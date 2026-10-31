@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { MapFile, NodeView, PacketView, View } from '../protocol.gen.ts';
-import { edgeIndex, lanePoint, supplyFlows, supplyScene } from './supplyLayout.ts';
+import { edgeIndex, lanePoint, lineFlows, supplyFlows, supplyScene } from './supplyLayout.ts';
 
 // A chain 0 - 1 - 2 of roads 0 (0-1) and 1 (1-2), plus a road 2 (1-3).
 const map = {
@@ -39,6 +39,27 @@ const view = (over: Partial<View>): View => ({
   fights: [],
   lines: [],
   ...over,
+});
+
+describe('supply lines (economy v2, DEC-41, item 3)', () => {
+  it('a line is a flow on every road of its path, the shared legs counted per line', () => {
+    const lines = [
+      { id: 1, path: [0, 1, 2] as [number, number, ...number[]] },
+      { id: 2, path: [0, 1, 3] as [number, number, ...number[]] },
+    ];
+    expect(lineFlows(view({ lines }), index)).toEqual([
+      { edge: 0, from: 0, to: 1, charges: 2, transfer: false, line: true },
+      { edge: 1, from: 1, to: 2, charges: 1, transfer: false, line: true },
+      { edge: 2, from: 1, to: 3, charges: 1, transfer: false, line: true },
+    ]);
+  });
+
+  it('the scene draws the lines, not the packets on them, once there are lines', () => {
+    const lines = [{ id: 1, path: [0, 1] as [number, number, ...number[]] }];
+    const packets = [packet({ path: [1, 2] })];
+    const flows = supplyScene(view({ lines, packets }), 0, index).flows;
+    expect(flows).toEqual([{ edge: 0, from: 0, to: 1, charges: 1, transfer: false, line: true }]);
+  });
 });
 
 describe('supply flows (DEC-28, item 8)', () => {
@@ -177,6 +198,7 @@ describe('what the layer draws (DEC-28, item 8)', () => {
     expect(Object.keys(scene()).sort()).toEqual([
       'bulkheads',
       'cut',
+      'factories',
       'flows',
       'levels',
       'markers',

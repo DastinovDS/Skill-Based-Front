@@ -5,6 +5,7 @@ import type { RenderFrame } from '../net/interpolate.ts';
 import type { MapFile, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { SupplyOverlay } from './interaction.ts';
+import { FACTORY_GLYPH } from './cityLayout.ts';
 import { borderPoint } from './fogLayout.ts';
 import { EDGE_PROGRESS, edgeEnds, edgePoint, nodePoint } from './layout.ts';
 import type { MapLayers } from './layers.ts';
@@ -29,6 +30,8 @@ import {
   SELECT_WIDTH,
   SUPPLY_BULKHEAD,
   SUPPLY_CUT,
+  SUPPLY_DRAFT,
+  SUPPLY_FACTORY,
   SUPPLY_FLOW_LABEL,
   SUPPLY_GAUGE,
   SUPPLY_MARKER,
@@ -249,7 +252,25 @@ export class SupplyView {
     this.drawMarkers(scene);
     this.drawCut(scene);
     this.drawPresence(scene);
+    this.drawFactories(scene);
     this.drawPick(supply);
+  }
+
+  /**
+   * Economy v2 (DEC-41, item 2): the own factories, where the lines start, as the badge of the city
+   * marks (the marks themselves hide on this layer): a dark disc with the saw-tooth glyph, upper left.
+   */
+  private drawFactories(scene: SupplyScene): void {
+    const g = this.plates;
+    const { radius, lift } = SUPPLY_FACTORY;
+    for (const node of scene.factories) {
+      const city = this.point(node);
+      if (city === undefined) continue;
+      const at = polar(city, this.radiusOf(node) + lift, 225);
+      g.circle(at.x, at.y, radius + 1.5).fill({ color: BG, alpha: 0.9 });
+      g.circle(at.x, at.y, radius).fill(BG).stroke({ width: 2, color: YOU });
+      g.poly(FACTORY_GLYPH.flatMap(([x, y]) => [at.x + x, at.y + y])).fill(PAPER);
+    }
   }
 
   /** Where the pipe of a road lies: from the rim of one city to the rim of the other. */
@@ -354,11 +375,16 @@ export class SupplyView {
       if (road === undefined || ends === null || pa === undefined || pb === undefined) continue;
       if (ends.length < SUPPLY_PIPE.minFlow) continue;
       const middle = this.radiusOf(road.a) + SUPPLY_PIPE.inset + ends.length / 2;
-      flows.forEach((flow, slot) => {
-        const shift = (slot - (flows.length - 1) / 2) * SUPPLY_PIPE.labelGap;
+      // A leg of the drawn lines (economy v2) is told by its direction alone; a number only when
+      // several lines share it ("×2").
+      const labelled = flows.filter((flow) => flow.line !== true || flow.charges > 1);
+      labelled.forEach((flow, slot) => {
+        const shift = (slot - (labelled.length - 1) / 2) * SUPPLY_PIPE.labelGap;
         const pose = labelPose(pa, pb, middle + shift, bore);
         this.text(
-          `${flow.transfer ? '~' : ''}${String(flow.charges)}`,
+          flow.line === true
+            ? `×${String(flow.charges)}`
+            : `${flow.transfer ? '~' : ''}${String(flow.charges)}`,
           pose,
           this.pipeStyle,
           0.5,
@@ -492,6 +518,7 @@ export class SupplyView {
   private drawPick(supply: SupplyOverlay): void {
     const g = this.plates;
     if (supply.source === null) return;
+    this.drawDraft(supply.draft);
     const source = this.point(supply.source);
     if (source !== undefined) {
       const r = this.radiusOf(supply.source) + TARGET.ring;
@@ -503,6 +530,41 @@ export class SupplyView {
       if (at === undefined) continue;
       this.dashedRing(at, this.radiusOf(node) + TARGET.ring, TARGET.dash, TARGET.gap);
       g.stroke({ width: 2, color: SELECT_COLOR, alpha: 0.9 });
+    }
+  }
+
+  /**
+   * Economy v2 (DEC-41, item 6): the supply line being drawn, from its source along the nodes
+   * clicked so far, in the selection colour with a casing; a dot on each node of the path.
+   */
+  private drawDraft(draft: readonly number[]): void {
+    if (draft.length < 2) return;
+    // The stroke lies with the pipes, under the cities: it never covers a city or its caption.
+    const g = this.pipes;
+    const points = draft.map((node) => this.point(node)).filter((p): p is Point => p !== undefined);
+    const [first, ...rest] = points;
+    if (first === undefined) return;
+    const lay = (): void => {
+      g.moveTo(first.x, first.y);
+      for (const p of rest) g.lineTo(p.x, p.y);
+    };
+    lay();
+    g.stroke({
+      width: SUPPLY_DRAFT.width + 4,
+      color: BG,
+      alpha: 0.85,
+      join: 'round',
+      cap: 'round',
+    });
+    lay();
+    g.stroke({ width: SUPPLY_DRAFT.width, color: SELECT_COLOR, join: 'round', cap: 'round' });
+    // The end the path has reached so far: a solid ring, as the source has.
+    const end = draft[draft.length - 1];
+    const at = end === undefined ? undefined : this.point(end);
+    if (end !== undefined && at !== undefined) {
+      const r = this.radiusOf(end) + TARGET.ring;
+      this.plates.circle(at.x, at.y, r + SELECT_WIDTH).stroke({ width: 2, color: BG });
+      this.plates.circle(at.x, at.y, r).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR });
     }
   }
 

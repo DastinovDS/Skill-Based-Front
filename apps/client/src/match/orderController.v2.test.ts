@@ -1,0 +1,166 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEV_RULES_V2, devSnapshot } from '../hud/devFeed.ts';
+import { HudState } from '../hud/hudState.svelte.ts';
+import { DEFAULT_MAP } from '../map/bundledMaps.ts';
+import type { Command, LineView, SnapshotMsg } from '../protocol.gen.ts';
+import { OrderBook } from './orderBook.ts';
+import { OrderController, PLAN_BONUS } from './orderController.ts';
+
+// Economy v2 (DEC-41, #649): the controls of factories, bunkers, supply lines and a gathering plan;
+// the v1 controls (stance, road mode, "Defense", markers, transfers) are off.
+const map = DEFAULT_MAP;
+const RULES = DEV_RULES_V2;
+const base = devSnapshot(map, RULES, 30);
+const group = base.view.groups[0];
+if (group?.location.kind !== 'node') throw new Error('the dev snapshot has no group in a node');
+const home = group.location.node;
+const own = new Set(base.view.nodes.filter((n) => n.owner === 0).map((n) => n.id));
+// An own road out of `home`: the first step of a line drawn from it.
+const road = map.edges.find(
+  (e) => (e.a === home && own.has(e.b)) || (e.b === home && own.has(e.a)),
+);
+if (road === undefined) throw new Error('the dev snapshot has no own road out of the home node');
+const next = road.a === home ? road.b : road.a;
+const enemy = base.view.nodes.find((n) => n.owner === 1);
+if (enemy === undefined) throw new Error('the dev snapshot has no enemy node');
+
+function setup(lines: LineView[] = []) {
+  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map });
+  const snapshot: SnapshotMsg = { ...base, view: { ...base.view, lines } };
+  hud.onSnapshot(snapshot);
+  const sent: Command[] = [];
+  const controller = new OrderController({
+    hud,
+    map,
+    rules: RULES,
+    book: new OrderBook(),
+    send: (cmd) => sent.push(cmd),
+  });
+  return { hud, sent, controller };
+}
+
+const down = (code: string) => ({ type: 'keydown', code, shiftKey: false }) as const;
+
+describe('OrderController under economy v2 (DEC-41)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('knows the model from the rules', () => {
+    expect(setup().controller.v2).toBe(true);
+  });
+
+  it('has no stance menu, road mode or «Defense»', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.key(down('KeyQ'))).toBe(false);
+    expect(controller.radial.current.open).toBe(false);
+    expect(controller.openRadial(true)).toBe(false);
+    expect(controller.key(down('KeyU'))).toBe(false);
+    expect(controller.roadMode).toBe(false);
+    expect(controller.key(down('KeyD'))).toBe(false);
+    expect(controller.key(down('Digit2'))).toBe(false);
+    controller.toggleDefense();
+    expect(sent).toEqual([]);
+  });
+
+  it('a planned order asks for the bonus of the stepper; an ordinary one for none', () => {
+    const { controller, sent } = setup();
+    expect(controller.planBonus).toBe(2);
+    controller.key(down('BracketRight'));
+    expect(controller.planBonus).toBe(3);
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'node', id: enemy.id }, true);
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    expect(sent).toEqual([
+      { type: 'move', group: group.id, dest: enemy.id, planned: true, bonus: 3 },
+      { type: 'move', group: group.id, dest: enemy.id, planned: false, bonus: 0 },
+    ]);
+  });
+
+  it('keeps the requested bonus within its range', () => {
+    const { controller } = setup();
+    for (let i = 0; i < 20; i++) controller.stepPlanBonus(-1);
+    expect(controller.planBonus).toBe(PLAN_BONUS.min);
+    for (let i = 0; i < 20; i++) controller.stepPlanBonus(1);
+    expect(controller.planBonus).toBe(PLAN_BONUS.max);
+  });
+
+  it('F and the group menu let the plan of the selected group go', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.key(down('KeyF'))).toBe(true);
+    controller.chooseGroup('release');
+    expect(sent).toEqual([
+      { type: 'release_plan', group: group.id },
+      { type: 'release_plan', group: group.id },
+    ]);
+  });
+
+  it('the city menu builds a factory and a bunker', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseCity('factory');
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseCity('bunker');
+    expect(sent).toEqual([
+      { type: 'build_factory', node: home },
+      { type: 'build_bunker', node: home },
+    ]);
+  });
+
+  it('draws a supply line: the menu, a click per node, Enter sends the path', () => {
+    const { controller, sent } = setup();
+    controller.key(down('Tab'));
+    controller.click({ kind: 'node', id: home }, false);
+    expect(controller.supplyMenu.current).toMatchObject({ open: true, node: home, lines: [] });
+    controller.key(down('Digit1'));
+    expect(controller.ui.current.lineDraft).toEqual([home]);
+    expect(controller.overlay().supply).toMatchObject({ source: home, draft: [home] });
+    expect(controller.lineNext()).toContain(next);
+    // A node that is not next to the end is not taken.
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    expect(controller.ui.current.lineDraft).toEqual([home]);
+    controller.click({ kind: 'node', id: next }, false);
+    expect(controller.ui.current.lineDraft).toEqual([home, next]);
+    expect(controller.overlay().supply?.draft).toEqual([home, next]);
+    controller.key(down('Enter'));
+    expect(controller.ui.current.lineDraft).toBeNull();
+    expect(sent).toEqual([{ type: 'draw_line', path: [home, next] }]);
+  });
+
+  it('a click on the end of the line finishes it; Backspace steps back; Esc drops it', () => {
+    const { controller, sent } = setup();
+    controller.key(down('Tab'));
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseLine('draw');
+    controller.click({ kind: 'node', id: next }, false);
+    controller.key(down('Backspace'));
+    expect(controller.ui.current.lineDraft).toEqual([home]);
+    controller.key(down('Escape'));
+    expect(controller.ui.current.lineDraft).toBeNull();
+    expect(controller.supplyMode).toBe(true);
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseLine('draw');
+    controller.click({ kind: 'node', id: next }, false);
+    controller.click({ kind: 'node', id: next }, false);
+    expect(sent).toEqual([{ type: 'draw_line', path: [home, next] }]);
+  });
+
+  it('the supply menu lists the lines that start at the city and removes one by its key', () => {
+    const { controller, sent } = setup([
+      { id: 7, path: [home, next] },
+      { id: 8, path: [next, home] },
+    ]);
+    controller.key(down('Tab'));
+    controller.click({ kind: 'node', id: home }, false);
+    expect(controller.supplyMenu.current.lines).toEqual([{ id: 7, to: next }]);
+    controller.key(down('Digit2'));
+    expect(sent).toEqual([{ type: 'remove_line', line: 7 }]);
+    expect(controller.supplyMenu.current.open).toBe(false);
+  });
+});

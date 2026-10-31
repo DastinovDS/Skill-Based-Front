@@ -361,7 +361,7 @@ describe('OverlayView, the dashed band of the road mode (#469)', () => {
 
   it('moves to the roads layer in the «Supply» view, which hides the intents, and back', () => {
     const { layers, view, none } = setup();
-    view.update(state({ source: null, targets: [] }), none);
+    view.update(state({ source: null, targets: [], draft: [] }), none);
     // The intents layer is hidden in this view, so what is visible is the roads layer.
     expect(band(layers, 'intents')).toBeUndefined();
     const drawn = band(layers, 'roads');
@@ -376,7 +376,7 @@ describe('OverlayView, the dashed band of the road mode (#469)', () => {
 
   it('is empty without candidates in both views', () => {
     const { layers, view, none } = setup();
-    view.update({ ...state({ source: null, targets: [] }), candidates: [] }, none);
+    view.update({ ...state({ source: null, targets: [], draft: [] }), candidates: [] }, none);
     expect(band(layers, 'roads')?.getLocalBounds().width).toBe(0);
     view.destroy();
   });

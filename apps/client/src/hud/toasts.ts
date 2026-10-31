@@ -30,6 +30,10 @@ export const TOAST_EVENT_KINDS: ReadonlySet<string> = new Set([
   'attrition',
   'recruit_queue_lost',
   'capture_failed',
+  // Economy v2 (DEC-41, item 3): a cut line is gone and must be drawn again; a rerouted one goes
+  // another way (#649).
+  'line_cut',
+  'line_rerouted',
 ]);
 
 /** The toast of `event` for player `me`, or `null` if the event goes to the journal only. */
@@ -43,6 +47,8 @@ export function toastOf(event: HudEvent, me: PlayerId, names: NodeNamer): ToastB
       return { tone: event.data.player === me ? 'mine' : 'enemy', icon: 'flag', text };
     case 'fight_ended':
       return { tone: 'neutral', icon: 'war', text };
+    case 'line_rerouted':
+      return { tone: 'mine', icon: 'road', text };
     default:
       return { tone: 'warn', icon: 'alert', text };
   }

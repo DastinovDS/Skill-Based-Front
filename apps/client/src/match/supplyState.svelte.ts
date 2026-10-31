@@ -1,4 +1,10 @@
-import type { SupplyChoice } from '../hud/radial.ts';
+import type { LineChoice, SupplyChoice } from '../hud/radial.ts';
+
+/** An own supply line that starts at the city of the menu (economy v2): its id and its target. */
+export interface MenuLine {
+  readonly id: number;
+  readonly to: number;
+}
 
 /** What the supply menu of an own city shows (DEC-18, item 7; the markers: DEC-28, item 2). */
 export interface SupplyMenuData {
@@ -9,8 +15,10 @@ export interface SupplyMenuData {
   readonly warehouse: number | null;
   /** The city of each front marker when the menu opened (`null`: not placed), for the labels. */
   readonly fronts: readonly (number | null)[];
+  /** Economy v2: the own lines that start at the city when the menu opened (by id). */
+  readonly lines: readonly MenuLine[];
   /** The sector under the pointer; `null`: the dead zone, or nothing yet. */
-  readonly hover: SupplyChoice | null;
+  readonly hover: SupplyChoice | LineChoice | null;
 }
 
 const MENU_CLOSED: SupplyMenuData = {
@@ -18,6 +26,7 @@ const MENU_CLOSED: SupplyMenuData = {
   node: -1,
   warehouse: null,
   fronts: [],
+  lines: [],
   hover: null,
 };
 
@@ -25,15 +34,20 @@ const MENU_CLOSED: SupplyMenuData = {
 export class SupplyMenuState {
   current = $state.raw<SupplyMenuData>(MENU_CLOSED);
 
-  open(node: number, warehouse: number | null, fronts: readonly (number | null)[] = []): void {
-    this.current = { open: true, node, warehouse, fronts, hover: null };
+  open(
+    node: number,
+    warehouse: number | null,
+    fronts: readonly (number | null)[] = [],
+    lines: readonly MenuLine[] = [],
+  ): void {
+    this.current = { open: true, node, warehouse, fronts, lines, hover: null };
   }
 
   close(): void {
     if (this.current.open) this.current = MENU_CLOSED;
   }
 
-  hover(choice: SupplyChoice | null): void {
+  hover(choice: SupplyChoice | LineChoice | null): void {
     if (this.current.hover !== choice) this.current = { ...this.current, hover: choice };
   }
 }

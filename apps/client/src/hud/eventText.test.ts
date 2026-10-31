@@ -27,6 +27,23 @@ describe('eventText', () => {
     expect(eventText(event('node_captured', captured), 1, names)).toBe('The enemy captured Cedar');
   });
 
+  it('tells the supply lines and the builds of economy v2 by the names of their places (#649)', () => {
+    setLocale('en');
+    const line = { player: 0, line: 3, from_node: 0, to_node: 2 };
+    expect(eventText(event('line_cut', line), 0, names)).toBe(
+      'Supply line Alder → Cedar is cut: draw it again',
+    );
+    expect(eventText(event('line_rerouted', line), 0, names)).toBe(
+      'Supply line Alder → Cedar goes another way',
+    );
+    expect(eventText(event('factory_built', { player: 0, node: 1 }), 0, names)).toBe(
+      'Birch is a factory now: it makes charges',
+    );
+    const started = { player: 0, node: 4, kind: 'fort', level: null, edge: null, width: null };
+    expect(eventText(event('build_started', started), 0, names)).toBe('Elm builds a bunker');
+    expect(toastOf(event('line_cut', line), 0, names)?.tone).toBe('warn');
+  });
+
   it('reads the losses of the viewer from losses_<player>', () => {
     setLocale('en');
     const fight = { node: 3, edge: null, losses_0: 1, losses_1: 4 };

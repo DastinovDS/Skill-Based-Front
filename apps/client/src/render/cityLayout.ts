@@ -157,6 +157,39 @@ export const BARRACKS_HOUSE: readonly (readonly [number, number])[] = [
 ];
 
 /**
+ * Economy v2 (DEC-41, item 2): the factory glyph of its badge, relative to the middle of the mark: a
+ * saw-tooth roof of two teeth and a tower on the right (the shape tells it, not the colour).
+ */
+export const FACTORY_GLYPH: readonly (readonly [number, number])[] = [
+  [-4.6, 4],
+  [-4.6, -0.8],
+  [-1.9, 1],
+  [-1.9, -0.8],
+  [0.8, 1],
+  [0.8, -4.6],
+  [3.8, -4.6],
+  [3.8, 4],
+];
+
+/**
+ * Economy v2 (DEC-41, item 12): the bunker glyph, a low dome on a base, relative to the middle of
+ * the mark; the firing slit is cut into it (`BUNKER_SLIT`).
+ */
+export const BUNKER_GLYPH: readonly (readonly [number, number])[] = (() => {
+  const points: [number, number][] = [];
+  const r = 4.7;
+  for (let i = 0; i <= 10; i++) {
+    const a = Math.PI + (Math.PI * i) / 10;
+    points.push([r * Math.cos(a), 2.2 + r * Math.sin(a)]);
+  }
+  points.push([4.7, 4], [-4.7, 4]);
+  return points;
+})();
+
+/** The firing slit of the bunker glyph: x, y, width, height from the middle of the mark. */
+export const BUNKER_SLIT = { x: -2.6, y: -0.3, width: 5.2, height: 1.3 } as const;
+
+/**
  * Where the VP badge sits: outside the capacity ring at the upper right (the angle of -45 degrees),
  * from the city centre.
  */

@@ -50,4 +50,25 @@ describe('cityChoices (DEC-26): what the menu of an own city offers', () => {
       'warehouse',
     ]);
   });
+
+  it('economy v2 (DEC-41): a city also builds a factory and a bunker until it has them', () => {
+    expect(cityChoices(on, { hasBarracks: true, warehouseLevel: 2 }, true)).toEqual([
+      'recruit',
+      'factory',
+      'bunker',
+    ]);
+    expect(
+      cityChoices(on, { hasBarracks: true, warehouseLevel: 2, factory: true, fort: true }, true),
+    ).toEqual(['recruit']);
+  });
+
+  it('economy v2: an own province offers only the bunker', () => {
+    expect(cityChoices(on, null, true, true)).toEqual(['bunker']);
+  });
+
+  it('economy v1 has no factory or bunker sector', () => {
+    expect(
+      cityChoices(on, { hasBarracks: true, warehouseLevel: 2, factory: false }, false),
+    ).toEqual(['recruit']);
+  });
 });

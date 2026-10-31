@@ -12,9 +12,11 @@
     onclose: () => void;
     /** `ruleset_public.capture.charge_cost` (DEC-38): with more than 0 the help tells the price of a capture. */
     captureCost?: number;
+    /** Economy v2 (DEC-41): the keys of the v1 economy are gone, those of lines and plans come. */
+    v2?: boolean;
   }
 
-  let { open, onclose, captureCost = 0 }: Props = $props();
+  let { open, onclose, captureCost = 0, v2 = false }: Props = $props();
 
   let close: HTMLButtonElement | undefined = $state();
   /** The rules page replaces the keys inside the sheet; the match runs on under it (nothing pauses). */
@@ -56,6 +58,27 @@
     ['?', 'help.key.help'],
     ['Esc', 'help.key.escape'],
   ] as const;
+
+  /** Economy v2 (DEC-41): no Defense, road levels, stances, markers or transfers; lines and plans. */
+  const KEYS_V2 = [
+    ['LMB', 'help.key.select'],
+    ['Shift + LMB', 'help.key.plannedV2'],
+    ['[ / ]', 'help.key.planBonus'],
+    ['F', 'help.key.release'],
+    ['X', 'help.key.cancel'],
+    ['R', 'help.key.recruit'],
+    ['T', 'help.key.terrain'],
+    ['S', 'help.key.split'],
+    ['G', 'help.key.merge'],
+    ['Tab / F2', 'help.key.supplyV2'],
+    ['Space', 'help.key.alert'],
+    ['H', 'help.key.fit'],
+    ['M', 'help.key.mute'],
+    ['?', 'help.key.help'],
+    ['Esc', 'help.key.escape'],
+  ] as const;
+
+  const keys = $derived(v2 ? KEYS_V2 : KEYS);
 </script>
 
 {#if open}
@@ -176,7 +199,7 @@
           <section aria-labelledby="help-keys">
             <h3 id="help-keys">{t('help.keys')}</h3>
             <dl class="keys">
-              {#each KEYS as [label, text] (text)}
+              {#each keys as [label, text] (text)}
                 <dt><kbd>{label}</kbd></dt>
                 <dd>{t(text)}</dd>
               {/each}
@@ -184,6 +207,9 @@
             <p class="note">{t('help.camera')}</p>
             {#if captureCost > 0}
               <p class="note">{tf('help.capture', { n: captureCost })}</p>
+            {/if}
+            {#if v2}
+              <p class="note">{t('help.economyV2')}</p>
             {/if}
             <div class="volume">
               <span>{t('help.volume')}</span>

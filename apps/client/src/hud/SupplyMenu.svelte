@@ -6,9 +6,12 @@
   import Radial from './Radial.svelte';
   import {
     frontOf,
+    halfFor,
+    spreadAngles,
     SUPPLY_HALF,
     SUPPLY_RING,
     SUPPLY_SECTORS,
+    type LineChoice,
     type RadialItem,
     type SupplyChoice,
   } from './radial.ts';
@@ -25,7 +28,33 @@
 
   // Marker sectors (DEC-28, item 2): put marker n on the city, or take it off where it stands. A
   // city holds one marker, so the sector of the other marker is off while one stands here.
+  // Economy v2 (DEC-41, item 3): draw a supply line from the city (1), or remove one of the lines
+  // that start here (2 to 4, by their target). Free, so no price.
+  const v2 = $derived(orders.v2);
+  const lineItems = $derived.by<RadialItem[]>(() => {
+    const angles = spreadAngles(1 + menu.lines.length);
+    const stock =
+      menu.warehouse !== null ? [tf('supplyMenu.stock', { charges: menu.warehouse })] : [];
+    return [
+      {
+        id: 'draw',
+        angle: angles[0] ?? 270,
+        icon: 'lineDraw',
+        label: t('supplyMenu.draw'),
+        lines: stock,
+        key: '1',
+      },
+      ...menu.lines.map((line, i): RadialItem => ({
+        id: `line:${String(line.id)}`,
+        angle: angles[i + 1] ?? 0,
+        icon: 'lineRemove',
+        label: tf('supplyMenu.remove', { node: names(line.to) }),
+        key: String(i + 2),
+      })),
+    ];
+  });
   const items = $derived.by<RadialItem[]>(() => {
+    if (v2) return lineItems;
     const count = orders.frontMarkers;
     // A marker is free in DEC-28 (`orders.cost.front = 0`); a ruleset that prices it shows the price.
     const price =
@@ -64,10 +93,11 @@
       };
     });
   });
-  const captions = $derived([
-    { text: t('supplyMenu.caption') },
-    { text: t('supplyMenu.hint'), dim: true },
-  ]);
+  const captions = $derived(
+    v2
+      ? [{ text: t('supplyMenu.lineCaption') }, { text: t('supplyMenu.lineHint'), dim: true }]
+      : [{ text: t('supplyMenu.caption') }, { text: t('supplyMenu.hint'), dim: true }],
+  );
 </script>
 
 <!-- The supply menu of an own city in the «Supply» map mode (DEC-18): opens where the click was. -->
@@ -78,10 +108,11 @@
     at="pointer"
     hover={menu.hover}
     onhover={(id: string | null) => {
-      orders.supplyMenu.hover(id as SupplyChoice | null);
+      orders.supplyMenu.hover(id as SupplyChoice | LineChoice | null);
     }}
     onchoose={(id: string) => {
-      orders.chooseSupply(id as SupplyChoice);
+      if (v2) orders.chooseLine(id as LineChoice);
+      else orders.chooseSupply(id as SupplyChoice);
     }}
     onclose={() => {
       orders.closeSupplyMenu();
@@ -90,7 +121,7 @@
     modal
     {captions}
     ring={SUPPLY_RING}
-    half={SUPPLY_HALF}
+    half={v2 ? Math.min(SUPPLY_HALF, halfFor(items.length)) : SUPPLY_HALF}
   >
     {#snippet centre()}
       <span class="cancel">{t('radial.cancel')}</span>

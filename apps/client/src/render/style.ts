@@ -245,6 +245,10 @@ export const PROGRESS = {
   alert: { width: 1.6, dash: 3, gap: 2, grow: 2, low: 0.45 },
   /** The round badge with the kind of a build: centre from the left of the plate, radius, rim, glyph size. */
   badge: { cx: 13, radius: 7, rim: 1.2, glyph: 4 },
+  /** Economy v2: at most this many hollow dots of charges a build still waits for (DEC-41, item 7). */
+  owedDots: 5,
+  /** The hollow dot of an owed charge: radius and stroke. */
+  owed: { radius: 2.5, width: 1.4, pitch: 7 },
 } as const;
 /**
  * The barracks of an own city (DEC-26): a round dark badge with a little house in it (the shape
@@ -683,6 +687,10 @@ export const SUPPLY_MARKER = {
   font: 11,
 } as const;
 /** A cut-off city (DEC-19): hatched, a dashed ring and the time to the next starvation. */
+/** Economy v2 (DEC-41, item 6): the stroke of the supply line being drawn. */
+export const SUPPLY_DRAFT = { width: 4 } as const;
+/** Economy v2 (DEC-41, item 2): the factory badge of the «Supply» layer, off the rim of the city. */
+export const SUPPLY_FACTORY = { radius: 7.5, lift: 4 } as const;
 export const SUPPLY_CUT = {
   gap: 9,
   width: 2.6,

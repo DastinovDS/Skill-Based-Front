@@ -20,6 +20,11 @@ const welcomeFiles = import.meta.glob<WelcomeMsg>(
   { eager: true, import: 'default' },
 );
 
+const welcomeV2Files = import.meta.glob<WelcomeMsg>(
+  '../../../../packages/protocol/fixtures/server/welcome_v2.json',
+  { eager: true, import: 'default' },
+);
+
 /** The player on the dev screen. */
 export const DEV_PLAYER = 0;
 
@@ -28,6 +33,15 @@ export const DEV_RULES: RulesetPublic = (() => {
   const welcome = Object.values(welcomeFiles)[0];
   if (welcome === undefined) {
     throw new Error('packages/protocol/fixtures/server/welcome.json is not bundled');
+  }
+  return welcome.ruleset_public;
+})();
+
+/** The ruleset of `mvp-3` (economy v2, DEC-41): the `welcome_v2` fixture of #647. */
+export const DEV_RULES_V2: RulesetPublic = (() => {
+  const welcome = Object.values(welcomeV2Files)[0];
+  if (welcome === undefined) {
+    throw new Error('packages/protocol/fixtures/server/welcome_v2.json is not bundled');
   }
   return welcome.ruleset_public;
 })();

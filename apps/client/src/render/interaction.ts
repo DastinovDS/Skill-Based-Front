@@ -60,6 +60,11 @@ export interface MovePreview {
 export interface SupplyOverlay {
   readonly source: number | null;
   readonly targets: readonly number[];
+  /**
+   * Economy v2 (DEC-41, item 6): the path of the supply line being drawn, from its source (empty
+   * while none is); `targets` are then the own nodes a click adds to it.
+   */
+  readonly draft: readonly number[];
 }
 
 export interface OverlayState {

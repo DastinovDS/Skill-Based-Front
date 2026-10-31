@@ -14,12 +14,17 @@ const NAMES = [
   'front1',
   'front2',
   'stackGroup',
+  'factory',
+  'bunker',
+  'lineDraw',
+  'lineRemove',
+  'release',
 ] as const;
 
 const signature = (shapes: readonly IconShape[]): string => JSON.stringify(shapes);
 
 describe('the icons of the radial menus (I1)', () => {
-  it('are the 10 of the mockup and the group of the city list, each with shapes', () => {
+  it('are the 10 of the mockup, the group of the city list and the economy v2 ones, each with shapes', () => {
     expect(Object.keys(MENU_ICONS).sort()).toEqual([...NAMES].sort());
     for (const name of NAMES) expect(MENU_ICONS[name].length).toBeGreaterThan(0);
   });

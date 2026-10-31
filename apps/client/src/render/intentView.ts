@@ -197,7 +197,16 @@ export class IntentView {
     const ribbon = ribbonOutline(axis, body);
     if (ribbon === null) return;
     const color = ownerColor(this.me, intent.owner);
-    const prep = progress !== null && progress < 1;
+    // Economy v2 (DEC-41, item 10): an own plan that gathers its bonus fills as the bonus grows
+    // (the server's `bonus` of the requested `plan`), not with a delay.
+    const order = item?.group.order;
+    const gathering = order?.gathering === true;
+    const fill = gathering
+      ? order.plan > 0
+        ? Math.min(1, order.bonus / order.plan)
+        : 0
+      : progress;
+    const prep = gathering || (fill !== null && fill < 1);
     const pulse = departPulse(since, RIBBON.pulseTicks, reducedMotion());
     const g = this.ribbons;
     const poly = flat(ribbon.outline);
@@ -213,9 +222,9 @@ export class IntentView {
     if (prep) {
       // The delay runs: the whole arrow is a faint tint and fills from the tail to the head.
       g.poly(poly).fill({ color, alpha: RIBBON.tintAlpha });
-      const filled = ribbonFilled(ribbon.outline, axis, progress);
+      const filled = ribbonFilled(ribbon.outline, axis, fill ?? 0);
       if (filled.length >= 3) g.poly(flat(filled)).fill({ color, alpha: RIBBON.prepAlpha });
-      const front = frontLine(axis, progress, body);
+      const front = frontLine(axis, fill ?? 0, body);
       if (front !== null) {
         g.moveTo(front[0].x, front[0].y).lineTo(front[1].x, front[1].y);
         g.stroke({ width: RIBBON.front.width, color: PAPER, cap: 'round' });
@@ -263,9 +272,18 @@ export class IntentView {
       // (the opponent's intent has no size and no bonus): "◇ +N" beside the arc, dashed while a forecast.
       const bonus = item?.group.order?.bonus ?? 0;
       const spot =
-        bonus > 0 ? bonusSpot(axis, bend, body, BONUS_PILL.height / 2 / this.cameraScale) : null;
+        bonus > 0 || gathering
+          ? bonusSpot(axis, bend, body, BONUS_PILL.height / 2 / this.cameraScale)
+          : null;
       if (spot !== null)
-        this.placeBonus(this.bonusUsed++, spot, bonus, progress === null || prep, color);
+        this.placeBonus(
+          this.bonusUsed++,
+          spot,
+          bonus,
+          fill === null || prep,
+          color,
+          gathering ? order.plan : null,
+        );
     } else {
       // The opponent's tail is a ring in a ring; the head stops on the dashed ring round the target.
       g.circle(start.x, start.y, tail.ring)
@@ -331,9 +349,11 @@ export class IntentView {
     bonus: number,
     forecast: boolean,
     color: number,
+    /** Economy v2: the requested bonus of a gathering plan ("+1/3"); `null`: none. */
+    plan: number | null = null,
   ): void {
     const pill = this.bonusPill(index);
-    const label = `+${String(bonus)}`;
+    const label = plan === null ? `+${String(bonus)}` : `+${String(bonus)}/${String(plan)}`;
     if (pill.text.text !== label) pill.text.text = label;
     const { diamond, gap, padX, height } = BONUS_PILL;
     const width = padX * 2 + diamond * 2 + gap + pill.text.width;
