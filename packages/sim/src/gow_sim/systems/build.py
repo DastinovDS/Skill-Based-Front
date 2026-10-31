@@ -161,7 +161,6 @@ def pay(state: GameState, player: int, node: int, owed: int) -> tuple[int, int]:
     n = state.nodes[node]
     from_stock = min(owed, n.warehouse)
     n.warehouse -= from_stock
-    n.inbox = min(n.inbox, n.warehouse)  # a relay gives out only what is still there (L5)
     left = owed - from_stock
     groups: list[Group] = []
     if left > 0:

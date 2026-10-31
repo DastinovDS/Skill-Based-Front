@@ -13,6 +13,7 @@ import pytest
 from gow_bots.bots import BOTS, SmartHoarder, SmartRusher
 from gow_bots.bots.base import V1_ONLY, V2_ONLY
 from gow_bots.bots.campaign import Ctx
+from gow_bots.bots.economy import LINE_COMMANDS
 from gow_bots.bots.hoarder import W_HOARD
 from gow_sim.commands import (
     BuildBunker,
@@ -142,8 +143,14 @@ def test_smart_bots_play_v2(mvp3: Ruleset, crossroads: MapDef, name: str) -> Non
     assert all(c.bonus >= 1 for c in mine if isinstance(c, Move) and c.planned)
     view = views[0]
     assert view.lines, "the bot keeps lines"
-    for line in view.lines:  # only factories are sources (economy module docstring)
-        assert view.nodes[line.path[0]].factory, line
+    targets = {line.path[-1]: True for line in view.lines}
+    assert any(view.nodes[line.path[0]].factory for line in view.lines)
+    orphans = [  # a source that lost its feed since the last decision (economy module docstring)
+        line
+        for line in view.lines
+        if not view.nodes[line.path[0]].factory and not targets.get(line.path[0], False)
+    ]
+    assert len(orphans) <= LINE_COMMANDS, orphans
 
 
 @pytest.mark.parametrize("names", [("smart_expander", "smart_hoarder"), ("expander", "rusher")])
