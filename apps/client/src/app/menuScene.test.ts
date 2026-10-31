@@ -16,7 +16,7 @@ import {
   starPoints,
 } from './menuScene.ts';
 
-const POOL = BUNDLED_MAPS.filter((m) => ['crossroads', 'highway', 'ridge'].includes(m.meta.name));
+const POOL = BUNDLED_MAPS.filter((m) => ['crossroads', 'highway', 'narrows', 'ridge'].includes(m.meta.name));
 // The menu map (#474) first: the client draws it; the pool maps keep the layout general.
 const MAPS = [MENU_MAP, ...POOL];
 
@@ -31,7 +31,7 @@ const WINDOWS = [
 
 describe('layoutScene (#471)', () => {
   it('finds the pool maps to test with', () => {
-    expect(POOL).toHaveLength(3);
+    expect(POOL).toHaveLength(4);
   });
 
   for (const map of MAPS) {

@@ -64,6 +64,7 @@ MAPS = [
     ROOT / "maps" / "ridge.json",
     ROOT / "maps" / "crossroads.json",
     ROOT / "maps" / "highway.json",
+    ROOT / "maps" / "narrows.json",
     TESTS_DIR / "maps" / "diamond.json",
     TESTS_DIR / "maps" / "choke.json",
 ]

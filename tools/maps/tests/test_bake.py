@@ -39,7 +39,7 @@ MAPS = ROOT / "maps"
 FIXTURES = MAPS / "fixtures"  # the MVP maps, frozen test fixtures (#372)
 TEST_MAPS = ROOT / "packages" / "sim" / "tests" / "maps"
 MENU = MAPS / "menu"  # the menu map, outside the server pool (#474)
-POOL = ["artery", "ridge", "web", "crossroads", "pass", "highway", "valley"]
+POOL = ["artery", "ridge", "web", "crossroads", "pass", "highway", "narrows", "valley"]
 MVP = ["artery", "web", "pass"]
 FILES = {
     name: (FIXTURES if name in MVP else MENU if name == "valley" else MAPS) / f"{name}.json"

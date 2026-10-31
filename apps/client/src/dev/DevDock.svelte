@@ -22,7 +22,7 @@
   // The Dock screens (#473) with a fake server: fixed lists and invites, nothing is asked of a
   // network. The scenes that need a click to reach their state (joining, a failed create) are
   // clicked by visual/shots.spec.ts.
-  const pool = ['crossroads', 'highway', 'ridge']
+  const pool = ['crossroads', 'highway', 'narrows', 'ridge']
     .map((name) => BUNDLED_MAPS.find((m) => m.meta.name === name))
     .filter((m): m is MapFile => m !== undefined);
   const summary = (m: MapFile): MapSummary => ({
