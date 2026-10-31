@@ -23,6 +23,7 @@ import pytest
 
 from gow_sim.commands import (
     BuildBarracks,
+    BuildBunker,
     BuildFactory,
     CancelOrder,
     CancelRecruit,
@@ -176,6 +177,9 @@ def _decide_v2(
             cmds.append(DrawLine(route.nodes))
     if tick % 45 == 0 and own_cities:
         cmds.append(BuildFactory(own_cities[tick // 45 % len(own_cities)]))
+    own = sorted(n for n in state.nodes if state.nodes[n].owner == player)
+    if tick % 65 == 0 and own:  # a bunker, in a city or a province (#645)
+        cmds.append(BuildBunker(own[tick // 65 % len(own)]))
     if tick % 95 == 0:
         cmds.append(RemoveLine(tick // 95 % 3))
     return cmds
@@ -236,6 +240,8 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
             return Transfer(mirror_nodes[src], mirror_nodes[dst], n)
         case BuildFactory(node=node):
             return BuildFactory(mirror_nodes[node])
+        case BuildBunker(node=node):
+            return BuildBunker(mirror_nodes[node])
         case DrawLine(path=path):
             return DrawLine(tuple(mirror_nodes[n] for n in path))
         case _:
@@ -362,19 +368,24 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.has_barracks,
             a.warehouse_level,
         ), f"node {n}"
-        assert (b.factory, b.inbox, b.rr) == (swap[a.factory], a.inbox, a.rr), f"v2 of {n}"
-        fa, fb = a.factory_build, b.factory_build
-        assert (fb is None) == (fa is None), f"factory build of {n}"
-        if fa is not None and fb is not None:
-            assert (fb.owner, fb.since) == (swap[fa.owner], fa.since), f"factory build of {n}"
+        assert (b.factory, b.inbox, b.rr, b.fort) == (swap[a.factory], a.inbox, a.rr, a.fort), (
+            f"v2 of {n}"
+        )
+        for fa, fb in ((a.factory_build, b.factory_build), (a.fort_build, b.fort_build)):
+            assert (fb is None) == (fa is None), f"factory or bunker build of {n}"
+            if fa is not None and fb is not None:
+                assert (fb.owner, fb.since, fb.owed) == (swap[fa.owner], fa.since, fa.owed), (
+                    f"factory or bunker build of {n}"
+                )
         ab, bb = a.build, b.build
         assert (bb is None) == (ab is None), f"build of {n}"
         if ab is not None and bb is not None:
-            assert (bb.edge, bb.owner, bb.since, bb.kind) == (
+            assert (bb.edge, bb.owner, bb.since, bb.kind, bb.owed) == (
                 None if ab.edge is None else mapdef.mirror_edges[ab.edge],
                 swap[ab.owner],
                 ab.since,
                 ab.kind,
+                ab.owed,
             ), f"build of {n}"
     for e in range(len(mapdef.edges)):
         road, mirrored = state.edges[e], state.edges[mapdef.mirror_edges[e]]
@@ -504,13 +515,14 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         return
     # The run did something: commands were applied, groups moved and took nodes.
     assert applied > 20
-    assert {"Move", "Split", "SetMode", "Recruit", "CancelRecruit", "CancelOrder"} <= set(kinds)
+    assert {"Move", "Split", "Recruit", "CancelRecruit", "CancelOrder"} <= set(kinds)
     if rules.v2:  # DEC-41: the v1 supply commands are disabled, the lines are mirrored
-        assert {"DrawLine", "RemoveLine"} <= set(kinds)
+        assert {"DrawLine", "RemoveLine", "BuildBunker", "BuildFactory"} <= set(kinds)
+        assert "SetMode" not in kinds  # "Defense" is removed (item 5, #645)
         assert sent > 0, "the lines carried charges"
         assert not {"SetStance", "SetFront", "SetRearMin", "Transfer", "UpgradeRoad"} & set(kinds)
     else:
-        assert {"SetStance", "SetFront", "SetRearMin"} <= set(kinds)
+        assert {"SetStance", "SetFront", "SetRearMin", "SetMode"} <= set(kinds)
     if rules.city_upgrades.enabled:  # DEC-26: the city development is mirrored as well
         assert {"BuildBarracks", "UpgradeWarehouse"} <= set(kinds)
     assert moves_on_edges > 0

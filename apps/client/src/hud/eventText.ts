@@ -40,6 +40,9 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   // Economy v2 (DEC-41): factories and supply lines; their UI comes with #649.
   'charge_burned',
   'factory_built',
+  // Economy v2 (DEC-41, #645): the progressive payment of a building and the finished bunker.
+  'build_paid',
+  'fort_built',
   'line_cut',
   'line_rerouted',
 ]);

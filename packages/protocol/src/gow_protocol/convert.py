@@ -124,6 +124,7 @@ PRIVATE_KINDS: Final = frozenset(
     {
         "attrition",
         "barracks_built",
+        "build_paid",
         "build_started",
         "build_stopped",
         "capture_failed",
@@ -133,6 +134,7 @@ PRIVATE_KINDS: Final = frozenset(
         "cp_burned",
         "factory_built",
         "fight_group",
+        "fort_built",
         "front_set",
         "group_arrived",
         "group_split",
@@ -162,6 +164,7 @@ FIGHT_KINDS: Final = frozenset({"fight_started", "fight_round", "fight_ended"})
 EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "attrition": ("charged", "destroyed", "group", "node", "player"),
     "barracks_built": ("node", "player"),
+    "build_paid": ("kind", "node", "owed", "player", "units", "warehouse"),
     "build_started": ("edge", "kind", "level", "node", "player", "width"),
     "build_stopped": ("edge", "kind", "node", "player", "reason"),
     "capture_failed": ("group", "node", "player", "result"),
@@ -170,6 +173,7 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "charges_produced": ("charges", "node", "player", "spill"),
     "cp_burned": ("cp", "player"),
     "factory_built": ("node", "player"),
+    "fort_built": ("node", "player"),
     "fight_ended": (
         "attacker",
         "captured",

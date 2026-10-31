@@ -335,6 +335,11 @@ class CityUpgradeRules:
     """Ticks to build the barracks (item 2)."""
     warehouse_ticks: int
     """Ticks to raise the warehouse by one level (item 3)."""
+    barracks_charges: int = dataclasses.field(default=0, metadata=OPTIONAL)
+    """DEC-41, item 7 (``v2`` only): the barracks costs this many charges instead of CP."""
+    warehouse_charges: int = dataclasses.field(default=0, metadata=OPTIONAL)
+    """DEC-41, item 7 (``v2`` only): every warehouse level costs this many charges instead of
+    CP."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,6 +350,8 @@ class WarehouseRules:
     gain_per_level: int
     max_level: int
     start_by_kind: CityKindTable
+    province: int = dataclasses.field(default=0, metadata=OPTIONAL)
+    """DEC-41, item 13 (``v2`` only): the warehouse of a province, always this capacity."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,11 +364,24 @@ class FactoryRules:
     built_period_ticks: int
     """Every other factory: a built one or a captured one (a captured capital too)."""
     cost: int
-    """Charges ``BuildFactory`` takes from the warehouse of the city."""
+    """Charges ``BuildFactory`` pays (the progressive payment of DEC-41, item 7)."""
     build_ticks: int
-    """Ticks from ``BuildFactory`` to the factory."""
+    """Ticks from the full payment of ``BuildFactory`` to the factory."""
     max: int
     """Factories of a player at most, the capital and the builds under way included."""
+
+
+@dataclass(frozen=True, slots=True)
+class BunkerRules:
+    """The bunker (DEC-41, item 12; code name ``fort``; ``economy.model = "v2"`` only): a
+    building of a city or a province that adds virtual shots to the node's defender."""
+
+    cost: int
+    """Charges ``BuildBunker`` pays (progressive payment, item 7)."""
+    build_ticks: int
+    """Ticks from the full payment to the bunker."""
+    shots: int
+    """Virtual shots of the node's defender in every fight there, if it has a charged unit."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -469,6 +489,8 @@ class Ruleset:
     """Set exactly with ``economy.model = "v2"`` (DEC-41)."""
     lines: LineRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
     """Set exactly with ``economy.model = "v2"`` (DEC-41)."""
+    bunker: BunkerRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
+    """Set exactly with ``economy.model = "v2"`` (DEC-41, item 12)."""
 
     @property
     def v2(self) -> bool:
@@ -486,6 +508,12 @@ class Ruleset:
         if self.lines is None:
             raise ValueError("line rules exist only with economy.model = 'v2'")
         return self.lines
+
+    def bunker_rules(self) -> BunkerRules:
+        """``bunker`` of a v2 ruleset; an error under v1."""
+        if self.bunker is None:
+            raise ValueError("bunker rules exist only with economy.model = 'v2'")
+        return self.bunker
 
 
 def load_ruleset(path: str | Path) -> Ruleset:
@@ -583,6 +611,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "vision",
             "factory",
             "lines",
+            "bunker",
         ),
     )
     economy = _parse_economy(
@@ -652,10 +681,21 @@ def parse_ruleset(data: object) -> Ruleset:
         ),
         victory=_parse_victory(root.table("victory", ("vp_period_ticks", "capital_multiplier"))),
         city_upgrades=_parse_city_upgrades(
-            root.table("city_upgrades", ("enabled", "barracks_ticks", "warehouse_ticks"))
+            root.table(
+                "city_upgrades",
+                (
+                    "enabled",
+                    "barracks_ticks",
+                    "warehouse_ticks",
+                    "barracks_charges",
+                    "warehouse_charges",
+                ),
+            ),
+            v2,
         ),
         warehouse=_parse_warehouse(
-            root.table("warehouse", ("gain_per_level", "max_level", "start_by_kind"))
+            root.table("warehouse", ("gain_per_level", "max_level", "start_by_kind", "province")),
+            v2,
         ),
         vision=_parse_vision(root.table("vision", ("range_starts", "by_terrain"))),
         factory=_parse_factory(
@@ -666,6 +706,7 @@ def parse_ruleset(data: object) -> Ruleset:
             )
         ),
         lines=_parse_lines(root.v2_table("lines", v2, ("max_out",))),
+        bunker=_parse_bunker(root.v2_table("bunker", v2, ("cost", "build_ticks", "shots"))),
     )
 
 
@@ -717,6 +758,16 @@ def _parse_lines(t: "_Table | None") -> LineRules | None:
     if t is None:
         return None
     return LineRules(max_out=t.integer("max_out", low=1))
+
+
+def _parse_bunker(t: "_Table | None") -> BunkerRules | None:
+    if t is None:
+        return None
+    return BunkerRules(
+        cost=t.integer("cost", low=0),
+        build_ticks=t.integer("build_ticks", low=1),
+        shots=t.integer("shots", low=0),
+    )
 
 
 def _parse_orders(t: "_Table") -> OrderRules:
@@ -812,23 +863,32 @@ def _parse_recruit(t: "_Table") -> RecruitRules:
     )
 
 
-def _parse_city_upgrades(t: "_Table") -> CityUpgradeRules:
+def _parse_city_upgrades(t: "_Table", v2: bool) -> CityUpgradeRules:
+    barracks_charges = warehouse_charges = 0
+    if t.has_v2("barracks_charges", v2):
+        barracks_charges = t.integer("barracks_charges", low=0)
+    if t.has_v2("warehouse_charges", v2):
+        warehouse_charges = t.integer("warehouse_charges", low=0)
     return CityUpgradeRules(
         enabled=t.boolean("enabled"),
         barracks_ticks=t.integer("barracks_ticks", low=1),
         warehouse_ticks=t.integer("warehouse_ticks", low=1),
+        barracks_charges=barracks_charges,
+        warehouse_charges=warehouse_charges,
     )
 
 
 _CITY_KINDS: Final = tuple(k.value for k in NodeKind if k is not NodeKind.PROVINCE)
 
 
-def _parse_warehouse(t: "_Table") -> WarehouseRules:
+def _parse_warehouse(t: "_Table", v2: bool) -> WarehouseRules:
     kinds = t.table("start_by_kind", _CITY_KINDS)
+    province = t.integer("province", low=0) if t.has_v2("province", v2) else 0
     return WarehouseRules(
         gain_per_level=t.integer("gain_per_level", low=0),
         max_level=t.integer("max_level", low=0),
         start_by_kind=CityKindTable(**{k: kinds.integer(k, low=0) for k in _CITY_KINDS}),
+        province=province,
     )
 
 

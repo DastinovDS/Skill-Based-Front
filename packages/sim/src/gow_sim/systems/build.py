@@ -28,20 +28,33 @@ barracks or a warehouse level of a city.
 - ``upgrade_gain()``: what the next level gives, for the road hint in the client (the
   ``upgrade_gain`` of an own edge in the view, SIM-14).
 
-- Under the economy v2 (DEC-41, item 2): ``BuildFactory(node)`` takes ``factory.cost`` charges
-  from the city warehouse at the start (``start_factory()``; the progressive payment of item 7
-  comes with #645) and puts a ``FactoryBuild`` on the city; it does not take the build slot of the
-  barracks and the warehouse. ``factory.build_ticks`` later the city is a factory
-  (``factory_built``); a change of the city's owner before stops it (``build_stopped``, ``kind =
-  "factory"``, nothing is returned).
+- Under the economy v2 (DEC-41, items 2, 7, 12): every building is paid in **charges**, not CP:
+  the barracks ``city_upgrades.barracks_charges``, a warehouse level
+  ``city_upgrades.warehouse_charges``, a factory ``factory.cost``, a bunker ``bunker.cost``
+  (``charge_cost()``). The payment is **progressive** (``pay()``): the build takes the charges of
+  the node's warehouse, then those of the owner's groups standing in the node outside a fight
+  (the largest ``charged`` first, ties by the lower id, as the starvation of DEC-19, item 4),
+  until the cost is met; what is missing is ``owed`` and the ``build`` system takes it on every
+  later tick (event ``build_paid`` whenever charges are taken). The build time starts in the tick
+  the build is paid in full (``since``); a build that is stopped returns nothing.
+- ``BuildFactory(node)`` puts a ``FactoryBuild`` on the city (``start_factory()``); it does not
+  take the build slot of the barracks and the warehouse. ``factory.build_ticks`` after the full
+  payment the city is a factory (``factory_built``).
+- ``BuildBunker(node)`` (code name ``fort``) puts a ``FactoryBuild`` into ``Node.fort_build`` of
+  an own city or province (``start_fort()``), its own slot as well; ``bunker.build_ticks`` after
+  the full payment the node has a bunker (``fort_built``). A capture destroys the bunker
+  (``systems.capacity.change_owner``); in a fight at the node it gives the defender
+  ``bunker.shots`` virtual shots if the defender has a charged unit (``systems.combat``).
+- A change of the node's owner stops a factory or bunker build (``build_stopped``, ``kind =
+  "factory"`` or ``"fort"``), nothing is returned.
 
 The build events go only to their player (DEC-17, item 6; ``gow_protocol.convert``).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import Build, BuildKind, Event, FactoryBuild, GameState, event
+from gow_sim.state import AtNode, Build, BuildKind, Event, FactoryBuild, GameState, Group, event
 from gow_sim.systems.capacity import is_internal
 from gow_sim.systems.movement import road_speed_pct as unit_speed_pct
 from gow_sim.systems.supply import road_amount, road_speed_pct
@@ -100,63 +113,172 @@ def start_road(state: GameState, player: int, edge: int) -> Event:
     )
 
 
-def start_city_build(state: GameState, player: int, node: int, kind: BuildKind) -> Event:
-    """Apply a validated ``BuildBarracks`` or ``UpgradeWarehouse`` (the CP are charged by SIM-04).
+def start_city_build(
+    state: GameState, rules: Ruleset, player: int, node: int, kind: BuildKind
+) -> list[Event]:
+    """Apply a validated ``BuildBarracks`` or ``UpgradeWarehouse`` (the CP are charged by SIM-04;
+    under the economy v2 the charges are paid by ``pay()``).
 
     ``level``: the warehouse level the build gives, ``None`` for the barracks.
     """
     city = state.nodes[node]
-    city.build = Build(edge=None, owner=player, since=state.tick, kind=kind)
     level = city.warehouse_level + 1 if kind is BuildKind.WAREHOUSE else None
-    return event(
-        state.tick, "build_started", player=player, node=node, kind=kind.value, level=level
-    )
+    events = [
+        event(state.tick, "build_started", player=player, node=node, kind=kind.value, level=level)
+    ]
+    owed = charge_cost(rules, kind.value) if rules.v2 else 0
+    owed = _pay_into(state, player, node, kind.value, owed, events)
+    city.build = Build(edge=None, owner=player, since=state.tick, kind=kind, owed=owed)
+    return events
 
 
 FACTORY_KIND = "factory"
 """``kind`` of the build events of a factory (DEC-41, item 2)."""
+FORT_KIND = "fort"
+"""``kind`` of the build events of a bunker (DEC-41, item 12; code name ``fort``)."""
 
 
-def start_factory(state: GameState, rules: Ruleset, player: int, node: int) -> Event:
-    """Apply a validated ``BuildFactory(node)``: pay ``factory.cost`` charges, start the build."""
-    city = state.nodes[node]
-    cost = rules.factory_rules().cost
-    city.warehouse -= cost  # validated: the warehouse holds it
-    city.factory_build = FactoryBuild(owner=player, since=state.tick)
-    return event(
-        state.tick, "build_started", player=player, node=node, kind=FACTORY_KIND, level=None
-    )
+def charge_cost(rules: Ruleset, kind: str) -> int:
+    """The charges a building of ``kind`` costs under the economy v2 (DEC-41, item 7)."""
+    if kind == BuildKind.BARRACKS.value:
+        return rules.city_upgrades.barracks_charges
+    if kind == BuildKind.WAREHOUSE.value:
+        return rules.city_upgrades.warehouse_charges
+    if kind == FACTORY_KIND:
+        return rules.factory_rules().cost
+    if kind == FORT_KIND:
+        return rules.bunker_rules().cost
+    raise ValueError(f"no charge cost for a build of kind {kind!r}")
 
 
-def _factory_builds(state: GameState, rules: Ruleset) -> list[Event]:
-    """Finish or stop the factory builds (DEC-41, item 2), cities in id order."""
-    tick = state.tick
-    events: list[Event] = []
-    ticks = rules.factory_rules().build_ticks
-    for nid in sorted(state.nodes):
-        city = state.nodes[nid]
-        b = city.factory_build
-        if b is None:
-            continue
-        if city.owner != b.owner:
-            city.factory_build = None
-            events.append(
-                event(
-                    tick,
-                    "build_stopped",
-                    player=b.owner,
-                    node=nid,
-                    kind=FACTORY_KIND,
-                    edge=None,
-                    reason="interrupted",
-                )
+def pay(state: GameState, player: int, node: int, owed: int) -> tuple[int, int]:
+    """Take up to ``owed`` charges for a build of ``player`` in ``node`` (DEC-41, item 7): the
+    node's warehouse first, then the charged units of the player's groups standing there outside
+    a fight, one charge at a time from the group with the most ``charged`` (ties: the lower id).
+    Returns the charges taken from the warehouse and from the units."""
+    # TODO(#651): one charge at a time from the largest, groups in a fight do not pay, the payment
+    # retried every tick: the readings of item 7 in mechanics.md (#645).
+    n = state.nodes[node]
+    from_stock = min(owed, n.warehouse)
+    n.warehouse -= from_stock
+    n.inbox = min(n.inbox, n.warehouse)  # a relay gives out only what is still there (L5)
+    left = owed - from_stock
+    groups: list[Group] = []
+    if left > 0:
+        for gid in sorted(state.groups):
+            g = state.groups[gid]
+            here = isinstance(g.location, AtNode) and g.location.node == node
+            if here and g.owner == player and g.fight is None and g.charged > 0:
+                groups.append(g)
+    from_units = 0
+    while left > 0 and groups:
+        group = max(groups, key=lambda g: (g.charged, -g.id))
+        if group.charged == 0:
+            break
+        group.charged -= 1
+        left -= 1
+        from_units += 1
+    return from_stock, from_units
+
+
+def _pay_into(
+    state: GameState, player: int, node: int, kind: str, owed: int, events: list[Event]
+) -> int:
+    """``pay()`` what ``owed`` asks, add ``build_paid`` to ``events`` when charges were taken;
+    returns what is still owed."""
+    if owed <= 0:
+        return 0
+    from_stock, from_units = pay(state, player, node, owed)
+    owed -= from_stock + from_units
+    if from_stock or from_units:
+        events.append(
+            event(
+                state.tick,
+                "build_paid",
+                player=player,
+                node=node,
+                kind=kind,
+                warehouse=from_stock,
+                units=from_units,
+                owed=owed,
             )
-            continue
-        if tick < b.since + ticks:
-            continue
-        city.factory_build = None
-        city.factory = b.owner
+        )
+    return owed
+
+
+def start_factory(state: GameState, rules: Ruleset, player: int, node: int) -> list[Event]:
+    """Apply a validated ``BuildFactory(node)``: start the build, pay what can be paid now."""
+    events = [
+        event(state.tick, "build_started", player=player, node=node, kind=FACTORY_KIND, level=None)
+    ]
+    owed = _pay_into(state, player, node, FACTORY_KIND, charge_cost(rules, FACTORY_KIND), events)
+    state.nodes[node].factory_build = FactoryBuild(owner=player, since=state.tick, owed=owed)
+    return events
+
+
+def start_fort(state: GameState, rules: Ruleset, player: int, node: int) -> list[Event]:
+    """Apply a validated ``BuildBunker(node)``: start the build, pay what can be paid now."""
+    events = [
+        event(state.tick, "build_started", player=player, node=node, kind=FORT_KIND, level=None)
+    ]
+    owed = _pay_into(state, player, node, FORT_KIND, charge_cost(rules, FORT_KIND), events)
+    state.nodes[node].fort_build = FactoryBuild(owner=player, since=state.tick, owed=owed)
+    return events
+
+
+def _site_build(
+    state: GameState, nid: int, b: FactoryBuild, kind: str, ticks: int, events: list[Event]
+) -> tuple[FactoryBuild | None, bool]:
+    """One tick of a factory or bunker build in ``nid``: stopped by an owner change, paid, done.
+    Returns the build that stays (``None`` when it is stopped or done) and whether it is done."""
+    tick = state.tick
+    if state.nodes[nid].owner != b.owner:
+        events.append(
+            event(
+                tick,
+                "build_stopped",
+                player=b.owner,
+                node=nid,
+                kind=kind,
+                edge=None,
+                reason="interrupted",
+            )
+        )
+        return None, False
+    if b.owed > 0:
+        owed = _pay_into(state, b.owner, nid, kind, b.owed, events)
+        b = replace(b, owed=owed, since=tick if owed == 0 else b.since)
+        if owed > 0:
+            return b, False
+    if tick < b.since + ticks:
+        return b, False
+    if kind == FACTORY_KIND:
         events.append(event(tick, "factory_built", player=b.owner, node=nid))
+    else:
+        events.append(event(tick, "fort_built", player=b.owner, node=nid))
+    return None, True
+
+
+def _site_builds(state: GameState, rules: Ruleset) -> list[Event]:
+    """Pay, finish or stop the factory and bunker builds (DEC-41, items 2, 7, 12), nodes in id
+    order, the factory before the bunker of one node."""
+    events: list[Event] = []
+    factory_ticks = rules.factory_rules().build_ticks
+    fort_ticks = rules.bunker_rules().build_ticks
+    for nid in sorted(state.nodes):
+        node = state.nodes[nid]
+        b = node.factory_build
+        if b is not None:
+            node.factory_build, done = _site_build(
+                state, nid, b, FACTORY_KIND, factory_ticks, events
+            )
+            if done:
+                node.factory = b.owner
+        b = node.fort_build
+        if b is not None:
+            node.fort_build, done = _site_build(state, nid, b, FORT_KIND, fort_ticks, events)
+            if done:
+                node.fort = True
     return events
 
 
@@ -202,6 +324,11 @@ def build(state: GameState, rules: Ruleset) -> list[Event]:
             city.build = None
             events.append(event(tick, "build_stopped", reason="interrupted", edge=None, **data))
             continue
+        if b.owed > 0:  # the economy v2: the progressive payment (DEC-41, item 7)
+            owed = _pay_into(state, b.owner, nid, b.kind.value, b.owed, events)
+            b = city.build = replace(b, owed=owed, since=tick if owed == 0 else b.since)
+            if owed > 0:
+                continue
         if tick < done_tick(rules, b):
             continue
         city.build = None
@@ -223,5 +350,5 @@ def build(state: GameState, rules: Ruleset) -> list[Event]:
                     )
                 )
     if rules.v2:
-        events.extend(_factory_builds(state, rules))
+        events.extend(_site_builds(state, rules))
     return events

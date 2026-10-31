@@ -40,6 +40,7 @@ from gow_sim.analysis import MatchLog, MatchMetrics, MatchRecorder, analyze
 from gow_sim.canonical import digest
 from gow_sim.commands import (
     BuildBarracks,
+    BuildBunker,
     BuildFactory,
     CancelOrder,
     CancelRecruit,
@@ -179,6 +180,8 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "transfer", "from": src, "to": dst, "n": n}
         case BuildFactory(node=node):
             return {"type": "build_factory", "node": node}
+        case BuildBunker(node=node):
+            return {"type": "build_bunker", "node": node}
         case DrawLine(path=path):
             return {"type": "draw_line", "path": list(path)}
         case RemoveLine(line=line):
@@ -230,6 +233,8 @@ def decode_command(data: object) -> Command:
                 return Transfer(_int(d["from"]), _int(d["to"]), _int(d["n"]))
             case "build_factory":
                 return BuildFactory(_int(d["node"]))
+            case "build_bunker":
+                return BuildBunker(_int(d["node"]))
             case "draw_line":
                 path = d["path"]
                 if not isinstance(path, list):

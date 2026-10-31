@@ -211,11 +211,15 @@ def test_fog_capture_failed_goes_only_to_the_capturing_player(result: str) -> No
         assert event_for_player(raw, 1 - player, KEY) is None
 
 
-@pytest.mark.parametrize("kind", ["charge_burned", "factory_built", "line_cut", "line_rerouted"])
+@pytest.mark.parametrize(
+    "kind",
+    ["build_paid", "charge_burned", "factory_built", "fort_built", "line_cut", "line_rerouted"],
+)
 def test_fog_economy_v2_events_go_only_to_their_player(kind: str) -> None:
     """DEC-41, item 3 (fog: the enemy's lines are never visible) and item 14: the factory burn,
     the factory build and the cut or reroute of a line (``line`` is the owner's per-player id)
-    go only to the player they belong to; the opponent gets none of their fields."""
+    go only to the player they belong to; the opponent gets none of their fields. The same for the
+    progressive payment of a building and the finished bunker (#645, items 7 and 12)."""
     data = _sample(kind)
     for player in PLAYERS:
         data["player"] = player

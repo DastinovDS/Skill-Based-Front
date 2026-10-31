@@ -784,6 +784,8 @@ def _build_view(
 
 
 def _building_view(rules: Ruleset, b: Build | None) -> BuildingView | None:
+    # TODO(#647): a v2 build that still owes charges (DEC-41, item 7) has no done tick yet; the
+    # view shows ``since + duration`` until the payment fields come with the protocol.
     return None if b is None else BuildingView(kind=b.kind, done_tick=done_tick(rules, b))
 
 

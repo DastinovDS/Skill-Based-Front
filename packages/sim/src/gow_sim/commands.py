@@ -28,10 +28,12 @@ warehouse levels (DEC-26): ``systems.build``; they are not public.
 Front markers and the rear minimum (DEC-28): ``SetFront`` and ``SetRearMin``; one-off transfers
 (DEC-18): ``Transfer``; none of them is public; a transfer is cut to the free room of the
 target and leaves in batches, the first in the tick it is applied (``systems.supply``, #287).
-Economy v2 (DEC-41, items 2, 3, 5, 14; ``economy.model = "v2"``): ``BuildFactory``, ``DrawLine``
-and ``RemoveLine`` (free of CP; ``systems.lines``, ``systems.build``); ``SetStance``, ``SetFront``,
-``SetRearMin``, ``Transfer`` and ``UpgradeRoad`` give ``FEATURE_DISABLED`` there, and the three
-new commands give it under v1. None of them is public.
+Economy v2 (DEC-41, items 2, 3, 5, 7, 12, 14; ``economy.model = "v2"``): ``BuildFactory``,
+``BuildBunker``, ``DrawLine`` and ``RemoveLine`` (free of CP; ``systems.lines``,
+``systems.build``); the buildings are paid in charges by the progressive payment of item 7
+(``systems.build.pay``), so no charge check rejects them. ``SetStance``, ``SetFront``,
+``SetRearMin``, ``Transfer``, ``UpgradeRoad`` and ``SetMode(DEFENSE)`` give ``FEATURE_DISABLED``
+there, and the four new commands give it under v1. None of them is public.
 """
 
 from collections.abc import Callable, Iterable
@@ -55,7 +57,8 @@ from gow_sim.state import (
     Order,
     event,
 )
-from gow_sim.systems.build import start_city_build, start_factory, start_road
+from gow_sim.systems.build import start_city_build, start_factory, start_fort, start_road
+from gow_sim.systems.capacity import warehouse_capacity
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
 from gow_sim.systems.lines import (
     creates_cycle,
@@ -84,6 +87,7 @@ from gow_sim.systems.vision import compute_vision, edge_detail_level, is_visible
 
 __all__ = [
     "BuildBarracks",
+    "BuildBunker",
     "BuildFactory",
     "CancelOrder",
     "CancelRecruit",
@@ -236,6 +240,14 @@ class BuildFactory:
 
 
 @dataclass(frozen=True, slots=True)
+class BuildBunker:
+    """The own city or province ``node`` builds a bunker (DEC-41, item 12; code name ``fort``;
+    economy v2)."""
+
+    node: int
+
+
+@dataclass(frozen=True, slots=True)
 class DrawLine:
     """A supply line along ``path``: own nodes from its source (an own factory or the target of
     an own line) to its target, an own city, each next one a neighbour (DEC-41, items 3 and 6)."""
@@ -271,6 +283,7 @@ type Command = (
     | SetRearMin
     | Transfer
     | BuildFactory
+    | BuildBunker
     | DrawLine
     | RemoveLine
     | Forfeit
@@ -301,6 +314,7 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             | SetRearMin()
             | Transfer()
             | BuildFactory()
+            | BuildBunker()
             | DrawLine()
             | RemoveLine()
             | Forfeit()
@@ -450,8 +464,8 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return cost.rear_min
         case Transfer():
             return cost.transfer
-        case BuildFactory() | DrawLine() | RemoveLine():
-            return 0  # paid in charges or free (DEC-41, items 2 and 3)
+        case BuildFactory() | BuildBunker() | DrawLine() | RemoveLine():
+            return 0  # paid in charges or free (DEC-41, items 2, 3, 12)
         case Forfeit():
             return 0
 
@@ -626,6 +640,8 @@ def _check(
             return _check_transfer(state, rules, player, src, dst, n)
         case BuildFactory(node=node):
             return _check_factory(state, rules, player, node)
+        case BuildBunker(node=node):
+            return _check_fort(state, player, node)
         case DrawLine(path=path):
             return _check_line(state, rules, player, path)
         case RemoveLine(line=line):
@@ -638,10 +654,12 @@ def _check(
 
 def _other_model(rules: Ruleset, cmd: Command) -> bool:
     """``cmd`` belongs to the other economy model (DEC-41, items 5 and 14)."""
-    if isinstance(cmd, BuildFactory | DrawLine | RemoveLine):
+    if isinstance(cmd, BuildFactory | BuildBunker | DrawLine | RemoveLine):
         return not rules.v2
     if isinstance(cmd, SetStance | SetFront | SetRearMin | Transfer | UpgradeRoad):
         return rules.v2
+    if isinstance(cmd, SetMode) and cmd.mode is Mode.DEFENSE:
+        return rules.v2  # the bunker replaces "Defense" (DEC-41, items 5 and 12)
     return False
 
 
@@ -649,8 +667,8 @@ def _check_factory(
     state: GameState, rules: Ruleset, player: int, node: int
 ) -> tuple[int, ...] | Reject:
     """The checks of ``BuildFactory`` in this order (DEC-41, item 2; mechanics.md, the notes of
-    #644): the node, the owner, a city, a factory or a factory build there already, the factory
-    cap, the charges of the city warehouse."""
+    #644 and #645): the node, the owner, a city, a factory or a factory build there already, the
+    factory cap. The charges are paid progressively (item 7), so they are not checked."""
     if not 0 <= node < len(state.map.nodes):
         return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
     city = state.nodes[node]
@@ -664,8 +682,20 @@ def _check_factory(
     factory = rules.factory_rules()
     if factory_count(state, player) >= factory.max:
         return Reject(RejectCode.FACTORY_LIMIT)
-    if city.warehouse < factory.cost:
-        return Reject(RejectCode.NOT_ENOUGH_CHARGES)
+    return ()
+
+
+def _check_fort(state: GameState, player: int, node: int) -> tuple[int, ...] | Reject:
+    """The checks of ``BuildBunker`` in this order (DEC-41, item 12; mechanics.md, the notes of
+    #645): the node, the owner, a bunker or a bunker build there already. A city or a province;
+    the charges are paid progressively (item 7)."""
+    if not 0 <= node < len(state.map.nodes):
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    site = state.nodes[node]
+    if site.owner != player:
+        return Reject(RejectCode.NOT_OWNER)
+    if site.fort or site.fort_build is not None:
+        return Reject(RejectCode.ALREADY_BUILT)
     return ()
 
 
@@ -684,7 +714,7 @@ def _check_line(
     if len(dict.fromkeys(path)) != len(path) or line_edges(state, path) is None:
         return Reject(RejectCode.INVALID_ARGUMENT)
     source, target = path[0], path[-1]
-    if not is_city(state.map, target):
+    if warehouse_capacity(state, rules, target) == 0:  # a province holds 1 (DEC-41, item 13)
         return Reject(RejectCode.NOT_CITY)
     if not is_line_source(state, player, source):
         return Reject(RejectCode.NOT_SOURCE)
@@ -944,9 +974,9 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
         case UpgradeRoad(edge=eid):
             return [start_road(state, player, eid)]  # not public (DEC-16, DEC-28)
         case BuildBarracks(node=node):
-            return [start_city_build(state, player, node, BuildKind.BARRACKS)]
+            return start_city_build(state, rules, player, node, BuildKind.BARRACKS)
         case UpgradeWarehouse(node=node):
-            return [start_city_build(state, player, node, BuildKind.WAREHOUSE)]
+            return start_city_build(state, rules, player, node, BuildKind.WAREHOUSE)
         case Recruit(node=node):
             queue_unit(state, node)
             return []
@@ -1012,7 +1042,9 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                 )
             ]
         case BuildFactory(node=node):
-            return [start_factory(state, rules, player, node)]
+            return start_factory(state, rules, player, node)
+        case BuildBunker(node=node):
+            return start_fort(state, rules, player, node)
         case DrawLine(path=path):
             ps = state.players[player]
             ps.lines[ps.next_line] = Line(ps.next_line, path)
