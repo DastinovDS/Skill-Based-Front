@@ -123,6 +123,26 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     the capital raise the alarm (item 2) within ``alarm`` ticks of their arrival; at any other
     own node they are answered like a strike at the capital (Defense and a reinforcement).
 
+18. **The midgame and the late game** (#663; ``gow_bots.bots.estimate``). The *phase* is the
+    opening while more than a tenth of the nodes is neutral, the midgame after it, the late game
+    in the last ``LATE_AWARDS`` VP awards. Every decision estimates the enemy force (the public,
+    symmetric start units of the map plus as many recruits as the own side made, minus the enemy
+    losses of the visible fights), its *strength by node* (fresh sightings, the rest spread over
+    the unseen enemy nodes), the *sectors* (the enemy nodes next to the own territory, with the
+    support of their enemy neighbours) and the *threat* to every own front node. On a settled map
+    the spare units of the capital march to the objective (``MID_RALLY``) and the personalities
+    play their plan by class switches: ``W_WEAK`` (score per shot a sector is below the mean
+    pressure), ``MID_GOAL`` (the army rallies to the weakest sector, ``weak_spot``),
+    ``MID_GROUP`` (no attack on a garrisoned enemy node with fewer charged units: concentrated
+    breakthroughs), ``W_RING`` (score per own neighbour of the target: the encirclement),
+    ``COUNTER`` (ahead on the forecast, enemy nodes are targets only for ``COUNTER_TICKS`` after
+    an enemy attack on an own node, the enemy neighbours of that node first). The late game keeps
+    item 1: ahead, every attack demands ``secure_margin`` more; not ahead, all in.
+19. **The turtle** (``SmartTurtle``): the natural half in the opening; on a settled map it holds
+    while the forecast is ahead (garrisons by the threat, the spare army in the most threatened
+    front city, bunkers or Defense, the own half retaken first) and pushes the weakest sector one
+    node at a time while it is not (its docstring).
+
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
 (``Bot.key``, ``Bot.edge_keys``), nothing draws from ``self.rng``.
@@ -476,6 +496,10 @@ class SmartBot(CampaignBot):
         self.shots: list[int] = [0] * count
         """Enemy shots estimated by node in this decision (``estimate.strengths``)."""
         self.sectors: list[Sector] = []
+        self.weak: dict[int, int] = {}
+        """Enemy sector to the shots its pressure is below the mean (``weakness``)."""
+        self.spot: int | None = None
+        """The weakest enemy sector of this decision (``weak_spot``)."""
         self.threat: list[int] = [0] * count
         """By own front node: enemy shots that can reach it (``estimate.threats``)."""
         self.attacked_at: dict[int, int] = {}
@@ -528,6 +552,7 @@ class SmartBot(CampaignBot):
         self.shots = strengths(view, self.map, self.neighbors, total, GUESS_UNITS)
         self.sectors = sectors(view, self.neighbors, self.shots)
         self.threat = threats(view, self.neighbors, self.shots)
+        self.weak, self.spot = self._weak_spots()
         tick, me = view.tick, view.player
         self.attacked_at = {
             n: t for n, t in sorted(self.attacked_at.items()) if tick - t <= COUNTER_TICKS
@@ -543,33 +568,34 @@ class SmartBot(CampaignBot):
         """The territory is split: the midgame or the late game (item 18)."""
         return self.phase is not Phase.OPENING
 
-    def weak_spot(self, ctx: Ctx) -> int | None:
-        """The enemy front sector with the least pressure per VP it is worth (item 18): the
-        least ``pressure`` minus 2 shots per VP, the one nearer the enemy capital, ``node_key``."""
+    def _weak_spots(self) -> tuple[dict[int, int], int | None]:
+        """By enemy sector the shots its pressure is below the mean of the sectors (rounded
+        down, at least 0), and the weak spot: the sector with the least pressure minus 2 shots
+        per VP it is worth, then the one nearer the enemy capital, then ``node_key`` (item 18)."""
+        secs = self.sectors
+        if not secs:
+            return {}, None
+        mean = sum(sec.pressure for sec in secs) // len(secs)
+        weak = {sec.node: max(0, mean - sec.pressure) for sec in secs}
         far = self.hops[self.enemy_home]
         best: tuple[int, int, int] | None = None
         spot: int | None = None
-        for sec in self.sectors:
+        for sec in secs:
             if sec.node == self.enemy_home:
                 continue
-            rank = (
-                sec.pressure - 2 * self.map.nodes[sec.node].vp,
-                far[sec.node],
-                self.key(sec.node),
-            )
+            vp = self.map.nodes[sec.node].vp
+            rank = (sec.pressure - 2 * vp, far[sec.node], self.key(sec.node))
             if best is None or rank < best:
                 best, spot = rank, sec.node
-        return spot
+        return weak, spot
+
+    def weak_spot(self, ctx: Ctx) -> int | None:
+        """The weak spot of this decision (``_weak_spots``)."""
+        return self.spot
 
     def weakness(self, dest: int) -> int:
         """Shots enemy sector ``dest`` is below the mean pressure of the sectors (0 if not)."""
-        if not self.sectors:
-            return 0
-        mean = sum(sec.pressure for sec in self.sectors) // len(self.sectors)
-        for sec in self.sectors:
-            if sec.node == dest:
-                return max(0, mean - sec.pressure)
-        return 0
+        return self.weak.get(dest, 0)
 
     def front_hold(self, node: int) -> int:
         """Units an own node next to the enemy keeps (``hold_front``; a hook of the turtle)."""
