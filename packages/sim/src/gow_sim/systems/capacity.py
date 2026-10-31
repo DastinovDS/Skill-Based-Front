@@ -38,7 +38,10 @@ Starvation in an encirclement (DEC-19; ``starvation`` after the attrition, in th
 Every owner change goes through ``change_owner()``: the warehouse is emptied (no trophies,
 mechanics.md, section 9), road levels, the barracks and the warehouse level are kept (DEC-26,
 item 4), the recruit queue of the former owner is lost without a refund (DEC-25,
-item 10), the grace period starts.
+item 10), the grace period starts. Under the economy v2 (DEC-41) the relay state of the node goes
+with the warehouse; its factory and its lines are settled by ``systems.supply`` in the same tick.
+
+Under the economy v2 there is no starvation (DEC-41, item 5).
 """
 
 from gow_sim.maps import NodeKind
@@ -184,6 +187,8 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     n.recruit_progress = 0
     n.owner = owner
     n.warehouse = 0
+    n.inbox = 0  # the relay state of DEC-41 goes with the warehouse
+    n.rr = 0
     n.cut_since = None
     n.over_ticks = 0
     n.captured_tick = state.tick
@@ -217,7 +222,8 @@ def capacity(state: GameState, rules: Ruleset) -> list[Event]:
             continue
         node.over_ticks = 0
         events.append(_kill_one(state, node_id, groups))
-    events.extend(starvation(state, rules, garrisons))
+    if not rules.v2:  # no starvation in the economy v2 (DEC-41, item 5)
+        events.extend(starvation(state, rules, garrisons))
     return events
 
 

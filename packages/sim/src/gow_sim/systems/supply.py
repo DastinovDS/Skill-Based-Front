@@ -485,9 +485,9 @@ def supply(state: GameState, rules: Ruleset) -> list[Event]:
     for pid in sorted(state.players):
         events.extend(_fall_back_fronts(state, rules, pid))
     capacities = warehouse_capacities(state, rules)
-    events.extend(_move_packets(state, capacities))
-    garrisons = _garrisons(state)
-    _recharge(state, rules, garrisons)
+    events.extend(move_packets(state, capacities))
+    garrisons = garrisons_by_node(state)
+    recharge(state, rules, garrisons)
     spill = _spill(state)
     tick = state.tick
     if tick > 0 and tick % rules.supply.dispatch_ticks == 0:
@@ -612,8 +612,15 @@ def _owned_by(state: GameState, edge: int, player: int) -> bool:
     return state.nodes[e.a].owner == player == state.nodes[e.b].owner
 
 
-def _move_packets(state: GameState, capacities: tuple[int, ...]) -> list[Event]:
-    """Lose packets on roads that are no longer own internal ones, move and deliver the rest."""
+def move_packets(
+    state: GameState,
+    capacities: tuple[int, ...],
+    delivered: Callable[[Packet, int, int], None] | None = None,
+) -> list[Event]:
+    """Lose packets on roads that are no longer own internal ones, move and deliver the rest.
+
+    ``delivered(packet, node, charges)``: called for every packet that reaches the end of its
+    path, with the charges that went into the warehouse (the economy v2 relays, DEC-41)."""
     events: list[Event] = []
     tick = state.tick
     mapdef = state.map
@@ -652,6 +659,8 @@ def _move_packets(state: GameState, capacities: tuple[int, ...]) -> list[Event]:
         del state.packets[pid]  # the end of the path, or the way is cut at an own city
         added = min(packet.charges, max(0, capacities[node_id] - node.warehouse))
         node.warehouse += added
+        if delivered is not None and not packet.route and node_id != packet.from_node:
+            delivered(packet, node_id, added)
         events.append(
             event(tick, "packet_delivered", packet=pid, player=owner, node=node_id, charges=added)
         )
@@ -679,7 +688,7 @@ def _lost(tick: int, pid: int, packet: Packet) -> Event:
     )
 
 
-def _garrisons(state: GameState) -> dict[int, list[Group]]:
+def garrisons_by_node(state: GameState) -> dict[int, list[Group]]:
     """Standing groups of the node owner, by node, each list by ascending group id."""
     garrisons: dict[int, list[Group]] = {}
     for gid in sorted(state.groups):
@@ -692,7 +701,7 @@ def _garrisons(state: GameState) -> dict[int, list[Group]]:
     return garrisons
 
 
-def _recharge(state: GameState, rules: Ruleset, garrisons: dict[int, list[Group]]) -> None:
+def recharge(state: GameState, rules: Ruleset, garrisons: dict[int, list[Group]]) -> None:
     for node_id in sorted(garrisons):
         node = state.nodes[node_id]
         left = min(rules.supply.recharge_per_tick, node.warehouse)

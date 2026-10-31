@@ -23,14 +23,17 @@ import pytest
 
 from gow_sim.commands import (
     BuildBarracks,
+    BuildFactory,
     CancelOrder,
     CancelRecruit,
     Command,
+    DrawLine,
     Merge,
     Move,
     Ok,
     PlayerCommand,
     Recruit,
+    RemoveLine,
     SetFront,
     SetMode,
     SetRearMin,
@@ -46,7 +49,7 @@ from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdge
 from gow_sim.systems.movement import find_path, traversal_ticks
-from gow_sim.systems.supply import is_city
+from gow_sim.systems.supply import is_city, transfer_route
 from gow_sim.systems.victory import EndReason, Outcome
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -66,10 +69,10 @@ TICKS = 600
 DECIDE_EVERY = 5
 
 
-@pytest.fixture(scope="module", params=["mvp-0", "mvp-1"])
+@pytest.fixture(scope="module", params=["mvp-0", "mvp-1", "mvp-3"])
 def rules(request: pytest.FixtureRequest) -> Ruleset:
-    """mvp-0 and mvp-1 (``city_upgrades`` on, DEC-26) with 50 CP to start with: CP do not limit
-    the controller, every command is used."""
+    """mvp-0, mvp-1 (``city_upgrades`` on, DEC-26) and mvp-3 (the economy v2, DEC-41) with 50 CP
+    to start with: CP do not limit the controller, every command is used."""
     name: str = request.param
     base = load_ruleset(ROOT / "rulesets" / f"{name}.toml")
     return dataclasses.replace(base, cp=dataclasses.replace(base.cp, start=5000, cap=5000))
@@ -126,6 +129,8 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
         cmds.append(BuildBarracks(own_cities[-1]))
     if tick % 110 == 55 and own_cities:  # and a warehouse level of the first one
         cmds.append(UpgradeWarehouse(own_cities[0]))
+    if rules.v2:
+        cmds.extend(_decide_v2(state, rules, player, own_cities))
     idle = sorted(
         (
             g
@@ -151,6 +156,28 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
                 dest = _target(state, rules, player, node)
                 if dest is not None:
                     cmds.append(Move(g.id, dest, planned=tick % 20 == 0))
+    return cmds
+
+
+def _decide_v2(
+    state: GameState, rules: Ruleset, player: int, own_cities: list[int]
+) -> list[Command]:
+    """DEC-41: lines from the capital and from the targets of lines, factories, removals."""
+    tick = state.tick
+    cmds: list[Command] = []
+    if tick % 35 == 0 and len(own_cities) >= 2:
+        k = tick // 35
+        lines = state.players[player].lines
+        sources = [state.map.capital(player), *(lines[i].target for i in sorted(lines))]
+        src = sources[k % len(sources)]
+        dst = own_cities[k % len(own_cities)]
+        route = transfer_route(state, rules, player, src, dst) if src != dst else None
+        if route is not None:
+            cmds.append(DrawLine(route.nodes))
+    if tick % 45 == 0 and own_cities:
+        cmds.append(BuildFactory(own_cities[tick // 45 % len(own_cities)]))
+    if tick % 95 == 0:
+        cmds.append(RemoveLine(tick // 95 % 3))
     return cmds
 
 
@@ -207,6 +234,10 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
             return SetFront(marker, None if node is None else mirror_nodes[node])
         case Transfer(src=src, dst=dst, n=n):
             return Transfer(mirror_nodes[src], mirror_nodes[dst], n)
+        case BuildFactory(node=node):
+            return BuildFactory(mirror_nodes[node])
+        case DrawLine(path=path):
+            return DrawLine(tuple(mirror_nodes[n] for n in path))
         case _:
             return cmd
 
@@ -331,6 +362,11 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.has_barracks,
             a.warehouse_level,
         ), f"node {n}"
+        assert (b.factory, b.inbox, b.rr) == (swap[a.factory], a.inbox, a.rr), f"v2 of {n}"
+        fa, fb = a.factory_build, b.factory_build
+        assert (fb is None) == (fa is None), f"factory build of {n}"
+        if fa is not None and fb is not None:
+            assert (fb.owner, fb.since) == (swap[fa.owner], fa.since), f"factory build of {n}"
         ab, bb = a.build, b.build
         assert (bb is None) == (ab is None), f"build of {n}"
         if ab is not None and bb is not None:
@@ -353,6 +389,10 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     mirror = mapdef.mirror_nodes
     assert p1.fronts == tuple(None if f is None else mirror[f] for f in p0.fronts), "fronts"
     assert p1.rear_min == p0.rear_min
+    assert p1.next_line == p0.next_line
+    assert {k: tuple(mirror[n] for n in line.path) for k, line in p0.lines.items()} == {
+        k: line.path for k, line in p1.lines.items()
+    }, "lines"
     assert (p0.cp, p0.stance, p0.charge_acc, p0.vp, p0.stance_changed_tick, p0.forfeited) == (
         p1.cp,
         p1.stance,
@@ -427,7 +467,7 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     _assert_mirrored(state, groups)
     pending: list[Command] = []
     kinds: list[str] = []
-    applied = captures = moves_on_edges = fights = 0
+    applied = captures = moves_on_edges = fights = sent = 0
     for tick in range(1, TICKS + 1):
         commands = [PlayerCommand(0, seq, cmd) for seq, cmd in enumerate(pending)]
         commands += [
@@ -451,6 +491,7 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         groups.update(zip(_new_groups(events, 0), _new_groups(events, 1), strict=True))
         captures += sum(e.kind == "node_captured" for e in events)
         fights += sum(e.kind == "fight_started" for e in events)
+        sent += sum(e.kind == "packet_sent" for e in events)
         moves_on_edges += sum(isinstance(g.location, OnEdge) for g in state.groups.values())
         _assert_mirrored(state, groups)
         if match.finished:
@@ -463,17 +504,13 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         return
     # The run did something: commands were applied, groups moved and took nodes.
     assert applied > 20
-    assert {
-        "Move",
-        "Split",
-        "SetMode",
-        "Recruit",
-        "CancelRecruit",
-        "SetStance",
-        "CancelOrder",
-        "SetFront",
-        "SetRearMin",
-    } <= set(kinds)
+    assert {"Move", "Split", "SetMode", "Recruit", "CancelRecruit", "CancelOrder"} <= set(kinds)
+    if rules.v2:  # DEC-41: the v1 supply commands are disabled, the lines are mirrored
+        assert {"DrawLine", "RemoveLine"} <= set(kinds)
+        assert sent > 0, "the lines carried charges"
+        assert not {"SetStance", "SetFront", "SetRearMin", "Transfer", "UpgradeRoad"} & set(kinds)
+    else:
+        assert {"SetStance", "SetFront", "SetRearMin"} <= set(kinds)
     if rules.city_upgrades.enabled:  # DEC-26: the city development is mirrored as well
         assert {"BuildBarracks", "UpgradeWarehouse"} <= set(kinds)
     assert moves_on_edges > 0

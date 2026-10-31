@@ -20,6 +20,13 @@ DEC-02 (mechanics.md, section 6), numbers from ``Ruleset``:
   limited (DEC-09). Command validation and application (SIM-04) use
   ``stance_cooldown_left()`` and ``set_stance()``.
 
+Economy v2 (DEC-41, items 1 and 2; ``economy.model = "v2"``): no stances, the whole quantum goes
+to CP (the cap and ``cp_burned`` as above). Charges come only from the factories: every own
+factory city makes one charge per period into its own warehouse, the own capital per
+``factory.capital_period_ticks``, every other factory per ``factory.built_period_ticks`` (on ticks
+``t > 0`` divisible by the period; event ``charges_produced`` with ``spill = 0``). A full
+warehouse burns the charge: event ``charge_burned``, the only burn of production (L6).
+
 Tick convention: a system sees ``state.tick`` as the number of the tick being simulated, 1 for
 the first step after ``initial_state()``. A period fires on ticks ``t > 0`` with
 ``t % period == 0``, so the first CP quantum comes at tick 50, and 600 steps give 12 quanta.
@@ -37,6 +44,8 @@ CENTI: Final = 100
 
 def economy(state: GameState, rules: Ruleset) -> list[Event]:
     """CP quantum and its charge share for both players (symmetric, no player order effect)."""
+    if rules.v2:
+        return _economy_v2(state, rules)
     tick = state.tick
     if not (tick > 0 and tick % rules.cp.period_ticks == 0):
         return []
@@ -69,6 +78,38 @@ def economy(state: GameState, rules: Ruleset) -> list[Event]:
         events.append(
             event(tick, "charges_produced", player=pid, node=capital, charges=charges, spill=spill)
         )
+    return events
+
+
+def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
+    """The CP quantum without a stance and the production of the factories (DEC-41)."""
+    tick = state.tick
+    events: list[Event] = []
+    if tick > 0 and tick % rules.cp.period_ticks == 0:
+        for pid in sorted(state.players):
+            player = state.players[pid]
+            total = player.cp + rules.cp.per_period
+            burned = max(0, total - rules.cp.cap)
+            player.cp = total - burned
+            if burned > 0:
+                events.append(event(tick, "cp_burned", player=pid, cp=burned))
+    factory = rules.factory_rules()
+    for nid in sorted(state.nodes):
+        node = state.nodes[nid]
+        owner = node.owner
+        if owner is None or node.factory != owner:
+            continue
+        own_capital = nid == state.map.capital(owner)
+        period = factory.capital_period_ticks if own_capital else factory.built_period_ticks
+        if tick <= 0 or tick % period != 0:
+            continue
+        if node.warehouse < warehouse_capacity(state, rules, nid):
+            node.warehouse += 1
+            events.append(
+                event(tick, "charges_produced", player=owner, node=nid, charges=1, spill=0)
+            )
+        else:
+            events.append(event(tick, "charge_burned", player=owner, node=nid, charges=1))
     return events
 
 

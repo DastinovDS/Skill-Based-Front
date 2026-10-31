@@ -31,6 +31,19 @@ class Stance(StrEnum):
     WAR = "war"
 
 
+class EconomyModel(StrEnum):
+    """``economy.model`` (DEC-41, #642): ``v1`` is the economy of stances, front markers and
+    donors; ``v2`` the economy of factories and drawn supply lines."""
+
+    V1 = "v1"
+    V2 = "v2"
+
+
+OPTIONAL: Final = {"optional": True}
+"""Metadata of a field whose key may be left out of the file (the economy v2 keys, DEC-41): at its
+default it is left out of ``to_canonical`` too, so the hash of a v1 ruleset stays as it was."""
+
+
 class RecruitLocation(StrEnum):
     """Where ``Recruit(node)`` is allowed (DEC-01)."""
 
@@ -158,6 +171,11 @@ class EconomyRules:
     charges_per_cp: int
     start_stance: Stance
     stance_to_charges_pct: StanceTable
+    model: EconomyModel = dataclasses.field(default=EconomyModel.V1, metadata=OPTIONAL)
+    """DEC-41: under ``v2`` the stance keys above have no effect (item 1)."""
+    start_stock_capital_only: bool = dataclasses.field(default=False, metadata=OPTIONAL)
+    """DEC-41, item 9 (``v2`` only): the warehouses of the cities other than the capital start
+    empty; the capital keeps the start stock of the map."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,6 +348,31 @@ class WarehouseRules:
 
 
 @dataclass(frozen=True, slots=True)
+class FactoryRules:
+    """Supply factories (DEC-41, item 2; ``economy.model = "v2"`` only): a factory city makes one
+    charge per period into its own warehouse."""
+
+    capital_period_ticks: int
+    """The own capital, the main factory from the start."""
+    built_period_ticks: int
+    """Every other factory: a built one or a captured one (a captured capital too)."""
+    cost: int
+    """Charges ``BuildFactory`` takes from the warehouse of the city."""
+    build_ticks: int
+    """Ticks from ``BuildFactory`` to the factory."""
+    max: int
+    """Factories of a player at most, the capital and the builds under way included."""
+
+
+@dataclass(frozen=True, slots=True)
+class LineRules:
+    """Drawn supply lines (DEC-41, item 3; ``economy.model = "v2"`` only)."""
+
+    max_out: int
+    """Lines that start at one node at most (L4)."""
+
+
+@dataclass(frozen=True, slots=True)
 class VictoryRules:
     vp_period_ticks: int
     capital_multiplier: int
@@ -422,6 +465,27 @@ class Ruleset:
     city_upgrades: CityUpgradeRules
     warehouse: WarehouseRules
     vision: VisionRules
+    factory: FactoryRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
+    """Set exactly with ``economy.model = "v2"`` (DEC-41)."""
+    lines: LineRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
+    """Set exactly with ``economy.model = "v2"`` (DEC-41)."""
+
+    @property
+    def v2(self) -> bool:
+        """The economy of DEC-41 (``economy.model = "v2"``)."""
+        return self.economy.model is EconomyModel.V2
+
+    def factory_rules(self) -> FactoryRules:
+        """``factory`` of a v2 ruleset; an error under v1."""
+        if self.factory is None:
+            raise ValueError("factory rules exist only with economy.model = 'v2'")
+        return self.factory
+
+    def line_rules(self) -> LineRules:
+        """``lines`` of a v2 ruleset; an error under v1."""
+        if self.lines is None:
+            raise ValueError("line rules exist only with economy.model = 'v2'")
+        return self.lines
 
 
 def load_ruleset(path: str | Path) -> Ruleset:
@@ -457,7 +521,11 @@ def _plain(value: object) -> object:
         items: tuple[object, ...] = value  # pyright: ignore[reportUnknownVariableType]
         return [_plain(item) for item in items]
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {f.name: _plain(getattr(value, f.name)) for f in dataclasses.fields(value)}
+        return {
+            f.name: _plain(getattr(value, f.name))
+            for f in dataclasses.fields(value)
+            if not (f.metadata.get("optional") and getattr(value, f.name) == f.default)
+        }
     return value
 
 
@@ -513,22 +581,28 @@ def parse_ruleset(data: object) -> Ruleset:
             "city_upgrades",
             "warehouse",
             "vision",
+            "factory",
+            "lines",
         ),
     )
+    economy = _parse_economy(
+        root.table(
+            "economy",
+            (
+                "charges_per_cp",
+                "start_stance",
+                "stance_to_charges_pct",
+                "model",
+                "start_stock_capital_only",
+            ),
+        )
+    )
+    v2 = economy.model is EconomyModel.V2
     return Ruleset(
         tick_hz=root.integer("tick_hz", low=1),
         match_ticks=root.integer("match_ticks", low=1),
         cp=_parse_cp(root.table("cp", ("start", "cap", "per_period", "period_ticks"))),
-        economy=_parse_economy(
-            root.table(
-                "economy",
-                (
-                    "charges_per_cp",
-                    "start_stance",
-                    "stance_to_charges_pct",
-                ),
-            )
-        ),
+        economy=economy,
         orders=_parse_orders(
             root.table(
                 "orders",
@@ -584,6 +658,14 @@ def parse_ruleset(data: object) -> Ruleset:
             root.table("warehouse", ("gain_per_level", "max_level", "start_by_kind"))
         ),
         vision=_parse_vision(root.table("vision", ("range_starts", "by_terrain"))),
+        factory=_parse_factory(
+            root.v2_table(
+                "factory",
+                v2,
+                ("capital_period_ticks", "built_period_ticks", "cost", "build_ticks", "max"),
+            )
+        ),
+        lines=_parse_lines(root.v2_table("lines", v2, ("max_out",))),
     )
 
 
@@ -599,6 +681,13 @@ def _parse_cp(t: "_Table") -> CpRules:
 
 def _parse_economy(t: "_Table") -> EconomyRules:
     pct = t.table("stance_to_charges_pct", tuple(s.value for s in Stance))
+    model = EconomyModel.V1
+    if t.has("model"):
+        model = EconomyModel(t.choice("model", tuple(m.value for m in EconomyModel)))
+    v2 = model is EconomyModel.V2
+    start_stock_capital_only = False
+    if t.has_v2("start_stock_capital_only", v2):
+        start_stock_capital_only = t.boolean("start_stock_capital_only")
     return EconomyRules(
         charges_per_cp=t.integer("charges_per_cp", low=0),
         start_stance=Stance(t.choice("start_stance", tuple(s.value for s in Stance))),
@@ -607,7 +696,27 @@ def _parse_economy(t: "_Table") -> EconomyRules:
             balance=pct.integer("balance", low=0, high=100),
             war=pct.integer("war", low=0, high=100),
         ),
+        model=model,
+        start_stock_capital_only=start_stock_capital_only,
     )
+
+
+def _parse_factory(t: "_Table | None") -> FactoryRules | None:
+    if t is None:
+        return None
+    return FactoryRules(
+        capital_period_ticks=t.integer("capital_period_ticks", low=1),
+        built_period_ticks=t.integer("built_period_ticks", low=1),
+        cost=t.integer("cost", low=0),
+        build_ticks=t.integer("build_ticks", low=1),
+        max=t.integer("max", low=1),
+    )
+
+
+def _parse_lines(t: "_Table | None") -> LineRules | None:
+    if t is None:
+        return None
+    return LineRules(max_out=t.integer("max_out", low=1))
 
 
 def _parse_orders(t: "_Table") -> OrderRules:
@@ -768,6 +877,23 @@ class _Table:
 
     def _path(self, key: str) -> str:
         return f"{self._where}.{key}" if self._where else key
+
+    def has(self, key: str) -> bool:
+        return key in self._data
+
+    def has_v2(self, key: str, v2: bool) -> bool:
+        """Whether the economy v2 key ``key`` (DEC-41) is given: it is required with
+        ``economy.model = "v2"`` and not allowed without it."""
+        if v2:
+            self._get(key)  # missing key: an error
+            return True
+        if key in self._data:
+            raise RulesetError(f"{self._path(key)}: only with economy.model = 'v2'")
+        return False
+
+    def v2_table(self, key: str, v2: bool, keys: tuple[str, ...]) -> "_Table | None":
+        """The economy v2 table ``key`` (DEC-41), see ``has_v2``; ``None`` without v2."""
+        return self.table(key, keys) if self.has_v2(key, v2) else None
 
     def _get(self, key: str) -> object:
         if key not in self._data:

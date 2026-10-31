@@ -40,14 +40,17 @@ from gow_sim.analysis import MatchLog, MatchMetrics, MatchRecorder, analyze
 from gow_sim.canonical import digest
 from gow_sim.commands import (
     BuildBarracks,
+    BuildFactory,
     CancelOrder,
     CancelRecruit,
     Command,
+    DrawLine,
     Forfeit,
     Merge,
     Move,
     PlayerCommand,
     Recruit,
+    RemoveLine,
     SetFront,
     SetMode,
     SetRearMin,
@@ -174,6 +177,12 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "set_rear_min", "n": n}
         case Transfer(src=src, dst=dst, n=n):
             return {"type": "transfer", "from": src, "to": dst, "n": n}
+        case BuildFactory(node=node):
+            return {"type": "build_factory", "node": node}
+        case DrawLine(path=path):
+            return {"type": "draw_line", "path": list(path)}
+        case RemoveLine(line=line):
+            return {"type": "remove_line", "line": line}
         case Forfeit():
             return {"type": "forfeit"}
 
@@ -219,6 +228,16 @@ def decode_command(data: object) -> Command:
                 return SetRearMin(_int(d["n"]))
             case "transfer":
                 return Transfer(_int(d["from"]), _int(d["to"]), _int(d["n"]))
+            case "build_factory":
+                return BuildFactory(_int(d["node"]))
+            case "draw_line":
+                path = d["path"]
+                if not isinstance(path, list):
+                    raise ReplayError("draw_line: path must be a list")
+                nodes: list[object] = path  # pyright: ignore[reportUnknownVariableType]
+                return DrawLine(tuple(_int(n) for n in nodes))
+            case "remove_line":
+                return RemoveLine(_int(d["line"]))
             case "forfeit":
                 return Forfeit()
             case _:

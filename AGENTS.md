@@ -199,7 +199,7 @@ gow_sim/
   maps.py         MapDef + loader
   state.py        GameState, Group, Node, Edge, Packet, Intent; to_canonical(), state_hash()
   commands.py     command types, validate(), apply_commands()
-  systems/        economy, movement, combat, capacity, supply, recruit, build, orders, victory, vision
+  systems/        economy, movement, combat, capacity, supply, lines, recruit, build, orders, victory, vision
   view.py         project() -> PlayerView
   match.py        Match, order of systems, run_headless()
   replay.py       recording, verification, dump of divergences
@@ -226,7 +226,7 @@ apply_commands → economy → movement → combat → capacity → supply (incl
 → recruit → build → orders → victory → vision (updating the "last seen" memory)
 ```
 
-The order in code: `gow_sim.match.SYSTEMS`. `Match.step()` first increments `state.tick`, so all systems of tick `t` see `state.tick == t` (the first tick is 1); the events of each system are appended to `state.events` immediately, and the following systems read them.
+The order in code: `gow_sim.match.SYSTEMS`. Under `economy.model = "v2"` (DEC-41) the `supply` step is `systems.lines` (factories and drawn supply lines) instead of `systems.supply`. `Match.step()` first increments `state.tick`, so all systems of tick `t` see `state.tick == t` (the first tick is 1); the events of each system are appended to `state.events` immediately, and the following systems read them.
 
 `combat` runs fights over time (DEC-24): a fight is a `Fight` in `GameState.fights` (iterated by id), a group has the field `fight`;
 rounds every `combat.round_ticks`, the groups of a fight do not move. `combat` gets the bonuses of scheduled orders and of "Defense" (accumulated, DEC-30) from `systems.orders.active_bonuses(state, rules)`
@@ -541,6 +541,10 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | transfer | `Transfer` | a one-off shipment of charges between your own cities (DEC-18) |
 | starvation | `starvation` | a garrison cut off from the capital spends charges (DEC-19) |
 | packet | `Packet` | charges travelling along a road |
+| economy model | `economy.model` | `v1` (stances, front markers, donors) or `v2` (factories and drawn lines, DEC-41; `rulesets/mvp-3.toml`) |
+| factory | `Node.factory`, `BuildFactory` | economy v2: a city that makes charges into its own warehouse; the capital from the start, others built for charges (DEC-41, item 2) |
+| supply line | `Line`, `DrawLine`, `RemoveLine` | economy v2: a path of own nodes drawn by the player from a factory or a line target to a city; 1 charge per dispatch on its turn (DEC-41, item 3) |
+| relay | `Node.inbox` | economy v2: a line target with outgoing lines; its round robin gives the charges its lines bring to its own warehouse and to its lines in turn (DEC-41, L5) |
 | bounce | `bounce` | an attacker without a win returns to the source node discharged |
 | scheduled order | `planned=True` | more expensive, visible to everyone as an intent, sets out with a delay, gives a one-off bonus |
 | fight | `Fight` | a fight over time (DEC-24): a node or an edge with a meeting point `point`, rounds every `combat.round_ticks`, reinforcements and retreat; visible to both (`PlayerView.fights`) |
