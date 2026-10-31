@@ -8,7 +8,8 @@ their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``SetRearMin(n)``; DEC-25:
 ``CancelRecruit(node)``; DEC-26: ``BuildBarracks(node)``, ``UpgradeWarehouse(node)``; economy v2
 (DEC-41, item 14): ``Move(group, dest, planned, bonus)``, ``BuildFactory(node)``,
-``BuildBunker(node)``, ``DrawLine(path)``, ``RemoveLine(line)``, ``ReleasePlan(group)``. A command
+``BuildBunker(node)``, ``DrawLine(path)``, ``RemoveLine(line)``, ``ReleasePlan(group)``;
+``SetAutoLines(on)`` (#665). A command
 of the other economy model (``ruleset_public.economy.model``) is rejected with
 ``FEATURE_DISABLED``. The conversion to simulation commands is PRO-03 (#46).
 
@@ -177,6 +178,15 @@ class RemoveLineCmd(WireModel):
     line: NonNegInt
 
 
+class SetAutoLinesCmd(WireModel):
+    """Turn the auto-extension of the own lines on or off (economy v2, DEC-41, owner decision
+    2026-10-31, #665): with it on, a city the player captures gets a line from the nearest own
+    source by itself. Free; ``NO_CHANGE`` when it is already so (``View.me.auto_lines``)."""
+
+    type: Literal["set_auto_lines"] = "set_auto_lines"
+    on: bool
+
+
 class ReleasePlanCmd(WireModel):
     """The own group waiting on a gathering planned order departs now with the bonus gathered so
     far, free (economy v2, DEC-41, item 10)."""
@@ -208,6 +218,7 @@ type Command = Annotated[
     | BuildBunkerCmd
     | DrawLineCmd
     | RemoveLineCmd
+    | SetAutoLinesCmd
     | ReleasePlanCmd
     | ForfeitCmd,
     Field(discriminator="type"),

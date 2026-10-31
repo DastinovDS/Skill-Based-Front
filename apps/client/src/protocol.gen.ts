@@ -5,7 +5,14 @@
  */
 export type Protocol = ClientMsg | ServerMsg | MapFile;
 export type ClientMsg =
-  HelloMsg | CommandMsg | PingMsg | ResyncMsg | PauseMsg | ResumeMsg | ReachQueryMsg;
+  | HelloMsg
+  | CommandMsg
+  | PingMsg
+  | ResyncMsg
+  | PauseMsg
+  | ResumeMsg
+  | ReachQueryMsg
+  | LineRouteQueryMsg;
 export type Command =
   | MoveCmd
   | SplitCmd
@@ -25,6 +32,7 @@ export type Command =
   | BuildBunkerCmd
   | DrawLineCmd
   | RemoveLineCmd
+  | SetAutoLinesCmd
   | ReleasePlanCmd
   | ForfeitCmd;
 /**
@@ -44,7 +52,8 @@ export type ServerMsg =
   | ErrorMsg
   | PongMsg
   | PausedMsg
-  | ReachMsg;
+  | ReachMsg
+  | LineRouteMsg;
 export type PlayerId = 0 | 1;
 /**
  * ``economy.model`` (DEC-41, #642): ``v1`` is the economy of stances, front markers and
@@ -257,6 +266,15 @@ export interface RemoveLineCmd {
   line: number;
 }
 /**
+ * Turn the auto-extension of the own lines on or off (economy v2, DEC-41, owner decision
+ * 2026-10-31, #665): with it on, a city the player captures gets a line from the nearest own
+ * source by itself. Free; ``NO_CHANGE`` when it is already so (``View.me.auto_lines``).
+ */
+export interface SetAutoLinesCmd {
+  type: 'set_auto_lines';
+  on: boolean;
+}
+/**
  * The own group waiting on a gathering planned order departs now with the bonus gathered so
  * far, free (economy v2, DEC-41, item 10).
  */
@@ -306,6 +324,22 @@ export interface ResumeMsg {
 export interface ReachQueryMsg {
   type: 'reach_query';
   group: string;
+}
+/**
+ * Ask for the suggested path of a supply line through ``points`` (economy v2, DEC-41,
+ * item 6; owner decision 2026-10-31, #665): the source, the nodes to route through, the target.
+ *
+ * The answer is ``line_route``. The interface sends it when the player clicks the target or a
+ * node to route through; the connection's message rate limit covers it like every other
+ * message. The suggestion is only a default: the player confirms it with ``draw_line``.
+ */
+export interface LineRouteQueryMsg {
+  type: 'line_route_query';
+  /**
+   * @minItems 2
+   * @maxItems 128
+   */
+  points: [number, number, ...number[]];
 }
 /**
  * Answer to a valid ``hello``, also after a reconnect; a full ``snapshot`` follows.
@@ -725,6 +759,11 @@ export interface SelfView {
    * The own rear minimum (DEC-28, item 3); the enemy's is never in a view.
    */
   rear_min: number;
+  /**
+   * Economy v2: the own lines extend to captured cities by themselves (``set_auto_lines``,
+   * #665); ``null`` under v1. The enemy's toggle is never in a view.
+   */
+  auto_lines: boolean | null;
 }
 export interface NodeView {
   id: number;
@@ -1358,6 +1397,25 @@ export interface ReachNode {
    */
   path: [number, number, ...number[]];
 }
+/**
+ * Answer to ``line_route_query``, computed by the server on the state after tick ``tick``
+ * (#665): the fastest path over own nodes through ``points`` in order, each leg avoiding the
+ * nodes of the legs before it (the sum of the packet times, ties by ``node_key``). ``path`` is
+ * empty when a point is not own, repeated or out of range, or a leg has no way. Only own nodes
+ * are on a path. The rules of ``draw_line`` (source, limit, cycle) are not checked here.
+ */
+export interface LineRouteMsg {
+  type: 'line_route';
+  /**
+   * The points of the query, as asked: the client matches the answer by them.
+   */
+  points: number[];
+  tick: number;
+  /**
+   * ``(points[0], ..., points[-1])`` or ``()``.
+   */
+  path: number[];
+}
 export interface MapFile {
   meta: MapMetaFile;
   nodes: MapNodeFile[];
@@ -1433,7 +1491,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 33;
+export const PROTOCOL_VERSION = 34;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

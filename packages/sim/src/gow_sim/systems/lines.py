@@ -16,6 +16,18 @@ Order inside the step:
    (``supply.transfer_route``: the sum of ``packet_ticks``, ties by the smaller ``node_key``
    sequence; event ``line_rerouted``), or cut if there is none. An intact path is never changed.
    A captured factory is a captured source, so all of its lines are cut.
+2a. **Auto-extension** (owner decision 2026-10-31, #665), for a player with
+   ``PlayerState.auto_lines`` on (``lines.auto_extend`` at the start, then ``SetAutoLines``):
+   every city (not a province) the player captured in this tick (``node_captured``) that is
+   still own and not an own factory, in ``node_key`` order of the player, gets a new line from
+   the **nearest suitable source**: an own node that may start a line (``is_line_source``: an
+   own factory or the target of an own line, so the line is new or extends the tree) with fewer
+   than ``lines.max_out`` lines out and no cycle closed (L4), whose fastest way over own nodes to
+   the city (``transfer_route``: the sum of ``packet_ticks``, ties by the smaller ``node_key``
+   sequence) takes the fewest ticks, at most ``lines.auto_extend_ticks`` ("next to it"); ties by
+   the smaller ``node_key`` of the source. The line follows that way (event ``line_auto``). No
+   suitable source that near: nothing happens. A city joined this way is the target of a line,
+   so a later capture in the same tick may extend from it.
 3. **Packets** move as in v1 (``supply.move_packets``: a packet on a road that is no longer own is
    lost, at an own city with the way cut it is taken into the warehouse, at the end of its path it
    fills the warehouse, the excess burns as ``charges_overflow``). A packet that ends in a relay
@@ -58,6 +70,7 @@ from gow_sim.systems.capacity import warehouse_capacities
 from gow_sim.systems.supply import (
     all_packet_ticks,
     garrisons_by_node,
+    is_city,
     move_packets,
     packet_dest,
     recharge,
@@ -81,6 +94,7 @@ def supply_lines(state: GameState, rules: Ruleset) -> list[Event]:
     _settle_factories(state, rules)
     for pid in sorted(state.players):
         events.extend(_check_lines(state, rules, pid))
+        events.extend(_auto_extend(state, rules, pid))
     capacities = warehouse_capacities(state, rules)
     relays = {pid: _relays(state, pid) for pid in sorted(state.players)}
 
@@ -203,6 +217,56 @@ def _check_lines(state: GameState, rules: Ruleset, player: int) -> list[Event]:
                     state.tick, "line_rerouted", player=player, line=k, from_node=src, to_node=dst
                 )
             )
+    return events
+
+
+def _auto_extend(state: GameState, rules: Ruleset, player: int) -> list[Event]:
+    """Join the cities ``player`` captured in this tick to its lines (module docstring, 2a)."""
+    if not state.players[player].auto_lines:
+        return []
+    nodes, mapdef = state.nodes, state.map
+    captured: dict[int, bool] = {}
+    for e in state.events:  # the events of this tick so far: movement and combat capture
+        node = e.get("node") if e.kind == "node_captured" else None
+        if isinstance(node, int) and e.get("player") == player:
+            captured[node] = True
+    events: list[Event] = []
+    max_out, reach = rules.line_rules().max_out, rules.line_rules().auto_extend_ticks
+    edge_ticks = all_packet_ticks(state, rules) if captured else ()
+    for city in sorted(captured, key=lambda n: mapdef.node_key(player, n)):
+        n = nodes[city]
+        if n.owner != player or n.factory == player or not is_city(mapdef, city):
+            continue
+        best: tuple[int, int, tuple[int, ...]] | None = None
+        for src in sorted(nodes, key=lambda v: mapdef.node_key(player, v)):
+            if src == city or nodes[src].owner != player or not is_line_source(state, player, src):
+                continue
+            if len(lines_out(state, player, src)) >= max_out:
+                continue
+            if creates_cycle(state, player, src, city):
+                continue
+            route = transfer_route(state, rules, player, src, city, edge_ticks=edge_ticks)
+            if route is None or route.total_ticks > reach:
+                continue  # no way, or not next to the city
+            cand = (route.total_ticks, mapdef.node_key(player, src), route.nodes)
+            if best is None or cand[:2] < best[:2]:
+                best = cand
+        if best is None:
+            continue
+        ps = state.players[player]
+        line = Line(ps.next_line, best[2])
+        ps.lines[line.id] = line
+        ps.next_line += 1
+        events.append(
+            event(
+                state.tick,
+                "line_auto",
+                player=player,
+                line=line.id,
+                from_node=line.source,
+                to_node=line.target,
+            )
+        )
     return events
 
 

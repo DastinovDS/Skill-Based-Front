@@ -59,6 +59,7 @@ from gow_protocol.messages import (
     Calibration,
     EndReason,
     EventMsg,
+    LineRouteMsg,
     MatchEndMsg,
     MatchEndStats,
     RatingChange,
@@ -141,6 +142,7 @@ PRIVATE_KINDS: Final = frozenset(
         "group_arrived",
         "group_split",
         "groups_merged",
+        "line_auto",
         "line_cut",
         "line_rerouted",
         "packet_delivered",
@@ -233,6 +235,7 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     ),
     "group_split": ("group", "new_group", "player", "units"),
     "groups_merged": ("group", "node", "player", "units"),
+    "line_auto": ("from_node", "line", "player", "to_node"),
     "line_cut": ("from_node", "line", "player", "to_node"),
     "line_rerouted": ("from_node", "line", "player", "to_node"),
     "node_captured": ("node", "player"),
@@ -314,6 +317,7 @@ def view_to_wire(view: sv.PlayerView) -> View:
             stance=view.me.stance,
             fronts=view.me.fronts,
             rear_min=view.me.rear_min,
+            auto_lines=view.me.auto_lines,
         ),
         vp=(vp[0], vp[1]),
         nodes=tuple(
@@ -507,6 +511,7 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             "stance": me.stance,
             "fronts": list(me.fronts),
             "rear_min": me.rear_min,
+            "auto_lines": me.auto_lines,
         },
         "vp": view.vp[:2],
         "nodes": [
@@ -734,6 +739,8 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.DrawLine(path)
         case wire.RemoveLineCmd(line=line):
             return sim.RemoveLine(line)
+        case wire.SetAutoLinesCmd(on=on):
+            return sim.SetAutoLines(on)
         case wire.ReleasePlanCmd(group=g):
             return sim.ReleasePlan(gid(g))
         case wire.ForfeitCmd():
@@ -764,6 +771,11 @@ def reach_msg(group: str, tick: int, reach: sv.Reach | None) -> ReachMsg:
         nodes=tuple(ReachNode(node=n, ticks=t, path=p) for n, t, p in reach.nodes),
         split=reach.split,
     )
+
+
+def line_route_msg(points: tuple[int, ...], tick: int, path: tuple[int, ...]) -> LineRouteMsg:
+    """``line_route`` for the asked ``points`` after tick ``tick``; ``path`` ``()``: no way."""
+    return LineRouteMsg(points=points, tick=tick, path=path)
 
 
 # Events --------------------------------------------------------------------------------------

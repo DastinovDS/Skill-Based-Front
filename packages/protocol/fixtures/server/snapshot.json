@@ -6,7 +6,8 @@
       "cp": 250,
       "stance": "balance",
       "fronts": [1, null],
-      "rear_min": 1
+      "rear_min": 1,
+      "auto_lines": null
     },
     "vp": [12, 9],
     "nodes": [

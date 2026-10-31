@@ -27,7 +27,16 @@ SERVER_FIXTURES = sorted((FIXTURES_DIR / "server").glob("*.json"))
 RULESET_PATH = Path(__file__).resolve().parents[3] / "rulesets" / "mvp-0.toml"
 
 # Message and command types named by PRO-01 (#44) and SIM-04 (#20); ``reach``: DEC-20 (#242).
-CLIENT_TYPES = {"hello", "command", "ping", "resync", "pause", "resume", "reach_query"}
+CLIENT_TYPES = {
+    "hello",
+    "command",
+    "ping",
+    "resync",
+    "pause",
+    "resume",
+    "reach_query",
+    "line_route_query",
+}
 SERVER_TYPES = {
     "welcome",
     "snapshot",
@@ -38,6 +47,7 @@ SERVER_TYPES = {
     "pong",
     "paused",
     "reach",
+    "line_route",
 }
 COMMAND_TYPES = {
     "move",
@@ -61,6 +71,7 @@ COMMAND_TYPES = {
     "draw_line",
     "remove_line",
     "release_plan",
+    "set_auto_lines",
 }
 
 

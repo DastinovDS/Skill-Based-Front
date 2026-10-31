@@ -552,6 +552,9 @@ class SelfView(WireModel):
     ``ruleset_public``), ``null``: not placed. The enemy's markers are never in a view."""
     rear_min: NonNegInt
     """The own rear minimum (DEC-28, item 3); the enemy's is never in a view."""
+    auto_lines: bool | None
+    """Economy v2: the own lines extend to captured cities by themselves (``set_auto_lines``,
+    #665); ``null`` under v1. The enemy's toggle is never in a view."""
 
 
 class View(WireModel):

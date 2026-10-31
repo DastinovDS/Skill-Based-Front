@@ -267,6 +267,10 @@ class PlayerState:
     """The supply lines of the player by id (DEC-41, item 3); empty under v1."""
     next_line: int = 0
     """The id of the next line the player draws."""
+    auto_lines: bool = False
+    """A city the player captures is joined to its lines by itself (DEC-41, auto-extension of
+    2026-10-31, #665; ``systems.lines``): ``lines.auto_extend`` at the start under v2, then the
+    player's ``SetAutoLines``. Always ``False`` under v1."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -519,6 +523,7 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
                 stance_changed_tick=None,
                 rear_min=rules.supply.rear_min_default,
                 fronts=(None,) * rules.supply.front_markers,
+                auto_lines=rules.v2 and rules.line_rules().auto_extend,
             )
             for p in PLAYERS
         },
@@ -651,6 +656,8 @@ def _v2_player_data(p: PlayerState) -> dict[str, object]:
         data["lines"] = [{"id": k, "path": list(p.lines[k].path)} for k in sorted(p.lines)]
     if p.next_line:
         data["next_line"] = p.next_line
+    if p.auto_lines:
+        data["auto_lines"] = True
     return data
 
 
@@ -916,7 +923,7 @@ def _parse_player(data: object, where: str) -> PlayerState:
             "fronts",
             "rear_min",
         ),
-        optional=("lines", "next_line"),
+        optional=("lines", "next_line", "auto_lines"),
     )
     fronts = _list(raw["fronts"], f"{where}.fronts")
     lines: dict[int, Line] = {}
@@ -944,6 +951,7 @@ def _parse_player(data: object, where: str) -> PlayerState:
         rear_min=_int(raw["rear_min"], f"{where}.rear_min", low=0),
         lines=lines,
         next_line=_int(raw.get("next_line", 0), f"{where}.next_line", low=0),
+        auto_lines=_bool(raw.get("auto_lines", False), f"{where}.auto_lines"),
     )
 
 

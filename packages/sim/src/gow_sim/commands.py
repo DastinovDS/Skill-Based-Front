@@ -35,7 +35,9 @@ Economy v2 (DEC-41, items 2, 3, 5, 7, 12, 14; ``economy.model = "v2"``): ``Build
 ``SetRearMin``, ``Transfer``, ``UpgradeRoad`` and ``SetMode(DEFENSE)`` give ``FEATURE_DISABLED``
 there, and the four new commands give it under v1. None of them is public. A planned ``Move``
 of v2 names its requested bonus (``Move.bonus >= 1``, item 10) and gathers it in
-``systems.orders``; ``ReleasePlan`` sends it at once (v1: ``FEATURE_DISABLED``).
+``systems.orders``; ``ReleasePlan`` sends it at once (v1: ``FEATURE_DISABLED``). ``SetAutoLines``
+turns the auto-extension of the player's lines on or off (#665, ``systems.lines``; free, not
+public; v1: ``FEATURE_DISABLED``).
 """
 
 from collections.abc import Callable, Iterable
@@ -108,6 +110,7 @@ __all__ = [
     "RejectCode",
     "ReleasePlan",
     "RemoveLine",
+    "SetAutoLines",
     "SetFront",
     "SetMode",
     "SetRearMin",
@@ -270,6 +273,14 @@ class RemoveLine:
 
 
 @dataclass(frozen=True, slots=True)
+class SetAutoLines:
+    """Turn the auto-extension of the own lines on or off (DEC-41, owner decision 2026-10-31,
+    #665): with it on, a city the player captures is joined to its lines by itself."""
+
+    on: bool
+
+
+@dataclass(frozen=True, slots=True)
 class ReleasePlan:
     """The group waiting on a gathering planned order departs now with the bonus gathered so
     far, free (DEC-41, item 10; economy v2 only)."""
@@ -301,6 +312,7 @@ type Command = (
     | BuildBunker
     | DrawLine
     | RemoveLine
+    | SetAutoLines
     | ReleasePlan
     | Forfeit
 )
@@ -335,6 +347,7 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             | BuildBunker()
             | DrawLine()
             | RemoveLine()
+            | SetAutoLines()
             | Forfeit()
         ):
             return cmd
@@ -482,8 +495,8 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return cost.rear_min
         case Transfer():
             return cost.transfer
-        case BuildFactory() | BuildBunker() | DrawLine() | RemoveLine():
-            return 0  # paid in charges or free (DEC-41, items 2, 3, 12)
+        case BuildFactory() | BuildBunker() | DrawLine() | RemoveLine() | SetAutoLines():
+            return 0  # paid in charges or free (DEC-41, items 2, 3, 12; #665)
         case ReleasePlan():
             return 0  # free (DEC-41, item 10)
         case Forfeit():
@@ -671,6 +684,8 @@ def _check(
             if line not in state.players[player].lines:
                 return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
             return ()
+        case SetAutoLines(on=on):
+            return Reject(RejectCode.NO_CHANGE) if state.players[player].auto_lines == on else ()
         case ReleasePlan(group=gid):
             group = _own_group(state, player, gid, seen)
             if isinstance(group, Reject):
@@ -688,7 +703,9 @@ def _check(
 
 def _other_model(rules: Ruleset, cmd: Command) -> bool:
     """``cmd`` belongs to the other economy model (DEC-41, items 5 and 14)."""
-    if isinstance(cmd, BuildFactory | BuildBunker | DrawLine | RemoveLine | ReleasePlan):
+    if isinstance(
+        cmd, BuildFactory | BuildBunker | DrawLine | RemoveLine | SetAutoLines | ReleasePlan
+    ):
         return not rules.v2
     if isinstance(cmd, SetStance | SetFront | SetRearMin | Transfer | UpgradeRoad):
         return rules.v2
@@ -1100,6 +1117,9 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             return []
         case RemoveLine(line=line):
             del state.players[player].lines[line]
+            return []
+        case SetAutoLines(on=on):
+            state.players[player].auto_lines = on
             return []
         case ReleasePlan(group=gid):
             release_plan(state.groups[gid], tick)  # it departs in this tick (movement)

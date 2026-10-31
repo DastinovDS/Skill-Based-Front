@@ -36,7 +36,15 @@ from gow_sim.systems.recruit import recruit
 from gow_sim.systems.supply import supply
 from gow_sim.systems.victory import EndReason, Outcome, victory
 from gow_sim.systems.vision import vision
-from gow_sim.view import PlayerView, Reach, check_match_key, project, reach, resolve
+from gow_sim.view import (
+    PlayerView,
+    Reach,
+    check_match_key,
+    line_route,
+    project,
+    reach,
+    resolve,
+)
 
 __all__ = [
     "HEADLESS_MATCH_KEY",
@@ -50,7 +58,7 @@ __all__ = [
     "run_headless",
 ]
 
-SIM_VERSION: Final = 29
+SIM_VERSION: Final = 30
 """Version of the rules and the system order; replays and golden hashes are per version."""
 
 HEADLESS_MATCH_KEY: Final = b"gow_sim headless match key 0001"
@@ -138,6 +146,10 @@ class Match:
     def reach(self, player: int, group: int) -> Reach | None:
         """Where the own group with opaque id ``group`` can go (``gow_sim.view.reach``)."""
         return reach(self.state, self.rules, player, group, self.match_key)
+
+    def line_route(self, player: int, points: tuple[int, ...]) -> tuple[int, ...]:
+        """The suggested path of a line through ``points`` (``gow_sim.view.line_route``)."""
+        return line_route(self.state, self.rules, player, points)
 
     def resolve(self, player: int, cmd: Command) -> Command:
         """``resolve()`` of an opaque-id command of ``player`` on the current state."""

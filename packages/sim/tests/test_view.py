@@ -451,8 +451,10 @@ def test_no_enemy_cp_stance_production_or_counters(rules: Ruleset) -> None:
     state.nodes[5].recruit_queue = 2  # the enemy's production is hidden (DEC-25, item 12)
     state.nodes[5].recruit_progress = 17
     assert _view(state, rules) == before
-    # Own counters only (DEC-28: the own front markers and rear minimum).
-    assert {f.name for f in dataclasses.fields(SelfView)} == {"cp", "stance", "fronts", "rear_min"}
+    # Own counters only (DEC-28: the own front markers and rear minimum; #665: the own toggle of
+    # the auto-extension, tests/test_dec41_auto.py).
+    names = {f.name for f in dataclasses.fields(SelfView)}
+    assert names == {"cp", "stance", "fronts", "rear_min", "auto_lines"}
     me = state.players[0]
     assert before.me == SelfView(cp=me.cp, stance=me.stance, fronts=(None, None), rear_min=1)
 

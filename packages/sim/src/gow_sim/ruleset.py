@@ -394,6 +394,14 @@ class LineRules:
 
     max_out: int
     """Lines that start at one node at most (L4)."""
+    auto_extend: bool = dataclasses.field(default=False, metadata=OPTIONAL)
+    """A city the player captures is joined by a new line from the nearest own source next to
+    it (DEC-41, auto-extension, owner decision 2026-10-31, #665): the start value of every
+    player's toggle (``SetAutoLines``)."""
+    auto_extend_ticks: int = dataclasses.field(default=0, metadata=OPTIONAL)
+    """"Next to it": the farthest the source of an auto-extension may be from the captured city,
+    in ticks of a packet over own nodes (the sum of ``packet_ticks``). Required with
+    ``auto_extend``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -711,7 +719,9 @@ def parse_ruleset(data: object) -> Ruleset:
                 ("capital_period_ticks", "built_period_ticks", "cost", "build_ticks", "max"),
             )
         ),
-        lines=_parse_lines(root.v2_table("lines", v2, ("max_out",))),
+        lines=_parse_lines(
+            root.v2_table("lines", v2, ("max_out", "auto_extend", "auto_extend_ticks"))
+        ),
         bunker=_parse_bunker(root.v2_table("bunker", v2, ("cost", "build_ticks", "shots"))),
     )
 
@@ -763,7 +773,13 @@ def _parse_factory(t: "_Table | None") -> FactoryRules | None:
 def _parse_lines(t: "_Table | None") -> LineRules | None:
     if t is None:
         return None
-    return LineRules(max_out=t.integer("max_out", low=1))
+    auto_extend = t.boolean("auto_extend") if t.has("auto_extend") else False
+    reach = 0
+    if auto_extend or t.has("auto_extend_ticks"):  # required with the auto-extension on
+        reach = t.integer("auto_extend_ticks", low=1)
+    return LineRules(
+        max_out=t.integer("max_out", low=1), auto_extend=auto_extend, auto_extend_ticks=reach
+    )
 
 
 def _parse_bunker(t: "_Table | None") -> BunkerRules | None:

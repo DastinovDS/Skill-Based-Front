@@ -19,8 +19,8 @@ If you changed the schema: raise `PROTOCOL_VERSION` (`gow_protocol.messages`), f
 
 | Directory | What | Decoder |
 |---|---|---|
-| `client/` | client → server: `hello`, `command` (every command type: SIM-04 #20 and later, the economy v2 ones of DEC-41 #647 among them), `ping`, `resync`, `pause`, `resume`, `reach_query` (DEC-20) | `gow_protocol.codec.decode_client` |
-| `server/` | server → client: `welcome`, `snapshot`, `ack`, `event`, `match_end`, `error`, `pong`, `paused`, `reach` (DEC-20) | `gow_protocol.codec.decode_server` |
+| `client/` | client → server: `hello`, `command` (every command type: SIM-04 #20 and later, the economy v2 ones of DEC-41 #647 among them), `ping`, `resync`, `pause`, `resume`, `reach_query` (DEC-20), `line_route_query` (#665) | `gow_protocol.codec.decode_client` |
+| `server/` | server → client: `welcome`, `snapshot`, `ack`, `event`, `match_end`, `error`, `pong`, `paused`, `reach` (DEC-20), `line_route` (#665) | `gow_protocol.codec.decode_server` |
 
 ## Scenarios
 

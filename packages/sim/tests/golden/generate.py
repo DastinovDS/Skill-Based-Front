@@ -42,6 +42,7 @@ from gow_sim.commands import (
     Move,
     ReleasePlan,
     RemoveLine,
+    SetAutoLines,
     SetFront,
     SetMode,
     SetRearMin,
@@ -161,6 +162,8 @@ class MixBot:
             cmds.append(BuildBunker(own[k // 29 % len(own)]))
         if k % 53 == 0:
             cmds.append(RemoveLine(k // 53 % 4))
+        if k % 67 == 0:  # the auto-extension off and on again (#665)
+            cmds.append(SetAutoLines(k // 67 % 2 == 0))
         if k % 13 == 0:  # a gathering planned order departs now (#646)
             waiting = [g for g in view.groups if g.order is not None and g.order.planned]
             if waiting:

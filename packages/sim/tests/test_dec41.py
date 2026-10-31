@@ -137,7 +137,7 @@ def test_mvp3_is_mvp2_with_the_v2_keys() -> None:
         "build_ticks": 100,
         "max": 3,
     }
-    expected["lines"] = {"max_out": 3}
+    expected["lines"] = {"max_out": 3, "auto_extend": True, "auto_extend_ticks": 100}
     # #645, items 7, 12, 13: buildings paid in charges instead of CP, the bunker, the province
     # warehouse.
     expected["orders"]["cost"]["barracks"] = 0
