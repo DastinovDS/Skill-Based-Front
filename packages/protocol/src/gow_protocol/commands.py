@@ -6,8 +6,11 @@ their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``SetStance(stance)``, ``UpgradeRoad(node, edge)``, ``Recruit(node)``, ``CancelOrder(group)``,
 ``Forfeit()``; DEC-18: ``Transfer(from, to, n)``; DEC-28: ``SetFront(marker, node)``,
 ``SetRearMin(n)``; DEC-25:
-``CancelRecruit(node)``; DEC-26: ``BuildBarracks(node)``, ``UpgradeWarehouse(node)``. The conversion
-to simulation commands is PRO-03 (#46).
+``CancelRecruit(node)``; DEC-26: ``BuildBarracks(node)``, ``UpgradeWarehouse(node)``; economy v2
+(DEC-41, item 14): ``Move(group, dest, planned, bonus)``, ``BuildFactory(node)``,
+``BuildBunker(node)``, ``DrawLine(path)``, ``RemoveLine(line)``, ``ReleasePlan(group)``. A command
+of the other economy model (``ruleset_public.economy.model``) is rejected with
+``FEATURE_DISABLED``. The conversion to simulation commands is PRO-03 (#46).
 
 The schema checks only the shape. Ownership, visibility, reachability and CP are checked by the
 simulation's ``validate()``, which answers with one ``reject_code`` in ``ack`` and uses the same
@@ -24,6 +27,9 @@ from gow_sim.state import Mode
 
 MAX_MERGE_GROUPS: Final = 16
 """Wire limit on ``merge.groups`` against oversized messages; not a game rule."""
+MAX_LINE_NODES: Final = 128
+"""Wire limit on ``draw_line.path`` against oversized messages; not a game rule (a line is a
+simple path, so it has at most as many nodes as the map)."""
 
 
 class MoveCmd(WireModel):
@@ -31,7 +37,12 @@ class MoveCmd(WireModel):
     group: OpaqueId
     dest: NodeId
     planned: bool
-    """Planned order (DEC-08): costlier, visible to everyone as an intent, starts after a delay."""
+    """Planned order (DEC-08): visible to everyone as an intent. Economy v1: costlier, starts
+    after a delay. Economy v2 (DEC-41, item 10): the price of a move, the group waits and gathers
+    ``bonus``."""
+    bonus: NonNegInt = 0
+    """Economy v2, a planned order only: the requested attack bonus, at least 1. An ordinary
+    order and any order under v1 give 0; otherwise ``INVALID_ARGUMENT``."""
 
 
 class SplitCmd(WireModel):
@@ -134,6 +145,46 @@ class TransferCmd(WireModel):
     n: PosInt
 
 
+class BuildFactoryCmd(WireModel):
+    """The own city ``node`` builds a factory (economy v2, DEC-41, item 2): ``factory.cost``
+    charges by the progressive payment (item 7), no CP."""
+
+    type: Literal["build_factory"] = "build_factory"
+    node: NodeId
+
+
+class BuildBunkerCmd(WireModel):
+    """The own city or province ``node`` builds a bunker (economy v2, DEC-41, item 12):
+    ``bunker.cost`` charges by the progressive payment (item 7), no CP."""
+
+    type: Literal["build_bunker"] = "build_bunker"
+    node: NodeId
+
+
+class DrawLineCmd(WireModel):
+    """Draw a supply line along ``path`` (economy v2, DEC-41, items 3 and 6): own nodes, each
+    next one joined by a road, from the source (an own factory or the target of an own line) to
+    the target (an own node with a warehouse). Free; the path is used as drawn while intact."""
+
+    type: Literal["draw_line"] = "draw_line"
+    path: Annotated[tuple[NodeId, ...], Field(min_length=2, max_length=MAX_LINE_NODES)]
+
+
+class RemoveLineCmd(WireModel):
+    """Remove the own line ``line`` (``View.lines[].id``; economy v2, DEC-41, item 3). Free."""
+
+    type: Literal["remove_line"] = "remove_line"
+    line: NonNegInt
+
+
+class ReleasePlanCmd(WireModel):
+    """The own group waiting on a gathering planned order departs now with the bonus gathered so
+    far, free (economy v2, DEC-41, item 10)."""
+
+    type: Literal["release_plan"] = "release_plan"
+    group: OpaqueId
+
+
 class ForfeitCmd(WireModel):
     type: Literal["forfeit"] = "forfeit"
 
@@ -153,6 +204,11 @@ type Command = Annotated[
     | SetFrontCmd
     | SetRearMinCmd
     | TransferCmd
+    | BuildFactoryCmd
+    | BuildBunkerCmd
+    | DrawLineCmd
+    | RemoveLineCmd
+    | ReleasePlanCmd
     | ForfeitCmd,
     Field(discriminator="type"),
 ]

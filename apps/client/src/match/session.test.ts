@@ -194,7 +194,7 @@ describe('MatchSession', () => {
     const { session, socket } = setup();
     const results: string[] = [];
     session.orders.onResult = (r) => results.push(r.kind);
-    const cmd = { type: 'move', group: 'dev-0', dest: 1, planned: false } as const;
+    const cmd = { type: 'move', group: 'dev-0', dest: 1, planned: false, bonus: 0 } as const;
     const seq = session.send(cmd);
     session.orders.track(seq, cmd, 0);
     expect(socket.sent.at(-1)).toEqual({ type: 'command', seq, cmd });
@@ -254,7 +254,7 @@ describe('MatchSession', () => {
   it('drops the ghost once a rendered frame reaches the tick the order was applied at', () => {
     const { session, socket, advance } = setup();
     socket.reply(snapshot(20));
-    const cmd = { type: 'move', group: 'dev-0', dest: 1, planned: false } as const;
+    const cmd = { type: 'move', group: 'dev-0', dest: 1, planned: false, bonus: 0 } as const;
     const seq = session.send(cmd);
     session.orders.track(seq, cmd, 0);
     socket.reply({

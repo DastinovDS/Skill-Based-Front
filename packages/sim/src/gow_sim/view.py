@@ -27,6 +27,13 @@ and DEC-35 (mechanics.md, section 10) and has the shape of the wire ``View`` of 
   (DEC-31; by the current owners and the public graph, no memory);
 - own groups in "Defense": the bonus gathered so far and its cap (DEC-30; enemy groups show the
   mode only, in the ``seen`` of places);
+- economy v2 (DEC-41, ``economy.model = "v2"``; under v1 these fields are empty or ``None``): the
+  own supply lines with their paths (``lines``; the enemy's never, item 3), the own factories and
+  their rates, the own bunkers, the factory and bunker builds of own nodes with the charges they
+  still owe (item 7), the plan of an own gathering planned order (the requested bonus, the bonus
+  gathered, the tick the next charge is due; item 10); the built factory of an enemy city and the
+  built bunker of an enemy node joined by an edge to any own node (DEC-31, item 12), never an enemy
+  build or an enemy line;
 - neighbours of sources by the terrain table (DEC-21, item 2), and the halves of edges by the level
   of their node (item 5): ``EXACT`` the enemy totals, ``RANGE`` the range of the enemy units,
   ``PRESENCE`` whether enemy groups are there; the modes on every level;
@@ -50,8 +57,9 @@ DEC-31), the warehouse of a foreign node where no own group stands (DEC-21, item
 detail 2), enemy builds on fogged
 edges, enemy packets (on any edge, DEC-10, item 6), enemy CP, stance, production and counters,
 the enemy's front markers and rear minimum (DEC-28), enemy transfers (DEC-18, item 8), the bonus
-an enemy "Defense" has gathered (DEC-30, item 5), events, the target of an enemy's normal order
-(normal orders have no intent), sequential ids.
+an enemy "Defense" has gathered (DEC-30, item 5), the enemy's supply lines, factory and bunker
+builds, factory rates and planned-order requests (DEC-41), events, the target of an enemy's
+normal order (normal orders have no intent), sequential ids.
 
 Ids of own groups, own packets and intents are opaque per player: keyed blake2b of
 ``(player, internal id)`` with the secret ``match_key`` of the match (``opaque_id``). They are
@@ -73,12 +81,15 @@ from gow_sim.commands import Command, map_group_ids
 from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import (
+    PLAN_WAIT,
     AtNode,
     Build,
     BuildKind,
     Detail,
+    FactoryBuild,
     FightRound,
     GameState,
+    Group,
     IntentKind,
     Location,
     Mode,
@@ -92,6 +103,7 @@ from gow_sim.systems.capacity import (
     starve_in,
     warehouse_capacity,
 )
+from gow_sim.systems.economy import factory_period
 from gow_sim.systems.movement import reachable, reachable_paths
 from gow_sim.systems.recruit import recruit_waiting
 from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
@@ -122,6 +134,7 @@ __all__ = [
     "HalfView",
     "IntentKind",
     "IntentView",
+    "LineView",
     "Location",
     "Mode",
     "NodeView",
@@ -132,6 +145,7 @@ __all__ = [
     "Reach",
     "SelfView",
     "Sighting",
+    "SiteBuildView",
     "Stance",
     "UpgradeGain",
     "check_match_key",
@@ -184,8 +198,22 @@ class BuildingView:
     """The current build of an own city, of any kind (DEC-26, item 10)."""
 
     kind: BuildKind
-    done_tick: int
-    """The tick it ends, if nothing interrupts it."""
+    done_tick: int | None
+    """The tick it ends, if nothing interrupts it; ``None`` while it still owes charges (economy
+    v2, DEC-41, item 7: the build time starts in the tick of the full payment)."""
+    owed: int = 0
+    """Economy v2 (DEC-41, item 7): the charges the build still has to take from the city and
+    its groups; always 0 under v1."""
+
+
+@dataclass(frozen=True, slots=True)
+class SiteBuildView:
+    """A factory (DEC-41, item 2) or a bunker (item 12) being built in an own node."""
+
+    done_tick: int | None
+    """The tick it is done, if nothing interrupts it; ``None`` while ``owed`` is above 0."""
+    owed: int
+    """The charges still to pay (the progressive payment of item 7)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +259,22 @@ class NodeView:
     ``city_upgrades``)."""
     building: BuildingView | None
     """Own city only: its current build of any kind and when it ends; ``None`` without one."""
+    factory: bool | None = None
+    """Economy v2 (DEC-41, item 2): an own city is a factory of the player; a city of the enemy
+    joined by an edge to any own node (the DEC-31 rule): it is a built factory of the enemy.
+    ``None`` under v1, for provinces, neutral nodes and the other cities of the enemy."""
+    factory_period: int | None = None
+    """Own factory only: ticks per charge it makes (``factory.capital_period_ticks`` for the
+    own capital, ``factory.built_period_ticks`` for any other)."""
+    factory_build: SiteBuildView | None = None
+    """Own city only: the factory being built there (economy v2)."""
+    fort: bool | None = None
+    """Economy v2 (DEC-41, item 12; the bunker, code name ``fort``): an own node, city or
+    province, has a bunker; a node of the enemy joined by an edge to any own node (the DEC-31
+    rule): it has a built bunker. ``None`` under v1, for neutral nodes and the other nodes of
+    the enemy."""
+    fort_build: SiteBuildView | None = None
+    """Own node only: the bunker being built there (economy v2)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,16 +343,25 @@ class OrderView:
     path: tuple[int, ...]
     """Remaining nodes to ``dest``, the next one first, ``dest`` included."""
     planned: bool
-    depart_tick: int
-    """Not before this tick the group leaves its node (a planned order waits, DEC-08). A planned
-    order of economy v2 that gathers its bonus has ``state.PLAN_WAIT`` here (DEC-41, item 10).
-    TODO(#647): the requested bonus and a gathering flag in the view and the protocol."""
+    depart_tick: int | None
+    """Not before this tick the group leaves its node (a planned order waits, DEC-08); ``None``
+    while a planned order of economy v2 gathers its bonus (``gathering``, DEC-41, item 10): no
+    departure tick is known until the request or the cap is reached or the plan is released."""
     bonus: int = 0
     """A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
     at most the charged units), ``min(Group.bonus, charged now)``. Before the departure it is a
     forecast: the cap is taken by the charged units in the departure tick. 0 for a normal order
     and once the bonus entered a fight. Own orders only: the enemy's bonus shows only in a fight
-    (DEC-32)."""
+    (DEC-32). Economy v2: the bonus gathered so far, at most the charged units."""
+    gathering: bool = False
+    """Economy v2 (DEC-41, item 10): the planned order waits in its node and gathers its bonus,
+    one real charge of the node's warehouse per ``orders.plan_ticks_per_bonus`` ticks."""
+    plan: int = 0
+    """While ``gathering``: the bonus the player requested (the group departs by itself once
+    ``bonus`` reaches it or the charged units); 0 otherwise."""
+    next_charge_tick: int | None = None
+    """While ``gathering``: the tick the next charge is due; it is taken in that tick or, with
+    an empty warehouse or a fight in the node, in the first tick after it that allows it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -349,6 +402,18 @@ class PacketView:
     """The tick the packet reaches the destination if nothing stops it."""
     transfer: bool
     """A one-off ``Transfer`` (DEC-18, item 6), not the automatic dispatch."""
+
+
+@dataclass(frozen=True, slots=True)
+class LineView:
+    """An own supply line (DEC-41, items 3 and 6): the enemy's lines are never in a view."""
+
+    id: int
+    """The per-player id of the line (``RemoveLine``, the ``line`` of ``line_cut`` and
+    ``line_rerouted``); only its owner ever sees it."""
+    path: tuple[int, ...]
+    """The own nodes from the source to the target: the drawn path while it is intact, the
+    rerouted one after a break."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -424,6 +489,8 @@ class PlayerView:
     """Intents of both players."""
     fights: tuple[FightView, ...] = ()
     """Fights going on (DEC-24): every fight has own groups, so all of them; sorted by opaque id."""
+    lines: tuple[LineView, ...] = ()
+    """Economy v2: the own supply lines by id (DEC-41, item 3); never the enemy's."""
 
 
 # Opaque ids ----------------------------------------------------------------------------------
@@ -554,6 +621,80 @@ def _borders_enemy_city(state: GameState, player: int, node: int) -> bool:
     )
 
 
+def _borders_enemy_node(state: GameState, player: int, node: int) -> bool:
+    """``node`` is a node of the enemy, a city or a province, joined by an edge of the map to any
+    own node: its built bunker is seen (DEC-41, item 12, by the rule of DEC-31)."""
+    mapdef = state.map
+    owner = state.nodes[node].owner
+    if owner is None or owner == player:
+        return False
+    return any(
+        state.nodes[mapdef.edges[e].other(node)].owner == player for e in mapdef.incident[node]
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Node:
+    """The economy v2 fields of a ``NodeView`` (all ``None`` under v1)."""
+
+    factory: bool | None = None
+    factory_period: int | None = None
+    factory_build: SiteBuildView | None = None
+    fort: bool | None = None
+    fort_build: SiteBuildView | None = None
+
+
+_NO_V2: Final = _V2Node()
+
+
+def _v2_node(state: GameState, rules: Ruleset, player: int, n: int, city: bool) -> _V2Node:
+    """DEC-41, items 2 and 12: own factories, bunkers and their builds; the built factory and
+    bunker of an enemy node next to an own node (DEC-31 rule); nothing else of the enemy."""
+    if not rules.v2:
+        return _NO_V2
+    node = state.nodes[n]
+    if node.owner == player:
+        own_factory = city and node.factory == player
+        return _V2Node(
+            factory=own_factory if city else None,
+            factory_period=factory_period(state, rules, n) if own_factory else None,
+            factory_build=_site_view(node.factory_build, rules.factory_rules().build_ticks)
+            if city
+            else None,
+            fort=node.fort,
+            fort_build=_site_view(node.fort_build, rules.bunker_rules().build_ticks),
+        )
+    if not _borders_enemy_node(state, player, n):
+        return _NO_V2
+    return _V2Node(
+        factory=node.factory == node.owner if city else None,
+        fort=node.fort,
+    )
+
+
+def _site_view(b: FactoryBuild | None, ticks: int) -> SiteBuildView | None:
+    if b is None:
+        return None
+    return SiteBuildView(done_tick=None if b.owed > 0 else b.since + ticks, owed=b.owed)
+
+
+def _order_view(rules: Ruleset, g: Group) -> OrderView | None:
+    order = g.order
+    if order is None or not order.path:
+        return None
+    gathering = order.planned and g.plan > 0 and order.depart_tick == PLAN_WAIT
+    return OrderView(
+        dest=order.path[-1],
+        path=order.path,
+        planned=order.planned,
+        depart_tick=None if gathering else order.depart_tick,
+        bonus=min(g.bonus, g.charged) if order.planned else 0,
+        gathering=gathering,
+        plan=g.plan if gathering else 0,
+        next_charge_tick=g.plan_tick + rules.orders.plan_ticks_per_bonus if gathering else None,
+    )
+
+
 def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> PlayerView:
     """The view of ``player`` on ``state`` (DEC-04, DEC-17, DEC-21, DEC-33, DEC-10, DEC-35). A pure
     function: never writes."""
@@ -568,7 +709,9 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     nodes: list[NodeView] = []
     for n, level in enumerate(levels.nodes):
         node = state.nodes[n]
-        own_city = node.owner == player and is_city(mapdef, n)
+        city = is_city(mapdef, n)
+        own_city = node.owner == player and city
+        v2 = _v2_node(state, rules, player, n, city)
         barracks_seen = own_city or _borders_enemy_city(state, player, n)
         attrition_in, grace_left = (
             overflow_countdown(state, rules, n, capacities[n])
@@ -593,6 +736,11 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 warehouse_level=node.warehouse_level if own_city else None,
                 warehouse_cap=warehouse_capacity(state, rules, n) if own_city else None,
                 building=_building_view(rules, node.build) if own_city else None,
+                factory=v2.factory,
+                factory_period=v2.factory_period,
+                factory_build=v2.factory_build,
+                fort=v2.fort,
+                fort_build=v2.fort_build,
             )
         )
 
@@ -621,7 +769,8 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 id=e,
                 width=roads[e],
                 detail=level,
-                upgrade_gain=upgrade_gain(state, rules, e) if own else None,
+                # Economy v2 has no road levels (DEC-41, items 5 and 8): no upgrade to offer.
+                upgrade_gain=upgrade_gain(state, rules, e) if own and not rules.v2 else None,
                 halves=(pair[0], pair[1]),
                 build=_build_view(state, rules, player, e, level),
                 enemy_groups=() if on_edge is None else tuple(sorted(on_edge, key=lambda v: v.id)),
@@ -633,7 +782,6 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         g = state.groups[gid]
         if g.owner != player:
             continue
-        order = g.order
         defense = g.mode is Mode.DEFENSE
         groups.append(
             GroupView(
@@ -642,15 +790,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 charged=g.charged,
                 mode=g.mode,
                 location=g.location,
-                order=None
-                if order is None or not order.path
-                else OrderView(
-                    order.path[-1],
-                    order.path,
-                    order.planned,
-                    order.depart_tick,
-                    min(g.bonus, g.charged) if order.planned else 0,
-                ),
+                order=_order_view(rules, g),
                 defense_bonus=rules.orders.defense_bonus(g.ticks_in_defense, g.charged)
                 if defense
                 else None,
@@ -734,6 +874,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         packets=tuple(sorted(packets, key=lambda v: v.id)),
         intents=tuple(sorted(intents, key=lambda v: v.id)),
         fights=tuple(sorted(fights, key=lambda v: v.id)),
+        lines=tuple(LineView(id=k, path=me.lines[k].path) for k in sorted(me.lines)),
     )
 
 
@@ -786,9 +927,12 @@ def _build_view(
 
 
 def _building_view(rules: Ruleset, b: Build | None) -> BuildingView | None:
-    # TODO(#647): a v2 build that still owes charges (DEC-41, item 7) has no done tick yet; the
-    # view shows ``since + duration`` until the payment fields come with the protocol.
-    return None if b is None else BuildingView(kind=b.kind, done_tick=done_tick(rules, b))
+    """A build that still owes charges (economy v2, DEC-41, item 7) has no done tick yet."""
+    if b is None:
+        return None
+    return BuildingView(
+        kind=b.kind, done_tick=None if b.owed > 0 else done_tick(rules, b), owed=b.owed
+    )
 
 
 # Canonical form ------------------------------------------------------------------------------
@@ -830,7 +974,16 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "warehouse_cap": n.warehouse_cap,
                 "building": None
                 if n.building is None
-                else {"kind": n.building.kind.value, "done_tick": n.building.done_tick},
+                else {
+                    "kind": n.building.kind.value,
+                    "done_tick": n.building.done_tick,
+                    "owed": n.building.owed,
+                },
+                "factory": n.factory,
+                "factory_period": n.factory_period,
+                "factory_build": _site_data(n.factory_build),
+                "fort": n.fort,
+                "fort_build": _site_data(n.fort_build),
             }
             for n in view.nodes
         ],
@@ -881,6 +1034,9 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                     "planned": g.order.planned,
                     "depart_tick": g.order.depart_tick,
                     "bonus": g.order.bonus,
+                    "gathering": g.order.gathering,
+                    "plan": g.order.plan,
+                    "next_charge_tick": g.order.next_charge_tick,
                 },
                 "defense_bonus": g.defense_bonus,
                 "defense_cap": g.defense_cap,
@@ -940,7 +1096,12 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
             }
             for f in view.fights
         ],
+        "lines": [{"id": line.id, "path": list(line.path)} for line in view.lines],
     }
+
+
+def _site_data(b: SiteBuildView | None) -> dict[str, object] | None:
+    return None if b is None else {"done_tick": b.done_tick, "owed": b.owed}
 
 
 def _seen_data(s: Sighting | None) -> dict[str, object] | None:

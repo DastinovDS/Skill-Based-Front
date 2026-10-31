@@ -105,6 +105,11 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       warehouse_level: mine && city ? level : null,
       warehouse_cap: mine && city ? cap : null,
       building: null,
+      factory: null,
+      factory_period: null,
+      factory_build: null,
+      fort: null,
+      fort_build: null,
     };
   });
 
@@ -156,6 +161,7 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       packets: [],
       intents: [],
       fights: [],
+      lines: [],
     },
   };
 }

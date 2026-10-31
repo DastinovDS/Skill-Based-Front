@@ -111,7 +111,8 @@ export interface NodeInfo {
 /** The current build of an own city (`NodeView.building`, DEC-26). */
 export interface BuildingInfo {
   readonly kind: BuildKind;
-  readonly secondsLeft: number;
+  /** `null` while the build still waits for its payment in charges (economy v2, DEC-41, item 7). */
+  readonly secondsLeft: number | null;
 }
 
 export interface EnemyInfo {
@@ -273,7 +274,10 @@ function nodeInfo(
         ? null
         : {
             kind: node.building.kind,
-            secondsLeft: Math.ceil(Math.max(0, node.building.done_tick - tick) / ctx.rules.tick_hz),
+            secondsLeft:
+              node.building.done_tick === null
+                ? null
+                : Math.ceil(Math.max(0, node.building.done_tick - tick) / ctx.rules.tick_hz),
           },
   };
 }

@@ -55,6 +55,12 @@ COMMAND_TYPES = {
     "set_rear_min",
     "transfer",
     "forfeit",
+    # Economy v2 (DEC-41, item 14; #647).
+    "build_factory",
+    "build_bunker",
+    "draw_line",
+    "remove_line",
+    "release_plan",
 }
 
 
@@ -119,7 +125,7 @@ def test_messages_built_in_python_roundtrip() -> None:
     assert json.loads(encode(msg)) == {
         "type": "command",
         "seq": 7,
-        "cmd": {"type": "move", "group": "abc", "dest": 3, "planned": True},
+        "cmd": {"type": "move", "group": "abc", "dest": 3, "planned": True, "bonus": 0},
     }
     assert decode_client(encode(msg)) == msg
 
@@ -151,6 +157,52 @@ def test_overcrowding_countdown_fields_are_validated() -> None:
         decode(other, attrition_in=5)
 
 
+def test_economy_v2_fields_are_validated() -> None:
+    """DEC-41 (#647): the v2 fields of a node, an order and the lines keep their shape: a rate only
+    for an own factory, a build only for an own node, ``done_tick`` exactly when nothing is owed,
+    a request only while a planned order gathers, a line only over nodes of the map. (Which
+    player a snapshot is for is not in it, so the rule "own only" is the simulation's fog test,
+    ``packages/sim/tests/test_dec41_view.py``.)"""
+    raw = json.loads((FIXTURES_DIR / "server" / "snapshot.json").read_text())
+    view = raw["view"]
+    own, neutral, enemy = view["nodes"][0], view["nodes"][2], view["nodes"][3]
+    order_group = next(g for g in view["groups"] if g["order"] is not None)
+
+    def decode(**patch: object) -> None:
+        decode_server(json.dumps({**raw, "view": {**view, **patch}}))
+
+    def nodes(node: dict[str, object], **fields: object) -> list[dict[str, object]]:
+        return [{**n, **fields} if n is node else n for n in view["nodes"]]
+
+    def order(**fields: object) -> list[dict[str, object]]:
+        patched: dict[str, object] = {**order_group, "order": {**order_group["order"], **fields}}
+        return [patched if g is order_group else g for g in view["groups"]]
+
+    built = {"done_tick": 220, "owed": 0}
+    unpaid = {"done_tick": None, "owed": 2}
+    decode(nodes=nodes(own, factory=True, factory_period=50, fort=False, fort_build=unpaid))
+    decode(nodes=nodes(own, factory=False, factory_build=built, fort=True))
+    decode(nodes=nodes(enemy, factory=True, fort=True))  # next to an own node (DEC-31 rule)
+    decode(lines=[{"id": 0, "path": [0, 1]}, {"id": 3, "path": [1, 0]}])
+    decode(groups=order(planned=True, gathering=True, plan=2, next_charge_tick=150))
+    bad: list[dict[str, object]] = [
+        {"nodes": nodes(own, factory=False, factory_period=50)},
+        {"nodes": nodes(neutral, fort=True)},
+        {"nodes": nodes(own, fort=False, fort_build={"done_tick": None, "owed": 0})},
+        {"nodes": nodes(own, fort=False, fort_build={"done_tick": 10, "owed": 1})},
+        {"nodes": nodes(own, building={"kind": "barracks", "done_tick": None, "owed": 0})},
+        {"lines": [{"id": 0, "path": [0]}]},
+        {"lines": [{"id": 0, "path": [0, 9]}]},
+        {"lines": [{"id": 0, "path": [0, 1]}, {"id": 0, "path": [1, 0]}]},
+        {"groups": order(planned=True, gathering=True, plan=2, next_charge_tick=None)},
+        {"groups": order(planned=False, gathering=True, plan=2, next_charge_tick=150)},
+        {"groups": order(planned=True, gathering=False, plan=2, next_charge_tick=None)},
+    ]
+    for patch in bad:
+        with pytest.raises(ValidationError):
+            decode(**patch)
+
+
 def test_protocol_version_is_a_positive_integer() -> None:
     assert type(PROTOCOL_VERSION) is int
     assert PROTOCOL_VERSION >= 1
@@ -169,6 +221,7 @@ def test_ruleset_public_has_the_stance_table_and_order_delays_of_mvp_0() -> None
     """The numbers of the stance menu and of the countdown on order arrows (ui-style 11 and 9.7)."""
     public = RulesetPublic.from_ruleset(load_ruleset(RULESET_PATH))
     assert public.economy.model_dump() == {
+        "model": "v1",
         "stance_to_charges_pct": {"economy": 75, "balance": 50, "war": 25},
         "charges_per_cp": 2,
     }
@@ -176,6 +229,7 @@ def test_ruleset_public_has_the_stance_table_and_order_delays_of_mvp_0() -> None
         "planned_delay_ticks": 30,
         "defense_ticks_per_bonus": 60,
         "stance_cooldown_ticks": 100,
+        "plan_ticks_per_bonus": 0,
     }
     # The overcrowding countdown of ui-style 12 (rulesets/mvp-0.toml, [capacity]).
     assert public.capacity.model_dump() == {"attrition_ticks": 30, "grace_ticks": 50}

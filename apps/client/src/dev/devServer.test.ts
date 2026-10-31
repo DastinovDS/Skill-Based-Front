@@ -42,7 +42,7 @@ describe('dev match', () => {
     const here = home.location.node;
     const far = map.nodes.find((n) => n.id !== here)?.id ?? 0;
     const move = (planned: boolean) =>
-      ({ type: 'move', group: home.id, dest: far, planned }) as const;
+      ({ type: 'move', group: home.id, dest: far, planned, bonus: 0 }) as const;
 
     const seq = match.session.send(move(false));
     match.session.orders.track(seq, move(false), here);
@@ -73,7 +73,13 @@ describe('dev match', () => {
     vi.advanceTimersByTime(1);
     const home = match.session.frame()?.base.view.groups[0];
     if (home?.location.kind !== 'node') throw new Error('no group to order');
-    const cmd = { type: 'move', group: home.id, dest: home.location.node, planned: false } as const;
+    const cmd = {
+      type: 'move',
+      group: home.id,
+      dest: home.location.node,
+      planned: false,
+      bonus: 0,
+    } as const;
     match.session.orders.track(match.session.send(cmd), cmd, home.location.node);
     vi.advanceTimersByTime(DEV_ACK_MS + 1);
     expect(results.at(-1)).toMatchObject({ kind: 'rejected', code: 'NOT_ENOUGH_CP' });

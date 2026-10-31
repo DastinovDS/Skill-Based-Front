@@ -16,7 +16,12 @@ Only what the client uses (AGENTS.md, section 7.1):
   warehouse levels, their prices and durations, for the city menu;
 - the range and the start value of the rear minimum (DEC-28, item 3), for the supply slider;
 - the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429);
-- the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help.
+- the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help;
+- the economy model (DEC-41, ``economy.model``): ``v2`` hides the stance, the front markers, the
+  rear minimum, transfers, road upgrades and "Defense" of v1 and shows factories, lines,
+  bunkers and the requested bonus of planned orders, with their numbers (``factory``, ``lines``,
+  ``bunker``, ``orders.plan_ticks_per_bonus``, the charge prices of the buildings); ``null`` or 0
+  under v1.
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -26,7 +31,7 @@ from typing import Annotated, Self
 from pydantic import Field
 
 from gow_protocol.base import Centi, NonNegInt, PosInt, SignedInt, WireModel
-from gow_sim.ruleset import Ruleset, Sight, SightTable, Stance
+from gow_sim.ruleset import EconomyModel, Ruleset, Sight, SightTable, Stance
 
 
 class CostsPublic(WireModel):
@@ -103,6 +108,9 @@ class StancePctPublic(WireModel):
 class EconomyPublic(WireModel):
     """The charge production the stance menu shows (``economy`` of the ruleset, DEC-02)."""
 
+    model: EconomyModel
+    """``v1``: stances, front markers, donors (DEC-02, DEC-28); ``v2``: factories and drawn supply
+    lines (DEC-41): the commands of the other model are rejected with ``FEATURE_DISABLED``."""
     stance_to_charges_pct: StancePctPublic
     charges_per_cp: NonNegInt
     """Charges per whole CP put into charges."""
@@ -116,6 +124,9 @@ class OrdersPublic(WireModel):
     """Defense gains one virtual shot per this many ticks in the mode, at most the charged units
     of the group when a fight begins (DEC-30)."""
     stance_cooldown_ticks: NonNegInt
+    plan_ticks_per_bonus: NonNegInt
+    """Economy v2 (DEC-41, item 10): a gathering planned order takes one charge and gains one
+    bonus per this many ticks; 0 under v1."""
 
 
 class CapacityPublic(WireModel):
@@ -156,6 +167,46 @@ class CityUpgradesPublic(WireModel):
     warehouse_ticks: PosInt
     warehouse_max_level: NonNegInt
     warehouse_gain_per_level: NonNegInt
+    barracks_charges: NonNegInt
+    """Economy v2 (DEC-41, item 7): the barracks costs this many charges; 0 under v1."""
+    warehouse_charges: NonNegInt
+    """Economy v2: every warehouse level costs this many charges; 0 under v1."""
+    warehouse_province: NonNegInt
+    """Economy v2 (DEC-41, item 13): the warehouse of every province holds this many charges; 0
+    under v1 (a province has no warehouse)."""
+
+
+class FactoryPublic(WireModel):
+    """Factories (``factory`` of the ruleset, DEC-41, item 2; economy v2 only)."""
+
+    capital_period_ticks: PosInt
+    """The own capital makes one charge per this many ticks."""
+    built_period_ticks: PosInt
+    """Every other factory makes one charge per this many ticks."""
+    cost: NonNegInt
+    """Charges ``build_factory`` pays (progressive payment, item 7)."""
+    build_ticks: PosInt
+    """Ticks from the full payment to the factory."""
+    max: PosInt
+    """Factories of a player at most, the capital and the builds under way included."""
+
+
+class LinesPublic(WireModel):
+    """Supply lines (``lines`` of the ruleset, DEC-41, item 3; economy v2 only)."""
+
+    max_out: PosInt
+    """Lines that start at one node at most (L4)."""
+
+
+class BunkerPublic(WireModel):
+    """The bunker (``bunker`` of the ruleset, DEC-41, item 12; economy v2 only)."""
+
+    cost: NonNegInt
+    """Charges ``build_bunker`` pays (progressive payment, item 7)."""
+    build_ticks: PosInt
+    """Ticks from the full payment to the bunker."""
+    shots: NonNegInt
+    """Virtual shots of the node's defender in a fight there, if it has a charged unit."""
 
 
 class SupplyPublic(WireModel):
@@ -212,6 +263,12 @@ class RulesetPublic(WireModel):
     city_upgrades: CityUpgradesPublic
     supply: SupplyPublic
     vision: VisionPublic
+    factory: FactoryPublic | None
+    """Economy v2 only; ``None`` under v1."""
+    lines: LinesPublic | None
+    """Economy v2 only; ``None`` under v1."""
+    bunker: BunkerPublic | None
+    """Economy v2 only; ``None`` under v1."""
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -255,6 +312,7 @@ class RulesetPublic(WireModel):
             capture=CapturePublic(charge_cost=rules.capture.charge_cost),
             build=BuildPublic(ticks_per_level=rules.build.ticks_per_level),
             economy=EconomyPublic(
+                model=rules.economy.model,
                 stance_to_charges_pct=StancePctPublic(
                     economy=pct.of(Stance.ECONOMY),
                     balance=pct.of(Stance.BALANCE),
@@ -266,6 +324,7 @@ class RulesetPublic(WireModel):
                 planned_delay_ticks=rules.orders.planned_delay_ticks,
                 defense_ticks_per_bonus=rules.orders.defense_ticks_per_bonus,
                 stance_cooldown_ticks=rules.orders.stance_cooldown_ticks,
+                plan_ticks_per_bonus=rules.orders.plan_ticks_per_bonus,
             ),
             capacity=CapacityPublic(
                 attrition_ticks=rules.capacity.attrition_ticks,
@@ -282,6 +341,9 @@ class RulesetPublic(WireModel):
                 warehouse_ticks=rules.city_upgrades.warehouse_ticks,
                 warehouse_max_level=rules.warehouse.max_level,
                 warehouse_gain_per_level=rules.warehouse.gain_per_level,
+                barracks_charges=rules.city_upgrades.barracks_charges,
+                warehouse_charges=rules.city_upgrades.warehouse_charges,
+                warehouse_province=rules.warehouse.province,
             ),
             supply=SupplyPublic(
                 rear_min_max=rules.supply.rear_min_max,
@@ -294,5 +356,22 @@ class RulesetPublic(WireModel):
                     forest=SightRowPublic.from_table(rules.vision.by_terrain.forest),
                     mountains=SightRowPublic.from_table(rules.vision.by_terrain.mountains),
                 )
+            ),
+            factory=None
+            if rules.factory is None
+            else FactoryPublic(
+                capital_period_ticks=rules.factory.capital_period_ticks,
+                built_period_ticks=rules.factory.built_period_ticks,
+                cost=rules.factory.cost,
+                build_ticks=rules.factory.build_ticks,
+                max=rules.factory.max,
+            ),
+            lines=None if rules.lines is None else LinesPublic(max_out=rules.lines.max_out),
+            bunker=None
+            if rules.bunker is None
+            else BunkerPublic(
+                cost=rules.bunker.cost,
+                build_ticks=rules.bunker.build_ticks,
+                shots=rules.bunker.shots,
             ),
         )

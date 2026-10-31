@@ -68,7 +68,9 @@ describe('an enemy city is not selected (#535)', () => {
     const { hud, controller, sent } = setup();
     controller.click({ kind: 'group', id: first.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
-    expect(sent).toEqual([{ type: 'move', group: first.id, dest: enemy.id, planned: false }]);
+    expect(sent).toEqual([
+      { type: 'move', group: first.id, dest: enemy.id, planned: false, bonus: 0 },
+    ]);
     expect(hud.selection).toBeNull();
   });
 

@@ -264,7 +264,9 @@ The fog memory is stored in `GameState` (for each player), so `project()` stays 
     the level of the half are visible; the memory of halves (`HalfView.seen` in the fog) has no position and no direction;
   - an edge level in the fog newer than the last one seen (`VisionMemory.widths`, otherwise level 1; roads have no
     type, DEC-26), enemy construction on edges in the fog (DEC-17, DEC-22);
-  - a barracks (except a built barracks of an enemy city adjacent to your own node: DEC-31), the warehouse level, the warehouse capacity, construction and the recruit queue of enemy cities (DEC-25, DEC-26).
+  - a barracks (except a built barracks of an enemy city adjacent to your own node: DEC-31), the warehouse level, the warehouse capacity, construction and the recruit queue of enemy cities (DEC-25, DEC-26);
+  - economy v2 (DEC-41): the enemy's supply lines (never, in any state), its factory and bunker builds, its factory rates and
+    the request or gathered bonus of its planned orders; a built enemy factory and bunker only by the DEC-31 rule (a node joined by an edge to an own node).
     The capacity of a node is public and exact: it is set by the kind of node (DEC-22), there is no estimate.
 - A new field in `PlayerView` only together with a fog test for that field.
 - Event fields are a declared contract (ARC-02, #457): `event_for_player` sends a field of an event only if `gow_protocol.convert.EVENT_FIELDS` lists it for the kind, and turns into opaque ids only the fields `EVENT_ID_FIELDS` lists; the rest of the event is dropped. A new event field only together with a fog test for that field, like a `PlayerView` field (a field of a public or fight kind goes to the opponent). The test `packages/protocol/tests/test_event_fields.py` compares the table with every `event(...)` call of `gow_sim`.

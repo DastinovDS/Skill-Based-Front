@@ -322,7 +322,7 @@ export class OrderController implements MapInteraction {
     if (hit.kind === 'node' && group !== null && this.#o.send !== null && group.node !== hit.id) {
       this.#closeTargetMenus();
       this.#sendCommand(
-        { type: 'move', group: group.id, dest: hit.id, planned: this.planned },
+        { type: 'move', group: group.id, dest: hit.id, planned: this.planned, bonus: 0 },
         group.node,
       );
       // The order is given: the group is let go (the ghost of the order is drawn without it).

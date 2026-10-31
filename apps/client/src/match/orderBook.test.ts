@@ -9,6 +9,7 @@ const move = (group: string, dest: number, planned = false): Command => ({
   group,
   dest,
   planned,
+  bonus: 0,
 });
 
 const ack = (seq: number, extra: Partial<AckMsg> = {}): AckMsg => ({

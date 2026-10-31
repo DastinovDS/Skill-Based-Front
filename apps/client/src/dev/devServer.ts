@@ -190,6 +190,9 @@ export function createDevServer(
         path: [...path.slice(1)] as [number, ...number[]],
         planned: cmd.planned,
         bonus: 0, // the dev server does not model the planned bonus (DEC-29)
+        gathering: false,
+        plan: 0,
+        next_charge_tick: null,
       });
       return { code: null, path };
     }

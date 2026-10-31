@@ -64,7 +64,7 @@ export function progressSnapshot(map: MapFile): SnapshotMsg {
       building:
         marks.build === undefined
           ? null
-          : { kind: marks.build.kind, done_tick: PROGRESS_TICK + marks.build.left },
+          : { kind: marks.build.kind, done_tick: PROGRESS_TICK + marks.build.left, owed: 0 },
     };
   });
   return { ...base, view: { ...base.view, nodes } };

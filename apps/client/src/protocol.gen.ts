@@ -21,6 +21,11 @@ export type Command =
   | SetFrontCmd
   | SetRearMinCmd
   | TransferCmd
+  | BuildFactoryCmd
+  | BuildBunkerCmd
+  | DrawLineCmd
+  | RemoveLineCmd
+  | ReleasePlanCmd
   | ForfeitCmd;
 /**
  * Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16).
@@ -41,6 +46,11 @@ export type ServerMsg =
   | PausedMsg
   | ReachMsg;
 export type PlayerId = 0 | 1;
+/**
+ * ``economy.model`` (DEC-41, #642): ``v1`` is the economy of stances, front markers and
+ * donors; ``v2`` the economy of factories and drawn supply lines.
+ */
+export type EconomyModel = 'v1' | 'v2';
 /**
  * What a source of vision shows of a neighbouring node (DEC-21, item 2): the detail levels
  * ``exact``, ``range`` and ``presence`` of ``gow_sim.state.Detail`` (never fog).
@@ -105,9 +115,16 @@ export interface MoveCmd {
   group: string;
   dest: number;
   /**
-   * Planned order (DEC-08): costlier, visible to everyone as an intent, starts after a delay.
+   * Planned order (DEC-08): visible to everyone as an intent. Economy v1: costlier, starts
+   * after a delay. Economy v2 (DEC-41, item 10): the price of a move, the group waits and gathers
+   * ``bonus``.
    */
   planned: boolean;
+  /**
+   * Economy v2, a planned order only: the requested attack bonus, at least 1. An ordinary
+   * order and any order under v1 give 0; otherwise ``INVALID_ARGUMENT``.
+   */
+  bonus: number;
 }
 export interface SplitCmd {
   type: 'split';
@@ -202,6 +219,50 @@ export interface TransferCmd {
   from_node: number;
   to_node: number;
   n: number;
+}
+/**
+ * The own city ``node`` builds a factory (economy v2, DEC-41, item 2): ``factory.cost``
+ * charges by the progressive payment (item 7), no CP.
+ */
+export interface BuildFactoryCmd {
+  type: 'build_factory';
+  node: number;
+}
+/**
+ * The own city or province ``node`` builds a bunker (economy v2, DEC-41, item 12):
+ * ``bunker.cost`` charges by the progressive payment (item 7), no CP.
+ */
+export interface BuildBunkerCmd {
+  type: 'build_bunker';
+  node: number;
+}
+/**
+ * Draw a supply line along ``path`` (economy v2, DEC-41, items 3 and 6): own nodes, each
+ * next one joined by a road, from the source (an own factory or the target of an own line) to
+ * the target (an own node with a warehouse). Free; the path is used as drawn while intact.
+ */
+export interface DrawLineCmd {
+  type: 'draw_line';
+  /**
+   * @minItems 2
+   * @maxItems 128
+   */
+  path: [number, number, ...number[]];
+}
+/**
+ * Remove the own line ``line`` (``View.lines[].id``; economy v2, DEC-41, item 3). Free.
+ */
+export interface RemoveLineCmd {
+  type: 'remove_line';
+  line: number;
+}
+/**
+ * The own group waiting on a gathering planned order departs now with the bonus gathered so
+ * far, free (economy v2, DEC-41, item 10).
+ */
+export interface ReleasePlanCmd {
+  type: 'release_plan';
+  group: string;
 }
 export interface ForfeitCmd {
   type: 'forfeit';
@@ -313,6 +374,18 @@ export interface RulesetPublic {
   city_upgrades: CityUpgradesPublic;
   supply: SupplyPublic;
   vision: VisionPublic;
+  /**
+   * Economy v2 only; ``None`` under v1.
+   */
+  factory: FactoryPublic | null;
+  /**
+   * Economy v2 only; ``None`` under v1.
+   */
+  lines: LinesPublic | null;
+  /**
+   * Economy v2 only; ``None`` under v1.
+   */
+  bunker: BunkerPublic | null;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -400,6 +473,11 @@ export interface BuildPublic {
  * The charge production the stance menu shows (``economy`` of the ruleset, DEC-02).
  */
 export interface EconomyPublic {
+  /**
+   * ``v1``: stances, front markers, donors (DEC-02, DEC-28); ``v2``: factories and drawn supply
+   * lines (DEC-41): the commands of the other model are rejected with ``FEATURE_DISABLED``.
+   */
+  model: EconomyModel;
   stance_to_charges_pct: StancePctPublic;
   /**
    * Charges per whole CP put into charges.
@@ -425,6 +503,11 @@ export interface OrdersPublic {
    */
   defense_ticks_per_bonus: number;
   stance_cooldown_ticks: number;
+  /**
+   * Economy v2 (DEC-41, item 10): a gathering planned order takes one charge and gains one
+   * bonus per this many ticks; 0 under v1.
+   */
+  plan_ticks_per_bonus: number;
 }
 /**
  * Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12.
@@ -470,6 +553,19 @@ export interface CityUpgradesPublic {
   warehouse_ticks: number;
   warehouse_max_level: number;
   warehouse_gain_per_level: number;
+  /**
+   * Economy v2 (DEC-41, item 7): the barracks costs this many charges; 0 under v1.
+   */
+  barracks_charges: number;
+  /**
+   * Economy v2: every warehouse level costs this many charges; 0 under v1.
+   */
+  warehouse_charges: number;
+  /**
+   * Economy v2 (DEC-41, item 13): the warehouse of every province holds this many charges; 0
+   * under v1 (a province has no warehouse).
+   */
+  warehouse_province: number;
 }
 /**
  * The supply settings of a player (DEC-28): the range of the rear minimum slider.
@@ -511,6 +607,57 @@ export interface SightRowPublic {
   plains: Sight;
   forest: Sight;
   mountains: Sight;
+}
+/**
+ * Factories (``factory`` of the ruleset, DEC-41, item 2; economy v2 only).
+ */
+export interface FactoryPublic {
+  /**
+   * The own capital makes one charge per this many ticks.
+   */
+  capital_period_ticks: number;
+  /**
+   * Every other factory makes one charge per this many ticks.
+   */
+  built_period_ticks: number;
+  /**
+   * Charges ``build_factory`` pays (progressive payment, item 7).
+   */
+  cost: number;
+  /**
+   * Ticks from the full payment to the factory.
+   */
+  build_ticks: number;
+  /**
+   * Factories of a player at most, the capital and the builds under way included.
+   */
+  max: number;
+}
+/**
+ * Supply lines (``lines`` of the ruleset, DEC-41, item 3; economy v2 only).
+ */
+export interface LinesPublic {
+  /**
+   * Lines that start at one node at most (L4).
+   */
+  max_out: number;
+}
+/**
+ * The bunker (``bunker`` of the ruleset, DEC-41, item 12; economy v2 only).
+ */
+export interface BunkerPublic {
+  /**
+   * Charges ``build_bunker`` pays (progressive payment, item 7).
+   */
+  cost: number;
+  /**
+   * Ticks from the full payment to the bunker.
+   */
+  build_ticks: number;
+  /**
+   * Virtual shots of the node's defender in a fight there, if it has a charged unit.
+   */
+  shots: number;
 }
 /**
  * Calibration progress of an account: the first matches of a rated account do not show its
@@ -558,6 +705,10 @@ export interface View {
    * Fights going on (DEC-24): own groups fight in each.
    */
   fights: FightView[];
+  /**
+   * Economy v2: the own supply lines by id (DEC-41, item 3); empty under v1.
+   */
+  lines: LineView[];
 }
 /**
  * Own counters; the enemy's CP and stance are never in a view (AGENTS.md, section 4.4).
@@ -642,6 +793,32 @@ export interface NodeView {
    * Own city only: its current build of any kind; ``None`` without one.
    */
   building: NodeBuilding | null;
+  /**
+   * Economy v2 (DEC-41, item 2): an own city is an own factory; a city of the enemy joined by
+   * an edge of the map to any own node (the DEC-31 rule, no memory): it is a built factory of the
+   * enemy. ``None`` under v1, for provinces, neutral nodes and the other cities of the enemy.
+   */
+  factory: boolean | null;
+  /**
+   * Own factory only: ticks per charge it makes into its warehouse (the own capital
+   * ``factory.capital_period_ticks``, any other ``factory.built_period_ticks``).
+   */
+  factory_period: number | null;
+  /**
+   * Own city only: the factory being built there (economy v2).
+   */
+  factory_build: SiteBuild | null;
+  /**
+   * Economy v2 (DEC-41, item 12, the bunker; code name ``fort``): an own node, a city or a
+   * province, has a bunker; a node of the enemy joined by an edge to any own node (the DEC-31
+   * rule): it has a built bunker. ``None`` under v1, for neutral nodes and the other nodes of the
+   * enemy.
+   */
+  fort: boolean | null;
+  /**
+   * Own node only: the bunker being built there (economy v2).
+   */
+  fort_build: SiteBuild | null;
 }
 /**
  * What the player sees, or last saw, of one node or half of an edge
@@ -680,9 +857,28 @@ export interface NodeBuilding {
    */
   kind: BuildKind;
   /**
-   * The tick it ends, if nothing interrupts it.
+   * The tick it ends, if nothing interrupts it; ``None`` while ``owed`` is above 0 (economy
+   * v2, DEC-41, item 7: the build time starts in the tick of the full payment).
    */
-  done_tick: number;
+  done_tick: number | null;
+  /**
+   * Economy v2: the charges the build still takes from the city's warehouse and the own
+   * groups standing there (the progressive payment of DEC-41, item 7); always 0 under v1.
+   */
+  owed: number;
+}
+/**
+ * A factory (DEC-41, item 2) or a bunker (item 12) being built in an own node.
+ */
+export interface SiteBuild {
+  /**
+   * The tick it is done, if nothing interrupts it; ``None`` while ``owed`` is above 0.
+   */
+  done_tick: number | null;
+  /**
+   * The charges still to pay (the progressive payment of DEC-41, item 7).
+   */
+  owed: number;
 }
 export interface EdgeView {
   id: number;
@@ -844,9 +1040,26 @@ export interface OrderView {
    * A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
    * at most the charged units of the group). Before the departure a forecast by the charged units
    * now; the cap is taken in the departure tick. 0 for a normal order and once the bonus entered
-   * a fight. Only own orders exist in a view (owner 2026-10-21, mockup #339).
+   * a fight. Only own orders exist in a view (owner 2026-10-21, mockup #339). Economy v2 (DEC-41,
+   * item 10): the bonus gathered so far.
    */
   bonus: number;
+  /**
+   * Economy v2: the planned order waits in its node and gathers its bonus, one real charge of
+   * the node's warehouse per ``orders.plan_ticks_per_bonus`` ticks (``release_plan`` departs at
+   * once with what it has).
+   */
+  gathering: boolean;
+  /**
+   * While ``gathering``: the requested bonus; the group departs by itself once ``bonus``
+   * reaches it, or reaches its charged units. 0 otherwise.
+   */
+  plan: number;
+  /**
+   * While ``gathering``: the tick the next charge is due (an empty warehouse or a fight in the
+   * node delays it). ``None`` otherwise.
+   */
+  next_charge_tick: number | null;
 }
 /**
  * Own charges on the way along a path of roads (mechanics.md, section 7; DEC-18, item 5).
@@ -962,6 +1175,23 @@ export interface FightRoundView {
    * @maxItems 2
    */
   losses: [number, number];
+}
+/**
+ * An own supply line (economy v2, DEC-41, items 3 and 6). The enemy's are never sent.
+ */
+export interface LineView {
+  /**
+   * The per-player id of the line (``remove_line``, the ``line`` of ``line_cut`` and
+   * ``line_rerouted``); only its owner ever sees it.
+   */
+  id: number;
+  /**
+   * The own nodes from the source to the target: the drawn path while it is intact, the
+   * server's reroute after a break (item 3).
+   *
+   * @minItems 2
+   */
+  path: [number, number, ...number[]];
 }
 /**
  * Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.
@@ -1203,7 +1433,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 32;
+export const PROTOCOL_VERSION = 33;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

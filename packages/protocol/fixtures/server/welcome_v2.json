@@ -1,0 +1,128 @@
+{
+  "type": "welcome",
+  "player": 0,
+  "ruleset_public": {
+    "tick_hz": 10,
+    "match_ticks": 9000,
+    "cp": {
+      "cap": 500,
+      "per_period": 100,
+      "period_ticks": 50
+    },
+    "cost": {
+      "move": 100,
+      "planned_move": 100,
+      "cancel": 0,
+      "split": 0,
+      "merge": 0,
+      "attack": 0,
+      "defense": 200,
+      "build": 50,
+      "recruit": 100,
+      "stance": 0,
+      "front": 0,
+      "rear_min": 0,
+      "transfer": 0,
+      "barracks": 0,
+      "warehouse": 0
+    },
+    "combat": {
+      "terrain_defense_mod": {
+        "plains": -1,
+        "forest": 0,
+        "mountains": 1
+      },
+      "planned_bonus_per_edge": 1,
+      "round_ticks": 20,
+      "shots_per_round": 1,
+      "regroup_ticks": 10
+    },
+    "capture": {
+      "charge_cost": 1
+    },
+    "build": {
+      "ticks_per_level": 150
+    },
+    "economy": {
+      "model": "v2",
+      "stance_to_charges_pct": {
+        "economy": 60,
+        "balance": 50,
+        "war": 40
+      },
+      "charges_per_cp": 2
+    },
+    "orders": {
+      "planned_delay_ticks": 30,
+      "defense_ticks_per_bonus": 60,
+      "stance_cooldown_ticks": 100,
+      "plan_ticks_per_bonus": 30
+    },
+    "capacity": {
+      "attrition_ticks": 30,
+      "grace_ticks": 50
+    },
+    "recruit": {
+      "unit_ticks": 30,
+      "queue_max": 3,
+      "refund_started_pct": 50
+    },
+    "city_upgrades": {
+      "enabled": true,
+      "barracks_ticks": 100,
+      "warehouse_ticks": 100,
+      "warehouse_max_level": 2,
+      "warehouse_gain_per_level": 1,
+      "barracks_charges": 3,
+      "warehouse_charges": 2,
+      "warehouse_province": 1
+    },
+    "supply": {
+      "rear_min_max": 8,
+      "rear_min_default": 1,
+      "front_markers": 2
+    },
+    "vision": {
+      "by_terrain": {
+        "plains": {
+          "plains": "exact",
+          "forest": "range",
+          "mountains": "presence"
+        },
+        "forest": {
+          "plains": "range",
+          "forest": "range",
+          "mountains": "presence"
+        },
+        "mountains": {
+          "plains": "exact",
+          "forest": "range",
+          "mountains": "range"
+        }
+      }
+    },
+    "factory": {
+      "capital_period_ticks": 50,
+      "built_period_ticks": 100,
+      "cost": 4,
+      "build_ticks": 100,
+      "max": 3
+    },
+    "lines": {
+      "max_out": 3
+    },
+    "bunker": {
+      "cost": 3,
+      "build_ticks": 100,
+      "shots": 1
+    }
+  },
+  "map_id": "diamond",
+  "last_seq": 0,
+  "nicks": ["Danya", "Guest"],
+  "rated": false,
+  "unrated_reason": "casual",
+  "calibration": null,
+  "forfeit_ban_s": 300,
+  "pause_available": true
+}

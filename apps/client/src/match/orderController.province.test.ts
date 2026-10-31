@@ -75,7 +75,9 @@ describe('a province is not selectable (#425)', () => {
     const { hud, controller, sent } = setup();
     controller.click({ kind: 'group', id: first.id }, false);
     controller.click({ kind: 'node', id: province }, false);
-    expect(sent).toEqual([{ type: 'move', group: first.id, dest: province, planned: false }]);
+    expect(sent).toEqual([
+      { type: 'move', group: first.id, dest: province, planned: false, bonus: 0 },
+    ]);
     expect(hud.selection).toBeNull();
     expect(controller.cityMenu.current.open).toBe(false);
   });

@@ -37,6 +37,7 @@ const view = (over: Partial<View>): View => ({
   packets: [],
   intents: [],
   fights: [],
+  lines: [],
   ...over,
 });
 

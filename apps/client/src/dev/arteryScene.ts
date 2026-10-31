@@ -115,6 +115,11 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       warehouse_level: city ? level : null,
       warehouse_cap: city ? cap : null,
       building: null,
+      factory: null,
+      factory_period: null,
+      factory_build: null,
+      fort: null,
+      fort_build: null,
     };
   });
 
@@ -169,12 +174,30 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       charged: 2,
       mode: 'attack',
       location: { kind: 'edge', edge: 10, from_node: 6, progress: 360 },
-      order: { dest: 7, path: [7], planned: false, bonus: 0 },
+      order: {
+        dest: 7,
+        path: [7],
+        planned: false,
+        bonus: 0,
+        gathering: false,
+        plan: 0,
+        next_charge_tick: null,
+      },
       defense_bonus: null,
       defense_cap: null,
     },
     // Waiting for a planned order to start: the bonus is a forecast by the charged units.
-    garrison(9, 2, 2, { order: { dest: 10, path: [10], planned: true, bonus: 2 } }),
+    garrison(9, 2, 2, {
+      order: {
+        dest: 10,
+        path: [10],
+        planned: true,
+        bonus: 2,
+        gathering: false,
+        plan: 0,
+        next_charge_tick: null,
+      },
+    }),
   ];
 
   const packet = (
@@ -250,6 +273,7 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       packets,
       intents,
       fights,
+      lines: [],
     },
   };
 }

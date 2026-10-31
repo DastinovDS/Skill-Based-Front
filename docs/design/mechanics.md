@@ -1967,6 +1967,17 @@ The owner's decision of 2026-10-31, after the mechanics audit (#639, `docs/desig
 | P7 | own province M holds 1, group 2/2, `bonus = 1` | the charge at tick 40, departs at 41 |
 | P8 | group 2/2 walks into the empty enemy city 9 with a factory, a bunker and 1 charge | 2/1 after the capture; the bunker destroyed, the factory passes, `warehouse_lost` |
 
+**Implementation notes of #647 (the protocol and the view).** Item 14 on the wire, `PROTOCOL_VERSION` 33. No rule changes (`SIM_VERSION` stays).
+
+- **Commands:** `build_factory {node}`, `build_bunker {node}`, `draw_line {path}` (2..128 node ids, the shape only; the rules are those of #644), `remove_line {line}` (the per-player id of `View.lines`), `release_plan {group}`, and `move {group, dest, planned, bonus}` (`bonus` 0 unless a v2 planned order). The reject codes are those of #644 to #646 in `ack.reject_code`; a command of the other model gives `FEATURE_DISABLED`.
+- **`ruleset_public`:** `economy.model` (`v1` / `v2`: the client hides the UI of the other model), `factory`, `lines`, `bunker` (`null` under v1), `orders.plan_ticks_per_bonus`, `city_upgrades.barracks_charges`, `warehouse_charges`, `warehouse_province` (0 under v1).
+- **`View.lines`:** the own lines `{id, path}` by id; the enemy's never, in any state (the views of a player do not depend on the enemy's lines).
+- **`NodeView`:** `factory` (own city: whether it is an own factory; an enemy city joined by an edge to an own node: whether it is a built factory, the DEC-31 rule), `factory_period` (own factory: ticks per charge), `factory_build` and `fort_build` (own node: `{done_tick, owed}`, `done_tick` `null` while charges are owed), `fort` (own node: a bunker; an enemy node, city or province, joined by an edge to an own node: a built bunker). `building` gains `owed`, and its `done_tick` is `null` while charges are owed. All `null` under v1 and for the other nodes.
+- **`OrderView`:** `gathering` (a v2 planned order waits and gathers), `plan` (the requested bonus while gathering, else 0), `next_charge_tick` (while gathering: the tick the next charge is due; an empty warehouse or a fight delays it); `bonus` is the bonus gathered so far. The server-only `depart_tick` is `None` while gathering (no longer `PLAN_WAIT`).
+- **Roads:** `EdgeView.upgrade_gain` is `null` under v2 (no road levels, items 5 and 8).
+- **Events:** the v2 kinds of #644 to #646 (`build_paid`, `charge_burned`, `factory_built`, `fort_built`, `line_cut`, `line_rerouted`, `plan_charged`) go only to their player; `line` is the per-player line id.
+- **Server:** the ruleset is chosen by `GOW_RULESET_PATH` as before (`mise run stack:agent mvp-3`); `mvp-3` is allowed in prod and its archive ships with the image; the default stays `mvp-2`. The bots of a bot match do not play v2 yet (#648).
+
 ---
 
 ## 8. Roads
