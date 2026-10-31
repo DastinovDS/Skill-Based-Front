@@ -8,10 +8,11 @@ block "Economy v2 (DEC-41, #642)"), played through the full ``Match.step`` on ``
 | 3 | as 2 | C captured | only B -> C is cut; A -> B and B -> D stay |
 | 4 | factory A with lines A -> B, A -> E | A captured | both lines cut |
 
-Map ``dec41`` (see ``test_dec41.py``): player 0 owns K (capital), A, B, C, D, E, F, G with the
-roads K-A, A-B, B-C, A-D, D-C, A-E, K-E, B-F, B-G. F and G hang off B only, so situations 2 and 3 use
-B -> F and B -> G for "B -> D, B -> C" of the table. A is a built factory. A capture is the owner
-change of ``capacity.change_owner`` between two ticks, as combat and movement make it.
+Map ``dec41`` (see ``test_dec41.py``): player 0 owns K (capital), A, B, C, D, E, F, G with
+the roads K-A, A-B, B-C, A-D, D-C, A-E, K-E, B-F, B-G. F and G hang off B only, so situations
+2 and 3 use B -> F and B -> G for "B -> D, B -> C" of the table. A is a built factory. A
+capture is the owner change of ``capacity.change_owner`` between two ticks, as combat and
+movement make it.
 """
 
 from pathlib import Path
