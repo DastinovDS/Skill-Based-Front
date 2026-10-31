@@ -33,7 +33,12 @@
         "has_barracks": true,
         "warehouse_level": 0,
         "warehouse_cap": 5,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 1,
@@ -58,7 +63,12 @@
         "has_barracks": true,
         "warehouse_level": 0,
         "warehouse_cap": 3,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 2,
@@ -83,7 +93,12 @@
         "has_barracks": null,
         "warehouse_level": null,
         "warehouse_cap": null,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 3,
@@ -108,7 +123,12 @@
         "has_barracks": true,
         "warehouse_level": null,
         "warehouse_cap": null,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       }
     ],
     "edges": [
@@ -298,7 +318,10 @@
           "dest": 2,
           "path": [2],
           "planned": false,
-          "bonus": 0
+          "bonus": 0,
+          "gathering": false,
+          "plan": 0,
+          "next_charge_tick": null
         },
         "defense_bonus": null,
         "defense_cap": null
@@ -335,6 +358,7 @@
         "created_tick": 115
       }
     ],
-    "fights": []
+    "fights": [],
+    "lines": []
   }
 }

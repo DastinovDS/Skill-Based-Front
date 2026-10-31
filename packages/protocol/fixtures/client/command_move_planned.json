@@ -1,1 +1,1 @@
-{"type": "command", "seq": 2, "cmd": {"type": "move", "group": "9f2c4a7e1b3d5f60", "dest": 3, "planned": true}}
+{"type": "command", "seq": 2, "cmd": {"type": "move", "group": "9f2c4a7e1b3d5f60", "dest": 3, "planned": true, "bonus": 0}}

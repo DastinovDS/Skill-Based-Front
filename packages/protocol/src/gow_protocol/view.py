@@ -37,6 +37,12 @@ Deliberate choices of the wire format:
   track a group through the fog. Enemy packets are never visible, on any edge (DEC-10, item 6).
 - Own-only data (``me``: CP, stance, front markers and rear minimum of DEC-28; ``upgrade_gain``
   of own edges; orders of own groups) has no enemy counterpart in the view.
+- Economy v2 (DEC-41; ``ruleset_public.economy.model`` says which economy the match plays, so the
+  client hides the UI of the other one): ``lines`` are the **own** supply lines only, the enemy's
+  are never sent (item 3); the factory, its rate and the bunker of own nodes, their builds with
+  the charges still owed (item 7); the gathering plan of own planned orders (item 10); of the
+  enemy only a built factory and a built bunker of a node joined by an edge to an own node (the
+  DEC-31 rule). Under v1 these fields are ``null``, ``false`` or empty.
 """
 
 from typing import Annotated, Literal, Self
@@ -124,8 +130,33 @@ class NodeBuilding(WireModel):
 
     kind: BuildKind
     """``barracks`` or ``warehouse`` (roads are built on edges, ``EdgeView.build``)."""
-    done_tick: Tick
-    """The tick it ends, if nothing interrupts it."""
+    done_tick: Tick | None
+    """The tick it ends, if nothing interrupts it; ``None`` while ``owed`` is above 0 (economy
+    v2, DEC-41, item 7: the build time starts in the tick of the full payment)."""
+    owed: NonNegInt
+    """Economy v2: the charges the build still takes from the city's warehouse and the own
+    groups standing there (the progressive payment of DEC-41, item 7); always 0 under v1."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if (self.done_tick is None) != (self.owed > 0):
+            raise ValueError("done_tick is given exactly when nothing is owed")
+        return self
+
+
+class SiteBuild(WireModel):
+    """A factory (DEC-41, item 2) or a bunker (item 12) being built in an own node."""
+
+    done_tick: Tick | None
+    """The tick it is done, if nothing interrupts it; ``None`` while ``owed`` is above 0."""
+    owed: NonNegInt
+    """The charges still to pay (the progressive payment of DEC-41, item 7)."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if (self.done_tick is None) != (self.owed > 0):
+            raise ValueError("done_tick is given exactly when nothing is owed")
+        return self
 
 
 class NodeView(WireModel):
@@ -169,6 +200,22 @@ class NodeView(WireModel):
     ``city_upgrades``)."""
     building: NodeBuilding | None
     """Own city only: its current build of any kind; ``None`` without one."""
+    factory: bool | None
+    """Economy v2 (DEC-41, item 2): an own city is an own factory; a city of the enemy joined by
+    an edge of the map to any own node (the DEC-31 rule, no memory): it is a built factory of the
+    enemy. ``None`` under v1, for provinces, neutral nodes and the other cities of the enemy."""
+    factory_period: PosInt | None
+    """Own factory only: ticks per charge it makes into its warehouse (the own capital
+    ``factory.capital_period_ticks``, any other ``factory.built_period_ticks``)."""
+    factory_build: SiteBuild | None
+    """Own city only: the factory being built there (economy v2)."""
+    fort: bool | None
+    """Economy v2 (DEC-41, item 12, the bunker; code name ``fort``): an own node, a city or a
+    province, has a bunker; a node of the enemy joined by an edge to any own node (the DEC-31
+    rule): it has a built bunker. ``None`` under v1, for neutral nodes and the other nodes of the
+    enemy."""
+    fort_build: SiteBuild | None
+    """Own node only: the bunker being built there (economy v2)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -189,6 +236,14 @@ class NodeView(WireModel):
         if self.warehouse is not None and self.detail is not Detail.EXACT and not own_data:
             raise ValueError("a warehouse only for an own node or a node with an own group")
         _check_seen(self.detail, self.seen)
+        if (self.factory is not None or self.fort is not None) and self.owner is None:
+            raise ValueError("a factory or a bunker only for an own node or a node of the enemy")
+        if self.factory_period is not None and not (self.factory and own_data):
+            raise ValueError("a factory rate only for an own factory")
+        if self.factory_build is not None and not (self.factory is False and own_data):
+            raise ValueError("a factory build only for an own city without a factory")
+        if self.fort_build is not None and not (self.fort is False and own_data):
+            raise ValueError("a bunker build only for an own node without a bunker")
         if self.attrition_in is not None and self.grace_left is not None:
             raise ValueError("attrition_in and grace_left exclude each other")
         if (self.attrition_in is not None or self.grace_left is not None) and not own_data:
@@ -321,7 +376,26 @@ class OrderView(WireModel):
     """A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
     at most the charged units of the group). Before the departure a forecast by the charged units
     now; the cap is taken in the departure tick. 0 for a normal order and once the bonus entered
-    a fight. Only own orders exist in a view (owner 2026-10-21, mockup #339)."""
+    a fight. Only own orders exist in a view (owner 2026-10-21, mockup #339). Economy v2 (DEC-41,
+    item 10): the bonus gathered so far."""
+    gathering: bool
+    """Economy v2: the planned order waits in its node and gathers its bonus, one real charge of
+    the node's warehouse per ``orders.plan_ticks_per_bonus`` ticks (``release_plan`` departs at
+    once with what it has)."""
+    plan: NonNegInt
+    """While ``gathering``: the requested bonus; the group departs by itself once ``bonus``
+    reaches it, or reaches its charged units. 0 otherwise."""
+    next_charge_tick: Tick | None
+    """While ``gathering``: the tick the next charge is due (an empty warehouse or a fight in the
+    node delays it). ``None`` otherwise."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.gathering != (self.next_charge_tick is not None):
+            raise ValueError("next_charge_tick is given exactly while gathering")
+        if self.gathering != (self.plan > 0) or (self.gathering and not self.planned):
+            raise ValueError("a requested bonus only for a gathering planned order")
+        return self
 
 
 class GroupView(WireModel):
@@ -379,6 +453,17 @@ class PacketView(WireModel):
         if self.dest_tick < self.arrive_tick:
             raise ValueError("dest_tick must not be before arrive_tick")
         return self
+
+
+class LineView(WireModel):
+    """An own supply line (economy v2, DEC-41, items 3 and 6). The enemy's are never sent."""
+
+    id: NonNegInt
+    """The per-player id of the line (``remove_line``, the ``line`` of ``line_cut`` and
+    ``line_rerouted``); only its owner ever sees it."""
+    path: Annotated[tuple[NodeId, ...], Field(min_length=2)]
+    """The own nodes from the source to the target: the drawn path while it is intact, the
+    server's reroute after a break (item 3)."""
 
 
 class IntentView(WireModel):
@@ -482,6 +567,8 @@ class View(WireModel):
     intents: tuple[IntentView, ...]
     fights: tuple[FightView, ...]
     """Fights going on (DEC-24): own groups fight in each."""
+    lines: tuple[LineView, ...]
+    """Economy v2: the own supply lines by id (DEC-41, item 3); empty under v1."""
 
     @field_validator("nodes", "edges")
     @classmethod
@@ -520,6 +607,10 @@ class View(WireModel):
             refs_nodes.append(intent.origin)
             if intent.target is not None:
                 refs_nodes.append(intent.target)
+        if len({line.id for line in self.lines}) != len(self.lines):
+            raise ValueError("ids of lines must be unique")
+        for line in self.lines:
+            refs_nodes.extend(line.path)
         own = {g.id for g in self.groups}
         for fight in self.fights:
             if fight.node is not None:

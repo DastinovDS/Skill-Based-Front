@@ -77,6 +77,7 @@ from gow_protocol.view import (
     GroupView,
     HalfView,
     IntentView,
+    LineView,
     Location,
     NodeBuilding,
     NodeView,
@@ -85,6 +86,7 @@ from gow_protocol.view import (
     PacketView,
     Seen,
     SelfView,
+    SiteBuild,
     UnitsRange,
     UpgradeGain,
     View,
@@ -333,7 +335,14 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 warehouse_cap=n.warehouse_cap,
                 building=None
                 if n.building is None
-                else NodeBuilding(kind=n.building.kind, done_tick=n.building.done_tick),
+                else NodeBuilding(
+                    kind=n.building.kind, done_tick=n.building.done_tick, owed=n.building.owed
+                ),
+                factory=n.factory,
+                factory_period=n.factory_period,
+                factory_build=_site(n.factory_build),
+                fort=n.fort,
+                fort_build=_site(n.fort_build),
             )
             for n in view.nodes
         ),
@@ -381,6 +390,9 @@ def view_to_wire(view: sv.PlayerView) -> View:
                     path=g.order.path,
                     planned=g.order.planned,
                     bonus=g.order.bonus,
+                    gathering=g.order.gathering,
+                    plan=g.order.plan,
+                    next_charge_tick=g.order.next_charge_tick,
                 ),
                 defense_bonus=g.defense_bonus,
                 defense_cap=g.defense_cap,
@@ -440,7 +452,12 @@ def view_to_wire(view: sv.PlayerView) -> View:
             )
             for f in view.fights
         ),
+        lines=tuple(LineView(id=line.id, path=line.path) for line in view.lines),
     )
+
+
+def _site(b: sv.SiteBuildView | None) -> SiteBuild | None:
+    return None if b is None else SiteBuild(done_tick=b.done_tick, owed=b.owed)
 
 
 def _seen(s: sv.Sighting | None) -> Seen | None:
@@ -511,7 +528,16 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "warehouse_cap": n.warehouse_cap,
                 "building": None
                 if n.building is None
-                else {"kind": n.building.kind, "done_tick": n.building.done_tick},
+                else {
+                    "kind": n.building.kind,
+                    "done_tick": n.building.done_tick,
+                    "owed": n.building.owed,
+                },
+                "factory": n.factory,
+                "factory_period": n.factory_period,
+                "factory_build": _site_data(n.factory_build),
+                "fort": n.fort,
+                "fort_build": _site_data(n.fort_build),
             }
             for n in view.nodes
         ],
@@ -559,6 +585,9 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                     "path": g.order.path,
                     "planned": g.order.planned,
                     "bonus": g.order.bonus,
+                    "gathering": g.order.gathering,
+                    "plan": g.order.plan,
+                    "next_charge_tick": g.order.next_charge_tick,
                 },
                 "defense_bonus": g.defense_bonus,
                 "defense_cap": g.defense_cap,
@@ -610,7 +639,12 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             }
             for f in view.fights
         ],
+        "lines": [{"id": line.id, "path": line.path} for line in view.lines],
     }
+
+
+def _site_data(b: sv.SiteBuildView | None) -> dict[str, object] | None:
+    return None if b is None else {"done_tick": b.done_tick, "owed": b.owed}
 
 
 def _round_data(r: sv.FightRound | None) -> dict[str, object] | None:
@@ -664,8 +698,8 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
         return unknown.setdefault(text, -1 - len(unknown))
 
     match cmd:
-        case wire.MoveCmd(group=g, dest=dest, planned=planned):
-            return sim.Move(gid(g), dest, planned)
+        case wire.MoveCmd(group=g, dest=dest, planned=planned, bonus=bonus):
+            return sim.Move(gid(g), dest, planned, bonus)
         case wire.SplitCmd(group=g, n=n):
             return sim.Split(gid(g), n)
         case wire.MergeCmd(groups=groups):
@@ -692,6 +726,16 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.SetRearMin(n)
         case wire.TransferCmd(from_node=src, to_node=dst, n=n):
             return sim.Transfer(src, dst, n)
+        case wire.BuildFactoryCmd(node=node):
+            return sim.BuildFactory(node)
+        case wire.BuildBunkerCmd(node=node):
+            return sim.BuildBunker(node)
+        case wire.DrawLineCmd(path=path):
+            return sim.DrawLine(path)
+        case wire.RemoveLineCmd(line=line):
+            return sim.RemoveLine(line)
+        case wire.ReleasePlanCmd(group=g):
+            return sim.ReleasePlan(gid(g))
         case wire.ForfeitCmd():
             return sim.Forfeit()
 

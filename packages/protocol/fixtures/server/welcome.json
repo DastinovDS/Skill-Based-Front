@@ -44,6 +44,7 @@
       "ticks_per_level": 150
     },
     "economy": {
+      "model": "v1",
       "stance_to_charges_pct": {
         "economy": 75,
         "balance": 50,
@@ -54,7 +55,8 @@
     "orders": {
       "planned_delay_ticks": 30,
       "defense_ticks_per_bonus": 60,
-      "stance_cooldown_ticks": 100
+      "stance_cooldown_ticks": 100,
+      "plan_ticks_per_bonus": 0
     },
     "capacity": {
       "attrition_ticks": 30,
@@ -70,7 +72,10 @@
       "barracks_ticks": 100,
       "warehouse_ticks": 100,
       "warehouse_max_level": 2,
-      "warehouse_gain_per_level": 1
+      "warehouse_gain_per_level": 1,
+      "barracks_charges": 0,
+      "warehouse_charges": 0,
+      "warehouse_province": 0
     },
     "supply": {
       "rear_min_max": 8,
@@ -83,7 +88,10 @@
         "forest": {"plains": "range", "forest": "range", "mountains": "presence"},
         "mountains": {"plains": "exact", "forest": "range", "mountains": "range"}
       }
-    }
+    },
+    "factory": null,
+    "lines": null,
+    "bunker": null
   },
   "map_id": "diamond",
   "last_seq": 0,

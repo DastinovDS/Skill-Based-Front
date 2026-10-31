@@ -140,11 +140,19 @@ describe('the icon of own units in a city', () => {
     // The group on the road or in another city is selected: use the group of `home`, aim at `away`.
     controller.click({ kind: 'group', id: first.id, node: home }, false);
     controller.click({ kind: 'group', id: 'far-group', node: away.id }, false);
-    expect(sent).toEqual([{ type: 'move', group: first.id, dest: away.id, planned: false }]);
+    expect(sent).toEqual([
+      { type: 'move', group: first.id, dest: away.id, planned: false, bonus: 0 },
+    ]);
     expect(hud.selection).toBeNull();
     controller.click({ kind: 'group', id: first.id, node: home }, false);
     controller.click({ kind: 'stack', node: away.id, ids: ['x', 'y'] }, true);
-    expect(sent[1]).toEqual({ type: 'move', group: first.id, dest: away.id, planned: true });
+    expect(sent[1]).toEqual({
+      type: 'move',
+      group: first.id,
+      dest: away.id,
+      planned: true,
+      bonus: 0,
+    });
   });
 
   it('the tip of a stack is the total of its groups', () => {
@@ -179,6 +187,8 @@ describe('the area of a city', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: first.id, node: home }, false);
     controller.click({ kind: 'node', id: away.id }, false);
-    expect(sent).toEqual([{ type: 'move', group: first.id, dest: away.id, planned: false }]);
+    expect(sent).toEqual([
+      { type: 'move', group: first.id, dest: away.id, planned: false, bonus: 0 },
+    ]);
   });
 });

@@ -148,6 +148,9 @@ describe('buildHudData: Defense and plan bonuses of own groups (DEC-30, DEC-29)'
       path: [1] as [number, ...number[]],
       planned,
       bonus,
+      gathering: false,
+      plan: 0,
+      next_charge_tick: null,
     });
     const info = (patch: Partial<typeof own>) =>
       buildHudData(ctx, withGroup(patch), { kind: 'group', id: own.id }, []).group;

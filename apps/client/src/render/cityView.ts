@@ -403,10 +403,9 @@ export class CityView {
     if (building !== null && building.kind !== 'road' && cityUpgrades !== null) {
       const total = cityUpgrades[building.kind];
       buildKind = building.kind;
-      buildPct = Math.min(
-        100,
-        Math.max(0, Math.round((100 * (total - Math.max(0, building.done_tick - tick))) / total)),
-      );
+      // A build that still owes charges (economy v2, DEC-41, item 7) has not started its time.
+      const left = building.done_tick === null ? total : Math.max(0, building.done_tick - tick);
+      buildPct = Math.min(100, Math.max(0, Math.round((100 * (total - left)) / total)));
     }
     // Free slots are shown where a unit can be queued: an own city (the view carries its queue), with
     // the barracks when the city development is on (DEC-26, the same test as the city menu).

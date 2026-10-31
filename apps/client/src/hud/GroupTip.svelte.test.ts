@@ -90,7 +90,15 @@ describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)',
     const planned = (location: GroupView['location']) =>
       group({
         location,
-        order: { dest: 2, path: [2], planned: true, bonus: 2 },
+        order: {
+          dest: 2,
+          path: [2],
+          planned: true,
+          bonus: 2,
+          gathering: false,
+          plan: 0,
+          next_charge_tick: null,
+        },
       });
     expect(tipOf([planned({ kind: 'node', node: city })])).toContain(
       'Plan bonus ◇ +2: a forecast, the number is settled at the departure',
@@ -101,7 +109,15 @@ describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)',
     const text = tipOf([
       group({
         location: { kind: 'edge', edge: 0, from_node: city, progress: 300 },
-        order: { dest: 2, path: [2], planned: true, bonus: 1 },
+        order: {
+          dest: 2,
+          path: [2],
+          planned: true,
+          bonus: 1,
+          gathering: false,
+          plan: 0,
+          next_charge_tick: null,
+        },
       }),
     ]);
     expect(text).toContain('Plan bonus ◇ +1');
@@ -110,10 +126,34 @@ describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)',
 
   it('shows no bonus line for an ordinary order or a plan without a bonus', () => {
     expect(
-      tipOf([group({ order: { dest: 2, path: [2], planned: false, bonus: 0 } })]),
+      tipOf([
+        group({
+          order: {
+            dest: 2,
+            path: [2],
+            planned: false,
+            bonus: 0,
+            gathering: false,
+            plan: 0,
+            next_charge_tick: null,
+          },
+        }),
+      ]),
     ).not.toContain('Plan bonus');
     expect(
-      tipOf([group({ order: { dest: 2, path: [2], planned: true, bonus: 0 } })]),
+      tipOf([
+        group({
+          order: {
+            dest: 2,
+            path: [2],
+            planned: true,
+            bonus: 0,
+            gathering: false,
+            plan: 0,
+            next_charge_tick: null,
+          },
+        }),
+      ]),
     ).not.toContain('Plan bonus');
   });
 });

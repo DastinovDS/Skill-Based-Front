@@ -333,6 +333,20 @@ def _features(view: View) -> set[str]:
         "enemy_barracks": any(
             n.has_barracks is not None and n.warehouse_level is None for n in view.nodes
         ),
+        # Economy v2 (DEC-41, #647).
+        "lines": bool(view.lines),
+        "factory_rate": any(n.factory_period is not None for n in view.nodes),
+        "factory_owed": any(n.factory_build and n.factory_build.owed for n in view.nodes),
+        "factory_build_done": any(
+            n.factory_build and n.factory_build.done_tick is not None for n in view.nodes
+        ),
+        "fort": any(n.fort and n.warehouse_level is not None for n in view.nodes),
+        "fort_owed": any(n.fort_build and n.fort_build.owed for n in view.nodes),
+        "enemy_fort": any(
+            n.fort and n.has_barracks is not None and n.warehouse_level is None for n in view.nodes
+        ),
+        "building_owed": any(n.building and n.building.owed for n in view.nodes),
+        "gathering": any(g.order is not None and g.order.gathering for g in view.groups),
     }
     return {name for name, present in found.items() if present}
 
@@ -419,6 +433,74 @@ def test_snapshot_frame_of_enemy_barracks_next_door() -> None:
         None,
         None,
     )
+
+
+V2_RULES = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+DEC41_MAP = ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json"
+
+
+def test_economy_v2_through_the_wire() -> None:
+    """DEC-41, item 14 (#647): the v2 commands go through the wire and are accepted; the frames
+    of both players equal the validated ones and ``view_to_canonical`` at every tick, with the
+    own lines, factory and bunker builds owing charges, a gathering plan and an enemy bunker next
+    door; the events are those of their player only. Map ``dec41`` (``packages/sim/tests``):
+    player 0 owns K = 0, A = 1, B = 2, C = 3, ..., M = 8 is a neutral province next to the enemy
+    city 13; player 1 owns 9..16."""
+    mapdef = load_map(DEC41_MAP)
+    match = Match(mapdef, V2_RULES, KEY)
+    state = match.state
+    state.nodes[8].owner = 0  # the own province M borders the enemy city 13 (DEC-31 rule)
+    state.nodes[13].fort = True
+    state.nodes[2].warehouse = 2  # B pays half of its factory at once, the line K-A-B the rest
+    start = next(g for g in match.view(0).groups if g.location == AtNode(0))
+    seq: dict[int, int] = dict.fromkeys(PLAYERS, 0)
+
+    def send(p: int, cmd: wire.Command) -> sim.PlayerCommand:
+        seq[p] += 1
+        msg = decode_client(encode(CommandMsg(seq=seq[p], cmd=cmd)))
+        assert isinstance(msg, CommandMsg)
+        return sim.PlayerCommand(p, msg.seq, match.resolve(p, command_from_wire(msg.cmd)))
+
+    script: dict[int, list[tuple[int, wire.Command]]] = {
+        1: [
+            (0, wire.DrawLineCmd(path=(0, 1, 2))),
+            (0, wire.BuildFactoryCmd(node=2)),
+            (0, wire.BuildBunkerCmd(node=1)),
+            (0, wire.BuildBarracksCmd(node=3)),
+            (0, wire.MoveCmd(group=str(start.id), dest=3, planned=True, bonus=2)),
+            (1, wire.DrawLineCmd(path=(16, 15, 14))),
+        ],
+        2: [(0, wire.DrawLineCmd(path=(2, 6))), (1, wire.DrawLineCmd(path=(14, 10)))],
+        45: [(0, wire.ReleasePlanCmd(group=str(start.id)))],
+        120: [(0, wire.RemoveLineCmd(line=1))],
+    }
+    checker = _FrameChecker()
+    checker.begin(match)
+    for tick in range(1, 260):
+        events = match.step([send(p, cmd) for p, cmd in script.get(tick, [])])
+        for result in match.results:
+            ack = ack_msg(result)
+            assert decode_server(encode(ack)) == ack
+            assert ack.reject_code is None, (tick, result)
+        for p in PLAYERS:
+            msg = _check_snapshot(match, p)
+            own = state.players[p].lines
+            assert [(line.id, line.path) for line in msg.view.lines] == [
+                (k, own[k].path) for k in sorted(own)
+            ]
+            _check_events(match, events, p)
+        checker.record(match, ())
+    assert checker.features >= {
+        "lines",
+        "factory_rate",
+        "factory_owed",
+        "factory_build_done",
+        "fort_owed",
+        "enemy_fort",
+        "building_owed",
+        "gathering",
+    }
+    assert [line.path for line in match.view(0).lines] == [(0, 1, 2)]
 
 
 class _Keeper:

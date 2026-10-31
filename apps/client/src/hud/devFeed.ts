@@ -71,6 +71,11 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       warehouse_level: null,
       warehouse_cap: null,
       building: null,
+      factory: null,
+      factory_period: null,
+      factory_build: null,
+      fort: null,
+      fort_build: null,
     };
     if (mine.has(n.id)) {
       const city = n.kind !== 'province';
@@ -171,6 +176,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       packets: [],
       intents: [],
       fights: devFights(map, tick),
+      lines: [],
     },
   };
 }

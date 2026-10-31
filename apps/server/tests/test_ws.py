@@ -27,7 +27,15 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus
 from websockets.typing import Origin
 
 from gow_protocol.codec import decode_server, encode
-from gow_protocol.commands import ForfeitCmd, SetStanceCmd
+from gow_protocol.commands import (
+    BuildFactoryCmd,
+    DrawLineCmd,
+    ForfeitCmd,
+    MoveCmd,
+    ReleasePlanCmd,
+    RemoveLineCmd,
+    SetStanceCmd,
+)
 from gow_protocol.messages import (
     CLOSE_NO_MATCH,
     CLOSE_POLICY,
@@ -63,7 +71,7 @@ from gow_server.settings import Settings
 from gow_server.ws import CLOSE_TRY_LATER
 from gow_sim.commands import Forfeit
 from gow_sim.replay import read_replay
-from gow_sim.ruleset import Stance, load_ruleset
+from gow_sim.ruleset import EconomyModel, Stance, load_ruleset
 
 ROOT: Final = Path(__file__).parents[3]
 DT: Final = 0.1
@@ -475,6 +483,74 @@ def test_welcome_snapshot_ack_ping_resync_and_seq_dedup(ws_settings: Settings) -
             assert isinstance(welcome, WelcomeMsg) and welcome.last_seq == 1
 
     run(ws_settings, scenario)
+
+
+def test_economy_v2_commands_over_the_websocket(ws_settings: Settings) -> None:
+    """DEC-41, item 14 (#647): a match on ``mvp-3`` over a real WebSocket. The welcome names the
+    economy model and its numbers; a line drawn from the capital (a factory from the start), a
+    factory build paid in charges, a planned order with a requested bonus that gathers and is
+    released, and a removed line are accepted and show in the snapshots. Map ``web``: player 0
+    owns the capital 2 and the cities 0, 1, 3, 4, 7 (roads 2-1, 1-0, 2-3, 2-7); 6 is neutral."""
+
+    async def scenario(live: Live) -> None:
+        async with live.connect() as ws:
+            await send(ws, hello(live.tokens[0]))
+            welcome = await recv(ws)
+            assert isinstance(welcome, WelcomeMsg)
+            public = welcome.ruleset_public
+            assert public.economy.model is EconomyModel.V2
+            assert public.factory is not None and public.lines is not None
+            assert public.bunker is not None and public.orders.plan_ticks_per_bonus == 30
+            snap = await recv_until(ws, SnapshotMsg)
+            capital = snap.view.nodes[2]
+            assert (capital.factory, capital.factory_period) == (True, 50)
+            home = next(
+                g for g in snap.view.groups if g.location == AtNodeLoc(node=2) and g.charged
+            )
+            commands = [
+                DrawLineCmd(path=(2, 1, 0)),
+                BuildFactoryCmd(node=1),
+                MoveCmd(group=home.id, dest=6, planned=True, bonus=2),
+            ]
+            for seq, cmd in enumerate(commands, start=1):
+                await send(ws, CommandMsg(seq=seq, cmd=cmd))
+            await send(ws, PingMsg(id=1))  # the server has read the commands
+            await recv_until(ws, PongMsg)
+            await live.ticks()
+            acks = [await recv_until(ws, AckMsg) for _ in commands]
+            assert [(a.seq, a.reject_code) for a in acks] == [(1, None), (2, None), (3, None)]
+            snap = await recv_until(ws, SnapshotMsg)
+            while snap.tick < live.runner.match.tick:
+                snap = await recv_until(ws, SnapshotMsg)
+            assert [(line.id, line.path) for line in snap.view.lines] == [(0, (2, 1, 0))]
+            assert snap.view.nodes[1].factory_build is not None
+            order = next(g for g in snap.view.groups if g.id == home.id).order
+            assert order is not None and (order.gathering, order.plan) == (True, 2)
+
+            await send(ws, CommandMsg(seq=4, cmd=ReleasePlanCmd(group=home.id)))
+            await send(ws, CommandMsg(seq=5, cmd=RemoveLineCmd(line=0)))
+            await send(ws, PingMsg(id=2))
+            await recv_until(ws, PongMsg)
+            await live.ticks()
+            acks = [await recv_until(ws, AckMsg) for _ in range(2)]
+            assert [(a.seq, a.reject_code) for a in acks] == [(4, None), (5, None)]
+            snap = await recv_until(ws, SnapshotMsg)
+            while snap.tick < live.runner.match.tick:
+                snap = await recv_until(ws, SnapshotMsg)
+            assert snap.view.lines == ()
+            moving = next((g for g in snap.view.groups if g.id == home.id), None)
+            assert moving is not None and moving.order is not None
+            assert not moving.order.gathering
+
+            # The opponent sees the public intent, never a line or the factory build.
+            async with live.connect() as enemy:
+                await send(enemy, hello(live.tokens[1]))
+                assert isinstance(await recv(enemy), WelcomeMsg)
+                theirs = await recv_until(enemy, SnapshotMsg)
+                assert theirs.view.lines == ()
+                assert theirs.view.nodes[1].factory_build is None
+
+    run(ws_settings, scenario, map_id="web", ruleset="mvp-3")
 
 
 def test_reach_query_is_answered_by_the_server(ws_settings: Settings) -> None:

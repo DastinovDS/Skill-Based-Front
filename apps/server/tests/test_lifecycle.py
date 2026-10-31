@@ -441,6 +441,19 @@ def test_test_short_ruleset_is_not_for_prod() -> None:
     assert Settings(env="prod", ruleset_path=full).env == "prod"
 
 
+def test_mvp3_is_a_selectable_ruleset_with_a_bundled_archive() -> None:
+    """DEC-41 (#647): the economy v2 ruleset ``mvp-3`` is chosen like any other by
+    ``GOW_RULESET_PATH`` (``mise run stack:agent mvp-3``), in prod too, and its archive file ships
+    with the image, so the replays of its matches re-simulate (AGENTS.md, section 4.5). The
+    default stays ``mvp-2`` in ``compose.yaml`` and the image."""
+    path = ROOT / "rulesets" / "mvp-3.toml"
+    rules = load_ruleset(path)
+    assert rules.v2
+    assert Settings(env="prod", ruleset_path=path).ruleset_path == path
+    archived = ROOT / "rulesets" / "archive" / f"{ruleset_hash(rules)}.toml"
+    assert archived.read_bytes() == path.read_bytes()
+
+
 def test_ruleset_is_archived_next_to_the_bundled_archive(tmp_path: Path) -> None:
     bundled, volume = ROOT / "rulesets" / "archive", tmp_path / "data" / "rulesets"
     path = ROOT / "rulesets" / "test-short.toml"

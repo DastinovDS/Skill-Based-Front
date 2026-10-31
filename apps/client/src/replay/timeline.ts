@@ -69,7 +69,15 @@ function groupView(g: FrameGroup): GroupView {
       g.to === undefined || dest === undefined
         ? null
         : // Replay frames carry no planned bonus (DEC-29): the viewer shows none.
-          { dest, path: g.to as [number, ...number[]], planned: g.pl === 1, bonus: 0 },
+          {
+            dest,
+            path: g.to as [number, ...number[]],
+            planned: g.pl === 1,
+            bonus: 0,
+            gathering: false,
+            plan: 0,
+            next_charge_tick: null,
+          },
     // Replay frames carry no gathered Defense bonus (DEC-30); the viewer shows the mode only.
     defense_bonus: null,
     defense_cap: null,
@@ -103,6 +111,12 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     // The places of the warehouse (#556): without them the bar would show the node capacity.
     warehouse_cap: warehouseCap ?? null,
     building: null,
+    // Economy v2 (DEC-41): not in the replay files.
+    factory: null,
+    factory_period: null,
+    factory_build: null,
+    fort: null,
+    fort_build: null,
   }));
   const packets: PacketView[] = frame.k.map(
     ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => {
@@ -191,6 +205,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
             : null,
         };
       }),
+      lines: [], // economy v2 (DEC-41): not in the replay files
     },
   };
 }

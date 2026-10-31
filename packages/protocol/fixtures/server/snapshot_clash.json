@@ -33,7 +33,12 @@
         "has_barracks": true,
         "warehouse_level": 0,
         "warehouse_cap": 6,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 1,
@@ -58,7 +63,12 @@
         "has_barracks": true,
         "warehouse_level": 0,
         "warehouse_cap": 4,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 2,
@@ -83,7 +93,12 @@
         "has_barracks": true,
         "warehouse_level": null,
         "warehouse_cap": null,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 3,
@@ -108,7 +123,12 @@
         "has_barracks": true,
         "warehouse_level": 0,
         "warehouse_cap": 3,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 4,
@@ -133,7 +153,12 @@
         "has_barracks": false,
         "warehouse_level": null,
         "warehouse_cap": null,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 5,
@@ -158,7 +183,12 @@
         "has_barracks": null,
         "warehouse_level": null,
         "warehouse_cap": null,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 6,
@@ -183,7 +213,12 @@
         "has_barracks": null,
         "warehouse_level": null,
         "warehouse_cap": null,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       },
       {
         "id": 7,
@@ -208,7 +243,12 @@
         "has_barracks": null,
         "warehouse_level": null,
         "warehouse_cap": null,
-        "building": null
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null
       }
     ],
     "edges": [
@@ -566,7 +606,10 @@
           "dest": 0,
           "path": [0],
           "planned": false,
-          "bonus": 0
+          "bonus": 0,
+          "gathering": false,
+          "plan": 0,
+          "next_charge_tick": null
         },
         "defense_bonus": null,
         "defense_cap": null
@@ -586,7 +629,10 @@
           "dest": 4,
           "path": [4],
           "planned": true,
-          "bonus": 1
+          "bonus": 1,
+          "gathering": false,
+          "plan": 0,
+          "next_charge_tick": null
         },
         "defense_bonus": null,
         "defense_cap": null
@@ -687,6 +733,7 @@
           "losses": [0, 1]
         }
       }
-    ]
+    ],
+    "lines": []
   }
 }

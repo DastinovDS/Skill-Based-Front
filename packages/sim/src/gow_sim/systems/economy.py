@@ -93,14 +93,12 @@ def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
             player.cp = total - burned
             if burned > 0:
                 events.append(event(tick, "cp_burned", player=pid, cp=burned))
-    factory = rules.factory_rules()
     for nid in sorted(state.nodes):
         node = state.nodes[nid]
         owner = node.owner
         if owner is None or node.factory != owner:
             continue
-        own_capital = nid == state.map.capital(owner)
-        period = factory.capital_period_ticks if own_capital else factory.built_period_ticks
+        period = factory_period(state, rules, nid)
         if tick <= 0 or tick % period != 0:
             continue
         if node.warehouse < warehouse_capacity(state, rules, nid):
@@ -111,6 +109,16 @@ def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
         else:
             events.append(event(tick, "charge_burned", player=owner, node=nid, charges=1))
     return events
+
+
+def factory_period(state: GameState, rules: Ruleset, node: int) -> int:
+    """Ticks per charge of the factory in ``node`` (DEC-41, item 2): the own capital of its
+    owner ``factory.capital_period_ticks``, any other factory ``factory.built_period_ticks``."""
+    factory = rules.factory_rules()
+    owner = state.nodes[node].owner
+    if owner is not None and node == state.map.capital(owner):
+        return factory.capital_period_ticks
+    return factory.built_period_ticks
 
 
 def stance_cooldown_left(state: GameState, rules: Ruleset, player: int) -> int:

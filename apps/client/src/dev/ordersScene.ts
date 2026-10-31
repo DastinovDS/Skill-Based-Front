@@ -55,7 +55,15 @@ export function ordersSnapshot(map: MapFile): SnapshotMsg {
       charged: 2,
       mode: 'attack',
       location: { kind: 'node', node: p.origin },
-      order: { dest: p.target, path: [p.target], planned: true, bonus: p.bonus ?? 0 },
+      order: {
+        dest: p.target,
+        path: [p.target],
+        planned: true,
+        bonus: p.bonus ?? 0,
+        gathering: false,
+        plan: 0,
+        next_charge_tick: null,
+      },
       defense_bonus: null,
       defense_cap: null,
     });

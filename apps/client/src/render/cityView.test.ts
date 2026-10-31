@@ -415,7 +415,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
 
   it('draws a barracks and a warehouse build with the same plate, told by the badge', () => {
     const { view, nodes } = make();
-    const left = (ticks: number) => ({ done_tick: NOW + ticks });
+    const left = (ticks: number) => ({ done_tick: NOW + ticks, owed: 0 });
     view.update(
       withCity({ building: { kind: 'barracks', ...left(50) } }),
       rules.unitTicks,
@@ -443,7 +443,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       withCity({
         recruit_queue: 1,
         recruit_progress: 5,
-        building: { kind: 'warehouse', done_tick: NOW + 20 },
+        building: { kind: 'warehouse', done_tick: NOW + 20, owed: 0 },
       }),
       rules.unitTicks,
       UPGRADES,
@@ -456,14 +456,14 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
   it('draws no build plate without the city development, or for a road build', () => {
     const { view, nodes } = make();
     view.update(
-      withCity({ building: { kind: 'warehouse', done_tick: NOW + 20 } }),
+      withCity({ building: { kind: 'warehouse', done_tick: NOW + 20, owed: 0 } }),
       rules.unitTicks,
       null,
       rules.queueMax,
     );
     expect(sprite(nodes, own.id, 'build').visible).toBe(false);
     view.update(
-      withCity({ building: { kind: 'road', done_tick: NOW + 20 } }),
+      withCity({ building: { kind: 'road', done_tick: NOW + 20, owed: 0 } }),
       rules.unitTicks,
       UPGRADES,
       rules.queueMax,
@@ -475,7 +475,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
   it('clamps a build that is past its end or has not started', () => {
     const { view, nodes } = make();
     view.update(
-      withCity({ building: { kind: 'barracks', done_tick: NOW - 5 } }),
+      withCity({ building: { kind: 'barracks', done_tick: NOW - 5, owed: 0 } }),
       rules.unitTicks,
       UPGRADES,
       rules.queueMax,
@@ -484,7 +484,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       buildMarkSpec(buildMark('barracks', 1)).key,
     );
     view.update(
-      withCity({ building: { kind: 'barracks', done_tick: NOW + 500 } }),
+      withCity({ building: { kind: 'barracks', done_tick: NOW + 500, owed: 0 } }),
       rules.unitTicks,
       UPGRADES,
       rules.queueMax,
@@ -502,7 +502,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
         recruit_queue: 1,
         recruit_waiting: true,
         recruit_progress: rules.unitTicks,
-        building: { kind: 'warehouse', done_tick: NOW + 20 },
+        building: { kind: 'warehouse', done_tick: NOW + 20, owed: 0 },
       }),
       rules.unitTicks,
       UPGRADES,

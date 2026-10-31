@@ -78,8 +78,8 @@ describe('OrderController', () => {
     controller.click({ kind: 'group', id: group.id }, false); // the order let the group go
     controller.click({ kind: 'node', id: other.id }, true);
     expect(sent).toEqual([
-      { type: 'move', group: group.id, dest: enemy.id, planned: false },
-      { type: 'move', group: group.id, dest: other.id, planned: true },
+      { type: 'move', group: group.id, dest: enemy.id, planned: false, bonus: 0 },
+      { type: 'move', group: group.id, dest: other.id, planned: true, bonus: 0 },
     ]);
     // Shown at once as a ghost, the last order replacing the first.
     expect(book.ghosts().map((g) => [g.from, g.dest, g.planned])).toEqual([[home, other.id, true]]);
@@ -507,7 +507,15 @@ describe('OrderController', () => {
     const waiting = {
       ...group,
       id: 'waiting',
-      order: { dest: enemy.id, path: [enemy.id], planned: true, bonus: 1 },
+      order: {
+        dest: enemy.id,
+        path: [enemy.id],
+        planned: true,
+        bonus: 1,
+        gathering: false,
+        plan: 0,
+        next_charge_tick: null,
+      },
     } satisfies typeof group;
     hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, groups: [group, twin, waiting] } });
     controller.click({ kind: 'group', id: group.id }, false);
@@ -683,7 +691,7 @@ describe('OrderController', () => {
       controller.click({ kind: 'edge', id: up2, cell: other.id }, false);
       expect(sent).toEqual([
         { type: 'upgrade_road', edge: up2 },
-        { type: 'move', group: group.id, dest: other.id, planned: false },
+        { type: 'move', group: group.id, dest: other.id, planned: false, bonus: 0 },
       ]);
     });
 
@@ -1340,7 +1348,9 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
     expect(controller.groupMenu.current.open).toBe(true);
     controller.click({ kind: 'node', id: other.id }, false);
     expect(controller.groupMenu.current.open).toBe(false);
-    expect(sent).toEqual([{ type: 'move', group: group.id, dest: other.id, planned: false }]);
+    expect(sent).toEqual([
+      { type: 'move', group: group.id, dest: other.id, planned: false, bonus: 0 },
+    ]);
   });
 
   it('a sector of the group menu does what its key does', () => {
