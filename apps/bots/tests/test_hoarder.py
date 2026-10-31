@@ -153,12 +153,13 @@ class _StrikeLog:
 
 
 def test_the_hoarder_stages_and_strikes_like_the_owner(crossroads: MapDef, rules: Ruleset) -> None:
-    # A full match on the owner's map against the normal level (seed fixed: the bots are
-    # deterministic). The owner's strike: Middle Court taken first, then 2-4 groups, at least one
-    # planned, joining one capital fight.
+    # A full match on the owner's map against the easy level (seed fixed: the bots are
+    # deterministic; #663 made the opponents of #624 hold back in the midgame, the easy turtle
+    # still lets the build-up reach the stage). The owner's strike: Middle Court taken first,
+    # then 2-4 groups, at least one planned, joining one capital fight.
     side = 1
     bots = [
-        bot_factory("smart_reactive@easy")(crossroads, rules, seed=1, player=0),
+        bot_factory("smart_turtle@easy")(crossroads, rules, seed=1, player=0),
         bot_factory("smart_hoarder")(crossroads, rules, seed=1, player=side),
     ]
     log = _StrikeLog(side)
