@@ -274,7 +274,11 @@ def test_reactive_waits_for_the_enemy_to_commit_when_ahead(
     bot.decide(lead, 5)
     ctx = _ctx(bot, lead)
     enemy = [n.id for n in lead.nodes if n.owner == 1]
-    assert not any(bot.in_reach(ctx, g, n) for n in enemy)
+    # Ahead and nothing committed: only an empty node or a weak sector is a target.
+    for n in enemy:
+        open_ = bot.shots[n] == 0 or bot.weakness(n) > 0
+        assert bot.in_reach(ctx, g, n) == open_, n
+    assert not all(bot.in_reach(ctx, g, n) for n in enemy)
     # The enemy attacks an own node next to its territory: its neighbours are open to a
     # counterattack for COUNTER_TICKS.
     own = next(

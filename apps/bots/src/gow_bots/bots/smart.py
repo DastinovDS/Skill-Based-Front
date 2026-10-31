@@ -135,8 +135,9 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     pressure), ``MID_GOAL`` (the army rallies to the weakest sector, ``weak_spot``),
     ``MID_GROUP`` (no attack on a garrisoned enemy node with fewer charged units: concentrated
     breakthroughs), ``W_RING`` (score per own neighbour of the target: the encirclement),
-    ``COUNTER`` (ahead on the forecast, enemy nodes are targets only for ``COUNTER_TICKS`` after
-    an enemy attack on an own node, the enemy neighbours of that node first). The late game keeps
+    ``COUNTER`` (ahead on the forecast, a garrisoned enemy node that is no weak sector is a
+    target only for ``COUNTER_TICKS`` after an enemy attack on an own node, the enemy neighbours
+    of that node first). The late game keeps
     item 1: ahead, every attack demands ``secure_margin`` more; not ahead, all in.
 19. **The turtle** (``SmartTurtle``): the natural half in the opening; on a settled map it holds
     while the forecast is ahead (garrisons by the threat, the spare army in the most threatened
@@ -1483,8 +1484,9 @@ class SmartBot(CampaignBot):
             ahead = a is not None and a.ahead
             seen = self.exposed.get(dest)
             fresh = seen is not None and ctx.tick - seen <= EXPOSED_TICKS
-            if ahead and not self.attacked_at and not fresh:
-                return False  # ahead and nothing committed: wait for the enemy to move
+            weak = self.shots[dest] == 0 or self.weakness(dest) > 0
+            if ahead and not self.attacked_at and not fresh and not weak:
+                return False  # ahead, nothing committed, no weak spot: wait for the enemy
         return True
 
     def mid_value(self, ctx: Ctx, dest: int) -> int:
