@@ -219,6 +219,8 @@ WORRY_SEEN: Final = 3
 """Enemy shots that must be seen near the capital before the fog adds to them (item 13)."""
 W_STAGE: Final = 400
 """Score added to the enemy build-up next to a worried capital (item 13)."""
+V2_RECRUIT_KEEP_MOVES: Final = 2
+"""Economy v2: ``recruit_keep`` is at most this many ordinary orders (``adjusted``)."""
 STANCES: Final = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
 """From the most charges to the most CP (``economy.stance_to_charges_pct``)."""
 
@@ -338,6 +340,8 @@ class SmartBot(CampaignBot):
     """Item 16 on (with ``ANSWERS``)."""
     PAIRS: ClassVar[bool] = True
     """Item 17 on (with ``ANSWERS``)."""
+    BUNKERS: ClassVar[int] = 1
+    """Economy v2: bunkers of a personality that fortifies (``bunkers``)."""
     ANXIETY: ClassVar[int] = 50
     """Percent of the hidden enemy force (``hidden_shots``) a worried capital counts (item 13)."""
     WITHDRAW_GAP: ClassVar[int] = 2
@@ -490,6 +494,12 @@ class SmartBot(CampaignBot):
         """The drawn parameters with the thresholds of this decision (module docstring, 1);
         without ``insight`` (item 9) only the capital guard of an alarm."""
         p = dict(self.params)
+        if self.rules.v2:
+            # Economy v2 has no Defense to keep CP for (DEC-41, item 5) and doubles the CP
+            # income (item 1): the keeps of the v1 personalities shrink to a move or two.
+            move = self.rules.orders.cost.move
+            p["reserve"] = min(p["reserve"], move)
+            p["recruit_keep"] = min(p["recruit_keep"], V2_RECRUIT_KEEP_MOVES * move)
         if not self.tempo.insight:
             p["scouts"] = 0
             if self.alarm:
@@ -529,13 +539,17 @@ class SmartBot(CampaignBot):
         for cmd in self.fight_commands(view, tick, ctx.budget):  # DEC-24: fights first
             if self.spend(ctx, cmd) and isinstance(cmd, Move):
                 ctx.used[cmd.group] = True
-        self._set_stance(ctx, a)
-        for cmd in self.fronts(view):  # front markers on the front cities (DEC-28)
-            self.spend(ctx, cmd)
+        if self.rules.v2:
+            self.economy_v2(ctx)  # lines, factories, bunkers, plans (DEC-41)
+        else:
+            self._set_stance(ctx, a)
+            for cmd in self.fronts(view):  # front markers on the front cities (DEC-28)
+                self.spend(ctx, cmd)
         self.evacuate(ctx)
         self.unbank(ctx)
-        self.set_rear_min(ctx)
-        self.feed(ctx)
+        if not self.rules.v2:
+            self.set_rear_min(ctx)
+            self.feed(ctx)
         plan_cp = self.held_cp(ctx)
         bank = self.strike_cp(ctx) if self.striking() else 0  # item 12: the strike's CP
         ctx.held = max(plan_cp, bank)  # item 10: from here on the spending leaves the plan's CP
@@ -563,7 +577,8 @@ class SmartBot(CampaignBot):
         self._gather(ctx)
         self._rally(ctx)
         self._recruit(ctx)
-        self.build_roads(ctx)
+        if not self.rules.v2:
+            self.build_roads(ctx)  # no road levels under v2 (DEC-41, item 8)
         self.bank(ctx)
         return ctx.cmds
 
@@ -713,29 +728,34 @@ class SmartBot(CampaignBot):
         # first, then the farther ones: each is planned when ``plan_strike`` says so for the
         # shots the groups before it leave missing, else ordinary, while the CP last.
         found.sort(key=lambda c: (c[2], -c[0].charged, self.group_order(c[0])))
-        delay = rules.orders.planned_delay_ticks
         spent = pool = 0
         chosen: list[Pick] = []
         for g, here, edges, ticks in found:
-            bonus = rules.orders.planned_bonus(edges, g.charged)
+            bonus = self.plan_bonus(view, here, edges, g.charged)
+            if rules.v2:
+                bonus = min(bonus, need - pool)  # a v2 plan asks for what is missing only
             plan = (
                 bonus >= 1
                 and need - pool > 0
                 and spent + cost.planned_move <= budget
-                and self.plan_strike(g, need - pool, edges)
+                and self.plan_strike(g, need - pool, edges, bonus)
             )
             price = cost.planned_move if plan else cost.move
             if spent + price > budget:
                 continue
             spent += price
             pool += g.charged + (bonus if plan else 0)
-            lead = ticks + (delay if plan else 0)
+            lead = ticks + (self.plan_lead(bonus) if plan else 0)
             chosen.append(Pick(g.id, here, g.units, g.charged, plan, lead, bonus if plan else 0))
         return StrikePlan(pool, need, spent, tuple(chosen))
 
-    def plan_strike(self, g: GroupView, missing: int, edges: int) -> bool:
+    def plan_strike(self, g: GroupView, missing: int, edges: int, bonus: int = 0) -> bool:
         """Whether group ``g`` of a strike goes by a scheduled order: the shared utility
-        (``prefer_planned``) with the shots the groups before it leave ``missing``."""
+        (``prefer_planned``) with the shots the groups before it leave ``missing``. Under v2
+        every group that can gather a ``bonus`` does (DEC-41, item 10): the strike is short,
+        and its arrival waits for the slowest group anyway."""
+        if self.rules.v2:
+            return bonus >= 1
         return prefer_planned(self.rules, g.charged, missing, edges)
 
     def strike_cp(self, ctx: Ctx) -> int:
@@ -781,7 +801,7 @@ class SmartBot(CampaignBot):
             if tick + 1 + p.lead < s.arrive - STRIKE_ALIGN:
                 left.append(p)
                 continue
-            if self.spend(ctx, Move(p.group, s.target, planned=p.planned)):
+            if self.spend(ctx, self.order(p.group, s.target, p.planned, p.bonus)):
                 ctx.used[p.group] = True
                 ctx.standing[p.node] -= g.units
                 self.strike_sent[p.group] = tick
@@ -1238,6 +1258,12 @@ class SmartBot(CampaignBot):
                     ctx.used[g.id] = True
                     ctx.standing[here] -= g.units
                     ctx.standing[node] += g.units
+
+    @override
+    def bunkers(self) -> int:
+        """Economy v2: the personalities that fortify keep ``BUNKERS`` (DEC-41, item 12: the
+        bunker replaces Defense)."""
+        return self.BUNKERS if self.params["fortify"] > 0 else 0
 
     def fortify(self, ctx: Ctx) -> None:
         """Defense on the strongest charged group of every own node next to the enemy (and of
@@ -1867,6 +1893,7 @@ class SmartTurtle(SmartBot):
 
     name: ClassVar[str] = "smart_turtle"
     STANCE: ClassVar[Stance] = Stance.ECONOMY
+    BUNKERS: ClassVar[int] = 3
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         "radius": ParamRange(2, 3),

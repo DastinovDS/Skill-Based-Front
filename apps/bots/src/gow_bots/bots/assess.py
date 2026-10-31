@@ -193,8 +193,9 @@ class EnemyCp:
         self.enemy = enemy
         least = min(rules.economy.stance_to_charges_pct.of(s) for s in Stance)
         per = rules.cp.per_period
-        self.gain = per - per * least // 100
-        """The largest CP part of a regeneration quantum."""
+        self.gain = per if rules.v2 else per - per * least // 100
+        """The largest CP part of a regeneration quantum (the whole quantum under economy v2:
+        no stances, DEC-41, item 1)."""
         self.bound = rules.cp.start
         self.tick = 0
         self.paid: dict[int, bool] = {}

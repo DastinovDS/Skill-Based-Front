@@ -24,6 +24,12 @@ def mvp_rules() -> Ruleset:
 
 
 @pytest.fixture(scope="session")
+def mvp3_rules() -> Ruleset:
+    """The economy v2 ruleset (DEC-41, #642)."""
+    return load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+
+
+@pytest.fixture(scope="session")
 def mvp1_rules() -> Ruleset:
     """mvp-0 with the city development of DEC-26 (``city_upgrades.enabled``)."""
     return load_ruleset(ROOT / "rulesets" / "mvp-1.toml")

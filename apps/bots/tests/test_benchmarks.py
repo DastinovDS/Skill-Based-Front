@@ -145,6 +145,25 @@ def test_bench_decide_smart_views(
     _bench(benchmark, speed_factor, smart_views, maps["web"], mvp1_rules, name)
 
 
+@pytest.fixture(scope="module")
+def v2_views(maps: dict[str, MapDef], mvp3_rules: Ruleset) -> list[PlayerView]:
+    """Views of a match of two smart bots on ``mvp-3`` (economy v2: lines, factories, #648)."""
+    return _play(maps["web"], mvp3_rules, ("smart_rusher", "smart_hoarder"))
+
+
+@pytest.mark.parametrize("name", [n for n in sorted(BOTS) if n.startswith("smart_")])
+def test_bench_decide_smart_v2_views(
+    benchmark: BenchmarkFixture,
+    speed_factor: float,
+    v2_views: list[PlayerView],
+    maps: dict[str, MapDef],
+    mvp3_rules: Ruleset,
+    name: str,
+) -> None:
+    """#648: the smart bots on the views of an economy v2 match (``gow_bots.bots.economy``)."""
+    _bench(benchmark, speed_factor, v2_views, maps["web"], mvp3_rules, name)
+
+
 def _bench(
     benchmark: BenchmarkFixture,
     speed_factor: float,

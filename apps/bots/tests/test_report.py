@@ -236,10 +236,12 @@ def test_report_prints_the_charge_flow_table(tmp_path: Path) -> None:
     text = render_report(load_rows(_write(tmp_path / "f.jsonl", _flow_rows())), "f.jsonl", "f")
     assert "## Charge flow (#588)" in text
     # rusher: start 10, produced 20, burned 4, fights 2, captures 3, packets lost 1, warehouses 0,
-    # starved 0, attrition 0, end 20, residual 0, sent/delivered/to markers 8 / 6 / 2,
+    # starved 0, attrition 0, built 0, plans 0 (a file without the v2 sinks), end 20, residual 0,
+    # sent/delivered/to markers 8 / 6 / 2,
     # marker city empty 100 of 500 = 20%, capital has charges 50 of 500 = 10%, capital full 25%.
     row = (
-        "| **rusher** | 1 | 10.0 | 20.0 | 4.0 | 2.0 | 3.0 | 1.0 | 0.0 | 0.0 | 0.0 | 20.0 | 0 "
+        "| **rusher** | 1 | 10.0 | 20.0 | 4.0 | 2.0 | 3.0 | 1.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 "
+        "| 20.0 | 0 "
         "| 8.0 / 6.0 / 2.0 | 20% | 10% | 25% |"
     )
     assert row in text
@@ -247,6 +249,15 @@ def test_report_prints_the_charge_flow_table(tmp_path: Path) -> None:
     # minute without a sample is skipped); packets 0.50. The expander has no sample at all.
     assert "| **rusher** | 1 | 3.00 | 0.00 | 1.00 | 0.00 | 0.00 | 0.50 |" in text
     assert "| **expander** | 0 | n/a | n/a | n/a | n/a | n/a | n/a |" in text
+
+
+def test_report_charge_flow_shows_the_v2_sinks(tmp_path: Path) -> None:
+    # #646, #648: the economy v2 sinks are columns of the ledger when the row has them.
+    rows = [_flow_rows()[0] | {"charges_built": [7, 0], "charges_plans": [3, 1]}]
+    text = render_report(load_rows(_write(tmp_path / "f.jsonl", rows)), "f.jsonl", "f")
+    assert "| died with units | built | plans | end |" in text
+    assert "| 0.0 | 0.0 | 0.0 | 7.0 | 3.0 | 20.0 | 0 " in text
+    assert "| 2.0 | 0.0 | 1.0 | 0.0 | 1.0 | 12.0 | 0 " in text
 
 
 def test_report_charge_flow_without_the_fields_is_na(tournament: Path) -> None:

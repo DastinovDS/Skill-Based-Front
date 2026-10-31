@@ -177,10 +177,17 @@ PLACE_KEYS: Final[tuple[str, ...]] = (
 """The places of ``stock_by_place_minute``; the same as ``gow_sim.analysis.PLACES``."""
 
 
+V2_FLOW_KEYS: Final[tuple[str, ...]] = ("charges_built", "charges_plans")
+"""The economy v2 sinks of the ledger (DEC-41, #646): 0 in a file written before them."""
+
+
 def _flow(raw: dict[str, Any]) -> dict[str, tuple[int, int]] | None:
     if any(k not in raw for k in FLOW_KEYS):
         return None
-    return {k: _pair(raw, k) for k in FLOW_KEYS}
+    flow = {k: _pair(raw, k) for k in FLOW_KEYS}
+    for k in V2_FLOW_KEYS:
+        flow[k] = _pair(raw, k) if k in raw else (0, 0)
+    return flow
 
 
 def _places(
@@ -534,7 +541,7 @@ def _flow_cells(ps: Sequence[Persp]) -> list[str]:
     """Charge flow columns of a group of perspectives: means per player and match."""
     rows = [(p.row.flow, p.side, p.row.ticks) for p in ps if p.row.flow is not None]
     if not rows:
-        return ["0", *["n/a"] * 15]
+        return ["0", *["n/a"] * 17]
     n = len(rows)
 
     def total(key: str) -> int:
@@ -564,6 +571,8 @@ def _flow_cells(ps: Sequence[Persp]) -> list[str]:
         mean("charges_warehouses_lost"),
         mean("charges_starved"),
         mean("charges_attrition"),
+        mean("charges_built"),
+        mean("charges_plans"),
         mean("charges_end"),
         str(total("charges_residual")),
         f"{mean('charges_sent')} / {mean('charges_delivered')} / {mean('charges_delivered_front')}",
@@ -601,6 +610,8 @@ def _section_flow(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         "warehouses lost",
         "starved",
         "died with units",
+        "built",
+        "plans",
         "end",
         "residual (sum, 0 = balanced)",
         "sent / delivered / to markers",
@@ -613,7 +624,9 @@ def _section_flow(ps: Sequence[Persp], bots: Sequence[str]) -> str:
     intro = (
         "Where the charges of a player come from and go (#588, definitions in "
         "[README.md](README.md)): *start* + *produced* = *burned* + *fights* + *captures* + "
-        "*packets lost* + *warehouses lost* + *starved* + *died with units* + *end*; the "
+        "*packets lost* + *warehouses lost* + *starved* + *died with units* + *built* + "
+        "*plans* + *end* (*built* and *plans*: the economy v2 sinks, buildings paid in charges "
+        "and the bonus a planned order gathers, DEC-41; 0 under v1); the "
         "columns are the mean per player and match, charges. *Marker city empty* is the share "
         "of the ticks with a front marker outside the capital in which such a warehouse is empty, "
         "*and capital has charges* the part of those ticks in which the capital is not empty "
