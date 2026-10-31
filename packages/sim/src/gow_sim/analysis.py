@@ -35,7 +35,8 @@ Definitions (all counts per player id, sides ``0`` and ``1``):
   the final values.
 - **Charge stock** (#310, a balance statistic, not a game rule): the total charges of a player at
   the end of a tick = the warehouses of the cities it owns + the charges in its packets on roads
-  + the charged units of its groups (``charge_stock``). ``MatchRecorder`` samples it after every
+  and in transit at its relays (``Node.inbox``, economy v2; the place ``packets``) + the charged
+  units of its groups (``charge_stock``). ``MatchRecorder`` samples it after every
   tick (``MatchLog.stock``, tick ``t`` is entry ``t - 1``); ``stock_peak`` is the largest sample
   and ``stock_mean_centi = sum * 100 // samples`` the mean in hundredths of a charge (rounded
   down; ``None`` without samples). A charge is counted in one place only: a charge that left a
@@ -302,7 +303,7 @@ def charge_stock(state: GameState) -> tuple[int, ...]:
     total = _zeros()
     for node in state.nodes.values():
         if node.owner is not None:
-            total[node.owner] += node.warehouse
+            total[node.owner] += node.warehouse + node.inbox  # a relay's transit (DEC-41)
     for packet in state.packets.values():
         total[packet.owner] += packet.charges
     for group in state.groups.values():
@@ -326,6 +327,7 @@ def charge_places(state: GameState) -> tuple[tuple[int, ...], ...]:
             out[owner][1] += node.warehouse
         else:
             out[owner][2] += node.warehouse
+        out[owner][5] += node.inbox  # a relay's charges in transit count with the packets
     for group in state.groups.values():
         out[group.owner][4 if isinstance(group.location, OnEdge) else 3] += group.charged
     for packet in state.packets.values():

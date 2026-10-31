@@ -177,10 +177,9 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     if n.owner == owner:
         return []
     events: list[Event] = []
-    if n.warehouse > 0:
-        events.append(
-            event(state.tick, "warehouse_lost", node=node, owner=n.owner, charges=n.warehouse)
-        )
+    lost = n.warehouse + n.inbox  # the charges in transit of a relay go too (DEC-41)
+    if lost > 0:
+        events.append(event(state.tick, "warehouse_lost", node=node, owner=n.owner, charges=lost))
     if n.recruit_queue > 0 and n.owner is not None:
         # The queue belongs to the former owner and is lost without a refund (DEC-25, item 10).
         events.append(
@@ -192,7 +191,7 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     n.recruit_progress = 0
     n.owner = owner
     n.warehouse = 0
-    n.inbox = 0  # the relay state of DEC-41 goes with the warehouse
+    n.inbox = 0  # the charges in transit of a relay (DEC-41) go with the warehouse
     n.rr = 0
     n.fort = False  # DEC-41, item 12: a bunker is destroyed on capture, it does not pass
     n.cut_since = None

@@ -499,13 +499,14 @@ def test_r2_one_charge_per_line_and_dispatch() -> None:
 
 
 def test_r3_a_relay_keeps_one_slot_for_itself() -> None:
-    """L5: B is the target of A -> B and has lines B -> F, B -> G; three charges came by A -> B:
-    B keeps one, F and G get one each."""
+    """L5: B is the target of A -> B and has lines B -> F, B -> G; three charges came by A -> B
+    and wait in transit (``inbox``, outside the warehouse, #661): B keeps one, F and G get one
+    each."""
     state = _state(9)
     _factory_a(state, 0)
     _lines(state, (A, B), (B, F), (B, G))
     state.nodes[B].warehouse_level = 1  # room for 3
-    state.nodes[B].warehouse = state.nodes[B].inbox = 3
+    state.nodes[B].inbox = 3
     assert _sent(_supply_until(state, 10)) == [(10, B, F), (10, B, G)]
     assert (state.nodes[B].warehouse, state.nodes[B].inbox) == (1, 0)
     assert _sent(_supply_until(state, 20)) == []  # the kept charge stays in B
@@ -529,6 +530,119 @@ def test_r3_relay_end_to_end() -> None:
     state.nodes[A].warehouse = 1
     assert _sent(_supply_until(state, 90)) == [(70, A, B)]
     assert state.nodes[B].warehouse == 2
+
+
+def _overflow(events: list[Event]) -> list[Event]:
+    return [e for e in events if e.kind == "charges_overflow"]
+
+
+def test_t1_a_full_relay_passes_charges_on_in_turn() -> None:
+    """Owner's situation 2 with the decision of 2026-10-31 (#661, table T1): A -> B, B -> D,
+    B -> C, B full (2). The room of B is 0 (own) + 2 (D) + 2 (C), so A -> B is not skipped; the
+    charges wait in B's transit and go to D and C in turn, B keeps its 2. A -> B and B -> C take
+    20 ticks, B -> A -> D 40."""
+    state = _state(9)
+    _factory_a(state, 2)
+    _lines(state, (A, B), (B, A, D), (B, C))
+    state.nodes[B].warehouse = 2
+    events = _supply_until(state, 40)
+    assert _sent(events) == [(10, A, B), (20, A, B), (30, B, D), (40, B, C)]
+    assert (state.nodes[B].warehouse, state.nodes[B].inbox) == (2, 0)
+    events += _supply_until(state, 80)
+    assert (state.nodes[D].warehouse, state.nodes[C].warehouse) == (1, 1)
+    assert state.nodes[B].warehouse == 2
+    assert not _overflow(events)
+
+
+def test_t2_a_province_relay_of_capacity_1() -> None:
+    """Table T2: own province M (warehouse 1, full) is the target of C -> M and has lines
+    M -> 19 and M -> 20 (provinces, empty). C -> M takes 48 * 100 // 150 = 32 ticks, M -> 19 and
+    M -> 20 20: both charges pass M, one to each line in turn."""
+    state = _state(9)
+    for n in (M, 19, 20):
+        state.nodes[n].owner = 0
+    state.nodes[C].factory = 0
+    state.nodes[C].warehouse = 2
+    state.nodes[M].warehouse = 1
+    _lines(state, (C, M), (M, 19), (M, 20))
+    events = _supply_until(state, 90)
+    assert _sent(events) == [(10, C, M), (20, C, M), (50, M, 19), (60, M, 20)]
+    assert [state.nodes[n].warehouse for n in (M, 19, 20)] == [1, 1, 1]
+    assert state.nodes[M].inbox == 0
+    assert not _overflow(events)
+
+
+def test_t3_a_chain_of_three_full_relays() -> None:
+    """Table T3: A -> B -> C -> M -> 19, the relays B, C (2) and M (1) full, 19 empty (1). The
+    room down the chain is 1, so one charge goes all the way to 19 and A keeps the other; nothing
+    burns."""
+    state = _state(9)
+    for n in (M, 19):
+        state.nodes[n].owner = 0
+    _factory_a(state, 2)
+    _lines(state, (A, B), (B, C), (C, M), (M, 19))
+    state.nodes[B].warehouse = state.nodes[C].warehouse = 2
+    state.nodes[M].warehouse = 1
+    events = _supply_until(state, 200)
+    assert _sent(events) == [(10, A, B), (30, B, C), (50, C, M), (90, M, 19)]
+    assert [state.nodes[n].warehouse for n in (A, B, C, M, 19)] == [1, 2, 2, 1, 1]
+    assert [state.nodes[n].inbox for n in (B, C, M)] == [0, 0, 0]
+    assert not _overflow(events)
+
+
+def test_t4_transit_burns_only_when_no_warehouse_of_the_tree_has_room() -> None:
+    """Table T4: B holds 1 in transit, its warehouse (2) and F (1), the only target of its lines,
+    are full: no slot takes it and it burns. With F empty it goes to F instead."""
+    state = _state(9)
+    _lines(state, (A, B), (B, F))
+    state.nodes[B].warehouse, state.nodes[B].inbox, state.nodes[F].warehouse = 2, 1, 1
+    events = _supply_until(state, 10)
+    assert _sent(events) == []
+    assert [(e.get("node"), e.get("charges")) for e in _overflow(events)] == [(B, 1)]
+    assert state.nodes[B].inbox == 0
+    state = _state(9)
+    _lines(state, (A, B), (B, F))
+    state.nodes[B].warehouse, state.nodes[B].inbox = 2, 1
+    events = _supply_until(state, 10)
+    assert _sent(events) == [(10, B, F)]
+    assert not _overflow(events)
+
+
+def test_a_relay_tree_is_mirror_symmetric() -> None:
+    """4.1, rule 6: situation 2 of T1 for both players (player 1 owns the mirror ``16 - n``)
+    gives the mirrored warehouses, transit, round robin and sends."""
+    state = _state(9)
+    for player in (0, 1):
+
+        def flip(n: int, player: int = player) -> int:
+            return 16 - n if player else n
+
+        state.nodes[flip(A)].factory = player
+        state.nodes[flip(A)].warehouse = 2
+        state.nodes[flip(B)].warehouse = 2
+        _lines(
+            state,
+            (flip(A), flip(B)),
+            (flip(B), flip(A), flip(D)),
+            (flip(B), flip(C)),
+            player=player,
+        )
+    events: list[Event] = []
+    for tick in (40, 55, 80):
+        events += _supply_until(state, tick)
+        for n in range(17):
+            a, b = state.nodes[n], state.nodes[16 - n]
+            assert (a.warehouse, a.inbox, a.rr) == (b.warehouse, b.inbox, b.rr), f"node {n}"
+    sent = {
+        p: [
+            (e.tick, e.get("from_node"), e.get("to_node"))
+            for e in events
+            if e.kind == "packet_sent" and e.get("player") == p
+        ]
+        for p in (0, 1)
+    }
+    assert sent[1] == [(t, 16 - cast(int, a), 16 - cast(int, b)) for t, a, b in sent[0]]
+    assert sent[0][:4] == [(10, A, B), (20, A, B), (30, B, D), (40, B, C)]
 
 
 def test_r4_a_full_target_is_skipped_and_the_source_keeps_the_charge() -> None:

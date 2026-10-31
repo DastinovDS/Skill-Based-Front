@@ -19,20 +19,31 @@ Order inside the step:
 3. **Packets** move as in v1 (``supply.move_packets``: a packet on a road that is no longer own is
    lost, at an own city with the way cut it is taken into the warehouse, at the end of its path it
    fills the warehouse, the excess burns as ``charges_overflow``). A packet that ends in a relay
-   (a node with outgoing lines) adds its charges to the relay's ``inbox``.
+   (an own node with outgoing lines that is not a factory) puts all its charges into the relay's
+   ``inbox``: charges in transit, outside the warehouse (owner decision 2026-10-31, #661).
 4. **Recharge** of standing units from the warehouse, as in v1 (``supply.recharge``).
 5. **Dispatch**, every ``supply.dispatch_ticks`` (ticks ``t > 0`` divisible by it). Every own node
-   with outgoing lines runs its round robin once, nodes in ``node_key`` order:
+   with outgoing lines or with charges in transit runs its round robin once, nodes in
+   ``node_key`` order:
 
-   - the slots: the node itself if it is a relay (the target of an own line, not a factory: L5),
-     then its outgoing lines by id; ``Node.rr`` is the slot that gets the next charge;
-   - the charges it gives out: the whole warehouse of a factory; the ``inbox`` of a relay;
-   - from ``rr``, one lap over the slots: a line whose target is full (``warehouse`` plus the
-     charges of own packets on the way to it at least the warehouse capacity) is skipped (L6);
-     else, while charges are left, the slot takes one: the own slot keeps it in the warehouse (it
-     leaves the ``inbox``), a line sends it as a packet of one charge along its path (L1: one
-     charge per line and dispatch, roads do not limit it). When the charges run out first, ``rr``
-     stays on the slot that got none; after a full lap it stays where the lap began.
+   - the slots: a factory has its outgoing lines by id; any other node has its own slot first
+     (its warehouse, L5), then its outgoing lines by id; ``Node.rr`` is the slot that gets the
+     next charge;
+   - the charges it gives out: the whole warehouse of a factory; the ``inbox`` of any other node;
+   - the **room** of a line's target ``T``: ``max(0, capacity - warehouse)`` of ``T``, plus the
+     room of the targets of ``T``'s own outgoing lines when ``T`` is not a factory, minus the
+     ``inbox`` of ``T`` and the charges of own packets on the way to ``T``, at least 0 (lines are
+     acyclic, L4, so the recursion ends; a node reached by two lines counts once per line);
+   - from ``rr``, one lap over the slots: the own slot is skipped when the warehouse is full, a
+     line when the room of its target is 0 (L6); else, while charges are left, the slot takes one:
+     the own slot moves it from the ``inbox`` into the warehouse, a line sends it as a packet of
+     one charge along its path (L1: one charge per line and dispatch, roads do not limit it).
+     When the charges run out first, ``rr`` stays on the slot that got none; after a full lap it
+     stays where the lap began;
+   - charges in transit that no slot took in the lap (every slot skipped) burn
+     (``charges_overflow``): no warehouse down the tree has room. Transit left after a lap in
+     which a slot took one waits for the next dispatch. A node that became a factory puts its
+     transit into its warehouse first (the excess burns).
 
 A packet travels at ``supply.base_speed_pct`` (item 8): roads have no levels in v2. There are no
 front markers, rear minimum, donors, delivery passes, transfers or starvation (item 5).
@@ -73,12 +84,10 @@ def supply_lines(state: GameState, rules: Ruleset) -> list[Event]:
     capacities = warehouse_capacities(state, rules)
     relays = {pid: _relays(state, pid) for pid in sorted(state.players)}
 
-    def delivered(packet: Packet, node: int, charges: int) -> None:
-        n = state.nodes[node]
-        if relays[packet.owner].get(node, False) and n.factory != packet.owner:
-            n.inbox += charges
+    def transit(packet: Packet, node: int) -> bool:
+        return relays[packet.owner].get(node, False) and state.nodes[node].factory != packet.owner
 
-    events.extend(move_packets(state, capacities, delivered))
+    events.extend(move_packets(state, capacities, transit))
     recharge(state, rules, garrisons_by_node(state))
     tick = state.tick
     if tick > 0 and tick % rules.supply.dispatch_ticks == 0:
@@ -198,7 +207,8 @@ def _check_lines(state: GameState, rules: Ruleset, player: int) -> list[Event]:
 
 
 def _relays(state: GameState, player: int) -> dict[int, bool]:
-    """The nodes with an outgoing line of ``player``: their line deliveries go to the inbox."""
+    """The nodes with an outgoing line of ``player``: their line deliveries go to the inbox
+    (charges in transit) unless the node is a factory."""
     lines = state.players[player].lines
     return {lines[k].source: True for k in sorted(lines)}
 
@@ -212,54 +222,90 @@ _SELF = -1
 def _dispatch(
     state: GameState, player: int, capacities: tuple[int, ...], edge_ticks: tuple[int, ...]
 ) -> list[Event]:
-    """One dispatch of ``player``: every source node runs its round robin once (module docstring,
-    step 5)."""
+    """One dispatch of ``player``: every source node and every node holding charges in transit
+    runs its round robin once (module docstring, step 5)."""
     lines = state.players[player].lines
-    if not lines:
-        return []
     nodes = state.nodes
     out: dict[int, list[int]] = {}
-    targets: dict[int, bool] = {}
     for k in sorted(lines):
         out.setdefault(lines[k].source, []).append(k)
-        targets[lines[k].target] = True
+    held = {n: True for n in sorted(nodes) if nodes[n].owner == player and nodes[n].inbox > 0}
+    if not out and not held:
+        return []
     incoming: dict[int, int] = {}
     for pid in sorted(state.packets):
         packet = state.packets[pid]
         if packet.owner == player:
             dest = packet_dest(state, packet)
             incoming[dest] = incoming.get(dest, 0) + packet.charges
+    memo: dict[int, int] = {}
 
-    def full(target: int) -> bool:
-        stock = nodes[target].warehouse + incoming.get(target, 0)
-        return stock >= capacities[target]
+    def room(target: int) -> int:
+        """The charges the tree below ``target`` can still take (the module docstring)."""
+        if target in memo:
+            return memo[target]
+        n = nodes[target]
+        free = max(0, capacities[target] - n.warehouse)
+        if n.factory != player:
+            free += sum(room(lines[k].target) for k in out.get(target, []))  # acyclic (L4)
+        memo[target] = max(0, free - n.inbox - incoming.get(target, 0))
+        return memo[target]
 
     events: list[Event] = []
-    for src in sorted(out, key=lambda n: state.map.node_key(player, n)):
+    sources = sorted({**out, **held}, key=lambda n: state.map.node_key(player, n))
+    for src in sources:
         node = nodes[src]
         factory = node.factory == player
-        # TODO(#651): the relay slot and the inbox are the reading of L5 in mechanics.md (#644).
-        slots = ([] if factory or not targets.get(src, False) else [_SELF]) + out[src]
-        if not factory:
-            node.inbox = min(node.inbox, node.warehouse)  # units may have taken some
+        if factory and node.inbox > 0:  # a relay that became a factory: its transit is stock
+            events.extend(_settle_inbox(state, player, src, capacities[src]))
+            memo.clear()
+        if factory and src not in out:
+            continue
+        slots = out[src] if factory else [_SELF, *out.get(src, [])]
         left = node.warehouse if factory else node.inbox
         start = node.rr % len(slots)
         node.rr = start
+        given = 0
         for i in range(len(slots)):
             slot = slots[(start + i) % len(slots)]
-            if slot != _SELF and full(lines[slot].target):
-                continue  # L6: skipped, the source keeps the charge
+            if slot == _SELF:
+                if node.warehouse >= capacities[src]:
+                    continue  # L6: the own warehouse is full
+            elif room(lines[slot].target) <= 0:
+                continue  # L6: nothing below that line has room, the charge stays
             if left == 0:
                 node.rr = (start + i) % len(slots)  # this slot gets the next charge
                 break
             left -= 1
+            given += 1
+            memo.clear()
             if slot == _SELF:
-                node.inbox -= 1  # kept in the own warehouse
+                node.inbox -= 1
+                node.warehouse += 1  # the own share of the relay (L5)
                 continue
             events.append(_send(state, player, node, lines[slot], edge_ticks, factory=factory))
             target = lines[slot].target
             incoming[target] = incoming.get(target, 0) + 1
+        if not factory and given == 0 and node.inbox > 0:
+            events.append(_burn_inbox(state, player, src))  # no warehouse of the tree has room
     return events
+
+
+def _settle_inbox(state: GameState, player: int, node: int, capacity: int) -> list[Event]:
+    """The transit of a node that is no longer a relay goes into its warehouse; what has no
+    room there burns."""
+    n = state.nodes[node]
+    added = min(n.inbox, max(0, capacity - n.warehouse))
+    n.warehouse += added
+    n.inbox -= added
+    return [_burn_inbox(state, player, node)] if n.inbox > 0 else []
+
+
+def _burn_inbox(state: GameState, player: int, node: int) -> Event:
+    """The charges in transit of ``node`` that no slot of its round robin can take burn."""
+    n = state.nodes[node]
+    charges, n.inbox = n.inbox, 0
+    return event(state.tick, "charges_overflow", player=player, node=node, charges=charges)
 
 
 def _send(
@@ -274,9 +320,10 @@ def _send(
     """One charge of ``node`` leaves along ``line`` as a packet (L1)."""
     edges = line_edges(state, line.path)
     assert edges is not None  # an own line always follows roads (validated, rerouted)
-    node.warehouse -= 1
-    if not factory:
-        node.inbox -= 1
+    if factory:
+        node.warehouse -= 1
+    else:
+        node.inbox -= 1  # a relay passes on its transit, its warehouse stays (#661)
     packet = send_packet(
         state,
         player,

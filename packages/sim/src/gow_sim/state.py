@@ -341,9 +341,10 @@ class Node:
     factory_build: FactoryBuild | None = None
     """The factory being built here (DEC-41, item 2); ``None``: none."""
     inbox: int = 0
-    """Charges a relay received by its lines and has not given out yet (DEC-41, L5): its round
-    robin gives each one to a slot, the own warehouse or an outgoing line; at most
-    ``warehouse``. 0 for a node without outgoing lines."""
+    """Charges in transit at a relay (DEC-41, L5, owner decision 2026-10-31): what its incoming
+    lines delivered and its round robin has not given out yet, **outside** the warehouse (units
+    do not recharge from it, buildings do not take it); each dispatch gives one per slot to the
+    own warehouse or an outgoing line. Lost with the warehouse on a capture."""
     rr: int = 0
     """The slot of the relay's round robin that gets the next charge (DEC-41, item 3)."""
     fort: bool = False
