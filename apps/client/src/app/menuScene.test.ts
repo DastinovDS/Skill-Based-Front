@@ -16,7 +16,9 @@ import {
   starPoints,
 } from './menuScene.ts';
 
-const POOL = BUNDLED_MAPS.filter((m) => ['crossroads', 'highway', 'narrows', 'ridge'].includes(m.meta.name));
+const POOL = BUNDLED_MAPS.filter((m) =>
+  ['crossroads', 'highway', 'narrows', 'ridge'].includes(m.meta.name),
+);
 // The menu map (#474) first: the client draws it; the pool maps keep the layout general.
 const MAPS = [MENU_MAP, ...POOL];
 
