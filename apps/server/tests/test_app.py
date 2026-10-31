@@ -112,9 +112,9 @@ def test_broken_map_stops_startup(maps_dir: Path, settings: Settings) -> None:
         pass
 
 
-def test_the_pool_of_the_repository_is_the_dec27_maps() -> None:
+def test_the_pool_of_the_repository_is_the_dec27_maps_and_narrows() -> None:
     # #372: the MVP maps in maps/fixtures/ are not served (the catalog is not recursive), nor is
     # the menu map maps/menu/valley.json (#474).
     catalog = MapCatalog.load(ROOT / "maps")
-    assert [entry.id for entry in catalog.all()] == ["crossroads", "highway", "ridge"]
+    assert [entry.id for entry in catalog.all()] == ["crossroads", "highway", "narrows", "ridge"]
     assert all(entry.background is not None for entry in catalog.all())

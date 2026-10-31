@@ -1,0 +1,49 @@
+{
+  "meta": {"name": "narrows", "version": 1, "width": 1500, "height": 932},
+  "nodes": [
+    {"id": "cap", "name": "Granite Hold", "mirror_name": "Iron Hold", "x": 100, "y": 465, "mirror_x": 1407, "mirror_y": 485, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 6, "start_charged": 6, "start_stock": 6},
+    {"id": "o1", "name": "Cairn", "mirror_name": "Barrow", "x": 300, "y": 470, "mirror_x": 1207, "mirror_y": 474, "terrain": "plains", "vp": 1, "kind": "city_large", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
+    {"id": "oP", "name": "Marlow", "mirror_name": "Fenmere", "x": 190, "y": 300, "mirror_x": 1328, "mirror_y": 649, "terrain": "plains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": 0, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "oN", "name": "Hollin", "mirror_name": "Ashby", "x": 300, "y": 160, "mirror_x": 1215, "mirror_y": 784, "terrain": "forest", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
+    {"id": "oS", "name": "Reedwick", "mirror_name": "Sedgeley", "x": 200, "y": 660, "mirror_x": 1288, "mirror_y": 289, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 1},
+    {"id": "n1", "name": "Wrenfield", "mirror_name": "Larkfield", "x": 520, "y": 110, "mirror_x": 991, "mirror_y": 816, "terrain": "forest", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "n2", "name": "Brackenway", "mirror_name": "Thornway", "x": 420, "y": 310, "mirror_x": 1097, "mirror_y": 625, "terrain": "plains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "n3", "name": "Stonecross", "mirror_name": "Flintcross", "x": 420, "y": 640, "mirror_x": 1069, "mirror_y": 295, "terrain": "plains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "n4", "name": "Millbrook", "mirror_name": "Weirbrook", "x": 420, "y": 800, "mirror_x": 1062, "mirror_y": 135, "terrain": "mountains", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "n5", "name": "Highmoor", "mirror_name": "Lowmoor", "x": 620, "y": 230, "mirror_x": 898, "mirror_y": 689, "terrain": "forest", "vp": 2, "kind": "city_large", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "n6", "name": "Torchester", "mirror_name": "Beaconford", "x": 620, "y": 700, "mirror_x": 865, "mirror_y": 219, "terrain": "plains", "vp": 2, "kind": "city_large", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "n7", "name": "Mid Fork", "mirror_name": "Far Fork", "x": 500, "y": 470, "mirror_x": 1007, "mirror_y": 458, "terrain": "plains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "n8", "name": "Gullhaven", "mirror_name": "Tern Haven", "x": 640, "y": 850, "mirror_x": 843, "mirror_y": 68, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "q1", "name": "Windgap", "mirror_name": "Gale Gap", "x": 750, "y": 130, "mirror_x": 762, "mirror_y": 784, "terrain": "mountains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "gate", "name": "The Narrows", "x": 750, "y": 465, "self_mirror": true, "terrain": "mountains", "vp": 3, "kind": "city_large", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0}
+  ],
+  "edges": [
+    {"a": "cap", "b": "oP", "max_level": 3},
+    {"a": "cap", "b": "o1", "max_level": 3},
+    {"a": "cap", "b": "oS", "max_level": 3},
+    {"a": "oP", "b": "oN", "max_level": 3},
+    {"a": "oP", "b": "o1", "max_level": 3},
+    {"a": "oS", "b": "o1", "max_level": 3},
+    {"a": "oN", "b": "n1", "max_level": 2},
+    {"a": "oP", "b": "n2", "max_level": 3},
+    {"a": "o1", "b": "n2", "max_level": 3},
+    {"a": "o1", "b": "n3", "max_level": 3},
+    {"a": "oS", "b": "n3", "max_level": 3},
+    {"a": "oS", "b": "n4", "max_level": 2},
+    {"a": "n1", "b": "n2", "max_level": 2},
+    {"a": "n1", "b": "n5", "max_level": 2},
+    {"a": "n2", "b": "n5", "max_level": 3},
+    {"a": "n2", "b": "n7", "max_level": 3},
+    {"a": "n3", "b": "n7", "max_level": 3},
+    {"a": "n3", "b": "n6", "max_level": 3},
+    {"a": "n4", "b": "n6", "max_level": 2},
+    {"a": "n4", "b": "n8", "max_level": 2},
+    {"a": "n6", "b": "n8", "max_level": 2},
+    {"a": "n7", "b": "gate", "max_level": 3},
+    {"a": "n1", "b": "q1", "max_level": 2},
+    {"a": "n5", "b": "q1", "max_level": 2}
+  ],
+  "cross_edges": [
+    {"a": "n5", "b": "n6", "max_level": 2}
+  ]
+}

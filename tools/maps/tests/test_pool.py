@@ -24,7 +24,9 @@ FIXTURES = MAPS / "fixtures"
 MENU = MAPS / "menu"  # the menu map (#474), outside the pool
 MVP = ["artery", "web", "pass"]
 DEC27 = ["ridge", "crossroads", "highway"]
-POOL = sorted(MVP + DEC27)
+SMALL = ["narrows"]  # #664: a 29-node pool map, outside the DEC-27 size range
+SERVED = DEC27 + SMALL  # maps/*.json
+POOL = sorted(MVP + SERVED)
 
 
 def _file(name: str) -> Path:
@@ -41,24 +43,24 @@ SIZE = dataclasses.replace(CONFIG, size_check=True)  # DEC-27, item 5: 45..55 no
 
 def test_pool_is_exactly_the_known_maps() -> None:
     # The server pool is only the DEC-27 maps; the MVP maps are fixtures (#372).
-    assert sorted(p.stem for p in MAPS.glob("*.json")) == sorted(DEC27)
+    assert sorted(p.stem for p in MAPS.glob("*.json")) == sorted(SERVED)
     assert sorted(p.stem for p in FIXTURES.glob("*.json")) == sorted(MVP)
     # Each pool map has its half and its authored geography (DEC-36, #545); the fixtures have
     # only their halves: they stay land only (DEC-36, item 10).
     assert sorted(p.name for p in (MAPS / "src").glob("*.json")) == sorted(
-        f"{name}.{kind}.json" for name in DEC27 for kind in ("geo", "half")
+        f"{name}.{kind}.json" for name in SERVED for kind in ("geo", "half")
     )
     assert sorted(p.name for p in (FIXTURES / "src").glob("*.json")) == [
         f"{name}.half.json" for name in sorted(MVP)
     ]
     # The generated vector files (DEC-36, item 5) live in maps/geo/, outside the pool glob.
     assert sorted(p.name for p in (MAPS / "geo").glob("*.json")) == [
-        f"{name}.json" for name in sorted(DEC27)
+        f"{name}.json" for name in sorted(SERVED)
     ]
     assert not (FIXTURES / "geo").exists()
 
 
-@pytest.mark.parametrize("name", [*DEC27, "valley"])
+@pytest.mark.parametrize("name", [*SERVED, "valley"])
 def test_pool_and_menu_maps_have_a_geography_with_water(name: str) -> None:
     # DEC-36, #545: the three pool maps and the menu map have water cells and long rivers; the
     # check `geography` itself runs in test_map_passes_the_validator (and the menu test below).
@@ -98,8 +100,15 @@ def test_dec27_map_passes_the_size_check_and_the_warehouses(name: str) -> None:
     assert validate_file(_file(name), SIZE, rules) == []
 
 
-@pytest.mark.parametrize("name", DEC27)
-def test_dec27_map_has_provinces_and_free_positions(name: str) -> None:
+@pytest.mark.parametrize("ruleset", ["mvp-2", "mvp-3"])
+def test_small_map_passes_the_warehouses(ruleset: str) -> None:
+    # #664: narrows (29 nodes) is outside the 45..55 size range, so only the other checks run.
+    rules = load_ruleset(MAPS.parent / "rulesets" / f"{ruleset}.toml")
+    assert validate_file(_file("narrows"), CONFIG, rules) == []
+
+
+@pytest.mark.parametrize("name", SERVED)
+def test_pool_map_has_provinces_and_free_positions(name: str) -> None:
     mapdef = load_map(_file(name))
     provinces = [n for n in mapdef.nodes if n.kind is NodeKind.PROVINCE]
     assert len(provinces) * 3 >= len(mapdef.nodes)  # DEC-23: about half of the nodes
@@ -120,7 +129,7 @@ def test_map_size_and_start(name: str) -> None:
     assert mapdef.meta.name == name  # the server requires maps/<id>.json
     # mechanics.md, section 1: 25-40 nodes (DEC-27: 45..55), each player starts with real
     # territory.
-    assert 25 <= len(mapdef.nodes) <= (55 if name in DEC27 else 40)
+    assert 25 <= len(mapdef.nodes) <= (55 if name in SERVED else 40)
     for player in (0, 1):
         owned = [n for n in mapdef.nodes if n.start_owner == player]
         assert len(owned) >= 4
@@ -162,7 +171,7 @@ def test_menu_holds_only_the_valley_map() -> None:
         "valley.half.json",
     ]
     assert sorted(p.name for p in (MENU / "geo").glob("*.json")) == ["valley.json"]
-    assert "valley" not in DEC27 + MVP
+    assert "valley" not in SERVED + MVP
 
 
 def test_menu_map_is_built_from_its_half_and_passes_the_validator() -> None:

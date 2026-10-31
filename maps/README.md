@@ -1,10 +1,11 @@
 # Maps
 
-Six maps with rule symmetry (MAP-04, #16; DEC-27): the graph and the attributes of nodes and roads are mirrored,
+Seven maps with rule symmetry (MAP-04, #16; DEC-27): the graph and the attributes of nodes and roads are mirrored,
 the sides swap places by the `mirror` table, so every map is fair for both sides.
 The pool of the server (`maps/*.json`: lobby, queue, bot matches, `GET /api/maps`, the default of `mise run tournament`)
 holds the three DEC-27 maps (#266): 49..51 nodes, about half of the nodes are provinces (DEC-23), the coordinates of the
-mirrored half are free, the picture is not rotated. The three MVP maps (31..34 nodes, no provinces,
+mirrored half are free, the picture is not rotated, and the small map `narrows` (#664: 29 nodes, to see whether economy v2 and
+capital capture fit a 15-minute match on a smaller map; outside the size check of 45..55). The three MVP maps (31..34 nodes, no provinces,
 the picture rotated by 180°) left the pool (#372, owner decision) and are test fixtures in `maps/fixtures/`
 (with their previews, backgrounds and halves in `maps/fixtures/src/`): many tests and the client dev scene `artery`
 stand on their graphs. The server does not serve them (it loads `maps/*.json` without subdirectories), the validator
@@ -27,13 +28,14 @@ serves it, the client draws it). After any map edit: `uv run gow-maps preview ma
 (`ui-style.md`, 26.3), WebP no larger than 0.5 MB, baking one map takes up to 10 s. A map with an authored geography
 `src/<id>.geo.json` (DEC-36, #537) gets water cells, streams and long rivers with bridges in the look W4 Painted, and the
 bake writes the vector file `geo/<id>.json` next to the background; a map without one is all land (DEC-27, #269).
-The three pool maps and the menu map have a geography (#545), the fixtures stay land only:
+The four pool maps and the menu map have a geography (#545, #664), the fixtures stay land only:
 
 | Map | Water (seas and lakes, plus rivers and streams) | Long rivers | Bridges | Nodes moved |
 |---|---|---|---|---|
 | `ridge` | 18.0 % + 2.2 %: seas in the north-east and south-west corners, two bays, four lakes | 4 | 10 | none |
 | `crossroads` | 17.6 % + 2.0 %: seas in the north-west and south-east corners, two bays, four lakes | 4 | 13 | none |
 | `highway` | 16.3 % + 2.8 %: seas in the four corners and a northern bay, four lakes | 4 | 10 | none |
+| `narrows` | seas in the north-east and south-west corners and two small bays, two lakes | 2 | 4 | none |
 | `menu/valley` | 10.6 % + 3.6 %: seas in the four corners and a southern bay (the map is too tight for a lake 60 units off every node) | 2 | 5 | none |
 
 | File | Map id (`meta.name`) | World | Nodes (provinces) | Roads | Own at start | Neutral, of them contested | Path capital → capital |
@@ -41,6 +43,7 @@ The three pool maps and the menu map have a geography (#545), the fixtures stay 
 | `ridge.json` | "ridge" | 2000 × 1240 | 51 (26) | 82 | 8 each (6 cities, 2 provinces) | 35, contested 11 (22%) | 8 roads |
 | `crossroads.json` | "crossroads" | 2000 × 1240 | 49 (22) | 92 | 8 each (6 cities, 2 provinces) | 33, contested 11 (22%) | 9 roads |
 | `highway.json` | "highway" | 2000 × 1240 | 49 (26) | 78 | 8 each (6 cities, 2 provinces) | 33, contested 11 (22%) | 9 roads |
+| `narrows.json` | "narrows" | 1500 × 932 | 29 (10) | 50 | 5 each (4 cities, 1 province) | 19, contested 7 (24%) | 7 roads |
 | `fixtures/pass.json` | "pass" | 1600 × 1000 | 33 | 52 | 6 each | 21, contested 7 (21%) | 8 roads |
 | `fixtures/web.json` | "web" | 1140 × 1000 | 34 | 61 | 6 each | 22, contested 14 (41%) | 5 roads |
 | `fixtures/artery.json` | "artery" | 1600 × 1000 | 31 | 44 | 6 each | 19, contested 7 (22%) | 7 roads |
@@ -182,3 +185,13 @@ symmetry test (`packages/sim/tests/test_symmetry.py`) runs all six maps.
 
 The preview (`<name>.preview.png`) is for people only: the server does not serve it. The map background for the client
 lies next to it: `<name>.bg.webp` (MAP-05, #344).
+
+### Narrows (`narrows`)
+
+![Narrows](narrows.preview.png)
+
+A compact ring of 29 nodes (#664): the world is 1500 × 932 and the roads are as long as on the big maps, so there are fewer
+of them between the capitals (7 roads, about 450 ticks along the fastest path, against 8 to 9 roads on the others). Each
+side starts with 5 nodes (the capital, one large, one medium and one small city, one province). The two large cities of vp 2
+on each side (Highmoor, Torchester) are linked across the middle by a cross road; "The Narrows" (vp 3) is the central city.
+Character: a short map, the capital is reachable in the mid-game. Not tuned for balance.
