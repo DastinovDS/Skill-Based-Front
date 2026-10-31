@@ -2064,8 +2064,8 @@ class SmartTurtle(SmartBot):
 
     name: ClassVar[str] = "smart_turtle"
     STANCE: ClassVar[Stance] = Stance.ECONOMY
-    BUNKERS: ClassVar[int] = 6
-    FRONT_EXTRA: ClassVar[int] = 3
+    BUNKERS: ClassVar[int] = 4
+    FRONT_EXTRA: ClassVar[int] = 2
     """Units a threatened front node keeps above ``hold_front`` at most."""
     W_WEAK: ClassVar[int] = 40
     W_RETAKE: ClassVar[int] = 300
