@@ -21,6 +21,9 @@ const road = map.edges.find(
 );
 if (road === undefined) throw new Error('the dev snapshot has no own road out of the home node');
 const next = road.a === home ? road.b : road.a;
+// Another own node: the target of a line whose path the server suggests.
+const far = [...own].find((n) => n !== home && n !== next);
+if (far === undefined) throw new Error('the dev snapshot has three own nodes at least');
 const enemy = base.view.nodes.find((n) => n.owner === 1);
 if (enemy === undefined) throw new Error('the dev snapshot has no enemy node');
 
@@ -29,14 +32,16 @@ function setup(lines: LineView[] = []) {
   const snapshot: SnapshotMsg = { ...base, view: { ...base.view, lines } };
   hud.onSnapshot(snapshot);
   const sent: Command[] = [];
+  const queries: number[][] = [];
   const controller = new OrderController({
     hud,
     map,
     rules: RULES,
     book: new OrderBook(),
     send: (cmd) => sent.push(cmd),
+    queryLineRoute: (points) => queries.push([...points]),
   });
-  return { hud, sent, controller };
+  return { hud, sent, controller, queries };
 }
 
 const down = (code: string) => ({ type: 'keydown', code, shiftKey: false }) as const;
@@ -113,32 +118,73 @@ describe('OrderController under economy v2 (DEC-41)', () => {
     ]);
   });
 
-  it('draws a supply line: the menu, a click per node, Enter sends the path', () => {
-    const { controller, sent } = setup();
+  it('draws a supply line: the menu, a click on the target, the server path, Enter (#665)', () => {
+    const { controller, sent, queries } = setup();
     controller.key(down('Tab'));
     controller.click({ kind: 'node', id: home }, false);
     expect(controller.supplyMenu.current).toMatchObject({ open: true, node: home, lines: [] });
     controller.key(down('Digit1'));
     expect(controller.ui.current.lineDraft).toEqual([home]);
-    expect(controller.overlay().supply).toMatchObject({ source: home, draft: [home] });
-    expect(controller.lineNext()).toContain(next);
-    // A node that is not next to the end is not taken.
+    expect(controller.overlay().supply).toMatchObject({ source: home, draft: [] });
+    expect(controller.overlay().supply?.targets).toContain(far);
+    // A node that is not own is not taken.
     controller.click({ kind: 'node', id: enemy.id }, false);
     expect(controller.ui.current.lineDraft).toEqual([home]);
-    controller.click({ kind: 'node', id: next }, false);
-    expect(controller.ui.current.lineDraft).toEqual([home, next]);
-    expect(controller.overlay().supply?.draft).toEqual([home, next]);
+    controller.click({ kind: 'node', id: far }, false);
+    expect(controller.ui.current.lineDraft).toEqual([home, far]);
+    expect(queries).toEqual([[home, far]]);
+    // No path yet: nothing to draw, Enter waits.
+    controller.key(down('Enter'));
+    expect(sent).toEqual([]);
+    controller.onLineRoute({
+      type: 'line_route',
+      points: [home, far],
+      tick: 30,
+      path: [home, next, far],
+    });
+    expect(controller.overlay().supply).toMatchObject({ draft: [home, next, far], targets: [] });
     controller.key(down('Enter'));
     expect(controller.ui.current.lineDraft).toBeNull();
-    expect(sent).toEqual([{ type: 'draw_line', path: [home, next] }]);
+    expect(sent).toEqual([{ type: 'draw_line', path: [home, next, far] }]);
   });
 
-  it('a click on the end of the line finishes it; Backspace steps back; Esc drops it', () => {
+  it('a click routes the line through a node, again takes it off, Shift goes on to it', () => {
+    const { controller, queries } = setup();
+    controller.key(down('Tab'));
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseLine('draw');
+    controller.click({ kind: 'node', id: far }, false);
+    controller.click({ kind: 'node', id: next }, false);
+    expect(controller.ui.current.lineDraft).toEqual([home, next, far]);
+    controller.click({ kind: 'node', id: next }, false);
+    expect(controller.ui.current.lineDraft).toEqual([home, far]);
+    controller.click({ kind: 'node', id: next }, true);
+    expect(controller.ui.current.lineDraft).toEqual([home, far, next]);
+    expect(queries).toEqual([
+      [home, far],
+      [home, next, far],
+      [home, far],
+      [home, far, next],
+    ]);
+    // An answer about other points than the current ones is dropped.
+    controller.onLineRoute({
+      type: 'line_route',
+      points: [home, far],
+      tick: 30,
+      path: [home, far],
+    });
+    expect(controller.ui.current.linePath).toBeNull();
+  });
+
+  it('a click on the target confirms; Backspace steps back; Esc drops the line', () => {
     const { controller, sent } = setup();
     controller.key(down('Tab'));
     controller.click({ kind: 'node', id: home }, false);
     controller.chooseLine('draw');
+    controller.click({ kind: 'node', id: far }, false);
     controller.click({ kind: 'node', id: next }, false);
+    controller.key(down('Backspace'));
+    expect(controller.ui.current.lineDraft).toEqual([home, far]);
     controller.key(down('Backspace'));
     expect(controller.ui.current.lineDraft).toEqual([home]);
     controller.key(down('Escape'));
@@ -147,8 +193,22 @@ describe('OrderController under economy v2 (DEC-41)', () => {
     controller.click({ kind: 'node', id: home }, false);
     controller.chooseLine('draw');
     controller.click({ kind: 'node', id: next }, false);
+    controller.onLineRoute({
+      type: 'line_route',
+      points: [home, next],
+      tick: 30,
+      path: [home, next],
+    });
     controller.click({ kind: 'node', id: next }, false);
     expect(sent).toEqual([{ type: 'draw_line', path: [home, next] }]);
+  });
+
+  it('the auto-extension toggle sends set_auto_lines only for a change (#665)', () => {
+    const { controller, sent } = setup();
+    expect(controller.autoLines).toBe(true);
+    controller.setAutoLines(true);
+    controller.setAutoLines(false);
+    expect(sent).toEqual([{ type: 'set_auto_lines', on: false }]);
   });
 
   it('the supply menu lists the lines that start at the city and removes one by its key', () => {

@@ -17,8 +17,12 @@
   // every snapshot; a press sends one step (`stepRearMin`, the same as the `[` and `]` keys), and the
   // snapshot that applies it shows the new number a tick later.
   const rearMin = $derived(orders.v2 ? null : orders.rearMin);
-  // Economy v2 (DEC-41, item 6): the path of the supply line being drawn, from its source.
+  // Economy v2 (DEC-41, item 6; #665): the points of the supply line being drawn (its source, the
+  // nodes it is routed through, its target) and the path the server suggests through them.
   const draft = $derived(ui.lineDraft);
+  const path = $derived(ui.linePath);
+  // The auto-extension of the own lines (#665): the server's value from every snapshot.
+  const autoLines = $derived(orders.autoLines);
 
   /** Key labels are the keys themselves, not translations. */
   const TAB = 'Tab';
@@ -43,16 +47,23 @@
         <span
           >{draft.length < 2
             ? tf('supply.lineStart', { node: names(draft[0] ?? -1) })
-            : tf('supply.lineDraft', {
-                from: names(draft[0] ?? -1),
-                to: names(draft[draft.length - 1] ?? -1),
-                n: draft.length,
-              })}</span
+            : tf(
+                path === null
+                  ? 'supply.lineWait'
+                  : path.length < 2
+                    ? 'supply.lineNone'
+                    : 'supply.lineDraft',
+                {
+                  from: names(draft[0] ?? -1),
+                  to: names(draft[draft.length - 1] ?? -1),
+                  n: path?.length ?? 0,
+                },
+              )}</span
         >
         <button
           type="button"
           class="tbtn primary"
-          disabled={draft.length < 2}
+          disabled={path === null || path.length < 2}
           onclick={(event) => {
             orders.finishLine();
             event.currentTarget.blur();
@@ -72,6 +83,24 @@
       <strong>{t('supply.banner')}</strong><kbd class="k" aria-hidden="true">{TAB}</kbd>
       {#if orders.v2 && draft === null}
         <span class="dim">{t('supply.lineHint')}</span>
+      {/if}
+      {#if autoLines !== null}
+        <span class="sep" aria-hidden="true"></span>
+        <!-- On or off is told by the box (filled or empty) and aria-pressed, not by colour alone. -->
+        <button
+          type="button"
+          class="tbtn auto"
+          aria-pressed={autoLines}
+          title={t('supply.autoLinesTip')}
+          onclick={(event) => {
+            orders.setAutoLines(!autoLines);
+            event.currentTarget.blur();
+          }}
+          ><svg class="box" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <rect x="2" y="2" width="12" height="12" rx="2" />
+            {#if autoLines}<path d="M4.5 8.5l2.5 2.5 4.5-5" />{/if}
+          </svg>{t('supply.autoLines')}</button
+        >
       {/if}
       {#if rearMin !== null}
         <span class="sep" aria-hidden="true"></span>
@@ -185,6 +214,27 @@
 
   .tbtn.primary {
     border-color: var(--you);
+  }
+  .tbtn.auto {
+    padding: 0 10px 0 8px;
+  }
+  .box {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .tbtn.auto[aria-pressed='true'] .box rect {
+    fill: var(--you);
+    stroke: var(--you);
+  }
+  .tbtn.auto[aria-pressed='true'] .box path {
+    stroke: var(--paper);
+    stroke-width: 2;
   }
 
   .tbtn:hover:not(:disabled) {

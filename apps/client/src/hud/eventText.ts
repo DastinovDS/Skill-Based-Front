@@ -71,6 +71,8 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'fort_built',
   'line_cut',
   'line_rerouted',
+  // A line the auto-extension drew to a captured city (#665): the journal only, the capture has the toast.
+  'line_auto',
 ]);
 
 /** Does the feed show this kind? An unknown kind is not shown (never a raw kind name). */
@@ -176,6 +178,11 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
       });
     case 'line_rerouted':
       return tf('event.line_rerouted', {
+        from: names(num(data.from_node)),
+        to: names(num(data.to_node)),
+      });
+    case 'line_auto':
+      return tf('event.line_auto', {
         from: names(num(data.from_node)),
         to: names(num(data.to_node)),
       });

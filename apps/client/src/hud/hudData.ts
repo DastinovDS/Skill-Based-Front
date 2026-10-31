@@ -224,6 +224,8 @@ export interface HudData {
   readonly fronts: readonly (number | null)[];
   /** The own rear minimum of charges in the cities without a marker (DEC-28, item 3). */
   readonly rearMin: number;
+  /** Economy v2: the own lines extend to captured cities by themselves (#665); `null` under v1. */
+  readonly autoLines: boolean | null;
   readonly vp: { readonly mine: number; readonly enemy: number };
   /** Whole seconds until the timer ends the match. */
   readonly secondsLeft: number;
@@ -449,6 +451,7 @@ export function buildHudData(
     stance: view.me.stance,
     fronts: view.me.fronts,
     rearMin: view.me.rear_min,
+    autoLines: view.me.auto_lines,
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },
     secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
     group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes, tick),

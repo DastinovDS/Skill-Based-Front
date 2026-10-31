@@ -29,7 +29,7 @@ const packet = (over: Partial<PacketView>): PacketView => ({
 });
 
 const view = (over: Partial<View>): View => ({
-  me: { cp: 100, stance: 'balance', fronts: [null, null], rear_min: 1 },
+  me: { cp: 100, stance: 'balance', fronts: [null, null], rear_min: 1, auto_lines: null },
   vp: [0, 0],
   nodes: [],
   edges: [],

@@ -136,7 +136,7 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
     ...base,
     view: {
       ...base.view,
-      me: { ...base.view.me, fronts: [null, null] },
+      me: { ...base.view.me, fronts: [null, null], auto_lines: true },
       nodes,
       edges,
       groups,

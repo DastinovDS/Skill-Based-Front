@@ -142,7 +142,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     tick: frame.t,
     view: {
       // Front markers and the rear minimum are not in the replay files (DEC-28).
-      me: { cp: first[0], stance: first[2], fronts: [null, null], rear_min: 0 },
+      me: { cp: first[0], stance: first[2], fronts: [null, null], rear_min: 0, auto_lines: null },
       vp: [first[1], second[1]],
       nodes,
       edges: frame.w.map((width, id) => ({

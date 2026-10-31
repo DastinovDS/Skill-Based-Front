@@ -57,10 +57,17 @@ export interface OrderUiData {
   /** Transfer pick: the own city the charges leave; a click on another own city picks `to`. */
   readonly transferFrom: number | null;
   /**
-   * Economy v2 (DEC-41, item 6): the path of a supply line being drawn in the «Supply» mode, from
-   * its source; each click on a neighbouring own node adds one. `null`: no line is being drawn.
+   * Economy v2 (DEC-41, item 6; #665): the points of a supply line being drawn in the «Supply» mode:
+   * its source, the nodes it is routed through, its target (the last one, once clicked). `null`: no
+   * line is being drawn.
    */
   readonly lineDraft: readonly number[] | null;
+  /**
+   * The path the server suggests through `lineDraft` (`line_route`, #665): drawn as the preview and
+   * sent by `draw_line` when the player confirms it. `null`: no target yet or the answer is on its
+   * way; empty: the server found no own path through those points.
+   */
+  readonly linePath: readonly number[] | null;
   /**
    * Economy v2 (DEC-41, item 10): the bonus a planned order asks for (`move.bonus`), set by the
    * stepper of the plan bar or `[` and `]`; at least 1.
@@ -86,6 +93,7 @@ export class OrderUiState {
     terrainMode: false,
     transferFrom: null,
     lineDraft: null,
+    linePath: null,
     planBonus: 2,
     notice: null,
     reach: null,

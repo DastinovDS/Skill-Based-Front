@@ -9,6 +9,7 @@
   import { HudState } from '../hud/hudState.svelte.ts';
   import { STATUS_INPUTS, isStatusScene } from './statusScenes.ts';
   import { createDevMatch } from './devMatch.ts';
+  import { devLinePath } from './devServer.ts';
   import { parseEta, pinEta } from './etaPin.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource } from './scenarios.ts';
   import { OrderBook } from '../match/orderBook.ts';
@@ -108,6 +109,9 @@
             orders.onReach(msg);
           },
           motionOn,
+          (msg) => {
+            orders.onLineRoute(msg);
+          },
         )
       : null,
   );
@@ -162,6 +166,19 @@
       send: match === null ? (menusOn ? () => 0 : null) : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,
       focusNode: (node) => canvas?.focusNode(node),
+      queryLineRoute: (points) => {
+        match?.session.queryLineRoute(points);
+        const [a, b, ...rest] = points;
+        if (match === null && a !== undefined && b !== undefined) {
+          // A frozen scene has no server: the stand-in answers at once.
+          orders.onLineRoute({
+            type: 'line_route',
+            points: [a, b, ...rest],
+            tick: 0,
+            path: devLinePath(map, points),
+          });
+        }
+      },
       queryReach: (group) => {
         match?.session.queryReach(group);
         if (match === null && splitPinned !== null) {

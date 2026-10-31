@@ -364,7 +364,7 @@ async def run(self) -> None:
 
 ### 7.1 There is no game logic in the client
 
-- The client draws snapshots and sends intents. It does not decide who wins a fight, whether a packet arrived, or whether the capacity is enough. The path and the arrival tick of an order come in the `ack`, the reachable nodes and the travel time to them in the `reach` response to `reach_query` (DEC-20): the client does not compute them.
+- The client draws snapshots and sends intents. It does not decide who wins a fight, whether a packet arrived, or whether the capacity is enough. The path and the arrival tick of an order come in the `ack`, the reachable nodes and the travel time to them in the `reach` response to `reach_query` (DEC-20), the suggested path of a supply line in the `line_route` response to `line_route_query` (#665): the client does not compute them.
 - No exceptions: the client computes neither the outcome of a fight nor an "estimate" of a fight. The fight estimate in the HUD was removed by the owner (#252); the test vectors `packages/protocol/vectors/combat.json` remain only for the simulation (SIM-09).
 
 ### 7.2 PixiJS and Svelte

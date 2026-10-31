@@ -94,6 +94,8 @@
       onend(me, msg, hud?.summary() ?? null);
     } else if (msg.type === 'reach') {
       orders?.onReach(msg);
+    } else if (msg.type === 'line_route') {
+      orders?.onLineRoute(msg);
     }
   }
 
@@ -198,6 +200,9 @@
       focusNode: (node) => canvas?.focusNode(node),
       queryReach: (group) => {
         live.queryReach(group);
+      },
+      queryLineRoute: (points) => {
+        live.queryLineRoute(points);
       },
     });
   });
