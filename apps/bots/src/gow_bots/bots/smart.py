@@ -552,7 +552,11 @@ class SmartBot(CampaignBot):
         for sec in self.sectors:
             if sec.node == self.enemy_home:
                 continue
-            rank = (sec.pressure - 2 * self.map.nodes[sec.node].vp, far[sec.node], self.key(sec.node))
+            rank = (
+                sec.pressure - 2 * self.map.nodes[sec.node].vp,
+                far[sec.node],
+                self.key(sec.node),
+            )
             if best is None or rank < best:
                 best, spot = rank, sec.node
         return spot
