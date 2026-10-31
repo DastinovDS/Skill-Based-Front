@@ -53,6 +53,7 @@ from gow_sim.commands import (
     Recruit,
     ReleasePlan,
     RemoveLine,
+    SetAutoLines,
     SetFront,
     SetMode,
     SetRearMin,
@@ -192,6 +193,8 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "draw_line", "path": list(path)}
         case RemoveLine(line=line):
             return {"type": "remove_line", "line": line}
+        case SetAutoLines(on=on):
+            return {"type": "set_auto_lines", "on": on}
         case Forfeit():
             return {"type": "forfeit"}
 
@@ -252,6 +255,8 @@ def decode_command(data: object) -> Command:
                 return DrawLine(tuple(_int(n) for n in nodes))
             case "remove_line":
                 return RemoveLine(_int(d["line"]))
+            case "set_auto_lines":
+                return SetAutoLines(_bool(d["on"]))
             case "forfeit":
                 return Forfeit()
             case _:

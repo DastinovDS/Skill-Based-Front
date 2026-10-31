@@ -153,7 +153,7 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
     type: 'snapshot',
     tick: T,
     view: {
-      me: { cp: 380, stance: 'balance', fronts: [7, null], rear_min: 1 },
+      me: { cp: 380, stance: 'balance', fronts: [7, null], rear_min: 1, auto_lines: null },
       vp: [6, 7],
       nodes,
       edges,

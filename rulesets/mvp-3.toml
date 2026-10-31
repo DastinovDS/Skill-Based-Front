@@ -283,6 +283,12 @@ max = 3 # factories of a player at most, the capital and the builds under way in
 # target of an own line to an own city; each line carries 1 charge per supply.dispatch_ticks on its turn
 # of the round robin of its source node. Drawing and removing a line is free.
 max_out = 3 # lines that start at one node at most (L4)
+# Auto-extension (owner decision 2026-10-31, #665): a city the player captures gets a new line from the
+# nearest own source with room (an own factory or the target of an own line; the fastest way over own
+# nodes) when that source is next to it: at most auto_extend_ticks of packet travel away. auto_extend is
+# the start value of every player's toggle (SetAutoLines); false: the players draw every line themselves.
+auto_extend = true
+auto_extend_ticks = 100 # about two roads (a road takes 20 to 60 packet ticks on the pool maps)
 
 [bunker]
 cost = 3 # BuildBunker(node): 3 charges, the progressive payment of DEC-41, item 7 (code name fort)

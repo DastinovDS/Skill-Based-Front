@@ -131,6 +131,8 @@ function describeServerMsg(msg: ServerMsg): string {
       return `paused ${String(msg.paused)}`;
     case 'reach':
       return `reach ${String(msg.nodes.length)} nodes`;
+    case 'line_route':
+      return `line_route ${String(msg.path.length)} nodes`;
     default:
       return unreachable(msg);
   }
@@ -152,6 +154,8 @@ function describeClientMsg(msg: ClientMsg): string {
       return msg.type;
     case 'reach_query':
       return `reach of ${msg.group}`;
+    case 'line_route_query':
+      return `line route through ${String(msg.points.length)} points`;
     default:
       return unreachable(msg);
   }

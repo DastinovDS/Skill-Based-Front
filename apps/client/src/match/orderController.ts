@@ -1,7 +1,15 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
 import type { GroupChoice as GroupBrief, Selection } from '../hud/hudData.ts';
-import type { Command, MapFile, Mode, ReachMsg, RulesetPublic, Stance } from '../protocol.gen.ts';
+import type {
+  Command,
+  LineRouteMsg,
+  MapFile,
+  Mode,
+  ReachMsg,
+  RulesetPublic,
+  Stance,
+} from '../protocol.gen.ts';
 import {
   EMPTY_OVERLAY,
   type MapInteraction,
@@ -66,6 +74,8 @@ export interface OrderControllerOptions {
   focusNode?: (node: number) => void;
   /** Sends `reach_query` for a group (DEC-20); the answer comes back through `onReach`. */
   queryReach?: (group: string) => void;
+  /** Sends `line_route_query` for the points of a line (#665); the answer comes back through `onLineRoute`. */
+  queryLineRoute?: (points: readonly number[]) => void;
 }
 
 /** The parts of a keyboard event the controller needs (`code`: layout-independent key). */
@@ -858,6 +868,7 @@ export class OrderController implements MapInteraction {
       supplyMode: on,
       transferFrom: null,
       lineDraft: null,
+      linePath: null,
       ...(on ? { terrainMode: false } : {}),
     });
   }
@@ -878,7 +889,7 @@ export class OrderController implements MapInteraction {
       this.#closeMenus();
       this.transfer.close();
       if (this.ui.current.supplyMode) {
-        this.ui.patch({ supplyMode: false, transferFrom: null, lineDraft: null });
+        this.ui.patch({ supplyMode: false, transferFrom: null, lineDraft: null, linePath: null });
       }
     }
     this.ui.patch({ terrainMode: on });
@@ -927,52 +938,98 @@ export class OrderController implements MapInteraction {
     this.supplyMenu.close();
     if (!open) return;
     const line = lineOf(choice);
-    if (line === null) this.ui.patch({ lineDraft: [node] });
+    if (line === null) this.ui.patch({ lineDraft: [node], linePath: null });
     else this.#sendCommand({ type: 'remove_line', line }, null);
   }
 
   /**
-   * The own nodes a click adds to the line being drawn: the map neighbours of its last node that
-   * are own in the latest snapshot and not on the path yet. Only what the map and the snapshot
-   * say; whether the line is allowed (a source, a cycle, the limit) is the server's call.
+   * The own nodes a click puts on the line being drawn: every own node of the latest snapshot that
+   * is not a point of the line yet. Only what the snapshot says; the path through the points is the
+   * server's (`line_route`), and whether the line is allowed (a source, a cycle, the limit) is
+   * decided when it is sent.
    */
-  lineNext(): number[] {
+  lineTargets(): number[] {
     const draft = this.ui.current.lineDraft;
-    const last = draft?.[draft.length - 1];
-    if (draft === null || last === undefined) return [];
-    const own = new Set(
-      (this.#o.hud.current?.nodes ?? []).filter((n) => n.owner === 'mine').map((n) => n.id),
-    );
-    const next: number[] = [];
-    for (const edge of this.#o.map.edges) {
-      const other = edge.a === last ? edge.b : edge.b === last ? edge.a : null;
-      if (other !== null && own.has(other) && !draft.includes(other) && !next.includes(other)) {
-        next.push(other);
-      }
-    }
-    return next.sort((a, b) => a - b);
+    if (draft === null) return [];
+    return (this.#o.hud.current?.nodes ?? [])
+      .filter((n) => n.owner === 'mine' && !draft.includes(n.id))
+      .map((n) => n.id)
+      .sort((a, b) => a - b);
   }
 
-  /** Sends the line being drawn (`draw_line`) when it has two nodes or more, and ends the drawing. */
+  /**
+   * A click on an own node while a line is drawn (#665). Without a target the node becomes the
+   * target; with one, a click routes the line through the node (Shift: the line goes on to it, the
+   * old target is passed through). A click on a node the line is routed through takes it off again.
+   * The server suggests the path through the points (`line_route_query`).
+   */
+  addLinePoint(node: number, extend = false): void {
+    const draft = this.ui.current.lineDraft;
+    if (draft === null || node === draft[0]) return;
+    const at = draft.indexOf(node);
+    if (at > 0 && at < draft.length - 1) {
+      this.#setLinePoints(draft.filter((n) => n !== node));
+      return;
+    }
+    if (at > 0) return; // the target itself: confirming is `finishLine`
+    if (draft.length < 2 || extend) this.#setLinePoints([...draft, node]);
+    else this.#setLinePoints([...draft.slice(0, -1), node, ...draft.slice(-1)]);
+  }
+
+  #setLinePoints(points: readonly number[]): void {
+    this.ui.patch({ lineDraft: points, linePath: null });
+    if (points.length >= 2) this.#o.queryLineRoute?.(points);
+  }
+
+  /**
+   * The server's answer to `line_route_query` (#665). Kept only while it is about the points being
+   * drawn: an answer for points changed since is dropped.
+   */
+  onLineRoute(msg: LineRouteMsg): void {
+    const draft = this.ui.current.lineDraft;
+    if (draft === null || draft.length !== msg.points.length) return;
+    if (draft.some((n, i) => n !== msg.points[i])) return;
+    this.ui.patch({ linePath: msg.path });
+  }
+
+  /** Sends the suggested path of the line (`draw_line`) once the server has one, and ends the drawing. */
   finishLine(): void {
     const draft = this.ui.current.lineDraft;
+    const path = this.ui.current.linePath;
     if (draft === null) return;
-    this.ui.patch({ lineDraft: null });
-    const [source, second, ...rest] = draft;
+    const [source, second, ...rest] = path ?? [];
+    if (draft.length >= 2 && (source === undefined || second === undefined)) return; // no path yet
+    this.ui.patch({ lineDraft: null, linePath: null });
     if (source === undefined || second === undefined) return;
     this.#sendCommand({ type: 'draw_line', path: [source, second, ...rest] }, null);
   }
 
-  /** Takes the last node off the line being drawn; with only the source left, ends the drawing. */
+  /**
+   * Backspace: takes the last node the line is routed through off it; without one the target; with
+   * only the source left, ends the drawing.
+   */
   undoLineStep(): void {
     const draft = this.ui.current.lineDraft;
     if (draft === null) return;
-    this.ui.patch({ lineDraft: draft.length > 1 ? draft.slice(0, -1) : null });
+    if (draft.length > 2) this.#setLinePoints([...draft.slice(0, -2), ...draft.slice(-1)]);
+    else if (draft.length === 2) this.#setLinePoints(draft.slice(0, 1));
+    else this.ui.patch({ lineDraft: null, linePath: null });
   }
 
   /** Ends the drawing of a line without sending it. */
   cancelLine(): void {
-    if (this.ui.current.lineDraft !== null) this.ui.patch({ lineDraft: null });
+    if (this.ui.current.lineDraft !== null) this.ui.patch({ lineDraft: null, linePath: null });
+  }
+
+  /** Economy v2: whether the own lines extend to captured cities by themselves (#665); `null` under v1. */
+  get autoLines(): boolean | null {
+    return this.#o.hud.current?.autoLines ?? null;
+  }
+
+  /** Turns the auto-extension of the own lines on or off (`set_auto_lines`, free). */
+  setAutoLines(on: boolean): void {
+    if (this.autoLines === null || this.autoLines === on) return;
+    this.#sendCommand({ type: 'set_auto_lines', on }, null);
   }
 
   closeSupplyMenu(): void {
@@ -1354,12 +1411,13 @@ export class OrderController implements MapInteraction {
     const node = hit === null ? null : this.#cityOf(hit);
     const draft = this.ui.current.lineDraft;
     if (draft !== null) {
-      // Drawing a line: a neighbouring own node goes on the path, the last node again finishes
-      // the line, the one before it steps back; a click anywhere else changes nothing.
+      // Drawing a line (#665): the target again confirms the suggested path, another own node is
+      // added to the points (`addLinePoint`); a click anywhere else changes nothing.
       if (node === null) return true;
-      if (node === draft[draft.length - 1]) this.finishLine();
-      else if (draft.length > 1 && node === draft[draft.length - 2]) this.undoLineStep();
-      else if (this.lineNext().includes(node)) this.ui.patch({ lineDraft: [...draft, node] });
+      if (draft.length > 1 && node === draft[draft.length - 1]) this.finishLine();
+      else if (draft.includes(node) || this.lineTargets().includes(node)) {
+        this.addLinePoint(node, this.#shift);
+      }
       return true;
     }
     if (from !== null) {
@@ -1404,13 +1462,15 @@ export class OrderController implements MapInteraction {
     const source = draft?.[0] ?? this.ui.current.transferFrom;
     const targets =
       draft !== null
-        ? this.lineNext()
+        ? draft.length < 2
+          ? this.lineTargets() // rung only while the target is picked: later any own node routes
+          : []
         : source === null
           ? []
           : (this.#o.hud.current?.nodes ?? [])
               .filter((n) => n.owner === 'mine' && n.warehouseCap !== null && n.id !== source)
               .map((n) => n.id);
-    const path = draft ?? [];
+    const path = draft === null ? [] : (this.ui.current.linePath ?? []);
     const prev = this.#supplyOverlay;
     if (
       prev?.source !== source ||

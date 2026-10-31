@@ -1,6 +1,6 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import { MatchSession } from '../match/session.ts';
-import type { MapFile, ReachMsg, RulesetPublic } from '../protocol.gen.ts';
+import type { LineRouteMsg, MapFile, ReachMsg, RulesetPublic } from '../protocol.gen.ts';
 import { createDevServer } from './devServer.ts';
 
 export interface DevMatch {
@@ -18,6 +18,8 @@ export function createDevMatch(
   onReach?: (msg: ReachMsg) => void,
   /** Scripted motion for looking at animation (`/?motion`). */
   motion = false,
+  /** The answers to `line_route_query` (#665). */
+  onLineRoute?: (msg: LineRouteMsg) => void,
 ): DevMatch {
   const server = createDevServer(map, rules, { motion });
   const session = new MatchSession({
@@ -32,6 +34,7 @@ export function createDevMatch(
     },
     onServerMessage: (msg) => {
       if (msg.type === 'reach') onReach?.(msg);
+      else if (msg.type === 'line_route') onLineRoute?.(msg);
     },
     connection: { createSocket: server.createSocket },
   });

@@ -255,6 +255,14 @@ export class MatchConnection {
     if (this.#status === 'ready') this.#write({ type: 'reach_query', group });
   }
 
+  /** Ask for the suggested path of a supply line (#665); not queued, like `queryReach`. */
+  queryLineRoute(points: readonly number[]): void {
+    const [a, b, ...rest] = points;
+    if (a === undefined || b === undefined) return;
+    if (this.#status === 'ready')
+      this.#write({ type: 'line_route_query', points: [a, b, ...rest] });
+  }
+
   /** Stop for good: no more reconnects. Unacknowledged commands are dropped. */
   close(): void {
     this.#unhook?.();

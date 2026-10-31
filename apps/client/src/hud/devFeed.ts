@@ -169,6 +169,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         stance: 'balance',
         fronts: [null, null],
         rear_min: 1,
+        auto_lines: rules.economy.model === 'v2' ? true : null,
       },
       vp: [Math.floor(tick / 100), Math.floor(tick / 150)],
       nodes,

@@ -106,7 +106,13 @@ from gow_sim.systems.capacity import (
 from gow_sim.systems.economy import factory_period
 from gow_sim.systems.movement import reachable, reachable_paths
 from gow_sim.systems.recruit import recruit_waiting
-from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
+from gow_sim.systems.supply import (
+    all_packet_ticks,
+    is_city,
+    packet_dest_tick,
+    packet_path,
+    transfer_route,
+)
 from gow_sim.systems.vision import (
     Vision,
     compute_vision,
@@ -149,6 +155,7 @@ __all__ = [
     "Stance",
     "UpgradeGain",
     "check_match_key",
+    "line_route",
     "opaque_id",
     "project",
     "reach",
@@ -183,6 +190,9 @@ class SelfView:
     ``None``: not placed."""
     rear_min: int = 0
     """The own rear minimum (DEC-28, item 3)."""
+    auto_lines: bool | None = None
+    """Economy v2: whether the own lines extend to captured cities by themselves (#665, the
+    player's ``SetAutoLines``); ``None`` under v1. The enemy's toggle is never in a view."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -605,6 +615,42 @@ def reach(
     return None
 
 
+def line_route(
+    state: GameState, rules: Ruleset, player: int, points: tuple[int, ...]
+) -> tuple[int, ...]:
+    """The suggested path of a supply line through ``points`` (DEC-41, item 6 and the owner
+    decision 2026-10-31, #665): the source, the nodes the player routes through, the target.
+
+    Each leg from one point to the next is the fastest way over own nodes (``transfer_route``:
+    the sum of ``packet_ticks``, ties by the smaller ``node_key`` sequence) that avoids the nodes
+    of the legs before it and the points after it, so the whole path is simple. ``()`` when there
+    are fewer than two points, a point is repeated, out of range or not own, or a leg has no way.
+    Only the owners of own nodes and the public map are read, so nothing hidden leaks; the
+    suggestion checks none of the rules of ``DrawLine`` (source, limit, cycle): the server
+    decides those when the player confirms the line.
+    """
+    count = len(state.map.nodes)
+    if len(points) < 2 or len(dict.fromkeys(points)) != len(points):
+        return ()
+    if any(not 0 <= n < count or state.nodes[n].owner != player for n in points):
+        return ()
+    edges = state.map.edges
+    ticks = all_packet_ticks(state, rules)
+    path: list[int] = [points[0]]
+    for i in range(len(points) - 1):
+        start, goal = points[i], points[i + 1]
+        blocked = {n: True for n in (*path[:-1], *points[i + 2 :])}
+
+        def usable(eid: int, blocked: dict[int, bool] = blocked) -> bool:
+            return edges[eid].a not in blocked and edges[eid].b not in blocked
+
+        route = transfer_route(state, rules, player, start, goal, usable, ticks)
+        if route is None:
+            return ()
+        path.extend(route.nodes[1:])
+    return tuple(path)
+
+
 # Projection ----------------------------------------------------------------------------------
 
 
@@ -865,7 +911,13 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     return PlayerView(
         tick=state.tick,
         player=player,
-        me=SelfView(cp=me.cp, stance=me.stance, fronts=me.fronts, rear_min=me.rear_min),
+        me=SelfView(
+            cp=me.cp,
+            stance=me.stance,
+            fronts=me.fronts,
+            rear_min=me.rear_min,
+            auto_lines=me.auto_lines if rules.v2 else None,
+        ),
         vp=tuple(state.players[p].vp for p in PLAYERS),
         nodes=tuple(nodes),
         edges=tuple(edges),
@@ -953,6 +1005,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
             "stance": view.me.stance.value,
             "fronts": list(view.me.fronts),
             "rear_min": view.me.rear_min,
+            "auto_lines": view.me.auto_lines,
         },
         "vp": list(view.vp),
         "nodes": [

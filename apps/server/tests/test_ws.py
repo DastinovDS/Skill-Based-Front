@@ -48,6 +48,8 @@ from gow_protocol.messages import (
     EndReason,
     ErrorMsg,
     HelloMsg,
+    LineRouteMsg,
+    LineRouteQueryMsg,
     MatchEndMsg,
     PausedMsg,
     PauseMsg,
@@ -575,6 +577,29 @@ def test_reach_query_is_answered_by_the_server(ws_settings: Settings) -> None:
             assert (unknown.group, unknown.nodes, unknown.split) == ("999", (), ())
 
     run(ws_settings, scenario)
+
+
+def test_line_route_query_is_answered_by_the_server(ws_settings: Settings) -> None:
+    """#665: the server suggests the path of a line over own nodes; an enemy point gets none."""
+
+    async def scenario(live: Live) -> None:
+        async with live.connect() as ws:
+            await send(ws, hello(live.tokens[0]))
+            assert isinstance(await recv(ws), WelcomeMsg)
+            snap = await recv_until(ws, SnapshotMsg)
+            assert snap.view.me.auto_lines is True  # lines.auto_extend of mvp-3
+            own = [n.id for n in snap.view.nodes if n.owner == 0]
+            enemy = next(n.id for n in snap.view.nodes if n.owner == 1)
+            points = (own[0], own[-1])
+            await send(ws, LineRouteQueryMsg(points=points))
+            answer = await recv_until(ws, LineRouteMsg)
+            assert (answer.points, answer.tick) == (points, live.runner.match.tick)
+            assert (answer.path[0], answer.path[-1]) == points
+            assert set(answer.path) <= set(own)
+            await send(ws, LineRouteQueryMsg(points=(own[0], enemy)))
+            assert (await recv_until(ws, LineRouteMsg)).path == ()
+
+    run(ws_settings, scenario, map_id="web", ruleset="mvp-3")
 
 
 def test_bad_message_gets_error_and_connection_stays(ws_settings: Settings) -> None:

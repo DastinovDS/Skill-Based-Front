@@ -6,7 +6,8 @@
       "cp": 500,
       "stance": "war",
       "fronts": [null, null],
-      "rear_min": 1
+      "rear_min": 1,
+      "auto_lines": null
     },
     "vp": [4, 6],
     "nodes": [

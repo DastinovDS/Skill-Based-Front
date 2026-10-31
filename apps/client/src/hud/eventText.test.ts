@@ -36,6 +36,9 @@ describe('eventText', () => {
     expect(eventText(event('line_rerouted', line), 0, names)).toBe(
       'Supply line Alder → Cedar goes another way',
     );
+    expect(eventText(event('line_auto', line), 0, names)).toBe(
+      'Supply line Alder → Cedar drawn by itself',
+    );
     expect(eventText(event('factory_built', { player: 0, node: 1 }), 0, names)).toBe(
       'Birch is a factory now: it makes charges',
     );

@@ -57,12 +57,13 @@ from gow_protocol.convert import (
     ack_msg,
     command_from_wire,
     events_msgs,
+    line_route_msg,
     match_end_msg,
     opaque_from_wire,
     reach_msg,
     snapshot_frame,
 )
-from gow_protocol.messages import PausedMsg, ReachMsg, ServerMsg
+from gow_protocol.messages import LineRouteMsg, PausedMsg, ReachMsg, ServerMsg
 from gow_server.alerts import Alerter
 from gow_server.clock import Clock
 from gow_server.ladder import (
@@ -337,6 +338,12 @@ class MatchRunner:
         oid = opaque_from_wire(group)
         found = None if oid is None else self.match.reach(player, oid)
         return reach_msg(group, self.match.tick, found)
+
+    def line_route(self, player: int, points: tuple[int, ...]) -> LineRouteMsg:
+        """The suggested path of a supply line of ``player`` through ``points`` (public node ids),
+        on the state after the last tick (#665). Synchronous and outside the step, like
+        ``reach``."""
+        return line_route_msg(points, self.match.tick, self.match.line_route(player, points))
 
     def submit(self, player: int, seq: int, cmd: wire.Command) -> bool:
         """Queue a command for the next tick. ``False``: a repeated ``seq`` or a finished match.

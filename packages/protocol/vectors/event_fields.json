@@ -231,6 +231,15 @@
         "group"
       ]
     },
+    "line_auto": {
+      "fields": [
+        "from_node",
+        "line",
+        "player",
+        "to_node"
+      ],
+      "ids": []
+    },
     "line_cut": {
       "fields": [
         "from_node",

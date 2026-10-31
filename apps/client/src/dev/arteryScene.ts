@@ -265,7 +265,7 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
     type: 'snapshot',
     tick: T,
     view: {
-      me: { cp: 420, stance: 'balance', fronts: [3, null], rear_min: 1 },
+      me: { cp: 420, stance: 'balance', fronts: [3, null], rear_min: 1, auto_lines: null },
       vp: [9, 17],
       nodes,
       edges,

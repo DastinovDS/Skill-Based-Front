@@ -232,7 +232,8 @@ for (const menu of MENUS) {
 // city with the factory and the bunker priced in charges (Ford), the menu of a group whose plan gathers
 // (Watchhouse: the release and the plan bar), the plan bar with the requested bonus (a group in
 // Watchpost), the supply menu of a city (Tab, Forkway: draw a line, remove the lines that start there)
-// and a supply line being drawn (Tab, Stonegate, 1, Watchpost, Forkway). `v2-<name>.png` and grey.
+// and a supply line being drawn (Tab, Stonegate, 1, Forkway: the path is suggested, #665; the banner
+// shows the auto lines toggle). `v2-<name>.png` and grey.
 const V2_SHOTS = ['city', 'group', 'plan', 'supply', 'line'] as const;
 
 for (const name of V2_SHOTS) {
@@ -257,10 +258,10 @@ for (const name of V2_SHOTS) {
         await page.mouse.click(533, 518);
         break;
       case 'line':
+        // #665: the source, 1, the target: the suggested path is drawn (the stand-in of the dev screen).
         await page.keyboard.press('Tab');
         await page.mouse.click(118, 518);
         await page.keyboard.press('Digit1');
-        await page.mouse.click(332, 518);
         await page.mouse.click(533, 518);
         break;
     }

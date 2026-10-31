@@ -201,6 +201,11 @@ export class MatchSession implements RenderSource {
     this.#connection.queryReach(group);
   }
 
+  /** Ask for the suggested path of a supply line (#665); the `line_route` answer goes to `onServerMessage`. */
+  queryLineRoute(points: readonly number[]): void {
+    this.#connection.queryLineRoute(points);
+  }
+
   /** Queue a command; returns its `seq`. */
   send(cmd: Command): number {
     return this.#connection.send(cmd);

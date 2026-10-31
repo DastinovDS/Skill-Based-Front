@@ -58,6 +58,20 @@ export function devPath(map: MapFile, from: number, to: number): [number, ...num
   return path as [number, ...number[]];
 }
 
+/**
+ * Stand-in for `line_route` (#665) on the dev screen: the legs between the points by `devPath`, put
+ * together. The real server takes the fastest own path; this only has to look plausible.
+ */
+export function devLinePath(map: MapFile, points: readonly number[]): number[] {
+  const path: number[] = points.slice(0, 1);
+  for (let i = 1; i < points.length; i++) {
+    const leg = devPath(map, points[i - 1] as number, points[i] as number);
+    if (leg === null) return [];
+    path.push(...leg.slice(1));
+  }
+  return path;
+}
+
 /** Ticks a demo packet needs for one road of the dev screen. */
 const DEV_PACKET_TICKS = 60;
 
@@ -122,6 +136,8 @@ export function createDevServer(
   /** The front markers (DEC-28, item 2) and the rear minimum (item 3). */
   const fronts: [number | null, number | null] = [null, null];
   let rearMin = rules.supply.rear_min_default;
+  /** Economy v2: the auto-extension of the own lines (#665). */
+  let autoLines = rules.economy.model === 'v2' ? true : null;
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
@@ -142,6 +158,7 @@ export function createDevServer(
           cp: Math.max(0, base.view.me.cp - spent),
           fronts: [...fronts],
           rear_min: rearMin,
+          auto_lines: autoLines,
         },
         packets: devPackets(map, base.view.nodes, tick),
         edges: base.view.edges.map((e) => {
@@ -280,6 +297,11 @@ export function createDevServer(
         if (cmd.n === rearMin) return 'NO_CHANGE';
         rearMin = cmd.n;
         return null;
+      case 'set_auto_lines':
+        if (autoLines === null) return 'FEATURE_DISABLED';
+        if (cmd.on === autoLines) return 'NO_CHANGE';
+        autoLines = cmd.on;
+        return null;
       case 'forfeit':
         setTimeout(() => {
           socket?.reply({
@@ -364,6 +386,13 @@ export function createDevServer(
               })
             : [];
         this.reply({ type: 'reach', group: msg.group, tick, nodes, split: [] });
+      } else if (msg.type === 'line_route_query') {
+        this.reply({
+          type: 'line_route',
+          points: msg.points,
+          tick,
+          path: devLinePath(map, msg.points),
+        });
       }
     }
 

@@ -1993,6 +1993,31 @@ The owner's decision of 2026-10-31, after the mechanics audit (#639, `docs/desig
 - **Events:** the v2 kinds of #644 to #646 (`build_paid`, `charge_burned`, `factory_built`, `fort_built`, `line_cut`, `line_rerouted`, `plan_charged`) go only to their player; `line` is the per-player line id.
 - **Server:** the ruleset is chosen by `GOW_RULESET_PATH` as before (`mise run stack:agent mvp-3`); `mvp-3` is allowed in prod and its archive ships with the image; the default stays `mvp-2`. The bots of a bot match do not play v2 yet (#648).
 
+**Faster supply lines (owner decision 2026-10-31, #665; `SIM_VERSION` 30, `PROTOCOL_VERSION` 34).** After the playtest of 2026-10-31 ("laying and managing supply lines is a hard and long process ... only by mid-game I manage to set up supply lines properly") the owner approved two changes. Item 6 stays: the player chooses the path; the server's path is only a default the player confirms, and an intact path is never replaced.
+
+- **Suggested path.** The player picks the source and clicks the target; the server suggests the path and the interface draws it as a preview. Clicking another own node routes the line through it (a click on it again takes it off; Shift+click goes on to the node, the old target is passed through); Enter or a click on the target confirms it, and the client sends `draw_line` with that path, checked as before (#644). The client computes no path (`AGENTS.md`, 7.1): `line_route_query {points}` (source, the nodes to route through, target) is answered by `line_route {points, tick, path}`. **Rule of the suggestion:** each leg from one point to the next is the fastest way over own nodes (the sum of `packet_ticks`, ties by the smaller `node_key` sequence, the metric of a reroute, item 3) that avoids the nodes of the legs before it and the points after it, so the path is simple; legs are chosen one after another (a leg is not changed to make a later leg possible). The path is empty when a point is not own, repeated or out of range, or a leg has no way. Only own nodes and the public map are read, so the answer shows nothing hidden; the rules of `draw_line` (source, `lines.max_out`, cycle) are not checked by the suggestion.
+- **Auto-extension.** Key `lines.auto_extend` (`true` in `mvp-3`; default `false`, so other hashes do not change) is the start value of every player's toggle; `SetAutoLines(on)` (`set_auto_lines`, free, not public, `NO_CHANGE` for the same value, `FEATURE_DISABLED` under v1) changes it; `View.me.auto_lines` shows the own value (`null` under v1), never the enemy's. With the toggle on, in the supply step after the line checks (item 3), every **city** (not a province) the player captured in this tick that is still own and is not an own factory gets **a new line** from **the nearest suitable source**:
+  - a source is an own node that may start a line (an own factory or the target of an own line: a new line from a factory or an extension of the line tree), with fewer than `lines.max_out` lines out and no cycle closed (L4);
+  - "nearest": the fewest ticks of its fastest way over own nodes to the city (the sum of `packet_ticks`, ties of ways by the smaller `node_key` sequence); ties of sources by the smaller `node_key` of the source (4.1, rule 6);
+  - "next to it": that way takes at most `lines.auto_extend_ticks` (`100` in `mvp-3`, about two roads: a road takes 20 to 60 packet ticks on the pool maps); farther, or no source: nothing happens;
+  - the line follows that way and is an ordinary line (the player may remove it or draw others); event `line_auto` (`player`, `line`, `from_node`, `to_node`; own player only);
+  - several cities of one player captured in one tick go in `node_key` order of that player; a city joined first is a line target, so a later one may extend from it. The players are independent (each reads and changes only its own lines).
+
+| # | Setting (`mvp-3`, map `dec41`; packet ticks: 20 per 30-tick road, D-C 38) | Result |
+|---|---|---|
+| S1 | `line_route_query [K, C]` | `[K, A, B, C]` (60; K-A-D-C takes 78) |
+| S2 | `[K, D, C]` | `[K, A, D, C]` |
+| S3 | `[A, G, C]`; `[A, G]` | `[]` (the leg G -> C may not pass B again); `[A, B, G]` |
+| S4 | a point not own, repeated, out of range, one point; B lost and `[K, C]` | `[]`; `[K, A, D, C]` |
+| X1 | lines K -> A, A -> B; C (neutral) captured | line B -> C (B 20, A 40, K 60); `line_auto` |
+| X2 | as X1 plus B -> F, B -> G, B -> A -> D (B has 3 lines out) | line D -> C (38 beats A at 40) |
+| X3 | as X1, the toggle off | no line |
+| X4 | line K -> E only, `auto_extend_ticks = 50` | no line (K and E are 60 away) |
+| X5 | as X1, then the province M captured | no line for M |
+| X6 | `SetAutoLines(true)` while on; `SetAutoLines(false)`; under v1 | `NO_CHANGE`; off, free, the enemy's stays on; `FEATURE_DISABLED` |
+| X7 | as X1, C and D captured in one tick | B -> C first, then A -> D (20; C, now a source, takes 38) |
+| X8 | no lines, C captured | line K -> C along K-A-B-C (the capital is a factory) |
+
 ---
 
 ## 8. Roads
@@ -3843,7 +3868,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-36 | #537 | map geography: water cells (sea, lakes), rivers as area borders, areas of nodes touch only where a road links them; visual only, the rules do not read it | section 9 | [accepted] 2026-10-29 (W4 Painted, no dark line along water, the defaults of the open questions); supersedes DEC-27, item 3; step 1 (baker, vector file, validator `geography`) #537, step 2 (client territory) #544, step 3 (pool maps and the menu map with water, no node moved) #545 |
 | DEC-37 | #549 | an engagement zone around a node: a defender that left the node within the last `combat.engage_ticks` ticks (3) is caught into the fight as a leaving defender | section 4 | [accepted] (2026-10-29, the owner's direction, a rule change after the freeze); the number `engage_ticks = 3` [default, chosen by the orchestrator; the owner may tune it]; implemented #549 |
 | DEC-38 | #578 | capture costs a charge: a capture spends `capture.charge_cost` real charges of the capturing groups in the node, otherwise they bounce | section 4 | [accepted] (2026-10-30, the owner, all defaults: variant C, every capture costs, provinces and the capital too, bounce, G3, no virtual charges); implemented #578 (sim, protocol); `charge_cost = 0` (off) in `mvp-0`, `mvp-1`, `test-short`, BAL-02 tests `1` in `mvp-2`; `charge_cost = 1` in v2 (DEC-41) |
-| DEC-41 | #642 | economy v2: factories (capital main, built smaller, both fixed), player-drawn supply lines with reroute, supply as the currency of buildings, no stances, bunker, planned-order accumulation, province warehouse 1, capture costs a charge | section 7 | [accepted] (2026-10-31, the owner; every other default [accepted] as a starting value tuned by playtests); behind `economy.model = "v2"` (`rulesets/mvp-3.toml`), v1 unchanged; supersedes the proposal DEC-39 (#625); simulation implemented: #644 (`SIM_VERSION` 26), #645 (27), #646 (28); protocol (#647), bots (#648), client (#649) await implementation |
+| DEC-41 | #642 | economy v2: factories (capital main, built smaller, both fixed), player-drawn supply lines with reroute, supply as the currency of buildings, no stances, bunker, planned-order accumulation, province warehouse 1, capture costs a charge | section 7 | [accepted] (2026-10-31, the owner; every other default [accepted] as a starting value tuned by playtests); behind `economy.model = "v2"` (`rulesets/mvp-3.toml`), v1 unchanged; supersedes the proposal DEC-39 (#625); simulation implemented: #644 (`SIM_VERSION` 26), #645 (27), #646 (28); protocol (#647), bots (#648), client (#649) await implementation; faster lines (suggested path, auto-extension; owner decision 2026-10-31) #665 (`SIM_VERSION` 30, `PROTOCOL_VERSION` 34) |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in

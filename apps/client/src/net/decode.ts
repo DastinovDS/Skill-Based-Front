@@ -94,6 +94,7 @@ const CHECKS: Record<ServerMsg['type'], (m: Obj) => boolean> = {
     isInt(m.tick) &&
     every(m.nodes, (n) => isObj(n) && isInt(n.node) && isInt(n.ticks)) &&
     every(m.split, isInt),
+  line_route: (m) => every(m.points, isInt) && isInt(m.tick) && every(m.path, isInt),
 };
 
 function isServerType(type: unknown): type is ServerMsg['type'] {

@@ -36,6 +36,7 @@ from gow_sim.commands import (
     Recruit,
     ReleasePlan,
     RemoveLine,
+    SetAutoLines,
     SetFront,
     SetMode,
     SetRearMin,
@@ -189,6 +190,8 @@ def _decide_v2(
         cmds.append(BuildBunker(own[tick // 65 % len(own)]))
     if tick % 95 == 0:
         cmds.append(RemoveLine(tick // 95 % 3))
+    if tick % 130 == 0:  # the auto-extension off and on again (#665)
+        cmds.append(SetAutoLines(tick // 130 % 2 == 0))
     return cmds
 
 

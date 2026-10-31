@@ -62,7 +62,16 @@ def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:
         (
             "ClientMsg",
             "type",
-            {"hello", "command", "ping", "resync", "pause", "resume", "reach_query"},
+            {
+                "hello",
+                "command",
+                "ping",
+                "resync",
+                "pause",
+                "resume",
+                "reach_query",
+                "line_route_query",
+            },
         ),
         (
             "ServerMsg",
@@ -77,6 +86,7 @@ def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:
                 "pong",
                 "paused",
                 "reach",
+                "line_route",
             },
         ),
         (
@@ -103,6 +113,7 @@ def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:
                 "draw_line",
                 "remove_line",
                 "release_plan",
+                "set_auto_lines",
             },
         ),
         ("Location", "kind", {"node", "edge"}),

@@ -23,6 +23,7 @@
     "group_arrived",
     "group_split",
     "groups_merged",
+    "line_auto",
     "line_cut",
     "line_rerouted",
     "node_captured",
