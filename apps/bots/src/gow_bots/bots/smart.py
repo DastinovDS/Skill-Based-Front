@@ -123,6 +123,27 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     the capital raise the alarm (item 2) within ``alarm`` ticks of their arrival; at any other
     own node they are answered like a strike at the capital (Defense and a reinforcement).
 
+18. **The midgame and the late game** (#663; ``gow_bots.bots.estimate``). The *phase* is the
+    opening while more than a tenth of the nodes is neutral, the midgame after it, the late game
+    in the last ``LATE_AWARDS`` VP awards. Every decision estimates the enemy force (the public,
+    symmetric start units of the map plus as many recruits as the own side made, minus the enemy
+    losses of the visible fights), its *strength by node* (fresh sightings, the rest spread over
+    the unseen enemy nodes), the *sectors* (the enemy nodes next to the own territory, with the
+    support of their enemy neighbours) and the *threat* to every own front node. On a settled map
+    the spare units of the capital march to the objective (``MID_RALLY``) and the personalities
+    play their plan by class switches: ``W_WEAK`` (score per shot a sector is below the mean
+    pressure), ``MID_GOAL`` (the army rallies to the weakest sector, ``weak_spot``),
+    ``MID_GROUP`` (no attack on a garrisoned enemy node with fewer charged units: concentrated
+    breakthroughs), ``W_RING`` (score per own neighbour of the target: the encirclement),
+    ``COUNTER`` (ahead on the forecast, a garrisoned enemy node that is no weak sector is a
+    target only for ``COUNTER_TICKS`` after an enemy attack on an own node, the enemy neighbours
+    of that node first). The late game keeps
+    item 1: ahead, every attack demands ``secure_margin`` more; not ahead, all in.
+19. **The turtle** (``SmartTurtle``): the natural half in the opening; on a settled map it holds
+    while the forecast is ahead (garrisons by the threat, the spare army in the most threatened
+    front city, bunkers or Defense, the own half retaken first) and pushes the weakest sector one
+    node at a time while it is not (its docstring).
+
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
 (``Bot.key``, ``Bot.edge_keys``), nothing draws from ``self.rng``.
@@ -137,6 +158,7 @@ from typing import ClassVar, Final, override
 from gow_bots.bots.assess import FRESH_TICKS, Assessment, Assessor, Travel, edge_ticks
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option
+from gow_bots.bots.estimate import EnemyForce, Phase, Sector, phase, sectors, strengths, threats
 from gow_bots.bots.logistics import (
     Arrival,
     arrivals,
@@ -219,6 +241,10 @@ WORRY_SEEN: Final = 3
 """Enemy shots that must be seen near the capital before the fog adds to them (item 13)."""
 W_STAGE: Final = 400
 """Score added to the enemy build-up next to a worried capital (item 13)."""
+LATE_AWARDS: Final = 6
+"""The late game: the last this many VP awards (three minutes, ``estimate.phase``)."""
+COUNTER_TICKS: Final = 300
+"""How long an enemy attack on an own node opens the counterattack of ``smart_reactive``."""
 V2_RECRUIT_KEEP_MOVES: Final = 2
 """Economy v2: ``recruit_keep`` is at most this many ordinary orders (``adjusted``)."""
 STANCES: Final = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
@@ -346,6 +372,19 @@ class SmartBot(CampaignBot):
     """Percent of the hidden enemy force (``hidden_shots``) a worried capital counts (item 13)."""
     WITHDRAW_GAP: ClassVar[int] = 2
     """A garrison this many shots below a visible adjacent enemy force leaves (item 14)."""
+    W_WEAK: ClassVar[int] = 0
+    """Midgame (item 18): score per shot an enemy front sector is below the mean pressure."""
+    W_RING: ClassVar[int] = 0
+    """Midgame (item 18): score per own neighbour of an enemy target (the encirclement)."""
+    MID_GOAL: ClassVar[bool] = False
+    """Midgame (item 18): the army rallies to the weakest enemy sector, not the enemy capital."""
+    MID_GROUP: ClassVar[int] = 0
+    """Midgame (item 18): an attack on a garrisoned enemy node needs this many charged units."""
+    MID_RALLY: ClassVar[bool] = True
+    """Midgame (item 18): the spare units of the capital march without a target in reach."""
+    COUNTER: ClassVar[bool] = False
+    """Midgame (item 18): ahead on the forecast, enemy nodes are attacked only for
+    ``COUNTER_TICKS`` after an enemy attack on an own node (the counterattack)."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **_COMMON,
         "radius": ParamRange(2, 3),
@@ -452,6 +491,21 @@ class SmartBot(CampaignBot):
         self._edge_ticks: dict[tuple[int, int, int], int] = {}
         self.edge_between: dict[tuple[int, int], int] = {}
         """``(a, b)`` in both orders to the edge between the two nodes."""
+        self.enemy_force = EnemyForce(mapdef, player)
+        """The estimate of the enemy units (item 18)."""
+        self.phase = Phase.OPENING
+        self.shots: list[int] = [0] * count
+        """Enemy shots estimated by node in this decision (``estimate.strengths``)."""
+        self.sectors: list[Sector] = []
+        self.weak: dict[int, int] = {}
+        """Enemy sector to the shots its pressure is below the mean (``weakness``)."""
+        self.spot: int | None = None
+        """The weakest enemy sector of this decision (``weak_spot``)."""
+        self.threat: list[int] = [0] * count
+        """By own front node: enemy shots that can reach it (``estimate.threats``)."""
+        self.attacked_at: dict[int, int] = {}
+        """Enemy node next to an own node the enemy attacked, to the tick of that attack: its
+        garrison left it (item 18, the counterattack)."""
         for e, edef in enumerate(mapdef.edges):
             self.edge_between[(edef.a, edef.b)] = e
             self.edge_between[(edef.b, edef.a)] = e
@@ -484,11 +538,69 @@ class SmartBot(CampaignBot):
         self.watched = self.enemy_near_home(view)
         self._read_arrivals(view)
         self.watch = self._watch_nodes(view)
+        self._estimate(view)
         self.params = self.adjusted(a)
         try:
             return self._decide(view, tick, a)
         finally:
             self.params = drawn
+
+    def _estimate(self, view: PlayerView) -> None:
+        """The phase, the enemy strength by node and sector, the threats and the enemy attacks of
+        this decision (item 18; ``gow_bots.bots.estimate``)."""
+        total = self.enemy_force.update(view)
+        self.phase = phase(view, self.rules, LATE_AWARDS)
+        self.shots = strengths(view, self.map, self.neighbors, total, GUESS_UNITS)
+        self.sectors = sectors(view, self.neighbors, self.shots)
+        self.threat = threats(view, self.neighbors, self.shots)
+        self.weak, self.spot = self._weak_spots()
+        tick, me = view.tick, view.player
+        self.attacked_at = {
+            n: t for n, t in sorted(self.attacked_at.items()) if tick - t <= COUNTER_TICKS
+        }
+        for f in view.fights:
+            if f.node is None or f.attacker != 1 - me or view.nodes[f.node].owner != me:
+                continue
+            for m in self.neighbors[f.node]:
+                if view.nodes[m].owner == 1 - me:
+                    self.attacked_at[m] = tick
+
+    def settled(self) -> bool:
+        """The territory is split: the midgame or the late game (item 18)."""
+        return self.phase is not Phase.OPENING
+
+    def _weak_spots(self) -> tuple[dict[int, int], int | None]:
+        """By enemy sector the shots its pressure is below the mean of the sectors (rounded
+        down, at least 0), and the weak spot: the sector with the least pressure minus 2 shots
+        per VP it is worth, then the one nearer the enemy capital, then ``node_key`` (item 18)."""
+        secs = self.sectors
+        if not secs:
+            return {}, None
+        mean = sum(sec.pressure for sec in secs) // len(secs)
+        weak = {sec.node: max(0, mean - sec.pressure) for sec in secs}
+        far = self.hops[self.enemy_home]
+        best: tuple[int, int, int] | None = None
+        spot: int | None = None
+        for sec in secs:
+            if sec.node == self.enemy_home:
+                continue
+            vp = self.map.nodes[sec.node].vp
+            rank = (sec.pressure - 2 * vp, far[sec.node], self.key(sec.node))
+            if best is None or rank < best:
+                best, spot = rank, sec.node
+        return weak, spot
+
+    def weak_spot(self, ctx: Ctx) -> int | None:
+        """The weak spot of this decision (``_weak_spots``)."""
+        return self.spot
+
+    def weakness(self, dest: int) -> int:
+        """Shots enemy sector ``dest`` is below the mean pressure of the sectors (0 if not)."""
+        return self.weak.get(dest, 0)
+
+    def front_hold(self, node: int) -> int:
+        """Units an own node next to the enemy keeps (``hold_front``; a hook of the turtle)."""
+        return self.params["hold_front"]
 
     def adjusted(self, a: Assessment) -> dict[str, int]:
         """The drawn parameters with the thresholds of this decision (module docstring, 1);
@@ -1239,13 +1351,12 @@ class SmartBot(CampaignBot):
     def garrison(self, ctx: Ctx) -> None:
         """Fill the own nodes next to the enemy that hold fewer than ``hold_front`` units from the
         free groups within ``SEARCH_HOPS`` that may leave (VP first, then ``node_key``)."""
-        hold = self.params["hold_front"]
-        if hold <= 0:
-            return
         view = ctx.view
-        short = [n for n in range(len(view.nodes)) if self.hot[n] and ctx.standing[n] < hold]
+        holds = [self.front_hold(n) if self.hot[n] else 0 for n in range(len(view.nodes))]
+        short = [n for n in range(len(view.nodes)) if ctx.standing[n] < holds[n]]
         short.sort(key=lambda n: (-self.map.nodes[n].vp, self.key(n)))
         for node in short:
+            hold = holds[node]
             for g in self.free_groups(ctx):
                 here = node_of(g)
                 if ctx.standing[node] >= hold:
@@ -1298,7 +1409,7 @@ class SmartBot(CampaignBot):
                 return False
             return ctx.standing[here] - g.units >= self.params["guard"]
         if self.hot[here]:
-            return ctx.standing[here] - g.units >= self.params["hold_front"]
+            return ctx.standing[here] - g.units >= self.front_hold(here)
         return True
 
     @override
@@ -1313,14 +1424,17 @@ class SmartBot(CampaignBot):
                     continue
                 keep = p["guard"]
             elif self.hot[here]:
-                keep = p["hold_front"]
+                keep = self.front_hold(here)
             else:
                 continue
             spare = ctx.standing[here] - keep
             if spare < 2 or g.units <= spare:
                 continue
             army = self.fake_group(g, spare, min(spare, g.charged))
-            if self.options(ctx, [army]) and self.spend(ctx, Split(g.id, spare)):
+            # Item 18: on a settled map the spare units of the capital march to the objective
+            # even without a target in reach (a pile at home earns nothing).
+            rally = self.MID_RALLY and self.settled() and here == self.home and g.charged > keep
+            if (rally or self.options(ctx, [army])) and self.spend(ctx, Split(g.id, spare)):
                 ctx.used[g.id] = True
 
     # Targets --------------------------------------------------------------------------------
@@ -1331,12 +1445,8 @@ class SmartBot(CampaignBot):
         node = self.map.nodes[dest]
         here = node_of(g)
         hops = self.hops[here][dest]
-        region = p["region"]
-        if region > 0:
-            if ctx.view.me.cp >= self.rules.cp.cap - self.rules.cp.per_period:
-                region += p["spill"]  # CP are about to burn: the bunker grows a ring
-            if self.hops[self.home][dest] > region:
-                return None
+        if not self.in_reach(ctx, g, dest):
+            return None
         if node.capital_of is not None:
             return None if self.STRIKE_ONLY else 10_000 - hops  # item 12
         far = self.hops[self.enemy_home]
@@ -1351,12 +1461,55 @@ class SmartBot(CampaignBot):
             value += p["w_exposed"]
         if self.worry is not None and dest == self.worry.stage:
             value += W_STAGE  # item 13: hit the build-up before it strikes
+        value += self.mid_value(ctx, dest)
         return value + p["w_closer"] * closer - p["w_need"] * need - p["w_hops"] * hops
+
+    def in_reach(self, ctx: Ctx, g: GroupView, dest: int) -> bool:
+        """Whether ``dest`` may be a target at all: within ``region`` hops of the own capital
+        (``spill`` more while CP are about to burn); midgame ``COUNTER`` and ``MID_GROUP``
+        (item 18)."""
+        p = self.params
+        region = p["region"]
+        if region > 0:
+            if ctx.view.me.cp >= self.rules.cp.cap - self.rules.cp.per_period:
+                region += p["spill"]  # CP are about to burn: the bunker grows a ring
+            if self.hops[self.home][dest] > region:
+                return False
+        if not self.settled() or ctx.view.nodes[dest].owner != 1 - self.player:
+            return True
+        if self.MID_GROUP and self.shots[dest] > 0 and g.charged < self.MID_GROUP:
+            return False  # concentrated breakthroughs: no single units into a garrison
+        if self.COUNTER:
+            a = self.assessment
+            ahead = a is not None and a.ahead
+            seen = self.exposed.get(dest)
+            fresh = seen is not None and ctx.tick - seen <= EXPOSED_TICKS
+            weak = self.shots[dest] == 0 or self.weakness(dest) > 0
+            if ahead and not self.attacked_at and not fresh and not weak:
+                return False  # ahead, nothing committed, no weak spot: wait for the enemy
+        return True
+
+    def mid_value(self, ctx: Ctx, dest: int) -> int:
+        """Item 18: the score a settled map adds to an enemy target (weakness, encirclement,
+        the nodes the enemy left to attack)."""
+        if not self.settled() or ctx.view.nodes[dest].owner != 1 - self.player:
+            return 0
+        value = self.W_WEAK * self.weakness(dest)
+        if self.W_RING:
+            ring = sum(ctx.view.nodes[m].owner == self.player for m in self.neighbors[dest])
+            value += self.W_RING * ring
+        if self.COUNTER and dest in self.attacked_at:
+            value += self.params["w_exposed"]
+        return value
 
     @override
     def objective(self, ctx: Ctx) -> int:
         """Region bots gather at the edge of their region nearest the enemy; cutting bots at the
         most damaging enemy node; the rest at the enemy capital."""
+        if self.MID_GOAL and self.settled():
+            spot = self.weak_spot(ctx)
+            if spot is not None:
+                return spot
         region = self.params["region"]
         if region > 0:
             far = self.hops[self.enemy_home]
@@ -1794,6 +1947,9 @@ class SmartRusher(SmartBot):
     name: ClassVar[str] = "smart_rusher"
     STANCE: ClassVar[Stance] = Stance.WAR
     STRIKE: ClassVar[bool] = True
+    MID_GROUP: ClassVar[int] = 3
+    MID_GOAL: ClassVar[bool] = True
+    W_WEAK: ClassVar[int] = 20
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         "radius": ParamRange(3, 4),
@@ -1818,6 +1974,7 @@ class SmartStrangler(SmartBot):
     name: ClassVar[str] = "smart_strangler"
     STANCE: ClassVar[Stance] = Stance.BALANCE
     STRIKE: ClassVar[bool] = True
+    W_RING: ClassVar[int] = 60
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         "radius": ParamRange(2, 4),
@@ -1841,6 +1998,7 @@ class SmartReactive(SmartBot):
     name: ClassVar[str] = "smart_reactive"
     STANCE: ClassVar[Stance] = Stance.BALANCE
     STRIKE: ClassVar[bool] = True
+    COUNTER: ClassVar[bool] = True
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         # Tuned by ``gow-bots search`` against smart_rusher and rusher (#166, PR 3).
@@ -1865,6 +2023,8 @@ class SmartExpander(SmartBot):
     STANCE: ClassVar[Stance] = Stance.WAR
     LATE_STANCE: ClassVar[Stance | None] = Stance.BALANCE
     STRIKE: ClassVar[bool] = True
+    MID_GOAL: ClassVar[bool] = True
+    W_WEAK: ClassVar[int] = 40
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         # Tuned by ``gow-bots search`` against smart_rusher and rusher (#166, PR 3).
@@ -1888,12 +2048,28 @@ class SmartExpander(SmartBot):
 
 
 class SmartTurtle(SmartBot):
-    """The bunker (``TurtleBot``): a region of ``region`` hops around the capital, Economy, big
-    front garrisons in Defense, attacks only with a large margin."""
+    """The bunker that holds the VP lead (#663, item 19 of the module docstring).
+
+    - *Opening*: it claims its natural half of the map (the nodes no farther from the own capital
+      than from the enemy one), one ring more while the CP are about to burn; Economy (v1).
+    - *Hold* (the territory split, the VP forecast ahead): no attack outside the own half; every
+      own node next to the enemy keeps a garrison sized to the enemy shots that can reach it
+      (``estimate.threats``, at least ``hold_front``, at most ``hold_front + FRONT_EXTRA``), the
+      spare army stands in the most threatened front city, the front cities get the bunkers
+      (v2) and Defense (v1), lost nodes of the own half are retaken first.
+    - *Push* (the forecast not ahead): a slow advance, one enemy node next to the own territory
+      at a time, the weakest sector first (``weak_spot``), with the bunker's margin; the army
+      rallies there. The late game without a lead goes all in like every smart bot (item 1).
+    """
 
     name: ClassVar[str] = "smart_turtle"
     STANCE: ClassVar[Stance] = Stance.ECONOMY
-    BUNKERS: ClassVar[int] = 3
+    BUNKERS: ClassVar[int] = 4
+    FRONT_EXTRA: ClassVar[int] = 2
+    """Units a threatened front node keeps above ``hold_front`` at most."""
+    W_WEAK: ClassVar[int] = 40
+    W_RETAKE: ClassVar[int] = 300
+    """Score of an enemy node in the own half (a lost node is retaken first)."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         "radius": ParamRange(2, 3),
@@ -1907,8 +2083,94 @@ class SmartTurtle(SmartBot):
         "hold_front": ParamRange(2, 3),
         "fortify": ParamRange(1, 1),
         "road_keep": ParamRange(250, 350),
+        "respond": ParamRange(2, 2),
         "worth_defense": ParamRange(1, 1),
     }
+
+    def __init__(
+        self,
+        mapdef: MapDef,
+        rules: Ruleset,
+        *,
+        seed: int,
+        player: int,
+        difficulty: str = DEFAULT_DIFFICULTY,
+    ) -> None:
+        super().__init__(mapdef, rules, seed=seed, player=player, difficulty=difficulty)
+        near, far = self.hops[self.home], self.hops[self.enemy_home]
+        count = len(mapdef.nodes)
+        self.half: list[bool] = [0 <= near[n] <= far[n] for n in range(count)]
+        """The natural half: no farther from the own capital than from the enemy one."""
+        self.ring: list[int] = [0 if self.half[n] else count for n in range(count)]
+        """Hops from the half (0 inside it)."""
+        queue = deque(n for n in range(count) if self.half[n])
+        while queue:
+            n = queue.popleft()
+            for m in self.neighbors[n]:
+                if self.ring[m] > self.ring[n] + 1:
+                    self.ring[m] = self.ring[n] + 1
+                    queue.append(m)
+
+    def pushing(self) -> bool:
+        """The territory is split and the forecast is not ahead: the slow advance."""
+        a = self.assessment
+        return self.settled() and (a is None or not a.ahead)
+
+    @override
+    def in_reach(self, ctx: Ctx, g: GroupView, dest: int) -> bool:
+        if self.pushing():
+            return True  # ``reachable`` ends at the first foreign node: next to the territory
+        spill = 0
+        if ctx.view.me.cp >= self.rules.cp.cap - self.rules.cp.per_period:
+            spill = self.params["spill"]  # CP are about to burn: one ring more
+        if self.settled():
+            spill = min(spill, 1)
+        return self.ring[dest] <= spill
+
+    @override
+    def mid_value(self, ctx: Ctx, dest: int) -> int:
+        if ctx.view.nodes[dest].owner != 1 - self.player:
+            return 0
+        value = self.W_RETAKE if self.half[dest] else 0
+        if self.pushing():
+            value += self.W_WEAK * self.weakness(dest)
+            if dest == self.weak_spot(ctx):
+                value += self.W_WEAK * 2
+        return value
+
+    @override
+    def front_hold(self, node: int) -> int:
+        hold = self.params["hold_front"]
+        if not self.settled():
+            return hold
+        if self.pushing():  # the army is needed for the advance: what the threat asks, no more
+            return max(1, min(hold, self.threat[node] + 1))
+        return max(hold, min(self.threat[node] + 1, hold + self.FRONT_EXTRA))
+
+    @override
+    def objective(self, ctx: Ctx) -> int:
+        """Opening: the own node of the half nearest the enemy capital; hold: the own front city
+        under the most threat; push: the weakest enemy sector."""
+        view = ctx.view
+        if self.pushing():
+            spot = self.weak_spot(ctx)
+            if spot is not None:
+                return spot
+        far = self.hops[self.enemy_home]
+        own = [n.id for n in view.nodes if n.owner == self.player]
+        if self.settled():
+            front = [n for n in own if self.hot[n] and self._is_city(n)]
+            if front:
+                return max(
+                    front,
+                    key=lambda n: (
+                        self.threat[n] - ctx.standing[n],
+                        self.map.nodes[n].vp,
+                        -self.key(n),
+                    ),
+                )
+        inside = [n for n in own if self.half[n]]
+        return min(inside, key=lambda n: (far[n], self.key(n)), default=self.home)
 
 
 PERSONALITIES: Final[tuple[type[SmartBot], ...]] = (

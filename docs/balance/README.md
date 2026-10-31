@@ -336,6 +336,31 @@ can gather a bonus. The CP keeps of the v1 personalities (`reserve`, `recruit_ke
 has no Defense to keep CP for and doubles the CP income. Under v1 the play is unchanged (the same `state_hash` on
 `mvp-2`).
 
+## Bot characters (#663)
+
+The smart personalities differ in the opening, the midgame and the late game, not only in the opening. The phase
+is read from public data (`gow_bots.bots.estimate`): the **opening** while more than a tenth of the nodes is neutral,
+the **midgame** after it, the **late game** in the last 6 VP awards (3 minutes). On a settled map every smart bot
+estimates the enemy force from public data only (the symmetric start units of the map, as many recruits as it made
+itself, since the CP income is flat and the same for both, minus the enemy losses of the visible fights), spreads the
+part it does not see over the unseen enemy nodes, and ranks the enemy front sectors by their pressure (the shots in the
+node plus half of its enemy neighbours'): the least pressed sector is the *weak spot*. The VP forecast of `assess.py`
+(the VP now plus the VP of the cities owned now at every award left) decides "ahead" or "not ahead".
+
+| Personality | Opening | Midgame (the territory split) | Late game |
+|---|---|---|---|
+| `smart_turtle` (Bunker) | claims its natural half (nodes no farther from its capital than from the enemy one), one ring more while CP burn; Economy | ahead on the forecast: holds, every front node keeps a garrison sized to the enemy shots that can reach it, the spare army stands in the most threatened front city, bunkers (v2) and Defense (v1), lost nodes of the half retaken first; not ahead: a slow advance, one enemy node next to the territory at a time, the weakest sector first | the same; not ahead, all in |
+| `smart_expander` (Expander) | War, neutral cities weigh like enemy ones, a wide radius | pushes the weakest sector: the army rallies to the weak spot, targets score by how far below the mean pressure they are | ahead: secure margin; not ahead: all in |
+| `smart_rusher` (Rusher) | War, enemy cities near the enemy capital first, small guard | concentrated breakthroughs: no attack on a garrisoned enemy node with fewer than 3 charged units, the army rallies to the weak spot nearest the enemy capital, converging strikes on the capital | as midgame; not ahead: all in |
+| `smart_strangler` (Strangler) | Balance, cuts the enemy supply network | encircles: the most damaging cut first, every own neighbour of a target adds to it, cut-off cities are besieged | as midgame; not ahead: all in |
+| `smart_reactive` (Counter) | Balance, answers every visible strike, Defense on the front | counterattacks: ahead on the forecast it attacks enemy nodes only within 30 s after an enemy attack on its territory (the neighbours of the attacked node first, their garrisons left); not ahead, it attacks without waiting | as midgame; not ahead: all in |
+| `smart_hoarder` (benchmark) | War, claims in groups of 2+, the centre barracks | from tick 2400..3600 the build-up at the centre, then the stage next to the enemy capital, the converging strike | not ahead: the strike goes without waiting for the build-up |
+
+Every smart bot on a settled map also sends the spare units of its capital toward its objective (a pile at home earns
+no VP), except the benchmark, whose build-up does that itself. The tempo levels (`easy`, `normal`, `hard`) keep their
+meaning: an `easy` bot reads the phase and the sectors too, but thinks, reacts and acts at its tempo and has no
+`insight` (section "Difficulty levels and tempo").
+
 ## Budget
 
 AGENTS.md, section 12: 1000 matches on 8 cores of the reference machine in no more than 20 minutes. A match

@@ -5,7 +5,7 @@
 The match is ``private`` (unrated, one pause per player, DEC-05).
 
 Difficulty levels are smart bots with a tempo level (``bot_factory``, ``smart_reactive@easy``),
-ordered by strength in the tournament of #574 on ``mvp-2`` (``docs/balance/log.md``); the
+ordered by strength in the tournaments of #574 and #663 (``docs/balance/log.md``); the
 parameters of a bot vary with the match seed (``choose_params``).
 The player's side is random, like in an invite.
 An account has at most one active match of any kind (409, SRV-09): a bot match costs server CPU.
@@ -34,7 +34,7 @@ Level = Literal["easy", "normal", "hard", "expert"]
 
 LEVEL_BOTS: Final[dict[Level, str]] = {
     "easy": "smart_turtle@easy",
-    "normal": "smart_reactive@easy",
+    "normal": "smart_reactive@normal",
     "hard": "smart_strangler@hard",
     "expert": "smart_expander@hard",
 }
