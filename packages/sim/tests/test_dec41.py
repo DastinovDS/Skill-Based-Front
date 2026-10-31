@@ -15,6 +15,7 @@ D-C 57, K-E 42, C-M 48; M = 8 is a neutral province in the middle; player 1 owns
 """
 
 import tomllib
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -137,6 +138,14 @@ def test_mvp3_is_mvp2_with_the_v2_keys() -> None:
         "max": 3,
     }
     expected["lines"] = {"max_out": 3}
+    # #645, items 7, 12, 13: buildings paid in charges instead of CP, the bunker, the province
+    # warehouse.
+    expected["orders"]["cost"]["barracks"] = 0
+    expected["orders"]["cost"]["warehouse"] = 0
+    expected["city_upgrades"]["barracks_charges"] = 3
+    expected["city_upgrades"]["warehouse_charges"] = 2
+    expected["warehouse"]["province"] = 1
+    expected["bunker"] = {"cost": 3, "build_ticks": 100, "shots": 1}
     assert to_canonical(RULES) == expected
     assert parse_ruleset(expected) == RULES
     assert RULES.v2 and RULES.economy.model is EconomyModel.V2
@@ -315,8 +324,8 @@ def test_build_factory_checks() -> None:
     assert _code(_cmd(state, BuildFactory(K))) is RejectCode.ALREADY_BUILT
     state.nodes[M].owner = 0
     assert _code(_cmd(state, BuildFactory(M))) is RejectCode.NOT_CITY
-    state.nodes[A].warehouse = 2
-    assert _code(_cmd(state, BuildFactory(A))) is RejectCode.NOT_ENOUGH_CHARGES
+    # #645, item 7: the payment is progressive, so an empty warehouse does not reject it.
+    assert isinstance(_cmd(state, BuildFactory(A)), Ok)
 
 
 def test_at_most_three_factories_with_the_capital_and_the_builds() -> None:
@@ -418,10 +427,15 @@ def test_draw_line_checks(path: tuple[int, ...], code: RejectCode) -> None:
     assert _code(_cmd(state, DrawLine(path))) is code
 
 
-def test_a_line_ends_in_a_city() -> None:
+def test_a_line_ends_in_a_node_with_a_warehouse() -> None:
+    """A city, or a province with its warehouse of 1 (item 13, #645); a node without a warehouse
+    (a province under a ruleset with ``warehouse.province = 0``) is ``NOT_CITY``."""
     state = _state(10)
     state.nodes[M].owner = 0
-    assert _code(_cmd(state, DrawLine((K, A, B, C, M)))) is RejectCode.NOT_CITY
+    assert isinstance(_cmd(state, DrawLine((K, A, B, C, M))), Ok)
+    rules = replace(RULES, warehouse=replace(RULES.warehouse, province=0))
+    results, _ = apply_commands(state, rules, [PlayerCommand(0, 0, DrawLine((K, A, B, C, M)))])
+    assert _code(results[0].outcome) is RejectCode.NOT_CITY
 
 
 def test_at_most_three_lines_start_at_a_node() -> None:

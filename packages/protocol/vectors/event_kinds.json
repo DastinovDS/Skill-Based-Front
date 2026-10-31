@@ -4,6 +4,7 @@
   "kinds": [
     "attrition",
     "barracks_built",
+    "build_paid",
     "build_started",
     "build_stopped",
     "capture_failed",
@@ -17,6 +18,7 @@
     "fight_round",
     "fight_started",
     "forfeit",
+    "fort_built",
     "front_set",
     "group_arrived",
     "group_split",

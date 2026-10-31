@@ -11,8 +11,9 @@ Rules for this module (AGENTS.md, section 4):
 id, so the canonical JSON and ``state_hash()`` do not depend on dict insertion order or
 ``PYTHONHASHSEED``. The static map is embedded in the file format (``map_to_data``), so the
 canonical form alone restores the state: ``from_canonical(to_canonical(s)) == s``. The fields of
-the economy v2 (DEC-41: factories, lines, the relay round robin) are written only when they differ
-from their defaults, so a v1 state has the canonical form and the hash it had before them.
+the economy v2 (DEC-41: factories, lines, the relay round robin, bunkers, the charges a build
+still owes) are written only when they differ from their defaults, so a v1 state has the
+canonical form and the hash it had before them.
 """
 
 from collections.abc import Callable
@@ -264,23 +265,31 @@ class Build:
     ``kind``: a road level (``UpgradeRoad(edge)``, ``edge`` set), the barracks or a warehouse
     level (``edge`` is ``None``). ``owner``: the player who started it; a road build holds while
     ``edge`` is internal for them, the others while the city is theirs. ``since``: the tick the
-    command was applied; the build ends ``build.ticks_per_level`` (road),
-    ``city_upgrades.barracks_ticks`` or ``city_upgrades.warehouse_ticks`` ticks later.
+    build time started, the tick the command was applied unless it waits for its payment; the
+    build ends ``build.ticks_per_level`` (road), ``city_upgrades.barracks_ticks`` or
+    ``city_upgrades.warehouse_ticks`` ticks later. ``owed``: the charges still to pay under the
+    economy v2 (DEC-41, item 7, the progressive payment); while it is above 0 the build time has
+    not started. Always 0 under v1.
     """
 
     edge: int | None
     owner: int
     since: int
     kind: BuildKind = BuildKind.ROAD
+    owed: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class FactoryBuild:
-    """A factory being built in a city (DEC-41, item 2): by ``owner`` since the tick ``since``;
-    it holds while the city is theirs and ends ``factory.build_ticks`` later."""
+    """A factory (DEC-41, item 2) or a bunker (item 12, ``Node.fort_build``) being built: by
+    ``owner``, the build time started at the tick ``since``; it holds while the node is theirs and
+    ends ``factory.build_ticks`` (``bunker.build_ticks``) later. ``owed``: the charges still to
+    pay (item 7, the progressive payment); while it is above 0 the build time has not started and
+    ``since`` is the tick of the command."""
 
     owner: int
     since: int
+    owed: int = 0
 
 
 @dataclass(slots=True)
@@ -325,6 +334,11 @@ class Node:
     ``warehouse``. 0 for a node without outgoing lines."""
     rr: int = 0
     """The slot of the relay's round robin that gets the next charge (DEC-41, item 3)."""
+    fort: bool = False
+    """The node has a bunker of its owner (DEC-41, item 12; code name ``fort``); destroyed when
+    the node is captured (``systems.capacity.change_owner``)."""
+    fort_build: FactoryBuild | None = None
+    """The bunker being built here (DEC-41, item 12); ``None``: none."""
 
 
 @dataclass(slots=True)
@@ -650,7 +664,11 @@ def _v2_node_data(n: Node) -> dict[str, object]:
     if n.factory is not None:
         data["factory"] = n.factory
     if n.factory_build is not None:
-        data["factory_build"] = {"owner": n.factory_build.owner, "since": n.factory_build.since}
+        data["factory_build"] = _site_build_data(n.factory_build)
+    if n.fort:
+        data["fort"] = True
+    if n.fort_build is not None:
+        data["fort_build"] = _site_build_data(n.fort_build)
     if n.inbox:
         data["inbox"] = n.inbox
     if n.rr:
@@ -661,7 +679,22 @@ def _v2_node_data(n: Node) -> dict[str, object]:
 def _build_data(b: Build | None) -> dict[str, object] | None:
     if b is None:
         return None
-    return {"edge": b.edge, "owner": b.owner, "since": b.since, "kind": b.kind.value}
+    data: dict[str, object] = {
+        "edge": b.edge,
+        "owner": b.owner,
+        "since": b.since,
+        "kind": b.kind.value,
+    }
+    if b.owed:  # the economy v2 only (DEC-41, item 7): a v1 build keeps its canonical form
+        data["owed"] = b.owed
+    return data
+
+
+def _site_build_data(b: FactoryBuild) -> dict[str, object]:
+    data: dict[str, object] = {"owner": b.owner, "since": b.since}
+    if b.owed:
+        data["owed"] = b.owed
+    return data
 
 
 def _location_data(loc: Location) -> dict[str, object]:
@@ -914,15 +947,8 @@ def _parse_node(data: object, where: str) -> Node:
             "has_barracks",
             "warehouse_level",
         ),
-        optional=("factory", "factory_build", "inbox", "rr"),
+        optional=("factory", "factory_build", "inbox", "rr", "fort", "fort_build"),
     )
-    factory_build = raw.get("factory_build")
-    if factory_build is not None:
-        fb = _obj(factory_build, f"{where}.factory_build", ("owner", "since"))
-        factory_build = FactoryBuild(
-            owner=_int(fb["owner"], f"{where}.factory_build.owner", low=0),
-            since=_int(fb["since"], f"{where}.factory_build.since", low=0),
-        )
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
         owner=_opt_int(raw["owner"], f"{where}.owner"),
@@ -936,19 +962,33 @@ def _parse_node(data: object, where: str) -> Node:
         has_barracks=_bool(raw["has_barracks"], f"{where}.has_barracks"),
         warehouse_level=_int(raw["warehouse_level"], f"{where}.warehouse_level", low=0),
         factory=_opt_int(raw.get("factory"), f"{where}.factory"),
-        factory_build=factory_build,
+        factory_build=_parse_site_build(raw.get("factory_build"), f"{where}.factory_build"),
         inbox=_int(raw.get("inbox", 0), f"{where}.inbox", low=0),
         rr=_int(raw.get("rr", 0), f"{where}.rr", low=0),
+        fort=_bool(raw.get("fort", False), f"{where}.fort"),
+        fort_build=_parse_site_build(raw.get("fort_build"), f"{where}.fort_build"),
+    )
+
+
+def _parse_site_build(data: object, where: str) -> FactoryBuild | None:
+    if data is None:
+        return None
+    raw = _obj(data, where, ("owner", "since"), optional=("owed",))
+    return FactoryBuild(
+        owner=_int(raw["owner"], f"{where}.owner", low=0),
+        since=_int(raw["since"], f"{where}.since", low=0),
+        owed=_int(raw.get("owed", 0), f"{where}.owed", low=0),
     )
 
 
 def _parse_build(data: object, where: str) -> Build:
-    raw = _obj(data, where, ("edge", "owner", "since", "kind"))
+    raw = _obj(data, where, ("edge", "owner", "since", "kind"), optional=("owed",))
     return Build(
         edge=_opt_int(raw["edge"], f"{where}.edge"),
         owner=_int(raw["owner"], f"{where}.owner", low=0),
         since=_int(raw["since"], f"{where}.since", low=0),
         kind=BuildKind(_choice(raw["kind"], f"{where}.kind", BuildKind)),
+        owed=_int(raw.get("owed", 0), f"{where}.owed", low=0),
     )
 
 

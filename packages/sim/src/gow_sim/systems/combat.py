@@ -40,6 +40,8 @@ the terrain of the node count only for a defender that has a charged unit at con
 "Defense" only for groups standing there from the start. "Defense" brings what it has gathered,
 capped by the charged units of the group at contact; joining a fight resets its count (DEC-30).
 Mountains add virtual shots, plains silence real ones in every round (``terrain.defense_mod``).
+A bunker of the node (economy v2, DEC-41, item 12) adds ``bunker.shots`` virtual shots to the
+defender on the same condition as the terrain.
 
 Events: ``fight_started``, ``fight_round``, ``fight_ended`` (both players, every field: the
 shots of both sides with the virtual ones apart, the spent charges and the losses; DEC-24 items
@@ -470,6 +472,9 @@ def _node_contacts(
             # Item F2: the defender has a charged unit at contact, so terrain counts to the end.
             mod = rules.terrain.defense_mod.of(state.map.nodes[node_id].terrain)
             _add_virtual(fight, defender, max(0, mod))
+            # DEC-41, item 12: the bunker, like the terrain; TODO(#651): node fights only.
+            if state.nodes[node_id].fort:
+                _add_virtual(fight, defender, rules.bunker_rules().shots)
             mute = [0, 0]
             mute[defender] = max(0, -mod)
             fight.mute = (mute[0], mute[1])

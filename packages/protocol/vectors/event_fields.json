@@ -21,6 +21,17 @@
       ],
       "ids": []
     },
+    "build_paid": {
+      "fields": [
+        "kind",
+        "node",
+        "owed",
+        "player",
+        "units",
+        "warehouse"
+      ],
+      "ids": []
+    },
     "build_started": {
       "fields": [
         "edge",
@@ -162,6 +173,13 @@
     },
     "forfeit": {
       "fields": [
+        "player"
+      ],
+      "ids": []
+    },
+    "fort_built": {
+      "fields": [
+        "node",
         "player"
       ],
       "ids": []

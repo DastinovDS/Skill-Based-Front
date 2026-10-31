@@ -14,8 +14,9 @@ type on a fixed schedule (planned moves, splits, merges, modes, stances, road up
 priorities and transfers, cancellations while waiting and on an edge, recruit cancellations,
 barracks and warehouse upgrades, unknown ids), so the replays go through every command path and
 many rejections. The games cover ``mvp-0``, ``mvp-1`` (``city_upgrades`` on, DEC-26) and the
-economy v2 of ``mvp-3`` (DEC-41): there ``MixBot`` also builds factories, draws supply lines from
-its capital and from their targets and removes them, and its v1-only commands are rejected.
+economy v2 of ``mvp-3`` (DEC-41): there ``MixBot`` also builds factories and bunkers (paid in
+charges, #645), draws supply lines from its capital and from their targets and removes them, and
+its v1-only commands (and "Defense") are rejected.
 """
 
 import argparse
@@ -29,6 +30,7 @@ from pathlib import Path
 
 from gow_sim.commands import (
     BuildBarracks,
+    BuildBunker,
     BuildFactory,
     CancelOrder,
     CancelRecruit,
@@ -148,6 +150,9 @@ class MixBot:
                 cmds.append(DrawLine(path))
         if k % 41 == 0 and cities:
             cmds.append(BuildFactory(cities[k % len(cities)]))
+        own = [n.id for n in view.nodes if n.owner == me]
+        if k % 29 == 0 and own:  # a bunker in a city or a province (#645)
+            cmds.append(BuildBunker(own[k // 29 % len(own)]))
         if k % 53 == 0:
             cmds.append(RemoveLine(k // 53 % 4))
         return cmds

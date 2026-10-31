@@ -549,7 +549,9 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | scheduled order | `planned=True` | more expensive, visible to everyone as an intent, sets out with a delay, gives a one-off bonus |
 | fight | `Fight` | a fight over time (DEC-24): a node or an edge with a meeting point `point`, rounds every `combat.round_ticks`, reinforcements and retreat; visible to both (`PlayerView.fights`) |
 | intent | `Intent` | the part of a scheduled order visible to everyone: from where, to where, the kind, without the size and group id |
-| modes | `Mode.ATTACK / DEFENSE` | "Attack", "Defense"; "Building" (`BUILD`) was removed by DEC-16 |
+| modes | `Mode.ATTACK / DEFENSE` | "Attack", "Defense"; "Building" (`BUILD`) was removed by DEC-16; economy v2 has no "Defense" (DEC-41, item 5) |
+| bunker | `Node.fort`, `BuildBunker` | economy v2: a building of a city or a province, +`bunker.shots` virtual shots to a charged defender in every fight there, destroyed on capture (DEC-41, item 12) |
+| progressive payment | `Build.owed`, `systems.build.pay` | economy v2: a building takes charges from the node warehouse, then from the own standing groups, until paid; its build time starts then (DEC-41, item 7) |
 | construction | `UpgradeRoad(edge)` | upgrading your own internal road by one level for CP (`orders.cost.build`), construction on an edge `Edge.build` (DEC-28, item 7) |
 | CP | `cp` | command points; flat regeneration, they do not grow with territory; stored in hundredths |
 | stance | `Stance.ECONOMY / BALANCE / WAR` | the share of CP regeneration that goes into charges |

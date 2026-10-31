@@ -8,7 +8,8 @@ Capacity (DEC-22, item 1, replaces the road-dependent formula of SIM-07):
 - The same number limits the units standing in the city and, without ``city_upgrades``,
   separately its warehouse (DEC-22, item 1). With ``city_upgrades`` the warehouse has its own
   capacity ``warehouse.start_by_kind[kind] + level * warehouse.gain_per_level`` (DEC-26, item 2;
-  ``warehouse_capacity``); provinces have no warehouse (DEC-23).
+  ``warehouse_capacity``); provinces have no warehouse (DEC-23), under the economy v2 one of
+  ``warehouse.province`` (DEC-41, item 13).
 - Supplied territory of a player (the cut-off cities of DEC-19): the nodes
   reachable from the own capital over own nodes; every edge between two own nodes is internal,
   so this is a BFS over internal edges.
@@ -39,7 +40,8 @@ Every owner change goes through ``change_owner()``: the warehouse is emptied (no
 mechanics.md, section 9), road levels, the barracks and the warehouse level are kept (DEC-26,
 item 4), the recruit queue of the former owner is lost without a refund (DEC-25,
 item 10), the grace period starts. Under the economy v2 (DEC-41) the relay state of the node goes
-with the warehouse; its factory and its lines are settled by ``systems.supply`` in the same tick.
+with the warehouse and a bunker is destroyed (item 12); its factory and its lines are settled by
+``systems.supply`` in the same tick, a factory or bunker build is stopped by ``systems.build``.
 
 Under the economy v2 there is no starvation (DEC-41, item 5).
 """
@@ -141,8 +143,11 @@ def city_capacity(state: GameState, rules: Ruleset, node: int) -> int:
 def warehouse_capacity(state: GameState, rules: Ruleset, node: int) -> int:
     """Charges the warehouse of ``node`` holds: the node capacity without ``city_upgrades``
     (DEC-22, item 1); with it ``start_by_kind[kind] + level * gain_per_level`` (DEC-26, item 2),
-    0 for a province."""
+    0 for a province. Under the economy v2 a province holds ``warehouse.province`` (DEC-41,
+    item 13: always 1 in ``mvp-3``)."""
     kind = state.map.nodes[node].kind
+    if rules.v2 and kind is NodeKind.PROVINCE:
+        return rules.warehouse.province
     if not rules.city_upgrades.enabled:
         return rules.capacity.by_kind.of(kind)
     w = rules.warehouse
@@ -153,7 +158,7 @@ def warehouse_capacity(state: GameState, rules: Ruleset, node: int) -> int:
 
 def warehouse_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
     """``warehouse_capacity`` of every node, ``result[node_id]``. O(V)."""
-    if not rules.city_upgrades.enabled:
+    if not rules.city_upgrades.enabled and not rules.v2:
         return node_capacities(state, rules)
     return tuple(warehouse_capacity(state, rules, n) for n in range(len(state.map.nodes)))
 
@@ -189,6 +194,7 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     n.warehouse = 0
     n.inbox = 0  # the relay state of DEC-41 goes with the warehouse
     n.rr = 0
+    n.fort = False  # DEC-41, item 12: a bunker is destroyed on capture, it does not pass
     n.cut_since = None
     n.over_ticks = 0
     n.captured_tick = state.tick

@@ -84,8 +84,8 @@ stance = 0 # changing the stance is free (DEC-02, #8)
 front = 0 # SetFront(marker, node): moving a front marker is free (DEC-28, item 2)
 rear_min = 0 # SetRearMin(n): changing the rear minimum is free (DEC-28, item 3)
 transfer = 0 # Transfer(from, to, n): a one-off transfer of charges is free (DEC-18, #230)
-barracks = 300 # BuildBarracks(node): 3 CP, only with city_upgrades.enabled (DEC-26, #265)
-warehouse = 200 # UpgradeWarehouse(node): 2 CP per level, only with city_upgrades.enabled (DEC-26)
+barracks = 0 # BuildBarracks(node): no CP in v2, paid in charges (city_upgrades.barracks_charges, DEC-41, item 7)
+warehouse = 0 # UpgradeWarehouse(node): no CP in v2, paid in charges (city_upgrades.warehouse_charges, DEC-41, item 7)
 
 [terrain.defense_mod]
 # Terrain modifier of the node defender's pool, in charges (DEC-07, #11, rule 1; mechanics.md, section 4).
@@ -213,8 +213,10 @@ capital_multiplier = 3
 # with a barracks recruit (NO_BARRACKS), recruit.location has no effect; a city's warehouse follows [warehouse];
 # a barracks and a warehouse take one construction slot of the city (CITY_BUSY).
 enabled = true
-barracks_ticks = 100 # BuildBarracks: the barracks appears after 10 s, orders.cost.barracks is paid at the start
-warehouse_ticks = 100 # UpgradeWarehouse: the warehouse level after 10 s, orders.cost.warehouse is paid at the start
+barracks_ticks = 100 # BuildBarracks: the barracks appears 10 s after the full payment
+warehouse_ticks = 100 # UpgradeWarehouse: the warehouse level 10 s after the full payment
+barracks_charges = 3 # DEC-41, item 7: the barracks costs 3 charges instead of CP (progressive payment; the 10 s run after the full payment)
+warehouse_charges = 2 # DEC-41, item 7: every warehouse level costs 2 charges instead of CP
 
 [warehouse]
 # Warehouse capacity of a city with city_upgrades.enabled = true (DEC-26, item 2):
@@ -222,6 +224,7 @@ warehouse_ticks = 100 # UpgradeWarehouse: the warehouse level after 10 s, orders
 # The warehouse at the start: min(the map's start_stock, the warehouse capacity), the excess is discarded (item 5).
 gain_per_level = 1 # +1 charge per level
 max_level = 2 # two upgrades
+province = 1 # DEC-41, item 13: a province has a warehouse of 1, always
 
 [warehouse.start_by_kind]
 # Warehouse capacity at level 0 by city kind.
@@ -265,8 +268,8 @@ mountains = "range"
 # the charge (event charge_burned). The own capital is the main factory from the start.
 capital_period_ticks = 50 # the capital: 1 charge per 5 s
 built_period_ticks = 100 # every other factory (built or captured, a captured capital too): 1 charge per 10 s
-cost = 4 # BuildFactory(node): 4 charges from the city warehouse at the start (progressive payment: #645)
-build_ticks = 100 # the factory works 10 s after BuildFactory
+cost = 4 # BuildFactory(node): 4 charges, the progressive payment of DEC-41, item 7 (the warehouse, then the own groups standing there)
+build_ticks = 100 # the factory works 10 s after the full payment
 max = 3 # factories of a player at most, the capital and the builds under way included
 
 [lines]
@@ -274,3 +277,8 @@ max = 3 # factories of a player at most, the capital and the builds under way in
 # target of an own line to an own city; each line carries 1 charge per supply.dispatch_ticks on its turn
 # of the round robin of its source node. Drawing and removing a line is free.
 max_out = 3 # lines that start at one node at most (L4)
+
+[bunker]
+cost = 3 # BuildBunker(node): 3 charges, the progressive payment of DEC-41, item 7 (code name fort)
+build_ticks = 100 # the bunker stands 10 s after the full payment
+shots = 1 # +1 virtual shot to the node's defender in every fight there, if it has a charged unit (DEC-41, item 12)
