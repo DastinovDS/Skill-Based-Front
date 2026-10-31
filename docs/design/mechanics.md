@@ -2003,6 +2003,8 @@ The owner's decision of 2026-10-31, after the mechanics audit (#639, `docs/desig
   - the line follows that way and is an ordinary line (the player may remove it or draw others); event `line_auto` (`player`, `line`, `from_node`, `to_node`; own player only);
   - several cities of one player captured in one tick go in `node_key` order of that player; a city joined first is a line target, so a later one may extend from it. The players are independent (each reads and changes only its own lines).
 
+Confirmed by the owner on 2026-10-31: items (1) radius by packet ticks, (2) works without an existing line, (3) cities only.
+
 | # | Setting (`mvp-3`, map `dec41`; packet ticks: 20 per 30-tick road, D-C 38) | Result |
 |---|---|---|
 | S1 | `line_route_query [K, C]` | `[K, A, B, C]` (60; K-A-D-C takes 78) |
