@@ -20,7 +20,7 @@ export const BOT_CELLS = 4;
 export const BOT_STYLES: Readonly<Record<BotLevel, BotStyle>> = {
   easy: { bot: 'smart_turtle@easy', style: 'bot.style.easy', desc: 'bot.desc.easy', cells: 1 },
   normal: {
-    bot: 'smart_reactive@easy',
+    bot: 'smart_reactive@normal',
     style: 'bot.style.normal',
     desc: 'bot.desc.normal',
     cells: 2,

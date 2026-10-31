@@ -737,3 +737,78 @@ No crash, decisions within budget (local, the 3 pool maps, all decide calls: p99
 `test_bench_decide_smart_v2_views` keeps the mean under 1 ms), v1 unchanged. Two gates of #648 are not met and are a
 finding for #659, not a rule change here: a bot above 0.80 (the hard expander 0.88, the hard rusher 0.82) and the hoarder
 is no longer the strongest bot (0.70). The relay reading of #644 (a full relay skips its incoming line) is noted on #651.
+
+## Midgame and late-game characters of the smart bots (#663)
+
+The owner (2026-10-31): a turtle that sits near its start and loses adds wins to the aggressive bots and paints an
+imbalance toward one strategy; the characters should show after the territory is split too. #663 adds the shared
+estimation `gow_bots.bots.estimate` (the phase, the enemy force from the symmetric start units, the own recruits and the
+visible enemy losses, the strength by node and the front sectors, public data only) and a midgame plan to every
+personality (the table of [README.md](README.md), "Bot characters"); the turtle is rewritten: its natural half in the
+opening, then it holds while the VP forecast is ahead (garrisons by the threat, bunkers or Defense, the half retaken)
+and advances at the weakest sector while it is not. No rule or ruleset number changed (`SIM_VERSION` 29).
+
+### Runs
+
+All on GitHub runners, the 16-bot field (15 smart bots, 5 personalities x 3 levels, and `smart_hoarder`), the 3 pool
+maps, seeds 0..19, both sides, 15360 matches each; no crash.
+
+| run | ruleset | code | runner run |
+|---|---|---|---|
+| before | `mvp-3` (hash `bcea544177702fae1f939a9910c396e0`) | `develop` 8e7a0cd | 41226875725 |
+| before | `mvp-2` (hash `9d8cc4dd4b48572ad2be415c2fcc4d4c`) | `develop` 8e7a0cd | 41226900200 |
+| after | `mvp-3` | PR of #663 | 41235493261 |
+| after | `mvp-2` | PR of #663 | 41235511592 |
+
+Iterations on the branch (8 bots or seeds 0..9): 41227687540, 41228042049 (a counter gate that kept the reactive out
+of every attack while ahead: `smart_reactive@hard` 0.50 -> 0.35 on `mvp-3`; softened to open on empty nodes and
+weak sectors), 41231137227.
+
+### Win rate against the other 15 [95%]
+
+| bot | `mvp-3` before | `mvp-3` after | `mvp-2` before | `mvp-2` after |
+|---|---|---|---|---|
+| smart_turtle@hard | 0.17 [0.15; 0.18] | 0.84 [0.82; 0.85] | 0.08 [0.07; 0.10] | 0.29 [0.27; 0.31] |
+| smart_expander@hard | 0.88 [0.87; 0.90] | 0.81 [0.79; 0.83] | 0.68 [0.66; 0.70] | 0.62 [0.60; 0.64] |
+| smart_expander@normal | 0.82 [0.80; 0.84] | 0.75 [0.73; 0.77] | 0.68 [0.66; 0.70] | 0.64 [0.62; 0.66] |
+| smart_turtle@normal | 0.25 [0.23; 0.27] | 0.74 [0.72; 0.76] | 0.08 [0.07; 0.09] | 0.28 [0.26; 0.30] |
+| smart_rusher@hard | 0.83 [0.81; 0.85] | 0.71 [0.69; 0.73] | 0.64 [0.61; 0.66] | 0.61 [0.59; 0.63] |
+| smart_hoarder | 0.75 [0.73; 0.77] | 0.65 [0.62; 0.67] | 0.73 [0.71; 0.75] | 0.72 [0.70; 0.74] |
+| smart_strangler@hard | 0.73 [0.71; 0.75] | 0.60 [0.58; 0.63] | 0.65 [0.62; 0.67] | 0.59 [0.57; 0.61] |
+| smart_rusher@normal | 0.71 [0.69; 0.73] | 0.59 [0.56; 0.61] | 0.62 [0.60; 0.64] | 0.61 [0.59; 0.63] |
+| smart_reactive@hard | 0.59 [0.57; 0.61] | 0.53 [0.50; 0.55] | 0.52 [0.49; 0.54] | 0.46 [0.44; 0.48] |
+| smart_strangler@normal | 0.64 [0.62; 0.66] | 0.50 [0.47; 0.52] | 0.67 [0.65; 0.69] | 0.60 [0.58; 0.63] |
+| smart_reactive@normal | 0.49 [0.46; 0.51] | 0.42 [0.39; 0.44] | 0.50 [0.48; 0.53] | 0.45 [0.43; 0.48] |
+| smart_turtle@easy | 0.09 [0.08; 0.10] | 0.26 [0.24; 0.28] | 0.06 [0.05; 0.07] | 0.21 [0.19; 0.23] |
+| smart_expander@easy | 0.33 [0.30; 0.35] | 0.24 [0.23; 0.27] | 0.57 [0.55; 0.59] | 0.51 [0.49; 0.54] |
+| smart_rusher@easy | 0.30 [0.28; 0.32] | 0.19 [0.17; 0.21] | 0.56 [0.54; 0.58] | 0.52 [0.50; 0.54] |
+| smart_strangler@easy | 0.23 [0.21; 0.25] | 0.10 [0.09; 0.12] | 0.55 [0.53; 0.57] | 0.50 [0.48; 0.52] |
+| smart_reactive@easy | 0.19 [0.18; 0.21] | 0.08 [0.07; 0.09] | 0.42 [0.40; 0.44] | 0.37 [0.35; 0.39] |
+
+Spread of the win rates of the `normal` and `hard` bots and the benchmark (standard deviation): `mvp-3` 0.225 ->
+0.129 (range 0.17-0.88 -> 0.42-0.84), `mvp-2` 0.222 -> 0.138 (0.08-0.73 -> 0.28-0.72). The `easy` bots stay weak by
+their tempo (no `insight`), on `mvp-3` weaker than before: the field they lose to is stronger.
+
+### The server ladder (`LEVEL_BOTS`, head to head, 120 matches each)
+
+The old ladder breaks on `mvp-3`: `smart_reactive@easy` beats `smart_turtle@easy` only 0.37 [0.29; 0.46] (before:
+0.92), on `mvp-2` 0.81 [0.73; 0.87] (before: 0.97). The `normal` level is now `smart_reactive@normal` (the same
+personality one tempo level up); the client strings of the levels follow the new characters.
+
+| step | `mvp-3` before (old ladder) | `mvp-3` after | `mvp-2` before (old ladder) | `mvp-2` after |
+|---|---|---|---|---|
+| normal beats easy `smart_turtle@easy` | 0.92 [0.85; 0.95] | 0.72 [0.64; 0.80] | 0.97 [0.93; 0.99] | 0.74 [0.66; 0.81] |
+| hard `smart_strangler@hard` beats normal | 1.00 [0.97; 1.00] | 0.82 [0.75; 0.88] | 0.77 [0.68; 0.83] | 0.62 [0.53; 0.70] |
+| expert `smart_expander@hard` beats hard | 0.74 [0.66; 0.81] | 0.75 [0.67; 0.82] | 0.55 [0.46; 0.64] | 0.52 [0.43; 0.60] |
+
+Against the whole field the levels rise on both rulesets (`mvp-3`: 0.26, 0.42, 0.60, 0.81; `mvp-2`: 0.21, 0.45,
+0.59, 0.62). The expert-over-hard step on `mvp-2` stays inside the interval of 0.5, as it was before (#624).
+
+### Verdict
+
+- The turtle is a real player now: `mvp-3` 0.17 -> 0.84 (`hard`), 0.25 -> 0.74 (`normal`); `mvp-2` 0.08 -> 0.29
+  and 0.28. It wins on VP (1504 of its 1505 wins on `mvp-3`), never by the capital: it holds, it does not conquer.
+- Goal "no personality below 0.30 or above 0.80 on `mvp-3`" (not a gate): the hard turtle (0.84) and the hard
+  expander (0.81) are just above it, the `easy` bots below it; the field is much less polarized. The turtle is
+  strong on `mvp-3` and weak on `mvp-2`: the v2 bunker and the factory economy favour the holder (a finding for #659).
+- Decisions within budget (local, the 3 pool maps, hard bots: p99 0.36-0.82 ms, the estimation step 0.03 ms mean).
