@@ -119,7 +119,8 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `charges_burned` | [int, int] | charges burned: the sum of `charges` of the `charges_overflow` events (#310) |
 | `burned_permille` | [int or null, ...] | the share burned in per mille, `charges_burned * 1000 // charges_produced`; `null` without production (#310) |
 | `charges_start`, `charges_fights`, `charges_captures`, `charges_packets_lost`, `charges_warehouses_lost`, `charges_starved`, `charges_attrition`, `charges_end` | [int, int] | the charge ledger (#588, section "Charge ledger and flow"): the stock before tick 1, the charges spent in fights, on captures (DEC-38), lost in cut packets, lost with captured warehouses, starved, killed with units, and the stock after the last tick |
-| `charges_residual` | [int, int] | `charges_start + charges_produced` minus all sinks (`charges_burned` and the six above) minus `charges_end`; 0 when every charge is explained by an event (#588) |
+| `charges_built`, `charges_plans` | [int, int] | economy v2 (DEC-41): the charges paid for buildings (`build_paid` warehouse + units, item 7) and taken by waiting planned orders for their bonus (`plan_charged`, one each, item 10); 0 under v1 (#646) |
+| `charges_residual` | [int, int] | `charges_start + charges_produced` minus all sinks (`charges_burned`, the six above and the two v2 sinks) minus `charges_end`; 0 when every charge is explained by an event (#588) |
 | `charges_sent`, `charges_delivered`, `charges_delivered_front`, `charges_transfers` | [int, int] | the supply flow (#588): charges in dispatched packets, in all delivered packets (one-off transfers included), of them delivered into a city with a front marker, sent by transfers |
 | `stock_by_place_minute` | [{place: [int or null, ...]}, ...] | the stock by place and match minute in hundredths of a charge (#588); places `cap_wh`, `front_wh`, `rear_wh`, `units_node`, `units_road`, `packets`; `null`: no sample in that minute |
 | `marker_ticks`, `front_empty_ticks`, `front_empty_cap_has_ticks`, `cap_full_ticks` | [int, int] | the supply bottleneck in ticks (#588) |
@@ -225,12 +226,14 @@ values). Code and exact definitions: the module docstring of `gow_sim.analysis` 
 `charge_places`). All values per player, charges, integers.
 
 **Ledger.** `charges_start + charges_produced = charges_burned + charges_fights + charges_captures +
-charges_packets_lost + charges_warehouses_lost + charges_starved + charges_attrition + charges_end`, and
+charges_packets_lost + charges_warehouses_lost + charges_starved + charges_attrition + charges_built + charges_plans +
+charges_end`, and
 `charges_residual` is the difference (must be 0). Sources by event: `charges_fights` is the player's
 `spent_<p>` of every `fight_round`; `charges_captures` is the number of `node_captured` times `capture.charge_cost`
 (DEC-38); `charges_packets_lost` is `packet_lost`; `charges_warehouses_lost` is `warehouse_lost` (its `owner`);
 `charges_starved` is `warehouse + units` of `starvation`; `charges_attrition` counts the `attrition` events that
-killed a charged unit. `charges_start` and `charges_end` are the charge stock (section "Charge stock") before the first
+killed a charged unit; under economy v2 `charges_built` is `warehouse + units` of `build_paid` and `charges_plans` counts
+`plan_charged` (#646). `charges_start` and `charges_end` are the charge stock (section "Charge stock") before the first
 and after the last tick. A nonzero residual means a rule moved a charge that no event explains: extend the ledger.
 
 **Flow.** `charges_sent` is the sum of `packet_sent` (the supply dispatch); `charges_delivered` the sum of all

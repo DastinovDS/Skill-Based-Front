@@ -214,6 +214,10 @@ class OrderRules:
     ``defense_bonus``."""
     stance_cooldown_ticks: int
     cost: OrderCosts
+    plan_ticks_per_bonus: int = dataclasses.field(default=0, metadata=OPTIONAL)
+    """DEC-41, item 10 (``v2`` only): a waiting planned order takes one real charge from the
+    warehouse of its node and gains one bonus once per this many ticks; ``planned_delay_ticks``
+    and ``planned_bonus_per_edge`` have no effect under v2."""
 
     def planned_bonus(self, edges: int, charged: int) -> int:
         """The bonus of a planned order (DEC-29): ``edges`` of the path chosen at the command
@@ -641,8 +645,10 @@ def parse_ruleset(data: object) -> Ruleset:
                     "defense_ticks_per_bonus",
                     "stance_cooldown_ticks",
                     "cost",
+                    "plan_ticks_per_bonus",
                 ),
-            )
+            ),
+            v2,
         ),
         terrain=_parse_terrain(root.table("terrain", ("defense_mod", "speed_pct"))),
         combat=_parse_combat(
@@ -770,15 +776,17 @@ def _parse_bunker(t: "_Table | None") -> BunkerRules | None:
     )
 
 
-def _parse_orders(t: "_Table") -> OrderRules:
+def _parse_orders(t: "_Table", v2: bool) -> OrderRules:
     names = tuple(f.name for f in dataclasses.fields(OrderCosts))
     cost = t.table("cost", names)
+    plan = t.integer("plan_ticks_per_bonus", low=1) if t.has_v2("plan_ticks_per_bonus", v2) else 0
     return OrderRules(
         planned_delay_ticks=t.integer("planned_delay_ticks", low=0),
         planned_bonus_per_edge=t.integer("planned_bonus_per_edge", low=0),
         defense_ticks_per_bonus=t.integer("defense_ticks_per_bonus", low=1),
         stance_cooldown_ticks=t.integer("stance_cooldown_ticks", low=0),
         cost=OrderCosts(**{name: cost.integer(name, low=0) for name in names}),
+        plan_ticks_per_bonus=plan,
     )
 
 

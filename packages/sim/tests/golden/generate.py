@@ -15,8 +15,9 @@ priorities and transfers, cancellations while waiting and on an edge, recruit ca
 barracks and warehouse upgrades, unknown ids), so the replays go through every command path and
 many rejections. The games cover ``mvp-0``, ``mvp-1`` (``city_upgrades`` on, DEC-26) and the
 economy v2 of ``mvp-3`` (DEC-41): there ``MixBot`` also builds factories and bunkers (paid in
-charges, #645), draws supply lines from its capital and from their targets and removes them, and
-its v1-only commands (and "Defense") are rejected.
+charges, #645), draws supply lines from its capital and from their targets and removes them,
+gives its planned orders a requested bonus and releases some of them early (#646), and its
+v1-only commands (and "Defense") are rejected.
 """
 
 import argparse
@@ -39,6 +40,7 @@ from gow_sim.commands import (
     Forfeit,
     Merge,
     Move,
+    ReleasePlan,
     RemoveLine,
     SetFront,
     SetMode,
@@ -81,6 +83,7 @@ class MixBot:
     def __init__(self, mapdef: MapDef, rules: Ruleset, forfeit_at: int | None = None) -> None:
         self.map = mapdef
         self.v2 = rules.v2
+        self.plan_cost = rules.orders.cost.planned_move
         self.base = ExpandBot(mapdef, rules)
         self.forfeit_at = forfeit_at
         self.decisions = 0
@@ -101,8 +104,9 @@ class MixBot:
             return self._develop(view, k // 120)
         cmds: list[Command] = self.base.decide(view, tick)
         idle = [g for g in view.groups if isinstance(g.location, AtNode) and g.order is None]
-        if k % 5 == 0:
-            cmds = [Move(c.group, c.dest, True) if isinstance(c, Move) else c for c in cmds]
+        if k % 5 == 0:  # under v2 a planned order names its bonus (DEC-41, item 10)
+            bonus = 1 + k // 5 % 3 if self.v2 else 0
+            cmds = [Move(c.group, c.dest, True, bonus) if isinstance(c, Move) else c for c in cmds]
         if k % 7 == 0 and idle:
             big = max(idle, key=lambda g: (g.units, g.id))
             if big.units >= 2:
@@ -134,6 +138,8 @@ class MixBot:
             cmds.extend(self._develop(view, k))
         if self.v2:
             cmds.extend(self._economy_v2(view, k))
+            if k % 2 == 0 and view.me.cp >= self.plan_cost:  # first, before the CP go (#646)
+                cmds = self._plan(view, 1 + k // 2 % 3) + cmds
         return cmds
 
     def _economy_v2(self, view: PlayerView, k: int) -> list[Command]:
@@ -155,7 +161,41 @@ class MixBot:
             cmds.append(BuildBunker(own[k // 29 % len(own)]))
         if k % 53 == 0:
             cmds.append(RemoveLine(k // 53 % 4))
+        if k % 13 == 0:  # a gathering planned order departs now (#646)
+            waiting = [g for g in view.groups if g.order is not None and g.order.planned]
+            if waiting:
+                cmds.append(ReleasePlan(waiting[-1].id))
         return cmds
+
+    def _plan(self, view: PlayerView, bonus: int) -> list[Command]:
+        """A planned ``Move`` with the requested ``bonus`` (DEC-41, item 10) of the idle charged
+        group with the most charges, to the nearest node it does not own (ties: lower id)."""
+        idle = [
+            g
+            for g in view.groups
+            if isinstance(g.location, AtNode) and g.order is None and g.charged > 0
+        ]
+        foreign = [n.id for n in view.nodes if n.owner != view.player]
+        if not idle or not foreign:
+            return []
+        g = max(idle, key=lambda g: (g.charged, g.id))
+        assert isinstance(g.location, AtNode)
+        hops = self._hops(g.location.node)
+        dest = min(foreign, key=lambda n: (hops.get(n, len(hops)), n))
+        return [Move(g.id, dest, True, bonus)]
+
+    def _hops(self, start: int) -> dict[int, int]:
+        """Edges from ``start`` to every node (BFS, neighbours in edge id order)."""
+        dist = {start: 0}
+        queue = deque([start])
+        while queue:
+            node = queue.popleft()
+            for e in self.map.incident[node]:
+                nxt = self.map.edges[e].other(node)
+                if nxt not in dist:
+                    dist[nxt] = dist[node] + 1
+                    queue.append(nxt)
+        return dist
 
     def _own_path(self, view: PlayerView, src: int, dst: int) -> tuple[int, ...] | None:
         """A shortest path by edges over own nodes (BFS, neighbours in edge id order)."""

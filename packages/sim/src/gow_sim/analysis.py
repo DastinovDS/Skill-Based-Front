@@ -59,7 +59,10 @@ state samplings; nothing is added to the simulation:
   (``node_captured`` count times ``capture.charge_cost``, DEC-38), ``charges_packets_lost``
   (``packet_lost``), ``charges_warehouses_lost`` (``warehouse_lost``, its ``owner``),
   ``charges_starved`` (``starvation`` warehouse + units), ``charges_attrition`` (``attrition``
-  with a charged unit: one charge each) and ``charges_end``. ``charges_residual`` = sources - sinks
+  with a charged unit: one charge each), under economy v2 ``charges_built`` (``build_paid``
+  warehouse + units: the progressive payment of the barracks, a warehouse level, a factory and a
+  bunker, DEC-41 item 7) and ``charges_plans`` (``plan_charged``: one charge each, the bonus of a
+  waiting planned order, item 10), and ``charges_end``. ``charges_residual`` = sources - sinks
   and must be 0: a value other than 0 means a charge appeared or vanished that no event explains
   (a rule changed without this ledger).
 - Flow: ``charges_sent`` (``packet_sent``, the supply dispatch), ``charges_delivered`` (all
@@ -480,10 +483,14 @@ class ChargeFlow:
     warehouses_lost: int
     starved: int
     attrition: int
+    built: int
+    """Economy v2: the charges paid for buildings (``build_paid``, DEC-41 item 7)."""
+    plans: int
+    """Economy v2: the charges planned orders took for their bonus (``plan_charged``, item 10)."""
     end: int
     residual: int
     """``start + produced - (burned + fights + captures + packets_lost + warehouses_lost +
-    starved + attrition) - end``; 0 in a consistent match."""
+    starved + attrition + built + plans) - end``; 0 in a consistent match."""
     sent: int
     delivered: int
     delivered_front: int
@@ -506,6 +513,8 @@ _FLOW_FIELDS: Final[tuple[str, ...]] = (
     "warehouses_lost",
     "starved",
     "attrition",
+    "built",
+    "plans",
     "end",
     "residual",
     "sent",
@@ -724,6 +733,8 @@ _EVENT_COUNTERS: Final[tuple[str, ...]] = (
     "warehouses_lost",
     "starved",
     "attrition",
+    "built",
+    "plans",
     "sent",
     "delivered",
     "transfers",
@@ -762,6 +773,15 @@ def _count_ledger(e: Event, ledger: dict[str, dict[int, int]]) -> None:
             player, charged = e.get("player"), e.get("charged")
             assert isinstance(player, int)
             ledger["attrition"][player] += 1 if charged else 0
+        case "build_paid":
+            player, warehouse, units = e.get("player"), e.get("warehouse"), e.get("units")
+            assert isinstance(player, int) and isinstance(warehouse, int)
+            assert isinstance(units, int)
+            ledger["built"][player] += warehouse + units
+        case "plan_charged":
+            player = e.get("player")
+            assert isinstance(player, int)
+            ledger["plans"][player] += 1
         case _:
             pass
 
@@ -774,7 +794,16 @@ def _charge_flow(
     counts["captures"] *= log.capture_charge_cost
     sinks = burned + sum(
         counts[k]
-        for k in ("captures", "fights", "packets_lost", "warehouses_lost", "starved", "attrition")
+        for k in (
+            "captures",
+            "fights",
+            "packets_lost",
+            "warehouses_lost",
+            "starved",
+            "attrition",
+            "built",
+            "plans",
+        )
     )
     by_place: dict[str, list[int | None]] = {name: [None] * minutes for name in PLACES}
     minute_ticks = 60 * log.tick_hz
@@ -798,6 +827,8 @@ def _charge_flow(
         warehouses_lost=counts["warehouses_lost"],
         starved=counts["starved"],
         attrition=counts["attrition"],
+        built=counts["built"],
+        plans=counts["plans"],
         end=end,
         residual=start + produced - sinks - end,
         sent=counts["sent"],

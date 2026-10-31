@@ -51,6 +51,7 @@ from gow_sim.commands import (
     Move,
     PlayerCommand,
     Recruit,
+    ReleasePlan,
     RemoveLine,
     SetFront,
     SetMode,
@@ -150,8 +151,13 @@ class Replay:
 def encode_command(cmd: Command) -> dict[str, object]:
     """``cmd`` as JSON data: ``{"type": <snake_case name>, <fields>}``."""
     match cmd:
-        case Move(group=g, dest=dest, planned=planned):
-            return {"type": "move", "group": g, "dest": dest, "planned": planned}
+        case Move(group=g, dest=dest, planned=planned, bonus=bonus):
+            data: dict[str, object] = {"type": "move", "group": g, "dest": dest, "planned": planned}
+            if bonus:  # DEC-41, item 10: v1 logs keep their form
+                data["bonus"] = bonus
+            return data
+        case ReleasePlan(group=g):
+            return {"type": "release_plan", "group": g}
         case Split(group=g, n=n):
             return {"type": "split", "group": g, "n": n}
         case Merge(groups=groups):
@@ -199,7 +205,10 @@ def decode_command(data: object) -> Command:
     try:
         match kind:
             case "move":
-                return Move(_int(d["group"]), _int(d["dest"]), _bool(d["planned"]))
+                bonus = _int(d["bonus"]) if "bonus" in d else 0
+                return Move(_int(d["group"]), _int(d["dest"]), _bool(d["planned"]), bonus)
+            case "release_plan":
+                return ReleasePlan(_int(d["group"]))
             case "split":
                 return Split(_int(d["group"]), _int(d["n"]))
             case "merge":

@@ -43,6 +43,8 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   // Economy v2 (DEC-41, #645): the progressive payment of a building and the finished bunker.
   'build_paid',
   'fort_built',
+  // Economy v2 (DEC-41, #646): a waiting planned order took a charge for its bonus.
+  'plan_charged',
   'line_cut',
   'line_rerouted',
 ]);

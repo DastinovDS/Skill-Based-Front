@@ -144,6 +144,7 @@ PRIVATE_KINDS: Final = frozenset(
         "packet_delivered",
         "packet_lost",
         "packet_sent",
+        "plan_charged",
         "rear_min_set",
         "recruit_cancelled",
         "recruit_queue_lost",
@@ -236,6 +237,7 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "packet_delivered": ("charges", "node", "packet", "player"),
     "packet_lost": ("charges", "edge", "packet", "player"),
     "packet_sent": ("charges", "edge", "from_node", "packet", "player", "to_node"),
+    "plan_charged": ("bonus", "group", "node", "player"),
     "rear_min_set": ("n", "player"),
     "recruit_cancelled": ("cp", "node", "player"),
     "recruit_queue_lost": ("node", "player", "units"),
@@ -270,6 +272,7 @@ EVENT_ID_FIELDS: Final[Mapping[str, frozenset[str]]] = {
     "packet_delivered": frozenset({"packet"}),
     "packet_lost": frozenset({"packet"}),
     "packet_sent": frozenset({"packet"}),
+    "plan_charged": frozenset({"group"}),
     "recruited": frozenset({"group"}),
     "transfer_started": frozenset({"packet"}),
 }

@@ -1,9 +1,9 @@
 # Ruleset mvp-3: economy v2 (DEC-41, #642; mechanics.md, section 7, "Economy v2"). A copy of
-# rulesets/mvp-2.toml with economy.model = "v2" and the v2 sections [factory] and [lines]; every other
-# number is the number of mvp-2. Under v2 the stance, front marker, rear minimum, transfer, road
+# rulesets/mvp-2.toml with economy.model = "v2", the v2 sections [factory], [lines], [bunker] and the
+# v2 keys marked DEC-41; besides them only orders.cost.planned_move (item 10) and capture.charge_cost
+# (item 11) differ from mvp-2. Under v2 the stance, front marker, rear minimum, transfer, road
 # upgrade and starvation keys below have no effect (DEC-41, items 1, 5, 8); the parser still requires
-# them, so the file stays a full ruleset. The implementation goes in steps (#644, #645, #646): a key
-# whose v2 rule is not implemented yet keeps its mvp-2 meaning.
+# them, so the file stays a full ruleset. The implementation went in steps (#644, #645, #646).
 #
 # Source of the rules: docs/design/mechanics.md (DEC decisions, section 21).
 # Values and key names: SIM-01 (#17), the table "Values and notes".
@@ -68,11 +68,17 @@ planned_delay_ticks = 30 # 3 s
 planned_bonus_per_edge = 1 # virtual charges per edge of the path (DEC-29)
 defense_ticks_per_bonus = 60 # +1 to the "Defense" bonus per 60 ticks (6 s) in the mode (DEC-30)
 stance_cooldown_ticks = 100 # the stance changes at most once per 100 ticks (DEC-02, #8)
+# DEC-41, item 10: under v2 a planned order names the requested bonus b >= 1 and waits in its node;
+# once per plan_ticks_per_bonus ticks it takes 1 real charge from the warehouse of the node (after the
+# recharge of the units) and the bonus grows by 1, at most the group's charged units; it departs by
+# itself at b or at that cap, or at once by ReleasePlan. planned_delay_ticks and planned_bonus_per_edge
+# (the DEC-29 distance bonus) have no effect under v2.
+plan_ticks_per_bonus = 30 # 3 s per bonus (P1)
 
 [orders.cost]
 # Cost of commands in hundredths of CP (100 = 1 CP). The full table: SIM-01 (#17), DEC-08 (#12).
 move = 100 # an ordinary move order
-planned_move = 200 # a scheduled order: 2 CP instead of 1 (DEC-08)
+planned_move = 100 # DEC-41, item 10: a planned order costs as much as an ordinary one
 cancel = 0 # CancelOrder: cancelling any order is free, on an edge it is a turn-around (DEC-20)
 split = 0 # splitting a group is free (DEC-20)
 merge = 0 # merging groups is free, groups also merge on their own (DEC-20)
@@ -118,7 +124,7 @@ engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is 
 # Capture costs a charge (DEC-38, #578; mechanics.md, section 4). A capture of a node (neutral or enemy, a city,
 # a province or a capital, also at the end of a fight) spends charge_cost real charges of the capturing player's
 # groups in the node; with fewer the groups bounce, a returning group dies (DEC-24, G3). Virtual charges never pay.
-charge_cost = 0 # 0: off, a capture is free (BAL-02 iterations 2, 5 and 6 tested 1: the field polarizes, see docs/balance/log.md)
+charge_cost = 1 # DEC-41, item 11: a capture spends one real charge (re-measured under v2; BAL-02 tested 1 under v1, docs/balance/log.md)
 
 [capacity]
 # Node capacity (DEC-22, #234; mechanics.md, section 8): limits the number of units standing in a node and,

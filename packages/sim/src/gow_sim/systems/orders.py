@@ -41,10 +41,18 @@ Details that DEC-08 leaves open follow the defaults of #141, accepted by DEC-24 
 """
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Intent, IntentKind, Mode, event
+from gow_sim.state import AtNode, Event, GameState, Group, Intent, IntentKind, Mode, Order, event
 from gow_sim.systems.combat import Bonus, BonusSource
 
-__all__ = ["absorb", "active_bonuses", "clear_bonus", "orders", "set_intent"]
+__all__ = [
+    "absorb",
+    "active_bonuses",
+    "clear_bonus",
+    "gather_plans",
+    "orders",
+    "release_plan",
+    "set_intent",
+]
 
 
 def set_intent(
@@ -64,8 +72,65 @@ def set_intent(
 
 
 def clear_bonus(group: Group) -> None:
+    """The planned bonus ends, and with it a v2 plan that gathers it (DEC-41, item 10)."""
     group.bonus = 0
     group.bonus_tick = 0
+    group.plan = 0
+    group.plan_tick = 0
+
+
+def release_plan(group: Group, tick: int) -> None:
+    """The gathering plan of ``group`` stops gathering: the group departs at ``tick`` with the
+    bonus it has (DEC-41, item 10), which is active from then on; the intent stays."""
+    order = group.order
+    assert order is not None and order.planned
+    group.order = Order(order.path, order.planned, tick)
+    group.bonus_tick = tick
+    group.plan = 0
+    group.plan_tick = 0
+
+
+def gather_plans(state: GameState, rules: Ruleset) -> list[Event]:
+    """Economy v2 (DEC-41, item 10): the waiting planned orders gather their bonus.
+
+    In group id order (one player's groups never compete with the other player's: a node holds
+    the groups of its owner), a group with a plan (``Group.plan``, the requested bonus) that
+    stands in an own node and is in no fight takes one real charge from the warehouse of the
+    node once ``orders.plan_ticks_per_bonus`` ticks have passed since the order or its last
+    charge, if the warehouse has one and the bonus is below the request and below its charged
+    units (the cap of DEC-29); the charge is consumed (``plan_charged``, own player only). The
+    units recharged earlier in the tick (``supply`` runs before, P4), and the buildings of the
+    node took their payment in ``build`` (TODO(#651): the order of the two sinks). An empty
+    warehouse pauses the plan with no timeout: the due charge is taken in the tick stock comes
+    (TODO(#651)). The group departs by itself in the next tick (``release_plan``) once its bonus
+    reaches the request or, with a bonus, its charged units.
+    """
+    if not rules.v2:
+        return []
+    tick = state.tick
+    per = rules.orders.plan_ticks_per_bonus
+    events: list[Event] = []
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        if g.plan == 0 or g.fight is not None or not isinstance(g.location, AtNode):
+            continue
+        nid = g.location.node
+        node = state.nodes[nid]
+        if (
+            tick - g.plan_tick >= per
+            and node.owner == g.owner
+            and node.warehouse > 0
+            and g.bonus < min(g.plan, g.charged)
+        ):
+            node.warehouse -= 1
+            g.bonus += 1
+            g.plan_tick = tick
+            events.append(
+                event(tick, "plan_charged", player=g.owner, group=gid, node=nid, bonus=g.bonus)
+            )
+        if g.bonus >= g.plan or 0 < g.charged <= g.bonus:
+            release_plan(g, tick + 1)
+    return events
 
 
 def absorb(state: GameState, keep: Group, gid: int) -> None:
@@ -108,9 +173,10 @@ def orders(state: GameState, rules: Ruleset) -> list[Event]:
     they burn with the fight. A planned bonus not yet used ends with its order; an inactive one
     (a planned order still waiting) is kept. A group standing in "Defense" in no fight counts one
     more tick (DEC-30). Reads the ``group_arrived``, ``recruited`` and ``fight_group`` events of
-    the tick from ``state.events``. Emits ``groups_merged`` for every auto-merge.
+    the tick from ``state.events``. Emits ``groups_merged`` for every auto-merge. Under economy
+    v2 the waiting planned orders gather their bonus first (``gather_plans``).
     """
-    del rules  # the signature of a system; no numbers are needed here
+    gathered = gather_plans(state, rules)
     live: dict[int, bool] = {}
     for gid in sorted(state.groups):
         g = state.groups[gid]
@@ -126,7 +192,7 @@ def orders(state: GameState, rules: Ruleset) -> list[Event]:
     for iid in sorted(state.intents):
         if iid not in live:
             del state.intents[iid]  # the group is gone (fight, attrition)
-    return _auto_merge(state)
+    return gathered + _auto_merge(state)
 
 
 def _auto_merge(state: GameState) -> list[Event]:

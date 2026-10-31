@@ -291,6 +291,17 @@
         "packet"
       ]
     },
+    "plan_charged": {
+      "fields": [
+        "bonus",
+        "group",
+        "node",
+        "player"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
     "rear_min_set": {
       "fields": [
         "n",
