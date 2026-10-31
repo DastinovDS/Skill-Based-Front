@@ -63,6 +63,8 @@ class RandomLegalBot(Bot):
 
         def spend(cmd: Command) -> bool:
             nonlocal budget
+            if not self.allowed(cmd):
+                return False  # a command of the other economy model (DEC-41)
             cost = self.cost(cmd)
             if cost > budget:
                 return False

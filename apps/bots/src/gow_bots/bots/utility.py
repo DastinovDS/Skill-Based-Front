@@ -68,14 +68,26 @@ def takes(rules: Ruleset, charged: int, bonus: int, need: int) -> bool:
     return charged >= cost and charged + bonus >= need + cost
 
 
-def prefer_planned(rules: Ruleset, own_charged: int, need: int, edges: int) -> bool:
+def prefer_planned(
+    rules: Ruleset, own_charged: int, need: int, edges: int, bonus: int | None = None
+) -> bool:
     """Whether an attack with ``own_charged`` charges on a node ``edges`` edges away that needs
     ``need`` shots (``shots_to_take``) should be a planned order rather than a normal one.
 
     Integer comparison in hundredths of CP: ``saved * 100 / charges_per_cp > surcharge``.
+
+    Economy v2 (DEC-41, item 10): a plan costs what an ordinary order costs, but every bonus is
+    a real charge of the warehouse and ``orders.plan_ticks_per_bonus`` ticks of waiting in
+    public; ``bonus`` is what the group can gather (``Bot.plan_bonus``). It pays only when the
+    plan turns a bounce into a capture.
     """
     if need <= 0:
         return False  # an empty node: no fight, the bonus is never fired
+    if rules.v2:
+        b = bonus or 0
+        return (
+            b >= 1 and not takes(rules, own_charged, 0, need) and takes(rules, own_charged, b, need)
+        )
     bonus = rules.orders.planned_bonus(edges, own_charged)
     cost = rules.orders.cost
     surcharge = cost.planned_move - cost.move

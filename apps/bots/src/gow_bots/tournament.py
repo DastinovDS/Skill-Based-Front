@@ -62,8 +62,14 @@ USAGE_KEYS: Final[tuple[str, ...]] = (
     "SetFront",
     "SetRearMin",
     "Transfer",
+    "DrawLine",
+    "RemoveLine",
+    "BuildFactory",
+    "BuildBunker",
+    "ReleasePlan",
 )
-"""The mechanics of ``usage``, in report order: every command but ``Forfeit``."""
+"""The mechanics of ``usage``, in report order: every command but ``Forfeit`` (the last five are
+economy v2 only, DEC-41)."""
 
 
 def usage(log: MatchLog) -> list[dict[str, int]]:

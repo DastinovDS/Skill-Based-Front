@@ -45,14 +45,17 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from gow_bots.bots.base import Bot, node_of
+from gow_bots.bots.economy import factory_site, line_commands, wants
 from gow_bots.bots.utility import prefer_planned, shots_to_take, takes
-from gow_sim.commands import Command, Move, Recruit, SetMode, SetStance, UpgradeRoad
+from gow_sim.commands import BuildFactory, Command, Move, Recruit, SetMode, SetStance, UpgradeRoad
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import Detail, GroupView, Mode, PlayerView, Stance
 
 __all__ = ["MEMORY_TICKS", "StrategyBot", "Turn"]
 
+FACTORIES: Final = 2
+"""Economy v2: factories built beside the capital (``economy.factory_site``)."""
 MEMORY_TICKS: Final = 600
 """How long an exact sighting of an enemy node stays a better guess than the capacity bound."""
 
@@ -95,6 +98,8 @@ class StrategyBot(Bot):
         self.recruited: dict[int, int] = {}
         """Decision tick of the last recruit in each city: one unit per city and decision."""
         self.stance_tick: int | None = None
+        self.lines_seen: dict[int, int] = {}
+        """Economy v2: own line id to the tick it was first seen (``economy.line_commands``)."""
         self.memory: dict[int, tuple[int, int, int]] = {}
         """Last exact sighting of the enemy per node: ``(units, charged, tick)``."""
         self.value: tuple[int, ...] = tuple(
@@ -201,6 +206,8 @@ class StrategyBot(Bot):
         A ``Move`` of a group too big for every path becomes the ``Split`` of the army that
         fits (``Bot.fitted``, DEC-20): the army goes in a later decision.
         """
+        if not self.allowed(cmd):
+            return False  # a command of the other economy model (DEC-41)
         fitted = self.fitted(turn.view, cmd)
         if fitted is None:
             return False
@@ -213,9 +220,18 @@ class StrategyBot(Bot):
         return True
 
     def prioritize(self, turn: Turn) -> None:
-        """Front markers on the front cities (DEC-28, ``Bot.fronts``)."""
-        for cmd in self.fronts(turn.view):
+        """Front markers on the front cities (DEC-28, ``Bot.fronts``); under economy v2 the lines
+        and the factories of ``gow_bots.bots.economy`` instead (DEC-41)."""
+        view = turn.view
+        if not self.rules.v2:
+            for cmd in self.fronts(view):
+                self.spend(turn, cmd)
+            return
+        for cmd in line_commands(self, view, wants(self, view, {}), self.lines_seen):
             self.spend(turn, cmd)
+        site = factory_site(self, view, FACTORIES)
+        if site is not None:
+            self.spend(turn, BuildFactory(site))
 
     def set_stance(self, turn: Turn, stance: Stance) -> None:
         last = self.stance_tick
@@ -248,15 +264,17 @@ class StrategyBot(Bot):
         Either way the real charges must also pay the capture (DEC-38, ``takes``).
         """
         want = need + margin
-        edges = self.path_edges(turn.view, node_of(g), dest, g.units)
-        bonus = self.rules.orders.planned_bonus(edges, g.charged)
-        planned = Move(g.id, dest, planned=True)
+        here = node_of(g)
+        edges = self.path_edges(turn.view, here, dest, g.units)
+        bonus = self.plan_bonus(turn.view, here, edges, g.charged)
+        ask = max(1, want + self.rules.capture.charge_cost - g.charged)
+        planned = self.order(g.id, dest, True, min(bonus, ask))
         plain = takes(self.rules, g.charged, 0, want)
         sent = (
             need > 0
             and not plain
             and takes(self.rules, g.charged, bonus, want)
-            and prefer_planned(self.rules, g.charged, need, edges)
+            and (self.rules.v2 or prefer_planned(self.rules, g.charged, need, edges))
             and self.spend(turn, planned, keep)
         ) or (plain and self.spend(turn, Move(g.id, dest), keep))
         if sent:

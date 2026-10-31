@@ -29,15 +29,25 @@ import random
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import ClassVar, Protocol
+from typing import ClassVar, Final, Protocol
 
 from gow_sim.commands import (
     BuildBarracks,
+    BuildBunker,
+    BuildFactory,
     CancelOrder,
     Command,
+    DrawLine,
     Move,
+    ReleasePlan,
+    RemoveLine,
     SetFront,
+    SetMode,
+    SetRearMin,
+    SetStance,
     Split,
+    Transfer,
+    UpgradeRoad,
     UpgradeWarehouse,
     command_cost,
 )
@@ -49,6 +59,7 @@ from gow_sim.view import (
     FightView,
     GroupView,
     IntentKind,
+    Mode,
     NodeView,
     OnEdge,
     PlayerView,
@@ -62,6 +73,12 @@ __all__ = [
     "choose_params",
     "node_of",
 ]
+
+V1_ONLY: Final = (SetStance, SetFront, SetRearMin, Transfer, UpgradeRoad)
+"""Commands economy v2 rejects with ``FEATURE_DISABLED`` (DEC-41, items 1, 5, 8); so does
+``SetMode(DEFENSE)`` (``Bot.allowed``)."""
+V2_ONLY: Final = (BuildFactory, BuildBunker, DrawLine, RemoveLine, ReleasePlan)
+"""Commands of economy v2 only (DEC-41, item 14)."""
 
 
 class Controller(Protocol):
@@ -421,7 +438,8 @@ class Bot:
           them: their price, three recruits in the capital, buys a shorter way for every later
           recruit.
         - A warehouse level: in a full warehouse of a city that supplies troops (own units stand
-          there, or it is at the front), only with CP that would soon burn on the cap.
+          there, or it is at the front), only with CP that would soon burn on the cap; under
+          economy v2 it costs charges, not CP (DEC-41, item 7), so a full warehouse is enough.
 
         Cities without a build and without a fight, in ``node_key`` order: mirror-invariant.
         """
@@ -431,8 +449,10 @@ class Bot:
         want = self.wanted_barracks(view)
         if want is not None and budget >= cost.barracks:
             return BuildBarracks(want)
-        if budget < max(cost.warehouse, self.rules.cp.cap - cost.recruit):
+        if budget < cost.warehouse:
             return None
+        if not self.rules.v2 and budget < self.rules.cp.cap - cost.recruit:
+            return None  # v1: CP about to burn; v2 pays in charges only (DEC-41, item 7)
         standing = self.standing(view)
         for n in self._free_cities(view):
             supplies = standing[n.id] > 0 or self.front(view, n.id)
@@ -519,6 +539,42 @@ class Bot:
     def cost(self, cmd: Command) -> int:
         return command_cost(self.rules, cmd)
 
+    def allowed(self, cmd: Command) -> bool:
+        """Whether the economy model of the ruleset has ``cmd`` at all: the commands of the
+        other model only give ``FEATURE_DISABLED`` (DEC-41, items 5 and 14)."""
+        if not self.rules.v2:
+            return not isinstance(cmd, V2_ONLY)
+        if isinstance(cmd, SetMode) and cmd.mode is Mode.DEFENSE:
+            return False
+        return not isinstance(cmd, V1_ONLY)
+
+    def plan_bonus(self, view: PlayerView, node: int, edges: int, charged: int) -> int:
+        """The bonus a planned order of a group with ``charged`` units in ``node`` brings over
+        ``edges`` edges: under v1 the distance bonus of DEC-29; under v2 what it can gather now,
+        the stock of the own warehouse there, at most the charged units (DEC-41, item 10)."""
+        if not self.rules.v2:
+            return self.rules.orders.planned_bonus(edges, charged)
+        return max(0, min(charged, view.nodes[node].warehouse or 0))
+
+    def plan_lead(self, bonus: int) -> int:
+        """Ticks a planned order waits in its node before it departs: the delay of DEC-08 under
+        v1, the gathering of ``bonus`` charges under v2 (DEC-41, item 10; it departs the tick
+        after the last one)."""
+        if not self.rules.v2:
+            return self.rules.orders.planned_delay_ticks
+        return bonus * self.rules.orders.plan_ticks_per_bonus + 1
+
+    def order(self, group: int, dest: int, planned: bool, bonus: int) -> Move:
+        """The ``Move`` of an attack: under v2 a planned order names its requested ``bonus``
+        and is an ordinary one without any (DEC-41, item 10); under v1 ``bonus`` is not sent."""
+        if not planned:
+            return Move(group, dest)
+        if not self.rules.v2:
+            return Move(group, dest, planned=True)
+        if bonus < 1:
+            return Move(group, dest)
+        return Move(group, dest, planned=True, bonus=bonus)
+
     def enemy_at(self, view: PlayerView, node: int) -> tuple[int, int] | None:
         """``(units, charged)`` of the enemy in ``node`` as far as the view tells.
 
@@ -549,9 +605,12 @@ class Bot:
             for i in view.intents
             if i.owner != view.player and i.kind is IntentKind.DEFENSE and i.origin == node
         ]
+        fort = 0
+        if self.rules.v2 and view.nodes[node].fort and view.nodes[node].owner != view.player:
+            fort = self.rules.bunker_rules().shots  # DEC-41, item 12: seen by the DEC-31 rule
         if not since:
-            return 0
-        return max(0, view.tick - min(since)) // self.rules.orders.defense_ticks_per_bonus
+            return fort
+        return fort + max(0, view.tick - min(since)) // self.rules.orders.defense_ticks_per_bonus
 
 
 def node_of(group: GroupView) -> int:

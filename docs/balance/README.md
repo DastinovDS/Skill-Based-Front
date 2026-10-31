@@ -125,7 +125,7 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `stock_by_place_minute` | [{place: [int or null, ...]}, ...] | the stock by place and match minute in hundredths of a charge (#588); places `cap_wh`, `front_wh`, `rear_wh`, `units_node`, `units_road`, `packets`; `null`: no sample in that minute |
 | `marker_ticks`, `front_empty_ticks`, `front_empty_cap_has_ticks`, `cap_full_ticks` | [int, int] | the supply bottleneck in ticks (#588) |
 | `front_empty_permille`, `front_empty_cap_has_permille` | [int or null, ...] | the second and the third over `marker_ticks`, per mille, rounded down; `null` without marker ticks (#588) |
-| `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name (`Move`, `CancelOrder`, `Split`, `Merge`, `SetMode`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `UpgradeWarehouse`, `UpgradeRoad`, `SetFront`, `SetRearMin`, `Transfer`), a planned `Move` as `MovePlanned`; `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
+| `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name (`Move`, `CancelOrder`, `Split`, `Merge`, `SetMode`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `UpgradeWarehouse`, `UpgradeRoad`, `SetFront`, `SetRearMin`, `Transfer`, and the economy v2 commands `DrawLine`, `RemoveLine`, `BuildFactory`, `BuildBunker`, `ReleasePlan`, #648), a planned `Move` as `MovePlanned`; `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
 
 The fields `stock_*`, `charges_*` and `burned_permille` were added in #310 without changing `schema`: nothing was removed and
 nothing changed meaning. Tournament files older than #310 do not contain them, the report shows "no data" for them.
@@ -321,6 +321,20 @@ a build-up next to the capital and the withdrawal of thin province garrisons are
 2026-10-30: claims in groups of 2+, a barracks in the centre, from tick 2400..3600 recruits first and an advance to the
 largest city next to the enemy capital, then a converging strike with banked CP. It is a yardstick, not a server level:
 put it in a tournament with `--bots "... smart_hoarder"`.
+
+**Economy v2** (`mvp-3`, DEC-41, #648; `gow_bots.bots.economy`). Under `economy.model = "v2"` every bot sends no v1-only
+command (stance, front markers, rear minimum, transfers, road upgrades, Defense: `Bot.allowed`) and the campaign and
+smart bots play the v2 economy instead: **lines** from the own factories (only factories are sources: a relay whose
+small warehouse is full skips its incoming line and starves everything below it) to the nodes that want charges most
+(units without a charge, a building that owes charges, a front node with room, the hoard of `smart_hoarder`), as many as
+the factory slots (`lines.max_out` each) serve; **factories** (two beside the capital, one build at a time, the own city
+nearest the enemy capital that no enemy node touches); **bunkers** for the personalities that used Defense (one, three
+for `smart_turtle`; a front city with a full warehouse); **warehouse levels** in full supplying warehouses (charges, no
+CP); a **planned order** only where its bonus turns a bounce into a capture, asking for the missing shots at most the
+stock of its warehouse, released (`ReleasePlan`) when it gathered too long; the converging strike plans every group that
+can gather a bonus. The CP keeps of the v1 personalities (`reserve`, `recruit_keep`) shrink to one and two orders: v2
+has no Defense to keep CP for and doubles the CP income. Under v1 the play is unchanged (the same `state_hash` on
+`mvp-2`).
 
 ## Budget
 

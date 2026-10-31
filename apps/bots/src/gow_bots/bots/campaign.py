@@ -49,8 +49,20 @@ from dataclasses import dataclass, field
 from typing import ClassVar, override
 
 from gow_bots.bots.base import Bot, ParamRange, node_of
+from gow_bots.bots.economy import bunker_site, factory_site, line_commands, release_commands, wants
 from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take, takes
-from gow_sim.commands import CancelOrder, Command, Merge, Move, Recruit, SetStance, Split
+from gow_sim.commands import (
+    BuildBunker,
+    BuildFactory,
+    CancelOrder,
+    Command,
+    Merge,
+    Move,
+    Recruit,
+    ReleasePlan,
+    SetStance,
+    Split,
+)
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import GroupView, Mode, OnEdge, PlayerView, Stance
@@ -75,6 +87,8 @@ class Option:
     dest: int
     planned: bool
     need: int
+    bonus: int = 0
+    """Economy v2: the bonus a planned order requests (DEC-41, item 10); 0 otherwise."""
 
 
 @dataclass(slots=True)
@@ -115,9 +129,17 @@ class CampaignBot(Bot):
         "reserve": ParamRange(0, 100),  # CP in hundredths kept unspent
         "recruit_keep": ParamRange(100, 250),  # CP left after a recruit
     }
+    FACTORIES: ClassVar[int] = 2
+    """Economy v2: factories built beside the capital (``factory.max`` caps the sum)."""
+    BUNKERS: ClassVar[int] = 0
+    """Economy v2: bunkers kept at most (``bunker_site``)."""
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> None:
         super().__init__(mapdef, rules, seed=seed, player=player)
+        self.gathering: dict[int, int] = {}
+        """Economy v2: own group id to the tick its gathering plan was first seen."""
+        self.lines_seen: dict[int, int] = {}
+        """Economy v2: own line id to the tick it was first seen."""
         self.home = mapdef.capital(player)
         self.enemy_home = mapdef.capital(1 - player)
         self.recruited: dict[int, int] = {}
@@ -145,6 +167,7 @@ class CampaignBot(Bot):
         self._stance(ctx)
         for cmd in self.fronts(view):  # front markers on the front cities (DEC-28)
             self.spend(ctx, cmd)
+        self.economy_v2(ctx)  # lines, factories, bunkers, plans (DEC-41)
         cmd = self.development(ctx.view, ctx.budget)  # DEC-26, item 11: before the orders
         if cmd is not None:
             self.spend(ctx, cmd)
@@ -156,6 +179,36 @@ class CampaignBot(Bot):
         self._rally(ctx)
         self._recruit(ctx)
         return ctx.cmds
+
+    # Economy v2 (DEC-41) ---------------------------------------------------------------------
+
+    def economy_v2(self, ctx: Ctx) -> None:
+        """The v2 play of ``gow_bots.bots.economy``: plans that waited depart, lines to the nodes
+        that want charges, one factory and one bunker build at a time. Nothing under v1."""
+        if not self.rules.v2:
+            return
+        view = ctx.view
+        for cmd in release_commands(self, view, self.gathering, ctx.tick):
+            if self.spend(ctx, cmd) and isinstance(cmd, ReleasePlan | CancelOrder):
+                ctx.used[cmd.group] = True
+        for cmd in line_commands(
+            self, view, wants(self, view, self.line_extra(ctx)), self.lines_seen
+        ):
+            self.spend(ctx, cmd)
+        site = factory_site(self, view, self.FACTORIES)
+        if site is not None:
+            self.spend(ctx, BuildFactory(site))
+        site = bunker_site(self, view, self.bunkers())
+        if site is not None:
+            self.spend(ctx, BuildBunker(site))
+
+    def line_extra(self, ctx: Ctx) -> dict[int, int]:
+        """Hook: the weight a personality adds to own nodes that want charges (``wants``)."""
+        return {}
+
+    def bunkers(self) -> int:
+        """Bunkers (and bunker builds) the bot keeps at most (``BUNKERS``)."""
+        return self.BUNKERS
 
     def respond(self, ctx: Ctx) -> None:
         """Hook: commands that come before everything else (``ReactiveBot``)."""
@@ -176,6 +229,8 @@ class CampaignBot(Bot):
     # Spending -------------------------------------------------------------------------------
 
     def spend(self, ctx: Ctx, cmd: Command) -> bool:
+        if not self.allowed(cmd):
+            return False  # a command of the other economy model (DEC-41)
         cost = self.cost(cmd)
         if cost > ctx.budget:
             return False
@@ -293,7 +348,12 @@ class CampaignBot(Bot):
                 continue
             # The bonus was set by the whole path at the departure (DEC-29); the edges still to
             # go are a lower bound of it.
-            bonus = orders.planned_bonus(len(g.order.path), g.charged) if g.order.planned else 0
+            if self.rules.v2:
+                bonus = g.order.bonus  # gathered, active from the departure (DEC-41, item 10)
+            elif g.order.planned:
+                bonus = orders.planned_bonus(len(g.order.path), g.charged)
+            else:
+                bonus = 0
             need = self.need(view, ctx.tick, dest)
             if not takes(self.rules, g.charged, bonus, need) and self.spend(ctx, CancelOrder(g.id)):
                 ctx.used[g.id] = True
@@ -307,26 +367,30 @@ class CampaignBot(Bot):
 
     def options(self, ctx: Ctx, groups: list[GroupView]) -> list[Option]:
         """Viable attacks of ``groups`` on nodes in reach, best first."""
-        view, orders = ctx.view, self.rules.orders
+        view, rules = ctx.view, self.rules
         found: list[Option] = []
         for g in groups:
-            if not self.may_leave(ctx, g):
-                continue
-            for dest in self.reachable(view, node_of(g), self.params["radius"], g.units):
+            if g.charged < rules.capture.charge_cost or not self.may_leave(ctx, g):
+                continue  # DEC-38: a group that cannot pay a capture takes nothing (``takes``)
+            here = node_of(g)
+            for dest in self.reachable(view, here, self.params["radius"], g.units):
                 if view.nodes[dest].owner == self.player or dest in ctx.claimed:
                     continue
                 need = self.need(view, ctx.tick, dest)
-                edges = self.path_edges(view, node_of(g), dest, g.units)
-                bonus = orders.planned_bonus(edges, g.charged)
+                # The v2 bonus does not grow with the distance (DEC-41, item 10).
+                edges = 0 if rules.v2 else self.path_edges(view, here, dest, g.units)
+                bonus = self.plan_bonus(view, here, edges, g.charged)
                 # DEC-38: the charges must also pay the capture; virtual shots never pay.
-                plain = takes(self.rules, g.charged, 0, need)
-                plan = bonus >= 1 and takes(self.rules, g.charged, bonus, need)
+                plain = takes(rules, g.charged, 0, need)
+                plan = bonus >= 1 and takes(rules, g.charged, bonus, need)
                 if not (plain or plan):
                     continue
-                planned = plan and (not plain or prefer_planned(self.rules, g.charged, need, edges))
+                planned = plan and (not plain or prefer_planned(rules, g.charged, need, edges))
+                # Under v2 the plan asks for the shots it misses only (DEC-41, item 10).
+                ask = max(1, need + rules.capture.charge_cost - g.charged)
                 score = self.score(ctx, g, dest, need)
                 if score is not None:
-                    found.append(Option(score, g, dest, planned, need))
+                    found.append(Option(score, g, dest, planned, need, min(bonus, ask)))
         found.sort(key=lambda o: (-o.score, self.key(o.dest), self.group_order(o.group)))
         return found
 
@@ -346,7 +410,7 @@ class CampaignBot(Bot):
         for opt in self.options(ctx, groups):
             if opt.group.id in ctx.used or opt.dest in ctx.claimed:
                 continue
-            cmd = Move(opt.group.id, opt.dest, planned=opt.planned)
+            cmd = self.order(opt.group.id, opt.dest, opt.planned, opt.bonus)
             if self.spend(ctx, cmd):
                 ctx.used[opt.group.id] = True
                 ctx.claimed[opt.dest] = True
@@ -391,8 +455,8 @@ class CampaignBot(Bot):
             spare = g.units - 1
             if here == self.home:
                 spare = min(spare, ctx.standing[here] - self.params["guard"])
-            if spare < 1 or self.options(ctx, [g]):
-                continue
+            if spare < 1 or g.charged < self.rules.capture.charge_cost or self.options(ctx, [g]):
+                continue  # DEC-38: the army gets the charged units first, none can pay
             best: tuple[int, int] | None = None
             for dest in self.reachable(view, here, radius):
                 if view.nodes[dest].owner == self.player or dest in ctx.claimed:
