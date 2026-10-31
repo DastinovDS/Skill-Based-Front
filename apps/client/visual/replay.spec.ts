@@ -59,6 +59,11 @@ test('replay viewer answers its buttons and switches the blue side', async ({ pa
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
   await page.getByRole('button', { name: 'Pause' }).click();
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  // The playback ran a few ticks between Play and Pause (how many depends on the machine, #638):
+  // back to the start, so the side switch below is checked on a known frame. A paused viewer
+  // stays there.
+  await page.getByLabel('Position in the match').fill('0');
+  await expect(canvas).toHaveAttribute('data-tick', '0');
   // The keys of the old viewer do nothing now.
   await page.keyboard.press('Digit1');
   await expect(page.getByRole('button', { name: '×4' })).toHaveAttribute('aria-pressed', 'true');
