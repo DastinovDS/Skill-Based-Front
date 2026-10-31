@@ -588,3 +588,90 @@ charges while CP was the binding constraint, every capital strike came from Midd
 bot capital) that the bot did not retake, a capital charge took 17-27 s to reach the front, and the starvation and
 G3 checks found no contradiction with `mechanics.md`. The candidate changes (bots B1-B4, ruleset R1-R2, rules D1-D3)
 are for the owner's decision; nothing was changed.
+
+## A benchmark of the owner's staging strike and the smart bots' answers (#624)
+
+The owner beat the hard smart bots 4 of 4 with one plan ([playtest-2026-10-30.md](playtest-2026-10-30.md)). PR #633
+added `smart_hoarder` (`gow_bots.bots.hoarder`), a `SmartBot` personality that plays it: War, claims only in groups of
+2+, a barracks in the centre (`crossroads`: Crossroads), from tick 2400..3600 recruits first and an advance to the
+stage (the largest city next to the enemy capital, `crossroads`: Middle Court), then a converging strike (`SmartBot`
+item 12: groups within 3 edges, the main one by an ordinary order, small far ones planned, arrivals aligned within
+10 ticks by the travel times of mechanics.md section 4, the price banked while ready). Against the hard bots on
+`crossroads` (20 local matches, the hoarder on the owner's side) it staged in Middle Court in 18, built the Crossroads
+barracks in 5 (late: tick 3501-6951, the owner at 1105-1118), and struck twice with the owner's shape (4 groups, 13
+charged, the 8-unit main group from Middle Court, one planned flank from 2 edges); it won 13 of 20, mostly on VP:
+its front groups are often discharged far from supply (observation 6 of the playtest), so a strike is rarer than the
+owner's.
+
+PR #641 adds the answers (`SmartBot` items 13-17, each with a switch) and the converging strike for every personality
+but the bunker (on top of the single attacks on the capital, `STRIKE_MIN` 2 groups, no banking). The benchmark keeps
+none of the answers, so it stays the same yardstick (its `state_hash` is unchanged).
+
+### Runs
+
+All on GitHub runners, `mvp-2` (hash `9d8cc4dd4b48572ad2be415c2fcc4d4c`), `SIM_VERSION` 25, the 3 pool maps, seeds
+0..19, both sides. The full field is the 15 smart bots (5 personalities x 3 levels) and `smart_hoarder`: 15360
+matches. The ablations ran the 8 bots that matter here (the 5 hard bots, the ladder's `smart_reactive@easy` and
+`smart_turtle@easy`, the hoarder; 3840 matches); a match depends only on its map, bots and seed, so the same 3840
+matches of a full run compare one to one.
+
+| run | branch state | runner run |
+|---|---|---|
+| before | #633: the hoarder, the personalities as on develop | 41107108133 |
+| after 1 | the strike replaces single attacks on the capital, all answers on, banking | 41114156697 |
+| after 2 | the strike adds to single attacks, no banking, all answers on | 41120933594 |
+| strike only | after 2 without any answer | 41120991330 |
+| ablation a | after 2 without items 15 and 16 (8 bots) | 41127631886 |
+| ablation b | after 2 without items 13 and 14 (8 bots) | 41127678799 |
+| final | ablation b as the default (items 13 and 14 off), the full field | 41131096355 |
+
+### The 8-bot field (win rate against the other 7 [95%])
+
+| bot | before | after 2 | strike only | a: 13, 14, 17 on | b: 15, 16, 17 on |
+|---|---|---|---|---|---|
+| smart_hoarder | 0.78 [0.75; 0.81] | 0.83 [0.80; 0.85] | 0.78 [0.75; 0.81] | 0.83 [0.81; 0.86] | 0.76 [0.73; 0.79] |
+| smart_expander@hard | 0.73 [0.70; 0.76] | 0.65 [0.62; 0.68] | 0.73 [0.70; 0.76] | 0.67 [0.64; 0.70] | 0.72 [0.69; 0.75] |
+| smart_rusher@hard | 0.69 [0.66; 0.72] | 0.72 [0.69; 0.75] | 0.69 [0.66; 0.72] | 0.72 [0.69; 0.75] | 0.67 [0.64; 0.70] |
+| smart_strangler@hard | 0.65 [0.62; 0.68] | 0.61 [0.57; 0.64] | 0.65 [0.62; 0.68] | 0.58 [0.55; 0.62] | 0.66 [0.63; 0.69] |
+| smart_reactive@hard | 0.51 [0.48; 0.54] | 0.52 [0.49; 0.55] | 0.51 [0.48; 0.54] | 0.50 [0.47; 0.54] | 0.57 [0.54; 0.60] |
+
+The hard bots against the hoarder (their score, 120 matches each, before / after 2 / strike only / a / b): expander
+0.44 / 0.23 / 0.44 / 0.26 / 0.38, rusher 0.56 / 0.47 / 0.56 / 0.47 / 0.56, strangler 0.18 / 0.20 / 0.18 / 0.12 /
+0.31, reactive 0.17 / 0.12 / 0.17 / 0.15 / 0.25 (intervals about +-0.08).
+
+**What the runs say.**
+
+1. **Items 13 and 14 hurt.** The worry (B1: walk home and recruit at home when the visible build-up plus the bound of
+   the hidden force reaches what takes the capital) and the withdrawal of thin province garrisons (B2) cost the
+   expander 0.06-0.08 and the strangler 0.04-0.07 against the field and made every hard bot weaker against the hoarder
+   (after 1 and 2, ablation a). The bots lose their claims and their tempo to the walk home and to nodes given up; the
+   benchmark wins on VP, not by the strike it builds up, so a defense against the strike does not pay against it.
+   Both stay in the code with a switch, off for every personality.
+2. **Items 15-17 help where the playtest saw the weakness.** War while the warehouses are 9/10 full (B3), one forward
+   barracks in the centre (B4) and the alarm on two strikes at one node: the strangler gains 0.13 against the hoarder
+   (0.18 -> 0.31), the reactive 0.08 (0.17 -> 0.25) and 0.06 against the field; the expander loses 0.06 against the
+   hoarder (within the intervals) and 0.01 against the field.
+3. **The converging strike changes almost nothing for the personalities** (strike only = before within 0.01): their
+   single attacks already take the capital when a group can, and a second group within 3 edges of the enemy capital
+   with an own path is rare outside the hoarder's play. As a replacement of the single attacks (after 1) it cut the
+   capital wins of the expander from 65 to 15 and of the strangler from 184 to 62: dropped.
+
+### The result (the code of PR #641 = ablation b) and the server ladder
+
+`LEVEL_BOTS` (#574) on the same 3840 matches, head to head (120 matches each, both sides):
+
+| step | before | after (b) |
+|---|---|---|
+| normal `smart_reactive@easy` beats easy `smart_turtle@easy` | 0.97 [0.93; 0.99] | 0.97 [0.93; 0.99] (unchanged: neither bot answers) |
+| hard `smart_strangler@hard` beats normal | 0.70 [0.61; 0.77] | 0.77 [0.68; 0.83] |
+| expert `smart_expander@hard` beats hard | 0.58 [0.49; 0.67] | 0.55 [0.46; 0.64] |
+| expert beats normal | 0.92 [0.85; 0.95] | 0.88 [0.81; 0.93] |
+
+The ladder holds in order; the expert-over-hard step was already inside the interval of 0.5 before (#618 measured 0.58)
+and stays there, so no new table is proposed. Planned siege share of the 8-bot field: 0.416 before, 0.421 after.
+The hoarder stays the strongest bot of the field (0.74 of 16 bots before, 0.76 of 8 after); only the rusher (0.56)
+holds it about even. What would close the gap is not a defense against the strike but the claim and supply game it wins
+on VP: its front groups are charged and in groups of 2+, the bots' are single and spread.
+
+The full 16-bot run of the final code (41131096355) was dispatched; its artifact was not downloaded here (the
+GitHub API rate limit of the account ran out during the session), the 8-bot numbers above are the same matches.
