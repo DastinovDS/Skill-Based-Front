@@ -28,6 +28,10 @@ warehouse levels (DEC-26): ``systems.build``; they are not public.
 Front markers and the rear minimum (DEC-28): ``SetFront`` and ``SetRearMin``; one-off transfers
 (DEC-18): ``Transfer``; none of them is public; a transfer is cut to the free room of the
 target and leaves in batches, the first in the tick it is applied (``systems.supply``, #287).
+Economy v2 (DEC-41, items 2, 3, 5, 14; ``economy.model = "v2"``): ``BuildFactory``, ``DrawLine``
+and ``RemoveLine`` (free of CP; ``systems.lines``, ``systems.build``); ``SetStance``, ``SetFront``,
+``SetRearMin``, ``Transfer`` and ``UpgradeRoad`` give ``FEATURE_DISABLED`` there, and the three
+new commands give it under v1. None of them is public.
 """
 
 from collections.abc import Callable, Iterable
@@ -45,13 +49,21 @@ from gow_sim.state import (
     GameState,
     Group,
     IntentKind,
+    Line,
     Mode,
     OnEdge,
     Order,
     event,
 )
-from gow_sim.systems.build import start_city_build, start_road
+from gow_sim.systems.build import start_city_build, start_factory, start_road
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
+from gow_sim.systems.lines import (
+    creates_cycle,
+    factory_count,
+    is_line_source,
+    line_edges,
+    lines_out,
+)
 from gow_sim.systems.movement import find_path, path_ticks
 from gow_sim.systems.orders import absorb, clear_bonus, set_intent
 from gow_sim.systems.recruit import (
@@ -72,10 +84,12 @@ from gow_sim.systems.vision import compute_vision, edge_detail_level, is_visible
 
 __all__ = [
     "BuildBarracks",
+    "BuildFactory",
     "CancelOrder",
     "CancelRecruit",
     "Command",
     "CommandResult",
+    "DrawLine",
     "Forfeit",
     "Merge",
     "Mode",
@@ -85,6 +99,7 @@ __all__ = [
     "Recruit",
     "Reject",
     "RejectCode",
+    "RemoveLine",
     "SetFront",
     "SetMode",
     "SetRearMin",
@@ -214,6 +229,28 @@ class Transfer:
 
 
 @dataclass(frozen=True, slots=True)
+class BuildFactory:
+    """The own city ``node`` builds a supply factory (DEC-41, item 2; economy v2)."""
+
+    node: int
+
+
+@dataclass(frozen=True, slots=True)
+class DrawLine:
+    """A supply line along ``path``: own nodes from its source (an own factory or the target of
+    an own line) to its target, an own city, each next one a neighbour (DEC-41, items 3 and 6)."""
+
+    path: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RemoveLine:
+    """Remove the own line ``line`` (its per-player id, DEC-41, item 3)."""
+
+    line: int
+
+
+@dataclass(frozen=True, slots=True)
 class Forfeit:
     pass
 
@@ -233,6 +270,9 @@ type Command = (
     | SetFront
     | SetRearMin
     | Transfer
+    | BuildFactory
+    | DrawLine
+    | RemoveLine
     | Forfeit
 )
 
@@ -260,6 +300,9 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             | SetFront()
             | SetRearMin()
             | Transfer()
+            | BuildFactory()
+            | DrawLine()
+            | RemoveLine()
             | Forfeit()
         ):
             return cmd
@@ -305,7 +348,8 @@ class RejectCode(StrEnum):
     NOT_CAPITAL = "NOT_CAPITAL"
     """``recruit.location = capital``: recruiting only in the own capital (DEC-01)."""
     FEATURE_DISABLED = "FEATURE_DISABLED"
-    """``BuildBarracks`` and ``UpgradeWarehouse`` without ``city_upgrades`` (DEC-26, item 1)."""
+    """``BuildBarracks`` and ``UpgradeWarehouse`` without ``city_upgrades`` (DEC-26, item 1); a
+    command of the other economy model (DEC-41, item 14)."""
     ALREADY_BUILT = "ALREADY_BUILT"
     """The city has its barracks already, the capital from the start (DEC-26, item 9)."""
     WAREHOUSE_MAX = "WAREHOUSE_MAX"
@@ -317,6 +361,15 @@ class RejectCode(StrEnum):
     CITY_FULL = "CITY_FULL"
     """The owner's units standing in the city plus its recruit queue fill the capacity
     (DEC-25, item 7)."""
+    NOT_SOURCE = "NOT_SOURCE"
+    """The first node of a ``DrawLine`` is neither an own factory nor the target of an own line
+    (DEC-41, item 3)."""
+    LINE_LIMIT = "LINE_LIMIT"
+    """``lines.max_out`` lines start at the node already (DEC-41, L4)."""
+    LINE_CYCLE = "LINE_CYCLE"
+    """The line would close a cycle of own lines (DEC-41, L4)."""
+    FACTORY_LIMIT = "FACTORY_LIMIT"
+    """The player has ``factory.max`` factories, builds under way included (DEC-41, item 2)."""
     IN_FIGHT = "IN_FIGHT"
     """The group is in a fight: it only withdraws (DEC-24, item E): a defender of a node by a
     normal ``Move``, everyone else by ``CancelOrder``."""
@@ -397,6 +450,8 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return cost.rear_min
         case Transfer():
             return cost.transfer
+        case BuildFactory() | DrawLine() | RemoveLine():
+            return 0  # paid in charges or free (DEC-41, items 2 and 3)
         case Forfeit():
             return 0
 
@@ -446,6 +501,8 @@ def _check(
 ) -> tuple[int, ...] | TransferRoute | Reject:
     """Every rule except CP; returns the path for ``Move``, the route for ``Transfer`` (empty
     for the rest) or a Reject."""
+    if _other_model(rules, cmd):
+        return Reject(RejectCode.FEATURE_DISABLED)  # DEC-41, items 5 and 14
     match cmd:
         case Move(group=gid, dest=dest, planned=planned):
             group = _standing_group(state, player, gid, seen)
@@ -567,8 +624,75 @@ def _check(
             return ()
         case Transfer(src=src, dst=dst, n=n):
             return _check_transfer(state, rules, player, src, dst, n)
+        case BuildFactory(node=node):
+            return _check_factory(state, rules, player, node)
+        case DrawLine(path=path):
+            return _check_line(state, rules, player, path)
+        case RemoveLine(line=line):
+            if line not in state.players[player].lines:
+                return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+            return ()
         case Forfeit():
             return Reject(RejectCode.NO_CHANGE) if state.players[player].forfeited else ()
+
+
+def _other_model(rules: Ruleset, cmd: Command) -> bool:
+    """``cmd`` belongs to the other economy model (DEC-41, items 5 and 14)."""
+    if isinstance(cmd, BuildFactory | DrawLine | RemoveLine):
+        return not rules.v2
+    if isinstance(cmd, SetStance | SetFront | SetRearMin | Transfer | UpgradeRoad):
+        return rules.v2
+    return False
+
+
+def _check_factory(
+    state: GameState, rules: Ruleset, player: int, node: int
+) -> tuple[int, ...] | Reject:
+    """The checks of ``BuildFactory`` in this order (DEC-41, item 2; mechanics.md, the notes of
+    #644): the node, the owner, a city, a factory or a factory build there already, the factory
+    cap, the charges of the city warehouse."""
+    if not 0 <= node < len(state.map.nodes):
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    city = state.nodes[node]
+    if city.owner != player:
+        return Reject(RejectCode.NOT_OWNER)
+    if not is_city(state.map, node):
+        return Reject(RejectCode.NOT_CITY)
+    # TODO(#651): a factory build has no shared slot with DEC-26 and counts for the cap.
+    if city.factory == player or city.factory_build is not None:
+        return Reject(RejectCode.ALREADY_BUILT)
+    factory = rules.factory_rules()
+    if factory_count(state, player) >= factory.max:
+        return Reject(RejectCode.FACTORY_LIMIT)
+    if city.warehouse < factory.cost:
+        return Reject(RejectCode.NOT_ENOUGH_CHARGES)
+    return ()
+
+
+def _check_line(
+    state: GameState, rules: Ruleset, player: int, path: tuple[int, ...]
+) -> tuple[int, ...] | Reject:
+    """The checks of ``DrawLine`` in this order (DEC-41, items 3 and 6; mechanics.md, the notes
+    of #644): the length, the nodes, their owner, a simple path along roads, a city at the end,
+    the source, ``lines.max_out``, no cycle. Only own nodes are read, so nothing hidden leaks."""
+    if len(path) < 2:
+        return Reject(RejectCode.INVALID_ARGUMENT)
+    if any(not 0 <= n < len(state.map.nodes) for n in path):
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    if any(state.nodes[n].owner != player for n in path):
+        return Reject(RejectCode.NOT_OWNER)
+    if len(dict.fromkeys(path)) != len(path) or line_edges(state, path) is None:
+        return Reject(RejectCode.INVALID_ARGUMENT)
+    source, target = path[0], path[-1]
+    if not is_city(state.map, target):
+        return Reject(RejectCode.NOT_CITY)
+    if not is_line_source(state, player, source):
+        return Reject(RejectCode.NOT_SOURCE)
+    if len(lines_out(state, player, source)) >= rules.line_rules().max_out:
+        return Reject(RejectCode.LINE_LIMIT)
+    if creates_cycle(state, player, source, target):
+        return Reject(RejectCode.LINE_CYCLE)
+    return path
 
 
 def _check_front(
@@ -887,6 +1011,16 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                     arrive_tick=arrive,
                 )
             ]
+        case BuildFactory(node=node):
+            return [start_factory(state, rules, player, node)]
+        case DrawLine(path=path):
+            ps = state.players[player]
+            ps.lines[ps.next_line] = Line(ps.next_line, path)
+            ps.next_line += 1
+            return []
+        case RemoveLine(line=line):
+            del state.players[player].lines[line]
+            return []
         case Forfeit():
             state.players[player].forfeited = True
             return [event(tick, "forfeit", player=player)]

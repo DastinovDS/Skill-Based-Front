@@ -10,7 +10,9 @@ Rules for this module (AGENTS.md, section 4):
 ``to_canonical()`` turns the state into plain JSON data with every collection as a list sorted by
 id, so the canonical JSON and ``state_hash()`` do not depend on dict insertion order or
 ``PYTHONHASHSEED``. The static map is embedded in the file format (``map_to_data``), so the
-canonical form alone restores the state: ``from_canonical(to_canonical(s)) == s``.
+canonical form alone restores the state: ``from_canonical(to_canonical(s)) == s``. The fields of
+the economy v2 (DEC-41: factories, lines, the relay round robin) are written only when they differ
+from their defaults, so a v1 state has the canonical form and the hash it had before them.
 """
 
 from collections.abc import Callable
@@ -207,6 +209,28 @@ class Fight:
 
 
 @dataclass(slots=True)
+class Line:
+    """A drawn supply line of a player (DEC-41, items 3 and 6; ``economy.model = "v2"``).
+
+    ``path``: the own nodes from the source to the target, the first and the last; the path the
+    player drew while it is intact, the rerouted one after a break. ``id``: per player, from
+    ``PlayerState.next_line`` (only the owner ever sees its lines, so the numbers tell the enemy
+    nothing).
+    """
+
+    id: int
+    path: tuple[int, ...]
+
+    @property
+    def source(self) -> int:
+        return self.path[0]
+
+    @property
+    def target(self) -> int:
+        return self.path[-1]
+
+
+@dataclass(slots=True)
 class PlayerState:
     id: int
     cp: int
@@ -226,6 +250,10 @@ class PlayerState:
     rear_min: int = 0
     """Charges the own cities without a marker keep (DEC-28, item 3); ``initial_state`` sets
     ``supply.rear_min_default``."""
+    lines: dict[int, Line] = field(default_factory=dict[int, Line])
+    """The supply lines of the player by id (DEC-41, item 3); empty under v1."""
+    next_line: int = 0
+    """The id of the next line the player draws."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +272,15 @@ class Build:
     owner: int
     since: int
     kind: BuildKind = BuildKind.ROAD
+
+
+@dataclass(frozen=True, slots=True)
+class FactoryBuild:
+    """A factory being built in a city (DEC-41, item 2): by ``owner`` since the tick ``since``;
+    it holds while the city is theirs and ends ``factory.build_ticks`` later."""
+
+    owner: int
+    since: int
 
 
 @dataclass(slots=True)
@@ -276,6 +313,18 @@ class Node:
     cut_since: int | None = None
     """First tick of the current continuous cut of an own city from the owner's capital
     (DEC-19, item 2); ``None`` while supplied, for provinces and neutral nodes."""
+    factory: int | None = None
+    """The player whose factory this city is (DEC-41, item 2); ``None``: no factory. It differs
+    from ``owner`` only between a capture and the ``supply`` system of the same tick, which passes
+    the factory to the capturer or destroys it."""
+    factory_build: FactoryBuild | None = None
+    """The factory being built here (DEC-41, item 2); ``None``: none."""
+    inbox: int = 0
+    """Charges a relay received by its lines and has not given out yet (DEC-41, L5): its round
+    robin gives each one to a slot, the own warehouse or an outgoing line; at most
+    ``warehouse``. 0 for a node without outgoing lines."""
+    rr: int = 0
+    """The slot of the relay's round robin that gets the next charge (DEC-41, item 3)."""
 
 
 @dataclass(slots=True)
@@ -454,6 +503,8 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
                 over_ticks=0,
                 captured_tick=None,
                 has_barracks=_starts_with_barracks(rules, n.kind),
+                # DEC-41, item 2: the own capital is the main factory from the start.
+                factory=n.capital_of if rules.v2 else None,
             )
             for n in mapdef.nodes
         },
@@ -495,7 +546,10 @@ def start_warehouse_capacity(rules: Ruleset, kind: NodeKind) -> int:
 
 def _start_stock(rules: Ruleset, stock: int, kind: NodeKind) -> int:
     """With ``city_upgrades`` the start stock of the map is cut to the warehouse capacity, the
-    excess is dropped without an event (DEC-26, item 5); without it the map's stock as it is."""
+    excess is dropped without an event (DEC-26, item 5); without it the map's stock as it is.
+    With ``economy.start_stock_capital_only`` (DEC-41, item 9) only the capital keeps it."""
+    if rules.economy.start_stock_capital_only and kind is not NodeKind.CAPITAL:
+        return 0
     if rules.city_upgrades.enabled:
         return min(stock, start_warehouse_capacity(rules, kind))
     return stock
@@ -559,7 +613,18 @@ def _player_data(p: PlayerState) -> dict[str, object]:
         "forfeited": p.forfeited,
         "fronts": list(p.fronts),
         "rear_min": p.rear_min,
+        **_v2_player_data(p),
     }
+
+
+def _v2_player_data(p: PlayerState) -> dict[str, object]:
+    """The economy v2 fields of a player, only when set (see the module docstring)."""
+    data: dict[str, object] = {}
+    if p.lines:
+        data["lines"] = [{"id": k, "path": list(p.lines[k].path)} for k in sorted(p.lines)]
+    if p.next_line:
+        data["next_line"] = p.next_line
+    return data
 
 
 def _node_data(n: Node) -> dict[str, object]:
@@ -575,7 +640,22 @@ def _node_data(n: Node) -> dict[str, object]:
         "build": _build_data(n.build),
         "has_barracks": n.has_barracks,
         "warehouse_level": n.warehouse_level,
+        **_v2_node_data(n),
     }
+
+
+def _v2_node_data(n: Node) -> dict[str, object]:
+    """The economy v2 fields of a node, only when set (see the module docstring)."""
+    data: dict[str, object] = {}
+    if n.factory is not None:
+        data["factory"] = n.factory
+    if n.factory_build is not None:
+        data["factory_build"] = {"owner": n.factory_build.owner, "since": n.factory_build.since}
+    if n.inbox:
+        data["inbox"] = n.inbox
+    if n.rr:
+        data["rr"] = n.rr
+    return data
 
 
 def _build_data(b: Build | None) -> dict[str, object] | None:
@@ -786,8 +866,22 @@ def _parse_player(data: object, where: str) -> PlayerState:
             "fronts",
             "rear_min",
         ),
+        optional=("lines", "next_line"),
     )
     fronts = _list(raw["fronts"], f"{where}.fronts")
+    lines: dict[int, Line] = {}
+    for i, item in enumerate(_list(raw.get("lines", []), f"{where}.lines")):
+        at = f"{where}.lines[{i}]"
+        row = _obj(item, at, ("id", "path"))
+        line_id = _int(row["id"], f"{at}.id", low=0)
+        if line_id in lines:
+            raise StateFormatError(f"{at}.id: duplicate id {line_id}")
+        path = _list(row["path"], f"{at}.path")
+        if len(path) < 2:
+            raise StateFormatError(f"{at}.path: a line joins at least two nodes")
+        lines[line_id] = Line(
+            line_id, tuple(_int(n, f"{at}.path[{j}]", low=0) for j, n in enumerate(path))
+        )
     return PlayerState(
         id=_int(raw["id"], f"{where}.id", low=0),
         cp=_int(raw["cp"], f"{where}.cp", low=0),
@@ -798,6 +892,8 @@ def _parse_player(data: object, where: str) -> PlayerState:
         forfeited=_bool(raw["forfeited"], f"{where}.forfeited"),
         fronts=tuple(_opt_int(f, f"{where}.fronts") for f in fronts),
         rear_min=_int(raw["rear_min"], f"{where}.rear_min", low=0),
+        lines=lines,
+        next_line=_int(raw.get("next_line", 0), f"{where}.next_line", low=0),
     )
 
 
@@ -818,7 +914,15 @@ def _parse_node(data: object, where: str) -> Node:
             "has_barracks",
             "warehouse_level",
         ),
+        optional=("factory", "factory_build", "inbox", "rr"),
     )
+    factory_build = raw.get("factory_build")
+    if factory_build is not None:
+        fb = _obj(factory_build, f"{where}.factory_build", ("owner", "since"))
+        factory_build = FactoryBuild(
+            owner=_int(fb["owner"], f"{where}.factory_build.owner", low=0),
+            since=_int(fb["since"], f"{where}.factory_build.since", low=0),
+        )
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
         owner=_opt_int(raw["owner"], f"{where}.owner"),
@@ -831,6 +935,10 @@ def _parse_node(data: object, where: str) -> Node:
         cut_since=_opt_int(raw["cut_since"], f"{where}.cut_since"),
         has_barracks=_bool(raw["has_barracks"], f"{where}.has_barracks"),
         warehouse_level=_int(raw["warehouse_level"], f"{where}.warehouse_level", low=0),
+        factory=_opt_int(raw.get("factory"), f"{where}.factory"),
+        factory_build=factory_build,
+        inbox=_int(raw.get("inbox", 0), f"{where}.inbox", low=0),
+        rr=_int(raw.get("rr", 0), f"{where}.rr", low=0),
     )
 
 
@@ -1154,11 +1262,14 @@ def _parse_event(data: object, where: str) -> Event:
     return Event(tick=_int(raw["tick"], f"{where}.tick", low=0), kind=kind, data=tuple(values))
 
 
-def _obj(data: object, where: str, keys: tuple[str, ...]) -> dict[str, object]:
+def _obj(
+    data: object, where: str, keys: tuple[str, ...], optional: tuple[str, ...] = ()
+) -> dict[str, object]:
+    """The object ``data`` with exactly ``keys``, plus any of ``optional`` (may be absent)."""
     if not isinstance(data, dict):
         raise StateFormatError(f"{where}: expected an object, got {type(data).__name__}")
     raw: dict[str, object] = data  # pyright: ignore[reportUnknownVariableType]
-    unknown = sorted(k for k in raw if k not in keys)
+    unknown = sorted(k for k in raw if k not in keys and k not in optional)
     if unknown:
         raise StateFormatError(f"{where}: unknown keys {unknown}")
     missing = [k for k in keys if k not in raw]

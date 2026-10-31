@@ -37,6 +37,11 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'rear_min_set',
   // The score is in the top bar already (ui-style U2): a VP line would repeat it every few seconds.
   'vp_awarded',
+  // Economy v2 (DEC-41): factories and supply lines; their UI comes with #649.
+  'charge_burned',
+  'factory_built',
+  'line_cut',
+  'line_rerouted',
 ]);
 
 /** Kinds with a line in the feed. */

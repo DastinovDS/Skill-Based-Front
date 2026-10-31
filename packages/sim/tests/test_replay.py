@@ -9,13 +9,16 @@ from pathlib import Path
 import pytest
 
 from gow_sim.commands import (
+    BuildFactory,
     CancelOrder,
     Command,
+    DrawLine,
     Forfeit,
     Merge,
     Move,
     PlayerCommand,
     Recruit,
+    RemoveLine,
     SetMode,
     SetStance,
     Split,
@@ -54,6 +57,9 @@ COMMANDS: list[Command] = [
     UpgradeRoad(9),
     Recruit(0),
     CancelOrder(10),
+    BuildFactory(3),
+    DrawLine((0, 1, 2)),
+    RemoveLine(4),
     Forfeit(),
 ]
 

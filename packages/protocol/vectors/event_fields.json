@@ -53,6 +53,14 @@
         "group"
       ]
     },
+    "charge_burned": {
+      "fields": [
+        "charges",
+        "node",
+        "player"
+      ],
+      "ids": []
+    },
     "charges_overflow": {
       "fields": [
         "charges",
@@ -73,6 +81,13 @@
     "cp_burned": {
       "fields": [
         "cp",
+        "player"
+      ],
+      "ids": []
+    },
+    "factory_built": {
+      "fields": [
+        "node",
         "player"
       ],
       "ids": []
@@ -197,6 +212,24 @@
       "ids": [
         "group"
       ]
+    },
+    "line_cut": {
+      "fields": [
+        "from_node",
+        "line",
+        "player",
+        "to_node"
+      ],
+      "ids": []
+    },
+    "line_rerouted": {
+      "fields": [
+        "from_node",
+        "line",
+        "player",
+        "to_node"
+      ],
+      "ids": []
     },
     "node_captured": {
       "fields": [

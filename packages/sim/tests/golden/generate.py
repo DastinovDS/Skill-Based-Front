@@ -13,25 +13,31 @@ The drivers are ``ExpandBot`` of ``conftest.py`` plus ``MixBot``, which adds eve
 type on a fixed schedule (planned moves, splits, merges, modes, stances, road upgrades, supply
 priorities and transfers, cancellations while waiting and on an edge, recruit cancellations,
 barracks and warehouse upgrades, unknown ids), so the replays go through every command path and
-many rejections. The games cover ``mvp-0`` and ``mvp-1`` (``city_upgrades`` on, DEC-26).
+many rejections. The games cover ``mvp-0``, ``mvp-1`` (``city_upgrades`` on, DEC-26) and the
+economy v2 of ``mvp-3`` (DEC-41): there ``MixBot`` also builds factories, draws supply lines from
+its capital and from their targets and removes them, and its v1-only commands are rejected.
 """
 
 import argparse
 import importlib.util
 import shutil
 import sys
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from gow_sim.commands import (
     BuildBarracks,
+    BuildFactory,
     CancelOrder,
     CancelRecruit,
     Command,
+    DrawLine,
     Forfeit,
     Merge,
     Move,
+    RemoveLine,
     SetFront,
     SetMode,
     SetRearMin,
@@ -72,6 +78,7 @@ class MixBot:
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, forfeit_at: int | None = None) -> None:
         self.map = mapdef
+        self.v2 = rules.v2
         self.base = ExpandBot(mapdef, rules)
         self.forfeit_at = forfeit_at
         self.decisions = 0
@@ -123,7 +130,48 @@ class MixBot:
             cmds.append(CancelRecruit(self.map.capital(view.player)))
         if k % 37 == 0:  # usually rejected: no CP left, or FEATURE_DISABLED without the flag
             cmds.extend(self._develop(view, k))
+        if self.v2:
+            cmds.extend(self._economy_v2(view, k))
         return cmds
+
+    def _economy_v2(self, view: PlayerView, k: int) -> list[Command]:
+        """DEC-41: a line from the capital or from an own city to the own city of rank ``k``, a
+        factory now and then, a line removed by its per-player id; rejects are part of the log."""
+        me = view.player
+        cities = [n.id for n in view.nodes if n.owner == me and n.has_barracks is not None]
+        cmds: list[Command] = []
+        if k % 9 == 0 and len(cities) >= 2:
+            source = self.map.capital(me) if k % 2 else cities[k // 9 % len(cities)]
+            target = cities[(k // 9 + 1) % len(cities)]
+            path = self._own_path(view, source, target)
+            if path is not None:
+                cmds.append(DrawLine(path))
+        if k % 41 == 0 and cities:
+            cmds.append(BuildFactory(cities[k % len(cities)]))
+        if k % 53 == 0:
+            cmds.append(RemoveLine(k // 53 % 4))
+        return cmds
+
+    def _own_path(self, view: PlayerView, src: int, dst: int) -> tuple[int, ...] | None:
+        """A shortest path by edges over own nodes (BFS, neighbours in edge id order)."""
+        if src == dst:
+            return None
+        me = view.player
+        prev: dict[int, int] = {src: src}
+        queue = deque([src])
+        while queue:
+            node = queue.popleft()
+            if node == dst:
+                path = [dst]
+                while path[-1] != src:
+                    path.append(prev[path[-1]])
+                return tuple(reversed(path))
+            for e in self.map.incident[node]:
+                nxt = self.map.edges[e].other(node)
+                if nxt not in prev and view.nodes[nxt].owner == me:
+                    prev[nxt] = node
+                    queue.append(nxt)
+        return None
 
     def _develop(self, view: PlayerView, k: int) -> list[Command]:
         """The barracks or a warehouse level in the own city of rank ``k`` (DEC-26); without
@@ -191,6 +239,8 @@ GAMES = (
     Game("pass-short-forfeit", "pass", "test-short", forfeit_at=400),
     Game("artery-mvp1", "artery", "mvp-1"),
     Game("pass-mvp1", "pass", "mvp-1"),
+    Game("artery-mvp3", "artery", "mvp-3"),
+    Game("web-mvp3", "web", "mvp-3"),
 )
 
 

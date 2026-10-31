@@ -28,13 +28,20 @@ barracks or a warehouse level of a city.
 - ``upgrade_gain()``: what the next level gives, for the road hint in the client (the
   ``upgrade_gain`` of an own edge in the view, SIM-14).
 
+- Under the economy v2 (DEC-41, item 2): ``BuildFactory(node)`` takes ``factory.cost`` charges
+  from the city warehouse at the start (``start_factory()``; the progressive payment of item 7
+  comes with #645) and puts a ``FactoryBuild`` on the city; it does not take the build slot of the
+  barracks and the warehouse. ``factory.build_ticks`` later the city is a factory
+  (``factory_built``); a change of the city's owner before stops it (``build_stopped``, ``kind =
+  "factory"``, nothing is returned).
+
 The build events go only to their player (DEC-17, item 6; ``gow_protocol.convert``).
 """
 
 from dataclasses import dataclass
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import Build, BuildKind, Event, GameState, event
+from gow_sim.state import Build, BuildKind, Event, FactoryBuild, GameState, event
 from gow_sim.systems.capacity import is_internal
 from gow_sim.systems.movement import road_speed_pct as unit_speed_pct
 from gow_sim.systems.supply import road_amount, road_speed_pct
@@ -106,6 +113,53 @@ def start_city_build(state: GameState, player: int, node: int, kind: BuildKind) 
     )
 
 
+FACTORY_KIND = "factory"
+"""``kind`` of the build events of a factory (DEC-41, item 2)."""
+
+
+def start_factory(state: GameState, rules: Ruleset, player: int, node: int) -> Event:
+    """Apply a validated ``BuildFactory(node)``: pay ``factory.cost`` charges, start the build."""
+    city = state.nodes[node]
+    cost = rules.factory_rules().cost
+    city.warehouse -= cost  # validated: the warehouse holds it
+    city.factory_build = FactoryBuild(owner=player, since=state.tick)
+    return event(
+        state.tick, "build_started", player=player, node=node, kind=FACTORY_KIND, level=None
+    )
+
+
+def _factory_builds(state: GameState, rules: Ruleset) -> list[Event]:
+    """Finish or stop the factory builds (DEC-41, item 2), cities in id order."""
+    tick = state.tick
+    events: list[Event] = []
+    ticks = rules.factory_rules().build_ticks
+    for nid in sorted(state.nodes):
+        city = state.nodes[nid]
+        b = city.factory_build
+        if b is None:
+            continue
+        if city.owner != b.owner:
+            city.factory_build = None
+            events.append(
+                event(
+                    tick,
+                    "build_stopped",
+                    player=b.owner,
+                    node=nid,
+                    kind=FACTORY_KIND,
+                    edge=None,
+                    reason="interrupted",
+                )
+            )
+            continue
+        if tick < b.since + ticks:
+            continue
+        city.factory_build = None
+        city.factory = b.owner
+        events.append(event(tick, "factory_built", player=b.owner, node=nid))
+    return events
+
+
 def build(state: GameState, rules: Ruleset) -> list[Event]:
     """Finish or interrupt the builds (see the module docstring).
 
@@ -168,4 +222,6 @@ def build(state: GameState, rules: Ruleset) -> list[Event]:
                         level=city.warehouse_level,
                     )
                 )
+    if rules.v2:
+        events.extend(_factory_builds(state, rules))
     return events

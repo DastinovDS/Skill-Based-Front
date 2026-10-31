@@ -42,7 +42,8 @@ Definitions (all counts per player id, sides ``0`` and ``1``):
   warehouse as a packet or was taken by a unit is no longer in the warehouse.
 - **Burned share** (#310): ``charges_produced`` is the sum of ``charges`` of the player's
   ``charges_produced`` events (all that the economy made, spill included), ``charges_burned`` the
-  sum of ``charges`` of its ``charges_overflow`` events (what found no room in a warehouse),
+  sum of ``charges`` of its ``charges_overflow`` events (what found no room in a warehouse); a
+  ``charge_burned`` of a full factory (economy v2, DEC-41) counts in both,
   ``burned_permille = charges_burned * 1000 // charges_produced`` (per mille, rounded down;
   ``None`` without production). The other sinks (``packet_lost``, ``warehouse_lost``, starvation)
   are not burning and are not counted. Charges that never were produced (the start stock) never
@@ -648,6 +649,11 @@ def analyze(log: MatchLog) -> MatchMetrics:
                 player, charges = e.get("player"), e.get("charges")
                 assert isinstance(player, int) and isinstance(charges, int)
                 (produced if e.kind == "charges_produced" else burned)[player] += charges
+            case "charge_burned":  # made by a full factory and burned at once (DEC-41, item 2)
+                player, charges = e.get("player"), e.get("charges")
+                assert isinstance(player, int) and isinstance(charges, int)
+                produced[player] += charges
+                burned[player] += charges
             case "match_ended":
                 w, why = e.get("winner"), e.get("reason")
                 assert (w is None or isinstance(w, int)) and isinstance(why, str)

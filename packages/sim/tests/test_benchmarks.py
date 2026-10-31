@@ -25,9 +25,11 @@ import pytest
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Controller, Match, MatchResult, run_headless
-from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Detail, GameState, Group, Mode, OnEdge, Packet
-from gow_sim.systems.supply import supply
+from gow_sim.ruleset import Ruleset, load_ruleset
+from gow_sim.state import AtNode, Detail, GameState, Group, Line, Mode, OnEdge, Packet
+from gow_sim.systems.capacity import warehouse_capacities
+from gow_sim.systems.lines import supply_lines
+from gow_sim.systems.supply import supply, supply_tree
 from gow_sim.systems.vision import compute_vision
 from gow_sim.view import project
 
@@ -269,6 +271,70 @@ def test_bench_supply_many_donors_busy_roads(
 
     benchmark.pedantic(partial(_supply, rules=mvp_rules), setup=setup, rounds=500)
     _check(benchmark, speed_factor, 1.0 * MS)
+
+
+def _lines_state(mapdef: MapDef, rules: Ruleset) -> GameState:
+    """A dispatch tick of the economy v2 (DEC-41): every own node of a player is on its line
+    tree (a line from each node of its supply tree to each child, at most ``lines.max_out``), the
+    capital and two more cities are factories, every other node is a relay; the warehouses hold 3
+    (two levels), every other relay is full of charges of its lines and the rest are empty, and
+    packets of the last dispatch are on the way. No groups: the step is the supply alone."""
+    match = Match(mapdef, rules, KEY)
+    state = match.state
+    state.groups.clear()
+    for pid in PLAYERS:
+        tree = supply_tree(state, rules, pid)
+        children: dict[int, list[int]] = {}
+        for node in tree.order[1:]:
+            parent = tree.parent[node]
+            assert parent is not None
+            children.setdefault(parent, []).append(node)
+        ps = state.players[pid]
+        for node in tree.order:
+            for child in children.get(node, [])[: rules.line_rules().max_out]:
+                ps.lines[ps.next_line] = Line(ps.next_line, (node, child))
+                ps.next_line += 1
+        for node in (tree.order[3], tree.order[6]):
+            state.nodes[node].factory = pid
+    for node in state.nodes.values():
+        node.warehouse_level = rules.warehouse.max_level
+
+    def fill() -> None:
+        caps = warehouse_capacities(state, rules)
+        for node in state.nodes.values():
+            if node.owner is None:
+                continue
+            if node.factory == node.owner:
+                node.warehouse = caps[node.id]
+            else:
+                node.warehouse = node.inbox = caps[node.id] if node.id % 2 else 0
+                node.rr = 1  # the first line's turn
+
+    for _ in range(289):
+        match.step()
+    fill()
+    for _ in range(10):  # the dispatch of tick 290: its packets are on the way at 300
+        match.step()
+    fill()
+    state.tick += 1  # tick 300: a dispatch tick (``supply.dispatch_ticks`` 10 divides it)
+    return state
+
+
+def test_bench_supply_lines(
+    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef
+) -> None:
+    """The supply budget of section 12 (0.1 ms) on the economy v2 (#644): a dispatch tick with a
+    line tree over all own nodes, the worst tick of the lines (the others only move packets)."""
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+    state = _lines_state(grid_map, rules)
+    probe = supply_lines(copy.deepcopy(state), rules)
+    assert state.packets and any(e.kind == "packet_sent" for e in probe)
+
+    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
+        return (copy.deepcopy(state),), {}
+
+    benchmark.pedantic(partial(supply_lines, rules=rules), setup=setup, rounds=500)
+    _check(benchmark, speed_factor, 0.1 * MS)
 
 
 def test_bench_project(
