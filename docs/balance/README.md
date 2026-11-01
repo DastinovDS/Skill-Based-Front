@@ -122,7 +122,7 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `charges_built`, `charges_plans` | [int, int] | economy v2 (DEC-41): the charges paid for buildings (`build_paid` warehouse + units, item 7) and taken by waiting planned orders for their bonus (`plan_charged`, one each, item 10); 0 under v1 (#646) |
 | `charges_residual` | [int, int] | `charges_start + charges_produced` minus all sinks (`charges_burned`, the six above and the two v2 sinks) minus `charges_end`; 0 when every charge is explained by an event (#588) |
 | `charges_sent`, `charges_delivered`, `charges_delivered_front`, `charges_transfers` | [int, int] | the supply flow (#588): charges in dispatched packets, in all delivered packets (one-off transfers included), of them delivered into a city with a front marker, sent by transfers |
-| `stock_by_place_minute` | [{place: [int or null, ...]}, ...] | the stock by place and match minute in hundredths of a charge (#588); places `cap_wh`, `front_wh`, `rear_wh`, `units_node`, `units_road`, `packets` (with the charges in transit at v2 relays); `null`: no sample in that minute |
+| `stock_by_place_minute` | [{place: [int or null, ...]}, ...] | the stock by place and match minute in hundredths of a charge (#588); places `cap_wh`, `front_wh`, `rear_wh`, `units_node`, `units_road`, `packets`; `null`: no sample in that minute |
 | `marker_ticks`, `front_empty_ticks`, `front_empty_cap_has_ticks`, `cap_full_ticks` | [int, int] | the supply bottleneck in ticks (#588) |
 | `front_empty_permille`, `front_empty_cap_has_permille` | [int or null, ...] | the second and the third over `marker_ticks`, per mille, rounded down; `null` without marker ticks (#588) |
 | `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name (`Move`, `CancelOrder`, `Split`, `Merge`, `SetMode`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `UpgradeWarehouse`, `UpgradeRoad`, `SetFront`, `SetRearMin`, `Transfer`, and the economy v2 commands `DrawLine`, `RemoveLine`, `BuildFactory`, `BuildBunker`, `ReleasePlan`, #648), a planned `Move` as `MovePlanned`; `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
@@ -324,10 +324,10 @@ put it in a tournament with `--bots "... smart_hoarder"`.
 
 **Economy v2** (`mvp-3`, DEC-41, #648; `gow_bots.bots.economy`). Under `economy.model = "v2"` every bot sends no v1-only
 command (stance, front markers, rear minimum, transfers, road upgrades, Defense: `Bot.allowed`) and the campaign and
-smart bots play the v2 economy instead: **lines** from the own factories (only factories are sources: a relay whose
-small warehouse is full skips its incoming line and starves everything below it) to the nodes that want charges most
-(units without a charge, a building that owes charges, a front node with room, the hoard of `smart_hoarder`), as many as
-the factory slots (`lines.max_out` each) serve; **factories** (two beside the capital, one build at a time, the own city
+smart bots play the v2 economy instead: **lines** from the own factories (only a factory starts a line, DEC-42) to the
+nodes that want charges most (units without a charge, a building that owes charges, a front node with room, the hoard
+of `smart_hoarder`), at most four per factory (`LINES_PER_FACTORY`, a bot choice: DEC-42 has no limit), and a line from
+the capital into every built factory (a hub); **factories** (two beside the capital, one build at a time, the own city
 nearest the enemy capital that no enemy node touches); **bunkers** for the personalities that used Defense (one, three
 for `smart_turtle`; a front city with a full warehouse); **warehouse levels** in full supplying warehouses (charges, no
 CP); a **planned order** only where its bonus turns a bounce into a capture, asking for the missing shots at most the
