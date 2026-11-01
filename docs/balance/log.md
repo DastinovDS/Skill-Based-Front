@@ -851,3 +851,32 @@ The columns are computed from `tournament.jsonl` as in the report.
 The run confirms the report (same field, same bots; small differences in CP spent and win sd come from the
 rebuilt metric script). For reference the 13-bot default field (`--bots all`, 13520 matches: the old non-smart bots
 and the smart ones without levels) gives CP spent 0.77, burned 0.31, capital wins 14.1%.
+
+## 2026-11-01: lines from factories only (DEC-42, #674)
+
+Rule change of `mvp-3` (owner decision 2026-11-01, DEC-42 in mechanics.md): only a factory starts a line, no limit of
+lines (`lines.max_out` removed), a factory that is a line target is a hub, the auto-extension copies the nearest own
+line. The ruleset numbers are those of #659; the hash changed only by the removed key (`0efed0c36a6800b5812db56ebfa68bf6`,
+archived), `SIM_VERSION` 31. The bots draw lines only from their factories (at most 4 lines to wanted nodes per factory,
+a bot choice) and feed every built factory from the capital (`gow_bots.bots.economy`).
+
+Smoke run: `mise run tournament:gh --ruleset rulesets/mvp-3.toml --seeds 20 --shards 20` with the 16-bot field of #671
+(5 smart characters x easy, normal, hard + `smart_hoarder`, 4 pool maps, 20480 matches), the metrics of
+[v2-params-2026-10.md](v2-params-2026-10.md) (win sd: population standard deviation of the 16 win rates, draws 0.5,
+mirror matches left out).
+
+| | #671 (`SIM_VERSION` 30, line trees) | this run (DEC-42) |
+|---|---|---|
+| CP spent | 0.92 | 0.94 |
+| burned | 0.21 | 0.17 |
+| captures per player | 49.3 | 50.3 |
+| capital wins | 12.3% | 13.5% |
+| ticks | 8474 | 8429 |
+| win sd | 0.178 | 0.140 |
+| spread (max - min) | 0.51 | 0.43 |
+| top bot | strangler@normal 0.72 | strangler@normal 0.69 (strangler@hard 0.69) |
+
+No crash (20480 rows), no rejected command of the bots, draws 179 (0.9%). Lines drawn per player and match 40.8,
+removed 17.9. Less burned (0.21 -> 0.17): with no slot limit a factory serves every wanted node, and the hub feed moves
+capital production forward. The field is a little flatter (win sd 0.178 -> 0.140); the level order easy < normal,
+hard holds for every character. No gross imbalance: the smoke check passes.
