@@ -812,3 +812,14 @@ Against the whole field the levels rise on both rulesets (`mvp-3`: 0.26, 0.42, 0
   expander (0.81) are just above it, the `easy` bots below it; the field is much less polarized. The turtle is
   strong on `mvp-3` and weak on `mvp-2`: the v2 bunker and the factory economy favour the holder (a finding for #659).
 - Decisions within budget (local, the 3 pool maps, hard bots: p99 0.36-0.82 ms, the estimation step 0.03 ms mean).
+
+## 2026-10-31: economy v2 parameter experiments (#659)
+
+Report: [v2-params-2026-10.md](v2-params-2026-10.md); candidates `docs/balance/candidates/mvp-3-balanced.toml` and
+`mvp-3-conservative.toml`. `mvp-3` itself is unchanged. Findings on the 16-bot field: CP prices barely change the
+share of CP spent (bots are tempo limited), halving the income does (0.61 to 0.81); factory throughput and the
+capital warehouse do nothing for the burn, only less production does (0.40 to 0.28 at 70/140); the capture price is
+the lever for capital wins (cost 0 doubles them). Recommended `balanced` (CP period 100, factory periods 100/200,
+capture cost 0): on the bots of #663, 20 seeds, CP spent 0.78 to 0.90, burned 0.36 to 0.22, capital wins 7.7% to
+12.4%, win sd 0.233 to 0.188, no bot above 0.80. Runs: GitHub runner runs of branch `tmp/659-exp` and `tmp/659-exp2`
+(deleted after the PR), local runs for group C.
