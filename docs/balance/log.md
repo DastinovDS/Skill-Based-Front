@@ -823,3 +823,31 @@ the lever for capital wins (cost 0 doubles them). Recommended `balanced` (CP per
 capture cost 0): on the bots of #663, 20 seeds, CP spent 0.78 to 0.90, burned 0.36 to 0.22, capital wins 7.7% to
 12.4%, win sd 0.233 to 0.188, no bot above 0.80. Runs: GitHub runner runs of branch `tmp/659-exp` and `tmp/659-exp2`
 (deleted after the PR), local runs for group C.
+
+## 2026-11-01: `mvp-3` takes the `balanced` parameters (#659)
+
+Owner decision 2026-11-01: `rulesets/mvp-3.toml` = the candidate `balanced` of
+[v2-params-2026-10.md](v2-params-2026-10.md): `cp.period_ticks` 50 -> 100, `factory.capital_period_ticks` 50 ->
+100, `factory.built_period_ticks` 100 -> 200, `capture.charge_cost` 1 -> 0 (the rule stays parametric, DEC-38 and
+DEC-41 item 11 in mechanics.md). Ruleset hash `f53557cb6a112f7bbf0888d71fb250cd` (archived), `SIM_VERSION` 30
+unchanged (a number change only; the golden replays name their ruleset by hash).
+
+Check run: `mise run tournament:gh --ruleset rulesets/mvp-3.toml --seeds 20 --shards 20` with the 16-bot field of the
+experiments (5 smart characters x easy, normal, hard + `smart_hoarder`, 4 pool maps, 20480 matches). The default
+100 seeds were started first and cancelled after an hour (about 5 hours); 20 seeds is the number of the report.
+The columns are computed from `tournament.jsonl` as in the report.
+
+| | report `balanced` | this run |
+|---|---|---|
+| CP spent | 0.90 | 0.92 |
+| burned | 0.22 | 0.21 |
+| captures per player | 48.0 | 49.3 |
+| capital wins | 12.4% | 12.3% |
+| ticks | 8486 | 8474 |
+| win sd | 0.188 | 0.178 |
+| spread (max - min) | 0.53 | 0.51 |
+| top bot | strangler@normal 0.73 | strangler@normal 0.72 |
+
+The run confirms the report (same field, same bots; small differences in CP spent and win sd come from the
+rebuilt metric script). For reference the 13-bot default field (`--bots all`, 13520 matches: the old non-smart bots
+and the smart ones without levels) gives CP spent 0.77, burned 0.31, capital wins 14.1%.

@@ -70,7 +70,17 @@ from gow_sim.systems.lines import supply_lines
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
 RULESETS = ROOT / "rulesets"
-RULES = load_ruleset(RULESETS / "mvp-3.toml")
+MVP3 = load_ruleset(RULESETS / "mvp-3.toml")
+# The tables of DEC-41 (mechanics.md) are written for the accepted starting values: CP every 50
+# ticks, factories 50 / 100, a capture costs 1. mvp-3 moved on (owner decision 2026-11-01, #659:
+# `balanced`), so these tests pin the DEC-41 numbers on top of it; test_dec41.py pins the file.
+assert MVP3.factory is not None
+RULES = replace(
+    MVP3,
+    cp=replace(MVP3.cp, period_ticks=50),
+    factory=replace(MVP3.factory, capital_period_ticks=50, built_period_ticks=100),
+    capture=replace(MVP3.capture, charge_cost=1),
+)
 V1 = load_ruleset(RULESETS / "mvp-2.toml")
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 K, A, B, C, D, E, F, G, M = range(9)
@@ -131,8 +141,8 @@ def test_mvp3_is_mvp2_with_the_v2_keys() -> None:
     expected["economy"]["start_stock_capital_only"] = True
     expected["supply"]["base_speed_pct"] = 150
     expected["factory"] = {
-        "capital_period_ticks": 50,
-        "built_period_ticks": 100,
+        "capital_period_ticks": 100,  # #659, owner decision 2026-11-01: `balanced`
+        "built_period_ticks": 200,
         "cost": 4,
         "build_ticks": 100,
         "max": 3,
@@ -147,13 +157,15 @@ def test_mvp3_is_mvp2_with_the_v2_keys() -> None:
     expected["warehouse"]["province"] = 1
     expected["bunker"] = {"cost": 3, "build_ticks": 100, "shots": 1}
     # #646, items 10 and 11: the planned order costs as much as an ordinary one and gathers one
-    # bonus per 30 ticks; a capture spends one charge.
+    # bonus per 30 ticks; a capture spends one charge. #659 (owner decision 2026-11-01, `balanced`):
+    # the CP quantum every 100 ticks and a free capture.
     expected["orders"]["cost"]["planned_move"] = expected["orders"]["cost"]["move"]
     expected["orders"]["plan_ticks_per_bonus"] = 30
-    expected["capture"]["charge_cost"] = 1
-    assert to_canonical(RULES) == expected
-    assert parse_ruleset(expected) == RULES
-    assert RULES.v2 and RULES.economy.model is EconomyModel.V2
+    expected["capture"]["charge_cost"] = 0
+    expected["cp"]["period_ticks"] = 100
+    assert to_canonical(MVP3) == expected
+    assert parse_ruleset(expected) == MVP3
+    assert MVP3.v2 and MVP3.economy.model is EconomyModel.V2
 
 
 @pytest.mark.parametrize("name", ["mvp-0", "mvp-1", "mvp-2", "test-short"])

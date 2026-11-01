@@ -505,7 +505,7 @@ def test_economy_v2_commands_over_the_websocket(ws_settings: Settings) -> None:
             assert public.bunker is not None and public.orders.plan_ticks_per_bonus == 30
             snap = await recv_until(ws, SnapshotMsg)
             capital = snap.view.nodes[2]
-            assert (capital.factory, capital.factory_period) == (True, 50)
+            assert (capital.factory, capital.factory_period) == (True, 100)  # mvp-3, #659
             home = next(
                 g for g in snap.view.groups if g.location == AtNodeLoc(node=2) and g.charged
             )

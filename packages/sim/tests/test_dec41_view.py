@@ -42,7 +42,17 @@ from gow_sim.view import (
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+MVP3 = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+# The tables of DEC-41 (mechanics.md) are written for the accepted starting values: CP every 50
+# ticks, factories 50 / 100, a capture costs 1. mvp-3 moved on (owner decision 2026-11-01, #659:
+# `balanced`), so these tests pin the DEC-41 numbers on top of it; test_dec41.py pins the file.
+assert MVP3.factory is not None
+RULES = replace(
+    MVP3,
+    cp=replace(MVP3.cp, period_ticks=50),
+    factory=replace(MVP3.factory, capital_period_ticks=50, built_period_ticks=100),
+    capture=replace(MVP3.capture, charge_cost=1),
+)
 V1 = load_ruleset(ROOT / "rulesets" / "mvp-2.toml")
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 KEY = HEADLESS_MATCH_KEY
