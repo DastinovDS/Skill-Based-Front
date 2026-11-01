@@ -287,11 +287,6 @@ export class OrderController implements MapInteraction {
     };
   }
 
-  /** At most this many lines start at one node (`ruleset_public.lines.max_out`); 0 under v1. */
-  get linesMaxOut(): number {
-    return this.#o.rules.lines?.max_out ?? 0;
-  }
-
   /** The bunker's virtual shots (`ruleset_public.bunker.shots`); 0 under v1. */
   get bunkerShots(): number {
     return this.#o.rules.bunker?.shots ?? 0;

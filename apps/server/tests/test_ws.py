@@ -501,7 +501,7 @@ def test_economy_v2_commands_over_the_websocket(ws_settings: Settings) -> None:
             assert isinstance(welcome, WelcomeMsg)
             public = welcome.ruleset_public
             assert public.economy.model is EconomyModel.V2
-            assert public.factory is not None and public.lines is not None
+            assert public.factory is not None and public.bunker is not None
             assert public.bunker is not None and public.orders.plan_ticks_per_bonus == 30
             snap = await recv_until(ws, SnapshotMsg)
             capital = snap.view.nodes[2]

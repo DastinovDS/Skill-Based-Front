@@ -1,7 +1,9 @@
 """Economy v2, faster supply lines (DEC-41, owner decision 2026-10-31, #665).
 
 Expected values come from mechanics.md, section 7, block "Economy v2 (DEC-41, #642)", the rules
-"Suggested path" and "Auto-extension" with their tables S1-S4 and X1-X8. Map ``dec41`` as in
+"Suggested path" with its table S1-S4, the toggle rows X3, X5, X6 of "Auto-extension", and the
+auto-extension of DEC-42 (owner decision 2026-11-01, #674: a copy of the nearest own line) with
+its table A1-A8, which supersedes the rows X1, X2, X4, X7, X8. Map ``dec41`` as in
 ``test_dec41.py``: player 0 owns K = 0 (capital, a factory), A = 1, B, C, D = 2, 3, 4, E, F, G =
 5, 6, 7; M = 8 a neutral province; roads K-A, A-B, B-C, A-D, A-E, B-F, B-G 30 ticks, D-C 57,
 K-E 42, C-M 48. A packet takes ``travel_ticks * 100 // 150`` per road (item 8): 20 for 30 ticks,
@@ -104,81 +106,118 @@ def _code(outcome: Ok | Reject) -> RejectCode | None:
 # Auto-extension --------------------------------------------------------------------------------
 
 
-def _front() -> GameState:
-    """K -> A -> B drawn; C was lost (neutral) and is taken back."""
+def _lost(*nodes: int) -> GameState:
+    """A state at tick 1 where ``nodes`` were lost (neutral) and may be taken back."""
     state = _state()
-    state.nodes[C].owner = None
-    _lines(state, (K, A), (A, B))
+    for n in nodes:
+        state.nodes[n].owner = None
     return state
 
 
-def test_x1_the_line_next_to_the_city_extends_to_it() -> None:
-    state = _front()
+def _capture_with(state: GameState, rules: Ruleset, *nodes: int) -> list[Event]:
+    for n in nodes:
+        state.nodes[n].owner = 0
+    state.events = [event(state.tick, "node_captured", node=n, player=0) for n in nodes]
+    return supply_lines(state, rules)
+
+
+def _reach(ticks: int) -> Ruleset:
+    return replace(RULES, lines=replace(RULES.line_rules(), auto_extend_ticks=ticks))
+
+
+def test_a1_a_copy_of_the_line_up_to_its_nearest_node_then_the_extension() -> None:
+    """A1: line K -> B along K-E-A-B; C captured. B is 20 ticks away (A 40 avoiding K and E,
+    E 60, K 60): the new line follows K-E-A-B and goes on to C; line 0 is not changed."""
+    state = _lost(C)
+    _lines(state, (K, E, A, B))
     events = _capture(state, C)
-    assert _paths(state) == [(K, A), (A, B), (B, C)]  # B: 20 ticks, A: 40, K: 60
-    assert _auto(events) == [(2, B, C)]
-    assert state.players[0].next_line == 3
+    assert _paths(state) == [(K, E, A, B), (K, E, A, B, C)]
+    assert _auto(events) == [(1, K, C)]
+    assert state.players[0].next_line == 2
 
 
-def test_x2_the_nearest_source_with_room_by_ticks() -> None:
-    """B has ``lines.max_out`` lines; D (38 ticks over D-C) beats A (40 over A-B-C)."""
-    state = _front()
-    _lines(state, (B, F), (B, G), (B, A, D))
+def test_a2_the_nearest_node_of_any_line_by_ticks() -> None:
+    """A2: lines K -> A and K -> D (along K-A-D); C captured: D (38 over D-C) beats A (40)."""
+    state = _lost(C)
+    _lines(state, (K, A), (K, A, D))
     _capture(state, C)
-    assert _paths(state)[-1] == (D, C)
+    assert _paths(state)[-1] == (K, A, D, C)
 
 
-def test_x3_the_toggle_off_draws_nothing() -> None:
-    state = _front()
-    state.players[0].auto_lines = False
-    assert _auto(_capture(state, C)) == []
-    assert _paths(state) == [(K, A), (A, B)]
-
-
-def test_x4_no_source_next_to_the_city() -> None:
-    """With ``auto_extend_ticks = 50`` the nearest sources K and E are 60 ticks away."""
-    rules = replace(RULES, lines=replace(RULES.line_rules(), auto_extend_ticks=50))
-    state = _state()
-    state.nodes[C].owner = None
+def test_a3_a_tie_of_nodes_goes_to_the_smaller_node_key() -> None:
+    """A3: B lost, line K -> E; C captured: K and E are both 78 away (K-A-D-C, E-A-D-C): K."""
+    state = _lost(B, C)
     _lines(state, (K, E))
-    state.nodes[C].owner = 0
-    state.events = [event(1, "node_captured", node=C, player=0)]
-    assert _auto(supply_lines(state, rules)) == []
+    _capture(state, C)
+    assert _paths(state)[-1] == (K, A, D, C)
+
+
+def test_a4_a_tie_of_lines_at_one_node_goes_to_the_smaller_line_id() -> None:
+    """A4: lines K-E-A-B and K-A-B-F both pass B (20 from C): the copy of line 0."""
+    state = _lost(C)
+    _lines(state, (K, E, A, B), (K, A, B, F))
+    _capture(state, C)
+    assert _paths(state)[-1] == (K, E, A, B, C)
+
+
+def test_a5_no_line_within_the_radius() -> None:
+    """A5: line K -> E, ``auto_extend_ticks = 50``; K and E are 60 from C: nothing."""
+    state = _lost(C)
+    _lines(state, (K, E))
+    assert _auto(_capture_with(state, _reach(50), C)) == []
     assert _paths(state) == [(K, E)]
 
 
-def test_x8_a_new_line_from_the_factory() -> None:
-    """No lines at all: the capital K, a factory, starts one along K-A-B-C (60 ticks)."""
-    state = _state()
-    state.nodes[C].owner = None
-    assert _auto(_capture(state, C)) == [(0, K, C)]
-    assert _paths(state) == [(K, A, B, C)]
+def test_a6_no_lines_no_extension() -> None:
+    """A6: no own line at all (the capital is a factory, but on no line): nothing."""
+    state = _lost(C)
+    assert _auto(_capture(state, C)) == []
+    assert _paths(state) == []
+
+
+def test_x3_the_toggle_off_draws_nothing() -> None:
+    state = _lost(C)
+    _lines(state, (K, A, B))
+    state.players[0].auto_lines = False
+    assert _auto(_capture(state, C)) == []
+    assert _paths(state) == [(K, A, B)]
 
 
 def test_x5_a_province_is_not_joined() -> None:
-    state = _front()
+    state = _lost(C)
+    _lines(state, (K, A, B))
     _capture(state, C)
     assert _auto(_capture(state, M)) == []
 
 
-def test_x7_two_captures_of_one_tick_go_in_node_key_order() -> None:
-    """C first (the smaller ``node_key``) from B; then D from A (20 ticks; C, just joined and
-    so a source, takes 38)."""
-    state = _front()
-    state.nodes[D].owner = None
-    _capture(state, D, C)
-    assert _paths(state)[2:] == [(B, C), (A, D)]
+def test_a7_a_captured_factory_gets_no_line() -> None:
+    """A7: a captured factory that passes to the capturer is an own factory: no copy."""
+    state = _lost(C)
+    _lines(state, (K, A, B))
+    state.nodes[C].factory = 0
+    assert _auto(_capture(state, C)) == []
+
+
+def test_a8_a_new_line_counts_for_a_later_capture_of_the_tick() -> None:
+    """A8: line K -> E, ``auto_extend_ticks = 50``; B and F captured in one tick. B first (the
+    smaller ``node_key``): K and E are 40 away, K wins the tie: K-A-B. F then: line 0 is 60
+    away, the new line's B 20: K-A-B-F."""
+    state = _lost(B, F)
+    _lines(state, (K, E))
+    events = _capture_with(state, _reach(50), F, B)
+    assert _paths(state) == [(K, E), (K, A, B), (K, A, B, F)]
+    assert _auto(events) == [(1, K, B), (2, K, F)]
 
 
 def test_the_players_are_symmetric() -> None:
-    """The mirror of X1 for player 1 gives the mirrored line (4.1, rule 6)."""
+    """The mirror of A1 for player 1 gives the mirrored line (4.1, rule 6)."""
     mirror = MAP.mirror_nodes
     state = _state()
     for player in (0, 1):
         n = C if player == 0 else mirror[C]
         state.nodes[n].owner = None
-    _lines(state, (K, A), (A, B))
-    _lines(state, *(tuple(mirror[n] for n in p) for p in ((K, A), (A, B))), player=1)
+    _lines(state, (K, E, A, B))
+    _lines(state, tuple(mirror[n] for n in (K, E, A, B)), player=1)
     for n, player in ((C, 0), (mirror[C], 1)):
         state.nodes[n].owner = player
     state.events = [
@@ -186,6 +225,7 @@ def test_the_players_are_symmetric() -> None:
         event(1, "node_captured", node=mirror[C], player=1),
     ]
     supply_lines(state, RULES)
+    assert _paths(state, 0)[-1] == (K, E, A, B, C)
     assert _paths(state, 1)[-1] == tuple(mirror[n] for n in _paths(state, 0)[-1])
 
 

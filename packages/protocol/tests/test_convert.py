@@ -470,7 +470,7 @@ def test_economy_v2_through_the_wire() -> None:
             (0, wire.MoveCmd(group=str(start.id), dest=3, planned=True, bonus=2)),
             (1, wire.DrawLineCmd(path=(16, 15, 14))),
         ],
-        2: [(0, wire.DrawLineCmd(path=(2, 6))), (1, wire.DrawLineCmd(path=(14, 10)))],
+        2: [(0, wire.DrawLineCmd(path=(0, 1, 2, 6))), (1, wire.DrawLineCmd(path=(16, 15, 14, 10)))],
         45: [(0, wire.ReleasePlanCmd(group=str(start.id)))],
         120: [(0, wire.RemoveLineCmd(line=1))],
     }

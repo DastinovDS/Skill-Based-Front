@@ -626,7 +626,7 @@ def line_route(
     of the legs before it and the points after it, so the whole path is simple. ``()`` when there
     are fewer than two points, a point is repeated, out of range or not own, or a leg has no way.
     Only the owners of own nodes and the public map are read, so nothing hidden leaks; the
-    suggestion checks none of the rules of ``DrawLine`` (source, limit, cycle): the server
+    suggestion checks none of the rules of ``DrawLine`` (source, cycle): the server
     decides those when the player confirms the line.
     """
     count = len(state.map.nodes)

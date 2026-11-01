@@ -172,13 +172,17 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
 def _decide_v2(
     state: GameState, rules: Ruleset, player: int, own_cities: list[int]
 ) -> list[Command]:
-    """DEC-41: lines from the capital and from the targets of lines, factories, removals."""
+    """DEC-41, DEC-42: lines from the own factories, factories, removals."""
     tick = state.tick
     cmds: list[Command] = []
     if tick % 35 == 0 and len(own_cities) >= 2:
         k = tick // 35
-        lines = state.players[player].lines
-        sources = [state.map.capital(player), *(lines[i].target for i in sorted(lines))]
+        nodes = state.nodes
+        sources = sorted(
+            (n for n in nodes if nodes[n].owner == player and nodes[n].factory == player),
+            key=lambda n: state.map.node_key(player, n),
+        )
+        sources = sources or [state.map.capital(player)]
         src = sources[k % len(sources)]
         dst = own_cities[k % len(own_cities)]
         route = transfer_route(state, rules, player, src, dst) if src != dst else None
@@ -379,9 +383,7 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.has_barracks,
             a.warehouse_level,
         ), f"node {n}"
-        assert (b.factory, b.inbox, b.rr, b.fort) == (swap[a.factory], a.inbox, a.rr, a.fort), (
-            f"v2 of {n}"
-        )
+        assert (b.factory, b.rr, b.fort) == (swap[a.factory], a.rr, a.fort), f"v2 of {n}"
         for fa, fb in ((a.factory_build, b.factory_build), (a.fort_build, b.fort_build)):
             assert (fb is None) == (fa is None), f"factory or bunker build of {n}"
             if fa is not None and fb is not None:

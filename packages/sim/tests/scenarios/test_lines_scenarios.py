@@ -4,13 +4,15 @@ block "Economy v2 (DEC-41, #642)"), played through the full ``Match.step`` on ``
 | # | Lines | Event | Result |
 |---|---|---|---|
 | 1 | A -> C along A-B-C; a path A-D-C exists | B captured | the line reroutes along A-D-C |
-| 2 | A -> B; B -> D; B -> C; D and C connect only through B | B captured | all three lines cut |
-| 3 | as 2 | C captured | only B -> C is cut; A -> B and B -> D stay |
+| 2 | A -> B; A -> B -> D; A -> B -> C; D, C only through B | B captured | all three cut |
+| 3 | as 2 | C captured | only A -> B -> C is cut; A -> B and A -> B -> D stay |
 | 4 | factory A with lines A -> B, A -> E | A captured | both lines cut |
 
 Map ``dec41`` (see ``test_dec41.py``): player 0 owns K (capital), A, B, C, D, E, F, G with
 the roads K-A, A-B, B-C, A-D, D-C, A-E, K-E, B-F, B-G. F and G hang off B only, so situations
-2 and 3 use B -> F and B -> G for "B -> D, B -> C" of the table. A is a built factory. A
+2 and 3 use A -> B -> F and A -> B -> G for "D, C" of the table; DEC-42 (#674) made the lines
+of the owner's situations 2 and 3 whole paths from the factory (a non-factory starts none). A is
+a built factory. A
 capture is the owner change of ``capacity.change_owner`` between two ticks, as combat and
 movement make it.
 """
@@ -90,17 +92,17 @@ def test_the_drawn_path_is_kept_while_it_is_intact() -> None:
     assert _kinds(events, "line_rerouted") == [0]
 
 
-def test_situation_2_a_captured_relay_cuts_its_incoming_and_outgoing_lines() -> None:
-    match = _match((A, B), (B, F), (B, G))
+def test_situation_2_a_captured_node_without_a_way_round_cuts_every_line_through_it() -> None:
+    match = _match((A, B), (A, B, F), (A, B, G))
     events = _capture(match, B)
     assert _lines(match) == {}
     assert sorted(_kinds(events, "line_cut")) == [0, 1, 2]
 
 
 def test_situation_3_a_captured_target_cuts_only_its_line() -> None:
-    match = _match((A, B), (B, F), (B, G))
+    match = _match((A, B), (A, B, F), (A, B, G))
     events = _capture(match, G)
-    assert _lines(match) == {0: (A, B), 1: (B, F)}
+    assert _lines(match) == {0: (A, B), 1: (A, B, F)}
     assert _kinds(events, "line_cut") == [2]
 
 

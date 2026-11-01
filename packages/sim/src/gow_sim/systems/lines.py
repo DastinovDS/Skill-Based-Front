@@ -1,8 +1,10 @@
 """Supply of the economy v2 (DEC-41, #642; ``economy.model = "v2"``): factories and drawn lines.
 
 The ``supply`` step of a v2 match (``match.SYSTEMS`` runs it instead of ``systems.supply.supply``);
-mechanics.md, section 7, "Economy v2", items 2, 3, 5, 6, 8, and its implementation notes (#644).
-Numbers come from ``Ruleset.factory``, ``Ruleset.lines`` and ``Ruleset.supply``.
+mechanics.md, section 7, "Economy v2", items 2, 3, 5, 6, 8, its implementation notes (#644) and
+DEC-42 (owner decision 2026-11-01, #674: lines start only at factories, no limit of lines, hub
+factories, auto-extension copies the nearest line). Numbers come from ``Ruleset.factory``,
+``Ruleset.lines`` and ``Ruleset.supply``.
 
 Order inside the step:
 
@@ -16,56 +18,48 @@ Order inside the step:
    (``supply.transfer_route``: the sum of ``packet_ticks``, ties by the smaller ``node_key``
    sequence; event ``line_rerouted``), or cut if there is none. An intact path is never changed.
    A captured factory is a captured source, so all of its lines are cut.
-2a. **Auto-extension** (owner decision 2026-10-31, #665), for a player with
-   ``PlayerState.auto_lines`` on (``lines.auto_extend`` at the start, then ``SetAutoLines``):
-   every city (not a province) the player captured in this tick (``node_captured``) that is
-   still own and not an own factory, in ``node_key`` order of the player, gets a new line from
-   the **nearest suitable source**: an own node that may start a line (``is_line_source``: an
-   own factory or the target of an own line, so the line is new or extends the tree) with fewer
-   than ``lines.max_out`` lines out and no cycle closed (L4), whose fastest way over own nodes to
-   the city (``transfer_route``: the sum of ``packet_ticks``, ties by the smaller ``node_key``
-   sequence) takes the fewest ticks, at most ``lines.auto_extend_ticks`` ("next to it"); ties by
-   the smaller ``node_key`` of the source. The line follows that way (event ``line_auto``). No
-   suitable source that near: nothing happens. A city joined this way is the target of a line,
-   so a later capture in the same tick may extend from it.
+2a. **Auto-extension** (DEC-42, item 5), for a player with ``PlayerState.auto_lines`` on
+   (``lines.auto_extend`` at the start, then ``SetAutoLines``): every city (not a province) the
+   player captured in this tick (``node_captured``) that is still own and not an own factory, in
+   ``node_key`` order of the player, gets a **copy of the nearest own line**. For every own line
+   (by id) and every node ``n`` of its path, the extension is the fastest way over own nodes from
+   ``n`` to the city that avoids the nodes before ``n`` on that path (the rule of a leg of the
+   suggested path, ``view.line_route``; ``n`` the city itself: no extension, 0 ticks). The
+   nearest is the fewest extension ticks, at most ``lines.auto_extend_ticks``; ties by the
+   smaller ``node_key`` of ``n``, then the smaller line id. The new line starts at that line's
+   factory, follows its path up to ``n`` and then the extension (event ``line_auto``); the line
+   it copies is not changed. No own line that near: nothing happens. A line made this way counts
+   for a later capture of the same tick.
 3. **Packets** move as in v1 (``supply.move_packets``: a packet on a road that is no longer own is
    lost, at an own city with the way cut it is taken into the warehouse, at the end of its path it
-   fills the warehouse, the excess burns as ``charges_overflow``). A packet that ends in a relay
-   (an own node with outgoing lines that is not a factory) puts all its charges into the relay's
-   ``inbox``: charges in transit, outside the warehouse (owner decision 2026-10-31, #661).
+   fills the warehouse, the excess burns as ``charges_overflow``). A packet that ends in a factory
+   fills its warehouse like any other: the factory gives it out with its production (a hub).
 4. **Recharge** of standing units from the warehouse, as in v1 (``supply.recharge``).
-5. **Dispatch**, every ``supply.dispatch_ticks`` (ticks ``t > 0`` divisible by it). Every own node
-   with outgoing lines or with charges in transit runs its round robin once, nodes in
-   ``node_key`` order:
+5. **Dispatch**, every ``supply.dispatch_ticks`` (ticks ``t > 0`` divisible by it). Every own
+   factory with outgoing lines runs its round robin once, factories in ``node_key`` order:
 
-   - the slots: a factory has its outgoing lines by id; any other node has its own slot first
-     (its warehouse, L5), then its outgoing lines by id; ``Node.rr`` is the slot that gets the
-     next charge;
-   - the charges it gives out: the whole warehouse of a factory; the ``inbox`` of any other node;
-   - the **room** of a line's target ``T``: ``max(0, capacity - warehouse)`` of ``T``, plus the
-     room of the targets of ``T``'s own outgoing lines when ``T`` is not a factory, minus the
-     ``inbox`` of ``T`` and the charges of own packets on the way to ``T``, at least 0 (lines are
-     acyclic, L4, so the recursion ends; a node reached by two lines counts once per line);
-   - from ``rr``, one lap over the slots: the own slot is skipped when the warehouse is full, a
-     line when the room of its target is 0 (L6); else, while charges are left, the slot takes one:
-     the own slot moves it from the ``inbox`` into the warehouse, a line sends it as a packet of
-     one charge along its path (L1: one charge per line and dispatch, roads do not limit it).
-     When the charges run out first, ``rr`` stays on the slot that got none; after a full lap it
-     stays where the lap began;
-   - charges in transit that no slot took in the lap (every slot skipped) burn
-     (``charges_overflow``): no warehouse down the tree has room. Transit left after a lap in
-     which a slot took one waits for the next dispatch. A node that became a factory puts its
-     transit into its warehouse first (the excess burns).
+   - the slots are its outgoing lines by id; ``Node.rr`` is the slot that gets the next charge;
+   - it gives out its whole warehouse (its production and what lines brought into it);
+   - the **room** of a line's target ``T``: ``max(0, capacity - warehouse)`` of ``T`` minus the
+     charges of own packets on the way to ``T``, at least 0;
+   - from ``rr``, one lap over the slots: a line is skipped when the room of its target is 0
+     (L6, the factory keeps the charge); else, while charges are left, the line sends one as a
+     packet of one charge along its path (L1: one charge per line and dispatch, roads do not
+     limit it). When the charges run out first, ``rr`` stays on the line that got none; after a
+     full lap it stays where the lap began.
+
+   A line has no limit of number (DEC-42, item 2) and only its target receives its charges.
 
 A packet travels at ``supply.base_speed_pct`` (item 8): roads have no levels in v2. There are no
 front markers, rear minimum, donors, delivery passes, transfers or starvation (item 5).
 
 Cost per tick: O(V + L * P + packets + groups), ``L`` the lines and ``P`` their path lengths; a
-reroute adds one Dijkstra (``transfer_route``), a dispatch one walk over the lines.
+reroute adds one Dijkstra (``transfer_route``), an auto-extension one per node of the own lines,
+a dispatch one walk over the lines.
 """
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import Event, GameState, Line, Node, Packet, event
+from gow_sim.state import Event, GameState, Line, Node, event
 from gow_sim.systems.capacity import warehouse_capacities
 from gow_sim.systems.supply import (
     all_packet_ticks,
@@ -83,7 +77,6 @@ __all__ = [
     "factory_count",
     "is_line_source",
     "line_edges",
-    "lines_out",
     "supply_lines",
 ]
 
@@ -96,12 +89,7 @@ def supply_lines(state: GameState, rules: Ruleset) -> list[Event]:
         events.extend(_check_lines(state, rules, pid))
         events.extend(_auto_extend(state, rules, pid))
     capacities = warehouse_capacities(state, rules)
-    relays = {pid: _relays(state, pid) for pid in sorted(state.players)}
-
-    def transit(packet: Packet, node: int) -> bool:
-        return relays[packet.owner].get(node, False) and state.nodes[node].factory != packet.owner
-
-    events.extend(move_packets(state, capacities, transit))
+    events.extend(move_packets(state, capacities))
     recharge(state, rules, garrisons_by_node(state))
     tick = state.tick
     if tick > 0 and tick % rules.supply.dispatch_ticks == 0:
@@ -145,19 +133,10 @@ def _settle_factories(state: GameState, rules: Ruleset) -> None:
 # Lines -----------------------------------------------------------------------------------------
 
 
-def lines_out(state: GameState, player: int, node: int) -> list[Line]:
-    """The own lines that start at ``node``, by id."""
-    lines = state.players[player].lines
-    return [lines[k] for k in sorted(lines) if lines[k].source == node]
-
-
 def is_line_source(state: GameState, player: int, node: int) -> bool:
-    """``node`` may start a line (DEC-41, item 3): an own factory or the target of an own line."""
+    """``node`` may start a line: an own factory (DEC-42, item 1)."""
     n = state.nodes[node]
-    if n.owner == player and n.factory == player:
-        return True
-    lines = state.players[player].lines
-    return any(lines[k].target == node for k in sorted(lines))
+    return n.owner == player and n.factory == player
 
 
 def creates_cycle(state: GameState, player: int, source: int, target: int) -> bool:
@@ -221,7 +200,8 @@ def _check_lines(state: GameState, rules: Ruleset, player: int) -> list[Event]:
 
 
 def _auto_extend(state: GameState, rules: Ruleset, player: int) -> list[Event]:
-    """Join the cities ``player`` captured in this tick to its lines (module docstring, 2a)."""
+    """Copy the nearest own line to the cities ``player`` captured in this tick (module
+    docstring, 2a)."""
     if not state.players[player].auto_lines:
         return []
     nodes, mapdef = state.nodes, state.map
@@ -231,30 +211,17 @@ def _auto_extend(state: GameState, rules: Ruleset, player: int) -> list[Event]:
         if isinstance(node, int) and e.get("player") == player:
             captured[node] = True
     events: list[Event] = []
-    max_out, reach = rules.line_rules().max_out, rules.line_rules().auto_extend_ticks
+    reach = rules.line_rules().auto_extend_ticks
     edge_ticks = all_packet_ticks(state, rules) if captured else ()
+    ps = state.players[player]
     for city in sorted(captured, key=lambda n: mapdef.node_key(player, n)):
         n = nodes[city]
         if n.owner != player or n.factory == player or not is_city(mapdef, city):
             continue
-        best: tuple[int, int, tuple[int, ...]] | None = None
-        for src in sorted(nodes, key=lambda v: mapdef.node_key(player, v)):
-            if src == city or nodes[src].owner != player or not is_line_source(state, player, src):
-                continue
-            if len(lines_out(state, player, src)) >= max_out:
-                continue
-            if creates_cycle(state, player, src, city):
-                continue
-            route = transfer_route(state, rules, player, src, city, edge_ticks=edge_ticks)
-            if route is None or route.total_ticks > reach:
-                continue  # no way, or not next to the city
-            cand = (route.total_ticks, mapdef.node_key(player, src), route.nodes)
-            if best is None or cand[:2] < best[:2]:
-                best = cand
+        best = _nearest_copy(state, rules, player, city, reach, edge_ticks)
         if best is None:
             continue
-        ps = state.players[player]
-        line = Line(ps.next_line, best[2])
+        line = Line(ps.next_line, best)
         ps.lines[line.id] = line
         ps.next_line += 1
         events.append(
@@ -270,31 +237,57 @@ def _auto_extend(state: GameState, rules: Ruleset, player: int) -> list[Event]:
     return events
 
 
-def _relays(state: GameState, player: int) -> dict[int, bool]:
-    """The nodes with an outgoing line of ``player``: their line deliveries go to the inbox
-    (charges in transit) unless the node is a factory."""
+def _nearest_copy(
+    state: GameState,
+    rules: Ruleset,
+    player: int,
+    city: int,
+    reach: int,
+    edge_ticks: tuple[int, ...],
+) -> tuple[int, ...] | None:
+    """The path of the copy of the own line nearest to ``city`` (module docstring, 2a), or
+    ``None`` when no own line comes within ``reach`` packet ticks."""
+    mapdef = state.map
+    edges = mapdef.edges
     lines = state.players[player].lines
-    return {lines[k].source: True for k in sorted(lines)}
+    best: tuple[int, int, int, tuple[int, ...]] | None = None
+    for k in sorted(lines):
+        path = lines[k].path
+        if not is_line_source(state, player, path[0]):
+            continue  # only a factory starts a line (DEC-42, item 1)
+        for i, node in enumerate(path):
+            if node == city:
+                cand = (0, mapdef.node_key(player, node), k, path[: i + 1])
+            else:
+                blocked = {n: True for n in path[:i]}
+
+                def usable(eid: int, blocked: dict[int, bool] = blocked) -> bool:
+                    return edges[eid].a not in blocked and edges[eid].b not in blocked
+
+                route = transfer_route(state, rules, player, node, city, usable, edge_ticks)
+                if route is None or route.total_ticks > reach:
+                    continue  # no way, or the line does not come that near
+                cand = (route.total_ticks, mapdef.node_key(player, node), k, path[:i] + route.nodes)
+            if best is None or cand[:3] < best[:3]:
+                best = cand
+    return None if best is None else best[3]
 
 
 # Dispatch --------------------------------------------------------------------------------------
-
-_SELF = -1
-"""The own slot of a relay in its round robin (L5)."""
 
 
 def _dispatch(
     state: GameState, player: int, capacities: tuple[int, ...], edge_ticks: tuple[int, ...]
 ) -> list[Event]:
-    """One dispatch of ``player``: every source node and every node holding charges in transit
-    runs its round robin once (module docstring, step 5)."""
+    """One dispatch of ``player``: every own factory with lines runs its round robin once
+    (module docstring, step 5)."""
     lines = state.players[player].lines
     nodes = state.nodes
     out: dict[int, list[int]] = {}
     for k in sorted(lines):
-        out.setdefault(lines[k].source, []).append(k)
-    held = {n: True for n in sorted(nodes) if nodes[n].owner == player and nodes[n].inbox > 0}
-    if not out and not held:
+        if is_line_source(state, player, lines[k].source):
+            out.setdefault(lines[k].source, []).append(k)
+    if not out:
         return []
     incoming: dict[int, int] = {}
     for pid in sorted(state.packets):
@@ -302,92 +295,36 @@ def _dispatch(
         if packet.owner == player:
             dest = packet_dest(state, packet)
             incoming[dest] = incoming.get(dest, 0) + packet.charges
-    memo: dict[int, int] = {}
 
     def room(target: int) -> int:
-        """The charges the tree below ``target`` can still take (the module docstring)."""
-        if target in memo:
-            return memo[target]
-        n = nodes[target]
-        free = max(0, capacities[target] - n.warehouse)
-        if n.factory != player:
-            free += sum(room(lines[k].target) for k in out.get(target, []))  # acyclic (L4)
-        memo[target] = max(0, free - n.inbox - incoming.get(target, 0))
-        return memo[target]
+        free = capacities[target] - nodes[target].warehouse - incoming.get(target, 0)
+        return max(0, free)
 
     events: list[Event] = []
-    sources = sorted({**out, **held}, key=lambda n: state.map.node_key(player, n))
-    for src in sources:
+    for src in sorted(out, key=lambda n: state.map.node_key(player, n)):
         node = nodes[src]
-        factory = node.factory == player
-        if factory and node.inbox > 0:  # a relay that became a factory: its transit is stock
-            events.extend(_settle_inbox(state, player, src, capacities[src]))
-            memo.clear()
-        if factory and src not in out:
-            continue
-        slots = out[src] if factory else [_SELF, *out.get(src, [])]
-        left = node.warehouse if factory else node.inbox
+        slots = out[src]
         start = node.rr % len(slots)
         node.rr = start
-        given = 0
         for i in range(len(slots)):
-            slot = slots[(start + i) % len(slots)]
-            if slot == _SELF:
-                if node.warehouse >= capacities[src]:
-                    continue  # L6: the own warehouse is full
-            elif room(lines[slot].target) <= 0:
-                continue  # L6: nothing below that line has room, the charge stays
-            if left == 0:
-                node.rr = (start + i) % len(slots)  # this slot gets the next charge
+            line = lines[slots[(start + i) % len(slots)]]
+            if room(line.target) <= 0:
+                continue  # L6: the target is full, the factory keeps the charge
+            if node.warehouse == 0:
+                node.rr = (start + i) % len(slots)  # this line gets the next charge
                 break
-            left -= 1
-            given += 1
-            memo.clear()
-            if slot == _SELF:
-                node.inbox -= 1
-                node.warehouse += 1  # the own share of the relay (L5)
-                continue
-            events.append(_send(state, player, node, lines[slot], edge_ticks, factory=factory))
-            target = lines[slot].target
-            incoming[target] = incoming.get(target, 0) + 1
-        if not factory and given == 0 and node.inbox > 0:
-            events.append(_burn_inbox(state, player, src))  # no warehouse of the tree has room
+            events.append(_send(state, player, node, line, edge_ticks))
+            incoming[line.target] = incoming.get(line.target, 0) + 1
     return events
 
 
-def _settle_inbox(state: GameState, player: int, node: int, capacity: int) -> list[Event]:
-    """The transit of a node that is no longer a relay goes into its warehouse; what has no
-    room there burns."""
-    n = state.nodes[node]
-    added = min(n.inbox, max(0, capacity - n.warehouse))
-    n.warehouse += added
-    n.inbox -= added
-    return [_burn_inbox(state, player, node)] if n.inbox > 0 else []
-
-
-def _burn_inbox(state: GameState, player: int, node: int) -> Event:
-    """The charges in transit of ``node`` that no slot of its round robin can take burn."""
-    n = state.nodes[node]
-    charges, n.inbox = n.inbox, 0
-    return event(state.tick, "charges_overflow", player=player, node=node, charges=charges)
-
-
 def _send(
-    state: GameState,
-    player: int,
-    node: Node,
-    line: Line,
-    edge_ticks: tuple[int, ...],
-    *,
-    factory: bool,
+    state: GameState, player: int, node: Node, line: Line, edge_ticks: tuple[int, ...]
 ) -> Event:
-    """One charge of ``node`` leaves along ``line`` as a packet (L1)."""
+    """One charge of the factory ``node`` leaves along ``line`` as a packet (L1)."""
     edges = line_edges(state, line.path)
     assert edges is not None  # an own line always follows roads (validated, rerouted)
-    if factory:
-        node.warehouse -= 1
-    else:
-        node.inbox -= 1  # a relay passes on its transit, its warehouse stays (#661)
+    node.warehouse -= 1
     packet = send_packet(
         state,
         player,

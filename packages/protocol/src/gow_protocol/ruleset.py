@@ -191,13 +191,6 @@ class FactoryPublic(WireModel):
     """Factories of a player at most, the capital and the builds under way included."""
 
 
-class LinesPublic(WireModel):
-    """Supply lines (``lines`` of the ruleset, DEC-41, item 3; economy v2 only)."""
-
-    max_out: PosInt
-    """Lines that start at one node at most (L4)."""
-
-
 class BunkerPublic(WireModel):
     """The bunker (``bunker`` of the ruleset, DEC-41, item 12; economy v2 only)."""
 
@@ -264,8 +257,6 @@ class RulesetPublic(WireModel):
     supply: SupplyPublic
     vision: VisionPublic
     factory: FactoryPublic | None
-    """Economy v2 only; ``None`` under v1."""
-    lines: LinesPublic | None
     """Economy v2 only; ``None`` under v1."""
     bunker: BunkerPublic | None
     """Economy v2 only; ``None`` under v1."""
@@ -366,7 +357,6 @@ class RulesetPublic(WireModel):
                 build_ticks=rules.factory.build_ticks,
                 max=rules.factory.max,
             ),
-            lines=None if rules.lines is None else LinesPublic(max_out=rules.lines.max_out),
             bunker=None
             if rules.bunker is None
             else BunkerPublic(

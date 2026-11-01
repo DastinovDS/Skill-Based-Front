@@ -544,9 +544,8 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | starvation | `starvation` | a garrison cut off from the capital spends charges (DEC-19) |
 | packet | `Packet` | charges travelling along a road |
 | economy model | `economy.model` | `v1` (stances, front markers, donors) or `v2` (factories and drawn lines, DEC-41; `rulesets/mvp-3.toml`) |
-| factory | `Node.factory`, `BuildFactory` | economy v2: a city that makes charges into its own warehouse; the capital from the start, others built for charges (DEC-41, item 2) |
-| supply line | `Line`, `DrawLine`, `RemoveLine` | economy v2: a path of own nodes drawn by the player from a factory or a line target to a city; 1 charge per dispatch on its turn (DEC-41, item 3) |
-| relay | `Node.inbox` | economy v2: a line target with outgoing lines; the charges its lines bring wait in transit (`inbox`, outside the warehouse) and its round robin gives them to its own warehouse and to its lines in turn, a full relay still passes them on (DEC-41, L5, #661) |
+| factory | `Node.factory`, `BuildFactory` | economy v2: a city that makes charges into its own warehouse; the capital from the start, others built for charges (DEC-41, item 2); the only node that starts supply lines, and a factory that is the target of a line gives its charges out with its production, a hub (DEC-42) |
+| supply line | `Line`, `DrawLine`, `RemoveLine` | economy v2: a path of own nodes drawn by the player from an own factory to a city, any number per factory; only the target receives its charges, 1 charge per dispatch on its turn (DEC-41, item 3; DEC-42) |
 | bounce | `bounce` | an attacker without a win returns to the source node discharged |
 | scheduled order | `planned=True` | more expensive, visible to everyone as an intent, sets out with a delay, gives a one-off bonus; economy v2: the price of a move, the requested bonus `Move.bonus` is gathered in the node, one warehouse charge per `orders.plan_ticks_per_bonus` ticks, departs at the request, at the cap or by `ReleasePlan` (DEC-41, item 10) |
 | fight | `Fight` | a fight over time (DEC-24): a node or an edge with a meeting point `point`, rounds every `combat.round_ticks`, reinforcements and retreat; visible to both (`PlayerView.fights`) |

@@ -713,13 +713,14 @@ def test_the_v2_sinks_are_counted_from_their_events() -> None:
 
 def test_the_ledger_balances_on_the_v2_golden_matches() -> None:
     # The identity of the ledger (sources - sinks - end = 0) on the economy v2 golden games,
-    # which pay buildings in charges, gather planned bonuses and pay captures (#646).
+    # which pay buildings in charges and gather planned bonuses (#646); since v31 they play the
+    # mvp-3 of #659, where a capture is free.
     files = sorted(GOLDEN.glob(f"*-mvp3{REPLAY_SUFFIX}"))
     assert files
     for file in files:
         log = replay_log(file, ROOT / "rulesets" / "archive", ROOT / "maps" / "fixtures")
         m = analyze(log)
-        assert log.capture_charge_cost == 1
+        assert log.capture_charge_cost == 0
         assert sum(f.built for f in m.flow) > 0 and sum(f.plans for f in m.flow) > 0
         for flow in m.flow:
             assert flow.residual == 0, (file.name, flow)

@@ -612,16 +612,8 @@ def _owned_by(state: GameState, edge: int, player: int) -> bool:
     return state.nodes[e.a].owner == player == state.nodes[e.b].owner
 
 
-def move_packets(
-    state: GameState,
-    capacities: tuple[int, ...],
-    transit: Callable[[Packet, int], bool] | None = None,
-) -> list[Event]:
-    """Lose packets on roads that are no longer own internal ones, move and deliver the rest.
-
-    ``transit(packet, node)``: true for a packet that reaches the end of its path in a relay of
-    the economy v2 (DEC-41, owner decision 2026-10-31): all its charges go into the relay's
-    ``inbox`` (charges in transit, outside the warehouse), none burns."""
+def move_packets(state: GameState, capacities: tuple[int, ...]) -> list[Event]:
+    """Lose packets on roads that are no longer own internal ones, move and deliver the rest."""
     events: list[Event] = []
     tick = state.tick
     mapdef = state.map
@@ -658,20 +650,6 @@ def move_packets(
                 events.append(_lost(tick, pid, packet))
                 continue
         del state.packets[pid]  # the end of the path, or the way is cut at an own city
-        end = not packet.route and node_id != packet.from_node
-        if end and transit is not None and transit(packet, node_id):
-            node.inbox += packet.charges
-            events.append(
-                event(
-                    tick,
-                    "packet_delivered",
-                    packet=pid,
-                    player=owner,
-                    node=node_id,
-                    charges=packet.charges,
-                )
-            )
-            continue
         added = min(packet.charges, max(0, capacities[node_id] - node.warehouse))
         node.warehouse += added
         events.append(

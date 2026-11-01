@@ -39,8 +39,8 @@ Starvation in an encirclement (DEC-19; ``starvation`` after the attrition, in th
 Every owner change goes through ``change_owner()``: the warehouse is emptied (no trophies,
 mechanics.md, section 9), road levels, the barracks and the warehouse level are kept (DEC-26,
 item 4), the recruit queue of the former owner is lost without a refund (DEC-25,
-item 10), the grace period starts. Under the economy v2 (DEC-41) the relay state of the node goes
-with the warehouse and a bunker is destroyed (item 12); its factory and its lines are settled by
+item 10), the grace period starts. Under the economy v2 (DEC-41) the round robin of the node starts
+again and a bunker is destroyed (item 12); its factory and its lines are settled by
 ``systems.supply`` in the same tick, a factory or bunker build is stopped by ``systems.build``.
 
 Under the economy v2 there is no starvation (DEC-41, item 5).
@@ -177,7 +177,7 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     if n.owner == owner:
         return []
     events: list[Event] = []
-    lost = n.warehouse + n.inbox  # the charges in transit of a relay go too (DEC-41)
+    lost = n.warehouse
     if lost > 0:
         events.append(event(state.tick, "warehouse_lost", node=node, owner=n.owner, charges=lost))
     if n.recruit_queue > 0 and n.owner is not None:
@@ -191,7 +191,6 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     n.recruit_progress = 0
     n.owner = owner
     n.warehouse = 0
-    n.inbox = 0  # the charges in transit of a relay (DEC-41) go with the warehouse
     n.rr = 0
     n.fort = False  # DEC-41, item 12: a bunker is destroyed on capture, it does not pass
     n.cut_since = None

@@ -274,26 +274,23 @@ def test_bench_supply_many_donors_busy_roads(
 
 
 def _lines_state(mapdef: MapDef, rules: Ruleset) -> GameState:
-    """A dispatch tick of the economy v2 (DEC-41): every own node of a player is on its line
-    tree (a line from each node of its supply tree to each child, at most ``lines.max_out``), the
-    capital and two more cities are factories, every other node is a relay; the warehouses hold 3
-    (two levels), every other relay is full of charges of its lines and the rest are empty, and
-    packets of the last dispatch are on the way. No groups: the step is the supply alone."""
+    """A dispatch tick of the economy v2 (DEC-41, DEC-42): every own node of a player is the
+    target of a line from its capital along the supply tree (no limit of lines, DEC-42), two more
+    cities on the tree are factories, so the lines through them pass hubs; the warehouses hold 3
+    (two levels), every other target is full and the rest are empty, and packets of the last
+    dispatch are on the way. No groups: the step is the supply alone."""
     match = Match(mapdef, rules, KEY)
     state = match.state
     state.groups.clear()
     for pid in PLAYERS:
         tree = supply_tree(state, rules, pid)
-        children: dict[int, list[int]] = {}
-        for node in tree.order[1:]:
-            parent = tree.parent[node]
-            assert parent is not None
-            children.setdefault(parent, []).append(node)
         ps = state.players[pid]
-        for node in tree.order:
-            for child in children.get(node, [])[: rules.line_rules().max_out]:
-                ps.lines[ps.next_line] = Line(ps.next_line, (node, child))
-                ps.next_line += 1
+        for node in tree.order[1:]:
+            path = [node]
+            while (parent := tree.parent[path[-1]]) is not None:
+                path.append(parent)
+            ps.lines[ps.next_line] = Line(ps.next_line, tuple(reversed(path)))
+            ps.next_line += 1
         for node in (tree.order[3], tree.order[6]):
             state.nodes[node].factory = pid
     for node in state.nodes.values():
@@ -307,8 +304,8 @@ def _lines_state(mapdef: MapDef, rules: Ruleset) -> GameState:
             if node.factory == node.owner:
                 node.warehouse = caps[node.id]
             else:
-                node.warehouse = node.inbox = caps[node.id] if node.id % 2 else 0
-                node.rr = 1  # the first line's turn
+                node.warehouse = caps[node.id] if node.id % 2 else 0
+            node.rr = 1  # the second line's turn
 
     for _ in range(289):
         match.step()
@@ -324,7 +321,8 @@ def test_bench_supply_lines(
     benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef
 ) -> None:
     """The supply budget of section 12 (0.1 ms) on the economy v2 (#644): a dispatch tick with a
-    line tree over all own nodes, the worst tick of the lines (the others only move packets)."""
+    line from the capital to every own node, the worst tick of the lines (the others only move
+    packets)."""
     rules = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
     state = _lines_state(grid_map, rules)
     probe = supply_lines(copy.deepcopy(state), rules)

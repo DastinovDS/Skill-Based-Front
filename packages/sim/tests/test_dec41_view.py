@@ -109,23 +109,22 @@ def test_own_lines_are_in_the_view_with_their_paths() -> None:
 def test_fog_an_enemy_line_is_never_visible() -> None:
     """Item 3 and 14: the enemy's lines never reach a view, and nothing of a view depends on
     them: the views of a player are equal whatever lines the enemy has, also with an own group in
-    the enemy's nodes on the lines (an own source of vision there) and with the relay state of
-    the enemy's nodes."""
+    the enemy's nodes on the lines (an own source of vision there) and with the round robin of
+    the enemy's factory."""
     m = _match()
     _group(m, ENEMY_CITY, 2, 2)  # an own source of vision inside the enemy's lines
     m.step()
     before = view_to_canonical(project(m.state, RULES, 0, KEY))
     enemy = m.state.players[1]
-    enemy.lines = {0: Line(0, (16, 15, 14, 13)), 1: Line(1, (14, 9)), 5: Line(5, (16, 11))}
+    enemy.lines = {0: Line(0, (16, 15, 14, 13)), 1: Line(1, (16, 15, 14, 9)), 5: Line(5, (16, 11))}
     enemy.next_line = 6
-    m.state.nodes[14].inbox = 1
-    m.state.nodes[14].rr = 2
+    m.state.nodes[16].rr = 2
     after = project(m.state, RULES, 0, KEY)
     assert view_to_canonical(after) == before
     assert after.lines == ()
     assert [line.path for line in project(m.state, RULES, 1, KEY).lines] == [
         (16, 15, 14, 13),
-        (14, 9),
+        (16, 15, 14, 9),
         (16, 11),
     ]
 
@@ -135,7 +134,12 @@ def test_fog_no_enemy_line_in_any_view_of_a_played_match() -> None:
     exactly the own lines of its player."""
     m = _match()
     m.step([PlayerCommand(0, 1, DrawLine((K, A, B))), PlayerCommand(1, 1, DrawLine((16, 15, 14)))])
-    m.step([PlayerCommand(0, 2, DrawLine((B, F))), PlayerCommand(1, 2, DrawLine((14, 10)))])
+    m.step(
+        [
+            PlayerCommand(0, 2, DrawLine((K, A, B, F))),
+            PlayerCommand(1, 2, DrawLine((16, 15, 14, 10))),
+        ]
+    )
     assert len(m.state.players[0].lines) == 2 and len(m.state.players[1].lines) == 2
     for _ in range(120):
         m.step()
