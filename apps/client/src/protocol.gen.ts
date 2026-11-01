@@ -415,10 +415,6 @@ export interface RulesetPublic {
   /**
    * Economy v2 only; ``None`` under v1.
    */
-  lines: LinesPublic | null;
-  /**
-   * Economy v2 only; ``None`` under v1.
-   */
   bunker: BunkerPublic | null;
 }
 /**
@@ -666,15 +662,6 @@ export interface FactoryPublic {
    * Factories of a player at most, the capital and the builds under way included.
    */
   max: number;
-}
-/**
- * Supply lines (``lines`` of the ruleset, DEC-41, item 3; economy v2 only).
- */
-export interface LinesPublic {
-  /**
-   * Lines that start at one node at most (L4).
-   */
-  max_out: number;
 }
 /**
  * The bunker (``bunker`` of the ruleset, DEC-41, item 12; economy v2 only).
@@ -1491,7 +1478,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 34;
+export const PROTOCOL_VERSION = 35;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

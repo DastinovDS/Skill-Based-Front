@@ -11,7 +11,7 @@ Rules for this module (AGENTS.md, section 4):
 id, so the canonical JSON and ``state_hash()`` do not depend on dict insertion order or
 ``PYTHONHASHSEED``. The static map is embedded in the file format (``map_to_data``), so the
 canonical form alone restores the state: ``from_canonical(to_canonical(s)) == s``. The fields of
-the economy v2 (DEC-41: factories, lines, the relay round robin, bunkers, the charges a build
+the economy v2 (DEC-41: factories, lines, the round robin of a factory, bunkers, the charges a build
 still owes) are written only when they differ from their defaults, so a v1 state has the
 canonical form and the hash it had before them.
 """
@@ -344,13 +344,8 @@ class Node:
     the factory to the capturer or destroys it."""
     factory_build: FactoryBuild | None = None
     """The factory being built here (DEC-41, item 2); ``None``: none."""
-    inbox: int = 0
-    """Charges in transit at a relay (DEC-41, L5, owner decision 2026-10-31): what its incoming
-    lines delivered and its round robin has not given out yet, **outside** the warehouse (units
-    do not recharge from it, buildings do not take it); each dispatch gives one per slot to the
-    own warehouse or an outgoing line. Lost with the warehouse on a capture."""
     rr: int = 0
-    """The slot of the relay's round robin that gets the next charge (DEC-41, item 3)."""
+    """The line of the factory's round robin that gets the next charge (DEC-41, item 3)."""
     fort: bool = False
     """The node has a bunker of its owner (DEC-41, item 12; code name ``fort``); destroyed when
     the node is captured (``systems.capacity.change_owner``)."""
@@ -689,8 +684,6 @@ def _v2_node_data(n: Node) -> dict[str, object]:
         data["fort"] = True
     if n.fort_build is not None:
         data["fort_build"] = _site_build_data(n.fort_build)
-    if n.inbox:
-        data["inbox"] = n.inbox
     if n.rr:
         data["rr"] = n.rr
     return data
@@ -972,7 +965,7 @@ def _parse_node(data: object, where: str) -> Node:
             "has_barracks",
             "warehouse_level",
         ),
-        optional=("factory", "factory_build", "inbox", "rr", "fort", "fort_build"),
+        optional=("factory", "factory_build", "rr", "fort", "fort_build"),
     )
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
@@ -988,7 +981,6 @@ def _parse_node(data: object, where: str) -> Node:
         warehouse_level=_int(raw["warehouse_level"], f"{where}.warehouse_level", low=0),
         factory=_opt_int(raw.get("factory"), f"{where}.factory"),
         factory_build=_parse_site_build(raw.get("factory_build"), f"{where}.factory_build"),
-        inbox=_int(raw.get("inbox", 0), f"{where}.inbox", low=0),
         rr=_int(raw.get("rr", 0), f"{where}.rr", low=0),
         fort=_bool(raw.get("fort", False), f"{where}.fort"),
         fort_build=_parse_site_build(raw.get("fort_build"), f"{where}.fort_build"),

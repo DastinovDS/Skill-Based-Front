@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 34,
+    "PROTOCOL_VERSION": 35,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -1652,23 +1652,6 @@
       "title": "LineView",
       "type": "object"
     },
-    "LinesPublic": {
-      "additionalProperties": false,
-      "description": "Supply lines (``lines`` of the ruleset, DEC-41, item 3; economy v2 only).",
-      "properties": {
-        "max_out": {
-          "description": "Lines that start at one node at most (L4).",
-          "maximum": 2147483647,
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "max_out"
-      ],
-      "title": "LinesPublic",
-      "type": "object"
-    },
     "Location": {
       "discriminator": {
         "mapping": {
@@ -3064,17 +3047,6 @@
           ],
           "description": "Economy v2 only; ``None`` under v1."
         },
-        "lines": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LinesPublic"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Economy v2 only; ``None`` under v1."
-        },
         "bunker": {
           "anyOf": [
             {
@@ -3103,7 +3075,6 @@
         "supply",
         "vision",
         "factory",
-        "lines",
         "bunker"
       ],
       "title": "RulesetPublic",

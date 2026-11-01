@@ -108,9 +108,6 @@
       "build_ticks": 100,
       "max": 3
     },
-    "lines": {
-      "max_out": 3
-    },
     "bunker": {
       "cost": 3,
       "build_ticks": 100,

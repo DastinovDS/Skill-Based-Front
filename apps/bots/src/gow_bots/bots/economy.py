@@ -5,15 +5,15 @@ player draws, so a bot that does not draw lines leaves every node but its capita
 supply. These helpers are the minimal v2 play every campaign bot shares; they read only the
 ``PlayerView``, the map and the ruleset, and every tie goes through ``Bot.key`` (mirror-invariant):
 
-- **Lines** (``line_commands``): the own nodes that want charges (``wants``: own units without a
-  charge standing there, a building that still owes charges, a node next to a foreign one with
-  room in its warehouse, and the nodes a personality names), as many as the factories have
-  slots (``lines.max_out`` each), get a line from the nearest own source with a free slot: a
-  factory or the target of an own line (a relay passes charges on even with a full warehouse,
-  owner decision 2026-10-31, #661), so the lines grow into a tree. A line to a node no longer
-  among the wanted ones gives its slot up after ``LINE_HOLD_TICKS`` unless lines leave its
-  target; a line whose source is neither a factory nor a line target any more goes first. At
-  most ``LINE_COMMANDS`` per decision.
+- **Lines** (``line_commands``; DEC-42: only a factory starts a line, any number of them): the
+  own nodes that want charges (``wants``: own units without a charge standing there, a building
+  that still owes charges, a node next to a foreign one with room in its warehouse, and the
+  nodes a personality names), at most ``LINES_PER_FACTORY`` per own factory (a bot's choice: the
+  round robin of a factory splits its charges over its lines), get a line from the nearest own
+  factory. A built factory with no line into it is fed by a line from the own capital (a hub: it
+  gives out what that line brings with its own production); these feeds do not count for the
+  cap. Once the cap is reached, a line to a node no longer among the wanted ones gives its place
+  up after ``LINE_HOLD_TICKS``. At most ``LINE_COMMANDS`` per decision.
 - **Factories** (``factory_site``): one build at a time while the player has fewer than
   ``1 + extra`` factories (the capital is one) and the match has at least ``FACTORY_LATE_TICKS``
   left (4 charges pay back in 400 ticks at the built rate): the own city nearest the enemy
@@ -38,6 +38,7 @@ from gow_sim.view import AtNode, NodeView, PlayerView
 
 __all__ = [
     "FACTORY_LATE_TICKS",
+    "LINES_PER_FACTORY",
     "LINE_COMMANDS",
     "LINE_HOLD_TICKS",
     "RELEASE_SLACK",
@@ -51,7 +52,10 @@ __all__ = [
 LINE_COMMANDS: Final = 2
 """Line commands (``DrawLine``, ``RemoveLine``) per decision at most."""
 LINE_HOLD_TICKS: Final = 200
-"""A line stays at least this long before another wanted node takes its slot (no flapping)."""
+"""A line stays at least this long before another wanted node takes its place (no flapping)."""
+LINES_PER_FACTORY: Final = 4
+"""Lines to wanted nodes per own factory at most (a bot's choice, not a rule: DEC-42 has no
+limit)."""
 FACTORY_LATE_TICKS: Final = 1500
 """No factory is started with fewer ticks left (its 4 charges pay back in 400 ticks plus the
 build and the delivery)."""
@@ -131,11 +135,10 @@ def _way(bot: Bot, view: PlayerView, start: int, ends: list[int]) -> tuple[int, 
 def line_commands(
     bot: Bot, view: PlayerView, wanted: list[int], seen: dict[int, int]
 ) -> list[Command]:
-    """Lines from the own sources to the most ``wanted`` nodes their slots serve (module
-    docstring); ``seen``: own line id to the tick it was first seen, kept up to date here (a
-    line is removed only ``LINE_HOLD_TICKS`` after it)."""
+    """Lines from the own factories to the most ``wanted`` nodes and the feeds of the built
+    factories (module docstring); ``seen``: own line id to the tick it was first seen, kept up
+    to date here (a line is removed only ``LINE_HOLD_TICKS`` after it)."""
     me, tick = view.player, view.tick
-    max_out = bot.rules.line_rules().max_out
     factories = [n.id for n in view.nodes if n.owner == me and n.factory]
     live = {line.id: True for line in view.lines}
     for lid in sorted(seen):
@@ -143,44 +146,44 @@ def line_commands(
             del seen[lid]
     for line in view.lines:
         seen.setdefault(line.id, tick)
-    out: dict[int, int] = {}
-    into: dict[int, bool] = {}
-    for line in view.lines:
-        out[line.path[0]] = out.get(line.path[0], 0) + 1
-        into[line.path[-1]] = True
-    sources = factories + [
-        n for n in sorted(into) if view.nodes[n].owner == me and n not in factories
-    ]
-    keep = {node: True for node in wanted[: max_out * len(sources)]}
+    if not factories:
+        return []
+    into: dict[int, bool] = {line.path[-1]: True for line in view.lines}
+    plain = sum(1 for line in view.lines if not view.nodes[line.path[-1]].factory)
+    cap = LINES_PER_FACTORY * len(factories)
+    keep = {node: True for node in wanted[:cap]}
     cmds: list[Command] = []
-    for line in view.lines:  # a source that lost its own feed carries nothing
-        source = line.path[0]
-        orphan = not view.nodes[source].factory and not into.get(source, False)
-        if orphan and len(cmds) < LINE_COMMANDS:
-            cmds.append(RemoveLine(line.id))
+    capital = bot.map.capital(me)
+    if view.nodes[capital].owner == me and view.nodes[capital].factory:
+        for hub in sorted(factories, key=bot.key):
+            if hub == capital or into.get(hub, False) or len(cmds) >= LINE_COMMANDS:
+                continue
+            path = _way(bot, view, hub, [capital])
+            if path is not None:
+                cmds.append(DrawLine(path))
+                into[hub] = True
     for target in keep:
         if len(cmds) >= LINE_COMMANDS:
             break
         if into.get(target, False):
             continue
-        free = [f for f in sources if out.get(f, 0) < max_out]
-        path = _way(bot, view, target, free) if free else None
+        if plain >= cap:
+            spare = [
+                line
+                for line in view.lines
+                if not keep.get(line.path[-1], False)
+                and not view.nodes[line.path[-1]].factory  # a hub feed stays
+                and tick - seen[line.id] >= LINE_HOLD_TICKS
+            ]
+            if spare:
+                drop = min(spare, key=lambda line: (bot.key(line.path[-1]), line.id))
+                cmds.append(RemoveLine(drop.id))
+            break  # the place is free in the next decision
+        path = _way(bot, view, target, factories)
         if path is not None:
             cmds.append(DrawLine(path))
-            out[path[0]] = out.get(path[0], 0) + 1
+            plain += 1
             into[target] = True
-            continue
-        spare = [
-            line
-            for line in view.lines
-            if not keep.get(line.path[-1], False)
-            and not out.get(line.path[-1], 0)  # it feeds lines of its own
-            and tick - seen[line.id] >= LINE_HOLD_TICKS
-        ]
-        if spare:
-            drop = min(spare, key=lambda line: (bot.key(line.path[-1]), line.id))
-            cmds.append(RemoveLine(drop.id))
-            break  # the slot is free in the next decision
     return cmds
 
 

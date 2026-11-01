@@ -70,7 +70,6 @@ from gow_sim.systems.lines import (
     factory_count,
     is_line_source,
     line_edges,
-    lines_out,
 )
 from gow_sim.systems.movement import find_path, path_ticks
 from gow_sim.systems.orders import absorb, clear_bonus, release_plan, set_intent
@@ -407,10 +406,7 @@ class RejectCode(StrEnum):
     """The owner's units standing in the city plus its recruit queue fill the capacity
     (DEC-25, item 7)."""
     NOT_SOURCE = "NOT_SOURCE"
-    """The first node of a ``DrawLine`` is neither an own factory nor the target of an own line
-    (DEC-41, item 3)."""
-    LINE_LIMIT = "LINE_LIMIT"
-    """``lines.max_out`` lines start at the node already (DEC-41, L4)."""
+    """The first node of a ``DrawLine`` is not an own factory (DEC-42, item 1)."""
     LINE_CYCLE = "LINE_CYCLE"
     """The line would close a cycle of own lines (DEC-41, L4)."""
     FACTORY_LIMIT = "FACTORY_LIMIT"
@@ -755,7 +751,8 @@ def _check_line(
 ) -> tuple[int, ...] | Reject:
     """The checks of ``DrawLine`` in this order (DEC-41, items 3 and 6; mechanics.md, the notes
     of #644): the length, the nodes, their owner, a simple path along roads, a city at the end,
-    the source, ``lines.max_out``, no cycle. Only own nodes are read, so nothing hidden leaks."""
+    the source (an own factory, DEC-42), no cycle. There is no limit of lines (DEC-42, item 2).
+    Only own nodes are read, so nothing hidden leaks."""
     if len(path) < 2:
         return Reject(RejectCode.INVALID_ARGUMENT)
     if any(not 0 <= n < len(state.map.nodes) for n in path):
@@ -769,8 +766,6 @@ def _check_line(
         return Reject(RejectCode.NOT_CITY)
     if not is_line_source(state, player, source):
         return Reject(RejectCode.NOT_SOURCE)
-    if len(lines_out(state, player, source)) >= rules.line_rules().max_out:
-        return Reject(RejectCode.LINE_LIMIT)
     if creates_cycle(state, player, source, target):
         return Reject(RejectCode.LINE_CYCLE)
     return path

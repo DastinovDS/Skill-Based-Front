@@ -279,14 +279,16 @@ build_ticks = 100 # the factory works 10 s after the full payment
 max = 3 # factories of a player at most, the capital and the builds under way included
 
 [lines]
-# Drawn supply lines (DEC-41, items 3 and 6). DrawLine(path): a path of own nodes from a factory or the
-# target of an own line to an own city; each line carries 1 charge per supply.dispatch_ticks on its turn
-# of the round robin of its source node. Drawing and removing a line is free.
-max_out = 3 # lines that start at one node at most (L4)
-# Auto-extension (owner decision 2026-10-31, #665): a city the player captures gets a new line from the
-# nearest own source with room (an own factory or the target of an own line; the fastest way over own
-# nodes) when that source is next to it: at most auto_extend_ticks of packet travel away. auto_extend is
-# the start value of every player's toggle (SetAutoLines); false: the players draw every line themselves.
+# Drawn supply lines (DEC-41, items 3 and 6; DEC-42). DrawLine(path): a path of own nodes from an own
+# factory to an own city; only a factory starts a line, and it starts any number of them (DEC-42, no
+# limit key). Each line carries 1 charge per supply.dispatch_ticks on its turn of the round robin of
+# its factory; a factory that is the target of a line gives those charges out with its production (a
+# hub). Drawing and removing a line is free.
+# Auto-extension (DEC-42, item 5): a city the player captures gets a copy of the nearest own line: from
+# that line's factory along its path up to its node nearest the city, then the fastest way over own
+# nodes to the city, when that node is at most auto_extend_ticks of packet travel away; the copied
+# line does not change. auto_extend is the start value of every player's toggle (SetAutoLines);
+# false: the players draw every line themselves.
 auto_extend = true
 auto_extend_ticks = 100 # about two roads (a road takes 20 to 60 packet ticks on the pool maps)
 

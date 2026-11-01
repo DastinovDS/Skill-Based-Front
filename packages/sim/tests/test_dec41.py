@@ -3,9 +3,10 @@
 Expected values come from mechanics.md, section 7, block "Economy v2 (DEC-41, #642)": items 1, 2,
 3, 5, 8, 9, 14 and the implementation notes of #644 with their table R1-R5; the numbers of
 ``mvp-3`` from the same block (``factory.capital_period_ticks = 50``, ``built_period_ticks = 100``,
-``cost = 4``, ``build_ticks = 100``, ``max = 3``, ``lines.max_out = 3``,
-``supply.base_speed_pct = 150``). The breaking situations 1-4 of item 3 are scenario tests in
-``scenarios/test_lines_scenarios.py``.
+``cost = 4``, ``build_ticks = 100``, ``max = 3``, ``supply.base_speed_pct = 150``). The line
+rules follow DEC-42 (owner decision 2026-11-01, #674): only a factory starts a line, no limit of
+lines, a factory target is a hub (its table H1-H5). The breaking situations 1-4 of item 3 are
+scenario tests in ``scenarios/test_lines_scenarios.py``.
 
 Map ``dec41`` (rot180): player 0 owns K = 0 (capital), A = 1 (large), B, C, D = 2, 3, 4
 (medium), E, F, G = 5, 6, 7 (small); the roads K-A, A-B, B-C, A-D, A-E, B-F, B-G take 30 ticks,
@@ -147,7 +148,7 @@ def test_mvp3_is_mvp2_with_the_v2_keys() -> None:
         "build_ticks": 100,
         "max": 3,
     }
-    expected["lines"] = {"max_out": 3, "auto_extend": True, "auto_extend_ticks": 100}
+    expected["lines"] = {"auto_extend": True, "auto_extend_ticks": 100}  # DEC-42: no max_out
     # #645, items 7, 12, 13: buildings paid in charges instead of CP, the bunker, the province
     # warehouse.
     expected["orders"]["cost"]["barracks"] = 0
@@ -421,7 +422,7 @@ def test_draw_and_remove_a_line() -> None:
     ok = _cmd(state, DrawLine((K, A, B)))
     assert ok == Ok(cost=0, path=(K, A, B))
     assert state.players[0].lines == {0: Line(0, (K, A, B))}
-    assert isinstance(_cmd(state, DrawLine((B, C))), Ok)  # the target of a line is a source
+    assert isinstance(_cmd(state, DrawLine((K, A, B, C))), Ok)
     assert isinstance(_cmd(state, RemoveLine(0)), Ok)
     assert list(state.players[0].lines) == [1]
     assert _code(_cmd(state, RemoveLine(0))) is RejectCode.NOT_FOUND_OR_HIDDEN
@@ -436,7 +437,7 @@ def test_draw_and_remove_a_line() -> None:
         ((K, A, B, C, M), RejectCode.NOT_OWNER),
         ((K, A, K), RejectCode.INVALID_ARGUMENT),  # not a simple path
         ((K, B), RejectCode.INVALID_ARGUMENT),  # no road K-B
-        ((A, B), RejectCode.NOT_SOURCE),  # A is no factory and no target
+        ((A, B), RejectCode.NOT_SOURCE),  # A is no factory
     ],
 )
 def test_draw_line_checks(path: tuple[int, ...], code: RejectCode) -> None:
@@ -455,24 +456,32 @@ def test_a_line_ends_in_a_node_with_a_warehouse() -> None:
     assert _code(results[0].outcome) is RejectCode.NOT_CITY
 
 
-def test_at_most_three_lines_start_at_a_node() -> None:
-    """L4: ``lines.max_out = 3``; any number of incoming lines."""
+def test_h1_only_a_factory_starts_a_line() -> None:
+    """DEC-42, H1: line K -> A; ``DrawLine(A, B)`` is ``NOT_SOURCE``; A a factory: drawn."""
     state = _state(10)
-    for path in ((K, A), (K, A, B), (K, A, E)):
-        assert isinstance(_cmd(state, DrawLine(path)), Ok)
-    assert _code(_cmd(state, DrawLine((K, A, D)))) is RejectCode.LINE_LIMIT
+    assert isinstance(_cmd(state, DrawLine((K, A))), Ok)
+    assert _code(_cmd(state, DrawLine((A, B)))) is RejectCode.NOT_SOURCE
     state.nodes[A].factory = 0
-    assert isinstance(_cmd(state, DrawLine((A, B))), Ok)  # B: a second incoming line
+    assert isinstance(_cmd(state, DrawLine((A, B))), Ok)
+
+
+def test_h2_a_factory_starts_any_number_of_lines() -> None:
+    """DEC-42, H2: five lines from K are all drawn (no limit); any number of incoming lines."""
+    state = _state(10)
+    for path in ((K, A), (K, A, B), (K, A, E), (K, A, D), (K, E)):
+        assert isinstance(_cmd(state, DrawLine(path)), Ok)
+    assert len(state.players[0].lines) == 5
 
 
 def test_a_cycle_of_lines_is_rejected() -> None:
-    """L4: K -> A, A -> B; then B -> K (through A) closes a cycle; B -> C does not."""
+    """L4, DEC-42 H5: factory A, line K -> A; then A -> K, also through E, closes a cycle;
+    A -> B does not."""
     state = _state(10)
-    _cmd(state, DrawLine((K, A)))
-    _cmd(state, DrawLine((A, B)))
-    assert _code(_cmd(state, DrawLine((B, A, K)))) is RejectCode.LINE_CYCLE
+    state.nodes[A].factory = 0
+    assert isinstance(_cmd(state, DrawLine((K, A))), Ok)
     assert _code(_cmd(state, DrawLine((A, K)))) is RejectCode.LINE_CYCLE
-    assert isinstance(_cmd(state, DrawLine((B, C))), Ok)
+    assert _code(_cmd(state, DrawLine((A, E, K)))) is RejectCode.LINE_CYCLE
+    assert isinstance(_cmd(state, DrawLine((A, B))), Ok)
 
 
 def test_two_lines_with_the_same_ends_are_two_layers() -> None:
@@ -510,141 +519,47 @@ def test_r2_one_charge_per_line_and_dispatch() -> None:
     assert _sent(_supply_until(state, 19)) == []  # one dispatch per 10 ticks
 
 
-def test_r3_a_relay_keeps_one_slot_for_itself() -> None:
-    """L5: B is the target of A -> B and has lines B -> F, B -> G; three charges came by A -> B
-    and wait in transit (``inbox``, outside the warehouse, #661): B keeps one, F and G get one
-    each."""
+def test_h3_a_hub_factory_gives_out_what_its_line_brings() -> None:
+    """DEC-42, H3: K holds 1, A is a factory (empty) with the line A -> B, K -> A: K sends at 10,
+    the charge reaches A at 30 and leaves on A -> B in the same dispatch, B holds it at 50. A
+    packet of a 30-tick road takes 20 ticks (item 8)."""
     state = _state(9)
+    state.nodes[K].warehouse = 1
     _factory_a(state, 0)
-    _lines(state, (A, B), (B, F), (B, G))
-    state.nodes[B].warehouse_level = 1  # room for 3
-    state.nodes[B].inbox = 3
-    assert _sent(_supply_until(state, 10)) == [(10, B, F), (10, B, G)]
-    assert (state.nodes[B].warehouse, state.nodes[B].inbox) == (1, 0)
-    assert _sent(_supply_until(state, 20)) == []  # the kept charge stays in B
+    _lines(state, (K, A), (A, B))
+    events = _supply_until(state, 50)
+    assert _sent(events) == [(10, K, A), (30, A, B)]
+    assert [state.nodes[n].warehouse for n in (K, A, B)] == [0, 0, 1]
 
 
-def test_r3_relay_end_to_end() -> None:
-    """A charge delivered by A -> B enters B's round robin (own slot, B -> F): the first one stays
-    in B, the next goes on to F, the third stays in B again. A packet of A -> B takes
-    30 * 100 // 150 = 20 ticks (item 8)."""
+def test_h4_only_the_target_gets_the_charges_of_a_line() -> None:
+    """DEC-42, H4: K -> A -> B, A an empty city and no factory: the charge passes A and B holds
+    it at 50; A gets nothing."""
     state = _state(9)
-    _factory_a(state, 1)
-    _lines(state, (A, B), (B, F))
-    assert _sent(_supply_until(state, 10)) == [(10, A, B)]
-    (packet,) = state.packets.values()
-    assert (packet.depart_tick, packet.arrive_tick) == (10, 30)
-    assert _sent(_supply_until(state, 30)) == []  # delivered at 30: B keeps it
-    assert (state.nodes[B].warehouse, state.nodes[B].inbox, state.nodes[B].rr) == (1, 0, 1)
-    state.nodes[A].warehouse = 1
-    assert _sent(_supply_until(state, 60)) == [(40, A, B), (60, B, F)]
-    assert (state.nodes[B].warehouse, state.nodes[B].inbox, state.nodes[B].rr) == (1, 0, 0)
-    state.nodes[A].warehouse = 1
-    assert _sent(_supply_until(state, 90)) == [(70, A, B)]
-    assert state.nodes[B].warehouse == 2
+    state.nodes[K].warehouse = 1
+    _lines(state, (K, A, B))
+    _supply_until(state, 50)
+    assert [state.nodes[n].warehouse for n in (K, A, B)] == [0, 0, 1]
 
 
-def _overflow(events: list[Event]) -> list[Event]:
-    return [e for e in events if e.kind == "charges_overflow"]
-
-
-def test_t1_a_full_relay_passes_charges_on_in_turn() -> None:
-    """Owner's situation 2 with the decision of 2026-10-31 (#661, table T1): A -> B, B -> D,
-    B -> C, B full (2). The room of B is 0 (own) + 2 (D) + 2 (C), so A -> B is not skipped; the
-    charges wait in B's transit and go to D and C in turn, B keeps its 2. A -> B and B -> C take
-    20 ticks, B -> A -> D 40."""
-    state = _state(9)
-    _factory_a(state, 2)
-    _lines(state, (A, B), (B, A, D), (B, C))
-    state.nodes[B].warehouse = 2
-    events = _supply_until(state, 40)
-    assert _sent(events) == [(10, A, B), (20, A, B), (30, B, D), (40, B, C)]
-    assert (state.nodes[B].warehouse, state.nodes[B].inbox) == (2, 0)
-    events += _supply_until(state, 80)
-    assert (state.nodes[D].warehouse, state.nodes[C].warehouse) == (1, 1)
-    assert state.nodes[B].warehouse == 2
-    assert not _overflow(events)
-
-
-def test_t2_a_province_relay_of_capacity_1() -> None:
-    """Table T2: own province M (warehouse 1, full) is the target of C -> M and has lines
-    M -> 19 and M -> 20 (provinces, empty). C -> M takes 48 * 100 // 150 = 32 ticks, M -> 19 and
-    M -> 20 20: both charges pass M, one to each line in turn."""
-    state = _state(9)
-    for n in (M, 19, 20):
-        state.nodes[n].owner = 0
-    state.nodes[C].factory = 0
-    state.nodes[C].warehouse = 2
-    state.nodes[M].warehouse = 1
-    _lines(state, (C, M), (M, 19), (M, 20))
-    events = _supply_until(state, 90)
-    assert _sent(events) == [(10, C, M), (20, C, M), (50, M, 19), (60, M, 20)]
-    assert [state.nodes[n].warehouse for n in (M, 19, 20)] == [1, 1, 1]
-    assert state.nodes[M].inbox == 0
-    assert not _overflow(events)
-
-
-def test_t3_a_chain_of_three_full_relays() -> None:
-    """Table T3: A -> B -> C -> M -> 19, the relays B, C (2) and M (1) full, 19 empty (1). The
-    room down the chain is 1, so one charge goes all the way to 19 and A keeps the other; nothing
-    burns."""
-    state = _state(9)
-    for n in (M, 19):
-        state.nodes[n].owner = 0
-    _factory_a(state, 2)
-    _lines(state, (A, B), (B, C), (C, M), (M, 19))
-    state.nodes[B].warehouse = state.nodes[C].warehouse = 2
-    state.nodes[M].warehouse = 1
-    events = _supply_until(state, 200)
-    assert _sent(events) == [(10, A, B), (30, B, C), (50, C, M), (90, M, 19)]
-    assert [state.nodes[n].warehouse for n in (A, B, C, M, 19)] == [1, 2, 2, 1, 1]
-    assert [state.nodes[n].inbox for n in (B, C, M)] == [0, 0, 0]
-    assert not _overflow(events)
-
-
-def test_t4_transit_burns_only_when_no_warehouse_of_the_tree_has_room() -> None:
-    """Table T4: B holds 1 in transit, its warehouse (2) and F (1), the only target of its lines,
-    are full: no slot takes it and it burns. With F empty it goes to F instead."""
-    state = _state(9)
-    _lines(state, (A, B), (B, F))
-    state.nodes[B].warehouse, state.nodes[B].inbox, state.nodes[F].warehouse = 2, 1, 1
-    events = _supply_until(state, 10)
-    assert _sent(events) == []
-    assert [(e.get("node"), e.get("charges")) for e in _overflow(events)] == [(B, 1)]
-    assert state.nodes[B].inbox == 0
-    state = _state(9)
-    _lines(state, (A, B), (B, F))
-    state.nodes[B].warehouse, state.nodes[B].inbox = 2, 1
-    events = _supply_until(state, 10)
-    assert _sent(events) == [(10, B, F)]
-    assert not _overflow(events)
-
-
-def test_a_relay_tree_is_mirror_symmetric() -> None:
-    """4.1, rule 6: situation 2 of T1 for both players (player 1 owns the mirror ``16 - n``)
-    gives the mirrored warehouses, transit, round robin and sends."""
+def test_a_hub_is_mirror_symmetric() -> None:
+    """4.1, rule 6: H3 for both players (player 1 owns the mirror ``16 - n``) gives the mirrored
+    warehouses, round robin and sends."""
     state = _state(9)
     for player in (0, 1):
 
         def flip(n: int, player: int = player) -> int:
             return 16 - n if player else n
 
+        state.nodes[flip(K)].warehouse = 2
         state.nodes[flip(A)].factory = player
-        state.nodes[flip(A)].warehouse = 2
-        state.nodes[flip(B)].warehouse = 2
-        _lines(
-            state,
-            (flip(A), flip(B)),
-            (flip(B), flip(A), flip(D)),
-            (flip(B), flip(C)),
-            player=player,
-        )
+        _lines(state, (flip(K), flip(A)), (flip(A), flip(B)), (flip(A), flip(E)), player=player)
     events: list[Event] = []
-    for tick in (40, 55, 80):
+    for tick in (30, 45, 80):
         events += _supply_until(state, tick)
         for n in range(17):
             a, b = state.nodes[n], state.nodes[16 - n]
-            assert (a.warehouse, a.inbox, a.rr) == (b.warehouse, b.inbox, b.rr), f"node {n}"
+            assert (a.warehouse, a.rr) == (b.warehouse, b.rr), f"node {n}"
     sent = {
         p: [
             (e.tick, e.get("from_node"), e.get("to_node"))
@@ -654,7 +569,7 @@ def test_a_relay_tree_is_mirror_symmetric() -> None:
         for p in (0, 1)
     }
     assert sent[1] == [(t, 16 - cast(int, a), 16 - cast(int, b)) for t, a, b in sent[0]]
-    assert sent[0][:4] == [(10, A, B), (20, A, B), (30, B, D), (40, B, C)]
+    assert sent[0] == [(10, K, A), (20, K, A), (30, A, B), (40, A, E)]
 
 
 def test_r4_a_full_target_is_skipped_and_the_source_keeps_the_charge() -> None:
@@ -695,17 +610,17 @@ def test_line_packets_travel_at_150_percent() -> None:
 
 
 def test_the_v2_fields_round_trip_and_a_v1_state_has_none() -> None:
-    """The canonical form carries factories, factory builds, the relay state and the lines; a v1
+    """The canonical form carries factories, factory builds, the round robin and the lines; a v1
     state has none of these keys, so its hash is the hash it had before DEC-41."""
     state = _state(7)
-    _lines(state, (K, A, B), (B, C))
+    _lines(state, (K, A, B), (K, A, B, C))
     state.nodes[A].factory_build = FactoryBuild(owner=0, since=3)
-    state.nodes[B].inbox, state.nodes[B].rr = 1, 1
+    state.nodes[K].rr = 1
     assert from_canonical(state_canonical(state)) == state
     v1 = state_canonical(initial_state(MAP, V1))
     players, nodes = v1["players"], v1["nodes"]
     assert isinstance(players, list) and isinstance(nodes, list)
-    v2_keys = ("lines", "next_line", "factory", "factory_build", "inbox", "rr")
+    v2_keys = ("lines", "next_line", "factory", "factory_build", "rr")
     rows = cast(list[dict[str, object]], [*players, *nodes])
     for row in rows:
         assert not [key for key in v2_keys if key in row]
