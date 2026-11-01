@@ -689,6 +689,18 @@ export const SUPPLY_MARKER = {
 /** A cut-off city (DEC-19): hatched, a dashed ring and the time to the next starvation. */
 /** Economy v2 (DEC-41, item 6): the stroke of the supply line being drawn. */
 export const SUPPLY_DRAFT = { width: 4 } as const;
+/**
+ * Economy v2 (#672): the own lines the player looks at (of the selected node, or the one whose
+ * «remove» entry the pointer rests on) and the rest. A background line keeps `dimAlpha` of its
+ * opacity; a looked-at leg carries chevrons pointing from the source to the target (a shape, not a
+ * hue: they read in grey and with "less motion", when the dashes stand still), one per `every`
+ * units of the leg; the end of the lit line gets a ring `ring` off the rim of the city.
+ */
+export const SUPPLY_LINE = {
+  dimAlpha: 0.35,
+  chevron: { half: 4.6, depth: 4, width: 2.4, casing: 1.7, every: 34 },
+  ring: 7,
+} as const;
 /** Economy v2 (DEC-41, item 2): the factory badge of the «Supply» layer, off the rim of the city. */
 export const SUPPLY_FACTORY = { radius: 7.5, lift: 4 } as const;
 export const SUPPLY_CUT = {

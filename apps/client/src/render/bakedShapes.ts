@@ -50,6 +50,7 @@ import {
   RIM,
   SEGMENT_EMPTY,
   SHADOW,
+  SUPPLY_LINE,
   UNIT_DASH,
   UNIT_HALO,
   UNIT_OUTLINE,
@@ -892,6 +893,33 @@ export function progressAlertSpec(width: number, height: number): BakeSpec {
       const g = graphics(into);
       dashedRect(g, -width / 2, -height / 2, width, height, dash, gap);
       g.stroke({ width: stroke, color: WARN });
+    },
+  };
+}
+
+// --- Supply lines --------------------------------------------------------------------------------
+
+/**
+ * The direction chevron of a supply line looked at (#672): a light «>» on a dark casing, pointing
+ * along +x (the sprite is turned to the leg); the same texture for every leg.
+ */
+export function lineChevronSpec(): BakeSpec {
+  const { half, depth, width, casing } = SUPPLY_LINE.chevron;
+  const reach = Math.max(half, depth / 2) + width / 2 + casing;
+  return {
+    key: 'line-chevron',
+    box: shadowBox(circleBox(reach), BAKE_MARGIN),
+    draw(into) {
+      const g = graphics(into);
+      const trace = (): void => {
+        g.moveTo(-depth / 2, -half)
+          .lineTo(depth / 2, 0)
+          .lineTo(-depth / 2, half);
+      };
+      trace();
+      g.stroke({ width: width + 2 * casing, color: BG, alpha: 0.92, join: 'round', cap: 'round' });
+      trace();
+      g.stroke({ width, color: PAPER, join: 'round', cap: 'round' });
     },
   };
 }

@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { MapFile, NodeView, PacketView, View } from '../protocol.gen.ts';
-import { edgeIndex, lanePoint, lineFlows, supplyFlows, supplyScene } from './supplyLayout.ts';
+import type { LineView, MapFile, NodeView, PacketView, View } from '../protocol.gen.ts';
+import {
+  edgeIndex,
+  lanePoint,
+  lineFlows,
+  splitLines,
+  supplyFlows,
+  supplyScene,
+} from './supplyLayout.ts';
 
 // A chain 0 - 1 - 2 of roads 0 (0-1) and 1 (1-2), plus a road 2 (1-3).
 const map = {
@@ -47,7 +54,7 @@ describe('supply lines (economy v2, DEC-41, item 3)', () => {
       { id: 1, path: [0, 1, 2] as [number, number, ...number[]] },
       { id: 2, path: [0, 1, 3] as [number, number, ...number[]] },
     ];
-    expect(lineFlows(view({ lines }), index)).toEqual([
+    expect(lineFlows(lines, index)).toEqual([
       { edge: 0, from: 0, to: 1, charges: 2, transfer: false, line: true },
       { edge: 1, from: 1, to: 2, charges: 1, transfer: false, line: true },
       { edge: 2, from: 1, to: 3, charges: 1, transfer: false, line: true },
@@ -59,6 +66,78 @@ describe('supply lines (economy v2, DEC-41, item 3)', () => {
     const packets = [packet({ path: [1, 2] })];
     const flows = supplyScene(view({ lines, packets }), 0, index).flows;
     expect(flows).toEqual([{ edge: 0, from: 0, to: 1, charges: 1, transfer: false, line: true }]);
+  });
+});
+
+describe('focus on the lines (#672)', () => {
+  const line = (id: number, ...path: number[]): LineView => ({ id, path }) as unknown as LineView;
+  // Two sources: 0 feeds 2 (through 1) and 3; 1 is the target of a line from 0 and relays to 3.
+  const a = line(1, 0, 1, 2);
+  const b = line(2, 0, 1, 3);
+  const c = line(3, 1, 3);
+  const lines = [a, b, c];
+  const ids = (list: readonly LineView[]) => list.map((l) => l.id);
+
+  it('nothing selected, nothing lit: every line in front, unmarked', () => {
+    const split = splitLines(lines, { node: null, line: null });
+    expect(ids(split.front)).toEqual([1, 2, 3]);
+    expect(split.back).toEqual([]);
+    expect(split.marked).toBe(false);
+    expect(split.lit).toBeNull();
+  });
+
+  it('a selected source shows only its lines, marked', () => {
+    const split = splitLines(lines, { node: 0, line: null });
+    expect(ids(split.front)).toEqual([1, 2]);
+    expect(split.back).toEqual([]);
+    expect(split.marked).toBe(true);
+  });
+
+  it('a selected relay shows the lines that end there and the ones that start there', () => {
+    expect(ids(splitLines([line(4, 0, 1), ...lines], { node: 1, line: null }).front)).toEqual([
+      4, 3,
+    ]);
+  });
+
+  it('a node only passed through, or one without lines, filters nothing', () => {
+    // Line 1 passes 1 but neither starts nor ends there; 2 is the target of line 1 only.
+    expect(ids(splitLines([a, b], { node: 1, line: null }).front)).toEqual([1, 2]);
+    const none = splitLines(lines, { node: 9, line: null });
+    expect(ids(none.front)).toEqual([1, 2, 3]);
+    expect(none.marked).toBe(false);
+  });
+
+  it('a lit line goes in front, the other shown lines to the background', () => {
+    const split = splitLines(lines, { node: 0, line: 2 });
+    expect(ids(split.front)).toEqual([2]);
+    expect(ids(split.back)).toEqual([1]);
+    expect(split.marked).toBe(true);
+    expect(split.lit).toBe(b);
+  });
+
+  it('an unknown lit line lights nothing', () => {
+    const split = splitLines(lines, { node: 0, line: 99 });
+    expect(ids(split.front)).toEqual([1, 2]);
+    expect(split.lit).toBeNull();
+  });
+
+  it('the scene draws the background legs first, faint, and names the target of the lit line', () => {
+    const scene = supplyScene(view({ lines }), 0, index, [], { node: 0, line: 2 });
+    expect(scene.flows).toEqual([
+      { edge: 0, from: 0, to: 1, charges: 1, transfer: false, line: true, dim: true },
+      { edge: 1, from: 1, to: 2, charges: 1, transfer: false, line: true, dim: true },
+      { edge: 0, from: 0, to: 1, charges: 1, transfer: false, line: true },
+      { edge: 2, from: 1, to: 3, charges: 1, transfer: false, line: true },
+    ]);
+    expect(scene.marked).toBe(true);
+    expect(scene.litTarget).toBe(3);
+  });
+
+  it('the scene keeps the old picture without a focus', () => {
+    const scene = supplyScene(view({ lines }), 0, index);
+    expect(scene.flows.some((f) => f.dim === true)).toBe(false);
+    expect(scene.marked).toBe(false);
+    expect(scene.litTarget).toBeNull();
   });
 });
 
@@ -201,6 +280,8 @@ describe('what the layer draws (DEC-28, item 8)', () => {
       'factories',
       'flows',
       'levels',
+      'litTarget',
+      'marked',
       'markers',
       'pipes',
       'presence',

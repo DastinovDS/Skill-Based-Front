@@ -13,11 +13,13 @@ import {
   PAPER,
   SUPPLY_BULKHEAD,
   SUPPLY_GAUGE,
+  SUPPLY_LINE,
   SUPPLY_PACKET,
   SUPPLY_PIPE,
   YOU,
 } from './style.ts';
 import { SupplyView } from './supplyView.ts';
+import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
 const snapshot = devSnapshot(map, DEV_RULES, 100);
@@ -64,14 +66,15 @@ function strokes(g: Graphics): Stroke[] {
 /** The parts of the view: the pipes (on the road layer), the flowing dashes, plates, packet dots, texts. */
 function parts(layers: ReturnType<typeof createLayers>) {
   const [root] = layers.layer.supply.children as Container[];
-  const [flowing, plates, dots, texts] = (root?.children ?? []) as [
+  const [flowing, plates, marks, dots, texts] = (root?.children ?? []) as [
     Graphics,
     Graphics,
+    Container,
     Graphics,
     Container,
   ];
   const pipeRoot = layers.layer.roads.children.find((c) => c.label === 'supply-pipes');
-  return { pipes: pipeRoot?.children[0] as Graphics, flowing, plates, dots, texts };
+  return { pipes: pipeRoot?.children[0] as Graphics, flowing, plates, marks, dots, texts };
 }
 
 const mockText = () =>
@@ -107,7 +110,7 @@ describe('SupplyView: the pipes (#429)', () => {
 
   function draw(base: SnapshotMsg, tick = 100) {
     const layers = createLayers();
-    const view = new SupplyView(map, layers, 0, () => 14);
+    const view = new SupplyView(map, layers, 0, () => 14, testSprites());
     view.update(interpolateFrame(base, null, tick), { source: null, targets: [], draft: [] });
     return { layers, view, ...parts(layers) };
   }
@@ -206,7 +209,7 @@ describe('SupplyView: the pipes (#429)', () => {
     const base = with_(2, [packet]);
     const dashesAt = (tick: number): string => {
       const layers = createLayers();
-      const view = new SupplyView(map, layers, 0, () => 14);
+      const view = new SupplyView(map, layers, 0, () => 14, testSprites());
       // The render tick runs on from the snapshot: the dashes follow it, the snapshot stays.
       view.update(
         { ...interpolateFrame(base, null, 150), tick },
@@ -245,7 +248,7 @@ describe('SupplyView: the warehouse gauge', () => {
 
   it('draws the stock of an own city as a filled share of a bar with «stock/capacity» beside it', () => {
     const layers = createLayers();
-    const view = new SupplyView(map, layers, 0, () => 14);
+    const view = new SupplyView(map, layers, 0, () => 14, testSprites());
     view.update(interpolateFrame(snapshot, null, 100), { source: null, targets: [], draft: [] });
     const { plates, texts } = parts(layers);
     const places = snapshot.view.nodes.filter(
@@ -275,7 +278,7 @@ describe('SupplyView: the warehouse gauge', () => {
       view: { ...snapshot.view, me: { ...snapshot.view.me, fronts: [city.id, null] } },
     };
     const layers = createLayers();
-    const view = new SupplyView(map, layers, 0, () => 14);
+    const view = new SupplyView(map, layers, 0, () => 14, testSprites());
     view.update(interpolateFrame(base, null, 100), { source: null, targets: [], draft: [] });
     const { plates, texts } = parts(layers);
     expect(strokes(plates).some((s) => s.color === YOU && s.width === 3)).toBe(true);
@@ -308,7 +311,7 @@ describe('SupplyView: the packets (#429)', () => {
   /** The shapes the dots Graphics of the layer draws for these packets. */
   function drawnPackets(list: PacketView[]): { type: string; radius?: number; width?: number }[] {
     const layers = createLayers();
-    const view = new SupplyView(map, layers, 0, () => 14);
+    const view = new SupplyView(map, layers, 0, () => 14, testSprites());
     const own: SnapshotMsg = { ...snapshot, view: { ...snapshot.view, packets: list } };
     view.update(interpolateFrame(own, null, 150), { source: null, targets: [], draft: [] });
     const { dots } = parts(layers);
@@ -345,5 +348,64 @@ describe('SupplyView: the packets (#429)', () => {
     expect(
       shapes.filter((s) => s.type === 'rectangle' || s.type === 'roundedRectangle'),
     ).not.toEqual([]);
+  });
+});
+
+describe('SupplyView: the focus on the lines (#672)', () => {
+  beforeEach(() => {
+    mockText();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  // Two own lines from the ends of two own roads that do not share a node.
+  const first = ownRoads[0];
+  const second = ownRoads.find(
+    (r) => first !== undefined && ![first.a, first.b].some((n) => n === r.a || n === r.b),
+  );
+  if (first === undefined || second === undefined) throw new Error('need two own roads');
+  const lines = [
+    { id: 1, path: [first.a, first.b] as [number, number] },
+    { id: 2, path: [second.a, second.b] as [number, number] },
+  ];
+  const base: SnapshotMsg = { ...with_(1), view: { ...with_(1).view, lines } };
+
+  function draw(focus: { node: number | null; line: number | null } | undefined) {
+    const layers = createLayers();
+    const view = new SupplyView(map, layers, 0, () => 14, testSprites());
+    view.update(interpolateFrame(base, null, 100), {
+      source: null,
+      targets: [],
+      draft: [],
+      ...(focus === undefined ? {} : { lines: focus }),
+    });
+    const all = parts(layers);
+    const chevrons = all.marks.children.filter((c) => c.visible).length;
+    const fills = strokes(all.pipes).filter((s) => s.color === YOU);
+    return { ...all, view, chevrons, fills };
+  }
+
+  it('without a focus every line is drawn as before, no chevrons', () => {
+    const { chevrons, fills, view } = draw(undefined);
+    expect(chevrons).toBe(0);
+    expect(fills).toHaveLength(2);
+    expect(fills.every((s) => s.alpha === SUPPLY_PIPE.fillAlpha)).toBe(true);
+    view.destroy();
+  });
+
+  it('a selected source shows its line alone, with chevrons', () => {
+    const { chevrons, fills, view } = draw({ node: first.a, line: null });
+    expect(fills).toHaveLength(1);
+    expect(chevrons).toBeGreaterThan(0);
+    view.destroy();
+  });
+
+  it('a lit line is full and marked, the other faint, its target ringed', () => {
+    const { chevrons, fills, plates, view } = draw({ node: null, line: 2 });
+    expect(fills.map((s) => s.alpha).sort()).toEqual(
+      [SUPPLY_PIPE.fillAlpha * SUPPLY_LINE.dimAlpha, SUPPLY_PIPE.fillAlpha].sort(),
+    );
+    expect(chevrons).toBeGreaterThan(0);
+    expect(strokes(plates).some((s) => s.color === PAPER && s.width === 3)).toBe(true);
+    view.destroy();
   });
 });

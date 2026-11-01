@@ -5,6 +5,8 @@ import type { RenderFrame } from '../net/interpolate.ts';
 import type { MapFile, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { SupplyOverlay } from './interaction.ts';
+import type { BakedSprite, SpriteCache } from './bake.ts';
+import { lineChevronSpec } from './bakedShapes.ts';
 import { FACTORY_GLYPH } from './cityLayout.ts';
 import { borderPoint } from './fogLayout.ts';
 import { EDGE_PROGRESS, edgeEnds, edgePoint, nodePoint } from './layout.ts';
@@ -34,6 +36,7 @@ import {
   SUPPLY_FACTORY,
   SUPPLY_FLOW_LABEL,
   SUPPLY_GAUGE,
+  SUPPLY_LINE,
   SUPPLY_MARKER,
   SUPPLY_PACKET,
   SUPPLY_PIPE,
@@ -63,6 +66,8 @@ interface FlowRun {
   readonly from: Point;
   readonly to: Point;
   readonly width: number;
+  /** The opacity of the dashes: a line in the background is faint (#672). */
+  readonly alpha: number;
 }
 
 /**
@@ -86,6 +91,11 @@ interface FlowRun {
  * While a transfer is being picked, the source is ringed and the cities a click would pick get
  * dashed rings. The snapshot part is redrawn only when the snapshot or the overlay changes; the
  * flowing dashes when their phase moves (never with "less motion"), the packets every frame.
+ * Economy v2 (#672): the own lines can be focused (`SupplyOverlay.lines`): a selected node shows
+ * only its lines, with chevrons from source to target on their legs; the line whose «remove» entry
+ * the pointer rests on is lit (chevrons, a ring at its target) and the others go faint. A focus
+ * change redraws the snapshot part once, nothing per frame.
+ *
  * Nothing is computed that the server did not send.
  */
 export class SupplyView {
@@ -99,6 +109,10 @@ export class SupplyView {
   private readonly flowing = new Graphics();
   private readonly plates = new Graphics();
   private readonly dots = new Graphics();
+  /** The direction chevrons of the lines looked at (#672): baked sprites, one pool. */
+  private readonly marks = new Container({ label: 'supply-marks' });
+  private readonly chevrons: BakedSprite[] = [];
+  private usedMarks = 0;
   private readonly texts = new Container({ label: 'supply-texts' });
   private readonly pool: Text[] = [];
   private readonly style: TextStyle;
@@ -119,6 +133,7 @@ export class SupplyView {
     layers: MapLayers,
     private readonly me: PlayerId,
     private readonly radiusOf: (node: number) => number,
+    private readonly sprites: SpriteCache,
   ) {
     this.index = edgeIndex(map);
     const font = 'system-ui, sans-serif';
@@ -152,7 +167,7 @@ export class SupplyView {
     this.pipeRoot.addChild(this.pipes);
     this.pipeRoot.visible = false;
     layers.layer.roads.addChild(this.pipeRoot);
-    this.root.addChild(this.flowing, this.plates, this.dots, this.texts);
+    this.root.addChild(this.flowing, this.plates, this.marks, this.dots, this.texts);
     this.root.visible = false;
     layers.layer.supply.addChild(this.root);
   }
@@ -185,13 +200,18 @@ export class SupplyView {
     if (frame.base !== this.base || supply !== this.overlay) {
       this.base = frame.base;
       this.overlay = supply;
-      this.drawStatic(supplyScene(frame.base.view, this.me, this.index, this.map.edges), supply);
+      this.drawStatic(
+        supplyScene(frame.base.view, this.me, this.index, this.map.edges, supply.lines),
+        supply,
+      );
     }
     this.drawFlowing(frame);
     this.drawPackets(frame);
   }
 
   destroy(): void {
+    // The chevrons let go of their textures (the cache keeps them for the next scene).
+    this.chevrons.length = 0;
     this.root.destroy({ children: true });
     this.pipeRoot.destroy({ children: true });
     this.pool.length = 0;
@@ -210,6 +230,22 @@ export class SupplyView {
     this.phase = Number.NaN;
     this.used = 0;
     for (const text of this.pool) text.visible = false;
+    this.usedMarks = 0;
+    for (const chevron of this.chevrons) chevron.visible = false;
+  }
+
+  /** The next chevron of the pool at `at`, turned to the direction `(ux, uy)`. */
+  private chevron(at: Point, ux: number, uy: number): void {
+    let sprite = this.chevrons[this.usedMarks];
+    if (sprite === undefined) {
+      sprite = this.sprites.sprite(lineChevronSpec());
+      this.marks.addChild(sprite);
+      this.chevrons.push(sprite);
+    }
+    this.usedMarks++;
+    sprite.position.set(at.x, at.y);
+    sprite.rotation = Math.atan2(uy, ux);
+    sprite.visible = true;
   }
 
   private point(node: number): Point | undefined {
@@ -253,7 +289,18 @@ export class SupplyView {
     this.drawCut(scene);
     this.drawPresence(scene);
     this.drawFactories(scene);
+    this.drawLit(scene);
     this.drawPick(supply);
+  }
+
+  /** The end of the lit line (#672): a solid ring, so the target the menu names is found at once. */
+  private drawLit(scene: SupplyScene): void {
+    if (scene.litTarget === null) return;
+    const at = this.point(scene.litTarget);
+    if (at === undefined) return;
+    const r = this.radiusOf(scene.litTarget) + SUPPLY_LINE.ring;
+    this.plates.circle(at.x, at.y, r + SELECT_WIDTH).stroke({ width: 2, color: BG });
+    this.plates.circle(at.x, at.y, r).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR });
   }
 
   /**
@@ -289,7 +336,8 @@ export class SupplyView {
   /** The pipes: a dark casing, the wall and the inside (dark idle, blue with a flow in it). */
   private drawPipes(scene: SupplyScene): void {
     const g = this.pipes;
-    const active = new Set(scene.flows.map((f) => f.edge));
+    // A pipe only the background lines use stays dark: it is not the one looked at.
+    const active = new Set(scene.flows.filter((f) => f.dim !== true).map((f) => f.edge));
     for (const pipe of scene.pipes) {
       // From city to city: the cities and their rims are drawn over the ends of the pipe.
       const a = this.point(pipe.a);
@@ -334,6 +382,7 @@ export class SupplyView {
       const both = directions.size > 1;
       const band = flowBand(bore, both);
       flows.forEach((flow) => {
+        const k = flow.dim === true ? SUPPLY_LINE.dimAlpha : 1;
         const span = this.span(flow.from, flow.to);
         const a = this.point(flow.from);
         const b = this.point(flow.to);
@@ -345,8 +394,8 @@ export class SupplyView {
         fill
           .moveTo(whole[0].x, whole[0].y)
           .lineTo(whole[1].x, whole[1].y)
-          .stroke({ width: band.width, color: YOU, alpha: SUPPLY_PIPE.fillAlpha });
-        runs.push({ from, to, width: both ? 1.8 : 2.4 });
+          .stroke({ width: band.width, color: YOU, alpha: SUPPLY_PIPE.fillAlpha * k });
+        runs.push({ from, to, width: both ? 1.8 : 2.4, alpha: 0.95 * k });
         if (span.length < SUPPLY_PIPE.minFlow) return;
         const length = Math.hypot(b.x - a.x, b.y - a.y);
         const ux = (b.x - a.x) / length;
@@ -358,13 +407,14 @@ export class SupplyView {
             p.x,
             p.y,
           ]),
-        ).fill(PAPER);
+        ).fill({ color: PAPER, alpha: k });
         const behind = { x: to.x - ux * 2, y: to.y - uy * 2 };
         g.poly(
           headPoly(behind, ux, uy, inner.length, Math.max(inner.minWidth, bore - 5)).flatMap(
             (p) => [p.x, p.y],
           ),
-        ).fill(YOU);
+        ).fill({ color: YOU, alpha: k });
+        if (scene.marked && flow.dim !== true) this.drawChevrons(from, to, span.length, ux, uy);
       });
       // The volumes lie along the pipe; the numbers of one road sit apart along it, in the order
       // of its own direction (`a` to `b`) whichever way each flow goes, so they never overlap.
@@ -377,7 +427,9 @@ export class SupplyView {
       const middle = this.radiusOf(road.a) + SUPPLY_PIPE.inset + ends.length / 2;
       // A leg of the drawn lines (economy v2) is told by its direction alone; a number only when
       // several lines share it ("×2").
-      const labelled = flows.filter((flow) => flow.line !== true || flow.charges > 1);
+      const labelled = flows.filter(
+        (flow) => flow.dim !== true && (flow.line !== true || flow.charges > 1),
+      );
       labelled.forEach((flow, slot) => {
         const shift = (slot - (labelled.length - 1) / 2) * SUPPLY_PIPE.labelGap;
         const pose = labelPose(pa, pb, middle + shift, bore);
@@ -393,6 +445,20 @@ export class SupplyView {
       });
     }
     this.runs = runs;
+  }
+
+  /**
+   * The chevrons of a leg looked at (#672): evenly along the lane from the rim of the source city,
+   * short of the valve cap at the destination, at least one.
+   */
+  private drawChevrons(from: Point, to: Point, length: number, ux: number, uy: number): void {
+    const usable = length - SUPPLY_PIPE.valve.outer.length - 3;
+    if (usable <= 0) return;
+    const count = Math.max(1, Math.floor(usable / SUPPLY_LINE.chevron.every));
+    for (let i = 0; i < count; i++) {
+      const at = ((i + 0.5) / count) * (usable / length);
+      this.chevron(lanePoint(from, to, at, 0), ux, uy);
+    }
   }
 
   /** A bulkhead at the border point of a road between an own city and a place that is not own. */
@@ -581,7 +647,7 @@ export class SupplyView {
       for (const [p, q] of flowDashes(run.from, run.to, SUPPLY_PIPE.dash, SUPPLY_PIPE.gap, phase)) {
         g.moveTo(p.x, p.y).lineTo(q.x, q.y);
       }
-      g.stroke({ width: run.width, color: PAPER, alpha: 0.95 });
+      g.stroke({ width: run.width, color: PAPER, alpha: run.alpha });
     }
   }
 

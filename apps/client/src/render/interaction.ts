@@ -5,6 +5,8 @@
  * nothing.
  */
 
+import type { LineFocus } from './supplyLayout.ts';
+
 /**
  * What is under the pointer: an own group (by id), the icon of several own groups standing in a
  * city (`stack`), a node, or a road (by id).
@@ -65,6 +67,11 @@ export interface SupplyOverlay {
    * while none is); `targets` are then the own nodes a click adds to it.
    */
   readonly draft: readonly number[];
+  /**
+   * Economy v2 (#672): the node whose own lines alone are shown (selected) and the line lit by the
+   * menu entry under the pointer; absent: every line, none lit.
+   */
+  readonly lines?: LineFocus;
 }
 
 export interface OverlayState {

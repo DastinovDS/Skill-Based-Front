@@ -6,7 +6,7 @@
  * DEC-17): no warehouse, no packet, no marker of the opponent is in a view at all, and this layer
  * does not look for them.
  */
-import type { MapFile, PlayerId, View } from '../protocol.gen.ts';
+import type { LineView, MapFile, PlayerId, View } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 
 /**
@@ -26,6 +26,11 @@ export interface SupplyFlow {
    * `charges` is then the number of lines that use the leg.
    */
   readonly line?: boolean;
+  /**
+   * A leg of the own lines left in the background (#672): another line is lit (the pointer rests on
+   * the menu entry that removes it), so this one is drawn faint, without its number.
+   */
+  readonly dim?: boolean;
 }
 
 /** The warehouse of an own city: charges held and the capacity of the warehouse. */
@@ -79,6 +84,59 @@ export interface SupplyScene {
   readonly presence: readonly SupplyPresence[];
   /** Economy v2: the own factories (DEC-41, item 2), marked on the layer since the city marks hide. */
   readonly factories: readonly number[];
+  /**
+   * Economy v2 (#672): the lines in front are the ones the player looks at (of the selected node,
+   * or the one lit): their legs carry direction chevrons. False while every line shows as usual.
+   */
+  readonly marked: boolean;
+  /** The target of the lit line (its end gets a ring); `null`: no line is lit. */
+  readonly litTarget: number | null;
+}
+
+/**
+ * What the player looks at on the «Supply» layer under economy v2 (#672): `node` an own node that
+ * is selected (its supply menu is open, a line is being drawn from it), `line` the line whose entry
+ * of the menu the pointer rests on (the entry removes it). `null` for either: nothing.
+ */
+export interface LineFocus {
+  readonly node: number | null;
+  readonly line: number | null;
+}
+
+export const NO_LINE_FOCUS: LineFocus = { node: null, line: null };
+
+/** The own lines split for the picture: `front` drawn as usual, `back` faint, the rest hidden. */
+export interface LineSplit {
+  readonly front: readonly LineView[];
+  readonly back: readonly LineView[];
+  /** The front lines are the ones looked at: they get the direction chevrons. */
+  readonly marked: boolean;
+  /** The lit line, if one is. */
+  readonly lit: LineView | null;
+}
+
+/** A line starts at `node` (its source) or ends there (its target, a relay if it sends on). */
+const touches = (line: LineView, node: number): boolean =>
+  line.path[0] === node || line.path[line.path.length - 1] === node;
+
+/**
+ * Which own lines the layer shows and how (#672). A selected node filters them to the lines that
+ * start or end there (a node without lines filters nothing: every line shows, unmarked). A lit
+ * line goes in front of the shown ones, the others of them go to the background. The paths are
+ * the server's (`View.lines`); nothing about supply is computed here.
+ */
+export function splitLines(lines: readonly LineView[], focus: LineFocus): LineSplit {
+  const own = focus.node === null ? [] : lines.filter((line) => touches(line, focus.node ?? -1));
+  const shown = own.length > 0 ? own : lines;
+  const lit =
+    focus.line === null
+      ? undefined
+      : (shown.find((line) => line.id === focus.line) ??
+        lines.find((line) => line.id === focus.line));
+  if (lit !== undefined) {
+    return { front: [lit], back: shown.filter((line) => line !== lit), marked: true, lit };
+  }
+  return { front: shown, back: [], marked: own.length > 0, lit: null };
 }
 
 /** `edge id` of the road between two nodes, by the ends of the map's edges. */
@@ -127,9 +185,9 @@ export function supplyFlows(view: View, index: EdgeIndex): SupplyFlow[] {
  * `charges` the number of lines on it (lines never merge, but they share a road). The path is the
  * server's (`LineView.path`: the drawn one, or the reroute after a break).
  */
-export function lineFlows(view: View, index: EdgeIndex): SupplyFlow[] {
+export function lineFlows(lines: readonly LineView[], index: EdgeIndex, dim = false): SupplyFlow[] {
   const sums = new Map<string, SupplyFlow>();
-  for (const line of view.lines) {
+  for (const line of lines) {
     for (let i = 1; i < line.path.length; i++) {
       const from = line.path[i - 1];
       const to = line.path[i];
@@ -145,6 +203,7 @@ export function lineFlows(view: View, index: EdgeIndex): SupplyFlow[] {
         charges: (prev?.charges ?? 0) + 1,
         transfer: false,
         line: true,
+        ...(dim ? { dim: true } : {}),
       });
     }
   }
@@ -162,6 +221,7 @@ export function supplyScene(
   me: PlayerId,
   index: EdgeIndex,
   edges: readonly { readonly a: number; readonly b: number }[] = [],
+  focus: LineFocus = NO_LINE_FOCUS,
 ): SupplyScene {
   const stocks: SupplyStock[] = [];
   const cut: SupplyCut[] = [];
@@ -209,17 +269,24 @@ export function supplyScene(
   view.me.fronts.forEach((node, marker) => {
     if (node !== null) markers.push({ marker, node });
   });
+  // Economy v2: the lines the player drew are the flows (the background ones first, so the front
+  // ones lie over them); the packets on them glide as dots.
+  const split = view.lines.length > 0 ? splitLines(view.lines, focus) : null;
   return {
     pipes,
     bulkheads,
     levels,
-    // Economy v2: the lines the player drew are the flows; the packets on them glide as dots.
-    flows: view.lines.length > 0 ? lineFlows(view, index) : supplyFlows(view, index),
+    flows:
+      split === null
+        ? supplyFlows(view, index)
+        : [...lineFlows(split.back, index, true), ...lineFlows(split.front, index)],
     stocks,
     markers,
     cut,
     presence,
     factories,
+    marked: split?.marked ?? false,
+    litTarget: split?.lit?.path[split.lit.path.length - 1] ?? null,
   };
 }
 

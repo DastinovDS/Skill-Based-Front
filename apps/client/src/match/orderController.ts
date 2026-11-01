@@ -18,6 +18,7 @@ import {
   type SupplyOverlay,
 } from '../render/interaction.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
+import { NO_LINE_FOCUS, type LineFocus } from '../render/supplyLayout.ts';
 import {
   frontOf,
   lineOf,
@@ -1471,17 +1472,39 @@ export class OrderController implements MapInteraction {
               .filter((n) => n.owner === 'mine' && n.warehouseCap !== null && n.id !== source)
               .map((n) => n.id);
     const path = draft === null ? [] : (this.ui.current.linePath ?? []);
+    const lines = this.#lineFocus();
     const prev = this.#supplyOverlay;
     if (
       prev?.source !== source ||
       prev.targets.length !== targets.length ||
       prev.targets.some((t, i) => t !== targets[i]) ||
       prev.draft.length !== path.length ||
-      prev.draft.some((n, i) => n !== path[i])
+      prev.draft.some((n, i) => n !== path[i]) ||
+      prev.lines?.node !== lines.node ||
+      prev.lines.line !== lines.line
     ) {
-      this.#supplyOverlay = { source, targets, draft: path };
+      this.#supplyOverlay = { source, targets, draft: path, lines };
     }
     return this.#supplyOverlay;
+  }
+
+  /**
+   * Economy v2 (#672): what the «Supply» layer focuses its lines on. The node: the one whose supply
+   * menu is open, else the source of the line being drawn, else the selected node; the line: the
+   * one whose «remove» sector the pointer rests on. Which lines that shows is `splitLines`.
+   */
+  #lineFocus(): LineFocus {
+    if (!this.v2) return NO_LINE_FOCUS;
+    const menu = this.supplyMenu.current;
+    if (menu.open) {
+      const hover = menu.hover;
+      const line = hover?.startsWith('line:') === true ? lineOf(hover as LineChoice) : null;
+      return { node: menu.node, line };
+    }
+    const draft = this.ui.current.lineDraft?.[0];
+    if (draft !== undefined) return { node: draft, line: null };
+    const selection = this.#o.hud.selection;
+    return { node: selection?.kind === 'node' ? selection.id : null, line: null };
   }
 
   /** `Space`: the camera goes to the city the next alert is about; taken only if there is one. */
