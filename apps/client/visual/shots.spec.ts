@@ -231,7 +231,7 @@ for (const menu of MENUS) {
 // Economy v2 (DEC-41, #649), the frozen scene `economy` under the rules of `mvp-3`: the menu of an own
 // city with the factory and the bunker priced in charges (Ford), the menu of a group whose plan gathers
 // (Watchhouse: the release and the plan bar), the plan bar with the requested bonus (a group in
-// Watchpost), the supply menu of a city (Tab, Forkway: draw a line, remove the lines that start there)
+// Watchpost), the supply menu of a target city (Tab, Forkway: remove the line into it, its factory named)
 // and a supply line being drawn (Tab, Stonegate, 1, Forkway: the path is suggested, #665; the banner
 // shows the auto lines toggle). `v2-<name>.png` and grey.
 const V2_SHOTS = ['city', 'group', 'plan', 'supply', 'line'] as const;
@@ -277,15 +277,17 @@ for (const name of V2_SHOTS) {
 }
 
 // The focus on the supply lines (#672), the frozen scene `economy` on the «Supply» layer (Tab): the
-// supply menu of the capital Stonegate shows its lines alone (`lines-source`), of the second factory
-// Watchpost its one line (`lines-factory`), of the relay Forkway the lines in and out
-// (`lines-relay`); the pointer on «remove line → Forkway» lights that line, the others go faint
-// (`lines-hover`). `lines-<state>.png` and grey; `economy_supply.png` is every line, unfocused.
+// supply menu of the capital Stonegate shows its lines alone (`lines-source`), of the hub factory
+// Watchpost its two lines and the one that feeds it (`lines-factory`), of the target Forkway the line
+// into it (`lines-target`); the pointer on «remove line → Forkway» lights that line, the others go
+// faint (`lines-hover`), on «remove line ← Stonegate» of Watchpost's menu the feed (`lines-hover-in`,
+// DEC-42, #674). `lines-<state>.png` and grey; `economy_supply.png` is every line, unfocused.
 const LINE_SHOTS = [
   { name: 'source', at: [118, 518], hover: null },
   { name: 'factory', at: [331, 518], hover: null },
-  { name: 'relay', at: [533, 518], hover: null },
+  { name: 'target', at: [533, 518], hover: null },
   { name: 'hover', at: [118, 518], hover: '→ Forkway' },
+  { name: 'hover-in', at: [331, 518], hover: '← Stonegate' },
 ] as const;
 
 for (const shot of LINE_SHOTS) {

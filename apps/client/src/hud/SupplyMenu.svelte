@@ -28,31 +28,41 @@
 
   // Marker sectors (DEC-28, item 2): put marker n on the city, or take it off where it stands. A
   // city holds one marker, so the sector of the other marker is off while one stands here.
-  // Economy v2 (DEC-41, item 3): draw a supply line from the city (1), or remove one of the lines
-  // that start here (2 to 4, by their target). Free, so no price.
+  // Economy v2 (DEC-42): a factory draws a supply line (1) and removes the lines that start there
+  // ("→ target"); any node removes the lines that end there ("← factory"). Free, so no price.
   const v2 = $derived(orders.v2);
   const lineItems = $derived.by<RadialItem[]>(() => {
-    const angles = spreadAngles(1 + menu.lines.length);
+    const draw = menu.canDraw ? 1 : 0;
+    const angles = spreadAngles(draw + menu.lines.length);
     const stock =
       menu.warehouse !== null ? [tf('supplyMenu.stock', { charges: menu.warehouse })] : [];
+    const head: RadialItem[] = menu.canDraw
+      ? [
+          {
+            id: 'draw',
+            angle: angles[0] ?? 270,
+            icon: 'lineDraw',
+            label: t('supplyMenu.draw'),
+            lines: stock,
+            key: '1',
+          },
+        ]
+      : [];
     return [
-      {
-        id: 'draw',
-        angle: angles[0] ?? 270,
-        icon: 'lineDraw',
-        label: t('supplyMenu.draw'),
-        lines: stock,
-        key: '1',
-      },
+      ...head,
       ...menu.lines.map((line, i): RadialItem => ({
         id: `line:${String(line.id)}`,
-        angle: angles[i + 1] ?? 0,
+        angle: angles[i + draw] ?? 0,
         icon: 'lineRemove',
         label: t('supplyMenu.remove'),
-        // The target tells the lines of one source apart; the map lights the line under the
-        // pointer and dims the others (#672).
-        lines: [tf('supplyMenu.removeTo', { node: names(line.to) })],
-        key: String(i + 2),
+        // The far end tells the lines apart; the map lights the line under the pointer and dims
+        // the others (#672).
+        lines: [
+          tf(line.dir === 'out' ? 'supplyMenu.removeTo' : 'supplyMenu.removeFrom', {
+            node: names(line.other),
+          }),
+        ],
+        ...(i + draw < 9 ? { key: String(i + draw + 1) } : {}),
       })),
     ];
   });

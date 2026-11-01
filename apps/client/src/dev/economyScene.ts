@@ -4,8 +4,8 @@
  * that still waits for two charges and a bunker build that runs, a bunker on an own city, a factory
  * and a bunker of the enemy next to an own city (DEC-31), a barracks build that owes a charge, and a
  * planned order that gathers its bonus (+1 of 3). On the «Supply» layer (`economy_supply`, Tab): the
- * own supply lines the player drew (one of them a relay to a third city, two of them sharing a road)
- * with charges gliding on them. No stances, front markers, rear minimum, road levels or "Defense".
+ * own supply lines the player drew, all from factories (DEC-42): the capital feeds the second
+ * factory (a hub), three lines share one road as a bundle ("×3"), with charges gliding on them. No stances, front markers, rear minimum, road levels or "Defense".
  * A picture for the eyes: the numbers only have to be plausible.
  */
 import type {
@@ -25,14 +25,16 @@ export const ECONOMY_VIEW = ARTERY_VIEW;
 const T = ECONOMY_TICK;
 const id = (n: number) => (0x6000 + n).toString(16).padStart(16, '0');
 
-/** The own supply lines (`View.lines`) of two factories: the capital feeds Watchpost and on to
- * Forkway, Firwood and on to Wood Hollow, and Watchpost; the factory of Watchpost feeds Ford through
- * Forkway (a road shared with the capital's line, "×2"); Forkway, the target of lines, relays to
- * Watchhouse. A click on a source in the «Supply» mode shows its lines alone (#672). */
+/** The own supply lines (`View.lines`) of two factories (DEC-42: only a factory starts a line): the
+ * capital feeds Forkway through Watchpost, Wood Hollow through Firwood, and the factory Watchpost
+ * itself (a hub: it gives out what that line brings); Watchpost feeds Watchhouse and Ford through
+ * Forkway. The road Watchpost-Forkway carries three lines (one bundle, "×3"), Stonegate-Watchpost
+ * two. A click on a factory in the «Supply» mode shows its lines, on a target the lines into it
+ * (#672). */
 const LINES: readonly LineView[] = [
   { id: 1, path: [0, 3, 4] },
   { id: 2, path: [0, 1, 6] },
-  { id: 3, path: [4, 12] },
+  { id: 3, path: [3, 4, 12] },
   { id: 4, path: [0, 3] },
   { id: 5, path: [3, 4, 13] },
 ];

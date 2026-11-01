@@ -27,9 +27,13 @@ if (far === undefined) throw new Error('the dev snapshot has three own nodes at 
 const enemy = base.view.nodes.find((n) => n.owner === 1);
 if (enemy === undefined) throw new Error('the dev snapshot has no enemy node');
 
-function setup(lines: LineView[] = []) {
+/** `factories`: the own nodes that are factories (DEC-42: only they start a line); `home` by default. */
+function setup(lines: LineView[] = [], factories: readonly number[] = [home]) {
   const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map });
-  const snapshot: SnapshotMsg = { ...base, view: { ...base.view, lines } };
+  const nodes = base.view.nodes.map((n) =>
+    n.owner === 0 ? { ...n, factory: factories.includes(n.id) } : n,
+  );
+  const snapshot: SnapshotMsg = { ...base, view: { ...base.view, nodes, lines } };
   hud.onSnapshot(snapshot);
   const sent: Command[] = [];
   const queries: number[][] = [];
@@ -232,16 +236,48 @@ describe('OrderController under economy v2 (DEC-41)', () => {
     expect(sent).toEqual([{ type: 'set_auto_lines', on: false }]);
   });
 
-  it('the supply menu lists the lines that start at the city and removes one by its key', () => {
-    const { controller, sent } = setup([
-      { id: 7, path: [home, next] },
-      { id: 8, path: [next, home] },
-    ]);
+  it('the supply menu of a hub factory lists its lines out, then in, and removes one by its key', () => {
+    const { controller, sent } = setup(
+      [
+        { id: 7, path: [home, next] },
+        { id: 8, path: [next, home] },
+      ],
+      [home, next],
+    );
     controller.key(down('Tab'));
     controller.click({ kind: 'node', id: home }, false);
-    expect(controller.supplyMenu.current.lines).toEqual([{ id: 7, to: next }]);
-    controller.key(down('Digit2'));
+    expect(controller.supplyMenu.current).toMatchObject({
+      canDraw: true,
+      lines: [
+        { id: 7, dir: 'out', other: next },
+        { id: 8, dir: 'in', other: next },
+      ],
+    });
+    controller.key(down('Digit3'));
+    expect(sent).toEqual([{ type: 'remove_line', line: 8 }]);
+    expect(controller.supplyMenu.current.open).toBe(false);
+  });
+
+  it('a target that is no factory removes the line into it and draws none (DEC-42)', () => {
+    const { controller, sent } = setup([{ id: 7, path: [home, next] }]);
+    controller.key(down('Tab'));
+    controller.click({ kind: 'node', id: next }, false);
+    expect(controller.supplyMenu.current).toMatchObject({
+      open: true,
+      canDraw: false,
+      lines: [{ id: 7, dir: 'in', other: home }],
+    });
+    controller.chooseLine('draw');
+    expect(controller.ui.current.lineDraft).toBeNull();
+    controller.click({ kind: 'node', id: next }, false);
+    controller.key(down('Digit1'));
     expect(sent).toEqual([{ type: 'remove_line', line: 7 }]);
+  });
+
+  it('a node that is no factory and no target has no supply menu', () => {
+    const { controller } = setup([], []);
+    controller.key(down('Tab'));
+    controller.click({ kind: 'node', id: home }, false);
     expect(controller.supplyMenu.current.open).toBe(false);
   });
 });

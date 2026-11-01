@@ -34,7 +34,7 @@ import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
-import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
+import { SupplyMenuState, TransferState, type MenuLine } from './supplyState.svelte.ts';
 
 /** A sector of the menu of a city (`factory` and `bunker`: economy v2, DEC-41). */
 export type CityChoice = 'recruit' | 'barracks' | 'warehouse' | 'factory' | 'bunker';
@@ -898,19 +898,30 @@ export class OrderController implements MapInteraction {
 
   /**
    * Opens the supply menu of the own city `node` (a click on it in the «Supply» mode). Under
-   * economy v2 any own node with a warehouse (a province too, DEC-41, item 13) has one: draw a
-   * line from it, or remove one of the lines that start there.
+   * economy v2 (DEC-42) an own factory draws a line and removes the lines that start there; any
+   * own node removes the lines that end there (the factory named). A node that is no factory and
+   * no line target has no menu.
    */
   openSupplyMenu(node: number): boolean {
     if (this.#o.send === null) return false;
     if (this.v2) {
       const own = this.#o.hud.current?.nodes.find((n) => n.id === node);
       if (own?.owner !== 'mine') return false;
+      const factory = own.factory === true;
+      const lines: MenuLine[] = [];
+      for (const line of this.ownLines()) {
+        const end = line.path[line.path.length - 1] ?? node;
+        if (factory && line.path[0] === node) lines.push({ id: line.id, dir: 'out', other: end });
+      }
+      for (const line of this.ownLines()) {
+        const start = line.path[0] ?? node;
+        if (line.path[line.path.length - 1] === node) {
+          lines.push({ id: line.id, dir: 'in', other: start });
+        }
+      }
+      if (!factory && lines.length === 0) return false;
       this.#closeMenus();
-      const lines = this.ownLines()
-        .filter((line) => line.path[0] === node)
-        .map((line) => ({ id: line.id, to: line.path[line.path.length - 1] ?? node }));
-      this.supplyMenu.open(node, own.warehouse, [], lines);
+      this.supplyMenu.open(node, own.warehouse, [], lines, factory);
       return true;
     }
     const city = this.#ownCity(node);
@@ -918,6 +929,12 @@ export class OrderController implements MapInteraction {
     this.#closeMenus();
     this.supplyMenu.open(node, city.warehouse, this.#o.hud.current?.fronts ?? []);
     return true;
+  }
+
+  /** The own node `node` is an own factory in the latest snapshot (economy v2). */
+  #isOwnFactory(node: number): boolean {
+    const own = this.#o.hud.current?.nodes.find((n) => n.id === node);
+    return own?.owner === 'mine' && own.factory === true;
   }
 
   /** The own supply lines of the latest snapshot (economy v2; empty under v1). */
@@ -934,14 +951,18 @@ export class OrderController implements MapInteraction {
     this.supplyMenu.close();
     if (!open) return;
     const line = lineOf(choice);
-    if (line === null) this.ui.patch({ lineDraft: [node], linePath: null });
-    else this.#sendCommand({ type: 'remove_line', line }, null);
+    if (line === null) {
+      // Only a factory starts a line (DEC-42): the server checks it, the menu offers it only there.
+      if (this.#isOwnFactory(node)) {
+        this.ui.patch({ lineDraft: [node], linePath: null });
+      }
+    } else this.#sendCommand({ type: 'remove_line', line }, null);
   }
 
   /**
    * The own nodes a click puts on the line being drawn: every own node of the latest snapshot that
    * is not a point of the line yet. Only what the snapshot says; the path through the points is the
-   * server's (`line_route`), and whether the line is allowed (a source, a cycle, the limit) is
+   * server's (`line_route`), and whether the line is allowed (a factory source, a cycle) is
    * decided when it is sent.
    */
   lineTargets(): number[] {
@@ -1190,12 +1211,14 @@ export class OrderController implements MapInteraction {
       }
     }
     if (this.supplyMenu.current.open && this.v2) {
-      // The supply menu of economy v2: 1 draws a line, 2 to 4 remove the lines listed, Esc closes it.
+      // The supply menu of economy v2: at a factory 1 draws a line; the next digits remove the
+      // lines listed, in their order; Esc closes it.
       const number = /^Digit([1-9])$/.exec(input.code)?.[1];
       if (number !== undefined) {
-        const index = Number(number) - 1;
-        const line = this.supplyMenu.current.lines[index - 1];
-        if (index === 0) this.chooseLine('draw');
+        const { canDraw, lines } = this.supplyMenu.current;
+        const index = Number(number) - 1 - (canDraw ? 1 : 0);
+        const line = lines[index];
+        if (index === -1) this.chooseLine('draw');
         else if (line !== undefined) this.chooseLine(`line:${String(line.id)}` as LineChoice);
         return true;
       }
