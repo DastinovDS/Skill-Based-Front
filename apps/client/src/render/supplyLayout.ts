@@ -31,6 +31,11 @@ export interface SupplyFlow {
    * the menu entry that removes it), so this one is drawn faint, without its number.
    */
   readonly dim?: boolean;
+  /**
+   * Economy v2 (#674): the lines of the bundle that are in front, when the bundle also carries
+   * background ones (`charges` counts them all): the leg is drawn once, lit, with the number.
+   */
+  readonly lit?: number;
 }
 
 /** The warehouse of an own city: charges held and the capacity of the warehouse. */
@@ -115,13 +120,14 @@ export interface LineSplit {
   readonly lit: LineView | null;
 }
 
-/** A line starts at `node` (its source) or ends there (its target, a relay if it sends on). */
+/** A line starts at `node` (its factory) or ends there (its target; a hub factory may be both). */
 const touches = (line: LineView, node: number): boolean =>
   line.path[0] === node || line.path[line.path.length - 1] === node;
 
 /**
- * Which own lines the layer shows and how (#672). A selected node filters them to the lines that
- * start or end there (a node without lines filters nothing: every line shows, unmarked). A lit
+ * Which own lines the layer shows and how (#672, DEC-42). A selected factory shows the lines that
+ * start there (and, a hub, the ones that bring it charges); a selected target the lines into it
+ * (a node without lines filters nothing: every line shows, unmarked). A lit
  * line goes in front of the shown ones, the others of them go to the background. The paths are
  * the server's (`View.lines`); nothing about supply is computed here.
  */
@@ -185,6 +191,30 @@ export function supplyFlows(view: View, index: EdgeIndex): SupplyFlow[] {
  * `charges` the number of lines on it (lines never merge, but they share a road). The path is the
  * server's (`LineView.path`: the drawn one, or the reroute after a break).
  */
+export function lineBundles(
+  front: readonly LineView[],
+  back: readonly LineView[],
+  index: EdgeIndex,
+): SupplyFlow[] {
+  // One bundle per road and direction (#674): the lines of a factory share roads, and a leg that
+  // carries both looked-at and background lines is drawn once, lit, not twice on top of itself.
+  const lit = new Map<string, number>();
+  for (const flow of lineFlows(front, index))
+    lit.set(`${String(flow.edge)}:${String(flow.from)}`, flow.charges);
+  const all = lineFlows([...back, ...front], index);
+  return all
+    .map((flow): SupplyFlow => {
+      const n = lit.get(`${String(flow.edge)}:${String(flow.from)}`) ?? 0;
+      if (n === 0) return back.length > 0 ? { ...flow, dim: true } : flow;
+      return n === flow.charges ? flow : { ...flow, lit: n };
+    })
+    .sort(
+      (a, b) =>
+        Number(b.dim === true) - Number(a.dim === true) || a.edge - b.edge || a.from - b.from,
+    );
+}
+
+/** The flows of `lines` per road and direction, `charges` the lines on it (see `lineBundles`). */
 export function lineFlows(lines: readonly LineView[], index: EdgeIndex, dim = false): SupplyFlow[] {
   const sums = new Map<string, SupplyFlow>();
   for (const line of lines) {
@@ -276,10 +306,7 @@ export function supplyScene(
     pipes,
     bulkheads,
     levels,
-    flows:
-      split === null
-        ? supplyFlows(view, index)
-        : [...lineFlows(split.back, index, true), ...lineFlows(split.front, index)],
+    flows: split === null ? supplyFlows(view, index) : lineBundles(split.front, split.back, index),
     stocks,
     markers,
     cut,

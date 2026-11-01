@@ -192,6 +192,8 @@ export interface NodeChoice {
   readonly warehouse: number | null;
   /** Warehouse capacity of an own city (DEC-26); `null` where the view does not give it. */
   readonly warehouseCap: number | null;
+  /** Economy v2: an own factory, the only node a supply line starts at (DEC-42). */
+  readonly factory?: boolean;
 }
 
 /** A road and what its next level would give, from `EdgeView.upgrade_gain` (the server's numbers). */
@@ -469,6 +471,7 @@ export function buildHudData(
       owner: ownership(n.owner, me),
       warehouse: n.warehouse,
       warehouseCap: n.warehouse_cap,
+      ...(n.factory === true && n.owner === me ? { factory: true } : {}),
     })),
     roads: view.edges.map((e) => roadInfo(ctx, e)),
     lines: view.lines,

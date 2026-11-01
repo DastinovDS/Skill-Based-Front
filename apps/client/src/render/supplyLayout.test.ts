@@ -71,7 +71,7 @@ describe('supply lines (economy v2, DEC-41, item 3)', () => {
 
 describe('focus on the lines (#672)', () => {
   const line = (id: number, ...path: number[]): LineView => ({ id, path }) as unknown as LineView;
-  // Two sources: 0 feeds 2 (through 1) and 3; 1 is the target of a line from 0 and relays to 3.
+  // Two factories (DEC-42): 0 feeds 2 and 3 through 1; 1, a hub factory, feeds 3.
   const a = line(1, 0, 1, 2);
   const b = line(2, 0, 1, 3);
   const c = line(3, 1, 3);
@@ -86,14 +86,14 @@ describe('focus on the lines (#672)', () => {
     expect(split.lit).toBeNull();
   });
 
-  it('a selected source shows only its lines, marked', () => {
+  it('a selected factory shows only its lines, marked', () => {
     const split = splitLines(lines, { node: 0, line: null });
     expect(ids(split.front)).toEqual([1, 2]);
     expect(split.back).toEqual([]);
     expect(split.marked).toBe(true);
   });
 
-  it('a selected relay shows the lines that end there and the ones that start there', () => {
+  it('a selected hub factory shows the lines that feed it and the ones that start there', () => {
     expect(ids(splitLines([line(4, 0, 1), ...lines], { node: 1, line: null }).front)).toEqual([
       4, 3,
     ]);
@@ -121,16 +121,25 @@ describe('focus on the lines (#672)', () => {
     expect(split.lit).toBeNull();
   });
 
-  it('the scene draws the background legs first, faint, and names the target of the lit line', () => {
+  it('the scene draws the background legs first, faint, a shared road once, and names the target of the lit line', () => {
     const scene = supplyScene(view({ lines }), 0, index, [], { node: 0, line: 2 });
+    // The road 0-1 carries the lit line 2 and the background line 1: one bundle, lit (#674).
     expect(scene.flows).toEqual([
-      { edge: 0, from: 0, to: 1, charges: 1, transfer: false, line: true, dim: true },
       { edge: 1, from: 1, to: 2, charges: 1, transfer: false, line: true, dim: true },
-      { edge: 0, from: 0, to: 1, charges: 1, transfer: false, line: true },
+      { edge: 0, from: 0, to: 1, charges: 2, transfer: false, line: true, lit: 1 },
       { edge: 2, from: 1, to: 3, charges: 1, transfer: false, line: true },
     ]);
     expect(scene.marked).toBe(true);
     expect(scene.litTarget).toBe(3);
+  });
+
+  it('the lines of one factory on a road are one bundle with their number', () => {
+    const scene = supplyScene(view({ lines }), 0, index, [], { node: 0, line: null });
+    expect(scene.flows).toEqual([
+      { edge: 0, from: 0, to: 1, charges: 2, transfer: false, line: true },
+      { edge: 1, from: 1, to: 2, charges: 1, transfer: false, line: true },
+      { edge: 2, from: 1, to: 3, charges: 1, transfer: false, line: true },
+    ]);
   });
 
   it('the scene keeps the old picture without a focus', () => {

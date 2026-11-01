@@ -1,9 +1,14 @@
 import type { LineChoice, SupplyChoice } from '../hud/radial.ts';
 
-/** An own supply line that starts at the city of the menu (economy v2): its id and its target. */
+/**
+ * An own supply line of the city of the menu (economy v2, DEC-42): one that starts there (`out`,
+ * the city is a factory) or ends there (`in`); `other` is the node at the far end (the target of
+ * an outgoing line, the factory of an incoming one).
+ */
 export interface MenuLine {
   readonly id: number;
-  readonly to: number;
+  readonly dir: 'out' | 'in';
+  readonly other: number;
 }
 
 /** What the supply menu of an own city shows (DEC-18, item 7; the markers: DEC-28, item 2). */
@@ -15,8 +20,10 @@ export interface SupplyMenuData {
   readonly warehouse: number | null;
   /** The city of each front marker when the menu opened (`null`: not placed), for the labels. */
   readonly fronts: readonly (number | null)[];
-  /** Economy v2: the own lines that start at the city when the menu opened (by id). */
+  /** Economy v2: the own lines of the city when the menu opened: outgoing first, then incoming. */
   readonly lines: readonly MenuLine[];
+  /** Economy v2: the city is an own factory, the only node a line starts at (DEC-42). */
+  readonly canDraw: boolean;
   /** The sector under the pointer; `null`: the dead zone, or nothing yet. */
   readonly hover: SupplyChoice | LineChoice | null;
 }
@@ -27,6 +34,7 @@ const MENU_CLOSED: SupplyMenuData = {
   warehouse: null,
   fronts: [],
   lines: [],
+  canDraw: false,
   hover: null,
 };
 
@@ -39,8 +47,9 @@ export class SupplyMenuState {
     warehouse: number | null,
     fronts: readonly (number | null)[] = [],
     lines: readonly MenuLine[] = [],
+    canDraw = false,
   ): void {
-    this.current = { open: true, node, warehouse, fronts, lines, hover: null };
+    this.current = { open: true, node, warehouse, fronts, lines, canDraw, hover: null };
   }
 
   close(): void {
