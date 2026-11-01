@@ -25,13 +25,16 @@ export const ECONOMY_VIEW = ARTERY_VIEW;
 const T = ECONOMY_TICK;
 const id = (n: number) => (0x6000 + n).toString(16).padStart(16, '0');
 
-/** The own supply lines (`View.lines`): the capital feeds Watchpost and on to Forkway, Firwood and on to
- * Wood Hollow; Forkway, the target of a line, relays to Watchhouse; the capital feeds Forkway again. */
+/** The own supply lines (`View.lines`) of two factories: the capital feeds Watchpost and on to
+ * Forkway, Firwood and on to Wood Hollow, and Watchpost; the factory of Watchpost feeds Ford through
+ * Forkway (a road shared with the capital's line, "×2"); Forkway, the target of lines, relays to
+ * Watchhouse. A click on a source in the «Supply» mode shows its lines alone (#672). */
 const LINES: readonly LineView[] = [
   { id: 1, path: [0, 3, 4] },
   { id: 2, path: [0, 1, 6] },
   { id: 3, path: [4, 12] },
   { id: 4, path: [0, 3] },
+  { id: 5, path: [3, 4, 13] },
 ];
 
 export function economySnapshot(map: MapFile): SnapshotMsg {
@@ -131,6 +134,7 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
     packet(1, 3, [4], 0.55),
     packet(4, 0, [1, 6], 0.6),
     packet(14, 4, [12], 0.75),
+    packet(16, 4, [13], 0.4),
   ];
   return {
     ...base,

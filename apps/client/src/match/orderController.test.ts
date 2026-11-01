@@ -907,7 +907,12 @@ describe('OrderController', () => {
       expect(controller.overlay().supply).toBeNull();
       expect(controller.key(down('Tab'))).toBe(true);
       expect(controller.supplyMode).toBe(true);
-      expect(controller.overlay().supply).toEqual({ source: null, targets: [], draft: [] });
+      expect(controller.overlay().supply).toEqual({
+        source: null,
+        targets: [],
+        draft: [],
+        lines: { node: null, line: null },
+      });
       expect(controller.key(down('Tab', true))).toBe(true); // a held key does not flip it back
       expect(controller.supplyMode).toBe(true);
       controller.key(down('F2'));

@@ -276,6 +276,46 @@ for (const name of V2_SHOTS) {
   });
 }
 
+// The focus on the supply lines (#672), the frozen scene `economy` on the «Supply» layer (Tab): the
+// supply menu of the capital Stonegate shows its lines alone (`lines-source`), of the second factory
+// Watchpost its one line (`lines-factory`), of the relay Forkway the lines in and out
+// (`lines-relay`); the pointer on «remove line → Forkway» lights that line, the others go faint
+// (`lines-hover`). `lines-<state>.png` and grey; `economy_supply.png` is every line, unfocused.
+const LINE_SHOTS = [
+  { name: 'source', at: [118, 518], hover: null },
+  { name: 'factory', at: [331, 518], hover: null },
+  { name: 'relay', at: [533, 518], hover: null },
+  { name: 'hover', at: [118, 518], hover: '→ Forkway' },
+] as const;
+
+for (const shot of LINE_SHOTS) {
+  test(`shot of the focus on the supply lines (${shot.name})`, async ({ page }) => {
+    await page.goto('/?scene=economy&menus');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.keyboard.press('Tab');
+    await page.mouse.click(shot.at[0], shot.at[1]);
+    await expect(page.locator('[role="menu"]')).toBeVisible();
+    await page.waitForTimeout(300);
+    if (shot.hover === null) await page.mouse.move(1000, 700);
+    else {
+      const sector = page.locator('[role="menuitem"]', { hasText: shot.hover });
+      // The menu grows out of its middle (its box is small at first) and places itself on an
+      // animation frame (rare in a headless page): measure and move again until the sector is lit.
+      await expect(async () => {
+        const box = await sector.locator('text', { hasText: shot.hover }).boundingBox();
+        if (box === null) throw new Error(`no sector ${shot.hover}`);
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 2 });
+        await expect(sector).toHaveClass(/hover/, { timeout: 500 });
+      }).toPass();
+    }
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: join(OUT, `lines-${shot.name}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `lines-${shot.name}-gray.png`) });
+  });
+}
+
 // The list of the groups of a city (#350): the scene `snapshot_clash` has three own groups in one
 // city; a click on their icon opens one sector per group. `stack.png` and `stack-gray.png`.
 test('shot of the list of the groups of a city (click on the icon of the stack)', async ({

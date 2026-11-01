@@ -167,7 +167,7 @@ export class MapScene {
       radiusOf,
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
-    this.supply = new SupplyView(map, this.layers, me, radiusOf);
+    this.supply = new SupplyView(map, this.layers, me, radiusOf, this.sprites);
     this.sight = new SightView(map, this.layers, me, radiusOf);
     this.alerts = new AlertView(map, this.layers, me, radiusOf);
     this.controller = new CameraController(

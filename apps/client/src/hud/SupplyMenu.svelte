@@ -48,7 +48,10 @@
         id: `line:${String(line.id)}`,
         angle: angles[i + 1] ?? 0,
         icon: 'lineRemove',
-        label: tf('supplyMenu.remove', { node: names(line.to) }),
+        label: t('supplyMenu.remove'),
+        // The target tells the lines of one source apart; the map lights the line under the
+        // pointer and dims the others (#672).
+        lines: [tf('supplyMenu.removeTo', { node: names(line.to) })],
         key: String(i + 2),
       })),
     ];

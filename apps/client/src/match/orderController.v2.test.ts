@@ -118,6 +118,27 @@ describe('OrderController under economy v2 (DEC-41)', () => {
     ]);
   });
 
+  it('focuses the «Supply» layer on the menu node, the hovered «remove» entry, the draft (#672)', () => {
+    const line: LineView = { id: 7, path: [home, next] };
+    const { controller } = setup([line]);
+    controller.key(down('Tab'));
+    expect(controller.overlay().supply?.lines).toEqual({ node: null, line: null });
+    controller.click({ kind: 'node', id: home }, false);
+    expect(controller.overlay().supply?.lines).toEqual({ node: home, line: null });
+    controller.supplyMenu.hover('line:7');
+    expect(controller.overlay().supply?.lines).toEqual({ node: home, line: 7 });
+    // The same focus is the same overlay: the layer is not redrawn for nothing.
+    expect(controller.overlay().supply).toBe(controller.overlay().supply);
+    controller.supplyMenu.hover('draw');
+    expect(controller.overlay().supply?.lines).toEqual({ node: home, line: null });
+    controller.key(down('Digit1'));
+    expect(controller.overlay().supply?.lines).toEqual({ node: home, line: null });
+    controller.key(down('Escape'));
+    controller.key(down('Escape'));
+    expect(controller.ui.current.lineDraft).toBeNull();
+    expect(controller.overlay().supply?.lines).toEqual({ node: null, line: null });
+  });
+
   it('draws a supply line: the menu, a click on the target, the server path, Enter (#665)', () => {
     const { controller, sent, queries } = setup();
     controller.key(down('Tab'));
