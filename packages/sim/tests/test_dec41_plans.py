@@ -18,6 +18,7 @@ owns 9..16 (its capital 16). Warehouse capacities of ``mvp-3``: medium 2, provin
 capital produces, and no line is drawn, so the warehouse of B holds exactly what a test puts in.
 """
 
+from dataclasses import replace
 from pathlib import Path
 
 from gow_sim.commands import (
@@ -41,7 +42,17 @@ from gow_sim.view import project
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+MVP3 = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+# The tables of DEC-41 (mechanics.md) are written for the accepted starting values: CP every 50 ticks,
+# factories 50 / 100, a capture costs 1. mvp-3 moved on (owner decision 2026-11-01, #659: `balanced`),
+# so these tests pin the DEC-41 numbers on top of it; test_dec41.py pins the file itself.
+assert MVP3.factory is not None
+RULES = replace(
+    MVP3,
+    cp=replace(MVP3.cp, period_ticks=50),
+    factory=replace(MVP3.factory, capital_period_ticks=50, built_period_ticks=100),
+    capture=replace(MVP3.capture, charge_cost=1),
+)
 V1 = load_ruleset(ROOT / "rulesets" / "mvp-2.toml")
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 K, A, B, C, D, E, F, G, M = range(9)
@@ -278,3 +289,18 @@ def test_a_group_without_a_charge_cannot_capture_and_bounces() -> None:
         events += m.step()
     assert m.state.nodes[M].owner is None
     assert [e.get("result") for e in events if e.kind == "capture_failed"] == ["bounce"]
+
+
+def test_a_free_capture_in_mvp3_takes_the_node_with_no_charge() -> None:
+    """Item 11 with the played ``mvp-3`` (`capture.charge_cost = 0`, owner decision 2026-11-01,
+    #659): the rule stays parametric, and `0` means a capture is free. A group 1/0 takes the empty
+    neutral province M, nothing bounces and no charge is spent."""
+    assert MVP3.capture.charge_cost == 0
+    m = Match(MAP, MVP3, HEADLESS_MATCH_KEY)
+    g = _group(m, C, 1, 0)
+    events = _to(m, 1, Move(g.id, M))
+    while m.state.nodes[M].owner is None and m.tick < 60:
+        events += m.step()
+    assert m.state.nodes[M].owner == 0
+    assert not any(e.kind == "capture_failed" for e in events)
+    assert (g.units, g.charged) == (1, 0)

@@ -133,7 +133,9 @@ def test_plan_bonus_is_the_distance_under_v1_and_the_stock_under_v2(
 
 @pytest.mark.parametrize("name", SMART)
 def test_smart_bots_play_v2(mvp3: Ruleset, crossroads: MapDef, name: str) -> None:
-    sent, rejects, views = _play(crossroads, mvp3, (name, "smart_rusher"), 3000)
+    # 1500 ticks: with the free capture of mvp-3 (#659) a bot often loses its nodes, and with them
+    # its lines, later in the match.
+    sent, rejects, views = _play(crossroads, mvp3, (name, "smart_rusher"), 1500)
     assert rejects["FEATURE_DISABLED"] == 0, rejects
     assert rejects["INVALID_ARGUMENT"] == 0, rejects  # every v2 plan names a bonus >= 1
     mine = [c for p, c in sent if p == 0]
