@@ -323,7 +323,17 @@ export class MapScene {
         this.source.recruitQueueMax ?? null,
         this.source.provinceWarehouse ?? 0,
       );
-      this.names.refresh();
+      // An own province shows its warehouse under economy v2 (DEC-41, item 13): its caption goes under it.
+      const places = this.source.provinceWarehouse ?? 0;
+      this.names.refresh(
+        new Set(
+          places > 0
+            ? frame.base.view.nodes
+                .filter((n) => n.owner === this.me && this.map.nodes[n.id]?.kind === 'province')
+                .map((n) => n.id)
+            : [],
+        ),
+      );
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);

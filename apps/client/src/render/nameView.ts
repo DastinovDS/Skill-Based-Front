@@ -11,6 +11,8 @@ import {
 } from './nameLayout.ts';
 import { BG, PAPER } from './style.ts';
 
+const NO_BARS: ReadonlySet<number> = new Set();
+
 interface Caption {
   readonly kind: CaptionKind;
   /** At the place, scaled to keep the size on screen. */
@@ -31,6 +33,7 @@ export class NameView {
   private readonly captions: (Caption | null)[];
   private readonly styles: Record<CaptionKind, TextStyle>;
   private cameraScale = 1;
+  private withBar: ReadonlySet<number> = NO_BARS;
 
   constructor(
     private readonly map: MapFile,
@@ -84,8 +87,13 @@ export class NameView {
     }
   }
 
-  /** A new snapshot may change the size of a city (its capacity class): the captions follow. */
-  refresh(): void {
+  /**
+   * A new snapshot may change the size of a city (its capacity class): the captions follow.
+   * `withBar`: the provinces that show a warehouse bar (own ones under economy v2); their caption
+   * sits under it.
+   */
+  refresh(withBar: ReadonlySet<number> = NO_BARS): void {
+    this.withBar = withBar;
     this.place();
   }
 
@@ -104,7 +112,10 @@ export class NameView {
       caption.box.visible = visible;
       if (!visible) return;
       caption.box.scale.set(scale);
-      caption.box.position.set(node.x, node.y + captionTop(caption.kind, this.radiusOf(id)));
+      caption.box.position.set(
+        node.x,
+        node.y + captionTop(caption.kind, this.radiusOf(id), this.withBar.has(id)),
+      );
     });
   }
 }
