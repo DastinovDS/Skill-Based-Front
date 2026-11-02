@@ -280,4 +280,29 @@ describe('OrderController under economy v2 (DEC-41)', () => {
     controller.click({ kind: 'node', id: home }, false);
     expect(controller.supplyMenu.current.open).toBe(false);
   });
+
+  it('in the «Supply» mode a click never selects or opens a city, group or stack menu (#678)', () => {
+    const { controller, hud } = setup([], []);
+    controller.key(down('Tab'));
+    expect(controller.supplyMode).toBe(true);
+    const hits = [
+      { kind: 'node', id: home },
+      { kind: 'node', id: enemy.id },
+      { kind: 'edge', id: 0, cell: home },
+      { kind: 'group', id: group.id, node: home },
+      { kind: 'stack', node: home, ids: [group.id] },
+    ] as const;
+    for (const hit of hits) {
+      controller.click(hit, false);
+      controller.click(hit, false);
+      expect(hud.selection).toBeNull();
+      expect(controller.cityMenu.current.open).toBe(false);
+      expect(controller.groupMenu.current.open).toBe(false);
+      expect(controller.stackMenu.current.open).toBe(false);
+    }
+    // Out of the mode the same click selects the city and opens its menu again.
+    controller.key(down('Tab'));
+    controller.click({ kind: 'node', id: home }, false);
+    expect(controller.cityMenu.current.open).toBe(true);
+  });
 });
