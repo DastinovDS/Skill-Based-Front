@@ -1211,7 +1211,7 @@ A map mode on `Tab` or `F2`, a separate minimalist layer (`LAYER_ORDER`: `supply
 | What | How |
 |---|---|
 | Territory | A flat fill in the player's color (your own blue, the opponent red) denser than on the ordinary map, plus the border outline |
-| Warehouse of your own city | The same strip of squares under the city as on the ordinary map (#325, `drawWarehouseBar`): one per unit of warehouse capacity; a colored square: a charge, a gray one: room. An enemy city has no warehouse (fog, DEC-04) |
+| Warehouse of your own city | The same strip of squares under the city as on the ordinary map (#325, `drawWarehouseBar`): one per unit of warehouse capacity; a colored square: a charge, a gray one: room. An enemy city has no warehouse (fog, DEC-04). Economy v2: an own province has one place (`city_upgrades.warehouse_province`, DEC-41 item 13, #679), drawn the same way on the ordinary map and here |
 | Front marker | A flag on a pole at the top left of the city, with the number 1 or 2 on the flag (the state is not only color) |
 | Flow | An arrow along the road in its own lane (counter-flows on different sides of the road) with the number of charges on a plate; solid: auto-supply, a wider dashed one: a one-off transfer. One city can receive along several roads: an arrow on each |
 | Packet | A circle on the road, a square for a transfer |
