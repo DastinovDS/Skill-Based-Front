@@ -2087,3 +2087,11 @@ Mockup: `docs/design/mockups/menus-entry.html`. **Owner's decision (2026-10-30):
 
 Everywhere: no key badges (the keys Enter and Esc keep working), no tagline at the bottom left. The mockup draws the old left rail beside R2 and L10; with M5 the tabs replace that rail, so these two tabs are one wide sheet under the tabs (`SheetFrame`).
 
+
+---
+
+## 42. Supply flow visualization (#699, economy v2 flow, #697)
+
+Status: **[awaiting the owner's decision]**. How the automatic "flow towards the leaves" supply (`supply-auto-flow.md`, `mvp-4`) is drawn so that a still frame answers: where charges flow and where the flow is idle, who is full or starving, the leaf level and the shift, the chain reaction after a leaf spends, bottlenecks and pockets.
+
+Mockup: [`mockups/supply-flow-visuals.html`](mockups/supply-flow-visuals.html), frames in [`mockups/img/supply-flow-visuals/`](mockups/img/supply-flow-visuals/). Twelve variants (Now plus 0-11 new; Wind was pruned), the Supply and the battle mode of each, a side-by-side comparison in sync, three maps with a six-step story and a free mode, grayscale and less motion. The variant table (blocks, battle-mode look, PixiJS cost, accessibility, estimate) and the recommendation are in #699: **1 Base** (chevrons, the level band, the warehouse status, the request ripple, pinch marks, the pocket hatch, the hover tree) for the Supply mode, with faint chevrons, the starving mark and the Echo ripple in the battle mode; alternatives **6 Transit diagram** and **9 Echo**. Code waits for the owner's choice and for the #697 implementation (`NodeView.front_dist`, `View.me.leaf_shift`).
