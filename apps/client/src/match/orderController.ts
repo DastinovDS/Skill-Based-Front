@@ -1454,7 +1454,12 @@ export class OrderController implements MapInteraction {
       }
       return true;
     }
-    return node !== null && this.openSupplyMenu(node);
+    // The layer is not the ordinary map (ui-style.md, section 19): a click that opens no supply menu
+    // (an enemy node, a node with nothing to show, a unit icon) is a click on nothing, never a
+    // selection or a city or group menu (#678). A click on empty ground still drops the selection.
+    if (hit === null) return false;
+    if (node === null || !this.openSupplyMenu(node)) this.#closeMenus();
+    return true;
   }
 
   /** The city a hit belongs to: itself, its area, or the icon of own units standing in it. */
