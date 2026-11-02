@@ -631,6 +631,7 @@ export function frozenSource(scene: FixtureScene, at?: number): RenderSource {
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
     recruitQueueMax: DEV_RULES.recruit.queue_max,
+    provinceWarehouse: rules.city_upgrades.warehouse_province,
     roadBuildTicks: DEV_RULES.build.ticks_per_level,
     cityUpgrades:
       scene.cityUpgrades === true

@@ -321,6 +321,7 @@ export class MapScene {
         this.source.recruitTicks ?? null,
         this.source.cityUpgrades ?? null,
         this.source.recruitQueueMax ?? null,
+        this.source.provinceWarehouse ?? 0,
       );
       this.names.refresh();
     }
@@ -356,6 +357,7 @@ export class MapScene {
     this.fog.update(frame.base);
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
     this.supply.setTickHz(tickHz);
+    this.supply.setProvinceWarehouse(this.source.provinceWarehouse ?? 0);
     this.supply.update(frame, overlay.supply);
     this.sight.update(this.terrainOn, frame.base.view.nodes, this.layers.world.scale.x);
     this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());

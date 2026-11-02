@@ -127,6 +127,7 @@
           roundTicks: welcome.ruleset_public.combat.round_ticks,
           recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
           recruitQueueMax: welcome.ruleset_public.recruit.queue_max,
+          provinceWarehouse: welcome.ruleset_public.city_upgrades.warehouse_province,
           roadBuildTicks: welcome.ruleset_public.build.ticks_per_level,
           audio: new MatchAudio({
             me: welcome.player,

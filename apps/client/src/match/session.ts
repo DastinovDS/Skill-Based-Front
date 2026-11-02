@@ -48,6 +48,8 @@ export interface MatchContext {
   recruitTicks?: number;
   /** `ruleset_public.recruit.queue_max`: the free slots a selected city shows (DEC-25). */
   recruitQueueMax?: number;
+  /** `ruleset_public.city_upgrades.warehouse_province`: the places of an own province warehouse (DEC-41, item 13). */
+  provinceWarehouse?: number;
   /** `ruleset_public.city_upgrades` when enabled (DEC-26): the city build mark. */
   cityUpgrades?: CityDevelopment | null;
   /** `ruleset_public.build.ticks_per_level`: the part done of the tape of an own road build (DEC-28). */
@@ -89,6 +91,7 @@ export class MatchSession implements RenderSource {
   roundTicks: number | undefined;
   recruitTicks: number | undefined;
   recruitQueueMax: number | undefined;
+  provinceWarehouse: number | undefined;
   cityUpgrades: CityDevelopment | null | undefined;
   roadBuildTicks: number | undefined;
   /** The overcrowding numbers: the pill beside an overcrowded city. */
@@ -151,6 +154,7 @@ export class MatchSession implements RenderSource {
     this.roundTicks = context.roundTicks;
     this.recruitTicks = context.recruitTicks;
     this.recruitQueueMax = context.recruitQueueMax;
+    this.provinceWarehouse = context.provinceWarehouse;
     this.cityUpgrades = context.cityUpgrades;
     this.roadBuildTicks = context.roadBuildTicks;
     this.capacityTicks =
