@@ -1,0 +1,2579 @@
+<!doctype html>
+<!--
+  Supply examples: the 15 supply variants (V0..V14) of issue #693 as tiny storyboards, so each variant reads in seconds.
+  Rules and numbers: docs/design/supply-methods.md. The detailed comparison (simulation, counters, board): supply-methods.html.
+  Self-contained: no network, no external fonts or scripts. Open in a browser as a file.
+  Every example is a map of 5 to 6 nodes and 3 to 4 numbered steps. The animation is scripted by hand from the written rules
+  (it is an illustration, not the toy simulation of supply-methods.html and not client code). Numbers are toy numbers.
+  Address state: #v=V3 (one variant) or #m=grid&s=front (one scenario, all variants); s is basic, front or cut.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Supply examples</title>
+    <style>
+      :root {
+        --bg: #0a0d12;
+        --surface: #161b22;
+        --surface-2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-dim: #9da7b3;
+        --you: #5b9bff;
+        --enemy: #ff5b61;
+        --warn: #ffb020;
+        --good: #3fb950;
+        --radius: 8px;
+        --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 0 16px 40px;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.4 var(--font);
+      }
+      .wrap {
+        max-width: 1500px;
+        margin: 0 auto;
+      }
+      button {
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px 10px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: #8b949e;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--you);
+        outline-offset: 1px;
+      }
+      button[aria-pressed='true'] {
+        background: #1f3a66;
+        border-color: var(--you);
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      a {
+        color: var(--you);
+      }
+      .bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 14px;
+        padding: 10px 0;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+      }
+      h1 {
+        font-size: 19px;
+        margin: 0 6px 0 0;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .seg button {
+        border: 0;
+        border-radius: 0;
+        border-right: 1px solid var(--border);
+      }
+      .seg button:last-child {
+        border-right: 0;
+      }
+      .bar label {
+        color: var(--text-dim);
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        cursor: pointer;
+      }
+      .bar .sp {
+        flex: 1 1 0;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        padding: 8px 0;
+        color: var(--text-dim);
+        font-size: 12.5px;
+        align-items: center;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend svg {
+        width: 34px;
+        height: 18px;
+        flex: none;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+      .layout.nolist {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .layout.nolist #list {
+        display: none;
+      }
+      #list {
+        position: sticky;
+        top: 58px;
+        max-height: calc(100vh - 70px);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding-right: 4px;
+      }
+      #list button {
+        text-align: left;
+        padding: 7px 10px;
+        display: block;
+        width: 100%;
+      }
+      #list .nm {
+        font-weight: 700;
+        font-size: 14px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      #list .rl {
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.3;
+        margin-top: 2px;
+      }
+      #list button[aria-pressed='true'] .rl {
+        color: #c9d8f2;
+      }
+      .id {
+        color: var(--text-dim);
+        font-weight: 600;
+        min-width: 26px;
+      }
+      .badge {
+        background: var(--warn);
+        color: #1b1300;
+        font-size: 10.5px;
+        font-weight: 800;
+        border-radius: 4px;
+        padding: 1px 5px;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+      .vhead h2 {
+        margin: 0;
+        font-size: 21px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .vhead .ruleline {
+        margin: 4px 0 0;
+        font-size: 16px;
+        color: #cfe0ff;
+      }
+      .scens {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 8px 8px 10px;
+        min-width: 0;
+      }
+      .panel h3 {
+        margin: 0 0 4px;
+        font-size: 14px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .panel h3 .n {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        flex: none;
+      }
+      .panel.extra h3 .n {
+        background: var(--warn);
+        color: #1b1300;
+        border-color: var(--warn);
+      }
+      .board svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #0f141b;
+        border-radius: 6px;
+      }
+      .cap {
+        margin: 6px 2px 4px;
+        font-size: 15.5px;
+        line-height: 1.3;
+        min-height: 41px;
+        font-weight: 600;
+      }
+      .cap .sn {
+        color: var(--warn);
+        margin-right: 4px;
+      }
+      .ctl {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .ctl button {
+        padding: 4px 7px;
+        min-width: 28px;
+        font-size: 13px;
+      }
+      .ctl .sb[aria-pressed='true'] {
+        background: var(--warn);
+        color: #1b1300;
+        border-color: var(--warn);
+        font-weight: 700;
+      }
+      .vfoot {
+        margin-top: 12px;
+        color: var(--text-dim);
+        font-size: 13px;
+        border-top: 1px solid var(--border);
+        padding-top: 8px;
+      }
+      .vfoot b {
+        color: var(--text);
+      }
+      .gridbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        align-items: center;
+        padding: 8px 0 4px;
+      }
+      .gridbar .ctl {
+        margin-left: auto;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 10px;
+        margin-top: 6px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 6px 6px 8px;
+        min-width: 0;
+      }
+      .card header {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin-bottom: 4px;
+        cursor: pointer;
+      }
+      .card header:hover .vn {
+        text-decoration: underline;
+      }
+      .card .vn {
+        font-weight: 700;
+        font-size: 14px;
+        flex: 1;
+        min-width: 0;
+      }
+      .card .mini {
+        color: var(--text-dim);
+        font-size: 11.5px;
+        white-space: nowrap;
+      }
+      .card .cap {
+        font-size: 13.5px;
+        min-height: 36px;
+        margin-top: 4px;
+      }
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        #list {
+          position: static;
+          max-height: none;
+          flex-direction: row;
+          overflow-x: auto;
+          padding: 0 0 6px;
+        }
+        #list button {
+          width: auto;
+          flex: none;
+          min-width: 96px;
+        }
+        #list .rl {
+          display: none;
+        }
+        .bar {
+          position: static;
+        }
+      }
+      @media (max-width: 520px) {
+        body {
+          padding: 0 10px 30px;
+        }
+        .cards {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .scens {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        h1 {
+          font-size: 17px;
+        }
+        .ctl button,
+        .gridbar button,
+        .bar button {
+          min-height: 36px;
+          min-width: 34px;
+        }
+      }
+
+      /* SVG animation */
+      svg .fresh {
+        animation: fadein 0.45s ease-out;
+      }
+      svg .popin {
+        animation: popin 0.4s ease-out;
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+      svg .draw {
+        stroke-dasharray: 1;
+        animation: draw 0.8s linear forwards;
+      }
+      svg .rip {
+        fill: none;
+        stroke: #fff;
+        stroke-width: 3;
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: rip 0.9s ease-out forwards;
+      }
+      svg .rip.r2 {
+        animation-delay: 0.22s;
+        opacity: 0;
+        animation-fill-mode: both;
+      }
+      svg .fade {
+        animation: fadeout 1.5s ease-in 0.2s forwards;
+      }
+      svg .pop {
+        animation: pop 1.25s ease-out forwards;
+        font-weight: 800;
+        font-size: 13px;
+        paint-order: stroke;
+        stroke: #0f141b;
+        stroke-width: 3px;
+      }
+      svg .flashring {
+        fill: none;
+        stroke-width: 4;
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: flashring 0.8s ease-out forwards;
+      }
+      svg .slotflash {
+        animation: slotflash 0.5s ease-out;
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+      svg .dash {
+        animation: dash 0.7s linear infinite;
+      }
+      svg .rd {
+        transition: transform 1.2s ease-in-out;
+      }
+      @keyframes fadein {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes fadeout {
+        to {
+          opacity: 0;
+        }
+      }
+      @keyframes popin {
+        from {
+          opacity: 0;
+          transform: scale(0.4);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      @keyframes draw {
+        from {
+          stroke-dashoffset: 1;
+        }
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      @keyframes rip {
+        from {
+          transform: scale(0.3);
+          opacity: 0.95;
+        }
+        to {
+          transform: scale(1.7);
+          opacity: 0;
+        }
+      }
+      @keyframes pop {
+        from {
+          transform: translateY(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateY(-20px);
+          opacity: 0;
+        }
+      }
+      @keyframes flashring {
+        from {
+          transform: scale(0.6);
+          opacity: 1;
+        }
+        to {
+          transform: scale(1.9);
+          opacity: 0;
+        }
+      }
+      @keyframes slotflash {
+        0% {
+          transform: scale(1.9);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+      @keyframes dash {
+        to {
+          stroke-dashoffset: -20;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        svg .dash {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="bar">
+        <h1>Supply examples</h1>
+        <div class="seg" role="group" aria-label="View">
+          <button type="button" data-m="one" aria-pressed="true">One variant, 3 scenarios</button>
+          <button type="button" data-m="grid" aria-pressed="false">One scenario, all variants</button>
+        </div>
+        <label><input type="checkbox" id="slow" /> Slow motion</label>
+        <button type="button" id="replayAll">Replay all</button>
+        <span class="sp"></span>
+        <a href="supply-methods.html">Detailed comparison (numbers, simulation)</a>
+      </div>
+      <div class="legend" aria-label="Legend">
+        <span
+          ><svg viewBox="0 0 34 18" aria-hidden="true">
+            <path d="M3 9 H31" stroke="#3d4858" stroke-width="8" stroke-linecap="round" />
+            <circle cx="14" cy="9" r="5.5" fill="#ffd23f" stroke="#3a2e00" stroke-width="2" />
+            <polygon points="26,9 20,5 20,13" fill="#fff" stroke="#000" stroke-width="1" /></svg
+          >charge, moving</span
+        >
+        <span
+          ><svg viewBox="0 0 34 18" aria-hidden="true">
+            <rect x="2" y="5" width="8" height="8" fill="#ffd23f" stroke="#7a5a00" stroke-width="1.5" />
+            <rect x="12" y="5" width="8" height="8" fill="#ffd23f" stroke="#7a5a00" stroke-width="1.5" />
+            <rect x="22" y="5" width="8" height="8" fill="#10151c" stroke="#5b6676" stroke-width="1.5" /></svg
+          >city stock (filled = charge)</span
+        >
+        <span
+          ><svg viewBox="0 0 34 18" aria-hidden="true">
+            <circle cx="10" cy="9" r="7" fill="none" stroke="#fff" stroke-width="2" />
+            <path d="M16 5 L16 18 L19 15 L22 20 L24 19 L21 14 L26 14 Z" fill="#fff" stroke="#000" stroke-width="1" /></svg
+          >the player clicks</span
+        >
+        <span
+          ><svg viewBox="0 0 34 18" aria-hidden="true">
+            <circle cx="17" cy="9" r="7" fill="none" stroke="#ff5b61" stroke-width="3" /></svg
+          >red flash: lost or burned</span
+        >
+        <span
+          ><svg viewBox="0 0 34 18" aria-hidden="true">
+            <circle cx="17" cy="9" r="8" fill="#1d4f9e" stroke="#8cb8ff" stroke-width="2.5" /></svg
+          >yours</span
+        >
+        <span
+          ><svg viewBox="0 0 34 18" aria-hidden="true">
+            <circle cx="17" cy="9" r="8" fill="#5a1f24" stroke="#ff7b80" stroke-width="2.5" stroke-dasharray="3 2.5" /></svg
+          >enemy (dashed, red ▲)</span
+        >
+        <span>F factory · A, B rear cities · C front city with your army ▲ · E enemy · D detour · P province</span>
+      </div>
+      <div class="layout" id="layout">
+        <nav id="list" aria-label="Variants"></nav>
+        <main id="main"></main>
+      </div>
+    </div>
+
+    <script>
+      (() => {
+        'use strict';
+        const NS = 'http://www.w3.org/2000/svg';
+        const svg = (tag, attrs, parent, text) => {
+          const e = document.createElementNS(NS, tag);
+          if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+          if (text != null) e.textContent = text;
+          if (parent) parent.appendChild(e);
+          return e;
+        };
+        const h = (tag, attrs, parent, text) => {
+          const e = document.createElement(tag);
+          if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+          if (text != null) e.textContent = text;
+          if (parent) parent.appendChild(e);
+          return e;
+        };
+        const COL = {
+          amber: '#ffa726',
+          amber2: '#ff7043',
+          cyan: '#29d0e0',
+          purple: '#b388ff',
+          green: '#3fd17a',
+          pink: '#ff6fb5',
+          red: '#ff5b61',
+          blue: '#5b9bff',
+          grey: '#8b97a6',
+          gold: '#ffd23f',
+        };
+        const col = (c) => COL[c] || c || COL.grey;
+
+        /* ---------------------------------------------------------------- maps */
+        const LINE = {
+          F: [42, 70, 'f', 'factory'],
+          A: [117, 70, 'c', 'rear'],
+          B: [192, 70, 'c', 'rear'],
+          C: [267, 70, 'c', 'front'],
+          E: [342, 70, 'c', 'enemy'],
+        };
+        const MAPS = {
+          line: { n: LINE, e: ['FA', 'AB', 'BC', 'CE'], enemy: ['E'] },
+          cut: {
+            n: { ...LINE, D: [229.5, 142, 'c', 'detour'] },
+            e: ['FA', 'AB', 'BC', 'CE', 'BD', 'DC'],
+            enemy: ['E'],
+          },
+          prov: {
+            n: { F: LINE.F, A: LINE.A, P: [192, 70, 'p', 'province'], C: LINE.C, E: LINE.E },
+            e: ['FA', 'AP', 'PC', 'CE'],
+            enemy: ['E'],
+          },
+          prov2: {
+            n: { F: LINE.F, A: LINE.A, B: LINE.B, C: LINE.C, P: [342, 70, 'p', 'enemy'] },
+            e: ['FA', 'AB', 'BC', 'CP'],
+            enemy: ['P'],
+          },
+        };
+        const TY = 44; // height of the chips above a node
+        const CAPS = { c: 4, p: 3, f: 6 };
+        const SPEED = 130; // px per second of a charge on a road
+        let SPD = 1; // slow motion factor
+
+        /* ------------------------------------------------------- event builders */
+        const D = (path, o = {}) => ({ k: 'dot', t: 0, path, ...o });
+        const many = (path, n, o = {}) =>
+          Array.from({ length: n }, (_, i) => D(path, { ...o, t: (o.t || 0) + i * (o.gap ?? 0.4) }));
+        const OV = (id, spec, t = 0) => ({ k: 'ov', t, id, spec });
+        const RM = (id, t = 0) => ({ k: 'ov', t, id, spec: null });
+        const DV = (id, d = -1, t = 0) => ({ k: 'ovdv', t, id, d });
+        const CLK = (target, t = 0, label) => ({ k: 'click', t, target, label });
+        const SHOT = (n, t = 0) => ({ k: 'shot', t, n });
+        const STK = (n, v, t = 0) => ({ k: 'stock', t, n, v });
+        const OWN = (n, who, t = 0) => ({ k: 'own', t, n, who });
+        const ARMY = (n, t = 0) => ({ k: 'army', t, n });
+        const CUT = (e, t = 0) => ({ k: 'cut', t, e });
+        const POP = (n, text, c, t = 0) => ({ k: 'pop', t, n, text, c });
+        const JUMP = (from, to, o = {}) => ({ k: 'jump', t: 0, from, to, ...o });
+        const AIR = (n, o = {}) => ({ k: 'air', t: 0, n, ...o });
+        /* a point d px from node n toward node `to` (wagons wait on the road, not on top of a city) */
+        const TW = (n, to, d = 44) => ({ tw: [n, to, d] });
+        const WSP = (at, load, t = 0) => ({ k: 'wsp', t, at, load });
+        const WLOAD = (v, t = 0) => ({ k: 'wload', t, v });
+        const WMOVE = (path, dur, t = 0) => ({ k: 'wmove', t, path, dur });
+        const WUNL = (n, cnt, t = 0) => ({ k: 'wunl', t, n, cnt });
+        const WDIE = (t = 0) => ({ k: 'wdie', t });
+        const S = (cap, ...ev) => ({ cap, ev: ev.flat(Infinity) });
+
+        /* overlay specs */
+        const LN = (path, o = {}) => ({ k: 'line', path, ...o });
+        const TG = (n, text, c) => ({ k: 'tag', n, text, c });
+        const ST = (n, s) => ({ k: 'status', n, s });
+        const FL = (a, b) => ({ k: 'flow', a, b });
+        const HZ = (nodes, text, c) => ({ k: 'halo', nodes, text, c });
+        const PIPS = (n, v) => ({ k: 'pips', n, v });
+        const TK = (n, v) => ({ k: 'ticket', n, v });
+        const DP = (n) => ({ k: 'depot', n });
+
+        /* the standard "enemy cuts road B-C" beat, shared by all variants (a charge dies on the road) */
+        const cutBC = (extra = []) => [D('ABC', { fate: 'lost', p: 0.82, ...extra[0] }), CUT('BC', 0.7)];
+
+        /* ------------------------------------------------------------ variants */
+        const SC = [
+          { id: 'basic', title: 'Basic: factory to front' },
+          { id: 'front', title: 'Front advances: city captured' },
+          { id: 'cut', title: 'Road cut' },
+        ];
+        const V = [];
+
+        /* V0 */
+        V.push({
+          id: 'V0',
+          name: 'Factory lines (now)',
+          rule: 'A line from the factory to a city. Only the target city fills.',
+          clicks: 12,
+          cost: 'none',
+          parts: 'already built',
+          basic: {
+            map: 'line',
+            steps: [
+              S('Player draws a line from F to C', CLK('F'), CLK('C', 0.8), OV('l1', LN('FABC'), 1.0)),
+              S('Charges ride the line and stop only in C', many('FABC', 3, { drop: 'C', gap: 0.45 })),
+              S(
+                'A and B get nothing: the rear stays empty',
+                OV('eA', TG('A', 'empty', 'red')),
+                OV('eB', TG('B', 'empty', 'red')),
+                SHOT('C', 0.3),
+                D('FABC', { drop: 'C', t: 0.6 }),
+              ),
+              S(
+                'To fill A: another line F to A, 2 more clicks',
+                CLK('F'),
+                CLK('A', 0.8),
+                OV('l2', LN('FA', { off: 8, c: 'amber2' }), 1.0),
+                RM('eA', 1.0),
+                many('FA', 2, { drop: 'A', t: 1.3, gap: 0.4 }),
+              ),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { ov: { l1: LN('FABC') }, stock: { C: 3 } },
+            steps: [
+              S('The line F to C feeds the front', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S(
+                'Auto lines adds a copy F to E on top of the old line',
+                OV('l2', LN('FABCE', { off: 8, c: 'amber2' }), 0.2),
+                OV('t1', TG('B', 'copy on top', 'amber2'), 0.9),
+              ),
+              S(
+                'The old line keeps filling C: the army left it',
+                D('FABC', { drop: 'C' }),
+                D('FABCE', { drop: 'E', t: 0.4 }),
+                OV('t2', TG('C', 'idle', 'red'), 1.3),
+              ),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { ov: { l1: LN('FABC') }, stock: { C: 1 } },
+            steps: [
+              S('The line F to C feeds the front', D('FABC', { drop: 'C' })),
+              S('Enemy cuts road B-C: a charge on it is lost', cutBC()),
+              S('The line reroutes through D by itself', OV('l1', LN('FABDC'), 0.1)),
+              S('C is fed again', many('FABDC', 2, { drop: 'C', gap: 0.3 })),
+            ],
+          },
+          extra: {
+            title: 'Line into a province',
+            map: 'prov',
+            steps: [
+              S('Player draws a line F to P (a province)', CLK('F'), CLK('P', 0.8), OV('l1', LN('FAP'), 1.0)),
+              S('Charges fill the province (it holds 3)', many('FAP', 3, { drop: 'P', gap: 0.4 })),
+              S('P is full: the next charge burns', D('FAP', { fate: 'burn' })),
+            ],
+          },
+        });
+
+        /* V1 */
+        V.push({
+          id: 'V1',
+          name: 'Lines + buffer K + ladder',
+          rule: 'Lines, but each transit city keeps K and a ladder pulls charges forward.',
+          clicks: 14,
+          cost: 'M',
+          parts: 'sim M, protocol S, client S, bots S',
+          basic: {
+            map: 'line',
+            steps: [
+              S(
+                'Player draws F to C and sets keep K = 1',
+                CLK('F'),
+                CLK('C', 0.6),
+                OV('l1', LN('FABC'), 0.8),
+                CLK('AB', 1.4, 'Player sets K = 1'),
+                OV('kA', TG('A', 'K=1', 'green'), 1.6),
+                OV('kB', TG('B', 'K=1', 'green'), 1.6),
+              ),
+              S(
+                'Every second charge stays in a transit city',
+                D('FABC', { drop: 'C' }),
+                D('FA', { drop: 'A', t: 0.45 }),
+                D('FABC', { drop: 'C', t: 0.9 }),
+                D('FAB', { drop: 'B', t: 1.35 }),
+              ),
+              S('C fires: B sends its charge forward', SHOT('C'), D('BC', { take: 'B', drop: 'C', t: 0.4 })),
+              S('A refills B, F refills A: the ladder', D('AB', { take: 'A', drop: 'B' }), D('FA', { drop: 'A', t: 0.5 })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: {
+              ov: { l1: LN('FABC'), kA: TG('A', 'K=1', 'green'), kB: TG('B', 'K=1', 'green') },
+              stock: { A: 1, B: 1, C: 3 },
+            },
+            steps: [
+              S('A and B keep 1, C is at the front', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S(
+                'Auto lines adds a copy F to E, K inherited',
+                OV('l2', LN('FABCE', { off: 8, c: 'amber2' }), 0.2),
+                OV('kC', TG('C', 'K=1', 'green'), 0.9),
+              ),
+              S(
+                'The old line keeps feeding C: the army left',
+                D('FABC', { drop: 'C' }),
+                D('FABCE', { drop: 'E', t: 0.4 }),
+              ),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: {
+              ov: { l1: LN('FABC'), kA: TG('A', 'K=1', 'green'), kB: TG('B', 'K=1', 'green') },
+              stock: { A: 1, B: 1, C: 1 },
+            },
+            steps: [
+              S('Line F to C. A and B keep 1', D('FABC', { drop: 'C' })),
+              S('Enemy cuts road B-C: a charge on it is lost', cutBC()),
+              S('The line reroutes through D, D keeps 1 too', OV('l1', LN('FABDC'), 0.1), OV('kD', TG('D', 'K=1', 'green'), 0.5)),
+              S('The ladder moves B’s charge through D to C', D('BDC', { take: 'B', drop: 'C' }), D('FAB', { drop: 'B', t: 0.5 })),
+            ],
+          },
+        });
+
+        /* V2 */
+        V.push({
+          id: 'V2',
+          name: 'Weighted lines + drag',
+          rule: 'Lines with a weight (pause, normal, main). Drag a line end to move it.',
+          clicks: 11,
+          cost: 'M',
+          parts: 'sim S, protocol S, client M, bots S',
+          basic: {
+            map: 'line',
+            steps: [
+              S('Player draws a line from F to C', CLK('F'), CLK('C', 0.8), OV('l1', LN('FABC'), 1.0)),
+              S('Charges ride the line. C shows "flowing"', OV('s', ST('C', 'flowing'), 0.1), many('FABC', 2, { drop: 'C', gap: 0.4 })),
+              S('C is full: the mark says "full", the line waits', many('FABC', 2, { drop: 'C', gap: 0.4 }), OV('s', ST('C', 'full'), 2.2)),
+              S(
+                'Player clicks the line: main weight x2, it fills first',
+                SHOT('C'),
+                SHOT('C', 0.15),
+                CLK('BC', 0.3, 'Player clicks the line'),
+                OV('w', TG('B', 'main x2', 'amber'), 0.5),
+                OV('s', ST('C', 'flowing'), 0.5),
+                many('FABC', 2, { drop: 'C', t: 0.6, gap: 0.25 }),
+              ),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { ov: { l1: LN('FABC'), s: ST('C', 'flowing') }, stock: { C: 3 } },
+            steps: [
+              S('The line F to C feeds the front', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S(
+                'Player drags the line end from C to E',
+                CLK('C', 0, 'Player drags the end C to E'),
+                CLK('E', 0.8, null),
+                OV('l1', LN('FABCE'), 0.9),
+                RM('s', 0.9),
+                OV('sE', ST('E', 'starving'), 1.0),
+              ),
+              S('One longer line: E is fed, no copy', many('FABCE', 2, { drop: 'E', gap: 0.3 }), OV('sE', ST('E', 'flowing'), 0.8)),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { ov: { l1: LN('FABC'), s: ST('C', 'flowing') }, stock: { C: 1 } },
+            steps: [
+              S('Line F to C. C shows "flowing"', D('FABC', { drop: 'C' })),
+              S('Enemy cuts road B-C: C shows "starving"', cutBC(), OV('s', ST('C', 'starving'), 1.3)),
+              S('The line reroutes through D', OV('l1', LN('FABDC'), 0.1)),
+              S('C is fed again', many('FABDC', 2, { drop: 'C', gap: 0.3 }), OV('s', ST('C', 'flowing'), 1.2)),
+            ],
+          },
+          extra: {
+            title: 'Pause a line',
+            map: 'line',
+            steps: [
+              S(
+                'Two lines share the factory: F to C and F to B',
+                OV('l1', LN('FABC')),
+                OV('l2', LN('FAB', { off: 8, c: 'amber2' }), 0.1),
+                D('FABC', { drop: 'C', t: 0.3 }),
+                D('FAB', { drop: 'B', t: 0.8 }),
+              ),
+              S('Player clicks the F to B line: pause', CLK('AB', 0, 'Player clicks line F to B'), OV('p', TG('A', 'paused', 'amber2'), 0.3)),
+              S('All charges now go to C', many('FABC', 3, { drop: 'C', gap: 0.35 })),
+            ],
+          },
+        });
+
+        /* V3 */
+        V.push({
+          id: 'V3',
+          name: 'Growing spine',
+          top: true,
+          rule: 'One growing line per front. Transit cities keep 1. A captured city extends it.',
+          clicks: 6,
+          cost: 'M',
+          parts: 'sim M, protocol S, client S, bots S',
+          basic: {
+            map: 'line',
+            steps: [
+              S('Player draws a spine from F to C', CLK('F'), CLK('C', 0.7), OV('sp', LN('FABC'), 0.9)),
+              S('The tip C fills first', many('FABC', 4, { drop: 'C', gap: 0.3 })),
+              S(
+                'C is full: B, then A, keep 1',
+                D('FAB', { drop: 'B' }),
+                D('FA', { drop: 'A', t: 0.5 }),
+                OV('kB', TG('B', 'keeps 1', 'green'), 1.1),
+                OV('kA', TG('A', 'keeps 1', 'green'), 1.1),
+              ),
+              S('C fires: the tip gets the next charge first', SHOT('C'), D('FABC', { drop: 'C', t: 0.3 })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: {
+              ov: { sp: LN('FABC'), kA: TG('A', 'keeps 1', 'green'), kB: TG('B', 'keeps 1', 'green') },
+              stock: { A: 1, B: 1, C: 4 },
+            },
+            steps: [
+              S('One spine F to C. A and B keep 1', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S('The spine grows into E by itself, no click', OV('sp', LN('FABCE'), 0.3), OV('kC', TG('C', 'keeps 1', 'green'), 1.1)),
+              S('E fills first. C passes extras on, keeps 1', many('CE', 3, { take: 'C', drop: 'E', gap: 0.35 })),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: {
+              ov: { sp: LN('FABC'), kA: TG('A', 'keeps 1', 'green'), kB: TG('B', 'keeps 1', 'green') },
+              stock: { A: 1, B: 1, C: 1 },
+            },
+            steps: [
+              S('One spine F to C. A and B keep 1', D('FABC', { drop: 'C' })),
+              S('Enemy cuts road B-C: a charge on it is lost', cutBC()),
+              S('The spine reroutes through D', OV('sp', LN('FABDC'), 0.1), OV('kD', TG('D', 'keeps 1', 'green'), 0.6)),
+              S('The tip C is fed through D', many('FABDC', 2, { drop: 'C', gap: 0.3 })),
+            ],
+          },
+          extra: {
+            title: 'Province next to the tip',
+            map: 'prov2',
+            init: {
+              ov: { sp: LN('FABC'), kA: TG('A', 'keeps 1', 'green'), kB: TG('B', 'keeps 1', 'green') },
+              stock: { A: 1, B: 1, C: 4 },
+            },
+            steps: [
+              S('The spine ends at city C. P is a province', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('Province P captured', OWN('P', 'you'), ARMY('P')),
+              S('The spine skips provinces: nothing burns', OV('sk', TG('P', 'no line', 'red'), 0.2)),
+            ],
+          },
+        });
+
+        /* V4 */
+        V.push({
+          id: 'V4',
+          name: 'Conveyor roads',
+          top: true,
+          rule: 'Click a road to give it a flow arrow. Cities on a flow keep 1. The end fills.',
+          clicks: 11,
+          cost: 'M',
+          parts: 'sim M, protocol M, client M, bots M',
+          basic: {
+            map: 'line',
+            steps: [
+              S(
+                'Player clicks each road: an arrow appears',
+                CLK('FA', 0, 'Player clicks road F-A'),
+                OV('f1', FL('F', 'A'), 0.15),
+                CLK('AB', 0.6, 'Player clicks road A-B'),
+                OV('f2', FL('A', 'B'), 0.75),
+                CLK('BC', 1.2, 'Player clicks road B-C'),
+                OV('f3', FL('B', 'C'), 1.35),
+              ),
+              S(
+                'A city holding 0 keeps the first charge it gets',
+                D('FA', { drop: 'A' }),
+                D('FAB', { drop: 'B', t: 0.45 }),
+                D('FABC', { drop: 'C', t: 0.9 }),
+              ),
+              S('Cities holding 1 pass charges on to the end', many('FABC', 3, { drop: 'C', gap: 0.3 })),
+              S('C fires: the flow refills the end city', SHOT('C'), D('FABC', { drop: 'C', t: 0.3 })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { ov: { f1: FL('F', 'A'), f2: FL('A', 'B'), f3: FL('B', 'C') }, stock: { A: 1, B: 1, C: 4 } },
+            steps: [
+              S('The arrows F to C feed the front', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S('Player clicks road C-E: the flow extends', CLK('CE'), OV('f4', FL('C', 'E'), 0.2)),
+              S('C keeps 1 and passes the rest on. E fills', many('CE', 3, { take: 'C', drop: 'E', gap: 0.35 })),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { ov: { f1: FL('F', 'A'), f2: FL('A', 'B'), f3: FL('B', 'C') }, stock: { A: 1, B: 1, C: 1 } },
+            steps: [
+              S('The arrows F to C feed the front', D('FABC', { drop: 'C' })),
+              S('Enemy cuts road B-C: its arrow is dead', cutBC(), RM('f3', 1.0)),
+              S(
+                'Player clicks B-D and D-C: a detour',
+                CLK('BD', 0, 'Player clicks road B-D'),
+                OV('f4', FL('B', 'D'), 0.1),
+                CLK('DC', 0.7, 'Player clicks road D-C'),
+                OV('f5', FL('D', 'C'), 0.8),
+              ),
+              S('D keeps 1, the rest goes on to C', D('FABD', { drop: 'D' }), D('FABDC', { drop: 'C', t: 0.35 })),
+            ],
+          },
+          extra: {
+            title: 'Army standing on the flow',
+            map: 'line',
+            init: { ov: { f1: FL('F', 'A'), f2: FL('A', 'B'), f3: FL('B', 'C') }, stock: { A: 1, B: 1 } },
+            steps: [
+              S('A second army (3 units) stands on B, on the flow', OV('ar', { k: 'army', n: 'B', v: 0 }, 0.2)),
+              S(
+                'Charges arriving at B recharge the army first',
+                ...many('FAB', 3, { gap: 0.5, onEnd: [DV('ar', 1)] }),
+              ),
+              S('Only then does the flow reach C', many('FABC', 2, { drop: 'C', gap: 0.35 })),
+            ],
+          },
+        });
+
+        /* V5 */
+        V.push({
+          id: 'V5',
+          name: 'Demand pips per city',
+          rule: 'Click a city to set how many charges it wants. Factories fill the requests.',
+          clicks: 18,
+          cost: 'M',
+          parts: 'sim M, protocol S, client M, bots S',
+          basic: {
+            map: 'line',
+            steps: [
+              S('Player clicks C: request "full"', CLK('C'), OV('pC', PIPS('C', 4), 0.15)),
+              S('The factory sends charges by the fastest road', many('FABC', 4, { drop: 'C', gap: 0.3 })),
+              S('Player clicks A: request 1', CLK('A'), OV('pA', PIPS('A', 1), 0.15)),
+              S('The factory fills A too', D('FA', { drop: 'A' })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { ov: { pC: PIPS('C', 4), pA: PIPS('A', 1), pB: PIPS('B', 1) }, stock: { A: 1, B: 1, C: 3 } },
+            steps: [
+              S('Requests: C full, A and B one each', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S(
+                'Player sets E to full and C down to 1',
+                CLK('E'),
+                OV('pE', PIPS('E', 4), 0.1),
+                CLK('C', 0.8),
+                OV('pC', PIPS('C', 1), 0.9),
+              ),
+              S('Charges go to E. C is not refilled', many('FABCE', 2, { drop: 'E', gap: 0.3 })),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { ov: { pC: PIPS('C', 4) }, stock: { C: 1 } },
+            steps: [
+              S('C wants more: the factory sends', D('FABC', { drop: 'C' })),
+              S('Enemy cuts road B-C: a charge on it is lost', cutBC()),
+              S('The request stays. Charges take the road via D', D('FABDC', { drop: 'C' })),
+              S('Request met: C is full', D('FABDC', { drop: 'C' }), OV('pC', ST('C', 'full'), 2.2)),
+            ],
+          },
+        });
+
+        /* V6 */
+        V.push({
+          id: 'V6',
+          name: 'Border roles (automatic)',
+          rule: 'Automatic: border cities fill, the rest keep 1. No input.',
+          clicks: 0,
+          cost: 'S',
+          parts: 'sim S, protocol S, client S, bots S',
+          basic: {
+            map: 'line',
+            steps: [
+              S(
+                'No clicks: roles come from the rule',
+                OV('bC', TG('C', 'fills', 'green'), 0.2),
+                OV('rA', TG('A', 'keeps 1', 'grey'), 0.2),
+                OV('rB', TG('B', 'keeps 1', 'grey'), 0.2),
+              ),
+              S('Border city C is served first', many('FABC', 4, { drop: 'C', gap: 0.3 })),
+              S('Then the rear cities keep 1', D('FAB', { drop: 'B' }), D('FA', { drop: 'A', t: 0.5 })),
+              S('C fires: the border is refilled first', SHOT('C'), D('FABC', { drop: 'C', t: 0.3 })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: {
+              ov: { bC: TG('C', 'fills', 'green'), rA: TG('A', 'keeps 1', 'grey'), rB: TG('B', 'keeps 1', 'grey') },
+              stock: { A: 1, B: 1, C: 4 },
+            },
+            steps: [
+              S('Border city C is served first', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S(
+                'E is the border now: roles flip by themselves',
+                OV('bC', TG('C', 'keeps 1', 'grey'), 0.2),
+                OV('bE', TG('E', 'fills', 'green'), 0.2),
+              ),
+              S('E is filled first', many('FABCE', 2, { drop: 'E', gap: 0.3 })),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: {
+              ov: { bC: TG('C', 'fills', 'green'), rA: TG('A', 'keeps 1', 'grey'), rB: TG('B', 'keeps 1', 'grey') },
+              stock: { A: 1, B: 1, C: 1 },
+            },
+            steps: [
+              S('Border city C is served first', D('FABC', { drop: 'C' })),
+              S('Enemy cuts road B-C: a charge on it is lost', cutBC()),
+              S('No click: the server picks the road via D', D('FABDC', { drop: 'C' })),
+              S('C is served again', D('FABDC', { drop: 'C' })),
+            ],
+          },
+        });
+
+        /* V7 */
+        V.push({
+          id: 'V7',
+          name: 'Depots with a district',
+          rule: 'Name up to two depots. A depot fills the cities one road around it.',
+          clicks: 7,
+          cost: 'M',
+          parts: 'sim M, protocol S, client M, bots M',
+          basic: {
+            map: 'line',
+            steps: [
+              S('Player clicks B: build a depot', CLK('B'), OV('dp', DP('B'), 0.15), OV('hz', HZ('ABC', 'district', 'purple'), 0.3)),
+              S('The factory feeds the depot', many('FAB', 3, { drop: 'B', gap: 0.35 })),
+              S(
+                'The depot fills its district: C full, A keeps 1',
+                D('BC', { take: 'B', drop: 'C' }),
+                D('BC', { take: 'B', drop: 'C', t: 0.35 }),
+                D('BA', { take: 'B', drop: 'A', t: 0.7 }),
+              ),
+              S('C fires: the depot refills it', SHOT('C'), D('FAB', { drop: 'B' }), D('BC', { take: 'B', drop: 'C', t: 1.2 })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { ov: { dp: DP('B'), hz: HZ('ABC', 'district', 'purple') }, stock: { A: 1, B: 2, C: 4 } },
+            steps: [
+              S('Depot B serves its district A, B, C', SHOT('C'), D('BC', { take: 'B', drop: 'C', t: 0.4 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S(
+                'E is 2 roads from B: too far. Player moves the depot to C',
+                OV('tE', TG('E', 'too far', 'red'), 0.1),
+                CLK('B', 0.5, 'Player moves the depot B to C'),
+                CLK('C', 1.2, null),
+                RM('dp', 1.3),
+                OV('dp', DP('C'), 1.3),
+                OV('hz', HZ('BCE', 'district', 'purple'), 1.3),
+                RM('tE', 1.3),
+              ),
+              S('Depot C fills E', many('CE', 3, { take: 'C', drop: 'E', gap: 0.35 })),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { ov: { dp: DP('B'), hz: HZ('ABCD', 'district', 'purple') }, stock: { A: 1, B: 2, C: 1, D: 1 } },
+            steps: [
+              S('Depot B fills its district', D('BC', { take: 'B', drop: 'C' })),
+              S('Enemy cuts road B-C: a charge on it is lost', D('BC', { fate: 'lost', p: 0.6, dur: 1.2 }), CUT('BC', 0.6)),
+              S('C is 2 roads from B now: outside the district', OV('hz', HZ('ABD', 'district', 'purple'), 0.2), OV('s', ST('C', 'starving'), 0.5)),
+              S(
+                'Player moves the depot to D: C is back',
+                CLK('B', 0, 'Player moves the depot B to D'),
+                CLK('D', 0.7, null),
+                RM('dp', 0.8),
+                OV('dp', DP('D'), 0.8),
+                OV('hz', HZ('BCD', 'district', 'purple'), 0.8),
+                OV('s', ST('C', 'flowing'), 1.4),
+                D('DC', { take: 'D', drop: 'C', t: 1.0 }),
+              ),
+            ],
+          },
+        });
+
+        /* V8 */
+        V.push({
+          id: 'V8',
+          name: 'Request tickets',
+          rule: 'A city asks once for 4 charges. Factories serve the tickets in order.',
+          clicks: 18,
+          cost: 'M',
+          parts: 'sim S, protocol S, client M, bots S',
+          basic: {
+            map: 'line',
+            steps: [
+              S('Player clicks C: ticket "send 4"', CLK('C'), OV('tk', TK('C', 4), 0.15)),
+              S('The factory serves it, one charge at a time', many('FABC', 2, { drop: 'C', gap: 0.5, onEnd: [DV('tk', -1)] })),
+              S('Two more charges. The ticket is done', many('FABC', 2, { drop: 'C', gap: 0.5, onEnd: [DV('tk', -1)] })),
+              S('C fires. The player must click again', SHOT('C'), SHOT('C', 0.2), CLK('C', 0.5), OV('tk', TK('C', 4), 0.7)),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { ov: { tk: TK('C', 2) }, stock: { C: 2 } },
+            steps: [
+              S('The ticket on C is served', many('FABC', 2, { drop: 'C', gap: 0.5, onEnd: [DV('tk', -1)] })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S('Player clicks E: new ticket "send 4"', CLK('E'), OV('tk2', TK('E', 4), 0.15)),
+              S('The factory serves E, nothing goes to C', many('FABCE', 2, { drop: 'E', gap: 0.3, onEnd: [DV('tk2', -1)] })),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { ov: { tk: TK('C', 3) }, stock: { C: 1 } },
+            steps: [
+              S('The ticket is being served', D('FABC', { drop: 'C', onEnd: [DV('tk', -1)] })),
+              S('Enemy cuts road B-C: a charge on it is lost', cutBC()),
+              S('The ticket stays open. The road via D is used', D('FABDC', { drop: 'C', onEnd: [DV('tk', -1)] })),
+              S('Ticket served: C is supplied', D('FABDC', { drop: 'C', onEnd: [DV('tk', -1)] })),
+            ],
+          },
+        });
+
+        /* V9 */
+        V.push({
+          id: 'V9',
+          name: 'Convoys',
+          rule: 'Wagons carry 4 charges at army speed. Enemies can destroy them.',
+          clicks: 9,
+          cost: 'L',
+          parts: 'sim L, protocol M, client L, bots L',
+          basic: {
+            map: 'line',
+            init: { wagon: { at: TW('F', 'A', 39), load: 0 } },
+            steps: [
+              S('Player clicks the wagon at F, then C', CLK('F', 0, 'Player clicks the wagon'), CLK('C', 0.9)),
+              S('The wagon loads 4 charges', WLOAD(4)),
+              S('It drives to C at army speed', WMOVE(['A', 'B', TW('C', 'B', 37.5)], 2.4)),
+              S('At C it unloads 4 charges', WUNL('C', 4, 0.1)),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { wagon: { at: TW('B', 'A', 37.5), load: 4 } },
+            steps: [
+              S('A wagon with 4 charges drives toward C', WMOVE(['B', TW('C', 'B', 37.5)], 1.3)),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S('Player clicks the wagon, then E: new target', CLK('B', 0, 'Player clicks the wagon'), CLK('E', 0.9), OV('tg', TG('E', 'target', 'amber'), 1.1)),
+              S('The wagon drives to E and unloads', WMOVE(['C', TW('E', 'C', 37.5)], 1.6), WUNL('E', 4, 1.7), RM('tg', 1.7)),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { wagon: { at: TW('B', 'A', 37.5), load: 4 } },
+            steps: [
+              S('A wagon with 4 charges leaves B for C', WMOVE(['B', [229.5, 70]], 1.5)),
+              S('Enemy cuts road B-C: wagon and cargo are lost', CUT('BC'), WDIE(0.5)),
+              S('Player sends a new wagon from F to C', WSP(TW('F', 'A', 39), 4), CLK('F', 0.2, 'Player clicks the wagon'), CLK('C', 1.0)),
+              S('It takes the longer detour through D', WMOVE(['A', 'B', 'D', TW('C', 'D', 50)], 2.4), WUNL('C', 4, 2.5)),
+            ],
+          },
+          extra: {
+            title: 'Convoy raid',
+            map: 'line',
+            init: { wagon: { at: TW('B', 'A', 37.5), load: 4 } },
+            steps: [
+              S('A wagon drives toward C', WMOVE(['B', [229.5, 70]], 1.5), OV('rd', { k: 'raider', x: 342, y: 30 }, 0.2)),
+              S('An enemy army sees the wagon and attacks', OV('rd', { k: 'raider', x: 229.5, y: 38 }, 0.1)),
+              S('The wagon and its 4 charges are destroyed', WDIE(0.3)),
+            ],
+          },
+        });
+
+        /* V10 */
+        V.push({
+          id: 'V10',
+          name: 'Army tether',
+          rule: 'Tie an army to a factory. The line follows the army.',
+          clicks: 4,
+          cost: 'S',
+          parts: 'sim S, protocol S, client S, bots S',
+          basic: {
+            map: 'line',
+            steps: [
+              S(
+                'Player clicks the army in C, then F',
+                CLK('C', 0, 'Player clicks the army in C'),
+                CLK('F', 0.8),
+                OV('tt', { k: 'tether', a: 'C', b: 'F' }, 1.0),
+              ),
+              S('A line F to C appears on the fastest road', OV('l1', LN('FABC'), 0.2)),
+              S('Charges ride the line to the army', many('FABC', 3, { drop: 'C', gap: 0.35 })),
+              S('The army fires, the line keeps refilling C', SHOT('C'), SHOT('C', 0.3), many('FABC', 2, { drop: 'C', t: 0.2, gap: 0.3 })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { ov: { tt: { k: 'tether', a: 'C', b: 'F' }, l1: LN('FABC') }, stock: { C: 3 } },
+            steps: [
+              S('The line follows the army at C', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('City E captured, the army moves in', OWN('E', 'you'), ARMY('E')),
+              S('The tether follows the army: the line moves to E', OV('tt', { k: 'tether', a: 'E', b: 'F' }, 0.2), OV('l1', LN('FABCE'), 0.3)),
+              S('E is fed. C keeps what it had', many('FABCE', 2, { drop: 'E', gap: 0.3 }), OV('id', TG('C', 'idle', 'red'), 1.0)),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { ov: { tt: { k: 'tether', a: 'C', b: 'F' }, l1: LN('FABC') }, stock: { C: 1 } },
+            steps: [
+              S('The line follows the army at C', D('FABC', { drop: 'C' })),
+              S('Enemy cuts road B-C: a charge on it is lost', cutBC()),
+              S('The line reroutes through D, still tied to the army', OV('l1', LN('FABDC'), 0.1)),
+              S('C is fed again', many('FABDC', 2, { drop: 'C', gap: 0.3 })),
+            ],
+          },
+        });
+
+        /* V11 */
+        V.push({
+          id: 'V11',
+          name: 'Painted zones + split',
+          rule: 'Paint cities into zones. A zone fills its emptiest city.',
+          clicks: 7,
+          cost: 'M',
+          parts: 'sim M, protocol S, client M, bots M',
+          basic: {
+            map: 'line',
+            steps: [
+              S(
+                'Player paints A, B, C: zone 1',
+                CLK('A', 0, 'Player paints A, B, C'),
+                CLK('B', 0.45, null),
+                CLK('C', 0.9, null),
+                OV('z', HZ('ABC', 'zone 1', 'purple'), 1.0),
+              ),
+              S(
+                'The factory fills the emptiest city of the zone',
+                D('FA', { drop: 'A' }),
+                D('FAB', { drop: 'B', t: 0.45 }),
+                D('FABC', { drop: 'C', t: 0.9 }),
+              ),
+              S(
+                'Charges keep A, B, C level',
+                D('FA', { drop: 'A' }),
+                D('FAB', { drop: 'B', t: 0.45 }),
+                D('FABC', { drop: 'C', t: 0.9 }),
+              ),
+              S('C fires: C is emptiest, so it gets the next', SHOT('C'), SHOT('C', 0.2), many('FABC', 2, { drop: 'C', t: 0.3, gap: 0.3 })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { ov: { z: HZ('ABC', 'zone 1', 'purple') }, stock: { A: 2, B: 2, C: 2 } },
+            steps: [
+              S('Zone 1 keeps A, B, C level', SHOT('C'), D('FABC', { drop: 'C', t: 0.4 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S('E joins the zone of C by itself', OV('z', HZ('ABCE', 'zone 1', 'purple'), 0.3)),
+              S('E is emptiest, so it is filled first', many('FABCE', 2, { drop: 'E', gap: 0.3 })),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { ov: { z: HZ('ABC', 'zone 1', 'purple') }, stock: { A: 2, B: 2, C: 1 } },
+            steps: [
+              S('Zone 1 fills its emptiest city', D('FABC', { drop: 'C' })),
+              S('Enemy cuts road B-C: a charge on it is lost', cutBC()),
+              S('Charges for C detour through D', D('FABDC', { drop: 'C' })),
+              S('C is level with A and B again', D('FABDC', { drop: 'C' })),
+            ],
+          },
+        });
+
+        /* V12 */
+        V.push({
+          id: 'V12',
+          name: 'Pressure and valves',
+          rule: 'Charges flow to emptier neighbours on every open road. Valves close roads.',
+          clicks: 2,
+          cost: 'M',
+          parts: 'sim M, protocol S, client M, bots M',
+          basic: {
+            map: 'line',
+            steps: [
+              S('No clicks. The factory pushes charges into empty A', many('FA', 3, { drop: 'A', gap: 0.3 })),
+              S('A passes one on to the emptier B', D('AB', { take: 'A', drop: 'B' }), D('FA', { drop: 'A', t: 0.3 })),
+              S(
+                'Charges step on toward C',
+                D('BC', { take: 'B', drop: 'C' }),
+                D('AB', { take: 'A', drop: 'B', t: 0.2 }),
+                D('FA', { drop: 'A', t: 0.4 }),
+              ),
+              S(
+                'C fires: the empty C draws charges forward',
+                SHOT('C'),
+                D('BC', { take: 'B', drop: 'C', t: 0.2 }),
+                D('AB', { take: 'A', drop: 'B', t: 0.4 }),
+                D('FA', { drop: 'A', t: 0.6 }),
+              ),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { stock: { A: 3, B: 2, C: 2 } },
+            steps: [
+              S(
+                'C fires and draws a charge from B',
+                SHOT('C'),
+                D('BC', { take: 'B', drop: 'C', t: 0.3 }),
+                D('AB', { take: 'A', drop: 'B', t: 0.5 }),
+                D('FA', { drop: 'A', t: 0.7 }),
+              ),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S(
+                'No click: charges flow on into the empty E',
+                D('CE', { take: 'C', drop: 'E' }),
+                D('BC', { take: 'B', drop: 'C', t: 0.3 }),
+                D('AB', { take: 'A', drop: 'B', t: 0.6 }),
+              ),
+              S(
+                'Levels even out toward the new front',
+                D('CE', { take: 'C', drop: 'E' }),
+                D('BC', { take: 'B', drop: 'C', t: 0.3 }),
+                D('AB', { take: 'A', drop: 'B', t: 0.6 }),
+                D('FA', { drop: 'A', t: 0.9 }),
+              ),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { stock: { A: 3, B: 2, C: 2 } },
+            steps: [
+              S('C fires and draws a charge from B', SHOT('C'), D('BC', { take: 'B', drop: 'C', t: 0.3 })),
+              S('Enemy cuts road B-C: a charge on it is lost', D('ABC', { take: 'A', fate: 'lost', p: 0.82 }), CUT('BC', 0.7)),
+              S('The flow finds the open road B, D, C', D('BDC', { take: 'B', drop: 'C' }), D('AB', { take: 'A', drop: 'B', t: 0.4 })),
+              S(
+                'C is filled again, no click',
+                D('BDC', { take: 'B', drop: 'C' }),
+                D('AB', { take: 'A', drop: 'B', t: 0.4 }),
+                D('FA', { drop: 'A', t: 0.8 }),
+              ),
+            ],
+          },
+          extra: {
+            title: 'Close a road with a valve',
+            map: 'cut',
+            init: { stock: { A: 3, B: 4 } },
+            steps: [
+              S('B passes charges to both C and D', D('BC', { take: 'B', drop: 'C' }), D('BD', { take: 'B', drop: 'D', t: 0.3 })),
+              S('Player clicks road B-D: a valve closes', CLK('BD', 0, 'Player clicks road B-D'), OV('vv', { k: 'valve', e: 'BD' }, 0.2)),
+              S('All charges now go to C', many('BC', 2, { take: 'B', drop: 'C', gap: 0.3 })),
+            ],
+          },
+        });
+
+        /* V13 */
+        V.push({
+          id: 'V13',
+          name: 'Supply radius, no packets',
+          top: true,
+          rule: 'A factory fills the emptiest city within 3 roads. Depots extend the reach.',
+          clicks: 3,
+          cost: 'M',
+          parts: 'sim M, protocol S, client M, bots M',
+          basic: {
+            map: 'line',
+            steps: [
+              S(
+                'The factory reaches 3 roads: A, B, C are in range',
+                OV('hz', HZ('ABC', '3 roads', 'green'), 0.1),
+                OV('hp', { k: 'hops', m: { A: 1, B: 2, C: 3 } }, 0.2),
+                OV('oE', TG('E', 'out', 'red'), 0.4),
+              ),
+              S('No packets: charges appear in the emptiest city', JUMP('F', 'A'), JUMP('F', 'B', { t: 0.4 }), JUMP('F', 'C', { t: 0.8 })),
+              S('All cities in range are kept level', JUMP('F', 'A'), JUMP('F', 'B', { t: 0.4 }), JUMP('F', 'C', { t: 0.8 })),
+              S('C fires: C is emptiest, so it gets the next', SHOT('C'), SHOT('C', 0.2), JUMP('F', 'C', { t: 0.5 }), JUMP('F', 'C', { t: 1.0 })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: {
+              ov: { hz: HZ('ABC', '3 roads', 'green'), hp: { k: 'hops', m: { A: 1, B: 2, C: 3 } } },
+              stock: { A: 2, B: 2, C: 3 },
+            },
+            steps: [
+              S('Everything within 3 roads is supplied', SHOT('C'), JUMP('F', 'C', { t: 0.3 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S(
+                'E is 4 roads away: out of range. Player builds a depot in C',
+                OV('oE', TG('E', 'out', 'red'), 0.1),
+                CLK('C', 0.5, 'Player builds a depot in C'),
+                OV('dp', DP('C'), 0.7),
+                OV('hz', HZ('ABCE', 'reach', 'green'), 1.2),
+                OV('hp', { k: 'hops', m: { A: 1, B: 2, C: 3, E: 1 } }, 1.2),
+                RM('oE', 1.2),
+              ),
+              S('The depot extends the reach: E is filled', JUMP('F', 'E'), JUMP('F', 'E', { t: 0.4 }), JUMP('F', 'E', { t: 0.8 })),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: {
+              ov: { hz: HZ('ABCD', '3 roads', 'green'), hp: { k: 'hops', m: { A: 1, B: 2, C: 3, D: 3 } } },
+              stock: { A: 2, B: 2, C: 2, D: 1 },
+            },
+            steps: [
+              S('C is 3 roads from F: in range', JUMP('F', 'C')),
+              S('Enemy cuts road B-C', CUT('BC')),
+              S(
+                'The detour is 4 roads: C is out of range',
+                OV('hz', HZ('ABD', '3 roads', 'green'), 0.1),
+                OV('hp', { k: 'hops', m: { A: 1, B: 2, D: 3 } }, 0.1),
+                OV('oC', TG('C', 'out', 'red'), 0.4),
+              ),
+              S('A, B, D are still filled. C starves', JUMP('F', 'A'), JUMP('F', 'B', { t: 0.4 }), JUMP('F', 'D', { t: 0.8 })),
+            ],
+          },
+        });
+
+        /* V14 */
+        V.push({
+          id: 'V14',
+          name: 'Airlift for CP',
+          rule: 'No network. 1 CP drops 2 charges into any city after 2.5 s.',
+          clicks: 34,
+          cost: 'S',
+          parts: 'sim S, protocol S, client S, bots S',
+          basic: {
+            map: 'line',
+            init: { stock: { F: 6 } },
+            steps: [
+              S('Player clicks C: 2 charges for 1 CP', CLK('C'), POP('C', '-1 CP', 'blue', 0.2), STK('F', 4, 0.4)),
+              S('A moment later 2 charges land in C', AIR('C', { dur: 1.5 }), AIR('C', { dur: 1.5, t: 0.35 })),
+              S('C fires twice', SHOT('C'), SHOT('C', 0.35)),
+              S('Player must click again: another 1 CP', CLK('C'), POP('C', '-1 CP', 'blue', 0.2), STK('F', 2, 0.4), AIR('C', { dur: 1.2, t: 0.6 }), AIR('C', { dur: 1.2, t: 0.95 })),
+            ],
+          },
+          front: {
+            map: 'line',
+            init: { stock: { F: 6, C: 2 } },
+            steps: [
+              S('Drop on C: 1 CP', CLK('C'), POP('C', '-1 CP', 'blue', 0.2), STK('F', 4, 0.4), AIR('C', { dur: 1.2, t: 0.6 }), AIR('C', { dur: 1.2, t: 0.95 })),
+              S('City E captured', OWN('E', 'you'), ARMY('E')),
+              S('Player clicks E: 2 charges for 1 CP', CLK('E'), POP('E', '-1 CP', 'blue', 0.2), STK('F', 2, 0.4)),
+              S('Charges land in E. No road needed', AIR('E', { dur: 1.5 }), AIR('E', { dur: 1.5, t: 0.35 })),
+            ],
+          },
+          cut: {
+            map: 'cut',
+            init: { stock: { F: 6, C: 1 } },
+            steps: [
+              S('Player clicks C: 1 CP', CLK('C'), POP('C', '-1 CP', 'blue', 0.2), STK('F', 4, 0.4), AIR('C', { dur: 1.2, t: 0.6 }), AIR('C', { dur: 1.2, t: 0.95 })),
+              S('Enemy cuts road B-C', CUT('BC')),
+              S('The airlift ignores the cut. Click again', SHOT('C'), CLK('C', 0.2), POP('C', '-1 CP', 'blue', 0.4), STK('F', 2, 0.6)),
+              S('Charges land in C', AIR('C', { dur: 1.5 }), AIR('C', { dur: 1.5, t: 0.35 })),
+            ],
+          },
+        });
+
+        /* ---------------------------------------------------------------- engine */
+        const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+        function chip(parent, x, y, text, color, o = {}) {
+          const w = o.w || Math.max(28, text.length * 6.9 + 12);
+          const hh = o.h || 17;
+          const cx = o.left ? x + w / 2 : o.noclamp ? x : clamp(x, w / 2 + 3, 377 - w / 2);
+          const g = svg('g', { transform: `translate(${cx},${y})` }, parent);
+          svg(
+            'rect',
+            {
+              x: -w / 2,
+              y: -hh / 2,
+              width: w,
+              height: hh,
+              rx: 5,
+              fill: o.bg || '#0d1117',
+              stroke: color,
+              'stroke-width': 1.8,
+              'stroke-dasharray': o.dash || 'none',
+            },
+            g,
+          );
+          if (text) svg('text', { x: 0, y: 4.2, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: o.fg || '#f0f6fc' }, g, text);
+          return g;
+        }
+        function arrowHead(parent, x, y, ang, size, fill) {
+          return svg(
+            'polygon',
+            {
+              points: `${size},0 ${-size * 0.6},${-size * 0.75} ${-size * 0.6},${size * 0.75}`,
+              fill,
+              stroke: '#0d1117',
+              'stroke-width': 1.5,
+              transform: `translate(${x},${y}) rotate(${ang})`,
+            },
+            parent,
+          );
+        }
+
+        class Board {
+          constructor(host, scen, key) {
+            this.scen = scen;
+            this.key = key;
+            this.map = MAPS[scen.map];
+            this.steps = scen.steps;
+            this.last = this.steps.length - 1;
+            this.live = false;
+            this.manual = false;
+            this.i = 0;
+            this.anims = [];
+            this.queue = [];
+            this.el = 0;
+            this.t0 = null;
+            this.warns = [];
+            this.ctl = null;
+            this.capEl = null;
+            this.build(host);
+            this.restore(0);
+            this.setCaption(0);
+          }
+          P(n) {
+            const q = this.map.n[n];
+            return [q[0], q[1]];
+          }
+          ptsOf(path) {
+            const arr = typeof path === 'string' ? path.split('') : path;
+            return arr.map((p) => {
+              if (typeof p === 'string') return this.P(p);
+              if (p.tw) {
+                const a = this.P(p.tw[0]);
+                const b = this.P(p.tw[1]);
+                const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                return [a[0] + ((b[0] - a[0]) * p.tw[2]) / l, a[1] + ((b[1] - a[1]) * p.tw[2]) / l];
+              }
+              return p;
+            });
+          }
+          mid(e) {
+            const a = this.P(e[0]);
+            const b = this.P(e[1]);
+            return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+          }
+          warn(msg) {
+            this.warns.push(msg);
+            if (window.__verbose) console.warn(`[${this.key}] step ${this.i + 1}: ${msg}`);
+          }
+          build(host) {
+            this.vh = this.map.n.D ? 196 : 130;
+            const s = svg('svg', { viewBox: `0 -16 380 ${this.vh + 16}`, role: 'img', 'aria-label': 'Supply example map' }, host);
+            this.svg = s;
+            this.L = {};
+            for (const n of ['roads', 'under', 'nodes', 'over', 'wg', 'dots', 'slots', 'fx']) this.L[n] = svg('g', { 'data-l': n }, s);
+            // roads
+            for (const e of this.map.e) {
+              const a = this.P(e[0]);
+              const b = this.P(e[1]);
+              svg('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: '#1b222c', 'stroke-width': 12, 'stroke-linecap': 'round' }, this.L.roads);
+              svg('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: '#3d4858', 'stroke-width': 8, 'stroke-linecap': 'round' }, this.L.roads);
+            }
+            // nodes
+            this.nodeEl = {};
+            for (const id in this.map.n) {
+              const [x, y, kind, role] = this.map.n[id];
+              const g = svg('g', { transform: `translate(${x},${y})` }, this.L.nodes);
+              const shape = kind === 'f' ? svg('rect', { x: -24, y: -19, width: 48, height: 38, rx: 8, 'stroke-width': 3 }, g) : kind === 'p' ? svg('rect', { x: -16, y: -16, width: 32, height: 32, rx: 4, transform: 'rotate(45)', 'stroke-width': 3 }, g) : svg('circle', { r: 21, 'stroke-width': 3 }, g);
+              svg('text', { x: 0, y: 7.5, 'text-anchor': 'middle', 'font-size': 21, 'font-weight': 800, fill: '#fff' }, g, id);
+              const roleEl = svg('text', { x: 0, y: 49, 'text-anchor': 'middle', 'font-size': 11, fill: '#8b97a6' }, g, role);
+              const slots = [];
+              const cap = CAPS[kind];
+              const showSlots = kind !== 'f' || this.scen.init?.stock?.F != null;
+              if (showSlots) {
+                const w = cap * 10 + (cap - 1) * 3;
+                const sg = svg('g', { transform: `translate(${x - w / 2},${y + (kind === 'f' ? 23 : 27)})` }, this.L.slots);
+                svg('rect', { x: -3, y: -3, width: w + 6, height: 16, rx: 4, fill: '#0f141b', opacity: 0.85 }, sg);
+                for (let k = 0; k < cap; k++) slots.push(svg('rect', { x: k * 13, y: 0, width: 10, height: 10, 'stroke-width': 1.6 }, sg));
+                
+              }
+              this.nodeEl[id] = { g, shape, slots, kind, roleEl, role, x, y };
+            }
+          }
+          /* ------------------------------------------------ state rendering */
+          initState() {
+            const sc = this.scen;
+            const own = {};
+            for (const id in this.map.n) own[id] = this.map.enemy.includes(id) ? 'enemy' : 'you';
+            this.st = {
+              stock: {},
+              own,
+              cut: {},
+              ov: clone(sc.init?.ov) || {},
+              army: 'C',
+              wagon: sc.init?.wagon ? this.wagonAt(sc.init.wagon.at, sc.init.wagon.load) : null,
+            };
+            if (this.map.n.P && this.map.enemy.includes('P')) this.st.army = 'C';
+            for (const id in this.map.n) this.st.stock[id] = 0;
+            Object.assign(this.st.stock, sc.init?.stock || {});
+          }
+          wagonAt(at, load) {
+            const p = this.ptsOf([at])[0];
+            return { x: p[0], y: p[1], load };
+          }
+          renderAll() {
+            for (const n of ['under', 'over', 'wg', 'dots', 'fx']) this.L[n].replaceChildren();
+            this.ovEls = {};
+            this.cutEls = {};
+            this.armyG = svg('g', {}, this.L.over);
+            for (const id in this.map.n) {
+              this.renderStock(id, false);
+              this.renderOwner(id);
+            }
+            this.renderArmies();
+            for (const e in this.st.cut) this.renderCut(e, false);
+            for (const id in this.st.ov) this.renderOv(id, this.st.ov[id], false);
+            this.renderWagon();
+          }
+          renderOwner(id) {
+            const ne = this.nodeEl[id];
+            const o = this.st.own[id];
+            const sh = ne.shape;
+            if (o === 'you') {
+              sh.setAttribute('fill', '#1d4f9e');
+              sh.setAttribute('stroke', '#8cb8ff');
+              sh.removeAttribute('stroke-dasharray');
+            } else {
+              sh.setAttribute('fill', '#5a1f24');
+              sh.setAttribute('stroke', '#ff7b80');
+              sh.setAttribute('stroke-dasharray', '4 3');
+            }
+            ne.roleEl.textContent = ne.role === 'enemy' && o === 'you' ? 'captured' : ne.role;
+          }
+          renderStock(id, flash) {
+            const ne = this.nodeEl[id];
+            const v = this.st.stock[id] || 0;
+            ne.slots.forEach((r, k) => {
+              const filled = k < v;
+              r.setAttribute('fill', filled ? '#ffd23f' : '#10151c');
+              r.setAttribute('stroke', filled ? '#7a5a00' : '#5b6676');
+              r.classList.remove('slotflash');
+            });
+            if (flash && ne.slots[v - 1]) {
+              const r = ne.slots[v - 1];
+              void r.getBoundingClientRect();
+              r.classList.add('slotflash');
+            }
+          }
+          renderArmies() {
+            this.armyG.replaceChildren();
+            const tri = (x, y, fill, stroke) =>
+              svg('polygon', { points: `${x},${y - 12} ${x - 7},${y} ${x + 7},${y}`, fill, stroke, 'stroke-width': 2 }, this.armyG);
+            for (const id in this.map.n) {
+              const [x, y] = this.P(id);
+              if (this.st.own[id] === 'enemy') tri(x + 21, y - 14, '#ff5b61', '#fff');
+            }
+            const a = this.st.army;
+            if (a) {
+              const [x, y] = this.P(a);
+              tri(x + 21, y - 14, '#5b9bff', '#fff');
+            }
+          }
+          renderCut(e, fresh) {
+            if (this.cutEls[e]) this.cutEls[e].remove();
+            const [x, y] = this.mid(e);
+            const g = svg('g', { class: fresh ? 'popin' : '' }, this.L.over);
+            const a = this.P(e[0]);
+            const b = this.P(e[1]);
+            svg('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: '#ff5b61', 'stroke-width': 4, 'stroke-dasharray': '5 7', opacity: 0.9 }, g);
+            svg('circle', { cx: x, cy: y, r: 11, fill: '#0d1117', stroke: '#ff5b61', 'stroke-width': 2 }, g);
+            svg('path', { d: `M${x - 6} ${y - 6} L${x + 6} ${y + 6} M${x + 6} ${y - 6} L${x - 6} ${y + 6}`, stroke: '#ff5b61', 'stroke-width': 4.5, 'stroke-linecap': 'round', fill: 'none' }, g);
+            svg('polygon', { points: `${x},${y - 38} ${x - 7},${y - 25} ${x + 7},${y - 25}`, fill: '#ff5b61', stroke: '#fff', 'stroke-width': 2 }, g);
+            this.cutEls[e] = g;
+          }
+          renderWagon() {
+            if (this.wagonG) this.wagonG.remove();
+            this.wagonG = null;
+            const w = this.st.wagon;
+            if (!w) return;
+            const g = svg('g', { transform: `translate(${w.x},${w.y})` }, this.L.wg);
+            svg('rect', { x: -18, y: -11, width: 36, height: 22, rx: 6, fill: '#6b4e1f', stroke: '#f0c36a', 'stroke-width': 2.5 }, g);
+            for (let k = 0; k < 4; k++)
+              svg('rect', { x: -13.5 + k * 7, y: -5, width: 5.5, height: 10, rx: 1.5, fill: k < w.load ? '#ffd23f' : '#2a2110', stroke: '#f0c36a', 'stroke-width': 0.8 }, g);
+            svg('text', { x: 0, y: -15, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: '#f0c36a', stroke: '#0f141b', 'stroke-width': 3, 'paint-order': 'stroke' }, g, 'wagon');
+            this.wagonG = g;
+          }
+          /* overlays */
+          renderOv(id, spec, fresh) {
+            const old = this.ovEls[id];
+            if (spec && old && spec.k === 'raider' && old.k === 'raider') {
+              old.g.setAttribute('transform', `translate(${spec.x},${spec.y})`);
+              old.spec = spec;
+              return;
+            }
+            if (old) {
+              old.g.remove();
+              delete this.ovEls[id];
+            }
+            if (!spec) return;
+            const B = this['ov_' + spec.k];
+            if (!B) return;
+            const r = B.call(this, spec, !!fresh);
+            this.ovEls[id] = { g: r.g, k: spec.k, spec };
+            (r.under ? this.L.under : this.L.over).appendChild(r.g);
+            if (this.L.fx && spec.k !== 'raider') {
+              /* nothing */
+            }
+          }
+          /* a chip above a node (beside it for D, which has a road above it) */
+          chipN(g, n, text, color, o = {}) {
+            if (n === 'D') {
+              const [dx, dy] = this.P('D');
+              return chip(g, dx + 27, dy - 2, text, color, { ...o, left: true });
+            }
+            const [x, y] = this.P(n);
+            return chip(g, x, y - TY, text, color, o);
+          }
+          ov_line(s, fresh) {
+            const c = col(s.c || 'amber');
+            const pts = this.ptsOf(s.path).map(([x, y]) => [x, y + (s.off || 0)]);
+            const g = svg('g', {}, null);
+            const d = 'M' + pts.map((p) => p.join(' ')).join(' L');
+            const p = svg('path', { d, fill: 'none', stroke: c, 'stroke-width': 11, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.6, pathLength: 1 }, g);
+            if (fresh) p.setAttribute('class', 'draw');
+            const ch = svg('g', { class: fresh ? 'fresh' : '' }, g);
+            for (let k = 0; k < pts.length - 1; k++) {
+              const [x1, y1] = pts[k];
+              const [x2, y2] = pts[k + 1];
+              const ang = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
+              arrowHead(ch, (x1 + x2) / 2, (y1 + y2) / 2, ang, 6, '#fff');
+            }
+            return { g, under: true };
+          }
+          ov_flow(s, fresh) {
+            const c = COL.cyan;
+            const a = this.P(s.a);
+            const b = this.P(s.b);
+            const g = svg('g', { class: fresh ? 'fresh' : '' }, null);
+            svg('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: c, 'stroke-width': 14, 'stroke-linecap': 'round', opacity: 0.45 }, g);
+            svg('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: '#e8fbff', 'stroke-width': 3, 'stroke-dasharray': '6 14', class: 'dash' }, g);
+            const ang = (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI;
+            arrowHead(g, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, ang, 13, c);
+            return { g, under: true };
+          }
+          ov_halo(s, fresh) {
+            const c = col(s.c || 'purple');
+            const ids = s.nodes.split('');
+            const g = svg('g', { class: fresh ? 'fresh' : '' }, null);
+            const body = svg('g', { opacity: 0.26 }, g);
+            for (const n of ids) {
+              const [x, y] = this.P(n);
+              svg('circle', { cx: x, cy: y, r: 31, fill: c }, body);
+            }
+            for (const e of this.map.e)
+              if (ids.includes(e[0]) && ids.includes(e[1])) {
+                const a = this.P(e[0]);
+                const b = this.P(e[1]);
+                svg('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: c, 'stroke-width': 62, 'stroke-linecap': 'round' }, body);
+              }
+            const first = ids.map((n) => this.P(n)).sort((p, q) => p[0] - q[0] || p[1] - q[1])[0];
+            if (s.text) chip(g, first[0], first[1] - TY, s.text, c, { fg: c });
+            return { g, under: true };
+          }
+          ov_tag(s) {
+            const g = svg('g', { class: 'popin' }, null);
+            if (s.at) {
+              const [x, y] = this.mid(s.at);
+              chip(g, x, y - TY, s.text, col(s.c));
+            } else this.chipN(g, s.n, s.text, col(s.c));
+            return { g };
+          }
+          ov_status(s) {
+            const g = svg('g', { class: 'popin' }, null);
+            const m = { flowing: ['▶ flowing', COL.green], full: ['■ full', COL.grey], starving: ['! starving', COL.red] }[s.s];
+            this.chipN(g, s.n, m[0], m[1]);
+            return { g };
+          }
+          ov_pips(s) {
+            const g = svg('g', { class: 'popin' }, null);
+            const [x0, y] = this.P(s.n);
+            const w = 16 + s.v * 13;
+            const x = clamp(x0, w / 2 + 3, 377 - w / 2);
+            chip(g, x, y - TY, '', COL.pink, { w, h: 20 });
+            for (let k = 0; k < s.v; k++) {
+              const cx = x - (s.v * 13) / 2 + 6.5 + k * 13;
+              svg('polygon', { points: `${cx},${y - TY - 7} ${cx + 6},${y - TY} ${cx},${y - TY + 7} ${cx - 6},${y - TY}`, fill: COL.pink, stroke: '#0d1117' }, g);
+            }
+            return { g };
+          }
+          ov_ticket(s) {
+            const g = svg('g', { class: 'popin' }, null);
+            this.chipN(g, s.n, `ticket: ${s.v} left`, COL.pink, { dash: '3 2' });
+            return { g };
+          }
+          ov_depot(s) {
+            const g = svg('g', { class: 'popin' }, null);
+            const [x, y] = this.P(s.n);
+            svg('rect', { x: x - 29, y: y - 29, width: 58, height: 58, rx: 10, fill: 'none', stroke: COL.purple, 'stroke-width': 4, 'stroke-dasharray': '7 4' }, g);
+            this.chipN(g, s.n, 'depot', COL.purple);
+            return { g };
+          }
+          ov_hops(s) {
+            const g = svg('g', { class: 'fresh' }, null);
+            for (const n in s.m) {
+              const [x, y] = this.P(n);
+              svg('circle', { cx: x - 22, cy: y - 20, r: 9, fill: COL.green, stroke: '#0d1117', 'stroke-width': 1.5 }, g);
+              svg('text', { x: x - 22, y: y - 16, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 800, fill: '#08210f' }, g, s.m[n]);
+            }
+            return { g };
+          }
+          ov_valve(s) {
+            const g = svg('g', { class: 'popin' }, null);
+            const [x, y] = this.mid(s.e);
+            svg('circle', { cx: x, cy: y, r: 11, fill: '#0d1117', stroke: COL.red, 'stroke-width': 3 }, g);
+            svg('rect', { x: x - 7, y: y - 2.5, width: 14, height: 5, fill: COL.red }, g);
+            chip(g, x - 66, y + 16, 'valve closed', COL.red);
+            return { g };
+          }
+          ov_tether(s) {
+            const g = svg('g', { class: 'fresh' }, null);
+            const a = this.P(s.a);
+            const b = this.P(s.b);
+            const ax = a[0] + 21;
+            const ay = a[1] - 28;
+            const mx = (ax + b[0]) / 2;
+            const my = Math.min(ay, b[1]) - 50;
+            svg('path', { d: `M${ax} ${ay} Q${mx} ${my} ${b[0]} ${b[1] - 18}`, fill: 'none', stroke: COL.purple, 'stroke-width': 4, 'stroke-dasharray': '8 6', class: 'dash' }, g);
+            chip(g, mx, (ay + b[1] - 18 + 2 * my) / 4 + 2, 'tether', COL.purple);
+            return { g };
+          }
+          ov_army(s) {
+            const g = svg('g', { class: 'popin' }, null);
+            const [x0, y] = this.P(s.n);
+            const x = clamp(x0, 35, 345);
+            chip(g, x, y - TY, '', COL.blue, { w: 64 });
+            svg('text', { x: x - 28, y: y - TY + 4, 'font-size': 10.5, 'font-weight': 700, fill: '#f0f6fc' }, g, 'army');
+            for (let k = 0; k < 3; k++) {
+              const cx = x + 6 + k * 9;
+              svg('polygon', { points: `${cx},${y - TY - 7} ${cx - 4.5},${y - TY + 4} ${cx + 4.5},${y - TY + 4}`, fill: k < s.v ? COL.gold : '#10151c', stroke: k < s.v ? '#7a5a00' : '#8b97a6', 'stroke-width': 1.5 }, g);
+            }
+            return { g };
+          }
+          ov_raider(s) {
+            const g = svg('g', { transform: `translate(${s.x},${s.y})`, class: 'rd' }, null);
+            svg('polygon', { points: '0,-12 -10,6 10,6', fill: COL.red, stroke: '#fff', 'stroke-width': 2 }, g);
+            chip(g, 0, -24, 'enemy', COL.red, { w: 46, noclamp: true });
+            return { g };
+          }
+          /* ----------------------------------------------------- stock & fx */
+          cap(id) {
+            return CAPS[this.map.n[id][2]];
+          }
+          addStock(id, d, live) {
+            const v = this.st.stock[id] || 0;
+            let nv = v + d;
+            if (nv < 0) {
+              this.warn(`underflow at ${id}`);
+              nv = 0;
+            }
+            if (nv > this.cap(id)) {
+              this.warn(`overflow at ${id}`);
+              nv = this.cap(id);
+              if (live) this.flashAt(...this.P(id), COL.red, 'burned');
+            }
+            this.st.stock[id] = nv;
+            this.renderStock(id, live && d > 0);
+          }
+          flashAt(x, y, color, text) {
+            svg('circle', { cx: x, cy: y, r: 14, class: 'flashring', stroke: color }, this.L.fx);
+            if (text) this.popAt(x, y - 26, text, color);
+          }
+          popAt(x, y, text, color) {
+            svg('text', { x, y, 'text-anchor': 'middle', class: 'pop', fill: col(color) }, this.L.fx, text);
+          }
+          ripple(x, y, label) {
+            const g = svg('g', { class: 'fade' }, this.L.fx);
+            svg('circle', { cx: x, cy: y, r: 16, class: 'rip' }, g);
+            svg('circle', { cx: x, cy: y, r: 16, class: 'rip r2' }, g);
+            svg('path', { d: `M${x + 3} ${y + 3} l0 16 l4.5 -4 l3.5 7.5 l2.8 -1.3 l-3.4 -7.2 l6 0 Z`, fill: '#fff', stroke: '#000', 'stroke-width': 1.3, class: 'fresh' }, g);
+            if (label) {
+              this.L.fx.querySelectorAll('.clabel').forEach((n) => n.remove());
+              const lg = svg('g', { class: 'clabel' }, this.L.fx);
+              const w = label.length * 7 + 18;
+              const cx = clamp(x, w / 2 + 4, 380 - w / 2 - 4);
+              const r = svg('rect', { x: cx - w / 2, y: -13, width: w, height: 21, rx: 6, fill: '#0d1117', stroke: '#fff', 'stroke-width': 1.5 }, lg);
+              svg('text', { x: cx, y: 2, 'text-anchor': 'middle', 'font-size': 12.5, 'font-weight': 800, fill: '#fff' }, lg, label);
+              lg.classList.add('fade');
+              r.setAttribute('opacity', 1);
+            }
+          }
+          /* ------------------------------------------------------- events */
+          durOf(e) {
+            switch (e.k) {
+              case 'dot': {
+                if (e.dur) return e.dur;
+                const pts = this.ptsOf(e.path);
+                let len = 0;
+                for (let k = 0; k < pts.length - 1; k++) len += Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
+                return (len / SPEED) * (e.fate === 'lost' ? e.p ?? 0.5 : 1);
+              }
+              case 'jump':
+                return 0.8;
+              case 'air':
+                return e.dur || 1.2;
+              case 'wmove':
+                return e.dur;
+              case 'wload':
+                return 1.3;
+              case 'wunl':
+                return 0.15 * e.cnt + 0.3;
+              case 'click':
+                return 1.0;
+              default:
+                return 0.5;
+            }
+          }
+          stepDur(i) {
+            let m = 0;
+            for (const e of this.steps[i].ev) m = Math.max(m, e.t + this.durOf(e));
+            return Math.max(1.5, m + 0.25);
+          }
+          clickLabel(e) {
+            if (e.label === null) return null;
+            if (e.label) return e.label;
+            return e.target.length === 1 ? `Player clicks ${e.target}` : `Player clicks road ${e.target[0]}-${e.target[1]}`;
+          }
+          /* apply event; live=true animates, live=false jumps to the final state */
+          apply(e, live) {
+            const st = this.st;
+            switch (e.k) {
+              case 'dot':
+                if (live) this.spawnDot(e);
+                else {
+                  if (e.take) this.addStock(e.take, -1, false);
+                  this.endDot(e, false);
+                }
+                break;
+              case 'jump':
+                if (live) this.spawnJump(e);
+                else {
+                  if (e.take) this.addStock(e.take, -1, false);
+                  this.addStock(e.to, 1, false);
+                }
+                break;
+              case 'air':
+                if (live) this.spawnAir(e);
+                else this.addStock(e.n, 1, false);
+                break;
+              case 'ov':
+                if (e.spec) st.ov[e.id] = clone(e.spec);
+                else delete st.ov[e.id];
+                this.renderOv(e.id, e.spec, live);
+                break;
+              case 'ovdv': {
+                const s = st.ov[e.id];
+                if (!s) break;
+                const key = s.k === 'army' ? 'v' : 'v';
+                s[key] += e.d;
+                if (s.k === 'ticket' && s.v <= 0) {
+                  delete st.ov[e.id];
+                  this.renderOv(e.id, null, live);
+                } else this.renderOv(e.id, s, false);
+                break;
+              }
+              case 'stock':
+                st.stock[e.n] = e.v;
+                this.renderStock(e.n, false);
+                break;
+              case 'shot':
+                this.addStock(e.n, -1, live);
+                if (live) this.popAt(...this.P(e.n).map((v, k) => (k ? v - 28 : v)), '-1 shot', COL.red);
+                break;
+              case 'own':
+                st.own[e.n] = e.who;
+                this.renderOwner(e.n);
+                this.renderArmies();
+                if (live) this.flashAt(...this.P(e.n), COL.blue, 'captured');
+                break;
+              case 'army':
+                st.army = e.n;
+                this.renderArmies();
+                break;
+              case 'cut':
+                st.cut[e.e] = true;
+                this.renderCut(e.e, live);
+                break;
+              case 'pop':
+                if (live) this.popAt(...this.P(e.n).map((v, k) => (k ? v - 30 : v)), e.text, e.c);
+                break;
+              case 'click':
+                if (live) {
+                  const [x, y] = e.target.length === 1 ? this.P(e.target) : this.mid(e.target);
+                  this.ripple(x, y, this.clickLabel(e));
+                }
+                break;
+              case 'wsp':
+                st.wagon = this.wagonAt(e.at, e.load);
+                this.renderWagon();
+                break;
+              case 'wload':
+                if (live) {
+                  const from = st.wagon.load;
+                  for (let k = from + 1; k <= e.v; k++)
+                    this.anims.push({ t0: this.el + (k - from) * 0.3, dur: 0.01, fn: () => {}, end: () => {
+                      st.wagon.load = k;
+                      this.renderWagon();
+                    } });
+                } else {
+                  st.wagon.load = e.v;
+                  this.renderWagon();
+                }
+                break;
+              case 'wmove': {
+                const pts = this.ptsOf([[st.wagon.x, st.wagon.y], ...e.path]);
+                const last = pts[pts.length - 1];
+                if (live) this.tweenPath(pts, e.dur, (x, y) => {
+                  st.wagon.x = x;
+                  st.wagon.y = y;
+                  this.wagonG && this.wagonG.setAttribute('transform', `translate(${x},${y})`);
+                });
+                else {
+                  st.wagon.x = last[0];
+                  st.wagon.y = last[1];
+                  this.renderWagon();
+                }
+                break;
+              }
+              case 'wunl':
+                if (live) {
+                  for (let k = 0; k < e.cnt; k++)
+                    this.anims.push({ t0: this.el + k * 0.15, dur: 0.01, fn: () => {}, end: () => {
+                      st.wagon.load = Math.max(0, st.wagon.load - 1);
+                      this.renderWagon();
+                      this.addStock(e.n, 1, true);
+                    } });
+                } else {
+                  st.wagon.load = Math.max(0, st.wagon.load - e.cnt);
+                  for (let k = 0; k < e.cnt; k++) this.addStock(e.n, 1, false);
+                  this.renderWagon();
+                }
+                break;
+              case 'wdie':
+                if (live && st.wagon) this.flashAt(st.wagon.x, st.wagon.y, COL.red, 'lost');
+                st.wagon = null;
+                this.renderWagon();
+                break;
+            }
+          }
+          endDot(e, live) {
+            const last = this.ptsOf(e.path).slice(-1)[0];
+            if (e.fate === 'lost') {
+              if (live) this.flashAt(last[0], last[1], COL.red, 'lost');
+              return;
+            }
+            if (e.fate === 'burn') {
+              if (live) this.flashAt(last[0], last[1], COL.red, 'burned');
+              return;
+            }
+            if (e.drop) this.addStock(e.drop, 1, live);
+            if (e.onEnd) for (const x of e.onEnd) this.apply(x, live);
+          }
+          tweenPath(pts, dur, fn, frac = 1, end) {
+            const segs = [];
+            let total = 0;
+            for (let k = 0; k < pts.length - 1; k++) {
+              const l = Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
+              segs.push(l);
+              total += l;
+            }
+            this.anims.push({
+              t0: this.el,
+              dur,
+              fn: (p) => {
+                let d = p * frac * total;
+                let k = 0;
+                while (k < segs.length - 1 && d > segs[k]) {
+                  d -= segs[k];
+                  k++;
+                }
+                const f = segs[k] ? d / segs[k] : 0;
+                const x = pts[k][0] + (pts[k + 1][0] - pts[k][0]) * f;
+                const y = pts[k][1] + (pts[k + 1][1] - pts[k][1]) * f;
+                const ang = (Math.atan2(pts[k + 1][1] - pts[k][1], pts[k + 1][0] - pts[k][0]) * 180) / Math.PI;
+                fn(x, y, ang);
+              },
+              end,
+            });
+          }
+          makeDot(arrow = true) {
+            const g = svg('g', {}, this.L.dots);
+            svg('circle', { r: 7.5, fill: '#ffd23f', stroke: '#3a2e00', 'stroke-width': 2.4 }, g);
+            if (arrow) svg('polygon', { points: '17,0 10,-6 10,6', fill: '#fff', stroke: '#000', 'stroke-width': 1.3 }, g);
+            return g;
+          }
+          spawnDot(e) {
+            const pts = this.ptsOf(e.path);
+            if (e.take) this.addStock(e.take, -1, false);
+            const g = this.makeDot();
+            const dur = this.durOf(e);
+            this.tweenPath(
+              pts,
+              dur,
+              (x, y, a) => g.setAttribute('transform', `translate(${x},${y}) rotate(${a})`),
+              e.fate === 'lost' ? e.p ?? 0.5 : 1,
+              () => {
+                g.remove();
+                this.endDot(e, true);
+              },
+            );
+          }
+          spawnJump(e) {
+            const a = this.P(e.from);
+            const b = this.P(e.to);
+            const my = Math.min(a[1], b[1]) - 52;
+            const mx = (a[0] + b[0]) / 2;
+            const pts = [];
+            for (let k = 0; k <= 16; k++) {
+              const t = k / 16;
+              pts.push([(1 - t) * (1 - t) * a[0] + 2 * (1 - t) * t * mx + t * t * b[0], (1 - t) * (1 - t) * a[1] + 2 * (1 - t) * t * my + t * t * (b[1] - 22)]);
+            }
+            if (e.take) this.addStock(e.take, -1, false);
+            const path = svg('path', { d: 'M' + pts.map((p) => p.join(' ')).join(' L'), fill: 'none', stroke: COL.green, 'stroke-width': 4, 'stroke-dasharray': '5 6', opacity: 0.95, class: 'fade' }, this.L.fx);
+            const g = this.makeDot(false);
+            this.tweenPath(pts, 0.8, (x, y) => g.setAttribute('transform', `translate(${x},${y})`), 1, () => {
+              g.remove();
+              this.addStock(e.to, 1, true);
+            });
+            void path;
+          }
+          spawnAir(e) {
+            const [x, y] = this.P(e.n);
+            svg('line', { x1: x, y1: -14, x2: x, y2: y - 26, stroke: COL.blue, 'stroke-width': 3, 'stroke-dasharray': '3 5', class: 'fade' }, this.L.fx);
+            const g = this.makeDot(false);
+            this.tweenPath([[x, -12], [x, y - 22]], e.dur || 1.2, (px, py) => g.setAttribute('transform', `translate(${px},${py})`), 1, () => {
+              g.remove();
+              this.addStock(e.n, 1, true);
+            });
+          }
+          /* -------------------------------------------------- navigation */
+          restore(i) {
+            this.cancel();
+            this.initState();
+            for (let j = 0; j < i; j++) for (const e of this.steps[j].ev) this.apply(e, false);
+            this.renderAll();
+            this.i = i;
+          }
+          cancel() {
+            this.anims = [];
+            this.queue = [];
+            this.live = false;
+          }
+          play(i) {
+            this.restore(i);
+            this.live = true;
+            this.t0 = null;
+            this.queue = this.steps[i].ev.map((e, k) => [e, k]).sort((a, b) => a[0].t - b[0].t || a[1] - b[1]).map((x) => x[0]);
+            this.end = this.stepDur(i);
+            this.el = 0;
+            this.setCaption(i);
+          }
+          showFinal(i) {
+            this.restore(i + 1);
+            this.i = i;
+            this.setCaption(i);
+          }
+          setCaption(i) {
+            if (this.capEl) {
+              this.capEl.replaceChildren();
+              h('span', { class: 'sn' }, this.capEl, `${i + 1}.`);
+              this.capEl.append(this.steps[i].cap);
+            }
+            if (this.ctl) {
+              this.ctl.btns.forEach((b, k) => {
+                b.setAttribute('aria-pressed', k === i ? 'true' : 'false');
+              });
+              this.ctl.prev.disabled = i === 0;
+              this.ctl.next.disabled = i === this.last;
+            }
+          }
+          tick(now) {
+            if (!this.live) return;
+            if (this.t0 == null) this.t0 = now;
+            this.el = ((now - this.t0) / 1000) * SPD;
+            while (this.queue.length && this.queue[0].t <= this.el) this.apply(this.queue.shift(), true);
+            for (let k = this.anims.length - 1; k >= 0; k--) {
+              const a = this.anims[k];
+              const p = clamp((this.el - a.t0) / a.dur, 0, 1);
+              if (this.el < a.t0) continue;
+              a.fn(p);
+              if (p >= 1) {
+                this.anims.splice(k, 1);
+                a.end && a.end();
+              }
+            }
+            if (!this.queue.length && !this.anims.length && this.el >= this.end) this.live = false;
+          }
+          /* run all steps headless: warnings and durations */
+          check() {
+            this.warns = [];
+            this.initState();
+            const out = [];
+            for (let j = 0; j <= this.last; j++) {
+              this.i = j;
+              for (const e of this.steps[j].ev) this.apply(e, false);
+              out.push({ dur: +this.stepDur(j).toFixed(2), stock: { ...this.st.stock } });
+            }
+            return { warns: [...this.warns], steps: out, total: out.reduce((s, x) => s + x.dur, 0) };
+          }
+        }
+
+        /* ------------------------------------------------------------- groups */
+        const HOLD = 0.75; // seconds to hold a finished step before the next one starts by itself
+        class Group {
+          constructor() {
+            this.boards = [];
+            this.auto = false;
+            this.step = 0;
+            this.holdUntil = null;
+            this.onStep = null;
+          }
+          add(b) {
+            this.boards.push(b);
+          }
+          /* force: a restart or a group control (all boards follow); without it boards the user stepped by hand are left alone */
+          playAll(step, force = true) {
+            this.step = step;
+            this.holdUntil = null;
+            for (const b of this.boards) {
+              if (force) b.manual = false;
+              else if (b.manual) continue;
+              if (step <= b.last) b.play(step);
+              else b.showFinal(b.last);
+            }
+            this.onStep && this.onStep(step);
+          }
+          tick(now) {
+            for (const b of this.boards) b.tick(now);
+            if (!this.auto) return;
+            if (this.boards.some((b) => !b.manual && b.live)) return;
+            if (this.holdUntil == null) this.holdUntil = now + (HOLD * 1000) / SPD;
+            else if (now >= this.holdUntil) {
+              const max = Math.max(...this.boards.map((b) => b.last));
+              if (this.step < max) this.playAll(this.step + 1, false);
+              else this.auto = false;
+            }
+          }
+          maxStep() {
+            return Math.max(...this.boards.map((b) => b.last));
+          }
+        }
+        const groups = new Set();
+        function frame(now) {
+          for (const g of groups) g.tick(now);
+          requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+
+        /* ---------------------------------------------------------------- page */
+        const $list = document.getElementById('list');
+        const $main = document.getElementById('main');
+        const $layout = document.getElementById('layout');
+        const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const state = { m: 'one', v: 'V3', s: 'basic' };
+        let group = null;
+
+        function readHash() {
+          const p = new URLSearchParams(location.hash.slice(1));
+          if (p.get('v') && V.find((x) => x.id === p.get('v'))) state.v = p.get('v');
+          if (p.get('m') === 'grid') state.m = 'grid';
+          if (SC.find((x) => x.id === p.get('s'))) state.s = p.get('s');
+        }
+        function writeHash() {
+          const p = new URLSearchParams();
+          if (state.m === 'grid') {
+            p.set('m', 'grid');
+            p.set('s', state.s);
+          } else p.set('v', state.v);
+          history.replaceState(null, '', '#' + p.toString());
+        }
+        const vOf = (id) => V.find((x) => x.id === id);
+
+        function buildList() {
+          $list.replaceChildren();
+          for (const v of V) {
+            const b = h('button', { type: 'button', 'data-v': v.id, 'aria-pressed': 'false' }, $list);
+            const nm = h('div', { class: 'nm' }, b);
+            h('span', { class: 'id' }, nm, v.id);
+            h('span', {}, nm, v.name);
+            if (v.top) h('span', { class: 'badge', title: 'In the top 3 of issue #693' }, nm, 'TOP 3');
+            h('div', { class: 'rl' }, b, v.rule);
+            b.addEventListener('click', () => {
+              state.v = v.id;
+              state.m = 'one';
+              render();
+            });
+          }
+        }
+        function mkPanel(parent, v, scen, num, title, extra) {
+          const p = h('article', { class: 'panel' + (extra ? ' extra' : '') }, parent);
+          const hd = h('h3', {}, p);
+          h('span', { class: 'n' }, hd, extra ? '+' : String(num));
+          h('span', {}, hd, title);
+          const host = h('div', { class: 'board' }, p);
+          const board = new Board(host, scen, `${v.id}/${title}`);
+          board.capEl = h('p', { class: 'cap', 'aria-live': 'polite' }, p);
+          const ctl = h('div', { class: 'ctl' }, p);
+          const prev = h('button', { type: 'button', 'aria-label': 'Previous step' }, ctl, '◀ Prev');
+          const btns = board.steps.map((_, k) => h('button', { type: 'button', class: 'sb', 'aria-label': `Step ${k + 1}`, 'aria-pressed': 'false' }, ctl, String(k + 1)));
+          const next = h('button', { type: 'button', 'aria-label': 'Next step' }, ctl, 'Next ▶');
+          const rep = h('button', { type: 'button', 'aria-label': 'Replay from step 1' }, ctl, '↻ Replay');
+          board.ctl = { prev, next, btns };
+          const go = (i) => {
+            board.manual = true;
+            board.play(clamp(i, 0, board.last));
+          };
+          prev.addEventListener('click', () => go(board.i - 1));
+          next.addEventListener('click', () => go(board.i + 1));
+          btns.forEach((b, k) => b.addEventListener('click', () => go(k)));
+          rep.addEventListener('click', () => {
+            board.manual = true;
+            board.play(0);
+            group.auto = false;
+          });
+          board.setCaption(0);
+          return board;
+        }
+        function renderOne() {
+          const v = vOf(state.v);
+          $layout.classList.remove('nolist');
+          $list.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v.id ? 'true' : 'false'));
+          const cur = $list.querySelector('[aria-pressed="true"]');
+          if (cur && $list.scrollWidth > $list.clientWidth) $list.scrollLeft = cur.offsetLeft - ($list.clientWidth - cur.offsetWidth) / 2;
+          const head = h('section', { class: 'vhead' }, $main);
+          const h2 = h('h2', {}, head);
+          h('span', { class: 'id' }, h2, v.id);
+          h('span', {}, h2, v.name);
+          if (v.top) h('span', { class: 'badge' }, h2, 'TOP 3 of #693');
+          h('p', { class: 'ruleline' }, head, v.rule);
+          const wrap = h('div', { class: 'scens' }, $main);
+          group = new Group();
+          groups.add(group);
+          SC.forEach((sc, k) => group.add(mkPanel(wrap, v, v[sc.id], k + 1, sc.title, false)));
+          if (v.extra) group.add(mkPanel(wrap, v, v.extra, 4, 'Extra: ' + v.extra.title, true));
+          const perMin = v.clicks / 3;
+          const foot = h('p', { class: 'vfoot' }, $main);
+          h('b', {}, foot, 'Clicks: ');
+          foot.append(`${v.clicks} per 3 min (about ${perMin % 1 ? perMin.toFixed(1) : perMin} per min, busy player)`);
+          foot.append('  ·  ');
+          h('b', {}, foot, 'Cost: ');
+          foot.append(`${v.cost} (${v.parts})`);
+          foot.append('  ·  numbers from supply-methods.md');
+        }
+        function renderGrid() {
+          $layout.classList.add('nolist');
+          group = new Group();
+          groups.add(group);
+          const bar = h('div', { class: 'gridbar' }, $main);
+          const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Scenario' }, bar);
+          SC.forEach((sc, k) => {
+            const b = h('button', { type: 'button', 'aria-pressed': sc.id === state.s ? 'true' : 'false' }, seg, `${k + 1} ${sc.title}`);
+            b.addEventListener('click', () => {
+              state.s = sc.id;
+              render();
+            });
+          });
+          const ctl = h('div', { class: 'ctl' }, bar);
+          const prev = h('button', { type: 'button' }, ctl, '◀ Prev');
+          const btns = [0, 1, 2, 3].map((k) => h('button', { type: 'button', class: 'sb', 'aria-pressed': 'false' }, ctl, String(k + 1)));
+          const next = h('button', { type: 'button' }, ctl, 'Next ▶');
+          const rep = h('button', { type: 'button' }, ctl, '↻ Replay');
+          const cards = h('div', { class: 'cards' }, $main);
+          for (const v of V) {
+            const c = h('article', { class: 'card' }, cards);
+            const hd = h('header', { title: 'Open this variant' }, c);
+            h('span', { class: 'id' }, hd, v.id);
+            h('span', { class: 'vn' }, hd, v.name);
+            if (v.top) h('span', { class: 'badge' }, hd, 'TOP 3');
+            h('span', { class: 'mini' }, hd, `${v.clicks} clk · ${v.cost}`);
+            hd.addEventListener('click', () => {
+              state.v = v.id;
+              state.m = 'one';
+              render();
+            });
+            const host = h('div', { class: 'board' }, c);
+            const b = new Board(host, v[state.s], `${v.id}/${state.s}`);
+            b.capEl = h('p', { class: 'cap' }, c);
+            b.setCaption(0);
+            group.add(b);
+          }
+          const sync = (k) => {
+            btns.forEach((x, j) => x.setAttribute('aria-pressed', j === k ? 'true' : 'false'));
+            prev.disabled = k === 0;
+            next.disabled = k >= group.maxStep();
+          };
+          group.onStep = sync;
+          prev.addEventListener('click', () => {
+            group.auto = false;
+            group.playAll(Math.max(0, group.step - 1));
+          });
+          next.addEventListener('click', () => {
+            group.auto = false;
+            group.playAll(Math.min(group.maxStep(), group.step + 1));
+          });
+          btns.forEach((x, k) =>
+            x.addEventListener('click', () => {
+              group.auto = false;
+              group.playAll(k);
+            }),
+          );
+          rep.addEventListener('click', () => {
+            group.auto = true;
+            group.playAll(0);
+          });
+        }
+        function render() {
+          if (group) groups.delete(group);
+          $main.replaceChildren();
+          document.querySelectorAll('[data-m]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.m === state.m ? 'true' : 'false'));
+          if (state.m === 'grid') renderGrid();
+          else renderOne();
+          writeHash();
+          start();
+          window.scrollTo({ top: 0 });
+        }
+        function start() {
+          if (reduce) {
+            group.boards.forEach((b) => b.showFinal(0));
+            group.onStep && group.onStep(0);
+            return;
+          }
+          group.auto = true;
+          group.playAll(0);
+        }
+
+        document.querySelectorAll('[data-m]').forEach((b) =>
+          b.addEventListener('click', () => {
+            state.m = b.dataset.m;
+            render();
+          }),
+        );
+        document.getElementById('slow').addEventListener('change', (e) => {
+          SPD = e.target.checked ? 0.55 : 1;
+        });
+        document.getElementById('replayAll').addEventListener('click', () => {
+          start();
+        });
+        window.addEventListener('hashchange', () => {
+          const before = JSON.stringify(state);
+          readHash();
+          if (JSON.stringify(state) !== before) render();
+        });
+
+        /* headless check for authors: open the page with #check, read the console */
+        window.__check = () => {
+          const host = document.createElement('div');
+          const res = [];
+          for (const v of V)
+            for (const sc of [...SC.map((s) => s.id), 'extra']) {
+              if (!v[sc]) continue;
+              const b = new Board(host, v[sc], `${v.id}/${sc}`);
+              const r = b.check();
+              res.push({ id: v.id, sc, steps: r.steps.length, total: +r.total.toFixed(1), warns: r.warns, stocks: r.steps.map((s) => Object.entries(s.stock).filter(([, x]) => x).map(([k, x]) => k + x).join(' ')) });
+            }
+          return res;
+        };
+
+        /* test hook: jump every board of the open view to the end state of step j, no animation */
+        window.__show = (j) => {
+          group.auto = false;
+          group.boards.forEach((b) => {
+            b.manual = true;
+            b.showFinal(Math.min(j, b.last));
+          });
+        };
+        readHash();
+        buildList();
+        render();
+      })();
+    </script>
+  </body>
+</html>
