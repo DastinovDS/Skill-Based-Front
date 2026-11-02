@@ -54,6 +54,11 @@ export interface RenderSource {
    */
   readonly recruitQueueMax?: number;
   /**
+   * Places of the warehouse of an own province (`ruleset_public.city_upgrades.warehouse_province`,
+   * economy v2, DEC-41, item 13); 0 or absent under v1: a province shows no stock.
+   */
+  readonly provinceWarehouse?: number;
+  /**
    * The city development of DEC-26 when the rules have it (`ruleset_public.city_upgrades`): the
    * durations of the barracks and warehouse builds for the build mark over an own city, and the
    * warehouse bar of a foreign city shows only its charges (its capacity is hidden).

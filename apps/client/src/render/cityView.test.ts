@@ -605,3 +605,49 @@ describe('CityView: a captured city cross-fades its body (#508)', () => {
     view.destroy();
   });
 });
+
+describe('CityView: the warehouse of an own province under economy v2 (DEC-41, item 13, #679)', () => {
+  const pool = BUNDLED_MAPS.find((m) => m.meta.name === 'crossroads') as MapFile;
+  const snapshot = devSnapshot(pool, DEV_RULES, 100);
+  const ownProvince = pool.nodes.find((n) => n.kind === 'province' && n.start_owner === 0);
+  const neutralProvince = pool.nodes.find((n) => n.kind === 'province' && n.start_owner === null);
+
+  beforeEach(() => {
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  /** The snapshot where province `id` holds `warehouse` charges. */
+  function holding(id: number, warehouse: number): SnapshotMsg {
+    const nodes = snapshot.view.nodes.map((n) => (n.id === id ? { ...n, warehouse } : n));
+    return { ...snapshot, view: { ...snapshot.view, nodes } };
+  }
+
+  it('shows the places of the province warehouse and the charge a line delivered', () => {
+    if (ownProvince === undefined) throw new Error('no own province');
+    const layers = createLayers();
+    const view = new CityView(pool, layers, 0, 1, testSprites());
+    view.update(holding(ownProvince.id, 1), null, UPGRADES, null, 1);
+    const bar = barOf(layers.layer.nodes, ownProvince.id);
+    expect(bar.visible).toBe(true);
+    expect(bar.spec?.key).toBe(warehouseBarSpec(1, 1, stockColor('you'), 0).key);
+    view.update(holding(ownProvince.id, 0), null, UPGRADES, null, 1);
+    expect(barOf(layers.layer.nodes, ownProvince.id).spec?.key).toBe(
+      warehouseBarSpec(1, 0, stockColor('you'), 0).key,
+    );
+    view.destroy();
+  });
+
+  it('draws nothing under economy v1 (no province warehouse) and on a province that is not own', () => {
+    if (ownProvince === undefined || neutralProvince === undefined) throw new Error('no province');
+    const layers = createLayers();
+    const view = new CityView(pool, layers, 0, 1, testSprites());
+    view.update(holding(ownProvince.id, 1), null, UPGRADES, null, 0);
+    expect(barOf(layers.layer.nodes, ownProvince.id).visible).toBe(false);
+    view.update(holding(neutralProvince.id, 1), null, UPGRADES, null, 1);
+    expect(barOf(layers.layer.nodes, neutralProvince.id).visible).toBe(false);
+    view.destroy();
+  });
+});

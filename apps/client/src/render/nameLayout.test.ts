@@ -9,7 +9,8 @@ import {
   captionTop,
   captionVisible,
 } from './nameLayout.ts';
-import { PROVINCE } from './style.ts';
+import { barTop } from './cityLayout.ts';
+import { BAR_SEGMENT, PROVINCE } from './style.ts';
 
 describe('captionVisible', () => {
   it('shows a caption from its zoom threshold up, and hides it below', () => {
@@ -60,6 +61,11 @@ describe('captions', () => {
     expect(captionTop('city', 20)).toBeGreaterThan(captionTop('city', 11));
     expect(captionTop('city', 11)).toBeGreaterThan(11);
     expect(captionTop('province', 0)).toBeGreaterThan(PROVINCE.radius);
+  });
+
+  it('sit under the warehouse bar of an own province under economy v2, clear of it (#679)', () => {
+    expect(captionTop('province', 0, true)).toBeGreaterThan(captionTop('province', 0));
+    expect(captionTop('province', 0, true)).toBe(barTop(PROVINCE.radius) + BAR_SEGMENT.height + 2);
   });
 
   it('every node of the bundled maps has a name to show', () => {

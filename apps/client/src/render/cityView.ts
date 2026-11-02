@@ -308,6 +308,7 @@ export class CityView {
     unitTicks: number | null = null,
     cityUpgrades: CityDevelopment | null = null,
     queueMax: number | null = null,
+    provinceWarehouse = 0,
   ): void {
     const garrison = new Map<number, number>();
     for (const group of base.view.groups) {
@@ -326,7 +327,7 @@ export class CityView {
         this.stateOf(
           node,
           { garrison: garrison.get(node.id) ?? 0, fighting: fighting.has(node.id) },
-          { unitTicks, cityUpgrades, queueMax },
+          { unitTicks, cityUpgrades, queueMax, provinceWarehouse },
           base.tick,
         ),
       );
@@ -469,10 +470,15 @@ export class CityView {
       unitTicks: number | null;
       cityUpgrades: CityDevelopment | null;
       queueMax: number | null;
+      provinceWarehouse: number;
     },
     tick: number,
   ): CityState {
-    const { unitTicks, cityUpgrades } = rules;
+    const { unitTicks, cityUpgrades, provinceWarehouse } = rules;
+    // Economy v2 (DEC-41, item 13): an own province has a warehouse of `provinceWarehouse` places
+    // (0 under v1: none). Any other province shows no stock.
+    const province = this.map.nodes[node.id]?.kind === 'province';
+    const provinceStock = province && node.owner === this.me && provinceWarehouse > 0;
     const building = node.building;
     let buildKind: Exclude<BuildKind, 'road'> | null = null;
     let buildPct = 0;
@@ -512,7 +518,7 @@ export class CityView {
       garrison: node.owner === this.me ? city.garrison : 0,
       // The server sends a warehouse only where it may be seen: an own node at any `detail`
       // (DEC-35, detail 3) or a node where an own group stands.
-      warehouse: node.warehouse,
+      warehouse: province && !provinceStock ? null : node.warehouse,
       queue: node.recruit_queue,
       progress: node.recruit_progress ?? 0,
       unitTicks,
@@ -521,7 +527,9 @@ export class CityView {
       queueMax: recruits ? (rules.queueMax ?? 0) : 0,
       // DEC-26: an own city knows its warehouse capacity; a foreign one shows only its charges
       // when the warehouse is apart from the capacity, else the capacity (DEC-22).
-      warehouseCap: node.warehouse_cap ?? (cityUpgrades === null ? node.capacity : null),
+      warehouseCap: provinceStock
+        ? provinceWarehouse
+        : (node.warehouse_cap ?? (cityUpgrades === null ? node.capacity : null)),
       locked: lockedPlaces(node.warehouse_level, cityUpgrades),
       buildKind,
       buildPct,
@@ -646,8 +654,9 @@ export class CityView {
     const ringOn = capacity !== null;
     ring.set(ringOn ? cityRingSpec(radius, capacity, kind === 'you' ? state.garrison : 0) : null);
     ring.visible = ringOn && !this.supplyMode;
-    // A province has no warehouse (DEC-23): whatever number the view carries, nothing is drawn.
-    const barOn = ringOn && warehouse !== null && !province;
+    // A province has a warehouse only under economy v2 and only its owner sees it (DEC-41, item 13):
+    // `stateOf` leaves `warehouse` null for every other province, so nothing is drawn there.
+    const barOn = ringOn && warehouse !== null;
     bar.set(
       barOn
         ? warehouseBarSpec(

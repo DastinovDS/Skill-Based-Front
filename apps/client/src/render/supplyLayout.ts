@@ -252,16 +252,19 @@ export function supplyScene(
   index: EdgeIndex,
   edges: readonly { readonly a: number; readonly b: number }[] = [],
   focus: LineFocus = NO_LINE_FOCUS,
+  provinceWarehouse = 0,
 ): SupplyScene {
   const stocks: SupplyStock[] = [];
   const cut: SupplyCut[] = [];
   const presence: SupplyPresence[] = [];
   for (const node of view.nodes) {
     if (node.owner === me) {
-      // Only an own city has a warehouse to show: `warehouse_cap` is null for a province (no
-      // warehouse) and for every node that is not own.
-      if (node.warehouse !== null && node.warehouse_cap !== null) {
-        stocks.push({ node: node.id, stock: node.warehouse, cap: node.warehouse_cap });
+      // An own city has a warehouse to show (`warehouse_cap`). An own province has one only under
+      // economy v2 (DEC-41, item 13): the view leaves its `warehouse_cap` null, the capacity is
+      // `ruleset_public.city_upgrades.warehouse_province` (0 under v1: none).
+      const cap = node.warehouse_cap ?? (provinceWarehouse > 0 ? provinceWarehouse : null);
+      if (node.warehouse !== null && cap !== null) {
+        stocks.push({ node: node.id, stock: node.warehouse, cap });
       }
       if (node.starve_in !== null) cut.push({ node: node.id, ticks: node.starve_in });
     }

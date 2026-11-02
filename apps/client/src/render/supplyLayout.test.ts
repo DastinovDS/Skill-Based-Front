@@ -239,10 +239,24 @@ describe('what the layer draws (DEC-28, item 8)', () => {
     }
   });
 
-  it('shows no warehouse for a province', () => {
+  it('shows no warehouse for a province under economy v1', () => {
     const province = base.nodes.find((n) => n.owner === 0 && n.warehouse_cap === null);
     if (province === undefined) return;
     expect(scene().stocks.map((s) => s.node)).not.toContain(province.id);
+  });
+
+  it('shows the warehouse of an own province under economy v2 (DEC-41, item 13, #679)', () => {
+    const nodes: NodeView[] = base.nodes.map((n) =>
+      n.id === a.id ? { ...n, warehouse: 1, warehouse_cap: null } : n,
+    );
+    const v2 = supplyScene({ ...base, nodes }, 0, idx, DEFAULT_MAP.edges, undefined, 1);
+    expect(v2.stocks.find((s) => s.node === a.id)).toEqual({ node: a.id, stock: 1, cap: 1 });
+    // Nothing for a province that is not own, whatever the rules say.
+    const foreign: NodeView[] = base.nodes.map((n) =>
+      n.id === enemyExact.id ? { ...n, warehouse: 1, warehouse_cap: null } : n,
+    );
+    const seen = supplyScene({ ...base, nodes: foreign }, 0, idx, DEFAULT_MAP.edges, undefined, 1);
+    expect(seen.stocks.map((s) => s.node)).not.toContain(enemyExact.id);
   });
 
   it('the capacity of the dots is the warehouse capacity of the city', () => {

@@ -126,6 +126,7 @@ export class SupplyView {
   private phase = Number.NaN;
   private used = 0;
   private tickHz = 10;
+  private provinceWarehouse = 0;
   private resolution = 1;
 
   constructor(
@@ -172,6 +173,13 @@ export class SupplyView {
     layers.layer.supply.addChild(this.root);
   }
 
+  /** Places of an own province warehouse (`city_upgrades.warehouse_province`, DEC-41, item 13); 0: none. */
+  setProvinceWarehouse(places: number): void {
+    if (places === this.provinceWarehouse) return;
+    this.provinceWarehouse = places;
+    this.base = null;
+  }
+
   setTickHz(tickHz: number): void {
     if (tickHz === this.tickHz) return;
     this.tickHz = tickHz;
@@ -201,7 +209,14 @@ export class SupplyView {
       this.base = frame.base;
       this.overlay = supply;
       this.drawStatic(
-        supplyScene(frame.base.view, this.me, this.index, this.map.edges, supply.lines),
+        supplyScene(
+          frame.base.view,
+          this.me,
+          this.index,
+          this.map.edges,
+          supply.lines,
+          this.provinceWarehouse,
+        ),
         supply,
       );
     }

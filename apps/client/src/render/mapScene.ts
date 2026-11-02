@@ -321,8 +321,19 @@ export class MapScene {
         this.source.recruitTicks ?? null,
         this.source.cityUpgrades ?? null,
         this.source.recruitQueueMax ?? null,
+        this.source.provinceWarehouse ?? 0,
       );
-      this.names.refresh();
+      // An own province shows its warehouse under economy v2 (DEC-41, item 13): its caption goes under it.
+      const places = this.source.provinceWarehouse ?? 0;
+      this.names.refresh(
+        new Set(
+          places > 0
+            ? frame.base.view.nodes
+                .filter((n) => n.owner === this.me && this.map.nodes[n.id]?.kind === 'province')
+                .map((n) => n.id)
+            : [],
+        ),
+      );
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);
@@ -356,6 +367,7 @@ export class MapScene {
     this.fog.update(frame.base);
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
     this.supply.setTickHz(tickHz);
+    this.supply.setProvinceWarehouse(this.source.provinceWarehouse ?? 0);
     this.supply.update(frame, overlay.supply);
     this.sight.update(this.terrainOn, frame.base.view.nodes, this.layers.world.scale.x);
     this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
