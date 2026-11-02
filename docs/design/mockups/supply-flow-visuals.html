@@ -1,0 +1,2967 @@
+<!doctype html>
+<!--
+  Supply flow visualization: variants (#699, design exploration for #697). Not client code, not the simulation.
+  Self-contained: no network. Open as a file.
+  The model is the toy, integer version of the accepted "flow towards the leaves" rule of
+  docs/design/supply-auto-flow.md with every recommended option (leaf = own node next to any non-own node;
+  one charge per road per dispatch downhill, emptiest neighbour first; level roads even out by 2; no rear minimum;
+  a tired army pulls; one global leaf shift k, stock ahead of the level stays; pockets follow the same rule).
+  Toy numbers: one beat = one dispatch, a road takes one beat (a slow road two), the capital makes 1 charge per
+  2 beats, a factory 1 per 3; warehouses: capital 6, city and factory 3, province 1.
+  Address state: #v=1&c=4&cmp=1&mode=supply&map=tree&step=2&free=0&gray=0&rm=0. window.__sfv exposes the model.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Supply flow visuals</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface-2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-dim: #9da7b3;
+        --paper: #f0f6fc;
+        --you: #5b9bff;
+        --enemy: #e5484d;
+        --warn: #ffb020;
+        --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        background: var(--bg);
+      }
+      body {
+        margin: 0;
+        padding: 0 16px 32px;
+        color: var(--text);
+        font: 14px/1.4 var(--font);
+      }
+      .wrap {
+        max-width: 1500px;
+        margin: 0 auto;
+      }
+      button,
+      select {
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px 10px;
+        font: inherit;
+        cursor: pointer;
+        min-height: 32px;
+      }
+      button:hover,
+      select:hover {
+        border-color: #8b949e;
+      }
+      button:focus-visible,
+      select:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--you);
+        outline-offset: 1px;
+      }
+      button[aria-pressed='true'] {
+        background: #1f3a66;
+        border-color: var(--you);
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 14px;
+        padding: 10px 0;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 4px 0 0;
+      }
+      .bar label {
+        color: var(--text-dim);
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        cursor: pointer;
+        min-height: 32px;
+      }
+      .sp {
+        flex: 1 1 0;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .seg button {
+        border: 0;
+        border-radius: 0;
+        border-right: 1px solid var(--border);
+        padding: 5px 10px;
+        white-space: nowrap;
+      }
+      .seg button:last-child {
+        border-right: 0;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 4px 0 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      .chips button {
+        padding: 4px 9px;
+        font-size: 13px;
+      }
+      .chips button b {
+        color: var(--text-dim);
+        margin-right: 4px;
+        font-weight: 700;
+      }
+      .chips button[aria-pressed='true'] b {
+        color: #fff;
+      }
+      .chips button.second {
+        box-shadow: inset 0 -3px 0 #9da7b3;
+      }
+      .stage {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .stage.one .panel {
+        max-width: 1060px;
+        width: 100%;
+        margin: 0 auto;
+      }
+      .stage.two {
+        grid-template-columns: 1fr 1fr;
+      }
+      @media (max-width: 860px) {
+        .stage.two {
+          grid-template-columns: 1fr;
+        }
+      }
+      .panel {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+      .panel.active {
+        border-color: var(--you);
+      }
+      .ph {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        min-height: 44px;
+      }
+      .ph .nm {
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .ph .tag {
+        color: var(--text-dim);
+        font-size: 12.5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .ph .md {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--text-dim);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1px 8px;
+        white-space: nowrap;
+      }
+      .ph button {
+        padding: 2px 8px;
+        min-height: 28px;
+        min-width: 28px;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        touch-action: manipulation;
+      }
+      .gray canvas {
+        filter: grayscale(1);
+      }
+      .ctl {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        padding: 12px 0 4px;
+      }
+      .steps {
+        display: inline-flex;
+        gap: 4px;
+      }
+      .steps button {
+        padding: 3px 8px;
+        font-size: 12.5px;
+        min-height: 30px;
+      }
+      .cap {
+        color: var(--text);
+        font-weight: 600;
+        min-height: 1.4em;
+        padding: 2px 0;
+      }
+      .hidden {
+        display: none !important;
+      }
+      @media (max-width: 600px) {
+        button,
+        .bar label,
+        .steps button {
+          min-height: 44px;
+        }
+        .ph button {
+          min-height: 40px;
+          min-width: 40px;
+        }
+      }
+      .free-hint {
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+      .cost {
+        color: var(--text-dim);
+        font-size: 12.5px;
+        padding: 6px 2px 0;
+      }
+      .cost b {
+        color: var(--text);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="bar">
+        <h1>Supply flow visuals</h1>
+        <div class="seg" id="modeSeg" role="group" aria-label="Map mode">
+          <button data-m="supply">Supply mode</button><button data-m="battle">Battle mode</button><button data-m="both">Both</button>
+        </div>
+        <label><input type="checkbox" id="cmp" /> Compare 2</label>
+        <span class="sp"></span>
+        <label><input type="checkbox" id="gray" /> Grayscale</label>
+        <label><input type="checkbox" id="rm" /> Less motion</label>
+      </div>
+      <nav class="chips" id="chips" aria-label="Variants"></nav>
+      <div class="stage" id="stage"></div>
+      <div class="cost" id="cost"></div>
+      <div class="ctl">
+        <div class="seg" id="mapSeg" role="group" aria-label="Map"></div>
+        <div class="seg" id="playSeg" role="group" aria-label="Play mode">
+          <button data-p="story">Story</button><button data-p="free">Free</button>
+        </div>
+      </div>
+      <div class="ctl" id="storyCtl">
+        <button id="prev" aria-label="Previous step">◀ Prev</button>
+        <button id="next" aria-label="Next step">Next ▶</button>
+        <button id="replay" aria-label="Replay step">↺ Replay</button>
+        <button id="all" aria-pressed="false">▶ Play all</button>
+        <div class="steps" id="steps"></div>
+      </div>
+      <div class="ctl hidden" id="freeCtl">
+        <div class="seg" id="toolSeg" role="group" aria-label="Click on the map">
+          <button data-t="spend">Spend at army</button><button data-t="capture">Capture</button><button data-t="cut">Cut / mend road</button>
+        </div>
+        <button id="lvlBack">Level −</button>
+        <button id="lvlFwd">Level +</button>
+        <button id="reset">Reset</button>
+        <span class="free-hint" id="freeHint">click the map</span>
+      </div>
+      <div class="cap" id="caption" aria-live="polite"></div>
+    </div>
+    <script>
+      (() => {
+        'use strict';
+        /* ================================================================ model */
+        const INF = 99;
+        const CAP = { cap: 6, fac: 3, city: 3, prov: 1 };
+        const W = 640;
+        const H = 380;
+        // node: [id, name, x, y, kind, owner, extra]; owner: me, en, ne; extra: s stock, a [units, charged], edge, vp
+        const MAPS = {
+          tree: {
+            label: 'Two fronts',
+            n: [
+              ['R', 'Oldmill', 52, 196, 'city', 'me', { s: 0 }],
+              ['K', 'Stonegate', 145, 196, 'cap', 'me', { s: 6, vp: 3 }],
+              ['P', 'Ford', 256, 112, 'prov', 'me', { s: 1 }],
+              ['B', 'Highmoor', 262, 282, 'city', 'me', { s: 1 }],
+              ['A1', 'Firwood', 378, 58, 'city', 'me', { s: 1, a: [3, 3] }],
+              ['A2', 'Bluff', 372, 170, 'prov', 'me', { s: 0 }],
+              ['B1', 'Watchpost', 388, 290, 'city', 'me', { s: 1, a: [3, 3] }],
+              ['E1', 'Crest', 500, 58, 'city', 'en', { edge: 1 }],
+              ['E2', 'Pine', 494, 178, 'prov', 'en', {}],
+              ['E3', 'Archway', 508, 298, 'city', 'en', { edge: 1 }],
+              ['E4', 'Heart', 598, 180, 'cap', 'en', { edge: 1, vp: 3 }],
+            ],
+            e: ['R-K', 'K-P', 'K-B:2', 'P-A1', 'P-A2', 'B-B1', 'A1-E1', 'A2-E2', 'B1-E3', 'E1-E2', 'E2-E3', 'E2-E4', 'E3-E4'],
+            story: [
+              ['Steady flow: charges roll downhill to the front', [], 8],
+              ['Firwood fires 3: the refill runs back up the chain', [['shots', 'A1', 3]], 7],
+              ['Capture Archway: it becomes a leaf', [['capture', 'E3', 'B1']], 7],
+              ['Leaf level −1: the line moves back', [['shift', 1]], 6],
+              ['Leaf level back to the front', [['shift', -1]], 6],
+              ['Road Stonegate–Highmoor cut: a pocket', [['cut', 'K-B'], ['shots', 'E3', 2]], 7],
+            ],
+          },
+          fac: {
+            label: 'Capital + factory',
+            n: [
+              ['K', 'Stonegate', 64, 196, 'cap', 'me', { s: 5, vp: 3 }],
+              ['M', 'Midway', 176, 196, 'city', 'me', { s: 1 }],
+              ['F', 'Forge', 292, 104, 'fac', 'me', { s: 2 }],
+              ['S', 'Southgate', 292, 284, 'city', 'me', { s: 0 }],
+              ['N1', 'Northcliff', 412, 54, 'city', 'me', { s: 1, a: [3, 3] }],
+              ['N2', 'Knoll', 408, 160, 'prov', 'me', { s: 0 }],
+              ['S1', 'Lowfield', 420, 292, 'city', 'me', { s: 1, a: [3, 3] }],
+              ['E1', 'Crest', 540, 54, 'city', 'en', { edge: 1 }],
+              ['E2', 'Pine', 534, 168, 'prov', 'en', { edge: 1 }],
+              ['E3', 'Archway', 548, 298, 'city', 'en', { edge: 1 }],
+            ],
+            e: ['K-M', 'M-F', 'M-S', 'F-N1', 'F-N2', 'S-S1:2', 'N1-E1', 'N2-E2', 'S1-E3', 'E1-E2', 'E2-E3'],
+            story: [
+              ['Two sources: each rolls its charges to the nearest front', [], 8],
+              ['Lowfield fires 3: only the capital refills the south', [['shots', 'S1', 3]], 8],
+              ['Capture Crest: a new leaf in the north', [['capture', 'E1', 'N1']], 7],
+              ['Leaf level −1: Forge and Southgate keep the stock', [['shift', 1]], 6],
+              ['Leaf level back to the front', [['shift', -1]], 6],
+              ['Road Midway–Southgate cut: the south is a pocket', [['cut', 'M-S'], ['shots', 'S1', 2]], 7],
+            ],
+          },
+          pocket: {
+            label: 'Pocket',
+            n: [
+              ['K', 'Stonegate', 52, 196, 'cap', 'me', { s: 4, vp: 3 }],
+              ['A', 'Elm', 152, 196, 'city', 'me', { s: 2 }],
+              ['B', 'Narrows', 252, 196, 'prov', 'me', { s: 1 }],
+              ['Hb', 'Hub', 352, 196, 'city', 'me', { s: 3 }],
+              ['C', 'Northcliff', 462, 100, 'city', 'me', { s: 2, a: [3, 3] }],
+              ['D', 'Lowfield', 462, 290, 'city', 'me', { s: 3, a: [3, 3] }],
+              ['E1', 'Crest', 584, 100, 'city', 'en', { edge: 1 }],
+              ['E2', 'Archway', 590, 290, 'city', 'en', { edge: 1 }],
+            ],
+            e: ['K-A', 'A-B:2', 'B-Hb', 'Hb-C', 'Hb-D', 'C-E1', 'D-E2', 'E1-E2'],
+            story: [
+              ['Mid-game: stock sits along the chain to the front', [], 6],
+              ['Northcliff fires 3: the chain refills it', [['shots', 'C', 3]], 7],
+              ['Capture Archway: a new leaf', [['capture', 'E2', 'D']], 7],
+              ['Leaf level −1: Hub keeps the stock', [['shift', 1]], 6],
+              ['Leaf level back to the front', [['shift', -1]], 6],
+              ['Road Elm–Narrows cut: the front is a pocket', [['cut', 'A-B'], ['shots', 'C', 3]], 8],
+            ],
+          },
+        };
+        const STEP_LABELS = ['Flow', 'Spend', 'Capture', 'Level −1', 'Level 0', 'Cut'];
+
+        function initState(mapId) {
+          const M = MAPS[mapId];
+          const st = {
+            map: mapId,
+            beat: 0,
+            nodes: {},
+            order: [],
+            edges: [],
+            packets: [],
+            d: {},
+            d0: {},
+            pocket: {},
+            shift: 0,
+            k: 0,
+            pid: 1,
+            flow: {},
+            chain: {},
+            hop: {},
+            ripples: [],
+            fx: [],
+            sends: [],
+            focus: null,
+          };
+          M.n.forEach(([id, name, x, y, kind, own, o], i) => {
+            st.nodes[id] = {
+              id,
+              name,
+              x,
+              y,
+              kind,
+              own,
+              cap: CAP[kind],
+              stock: o.s || 0,
+              army: o.a ? { u: o.a[0], c: o.a[1] } : null,
+              edge: !!o.edge,
+              vp: kind === 'prov' ? 0 : o.vp || 1,
+              key: i,
+            };
+            st.order.push(id);
+          });
+          for (const s of M.e) {
+            const [ab, len] = s.split(':');
+            const [a, b] = ab.split('-');
+            st.edges.push({ id: ab, a, b, len: +(len || 1), cut: false });
+          }
+          return st;
+        }
+        const clone = (o) => JSON.parse(JSON.stringify(o));
+        const mine = (st, n) => st.nodes[n].own === 'me';
+        const nb = (st, n) => {
+          const r = [];
+          for (const e of st.edges) {
+            if (e.a === n) r.push([e.b, e]);
+            else if (e.b === n) r.push([e.a, e]);
+          }
+          return r;
+        };
+        const road = (st, e) => !e.cut && mine(st, e.a) && mine(st, e.b);
+        const byKey = (st) => (a, b) => st.nodes[a].key - st.nodes[b].key;
+        const isSrc = (N) => N.kind === 'cap' || N.kind === 'fac';
+        const incoming = (st, n) => st.packets.filter((p) => p.b === n).length;
+        const edgeOf = (st, id) => st.edges.find((x) => x.id === id);
+
+        function computeField(st) {
+          const ids = st.order.filter((n) => mine(st, n));
+          const d = {};
+          for (const n of ids) {
+            let b = st.nodes[n].edge;
+            for (const [m, e] of nb(st, n)) if (e.cut || !mine(st, m)) b = true;
+            d[n] = b ? 0 : INF;
+          }
+          const spread = () => {
+            for (let lv = 0; lv < 64; lv++) {
+              for (const n of ids) if (d[n] === lv) for (const [m, e] of nb(st, n)) if (road(st, e) && d[m] > lv + 1) d[m] = lv + 1;
+              if (!ids.some((n) => d[n] > lv && d[n] < INF)) break;
+            }
+          };
+          spread();
+          const kc = ids.find((n) => st.nodes[n].kind === 'cap');
+          const fin = ids.map((n) => d[n]).filter((x) => x < INF);
+          st.kmax = kc && d[kc] < INF ? d[kc] : fin.length ? Math.max(...fin) : 0;
+          st.k = Math.min(st.shift, st.kmax);
+          st.d0 = { ...d };
+          st.pulled = {};
+          let any = false;
+          for (const n of ids) {
+            const A = st.nodes[n].army;
+            if (A && A.c < A.u && d[n] > st.k && d[n] < INF) {
+              d[n] = st.k;
+              st.pulled[n] = true;
+              any = true;
+            }
+          }
+          if (any) spread();
+          const comp = {};
+          const pocket = {};
+          st.comps = [];
+          for (const n of ids) {
+            if (comp[n] != null) continue;
+            const c = [n];
+            comp[n] = n;
+            for (let i = 0; i < c.length; i++)
+              for (const [m, e] of nb(st, c[i]))
+                if (road(st, e) && comp[m] == null) {
+                  comp[m] = n;
+                  c.push(m);
+                }
+            const src = c.some((x) => isSrc(st.nodes[x]));
+            for (const x of c) pocket[x] = !src;
+            st.comps.push(c);
+          }
+          st.d = d;
+          st.pocket = pocket;
+          st.comp = comp;
+        }
+        const roomOf = (st, n) => st.nodes[n].cap - st.nodes[n].stock - incoming(st, n);
+        const fillPct = (st, n, room) => Math.floor(((st.nodes[n].cap - room) * 100) / st.nodes[n].cap);
+
+        function send(st, a, b, e, kind) {
+          st.nodes[a].stock -= 1;
+          st.packets.push({ id: st.pid++, a, b, e: e.id, t0: st.beat, len: e.len, kind });
+          st.sends.push({ a, b, e: e.id, kind });
+        }
+        function orderCands(st, cands, room) {
+          const key = (m) => st.nodes[m[0]].key;
+          return cands
+            .slice()
+            .sort((x, y) => fillPct(st, x[0], room[x[0]]) - fillPct(st, y[0], room[y[0]]) || key(x) - key(y));
+        }
+
+        function beat(st) {
+          st.beat += 1;
+          const fx = [];
+          st.sends = [];
+          // 1. arrivals
+          for (const p of st.packets.slice()) {
+            if (st.beat - p.t0 < p.len) continue;
+            st.packets.splice(st.packets.indexOf(p), 1);
+            const e = edgeOf(st, p.e);
+            const N = st.nodes[p.b];
+            if (e.cut || !mine(st, p.b)) fx.push({ k: 'lost', n: p.b });
+            else if (N.stock >= N.cap) fx.push({ k: 'burn', n: p.b });
+            else N.stock += 1;
+          }
+          computeField(st);
+          // 2. production; a full source spills one road back, not ahead of the level
+          for (const n of st.order) {
+            const N = st.nodes[n];
+            if (!mine(st, n) || !isSrc(N)) continue;
+            if (st.beat % (N.kind === 'cap' ? 2 : 3)) continue;
+            if (N.stock < N.cap) {
+              N.stock += 1;
+              fx.push({ k: 'prod', n });
+              continue;
+            }
+            const c = nb(st, n)
+              .filter(([m, e]) => road(st, e) && roomOf(st, m) > 0 && (st.d[m] ?? INF) >= st.k)
+              .sort((x, y) => st.d[x[0]] - st.d[y[0]] || st.nodes[x[0]].key - st.nodes[y[0]].key);
+            if (c.length) {
+              N.stock += 1;
+              send(st, n, c[0][0], c[0][1], 'spill');
+            } else fx.push({ k: 'burn', n });
+          }
+          // 3. armies recharge from their node
+          for (const n of st.order) {
+            const N = st.nodes[n];
+            if (!mine(st, n) || !N.army) continue;
+            const t = Math.min(N.army.u - N.army.c, N.stock);
+            if (t > 0) {
+              N.army.c += t;
+              N.stock -= t;
+              fx.push({ k: 'recharge', n, v: t });
+            }
+          }
+          // 4. dispatch on a snapshot of the room
+          computeField(st);
+          const d = st.d;
+          const k = st.k;
+          const ids = Object.keys(d).sort((a, b) => d[a] - d[b] || st.nodes[a].key - st.nodes[b].key);
+          const room = {};
+          for (const n of ids) room[n] = roomOf(st, n);
+          for (const n of ids) {
+            const N = st.nodes[n];
+            if (d[n] >= INF || d[n] <= k) continue;
+            let spare = N.stock;
+            if (spare <= 0) continue;
+            const roads = nb(st, n).filter(([m, e]) => road(st, e) && d[m] >= k);
+            for (const [m, e] of orderCands(st, roads.filter(([m]) => d[m] < d[n] && room[m] > 0), room)) {
+              if (spare <= 0) break;
+              send(st, n, m, e, 'down');
+              room[m] -= 1;
+              spare -= 1;
+            }
+            for (const [m, e] of orderCands(st, roads.filter(([m]) => d[m] === d[n] && room[m] > 0), room)) {
+              if (spare <= 0) break;
+              if (st.nodes[m].cap - room[m] + 2 > N.stock) continue;
+              send(st, n, m, e, 'level');
+              room[m] -= 1;
+              spare -= 1;
+            }
+          }
+          // throughput per road (decays), and the request chain (who asked whom)
+          for (const id in st.flow) {
+            st.flow[id].v *= 0.5;
+            if (st.flow[id].v < 0.06) delete st.flow[id];
+          }
+          for (const s of st.sends) {
+            const f = st.flow[s.e] || (st.flow[s.e] = { v: 0, from: s.a });
+            f.v += 1;
+            f.from = s.a;
+          }
+          for (const n in st.chain) if (--st.chain[n] <= 0) delete st.chain[n];
+          st.ripples = [];
+          for (const s of st.sends) {
+            if (st.chain[s.b] == null) continue;
+            const hop = (st.hop[s.b] || 0) + 1;
+            st.ripples.push({ req: s.b, giv: s.a, e: s.e, hop });
+            if (st.chain[s.a] == null && !isSrc(st.nodes[s.a])) {
+              st.chain[s.a] = 3;
+              st.hop[s.a] = hop;
+            } else if (isSrc(st.nodes[s.a])) st.hop[s.a] = hop;
+          }
+          st.fx = fx;
+          return fx;
+        }
+
+        function applyEvent(st, ev) {
+          const [k, a, b] = ev;
+          const fx = [];
+          if (k === 'shots') {
+            const N = st.nodes[a];
+            if (!N.army || N.own !== 'me') return fx;
+            const v = Math.min(b, N.army.c);
+            N.army.c -= v;
+            st.chain[a] = 4;
+            st.hop[a] = 0;
+            st.focus = a;
+            fx.push({ k: 'shots', n: a, v });
+          } else if (k === 'cut' || k === 'mend') {
+            const e = edgeOf(st, a);
+            e.cut = k === 'cut';
+            st.focus = e.a;
+            fx.push({ k: e.cut ? 'cut' : 'mend', e: a });
+          } else if (k === 'capture') {
+            const N = st.nodes[a];
+            N.own = 'me';
+            N.stock = 0;
+            if (b && st.nodes[b].army) {
+              N.army = st.nodes[b].army;
+              st.nodes[b].army = null;
+            }
+            st.focus = a;
+            fx.push({ k: 'capture', n: a });
+          } else if (k === 'shift') {
+            computeField(st);
+            st.shift = Math.max(0, Math.min(st.kmax, st.k + a));
+            fx.push({ k: 'shift' });
+          }
+          computeField(st);
+          return fx;
+        }
+
+        /* ============================================================ geometry */
+        // Voronoi cells by half-plane clipping; every vertex carries the tag of the edge that starts at it
+        // (-1 the frame, otherwise the index of the neighbouring node).
+        function clipHalf(poly, pi, pj, j) {
+          const nx = pj.x - pi.x;
+          const ny = pj.y - pi.y;
+          const mx = (pi.x + pj.x) / 2;
+          const my = (pi.y + pj.y) / 2;
+          const f = (v) => (v.x - mx) * nx + (v.y - my) * ny;
+          const out = [];
+          for (let i = 0; i < poly.length; i++) {
+            const A = poly[i];
+            const B = poly[(i + 1) % poly.length];
+            const fa = f(A);
+            const fb = f(B);
+            if (fa <= 0) out.push({ x: A.x, y: A.y, t: A.t });
+            if (fa <= 0 !== fb <= 0) {
+              const s = fa / (fa - fb);
+              out.push({ x: A.x + (B.x - A.x) * s, y: A.y + (B.y - A.y) * s, t: fa <= 0 ? j : A.t });
+            }
+          }
+          return out;
+        }
+        const CELLS = {};
+        function cellsOf(mapId) {
+          if (CELLS[mapId]) return CELLS[mapId];
+          const real = MAPS[mapId].n.map(([id, , x, y]) => ({ id, x, y }));
+          const pts = real.slice();
+          const r = rng(mapId.length * 31 + 7);
+          for (let gy = 18; gy < H + 30; gy += 52)
+            for (let gx = 18; gx < W + 30; gx += 52) {
+              const x = gx + (r() - 0.5) * 40;
+              const y = gy + (r() - 0.5) * 40;
+              let best = real[0];
+              let bd = 1e9;
+              for (const q of real) {
+                const d = Math.hypot(q.x - x, q.y - y);
+                if (d < bd) {
+                  bd = d;
+                  best = q;
+                }
+              }
+              if (bd > 34) pts.push({ id: best.id, x, y });
+            }
+          const frame = [
+            { x: 0, y: 0, t: -1 },
+            { x: W, y: 0, t: -1 },
+            { x: W, y: H, t: -1 },
+            { x: 0, y: H, t: -1 },
+          ];
+          const cells = pts.map((p, i) => {
+            let poly = frame.map((v) => ({ ...v }));
+            pts.forEach((q, j) => {
+              if (j !== i) poly = clipHalf(poly, p, q, j);
+            });
+            return { id: p.id, poly, pts };
+          });
+          return (CELLS[mapId] = cells);
+        }
+
+        // terrain of the battle map: baked once per map (value noise, stipple), like the baked map background
+        const TERRAIN = {};
+        function rng(seed) {
+          return () => {
+            seed |= 0;
+            seed = (seed + 0x6d2b79f5) | 0;
+            let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+        function terrainOf(mapId) {
+          if (TERRAIN[mapId]) return TERRAIN[mapId];
+          const S = 2;
+          const c = document.createElement('canvas');
+          c.width = W * S;
+          c.height = H * S;
+          const g = c.getContext('2d');
+          const r = rng(mapId.length * 977 + 13);
+          const waves = Array.from({ length: 9 }, () => ({ fx: 0.008 + r() * 0.022, fy: 0.008 + r() * 0.022, p: r() * 6.28, q: r() * 6.28 }));
+          const img = g.createImageData(c.width, c.height);
+          const cols = { plains: [118, 138, 86], forest: [34, 82, 62], mount: [104, 106, 112] };
+          for (let y = 0; y < c.height; y++)
+            for (let x = 0; x < c.width; x++) {
+              const X = x / S;
+              const Y = y / S;
+              let v = 0;
+              let u = 0;
+              for (const w of waves) {
+                v += Math.sin(X * w.fx + w.p) * Math.cos(Y * w.fy + w.q);
+                u += Math.cos(X * w.fy * 1.3 + w.q) * Math.sin(Y * w.fx * 1.1 + w.p);
+              }
+              const t = v > 1.1 ? 'forest' : u > 1.5 ? 'mount' : 'plains';
+              const cc = cols[t];
+              const n = (r() - 0.5) * 10;
+              const i = (y * c.width + x) * 4;
+              img.data[i] = cc[0] + n;
+              img.data[i + 1] = cc[1] + n;
+              img.data[i + 2] = cc[2] + n;
+              img.data[i + 3] = 255;
+            }
+          g.putImageData(img, 0, 0);
+          g.globalAlpha = 0.22;
+          g.fillStyle = '#0d1117';
+          for (let i = 0; i < 2600; i++) {
+            g.beginPath();
+            g.arc(r() * c.width, r() * c.height, 1 + r() * 2.2, 0, 6.29);
+            g.fill();
+          }
+          g.globalAlpha = 0.36;
+          g.fillRect(0, 0, c.width, c.height);
+          return (TERRAIN[mapId] = c);
+        }
+
+        /* ============================================================ variants */
+        // s: features in the Supply mode, b: in the battle mode. cost: PixiJS cost (AGENTS.md 7.2).
+        const VARS = [
+          {
+            id: 'now',
+            n: 'Now: pipes',
+            tag: 'the current layer, no new marks',
+            s: { pipes: 1, gauge: 1, dots: 'pipe' },
+            b: { dots: 'square' },
+            cost: 'as today: pipe dashes per frame, the rest redrawn per snapshot',
+          },
+          {
+            id: 'base',
+            n: 'Base: chevrons + level band + status',
+            tag: 'A + C + E, H on hover, F and G accents',
+            s: { chev: 1, band: 1, status: 1, ripple: 1, pinch: 1, hover: 1, pocket: 1, ahead: 1 },
+            b: { chev: 'faint', status: 1 },
+            cost: 'chevrons: one scrolling strip per road (per frame, cheap); band, status, pinch, hatch baked per dispatch; ripple per frame only after a spend',
+          },
+          {
+            id: 'dots',
+            n: 'Dots only',
+            tag: 'B, minimal',
+            s: { dots: 'trail', slotsOnly: 1 },
+            b: { dots: 'small' },
+            cost: 'packets per frame (as today); nothing else',
+          },
+          {
+            id: 'full',
+            n: 'Full kit',
+            tag: 'A + B + C + D + E + F + G + H + I',
+            s: { chev: 1, dots: 'trail', band: 1, slope: 1, status: 1, ripple: 1, pinch: 1, hover: 1, pocket: 1, ahead: 1 },
+            b: { chev: 'faint', status: 1, ticks: 1 },
+            cost: 'the most: chevrons + packets per frame, slope and band baked per dispatch',
+          },
+          {
+            id: 'slope',
+            n: 'Slope: contour map',
+            tag: 'D + level isoline + B',
+            s: { slope: 1, isoline: 1, dots: 'small', status: 1, pocket: 1 },
+            b: { isoline: 'thin' },
+            cost: 'territory shading and contours baked per dispatch (one cached layer); packets per frame',
+          },
+          {
+            id: 'rivers',
+            n: 'Rivers: width = throughput',
+            tag: 'A as a widening band, pools at the level',
+            s: { rivers: 1, pools: 1, status: 1, pocket: 1 },
+            b: { rivers: 'faint', status: 1 },
+            cost: 'band width redrawn per dispatch, ripple dashes per frame (scrolling texture)',
+          },
+          {
+            id: 'transit',
+            n: 'Transit diagram',
+            tag: 'metro lines, stations with a fill pie, terminus bars',
+            s: { metro: 1, pocket: 1 },
+            b: { heads: 1, status: 1 },
+            cost: 'all baked per dispatch; no per-frame work',
+          },
+          {
+            id: 'ledger',
+            n: 'Ledger: numbers',
+            tag: 'hops to the front, stock/cap, charges on each road',
+            s: { ledger: 1, pocket: 1, band: 'tags' },
+            b: { ledgerStarve: 1 },
+            cost: 'text baked per dispatch (BitmapText); no per-frame work',
+          },
+          {
+            id: 'vessels',
+            n: 'Vessels',
+            tag: 'a tank per city, beads on roads, a spout at the level',
+            s: { vessels: 1, dots: 'beads', pocket: 1 },
+            b: { status: 1 },
+            cost: 'tanks baked per dispatch; beads per frame',
+          },
+          {
+            id: 'echo',
+            n: 'Echo: quiet until something happens',
+            tag: 'F first: request echo up, comet charges down',
+            s: { echo: 1, stopbar: 1, slotsOnly: 1, pocket: 1 },
+            b: { echo: 'faint' },
+            cost: 'idle map costs nothing; per frame only for ~2 s after a spend, a capture or a cut',
+          },
+          {
+            id: 'spot',
+            n: 'Spotlight: follow one city',
+            tag: 'H first: where it gets from, where it gives',
+            s: { spot: 1, status: 1, band: 'thin' },
+            b: { spot: 'hover' },
+            cost: 'redrawn on a focus change only',
+          },
+          {
+            id: 'compass',
+            n: 'Compass: arrows on the cities',
+            tag: 'direction on the city rim, a closed ring at the level',
+            s: { compass: 1, status: 1, pocket: 1 },
+            b: { compass: 'small' },
+            cost: 'one baked wedge sprite per direction, rotated; no per-frame work',
+          },
+        ];
+
+        /* ============================================================ drawing */
+        const C = {
+          bg: '#0d1117',
+          floor: '#141a22',
+          paper: '#f0f6fc',
+          you: '#5b9bff',
+          enemy: '#e5484d',
+          warn: '#ffb020',
+          vp: '#e3b341',
+          nstroke: '#8b949e',
+          nfill: '#2b3139',
+          seg: '#59636e',
+          segBar: '#3b4450',
+        };
+        const rgba = (hex, a) => {
+          const v = parseInt(hex.slice(1), 16);
+          return `rgba(${v >> 16},${(v >> 8) & 255},${v & 255},${a})`;
+        };
+        const nodeR = (N) => (N.kind === 'prov' ? 10 : N.kind === 'cap' ? 17 : 15);
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const ownCol = (o) => (o === 'me' ? C.you : o === 'en' ? C.enemy : C.nstroke);
+
+        function polyPath(g, poly) {
+          g.beginPath();
+          poly.forEach((v, i) => (i ? g.lineTo(v.x, v.y) : g.moveTo(v.x, v.y)));
+          g.closePath();
+        }
+        function roadEnds(st, e, pad = 2) {
+          const A = st.nodes[e.a];
+          const B = st.nodes[e.b];
+          const dx = B.x - A.x;
+          const dy = B.y - A.y;
+          const L = Math.hypot(dx, dy);
+          const ux = dx / L;
+          const uy = dy / L;
+          const ra = nodeR(A) + pad;
+          const rb = nodeR(B) + pad;
+          return { x1: A.x + ux * ra, y1: A.y + uy * ra, x2: B.x - ux * rb, y2: B.y - uy * rb, ux, uy, L: L - ra - rb };
+        }
+        // the direction a road carries now (or would carry): from the higher field to the lower
+        function roadDir(st, e) {
+          if (!road(st, e)) return null;
+          const da = st.d[e.a];
+          const db = st.d[e.b];
+          const f = st.flow[e.id];
+          if (da >= INF || db >= INF) return f ? (f.from === e.a ? 1 : -1) : null;
+          if (Math.min(da, db) < st.k) return null;
+          if (da === db) return f ? (f.from === e.a ? 1 : -1) : null;
+          return da > db ? 1 : -1;
+        }
+        const flowV = (st, e, dir) => {
+          const f = st.flow[e.id];
+          if (!f) return 0;
+          return (f.from === e.a ? 1 : -1) === dir ? f.v : 0;
+        };
+        const isVisible = (st, n) => {
+          if (mine(st, n)) return true;
+          return nb(st, n).some(([m]) => mine(st, m));
+        };
+        const levelNodes = (st) => st.order.filter((n) => mine(st, n) && st.d0[n] === st.k);
+        const ahead = (st, n) => mine(st, n) && st.d0[n] < st.k;
+        function starving(st, n) {
+          const N = st.nodes[n];
+          if (!mine(st, n)) return false;
+          if (N.army && N.army.c < N.army.u && N.stock === 0) return true;
+          return st.d0[n] === st.k && N.stock === 0 && incoming(st, n) === 0 && !ahead(st, n);
+        }
+        const full = (st, n) => mine(st, n) && st.nodes[n].stock >= st.nodes[n].cap;
+
+        function chevron(g, x, y, ang, sz, col, alpha, w = 2.3) {
+          g.save();
+          g.translate(x, y);
+          g.rotate(ang);
+          g.globalAlpha *= alpha;
+          g.lineCap = 'round';
+          g.lineJoin = 'round';
+          g.beginPath();
+          g.moveTo(-sz * 0.55, -sz);
+          g.lineTo(sz * 0.45, 0);
+          g.lineTo(-sz * 0.55, sz);
+          g.strokeStyle = C.bg;
+          g.lineWidth = w + 2.6;
+          g.stroke();
+          g.strokeStyle = col;
+          g.lineWidth = w;
+          g.stroke();
+          g.restore();
+        }
+        function hatch(g, x0, y0, x1, y1, step, col, w) {
+          g.strokeStyle = col;
+          g.lineWidth = w;
+          g.beginPath();
+          for (let s = x0 - (y1 - y0); s < x1; s += step) {
+            g.moveTo(s, y1);
+            g.lineTo(s + (y1 - y0), y0);
+          }
+          g.stroke();
+        }
+        function text(g, s, x, y, size, col, opt = {}) {
+          g.font = `${opt.weight || 700} ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
+          g.textAlign = opt.align || 'center';
+          g.textBaseline = 'middle';
+          if (opt.halo !== false) {
+            g.strokeStyle = 'rgba(13,17,23,0.85)';
+            g.lineWidth = opt.haloW || 3;
+            g.lineJoin = 'round';
+            g.strokeText(s, x, y);
+          }
+          g.fillStyle = col;
+          g.fillText(s, x, y);
+        }
+        function star(g, x, y, r) {
+          g.beginPath();
+          for (let i = 0; i < 10; i++) {
+            const a = -Math.PI / 2 + (i * Math.PI) / 5;
+            const rr = i % 2 ? r * 0.45 : r;
+            g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+          }
+          g.closePath();
+        }
+        function plate(g, x, y, w, h, fill, stroke) {
+          g.beginPath();
+          g.roundRect(x, y, w, h, Math.min(4, h / 2));
+          g.fillStyle = fill;
+          g.fill();
+          if (stroke) {
+            g.strokeStyle = stroke;
+            g.lineWidth = 1.2;
+            g.stroke();
+          }
+        }
+
+        class Painter {
+          constructor(canvas) {
+            this.cv = canvas;
+            this.g = canvas.getContext('2d');
+            this.hover = null;
+            this.pointer = null;
+          }
+          size() {
+            const cw = this.cv.clientWidth || W;
+            const dpr = Math.min(2, window.devicePixelRatio || 1);
+            const pw = Math.round(cw * dpr);
+            const ph = Math.round((cw * H * dpr) / W);
+            if (this.cv.width !== pw || this.cv.height !== ph) {
+              this.cv.width = pw;
+              this.cv.height = ph;
+            }
+            this.scale = (cw * dpr) / W;
+            // labels and marks keep a readable size on a narrow screen
+            this.tb = clamp((W / cw) * 0.85, 1, 1.6);
+          }
+          draw(st, V, mode, t, frac, rm) {
+            this.size();
+            const g = this.g;
+            g.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+            const F = mode === 'battle' ? V.b : V.s;
+            this.F = F;
+            this.st = st;
+            this.mode = mode;
+            this.t = rm ? 0 : t;
+            this.frac = frac;
+            this.rm = rm;
+            const cells = cellsOf(st.map);
+            // background
+            if (mode === 'battle') g.drawImage(terrainOf(st.map), 0, 0, W, H);
+            else {
+              g.fillStyle = C.floor;
+              g.fillRect(0, 0, W, H);
+            }
+            this.territory(cells);
+            if (F.slope) this.slope(cells);
+            if (F.pocket) this.pocketHatch(cells);
+            if (mode === 'battle') this.fog(cells);
+            if (F.isoline) this.isoline(cells, F.isoline === 'thin');
+            this.roads();
+            if (F.band) this.band(F.band);
+            if (F.pinch) this.pinch();
+            if (F.rivers) this.rivers(F.rivers === 'faint');
+            if (F.chev) this.chevrons(F.chev);
+            if (F.ledger) this.roadPlates();
+            if (F.heads) this.heads();
+            if (F.dots) this.dots(F.dots);
+            if (F.spot) this.spotlight(F.spot === 'hover');
+            if (F.ripple || F.echo) this.ripples(F.echo === 'faint' ? 0.5 : 1, !!F.echo);
+            this.nodes();
+            if (F.hover && this.hover) this.hoverTree();
+            this.effects();
+            if (mode !== 'battle') this.hud();
+            else if (st.k > 0) this.levelChip();
+          }
+          territory(cells) {
+            const g = this.g;
+            const st = this.st;
+            const battle = this.mode === 'battle';
+            for (const c of cells) {
+              const N = st.nodes[c.id];
+              if (N.own === 'ne') continue;
+              polyPath(g, c.poly);
+              g.fillStyle = rgba(ownCol(N.own), battle ? 0.2 : 0.3);
+              g.fill();
+            }
+            // faint cell lines, then the borders inside each cell (blue on the own side, red on the other)
+            for (const c of cells) {
+              const N = st.nodes[c.id];
+              const P = c.poly;
+              g.save();
+              polyPath(g, P);
+              g.clip();
+              for (let i = 0; i < P.length; i++) {
+                const a = P[i];
+                const b = P[(i + 1) % P.length];
+                if (a.t < 0) continue;
+                const M = st.nodes[c.pts[a.t].id];
+                g.beginPath();
+                g.moveTo(a.x, a.y);
+                g.lineTo(b.x, b.y);
+                if (M.id === N.id) continue;
+                if (M.own === N.own || N.own === 'ne') {
+                  g.strokeStyle = 'rgba(240,246,252,0.07)';
+                  g.lineWidth = 1;
+                  g.stroke();
+                } else {
+                  g.strokeStyle = rgba(ownCol(N.own), 0.16);
+                  g.lineWidth = 18;
+                  g.stroke();
+                  g.strokeStyle = rgba(ownCol(N.own), 0.95);
+                  g.lineWidth = 4;
+                  g.stroke();
+                }
+              }
+              g.restore();
+            }
+          }
+          fog(cells) {
+            const g = this.g;
+            const st = this.st;
+            for (const c of cells) {
+              if (isVisible(this.st, c.id)) continue;
+              polyPath(g, c.poly);
+              g.fillStyle = 'rgba(10,13,18,0.55)';
+              g.fill();
+            }
+          }
+          slope(cells) {
+            // D: own land shaded by the distance to the front (light = close to the front), contours between levels
+            const g = this.g;
+            const st = this.st;
+            for (const c of cells) {
+              const n = c.id;
+              if (!mine(st, n)) continue;
+              const d = st.d0[n];
+              if (d >= INF) continue;
+              polyPath(g, c.poly);
+              const a = clamp(0.27 - 0.075 * d, 0.03, 0.27);
+              g.fillStyle = `rgba(200,225,255,${a})`;
+              g.fill();
+            }
+            this.contours(cells, false, false, true);
+          }
+          contours(cells, onlyLevel, thin, skipLevel) {
+            const g = this.g;
+            const st = this.st;
+            const segs = { lvl: [], dash: [] };
+            for (const c of cells) {
+              const n = c.id;
+              if (!mine(st, n)) continue;
+              const P = c.poly;
+              for (let i = 0; i < P.length; i++) {
+                const a = P[i];
+                const b = P[(i + 1) % P.length];
+                if (a.t < 0) continue;
+                const m = c.pts[a.t].id;
+                if (m === n || !mine(st, m)) continue;
+                const dn = st.d0[n];
+                const dm = st.d0[m];
+                if (!(dn < dm)) continue; // each contour once, from the front side
+                const isLvl = dn <= st.k && dm > st.k;
+                if (onlyLevel && !isLvl) continue;
+                if (skipLevel && isLvl) continue;
+                segs[isLvl ? 'lvl' : 'dash'].push([a, b]);
+              }
+            }
+            const key = (p) => `${Math.round(p.x * 2)},${Math.round(p.y * 2)}`;
+            const chains = (list) => {
+              const ends = {};
+              list.forEach((sg, i) => {
+                for (const p of sg) (ends[key(p)] = ends[key(p)] || []).push(i);
+              });
+              const used = new Set();
+              const out = [];
+              list.forEach((sg, i) => {
+                if (used.has(i)) return;
+                used.add(i);
+                const line = [sg[0], sg[1]];
+                for (const dirn of [1, 0]) {
+                  for (;;) {
+                    const tip = dirn ? line[line.length - 1] : line[0];
+                    const j = (ends[key(tip)] || []).find((x) => !used.has(x));
+                    if (j == null) break;
+                    used.add(j);
+                    const o = list[j];
+                    const nxt = key(o[0]) === key(tip) ? o[1] : o[0];
+                    if (dirn) line.push(nxt);
+                    else line.unshift(nxt);
+                  }
+                }
+                out.push(line);
+              });
+              return out;
+            };
+            const smooth = (pts) => {
+              let p = pts;
+              for (let it = 0; it < 3; it++) {
+                const q = [p[0]];
+                for (let i = 0; i < p.length - 1; i++) {
+                  q.push({ x: 0.75 * p[i].x + 0.25 * p[i + 1].x, y: 0.75 * p[i].y + 0.25 * p[i + 1].y });
+                  q.push({ x: 0.25 * p[i].x + 0.75 * p[i + 1].x, y: 0.25 * p[i].y + 0.75 * p[i + 1].y });
+                }
+                q.push(p[p.length - 1]);
+                p = q;
+              }
+              return p;
+            };
+            const stroke = (line) => {
+              const p = smooth(line);
+              g.beginPath();
+              p.forEach((v, i) => (i ? g.lineTo(v.x, v.y) : g.moveTo(v.x, v.y)));
+            };
+            g.save();
+            g.lineCap = 'round';
+            g.lineJoin = 'round';
+            for (const line of chains(segs.dash)) {
+              stroke(line);
+              g.setLineDash([5, 5]);
+              g.strokeStyle = 'rgba(240,246,252,0.4)';
+              g.lineWidth = 1.3;
+              g.stroke();
+            }
+            g.setLineDash([]);
+            for (const line of chains(segs.lvl)) {
+              if (!thin) {
+                stroke(line);
+                g.strokeStyle = 'rgba(240,246,252,0.18)';
+                g.lineWidth = 10;
+                g.stroke();
+              }
+              stroke(line);
+              g.strokeStyle = 'rgba(240,246,252,0.92)';
+              g.lineWidth = thin ? 1.8 : 2.6;
+              if (thin) g.setLineDash([6, 4]);
+              g.stroke();
+              g.setLineDash([]);
+            }
+            g.restore();
+          }
+          isoline(cells, thin) {
+            this.contours(cells, true, thin);
+            if (thin) return;
+            // the level contour carries the hop number at its middle
+          }
+          pocketHatch(cells) {
+            const g = this.g;
+            const st = this.st;
+            const done = {};
+            for (const c of cells) {
+              if (!mine(st, c.id) || !st.pocket[c.id]) continue;
+              g.save();
+              polyPath(g, c.poly);
+              g.clip();
+              hatch(g, 0, 0, W, H, 9, 'rgba(240,246,252,0.16)', 2);
+              g.restore();
+              const root = st.comp[c.id];
+              done[root] = done[root] || [];
+              done[root].push(st.nodes[c.id]);
+            }
+            for (const r in done) {
+              const ns = done[r];
+              // the "no source" mark: above the pocket node nearest the rest of the territory
+              const N = ns.slice().sort((a, b) => a.key - b.key)[0];
+              this.noSource(N.x, N.y + nodeR(N) + 40 * this.tb);
+            }
+          }
+          noSource(x, y) {
+            const g = this.g;
+            const s = this.tb;
+            g.save();
+            g.translate(x, y);
+            g.scale(s, s);
+            plate(g, -42, -11, 86, 22, 'rgba(13,17,23,0.92)', 'rgba(240,246,252,0.5)');
+            // a source glyph (a small factory roof) crossed out
+            g.strokeStyle = C.paper;
+            g.lineWidth = 1.6;
+            g.beginPath();
+            g.arc(-30, 0, 6.5, 0, 6.29);
+            g.moveTo(-34.6, 4.6);
+            g.lineTo(-25.4, -4.6);
+            g.stroke();
+            text(g, 'no source', 10, 0.5, 10.5, C.paper, { halo: false });
+            g.restore();
+          }
+          roads() {
+            const g = this.g;
+            const st = this.st;
+            const F = this.F;
+            const battle = this.mode === 'battle';
+            for (const e of st.edges) {
+              const A = st.nodes[e.a];
+              const B = st.nodes[e.b];
+              let x1 = A.x;
+              let y1 = A.y;
+              let x2 = B.x;
+              let y2 = B.y;
+              const own = road(st, e);
+              const enemy = !e.cut && A.own === 'en' && B.own === 'en';
+              const vis = isVisible(st, e.a) || isVisible(st, e.b);
+              g.lineCap = 'round';
+              if (F.metro && own) {
+                const dir = roadDir(st, e);
+                const v = dir ? flowV(st, e, dir) : 0;
+                g.strokeStyle = C.bg;
+                g.lineWidth = 11;
+                g.beginPath();
+                g.moveTo(x1, y1);
+                g.lineTo(x2, y2);
+                g.stroke();
+                g.strokeStyle = dir == null ? '#2c3440' : v > 0.2 ? C.you : '#3c5a86';
+                g.lineWidth = 7;
+                if (st.pocket[e.a]) g.setLineDash([8, 5]);
+                g.stroke();
+                g.setLineDash([]);
+                continue;
+              }
+              if (F.pipes && own) {
+                this.pipe(e);
+                continue;
+              }
+              g.beginPath();
+              g.moveTo(x1, y1);
+              g.lineTo(x2, y2);
+              g.strokeStyle = 'rgba(13,17,23,0.85)';
+              g.lineWidth = own ? 7 : 5;
+              g.stroke();
+              if (e.cut) {
+                g.setLineDash([5, 6]);
+                g.strokeStyle = 'rgba(170,178,189,0.7)';
+                g.lineWidth = 2;
+                g.stroke();
+                g.setLineDash([]);
+              } else if (own) {
+                if (battle) {
+                  g.strokeStyle = 'rgba(91,155,255,0.55)';
+                  g.lineWidth = 4.4;
+                  g.stroke();
+                  g.strokeStyle = 'rgba(230,237,243,0.95)';
+                  g.lineWidth = 1.6;
+                  g.stroke();
+                } else {
+                  g.strokeStyle = '#323d4c';
+                  g.lineWidth = 4.2;
+                  g.stroke();
+                }
+              } else if (enemy) {
+                g.strokeStyle = rgba(C.enemy, vis ? 0.5 : 0.25);
+                g.lineWidth = 3.6;
+                g.stroke();
+                g.strokeStyle = vis ? 'rgba(255,200,202,0.8)' : 'rgba(255,200,202,0.3)';
+                g.lineWidth = 1.2;
+                g.stroke();
+              } else {
+                g.setLineDash([6, 5]);
+                g.strokeStyle = 'rgba(170,178,189,0.75)';
+                g.lineWidth = 2;
+                g.stroke();
+                g.setLineDash([]);
+              }
+              if (e.len > 1 && !e.cut && (battle || !F.pinch)) {
+                // a slow road: a stippled band on both sides (the road kind of the map)
+                const r = roadEnds(st, e, 0);
+                g.save();
+                g.globalAlpha = 0.5;
+                g.setLineDash([1.5, 4]);
+                g.strokeStyle = C.paper;
+                g.lineWidth = 1.2;
+                for (const s of [-1, 1]) {
+                  g.beginPath();
+                  g.moveTo(r.x1 - r.uy * 6 * s, r.y1 + r.ux * 6 * s);
+                  g.lineTo(r.x2 - r.uy * 6 * s, r.y2 + r.ux * 6 * s);
+                  g.stroke();
+                }
+                g.restore();
+              }
+              if (e.cut) this.cutMark(e);
+            }
+            // a hint that the enemy land goes on past the edge of the board
+            for (const id of st.order) {
+              const N = st.nodes[id];
+              if (!N.edge || N.own === 'me') continue;
+              g.setLineDash([3, 5]);
+              g.strokeStyle = rgba(C.enemy, 0.45);
+              g.lineWidth = 2;
+              g.beginPath();
+              g.moveTo(N.x + nodeR(N) + 4, N.y);
+              g.lineTo(W, N.y);
+              g.stroke();
+              g.setLineDash([]);
+            }
+          }
+          cutMark(e) {
+            const g = this.g;
+            const st = this.st;
+            const A = st.nodes[e.a];
+            const B = st.nodes[e.b];
+            const x = (A.x + B.x) / 2;
+            const y = (A.y + B.y) / 2;
+            const s = this.tb;
+            g.save();
+            g.translate(x, y);
+            g.scale(s, s);
+            g.beginPath();
+            g.arc(0, 0, 9, 0, 6.29);
+            g.fillStyle = C.bg;
+            g.fill();
+            g.strokeStyle = C.paper;
+            g.lineWidth = 1.6;
+            g.stroke();
+            g.beginPath();
+            g.moveTo(-4, -4);
+            g.lineTo(4, 4);
+            g.moveTo(4, -4);
+            g.lineTo(-4, 4);
+            g.lineWidth = 2.4;
+            g.stroke();
+            g.restore();
+          }
+          pipe(e) {
+            // the current layer: the bore is the road level, an active pipe is filled and its dashes run
+            const g = this.g;
+            const st = this.st;
+            const A = st.nodes[e.a];
+            const B = st.nodes[e.b];
+            const busy = st.packets.some((p) => p.e === e.id) || (st.flow[e.id] && st.flow[e.id].v > 0.3);
+            const bore = e.len > 1 ? 7 : 10;
+            g.lineCap = 'butt';
+            g.beginPath();
+            g.moveTo(A.x, A.y);
+            g.lineTo(B.x, B.y);
+            g.strokeStyle = 'rgba(13,17,23,0.9)';
+            g.lineWidth = bore + 6.4;
+            g.stroke();
+            g.strokeStyle = '#566982';
+            g.lineWidth = bore + 3;
+            g.stroke();
+            g.strokeStyle = busy ? '#1d4e91' : '#18202c';
+            g.lineWidth = bore;
+            g.stroke();
+            if (busy) {
+              const f = st.flow[e.id];
+              const dir = f ? (f.from === e.a ? 1 : -1) : 1;
+              g.setLineDash([4, 8]);
+              g.lineDashOffset = -dir * ((this.t * 22) % 12);
+              g.strokeStyle = 'rgba(230,237,243,0.75)';
+              g.lineWidth = 2;
+              g.stroke();
+              g.setLineDash([]);
+              g.lineDashOffset = 0;
+            }
+            g.lineCap = 'round';
+            if (e.cut) this.cutMark(e);
+          }
+          chevrons(mode) {
+            // A: chevrons along each road that carries, brightness by throughput; idle roads dim
+            const g = this.g;
+            const st = this.st;
+            const faint = mode === 'faint';
+            const still = mode === 'static' || this.rm;
+            for (const e of st.edges) {
+              const dir = roadDir(st, e);
+              if (!dir) continue;
+              const r = roadEnds(st, e, 4);
+              const v = flowV(st, e, dir);
+              const idle = v < 0.2;
+              let a = idle ? 0.45 : clamp(0.65 + 0.35 * v, 0.65, 1);
+              if (faint) a *= idle ? 0.8 : 0.55;
+              if (this.spotDim && !this.spotDim.has(e.id)) a *= 0.35;
+              const gap = faint ? 22 : 15;
+              const off = still ? gap / 2 : (this.t * (16 + 22 * Math.min(1, v))) % gap;
+              const ux = r.ux * dir;
+              const uy = r.uy * dir;
+              const sx = dir > 0 ? r.x1 : r.x2;
+              const sy = dir > 0 ? r.y1 : r.y2;
+              const ang = Math.atan2(uy, ux);
+              const sz = faint ? 3.4 : 4.4;
+              if (idle) {
+                chevron(g, sx + (ux * r.L) / 2, sy + (uy * r.L) / 2, ang, sz, C.paper, a, faint ? 1.8 : 2.4);
+                continue;
+              }
+              for (let s = off; s < r.L - 2; s += gap) {
+                const edgeFade = Math.min(1, s / 6, (r.L - s) / 6);
+                chevron(g, sx + ux * s, sy + uy * s, ang, sz, C.paper, a * edgeFade, faint ? 1.8 : 2.4);
+              }
+            }
+          }
+          roadPlates() {
+            // Ledger: on each road that carries, a plate with the direction and the charges on it now
+            const g = this.g;
+            const st = this.st;
+            for (const e of st.edges) {
+              const dir = roadDir(st, e);
+              if (!dir) continue;
+              const n = st.packets.filter((p) => p.e === e.id).length;
+              const A = st.nodes[e.a];
+              const B = st.nodes[e.b];
+              const x = (A.x + B.x) / 2;
+              const y = (A.y + B.y) / 2;
+              const s = this.tb;
+              g.save();
+              g.translate(x, y);
+              g.scale(s, s);
+              plate(g, -15, -8, 30, 16, n ? C.paper : 'rgba(13,17,23,0.92)', n ? null : 'rgba(240,246,252,0.35)');
+              const ang = Math.atan2((B.y - A.y) * dir, (B.x - A.x) * dir);
+              g.save();
+              g.translate(-6, 0);
+              g.rotate(ang);
+              g.strokeStyle = n ? C.bg : 'rgba(240,246,252,0.75)';
+              g.fillStyle = g.strokeStyle;
+              g.lineWidth = 1.8;
+              g.beginPath();
+              g.moveTo(-5, 0);
+              g.lineTo(1.5, 0);
+              g.stroke();
+              g.beginPath();
+              g.moveTo(5, 0);
+              g.lineTo(0.5, -3.6);
+              g.lineTo(0.5, 3.6);
+              g.closePath();
+              g.fill();
+              g.restore();
+              text(g, String(n), 6, 0.5, 10.5, n ? C.bg : 'rgba(240,246,252,0.7)', { halo: false });
+              g.restore();
+            }
+          }
+          heads() {
+            // battle mode of Transit: one small arrowhead where a carrying road enters the receiving city
+            const st = this.st;
+            for (const e of st.edges) {
+              const dir = roadDir(st, e);
+              if (!dir) continue;
+              const r = roadEnds(st, e, 6);
+              const v = flowV(st, e, dir);
+              const x = dir > 0 ? r.x2 : r.x1;
+              const y = dir > 0 ? r.y2 : r.y1;
+              chevron(this.g, x, y, Math.atan2(r.uy * dir, r.ux * dir), 4, C.paper, v > 0.2 ? 0.95 : 0.4, 2.2);
+            }
+          }
+          packetPos(p) {
+            const st = this.st;
+            const e = edgeOf(st, p.e);
+            const r = roadEnds(st, e, 1);
+            let t = (st.beat - p.t0 + this.frac) / p.len;
+            t = clamp(t, 0, 1);
+            const fwd = p.a === e.a;
+            const tt = fwd ? t : 1 - t;
+            return { x: lerp(r.x1, r.x2, tt), y: lerp(r.y1, r.y2, tt), t, ux: r.ux * (fwd ? 1 : -1), uy: r.uy * (fwd ? 1 : -1), L: r.L };
+          }
+          dots(kind) {
+            const g = this.g;
+            const st = this.st;
+            for (const p of st.packets) {
+              const P = this.packetPos(p);
+              if (P.t >= 1) continue;
+              if (kind === 'square') {
+                g.fillStyle = C.you;
+                g.strokeStyle = C.bg;
+                g.lineWidth = 1.4;
+                g.fillRect(P.x - 3.2, P.y - 3.2, 6.4, 6.4);
+                g.strokeRect(P.x - 3.2, P.y - 3.2, 6.4, 6.4);
+                continue;
+              }
+              if (kind === 'trail' && !this.rm) {
+                for (let i = 4; i >= 1; i--) {
+                  const back = i * 5;
+                  if (P.t * P.L < back) continue;
+                  g.beginPath();
+                  g.arc(P.x - P.ux * back, P.y - P.uy * back, 4 - i * 0.55, 0, 6.29);
+                  g.fillStyle = `rgba(240,246,252,${0.42 - i * 0.08})`;
+                  g.fill();
+                }
+              }
+              if (kind === 'beads') {
+                g.beginPath();
+                g.arc(P.x, P.y, 3.4, 0, 6.29);
+                g.fillStyle = C.you;
+                g.fill();
+                g.strokeStyle = C.paper;
+                g.lineWidth = 1.4;
+                g.stroke();
+                continue;
+              }
+              const r = kind === 'small' ? 3.2 : kind === 'pipe' ? 3.6 : 4.6;
+              g.beginPath();
+              g.arc(P.x, P.y, r, 0, 6.29);
+              g.fillStyle = C.paper;
+              g.fill();
+              g.strokeStyle = kind === 'pipe' ? C.bg : C.you;
+              g.lineWidth = kind === 'pipe' ? 1.3 : 2;
+              g.stroke();
+            }
+          }
+          rivers(faint) {
+            // the road becomes a river: its width is the throughput, ripples run with the flow
+            const g = this.g;
+            const st = this.st;
+            for (const e of st.edges) {
+              const dir = roadDir(st, e);
+              if (!dir) continue;
+              const v = flowV(st, e, dir);
+              const n = st.packets.filter((p) => p.e === e.id).length;
+              const w = 3 + Math.min(1.4, v + n * 0.35) * 8;
+              const r = roadEnds(st, e, 0);
+              g.save();
+              g.globalAlpha = faint ? 0.75 : 1;
+              g.lineCap = 'round';
+              g.beginPath();
+              g.moveTo(r.x1, r.y1);
+              g.lineTo(r.x2, r.y2);
+              g.strokeStyle = C.bg;
+              g.lineWidth = w + 4;
+              g.stroke();
+              g.strokeStyle = v + n > 0.2 ? '#3f7fd9' : '#26364d';
+              g.lineWidth = w;
+              g.stroke();
+              if (v + n > 0.2) {
+                g.setLineDash([3, 9]);
+                g.lineDashOffset = -dir * ((this.t * 26) % 12);
+                g.strokeStyle = 'rgba(240,246,252,0.85)';
+                g.lineWidth = Math.max(1.4, w * 0.28);
+                g.stroke();
+                g.setLineDash([]);
+              }
+              g.restore();
+              if (!faint && w > 6) {
+                // a flow arrow at the mouth makes the direction readable in a still frame
+                const x = dir > 0 ? r.x2 : r.x1;
+                const y = dir > 0 ? r.y2 : r.y1;
+                chevron(g, x - r.ux * dir * 4, y - r.uy * dir * 4, Math.atan2(r.uy * dir, r.ux * dir), 4.4, C.paper, 0.95, 2.4);
+              }
+            }
+          }
+          pools() {
+            const g = this.g;
+            const st = this.st;
+            for (const n of levelNodes(st)) {
+              const N = st.nodes[n];
+              const R = nodeR(N);
+              for (let i = 0; i < 2; i++) {
+                g.beginPath();
+                g.arc(N.x, N.y, R + 6 + i * 5, 0, 6.29);
+                g.strokeStyle = `rgba(140,190,255,${0.85 - i * 0.4})`;
+                g.lineWidth = 2;
+                g.stroke();
+              }
+            }
+          }
+          band(kind) {
+            // C: a glowing band through the leaf-level nodes, one per connected part of the territory
+            const g = this.g;
+            const st = this.st;
+            const lv = levelNodes(st);
+            if (kind === 'tags') return;
+            const groups = {};
+            for (const n of lv) (groups[st.comp[n]] = groups[st.comp[n]] || []).push(st.nodes[n]);
+            const thin = kind === 'thin';
+            const runs = [];
+            for (const k in groups) {
+              const sorted = groups[k].slice().sort((a, b) => a.y - b.y);
+              let cur = [sorted[0]];
+              for (let i = 1; i < sorted.length; i++) {
+                const p = sorted[i - 1];
+                const q = sorted[i];
+                if (Math.hypot(p.x - q.x, p.y - q.y) > 175) {
+                  runs.push(cur);
+                  cur = [];
+                }
+                cur.push(q);
+              }
+              runs.push(cur);
+            }
+            runs.forEach((ns, ri) => {
+              g.save();
+              g.lineCap = 'round';
+              g.lineJoin = 'round';
+              if (ns.length === 1) {
+                const N = ns[0];
+                const R = nodeR(N) + 10;
+                const draw = () => {
+                  g.beginPath();
+                  g.arc(N.x, N.y, R, 0, 6.29);
+                };
+                draw();
+                g.strokeStyle = 'rgba(240,246,252,0.14)';
+                g.lineWidth = thin ? 8 : 16;
+                g.stroke();
+                draw();
+                g.setLineDash([7, 5]);
+                g.strokeStyle = 'rgba(240,246,252,0.95)';
+                g.lineWidth = thin ? 1.8 : 2.6;
+                g.stroke();
+              } else {
+                const pts = ns.map((N) => ({ x: N.x, y: N.y }));
+                const a = pts[0];
+                const b = pts[1];
+                const y = pts[pts.length - 1];
+                const z = pts[pts.length - 2];
+                const ext = (p, q, L) => {
+                  const dx = p.x - q.x;
+                  const dy = p.y - q.y;
+                  const l = Math.hypot(dx, dy) || 1;
+                  return { x: p.x + (dx / l) * L, y: p.y + (dy / l) * L };
+                };
+                const P = [ext(a, b, 26), ...pts, ext(y, z, 26)];
+                const path = () => {
+                  g.beginPath();
+                  g.moveTo(P[0].x, P[0].y);
+                  for (let i = 0; i < P.length - 1; i++) {
+                    const p0 = P[i - 1] || P[i];
+                    const p1 = P[i];
+                    const p2 = P[i + 1];
+                    const p3 = P[i + 2] || p2;
+                    g.bezierCurveTo(
+                      p1.x + (p2.x - p0.x) / 6,
+                      p1.y + (p2.y - p0.y) / 6,
+                      p2.x - (p3.x - p1.x) / 6,
+                      p2.y - (p3.y - p1.y) / 6,
+                      p2.x,
+                      p2.y,
+                    );
+                  }
+                };
+                path();
+                g.strokeStyle = 'rgba(240,246,252,0.10)';
+                g.lineWidth = thin ? 12 : 30;
+                g.stroke();
+                path();
+                g.strokeStyle = 'rgba(240,246,252,0.16)';
+                g.lineWidth = thin ? 6 : 14;
+                g.stroke();
+                path();
+                g.setLineDash([8, 6]);
+                g.strokeStyle = 'rgba(240,246,252,0.95)';
+                g.lineWidth = thin ? 1.8 : 2.6;
+                g.stroke();
+              }
+              g.restore();
+              if (!thin && ri === 0) {
+                // the level tag at the top end of the topmost band
+                const N = ns[0];
+                const lbl = st.k === 0 ? 'front' : `−${st.k}`;
+                const s = this.tb;
+                g.save();
+                g.translate(N.x, N.y - nodeR(N) - (ns.length === 1 ? 24 : 28));
+                g.scale(s, s);
+                const w = st.k === 0 ? 40 : 26;
+                plate(g, -w / 2, -8, w, 16, C.paper);
+                text(g, lbl, 0, 0.5, 10.5, C.bg, { halo: false });
+                g.restore();
+              }
+            });
+          }
+          pinch() {
+            // G: a slow road and a 1-slot province on the trunk get a pinch )( mark
+            const g = this.g;
+            const st = this.st;
+            const mark = (x, y, ang, s) => {
+              g.save();
+              g.translate(x, y);
+              g.rotate(ang);
+              g.scale(s, s);
+              g.lineCap = 'round';
+              for (const [col, w] of [
+                [C.bg, 5.4],
+                [C.paper, 2.4],
+              ]) {
+                g.strokeStyle = col;
+                g.lineWidth = w;
+                g.beginPath();
+                g.arc(-9, 0, 7, -0.95, 0.95);
+                g.moveTo(9 + Math.cos(Math.PI - 0.95) * 7, Math.sin(Math.PI - 0.95) * 7);
+                g.arc(9, 0, 7, Math.PI - 0.95, Math.PI + 0.95);
+                g.stroke();
+              }
+              g.restore();
+            };
+            for (const e of st.edges) {
+              if (e.len < 2 || e.cut || !road(st, e)) continue;
+              const A = st.nodes[e.a];
+              const B = st.nodes[e.b];
+              mark((A.x + B.x) / 2, (A.y + B.y) / 2, Math.atan2(B.y - A.y, B.x - A.x) + Math.PI / 2, 1.1 * this.tb);
+            }
+            for (const n of st.order) {
+              const N = st.nodes[n];
+              if (!mine(st, n) || N.kind !== 'prov' || !(st.d0[n] > st.k) || st.d0[n] >= INF) continue;
+              // a neck: the province passes charges on one slot at a time; the mark sits on the road into it
+              const [m] = nb(st, n).find(([m2, e]) => road(st, e) && st.d0[m2] > st.d0[n]) || [];
+              if (!m) continue;
+              const U = st.nodes[m];
+              const L = Math.hypot(N.x - U.x, N.y - U.y);
+              const t = 1 - (nodeR(N) + 16) / L;
+              mark(lerp(U.x, N.x, t), lerp(U.y, N.y, t), Math.atan2(N.y - U.y, N.x - U.x) + Math.PI / 2, 1.1 * this.tb);
+            }
+          }
+          ripples(alpha, echo) {
+            // F: the request runs up the chain (from the city that needs to the one that gives), then the charge comes down
+            const g = this.g;
+            const st = this.st;
+            const fr = this.frac;
+            for (const r of st.ripples) {
+              const e = edgeOf(st, r.e);
+              const A = st.nodes[r.req];
+              const B = st.nodes[r.giv];
+              const t = clamp(fr / 0.45, 0, 1);
+              if (fr < 0.5) {
+                const x = lerp(A.x, B.x, t);
+                const y = lerp(A.y, B.y, t);
+                g.save();
+                g.globalAlpha = alpha;
+                for (let i = 0; i < 3; i++) {
+                  const tt = clamp(t - i * 0.08, 0, 1);
+                  g.beginPath();
+                  g.arc(lerp(A.x, B.x, tt), lerp(A.y, B.y, tt), 5 - i * 1.2, 0, 6.29);
+                  g.fillStyle = rgba(C.warn, 0.9 - i * 0.28);
+                  g.fill();
+                }
+                g.beginPath();
+                g.arc(x, y, 7.5, 0, 6.29);
+                g.strokeStyle = C.bg;
+                g.lineWidth = 1.4;
+                g.stroke();
+                g.restore();
+              }
+              // the giver flashes its order in the chain: 1 = first to give, 2 = the one behind it
+              const ft = clamp((fr - 0.35) / 0.65, 0, 1);
+              if (ft > 0 && ft < 1) {
+                const R = nodeR(B) + 6 + ft * 12;
+                g.save();
+                g.globalAlpha = alpha * (1 - ft);
+                g.beginPath();
+                g.arc(B.x, B.y, R, 0, 6.29);
+                g.strokeStyle = C.warn;
+                g.lineWidth = 3;
+                g.stroke();
+                g.restore();
+              }
+              if (alpha >= 1) {
+                const s = this.tb;
+                g.save();
+                g.translate(B.x - nodeR(B) - 12, B.y + 2);
+                g.scale(s, s);
+                g.beginPath();
+                g.arc(0, 0, 8, 0, 6.29);
+                g.fillStyle = C.warn;
+                g.fill();
+                g.strokeStyle = C.bg;
+                g.lineWidth = 1.5;
+                g.stroke();
+                text(g, String(r.hop), 0, 0.5, 10.5, C.bg, { halo: false });
+                g.restore();
+              }
+              if (echo) {
+                // the answer: a comet from the giver to the city that asked
+                const p = st.packets.find((q) => q.e === r.e && q.a === r.giv && q.t0 === st.beat);
+                if (p && fr > 0.2) {
+                  const P = this.packetPos(p);
+                  for (let i = 0; i < 7; i++) {
+                    const back = i * 4;
+                    if (P.t * P.L < back) break;
+                    g.beginPath();
+                    g.arc(P.x - P.ux * back, P.y - P.uy * back, 4.5 - i * 0.5, 0, 6.29);
+                    g.fillStyle = `rgba(240,246,252,${(0.95 - i * 0.13) * alpha})`;
+                    g.fill();
+                  }
+                }
+              }
+            }
+            if (echo) {
+              // between events the map stays quiet: the steady flow is shown as faint ticks only
+              for (const p of st.packets) {
+                if (st.ripples.some((r) => r.e === p.e && r.giv === p.a && p.t0 === st.beat)) continue;
+                const P = this.packetPos(p);
+                if (P.t >= 1) continue;
+                g.beginPath();
+                g.arc(P.x, P.y, 2.2, 0, 6.29);
+                g.fillStyle = `rgba(240,246,252,${0.45 * alpha})`;
+                g.fill();
+              }
+            }
+          }
+          spotlight(hoverOnly) {
+            // H first: one city in focus; where its charges come from (lit roads into it), where it gives (dashed)
+            const st = this.st;
+            const g = this.g;
+            let f = this.hover;
+            if (!f && !hoverOnly) {
+              f = st.focus && mine(st, st.focus) ? st.focus : null;
+              if (!f) f = st.order.find((n) => starving(st, n)) || levelNodes(st)[0];
+            }
+            this.spotDim = null;
+            this.spotLit = null;
+            if (!f) return;
+            const up = new Set();
+            const upN = new Set([f]);
+            const q = [f];
+            while (q.length) {
+              const n = q.shift();
+              for (const [m, e] of nb(st, n)) {
+                if (!road(st, e) || upN.has(m)) continue;
+                if (st.d[m] > st.d[n] && st.d[m] < INF && st.d[n] >= st.k) {
+                  up.add(e.id);
+                  upN.add(m);
+                  q.push(m);
+                }
+              }
+            }
+            const memo = {};
+            const useful = (n, seen = new Set()) => {
+              if (memo[n] != null) return memo[n];
+              if (seen.has(n)) return false;
+              seen.add(n);
+              let ok = isSrc(st.nodes[n]) || st.nodes[n].stock > 0;
+              for (const [m, e] of nb(st, n)) if (up.has(e.id) && st.d[m] > st.d[n] && useful(m, seen)) ok = true;
+              return (memo[n] = ok);
+            };
+            for (const e of st.edges) {
+              if (!up.has(e.id)) continue;
+              const hi = st.d[e.a] > st.d[e.b] ? e.a : e.b;
+              if (!useful(hi)) {
+                up.delete(e.id);
+                upN.delete(hi);
+              }
+            }
+            const down = new Set();
+            for (const [m, e] of nb(st, f)) if (road(st, e) && st.d[m] < st.d[f] && st.d[m] >= st.k) down.add(e.id);
+            if (!hoverOnly) {
+              g.fillStyle = 'rgba(13,17,23,0.45)';
+              g.fillRect(0, 0, W, H);
+            }
+            const a = hoverOnly ? 0.75 : 1;
+            for (const e of st.edges) {
+              const isUp = up.has(e.id);
+              const isDown = down.has(e.id);
+              if (!isUp && !isDown) continue;
+              const r = roadEnds(st, e, 3);
+              g.save();
+              g.globalAlpha = a;
+              g.lineCap = 'round';
+              g.beginPath();
+              g.moveTo(r.x1, r.y1);
+              g.lineTo(r.x2, r.y2);
+              g.strokeStyle = C.bg;
+              g.lineWidth = 9;
+              g.stroke();
+              g.strokeStyle = isUp ? C.paper : 'rgba(240,246,252,0.8)';
+              g.lineWidth = isUp ? 4.5 : 2.5;
+              if (isDown) g.setLineDash([6, 5]);
+              g.stroke();
+              g.restore();
+              const dir = roadDir(st, e) || 1;
+              const s = 0.55;
+              chevron(g, lerp(r.x1, r.x2, s), lerp(r.y1, r.y2, s), Math.atan2(r.uy * dir, r.ux * dir), 5.5, C.paper, a, 2.6);
+            }
+            for (const n of upN) {
+              const N = st.nodes[n];
+              if (n === f) continue;
+              if (isSrc(N)) {
+                g.beginPath();
+                g.arc(N.x, N.y, nodeR(N) + 7, 0, 6.29);
+                g.strokeStyle = C.paper;
+                g.lineWidth = 2.5;
+                g.globalAlpha = a;
+                g.stroke();
+                g.globalAlpha = 1;
+              }
+            }
+            const N = st.nodes[f];
+            g.beginPath();
+            g.arc(N.x, N.y, nodeR(N) + 8, 0, 6.29);
+            g.strokeStyle = C.paper;
+            g.lineWidth = 3.2;
+            g.globalAlpha = a;
+            g.setLineDash([3, 4]);
+            g.stroke();
+            g.setLineDash([]);
+            g.globalAlpha = 1;
+            this.spotLit = upN;
+          }
+          hoverTree() {
+            this.spotlight(false);
+            for (const n of this.spotLit || []) this.drawNode(this.st.nodes[n], {});
+          }
+          nodes() {
+            const st = this.st;
+            for (const id of st.order) this.drawNode(st.nodes[id], {});
+          }
+          drawNode(N, o) {
+            const g = this.g;
+            const st = this.st;
+            const F = this.F;
+            const battle = this.mode === 'battle';
+            const R = nodeR(N);
+            const own = N.own;
+            const vis = isVisible(st, N.id);
+            const dim =
+              (battle && !vis) || (F.ahead && ahead(st, N.id)) || (F.spot && !battle && this.spotLit && !this.spotLit.has(N.id));
+            g.save();
+            if (dim) g.globalAlpha = 0.5;
+            if (F.metro && own === 'me' && !battle) {
+              this.station(N);
+              g.restore();
+              return;
+            }
+            // the city sign: a dark ring with capacity segments, a coloured disc with a paper rim
+            if (N.kind !== 'prov') {
+              g.beginPath();
+              g.arc(N.x, N.y, R + 3, 0, 6.29);
+              g.fillStyle = '#161c24';
+              g.fill();
+              const segs = N.kind === 'cap' ? 6 : 4;
+              g.strokeStyle = C.seg;
+              g.lineWidth = 3;
+              for (let i = 0; i < segs; i++) {
+                const a0 = -Math.PI / 2 + (i * 2 * Math.PI) / segs + 0.13;
+                const a1 = a0 + (2 * Math.PI) / segs - 0.26;
+                g.beginPath();
+                g.arc(N.x, N.y, R + 0.5, a0, a1);
+                g.stroke();
+              }
+              g.beginPath();
+              g.arc(N.x, N.y, R - 4, 0, 6.29);
+              g.fillStyle = own === 'me' ? C.you : own === 'en' ? C.enemy : C.nfill;
+              g.fill();
+              g.strokeStyle = own === 'ne' ? C.nstroke : C.paper;
+              g.lineWidth = 2.2;
+              g.stroke();
+              if (own === 'en') {
+                g.beginPath();
+                g.arc(N.x, N.y, R + 4.5, 0, 6.29);
+                g.strokeStyle = C.enemy;
+                g.lineWidth = 1.6;
+                g.stroke();
+              }
+              if (N.kind === 'cap' && !(N.army && own === 'me')) {
+                star(g, N.x, N.y, 7.5);
+                g.fillStyle = C.paper;
+                g.fill();
+              }
+            } else {
+              g.beginPath();
+              g.arc(N.x, N.y, R, 0, 6.29);
+              g.fillStyle = '#161c24';
+              g.fill();
+              g.strokeStyle = C.seg;
+              g.lineWidth = 2.2;
+              g.stroke();
+              g.beginPath();
+              g.arc(N.x, N.y, 5.5, 0, 6.29);
+              g.fillStyle = own === 'me' ? '#9cc2ff' : own === 'en' ? '#f09a9d' : '#6b737d';
+              g.fill();
+              g.strokeStyle = own === 'ne' ? C.nstroke : C.paper;
+              g.lineWidth = 1.5;
+              g.stroke();
+              if (own === 'en') {
+                g.beginPath();
+                g.arc(N.x, N.y, R + 2.5, 0, 6.29);
+                g.strokeStyle = C.enemy;
+                g.lineWidth = 1.4;
+                g.stroke();
+              }
+            }
+            if (N.kind === 'fac') this.factoryBadge(N);
+            if (N.vp) this.vpBadge(N);
+            if (N.army && own === 'me') this.army(N);
+            if (own === 'me') this.store(N);
+            // the name
+            const s = this.tb;
+            const below = own !== 'me' || (F.vessels && !battle) ? 11 : F.ledger && !battle ? 24 : 17;
+            const ny = N.y + R + below * (s > 1 ? 1.15 : 1) + (F.gauge ? 2 : 0);
+            text(g, N.name, N.x, ny + 3, 9.5 * Math.min(s, 1.35), dim ? 'rgba(240,246,252,0.7)' : C.paper, { weight: 600, haloW: 3.4 });
+            if (own === 'me' && !(battle && !vis)) this.nodeMarks(N);
+            g.restore();
+          }
+          factoryBadge(N) {
+            const g = this.g;
+            const R = nodeR(N);
+            const x = N.x - R - 7;
+            const y = N.y - 6;
+            g.beginPath();
+            g.arc(x, y, 7, 0, 6.29);
+            g.fillStyle = C.bg;
+            g.fill();
+            g.strokeStyle = C.you;
+            g.lineWidth = 1.5;
+            g.stroke();
+            g.fillStyle = C.paper;
+            g.beginPath();
+            g.moveTo(x - 4, y + 3.5);
+            g.lineTo(x - 4, y - 1);
+            g.lineTo(x - 1, y + 1);
+            g.lineTo(x - 1, y - 1);
+            g.lineTo(x + 2, y + 1);
+            g.lineTo(x + 2, y - 4);
+            g.lineTo(x + 4, y - 4);
+            g.lineTo(x + 4, y + 3.5);
+            g.closePath();
+            g.fill();
+          }
+          vpBadge(N) {
+            const g = this.g;
+            const R = nodeR(N);
+            const x = N.x + R * 0.8 + 2;
+            const y = N.y - R * 0.8 - 2;
+            g.beginPath();
+            g.arc(x, y, 6.5, 0, 6.29);
+            g.fillStyle = C.bg;
+            g.fill();
+            g.strokeStyle = C.vp;
+            g.lineWidth = 1.8;
+            g.stroke();
+            text(g, String(N.vp), x, y + 0.5, 8.5, C.paper, { halo: false });
+          }
+          army(N) {
+            // the unit triangle: the charged share is the filled part (state by fill, not by colour alone)
+            const g = this.g;
+            const A = N.army;
+            const x = N.x;
+            const y = N.y;
+            const s = N.kind === 'prov' ? 0.8 : 1;
+            const p = [
+              [x - 9 * s, y - 6.5 * s],
+              [x + 9 * s, y - 6.5 * s],
+              [x, y + 9 * s],
+            ];
+            const tri = () => {
+              g.beginPath();
+              g.moveTo(...p[0]);
+              g.lineTo(...p[1]);
+              g.lineTo(...p[2]);
+              g.closePath();
+            };
+            tri();
+            g.fillStyle = C.bg;
+            g.fill();
+            g.save();
+            tri();
+            g.clip();
+            const share = A.u ? A.c / A.u : 0;
+            const h = 15.5 * s;
+            g.fillStyle = C.you;
+            g.fillRect(x - 10 * s, y - 6.5 * s, 20 * s, h * share);
+            g.restore();
+            tri();
+            g.strokeStyle = C.paper;
+            g.lineWidth = 2;
+            g.stroke();
+            text(g, String(A.u), x, y - 1.5 * s, 9.5, C.paper, { haloW: 2.6 });
+          }
+          store(N) {
+            const F = this.F;
+            if (F.vessels && this.mode !== 'battle') return this.vessel(N);
+            if (F.ledger && this.mode !== 'battle') return this.ledgerStock(N);
+            if (F.gauge && this.mode !== 'battle') return this.gauge(N);
+            this.slots(N);
+          }
+          slots(N) {
+            // E: the warehouse squares under the city (as on the map today)
+            const g = this.g;
+            const st = this.st;
+            const R = nodeR(N);
+            const s = this.tb > 1 ? 1.15 : 1;
+            const w = 6 * s;
+            const hh = 5 * s;
+            const gap = 1.6 * s;
+            const tw = N.cap * w + (N.cap - 1) * gap;
+            const x0 = N.x - tw / 2;
+            const y0 = N.y + R + 4;
+            const F = this.F;
+            const starve = F.status && starving(st, N.id);
+            plate(g, x0 - 2.5, y0 - 2.5, tw + 5, hh + 5, 'rgba(13,17,23,0.92)', starve ? C.warn : null);
+            for (let i = 0; i < N.cap; i++) {
+              const x = x0 + i * (w + gap);
+              const f = i < N.stock;
+              g.fillStyle = f ? C.you : C.segBar;
+              g.fillRect(x, y0, w, hh);
+              if (!f) {
+                g.strokeStyle = C.seg;
+                g.lineWidth = 1;
+                g.strokeRect(x + 0.5, y0 + 0.5, w - 1, hh - 1);
+              }
+            }
+            if (F.status && full(st, N.id)) {
+              // full: a lid over the squares (a shape, not a colour)
+              g.strokeStyle = C.paper;
+              g.lineWidth = 1.6;
+              g.beginPath();
+              g.moveTo(x0 - 2.5, y0 - 0.5);
+              g.lineTo(x0 - 2.5, y0 - 4.5);
+              g.lineTo(x0 + tw + 2.5, y0 - 4.5);
+              g.lineTo(x0 + tw + 2.5, y0 - 0.5);
+              g.stroke();
+            }
+          }
+          gauge(N) {
+            // the current gauge: a bar and «stock/capacity»
+            const g = this.g;
+            const R = nodeR(N);
+            const x0 = N.x - 16;
+            const y0 = N.y + R + 5;
+            plate(g, x0, y0, 32, 6, 'rgba(91,155,255,0.18)');
+            plate(g, x0, y0, (32 * N.stock) / N.cap || 0.01, 6, C.you);
+            text(g, `${N.stock}/${N.cap}`, x0 + 46, y0 + 3, 9.5, C.paper, { weight: 600 });
+          }
+          vessel(N) {
+            const g = this.g;
+            const st = this.st;
+            const R = nodeR(N);
+            const cell = N.cap > 3 ? 4 : N.cap > 1 ? 5.5 : 8;
+            const h = cell * N.cap;
+            const x = N.x + R + 7;
+            const y = N.y + h / 2;
+            const starve = starving(st, N.id);
+            g.save();
+            plate(g, x - 2, y - h - 2, 12, h + 4, 'rgba(13,17,23,0.95)');
+            g.fillStyle = C.you;
+            g.fillRect(x, y - cell * N.stock, 8, cell * N.stock);
+            g.strokeStyle = 'rgba(240,246,252,0.35)';
+            g.lineWidth = 1;
+            for (let i = 1; i < N.cap; i++) {
+              g.beginPath();
+              g.moveTo(x, y - i * cell);
+              g.lineTo(x + 8, y - i * cell);
+              g.stroke();
+            }
+            g.beginPath();
+            g.moveTo(x - 1, y - h - 1);
+            g.lineTo(x - 1, y + 1);
+            g.lineTo(x + 9, y + 1);
+            g.lineTo(x + 9, y - h - 1);
+            g.strokeStyle = starve ? C.warn : C.paper;
+            g.setLineDash(starve ? [2.5, 2] : []);
+            g.lineWidth = 1.6;
+            g.stroke();
+            g.setLineDash([]);
+            if (full(st, N.id)) {
+              g.beginPath();
+              g.moveTo(x - 3, y - h - 2.5);
+              g.lineTo(x + 11, y - h - 2.5);
+              g.strokeStyle = C.paper;
+              g.lineWidth = 2.2;
+              g.stroke();
+            }
+            if (starve) this.bang(x + 4, y - h - 10);
+            // the leaf level: a spout over the city (it keeps what it gets)
+            if (st.d0[N.id] === st.k && !ahead(st, N.id)) {
+              g.beginPath();
+              g.moveTo(N.x - 8, N.y - R - 8);
+              g.lineTo(N.x + 8, N.y - R - 8);
+              g.lineTo(N.x, N.y - R - 1);
+              g.closePath();
+              g.fillStyle = C.paper;
+              g.fill();
+              g.strokeStyle = C.bg;
+              g.lineWidth = 1.4;
+              g.stroke();
+            }
+            g.restore();
+          }
+          ledgerStock(N) {
+            const g = this.g;
+            const st = this.st;
+            const R = nodeR(N);
+            const starve = starving(st, N.id);
+            const s = this.tb;
+            g.save();
+            g.translate(N.x, N.y + R + 9);
+            g.scale(s, s);
+            const str = `${N.stock}/${N.cap}`;
+            plate(g, -14, -7, 28, 14, 'rgba(13,17,23,0.95)', starve ? C.warn : 'rgba(240,246,252,0.35)');
+            text(g, str, 0, 0.5, 10, starve ? C.warn : C.paper, { halo: false });
+            g.restore();
+          }
+          station(N) {
+            // Transit: a station; the stock is a pie (a share of a circle), the level a terminus bar
+            const g = this.g;
+            const st = this.st;
+            const R = N.kind === 'prov' ? 8 : N.kind === 'cap' ? 14 : 12;
+            g.beginPath();
+            g.arc(N.x, N.y, R + 2.5, 0, 6.29);
+            g.fillStyle = C.bg;
+            g.fill();
+            g.beginPath();
+            g.arc(N.x, N.y, R, 0, 6.29);
+            g.fillStyle = C.paper;
+            g.fill();
+            if (N.stock) {
+              g.beginPath();
+              g.moveTo(N.x, N.y);
+              g.arc(N.x, N.y, R - 2.5, -Math.PI / 2, -Math.PI / 2 + (2 * Math.PI * N.stock) / N.cap);
+              g.closePath();
+              g.fillStyle = C.you;
+              g.fill();
+            }
+            g.strokeStyle = C.bg;
+            g.lineWidth = 1.2;
+            for (let i = 0; i < N.cap && N.cap > 1; i++) {
+              const a = -Math.PI / 2 + (2 * Math.PI * i) / N.cap;
+              g.beginPath();
+              g.moveTo(N.x, N.y);
+              g.lineTo(N.x + Math.cos(a) * R, N.y + Math.sin(a) * R);
+              g.stroke();
+            }
+            if (N.kind === 'cap') {
+              g.beginPath();
+              g.arc(N.x, N.y, R + 5, 0, 6.29);
+              g.strokeStyle = C.paper;
+              g.lineWidth = 2;
+              g.stroke();
+            }
+            if (N.kind === 'fac') this.factoryBadge(N);
+            if (N.vp) this.vpBadge(N);
+            if (N.army) {
+              g.save();
+              g.translate(N.x - R - 9, N.y - R - 2);
+              g.scale(0.7, 0.7);
+              this.army({ ...N, x: 0, y: 0 });
+              g.restore();
+            }
+            const lvl = st.d0[N.id] === st.k && !ahead(st, N.id);
+            if (lvl) {
+              // the terminus bar across the line on the front side
+              const ang = this.frontAngle(N);
+              g.save();
+              g.translate(N.x + Math.cos(ang) * (R + 8), N.y + Math.sin(ang) * (R + 8));
+              g.rotate(ang);
+              g.fillStyle = C.paper;
+              g.strokeStyle = C.bg;
+              g.lineWidth = 1.5;
+              g.beginPath();
+              g.rect(-2.5, -11, 5, 22);
+              g.fill();
+              g.stroke();
+              g.restore();
+            }
+            if (starving(st, N.id)) this.bang(N.x - R - 9, N.y - R + 2);
+            text(g, N.name, N.x, N.y + R + 13, 9.5 * Math.min(this.tb, 1.35), C.paper, { weight: 600, haloW: 3.4 });
+          }
+          frontAngle(N) {
+            const st = this.st;
+            let sx = 0;
+            let sy = 0;
+            for (const [m, e] of nb(st, N.id)) {
+              if (!mine(st, m) || e.cut) {
+                sx += st.nodes[m].x - N.x;
+                sy += st.nodes[m].y - N.y;
+              }
+            }
+            if (N.edge || (!sx && !sy)) {
+              // no front neighbour on the board (a pulled army, a cut end): away from the upstream neighbour
+              const up = nb(st, N.id).find(([m, e]) => road(st, e) && st.d[m] > st.d[N.id]);
+              if (up) {
+                sx = N.x - st.nodes[up[0]].x;
+                sy = N.y - st.nodes[up[0]].y;
+              } else sx = 1;
+            }
+            return Math.atan2(sy, sx);
+          }
+          bang(x, y) {
+            // starving: an amber triangle with "!" (a shape and a glyph, not a colour only)
+            const g = this.g;
+            const s = this.tb;
+            g.save();
+            g.translate(x, y);
+            g.scale(s, s);
+            g.beginPath();
+            g.moveTo(0, -8);
+            g.lineTo(8, 6);
+            g.lineTo(-8, 6);
+            g.closePath();
+            g.fillStyle = C.warn;
+            g.fill();
+            g.strokeStyle = C.bg;
+            g.lineWidth = 1.6;
+            g.stroke();
+            text(g, '!', 0, 1.8, 10, C.bg, { halo: false, weight: 900 });
+            g.restore();
+          }
+          nodeMarks(N) {
+            const g = this.g;
+            const st = this.st;
+            const F = this.F;
+            const R = nodeR(N);
+            const lvl = st.d0[N.id] === st.k && !ahead(st, N.id);
+            if (F.status && !F.vessels && starving(st, N.id)) this.bang(N.x - R - 8, N.y - R + 1);
+            if (F.ledgerStarve && starving(st, N.id)) this.ledgerStock(N);
+            if (F.pools && lvl) this.poolsAt(N);
+            if (F.stopbar && lvl) this.stopBar(N);
+            if (F.ticks && lvl) this.stopBar(N, true);
+            if (F.ledger) this.ledgerTag(N, lvl);
+            if (F.compass) this.compass(N, F.compass === 'small');
+            if (F.ahead && ahead(st, N.id)) {
+              // ahead of the level: no new supply (hatched disc)
+              g.save();
+              g.beginPath();
+              g.arc(N.x, N.y, R + 2, 0, 6.29);
+              g.clip();
+              g.globalAlpha = 1;
+              hatch(g, N.x - R - 2, N.y - R - 2, N.x + R + 2, N.y + R + 2, 4, 'rgba(13,17,23,0.85)', 1.6);
+              g.restore();
+            }
+          }
+          poolsAt(N) {
+            const g = this.g;
+            const R = nodeR(N);
+            for (let i = 0; i < 2; i++) {
+              g.beginPath();
+              g.arc(N.x, N.y, R + 7 + i * 5, 0, 6.29);
+              g.strokeStyle = `rgba(160,200,255,${0.9 - i * 0.45})`;
+              g.lineWidth = 2;
+              g.stroke();
+            }
+          }
+          stopBar(N, small) {
+            const g = this.g;
+            const R = nodeR(N);
+            const ang = this.frontAngle(N);
+            g.save();
+            g.translate(N.x + Math.cos(ang) * (R + 7), N.y + Math.sin(ang) * (R + 7));
+            g.rotate(ang);
+            g.fillStyle = C.paper;
+            g.strokeStyle = C.bg;
+            g.lineWidth = 1.4;
+            g.beginPath();
+            const h = small ? 8 : 12;
+            g.rect(-2, -h, 4, h * 2);
+            g.fill();
+            g.stroke();
+            g.restore();
+          }
+          ledgerTag(N, lvl) {
+            // the field number: roads to the front; the level is inverted (dark on paper)
+            const g = this.g;
+            const st = this.st;
+            const R = nodeR(N);
+            const d = st.d0[N.id];
+            const s = this.tb;
+            g.save();
+            g.translate(N.x - R - 4, N.y - R - 5);
+            g.scale(s, s);
+            g.beginPath();
+            g.arc(0, 0, 8.5, 0, 6.29);
+            g.fillStyle = lvl ? C.paper : C.bg;
+            g.fill();
+            g.strokeStyle = lvl ? C.bg : 'rgba(240,246,252,0.6)';
+            g.lineWidth = 1.5;
+            g.stroke();
+            text(g, d >= INF ? '–' : String(d), 0, 0.5, 10.5, lvl ? C.bg : C.paper, { halo: false });
+            g.restore();
+            if (st.pulled[N.id]) {
+              g.save();
+              g.translate(N.x - R - 9, N.y - R + 20);
+              g.scale(s, s);
+              text(g, `→${st.k}`, 0, 0, 9.5, C.paper, {});
+              g.restore();
+            }
+          }
+          compass(N, small) {
+            // a wedge on the rim towards each neighbour this city gives to; filled = carrying now
+            const g = this.g;
+            const st = this.st;
+            const R = nodeR(N);
+            const lvl = st.d0[N.id] === st.k && !ahead(st, N.id);
+            if (lvl) {
+              g.beginPath();
+              g.arc(N.x, N.y, R + 7, 0, 6.29);
+              g.strokeStyle = C.paper;
+              g.lineWidth = small ? 1.4 : 2.2;
+              g.stroke();
+              return;
+            }
+            for (const [m, e] of nb(st, N.id)) {
+              const dir = roadDir(st, e);
+              if (!dir) continue;
+              const from = dir > 0 ? e.a : e.b;
+              if (from !== N.id) continue;
+              const M = st.nodes[m];
+              const ang = Math.atan2(M.y - N.y, M.x - N.x);
+              const v = flowV(st, e, dir);
+              const sc = small ? 0.7 : 1;
+              g.save();
+              g.translate(N.x + Math.cos(ang) * (R + 4), N.y + Math.sin(ang) * (R + 4));
+              g.rotate(ang);
+              g.scale(sc, sc);
+              g.beginPath();
+              g.moveTo(0, -7);
+              g.lineTo(11, 0);
+              g.lineTo(0, 7);
+              g.closePath();
+              g.fillStyle = v > 0.2 ? C.paper : C.bg;
+              g.fill();
+              g.strokeStyle = v > 0.2 ? C.bg : C.paper;
+              g.lineWidth = 1.6;
+              if (st.pocket[N.id]) g.setLineDash([2, 2]);
+              g.stroke();
+              g.restore();
+            }
+          }
+          effects() {
+            const g = this.g;
+            const st = this.st;
+            const fr = this.frac;
+            if (fr > 0.9) return;
+            const a = 1 - fr / 0.9;
+            for (const f of st.fx) {
+              const N = f.n ? st.nodes[f.n] : null;
+              if (f.k === 'shots') {
+                g.save();
+                g.globalAlpha = a;
+                g.beginPath();
+                g.arc(N.x, N.y, nodeR(N) + 6 + fr * 14, 0, 6.29);
+                g.strokeStyle = C.enemy;
+                g.lineWidth = 3;
+                g.stroke();
+                text(g, `−${f.v}`, N.x + 22, N.y - 24 - fr * 6, 13, '#ff9a9d');
+                g.restore();
+              } else if (f.k === 'capture') {
+                g.save();
+                g.globalAlpha = a;
+                g.beginPath();
+                g.arc(N.x, N.y, nodeR(N) + 6 + fr * 16, 0, 6.29);
+                g.strokeStyle = C.paper;
+                g.lineWidth = 3;
+                g.stroke();
+                g.restore();
+              } else if (f.k === 'prod') {
+                g.save();
+                g.globalAlpha = a * 0.9;
+                text(g, '+1', N.x, N.y - nodeR(N) - 10 - fr * 8, 10.5, '#bcd6ff');
+                g.restore();
+              } else if (f.k === 'burn') {
+                g.save();
+                g.globalAlpha = a;
+                text(g, 'burned', N.x, N.y - nodeR(N) - 12 - fr * 6, 10, '#ffb3b5');
+                g.restore();
+              }
+            }
+          }
+          hud() {
+            // the Supply mode pill (S3 Stepper, ui-style 40) with the leaf level instead of the rear minimum
+            const g = this.g;
+            const st = this.st;
+            const s = Math.min(this.tb, 1.3);
+            g.save();
+            g.translate(8, 8);
+            g.scale(s, s);
+            const lbl = st.k === 0 ? 'front' : `−${st.k}`;
+            plate(g, 0, 0, 150, 24, 'rgba(22,27,34,0.94)', '#30363d');
+            text(g, 'Supply', 30, 12.5, 11.5, C.paper, { halo: false });
+            text(g, '−', 70, 12, 14, st.k < st.kmax ? C.paper : '#59636e', { halo: false });
+            plate(g, 82, 4, 42, 16, st.k ? C.warn : '#21262d');
+            text(g, lbl, 103, 12.5, 10.5, st.k ? C.bg : C.paper, { halo: false });
+            text(g, '+', 137, 12, 14, st.k > 0 ? C.paper : '#59636e', { halo: false });
+            g.restore();
+          }
+          levelChip() {
+            const g = this.g;
+            const s = Math.min(this.tb, 1.3);
+            g.save();
+            g.translate(8, 8);
+            g.scale(s, s);
+            plate(g, 0, 0, 84, 20, 'rgba(22,27,34,0.94)', C.warn);
+            text(g, `level −${this.st.k}`, 42, 10.5, 10.5, C.warn, { halo: false });
+            g.restore();
+          }
+          hit(ev) {
+            const r = this.cv.getBoundingClientRect();
+            const x = ((ev.clientX - r.left) / r.width) * W;
+            const y = ((ev.clientY - r.top) / r.height) * H;
+            return { x, y };
+          }
+        }
+
+        /* ============================================================ page */
+        const $ = (id) => document.getElementById(id);
+        const ui = {
+          v: 1,
+          c: 4,
+          cmp: false,
+          mode: 'supply',
+          map: 'tree',
+          play: 'story',
+          step: 0,
+          gray: false,
+          rm: matchMedia('(prefers-reduced-motion: reduce)').matches,
+          active: 0,
+          tool: 'spend',
+          auto: false,
+        };
+        const BEAT = 720;
+        let st = null;
+        let snaps = [];
+        let beatsLeft = 0;
+        let beatAt = 0;
+        let holdUntil = 0;
+        let panels = [];
+
+        function buildSnaps() {
+          const M = MAPS[ui.map];
+          snaps = [];
+          let s = initState(ui.map);
+          computeField(s);
+          for (const [, evs, beats] of M.story) {
+            snaps.push(clone(s));
+            for (const ev of evs) applyEvent(s, ev);
+            for (let i = 0; i < beats; i++) beat(s);
+          }
+          snaps.push(clone(s));
+        }
+        function startStep(i) {
+          ui.step = clamp(i, 0, MAPS[ui.map].story.length - 1);
+          st = clone(snaps[ui.step]);
+          st.fx = [];
+          st.ripples = [];
+          const [cap, evs, beats] = MAPS[ui.map].story[ui.step];
+          for (const ev of evs) st.fx.push(...applyEvent(st, ev));
+          beatsLeft = beats;
+          beatAt = performance.now() + (evs.length ? 650 : 250);
+          holdUntil = 0;
+          $('caption').textContent = `${ui.step + 1}. ${cap}`;
+          renderSteps();
+          writeHash();
+        }
+        function startFree() {
+          st = initState(ui.map);
+          computeField(st);
+          beatAt = performance.now() + 300;
+          $('caption').textContent = '';
+          writeHash();
+        }
+        let pending = [];
+        function tick(now) {
+          if (!st) return;
+          if (ui.play === 'free') {
+            if (now >= beatAt + BEAT) {
+              const fx = [];
+              for (const ev of pending) fx.push(...applyEvent(st, ev));
+              pending = [];
+              beat(st);
+              st.fx.push(...fx);
+              beatAt = now;
+            }
+            return;
+          }
+          if (beatsLeft > 0 && now >= beatAt) {
+            if (now >= beatAt + (st.beat === snaps[ui.step].beat ? 0 : BEAT)) {
+              beat(st);
+              beatsLeft -= 1;
+              beatAt = now;
+            }
+          } else if (beatsLeft === 0 && !holdUntil && now >= beatAt + BEAT) {
+            holdUntil = now + 1400;
+          } else if (holdUntil && now >= holdUntil && ui.auto) {
+            if (ui.step < MAPS[ui.map].story.length - 1) startStep(ui.step + 1);
+            else {
+              ui.auto = false;
+              $('all').setAttribute('aria-pressed', 'false');
+            }
+          }
+        }
+        function fracNow(now) {
+          if (ui.play === 'story' && beatsLeft === 0 && now >= beatAt + BEAT) return 1;
+          if (now < beatAt) return 0;
+          return clamp((now - beatAt) / BEAT, 0, 1);
+        }
+
+        function buildPanels() {
+          const stage = $('stage');
+          stage.replaceChildren();
+          panels = [];
+          const two = ui.cmp || ui.mode === 'both';
+          stage.classList.toggle('two', two);
+          stage.classList.toggle('one', !two);
+          const n = two ? 2 : 1;
+          for (let i = 0; i < n; i++) {
+            const el = document.createElement('div');
+            el.className = 'panel';
+            el.innerHTML =
+              '<div class="ph"><button class="pv" aria-label="Previous variant">‹</button><button class="nx" aria-label="Next variant">›</button>' +
+              '<span class="nm"></span><span class="tag"></span><span class="md"></span></div><canvas role="img"></canvas>';
+            stage.appendChild(el);
+            const cv = el.querySelector('canvas');
+            const P = new Painter(cv);
+            const panel = { el, P, i };
+            panels.push(panel);
+            el.querySelector('.pv').onclick = () => {
+              setActive(i);
+              cycle(-1);
+            };
+            el.querySelector('.nx').onclick = () => {
+              setActive(i);
+              cycle(1);
+            };
+            el.addEventListener('pointerdown', () => setActive(i));
+            cv.addEventListener('pointermove', (ev) => {
+              const p = P.hit(ev);
+              P.hover = nearest(p, 26);
+              cv.style.cursor = ui.play === 'free' && (P.hover || nearestRoad(p)) ? 'pointer' : 'default';
+            });
+            cv.addEventListener('pointerleave', () => (P.hover = null));
+            cv.addEventListener('click', (ev) => freeClick(P.hit(ev)));
+          }
+          updatePanels();
+        }
+        function panelVariant(i) {
+          if (ui.mode === 'both') return ui.v;
+          return i === 0 ? ui.v : ui.c;
+        }
+        function panelMode(i) {
+          if (ui.mode === 'both') return i === 0 ? 'supply' : 'battle';
+          return ui.mode;
+        }
+        function updatePanels() {
+          panels.forEach((p) => {
+            const V = VARS[panelVariant(p.i)];
+            p.el.querySelector('.nm').textContent = `${panelVariant(p.i)}. ${V.n}`;
+            p.el.querySelector('.tag').textContent = V.tag;
+            p.el.querySelector('.md').textContent = panelMode(p.i) === 'battle' ? 'battle' : 'supply';
+            p.el.querySelector('canvas').setAttribute('aria-label', `Map, variant ${panelVariant(p.i)} ${V.n}, ${panelMode(p.i)} mode`);
+            p.el.classList.toggle('active', panels.length > 1 && ui.mode !== 'both' && p.i === ui.active);
+            p.el.querySelector('.pv').disabled = ui.mode === 'both' && p.i === 1;
+            p.el.querySelector('.nx').disabled = ui.mode === 'both' && p.i === 1;
+          });
+          [...$('chips').children].forEach((b, i) => {
+            b.setAttribute('aria-pressed', String(i === (ui.active === 1 && ui.cmp && ui.mode !== 'both' ? ui.c : ui.v)));
+            b.classList.toggle('second', ui.cmp && ui.mode !== 'both' && i === (ui.active === 1 ? ui.v : ui.c));
+          });
+          const vs = [...new Set(panels.map((p) => panelVariant(p.i)))];
+          $('cost').innerHTML = vs.map((v) => `<b>${v}. PixiJS:</b> ${VARS[v].cost}`).join('<br>');
+          document.body.classList.toggle('gray', ui.gray);
+          writeHash();
+        }
+        function setActive(i) {
+          if (ui.active === i) return;
+          ui.active = i;
+          updatePanels();
+        }
+        function cycle(dir) {
+          const k = ui.cmp && ui.mode !== 'both' && ui.active === 1 ? 'c' : 'v';
+          ui[k] = (ui[k] + dir + VARS.length) % VARS.length;
+          updatePanels();
+        }
+        function nearest(p, rad) {
+          if (!st) return null;
+          let best = null;
+          let bd = rad;
+          for (const id of st.order) {
+            const N = st.nodes[id];
+            const d = Math.hypot(N.x - p.x, N.y - p.y);
+            if (d < bd) {
+              bd = d;
+              best = id;
+            }
+          }
+          return best;
+        }
+        function nearestRoad(p) {
+          let best = null;
+          let bd = 10;
+          for (const e of st.edges) {
+            const A = st.nodes[e.a];
+            const B = st.nodes[e.b];
+            const dx = B.x - A.x;
+            const dy = B.y - A.y;
+            const t = clamp(((p.x - A.x) * dx + (p.y - A.y) * dy) / (dx * dx + dy * dy), 0.15, 0.85);
+            const d = Math.hypot(A.x + dx * t - p.x, A.y + dy * t - p.y);
+            if (d < bd) {
+              bd = d;
+              best = e;
+            }
+          }
+          return best;
+        }
+        function freeClick(p) {
+          if (ui.play !== 'free' || !st) return;
+          const n = nearest(p, 24);
+          if (ui.tool === 'cut') {
+            const e = n ? null : nearestRoad(p);
+            if (e) pending.push([e.cut ? 'mend' : 'cut', e.id]);
+            return;
+          }
+          if (!n) return;
+          const N = st.nodes[n];
+          if (ui.tool === 'spend' && N.own === 'me' && N.army) pending.push(['shots', n, 3]);
+          if (ui.tool === 'capture' && N.own !== 'me') {
+            const adj = nb(st, n).filter(([m]) => mine(st, m));
+            if (!adj.length) return;
+            const withArmy = adj.find(([m]) => st.nodes[m].army);
+            pending.push(['capture', n, withArmy ? withArmy[0] : null]);
+          }
+        }
+
+        function renderSteps() {
+          const box = $('steps');
+          box.replaceChildren();
+          MAPS[ui.map].story.forEach((s, i) => {
+            const b = document.createElement('button');
+            b.textContent = `${i + 1} ${STEP_LABELS[i]}`;
+            b.setAttribute('aria-pressed', String(i === ui.step));
+            b.onclick = () => {
+              ui.auto = false;
+              $('all').setAttribute('aria-pressed', 'false');
+              startStep(i);
+            };
+            box.appendChild(b);
+          });
+          $('prev').disabled = ui.step === 0;
+          $('next').disabled = ui.step === MAPS[ui.map].story.length - 1;
+        }
+        function setSeg(id, attr, val) {
+          [...$(id).children].forEach((b) => b.setAttribute('aria-pressed', String(b.dataset[attr] === val)));
+        }
+        function setMap(m) {
+          ui.map = m;
+          setSeg('mapSeg', 'map', m);
+          buildSnaps();
+          if (ui.play === 'story') startStep(Math.min(ui.step, MAPS[m].story.length - 1));
+          else startFree();
+        }
+        function setPlay(p) {
+          ui.play = p;
+          setSeg('playSeg', 'p', p);
+          $('storyCtl').classList.toggle('hidden', p !== 'story');
+          $('freeCtl').classList.toggle('hidden', p !== 'free');
+          ui.auto = false;
+          $('all').setAttribute('aria-pressed', 'false');
+          if (p === 'story') startStep(ui.step);
+          else startFree();
+        }
+        function writeHash() {
+          const h = new URLSearchParams({
+            v: ui.v,
+            c: ui.c,
+            cmp: +ui.cmp,
+            mode: ui.mode,
+            map: ui.map,
+            step: ui.step,
+            free: +(ui.play === 'free'),
+            gray: +ui.gray,
+            rm: +ui.rm,
+          });
+          history.replaceState(null, '', '#' + h.toString());
+        }
+        function readHash() {
+          const h = new URLSearchParams(location.hash.slice(1));
+          const num = (k, d, max) => {
+            const v = parseInt(h.get(k), 10);
+            return Number.isFinite(v) ? clamp(v, 0, max) : d;
+          };
+          ui.v = num('v', ui.v, VARS.length - 1);
+          ui.c = num('c', ui.c, VARS.length - 1);
+          ui.cmp = h.get('cmp') === '1';
+          if (['supply', 'battle', 'both'].includes(h.get('mode'))) ui.mode = h.get('mode');
+          if (MAPS[h.get('map')]) ui.map = h.get('map');
+          ui.step = num('step', 0, 5);
+          if (h.get('free') === '1') ui.play = 'free';
+          ui.gray = h.get('gray') === '1';
+          if (h.has('rm')) ui.rm = h.get('rm') === '1';
+        }
+
+        function init() {
+          readHash();
+          const chips = $('chips');
+          VARS.forEach((V, i) => {
+            const b = document.createElement('button');
+            b.innerHTML = `<b>${i}</b>`;
+            b.appendChild(document.createTextNode(V.n.split(':')[0]));
+            b.title = V.n;
+            b.onclick = () => {
+              if (ui.cmp && ui.mode !== 'both' && ui.active === 1) ui.c = i;
+              else ui.v = i;
+              updatePanels();
+            };
+            chips.appendChild(b);
+          });
+          const mapSeg = $('mapSeg');
+          for (const id in MAPS) {
+            const b = document.createElement('button');
+            b.dataset.map = id;
+            b.textContent = MAPS[id].label;
+            b.onclick = () => setMap(id);
+            mapSeg.appendChild(b);
+          }
+          [...$('modeSeg').children].forEach(
+            (b) =>
+              (b.onclick = () => {
+                ui.mode = b.dataset.m;
+                setSeg('modeSeg', 'm', ui.mode);
+                buildPanels();
+              }),
+          );
+          [...$('playSeg').children].forEach((b) => (b.onclick = () => setPlay(b.dataset.p)));
+          [...$('toolSeg').children].forEach(
+            (b) =>
+              (b.onclick = () => {
+                ui.tool = b.dataset.t;
+                setSeg('toolSeg', 't', ui.tool);
+                $('freeHint').textContent =
+                  ui.tool === 'spend' ? 'click a city with your army' : ui.tool === 'capture' ? 'click a red city next to yours' : 'click a road';
+              }),
+          );
+          setSeg('toolSeg', 't', ui.tool);
+          $('freeHint').textContent = 'click a city with your army';
+          $('cmp').checked = ui.cmp;
+          $('cmp').onchange = (e) => {
+            ui.cmp = e.target.checked;
+            if (ui.cmp && ui.mode === 'both') {
+              ui.mode = 'supply';
+              setSeg('modeSeg', 'm', ui.mode);
+            }
+            ui.active = 0;
+            buildPanels();
+          };
+          $('gray').checked = ui.gray;
+          $('gray').onchange = (e) => {
+            ui.gray = e.target.checked;
+            updatePanels();
+          };
+          $('rm').checked = ui.rm;
+          $('rm').onchange = (e) => {
+            ui.rm = e.target.checked;
+            writeHash();
+          };
+          $('prev').onclick = () => startStep(ui.step - 1);
+          $('next').onclick = () => startStep(ui.step + 1);
+          $('replay').onclick = () => startStep(ui.step);
+          $('all').onclick = () => {
+            ui.auto = !ui.auto;
+            $('all').setAttribute('aria-pressed', String(ui.auto));
+            if (ui.auto) startStep(ui.step === MAPS[ui.map].story.length - 1 ? 0 : ui.step);
+          };
+          $('lvlBack').onclick = () => pending.push(['shift', 1]);
+          $('lvlFwd').onclick = () => pending.push(['shift', -1]);
+          $('reset').onclick = () => startFree();
+          document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+            if (e.key === 'ArrowRight') cycle(1);
+            else if (e.key === 'ArrowLeft') cycle(-1);
+            else if (e.key === ' ' && ui.play === 'story') {
+              e.preventDefault();
+              startStep(ui.step + 1);
+            }
+          });
+          setSeg('modeSeg', 'm', ui.mode);
+          setSeg('mapSeg', 'map', ui.map);
+          setSeg('playSeg', 'p', ui.play);
+          $('storyCtl').classList.toggle('hidden', ui.play !== 'story');
+          $('freeCtl').classList.toggle('hidden', ui.play !== 'free');
+          buildSnaps();
+          buildPanels();
+          if (ui.play === 'story') startStep(ui.step);
+          else startFree();
+          const loop = (now) => {
+            tick(now);
+            const fr = fracNow(now);
+            for (const p of panels) p.P.draw(st, VARS[panelVariant(p.i)], panelMode(p.i), now / 1000, fr, ui.rm);
+            requestAnimationFrame(loop);
+          };
+          requestAnimationFrame(loop);
+        }
+        window.__sfv = {
+          get state() {
+            return st;
+          },
+          VARS,
+          MAPS,
+          ui,
+          initState,
+          computeField,
+          beat,
+          applyEvent,
+          // jump to the end of the current step (for frame captures)
+          settle(n = 99) {
+            while (beatsLeft > 0 && n-- > 0) {
+              beat(st);
+              beatsLeft -= 1;
+            }
+            beatAt = performance.now() - BEAT * 0.5;
+          },
+          freeze(frac) {
+            beatAt = performance.now() - BEAT * frac;
+          },
+        };
+        init();
+      })();
+    </script>
+  </body>
+</html>

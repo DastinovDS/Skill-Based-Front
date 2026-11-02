@@ -1,6 +1,6 @@
 # Automatic supply flow towards the front (owner idea)
 
-Status: **[awaiting the owner's decision]**. Design exploration for economy v2 (`economy.model = "v2"`); nothing here changes the rules. Decision issue: #697 (it continues #693). Interactive storyboards: [`mockups/supply-auto-flow.html`](mockups/supply-auto-flow.html) (open as a file; the switches at the top change the rule, every board replays it).
+Status: **[awaiting the owner's decision]**. Design exploration for economy v2 (`economy.model = "v2"`); nothing here changes the rules. Decision issue: #697 (it continues #693). Interactive storyboards: [`mockups/supply-auto-flow.html`](mockups/supply-auto-flow.html) (open as a file; the switches at the top change the rule, every board replays it). How the flow is drawn for the player: #699, [`mockups/supply-flow-visuals.html`](mockups/supply-flow-visuals.html).
 
 ## The idea
 
