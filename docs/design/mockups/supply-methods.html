@@ -1,0 +1,2322 @@
+<!doctype html>
+<!--
+  Supply methods mockup: 15 ways for the player to distribute charges (economy v2), for the owner to compare and pick.
+  The variants and their full descriptions: docs/design/supply-methods.md; the decision issue: #693.
+  Self-contained: no external fonts, images or scripts. Open in a browser as a file.
+  This is an illustration, not client code. The toy simulation below lives only in this page: one map of 14 nodes,
+  one factory, two armies that spend charges, a scripted player per variant who clicks what that variant needs
+  (setup at the start, a reaction after an "attention" delay). Numbers are toy numbers, not ruleset values.
+  The state of the choices lives in the address (#a=v4&b=v0&att=busy&spd=2&t=60), so a frame can be linked.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Supply methods</title>
+    <style>
+      :root {
+        /* Palette tokens (ui-style.md, section 6). */
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface-2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-dim: #9da7b3;
+        --you: #5b9bff;
+        --enemy: #e5484d;
+        --warn: #ffb020;
+        --good: #3fb950;
+        --paper: #f0f6fc;
+        --radius: 8px;
+        --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 14px 16px 40px;
+        background: #0a0d12;
+        color: var(--text);
+        font: 13px/1.4 var(--font);
+      }
+      .wrap {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 10px 0 0;
+        white-space: nowrap;
+      }
+      .bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 8px 10px;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .seg button {
+        border: 0;
+        border-radius: 0;
+        border-right: 1px solid var(--border);
+      }
+      .seg button:last-child {
+        border-right: 0;
+      }
+      button,
+      select {
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 5px 9px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover,
+      select:hover {
+        border-color: #8b949e;
+      }
+      button[aria-pressed='true'] {
+        background: #1f3a66;
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      button:focus-visible,
+      select:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--you);
+        outline-offset: 1px;
+      }
+      .lbl {
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      #time {
+        width: 180px;
+        accent-color: var(--you);
+      }
+      #clock {
+        font-variant-numeric: tabular-nums;
+        min-width: 44px;
+        display: inline-block;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .pane {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 8px;
+        min-width: 0;
+      }
+      .head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .head select {
+        flex: 1 1 220px;
+        min-width: 0;
+        font-weight: 600;
+      }
+      .rule {
+        color: var(--text-dim);
+        margin: 6px 2px 4px;
+        min-height: 18px;
+      }
+      canvas.strip {
+        margin-top: 4px;
+        border-radius: 4px;
+      }
+      canvas {
+        width: 100%;
+        display: block;
+        background: #0f141b;
+        border-radius: 6px;
+      }
+      .counters {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .ct {
+        background: var(--surface-2);
+        border-radius: 6px;
+        padding: 4px 6px;
+        text-align: center;
+      }
+      .ct b {
+        display: block;
+        font-size: 17px;
+        font-variant-numeric: tabular-nums;
+      }
+      .ct span {
+        color: var(--text-dim);
+        font-size: 11px;
+      }
+      .sees {
+        margin-top: 6px;
+        color: var(--text-dim);
+        font-size: 12px;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .sees b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 22px 0 6px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--border);
+        text-align: right;
+        white-space: nowrap;
+      }
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+      th {
+        color: var(--text-dim);
+        font-weight: 500;
+        font-size: 12px;
+      }
+      tbody tr {
+        cursor: pointer;
+      }
+      tbody tr:hover {
+        background: var(--surface-2);
+      }
+      tr.selA td:first-child::before,
+      tr.selB td:first-child::before {
+        display: inline-block;
+        width: 16px;
+        margin-right: 6px;
+        border-radius: 3px;
+        text-align: center;
+        font-size: 10px;
+        font-weight: 700;
+        color: #0a0d12;
+      }
+      tr.selA td:first-child::before {
+        content: 'L';
+        background: var(--you);
+      }
+      tr.selB td:first-child::before {
+        content: 'R';
+        background: var(--warn);
+      }
+      tr.selA.selB td:first-child::before {
+        content: 'LR';
+        width: 22px;
+        background: linear-gradient(90deg, var(--you) 50%, var(--warn) 50%);
+      }
+      td.best {
+        color: var(--good);
+        font-weight: 700;
+      }
+      td.best::after {
+        content: ' ▲';
+        font-size: 9px;
+      }
+      td.worst {
+        color: var(--enemy);
+      }
+      td.worst::after {
+        content: ' ▼';
+        font-size: 9px;
+      }
+      .tablewrap {
+        overflow-x: auto;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        margin-top: 10px;
+        color: var(--text-dim);
+        font-size: 12px;
+        align-items: center;
+      }
+      .legend canvas {
+        width: 22px;
+        height: 16px;
+        display: inline-block;
+        vertical-align: middle;
+        background: none;
+      }
+      .tag {
+        display: inline-block;
+        padding: 0 5px;
+        border-radius: 4px;
+        font-size: 11px;
+        background: var(--surface-2);
+        color: var(--text-dim);
+      }
+      @media (max-width: 520px) {
+        .bar {
+          position: static;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .counters {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        #time {
+          width: 120px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="bar" role="toolbar" aria-label="Controls">
+        <h1>Supply methods</h1>
+        <button id="play" aria-label="Play or pause">▶</button>
+        <span class="seg" id="spd" aria-label="Speed">
+          <button data-v="1">1×</button><button data-v="2">2×</button><button data-v="4">4×</button
+          ><button data-v="8">8×</button>
+        </span>
+        <input type="range" id="time" min="0" max="1800" step="10" value="0" aria-label="Time" />
+        <span id="clock">0:00</span>
+        <span class="lbl">Player</span>
+        <span class="seg" id="att" aria-label="Player attention">
+          <button data-v="focused" title="Reacts after 1 s">Focused</button
+          ><button data-v="busy" title="Reacts after 6 s">Busy</button
+          ><button data-v="away" title="Only the setup clicks">Away</button>
+        </span>
+        <span class="lbl">Front</span>
+        <span class="seg" id="scn" aria-label="Scenario">
+          <button data-v="auto" title="Captures and a cut on a fixed timeline">Script</button
+          ><button data-v="manual" title="You press the buttons">Manual</button>
+        </span>
+        <button id="cap">Capture next</button>
+        <button id="cut">Cut roads</button>
+        <button id="reset" aria-label="Restart">↺</button>
+      </div>
+
+      <div class="grid" id="panes"></div>
+
+      <div class="legend" id="legend"></div>
+
+      <h2>All variants, same script, 3 minutes</h2>
+      <div class="tablewrap">
+        <table id="board">
+          <thead>
+            <tr>
+              <th>Variant <span class="tag">click: left pane · shift: right pane</span></th>
+              <th title="Clicks the player spent">Clicks</th>
+              <th title="Charges the armies took">To armies</th>
+              <th title="Seconds an army had no charge">Army dry, s</th>
+              <th title="Average charges idle in the rear (above 1 per node)">Rear idle</th>
+              <th title="Average number of rear cities with an empty warehouse">Empty rear</th>
+              <th title="Charges burned at a full warehouse or lost on a cut road">Burned/lost</th>
+              <th title="Fit to the pain points, 1 to 5 (supply-methods.md)">Fit</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      'use strict';
+      // ---------------------------------------------------------------- toy map
+      // 14 nodes: K is the capital and the only factory; P and Q are provinces (warehouse 1).
+      // Own at the start: K, A, B, P, C, D, N1, S1. Two armies stand in N1 and S1 and spend charges.
+      const NODES = [
+        { k: 'K', x: 70, y: 250, cap: 6 },
+        { k: 'A', x: 200, y: 140, cap: 2 },
+        { k: 'B', x: 200, y: 360, cap: 2 },
+        { k: 'P', x: 310, y: 250, cap: 1, prov: true },
+        { k: 'C', x: 425, y: 130, cap: 2 },
+        { k: 'D', x: 425, y: 370, cap: 2 },
+        { k: 'N1', x: 560, y: 105, cap: 3 },
+        { k: 'S1', x: 560, y: 395, cap: 3 },
+        { k: 'N2', x: 690, y: 85, cap: 3 },
+        { k: 'S2', x: 690, y: 415, cap: 3 },
+        { k: 'Q', x: 735, y: 250, cap: 1, prov: true },
+        { k: 'N3', x: 830, y: 130, cap: 3 },
+        { k: 'S3', x: 830, y: 370, cap: 3 },
+        { k: 'H', x: 940, y: 250, cap: 3 },
+      ];
+      const NN = NODES.length;
+      const ID = Object.fromEntries(NODES.map((n, i) => [n.k, i]));
+      const EDGES = [
+        'K-A', 'K-B', 'A-P', 'B-P', 'A-C', 'B-D', 'P-C', 'P-D', 'C-N1', 'D-S1',
+        'N1-N2', 'S1-S2', 'N2-Q', 'S2-Q', 'N2-N3', 'S2-S3', 'N3-H', 'S3-H', 'Q-H',
+      ].map((s) => s.split('-').map((k) => ID[k]));
+      const EL = EDGES.map(([a, b]) => Math.round(Math.hypot(NODES[a].x - NODES[b].x, NODES[a].y - NODES[b].y) / 13));
+      const ADJ = NODES.map(() => []);
+      const EI = NODES.map(() => Array(NN).fill(-1));
+      EDGES.forEach(([a, b], i) => {
+        ADJ[a].push([b, i]);
+        ADJ[b].push([a, i]);
+        EI[a][b] = EI[b][a] = i;
+      });
+      const CUT_EDGES = [EI[ID.C][ID.N1], EI[ID.N2][ID.Q]];
+
+      // ------------------------------------------------------------ toy numbers
+      const PROD = 10; // the factory makes 1 charge per 10 ticks
+      const DISP = 5; // dispatch period
+      const FIRE = 26; // an army spends 1 charge per 26 ticks
+      const RECH = 3; // an army takes 1 charge from its warehouse per 3 ticks
+      const POOL = 4; // charges an army holds
+      const WATCH = 40; // the scripted player looks at the map every 4 s
+      const AUTO_EXT = 40; // DEC-42 auto-extension radius in toy ticks (about two roads)
+      const END = 1800; // 3 minutes
+      const ATT = { focused: 10, busy: 60, away: Infinity };
+      const SCRIPT = [
+        { at: 250, type: 'cap' },
+        { at: 450, type: 'cap' },
+        { at: 650, type: 'cap' },
+        { at: 800, type: 'cap' },
+        { at: 950, type: 'cap' },
+        { at: 1100, type: 'cut' },
+        { at: 1300, type: 'cap' },
+        { at: 1500, type: 'cut' },
+      ];
+      // Capture order: the node and the army that takes it (null: a detachment, the armies stay).
+      const CAPS = [
+        ['N2', 'N'],
+        ['S2', 'S'],
+        ['N3', 'N'],
+        ['Q', null],
+        ['S3', 'S'],
+        ['H', 'N'],
+      ].map(([k, a]) => [ID[k], a]);
+
+      // --------------------------------------------------------------- helpers
+      const isFac = (S, n) => S.fac.includes(n) && S.own[n];
+      const cut = (S, a, b) => EI[a][b] < 0 || S.cut.has(EI[a][b]);
+      function pathOk(S, p) {
+        for (let i = 0; i < p.length; i++) {
+          if (!S.own[p[i]]) return false;
+          if (i && cut(S, p[i - 1], p[i])) return false;
+        }
+        return true;
+      }
+      function cost(p) {
+        let c = 0;
+        for (let i = 1; i < p.length; i++) c += EL[EI[p[i - 1]][p[i]]];
+        return c;
+      }
+      // Fastest way over own nodes and open roads; ties by the smaller node index (deterministic).
+      function route(S, from, to, avoid) {
+        if (!S.own[from] || !S.own[to]) return null;
+        if (from === to) return [from];
+        const av = new Set(avoid || []);
+        const dist = Array(NN).fill(Infinity),
+          prev = Array(NN).fill(-1),
+          done = Array(NN).fill(false);
+        dist[from] = 0;
+        for (;;) {
+          let u = -1;
+          for (let i = 0; i < NN; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
+          if (u < 0 || u === to) break;
+          done[u] = true;
+          for (const [v, ei] of ADJ[u]) {
+            if (!S.own[v] || S.cut.has(ei) || (av.has(v) && v !== to)) continue;
+            const d = dist[u] + EL[ei];
+            if (d < dist[v]) {
+              dist[v] = d;
+              prev[v] = u;
+            }
+          }
+        }
+        if (dist[to] === Infinity) return null;
+        const p = [to];
+        while (p[0] !== from) p.unshift(prev[p[0]]);
+        return p;
+      }
+      function hops(S, sources) {
+        const d = Array(NN).fill(Infinity);
+        const q = [];
+        for (const s of sources) if (S.own[s]) (d[s] = 0), q.push(s);
+        while (q.length) {
+          const u = q.shift();
+          for (const [v, ei] of ADJ[u])
+            if (S.own[v] && !S.cut.has(ei) && d[v] === Infinity) (d[v] = d[u] + 1), q.push(v);
+        }
+        return d;
+      }
+      const armyAt = (S, n) => S.armies.some((a) => a.node === n);
+      const frontier = (S, n) => ADJ[n].some(([v]) => !S.own[v]);
+      function inflight(S, n) {
+        let c = 0;
+        for (const p of S.packets) if (p.path[p.path.length - 1] === n) c += 1;
+        if (S.x.drops) for (const d of S.x.drops) if (d.node === n) c += d.n;
+        return c;
+      }
+      const room = (S, n) => NODES[n].cap - S.stock[n] - inflight(S, n);
+      function deposit(S, n, k) {
+        const take = Math.min(k, NODES[n].cap - S.stock[n]);
+        S.stock[n] += take;
+        S.c.burned += k - take;
+      }
+      function send(S, path, meta) {
+        S.packets.push(Object.assign({ path, seg: 0, t: 0 }, meta || {}));
+      }
+      // The scripted player. `setup` clicks run in the first seconds; `want` runs after the attention delay.
+      function setup(S, clicks, node, label, fn) {
+        const at = 3 + 6 * S.setupN++;
+        S.queue.push({ at, clicks, node, label, fn });
+      }
+      function want(S, key, clicks, node, label, fn) {
+        if (S.pend.has(key)) return;
+        const d = ATT[S.att];
+        if (d === Infinity) return;
+        S.pend.add(key);
+        S.queue.push({ at: S.tick + d, clicks, node, label, fn, key });
+      }
+      function auto(S, node, label) {
+        S.ripples.push({ node, t: S.tick, label, auto: true });
+        S.log.push({ t: S.tick, k: 0 });
+      }
+
+      // ------------------------------------------------------------ line kit
+      // Shared by the variants that keep lines (factory -> target): the DEC-41/42 break rules.
+      function linesInit(S) {
+        S.x.lines = [];
+        S.x.lid = 0;
+        S.x.rr = 0;
+      }
+      function addLine(S, path, extra) {
+        const l = Object.assign({ id: S.x.lid++, path, w: 1, K: 0 }, extra || {});
+        S.x.lines.push(l);
+        return l;
+      }
+      const tgt = (l) => l.path[l.path.length - 1];
+      function lineCheck(S) {
+        S.x.lines = S.x.lines.filter((l) => {
+          const s = l.path[0],
+            t = tgt(l);
+          if (!S.own[s] || !S.own[t]) return false;
+          if (pathOk(S, l.path)) return true;
+          const np = route(S, s, t);
+          if (np) {
+            l.path = np;
+            return true;
+          }
+          return false;
+        });
+      }
+      function lineDispatch(S, linesOf) {
+        for (const f of S.fac) {
+          if (!S.own[f]) continue;
+          const ls = (linesOf || ((S) => S.x.lines))(S).filter((l) => l.path[0] === f);
+          const exp = [];
+          for (const l of ls) for (let k = 0; k < l.w; k++) exp.push(l);
+          if (!exp.length) continue;
+          const start = S.x.rr++ % exp.length;
+          for (let k = 0; k < exp.length && S.stock[f] > 0; k++) {
+            const l = exp[(start + k) % exp.length];
+            if (room(S, tgt(l)) > 0) {
+              send(S, l.path.slice(), { line: l.id });
+              S.stock[f]--;
+            }
+          }
+        }
+      }
+      // The scripted player keeps one line into every army and (optionally) drops lines into cities the army left.
+      function watchLines(S, opts) {
+        for (const a of S.armies) {
+          if (S.x.lines.some((l) => tgt(l) === a.node)) continue;
+          const stale = S.x.lines.find((l) => !armyAt(S, tgt(l)) && !NODES[tgt(l)].prov);
+          if (opts.drag && stale) {
+            want(S, 'drag' + a.id, 1, a.node, 'drag end', (S) => {
+              if (!S.x.lines.includes(stale) || S.x.lines.some((l) => tgt(l) === a.node)) return false;
+              const ext = route(S, tgt(stale), a.node, stale.path);
+              const np = ext ? stale.path.concat(ext.slice(1)) : route(S, 0, a.node);
+              if (!np) return false;
+              stale.path = np;
+            });
+            continue;
+          }
+          want(S, 'draw' + a.id, 2, a.node, '+ line', (S) => {
+            if (S.x.lines.some((l) => tgt(l) === a.node)) return false;
+            const p = route(S, 0, a.node);
+            if (!p) return false;
+            addLine(S, p, opts.extra && opts.extra());
+          });
+        }
+        if (opts.dropStale)
+          for (const l of S.x.lines) {
+            const t = tgt(l);
+            if (armyAt(S, t) || !S.x.lines.some((m) => m !== l && m.path.includes(t))) continue;
+            want(S, 'drop' + l.id, 2, t, '− line', (S) => {
+              if (!S.x.lines.includes(l) || armyAt(S, tgt(l))) return false;
+              S.x.lines = S.x.lines.filter((m) => m !== l);
+            });
+          }
+      }
+      // DEC-42 item 5: a captured city gets a copy of the nearest own line plus the fastest extension.
+      function autoCopy(S, city) {
+        let best = null;
+        for (const l of S.x.lines)
+          l.path.forEach((n, i) => {
+            const ext = n === city ? [city] : route(S, n, city, l.path.slice(0, i));
+            if (!ext) return;
+            const c = cost(ext);
+            if (c > AUTO_EXT) return;
+            if (!best || c < best.c || (c === best.c && (n < best.n || (n === best.n && l.id < best.id))))
+              best = { c, n, id: l.id, path: l.path.slice(0, i).concat(ext) };
+          });
+        if (!best) return;
+        const src = S.x.lines.find((l) => l.id === best.id);
+        addLine(S, best.path, { K: src.K, w: src.w });
+        auto(S, city, 'auto copy');
+      }
+
+      // --------------------------------------------------------------- variants
+      // Each variant: init (state and setup clicks), tick, dispatch, onPass, onCapture, watch, draw, extra.
+      const V = [];
+      const add = (v) => V.push(v);
+
+      add({
+        id: 'v0',
+        name: 'Now: factory lines (DEC-42)',
+        rule: 'Lines factory → city; only the target fills; a capture copies the nearest line.',
+        sees: 'nothing',
+        clicks: '2 per line, 2 to drop one',
+        fit: 2,
+        init(S) {
+          linesInit(S);
+          setup(S, 2, ID.N1, '+ line', (S) => void addLine(S, route(S, 0, ID.N1)));
+          setup(S, 2, ID.S1, '+ line', (S) => void addLine(S, route(S, 0, ID.S1)));
+        },
+        tick: lineCheck,
+        dispatch: (S) => lineDispatch(S),
+        onCapture(S, node) {
+          if (!NODES[node].prov) autoCopy(S, node);
+        },
+        watch: (S) => watchLines(S, { dropStale: true }),
+        draw: (g, S) => drawLines(g, S),
+      });
+
+      add({
+        id: 'v1',
+        name: 'Lines + transit buffer K + ladder',
+        rule: 'Lines; each transit city keeps K (every 2nd charge); a ladder pulls the buffer to the target.',
+        sees: 'nothing',
+        clicks: '2 per line, 1 for K',
+        fit: 3,
+        init(S) {
+          linesInit(S);
+          S.x.alt = Array(NN).fill(0);
+          for (const n of [ID.N1, ID.S1]) {
+            setup(S, 2, n, '+ line', (S) => void addLine(S, route(S, 0, n)));
+            setup(S, 1, n, 'K = 1', (S) => {
+              const l = S.x.lines.find((l) => tgt(l) === n);
+              if (!l) return false;
+              l.K = 1;
+            });
+          }
+        },
+        tick: lineCheck,
+        dispatch(S) {
+          lineDispatch(S);
+          for (const l of S.x.lines) {
+            if (!l.K) continue;
+            const p = l.path;
+            for (let i = p.length - 2; i >= 1; i--) {
+              const a = p[i],
+                b = p[i + 1];
+              if (isFac(S, a)) continue;
+              const need = i + 1 === p.length - 1 ? room(S, b) > 0 : S.stock[b] + inflight(S, b) < l.K;
+              if (need && S.stock[a] > 0) {
+                send(S, [a, b], { hop: true });
+                S.stock[a]--;
+              }
+            }
+          }
+        },
+        onPass(S, pk, n) {
+          const l = S.x.lines.find((l) => l.id === pk.line);
+          if (!l || !l.K || isFac(S, n) || S.stock[n] >= l.K) return false;
+          S.x.alt[n] ^= 1;
+          if (S.x.alt[n]) return false;
+          deposit(S, n, 1);
+          return true;
+        },
+        onCapture(S, node) {
+          if (!NODES[node].prov) autoCopy(S, node);
+        },
+        watch: (S) => watchLines(S, { dropStale: true, extra: () => ({ K: 1 }) }),
+        draw: (g, S) => drawLines(g, S, { K: true }),
+      });
+
+      add({
+        id: 'v2',
+        name: 'Weighted lines + drag to retarget',
+        rule: 'Lines with a weight (pause, normal, main); drag a line end to move it, the route stays.',
+        sees: 'nothing',
+        clicks: '2 per line, 1 per drag',
+        fit: 3,
+        init(S) {
+          linesInit(S);
+          setup(S, 2, ID.N1, '+ line', (S) => void addLine(S, route(S, 0, ID.N1)));
+          setup(S, 2, ID.S1, '+ line', (S) => void addLine(S, route(S, 0, ID.S1)));
+          setup(S, 1, ID.N1, 'main', (S) => {
+            const l = S.x.lines.find((l) => tgt(l) === ID.N1);
+            if (!l) return false;
+            l.w = 2;
+          });
+        },
+        tick: lineCheck,
+        dispatch: (S) => lineDispatch(S),
+        watch: (S) => watchLines(S, { drag: true }),
+        draw: (g, S) => drawLines(g, S, { weight: true, status: true }),
+      });
+
+      add({
+        id: 'v3',
+        name: 'Growing spine',
+        rule: 'One line per front; transit cities keep 1; the tip grows into a city captured next to it.',
+        sees: 'nothing',
+        clicks: '2 per spine, 0 on advance',
+        fit: 4,
+        init(S) {
+          linesInit(S);
+          setup(S, 2, ID.N1, '+ spine', (S) => void addLine(S, route(S, 0, ID.N1)));
+          setup(S, 2, ID.S1, '+ spine', (S) => void addLine(S, route(S, 0, ID.S1)));
+        },
+        tick: lineCheck,
+        dispatch(S) {
+          const f = 0;
+          if (!S.own[f]) return;
+          const ls = S.x.lines;
+          if (ls.length) {
+            const start = S.x.rr++ % ls.length;
+            for (let k = 0; k < ls.length && S.stock[f] > 0; k++) {
+              const l = ls[(start + k) % ls.length];
+              const p = l.path;
+              if (room(S, tgt(l)) > 0) {
+                send(S, p.slice(), { line: l.id });
+                S.stock[f]--;
+                continue;
+              }
+              for (let i = p.length - 2; i >= 1; i--)
+                if (S.stock[p[i]] + inflight(S, p[i]) < 1) {
+                  send(S, p.slice(0, i + 1), { line: l.id });
+                  S.stock[f]--;
+                  break;
+                }
+            }
+          }
+          // A transit city holds 1; anything above rolls one road toward the tip.
+          for (const l of ls) {
+            const p = l.path;
+            for (let i = p.length - 2; i >= 1; i--)
+              if (S.stock[p[i]] > 1 && room(S, p[i + 1]) > 0) {
+                send(S, [p[i], p[i + 1]], { hop: true });
+                S.stock[p[i]]--;
+              }
+          }
+        },
+        onCapture(S, node, army, from) {
+          if (NODES[node].prov) return;
+          const cand = S.x.lines.filter((l) => !cut(S, tgt(l), node));
+          const l = cand.find((l) => tgt(l) === from) || cand[0];
+          if (!l || l.path.includes(node)) return;
+          l.path.push(node);
+          auto(S, node, 'grows');
+        },
+        watch(S) {
+          for (const a of S.armies) {
+            if (S.x.lines.some((l) => tgt(l) === a.node)) continue;
+            want(S, 'spine' + a.id, 2, a.node, '+ spine', (S) => {
+              if (S.x.lines.some((l) => tgt(l) === a.node)) return false;
+              const p = route(S, 0, a.node);
+              if (!p) return false;
+              addLine(S, p);
+            });
+          }
+        },
+        draw: (g, S) => drawLines(g, S, { spine: true }),
+      });
+
+      const convOuts = (S, n) =>
+        S.x.conv.filter(([a, b]) => a === n && S.own[b] && !cut(S, a, b)).map(([, b]) => b);
+      // the room a flow road leads into: 1 for a city on the flow that is empty, the warehouse for the end
+      function convRoom(S, n, seen) {
+        if (seen.includes(n)) return 0;
+        const outs = convOuts(S, n);
+        if (!outs.length) return Math.max(0, NODES[n].cap - S.stock[n]);
+        let r = Math.max(0, 1 - S.stock[n]);
+        for (const c of outs) r += convRoom(S, c, seen.concat([n]));
+        return r;
+      }
+      // conveyor charges already on the way into the part of the flow that starts at n
+      function convHeading(S, n) {
+        const sub = new Set([n]);
+        const q = [n];
+        while (q.length) {
+          const u = q.shift();
+          for (const c of convOuts(S, u)) if (!sub.has(c)) sub.add(c), q.push(c);
+        }
+        let k = 0;
+        for (const p of S.packets) if (p.conv && sub.has(p.path[p.path.length - 1])) k++;
+        return k;
+      }
+      add({
+        id: 'v4',
+        name: 'Conveyor roads',
+        rule: 'Click a road to give it a flow arrow; cities on the flow keep 1, the end of a flow fills up.',
+        sees: 'nothing',
+        clicks: '1 per road',
+        fit: 4,
+        init(S) {
+          S.x.conv = [];
+          S.x.rr = Array(NN).fill(0);
+          const roads = [
+            ['K', 'A'],
+            ['A', 'C'],
+            ['C', 'N1'],
+            ['K', 'B'],
+            ['B', 'D'],
+            ['D', 'S1'],
+          ];
+          for (const [a, b] of roads) setup(S, 1, ID[b], 'road', (S) => void S.x.conv.push([ID[a], ID[b]]));
+        },
+        // A flow road carries a charge straight through a city that already holds 1; the end of a flow fills up.
+        dispatch(S) {
+          for (let n = 0; n < NN; n++) {
+            if (!S.own[n]) continue;
+            const outs = convOuts(S, n);
+            if (!outs.length) continue;
+            let avail = S.stock[n] - (isFac(S, n) ? 0 : 1);
+            for (let k = 0; k < outs.length && avail > 0; k++) {
+              const b = outs[(S.x.rr[n] + k) % outs.length];
+              if (convRoom(S, b, []) > convHeading(S, b)) {
+                send(S, [n, b], { conv: true });
+                S.stock[n]--;
+                avail--;
+              }
+            }
+            S.x.rr[n]++;
+          }
+        },
+        onArrive(S, pk, b) {
+          const outs = convOuts(S, b);
+          if (!outs.length || S.stock[b] < 1) return false; // the end of a flow, or a city that keeps 1
+          for (let k = 0; k < outs.length; k++) {
+            const c = outs[(S.x.rr[b] + k) % outs.length];
+            if (convRoom(S, c, [b]) > convHeading(S, c)) {
+              S.x.rr[b]++;
+              send(S, [b, c], { conv: true });
+              return true;
+            }
+          }
+          return false;
+        },
+        watch(S) {
+          const reach = Array(NN).fill(false);
+          const q = S.fac.filter((f) => S.own[f]);
+          q.forEach((f) => (reach[f] = true));
+          while (q.length) {
+            const u = q.shift();
+            for (const [a, b] of S.x.conv)
+              if (a === u && S.own[b] && !cut(S, a, b) && !reach[b]) (reach[b] = true), q.push(b);
+          }
+          for (const a of S.armies) {
+            if (reach[a.node]) continue;
+            let best = null;
+            for (let n = 0; n < NN; n++) {
+              if (!reach[n]) continue;
+              const p = route(S, n, a.node);
+              if (p && (!best || cost(p) < cost(best))) best = p;
+            }
+            if (!best) continue;
+            const p = best;
+            want(S, 'conv' + a.id, p.length - 1, a.node, 'road', (S) => {
+              if (!pathOk(S, p)) return false;
+              for (let i = 1; i < p.length; i++)
+                if (!S.x.conv.some(([x, y]) => x === p[i - 1] && y === p[i])) S.x.conv.push([p[i - 1], p[i]]);
+            });
+          }
+        },
+        draw(g, S) {
+          for (const [a, b] of S.x.conv) drawArrowRoad(g, a, b, cut(S, a, b) ? '#5a6472' : '#7fb2ff');
+        },
+      });
+
+      // A pull model shared by "demand" and "roles": a target stock per node, factories fill the gaps.
+      function demandDispatch(S, dem) {
+        for (const f of S.fac) {
+          if (!S.own[f]) continue;
+          const gaps = [];
+          for (let n = 0; n < NN; n++) {
+            if (!S.own[n] || n === f || dem[n] <= S.stock[n] + inflight(S, n)) continue;
+            const p = route(S, f, n);
+            if (p) gaps.push({ n, p, full: dem[n] >= NODES[n].cap ? 0 : 1, c: cost(p) });
+          }
+          gaps.sort((x, y) => x.full - y.full || x.c - y.c || x.n - y.n);
+          for (const gp of gaps) {
+            if (S.stock[f] <= 0) break;
+            send(S, gp.p);
+            S.stock[f]--;
+          }
+        }
+      }
+
+      add({
+        id: 'v5',
+        name: 'Demand pips per city',
+        rule: 'Each city asks for a stock (0 to full); factories fill the requests, full ones first.',
+        sees: 'nothing',
+        clicks: '1 per city change',
+        fit: 2,
+        init(S) {
+          S.x.dem = Array(NN).fill(0);
+          setup(S, 1, ID.N1, 'full', (S) => void (S.x.dem[ID.N1] = 2));
+          setup(S, 1, ID.S1, 'full', (S) => void (S.x.dem[ID.S1] = 2));
+          for (const k of ['A', 'B', 'C', 'D']) setup(S, 1, ID[k], '1', (S) => void (S.x.dem[ID[k]] = 1));
+        },
+        dispatch: (S) => demandDispatch(S, S.x.dem),
+        watch(S) {
+          for (const a of S.armies)
+            if (S.x.dem[a.node] < NODES[a.node].cap)
+              want(S, 'full' + a.node, 1, a.node, 'full', (S) => void (S.x.dem[a.node] = NODES[a.node].cap));
+          for (let n = 0; n < NN; n++)
+            if (S.own[n] && !armyAt(S, n) && S.x.dem[n] > 1)
+              want(S, 'low' + n, 1, n, '1', (S) => {
+                if (armyAt(S, n)) return false;
+                S.x.dem[n] = 1;
+              });
+        },
+        draw(g, S) {
+          for (let n = 0; n < NN; n++) if (S.own[n] && S.x.dem[n]) drawPips(g, n, S.x.dem[n]);
+        },
+      });
+
+      function rolesDem(S) {
+        const d = Array(NN).fill(0);
+        for (let n = 0; n < NN; n++) if (S.own[n]) d[n] = armyAt(S, n) || frontier(S, n) ? NODES[n].cap : 1;
+        return d;
+      }
+      add({
+        id: 'v6',
+        name: 'Border roles (automatic)',
+        rule: 'Cities on the border fill up, the rest keep 1; the player sets nothing.',
+        sees: 'nothing',
+        clicks: '0',
+        fit: 1,
+        init() {},
+        dispatch: (S) => demandDispatch(S, rolesDem(S)),
+        draw(g, S) {
+          const d = rolesDem(S);
+          for (let n = 0; n < NN; n++) if (S.own[n] && d[n]) drawPips(g, n, d[n], true);
+        },
+      });
+
+      add({
+        id: 'v7',
+        name: 'Depots with a district',
+        rule: 'Factories feed up to two depots; a depot fills the cities one road around it.',
+        sees: 'nothing',
+        clicks: '1 per depot move',
+        fit: 3,
+        init(S) {
+          S.x.dep = [];
+          setup(S, 1, ID.C, 'depot', (S) => void S.x.dep.push(ID.C));
+          setup(S, 1, ID.D, 'depot', (S) => void S.x.dep.push(ID.D));
+        },
+        dispatch(S) {
+          const f = 0;
+          if (S.own[f] && S.x.dep.length) {
+            const start = (S.x.rr = (S.x.rr || 0) + 1) % S.x.dep.length;
+            for (let k = 0; k < S.x.dep.length && S.stock[f] > 0; k++) {
+              const d = S.x.dep[(start + k) % S.x.dep.length];
+              const p = route(S, f, d);
+              if (p && room(S, d) > 0) {
+                send(S, p);
+                S.stock[f]--;
+              }
+            }
+          }
+          for (const d of S.x.dep) {
+            if (!S.own[d]) continue;
+            const nbs = ADJ[d]
+              .map(([v]) => v)
+              .filter((v) => S.own[v] && !cut(S, d, v) && !isFac(S, v) && !S.x.dep.includes(v))
+              .map((v) => ({ v, gap: (armyAt(S, v) || frontier(S, v) ? NODES[v].cap : 1) - S.stock[v] - inflight(S, v) }))
+              .filter((o) => o.gap > 0)
+              .sort((a, b) => b.gap - a.gap || a.v - b.v);
+            for (const o of nbs) {
+              if (S.stock[d] <= 0) break;
+              send(S, [d, o.v], { hop: true });
+              S.stock[d]--;
+            }
+          }
+        },
+        watch(S) {
+          for (const a of S.armies) {
+            const covered = S.x.dep.some((d) => d === a.node || (EI[d][a.node] >= 0 && !cut(S, d, a.node)));
+            if (covered) continue;
+            want(S, 'dep' + a.id, 1, a.node, 'move depot', (S) => {
+              const opts = ADJ[a.node]
+                .map(([v]) => v)
+                .filter((v) => S.own[v] && !cut(S, v, a.node) && route(S, 0, v))
+                .sort((x, y) => cost(route(S, 0, x)) - cost(route(S, 0, y)));
+              if (!opts.length) return false;
+              const nb = opts[0];
+              // the depot nearest to the army moves
+              let bi = 0,
+                bc = Infinity;
+              S.x.dep.forEach((d, i) => {
+                const p = route(S, d, a.node);
+                const c = p ? cost(p) : 9999;
+                if (c < bc) (bc = c), (bi = i);
+              });
+              if (S.x.dep.includes(nb)) return false;
+              S.x.dep[bi] = nb;
+            });
+          }
+        },
+        draw(g, S) {
+          for (const d of S.x.dep) if (S.own[d]) drawDepot(g, S, d);
+        },
+      });
+
+      add({
+        id: 'v8',
+        name: 'Request tickets',
+        rule: 'A front city asks for 4 charges once; factories serve the tickets in order.',
+        sees: 'nothing',
+        clicks: '1 per ticket',
+        fit: 2,
+        init(S) {
+          S.x.q = [];
+        },
+        dispatch(S) {
+          const f = 0;
+          for (const t of S.x.q) {
+            if (S.stock[f] <= 0) break;
+            if (!S.own[t.node] || room(S, t.node) <= 0) continue;
+            const p = route(S, f, t.node);
+            if (!p) continue;
+            send(S, p);
+            S.stock[f]--;
+            t.left--;
+          }
+          S.x.q = S.x.q.filter((t) => t.left > 0 && S.own[t.node]);
+        },
+        watch(S) {
+          for (const a of S.armies) {
+            if (S.stock[a.node] + inflight(S, a.node) > 0 || a.pool > 2) continue;
+            if (S.x.q.some((t) => t.node === a.node)) continue;
+            want(S, 'req' + a.id + a.node, 1, a.node, 'ask 4', (S) => {
+              if (S.x.q.some((t) => t.node === a.node)) return false;
+              S.x.q.push({ node: a.node, left: 4 });
+            });
+          }
+        },
+        draw(g, S) {
+          S.x.q.forEach((t, i) => drawTicket(g, t.node, t.left, i + 1));
+        },
+      });
+
+      add({
+        id: 'v9',
+        name: 'Convoys',
+        rule: 'Wagons carry 4 charges factory ↔ city at army speed; a cut road destroys one.',
+        sees: 'convoys in sight',
+        clicks: '2 per convoy, 1 to retarget',
+        fit: 2,
+        init(S) {
+          S.x.cv = [];
+          S.x.cid = 0;
+          for (const n of [ID.N1, ID.S1])
+            setup(S, 2, n, '+ convoy', (S) => void S.x.cv.push({ id: S.x.cid++, tgt: n, st: 'load', at: 0, cargo: 0, wait: 0 }));
+        },
+        tick(S) {
+          const CAP = 4;
+          S.x.cv = S.x.cv.filter((c) => {
+            if (c.st === 'load') {
+              const take = Math.min(CAP - c.cargo, S.stock[0]);
+              c.cargo += take;
+              S.stock[0] -= take;
+              c.wait++;
+              if (c.cargo === CAP || (c.cargo > 0 && c.wait >= 15)) {
+                const p = route(S, 0, c.tgt);
+                if (p && p.length > 1) Object.assign(c, { st: 'go', path: p, seg: 0, t: 0, wait: 0 });
+              }
+              return true;
+            }
+            if (c.st === 'go' || c.st === 'back') {
+              const a = c.path[c.seg],
+                b = c.path[c.seg + 1];
+              if (!S.own[b] || cut(S, a, b)) {
+                if (c.t > 0) {
+                  S.c.burned += c.cargo;
+                  auto(S, a, 'convoy lost');
+                  return false;
+                }
+                const p = route(S, a, c.st === 'go' ? c.tgt : 0);
+                if (!p || p.length < 2) return true;
+                c.path = p;
+                c.seg = 0;
+                return true;
+              }
+              c.t++;
+              if (c.t >= Math.round(EL[EI[a][b]] * 1.5)) {
+                c.seg++;
+                c.t = 0;
+                if (c.seg === c.path.length - 1) Object.assign(c, { st: c.st === 'go' ? 'unload' : 'load', wait: 0 });
+              }
+              return true;
+            }
+            if (c.st === 'unload') {
+              const n = c.path[c.path.length - 1];
+              const r = NODES[n].cap - S.stock[n];
+              if (r > 0 && c.cargo > 0) {
+                S.stock[n]++;
+                c.cargo--;
+              }
+              c.wait++;
+              if (c.cargo === 0 || c.wait >= 20) {
+                const p = route(S, n, 0);
+                if (p) Object.assign(c, { st: 'back', path: p, seg: 0, t: 0 });
+              }
+            }
+            return true;
+          });
+        },
+        watch(S) {
+          for (const a of S.armies) {
+            if (S.x.cv.some((c) => c.tgt === a.node)) continue;
+            const idle = S.x.cv.find((c) => !armyAt(S, c.tgt));
+            if (idle)
+              want(S, 'cvr' + a.id, 1, a.node, 'retarget', (S) => {
+                if (!S.x.cv.includes(idle) || S.x.cv.some((c) => c.tgt === a.node)) return false;
+                idle.tgt = a.node;
+              });
+            else if (S.x.cv.length < 2)
+              want(S, 'cvn' + a.id, 2, a.node, '+ convoy', (S) => {
+                if (S.x.cv.some((c) => c.tgt === a.node) || S.x.cv.length >= 2) return false;
+                S.x.cv.push({ id: S.x.cid++, tgt: a.node, st: 'load', at: 0, cargo: 0, wait: 0 });
+              });
+          }
+        },
+        draw(g, S) {
+          for (const c of S.x.cv) drawConvoy(g, c);
+        },
+      });
+
+      add({
+        id: 'v10',
+        name: 'Army tether',
+        rule: 'Tie a group to a factory; its line follows the group wherever it stands.',
+        sees: 'nothing',
+        clicks: '2 per group',
+        fit: 3,
+        init(S) {
+          S.x.teth = [];
+          S.x.rr = 0;
+          for (const a of S.armies) setup(S, 2, a.node, 'tether', (S) => void S.x.teth.push(a.id));
+        },
+        dispatch(S) {
+          lineDispatch(S, (S) => tetherLines(S));
+        },
+        draw: (g, S) => drawLines(g, S, { list: tetherLines(S), dash: true }),
+      });
+      function tetherLines(S) {
+        const out = [];
+        for (const id of S.x.teth) {
+          const a = S.armies.find((x) => x.id === id);
+          const p = route(S, 0, a.node);
+          if (p && p.length > 1) out.push({ id: id === 'N' ? 0 : 1, path: p, w: 1 });
+        }
+        return out;
+      }
+
+      add({
+        id: 'v11',
+        name: 'Painted zones + split',
+        rule: 'Paint two zones and set a split; a zone fills its emptiest city; a capture joins its zone.',
+        sees: 'nothing',
+        clicks: '1 per stroke',
+        fit: 2,
+        init(S) {
+          S.x.zone = Array(NN).fill(0);
+          S.x.zr = 0;
+          setup(S, 1, ID.N1, 'zone 1', (S) => void (S.x.zone[ID.C] = S.x.zone[ID.N1] = 1));
+          setup(S, 1, ID.S1, 'zone 2', (S) => void (S.x.zone[ID.D] = S.x.zone[ID.S1] = 2));
+        },
+        dispatch(S) {
+          const f = 0;
+          for (let k = 0; k < 2 && S.stock[f] > 0; k++) {
+            const z = ((S.x.zr + k) % 2) + 1;
+            let best = null;
+            for (let n = 0; n < NN; n++) {
+              if (!S.own[n] || S.x.zone[n] !== z || room(S, n) <= 0) continue;
+              const p = route(S, f, n);
+              if (!p) continue;
+              const fill = (S.stock[n] + inflight(S, n)) / NODES[n].cap;
+              if (!best || fill < best.fill || (fill === best.fill && cost(p) > cost(best.p))) best = { n, p, fill };
+            }
+            if (best) {
+              send(S, best.p);
+              S.stock[f]--;
+            }
+          }
+          S.x.zr++;
+        },
+        onCapture(S, node, army, from) {
+          if (army && S.x.zone[from]) {
+            S.x.zone[node] = S.x.zone[from];
+            auto(S, node, 'joins zone');
+          }
+        },
+        watch(S) {
+          for (const z of [1, 2]) {
+            const ns = [];
+            for (let n = 0; n < NN; n++) if (S.own[n] && S.x.zone[n] === z && !armyAt(S, n)) ns.push(n);
+            if (ns.length < 2) continue;
+            ns.sort((a, b) => (cost(route(S, 0, a) || [a]) || 0) - (cost(route(S, 0, b) || [b]) || 0));
+            const n = ns[0];
+            want(S, 'unz' + n, 1, n, 'unpaint', (S) => void (S.x.zone[n] = 0));
+          }
+        },
+        draw(g, S) {
+          for (let n = 0; n < NN; n++) if (S.own[n] && S.x.zone[n]) drawZone(g, n, S.x.zone[n]);
+        },
+      });
+
+      add({
+        id: 'v12',
+        name: 'Pressure and valves',
+        rule: 'Charges flow along every open road to an emptier neighbour; a valve closes a road.',
+        sees: 'nothing',
+        clicks: '1 per valve',
+        fit: 3,
+        init(S) {
+          S.x.valve = new Set();
+          setup(S, 1, ID.P, 'valve', (S) => void S.x.valve.add(EI[ID.A][ID.P]));
+          setup(S, 1, ID.P, 'valve', (S) => void S.x.valve.add(EI[ID.B][ID.P]));
+        },
+        dispatch(S) {
+          for (let n = 0; n < NN; n++) {
+            if (!S.own[n]) continue;
+            for (const [b, ei] of ADJ[n]) {
+              if (S.stock[n] <= 0) break;
+              if (!S.own[b] || S.cut.has(ei) || S.x.valve.has(ei) || room(S, b) <= 0) continue;
+              const cb = NODES[b].cap,
+                cn = NODES[n].cap;
+              if ((S.stock[n] - 1) * cb >= (S.stock[b] + inflight(S, b)) * cn) {
+                send(S, [n, b], { hop: true });
+                S.stock[n]--;
+              }
+            }
+          }
+        },
+        draw(g, S) {
+          for (const ei of S.x.valve) drawValve(g, ei);
+        },
+      });
+
+      add({
+        id: 'v13',
+        name: 'Supply radius (no packets)',
+        rule: 'A factory fills the emptiest city within 3 roads, no packets to cut; a depot (3 charges) extends it.',
+        sees: 'built depots',
+        clicks: '1 per depot',
+        fit: 3,
+        init(S) {
+          S.x.R = 3;
+          S.x.dep = [];
+          S.x.builds = [];
+          S.x.pulses = [];
+          S.x.drops = [];
+        },
+        tick(S) {
+          for (const b of S.x.builds) {
+            if (!S.own[b.node]) continue;
+            if (b.owed > 0 && S.stock[b.node] > 0) {
+              S.stock[b.node]--;
+              b.owed--;
+              S.c.built++;
+              if (!b.owed) b.done = S.tick + 30;
+            }
+            if (b.done && S.tick >= b.done) {
+              S.x.dep.push(b.node);
+              b.gone = true;
+              auto(S, b.node, 'depot up');
+            }
+          }
+          S.x.builds = S.x.builds.filter((b) => !b.gone && S.own[b.node]);
+          S.x.drops = S.x.drops.filter((d) => {
+            if (S.tick < d.at) return true;
+            if (S.own[d.node]) deposit(S, d.node, d.n);
+            else S.c.burned += d.n;
+            S.x.pulses.push({ n: d.node, t: S.tick });
+            return false;
+          });
+          S.x.pulses = S.x.pulses.filter((p) => S.tick - p.t < 8);
+        },
+        dispatch(S) {
+          const f = 0;
+          if (!S.own[f] || S.stock[f] <= 0) return;
+          const linked = hops(S, [f]);
+          const src = [f].concat(S.x.dep.filter((d) => S.own[d] && linked[d] < Infinity));
+          const h = hops(S, src);
+          let best = -1;
+          for (let n = 0; n < NN; n++) {
+            if (n === f || !S.own[n] || h[n] > S.x.R || S.stock[n] >= NODES[n].cap) continue;
+            const fi = (S.stock[n] + inflight(S, n)) / NODES[n].cap;
+            const fbi = best < 0 ? 0 : (S.stock[best] + inflight(S, best)) / NODES[best].cap;
+            if (fi >= 1) continue;
+            if (best < 0 || fi < fbi || (fi === fbi && h[n] > h[best])) best = n;
+          }
+          if (best < 0) return;
+          S.stock[f]--;
+          // no packet on a road, but not instant either: 6 ticks per road from the nearest source
+          S.x.drops.push({ node: best, n: 1, at: S.tick + 6 * h[best], t0: S.tick, pulse: true });
+        },
+        watch(S) {
+          const linked = hops(S, [0]);
+          const src = [0].concat(S.x.dep.filter((d) => S.own[d] && linked[d] < Infinity));
+          const h = hops(S, src);
+          for (const a of S.armies) {
+            if (h[a.node] <= S.x.R) continue;
+            if (S.x.builds.length) continue;
+            want(S, 'dep' + a.id + a.node, 1, a.node, 'build depot', (S) => {
+              const h2 = hops(S, src);
+              let best = -1,
+                bc = Infinity;
+              for (let n = 0; n < NN; n++) {
+                if (!S.own[n] || h2[n] > S.x.R || NODES[n].prov || S.x.dep.includes(n) || n === 0) continue;
+                const p = route(S, n, a.node);
+                if (p && cost(p) < bc) (bc = cost(p)), (best = n);
+              }
+              if (best < 0 || S.x.builds.length) return false;
+              S.x.builds.push({ node: best, owed: 3 });
+            });
+          }
+        },
+        draw(g, S) {
+          const linked = hops(S, [0]);
+          const src = [0].concat(S.x.dep.filter((d) => S.own[d] && linked[d] < Infinity));
+          const h = hops(S, src);
+          for (let n = 0; n < NN; n++) if (S.own[n] && h[n] <= S.x.R) drawCover(g, n);
+          for (const d of S.x.dep) drawDepot(g, S, d, true);
+          for (const b of S.x.builds) drawBuild(g, b);
+          for (const p of S.x.pulses) drawPulse(g, p.n, (S.tick - p.t) / 8);
+        },
+        extra: (S) => ['built', S.c.built],
+      });
+
+      add({
+        id: 'v14',
+        name: 'Airlift for CP',
+        rule: 'No network: 1 CP drops 2 factory charges into any own city in 2.5 s, cut or not.',
+        sees: 'a drop in sight',
+        clicks: '1 per drop + 1 CP',
+        fit: 2,
+        init(S) {
+          S.x.drops = [];
+          S.x.cp = 300;
+        },
+        tick(S) {
+          if (S.tick % 40 === 0) S.x.cp = Math.min(500, S.x.cp + 100);
+          S.x.drops = S.x.drops.filter((d) => {
+            if (S.tick < d.at) return true;
+            if (S.own[d.node]) deposit(S, d.node, d.n);
+            else S.c.burned += d.n;
+            return false;
+          });
+        },
+        watch(S) {
+          for (const a of S.armies) {
+            if (S.stock[a.node] + inflight(S, a.node) > 0 || a.pool > 2) continue;
+            want(S, 'drop' + a.id + a.node, 1, a.node, 'airlift', (S) => {
+              if (S.x.cp < 100 || S.stock[0] < 1 || inflight(S, a.node) > 0) return false;
+              const n = Math.min(2, S.stock[0]);
+              S.stock[0] -= n;
+              S.x.cp -= 100;
+              S.c.cp++;
+              S.x.drops.push({ node: a.node, n, at: S.tick + 25, t0: S.tick });
+            });
+          }
+        },
+        draw(g, S) {
+          for (const d of S.x.drops) drawDrop(g, S, d);
+        },
+        extra: (S) => ['CP spent', S.c.cp],
+      });
+
+      // ------------------------------------------------------------- simulation
+      function newSim(vi, att) {
+        const S = {
+          vi,
+          v: V[vi],
+          att,
+          tick: 0,
+          own: NODES.map((n, i) => i <= 7),
+          stock: NODES.map(() => 0),
+          cut: new Set(),
+          packets: [],
+          armies: [
+            { id: 'N', node: ID.N1, pool: POOL, off: 0 },
+            { id: 'S', node: ID.S1, pool: POOL, off: 13 },
+          ],
+          fac: [0],
+          c: { clicks: 0, front: 0, dry: 0, burned: 0, idleSum: 0, emptySum: 0, cp: 0, built: 0 },
+          pend: new Set(),
+          queue: [],
+          setupN: 0,
+          ripples: [],
+          log: [],
+          x: {},
+          capIdx: 0,
+          cutOn: false,
+        };
+        S.stock[0] = 6; // DEC-41 item 9: only the capital starts with a stock
+        S.v.init(S);
+        return S;
+      }
+      function capture(S) {
+        if (S.capIdx >= CAPS.length) return;
+        const [node, aid] = CAPS[S.capIdx++];
+        S.own[node] = true;
+        S.stock[node] = 0;
+        let from = -1;
+        if (aid) {
+          const a = S.armies.find((a) => a.id === aid);
+          from = a.node;
+          a.node = node;
+        }
+        if (S.v.onCapture) S.v.onCapture(S, node, aid, from);
+        if (S.v.tick) S.v.tick(S);
+        if (S.v.watch) S.v.watch(S);
+      }
+      function toggleCut(S) {
+        S.cutOn = !S.cutOn;
+        for (const e of CUT_EDGES) S.cutOn ? S.cut.add(e) : S.cut.delete(e);
+        if (S.v.tick) S.v.tick(S);
+        if (S.v.watch) S.v.watch(S);
+      }
+      function step(S, events) {
+        S.tick++;
+        for (const e of events) if (e.at === S.tick) e.type === 'cap' ? capture(S) : toggleCut(S);
+        // the player's clicks that are due
+        const due = S.queue.filter((q) => q.at <= S.tick);
+        S.queue = S.queue.filter((q) => q.at > S.tick);
+        for (const q of due) {
+          if (q.key) S.pend.delete(q.key);
+          if (q.fn(S) === false) continue;
+          S.c.clicks += q.clicks;
+          S.log.push({ t: S.tick, k: q.clicks });
+          S.ripples.push({ node: q.node, t: S.tick, label: q.label + (q.clicks > 1 ? ' ×' + q.clicks : '') });
+        }
+        if (S.tick % PROD === 0)
+          for (const f of S.fac) if (S.own[f]) deposit(S, f, 1);
+        if (S.v.tick) S.v.tick(S);
+        if (S.tick % DISP === 0) S.v.dispatch && S.v.dispatch(S);
+        // packets
+        const moving = S.packets;
+        S.packets = []; // packets sent while moving (a flow passing a city) land here
+        const kept = moving.filter((pk) => {
+          const a = pk.path[pk.seg],
+            b = pk.path[pk.seg + 1];
+          if (!S.own[b] || cut(S, a, b)) {
+            S.c.burned++;
+            return false;
+          }
+          pk.t++;
+          if (pk.t < EL[EI[a][b]]) return true;
+          pk.seg++;
+          pk.t = 0;
+          if (pk.seg === pk.path.length - 1) {
+            if (!(S.v.onArrive && S.v.onArrive(S, pk, b))) deposit(S, b, 1);
+            return false;
+          }
+          if (S.v.onPass && S.v.onPass(S, pk, b)) return false;
+          return true;
+        });
+        S.packets = kept.concat(S.packets);
+        // armies: recharge from the warehouse, spend on fire
+        for (const a of S.armies) {
+          if (S.tick % RECH === 0 && a.pool < POOL && S.stock[a.node] > 0) {
+            S.stock[a.node]--;
+            a.pool++;
+            S.c.front++;
+          }
+          if ((S.tick + a.off) % FIRE === 0 && a.pool > 0) a.pool--;
+          if (a.pool === 0) S.c.dry++;
+        }
+        if (S.tick % WATCH === 0 && S.v.watch) S.v.watch(S);
+        const m = measures(S);
+        S.c.idleSum += m.idle;
+        S.c.emptySum += m.empty;
+        S.ripples = S.ripples.filter((r) => S.tick - r.t < 22);
+      }
+      function measures(S) {
+        let idle = 0,
+          empty = 0;
+        for (let n = 0; n < NN; n++) {
+          if (!S.own[n] || armyAt(S, n)) continue;
+          idle += Math.max(0, S.stock[n] - 1);
+          if (!NODES[n].prov && !isFac(S, n) && S.stock[n] === 0) empty++;
+        }
+        return { idle, empty };
+      }
+
+      // ----------------------------------------------------------------- drawing
+      const COL = {
+        road: '#2b3440',
+        roadCut: '#e5484d',
+        you: '#5b9bff',
+        enemy: '#e5484d',
+        neutral: '#6e7681',
+        charge: '#f0f6fc',
+        slot: '#3a4452',
+        warn: '#ffb020',
+        dim: '#9da7b3',
+      };
+      const LINE_HUES = ['#7fb2ff', '#ffd166', '#5ee0b0', '#d0a2ff', '#ff9eb5', '#9be7ff', '#ffb38a', '#c3e88d'];
+      const W = 1000,
+        H = 430,
+        VY = 40; // the map spans y 40..470 of its 1000 x 500 plane
+      function lerp(a, b, t) {
+        return a + (b - a) * t;
+      }
+      function pos(n) {
+        return NODES[n];
+      }
+      function along(a, b, t, off) {
+        const A = pos(a),
+          B = pos(b);
+        const dx = B.x - A.x,
+          dy = B.y - A.y,
+          L = Math.hypot(dx, dy) || 1;
+        const nx = -dy / L,
+          ny = dx / L;
+        return { x: lerp(A.x, B.x, t) + nx * (off || 0), y: lerp(A.y, B.y, t) + ny * (off || 0) };
+      }
+      function drawBase(g, S) {
+        g.clearRect(0, VY, W, H);
+        // roads
+        EDGES.forEach(([a, b], i) => {
+          const c = S.cut.has(i);
+          g.strokeStyle = c ? COL.roadCut : COL.road;
+          g.lineWidth = c ? 3 : 6;
+          g.setLineDash(c ? [6, 6] : []);
+          g.beginPath();
+          g.moveTo(pos(a).x, pos(a).y);
+          g.lineTo(pos(b).x, pos(b).y);
+          g.stroke();
+          g.setLineDash([]);
+          if (c) {
+            const m = along(a, b, 0.5);
+            g.strokeStyle = COL.roadCut;
+            g.lineWidth = 3;
+            g.beginPath();
+            g.moveTo(m.x - 7, m.y - 7);
+            g.lineTo(m.x + 7, m.y + 7);
+            g.moveTo(m.x + 7, m.y - 7);
+            g.lineTo(m.x - 7, m.y + 7);
+            g.stroke();
+          }
+        });
+      }
+      function drawNodes(g, S) {
+        for (let n = 0; n < NN; n++) {
+          const N = NODES[n],
+            own = S.own[n];
+          const r = N.prov ? 11 : n === 0 ? 20 : 15;
+          g.beginPath();
+          if (N.prov) {
+            g.moveTo(N.x, N.y - r - 2);
+            g.lineTo(N.x + r + 2, N.y);
+            g.lineTo(N.x, N.y + r + 2);
+            g.lineTo(N.x - r - 2, N.y);
+            g.closePath();
+          } else g.arc(N.x, N.y, r, 0, Math.PI * 2);
+          g.fillStyle = own ? '#14233d' : '#1a1d22';
+          g.fill();
+          g.lineWidth = own ? 3 : 2;
+          g.strokeStyle = own ? COL.you : n === ID.H ? COL.enemy : COL.neutral;
+          g.setLineDash(own ? [] : [4, 3]);
+          g.stroke();
+          g.setLineDash([]);
+          if (isFac(S, n)) {
+            // the factory: a toothed ring
+            g.strokeStyle = COL.you;
+            g.lineWidth = 3;
+            for (let k = 0; k < 8; k++) {
+              const a = (k * Math.PI) / 4;
+              g.beginPath();
+              g.moveTo(N.x + Math.cos(a) * (r + 1), N.y + Math.sin(a) * (r + 1));
+              g.lineTo(N.x + Math.cos(a) * (r + 6), N.y + Math.sin(a) * (r + 6));
+              g.stroke();
+            }
+          }
+          g.fillStyle = own ? '#cfe0ff' : COL.dim;
+          g.font = '700 14px system-ui, sans-serif';
+          g.textAlign = 'center';
+          g.textBaseline = 'middle';
+          g.fillText(N.k, N.x, N.y + 1);
+          if (!own) continue;
+          // warehouse: one square per slot, filled = a charge (a shape, not only a colour)
+          const cap = N.cap,
+            sz = 7,
+            gap = 3;
+          const w = cap * sz + (cap - 1) * gap;
+          const y0 = N.y + r + (n === 0 ? 9 : 6);
+          for (let k = 0; k < cap; k++) {
+            const x = N.x - w / 2 + k * (sz + gap);
+            if (k < S.stock[n]) {
+              g.fillStyle = COL.charge;
+              g.fillRect(x, y0, sz, sz);
+            } else {
+              g.strokeStyle = COL.slot;
+              g.lineWidth = 1.5;
+              g.strokeRect(x + 0.75, y0 + 0.75, sz - 1.5, sz - 1.5);
+            }
+          }
+        }
+        // armies: a triangle with its charges as dots
+        for (const a of S.armies) {
+          const N = NODES[a.node];
+          const x = N.x + 20,
+            y = N.y - 24;
+          g.beginPath();
+          g.moveTo(x, y - 9);
+          g.lineTo(x + 9, y + 6);
+          g.lineTo(x - 9, y + 6);
+          g.closePath();
+          g.fillStyle = a.pool ? COL.you : '#1a1d22';
+          g.fill();
+          g.lineWidth = 2;
+          g.strokeStyle = a.pool ? '#cfe0ff' : COL.warn;
+          g.setLineDash(a.pool ? [] : [3, 2]);
+          g.stroke();
+          g.setLineDash([]);
+          for (let k = 0; k < POOL; k++) {
+            g.beginPath();
+            g.arc(x + 14 + k * 7, y + 2, 2.6, 0, Math.PI * 2);
+            if (k < a.pool) {
+              g.fillStyle = COL.charge;
+              g.fill();
+            } else {
+              g.strokeStyle = COL.warn;
+              g.lineWidth = 1.2;
+              g.stroke();
+            }
+          }
+        }
+      }
+      function drawPackets(g, S) {
+        for (const pk of S.packets) {
+          const a = pk.path[pk.seg],
+            b = pk.path[pk.seg + 1];
+          const t = pk.t / EL[EI[a][b]];
+          const p = along(a, b, t);
+          g.fillStyle = COL.charge;
+          g.fillRect(p.x - 3.5, p.y - 3.5, 7, 7);
+          g.strokeStyle = '#0a0d12';
+          g.lineWidth = 1;
+          g.strokeRect(p.x - 3.5, p.y - 3.5, 7, 7);
+        }
+      }
+      function drawRipples(g, S, now) {
+        for (const r of S.ripples) {
+          const N = NODES[r.node];
+          const age = (now - r.t) / 22;
+          g.globalAlpha = 1 - age;
+          g.strokeStyle = r.auto ? COL.dim : COL.warn;
+          g.lineWidth = 2.5;
+          g.setLineDash(r.auto ? [4, 4] : []);
+          g.beginPath();
+          g.arc(N.x, N.y, 18 + age * 22, 0, Math.PI * 2);
+          g.stroke();
+          g.setLineDash([]);
+          g.font = '600 12px system-ui, sans-serif';
+          g.textAlign = 'center';
+          const txt = (r.auto ? '⟳ ' : '') + r.label;
+          const tw = g.measureText(txt).width + 10;
+          const ty = N.y - 50 - age * 6;
+          g.fillStyle = r.auto ? '#21262d' : '#3d2e0a';
+          g.fillRect(N.x - tw / 2, ty - 9, tw, 18);
+          g.fillStyle = r.auto ? COL.dim : COL.warn;
+          g.fillText(txt, N.x, ty);
+          g.globalAlpha = 1;
+        }
+      }
+      function chevrons(g, pts, color) {
+        let acc = 0;
+        for (let i = 1; i < pts.length; i++) {
+          const A = pts[i - 1],
+            B = pts[i];
+          const L = Math.hypot(B.x - A.x, B.y - A.y);
+          const ux = (B.x - A.x) / L,
+            uy = (B.y - A.y) / L;
+          for (let s = 26 - acc; s < L - 8; s += 34) {
+            const x = A.x + ux * s,
+              y = A.y + uy * s;
+            g.strokeStyle = color;
+            g.lineWidth = 2;
+            g.beginPath();
+            g.moveTo(x - ux * 5 - uy * 4, y - uy * 5 + ux * 4);
+            g.lineTo(x, y);
+            g.lineTo(x - ux * 5 + uy * 4, y - uy * 5 - ux * 4);
+            g.stroke();
+          }
+          acc = (acc + L) % 34;
+        }
+      }
+      function linePoints(path, off) {
+        const pts = [];
+        for (let i = 0; i < path.length; i++) {
+          const n = path[i];
+          if (i === 0) pts.push(along(n, path[1], 0.12, off));
+          else if (i === path.length - 1) pts.push(along(path[i - 1], n, 0.88, off));
+          else {
+            const p1 = along(path[i - 1], n, 1, off),
+              p2 = along(n, path[i + 1], 0, off);
+            pts.push({ x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 });
+          }
+        }
+        return pts;
+      }
+      function drawLines(g, S, o) {
+        o = o || {};
+        const ls = o.list || S.x.lines;
+        ls.forEach((l, i) => {
+          if (l.path.length < 2) return;
+          const off = (i - (ls.length - 1) / 2) * 7;
+          const col = LINE_HUES[l.id % LINE_HUES.length];
+          const pts = linePoints(l.path, off);
+          g.strokeStyle = '#0a0d12';
+          g.lineWidth = (o.weight ? 2 + 2 * l.w : 4) + 3;
+          g.setLineDash(l.w === 0 ? [4, 6] : o.dash ? [10, 5] : []);
+          g.beginPath();
+          pts.forEach((p, k) => (k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
+          g.stroke();
+          g.strokeStyle = col;
+          g.lineWidth = o.weight ? 2 + 2 * l.w : 4;
+          g.globalAlpha = 0.85;
+          g.stroke();
+          g.globalAlpha = 1;
+          g.setLineDash([]);
+          chevrons(g, pts, '#0a0d12');
+          // the target: a ring of the line colour
+          const T = pos(tgt(l));
+          g.strokeStyle = col;
+          g.lineWidth = 2;
+          g.beginPath();
+          g.arc(T.x, T.y, 23 + (i % 3) * 3, 0, Math.PI * 2);
+          g.stroke();
+          if (o.K && l.K)
+            for (const n of l.path.slice(1, -1)) {
+              const N = pos(n);
+              g.fillStyle = col;
+              g.font = '700 10px system-ui, sans-serif';
+              g.fillText('K' + l.K, N.x - 22, N.y - 16);
+            }
+          if (o.status) {
+            const t = tgt(l);
+            const st = S.stock[t] >= NODES[t].cap ? 'full' : inflight(S, t) ? 'flow' : 'dry';
+            drawStatus(g, T.x + 26, T.y + 4, st);
+          }
+          if (o.spine) {
+            for (const n of l.path.slice(1, -1)) {
+              const N = pos(n);
+              g.strokeStyle = col;
+              g.lineWidth = 1.5;
+              g.strokeRect(N.x - 26, N.y - 4, 6, 6);
+            }
+          }
+        });
+      }
+      function drawStatus(g, x, y, st) {
+        g.lineWidth = 2;
+        if (st === 'full') {
+          g.fillStyle = '#3fb950';
+          g.fillRect(x - 5, y - 5, 10, 10);
+        } else if (st === 'flow') {
+          g.strokeStyle = '#7fb2ff';
+          g.beginPath();
+          g.moveTo(x - 5, y - 5);
+          g.lineTo(x + 3, y);
+          g.lineTo(x - 5, y + 5);
+          g.stroke();
+        } else {
+          g.strokeStyle = COL.warn;
+          g.strokeRect(x - 5, y - 5, 10, 10);
+          g.beginPath();
+          g.moveTo(x - 5, y + 5);
+          g.lineTo(x + 5, y - 5);
+          g.stroke();
+        }
+      }
+      function drawArrowRoad(g, a, b, col) {
+        const pts = [along(a, b, 0.14, 0), along(a, b, 0.86, 0)];
+        g.strokeStyle = col;
+        g.lineWidth = 5;
+        g.globalAlpha = 0.7;
+        g.beginPath();
+        g.moveTo(pts[0].x, pts[0].y);
+        g.lineTo(pts[1].x, pts[1].y);
+        g.stroke();
+        g.globalAlpha = 1;
+        chevrons(g, pts, '#0a0d12');
+      }
+      // the requested stock: a bracket under the warehouse squares it covers (dashed grey when automatic)
+      function drawPips(g, n, k, auto) {
+        const N = pos(n);
+        const r = N.prov ? 11 : n === 0 ? 20 : 15;
+        const sz = 7,
+          gap = 3,
+          w = N.cap * sz + (N.cap - 1) * gap;
+        const x0 = N.x - w / 2,
+          x1 = x0 + k * sz + (k - 1) * gap;
+        const y = N.y + r + (n === 0 ? 9 : 6) + sz + 3;
+        g.strokeStyle = auto ? COL.dim : COL.warn;
+        g.lineWidth = 2;
+        g.setLineDash(auto ? [3, 2] : []);
+        g.beginPath();
+        g.moveTo(x0, y - 3);
+        g.lineTo(x0, y);
+        g.lineTo(x1, y);
+        g.lineTo(x1, y - 3);
+        g.stroke();
+        g.setLineDash([]);
+      }
+      function drawDepot(g, S, d, plain) {
+        const N = pos(d);
+        g.strokeStyle = '#5ee0b0';
+        g.lineWidth = 2.5;
+        g.strokeRect(N.x - 24, N.y - 24, 48, 48);
+        if (plain) return;
+        for (const [v, ei] of ADJ[d]) {
+          if (!S.own[v] || S.cut.has(ei)) continue;
+          const p = along(d, v, 0.45, 0);
+          g.fillStyle = '#5ee0b0';
+          g.beginPath();
+          g.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+      function drawTicket(g, n, left, idx) {
+        const N = pos(n);
+        const x = N.x - 44,
+          y = N.y - 8;
+        g.fillStyle = '#3d2e0a';
+        g.strokeStyle = COL.warn;
+        g.lineWidth = 1.5;
+        g.fillRect(x, y, 22, 18);
+        g.strokeRect(x, y, 22, 18);
+        g.fillStyle = COL.warn;
+        g.font = '700 11px system-ui, sans-serif';
+        g.textAlign = 'center';
+        g.fillText(String(left), x + 11, y + 10);
+        g.font = '600 9px system-ui, sans-serif';
+        g.fillText('#' + idx, x + 11, y - 6);
+      }
+      function drawConvoy(g, c) {
+        let p;
+        if (c.st === 'go' || c.st === 'back') {
+          const a = c.path[c.seg],
+            b = c.path[c.seg + 1];
+          p = along(a, b, c.t / Math.round(EL[EI[a][b]] * 1.5), c.st === 'go' ? -8 : 8);
+        } else {
+          const n = c.st === 'load' ? 0 : c.path[c.path.length - 1];
+          p = { x: pos(n).x - 30, y: pos(n).y + 18 + c.id * 14 };
+        }
+        g.fillStyle = '#1a2a1f';
+        g.strokeStyle = '#5ee0b0';
+        g.lineWidth = 2;
+        g.fillRect(p.x - 14, p.y - 7, 28, 12);
+        g.strokeRect(p.x - 14, p.y - 7, 28, 12);
+        for (let k = 0; k < 4; k++) {
+          g.fillStyle = k < c.cargo ? COL.charge : COL.slot;
+          g.fillRect(p.x - 11 + k * 6, p.y - 4, 4, 5);
+        }
+        g.fillStyle = '#5ee0b0';
+        g.beginPath();
+        g.arc(p.x - 8, p.y + 7, 2.5, 0, Math.PI * 2);
+        g.arc(p.x + 8, p.y + 7, 2.5, 0, Math.PI * 2);
+        g.fill();
+      }
+      function drawZone(g, n, z) {
+        const N = pos(n);
+        g.strokeStyle = z === 1 ? '#d0a2ff' : '#ffd166';
+        g.lineWidth = 2;
+        g.setLineDash(z === 1 ? [2, 3] : [8, 3]);
+        g.beginPath();
+        g.arc(N.x, N.y, 27, 0, Math.PI * 2);
+        g.stroke();
+        g.setLineDash([]);
+        g.fillStyle = g.strokeStyle;
+        g.font = '700 10px system-ui, sans-serif';
+        g.fillText(String(z), N.x + 27, N.y - 20);
+      }
+      function drawValve(g, ei) {
+        const [a, b] = EDGES[ei];
+        const m = along(a, b, 0.5, 0);
+        const A = pos(a),
+          B = pos(b);
+        const L = Math.hypot(B.x - A.x, B.y - A.y);
+        const nx = -(B.y - A.y) / L,
+          ny = (B.x - A.x) / L;
+        g.strokeStyle = COL.warn;
+        g.lineWidth = 4;
+        g.beginPath();
+        g.moveTo(m.x - nx * 10, m.y - ny * 10);
+        g.lineTo(m.x + nx * 10, m.y + ny * 10);
+        g.stroke();
+      }
+      function drawCover(g, n) {
+        const N = pos(n);
+        g.fillStyle = 'rgba(94,224,176,0.10)';
+        g.beginPath();
+        g.arc(N.x, N.y, 32, 0, Math.PI * 2);
+        g.fill();
+      }
+      function drawBuild(g, b) {
+        const N = pos(b.node);
+        g.strokeStyle = '#5ee0b0';
+        g.setLineDash([4, 4]);
+        g.lineWidth = 2;
+        g.strokeRect(N.x - 24, N.y - 24, 48, 48);
+        g.setLineDash([]);
+        g.fillStyle = '#5ee0b0';
+        g.font = '700 10px system-ui, sans-serif';
+        g.fillText(b.owed ? 'owes ' + b.owed : 'building', N.x, N.y - 30);
+      }
+      function drawPulse(g, n, t) {
+        const N = pos(n);
+        g.globalAlpha = 1 - t;
+        g.strokeStyle = '#5ee0b0';
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(N.x, N.y, 16 + t * 14, 0, Math.PI * 2);
+        g.stroke();
+        g.globalAlpha = 1;
+      }
+      function drawDrop(g, S, d) {
+        const A = pos(0),
+          B = pos(d.node);
+        const t = (S.tick - d.t0) / 25;
+        g.strokeStyle = '#d0a2ff';
+        g.setLineDash([3, 5]);
+        g.lineWidth = 2;
+        const cx = (A.x + B.x) / 2,
+          cy = Math.min(A.y, B.y) - 120;
+        g.beginPath();
+        g.moveTo(A.x, A.y);
+        g.quadraticCurveTo(cx, cy, B.x, B.y);
+        g.stroke();
+        g.setLineDash([]);
+        const x = (1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * cx + t * t * B.x;
+        const y = (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * cy + t * t * B.y;
+        g.fillStyle = '#d0a2ff';
+        g.fillRect(x - 5, y - 5, 10, 10);
+      }
+
+      // ---------------------------------------------------------------- the page
+      const st = { a: 4, b: 0, att: 'busy', spd: 2, scn: 'auto', play: false, t: 0, events: [] };
+      try {
+        const h = new URLSearchParams(location.hash.slice(1));
+        const vi = (s) => V.findIndex((v) => v.id === s);
+        if (vi(h.get('a')) >= 0) st.a = vi(h.get('a'));
+        if (vi(h.get('b')) >= 0) st.b = vi(h.get('b'));
+        if (ATT[h.get('att')] !== undefined) st.att = h.get('att');
+        if (['1', '2', '4', '8'].includes(h.get('spd'))) st.spd = +h.get('spd');
+        if (h.get('scn') === 'manual') st.scn = 'manual';
+        if (h.get('t')) st.t = Math.max(0, Math.min(END, (+h.get('t') || 0) * 10));
+      } catch (e) {}
+      const events = () => (st.scn === 'auto' ? SCRIPT : st.events);
+      let sims = [];
+      const panes = [];
+      function buildPanes() {
+        const host = document.getElementById('panes');
+        host.innerHTML = '';
+        ['a', 'b'].forEach((key, idx) => {
+          const el = document.createElement('div');
+          el.className = 'pane';
+          const head = document.createElement('div');
+          head.className = 'head';
+          const prev = document.createElement('button');
+          prev.textContent = '‹';
+          prev.setAttribute('aria-label', 'Previous variant');
+          const sel = document.createElement('select');
+          sel.setAttribute('aria-label', idx ? 'Right variant' : 'Left variant');
+          V.forEach((v, i) => {
+            const o = document.createElement('option');
+            o.value = i;
+            o.textContent = 'V' + i + '  ' + v.name;
+            sel.appendChild(o);
+          });
+          const next = document.createElement('button');
+          next.textContent = '›';
+          next.setAttribute('aria-label', 'Next variant');
+          head.append(prev, sel, next);
+          const rule = document.createElement('div');
+          rule.className = 'rule';
+          const cv = document.createElement('canvas');
+          const strip = document.createElement('canvas');
+          strip.className = 'strip';
+          strip.setAttribute('aria-label', 'When the player clicked');
+          const counters = document.createElement('div');
+          counters.className = 'counters';
+          const sees = document.createElement('div');
+          sees.className = 'sees';
+          el.append(head, rule, cv, strip, counters, sees);
+          host.appendChild(el);
+          const setV = (i) => {
+            st[key] = (i + V.length) % V.length;
+            sel.value = st[key];
+            rebuild();
+          };
+          sel.onchange = () => setV(+sel.value);
+          prev.onclick = () => setV(st[key] - 1);
+          next.onclick = () => setV(st[key] + 1);
+          panes.push({ key, el, sel, rule, cv, strip, counters, sees });
+        });
+      }
+      function sizeCanvas(cv) {
+        const r = window.devicePixelRatio || 1;
+        const w = cv.clientWidth || 600;
+        cv.width = Math.round(w * r);
+        cv.height = Math.round((w * H) / W * r);
+        cv.style.height = Math.round((w * H) / W) + 'px';
+      }
+      function rebuild() {
+        sims = panes.map((p) => newSim(st[p.key], st.att));
+        const t = st.t;
+        for (const S of sims) while (S.tick < t) step(S, events());
+        renderBoardSel();
+        writeHash();
+        draw();
+      }
+      function writeHash() {
+        const h = `a=${V[st.a].id}&b=${V[st.b].id}&att=${st.att}&spd=${st.spd}&scn=${st.scn}&t=${Math.round(st.t / 10)}`;
+        try {
+          history.replaceState(null, '', '#' + h);
+        } catch (e) {}
+      }
+      function fmt(t) {
+        const s = Math.floor(t / 10);
+        return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+      }
+      function draw() {
+        panes.forEach((p, i) => {
+          const S = sims[i];
+          if (!S) return;
+          const v = V[st[p.key]];
+          p.sel.value = st[p.key];
+          p.rule.textContent = v.rule;
+          if (p.cv.width !== Math.round((p.cv.clientWidth || 600) * (window.devicePixelRatio || 1))) sizeCanvas(p.cv);
+          const g = p.cv.getContext('2d');
+          const sc = p.cv.width / W;
+          g.setTransform(sc, 0, 0, sc, 0, -VY * sc);
+          drawBase(g, S);
+          if (v.draw) v.draw(g, S);
+          drawPackets(g, S);
+          drawNodes(g, S);
+          drawRipples(g, S, S.tick);
+          drawStrip(p.strip, S);
+          const m = measures(S);
+          const ex = v.extra ? v.extra(S) : null;
+          const cells = [
+            ['clicks', S.c.clicks],
+            ['to armies', S.c.front],
+            ['army dry, s', (S.c.dry / 10).toFixed(0)],
+            ['rear idle', m.idle],
+            ['empty rear', m.empty],
+            ['burned/lost', S.c.burned],
+          ];
+          p.counters.innerHTML = '';
+          for (const [k, val] of cells) {
+            const d = document.createElement('div');
+            d.className = 'ct';
+            const b = document.createElement('b');
+            b.textContent = val;
+            const s = document.createElement('span');
+            s.textContent = k;
+            d.append(b, s);
+            p.counters.appendChild(d);
+          }
+          p.sees.innerHTML = '';
+          const items = [
+            ['Enemy sees', v.sees],
+            ['Clicks', v.clicks],
+          ];
+          if (ex) items.push([ex[0], String(ex[1])]);
+          for (const [k, val] of items) {
+            const s = document.createElement('span');
+            s.append(k + ': ');
+            const b = document.createElement('b');
+            b.textContent = val;
+            s.appendChild(b);
+            p.sees.appendChild(s);
+          }
+        });
+        document.getElementById('time').value = st.t;
+        document.getElementById('clock').textContent = fmt(st.t);
+        const capBtn = document.getElementById('cap');
+        const cutBtn = document.getElementById('cut');
+        const manual = st.scn === 'manual';
+        capBtn.title = cutBtn.title = manual ? '' : 'Switch Front to Manual';
+        capBtn.disabled = !manual || (sims[0] && sims[0].capIdx >= CAPS.length);
+        cutBtn.disabled = !manual;
+        cutBtn.textContent = sims[0] && sims[0].cutOn ? 'Reopen roads' : 'Cut roads';
+        document.getElementById('play').textContent = st.play ? '❚❚' : '▶';
+      }
+      // the rhythm strip: one mark per player action (amber, height = clicks), automatic ones grey, events as red ticks
+      function drawStrip(cv, S) {
+        const r = window.devicePixelRatio || 1;
+        const w = cv.clientWidth || 600,
+          h = 22;
+        if (cv.width !== Math.round(w * r)) {
+          cv.width = Math.round(w * r);
+          cv.height = Math.round(h * r);
+          cv.style.height = h + 'px';
+        }
+        const g = cv.getContext('2d');
+        g.setTransform(r, 0, 0, r, 0, 0);
+        g.clearRect(0, 0, w, h);
+        g.fillStyle = '#0f141b';
+        g.fillRect(0, 0, w, h);
+        const X = (t) => 4 + ((w - 8) * t) / END;
+        for (const e of events()) {
+          g.fillStyle = '#e5484d';
+          g.fillRect(X(e.at) - 0.5, 0, 1, h);
+        }
+        for (const l of S.log) {
+          if (l.k) {
+            g.fillStyle = COL.warn;
+            const hh = Math.min(h - 4, 5 + l.k * 4);
+            g.fillRect(X(l.t) - 1.5, h - 2 - hh, 3, hh);
+          } else {
+            g.fillStyle = COL.dim;
+            g.fillRect(X(l.t) - 1, h - 6, 2, 4);
+          }
+        }
+        g.fillStyle = 'rgba(91,155,255,0.25)';
+        g.fillRect(4, 0, X(S.tick) - 4, h);
+      }
+      // the board: every variant through the script at the chosen attention
+      function runBoard() {
+        const rows = V.map((v, i) => {
+          const S = newSim(i, st.att);
+          while (S.tick < END) step(S, SCRIPT);
+          return {
+            i,
+            clicks: S.c.clicks,
+            front: S.c.front,
+            dry: Math.round(S.c.dry / 10),
+            idle: +(S.c.idleSum / END).toFixed(1),
+            empty: +(S.c.emptySum / END).toFixed(1),
+            burned: S.c.burned,
+            fit: v.fit,
+          };
+        });
+        const cols = [
+          ['clicks', -1],
+          ['front', 1],
+          ['dry', -1],
+          ['idle', -1],
+          ['empty', -1],
+          ['burned', -1],
+          ['fit', 1],
+        ];
+        const tb = document.querySelector('#board tbody');
+        tb.innerHTML = '';
+        for (const r of rows) {
+          const tr = document.createElement('tr');
+          tr.dataset.i = r.i;
+          const td0 = document.createElement('td');
+          td0.textContent = 'V' + r.i + '  ' + V[r.i].name;
+          tr.appendChild(td0);
+          for (const [k, dir] of cols) {
+            const td = document.createElement('td');
+            td.textContent = r[k];
+            const vals = rows.map((x) => x[k]);
+            const best = dir > 0 ? Math.max(...vals) : Math.min(...vals);
+            const worst = dir > 0 ? Math.min(...vals) : Math.max(...vals);
+            if (r[k] === best && best !== worst) td.className = 'best';
+            else if (r[k] === worst && best !== worst) td.className = 'worst';
+            tr.appendChild(td);
+          }
+          tr.onclick = (e) => {
+            if (e.shiftKey) st.b = r.i;
+            else st.a = r.i;
+            rebuild();
+          };
+          tb.appendChild(tr);
+        }
+        renderBoardSel();
+      }
+      function renderBoardSel() {
+        document.querySelectorAll('#board tbody tr').forEach((tr) => {
+          tr.classList.toggle('selA', +tr.dataset.i === st.a);
+          tr.classList.toggle('selB', +tr.dataset.i === st.b);
+        });
+      }
+      function legend() {
+        const L = document.getElementById('legend');
+        const items = [
+          ['factory', (g) => { g.strokeStyle = COL.you; g.lineWidth = 2; g.beginPath(); g.arc(11, 8, 5, 0, 7); g.stroke(); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; g.beginPath(); g.moveTo(11 + Math.cos(a) * 5, 8 + Math.sin(a) * 5); g.lineTo(11 + Math.cos(a) * 8, 8 + Math.sin(a) * 8); g.stroke(); } }],
+          ['charge / room', (g) => { g.fillStyle = COL.charge; g.fillRect(3, 4, 7, 7); g.strokeStyle = COL.slot; g.lineWidth = 1.5; g.strokeRect(13, 4.75, 5.5, 5.5); }],
+          ['army and its charges', (g) => { g.fillStyle = COL.you; g.beginPath(); g.moveTo(7, 2); g.lineTo(13, 13); g.lineTo(1, 13); g.fill(); g.fillStyle = COL.charge; g.beginPath(); g.arc(17, 9, 2.5, 0, 7); g.fill(); }],
+          ['player click', (g) => { g.strokeStyle = COL.warn; g.lineWidth = 2; g.beginPath(); g.arc(11, 8, 6, 0, 7); g.stroke(); }],
+          ['automatic', (g) => { g.strokeStyle = COL.dim; g.lineWidth = 2; g.setLineDash([3, 3]); g.beginPath(); g.arc(11, 8, 6, 0, 7); g.stroke(); }],
+          ['province', (g) => { g.strokeStyle = COL.you; g.lineWidth = 2; g.beginPath(); g.moveTo(11, 1); g.lineTo(18, 8); g.lineTo(11, 15); g.lineTo(4, 8); g.closePath(); g.stroke(); }],
+          ['capture or cut', (g) => { g.fillStyle = '#e5484d'; g.fillRect(10, 0, 1.5, 16); }],
+          ['cut road', (g) => { g.strokeStyle = COL.roadCut; g.lineWidth = 2; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(0, 8); g.lineTo(22, 8); g.stroke(); }],
+        ];
+        for (const [txt, fn] of items) {
+          const s = document.createElement('span');
+          const c = document.createElement('canvas');
+          c.width = 44;
+          c.height = 32;
+          const g = c.getContext('2d');
+          g.scale(2, 2);
+          fn(g);
+          s.append(c, ' ' + txt);
+          L.appendChild(s);
+        }
+      }
+
+      // controls
+      function seg(id, key, cb) {
+        const el = document.getElementById(id);
+        const sync = () => el.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v == st[key])));
+        el.querySelectorAll('button').forEach((b) => {
+          b.onclick = () => {
+            st[key] = key === 'spd' ? +b.dataset.v : b.dataset.v;
+            sync();
+            cb && cb();
+            writeHash();
+          };
+        });
+        sync();
+      }
+      buildPanes();
+      seg('spd', 'spd');
+      seg('att', 'att', () => {
+        rebuild();
+        runBoard();
+      });
+      seg('scn', 'scn', () => {
+        st.events = [];
+        st.t = 0;
+        rebuild();
+      });
+      document.getElementById('play').onclick = () => {
+        if (st.t >= END) {
+          st.t = 0;
+          rebuild();
+        }
+        st.play = !st.play;
+        draw();
+      };
+      document.getElementById('reset').onclick = () => {
+        st.t = 0;
+        st.events = [];
+        rebuild();
+      };
+      document.getElementById('time').oninput = (e) => {
+        const t = +e.target.value;
+        if (st.scn === 'manual') st.events = st.events.filter((x) => x.at <= t);
+        if (t < st.t) {
+          st.t = t;
+          rebuild();
+        } else {
+          st.t = t;
+          for (const S of sims) while (S.tick < t) step(S, events());
+          writeHash();
+          draw();
+        }
+      };
+      const manualEvent = (type) => {
+        st.events.push({ at: st.t + 1, type });
+        for (const S of sims) while (S.tick < st.t + 1) step(S, events());
+        st.t += 1;
+        draw();
+      };
+      document.getElementById('cap').onclick = () => manualEvent('cap');
+      document.getElementById('cut').onclick = () => manualEvent('cut');
+      window.addEventListener('resize', () => {
+        panes.forEach((p) => sizeCanvas(p.cv));
+        draw();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === ' ' && e.target === document.body) {
+          e.preventDefault();
+          document.getElementById('play').click();
+        }
+      });
+      legend();
+      panes.forEach((p) => sizeCanvas(p.cv));
+      rebuild();
+      runBoard();
+      let last = performance.now(),
+        acc = 0;
+      function frame(now) {
+        const dt = Math.min(100, now - last);
+        last = now;
+        if (st.play) {
+          acc += (dt / 100) * st.spd; // 10 ticks per second at 1x
+          let moved = false;
+          while (acc >= 1 && st.t < END) {
+            acc -= 1;
+            st.t++;
+            for (const S of sims) step(S, events());
+            moved = true;
+          }
+          if (st.t >= END) st.play = false;
+          if (moved) {
+            if (st.t % 10 === 0) writeHash();
+            draw();
+          }
+        }
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>
