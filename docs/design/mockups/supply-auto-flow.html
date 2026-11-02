@@ -651,18 +651,34 @@
                 }
               }
             }
-            if (opt.army === 'on' && N.army && N.army.c < N.army.u) b = true;
             d[n] = b ? 0 : INF;
-            if (b) q.push(n);
           }
-          for (let i = 0; i < q.length; i++) {
-            const n = q[i];
-            for (const [m, e] of nb(st, n).sort((x, y) => st.nodes[x[0]].key - st.nodes[y[0]].key)) {
-              if (froad(st, e) && d[m] === INF) {
-                d[m] = d[n] + 1;
-                q.push(m);
+          // multi-seed BFS by integer buckets (seeds may start above 0)
+          const spread = () => {
+            for (let lv = 0; lv < 64; lv++) {
+              for (const n of ids) {
+                if (d[n] === lv) for (const [m, e] of nb(st, n)) if (froad(st, e) && d[m] > lv + 1) d[m] = lv + 1;
+              }
+              if (!ids.some((n) => d[n] > lv && d[n] < INF)) break;
+            }
+          };
+          spread();
+          // the leaf level k: never deeper than the capital (or the deepest node of the territory)
+          const kc = ids.find((n) => st.nodes[n].kind === 'cap');
+          const fin = ids.map((n) => d[n]).filter((x) => x < INF);
+          st.kmax = kc && d[kc] < INF ? d[kc] : fin.length ? Math.max(...fin) : 0;
+          st.k = opt.lever === 'shift' ? Math.min(st.shift, st.kmax) : 0;
+          // a tired army puts its node on the leaf level k (ahead of the level the shift wins)
+          if (opt.army === 'on') {
+            let any = false;
+            for (const n of ids) {
+              const A = st.nodes[n].army;
+              if (A && A.c < A.u && d[n] > st.k) {
+                d[n] = st.k;
+                any = true;
               }
             }
+            if (any) spread();
           }
           // components and sources
           const comp = {};
@@ -682,11 +698,6 @@
           }
           st.d = d;
           st.pocket = pocket;
-          // the leaf level k: never deeper than the capital (or the deepest node of the territory)
-          const kc = Object.keys(st.nodes).find((n) => st.nodes[n].kind === 'cap' && fown(st, n));
-          const fin = ids.map((n) => d[n]).filter((x) => x < INF);
-          st.kmax = kc && d[kc] < INF ? d[kc] : fin.length ? Math.max(...fin) : 0;
-          st.k = opt.lever === 'shift' ? Math.min(st.shift, st.kmax) : 0;
         }
 
         // the room of a node: free warehouse minus what is already on the way to it
@@ -945,7 +956,7 @@
             steps: [
               { cap: 'Mid-game: stock along the chain K, A, B, H to the front C and D.', beats: 1 },
               { cap: 'The army at C fires 3 shots: the chain refills C.', ev: [['shots', 'C', 3]], beats: 6, chain: true },
-              { cap: 'The enemy cuts the road A–B: B, H, C, D are a pocket.', ev: [['cut', 'A-B']], beats: 2 },
+              { cap: 'The enemy cuts the road A-B: B, H, C, D are a pocket.', ev: [['cut', 'A-B']], beats: 2 },
               { cap: 'The army at D fires 3 shots: can the pocket refill D?', ev: [['shots', 'D', 3]], beats: 5, chain: true },
               { cap: 'The army at C fires 3 shots: what is left in the pocket?', ev: [['shots', 'C', 3]], beats: 5 },
               { cap: 'The road is mended: K’s charges flow in again.', ev: [['mend', 'A-B']], beats: 8 },
