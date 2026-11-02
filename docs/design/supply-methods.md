@@ -1,6 +1,6 @@
 # Supply distribution: variants
 
-Status: **[awaiting the owner's decision]**. Design exploration for economy v2 (`economy.model = "v2"`, `rulesets/mvp-3.toml`); nothing here changes the rules. Decision issue: #693. Frames: [`mockups/img/693/`](mockups/img/693/). Mockup: [`mockups/supply-methods.html`](mockups/supply-methods.html) (open as a file; pick two variants, play the script, compare the counters and the board of all 15).
+Status: **[awaiting the owner's decision]**. Design exploration for economy v2 (`economy.model = "v2"`, `rulesets/mvp-3.toml`); nothing here changes the rules. Decision issue: #693. Frames: [`mockups/img/693/`](mockups/img/693/). Short storyboards of every variant (3 scenarios each, start here): [`mockups/supply-examples.html`](mockups/supply-examples.html). Detailed mockup: [`mockups/supply-methods.html`](mockups/supply-methods.html) (open as a file; pick two variants, play the script, compare the counters and the board of all 15).
 
 ## The problem
 
