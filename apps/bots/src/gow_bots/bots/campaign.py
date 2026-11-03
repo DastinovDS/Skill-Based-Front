@@ -49,7 +49,14 @@ from dataclasses import dataclass, field
 from typing import ClassVar, override
 
 from gow_bots.bots.base import Bot, ParamRange, node_of
-from gow_bots.bots.economy import bunker_site, factory_site, line_commands, release_commands, wants
+from gow_bots.bots.economy import (
+    bunker_site,
+    factory_site,
+    leaf_shift_command,
+    line_commands,
+    release_commands,
+    wants,
+)
 from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take, takes
 from gow_sim.commands import (
     BuildBunker,
@@ -184,7 +191,8 @@ class CampaignBot(Bot):
 
     def economy_v2(self, ctx: Ctx) -> None:
         """The v2 play of ``gow_bots.bots.economy``: plans that waited depart, lines to the nodes
-        that want charges, one factory and one bunker build at a time. Nothing under v1."""
+        that want charges, one factory and one bunker build at a time; under the supply flow no
+        lines and no bunker, the leaf shift instead (DEC-43). Nothing under v1."""
         if not self.rules.v2:
             return
         view = ctx.view
@@ -201,6 +209,9 @@ class CampaignBot(Bot):
         site = bunker_site(self, view, self.bunkers())
         if site is not None:
             self.spend(ctx, BuildBunker(site))
+        shift = leaf_shift_command(self, view)  # the supply flow only (DEC-43, item G)
+        if shift is not None:
+            self.spend(ctx, shift)
 
     def line_extra(self, ctx: Ctx) -> dict[int, int]:
         """Hook: the weight a personality adds to own nodes that want charges (``wants``)."""

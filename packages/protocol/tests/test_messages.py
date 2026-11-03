@@ -233,8 +233,18 @@ def test_supply_flow_fields_are_validated() -> None:
     def me(**fields: object) -> dict[str, object]:
         return {**view["me"], **fields}
 
-    sending = {"front_dist": 2, "flow_down": [1], "flow_next": [1], "flow_idle": None}
-    idle = {"front_dist": None, "flow_down": [], "flow_next": [], "flow_idle": "leaf"}
+    sending: dict[str, object] = {
+        "front_dist": 2,
+        "flow_down": [1],
+        "flow_next": [1],
+        "flow_idle": None,
+    }
+    idle: dict[str, object] = {
+        "front_dist": None,
+        "flow_down": [],
+        "flow_next": [],
+        "flow_idle": "leaf",
+    }
     decode(nodes=nodes(own, **sending, flow_pocket=False))
     decode(nodes=nodes(own, **idle, flow_pocket=True))
     decode(me=me(leaf_shift=1, leaf_shift_max=2, next_dispatch_tick=130))

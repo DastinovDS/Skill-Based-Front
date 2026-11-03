@@ -41,7 +41,9 @@ from gow_sim.commands import (
     Move,
     ReleasePlan,
     RemoveLine,
+    SetAutoLines,
     SetFront,
+    SetLeafShift,
     SetMode,
     SetRearMin,
     SetStance,
@@ -79,6 +81,10 @@ V1_ONLY: Final = (SetStance, SetFront, SetRearMin, Transfer, UpgradeRoad)
 ``SetMode(DEFENSE)`` (``Bot.allowed``)."""
 V2_ONLY: Final = (BuildFactory, BuildBunker, DrawLine, RemoveLine, ReleasePlan)
 """Commands of economy v2 only (DEC-41, item 14)."""
+LINES_ONLY: Final = (DrawLine, RemoveLine, SetAutoLines)
+"""Commands the supply flow rejects with ``FEATURE_DISABLED`` (DEC-43, item A12)."""
+FLOW_ONLY: Final = (SetLeafShift,)
+"""Commands of the supply flow only (DEC-43, item B2)."""
 
 
 class Controller(Protocol):
@@ -541,8 +547,16 @@ class Bot:
 
     def allowed(self, cmd: Command) -> bool:
         """Whether the economy model of the ruleset has ``cmd`` at all: the commands of the
-        other model only give ``FEATURE_DISABLED`` (DEC-41, items 5 and 14)."""
-        if not self.rules.v2:
+        other model only give ``FEATURE_DISABLED`` (DEC-41, items 5 and 14); so do the commands
+        of the other supply model and the bunker without ``[bunker]`` (DEC-43, A12, B2, D1)."""
+        rules = self.rules
+        if isinstance(cmd, FLOW_ONLY):
+            return rules.flow
+        if rules.flow and isinstance(cmd, LINES_ONLY):
+            return False
+        if isinstance(cmd, BuildBunker) and rules.bunker is None:
+            return False
+        if not rules.v2:
             return not isinstance(cmd, V2_ONLY)
         if isinstance(cmd, SetMode) and cmd.mode is Mode.DEFENSE:
             return False

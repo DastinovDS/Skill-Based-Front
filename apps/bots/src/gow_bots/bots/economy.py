@@ -26,13 +26,20 @@ supply. These helpers are the minimal v2 play every campaign bot shares; they re
   stock of its node's warehouse and the charged units of the group (DEC-41, item 10); a plan that
   gathered for its requested time plus ``RELEASE_SLACK`` ticks departs with what it has
   (``ReleasePlan``), one without any bonus is cancelled.
+
+Under the supply flow (DEC-43, ``supply.model = "flow"``, ``mvp-4``) there are no lines and no
+bunker: ``line_commands`` and ``bunker_site`` give nothing, and the flow carries the charges by
+itself. The one lever is the **leaf shift** (``leaf_shift_command``, DEC-43 item G): the level goes
+one road back (``SetLeafShift(1)``) while an own leaf faces a visibly stronger enemy and the bot
+attacks from none of them, so new charges stop short of a node it may lose; back to the front
+(``0``) when the bot attacks or the threat is gone.
 """
 
 from collections import deque
 from typing import Final
 
 from gow_bots.bots.base import Bot
-from gow_sim.commands import CancelOrder, Command, DrawLine, ReleasePlan, RemoveLine
+from gow_sim.commands import CancelOrder, Command, DrawLine, ReleasePlan, RemoveLine, SetLeafShift
 from gow_sim.maps import NodeKind
 from gow_sim.view import AtNode, NodeView, PlayerView
 
@@ -44,6 +51,7 @@ __all__ = [
     "RELEASE_SLACK",
     "bunker_site",
     "factory_site",
+    "leaf_shift_command",
     "line_commands",
     "release_commands",
     "wants",
@@ -65,6 +73,9 @@ W_WAIT: Final = 3
 """Weight of an own unit without a charge in ``wants``."""
 W_FRONT: Final = 2
 """Weight of a node next to a foreign one in ``wants``."""
+LEAF_MARGIN: Final = 1
+"""Charged enemy units beyond the own charged units of a leaf that make it "visibly stronger"
+(``leaf_shift_command``)."""
 
 
 def waiting(view: PlayerView) -> list[int]:
@@ -137,7 +148,10 @@ def line_commands(
 ) -> list[Command]:
     """Lines from the own factories to the most ``wanted`` nodes and the feeds of the built
     factories (module docstring); ``seen``: own line id to the tick it was first seen, kept up
-    to date here (a line is removed only ``LINE_HOLD_TICKS`` after it)."""
+    to date here (a line is removed only ``LINE_HOLD_TICKS`` after it). Nothing under the
+    supply flow (DEC-43, item A12)."""
+    if bot.rules.flow:
+        return []
     me, tick = view.player, view.tick
     factories = [n.id for n in view.nodes if n.owner == me and n.factory]
     live = {line.id: True for line in view.lines}
@@ -219,10 +233,11 @@ def factory_site(bot: Bot, view: PlayerView, extra: int) -> int | None:
 
 
 def bunker_site(bot: Bot, view: PlayerView, limit: int) -> int | None:
-    """The own city next to an enemy node that should build a bunker now, or ``None``."""
+    """The own city next to an enemy node that should build a bunker now, or ``None``; always
+    ``None`` without a ``[bunker]`` section (``mvp-4``, DEC-43 item D1)."""
     rules = bot.rules
     me = view.player
-    if limit <= 0:
+    if limit <= 0 or rules.bunker is None:
         return None
     count = 0
     for n in view.nodes:
@@ -275,3 +290,37 @@ def release_commands(bot: Bot, view: PlayerView, since: dict[int, int], tick: in
         if gid not in live:
             del since[gid]
     return cmds
+
+
+def leaf_shift_command(bot: Bot, view: PlayerView) -> Command | None:
+    """The leaf shift the bot wants now under the supply flow (module docstring), as a command
+    when it differs from the one in force; ``None`` otherwise and under any other supply model.
+
+    "Visibly stronger": a neighbour of the enemy whose charged units as the view tells them
+    (``Bot.enemy_at``; a presence without numbers counts as nothing) exceed the own charged units
+    standing in the leaf by more than ``LEAF_MARGIN``. "Attacks": an own group has an order to a
+    node the player does not own. Reads only the own view (the own ``front_dist`` and shift)."""
+    me = view.me
+    if not bot.rules.flow or me.leaf_shift is None or me.leaf_shift_max is None:
+        return None
+    player = view.player
+    attacking = any(
+        g.order is not None and view.nodes[g.order.dest].owner != player for g in view.groups
+    )
+    want = 0
+    if not attacking:
+        charged = [0] * len(view.nodes)
+        for g in view.groups:
+            if isinstance(g.location, AtNode):
+                charged[g.location.node] += g.charged
+        for n in view.nodes:
+            if n.owner != player or n.front_dist != 0:
+                continue
+            for m in bot.neighbors[n.id]:
+                if view.nodes[m].owner != 1 - player:
+                    continue
+                seen = bot.enemy_at(view, m)
+                if seen is not None and seen[1] > charged[n.id] + LEAF_MARGIN:
+                    want = 1
+    want = min(want, me.leaf_shift_max)
+    return None if want == me.leaf_shift else SetLeafShift(want)

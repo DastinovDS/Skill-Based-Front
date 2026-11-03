@@ -67,6 +67,7 @@ USAGE_KEYS: Final[tuple[str, ...]] = (
     "BuildFactory",
     "BuildBunker",
     "ReleasePlan",
+    "SetLeafShift",
 )
 """The mechanics of ``usage``, in report order: every command but ``Forfeit`` (the last five are
 economy v2 only, DEC-41)."""
