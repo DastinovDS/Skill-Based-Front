@@ -155,7 +155,8 @@ def test_l9_a_level_node_an_army_holds_keeps() -> None:
     _group(state, C, 2, 2, plan=1)
     assert _sent(_flow(state)) == []
     assert state.nodes[C].warehouse == 3
-    assert state.nodes[C].flow is not None and state.nodes[C].flow.idle is FlowIdle.LEAF
+    flow = state.nodes[C].flow
+    assert flow is not None and flow.idle is FlowIdle.LEAF
     tired = _state({C: 3}, owners=passes)
     _group(tired, D, 2, 0)  # a tired army in the receiver does not stop the giver
     assert _sent(_flow(tired)) == [(C, D)]
@@ -176,7 +177,8 @@ def test_l11_a_pocket_without_contact_is_all_leaves() -> None:
     assert _d(state) == {K: 3, A: 2, B: 1, D: 3, E: 3, F: 0, G: 0, M: 0, HILL_N: 0, HILL_S: 0}
     view = project(state, RULES, 0, HEADLESS_MATCH_KEY)
     assert [view.nodes[n].flow_pocket for n in (M, HILL_N, HILL_S, K)] == [True, True, True, False]
-    assert state.nodes[M].flow is not None and state.nodes[M].flow.k == 0
+    flow = state.nodes[M].flow
+    assert flow is not None and flow.k == 0
     assert _sent(_flow(state, 20)) == []  # M 1, 19 0: a gap of 1
 
 

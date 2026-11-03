@@ -5,7 +5,8 @@ Expected values come from mechanics.md, section 7, block "Automatic supply flow,
 warehouses, road fortifications (DEC-43, #697)", item H and its table H1..H14.
 
 The map is ``dec41`` (see ``test_dec43.py``), player 0, ``mvp-4``: own K = 0 (capital), A = 1, B,
-C, D = 2, 3, 4, E, F, G = 5, 6, 7; M = 8 a neutral province (warehouse 1 when own). Stocks 0 unless
+C, D = 2, 3, 4, E, F, G = 5, 6, 7; M = 8 a neutral province (warehouse 1 when own); 17 and 18 are
+player 1's, as in the base of table F (#724), so C is always a leaf. Stocks 0 unless
 a row says so, no groups but the start garrison of K. "A captured in tick ``t``": A is player 1's
 from the ``movement`` of tick ``t`` on, after the ``economy`` of that tick (``_run`` applies the
 change between ``economy`` and ``capacity``); then B, C, D, F, G are a pocket of player 0.

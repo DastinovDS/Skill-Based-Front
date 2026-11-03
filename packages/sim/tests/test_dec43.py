@@ -4,12 +4,13 @@ Expected values come from mechanics.md, section 7, block "Automatic supply flow,
 warehouses, road fortifications (DEC-43, #697)": items A, B, C, the key list of ``mvp-4.toml``
 and the table F1..F20 (the view rows V1..V4 are in ``test_dec43_view.py``).
 
-The map of the table is ``dec41`` (see ``test_dec41.py``), player 0, ``mvp-4``: own K = 0
-(capital, warehouse 6), A = 1, B, C, D = 2, 3, 4, E, F, G = 5, 6, 7 (cities, warehouse 3); M = 8
-and 17 are neutral provinces (warehouse 1 when own); roads K-A, K-E, A-B, A-D, A-E, B-C, B-F, B-G,
-D-C, C-M, C-17, D-18; packet ticks 20 per 30-tick road, K-E 28, D-C 38, C-M 32, C-17 30;
-``node_key(0, n) = n``. No groups and no packets unless a row says so (the start garrison of K,
-2 units charged, never pulls); stocks as set by the row, the rest 0; the dispatch at tick 10.
+The map of the table is ``dec41`` (see ``test_dec41.py``), player 0, ``mvp-4``: own K = 0 (capital,
+warehouse 6), A = 1, B, C, D = 2, 3, 4, E, F, G = 5, 6, 7 (cities, warehouse 3); M = 8 is a neutral
+province (warehouse 1 when own); the provinces 17 and 18 are player 1's in the base (since #724 a
+neutral never makes a leaf; the map as it is: ``test_dec43_leaves.py``); roads K-A, K-E, A-B, A-D,
+A-E, B-C, B-F, B-G, D-C, C-M, C-17, D-18; packet ticks 20 per 30-tick road, K-E 28, D-C 38, C-M 32,
+C-17 30; ``node_key(0, n) = n``. No groups and no packets unless a row says so (the start garrison
+of K, 2 units charged, never pulls); stocks as set by the row, the rest 0; the dispatch at tick 10.
 """
 
 import tomllib
