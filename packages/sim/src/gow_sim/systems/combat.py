@@ -7,6 +7,10 @@ over ticks; its groups carry its id in ``Group.fight`` and do not move (item B6)
 The ``combat`` system runs after ``movement`` (all moves and arrivals first, then all fights) and
 reads the ``group_arrived`` events of the tick from ``state.events``. In one tick (item C5):
 
+0. **The toll** of road fortifications (DEC-43, item D6; ``systems.fortify``): a group whose own
+   progress reached the line point of an enemy fortification of the node it heads to in this tick
+   pays first, so it meets, joins and attacks with what is left.
+
 1. **Edge meetings** (item C2) on edges without a fight: groups of the two players going towards
    each other meet in the tick their progress towards their ends first sums to at least 1000 (a
    group that arrived in this tick counts with 1000 on its arrival edge and is put back on the
@@ -71,6 +75,7 @@ from gow_sim.state import (
 )
 from gow_sim.systems.capacity import change_owner
 from gow_sim.systems.capture import CaptureFailure, bounce_back, failed, pay
+from gow_sim.systems.fortify import Crossing, tolls
 from gow_sim.systems.movement import edge_between, leg
 
 __all__ = [
@@ -225,8 +230,9 @@ def combat(
     """
     bonus = dict(bonuses or {})
     arrivals = _arrivals(state)
+    events = _tolls(state, rules, arrivals, bonus)
     busy = {f.edge: fid for fid, f in sorted(state.fights.items()) if f.edge is not None}
-    events = _edge_meetings(state, rules, arrivals, bonus, busy)
+    events += _edge_meetings(state, rules, arrivals, bonus, busy)
     _edge_joins(state, rules, arrivals, bonus)
     events.extend(_node_contacts(state, rules, arrivals, bonus))
     for fid in sorted(state.fights):
@@ -338,6 +344,30 @@ def _meet(x: _OnEdge, y: _OnEdge) -> bool:
         and x.before + y.before < PROGRESS_SCALE
         and not (x.back and y.back)
     )
+
+
+def _tolls(
+    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
+) -> list[Event]:
+    """Step 0: the toll of road fortifications (DEC-43, item D6; ``systems.fortify``) on the moves
+    of this tick, before any fight of the tick takes the groups: a group that pays brings a
+    planned bonus of at most its charged units into a fight (DEC-29)."""
+    if rules.fort is None or not any(n.road_forts for n in state.nodes.values()):
+        return []
+    by_edge = _on_edges(state, arrivals)
+    crossings: dict[int, Crossing] = {}
+    for eid in sorted(by_edge):
+        for gid in by_edge[eid]:
+            x = _edge_presence(state, rules, gid, arrivals)
+            crossings[gid] = Crossing(gid, x.owner, x.edge, x.heading, x.before, x.progress)
+
+    def capped(gid: int) -> None:
+        b = bonus.get(gid)
+        charged = state.groups[gid].charged
+        if b is not None and b.source is BonusSource.PLANNED_ORDER and b.amount > charged:
+            bonus[gid] = Bonus(b.source, charged)
+
+    return tolls(state, rules, crossings, capped)
 
 
 def _edge_meetings(

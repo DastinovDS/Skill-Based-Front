@@ -344,6 +344,23 @@
         "group"
       ]
     },
+    "road_fort_built": {
+      "fields": [
+        "edge",
+        "node",
+        "player"
+      ],
+      "ids": []
+    },
+    "road_fort_destroyed": {
+      "fields": [
+        "built",
+        "edge",
+        "node",
+        "player"
+      ],
+      "ids": []
+    },
     "road_upgraded": {
       "fields": [
         "edge",
@@ -365,6 +382,27 @@
         "player",
         "units",
         "warehouse"
+      ],
+      "ids": []
+    },
+    "toll_paid": {
+      "fields": [
+        "charges",
+        "edge",
+        "group",
+        "node",
+        "player"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
+    "toll_taken": {
+      "fields": [
+        "charges",
+        "edge",
+        "node",
+        "player"
       ],
       "ids": []
     },

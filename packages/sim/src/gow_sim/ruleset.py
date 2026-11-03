@@ -400,6 +400,28 @@ class BunkerRules:
 
 
 @dataclass(frozen=True, slots=True)
+class FortRules:
+    """Road fortifications (DEC-43, item D; code name ``road_fort``, the bunker is ``fort``;
+    ``economy.model = "v2"`` only): a line at the border point of a road leaving an own node that
+    takes charges from an enemy group crossing it towards the node."""
+
+    cost: int
+    """CP in hundredths ``FortifyRoad`` costs, flat (item D2)."""
+    build_ticks: int
+    """Ticks from the command to a working fortification (item D4)."""
+    toll_units: int
+    """The toll is ``toll_charges`` per started ``toll_units`` units of the group (item D6)."""
+    toll_charges: int
+    """Charges taken per started ``toll_units`` units, never more than the group's charged."""
+
+    def toll(self, units: int, charged: int) -> int:
+        """The charges a group of ``units``, ``charged`` loses on one line (item D6):
+        ``min(charged, toll_charges * ceil(units / toll_units))``; non-negative, rounded down."""
+        started = (units + self.toll_units - 1) // self.toll_units
+        return min(charged, self.toll_charges * started)
+
+
+@dataclass(frozen=True, slots=True)
 class LineRules:
     """Drawn supply lines (DEC-41, item 3; ``economy.model = "v2"`` only). Only a factory starts
     a line and a factory starts any number of them (DEC-42, items 1 and 2): no limit key."""
@@ -513,6 +535,9 @@ class Ruleset:
     bunker: BunkerRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
     """Only with ``economy.model = "v2"`` (DEC-41, item 12), and optional there (DEC-43, item
     D1): without it ``BuildBunker`` gives ``FEATURE_DISABLED``."""
+    fort: FortRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
+    """Road fortifications (DEC-43, item D): only with ``economy.model = "v2"``, optional there;
+    without it ``FortifyRoad`` gives ``FEATURE_DISABLED``."""
 
     @property
     def v2(self) -> bool:
@@ -639,6 +664,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "factory",
             "lines",
             "bunker",
+            "fort",
         ),
     )
     economy = _parse_economy(
@@ -682,6 +708,13 @@ def parse_ruleset(data: object) -> Ruleset:
         bunker = _parse_bunker(root.table("bunker", ("cost", "build_ticks", "shots")))
     elif root.has("bunker"):
         raise RulesetError("bunker: only with economy.model = 'v2'")
+    fort = None
+    if v2 and root.has("fort"):  # optional under v2 (DEC-43, item D)
+        fort = _parse_fort(
+            root.table("fort", ("cost", "build_ticks", "toll_units", "toll_charges"))
+        )
+    elif root.has("fort"):
+        raise RulesetError("fort: only with economy.model = 'v2'")
     return Ruleset(
         tick_hz=root.integer("tick_hz", low=1),
         match_ticks=root.integer("match_ticks", low=1),
@@ -750,6 +783,7 @@ def parse_ruleset(data: object) -> Ruleset:
         ),
         lines=lines,
         bunker=bunker,
+        fort=fort,
     )
 
 
@@ -812,6 +846,15 @@ def _parse_bunker(t: "_Table") -> BunkerRules:
         cost=t.integer("cost", low=0),
         build_ticks=t.integer("build_ticks", low=1),
         shots=t.integer("shots", low=0),
+    )
+
+
+def _parse_fort(t: "_Table") -> FortRules:
+    return FortRules(
+        cost=t.integer("cost", low=0),
+        build_ticks=t.integer("build_ticks", low=1),
+        toll_units=t.integer("toll_units", low=1),
+        toll_charges=t.integer("toll_charges", low=0),
     )
 
 

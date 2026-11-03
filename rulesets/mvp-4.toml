@@ -1,7 +1,7 @@
 # Ruleset mvp-4: the automatic supply flow (DEC-43, #697; mechanics.md, section 7, "Automatic supply
 # flow, leaf shift, fixed warehouses, road fortifications"). A copy of rulesets/mvp-3.toml with
 # supply.model = "flow" (no [lines]: the flow replaces the drawn lines), no [bunker] (BuildBunker
-# gives FEATURE_DISABLED; road fortifications, DEC-43 item D, are to replace it) and fixed warehouses
+# gives FEATURE_DISABLED; the road fortifications of [fort], DEC-43 item D, replace it) and fixed warehouses
 # (city 3, capital 6, province 1, warehouse.max_level = 0: UpgradeWarehouse gives FEATURE_DISABLED).
 # Everything else is as in mvp-3. Under v2 the stance, front marker, rear minimum, transfer, road
 # upgrade and starvation keys below have no effect (DEC-41, items 1, 5, 8); the parser still requires
@@ -285,3 +285,14 @@ built_period_ticks = 200 # every other factory (built or captured, a captured ca
 cost = 4 # BuildFactory(node): 4 charges, the progressive payment of DEC-41, item 7 (the warehouse, then the own groups standing there)
 build_ticks = 100 # the factory works 10 s after the full payment
 max = 3 # factories of a player at most, the capital and the builds under way included
+
+[fort]
+# Road fortifications (DEC-43, item D, #707; mechanics.md, section 7). FortifyRoad(node, edge): an own city
+# or province fortifies a road leaving it, one per (node, road), internal roads included, no global limit.
+# The line point is the border point of the road (border_permille). An enemy group crossing it towards the
+# node loses toll_charges charges per started toll_units units (its charged units become discharged, never
+# below 0); own groups and enemies moving away pass free; a capture of the node destroys its fortifications.
+cost = 150 # 1.5 CP, flat, paid when the command is applied
+build_ticks = 100 # works 10 s after the command
+toll_units = 3 # 1 charge per started 3 units: ceil(units / 3)
+toll_charges = 1

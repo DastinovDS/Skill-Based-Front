@@ -125,6 +125,26 @@ class EdgeBuild(WireModel):
     """The tick the level grows; only for an own build."""
 
 
+class RoadFort(WireModel):
+    """A road fortification of the end ``node`` of the edge (DEC-43, item D; code name
+    ``road_fort``): own ones always, an enemy one (built or being built) while the half of
+    ``node`` is not in fog for the player (item D8, no memory). Its line is the border point of
+    the edge, inside the cell of ``node``."""
+
+    node: NodeId
+    owner: PlayerId
+    built: bool
+    """It takes its toll."""
+    done_tick: Tick | None
+    """An own build only: the tick it starts to work."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.built and self.done_tick is not None:
+            raise ValueError("a built fortification has no done_tick")
+        return self
+
+
 class NodeBuilding(WireModel):
     """The current build of an own city, of any kind (DEC-26, item 10)."""
 
@@ -357,11 +377,16 @@ class EdgeView(WireModel):
     while the edge is not in fog (DEC-17, item 5)."""
     enemy_groups: tuple[EnemyGroup, ...]
     """Enemy figures on the halves not in fog (DEC-33)."""
+    forts: tuple[RoadFort, ...]
+    """The road fortifications of its ends the player knows of (DEC-43, item D8), the end ``a``
+    first; empty without ``ruleset_public.fort``."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if self.detail not in (Detail.PRESENCE, Detail.FOG):
             raise ValueError("edge detail is presence or fog")
+        if len({f.node for f in self.forts}) != len(self.forts):
+            raise ValueError("one fortification per end of an edge")
         if self.enemy_groups and all(h.detail is Detail.FOG for h in self.halves):
             raise ValueError("no figures on an edge with both halves in fog")
         if len({g.id for g in self.enemy_groups}) != len(self.enemy_groups):

@@ -109,7 +109,14 @@
       "max": 3
     },
     "bunker": null,
-    "supply_model": "flow"
+    "fort": {
+      "cost": 150,
+      "build_ticks": 100,
+      "toll_units": 3,
+      "toll_charges": 1
+    },
+    "supply_model": "flow",
+    "supply_dispatch_ticks": 10
   },
   "map_id": "diamond",
   "last_seq": 0,

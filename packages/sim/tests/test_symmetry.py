@@ -29,6 +29,7 @@ from gow_sim.commands import (
     CancelRecruit,
     Command,
     DrawLine,
+    FortifyRoad,
     Merge,
     Move,
     Ok,
@@ -199,6 +200,20 @@ def _decide_v2(
         cmds.append(RemoveLine(tick // 95 % 3))
     if tick % 130 == 0:  # the auto-extension off and on again (#665)
         cmds.append(SetAutoLines(tick // 130 % 2 == 0))
+    if rules.fort is not None and tick % 10 == 5:  # DEC-43, item D: fortify the roads to the enemy
+        front = [
+            (node, e)
+            for node in sorted(own, key=lambda n: state.map.node_key(player, n))
+            for e in state.map.incident[node]
+            if state.nodes[state.map.edges[e].other(node)].owner == 1 - player
+            and e not in state.nodes[node].road_forts
+        ]
+        if front:
+            cmds.append(FortifyRoad(*front[0]))
+        elif own:
+            node = own[tick // 10 % len(own)]
+            roads = state.map.incident[node]
+            cmds.append(FortifyRoad(node, roads[tick // 20 % len(roads)]))
     if rules.flow and tick % 40 == 20:  # DEC-43: the leaf shift up and down to its maximum
         ps = state.players[player]
         cmds.append(SetLeafShift(tick // 40 % (ps.leaf_shift_max + 1)))
@@ -262,6 +277,8 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
             return BuildFactory(mirror_nodes[node])
         case BuildBunker(node=node):
             return BuildBunker(mirror_nodes[node])
+        case FortifyRoad(node=node, edge=edge):
+            return FortifyRoad(mirror_nodes[node], mirror_edges[edge])
         case DrawLine(path=path):
             return DrawLine(tuple(mirror_nodes[n] for n in path))
         case _:
@@ -389,6 +406,9 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.warehouse_level,
         ), f"node {n}"
         assert (b.factory, b.rr, b.fort) == (swap[a.factory], a.rr, a.fort), f"v2 of {n}"
+        assert b.road_forts == {  # DEC-43, item D: the road fortifications, mirrored
+            mapdef.mirror_edges[e]: ready for e, ready in a.road_forts.items()
+        }, f"road fortifications of {n}"
         fa, fb = a.flow, b.flow  # DEC-43: the field and the plan of the flow, mirrored
         assert (fb is None) == (fa is None), f"flow of {n}"
         if fa is not None and fb is not None:
@@ -542,7 +562,7 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     assert applied > 20
     assert {"Move", "Split", "Recruit", "CancelRecruit", "CancelOrder"} <= set(kinds)
     if rules.flow:  # DEC-43: no lines and no bunker, the flow and the shift are mirrored
-        assert {"SetLeafShift", "BuildFactory"} <= set(kinds)
+        assert {"SetLeafShift", "BuildFactory", "FortifyRoad"} <= set(kinds)
         assert not {"DrawLine", "RemoveLine", "BuildBunker", "UpgradeWarehouse"} & set(kinds)
         assert sent > 0, "the flow carried charges"
         assert "SetMode" not in kinds

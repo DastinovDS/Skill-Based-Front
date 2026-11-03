@@ -48,6 +48,9 @@ barracks or a warehouse level of a city.
 - A change of the node's owner stops a factory or bunker build (``build_stopped``, ``kind =
   "factory"`` or ``"fort"``), nothing is returned.
 
+- ``FortifyRoad(node, edge)`` (DEC-43, item D; ``systems.fortify``): a road fortification works
+  ``fort.build_ticks`` after the command, ``road_fort_built`` in that tick; a capture destroys it.
+
 The build events go only to their player (DEC-17, item 6; ``gow_protocol.convert``).
 """
 
@@ -350,4 +353,20 @@ def build(state: GameState, rules: Ruleset) -> list[Event]:
                 )
     if rules.v2:
         events.extend(_site_builds(state, rules))
+    if rules.fort is not None:
+        events.extend(_road_forts_built(state))
+    return events
+
+
+def _road_forts_built(state: GameState) -> list[Event]:
+    """``road_fort_built`` for every road fortification that works from this tick on (DEC-43,
+    item D4), nodes and then edges in id order. A capture before it destroyed it already
+    (``change_owner``), so nothing else stops it."""
+    tick = state.tick
+    events: list[Event] = []
+    for nid in sorted(state.nodes):
+        node = state.nodes[nid]
+        for eid in sorted(node.road_forts):
+            if node.road_forts[eid] == tick and node.owner is not None:
+                events.append(event(tick, "road_fort_built", player=node.owner, node=nid, edge=eid))
     return events

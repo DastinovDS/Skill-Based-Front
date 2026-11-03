@@ -332,7 +332,8 @@
         "build": {
           "done_tick": 550
         },
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 1,
@@ -364,7 +365,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 2,
@@ -389,7 +391,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 3,
@@ -421,7 +424,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 4,
@@ -453,7 +457,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 5,
@@ -485,7 +490,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 6,
@@ -517,7 +523,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 7,
@@ -560,7 +567,8 @@
             "charged": null,
             "units_range": null
           }
-        ]
+        ],
+        "forts": []
       },
       {
         "id": 8,
@@ -592,7 +600,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       }
     ],
     "groups": [

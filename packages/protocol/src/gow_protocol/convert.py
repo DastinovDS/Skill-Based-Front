@@ -38,7 +38,10 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
   ``build_stopped`` only to the builder (DEC-17, item 6; DEC-26, item 9); ``front_set``,
   ``rear_min_set`` (DEC-28) and ``transfer_started`` only to their player (DEC-18, item 8);
   ``starvation`` only to the owner of the city (DEC-19, item 8); ``capture_failed`` only to the
-  player whose group could not pay for a capture (DEC-38, item 10);
+  player whose group could not pay for a capture (DEC-38, item 10); the road fortifications
+  (DEC-43, item D): ``road_fort_built`` and ``road_fort_destroyed`` to the owner, ``toll_paid``
+  to the payer, ``toll_taken`` to the owner of the fortification (the simulation emits it only
+  when the owner sees the half of the fortified node, so it is private by ``player`` too);
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
 Entity ids in event data (``group``, ``new_group``, ``packet``, ``fight``) become opaque ids of
@@ -85,6 +88,7 @@ from gow_protocol.view import (
     OnEdgeLoc,
     OrderView,
     PacketView,
+    RoadFort,
     Seen,
     SelfView,
     SiteBuild,
@@ -153,9 +157,13 @@ PRIVATE_KINDS: Final = frozenset(
         "recruit_cancelled",
         "recruit_queue_lost",
         "recruited",
+        "road_fort_built",
+        "road_fort_destroyed",
         "road_upgraded",
         "stance_changed",
         "starvation",
+        "toll_paid",
+        "toll_taken",
         "transfer_started",
         "warehouse_lost",
         "warehouse_upgraded",
@@ -247,9 +255,13 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "recruit_cancelled": ("cp", "node", "player"),
     "recruit_queue_lost": ("node", "player", "units"),
     "recruited": ("group", "node", "player"),
+    "road_fort_built": ("edge", "node", "player"),
+    "road_fort_destroyed": ("built", "edge", "node", "player"),
     "road_upgraded": ("edge", "player", "width"),
     "stance_changed": ("player", "stance"),
     "starvation": ("node", "player", "units", "warehouse"),
+    "toll_paid": ("charges", "edge", "group", "node", "player"),
+    "toll_taken": ("charges", "edge", "node", "player"),
     "transfer_started": ("arrive_tick", "charges", "from_node", "packet", "player", "to_node"),
     "vp_awarded": ("player", "vp"),
     "warehouse_lost": ("charges", "node", "owner"),
@@ -279,6 +291,7 @@ EVENT_ID_FIELDS: Final[Mapping[str, frozenset[str]]] = {
     "packet_sent": frozenset({"packet"}),
     "plan_charged": frozenset({"group"}),
     "recruited": frozenset({"group"}),
+    "toll_paid": frozenset({"group"}),
     "transfer_started": frozenset({"packet"}),
 }
 """The fields of an event kind that hold an internal entity id (a subset of ``EVENT_FIELDS``).
@@ -384,6 +397,10 @@ def view_to_wire(view: sv.PlayerView) -> View:
                         units_range=_range(f.units_range),
                     )
                     for f in e.enemy_groups
+                ),
+                forts=tuple(
+                    RoadFort(node=f.node, owner=f.owner, built=f.built, done_tick=f.done_tick)
+                    for f in e.forts
                 ),
             )
             for e in view.edges
@@ -589,6 +606,10 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                     }
                     for f in e.enemy_groups
                 ],
+                "forts": [
+                    {"node": f.node, "owner": f.owner, "built": f.built, "done_tick": f.done_tick}
+                    for f in e.forts
+                ],
             }
             for e in view.edges
         ],
@@ -751,6 +772,8 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.BuildFactory(node)
         case wire.BuildBunkerCmd(node=node):
             return sim.BuildBunker(node)
+        case wire.FortifyRoadCmd(node=node, edge=edge):
+            return sim.FortifyRoad(node, edge)
         case wire.DrawLineCmd(path=path):
             return sim.DrawLine(path)
         case wire.RemoveLineCmd(line=line):

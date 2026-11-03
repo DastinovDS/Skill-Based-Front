@@ -920,3 +920,35 @@ of the decided matches (narrows 0.45 [0.41; 0.49]). No gross imbalance between b
 What stands out is the burned share: about half of the production burns (DEC-42 field on `mvp-3`: 0.17), the capital
 is full in 50 to 86% of the ticks: with warehouses of 3 the network fills and a full factory finds no neighbour with
 room. A question for the field run (#706) and the owner, not a smoke failure.
+
+## 2026-11-03: road fortifications of `mvp-4`, smoke run (DEC-43 item D, #707)
+
+`mvp-4` with the `[fort]` section (DEC-43 item D: 1.5 CP, 100 ticks, a toll of 1 charge per started 3 units at the
+border point of the road). Hash `2ecffe4f3f336217d718a37347b920b7` (archived), `SIM_VERSION` 33. The campaign bots
+fortify the road of an own node to an enemy neighbour where an enemy is in sight while their CP are near the cap
+(`gow_bots.bots.economy.fort_site`), and an attack whose every own road into the target is fortified asks for the toll
+on top of its shots (`Bot.toll_ahead`).
+
+Smoke run (AGENTS.md, section 8): `mise run tournament -- --seeds 3 --ruleset rulesets/mvp-4.toml`, the default field
+(13 bots), the 4 pool maps, 2028 matches, locally; the metrics as in the #704 entry above.
+
+| | `mvp-4` #704 | `mvp-4` with `[fort]`, this run |
+|---|---|---|
+| CP spent | 0.77 | 0.77 (0.74 moves and recruits, 0.03 fortifications) |
+| burned (share of start + production) | 0.47 | 0.48 |
+| captures per player | 35.2 | 35.0 |
+| capital wins | 13.4% | 12.9% |
+| ticks | 8426 | 8430 |
+| leaf shifts per player and match | 32.7 | 32.3 |
+
+Fortifications: 5893 built in all (2.9 per player and match); the bots that build them are `reactive` (4.9 per match,
+in 68% of its matches), `smart_reactive` 4.9, `smart_hoarder` 3.3, `strangler` 2.6, `smart_strangler` 2.2,
+`smart_turtle` 0.9; the expander, rusher and turtle personalities (plain and smart) almost never reach the CP
+condition. Tolls: 732 paid in all, 772 charges (0.36 tolls and 0.38 charges per player and match); most by
+`random_legal` (0.69 per match), `smart_turtle` (0.59) and `smart_expander` (0.48). No crash (2028 rows), charge ledger
+residual 0 in every match (`charges_tolls` is a sink of the ledger now), draws 62 (3%). Win rates against the others:
+the smart bots 0.50 (turtle) to 0.79 (strangler), `reactive` 0.74, `turtle` 0.18, `idle` 0.00; side 0 wins 0.48
+[0.45; 0.50] of the decided matches. No gross imbalance; the smoke check passes. The fortifications are a small CP sink
+for these bots (3% of the income): the total CP spent did not rise, the bots that fortify spend a little less on moves
+and recruits. The CP burned at the cap is not in the tournament rows (no metric); a question for the field run (#706)
+and the bot audit, together with the price.

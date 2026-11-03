@@ -1,0 +1,5 @@
+{
+  "type": "command",
+  "seq": 26,
+  "cmd": { "type": "fortify_road", "node": 3, "edge": 8 }
+}

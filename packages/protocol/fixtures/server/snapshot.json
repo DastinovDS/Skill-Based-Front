@@ -190,7 +190,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 1,
@@ -222,7 +223,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 2,
@@ -254,7 +256,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 3,
@@ -297,7 +300,8 @@
             "charged": null,
             "units_range": null
           }
-        ]
+        ],
+        "forts": []
       }
     ],
     "groups": [

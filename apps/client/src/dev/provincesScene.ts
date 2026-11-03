@@ -132,6 +132,7 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       halves: [half(e.a), half(e.b)],
       build: null,
       enemy_groups: [],
+      forts: [],
     };
   });
 

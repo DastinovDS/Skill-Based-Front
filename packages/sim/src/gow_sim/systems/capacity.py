@@ -40,7 +40,8 @@ Every owner change goes through ``change_owner()``: the warehouse is emptied (no
 mechanics.md, section 9), road levels, the barracks and the warehouse level are kept (DEC-26,
 item 4), the recruit queue of the former owner is lost without a refund (DEC-25,
 item 10), the grace period starts. Under the economy v2 (DEC-41) the round robin of the node starts
-again and a bunker is destroyed (item 12); its factory and its lines are settled by
+again and a bunker is destroyed (item 12), so are the road fortifications of the node (DEC-43,
+item D7); its factory and its lines are settled by
 ``systems.supply`` in the same tick, a factory or bunker build is stopped by ``systems.build``.
 
 Under the economy v2 there is no starvation (DEC-41, item 5).
@@ -185,8 +186,9 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     former owner on the city falls back in ``systems.supply`` (DEC-28, item 2).
 
     Captures (movement SIM-05, combat SIM-09) call this; it emits ``warehouse_lost`` when
-    charges were in the warehouse and ``recruit_queue_lost`` (for the former owner) when units
-    were queued. A call with the current owner changes nothing.
+    charges were in the warehouse, ``recruit_queue_lost`` (for the former owner) when units
+    were queued and ``road_fort_destroyed`` (for the former owner) for every road fortification of
+    the node (DEC-43, item D7). A call with the current owner changes nothing.
     """
     n = state.nodes[node]
     if n.owner == owner:
@@ -202,12 +204,27 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
                 state.tick, "recruit_queue_lost", player=n.owner, node=node, units=n.recruit_queue
             )
         )
+    old = n.owner
     n.recruit_queue = 0
     n.recruit_progress = 0
     n.owner = owner
     n.warehouse = 0
     n.rr = 0
     n.fort = False  # DEC-41, item 12: a bunker is destroyed on capture, it does not pass
+    # DEC-43, item D7: the road fortifications of the node (built or being built) are destroyed.
+    events.extend(
+        event(
+            state.tick,
+            "road_fort_destroyed",
+            player=old,
+            node=node,
+            edge=e,
+            built=state.tick >= n.road_forts[e],
+        )
+        for e in sorted(n.road_forts)
+        if old is not None
+    )
+    n.road_forts = {}
     n.cut_since = None
     n.over_ticks = 0
     n.captured_tick = state.tick

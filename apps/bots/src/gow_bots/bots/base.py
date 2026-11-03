@@ -38,6 +38,7 @@ from gow_sim.commands import (
     CancelOrder,
     Command,
     DrawLine,
+    FortifyRoad,
     Move,
     ReleasePlan,
     RemoveLine,
@@ -548,7 +549,8 @@ class Bot:
     def allowed(self, cmd: Command) -> bool:
         """Whether the economy model of the ruleset has ``cmd`` at all: the commands of the
         other model only give ``FEATURE_DISABLED`` (DEC-41, items 5 and 14); so do the commands
-        of the other supply model and the bunker without ``[bunker]`` (DEC-43, A12, B2, D1)."""
+        of the other supply model, the bunker without ``[bunker]`` and the road fortification
+        without ``[fort]`` (DEC-43, A12, B2, D1, D)."""
         rules = self.rules
         if isinstance(cmd, FLOW_ONLY):
             return rules.flow
@@ -556,6 +558,8 @@ class Bot:
             return False
         if isinstance(cmd, BuildBunker) and rules.bunker is None:
             return False
+        if isinstance(cmd, FortifyRoad):
+            return rules.fort is not None  # DEC-43, item D
         if not rules.v2:
             return not isinstance(cmd, V2_ONLY)
         if isinstance(cmd, SetMode) and cmd.mode is Mode.DEFENSE:
@@ -607,6 +611,23 @@ class Bot:
         if seen.enemy_units is None or seen.enemy_charged is None:
             return None
         return (seen.enemy_units, seen.enemy_charged)
+
+    def toll_ahead(self, view: PlayerView, dest: int, shots: int) -> int:
+        """The charges an attack of ``shots`` charged units on ``dest`` loses to a visible enemy
+        road fortification of ``dest`` (DEC-43, item D6), when every road from an own node into
+        ``dest`` has one (the bot cannot pick the road: the path is the simulation's); 0 when one
+        of them is free, without ``[fort]`` and for a node of no enemy."""
+        fort = self.rules.fort
+        if fort is None or shots <= 0 or view.nodes[dest].owner != 1 - view.player:
+            return 0
+        approaches = 0
+        for eid in self.map.incident[dest]:
+            if view.nodes[self.map.edges[eid].other(dest)].owner != view.player:
+                continue
+            approaches += 1
+            if not any(f.node == dest and f.built for f in view.edges[eid].forts):
+                return 0
+        return fort.toll(shots, shots) if approaches else 0
 
     def defended(self, view: PlayerView, node: int) -> int:
         """The Defense bonus the enemy may have gathered in ``node``, before its cap (DEC-30).

@@ -52,6 +52,7 @@ from gow_bots.bots.base import Bot, ParamRange, node_of
 from gow_bots.bots.economy import (
     bunker_site,
     factory_site,
+    fort_site,
     leaf_shift_command,
     line_commands,
     release_commands,
@@ -63,6 +64,7 @@ from gow_sim.commands import (
     BuildFactory,
     CancelOrder,
     Command,
+    FortifyRoad,
     Merge,
     Move,
     Recruit,
@@ -192,7 +194,8 @@ class CampaignBot(Bot):
     def economy_v2(self, ctx: Ctx) -> None:
         """The v2 play of ``gow_bots.bots.economy``: plans that waited depart, lines to the nodes
         that want charges, one factory and one bunker build at a time; under the supply flow no
-        lines and no bunker, the leaf shift instead (DEC-43). Nothing under v1."""
+        lines and no bunker, the leaf shift instead (DEC-43), and a road fortification when the
+        CP near their cap (``fort_site``, item D). Nothing under v1."""
         if not self.rules.v2:
             return
         view = ctx.view
@@ -209,6 +212,9 @@ class CampaignBot(Bot):
         site = bunker_site(self, view, self.bunkers())
         if site is not None:
             self.spend(ctx, BuildBunker(site))
+        road = fort_site(self, view, ctx.budget)  # DEC-43, item D: the CP sink of mvp-4
+        if road is not None:
+            self.spend(ctx, FortifyRoad(*road))
         shift = leaf_shift_command(self, view)  # the supply flow only (DEC-43, item G)
         if shift is not None:
             self.spend(ctx, shift)
@@ -287,6 +293,7 @@ class CampaignBot(Bot):
             return 0
         terrain = self.map.nodes[dest].terrain
         base = shots_to_take(self.rules, terrain, units, charged, self.defended(view, dest))
+        base += self.toll_ahead(view, dest, base)  # DEC-43, item D: a fortified road costs more
         return base + self.params["margin"] + self.extra.get(dest, 0)
 
     def enemy_net(self, view: PlayerView) -> frozenset[int]:

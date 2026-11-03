@@ -18,8 +18,9 @@ economy v2 of ``mvp-3`` (DEC-41): there ``MixBot`` also builds factories and bun
 charges, #645), draws supply lines from its capital and from their targets and removes them,
 gives its planned orders a requested bonus and releases some of them early (#646), and its
 v1-only commands (and "Defense") are rejected. Under the supply flow of ``mvp-4`` (DEC-43) it also
-sets its leaf shift now and then (in range, out of range, unchanged), and its line, bunker and
-warehouse commands are rejected.
+sets its leaf shift now and then (in range, out of range, unchanged) and fortifies roads to
+foreign nodes (DEC-43, item D; with a wrong road and a second one on the same road now and
+then), and its line, bunker and warehouse commands are rejected.
 """
 
 import argparse
@@ -40,6 +41,7 @@ from gow_sim.commands import (
     Command,
     DrawLine,
     Forfeit,
+    FortifyRoad,
     Merge,
     Move,
     ReleasePlan,
@@ -143,6 +145,8 @@ class MixBot:
             cmds.extend(self._develop(view, k))
         if self.flow and k % 7 == 3:  # DEC-43: 0..3, beyond the maximum now and then
             cmds.append(SetLeafShift(k // 7 % 4))
+        if self.flow and k % 11 == 5:  # DEC-43, item D: first, before the CP go; at times a reject
+            cmds = self._fortify(view, k) + cmds
         if self.v2:
             cmds.extend(self._economy_v2(view, k))
             if k % 2 == 0 and view.me.cp >= self.plan_cost:  # first, before the CP go (#646)
@@ -175,6 +179,30 @@ class MixBot:
             if waiting:
                 cmds.append(ReleasePlan(waiting[-1].id))
         return cmds
+
+    def _fortify(self, view: PlayerView, k: int) -> list[Command]:
+        """DEC-43, item D: the first own node (by id) with a road to a foreign node it has not
+        fortified fortifies it; every fourth time a road that does not leave the node
+        (``NOT_ADJACENT``) or a second one on the same road (``ALREADY_BUILT``)."""
+        me = view.player
+        for n in view.nodes:
+            if n.owner != me:
+                continue
+            for eid in self.map.incident[n.id]:
+                other = self.map.edges[eid].other(n.id)
+                if view.nodes[other].owner == me:
+                    continue
+                built = any(f.node == n.id for f in view.edges[eid].forts)
+                if k % 4 == 1:
+                    wrong = next(
+                        e for e in range(len(self.map.edges)) if e not in self.map.incident[n.id]
+                    )
+                    return [FortifyRoad(n.id, wrong)]
+                if built and k % 4 == 3:
+                    return [FortifyRoad(n.id, eid)]
+                if not built:
+                    return [FortifyRoad(n.id, eid)]
+        return []
 
     def _plan(self, view: PlayerView, bonus: int) -> list[Command]:
         """A planned ``Move`` with the requested ``bonus`` (DEC-41, item 10) of the idle charged

@@ -34,6 +34,9 @@ and DEC-35 (mechanics.md, section 10) and has the shape of the wire ``View`` of 
   gathered, the tick the next charge is due; item 10); the built factory of an enemy city and the
   built bunker of an enemy node joined by an edge to any own node (DEC-31, item 12), never an enemy
   build or an enemy line;
+- road fortifications (DEC-43, item D8; ``EdgeView.forts``): own ones always with the tick an own
+  build ends; an enemy one, built or being built, while the half of its node is not in fog (only
+  whether it is built, no memory);
 - supply flow (DEC-43, item E, ``supply.model = "flow"``; otherwise ``None``): for own nodes only
   the field, the downhill neighbours, the plan of the next dispatch and why a node sends nothing,
   whether it is in a pocket; the own leaf shift, its maximum and the next dispatch tick;
@@ -62,7 +65,8 @@ edges, enemy packets (on any edge, DEC-10, item 6), enemy CP, stance, production
 the enemy's front markers and rear minimum (DEC-28), enemy transfers (DEC-18, item 8), the bonus
 an enemy "Defense" has gathered (DEC-30, item 5), the enemy's supply lines, factory and bunker
 builds, factory rates and planned-order requests (DEC-41), the enemy's leaf shift, field and
-flow plan (DEC-43, item B5), events, the target of an enemy's
+flow plan (DEC-43, item B5), the enemy's road fortifications in fog and the tick an enemy one is
+built (item D8), events, the target of an enemy's
 normal order (normal orders have no intent), sequential ids.
 
 Ids of own groups, own packets and intents are opaque per player: keyed blake2b of
@@ -156,6 +160,7 @@ __all__ = [
     "PacketView",
     "PlayerView",
     "Reach",
+    "RoadFortView",
     "SelfView",
     "Sighting",
     "SiteBuildView",
@@ -352,6 +357,20 @@ class EnemyGroupView:
 
 
 @dataclass(frozen=True, slots=True)
+class RoadFortView:
+    """A road fortification on an edge (DEC-43, item D; code name ``road_fort``): of the end
+    ``node``, owned by ``owner``. Own ones always; an enemy one, built or being built, while the
+    half of ``node`` on the edge is not in fog (item D8, no memory)."""
+
+    node: int
+    owner: int
+    built: bool
+    """It takes its toll (the build time is over)."""
+    done_tick: int | None
+    """Own builds only: the tick it starts to work; ``None`` when built and for the enemy's."""
+
+
+@dataclass(frozen=True, slots=True)
 class EdgeView:
     id: int
     width: int
@@ -371,6 +390,9 @@ class EdgeView:
     while the edge is not in fog (DEC-17, item 5; not remembered)."""
     enemy_groups: tuple[EnemyGroupView, ...] = ()
     """Enemy figures on the halves not in fog (DEC-33), sorted by id."""
+    forts: tuple[RoadFortView, ...] = ()
+    """The road fortifications of its ends the player knows of (DEC-43, item D8): the end ``a``
+    first."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -859,6 +881,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 halves=(pair[0], pair[1]),
                 build=_build_view(state, rules, player, e, level),
                 enemy_groups=() if on_edge is None else tuple(sorted(on_edge, key=lambda v: v.id)),
+                forts=_forts_view(state, player, e, levels),
             )
         )
 
@@ -1007,6 +1030,26 @@ def _enemy_figures(
     return figures
 
 
+def _forts_view(
+    state: GameState, player: int, edge: int, levels: Vision
+) -> tuple[RoadFortView, ...]:
+    """DEC-43, item D8: own road fortifications always, with the tick an own build ends; an enemy
+    one while the half of its node is not in fog, only whether it is built."""
+    edef = state.map.edges[edge]
+    forts: list[RoadFortView] = []
+    for n in (edef.a, edef.b):
+        node = state.nodes[n]
+        ready = node.road_forts.get(edge)
+        if ready is None or node.owner is None:
+            continue
+        built = state.tick >= ready
+        if node.owner == player:
+            forts.append(RoadFortView(n, node.owner, built, None if built else ready))
+        elif levels.half(n) is not Detail.FOG:
+            forts.append(RoadFortView(n, node.owner, built, None))
+    return tuple(forts)
+
+
 def _build_view(
     state: GameState, rules: Ruleset, player: int, edge: int, level: Detail
 ) -> BuildView | None:
@@ -1118,6 +1161,10 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                         "units_range": None if f.units_range is None else list(f.units_range),
                     }
                     for f in e.enemy_groups
+                ],
+                "forts": [
+                    {"node": f.node, "owner": f.owner, "built": f.built, "done_tick": f.done_tick}
+                    for f in e.forts
                 ],
             }
             for e in view.edges

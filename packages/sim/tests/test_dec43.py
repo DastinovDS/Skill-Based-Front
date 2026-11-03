@@ -152,11 +152,12 @@ def _raw(path: Path) -> dict[str, Any]:
 
 def test_mvp4_is_mvp3_with_the_dec43_keys() -> None:
     """The key list of ``mvp-4.toml``: ``supply.model = "flow"``, no ``[lines]``, no ``[bunker]``,
-    fixed warehouses; everything else as ``mvp-3``."""
+    fixed warehouses, the ``[fort]`` of item D (#707); everything else as ``mvp-3``."""
     expected = _raw(RULESETS / "mvp-3.toml")
     expected["supply"]["model"] = "flow"
     del expected["lines"]
     del expected["bunker"]
+    expected["fort"] = {"cost": 150, "build_ticks": 100, "toll_units": 3, "toll_charges": 1}
     expected["warehouse"]["max_level"] = 0
     expected["warehouse"]["start_by_kind"] = {
         "capital": 6,

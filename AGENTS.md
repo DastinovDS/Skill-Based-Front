@@ -233,6 +233,7 @@ The order in code: `gow_sim.match.SYSTEMS`. Under `economy.model = "v2"` (DEC-41
 rounds every `combat.round_ticks`, the groups of a fight do not move. `combat` gets the bonuses of scheduled orders and of "Defense" (accumulated, DEC-30) from `systems.orders.active_bonuses(state, rules)`
 and removes the bonus from a group that entered a fight (it burns up with the fight);
 `orders` removes the intents and bonuses of finished orders and modes (SIM-10); road building (DEC-28, item 7: for CP, on an edge) creates no intents.
+The toll of road fortifications (DEC-43, item D, `systems.fortify`) is the first step of `combat`, before the edge meetings and the node contacts: it reads the moves of the tick the same way the edge meetings do.
 
 The fog memory is stored in `GameState` (for each player), so `project()` stays a pure function and a replay stays reproducible.
 
@@ -267,7 +268,10 @@ The fog memory is stored in `GameState` (for each player), so `project()` stays 
     type, DEC-26), enemy construction on edges in the fog (DEC-17, DEC-22);
   - a barracks (except a built barracks of an enemy city adjacent to your own node: DEC-31), the warehouse level, the warehouse capacity, construction and the recruit queue of enemy cities (DEC-25, DEC-26);
   - economy v2 (DEC-41): the enemy's supply lines (never, in any state), its factory and bunker builds, its factory rates and
-    the request or gathered bonus of its planned orders; a built enemy factory and bunker only by the DEC-31 rule (a node joined by an edge to an own node).
+    the request or gathered bonus of its planned orders; a built enemy factory and bunker only by the DEC-31 rule (a node joined by an edge to an own node);
+  - road fortifications (DEC-43, item D): an enemy one (built or being built) outside the half of its node that is not in fog,
+    the tick an enemy one starts to work, any memory of one; the toll of an enemy line is told to its owner (`toll_taken`) only
+    when the owner sees that half in the tick of the toll, never with the id of the paying group.
   - the supply flow (DEC-43): the enemy's leaf shift, its field, its downhill roads and the plan of its next dispatch (never, in any state);
     The capacity of a node is public and exact: it is set by the kind of node (DEC-22), there is no estimate.
 - A new field in `PlayerView` only together with a fog test for that field.
@@ -483,6 +487,7 @@ The reference machine is described in `docs/perf.md`.
 | The same on maps with 45..55 nodes (`grid55`, DEC-27, item 7) | step and supply: the 40-node budgets; projection: 0.45 ms (accepted by the owner 2026-10-22, #371) |
 | The supply step (part of the simulation step) | ≤ 0.1 ms |
 | The supply step on a stress state (`test_bench_supply_many_donors_busy_roads`, `docs/perf.md`): busy roads, detours, dispatch once per `supply.dispatch_ticks` | ≤ 1 ms (accepted by the owner 2026-10-21) |
+| The supply flow step on a stress state (`test_bench_supply_flow_busy`, `docs/perf.md`): the busiest dispatch of DEC-43, about 18 packets at once | ≤ 0.2 ms (accepted by the owner 2026-11-03) |
 | A bot decision (every 5 ticks) | ≤ 1 ms |
 | A full headless match of two bots | ≤ 8 s |
 | A tournament of 1000 matches on 8 cores | ≤ 20 min |
@@ -556,6 +561,7 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | intent | `Intent` | the part of a scheduled order visible to everyone: from where, to where, the kind, without the size and group id |
 | modes | `Mode.ATTACK / DEFENSE` | "Attack", "Defense"; "Building" (`BUILD`) was removed by DEC-16; economy v2 has no "Defense" (DEC-41, item 5) |
 | bunker | `Node.fort`, `BuildBunker` | economy v2: a building of a city or a province, +`bunker.shots` virtual shots to a charged defender in every fight there, destroyed on capture (DEC-41, item 12) |
+| road fortification | `Node.road_forts`, `FortifyRoad`, `EdgeView.forts` | `mvp-4` (`[fort]`, DEC-43, item D): a line of an own node on a road leaving it, at the border point of the road, bought for CP; an enemy group crossing it towards the node loses 1 charge per started 3 units (`toll_paid`, `toll_taken`); destroyed when the node is captured. Code name `road_fort` (the bunker is `fort`) |
 | progressive payment | `Build.owed`, `systems.build.pay` | economy v2: a building takes charges from the node warehouse, then from the own standing groups, until paid; its build time starts then (DEC-41, item 7) |
 | construction | `UpgradeRoad(edge)` | upgrading your own internal road by one level for CP (`orders.cost.build`), construction on an edge `Edge.build` (DEC-28, item 7) |
 | CP | `cp` | command points; flat regeneration, they do not grow with territory; stored in hundredths |

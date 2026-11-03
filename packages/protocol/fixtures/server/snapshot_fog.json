@@ -151,7 +151,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 1,
@@ -176,7 +177,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       }
     ],
     "groups": [
