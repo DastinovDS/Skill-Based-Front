@@ -265,7 +265,7 @@ class FlowNode:
 
     ``d``: the effective field (item A4, after the pull), ``None`` without a field (INF, item A2).
     ``k``: the leaf level of the node's own component (item A10: the shift for the capital's
-    component, 0 for any other). ``pocket``: the component has no own factory (item A10).
+    component, 0 for any other). ``pocket``: the component does not contain the own capital (item H1).
     ``down``: the downhill neighbours of item A6 (``k <= d(m) < d``, room not considered), by
     ``node_key``. ``next``: the receivers of its next dispatch in the order of item A6, and
     ``idle`` why there are none (the plan of item A13, step 6; ``None`` when ``next`` is set).

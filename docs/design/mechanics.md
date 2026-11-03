@@ -2201,7 +2201,7 @@ The owner's decision of 2026-11-03 (#719, refs #697). Under the flow a cut-off p
 | H11 | a factory appears: A captured in 1000; a group 3/3 in C; an own factory in B from tick 1050 on (a build finished in tick 1049) | `cut_since` of B..G reset at 1050; nothing spent at 1100 (3/3); B produces nothing at 1200 (cut off) |
 | H12 | the capturer's pocket: a group 3/3 of player 1 stands in A when player 1 takes it in tick 1000 (A touches no other node of player 1) | for player 1: `cut_since` of A 1000; 1100: the group 3/2, `starvation` to player 1 only |
 | H13 | the capital lost: player 1 takes K in tick 1000 | every node of player 0 has `flow_pocket` true; no factory of player 0 produces; the match ends in that tick (DEC-03, `capital`) |
-| H14 | H5 and H2 under `mvp-3` (`supply.model = "lines"`) | nothing is spent; C produces at 1200 and 1400 (DEC-41 item 5 unchanged) |
+| H14 | H5 and H2 under `mvp-3` (`supply.model = "lines"`) | no `starvation` event, the group stays 3/3; C's factory does not stop: an event of its production at 1200 and at 1400 (`charges_produced`, or `charge_burned` when its warehouse of 2 is full; DEC-41 items 2 and 5 unchanged) |
 
 **Versions.** `SIM_VERSION` 34 (golden replays `v34`). `PROTOCOL_VERSION` stays 37: the schema does not change (`flow_pocket` keeps its type and changes only its meaning; the `starvation` event and `NodeView.starve_in` exist since DEC-19).
 

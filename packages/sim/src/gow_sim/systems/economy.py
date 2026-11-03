@@ -32,6 +32,9 @@ plus the own packets on the way to it reach its warehouse. A full factory's new 
 it leaves at once as a packet to an own neighbour with room and ``d(m) >= k`` by the field the flow
 step stored in the previous tick (``systems.flow.spill_target``; event ``charges_produced`` with
 ``spill = 1`` and ``packet_sent``); with no such neighbour it burns (``charge_burned``).
+A factory in a **pocket** (its own component does not contain the own capital, DEC-43 item H2)
+produces nothing, with no event; the test reads the ownership at the start of the tick
+(``capacity.supplied_territory``), before the captures of the tick's ``movement`` and ``combat``.
 
 Tick convention: a system sees ``state.tick`` as the number of the tick being simulated, 1 for
 the first step after ``initial_state()``. A period fires on ticks ``t > 0`` with
@@ -42,7 +45,7 @@ from typing import Final
 
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import Event, GameState, event
-from gow_sim.systems.capacity import warehouse_capacity
+from gow_sim.systems.capacity import supplied_territory, warehouse_capacity
 from gow_sim.systems.flow import send_one, spill_target
 from gow_sim.systems.supply import edge_packet_ticks, incoming_charges
 
@@ -101,6 +104,7 @@ def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
             player.cp = total - burned
             if burned > 0:
                 events.append(event(tick, "cp_burned", player=pid, cp=burned))
+    connected: dict[int, tuple[bool, ...]] = {}
     for nid in sorted(state.nodes):
         node = state.nodes[nid]
         owner = node.owner
@@ -110,6 +114,10 @@ def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
         if tick <= 0 or tick % period != 0:
             continue
         if rules.flow:
+            if owner not in connected:
+                connected[owner] = supplied_territory(state, owner)
+            if not connected[owner][nid]:
+                continue  # cut off from the own capital: the factory stops (DEC-43, item H2)
             events.extend(_produce_flow(state, rules, owner, nid))
         elif node.warehouse < warehouse_capacity(state, rules, nid):
             node.warehouse += 1

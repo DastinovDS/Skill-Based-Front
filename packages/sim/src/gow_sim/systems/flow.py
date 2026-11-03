@@ -13,6 +13,9 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
 - the **leaf level** ``k`` of a component: the player's shift (``PlayerState.leaf_shift``) for the
   component of the own capital, 0 for every other one (item A10); the shift is clamped first,
   ``k := min(k, d0(capital))``, and stays clamped (item B3);
+- a **pocket** is an own component that does not contain the own capital (item H1); its
+  factories stop (``systems.economy``, item H2) and, without an own factory, its nodes starve
+  (item H4);
 - a node with ``d0(n) > k`` is **pulled** to the level when an own group stands in it short of a
   charge (``charged < units``, in a fight or not) or with a gathering planned order
   (``plan > 0``); groups on edges never pull (item A4). The effective field
@@ -24,6 +27,9 @@ Order inside the step (item A13):
 
 1. **Captured factories** pass to the capturer or are destroyed (``lines.settle_factories``,
    DEC-41 item 2).
+1b. **Starvation** of the factory-less pockets (item H4, ``starve_pockets``): the per-node timer
+   ``Node.cut_since`` and the DEC-19 consumption (``capacity.consume``) on every node of such a
+   pocket, provinces included.
 2. **Packets** move and land (``supply.move_packets``).
 3. **Recharge** of standing units (``supply.recharge``).
 4. The **field**: ``d0``, the clamp of the shift, the pull, ``d``.
@@ -48,8 +54,8 @@ from collections import deque
 from dataclasses import dataclass
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, FlowIdle, FlowNode, GameState, event
-from gow_sim.systems.capacity import warehouse_capacities
+from gow_sim.state import AtNode, Event, FlowIdle, FlowNode, GameState, Group, event
+from gow_sim.systems.capacity import consume, is_starvation_tick, warehouse_capacities
 from gow_sim.systems.lines import settle_factories
 from gow_sim.systems.supply import (
     edge_packet_ticks,
@@ -60,16 +66,25 @@ from gow_sim.systems.supply import (
     send_packet,
 )
 
-__all__ = ["next_dispatch_tick", "send_one", "spill_target", "supply_flow", "update_flow"]
+__all__ = [
+    "next_dispatch_tick",
+    "send_one",
+    "spill_target",
+    "starve_pockets",
+    "supply_flow",
+    "update_flow",
+]
 
 
 def supply_flow(state: GameState, rules: Ruleset) -> list[Event]:
     """The supply step of the flow (see the module docstring)."""
     events: list[Event] = []
     settle_factories(state, rules)
+    garrisons = garrisons_by_node(state)
+    events.extend(starve_pockets(state, rules, garrisons))
     capacities = warehouse_capacities(state, rules)
     events.extend(move_packets(state, capacities))
-    recharge(state, rules, garrisons_by_node(state))
+    recharge(state, rules, garrisons)
     tick = state.tick
     dispatch = tick > 0 and tick % rules.supply.dispatch_ticks == 0
     for pid in sorted(state.players):
@@ -98,6 +113,68 @@ def next_dispatch_tick(state: GameState, rules: Ruleset) -> int:
     return (state.tick // period + 1) * period  # non-negative: rounded down
 
 
+# Pockets and starvation (item H) --------------------------------------------------------------
+
+
+def starving_nodes(state: GameState, player: int) -> list[int]:
+    """The own nodes of ``player`` in a factory-less pocket (items H1, H3, H4), ascending: their
+    own component over own nodes does not contain the own capital and has no node with
+    ``Node.factory == player``. O(V + E)."""
+    mapdef = state.map
+    nodes = state.nodes
+    incident = mapdef.incident
+    edges = mapdef.edges
+    capital = mapdef.capital(player)
+    seen: dict[int, bool] = {}
+    result: list[int] = []
+    for nid in range(len(incident)):  # ascending; ids are 0..n-1 (``MapDef``)
+        if nid in seen or nodes[nid].owner != player:
+            continue
+        seen[nid] = True
+        members = [nid]
+        safe = False
+        head = 0
+        while head < len(members):
+            n = members[head]
+            head += 1
+            safe = safe or n == capital or nodes[n].factory == player
+            for eid in incident[n]:
+                e = edges[eid]
+                m = e.b if e.a == n else e.a
+                if m not in seen and nodes[m].owner == player:
+                    seen[m] = True
+                    members.append(m)
+        if not safe:
+            result.extend(members)
+    result.sort()
+    return result
+
+
+def starve_pockets(
+    state: GameState, rules: Ruleset, garrisons: dict[int, list[Group]]
+) -> list[Event]:
+    """Step 1b (item H4): ``cut_since`` of every node and the DEC-19 consumption of the nodes of
+    factory-less pockets, provinces included. ``garrisons``: ``supply.garrisons_by_node``."""
+    starving: dict[int, bool] = {}
+    for pid in sorted(state.players):
+        for n in starving_nodes(state, pid):
+            starving[n] = True
+    events: list[Event] = []
+    tick = state.tick
+    for nid in sorted(state.nodes):
+        node = state.nodes[nid]
+        if nid not in starving:
+            node.cut_since = None  # connected to the capital, a factory, or not own (item H5)
+            continue
+        if node.cut_since is None:
+            node.cut_since = tick
+        if is_starvation_tick(state, rules, node.cut_since):
+            starved = consume(state, rules, nid, garrisons.get(nid, ()))
+            if starved is not None:
+                events.append(starved)
+    return events
+
+
 # The field -----------------------------------------------------------------------------------
 
 
@@ -111,7 +188,7 @@ class _Field:
     k: dict[int, int]
     """The leaf level of every own node's component."""
     pocket: dict[int, bool]
-    """Every own node: its component has no own factory."""
+    """Every own node: its component does not contain the own capital (item H1)."""
     adj: dict[int, list[tuple[int, int]]]
     """Every own node: ``(neighbour, road)`` over internal roads, by road id."""
     down: dict[int, list[tuple[int, int]]]
@@ -149,23 +226,19 @@ def _field(state: GameState, player: int) -> _Field:
             queue.append(nid)
     _bfs(adj, d0, queue)
 
-    # Components over internal roads: the shift of the capital's one, pockets (items A10, B3).
+    # Components over internal roads: the shift of the capital's one, pockets (items A10, B3, H1).
     comp: dict[int, int] = {}
-    has_factory: dict[int, bool] = {}
     for nid in adj:  # ascending: the component id is its smallest node
         if nid in comp:
             continue
         comp[nid] = nid
-        factory = False
         stack = [nid]
         while stack:
             n = stack.pop()
-            factory = factory or nodes[n].factory == player
             for m, _ in adj[n]:
                 if m not in comp:
                     comp[m] = nid
                     stack.append(m)
-        has_factory[nid] = factory
     ps = state.players[player]
     capital = mapdef.capital(player)
     shift_max = d0.get(capital, 0) if capital in adj else 0
@@ -174,7 +247,7 @@ def _field(state: GameState, player: int) -> _Field:
     main = comp.get(capital)
     shift = ps.leaf_shift
     k = {n: shift if c == main else 0 for n, c in comp.items()}
-    pocket = {n: not has_factory[c] for n, c in comp.items()}
+    pocket = {n: c != main for n, c in comp.items()}  # no own capital: all pockets
 
     # The pull (item A4): a multi-source BFS from the pulled nodes; d = min(d0, k + hops).
     pulled: dict[int, bool] = {}

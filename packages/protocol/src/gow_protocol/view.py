@@ -252,7 +252,8 @@ class NodeView(WireModel):
     level or without a field, ``ahead``: ahead of the level, ``empty``, ``full``: no neighbour
     takes a charge); ``null`` when ``flow_next`` is not empty."""
     flow_pocket: bool | None
-    """Supply flow, own node only: its own component over internal roads has no own factory."""
+    """Supply flow, own node only: its own component over internal roads does not contain the own
+    capital (a pocket: its factories stop, without a factory it starves)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
