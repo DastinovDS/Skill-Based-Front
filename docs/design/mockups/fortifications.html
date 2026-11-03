@@ -13,10 +13,12 @@
   Round 2 (owner feedback, #707): the default view is now the owner's sketch, a fortification as a segment of the territory border
   (B1..B3: 3, 5 and 7 blocks, block width and gap fixed, the count is what fits), on a sharp bend or a curve of the border, with the toll
   as the T5 ripple plus the combat hit of the fight (H1..H3, ui-style 9.9 and 29). Round 1 (F1..F6, T1..T6) is behind "Round 1".
+  Round 4 (owner picked C7 Long run and K6 Beam): they are the default; fixes: a stacked line is a clean parallel copy of the border run, a flat line glyph in
+  the radial menu, three cleaner pick previews (P1 ghosts, P2 shields, P3 roads), no caption in pick mode. Rounds 3, 2 and 1 are behind the Round switch.
   Round 3 (owner feedback, #707): the look is a flat stroke in front of the border, offset a little inside the own cell, with flat ticks of the same colour
   on its outer side and a soft dark halo (style reference: the front line of a strategy map): C1..C10, and ten tolls K1..K10 (the T5 ripple plus the
   combat hit). Rounds 2 and 1 are behind the "Round" switch.
-  Address state: #round=3&a=1&b=2&view=1&kk=0&hit=1&toll=4&map=bend&step=7&mode=supply&zoom=1&gray=0&rm=0&cnt=0&t=1.7 (t freezes the step at that second).
+  Address state: #round=4&pv=0&stack=2&a=1&b=2&view=1&kk=0&hit=1&toll=4&map=bend&step=7&mode=supply&zoom=1&gray=0&rm=0&cnt=0&t=1.7 (t freezes the step at that second).
   window.__fort exposes the state and a few helpers for checks.
 -->
 <html lang="en">
@@ -318,7 +320,7 @@
           <button data-z="0.45">0.45</button><button data-z="1">1</button><button data-z="2">2</button>
         </div>
         <div class="seg" id="roundSeg" role="group" aria-label="Design round">
-          <button data-r="3" aria-label="Round 3">Round 3</button><button data-r="2" aria-label="Round 2">2</button><button data-r="1" aria-label="Round 1">1</button>
+          <button data-r="4" aria-label="Round 4">Round 4</button><button data-r="3" aria-label="Round 3">3</button><button data-r="2" aria-label="Round 2">2</button><button data-r="1" aria-label="Round 1">1</button>
         </div>
         <div class="seg" id="mapSeg" role="group" aria-label="Border">
           <button data-b="bend">Sharp bend</button><button data-b="curve">Curve</button>
@@ -334,6 +336,7 @@
       </div>
       <div class="grp"><span class="gl" id="glA">Look</span><nav class="chips" id="gA" aria-label="Look of the fortification"></nav></div>
       <div class="grp" id="rowB"><span class="gl">Look B</span><nav class="chips" id="gB" aria-label="Look of the fortification, panel B"></nav></div>
+      <div class="grp" id="rowP"><span class="gl">Pick</span><nav class="chips tog" id="gP" aria-label="How the candidate roads are shown"></nav></div>
       <div class="grp"><span class="gl" id="glT">Toll</span><nav class="chips tog" id="gT" aria-label="How the toll is shown"></nav></div>
       <div class="panels v1" id="panels"></div>
       <div class="ctl">
@@ -341,6 +344,9 @@
         <button id="next" aria-label="Next state">Next &#9654;</button>
         <button id="replay" aria-label="Replay the state">&#8634; Replay</button>
         <button id="pause" aria-pressed="false">Pause</button>
+        <div class="seg" id="stackSeg" role="group" aria-label="Stacked lines in the Stacked state">
+          <button data-k="2" aria-label="Two stacked lines">2 lines</button><button data-k="3" aria-label="Three stacked lines">3 lines</button>
+        </div>
         <div class="steps" id="steps"></div>
       </div>
       <div class="sr" id="live" aria-live="polite"></div>
@@ -733,11 +739,54 @@
         };
 
         // the run of the own cell's border that lies along the road crossing: a polyline, arc length s, centred (s0) on the crossing
-        function borderChain(node, to, half) {
+        // the own cell moved inward by d, only along the edges that border cells of `kind` (a convex cell is cut by a shifted half-plane per edge),
+        // so an offset line is a clean parallel copy of the border run: it never folds back at a bend and is trimmed where the run ends
+        function shrinkCell(poly, kind, d) {
+          let out = poly.map((v) => ({ x: v.x, y: v.y, t: v.t }));
+          const n = poly.length;
+          const cx = poly.reduce((q, v) => q + v.x, 0) / n;
+          const cy = poly.reduce((q, v) => q + v.y, 0) / n;
+          for (let i = 0; i < n; i++) {
+            const tag = poly[i].t;
+            if (tag < 0 || NODES[IDS[tag]].own !== kind) continue;
+            const a = poly[i];
+            const b = poly[(i + 1) % n];
+            const L = Math.hypot(b.x - a.x, b.y - a.y);
+            if (L < 1e-6) continue;
+            let nx = (b.y - a.y) / L;
+            let ny = -(b.x - a.x) / L;
+            if (nx * (cx - a.x) + ny * (cy - a.y) < 0) {
+              nx = -nx;
+              ny = -ny;
+            }
+            const f = (v) => d - ((v.x - a.x) * nx + (v.y - a.y) * ny);
+            const res = [];
+            for (let j = 0; j < out.length; j++) {
+              const A = out[j];
+              const B = out[(j + 1) % out.length];
+              const fa = f(A);
+              const fb = f(B);
+              if (fa <= 0) res.push({ x: A.x, y: A.y, t: A.t });
+              if (fa <= 0 !== fb <= 0) {
+                const u = fa / (fa - fb);
+                res.push({ x: A.x + (B.x - A.x) * u, y: A.y + (B.y - A.y) * u, t: fa <= 0 ? tag : A.t });
+              }
+            }
+            out = res;
+            if (out.length < 3) return null;
+          }
+          return out;
+        }
+        function borderChain(node, to, half, inset) {
           half = Math.round(half);
-          const key = `${node}|${to}|${half}`;
+          inset = Math.round((inset || 0) * 10) / 10;
+          const key = `${node}|${to}|${half}|${inset}`;
           if (CHAINS.has(key)) return CHAINS.get(key);
-          const P = CELLS[IDS.indexOf(node)].poly;
+          const P = inset > 0 ? shrinkCell(CELLS[IDS.indexOf(node)].poly, NODES[to].own, inset) : CELLS[IDS.indexOf(node)].poly;
+          if (!P) {
+            CHAINS.set(key, null);
+            return null;
+          }
           const n = P.length;
           const ti = IDS.indexOf(to);
           let e = -1;
@@ -752,7 +801,19 @@
           }
           const N = NODES[node];
           const T = NODES[to];
-          const X0 = { x: (N.x + T.x) / 2, y: (N.y + T.y) / 2 };
+          let X0 = { x: (N.x + T.x) / 2, y: (N.y + T.y) / 2 };
+          if (inset > 0) {
+            // the foot of the crossing on the moved edge
+            const dl = Math.hypot(T.x - N.x, T.y - N.y);
+            const fx = X0.x - ((T.x - N.x) / dl) * inset;
+            const fy = X0.y - ((T.y - N.y) / dl) * inset;
+            const a = P[e];
+            const b = P[(e + 1) % n];
+            const ex = b.x - a.x;
+            const ey = b.y - a.y;
+            const u = clamp(((fx - a.x) * ex + (fy - a.y) * ey) / (ex * ex + ey * ey), 0, 1);
+            X0 = { x: a.x + ex * u, y: a.y + ey * u };
+          }
           const kind = T.own;
           const ok = (i) => {
             const t = P[i].t;
@@ -947,17 +1008,20 @@
         function fortFrame3(f, V) {
           const mk = CUR_MK;
           const lay = tickLayout3(V, mk);
-          const ch = borderChain(f.node, f.to, lay.half + 8 * mk);
-          if (!ch) return { ch: null };
           const stack = f.off > OFF1 ? (f.off - OFF1) * mk : 0;
-          const inset = lay.off + stack;
+          const half = lay.half + 8 * mk;
+          // the line is a parallel copy of the border run, moved into the own cell by its offset (and by a fixed step per stacked line)
+          const ch = borderChain(f.node, f.to, half, lay.off + stack);
+          const borderCh = borderChain(f.node, f.to, half, 0);
+          if (!ch || !borderCh) return { ch: null };
           const pt = (a) => {
             const q = chainPt(ch, ch.s0 + clamp(a, -ch.s0, ch.len - ch.s0));
-            return { x: q.x - q.nx * inset * q.m, y: q.y - q.ny * inset * q.m, nx: q.nx, ny: q.ny, tx: q.tx, ty: q.ty };
+            return { x: q.x, y: q.y, nx: q.nx, ny: q.ny, tx: q.tx, ty: q.ty };
           };
           const c = pt(0);
-          return { ch, inset, pt, nodeId: f.node, x: c.x, y: c.y, ux: c.nx, uy: c.ny, nx: c.tx, ny: c.ty, half: lay.half, lay, V, mk };
+          return { ch, borderCh, inset: 0, pt, nodeId: f.node, x: c.x, y: c.y, ux: c.nx, uy: c.ny, nx: c.tx, ny: c.ty, half: lay.half, lay, V, mk };
         }
+        const lookV = (S) => (S.round === 4 ? R3[6] : R3[S.look]);
 
         /* ============================================================ geometry helpers */
         // zoomed out, marks grow (min size on screen), so a second stacked line keeps its gap in marks, not in world units
@@ -1002,7 +1066,10 @@
         const S0 = 34;
         const DELAY = 0.3;
         const OFF1 = 18;
-        const OFF2 = 48;
+        const STACK_STEP = 20;
+        const OFF2 = OFF1 + STACK_STEP;
+        const OFF3 = OFF1 + 2 * STACK_STEP;
+        let CUR_STACK = 2;
         const BASE_COUNT = 4;
 
         // a group walks `from` -> `to`; forts (belonging to `to`) toll it; returns the group and the toll records
@@ -1081,10 +1148,9 @@
               sc.focus = [610, 250];
               break;
             case 'stack': {
-              const f1 = mineA(OFF1, 'built');
-              const f2 = mineA(OFF2, 'built');
-              sc.forts.push(f1, f2);
-              const r = crossing(t, { from: 'E', to: 'A', forts: [f1, f2], owner: 'en', u: 7, c: 5, mine: false });
+              const stackFs = [OFF1, OFF2, OFF3].slice(0, CUR_STACK).map((o) => mineA(o, 'built'));
+              sc.forts.push(...stackFs);
+              const r = crossing(t, { from: 'E', to: 'A', forts: stackFs, owner: 'en', u: 7, c: 5, mine: false });
               if (r.group) sc.groups.push(r.group);
               sc.tolls = r.tolls;
               sc.focus = [500, 250];
@@ -1142,7 +1208,7 @@
           { id: 'ripple', n: 'Ripple', rest: 0.3, cost: 'one ring sprite scaled and faded, one strip sprite, ticks as 1 sprite each' },
           { id: 'trail', n: 'Trail', rest: 0.5, cost: 'the same pooled square sprite as Shed dots, placed on the road and faded' },
         ];
-        const tollDef = (S) => (S.round === 1 ? TOLLS : S.round === 2 ? HITS : KS)[S.toll];
+        const tollDef = (S) => (S.round === 4 ? KS[5] : (S.round === 1 ? TOLLS : S.round === 2 ? HITS : KS)[S.toll]);
         // a "stop" frame for Less motion: the moment the effect is clearest, held 1.2 s
         const HOLD = 1.2;
 
@@ -1652,7 +1718,7 @@
             return this.sc.tolls.filter((r) => r.fort === fortId);
           }
           forts() {
-            if (this.S.round === 3) return this.forts3();
+            if (this.S.round >= 3) return this.forts3();
             if (!this.S.r1) return this.forts2();
             const g = this.g;
             const S = this.S;
@@ -1983,7 +2049,7 @@
           }
           forts3() {
             const S = this.S;
-            const V = R3[S.look];
+            const V = lookV(S);
             const k = this.mk;
             const def = tollDef(S);
             const todo = [];
@@ -2110,7 +2176,7 @@
               cell.forEach((v, i) => (i ? g.lineTo(v.x, v.y) : g.moveTo(v.x, v.y)));
               g.closePath();
               g.clip();
-              const shift = -fr.inset + lay.tl * 0.5;
+              const shift = lay.tl * 0.5;
               const hl = chainLine(ch, lo - lay.tl * 0.4, hi + lay.tl * 0.4, shift);
               const W = lay.lw + lay.tl + V.halo[0] * this.mk;
               g.lineCap = 'round';
@@ -2120,7 +2186,7 @@
                 g.lineWidth = W * wf;
                 g.stroke();
               }
-              const bl = chainLine(ch, lo - lay.tl, hi + lay.tl, 0);
+              const bl = chainLine(fr.borderCh, lo - lay.tl, hi + lay.tl, 0);
               this.polyPath(bl);
               g.strokeStyle = rgba(colOf(owner), 0.16);
               g.lineWidth = 18 * rk;
@@ -2659,8 +2725,8 @@
               if (d < 0 || r.n <= 0) continue;
               const f = this.sc.forts.find((x) => x.id === r.fort);
               const k = this.mk;
-              if (S.round === 3) {
-                const fr = fortFrame3(f, R3[S.look]);
+              if (S.round >= 3) {
+                const fr = fortFrame3(f, lookV(S));
                 if (!fr.ch) continue;
                 this.fxHit3(r, d, fr, k, f.owner);
                 if (r.mine) this.lossMark(r, d, fr, k);
@@ -3171,12 +3237,8 @@
                 g.translate(ix, iy - 8);
                 g.globalAlpha *= on || sec.ico !== 'fort' ? 1 : 0.9;
                 if (sec.ico === 'fort') {
-                  if (this.S.r1) {
-                    g.rotate(-Math.PI / 2);
-                    g.scale(1.55, 1.55);
-                    g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
-                  } else if (this.S.round === 3) miniFort3(g, R3[this.S.look], 62);
-                  else miniFort(g, R2[this.S.look], 62);
+                  g.scale(1.25, 1.25);
+                  lineGlyph(g);
                 } else if (sec.ico === 'house') {
                   g.fillStyle = C.paper;
                   g.beginPath();
@@ -3215,6 +3277,10 @@
               });
               g.restore();
             } else if (ov.kind === 'pick') {
+              if (this.S.round >= 3) {
+                this.pickOverlay3(ov);
+                return;
+              }
               this.world();
               const roads = [
                 { to: 'B', own: true },
@@ -3240,21 +3306,6 @@
                 gr.lineWidth = 2 / this.z;
                 gr.stroke();
                 gr.restore();
-                if (this.S.round === 3) {
-                  const V = R3[this.S.look];
-                  const fr3 = fortFrame3({ node: 'A', to: rd.to, off: OFF1 }, V);
-                  if (!fr3.ch) return;
-                  const o3 = on ? { p: 1, alpha: 0.7 } : { preview: true };
-                  this.drawFort3(V, fr3, 'me', o3, 'solid');
-                  if (on) {
-                    this.pill(fr3.x + fr3.ux * (fr3.lay.tl + 38 * k), fr3.y + fr3.uy * (fr3.lay.tl + 38 * k), '1.5 CP', { size: 13, frame: C.paper });
-                    const [sx, sy] = this.toScreen(fr3.x, fr3.y);
-                    this.screenT();
-                    this.cursor(sx + 4, sy + 6);
-                    this.world();
-                  }
-                  return;
-                }
                 if (!this.S.r1) {
                   const V = R2[this.S.look];
                   const fr2 = fortFrame2({ node: 'A', to: rd.to, off: OFF1 }, V);
@@ -3288,30 +3339,62 @@
                   this.world();
                 }
               });
-              this.screenT();
-              const tw = 150;
-              g.beginPath();
-              g.roundRect(this.vw / 2 - tw / 2, 10, tw, 32, 8);
-              g.fillStyle = 'rgba(13,17,23,0.94)';
-              g.fill();
-              g.strokeStyle = 'rgba(240,246,252,0.7)';
-              g.lineWidth = 1.4;
-              g.stroke();
-              g.font = '700 13px system-ui, sans-serif';
-              g.textAlign = 'left';
-              g.textBaseline = 'middle';
-              g.fillStyle = C.paper;
-              g.fillText('Pick a road', this.vw / 2 - tw / 2 + 40, 26.5);
-              g.save();
-              g.translate(this.vw / 2 - tw / 2 + 21, 26);
-              if (this.S.r1) {
-                g.rotate(-Math.PI / 2);
-                g.scale(0.5, 0.5);
-                g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
-              } else if (this.S.round === 3) miniFort3(g, R3[this.S.look], 30);
-              else miniFort(g, R2[this.S.look], 30);
-              g.restore();
             }
+          }
+          // rounds 3 and 4: three cleaner ways to show the candidates (S.pv): 0 faint ghosts on every crossing, 1 shield markers (ghost on hover), 2 highlighted roads (ghost on hover)
+          pickOverlay3(ov) {
+            const g = this.g;
+            const S = this.S;
+            const A = NODES.A;
+            const V = lookV(S);
+            const k = this.mk;
+            const pv = S.pv;
+            const pulse = S.rm ? 0.5 : 0.5 - 0.5 * Math.cos(this.t * 7.85);
+            this.world();
+            ['B', 'E', 'P'].forEach((to, i) => {
+              const on = ov.hover === i;
+              const B = NODES[to];
+              const hl = pv === 2 ? (on ? 0.36 : 0.14 + pulse * 0.1) : on ? 0.22 : 0;
+              if (hl > 0) {
+                g.save();
+                g.lineCap = 'round';
+                g.beginPath();
+                g.moveTo(A.x, A.y);
+                g.lineTo(B.x, B.y);
+                g.strokeStyle = `rgba(240,246,252,${hl})`;
+                g.lineWidth = (on ? 20 : 15) / this.z;
+                g.stroke();
+                g.restore();
+              }
+              const fr = fortFrame3({ node: 'A', to, off: OFF1 }, V);
+              if (!fr.ch) return;
+              const ga = pv === 0 ? (on ? 0.9 : 0.3) : on ? 0.9 : 0;
+              if (ga > 0) {
+                if (on) this.drawFort3(V, fr, 'me', { p: 1, alpha: 0.85 }, 'halo');
+                this.drawFort3(V, fr, 'me', { p: 1, alpha: ga }, 'solid');
+              }
+              if (pv === 1) {
+                const mx = (A.x + B.x) / 2;
+                const my = (A.y + B.y) / 2;
+                this.px(mx, my, (c) => {
+                  c.beginPath();
+                  c.arc(0, 0, on ? 13 : 11, 0, 6.29);
+                  c.fillStyle = on ? C.paper : 'rgba(13,17,23,0.94)';
+                  c.fill();
+                  c.strokeStyle = on ? C.bg : 'rgba(240,246,252,0.85)';
+                  c.lineWidth = 1.6;
+                  c.stroke();
+                  shieldGlyph(c, on ? 6.4 : 5.6, on ? C.bg : C.paper);
+                });
+              }
+              if (on) {
+                this.pill(fr.x + fr.ux * (fr.lay.tl + 38 * k), fr.y + fr.uy * (fr.lay.tl + 38 * k), '1.5 CP', { size: 13, frame: C.paper });
+                const [sx, sy] = this.toScreen(fr.x, fr.y);
+                this.screenT();
+                this.cursor(sx + 4, sy + 6);
+                this.world();
+              }
+            });
           }
           cursor(x, y) {
             const g = this.g;
@@ -3336,13 +3419,37 @@
         }
 
         /* ============================================================ ui */
-        const ui = { round: 3, a: 0, b: 3, view: 1, toll: 4, hit: 1, kk: 0, map: 'bend', step: 7, mode: 'supply', zoom: 1, gray: 0, rm: 0, cnt: 0, pause: 0, hold: null };
+        const ui = { round: 4, pv: 1, stack: 2, a: 0, b: 3, view: 1, toll: 4, hit: 1, kk: 5, map: 'bend', step: 7, mode: 'supply', zoom: 1, gray: 0, rm: 0, cnt: 0, pause: 0, hold: null };
         let panels = [];
         let startT = performance.now();
         const $ = (id) => document.getElementById(id);
-        const lookSet = () => (ui.round === 1 ? LOOKS : ui.round === 2 ? R2 : R3);
-        const tollIdx = () => (ui.round === 1 ? ui.toll : ui.round === 2 ? ui.hit : ui.kk);
+        const lookSet = () => (ui.round === 1 ? LOOKS : ui.round === 2 ? R2 : ui.round === 4 ? [R3[6]] : R3);
+        const PVS = [
+          { n: 'Ghosts', title: 'a faint ghost of the real segment on every pickable crossing, brightens on hover' },
+          { n: 'Shields', title: 'a small shield marker on every pickable crossing, the ghost appears on hover' },
+          { n: 'Roads', title: 'the pickable roads are highlighted, the ghost appears on hover only' },
+        ];
+        const tollIdx = () => (ui.round === 1 ? ui.toll : ui.round === 2 ? ui.hit : ui.round === 4 ? 0 : ui.kk);
 
+        // flat glyphs in the style of the radial menu icons (white, simple)
+        function lineGlyph(g) {
+          g.fillStyle = C.paper;
+          g.beginPath();
+          g.roundRect(-16, 3, 32, 4, 2);
+          g.fill();
+          for (let i = 0; i < 5; i++) g.fillRect(-16 + i * 7.2, -7, 3.6, 10.5);
+        }
+        function shieldGlyph(g, s, col) {
+          g.beginPath();
+          g.moveTo(-s * 0.85, -s * 0.8);
+          g.lineTo(s * 0.85, -s * 0.8);
+          g.lineTo(s * 0.85, s * 0.1);
+          g.quadraticCurveTo(s * 0.7, s * 0.75, 0, s);
+          g.quadraticCurveTo(-s * 0.7, s * 0.75, -s * 0.85, s * 0.1);
+          g.closePath();
+          g.fillStyle = col;
+          g.fill();
+        }
         // a small straight picture of a border fortification: base line, outlined blocks on top, outward is up
         function miniFort(g, V, w) {
           const n = Math.min(V.count, w >= 50 ? V.count : 3);
@@ -3415,7 +3522,7 @@
             miniFort(g, R2[li], 52);
           } else {
             g.translate(32, 30);
-            miniFort3(g, R3[li], 54);
+            miniFort3(g, lookSet()[li], 54);
           }
           return cv;
         }
@@ -3438,22 +3545,27 @@
             host.append(b);
           });
         }
-        const PREF = { 1: ['F', 'T'], 2: ['B', 'H'], 3: ['C', 'K'] };
+        const PREF = { 1: ['F', 'T'], 2: ['B', 'H'], 3: ['C', 'K'], 4: ['C', 'K'] };
+        // panel title: in round 4 a panel is one way to pick a road (the look is always C7)
+        const panelName = (li) => (ui.round === 4 ? `C7 ${R3[6].n} \u00b7 pick: ${PVS[li].n}` : lookName(li));
         function lookName(i) {
           if (ui.round === 1) return `F${i + 1} ${LOOKS[i].n}`;
           if (ui.round === 2) return `B${i + 1} ${R2[i].n} · ${R2[i].count}`;
           return `C${i + 1} ${R3[i].n} · ${R3[i].count}`;
         }
         function buildChips() {
-          const looks = lookSet().map((l, i) => ({ k: PREF[ui.round][0] + (i + 1), n: ui.round === 1 ? l.n : `${l.n} · ${l.count}`, title: ui.round === 1 ? l.line + '. Bake: ' + l.bake : l.line }));
-          const cmp = ui.view === 2;
+          const r4 = ui.round === 4;
+          const looks = lookSet().map((l, i) => ({ k: r4 ? 'C7' : PREF[ui.round][0] + (i + 1), n: ui.round === 1 ? l.n : `${l.n} · ${l.count}`, title: ui.round === 1 ? l.line + '. Bake: ' + l.bake : l.line }));
+          const cmp = ui.view === 2 && !r4;
           $('glA').textContent = cmp ? 'Look A' : 'Look';
           $('rowB').style.display = cmp ? '' : 'none';
           chipRow($('gA'), looks, (i) => ui.a === i && ui.view !== 6, (i) => ((ui.view = ui.view === 6 ? 1 : ui.view), (ui.a = i), update()), true);
           chipRow($('gB'), looks, (i) => ui.b === i, (i) => ((ui.b = i), update()), true);
           const set = ui.round === 1 ? TOLLS : ui.round === 2 ? HITS : KS;
-          const tolls = set.map((t, i) => ({ k: PREF[ui.round][1] + (i + 1), n: t.n, title: t.cost }));
+          const tolls = (r4 ? [KS[5]] : set).map((t, i) => ({ k: r4 ? 'K6' : PREF[ui.round][1] + (i + 1), n: t.n, title: t.cost }));
           chipRow($('gT'), tolls, (i) => tollIdx() === i, (i) => ((ui.round === 1 ? (ui.toll = i) : ui.round === 2 ? (ui.hit = i) : (ui.kk = i)), update()), false);
+          $('rowP').style.display = ui.round >= 3 ? '' : 'none';
+          chipRow($('gP'), PVS.map((v, i) => ({ k: 'P' + (i + 1), n: v.n, title: v.title })), (i) => ui.pv === i && !(ui.round === 4 && ui.view === 6), (i) => ((ui.pv = i), (ui.view = ui.round === 4 && ui.view === 6 ? 1 : ui.view), update()), false);
           const steps = STEPS.map((s, i) => ({ k: String(i + 1), n: s.n }));
           chipRow($('steps'), steps, (i) => ui.step === i, (i) => setStep(i), false);
           $('gB').querySelectorAll('button').forEach((b) => b.classList.add('second'));
@@ -3466,11 +3578,11 @@
         function buildPanels() {
           const host = $('panels');
           const set = lookSet();
-          host.className = 'panels v' + ui.view + (ui.view === 6 ? ' n' + set.length : '');
+          host.className = 'panels v' + ui.view + (ui.view === 6 ? ' n' + (ui.round === 4 ? 3 : set.length) : '');
           host.textContent = '';
           ui.a = clamp(ui.a, 0, set.length - 1);
           ui.b = clamp(ui.b, 0, set.length - 1);
-          const list = ui.view === 1 ? [ui.a] : ui.view === 2 ? [ui.a, ui.b] : set.map((_, i) => i);
+          const list = ui.round === 4 ? (ui.view === 1 ? [ui.pv] : ui.view === 2 ? [ui.pv, (ui.pv + 1) % 3] : [0, 1, 2]) : ui.view === 1 ? [ui.a] : ui.view === 2 ? [ui.a, ui.b] : set.map((_, i) => i);
           panels = list.map((li) => {
             const d = document.createElement('div');
             d.className = 'panel';
@@ -3496,6 +3608,7 @@
           seg('viewSeg', 'v', ui.view);
           seg('mapSeg', 'b', ui.map);
           seg('roundSeg', 'r', ui.round);
+          seg('stackSeg', 'k', ui.stack);
           $('gray').checked = !!ui.gray;
           $('rm').checked = !!ui.rm;
           $('cnt').checked = !!ui.cnt;
@@ -3511,7 +3624,7 @@
           $('live').textContent = STEPS[ui.step].n;
         }
         function writeHash() {
-          const p = new URLSearchParams({ round: ui.round, a: ui.a, b: ui.b, view: ui.view, toll: ui.toll, hit: ui.hit, kk: ui.kk, map: ui.map, step: ui.step, mode: ui.mode, zoom: ui.zoom, gray: ui.gray, rm: ui.rm, cnt: ui.cnt });
+          const p = new URLSearchParams({ round: ui.round, pv: ui.pv, stack: ui.stack, a: ui.a, b: ui.b, view: ui.view, toll: ui.toll, hit: ui.hit, kk: ui.kk, map: ui.map, step: ui.step, mode: ui.mode, zoom: ui.zoom, gray: ui.gray, rm: ui.rm, cnt: ui.cnt });
           if (ui.hold != null) p.set('t', ui.hold);
           try {
             history.replaceState(null, '', '#' + p.toString());
@@ -3522,7 +3635,9 @@
         function readHash() {
           const p = new URLSearchParams(location.hash.slice(1));
           const n = (k, d) => (p.has(k) && !Number.isNaN(Number(p.get(k))) ? Number(p.get(k)) : d);
-          ui.round = [1, 2, 3].includes(n('round', 3)) ? n('round', 3) : 3;
+          ui.round = [1, 2, 3, 4].includes(n('round', 4)) ? n('round', 4) : 4;
+          ui.pv = clamp(n('pv', ui.pv), 0, 2);
+          ui.stack = n('stack', 2) === 3 ? 3 : 2;
           const len = lookSet().length;
           ui.a = clamp(n('a', ui.a), 0, len - 1);
           ui.b = clamp(n('b', ui.b), 0, len - 1);
@@ -3551,14 +3666,15 @@
             pausedAt = t;
           }
           for (const p of panels) {
-            const S = { look: p.li, toll: tollIdx(), mode: ui.mode, zoom: ui.zoom, rm: ui.rm, cnt: ui.cnt, round: ui.round, r1: ui.round === 1 };
-            CUR_SET = 'r' + ui.round;
-            CUR_V = ui.round === 3 ? R3[p.li] : null;
+            const S = { look: ui.round === 4 ? 0 : p.li, pv: ui.round === 4 ? p.li : ui.pv, toll: tollIdx(), mode: ui.mode, zoom: ui.zoom, rm: ui.rm, cnt: ui.cnt, round: ui.round, r1: ui.round === 1 };
+            CUR_SET = 'r' + (ui.round === 4 ? 3 : ui.round);
+            CUR_V = ui.round === 4 ? R3[6] : ui.round === 3 ? R3[p.li] : null;
+            CUR_STACK = ui.stack;
             CUR_MK = ui.zoom < 1 ? Math.pow(1 / ui.zoom, 0.6) : 1;
             const sc = scene(step.id, t);
             p.painter.stepId = step.id;
             p.painter.draw(S, ui, t, sc);
-            const nm = lookName(p.li);
+            const nm = panelName(p.li);
             if (p.nm.textContent !== nm) {
               p.nm.textContent = nm;
               p.cv.setAttribute('aria-label', `${nm}, ${step.n}`);
@@ -3572,6 +3688,7 @@
           $('modeSeg').addEventListener('click', (e) => e.target.dataset.m && ((ui.mode = e.target.dataset.m), update()));
           $('zoomSeg').addEventListener('click', (e) => e.target.dataset.z && ((ui.zoom = Number(e.target.dataset.z)), update()));
           $('mapSeg').addEventListener('click', (e) => e.target.dataset.b && ((ui.map = e.target.dataset.b), update()));
+          $('stackSeg').addEventListener('click', (e) => e.target.dataset.k && ((ui.stack = Number(e.target.dataset.k)), update()));
           $('roundSeg').addEventListener('click', (e) => e.target.dataset.r && ((ui.round = Number(e.target.dataset.r)), update()));
           $('viewSeg').addEventListener('click', (e) => e.target.dataset.v && ((ui.view = Number(e.target.dataset.v)), update()));
           $('gray').addEventListener('change', (e) => ((ui.gray = e.target.checked ? 1 : 0), update()));
