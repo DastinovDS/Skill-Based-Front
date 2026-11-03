@@ -84,7 +84,7 @@ __all__ = [
 def supply_lines(state: GameState, rules: Ruleset) -> list[Event]:
     """The supply step of the economy v2 (see the module docstring)."""
     events: list[Event] = []
-    _settle_factories(state, rules)
+    settle_factories(state, rules)
     for pid in sorted(state.players):
         events.extend(_check_lines(state, rules, pid))
         events.extend(_auto_extend(state, rules, pid))
@@ -114,7 +114,7 @@ def factory_count(state: GameState, player: int) -> int:
     return count
 
 
-def _settle_factories(state: GameState, rules: Ruleset) -> None:
+def settle_factories(state: GameState, rules: Ruleset) -> None:
     """Item 2: a factory captured in this tick passes to the capturer or is destroyed."""
     captured: dict[int, list[int]] = {}
     for nid in sorted(state.nodes):

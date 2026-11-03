@@ -38,6 +38,7 @@ from gow_sim.commands import (
     RemoveLine,
     SetAutoLines,
     SetFront,
+    SetLeafShift,
     SetMode,
     SetRearMin,
     SetStance,
@@ -73,10 +74,11 @@ TICKS = 600
 DECIDE_EVERY = 5
 
 
-@pytest.fixture(scope="module", params=["mvp-0", "mvp-1", "mvp-3"])
+@pytest.fixture(scope="module", params=["mvp-0", "mvp-1", "mvp-3", "mvp-4"])
 def rules(request: pytest.FixtureRequest) -> Ruleset:
-    """mvp-0, mvp-1 (``city_upgrades`` on, DEC-26) and mvp-3 (the economy v2, DEC-41) with 50 CP
-    to start with: CP do not limit the controller, every command is used."""
+    """mvp-0, mvp-1 (``city_upgrades`` on, DEC-26), mvp-3 (the economy v2, DEC-41) and mvp-4 (the
+    supply flow, DEC-43) with 50 CP to start with: CP do not limit the controller, every command is
+    used."""
     name: str = request.param
     base = load_ruleset(ROOT / "rulesets" / f"{name}.toml")
     return dataclasses.replace(base, cp=dataclasses.replace(base.cp, start=5000, cap=5000))
@@ -197,6 +199,9 @@ def _decide_v2(
         cmds.append(RemoveLine(tick // 95 % 3))
     if tick % 130 == 0:  # the auto-extension off and on again (#665)
         cmds.append(SetAutoLines(tick // 130 % 2 == 0))
+    if rules.flow and tick % 40 == 20:  # DEC-43: the leaf shift up and down to its maximum
+        ps = state.players[player]
+        cmds.append(SetLeafShift(tick // 40 % (ps.leaf_shift_max + 1)))
     return cmds
 
 
@@ -384,6 +389,12 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.warehouse_level,
         ), f"node {n}"
         assert (b.factory, b.rr, b.fort) == (swap[a.factory], a.rr, a.fort), f"v2 of {n}"
+        fa, fb = a.flow, b.flow  # DEC-43: the field and the plan of the flow, mirrored
+        assert (fb is None) == (fa is None), f"flow of {n}"
+        if fa is not None and fb is not None:
+            assert (fb.d, fb.k, fb.pocket, fb.idle) == (fa.d, fa.k, fa.pocket, fa.idle), n
+            assert fb.down == tuple(mapdef.mirror_nodes[x] for x in fa.down), f"down of {n}"
+            assert fb.next == tuple(mapdef.mirror_nodes[x] for x in fa.next), f"next of {n}"
         for fa, fb in ((a.factory_build, b.factory_build), (a.fort_build, b.fort_build)):
             assert (fb is None) == (fa is None), f"factory or bunker build of {n}"
             if fa is not None and fb is not None:
@@ -413,6 +424,7 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     mirror = mapdef.mirror_nodes
     assert p1.fronts == tuple(None if f is None else mirror[f] for f in p0.fronts), "fronts"
     assert p1.rear_min == p0.rear_min
+    assert (p1.leaf_shift, p1.leaf_shift_max) == (p0.leaf_shift, p0.leaf_shift_max), "shift"
     assert p1.next_line == p0.next_line
     assert {k: tuple(mirror[n] for n in line.path) for k, line in p0.lines.items()} == {
         k: line.path for k, line in p1.lines.items()
@@ -529,7 +541,13 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     # The run did something: commands were applied, groups moved and took nodes.
     assert applied > 20
     assert {"Move", "Split", "Recruit", "CancelRecruit", "CancelOrder"} <= set(kinds)
-    if rules.v2:  # DEC-41: the v1 supply commands are disabled, the lines are mirrored
+    if rules.flow:  # DEC-43: no lines and no bunker, the flow and the shift are mirrored
+        assert {"SetLeafShift", "BuildFactory"} <= set(kinds)
+        assert not {"DrawLine", "RemoveLine", "BuildBunker", "UpgradeWarehouse"} & set(kinds)
+        assert sent > 0, "the flow carried charges"
+        assert "SetMode" not in kinds
+        assert not {"SetStance", "SetFront", "SetRearMin", "Transfer", "UpgradeRoad"} & set(kinds)
+    elif rules.v2:  # DEC-41: the v1 supply commands are disabled, the lines are mirrored
         assert {"DrawLine", "RemoveLine", "BuildBunker", "BuildFactory"} <= set(kinds)
         assert "SetMode" not in kinds  # "Defense" is removed (item 5, #645)
         assert sent > 0, "the lines carried charges"
@@ -537,7 +555,8 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     else:
         assert {"SetStance", "SetFront", "SetRearMin", "SetMode"} <= set(kinds)
     if rules.city_upgrades.enabled:  # DEC-26: the city development is mirrored as well
-        assert {"BuildBarracks", "UpgradeWarehouse"} <= set(kinds)
+        assert "BuildBarracks" in kinds
+        assert ("UpgradeWarehouse" in kinds) == (rules.warehouse.max_level > 0)
     assert moves_on_edges > 0
     # On choke the only way out is the central node 3; both players reach it at once and fight
     # there (DEC-07, rule 5; DEC-24) with equal sides, so both bounce and nothing is captured.

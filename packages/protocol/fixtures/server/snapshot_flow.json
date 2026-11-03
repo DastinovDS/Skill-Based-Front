@@ -1,0 +1,1208 @@
+{
+  "type": "snapshot",
+  "tick": 5,
+  "view": {
+    "me": {
+      "cp": 300,
+      "stance": "balance",
+      "fronts": [null, null],
+      "rear_min": 1,
+      "auto_lines": null,
+      "leaf_shift": 1,
+      "leaf_shift_max": 2,
+      "next_dispatch_tick": 10
+    },
+    "vp": [0, 0],
+    "nodes": [
+      {
+        "id": 0,
+        "owner": 0,
+        "capacity": 10,
+        "detail": "exact",
+        "warehouse": 6,
+        "seen": {
+          "tick": 5,
+          "level": "exact",
+          "enemy_modes": [],
+          "enemy_units": 0,
+          "enemy_charged": 0,
+          "enemy_range": null
+        },
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false,
+        "has_barracks": true,
+        "warehouse_level": 0,
+        "warehouse_cap": 6,
+        "building": null,
+        "factory": true,
+        "factory_period": 100,
+        "factory_build": null,
+        "fort": false,
+        "fort_build": null,
+        "front_dist": 2,
+        "flow_down": [1],
+        "flow_next": [1, 5],
+        "flow_idle": null,
+        "flow_pocket": false
+      },
+      {
+        "id": 1,
+        "owner": 0,
+        "capacity": 8,
+        "detail": "exact",
+        "warehouse": 0,
+        "seen": {
+          "tick": 5,
+          "level": "exact",
+          "enemy_modes": [],
+          "enemy_units": 0,
+          "enemy_charged": 0,
+          "enemy_range": null
+        },
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false,
+        "has_barracks": false,
+        "warehouse_level": 0,
+        "warehouse_cap": 3,
+        "building": null,
+        "factory": false,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": false,
+        "fort_build": null,
+        "front_dist": 1,
+        "flow_down": [],
+        "flow_next": [],
+        "flow_idle": "leaf",
+        "flow_pocket": false
+      },
+      {
+        "id": 2,
+        "owner": 0,
+        "capacity": 6,
+        "detail": "presence",
+        "warehouse": 0,
+        "seen": {
+          "tick": 5,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null,
+          "enemy_range": null
+        },
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false,
+        "has_barracks": false,
+        "warehouse_level": 0,
+        "warehouse_cap": 3,
+        "building": null,
+        "factory": false,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": false,
+        "fort_build": null,
+        "front_dist": 1,
+        "flow_down": [],
+        "flow_next": [],
+        "flow_idle": "leaf",
+        "flow_pocket": false
+      },
+      {
+        "id": 3,
+        "owner": 0,
+        "capacity": 6,
+        "detail": "presence",
+        "warehouse": 0,
+        "seen": {
+          "tick": 5,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null,
+          "enemy_range": null
+        },
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false,
+        "has_barracks": false,
+        "warehouse_level": 0,
+        "warehouse_cap": 3,
+        "building": null,
+        "factory": false,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": false,
+        "fort_build": null,
+        "front_dist": 0,
+        "flow_down": [],
+        "flow_next": [],
+        "flow_idle": "ahead",
+        "flow_pocket": false
+      },
+      {
+        "id": 4,
+        "owner": 0,
+        "capacity": 6,
+        "detail": "presence",
+        "warehouse": 0,
+        "seen": {
+          "tick": 5,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null,
+          "enemy_range": null
+        },
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false,
+        "has_barracks": false,
+        "warehouse_level": 0,
+        "warehouse_cap": 3,
+        "building": null,
+        "factory": false,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": false,
+        "fort_build": null,
+        "front_dist": 0,
+        "flow_down": [],
+        "flow_next": [],
+        "flow_idle": "ahead",
+        "flow_pocket": false
+      },
+      {
+        "id": 5,
+        "owner": 0,
+        "capacity": 4,
+        "detail": "exact",
+        "warehouse": 0,
+        "seen": {
+          "tick": 5,
+          "level": "exact",
+          "enemy_modes": [],
+          "enemy_units": 0,
+          "enemy_charged": 0,
+          "enemy_range": null
+        },
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false,
+        "has_barracks": false,
+        "warehouse_level": 0,
+        "warehouse_cap": 3,
+        "building": null,
+        "factory": false,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": false,
+        "fort_build": null,
+        "front_dist": 2,
+        "flow_down": [1],
+        "flow_next": [],
+        "flow_idle": "empty",
+        "flow_pocket": false
+      },
+      {
+        "id": 6,
+        "owner": 0,
+        "capacity": 4,
+        "detail": "presence",
+        "warehouse": 0,
+        "seen": {
+          "tick": 5,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null,
+          "enemy_range": null
+        },
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false,
+        "has_barracks": false,
+        "warehouse_level": 0,
+        "warehouse_cap": 3,
+        "building": null,
+        "factory": false,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": false,
+        "fort_build": null,
+        "front_dist": 2,
+        "flow_down": [2],
+        "flow_next": [],
+        "flow_idle": "empty",
+        "flow_pocket": false
+      },
+      {
+        "id": 7,
+        "owner": 0,
+        "capacity": 4,
+        "detail": "presence",
+        "warehouse": 0,
+        "seen": {
+          "tick": 5,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null,
+          "enemy_range": null
+        },
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false,
+        "has_barracks": false,
+        "warehouse_level": 0,
+        "warehouse_cap": 3,
+        "building": null,
+        "factory": false,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": false,
+        "fort_build": null,
+        "front_dist": 2,
+        "flow_down": [2],
+        "flow_next": [],
+        "flow_idle": "empty",
+        "flow_pocket": false
+      },
+      {
+        "id": 8,
+        "owner": null,
+        "capacity": 3,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 9,
+        "owner": 1,
+        "capacity": 4,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 10,
+        "owner": 1,
+        "capacity": 4,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 11,
+        "owner": 1,
+        "capacity": 4,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 12,
+        "owner": 1,
+        "capacity": 6,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 13,
+        "owner": 1,
+        "capacity": 6,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 14,
+        "owner": 1,
+        "capacity": 6,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 15,
+        "owner": 1,
+        "capacity": 8,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 16,
+        "owner": 1,
+        "capacity": 10,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 17,
+        "owner": null,
+        "capacity": 3,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 18,
+        "owner": null,
+        "capacity": 3,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 19,
+        "owner": null,
+        "capacity": 3,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      },
+      {
+        "id": 20,
+        "owner": null,
+        "capacity": 3,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": null,
+        "attrition_in": null,
+        "grace_left": null,
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null,
+        "factory": null,
+        "factory_period": null,
+        "factory_build": null,
+        "fort": null,
+        "fort_build": null,
+        "front_dist": null,
+        "flow_down": null,
+        "flow_next": null,
+        "flow_idle": null,
+        "flow_pocket": null
+      }
+    ],
+    "edges": [
+      {
+        "id": 0,
+        "width": 1,
+        "detail": "presence",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 5,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 5,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 1,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 5,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 2,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 3,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 5,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 4,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 5,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 5,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 5,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 6,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 7,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 8,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 9,
+        "width": 1,
+        "detail": "presence",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 5,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 5,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 10,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 11,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 12,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 13,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 14,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 15,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 16,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 17,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 18,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 19,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 20,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 21,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 22,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 23,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 24,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      },
+      {
+        "id": 25,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "fog",
+            "seen": null
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
+      }
+    ],
+    "groups": [
+      {
+        "id": "1060285282921666961",
+        "units": 2,
+        "charged": 2,
+        "mode": "attack",
+        "location": {
+          "kind": "node",
+          "node": 0
+        },
+        "order": null,
+        "defense_bonus": null,
+        "defense_cap": null
+      }
+    ],
+    "packets": [],
+    "intents": [],
+    "fights": [],
+    "lines": []
+  }
+}

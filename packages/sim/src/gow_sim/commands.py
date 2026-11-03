@@ -38,6 +38,11 @@ of v2 names its requested bonus (``Move.bonus >= 1``, item 10) and gathers it in
 ``systems.orders``; ``ReleasePlan`` sends it at once (v1: ``FEATURE_DISABLED``). ``SetAutoLines``
 turns the auto-extension of the player's lines on or off (#665, ``systems.lines``; free, not
 public; v1: ``FEATURE_DISABLED``).
+Supply flow (DEC-43, ``supply.model = "flow"``): ``SetLeafShift`` sets the player's leaf shift
+(item B2; free, not public, no event; ``FEATURE_DISABLED`` under any other supply model);
+``DrawLine``, ``RemoveLine`` and ``SetAutoLines`` give ``FEATURE_DISABLED`` (item A12).
+``BuildBunker`` gives it without a ``[bunker]`` section and ``UpgradeWarehouse`` with
+``warehouse.max_level = 0`` (items C2 and D1), under any model.
 """
 
 from collections.abc import Callable, Iterable
@@ -280,6 +285,14 @@ class SetAutoLines:
 
 
 @dataclass(frozen=True, slots=True)
+class SetLeafShift:
+    """Set the own leaf shift (DEC-43, item B2): the level moves ``shift`` roads back from the
+    front, ``0..leaf_shift_max``. Free, not public."""
+
+    shift: int
+
+
+@dataclass(frozen=True, slots=True)
 class ReleasePlan:
     """The group waiting on a gathering planned order departs now with the bonus gathered so
     far, free (DEC-41, item 10; economy v2 only)."""
@@ -312,6 +325,7 @@ type Command = (
     | DrawLine
     | RemoveLine
     | SetAutoLines
+    | SetLeafShift
     | ReleasePlan
     | Forfeit
 )
@@ -347,6 +361,7 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             | DrawLine()
             | RemoveLine()
             | SetAutoLines()
+            | SetLeafShift()
             | Forfeit()
         ):
             return cmd
@@ -393,7 +408,9 @@ class RejectCode(StrEnum):
     """``recruit.location = capital``: recruiting only in the own capital (DEC-01)."""
     FEATURE_DISABLED = "FEATURE_DISABLED"
     """``BuildBarracks`` and ``UpgradeWarehouse`` without ``city_upgrades`` (DEC-26, item 1); a
-    command of the other economy model (DEC-41, item 14)."""
+    command of the other economy model (DEC-41, item 14) or supply model (DEC-43, items A12 and
+    B2); ``BuildBunker`` without ``[bunker]``, ``UpgradeWarehouse`` with
+    ``warehouse.max_level = 0`` (DEC-43, items C2 and D1)."""
     ALREADY_BUILT = "ALREADY_BUILT"
     """The city has its barracks already, the capital from the start (DEC-26, item 9)."""
     WAREHOUSE_MAX = "WAREHOUSE_MAX"
@@ -493,6 +510,8 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return cost.transfer
         case BuildFactory() | BuildBunker() | DrawLine() | RemoveLine() | SetAutoLines():
             return 0  # paid in charges or free (DEC-41, items 2, 3, 12; #665)
+        case SetLeafShift():
+            return 0  # free (DEC-43, item B2)
         case ReleasePlan():
             return 0  # free (DEC-41, item 10)
         case Forfeit():
@@ -682,6 +701,11 @@ def _check(
             return ()
         case SetAutoLines(on=on):
             return Reject(RejectCode.NO_CHANGE) if state.players[player].auto_lines == on else ()
+        case SetLeafShift(shift=shift):
+            ps = state.players[player]
+            if not 0 <= shift <= ps.leaf_shift_max:  # stored by the last flow step (item B2)
+                return Reject(RejectCode.INVALID_ARGUMENT)
+            return Reject(RejectCode.NO_CHANGE) if shift == ps.leaf_shift else ()
         case ReleasePlan(group=gid):
             group = _own_group(state, player, gid, seen)
             if isinstance(group, Reject):
@@ -698,7 +722,16 @@ def _check(
 
 
 def _other_model(rules: Ruleset, cmd: Command) -> bool:
-    """``cmd`` belongs to the other economy model (DEC-41, items 5 and 14)."""
+    """``cmd`` belongs to the other economy model (DEC-41, items 5 and 14) or the other supply
+    model (DEC-43, items A12 and B2), or the ruleset turns its feature off (items C2 and D1)."""
+    if isinstance(cmd, SetLeafShift):
+        return not rules.flow
+    if isinstance(cmd, DrawLine | RemoveLine | SetAutoLines) and rules.flow:
+        return True
+    if isinstance(cmd, BuildBunker) and rules.v2 and rules.bunker is None:
+        return True
+    if isinstance(cmd, UpgradeWarehouse) and rules.warehouse.max_level == 0:
+        return True
     if isinstance(
         cmd, BuildFactory | BuildBunker | DrawLine | RemoveLine | SetAutoLines | ReleasePlan
     ):
@@ -1115,6 +1148,9 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             return []
         case SetAutoLines(on=on):
             state.players[player].auto_lines = on
+            return []
+        case SetLeafShift(shift=shift):
+            state.players[player].leaf_shift = shift  # in force in this tick's flow step
             return []
         case ReleasePlan(group=gid):
             release_plan(state.groups[gid], tick)  # it departs in this tick (movement)

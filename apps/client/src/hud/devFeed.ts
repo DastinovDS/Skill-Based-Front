@@ -90,6 +90,11 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       factory_build: null,
       fort: null,
       fort_build: null,
+      front_dist: null,
+      flow_down: null,
+      flow_next: null,
+      flow_idle: null,
+      flow_pocket: null,
     };
     if (mine.has(n.id)) {
       const city = n.kind !== 'province';
@@ -170,6 +175,9 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         fronts: [null, null],
         rear_min: 1,
         auto_lines: rules.economy.model === 'v2' ? true : null,
+        leaf_shift: null,
+        leaf_shift_max: null,
+        next_dispatch_tick: null,
       },
       vp: [Math.floor(tick / 100), Math.floor(tick / 150)],
       nodes,

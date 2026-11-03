@@ -21,7 +21,9 @@ Only what the client uses (AGENTS.md, section 7.1):
   rear minimum, transfers, road upgrades and "Defense" of v1 and shows factories, lines,
   bunkers and the requested bonus of planned orders, with their numbers (``factory``, ``lines``,
   ``bunker``, ``orders.plan_ticks_per_bonus``, the charge prices of the buildings); ``null`` or 0
-  under v1.
+  under v1;
+- the supply model (DEC-43, ``supply_model``): ``flow`` hides the lines and shows the automatic
+  flow and the leaf shift (``lines`` under v1 and the drawn lines of DEC-41).
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -31,7 +33,7 @@ from typing import Annotated, Self
 from pydantic import Field
 
 from gow_protocol.base import Centi, NonNegInt, PosInt, SignedInt, WireModel
-from gow_sim.ruleset import EconomyModel, Ruleset, Sight, SightTable, Stance
+from gow_sim.ruleset import EconomyModel, Ruleset, Sight, SightTable, Stance, SupplyModel
 
 
 class CostsPublic(WireModel):
@@ -259,7 +261,12 @@ class RulesetPublic(WireModel):
     factory: FactoryPublic | None
     """Economy v2 only; ``None`` under v1."""
     bunker: BunkerPublic | None
-    """Economy v2 only; ``None`` under v1."""
+    """Economy v2 with a ``[bunker]`` section only; ``None`` under v1 and in ``mvp-4`` (DEC-43,
+    item D1: ``build_bunker`` is rejected with ``FEATURE_DISABLED``)."""
+    supply_model: SupplyModel
+    """``supply.model`` (DEC-43): ``flow`` is the automatic supply flow with the leaf shift
+    (``set_leaf_shift``; the line commands are rejected with ``FEATURE_DISABLED``); ``lines``
+    otherwise."""
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -364,4 +371,5 @@ class RulesetPublic(WireModel):
                 build_ticks=rules.bunker.build_ticks,
                 shots=rules.bunker.shots,
             ),
+            supply_model=rules.supply.model,
         )

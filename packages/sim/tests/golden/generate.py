@@ -17,7 +17,9 @@ many rejections. The games cover ``mvp-0``, ``mvp-1`` (``city_upgrades`` on, DEC
 economy v2 of ``mvp-3`` (DEC-41): there ``MixBot`` also builds factories and bunkers (paid in
 charges, #645), draws supply lines from its capital and from their targets and removes them,
 gives its planned orders a requested bonus and releases some of them early (#646), and its
-v1-only commands (and "Defense") are rejected.
+v1-only commands (and "Defense") are rejected. Under the supply flow of ``mvp-4`` (DEC-43) it also
+sets its leaf shift now and then (in range, out of range, unchanged), and its line, bunker and
+warehouse commands are rejected.
 """
 
 import argparse
@@ -44,6 +46,7 @@ from gow_sim.commands import (
     RemoveLine,
     SetAutoLines,
     SetFront,
+    SetLeafShift,
     SetMode,
     SetRearMin,
     SetStance,
@@ -84,6 +87,7 @@ class MixBot:
     def __init__(self, mapdef: MapDef, rules: Ruleset, forfeit_at: int | None = None) -> None:
         self.map = mapdef
         self.v2 = rules.v2
+        self.flow = rules.flow
         self.plan_cost = rules.orders.cost.planned_move
         self.base = ExpandBot(mapdef, rules)
         self.forfeit_at = forfeit_at
@@ -137,6 +141,8 @@ class MixBot:
             cmds.append(CancelRecruit(self.map.capital(view.player)))
         if k % 37 == 0:  # usually rejected: no CP left, or FEATURE_DISABLED without the flag
             cmds.extend(self._develop(view, k))
+        if self.flow and k % 7 == 3:  # DEC-43: 0..3, beyond the maximum now and then
+            cmds.append(SetLeafShift(k // 7 % 4))
         if self.v2:
             cmds.extend(self._economy_v2(view, k))
             if k % 2 == 0 and view.me.cp >= self.plan_cost:  # first, before the CP go (#646)
@@ -289,6 +295,7 @@ GAMES = (
     Game("pass-mvp1", "pass", "mvp-1"),
     Game("artery-mvp3", "artery", "mvp-3"),
     Game("web-mvp3", "web", "mvp-3"),
+    Game("web-mvp4", "web", "mvp-4"),
 )
 
 

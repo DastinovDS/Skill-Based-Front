@@ -12,8 +12,9 @@ id, so the canonical JSON and ``state_hash()`` do not depend on dict insertion o
 ``PYTHONHASHSEED``. The static map is embedded in the file format (``map_to_data``), so the
 canonical form alone restores the state: ``from_canonical(to_canonical(s)) == s``. The fields of
 the economy v2 (DEC-41: factories, lines, the round robin of a factory, bunkers, the charges a build
-still owes) are written only when they differ from their defaults, so a v1 state has the
-canonical form and the hash it had before them.
+still owes) and of the supply flow (DEC-43: the leaf shift, the field and the plan of a node) are
+written only when they differ from their defaults, so a v1 state and a state of the drawn lines
+have the canonical form and the hash they had before them.
 """
 
 from collections.abc import Callable
@@ -54,6 +55,19 @@ class BuildKind(StrEnum):
     ROAD = "road"
     BARRACKS = "barracks"
     WAREHOUSE = "warehouse"
+
+
+class FlowIdle(StrEnum):
+    """Why an own node sends nothing at the next dispatch of the supply flow (DEC-43, item E)."""
+
+    LEAF = "leaf"
+    """On the level (``d == k``) or without a field."""
+    AHEAD = "ahead"
+    """Ahead of the level (``d < k``): it neither gives nor receives."""
+    EMPTY = "empty"
+    """Its warehouse is empty."""
+    FULL = "full"
+    """No neighbour takes a charge."""
 
 
 class Detail(StrEnum):
@@ -243,6 +257,28 @@ class Line:
         return self.path[-1]
 
 
+@dataclass(frozen=True, slots=True)
+class FlowNode:
+    """The supply flow at an own node (DEC-43; ``supply.model = "flow"``), set by
+    ``systems.flow`` in every tick (and by ``initial_state``) for every node of its owner.
+
+    ``d``: the effective field (item A4, after the pull), ``None`` without a field (INF, item A2).
+    ``k``: the leaf level of the node's own component (item A10: the shift for the capital's
+    component, 0 for any other). ``pocket``: the component has no own factory (item A10).
+    ``down``: the downhill neighbours of item A6 (``k <= d(m) < d``, room not considered), by
+    ``node_key``. ``next``: the receivers of its next dispatch in the order of item A6, and
+    ``idle`` why there are none (the plan of item A13, step 6; ``None`` when ``next`` is set).
+    The economy reads ``d`` and ``k`` of the previous tick for the spill of a full factory
+    (item A8)."""
+
+    d: int | None
+    k: int
+    pocket: bool
+    down: tuple[int, ...] = ()
+    next: tuple[int, ...] = ()
+    idle: FlowIdle | None = None
+
+
 @dataclass(slots=True)
 class PlayerState:
     id: int
@@ -271,6 +307,12 @@ class PlayerState:
     """A city the player captures is joined to its lines by itself (DEC-41, auto-extension of
     2026-10-31, #665; ``systems.lines``): ``lines.auto_extend`` at the start under v2, then the
     player's ``SetAutoLines``. Always ``False`` under v1."""
+    leaf_shift: int = 0
+    """The leaf shift in force (DEC-43, item B; ``supply.model = "flow"``): the level is the own
+    nodes ``leaf_shift`` roads behind the front; ``SetLeafShift`` sets it, the flow step clamps
+    it to ``leaf_shift_max`` (item B3). Hidden from the enemy (item B5)."""
+    leaf_shift_max: int = 0
+    """``d0`` of the own capital stored by the last flow step: the largest ``SetLeafShift``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,6 +393,9 @@ class Node:
     the node is captured (``systems.capacity.change_owner``)."""
     fort_build: FactoryBuild | None = None
     """The bunker being built here (DEC-41, item 12); ``None``: none."""
+    flow: FlowNode | None = None
+    """The supply flow of the owner here (DEC-43); ``None`` outside the flow and for nodes
+    without an owner."""
 
 
 @dataclass(slots=True)
@@ -518,7 +563,7 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
                 stance_changed_tick=None,
                 rear_min=rules.supply.rear_min_default,
                 fronts=(None,) * rules.supply.front_markers,
-                auto_lines=rules.v2 and rules.line_rules().auto_extend,
+                auto_lines=rules.lines is not None and rules.lines.auto_extend,
             )
             for p in PLAYERS
         },
@@ -560,6 +605,12 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
                 mode=Mode.ATTACK,
                 location=AtNode(node.id),
             )
+    if rules.flow:
+        # The initial state carries the field and the plan of the flow (DEC-43, item A8). A local
+        # import: the systems import this module.
+        from gow_sim.systems.flow import update_flow
+
+        update_flow(state, rules)
     return state
 
 
@@ -653,6 +704,10 @@ def _v2_player_data(p: PlayerState) -> dict[str, object]:
         data["next_line"] = p.next_line
     if p.auto_lines:
         data["auto_lines"] = True
+    if p.leaf_shift:
+        data["leaf_shift"] = p.leaf_shift
+    if p.leaf_shift_max:
+        data["leaf_shift_max"] = p.leaf_shift_max
     return data
 
 
@@ -686,6 +741,16 @@ def _v2_node_data(n: Node) -> dict[str, object]:
         data["fort_build"] = _site_build_data(n.fort_build)
     if n.rr:
         data["rr"] = n.rr
+    if n.flow is not None:
+        f = n.flow
+        data["flow"] = {
+            "d": f.d,
+            "k": f.k,
+            "pocket": f.pocket,
+            "down": list(f.down),
+            "next": list(f.next),
+            "idle": None if f.idle is None else f.idle.value,
+        }
     return data
 
 
@@ -916,7 +981,7 @@ def _parse_player(data: object, where: str) -> PlayerState:
             "fronts",
             "rear_min",
         ),
-        optional=("lines", "next_line", "auto_lines"),
+        optional=("lines", "next_line", "auto_lines", "leaf_shift", "leaf_shift_max"),
     )
     fronts = _list(raw["fronts"], f"{where}.fronts")
     lines: dict[int, Line] = {}
@@ -945,6 +1010,8 @@ def _parse_player(data: object, where: str) -> PlayerState:
         lines=lines,
         next_line=_int(raw.get("next_line", 0), f"{where}.next_line", low=0),
         auto_lines=_bool(raw.get("auto_lines", False), f"{where}.auto_lines"),
+        leaf_shift=_int(raw.get("leaf_shift", 0), f"{where}.leaf_shift", low=0),
+        leaf_shift_max=_int(raw.get("leaf_shift_max", 0), f"{where}.leaf_shift_max", low=0),
     )
 
 
@@ -965,7 +1032,7 @@ def _parse_node(data: object, where: str) -> Node:
             "has_barracks",
             "warehouse_level",
         ),
-        optional=("factory", "factory_build", "rr", "fort", "fort_build"),
+        optional=("factory", "factory_build", "rr", "fort", "fort_build", "flow"),
     )
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
@@ -984,6 +1051,22 @@ def _parse_node(data: object, where: str) -> Node:
         rr=_int(raw.get("rr", 0), f"{where}.rr", low=0),
         fort=_bool(raw.get("fort", False), f"{where}.fort"),
         fort_build=_parse_site_build(raw.get("fort_build"), f"{where}.fort_build"),
+        flow=_parse_flow(raw.get("flow"), f"{where}.flow"),
+    )
+
+
+def _parse_flow(data: object, where: str) -> FlowNode | None:
+    if data is None:
+        return None
+    raw = _obj(data, where, ("d", "k", "pocket", "down", "next", "idle"))
+    idle = raw["idle"]
+    return FlowNode(
+        d=_opt_int(raw["d"], f"{where}.d"),
+        k=_int(raw["k"], f"{where}.k", low=0),
+        pocket=_bool(raw["pocket"], f"{where}.pocket"),
+        down=tuple(_int(n, f"{where}.down", low=0) for n in _list(raw["down"], f"{where}.down")),
+        next=tuple(_int(n, f"{where}.next", low=0) for n in _list(raw["next"], f"{where}.next")),
+        idle=None if idle is None else FlowIdle(_choice(idle, f"{where}.idle", FlowIdle)),
     )
 
 

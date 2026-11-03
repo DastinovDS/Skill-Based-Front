@@ -33,6 +33,7 @@ export type Command =
   | DrawLineCmd
   | RemoveLineCmd
   | SetAutoLinesCmd
+  | SetLeafShiftCmd
   | ReleasePlanCmd
   | ForfeitCmd;
 /**
@@ -66,6 +67,11 @@ export type EconomyModel = 'v1' | 'v2';
  */
 export type Sight = 'exact' | 'range' | 'presence';
 /**
+ * ``supply.model`` (DEC-43, #697; economy v2 only): ``lines`` is the supply of drawn lines
+ * (DEC-41, DEC-42); ``flow`` the automatic flow towards the front with the leaf shift.
+ */
+export type SupplyModel = 'lines' | 'flow';
+/**
  * Why a match did not change your rating (DEC-34, #414).
  */
 export type UnratedReason =
@@ -85,6 +91,10 @@ export type Detail = 'exact' | 'range' | 'presence' | 'fog';
  * What a city builds (DEC-26, item 9): a road level, the barracks or a warehouse level.
  */
 export type BuildKind = 'road' | 'barracks' | 'warehouse';
+/**
+ * Why an own node sends nothing at the next dispatch of the supply flow (DEC-43, item E).
+ */
+export type FlowIdle = 'leaf' | 'ahead' | 'empty' | 'full';
 export type Location = AtNodeLoc | OnEdgeLoc;
 /**
  * Publicly visible intent types (DEC-04, DEC-08).
@@ -275,6 +285,16 @@ export interface SetAutoLinesCmd {
   on: boolean;
 }
 /**
+ * The own leaf shift (DEC-43, item B2): the level of the supply flow moves ``shift`` roads
+ * back from the front, ``0..View.me.leaf_shift_max``; the range is checked by the simulation
+ * (``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public; only under
+ * ``supply_model = "flow"`` (``FEATURE_DISABLED`` otherwise).
+ */
+export interface SetLeafShiftCmd {
+  type: 'set_leaf_shift';
+  shift: number;
+}
+/**
  * The own group waiting on a gathering planned order departs now with the bonus gathered so
  * far, free (economy v2, DEC-41, item 10).
  */
@@ -413,9 +433,16 @@ export interface RulesetPublic {
    */
   factory: FactoryPublic | null;
   /**
-   * Economy v2 only; ``None`` under v1.
+   * Economy v2 with a ``[bunker]`` section only; ``None`` under v1 and in ``mvp-4`` (DEC-43,
+   * item D1: ``build_bunker`` is rejected with ``FEATURE_DISABLED``).
    */
   bunker: BunkerPublic | null;
+  /**
+   * ``supply.model`` (DEC-43): ``flow`` is the automatic supply flow with the leaf shift
+   * (``set_leaf_shift``; the line commands are rejected with ``FEATURE_DISABLED``); ``lines``
+   * otherwise.
+   */
+  supply_model: SupplyModel;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -748,9 +775,22 @@ export interface SelfView {
   rear_min: number;
   /**
    * Economy v2: the own lines extend to captured cities by themselves (``set_auto_lines``,
-   * #665); ``null`` under v1. The enemy's toggle is never in a view.
+   * #665); ``null`` under v1 and the supply flow. The enemy's toggle is never in a view.
    */
   auto_lines: boolean | null;
+  /**
+   * Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``);
+   * ``null`` under ``supply_model = "lines"``. The enemy's shift is never in a view.
+   */
+  leaf_shift: number | null;
+  /**
+   * Supply flow: the largest shift now (the roads from the own capital to the front).
+   */
+  leaf_shift_max: number | null;
+  /**
+   * Supply flow: the tick of the next dispatch.
+   */
+  next_dispatch_tick: number | null;
 }
 export interface NodeView {
   id: number;
@@ -845,6 +885,33 @@ export interface NodeView {
    * Own node only: the bunker being built there (economy v2).
    */
   fort_build: SiteBuild | null;
+  /**
+   * Supply flow (DEC-43, item E), own node only: the effective field ``d`` of the current
+   * tick, the roads to the nearest leaf after the pull of a tired army; ``null`` without a field,
+   * for every other node and under ``supply_model = "lines"``. The level is
+   * ``front_dist == View.me.leaf_shift``, ahead of it ``front_dist < leaf_shift``.
+   */
+  front_dist: number | null;
+  /**
+   * Supply flow, own node only: its downhill neighbours (roads it gives to, room not
+   * considered), in tie-break order; ``null`` like ``front_dist``.
+   */
+  flow_down: number[] | null;
+  /**
+   * Supply flow, own node only: the receivers of its next dispatch, one charge each, in the
+   * order they get them.
+   */
+  flow_next: number[] | null;
+  /**
+   * Supply flow, own node only: why it sends nothing at the next dispatch (``leaf``: on the
+   * level or without a field, ``ahead``: ahead of the level, ``empty``, ``full``: no neighbour
+   * takes a charge); ``null`` when ``flow_next`` is not empty.
+   */
+  flow_idle: FlowIdle | null;
+  /**
+   * Supply flow, own node only: its own component over internal roads has no own factory.
+   */
+  flow_pocket: boolean | null;
 }
 /**
  * What the player sees, or last saw, of one node or half of an edge
@@ -1478,7 +1545,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 35;
+export const PROTOCOL_VERSION = 36;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

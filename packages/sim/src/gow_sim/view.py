@@ -34,6 +34,9 @@ and DEC-35 (mechanics.md, section 10) and has the shape of the wire ``View`` of 
   gathered, the tick the next charge is due; item 10); the built factory of an enemy city and the
   built bunker of an enemy node joined by an edge to any own node (DEC-31, item 12), never an enemy
   build or an enemy line;
+- supply flow (DEC-43, item E, ``supply.model = "flow"``; otherwise ``None``): for own nodes only
+  the field, the downhill neighbours, the plan of the next dispatch and why a node sends nothing,
+  whether it is in a pocket; the own leaf shift, its maximum and the next dispatch tick;
 - neighbours of sources by the terrain table (DEC-21, item 2), and the halves of edges by the level
   of their node (item 5): ``EXACT`` the enemy totals, ``RANGE`` the range of the enemy units,
   ``PRESENCE`` whether enemy groups are there; the modes on every level;
@@ -58,7 +61,8 @@ detail 2), enemy builds on fogged
 edges, enemy packets (on any edge, DEC-10, item 6), enemy CP, stance, production and counters,
 the enemy's front markers and rear minimum (DEC-28), enemy transfers (DEC-18, item 8), the bonus
 an enemy "Defense" has gathered (DEC-30, item 5), the enemy's supply lines, factory and bunker
-builds, factory rates and planned-order requests (DEC-41), events, the target of an enemy's
+builds, factory rates and planned-order requests (DEC-41), the enemy's leaf shift, field and
+flow plan (DEC-43, item B5), events, the target of an enemy's
 normal order (normal orders have no intent), sequential ids.
 
 Ids of own groups, own packets and intents are opaque per player: keyed blake2b of
@@ -88,6 +92,7 @@ from gow_sim.state import (
     Detail,
     FactoryBuild,
     FightRound,
+    FlowIdle,
     GameState,
     Group,
     IntentKind,
@@ -104,6 +109,7 @@ from gow_sim.systems.capacity import (
     warehouse_capacity,
 )
 from gow_sim.systems.economy import factory_period
+from gow_sim.systems.flow import next_dispatch_tick
 from gow_sim.systems.movement import reachable, reachable_paths
 from gow_sim.systems.recruit import recruit_waiting
 from gow_sim.systems.supply import (
@@ -136,6 +142,7 @@ __all__ = [
     "EnemyGroupView",
     "FightRound",
     "FightView",
+    "FlowIdle",
     "GroupView",
     "HalfView",
     "IntentKind",
@@ -192,7 +199,15 @@ class SelfView:
     """The own rear minimum (DEC-28, item 3)."""
     auto_lines: bool | None = None
     """Economy v2: whether the own lines extend to captured cities by themselves (#665, the
-    player's ``SetAutoLines``); ``None`` under v1. The enemy's toggle is never in a view."""
+    player's ``SetAutoLines``); ``None`` under v1 and the supply flow. The enemy's toggle is never
+    in a view."""
+    leaf_shift: int | None = None
+    """Supply flow (DEC-43, item B): the own leaf shift in force; ``None`` under any other supply
+    model. The enemy's shift is never in a view (item B5)."""
+    leaf_shift_max: int | None = None
+    """Supply flow: the largest shift, ``d0`` of the own capital (item B2)."""
+    next_dispatch_tick: int | None = None
+    """Supply flow: the tick of the next dispatch (item A6)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,6 +300,19 @@ class NodeView:
     the enemy."""
     fort_build: SiteBuildView | None = None
     """Own node only: the bunker being built there (economy v2)."""
+    front_dist: int | None = None
+    """Supply flow (DEC-43, item E), own node only: the effective field ``d`` (after the pull) of
+    the current tick; ``None`` without a field, for other nodes and under another supply model."""
+    flow_down: tuple[int, ...] | None = None
+    """Own node only: the downhill neighbours (``k <= d(m) < d``, room not considered), by
+    ``node_key``."""
+    flow_next: tuple[int, ...] | None = None
+    """Own node only: the receivers of its next dispatch, in the order they get the charges."""
+    flow_idle: FlowIdle | None = None
+    """Own node only: why it sends nothing at the next dispatch; ``None`` when ``flow_next`` is
+    not empty."""
+    flow_pocket: bool | None = None
+    """Own node only: its component over internal roads has no own factory (item A10)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -627,8 +655,11 @@ def line_route(
     are fewer than two points, a point is repeated, out of range or not own, or a leg has no way.
     Only the owners of own nodes and the public map are read, so nothing hidden leaks; the
     suggestion checks none of the rules of ``DrawLine`` (source, cycle): the server
-    decides those when the player confirms the line.
+    decides those when the player confirms the line. Under the supply flow there are no lines:
+    always ``()`` (DEC-43, item A12).
     """
+    if rules.flow:
+        return ()
     count = len(state.map.nodes)
     if len(points) < 2 or len(dict.fromkeys(points)) != len(points):
         return ()
@@ -708,7 +739,9 @@ def _v2_node(state: GameState, rules: Ruleset, player: int, n: int, city: bool) 
             if city
             else None,
             fort=node.fort,
-            fort_build=_site_view(node.fort_build, rules.bunker_rules().build_ticks),
+            fort_build=None
+            if node.fort_build is None
+            else _site_view(node.fort_build, rules.bunker_rules().build_ticks),
         )
     if not _borders_enemy_node(state, player, n):
         return _NO_V2
@@ -758,6 +791,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         city = is_city(mapdef, n)
         own_city = node.owner == player and city
         v2 = _v2_node(state, rules, player, n, city)
+        flow = node.flow if node.owner == player and rules.flow else None  # own only (item E)
         barracks_seen = own_city or _borders_enemy_city(state, player, n)
         attrition_in, grace_left = (
             overflow_countdown(state, rules, n, capacities[n])
@@ -787,6 +821,11 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 factory_build=v2.factory_build,
                 fort=v2.fort,
                 fort_build=v2.fort_build,
+                front_dist=flow.d if flow is not None else None,
+                flow_down=flow.down if flow is not None else None,
+                flow_next=flow.next if flow is not None else None,
+                flow_idle=flow.idle if flow is not None else None,
+                flow_pocket=flow.pocket if flow is not None else None,
             )
         )
 
@@ -916,7 +955,10 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
             stance=me.stance,
             fronts=me.fronts,
             rear_min=me.rear_min,
-            auto_lines=me.auto_lines if rules.v2 else None,
+            auto_lines=me.auto_lines if rules.lines is not None else None,
+            leaf_shift=me.leaf_shift if rules.flow else None,
+            leaf_shift_max=me.leaf_shift_max if rules.flow else None,
+            next_dispatch_tick=next_dispatch_tick(state, rules) if rules.flow else None,
         ),
         vp=tuple(state.players[p].vp for p in PLAYERS),
         nodes=tuple(nodes),
@@ -1006,6 +1048,9 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
             "fronts": list(view.me.fronts),
             "rear_min": view.me.rear_min,
             "auto_lines": view.me.auto_lines,
+            "leaf_shift": view.me.leaf_shift,
+            "leaf_shift_max": view.me.leaf_shift_max,
+            "next_dispatch_tick": view.me.next_dispatch_tick,
         },
         "vp": list(view.vp),
         "nodes": [
@@ -1037,6 +1082,11 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "factory_build": _site_data(n.factory_build),
                 "fort": n.fort,
                 "fort_build": _site_data(n.fort_build),
+                "front_dist": n.front_dist,
+                "flow_down": None if n.flow_down is None else list(n.flow_down),
+                "flow_next": None if n.flow_next is None else list(n.flow_next),
+                "flow_idle": None if n.flow_idle is None else n.flow_idle.value,
+                "flow_pocket": n.flow_pocket,
             }
             for n in view.nodes
         ],

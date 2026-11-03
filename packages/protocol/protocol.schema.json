@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 35,
+    "PROTOCOL_VERSION": 36,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -502,6 +502,7 @@
           "remove_line": "#/$defs/RemoveLineCmd",
           "set_auto_lines": "#/$defs/SetAutoLinesCmd",
           "set_front": "#/$defs/SetFrontCmd",
+          "set_leaf_shift": "#/$defs/SetLeafShiftCmd",
           "set_mode": "#/$defs/SetModeCmd",
           "set_rear_min": "#/$defs/SetRearMinCmd",
           "set_stance": "#/$defs/SetStanceCmd",
@@ -569,6 +570,9 @@
         },
         {
           "$ref": "#/$defs/SetAutoLinesCmd"
+        },
+        {
+          "$ref": "#/$defs/SetLeafShiftCmd"
         },
         {
           "$ref": "#/$defs/ReleasePlanCmd"
@@ -1348,6 +1352,17 @@
       ],
       "title": "FightView",
       "type": "object"
+    },
+    "FlowIdle": {
+      "description": "Why an own node sends nothing at the next dispatch of the supply flow (DEC-43, item E).",
+      "enum": [
+        "leaf",
+        "ahead",
+        "empty",
+        "full"
+      ],
+      "title": "FlowIdle",
+      "type": "string"
     },
     "ForfeitCmd": {
       "additionalProperties": false,
@@ -2395,6 +2410,73 @@
             }
           ],
           "description": "Own node only: the bunker being built there (economy v2)."
+        },
+        "front_dist": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supply flow (DEC-43, item E), own node only: the effective field ``d`` of the current\ntick, the roads to the nearest leaf after the pull of a tired army; ``null`` without a field,\nfor every other node and under ``supply_model = \"lines\"``. The level is\n``front_dist == View.me.leaf_shift``, ahead of it ``front_dist < leaf_shift``."
+        },
+        "flow_down": {
+          "anyOf": [
+            {
+              "items": {
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supply flow, own node only: its downhill neighbours (roads it gives to, room not\nconsidered), in tie-break order; ``null`` like ``front_dist``."
+        },
+        "flow_next": {
+          "anyOf": [
+            {
+              "items": {
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supply flow, own node only: the receivers of its next dispatch, one charge each, in the\norder they get them."
+        },
+        "flow_idle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FlowIdle"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supply flow, own node only: why it sends nothing at the next dispatch (``leaf``: on the\nlevel or without a field, ``ahead``: ahead of the level, ``empty``, ``full``: no neighbour\ntakes a charge); ``null`` when ``flow_next`` is not empty."
+        },
+        "flow_pocket": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supply flow, own node only: its own component over internal roads has no own factory."
         }
       },
       "required": [
@@ -2418,7 +2500,12 @@
         "factory_period",
         "factory_build",
         "fort",
-        "fort_build"
+        "fort_build",
+        "front_dist",
+        "flow_down",
+        "flow_next",
+        "flow_idle",
+        "flow_pocket"
       ],
       "title": "NodeView",
       "type": "object"
@@ -3056,7 +3143,15 @@
               "type": "null"
             }
           ],
-          "description": "Economy v2 only; ``None`` under v1."
+          "description": "Economy v2 with a ``[bunker]`` section only; ``None`` under v1 and in ``mvp-4`` (DEC-43,\nitem D1: ``build_bunker`` is rejected with ``FEATURE_DISABLED``)."
+        },
+        "supply_model": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/SupplyModel"
+            }
+          ],
+          "description": "``supply.model`` (DEC-43): ``flow`` is the automatic supply flow with the leaf shift\n(``set_leaf_shift``; the line commands are rejected with ``FEATURE_DISABLED``); ``lines``\notherwise."
         }
       },
       "required": [
@@ -3075,7 +3170,8 @@
         "supply",
         "vision",
         "factory",
-        "bunker"
+        "bunker",
+        "supply_model"
       ],
       "title": "RulesetPublic",
       "type": "object"
@@ -3188,7 +3284,46 @@
               "type": "null"
             }
           ],
-          "description": "Economy v2: the own lines extend to captured cities by themselves (``set_auto_lines``,\n#665); ``null`` under v1. The enemy's toggle is never in a view."
+          "description": "Economy v2: the own lines extend to captured cities by themselves (``set_auto_lines``,\n#665); ``null`` under v1 and the supply flow. The enemy's toggle is never in a view."
+        },
+        "leaf_shift": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``);\n``null`` under ``supply_model = \"lines\"``. The enemy's shift is never in a view."
+        },
+        "leaf_shift_max": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supply flow: the largest shift now (the roads from the own capital to the front)."
+        },
+        "next_dispatch_tick": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supply flow: the tick of the next dispatch."
         }
       },
       "required": [
@@ -3196,7 +3331,10 @@
         "stance",
         "fronts",
         "rear_min",
-        "auto_lines"
+        "auto_lines",
+        "leaf_shift",
+        "leaf_shift_max",
+        "next_dispatch_tick"
       ],
       "title": "SelfView",
       "type": "object"
@@ -3303,6 +3441,28 @@
         "node"
       ],
       "title": "SetFrontCmd",
+      "type": "object"
+    },
+    "SetLeafShiftCmd": {
+      "additionalProperties": false,
+      "description": "The own leaf shift (DEC-43, item B2): the level of the supply flow moves ``shift`` roads\nback from the front, ``0..View.me.leaf_shift_max``; the range is checked by the simulation\n(``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public; only under\n``supply_model = \"flow\"`` (``FEATURE_DISABLED`` otherwise).",
+      "properties": {
+        "type": {
+          "const": "set_leaf_shift",
+          "default": "set_leaf_shift",
+          "type": "string"
+        },
+        "shift": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "shift"
+      ],
+      "title": "SetLeafShiftCmd",
       "type": "object"
     },
     "SetModeCmd": {
@@ -3523,6 +3683,15 @@
       ],
       "title": "StancePctPublic",
       "type": "object"
+    },
+    "SupplyModel": {
+      "description": "``supply.model`` (DEC-43, #697; economy v2 only): ``lines`` is the supply of drawn lines\n(DEC-41, DEC-42); ``flow`` the automatic flow towards the front with the leaf shift.",
+      "enum": [
+        "lines",
+        "flow"
+      ],
+      "title": "SupplyModel",
+      "type": "string"
     },
     "SupplyPublic": {
       "additionalProperties": false,

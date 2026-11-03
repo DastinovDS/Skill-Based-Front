@@ -1,0 +1,5 @@
+{
+  "type": "command",
+  "seq": 25,
+  "cmd": { "type": "set_leaf_shift", "shift": 1 }
+}
