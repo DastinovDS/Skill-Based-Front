@@ -13,7 +13,10 @@
   Round 2 (owner feedback, #707): the default view is now the owner's sketch, a fortification as a segment of the territory border
   (B1..B3: 3, 5 and 7 blocks, block width and gap fixed, the count is what fits), on a sharp bend or a curve of the border, with the toll
   as the T5 ripple plus the combat hit of the fight (H1..H3, ui-style 9.9 and 29). Round 1 (F1..F6, T1..T6) is behind "Round 1".
-  Address state: #r1=0&a=1&b=2&view=1&hit=1&toll=4&map=bend&step=7&mode=supply&zoom=1&gray=0&rm=0&cnt=0&t=1.7 (t freezes the step at that second).
+  Round 3 (owner feedback, #707): the look is a flat stroke in front of the border, offset a little inside the own cell, with flat ticks of the same colour
+  on its outer side and a soft dark halo (style reference: the front line of a strategy map): C1..C10, and ten tolls K1..K10 (the T5 ripple plus the
+  combat hit). Rounds 2 and 1 are behind the "Round" switch.
+  Address state: #round=3&a=1&b=2&view=1&kk=0&hit=1&toll=4&map=bend&step=7&mode=supply&zoom=1&gray=0&rm=0&cnt=0&t=1.7 (t freezes the step at that second).
   window.__fort exposes the state and a few helpers for checks.
 -->
 <html lang="en">
@@ -182,6 +185,17 @@
       .panels.v6.n3 canvas {
         aspect-ratio: 4 / 5;
       }
+      .panels.v6.n10 {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+      .panels.v6.n10 canvas {
+        aspect-ratio: 1 / 1.1;
+      }
+      @media (max-width: 1100px) {
+        .panels.v6.n10 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
       .panel {
         background: var(--surface);
         border: 1px solid var(--border);
@@ -249,6 +263,9 @@
         white-space: nowrap;
       }
       @media (max-width: 900px) {
+        .panels.v6.n10 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
         .panels.v2 {
           grid-template-columns: minmax(0, 1fr);
         }
@@ -257,6 +274,9 @@
         }
       }
       @media (max-width: 600px) {
+        .panels.v6.n10 {
+          grid-template-columns: minmax(0, 1fr);
+        }
         body {
           padding: 0 16px 24px;
         }
@@ -297,14 +317,17 @@
         <div class="seg" id="zoomSeg" role="group" aria-label="Zoom">
           <button data-z="0.45">0.45</button><button data-z="1">1</button><button data-z="2">2</button>
         </div>
+        <div class="seg" id="roundSeg" role="group" aria-label="Design round">
+          <button data-r="3" aria-label="Round 3">Round 3</button><button data-r="2" aria-label="Round 2">2</button><button data-r="1" aria-label="Round 1">1</button>
+        </div>
         <div class="seg" id="mapSeg" role="group" aria-label="Border">
           <button data-b="bend">Sharp bend</button><button data-b="curve">Curve</button>
         </div>
         <div class="seg" id="viewSeg" role="group" aria-label="Panels">
-          <button data-v="1">1</button><button data-v="2">Compare 2</button><button data-v="6">All</button>
+          <button data-v="1" aria-label="One panel">1</button><button data-v="2">Compare 2</button><button data-v="6" aria-label="All looks">All</button>
         </div>
         <span class="sp"></span>
-        <label><input type="checkbox" id="r1" /> Round 1</label>
+        
         <label><input type="checkbox" id="cnt" /> Counter</label>
         <label><input type="checkbox" id="gray" /> Grayscale</label>
         <label><input type="checkbox" id="rm" /> Less motion</label>
@@ -871,7 +894,70 @@
           return { ch, inset, pt, nodeId: f.node, x: c.x, y: c.y, ux: c.nx, uy: c.ny, nx: c.tx, ny: c.ty, half: V.len * mk * 0.5, V, mk };
         }
         // where along the road, from the far end, the line sits: the border is at half of it, a stacked line a little further in
-        const fortSF = (f, L) => (CUR_SET === 'r1' ? L / 2 + fortOff(f) : L / 2 + (f.off > OFF1 ? (f.off - OFF1) * CUR_MK : 0));
+        const fortSF = (f, L) => {
+          const stack = f.off > OFF1 ? (f.off - OFF1) * CUR_MK : 0;
+          if (CUR_SET === 'r1') return L / 2 + fortOff(f);
+          if (CUR_SET === 'r3') return L / 2 + (CUR_V ? CUR_V.off * CUR_MK : 0) + stack;
+          return L / 2 + stack;
+        };
+
+        /* ============================================================ round 3: a stroke in front of the border, flat ticks on its outer side */
+        // The owner's reference language (a front line on a strategy map): one smooth flat-coloured stroke that follows the border, short simple
+        // ticks along its outer side (towards the border and the enemy), the same colour, no texture, a soft darker halo under it. The stroke sits a
+        // little inside the OWN cell, parallel to the border, so the real border stays visible, and both sides of one border never overlap.
+        // len: segment length along the border (world units, not scaled by the camera); lw stroke width; off: how far inside the cell; tl, tw, gap: tick
+        // length, width and gap; the number of ticks is what fits `len` (so zoomed out, where ticks grow, fewer fit: the rhythm simplifies).
+        // shape: rect | taper | alt (alternating long/short); ends: round | butt | post (taller end ticks) | taper (ticks shrink to the ends);
+        // prog: how the build shows: grow (from the crossing both ways) | sweep (from one end) | ticks (line first, ticks appear) | dash (a dotted line closes up).
+        const R3 = [
+          { id: 'fine', n: 'Fine', line: 'thin stroke, dense short ticks, round ends, grows from the crossing', len: 96, lw: 3, off: 9.5, tl: 5, tw: 3, gap: 3, shape: 'rect', halo: [9, 0.5], ends: 'round', prog: 'grow' },
+          { id: 'sparse', n: 'Sparse', line: 'wider rhythm of square ticks, butt ends, ticks appear one by one', len: 96, lw: 4, off: 11, tl: 7, tw: 7, gap: 9, shape: 'rect', halo: [10, 0.55], ends: 'butt', prog: 'ticks' },
+          { id: 'heavy', n: 'Heavy', line: 'thick stroke, tall blocks, strong halo', len: 84, lw: 5.5, off: 13.5, tl: 9, tw: 8, gap: 5, shape: 'rect', halo: [12, 0.65], ends: 'round', prog: 'grow' },
+          { id: 'taper', n: 'Tapered', line: 'tapered ticks, shortening to the ends, builds from one end', len: 100, lw: 4, off: 12, tl: 8, tw: 6, gap: 4, shape: 'taper', halo: [10, 0.5], ends: 'taper', prog: 'sweep' },
+          { id: 'alt', n: 'Alternating', line: 'long and short ticks in turn, round ends', len: 110, lw: 4, off: 12, tl: 8, tw: 4, gap: 4, shape: 'alt', halo: [10, 0.5], ends: 'round', prog: 'grow' },
+          { id: 'compact', n: 'Compact', line: 'a short run of wide blocks with taller end posts', len: 52, lw: 4, off: 12, tl: 7, tw: 10, gap: 5, shape: 'rect', halo: [11, 0.55], ends: 'post', prog: 'ticks' },
+          { id: 'long', n: 'Long run', line: 'a long thin front with a wide soft halo, ticks fade out at both ends', len: 170, lw: 3, off: 8.5, tl: 5, tw: 3, gap: 4, shape: 'rect', halo: [14, 0.4], ends: 'taper', prog: 'sweep' },
+          { id: 'deep', n: 'Deep', line: 'set well inside the cell with long ticks, a dotted line closes up while building', len: 90, lw: 4, off: 16.5, tl: 11, tw: 5, gap: 6, shape: 'rect', halo: [9, 0.5], ends: 'butt', prog: 'dash' },
+          { id: 'hug', n: 'Hug', line: 'hugs the border with tiny ticks, the most discreet', len: 100, lw: 3, off: 7.5, tl: 3, tw: 4, gap: 3, shape: 'rect', halo: [6, 0.45], ends: 'round', prog: 'grow' },
+          { id: 'wall', n: 'Wall', line: 'a short thick wall of big close blocks with end posts, the strongest halo', len: 70, lw: 6, off: 13.5, tl: 8, tw: 12, gap: 4, shape: 'rect', halo: [14, 0.7], ends: 'post', prog: 'ticks' },
+        ];
+        R3.forEach((V) => (V.count = Math.max(3, Math.floor((V.len + V.gap) / (V.tw + V.gap)))));
+        // the toll as a ripple plus a combat hit (round 2), ten ways
+        const KS = [
+          { id: 'arc', n: 'Arc shot', tHit: 0.22, K: 1, sparks: 9, tracer: 'arc', trN: 1, ring: 1, flash: 1, loss: 'shards', pop: 0.35, react: 'flash', ripple: 'ringline', num: 'plate', rest: 0.42, cost: 'the baseline of round 2: an SH1 tracer from a tick, ring, flash, 9 sparks, a shard per lost charge, ticks flash; one pooled tracer Graphics and the fight particles' },
+          { id: 'round', n: 'Straight round', tHit: 0.13, K: 1, sparks: 7, tracer: 'line', trN: 1, ring: 1, flash: 0.8, loss: 'shards', pop: 0.3, react: 'recoil', ripple: 'ring', num: 'plate', rest: 0.35, cost: 'a short straight tracer (one Graphics line and a head sprite), quicker, the ticks recoil (a scale on the tick sprites)' },
+          { id: 'volley', n: 'Volley', tHit: 0.24, K: 1.15, sparks: 9, tracer: 'arc', trN: 3, ring: 2, flash: 1, loss: 'shards', pop: 0.4, react: 'flash', ripple: 'ringline', num: 'plate', rest: 0.45, cost: 'three tracers from neighbouring ticks converge, two rings: 3 pooled tracers, the rest as Arc shot' },
+          { id: 'each', n: 'One per charge', tHit: 0.2, K: 0.9, sparks: 5, tracer: 'arc', per: true, ring: 1, flash: 0.6, loss: 'shards', pop: 0.2, react: 'each', ripple: 'none', num: 'plate', rest: 0.5, cost: 'one short tracer per lost charge from successive ticks, a small hit each (the count is the number of shots); up to 3 tracers in flight' },
+          { id: 'wave', n: 'Wave', tHit: 0.3, K: 1, sparks: 8, tracer: 'none', ring: 1, flash: 1, loss: 'shards', pop: 0.35, react: 'wave', ripple: 'line', num: 'plate', rest: 0.42, cost: 'no projectile: a wave runs through the ticks (a scale per tick, staggered by position) and the hit follows; the ticks are sprites already' },
+          { id: 'beam', n: 'Beam', tHit: 0.1, K: 1.2, sparks: 10, tracer: 'beam', ring: 1, flash: 1.5, loss: 'fling', pop: 0.4, react: 'flash', ripple: 'ring', num: 'plate', rest: 0.3, cost: 'an instant bright beam from a tick (one Graphics line, 0.1 s), a big flash, charges flung away in a cone with no fall' },
+          { id: 'pull', n: 'Pull back', tHit: 0.2, K: 1, sparks: 6, tracer: 'arc', trN: 1, ring: 1, flash: 0.7, loss: 'pull', pop: 0.25, react: 'flash', ripple: 'ringline', num: 'plate', rest: 0.4, cost: 'the lost charges leave the group and fly back to the ticks and go out there (a pooled square sprite per charge)' },
+          { id: 'pips', n: 'Pip knock-out', tHit: 0.2, K: 1, sparks: 6, tracer: 'arc', trN: 1, ring: 1, flash: 0.7, loss: 'pips', pop: 0.2, react: 'flash', ripple: 'ringline', num: 'plate', rest: 0.5, cost: 'a row of pips over the group (a baked row per units and charged) and the lost ones break; exact count, needs room' },
+          { id: 'slam', n: 'Heavy slam', tHit: 0.22, K: 1.6, sparks: 9, tracer: 'arc', trN: 1, thick: true, ring: 2, flash: 1.3, loss: 'shards', pop: 0.5, react: 'recoil+flash', ripple: 'ringline', num: 'big', rest: 0.42, cost: 'the game strength "Stronger" (1.6): thick tracer, 14 sparks, two big rings, the ticks recoil and flash, a bigger -N; about +40% of Arc shot' },
+          { id: 'stamp', n: 'Stamp', tHit: 0.12, K: 1, sparks: 5, tracer: 'none', ring: 1, flash: 0.6, loss: 'shards', pop: 0.2, react: 'flash', ripple: 'ringline', num: 'stamp', rest: 0.35, cost: 'the quietest: ripple, a small hit and the -N stamped on the line (stays there) instead of rising from the group' },
+        ];
+        let CUR_V = null;
+        function tickLayout3(V, mk) {
+          const tw = V.tw * mk;
+          const gap = V.gap * mk;
+          const n = Math.max(3, Math.floor((V.len + gap) / (tw + gap)));
+          const used = n * tw + (n - 1) * gap;
+          const cs = Array.from({ length: n }, (_, i) => -used / 2 + tw / 2 + i * (tw + gap));
+          return { n, tw, gap, tl: V.tl * mk, lw: V.lw * mk, off: V.off * mk, used, cs, half: used / 2 + gap * 0.5 };
+        }
+        function fortFrame3(f, V) {
+          const mk = CUR_MK;
+          const lay = tickLayout3(V, mk);
+          const ch = borderChain(f.node, f.to, lay.half + 8 * mk);
+          if (!ch) return { ch: null };
+          const stack = f.off > OFF1 ? (f.off - OFF1) * mk : 0;
+          const inset = lay.off + stack;
+          const pt = (a) => {
+            const q = chainPt(ch, ch.s0 + clamp(a, -ch.s0, ch.len - ch.s0));
+            return { x: q.x - q.nx * inset * q.m, y: q.y - q.ny * inset * q.m, nx: q.nx, ny: q.ny, tx: q.tx, ty: q.ty };
+          };
+          const c = pt(0);
+          return { ch, inset, pt, nodeId: f.node, x: c.x, y: c.y, ux: c.nx, uy: c.ny, nx: c.tx, ny: c.ty, half: lay.half, lay, V, mk };
+        }
 
         /* ============================================================ geometry helpers */
         // zoomed out, marks grow (min size on screen), so a second stacked line keeps its gap in marks, not in world units
@@ -905,7 +991,7 @@
           { id: 'pick', n: 'Pick road', dur: 3.8 },
           { id: 'build', n: 'Building', dur: 4.0 },
           { id: 'built', n: 'Built', dur: 2.6 },
-          { id: 'enemy', n: 'Enemy seen', dur: 2.6 },
+          { id: 'enemy', n: 'Both sides', dur: 2.6 },
           { id: 'fog', n: 'Fog edge', dur: 2.6 },
           { id: 'stack', n: 'Stacked', dur: 4.2 },
           { id: 'collect', n: 'You collect', dur: 4.0 },
@@ -1056,7 +1142,7 @@
           { id: 'ripple', n: 'Ripple', rest: 0.3, cost: 'one ring sprite scaled and faded, one strip sprite, ticks as 1 sprite each' },
           { id: 'trail', n: 'Trail', rest: 0.5, cost: 'the same pooled square sprite as Shed dots, placed on the road and faded' },
         ];
-        const tollDef = (S) => (S.r1 ? TOLLS : HITS)[S.toll];
+        const tollDef = (S) => (S.round === 1 ? TOLLS : S.round === 2 ? HITS : KS)[S.toll];
         // a "stop" frame for Less motion: the moment the effect is clearest, held 1.2 s
         const HOLD = 1.2;
 
@@ -1566,6 +1652,7 @@
             return this.sc.tolls.filter((r) => r.fort === fortId);
           }
           forts() {
+            if (this.S.round === 3) return this.forts3();
             if (!this.S.r1) return this.forts2();
             const g = this.g;
             const S = this.S;
@@ -1875,6 +1962,513 @@
             this.pill(x, y, String(v), { glyph: 'sq', size: 12 + (this.S.rm ? 0 : pulse * 2), frame: pulse > 0 ? C.paper : 'rgba(240,246,252,0.6)', frameW: 1.2 + pulse });
           }
 
+          /* ---- round 3: the stroke with ticks */
+          // how far a tick has grown (gf) and flashes (fl) in the toll of the chosen variant
+          reactOf(L, r, fr, d, i, a) {
+            let gf = 1;
+            let fl = 0;
+            const th = L.tHit;
+            const kind = L.react;
+            if (kind === 'flash' || kind === 'recoil+flash') fl = 0.75 * clamp(1 - Math.abs(d - th) / 0.22, 0, 1);
+            if (kind === 'recoil' || kind === 'recoil+flash') gf = 1 + 0.4 * Math.sin(Math.PI * clamp((d - th + 0.06) / 0.28, 0, 1));
+            if (kind === 'wave') {
+              const dd = d - Math.abs(a) / 300;
+              gf = 1 + 0.4 * Math.sin(Math.PI * clamp(dd / 0.32, 0, 1));
+              fl = 0.55 * clamp(1 - Math.abs(dd - 0.12) / 0.16, 0, 1);
+            }
+            if (kind === 'each') {
+              for (const s of this.shots3(L, r, fr)) if (s.i === i) fl = Math.max(fl, 0.8 * clamp(1 - Math.abs(d - s.t0 - s.fl) / 0.2, 0, 1));
+            }
+            return { gf: Math.min(gf, Math.max(1, (fr.lay.off - 1.5) / fr.lay.tl)), fl };
+          }
+          forts3() {
+            const S = this.S;
+            const V = R3[S.look];
+            const k = this.mk;
+            const def = tollDef(S);
+            const todo = [];
+            const marks = [];
+            for (const f of this.sc.forts) {
+              const fr = fortFrame3(f, V);
+              if (!fr.ch) continue;
+              const o = { p: 1, alpha: 1, grow: 1 };
+              if (f.mode === 'break') {
+                todo.push({ f, fr, o, brk: clamp(f.brk, 0, 1) });
+                continue;
+              }
+              if (f.mode === 'build') o.p = f.p;
+              else if (f.mode === 'ghost') o.ghost = true;
+              else if (f.mode === 'built' && f.born != null && !S.rm) {
+                const b = easeOut(f.born / 0.3);
+                o.alpha = b;
+                o.grow = lerp(0.5, 1, b);
+              }
+              const recs = this.tollsOf(f.id)
+                .map((r) => ({ r, d: this.dEff(r) }))
+                .filter((x) => x.d >= 0 && x.r.n > 0);
+              if (recs.length) o.react = (a, i) => recs.reduce((acc, x) => {
+                const q = this.reactOf(def, x.r, fr, x.d, i, a);
+                return { gf: Math.max(acc.gf, q.gf), fl: Math.max(acc.fl, q.fl) };
+              }, { gf: 1, fl: 0 });
+              todo.push({ f, fr, o });
+              const lay = fr.lay;
+              if (f.mode === 'build' && f.owner === 'me') {
+                const sec = Math.max(0, Math.ceil((1 - f.p) * 10));
+                marks.push(() => this.pill(fr.x - fr.ux * (lay.lw + 22 * k), fr.y - fr.uy * (lay.lw + 22 * k), `0:${String(sec).padStart(2, '0')}`, { size: 12, frame: 'rgba(240,246,252,0.6)' }));
+              }
+              if (f.mode === 'ghost') marks.push(() => this.pill(fr.x + fr.ux * (lay.tl + 24 * k), fr.y + fr.uy * (lay.tl + 24 * k), `-0:${f.age}`, { size: 12, dash: true, alpha: 0.9 }));
+              if (S.cnt && f.mode === 'built' && ['stack', 'collect', 'pay'].includes(this.stepId)) {
+                const x = fr.x + fr.nx * (lay.used / 2 + 30 * k) - fr.ux * 6 * k;
+                const y = fr.y + fr.ny * (lay.used / 2 + 30 * k) - fr.uy * 6 * k;
+                marks.push(() => this.counterAt(f, x, y));
+              }
+            }
+            // all halos first (each clipped to its own cell, so two sides of one border never touch), then the strokes and ticks
+            for (const t of todo) if (!t.brk && !t.o.ghost) this.drawFort3(V, t.fr, t.f.owner, t.o, 'halo');
+            for (const t of todo) {
+              if (t.brk != null) this.breakFort3(t.f, V, t.fr, t.brk);
+              else this.drawFort3(V, t.fr, t.f.owner, t.o, 'solid');
+            }
+            marks.forEach((m) => m());
+          }
+          tickPoly3(fr, V, a, i, gf, grow) {
+            const lay = fr.lay;
+            const ch = fr.ch;
+            const P = (aa, hh) => {
+              const q = chainPt(ch, ch.s0 + clamp(aa, -ch.s0, ch.len - ch.s0));
+              return { x: q.x + q.nx * hh * q.m, y: q.y + q.ny * hh * q.m };
+            };
+            let tl = lay.tl;
+            let tw = lay.tw;
+            const n = lay.n;
+            if (V.shape === 'alt' && i % 2) tl *= 0.5;
+            if (V.ends === 'taper') {
+              const e = Math.min(i, n - 1 - i);
+              tl *= e >= 2 ? 1 : 0.45 + 0.275 * e;
+            } else if (V.ends === 'post' && (i === 0 || i === n - 1)) {
+              tl *= 1.4;
+              tw *= 1.25;
+            }
+            tl *= gf * grow;
+            const h0 = -fr.inset - lay.lw * 0.3;
+            const h1 = -fr.inset + tl;
+            if (V.shape === 'taper') return [P(a - tw / 2, h0), P(a + tw / 2, h0), P(a + tw * 0.2, h1), P(a - tw * 0.2, h1)];
+            return [P(a - tw / 2, h0), P(a + tw / 2, h0), P(a + tw / 2, h1), P(a - tw / 2, h1)];
+          }
+          // o: p build progress, ghost, preview, alpha, grow, react(a, i) -> {gf, fl}
+          drawFort3(V, fr, owner, o, pass) {
+            const g = this.g;
+            const rk = this.rk;
+            const lay = fr.lay;
+            const ch = fr.ch;
+            const half = lay.half;
+            const col = lighten(colOf(owner), owner === 'me' ? 0.3 : 0.38);
+            const none = o.ghost || o.preview;
+            const prog = none ? 0 : o.p == null ? 1 : o.p;
+            const full = prog >= 1;
+            // what is built, by the build style of the look
+            let lo = -half;
+            let hi = half;
+            let lineA = 1;
+            let dotted = 0;
+            let tickBuilt = () => true;
+            const rank = lay.cs.map((a, i) => i).sort((x, y) => Math.abs(lay.cs[x]) - Math.abs(lay.cs[y]));
+            const rk2 = rank.map((_, i) => rank.indexOf(i));
+            if (none) {
+              lo = hi = 0;
+              lineA = 0;
+              tickBuilt = () => false;
+            } else if (!full) {
+              if (V.prog === 'grow') {
+                lo = -half * prog;
+                hi = half * prog;
+                tickBuilt = (i, a) => Math.abs(a) + lay.tw / 2 <= hi + 0.01;
+              } else if (V.prog === 'sweep') {
+                lo = -half;
+                hi = -half + 2 * half * prog;
+                tickBuilt = (i, a) => a + lay.tw / 2 <= hi + 0.01;
+              } else if (V.prog === 'ticks') {
+                lineA = prog > 0 ? 0.35 + 0.65 * prog : 0;
+                tickBuilt = (i) => rk2[i] < prog * lay.n - 1e-6;
+              } else {
+                dotted = 1 - prog;
+                tickBuilt = (i) => prog > 0.3 + 0.7 * (rk2[i] / lay.n);
+              }
+            }
+            g.save();
+            g.globalAlpha *= o.alpha == null ? 1 : o.alpha;
+            g.lineJoin = 'round';
+            const cell = CELLS[IDS.indexOf(fr.nodeId)].poly;
+            if (pass === 'halo') {
+              if (hi - lo < 1 && lineA === 0) {
+                g.restore();
+                return;
+              }
+              // a soft dark shadow under the stroke and its ticks, kept inside the own cell; then the real border is drawn again over it
+              g.save();
+              g.beginPath();
+              cell.forEach((v, i) => (i ? g.lineTo(v.x, v.y) : g.moveTo(v.x, v.y)));
+              g.closePath();
+              g.clip();
+              const shift = -fr.inset + lay.tl * 0.5;
+              const hl = chainLine(ch, lo - lay.tl * 0.4, hi + lay.tl * 0.4, shift);
+              const W = lay.lw + lay.tl + V.halo[0] * this.mk;
+              g.lineCap = 'round';
+              for (const [wf, al] of [[1, V.halo[1] * 0.45], [0.74, V.halo[1] * 0.6]]) {
+                this.polyPath(hl);
+                g.strokeStyle = `rgba(5,8,12,${al * (lineA || 1)})`;
+                g.lineWidth = W * wf;
+                g.stroke();
+              }
+              const bl = chainLine(ch, lo - lay.tl, hi + lay.tl, 0);
+              this.polyPath(bl);
+              g.strokeStyle = rgba(colOf(owner), 0.16);
+              g.lineWidth = 18 * rk;
+              g.stroke();
+              this.polyPath(bl);
+              g.strokeStyle = rgba(colOf(owner), 0.95);
+              g.lineWidth = 4 * rk;
+              g.stroke();
+              g.restore();
+              g.restore();
+              return;
+            }
+            // the stroke: one flat colour
+            if (hi - lo > 0.5) {
+              const line = chainLine(ch, lo, hi, -fr.inset);
+              this.polyPath(line);
+              g.lineCap = V.ends === 'butt' ? 'butt' : 'round';
+              g.strokeStyle = col;
+              g.globalAlpha *= lineA;
+              g.lineWidth = lay.lw;
+              if (dotted > 0) g.setLineDash([6 * this.mk, 6 * this.mk * dotted + 0.01]);
+              g.stroke();
+              g.setLineDash([]);
+              g.globalAlpha = o.alpha == null ? 1 : o.alpha;
+            }
+            // the part not built yet: a thin dashed line
+            if (!none && !full && (V.prog === 'grow' || V.prog === 'sweep')) {
+              for (const [a0, a1] of V.prog === 'grow' ? [[-half, lo], [hi, half]] : [[hi, half]]) {
+                if (a1 - a0 < 1) continue;
+                this.polyPath(chainLine(ch, a0, a1, -fr.inset));
+                g.setLineDash([4 * rk, 4 * rk]);
+                g.strokeStyle = 'rgba(240,246,252,0.85)';
+                g.lineWidth = 1.5 * rk;
+                g.stroke();
+                g.setLineDash([]);
+              }
+            }
+            if (none) {
+              this.polyPath(chainLine(ch, -half, half, -fr.inset));
+              g.setLineDash([4 * rk, 4 * rk]);
+              g.strokeStyle = o.ghost ? 'rgba(170,178,189,0.9)' : 'rgba(240,246,252,0.9)';
+              g.lineWidth = 1.5 * rk;
+              g.stroke();
+              g.setLineDash([]);
+            }
+            // the ticks: flat, the same colour as the stroke
+            const polys = [];
+            lay.cs.forEach((a, i) => {
+              if (a - lay.tw / 2 < -ch.s0 || a + lay.tw / 2 > ch.len - ch.s0) return;
+              const rc = o.react ? o.react(a, i) : { gf: 1, fl: 0 };
+              const built = tickBuilt(i, a);
+              polys.push({ poly: this.tickPoly3(fr, V, a, i, rc.gf, o.grow || 1), built, fl: rc.fl });
+            });
+            for (const b of polys) {
+              this.polyPath(b.poly);
+              g.closePath();
+              if (b.built) {
+                g.fillStyle = col;
+                g.fill();
+              } else if (V.prog !== 'dash') {
+                g.setLineDash([2.6 * rk, 2.2 * rk]);
+                g.strokeStyle = o.ghost ? 'rgba(170,178,189,0.9)' : 'rgba(240,246,252,0.9)';
+                g.lineWidth = 1.3 * rk;
+                g.stroke();
+                g.setLineDash([]);
+              }
+            }
+            // the line's reaction: the ticks flash
+            if (polys.some((b) => b.fl > 0.01)) {
+              g.globalCompositeOperation = 'lighter';
+              g.fillStyle = '#fff';
+              for (const b of polys) {
+                if (!b.built || b.fl <= 0.01) continue;
+                g.globalAlpha = b.fl;
+                this.polyPath(b.poly);
+                g.closePath();
+                g.fill();
+              }
+              g.globalCompositeOperation = 'source-over';
+            }
+            // the head of the build
+            if (!none && !full) {
+              g.globalAlpha = 1;
+              const heads = V.prog === 'grow' ? [lo, hi] : V.prog === 'sweep' ? [hi] : [];
+              for (const a of heads) {
+                const q = fr.pt(a);
+                this.polyPath([{ x: q.x - q.nx * lay.lw * 1.4, y: q.y - q.ny * lay.lw * 1.4 }, { x: q.x + q.nx * (lay.tl + lay.lw), y: q.y + q.ny * (lay.tl + lay.lw) }]);
+                g.strokeStyle = C.paper;
+                g.lineWidth = 2 * rk;
+                g.stroke();
+              }
+            }
+            g.restore();
+          }
+          breakFort3(f, V, fr, b) {
+            const g = this.g;
+            const lay = fr.lay;
+            const rm = this.S.rm;
+            const q = rm ? (b < 0.5 ? 0 : 1) : b;
+            const col = lighten(colOf(f.owner), f.owner === 'me' ? 0.3 : 0.38);
+            const rand = rng(31);
+            g.save();
+            g.lineJoin = 'round';
+            this.polyPath(chainLine(fr.ch, -lay.half, lay.half, -fr.inset));
+            g.setLineDash([5 * this.rk, 6 * this.rk]);
+            g.strokeStyle = col;
+            g.globalAlpha = rm ? (q < 1 ? 0.9 : 0) : 1 - q;
+            g.lineWidth = lay.lw * (1 - 0.5 * q);
+            g.stroke();
+            g.setLineDash([]);
+            lay.cs.forEach((a, i) => {
+              const poly = this.tickPoly3(fr, V, a, i, 1, 1);
+              const cx = poly.reduce((s2, p) => s2 + p.x, 0) / 4;
+              const cy = poly.reduce((s2, p) => s2 + p.y, 0) / 4;
+              const c0 = chainPt(fr.ch, fr.ch.s0 + a);
+              const dist = easeOut(q) * (28 + rand() * 40);
+              const side = (rand() - 0.5) * 40 * easeOut(q);
+              g.save();
+              g.translate(cx + c0.nx * dist + c0.tx * side, cy + c0.ny * dist + c0.ty * side);
+              g.rotate((rand() - 0.5) * 5 * q);
+              g.translate(-cx, -cy);
+              g.globalAlpha = rm ? (q < 1 ? 1 : 0) : 1 - q;
+              this.polyPath(poly);
+              g.closePath();
+              g.fillStyle = col;
+              g.fill();
+              g.restore();
+            });
+            g.restore();
+          }
+
+          /* ---- round 3: ten tolls, each a ripple of the line plus a hit as in a fight */
+          // the shots: from which ticks, when they leave and how long they fly
+          shots3(L, r, fr) {
+            const lay = fr.lay;
+            const n = lay.n;
+            const mid = Math.floor((n - 1) / 2);
+            const tip = (i) => {
+              const j = clamp(i, 0, n - 1);
+              const q = fr.pt(lay.cs[j]);
+              return { x: q.x + q.nx * lay.tl * 0.9, y: q.y + q.ny * lay.tl * 0.9, a: lay.cs[j], i: j };
+            };
+            if (L.tracer === 'none') return [];
+            if (L.per) return Array.from({ length: r.n }, (_, i) => Object.assign(tip(mid + Math.round((i - (r.n - 1) / 2) * 2)), { t0: i * 0.09, fl: 0.13 }));
+            if (L.trN === 3) return [-2, 0, 2].map((o, i) => Object.assign(tip(mid + o), { t0: i * 0.02, fl: L.tHit }));
+            return [Object.assign(tip(mid), { t0: 0, fl: L.tHit })];
+          }
+          fxHit3(r, d, fr, k, shooterOwner) {
+            const g = this.g;
+            const rm = this.S.rm;
+            const L = tollDef(this.S);
+            const K = L.K;
+            const lay = fr.lay;
+            const shooter = colOf(shooterOwner);
+            const victim = colOf(r.owner);
+            const dd = rm ? L.rest : d;
+            const gpNow = r.gpos(r.tc + Math.min(dd, 0.95));
+            // 1. the ripple of the line: a ring from the crossing and/or a pulse running along the stroke
+            if (L.ripple === 'ring' || L.ripple === 'ringline') {
+              const q = clamp(d / 0.5, 0, 1);
+              g.save();
+              g.globalAlpha = rm ? 1 : 1 - q;
+              g.beginPath();
+              g.arc(fr.x, fr.y, (rm ? 26 : 8 + 26 * easeOut(q)) * k, 0, 6.29);
+              g.strokeStyle = 'rgba(13,17,23,0.9)';
+              g.lineWidth = 6;
+              g.stroke();
+              g.strokeStyle = C.paper;
+              g.lineWidth = 2.4;
+              g.stroke();
+              g.restore();
+            }
+            if (L.ripple === 'line' || L.ripple === 'ringline') {
+              const run = clamp(d / 0.3, 0, 1);
+              g.save();
+              g.globalAlpha = rm ? 1 : 1 - clamp((d - 0.3) / 0.3, 0, 1);
+              for (const sg of [-1, 1]) {
+                const a0 = Math.max(0, run * lay.half - 14 * k);
+                const a1 = rm ? lay.half : run * lay.half;
+                if (a1 <= a0) continue;
+                const line = chainLine(fr.ch, sg * a0, sg * a1, -fr.inset);
+                if (line.length < 2) continue;
+                this.polyPath(line);
+                g.strokeStyle = 'rgba(13,17,23,0.9)';
+                g.lineWidth = lay.lw + 4;
+                g.stroke();
+                this.polyPath(line);
+                g.strokeStyle = C.paper;
+                g.lineWidth = Math.max(2.4, lay.lw * 0.9);
+                g.stroke();
+              }
+              g.restore();
+            }
+            // 2. the projectile(s), from the tips of ticks to where the group is when they land
+            const shots = this.shots3(L, r, fr);
+            let origin = { x: fr.x + fr.ux * lay.tl, y: fr.y + fr.uy * lay.tl };
+            for (const s of shots) {
+              const hit = r.gpos(r.tc + s.t0 + s.fl);
+              const f = (d - s.t0) / s.fl;
+              if (rm || f < 0 || f > 1.15) {
+                if (s === shots[0]) origin = s;
+                continue;
+              }
+              if (s === shots[0]) origin = s;
+              const kk = k * (L.thick ? 1.35 : 1);
+              if (L.tracer === 'arc') this.tracer(s, hit, f, shooter, shooterOwner === 'en', kk);
+              else if (L.tracer === 'line') {
+                const u = clamp(f, 0, 1);
+                const hx = lerp(s.x, hit.x, u);
+                const hy = lerp(s.y, hit.y, u);
+                const tx = lerp(s.x, hit.x, Math.max(0, u - 0.5));
+                const ty = lerp(s.y, hit.y, Math.max(0, u - 0.5));
+                g.save();
+                g.lineCap = 'round';
+                for (const [w, c] of [[8 * kk, 'rgba(13,17,23,0.75)'], [4.6 * kk, shooter]]) {
+                  g.beginPath();
+                  g.moveTo(tx, ty);
+                  g.lineTo(hx, hy);
+                  g.strokeStyle = c;
+                  g.lineWidth = w;
+                  g.stroke();
+                }
+                const sz = 8 * kk;
+                g.fillStyle = shooter;
+                g.strokeStyle = C.bg;
+                g.lineWidth = 1.8;
+                g.fillRect(hx - sz / 2, hy - sz / 2, sz, sz);
+                g.strokeRect(hx - sz / 2, hy - sz / 2, sz, sz);
+                g.restore();
+              } else if (L.tracer === 'beam') {
+                const u = clamp(f, 0, 1);
+                g.save();
+                g.lineCap = 'round';
+                g.globalAlpha = 1 - u * 0.7;
+                for (const [w, c] of [[11 * kk * (1 - u * 0.5), 'rgba(13,17,23,0.7)'], [7 * kk * (1 - u * 0.5), shooter], [3 * kk, '#ffffff']]) {
+                  g.beginPath();
+                  g.moveTo(s.x, s.y);
+                  g.lineTo(hit.x, hit.y);
+                  g.strokeStyle = c;
+                  g.lineWidth = w;
+                  g.stroke();
+                }
+                g.restore();
+              }
+            }
+            // 3. the impacts: a ring in the lightened colour of the shooter, a white flash, sparks in a cone away from the shooter, what is lost
+            const impacts = shots.length ? shots.map((s) => ({ t: s.t0 + s.fl, org: s, small: !!L.per })) : [{ t: L.tHit, org: origin, small: false }];
+            impacts.forEach((im, ii) => {
+              const u = (d - im.t) / 0.58;
+              const uu = rm ? (ii === 0 ? (L.rest - im.t) / 0.58 : -1) : u;
+              if (uu < 0 || uu >= 1) return;
+              const gp = r.gpos(r.tc + (rm ? L.rest : Math.min(d, 0.95)));
+              const ang = Math.atan2(gp.y - im.org.y, gp.x - im.org.x);
+              const sm = im.small ? 0.62 : 1;
+              const p5 = clamp(uu / 0.5, 0, 1);
+              for (let ri = 0; ri < L.ring; ri++) {
+                const pr = clamp(p5 - ri * 0.22, 0, 1);
+                if (pr <= 0 || pr >= 1) continue;
+                g.save();
+                g.globalAlpha = 1 - pr;
+                g.beginPath();
+                g.arc(gp.x, gp.y, (5 + (20 + 8 * K) * easeOut(pr)) * k * sm, 0, 6.29);
+                g.strokeStyle = 'rgba(13,17,23,0.85)';
+                g.lineWidth = 5.5;
+                g.stroke();
+                g.strokeStyle = lighten(shooter, 0.5);
+                g.lineWidth = 2.6;
+                g.stroke();
+                g.restore();
+              }
+              if (uu < 0.3) this.glow(gp.x, gp.y, (8 + 8 * K) * 1.3 * k * sm * (1 - 0.4 * (uu / 0.3)), clamp(0.8 * L.flash, 0, 1) * Math.pow(1 - uu / 0.3, 2));
+              this.burst({ x: gp.x, y: gp.y, p: uu / 0.8, count: Math.round(L.sparks * (K > 1 ? 1.55 : 1) * sm), speed: 50 * (0.6 + 0.4 * K) * k, cone: [ang, 2.6], colors: ['#ffffff', shooter], size: 6.4 * k * (K > 1 ? 1.2 : 1), seed: r.n * 5 + 1 + ii, add: true });
+              const lost = im.small ? 1 : r.n;
+              if (L.loss === 'shards') this.burst({ x: gp.x, y: gp.y, p: uu / 0.95, count: lost, speed: 40 * k, cone: [ang, 3.4], fall: 34 * k, colors: [victim], size: (K > 1 ? 10 : 8) * k, spin: 6.6, seed: r.n * 3 + 2 + ii, outline: true });
+              if (L.loss === 'fling') this.burst({ x: gp.x, y: gp.y, p: uu / 0.8, count: lost, speed: 78 * k, cone: [ang, 3.8], colors: [victim], size: 7.5 * k, spin: 3, seed: r.n * 3 + 7, outline: true });
+            });
+            // lost charges that leave another way
+            if (L.loss === 'pull') {
+              const mid = Math.floor((lay.n - 1) / 2);
+              for (let i = 0; i < r.n; i++) {
+                const q = ((rm ? L.rest : d) - L.tHit - i * 0.05) / 0.36;
+                if (q < 0 || q > 1.1) continue;
+                const j = clamp(mid + Math.round((i - (r.n - 1) / 2) * 2), 0, lay.n - 1);
+                const t = fr.pt(lay.cs[j]);
+                const dest = { x: t.x + t.nx * lay.tl, y: t.y + t.ny * lay.tl };
+                const e = clamp(q, 0, 1);
+                const ee = e * e;
+                const arc = Math.sin(Math.PI * e) * 12 * k * (i % 2 ? 1 : -1);
+                this.square(lerp(gpNow.x, dest.x, ee) + fr.nx * arc, lerp(gpNow.y, dest.y, ee) + fr.ny * arc, 7.5 * k * (1 - 0.35 * e), victim, e * 5, q > 1 ? 0 : 1 - e * e * e);
+                if (q > 0.9 && q < 1.1) this.glow(dest.x, dest.y, 11 * k, 0.5);
+              }
+            }
+            if (L.loss === 'pips') {
+              const al = rm ? 1 : clamp(((d - L.tHit + 0.1) / 0.08)) * clamp((0.82 - d) / 0.12, 0, 1);
+              const sz = 6.5 * k;
+              const gap = 2.4 * k;
+              const tw = r.u * sz + (r.u - 1) * gap;
+              const y = gpNow.y - 32 * k;
+              for (let i = 0; i < r.u; i++) {
+                const x = gpNow.x - tw / 2 + i * (sz + gap) + sz / 2;
+                const lostIdx = r.c0 - 1 - i;
+                const lost = i < r.c0 && lostIdx < r.n && (rm || d - L.tHit - lostIdx * 0.08 > 0);
+                g.save();
+                g.globalAlpha = al;
+                if (i < r.c0 && !lost) {
+                  g.fillStyle = victim;
+                  g.strokeStyle = C.bg;
+                  g.lineWidth = 1.5;
+                  g.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+                  g.strokeRect(x - sz / 2, y - sz / 2, sz, sz);
+                } else {
+                  g.strokeStyle = lost ? C.paper : C.seg;
+                  g.lineWidth = 1.3;
+                  if (lost) g.setLineDash([2, 1.6]);
+                  g.strokeRect(x - sz / 2, y - sz / 2, sz, sz);
+                  g.setLineDash([]);
+                  if (lost) {
+                    g.beginPath();
+                    g.moveTo(x - sz * 0.35, y - sz * 0.35);
+                    g.lineTo(x + sz * 0.35, y + sz * 0.35);
+                    g.moveTo(x + sz * 0.35, y - sz * 0.35);
+                    g.lineTo(x - sz * 0.35, y + sz * 0.35);
+                    g.stroke();
+                    const since = rm ? 0.2 : d - L.tHit - lostIdx * 0.08;
+                    if (since < 0.2) this.burst({ x, y, p: since / 0.2, count: 4, speed: 18 * k, colors: [victim], size: 4 * k, seed: i + 40 });
+                  }
+                }
+                g.restore();
+              }
+            }
+            // 4. "-N": over the group (rising), big over the group, or stamped on the line
+            if (L.num === 'stamp') {
+              const un = (d - L.tHit) / (0.85 - L.tHit);
+              if (un >= 0 || rm) {
+                const al = rm ? 1 : clamp((1 - un) / 0.25, 0, 1);
+                const bounce = rm ? 0 : Math.sin(clamp(un * 4, 0, 1) * Math.PI) * 5;
+                this.plateFor(r, fr.x + fr.ux * (lay.tl + 26 * k), fr.y + fr.uy * (lay.tl + 26 * k) - bounce / this.z, { alpha: al, size: 14 });
+              }
+            } else {
+              const un = (d - L.tHit) / (0.8 - L.tHit);
+              if (un >= 0 || rm) {
+                const rise = rm ? 8 : easeOut(clamp(un, 0, 1)) * 12;
+                const al = rm ? 1 : clamp((1 - un) / 0.3, 0, 1) * clamp(un / 0.08 + 0.3, 0, 1);
+                this.plateFor(r, gpNow.x, gpNow.y - 36 * k - rise / this.z - (L.loss === 'pips' ? 12 * k : 0), { alpha: al, size: L.num === 'big' ? 17 : 13 });
+              }
+            }
+          }
+
           counter(f, fr, k) {
             let v = BASE_COUNT;
             let pulse = 0;
@@ -2065,6 +2659,13 @@
               if (d < 0 || r.n <= 0) continue;
               const f = this.sc.forts.find((x) => x.id === r.fort);
               const k = this.mk;
+              if (S.round === 3) {
+                const fr = fortFrame3(f, R3[S.look]);
+                if (!fr.ch) continue;
+                this.fxHit3(r, d, fr, k, f.owner);
+                if (r.mine) this.lossMark(r, d, fr, k);
+                continue;
+              }
               if (!S.r1) {
                 const fr = fortFrame2(f, R2[S.look]);
                 if (!fr.ch) continue;
@@ -2574,7 +3175,8 @@
                     g.rotate(-Math.PI / 2);
                     g.scale(1.55, 1.55);
                     g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
-                  } else miniFort(g, R2[this.S.look], 62);
+                  } else if (this.S.round === 3) miniFort3(g, R3[this.S.look], 62);
+                  else miniFort(g, R2[this.S.look], 62);
                 } else if (sec.ico === 'house') {
                   g.fillStyle = C.paper;
                   g.beginPath();
@@ -2638,6 +3240,21 @@
                 gr.lineWidth = 2 / this.z;
                 gr.stroke();
                 gr.restore();
+                if (this.S.round === 3) {
+                  const V = R3[this.S.look];
+                  const fr3 = fortFrame3({ node: 'A', to: rd.to, off: OFF1 }, V);
+                  if (!fr3.ch) return;
+                  const o3 = on ? { p: 1, alpha: 0.7 } : { preview: true };
+                  this.drawFort3(V, fr3, 'me', o3, 'solid');
+                  if (on) {
+                    this.pill(fr3.x + fr3.ux * (fr3.lay.tl + 38 * k), fr3.y + fr3.uy * (fr3.lay.tl + 38 * k), '1.5 CP', { size: 13, frame: C.paper });
+                    const [sx, sy] = this.toScreen(fr3.x, fr3.y);
+                    this.screenT();
+                    this.cursor(sx + 4, sy + 6);
+                    this.world();
+                  }
+                  return;
+                }
                 if (!this.S.r1) {
                   const V = R2[this.S.look];
                   const fr2 = fortFrame2({ node: 'A', to: rd.to, off: OFF1 }, V);
@@ -2691,7 +3308,8 @@
                 g.rotate(-Math.PI / 2);
                 g.scale(0.5, 0.5);
                 g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
-              } else miniFort(g, R2[this.S.look], 30);
+              } else if (this.S.round === 3) miniFort3(g, R3[this.S.look], 30);
+              else miniFort(g, R2[this.S.look], 30);
               g.restore();
             }
           }
@@ -2718,11 +3336,12 @@
         }
 
         /* ============================================================ ui */
-        const ui = { r1: 0, a: 0, b: 2, view: 1, toll: 4, hit: 1, map: 'bend', step: 7, mode: 'supply', zoom: 1, gray: 0, rm: 0, cnt: 0, pause: 0, hold: null };
+        const ui = { round: 3, a: 0, b: 3, view: 1, toll: 4, hit: 1, kk: 0, map: 'bend', step: 7, mode: 'supply', zoom: 1, gray: 0, rm: 0, cnt: 0, pause: 0, hold: null };
         let panels = [];
         let startT = performance.now();
         const $ = (id) => document.getElementById(id);
-        const lookSet = () => (ui.r1 ? LOOKS : R2);
+        const lookSet = () => (ui.round === 1 ? LOOKS : ui.round === 2 ? R2 : R3);
+        const tollIdx = () => (ui.round === 1 ? ui.toll : ui.round === 2 ? ui.hit : ui.kk);
 
         // a small straight picture of a border fortification: base line, outlined blocks on top, outward is up
         function miniFort(g, V, w) {
@@ -2753,19 +3372,50 @@
           }
           g.restore();
         }
+        // round 3: a flat stroke with flat ticks, outward is up
+        function miniFort3(g, V, w) {
+          const n = Math.min(V.count, w >= 50 ? 12 : 5);
+          const k = w / (n * V.tw + (n - 1) * V.gap);
+          const tw = V.tw * k;
+          const gap = V.gap * k;
+          const tl = Math.max(3, V.tl * k * (V.tl > 8 ? 0.8 : 1));
+          const lw = Math.max(2, V.lw * Math.min(k, 1.2));
+          const col = lighten(C.you, 0.1);
+          g.save();
+          g.beginPath();
+          g.moveTo(-w / 2 - lw / 2, 0);
+          g.lineTo(w / 2 + lw / 2, 0);
+          g.lineCap = V.ends === 'butt' ? 'butt' : 'round';
+          g.strokeStyle = 'rgba(5,8,12,0.55)';
+          g.lineWidth = lw + tl + 6;
+          g.stroke();
+          g.strokeStyle = col;
+          g.lineWidth = lw;
+          g.stroke();
+          g.fillStyle = col;
+          for (let i = 0; i < n; i++) {
+            const x = -w / 2 + i * (tw + gap);
+            const h = V.shape === 'alt' && i % 2 ? tl * 0.5 : tl;
+            g.fillRect(x, -h - lw * 0.2, tw, h);
+          }
+          g.restore();
+        }
         function thumb(li) {
           const cv = document.createElement('canvas');
           cv.width = 64;
           cv.height = 52;
           const g = cv.getContext('2d');
-          if (ui.r1) {
+          if (ui.round === 1) {
             g.translate(32, 26);
             g.rotate(-Math.PI / 2);
             g.scale(0.72, 0.72);
             g.drawImage(sprite(li, 'me', fullMask(LOOKS[li]), false), -OX, -OY, SW, SH);
-          } else {
+          } else if (ui.round === 2) {
             g.translate(32, 28);
             miniFort(g, R2[li], 52);
+          } else {
+            g.translate(32, 30);
+            miniFort3(g, R3[li], 54);
           }
           return cv;
         }
@@ -2775,7 +3425,11 @@
             const b = document.createElement('button');
             b.type = 'button';
             b.setAttribute('aria-pressed', String(getSel(i)));
-            if (withThumb) b.append(thumb(i));
+            if (withThumb) {
+              const th = thumb(i);
+              th.setAttribute('aria-hidden', 'true');
+              b.append(th);
+            }
             const k = document.createElement('b');
             k.textContent = it.k;
             b.append(k, document.createTextNode(it.n));
@@ -2784,16 +3438,22 @@
             host.append(b);
           });
         }
-        const lookName = (i) => (ui.r1 ? `F${i + 1} ${LOOKS[i].n}` : `B${i + 1} ${R2[i].n} · ${R2[i].count}`);
+        const PREF = { 1: ['F', 'T'], 2: ['B', 'H'], 3: ['C', 'K'] };
+        function lookName(i) {
+          if (ui.round === 1) return `F${i + 1} ${LOOKS[i].n}`;
+          if (ui.round === 2) return `B${i + 1} ${R2[i].n} · ${R2[i].count}`;
+          return `C${i + 1} ${R3[i].n} · ${R3[i].count}`;
+        }
         function buildChips() {
-          const looks = lookSet().map((l, i) => ({ k: ui.r1 ? 'F' + (i + 1) : 'B' + (i + 1), n: ui.r1 ? l.n : `${l.n} · ${l.count}`, title: ui.r1 ? l.line + '. Bake: ' + l.bake : l.line }));
+          const looks = lookSet().map((l, i) => ({ k: PREF[ui.round][0] + (i + 1), n: ui.round === 1 ? l.n : `${l.n} · ${l.count}`, title: ui.round === 1 ? l.line + '. Bake: ' + l.bake : l.line }));
           const cmp = ui.view === 2;
           $('glA').textContent = cmp ? 'Look A' : 'Look';
           $('rowB').style.display = cmp ? '' : 'none';
           chipRow($('gA'), looks, (i) => ui.a === i && ui.view !== 6, (i) => ((ui.view = ui.view === 6 ? 1 : ui.view), (ui.a = i), update()), true);
           chipRow($('gB'), looks, (i) => ui.b === i, (i) => ((ui.b = i), update()), true);
-          const tolls = (ui.r1 ? TOLLS : HITS).map((t, i) => ({ k: (ui.r1 ? 'T' : 'H') + (i + 1), n: t.n, title: t.cost }));
-          chipRow($('gT'), tolls, (i) => (ui.r1 ? ui.toll : ui.hit) === i, (i) => ((ui.r1 ? (ui.toll = i) : (ui.hit = i)), update()), false);
+          const set = ui.round === 1 ? TOLLS : ui.round === 2 ? HITS : KS;
+          const tolls = set.map((t, i) => ({ k: PREF[ui.round][1] + (i + 1), n: t.n, title: t.cost }));
+          chipRow($('gT'), tolls, (i) => tollIdx() === i, (i) => ((ui.round === 1 ? (ui.toll = i) : ui.round === 2 ? (ui.hit = i) : (ui.kk = i)), update()), false);
           const steps = STEPS.map((s, i) => ({ k: String(i + 1), n: s.n }));
           chipRow($('steps'), steps, (i) => ui.step === i, (i) => setStep(i), false);
           $('gB').querySelectorAll('button').forEach((b) => b.classList.add('second'));
@@ -2805,9 +3465,9 @@
         }
         function buildPanels() {
           const host = $('panels');
-          host.className = 'panels v' + ui.view + (ui.view === 6 && !ui.r1 ? ' n3' : '');
-          host.textContent = '';
           const set = lookSet();
+          host.className = 'panels v' + ui.view + (ui.view === 6 ? ' n' + set.length : '');
+          host.textContent = '';
           ui.a = clamp(ui.a, 0, set.length - 1);
           ui.b = clamp(ui.b, 0, set.length - 1);
           const list = ui.view === 1 ? [ui.a] : ui.view === 2 ? [ui.a, ui.b] : set.map((_, i) => i);
@@ -2835,12 +3495,11 @@
           seg('zoomSeg', 'z', ui.zoom);
           seg('viewSeg', 'v', ui.view);
           seg('mapSeg', 'b', ui.map);
+          seg('roundSeg', 'r', ui.round);
           $('gray').checked = !!ui.gray;
           $('rm').checked = !!ui.rm;
           $('cnt').checked = !!ui.cnt;
-          $('r1').checked = !!ui.r1;
           $('pause').setAttribute('aria-pressed', String(!!ui.pause));
-          $('glT').textContent = 'Toll';
           buildPanels();
           writeHash();
         }
@@ -2852,7 +3511,7 @@
           $('live').textContent = STEPS[ui.step].n;
         }
         function writeHash() {
-          const p = new URLSearchParams({ r1: ui.r1, a: ui.a, b: ui.b, view: ui.view, toll: ui.toll, hit: ui.hit, map: ui.map, step: ui.step, mode: ui.mode, zoom: ui.zoom, gray: ui.gray, rm: ui.rm, cnt: ui.cnt });
+          const p = new URLSearchParams({ round: ui.round, a: ui.a, b: ui.b, view: ui.view, toll: ui.toll, hit: ui.hit, kk: ui.kk, map: ui.map, step: ui.step, mode: ui.mode, zoom: ui.zoom, gray: ui.gray, rm: ui.rm, cnt: ui.cnt });
           if (ui.hold != null) p.set('t', ui.hold);
           try {
             history.replaceState(null, '', '#' + p.toString());
@@ -2863,12 +3522,14 @@
         function readHash() {
           const p = new URLSearchParams(location.hash.slice(1));
           const n = (k, d) => (p.has(k) && !Number.isNaN(Number(p.get(k))) ? Number(p.get(k)) : d);
-          ui.r1 = n('r1', 0) ? 1 : 0;
-          ui.a = clamp(n('a', ui.a), 0, (ui.r1 ? LOOKS : R2).length - 1);
-          ui.b = clamp(n('b', ui.b), 0, (ui.r1 ? LOOKS : R2).length - 1);
+          ui.round = [1, 2, 3].includes(n('round', 3)) ? n('round', 3) : 3;
+          const len = lookSet().length;
+          ui.a = clamp(n('a', ui.a), 0, len - 1);
+          ui.b = clamp(n('b', ui.b), 0, len - 1);
           ui.view = [1, 2, 6].includes(n('view', 1)) ? n('view', 1) : 1;
           ui.toll = clamp(n('toll', ui.toll), 0, TOLLS.length - 1);
           ui.hit = clamp(n('hit', ui.hit), 0, HITS.length - 1);
+          ui.kk = clamp(n('kk', ui.kk), 0, KS.length - 1);
           ui.map = p.get('map') === 'curve' ? 'curve' : 'bend';
           ui.step = clamp(n('step', ui.step), 0, STEPS.length - 1);
           ui.mode = p.get('mode') === 'battle' ? 'battle' : 'supply';
@@ -2890,8 +3551,9 @@
             pausedAt = t;
           }
           for (const p of panels) {
-            const S = { look: p.li, toll: ui.r1 ? ui.toll : ui.hit, mode: ui.mode, zoom: ui.zoom, rm: ui.rm, cnt: ui.cnt, r1: ui.r1 };
-            CUR_SET = ui.r1 ? 'r1' : 'r2';
+            const S = { look: p.li, toll: tollIdx(), mode: ui.mode, zoom: ui.zoom, rm: ui.rm, cnt: ui.cnt, round: ui.round, r1: ui.round === 1 };
+            CUR_SET = 'r' + ui.round;
+            CUR_V = ui.round === 3 ? R3[p.li] : null;
             CUR_MK = ui.zoom < 1 ? Math.pow(1 / ui.zoom, 0.6) : 1;
             const sc = scene(step.id, t);
             p.painter.stepId = step.id;
@@ -2901,7 +3563,7 @@
               p.nm.textContent = nm;
               p.cv.setAttribute('aria-label', `${nm}, ${step.n}`);
             }
-            p.sub.textContent = ui.r1 ? `${step.n} · sprites baked ${SPR_BY_LOOK[p.li]}` : step.n;
+            p.sub.textContent = ui.round === 1 ? `${step.n} · sprites baked ${SPR_BY_LOOK[p.li]}` : step.n;
           }
           requestAnimationFrame(frame);
         }
@@ -2910,7 +3572,7 @@
           $('modeSeg').addEventListener('click', (e) => e.target.dataset.m && ((ui.mode = e.target.dataset.m), update()));
           $('zoomSeg').addEventListener('click', (e) => e.target.dataset.z && ((ui.zoom = Number(e.target.dataset.z)), update()));
           $('mapSeg').addEventListener('click', (e) => e.target.dataset.b && ((ui.map = e.target.dataset.b), update()));
-          $('r1').addEventListener('change', (e) => ((ui.r1 = e.target.checked ? 1 : 0), update()));
+          $('roundSeg').addEventListener('click', (e) => e.target.dataset.r && ((ui.round = Number(e.target.dataset.r)), update()));
           $('viewSeg').addEventListener('click', (e) => e.target.dataset.v && ((ui.view = Number(e.target.dataset.v)), update()));
           $('gray').addEventListener('change', (e) => ((ui.gray = e.target.checked ? 1 : 0), update()));
           $('rm').addEventListener('change', (e) => ((ui.rm = e.target.checked ? 1 : 0), update()));
@@ -2936,7 +3598,7 @@
           if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches && !location.hash.includes('rm=')) ui.rm = 1;
           useMap(ui.map);
           update();
-          window.__fort = { ui, LOOKS, R2, HITS, TOLLS, STEPS, SPR_BY_LOOK, update, setStep, scene, crossing };
+          window.__fort = { ui, LOOKS, R2, R3, KS, HITS, TOLLS, STEPS, SPR_BY_LOOK, update, setStep, scene, crossing };
           requestAnimationFrame(frame);
         }
         init();
