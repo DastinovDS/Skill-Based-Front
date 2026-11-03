@@ -55,6 +55,8 @@ Each point: the options, then the recommendation (**rec.**). The mockup has a sw
 
 ### 1. What a leaf is ⚙
 
+> **After the first playtest (owner 2026-11-03, #724, `mechanics.md` DEC-43 item I):** 1B is the rule: a leaf faces an enemy node only; its fallback before contact is the own nodes farthest from the capital (hops over own roads, all ties); the leaves on the level even out along level roads (4B now applies on the level too).
+
 | | Option | Effect |
 |---|---|---|
 | 1A | an own node with a road to a node that is not own (enemy or neutral) | simplest, readable as "touches land that is not mine"; early game the expansion edge is the front; a quiet flank next to a neutral also fills |
@@ -89,7 +91,7 @@ A node gets charges only from a neighbour that is farther from the front. A node
 | 4B | a level road evens out: a charge goes to the level neighbour when that one is lower by 2 or more (stock plus incoming) | fixes ridges; also moves stock along the front line from a quiet leaf to a busy one; cannot oscillate (the gap shrinks by 2 per move and a gap of 1 never moves) |
 | 4C | level roads point away from the nearest factory (a second field) | fixes ridges with a direction, but a second number the player cannot see |
 
-**Rec. 4B.** One extra clause, visible as charges moving along a road with no downhill arrow.
+**Rec. 4B.** One extra clause, visible as charges moving along a road with no downhill arrow. (The first implementation applied it behind the level only; since #724 the level evens out too: DEC-43 item I3.)
 
 ### 5. Throughput, speed and the chain speed
 
@@ -151,7 +153,7 @@ Units recharge from the warehouse of their node (unchanged). A big army at a lea
 - **12A (rec.)**: **a tired army pulls**: a node with own standing units that have fewer charges than units, or with a gathering planned order (DEC-41 item 10), is placed on the leaf level of the field (`d = k`). Charges then flow to it like to a leaf until it is charged, and it stops pulling. The player steers supply with the armies it already moves; no new control.
 - 12B: no pull; an army must stand on the flow (or at the front) to recharge.
 
-With the leaf shift above 0, a tired army ahead of the level does not pull: the shift is the player's explicit choice and wins.
+With the leaf shift above 0, a tired army ahead of the level does not pull: the shift is the player's explicit choice and wins. (Superseded after the first playtest, owner 2026-11-03, #724: a tired army ahead of the level pulls too, its node is put on the level; `mechanics.md` DEC-43 item I6.)
 
 ### 13. Provinces
 

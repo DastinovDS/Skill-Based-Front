@@ -7,9 +7,12 @@ fortifications (DEC-43)", items A and B. Numbers come from ``Ruleset.supply`` an
 
 Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
 
-- a **leaf** is an own node with a road to a node that is not ``p``'s (item A1);
-- the field ``d0(n)``: roads from ``n`` to the nearest leaf, a BFS from all leaves; a component
-  without a leaf has no field (``None``, INF; item A2);
+- a **leaf** is an own node with a road to an **enemy** node; a neutral node never makes one
+  (item A1 as revised by #724). An own component with no such node takes as its leaves: the
+  capital's component its nodes farthest from the capital (hops over internal roads, all ties),
+  a pocket all its nodes;
+- the field ``d0(n)``: roads from ``n`` to the nearest leaf of its component, a BFS from all
+  leaves (item A2); every own node has one;
 - the **leaf level** ``k`` of a component: the player's shift (``PlayerState.leaf_shift``) for the
   component of the own capital, 0 for every other one (item A10); the shift is clamped first,
   ``k := min(k, d0(capital))``, and stays clamped (item B3);
@@ -19,7 +22,8 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
 - a node with ``d0(n) > k`` is **pulled** to the level when an own group stands in it short of a
   charge (``charged < units``, in a fight or not) or with a gathering planned order
   (``plan > 0``); groups on edges never pull (item A4). The effective field
-  ``d(n) = min(d0(n), k + hops(n, nearest pulled node))``;
+  ``d(n) = min(d0(n), k + hops(n, nearest pulled node))``; such an army ahead of the level
+  (``d0(n) < k``) pulls too: its node alone is put on the level, ``d(n) = k`` (item I6, #724);
 - the **room** of an own node: ``max(0, cap - stock - own packets on the way to it)``, a snapshot
   at the start of a dispatch that only decreases while it runs (item A5, the wave).
 
@@ -34,12 +38,14 @@ Order inside the step (item A13):
 3. **Recharge** of standing units (``supply.recharge``).
 4. The **field**: ``d0``, the clamp of the shift, the pull, ``d``.
 5. On a dispatch tick (``t > 0`` divisible by ``supply.dispatch_ticks``) the **dispatch** of item
-   A6, per player: senders in ``(d, node_key)`` order, the front first; a node on or ahead of the
-   level (``d <= k``) or without a field sends nothing; the others send one charge per road,
-   first **downhill** (own neighbours with ``k <= d(m) < d(n)`` and room, by fill
-   ``(cap - room) * 100 // cap`` then ``node_key``), then along **level roads** (``d(m) == d(n)``,
-   room, the same order, only while ``load(m) + 2 <= have``, ``load = cap - room``). Each charge
-   is a packet of 1 along one road (item A7).
+   A6, per player: senders in ``(d, node_key)`` order, the front first; a node ahead of the
+   level (``d < k``) sends nothing; the others send one charge per road, first **downhill** (own
+   neighbours with ``k <= d(m) < d(n)`` and room, by fill ``(cap - room) * 100 // cap`` then
+   ``node_key``), then along **level roads** (``d(m) == d(n)``, room, the same order, only while
+   ``load(m) + 2 <= have``, ``load = cap - room``). On the level (``d == k``) only the level
+   roads: the leaves even out (#724), except a level node where an own group stands short of a
+   charge or gathering a plan (the groups that pull): it keeps, and its level neighbours give to
+   it without the gap (room only). Each charge is a packet of 1 along one road (item A7).
 6. The **plan** of the next dispatch for the view: the same function run on the state now, without
    sending (item E: ``flow_next`` and ``flow_idle``), stored in ``Node.flow`` with the field.
 
@@ -192,90 +198,132 @@ class _Field:
     adj: dict[int, list[tuple[int, int]]]
     """Every own node: ``(neighbour, road)`` over internal roads, by road id."""
     down: dict[int, list[tuple[int, int]]]
-    """Every own node behind the level (``d > k``): its downhill neighbours of item A6
-    (``k <= d(m) < d``) with the road, by road id, room not considered."""
+    """Every own node that may send: behind the level (``d > k``), or on it (``d == k``) with no
+    own standing group short of a charge or gathering a plan; its downhill neighbours of item A6
+    (``k <= d(m) < d``; none on the level) with the road, by road id, room not considered."""
     level: dict[int, list[tuple[int, int]]]
-    """The same nodes: the neighbours on its level (``d(m) == d``)."""
+    """The same nodes: the neighbours on its level (``d(m) == d``): level roads behind the level,
+    the equalization of the leaves on it (#724)."""
+    holding: dict[int, bool]
+    """The own nodes where an own standing group is short of a charge or gathers a plan (the
+    groups that pull): on the level they keep, and a level neighbour gives to them without the
+    gap (item I3)."""
 
 
 def _field(state: GameState, player: int) -> _Field:
-    """Item A2 to A4 and B3 for ``player``; stores the clamped shift and its maximum."""
+    """Items A1 to A4 (as revised by #724) and B3 for ``player``; stores the clamped shift and its
+    maximum."""
     mapdef = state.map
     nodes = state.nodes
     edges = mapdef.edges
     adj: dict[int, list[tuple[int, int]]] = {}
-    d0: dict[int, int] = {}
-    queue: deque[int] = deque()
+    contact: dict[int, bool] = {}
     incident = mapdef.incident
     owners = [nodes[nid].owner for nid in range(len(incident))]  # ids are 0..n-1 (``MapDef``)
     for nid, owner in enumerate(owners):  # ascending
         if owner != player:
             continue
         near: list[tuple[int, int]] = []
-        leaf = False
         for eid in incident[nid]:
             e = edges[eid]
             other = e.b if e.a == nid else e.a
             if owners[other] == player:
                 near.append((other, eid))
-            else:
-                leaf = True
+            elif owners[other] is not None:
+                contact[nid] = True  # a road to an enemy node; a neutral one never (item A1)
         adj[nid] = near
-        if leaf:
-            d0[nid] = 0
-            queue.append(nid)
-    _bfs(adj, d0, queue)
 
     # Components over internal roads: the shift of the capital's one, pockets (items A10, B3, H1).
     comp: dict[int, int] = {}
+    members: dict[int, list[int]] = {}
     for nid in adj:  # ascending: the component id is its smallest node
         if nid in comp:
             continue
         comp[nid] = nid
-        stack = [nid]
-        while stack:
-            n = stack.pop()
+        group = [nid]
+        head = 0
+        while head < len(group):
+            n = group[head]
+            head += 1
             for m, _ in adj[n]:
                 if m not in comp:
                     comp[m] = nid
-                    stack.append(m)
-    ps = state.players[player]
+                    group.append(m)
+        members[nid] = group
     capital = mapdef.capital(player)
+    main = comp.get(capital)
+
+    # The leaves of every component (items A1, A2): its nodes on a road to an enemy node; with
+    # none, the capital's component takes its nodes farthest from the capital, a pocket all its
+    # nodes. Then ``d0`` by one BFS from all leaves.
+    d0: dict[int, int] = {}
+    leaves: list[int] = []
+    for c in sorted(members):
+        group = members[c]
+        touching = [n for n in group if n in contact]
+        if touching:
+            leaves.extend(touching)
+        elif c == main:
+            hops: dict[int, int] = {capital: 0}
+            _bfs(adj, hops, deque([capital]))
+            far = max(hops.values())
+            leaves.extend(n for n in group if hops[n] == far)
+        else:
+            leaves.extend(group)
+    leaves.sort()
+    for n in leaves:
+        d0[n] = 0
+    _bfs(adj, d0, deque(leaves))
+
+    ps = state.players[player]
     shift_max = d0.get(capital, 0) if capital in adj else 0
     ps.leaf_shift_max = shift_max
     ps.leaf_shift = min(ps.leaf_shift, shift_max)  # the clamp is stored (item B3)
-    main = comp.get(capital)
     shift = ps.leaf_shift
     k = {n: shift if c == main else 0 for n, c in comp.items()}
     pocket = {n: c != main for n, c in comp.items()}  # no own capital: all pockets
 
-    # The pull (item A4): a multi-source BFS from the pulled nodes; d = min(d0, k + hops).
+    # The pull (item A4): a multi-source BFS from the pulled nodes behind the level; d = min(d0,
+    # k + hops). A pulling army ahead of the level puts its node alone on the level, d = k
+    # (item I6, option A). The same groups make a node on the level keep what it has and take
+    # from its level neighbours without the gap (item I3).
     pulled: dict[int, bool] = {}
+    lifted: dict[int, bool] = {}
+    holding: dict[int, bool] = {}
     for g in state.groups.values():  # flags: the order does not matter
         loc = g.location
         if g.owner != player or not isinstance(loc, AtNode):
             continue
         n = loc.node
-        if (g.charged < g.units or g.plan > 0) and n in d0 and d0[n] > k[n]:
-            pulled[n] = True
+        if (g.charged < g.units or g.plan > 0) and n in d0:
+            holding[n] = True
+            if d0[n] > k[n]:
+                pulled[n] = True
+            elif d0[n] < k[n]:
+                lifted[n] = True
     d = d0
     if pulled:
-        hops: dict[int, int] = {}
+        dist: dict[int, int] = {}
         start: deque[int] = deque()
         for n in sorted(pulled):
-            hops[n] = 0
+            dist[n] = 0
             start.append(n)
-        _bfs(adj, hops, start)
+        _bfs(adj, dist, start)
         d = dict(d0)
-        for n, h in hops.items():
+        for n, h in dist.items():
             if n in d:  # a pulled node and its component have a field
                 d[n] = min(d[n], k[n] + h)
+    if lifted:
+        if d is d0:
+            d = dict(d0)
+        for n in lifted:  # independent writes: the order does not matter
+            d[n] = k[n]
     down: dict[int, list[tuple[int, int]]] = {}
     level: dict[int, list[tuple[int, int]]] = {}
     for n, dn in d.items():
         kn = k[n]
-        if dn <= kn:
-            continue  # on or ahead of the level: it never sends
+        if dn < kn or (dn == kn and n in holding):
+            continue  # ahead of the level, or a level node an army there holds: it never sends
         below: list[tuple[int, int]] = []
         same: list[tuple[int, int]] = []
         for m, eid in adj[n]:
@@ -289,7 +337,7 @@ def _field(state: GameState, player: int) -> _Field:
                 same.append((m, eid))
         down[n] = below
         level[n] = same
-    return _Field(player, d, k, pocket, adj, down, level)
+    return _Field(player, d, k, pocket, adj, down, level, holding)
 
 
 def _bfs(adj: dict[int, list[tuple[int, int]]], dist: dict[int, int], queue: deque[int]) -> None:
@@ -363,7 +411,8 @@ def _run(
         for m, eid in level:
             if have == 0:
                 break
-            if capacities[m] - room[m] + 2 <= have:  # a gap of 1 never moves
+            # a gap of 1 never moves; a pulling army takes without the gap (item I3)
+            if m in field.holding or capacities[m] - room[m] + 2 <= have:
                 out.append((m, eid))
                 room[m] -= 1
                 have -= 1

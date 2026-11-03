@@ -5,7 +5,8 @@ Expected values come from mechanics.md, section 7, block "Automatic supply flow,
 warehouses, road fortifications (DEC-43, #697)", item H and its table H1..H14.
 
 The map is ``dec41`` (see ``test_dec43.py``), player 0, ``mvp-4``: own K = 0 (capital), A = 1, B,
-C, D = 2, 3, 4, E, F, G = 5, 6, 7; M = 8 a neutral province (warehouse 1 when own). Stocks 0 unless
+C, D = 2, 3, 4, E, F, G = 5, 6, 7; M = 8 a neutral province (warehouse 1 when own); 17 and 18 are
+player 1's, as in the base of table F (#724), so C is always a leaf. Stocks 0 unless
 a row says so, no groups but the start garrison of K. "A captured in tick ``t``": A is player 1's
 from the ``movement`` of tick ``t`` on, after the ``economy`` of that tick (``_run`` applies the
 change between ``economy`` and ``capacity``); then B, C, D, F, G are a pocket of player 0.
@@ -20,7 +21,7 @@ from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Mode, OnEdge, initial_state
 from gow_sim.systems.capacity import capacity, change_owner
 from gow_sim.systems.economy import economy
-from gow_sim.systems.flow import starving_nodes, supply_flow
+from gow_sim.systems.flow import starving_nodes, supply_flow, update_flow
 from gow_sim.systems.lines import supply_lines
 from gow_sim.systems.victory import EndReason, outcome
 from gow_sim.view import project
@@ -31,6 +32,7 @@ RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
 MVP3 = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 K, A, B, C, D, E, F, G, M = range(9)
+ENEMY_PASSES = (17, 18)  # North Pass, South Pass: player 1's in the base of the tables (#724)
 OWN = (K, A, B, C, D, E, F, G)
 POCKET = (B, C, D, F, G)
 CUT = 1000
@@ -43,8 +45,12 @@ def _state(stocks: dict[int, int] | None = None, rules: Ruleset = RULES) -> Game
     state = initial_state(MAP, rules)
     for n in OWN:
         state.nodes[n].warehouse = 0
+    for n in ENEMY_PASSES:  # the passes are player 1's (#724: a neutral never makes a leaf)
+        state.nodes[n].owner = 1
     for n, stock in (stocks or {}).items():
         state.nodes[n].warehouse = stock
+    if rules.flow:
+        update_flow(state, rules)
     state.tick = CUT - 1
     return state
 
@@ -96,6 +102,15 @@ def _starved(events: list[Event]) -> list[tuple[int, int, int, int, int]]:
     ]
 
 
+def _sends(events: list[Event]) -> list[tuple[int, int, int]]:
+    """``(tick, from, to)`` of every ``packet_sent`` of player 0."""
+    return [
+        (e.tick, e.get("from_node"), e.get("to_node"))  # type: ignore[misc]
+        for e in events
+        if e.kind == "packet_sent" and e.get("player") == 0
+    ]
+
+
 def _made(events: list[Event], node: int) -> list[int]:
     """Ticks of the production events of the factory in ``node``."""
     return [
@@ -141,7 +156,8 @@ def test_h3_reconnecting_restarts_production() -> None:
     state.nodes[C].factory = 0
     events = _run(state, 1400, _cut((1300, _owner(A, 0))))
     assert _made(events, C) == [1000, 1400]
-    assert state.nodes[C].warehouse == 2
+    made = [e for e in events if e.kind == "charges_produced" and e.get("node") == C]
+    assert made[-1].tick == 1400 and made[-1].get("spill") == 0  # into C's own warehouse
 
 
 # H4: a pocket with a factory does not starve -------------------------------------------------
@@ -153,7 +169,10 @@ def test_h4_a_pocket_with_a_factory_does_not_starve() -> None:
     g = _group(state, C, 3, 3)
     events = _run(state, 1500, _cut())
     assert _starved(events) == []
-    assert (state.nodes[C].warehouse, g.units, g.charged) == (2, 3, 3)
+    # B's factory made 1 at 1000 (before the capture); C gives 1 to D, the emptier leaf (#724)
+    assert [(t, a, b) for t, a, b in _sends(events) if a == C] == [(1000, C, D)]
+    assert (state.nodes[C].warehouse, g.units, g.charged) == (1, 3, 3)
+    assert (state.nodes[B].warehouse, state.nodes[D].warehouse) == (1, 1)
     assert all(state.nodes[n].cut_since is None for n in POCKET)
     assert project(state, RULES, 0, HEADLESS_MATCH_KEY).nodes[C].starve_in is None
 
@@ -169,14 +188,19 @@ def test_h5_a_factory_less_pocket_starves_by_dec19() -> None:
     for tick in (1100, 1200, 1300, 1400, 1500, 1600):
         events += _run(state, tick, _cut())
         seen.append((state.nodes[C].warehouse, g.units, g.charged))
-    assert seen == [(1, 3, 3), (0, 3, 3), (0, 3, 2), (0, 3, 1), (0, 3, 0), (0, 3, 0)]
+    # C gives 1 to B at the dispatch of 1000: the leaves of the pocket even out (#724)
+    assert [(t, a, b) for t, a, b in _sends(events) if a == C] == [(1000, C, B)]
+    # at 1200 the group is short: B gives its 1 back without the gap (item I3), it recharges at 1220
+    assert [(t, a, b) for t, a, b in _sends(events) if a == B] == [(1200, B, C)]
+    assert seen == [(0, 3, 3), (0, 3, 2), (0, 3, 2), (0, 3, 1), (0, 3, 0), (0, 3, 0)]
     assert _starved(events) == [
         (1100, 0, C, 1, 0),
-        (1200, 0, C, 1, 0),
+        (1200, 0, C, 0, 1),
         (1300, 0, C, 0, 1),
         (1400, 0, C, 0, 1),
         (1500, 0, C, 0, 1),
     ]
+    assert state.nodes[B].warehouse == 0
     assert all(n in state.groups for n in (g.id,))  # the units live
 
 
@@ -335,6 +359,8 @@ def test_both_players_pockets_are_mirrored() -> None:
     """Player symmetry (AGENTS.md 4.1, item 6): the mirrored cut of player 1 starves the same."""
     mirror = MAP.mirror_nodes
     state = _state({C: 2})
+    state.nodes[18].owner = 0  # the mirror of North Pass held by player 1
+    update_flow(state, RULES)
     state.nodes[mirror[C]].warehouse = 2
     g0 = _group(state, C, 3, 3)
     g1 = _group(state, mirror[C], 3, 3, owner=1)
@@ -342,7 +368,7 @@ def test_both_players_pockets_are_mirrored() -> None:
     events = _run(state, 1500, changes)
     assert (g0.charged, state.nodes[C].warehouse) == (g1.charged, state.nodes[mirror[C]].warehouse)
     by_player = {p: [(t, w, u) for t, q, _, w, u in _starved(events) if q == p] for p in (0, 1)}
-    assert by_player[0] == by_player[1] and len(by_player[0]) == 5
-    # each also holds the other's A, cut off from everything of its own
-    assert starving_nodes(state, 0) == sorted((*POCKET, mirror[A]))
-    assert starving_nodes(state, 1) == sorted((*(mirror[n] for n in POCKET), A))
+    assert by_player[0] == by_player[1] and len(by_player[0]) == 5  # as H5
+    # each also holds the other's A, cut off from everything of its own, and its own pass
+    assert starving_nodes(state, 0) == sorted((*POCKET, 18, mirror[A]))
+    assert starving_nodes(state, 1) == sorted((*(mirror[n] for n in POCKET), 17, A))

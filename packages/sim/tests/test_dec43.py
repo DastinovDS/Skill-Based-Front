@@ -4,12 +4,13 @@ Expected values come from mechanics.md, section 7, block "Automatic supply flow,
 warehouses, road fortifications (DEC-43, #697)": items A, B, C, the key list of ``mvp-4.toml``
 and the table F1..F20 (the view rows V1..V4 are in ``test_dec43_view.py``).
 
-The map of the table is ``dec41`` (see ``test_dec41.py``), player 0, ``mvp-4``: own K = 0
-(capital, warehouse 6), A = 1, B, C, D = 2, 3, 4, E, F, G = 5, 6, 7 (cities, warehouse 3); M = 8
-and 17 are neutral provinces (warehouse 1 when own); roads K-A, K-E, A-B, A-D, A-E, B-C, B-F, B-G,
-D-C, C-M, C-17, D-18; packet ticks 20 per 30-tick road, K-E 28, D-C 38, C-M 32, C-17 30;
-``node_key(0, n) = n``. No groups and no packets unless a row says so (the start garrison of K,
-2 units charged, never pulls); stocks as set by the row, the rest 0; the dispatch at tick 10.
+The map of the table is ``dec41`` (see ``test_dec41.py``), player 0, ``mvp-4``: own K = 0 (capital,
+warehouse 6), A = 1, B, C, D = 2, 3, 4, E, F, G = 5, 6, 7 (cities, warehouse 3); M = 8 is a neutral
+province (warehouse 1 when own); the provinces 17 and 18 are player 1's in the base (since #724 a
+neutral never makes a leaf; the map as it is: ``test_dec43_leaves.py``); roads K-A, K-E, A-B, A-D,
+A-E, B-C, B-F, B-G, D-C, C-M, C-17, D-18; packet ticks 20 per 30-tick road, K-E 28, D-C 38, C-M 32,
+C-17 30; ``node_key(0, n) = n``. No groups and no packets unless a row says so (the start garrison
+of K, 2 units charged, never pulls); stocks as set by the row, the rest 0; the dispatch at tick 10.
 """
 
 import tomllib
@@ -72,6 +73,7 @@ RULES = load_ruleset(RULESETS / "mvp-4.toml")
 MVP3 = load_ruleset(RULESETS / "mvp-3.toml")
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 K, A, B, C, D, E, F, G, M = range(9)
+ENEMY_PASSES = (17, 18)  # North Pass, South Pass: player 1's in the base of the tables (#724)
 NORTH = 17
 OWN = (K, A, B, C, D, E, F, G)
 ROAD = {  # edge ids of dec41
@@ -90,8 +92,11 @@ def _state(stocks: dict[int, int] | None = None, shift: int = 0, tick: int = 9) 
     state = initial_state(MAP, RULES)
     for n in OWN:
         state.nodes[n].warehouse = 0
+    for n in ENEMY_PASSES:  # the passes are player 1's (#724: a neutral never makes a leaf)
+        state.nodes[n].owner = 1
     for n, stock in (stocks or {}).items():
         state.nodes[n].warehouse = stock
+    update_flow(state, RULES)  # the field of the base (item A8), before the shift is set
     state.players[0].leaf_shift = shift
     state.tick = tick
     return state
@@ -141,6 +146,8 @@ def _code(outcome: Ok | Reject) -> RejectCode | None:
 
 
 BASE_D = {C: 0, D: 0, A: 1, B: 1, K: 2, E: 2, F: 2, G: 2}
+L1_D = {C: 0, F: 0, G: 0, B: 1, D: 1, A: 2, K: 3, E: 3}
+"""Row L1: the passes neutral (the map as it is), no enemy contact: the farthest nodes from K."""
 
 
 # The ruleset (supply.model, mvp-4, item C) ------------------------------------------------------
@@ -260,10 +267,11 @@ def test_f1_the_base_field() -> None:
 
 
 def test_the_initial_state_carries_the_field() -> None:
-    """Item A8: the initial state carries the field computed by the same function."""
+    """Item A8: the initial state carries the field computed by the same function (the start of
+    ``dec41``: no enemy contact, so the leaves are the farthest nodes, row L1)."""
     state = initial_state(MAP, RULES)
-    assert _d(state, *OWN) == BASE_D
-    assert state.players[0].leaf_shift_max == 2
+    assert _d(state, *OWN) == L1_D
+    assert state.players[0].leaf_shift_max == 3
     assert state.nodes[M].flow is None  # neutral
 
 
@@ -302,10 +310,10 @@ def _from(events: list[Event], node: int) -> list[tuple[int, int]]:
 
 
 def test_f6_no_room_below() -> None:
-    state = _state({A: 1, D: 3, B: 3})
+    state = _state({A: 1, D: 3, B: 3, C: 3})
     assert _from(_flow(state), A) == []
     assert state.nodes[A].flow.idle is FlowIdle.FULL  # type: ignore[union-attr]
-    state = _state({A: 1, D: 2, B: 3})
+    state = _state({A: 1, D: 2, B: 3, C: 3})
     send_packet(state, 0, K, (ROAD[K, A], ROAD[A, D]), (20, 20), 1, transfer=False)
     assert _from(_flow(state), A) == []
     assert state.nodes[A].flow.idle is FlowIdle.FULL  # type: ignore[union-attr]
@@ -313,8 +321,8 @@ def test_f6_no_room_below() -> None:
 
 def test_f7_the_wave() -> None:
     state = _state({K: 6, A: 3, B: 3, C: 3, E: 3, D: 0})
-    assert _sent(_flow(state, 10)) == [(A, D)]
-    assert _sent(_flow(state, 20)) == [(A, D), (K, A)]
+    assert _sent(_flow(state, 10)) == [(C, D), (A, D)]
+    assert _sent(_flow(state, 20)) == [(A, D), (B, C), (K, A)]
 
 
 def test_f8_a_level_road_moves_a_gap_of_two() -> None:
@@ -323,9 +331,10 @@ def test_f8_a_level_road_moves_a_gap_of_two() -> None:
 
 
 def test_f9_a_leaf_keeps() -> None:
+    """Nothing goes back behind the level; the leaves even out (#724): C gives 1 to D."""
     state = _state({C: 3, B: 0})
-    assert _sent(_flow(state)) == []
-    assert state.nodes[C].warehouse == 3
+    assert _sent(_flow(state)) == [(C, D)]
+    assert state.nodes[C].warehouse == 2
 
 
 # The pull (item A4) ----------------------------------------------------------------------------
@@ -356,8 +365,8 @@ def test_f11_a_gathering_plan_pulls() -> None:
 def test_f12_the_shift_moves_the_level_back() -> None:
     state = _state({K: 6, A: 3, C: 2, F: 2}, shift=1)
     events = _flow(state)
-    assert _sent(events) == [(K, E), (F, B)]
-    assert [state.nodes[n].warehouse for n in (K, A, C, F)] == [5, 3, 2, 1]
+    assert _sent(events) == [(A, B), (K, E), (F, B)]  # the level A, B evens out (#724)
+    assert [state.nodes[n].warehouse for n in (K, A, C, F)] == [5, 2, 2, 1]
     assert _sent([e for e in events if e.get("player") == 0 and e.get("to_node") == C]) == []
 
 
@@ -365,8 +374,8 @@ def test_f13_ahead_of_the_level_no_pull_behind_it_a_pull_to_the_level() -> None:
     state = _state({A: 3}, shift=1)
     _group(state, D, 2, 0)
     events = _flow(state)
-    assert _d(state, *OWN) == BASE_D  # D ahead: no pull
-    assert [r for r in _sent(events) if r[1] == D] == []
+    assert _d(state, *OWN) == {**BASE_D, D: 1}  # D ahead pulls: on the level (item I6, #724)
+    assert _sent(events) == [(A, B), (A, D)]
     state = _state({K: 6}, shift=1)
     _group(state, K, 2, 0)
     events = _flow(state)

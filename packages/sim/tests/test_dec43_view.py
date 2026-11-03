@@ -18,7 +18,7 @@ from gow_sim.maps import load_map
 from gow_sim.match import HEADLESS_MATCH_KEY, Match
 from gow_sim.ruleset import load_ruleset
 from gow_sim.state import AtNode, FlowIdle, FlowNode, GameState, Group, Mode, initial_state
-from gow_sim.systems.flow import supply_flow
+from gow_sim.systems.flow import supply_flow, update_flow
 from gow_sim.view import NodeView, PlayerView, SelfView, project, view_to_canonical
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -28,6 +28,7 @@ MVP3 = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 KEY = HEADLESS_MATCH_KEY
 K, A, B, C, D, E, F, G, M = range(9)
+ENEMY_PASSES = (17, 18)  # North Pass, South Pass: player 1's in the base of the tables (#724)
 OWN = (K, A, B, C, D, E, F, G)
 ENEMY_CAPITAL = 16
 FLOW_FIELDS = ("front_dist", "flow_down", "flow_next", "flow_idle", "flow_pocket")
@@ -39,8 +40,11 @@ def _state(stocks: dict[int, int], shift: int = 0, tick: int = 5) -> GameState:
     state = initial_state(MAP, RULES)
     for n in OWN:
         state.nodes[n].warehouse = 0
+    for n in ENEMY_PASSES:  # the passes are player 1's (#724: a neutral never makes a leaf)
+        state.nodes[n].owner = 1
     for n, stock in stocks.items():
         state.nodes[n].warehouse = stock
+    update_flow(state, RULES)
     state.players[0].leaf_shift = shift
     while state.tick < tick:
         state.tick += 1
@@ -71,9 +75,10 @@ def test_v2_the_shift_changes_the_idle_reasons_not_the_field() -> None:
     assert [view.nodes[n].flow_idle for n in (C, D, A, B)] == [
         FlowIdle.AHEAD,
         FlowIdle.AHEAD,
-        FlowIdle.LEAF,
+        None,  # A gives 1 to B at the next dispatch: the level evens out (#724)
         FlowIdle.LEAF,
     ]
+    assert view.nodes[A].flow_next == (B,)
     base = {C: 0, D: 0, A: 1, B: 1, K: 2, E: 2, F: 2, G: 2}
     assert {n: view.nodes[n].front_dist for n in OWN} == base
 
