@@ -3237,8 +3237,8 @@
                 g.translate(ix, iy - 8);
                 g.globalAlpha *= on || sec.ico !== 'fort' ? 1 : 0.9;
                 if (sec.ico === 'fort') {
-                  g.scale(1.25, 1.25);
-                  lineGlyph(g);
+                  g.translate(0, 1);
+                  shieldGlyph(g, 12, C.paper);
                 } else if (sec.ico === 'house') {
                   g.fillStyle = C.paper;
                   g.beginPath();
