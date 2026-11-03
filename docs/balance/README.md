@@ -120,6 +120,7 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `burned_permille` | [int or null, ...] | the share burned in per mille, `charges_burned * 1000 // charges_produced`; `null` without production (#310) |
 | `charges_start`, `charges_fights`, `charges_captures`, `charges_packets_lost`, `charges_warehouses_lost`, `charges_starved`, `charges_attrition`, `charges_end` | [int, int] | the charge ledger (#588, section "Charge ledger and flow"): the stock before tick 1, the charges spent in fights, on captures (DEC-38), lost in cut packets, lost with captured warehouses, starved, killed with units, and the stock after the last tick |
 | `charges_built`, `charges_plans` | [int, int] | economy v2 (DEC-41): the charges paid for buildings (`build_paid` warehouse + units, item 7) and taken by waiting planned orders for their bonus (`plan_charged`, one each, item 10); 0 under v1 (#646) |
+| `charges_tolls`, `tolls_paid`, `forts_built` | [int, int] | road fortifications (DEC-43, item D, #707): the charges the player's groups lost to tolls (`toll_paid`), the number of those tolls, the player's fortifications that started to work (`road_fort_built`); 0 without `[fort]` |
 | `charges_residual` | [int, int] | `charges_start + charges_produced` minus all sinks (`charges_burned`, the six above and the two v2 sinks) minus `charges_end`; 0 when every charge is explained by an event (#588) |
 | `charges_sent`, `charges_delivered`, `charges_delivered_front`, `charges_transfers` | [int, int] | the supply flow (#588): charges in dispatched packets, in all delivered packets (one-off transfers included), of them delivered into a city with a front marker, sent by transfers |
 | `stock_by_place_minute` | [{place: [int or null, ...]}, ...] | the stock by place and match minute in hundredths of a charge (#588); places `cap_wh`, `front_wh`, `rear_wh`, `units_node`, `units_road`, `packets`; `null`: no sample in that minute |
@@ -163,7 +164,7 @@ these are separate fields, the only thing they share is `MatchRecorder`/`MatchLo
 | `orders`, `planned_orders` | accepted `Move` and of them the scheduled ones |
 | `planned_share` | `planned_orders / orders`, 4 digits; `null` without orders |
 | `planned_attack_share`, `planned_siege_share` | as in `MatchMetrics` (#590: the second one is the gate share) |
-| `cp_by_category` | CP spending in hundredths by accepted commands and the prices `orders.cost` of the ruleset: `move`, `planned_move`, `mode` (`SetMode`), `recruit` (recruiting minus the `CancelRecruit` refunds), `road` (`UpgradeRoad`), `barracks`, `warehouse`, `transfer`, `other` (`Split`, `Merge`, `CancelOrder`, `SetStance`, `SetFront`, `SetRearMin`: free in the MVP rulesets) |
+| `cp_by_category` | CP spending in hundredths by accepted commands and the prices `orders.cost` of the ruleset: `move`, `planned_move`, `mode` (`SetMode`), `recruit` (recruiting minus the `CancelRecruit` refunds), `road` (`UpgradeRoad`), `barracks`, `warehouse`, `transfer`, `fort` (`FortifyRoad`, DEC-43 item D), `other` (`Split`, `Merge`, `CancelOrder`, `SetStance`, `SetFront`, `SetRearMin`: free in the MVP rulesets) |
 | `cp_refunded`, `cp_total` | the refund for cancelling a recruit (already subtracted from `recruit`) and the sum of the categories |
 
 A rejected command costs nothing. The real CP balance (regeneration, burning at the cap) is not
@@ -227,13 +228,13 @@ values). Code and exact definitions: the module docstring of `gow_sim.analysis` 
 
 **Ledger.** `charges_start + charges_produced = charges_burned + charges_fights + charges_captures +
 charges_packets_lost + charges_warehouses_lost + charges_starved + charges_attrition + charges_built + charges_plans +
-charges_end`, and
+charges_tolls + charges_end`, and
 `charges_residual` is the difference (must be 0). Sources by event: `charges_fights` is the player's
 `spent_<p>` of every `fight_round`; `charges_captures` is the number of `node_captured` times `capture.charge_cost`
 (DEC-38); `charges_packets_lost` is `packet_lost`; `charges_warehouses_lost` is `warehouse_lost` (its `owner`);
 `charges_starved` is `warehouse + units` of `starvation`; `charges_attrition` counts the `attrition` events that
 killed a charged unit; under economy v2 `charges_built` is `warehouse + units` of `build_paid` and `charges_plans` counts
-`plan_charged` (#646). `charges_start` and `charges_end` are the charge stock (section "Charge stock") before the first
+`plan_charged` (#646); `charges_tolls` is `charges` of `toll_paid` (DEC-43, item D6). `charges_start` and `charges_end` are the charge stock (section "Charge stock") before the first
 and after the last tick. A nonzero residual means a rule moved a charge that no event explains: extend the ledger.
 
 **Flow.** `charges_sent` is the sum of `packet_sent` (the supply dispatch); `charges_delivered` the sum of all
