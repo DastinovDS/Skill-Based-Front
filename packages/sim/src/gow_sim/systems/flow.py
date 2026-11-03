@@ -471,9 +471,18 @@ def _run(
         cap = capacities[m]  # room > 0, so cap > 0
         return ((cap - room[m]) * 100 // cap, key(player, m))  # non-negative: rounded down
 
+    # The feed distance of item K (the saddle): only when a sender behind the level has a level road.
+    k = field.k
+    feed: dict[int, int] | None = None
+    if any(field.level[n] for n in senders if d[n] > k[n]):
+        feed = _feed(field, room, want)
+    far = len(field.adj) + 1  # above every feed distance: "feeds no hungry level node"
+
     sends: _Sends = []
     for n in senders:
         have = nodes[n].warehouse
+        behind = d[n] > k[n]
+        fn = feed.get(n, far) if feed is not None else far
         if want:
             down = [p for p in field.down[n] if room[p[0]] and want.get(p[0], 1)]
             level = [p for p in field.level[n] if room[p[0]] and want.get(p[0], 1)]
@@ -496,13 +505,20 @@ def _run(
         for m, eid in level:
             if have == 0:
                 break
-            # a gap of 1 never moves; a pulling army takes without the gap (item I3), and so
-            # does the next node of a path (item I7)
-            if (
-                m in field.holding
-                or field.before.get(m) == n
-                or capacities[m] - room[m] + 2 <= have
-            ):
+            if behind and feed is not None:
+                # behind the level (item K): towards a hungry level node on room alone, the gap
+                # rule between equal feed distances, nothing away from a hungry level node
+                fm = feed.get(m, far)
+                give = fm < fn or (fm == fn and capacities[m] - room[m] + 2 <= have)
+            else:
+                # a gap of 1 never moves; a pulling army takes without the gap (item I3), and so
+                # does the next node of a path (item I7)
+                give = (
+                    m in field.holding
+                    or field.before.get(m) == n
+                    or capacities[m] - room[m] + 2 <= have
+                )
+            if give:
                 out.append((m, eid))
                 room[m] -= 1
                 if m in want:
@@ -511,6 +527,37 @@ def _run(
         if out:
             sends.append((n, out))
     return sends
+
+
+def _feed(field: _Field, room: dict[int, int], want: dict[int, int]) -> dict[int, int]:
+    """The feed distance of item K at the room snapshot of a dispatch: 0 for a **hungry** level
+    node (``d == k``, ``room > 0``, and a build node without an army still wants a charge, item
+    J), then a BFS backwards over the roads a node behind the level sends along: ``feed(n) = 1 +
+    min(feed(m))`` over its downhill and level neighbours ``m`` (``down`` and ``level`` of the
+    field). A node missing from the result feeds no hungry level node. A BFS distance: the order
+    of the queue does not change it. O(V + E)."""
+    d = field.d
+    k = field.k
+    adj = field.adj
+    feed: dict[int, int] = {}
+    queue: deque[int] = deque()
+    for n in sorted(d):
+        if d[n] == k[n] and room[n] > 0 and want.get(n, 1) > 0:
+            feed[n] = 0
+            queue.append(n)
+    while queue:
+        m = queue.popleft()
+        dm = d[m]
+        step = feed[m] + 1
+        for n, _ in adj[m]:
+            if n in feed:
+                continue
+            dn = d.get(n)
+            # n sends to m: n is behind the level, m downhill of it or on its level
+            if dn is not None and dn > k[n] and dn >= dm:
+                feed[n] = step
+                queue.append(n)
+    return feed
 
 
 def _send(
