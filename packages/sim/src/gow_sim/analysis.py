@@ -62,12 +62,15 @@ state samplings; nothing is added to the simulation:
   with a charged unit: one charge each), under economy v2 ``charges_built`` (``build_paid``
   warehouse + units: the progressive payment of the barracks, a warehouse level, a factory and a
   bunker, DEC-41 item 7) and ``charges_plans`` (``plan_charged``: one charge each, the bonus of a
-  waiting planned order, item 10), and ``charges_end``. ``charges_residual`` = sources - sinks
+  waiting planned order, item 10), ``charges_tolls`` (``toll_paid``: the charges road
+  fortifications took, DEC-43 item D6), and ``charges_end``. ``charges_residual`` = sources - sinks
   and must be 0: a value other than 0 means a charge appeared or vanished that no event explains
   (a rule changed without this ledger).
 - Flow: ``charges_sent`` (``packet_sent``, the supply dispatch), ``charges_delivered`` (all
   ``packet_delivered``, one-off transfers included), ``charges_delivered_front`` (of them into a
-  city with a front marker at the end of that tick), ``charges_transfers`` (``transfer_started``).
+  city with a front marker at the end of that tick), ``charges_transfers`` (``transfer_started``);
+  ``tolls_paid`` (the number of ``toll_paid`` of the player's groups) and ``forts_built`` (its
+  ``road_fort_built``), road fortifications (DEC-43, item D).
 - **Stock by place**, ``stock_by_place_minute``: the charges of a player split into the places of
   ``PLACES`` (capital warehouse, warehouses of the cities with a front marker, other warehouses,
   charged units standing in nodes, charged units on roads, packets), sampled at the end of every
@@ -110,7 +113,8 @@ simulation, so the state hash does not change. Definitions (the same text is in
   command (``orders.cost`` of the ruleset), summed per category: ``move`` (``Move``),
   ``planned_move`` (``Move`` with ``planned``), ``mode`` (``SetMode``), ``recruit``
   (``Recruit`` minus the CP that ``CancelRecruit`` returned, ``cp`` of ``recruit_cancelled``),
-  ``road`` (``UpgradeRoad``), ``barracks``, ``warehouse``, ``transfer`` and ``other`` (``Split``,
+  ``road`` (``UpgradeRoad``), ``barracks``, ``warehouse``, ``transfer``, ``fort`` (``FortifyRoad``,
+  DEC-43 item D) and ``other`` (``Split``,
   ``Merge``, ``CancelOrder``, ``SetStance``, ``SetFront``, ``SetRearMin``: free in the MVP
   rulesets). ``cp_total`` is the sum, ``cp_refunded`` the returned part (already subtracted).
   Rejected commands cost nothing; the real CP balance (regeneration, burning at the cap) is not
@@ -185,6 +189,7 @@ CP_CATEGORIES: Final[tuple[str, ...]] = (
     "barracks",
     "warehouse",
     "transfer",
+    "fort",
     "other",
 )
 """Categories of ``PlayerStats.cp_by_category``, in output order (module docstring)."""
@@ -197,6 +202,7 @@ _KIND_CATEGORY: Final = {
     "BuildBarracks": "barracks",
     "UpgradeWarehouse": "warehouse",
     "Transfer": "transfer",
+    "FortifyRoad": "fort",
 }
 """``CommandRecord.kind`` to category; ``Move`` goes by ``planned``, the rest is ``other``."""
 
@@ -487,14 +493,21 @@ class ChargeFlow:
     """Economy v2: the charges paid for buildings (``build_paid``, DEC-41 item 7)."""
     plans: int
     """Economy v2: the charges planned orders took for their bonus (``plan_charged``, item 10)."""
+    tolls: int
+    """The charges road fortifications took from the player's groups (``toll_paid``, DEC-43
+    item D6)."""
     end: int
     residual: int
     """``start + produced - (burned + fights + captures + packets_lost + warehouses_lost +
-    starved + attrition + built + plans) - end``; 0 in a consistent match."""
+    starved + attrition + built + plans + tolls) - end``; 0 in a consistent match."""
     sent: int
     delivered: int
     delivered_front: int
     transfers: int
+    tolls_paid: int
+    """Road fortification tolls the player's groups paid (``toll_paid`` events, DEC-43 item D)."""
+    forts_built: int
+    """Road fortifications of the player that started to work (``road_fort_built``)."""
     stock_by_place_minute: tuple[tuple[str, tuple[int | None, ...]], ...]
     """Per ``PLACES`` name the mean of each match minute in hundredths of a charge."""
     marker_ticks: int
@@ -515,12 +528,15 @@ _FLOW_FIELDS: Final[tuple[str, ...]] = (
     "attrition",
     "built",
     "plans",
+    "tolls",
     "end",
     "residual",
     "sent",
     "delivered",
     "delivered_front",
     "transfers",
+    "tolls_paid",
+    "forts_built",
     "marker_ticks",
     "front_empty_ticks",
     "front_empty_cap_has_ticks",
@@ -531,7 +547,7 @@ _FLOW_FIELDS: Final[tuple[str, ...]] = (
 
 
 def _flow_key(name: str) -> str:
-    if name.endswith("_ticks") or name == "stock_by_place_minute":
+    if name.endswith("_ticks") or name in ("stock_by_place_minute", "tolls_paid", "forts_built"):
         return name
     return f"charges_{name}"
 
@@ -735,6 +751,9 @@ _EVENT_COUNTERS: Final[tuple[str, ...]] = (
     "attrition",
     "built",
     "plans",
+    "tolls",
+    "tolls_paid",
+    "forts_built",
     "sent",
     "delivered",
     "transfers",
@@ -782,6 +801,15 @@ def _count_ledger(e: Event, ledger: dict[str, dict[int, int]]) -> None:
             player = e.get("player")
             assert isinstance(player, int)
             ledger["plans"][player] += 1
+        case "toll_paid":
+            player, charges = e.get("player"), e.get("charges")
+            assert isinstance(player, int) and isinstance(charges, int)
+            ledger["tolls"][player] += charges
+            ledger["tolls_paid"][player] += 1
+        case "road_fort_built":
+            player = e.get("player")
+            assert isinstance(player, int)
+            ledger["forts_built"][player] += 1
         case _:
             pass
 
@@ -803,6 +831,7 @@ def _charge_flow(
             "attrition",
             "built",
             "plans",
+            "tolls",
         )
     )
     by_place: dict[str, list[int | None]] = {name: [None] * minutes for name in PLACES}
@@ -828,6 +857,9 @@ def _charge_flow(
         starved=counts["starved"],
         attrition=counts["attrition"],
         built=counts["built"],
+        tolls=counts["tolls"],
+        tolls_paid=counts["tolls_paid"],
+        forts_built=counts["forts_built"],
         plans=counts["plans"],
         end=end,
         residual=start + produced - sinks - end,

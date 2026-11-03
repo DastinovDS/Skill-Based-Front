@@ -32,7 +32,10 @@ bunker: ``line_commands`` and ``bunker_site`` give nothing, and the flow carries
 itself. The one lever is the **leaf shift** (``leaf_shift_command``, DEC-43 item G): the level goes
 one road back (``SetLeafShift(1)``) while an own leaf faces a visibly stronger enemy and the bot
 attacks from none of them, so new charges stop short of a node it may lose; back to the front
-(``0``) when the bot attacks or the threat is gone.
+(``0``) when the bot attacks or the threat is gone. **Road fortifications** (``fort_site``,
+DEC-43 item D) are the CP sink there: while the CP are near the cap, an own node fortifies the
+road to an enemy neighbour where an enemy is in sight; an attack whose every road into the target
+is fortified asks for the toll on top of its shots (``Bot.toll_ahead``).
 """
 
 from collections import deque
@@ -51,6 +54,7 @@ __all__ = [
     "RELEASE_SLACK",
     "bunker_site",
     "factory_site",
+    "fort_site",
     "leaf_shift_command",
     "line_commands",
     "release_commands",
@@ -267,6 +271,48 @@ def bunker_site(bot: Bot, view: PlayerView, limit: int) -> int | None:
         rank = (-vp, bot.key(node))
         if best is None or rank < best:
             best, site = rank, node
+    return site
+
+
+def fort_site(bot: Bot, view: PlayerView, budget: int) -> tuple[int, int] | None:
+    """The road fortification to build now (DEC-43, item D), ``(node, edge)``, or ``None``; always
+    ``None`` without ``[fort]``.
+
+    Only while the CP are near their cap (``cp.cap - cp.per_period`` or more: the next income
+    would burn in part) and ``budget`` pays ``fort.cost``: an own node (a city or a province)
+    with no fight, on the road to an enemy neighbour it does not fortify yet, where an enemy is
+    in sight (in that neighbour or as a figure on that road). The most VP of the own node first
+    (the capital counted with its multiplier), then the most enemy units seen there, then
+    ``Bot.key`` of the node and of the neighbour (mirror-invariant)."""
+    rules = bot.rules
+    fort = rules.fort
+    if fort is None or budget < fort.cost or view.me.cp < rules.cp.cap - rules.cp.per_period:
+        return None
+    me = view.player
+    fights = bot.fight_nodes(view)
+    best: tuple[int, int, int, int] | None = None
+    site: tuple[int, int] | None = None
+    for n in view.nodes:
+        node = n.id
+        if n.owner != me or node in fights:
+            continue
+        mdef = bot.map.nodes[node]
+        vp = mdef.vp * (rules.victory.capital_multiplier if mdef.kind is NodeKind.CAPITAL else 1)
+        for eid in bot.map.incident[node]:
+            other = bot.map.edges[eid].other(node)
+            if view.nodes[other].owner != 1 - me:
+                continue
+            edge = view.edges[eid]
+            if any(f.node == node for f in edge.forts):
+                continue
+            seen = view.nodes[other].seen
+            units = 0 if seen is None else (seen.enemy_units or len(seen.enemy_modes))
+            units += sum(g.units or 1 for g in edge.enemy_groups)
+            if units <= 0:
+                continue
+            rank = (-vp, -units, bot.key(node), bot.key(other))
+            if best is None or rank < best:
+                best, site = rank, (node, eid)
     return site
 
 
