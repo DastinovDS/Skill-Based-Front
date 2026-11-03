@@ -115,7 +115,8 @@
       "toll_units": 3,
       "toll_charges": 1
     },
-    "supply_model": "flow"
+    "supply_model": "flow",
+    "supply_dispatch_ticks": 10
   },
   "map_id": "diamond",
   "last_seq": 0,

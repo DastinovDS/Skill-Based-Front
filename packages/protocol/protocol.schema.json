@@ -3279,6 +3279,12 @@
             }
           ],
           "description": "``supply.model`` (DEC-43): ``flow`` is the automatic supply flow with the leaf shift\n(``set_leaf_shift``; the line commands are rejected with ``FEATURE_DISABLED``); ``lines``\notherwise."
+        },
+        "supply_dispatch_ticks": {
+          "description": "``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it\n(DEC-43, item A6; the same period drives the lines of DEC-41 and the v1 supply), so the\ncountdown to ``View.me.next_dispatch_tick`` is exact from the first snapshot (#705).",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
         }
       },
       "required": [
@@ -3299,7 +3305,8 @@
         "factory",
         "bunker",
         "fort",
-        "supply_model"
+        "supply_model",
+        "supply_dispatch_ticks"
       ],
       "title": "RulesetPublic",
       "type": "object"

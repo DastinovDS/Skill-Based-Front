@@ -1,5 +1,6 @@
 """Road fortifications on the wire (DEC-43, item D, #707): the fog of the toll events (row V4 of
-the table in mechanics.md, section 7), the ``fortify_road`` command and ``EdgeView.forts``.
+the table in mechanics.md, section 7), the ``fortify_road`` command and ``EdgeView.forts``; the
+public dispatch period of the supply (``ruleset_public.supply_dispatch_ticks``, #705).
 
 Expected values come from DEC-43 item D (D8, D9): ``toll_paid`` goes to the payer with its own
 group's opaque id, ``toll_taken`` to the owner of the fortification without any group id; an
@@ -114,3 +115,12 @@ def test_the_forts_of_a_snapshot() -> None:
 def test_a_built_fort_has_no_done_tick() -> None:
     with pytest.raises(ValidationError):
         RoadFort(node=C, owner=0, built=True, done_tick=10)
+
+
+@pytest.mark.parametrize("name", ["mvp-0", "mvp-3", "mvp-4", "test-short"])
+def test_the_public_ruleset_carries_the_dispatch_period(name: str) -> None:
+    """#705: ``supply_dispatch_ticks`` is ``supply.dispatch_ticks`` of the ruleset, so the client's
+    countdown ring is exact from the first snapshot."""
+    rules = load_ruleset(ROOT / "rulesets" / f"{name}.toml")
+    public = RulesetPublic.from_ruleset(rules)
+    assert public.supply_dispatch_ticks == rules.supply.dispatch_ticks

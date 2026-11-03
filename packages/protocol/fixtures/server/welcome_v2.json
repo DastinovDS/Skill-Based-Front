@@ -114,7 +114,8 @@
       "shots": 1
     },
     "fort": null,
-    "supply_model": "lines"
+    "supply_model": "lines",
+    "supply_dispatch_ticks": 10
   },
   "map_id": "diamond",
   "last_seq": 0,

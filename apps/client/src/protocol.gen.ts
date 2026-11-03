@@ -460,6 +460,12 @@ export interface RulesetPublic {
    * otherwise.
    */
   supply_model: SupplyModel;
+  /**
+   * ``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it
+   * (DEC-43, item A6; the same period drives the lines of DEC-41 and the v1 supply), so the
+   * countdown to ``View.me.next_dispatch_tick`` is exact from the first snapshot (#705).
+   */
+  supply_dispatch_ticks: number;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.

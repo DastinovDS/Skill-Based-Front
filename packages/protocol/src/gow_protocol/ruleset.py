@@ -23,7 +23,8 @@ Only what the client uses (AGENTS.md, section 7.1):
   ``bunker``, ``orders.plan_ticks_per_bonus``, the charge prices of the buildings); ``null`` or 0
   under v1;
 - the supply model (DEC-43, ``supply_model``): ``flow`` hides the lines and shows the automatic
-  flow and the leaf shift (``lines`` under v1 and the drawn lines of DEC-41).
+  flow and the leaf shift (``lines`` under v1 and the drawn lines of DEC-41), with the period of
+  the dispatch (``supply_dispatch_ticks``).
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -283,6 +284,10 @@ class RulesetPublic(WireModel):
     """``supply.model`` (DEC-43): ``flow`` is the automatic supply flow with the leaf shift
     (``set_leaf_shift``; the line commands are rejected with ``FEATURE_DISABLED``); ``lines``
     otherwise."""
+    supply_dispatch_ticks: PosInt
+    """``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it
+    (DEC-43, item A6; the same period drives the lines of DEC-41 and the v1 supply), so the
+    countdown to ``View.me.next_dispatch_tick`` is exact from the first snapshot (#705)."""
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -396,4 +401,5 @@ class RulesetPublic(WireModel):
                 toll_charges=rules.fort.toll_charges,
             ),
             supply_model=rules.supply.model,
+            supply_dispatch_ticks=rules.supply.dispatch_ticks,
         )
