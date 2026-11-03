@@ -54,6 +54,10 @@ export interface MatchContext {
   cityUpgrades?: CityDevelopment | null;
   /** `ruleset_public.build.ticks_per_level`: the part done of the tape of an own road build (DEC-28). */
   roadBuildTicks?: number;
+  /** `ruleset_public.supply_dispatch_ticks`: the period of the countdown ring of the supply flow (DEC-43). */
+  supplyDispatchTicks?: number;
+  /** `ruleset_public.fort.build_ticks`: the part done of an own road fortification (DEC-43, item D). */
+  fortBuildTicks?: number;
   /** The sounds of the match (#71); absent: silent (tests, the replay). */
   audio?: MatchAudio;
 }
@@ -94,6 +98,8 @@ export class MatchSession implements RenderSource {
   provinceWarehouse: number | undefined;
   cityUpgrades: CityDevelopment | null | undefined;
   roadBuildTicks: number | undefined;
+  fortBuildTicks: number | undefined;
+  supplyDispatchTicks: number | undefined;
   /** The overcrowding numbers: the pill beside an overcrowded city. */
   capacityTicks: CapacityTicks | undefined;
   buffer: SnapshotBuffer;
@@ -157,6 +163,8 @@ export class MatchSession implements RenderSource {
     this.provinceWarehouse = context.provinceWarehouse;
     this.cityUpgrades = context.cityUpgrades;
     this.roadBuildTicks = context.roadBuildTicks;
+    this.fortBuildTicks = context.fortBuildTicks;
+    this.supplyDispatchTicks = context.supplyDispatchTicks;
     this.capacityTicks =
       context.capacity === undefined
         ? undefined

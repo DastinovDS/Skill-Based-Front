@@ -12,6 +12,7 @@ export const LAYER_ORDER = [
   'background',
   'territory',
   'roads',
+  'forts',
   'nodes',
   'fog',
   'groups',

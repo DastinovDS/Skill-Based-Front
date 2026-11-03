@@ -236,31 +236,37 @@ describe('the node marks: starving, full, bottlenecks', () => {
 });
 
 describe('N4: the countdown to the next dispatch', () => {
-  it('starts full at the first snapshot and empties towards next_dispatch_tick', () => {
+  it("is exact from the first snapshot: the period is the ruleset's, not learned", () => {
     const clock = new DispatchClock();
-    clock.observe(12, 20);
-    expect(clock.fraction(12)).toBe(1);
-    expect(clock.fraction(16)).toBeCloseTo(0.5);
+    clock.setPeriod(10);
+    clock.observe(20);
+    expect(clock.fraction(10)).toBe(1);
+    expect(clock.fraction(15)).toBeCloseTo(0.5);
     expect(clock.fraction(20)).toBe(0);
     // A render tick past the dispatch (the next snapshot is late) stays at 0, never negative.
     expect(clock.fraction(25)).toBe(0);
+    // A render tick before the period began never goes above 1.
+    expect(clock.fraction(4)).toBe(1);
   });
 
-  it('learns the period from two dispatches in a row', () => {
+  it('follows the next dispatch tick the server sends, with the same period', () => {
     const clock = new DispatchClock();
-    clock.observe(18, 20);
-    clock.observe(21, 30);
+    clock.setPeriod(10);
+    clock.observe(20);
+    clock.observe(30);
     expect(clock.fraction(21)).toBeCloseTo(0.9);
     expect(clock.fraction(25)).toBeCloseTo(0.5);
-    // The same next tick again (the next snapshot of the same period) changes nothing.
-    clock.observe(22, 30);
-    expect(clock.fraction(25)).toBeCloseTo(0.5);
   });
 
-  it('knows nothing without a flow', () => {
+  it('knows nothing without a flow or without a period', () => {
     const clock = new DispatchClock();
+    clock.observe(20);
     expect(clock.fraction(10)).toBe(0);
-    clock.observe(10, null);
+    clock.setPeriod(10);
+    clock.observe(null);
+    expect(clock.fraction(10)).toBe(0);
+    clock.setPeriod(0);
+    clock.observe(20);
     expect(clock.fraction(10)).toBe(0);
   });
 });

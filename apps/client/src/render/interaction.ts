@@ -79,6 +79,19 @@ export interface SupplyOverlay {
   readonly flow?: number | null;
 }
 
+/**
+ * The road pick of "Fortify road" (DEC-43, item D; #707; P1 "Ghosts"): the own node whose road is
+ * being picked, the roads a click would fortify (a faint ghost of the line lies on each), and the one
+ * under the pointer (brighter, with the price).
+ */
+export interface FortPick {
+  readonly node: number;
+  readonly edges: readonly number[];
+  readonly hover: number | null;
+  /** The price as the player reads it ("1.5 CP"). */
+  readonly cost: string;
+}
+
 export interface OverlayState {
   readonly selection: SelectionHit | null;
   readonly ghosts: readonly GhostArrow[];
@@ -103,6 +116,8 @@ export interface OverlayState {
    * plus the delay of a planned order (Shift held). `null`: no label.
    */
   readonly eta: EtaMark | null;
+  /** The road pick of a fortification; `null`: not picking. */
+  readonly fortPick?: FortPick | null;
 }
 
 export interface EtaMark {
@@ -125,6 +140,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   reach: [],
   split: [],
   eta: null,
+  fortPick: null,
 };
 
 export interface MapInteraction {

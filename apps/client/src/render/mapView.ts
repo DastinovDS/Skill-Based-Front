@@ -333,6 +333,11 @@ export class MapView {
     if (this.backdrop === null) this.terrainFill.visible = !flat;
   }
 
+  /** The edges of the areas with the area across each: what the road fortifications lie along (#707). */
+  get territoryEdges(): readonly CellEdge[] {
+    return this.edges;
+  }
+
   /** The areas come from a vector file (DEC-36), not from Voronoi cells. */
   get geography(): boolean {
     return !this.convex;

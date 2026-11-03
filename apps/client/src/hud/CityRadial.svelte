@@ -34,7 +34,9 @@
   // warehouse is at its top level) is not drawn; the others spread evenly around the ring.
   const v2 = $derived(orders.v2);
   const province = $derived(menu.target !== null && orders.isProvince(menu.target));
-  const choices = $derived(cityChoices(upgrades, city, v2, province, orders.hasBunker));
+  const choices = $derived(
+    cityChoices(upgrades, city, v2, province, orders.hasBunker, orders.hasFort),
+  );
   const count = $derived(choices.length);
   const items = $derived.by<RadialItem[]>(() => {
     const angles = spreadAngles(count);
@@ -94,6 +96,17 @@
             compact: true,
             // One factory build at a time in a city; the cap of factories is the server's call.
             disabled: city?.factoryBuild != null,
+          };
+        case 'fortify':
+          return {
+            id: 'fortify',
+            icon: 'fortify',
+            label: t('city.fortify'),
+            lines: price(orders.fortCost),
+            key: 'B',
+            compact: true,
+            // The road is picked next: the sector is dimmed by the CP only (a fight does not stop it).
+            disabled: poor(orders.fortCost),
           };
         case 'bunker':
           return {

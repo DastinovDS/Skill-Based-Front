@@ -31,6 +31,8 @@ export function createDevMatch(
       orders: rules.orders,
       capacity: rules.capacity,
       roadBuildTicks: rules.build.ticks_per_level,
+      supplyDispatchTicks: rules.supply_dispatch_ticks,
+      ...(rules.fort === null ? {} : { fortBuildTicks: rules.fort.build_ticks }),
     },
     onServerMessage: (msg) => {
       if (msg.type === 'reach') onReach?.(msg);

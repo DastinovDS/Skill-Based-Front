@@ -211,6 +211,11 @@ export interface RoadInfo {
   readonly gain: UpgradeGain | null;
   /** A level is being built on it now (`EdgeView.build`): it cannot be raised until it is done. */
   readonly building: boolean;
+  /**
+   * The ends of this road that have a fortification (`EdgeView.forts`, DEC-43, item D) the player
+   * knows of: own ones always, an enemy one while the server shows it.
+   */
+  readonly fortNodes: readonly number[];
 }
 
 export interface HudData {
@@ -369,6 +374,7 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
     width: edge.width,
     gain: edge.upgrade_gain,
     building: edge.build !== null,
+    fortNodes: edge.forts.map((fort) => fort.node),
   };
 }
 

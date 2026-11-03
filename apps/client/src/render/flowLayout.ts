@@ -189,26 +189,22 @@ export const IDLE_TEXT: Readonly<Record<FlowIdle, MessageKey>> = {
 };
 
 /**
- * The countdown of the ring (N4): how much of the period until the next dispatch is left. The
- * server sends the tick of the next dispatch (`me.next_dispatch_tick`), not the period, so the
- * period is learned from two dispatches in a row; before that it is the distance to the first one
- * seen (the ring starts full), which is the whole period at the start of a match and a shorter guess
- * after a reconnect (the ring then empties early until the first dispatch corrects it).
+ * The countdown of the ring (N4): how much of the period until the next dispatch is left. The server
+ * sends the tick of the next dispatch (`me.next_dispatch_tick`) and the period itself
+ * (`ruleset_public.supply_dispatch_ticks`), so the ring is exact from the first snapshot; without a
+ * period (a source that has none) it knows nothing and stays empty.
  */
 export class DispatchClock {
   #next: number | null = null;
   #period = 0;
 
-  /** A new snapshot: its tick and `me.next_dispatch_tick`. */
-  observe(tick: number, next: number | null): void {
-    if (next === null) {
-      this.#next = null;
-      this.#period = 0;
-      return;
-    }
-    // The first one seen: the ring starts full and empties by the time left then.
-    if (this.#next === null) this.#period = Math.max(1, next - tick);
-    else if (next > this.#next) this.#period = next - this.#next;
+  /** `ruleset_public.supply_dispatch_ticks`; 0 or less: unknown. */
+  setPeriod(period: number): void {
+    this.#period = period > 0 ? period : 0;
+  }
+
+  /** A new snapshot: `me.next_dispatch_tick`. */
+  observe(next: number | null): void {
     this.#next = next;
   }
 

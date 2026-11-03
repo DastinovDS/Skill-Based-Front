@@ -6,6 +6,9 @@ import { fightPlace, placeKey, type FightPlace } from './fightFx.ts';
 import { HitView, type Punch } from './hitView.ts';
 import { ParticleLayer } from './particles.ts';
 import { ShotView } from './shotView.ts';
+import type { LineMark } from './fortView.ts';
+import { TollView } from './tollView.ts';
+import { tollInfo, type TollInfo } from './tollLayout.ts';
 import type { EnemyAnchors } from './entityView.ts';
 import type { Point } from './camera.ts';
 import {
@@ -69,6 +72,7 @@ export class EffectsView {
   private readonly particles: ParticleLayer;
   private readonly hits: HitView;
   private readonly shots: ShotView;
+  private readonly tolls: TollView;
   /** Where the two sides of each fight stood the last time they were seen (the tokens): ended fights keep it. */
   private readonly contacts = new Map<string, Contacts>();
   private cameraScale = 1;
@@ -79,6 +83,7 @@ export class EffectsView {
   private readonly flagContext: readonly [GraphicsContext, GraphicsContext];
   private captures: CaptureInfo[] = [];
   private bounces: BounceInfo[] = [];
+  private tollList: TollInfo[] = [];
   private readonly arrowAt = new Map<string, BounceArrow>();
   private eventsSeen: readonly EventMsg[] | null = null;
   private eventCount = -1;
@@ -94,6 +99,8 @@ export class EffectsView {
     private readonly radiusOf: (node: number) => number,
     /** The baked shapes drawn in screen px (the plate and chips of the arenas). */
     sprites: SpriteCache,
+    /** Where the toll of a road fortification leaves its line (`FortView.lineAt`, #707). */
+    lineAt: (node: number, edge: number) => LineMark | undefined = () => undefined,
   ) {
     this.layer.addChild(this.arrows);
     const flag = (owner: PlayerId): GraphicsContext =>
@@ -115,6 +122,7 @@ export class EffectsView {
       enemy: ownerColor(me, enemy),
     });
     this.hits = new HitView(layers.layer.effects, map, me, labelResolution, radiusOf);
+    this.tolls = new TollView(layers.layer.effects, map, me, labelResolution, lineAt);
     this.fightView = new FightView(map, layers, me, labelResolution, radiusOf, sprites);
     this.fightView.setContacts((place) => this.contactsAt(place));
   }
@@ -134,6 +142,7 @@ export class EffectsView {
   setScreenResolution(resolution: number): void {
     this.fightView.setScreenResolution(resolution);
     this.hits.setScreenResolution(resolution);
+    this.tolls.setScreenResolution(resolution);
   }
 
   update(
@@ -172,6 +181,20 @@ export class EffectsView {
       scale,
     );
     this.captureRings(frame.tick, tickHz, scale);
+    // The tolls of road fortifications (#707): the beam and the hit go to the same particle pass.
+    punches.push(
+      ...this.tolls.update(
+        (particle) => {
+          this.particles.put(particle);
+        },
+        frame.tick,
+        this.tollList,
+        spots,
+        enemies,
+        tickHz,
+        scale,
+      ),
+    );
     this.particles.end();
     this.drawWaves(frame.tick, tickHz, reduced);
     this.drawFlags(frame.tick, tickHz, scale);
@@ -227,6 +250,7 @@ export class EffectsView {
   destroy(): void {
     this.fightView.destroy();
     this.hits.destroy();
+    this.tolls.destroy();
     this.shots.destroy();
     this.particles.destroy();
     this.arrows.destroy();
@@ -240,7 +264,10 @@ export class EffectsView {
     this.eventCount = events.length;
     this.captures = [];
     this.bounces = [];
+    this.tollList = [];
     for (const event of events) {
+      const toll = tollInfo(event);
+      if (toll !== null) this.tollList.push(toll);
       const capture = captureInfo(event, this.map);
       if (capture !== null) this.captures.push(capture);
       const bounce = bounceInfo(event);

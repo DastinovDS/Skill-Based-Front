@@ -12,6 +12,7 @@ import type {
 } from '../protocol.gen.ts';
 import {
   EMPTY_OVERLAY,
+  type FortPick,
   type MapInteraction,
   type OverlayState,
   type PickHit,
@@ -30,14 +31,19 @@ import {
   type StanceRate,
   type SupplyChoice,
 } from '../hud/radial.ts';
+import { getLocale, tf } from '../i18n/index.ts';
+import { formatCentis } from '../hud/format.ts';
 import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState, type MenuLine } from './supplyState.svelte.ts';
 
-/** A sector of the menu of a city (`factory` and `bunker`: economy v2, DEC-41). */
-export type CityChoice = 'recruit' | 'barracks' | 'warehouse' | 'factory' | 'bunker';
+/**
+ * A sector of the menu of a city (`factory` and `bunker`: economy v2, DEC-41; `fortify`: a road
+ * fortification, DEC-43, item D, which then asks for the road).
+ */
+export type CityChoice = 'recruit' | 'barracks' | 'warehouse' | 'factory' | 'bunker' | 'fortify';
 
 /** A sector of the menu of a group (`release`: economy v2, a gathering plan departs now). */
 export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense' | 'release';
@@ -272,6 +278,16 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.bunker !== null;
   }
 
+  /** The ruleset has road fortifications (`ruleset_public.fort`, DEC-43, item D); `null` hides the feature. */
+  get hasFort(): boolean {
+    return this.#o.rules.fort !== null;
+  }
+
+  /** The price of one road fortification, hundredths of CP (`ruleset_public.fort.cost`); 0 without them. */
+  get fortCost(): number {
+    return this.#o.rules.fort?.cost ?? 0;
+  }
+
   /** The own leaf shift in force (`View.me.leaf_shift`); `null` under lines or before a snapshot. */
   get leafShift(): number | null {
     return this.#o.hud.current?.leafShift ?? null;
@@ -355,6 +371,8 @@ export class OrderController implements MapInteraction {
     const preview = this.#previewTarget();
     const from = this.#selectedGroup()?.node ?? null;
     const candidates = this.#candidates();
+    this.#syncFort();
+    const fortPick = this.#fortPick();
     const beacon = this.#o.hud.beacon;
     const supply = this.#supplyOverlayNow();
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
@@ -362,7 +380,7 @@ export class OrderController implements MapInteraction {
     const eta = this.#eta(reach, preview);
     this.#syncSplitHover(reach, preview);
     this.#syncCaptureHover(preview);
-    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}`;
+    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
@@ -389,6 +407,7 @@ export class OrderController implements MapInteraction {
         terrain: this.ui.current.terrainMode,
         reach: reachNodes,
         split: splitNodes,
+        fortPick,
         eta:
           eta === null || preview === null || from === null
             ? null
@@ -400,6 +419,11 @@ export class OrderController implements MapInteraction {
 
   click(picked: PickHit | null, shift: boolean): void {
     this.#shift = shift;
+    // The road pick of "Fortify road" takes the click first: a road gets the line, anything else cancels.
+    if (this.ui.current.fortFrom !== null) {
+      this.#fortClick(picked);
+      return;
+    }
     // In the road mode a click on an own road that can be raised raises it, on the ordinary map and
     // in the «Supply» mode alike (DEC-28, item 7; #315). Out of the mode a road is its city's area.
     const road = this.#roadTarget(picked);
@@ -523,6 +547,7 @@ export class OrderController implements MapInteraction {
   hover(hit: PickHit | null): void {
     this.#hover = hit;
     this.#syncRoadHover();
+    this.#syncFortHover();
     this.#o.hud.hoverGroup(
       hit?.kind === 'group' ? hit.id : hit?.kind === 'stack' ? { node: hit.node } : null,
     );
@@ -536,6 +561,7 @@ export class OrderController implements MapInteraction {
     return (
       this.#o.hud.selection === null &&
       !this.ui.current.roadMode &&
+      this.ui.current.fortFrom === null &&
       this.ui.current.transferFrom === null &&
       this.ui.current.lineDraft === null &&
       !this.cityMenu.current.open &&
@@ -715,7 +741,72 @@ export class OrderController implements MapInteraction {
       case 'bunker':
         this.cityBuild('build_bunker');
         return;
+      case 'fortify':
+        this.startFortify();
+        return;
     }
+  }
+
+  /**
+   * "Fortify road" (DEC-43, item D; #707): the menu of the own city or province closes and the map
+   * asks for the road (P1 "Ghosts": a faint ghost of the line on each road that has none of this
+   * node yet, the hovered one bright with the price). A click on a ghost sends `fortify_road`; Esc or
+   * a click anywhere else cancels. The price and the rejects are the server's call.
+   */
+  startFortify(): void {
+    const node = this.recruitNode();
+    if (node === null || !this.hasFort || this.#o.send === null) return;
+    this.closeCityMenu();
+    this.ui.patch({ fortFrom: node, fortHover: null, roadMode: false });
+  }
+
+  /** Leaves the road pick of a fortification without sending anything. */
+  cancelFortify(): void {
+    if (this.ui.current.fortFrom !== null) this.ui.patch({ fortFrom: null, fortHover: null });
+  }
+
+  /** The roads of `node` a fortification could be asked for: those it has no line on yet. */
+  #fortRoads(node: number): number[] {
+    const roads = this.#o.hud.current?.roads ?? [];
+    return this.#o.map.edges
+      .filter((edge) => edge.a === node || edge.b === node)
+      .filter((edge) => roads[edge.id]?.fortNodes.includes(node) !== true)
+      .map((edge) => edge.id);
+  }
+
+  /** The pick of the overlay; ends itself when the node is no longer the player's. */
+  #fortPick(): FortPick | null {
+    const node = this.ui.current.fortFrom;
+    if (node === null) return null;
+    return {
+      node,
+      edges: this.#fortRoads(node),
+      hover: this.ui.current.fortHover,
+      cost: tf('city.cost', { cost: formatCentis(this.fortCost, getLocale()) }),
+    };
+  }
+
+  #syncFort(): void {
+    const node = this.ui.current.fortFrom;
+    if (node !== null && !this.#isOwnNode(node)) this.cancelFortify();
+  }
+
+  /** The road under the pointer that a click would fortify. */
+  #syncFortHover(): void {
+    const node = this.ui.current.fortFrom;
+    if (node === null) return;
+    const hit = this.#hover;
+    const edge = hit?.kind === 'edge' && this.#fortRoads(node).includes(hit.id) ? hit.id : null;
+    if (edge !== this.ui.current.fortHover) this.ui.patch({ fortHover: edge });
+  }
+
+  #fortClick(hit: PickHit | null): void {
+    const node = this.ui.current.fortFrom;
+    if (node === null) return;
+    const edge = hit?.kind === 'edge' && this.#fortRoads(node).includes(hit.id) ? hit.id : null;
+    this.cancelFortify();
+    if (edge === null || this.#o.send === null) return;
+    this.#sendCommand({ type: 'fortify_road', node, edge }, null);
   }
 
   /** A sector of the menu of a group: the same as its key. */
@@ -1224,6 +1315,11 @@ export class OrderController implements MapInteraction {
         return true;
       }
     }
+    if (input.code === 'Escape' && this.ui.current.fortFrom !== null) {
+      // The road pick of a fortification: Esc drops it.
+      this.cancelFortify();
+      return true;
+    }
     if (this.ui.current.lineDraft !== null) {
       // Drawing a line: Enter sends it, Backspace takes the last node off, Esc drops it.
       switch (input.code) {
@@ -1369,6 +1465,11 @@ export class OrderController implements MapInteraction {
       case 'KeyR':
         this.recruit();
         return true;
+      case 'KeyB':
+        // "Fortify road" of the selected own city or province (DEC-43, item D): the road is picked next.
+        if (!this.hasFort || this.selectedOwnCity() === null) return false;
+        this.startFortify();
+        return true;
       case 'KeyS':
         this.toggleSplit();
         return true;
@@ -1395,6 +1496,7 @@ export class OrderController implements MapInteraction {
    * at a time, so whoever opens one calls this first.
    */
   #closeMenus(): void {
+    this.cancelFortify();
     this.closeRadial();
     this.supplyMenu.close();
     this.splitMenu.close();
@@ -1421,7 +1523,14 @@ export class OrderController implements MapInteraction {
    * Under economy v2 an own province is selected and has a menu: it can build a bunker (DEC-41, item 12).
    */
   #isUnselectable(id: number): boolean {
-    if (this.v2 && this.hasBunker && this.#isProvince(id) && this.#isOwnNode(id)) return false;
+    if (
+      this.v2 &&
+      (this.hasBunker || this.hasFort) &&
+      this.#isProvince(id) &&
+      this.#isOwnNode(id)
+    ) {
+      return false;
+    }
     return this.#isProvince(id) || this.#isEnemyNode(id);
   }
 
