@@ -149,3 +149,50 @@ describe('pickAt on the areas of a geography (DEC-36, #544)', () => {
     ).not.toBeNull();
   });
 });
+
+describe('pickAt: the ghosts of the road pick of a fortification (P1, #707)', () => {
+  // A ghost far from any road or node: only the ghost can be hit there.
+  const line = [
+    { x: 10_000, y: 10_000 },
+    { x: 10_000, y: 10_100 },
+  ];
+  const forts = [{ edge: 5, line }];
+
+  it('hits the road whose ghost the pointer is near, however far from the road itself', () => {
+    expect(pickAt(map, { x: 10_000, y: 10_050 }, { groups: NONE, forts })).toEqual({
+      kind: 'edge',
+      id: 5,
+    });
+    expect(pickAt(map, { x: 10_010, y: 10_050 }, { groups: NONE, forts })).toEqual({
+      kind: 'edge',
+      id: 5,
+    });
+  });
+
+  it('is 16 px on screen: wider in world units when zoomed out, narrower zoomed in', () => {
+    const near = { x: 10_030, y: 10_050 };
+    expect(pickAt(map, near, { groups: NONE, forts }, 1)).toBeNull();
+    expect(pickAt(map, near, { groups: NONE, forts }, 0.4)?.kind).toBe('edge');
+    expect(pickAt(map, { x: 10_010, y: 10_050 }, { groups: NONE, forts }, 4)).toBeNull();
+  });
+
+  it('takes the nearest ghost when two are near', () => {
+    const two = [
+      { edge: 1, line },
+      { edge: 2, line: line.map((p) => ({ x: p.x + 12, y: p.y })) },
+    ];
+    expect(pickAt(map, { x: 10_003, y: 10_050 }, { groups: NONE, forts: two })).toEqual({
+      kind: 'edge',
+      id: 1,
+    });
+    expect(pickAt(map, { x: 10_010, y: 10_050 }, { groups: NONE, forts: two })).toEqual({
+      kind: 'edge',
+      id: 2,
+    });
+  });
+
+  it('does not change what a click hits while there is no pick', () => {
+    expect(pickAt(map, at, { groups: NONE, forts: [] })).toEqual({ kind: 'node', id: node.id });
+    expect(pickAt(map, { x: 10_000, y: 10_050 }, { groups: NONE })).toBeNull();
+  });
+});

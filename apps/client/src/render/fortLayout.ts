@@ -28,8 +28,10 @@ export const FORT = {
   haloWidth: 14,
   haloAlpha: 0.4,
   haloClear: 3,
-  /** The border run is trimmed where it turns by more than this (degrees). */
+  /** The border run is trimmed where it turns by more than this (degrees)... */
   trim: 38,
+  /** ...or has turned by more than this in all since the crossing (a corner rounded into a gentle curve). */
+  drift: 70,
   /** A second line on the same stretch lies this much further inside the cell. */
   stackStep: 20,
   /** The run reaches this much beyond the last tick. */
@@ -145,15 +147,49 @@ function outwardNormal(edge: CellEdge, node: Point): Point {
   return n;
 }
 
+/** Two points closer than this (world units) are one: the end of an edge and the start of the next. */
+const JOIN = 0.5;
+
+/**
+ * The edges of one cell in order round the polygon, each starting where the previous one ends. The
+ * edges of a Voronoi cell are in that order already; the pieces of a geography come in the order of the
+ * baker's chains, so they are joined by their end points. A cell that does not close is returned in the
+ * order found (the run stops at a gap).
+ */
+export function ringOrder(edges: readonly CellEdge[]): CellEdge[] {
+  const key = (p: Point): string => `${String(p.x)},${String(p.y)}`;
+  const starts = new Map<string, number[]>();
+  edges.forEach((edge, i) => {
+    const k = key(edge.a);
+    starts.set(k, [...(starts.get(k) ?? []), i]);
+  });
+  const used = new Set<number>();
+  const out: CellEdge[] = [];
+  for (let first = 0; first < edges.length; first++) {
+    let at: number | undefined = first;
+    while (at !== undefined && !used.has(at)) {
+      used.add(at);
+      const edge = edges[at] as CellEdge;
+      out.push(edge);
+      at = starts.get(key(edge.b))?.find((j) => !used.has(j));
+    }
+  }
+  return out;
+}
+
+/** How far each side of a vertex the direction of the border is taken from to judge a turn (world units). */
+const TURN_WINDOW = 12;
+
 /**
  * The run of the border of a cell that a fortification at `cross` lies along: from the nearest shared
  * edge, `half` each way, stopping where the shared border ends or turns by more than `FORT.trim`
- * degrees. `null` when the cell has no shared edge (the caller draws a straight stub then).
+ * degrees (a turn is judged over `TURN_WINDOW` on each side, so a corner a geography has rounded
+ * into many short steps still counts). `null` when the cell has no shared edge (the caller draws a
+ * straight stub then).
  */
 export function borderRun(input: RunInput): Run | null {
   const { ring, shared, cross, node, half } = input;
   const n = ring.length;
-  if (n === 0) return null;
   let e = -1;
   let best = Infinity;
   let at: Point = cross;
@@ -171,15 +207,11 @@ export function borderRun(input: RunInput): Run | null {
   });
   const first = ring[e];
   if (first === undefined) return null;
-  const dirOf = (edge: CellEdge): Point => {
-    const l = dist(edge.a, edge.b) || 1;
-    return { x: (edge.b.x - edge.a.x) / l, y: (edge.b.y - edge.a.y) / l };
-  };
-  // Each step: the points reached, the unit direction of the edge walked (forward), the edge.
-  const walk = (dir: 1 | -1): { pts: Point[]; edges: CellEdge[] } => {
+  // The points of the shared border from the crossing outwards, to `reach` along it (no turn limit yet).
+  const reach = half + TURN_WINDOW;
+  const walk = (dir: 1 | -1): Point[] => {
     const pts: Point[] = [];
-    const edges: CellEdge[] = [];
-    let rem = half;
+    let rem = reach;
     let cur = at;
     let i = e;
     for (let guard = 0; guard < n; guard++) {
@@ -195,51 +227,110 @@ export function borderRun(input: RunInput): Run | null {
       rem -= d;
       cur = target;
       const j = (i + dir + n) % n;
-      const nextEdge = ring[j] as CellEdge;
-      if (j === e || !shared(nextEdge)) break;
-      const d1 = dirOf(edge);
-      const d2 = dirOf(nextEdge);
-      // Walking backwards both directions flip; the angle between them is the same.
-      if (turnDegrees(d1, d2) > FORT.trim) break;
+      const next = ring[j] as CellEdge;
+      // The border ends at an edge that is not shared, at a gap, and when it has come full circle.
+      if (j === e || !shared(next) || dist(target, dir > 0 ? next.a : next.b) > JOIN) break;
       i = j;
-      edges.push(nextEdge);
     }
-    return { pts, edges };
+    return pts;
   };
-  const back = walk(-1);
-  const fwd = walk(1);
-  const raw: Point[] = [...back.pts.reverse(), at, ...fwd.pts];
-  // Drop repeated points (a run that starts on a corner), keep the arc length.
+  const raw: Point[] = [...walk(-1).reverse(), at, ...walk(1)];
   const pts: Point[] = [];
-  const s: number[] = [];
+  const arc: number[] = [];
   let total = 0;
-  let s0 = 0;
-  raw.forEach((p) => {
+  let crossing = 0;
+  for (const p of raw) {
     const prev = pts[pts.length - 1];
     if (prev !== undefined) {
       const d = dist(prev, p);
       if (d < 0.01) {
-        if (dist(p, at) < 0.02) s0 = total;
-        return;
+        if (dist(p, at) < 0.02) crossing = total;
+        continue;
       }
       total += d;
     }
-    if (dist(p, at) < 0.02) s0 = total;
+    if (dist(p, at) < 0.02) crossing = total;
     pts.push(p);
-    s.push(total);
-  });
+    arc.push(total);
+  }
   if (pts.length < 2) return null;
+  // The point of the raw polyline at arc length `s`.
+  const sample = (s: number): Point => {
+    const t = Math.max(0, Math.min(total, s));
+    let j = 0;
+    while (j < pts.length - 2 && (arc[j + 1] ?? 0) < t) j++;
+    const a = pts[j] as Point;
+    const b = pts[j + 1] as Point;
+    const span = (arc[j + 1] ?? 0) - (arc[j] ?? 0);
+    const u = span > 0 ? (t - (arc[j] ?? 0)) / span : 0;
+    return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
+  };
+  // The direction of the border round a point: the chord over `TURN_WINDOW` each way.
+  const headingAt = (s: number): Point => {
+    const before = sample(s - TURN_WINDOW);
+    const after = sample(s + TURN_WINDOW);
+    return { x: after.x - before.x, y: after.y - before.y };
+  };
+  const heading0 = headingAt(crossing);
+  const bad = (k: number): boolean => {
+    const s = arc[k] ?? 0;
+    const behind = Math.min(TURN_WINDOW, s);
+    const ahead = Math.min(TURN_WINDOW, total - s);
+    if (behind < 1 || ahead < 1) return false;
+    const p = pts[k] as Point;
+    const before = sample(s - behind);
+    const after = sample(s + ahead);
+    const sharp =
+      turnDegrees(
+        { x: p.x - before.x, y: p.y - before.y },
+        { x: after.x - p.x, y: after.y - p.y },
+      ) > FORT.trim;
+    return sharp || turnDegrees(heading0, headingAt(s)) > FORT.drift;
+  };
+  // The first sharp turn each side of the crossing ends the run there.
+  let lo = 0;
+  for (let k = pts.length - 1; k >= 0; k--) {
+    if ((arc[k] ?? 0) < crossing - 0.01 && bad(k)) {
+      lo = k;
+      break;
+    }
+  }
+  let hi = pts.length - 1;
+  for (let k = 0; k < pts.length; k++) {
+    if ((arc[k] ?? 0) > crossing + 0.01 && bad(k)) {
+      hi = k;
+      break;
+    }
+  }
+  // Cut to `half` each way, by interpolation.
+  const sLo = Math.max(arc[lo] ?? 0, crossing - half);
+  const sHi = Math.min(arc[hi] ?? total, crossing + half);
+  const cut: Point[] = [sample(sLo)];
+  const cutArc: number[] = [0];
+  let acc = 0;
+  for (let k = 0; k < pts.length; k++) {
+    const s = arc[k] ?? 0;
+    if (s <= sLo + 0.01 || s >= sHi - 0.01) continue;
+    const p = pts[k] as Point;
+    acc += dist(cut[cut.length - 1] as Point, p);
+    cut.push(p);
+    cutArc.push(acc);
+  }
+  const end = sample(sHi);
+  acc += dist(cut[cut.length - 1] as Point, end);
+  cut.push(end);
+  cutArc.push(acc);
+  if (cut.length < 2 || acc < 1) return null;
   const normals: Point[] = [];
-  for (let k = 0; k < pts.length - 1; k++) {
-    const a = pts[k] as Point;
-    const b = pts[k + 1] as Point;
+  for (let k = 0; k < cut.length - 1; k++) {
+    const a = cut[k] as Point;
+    const b = cut[k + 1] as Point;
     const l = dist(a, b) || 1;
     let nx = (b.y - a.y) / l;
     let ny = -(b.x - a.x) / l;
     // Out of the cell: the side the ring edge this piece lies on says.
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const home = nearestEdge(ring, mid, shared) ?? first;
-    const out = outwardNormal(home, node);
+    const out = outwardNormal(nearestEdge(ring, mid, shared) ?? first, node);
     if (nx * out.x + ny * out.y < 0) {
       nx = -nx;
       ny = -ny;
@@ -251,7 +342,15 @@ export function borderRun(input: RunInput): Run | null {
   ringAt += dist(first.a, first.b) * along;
   let ringLength = 0;
   for (const edge of ring) ringLength += dist(edge.a, edge.b);
-  return { pts, s, s0, len: total, normals, ringAt, ringLength };
+  return {
+    pts: cut,
+    s: cutArc,
+    s0: Math.max(0, Math.min(acc, crossing - sLo)),
+    len: acc,
+    normals,
+    ringAt,
+    ringLength,
+  };
 }
 
 /** The ring edge a point of the run lies on (the nearest shared one). */

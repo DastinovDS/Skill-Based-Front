@@ -8,6 +8,7 @@ import {
   borderRun,
   dashAlong,
   markScale,
+  ringOrder,
   runLine,
   runPoint,
   runStrip,
@@ -211,7 +212,7 @@ export class FortView {
   private ringOf(node: number): readonly CellEdge[] {
     let ring = this.rings.get(node);
     if (ring === undefined) {
-      ring = this.edges().filter((e) => e.cell === node);
+      ring = ringOrder(this.edges().filter((e) => e.cell === node));
       this.rings.set(node, ring);
     }
     return ring;

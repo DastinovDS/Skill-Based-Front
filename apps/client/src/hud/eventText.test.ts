@@ -47,6 +47,32 @@ describe('eventText', () => {
     expect(toastOf(event('line_cut', line), 0, names)?.tone).toBe('warn');
   });
 
+  it('tells road fortifications (DEC-43, item D): a line done, lost with its city, a toll paid or taken (#707)', () => {
+    setLocale('en');
+    for (const kind of ['road_fort_built', 'road_fort_destroyed', 'toll_paid', 'toll_taken']) {
+      expect(isLogged(kind), kind).toBe(true);
+      expect(HIDDEN_EVENT_KINDS.has(kind), kind).toBe(false);
+    }
+    expect(eventText(event('road_fort_built', { player: 0, node: 2, edge: 7 }), 0, names)).toBe(
+      'The line of Cedar on road 7 is ready: it takes its toll',
+    );
+    const lost = { player: 0, node: 2, edge: 7, built: true };
+    expect(eventText(event('road_fort_destroyed', lost), 0, names)).toBe(
+      'The line of Cedar on road 7 is lost with the city',
+    );
+    expect(eventText(event('road_fort_destroyed', { ...lost, built: false }), 0, names)).toBe(
+      'The unfinished line of Cedar on road 7 is lost with the city',
+    );
+    const paid = { player: 0, group: 'g', node: 3, edge: 7, charges: 2 };
+    expect(eventText(event('toll_paid', paid), 0, names)).toBe(
+      'Your group paid a toll at Dune: charges lost 2',
+    );
+    const taken = { player: 0, node: 1, edge: 7, charges: 1 };
+    expect(eventText(event('toll_taken', taken), 0, names)).toBe(
+      'Your line at Birch took a toll: charges taken 1',
+    );
+  });
+
   it('reads the losses of the viewer from losses_<player>', () => {
     setLocale('en');
     const fight = { node: 3, edge: null, losses_0: 1, losses_1: 4 };
@@ -179,6 +205,7 @@ describe('the fields the feed and the toasts read (ARC-02)', () => {
     { kind: 'barracks' },
     { kind: 'warehouse' },
     { stance: 'war' },
+    { built: false },
   ];
 
   it.each(kinds)('%s: only fields the server sends', (kind) => {
