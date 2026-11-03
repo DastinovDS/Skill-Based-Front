@@ -10,7 +10,10 @@
   The toy: one fixed map, the Voronoi territory of the real client, roads of the real style, groups as inverted triangles.
   Forts are drawn from a baked-sprite cache (AGENTS.md 7.2): the cache size per look is the "baked" number in each panel header.
   Marks keep a minimum size on the screen when zoomed out (like the construction plate, ui-style 9.3), geometry does not.
-  Address state: #a=0&b=3&view=1&toll=0&step=7&mode=supply&zoom=1&gray=0&rm=0&cnt=0&t=1.7 (t freezes the step at that second).
+  Round 2 (owner feedback, #707): the default view is now the owner's sketch, a fortification as a segment of the territory border
+  (B1..B3: 3, 5 and 7 blocks, block width and gap fixed, the count is what fits), on a sharp bend or a curve of the border, with the toll
+  as the T5 ripple plus the combat hit of the fight (H1..H3, ui-style 9.9 and 29). Round 1 (F1..F6, T1..T6) is behind "Round 1".
+  Address state: #r1=0&a=1&b=2&view=1&hit=1&toll=4&map=bend&step=7&mode=supply&zoom=1&gray=0&rm=0&cnt=0&t=1.7 (t freezes the step at that second).
   window.__fort exposes the state and a few helpers for checks.
 -->
 <html lang="en">
@@ -176,6 +179,9 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
         justify-items: stretch;
       }
+      .panels.v6.n3 canvas {
+        aspect-ratio: 4 / 5;
+      }
       .panel {
         background: var(--surface);
         border: 1px solid var(--border);
@@ -291,17 +297,21 @@
         <div class="seg" id="zoomSeg" role="group" aria-label="Zoom">
           <button data-z="0.45">0.45</button><button data-z="1">1</button><button data-z="2">2</button>
         </div>
+        <div class="seg" id="mapSeg" role="group" aria-label="Border">
+          <button data-b="bend">Sharp bend</button><button data-b="curve">Curve</button>
+        </div>
         <div class="seg" id="viewSeg" role="group" aria-label="Panels">
-          <button data-v="1">1</button><button data-v="2">Compare 2</button><button data-v="6">All 6</button>
+          <button data-v="1">1</button><button data-v="2">Compare 2</button><button data-v="6">All</button>
         </div>
         <span class="sp"></span>
+        <label><input type="checkbox" id="r1" /> Round 1</label>
         <label><input type="checkbox" id="cnt" /> Counter</label>
         <label><input type="checkbox" id="gray" /> Grayscale</label>
         <label><input type="checkbox" id="rm" /> Less motion</label>
       </div>
       <div class="grp"><span class="gl" id="glA">Look</span><nav class="chips" id="gA" aria-label="Look of the fortification"></nav></div>
       <div class="grp" id="rowB"><span class="gl">Look B</span><nav class="chips" id="gB" aria-label="Look of the fortification, panel B"></nav></div>
-      <div class="grp"><span class="gl">Toll</span><nav class="chips tog" id="gT" aria-label="How the toll is shown"></nav></div>
+      <div class="grp"><span class="gl" id="glT">Toll</span><nav class="chips tog" id="gT" aria-label="How the toll is shown"></nav></div>
       <div class="panels v1" id="panels"></div>
       <div class="ctl">
         <button id="prev" aria-label="Previous state">&#9664; Prev</button>
@@ -339,40 +349,55 @@
         const easeOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
         const colOf = (o) => (o === 'me' ? C.you : o === 'en' ? C.enemy : C.nstroke);
 
-        const NODES = {
-          K: { kind: 'cap', own: 'me', x: 130, y: 300, name: 'Keep', gar: 3 },
-          B: { kind: 'city', own: 'me', x: 290, y: 190, name: 'Bryn', gar: 2 },
-          Q: { kind: 'prov', own: 'me', x: 280, y: 420, name: 'Quay', gar: 1 },
-          A: { kind: 'city', own: 'me', x: 440, y: 300, name: 'Alder', gar: 1 },
-          E: { kind: 'city', own: 'en', x: 590, y: 190, name: 'Eston', gar: 2 },
-          P: { kind: 'prov', own: 'en', x: 600, y: 420, name: 'Pike', gar: 1 },
-          F: { kind: 'cap', own: 'en', x: 760, y: 300, name: 'Fenn', gar: 3 },
-          G: { kind: 'city', own: 'en', x: 880, y: 160, name: 'Gale', gar: 2 },
-          H: { kind: 'city', own: 'en', x: 900, y: 450, name: 'Hale', gar: 2 },
-          N1: { kind: 'city', own: 'ne', x: 440, y: 540, name: 'Marsh', gar: 0 },
-          N2: { kind: 'prov', own: 'ne', x: 460, y: 70, name: 'Moor', gar: 0 },
-          N3: { kind: 'prov', own: 'ne', x: 120, y: 520, name: 'Dune', gar: 0 },
-          N4: { kind: 'prov', own: 'ne', x: 140, y: 100, name: 'Fell', gar: 0 },
+        // two borders: "bend" has a sharp bend at the tip of the city's cell, "curve" a border made of many short steps (a ring of nodes facing a ring)
+        const polar = (cx, cy, r, deg) => [Math.round(cx + r * Math.cos((deg * Math.PI) / 180)), Math.round(cy + r * Math.sin((deg * Math.PI) / 180))];
+        const nd = (kind, own, pos, name, gar) => ({ kind, own, x: pos[0], y: pos[1], name, gar: gar || 0 });
+        const MAPDEFS = {
+          bend: {
+            shift: [0, 0],
+            nodes: {
+              K: nd('cap', 'me', [130, 300], 'Keep', 3),
+              B: nd('city', 'me', [290, 190], 'Bryn', 2),
+              Q: nd('prov', 'me', [280, 420], 'Quay', 1),
+              A: nd('city', 'me', [440, 300], 'Alder', 1),
+              E: nd('city', 'en', [590, 190], 'Eston', 2),
+              P: nd('prov', 'en', [600, 420], 'Pike', 1),
+              F: nd('cap', 'en', [760, 300], 'Fenn', 3),
+              G: nd('city', 'en', [880, 160], 'Gale', 2),
+              H: nd('city', 'en', [900, 450], 'Hale', 2),
+              N1: nd('city', 'ne', [440, 540], 'Marsh'),
+              N2: nd('prov', 'ne', [460, 70], 'Moor'),
+              N3: nd('prov', 'ne', [120, 520], 'Dune'),
+              N4: nd('prov', 'ne', [140, 100], 'Fell'),
+            },
+            edges: [['K', 'B', 2], ['K', 'Q', 1], ['B', 'A', 2], ['A', 'E', 1], ['A', 'P', 1], ['E', 'F', 1], ['P', 'F', 1], ['F', 'G', 1], ['F', 'H', 1], ['Q', 'N1', 1], ['N1', 'P', 1], ['B', 'N2', 1], ['N2', 'E', 1], ['B', 'N4', 1], ['K', 'N3', 1]],
+          },
+          curve: {
+            shift: [-10, 52],
+            nodes: {
+              K: nd('cap', 'me', [250, 300], 'Keep', 3),
+              o1: nd('prov', 'me', polar(250, 300, 190, -60), 'Fell', 1),
+              B: nd('city', 'me', polar(250, 300, 190, -30), 'Bryn', 2),
+              A: nd('city', 'me', polar(250, 300, 190, 0), 'Alder', 1),
+              Q: nd('prov', 'me', polar(250, 300, 190, 30), 'Quay', 1),
+              o2: nd('prov', 'me', polar(250, 300, 190, 60), 'Dune', 1),
+              e2: nd('prov', 'en', polar(250, 300, 320, -45), 'Moor'),
+              G: nd('city', 'en', polar(250, 300, 320, -30), 'Gale', 2),
+              e1: nd('prov', 'en', polar(250, 300, 320, -15), 'Reed'),
+              E: nd('city', 'en', polar(250, 300, 320, 0), 'Eston', 2),
+              P: nd('prov', 'en', polar(250, 300, 320, 15), 'Pike', 1),
+              H: nd('city', 'en', polar(250, 300, 320, 30), 'Hale', 2),
+              e3: nd('prov', 'en', polar(250, 300, 320, 45), 'Marsh'),
+              F: nd('cap', 'en', [740, 300], 'Fenn', 3),
+            },
+            edges: [['K', 'B', 2], ['K', 'Q', 1], ['B', 'A', 2], ['A', 'E', 1], ['A', 'P', 1], ['E', 'F', 1], ['P', 'F', 1], ['F', 'G', 1], ['F', 'H', 1], ['B', 'o1', 1], ['Q', 'o2', 1], ['E', 'e1', 1], ['G', 'e2', 1], ['H', 'e3', 1]],
+          },
         };
-        const IDS = Object.keys(NODES);
-        for (const id of IDS) NODES[id].id = id;
-        const EDGES = [
-          ['K', 'B', 2],
-          ['K', 'Q', 1],
-          ['B', 'A', 2],
-          ['A', 'E', 1],
-          ['A', 'P', 1],
-          ['E', 'F', 1],
-          ['P', 'F', 1],
-          ['F', 'G', 1],
-          ['F', 'H', 1],
-          ['Q', 'N1', 1],
-          ['N1', 'P', 1],
-          ['B', 'N2', 1],
-          ['N2', 'E', 1],
-          ['B', 'N4', 1],
-          ['K', 'N3', 1],
-        ].map(([a, b, w]) => ({ a, b, w }));
+        let NODES = {};
+        let IDS = [];
+        let EDGES = [];
+        let CELLS = [];
+        let CUR_MAP = 'bend';
         const nodeR = (N) => (N.kind === 'prov' ? 6.5 : N.kind === 'cap' ? 17 : 14);
 
         /* ============================================================ territory cells (the real client uses Voronoi) */
@@ -396,18 +421,28 @@
           }
           return out;
         }
-        const CELLS = IDS.map((id, i) => {
-          let poly = [
-            { x: 0, y: 0, t: -1 },
-            { x: W, y: 0, t: -1 },
-            { x: W, y: H, t: -1 },
-            { x: 0, y: H, t: -1 },
-          ];
-          IDS.forEach((o, j) => {
-            if (j !== i) poly = clipHalf(poly, NODES[id], NODES[o], j);
+        function useMap(id) {
+          CUR_MAP = id;
+          const def = MAPDEFS[id];
+          NODES = {};
+          for (const k of Object.keys(def.nodes)) NODES[k] = Object.assign({ id: k }, def.nodes[k]);
+          IDS = Object.keys(NODES);
+          EDGES = def.edges.map(([a, b, w]) => ({ a, b, w }));
+          CHAINS.clear();
+          CELLS = IDS.map((id2, i) => {
+            let poly = [
+              { x: 0, y: 0, t: -1 },
+              { x: W, y: 0, t: -1 },
+              { x: W, y: H, t: -1 },
+              { x: 0, y: H, t: -1 },
+            ];
+            IDS.forEach((o, j) => {
+              if (j !== i) poly = clipHalf(poly, NODES[id2], NODES[o], j);
+            });
+            return { id: id2, poly };
           });
-          return { id, poly };
-        });
+        }
+        const CHAINS = new Map();
 
         function rng(seed) {
           return () => {
@@ -650,9 +685,198 @@
         const fullMask = (L) => (1 << L.parts.length) - 1;
         const maskAt = (L, k) => L.order.slice(0, k).reduce((m, i) => m | (1 << i), 0);
 
+        /* ============================================================ round 2: the fortification as a segment of the territory border */
+        // The owner's sketch: a straight base line with wide, low, outlined blocks on top of it, drawn in the style of the border
+        // line, lying ALONG the border where the road crosses it (bending with it), blocks on the outer side towards the next node.
+        // Block width and gap are fixed; the number of blocks is what fits the segment (3, 5, 7).
+        const R2 = [
+          { id: 'short', n: 'Short', line: 'outlined blocks, thin base line', len: 56, bw: 12, gap: 8, h: 8, lw: 3.2, fill: 'none', rim: 2.2 },
+          { id: 'mid', n: 'Medium', line: 'filled blocks, medium base line', len: 96, bw: 12, gap: 8, h: 10, lw: 4.2, fill: 'tint', rim: 2.4 },
+          { id: 'long', n: 'Long', line: 'outlined blocks with a second inner line, heavy base line', len: 136, bw: 12, gap: 8, h: 13, lw: 5.6, fill: 'none', rim: 3.2, heavy: true },
+        ];
+        R2.forEach((V) => (V.count = Math.max(1, Math.floor((V.len + V.gap) / (V.bw + V.gap)))));
+        // the combat hit language of the game (ui-style 9.9, 29; fightImpact.ts): a ring in the lightened colour of the shooter, a white
+        // additive flash, square sparks in a cone away from the shooter, shards of what was lost, the token pops, "-N" rises; SH1 tracer
+        // K: the strength constant (FIGHT_FX_STRENGTH is 1.6 in the game: "Stronger")
+        const HITS = [
+          { id: 'light', n: 'Light', tHit: 0.05, K: 1.0, sparks: 5, tracer: false, shards: false, pop: 0.15, rings: 1, grow: 1, rest: 0.3, cost: 'the line ripple plus ring, flash and 5 sparks from the existing fight particle atlas, one pop scale on the token; nothing new baked, no tracer' },
+          { id: 'combat', n: 'Combat', tHit: 0.22, K: 1.0, sparks: 9, tracer: true, shards: true, pop: 0.35, rings: 1, grow: 1, rest: 0.42, cost: 'as a real shot in a fight at strength medium: an SH1 tracer from a block (one pooled Graphics), ring, flash, 9 sparks and one shard per lost charge in the same ParticleContainers, pop 1.35' },
+          { id: 'heavy', n: 'Heavy', tHit: 0.22, K: 1.6, sparks: 9, tracer: true, shards: true, pop: 0.5, rings: 2, grow: 1.25, rest: 0.42, cost: 'as Combat at the game strength "Stronger" (1.6): 14 sparks, bigger flash and ring, a second ring, the blocks swell and flash; about +40% of Combat, still one particle pass' },
+        ];
+        const lighten = (hex, a) => {
+          const v = parseInt(hex.slice(1), 16);
+          const m = (c) => Math.round(c + (255 - c) * a);
+          return `rgb(${m(v >> 16)},${m((v >> 8) & 255)},${m(v & 255)})`;
+        };
+
+        // the run of the own cell's border that lies along the road crossing: a polyline, arc length s, centred (s0) on the crossing
+        function borderChain(node, to, half) {
+          half = Math.round(half);
+          const key = `${node}|${to}|${half}`;
+          if (CHAINS.has(key)) return CHAINS.get(key);
+          const P = CELLS[IDS.indexOf(node)].poly;
+          const n = P.length;
+          const ti = IDS.indexOf(to);
+          let e = -1;
+          for (let i = 0; i < n; i++)
+            if (P[i].t === ti) {
+              e = i;
+              break;
+            }
+          if (e < 0) {
+            CHAINS.set(key, null);
+            return null;
+          }
+          const N = NODES[node];
+          const T = NODES[to];
+          const X0 = { x: (N.x + T.x) / 2, y: (N.y + T.y) / 2 };
+          const kind = T.own;
+          const ok = (i) => {
+            const t = P[i].t;
+            return t >= 0 && NODES[IDS[t]].own === kind;
+          };
+          const walk = (dir) => {
+            const out = [];
+            let rem = half;
+            let cur = X0;
+            let i = e;
+            for (let guard = 0; guard < 40; guard++) {
+              const nv = dir > 0 ? P[(i + 1) % n] : P[i];
+              const d = Math.hypot(nv.x - cur.x, nv.y - cur.y);
+              if (d >= rem) {
+                out.push({ x: cur.x + ((nv.x - cur.x) * rem) / d, y: cur.y + ((nv.y - cur.y) * rem) / d });
+                break;
+              }
+              out.push({ x: nv.x, y: nv.y });
+              rem -= d;
+              cur = nv;
+              i = dir > 0 ? (i + 1) % n : (i - 1 + n) % n;
+              if (!ok(i)) break;
+            }
+            return out;
+          };
+          const pts0 = [...walk(-1).reverse(), X0, ...walk(1)];
+          const pts = [];
+          let s = 0;
+          let s0 = 0;
+          pts0.forEach((p, i) => {
+            if (i > 0) {
+              const d = Math.hypot(p.x - pts0[i - 1].x, p.y - pts0[i - 1].y);
+              if (d > 0.01) s += d;
+              else {
+                if (Math.hypot(p.x - X0.x, p.y - X0.y) < 0.02) s0 = s;
+                return;
+              }
+            }
+            if (Math.hypot(p.x - X0.x, p.y - X0.y) < 0.02) s0 = s;
+            pts.push({ x: p.x, y: p.y, s });
+          });
+          const segs = [];
+          for (let j = 0; j < pts.length - 1; j++) {
+            const a = pts[j];
+            const b = pts[j + 1];
+            const d = Math.hypot(b.x - a.x, b.y - a.y);
+            const tx = (b.x - a.x) / d;
+            const ty = (b.y - a.y) / d;
+            let nx = ty;
+            let ny = -tx;
+            if (nx * ((a.x + b.x) / 2 - N.x) + ny * ((a.y + b.y) / 2 - N.y) < 0) {
+              nx = -nx;
+              ny = -ny;
+            }
+            segs.push({ tx, ty, nx, ny });
+          }
+          const ch = { pts, segs, len: s, s0 };
+          CHAINS.set(key, ch);
+          return ch;
+        }
+        // a point of the chain at arc length s, with its outward normal (averaged at a vertex, with a miter factor m)
+        function chainPt(ch, s) {
+          s = clamp(s, 0, ch.len);
+          let j = 0;
+          while (j < ch.segs.length - 1 && ch.pts[j + 1].s < s) j++;
+          const a = ch.pts[j];
+          const b = ch.pts[j + 1];
+          const u = (s - a.s) / Math.max(1e-6, b.s - a.s);
+          const sg = ch.segs[j];
+          let nx = sg.nx;
+          let ny = sg.ny;
+          let m = 1;
+          const atA = u < 0.001 && j > 0;
+          const atB = u > 0.999 && j < ch.segs.length - 1;
+          if (atA || atB) {
+            const o = ch.segs[atA ? j - 1 : j + 1];
+            nx = sg.nx + o.nx;
+            ny = sg.ny + o.ny;
+            const l = Math.hypot(nx, ny) || 1;
+            nx /= l;
+            ny /= l;
+            m = 1 / Math.max(0.45, nx * sg.nx + ny * sg.ny);
+          }
+          return { x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u), tx: sg.tx, ty: sg.ty, nx, ny, m };
+        }
+        const chainS = (ch, a0, a1) => {
+          const lo = clamp(ch.s0 + a0, 0, ch.len);
+          const hi = clamp(ch.s0 + a1, 0, ch.len);
+          const ss = [lo];
+          ch.pts.forEach((p) => p.s > lo + 0.01 && p.s < hi - 0.01 && ss.push(p.s));
+          ss.push(hi);
+          return ss;
+        };
+        // the polyline of the chain between a0 and a1 (relative to the crossing), moved off the border by `off` (outward positive)
+        function chainLine(ch, a0, a1, off) {
+          return chainS(ch, a0, a1).map((s) => {
+            const q = chainPt(ch, s);
+            return { x: q.x + q.nx * off * q.m, y: q.y + q.ny * off * q.m };
+          });
+        }
+        // a strip between offsets h0 and h1: a block that follows the border and stays perpendicular to it
+        function chainStrip(ch, a0, a1, h0, h1) {
+          const ss = chainS(ch, a0, a1);
+          const A = [];
+          const B = [];
+          for (const s of ss) {
+            const q = chainPt(ch, s);
+            A.push({ x: q.x + q.nx * h0 * q.m, y: q.y + q.ny * h0 * q.m });
+            B.push({ x: q.x + q.nx * h1 * q.m, y: q.y + q.ny * h1 * q.m });
+          }
+          return A.concat(B.reverse());
+        }
+        // block width and gap are fixed; the count is what fits. Zoomed out the rhythm simplifies: about half the blocks, wider (never below 3)
+        function blockLayout(V, mk, z) {
+          const w = V.bw * mk;
+          const gap = V.gap * mk;
+          const Lw = V.len * mk;
+          let n = V.count;
+          let ww = w;
+          if (z <= 0.6 && n > 3) {
+            n = Math.max(3, Math.round(n / 2));
+            ww = Math.min((Lw - (n - 1) * gap) / n, 2.2 * w);
+          }
+          const used = n * ww + (n - 1) * gap;
+          const cs = Array.from({ length: n }, (_, i) => -used / 2 + ww / 2 + i * (ww + gap));
+          return { n, ww, gg: gap, h: V.h * mk, used, cs };
+        }
+        function fortFrame2(f, V) {
+          const mk = CUR_MK;
+          const half = (V.len * mk) / 2 + 8 * mk;
+          const ch = borderChain(f.node, f.to, half);
+          const inset = f.off > OFF1 ? (f.off - OFF1) * mk : 0;
+          if (!ch) return { ch: null };
+          const pt = (a) => {
+            const q = chainPt(ch, ch.s0 + clamp(a, -ch.s0, ch.len - ch.s0));
+            return { x: q.x - q.nx * inset * q.m, y: q.y - q.ny * inset * q.m, nx: q.nx, ny: q.ny, tx: q.tx, ty: q.ty };
+          };
+          const c = pt(0);
+          return { ch, inset, pt, nodeId: f.node, x: c.x, y: c.y, ux: c.nx, uy: c.ny, nx: c.tx, ny: c.ty, half: V.len * mk * 0.5, V, mk };
+        }
+        // where along the road, from the far end, the line sits: the border is at half of it, a stacked line a little further in
+        const fortSF = (f, L) => (CUR_SET === 'r1' ? L / 2 + fortOff(f) : L / 2 + (f.off > OFF1 ? (f.off - OFF1) * CUR_MK : 0));
+
         /* ============================================================ geometry helpers */
         // zoomed out, marks grow (min size on screen), so a second stacked line keeps its gap in marks, not in world units
         let CUR_MK = 1;
+        let CUR_SET = 'r2';
         const fortOff = (f) => (f.off > OFF1 ? OFF1 + (f.off - OFF1) * CUR_MK : f.off);
         function fortFrame(f) {
           const A = NODES[f.node];
@@ -663,7 +887,9 @@
           const ux = dx / L;
           const uy = dy / L;
           const off = fortOff(f);
-          return { x: (A.x + B.x) / 2 - ux * off, y: (A.y + B.y) / 2 - uy * off, ux, uy, nx: -uy, ny: ux, L };
+          const x = (A.x + B.x) / 2 - ux * off;
+          const y = (A.y + B.y) / 2 - uy * off;
+          return { x, y, ux, uy, nx: -uy, ny: ux, L, pt: (a) => ({ x: x - uy * a, y: y + ux * a, nx: ux, ny: uy }) };
         }
         function roadPoint(from, to, s) {
           const A = NODES[from];
@@ -707,7 +933,7 @@
             .slice()
             .sort((a, b) => a.off - b.off)
             .forEach((f) => {
-              const sF = L / 2 + fortOff(f);
+              const sF = fortSF(f, L);
               const tc = DELAY + (sF - S0) / SPEED;
               const pay = Math.min(Math.ceil(o.u / 3), c);
               tolls.push({ tc, n: pay, c0: c, c1: c - pay, fort: f.id, mine: o.mine, owner: o.owner, u: o.u, from: o.from, to: o.to, sF });
@@ -816,6 +1042,8 @@
               break;
             }
           }
+          const sh = MAPDEFS[CUR_MAP].shift;
+          sc.focus = [sc.focus[0] + sh[0], sc.focus[1] + sh[1]];
           return sc;
         }
 
@@ -828,6 +1056,7 @@
           { id: 'ripple', n: 'Ripple', rest: 0.3, cost: 'one ring sprite scaled and faded, one strip sprite, ticks as 1 sprite each' },
           { id: 'trail', n: 'Trail', rest: 0.5, cost: 'the same pooled square sprite as Shed dots, placed on the road and faded' },
         ];
+        const tollDef = (S) => (S.r1 ? TOLLS : HITS)[S.toll];
         // a "stop" frame for Less motion: the moment the effect is clearest, held 1.2 s
         const HOLD = 1.2;
 
@@ -1337,6 +1566,7 @@
             return this.sc.tolls.filter((r) => r.fort === fortId);
           }
           forts() {
+            if (!this.S.r1) return this.forts2();
             const g = this.g;
             const S = this.S;
             const li = S.look;
@@ -1371,12 +1601,12 @@
               for (const r of this.tollsOf(f.id)) {
                 const d = this.dEff(r);
                 if (d < 0) continue;
-                if (TOLLS[S.toll].id === 'bite') {
+                if (tollDef(S).id === 'bite') {
                   const q = clamp(d / 0.3, 0, 1);
                   sx = 1 + 0.7 * Math.sin(Math.PI * Math.min(1, q * 1.15));
                   flash = Math.max(flash, 0.9 * (1 - q));
-                } else if (TOLLS[S.toll].id === 'float' || TOLLS[S.toll].id === 'trail') flash = Math.max(flash, 0.4 * clamp(1 - d / 0.25, 0, 1));
-                else if (TOLLS[S.toll].id === 'shed' || TOLLS[S.toll].id === 'pips') flash = Math.max(flash, 0.35 * clamp(1 - Math.abs(d - 0.28) / 0.25, 0, 1));
+                } else if (tollDef(S).id === 'float' || tollDef(S).id === 'trail') flash = Math.max(flash, 0.4 * clamp(1 - d / 0.25, 0, 1));
+                else if (tollDef(S).id === 'shed' || tollDef(S).id === 'pips') flash = Math.max(flash, 0.35 * clamp(1 - Math.abs(d - 0.28) / 0.25, 0, 1));
               }
               g.save();
               g.translate(fr.x, fr.y);
@@ -1401,6 +1631,250 @@
               if (S.cnt && f.mode === 'built' && ['stack', 'collect', 'pay'].includes(this.stepId)) this.counter(f, fr, k);
             }
           }
+          /* ---- round 2: the border-segment fortification */
+          forts2() {
+            const S = this.S;
+            const V = R2[S.look];
+            const k = this.mk;
+            const def = tollDef(S);
+            const todo = [];
+            const marks = [];
+            for (const f of this.sc.forts) {
+              const fr = fortFrame2(f, V);
+              if (!fr.ch) continue;
+              const o = { p: 1, alpha: 1, grow: 1, flash: 0 };
+              if (f.mode === 'break') {
+                this.breakFort2(f, V, fr, clamp(f.brk, 0, 1));
+                continue;
+              }
+              if (f.mode === 'build') o.p = f.p;
+              else if (f.mode === 'ghost') o.ghost = true;
+              else if (f.mode === 'built' && f.born != null && !S.rm) {
+                const b = easeOut(f.born / 0.3);
+                o.alpha = b;
+                o.grow = lerp(0.6, 1, b);
+              }
+              for (const r of this.tollsOf(f.id)) {
+                const d = this.dEff(r);
+                if (d < 0) continue;
+                o.flash = Math.max(o.flash, 0.55 * clamp(1 - Math.abs(d - def.tHit) / 0.25, 0, 1));
+                if (def.grow > 1) o.grow *= 1 + (def.grow - 1) * Math.sin(Math.PI * clamp((d - def.tHit) / 0.3, 0, 1));
+              }
+              todo.push({ f, fr, o });
+              const lay = blockLayout(V, this.mk, this.z);
+              if (f.mode === 'build' && f.owner === 'me') {
+                const sec = Math.max(0, Math.ceil((1 - f.p) * 10));
+                marks.push(() => this.pill(fr.x - fr.ux * 36 * k, fr.y - fr.uy * 36 * k, `0:${String(sec).padStart(2, '0')}`, { size: 12, frame: 'rgba(240,246,252,0.6)' }));
+              }
+              if (f.mode === 'ghost') marks.push(() => this.pill(fr.x + fr.ux * (lay.h + 26 * k), fr.y + fr.uy * (lay.h + 26 * k), `-0:${f.age}`, { size: 12, dash: true, alpha: 0.9 }));
+              if (S.cnt && f.mode === 'built' && ['stack', 'collect', 'pay'].includes(this.stepId)) {
+                const x = fr.x + fr.nx * (lay.used / 2 + 30 * k) - fr.ux * 6 * k;
+                const y = fr.y + fr.ny * (lay.used / 2 + 30 * k) - fr.uy * 6 * k;
+                marks.push(() => this.counterAt(f, x, y));
+              }
+            }
+            // all base lines first (they are one border), then the blocks, so a line never hides the blocks of the other side
+            for (const t of todo) this.drawFort2(V, t.fr, t.f.owner, t.o, 'base');
+            for (const t of todo) this.drawFort2(V, t.fr, t.f.owner, t.o, 'blocks');
+            marks.forEach((m) => m());
+          }
+          polyPath(pts) {
+            const g = this.g;
+            g.beginPath();
+            pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
+          }
+          // o: p build progress (1 = built), ghost, preview (dashed paper), alpha, grow (blocks swell), flash
+          drawFort2(V, fr, owner, o, pass) {
+            pass = pass || 'all';
+            const g = this.g;
+            const mk = this.mk;
+            const rk = this.rk;
+            const col = colOf(owner);
+            const lay = blockLayout(V, mk, this.z);
+            const ch = fr.ch;
+            const inset = fr.inset;
+            const half = lay.used / 2 + lay.gg * 0.6;
+            const prog = o.ghost || o.preview ? 0 : o.p == null ? 1 : o.p;
+            const reach = half * prog;
+            const dashCol = o.ghost ? 'rgba(170,178,189,0.9)' : 'rgba(240,246,252,0.92)';
+                        g.save();
+            g.globalAlpha *= o.alpha == null ? 1 : o.alpha;
+            g.lineJoin = 'round';
+            g.lineCap = 'butt';
+            const clipCell = (poly) => {
+              g.beginPath();
+              poly.forEach((v, i) => (i ? g.lineTo(v.x, v.y) : g.moveTo(v.x, v.y)));
+              g.closePath();
+              g.clip();
+            };
+            // the base line: the border stroke of the game (a glow and a line in the owner's colour, clipped to the own cell), a little stronger
+            if (pass !== 'blocks' && reach > 0.5) {
+              g.save();
+              clipCell(CELLS[IDS.indexOf(fr.nodeId)].poly);
+              const line = chainLine(ch, -reach, reach, -inset);
+              this.polyPath(line);
+              g.strokeStyle = rgba(col, 0.24);
+              g.lineWidth = 20 * rk;
+              g.stroke();
+              this.polyPath(line);
+              g.strokeStyle = rgba(col, 0.97);
+              g.lineWidth = V.lw * 2 * rk;
+              g.stroke();
+              if (owner === 'en') {
+                this.polyPath(line);
+                g.strokeStyle = 'rgba(13,17,23,0.85)';
+                g.lineWidth = 1.2 * rk;
+                g.stroke();
+              }
+              g.restore();
+            }
+            if (pass !== 'blocks' && reach < half - 0.5) {
+              // what is not built yet: a dashed line
+              const a0 = o.ghost || o.preview ? -half : reach;
+              for (const sg of [-1, 1]) {
+                const line = chainLine(ch, sg > 0 ? a0 : -half, sg > 0 ? half : -a0, -inset);
+                if (line.length < 2) continue;
+                this.polyPath(line);
+                g.setLineDash([5 * rk, 4 * rk]);
+                g.strokeStyle = dashCol;
+                g.lineWidth = 2 * rk;
+                g.stroke();
+                g.setLineDash([]);
+                if (o.ghost || o.preview) break;
+              }
+            }
+            if (pass === 'base') {
+              g.restore();
+              return;
+            }
+            // the blocks
+            const polys = [];
+            lay.cs.forEach((a) => {
+              if (a - lay.ww / 2 < -ch.s0 || a + lay.ww / 2 > ch.len - ch.s0) return;
+              const poly = chainStrip(ch, a - lay.ww / 2, a + lay.ww / 2, -inset, -inset + lay.h * (o.grow || 1));
+              const built = !o.ghost && !o.preview && Math.abs(a) + lay.ww / 2 <= reach + 0.01;
+              polys.push({ poly, built, a });
+            });
+            for (const b of polys) {
+              this.polyPath(b.poly);
+              g.closePath();
+              if (!b.built) {
+                g.setLineDash([3.2 * rk, 2.6 * rk]);
+                g.strokeStyle = dashCol;
+                g.lineWidth = 1.6 * rk;
+                g.stroke();
+                g.setLineDash([]);
+                continue;
+              }
+              g.fillStyle = V.fill === 'tint' ? rgba(col, 0.5) : 'rgba(13,17,23,0.62)';
+              g.fill();
+              g.strokeStyle = rgba(col, 0.22);
+              g.lineWidth = 6 * rk;
+              g.stroke();
+              g.strokeStyle = rgba(col, 0.98);
+              g.lineWidth = V.rim * rk;
+              g.stroke();
+              // the second shape of the side: the enemy has a dark inner line, a heavy look a light one
+              const cx = b.poly.reduce((s2, p) => s2 + p.x, 0) / b.poly.length;
+              const cy = b.poly.reduce((s2, p) => s2 + p.y, 0) / b.poly.length;
+              const shrink = (q) => ({ x: cx + (q.x - cx) * 0.62 + (0), y: cy + (q.y - cy) * 0.62 });
+              if (owner === 'en') {
+                this.polyPath(b.poly.map(shrink));
+                g.closePath();
+                g.strokeStyle = C.bg;
+                g.lineWidth = 1.3 * rk;
+                g.stroke();
+              } else if (V.heavy) {
+                this.polyPath(b.poly.map(shrink));
+                g.closePath();
+                g.strokeStyle = 'rgba(240,246,252,0.75)';
+                g.lineWidth = 1.1 * rk;
+                g.stroke();
+              }
+            }
+            if (o.flash > 0.01) {
+              g.globalCompositeOperation = 'lighter';
+              g.globalAlpha = o.flash;
+              g.fillStyle = '#fff';
+              for (const b of polys) {
+                if (!b.built) continue;
+                this.polyPath(b.poly);
+                g.closePath();
+                g.fill();
+              }
+              g.globalCompositeOperation = 'source-over';
+            }
+            // the head of the build: a bright tick across the line where it has got to
+            if (prog > 0 && prog < 1) {
+              g.globalAlpha = 1;
+              for (const sg of [-1, 1]) {
+                const q = chainPt(ch, ch.s0 + sg * reach);
+                this.polyPath([
+                  { x: q.x - q.nx * (inset + 8 * mk), y: q.y - q.ny * (inset + 8 * mk) },
+                  { x: q.x + q.nx * (-inset + 8 * mk), y: q.y + q.ny * (-inset + 8 * mk) },
+                ]);
+                g.strokeStyle = C.paper;
+                g.lineWidth = 2.2 * rk;
+                g.stroke();
+              }
+            }
+            g.restore();
+          }
+          breakFort2(f, V, fr, b) {
+            const g = this.g;
+            const rk = this.rk;
+            const col = colOf(f.owner);
+            const lay = blockLayout(V, this.mk, this.z);
+            const rand = rng(23);
+            const rm = this.S.rm;
+            const q = rm ? (b < 0.5 ? 0 : 1) : b;
+            g.save();
+            g.lineJoin = 'round';
+            // the base line dissolves into dashes
+            const line = chainLine(fr.ch, -(lay.used / 2), lay.used / 2, -fr.inset);
+            this.polyPath(line);
+            g.setLineDash([5 * rk, 6 * rk]);
+            g.strokeStyle = rgba(col, rm ? (q < 1 ? 0.9 : 0) : 0.95 * (1 - q));
+            g.lineWidth = V.lw * 2 * rk * (1 - 0.5 * q);
+            g.stroke();
+            g.setLineDash([]);
+            lay.cs.forEach((a) => {
+              const poly = chainStrip(fr.ch, a - lay.ww / 2, a + lay.ww / 2, -fr.inset, -fr.inset + lay.h);
+              const cx = poly.reduce((s2, p) => s2 + p.x, 0) / poly.length;
+              const cy = poly.reduce((s2, p) => s2 + p.y, 0) / poly.length;
+              const c0 = chainPt(fr.ch, fr.ch.s0 + a);
+              const dist = easeOut(q) * (30 + rand() * 40);
+              const side = (rand() - 0.5) * 50 * easeOut(q);
+              const rot = (rand() - 0.5) * 4 * q;
+              g.save();
+              g.translate(cx + c0.nx * dist + c0.tx * side, cy + c0.ny * dist + c0.ty * side);
+              g.rotate(rot);
+              g.translate(-cx, -cy);
+              g.globalAlpha = rm ? (q < 1 ? 1 : 0) : 1 - q;
+              this.polyPath(poly);
+              g.closePath();
+              g.fillStyle = V.fill === 'tint' ? rgba(col, 0.5) : 'rgba(13,17,23,0.62)';
+              g.fill();
+              g.strokeStyle = rgba(col, 0.98);
+              g.lineWidth = V.rim * rk;
+              g.stroke();
+              g.restore();
+            });
+            g.restore();
+          }
+          counterAt(f, x, y) {
+            let v = BASE_COUNT;
+            let pulse = 0;
+            for (const r of this.tollsOf(f.id)) {
+              const d = this.t - r.tc;
+              if (d >= 0) {
+                v += r.n;
+                if (d < 0.5) pulse = 1 - d / 0.5;
+              }
+            }
+            this.pill(x, y, String(v), { glyph: 'sq', size: 12 + (this.S.rm ? 0 : pulse * 2), frame: pulse > 0 ? C.paper : 'rgba(240,246,252,0.6)', frameW: 1.2 + pulse });
+          }
+
           counter(f, fr, k) {
             let v = BASE_COUNT;
             let pulse = 0;
@@ -1491,7 +1965,8 @@
 
           /* ---- groups */
           groups() {
-            for (const gr of this.sc.groups) this.tri(gr.x, gr.y, gr);
+            const pop = this.popOf();
+            for (const gr of this.sc.groups) this.tri(gr.x, gr.y, pop !== 1 ? Object.assign({}, gr, { scale: (gr.scale || 1) * pop }) : gr);
             for (const gr of this.sc.garrison) {
               const N = NODES[gr.node];
               this.tri(N.x, N.y, { owner: gr.owner, u: gr.u, c: gr.c, alpha: 1, scale: 0.9 });
@@ -1577,26 +2052,211 @@
           dEff(r) {
             const d = this.t - r.tc;
             if (d < -0.02) return -1;
-            if (this.S.rm) return d <= HOLD ? TOLLS[this.S.toll].rest : -1;
+            if (this.S.rm) return d <= HOLD ? tollDef(this.S).rest : -1;
             return d <= 0.8 ? d : -1;
           }
 
           /* ---- toll effects */
           effects() {
             const S = this.S;
-            const id = TOLLS[S.toll].id;
+            const def = tollDef(S);
             for (const r of this.sc.tolls) {
               const d = this.dEff(r);
               if (d < 0 || r.n <= 0) continue;
               const f = this.sc.forts.find((x) => x.id === r.fort);
-              const fr = fortFrame(f);
               const k = this.mk;
+              if (!S.r1) {
+                const fr = fortFrame2(f, R2[S.look]);
+                if (!fr.ch) continue;
+                this.fxHit(r, d, fr, k, f.owner);
+                if (r.mine) this.lossMark(r, d, fr, k);
+                continue;
+              }
+              const fr = fortFrame(f);
               const col = colOf(r.owner);
-              const fn = { shed: this.fxShed, bite: this.fxBite, float: this.fxFloat, pips: this.fxPips, ripple: this.fxRipple, trail: this.fxTrail }[id];
+              const fn = { shed: this.fxShed, bite: this.fxBite, float: this.fxFloat, pips: this.fxPips, ripple: this.fxRipple, trail: this.fxTrail }[def.id];
               fn.call(this, r, d, fr, k, col);
               if (r.mine) this.lossMark(r, d, fr, k);
             }
           }
+
+          /* ---- round 2: the toll as a shot landing on the group (the combat hit language, ripple from the line kept) */
+          burst(o) {
+            // square sparks (or small charge squares) thrown in a cone, as `burst` of particles.ts: a fixed seed, the same on every frame
+            const g = this.g;
+            const rand = rng(o.seed);
+            const p = clamp(o.p, 0, 1);
+            for (let j = 0; j < o.count; j++) {
+              const ang = o.cone ? o.cone[0] + (rand() - 0.5) * o.cone[1] : rand() * Math.PI * 2;
+              const sp = o.speed * (0.55 + rand() * 0.8);
+              const dist = sp * easeOut(p);
+              const x = o.x + Math.cos(ang) * dist;
+              const y = o.y + Math.sin(ang) * dist + (o.fall ? o.fall * p * p : 0);
+              const size = o.size * (1 - 0.45 * p);
+              g.save();
+              g.translate(x, y);
+              g.rotate((o.spin || 0) * p * (j % 2 ? 1 : -1) + j);
+              g.globalAlpha = (o.alpha == null ? 1 : o.alpha) * (1 - p * p);
+              if (o.add) g.globalCompositeOperation = 'lighter';
+              g.fillStyle = o.colors[j % o.colors.length];
+              if (o.outline) {
+                g.strokeStyle = C.bg;
+                g.lineWidth = Math.max(1.2, size * 0.2);
+                g.fillRect(-size / 2, -size / 2, size, size);
+                g.strokeRect(-size / 2, -size / 2, size, size);
+              } else g.fillRect(-size / 2, -size / 2, size, size);
+              g.restore();
+            }
+          }
+          glow(x, y, rad, a) {
+            const g = this.g;
+            const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+            gr.addColorStop(0, `rgba(255,255,255,${a})`);
+            gr.addColorStop(1, 'rgba(255,255,255,0)');
+            g.save();
+            g.globalCompositeOperation = 'lighter';
+            g.fillStyle = gr;
+            g.beginPath();
+            g.arc(x, y, rad, 0, 6.29);
+            g.fill();
+            g.restore();
+          }
+          // SH1 tracer: a curved arc with a tapering tail and a square head (a charge), a dark backing so it reads on any ground
+          tracer(from, to, f, col, enemy, k) {
+            const g = this.g;
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const bend = Math.min(18 * k, len * 0.35);
+            const cx = (from.x + to.x) / 2 - (dy / len) * bend;
+            const cy = (from.y + to.y) / 2 + (dx / len) * bend;
+            const at = (u) => ({ x: (1 - u) * (1 - u) * from.x + 2 * (1 - u) * u * cx + u * u * to.x, y: (1 - u) * (1 - u) * from.y + 2 * (1 - u) * u * cy + u * u * to.y });
+            const head = clamp(f, 0, 1);
+            const tail = 0.55;
+            g.save();
+            g.lineCap = 'round';
+            const segs = 8;
+            for (const pass of [0, 1]) {
+              for (let i = 0; i < segs; i++) {
+                const u0 = Math.max(0, head - (tail * (i + 1)) / segs);
+                const u1 = Math.max(0, head - (tail * i) / segs);
+                if (u1 <= u0) continue;
+                const a = at(u0);
+                const b = at(u1);
+                g.beginPath();
+                g.moveTo(a.x, a.y);
+                g.lineTo(b.x, b.y);
+                const dens = 1 - i / segs;
+                g.strokeStyle = pass === 0 ? `rgba(13,17,23,${0.7 * dens})` : rgba(col, dens);
+                g.lineWidth = (pass === 0 ? 9 : 5.4) * k * (0.35 + 0.65 * dens);
+                g.stroke();
+              }
+            }
+            const h = at(head);
+            const sz = 8.5 * k;
+            g.fillStyle = col;
+            g.strokeStyle = C.bg;
+            g.lineWidth = 1.8;
+            g.fillRect(h.x - sz / 2, h.y - sz / 2, sz, sz);
+            g.strokeRect(h.x - sz / 2, h.y - sz / 2, sz, sz);
+            g.fillStyle = enemy ? C.bg : 'rgba(255,255,255,0.9)';
+            g.fillRect(h.x - sz * 0.2, h.y - sz * 0.2, sz * 0.4, sz * 0.4);
+            g.restore();
+          }
+          popOf() {
+            if (this.S.r1 || this.S.rm) return 1;
+            const def = tollDef(this.S);
+            let p = 1;
+            for (const r of this.sc.tolls) {
+              const d = this.t - r.tc - def.tHit;
+              if (r.n > 0 && d >= 0 && d < 0.25) p = Math.max(p, 1 + def.pop * Math.sin((Math.PI * d) / 0.25));
+            }
+            return p;
+          }
+          fxHit(r, d, fr, k, shooterOwner) {
+            const g = this.g;
+            const rm = this.S.rm;
+            const L = tollDef(this.S);
+            const K = L.K;
+            const shooter = colOf(shooterOwner);
+            const victim = colOf(r.owner);
+            const lay = blockLayout(fr.V, this.mk, this.z);
+            const gpNow = r.gpos(r.tc + (rm ? L.rest : d));
+            const gpHit = r.gpos(r.tc + L.tHit);
+            // 1. the ripple of the line (T5): a ring from the crossing, a pulse running along the border to both ends
+            const q = clamp(d / 0.5, 0, 1);
+            g.save();
+            g.globalAlpha = rm ? 1 : 1 - q;
+            const rr = (rm ? 26 : 8 + 26 * easeOut(q)) * k;
+            g.beginPath();
+            g.arc(fr.x, fr.y, rr, 0, 6.29);
+            g.strokeStyle = 'rgba(13,17,23,0.9)';
+            g.lineWidth = 6;
+            g.stroke();
+            g.strokeStyle = C.paper;
+            g.lineWidth = 2.4;
+            g.stroke();
+            g.restore();
+            const run = clamp(d / 0.3, 0, 1);
+            const halfL = lay.used / 2 + lay.gg * 0.6;
+            g.save();
+            g.globalAlpha = rm ? 1 : 1 - clamp((d - 0.3) / 0.3, 0, 1);
+            for (const sg of [-1, 1]) {
+              const a0 = Math.max(0, run * halfL - 14 * k);
+              const a1 = rm ? halfL : run * halfL;
+              if (a1 <= a0) continue;
+              const line = chainLine(fr.ch, sg * a0, sg * a1, -fr.inset);
+              if (line.length < 2) continue;
+              this.polyPath(line);
+              g.strokeStyle = 'rgba(13,17,23,0.9)';
+              g.lineWidth = 8;
+              g.stroke();
+              this.polyPath(line);
+              g.strokeStyle = C.paper;
+              g.lineWidth = 3.4;
+              g.stroke();
+            }
+            g.restore();
+            // 2. the shot: a tracer from a block of the line to the group (the wind-up is the ripple itself)
+            const a = lay.cs[(r.n + lay.n) % lay.n] !== undefined ? lay.cs[(r.n + lay.n) % lay.n] : 0;
+            const o0 = chainPt(fr.ch, fr.ch.s0 + clamp(a, -fr.ch.s0, fr.ch.len - fr.ch.s0));
+            const origin = { x: o0.x - o0.nx * fr.inset + o0.nx * lay.h * 0.6, y: o0.y - o0.ny * fr.inset + o0.ny * lay.h * 0.6 };
+            if (L.tracer && !rm && d < L.tHit + 0.1) this.tracer(origin, gpHit, d / L.tHit, shooter, shooterOwner === 'en', k);
+            // 3. the hit, from tHit: ring in the lightened colour of the shooter, white flash, sparks in a cone away from the shooter, shards of the lost charges
+            const u = (d - L.tHit) / 0.58;
+            if (u >= 0 && u < 1) {
+              const ang = Math.atan2(gpNow.y - origin.y, gpNow.x - origin.x);
+              const p5 = clamp(u / 0.5, 0, 1);
+              for (let ri = 0; ri < L.rings; ri++) {
+                const pr = clamp(p5 - ri * 0.22, 0, 1);
+                if (pr <= 0 || pr >= 1) continue;
+                g.save();
+                g.globalAlpha = 1 - pr;
+                g.beginPath();
+                g.arc(gpNow.x, gpNow.y, (5 + (20 + 8 * K) * easeOut(pr)) * k, 0, 6.29);
+                g.strokeStyle = 'rgba(13,17,23,0.85)';
+                g.lineWidth = 5.5;
+                g.stroke();
+                g.strokeStyle = lighten(shooter, 0.5);
+                g.lineWidth = 2.6;
+                g.stroke();
+                g.restore();
+              }
+              if (u < 0.3) this.glow(gpNow.x, gpNow.y, (8 + 8 * K) * 1.3 * k * (1 - 0.4 * (u / 0.3)), 0.8 * Math.pow(1 - u / 0.3, 2));
+              this.burst({ x: gpNow.x, y: gpNow.y, p: u / 0.8, count: Math.round(L.sparks * (K > 1 ? 1.55 : 1)), speed: 50 * (0.6 + 0.4 * K) * k, cone: [ang, 2.6], colors: ['#ffffff', shooter], size: 6.4 * k * (K > 1 ? 1.2 : 1), seed: r.n * 5 + 1, add: true });
+              if (L.shards) this.burst({ x: gpNow.x, y: gpNow.y, p: u / 0.95, count: r.n, speed: 40 * k, cone: [ang, 3.4], fall: 34 * k, colors: [victim], size: (K > 1 ? 10 : 8) * k, spin: 6.6, seed: r.n * 3 + 2, outline: true });
+            }
+            // 4. "-N" over the group that lost charges: it rises by 12 and fades (a plate with the down triangle when the group is yours)
+            const un = (d - L.tHit) / (0.8 - L.tHit);
+            if (un >= 0 || rm) {
+              const rise = rm ? 8 : easeOut(clamp(un, 0, 1)) * 12;
+              const al = rm ? 1 : clamp((1 - un) / 0.3, 0, 1) * clamp(un / 0.08 + 0.3, 0, 1);
+              const x = gpNow.x;
+              const y = gpNow.y - 36 * k - rise / this.z;
+              this.plateFor(r, x, y, { alpha: al });
+            }
+          }
+
           // a loss to you is told by more than the hue: a dashed amber ring round the group, the down triangle in the number plate
           lossMark(r, d, fr, k) {
             const g = this.g;
@@ -1910,9 +2570,11 @@
                 g.translate(ix, iy - 8);
                 g.globalAlpha *= on || sec.ico !== 'fort' ? 1 : 0.9;
                 if (sec.ico === 'fort') {
-                  g.rotate(-Math.PI / 2);
-                  g.scale(1.55, 1.55);
-                  g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
+                  if (this.S.r1) {
+                    g.rotate(-Math.PI / 2);
+                    g.scale(1.55, 1.55);
+                    g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
+                  } else miniFort(g, R2[this.S.look], 62);
                 } else if (sec.ico === 'house') {
                   g.fillStyle = C.paper;
                   g.beginPath();
@@ -1976,6 +2638,21 @@
                 gr.lineWidth = 2 / this.z;
                 gr.stroke();
                 gr.restore();
+                if (!this.S.r1) {
+                  const V = R2[this.S.look];
+                  const fr2 = fortFrame2({ node: 'A', to: rd.to, off: OFF1 }, V);
+                  if (!fr2.ch) return;
+                  this.drawFort2(V, fr2, 'me', on ? { p: 1, alpha: 0.62 } : { preview: true });
+                  if (on) {
+                    const hh = blockLayout(V, k, this.z).h;
+                    this.pill(fr2.x + fr2.ux * (hh + 36 * k), fr2.y + fr2.uy * (hh + 36 * k), '1.5 CP', { size: 13, frame: C.paper });
+                    const [sx, sy] = this.toScreen(fr2.x, fr2.y);
+                    this.screenT();
+                    this.cursor(sx + 4, sy + 6);
+                    this.world();
+                  }
+                  return;
+                }
                 const fr = fortFrame({ node: 'A', to: rd.to, off: OFF1 });
                 const ang = Math.atan2(fr.uy, fr.ux);
                 gr.save();
@@ -2010,9 +2687,11 @@
               g.fillText('Pick a road', this.vw / 2 - tw / 2 + 40, 26.5);
               g.save();
               g.translate(this.vw / 2 - tw / 2 + 21, 26);
-              g.rotate(-Math.PI / 2);
-              g.scale(0.5, 0.5);
-              g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
+              if (this.S.r1) {
+                g.rotate(-Math.PI / 2);
+                g.scale(0.5, 0.5);
+                g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
+              } else miniFort(g, R2[this.S.look], 30);
               g.restore();
             }
           }
@@ -2039,20 +2718,55 @@
         }
 
         /* ============================================================ ui */
-        const ui = { a: 0, b: 3, view: 1, toll: 0, step: 7, mode: 'supply', zoom: 1, gray: 0, rm: 0, cnt: 0, pause: 0, hold: null };
+        const ui = { r1: 0, a: 0, b: 2, view: 1, toll: 4, hit: 1, map: 'bend', step: 7, mode: 'supply', zoom: 1, gray: 0, rm: 0, cnt: 0, pause: 0, hold: null };
         let panels = [];
         let startT = performance.now();
         const $ = (id) => document.getElementById(id);
+        const lookSet = () => (ui.r1 ? LOOKS : R2);
 
+        // a small straight picture of a border fortification: base line, outlined blocks on top, outward is up
+        function miniFort(g, V, w) {
+          const n = Math.min(V.count, w >= 50 ? V.count : 3);
+          const gapK = V.gap / V.bw;
+          const bw = w / (n + (n - 1) * gapK);
+          const gap = bw * gapK;
+          const h = Math.max(4, bw * (V.h / V.bw) * 1.15);
+          const y0 = h / 2;
+          g.save();
+          g.lineJoin = 'round';
+          g.beginPath();
+          g.moveTo(-w / 2 - 3, y0);
+          g.lineTo(w / 2 + 3, y0);
+          g.strokeStyle = rgba(C.you, 0.35);
+          g.lineWidth = 8;
+          g.stroke();
+          g.strokeStyle = rgba(C.you, 0.97);
+          g.lineWidth = Math.max(2, V.lw * 0.9);
+          g.stroke();
+          for (let i = 0; i < n; i++) {
+            const x = -w / 2 + i * (bw + gap);
+            g.fillStyle = V.fill === 'tint' ? rgba(C.you, 0.5) : 'rgba(13,17,23,0.62)';
+            g.fillRect(x, y0 - h - 1, bw, h);
+            g.strokeStyle = rgba(C.you, 0.98);
+            g.lineWidth = Math.max(1.3, V.rim * 0.7);
+            g.strokeRect(x, y0 - h - 1, bw, h);
+          }
+          g.restore();
+        }
         function thumb(li) {
           const cv = document.createElement('canvas');
           cv.width = 64;
           cv.height = 52;
           const g = cv.getContext('2d');
-          g.translate(32, 26);
-          g.rotate(-Math.PI / 2);
-          g.scale(0.72, 0.72);
-          g.drawImage(sprite(li, 'me', fullMask(LOOKS[li]), false), -OX, -OY, SW, SH);
+          if (ui.r1) {
+            g.translate(32, 26);
+            g.rotate(-Math.PI / 2);
+            g.scale(0.72, 0.72);
+            g.drawImage(sprite(li, 'me', fullMask(LOOKS[li]), false), -OX, -OY, SW, SH);
+          } else {
+            g.translate(32, 28);
+            miniFort(g, R2[li], 52);
+          }
           return cv;
         }
         function chipRow(host, items, getSel, pick, withThumb) {
@@ -2070,15 +2784,16 @@
             host.append(b);
           });
         }
+        const lookName = (i) => (ui.r1 ? `F${i + 1} ${LOOKS[i].n}` : `B${i + 1} ${R2[i].n} · ${R2[i].count}`);
         function buildChips() {
-          const looks = LOOKS.map((l, i) => ({ k: 'F' + (i + 1), n: l.n, title: l.line + '. Bake: ' + l.bake }));
+          const looks = lookSet().map((l, i) => ({ k: ui.r1 ? 'F' + (i + 1) : 'B' + (i + 1), n: ui.r1 ? l.n : `${l.n} · ${l.count}`, title: ui.r1 ? l.line + '. Bake: ' + l.bake : l.line }));
           const cmp = ui.view === 2;
           $('glA').textContent = cmp ? 'Look A' : 'Look';
           $('rowB').style.display = cmp ? '' : 'none';
-          chipRow($('gA'), looks, (i) => ui.a === i && ui.view !== 6, (i) => (ui.view === 6 ? ((ui.view = 1), (ui.a = i), update()) : ((ui.a = i), update())), true);
+          chipRow($('gA'), looks, (i) => ui.a === i && ui.view !== 6, (i) => ((ui.view = ui.view === 6 ? 1 : ui.view), (ui.a = i), update()), true);
           chipRow($('gB'), looks, (i) => ui.b === i, (i) => ((ui.b = i), update()), true);
-          const tolls = TOLLS.map((t, i) => ({ k: 'T' + (i + 1), n: t.n, title: t.cost }));
-          chipRow($('gT'), tolls, (i) => ui.toll === i, (i) => ((ui.toll = i), update()), false);
+          const tolls = (ui.r1 ? TOLLS : HITS).map((t, i) => ({ k: (ui.r1 ? 'T' : 'H') + (i + 1), n: t.n, title: t.cost }));
+          chipRow($('gT'), tolls, (i) => (ui.r1 ? ui.toll : ui.hit) === i, (i) => ((ui.r1 ? (ui.toll = i) : (ui.hit = i)), update()), false);
           const steps = STEPS.map((s, i) => ({ k: String(i + 1), n: s.n }));
           chipRow($('steps'), steps, (i) => ui.step === i, (i) => setStep(i), false);
           $('gB').querySelectorAll('button').forEach((b) => b.classList.add('second'));
@@ -2090,10 +2805,13 @@
         }
         function buildPanels() {
           const host = $('panels');
-          host.className = 'panels v' + ui.view;
+          host.className = 'panels v' + ui.view + (ui.view === 6 && !ui.r1 ? ' n3' : '');
           host.textContent = '';
-          const list = ui.view === 1 ? [ui.a] : ui.view === 2 ? [ui.a, ui.b] : LOOKS.map((_, i) => i);
-          panels = list.map((li, pi) => {
+          const set = lookSet();
+          ui.a = clamp(ui.a, 0, set.length - 1);
+          ui.b = clamp(ui.b, 0, set.length - 1);
+          const list = ui.view === 1 ? [ui.a] : ui.view === 2 ? [ui.a, ui.b] : set.map((_, i) => i);
+          panels = list.map((li) => {
             const d = document.createElement('div');
             d.className = 'panel';
             const h = document.createElement('div');
@@ -2111,14 +2829,18 @@
           host.classList.toggle('gray', !!ui.gray);
         }
         function update() {
+          if (CUR_MAP !== ui.map) useMap(ui.map);
           buildChips();
           seg('modeSeg', 'm', ui.mode);
           seg('zoomSeg', 'z', ui.zoom);
           seg('viewSeg', 'v', ui.view);
+          seg('mapSeg', 'b', ui.map);
           $('gray').checked = !!ui.gray;
           $('rm').checked = !!ui.rm;
           $('cnt').checked = !!ui.cnt;
+          $('r1').checked = !!ui.r1;
           $('pause').setAttribute('aria-pressed', String(!!ui.pause));
+          $('glT').textContent = 'Toll';
           buildPanels();
           writeHash();
         }
@@ -2130,7 +2852,7 @@
           $('live').textContent = STEPS[ui.step].n;
         }
         function writeHash() {
-          const p = new URLSearchParams({ a: ui.a, b: ui.b, view: ui.view, toll: ui.toll, step: ui.step, mode: ui.mode, zoom: ui.zoom, gray: ui.gray, rm: ui.rm, cnt: ui.cnt });
+          const p = new URLSearchParams({ r1: ui.r1, a: ui.a, b: ui.b, view: ui.view, toll: ui.toll, hit: ui.hit, map: ui.map, step: ui.step, mode: ui.mode, zoom: ui.zoom, gray: ui.gray, rm: ui.rm, cnt: ui.cnt });
           if (ui.hold != null) p.set('t', ui.hold);
           try {
             history.replaceState(null, '', '#' + p.toString());
@@ -2141,10 +2863,13 @@
         function readHash() {
           const p = new URLSearchParams(location.hash.slice(1));
           const n = (k, d) => (p.has(k) && !Number.isNaN(Number(p.get(k))) ? Number(p.get(k)) : d);
-          ui.a = clamp(n('a', ui.a), 0, LOOKS.length - 1);
-          ui.b = clamp(n('b', ui.b), 0, LOOKS.length - 1);
+          ui.r1 = n('r1', 0) ? 1 : 0;
+          ui.a = clamp(n('a', ui.a), 0, (ui.r1 ? LOOKS : R2).length - 1);
+          ui.b = clamp(n('b', ui.b), 0, (ui.r1 ? LOOKS : R2).length - 1);
           ui.view = [1, 2, 6].includes(n('view', 1)) ? n('view', 1) : 1;
-          ui.toll = clamp(n('toll', 0), 0, TOLLS.length - 1);
+          ui.toll = clamp(n('toll', ui.toll), 0, TOLLS.length - 1);
+          ui.hit = clamp(n('hit', ui.hit), 0, HITS.length - 1);
+          ui.map = p.get('map') === 'curve' ? 'curve' : 'bend';
           ui.step = clamp(n('step', ui.step), 0, STEPS.length - 1);
           ui.mode = p.get('mode') === 'battle' ? 'battle' : 'supply';
           ui.zoom = [0.45, 1, 2].includes(n('zoom', 1)) ? n('zoom', 1) : 1;
@@ -2165,18 +2890,18 @@
             pausedAt = t;
           }
           for (const p of panels) {
-            const S = { look: p.li, toll: ui.toll, mode: ui.mode, zoom: ui.zoom, rm: ui.rm, cnt: ui.cnt };
+            const S = { look: p.li, toll: ui.r1 ? ui.toll : ui.hit, mode: ui.mode, zoom: ui.zoom, rm: ui.rm, cnt: ui.cnt, r1: ui.r1 };
+            CUR_SET = ui.r1 ? 'r1' : 'r2';
             CUR_MK = ui.zoom < 1 ? Math.pow(1 / ui.zoom, 0.6) : 1;
             const sc = scene(step.id, t);
             p.painter.stepId = step.id;
             p.painter.draw(S, ui, t, sc);
-            const L = LOOKS[p.li];
-            const nm = `F${p.li + 1} ${L.n}`;
+            const nm = lookName(p.li);
             if (p.nm.textContent !== nm) {
               p.nm.textContent = nm;
               p.cv.setAttribute('aria-label', `${nm}, ${step.n}`);
             }
-            p.sub.textContent = `${step.n} · baked ${SPR_BY_LOOK[p.li]}`;
+            p.sub.textContent = ui.r1 ? `${step.n} · sprites baked ${SPR_BY_LOOK[p.li]}` : step.n;
           }
           requestAnimationFrame(frame);
         }
@@ -2184,6 +2909,8 @@
           readHash();
           $('modeSeg').addEventListener('click', (e) => e.target.dataset.m && ((ui.mode = e.target.dataset.m), update()));
           $('zoomSeg').addEventListener('click', (e) => e.target.dataset.z && ((ui.zoom = Number(e.target.dataset.z)), update()));
+          $('mapSeg').addEventListener('click', (e) => e.target.dataset.b && ((ui.map = e.target.dataset.b), update()));
+          $('r1').addEventListener('change', (e) => ((ui.r1 = e.target.checked ? 1 : 0), update()));
           $('viewSeg').addEventListener('click', (e) => e.target.dataset.v && ((ui.view = Number(e.target.dataset.v)), update()));
           $('gray').addEventListener('change', (e) => ((ui.gray = e.target.checked ? 1 : 0), update()));
           $('rm').addEventListener('change', (e) => ((ui.rm = e.target.checked ? 1 : 0), update()));
@@ -2207,8 +2934,9 @@
             else if (e.key === 'ArrowLeft') setStep(ui.step - 1);
           });
           if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches && !location.hash.includes('rm=')) ui.rm = 1;
+          useMap(ui.map);
           update();
-          window.__fort = { ui, LOOKS, TOLLS, STEPS, SPR_BY_LOOK, update, setStep, scene, crossing };
+          window.__fort = { ui, LOOKS, R2, HITS, TOLLS, STEPS, SPR_BY_LOOK, update, setStep, scene, crossing };
           requestAnimationFrame(frame);
         }
         init();
