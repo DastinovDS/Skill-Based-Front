@@ -213,6 +213,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         ],
         build: null,
         enemy_groups: [],
+        forts: [],
       })),
       groups,
       packets: [],

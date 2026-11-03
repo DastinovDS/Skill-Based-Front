@@ -91,6 +91,7 @@
     },
     "factory": null,
     "bunker": null,
+    "fort": null,
     "supply_model": "lines"
   },
   "map_id": "diamond",

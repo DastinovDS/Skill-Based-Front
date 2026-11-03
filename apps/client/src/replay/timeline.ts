@@ -171,6 +171,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
         ],
         build: builds.get(id) ?? null,
         enemy_groups: [],
+        forts: [],
       })),
       groups: frame.g.map(groupView),
       packets,

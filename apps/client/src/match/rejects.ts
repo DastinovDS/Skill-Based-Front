@@ -35,6 +35,7 @@ export const REJECT_MESSAGES = {
   NOT_SOURCE: 'reject.NOT_SOURCE',
   LINE_CYCLE: 'reject.LINE_CYCLE',
   FACTORY_LIMIT: 'reject.FACTORY_LIMIT',
+  NOT_ADJACENT: 'reject.NOT_ADJACENT',
 } as const satisfies Record<string, MessageKey>;
 
 /**

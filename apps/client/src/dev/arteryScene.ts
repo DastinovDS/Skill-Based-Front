@@ -152,6 +152,7 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       // The road 4-13 is being built: 12 s to go (DEC-28, item 7).
       build: e.id === 16 ? { done_tick: T + 120 } : null,
       enemy_groups: [],
+      forts: [],
     };
   });
 

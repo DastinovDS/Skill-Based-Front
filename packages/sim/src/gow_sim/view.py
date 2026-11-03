@@ -1162,21 +1162,10 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                     }
                     for f in e.enemy_groups
                 ],
-                **(
-                    {
-                        "forts": [
-                            {
-                                "node": f.node,
-                                "owner": f.owner,
-                                "built": f.built,
-                                "done_tick": f.done_tick,
-                            }
-                            for f in e.forts
-                        ]
-                    }
-                    if e.forts
-                    else {}
-                ),
+                "forts": [
+                    {"node": f.node, "owner": f.owner, "built": f.built, "done_tick": f.done_tick}
+                    for f in e.forts
+                ],
             }
             for e in view.edges
         ],

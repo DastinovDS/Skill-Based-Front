@@ -690,7 +690,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 1,
@@ -715,7 +716,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 2,
@@ -733,7 +735,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 3,
@@ -758,7 +761,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 4,
@@ -776,7 +780,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 5,
@@ -808,7 +813,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 6,
@@ -826,7 +832,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 7,
@@ -844,7 +851,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 8,
@@ -862,7 +870,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 9,
@@ -894,7 +903,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 10,
@@ -912,7 +922,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 11,
@@ -930,7 +941,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 12,
@@ -948,7 +960,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 13,
@@ -966,7 +979,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 14,
@@ -984,7 +998,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 15,
@@ -1002,7 +1017,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 16,
@@ -1020,7 +1036,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 17,
@@ -1038,7 +1055,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 18,
@@ -1056,7 +1074,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 19,
@@ -1074,7 +1093,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 20,
@@ -1092,7 +1112,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 21,
@@ -1110,7 +1131,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 22,
@@ -1128,7 +1150,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 23,
@@ -1146,7 +1169,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 24,
@@ -1164,7 +1188,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       },
       {
         "id": 25,
@@ -1182,7 +1207,8 @@
           }
         ],
         "build": null,
-        "enemy_groups": []
+        "enemy_groups": [],
+        "forts": []
       }
     ],
     "groups": [
