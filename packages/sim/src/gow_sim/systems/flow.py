@@ -28,6 +28,11 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
   node not ahead (a BFS), and from the army's node each next node is the own neighbour with ``h``
   one less, the smallest ``node_key`` first, until ``h == 0`` (the level end). A lifted node
   between gives only to its next nodes towards the armies, on room alone;
+- an **unpaid build** pulls exactly like such an army (item J, #729): a node with an own build
+  paid in charges that still owes some (``owed > 0``: the barracks, a warehouse level, a factory,
+  a bunker; ``Node.build``, ``Node.factory_build``, ``Node.fort_build``). Without a pulling army
+  in it, a dispatch sends it at most its **want**, ``owed - stock - own packets on the way to
+  it`` (the fill order still reads its warehouse room);
 - the **room** of an own node: ``max(0, cap - stock - own packets on the way to it)``, a snapshot
   at the start of a dispatch that only decreases while it runs (item A5, the wave).
 
@@ -48,10 +53,10 @@ Order inside the step (item A13):
    ``node_key``), then along **level roads** (``d(m) == d(n)``, room, the same order, only while
    ``load(m) + 2 <= have``, ``load = cap - room``). On the level (``d == k``) only the level
    roads: the leaves even out (#724), except a level node where an own group stands short of a
-   charge or gathering a plan (the groups that pull): it keeps, and its level neighbours give to
-   it without the gap (room only). A lifted path node gives only along its path, and the node
-   before it on the path gives to it on room alone (item I7). Each charge is a packet of 1 along
-   one road (item A7).
+   charge or gathering a plan (the groups that pull), or with an unpaid build (item J): it keeps,
+   and its level neighbours give to it without the gap (room only). A lifted path node gives
+   only along its path, and the node before it on the path gives to it on room alone (item I7).
+   Each charge is a packet of 1 along one road (item A7).
 6. The **plan** of the next dispatch for the view: the same function run on the state now, without
    sending (item E: ``flow_next`` and ``flow_idle``), stored in ``Node.flow`` with the field.
 
@@ -59,14 +64,14 @@ The full factory spills its new charge in ``systems.economy`` (item A8), reading
 the previous tick (``spill_target``).
 
 Cost per tick and player: O(V + E) for the field and the plan, O(packets) for the room, O(groups)
-for the pull and the paths.
+and O(V) (the builds) for the pull and the paths.
 """
 
 from collections import deque
 from dataclasses import dataclass
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, FlowIdle, FlowNode, GameState, Group, event
+from gow_sim.state import AtNode, Event, FlowIdle, FlowNode, GameState, Group, Node, event
 from gow_sim.systems.capacity import consume, is_starvation_tick, warehouse_capacities
 from gow_sim.systems.lines import settle_factories
 from gow_sim.systems.supply import (
@@ -100,8 +105,8 @@ def supply_flow(state: GameState, rules: Ruleset) -> list[Event]:
     tick = state.tick
     dispatch = tick > 0 and tick % rules.supply.dispatch_ticks == 0
     for pid in sorted(state.players):
-        field = _field(state, pid)
         incoming = _incoming(state, pid)
+        field = _field(state, pid)
         if dispatch:
             sends = _run(state, field, capacities, incoming)
             events.extend(_send(state, rules, pid, sends, incoming))
@@ -213,11 +218,15 @@ class _Field:
     towards the armies (item I7)."""
     holding: dict[int, bool]
     """The own nodes where an own standing group is short of a charge or gathers a plan (the
-    groups that pull): on the level they keep, and a level neighbour gives to them without the
-    gap (item I3)."""
+    groups that pull), or with an unpaid build (item J): on the level they keep, and a level
+    neighbour gives to them without the gap (item I3)."""
     before: dict[int, int]
     """The lifted nodes of the paths (item I7): the node before each on its path, towards the
     level; it gives to it on room alone."""
+    owed: dict[int, int]
+    """The own nodes that pull for an unpaid build alone (no pulling army there, item J): the
+    charges their own builds still owe; a dispatch sends them at most ``owed - stock -
+    incoming``."""
 
 
 def _field(state: GameState, player: int) -> _Field:
@@ -307,10 +316,20 @@ def _field(state: GameState, player: int) -> _Field:
         n = loc.node
         if (g.charged < g.units or g.plan > 0) and n in d0:
             holding[n] = True
-            if d0[n] > k[n]:
-                pulled[n] = True
-            elif d0[n] < k[n]:
-                lifted[n] = True
+    # An unpaid build pulls like such an army (item J): its node joins the same set; without an
+    # army there its intake is capped by what it still owes (``_run``).
+    owed: dict[int, int] = {}
+    for n in adj:  # ascending
+        if n not in holding:
+            due = _owed(nodes[n], player)
+            if due > 0:
+                owed[n] = due
+                holding[n] = True
+    for n in holding:  # flags: the order does not matter
+        if d0[n] > k[n]:
+            pulled[n] = True
+        elif d0[n] < k[n]:
+            lifted[n] = True
     d = d0
     if pulled:
         dist: dict[int, int] = {}
@@ -375,7 +394,23 @@ def _field(state: GameState, player: int) -> _Field:
                 same.append((m, eid))
         down[n] = below
         level[n] = same
-    return _Field(player, d, k, pocket, adj, down, level, holding, before)
+    return _Field(player, d, k, pocket, adj, down, level, holding, before, owed)
+
+
+def _owed(node: Node, player: int) -> int:
+    """The charges the builds of ``player`` in ``node`` still owe (DEC-41, item 7): the barracks
+    or a warehouse level, a factory, a bunker. Road levels and road fortifications cost CP."""
+    due = 0
+    b = node.build
+    if b is not None and b.owner == player:
+        due += b.owed
+    f = node.factory_build
+    if f is not None and f.owner == player:
+        due += f.owed
+    f = node.fort_build
+    if f is not None and f.owner == player:
+        due += f.owed
+    return due
 
 
 def _bfs(adj: dict[int, list[tuple[int, int]]], dist: dict[int, int], queue: deque[int]) -> None:
@@ -425,6 +460,12 @@ def _run(
     for n in field.adj:
         free = capacities[n] - nodes[n].warehouse - incoming.get(n, 0)
         room[n] = free if free > 0 else 0
+    # The want of a node that pulls for a build alone (item J): what it still owes beyond its
+    # stock and its packets on the way; it takes no more than that. Its fill stays the warehouse's.
+    want: dict[int, int] = {}
+    for n, due in field.owed.items():
+        rest = due - nodes[n].warehouse - incoming.get(n, 0)
+        want[n] = rest if rest > 0 else 0
 
     def order(m: int) -> tuple[int, int]:
         cap = capacities[m]  # room > 0, so cap > 0
@@ -433,8 +474,12 @@ def _run(
     sends: _Sends = []
     for n in senders:
         have = nodes[n].warehouse
-        down = [pair for pair in field.down[n] if room[pair[0]]]
-        level = [pair for pair in field.level[n] if room[pair[0]]]
+        if want:
+            down = [p for p in field.down[n] if room[p[0]] and want.get(p[0], 1)]
+            level = [p for p in field.level[n] if room[p[0]] and want.get(p[0], 1)]
+        else:
+            down = [pair for pair in field.down[n] if room[pair[0]]]
+            level = [pair for pair in field.level[n] if room[pair[0]]]
         out: list[tuple[int, int]] = []
         if len(down) > 1:
             down.sort(key=lambda pair: order(pair[0]))
@@ -443,6 +488,8 @@ def _run(
                 break
             out.append((m, eid))
             room[m] -= 1
+            if m in want:
+                want[m] -= 1
             have -= 1
         if len(level) > 1:
             level.sort(key=lambda pair: order(pair[0]))
@@ -458,6 +505,8 @@ def _run(
             ):
                 out.append((m, eid))
                 room[m] -= 1
+                if m in want:
+                    want[m] -= 1
                 have -= 1
         if out:
             sends.append((n, out))
