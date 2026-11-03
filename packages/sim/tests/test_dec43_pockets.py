@@ -329,3 +329,20 @@ def test_neutral_nodes_have_no_timer() -> None:
     _run(state, 1100, _cut())
     neutral = [n for n in state.nodes if state.nodes[n].owner is None]
     assert all(state.nodes[n].cut_since is None for n in neutral)
+
+
+def test_both_players_pockets_are_mirrored() -> None:
+    """Player symmetry (AGENTS.md 4.1, item 6): the mirrored cut of player 1 starves the same."""
+    mirror = MAP.mirror_nodes
+    state = _state({C: 2})
+    state.nodes[mirror[C]].warehouse = 2
+    g0 = _group(state, C, 3, 3)
+    g1 = _group(state, mirror[C], 3, 3, owner=1)
+    changes: dict[int, list[Change]] = {CUT: [_owner(A, 1), _owner(mirror[A], 0)]}
+    events = _run(state, 1500, changes)
+    assert (g0.charged, state.nodes[C].warehouse) == (g1.charged, state.nodes[mirror[C]].warehouse)
+    by_player = {p: [(t, w, u) for t, q, _, w, u in _starved(events) if q == p] for p in (0, 1)}
+    assert by_player[0] == by_player[1] and len(by_player[0]) == 5
+    # each also holds the other's A, cut off from everything of its own
+    assert starving_nodes(state, 0) == sorted((*POCKET, mirror[A]))
+    assert starving_nodes(state, 1) == sorted((*(mirror[n] for n in POCKET), A))
