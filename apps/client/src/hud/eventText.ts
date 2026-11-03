@@ -43,6 +43,12 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'charge_burned',
   'build_paid',
   'plan_charged',
+  // Road fortifications (DEC-43, item D): their feed lines and the toll effect are the client step
+  // of #707; until then the map view (`EdgeView.forts`) is the only trace.
+  'road_fort_built',
+  'road_fort_destroyed',
+  'toll_paid',
+  'toll_taken',
 ]);
 
 /** Kinds with a line in the feed. */
@@ -132,6 +138,8 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
         return tf('event.build_started.factory', { node: names(num(data.node)) });
       if (data.kind === 'fort')
         return tf('event.build_started.bunker', { node: names(num(data.node)) });
+      if (data.kind === 'road_fort')
+        return tf('event.build_started.road_fort', { node: names(num(data.node)) });
       if (data.kind === 'barracks')
         return tf('event.build_started.barracks', { node: names(num(data.node)) });
       if (data.kind === 'warehouse') {

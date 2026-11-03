@@ -73,6 +73,7 @@ COMMAND_TYPES = {
     "release_plan",
     "set_auto_lines",
     "set_leaf_shift",
+    "fortify_road",
 }
 
 

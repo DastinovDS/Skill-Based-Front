@@ -300,6 +300,7 @@ def test_cp_by_category_sums_the_prices_charged() -> None:
         "barracks": 300,
         "warehouse": 200,
         "transfer": 40,
+        "fort": 0,
         "other": 20,
     }
     assert (p0.cp_refunded, p0.cp_total) == (100, 1310)
@@ -469,6 +470,7 @@ def test_scripted_match_statistics() -> None:
         "barracks": 300,
         "warehouse": 200,
         "transfer": 80,
+        "fort": 0,
         "other": 20,
     }
     assert (p0.cp_refunded, p0.cp_total) == (150, 1500)

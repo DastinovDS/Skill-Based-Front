@@ -727,6 +727,7 @@ export const en = {
   'supply.lineCancel': 'Cancel',
   'event.build_started.factory': '{node} builds a factory',
   'event.build_started.bunker': '{node} builds a bunker',
+  'event.build_started.road_fort': '{node} fortifies a road',
   'event.factory_built': '{node} is a factory now: it makes charges',
   'event.fort_built': '{node} has its bunker',
   'event.line_cut': 'Supply line {from} → {to} is cut: draw it again',
