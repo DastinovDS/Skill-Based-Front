@@ -25,6 +25,8 @@ node = "24"
 pnpm = "12.8.1"
 # uv.lock is written by uv 0.12; Python 3.12 (.python-version) is fetched by uv itself.
 uv = "0.12"
+# `share` (#711): Cloudflare quick tunnel to the local stack (aqua backend, checksum-verified; macOS arm64 checked).
+cloudflared = "2026.10.7"
 
 # ---------------------------------------------------------------------------------------------
 # setup
@@ -315,6 +317,11 @@ run = "GOW_RULESET_PATH=rulesets/{{usage.ruleset}}.toml docker compose -p {{get_
 description = "Stop the agents' stack and delete its volumes (only project sbf-agent)"
 env = { HTTP_PORT = "{{get_env(name='SBF_AGENT_HTTP_PORT', default='18080')}}", HTTPS_PORT = "{{get_env(name='SBF_AGENT_HTTPS_PORT', default='18443')}}" }
 run = "docker compose -p {{get_env(name='SBF_AGENT_PROJECT', default='sbf-agent')}} --progress quiet down --volumes --remove-orphans"
+
+[tasks.share]
+description = "Put the local stack online through a Cloudflare quick tunnel and print the https link (arg: port, default 8080 = `stack`; 18080 for `stack:agent`). Ctrl+C closes it. Needs bash; does not start a stack"
+usage = 'arg "[port]" default="8080"'
+run = "bash scripts/share.sh {{usage.port}}"
 
 [tasks."load:agent"]
 description = "Load harness inside the app container of the agents' stack (QA-03, docs/qa/load.md): start the stack with GOW_GUEST_RATE_LIMIT>=2N first; options after --. POSIX shell"
