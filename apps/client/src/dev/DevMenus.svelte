@@ -75,7 +75,7 @@
     api={sceneApi(board)}
     token="dev"
     ownId={ME}
-    nick="Danya"
+    nick="Ember"
     hasPassword={board.hasPassword}
     calibration={board.calibration}
     rating={board.rating}
@@ -93,7 +93,7 @@
     api={sceneApi(board)}
     token="dev"
     ownId={ME}
-    nick="Danya"
+    nick="Ember"
     hasPassword={board.hasPassword}
     calibration={board.calibration}
     rating={board.rating}
@@ -153,7 +153,7 @@
 {:else if id === 'menu-resume'}
   <MenuScreen
     {map}
-    nick="Danya"
+    nick="Ember"
     notice={null}
     hasPassword
     calibration={CALIBRATION}
@@ -163,7 +163,7 @@
 {:else if id === 'menu-banned'}
   <MenuScreen
     {map}
-    nick="Danya"
+    nick="Ember"
     notice={null}
     hasPassword
     calibration={CALIBRATION}
@@ -174,7 +174,7 @@
 {:else if id === 'menu-error'}
   <MenuScreen
     {map}
-    nick="Danya"
+    nick="Ember"
     notice="error.api.network"
     hasPassword
     calibration={null}
@@ -183,7 +183,7 @@
 {:else}
   <MenuScreen
     {map}
-    nick="Danya"
+    nick="Ember"
     notice={null}
     hasPassword={id !== 'menu-guest'}
     calibration={id === 'menu-calibration' ? CALIBRATION : null}

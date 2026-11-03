@@ -24,7 +24,7 @@ const other = snapshot.view.nodes.find((n) => n.id !== home && n.owner === 0);
 if (enemy === undefined || other === undefined) throw new Error('the dev snapshot lacks nodes');
 
 function setup(withSend = true) {
-  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map });
+  const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map });
   hud.onSnapshot(snapshot);
   const book = new OrderBook();
   const sent: Command[] = [];
@@ -735,7 +735,7 @@ describe('OrderController', () => {
         cost: { ...RULES.cost, build: 70 },
         build: { ticks_per_level: 90 },
       };
-      const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules, map });
+      const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules, map });
       const priced = new OrderController({
         hud,
         map,
@@ -1089,7 +1089,7 @@ describe('OrderController', () => {
 
       it('has as many markers as the ruleset says, and no key for a missing one', () => {
         const rules: RulesetPublic = { ...RULES, supply: { ...RULES.supply, front_markers: 1 } };
-        const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules, map });
+        const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules, map });
         hud.onSnapshot(snapshot);
         const sent: Command[] = [];
         const controller = new OrderController({

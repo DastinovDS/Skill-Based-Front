@@ -15,7 +15,7 @@ const welcome: ServerMsg = {
   ruleset_public: DEV_RULES,
   map_id: map.meta.name,
   last_seq: 0,
-  nicks: ['Danya', 'Bot'],
+  nicks: ['Ember', 'Bot'],
   rated: false,
   unrated_reason: 'casual',
   calibration: null,
@@ -26,7 +26,7 @@ const snapshot = (tick: number): ServerMsg => devSnapshot(map, DEV_RULES, tick);
 
 function setup() {
   const server = createFakeServer();
-  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
+  const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: DEV_RULES, map });
   let clock = 0;
   const session = new MatchSession({
     matchId: 'm1',
@@ -67,7 +67,7 @@ describe('MatchSession', () => {
         return {
           hud: new HudState({
             me: msg.player,
-            nicks: ['Danya', 'Bot'],
+            nicks: ['Ember', 'Bot'],
             rules: msg.ruleset_public,
             map,
           }),
@@ -103,7 +103,7 @@ describe('MatchSession', () => {
   it('hands events, acks and the end to the match audio, and releases events with the frames (#71)', () => {
     const server = createFakeServer();
     const played: SoundId[] = [];
-    const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
+    const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: DEV_RULES, map });
     let clock = 0;
     const audio = new MatchAudio({ me: 0, play: (id) => played.push(id), now: () => clock });
     const session = new MatchSession({

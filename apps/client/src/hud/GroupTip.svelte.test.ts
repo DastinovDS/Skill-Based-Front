@@ -14,7 +14,7 @@ const RULES: RulesetPublic = {
   orders: { ...DEV_RULES.orders, defense_ticks_per_bonus: 60 },
   cost: { ...DEV_RULES.cost, defense: 200 },
 };
-const ctx: HudContext = { me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map: DEFAULT_MAP };
+const ctx: HudContext = { me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map: DEFAULT_MAP };
 const base = devSnapshot(DEFAULT_MAP, RULES, 100);
 const city = base.view.nodes.find((n) => n.owner === 0)?.id ?? 0;
 

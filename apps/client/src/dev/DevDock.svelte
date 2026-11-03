@@ -57,7 +57,7 @@
     state: 'open',
     public: false,
     map_id: 'crossroads',
-    host_nick: 'Danya',
+    host_nick: 'Ember',
     guest_nick: null,
     you_ready: false,
     opponent_ready: false,
@@ -120,7 +120,7 @@
     const guest = id === 'lobby-guest' || id === 'password-set';
     const rated = id === 'bot-rated';
     const dock: DockContext = {
-      nick: 'Danya',
+      nick: 'Ember',
       hasPassword: !guest,
       calibration: guest || rated ? null : CALIBRATION,
       banUntil: banned ? BAN_SECONDS * 1000 : null,
@@ -168,7 +168,7 @@
   <InviteScreen
     {api}
     token="dev"
-    nick="Danya"
+    nick="Ember"
     code="k3x9-q7ab-02ff"
     {dock}
     onstart={nothing}

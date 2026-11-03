@@ -343,7 +343,7 @@ export function createDevServer(
           ruleset_public: rules,
           map_id: map.meta.name,
           last_seq: lastSeq,
-          nicks: ['Danya', 'Bot'],
+          nicks: ['Ember', 'Bot'],
           rated: false,
           unrated_reason: 'casual',
           calibration: null,

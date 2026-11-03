@@ -57,7 +57,7 @@ const PEOPLE: readonly (readonly [string, number, number, number, number])[] = [
   ['Vega', 1590, 22, 12, 3],
   ['Kolya', 1561, 25, 17, 2],
   ['Mira', 1522, 19, 11, 4],
-  ['Danya', 1480, 12, 8, 1],
+  ['Ember', 1480, 12, 8, 1],
   ['Lena', 1441, 14, 13, 2],
   ['Sasha', 1398, 11, 9, 0],
   ['Nikita', 1366, 10, 10, 1],
@@ -66,10 +66,10 @@ const PEOPLE: readonly (readonly [string, number, number, number, number])[] = [
   ['Max', 1287, 9, 12, 0],
 ];
 
-/** The top list; `withMe` keeps Danya (id 6) in it, otherwise the row is left out. */
+/** The top list; `withMe` keeps Ember (id 6) in it, otherwise the row is left out. */
 function entries(withMe: boolean): LeaderboardEntry[] {
   return PEOPLE.map((p, i) => ({ person: p, id: i + 1 }))
-    .filter(({ person }) => withMe || person[0] !== 'Danya')
+    .filter(({ person }) => withMe || person[0] !== 'Ember')
     .map(({ person, id }, i) => ({
       rank: i + 1,
       player_id: id,
@@ -147,7 +147,7 @@ function profile(over: Partial<PlayerProfile> & Pick<PlayerProfile, 'player_id' 
 const ranked = (far: boolean): PlayerProfile =>
   profile({
     player_id: ME,
-    nick: 'Danya',
+    nick: 'Ember',
     rating: far ? 1102 : 1480,
     rank: far ? 143 : 6,
     rated_matches: far ? 20 : 21,
@@ -188,7 +188,7 @@ export interface BoardScene {
 export function sceneApi(scene: BoardScene): Pick<Api, 'leaderboard' | 'player' | 'me'> {
   return {
     leaderboard: scene.leaderboard,
-    me: () => Promise.resolve({ player_id: ME, nick: 'Danya', has_password: scene.hasPassword }),
+    me: () => Promise.resolve({ player_id: ME, nick: 'Ember', has_password: scene.hasPassword }),
     player: (id) => (scene.profiles[id] ?? reject<PlayerProfile>(new ApiError('not_found', 404)))(),
   };
 }
@@ -223,12 +223,12 @@ function account(
 
 const ownGuest = profile({
   player_id: ME,
-  nick: 'Danya',
+  nick: 'Ember',
   has_password: false,
   record: rec(2, 1, 1),
   matches: GUEST_MATCHES,
 });
-const ownCalibrating = calibrating(ME, 'Danya', 2, [
+const ownCalibrating = calibrating(ME, 'Ember', 2, [
   m('win', E('Mira', 5), 'calibration', 'crossroads', mins(11, 30), 60, 'ready'),
   m('loss', E('Sasha', 8), 'calibration', 'ridge', mins(9, 12), 1500, 'ready'),
   m('win', BOT('reactive'), 'bot', 'highway', mins(14, 40), 1560, 'expired'),
@@ -247,7 +247,7 @@ export const BOARD_SCENES: Readonly<Record<BoardSceneId, BoardScene>> = {
   replays: account(ranked(false), now(TOP), { mode: 'history' }),
   'replays-guest': account(ownGuest, now(TOP), { mode: 'history' }),
   'replays-empty': account(
-    profile({ player_id: ME, nick: 'Danya', has_password: false }),
+    profile({ player_id: ME, nick: 'Ember', has_password: false }),
     now(TOP),
     {
       mode: 'history',

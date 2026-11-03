@@ -41,7 +41,7 @@ describe('Hud', () => {
   ) {
     const state = new HudState({
       me: DEV_PLAYER,
-      nicks: ['Danya', 'Guest'],
+      nicks: ['Ember', 'Guest'],
       rules: DEV_RULES,
       map: DEFAULT_MAP,
     });
@@ -128,10 +128,10 @@ describe('Hud', () => {
     // Tick 250 at 10 Hz of a 9000-tick match (DEC-22): 875 s = 14:35 left; CP is at the cap.
     expect(bar).toContain('14:35');
     expect(bar).toContain('Balance');
-    expect(bar).toContain('Danya');
+    expect(bar).toContain('Ember');
     expect(bar).toContain('Guest');
     expect(target.querySelector('[aria-label^="VP score"]')?.getAttribute('aria-label')).toBe(
-      'VP score: Danya 2, Guest 1',
+      'VP score: Ember 2, Guest 1',
     );
     // CP as one track with a notch at every whole CP below the cap: four for a cap of 5 CP.
     expect(target.querySelectorAll('.track')).toHaveLength(1);

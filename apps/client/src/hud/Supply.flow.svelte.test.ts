@@ -31,7 +31,7 @@ describe('the leaf shift control', () => {
   function render(snapshot: SnapshotMsg = withShift(0)) {
     const hud = new HudState({
       me: 0,
-      nicks: ['Danya', 'Bot'],
+      nicks: ['Ember', 'Bot'],
       rules: DEV_RULES_FLOW,
       map: DEFAULT_MAP,
     });

@@ -27,7 +27,7 @@ describe('SplitTip: the stack limit before the order is sent (#468)', () => {
   function setup() {
     const hud = new HudState({
       me: 0,
-      nicks: ['Danya', 'Bot'],
+      nicks: ['Ember', 'Bot'],
       rules: DEV_RULES,
       map: DEFAULT_MAP,
     });

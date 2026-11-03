@@ -32,7 +32,7 @@ describe('the «Supply» mode UI (DEC-28)', () => {
   function render(snapshot: SnapshotMsg = base, rules: RulesetPublic = DEV_RULES) {
     const hud = new HudState({
       me: 0,
-      nicks: ['Danya', 'Bot'],
+      nicks: ['Ember', 'Bot'],
       rules,
       map: DEFAULT_MAP,
     });

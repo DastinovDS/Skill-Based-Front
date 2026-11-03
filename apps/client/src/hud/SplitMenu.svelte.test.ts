@@ -28,7 +28,7 @@ describe('SplitMenu', () => {
   function render() {
     const hud = new HudState({
       me: 0,
-      nicks: ['Danya', 'Bot'],
+      nicks: ['Ember', 'Bot'],
       rules: DEV_RULES,
       map: DEFAULT_MAP,
     });

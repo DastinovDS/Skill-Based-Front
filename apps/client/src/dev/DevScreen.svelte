@@ -93,7 +93,7 @@
 
   // The HUD numbers for the map on screen.
   const hud = $derived(
-    new HudState({ me: DEV_PLAYER, nicks: ['Danya', 'Bot'], rules: sceneRules, map }),
+    new HudState({ me: DEV_PLAYER, nicks: ['Ember', 'Bot'], rules: sceneRules, map }),
   );
   const chrome = new HudChrome();
 

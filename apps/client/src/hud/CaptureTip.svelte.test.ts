@@ -28,7 +28,7 @@ describe('CaptureTip: the price of a capture on a target (DEC-38, #580)', () => 
   });
 
   function setup(rules: RulesetPublic) {
-    const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules, map: DEFAULT_MAP });
+    const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules, map: DEFAULT_MAP });
     hud.onSnapshot(snapshot);
     const group = snapshot.view.groups.find((g) => g.location.kind === 'node');
     const home = group?.location.kind === 'node' ? group.location.node : null;
