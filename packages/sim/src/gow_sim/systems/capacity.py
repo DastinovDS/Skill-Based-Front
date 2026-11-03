@@ -324,7 +324,9 @@ def starvation(state: GameState, rules: Ruleset, garrisons: dict[int, list[Group
     return events
 
 
-def consume(state: GameState, rules: Ruleset, node_id: int, garrison: Sequence[Group]) -> Event | None:
+def consume(
+    state: GameState, rules: Ruleset, node_id: int, garrison: Sequence[Group]
+) -> Event | None:
     """One consumption of a starving node (DEC-19, items 3 and 4): ``charges * ceil(U /
     per_units)`` charges, ``U`` the units of ``garrison`` (the owner's standing groups in the
     node, ascending id), first from the warehouse, the rest one charge at a time from the group

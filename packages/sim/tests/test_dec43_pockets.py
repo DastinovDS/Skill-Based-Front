@@ -327,4 +327,5 @@ def test_a_group_in_transit_does_not_count() -> None:
 def test_neutral_nodes_have_no_timer() -> None:
     state = _state()
     _run(state, 1100, _cut())
-    assert all(state.nodes[n].cut_since is None for n in state.nodes if state.nodes[n].owner is None)
+    neutral = [n for n in state.nodes if state.nodes[n].owner is None]
+    assert all(state.nodes[n].cut_since is None for n in neutral)
