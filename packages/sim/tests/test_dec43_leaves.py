@@ -1,8 +1,8 @@
 """Leaves face the enemy only, the farthest nodes before contact, leaves even out (DEC-43, #724).
 
 Expected values come from mechanics.md, section 7, block "Automatic supply flow, leaf shift, fixed
-warehouses, road fortifications (DEC-43, #697)", item A as revised by #724 and its table L1..L13
-(computed by hand there).
+warehouses, road fortifications (DEC-43, #697)", item A as revised by #724 and #726 and its table
+L1..L21 (computed by hand there).
 
 The map is ``dec41`` as it is (unlike the tables F and H, whose base gives the passes 17 and 18 to
 player 1): player 0 owns K = 0 (capital), A = 1, B, C, D = 2, 3, 4, E, F, G = 5, 6, 7; M = 8,
@@ -18,7 +18,7 @@ from pathlib import Path
 from gow_sim.maps import load_map
 from gow_sim.match import HEADLESS_MATCH_KEY
 from gow_sim.ruleset import load_ruleset
-from gow_sim.state import AtNode, Event, FlowIdle, GameState, Group, Mode, initial_state
+from gow_sim.state import AtNode, Event, FlowIdle, GameState, Group, Mode, OnEdge, initial_state
 from gow_sim.systems.flow import supply_flow, update_flow
 from gow_sim.view import project
 
@@ -262,3 +262,138 @@ def test_l17_replay_9_with_the_shift_at_1() -> None:
     old.groups.clear()
     old.players[0].leaf_shift = 1
     assert _sent(_flow(old)) == [(1, 2), (4, 8)]
+
+
+# Item I7: a pulling army ahead of the level lifts its path (#726) ------------------------------
+
+
+def _timeline(
+    state: GameState, groups: dict[str, Group], until: int
+) -> tuple[dict[int, list[tuple[int, int]]], dict[int, dict[str, int]]]:
+    """The sends of every dispatch up to ``until`` and the tick each group's ``charged`` grew."""
+    sends: dict[int, list[tuple[int, int]]] = {}
+    charged: dict[int, dict[str, int]] = {}
+    while state.tick < until:
+        before = {name: g.charged for name, g in groups.items()}
+        sent = _sent(_flow(state, state.tick + 1))
+        if sent:
+            sends[state.tick] = sent
+        grown = {name: g.charged for name, g in groups.items() if g.charged != before[name]}
+        if grown:
+            charged[state.tick] = grown
+    return sends, charged
+
+
+def test_l18_an_army_two_roads_ahead_lifts_its_path() -> None:
+    passes: dict[int, int | None] = {NORTH: 1, SOUTH: 1}
+    state = _state({F: 2, A: 2, D: 2}, owners=passes, shift=2)
+    army = _group(state, C, 2, 0)
+    sends, charged = _timeline(state, {"C": army}, 60)
+    assert sends == {10: [(F, B)], 20: [(F, B)], 30: [(B, C)], 40: [(B, C)]}
+    assert charged == {50: {"C": 1}, 60: {"C": 2}}
+    assert (state.nodes[A].warehouse, state.nodes[D].warehouse) == (2, 2)  # ahead, on no path
+    d = _d(state)  # the army is full: the lift ends at once
+    assert (d[C], d[B]) == (0, 1)
+    flow = state.nodes[B].flow
+    assert flow is not None and flow.idle is FlowIdle.AHEAD
+
+
+def test_l18_the_field_and_the_army_leaving() -> None:
+    passes: dict[int, int | None] = {NORTH: 1, SOUTH: 1}
+    state = _state({F: 2, A: 2, D: 2}, owners=passes, shift=2)
+    army = _group(state, C, 2, 0)
+    _flow(state)
+    d = _d(state)
+    assert (d[C], d[B], d[A], d[D], d[F], d[G], d[K], d[E]) == (2, 2, 1, 0, 2, 2, 2, 2)
+    _flow(state, 35)
+    army.location = OnEdge(2, C, 0)  # the group leaves C along B-C
+    _flow(state, 36)
+    d = _d(state)
+    assert (d[C], d[B]) == (0, 1)  # the lift ends in the same tick
+
+
+def test_i7_an_army_next_to_the_level_lifts_its_node_alone() -> None:
+    passes: dict[int, int | None] = {NORTH: 1, SOUTH: 1}
+    state = _state({F: 2}, owners=passes, shift=2)
+    _group(state, B, 2, 0)  # B is one road ahead: its node alone, item I6 as before
+    assert _sent(_flow(state)) == [(F, B)]
+    d = _d(state)
+    assert (d[B], d[C], d[A]) == (2, 0, 1)
+
+
+def test_l19_an_army_three_roads_ahead_under_k_3() -> None:
+    state = _state({K: 2, E: 1, D: 2}, owners={NORTH: 1}, shift=3)
+    army = _group(state, C, 2, 0)
+    sends, charged = _timeline(state, {"C": army}, 80)
+    assert sends == {
+        10: [(K, A)],
+        20: [(K, A)],
+        30: [(A, B)],
+        40: [(A, B)],
+        50: [(B, C)],
+        60: [(B, C)],
+    }
+    assert charged == {70: {"C": 1}, 80: {"C": 2}}
+    assert (state.nodes[D].warehouse, state.nodes[E].warehouse) == (2, 1)
+
+
+def test_l19_the_field_of_the_path() -> None:
+    state = _state({K: 2, E: 1, D: 2}, owners={NORTH: 1}, shift=3)
+    _group(state, C, 2, 0)
+    _flow(state)
+    d = _d(state)
+    assert (d[C], d[B], d[A], d[D], d[F], d[G], d[K], d[E]) == (3, 3, 3, 1, 2, 2, 3, 3)
+    view = project(state, RULES, 0, HEADLESS_MATCH_KEY)
+    assert view.me.leaf_shift == 3
+    assert [view.nodes[n].front_dist for n in (C, B, A, D)] == [3, 3, 3, 1]
+
+
+def test_l20_two_armies_share_a_path() -> None:
+    state = _state({K: 2, E: 1}, owners={NORTH: 1}, shift=3)
+    north = _group(state, C, 2, 0)
+    south = _group(state, D, 2, 0)
+    sends, charged = _timeline(state, {"C": north, "D": south}, 70)
+    assert sends == {10: [(K, A)], 20: [(K, A)], 30: [(A, B)], 40: [(A, D)], 50: [(B, C)]}
+    assert charged == {60: {"D": 1}, 70: {"C": 1}}
+
+
+def test_l21_the_nearer_army_first() -> None:
+    state = _state({K: 3, E: 1}, owners={NORTH: 1}, shift=3)
+    near = _group(state, B, 2, 0)
+    far = _group(state, C, 2, 0)
+    sends, charged = _timeline(state, {"B": near, "C": far}, 90)
+    assert sends == {
+        10: [(K, A)],
+        20: [(K, A)],
+        30: [(K, A), (A, B)],
+        40: [(A, B)],
+        50: [(A, B)],
+        70: [(B, C)],
+    }
+    assert charged == {50: {"B": 1}, 60: {"B": 2}, 90: {"C": 1}}
+
+
+def test_i7_the_path_is_mirrored() -> None:
+    """Both players with the mirrored position (the map as it is, no contact, ``k = 3``, an army
+    in C and in its mirror node): the ties of the path (B or D from C) are broken by ``node_key``,
+    so player 1 lifts and sends the mirror of what player 0 does."""
+    mirror = MAP.mirror_nodes
+    state = _state({K: 2} | {mirror[n]: 0 for n in OWN} | {mirror[K]: 2}, shift=3)
+    state.players[1].leaf_shift = 3
+    west = _group(state, C, 2, 0)
+    gid = state.new_id()
+    east = Group(gid, 1, 2, 0, Mode.ATTACK, AtNode(mirror[C]))
+    state.groups[gid] = east
+    events: list[Event] = []
+    while state.tick < 80:
+        events += _flow(state, state.tick + 1)
+        assert west.charged == east.charged
+        for n in OWN:
+            a, b = state.nodes[n].flow, state.nodes[mirror[n]].flow
+            assert a is not None and b is not None
+            assert (b.d, b.k, b.idle) == (a.d, a.k, a.idle)
+            assert b.next == tuple(mirror[m] for m in a.next)
+    sent_west = _sent(events, 0)
+    assert sent_west == [(K, A), (K, A), (A, B), (A, B), (B, C), (B, C)]
+    assert _sent(events, 1) == [(mirror[a], mirror[b]) for a, b in sent_west]
+    assert west.charged == 2

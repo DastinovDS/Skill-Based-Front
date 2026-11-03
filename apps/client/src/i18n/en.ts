@@ -753,7 +753,7 @@ export const en = {
   // The automatic supply flow (DEC-43, `mvp-4`): no lines, one lever, the leaf shift.
   'supply.shift': 'Supply level',
   'supply.shiftTip':
-    'The level is where supply stops: cities there keep what they get, those ahead of it are frozen. − moves it one road back from the front, + forward (keys - and =)',
+    'The level is where supply stops: cities there keep what they get and even out with each other; those ahead of it are frozen, but an army short of charges still gets supplied. − moves it one road back from the front, + forward (keys - and =)',
   'supply.shiftFront': 'front',
   'supply.shiftBack': 'Move the supply level one road back from the front',
   'supply.shiftForward': 'Move the supply level one road forward',
