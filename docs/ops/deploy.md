@@ -388,3 +388,36 @@ change over that gets `503` with `Retry-After: 1` at once instead of queueing. T
 Player reports about nicks and logging of blocks are not part of the issue: blocks are visible in the container log only as
 403 in requests. `[manual]` The first list of forbidden words was compiled by the author of the code: the owner should review it
 and extend it for their audience.
+
+## 9. Sharing the local stack (`mise run share`, #711)
+
+To open the game from a phone or let friends play without a deploy, run the stack as usual and put it online through a
+Cloudflare **quick tunnel** (`cloudflared`, no Cloudflare account, pinned in `mise.toml`):
+
+```
+mise run stack        # the owner's stack on http://localhost:8080 (once, as always)
+mise run share        # prints https://<random-words>.trycloudflare.com and keeps the tunnel up
+```
+
+`mise run share 18080` shares the agents' stack (`stack:agent`) instead. The task does not start, restart or change any stack:
+if nothing answers on the port it says which command to run. The link is copied to the clipboard (macOS), it appears only after
+the first connection to the Cloudflare edge is registered, and the task checks the link from this machine (the page loads, and
+the match WebSocket is accepted) before printing the result. **Ctrl+C closes the tunnel.**
+
+**Security.** Anyone who has the link reaches your local stack: the game, its API and its database, with the same rules as a real
+server and nobody in front of it. The address is random and changes on every run, nothing stays online after Ctrl+C, but
+send the link only to people you trust and stop the tunnel when you are done. Quick tunnels have no uptime guarantee and are
+subject to Cloudflare's terms.
+
+**Why the stack needs no change.** The Cloudflare edge terminates HTTPS and forwards plain HTTP to Caddy (`SITE_ADDRESS=:80`
+accepts any host) with the public `Host`, and the browser sends the matching `Origin`, so the rule "Origin equals the page's own
+Host" of the match WebSocket (AGENTS.md 5.3, `gow_server.ws.origin_allowed`) holds and `GOW_WS_ALLOWED_ORIGINS` stays empty.
+The client uses relative `/api` and `/ws` URLs and builds invite links from `location.origin`, so invites carry the tunnel
+address; the CSP is `'self'`-only and covers `wss:` of the same host; the server sets no cookies (the guest token is kept by
+the client). If the task prints "WARNING: the match WebSocket was refused by the Origin check", something in front of Caddy
+rewrote `Host`: do not switch the check off, fix the proxy.
+
+**Limits.** Per-IP limits (section 8) see the address of `cloudflared`, not of each friend, as with any proxy behind Caddy: all
+visitors count as one client, so 10 new guests per hour in total and 10 sockets waiting for `hello`. For a bigger group raise the
+limits for the run: `GOW_GUEST_RATE_LIMIT=100 mise run stack`. The tunnel needs outbound TCP/UDP to port 7844 on
+`*.argotunnel.com`; a VPN, a firewall or a guest Wi-Fi may block it (the task then stops after 60 s and says so).
