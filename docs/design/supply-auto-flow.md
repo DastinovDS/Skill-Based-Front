@@ -153,7 +153,7 @@ Units recharge from the warehouse of their node (unchanged). A big army at a lea
 - **12A (rec.)**: **a tired army pulls**: a node with own standing units that have fewer charges than units, or with a gathering planned order (DEC-41 item 10), is placed on the leaf level of the field (`d = k`). Charges then flow to it like to a leaf until it is charged, and it stops pulling. The player steers supply with the armies it already moves; no new control.
 - 12B: no pull; an army must stand on the flow (or at the front) to recharge.
 
-With the leaf shift above 0, a tired army ahead of the level does not pull: the shift is the player's explicit choice and wins. (Superseded after the first playtest, owner 2026-11-03, #724: a tired army ahead of the level pulls too, its node is put on the level; `mechanics.md` DEC-43 item I6. Owner 2026-11-03, #726: with the nodes of its path to the level, which pass charges towards it; item I7.)
+With the leaf shift above 0, a tired army ahead of the level does not pull: the shift is the player's explicit choice and wins. (Superseded after the first playtest, owner 2026-11-03, #724: a tired army ahead of the level pulls too, its node is put on the level; `mechanics.md` DEC-43 item I6. Owner 2026-11-03, #726: with the nodes of its path to the level, which pass charges towards it; item I7. Owner 2026-11-03, #729: an unpaid build paid in charges pulls exactly like such an army; item J.)
 
 ### 13. Provinces
 
