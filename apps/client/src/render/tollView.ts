@@ -1,18 +1,19 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
-import type { PlayerId } from '../protocol.gen.ts';
+import type { EventMsg, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { EnemyAnchors } from './entityView.ts';
 import { borderPoint } from './fogLayout.ts';
 import type { LineMark } from './fortView.ts';
 import type { Punch } from './hitView.ts';
 import type { TokenSpot } from './layout.ts';
-import type { Emit } from './particles.ts';
+import { ParticleLayer } from './particles.ts';
 import { reducedMotion } from './motion.ts';
 import { BG, NUMBERS_RISE, PAPER, PLATE_FILL, WARN, ownerColor } from './style.ts';
 import {
   TOLL_MS,
   tollMs,
   tollNumber,
+  tollInfo,
   tollParticles,
   tollPop,
   tollSeed,
@@ -36,8 +37,8 @@ interface Plate {
 
 /**
  * The toll of road fortifications on the map (K6 "Beam", ui-style 42): per toll the beam, the ring,
- * the flash, the sparks and the flung charges go to the shared `ParticleLayer` through `emit`; the
- * number "-N" is a pooled plate drawn here. When the viewing player paid, the plate has a down
+ * the flash, the sparks and the flung charges go to a `ParticleLayer` of its own, and the number
+ * "-N" is a pooled plate drawn here, both in the layer `tolls`, which the «Supply» mode does not hide. When the viewing player paid, the plate has a down
  * triangle and an amber frame and a dashed amber ring turns round the group, so the loss is told by
  * more than the hue; when the own line took it, the plate is plain. Every effect is a function of
  * the render tick, so a paused scene shows a toll in the state of its tick. With "less motion" only
@@ -49,6 +50,10 @@ export class TollView {
   private readonly frames: { mine: GraphicsContext; enemy: GraphicsContext };
   private readonly style: TextStyle;
   private readonly colors: { own: number; enemy: number };
+  private readonly particles: ParticleLayer;
+  private tolls: readonly TollInfo[] = [];
+  private eventsSeen: readonly EventMsg[] | null = null;
+  private eventCount = -1;
 
   constructor(
     parent: Container,
@@ -60,6 +65,7 @@ export class TollView {
   ) {
     const enemy: PlayerId = me === 0 ? 1 : 0;
     this.colors = { own: ownerColor(me, me), enemy: ownerColor(me, enemy) };
+    this.particles = new ParticleLayer(parent, this.colors);
     const plate = (mine: boolean): GraphicsContext => {
       const ctx = new GraphicsContext()
         .roundRect(-19, -8.5, 38, 17, 4)
@@ -90,18 +96,22 @@ export class TollView {
    * `scale`: the size of everything on the map (more when zoomed out).
    */
   update(
-    emit: Emit,
+    events: readonly EventMsg[],
     tick: number,
-    tolls: readonly TollInfo[],
     spots: ReadonlyMap<string, TokenSpot>,
     enemies: EnemyAnchors | null,
     tickHz: number,
     scale: number,
   ): Punch[] {
+    this.readEvents(events);
     const reduced = reducedMotion();
     const punches: Punch[] = [];
+    const emit = (particle: Parameters<ParticleLayer['put']>[0]): void => {
+      this.particles.put(particle);
+    };
+    this.particles.begin();
     let used = 0;
-    for (const toll of tolls) {
+    for (const toll of this.tolls) {
       const ms = tollMs(tick - toll.tick, tickHz);
       if (ms === null || used >= MAX_TOLLS) continue;
       const road = this.map.edges[toll.edge];
@@ -158,11 +168,20 @@ export class TollView {
       plate.text.position.set(toll.paid ? 6 : 0, 0.5);
       plate.view.visible = true;
     }
+    this.particles.end();
     for (let i = used; i < this.plates.length; i++) {
       const plate = this.plates[i];
       if (plate !== undefined) plate.view.visible = false;
     }
     return punches;
+  }
+
+  /** The tolls among the events, read again only when the list has grown. */
+  private readEvents(events: readonly EventMsg[]): void {
+    if (events === this.eventsSeen && events.length === this.eventCount) return;
+    this.eventsSeen = events;
+    this.eventCount = events.length;
+    this.tolls = events.flatMap((event) => tollInfo(event) ?? []);
   }
 
   /** The group that lost the charges: the own token, or the enemy figure on the road nearest the line. */
@@ -199,6 +218,7 @@ export class TollView {
   }
 
   destroy(): void {
+    this.particles.destroy();
     this.layer.destroy({ children: true });
     this.frames.mine.destroy();
     this.frames.enemy.destroy();

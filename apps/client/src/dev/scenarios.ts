@@ -28,7 +28,13 @@ import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 import { supplySnapshot } from './supplyScene.ts';
 import { FLOW_VIEW, flowSnapshot } from './flowScene.ts';
-import { FORTS_VIEW, fortsEvents, fortsSnapshot } from './fortsScene.ts';
+import {
+  FORTS_GEO_VIEW,
+  FORTS_VIEW,
+  fortsEvents,
+  fortsGeoSnapshot,
+  fortsSnapshot,
+} from './fortsScene.ts';
 import { terrainSnapshot } from './terrainScene.ts';
 
 const files = import.meta.glob<SnapshotMsg>(
@@ -608,6 +614,16 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     snapshot: fortsSnapshot(bundledMap('artery')),
     events: [],
     view: FORTS_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_FLOW,
+  },
+  {
+    // The same on a pool map whose areas come from a geography (curved borders, provinces): `crossroads`.
+    id: 'forts_geo',
+    map: 'crossroads',
+    snapshot: fortsGeoSnapshot(bundledMap('crossroads')),
+    events: [],
+    view: FORTS_GEO_VIEW,
     cityUpgrades: true,
     rules: DEV_RULES_FLOW,
   },

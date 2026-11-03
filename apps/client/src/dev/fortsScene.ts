@@ -20,6 +20,7 @@ import type {
 } from '../protocol.gen.ts';
 import { ARTERY_TICK } from './arteryScene.ts';
 import { FLOW_VIEW, flowSnapshot } from './flowScene.ts';
+import { PROVINCES_TICK, PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 
 export const FORTS_TICK = ARTERY_TICK;
 export const FORTS_VIEW = FLOW_VIEW;
@@ -119,4 +120,28 @@ export function fortsEvents(age: number): EventMsg[] {
       data: { player: 0, node: 7, edge: 11, charges: 1 },
     },
   ];
+}
+
+/** The `forts_geo` scene: the same on the pool map `crossroads`, whose areas come from a geography (curved borders). */
+export const FORTS_GEO_TICK = PROVINCES_TICK;
+export const FORTS_GEO_VIEW = PROVINCES_VIEW;
+
+const GEO_FORTS: Readonly<Record<number, readonly RoadFort[]>> = {
+  // 6-10: the border with the enemy: both sides, built.
+  14: [fort(6, 0, true, null), fort(10, 1, true, null)],
+  // 7-11: an own city against a neutral province, built.
+  16: [fort(7, 0, true, null)],
+  // 7-12 and 7-11: the second line of the city 7 on a neighbouring road (they share a stretch of border).
+  17: [fort(7, 0, false, PROVINCES_TICK + 45)],
+  // 1-6: an own line on an internal road.
+  6: [fort(6, 0, true, null)],
+};
+
+export function fortsGeoSnapshot(map: MapFile): SnapshotMsg {
+  const base = provincesSnapshot(map);
+  const edges: EdgeView[] = base.view.edges.map((edge) => {
+    const forts = GEO_FORTS[edge.id];
+    return forts === undefined ? edge : { ...edge, forts: [...forts] };
+  });
+  return { ...base, view: { ...base.view, edges } };
 }

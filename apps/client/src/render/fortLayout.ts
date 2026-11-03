@@ -40,7 +40,7 @@ export const FORT = {
   lightenOwn: 0.3,
   lightenEnemy: 0.38,
   /** The shield marker of the pick is not used (P1 "Ghosts"): a pickable crossing shows this much of the line. */
-  ghostAlpha: 0.38,
+  ghostAlpha: 0.5,
   ghostHoverAlpha: 0.95,
 } as const;
 

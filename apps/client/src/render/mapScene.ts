@@ -10,6 +10,7 @@ import { FrameGuard } from './frameGuard.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
 import { FortView } from './fortView.ts';
+import { TollView } from './tollView.ts';
 import { DefenseView } from './defenseView.ts';
 import { defenseSigns, signCounts } from './defenseSigns.ts';
 import { IntentView } from './intentView.ts';
@@ -109,6 +110,8 @@ export class MapScene {
   private readonly flow: FlowView;
   /** The road fortifications (DEC-43, item D; #707). */
   private readonly forts: FortView;
+  /** The toll of the lines (K6): its own layer, shown in the «Supply» mode too. */
+  private readonly tolls: TollView;
   /** The own nodes of the supply level (T1) of the snapshot on screen. */
   private levelCells: readonly number[] = [];
   private readonly sight: SightView;
@@ -165,7 +168,9 @@ export class MapScene {
       this.view.cells,
       radiusOf,
       this.screenSprites,
-      (node, edge) => this.forts.lineAt(node, edge),
+    );
+    this.tolls = new TollView(this.layers.layer.tolls, map, me, 1, (node, edge) =>
+      this.forts.lineAt(node, edge),
     );
     this.fog = new FogView(
       map,
@@ -266,6 +271,7 @@ export class MapScene {
     this.supply.destroy();
     this.flow.destroy();
     this.forts.destroy();
+    this.tolls.destroy();
     this.sight.destroy();
     this.names.destroy();
     this.cities.destroy();
@@ -377,7 +383,16 @@ export class MapScene {
       this.source.roundTicks,
       this.entities,
     );
-    this.entities.punch(punches);
+    // The toll of the road fortifications (#707), on both maps; its hits swell the tokens as a fight's do.
+    const tollPunches = this.tolls.update(
+      this.source.events(),
+      frame.tick,
+      this.entities.groupPoints(),
+      this.entities,
+      tickHz,
+      Math.max(1, 1 / this.layers.world.scale.x),
+    );
+    this.entities.punch([...punches, ...tollPunches]);
     this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
@@ -484,6 +499,7 @@ export class MapScene {
     this.names.setLabelResolution(screen);
     this.screenSprites.setResolution(screen);
     this.effects.setScreenResolution(screen);
+    this.tolls.setScreenResolution(screen);
     this.intents.setScreenResolution(screen);
     this.effects.setCameraScale(camera.scale);
     // The canvas in the px of the world times the scale: the arenas of fights keep inside it.

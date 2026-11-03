@@ -32,6 +32,7 @@ export const SCENES: readonly {
   { id: 'forts', tick: 2400 },
   { id: 'forts_supply', tick: 2400, keys: ['Tab'] },
   { id: 'forts_toll', tick: 2400 },
+  { id: 'forts_geo', tick: 1200 },
 ];
 
 /**

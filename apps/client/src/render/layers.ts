@@ -6,7 +6,8 @@ import { Container } from 'pixi.js';
  * must not dim, and neither must the own group that marches along a road into a hidden city
  * (DEC-10: it sees its own edge, which lies in the veil of the hidden end). That is safe: the
  * server sends an enemy figure only where it is seen, and the memory ghosts of the fog are drawn in
- * the fog layer itself. `supply` is above everything.
+ * the fog layer itself. `tolls` (the toll of a road fortification, #707) is not hidden by the «Supply»
+ * mode, so it has a layer of its own above the effects. `supply` is above everything.
  */
 export const LAYER_ORDER = [
   'background',
@@ -18,6 +19,7 @@ export const LAYER_ORDER = [
   'groups',
   'intents',
   'effects',
+  'tolls',
   'supply',
 ] as const;
 

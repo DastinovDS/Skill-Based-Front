@@ -764,6 +764,7 @@ export const en = {
   'flow.noSource': 'No source',
   'flow.next': 'Next dispatch',
   'help.key.supplyFlow': 'supply map mode: point at a city to see where it sends next',
+  'help.key.fortify': 'fortify a road of the selected city or province, then pick the road',
   'help.key.leafShift': 'move the supply level back from the front / forward',
   'help.economyFlow':
     'Factories make charges, and supply rolls by itself towards the front, one charge per road each dispatch. You steer one thing: the supply level. Buildings are paid in charges of the node and of the units standing there.',

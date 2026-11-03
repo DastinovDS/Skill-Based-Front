@@ -344,6 +344,18 @@ export class FortView {
   private drawHalo(p: Placed, lay: TickLayout): void {
     const { lo, hi, known } = this.stateOf(p.spec, lay);
     if (!known || hi - lo < 1) return;
+    this.haloOf(this.halos, p, lay, lo, hi, 1);
+  }
+
+  /** The soft dark band under a line from `lo` to `hi`, `strength` of its alpha. */
+  private haloOf(
+    g: Graphics,
+    p: Placed,
+    lay: TickLayout,
+    lo: number,
+    hi: number,
+    strength: number,
+  ): void {
     const d = lay.off + p.level * FORT.stackStep * this.mk;
     // A band round the stroke and its ticks, from just inside the real border line inwards.
     const centre = d - lay.tl * 0.5;
@@ -357,7 +369,7 @@ export class FortView {
       const far = centre + (width * k) / 2;
       if (far <= near) continue;
       const strip = runStrip(p.run, lo - lay.tl * 0.4, hi + lay.tl * 0.4, -far, -near);
-      this.halos.poly(strip.flatMap((q) => [q.x, q.y])).fill({ color: HALO_COLOR, alpha });
+      g.poly(strip.flatMap((q) => [q.x, q.y])).fill({ color: HALO_COLOR, alpha: alpha * strength });
     }
   }
 
@@ -452,6 +464,8 @@ export class FortView {
       const d = lay.off + p.level * FORT.stackStep * this.mk;
       const alpha = isHover ? FORT.ghostHoverAlpha : FORT.ghostAlpha;
       const half = lay.half + lay.reach;
+      // The dark band under it keeps a ghost readable on a pale ground and over a cell line.
+      this.haloOf(g, p, lay, -half, half, isHover ? 1 : 0.8);
       const line = runLine(p.run, -half, half, -d);
       const first = line[0];
       if (first !== undefined) {
