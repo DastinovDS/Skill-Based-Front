@@ -391,7 +391,7 @@ FLOW_BUSY_BUDGET: Final = 0.2 * MS
 """The busiest dispatch of the flow (``_flow_state``), a stress state like the one of
 ``test_bench_supply_many_donors_busy_roads``: not the section 12 budget (that one is
 ``test_bench_supply_flow``); about 0.15 ms on the reference machine, half of it the 18 packets it
-sends. Awaits the owner's acceptance (#704)."""
+sends. Accepted by the owner 2026-11-03 (#704)."""
 
 
 def test_bench_supply_flow_busy(

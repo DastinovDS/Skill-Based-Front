@@ -483,6 +483,7 @@ The reference machine is described in `docs/perf.md`.
 | The same on maps with 45..55 nodes (`grid55`, DEC-27, item 7) | step and supply: the 40-node budgets; projection: 0.45 ms (accepted by the owner 2026-10-22, #371) |
 | The supply step (part of the simulation step) | ≤ 0.1 ms |
 | The supply step on a stress state (`test_bench_supply_many_donors_busy_roads`, `docs/perf.md`): busy roads, detours, dispatch once per `supply.dispatch_ticks` | ≤ 1 ms (accepted by the owner 2026-10-21) |
+| The supply flow step on a stress state (`test_bench_supply_flow_busy`, `docs/perf.md`): the busiest dispatch of DEC-43, about 18 packets at once | ≤ 0.2 ms (accepted by the owner 2026-11-03) |
 | A bot decision (every 5 ticks) | ≤ 1 ms |
 | A full headless match of two bots | ≤ 8 s |
 | A tournament of 1000 matches on 8 cores | ≤ 20 min |

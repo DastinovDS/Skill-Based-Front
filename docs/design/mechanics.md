@@ -2161,7 +2161,7 @@ Own packets stay as today (`PacketView`, the dots). No new event kind: the flow 
 - **No own capital.** Without its capital a player has `leaf_shift_max = 0` and every component uses `k = 0` (the match ends then anyway, DEC-03).
 - **The view.** `flow_down` and `flow_next` are `null` like the other fields for nodes that are not own (an own node gets `[]`); `next_dispatch_tick` is `(tick // dispatch_ticks + 1) * dispatch_ticks`, the same number for both players. The flow step stores the field and the plan per own node (`Node.flow`), `project()` copies them. `ruleset_public.supply_model` is a top-level field (`lines` or `flow`).
 - **Checks.** `UpgradeWarehouse` with `warehouse.max_level = 0` and `BuildBunker` without `[bunker]` give `FEATURE_DISABLED` before every other check, like a command of the other economy model.
-- **Performance** (`docs/perf.md`): the plan of item A13, step 6, is computed every tick; the flow step of a bot match fits the supply budget of section 12, the busiest synthetic dispatch (`test_bench_supply_flow_busy`) takes about 0.15 ms and has its own budget of 0.2 ms awaiting the owner's acceptance; the fallback (the receivers of the last dispatch instead of a plan) is not used.
+- **Performance** (`docs/perf.md`): the plan of item A13, step 6, is computed every tick; the flow step of a bot match fits the supply budget of section 12, the busiest synthetic dispatch (`test_bench_supply_flow_busy`) takes about 0.15 ms and has its own budget of 0.2 ms, accepted by the owner 2026-11-03; the fallback (the receivers of the last dispatch instead of a plan) is not used.
 
 **`rulesets/mvp-4.toml`** (a copy of `mvp-3.toml` with these differences):
 
