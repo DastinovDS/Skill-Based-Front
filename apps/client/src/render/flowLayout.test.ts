@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowIdle, GroupView, MapFile, NodeView, PacketView, View } from '../protocol.gen.ts';
 import {
-  DispatchClock,
   aheadNodes,
   downhillRoads,
-  flowChain,
   flowOn,
   fullNodes,
   levelNodes,
@@ -156,34 +154,6 @@ describe('the roads of the flow (chevrons) and the packets on them', () => {
   });
 });
 
-describe('P2: the downstream chain walks flow_down to the level', () => {
-  it('from the capital down every branch, each road once', () => {
-    const chain = flowChain(view(0), 0, index, 0);
-    expect(chain.roads.map((r) => `${String(r.from)}>${String(r.to)}`)).toEqual([
-      '0>1',
-      '1>2',
-      '1>5',
-      '2>3',
-    ]);
-    expect(chain.nodes).toEqual([0, 1, 2, 5, 3]);
-    // The walk ends where the server gives no downhill neighbour: the level (3) and the neck (5).
-    expect(chain.ends).toEqual([5, 3]);
-  });
-
-  it('a node of the level is its own chain, a node of another player has none', () => {
-    expect(flowChain(view(0), 0, index, 3)).toEqual({ roads: [], nodes: [3], ends: [3] });
-    expect(flowChain(view(0), 0, index, 4).roads).toEqual([]);
-  });
-
-  it('a shifted level stops the chain where the server says (flow_down is empty there)', () => {
-    const v = view(1);
-    const nodes = v.nodes.map((n) => (n.id === 2 ? { ...n, flow_down: [] } : n));
-    const chain = flowChain({ ...v, nodes }, 0, index, 0);
-    expect(chain.ends).toContain(2);
-    expect(chain.nodes).not.toContain(3);
-  });
-});
-
 describe('the node marks: starving, full, bottlenecks', () => {
   it('an empty level node with nothing on the way is starving, one with a packet coming is not', () => {
     const v = view(0);
@@ -232,42 +202,6 @@ describe('the node marks: starving, full, bottlenecks', () => {
     expect(pinchRoads(view(0), 0, map, index, 1)).toEqual([4]);
     expect(pinchRoads(view(0), 0, map, index, 2)).toEqual([]);
     expect(pinchRoads(view(0), 0, map, index, 0)).toEqual([]);
-  });
-});
-
-describe('N4: the countdown to the next dispatch', () => {
-  it("is exact from the first snapshot: the period is the ruleset's, not learned", () => {
-    const clock = new DispatchClock();
-    clock.setPeriod(10);
-    clock.observe(20);
-    expect(clock.fraction(10)).toBe(1);
-    expect(clock.fraction(15)).toBeCloseTo(0.5);
-    expect(clock.fraction(20)).toBe(0);
-    // A render tick past the dispatch (the next snapshot is late) stays at 0, never negative.
-    expect(clock.fraction(25)).toBe(0);
-    // A render tick before the period began never goes above 1.
-    expect(clock.fraction(4)).toBe(1);
-  });
-
-  it('follows the next dispatch tick the server sends, with the same period', () => {
-    const clock = new DispatchClock();
-    clock.setPeriod(10);
-    clock.observe(20);
-    clock.observe(30);
-    expect(clock.fraction(21)).toBeCloseTo(0.9);
-    expect(clock.fraction(25)).toBeCloseTo(0.5);
-  });
-
-  it('knows nothing without a flow or without a period', () => {
-    const clock = new DispatchClock();
-    clock.observe(20);
-    expect(clock.fraction(10)).toBe(0);
-    clock.setPeriod(10);
-    clock.observe(null);
-    expect(clock.fraction(10)).toBe(0);
-    clock.setPeriod(0);
-    clock.observe(20);
-    expect(clock.fraction(10)).toBe(0);
   });
 });
 

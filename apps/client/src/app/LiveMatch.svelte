@@ -129,7 +129,6 @@
           recruitQueueMax: welcome.ruleset_public.recruit.queue_max,
           provinceWarehouse: welcome.ruleset_public.city_upgrades.warehouse_province,
           roadBuildTicks: welcome.ruleset_public.build.ticks_per_level,
-          supplyDispatchTicks: welcome.ruleset_public.supply_dispatch_ticks,
           ...(welcome.ruleset_public.fort === null
             ? {}
             : { fortBuildTicks: welcome.ruleset_public.fort.build_ticks }),

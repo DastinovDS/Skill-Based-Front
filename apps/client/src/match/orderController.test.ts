@@ -912,7 +912,6 @@ describe('OrderController', () => {
         targets: [],
         draft: [],
         lines: { node: null, line: null },
-        flow: null,
       });
       expect(controller.key(down('Tab', true))).toBe(true); // a held key does not flip it back
       expect(controller.supplyMode).toBe(true);

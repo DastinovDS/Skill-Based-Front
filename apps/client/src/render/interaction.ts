@@ -72,11 +72,6 @@ export interface SupplyOverlay {
    * menu entry under the pointer; absent: every line, none lit.
    */
   readonly lines?: LineFocus;
-  /**
-   * The supply flow (DEC-43): the own node whose marks are shown, pinned by a click or under the
-   * pointer (the countdown ring N4, the downstream chain P2); `null` or absent: none.
-   */
-  readonly flow?: number | null;
 }
 
 /**

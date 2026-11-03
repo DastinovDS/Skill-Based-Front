@@ -10,11 +10,8 @@ import { lineChevronSpec, starveMarkSpec } from './bakedShapes.ts';
 import { FACTORY_GLYPH } from './cityLayout.ts';
 import { borderPoint } from './fogLayout.ts';
 import {
-  DispatchClock,
-  IDLE_TEXT,
   aheadNodes,
   downhillRoads,
-  flowChain,
   flowOn,
   fullNodes,
   packetRoads,
@@ -22,8 +19,6 @@ import {
   pocketNodes,
   roadKey,
   starvingNodes,
-  type FlowChain,
-  type FlowRoad,
 } from './flowLayout.ts';
 import { starvePoint } from './flowView.ts';
 import { EDGE_PROGRESS, edgeEnds, edgePoint, nodePoint } from './layout.ts';
@@ -75,15 +70,6 @@ import {
 
 const TARGET = { dash: 6, gap: 5, ring: 7 } as const;
 
-/** The hovered or pinned city of the flow: what its countdown ring draws (N4). */
-interface RingFocus {
-  readonly city: Point;
-  readonly radius: number;
-  /** The directions (radians) of the receivers of the next dispatch: a notch each. */
-  readonly notches: readonly number[];
-  /** Nothing is sent: the ring is dashed and a plate says why. */
-  readonly idle: { readonly spot: Point; readonly width: number } | null;
-}
 const STARVE_MARK = '✂';
 
 const polar = (centre: Point, radius: number, degrees: number): Point => {
@@ -139,18 +125,8 @@ export class SupplyView {
   private readonly flowing = new Graphics();
   private readonly plates = new Graphics();
   private readonly dots = new Graphics();
-  /**
-   * The supply flow's hover (DEC-43, P2 and N4): a dimmer over the map with holes at the nodes of
-   * the downstream chain, the chain itself, and the countdown ring of the hovered city, which is
-   * the only part redrawn every frame.
-   */
-  private readonly dimmer = new Graphics();
-  private readonly chain = new Graphics();
-  private readonly ring = new Graphics();
   private readonly bangs: BakedSprite[] = [];
   private usedBangs = 0;
-  private readonly clock = new DispatchClock();
-  private focus: RingFocus | null = null;
   /** The direction chevrons of the lines looked at (#672): baked sprites, one pool. */
   private readonly marks = new Container({ label: 'supply-marks' });
   private readonly chevrons: BakedSprite[] = [];
@@ -210,23 +186,9 @@ export class SupplyView {
     this.pipeRoot.addChild(this.pipes);
     this.pipeRoot.visible = false;
     layers.layer.roads.addChild(this.pipeRoot);
-    this.root.addChild(
-      this.flowing,
-      this.plates,
-      this.marks,
-      this.dots,
-      this.dimmer,
-      this.chain,
-      this.ring,
-      this.texts,
-    );
+    this.root.addChild(this.flowing, this.plates, this.marks, this.dots, this.texts);
     this.root.visible = false;
     layers.layer.supply.addChild(this.root);
-  }
-
-  /** `ruleset_public.supply_dispatch_ticks`: the period the countdown ring of the flow empties over (N4). */
-  setDispatchTicks(ticks: number): void {
-    this.clock.setPeriod(ticks);
   }
 
   /** Places of an own province warehouse (`city_upgrades.warehouse_province`, DEC-41, item 13); 0: none. */
@@ -261,9 +223,6 @@ export class SupplyView {
       }
       return;
     }
-    if (frame.base !== this.base) {
-      this.clock.observe(frame.base.view.me.next_dispatch_tick);
-    }
     if (frame.base !== this.base || supply !== this.overlay) {
       this.base = frame.base;
       this.overlay = supply;
@@ -281,7 +240,6 @@ export class SupplyView {
     }
     this.drawFlowing(frame);
     this.drawPackets(frame);
-    this.drawRing(frame.tick);
   }
 
   destroy(): void {
@@ -301,10 +259,6 @@ export class SupplyView {
     this.flowing.clear();
     this.plates.clear();
     this.dots.clear();
-    this.dimmer.clear();
-    this.chain.clear();
-    this.ring.clear();
-    this.focus = null;
     this.usedBangs = 0;
     for (const bang of this.bangs) bang.visible = false;
     this.runs = [];
@@ -376,7 +330,7 @@ export class SupplyView {
     this.drawFactories(scene);
     this.drawLit(scene);
     this.drawPick(supply);
-    if (view !== null) this.drawFlowNodes(view, supply.flow ?? null);
+    if (view !== null) this.drawFlowNodes(view);
   }
 
   /** The end of the lit line (#672): a solid ring, so the target the menu names is found at once. */
@@ -741,9 +695,9 @@ export class SupplyView {
   /**
    * The nodes under the flow: the warehouse squares (a lid when full, an amber frame and the `!`
    * triangle when starving), the hatched disc of a node ahead of the level, the pocket hatch with
-   * "no source", and the marks of the hovered city (the downstream chain, the countdown ring).
+   * "no source".
    */
-  private drawFlowNodes(view: View, focusNode: number | null): void {
+  private drawFlowNodes(view: View): void {
     const g = this.plates;
     const starving = new Set(starvingNodes(view, this.me));
     const full = new Set(fullNodes(view, this.me));
@@ -799,7 +753,6 @@ export class SupplyView {
       g.stroke({ width, color: PAPER, alpha });
       this.plate(t('flow.noSource'), { x: city.x, y: city.y - r - FLOW_LAYER.plate.lift - 6 });
     }
-    if (focusNode !== null) this.drawFocus(view, focusNode);
   }
 
   /** A label on a dark plate, over the other marks (the text pool lies on top of the layer). */
@@ -812,165 +765,6 @@ export class SupplyView {
       .fill({ color: BG, alpha: 0.94 })
       .stroke({ width: 1.5, color: border });
     return width;
-  }
-
-  /**
-   * The hover of an own city (DEC-43): P2, the chain of roads from it down to the level over
-   * `flow_down`, drawn solid over a dimmed map, the level nodes at its ends ringed dashed; and the
-   * data of N4, the ring (drawn every frame by `drawRing`).
-   */
-  private drawFocus(view: View, node: number): void {
-    const city = this.point(node);
-    const own = view.nodes[node];
-    if (city === undefined || own === undefined || own.owner !== this.me) return;
-    const chain = flowChain(view, this.me, this.index, node);
-    this.drawChain(view, chain, node);
-    const notches = (own.flow_next ?? []).flatMap((to) => {
-      const target = this.point(to);
-      return target === undefined ? [] : [Math.atan2(target.y - city.y, target.x - city.x)];
-    });
-    let idle: RingFocus['idle'] = null;
-    if (notches.length === 0) {
-      const text =
-        own.flow_pocket === true
-          ? t('flow.noSource')
-          : own.flow_idle === null
-            ? null
-            : t(IDLE_TEXT[own.flow_idle]);
-      if (text !== null) {
-        const spot = {
-          x: city.x,
-          y: city.y - this.radiusOf(node) - FLOW_LAYER.ring.gap - FLOW_LAYER.plate.lift,
-        };
-        const label = this.text(text, spot);
-        idle = { spot, width: label.width + 2 * FLOW_LAYER.plate.padX };
-      }
-    }
-    this.focus = { city, radius: this.radiusOf(node), notches, idle };
-  }
-
-  private drawChain(view: View, chain: FlowChain, start: number): void {
-    const dim = this.dimmer;
-    const g = this.chain;
-    const { width: bounds, height } = { width: this.map.meta.width, height: this.map.meta.height };
-    dim.rect(0, 0, bounds, height).fill({ color: BG, alpha: FLOW_LAYER.dim });
-    // Holes at the nodes of the chain: they stay as they are.
-    for (const node of chain.nodes) {
-      const at = this.point(node);
-      if (at !== undefined) dim.circle(at.x, at.y, this.radiusOf(node) + 5);
-    }
-    dim.cut();
-    const { width, casing, arrow, end } = FLOW_LAYER.chain;
-    const paint = (road: FlowRoad): void => {
-      const span = this.span(road.from, road.to);
-      if (span === null) return;
-      const length = Math.hypot(span.end.x - span.start.x, span.end.y - span.start.y);
-      const ux = (span.end.x - span.start.x) / length;
-      const uy = (span.end.y - span.start.y) / length;
-      for (const [color, w] of [
-        [BG, casing],
-        [PAPER, width],
-      ] as const) {
-        g.moveTo(span.start.x, span.start.y).lineTo(span.end.x, span.end.y);
-        g.stroke({ width: w, color, cap: 'round' });
-      }
-      // The direction: a solid head at the middle of the road.
-      const mid = lanePoint(span.start, span.end, 0.5, 0);
-      g.poly(headPoly(mid, ux, uy, arrow.length, arrow.width).flatMap((p) => [p.x, p.y])).fill(
-        PAPER,
-      );
-    };
-    for (const road of chain.roads) paint(road);
-    // The level nodes the walk ends at: dashed rings (the start is ringed by N4).
-    const level = view.me.leaf_shift;
-    for (const node of chain.ends) {
-      if (node === start || view.nodes[node]?.front_dist !== level) continue;
-      const at = this.point(node);
-      if (at === undefined) continue;
-      this.dashedRingOn(g, at, this.radiusOf(node) + end, TARGET.dash, TARGET.gap);
-      g.stroke({ width: 2.4, color: PAPER });
-    }
-  }
-
-  /** A ring cut into dashes on `g` (the caller strokes it). */
-  private dashedRingOn(g: Graphics, at: Point, radius: number, dash: number, gap: number): void {
-    const steps = Math.max(8, Math.round((2 * Math.PI * radius) / (dash + gap)));
-    for (let i = 0; i < steps; i++) {
-      const a0 = (i / steps) * 2 * Math.PI;
-      const a1 = a0 + (dash / (dash + gap)) * ((2 * Math.PI) / steps);
-      g.moveTo(at.x + radius * Math.cos(a0), at.y + radius * Math.sin(a0));
-      g.arc(at.x, at.y, radius, a0, a1);
-    }
-  }
-
-  /**
-   * N4, the countdown ring of the hovered or pinned city, every frame: a track, an arc that
-   * empties until the next dispatch (the fraction is `DispatchClock`'s, from the server's
-   * `next_dispatch_tick`), a notch toward each receiver; dashed and with a plate when nothing is sent.
-   */
-  private drawRing(tick: number): void {
-    const g = this.ring.clear();
-    const focus = this.focus;
-    if (focus === null) return;
-    const { city, radius, notches, idle } = focus;
-    const { gap, width, track, notch, notchWidth, dash, gapDash } = FLOW_LAYER.ring;
-    const r = radius + gap;
-    if (idle !== null) {
-      g.roundRect(
-        idle.spot.x - idle.width / 2,
-        idle.spot.y - FLOW_LAYER.plate.height / 2,
-        idle.width,
-        FLOW_LAYER.plate.height,
-        FLOW_LAYER.plate.radius,
-      )
-        .fill({ color: BG, alpha: 0.94 })
-        .stroke({ width: 1.5, color: SEGMENT_EMPTY });
-    }
-    if (notches.length === 0) {
-      // Idle: a dashed ring, no arc (nothing is sent at the next dispatch).
-      this.dashedRingOn(g, city, r, dash, gapDash);
-      g.stroke({ width: 2.4, color: BG, alpha: 0.9 });
-      this.dashedRingOn(g, city, r, dash, gapDash);
-      g.stroke({ width: 1.6, color: PAPER });
-      return;
-    }
-    g.circle(city.x, city.y, r).stroke({ width: width + 2.4, color: BG, alpha: 0.9 });
-    g.circle(city.x, city.y, r).stroke({ width, color: PAPER, alpha: track });
-    const left = this.clock.fraction(tick);
-    if (left > 0) {
-      const start = -Math.PI / 2;
-      const sweep = left * 2 * Math.PI;
-      for (const [color, w] of [
-        [BG, width + 2.4],
-        [PAPER, width],
-      ] as const) {
-        g.moveTo(city.x + r * Math.cos(start), city.y + r * Math.sin(start))
-          .arc(city.x, city.y, r, start, start + sweep)
-          .stroke({ width: w, color, cap: 'butt' });
-      }
-    }
-    for (const angle of notches) {
-      const inner = {
-        x: city.x + (r - notch / 2) * Math.cos(angle),
-        y: city.y + (r - notch / 2) * Math.sin(angle),
-      };
-      const outer = {
-        x: city.x + (r + notch) * Math.cos(angle),
-        y: city.y + (r + notch) * Math.sin(angle),
-      };
-      g.moveTo(inner.x, inner.y)
-        .lineTo(outer.x, outer.y)
-        .stroke({
-          width: notchWidth + 2.4,
-          color: BG,
-          cap: 'round',
-        });
-      g.moveTo(inner.x, inner.y).lineTo(outer.x, outer.y).stroke({
-        width: notchWidth,
-        color: PAPER,
-        cap: 'round',
-      });
-    }
   }
 
   private drawPick(supply: SupplyOverlay): void {

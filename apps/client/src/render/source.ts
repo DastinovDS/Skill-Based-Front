@@ -70,11 +70,6 @@ export interface RenderSource {
    */
   readonly roadBuildTicks?: number;
   /**
-   * `ruleset_public.supply_dispatch_ticks`: the period of the supply dispatch, which the countdown ring of
-   * the flow (N4) empties over (DEC-43). Without it the ring stays empty.
-   */
-  readonly supplyDispatchTicks?: number;
-  /**
    * Ticks a road fortification takes to build (`ruleset_public.fort.build_ticks`, DEC-43, item D):
    * the part done of the line of an own build. Without it an own build shows no part done.
    */

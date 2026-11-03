@@ -318,35 +318,22 @@ for (const shot of LINE_SHOTS) {
   });
 }
 
-// The supply flow (DEC-43, #705), the frozen scene `flow_supply` on the «Supply» layer (Tab): the
-// pointer on a city shows the countdown ring (N4) and the downstream chain over the dimmed map (P2):
-// the capital (`flow-hover-capital`: three roads and the ring with notches), a leaf (`flow-hover-leaf`:
-// the dashed ring and the plate "keeps"), the pocket (`flow-hover-pocket`: "no source"); a click pins
-// the marks and the pointer goes away (`flow-pin`). `flow-<state>.png` and grey.
-const FLOW_SHOTS = [
-  { name: 'hover-capital', at: [118, 518], click: false },
-  { name: 'hover-leaf', at: [533, 518], click: false },
-  { name: 'hover-pocket', at: [889, 318], click: false },
-  { name: 'pin', at: [331, 518], click: true },
-] as const;
-
-for (const shot of FLOW_SHOTS) {
-  test(`shot of the flow marks of a city (${shot.name})`, async ({ page }) => {
-    await page.goto('/?scene=flow_supply&menus');
-    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
-    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
-    await page.keyboard.press('Tab');
-    await page.mouse.move(shot.at[0], shot.at[1]);
-    if (shot.click) {
-      await page.mouse.click(shot.at[0], shot.at[1]);
-      await page.mouse.move(1000, 700);
-    }
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: join(OUT, `flow-${shot.name}.png`) });
-    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
-    await page.screenshot({ path: join(OUT, `flow-${shot.name}-gray.png`) });
-  });
-}
+// The supply flow (DEC-43, #705, #728), the frozen scene `flow_supply` on the «Supply» layer (Tab): the
+// pointer on the capital shows nothing of its own (the countdown ring, the downstream chain and the
+// click-to-pin were removed, #728): `flow-hover-capital.png` and grey.
+test('shot of the Supply layer with the pointer on a city (flow-hover-capital)', async ({
+  page,
+}) => {
+  await page.goto('/?scene=flow_supply&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.keyboard.press('Tab');
+  await page.mouse.move(118, 518);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(OUT, 'flow-hover-capital.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'flow-hover-capital-gray.png') });
+});
 
 // The list of the groups of a city (#350): the scene `snapshot_clash` has three own groups in one
 // city; a click on their icon opens one sector per group. `stack.png` and `stack-gray.png`.

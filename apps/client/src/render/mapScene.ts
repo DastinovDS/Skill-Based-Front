@@ -26,7 +26,6 @@ import { SightView } from './sightView.ts';
 import { SupplyView } from './supplyView.ts';
 import { FlowView } from './flowView.ts';
 import { levelNodes } from './flowLayout.ts';
-import { FLOW_LEVEL } from './style.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
@@ -398,14 +397,10 @@ export class MapScene {
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
     this.supply.setTickHz(tickHz);
     this.supply.setProvinceWarehouse(this.source.provinceWarehouse ?? 0);
-    this.supply.setDispatchTicks(this.source.supplyDispatchTicks ?? 0);
     this.supply.update(frame, overlay.supply);
-    // The supply flow (DEC-43): the level fill on both maps (half strength on the normal one), the
-    // faint chevrons and starving marks on the normal map only.
-    this.view.setLevel(
-      this.levelCells,
-      this.levelCells.length === 0 ? 0 : overlay.supply === null ? FLOW_LEVEL.battle : 1,
-    );
+    // The supply flow (DEC-43): the level fill in the «Supply» mode only; the normal map shows the
+    // starving marks and nothing else of it (ui-style 42).
+    this.view.setLevel(this.levelCells, overlay.supply === null ? 0 : 1);
     this.flow.update(frame.base, overlay.supply === null);
     // The road fortifications, on both maps; the road pick adds a ghost of the line on every road it reaches.
     this.forts.setBuildTicks(this.source.fortBuildTicks ?? 0);
