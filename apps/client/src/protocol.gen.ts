@@ -30,6 +30,7 @@ export type Command =
   | TransferCmd
   | BuildFactoryCmd
   | BuildBunkerCmd
+  | FortifyRoadCmd
   | DrawLineCmd
   | RemoveLineCmd
   | SetAutoLinesCmd
@@ -256,6 +257,17 @@ export interface BuildBunkerCmd {
   node: number;
 }
 /**
+ * The own city or province ``node`` fortifies the road ``edge`` leaving it (DEC-43, item D):
+ * ``ruleset_public.fort.cost`` CP. ``NOT_ADJACENT`` when the road does not leave the node,
+ * ``ALREADY_BUILT`` for a second one of the node on that road; ``FEATURE_DISABLED`` when
+ * ``ruleset_public.fort`` is ``null``.
+ */
+export interface FortifyRoadCmd {
+  type: 'fortify_road';
+  node: number;
+  edge: number;
+}
+/**
  * Draw a supply line along ``path`` (economy v2, DEC-41, items 3 and 6): own nodes, each
  * next one joined by a road, from the source (an own factory or the target of an own line) to
  * the target (an own node with a warehouse). Free; the path is used as drawn while intact.
@@ -437,6 +449,11 @@ export interface RulesetPublic {
    * item D1: ``build_bunker`` is rejected with ``FEATURE_DISABLED``).
    */
   bunker: BunkerPublic | null;
+  /**
+   * Road fortifications: a ``[fort]`` section only (``mvp-4``, DEC-43, item D); ``None``
+   * otherwise (``fortify_road`` is rejected with ``FEATURE_DISABLED``).
+   */
+  fort: FortPublic | null;
   /**
    * ``supply.model`` (DEC-43): ``flow`` is the automatic supply flow with the leaf shift
    * (``set_leaf_shift``; the line commands are rejected with ``FEATURE_DISABLED``); ``lines``
@@ -706,6 +723,25 @@ export interface BunkerPublic {
    * Virtual shots of the node's defender in a fight there, if it has a charged unit.
    */
   shots: number;
+}
+/**
+ * Road fortifications (``fort`` of the ruleset, DEC-43, item D).
+ */
+export interface FortPublic {
+  /**
+   * CP in hundredths ``fortify_road`` costs, flat.
+   */
+  cost: number;
+  /**
+   * Ticks from the command to a working fortification.
+   */
+  build_ticks: number;
+  /**
+   * The toll: ``toll_charges`` per started ``toll_units`` units of an enemy group crossing the
+   * line towards the node, never more than its charged units.
+   */
+  toll_units: number;
+  toll_charges: number;
 }
 /**
  * Calibration progress of an account: the first matches of a rated account do not show its
@@ -1007,6 +1043,11 @@ export interface EdgeView {
    * Enemy figures on the halves not in fog (DEC-33).
    */
   enemy_groups: EnemyGroup[];
+  /**
+   * The road fortifications of its ends the player knows of (DEC-43, item D8), the end ``a``
+   * first; empty without ``ruleset_public.fort``.
+   */
+  forts: RoadFort[];
 }
 /**
  * What the next road level would give (DEC-28, item 7).
@@ -1083,6 +1124,24 @@ export interface EnemyGroup {
    * Only on ``range``: the range of its units.
    */
   units_range: UnitsRange | null;
+}
+/**
+ * A road fortification of the end ``node`` of the edge (DEC-43, item D; code name
+ * ``road_fort``): own ones always, an enemy one (built or being built) while the half of
+ * ``node`` is not in fog for the player (item D8, no memory). Its line is the border point of
+ * the edge, inside the cell of ``node``.
+ */
+export interface RoadFort {
+  node: number;
+  owner: PlayerId;
+  /**
+   * It takes its toll.
+   */
+  built: boolean;
+  /**
+   * An own build only: the tick it starts to work.
+   */
+  done_tick: number | null;
 }
 /**
  * An own group. Enemy groups appear only as ``Seen`` summaries of places.
@@ -1545,7 +1604,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 36;
+export const PROTOCOL_VERSION = 37;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

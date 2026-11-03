@@ -9,7 +9,8 @@ their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``CancelRecruit(node)``; DEC-26: ``BuildBarracks(node)``, ``UpgradeWarehouse(node)``; economy v2
 (DEC-41, item 14): ``Move(group, dest, planned, bonus)``, ``BuildFactory(node)``,
 ``BuildBunker(node)``, ``DrawLine(path)``, ``RemoveLine(line)``, ``ReleasePlan(group)``;
-``SetAutoLines(on)`` (#665); the supply flow (DEC-43): ``SetLeafShift(shift)``. A command
+``SetAutoLines(on)`` (#665); the supply flow (DEC-43): ``SetLeafShift(shift)``; road
+fortifications (DEC-43, item D): ``FortifyRoad(node, edge)``. A command
 of the other economy model (``ruleset_public.economy.model``) or supply model
 (``ruleset_public.supply_model``) is rejected with ``FEATURE_DISABLED``. The conversion to
 simulation commands is PRO-03 (#46).
@@ -163,6 +164,17 @@ class BuildBunkerCmd(WireModel):
     node: NodeId
 
 
+class FortifyRoadCmd(WireModel):
+    """The own city or province ``node`` fortifies the road ``edge`` leaving it (DEC-43, item D):
+    ``ruleset_public.fort.cost`` CP. ``NOT_ADJACENT`` when the road does not leave the node,
+    ``ALREADY_BUILT`` for a second one of the node on that road; ``FEATURE_DISABLED`` when
+    ``ruleset_public.fort`` is ``null``."""
+
+    type: Literal["fortify_road"] = "fortify_road"
+    node: NodeId
+    edge: EdgeId
+
+
 class DrawLineCmd(WireModel):
     """Draw a supply line along ``path`` (economy v2, DEC-41, items 3 and 6): own nodes, each
     next one joined by a road, from the source (an own factory or the target of an own line) to
@@ -227,6 +239,7 @@ type Command = Annotated[
     | TransferCmd
     | BuildFactoryCmd
     | BuildBunkerCmd
+    | FortifyRoadCmd
     | DrawLineCmd
     | RemoveLineCmd
     | SetAutoLinesCmd

@@ -12,7 +12,8 @@ id, so the canonical JSON and ``state_hash()`` do not depend on dict insertion o
 ``PYTHONHASHSEED``. The static map is embedded in the file format (``map_to_data``), so the
 canonical form alone restores the state: ``from_canonical(to_canonical(s)) == s``. The fields of
 the economy v2 (DEC-41: factories, lines, the round robin of a factory, bunkers, the charges a build
-still owes) and of the supply flow (DEC-43: the leaf shift, the field and the plan of a node) are
+still owes) and of the supply flow (DEC-43: the leaf shift, the field and the plan of a node, the
+road fortifications of item D) are
 written only when they differ from their defaults, so a v1 state and a state of the drawn lines
 have the canonical form and the hash they had before them.
 """
@@ -396,6 +397,10 @@ class Node:
     flow: FlowNode | None = None
     """The supply flow of the owner here (DEC-43); ``None`` outside the flow and for nodes
     without an owner."""
+    road_forts: dict[int, int] = field(default_factory=dict[int, int])
+    """The road fortifications of the owner here (DEC-43, item D; code name ``road_fort``): edge
+    id (a road leaving the node) to the tick it works from (``ready``: the tick of the command plus
+    ``fort.build_ticks``); before it, it is being built. Destroyed on capture (``change_owner``)."""
 
 
 @dataclass(slots=True)
@@ -741,6 +746,8 @@ def _v2_node_data(n: Node) -> dict[str, object]:
         data["fort_build"] = _site_build_data(n.fort_build)
     if n.rr:
         data["rr"] = n.rr
+    if n.road_forts:
+        data["road_forts"] = [{"edge": e, "ready": n.road_forts[e]} for e in sorted(n.road_forts)]
     if n.flow is not None:
         f = n.flow
         data["flow"] = {
@@ -1032,7 +1039,7 @@ def _parse_node(data: object, where: str) -> Node:
             "has_barracks",
             "warehouse_level",
         ),
-        optional=("factory", "factory_build", "rr", "fort", "fort_build", "flow"),
+        optional=("factory", "factory_build", "rr", "fort", "fort_build", "flow", "road_forts"),
     )
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
@@ -1052,7 +1059,19 @@ def _parse_node(data: object, where: str) -> Node:
         fort=_bool(raw.get("fort", False), f"{where}.fort"),
         fort_build=_parse_site_build(raw.get("fort_build"), f"{where}.fort_build"),
         flow=_parse_flow(raw.get("flow"), f"{where}.flow"),
+        road_forts=_parse_road_forts(raw.get("road_forts", []), f"{where}.road_forts"),
     )
+
+
+def _parse_road_forts(data: object, where: str) -> dict[int, int]:
+    forts: dict[int, int] = {}
+    for item in _list(data, where):
+        raw = _obj(item, where, ("edge", "ready"))
+        edge = _int(raw["edge"], f"{where}.edge", low=0)
+        if edge in forts:
+            raise StateFormatError(f"{where}: edge {edge} twice")
+        forts[edge] = _int(raw["ready"], f"{where}.ready", low=0)
+    return forts
 
 
 def _parse_flow(data: object, where: str) -> FlowNode | None:

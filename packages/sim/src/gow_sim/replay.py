@@ -47,6 +47,7 @@ from gow_sim.commands import (
     Command,
     DrawLine,
     Forfeit,
+    FortifyRoad,
     Merge,
     Move,
     PlayerCommand,
@@ -190,6 +191,8 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "build_factory", "node": node}
         case BuildBunker(node=node):
             return {"type": "build_bunker", "node": node}
+        case FortifyRoad(node=node, edge=edge):
+            return {"type": "fortify_road", "node": node, "edge": edge}
         case DrawLine(path=path):
             return {"type": "draw_line", "path": list(path)}
         case RemoveLine(line=line):
@@ -250,6 +253,8 @@ def decode_command(data: object) -> Command:
                 return BuildFactory(_int(d["node"]))
             case "build_bunker":
                 return BuildBunker(_int(d["node"]))
+            case "fortify_road":
+                return FortifyRoad(_int(d["node"]), _int(d["edge"]))
             case "draw_line":
                 path = d["path"]
                 if not isinstance(path, list):

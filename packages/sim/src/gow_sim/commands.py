@@ -43,6 +43,8 @@ Supply flow (DEC-43, ``supply.model = "flow"``): ``SetLeafShift`` sets the playe
 ``DrawLine``, ``RemoveLine`` and ``SetAutoLines`` give ``FEATURE_DISABLED`` (item A12).
 ``BuildBunker`` gives it without a ``[bunker]`` section and ``UpgradeWarehouse`` with
 ``warehouse.max_level = 0`` (items C2 and D1), under any model.
+Road fortifications (DEC-43, item D): ``FortifyRoad(node, edge)`` for ``fort.cost`` CP
+(``systems.fortify``; not public; ``FEATURE_DISABLED`` without a ``[fort]`` section).
 """
 
 from collections.abc import Callable, Iterable
@@ -70,6 +72,7 @@ from gow_sim.state import (
 from gow_sim.systems.build import start_city_build, start_factory, start_fort, start_road
 from gow_sim.systems.capacity import warehouse_capacity
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
+from gow_sim.systems.fortify import start_road_fort
 from gow_sim.systems.lines import (
     creates_cycle,
     factory_count,
@@ -104,6 +107,7 @@ __all__ = [
     "CommandResult",
     "DrawLine",
     "Forfeit",
+    "FortifyRoad",
     "Merge",
     "Mode",
     "Move",
@@ -262,6 +266,15 @@ class BuildBunker:
 
 
 @dataclass(frozen=True, slots=True)
+class FortifyRoad:
+    """The own city or province ``node`` fortifies the road ``edge`` leaving it (DEC-43, item D;
+    code name ``road_fort``) for ``fort.cost`` CP."""
+
+    node: int
+    edge: int
+
+
+@dataclass(frozen=True, slots=True)
 class DrawLine:
     """A supply line along ``path``: own nodes from its source (an own factory or the target of
     an own line) to its target, an own city, each next one a neighbour (DEC-41, items 3 and 6)."""
@@ -322,6 +335,7 @@ type Command = (
     | Transfer
     | BuildFactory
     | BuildBunker
+    | FortifyRoad
     | DrawLine
     | RemoveLine
     | SetAutoLines
@@ -358,6 +372,7 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             | Transfer()
             | BuildFactory()
             | BuildBunker()
+            | FortifyRoad()
             | DrawLine()
             | RemoveLine()
             | SetAutoLines()
@@ -428,6 +443,8 @@ class RejectCode(StrEnum):
     """The line would close a cycle of own lines (DEC-41, L4)."""
     FACTORY_LIMIT = "FACTORY_LIMIT"
     """The player has ``factory.max`` factories, builds under way included (DEC-41, item 2)."""
+    NOT_ADJACENT = "NOT_ADJACENT"
+    """The road of ``FortifyRoad`` does not leave its node (DEC-43, item D3)."""
     IN_FIGHT = "IN_FIGHT"
     """The group is in a fight: it only withdraws (DEC-24, item E): a defender of a node by a
     normal ``Move``, everyone else by ``CancelOrder``."""
@@ -512,6 +529,8 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return 0  # paid in charges or free (DEC-41, items 2, 3, 12; #665)
         case SetLeafShift():
             return 0  # free (DEC-43, item B2)
+        case FortifyRoad():
+            return 0 if rules.fort is None else rules.fort.cost  # flat (DEC-43, item D2)
         case ReleasePlan():
             return 0  # free (DEC-41, item 10)
         case Forfeit():
@@ -693,6 +712,8 @@ def _check(
             return _check_factory(state, rules, player, node)
         case BuildBunker(node=node):
             return _check_fort(state, player, node)
+        case FortifyRoad(node=node, edge=edge):
+            return _check_road_fort(state, player, node, edge)
         case DrawLine(path=path):
             return _check_line(state, rules, player, path)
         case RemoveLine(line=line):
@@ -726,6 +747,8 @@ def _other_model(rules: Ruleset, cmd: Command) -> bool:
     model (DEC-43, items A12 and B2), or the ruleset turns its feature off (items C2 and D1)."""
     if isinstance(cmd, SetLeafShift):
         return not rules.flow
+    if isinstance(cmd, FortifyRoad):
+        return rules.fort is None  # DEC-43, item D3
     if isinstance(cmd, DrawLine | RemoveLine | SetAutoLines) and rules.flow:
         return True
     if isinstance(cmd, BuildBunker) and rules.v2 and rules.bunker is None:
@@ -775,6 +798,26 @@ def _check_fort(state: GameState, player: int, node: int) -> tuple[int, ...] | R
     if site.owner != player:
         return Reject(RejectCode.NOT_OWNER)
     if site.fort or site.fort_build is not None:
+        return Reject(RejectCode.ALREADY_BUILT)
+    return ()
+
+
+def _check_road_fort(
+    state: GameState, player: int, node: int, edge: int
+) -> tuple[int, ...] | Reject:
+    """The checks of ``FortifyRoad`` in this order (DEC-43, item D3; CP last, in ``_validate``):
+    the node and the edge on the map, the owner of the node, the edge leaves the node, a
+    fortification of the node on that road built or being built already. A fight does not
+    reject. Only the own node is read, so nothing hidden leaks."""
+    mapdef = state.map
+    if not (0 <= node < len(mapdef.nodes) and 0 <= edge < len(mapdef.edges)):
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    site = state.nodes[node]
+    if site.owner != player:
+        return Reject(RejectCode.NOT_OWNER)
+    if edge not in mapdef.incident[node]:
+        return Reject(RejectCode.NOT_ADJACENT)
+    if edge in site.road_forts:
         return Reject(RejectCode.ALREADY_BUILT)
     return ()
 
@@ -1138,6 +1181,8 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             return start_factory(state, rules, player, node)
         case BuildBunker(node=node):
             return start_fort(state, rules, player, node)
+        case FortifyRoad(node=node, edge=edge):
+            return start_road_fort(state, rules, player, node, edge)
         case DrawLine(path=path):
             ps = state.players[player]
             ps.lines[ps.next_line] = Line(ps.next_line, path)
