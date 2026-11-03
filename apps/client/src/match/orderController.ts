@@ -164,6 +164,10 @@ export class OrderController implements MapInteraction {
   #hover: PickHit | null = null;
   /** The last step of the rear minimum by key: where it started and where it was sent to. */
   #rearStep: { readonly from: number; readonly to: number } | null = null;
+  /** The same for the leaf shift (`stepLeafShift`). */
+  #shiftStep: { readonly from: number; readonly to: number } | null = null;
+  /** The own node whose flow marks a click pinned in the «Supply» mode under the flow (N4, P2). */
+  #flowPin: number | null = null;
   #noticeId = 0;
   #noticeTimer: ReturnType<typeof setTimeout> | undefined;
   #overlay: OverlayState = EMPTY_OVERLAY;
@@ -253,6 +257,47 @@ export class OrderController implements MapInteraction {
    */
   get v2(): boolean {
     return this.#o.rules.economy.model === 'v2';
+  }
+
+  /**
+   * The supply is the automatic flow with the leaf shift (DEC-43, `ruleset_public.supply_model`):
+   * no lines, no auto lines, no transfers; the player has one lever, the shift.
+   */
+  get flow(): boolean {
+    return this.#o.rules.supply_model === 'flow';
+  }
+
+  /** The ruleset has a bunker (`ruleset_public.bunker`); `mvp-4` has none (DEC-43, item D1). */
+  get hasBunker(): boolean {
+    return this.#o.rules.bunker !== null;
+  }
+
+  /** The own leaf shift in force (`View.me.leaf_shift`); `null` under lines or before a snapshot. */
+  get leafShift(): number | null {
+    return this.#o.hud.current?.leafShift ?? null;
+  }
+
+  /** The largest shift now (`View.me.leaf_shift_max`); `null` like `leafShift`. */
+  get leafShiftMax(): number | null {
+    return this.#o.hud.current?.leafShiftMax ?? null;
+  }
+
+  /**
+   * One step of the leaf shift (`set_leaf_shift`, free): `delta` +1 raises the shift (the level
+   * moves one road back from the front, the control's `−`), -1 lowers it (the control's `+`). Kept within `0..leaf_shift_max` as the server's own
+   * numbers; presses before the snapshot that confirms one add up from the step already sent, like
+   * the rear minimum.
+   */
+  stepLeafShift(delta: number): void {
+    const now = this.leafShift;
+    const max = this.leafShiftMax;
+    if (!this.flow || now === null || max === null) return;
+    const sent =
+      this.#shiftStep !== null && this.#shiftStep.from === now ? this.#shiftStep.to : now;
+    const to = Math.min(max, Math.max(0, sent + delta));
+    if (to === sent) return;
+    this.#shiftStep = { from: now, to };
+    this.#sendCommand({ type: 'set_leaf_shift', shift: to }, null);
   }
 
   /** The bonus the next planned order asks for (economy v2). */
@@ -860,6 +905,7 @@ export class OrderController implements MapInteraction {
     this.#closeMenus();
     this.transfer.close();
     if (this.#o.hud.selection?.kind === 'node') this.#o.hud.select(null);
+    this.#flowPin = null;
     this.ui.patch({
       supplyMode: on,
       transferFrom: null,
@@ -904,6 +950,8 @@ export class OrderController implements MapInteraction {
    */
   openSupplyMenu(node: number): boolean {
     if (this.#o.send === null) return false;
+    // The flow has no lines and no transfers: a city has no supply menu (a click pins its marks).
+    if (this.flow) return false;
     if (this.v2) {
       const own = this.#o.hud.current?.nodes.find((n) => n.id === node);
       if (own?.owner !== 'mine') return false;
@@ -1164,6 +1212,18 @@ export class OrderController implements MapInteraction {
       return true;
     }
     if (input.code === 'KeyQ' && !this.v2) return this.#qDown(input);
+    if (this.flow && this.leafShift !== null) {
+      // The leaf shift (DEC-43): `-` moves the level one road back from the front (the control
+      // reads "−1", "−2"), `=` / `+` moves it forward again.
+      if (input.code === 'Minus' || input.code === 'NumpadSubtract') {
+        if (input.repeat !== true) this.stepLeafShift(1);
+        return true;
+      }
+      if (input.code === 'Equal' || input.code === 'NumpadAdd') {
+        if (input.repeat !== true) this.stepLeafShift(-1);
+        return true;
+      }
+    }
     if (this.ui.current.lineDraft !== null) {
       // Drawing a line: Enter sends it, Backspace takes the last node off, Esc drops it.
       switch (input.code) {
@@ -1361,7 +1421,7 @@ export class OrderController implements MapInteraction {
    * Under economy v2 an own province is selected and has a menu: it can build a bunker (DEC-41, item 12).
    */
   #isUnselectable(id: number): boolean {
-    if (this.v2 && this.#isProvince(id) && this.#isOwnNode(id)) return false;
+    if (this.v2 && this.hasBunker && this.#isProvince(id) && this.#isOwnNode(id)) return false;
     return this.#isProvince(id) || this.#isEnemyNode(id);
   }
 
@@ -1457,7 +1517,18 @@ export class OrderController implements MapInteraction {
     // The layer is not the ordinary map (ui-style.md, section 19): a click that opens no supply menu
     // (an enemy node, a node with nothing to show, a unit icon) is a click on nothing, never a
     // selection or a city or group menu (#678). A click on empty ground still drops the selection.
-    if (hit === null) return false;
+    if (hit === null) {
+      this.#flowPin = null;
+      return false;
+    }
+    if (this.flow) {
+      // The flow: a click on an own city pins its marks (the ring, the chain), the same again or a
+      // click elsewhere lets go; touch has no hover, so a tap is the way to see them.
+      this.#closeMenus();
+      this.#flowPin =
+        node !== null && this.#isOwnNode(node) && node !== this.#flowPin ? node : null;
+      return true;
+    }
     if (node === null || !this.openSupplyMenu(node)) this.#closeMenus();
     return true;
   }
@@ -1496,9 +1567,11 @@ export class OrderController implements MapInteraction {
               .map((n) => n.id);
     const path = draft === null ? [] : (this.ui.current.linePath ?? []);
     const lines = this.#lineFocus();
+    const flow = this.#flowFocus();
     const prev = this.#supplyOverlay;
     if (
-      prev?.source !== source ||
+      prev?.flow !== flow ||
+      prev.source !== source ||
       prev.targets.length !== targets.length ||
       prev.targets.some((t, i) => t !== targets[i]) ||
       prev.draft.length !== path.length ||
@@ -1506,9 +1579,21 @@ export class OrderController implements MapInteraction {
       prev.lines?.node !== lines.node ||
       prev.lines.line !== lines.line
     ) {
-      this.#supplyOverlay = { source, targets, draft: path, lines };
+      this.#supplyOverlay = { source, targets, draft: path, lines, flow };
     }
     return this.#supplyOverlay;
+  }
+
+  /**
+   * The own node whose flow marks the «Supply» layer shows (N4 ring, P2 chain): the pinned one, else
+   * the own city under the pointer. `null`: none, and always under lines.
+   */
+  #flowFocus(): number | null {
+    if (!this.flow) return null;
+    if (this.#flowPin !== null) return this.#flowPin;
+    const hit = this.#hover;
+    const node = hit === null ? null : this.#cityOf(hit);
+    return node !== null && this.#isOwnNode(node) ? node : null;
   }
 
   /**

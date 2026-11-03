@@ -4,7 +4,7 @@
  * its map, frozen at the tick of the snapshot. The Playwright test (`visual/`) takes its reference
  * screenshots from them. The live `demo` scene is the dev server's match (CLI-06, #62).
  */
-import { DEV_RULES, DEV_RULES_V2 } from '../hud/devFeed.ts';
+import { DEV_RULES, DEV_RULES_FLOW, DEV_RULES_V2 } from '../hud/devFeed.ts';
 import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
 import type {
@@ -27,6 +27,7 @@ import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 import { supplySnapshot } from './supplyScene.ts';
+import { FLOW_VIEW, flowSnapshot } from './flowScene.ts';
 import { terrainSnapshot } from './terrainScene.ts';
 
 const files = import.meta.glob<SnapshotMsg>(
@@ -552,6 +553,40 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     view: ECONOMY_VIEW,
     cityUpgrades: true,
     rules: DEV_RULES_V2,
+  },
+  {
+    // The supply flow (DEC-43, #705) under the rules of `mvp-4`, the shift at the front: the battle mode
+    // (T1 level fill at half strength, faint chevrons, the starving marks).
+    id: 'flow',
+    map: 'artery',
+    snapshot: flowSnapshot(bundledMap('artery'), 0),
+    events: [],
+    view: FLOW_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_FLOW,
+  },
+  {
+    // The same moment on the «Supply» layer (Tab): chevrons, dots, the level fill, the warehouse
+    // squares, the pocket West Shoulder, the pinch marks. The pointer on a node (shots.spec.ts) adds
+    // the countdown ring and the chain.
+    id: 'flow_supply',
+    map: 'artery',
+    snapshot: flowSnapshot(bundledMap('artery'), 0),
+    events: [],
+    view: FLOW_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_FLOW,
+  },
+  {
+    // The leaf shift one road back (`−1`): the level is the ring behind the leaves, the leaves are
+    // frozen (the hatched discs), on the «Supply» layer.
+    id: 'flow_shift',
+    map: 'artery',
+    snapshot: flowSnapshot(bundledMap('artery'), 1),
+    events: [],
+    view: FLOW_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_FLOW,
   },
   {
     // A pool map (DEC-27) with its provinces: pale dots, no warehouse, no VP (#348).

@@ -34,7 +34,7 @@
   // warehouse is at its top level) is not drawn; the others spread evenly around the ring.
   const v2 = $derived(orders.v2);
   const province = $derived(menu.target !== null && orders.isProvince(menu.target));
-  const choices = $derived(cityChoices(upgrades, city, v2, province));
+  const choices = $derived(cityChoices(upgrades, city, v2, province, orders.hasBunker));
   const count = $derived(choices.length);
   const items = $derived.by<RadialItem[]>(() => {
     const angles = spreadAngles(count);

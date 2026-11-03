@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
+  import LeafShift from './LeafShift.svelte';
   import type { NodeNamer } from './nodeName.ts';
 
   interface Props {
@@ -23,6 +24,10 @@
   const path = $derived(ui.linePath);
   // The auto-extension of the own lines (#665): the server's value from every snapshot.
   const autoLines = $derived(orders.autoLines);
+
+  // The supply flow (DEC-43): the leaf shift stepper (`LeafShift`) and its HUD pill.
+  const flow = $derived(orders.flow);
+  const shift = $derived(orders.leafShift);
 
   /** Key labels are the keys themselves, not translations. */
   const TAB = 'Tab';
@@ -81,8 +86,12 @@
     {/if}
     <div class="pill">
       <strong>{t('supply.banner')}</strong><kbd class="k" aria-hidden="true">{TAB}</kbd>
-      {#if orders.v2 && draft === null}
+      {#if orders.v2 && !flow && draft === null}
         <span class="dim">{t('supply.lineHint')}</span>
+      {/if}
+      {#if flow}
+        <span class="sep" aria-hidden="true"></span>
+        <LeafShift {orders} />
       {/if}
       {#if autoLines !== null}
         <span class="sep" aria-hidden="true"></span>
@@ -139,6 +148,14 @@
           >
         </div>
       {/if}
+    </div>
+  </section>
+{:else if flow && shift !== null && shift > 0}
+  <!-- Out of the Supply mode the shift stays in sight while it is not "front". -->
+  <section class="supply" aria-label={t('supply.banner')}>
+    <div class="pill">
+      <strong>{t('supply.banner')}</strong>
+      <LeafShift {orders} />
     </div>
   </section>
 {/if}

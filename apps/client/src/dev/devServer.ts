@@ -137,7 +137,9 @@ export function createDevServer(
   const fronts: [number | null, number | null] = [null, null];
   let rearMin = rules.supply.rear_min_default;
   /** Economy v2: the auto-extension of the own lines (#665). */
-  let autoLines = rules.economy.model === 'v2' ? true : null;
+  let autoLines = rules.economy.model === 'v2' && rules.supply_model !== 'flow' ? true : null;
+  /** The supply flow (DEC-43): the own leaf shift, `null` under lines. */
+  let leafShift: number | null = rules.supply_model === 'flow' ? 0 : null;
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
@@ -159,6 +161,7 @@ export function createDevServer(
           fronts: [...fronts],
           rear_min: rearMin,
           auto_lines: autoLines,
+          leaf_shift: leafShift,
         },
         packets: devPackets(map, base.view.nodes, tick),
         edges: base.view.edges.map((e) => {
@@ -296,6 +299,12 @@ export function createDevServer(
         if (cmd.n < 0 || cmd.n > rules.supply.rear_min_max) return 'INVALID_ARGUMENT';
         if (cmd.n === rearMin) return 'NO_CHANGE';
         rearMin = cmd.n;
+        return null;
+      case 'set_leaf_shift':
+        if (leafShift === null) return 'FEATURE_DISABLED';
+        if (cmd.shift < 0 || cmd.shift > 2) return 'INVALID_ARGUMENT';
+        if (cmd.shift === leafShift) return 'NO_CHANGE';
+        leafShift = cmd.shift;
         return null;
       case 'set_auto_lines':
         if (autoLines === null) return 'FEATURE_DISABLED';

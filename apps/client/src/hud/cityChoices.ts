@@ -20,15 +20,17 @@ export interface CityState {
  *
  * Economy v2 (`v2`, DEC-41): a city also builds a factory (until it is one) and a bunker (until it
  * has one); an own province (`province`) has only the bunker, kept while it stands (a menu is never
- * empty).
+ * empty). A ruleset without a bunker (`bunker` false, DEC-43) offers none.
  */
 export function cityChoices(
   development: { readonly enabled: boolean; readonly warehouse_max_level: number },
   city: CityState | null,
   v2 = false,
   province = false,
+  bunker = true,
 ): CityChoice[] {
-  if (v2 && province) return ['bunker'];
+  // Without a bunker in the rules (`mvp-4`, DEC-43) a province has no menu and a city no bunker sector.
+  if (v2 && province) return bunker ? ['bunker'] : [];
   const choices: CityChoice[] = [];
   if (!development.enabled) choices.push('recruit');
   else {
@@ -38,7 +40,7 @@ export function cityChoices(
   }
   if (v2) {
     if (city?.factory !== true) choices.push('factory');
-    if (city?.fort !== true) choices.push('bunker');
+    if (bunker && city?.fort !== true) choices.push('bunker');
   }
   return choices;
 }

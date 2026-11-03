@@ -39,16 +39,20 @@ trap 'exit 130' INT TERM
 
 cloudflared tunnel --no-autoupdate --url "$local_url" >"$log" 2>&1 &
 pid=$!
+# Up to 60 s of silence otherwise: say what is going on at once, and that it is still going on.
+echo "share: connecting to Cloudflare (needs outbound port 7844)..."
 
 # The link appears in the log at once, but works only after the first edge connection is
 # registered ("Registered tunnel connection"); before that Cloudflare answers with error 1033.
 url=""
 ready=0
-for _ in $(seq 1 60); do
+for waited in $(seq 1 60); do
   kill -0 "$pid" 2>/dev/null || { echo "share: cloudflared stopped:" >&2; tail -n 15 "$log" >&2; exit 1; }
   [ -n "$url" ] || url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "$log" | head -n 1 || true)"
   if [ -n "$url" ] && grep -q 'Registered tunnel connection' "$log"; then ready=1; break; fi
   sleep 1
+  # A line every 10 s, so a blocked port does not look like a hang.
+  [ $((waited % 10)) -ne 0 ] || echo "share: still connecting (${waited} s of 60)..."
 done
 if [ "$ready" -ne 1 ]; then
   echo "share: the tunnel did not come up within 60 s." >&2

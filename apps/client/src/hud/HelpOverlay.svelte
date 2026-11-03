@@ -14,9 +14,11 @@
     captureCost?: number;
     /** Economy v2 (DEC-41): the keys of the v1 economy are gone, those of lines and plans come. */
     v2?: boolean;
+    /** The automatic supply flow (DEC-43): no lines, the supply level keys instead. */
+    flow?: boolean;
   }
 
-  let { open, onclose, captureCost = 0, v2 = false }: Props = $props();
+  let { open, onclose, captureCost = 0, v2 = false, flow = false }: Props = $props();
 
   let close: HTMLButtonElement | undefined = $state();
   /** The rules page replaces the keys inside the sheet; the match runs on under it (nothing pauses). */
@@ -78,7 +80,27 @@
     ['Esc', 'help.key.escape'],
   ] as const;
 
-  const keys = $derived(v2 ? KEYS_V2 : KEYS);
+  /** The automatic supply flow (DEC-43): the layer shows where charges go, `-` and `=` move the level. */
+  const KEYS_FLOW = [
+    ['LMB', 'help.key.select'],
+    ['Shift + LMB', 'help.key.plannedV2'],
+    ['[ / ]', 'help.key.planBonus'],
+    ['F', 'help.key.release'],
+    ['X', 'help.key.cancel'],
+    ['R', 'help.key.recruit'],
+    ['T', 'help.key.terrain'],
+    ['S', 'help.key.split'],
+    ['G', 'help.key.merge'],
+    ['Tab / F2', 'help.key.supplyFlow'],
+    ['- / =', 'help.key.leafShift'],
+    ['Space', 'help.key.alert'],
+    ['H', 'help.key.fit'],
+    ['M', 'help.key.mute'],
+    ['?', 'help.key.help'],
+    ['Esc', 'help.key.escape'],
+  ] as const;
+
+  const keys = $derived(flow ? KEYS_FLOW : v2 ? KEYS_V2 : KEYS);
 </script>
 
 {#if open}
@@ -209,7 +231,7 @@
               <p class="note">{tf('help.capture', { n: captureCost })}</p>
             {/if}
             {#if v2}
-              <p class="note">{t('help.economyV2')}</p>
+              <p class="note">{t(flow ? 'help.economyFlow' : 'help.economyV2')}</p>
             {/if}
             <div class="volume">
               <span>{t('help.volume')}</span>

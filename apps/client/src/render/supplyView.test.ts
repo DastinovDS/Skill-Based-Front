@@ -66,13 +66,14 @@ function strokes(g: Graphics): Stroke[] {
 /** The parts of the view: the pipes (on the road layer), the flowing dashes, plates, packet dots, texts. */
 function parts(layers: ReturnType<typeof createLayers>) {
   const [root] = layers.layer.supply.children as Container[];
-  const [flowing, plates, marks, dots, texts] = (root?.children ?? []) as [
+  const [flowing, plates, marks, dots] = (root?.children ?? []) as [
     Graphics,
     Graphics,
     Container,
     Graphics,
-    Container,
   ];
+  // The flow's hover layers (dimmer, chain, ring) lie between the dots and the texts.
+  const texts = root?.children.find((c) => c.label === 'supply-texts') as Container;
   const pipeRoot = layers.layer.roads.children.find((c) => c.label === 'supply-pipes');
   return { pipes: pipeRoot?.children[0] as Graphics, flowing, plates, marks, dots, texts };
 }

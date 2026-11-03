@@ -4,9 +4,11 @@
   interface Props {
     /** Economy v2 (DEC-41): no stance and no road levels; the supply lines and the plan instead. */
     v2?: boolean;
+    /** The automatic supply flow (DEC-43): Tab is the supply layer, not the lines. */
+    flow?: boolean;
   }
 
-  let { v2 = false }: Props = $props();
+  let { v2 = false, flow = false }: Props = $props();
 
   /** `[key, dictionary key of what it does]`: the keys themselves are not translated. */
   const HINTS_V1 = [
@@ -21,7 +23,13 @@
     ['R', 'hints.recruit'],
     ['?', 'hints.help'],
   ] as const;
-  const HINTS = $derived(v2 ? HINTS_V2 : HINTS_V1);
+  const HINTS_FLOW = [
+    ['Tab', 'hints.supply'],
+    ['Shift', 'hints.plan'],
+    ['R', 'hints.recruit'],
+    ['?', 'hints.help'],
+  ] as const;
+  const HINTS = $derived(flow ? HINTS_FLOW : v2 ? HINTS_V2 : HINTS_V1);
 </script>
 
 <!-- The key bar at the bottom right: the first matches only (ui-style 10.4). -->

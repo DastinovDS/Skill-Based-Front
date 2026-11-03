@@ -72,3 +72,29 @@ describe('cityChoices (DEC-26): what the menu of an own city offers', () => {
     ).toEqual(['recruit']);
   });
 });
+
+describe('cityChoices under the supply flow (DEC-43): no bunker in the rules', () => {
+  it('a city offers no bunker sector, a province has no menu at all', () => {
+    const v2 = { enabled: true, warehouse_max_level: 0 };
+    expect(
+      cityChoices(v2, { hasBarracks: true, warehouseLevel: 0, factory: false }, true, false, false),
+    ).toEqual(['recruit', 'factory']);
+    expect(cityChoices(v2, null, true, true, false)).toEqual([]);
+  });
+
+  it('with a bunker in the rules (mvp-3) nothing changes', () => {
+    const v2 = { enabled: true, warehouse_max_level: 2 };
+    expect(cityChoices(v2, null, true, true)).toEqual(['bunker']);
+    expect(cityChoices(v2, { hasBarracks: true, warehouseLevel: 2, factory: true }, true)).toEqual([
+      'recruit',
+      'bunker',
+    ]);
+  });
+
+  it('the warehouse sector is not offered when its top level is 0 (mvp-4)', () => {
+    const v2 = { enabled: true, warehouse_max_level: 0 };
+    expect(
+      cityChoices(v2, { hasBarracks: false, warehouseLevel: 0 }, true, false, false),
+    ).not.toContain('warehouse');
+  });
+});
