@@ -1,0 +1,2218 @@
+<!doctype html>
+<!--
+  Road fortifications, the look (#707, DEC-43 item D). Design exploration only: not client code, not the simulation.
+  Self-contained: no network, no libraries. Open as a file.
+  The owner's idea: "a line with rectangular protrusions across the road, near the border towards the next node".
+  Six looks of that idea (F1..F6) and, as a separate switch group, six ways to show the toll (T1..T6), combinable.
+  The mechanics shown are the agreed ones, not decided here: bought for CP (1.5) from the city radial menu, built in 100 ticks,
+  several on one path stack, an enemy group crossing the line towards the fortified node pays 1 charge per started 3 units
+  (never below 0), own groups and enemies moving away pass free, seen with the edge half, destroyed when its node is captured.
+  The toy: one fixed map, the Voronoi territory of the real client, roads of the real style, groups as inverted triangles.
+  Forts are drawn from a baked-sprite cache (AGENTS.md 7.2): the cache size per look is the "baked" number in each panel header.
+  Marks keep a minimum size on the screen when zoomed out (like the construction plate, ui-style 9.3), geometry does not.
+  Address state: #a=0&b=3&view=1&toll=0&step=7&mode=supply&zoom=1&gray=0&rm=0&cnt=0&t=1.7 (t freezes the step at that second).
+  window.__fort exposes the state and a few helpers for checks.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Road fortifications</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface-2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-dim: #9da7b3;
+        --paper: #f0f6fc;
+        --you: #5b9bff;
+        --enemy: #e5484d;
+        --warn: #ffb020;
+        --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        background: var(--bg);
+      }
+      body {
+        margin: 0;
+        padding: 0 16px 28px;
+        color: var(--text);
+        font: 14px/1.4 var(--font);
+      }
+      .wrap {
+        max-width: 1500px;
+        margin: 0 auto;
+      }
+      button {
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px 10px;
+        font: inherit;
+        cursor: pointer;
+        min-height: 32px;
+      }
+      button:hover {
+        border-color: #8b949e;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      canvas:focus-visible {
+        outline: 2px solid var(--you);
+        outline-offset: 1px;
+      }
+      button[aria-pressed='true'] {
+        background: #1f3a66;
+        border-color: var(--you);
+        color: #fff;
+      }
+      .bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 14px;
+        padding: 10px 0 6px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 4px 0 0;
+        white-space: nowrap;
+      }
+      .bar label {
+        color: var(--text-dim);
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        cursor: pointer;
+        min-height: 32px;
+      }
+      .sp {
+        flex: 1 1 0;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .seg button {
+        border: 0;
+        border-radius: 0;
+        border-right: 1px solid var(--border);
+        padding: 5px 10px;
+        white-space: nowrap;
+      }
+      .seg button:last-child {
+        border-right: 0;
+      }
+      .grp {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 5px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .gl {
+        flex: 0 0 52px;
+        color: var(--text-dim);
+        font-weight: 700;
+        padding-top: 7px;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .chips button {
+        padding: 3px 9px 3px 5px;
+        font-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .chips button b {
+        color: var(--text-dim);
+        font-weight: 700;
+      }
+      .chips button[aria-pressed='true'] b {
+        color: #fff;
+      }
+      .chips button.second {
+        box-shadow: inset 0 -3px 0 #9da7b3;
+      }
+      .chips canvas {
+        width: 32px;
+        height: 26px;
+        display: block;
+      }
+      .chips.tog button {
+        padding: 4px 10px;
+      }
+      .panels {
+        display: grid;
+        gap: 10px;
+        padding: 10px 0;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+      }
+      .panels.v1 .panel {
+        width: 100%;
+        max-width: 1100px;
+      }
+      .panels.v2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        justify-items: stretch;
+      }
+      .panels.v6 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        justify-items: stretch;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        min-width: 0;
+      }
+      .ph {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+      }
+      .ph b {
+        font-size: 14px;
+      }
+      .ph .sub {
+        color: var(--text-dim);
+        margin-left: auto;
+        white-space: nowrap;
+      }
+      .panel canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 10;
+        background: #0a0d12;
+      }
+      .panels.v6 canvas {
+        aspect-ratio: 3 / 2;
+      }
+      .gray canvas {
+        filter: grayscale(1);
+      }
+      .ctl {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 0;
+      }
+      .steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .steps button {
+        padding: 4px 9px;
+        font-size: 13px;
+      }
+      .steps button b {
+        color: var(--text-dim);
+        margin-right: 4px;
+      }
+      .steps button[aria-pressed='true'] b {
+        color: #fff;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      @media (max-width: 900px) {
+        .panels.v2 {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .panels.v6 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 600px) {
+        body {
+          padding: 0 16px 24px;
+        }
+        .panels.v6 {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .panel canvas {
+          aspect-ratio: 1 / 0.92;
+        }
+        button,
+        .bar label {
+          min-height: 40px;
+        }
+        .panels.v6 canvas {
+          aspect-ratio: 1 / 0.92;
+        }
+        .gl {
+          flex-basis: 100%;
+          padding-top: 2px;
+        }
+        .grp {
+          flex-wrap: wrap;
+          gap: 2px 10px;
+        }
+        h1 {
+          white-space: normal;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="bar">
+        <h1>Road fortifications</h1>
+        <div class="seg" id="modeSeg" role="group" aria-label="Map mode">
+          <button data-m="supply">Supply</button><button data-m="battle">Battle</button>
+        </div>
+        <div class="seg" id="zoomSeg" role="group" aria-label="Zoom">
+          <button data-z="0.45">0.45</button><button data-z="1">1</button><button data-z="2">2</button>
+        </div>
+        <div class="seg" id="viewSeg" role="group" aria-label="Panels">
+          <button data-v="1">1</button><button data-v="2">Compare 2</button><button data-v="6">All 6</button>
+        </div>
+        <span class="sp"></span>
+        <label><input type="checkbox" id="cnt" /> Counter</label>
+        <label><input type="checkbox" id="gray" /> Grayscale</label>
+        <label><input type="checkbox" id="rm" /> Less motion</label>
+      </div>
+      <div class="grp"><span class="gl" id="glA">Look</span><nav class="chips" id="gA" aria-label="Look of the fortification"></nav></div>
+      <div class="grp" id="rowB"><span class="gl">Look B</span><nav class="chips" id="gB" aria-label="Look of the fortification, panel B"></nav></div>
+      <div class="grp"><span class="gl">Toll</span><nav class="chips tog" id="gT" aria-label="How the toll is shown"></nav></div>
+      <div class="panels v1" id="panels"></div>
+      <div class="ctl">
+        <button id="prev" aria-label="Previous state">&#9664; Prev</button>
+        <button id="next" aria-label="Next state">Next &#9654;</button>
+        <button id="replay" aria-label="Replay the state">&#8634; Replay</button>
+        <button id="pause" aria-pressed="false">Pause</button>
+        <div class="steps" id="steps"></div>
+      </div>
+      <div class="sr" id="live" aria-live="polite"></div>
+    </div>
+    <script>
+      (() => {
+        'use strict';
+        /* ============================================================ constants and data */
+        const W = 1000;
+        const H = 620;
+        const C = {
+          bg: '#0d1117',
+          floor: '#141a22',
+          paper: '#f0f6fc',
+          you: '#5b9bff',
+          enemy: '#e5484d',
+          warn: '#ffb020',
+          nstroke: '#8b949e',
+          nfill: '#2b3139',
+          seg: '#59636e',
+          vp: '#e3b341',
+        };
+        const rgba = (hex, a) => {
+          const v = parseInt(hex.slice(1), 16);
+          return `rgba(${v >> 16},${(v >> 8) & 255},${v & 255},${a})`;
+        };
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const easeOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+        const colOf = (o) => (o === 'me' ? C.you : o === 'en' ? C.enemy : C.nstroke);
+
+        const NODES = {
+          K: { kind: 'cap', own: 'me', x: 130, y: 300, name: 'Keep', gar: 3 },
+          B: { kind: 'city', own: 'me', x: 290, y: 190, name: 'Bryn', gar: 2 },
+          Q: { kind: 'prov', own: 'me', x: 280, y: 420, name: 'Quay', gar: 1 },
+          A: { kind: 'city', own: 'me', x: 440, y: 300, name: 'Alder', gar: 1 },
+          E: { kind: 'city', own: 'en', x: 590, y: 190, name: 'Eston', gar: 2 },
+          P: { kind: 'prov', own: 'en', x: 600, y: 420, name: 'Pike', gar: 1 },
+          F: { kind: 'cap', own: 'en', x: 760, y: 300, name: 'Fenn', gar: 3 },
+          G: { kind: 'city', own: 'en', x: 880, y: 160, name: 'Gale', gar: 2 },
+          H: { kind: 'city', own: 'en', x: 900, y: 450, name: 'Hale', gar: 2 },
+          N1: { kind: 'city', own: 'ne', x: 440, y: 540, name: 'Marsh', gar: 0 },
+          N2: { kind: 'prov', own: 'ne', x: 460, y: 70, name: 'Moor', gar: 0 },
+          N3: { kind: 'prov', own: 'ne', x: 120, y: 520, name: 'Dune', gar: 0 },
+          N4: { kind: 'prov', own: 'ne', x: 140, y: 100, name: 'Fell', gar: 0 },
+        };
+        const IDS = Object.keys(NODES);
+        for (const id of IDS) NODES[id].id = id;
+        const EDGES = [
+          ['K', 'B', 2],
+          ['K', 'Q', 1],
+          ['B', 'A', 2],
+          ['A', 'E', 1],
+          ['A', 'P', 1],
+          ['E', 'F', 1],
+          ['P', 'F', 1],
+          ['F', 'G', 1],
+          ['F', 'H', 1],
+          ['Q', 'N1', 1],
+          ['N1', 'P', 1],
+          ['B', 'N2', 1],
+          ['N2', 'E', 1],
+          ['B', 'N4', 1],
+          ['K', 'N3', 1],
+        ].map(([a, b, w]) => ({ a, b, w }));
+        const nodeR = (N) => (N.kind === 'prov' ? 6.5 : N.kind === 'cap' ? 17 : 14);
+
+        /* ============================================================ territory cells (the real client uses Voronoi) */
+        function clipHalf(poly, pi, pj, j) {
+          const nx = pj.x - pi.x;
+          const ny = pj.y - pi.y;
+          const mx = (pi.x + pj.x) / 2;
+          const my = (pi.y + pj.y) / 2;
+          const f = (v) => (v.x - mx) * nx + (v.y - my) * ny;
+          const out = [];
+          for (let i = 0; i < poly.length; i++) {
+            const A = poly[i];
+            const B = poly[(i + 1) % poly.length];
+            const fa = f(A);
+            const fb = f(B);
+            if (fa <= 0) out.push({ x: A.x, y: A.y, t: A.t });
+            if (fa <= 0 !== fb <= 0) {
+              const s = fa / (fa - fb);
+              out.push({ x: A.x + (B.x - A.x) * s, y: A.y + (B.y - A.y) * s, t: fa <= 0 ? j : A.t });
+            }
+          }
+          return out;
+        }
+        const CELLS = IDS.map((id, i) => {
+          let poly = [
+            { x: 0, y: 0, t: -1 },
+            { x: W, y: 0, t: -1 },
+            { x: W, y: H, t: -1 },
+            { x: 0, y: H, t: -1 },
+          ];
+          IDS.forEach((o, j) => {
+            if (j !== i) poly = clipHalf(poly, NODES[id], NODES[o], j);
+          });
+          return { id, poly };
+        });
+
+        function rng(seed) {
+          return () => {
+            seed |= 0;
+            seed = (seed + 0x6d2b79f5) | 0;
+            let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+        // terrain of the battle mode: baked once (value noise and stipple), like the baked map background
+        let TERRAIN = null;
+        function terrain() {
+          if (TERRAIN) return TERRAIN;
+          const S = 0.5;
+          const c = document.createElement('canvas');
+          c.width = W * S;
+          c.height = H * S;
+          const g = c.getContext('2d');
+          const r = rng(977);
+          const waves = Array.from({ length: 9 }, () => ({ fx: 0.008 + r() * 0.022, fy: 0.008 + r() * 0.022, p: r() * 6.28, q: r() * 6.28 }));
+          const img = g.createImageData(c.width, c.height);
+          const cols = { plains: [118, 138, 86], forest: [34, 82, 62], mount: [104, 106, 112] };
+          for (let y = 0; y < c.height; y++)
+            for (let x = 0; x < c.width; x++) {
+              const X = x / S;
+              const Y = y / S;
+              let v = 0;
+              let u = 0;
+              for (const w of waves) {
+                v += Math.sin(X * w.fx + w.p) * Math.cos(Y * w.fy + w.q);
+                u += Math.cos(X * w.fy * 1.3 + w.q) * Math.sin(Y * w.fx * 1.1 + w.p);
+              }
+              const cc = cols[v > 1.1 ? 'forest' : u > 1.5 ? 'mount' : 'plains'];
+              const n = (r() - 0.5) * 10;
+              const i = (y * c.width + x) * 4;
+              img.data[i] = cc[0] + n;
+              img.data[i + 1] = cc[1] + n;
+              img.data[i + 2] = cc[2] + n;
+              img.data[i + 3] = 255;
+            }
+          g.putImageData(img, 0, 0);
+          g.globalAlpha = 0.22;
+          g.fillStyle = '#0d1117';
+          for (let i = 0; i < 900; i++) {
+            g.beginPath();
+            g.arc(r() * c.width, r() * c.height, 0.6 + r() * 1.2, 0, 6.29);
+            g.fill();
+          }
+          g.globalAlpha = 0.36;
+          g.fillRect(0, 0, c.width, c.height);
+          return (TERRAIN = c);
+        }
+
+        /* ============================================================ the looks (local frame: x along the road, outward = towards the next node / the enemy; y across) */
+        // part: {x, y, w, h, r: role}. order: the sequence in which parts are built. style.fill: 'split' (bar owner, teeth paper), 'owner', 'tint', 'paper'.
+        const rect = (x, y, w, h, r) => ({ x, y, w, h, r });
+        const comb = (n, x, y0, pitch, w, h) => Array.from({ length: n }, (_, i) => rect(x, y0 + i * pitch, w, h, 't'));
+        const LOOKS = [
+          {
+            id: 'palisade',
+            n: 'Palisade',
+            line: 'One solid bar, five teeth facing out; owner-colour bar, white teeth',
+            len: 40,
+            parts: [rect(-3, -20, 5, 40, 'b'), ...comb(5, 2, -20, 8.5, 7, 6)],
+            order: [0, 1, 2, 3, 4, 5],
+            style: { fill: 'split', rim: null, rimW: 0 },
+            progress: 'parts',
+            bake: 'worst case 15 tiny textures (2 owners x 7 build steps + the grey ghost; this storyboard bakes 12); one draw call per fort',
+          },
+          {
+            id: 'comb',
+            n: 'Comb',
+            line: 'Teeth both ways, outlined: a hollow shape with an owner tint',
+            len: 36,
+            parts: [rect(-2.5, -18, 5, 36, 'b'), ...comb(4, 2.5, -18, 9.6, 7, 7.2), ...comb(4, -9.5, -18, 9.6, 7, 7.2)],
+            order: [0, 1, 5, 2, 6, 3, 7, 4, 8],
+            style: { fill: 'tint', rim: 'paper', rimW: 1.5 },
+            progress: 'strip',
+            bake: 'worst case 21 textures (2 owners x 10 steps + ghost; 14 in this storyboard), or one per part composed at draw time; the hatch strip is a separate cell plate (as the road build ribbon)',
+          },
+          {
+            id: 'double',
+            n: 'Double wall',
+            line: 'Two parallel bars joined by links; teeth on the outer one; solid owner colour',
+            len: 36,
+            parts: [rect(-7, -18, 3.5, 36, 'b'), rect(-4, -12, 8, 4, 'l'), rect(-4, 8, 8, 4, 'l'), rect(3.5, -18, 3.5, 36, 'b'), ...comb(3, 7, -18, 13.5, 6.5, 9)],
+            order: [0, 1, 2, 3, 4, 5, 6],
+            style: { fill: 'owner', rim: 'paper', rimW: 1.4 },
+            progress: 'parts',
+            bake: 'worst case 17 textures (2 owners x 8 steps + ghost; 12 in this storyboard)',
+          },
+          {
+            id: 'towers',
+            n: 'Bastions',
+            line: 'Three big blocks on a base bar: few, bold shapes that survive zooming out',
+            len: 36,
+            parts: [rect(-6, -18, 3, 36, 'b'), ...[0, 1, 2].map((i) => rect(-4, -18 + i * 12.8, 12, 10.4, 't'))],
+            order: [0, 1, 3, 2],
+            style: { fill: 'owner', rim: 'paper', rimW: 1.6 },
+            progress: 'parts',
+            bake: 'worst case 11 textures (2 owners x 5 steps + ghost; 10 in this storyboard), the cheapest',
+          },
+          {
+            id: 'rake',
+            n: 'Rake',
+            line: 'A long fine comb with an owner-tint zone behind the line, on the own side',
+            len: 52,
+            parts: [rect(-1.5, -26, 3, 52, 'b'), ...comb(9, 1.5, -26, 5.9, 6.5, 3.4)],
+            order: [0, 5, 4, 6, 3, 7, 2, 8, 1, 9],
+            style: { fill: 'split', rim: null, rimW: 0 },
+            wedge: true,
+            progress: 'strip',
+            bake: 'worst case 23 textures (2 owners x 11 steps + ghost; 14 in this storyboard); the zone is part of the sprite; the thinnest teeth (3.4) are the risk at 0.45',
+          },
+          {
+            id: 'blocks',
+            n: 'Blocks',
+            line: 'Five detached blocks in a zigzag, white with an owner-colour rim: no continuous bar',
+            len: 45,
+            parts: [0, 1, 2, 3, 4].map((i) => rect(i % 2 ? 3 : -4, -23 + i * 9.5, 8, 7, 't')),
+            order: [0, 4, 1, 3, 2],
+            style: { fill: 'paper', rim: 'owner', rimW: 2.2 },
+            progress: 'parts',
+            bake: 'worst case 13 textures (2 owners x 6 steps + ghost; 12 in this storyboard); a block is a reusable sprite, so 1 sprite x 5 placements also works',
+          },
+        ];
+        const OX = 32;
+        const OY = 32;
+        const SW = 56;
+        const SH = 64;
+        const BK = 3;
+        const SPR = new Map();
+        const SPR_BY_LOOK = LOOKS.map(() => 0);
+
+        function paintPartOne(g, r, L, owner, enemyMark) {
+          const col = colOf(owner);
+          const st = L.style;
+          const cas = (st.rim ? st.rimW : 0) + 1.8;
+          g.fillStyle = C.bg;
+          g.fillRect(r.x - cas, r.y - cas, r.w + cas * 2, r.h + cas * 2);
+          if (st.rim) {
+            g.fillStyle = st.rim === 'owner' ? col : C.paper;
+            g.fillRect(r.x - st.rimW, r.y - st.rimW, r.w + st.rimW * 2, r.h + st.rimW * 2);
+          }
+        }
+        function fillOf(L, r, owner) {
+          const f = L.style.fill;
+          const col = colOf(owner);
+          if (f === 'split') return r.r === 'b' ? col : C.paper;
+          if (f === 'owner') return col;
+          if (f === 'paper') return C.paper;
+          return null;
+        }
+        // all parts at once (casing, rim, fill) so touching parts form one silhouette; mask: bit i = part i is built
+        function paintFort(g, L, owner, mask, ghost) {
+          const parts = L.parts;
+          const col = colOf(owner);
+          const built = (i) => !ghost && ((mask >> i) & 1) === 1;
+          if (L.wedge && !ghost && mask) {
+            g.beginPath();
+            g.moveTo(-1.5, -26);
+            g.lineTo(-27, -31);
+            g.lineTo(-27, 31);
+            g.lineTo(-1.5, 26);
+            g.closePath();
+            g.fillStyle = rgba(col, 0.26);
+            g.fill();
+            g.setLineDash([3, 3]);
+            g.strokeStyle = rgba(col, 0.9);
+            g.lineWidth = 1.2;
+            g.stroke();
+            g.setLineDash([]);
+          }
+          const st = L.style;
+          const cas = (st.rim ? st.rimW : 0) + 1.8;
+          g.fillStyle = C.bg;
+          parts.forEach((r, i) => built(i) && g.fillRect(r.x - cas, r.y - cas, r.w + cas * 2, r.h + cas * 2));
+          if (st.rim) {
+            g.fillStyle = st.rim === 'owner' ? col : C.paper;
+            parts.forEach((r, i) => built(i) && g.fillRect(r.x - st.rimW, r.y - st.rimW, r.w + st.rimW * 2, r.h + st.rimW * 2));
+          }
+          parts.forEach((r, i) => {
+            if (!built(i)) return;
+            if (st.fill === 'tint') {
+              g.fillStyle = '#1b2330';
+              g.fillRect(r.x, r.y, r.w, r.h);
+              g.fillStyle = rgba(col, 0.6);
+              g.fillRect(r.x, r.y, r.w, r.h);
+            } else {
+              g.fillStyle = fillOf(L, r, owner);
+              g.fillRect(r.x, r.y, r.w, r.h);
+            }
+          });
+          if (owner === 'en' && !ghost) {
+            // the enemy reads without the hue: a dark core line in every part (like the dark inner ring of enemy shapes)
+            g.strokeStyle = C.bg;
+            g.lineWidth = 1;
+            parts.forEach((r, i) => {
+              if (!built(i)) return;
+              if (Math.min(r.w, r.h) >= 6.5) g.strokeRect(r.x + 1.7, r.y + 1.7, r.w - 3.4, r.h - 3.4);
+              else if (Math.max(r.w, r.h) >= 18) {
+                g.beginPath();
+                if (r.h > r.w) {
+                  g.moveTo(r.x + r.w / 2, r.y + 1);
+                  g.lineTo(r.x + r.w / 2, r.y + r.h - 1);
+                } else {
+                  g.moveTo(r.x + 1, r.y + r.h / 2);
+                  g.lineTo(r.x + r.w - 1, r.y + r.h / 2);
+                }
+                g.stroke();
+              }
+            });
+          }
+          // what is not built (or a memory ghost) is a dashed outline: dashed = does not exist or not seen now
+          g.setLineDash([2.4, 2]);
+          g.lineWidth = 1.2;
+          g.strokeStyle = ghost ? 'rgba(170,178,189,0.85)' : 'rgba(240,246,252,0.9)';
+          parts.forEach((r, i) => {
+            if (!built(i)) g.strokeRect(r.x, r.y, r.w, r.h);
+          });
+          g.setLineDash([]);
+        }
+        function sprite(li, owner, mask, ghost) {
+          const key = `${li}|${owner}|${mask}|${ghost ? 1 : 0}`;
+          let s = SPR.get(key);
+          if (s) return s;
+          const L = LOOKS[li];
+          const cv = document.createElement('canvas');
+          cv.width = SW * BK;
+          cv.height = SH * BK;
+          const g = cv.getContext('2d');
+          g.scale(BK, BK);
+          g.translate(OX, OY);
+          paintFort(g, L, owner, mask, ghost);
+          SPR.set(key, cv);
+          SPR_BY_LOOK[li]++;
+          return cv;
+        }
+        const fullMask = (L) => (1 << L.parts.length) - 1;
+        const maskAt = (L, k) => L.order.slice(0, k).reduce((m, i) => m | (1 << i), 0);
+
+        /* ============================================================ geometry helpers */
+        // zoomed out, marks grow (min size on screen), so a second stacked line keeps its gap in marks, not in world units
+        let CUR_MK = 1;
+        const fortOff = (f) => (f.off > OFF1 ? OFF1 + (f.off - OFF1) * CUR_MK : f.off);
+        function fortFrame(f) {
+          const A = NODES[f.node];
+          const B = NODES[f.to];
+          const dx = B.x - A.x;
+          const dy = B.y - A.y;
+          const L = Math.hypot(dx, dy);
+          const ux = dx / L;
+          const uy = dy / L;
+          const off = fortOff(f);
+          return { x: (A.x + B.x) / 2 - ux * off, y: (A.y + B.y) / 2 - uy * off, ux, uy, nx: -uy, ny: ux, L };
+        }
+        function roadPoint(from, to, s) {
+          const A = NODES[from];
+          const B = NODES[to];
+          const L = Math.hypot(B.x - A.x, B.y - A.y);
+          return { x: A.x + ((B.x - A.x) / L) * s, y: A.y + ((B.y - A.y) / L) * s, ux: (B.x - A.x) / L, uy: (B.y - A.y) / L, L };
+        }
+        const edgeBetween = (a, b) => EDGES.find((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a));
+
+        /* ============================================================ the storyboard */
+        const STEPS = [
+          { id: 'menu', n: 'Menu', dur: 3.2 },
+          { id: 'pick', n: 'Pick road', dur: 3.8 },
+          { id: 'build', n: 'Building', dur: 4.0 },
+          { id: 'built', n: 'Built', dur: 2.6 },
+          { id: 'enemy', n: 'Enemy seen', dur: 2.6 },
+          { id: 'fog', n: 'Fog edge', dur: 2.6 },
+          { id: 'stack', n: 'Stacked', dur: 4.2 },
+          { id: 'collect', n: 'You collect', dur: 4.0 },
+          { id: 'pay', n: 'You pay', dur: 4.0 },
+          { id: 'capture', n: 'Captured', dur: 4.2 },
+        ];
+        const SPEED = 50; // world units per second on the road (toy value)
+        const S0 = 34;
+        const DELAY = 0.3;
+        const OFF1 = 18;
+        const OFF2 = 48;
+        const BASE_COUNT = 4;
+
+        // a group walks `from` -> `to`; forts (belonging to `to`) toll it; returns the group and the toll records
+        function crossing(t, o) {
+          const E = edgeBetween(o.from, o.to);
+          const R = roadPoint(o.from, o.to, 0);
+          const L = R.L;
+          const sOf = (tt) => S0 + SPEED * (tt - DELAY);
+          const end = L - 26;
+          const tEnd = DELAY + (end - S0) / SPEED;
+          const tolls = [];
+          let c = o.c;
+          o.forts
+            .slice()
+            .sort((a, b) => a.off - b.off)
+            .forEach((f) => {
+              const sF = L / 2 + fortOff(f);
+              const tc = DELAY + (sF - S0) / SPEED;
+              const pay = Math.min(Math.ceil(o.u / 3), c);
+              tolls.push({ tc, n: pay, c0: c, c1: c - pay, fort: f.id, mine: o.mine, owner: o.owner, u: o.u, from: o.from, to: o.to, sF });
+              c -= pay;
+            });
+          let shown = o.c;
+          for (const r of tolls) if (t >= r.tc) shown = lerp(r.c0, r.c1, easeOut((t - r.tc) / 0.32));
+          const s = Math.min(sOf(t), end);
+          const p = roadPoint(o.from, o.to, s);
+          let alpha = clamp(t / DELAY, 0, 1);
+          let scale = 1;
+          if (t > tEnd) {
+            const k = clamp((t - tEnd) / 0.35, 0, 1);
+            alpha = 1 - k;
+            scale = 1 - 0.35 * k;
+          }
+          const gpos = (tt) => roadPoint(o.from, o.to, Math.min(sOf(tt), end));
+          const g = { x: p.x, y: p.y, dx: p.ux, dy: p.uy, owner: o.owner, u: o.u, c: shown, alpha, scale, id: 'g' };
+          tolls.forEach((r) => (r.gpos = gpos));
+          return { group: t < 0 || sOf(t) < 0 ? null : g, tolls };
+        }
+
+        function scene(stepId, t) {
+          const sc = { owners: {}, forts: [], groups: [], tolls: [], fog: false, focus: [520, 255], sel: null, overlay: null, label: '', rings: [], garrison: [] };
+          const mineA = (off, mode, extra) => Object.assign({ id: 'f' + off + mode, node: 'A', to: 'E', owner: 'me', off, mode }, extra || {});
+          switch (stepId) {
+            case 'menu':
+              sc.sel = 'A';
+              sc.overlay = { kind: 'menu', t };
+              sc.focus = [440, 285];
+              break;
+            case 'pick': {
+              sc.sel = 'A';
+              const hv = t < 0.7 ? -1 : t < 1.5 ? 0 : 1;
+              sc.overlay = { kind: 'pick', t, hover: hv };
+              sc.focus = [470, 280];
+              break;
+            }
+            case 'build': {
+              const p = clamp(t / 3.2, 0, 1);
+              sc.forts.push(mineA(OFF1, 'build', { p }));
+              sc.focus = [500, 255];
+              break;
+            }
+            case 'built':
+              sc.forts.push(mineA(OFF1, 'built', { born: t }));
+              break;
+            case 'enemy':
+              sc.forts.push(mineA(OFF1, 'built'));
+              sc.forts.push({ id: 'e1', node: 'E', to: 'A', owner: 'en', off: OFF1, mode: 'built', born: t });
+              sc.forts.push({ id: 'e2', node: 'P', to: 'A', owner: 'en', off: OFF1, mode: 'build', p: clamp(0.25 + t * 0.25, 0, 0.9) });
+              sc.focus = [510, 285];
+              break;
+            case 'fog':
+              sc.fog = true;
+              sc.forts.push({ id: 'e1', node: 'E', to: 'F', owner: 'en', off: OFF1, mode: 'built', born: t });
+              sc.forts.push({ id: 'e3', node: 'F', to: 'E', owner: 'en', off: OFF1, mode: 'ghost', age: 42 });
+              sc.forts.push(mineA(OFF1, 'built'));
+              sc.focus = [610, 250];
+              break;
+            case 'stack': {
+              const f1 = mineA(OFF1, 'built');
+              const f2 = mineA(OFF2, 'built');
+              sc.forts.push(f1, f2);
+              const r = crossing(t, { from: 'E', to: 'A', forts: [f1, f2], owner: 'en', u: 7, c: 5, mine: false });
+              if (r.group) sc.groups.push(r.group);
+              sc.tolls = r.tolls;
+              sc.focus = [500, 250];
+              break;
+            }
+            case 'collect': {
+              const f1 = mineA(OFF1, 'built');
+              sc.forts.push(f1);
+              const r = crossing(t, { from: 'E', to: 'A', forts: [f1], owner: 'en', u: 7, c: 5, mine: false });
+              if (r.group) sc.groups.push(r.group);
+              sc.tolls = r.tolls;
+              sc.focus = [515, 250];
+              break;
+            }
+            case 'pay': {
+              const f1 = { id: 'e1', node: 'E', to: 'A', owner: 'en', off: OFF1, mode: 'built' };
+              sc.forts.push(f1);
+              const r = crossing(t, { from: 'A', to: 'E', forts: [f1], owner: 'me', u: 7, c: 5, mine: true });
+              if (r.group) sc.groups.push(r.group);
+              sc.tolls = r.tolls;
+              sc.focus = [515, 250];
+              break;
+            }
+            case 'capture': {
+              const f1 = mineA(OFF1, 'built');
+              const tCap = 1.0;
+              const tBrk = 1.3;
+              if (t < tBrk + 0.8) {
+                sc.forts.push(t < tBrk ? f1 : Object.assign(f1, { mode: 'break', brk: (t - tBrk) / 0.7 }));
+              }
+              const arrive = clamp(t / tCap, 0, 1);
+              const p = roadPoint('E', 'A', lerp(120, NODES.A.x ? 160 : 160, arrive));
+              if (t < tCap) sc.groups.push({ x: p.x, y: p.y, dx: p.ux, dy: p.uy, owner: 'en', u: 7, c: 2, alpha: 1, scale: 1, id: 'g' });
+              else sc.garrison.push({ node: 'A', owner: 'en', u: 7, c: 2 });
+              if (t >= tCap) {
+                sc.noPackets = true;
+                sc.owners.A = 'en';
+                sc.rings.push({ x: NODES.A.x, y: NODES.A.y, k: (t - tCap) / 0.5 });
+              }
+              sc.focus = [500, 270];
+              break;
+            }
+          }
+          return sc;
+        }
+
+        /* ============================================================ toll variants */
+        const TOLLS = [
+          { id: 'shed', n: 'Shed dots', rest: 0.44, cost: 'sprite pool: 1 charge-square sprite and 1 fragment sprite, n + 4n per toll moved by position and alpha, no redraw' },
+          { id: 'bite', n: 'Bite', rest: 0.2, cost: 'the fort sprite is scaled on x and re-drawn once additively: nothing new baked' },
+          { id: 'float', n: 'Float -N', rest: 0.42, cost: 'one pooled Text per number (cached glyph atlas), rises by position and alpha' },
+          { id: 'pips', n: 'Pip drain', rest: 0.5, cost: 'a baked row of pips per (units, charged): at most 9 + 9 textures, swapped by step' },
+          { id: 'ripple', n: 'Ripple', rest: 0.3, cost: 'one ring sprite scaled and faded, one strip sprite, ticks as 1 sprite each' },
+          { id: 'trail', n: 'Trail', rest: 0.5, cost: 'the same pooled square sprite as Shed dots, placed on the road and faded' },
+        ];
+        // a "stop" frame for Less motion: the moment the effect is clearest, held 1.2 s
+        const HOLD = 1.2;
+
+        /* ============================================================ painter */
+        class Painter {
+          constructor(cv) {
+            this.cv = cv;
+            this.g = cv.getContext('2d');
+          }
+          setup(S, sc) {
+            const cv = this.cv;
+            const dpr = Math.min(2, window.devicePixelRatio || 1);
+            const w = cv.clientWidth || 600;
+            const h = cv.clientHeight || 380;
+            const pw = Math.round(w * dpr);
+            const ph = Math.round(h * dpr);
+            if (cv.width !== pw || cv.height !== ph) {
+              cv.width = pw;
+              cv.height = ph;
+            }
+            this.vw = w;
+            this.vh = h;
+            this.dpr = dpr;
+            const z = S.zoom;
+            this.z = z;
+            const hw = w / 2 / z;
+            const hh = h / 2 / z;
+            let [fx, fy] = sc.focus;
+            fx = hw * 2 >= W ? W / 2 : clamp(fx, hw, W - hw);
+            fy = hh * 2 >= H ? H / 2 : clamp(fy, hh, H - hh);
+            this.fx = fx;
+            this.fy = fy;
+            this.mk = z < 1 ? Math.pow(1 / z, 0.6) : 1;
+            this.rk = z < 1 ? Math.pow(1 / z, 0.75) : 1;
+          }
+          world() {
+            const { dpr, z, vw, vh, fx, fy } = this;
+            this.g.setTransform(dpr * z, 0, 0, dpr * z, dpr * (vw / 2 - fx * z), dpr * (vh / 2 - fy * z));
+          }
+          screenT() {
+            this.g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+          }
+          toScreen(x, y) {
+            return [(x - this.fx) * this.z + this.vw / 2, (y - this.fy) * this.z + this.vh / 2];
+          }
+          // draw in screen pixels around a world point
+          px(x, y, fn) {
+            const g = this.g;
+            g.save();
+            g.translate(x, y);
+            g.scale(1 / this.z, 1 / this.z);
+            fn(g);
+            g.restore();
+          }
+          text(s, x, y, size, col, o) {
+            o = o || {};
+            this.px(x, y, (g) => {
+              g.font = `${o.weight || 700} ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
+              g.textAlign = o.align || 'center';
+              g.textBaseline = 'middle';
+              g.lineJoin = 'round';
+              g.strokeStyle = 'rgba(13,17,23,0.9)';
+              g.lineWidth = 3.4;
+              g.strokeText(s, 0, 0);
+              g.fillStyle = col;
+              g.fillText(s, 0, 0);
+            });
+          }
+          // a dark pill with a small glyph and a number (screen pixels)
+          pill(x, y, label, o) {
+            o = o || {};
+            this.px(x, y, (g) => {
+              const size = o.size || 13;
+              g.font = `700 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
+              const tw = g.measureText(label).width;
+              const gw = o.glyph ? size * 0.95 : 0;
+              const w = tw + gw + 14 + (o.glyph ? 3 : 0);
+              const h = size + 8;
+              g.globalAlpha *= o.alpha == null ? 1 : o.alpha;
+              g.beginPath();
+              g.roundRect(-w / 2, -h / 2, w, h, h / 2.6);
+              g.fillStyle = 'rgba(13,17,23,0.94)';
+              g.fill();
+              g.lineWidth = o.frameW || 1.4;
+              g.strokeStyle = o.frame || 'rgba(240,246,252,0.8)';
+              if (o.dash) g.setLineDash([3.5, 2.5]);
+              g.stroke();
+              g.setLineDash([]);
+              let cx = -w / 2 + 7;
+              if (o.glyph) {
+                const gx = cx + gw / 2;
+                const s = size * 0.34;
+                g.fillStyle = o.glyphCol || C.paper;
+                g.strokeStyle = o.glyphCol || C.paper;
+                if (o.glyph === 'down') {
+                  g.beginPath();
+                  g.moveTo(gx - s * 1.2, -s * 0.9);
+                  g.lineTo(gx + s * 1.2, -s * 0.9);
+                  g.lineTo(gx, s * 1.1);
+                  g.closePath();
+                  g.fill();
+                } else if (o.glyph === 'sq') {
+                  g.fillRect(gx - s, -s, s * 2, s * 2);
+                } else if (o.glyph === 'broken') {
+                  g.lineWidth = 1.6;
+                  g.beginPath();
+                  g.moveTo(gx - s, -s * 0.2);
+                  g.lineTo(gx - s, -s);
+                  g.lineTo(gx + s * 0.1, -s);
+                  g.moveTo(gx + s, s * 0.2);
+                  g.lineTo(gx + s, s);
+                  g.lineTo(gx - s * 0.1, s);
+                  g.stroke();
+                }
+                cx += gw + 3;
+              }
+              g.fillStyle = o.col || C.paper;
+              g.textAlign = 'left';
+              g.textBaseline = 'middle';
+              g.fillText(label, cx, 0.5);
+            });
+          }
+
+          draw(S, st, t, sc) {
+            this.setup(S, sc);
+            this.S = S;
+            this.sc = sc;
+            this.t = t;
+            this.st = st;
+            const g = this.g;
+            this.screenT();
+            g.fillStyle = '#0a0d12';
+            g.fillRect(0, 0, this.vw, this.vh);
+            this.world();
+            g.save();
+            g.beginPath();
+            g.rect(0, 0, W, H);
+            g.clip();
+            this.battle = S.mode === 'battle';
+            if (this.battle) {
+              g.imageSmoothingEnabled = true;
+              g.drawImage(terrain(), 0, 0, W, H);
+            } else {
+              g.fillStyle = C.floor;
+              g.fillRect(0, 0, W, H);
+            }
+            this.cells();
+            if (!this.battle) this.front();
+            this.roads();
+            if (!this.battle) this.packets();
+            this.nodes();
+            if (sc.fog) this.veil();
+            this.forts();
+            this.groups();
+            this.effects();
+            g.restore();
+            this.world();
+            g.strokeStyle = 'rgba(139,148,158,0.55)';
+            g.lineWidth = 1.5 / this.z;
+            g.strokeRect(0, 0, W, H);
+            this.overlay();
+          }
+          own(id) {
+            return this.sc.owners[id] || NODES[id].own;
+          }
+
+          /* ---- territory */
+          cells() {
+            const g = this.g;
+            const paths = (poly) => {
+              g.beginPath();
+              poly.forEach((v, i) => (i ? g.lineTo(v.x, v.y) : g.moveTo(v.x, v.y)));
+              g.closePath();
+            };
+            for (const c of CELLS) {
+              const o = this.own(c.id);
+              if (o === 'ne') continue;
+              paths(c.poly);
+              g.fillStyle = rgba(colOf(o), this.battle ? 0.2 : 0.3);
+              g.fill();
+            }
+            const bw = this.rk;
+            for (const c of CELLS) {
+              const o = this.own(c.id);
+              const P = c.poly;
+              g.save();
+              paths(P);
+              g.clip();
+              for (let i = 0; i < P.length; i++) {
+                const a = P[i];
+                const b = P[(i + 1) % P.length];
+                if (a.t < 0) continue;
+                const m = IDS[a.t];
+                g.beginPath();
+                g.moveTo(a.x, a.y);
+                g.lineTo(b.x, b.y);
+                const mo = this.own(m);
+                if (mo === o || o === 'ne') {
+                  g.strokeStyle = 'rgba(240,246,252,0.07)';
+                  g.lineWidth = 1 * bw;
+                  g.stroke();
+                } else {
+                  g.strokeStyle = rgba(colOf(o), 0.16);
+                  g.lineWidth = 18 * bw;
+                  g.stroke();
+                  g.strokeStyle = rgba(colOf(o), 0.95);
+                  g.lineWidth = 4 * bw;
+                  g.stroke();
+                }
+              }
+              g.restore();
+            }
+          }
+          // supply mode: the delivery-front cell is lit (T1 "bright fill" of supply-flow-visuals-r2)
+          front() {
+            const g = this.g;
+            const c = CELLS.find((x) => x.id === 'A');
+            if (this.own('A') !== 'me') return;
+            g.beginPath();
+            c.poly.forEach((v, i) => (i ? g.lineTo(v.x, v.y) : g.moveTo(v.x, v.y)));
+            g.closePath();
+            g.fillStyle = rgba(C.you, 0.3);
+            g.fill();
+            g.fillStyle = 'rgba(240,246,252,0.16)';
+            g.fill();
+            g.save();
+            g.clip();
+            const P = c.poly;
+            for (let i = 0; i < P.length; i++) {
+              const a = P[i];
+              const b = P[(i + 1) % P.length];
+              if (a.t < 0 || this.own(IDS[a.t]) === 'me') continue;
+              g.beginPath();
+              g.moveTo(a.x, a.y);
+              g.lineTo(b.x, b.y);
+              g.strokeStyle = 'rgba(240,246,252,0.9)';
+              g.lineWidth = 2.8 * this.rk;
+              g.stroke();
+            }
+            g.restore();
+          }
+
+          /* ---- roads */
+          roadKind(e) {
+            const a = this.own(e.a);
+            const b = this.own(e.b);
+            if (a === b && a !== 'ne') return a;
+            return 'buf';
+          }
+          roads() {
+            const g = this.g;
+            const rk = this.rk;
+            g.lineCap = 'round';
+            for (const e of EDGES) {
+              const A = NODES[e.a];
+              const B = NODES[e.b];
+              const k = this.roadKind(e);
+              const stripe = (e.w === 2 ? 5.7 : 2) * rk;
+              const line = () => {
+                g.beginPath();
+                g.moveTo(A.x, A.y);
+                g.lineTo(B.x, B.y);
+              };
+              line();
+              g.strokeStyle = 'rgba(13,17,23,0.85)';
+              g.lineWidth = stripe + 5.6 * rk;
+              g.stroke();
+              if (k === 'buf') {
+                g.strokeStyle = 'rgba(13,17,23,0.4)';
+                line();
+                g.stroke();
+                g.setLineDash([7 * rk, 5 * rk]);
+                g.strokeStyle = 'rgba(170,178,189,0.85)';
+                g.lineWidth = 2 * rk;
+                line();
+                g.stroke();
+                g.setLineDash([]);
+              } else {
+                const col = k === 'me' ? C.you : C.enemy;
+                g.strokeStyle = rgba(col, 0.62);
+                g.lineWidth = stripe + 3.6 * rk;
+                line();
+                g.stroke();
+                g.strokeStyle = this.battle ? 'rgba(230,237,243,0.95)' : '#d7dee6';
+                g.lineWidth = stripe;
+                line();
+                g.stroke();
+                if (e.w === 2) {
+                  g.strokeStyle = rgba(col, 0.62);
+                  g.lineWidth = 1.7 * rk;
+                  line();
+                  g.stroke();
+                }
+              }
+            }
+            // half of an edge in the fog: dotted grey
+            if (this.sc.fog) {
+              for (const e of EDGES) {
+                const A = NODES[e.a];
+                const B = NODES[e.b];
+                const hid = (id) => ['F', 'G', 'H'].includes(id);
+                if (hid(e.a) === hid(e.b)) continue;
+                const hidEnd = hid(e.a) ? A : B;
+                const seeEnd = hid(e.a) ? B : A;
+                const mx = (A.x + B.x) / 2;
+                const my = (A.y + B.y) / 2;
+                g.setLineDash([1.5 * rk, 5 * rk]);
+                g.strokeStyle = 'rgba(170,178,189,0.9)';
+                g.lineWidth = 2 * rk;
+                g.beginPath();
+                g.moveTo(mx, my);
+                g.lineTo(hidEnd.x, hidEnd.y);
+                g.stroke();
+                g.setLineDash([]);
+                void seeEnd;
+              }
+            }
+          }
+          packets() {
+            const g = this.g;
+            const flows = [
+              ['K', 'B'],
+              ['B', 'A'],
+              ['Q', 'K'],
+            ];
+            const sp = this.sc.noPackets || this.S.rm ? 0 : 1;
+            for (const [a, b] of flows) {
+              const A = NODES[a];
+              const B = NODES[b];
+              const L = Math.hypot(B.x - A.x, B.y - A.y);
+              const ux = (B.x - A.x) / L;
+              const uy = (B.y - A.y) / L;
+              const pitch = 70;
+              const off = sp ? (this.t * 38) % pitch : 20;
+              for (let s = off; s < L - 20; s += pitch) {
+                if (s < 22) continue;
+                const x = A.x + ux * s;
+                const y = A.y + uy * s;
+                const sz = 8 * this.mk;
+                [
+                  [-14, 0.3, 5],
+                  [-8, 0.6, 6],
+                ].forEach(([d, al, q]) => {
+                  g.fillStyle = `rgba(240,246,252,${al})`;
+                  const qq = q * this.mk;
+                  g.fillRect(x + ux * d * this.mk - qq / 2, y + uy * d * this.mk - qq / 2, qq, qq);
+                });
+                g.fillStyle = C.you;
+                g.strokeStyle = C.bg;
+                g.lineWidth = 1.5;
+                g.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+                g.strokeRect(x - sz / 2, y - sz / 2, sz, sz);
+              }
+            }
+          }
+
+          /* ---- nodes */
+          nodes() {
+            const g = this.g;
+            const mk = this.mk;
+            for (const id of IDS) {
+              const N = NODES[id];
+              const o = this.own(id);
+              const R = nodeR(N) * mk;
+              const prov = N.kind === 'prov';
+              const nseg = prov ? 3 : N.kind === 'cap' ? 5 : 3;
+              const ringR = prov ? 16 * mk : R + 7 * mk;
+              // capacity ring: white = a unit stands there
+              const gar = this.sc.garrison.some((x) => x.node === id) ? 3 : o === 'me' ? N.gar : 0;
+              for (let pass = 0; pass < 2; pass++) {
+                for (let i = 0; i < nseg; i++) {
+                  const a0 = -Math.PI / 2 + (i * Math.PI * 2) / nseg + 0.12;
+                  const a1 = -Math.PI / 2 + ((i + 1) * Math.PI * 2) / nseg - 0.12;
+                  g.beginPath();
+                  g.arc(N.x, N.y, ringR, a0, a1);
+                  g.lineCap = 'butt';
+                  if (pass === 0) {
+                    g.strokeStyle = 'rgba(13,17,23,0.9)';
+                    g.lineWidth = 7 * mk;
+                  } else {
+                    g.strokeStyle = o === 'me' && i < gar ? C.paper : C.seg;
+                    g.lineWidth = 4 * mk;
+                  }
+                  g.stroke();
+                }
+              }
+              g.lineCap = 'round';
+              g.beginPath();
+              if (prov) {
+                // a small pale dot, the enemy's has a second light ring (side by shape, not hue only)
+                g.arc(N.x, N.y, R, 0, 6.29);
+                g.fillStyle = o === 'ne' ? 'rgba(170,178,189,0.35)' : rgba(colOf(o), 0.55);
+                g.fill();
+                g.fillStyle = o === 'ne' ? 'rgba(170,178,189,0.25)' : 'rgba(240,246,252,0.35)';
+                g.fill();
+                g.strokeStyle = C.bg;
+                g.lineWidth = 3.6 * mk;
+                g.stroke();
+                g.strokeStyle = o === 'ne' ? C.nstroke : colOf(o);
+                g.lineWidth = 1.5 * mk;
+                if (o === 'ne') g.setLineDash([2 * mk, 2 * mk]);
+                g.stroke();
+                g.setLineDash([]);
+                if (o === 'en') {
+                  g.beginPath();
+                  g.arc(N.x, N.y, R + 3.4 * mk, 0, 6.29);
+                  g.strokeStyle = 'rgba(240,246,252,0.8)';
+                  g.lineWidth = 1.1 * mk;
+                  g.stroke();
+                }
+              } else {
+                g.arc(N.x, N.y, R, 0, 6.29);
+                g.fillStyle = C.nfill;
+                g.fill();
+                g.strokeStyle = C.bg;
+                g.lineWidth = 5.6 * mk;
+                g.stroke();
+                g.strokeStyle = o === 'ne' ? C.nstroke : C.paper;
+                g.lineWidth = (o === 'me' ? 3 : 2.2) * mk;
+                g.stroke();
+                if (o !== 'ne') {
+                  g.beginPath();
+                  g.arc(N.x, N.y, R - 3.4 * mk, 0, 6.29);
+                  g.strokeStyle = o === 'en' ? C.bg : C.you;
+                  g.lineWidth = 1.8 * mk;
+                  g.stroke();
+                  g.beginPath();
+                  g.arc(N.x, N.y, R - 5.4 * mk, 0, 6.29);
+                  g.strokeStyle = colOf(o);
+                  g.lineWidth = (o === 'en' ? 2.6 : 1.4) * mk;
+                  g.stroke();
+                }
+                if (N.kind === 'cap') {
+                  g.beginPath();
+                  for (let i = 0; i < 10; i++) {
+                    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+                    const rr = (i % 2 ? 3.6 : 8) * mk;
+                    g.lineTo(N.x + Math.cos(a) * rr, N.y + Math.sin(a) * rr);
+                  }
+                  g.closePath();
+                  g.fillStyle = C.paper;
+                  g.fill();
+                }
+              }
+              // warehouse places under an own city (a filled square = a charge)
+              if (!prov && o === 'me') {
+                const n = N.kind === 'cap' ? 6 : 3;
+                const w = 5 * mk;
+                const gap = 1.5 * mk;
+                const tw = n * w + (n - 1) * gap;
+                const y0 = N.y + ringR + 6 * mk;
+                g.fillStyle = 'rgba(13,17,23,0.92)';
+                g.fillRect(N.x - tw / 2 - 2.5 * mk, y0 - 2.5 * mk, tw + 5 * mk, 4 * mk + 5 * mk);
+                for (let i = 0; i < n; i++) {
+                  const x = N.x - tw / 2 + i * (w + gap);
+                  if (i < 2) {
+                    g.fillStyle = C.you;
+                    g.fillRect(x, y0, w, 4 * mk);
+                  } else {
+                    g.strokeStyle = C.seg;
+                    g.lineWidth = 1;
+                    g.strokeRect(x + 0.5, y0 + 0.5, w - 1, 4 * mk - 1);
+                  }
+                }
+              }
+              if (this.sc.sel === id) {
+                const pulse = this.S.rm ? 0.5 : 0.5 - 0.5 * Math.cos(this.t * 7.85);
+                g.beginPath();
+                g.arc(N.x, N.y, ringR + 8 * mk + pulse * 3, 0, 6.29);
+                g.strokeStyle = 'rgba(13,17,23,0.8)';
+                g.lineWidth = 5;
+                g.stroke();
+                g.strokeStyle = C.paper;
+                g.lineWidth = 2.2;
+                g.stroke();
+              }
+              const cap = prov ? this.z >= 0.7 : this.z >= 0.45;
+              if (cap && this.sc.overlay === null) {
+                const yy = N.y + ringR + (o === 'me' && !prov ? 22 : 12) * mk;
+                this.text(N.name, N.x, yy + (this.z < 1 ? 0 : 0), prov ? 12 : 13, 'rgba(230,237,243,0.9)', { weight: prov ? 500 : 700 });
+              }
+            }
+            // a capture wave
+            for (const r of this.sc.rings) {
+              if (r.k < 0 || r.k > 1) continue;
+              g.beginPath();
+              g.arc(r.x, r.y, 20 + 70 * easeOut(r.k), 0, 6.29);
+              g.strokeStyle = rgba(C.enemy, 0.9 * (1 - r.k));
+              g.lineWidth = 5;
+              g.stroke();
+            }
+          }
+          veil() {
+            const g = this.g;
+            for (const c of CELLS) {
+              if (!['F', 'G', 'H'].includes(c.id)) continue;
+              g.beginPath();
+              c.poly.forEach((v, i) => (i ? g.lineTo(v.x, v.y) : g.moveTo(v.x, v.y)));
+              g.closePath();
+              g.fillStyle = 'rgba(37,45,56,0.66)';
+              g.fill();
+            }
+          }
+
+          /* ---- forts */
+          tollsOf(fortId) {
+            return this.sc.tolls.filter((r) => r.fort === fortId);
+          }
+          forts() {
+            const g = this.g;
+            const S = this.S;
+            const li = S.look;
+            const L = LOOKS[li];
+            const mk = this.mk;
+            const n = L.parts.length;
+            // minimum size on the screen (like the construction plate): the sprite grows when the camera zooms out
+            const k = mk;
+            for (const f of this.sc.forts) {
+              const fr = fortFrame(f);
+              const ang = Math.atan2(fr.uy, fr.ux);
+              let key = null;
+              let alpha = 1;
+              let sx = 1;
+              let flash = 0;
+              let scale = 1;
+              if (f.mode === 'built') {
+                key = sprite(li, f.owner, fullMask(L), false);
+                const born = f.born != null && !S.rm ? easeOut(f.born / 0.3) : 1;
+                scale = lerp(0.7, 1, born);
+                alpha = born;
+              } else if (f.mode === 'build') {
+                const kk = Math.floor(f.p * n + 1e-6);
+                key = sprite(li, f.owner, maskAt(L, kk), false);
+              } else if (f.mode === 'ghost') {
+                key = sprite(li, 'ne', 0, true);
+                alpha = 0.75;
+              } else if (f.mode === 'break') {
+                this.breakFort(f, L, fr, ang, k);
+                continue;
+              }
+              for (const r of this.tollsOf(f.id)) {
+                const d = this.dEff(r);
+                if (d < 0) continue;
+                if (TOLLS[S.toll].id === 'bite') {
+                  const q = clamp(d / 0.3, 0, 1);
+                  sx = 1 + 0.7 * Math.sin(Math.PI * Math.min(1, q * 1.15));
+                  flash = Math.max(flash, 0.9 * (1 - q));
+                } else if (TOLLS[S.toll].id === 'float' || TOLLS[S.toll].id === 'trail') flash = Math.max(flash, 0.4 * clamp(1 - d / 0.25, 0, 1));
+                else if (TOLLS[S.toll].id === 'shed' || TOLLS[S.toll].id === 'pips') flash = Math.max(flash, 0.35 * clamp(1 - Math.abs(d - 0.28) / 0.25, 0, 1));
+              }
+              g.save();
+              g.translate(fr.x, fr.y);
+              g.rotate(ang);
+              g.scale(k * scale, k);
+              g.globalAlpha = alpha;
+              g.save();
+              g.scale(sx, 1);
+              g.drawImage(key, -OX, -OY, SW, SH);
+              if (flash > 0.01) {
+                g.globalCompositeOperation = 'lighter';
+                g.globalAlpha = flash;
+                g.drawImage(key, -OX, -OY, SW, SH);
+              }
+              g.restore();
+              g.restore();
+              if (f.mode === 'build') this.buildMarks(f, L, fr, ang, k);
+              if (f.mode === 'ghost') {
+                const [wx, wy] = [fr.x + fr.nx * 28 * k, fr.y + fr.ny * 28 * k];
+                this.pill(wx, wy, `-0:${f.age}`, { size: 12, dash: true, alpha: 0.9 });
+              }
+              if (S.cnt && f.mode === 'built' && ['stack', 'collect', 'pay'].includes(this.stepId)) this.counter(f, fr, k);
+            }
+          }
+          counter(f, fr, k) {
+            let v = BASE_COUNT;
+            let pulse = 0;
+            for (const r of this.tollsOf(f.id)) {
+              const d = this.t - r.tc;
+              if (d >= 0) {
+                v += r.n;
+                if (d < 0.5) pulse = 1 - d / 0.5;
+              }
+            }
+            const x = fr.x + fr.ux * 26 * k - fr.nx * 30 * k;
+            const y = fr.y + fr.uy * 26 * k - fr.ny * 30 * k;
+            this.pill(x, y, String(v), { glyph: 'sq', size: 12 + (this.S.rm ? 0 : pulse * 2), frame: pulse > 0 ? C.paper : 'rgba(240,246,252,0.6)', frameW: 1.2 + pulse });
+          }
+          buildMarks(f, L, fr, ang, k) {
+            const g = this.g;
+            if (L.progress === 'strip') {
+              // a hatched strip beside the line: a dark base, amber slanted stripes, the done part solid (like the road build ribbon)
+              g.save();
+              g.translate(fr.x, fr.y);
+              g.rotate(ang);
+              g.scale(k, k);
+              const x0 = L.id === 'rake' ? -20 : -17;
+              const half = L.len / 2;
+              g.fillStyle = C.bg;
+              g.fillRect(x0 - 1.4, -half - 1.4, 7.8, half * 2 + 2.8);
+              g.save();
+              g.beginPath();
+              g.rect(x0, -half, 5, half * 2);
+              g.clip();
+              g.fillStyle = '#2b2f36';
+              g.fillRect(x0, -half, 5, half * 2);
+              g.strokeStyle = C.warn;
+              g.lineWidth = 2;
+              g.beginPath();
+              for (let s = -half - 10; s < half + 10; s += 5) {
+                g.moveTo(x0, s + 5);
+                g.lineTo(x0 + 5, s);
+              }
+              g.stroke();
+              g.fillStyle = C.paper;
+              g.fillRect(x0, -half, 5, half * 2 * f.p);
+              g.restore();
+              g.fillStyle = C.paper;
+              g.fillRect(x0 - 2, -half + half * 2 * f.p - 0.8, 9, 1.6);
+              g.restore();
+            }
+            if (f.owner === 'me') {
+              const sec = Math.max(0, Math.ceil((1 - f.p) * 10));
+              const x = fr.x - fr.ux * 26 * k - fr.nx * 30 * k;
+              const y = fr.y - fr.uy * 26 * k - fr.ny * 30 * k;
+              this.pill(x, y, `0:${String(sec).padStart(2, '0')}`, { size: 12, frame: 'rgba(240,246,252,0.6)' });
+            }
+          }
+          breakFort(f, L, fr, ang, k) {
+            const g = this.g;
+            const b = this.S.rm ? (f.brk < 0.5 ? 0 : 1) : clamp(f.brk, 0, 1);
+            const rand = rng(11);
+            g.save();
+            g.translate(fr.x, fr.y);
+            g.rotate(ang);
+            g.scale(k, k);
+            L.parts.forEach((r) => {
+              const dx = (rand() - 0.1) * 80 * easeOut(b);
+              const dy = (rand() - 0.5) * 110 * easeOut(b);
+              const rot = (rand() - 0.5) * 5 * b;
+              const cx = r.x + r.w / 2;
+              const cy = r.y + r.h / 2;
+              g.save();
+              g.translate(cx + dx, cy + dy);
+              g.rotate(rot);
+              g.globalAlpha = this.S.rm ? (b < 1 ? 1 : 0.0) : 1 - b;
+              const q = { x: -r.w / 2, y: -r.h / 2, w: r.w, h: r.h, r: r.r };
+              paintPartOne(g, q, L, f.owner);
+              g.fillStyle = f.owner ? (L.style.fill === 'tint' ? rgba(colOf(f.owner), 0.7) : fillOf(L, q, f.owner)) : C.paper;
+              g.fillRect(q.x, q.y, q.w, q.h);
+              g.restore();
+            });
+            if (this.S.rm) {
+              g.setLineDash([2.4, 2]);
+              g.strokeStyle = 'rgba(240,246,252,0.9)';
+              g.lineWidth = 1.2;
+              g.globalAlpha = b < 1 ? 0 : 1;
+              L.parts.forEach((r) => g.strokeRect(r.x, r.y, r.w, r.h));
+            }
+            g.restore();
+          }
+
+          /* ---- groups */
+          groups() {
+            for (const gr of this.sc.groups) this.tri(gr.x, gr.y, gr);
+            for (const gr of this.sc.garrison) {
+              const N = NODES[gr.node];
+              this.tri(N.x, N.y, { owner: gr.owner, u: gr.u, c: gr.c, alpha: 1, scale: 0.9 });
+            }
+          }
+          // the inverted triangle: the charge level fills from the tip, faint dividers per unit, the number inside
+          tri(x, y, o) {
+            const g = this.g;
+            const mk = this.mk;
+            const side = (o.u <= 3 ? 24 : o.u <= 7 ? 30 : o.u <= 15 ? 36 : 42) * mk * (o.scale || 1);
+            let ox = 0;
+            let oy = 0;
+            const sh = this.shake(o);
+            ox += sh[0];
+            oy += sh[1];
+            const hw = side / 2;
+            const h = side * 0.866;
+            const ty = -h / 3;
+            const shape = (k) => {
+              g.beginPath();
+              g.moveTo(-hw * k, ty * k);
+              g.lineTo(hw * k, ty * k);
+              g.lineTo(0, ty * k + h * k);
+              g.closePath();
+            };
+            g.save();
+            g.translate(x + ox, y + oy);
+            g.globalAlpha = o.alpha == null ? 1 : o.alpha;
+            shape(1);
+            g.fillStyle = '#161b22';
+            g.fill();
+            g.save();
+            shape(1);
+            g.clip();
+            const share = o.u ? clamp(o.c / o.u, 0, 1) : 0;
+            g.fillStyle = colOf(o.owner);
+            g.fillRect(-hw - 1, ty + h * (1 - share), side + 2, h * share + 1);
+            if (o.u <= 8) {
+              g.strokeStyle = 'rgba(240,246,252,0.34)';
+              g.lineWidth = 1;
+              for (let i = 1; i < o.u; i++) {
+                const yy = ty + h * (i / o.u);
+                g.beginPath();
+                g.moveTo(-hw, yy);
+                g.lineTo(hw, yy);
+                g.stroke();
+              }
+            }
+            g.restore();
+            if (o.owner === 'en') {
+              shape(0.62);
+              g.strokeStyle = C.bg;
+              g.lineWidth = 1.6 * mk;
+              g.stroke();
+            }
+            shape(1);
+            g.strokeStyle = C.bg;
+            g.lineWidth = 4.6;
+            g.stroke();
+            g.strokeStyle = C.paper;
+            g.lineWidth = 2.4;
+            g.stroke();
+            g.font = `800 ${Math.round(side * 0.36)}px system-ui, sans-serif`;
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.lineJoin = 'round';
+            g.strokeStyle = 'rgba(13,17,23,0.9)';
+            g.lineWidth = 3;
+            g.strokeText(String(o.u), 0, ty + h * 0.3);
+            g.fillStyle = C.paper;
+            g.fillText(String(o.u), 0, ty + h * 0.3);
+            g.restore();
+          }
+          shake(o) {
+            if (!o.mine || this.S.rm || !this.sc.tolls.length) return [0, 0];
+            for (const r of this.sc.tolls) {
+              const d = this.t - r.tc;
+              if (r.mine && d >= 0 && d < 0.28) return [Math.sin(d * 70) * 3.2 * (1 - d / 0.28) * this.mk, 0];
+            }
+            return [0, 0];
+          }
+          // the elapsed time of a toll for the effect: with Less motion, a held "stop" frame for 1.2 s
+          dEff(r) {
+            const d = this.t - r.tc;
+            if (d < -0.02) return -1;
+            if (this.S.rm) return d <= HOLD ? TOLLS[this.S.toll].rest : -1;
+            return d <= 0.8 ? d : -1;
+          }
+
+          /* ---- toll effects */
+          effects() {
+            const S = this.S;
+            const id = TOLLS[S.toll].id;
+            for (const r of this.sc.tolls) {
+              const d = this.dEff(r);
+              if (d < 0 || r.n <= 0) continue;
+              const f = this.sc.forts.find((x) => x.id === r.fort);
+              const fr = fortFrame(f);
+              const k = this.mk;
+              const col = colOf(r.owner);
+              const fn = { shed: this.fxShed, bite: this.fxBite, float: this.fxFloat, pips: this.fxPips, ripple: this.fxRipple, trail: this.fxTrail }[id];
+              fn.call(this, r, d, fr, k, col);
+              if (r.mine) this.lossMark(r, d, fr, k);
+            }
+          }
+          // a loss to you is told by more than the hue: a dashed amber ring round the group, the down triangle in the number plate
+          lossMark(r, d, fr, k) {
+            const g = this.g;
+            const gp = r.gpos(r.tc + d);
+            const q = clamp(d / 0.55, 0, 1);
+            g.save();
+            g.beginPath();
+            g.arc(gp.x, gp.y, (22 + (this.S.rm ? 8 : 12 * easeOut(q))) * k, 0, 6.29);
+            g.setLineDash([5 * k, 4 * k]);
+            g.strokeStyle = C.warn;
+            g.lineWidth = 2.4;
+            g.globalAlpha = this.S.rm ? 1 : 1 - q * 0.8;
+            g.stroke();
+            g.restore();
+          }
+          plateFor(r, x, y, o) {
+            const txt = `-${r.n}`;
+            const loss = r.mine;
+            this.pill(x, y, txt, Object.assign({ size: 13, glyph: loss ? 'down' : null, frame: loss ? C.warn : 'rgba(240,246,252,0.85)', dash: !loss && false, glyphCol: loss ? C.warn : C.paper, frameW: loss ? 2 : 1.3 }, o || {}));
+          }
+          fxShed(r, d, fr, k, col) {
+            const g = this.g;
+            const n = r.n;
+            const rm = this.S.rm;
+            const rand = rng(r.n * 7 + 3);
+            for (let i = 0; i < n; i++) {
+              const ti = i * 0.07;
+              const fl = 0.3;
+              const f = (d - ti) / fl;
+              const tx = fr.x + fr.nx * ((i - (n - 1) / 2) * 7.5 * k) + fr.ux * 3 * k;
+              const ty = fr.y + fr.ny * ((i - (n - 1) / 2) * 7.5 * k) + fr.uy * 3 * k;
+              const sz = 7.5 * k;
+              if (f < 0) continue;
+              if (f <= 1) {
+                const sp = r.gpos(r.tc + ti);
+                const arc = Math.sin(Math.PI * f) * (20 + (i % 3) * 6) * k * (i % 2 ? 1 : -1);
+                const x = lerp(sp.x, tx, f) + fr.nx * arc;
+                const y = lerp(sp.y, ty, f) + fr.ny * arc;
+                this.square(x, y, sz, col, f * 4);
+              } else {
+                const q = clamp((f - 1) * (fl / 0.24), 0, 1);
+                for (let j = 0; j < 4; j++) {
+                  const a = (rand() - 0.5) * 2.4 + Math.atan2(fr.uy, fr.ux);
+                  const dist = (6 + rand() * 12) * k * easeOut(q);
+                  this.square(tx + Math.cos(a) * dist, ty + Math.sin(a) * dist, sz * 0.42, col, rand() * 3, 1 - q);
+                }
+              }
+            }
+            if (d > 0.22 || rm) {
+              const gp = r.gpos(r.tc + (rm ? 0.3 : d));
+              const up = rm ? 0 : Math.min(8, (d - 0.22) * 16);
+              this.plateFor(r, gp.x, gp.y - (34 + up) * k, { alpha: rm ? 1 : clamp((0.8 - d) / 0.15, 0, 1) });
+            }
+          }
+          square(x, y, s, col, rot, alpha) {
+            const g = this.g;
+            g.save();
+            g.translate(x, y);
+            g.rotate(rot || 0);
+            g.globalAlpha *= alpha == null ? 1 : alpha;
+            g.fillStyle = col;
+            g.strokeStyle = C.bg;
+            g.lineWidth = Math.max(1.2, s * 0.2);
+            g.fillRect(-s / 2, -s / 2, s, s);
+            g.strokeRect(-s / 2, -s / 2, s, s);
+            g.restore();
+          }
+          fxBite(r, d, fr, k, col) {
+            // the teeth snap (the fort sprite is stretched and flashes in forts()); the group flinches; the number sits at the line
+            const gp = r.gpos(r.tc + d);
+            const x = fr.x - fr.ux * 0 + fr.nx * 30 * k;
+            const y = fr.y + fr.ny * 30 * k;
+            const rise = this.S.rm ? 0 : Math.min(6, d * 20);
+            this.plateFor(r, x, y - rise, { alpha: this.S.rm ? 1 : clamp((0.8 - d) / 0.15, 0, 1) });
+            void gp;
+          }
+          fxFloat(r, d, fr, k, col) {
+            const g = this.g;
+            const gp = r.gpos(r.tc + (this.S.rm ? 0.2 : d));
+            const rise = this.S.rm ? 12 : easeOut(d / 0.8) * 22;
+            const al = this.S.rm ? 1 : d < 0.08 ? d / 0.08 : d > 0.6 ? clamp((0.8 - d) / 0.2, 0, 1) : 1;
+            const y = gp.y - (30 * k + rise / this.z);
+            const txt = `-${r.n}`;
+            const loss = r.mine;
+            this.px(gp.x, y, (c) => {
+              c.globalAlpha = al;
+              c.font = '900 24px system-ui, -apple-system, Segoe UI, sans-serif';
+              c.textAlign = 'center';
+              c.textBaseline = 'middle';
+              c.lineJoin = 'round';
+              c.strokeStyle = 'rgba(13,17,23,0.95)';
+              c.lineWidth = 6;
+              const w = c.measureText(txt).width;
+              c.strokeText(txt, 10, 0);
+              c.fillStyle = loss ? C.warn : C.paper;
+              c.fillText(txt, 10, 0);
+              // a broken square: one charge lost (shape, not hue)
+              const x0 = -w / 2 - 6;
+              c.lineWidth = 3;
+              c.strokeStyle = loss ? C.warn : C.paper;
+              c.beginPath();
+              c.moveTo(x0 - 8, -2);
+              c.lineTo(x0 - 8, -9);
+              c.lineTo(x0 + 1, -9);
+              c.moveTo(x0 + 8, 2);
+              c.lineTo(x0 + 8, 9);
+              c.lineTo(x0 - 1, 9);
+              c.stroke();
+              if (loss) {
+                c.fillStyle = C.warn;
+                c.beginPath();
+                c.moveTo(x0 - 6, 14);
+                c.lineTo(x0 + 6, 14);
+                c.lineTo(x0, 21);
+                c.closePath();
+                c.fill();
+              }
+            });
+            void g;
+            void fr;
+            void col;
+          }
+          fxPips(r, d, fr, k, col) {
+            const g = this.g;
+            const rm = this.S.rm;
+            const gp = r.gpos(r.tc + (rm ? 0.2 : Math.min(d, 0.8)));
+            const u = r.u;
+            const step = 0.11;
+            const t0 = 0.1;
+            const al = rm ? 1 : clamp(d / 0.1, 0, 1) * clamp((0.8 - d) / 0.15, 0, 1);
+            const sz = 6.5 * k;
+            const gap = 2.4 * k;
+            const tw = u * sz + (u - 1) * gap;
+            const y = gp.y - 30 * k;
+            const gone = rm ? r.n : clamp(Math.floor((d - t0) / step) + 1, 0, r.n);
+            for (let i = 0; i < u; i++) {
+              const x = gp.x - tw / 2 + i * (sz + gap) + sz / 2;
+              const filledBefore = i < r.c0;
+              const lostIdx = r.c0 - 1 - i; // the highest filled go first
+              const lost = filledBefore && lostIdx < gone;
+              g.save();
+              g.globalAlpha = al;
+              if (lost) {
+                const since = rm ? 1 : clamp(((d - t0) - (r.n - 1 - lostIdx) * 0 - (lostIdx === r.c0 - 1 ? 0 : 0)) / 0.1, 0, 1);
+                void since;
+                g.strokeStyle = C.paper;
+                g.lineWidth = 1.4;
+                g.setLineDash([2, 1.6]);
+                g.strokeRect(x - sz / 2, y - sz / 2, sz, sz);
+                g.setLineDash([]);
+                g.beginPath();
+                g.moveTo(x - sz * 0.35, y - sz * 0.35);
+                g.lineTo(x + sz * 0.35, y + sz * 0.35);
+                g.moveTo(x + sz * 0.35, y - sz * 0.35);
+                g.lineTo(x - sz * 0.35, y + sz * 0.35);
+                g.stroke();
+              } else if (filledBefore) {
+                g.fillStyle = col;
+                g.strokeStyle = C.bg;
+                g.lineWidth = 1.5;
+                g.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+                g.strokeRect(x - sz / 2, y - sz / 2, sz, sz);
+              } else {
+                g.strokeStyle = C.seg;
+                g.lineWidth = 1.3;
+                g.strokeRect(x - sz / 2, y - sz / 2, sz, sz);
+              }
+              g.restore();
+            }
+            if (gone >= r.n || rm) this.plateFor(r, gp.x + tw / 2 + 26 * k, y, { alpha: al, size: 12 });
+          }
+          fxRipple(r, d, fr, k, col) {
+            const g = this.g;
+            const rm = this.S.rm;
+            const q = clamp(d / 0.5, 0, 1);
+            const x = fr.x;
+            const y = fr.y;
+            const al = rm ? 1 : 1 - q;
+            g.save();
+            g.globalAlpha = al;
+            g.strokeStyle = 'rgba(13,17,23,0.9)';
+            g.lineWidth = 6;
+            const rr = (rm ? 26 : 8 + 26 * easeOut(q)) * k;
+            g.beginPath();
+            g.arc(x, y, rr, 0, 6.29);
+            g.stroke();
+            g.strokeStyle = C.paper;
+            g.lineWidth = 2.4;
+            g.stroke();
+            if (!rm || true) {
+              g.beginPath();
+              g.arc(x, y, rr * 0.62, 0, 6.29);
+              g.lineWidth = 1.6;
+              g.stroke();
+            }
+            // the pulse runs along the bar from the contact point to both ends
+            const run = clamp(d / 0.3, 0, 1);
+            const half = (LOOKS[this.S.look].len / 2) * k;
+            for (const sgn of [-1, 1]) {
+              const c0 = Math.max(0, run * half - 9 * k);
+              const c1 = rm ? half : run * half;
+              g.beginPath();
+              g.moveTo(x + fr.nx * sgn * c0, y + fr.ny * sgn * c0);
+              g.lineTo(x + fr.nx * sgn * c1, y + fr.ny * sgn * c1);
+              g.strokeStyle = 'rgba(13,17,23,0.9)';
+              g.lineWidth = 7;
+              g.stroke();
+              g.strokeStyle = C.paper;
+              g.lineWidth = 3.2;
+              g.stroke();
+            }
+            g.restore();
+            // sparks, outward
+            const rand = rng(5);
+            g.save();
+            g.globalAlpha = rm ? 1 : clamp(1 - d / 0.35, 0, 1);
+            g.strokeStyle = C.paper;
+            g.lineWidth = 2;
+            for (let i = 0; i < 7; i++) {
+              const a = Math.atan2(fr.uy, fr.ux) + (i / 6 - 0.5) * 2.5;
+              const r0 = (rm ? 8 : 6 + d * 20) * k;
+              const r1 = r0 + 7 * k;
+              g.beginPath();
+              g.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+              g.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
+              g.stroke();
+              void rand;
+            }
+            g.restore();
+            // a tally: one tick per charge, beside the line on the own side, they stay
+            for (let i = 0; i < r.n; i++) {
+              if (!rm && d < 0.12 + i * 0.07) continue;
+              const tx = x - fr.ux * 16 * k + fr.nx * ((i - (r.n - 1) / 2) * 6 * k);
+              const ty = y - fr.uy * 16 * k + fr.ny * ((i - (r.n - 1) / 2) * 6 * k);
+              g.save();
+              g.translate(tx, ty);
+              g.rotate(Math.atan2(fr.uy, fr.ux));
+              g.globalAlpha = rm ? 1 : clamp((0.8 - d) / 0.15, 0, 1);
+              g.fillStyle = C.bg;
+              g.fillRect(-6 * k - 1.4, -1.9 * k - 1.4, 12 * k + 2.8, 3.8 * k + 2.8);
+              g.fillStyle = col;
+              g.strokeStyle = C.paper;
+              g.lineWidth = 1;
+              g.fillRect(-6 * k, -1.9 * k, 12 * k, 3.8 * k);
+              g.strokeRect(-6 * k, -1.9 * k, 12 * k, 3.8 * k);
+              g.restore();
+            }
+            this.plateFor(r, x + fr.nx * 34 * k - fr.ux * 6 * k, y + fr.ny * 34 * k, { alpha: rm ? 1 : clamp((0.8 - d) / 0.15, 0, 1) * clamp(d / 0.12, 0, 1) });
+          }
+          fxTrail(r, d, fr, k, col) {
+            // squares drop out of the group into its wake and lie beside the road, then fade (they stay under 0.8 s)
+            const rm = this.S.rm;
+            const rand = rng(r.n * 13 + 1);
+            for (let i = 0; i < r.n; i++) {
+              const ti = i * 0.12;
+              const q = rm ? 1 : d - ti;
+              const side = i % 2 ? 1 : -1;
+              const reach = (16 + rand() * 8) * k;
+              const jit = (rand() - 0.5) * 8 * k;
+              if (q < 0) continue;
+              const sp = r.gpos(r.tc + ti);
+              const f = rm ? 1 : easeOut(clamp(q / 0.22, 0, 1));
+              const hop = rm ? 0 : Math.sin(Math.PI * clamp(q / 0.22, 0, 1)) * 8 * k;
+              const x = sp.x - sp.ux * (10 * k + jit) + fr.nx * side * (reach * f + hop * 0.0);
+              const y = sp.y - sp.uy * (10 * k + jit) + fr.ny * side * (reach * f);
+              const al = rm ? 1 : clamp(1 - Math.max(0, q - 0.3) / 0.45, 0, 1);
+              this.square(x, y, 7.5 * k, col, (rand() - 0.5) * 1.6 + f * 1.2 * side, al);
+            }
+            const gp = r.gpos(r.tc + (rm ? 0.3 : d));
+            this.plateFor(r, gp.x, gp.y - 34 * k, { size: 12, alpha: rm ? 1 : clamp((0.8 - d) / 0.15, 0, 1) * clamp(d / 0.1, 0, 1) });
+          }
+
+          /* ---- overlays: the radial menu and the road pick */
+          overlay() {
+            const ov = this.sc.overlay;
+            if (!ov) return;
+            const g = this.g;
+            this.screenT();
+            const A = NODES.A;
+            if (ov.kind === 'menu') {
+              const [cx, cy] = this.toScreen(A.x, A.y);
+              const s = this.S.rm ? 1 : easeOut(ov.t / 0.14) * 0.6 + 0.4;
+              const hov = ov.t > 0.7;
+              const ri = 36 * s;
+              const ro = 142 * s;
+              const gap = 0.07;
+              const secs = [
+                { a: -Math.PI / 2, n: 'Barracks', ico: 'house' },
+                { a: Math.PI / 6, n: 'Fortify road', ico: 'fort', sub: '1.5 CP' },
+                { a: (5 * Math.PI) / 6, n: 'Recruit', ico: 'rank' },
+              ];
+              g.save();
+              g.globalAlpha = this.S.rm ? 1 : clamp(ov.t / 0.14, 0, 1);
+              secs.forEach((sec) => {
+                const a0 = sec.a - (116 * Math.PI) / 360 + gap;
+                const a1 = sec.a + (116 * Math.PI) / 360 - gap;
+                const on = sec.ico === 'fort' && hov;
+                g.beginPath();
+                g.arc(cx, cy, ro, a0, a1);
+                g.arc(cx, cy, ri, a1, a0, true);
+                g.closePath();
+                g.fillStyle = on ? '#2b3b57' : 'rgba(22,27,34,0.96)';
+                g.fill();
+                g.strokeStyle = on ? C.paper : '#4b5563';
+                g.lineWidth = on ? 2.6 : 1.4;
+                g.stroke();
+                const mr = (ri + ro) / 2;
+                const ix = cx + Math.cos(sec.a) * mr;
+                const iy = cy + Math.sin(sec.a) * mr;
+                g.save();
+                g.translate(ix, iy - 8);
+                g.globalAlpha *= on || sec.ico !== 'fort' ? 1 : 0.9;
+                if (sec.ico === 'fort') {
+                  g.rotate(-Math.PI / 2);
+                  g.scale(1.55, 1.55);
+                  g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
+                } else if (sec.ico === 'house') {
+                  g.fillStyle = C.paper;
+                  g.beginPath();
+                  g.moveTo(-12, 2);
+                  g.lineTo(0, -10);
+                  g.lineTo(12, 2);
+                  g.lineTo(9, 2);
+                  g.lineTo(9, 11);
+                  g.lineTo(-9, 11);
+                  g.lineTo(-9, 2);
+                  g.closePath();
+                  g.fill();
+                } else {
+                  g.strokeStyle = C.paper;
+                  g.lineWidth = 3;
+                  g.lineJoin = 'round';
+                  for (const dy of [-4, 5]) {
+                    g.beginPath();
+                    g.moveTo(-10, dy + 4);
+                    g.lineTo(0, dy - 4);
+                    g.lineTo(10, dy + 4);
+                    g.stroke();
+                  }
+                }
+                g.restore();
+                g.font = '700 12px system-ui, sans-serif';
+                g.textAlign = 'center';
+                g.textBaseline = 'middle';
+                g.fillStyle = C.paper;
+                g.fillText(sec.n, ix, iy + 24);
+                if (sec.sub) {
+                  g.fillStyle = on ? C.paper : C.text;
+                  g.fillStyle = '#c9d4e0';
+                  g.fillText(sec.sub, ix, iy + 40);
+                }
+              });
+              g.restore();
+            } else if (ov.kind === 'pick') {
+              this.world();
+              const roads = [
+                { to: 'B', own: true },
+                { to: 'E' },
+                { to: 'P' },
+              ];
+              const pulse = this.S.rm ? 0.5 : 0.5 - 0.5 * Math.cos(this.t * 7.85);
+              const k = this.mk;
+              roads.forEach((rd, i) => {
+                const B = NODES[rd.to];
+                const on = ov.hover === i;
+                const gr = this.g;
+                gr.save();
+                gr.lineCap = 'round';
+                gr.beginPath();
+                gr.moveTo(A.x, A.y);
+                gr.lineTo(B.x, B.y);
+                gr.strokeStyle = `rgba(240,246,252,${on ? 0.4 : 0.14 + pulse * 0.14})`;
+                gr.lineWidth = (on ? 24 : 18) / this.z;
+                gr.stroke();
+                gr.setLineDash([3 / this.z, 6 / this.z]);
+                gr.strokeStyle = C.paper;
+                gr.lineWidth = 2 / this.z;
+                gr.stroke();
+                gr.restore();
+                const fr = fortFrame({ node: 'A', to: rd.to, off: OFF1 });
+                const ang = Math.atan2(fr.uy, fr.ux);
+                gr.save();
+                gr.translate(fr.x, fr.y);
+                gr.rotate(ang);
+                gr.scale(k, k);
+                gr.globalAlpha = on ? 0.62 : 0.95;
+                const L = LOOKS[this.S.look];
+                gr.drawImage(sprite(this.S.look, 'me', on ? fullMask(L) : 0, false), -OX, -OY, SW, SH);
+                gr.restore();
+                if (on) {
+                  this.pill(fr.x + fr.nx * 48 * k + fr.ux * 6, fr.y + fr.ny * 48 * k + fr.uy * 6, '1.5 CP', { size: 13, frame: C.paper });
+                  const [sx, sy] = this.toScreen(fr.x + fr.ux * -4, fr.y + fr.uy * -4);
+                  this.screenT();
+                  this.cursor(sx + 4, sy + 6);
+                  this.world();
+                }
+              });
+              this.screenT();
+              const tw = 150;
+              g.beginPath();
+              g.roundRect(this.vw / 2 - tw / 2, 10, tw, 32, 8);
+              g.fillStyle = 'rgba(13,17,23,0.94)';
+              g.fill();
+              g.strokeStyle = 'rgba(240,246,252,0.7)';
+              g.lineWidth = 1.4;
+              g.stroke();
+              g.font = '700 13px system-ui, sans-serif';
+              g.textAlign = 'left';
+              g.textBaseline = 'middle';
+              g.fillStyle = C.paper;
+              g.fillText('Pick a road', this.vw / 2 - tw / 2 + 40, 26.5);
+              g.save();
+              g.translate(this.vw / 2 - tw / 2 + 21, 26);
+              g.rotate(-Math.PI / 2);
+              g.scale(0.5, 0.5);
+              g.drawImage(sprite(this.S.look, 'me', fullMask(LOOKS[this.S.look]), false), -OX, -OY, SW, SH);
+              g.restore();
+            }
+          }
+          cursor(x, y) {
+            const g = this.g;
+            g.save();
+            g.translate(x, y);
+            g.beginPath();
+            g.moveTo(0, 0);
+            g.lineTo(0, 17);
+            g.lineTo(4.5, 13);
+            g.lineTo(8, 20);
+            g.lineTo(11, 18.5);
+            g.lineTo(7.5, 12);
+            g.lineTo(13, 12);
+            g.closePath();
+            g.fillStyle = C.paper;
+            g.strokeStyle = C.bg;
+            g.lineWidth = 1.6;
+            g.stroke();
+            g.fill();
+            g.restore();
+          }
+        }
+
+        /* ============================================================ ui */
+        const ui = { a: 0, b: 3, view: 1, toll: 0, step: 7, mode: 'supply', zoom: 1, gray: 0, rm: 0, cnt: 0, pause: 0, hold: null };
+        let panels = [];
+        let startT = performance.now();
+        const $ = (id) => document.getElementById(id);
+
+        function thumb(li) {
+          const cv = document.createElement('canvas');
+          cv.width = 64;
+          cv.height = 52;
+          const g = cv.getContext('2d');
+          g.translate(32, 26);
+          g.rotate(-Math.PI / 2);
+          g.scale(0.72, 0.72);
+          g.drawImage(sprite(li, 'me', fullMask(LOOKS[li]), false), -OX, -OY, SW, SH);
+          return cv;
+        }
+        function chipRow(host, items, getSel, pick, withThumb) {
+          host.textContent = '';
+          items.forEach((it, i) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.setAttribute('aria-pressed', String(getSel(i)));
+            if (withThumb) b.append(thumb(i));
+            const k = document.createElement('b');
+            k.textContent = it.k;
+            b.append(k, document.createTextNode(it.n));
+            b.title = it.title || '';
+            b.addEventListener('click', () => pick(i));
+            host.append(b);
+          });
+        }
+        function buildChips() {
+          const looks = LOOKS.map((l, i) => ({ k: 'F' + (i + 1), n: l.n, title: l.line + '. Bake: ' + l.bake }));
+          const cmp = ui.view === 2;
+          $('glA').textContent = cmp ? 'Look A' : 'Look';
+          $('rowB').style.display = cmp ? '' : 'none';
+          chipRow($('gA'), looks, (i) => ui.a === i && ui.view !== 6, (i) => (ui.view === 6 ? ((ui.view = 1), (ui.a = i), update()) : ((ui.a = i), update())), true);
+          chipRow($('gB'), looks, (i) => ui.b === i, (i) => ((ui.b = i), update()), true);
+          const tolls = TOLLS.map((t, i) => ({ k: 'T' + (i + 1), n: t.n, title: t.cost }));
+          chipRow($('gT'), tolls, (i) => ui.toll === i, (i) => ((ui.toll = i), update()), false);
+          const steps = STEPS.map((s, i) => ({ k: String(i + 1), n: s.n }));
+          chipRow($('steps'), steps, (i) => ui.step === i, (i) => setStep(i), false);
+          $('gB').querySelectorAll('button').forEach((b) => b.classList.add('second'));
+        }
+        function seg(id, attr, val) {
+          $(id)
+            .querySelectorAll('button')
+            .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset[attr] === String(val))));
+        }
+        function buildPanels() {
+          const host = $('panels');
+          host.className = 'panels v' + ui.view;
+          host.textContent = '';
+          const list = ui.view === 1 ? [ui.a] : ui.view === 2 ? [ui.a, ui.b] : LOOKS.map((_, i) => i);
+          panels = list.map((li, pi) => {
+            const d = document.createElement('div');
+            d.className = 'panel';
+            const h = document.createElement('div');
+            h.className = 'ph';
+            const nm = document.createElement('b');
+            const sub = document.createElement('span');
+            sub.className = 'sub';
+            h.append(nm, sub);
+            const cv = document.createElement('canvas');
+            cv.setAttribute('role', 'img');
+            d.append(h, cv);
+            host.append(d);
+            return { li, painter: new Painter(cv), nm, sub, cv, d };
+          });
+          host.classList.toggle('gray', !!ui.gray);
+        }
+        function update() {
+          buildChips();
+          seg('modeSeg', 'm', ui.mode);
+          seg('zoomSeg', 'z', ui.zoom);
+          seg('viewSeg', 'v', ui.view);
+          $('gray').checked = !!ui.gray;
+          $('rm').checked = !!ui.rm;
+          $('cnt').checked = !!ui.cnt;
+          $('pause').setAttribute('aria-pressed', String(!!ui.pause));
+          buildPanels();
+          writeHash();
+        }
+        function setStep(i) {
+          ui.step = (i + STEPS.length) % STEPS.length;
+          startT = performance.now();
+          buildChips();
+          writeHash();
+          $('live').textContent = STEPS[ui.step].n;
+        }
+        function writeHash() {
+          const p = new URLSearchParams({ a: ui.a, b: ui.b, view: ui.view, toll: ui.toll, step: ui.step, mode: ui.mode, zoom: ui.zoom, gray: ui.gray, rm: ui.rm, cnt: ui.cnt });
+          if (ui.hold != null) p.set('t', ui.hold);
+          try {
+            history.replaceState(null, '', '#' + p.toString());
+          } catch (e) {
+            /* file URLs may refuse; the page works without it */
+          }
+        }
+        function readHash() {
+          const p = new URLSearchParams(location.hash.slice(1));
+          const n = (k, d) => (p.has(k) && !Number.isNaN(Number(p.get(k))) ? Number(p.get(k)) : d);
+          ui.a = clamp(n('a', ui.a), 0, LOOKS.length - 1);
+          ui.b = clamp(n('b', ui.b), 0, LOOKS.length - 1);
+          ui.view = [1, 2, 6].includes(n('view', 1)) ? n('view', 1) : 1;
+          ui.toll = clamp(n('toll', 0), 0, TOLLS.length - 1);
+          ui.step = clamp(n('step', ui.step), 0, STEPS.length - 1);
+          ui.mode = p.get('mode') === 'battle' ? 'battle' : 'supply';
+          ui.zoom = [0.45, 1, 2].includes(n('zoom', 1)) ? n('zoom', 1) : 1;
+          ui.gray = n('gray', 0) ? 1 : 0;
+          ui.rm = n('rm', 0) ? 1 : 0;
+          ui.cnt = n('cnt', 0) ? 1 : 0;
+          ui.hold = p.has('t') ? n('t', 0) : null;
+        }
+
+        let pausedAt = 0;
+        function frame(now) {
+          const step = STEPS[ui.step];
+          let t;
+          if (ui.hold != null) t = ui.hold;
+          else if (ui.pause) t = pausedAt;
+          else {
+            t = ((now - startT) / 1000) % step.dur;
+            pausedAt = t;
+          }
+          for (const p of panels) {
+            const S = { look: p.li, toll: ui.toll, mode: ui.mode, zoom: ui.zoom, rm: ui.rm, cnt: ui.cnt };
+            CUR_MK = ui.zoom < 1 ? Math.pow(1 / ui.zoom, 0.6) : 1;
+            const sc = scene(step.id, t);
+            p.painter.stepId = step.id;
+            p.painter.draw(S, ui, t, sc);
+            const L = LOOKS[p.li];
+            const nm = `F${p.li + 1} ${L.n}`;
+            if (p.nm.textContent !== nm) {
+              p.nm.textContent = nm;
+              p.cv.setAttribute('aria-label', `${nm}, ${step.n}`);
+            }
+            p.sub.textContent = `${step.n} · baked ${SPR_BY_LOOK[p.li]}`;
+          }
+          requestAnimationFrame(frame);
+        }
+        function init() {
+          readHash();
+          $('modeSeg').addEventListener('click', (e) => e.target.dataset.m && ((ui.mode = e.target.dataset.m), update()));
+          $('zoomSeg').addEventListener('click', (e) => e.target.dataset.z && ((ui.zoom = Number(e.target.dataset.z)), update()));
+          $('viewSeg').addEventListener('click', (e) => e.target.dataset.v && ((ui.view = Number(e.target.dataset.v)), update()));
+          $('gray').addEventListener('change', (e) => ((ui.gray = e.target.checked ? 1 : 0), update()));
+          $('rm').addEventListener('change', (e) => ((ui.rm = e.target.checked ? 1 : 0), update()));
+          $('cnt').addEventListener('change', (e) => ((ui.cnt = e.target.checked ? 1 : 0), update()));
+          $('prev').addEventListener('click', () => setStep(ui.step - 1));
+          $('next').addEventListener('click', () => setStep(ui.step + 1));
+          $('replay').addEventListener('click', () => {
+            startT = performance.now();
+            pausedAt = 0;
+            ui.hold = null;
+            writeHash();
+          });
+          $('pause').addEventListener('click', () => {
+            ui.pause = ui.pause ? 0 : 1;
+            $('pause').setAttribute('aria-pressed', String(!!ui.pause));
+            if (!ui.pause) startT = performance.now() - pausedAt * 1000;
+          });
+          document.addEventListener('keydown', (e) => {
+            if (e.target && /INPUT|SELECT/.test(e.target.tagName)) return;
+            if (e.key === 'ArrowRight') setStep(ui.step + 1);
+            else if (e.key === 'ArrowLeft') setStep(ui.step - 1);
+          });
+          if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches && !location.hash.includes('rm=')) ui.rm = 1;
+          update();
+          window.__fort = { ui, LOOKS, TOLLS, STEPS, SPR_BY_LOOK, update, setStep, scene, crossing };
+          requestAnimationFrame(frame);
+        }
+        init();
+      })();
+    </script>
+  </body>
+</html>
