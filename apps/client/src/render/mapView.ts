@@ -146,7 +146,7 @@ export class MapView {
   private level: ReadonlySet<number> = new Set();
   private levelFrom: ReadonlySet<number> | null = null;
   private levelElapsed = 0;
-  /** 0: no level fill, 1: full (the «Supply» mode), `FLOW_LEVEL.battle`: the normal map. */
+  /** 0: no level fill (the normal map), 1: full (the «Supply» mode). */
   private levelStrength = 0;
   private levelSet = false;
   private rims = new Map<ReadonlySet<number>, readonly RimSegment[]>();
@@ -350,8 +350,7 @@ export class MapView {
 
   /**
    * The supply level (T1, DEC-43, ui-style 42): `cells` are the own nodes of the leaf level (an empty
-   * list or `strength` 0 draws nothing), `strength` is 1 in the «Supply» mode and
-   * `FLOW_LEVEL.battle` on the normal map. A new set fades in and out over `FLOW_LEVEL.fadeMs`; the
+   * list or `strength` 0 draws nothing), `strength` is 1 in the «Supply» mode and 0 on the normal map. A new set fades in and out over `FLOW_LEVEL.fadeMs`; the
    * first one and "less motion" are instant. Called every frame: the same input costs nothing.
    */
   setLevel(cells: readonly number[], strength: number): void {

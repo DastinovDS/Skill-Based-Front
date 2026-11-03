@@ -3,13 +3,11 @@
  * as plain data from one snapshot. Pure functions, no PixiJS.
  *
  * The client computes no part of the dispatch rule (`AGENTS.md`, 7.1): every number here is a field
- * the server sends for the own nodes (`front_dist`, `flow_down`, `flow_next`, `flow_idle`,
- * `flow_pocket`, `me.leaf_shift`, `me.next_dispatch_tick`) or an own packet. What this module does is
- * only picking: which nodes are the level, where the chevrons go, the walk over `flow_down` that
- * the hover shows, and the countdown fraction of the ring.
+ * the server sends for the own nodes (`front_dist`, `flow_down`, `flow_pocket`, `me.leaf_shift`) or
+ * an own packet. What this module does is only picking: which nodes are the level, where the
+ * chevrons of the «Supply» layer go, which nodes are starving.
  */
-import type { MessageKey } from '../i18n/index.ts';
-import type { FlowIdle, MapFile, PlayerId, View } from '../protocol.gen.ts';
+import type { MapFile, PlayerId, View } from '../protocol.gen.ts';
 import type { EdgeIndex } from './supplyLayout.ts';
 
 /** The supply is the automatic flow (`ruleset_public.supply_model = "flow"`), seen in the view. */
@@ -83,42 +81,6 @@ export function packetRoads(view: View): Set<string> {
 }
 
 /**
- * The downstream chain of a node (P2): the roads reached by walking over `flow_down` from `node`
- * until the level, and the nodes the walk ends at (the level, or a node the server gives no
- * downhill neighbour). Each road once; a node of the chain is listed once.
- */
-export interface FlowChain {
-  readonly roads: readonly FlowRoad[];
-  readonly nodes: readonly number[];
-  /** Where the walk stops: the nodes without a downhill neighbour (the level is among them). */
-  readonly ends: readonly number[];
-}
-
-export function flowChain(view: View, me: PlayerId, index: EdgeIndex, start: number): FlowChain {
-  const roads: FlowRoad[] = [];
-  const nodes: number[] = [];
-  const ends: number[] = [];
-  const seen = new Set<number>();
-  const queue = [start];
-  while (queue.length > 0) {
-    const node = queue.shift() as number;
-    if (seen.has(node)) continue;
-    seen.add(node);
-    nodes.push(node);
-    const here = view.nodes[node];
-    const down = here?.owner === me ? (here.flow_down ?? []) : [];
-    if (down.length === 0) ends.push(node);
-    for (const to of down) {
-      const edge = edgeBetween(index, node, to);
-      if (edge === undefined) continue;
-      roads.push({ edge, from: node, to });
-      queue.push(to);
-    }
-  }
-  return { roads, nodes, ends };
-}
-
-/**
  * A node shown as starving (a shape, the `!` triangle, not a colour only): its warehouse is empty
  * and either an own group stands there short of a charge, or it is on the level with no own packet
  * on the way to it. A display class from the snapshot; whether and when charges come is the
@@ -178,41 +140,6 @@ export function pinchRoads(
     if (map.nodes[road.to]?.kind === 'province') edges.add(road.edge);
   }
   return [...edges].sort((a, b) => a - b);
-}
-
-/** The words of the plate that says why a node sends nothing (the dictionary key per reason). */
-export const IDLE_TEXT: Readonly<Record<FlowIdle, MessageKey>> = {
-  leaf: 'flow.idle.leaf',
-  ahead: 'flow.idle.ahead',
-  empty: 'flow.idle.empty',
-  full: 'flow.idle.full',
-};
-
-/**
- * The countdown of the ring (N4): how much of the period until the next dispatch is left. The server
- * sends the tick of the next dispatch (`me.next_dispatch_tick`) and the period itself
- * (`ruleset_public.supply_dispatch_ticks`), so the ring is exact from the first snapshot; without a
- * period (a source that has none) it knows nothing and stays empty.
- */
-export class DispatchClock {
-  #next: number | null = null;
-  #period = 0;
-
-  /** `ruleset_public.supply_dispatch_ticks`; 0 or less: unknown. */
-  setPeriod(period: number): void {
-    this.#period = period > 0 ? period : 0;
-  }
-
-  /** A new snapshot: `me.next_dispatch_tick`. */
-  observe(next: number | null): void {
-    this.#next = next;
-  }
-
-  /** Remaining share (0..1) of the period at render tick `tick` (fractional); 0 when unknown. */
-  fraction(tick: number): number {
-    if (this.#next === null || this.#period <= 0) return 0;
-    return Math.min(1, Math.max(0, (this.#next - tick) / this.#period));
-  }
 }
 
 /** `leaf_shift` as the words of the control: "front" at 0, "−n" otherwise (a real minus sign). */

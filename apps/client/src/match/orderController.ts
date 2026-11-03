@@ -172,8 +172,6 @@ export class OrderController implements MapInteraction {
   #rearStep: { readonly from: number; readonly to: number } | null = null;
   /** The same for the leaf shift (`stepLeafShift`). */
   #shiftStep: { readonly from: number; readonly to: number } | null = null;
-  /** The own node whose flow marks a click pinned in the «Supply» mode under the flow (N4, P2). */
-  #flowPin: number | null = null;
   #noticeId = 0;
   #noticeTimer: ReturnType<typeof setTimeout> | undefined;
   #overlay: OverlayState = EMPTY_OVERLAY;
@@ -996,7 +994,6 @@ export class OrderController implements MapInteraction {
     this.#closeMenus();
     this.transfer.close();
     if (this.#o.hud.selection?.kind === 'node') this.#o.hud.select(null);
-    this.#flowPin = null;
     this.ui.patch({
       supplyMode: on,
       transferFrom: null,
@@ -1041,7 +1038,7 @@ export class OrderController implements MapInteraction {
    */
   openSupplyMenu(node: number): boolean {
     if (this.#o.send === null) return false;
-    // The flow has no lines and no transfers: a city has no supply menu (a click pins its marks).
+    // The flow has no lines and no transfers: a city has no supply menu.
     if (this.flow) return false;
     if (this.v2) {
       const own = this.#o.hud.current?.nodes.find((n) => n.id === node);
@@ -1626,18 +1623,7 @@ export class OrderController implements MapInteraction {
     // The layer is not the ordinary map (ui-style.md, section 19): a click that opens no supply menu
     // (an enemy node, a node with nothing to show, a unit icon) is a click on nothing, never a
     // selection or a city or group menu (#678). A click on empty ground still drops the selection.
-    if (hit === null) {
-      this.#flowPin = null;
-      return false;
-    }
-    if (this.flow) {
-      // The flow: a click on an own city pins its marks (the ring, the chain), the same again or a
-      // click elsewhere lets go; touch has no hover, so a tap is the way to see them.
-      this.#closeMenus();
-      this.#flowPin =
-        node !== null && this.#isOwnNode(node) && node !== this.#flowPin ? node : null;
-      return true;
-    }
+    if (hit === null) return false;
     if (node === null || !this.openSupplyMenu(node)) this.#closeMenus();
     return true;
   }
@@ -1676,11 +1662,9 @@ export class OrderController implements MapInteraction {
               .map((n) => n.id);
     const path = draft === null ? [] : (this.ui.current.linePath ?? []);
     const lines = this.#lineFocus();
-    const flow = this.#flowFocus();
     const prev = this.#supplyOverlay;
     if (
-      prev?.flow !== flow ||
-      prev.source !== source ||
+      prev?.source !== source ||
       prev.targets.length !== targets.length ||
       prev.targets.some((t, i) => t !== targets[i]) ||
       prev.draft.length !== path.length ||
@@ -1688,21 +1672,9 @@ export class OrderController implements MapInteraction {
       prev.lines?.node !== lines.node ||
       prev.lines.line !== lines.line
     ) {
-      this.#supplyOverlay = { source, targets, draft: path, lines, flow };
+      this.#supplyOverlay = { source, targets, draft: path, lines };
     }
     return this.#supplyOverlay;
-  }
-
-  /**
-   * The own node whose flow marks the «Supply» layer shows (N4 ring, P2 chain): the pinned one, else
-   * the own city under the pointer. `null`: none, and always under lines.
-   */
-  #flowFocus(): number | null {
-    if (!this.flow) return null;
-    if (this.#flowPin !== null) return this.#flowPin;
-    const hit = this.#hover;
-    const node = hit === null ? null : this.#cityOf(hit);
-    return node !== null && this.#isOwnNode(node) ? node : null;
   }
 
   /**

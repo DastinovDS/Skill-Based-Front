@@ -563,7 +563,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
   },
   {
     // The supply flow (DEC-43, #705) under the rules of `mvp-4`, the shift at the front: the battle mode
-    // (T1 level fill at half strength, faint chevrons, the starving marks).
+    // (alerts only: the starving marks; no level fill, no chevrons, #728).
     id: 'flow',
     map: 'artery',
     snapshot: flowSnapshot(bundledMap('artery'), 0),
@@ -574,8 +574,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
   },
   {
     // The same moment on the «Supply» layer (Tab): chevrons, dots, the level fill, the warehouse
-    // squares, the pocket West Shoulder, the pinch marks. The pointer on a node (shots.spec.ts) adds
-    // the countdown ring and the chain.
+    // squares, the pocket West Shoulder, the pinch marks. The pointer on a node adds nothing (#728).
     id: 'flow_supply',
     map: 'artery',
     snapshot: flowSnapshot(bundledMap('artery'), 0),
@@ -718,7 +717,6 @@ export function frozenSource(scene: FixtureScene, at?: number): RenderSource {
     recruitQueueMax: DEV_RULES.recruit.queue_max,
     provinceWarehouse: rules.city_upgrades.warehouse_province,
     roadBuildTicks: DEV_RULES.build.ticks_per_level,
-    supplyDispatchTicks: rules.supply_dispatch_ticks,
     ...(rules.fort === null ? {} : { fortBuildTicks: rules.fort.build_ticks }),
     cityUpgrades:
       scene.cityUpgrades === true
