@@ -120,6 +120,11 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       factory_build: null,
       fort: null,
       fort_build: null,
+      front_dist: null,
+      flow_down: null,
+      flow_next: null,
+      flow_idle: null,
+      flow_pocket: null,
     };
   });
 
@@ -265,7 +270,16 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
     type: 'snapshot',
     tick: T,
     view: {
-      me: { cp: 420, stance: 'balance', fronts: [3, null], rear_min: 1, auto_lines: null },
+      me: {
+        cp: 420,
+        stance: 'balance',
+        fronts: [3, null],
+        rear_min: 1,
+        auto_lines: null,
+        leaf_shift: null,
+        leaf_shift_max: null,
+        next_dispatch_tick: null,
+      },
       vp: [9, 17],
       nodes,
       edges,

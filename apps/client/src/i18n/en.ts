@@ -93,6 +93,7 @@ export const en = {
   'cmd.remove_line': 'remove supply line',
   'cmd.release_plan': 'release planned order',
   'cmd.set_auto_lines': 'turn auto lines on or off',
+  'cmd.set_leaf_shift': 'move the supply level',
   'orders.rejected': 'Rejected ({command}): {reason}',
   'orders.splitUnits': 'Units to split off',
   'split.title': 'Split the group',

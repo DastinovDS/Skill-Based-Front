@@ -114,6 +114,7 @@ def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:
                 "remove_line",
                 "release_plan",
                 "set_auto_lines",
+                "set_leaf_shift",
             },
         ),
         ("Location", "kind", {"node", "edge"}),

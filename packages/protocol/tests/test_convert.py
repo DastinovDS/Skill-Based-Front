@@ -48,6 +48,7 @@ from gow_protocol.messages import (
     MatchEndStats,
     SnapshotMsg,
 )
+from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import AtNodeLoc, OnEdgeLoc, View
 from gow_sim import commands as sim
 from gow_sim import view as sv
@@ -501,6 +502,51 @@ def test_economy_v2_through_the_wire() -> None:
         "gathering",
     }
     assert [line.path for line in match.view(0).lines] == [(0, 1, 2)]
+
+
+FLOW_RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+
+
+def test_supply_flow_through_the_wire() -> None:
+    """DEC-43 (#704): ``set_leaf_shift`` goes through the wire; the line and bunker commands are
+    rejected with ``FEATURE_DISABLED``; the frames of both players carry the own flow fields of
+    item E, equal the validated ones and ``view_to_canonical`` at every tick, and never a flow
+    field of an enemy node; ``ruleset_public.supply_model`` is ``flow``."""
+    assert RulesetPublic.from_ruleset(FLOW_RULES).supply_model == "flow"
+    assert RulesetPublic.from_ruleset(V2_RULES).supply_model == "lines"
+    match = Match(load_map(DEC41_MAP), FLOW_RULES, KEY)
+    seq: dict[int, int] = dict.fromkeys(PLAYERS, 0)
+
+    def send(p: int, cmd: wire.Command) -> sim.PlayerCommand:
+        seq[p] += 1
+        msg = decode_client(encode(CommandMsg(seq=seq[p], cmd=cmd)))
+        assert isinstance(msg, CommandMsg)
+        return sim.PlayerCommand(p, msg.seq, match.resolve(p, command_from_wire(msg.cmd)))
+
+    script: dict[int, list[tuple[int, wire.Command]]] = {
+        1: [(0, wire.SetLeafShiftCmd(shift=1)), (1, wire.DrawLineCmd(path=(16, 15)))],
+        2: [(1, wire.BuildBunkerCmd(node=16)), (1, wire.UpgradeWarehouseCmd(node=15))],
+        30: [(0, wire.SetLeafShiftCmd(shift=0)), (1, wire.SetLeafShiftCmd(shift=9))],
+    }
+    codes: list[str | None] = []
+    for tick in range(1, 60):
+        match.step([send(p, cmd) for p, cmd in script.get(tick, [])])
+        codes += [ack_msg(r).reject_code for r in match.results]
+        for p in PLAYERS:
+            view = _check_snapshot(match, p).view
+            assert view.me.leaf_shift is not None and view.me.next_dispatch_tick is not None
+            for n in view.nodes:
+                own = n.owner == p
+                assert (n.flow_next is not None) == own, (tick, p, n.id)
+    assert codes == [
+        None,
+        "FEATURE_DISABLED",
+        "FEATURE_DISABLED",
+        "FEATURE_DISABLED",
+        None,
+        "INVALID_ARGUMENT",
+    ]
+    assert match.state.players[0].leaf_shift == 0
 
 
 class _Keeper:

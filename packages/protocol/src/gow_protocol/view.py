@@ -63,7 +63,7 @@ from gow_protocol.base import (
     WireModel,
 )
 from gow_sim.ruleset import Stance
-from gow_sim.state import BuildKind, Detail, IntentKind, Mode
+from gow_sim.state import BuildKind, Detail, FlowIdle, IntentKind, Mode
 
 
 class UnitsRange(WireModel):
@@ -216,6 +216,23 @@ class NodeView(WireModel):
     enemy."""
     fort_build: SiteBuild | None
     """Own node only: the bunker being built there (economy v2)."""
+    front_dist: NonNegInt | None
+    """Supply flow (DEC-43, item E), own node only: the effective field ``d`` of the current
+    tick, the roads to the nearest leaf after the pull of a tired army; ``null`` without a field,
+    for every other node and under ``supply_model = "lines"``. The level is
+    ``front_dist == View.me.leaf_shift``, ahead of it ``front_dist < leaf_shift``."""
+    flow_down: tuple[NodeId, ...] | None
+    """Supply flow, own node only: its downhill neighbours (roads it gives to, room not
+    considered), in tie-break order; ``null`` like ``front_dist``."""
+    flow_next: tuple[NodeId, ...] | None
+    """Supply flow, own node only: the receivers of its next dispatch, one charge each, in the
+    order they get them."""
+    flow_idle: FlowIdle | None
+    """Supply flow, own node only: why it sends nothing at the next dispatch (``leaf``: on the
+    level or without a field, ``ahead``: ahead of the level, ``empty``, ``full``: no neighbour
+    takes a charge); ``null`` when ``flow_next`` is not empty."""
+    flow_pocket: bool | None
+    """Supply flow, own node only: its own component over internal roads has no own factory."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -248,6 +265,15 @@ class NodeView(WireModel):
             raise ValueError("attrition_in and grace_left exclude each other")
         if (self.attrition_in is not None or self.grace_left is not None) and not own_data:
             raise ValueError("an overcrowding countdown only for an own node")
+        flow = (self.flow_down, self.flow_next, self.flow_pocket)
+        if any(v is not None for v in flow) and (None in flow or not own_data):
+            raise ValueError("the flow fields only for an own node, all together")
+        if self.front_dist is not None and self.flow_next is None:
+            raise ValueError("front_dist only with the other flow fields")
+        if self.flow_next is not None and (self.flow_idle is None) == (len(self.flow_next) == 0):
+            raise ValueError("flow_idle is given exactly when flow_next is empty")
+        if self.flow_idle is not None and self.flow_next is None:
+            raise ValueError("flow_idle only with the other flow fields")
         return self
 
 
@@ -554,7 +580,24 @@ class SelfView(WireModel):
     """The own rear minimum (DEC-28, item 3); the enemy's is never in a view."""
     auto_lines: bool | None
     """Economy v2: the own lines extend to captured cities by themselves (``set_auto_lines``,
-    #665); ``null`` under v1. The enemy's toggle is never in a view."""
+    #665); ``null`` under v1 and the supply flow. The enemy's toggle is never in a view."""
+    leaf_shift: NonNegInt | None
+    """Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``);
+    ``null`` under ``supply_model = "lines"``. The enemy's shift is never in a view."""
+    leaf_shift_max: NonNegInt | None
+    """Supply flow: the largest shift now (the roads from the own capital to the front)."""
+    next_dispatch_tick: Tick | None
+    """Supply flow: the tick of the next dispatch."""
+
+    @model_validator(mode="after")
+    def _check_flow(self) -> Self:
+        flow = (self.leaf_shift, self.leaf_shift_max, self.next_dispatch_tick)
+        if any(v is not None for v in flow) and None in flow:
+            raise ValueError("leaf_shift, leaf_shift_max and next_dispatch_tick go together")
+        if self.leaf_shift is not None and self.leaf_shift_max is not None:
+            if self.leaf_shift > self.leaf_shift_max:
+                raise ValueError("leaf_shift must not exceed leaf_shift_max")
+        return self
 
 
 class View(WireModel):

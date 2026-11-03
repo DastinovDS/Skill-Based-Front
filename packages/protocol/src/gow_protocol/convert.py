@@ -318,6 +318,9 @@ def view_to_wire(view: sv.PlayerView) -> View:
             fronts=view.me.fronts,
             rear_min=view.me.rear_min,
             auto_lines=view.me.auto_lines,
+            leaf_shift=view.me.leaf_shift,
+            leaf_shift_max=view.me.leaf_shift_max,
+            next_dispatch_tick=view.me.next_dispatch_tick,
         ),
         vp=(vp[0], vp[1]),
         nodes=tuple(
@@ -347,6 +350,11 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 factory_build=_site(n.factory_build),
                 fort=n.fort,
                 fort_build=_site(n.fort_build),
+                front_dist=n.front_dist,
+                flow_down=n.flow_down,
+                flow_next=n.flow_next,
+                flow_idle=n.flow_idle,
+                flow_pocket=n.flow_pocket,
             )
             for n in view.nodes
         ),
@@ -512,6 +520,9 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             "fronts": list(me.fronts),
             "rear_min": me.rear_min,
             "auto_lines": me.auto_lines,
+            "leaf_shift": me.leaf_shift,
+            "leaf_shift_max": me.leaf_shift_max,
+            "next_dispatch_tick": me.next_dispatch_tick,
         },
         "vp": view.vp[:2],
         "nodes": [
@@ -543,6 +554,11 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "factory_build": _site_data(n.factory_build),
                 "fort": n.fort,
                 "fort_build": _site_data(n.fort_build),
+                "front_dist": n.front_dist,
+                "flow_down": None if n.flow_down is None else list(n.flow_down),
+                "flow_next": None if n.flow_next is None else list(n.flow_next),
+                "flow_idle": n.flow_idle,
+                "flow_pocket": n.flow_pocket,
             }
             for n in view.nodes
         ],
@@ -741,6 +757,8 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.RemoveLine(line)
         case wire.SetAutoLinesCmd(on=on):
             return sim.SetAutoLines(on)
+        case wire.SetLeafShiftCmd(shift=shift):
+            return sim.SetLeafShift(shift)
         case wire.ReleasePlanCmd(group=g):
             return sim.ReleasePlan(gid(g))
         case wire.ForfeitCmd():

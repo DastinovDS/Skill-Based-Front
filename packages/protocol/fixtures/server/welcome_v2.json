@@ -112,7 +112,8 @@
       "cost": 3,
       "build_ticks": 100,
       "shots": 1
-    }
+    },
+    "supply_model": "lines"
   },
   "map_id": "diamond",
   "last_seq": 0,

@@ -110,6 +110,11 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       factory_build: null,
       fort: null,
       fort_build: null,
+      front_dist: null,
+      flow_down: null,
+      flow_next: null,
+      flow_idle: null,
+      flow_pocket: null,
     };
   });
 
@@ -153,7 +158,16 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
     type: 'snapshot',
     tick: T,
     view: {
-      me: { cp: 380, stance: 'balance', fronts: [7, null], rear_min: 1, auto_lines: null },
+      me: {
+        cp: 380,
+        stance: 'balance',
+        fronts: [7, null],
+        rear_min: 1,
+        auto_lines: null,
+        leaf_shift: null,
+        leaf_shift_max: null,
+        next_dispatch_tick: null,
+      },
       vp: [6, 7],
       nodes,
       edges,

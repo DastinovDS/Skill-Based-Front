@@ -90,7 +90,8 @@
       }
     },
     "factory": null,
-    "bunker": null
+    "bunker": null,
+    "supply_model": "lines"
   },
   "map_id": "diamond",
   "last_seq": 0,

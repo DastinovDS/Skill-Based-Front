@@ -72,6 +72,7 @@ COMMAND_TYPES = {
     "remove_line",
     "release_plan",
     "set_auto_lines",
+    "set_leaf_shift",
 }
 
 
@@ -208,6 +209,44 @@ def test_economy_v2_fields_are_validated() -> None:
         {"groups": order(planned=True, gathering=True, plan=2, next_charge_tick=None)},
         {"groups": order(planned=False, gathering=True, plan=2, next_charge_tick=150)},
         {"groups": order(planned=True, gathering=False, plan=2, next_charge_tick=None)},
+    ]
+    for patch in bad:
+        with pytest.raises(ValidationError):
+            decode(**patch)
+
+
+def test_supply_flow_fields_are_validated() -> None:
+    """DEC-43, item E (#704): the flow fields of a node go together and only for an own node,
+    ``flow_idle`` exactly when ``flow_next`` is empty, ``front_dist`` may be ``null`` (no field);
+    the shift fields of ``me`` go together, the shift within its maximum. (The rule "own only"
+    is the simulation's fog test, ``packages/sim/tests/test_dec43_view.py``.)"""
+    raw = json.loads((FIXTURES_DIR / "server" / "snapshot.json").read_text())
+    view = raw["view"]
+    own, neutral = view["nodes"][0], view["nodes"][2]
+
+    def decode(**patch: object) -> None:
+        decode_server(json.dumps({**raw, "view": {**view, **patch}}))
+
+    def nodes(node: dict[str, object], **fields: object) -> list[dict[str, object]]:
+        return [{**n, **fields} if n is node else n for n in view["nodes"]]
+
+    def me(**fields: object) -> dict[str, object]:
+        return {**view["me"], **fields}
+
+    sending = {"front_dist": 2, "flow_down": [1], "flow_next": [1], "flow_idle": None}
+    idle = {"front_dist": None, "flow_down": [], "flow_next": [], "flow_idle": "leaf"}
+    decode(nodes=nodes(own, **sending, flow_pocket=False))
+    decode(nodes=nodes(own, **idle, flow_pocket=True))
+    decode(me=me(leaf_shift=1, leaf_shift_max=2, next_dispatch_tick=130))
+    bad: list[dict[str, object]] = [
+        {"nodes": nodes(neutral, **sending, flow_pocket=False)},
+        {"nodes": nodes(own, **sending, flow_pocket=None)},
+        {"nodes": nodes(own, **{**sending, "flow_idle": "full"}, flow_pocket=False)},
+        {"nodes": nodes(own, **{**idle, "flow_idle": None}, flow_pocket=False)},
+        {"nodes": nodes(own, front_dist=1)},
+        {"nodes": nodes(own, flow_idle="ahead")},
+        {"me": me(leaf_shift=1, leaf_shift_max=None, next_dispatch_tick=130)},
+        {"me": me(leaf_shift=3, leaf_shift_max=2, next_dispatch_tick=130)},
     ]
     for patch in bad:
         with pytest.raises(ValidationError):

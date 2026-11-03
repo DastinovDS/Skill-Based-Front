@@ -117,6 +117,11 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     factory_build: null,
     fort: null,
     fort_build: null,
+    front_dist: null,
+    flow_down: null,
+    flow_next: null,
+    flow_idle: null,
+    flow_pocket: null,
   }));
   const packets: PacketView[] = frame.k.map(
     ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => {
@@ -142,7 +147,16 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     tick: frame.t,
     view: {
       // Front markers and the rear minimum are not in the replay files (DEC-28).
-      me: { cp: first[0], stance: first[2], fronts: [null, null], rear_min: 0, auto_lines: null },
+      me: {
+        cp: first[0],
+        stance: first[2],
+        fronts: [null, null],
+        rear_min: 0,
+        auto_lines: null,
+        leaf_shift: null,
+        leaf_shift_max: null,
+        next_dispatch_tick: null,
+      },
       vp: [first[1], second[1]],
       nodes,
       edges: frame.w.map((width, id) => ({

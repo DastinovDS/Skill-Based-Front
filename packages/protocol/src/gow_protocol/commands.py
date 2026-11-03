@@ -9,9 +9,9 @@ their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``CancelRecruit(node)``; DEC-26: ``BuildBarracks(node)``, ``UpgradeWarehouse(node)``; economy v2
 (DEC-41, item 14): ``Move(group, dest, planned, bonus)``, ``BuildFactory(node)``,
 ``BuildBunker(node)``, ``DrawLine(path)``, ``RemoveLine(line)``, ``ReleasePlan(group)``;
-``SetAutoLines(on)`` (#665). A command
-of the other economy model (``ruleset_public.economy.model``) is rejected with
-``FEATURE_DISABLED``. The conversion to simulation commands is PRO-03 (#46).
+``SetAutoLines(on)`` (#665); the supply flow (DEC-43): ``SetLeafShift(shift)``. A command
+of the other economy model (``ruleset_public.economy.model``) or supply model
+(``ruleset_public.supply_model``) is rejected with ``FEATURE_DISABLED``. The conversion to simulation commands is PRO-03 (#46).
 
 The schema checks only the shape. Ownership, visibility, reachability and CP are checked by the
 simulation's ``validate()``, which answers with one ``reject_code`` in ``ack`` and uses the same
@@ -187,6 +187,16 @@ class SetAutoLinesCmd(WireModel):
     on: bool
 
 
+class SetLeafShiftCmd(WireModel):
+    """The own leaf shift (DEC-43, item B2): the level of the supply flow moves ``shift`` roads
+    back from the front, ``0..View.me.leaf_shift_max``; the range is checked by the simulation
+    (``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public; only under
+    ``supply_model = "flow"`` (``FEATURE_DISABLED`` otherwise)."""
+
+    type: Literal["set_leaf_shift"] = "set_leaf_shift"
+    shift: NonNegInt
+
+
 class ReleasePlanCmd(WireModel):
     """The own group waiting on a gathering planned order departs now with the bonus gathered so
     far, free (economy v2, DEC-41, item 10)."""
@@ -219,6 +229,7 @@ type Command = Annotated[
     | DrawLineCmd
     | RemoveLineCmd
     | SetAutoLinesCmd
+    | SetLeafShiftCmd
     | ReleasePlanCmd
     | ForfeitCmd,
     Field(discriminator="type"),
