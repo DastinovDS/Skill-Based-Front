@@ -636,13 +636,13 @@ export const SUPPLY_TERRITORY_ALPHA = 0.34;
  * fades over `fadeMs` (instant under "less motion").
  */
 export const FLOW_LEVEL = {
-  color: 0x86b8ff,
-  alpha: 0.36,
+  color: 0x6aa8ff,
+  alpha: 0.4,
   rimColor: PAPER,
   rimAlpha: 0.95,
   rimWidth: 2,
   rimInset: 2.5,
-  battle: 0.5,
+  battle: 0.6,
   fadeMs: 600,
 } as const;
 /** The starving mark of a node under the flow: a triangle `half` wide each side and `height` high. */
