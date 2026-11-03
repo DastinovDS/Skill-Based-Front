@@ -34,7 +34,11 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
   in it, a dispatch sends it at most its **want**, ``owed - stock - own packets on the way to
   it`` (the fill order still reads its warehouse room);
 - the **room** of an own node: ``max(0, cap - stock - own packets on the way to it)``, a snapshot
-  at the start of a dispatch that only decreases while it runs (item A5, the wave).
+  at the start of a dispatch that only decreases while it runs (item A5, the wave);
+- the **feed distance** (item K, #732): 0 for a **hungry** level node (``d == k``, room at the
+  snapshot, and a build node without an army still wants a charge), then a BFS backwards over the
+  roads a node behind the level sends along (downhill and level roads); a node without one feeds
+  no hungry level node.
 
 Order inside the step (item A13):
 
@@ -50,9 +54,11 @@ Order inside the step (item A13):
    A6, per player: senders in ``(d, node_key)`` order, the front first; a node ahead of the
    level (``d < k``) sends nothing; the others send one charge per road, first **downhill** (own
    neighbours with ``k <= d(m) < d(n)`` and room, by fill ``(cap - room) * 100 // cap`` then
-   ``node_key``), then along **level roads** (``d(m) == d(n)``, room, the same order, only while
-   ``load(m) + 2 <= have``, ``load = cap - room``). On the level (``d == k``) only the level
-   roads: the leaves even out (#724), except a level node where an own group stands short of a
+   ``node_key``), then along **level roads** (``d(m) == d(n)``, room, the same order): behind the
+   level by the feed distance (item K: towards a smaller one on room alone, the gap rule
+   ``load(m) + 2 <= have``, ``load = cap - room``, between equal ones, nothing towards a larger
+   one, so no charge bounces); on the level (``d == k``) by the gap rule: the leaves even out
+   (#724), except a level node where an own group stands short of a
    charge or gathering a plan (the groups that pull), or with an unpaid build (item J): it keeps,
    and its level neighbours give to it without the gap (room only). A lifted path node gives
    only along its path, and the node before it on the path gives to it on room alone (item I7).
@@ -63,8 +69,9 @@ Order inside the step (item A13):
 The full factory spills its new charge in ``systems.economy`` (item A8), reading ``Node.flow`` of
 the previous tick (``spill_target``).
 
-Cost per tick and player: O(V + E) for the field and the plan, O(packets) for the room, O(groups)
-and O(V) (the builds) for the pull and the paths.
+Cost per tick and player: O(V + E) for the field and the plan (and the feed distance of a
+dispatch or plan with a level road behind the level), O(packets) for the room, O(groups) and O(V)
+(the builds) for the pull and the paths.
 """
 
 from collections import deque
@@ -471,7 +478,7 @@ def _run(
         cap = capacities[m]  # room > 0, so cap > 0
         return ((cap - room[m]) * 100 // cap, key(player, m))  # non-negative: rounded down
 
-    # The feed distance of item K (the saddle): only when a sender behind the level has a level road.
+    # The feed distance of item K (the saddle), when a sender behind the level has a level road.
     k = field.k
     feed: dict[int, int] | None = None
     if any(field.level[n] for n in senders if d[n] > k[n]):
