@@ -139,7 +139,8 @@ def test_j1_a_rear_factory_build_pulls_at_k_0() -> None:
     _factory(state, F, 2)
     assert _d(state) == {K: 2, A: 1, B: 1, C: 0, D: 0, E: 2, F: 0, G: 2}
     sends, events = _run(state, 140)
-    assert sends == {10: [(B, F)], 20: [(B, F)], 30: [(A, B)]}
+    # since #732 A refills B at 20 on room alone (item K: B feeds the hungry F, A does not)
+    assert sends == {10: [(B, F)], 20: [(A, B), (B, F)]}
     assert _paid(events) == [(30, F, 1, 1), (40, F, 1, 0)]
     built = [e.tick for e in events if e.kind == "factory_built"]
     assert built == [140]
@@ -261,8 +262,15 @@ def test_j7_an_army_there_takes_on_room() -> None:
     state = _state({A: 3, B: 3, C: 3, D: 3})
     _factory(state, F, 1)
     _group(state, F, 2, 0)
-    sends, _ = _run(state, 20)
-    assert sends == {10: [(B, F)], 20: [(B, F)]}
+    sends, events = _run(state, 60)
+    assert sends == {
+        10: [(B, F)],
+        20: [(A, B), (B, F)],  # since #732: A refills B on room alone (item K)
+        30: [(A, B), (B, F)],
+        40: [(A, B), (B, F)],
+        60: [(B, A), (F, B)],  # the demand ended at 50: the last charge goes back (item K5)
+    }
+    assert _paid(events) == [(30, F, 0, 0)]  # from the army's first charge (DEC-41 item 7)
 
 
 # Properties: mirror symmetry and the conservation of charges -------------------------------------

@@ -53,7 +53,7 @@ the runner, and `scripts/tournament_shards.py merge` puts the rows into the orde
 file of `mise run tournament` with the same arguments (the test `tests/test_tournament_shards.py`). Runners use the
 Python of `.python-version` (uv fetches it; a shard fails if the version differs).
 
-**Agents: prefer this to a local run for anything above `--seeds 3`**; the smoke tournament of 3 seeds stays local.
+**Agents run tournaments only here**; a local run of at most 3 seeds only when GitHub is unavailable. When to run one: after a rules change no tournament gates the merge: the required CI is the gate (golden replays, determinism and property tests, `py-slow` catch crashes). While the owner is still iterating the mechanics through playtests, tournaments are skipped. Once the owner declares the mechanics settled: one batched smoke `mise run tournament:gh --seeds 3` (crashes and gross imbalance), then the field run of 16 bots x 20 seeds (`tournament:gh`) for the ruleset numbers. Tournaments run on GitHub runners (`tournament:gh`), not on the owner's laptop; a local `mise run tournament -- --seeds 3` (at most 3 seeds) only when GitHub is unavailable (owner decision 2026-11-03).
 
 Matches: `maps x bots x bots x seeds`. Every **ordered** pair `(the bot of side 0, the bot of
 side 1)` plays: each pair meets from both sides, each bot also plays itself (this gives an

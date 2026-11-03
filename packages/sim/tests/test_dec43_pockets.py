@@ -157,7 +157,10 @@ def test_h3_reconnecting_restarts_production() -> None:
     events = _run(state, 1400, _cut((1300, _owner(A, 0))))
     assert _made(events, C) == [1000, 1400]
     made = [e for e in events if e.kind == "charges_produced" and e.get("node") == C]
-    assert made[-1].tick == 1400 and made[-1].get("spill") == 0  # into C's own warehouse
+    # since #732 C is full by 1400 (item K: A gives B a charge at 1350, B passes it to C at 1370),
+    # so the charge spills to D
+    assert made[-1].tick == 1400 and made[-1].get("spill") == 1
+    assert (1350, A, B) in _sends(events) and (1370, B, C) in _sends(events)
 
 
 # H4: a pocket with a factory does not starve -------------------------------------------------

@@ -91,7 +91,7 @@ A node gets charges only from a neighbour that is farther from the front. A node
 | 4B | a level road evens out: a charge goes to the level neighbour when that one is lower by 2 or more (stock plus incoming) | fixes ridges; also moves stock along the front line from a quiet leaf to a busy one; cannot oscillate (the gap shrinks by 2 per move and a gap of 1 never moves) |
 | 4C | level roads point away from the nearest factory (a second field) | fixes ridges with a direction, but a second number the player cannot see |
 
-**Rec. 4B.** One extra clause, visible as charges moving along a road with no downhill arrow. (The first implementation applied it behind the level only; since #724 the level evens out too: DEC-43 item I3.)
+**Rec. 4B.** One extra clause, visible as charges moving along a road with no downhill arrow. (The first implementation applied it behind the level only; since #724 the level evens out too: DEC-43 item I3. Since #732, behind the level a level road also passes a charge on room alone towards a node nearer a hungry level node, and the gap rule holds only between equal feed distances: the saddle of match 11, a province ridge that never passed the gap; DEC-43 item K.)
 
 ### 5. Throughput, speed and the chain speed
 
