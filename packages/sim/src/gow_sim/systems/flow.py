@@ -23,7 +23,11 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
   charge (``charged < units``, in a fight or not) or with a gathering planned order
   (``plan > 0``); groups on edges never pull (item A4). The effective field
   ``d(n) = min(d0(n), k + hops(n, nearest pulled node))``; such an army ahead of the level
-  (``d0(n) < k``) pulls too: its node alone is put on the level, ``d(n) = k`` (item I6, #724);
+  (``d0(n) < k``) pulls too: its node and its **path** are lifted onto the level, ``d = k``
+  (items I6, #724, and I7, #726). The path: ``h(n)``, the hops from a node ahead to the nearest
+  node not ahead (a BFS), and from the army's node each next node is the own neighbour with ``h``
+  one less, the smallest ``node_key`` first, until ``h == 0`` (the level end). A lifted node
+  between gives only to its next nodes towards the armies, on room alone;
 - the **room** of an own node: ``max(0, cap - stock - own packets on the way to it)``, a snapshot
   at the start of a dispatch that only decreases while it runs (item A5, the wave).
 
@@ -45,7 +49,9 @@ Order inside the step (item A13):
    ``load(m) + 2 <= have``, ``load = cap - room``). On the level (``d == k``) only the level
    roads: the leaves even out (#724), except a level node where an own group stands short of a
    charge or gathering a plan (the groups that pull): it keeps, and its level neighbours give to
-   it without the gap (room only). Each charge is a packet of 1 along one road (item A7).
+   it without the gap (room only). A lifted path node gives only along its path, and the node
+   before it on the path gives to it on room alone (item I7). Each charge is a packet of 1 along
+   one road (item A7).
 6. The **plan** of the next dispatch for the view: the same function run on the state now, without
    sending (item E: ``flow_next`` and ``flow_idle``), stored in ``Node.flow`` with the field.
 
@@ -53,7 +59,7 @@ The full factory spills its new charge in ``systems.economy`` (item A8), reading
 the previous tick (``spill_target``).
 
 Cost per tick and player: O(V + E) for the field and the plan, O(packets) for the room, O(groups)
-for the pull.
+for the pull and the paths.
 """
 
 from collections import deque
@@ -203,11 +209,15 @@ class _Field:
     (``k <= d(m) < d``; none on the level) with the road, by road id, room not considered."""
     level: dict[int, list[tuple[int, int]]]
     """The same nodes: the neighbours on its level (``d(m) == d``): level roads behind the level,
-    the equalization of the leaves on it (#724)."""
+    the equalization of the leaves on it (#724); for a lifted path node only its next nodes
+    towards the armies (item I7)."""
     holding: dict[int, bool]
     """The own nodes where an own standing group is short of a charge or gathers a plan (the
     groups that pull): on the level they keep, and a level neighbour gives to them without the
     gap (item I3)."""
+    before: dict[int, int]
+    """The lifted nodes of the paths (item I7): the node before each on its path, towards the
+    level; it gives to it on room alone."""
 
 
 def _field(state: GameState, player: int) -> _Field:
@@ -284,8 +294,8 @@ def _field(state: GameState, player: int) -> _Field:
     pocket = {n: c != main for n, c in comp.items()}  # no own capital: all pockets
 
     # The pull (item A4): a multi-source BFS from the pulled nodes behind the level; d = min(d0,
-    # k + hops). A pulling army ahead of the level puts its node alone on the level, d = k
-    # (item I6, option A). The same groups make a node on the level keep what it has and take
+    # k + hops). A pulling army ahead of the level puts its node and its path on the level,
+    # d = k (items I6, I7). The same groups make a node on the level keep what it has and take
     # from its level neighbours without the gap (item I3).
     pulled: dict[int, bool] = {}
     lifted: dict[int, bool] = {}
@@ -313,17 +323,45 @@ def _field(state: GameState, player: int) -> _Field:
         for n, h in dist.items():
             if n in d:  # a pulled node and its component have a field
                 d[n] = min(d[n], k[n] + h)
+    before: dict[int, int] = {}
+    after: dict[int, list[tuple[int, int]]] = {}
     if lifted:
         if d is d0:
             d = dict(d0)
-        for n in lifted:  # independent writes: the order does not matter
-            d[n] = k[n]
+        # rise: hops to the nearest node not ahead of the level (only the capital's component has
+        # k > 0, so only its nodes can be ahead); the BFS expands into the nodes ahead only.
+        rise: dict[int, int] = {}
+        for n in adj:  # ascending
+            if d0[n] >= k[n]:
+                rise[n] = 0
+        _bfs(adj, rise, deque(rise))
+        key = mapdef.node_key
+        for a in sorted(lifted):
+            n = a
+            while rise[n] > 0 and n not in before:  # a shared rest of the way is walked once
+                d[n] = k[n]
+                want = rise[n] - 1
+                best: tuple[int, int, int] | None = None
+                for m, eid in adj[n]:
+                    if rise[m] == want:
+                        cand = (key(player, m), m, eid)
+                        if best is None or cand < best:
+                            best = cand
+                assert best is not None  # rise is a BFS distance: a neighbour one less exists
+                _, m, eid = best
+                before[n] = m
+                after.setdefault(m, []).append((n, eid))
+                n = m
     down: dict[int, list[tuple[int, int]]] = {}
     level: dict[int, list[tuple[int, int]]] = {}
     for n, dn in d.items():
         kn = k[n]
         if dn < kn or (dn == kn and n in holding):
             continue  # ahead of the level, or a level node an army there holds: it never sends
+        if n in before:  # a lifted node between: only towards the armies (item I7)
+            down[n] = []
+            level[n] = sorted(after.get(n, []), key=lambda pair: pair[1])  # by road id
+            continue
         below: list[tuple[int, int]] = []
         same: list[tuple[int, int]] = []
         for m, eid in adj[n]:
@@ -337,7 +375,7 @@ def _field(state: GameState, player: int) -> _Field:
                 same.append((m, eid))
         down[n] = below
         level[n] = same
-    return _Field(player, d, k, pocket, adj, down, level, holding)
+    return _Field(player, d, k, pocket, adj, down, level, holding, before)
 
 
 def _bfs(adj: dict[int, list[tuple[int, int]]], dist: dict[int, int], queue: deque[int]) -> None:
@@ -411,8 +449,13 @@ def _run(
         for m, eid in level:
             if have == 0:
                 break
-            # a gap of 1 never moves; a pulling army takes without the gap (item I3)
-            if m in field.holding or capacities[m] - room[m] + 2 <= have:
+            # a gap of 1 never moves; a pulling army takes without the gap (item I3), and so
+            # does the next node of a path (item I7)
+            if (
+                m in field.holding
+                or field.before.get(m) == n
+                or capacities[m] - room[m] + 2 <= have
+            ):
                 out.append((m, eid))
                 room[m] -= 1
                 have -= 1
