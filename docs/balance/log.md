@@ -881,6 +881,17 @@ removed 17.9. Less burned (0.21 -> 0.17): with no slot limit a factory serves ev
 capital production forward. The field is a little flatter (win sd 0.178 -> 0.140); the level order easy < normal,
 hard holds for every character. No gross imbalance: the smoke check passes.
 
+## 2026-11-02: bot audit (the smart bots under v2, the metrics, information grants)
+
+Report: [bot-audit-2026-11.md](bot-audit-2026-11.md); ADR draft `docs/adr/0002-bot-information-grants.md` (proposed,
+#692). From the owner's match 6 on `narrows` (`smart_expander@hard` lost by the capital) and a 3-seed smoke run
+(`mise run tournament -- --maps maps/narrows.json --bots smart_expander@hard smart_hoarder smart_rusher@hard --seeds 3
+--jobs 4 --ruleset rulesets/mvp-3.toml`): every smart bot sinks a third of its charges into buildings (41-50 per match,
+`UpgradeWarehouse` 14), the v2 capital defense and evacuation are v1 no-ops (Defense, Transfer), discharged units in a
+cut-off pocket idle, cancels waste a quarter of the CP; the field shares the blind spots and the hoarder benchmark is the
+weakest bot of the three (2 of 12). Issues: #682 to #691 (bot fixes, the `smart_exploiter` yardstick and gate, v2
+metrics, scenario tests), #692 (the grant decision). No code changed.
+
 ## 2026-11-03: the supply flow of `mvp-4`, smoke run (DEC-43, #704)
 
 New ruleset `mvp-4` (owner decision 2026-11-03, DEC-43 in mechanics.md): `mvp-3` with the automatic supply flow
@@ -909,14 +920,3 @@ of the decided matches (narrows 0.45 [0.41; 0.49]). No gross imbalance between b
 What stands out is the burned share: about half of the production burns (DEC-42 field on `mvp-3`: 0.17), the capital
 is full in 50 to 86% of the ticks: with warehouses of 3 the network fills and a full factory finds no neighbour with
 room. A question for the field run (#706) and the owner, not a smoke failure.
-
-## 2026-11-02: bot audit (the smart bots under v2, the metrics, information grants)
-
-Report: [bot-audit-2026-11.md](bot-audit-2026-11.md); ADR draft `docs/adr/0002-bot-information-grants.md` (proposed,
-#692). From the owner's match 6 on `narrows` (`smart_expander@hard` lost by the capital) and a 3-seed smoke run
-(`mise run tournament -- --maps maps/narrows.json --bots smart_expander@hard smart_hoarder smart_rusher@hard --seeds 3
---jobs 4 --ruleset rulesets/mvp-3.toml`): every smart bot sinks a third of its charges into buildings (41-50 per match,
-`UpgradeWarehouse` 14), the v2 capital defense and evacuation are v1 no-ops (Defense, Transfer), discharged units in a
-cut-off pocket idle, cancels waste a quarter of the CP; the field shares the blind spots and the hoarder benchmark is the
-weakest bot of the three (2 of 12). Issues: #682 to #691 (bot fixes, the `smart_exploiter` yardstick and gate, v2
-metrics, scenario tests), #692 (the grant decision). No code changed.
