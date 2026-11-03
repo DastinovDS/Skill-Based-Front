@@ -777,6 +777,8 @@
           }
           return out;
         }
+        // a fortification covers only the run of the shared border around the crossing: it ends at a turn sharper than this (degrees)
+        const TURN_MAX = 38;
         function borderChain(node, to, half, inset) {
           half = Math.round(half);
           inset = Math.round((inset || 0) * 10) / 10;
@@ -819,6 +821,17 @@
             const t = P[i].t;
             return t >= 0 && NODES[IDS[t]].own === kind;
           };
+          // the turn of the border at vertex v, in degrees (0 = straight on)
+          const turnAt = (v) => {
+            const a = P[(v - 1 + n) % n];
+            const b = P[v % n];
+            const c = P[(v + 1) % n];
+            const x1 = b.x - a.x;
+            const y1 = b.y - a.y;
+            const x2 = c.x - b.x;
+            const y2 = c.y - b.y;
+            return (Math.abs(Math.atan2(x1 * y2 - y1 * x2, x1 * x2 + y1 * y2)) * 180) / Math.PI;
+          };
           const walk = (dir) => {
             const out = [];
             let rem = half;
@@ -834,8 +847,10 @@
               out.push({ x: nv.x, y: nv.y });
               rem -= d;
               cur = nv;
+              // the vertex we have just reached: stop where the shared border ends or turns away sharply (never wrap round a cell corner)
+              const v = dir > 0 ? (i + 1) % n : i;
               i = dir > 0 ? (i + 1) % n : (i - 1 + n) % n;
-              if (!ok(i)) break;
+              if (!ok(i) || turnAt(v) > TURN_MAX) break;
             }
             return out;
           };
@@ -977,7 +992,7 @@
           { id: 'taper', n: 'Tapered', line: 'tapered ticks, shortening to the ends, builds from one end', len: 100, lw: 4, off: 12, tl: 8, tw: 6, gap: 4, shape: 'taper', halo: [10, 0.5], ends: 'taper', prog: 'sweep' },
           { id: 'alt', n: 'Alternating', line: 'long and short ticks in turn, round ends', len: 110, lw: 4, off: 12, tl: 8, tw: 4, gap: 4, shape: 'alt', halo: [10, 0.5], ends: 'round', prog: 'grow' },
           { id: 'compact', n: 'Compact', line: 'a short run of wide blocks with taller end posts', len: 52, lw: 4, off: 12, tl: 7, tw: 10, gap: 5, shape: 'rect', halo: [11, 0.55], ends: 'post', prog: 'ticks' },
-          { id: 'long', n: 'Long run', line: 'a long thin front with a wide soft halo, ticks fade out at both ends', len: 170, lw: 3, off: 8.5, tl: 5, tw: 3, gap: 4, shape: 'rect', halo: [14, 0.4], ends: 'taper', prog: 'sweep' },
+          { id: 'long', n: 'Long run', line: 'a long thin front with a wide soft halo, square ends', len: 170, lw: 3, off: 8.5, tl: 5, tw: 3, gap: 4, shape: 'rect', halo: [14, 0.4], ends: 'butt', prog: 'sweep' },
           { id: 'deep', n: 'Deep', line: 'set well inside the cell with long ticks, a dotted line closes up while building', len: 90, lw: 4, off: 16.5, tl: 11, tw: 5, gap: 6, shape: 'rect', halo: [9, 0.5], ends: 'butt', prog: 'dash' },
           { id: 'hug', n: 'Hug', line: 'hugs the border with tiny ticks, the most discreet', len: 100, lw: 3, off: 7.5, tl: 3, tw: 4, gap: 3, shape: 'rect', halo: [6, 0.45], ends: 'round', prog: 'grow' },
           { id: 'wall', n: 'Wall', line: 'a short thick wall of big close blocks with end posts, the strongest halo', len: 70, lw: 6, off: 13.5, tl: 8, tw: 12, gap: 4, shape: 'rect', halo: [14, 0.7], ends: 'post', prog: 'ticks' },
@@ -2179,7 +2194,7 @@
               const shift = lay.tl * 0.5;
               const hl = chainLine(ch, lo - lay.tl * 0.4, hi + lay.tl * 0.4, shift);
               const W = lay.lw + lay.tl + V.halo[0] * this.mk;
-              g.lineCap = 'round';
+              g.lineCap = V.ends === 'round' ? 'round' : 'butt';
               for (const [wf, al] of [[1, V.halo[1] * 0.45], [0.74, V.halo[1] * 0.6]]) {
                 this.polyPath(hl);
                 g.strokeStyle = `rgba(5,8,12,${al * (lineA || 1)})`;
@@ -3715,7 +3730,7 @@
           if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches && !location.hash.includes('rm=')) ui.rm = 1;
           useMap(ui.map);
           update();
-          window.__fort = { ui, LOOKS, R2, R3, KS, HITS, TOLLS, STEPS, SPR_BY_LOOK, update, setStep, scene, crossing };
+          window.__fort = { cells: () => ({ CELLS, NODES, IDS }), ui, LOOKS, R2, R3, KS, HITS, TOLLS, STEPS, SPR_BY_LOOK, update, setStep, scene, crossing };
           requestAnimationFrame(frame);
         }
         init();
