@@ -52,7 +52,7 @@ from gow_sim.state import AtNode, Event, FlowIdle, FlowNode, GameState, event
 from gow_sim.systems.capacity import warehouse_capacities
 from gow_sim.systems.lines import settle_factories
 from gow_sim.systems.supply import (
-    all_packet_ticks,
+    edge_packet_ticks,
     garrisons_by_node,
     move_packets,
     packet_dest,
@@ -72,14 +72,13 @@ def supply_flow(state: GameState, rules: Ruleset) -> list[Event]:
     recharge(state, rules, garrisons_by_node(state))
     tick = state.tick
     dispatch = tick > 0 and tick % rules.supply.dispatch_ticks == 0
-    edge_ticks = all_packet_ticks(state, rules) if dispatch else ()
     for pid in sorted(state.players):
         field = _field(state, pid)
+        incoming = _incoming(state, pid)
         if dispatch:
-            incoming = _incoming(state, pid)
             sends = _run(state, field, capacities, incoming)
-            events.extend(_send(state, pid, sends, edge_ticks))
-        _store(state, field, capacities)
+            events.extend(_send(state, rules, pid, sends, incoming))
+        _store(state, field, capacities, incoming)
     _clear_neutral(state)
     return events
 
@@ -89,7 +88,7 @@ def update_flow(state: GameState, rules: Ruleset) -> None:
     initial state carries the field this way (item A8)."""
     capacities = warehouse_capacities(state, rules)
     for pid in sorted(state.players):
-        _store(state, _field(state, pid), capacities)
+        _store(state, _field(state, pid), capacities, _incoming(state, pid))
     _clear_neutral(state)
 
 
@@ -125,13 +124,15 @@ def _field(state: GameState, player: int) -> _Field:
     adj: dict[int, list[tuple[int, int]]] = {}
     d0: dict[int, int] = {}
     queue: deque[int] = deque()
-    for nid in sorted(nodes):
+    incident = mapdef.incident
+    for nid in range(len(incident)):  # node ids are 0..n-1 (``MapDef``): ascending
         if nodes[nid].owner != player:
             continue
         near: list[tuple[int, int]] = []
         leaf = False
-        for eid in mapdef.incident[nid]:
-            other = edges[eid].other(nid)
+        for eid in incident[nid]:
+            e = edges[eid]
+            other = e.b if e.a == nid else e.a
             if nodes[other].owner == player:
                 near.append((other, eid))
             else:
@@ -231,20 +232,25 @@ def _run(
     key = state.map.node_key
     nodes = state.nodes
     d = field.d
+    ks = field.k
+    # The senders: a field above the level and stock (the level keeps, ahead is frozen).
+    senders = [n for n, dn in d.items() if dn > ks[n] and nodes[n].warehouse > 0]
+    if not senders:
+        return []
+    senders.sort(key=lambda n: (d[n], key(player, n)))
     room: dict[int, int] = {}
     for n in field.adj:
-        room[n] = max(0, capacities[n] - nodes[n].warehouse - incoming.get(n, 0))
+        free = capacities[n] - nodes[n].warehouse - incoming.get(n, 0)
+        room[n] = free if free > 0 else 0
 
     def order(m: int) -> tuple[int, int]:
         cap = capacities[m]  # room > 0, so cap > 0
         return ((cap - room[m]) * 100 // cap, key(player, m))  # non-negative: rounded down
 
     sends: _Sends = []
-    for n in sorted(d, key=lambda n: (d[n], key(player, n))):
-        dn, k = d[n], field.k[n]
+    for n in senders:
+        dn, k = d[n], ks[n]
         have = nodes[n].warehouse
-        if dn <= k or have == 0:
-            continue  # the level keeps, ahead is frozen; or nothing to give
         down: list[tuple[int, int]] = []
         level: list[tuple[int, int]] = []
         for m, eid in field.adj[n]:
@@ -256,14 +262,16 @@ def _run(
             elif dm == dn:
                 level.append((m, eid))
         out: list[tuple[int, int]] = []
-        down.sort(key=lambda pair: order(pair[0]))
+        if len(down) > 1:
+            down.sort(key=lambda pair: order(pair[0]))
         for m, eid in down:
             if have == 0:
                 break
             out.append((m, eid))
             room[m] -= 1
             have -= 1
-        level.sort(key=lambda pair: order(pair[0]))
+        if len(level) > 1:
+            level.sort(key=lambda pair: order(pair[0]))
         for m, eid in level:
             if have == 0:
                 break
@@ -276,34 +284,39 @@ def _run(
     return sends
 
 
-def _send(state: GameState, player: int, sends: _Sends, edge_ticks: tuple[int, ...]) -> list[Event]:
-    """The packets of a dispatch, in its order."""
+def _send(
+    state: GameState, rules: Ruleset, player: int, sends: _Sends, incoming: dict[int, int]
+) -> list[Event]:
+    """The packets of a dispatch, in its order; ``incoming`` counts them."""
     events: list[Event] = []
     for n, out in sends:
         for m, eid in out:
             state.nodes[n].warehouse -= 1
-            events.append(send_one(state, player, n, m, eid, edge_ticks[eid]))
+            incoming[m] = incoming.get(m, 0) + 1
+            ticks = edge_packet_ticks(state, rules, eid)
+            events.append(send_one(state, player, n, m, eid, ticks))
     return events
 
 
-def _store(state: GameState, field: _Field, capacities: tuple[int, ...]) -> None:
-    """Step 6: the plan of the next dispatch and the field into ``Node.flow``."""
+def _store(
+    state: GameState, field: _Field, capacities: tuple[int, ...], incoming: dict[int, int]
+) -> None:
+    """Step 6: the plan of the next dispatch and the field into ``Node.flow``. A node keeps its
+    ``FlowNode`` when nothing of it changed (equal values: the same state)."""
     player = field.player
     key = state.map.node_key
     nodes = state.nodes
     d = field.d
-    plan = dict(_run(state, field, capacities, _incoming(state, player)))
+    plan = dict(_run(state, field, capacities, incoming))
     for n, near in field.adj.items():
         dn = d.get(n)
         k = field.k[n]
         down: tuple[int, ...] = ()
         if dn is not None and dn > k:
-            down = tuple(
-                sorted(
-                    (m for m, _ in near if (dm := d.get(m)) is not None and k <= dm < dn),
-                    key=lambda m: key(player, m),
-                )
-            )
+            below = [m for m, _ in near if (dm := d.get(m)) is not None and k <= dm < dn]
+            if len(below) > 1:
+                below.sort(key=lambda m: key(player, m))
+            down = tuple(below)
         receivers = plan.get(n)
         idle: FlowIdle | None = None
         if receivers is None:
@@ -315,14 +328,20 @@ def _store(state: GameState, field: _Field, capacities: tuple[int, ...]) -> None
                 idle = FlowIdle.EMPTY
             else:
                 idle = FlowIdle.FULL
-        nodes[n].flow = FlowNode(
-            d=dn,
-            k=k,
-            pocket=field.pocket[n],
-            down=down,
-            next=() if receivers is None else tuple(m for m, _ in receivers),
-            idle=idle,
-        )
+        nxt = () if receivers is None else tuple(m for m, _ in receivers)
+        pocket = field.pocket[n]
+        old = nodes[n].flow
+        if (
+            old is not None
+            and old.d == dn
+            and old.k == k
+            and old.pocket == pocket
+            and old.down == down
+            and old.next == nxt
+            and old.idle is idle
+        ):
+            continue
+        nodes[n].flow = FlowNode(d=dn, k=k, pocket=pocket, down=down, next=nxt, idle=idle)
 
 
 def _clear_neutral(state: GameState) -> None:

@@ -452,9 +452,19 @@ def test_no_enemy_cp_stance_production_or_counters(rules: Ruleset) -> None:
     state.nodes[5].recruit_progress = 17
     assert _view(state, rules) == before
     # Own counters only (DEC-28: the own front markers and rear minimum; #665: the own toggle of
-    # the auto-extension, tests/test_dec41_auto.py).
+    # the auto-extension, tests/test_dec41_auto.py; DEC-43: the own leaf shift, its maximum and
+    # the next dispatch tick, tests/test_dec43_view.py).
     names = {f.name for f in dataclasses.fields(SelfView)}
-    assert names == {"cp", "stance", "fronts", "rear_min", "auto_lines"}
+    assert names == {
+        "cp",
+        "stance",
+        "fronts",
+        "rear_min",
+        "auto_lines",
+        "leaf_shift",
+        "leaf_shift_max",
+        "next_dispatch_tick",
+    }
     me = state.players[0]
     assert before.me == SelfView(cp=me.cp, stance=me.stance, fronts=(None, None), rear_min=1)
 

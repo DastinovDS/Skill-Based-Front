@@ -157,10 +157,25 @@ def warehouse_capacity(state: GameState, rules: Ruleset, node: int) -> int:
 
 
 def warehouse_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
-    """``warehouse_capacity`` of every node, ``result[node_id]``. O(V)."""
+    """``warehouse_capacity`` of every node, ``result[node_id]``. O(V), one pass without a call
+    per node (the supply steps read it every tick)."""
     if not rules.city_upgrades.enabled and not rules.v2:
         return node_capacities(state, rules)
-    return tuple(warehouse_capacity(state, rules, n) for n in range(len(state.map.nodes)))
+    w = rules.warehouse
+    upgrades = rules.city_upgrades.enabled
+    gain = w.gain_per_level
+    base = {
+        kind: (w.start_by_kind.of(kind) if upgrades else rules.capacity.by_kind.of(kind))
+        for kind in NodeKind
+    }
+    province = w.province if rules.v2 else base[NodeKind.PROVINCE]  # v1: 0 or the capacity
+    nodes = state.nodes
+    return tuple(
+        province
+        if nd.kind is NodeKind.PROVINCE
+        else base[nd.kind] + (nodes[nd.id].warehouse_level * gain if upgrades else 0)
+        for nd in state.map.nodes
+    )
 
 
 def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
