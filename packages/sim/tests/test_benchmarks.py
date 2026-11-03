@@ -28,6 +28,7 @@ from gow_sim.match import Controller, Match, MatchResult, run_headless
 from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import AtNode, Detail, GameState, Group, Line, Mode, OnEdge, Packet
 from gow_sim.systems.capacity import warehouse_capacities
+from gow_sim.systems.flow import supply_flow, update_flow
 from gow_sim.systems.lines import supply_lines
 from gow_sim.systems.supply import supply, supply_tree
 from gow_sim.systems.vision import compute_vision
@@ -333,6 +334,109 @@ def test_bench_supply_lines(
 
     benchmark.pedantic(partial(supply_lines, rules=rules), setup=setup, rounds=500)
     _check(benchmark, speed_factor, 0.1 * MS)
+
+
+MVP4: Final = ROOT / "rulesets" / "mvp-4.toml"
+
+
+def _flow_state(mapdef: MapDef, rules: Ruleset) -> GameState:
+    """A dispatch tick of the supply flow (DEC-43) at its busiest: each player owns its half of
+    the map (the middle column of ``grid55`` neutral), every own warehouse holds a charge or is
+    full in turn, a tired group stands in every third own node (the pull), a packet is on the
+    way on every other internal road and the leaf shift is 1. Nearly every node behind the level
+    sends, so the dispatch and the plan of item A13 run at their longest."""
+    state = Match(mapdef, rules, KEY).state
+    width = max(n.x for n in mapdef.nodes) + min(n.x for n in mapdef.nodes)
+    for nd in mapdef.nodes:  # the halves by x, the middle (x == width / 2) neutral
+        twice = 2 * nd.x
+        state.nodes[nd.id].owner = 0 if twice < width else 1 if twice > width else None
+    caps = warehouse_capacities(state, rules)
+    state.groups.clear()
+    for nd in mapdef.nodes:
+        node = state.nodes[nd.id]
+        node.warehouse = 0 if node.owner is None else (caps[nd.id] if nd.id % 2 else 1)
+        if node.owner is not None and nd.id % 3 == 0:
+            gid = state.new_id()
+            state.groups[gid] = Group(gid, node.owner, 3, 1, Mode.ATTACK, AtNode(nd.id))
+    for e in mapdef.edges:
+        owner = state.nodes[e.a].owner
+        if e.id % 2 and owner is not None and state.nodes[e.b].owner == owner:
+            pid = state.new_id()
+            state.packets[pid] = Packet(pid, owner, e.id, e.a, 1, 290, 310)
+    for pid in PLAYERS:
+        state.players[pid].leaf_shift = 1
+    state.tick = 300  # a dispatch tick (``supply.dispatch_ticks`` 10 divides it)
+    update_flow(state, rules)
+    return state
+
+
+def test_bench_supply_flow(
+    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef, expand_bot: BotFactory
+) -> None:
+    """The supply budget of section 12 (0.1 ms) on the supply flow (DEC-43, #704), measured like
+    ``test_bench_supply``: the state after 300 ticks of a bot match under ``mvp-4``, a dispatch
+    tick, with the field, the pull, the dispatch and the plan of the view (item A13) in the step."""
+    rules = load_ruleset(MVP4)
+    state = _Driver(grid_map, rules, expand_bot).warm(300)
+    assert state.tick % rules.supply.dispatch_ticks == 0
+
+    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
+        return (copy.deepcopy(state),), {}
+
+    benchmark.pedantic(partial(supply_flow, rules=rules), setup=setup, rounds=500)
+    _check(benchmark, speed_factor, 0.1 * MS)
+
+
+FLOW_BUSY_BUDGET: Final = 0.2 * MS
+"""The busiest dispatch of the flow (``_flow_state``), a stress state like the one of
+``test_bench_supply_many_donors_busy_roads``: not the section 12 budget (that one is
+``test_bench_supply_flow``); about 0.15 ms on the reference machine, half of it the 18 packets it
+sends. Awaits the owner's acceptance (#704)."""
+
+
+def test_bench_supply_flow_busy(
+    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef
+) -> None:
+    """The busiest dispatch tick of the flow: ``_flow_state``, nearly every node behind the level
+    sends, the plan of the view computed after it."""
+    rules = load_ruleset(MVP4)
+    state = _flow_state(grid_map, rules)
+    probe = supply_flow(copy.deepcopy(state), rules)
+    assert sum(e.kind == "packet_sent" for e in probe) >= 10
+
+    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
+        return (copy.deepcopy(state),), {}
+
+    benchmark.pedantic(partial(supply_flow, rules=rules), setup=setup, rounds=500)
+    _check(benchmark, speed_factor, FLOW_BUSY_BUDGET)
+
+
+def test_bench_step_flow(
+    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef, expand_bot: BotFactory
+) -> None:
+    """The step budget of section 12 under ``mvp-4`` (the supply flow, DEC-43)."""
+    driver = _Driver(grid_map, load_ruleset(MVP4), expand_bot)
+    driver.warm(50)
+
+    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
+        return (driver.commands(),), {}
+
+    benchmark.pedantic(driver.step, setup=setup, rounds=2000)
+    _check(benchmark, speed_factor, 0.3 * MS, 1.0 * MS)
+
+
+def test_bench_project_flow(
+    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef
+) -> None:
+    """The projection budget under ``mvp-4``: the own-only flow fields of item E on every own
+    node of the busy state of ``_flow_state``."""
+    rules = load_ruleset(MVP4)
+    state = _flow_state(grid_map, rules)
+    supply_flow(state, rules)
+    view = project(state, rules, 0, KEY)
+    assert sum(n.front_dist is not None for n in view.nodes) >= 15
+    benchmark.pedantic(lambda: project(state, rules, 0, KEY), rounds=2000)
+    _check(benchmark, speed_factor, _project_budget(grid_map))
 
 
 def test_bench_project(

@@ -715,8 +715,11 @@ def test_the_ledger_balances_on_the_v2_golden_matches() -> None:
     # The identity of the ledger (sources - sinks - end = 0) on the economy v2 golden games,
     # which pay buildings in charges and gather planned bonuses (#646); since v31 they play the
     # mvp-3 of #659, where a capture is free.
-    files = sorted(GOLDEN.glob(f"*-mvp3{REPLAY_SUFFIX}"))
-    assert files
+    # Since v32 also on the mvp-4 game of the supply flow (DEC-43, #704): a full factory spills.
+    files = sorted(GOLDEN.glob(f"*-mvp3{REPLAY_SUFFIX}")) + sorted(
+        GOLDEN.glob(f"*-mvp4{REPLAY_SUFFIX}")
+    )
+    assert len(files) >= 3
     for file in files:
         log = replay_log(file, ROOT / "rulesets" / "archive", ROOT / "maps" / "fixtures")
         m = analyze(log)

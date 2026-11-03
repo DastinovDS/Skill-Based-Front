@@ -9,6 +9,7 @@ are those of ``test_dec43.py``.
 
 import dataclasses
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -115,9 +116,11 @@ def test_fog_the_enemy_view_does_not_depend_on_a_flow_field(name: str) -> None:
         assert flow is not None
         state.nodes[n].flow = dataclasses.replace(flow, **{name: other[name]})
     assert view_to_canonical(_view(state, 1)) == before
-    assert view_to_canonical(_view(state, 0)) != view_to_canonical(
-        _view(_state({K: 6, A: 3, C: 2, F: 2}), 0)
-    ) or name == "k"  # k shows only through the derived fields
+    assert (
+        view_to_canonical(_view(state, 0))
+        != view_to_canonical(_view(_state({K: 6, A: 3, C: 2, F: 2}), 0))
+        or name == "k"
+    )  # k shows only through the derived fields
 
 
 @pytest.mark.parametrize("name", ["leaf_shift", "leaf_shift_max"])
@@ -141,9 +144,8 @@ def _no_packet_ids(view: PlayerView) -> dict[str, object]:
     of one counter for both players (AGENTS.md 4.4), so the other player's packets shift them
     without telling anything."""
     data = view_to_canonical(view)
-    packets = data["packets"]
-    assert isinstance(packets, list)
-    rows = [{k: v for k, v in p.items() if k != "id"} for p in packets]  # type: ignore[union-attr]
+    packets = cast(list[dict[str, object]], data["packets"])
+    rows = [{k: v for k, v in p.items() if k != "id"} for p in packets]
     data["packets"] = sorted(rows, key=repr)
     return data
 

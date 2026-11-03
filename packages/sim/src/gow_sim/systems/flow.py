@@ -114,6 +114,11 @@ class _Field:
     """Every own node: its component has no own factory."""
     adj: dict[int, list[tuple[int, int]]]
     """Every own node: ``(neighbour, road)`` over internal roads, by road id."""
+    down: dict[int, list[tuple[int, int]]]
+    """Every own node behind the level (``d > k``): its downhill neighbours of item A6
+    (``k <= d(m) < d``) with the road, by road id, room not considered."""
+    level: dict[int, list[tuple[int, int]]]
+    """The same nodes: the neighbours on its level (``d(m) == d``)."""
 
 
 def _field(state: GameState, player: int) -> _Field:
@@ -125,15 +130,16 @@ def _field(state: GameState, player: int) -> _Field:
     d0: dict[int, int] = {}
     queue: deque[int] = deque()
     incident = mapdef.incident
-    for nid in range(len(incident)):  # node ids are 0..n-1 (``MapDef``): ascending
-        if nodes[nid].owner != player:
+    owners = [nodes[nid].owner for nid in range(len(incident))]  # ids are 0..n-1 (``MapDef``)
+    for nid, owner in enumerate(owners):  # ascending
+        if owner != player:
             continue
         near: list[tuple[int, int]] = []
         leaf = False
         for eid in incident[nid]:
             e = edges[eid]
             other = e.b if e.a == nid else e.a
-            if nodes[other].owner == player:
+            if owners[other] == player:
                 near.append((other, eid))
             else:
                 leaf = True
@@ -154,8 +160,7 @@ def _field(state: GameState, player: int) -> _Field:
         stack = [nid]
         while stack:
             n = stack.pop()
-            if nodes[n].factory == player:
-                factory = True
+            factory = factory or nodes[n].factory == player
             for m, _ in adj[n]:
                 if m not in comp:
                     comp[m] = nid
@@ -167,8 +172,9 @@ def _field(state: GameState, player: int) -> _Field:
     ps.leaf_shift_max = shift_max
     ps.leaf_shift = min(ps.leaf_shift, shift_max)  # the clamp is stored (item B3)
     main = comp.get(capital)
-    k = {n: ps.leaf_shift if comp[n] == main else 0 for n in adj}
-    pocket = {n: not has_factory[comp[n]] for n in adj}
+    shift = ps.leaf_shift
+    k = {n: shift if c == main else 0 for n, c in comp.items()}
+    pocket = {n: not has_factory[c] for n, c in comp.items()}
 
     # The pull (item A4): a multi-source BFS from the pulled nodes; d = min(d0, k + hops).
     pulled: dict[int, bool] = {}
@@ -191,7 +197,26 @@ def _field(state: GameState, player: int) -> _Field:
         for n, h in hops.items():
             if n in d:  # a pulled node and its component have a field
                 d[n] = min(d[n], k[n] + h)
-    return _Field(player, d, k, pocket, adj)
+    down: dict[int, list[tuple[int, int]]] = {}
+    level: dict[int, list[tuple[int, int]]] = {}
+    for n, dn in d.items():
+        kn = k[n]
+        if dn <= kn:
+            continue  # on or ahead of the level: it never sends
+        below: list[tuple[int, int]] = []
+        same: list[tuple[int, int]] = []
+        for m, eid in adj[n]:
+            dm = d.get(m)
+            if dm is None:
+                continue
+            if dm < dn:
+                if dm >= kn:
+                    below.append((m, eid))
+            elif dm == dn:
+                same.append((m, eid))
+        down[n] = below
+        level[n] = same
+    return _Field(player, d, k, pocket, adj, down, level)
 
 
 def _bfs(adj: dict[int, list[tuple[int, int]]], dist: dict[int, int], queue: deque[int]) -> None:
@@ -232,9 +257,8 @@ def _run(
     key = state.map.node_key
     nodes = state.nodes
     d = field.d
-    ks = field.k
-    # The senders: a field above the level and stock (the level keeps, ahead is frozen).
-    senders = [n for n, dn in d.items() if dn > ks[n] and nodes[n].warehouse > 0]
+    # The senders: behind the level (the level keeps, ahead is frozen) and with stock.
+    senders = [n for n in field.down if nodes[n].warehouse > 0]
     if not senders:
         return []
     senders.sort(key=lambda n: (d[n], key(player, n)))
@@ -249,18 +273,9 @@ def _run(
 
     sends: _Sends = []
     for n in senders:
-        dn, k = d[n], ks[n]
         have = nodes[n].warehouse
-        down: list[tuple[int, int]] = []
-        level: list[tuple[int, int]] = []
-        for m, eid in field.adj[n]:
-            dm = d.get(m)
-            if dm is None or room[m] == 0:
-                continue
-            if k <= dm < dn:
-                down.append((m, eid))
-            elif dm == dn:
-                level.append((m, eid))
+        down = [pair for pair in field.down[n] if room[pair[0]]]
+        level = [pair for pair in field.level[n] if room[pair[0]]]
         out: list[tuple[int, int]] = []
         if len(down) > 1:
             down.sort(key=lambda pair: order(pair[0]))
@@ -308,12 +323,13 @@ def _store(
     nodes = state.nodes
     d = field.d
     plan = dict(_run(state, field, capacities, incoming))
-    for n, near in field.adj.items():
+    for n in field.adj:
         dn = d.get(n)
         k = field.k[n]
         down: tuple[int, ...] = ()
-        if dn is not None and dn > k:
-            below = [m for m, _ in near if (dm := d.get(m)) is not None and k <= dm < dn]
+        below_pairs = field.down.get(n)
+        if below_pairs:
+            below = [m for m, _ in below_pairs]
             if len(below) > 1:
                 below.sort(key=lambda m: key(player, m))
             down = tuple(below)

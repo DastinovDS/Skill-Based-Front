@@ -21,6 +21,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from gow_sim.analysis import MatchMetrics, MatchRecorder, analyze
 from gow_sim.commands import (
     BuildBunker,
     Command,
@@ -35,7 +36,6 @@ from gow_sim.commands import (
     UpgradeWarehouse,
     apply_commands,
 )
-from gow_sim.analysis import MatchMetrics, MatchRecorder, analyze
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Controller, Match, run_headless
 from gow_sim.ruleset import (
