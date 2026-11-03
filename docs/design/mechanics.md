@@ -22,6 +22,8 @@
 | **[proposed]** | a proposal from the discussion; the owner did not object but did not explicitly confirm it |
 | **[open]** | the question is not settled, there are options |
 | **[rejected]** | the option was considered and replaced by another one (see section 16) |
+| **[draft, awaiting the owner's discussion]** | the owner agreed the basics, the details are still to be discussed; not implemented before the owner's decision |
+| **[reading, to confirm]** | a point the owner's text left open, filled by the author of the DEC block; in force until the owner confirms or changes it |
 | **[superseded by DEC-N]** | the accepted text is cancelled by a later decision DEC-N; the text is kept struck through for history, the DEC-N block is in force |
 
 If the decision of a DEC issue refines an item with the status [proposed] or [open], next to the item there is
@@ -1834,6 +1836,8 @@ Alternatives (not chosen):
 
 ### Economy v2 (DEC-41, #642) **[accepted]**
 
+> **[superseded by DEC-43 under `supply.model = "flow"`]** (`mvp-4`): items 3 and 6 (lines, the drawn path), the burn of a full factory in item 2 (a spill first), the warehouse upgrade and the bunker of items 7 and 12, the line and bunker commands of item 14, and the #665 suggested path and auto-extension. The text below is in force for `mvp-3` (`supply.model = "lines"`).
+
 The owner's decision of 2026-10-31, after the mechanics audit (#639, `docs/design/mechanics-audit-2026-10.md`): the audit found a CP deficit and a supply surplus at the source (CP binds everywhere, charges are short at the front only by delivery latency, few things consume charges). The model of v2: **CP pays for orders (moves, recruiting); supply (charges) pays for everything material.** The owner's answers: "the capital is the main factory with one fixed rate, every built factory has a smaller but also fixed rate" (item 2); "the player chooses the path, not the server" (item 6); "a capture needs one spent charge" (item 11); "a bunker is destroyed on capture" (item 12); "we will see the rest as the game goes": every other default below is **[accepted]** as a **starting value, tuned by playtests** (not a promise of the final number).
 
 **Behind a flag.** Everything below applies only under `economy.model = "v2"` in the new `rulesets/mvp-3.toml`. `economy.model = "v1"` (the default) is today's behaviour in `mvp-0`, `mvp-1`, `mvp-2`, `test-short`: the v1 rules, their DEC blocks and the golden replays stay valid and unchanged. Rule numbers live in `Ruleset` (`AGENTS.md`, 4.1, rule 7); the numbers named here are the starting values of `mvp-3.toml`. The status marks `[superseded by DEC-41 under economy.model = "v2"]` on the older blocks mean exactly this: the old text is kept, and it is in force for v1.
@@ -2024,6 +2028,8 @@ Confirmed by the owner on 2026-10-31: items (1) radius by packet ticks, (2) work
 
 ### Lines from factories only (DEC-42, #674) **[accepted]**
 
+> **[superseded by DEC-43 under `supply.model = "flow"`]** (`mvp-4`): there are no lines; the block is in force for `mvp-3`.
+
 Owner decision of 2026-11-01 after a playtest of `mvp-3`: lines started from cities that are not factories (relays, line trees) are confusing, "you have to click many cities to understand what goes where". Economy v2 only (`economy.model = "v2"`); v1 is unchanged. `SIM_VERSION` 31, `PROTOCOL_VERSION` 35 (`ruleset_public.lines` is removed: it carried only `max_out`). It supersedes, under v2: in DEC-41 item 3 "any city that is the target of a line can start lines", the tree node of the round robin, L5 (relay), the limit of L4, the tree reading of L6 (#661), the rule "Relay transit" (#661, `Node.inbox`), and the source rule of the auto-extension (#665).
 
 1. **Only a factory starts a line.** `DrawLine(path)` whose first node is not an own factory is rejected with `NOT_SOURCE`. The other checks and their order stay those of #644 (`INVALID_ARGUMENT`, `NOT_FOUND_OR_HIDDEN`, `NOT_OWNER`, `INVALID_ARGUMENT`, `NOT_CITY`, then `NOT_SOURCE`, then `LINE_CYCLE`). A line is one whole path from a factory to its target; only the target receives its charges, the intermediate nodes get nothing.
@@ -2054,6 +2060,139 @@ Owner decision of 2026-11-01 after a playtest of `mvp-3`: lines started from cit
 | A8 | line K -> E, `auto_extend_ticks = 50`; B and F captured in one tick | B first: K-A-B (K and E 40, K by `node_key`); then F: K-A-B-F (B of the new line 20; line 0 is 60 away) |
 
 The owner's situations of item 3 read under DEC-42: situation 2 is the lines A -> B, A -> B -> D and A -> B -> C (B captured: all three cut, no way round); situation 3: C captured cuts only A -> B -> C.
+
+### Automatic supply flow, leaf shift, fixed warehouses, road fortifications (DEC-43, #697) **[accepted]**
+
+The owner's decision of 2026-11-03 on #697 (the algorithm and its options: `docs/design/supply-auto-flow.md`, all recommendations accepted), #699 and #701 (how the flow is drawn: `docs/design/ui-style.md`, section 42). The owner's reason: any supply system the player steers by hand moves the micromanagement from CP to supply, which is now the more important resource; so supply flows by itself towards the front, one local rule for every node, and the player has one lever, the leaf shift. Items A to C and E are **[accepted]**; item D (road fortifications) is **[draft, awaiting the owner's discussion]**: its basics are agreed, its details are not. Points this block had to add to the owner's text are marked **[reading, to confirm]**; they are in force until the owner answers.
+
+**Behind a flag.** Everything below applies only under `supply.model = "flow"` (new key, default `"lines"`, allowed only with `economy.model = "v2"`) in the new `rulesets/mvp-4.toml`. `mvp-3` (`supply.model = "lines"`, DEC-41 and DEC-42) and its golden replays are unchanged, so the two can be compared in a playtest; `mvp-0`, `mvp-1`, `mvp-2`, `test-short` are untouched. The marks `[superseded by DEC-43 under supply.model = "flow"]` on older blocks mean exactly this: the old text stays in force for the other rulesets.
+
+**What it supersedes under `supply.model = "flow"`.** DEC-41 item 3 (supply lines), item 6 (the player draws the path), item 2 "a full factory burns its charge" (replaced by the spill of item A8), item 7 the warehouse upgrade and the bunker prices, item 12 (the bunker), item 14 the commands `DrawLine`, `RemoveLine`, `BuildBunker`; the #665 suggested path, auto-extension and `SetAutoLines`; DEC-42 in full; DEC-26 items 2 and 3 (warehouse sizes by level, `UpgradeWarehouse`). Kept from DEC-41: no stances, factories (rates, cost, cap, capture), buildings paid in charges and the progressive payment (factory, barracks), the planned order that gathers its bonus, the capture cost, the province warehouse of 1, recharge, packets, `warehouse_lost`, everything removed by item 5 stays removed.
+
+**A. Automatic supply flow**
+
+1. **Leaf.** A leaf (a border node) of player `p` is an own node with a road to a node that is not `p`'s: an enemy node or a neutral one. Cities and provinces alike.
+2. **The field** `d0(n)`: the number of roads (hops) from `n` to the nearest leaf, by a multi-source BFS from all leaves over **internal roads** (both ends own, as today). Integers only. A node whose own component has no leaf has no field (`INF`; possible only when the player owns every node of the map).
+3. **The leaf level** `k` (item B): own nodes with `d(n) == k` are the **level**: they keep what they get. Nodes with `d(n) < k` are **ahead** of the level: they neither receive nor give; their units still recharge from their own warehouses.
+4. **A tired army pulls.** A node `n` with `d0(n) > k` is **pulled** to the level when one of these stands in it: an own group standing in the node (`AtNode`, as for the recharge) with `charged < units`, in a fight or not; an own group with a gathering planned order (DEC-41 item 10, `plan > 0`). **[reading, to confirm]**: the exact set of groups that pull (any standing own group short of a charge; groups on edges never pull). The effective field is then `d(n) = min(d0(n), k + hops(n, nearest pulled node))`: one BFS from all leaves at 0 and all pulled nodes at `k`. A tired army ahead of the level (`d0 <= k`) does not pull: the shift is the player's explicit choice and wins. Adjacent nodes differ by at most 1 in `d` (it is a distance), so a node has downhill neighbours at `d - 1` and level neighbours at `d`.
+5. **Room** of an own node `m`, taken as a snapshot at the start of the dispatch: `room(m) = max(0, cap(m) - stock(m) - charges of own packets on the way to m)`, `cap` the warehouse capacity (item C). During the dispatch it only decreases (by the charges sent to `m`); a charge `m` sends does not free room in the same dispatch. This is the **wave**: after a leaf spends, the node behind it refills it at the next dispatch, the node behind that one a dispatch later, one city per dispatch (the owner's chain reaction).
+6. **The dispatch**, every `supply.dispatch_ticks` (ticks `t > 0` divisible by it), for each player independently (nothing below reads the other player's state; ownership is public), senders in the order `(d(n), node_key(p, n))` ascending, the front first:
+   - skip `n` when `d(n) <= k` (the level keeps, ahead is frozen) or `d(n)` is `INF`;
+   - `have(n)` = its warehouse now (no rear minimum: nothing is kept back);
+   - **downhill**: the own neighbours `m` over internal roads with `k <= d(m) < d(n)` and `room(m) > 0`, ordered by `fill(m) = (cap(m) - room(m)) * 100 // cap(m)` ascending (rounded down, non-negative), then `node_key(p, m)`; while `have(n) > 0`, each in turn gets **one** packet of 1 charge: `room(m) -= 1`, `have(n) -= 1`;
+   - **level roads**: then the own neighbours `m` with `d(m) == d(n)` and `room(m) > 0`, in the same order, each gets one charge while `have(n) > 0` and `load(m) + 2 <= have(n)`, where `load(m) = cap(m) - room(m)` (its stock, the packets on the way and what this dispatch already sent to it). A gap of 1 never moves, a move shrinks the gap by 2, so nothing oscillates. **[reading, to confirm]**: the level and the nodes ahead of it never send, so level roads even out only behind the level; the sentence of `supply-auto-flow.md` item 4B "also moves stock along the front line" is not adopted (the owner's "leaves keep everything" wins).
+   - At most one charge per road and direction per dispatch.
+7. **A packet** is today's v2 packet: 1 charge along one road, `max(1, travel_ticks * 100 // supply.base_speed_pct)` ticks (`base_speed_pct = 150`, rounded down), event `packet_sent` (`from_node`, `to_node` the two ends). It lands in the warehouse of the next node, which decides at its own next dispatch. It is lost when its road stops being internal (section 7 packet rules, `packet_lost`). An enemy group on the road, moving or in a fight, does **not** block it; only a capture of an end cuts a road (no raids for now, #697 question 8).
+8. **Production and a full factory.** A factory (the capital included) produces into its own warehouse as in DEC-41 item 2, and its stock rolls downhill by item 6 like any node. A factory counts as **full** for production when `stock + own packets on the way to it >= cap` **[reading, to confirm]** (so a reserved arrival never overflows). A full factory's new charge **spills**: it leaves at once as a packet to an own neighbour with `room > 0` and `d(m) >= k`, the smallest `d(m)` first, then `node_key(p, m)` (event `charges_produced` with `charges = 1`, `spill = 1`, and `packet_sent`); with no such neighbour it burns (`charge_burned`). Production runs in `economy`, before the flow step, so the spill reads the field stored by the flow step of the previous tick **[reading, to confirm]**; the initial state carries the field computed by the same function.
+9. **Several sources** need nothing extra: the field is the distance to the front, not to the sources, so every factory's charges roll downhill from where it stands.
+10. **Pockets** (own nodes with no road path over own nodes to an own factory) run the same rule on their own stock. **[reading, to confirm]**: the leaf shift applies to the capital's component only; every other own component (a pocket, or a part cut off with a factory) uses `k = 0`, so a shallow pocket is not frozen by a shift meant for the main front.
+11. **The front moves** without a command: the field is recomputed from the current ownership, so a captured node is a leaf at once and the old leaf's stock rolls into it; a lost node loses its warehouse (`warehouse_lost`) and its packets, and its own neighbours become leaves. No "fresh city delay" (#697 question 10: the shift alone).
+12. **Removed under flow** (`FEATURE_DISABLED`): `DrawLine`, `RemoveLine`, `SetAutoLines`; `View.lines` is empty and `View.me.auto_lines` is `null`; `line_route_query` is answered with an empty path **[reading, to confirm]** (it is a query, not a command); no `line_cut`, `line_rerouted`, `line_auto`. `[lines]` must not be in a flow ruleset.
+13. **Order inside the flow step** (it replaces `systems.lines` in the `supply` slot; `SYSTEMS` keeps its order) **[reading, to confirm]**: (1) captured factories (DEC-41 item 2, as today); (2) packets move and land; (3) recharge of standing units (`supply.recharge_per_tick`); (4) the field `d0`, the clamp of the shift (item B3), the pull, the field `d`; (5) on a dispatch tick the dispatch of item 6; (6) the **plan** of the next dispatch for the view: the same function as item 6 run on the state now, without sending (item E).
+
+**B. Leaf shift**
+
+1. **One global value** `k` per player, `0` (the front, the start value) up to `d0(capital)`. `k = 1` makes the nodes one road behind the front the level; `k = d0(capital)` makes the capital the level. It follows the moving front: it is relative to the current field.
+2. **`SetLeafShift(shift)`**, free (no CP), not public (no intent, no event to anyone), checks in this order: not `supply.model = "flow"` (`FEATURE_DISABLED`); `shift < 0` or `shift > leaf_shift_max` (`INVALID_ARGUMENT`), where `leaf_shift_max = d0(capital)` stored by the flow step of the previous tick; `shift` equal to the current value (`NO_CHANGE`). Applied at the start of the tick like any command, so the flow step of that tick already uses it.
+3. **The clamp** **[reading, to confirm]**: in every flow step, `k := min(k, d0(capital))`: when the front comes closer to the capital than the shift, the shift drops to the capital and stays there when the front moves away again (one stored number; the HUD always shows the value in force). The alternative (keep the requested value and use `min` without storing it) makes `−` and `+` act on an invisible number.
+4. **Stock ahead of the level stays** (item A3): pressing `−` before a feint keeps what is already at the front; `+` resumes the flow.
+5. **Fog:** the enemy sees nothing of it: not `k`, not the field, not the level. The enemy's view of a state does not depend on the player's shift (a fog test, `AGENTS.md` 4.4).
+
+**C. Warehouses without upgrades**
+
+1. The warehouse of every **city** (large, medium, small) is **3**, the **capital 6**, a **province 1** (DEC-41 item 13). In `mvp-4`: `warehouse.start_by_kind` = `capital 6`, `city_large 3`, `city_medium 3`, `city_small 3`; `warehouse.max_level = 0`; `warehouse.province = 1`. Unit capacity (`capacity.by_kind`) is unchanged.
+2. **`UpgradeWarehouse`** gives `FEATURE_DISABLED` when `warehouse.max_level = 0` **[reading, to confirm]** (the ruleset says it, not the supply model; no current ruleset has 0). `city_upgrades.warehouse_charges` and `warehouse_ticks` have no effect then. The map validator check `warehouse` (start stock not above the warehouse) passes on every pool map with these numbers.
+
+**D. Road fortifications** **[draft, awaiting the owner's discussion]**
+
+Agreed basics (not yet a rule; nothing of this is implemented before the owner's decision):
+
+1. **They replace the bunker in `mvp-4`.** `BuildBunker` gives `FEATURE_DISABLED` when the ruleset has no `[bunker]` section, and `mvp-4.toml` has none. **[reading, to confirm]**: the bunker goes with the first `mvp-4` implementation (#704), before fortifications exist, so `mvp-4` has no defensive building until item D lands.
+2. **Bought for CP**, the main new CP sink of `mvp-4` (item F).
+3. **Placed on a road at the own end**: on any road leaving an own node (a city or a province), internal roads included.
+4. **The toll**: an enemy group that crosses the fortification line **moving towards that node** pays it; own groups and enemies moving away pass free.
+5. **Visible with the edge half**: an enemy fortification is seen when that half of the edge is visible (the DEC-21 / DEC-35 levels), the way DEC-31 shows a built enemy building.
+6. **Destroyed when its node is captured.** Future option, not a rule: it passes to the capturer (the owner finds it interesting).
+7. **Several on one road** (both ends, different owners): each works for its own node.
+
+The owner's start proposal (numbers for the tournament to tune): price 150 (1.5 CP), build 100 ticks, no global limit; toll 1 charge per started 3 units of the group (`ceil(units / 3)`), taken from its charged units, never below 0; no toll when the group stopped in a fight before the line point.
+
+**Open points** (to settle with the owner, then a mockup round for the look):
+
+| # | Point | Options to discuss |
+|---|---|---|
+| D-1 | toll size and formula | per started 3 units (proposal); a flat 1 per group; a share of the charged units; does an uncharged group pay anything (proposal: no, never below 0) |
+| D-2 | the line point on the edge | at the own node's end of its half (the node itself); the border point (`border_permille`); the middle of the own half; a ruleset number in permille |
+| D-3 | stacking | one per road end (proposal) or several on one end adding up; a group crossing two lines on one road (both ends own by one player is impossible on a buffer road, possible on an internal one) |
+| D-4 | placement and mode | which interface mode (Supply, battle, a city menu), a click on the road near the node, how the cost is shown |
+| D-5 | build time and visibility while building | 100 ticks (proposal); is a fortification under construction visible to the enemy, does it work before it is done (proposal: no) |
+| D-6 | destruction without a capture | only a capture (proposal), or an enemy group can tear it down (time, charges), or the owner can remove it (refund or not) |
+| D-7 | cost scaling | one price (proposal), or rising per fortification of the node or of the player |
+| D-8 | interaction with fights | a group stopped by a fight on the edge before the line pays nothing (proposal); a retreat (DEC-40) back through the line; the DEC-37 engagement zone |
+| D-9 | events and fog of the toll | does the paying side see a `toll_paid` event; does the owner see the enemy group pay when the half is in the fog |
+
+Look: **pending a mockup round** (`docs/design/ui-style.md`, section 42). Implementation: #707, after the owner's decision.
+
+**E. Visualization and the view** (client, no rules; the look: `docs/design/ui-style.md`, section 42)
+
+The client draws the flow from these own-only fields and never re-implements the dispatch rule (`AGENTS.md`, 7.1). Every field is `null` for nodes that are not own and under `supply.model = "lines"`; each one needs a fog test (`AGENTS.md`, 4.4).
+
+| Field | Content | Drives |
+|---|---|---|
+| `NodeView.front_dist: int \| null` | the effective field `d` (after the pull) of the current tick; `null` for `INF` | the level fill (T1: `front_dist == leaf_shift`, pulled nodes included), the "ahead" hatch (`front_dist < leaf_shift`) |
+| `NodeView.flow_down: list[int]` | the downhill neighbours of item A6 (`k <= d(m) < d(n)`, room not considered), by `node_key` | the chevrons on roads, the P2 downstream chain on hover (a walk over `flow_down` to the level) |
+| `NodeView.flow_next: list[int]` | the receivers of its next dispatch in the order of item A6 (the plan of item A13, step 6) | the N4 notches |
+| `NodeView.flow_idle: "leaf" \| "ahead" \| "empty" \| "full" \| null` | why it sends nothing at the next dispatch: on the level (or no field), ahead of it, an empty warehouse, no neighbour takes a charge; `null` when `flow_next` is not empty | the N4 dashed ring and the idle plate |
+| `NodeView.flow_pocket: bool \| null` | its own component over internal roads has no own factory | the pocket hatch and "no source" |
+| `View.me.leaf_shift: int \| null` | the shift in force (item B3) | the HUD control, "front" / "−n" |
+| `View.me.leaf_shift_max: int \| null` | `d0(capital)` | the `−` button limit |
+| `View.me.next_dispatch_tick: int \| null` | the tick of the next dispatch (like `OrderView.next_charge_tick`) | the N4 countdown ring |
+
+Own packets stay as today (`PacketView`, the dots). No new event kind: the flow uses `packet_sent`, `packet_delivered`, `packet_lost`, `charges_produced` (`spill`), `charge_burned` as they are in `EVENT_FIELDS`.
+
+**F. CP surplus (open).** Fortifications (item D) are the planned CP sink. The other options of `supply-auto-flow.md` item 17 stay **[open]**, not decided: **C1** overtime (1 CP makes a factory produce one extra charge now), **C2** a paid shift (each step of the leaf shift costs CP; it would change item B2 "free"), **C3** a rush road (CP doubles one road's packet speed for 30 s), **C4** lower income (`cp.period_ticks` back up to 150..200).
+
+**G. Bots.** The bots must play `mvp-4`: no line logic under flow, the leaf shift used by at least one heuristic (for example `−` before a planned withdrawal or when a leaf faces a visibly stronger enemy, `+` when the bot attacks from it), no `UpgradeWarehouse` and no `BuildBunker`; fortifications once item D is decided. Minimal in the first implementation; the bot audit (#682 to #691) is separate.
+
+**`rulesets/mvp-4.toml`** (planned; a copy of `mvp-3.toml` with these differences):
+
+- `[supply]` `model = "flow"` (new key; default `"lines"`, not part of the hash at its default, so the hashes of the other rulesets do not change); `dispatch_ticks = 10`, `base_speed_pct = 150`, `recharge_per_tick = 1` as in `mvp-3`.
+- `[lines]` absent (a flow ruleset must not have it).
+- `[bunker]` absent (`BuildBunker` gives `FEATURE_DISABLED`, `ruleset_public.bunker` is `null`).
+- `[warehouse]` `max_level = 0`, `province = 1`; `[warehouse.start_by_kind]` `capital = 6`, `city_large = 3`, `city_medium = 3`, `city_small = 3`.
+- Everything else as `mvp-3` (`cp.period_ticks = 100`, `factory.capital_period_ticks = 100`, `factory.built_period_ticks = 200`, `factory.cost = 4`, `factory.max = 3`, `capture.charge_cost = 0`, `orders.plan_ticks_per_bonus = 30`, `city_upgrades.enabled = true`, `barracks_charges = 3`).
+- Later, with item D: a `[fort]` section (proposal: `cost = 150` hundredths of CP, `build_ticks = 100`, the toll keys of D-1, the line point of D-2).
+
+**Versions.** `SIM_VERSION` 32 (golden replays `v32`, with a `mvp-4` game added), `PROTOCOL_VERSION` 36 (`set_leaf_shift {shift}`, the fields of item E, `ruleset_public.supply_model`), `regen`.
+
+**Examples** (map `dec41` of the tests, player 0, `mvp-4`; own K (capital, warehouse 6), A, B, C, D, E, F, G (cities, warehouse 3); M (8) and 17 are neutral provinces (warehouse 1 when own); roads K-A, K-E, A-B, A-D, A-E, B-C, B-F, B-G, D-C, C-M, C-17, D-18; packet ticks 20 per 30-tick road, K-E 28, D-C 38, C-M 32, C-17 30; `node_key(0, n) = n`; no groups and no packets unless the row says so; stocks as set by the row, the rest 0; the dispatch at tick 10 unless the row says so). The base field: C and D touch neutrals (M, 17, 18), so `d0`: C 0, D 0, A 1, B 1, K 2, E 2, F 2, G 2; `leaf_shift_max` 2.
+
+| # | Setting | Result |
+|---|---|---|
+| F1 | the base map | `d`: C 0, D 0, A 1, B 1, K 2, E 2, F 2, G 2; the level is C and D |
+| F2 | K holds 6 | K sends 1 to A (downhill) and 1 to E (level road K-E: E load 0, `0 + 2 <= 5`); K keeps 4; nobody else sends |
+| F3 | C enemy-owned (so B and D are leaves, `d`: B 0, D 0, A 1, F 1, G 1, K 2, E 2); A holds 1, B 1, D 0 | A sends to D (fill 0 before B's 33) |
+| F4 | as F3, A holds 1, B 0, D 0 | A sends to B (equal fill, `node_key` 2 < 4) |
+| F5 | as F3, A holds 2, B 1, D 0 | one to D and one to B |
+| F6 | A holds 1, D holds 3 (full), B holds 3 | A sends nothing (`flow_idle = "full"`); the same with D holding 2 and one own packet on the way to D |
+| F7 | the wave: K holds 6, A 3, B 3, C 3, E 3, D 0; dispatches at 10 and 20 | tick 10: A sends 1 to D; K sends nothing (room of A was 0 at the snapshot). Tick 20: A sends 1 to D (D room 2), K sends 1 to A (A room 1) |
+| F8 | level road: A holds 3, B 0, D 3, C 3 | A sends 1 to B (`0 + 2 <= 3`); with A holding 1: nothing (a gap of 1) |
+| F9 | a leaf keeps: C holds 3, B 0 | C sends nothing |
+| F10 | tired army: K holds 1, a group 2/0 stands in E | E is pulled to 0 (`d`: E 0, K 1, A 1); K sends its charge to E; without the group it goes to A |
+| F11 | gathering plan: B holds 2, a group 2/2 in B with a gathering planned order | B is pulled to 0 and keeps both; without the plan B sends 1 to C and keeps 1 |
+| F12 | shift `k = 1`: K holds 6, A 3, C 2, F 2 | the level is A and B, C and D are ahead; K sends 1 to E (level road; A has no room) and keeps 5; A keeps 3; C sends and gets nothing; F sends 1 to B |
+| F13 | `k = 1`, a group 2/0 in D; separately, a group 2/0 in K | D ahead: no pull, D gets nothing; K pulled to 1 (the level) and keeps; E stays 2 |
+| F14 | `SetLeafShift(3)`; `SetLeafShift(2)`; `SetLeafShift(2)` again; `SetLeafShift(-1)`; under `mvp-3` | `INVALID_ARGUMENT` (max 2); in force, free, no event; `NO_CHANGE`; `INVALID_ARGUMENT`; `FEATURE_DISABLED` |
+| F15 | `k = 2`, then A captured by the enemy | K touches A: `d0(K) = 0`, the shift drops to 0 in that tick's flow step and stays 0 after A is retaken |
+| F16 | full factory: K holds 6, A 3, C 3, D 3, E 0, tick 100 | production spills: a packet K -> E (`charges_produced`, `spill = 1`); the dispatch of tick 100 sends one more to E (E load 1, `1 + 2 <= 6`); K keeps 5 |
+| F17 | as F16 with E holding 3; and K holding 5 with one own packet on the way to K | the charge burns (`charge_burned`); K counts as full, the charge spills to E if E has room, else burns |
+| F18 | pocket: A captured by the enemy; F holds 2, B 0 | `d`: B 0, C 0, D 0, F 1, G 1 (pocket), K 0, E 0; F sends 1 to B; `flow_pocket` true for B, C, D, F, G, false for K, E |
+| F19 | new leaves: M and 17 own (captured), C holds 3, D holds 3 | C now touches no foreign node: `d(C) = 1`, M 0, 17 0; C sends 1 to M and 1 to 17 (fill 0, D full), keeps 1 |
+| F20 | a packet A -> D sent at 10; an enemy group walks on A-D at 20 | the packet lands in D at 30; lost only if A or D changes owner first |
+| V1 | as F2 at tick 5 (before the dispatch) | K: `front_dist` 2, `flow_down` [A], `flow_next` [A, E], `flow_idle` null; C: 0, [], [], `"leaf"`; A: 1, [D], [], `"empty"`; `me`: `leaf_shift` 0, `leaf_shift_max` 2, `next_dispatch_tick` 10 |
+| V2 | F12 at tick 5 | C and D `flow_idle = "ahead"`, A and B `"leaf"`, `front_dist` unchanged (the field, not the shift) |
+| V3 | F2 at tick 10 (after the dispatch) | K `flow_next` [A, E] again (A room 2, E load 1, `1 + 2 <= 3`); `next_dispatch_tick` 20 |
+| V4 | the enemy's view of any state above | no `front_dist`, `flow_*`, `leaf_shift*`, `next_dispatch_tick` of player 0; changing player 0's shift does not change player 1's view |
 
 ---
 
@@ -2314,6 +2453,7 @@ Alternatives (not chosen):
 ### City development: barracks, warehouse separate from capacity, roads without a type (DEC-26, #265) **[accepted]**
 
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: road upgrades and the CP prices of the barracks and the warehouse upgrade (paid in charges in v2). The text below is kept and is in force for `economy.model = "v1"`.
+> **[superseded by DEC-43 under `supply.model = "flow"`]** (`mvp-4`): items 2 and 3: fixed warehouses (city 3, capital 6, province 1), no `UpgradeWarehouse`.
 
 The owner's decision of 2026-10-14 (#252). Cities stop being equal from the first second: at first only the capital
 recruits, the warehouse is small and grows by upgrades, roads only speed up delivery. The barracks
@@ -3907,6 +4047,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-38 | #578 | capture costs a charge: a capture spends `capture.charge_cost` real charges of the capturing groups in the node, otherwise they bounce | section 4 | [accepted] (2026-10-30, the owner, all defaults: variant C, every capture costs, provinces and the capital too, bounce, G3, no virtual charges); implemented #578 (sim, protocol); `charge_cost = 0` (off) in `mvp-0`, `mvp-1`, `test-short`, BAL-02 tests `1` in `mvp-2`; `charge_cost = 0` in `mvp-3` (v2, DEC-41; owner decision 2026-11-01, #659: `balanced`, capture cost 0; it was 1) |
 | DEC-41 | #642 | economy v2: factories (capital main, built smaller, both fixed), player-drawn supply lines with reroute, supply as the currency of buildings, no stances, bunker, planned-order accumulation, province warehouse 1, capture costs a charge | section 7 | [accepted] (2026-10-31, the owner; every other default [accepted] as a starting value tuned by playtests); behind `economy.model = "v2"` (`rulesets/mvp-3.toml`), v1 unchanged; supersedes the proposal DEC-39 (#625); simulation implemented: #644 (`SIM_VERSION` 26), #645 (27), #646 (28); protocol (#647), bots (#648), client (#649) await implementation; faster lines (suggested path, auto-extension; owner decision 2026-10-31) #665 (`SIM_VERSION` 30, `PROTOCOL_VERSION` 34); parts [superseded by DEC-42] |
 | DEC-42 | #674 | supply lines from factories only: no relays and no transit, no limit of lines, a factory target is a hub, the auto-extension copies the nearest own line | section 7 | [accepted] (2026-11-01, the owner); economy v2 only; supersedes DEC-41 item 3 (line trees, L4 limit, L5), the #661 relay transit and the #665 auto-extension source; implemented #674 (`SIM_VERSION` 31, `PROTOCOL_VERSION` 35) |
+| DEC-43 | #697 | automatic supply flow towards the front (a field of hops to the leaves, one charge per road downhill per dispatch, the wave, a tired army pulls, a full factory spills), one global leaf shift, fixed warehouses (city 3, capital 6, province 1), road fortifications replace the bunker | section 7 | [accepted] (2026-11-03, the owner, all #697 recommendations; the look #699, #701: Full kit without the band, T1, N4, P2); behind `supply.model = "flow"` (`rulesets/mvp-4.toml`), `mvp-3` unchanged; supersedes DEC-41 items 3, 6, 12, DEC-42 and #665 under flow; item D (fortifications) [draft, awaiting the owner's discussion]; CP surplus options C1..C4 [open]; awaits implementation: sim, protocol, bots #704 (`SIM_VERSION` 32, `PROTOCOL_VERSION` 36), client #705, tournament #706, fortifications #707 |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in
