@@ -39,6 +39,14 @@ class EconomyModel(StrEnum):
     V2 = "v2"
 
 
+class SupplyModel(StrEnum):
+    """``supply.model`` (DEC-43, #697; economy v2 only): ``lines`` is the supply of drawn lines
+    (DEC-41, DEC-42); ``flow`` the automatic flow towards the front with the leaf shift."""
+
+    LINES = "lines"
+    FLOW = "flow"
+
+
 OPTIONAL: Final = {"optional": True}
 """Metadata of a field whose key may be left out of the file (the economy v2 keys, DEC-41): at its
 default it is left out of ``to_canonical`` too, so the hash of a v1 ruleset stays as it was."""
@@ -296,6 +304,9 @@ class SupplyRules:
     """Charges per road and dispatch period by the road level ``1..MAX_LEVEL`` (DEC-28, item 7)."""
     front_markers: int
     """Front markers of a player (DEC-28, item 2)."""
+    model: SupplyModel = dataclasses.field(default=SupplyModel.LINES, metadata=OPTIONAL)
+    """DEC-43: ``flow`` (only with ``economy.model = "v2"``) replaces the drawn lines by the
+    automatic flow; at the default it is not part of the ruleset hash."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -500,12 +511,18 @@ class Ruleset:
     lines: LineRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
     """Set exactly with ``economy.model = "v2"`` (DEC-41)."""
     bunker: BunkerRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
-    """Set exactly with ``economy.model = "v2"`` (DEC-41, item 12)."""
+    """Only with ``economy.model = "v2"`` (DEC-41, item 12), and optional there (DEC-43, item
+    D1): without it ``BuildBunker`` gives ``FEATURE_DISABLED``."""
 
     @property
     def v2(self) -> bool:
         """The economy of DEC-41 (``economy.model = "v2"``)."""
         return self.economy.model is EconomyModel.V2
+
+    @property
+    def flow(self) -> bool:
+        """The automatic supply flow of DEC-43 (``supply.model = "flow"``, economy v2 only)."""
+        return self.supply.model is SupplyModel.FLOW
 
     def factory_rules(self) -> FactoryRules:
         """``factory`` of a v2 ruleset; an error under v1."""
@@ -516,13 +533,13 @@ class Ruleset:
     def line_rules(self) -> LineRules:
         """``lines`` of a v2 ruleset; an error under v1."""
         if self.lines is None:
-            raise ValueError("line rules exist only with economy.model = 'v2'")
+            raise ValueError("line rules exist only with supply.model = 'lines' under v2")
         return self.lines
 
     def bunker_rules(self) -> BunkerRules:
         """``bunker`` of a v2 ruleset; an error under v1."""
         if self.bunker is None:
-            raise ValueError("bunker rules exist only with economy.model = 'v2'")
+            raise ValueError("bunker rules exist only with a [bunker] section under v2")
         return self.bunker
 
 
@@ -637,6 +654,34 @@ def parse_ruleset(data: object) -> Ruleset:
         )
     )
     v2 = economy.model is EconomyModel.V2
+    supply_table = root.table(
+        "supply",
+        (
+            "dispatch_ticks",
+            "rear_min_default",
+            "rear_min_max",
+            "recharge_per_tick",
+            "base_speed_pct",
+            "fast_speed_pct",
+            "amount_by_level",
+            "front_markers",
+            "model",
+        ),
+    )
+    supply = _parse_supply(supply_table, v2)
+    flow = supply.model is SupplyModel.FLOW
+    if flow and root.has("lines"):
+        raise RulesetError("lines: not allowed with supply.model = 'flow' (DEC-43, item A12)")
+    lines = (
+        None
+        if flow
+        else _parse_lines(root.v2_table("lines", v2, ("auto_extend", "auto_extend_ticks")))
+    )
+    bunker = None
+    if v2 and root.has("bunker"):  # optional under v2 (DEC-43, item D1)
+        bunker = _parse_bunker(root.table("bunker", ("cost", "build_ticks", "shots")))
+    elif root.has("bunker"):
+        raise RulesetError("bunker: only with economy.model = 'v2'")
     return Ruleset(
         tick_hz=root.integer("tick_hz", low=1),
         match_ticks=root.integer("match_ticks", low=1),
@@ -671,21 +716,7 @@ def parse_ruleset(data: object) -> Ruleset:
         starvation=_parse_starvation(
             root.table("starvation", ("grace_ticks", "period_ticks", "charges", "per_units"))
         ),
-        supply=_parse_supply(
-            root.table(
-                "supply",
-                (
-                    "dispatch_ticks",
-                    "rear_min_default",
-                    "rear_min_max",
-                    "recharge_per_tick",
-                    "base_speed_pct",
-                    "fast_speed_pct",
-                    "amount_by_level",
-                    "front_markers",
-                ),
-            )
-        ),
+        supply=supply,
         road=_parse_road(root.table("road", ("speed_pct",))),
         build=_parse_build(root.table("build", ("ticks_per_level",))),
         recruit=_parse_recruit(
@@ -717,8 +748,8 @@ def parse_ruleset(data: object) -> Ruleset:
                 ("capital_period_ticks", "built_period_ticks", "cost", "build_ticks", "max"),
             )
         ),
-        lines=_parse_lines(root.v2_table("lines", v2, ("auto_extend", "auto_extend_ticks"))),
-        bunker=_parse_bunker(root.v2_table("bunker", v2, ("cost", "build_ticks", "shots"))),
+        lines=lines,
+        bunker=bunker,
     )
 
 
@@ -776,9 +807,7 @@ def _parse_lines(t: "_Table | None") -> LineRules | None:
     return LineRules(auto_extend=auto_extend, auto_extend_ticks=reach)
 
 
-def _parse_bunker(t: "_Table | None") -> BunkerRules | None:
-    if t is None:
-        return None
+def _parse_bunker(t: "_Table") -> BunkerRules:
     return BunkerRules(
         cost=t.integer("cost", low=0),
         build_ticks=t.integer("build_ticks", low=1),
@@ -845,7 +874,12 @@ def _parse_starvation(t: "_Table") -> StarvationRules:
     )
 
 
-def _parse_supply(t: "_Table") -> SupplyRules:
+def _parse_supply(t: "_Table", v2: bool) -> SupplyRules:
+    model = SupplyModel.LINES
+    if t.has("model"):
+        model = SupplyModel(t.choice("model", tuple(m.value for m in SupplyModel)))
+        if model is SupplyModel.FLOW and not v2:
+            raise RulesetError("supply.model: 'flow' only with economy.model = 'v2' (DEC-43)")
     speed = t.table("fast_speed_pct", _LEVEL_KEYS)
     amount = t.table("amount_by_level", _ALL_LEVEL_KEYS)
     rear_min_max = t.integer("rear_min_max", low=0)
@@ -860,6 +894,7 @@ def _parse_supply(t: "_Table") -> SupplyRules:
             tuple(amount.integer(key, low=1) for key in _ALL_LEVEL_KEYS)
         ),
         front_markers=t.integer("front_markers", low=0),
+        model=model,
     )
 
 

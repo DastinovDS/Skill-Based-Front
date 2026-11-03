@@ -27,6 +27,12 @@ factory city makes one charge per period into its own warehouse, the own capital
 ``t > 0`` divisible by the period; event ``charges_produced`` with ``spill = 0``). A full
 warehouse burns the charge: event ``charge_burned``, the only burn of production (L6).
 
+Supply flow (DEC-43, item A8; ``supply.model = "flow"``): a factory is **full** when its stock
+plus the own packets on the way to it reach its warehouse. A full factory's new charge **spills**:
+it leaves at once as a packet to an own neighbour with room and ``d(m) >= k`` by the field the flow
+step stored in the previous tick (``systems.flow.spill_target``; event ``charges_produced`` with
+``spill = 1`` and ``packet_sent``); with no such neighbour it burns (``charge_burned``).
+
 Tick convention: a system sees ``state.tick`` as the number of the tick being simulated, 1 for
 the first step after ``initial_state()``. A period fires on ticks ``t > 0`` with
 ``t % period == 0``, so the first CP quantum comes at tick 50, and 600 steps give 12 quanta.
@@ -37,6 +43,8 @@ from typing import Final
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import Event, GameState, event
 from gow_sim.systems.capacity import warehouse_capacity
+from gow_sim.systems.flow import send_one, spill_target
+from gow_sim.systems.supply import edge_packet_ticks, incoming_charges
 
 CENTI: Final = 100
 """The stance share of a CP quantum is kept in hundredths of a charge (DEC-02)."""
@@ -101,7 +109,9 @@ def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
         period = factory_period(state, rules, nid)
         if tick <= 0 or tick % period != 0:
             continue
-        if node.warehouse < warehouse_capacity(state, rules, nid):
+        if rules.flow:
+            events.extend(_produce_flow(state, rules, owner, nid))
+        elif node.warehouse < warehouse_capacity(state, rules, nid):
             node.warehouse += 1
             events.append(
                 event(tick, "charges_produced", player=owner, node=nid, charges=1, spill=0)
@@ -109,6 +119,23 @@ def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
         else:
             events.append(event(tick, "charge_burned", player=owner, node=nid, charges=1))
     return events
+
+
+def _produce_flow(state: GameState, rules: Ruleset, owner: int, nid: int) -> list[Event]:
+    """The charge of the factory ``nid`` under the flow: into the warehouse, spilled or burned."""
+    tick = state.tick
+    node = state.nodes[nid]
+    if node.warehouse + incoming_charges(state, owner, nid) < warehouse_capacity(state, rules, nid):
+        node.warehouse += 1
+        return [event(tick, "charges_produced", player=owner, node=nid, charges=1, spill=0)]
+    target = spill_target(state, rules, nid)
+    if target is None:
+        return [event(tick, "charge_burned", player=owner, node=nid, charges=1)]
+    m, eid = target
+    return [
+        event(tick, "charges_produced", player=owner, node=nid, charges=1, spill=1),
+        send_one(state, owner, nid, m, eid, edge_packet_ticks(state, rules, eid)),
+    ]
 
 
 def factory_period(state: GameState, rules: Ruleset, node: int) -> int:

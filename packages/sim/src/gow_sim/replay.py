@@ -55,6 +55,7 @@ from gow_sim.commands import (
     RemoveLine,
     SetAutoLines,
     SetFront,
+    SetLeafShift,
     SetMode,
     SetRearMin,
     SetStance,
@@ -195,6 +196,8 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "remove_line", "line": line}
         case SetAutoLines(on=on):
             return {"type": "set_auto_lines", "on": on}
+        case SetLeafShift(shift=shift):
+            return {"type": "set_leaf_shift", "shift": shift}
         case Forfeit():
             return {"type": "forfeit"}
 
@@ -257,6 +260,8 @@ def decode_command(data: object) -> Command:
                 return RemoveLine(_int(d["line"]))
             case "set_auto_lines":
                 return SetAutoLines(_bool(d["on"]))
+            case "set_leaf_shift":
+                return SetLeafShift(_int(d["shift"]))
             case "forfeit":
                 return Forfeit()
             case _:

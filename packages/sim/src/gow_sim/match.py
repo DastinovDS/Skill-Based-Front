@@ -8,7 +8,8 @@ sees ``state.tick == t`` (``t`` starts at 1; tick 0 is the initial state). Then,
 
 ``combat`` gets the bonuses of planned orders and "Defense" (``systems.orders.active_bonuses``).
 ``supply`` is ``systems.supply`` under ``economy.model = "v1"`` and ``systems.lines`` (factories and
-drawn lines, DEC-41) under ``"v2"``.
+drawn lines, DEC-41) under ``"v2"``, or ``systems.flow`` (the automatic flow, DEC-43) under
+``supply.model = "flow"``.
 The events of every system are appended to ``state.events`` as soon as the system returns, so a
 later system reads the events of the tick that came before it (``combat`` the arrivals of
 ``movement``, ``orders`` the fights). The match ends with the ``match_ended`` event of ``victory``
@@ -29,6 +30,7 @@ from gow_sim.systems.build import build
 from gow_sim.systems.capacity import capacity
 from gow_sim.systems.combat import combat
 from gow_sim.systems.economy import economy
+from gow_sim.systems.flow import supply_flow
 from gow_sim.systems.lines import supply_lines
 from gow_sim.systems.movement import movement
 from gow_sim.systems.orders import active_bonuses, orders
@@ -58,7 +60,7 @@ __all__ = [
     "run_headless",
 ]
 
-SIM_VERSION: Final = 31
+SIM_VERSION: Final = 32
 """Version of the rules and the system order; replays and golden hashes are per version."""
 
 HEADLESS_MATCH_KEY: Final = b"gow_sim headless match key 0001"
@@ -72,7 +74,10 @@ def _combat(state: GameState, rules: Ruleset) -> list[Event]:
 
 
 def _supply(state: GameState, rules: Ruleset) -> list[Event]:
-    """The supply of the economy of the ruleset: v1, or the factories and lines of DEC-41."""
+    """The supply of the economy of the ruleset: v1, the factories and lines of DEC-41, or the
+    flow of DEC-43."""
+    if rules.flow:
+        return supply_flow(state, rules)
     return supply_lines(state, rules) if rules.v2 else supply(state, rules)
 
 

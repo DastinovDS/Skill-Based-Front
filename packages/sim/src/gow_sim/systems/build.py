@@ -263,7 +263,7 @@ def _site_builds(state: GameState, rules: Ruleset) -> list[Event]:
     order, the factory before the bunker of one node."""
     events: list[Event] = []
     factory_ticks = rules.factory_rules().build_ticks
-    fort_ticks = rules.bunker_rules().build_ticks
+    fort_ticks = 0 if rules.bunker is None else rules.bunker.build_ticks  # no bunker: no builds
     for nid in sorted(state.nodes):
         node = state.nodes[nid]
         b = node.factory_build
