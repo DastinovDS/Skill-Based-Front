@@ -234,6 +234,9 @@ class _Field:
     """The own nodes that pull for an unpaid build alone (no pulling army there, item J): the
     charges their own builds still owe; a dispatch sends them at most ``owed - stock -
     incoming``."""
+    flat: list[int]
+    """The own nodes on the level (``d == k``), lifted and pulled nodes included: the candidates
+    for a hungry level node of item K."""
 
 
 def _field(state: GameState, player: int) -> _Field:
@@ -380,8 +383,11 @@ def _field(state: GameState, player: int) -> _Field:
                 n = m
     down: dict[int, list[tuple[int, int]]] = {}
     level: dict[int, list[tuple[int, int]]] = {}
+    flat: list[int] = []
     for n, dn in d.items():
         kn = k[n]
+        if dn == kn:
+            flat.append(n)
         if dn < kn or (dn == kn and n in holding):
             continue  # ahead of the level, or a level node an army there holds: it never sends
         if n in before:  # a lifted node between: only towards the armies (item I7)
@@ -401,7 +407,7 @@ def _field(state: GameState, player: int) -> _Field:
                 same.append((m, eid))
         down[n] = below
         level[n] = same
-    return _Field(player, d, k, pocket, adj, down, level, holding, before, owed)
+    return _Field(player, d, k, pocket, adj, down, level, holding, before, owed, flat)
 
 
 def _owed(node: Node, player: int) -> int:
@@ -481,8 +487,10 @@ def _run(
     # The feed distance of item K (the saddle), when a sender behind the level has a level road.
     k = field.k
     feed: dict[int, int] | None = None
-    if any(field.level[n] for n in senders if d[n] > k[n]):
-        feed = _feed(field, room, want)
+    for n in senders:
+        if d[n] > k[n] and any(room[m] for m, _ in field.level[n]):
+            feed = _feed(field, room, want)
+            break
     far = len(field.adj) + 1  # above every feed distance: "feeds no hungry level node"
 
     sends: _Sends = []
@@ -546,22 +554,15 @@ def _feed(field: _Field, room: dict[int, int], want: dict[int, int]) -> dict[int
     d = field.d
     k = field.k
     adj = field.adj
-    feed: dict[int, int] = {}
-    queue: deque[int] = deque()
-    for n in sorted(d):
-        if d[n] == k[n] and room[n] > 0 and want.get(n, 1) > 0:
-            feed[n] = 0
-            queue.append(n)
-    while queue:
-        m = queue.popleft()
+    queue = [n for n in field.flat if room[n] and want.get(n, 1)]
+    feed = dict.fromkeys(queue, 0)
+    for m in queue:  # the list grows while it is walked: a BFS in queue order
         dm = d[m]
         step = feed[m] + 1
         for n, _ in adj[m]:
-            if n in feed:
-                continue
-            dn = d.get(n)
-            # n sends to m: n is behind the level, m downhill of it or on its level
-            if dn is not None and dn > k[n] and dn >= dm:
+            # n sends to m: n is behind the level, m downhill of it or on its level (the nodes of
+            # one component share k, and every own node has a field)
+            if n not in feed and d[n] >= dm and d[n] > k[n]:
                 feed[n] = step
                 queue.append(n)
     return feed
