@@ -13,12 +13,12 @@ describe('parseReplay', () => {
   it('reads the optional nicks, as an array or keyed by player id, and ignores other shapes', () => {
     const raw = (): object => ({ ...(SAMPLE_RAW as object) });
     expect(SAMPLE.nicks).toBeUndefined();
-    expect(parseReplay({ ...raw(), nicks: ['Danya', 'Guest-7'] }).nicks).toEqual([
-      'Danya',
+    expect(parseReplay({ ...raw(), nicks: ['Ember', 'Guest-7'] }).nicks).toEqual([
+      'Ember',
       'Guest-7',
     ]);
-    expect(parseReplay({ ...raw(), nicks: { '0': 'Danya', '1': 'hard' } }).nicks).toEqual([
-      'Danya',
+    expect(parseReplay({ ...raw(), nicks: { '0': 'Ember', '1': 'hard' } }).nicks).toEqual([
+      'Ember',
       'hard',
     ]);
     for (const odd of [['only'], [1, 2], ['a', ''], 'text', { 0: 'a' }, null]) {

@@ -57,12 +57,12 @@ describe('ResultScreen', () => {
 
   it('names the players in the score when the match gave the nicks', () => {
     render(0, end(0), vi.fn(), summary);
-    expect(document.querySelector('.score')?.textContent).toContain('Danya');
+    expect(document.querySelector('.score')?.textContent).toContain('Ember');
     expect(document.querySelector('.score')?.textContent).toContain('Marta');
   });
 
   const summary: MatchSummary = {
-    nicks: { mine: 'Danya', enemy: 'Marta' },
+    nicks: { mine: 'Ember', enemy: 'Marta' },
     cities: 4,
     vpPeak: 9,
   };

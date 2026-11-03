@@ -192,15 +192,15 @@ describe('ReplayViewer "View as" (#599)', () => {
   });
 
   it('opens as the given side and names the sides by nick', () => {
-    const nicks: [string, string] = ['Danya', 'Guest-7'];
+    const nicks: [string, string] = ['Ember', 'Guest-7'];
     const root = open(undefined, { file: { ...SAMPLE, nicks }, initialView: 1 });
     expect(pressed(root)).toEqual(['Guest-7']);
     expect(blue()).toBe(1);
-    expect(root.querySelector('.score')?.getAttribute('aria-label')).toBe('Guest-7 0, Danya 0');
+    expect(root.querySelector('.score')?.getAttribute('aria-label')).toBe('Guest-7 0, Ember 0');
   });
 
   it('shows who won by nick at the end', () => {
-    const nicks: [string, string] = ['Danya', 'Guest-7'];
+    const nicks: [string, string] = ['Ember', 'Guest-7'];
     const root = open(undefined, { file: { ...SAMPLE, nicks } });
     const slider = root.querySelector<HTMLInputElement>('input[type="range"]');
     if (slider === null) throw new Error('no slider');

@@ -12,7 +12,7 @@ describe('blueSide', () => {
 });
 
 describe('defaultView', () => {
-  const nicks = ['Danya', 'Guest-7'] as const;
+  const nicks = ['Ember', 'Guest-7'] as const;
 
   it('opens as the side the app says the viewer played', () => {
     expect(defaultView(1, null, null)).toBe(1);
@@ -21,12 +21,12 @@ describe('defaultView', () => {
 
   it('finds the viewer by nick when the app does not know the side', () => {
     expect(defaultView(null, nicks, 'guest-7')).toBe(1);
-    expect(defaultView(null, nicks, 'Danya')).toBe(0);
+    expect(defaultView(null, nicks, 'Ember')).toBe(0);
   });
 
   it('shows both for a stranger, an unknown nick, a file without nicks or a game against oneself', () => {
     expect(defaultView(null, nicks, 'Other')).toBe('both');
-    expect(defaultView(null, null, 'Danya')).toBe('both');
+    expect(defaultView(null, null, 'Ember')).toBe('both');
     expect(defaultView(null, nicks, null)).toBe('both');
     expect(defaultView(null, ['Same', 'same'], 'Same')).toBe('both');
   });

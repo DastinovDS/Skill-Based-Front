@@ -578,7 +578,7 @@ function thumb(id,o={}){const M=MAPDATA[id];let s=`<svg viewBox="0 0 ${M.w} ${M.
   return s+'</svg>'}
 
 /* ---------- the model of a frame ---------- */
-function model(){return{scr:S.scr,st:S.st,acct:S.acct,guest:S.acct==='guest',cal:S.acct==='cal',rated:S.acct==='rated',nick:'Danya',ban:S.ban,map:S.map,lvl:S.lvl,row:S.row}}
+function model(){return{scr:S.scr,st:S.st,acct:S.acct,guest:S.acct==='guest',cal:S.acct==='cal',rated:S.acct==='rated',nick:'Ember',ban:S.ban,map:S.map,lvl:S.lvl,row:S.row}}
 function who(m){
   const inner=m.guest?`${ico('user',18)}<b>${m.nick}</b><span class="chip" data-need="DEC-34: guests are unrated" style="margin-left:2px">Guest</span>`:
     m.cal?`<b>${m.nick}</b><span data-need="/api/me: calibration (exists)" style="display:flex;align-items:center;gap:8px">${cells(2)}<span class="cap2">Calibration 2/5</span></span>`:

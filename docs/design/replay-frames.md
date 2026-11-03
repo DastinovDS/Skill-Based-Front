@@ -56,7 +56,7 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
   "format": 1, "sim_version": 1, "ruleset_hash": "...", "map_id": "artery", "map_hash": "...",
   "tick_hz": 10, "frame_every": 5, "ticks": 9000,
   "outcome": {"winner": 0, "reason": "vp"}, "vp": [31, 24], "state_hash": "...",
-  "nicks": ["Danya", "Bot (normal)"],
+  "nicks": ["Ember", "Bot (normal)"],
   "map": { ...map format, docs/design/map-format.md... },
   "frames": [ {"t": 0, ...}, {"t": 5, ...}, ... ],
   "events": [ [1, "recruit", {"node": 3, "owner": 0}], ... ]

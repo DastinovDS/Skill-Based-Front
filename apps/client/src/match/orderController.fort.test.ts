@@ -45,7 +45,7 @@ function setup(
   snapshot: SnapshotMsg = base,
   map: MapFile = DEFAULT_MAP,
 ) {
-  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules, map });
+  const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules, map });
   hud.onSnapshot(snapshot);
   const sent: Command[] = [];
   const controller = new OrderController({
@@ -199,7 +199,7 @@ describe('Fortify road: the road pick', () => {
   });
 
   it('sends nothing without a match to send to (selection only)', () => {
-    const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map: DEFAULT_MAP });
+    const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map: DEFAULT_MAP });
     hud.onSnapshot(base);
     const controller = new OrderController({
       hud,

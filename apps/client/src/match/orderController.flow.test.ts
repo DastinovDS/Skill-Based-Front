@@ -28,7 +28,7 @@ function flowSnapshot(shift: number | null, max: number | null): SnapshotMsg {
 }
 
 function setup(shift: number | null = 0, max: number | null = 3) {
-  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map });
+  const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map });
   hud.onSnapshot(flowSnapshot(shift, max));
   const sent: Command[] = [];
   const controller = new OrderController({

@@ -41,7 +41,7 @@ describe('the radial menus of a city and of a group', () => {
   ) {
     const hud = new HudState({
       me: 0,
-      nicks: ['Danya', 'Bot'],
+      nicks: ['Ember', 'Bot'],
       rules,
       map: DEFAULT_MAP,
     });

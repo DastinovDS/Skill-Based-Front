@@ -9,7 +9,7 @@ import { TOAST_HOLD_MS } from './toastState.svelte.ts';
 const map = DEFAULT_MAP;
 
 function newState(): HudState {
-  return new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
+  return new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: DEV_RULES, map });
 }
 
 function snapshot(tick: number): SnapshotMsg {
@@ -29,7 +29,7 @@ describe('HudState', () => {
   it('summarises our side for the result screen (#596): nicks, own cities, VP peak', () => {
     const hud = newState();
     expect(hud.summary()).toEqual({
-      nicks: { mine: 'Danya', enemy: 'Bot' },
+      nicks: { mine: 'Ember', enemy: 'Bot' },
       cities: null,
       vpPeak: null,
     });
@@ -148,10 +148,10 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
   it('keeps the nicks of both sides for the top bar', () => {
     const hud = newState();
     hud.onSnapshot(snapshot(2));
-    expect(hud.current?.nicks).toEqual({ mine: 'Danya', enemy: 'Bot' });
-    const second = new HudState({ me: 1, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
+    expect(hud.current?.nicks).toEqual({ mine: 'Ember', enemy: 'Bot' });
+    const second = new HudState({ me: 1, nicks: ['Ember', 'Bot'], rules: DEV_RULES, map });
     second.onSnapshot(snapshot(2));
-    expect(second.current?.nicks).toEqual({ mine: 'Bot', enemy: 'Danya' });
+    expect(second.current?.nicks).toEqual({ mine: 'Bot', enemy: 'Ember' });
   });
 
   it('publishes the group under the pointer once per change', () => {

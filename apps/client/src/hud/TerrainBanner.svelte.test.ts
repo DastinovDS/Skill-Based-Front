@@ -21,7 +21,7 @@ describe('TerrainBanner: the terrain map mode on T and its legend (#429)', () =>
     setLocale('en');
     const hud = new HudState({
       me: 0,
-      nicks: ['Danya', 'Bot'],
+      nicks: ['Ember', 'Bot'],
       rules: DEV_RULES,
       map: DEFAULT_MAP,
     });

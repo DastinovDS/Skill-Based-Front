@@ -503,7 +503,7 @@ def test_frames_header_has_the_nicks_of_the_sides(
 ) -> None:
     """``nicks`` (#598): by player id from the ``match_players`` rows, a bot by its level."""
     with sessions.begin() as session:
-        session.add(Player(id=101, nick="Danya", nick_key="danya", token_hash=b"t" * 32))
+        session.add(Player(id=101, nick="Ember", nick_key="ember", token_hash=b"t" * 32))
         session.add(Match(id=6, map_id="line3", ruleset_hash="x", rated=False))
         session.flush()
         session.add(MatchPlayer(match_id=6, side=0, bot="turtle"))
@@ -521,7 +521,7 @@ def test_frames_header_has_the_nicks_of_the_sides(
 
     service = asyncio.run(scenario())
     doc = json.loads(gzip.decompress((service.replays_dir / "6.frames.json.gz").read_bytes()))
-    assert doc["nicks"] == ["Bot (easy)", "Danya"]
+    assert doc["nicks"] == ["Bot (easy)", "Ember"]
 
 
 def test_bot_nick_names_the_level() -> None:

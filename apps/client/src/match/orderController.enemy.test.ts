@@ -16,7 +16,7 @@ const enemy = base.view.nodes.find((n) => n.owner === 1);
 if (enemy === undefined) throw new Error('the dev snapshot lacks an enemy node');
 
 function setup() {
-  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map: DEFAULT_MAP });
+  const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: DEV_RULES, map: DEFAULT_MAP });
   hud.onSnapshot(base);
   const sent: Command[] = [];
   const controller = new OrderController({

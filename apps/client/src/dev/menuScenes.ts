@@ -147,7 +147,7 @@ export const RESULT_SCENES: Readonly<Record<string, MatchEndMsg>> = {
 
 /** What the client knows of its own side at the end of the result scenes (#596). */
 export const RESULT_SUMMARY: MatchSummary = {
-  nicks: { mine: 'Danya', enemy: 'Marta' },
+  nicks: { mine: 'Ember', enemy: 'Marta' },
   cities: 4,
   vpPeak: 9,
 };

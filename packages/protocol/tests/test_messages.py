@@ -145,8 +145,8 @@ def test_messages_built_in_python_roundtrip() -> None:
 
 def test_welcome_has_two_nicks() -> None:
     raw = json.loads((FIXTURES_DIR / "server" / "welcome.json").read_text())
-    assert decode_server(json.dumps(raw)).model_dump(mode="json")["nicks"] == ["Danya", "Guest"]
-    for bad in (["Danya"], ["Danya", "Guest", "Third"], ["", "Guest"], ["x" * 17, "Guest"]):
+    assert decode_server(json.dumps(raw)).model_dump(mode="json")["nicks"] == ["Ember", "Guest"]
+    for bad in (["Ember"], ["Ember", "Guest", "Third"], ["", "Guest"], ["x" * 17, "Guest"]):
         with pytest.raises(ValidationError):
             decode_server(json.dumps({**raw, "nicks": bad}))
 

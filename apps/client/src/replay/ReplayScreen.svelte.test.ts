@@ -157,7 +157,7 @@ describe('ReplayScreen', () => {
   });
 
   it('opens as the side that has the viewer nick, or the side the app says', async () => {
-    const nicks = ['Danya', 'Guest-7'];
+    const nicks = ['Ember', 'Guest-7'];
     const byNick = open([answer(200, { ...(SAMPLE_RAW as object), nicks })], vi.fn(), {
       nick: 'guest-7',
     });

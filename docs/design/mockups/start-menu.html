@@ -333,7 +333,7 @@ function elapsed(){return S.live?Math.floor((Date.now()-S.t0)/1000):0}
 function model(){const s=S.s,a=S.acct;
   const ph={search:'search','search-long':'long',found:'found',confirmed:'confirmed',banned:'banned',resume:'resume'}[s]||'idle';
   const e=elapsed();
-  return{s,ph,guest:a==='guest',cal:a==='cal',rated:a==='rated',nick:'Danya',e,
+  return{s,ph,guest:a==='guest',cal:a==='cal',rated:a==='rated',nick:'Ember',e,
     waited:(H.wait[s]||0)+e,confirm:Math.max(0,(s==='confirmed'?H.confirmed:H.found)-e),ban:Math.max(0,H.ban-e),
     welcome:s.startsWith('welcome'),err:s==='welcome-error',net:s==='error',account:s==='account',
     panel:['bot','friend','lobby','replays'].includes(s)?s:null,
@@ -374,7 +374,7 @@ function panel(kind,m){
     <div style="display:flex;margin-top:14px"><button class="btn link" data-act="go:menu">Back ${kb('Esc')}</button></div></div>`;
   return'';}
 function welcomeFields(m,cls){const login=m.wm==='login',reg=m.wm==='register';
-  return `<label class="fld ${cls||''}"><span class="dim">${T.nick}</span><input value="${m.err?'Danya':''}" maxlength="16" aria-label="${T.nick}"></label>
+  return `<label class="fld ${cls||''}"><span class="dim">${T.nick}</span><input value="${m.err?'Ember':''}" maxlength="16" aria-label="${T.nick}"></label>
    ${login||reg?`<label class="fld"><span class="dim">${T.pw}</span><input type="password" value="${m.err?'••••••••••':''}" aria-label="${T.pw}"></label>`:`<p class="hint">${T.nickHint}</p>`}
    ${reg?`<label class="fld"><span class="dim">${T.pw2}</span><input type="password" aria-label="${T.pw2}"></label>`:''}
    ${m.err?`<p class="wl" role="alert">${ico('alert',16)} Wrong nick or password.</p>`:''}`}
@@ -438,7 +438,7 @@ function frame(cls,inner,m){return `<div class="st ${cls}${S.gray?' gray':''}${S
 /* Now: the current client, state by state */
 function frameNow(m){let c='';const act='<div class="actions">';
   if(m.welcome)c=`<form class="card"><h1>${T.name}</h1><p>${m.wm==='login'?'Log in with your nick and password.':m.wm==='register'?'Choose a nick and a password. An account keeps your rating and match history, and you can log in to it from another device.':'Choose a nick and play in your browser.'}</p>
-    <label>${T.nick}<input value="${m.err?'Danya':''}"></label>${m.wm==='login'?`<label>Password<input type="password" value="${m.err?'••••••••••':''}"></label>`:`<p class="hint">${T.nickHint}</p>`}${m.err?'<p class="error" role="alert">Wrong nick or password.</p>':''}
+    <label>${T.nick}<input value="${m.err?'Ember':''}"></label>${m.wm==='login'?`<label>Password<input type="password" value="${m.err?'••••••••••':''}"></label>`:`<p class="hint">${T.nickHint}</p>`}${m.err?'<p class="error" role="alert">Wrong nick or password.</p>':''}
     ${act}<button type="button" class="primary">${m.wm==='login'?T.login:m.wm==='register'?'Create the account and play':'Play'}</button></div>${act}${m.wm!=='guest'?`<button type="button" data-act="wm:guest">${T.guestGo}</button>`:''}${m.wm!=='login'?`<button type="button" data-act="wm:login">Log in to an account</button>`:''}${m.wm!=='register'?`<button type="button" data-act="wm:register">Create an account</button>`:''}</div></form>`;
   else if(m.ph==='idle'&&!m.panel&&!m.net||m.ph==='resume'||m.ph==='banned'){
     c=`<div class="card"><h1>${T.name}</h1><p>Hello, ${m.nick}!</p>${m.ph==='banned'?'<p class="error" role="alert">Too many requests from your address or account. Try again later.</p>':''}

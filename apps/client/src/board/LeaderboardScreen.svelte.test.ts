@@ -50,7 +50,7 @@ describe('LeaderboardScreen (#629, L10)', () => {
         api: sceneApi(scene),
         token: 'tok',
         ownId: ME,
-        nick: 'Danya',
+        nick: 'Ember',
         hasPassword: scene.hasPassword,
         calibration: scene.calibration,
         rating: scene.rating,
@@ -72,7 +72,7 @@ describe('LeaderboardScreen (#629, L10)', () => {
     expect(alina?.textContent).toContain('31–9–2');
     expect(alina?.textContent).toContain('74%');
     expect(alina?.textContent).toContain('1712');
-    const own = rowOf('Danya');
+    const own = rowOf('Ember');
     expect(own?.getAttribute('aria-current')).toBe('true');
     expect(own?.textContent).toContain(tr('board.you'));
     expect(document.querySelector('.watch')).toBeNull();
@@ -147,7 +147,7 @@ describe('ReplaysScreen (#629, R2)', () => {
         api: sceneApi(scene),
         token: 'tok',
         ownId: ME,
-        nick: 'Danya',
+        nick: 'Ember',
         hasPassword: scene.hasPassword,
         calibration: scene.calibration,
         rating: scene.rating,

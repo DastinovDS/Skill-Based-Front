@@ -29,7 +29,7 @@ if (enemy === undefined) throw new Error('the dev snapshot has no enemy node');
 
 /** `factories`: the own nodes that are factories (DEC-42: only they start a line); `home` by default. */
 function setup(lines: LineView[] = [], factories: readonly number[] = [home]) {
-  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map });
+  const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map });
   const nodes = base.view.nodes.map((n) =>
     n.owner === 0 ? { ...n, factory: factories.includes(n.id) } : n,
   );

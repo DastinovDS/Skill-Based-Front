@@ -23,7 +23,7 @@ const map: MapFile = {
 };
 
 function setup(snapshot: SnapshotMsg = base) {
-  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
+  const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: DEV_RULES, map });
   hud.onSnapshot(snapshot);
   const sent: Command[] = [];
   const controller = new OrderController({

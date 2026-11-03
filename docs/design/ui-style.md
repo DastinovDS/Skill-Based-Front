@@ -263,7 +263,7 @@ or **later**.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | IM1 | **A result screen with the course of the match**: a big word of the outcome, the opponent's nick, the duration, 4 key numbers (cities at the end, units lost, charges delivered, VP peak) and a graph of the VP difference over time with marks of captures and fights; a click on a mark opens the replay at that tick | 13, 14, 19, 20, 22 | P0 | M | no: everything is in the frames file (`GET /api/replays/{id}`, `docs/design/replay-frames.md`) | now | E |
 | IM2 | **An event filter**: VP awards do not get into the feed (the score is already in the top bar); toasts only for a fight, the capture and loss of a city, starvation, a rejected command; the rest in a slide-out log | 1, 3 | P0 | S | no | now | D |
-| IM3 | **Nicks in the match, the result and the replay**: "Danya 4 : 6 Guest" in the top bar, the opponent's nick on the result, nicks in the replay | 14, 16 | P0 | S | protocol: nicks in `welcome`; API: nicks in the frames file or in the replay response | now | D, E |
+| IM3 | **Nicks in the match, the result and the replay**: "Ember 4 : 6 Guest" in the top bar, the opponent's nick on the result, nicks in the replay | 14, 16 | P0 | S | protocol: nicks in `welcome`; API: nicks in the frames file or in the replay response | now | D, E |
 | IM4 | **Match start**: for 3 s a plate "You are blue. Your capital is here" and a pulsing ring around the own capital, the camera fits the map | 3, 1 | P0 | S | no | now | D |
 | IM5 | **Hover tooltips with numbers** for a city, a road, a group, an intent arrow: 1 title line and 2-4 "key: value" lines (capacity, warehouse, terrain with a modifier, width and what the next one gives), the term CP and "capacity" with a nested tooltip | 3, 10, 23 | P0 | M | no (the numbers from the player's view and `ruleset_public`) | now | D |
 | IM6 | **A response to every action**: an accepted order: the ghost becomes solid and a short sound; a rejection: the ghost shakes and fades, a toast with the reason (`rejects.ts` already translates the codes) and a rejection sound | 7, 2 | P0 | S | no | now | C (map), F (sound) |
@@ -710,7 +710,7 @@ Height 48 px, three columns:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│ ☰  CP ▮▮▮▯▯ 2.4/5  [⚖ Balance Q] │ ▽ Danya  4 ━━━━━━┿━━━ 6  Guest ▽ │ ◷ 11:30 │ 🔈 ⏸ ? [⇥ Exit] │
+│ ☰  CP ▮▮▮▯▯ 2.4/5  [⚖ Balance Q] │ ▽ Ember  4 ━━━━━━┿━━━ 6  Guest ▽ │ ◷ 11:30 │ 🔈 ⏸ ? [⇥ Exit] │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -854,7 +854,7 @@ The hierarchy (Overwatch 2 Match Summary, VALORANT):
 
 1. The outcome word 40 px ("Victory" in the `--you` color, "Defeat" `--enemy`, "Draw" `--text`) and
    the reason in a line below.
-2. A line "Danya 96 : 134 Guest · artery · 12:00", the rating change as an arrow (if ranked).
+2. A line "Ember 96 : 134 Guest · artery · 12:00", the rating change as an arrow (if ranked).
 3. A row of 4 numbers with a caption: "Cities at the end", "Units lost", "Charges delivered", "VP peak".
 4. A graph of the VP difference over time (LoL Gold Diff): above zero a blue fill, below a red one; the marks of
    own captures above the graph, the other side's under it; hover shows the time and the values; a click opens

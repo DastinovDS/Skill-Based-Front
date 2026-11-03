@@ -22,7 +22,7 @@ const away = base.view.nodes.find((n) => n.id !== home && n.owner === 0);
 if (away === undefined) throw new Error('the dev snapshot lacks an own node');
 
 function setup(snapshot: SnapshotMsg = base) {
-  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
+  const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: DEV_RULES, map });
   hud.onSnapshot(snapshot);
   const sent: Command[] = [];
   const controller = new OrderController({

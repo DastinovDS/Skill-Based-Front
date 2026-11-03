@@ -42,7 +42,7 @@ describe('RoadTip: what a click on an own road gives', () => {
 
   it('shows the next level, the gain, the price and the time of the ruleset after a rest', () => {
     setLocale('en');
-    const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map: DEFAULT_MAP });
+    const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map: DEFAULT_MAP });
     hud.onSnapshot(snapshot);
     const orders = new OrderController({
       hud,
@@ -68,7 +68,7 @@ describe('RoadTip: what a click on an own road gives', () => {
   });
 
   it('shows nothing without a road', () => {
-    const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map: DEFAULT_MAP });
+    const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map: DEFAULT_MAP });
     const orders = new OrderController({
       hud,
       map: DEFAULT_MAP,
