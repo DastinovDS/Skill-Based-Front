@@ -22,7 +22,8 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
 - a node with ``d0(n) > k`` is **pulled** to the level when an own group stands in it short of a
   charge (``charged < units``, in a fight or not) or with a gathering planned order
   (``plan > 0``); groups on edges never pull (item A4). The effective field
-  ``d(n) = min(d0(n), k + hops(n, nearest pulled node))``;
+  ``d(n) = min(d0(n), k + hops(n, nearest pulled node))``; such an army ahead of the level
+  (``d0(n) < k``) pulls too: its node alone is put on the level, ``d(n) = k`` (item I6, #724);
 - the **room** of an own node: ``max(0, cap - stock - own packets on the way to it)``, a snapshot
   at the start of a dispatch that only decreases while it runs (item A5, the wave).
 
@@ -43,8 +44,8 @@ Order inside the step (item A13):
    ``node_key``), then along **level roads** (``d(m) == d(n)``, room, the same order, only while
    ``load(m) + 2 <= have``, ``load = cap - room``). On the level (``d == k``) only the level
    roads: the leaves even out (#724), except a level node where an own group stands short of a
-   charge or gathering a plan (the groups that pull): it keeps. Each charge is a packet of 1
-   along one road (item A7).
+   charge or gathering a plan (the groups that pull): it keeps, and its level neighbours give to
+   it without the gap (room only). Each charge is a packet of 1 along one road (item A7).
 6. The **plan** of the next dispatch for the view: the same function run on the state now, without
    sending (item E: ``flow_next`` and ``flow_idle``), stored in ``Node.flow`` with the field.
 
@@ -203,6 +204,10 @@ class _Field:
     level: dict[int, list[tuple[int, int]]]
     """The same nodes: the neighbours on its level (``d(m) == d``): level roads behind the level,
     the equalization of the leaves on it (#724)."""
+    holding: dict[int, bool]
+    """The own nodes where an own standing group is short of a charge or gathers a plan (the
+    groups that pull): on the level they keep, and a level neighbour gives to them without the
+    gap (item I3)."""
 
 
 def _field(state: GameState, player: int) -> _Field:
@@ -278,9 +283,12 @@ def _field(state: GameState, player: int) -> _Field:
     k = {n: shift if c == main else 0 for n, c in comp.items()}
     pocket = {n: c != main for n, c in comp.items()}  # no own capital: all pockets
 
-    # The pull (item A4): a multi-source BFS from the pulled nodes; d = min(d0, k + hops). The
-    # same groups make a node on the level keep what it has (item A6, the level equalization).
+    # The pull (item A4): a multi-source BFS from the pulled nodes behind the level; d = min(d0,
+    # k + hops). A pulling army ahead of the level puts its node alone on the level, d = k
+    # (item I6, option A). The same groups make a node on the level keep what it has and take
+    # from its level neighbours without the gap (item I3).
     pulled: dict[int, bool] = {}
+    lifted: dict[int, bool] = {}
     holding: dict[int, bool] = {}
     for g in state.groups.values():  # flags: the order does not matter
         loc = g.location
@@ -291,6 +299,8 @@ def _field(state: GameState, player: int) -> _Field:
             holding[n] = True
             if d0[n] > k[n]:
                 pulled[n] = True
+            elif d0[n] < k[n]:
+                lifted[n] = True
     d = d0
     if pulled:
         dist: dict[int, int] = {}
@@ -303,6 +313,11 @@ def _field(state: GameState, player: int) -> _Field:
         for n, h in dist.items():
             if n in d:  # a pulled node and its component have a field
                 d[n] = min(d[n], k[n] + h)
+    if lifted:
+        if d is d0:
+            d = dict(d0)
+        for n in lifted:  # independent writes: the order does not matter
+            d[n] = k[n]
     down: dict[int, list[tuple[int, int]]] = {}
     level: dict[int, list[tuple[int, int]]] = {}
     for n, dn in d.items():
@@ -322,7 +337,7 @@ def _field(state: GameState, player: int) -> _Field:
                 same.append((m, eid))
         down[n] = below
         level[n] = same
-    return _Field(player, d, k, pocket, adj, down, level)
+    return _Field(player, d, k, pocket, adj, down, level, holding)
 
 
 def _bfs(adj: dict[int, list[tuple[int, int]]], dist: dict[int, int], queue: deque[int]) -> None:
@@ -396,7 +411,8 @@ def _run(
         for m, eid in level:
             if have == 0:
                 break
-            if capacities[m] - room[m] + 2 <= have:  # a gap of 1 never moves
+            # a gap of 1 never moves; a pulling army takes without the gap (item I3)
+            if m in field.holding or capacities[m] - room[m] + 2 <= have:
                 out.append((m, eid))
                 room[m] -= 1
                 have -= 1

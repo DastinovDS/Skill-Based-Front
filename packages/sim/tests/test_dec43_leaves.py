@@ -218,3 +218,47 @@ def test_l13_the_starving_front_node_of_replay_9_gets_a_charge() -> None:
     events = _flow(state)
     assert _d(state) == {0: 3, 1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 8: 1, 9: 0, 10: 0}
     assert _sent(events) == [(6, 9), (1, 2), (4, 8)]
+
+
+# Option A: a pulling army ahead of the level pulls (item I6) ----------------------------------
+
+
+def test_l14_an_army_ahead_of_the_level_is_put_on_it() -> None:
+    passes: dict[int, int | None] = {NORTH: 1, SOUTH: 1}
+    state = _state({A: 3, B: 3, D: 2}, owners=passes, shift=1)
+    _group(state, C, 2, 0)
+    events = _flow(state)
+    d = _d(state)
+    assert (d[C], d[D], d[A], d[B]) == (1, 0, 1, 1)
+    assert _sent(events) == [(B, C)]
+    assert state.nodes[D].warehouse == 2  # ahead, frozen: it does not give to C
+
+
+def test_l15_a_node_ahead_without_an_army_stays_frozen() -> None:
+    passes: dict[int, int | None] = {NORTH: 1, SOUTH: 1}
+    state = _state({A: 3, B: 3, D: 2}, owners=passes, shift=1)
+    events = _flow(state)
+    assert _d(state)[C] == 0
+    assert _sent(events) == []
+    flow = state.nodes[C].flow
+    assert flow is not None and flow.idle is FlowIdle.AHEAD
+
+
+def test_l16_a_pulling_army_takes_without_the_gap() -> None:
+    passes: dict[int, int | None] = {NORTH: 1, SOUTH: 1}
+    state = _state({C: 1}, owners=passes)
+    _group(state, D, 2, 0)
+    assert _sent(_flow(state)) == [(C, D)]
+
+
+def test_l17_replay_9_with_the_shift_at_1() -> None:
+    state = _narrows()
+    state.players[0].leaf_shift = 1
+    events = _flow(state)
+    d = _d(state)
+    assert (d[9], d[10], d[5], d[6], d[8], d[0]) == (1, 0, 1, 1, 1, 3)
+    assert _sent(events) == [(6, 9), (1, 2), (4, 8)]
+    old = _narrows()  # without the army Highmoor stays frozen ahead of the level
+    old.groups.clear()
+    old.players[0].leaf_shift = 1
+    assert _sent(_flow(old)) == [(1, 2), (4, 8)]

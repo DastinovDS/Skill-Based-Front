@@ -374,8 +374,8 @@ def test_f13_ahead_of_the_level_no_pull_behind_it_a_pull_to_the_level() -> None:
     state = _state({A: 3}, shift=1)
     _group(state, D, 2, 0)
     events = _flow(state)
-    assert _d(state, *OWN) == BASE_D  # D ahead: no pull
-    assert [r for r in _sent(events) if r[1] == D] == []
+    assert _d(state, *OWN) == {**BASE_D, D: 1}  # D ahead pulls: on the level (item I6, #724)
+    assert _sent(events) == [(A, B), (A, D)]
     state = _state({K: 6}, shift=1)
     _group(state, K, 2, 0)
     events = _flow(state)

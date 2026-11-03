@@ -190,14 +190,17 @@ def test_h5_a_factory_less_pocket_starves_by_dec19() -> None:
         seen.append((state.nodes[C].warehouse, g.units, g.charged))
     # C gives 1 to B at the dispatch of 1000: the leaves of the pocket even out (#724)
     assert [(t, a, b) for t, a, b in _sends(events) if a == C] == [(1000, C, B)]
-    assert seen == [(0, 3, 3), (0, 3, 2), (0, 3, 1), (0, 3, 0), (0, 3, 0), (0, 3, 0)]
+    # at 1200 the group is short: B gives its 1 back without the gap (item I3), it recharges at 1220
+    assert [(t, a, b) for t, a, b in _sends(events) if a == B] == [(1200, B, C)]
+    assert seen == [(0, 3, 3), (0, 3, 2), (0, 3, 2), (0, 3, 1), (0, 3, 0), (0, 3, 0)]
     assert _starved(events) == [
         (1100, 0, C, 1, 0),
         (1200, 0, C, 0, 1),
         (1300, 0, C, 0, 1),
         (1400, 0, C, 0, 1),
+        (1500, 0, C, 0, 1),
     ]
-    assert state.nodes[B].warehouse == 1  # a gap of 1 never moves
+    assert state.nodes[B].warehouse == 0
     assert all(n in state.groups for n in (g.id,))  # the units live
 
 
@@ -365,7 +368,7 @@ def test_both_players_pockets_are_mirrored() -> None:
     events = _run(state, 1500, changes)
     assert (g0.charged, state.nodes[C].warehouse) == (g1.charged, state.nodes[mirror[C]].warehouse)
     by_player = {p: [(t, w, u) for t, q, _, w, u in _starved(events) if q == p] for p in (0, 1)}
-    assert by_player[0] == by_player[1] and len(by_player[0]) == 4  # as H5
+    assert by_player[0] == by_player[1] and len(by_player[0]) == 5  # as H5
     # each also holds the other's A, cut off from everything of its own, and its own pass
     assert starving_nodes(state, 0) == sorted((*POCKET, 18, mirror[A]))
     assert starving_nodes(state, 1) == sorted((*(mirror[n] for n in POCKET), 17, A))
