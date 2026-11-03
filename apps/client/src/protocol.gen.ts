@@ -951,7 +951,8 @@ export interface NodeView {
    */
   flow_idle: FlowIdle | null;
   /**
-   * Supply flow, own node only: its own component over internal roads has no own factory.
+   * Supply flow, own node only: its own component over internal roads does not contain the own
+   * capital (a pocket: its factories stop, without a factory it starves).
    */
   flow_pocket: boolean | null;
 }

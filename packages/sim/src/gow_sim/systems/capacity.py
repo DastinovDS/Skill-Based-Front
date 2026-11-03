@@ -44,8 +44,12 @@ again and a bunker is destroyed (item 12), so are the road fortifications of the
 item D7); its factory and its lines are settled by
 ``systems.supply`` in the same tick, a factory or bunker build is stopped by ``systems.build``.
 
-Under the economy v2 there is no starvation (DEC-41, item 5).
+Under the economy v2 there is no starvation here (DEC-41, item 5). Under ``supply.model = "flow"``
+the factory-less pockets starve by the same consumption (``consume``) in ``systems.flow`` (DEC-43,
+item H4): every node of the pocket, provinces included.
 """
+
+from collections.abc import Sequence
 
 from gow_sim.maps import NodeKind
 from gow_sim.ruleset import Ruleset
@@ -302,7 +306,6 @@ def starve_in(state: GameState, rules: Ruleset, node: int) -> int | None:
 def starvation(state: GameState, rules: Ruleset, garrisons: dict[int, list[Group]]) -> list[Event]:
     """Update ``cut_since`` of every own city and let the cut-off garrisons starve (DEC-19)."""
     events: list[Event] = []
-    rules_s = rules.starvation
     supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
     tick = state.tick
     for node_id in sorted(state.nodes):
@@ -313,37 +316,56 @@ def starvation(state: GameState, rules: Ruleset, garrisons: dict[int, list[Group
             continue
         if node.cut_since is None:
             node.cut_since = tick
-        since = tick - node.cut_since - rules_s.grace_ticks
-        if since < 0 or since % rules_s.period_ticks != 0:
+        if not is_starvation_tick(state, rules, node.cut_since):
             continue
-        groups = [g for g in garrisons.get(node_id, ()) if g.units > 0]
-        units = sum(g.units for g in groups)
-        if units == 0:
-            continue
-        need = rules_s.charges * ((units + rules_s.per_units - 1) // rules_s.per_units)
-        from_stock = min(need, node.warehouse)
-        node.warehouse -= from_stock
-        left = need - from_stock
-        from_units = 0
-        while left > 0:
-            group = max(groups, key=lambda g: (g.charged, -g.id))
-            if group.charged == 0:
-                break  # nothing left to spend: the shortfall is not carried over
-            group.charged -= 1
-            left -= 1
-            from_units += 1
-        if from_stock or from_units:
-            events.append(
-                event(
-                    tick,
-                    "starvation",
-                    player=owner,
-                    node=node_id,
-                    warehouse=from_stock,
-                    units=from_units,
-                )
-            )
+        starved = consume(state, rules, node_id, garrisons.get(node_id, ()))
+        if starved is not None:
+            events.append(starved)
     return events
+
+
+def consume(
+    state: GameState, rules: Ruleset, node_id: int, garrison: Sequence[Group]
+) -> Event | None:
+    """One consumption of a starving node (DEC-19, items 3 and 4): ``charges * ceil(U /
+    per_units)`` charges, ``U`` the units of ``garrison`` (the owner's standing groups in the
+    node, ascending id), first from the warehouse, the rest one charge at a time from the group
+    with the most ``charged`` (ties: lower id); a shortfall is not carried over. The event
+    ``starvation`` when anything was spent, else ``None``. DEC-43 item H4 uses it too."""
+    rules_s = rules.starvation
+    node = state.nodes[node_id]
+    groups = [g for g in garrison if g.units > 0]
+    units = sum(g.units for g in groups)
+    if units == 0:
+        return None
+    need = rules_s.charges * ((units + rules_s.per_units - 1) // rules_s.per_units)
+    from_stock = min(need, node.warehouse)
+    node.warehouse -= from_stock
+    left = need - from_stock
+    from_units = 0
+    while left > 0:
+        group = max(groups, key=lambda g: (g.charged, -g.id))
+        if group.charged == 0:
+            break  # nothing left to spend: the shortfall is not carried over
+        group.charged -= 1
+        left -= 1
+        from_units += 1
+    if not (from_stock or from_units):
+        return None
+    return event(
+        state.tick,
+        "starvation",
+        player=node.owner,
+        node=node_id,
+        warehouse=from_stock,
+        units=from_units,
+    )
+
+
+def is_starvation_tick(state: GameState, rules: Ruleset, cut_since: int) -> bool:
+    """``state.tick`` is ``cut_since + grace_ticks + k * period_ticks`` for a ``k >= 0``."""
+    since = state.tick - cut_since - rules.starvation.grace_ticks
+    return since >= 0 and since % rules.starvation.period_ticks == 0
 
 
 def _kill_one(state: GameState, node: int, groups: list[Group]) -> Event:

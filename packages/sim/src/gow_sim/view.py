@@ -317,7 +317,8 @@ class NodeView:
     """Own node only: why it sends nothing at the next dispatch; ``None`` when ``flow_next`` is
     not empty."""
     flow_pocket: bool | None = None
-    """Own node only: its component over internal roads has no own factory (item A10)."""
+    """Own node only: its component over internal roads does not contain the own capital (item
+    H1)."""
 
 
 @dataclass(frozen=True, slots=True)

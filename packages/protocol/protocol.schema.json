@@ -2553,7 +2553,7 @@
               "type": "null"
             }
           ],
-          "description": "Supply flow, own node only: its own component over internal roads has no own factory."
+          "description": "Supply flow, own node only: its own component over internal roads does not contain the own\ncapital (a pocket: its factories stop, without a factory it starves)."
         }
       },
       "required": [

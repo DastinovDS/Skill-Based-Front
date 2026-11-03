@@ -57,6 +57,7 @@ from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import AtNode, Detail, Event, Group, Mode, event
+from gow_sim.systems.capacity import change_owner
 from gow_sim.systems.movement import find_path
 from gow_sim.systems.victory import EndReason as SimEndReason
 from gow_sim.systems.victory import Outcome
@@ -798,6 +799,27 @@ def test_starvation_countdown_through_the_wire() -> None:
     starving = event(5, "starvation", player=0, node=city, warehouse=1, units=0)
     assert event_for_player(starving, 0, KEY) is not None
     assert event_for_player(starving, 1, KEY) is None
+
+
+def test_pocket_starvation_through_the_wire() -> None:
+    """DEC-43 item H4: a node of a factory-less pocket under ``mvp-4`` starves; the owner gets the
+    countdown and the ``starvation`` event, the enemy neither (the fog of DEC-19 item 8)."""
+    mvp4 = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+    match = Match(load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json"), mvp4, KEY)
+    state = match.state
+    cedar = 3
+    change_owner(state, 1, 1)  # Ash: Birch, Cedar, Dale, Fern, Glen become a pocket
+    gid = state.new_id()
+    state.groups[gid] = Group(gid, 0, 3, 3, Mode.ATTACK, AtNode(cedar))
+    events: list[Event] = []
+    for _ in range(101):  # cut from tick 1: the first consumption at 1 + grace 100
+        events += match.step()
+    assert snapshot_msg(match.view(0)).view.nodes[cedar].starve_in is not None
+    assert snapshot_msg(match.view(1)).view.nodes[cedar].starve_in is None
+    starving = [e for e in events if e.kind == "starvation"]
+    assert [e.get("node") for e in starving] == [cedar]
+    assert event_for_player(starving[0], 0, KEY) is not None
+    assert event_for_player(starving[0], 1, KEY) is None
 
 
 def test_ack_of_an_accepted_command_without_path() -> None:

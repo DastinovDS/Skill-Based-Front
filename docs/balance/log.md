@@ -952,3 +952,28 @@ the smart bots 0.50 (turtle) to 0.79 (strangler), `reactive` 0.74, `turtle` 0.18
 for these bots (3% of the income): the total CP spent did not rise, the bots that fortify spend a little less on moves
 and recruits. The CP burned at the cap is not in the tournament rows (no metric); a question for the field run (#706)
 and the bot audit, together with the price.
+
+## 2026-11-03: pockets and starvation of `mvp-4`, smoke run (DEC-43 item H, #719)
+
+`mvp-4` unchanged (hash `2ecffe4f3f336217d718a37347b920b7`), `SIM_VERSION` 34: a pocket is an own component without the
+own capital, its factories stop, and a pocket without an own factory starves by DEC-19 on every node, provinces
+included. The bots are unchanged.
+
+Smoke run (AGENTS.md, section 8): `mise run tournament:gh --ruleset rulesets/mvp-4.toml --seeds 3`, the default field
+(13 bots), the 4 pool maps, 2028 matches on GitHub runners (run 41649182902).
+
+| | `mvp-4` with `[fort]` #707 | `mvp-4` with pockets, this run |
+|---|---|---|
+| burned (share of start + production) | 0.48 | 0.48 |
+| captures per player | 35.0 | 35.6 |
+| capital wins | 12.9% | 11.1% |
+| ticks | 8430 | 8489 |
+| draws | 62 | 63 |
+| side 0 wins (decided) | 0.48 [0.45; 0.50] | 0.47 [0.45; 0.49] |
+
+Starvation fires in 1528 of 2028 matches (75%), 4.4 charges per player and match (3.5% of the production; at most 45
+in one match, median 11 where it fires); by bot from 2.4 (`random_legal`) to 7.3 (`smart_expander`) and 6.9
+(`smart_turtle`). No crash (2028 rows), charge ledger residual 0 in every match. Win rates against the others: the
+smart bots 0.49 (turtle) to 0.75 (expander), `smart_strangler` 0.74 (0.79 before), `reactive` 0.73, `turtle` 0.18,
+`idle` 0.00. No gross imbalance; the smoke check passes. Mirror matches alone give side 0 0.39 [0.31; 0.49] (n=107),
+a small sample; the mirror test of the simulation covers the rule.
