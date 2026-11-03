@@ -881,6 +881,35 @@ removed 17.9. Less burned (0.21 -> 0.17): with no slot limit a factory serves ev
 capital production forward. The field is a little flatter (win sd 0.178 -> 0.140); the level order easy < normal,
 hard holds for every character. No gross imbalance: the smoke check passes.
 
+## 2026-11-03: the supply flow of `mvp-4`, smoke run (DEC-43, #704)
+
+New ruleset `mvp-4` (owner decision 2026-11-03, DEC-43 in mechanics.md): `mvp-3` with the automatic supply flow
+towards the front and the leaf shift instead of drawn lines, fixed warehouses (city 3, capital 6, province 1, no
+upgrades) and no bunker. Hash `323c452aff9f942bfaeb010644c6cea5` (archived), `SIM_VERSION` 32. The bots draw no lines,
+build no bunker, raise no warehouse; the campaign bots set the leaf shift by `gow_bots.bots.economy.leaf_shift_command`
+(one road back while an own leaf faces a visibly stronger enemy and the bot attacks from nowhere, else the front).
+
+Smoke run (AGENTS.md, section 8, a rule change): `mise run tournament -- --seeds 3 --ruleset rulesets/mvp-4.toml`, the
+default field (13 bots), the 4 pool maps, 2028 matches, locally. The metrics as in
+[v2-params-2026-10.md](v2-params-2026-10.md):
+
+| | `mvp-4`, this run |
+|---|---|
+| CP spent | 0.77 |
+| burned (share of start + production) | 0.47 |
+| captures per player | 35.2 |
+| capital wins | 13.4% |
+| ticks | 8426 |
+| leaf shifts per player and match | 32.7 |
+
+No crash (2028 rows), charge ledger residual 0 in every match, draws 61 (3%); 282 rejected commands in all (none
+`FEATURE_DISABLED` from the campaign bots, `tests/test_supply_flow.py`). Win rates against the others: the smart bots
+0.50 (turtle) to 0.79 (strangler), `reactive` 0.73, the plain `turtle` 0.18, `idle` 0.00; side 0 wins 0.48 [0.45; 0.50]
+of the decided matches (narrows 0.45 [0.41; 0.49]). No gross imbalance between bots or sides: the smoke check passes.
+What stands out is the burned share: about half of the production burns (DEC-42 field on `mvp-3`: 0.17), the capital
+is full in 50 to 86% of the ticks: with warehouses of 3 the network fills and a full factory finds no neighbour with
+room. A question for the field run (#706) and the owner, not a smoke failure.
+
 ## 2026-11-02: bot audit (the smart bots under v2, the metrics, information grants)
 
 Report: [bot-audit-2026-11.md](bot-audit-2026-11.md); ADR draft `docs/adr/0002-bot-information-grants.md` (proposed,
