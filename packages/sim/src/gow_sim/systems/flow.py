@@ -54,9 +54,9 @@ Order inside the step (item A13):
    ``load(m) + 2 <= have``, ``load = cap - room``). On the level (``d == k``) only the level
    roads: the leaves even out (#724), except a level node where an own group stands short of a
    charge or gathering a plan (the groups that pull), or with an unpaid build (item J): it keeps,
-   and its level neighbours give to it without the gap (room only). A lifted path node gives only along its path, and the node
-   before it on the path gives to it on room alone (item I7). Each charge is a packet of 1 along
-   one road (item A7).
+   and its level neighbours give to it without the gap (room only). A lifted path node gives
+   only along its path, and the node before it on the path gives to it on room alone (item I7).
+   Each charge is a packet of 1 along one road (item A7).
 6. The **plan** of the next dispatch for the view: the same function run on the state now, without
    sending (item E: ``flow_next`` and ``flow_idle``), stored in ``Node.flow`` with the field.
 
@@ -225,7 +225,8 @@ class _Field:
     level; it gives to it on room alone."""
     owed: dict[int, int]
     """The own nodes that pull for an unpaid build alone (no pulling army there, item J): the
-    charges their own builds still owe; a dispatch sends them at most ``owed - stock - incoming``."""
+    charges their own builds still owe; a dispatch sends them at most ``owed - stock -
+    incoming``."""
 
 
 def _field(state: GameState, player: int) -> _Field:
@@ -319,9 +320,9 @@ def _field(state: GameState, player: int) -> _Field:
     # army there its intake is capped by what it still owes (``_run``).
     owed: dict[int, int] = {}
     for n in adj:  # ascending
-        due = _owed(nodes[n], player)
-        if due > 0:
-            if n not in holding:
+        if n not in holding:
+            due = _owed(nodes[n], player)
+            if due > 0:
                 owed[n] = due
                 holding[n] = True
     for n in holding:  # flags: the order does not matter

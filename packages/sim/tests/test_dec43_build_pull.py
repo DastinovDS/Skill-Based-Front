@@ -15,6 +15,9 @@ system, as ``match.SYSTEMS`` does (``build`` runs after ``supply``).
 
 from pathlib import Path
 
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from gow_sim.maps import load_map
 from gow_sim.ruleset import load_ruleset
 from gow_sim.state import (
@@ -260,3 +263,58 @@ def test_j7_an_army_there_takes_on_room() -> None:
     _group(state, F, 2, 0)
     sends, _ = _run(state, 20)
     assert sends == {10: [(B, F)], 20: [(B, F)]}
+
+
+# Properties: mirror symmetry and the conservation of charges -------------------------------------
+
+
+@given(
+    st.lists(st.integers(0, 3), min_size=len(OWN), max_size=len(OWN)),
+    st.lists(st.integers(0, 4), min_size=len(OWN), max_size=len(OWN)),
+    st.integers(0, 3),
+)
+@settings(max_examples=25, deadline=None)
+def test_builds_pull_mirrored_and_conserve_charges(
+    stocks: list[int], owed: list[int], shift: int
+) -> None:
+    """Both players with the mirrored position (the map as it is, no contact): random stocks, a
+    factory build owing a random amount in every own node but the capital, a random shift. Every
+    tick the flow of player 1 is the mirror of player 0's, and the charges of each player (the
+    warehouses, the packets, the units, what the builds took) stay constant."""
+    mirror = MAP.mirror_nodes
+    state = initial_state(MAP, RULES)
+    for i, n in enumerate(OWN):
+        for p, node in ((0, n), (1, mirror[n])):
+            state.nodes[node].warehouse = min(stocks[i], 6 if n == K else 3)
+            if n != K:
+                state.nodes[node].factory_build = FactoryBuild(owner=p, since=1, owed=owed[i])
+    for p in (0, 1):
+        state.players[p].leaf_shift = shift
+    update_flow(state, RULES)
+    state.tick = 9
+
+    def total(player: int) -> int:
+        stock = sum(n.warehouse for n in state.nodes.values() if n.owner == player)
+        moving = sum(pk.charges for pk in state.packets.values() if pk.owner == player)
+        units = sum(g.charged for g in state.groups.values() if g.owner == player)
+        return stock + moving + units
+
+    start = (total(0), total(1))
+    paid = [0, 0]
+    while state.tick < 200:
+        for e in _step(state):
+            if e.kind == "build_paid":
+                player = e.get("player")
+                assert player in (0, 1)
+                paid[player] += e.get("warehouse") + e.get("units")  # type: ignore[operator]
+        assert (total(0) + paid[0], total(1) + paid[1]) == start
+        for n in OWN:
+            a, b = state.nodes[n], state.nodes[mirror[n]]
+            assert b.warehouse == a.warehouse
+            assert a.flow is not None and b.flow is not None
+            assert (b.flow.d, b.flow.k, b.flow.idle) == (a.flow.d, a.flow.k, a.flow.idle)
+            assert b.flow.next == tuple(mirror[m] for m in a.flow.next)
+            fa, fb = a.factory_build, b.factory_build
+            assert (fa is None) == (fb is None)
+            if fa is not None and fb is not None:
+                assert fb.owed == fa.owed
