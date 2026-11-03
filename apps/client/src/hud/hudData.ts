@@ -228,6 +228,9 @@ export interface HudData {
   readonly rearMin: number;
   /** Economy v2: the own lines extend to captured cities by themselves (#665); `null` under v1. */
   readonly autoLines: boolean | null;
+  /** Supply flow (DEC-43): the own leaf shift in force and its largest value; `null` under lines. */
+  readonly leafShift: number | null;
+  readonly leafShiftMax: number | null;
   readonly vp: { readonly mine: number; readonly enemy: number };
   /** Whole seconds until the timer ends the match. */
   readonly secondsLeft: number;
@@ -454,6 +457,8 @@ export function buildHudData(
     fronts: view.me.fronts,
     rearMin: view.me.rear_min,
     autoLines: view.me.auto_lines,
+    leafShift: view.me.leaf_shift,
+    leafShiftMax: view.me.leaf_shift_max,
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },
     secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
     group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes, tick),

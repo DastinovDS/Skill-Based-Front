@@ -13,6 +13,7 @@ import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { borderPermille } from './fogLayout.ts';
 import { reducedMotion } from './motion.ts';
+import { levelRim, levelShare, type RimSegment } from './levelLayout.ts';
 import { territoryBorders, type CellEdge } from './regionLayout.ts';
 import { easeOutCubic } from './tween.ts';
 import {
@@ -28,6 +29,7 @@ import {
   BG,
   CELL_BORDER,
   CELL_LINE,
+  FLOW_LEVEL,
   MAP_BORDER,
   ROAD_BUFFER,
   ROAD_FOG,
@@ -138,6 +140,16 @@ export class MapView {
   } | null = null;
   private readonly cellLines: Graphics;
   private readonly territory: Graphics;
+  /** The supply level (T1, DEC-43): lit cells over the tint, and their rim toward the rear. */
+  private readonly levelFill: Graphics;
+  private readonly levelRim: Graphics;
+  private level: ReadonlySet<number> = new Set();
+  private levelFrom: ReadonlySet<number> | null = null;
+  private levelElapsed = 0;
+  /** 0: no level fill, 1: full (the «Supply» mode), `FLOW_LEVEL.battle`: the normal map. */
+  private levelStrength = 0;
+  private levelSet = false;
+  private rims = new Map<ReadonlySet<number>, readonly RimSegment[]>();
   /** The line of an owner's border, over its glow. */
   private readonly borderLines: Graphics;
   /**
@@ -202,8 +214,10 @@ export class MapView {
     // the stronger border of the owners, under the roads.
     this.cellLines = layers.layer.territory.addChild(this.drawCellLines());
     this.territory = layers.layer.territory.addChild(new Graphics());
+    this.levelFill = layers.layer.territory.addChild(new Graphics({ label: 'level-fill' }));
     this.buildGlow(layers.layer.territory, bounds);
     this.borderLines = layers.layer.territory.addChild(new Graphics());
+    this.levelRim = layers.layer.territory.addChild(new Graphics({ label: 'level-rim' }));
 
     // All casings first, so no casing covers the lanes of a neighbouring road.
     this.casingLayer = layers.layer.roads.addChild(new Container({ label: 'road-casings' }));
@@ -329,6 +343,80 @@ export class MapView {
     return this.stamps?.count ?? 0;
   }
 
+  /**
+   * The supply level (T1, DEC-43, ui-style 42): `cells` are the own nodes of the leaf level (an empty
+   * list or `strength` 0 draws nothing), `strength` is 1 in the «Supply» mode and
+   * `FLOW_LEVEL.battle` on the normal map. A new set fades in and out over `FLOW_LEVEL.fadeMs`; the
+   * first one and "less motion" are instant. Called every frame: the same input costs nothing.
+   */
+  setLevel(cells: readonly number[], strength: number): void {
+    const next = new Set(cells);
+    const same = next.size === this.level.size && cells.every((cell) => this.level.has(cell));
+    if (same && strength === this.levelStrength && this.levelSet) return;
+    if (!same) {
+      // The old target (or the fade in progress) becomes the start of the new fade.
+      const instant = !this.levelSet || reducedMotion() || strength === 0;
+      this.levelFrom = instant ? null : this.level;
+      this.levelElapsed = 0;
+      this.level = next;
+      this.rims.clear();
+    }
+    this.levelStrength = strength;
+    this.levelSet = true;
+    this.drawLevel(this.levelFrom === null ? 1 : 0);
+  }
+
+  private levelShareNow(): number {
+    return this.levelFrom === null
+      ? 1
+      : easeOutCubic(Math.min(1, this.levelElapsed / FLOW_LEVEL.fadeMs));
+  }
+
+  private drawLevel(share: number): void {
+    const fill = this.levelFill.clear();
+    const rim = this.levelRim.clear();
+    const strength = this.levelStrength;
+    if (strength <= 0) return;
+    const from = this.levelFrom ?? this.level;
+    const to = this.level;
+    for (const cell of new Set([...from, ...to])) {
+      const polygon = this.cells[cell];
+      const k = levelShare(cell, from, to, share);
+      if (polygon === undefined || k <= 0) continue;
+      fill.poly(polygon).fill({ color: FLOW_LEVEL.color, alpha: FLOW_LEVEL.alpha * strength * k });
+    }
+    // The rim of a set; a segment both sets share stays, the others fade like their cells.
+    const key = (r: RimSegment): string =>
+      `${String(r.a.x)},${String(r.a.y)}:${String(r.b.x)},${String(r.b.y)}`;
+    const rimOf = (set: ReadonlySet<number>): readonly RimSegment[] => {
+      let known = this.rims.get(set);
+      if (known === undefined) {
+        known = levelRim(this.cells, this.edges, this.owners, this.me, set, FLOW_LEVEL.rimInset);
+        this.rims.set(set, known);
+      }
+      return known;
+    };
+    const now = rimOf(to);
+    const before = from === to ? now : rimOf(from);
+    const nowKeys = new Set(now.map(key));
+    const oldKeys = new Set(before.map(key));
+    const groups: { segments: readonly RimSegment[]; k: number }[] = [
+      { segments: now.filter((r) => oldKeys.has(key(r))), k: 1 },
+      { segments: now.filter((r) => !oldKeys.has(key(r))), k: share },
+      { segments: before.filter((r) => !nowKeys.has(key(r))), k: 1 - share },
+    ];
+    for (const { segments, k } of groups) {
+      if (k <= 0 || segments.length === 0) continue;
+      for (const { a, b } of segments) rim.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      rim.stroke({
+        width: FLOW_LEVEL.rimWidth,
+        color: FLOW_LEVEL.rimColor,
+        alpha: FLOW_LEVEL.rimAlpha * strength * k,
+        cap: 'round',
+      });
+    }
+  }
+
   /** `owners[i]`: current owner of node `i` (`null`: nobody). */
   setOwners(owners: readonly Owner[], animate = false): void {
     const previous = this.owners;
@@ -350,6 +438,9 @@ export class MapView {
         }
       : null;
     this.drawTerritory(changed ? 0 : 1);
+    // The rim of the level follows the owners (a capture moves the border).
+    this.rims.clear();
+    if (this.levelSet) this.drawLevel(this.levelShareNow());
     if (!changed) this.drawGlow(owners);
     // A road between two cities of one owner looks different from a buffer road.
     this.roads.forEach((_, i) => {
@@ -415,6 +506,7 @@ export class MapView {
 
   /** Runs the fade of a capture by `dtMs` of real time; once per frame (a no-op when none is under way). */
   advance(dtMs: number): void {
+    this.advanceLevel(dtMs);
     const fade = this.fade;
     if (fade === null) return;
     fade.elapsed += Math.max(0, dtMs);
@@ -427,6 +519,17 @@ export class MapView {
     }
     if (t >= 1) this.fade = null;
     this.drawTerritory(t >= 1 ? 1 : share);
+  }
+
+  /** The fade of the supply level by `dtMs` of real time (a no-op when none is under way). */
+  private advanceLevel(dtMs: number): void {
+    if (this.levelFrom === null) return;
+    this.levelElapsed += Math.max(0, dtMs);
+    const t = Math.min(1, this.levelElapsed / FLOW_LEVEL.fadeMs);
+    if (t >= 1) {
+      this.levelFrom = null;
+      this.drawLevel(1);
+    } else this.drawLevel(easeOutCubic(t));
   }
 
   private buildGlow(parent: Container, bounds: { width: number; height: number }): void {
@@ -643,6 +746,8 @@ export class MapView {
     this.laneLayer.destroy({ children: true });
     this.cellLines.destroy();
     this.territory.destroy();
+    this.levelFill.destroy();
+    this.levelRim.destroy();
     this.borderLines.destroy();
     this.glow.destroy({ children: true });
     for (const blur of this.glowBlurs) blur.destroy();

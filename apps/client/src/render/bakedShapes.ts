@@ -32,6 +32,7 @@ import {
   CITY_HALO_INSET,
   DEFENSE_PIPS,
   FIGHT_COLOR,
+  FLOW_STARVE,
   GLYPH_COLOR,
   INNER_RING,
   INNER_RING_INSET,
@@ -920,6 +921,33 @@ export function lineChevronSpec(): BakeSpec {
       g.stroke({ width: width + 2 * casing, color: BG, alpha: 0.92, join: 'round', cap: 'round' });
       trace();
       g.stroke({ width, color: PAPER, join: 'round', cap: 'round' });
+    },
+  };
+}
+
+// --- Supply flow ---------------------------------------------------------------------------------
+
+/**
+ * The starving mark (DEC-43, ui-style 42): an amber triangle with an exclamation mark, a shape and
+ * a glyph so that it is not told by colour alone. Centred on its middle; the same texture for every
+ * node.
+ */
+export function starveMarkSpec(): BakeSpec {
+  const { half, height } = FLOW_STARVE;
+  return {
+    key: 'flow-starve',
+    box: shadowBox(
+      { x: -half - 1, y: -height / 2 - 1, width: 2 * half + 2, height: height + 2 },
+      BAKE_MARGIN,
+    ),
+    draw(into) {
+      const g = graphics(into);
+      g.poly([0, -height / 2, half, height / 2, -half, height / 2])
+        .fill(WARN)
+        .stroke({ width: 1.6, color: BG, join: 'round' });
+      // The bang: a bar and a dot, cut from the dark of the background.
+      g.roundRect(-1, -height / 2 + 5.5, 2, 5, 1).fill(BG);
+      g.circle(0, height / 2 - 3.4, 1.25).fill(BG);
     },
   };
 }

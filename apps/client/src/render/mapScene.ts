@@ -22,6 +22,9 @@ import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
 import { SightView } from './sightView.ts';
 import { SupplyView } from './supplyView.ts';
+import { FlowView } from './flowView.ts';
+import { levelNodes } from './flowLayout.ts';
+import { FLOW_LEVEL } from './style.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
@@ -102,6 +105,9 @@ export class MapScene {
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
   private readonly supply: SupplyView;
+  private readonly flow: FlowView;
+  /** The own nodes of the supply level (T1) of the snapshot on screen. */
+  private levelCells: readonly number[] = [];
   private readonly sight: SightView;
   private readonly alerts: AlertView;
   private interaction: MapInteraction | null;
@@ -168,6 +174,7 @@ export class MapScene {
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
     this.supply = new SupplyView(map, this.layers, me, radiusOf, this.sprites);
+    this.flow = new FlowView(map, this.layers, me, radiusOf, this.sprites);
     this.sight = new SightView(map, this.layers, me, radiusOf);
     this.alerts = new AlertView(map, this.layers, me, radiusOf);
     this.controller = new CameraController(
@@ -252,6 +259,7 @@ export class MapScene {
     this.entities.destroy();
     this.overlay.destroy();
     this.supply.destroy();
+    this.flow.destroy();
     this.sight.destroy();
     this.names.destroy();
     this.cities.destroy();
@@ -316,6 +324,7 @@ export class MapScene {
       );
       const edges = frame.base.view.edges;
       this.view.setRoads(edges);
+      this.levelCells = levelNodes(frame.base.view, this.me);
       this.cities.update(
         frame.base,
         this.source.recruitTicks ?? null,
@@ -369,6 +378,13 @@ export class MapScene {
     this.supply.setTickHz(tickHz);
     this.supply.setProvinceWarehouse(this.source.provinceWarehouse ?? 0);
     this.supply.update(frame, overlay.supply);
+    // The supply flow (DEC-43): the level fill on both maps (half strength on the normal one), the
+    // faint chevrons and starving marks on the normal map only.
+    this.view.setLevel(
+      this.levelCells,
+      this.levelCells.length === 0 ? 0 : overlay.supply === null ? FLOW_LEVEL.battle : 1,
+    );
+    this.flow.update(frame.base, overlay.supply === null);
     this.sight.update(this.terrainOn, frame.base.view.nodes, this.layers.world.scale.x);
     this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
     if (announce) this.onsnapshot?.(frame.base.tick);

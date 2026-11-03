@@ -25,6 +25,11 @@ const welcomeV2Files = import.meta.glob<WelcomeMsg>(
   { eager: true, import: 'default' },
 );
 
+const welcomeV4Files = import.meta.glob<WelcomeMsg>(
+  '../../../../packages/protocol/fixtures/server/welcome_v4.json',
+  { eager: true, import: 'default' },
+);
+
 /** The player on the dev screen. */
 export const DEV_PLAYER = 0;
 
@@ -42,6 +47,18 @@ export const DEV_RULES_V2: RulesetPublic = (() => {
   const welcome = Object.values(welcomeV2Files)[0];
   if (welcome === undefined) {
     throw new Error('packages/protocol/fixtures/server/welcome_v2.json is not bundled');
+  }
+  return welcome.ruleset_public;
+})();
+
+/**
+ * The rules of `mvp-4` (DEC-43): economy v2 with the automatic supply flow (`welcome_v4.json`), for the
+ * `flow` scenes.
+ */
+export const DEV_RULES_FLOW: RulesetPublic = (() => {
+  const welcome = Object.values(welcomeV4Files)[0];
+  if (welcome === undefined) {
+    throw new Error('packages/protocol/fixtures/server/welcome_v4.json is not bundled');
   }
   return welcome.ruleset_public;
 })();
@@ -174,10 +191,12 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         stance: 'balance',
         fronts: [null, null],
         rear_min: 1,
-        auto_lines: rules.economy.model === 'v2' ? true : null,
-        leaf_shift: null,
-        leaf_shift_max: null,
-        next_dispatch_tick: null,
+        // The supply flow (DEC-43) has no auto lines; the shift starts at the front (a stand-in:
+        // the dev feed has no field, so the dev screen shows the control only).
+        auto_lines: rules.economy.model === 'v2' && rules.supply_model !== 'flow' ? true : null,
+        leaf_shift: rules.supply_model === 'flow' ? 0 : null,
+        leaf_shift_max: rules.supply_model === 'flow' ? 2 : null,
+        next_dispatch_tick: rules.supply_model === 'flow' ? (Math.floor(tick / 10) + 1) * 10 : null,
       },
       vp: [Math.floor(tick / 100), Math.floor(tick / 150)],
       nodes,

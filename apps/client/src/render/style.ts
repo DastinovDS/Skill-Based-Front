@@ -629,6 +629,46 @@ export const GHOST_SHAKE_AMPLITUDE = 3;
 
 /** The territory tint of the layer (the normal map: `TERRITORY_ALPHA`): flat, no terrain under it. */
 export const SUPPLY_TERRITORY_ALPHA = 0.34;
+/**
+ * The supply level (T1 "Bright fill", DEC-43, ui-style 42): the cells of the leaf level are lit in
+ * a lighter own blue with a thin light rim toward the rear (the rim carries it in grey scale). In
+ * the battle mode (the normal map) both are `battle` of their strength. A change of the level
+ * fades over `fadeMs` (instant under "less motion").
+ */
+export const FLOW_LEVEL = {
+  color: 0x86b8ff,
+  alpha: 0.36,
+  rimColor: PAPER,
+  rimAlpha: 0.95,
+  rimWidth: 2,
+  rimInset: 2.5,
+  battle: 0.5,
+  fadeMs: 600,
+} as const;
+/** The starving mark of a node under the flow: a triangle `half` wide each side and `height` high. */
+export const FLOW_STARVE = { half: 8, height: 14 } as const;
+/** The battle mode of the flow (the normal map): faint chevrons and the starving mark off the lower right rim. */
+export const FLOW_BATTLE = { chevronAlpha: 0.5, starveAngle: 45, starveGap: 9 } as const;
+/**
+ * The «Supply» layer under the flow (DEC-43, ui-style 42): the warehouse as squares under the city
+ * (a lid over a full one, an amber frame round a starving one), the hatched disc of a node ahead of
+ * the level, the pocket hatch, the pinch mark of a bottleneck, the countdown ring of the hovered city
+ * (N4) and the dimmer of the downstream chain (P2).
+ */
+export const FLOW_LAYER = {
+  slot: { w: 6, h: 5, gap: 1.6, drop: 5 },
+  /** The lid of a full warehouse: a bracket this far over the squares. */
+  lid: { lift: 4.5, width: 1.6 },
+  aheadHatch: { period: 4, width: 1.6, alpha: 0.85, grow: 2 },
+  pocketHatch: { period: 5, width: 1.6, alpha: 0.5, grow: 3 },
+  pinch: { at: 0.72, arc: 7, gap: 9, width: 2.4, casing: 5.4 },
+  /** The countdown ring: `gap` off the city rim, the arc `width`, a notch toward each receiver. */
+  ring: { gap: 8, width: 3.5, track: 0.28, notch: 8, notchWidth: 3.4, dash: 4, gapDash: 4 },
+  chain: { width: 3.4, casing: 6.4, arrow: { length: 9, width: 8 }, end: 8 },
+  dim: 0.5,
+  plate: { height: 16, padX: 6, radius: 5, lift: 18 },
+  chevronDim: 0.45,
+} as const;
 /** The flat floor of the layer instead of the terrain. */
 export const SUPPLY_FLOOR = 0x141a22;
 /** The flat water of the layer on a map with a geography (DEC-36): darker than the land tint, bluer than the floor. */

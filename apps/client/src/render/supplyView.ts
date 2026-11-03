@@ -1,14 +1,31 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { tf, getLocale } from '../i18n/index.ts';
+import { t, tf, getLocale } from '../i18n/index.ts';
 import { formatSeconds } from '../hud/format.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
-import type { MapFile, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
+import type { MapFile, PlayerId, SnapshotMsg, View } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { SupplyOverlay } from './interaction.ts';
 import type { BakedSprite, SpriteCache } from './bake.ts';
-import { lineChevronSpec } from './bakedShapes.ts';
+import { lineChevronSpec, starveMarkSpec } from './bakedShapes.ts';
 import { FACTORY_GLYPH } from './cityLayout.ts';
 import { borderPoint } from './fogLayout.ts';
+import {
+  DispatchClock,
+  IDLE_TEXT,
+  aheadNodes,
+  downhillRoads,
+  flowChain,
+  flowOn,
+  fullNodes,
+  packetRoads,
+  pinchRoads,
+  pocketNodes,
+  roadKey,
+  starvingNodes,
+  type FlowChain,
+  type FlowRoad,
+} from './flowLayout.ts';
+import { starvePoint } from './flowView.ts';
 import { EDGE_PROGRESS, edgeEnds, edgePoint, nodePoint } from './layout.ts';
 import type { MapLayers } from './layers.ts';
 import { reducedMotion } from './motion.ts';
@@ -27,7 +44,10 @@ import {
 import {
   BG,
   ENEMY,
+  FLOW_LAYER,
   PAPER,
+  SEGMENT_EMPTY,
+  SEGMENT_EMPTY_BAR,
   SELECT_COLOR,
   SELECT_WIDTH,
   SUPPLY_BULKHEAD,
@@ -54,6 +74,16 @@ import {
 } from './supplyLayout.ts';
 
 const TARGET = { dash: 6, gap: 5, ring: 7 } as const;
+
+/** The hovered or pinned city of the flow: what its countdown ring draws (N4). */
+interface RingFocus {
+  readonly city: Point;
+  readonly radius: number;
+  /** The directions (radians) of the receivers of the next dispatch: a notch each. */
+  readonly notches: readonly number[];
+  /** Nothing is sent: the ring is dashed and a plate says why. */
+  readonly idle: { readonly spot: Point; readonly width: number } | null;
+}
 const STARVE_MARK = '✂';
 
 const polar = (centre: Point, radius: number, degrees: number): Point => {
@@ -109,6 +139,18 @@ export class SupplyView {
   private readonly flowing = new Graphics();
   private readonly plates = new Graphics();
   private readonly dots = new Graphics();
+  /**
+   * The supply flow's hover (DEC-43, P2 and N4): a dimmer over the map with holes at the nodes of
+   * the downstream chain, the chain itself, and the countdown ring of the hovered city, which is
+   * the only part redrawn every frame.
+   */
+  private readonly dimmer = new Graphics();
+  private readonly chain = new Graphics();
+  private readonly ring = new Graphics();
+  private readonly bangs: BakedSprite[] = [];
+  private usedBangs = 0;
+  private readonly clock = new DispatchClock();
+  private focus: RingFocus | null = null;
   /** The direction chevrons of the lines looked at (#672): baked sprites, one pool. */
   private readonly marks = new Container({ label: 'supply-marks' });
   private readonly chevrons: BakedSprite[] = [];
@@ -168,7 +210,16 @@ export class SupplyView {
     this.pipeRoot.addChild(this.pipes);
     this.pipeRoot.visible = false;
     layers.layer.roads.addChild(this.pipeRoot);
-    this.root.addChild(this.flowing, this.plates, this.marks, this.dots, this.texts);
+    this.root.addChild(
+      this.flowing,
+      this.plates,
+      this.marks,
+      this.dots,
+      this.dimmer,
+      this.chain,
+      this.ring,
+      this.texts,
+    );
     this.root.visible = false;
     layers.layer.supply.addChild(this.root);
   }
@@ -205,6 +256,9 @@ export class SupplyView {
       }
       return;
     }
+    if (frame.base !== this.base) {
+      this.clock.observe(frame.base.tick, frame.base.view.me.next_dispatch_tick);
+    }
     if (frame.base !== this.base || supply !== this.overlay) {
       this.base = frame.base;
       this.overlay = supply;
@@ -222,6 +276,7 @@ export class SupplyView {
     }
     this.drawFlowing(frame);
     this.drawPackets(frame);
+    this.drawRing(frame.tick);
   }
 
   destroy(): void {
@@ -241,6 +296,12 @@ export class SupplyView {
     this.flowing.clear();
     this.plates.clear();
     this.dots.clear();
+    this.dimmer.clear();
+    this.chain.clear();
+    this.ring.clear();
+    this.focus = null;
+    this.usedBangs = 0;
+    for (const bang of this.bangs) bang.visible = false;
     this.runs = [];
     this.phase = Number.NaN;
     this.used = 0;
@@ -250,7 +311,7 @@ export class SupplyView {
   }
 
   /** The next chevron of the pool at `at`, turned to the direction `(ux, uy)`. */
-  private chevron(at: Point, ux: number, uy: number): void {
+  private chevron(at: Point, ux: number, uy: number, alpha = 1): void {
     let sprite = this.chevrons[this.usedMarks];
     if (sprite === undefined) {
       sprite = this.sprites.sprite(lineChevronSpec());
@@ -260,6 +321,7 @@ export class SupplyView {
     this.usedMarks++;
     sprite.position.set(at.x, at.y);
     sprite.rotation = Math.atan2(uy, ux);
+    sprite.alpha = alpha;
     sprite.visible = true;
   }
 
@@ -296,16 +358,20 @@ export class SupplyView {
 
   private drawStatic(scene: SupplyScene, supply: SupplyOverlay): void {
     this.clear();
+    const seen = this.base?.view;
+    const view = seen !== undefined && flowOn(seen) ? seen : null;
     this.drawPipes(scene);
-    this.drawFlows(scene);
+    this.drawFlows(scene, view !== null);
     this.drawBulkheads(scene);
-    this.drawGauges(scene);
+    if (view !== null) this.drawFlowRoads(view);
+    else this.drawGauges(scene);
     this.drawMarkers(scene);
     this.drawCut(scene);
     this.drawPresence(scene);
     this.drawFactories(scene);
     this.drawLit(scene);
     this.drawPick(supply);
+    if (view !== null) this.drawFlowNodes(view, supply.flow ?? null);
   }
 
   /** The end of the lit line (#672): a solid ring, so the target the menu names is found at once. */
@@ -380,7 +446,7 @@ export class SupplyView {
   }
 
   /** The flows: the fill of the pipe, the valve cap at the destination and the number along it. */
-  private drawFlows(scene: SupplyScene): void {
+  private drawFlows(scene: SupplyScene, auto = false): void {
     const fill = this.pipes;
     const g = this.plates;
     const runs: FlowRun[] = [];
@@ -411,7 +477,8 @@ export class SupplyView {
           .lineTo(whole[1].x, whole[1].y)
           .stroke({ width: band.width, color: YOU, alpha: SUPPLY_PIPE.fillAlpha * k });
         runs.push({ from, to, width: both ? 1.8 : 2.4, alpha: 0.95 * k });
-        if (span.length < SUPPLY_PIPE.minFlow) return;
+        // The flow: one-charge packets need no valve cap and no number, the chevrons say the way.
+        if (auto || span.length < SUPPLY_PIPE.minFlow) return;
         const length = Math.hypot(b.x - a.x, b.y - a.y);
         const ux = (b.x - a.x) / length;
         const uy = (b.y - a.y) / length;
@@ -438,7 +505,7 @@ export class SupplyView {
       const pa = road === undefined ? undefined : this.point(road.a);
       const pb = road === undefined ? undefined : this.point(road.b);
       if (road === undefined || ends === null || pa === undefined || pb === undefined) continue;
-      if (ends.length < SUPPLY_PIPE.minFlow) continue;
+      if (auto || ends.length < SUPPLY_PIPE.minFlow) continue;
       const middle = this.radiusOf(road.a) + SUPPLY_PIPE.inset + ends.length / 2;
       // A leg of the drawn lines (economy v2) is told by its direction alone; a number only when
       // several lines share it ("×2").
@@ -593,6 +660,311 @@ export class SupplyView {
       g.poly([at.x - side / 2, at.y - h / 2, at.x + side / 2, at.y - h / 2, at.x, at.y + h / 2])
         .fill({ color: BG, alpha: 0.9 })
         .stroke({ width, color: ENEMY, join: 'round' });
+    }
+  }
+
+  // --- The supply flow (DEC-43, ui-style 42) -----------------------------------------------
+
+  /**
+   * The chevrons along the downhill roads: bright and several where an own packet is on the road,
+   * one dim one in the middle when it is idle; the pinch mark `)(` of a bottleneck. All from the
+   * server's `flow_down` and the own packets.
+   */
+  private drawFlowRoads(view: View): void {
+    const g = this.plates;
+    const active = packetRoads(view);
+    const pinch = new Set(pinchRoads(view, this.me, this.map, this.index, this.provinceWarehouse));
+    for (const road of downhillRoads(view, this.me, this.index)) {
+      const a = this.point(road.from);
+      const b = this.point(road.to);
+      const span = this.span(road.from, road.to);
+      if (a === undefined || b === undefined || span === null) continue;
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      const ux = (b.x - a.x) / length;
+      const uy = (b.y - a.y) / length;
+      if (span.length >= SUPPLY_PIPE.minFlow) {
+        if (active.has(roadKey(road.edge, road.from))) {
+          const from = lanePoint(span.start, span.end, 0, 0);
+          this.drawChevrons(from, span.end, span.length, ux, uy);
+        } else {
+          const mid = lanePoint(span.start, span.end, 0.5, 0);
+          this.chevron(mid, ux, uy, FLOW_LAYER.chevronDim);
+        }
+      }
+      if (pinch.has(road.edge)) {
+        const { at, arc, gap, width, casing } = FLOW_LAYER.pinch;
+        const spot = lanePoint(span.start, span.end, at, 0);
+        const angle = Math.atan2(uy, ux);
+        for (const [color, w] of [
+          [BG, casing],
+          [PAPER, width],
+        ] as const) {
+          // Two arcs facing each other across the road: the neck.
+          for (const side of [-1, 1] as const) {
+            const centre = {
+              x: spot.x + ux * side * gap,
+              y: spot.y + uy * side * gap,
+            };
+            const start = side === -1 ? angle - 0.95 : angle + Math.PI - 0.95;
+            g.moveTo(centre.x + Math.cos(start) * arc, centre.y + Math.sin(start) * arc).arc(
+              centre.x,
+              centre.y,
+              arc,
+              start,
+              start + 1.9,
+            );
+          }
+          g.stroke({ width: w, color, cap: 'round' });
+        }
+      }
+    }
+  }
+
+  /** The next sprite of the pool of starving marks. */
+  private bang(at: Point): void {
+    let sprite = this.bangs[this.usedBangs];
+    if (sprite === undefined) {
+      sprite = this.sprites.sprite(starveMarkSpec());
+      this.marks.addChild(sprite);
+      this.bangs.push(sprite);
+    }
+    this.usedBangs++;
+    sprite.position.set(at.x, at.y);
+    sprite.visible = true;
+  }
+
+  /**
+   * The nodes under the flow: the warehouse squares (a lid when full, an amber frame and the `!`
+   * triangle when starving), the hatched disc of a node ahead of the level, the pocket hatch with
+   * "no source", and the marks of the hovered city (the downstream chain, the countdown ring).
+   */
+  private drawFlowNodes(view: View, focusNode: number | null): void {
+    const g = this.plates;
+    const starving = new Set(starvingNodes(view, this.me));
+    const full = new Set(fullNodes(view, this.me));
+    const { w, h, gap, drop } = FLOW_LAYER.slot;
+    for (const node of view.nodes) {
+      if (node.owner !== this.me || node.warehouse === null) continue;
+      const cap = node.warehouse_cap ?? (this.provinceWarehouse > 0 ? this.provinceWarehouse : 0);
+      const at = this.point(node.id);
+      if (at === undefined || cap <= 0) continue;
+      const total = cap * w + (cap - 1) * gap;
+      const x0 = at.x - total / 2;
+      const y0 = at.y + this.radiusOf(node.id) + drop;
+      const hungry = starving.has(node.id);
+      g.roundRect(x0 - 2.5, y0 - 2.5, total + 5, h + 5, 2)
+        .fill({ color: BG, alpha: 0.92 })
+        .stroke(hungry ? { width: 1.6, color: WARN } : { width: 0 });
+      for (let i = 0; i < cap; i++) {
+        const x = x0 + i * (w + gap);
+        if (i < node.warehouse) g.rect(x, y0, w, h).fill(YOU);
+        else g.rect(x, y0, w, h).fill(SEGMENT_EMPTY_BAR).stroke({ width: 1, color: SEGMENT_EMPTY });
+      }
+      if (full.has(node.id)) {
+        // A lid over the squares: full is a shape, not a colour.
+        const top = y0 - FLOW_LAYER.lid.lift;
+        g.moveTo(x0 - 2.5, y0 - 0.5)
+          .lineTo(x0 - 2.5, top)
+          .lineTo(x0 + total + 2.5, top)
+          .lineTo(x0 + total + 2.5, y0 - 0.5)
+          .stroke({ width: FLOW_LAYER.lid.width, color: PAPER });
+      }
+    }
+    for (const node of starving) {
+      const city = this.point(node);
+      if (city !== undefined) this.bang(starvePoint(city, this.radiusOf(node)));
+    }
+    for (const node of aheadNodes(view, this.me)) {
+      // Ahead of the level: no supply goes there and none leaves (a hatched dark disc).
+      const city = this.point(node);
+      if (city === undefined) continue;
+      const { period, width, alpha, grow } = FLOW_LAYER.aheadHatch;
+      for (const [p, q] of circleHatch(city, this.radiusOf(node) + grow, period)) {
+        g.moveTo(p.x, p.y).lineTo(q.x, q.y);
+      }
+      g.stroke({ width, color: BG, alpha });
+    }
+    for (const node of pocketNodes(view, this.me)) {
+      // A pocket: its own component has no factory, so nothing is made for it.
+      const city = this.point(node);
+      if (city === undefined) continue;
+      const { period, width, alpha, grow } = FLOW_LAYER.pocketHatch;
+      const r = this.radiusOf(node) + grow;
+      for (const [p, q] of circleHatch(city, r, period)) g.moveTo(p.x, p.y).lineTo(q.x, q.y);
+      g.stroke({ width, color: PAPER, alpha });
+      this.plate(t('flow.noSource'), { x: city.x, y: city.y - r - FLOW_LAYER.plate.lift - 6 });
+    }
+    if (focusNode !== null) this.drawFocus(view, focusNode);
+  }
+
+  /** A label on a dark plate, over the other marks (the text pool lies on top of the layer). */
+  private plate(content: string, spot: Point, border: number = SEGMENT_EMPTY): number {
+    const label = this.text(content, spot);
+    const { height, padX, radius } = FLOW_LAYER.plate;
+    const width = label.width + 2 * padX;
+    this.plates
+      .roundRect(spot.x - width / 2, spot.y - height / 2, width, height, radius)
+      .fill({ color: BG, alpha: 0.94 })
+      .stroke({ width: 1.5, color: border });
+    return width;
+  }
+
+  /**
+   * The hover of an own city (DEC-43): P2, the chain of roads from it down to the level over
+   * `flow_down`, drawn solid over a dimmed map, the level nodes at its ends ringed dashed; and the
+   * data of N4, the ring (drawn every frame by `drawRing`).
+   */
+  private drawFocus(view: View, node: number): void {
+    const city = this.point(node);
+    const own = view.nodes[node];
+    if (city === undefined || own === undefined || own.owner !== this.me) return;
+    const chain = flowChain(view, this.me, this.index, node);
+    this.drawChain(view, chain, node);
+    const notches = (own.flow_next ?? []).flatMap((to) => {
+      const target = this.point(to);
+      return target === undefined ? [] : [Math.atan2(target.y - city.y, target.x - city.x)];
+    });
+    let idle: RingFocus['idle'] = null;
+    if (notches.length === 0) {
+      const text =
+        own.flow_pocket === true
+          ? t('flow.noSource')
+          : own.flow_idle === null
+            ? null
+            : t(IDLE_TEXT[own.flow_idle]);
+      if (text !== null) {
+        const spot = {
+          x: city.x,
+          y: city.y - this.radiusOf(node) - FLOW_LAYER.ring.gap - FLOW_LAYER.plate.lift,
+        };
+        const label = this.text(text, spot);
+        idle = { spot, width: label.width + 2 * FLOW_LAYER.plate.padX };
+      }
+    }
+    this.focus = { city, radius: this.radiusOf(node), notches, idle };
+  }
+
+  private drawChain(view: View, chain: FlowChain, start: number): void {
+    const dim = this.dimmer;
+    const g = this.chain;
+    const { width: bounds, height } = { width: this.map.meta.width, height: this.map.meta.height };
+    dim.rect(0, 0, bounds, height).fill({ color: BG, alpha: FLOW_LAYER.dim });
+    // Holes at the nodes of the chain: they stay as they are.
+    for (const node of chain.nodes) {
+      const at = this.point(node);
+      if (at !== undefined) dim.circle(at.x, at.y, this.radiusOf(node) + 5);
+    }
+    dim.cut();
+    const { width, casing, arrow, end } = FLOW_LAYER.chain;
+    const paint = (road: FlowRoad): void => {
+      const span = this.span(road.from, road.to);
+      if (span === null) return;
+      const length = Math.hypot(span.end.x - span.start.x, span.end.y - span.start.y);
+      const ux = (span.end.x - span.start.x) / length;
+      const uy = (span.end.y - span.start.y) / length;
+      for (const [color, w] of [
+        [BG, casing],
+        [PAPER, width],
+      ] as const) {
+        g.moveTo(span.start.x, span.start.y).lineTo(span.end.x, span.end.y);
+        g.stroke({ width: w, color, cap: 'round' });
+      }
+      // The direction: a solid head at the middle of the road.
+      const mid = lanePoint(span.start, span.end, 0.5, 0);
+      g.poly(headPoly(mid, ux, uy, arrow.length, arrow.width).flatMap((p) => [p.x, p.y])).fill(
+        PAPER,
+      );
+    };
+    for (const road of chain.roads) paint(road);
+    // The level nodes the walk ends at: dashed rings (the start is ringed by N4).
+    const level = view.me.leaf_shift;
+    for (const node of chain.ends) {
+      if (node === start || view.nodes[node]?.front_dist !== level) continue;
+      const at = this.point(node);
+      if (at === undefined) continue;
+      this.dashedRingOn(g, at, this.radiusOf(node) + end, TARGET.dash, TARGET.gap);
+      g.stroke({ width: 2.4, color: PAPER });
+    }
+  }
+
+  /** A ring cut into dashes on `g` (the caller strokes it). */
+  private dashedRingOn(g: Graphics, at: Point, radius: number, dash: number, gap: number): void {
+    const steps = Math.max(8, Math.round((2 * Math.PI * radius) / (dash + gap)));
+    for (let i = 0; i < steps; i++) {
+      const a0 = (i / steps) * 2 * Math.PI;
+      const a1 = a0 + (dash / (dash + gap)) * ((2 * Math.PI) / steps);
+      g.moveTo(at.x + radius * Math.cos(a0), at.y + radius * Math.sin(a0));
+      g.arc(at.x, at.y, radius, a0, a1);
+    }
+  }
+
+  /**
+   * N4, the countdown ring of the hovered or pinned city, every frame: a track, an arc that
+   * empties until the next dispatch (the fraction is `DispatchClock`'s, from the server's
+   * `next_dispatch_tick`), a notch toward each receiver; dashed and with a plate when nothing is sent.
+   */
+  private drawRing(tick: number): void {
+    const g = this.ring.clear();
+    const focus = this.focus;
+    if (focus === null) return;
+    const { city, radius, notches, idle } = focus;
+    const { gap, width, track, notch, notchWidth, dash, gapDash } = FLOW_LAYER.ring;
+    const r = radius + gap;
+    if (idle !== null) {
+      g.roundRect(
+        idle.spot.x - idle.width / 2,
+        idle.spot.y - FLOW_LAYER.plate.height / 2,
+        idle.width,
+        FLOW_LAYER.plate.height,
+        FLOW_LAYER.plate.radius,
+      )
+        .fill({ color: BG, alpha: 0.94 })
+        .stroke({ width: 1.5, color: SEGMENT_EMPTY });
+    }
+    if (notches.length === 0) {
+      // Idle: a dashed ring, no arc (nothing is sent at the next dispatch).
+      this.dashedRingOn(g, city, r, dash, gapDash);
+      g.stroke({ width: 2.4, color: BG, alpha: 0.9 });
+      this.dashedRingOn(g, city, r, dash, gapDash);
+      g.stroke({ width: 1.6, color: PAPER });
+      return;
+    }
+    g.circle(city.x, city.y, r).stroke({ width: width + 2.4, color: BG, alpha: 0.9 });
+    g.circle(city.x, city.y, r).stroke({ width, color: PAPER, alpha: track });
+    const left = this.clock.fraction(tick);
+    if (left > 0) {
+      const start = -Math.PI / 2;
+      const sweep = left * 2 * Math.PI;
+      for (const [color, w] of [
+        [BG, width + 2.4],
+        [PAPER, width],
+      ] as const) {
+        g.moveTo(city.x + r * Math.cos(start), city.y + r * Math.sin(start))
+          .arc(city.x, city.y, r, start, start + sweep)
+          .stroke({ width: w, color, cap: 'butt' });
+      }
+    }
+    for (const angle of notches) {
+      const inner = {
+        x: city.x + (r - notch / 2) * Math.cos(angle),
+        y: city.y + (r - notch / 2) * Math.sin(angle),
+      };
+      const outer = {
+        x: city.x + (r + notch) * Math.cos(angle),
+        y: city.y + (r + notch) * Math.sin(angle),
+      };
+      g.moveTo(inner.x, inner.y)
+        .lineTo(outer.x, outer.y)
+        .stroke({
+          width: notchWidth + 2.4,
+          color: BG,
+          cap: 'round',
+        });
+      g.moveTo(inner.x, inner.y).lineTo(outer.x, outer.y).stroke({
+        width: notchWidth,
+        color: PAPER,
+        cap: 'round',
+      });
     }
   }
 

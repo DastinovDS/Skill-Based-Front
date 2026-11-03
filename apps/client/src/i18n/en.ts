@@ -738,4 +738,22 @@ export const en = {
     'Factories make charges, the supply lines you draw carry them. Buildings are paid in charges of the node and of the units standing there.',
   'hints.lines': 'supply lines',
   'hints.plan': 'planned order',
+  // The automatic supply flow (DEC-43, `mvp-4`): no lines, one lever, the leaf shift.
+  'supply.shift': 'Supply level',
+  'supply.shiftTip':
+    'The level is where supply stops: cities there keep what they get, those ahead of it are frozen. − moves it one road back from the front, + forward (keys - and =)',
+  'supply.shiftFront': 'front',
+  'supply.shiftBack': 'Move the supply level one road back from the front',
+  'supply.shiftForward': 'Move the supply level one road forward',
+  'flow.idle.leaf': 'Keeps: the supply level',
+  'flow.idle.ahead': 'Frozen: ahead of the level',
+  'flow.idle.empty': 'Nothing to send',
+  'flow.idle.full': 'Nobody takes more',
+  'flow.noSource': 'No source',
+  'flow.next': 'Next dispatch',
+  'help.key.supplyFlow': 'supply map mode: point at a city to see where it sends next',
+  'help.key.leafShift': 'move the supply level back from the front / forward',
+  'help.economyFlow':
+    'Factories make charges, and supply rolls by itself towards the front, one charge per road each dispatch. You steer one thing: the supply level. Buildings are paid in charges of the node and of the units standing there.',
+  'hints.supply': 'supply',
 };
