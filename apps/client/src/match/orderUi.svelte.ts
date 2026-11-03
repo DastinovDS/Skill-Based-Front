@@ -50,6 +50,12 @@ export interface OrderUiData {
    * the rule. It says nothing about whether this group can pay (AGENTS.md 7.1). `null`: none.
    */
   readonly captureHover: number | null;
+  /**
+   * The road pick of "Fortify road" (DEC-43, item D): the own node whose road is being picked, and the
+   * road under the pointer; `null`: not picking.
+   */
+  readonly fortFrom: number | null;
+  readonly fortHover: number | null;
   /** The «Supply» map mode is on (Tab or F2, DEC-18). */
   readonly supplyMode: boolean;
   /** The terrain map mode is on (`T`, #429): patterns for the ground, a sight sign on the places you see. */
@@ -89,6 +95,8 @@ export class OrderUiState {
     roadHover: null,
     splitHover: null,
     captureHover: null,
+    fortFrom: null,
+    fortHover: null,
     supplyMode: false,
     terrainMode: false,
     transferFrom: null,

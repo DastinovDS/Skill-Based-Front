@@ -43,12 +43,6 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'charge_burned',
   'build_paid',
   'plan_charged',
-  // Road fortifications (DEC-43, item D): their feed lines and the toll effect are the client step
-  // of #707; until then the map view (`EdgeView.forts`) is the only trace.
-  'road_fort_built',
-  'road_fort_destroyed',
-  'toll_paid',
-  'toll_taken',
 ]);
 
 /** Kinds with a line in the feed. */
@@ -79,6 +73,12 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'line_rerouted',
   // A line the auto-extension drew to a captured city (#665): the journal only, the capture has the toast.
   'line_auto',
+  // Road fortifications (DEC-43, item D; #707): a line starts to work or is lost with its city, and a
+  // toll paid or taken (the map shows each as a beam, the feed keeps the count).
+  'road_fort_built',
+  'road_fort_destroyed',
+  'toll_paid',
+  'toll_taken',
 ]);
 
 /** Does the feed show this kind? An unknown kind is not shown (never a raw kind name). */
@@ -194,6 +194,17 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
         from: names(num(data.from_node)),
         to: names(num(data.to_node)),
       });
+    case 'road_fort_built':
+      return tf('event.road_fort_built', { node: names(num(data.node)), edge: num(data.edge) });
+    case 'road_fort_destroyed':
+      return tf(
+        data.built === true ? 'event.road_fort_destroyed' : 'event.road_fort_destroyed.unfinished',
+        { node: names(num(data.node)), edge: num(data.edge) },
+      );
+    case 'toll_paid':
+      return tf('event.toll_paid', { node: names(num(data.node)), charges: num(data.charges) });
+    case 'toll_taken':
+      return tf('event.toll_taken', { node: names(num(data.node)), charges: num(data.charges) });
     case 'capture_failed':
       // DEC-38: `bounce`, the group turns back; `encircled`, a returning group could not retake its home and died.
       return tf(

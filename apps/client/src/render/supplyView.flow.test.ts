@@ -55,6 +55,8 @@ describe('SupplyView under the flow', () => {
     const layers = createLayers();
     const view = new SupplyView(map as NonNullable<typeof map>, layers, 0, () => 14, testSprites());
     view.setProvinceWarehouse(1);
+    // The period the ruleset gives (`ruleset_public.supply_dispatch_ticks`): the ring needs no learning (#707).
+    view.setDispatchTicks(10);
     const supply = { source: null, targets: [], draft: [], flow };
     view.update(interpolateFrame(base, null, tick), supply);
     return { layers, view, supply, ...parts(layers) };

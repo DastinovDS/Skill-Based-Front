@@ -28,6 +28,13 @@ import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 import { supplySnapshot } from './supplyScene.ts';
 import { FLOW_VIEW, flowSnapshot } from './flowScene.ts';
+import {
+  FORTS_GEO_VIEW,
+  FORTS_VIEW,
+  fortsEvents,
+  fortsGeoSnapshot,
+  fortsSnapshot,
+} from './fortsScene.ts';
 import { terrainSnapshot } from './terrainScene.ts';
 
 const files = import.meta.glob<SnapshotMsg>(
@@ -589,6 +596,49 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     rules: DEV_RULES_FLOW,
   },
   {
+    // Road fortifications (DEC-43, item D; #707) under the rules of `mvp-4`: an own line built with the
+    // enemy's on the other side of the same border, one being built (55%), one with a neutral city
+    // across, an enemy line being built (known to exist only).
+    id: 'forts',
+    map: 'artery',
+    snapshot: fortsSnapshot(bundledMap('artery')),
+    events: [],
+    view: FORTS_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_FLOW,
+  },
+  {
+    // The same on the «Supply» layer (Tab): the lines are drawn there too.
+    id: 'forts_supply',
+    map: 'artery',
+    snapshot: fortsSnapshot(bundledMap('artery')),
+    events: [],
+    view: FORTS_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_FLOW,
+  },
+  {
+    // The same on a pool map whose areas come from a geography (curved borders, provinces): `crossroads`.
+    id: 'forts_geo',
+    map: 'crossroads',
+    snapshot: fortsGeoSnapshot(bundledMap('crossroads')),
+    events: [],
+    view: FORTS_GEO_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_FLOW,
+  },
+  {
+    // A toll in the air, 0.1 s after it was taken (the beam is still in the air): an own group pays at the enemy line (road 4-5) and an
+    // own line collects from an enemy group (road 7-8), the beam of K6.
+    id: 'forts_toll',
+    map: 'artery',
+    snapshot: fortsSnapshot(bundledMap('artery')),
+    events: fortsEvents(1),
+    view: FORTS_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_FLOW,
+  },
+  {
     // A pool map (DEC-27) with its provinces: pale dots, no warehouse, no VP (#348).
     id: 'provinces',
     map: 'crossroads',
@@ -668,6 +718,8 @@ export function frozenSource(scene: FixtureScene, at?: number): RenderSource {
     recruitQueueMax: DEV_RULES.recruit.queue_max,
     provinceWarehouse: rules.city_upgrades.warehouse_province,
     roadBuildTicks: DEV_RULES.build.ticks_per_level,
+    supplyDispatchTicks: rules.supply_dispatch_ticks,
+    ...(rules.fort === null ? {} : { fortBuildTicks: rules.fort.build_ticks }),
     cityUpgrades:
       scene.cityUpgrades === true
         ? {

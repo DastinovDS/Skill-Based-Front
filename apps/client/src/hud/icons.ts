@@ -242,6 +242,12 @@ export const MENU_ICONS = {
     path('M7 17.5h2.5'),
     path('M12 17.5h2.5'),
   ],
+  // Road fortifications (DEC-43, item D; #707): a flat shield, the owner's pick for the radial entry "Fortify road".
+  fortify: [
+    path('M12 2.8 19.5 5.4v6c0 4.6-3 7.9-7.5 9.8C7.5 19.3 4.5 16 4.5 11.4v-6z'),
+    path('M12 7.6v7.6'),
+    path('M8.8 10.6h6.4'),
+  ],
   bunker: [path('M2.5 19.5h19'), path('M4.5 19.5a7.5 7.5 0 0 1 15 0'), path('M9 14.5h6')],
   lineDraw: [
     circle(5.5, 17.5, 2.3),

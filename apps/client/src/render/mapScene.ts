@@ -9,6 +9,8 @@ import { EffectsView } from './effectsView.ts';
 import { FrameGuard } from './frameGuard.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
+import { FortView } from './fortView.ts';
+import { TollView } from './tollView.ts';
 import { DefenseView } from './defenseView.ts';
 import { defenseSigns, signCounts } from './defenseSigns.ts';
 import { IntentView } from './intentView.ts';
@@ -106,6 +108,10 @@ export class MapScene {
   private readonly overlay: OverlayView;
   private readonly supply: SupplyView;
   private readonly flow: FlowView;
+  /** The road fortifications (DEC-43, item D; #707). */
+  private readonly forts: FortView;
+  /** The toll of the lines (K6): its own layer, shown in the «Supply» mode too. */
+  private readonly tolls: TollView;
   /** The own nodes of the supply level (T1) of the snapshot on screen. */
   private levelCells: readonly number[] = [];
   private readonly sight: SightView;
@@ -153,6 +159,7 @@ export class MapScene {
     this.defense = new DefenseView(map, this.layers, me, this.sprites, radiusOf, (node) =>
       this.cities.hasBarracks(node),
     );
+    this.forts = new FortView(map, this.layers, me, () => this.view.territoryEdges);
     this.effects = new EffectsView(
       map,
       this.layers,
@@ -161,6 +168,9 @@ export class MapScene {
       this.view.cells,
       radiusOf,
       this.screenSprites,
+    );
+    this.tolls = new TollView(this.layers.layer.tolls, map, me, 1, (node, edge) =>
+      this.forts.lineAt(node, edge),
     );
     this.fog = new FogView(
       map,
@@ -260,6 +270,8 @@ export class MapScene {
     this.overlay.destroy();
     this.supply.destroy();
     this.flow.destroy();
+    this.forts.destroy();
+    this.tolls.destroy();
     this.sight.destroy();
     this.names.destroy();
     this.cities.destroy();
@@ -371,12 +383,22 @@ export class MapScene {
       this.source.roundTicks,
       this.entities,
     );
-    this.entities.punch(punches);
+    // The toll of the road fortifications (#707), on both maps; its hits swell the tokens as a fight's do.
+    const tollPunches = this.tolls.update(
+      this.source.events(),
+      frame.tick,
+      this.entities.groupPoints(),
+      this.entities,
+      tickHz,
+      Math.max(1, 1 / this.layers.world.scale.x),
+    );
+    this.entities.punch([...punches, ...tollPunches]);
     this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
     this.supply.setTickHz(tickHz);
     this.supply.setProvinceWarehouse(this.source.provinceWarehouse ?? 0);
+    this.supply.setDispatchTicks(this.source.supplyDispatchTicks ?? 0);
     this.supply.update(frame, overlay.supply);
     // The supply flow (DEC-43): the level fill on both maps (half strength on the normal one), the
     // faint chevrons and starving marks on the normal map only.
@@ -385,6 +407,10 @@ export class MapScene {
       this.levelCells.length === 0 ? 0 : overlay.supply === null ? FLOW_LEVEL.battle : 1,
     );
     this.flow.update(frame.base, overlay.supply === null);
+    // The road fortifications, on both maps; the road pick adds a ghost of the line on every road it reaches.
+    this.forts.setBuildTicks(this.source.fortBuildTicks ?? 0);
+    this.forts.setTickHz(tickHz);
+    this.forts.update(frame.base.view, frame.tick, overlay.fortPick ?? null);
     this.sight.update(this.terrainOn, frame.base.view.nodes, this.layers.world.scale.x);
     this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
     if (announce) this.onsnapshot?.(frame.base.tick);
@@ -429,6 +455,7 @@ export class MapScene {
         icons: this.entities.cityIcons(),
         cells: this.view.cells,
         geo: this.view.geography,
+        forts: this.forts.pickTargets(),
       },
       world.scale.x,
     );
@@ -464,12 +491,15 @@ export class MapScene {
     this.entities.setLabelResolution(resolution);
     this.alerts.setLabelResolution(resolution);
     this.supply.setLabelResolution(resolution);
+    this.forts.setLabelResolution(resolution);
+    this.forts.setCameraScale(camera.scale);
     // What is drawn at one unit a CSS px (the arenas of fights, the bonus of plans) needs the device pixel ratio only.
     const screen = labelResolution(1, this.app.renderer.resolution);
     this.names.setCameraScale(camera.scale);
     this.names.setLabelResolution(screen);
     this.screenSprites.setResolution(screen);
     this.effects.setScreenResolution(screen);
+    this.tolls.setScreenResolution(screen);
     this.intents.setScreenResolution(screen);
     this.effects.setCameraScale(camera.scale);
     // The canvas in the px of the world times the scale: the arenas of fights keep inside it.

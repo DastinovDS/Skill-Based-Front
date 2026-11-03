@@ -112,6 +112,7 @@ describe('buildHudData: road upgrades for CP (DEC-28, item 7)', () => {
       width: 2,
       gain,
       building: false,
+      fortNodes: [],
     });
     // No upgrade hint from the server: nothing to raise.
     expect(data.roads[1]).toMatchObject({ gain: null });

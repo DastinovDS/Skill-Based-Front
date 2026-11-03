@@ -45,6 +45,8 @@ export const REJECT_MESSAGES = {
 export const REJECT_MESSAGES_BY_COMMAND = {
   'ALREADY_BUILT:build_factory': 'reject.ALREADY_BUILT.factory',
   'ALREADY_BUILT:build_bunker': 'reject.ALREADY_BUILT.bunker',
+  'ALREADY_BUILT:fortify_road': 'reject.ALREADY_BUILT.fort',
+  'FEATURE_DISABLED:fortify_road': 'reject.FEATURE_DISABLED.fort',
   'ALREADY_BUILT:upgrade_warehouse': 'reject.ALREADY_BUILT.warehouse',
   'NOT_CITY:build_factory': 'reject.NOT_CITY.factory',
   'NOT_CITY:draw_line': 'reject.NOT_CITY.line',

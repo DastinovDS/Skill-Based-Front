@@ -679,6 +679,8 @@ export const en = {
   'transfer.accepted': 'Transfer of {n} charges to {node}: arrives in {seconds} s',
   // Economy v2 (DEC-41, #649): factories, the bunker, drawn supply lines, a plan that gathers.
   'reject.ALREADY_BUILT.factory': 'The city is a factory already, or one is being built',
+  'reject.ALREADY_BUILT.fort': 'This road has your line at this end already',
+  'reject.FEATURE_DISABLED.fort': 'These rules have no road fortifications',
   'reject.ALREADY_BUILT.bunker': 'There is a bunker here already, or one is being built',
   'reject.ALREADY_BUILT.warehouse': 'The warehouse is at its last level',
   'reject.NOT_CITY.factory': 'A factory needs a city, not a province',
@@ -692,6 +694,7 @@ export const en = {
   'city.titleProvince': 'Province {node}',
   'city.factory': 'Factory',
   'city.bunker': 'Bunker',
+  'city.fortify': 'Fortify road',
   'city.costCharges': '{charges}●',
   'group.release': 'Release',
   'plan.banner': 'Planned order',
@@ -728,6 +731,12 @@ export const en = {
   'event.build_started.factory': '{node} builds a factory',
   'event.build_started.bunker': '{node} builds a bunker',
   'event.build_started.road_fort': '{node} fortifies a road',
+  'event.road_fort_built': 'The line of {node} on road {edge} is ready: it takes its toll',
+  'event.road_fort_destroyed': 'The line of {node} on road {edge} is lost with the city',
+  'event.road_fort_destroyed.unfinished':
+    'The unfinished line of {node} on road {edge} is lost with the city',
+  'event.toll_paid': 'Your group paid a toll at {node}: charges lost {charges}',
+  'event.toll_taken': 'Your line at {node} took a toll: charges taken {charges}',
   'event.factory_built': '{node} is a factory now: it makes charges',
   'event.fort_built': '{node} has its bunker',
   'event.line_cut': 'Supply line {from} → {to} is cut: draw it again',
@@ -755,6 +764,7 @@ export const en = {
   'flow.noSource': 'No source',
   'flow.next': 'Next dispatch',
   'help.key.supplyFlow': 'supply map mode: point at a city to see where it sends next',
+  'help.key.fortify': 'fortify a road of the selected city or province, then pick the road',
   'help.key.leafShift': 'move the supply level back from the front / forward',
   'help.economyFlow':
     'Factories make charges, and supply rolls by itself towards the front, one charge per road each dispatch. You steer one thing: the supply level. Buildings are paid in charges of the node and of the units standing there.',

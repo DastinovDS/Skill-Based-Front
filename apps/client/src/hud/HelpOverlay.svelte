@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { t, tf } from '../i18n/index.ts';
+  import type { MessageKey } from '../i18n/messages.ts';
   import { sound } from '../audio/soundState.svelte.ts';
   import './dialog.css';
   import HowToPlay from '../howto/HowToPlay.svelte';
@@ -16,9 +17,11 @@
     v2?: boolean;
     /** The automatic supply flow (DEC-43): no lines, the supply level keys instead. */
     flow?: boolean;
+    /** Road fortifications (DEC-43, item D): `B` fortifies a road of the selected city. */
+    fort?: boolean;
   }
 
-  let { open, onclose, captureCost = 0, v2 = false, flow = false }: Props = $props();
+  let { open, onclose, captureCost = 0, v2 = false, flow = false, fort = false }: Props = $props();
 
   let close: HTMLButtonElement | undefined = $state();
   /** The rules page replaces the keys inside the sheet; the match runs on under it (nothing pauses). */
@@ -100,7 +103,15 @@
     ['Esc', 'help.key.escape'],
   ] as const;
 
-  const keys = $derived(flow ? KEYS_FLOW : v2 ? KEYS_V2 : KEYS);
+  const keys = $derived.by((): readonly (readonly [string, MessageKey])[] => {
+    if (!flow) return v2 ? KEYS_V2 : KEYS;
+    // `B` goes after `R`, the other key of the menu of a city.
+    return fort
+      ? KEYS_FLOW.flatMap((row): (readonly [string, MessageKey])[] =>
+          row[0] === 'R' ? [row, ['B', 'help.key.fortify']] : [row],
+        )
+      : KEYS_FLOW;
+  });
 </script>
 
 {#if open}

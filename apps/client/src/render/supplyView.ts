@@ -224,6 +224,11 @@ export class SupplyView {
     layers.layer.supply.addChild(this.root);
   }
 
+  /** `ruleset_public.supply_dispatch_ticks`: the period the countdown ring of the flow empties over (N4). */
+  setDispatchTicks(ticks: number): void {
+    this.clock.setPeriod(ticks);
+  }
+
   /** Places of an own province warehouse (`city_upgrades.warehouse_province`, DEC-41, item 13); 0: none. */
   setProvinceWarehouse(places: number): void {
     if (places === this.provinceWarehouse) return;
@@ -257,7 +262,7 @@ export class SupplyView {
       return;
     }
     if (frame.base !== this.base) {
-      this.clock.observe(frame.base.tick, frame.base.view.me.next_dispatch_tick);
+      this.clock.observe(frame.base.view.me.next_dispatch_tick);
     }
     if (frame.base !== this.base || supply !== this.overlay) {
       this.base = frame.base;

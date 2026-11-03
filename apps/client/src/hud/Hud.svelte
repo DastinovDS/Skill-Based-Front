@@ -210,6 +210,7 @@
     captureCost={hud.context.rules.capture.charge_cost}
     v2={orders.v2}
     flow={orders.flow}
+    fort={orders.hasFort}
     onclose={() => {
       chrome.helpOpen = false;
     }}

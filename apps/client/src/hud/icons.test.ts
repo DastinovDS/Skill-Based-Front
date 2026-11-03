@@ -16,6 +16,7 @@ const NAMES = [
   'stackGroup',
   'factory',
   'bunker',
+  'fortify',
   'lineDraw',
   'lineRemove',
   'release',

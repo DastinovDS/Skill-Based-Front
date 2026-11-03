@@ -36,6 +36,33 @@ export interface PickScene {
    * no city, so a click on a lake or a river hits no area.
    */
   readonly geo?: boolean;
+  /**
+   * The roads of the pick of a road fortification (P1 "Ghosts", #707), each with the line the ghost
+   * lies on: the pointer near the ghost picks the road, however far it is from the road itself.
+   */
+  readonly forts?: readonly { readonly edge: number; readonly line: readonly Point[] }[];
+}
+
+/** The ghost of a fortification is hit this close to its line, in screen px. */
+export const FORT_HIT_PX = 16;
+
+/** The road of the pick whose ghost is nearest to `world`, within `FORT_HIT_PX` of the screen. */
+export function fortAt(forts: PickScene['forts'], world: Point, scale: number): number | null {
+  let best: number | null = null;
+  let bestDistance = FORT_HIT_PX / Math.max(scale, 0.01);
+  for (const fort of forts ?? []) {
+    for (let i = 0; i + 1 < fort.line.length; i++) {
+      const a = fort.line[i];
+      const b = fort.line[i + 1];
+      if (a === undefined || b === undefined) continue;
+      const d = segmentDistance(world, a, b);
+      if (d <= bestDistance) {
+        best = fort.edge;
+        bestDistance = d;
+      }
+    }
+  }
+  return best;
 }
 
 /** The city whose area holds `world`, or `null`. */
@@ -55,6 +82,9 @@ export function cellAt(
  * Pure: the order of the checks is the only rule.
  */
 export function pickAt(map: MapFile, world: Point, scene: PickScene, scale = 1): PickHit | null {
+  // While a road fortification is being placed, the ghost of a line is a target of its own.
+  const fort = fortAt(scene.forts, world, scale);
+  if (fort !== null) return { kind: 'edge', id: fort };
   let group: string | null = null;
   for (const [id, at] of scene.groups) {
     const half = hitHalf(at.side, scale);
