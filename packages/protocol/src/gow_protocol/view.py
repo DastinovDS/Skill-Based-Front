@@ -594,9 +594,9 @@ class SelfView(WireModel):
         flow = (self.leaf_shift, self.leaf_shift_max, self.next_dispatch_tick)
         if any(v is not None for v in flow) and None in flow:
             raise ValueError("leaf_shift, leaf_shift_max and next_dispatch_tick go together")
-        if self.leaf_shift is not None and self.leaf_shift_max is not None:
-            if self.leaf_shift > self.leaf_shift_max:
-                raise ValueError("leaf_shift must not exceed leaf_shift_max")
+        shift, top = self.leaf_shift, self.leaf_shift_max
+        if shift is not None and top is not None and shift > top:
+            raise ValueError("leaf_shift must not exceed leaf_shift_max")
         return self
 
 

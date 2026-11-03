@@ -11,7 +11,8 @@ their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``BuildBunker(node)``, ``DrawLine(path)``, ``RemoveLine(line)``, ``ReleasePlan(group)``;
 ``SetAutoLines(on)`` (#665); the supply flow (DEC-43): ``SetLeafShift(shift)``. A command
 of the other economy model (``ruleset_public.economy.model``) or supply model
-(``ruleset_public.supply_model``) is rejected with ``FEATURE_DISABLED``. The conversion to simulation commands is PRO-03 (#46).
+(``ruleset_public.supply_model``) is rejected with ``FEATURE_DISABLED``. The conversion to
+simulation commands is PRO-03 (#46).
 
 The schema checks only the shape. Ownership, visibility, reachability and CP are checked by the
 simulation's ``validate()``, which answers with one ``reject_code`` in ``ack`` and uses the same
