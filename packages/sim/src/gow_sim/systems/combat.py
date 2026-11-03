@@ -7,6 +7,10 @@ over ticks; its groups carry its id in ``Group.fight`` and do not move (item B6)
 The ``combat`` system runs after ``movement`` (all moves and arrivals first, then all fights) and
 reads the ``group_arrived`` events of the tick from ``state.events``. In one tick (item C5):
 
+0. **The toll** of road fortifications (DEC-43, item D6; ``systems.fortify``): a group whose own
+   progress reached the line point of an enemy fortification of the node it heads to in this tick
+   pays first, so it meets, joins and attacks with what is left.
+
 1. **Edge meetings** (item C2) on edges without a fight: groups of the two players going towards
    each other meet in the tick their progress towards their ends first sums to at least 1000 (a
    group that arrived in this tick counts with 1000 on its arrival edge and is put back on the
@@ -15,9 +19,6 @@ reads the ``group_arrived`` events of the tick from ``state.events``. In one tic
    groups in thousandths from the end ``a`` (item C3).
 2. **Edge reinforcements** (item D2): a group on an edge with a fight (any player, forward or
    back) whose position reached or passed the point in this tick stops there and joins.
-   Steps 1 and 2 are worked out first (``_edge_plan``), then the **toll** of road fortifications
-   (DEC-43, item D6; ``systems.fortify``) is taken on the moves of the tick with the points the
-   groups stop at, then the fights of steps 1 and 2 are set up with the counters after the toll.
 3. **Nodes**, in id order (item C1, D1): a group that finished its movement in a node with a fight
    joins its side; foreign groups standing in a player's node without a fight start one (the
    arrivals attack); an empty enemy node is taken at once (DEC-07, row 5); both players arriving
@@ -229,9 +230,10 @@ def combat(
     """
     bonus = dict(bonuses or {})
     arrivals = _arrivals(state)
-    plan = _edge_plan(state, rules, arrivals)
-    events = _tolls(state, rules, plan, bonus)
-    events.extend(_edge_fights(state, rules, plan, arrivals, bonus))
+    events = _tolls(state, rules, arrivals, bonus)
+    busy = {f.edge: fid for fid, f in sorted(state.fights.items()) if f.edge is not None}
+    events += _edge_meetings(state, rules, arrivals, bonus, busy)
+    _edge_joins(state, rules, arrivals, bonus)
     events.extend(_node_contacts(state, rules, arrivals, bonus))
     for fid in sorted(state.fights):
         events.extend(_run(state, rules, state.fights[fid]))
@@ -344,88 +346,20 @@ def _meet(x: _OnEdge, y: _OnEdge) -> bool:
     )
 
 
-@dataclass(frozen=True, slots=True)
-class _Meeting:
-    """A new fight on an edge (item C2): its point and the met groups by id."""
-
-    edge: int
-    point: int
-    met: tuple[_OnEdge, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class _EdgePlan:
-    """Items C2 and D2 worked out before anything changes: every group on an edge outside a fight
-    (``moved``, by id), the new fights in edge order, the groups that join a fight of their edge
-    at its point (the fights going on by id, then the new ones), and the point each of them stops
-    at (``stops``, by id). The toll of road fortifications (DEC-43, item D6) reads it."""
-
-    moved: dict[int, _OnEdge]
-    meetings: tuple[_Meeting, ...]
-    joins: tuple[_OnEdge, ...]
-    stops: dict[int, int]
-
-
-def _edge_plan(state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival]) -> _EdgePlan:
-    """Item C2: every meeting of an edge without a fight in a tick is one fight; item D2: a group
-    whose position reached or passed the point of its edge's fight in this tick stops there and
-    joins (the fight of a meeting of this tick too). Changes nothing."""
-    by_edge = _on_edges(state, arrivals)
-    moved = {
-        gid: _edge_presence(state, rules, gid, arrivals)
-        for eid in sorted(by_edge)
-        for gid in by_edge[eid]
-    }
-    busy = {f.edge: f.point for _, f in sorted(state.fights.items()) if f.edge is not None}
-    meetings: list[_Meeting] = []
-    stops: dict[int, int] = {}
-    for eid in sorted(by_edge):
-        if eid in busy:
-            continue  # item C4: one fight per edge; the groups join it at its point instead
-        here = [moved[gid] for gid in by_edge[eid]]
-        side0 = [x for x in here if x.owner == 0]
-        side1 = [y for y in here if y.owner == 1]
-        met = [x for x in side0 if any(_meet(x, y) for y in side1)]
-        met += [y for y in side1 if any(_meet(x, y) for x in side0)]
-        if not met:
-            continue
-        point = min(x.pos for x in met) + max(x.pos for x in met)
-        meetings.append(_Meeting(eid, point, tuple(sorted(met, key=lambda x: x.gid))))
-        stops.update((x.gid, point) for x in met)
-    # The joins in the order of the fights: those going on by id, then the new ones (their ids
-    # come later, in edge order).
-    points = [(f.edge, f.point) for _, f in sorted(state.fights.items()) if f.edge is not None]
-    points += [(m.edge, m.point) for m in meetings]
-    joins: list[_OnEdge] = []
-    for eid, point in points:
-        assert point is not None
-        for gid in by_edge.get(eid, []):
-            if gid in stops:
-                continue
-            x = moved[gid]
-            to_b = x.heading == state.map.edges[x.edge].b
-            if to_b:
-                crossed = 2 * x.pos >= point > 2 * x.pos_before
-            else:
-                crossed = 2 * x.pos <= point < 2 * x.pos_before
-            if crossed:
-                joins.append(x)
-                stops[gid] = point
-    return _EdgePlan(moved, tuple(meetings), tuple(joins), stops)
-
-
 def _tolls(
-    state: GameState, rules: Ruleset, plan: _EdgePlan, bonus: dict[int, Bonus]
+    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
 ) -> list[Event]:
-    """The toll of road fortifications (DEC-43, item D6) on the moves of this tick, before any
-    fight of the tick takes the groups: a group that pays brings a planned bonus of at most its
-    charged units into the fight it joins (DEC-29)."""
-    if rules.fort is None:
+    """Step 0: the toll of road fortifications (DEC-43, item D6; ``systems.fortify``) on the moves
+    of this tick, before any fight of the tick takes the groups: a group that pays brings a
+    planned bonus of at most its charged units into a fight (DEC-29)."""
+    if rules.fort is None or not any(n.road_forts for n in state.nodes.values()):
         return []
-    crossings = {
-        gid: Crossing(gid, x.owner, x.edge, x.heading, x.before, x.progress, plan.stops.get(gid))
-        for gid, x in sorted(plan.moved.items())
-    }
+    by_edge = _on_edges(state, arrivals)
+    crossings: dict[int, Crossing] = {}
+    for eid in sorted(by_edge):
+        for gid in by_edge[eid]:
+            x = _edge_presence(state, rules, gid, arrivals)
+            crossings[gid] = Crossing(gid, x.owner, x.edge, x.heading, x.before, x.progress)
 
     def capped(gid: int) -> None:
         b = bonus.get(gid)
@@ -436,25 +370,57 @@ def _tolls(
     return tolls(state, rules, crossings, capped)
 
 
-def _edge_fights(
+def _edge_meetings(
     state: GameState,
     rules: Ruleset,
-    plan: _EdgePlan,
     arrivals: dict[int, _Arrival],
     bonus: dict[int, Bonus],
+    busy: dict[int, int],
 ) -> list[Event]:
-    """Start the fights of ``plan`` (item C2) and let its groups join theirs (item D2)."""
+    """Item C2: new fights on edges without one; every meeting of an edge in a tick is one fight."""
     events: list[Event] = []
-    fights = {f.edge: f for _, f in sorted(state.fights.items()) if f.edge is not None}
-    for m in plan.meetings:
-        fight = _new_fight(state, rules, node=None, edge=m.edge, point=m.point, attacker=None)
+    by_edge = _on_edges(state, arrivals)
+    for eid in sorted(by_edge):
+        if eid in busy:
+            continue  # item C4: one fight per edge; the groups join it at its point instead
+        here = [_edge_presence(state, rules, gid, arrivals) for gid in by_edge[eid]]
+        side0 = [x for x in here if x.owner == 0]
+        side1 = [y for y in here if y.owner == 1]
+        met = [x for x in side0 if any(_meet(x, y) for y in side1)]
+        met += [y for y in side1 if any(_meet(x, y) for x in side0)]
+        if not met:
+            continue
+        point = min(x.pos for x in met) + max(x.pos for x in met)
+        fight = _new_fight(state, rules, node=None, edge=eid, point=point, attacker=None)
         events.append(_started(state, fight))
-        for x in m.met:
+        for x in sorted(met, key=lambda x: x.gid):
             _join_edge(state, fight, x, arrivals, bonus)
-        fights[m.edge] = fight
-    for x in plan.joins:
-        _join_edge(state, fights[x.edge], x, arrivals, bonus)
     return events
+
+
+def _edge_joins(
+    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
+) -> None:
+    """Item D2: a group whose position reached or passed the point of its edge's fight in this
+    tick stops where it is and joins."""
+    by_edge = _on_edges(state, arrivals)
+    for fid in sorted(state.fights):
+        fight = state.fights[fid]
+        if fight.edge is None or fight.edge not in by_edge:
+            continue
+        point = fight.point
+        assert point is not None
+        for gid in by_edge[fight.edge]:
+            if state.groups[gid].fight is not None:
+                continue
+            x = _edge_presence(state, rules, gid, arrivals)
+            to_b = x.heading == state.map.edges[x.edge].b
+            if to_b:
+                crossed = 2 * x.pos >= point > 2 * x.pos_before
+            else:
+                crossed = 2 * x.pos <= point < 2 * x.pos_before
+            if crossed:
+                _join_edge(state, fight, x, arrivals, bonus)
 
 
 def _join_edge(

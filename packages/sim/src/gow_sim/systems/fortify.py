@@ -8,20 +8,20 @@ mechanics.md, section 7, block DEC-43, item D:
   are charged by ``apply_commands``. One per (node, road); ``systems.build`` emits
   ``road_fort_built`` when it starts to work; ``systems.capacity.change_owner`` destroys the
   fortifications of a captured node (``road_fort_destroyed``).
-- **The toll** (``tolls``, a step of ``systems.combat`` after the edge stops and before the node
-  contacts): a group not of the node's owner whose progress towards the fortified node goes from
-  below the line point to it or past it in this tick, and that did not stop in a fight before the
-  point, loses ``fort.toll(units, charged)`` charges. The line point is the border point of the
-  edge (``border_permille``). A group with a planned bonus above its charged units after the toll
-  keeps a bonus of its charged units (DEC-29). Groups are taken in id order; a group crosses at
-  most one line per tick.
+- **The toll** (``tolls``, the first step of ``systems.combat``, before the edge meetings and the
+  node contacts): a group not of the node's owner whose own progress towards the fortified node
+  went from below the line point to it or past it in this tick loses ``fort.toll(units,
+  charged)`` charges. A group that meets an enemy on the road stops at its own progress (DEC-24,
+  item C2), so a group stopped short of the line pays when it crosses later. The line point is the
+  border point of the edge (``border_permille``). A group with a planned bonus above its charged
+  units after the toll keeps a bonus of its charged units (DEC-29). Groups are taken in id order;
+  a group crosses at most one line per tick.
 - Events: ``toll_paid`` to the payer (with its group), ``toll_taken`` to the owner of the
   fortification when the half of the node on that edge is not in fog for them at the toll (no
   group id); nothing when the toll takes 0.
 
 Positions here are "towards the heading": thousandths of the edge from the end the group comes
-from. A fight point is doubled (``pos_0 + pos_1`` from the end ``a``, DEC-24 item C3), so the
-comparison with the line point is made doubled too, without a division.
+from.
 """
 
 from collections.abc import Callable, Mapping
@@ -38,8 +38,7 @@ __all__ = ["Crossing", "line_point", "start_road_fort", "tolls"]
 @dataclass(frozen=True, slots=True)
 class Crossing:
     """A group's move along ``edge`` in this tick: towards ``heading``, from ``before`` to
-    ``progress`` (thousandths from the other end). ``stop``: the doubled fight point (from the end
-    ``a``) where it stops in this tick, ``None`` if it meets no fight."""
+    ``progress`` (thousandths from the other end)."""
 
     gid: int
     owner: int
@@ -47,7 +46,6 @@ class Crossing:
     heading: int
     before: int
     progress: int
-    stop: int | None
 
 
 def line_point(state: GameState, edge: int, node: int) -> int:
@@ -101,11 +99,7 @@ def tolls(
         if ready is None or ready > tick or node.owner is None or node.owner == x.owner:
             continue
         line = line_point(state, x.edge, x.heading)
-        reach = 2 * x.progress
-        if x.stop is not None:
-            to_b = x.heading == state.map.edges[x.edge].b
-            reach = min(reach, x.stop if to_b else 2 * PROGRESS_SCALE - x.stop)
-        if not (x.before < line and 2 * line <= reach):
+        if not x.before < line <= x.progress:
             continue
         g = state.groups[gid]
         lost = fort.toll(g.units, g.charged)
