@@ -28,6 +28,12 @@ If you changed the schema: raise `PROTOCOL_VERSION` (`gow_protocol.messages`), f
   `ruleset_public` with the numbers of `rulesets/mvp-0.toml` at the time of writing (the ruleset may move on,
   the fixture does not break because of it).
 - `server/welcome_v2.json`: the same with `ruleset_public` of `rulesets/mvp-3.toml` (economy v2, DEC-41, #647).
+- `server/welcome_v4.json`: the same with `ruleset_public` of `rulesets/mvp-4.toml` (the supply flow, DEC-43, #704:
+  `supply_model: "flow"`, no `bunker`).
+- `server/snapshot_flow.json`: the view of player 0 on `dec41` (`packages/sim/tests/maps/dec41.json`) under `mvp-4`, tick 5,
+  after `set_leaf_shift {shift: 1}` (the only fixture written by code, from a real `project()`): the own nodes carry the
+  flow fields of DEC-43, item E (`front_dist`, `flow_down`, `flow_next`, `flow_idle`, `flow_pocket`), `me` the shift
+  (`leaf_shift` 1, `leaf_shift_max` 2, `next_dispatch_tick` 10); every other fixture has them `null` (the drawn lines).
 - `server/snapshot.json`: the view of player 0 on `diamond`, tick 120. Nodes 0 and 1 are own (`exact`), nodes 2 and 3
   are adjacent (`presence`, at the opponent's capital the modes `attack` and `defense` are visible without numbers),
   edge 2 is in the fog with the memory from tick 60, an enemy group goes along edge 3 (only the mode).

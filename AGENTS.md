@@ -200,7 +200,7 @@ gow_sim/
   maps.py         MapDef + loader
   state.py        GameState, Group, Node, Edge, Packet, Intent; to_canonical(), state_hash()
   commands.py     command types, validate(), apply_commands()
-  systems/        economy, movement, combat, capacity, supply, lines, recruit, build, orders, victory, vision
+  systems/        economy, movement, combat, capacity, supply, lines, flow, recruit, build, orders, victory, vision
   view.py         project() -> PlayerView
   match.py        Match, order of systems, run_headless()
   replay.py       recording, verification, dump of divergences
@@ -227,7 +227,7 @@ apply_commands → economy → movement → combat → capacity → supply (incl
 → recruit → build → orders → victory → vision (updating the "last seen" memory)
 ```
 
-The order in code: `gow_sim.match.SYSTEMS`. Under `economy.model = "v2"` (DEC-41) the `supply` step is `systems.lines` (factories and drawn supply lines) instead of `systems.supply`. `Match.step()` first increments `state.tick`, so all systems of tick `t` see `state.tick == t` (the first tick is 1); the events of each system are appended to `state.events` immediately, and the following systems read them.
+The order in code: `gow_sim.match.SYSTEMS`. Under `economy.model = "v2"` (DEC-41) the `supply` step is `systems.lines` (factories and drawn supply lines) instead of `systems.supply`, and under `supply.model = "flow"` (DEC-43, `rulesets/mvp-4.toml`) it is `systems.flow` (the automatic flow towards the front and the leaf shift). `Match.step()` first increments `state.tick`, so all systems of tick `t` see `state.tick == t` (the first tick is 1); the events of each system are appended to `state.events` immediately, and the following systems read them.
 
 `combat` runs fights over time (DEC-24): a fight is a `Fight` in `GameState.fights` (iterated by id), a group has the field `fight`;
 rounds every `combat.round_ticks`, the groups of a fight do not move. `combat` gets the bonuses of scheduled orders and of "Defense" (accumulated, DEC-30) from `systems.orders.active_bonuses(state, rules)`
@@ -268,6 +268,7 @@ The fog memory is stored in `GameState` (for each player), so `project()` stays 
   - a barracks (except a built barracks of an enemy city adjacent to your own node: DEC-31), the warehouse level, the warehouse capacity, construction and the recruit queue of enemy cities (DEC-25, DEC-26);
   - economy v2 (DEC-41): the enemy's supply lines (never, in any state), its factory and bunker builds, its factory rates and
     the request or gathered bonus of its planned orders; a built enemy factory and bunker only by the DEC-31 rule (a node joined by an edge to an own node).
+  - the supply flow (DEC-43): the enemy's leaf shift, its field, its downhill roads and the plan of its next dispatch (never, in any state);
     The capacity of a node is public and exact: it is set by the kind of node (DEC-22), there is no estimate.
 - A new field in `PlayerView` only together with a fog test for that field.
 - Event fields are a declared contract (ARC-02, #457): `event_for_player` sends a field of an event only if `gow_protocol.convert.EVENT_FIELDS` lists it for the kind, and turns into opaque ids only the fields `EVENT_ID_FIELDS` lists; the rest of the event is dropped. A new event field only together with a fog test for that field, like a `PlayerView` field (a field of a public or fight kind goes to the opponent). The test `packages/protocol/tests/test_event_fields.py` compares the table with every `event(...)` call of `gow_sim`.
@@ -544,9 +545,11 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | transfer | `Transfer` | a one-off shipment of charges between your own cities (DEC-18) |
 | starvation | `starvation` | a garrison cut off from the capital spends charges (DEC-19) |
 | packet | `Packet` | charges travelling along a road |
-| economy model | `economy.model` | `v1` (stances, front markers, donors) or `v2` (factories and drawn lines, DEC-41; `rulesets/mvp-3.toml`) |
+| economy model | `economy.model` | `v1` (stances, front markers, donors) or `v2` (factories, DEC-41; with `supply.model = "lines"` the drawn lines of `rulesets/mvp-3.toml`, with `supply.model = "flow"` the automatic flow of `rulesets/mvp-4.toml`, DEC-43) |
 | factory | `Node.factory`, `BuildFactory` | economy v2: a city that makes charges into its own warehouse; the capital from the start, others built for charges (DEC-41, item 2); the only node that starts supply lines, and a factory that is the target of a line gives its charges out with its production, a hub (DEC-42) |
 | supply line | `Line`, `DrawLine`, `RemoveLine` | economy v2: a path of own nodes drawn by the player from an own factory to a city, any number per factory; only the target receives its charges, 1 charge per dispatch on its turn (DEC-41, item 3; DEC-42) |
+| supply flow | `supply.model = "flow"`, `systems.flow`, `Node.flow` | economy v2 without lines (DEC-43, `mvp-4`): every own node knows its distance in roads to the nearest leaf (a node touching a foreign one); per dispatch each node behind the level sends one charge per road downhill to a neighbour with room, then evens out level roads; a tired army pulls the level to itself; a full factory spills |
+| leaf shift | `PlayerState.leaf_shift`, `SetLeafShift` | the one lever of the supply flow: the level (the nodes that keep what they get) moves this many roads back from the front, `0..d0(capital)`; free, hidden from the enemy (DEC-43, item B) |
 | bounce | `bounce` | an attacker without a win returns to the source node discharged |
 | scheduled order | `planned=True` | more expensive, visible to everyone as an intent, sets out with a delay, gives a one-off bonus; economy v2: the price of a move, the requested bonus `Move.bonus` is gathered in the node, one warehouse charge per `orders.plan_ticks_per_bonus` ticks, departs at the request, at the cap or by `ReleasePlan` (DEC-41, item 10) |
 | fight | `Fight` | a fight over time (DEC-24): a node or an edge with a meeting point `point`, rounds every `combat.round_ticks`, reinforcements and retreat; visible to both (`PlayerView.fights`) |
