@@ -22,6 +22,14 @@ first:
 Groups that arrive in an own node merge on their own (DEC-20, A), so a rally point gathers the
 army without a ``Merge``.
 
+Capacity (#686): units standing in an own node above its capacity die one every
+``capacity.attrition_ticks`` (DEC-12), so no command puts a node over it at the arrival. The load of
+a node is the own units standing there plus the own units on the way into it (``Ctx.incoming``:
+ordered there, or turning back to it on an edge). ``spend`` refuses a move of a standing group into
+an own node the group does not fit (a group leaving a fight is exempt), ``recall`` cancels only
+into a node with room for the group, ``rally`` sends at most the free room (a split), and a
+recruit is queued only while the load leaves room for it.
+
 Each attack is a normal or a planned order by ``prefer_planned``, i.e. by the prices of the
 ruleset only (BOT-01). The capital keeps ``guard`` units at home: the group that would leave
 it below that is split first.
@@ -50,6 +58,7 @@ from typing import ClassVar, override
 
 from gow_bots.bots.base import Bot, ParamRange, node_of
 from gow_bots.bots.economy import (
+    LeafShift,
     bunker_site,
     factory_site,
     fort_site,
@@ -74,7 +83,7 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import GroupView, Mode, OnEdge, PlayerView, Stance
+from gow_sim.view import AtNode, GroupView, Mode, OnEdge, PlayerView, Stance
 
 __all__ = ["CampaignBot", "Ctx", "Option"]
 
@@ -124,6 +133,40 @@ class Ctx:
     standing: list[int] = field(default_factory=list[int])
     held: int = 0
     """CP in hundredths kept for a chosen scheduled order (``SmartBot``): the rest leaves them."""
+    incoming: list[int] = field(default_factory=list[int])
+    """Own units on the way into each own node (#686): ordered there in an earlier decision or
+    in this one (``spend`` adds every accepted move), or turning back to it on an edge
+    (``OnEdge.back``: a cancel or a bounce returns to the start of the edge)."""
+    groups: dict[int, GroupView] = field(default_factory=dict[int, GroupView])
+    """Own groups of the view by opaque id."""
+
+    def __post_init__(self) -> None:
+        view = self.view
+        self.groups = {g.id: g for g in view.groups}
+        if not self.standing:
+            self.standing = [0] * len(view.nodes)
+            for g in view.groups:
+                if isinstance(g.location, AtNode):
+                    self.standing[g.location.node] += g.units
+        if not self.incoming:
+            self.incoming = incoming(view)
+
+
+def incoming(view: PlayerView) -> list[int]:
+    """Own units on the way into each own node (``Ctx.incoming``): the groups with an order to
+    an own node they do not stand in, and the groups turning back on an edge."""
+    units = [0] * len(view.nodes)
+    for g in view.groups:
+        loc, order = g.location, g.order
+        if isinstance(loc, OnEdge) and loc.back:
+            units[loc.from_node] += g.units
+        elif (
+            order is not None
+            and view.nodes[order.dest].owner == view.player
+            and not (isinstance(loc, AtNode) and loc.node == order.dest)
+        ):
+            units[order.dest] += g.units
+    return units
 
 
 class CampaignBot(Bot):
@@ -159,6 +202,8 @@ class CampaignBot(Bot):
         self.waves: dict[int, Wave] = {}
         self._net_tick = -1
         self._net: frozenset[int] = frozenset()
+        self.leaf = LeafShift()
+        """The memory of the leaf shift policy (``economy.leaf_shift_command``)."""
 
     # Decision -------------------------------------------------------------------------------
 
@@ -215,7 +260,7 @@ class CampaignBot(Bot):
         road = fort_site(self, view, ctx.budget)  # DEC-43, item D: the CP sink of mvp-4
         if road is not None:
             self.spend(ctx, FortifyRoad(*road))
-        shift = leaf_shift_command(self, view)  # the supply flow only (DEC-43, item G)
+        shift = leaf_shift_command(self, view, self.leaf)  # the supply flow (DEC-43, item G)
         if shift is not None:
             self.spend(ctx, shift)
 
@@ -246,14 +291,44 @@ class CampaignBot(Bot):
     # Spending -------------------------------------------------------------------------------
 
     def spend(self, ctx: Ctx, cmd: Command) -> bool:
+        """Send ``cmd`` if the CP pay for it. A move of a standing group into an own node is sent
+        only when the units fit the node at the arrival (``room``, #686: a node over capacity
+        loses a unit every ``capacity.attrition_ticks``, DEC-12); it then counts in
+        ``Ctx.incoming``. A group leaving a fight is exempt: a lost fight costs a unit a round."""
         if not self.allowed(cmd):
             return False  # a command of the other economy model (DEC-41)
+        into = self.moves_in(ctx, cmd)
+        if into is not None and into[1] > self.room(ctx, into[0]):
+            return False
         cost = self.cost(cmd)
         if cost > ctx.budget:
             return False
         ctx.budget -= cost
         ctx.cmds.append(cmd)
+        if into is not None:
+            ctx.incoming[into[0]] += into[1]
         return True
+
+    def moves_in(self, ctx: Ctx, cmd: Command) -> tuple[int, int] | None:
+        """``(node, units)`` when ``cmd`` moves an own standing group outside any fight into an
+        own node (``spend``); ``None`` otherwise."""
+        if not isinstance(cmd, Move) or ctx.view.nodes[cmd.dest].owner != self.player:
+            return None
+        g = ctx.groups.get(cmd.group)
+        if g is None or not isinstance(g.location, AtNode) or g.location.node == cmd.dest:
+            return None
+        if any(g.id in f.groups for f in ctx.view.fights):
+            return None
+        return cmd.dest, g.units
+
+    def load(self, ctx: Ctx, node: int) -> int:
+        """Own units in ``node`` at the arrivals: those standing there and those on the way."""
+        return ctx.standing[node] + ctx.incoming[node]
+
+    def room(self, ctx: Ctx, node: int) -> int:
+        """Units that still fit ``node`` (its public capacity, DEC-22) once the own units on the
+        way have arrived; negative when it will be over."""
+        return ctx.view.nodes[node].capacity - self.load(ctx, node)
 
     def free_groups(self, ctx: Ctx) -> list[GroupView]:
         return [g for g in self.idle_groups(ctx.view) if g.id not in ctx.used]
@@ -348,16 +423,22 @@ class CampaignBot(Bot):
         (with the price of the capture, DEC-38: a group that could not pay would bounce).
 
         Free since DEC-20: the group turns back to the start of its edge. Only on numbers of
-        this tick, so an old memory does not make the bot hesitate.
+        this tick, so an old memory does not make the bot hesitate. Only into an own node with
+        room for the group (#686): a group on an edge takes no new order (``GROUP_ON_EDGE``), so
+        it cannot be sent elsewhere; it goes on and the attack decides.
         """
         view = ctx.view
         orders = self.rules.orders
         busy = self.fighting(view)
         for g in view.groups:
-            if not isinstance(g.location, OnEdge) or g.order is None or g.id in busy:
+            loc = g.location
+            if not isinstance(loc, OnEdge) or g.order is None or g.id in busy:
                 continue
             if self.committed(g.id):
                 continue  # one wave of several: the target is judged against all of them
+            back = loc.from_node
+            if view.nodes[back].owner == self.player and self.room(ctx, back) < g.units:
+                continue  # #686: the way back ends over capacity
             dest = g.order.dest
             seen = view.nodes[dest].seen
             if view.nodes[dest].owner == self.player or seen is None or seen.tick != view.tick:
@@ -376,6 +457,8 @@ class CampaignBot(Bot):
             if not takes(self.rules, g.charged, bonus, need) and self.spend(ctx, CancelOrder(g.id)):
                 ctx.used[g.id] = True
                 ctx.claimed.pop(dest, None)
+                if view.nodes[back].owner == self.player:
+                    ctx.incoming[back] += g.units
 
     def committed(self, group: int) -> bool:
         """Hook: own group ``group`` is one of several groups sent together (``SmartBot``)."""
@@ -526,6 +609,9 @@ class CampaignBot(Bot):
     # Rally ----------------------------------------------------------------------------------
 
     def _rally(self, ctx: Ctx) -> None:
+        """Free charged groups walk to the own node nearest the objective that has room for at
+        least one unit at the arrival (#686); a group bigger than that room (or the way)
+        splits off the part that fits, which walks in the next decision."""
         goal = self.objective(ctx)
         hops = self.hops[goal]
         for g in self.free_groups(ctx):
@@ -536,14 +622,16 @@ class CampaignBot(Bot):
                 (
                     n
                     for n in self.reachable(ctx.view, here, self.params["radius"])
-                    if ctx.view.nodes[n].owner == self.player and hops[n] < hops[here]
+                    if ctx.view.nodes[n].owner == self.player
+                    and hops[n] < hops[here]
+                    and self.room(ctx, n) >= 1
                 ),
                 key=lambda n: (hops[n], self.key(n)),
                 default=None,
             )
             if best is None:
                 continue
-            size = self.fit(ctx.view, here, best, g.units)
+            size = min(self.fit(ctx.view, here, best, g.units), self.room(ctx, best))
             if size == g.units and self.spend(ctx, Move(g.id, best)):
                 ctx.used[g.id] = True
                 ctx.standing[here] -= g.units
@@ -561,7 +649,7 @@ class CampaignBot(Bot):
             n.id
             for n in view.nodes
             if self.recruited.get(n.id) != ctx.tick
-            and self.can_queue(view, n.id, ctx.standing[n.id])
+            and self.can_queue(view, n.id, self.load(ctx, n.id))  # #686: the arrivals too
         ]
         if not cities:
             return

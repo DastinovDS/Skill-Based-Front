@@ -13,7 +13,7 @@ import pytest
 
 from gow_bots.bots import BOTS, SmartRusher
 from gow_bots.bots.base import LINES_ONLY, V1_ONLY
-from gow_bots.bots.economy import leaf_shift_command
+from gow_bots.bots.economy import LeafShift, leaf_shift_command
 from gow_sim.commands import (
     BuildBunker,
     Command,
@@ -148,7 +148,8 @@ def test_leaf_shift_goes_back_when_a_leaf_faces_a_stronger_enemy(
     view = match.view(0)
     assert view.nodes[leaf].front_dist == 0
     assert view.me.leaf_shift_max is not None and view.me.leaf_shift_max >= 1
-    assert leaf_shift_command(bot, view) is None  # nothing seen there: the shift stays 0
+    # Nothing seen there: the shift stays 0.
+    assert leaf_shift_command(bot, view, LeafShift()) is None
     # A visible enemy of 5 charged next to the leaf (as an EXACT sighting tells it).
     sighting = Sighting(view.tick, Detail.EXACT, (Mode.ATTACK,), 5, 5)
     nodes = list(view.nodes)
@@ -156,14 +157,14 @@ def test_leaf_shift_goes_back_when_a_leaf_faces_a_stronger_enemy(
     view = replace(view, nodes=tuple(nodes))
     seen = bot.enemy_at(view, enemy)
     assert seen == (5, 5)
-    assert leaf_shift_command(bot, view) == SetLeafShift(1)
+    assert leaf_shift_command(bot, view, LeafShift()) == SetLeafShift(1)
     # The bot attacks: back to the front.
     group = view.groups[0]
     attack = OrderView(dest=enemy, path=(enemy,), planned=False, depart_tick=view.tick)
     attacking = replace(view, groups=(replace(group, order=attack),))
-    assert leaf_shift_command(bot, attacking) is None  # in force: 0
+    assert leaf_shift_command(bot, attacking, LeafShift()) is None  # in force: 0
 
 
 def test_leaf_shift_is_none_under_lines(mvp3: Ruleset, crossroads: MapDef) -> None:
     bot = SmartRusher(crossroads, mvp3, seed=1, player=0)
-    assert leaf_shift_command(bot, Match(crossroads, mvp3, KEY).view(0)) is None
+    assert leaf_shift_command(bot, Match(crossroads, mvp3, KEY).view(0), LeafShift()) is None

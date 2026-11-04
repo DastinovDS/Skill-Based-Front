@@ -135,10 +135,11 @@ class ReactiveBot(CampaignBot):
     def reinforce(self, ctx: Ctx, target: int) -> bool:
         """The nearest charged group that can walk to ``target`` and may leave its city."""
         best: GroupView | None = None
+        room = self.room(ctx, target) if ctx.view.nodes[target].owner == self.player else None
         for g in self.free_groups(ctx):
             here = node_of(g)
-            if here == target or g.charged == 0:
-                continue
+            if here == target or g.charged == 0 or (room is not None and g.units > room):
+                continue  # #686: no move into a node it would put over capacity
             if not self.may_leave(ctx, g) or target not in self.reachable(
                 ctx.view, here, SEARCH_HOPS, g.units
             ):
