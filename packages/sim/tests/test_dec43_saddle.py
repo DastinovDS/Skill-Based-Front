@@ -154,8 +154,9 @@ def test_k4_nothing_goes_away_from_a_hungry_leaf() -> None:
         state.nodes[n].warehouse = stock
     update_flow(state, RULES)
     state.tick = 9
-    assert _run(state, 10, 0) == {10: [(B, C)]}
-    assert state.nodes[B].warehouse == 2
+    # since #735 D fills C first (the level outward, ``c`` 2 to 3, item L2); B keeps its 3
+    assert _run(state, 10, 0) == {10: [(D, C)]}
+    assert state.nodes[B].warehouse == 3
 
 
 # K5: a saddle under a shift -----------------------------------------------------------------------
@@ -169,15 +170,16 @@ def test_k5_a_saddle_behind_the_level_at_k_2() -> None:
     state.players[1].leaf_shift = 2
     sends = _run(state, 100, 1)
     assert sends == {
-        10: [(FENMERE, ASHBY)],
-        20: [(IRON_HOLD, FENMERE)],
+        10: [(THORNWAY, LARKFIELD), (FENMERE, ASHBY)],  # Thornway outward (#735, item L2)
+        20: [(BARROW, THORNWAY), (IRON_HOLD, FENMERE)],
+        30: [(IRON_HOLD, BARROW)],
         50: [(ASHBY, LARKFIELD)],
         60: [(FENMERE, ASHBY)],
         70: [(IRON_HOLD, FENMERE)],
         100: [(ASHBY, LARKFIELD)],
     }
     assert state.players[1].leaf_shift == 2
-    assert state.nodes[LARKFIELD].warehouse == 1  # landed at 95
+    assert state.nodes[LARKFIELD].warehouse == 2  # landed at 54 and 95
     d = {n: state.nodes[n].flow.d for n in (ASHBY, FENMERE, IRON_HOLD, LARKFIELD)}  # type: ignore[union-attr]
     assert d == {ASHBY: 3, FENMERE: 3, IRON_HOLD: 3, LARKFIELD: 2}
 
