@@ -1,9 +1,9 @@
 /**
  * Geometry of the road fortifications (DEC-43, item D; #707; ui-style 42, the look C7 "Long run"):
  * a flat stroke inside the own cell, parallel to the territory border at the road crossing, with
- * fine ticks on its outer side. It follows the border of the cell as far as the shared border goes
- * (it ends square where the run ends or turns by more than `FORT.trim` degrees, so it never wraps a
- * cell corner) and bends with the gentle curves of that border.
+ * fine ticks on its outer side. It covers the whole stretch of the border with the cell the road
+ * leads to (it ends square where that border ends or turns by more than `FORT.trim` degrees, so it
+ * never wraps a cell corner) and bends with the gentle curves of that border (#734).
  *
  * Pure functions, no PixiJS and no DOM. Nothing here knows a rule: the server says which road of
  * which node is fortified and whether it is built (`EdgeView.forts`); the client only draws it.
@@ -13,7 +13,10 @@ import type { CellEdge } from './regionLayout.ts';
 
 /** The look C7 "Long run", in world units at zoom 1 (docs/design/mockups/fortifications.html, round 4). */
 export const FORT = {
-  /** The run along the border that the ticks are laid on (not scaled by the zoom: zoomed out fewer ticks fit). */
+  /**
+   * The length of a straight stub, when the cell has no border with the cell across the road (not
+   * scaled by the zoom: zoomed out fewer ticks fit). A border run is as long as the border (#734).
+   */
   runLength: 170,
   /** The stroke width, and how far it lies inside the own cell. */
   line: 3,
@@ -58,9 +61,9 @@ export interface TickLayout {
   readonly tl: number;
   readonly lw: number;
   readonly off: number;
-  /** Centres of the ticks along the run, relative to the crossing. */
+  /** Centres of the ticks of a stub, relative to the crossing (`tickCentres` lays them on a run). */
   readonly cs: readonly number[];
-  /** Half of the stretch the ticks cover, and the same plus the reach: what the run has to cover. */
+  /** Half of the stretch the ticks of a stub cover, and the reach of its line beyond the last tick. */
   readonly half: number;
   readonly reach: number;
 }
@@ -110,8 +113,8 @@ export interface RunInput {
   readonly cross: Point;
   /** The node, to tell which side of an edge is out of its cell when the edge has no `inward`. */
   readonly node: Point;
-  /** How far the run reaches from the crossing on each side. */
-  readonly half: number;
+  /** How far the run may reach from the crossing on each side; by default as far as the border goes. */
+  readonly half?: number;
 }
 
 const dist = (a: Point, b: Point): number => Math.hypot(b.x - a.x, b.y - a.y);
@@ -182,13 +185,15 @@ const TURN_WINDOW = 12;
 
 /**
  * The run of the border of a cell that a fortification at `cross` lies along: from the nearest shared
- * edge, `half` each way, stopping where the shared border ends or turns by more than `FORT.trim`
- * degrees (a turn is judged over `TURN_WINDOW` on each side, so a corner a geography has rounded
- * into many short steps still counts). `null` when the cell has no shared edge (the caller draws a
- * straight stub then).
+ * edge both ways, stopping where the shared border ends or turns by more than `FORT.trim` degrees (a
+ * turn is judged over `TURN_WINDOW` on each side, so a corner a geography has rounded into many short
+ * steps still counts), or has turned by more than `FORT.drift` since the crossing, or (when given)
+ * `half` from the crossing. `null` when the cell has no shared edge (the caller draws a straight stub
+ * then).
  */
 export function borderRun(input: RunInput): Run | null {
-  const { ring, shared, cross, node, half } = input;
+  const { ring, shared, cross, node } = input;
+  const half = input.half ?? Infinity;
   const n = ring.length;
   let e = -1;
   let best = Infinity;
@@ -506,6 +511,33 @@ export function tickFits(run: Run, a: number, width: number): boolean {
   return a - width / 2 >= -run.s0 && a + width / 2 <= run.len - run.s0;
 }
 
+/** The whole run relative to the crossing: from its first point (`lo`, negative) to its last (`hi`). */
+export function runSpan(run: Run): { readonly lo: number; readonly hi: number } {
+  return { lo: -run.s0, hi: run.len - run.s0 };
+}
+
+/**
+ * The centres of the ticks on the whole run, relative to the crossing: the spacing of `lay` (a tick
+ * and a gap) kept in step with the crossing, every tick that fits on the run. A border run has ticks
+ * up to its square ends; a stub (no ring) keeps `lay.reach` of bare stroke at each end, as before.
+ */
+export function tickCentres(run: Run, lay: TickLayout): number[] {
+  const step = lay.tw + lay.gap;
+  if (!(step > 0)) return [];
+  const c0 = lay.cs[0] ?? 0;
+  const inset = run.ringLength > 0 ? 0 : lay.reach;
+  const span = runSpan(run);
+  const lo = span.lo + inset;
+  const hi = span.hi - inset;
+  const out: number[] = [];
+  for (let k = Math.ceil((lo + lay.tw / 2 - c0) / step - 1e-9); ; k++) {
+    const a = c0 + k * step;
+    if (a + lay.tw / 2 > hi + 1e-9) break;
+    out.push(a);
+  }
+  return out;
+}
+
 /** Dashes along a polyline: pieces of length `dash` with `gap` between, as pairs of points (a piece may bend). */
 export function dashAlong(line: readonly Point[], dash: number, gap: number): Point[][] {
   const pieces: Point[][] = [];
@@ -539,27 +571,45 @@ export function dashAlong(line: readonly Point[], dash: number, gap: number): Po
   return pieces;
 }
 
+/** Where a run lies on the ring of its cell: from its first point to its last (arc length, may pass the ring's end). */
+export function ringStretch(run: Run): { readonly from: number; readonly to: number } {
+  const from = run.ringAt - run.s0;
+  return { from, to: from + run.len };
+}
+
+/** Two runs closer than this on one ring (world units) are not on one stretch: they only touch at a vertex. */
+const TOUCH = 1;
+
 /**
- * Which of the forts of one node lie one over another (their runs overlap on the ring of the cell):
- * the stack level of each, 0 for the first, 1 for one moved further into the cell, and so on.
+ * Which of the forts of one node lie one over another (their stretches of the ring of the cell
+ * overlap; `ringLength` 0 is a stub, which overlaps the other stubs of the node only): the stack level of
+ * each, 0 for the first, 1 for one moved further into the cell, and so on.
  */
 export function stackLevels(
-  forts: readonly { readonly key: string; readonly ringAt: number; readonly ringLength: number }[],
-  overlap: number,
+  forts: readonly {
+    readonly key: string;
+    readonly from: number;
+    readonly to: number;
+    readonly ringLength: number;
+  }[],
 ): Map<string, number> {
   const levels = new Map<string, number>();
-  const placed: { ringAt: number; ringLength: number; level: number }[] = [];
+  const placed: { from: number; to: number; ringLength: number; level: number }[] = [];
+  const overlaps = (a: (typeof placed)[number], b: (typeof placed)[number]): boolean => {
+    if (a.ringLength <= 0 || b.ringLength <= 0) return a.ringLength <= 0 && b.ringLength <= 0;
+    const ring = a.ringLength;
+    // The ring is closed: a stretch past its end meets one at its start.
+    return [-ring, 0, ring].some(
+      (k) => Math.min(a.to, b.to + k) - Math.max(a.from, b.from + k) > TOUCH,
+    );
+  };
   for (const fort of forts) {
+    const here = { from: fort.from, to: fort.to, ringLength: fort.ringLength, level: 0 };
     const taken = new Set<number>();
-    for (const other of placed) {
-      let d = Math.abs(fort.ringAt - other.ringAt);
-      if (fort.ringLength > 0) d = Math.min(d, fort.ringLength - d);
-      if (d < overlap) taken.add(other.level);
-    }
-    let level = 0;
-    while (taken.has(level)) level++;
-    levels.set(fort.key, level);
-    placed.push({ ringAt: fort.ringAt, ringLength: fort.ringLength, level });
+    for (const other of placed) if (overlaps(here, other)) taken.add(other.level);
+    while (taken.has(here.level)) here.level++;
+    levels.set(fort.key, here.level);
+    placed.push(here);
   }
   return levels;
 }

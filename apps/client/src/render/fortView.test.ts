@@ -1,11 +1,12 @@
 import type { Container, Graphics, Text } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { DEV_RULES_FLOW, devSnapshot } from '../hud/devFeed.ts';
-import { DEFAULT_MAP } from '../map/bundledMaps.ts';
+import { BUNDLED_MAPS, DEFAULT_MAP, bundledGeo } from '../map/bundledMaps.ts';
 import type { RoadFort, SnapshotMsg } from '../protocol.gen.ts';
 import { buildProgress, FortView, fortsOf } from './fortView.ts';
+import { ringOrder } from './fortLayout.ts';
 import { createLayers } from './layers.ts';
-import { voronoiTerritory } from './territory.ts';
+import { territoryOf, voronoiTerritory } from './territory.ts';
 
 const map = DEFAULT_MAP;
 const territory = voronoiTerritory(map);
@@ -248,6 +249,40 @@ describe('FortView: the pick of "Fortify road" (P1 Ghosts)', () => {
       cost: '1.5 CP',
     });
     expect(view.pickTargets().every((t) => t.edge !== road.id)).toBe(true);
+    view.destroy();
+  });
+});
+
+describe('FortView: a line covers the whole shared border on a geography map (#734)', () => {
+  const narrows = BUNDLED_MAPS.find((m) => m.meta.name === 'narrows');
+  if (narrows === undefined) throw new Error('the map narrows is not bundled');
+  const land = territoryOf(narrows, bundledGeo(narrows));
+  // The Narrows (14) and Far Fork (17): the road 45 crosses their smooth shared border about 35
+  // units from one end and 156 from the other (the owner's playtest, #734).
+  const NODE = 14;
+  const TO = 17;
+  const ROAD = 45;
+  const border = ringOrder(land.edges.filter((e) => e.cell === NODE)).filter(
+    (e) => e.neighbour === TO,
+  );
+  const ends = [border[0]?.a, border[border.length - 1]?.b];
+
+  it('the ghost of the pick reaches both ends of the border with the cell the road leads to', () => {
+    const layers = createLayers();
+    const view = new FortView(narrows, layers, 0, () => land.edges);
+    const snap = devSnapshot(narrows, DEV_RULES_FLOW, TICK);
+    view.update(snap.view, TICK, { node: NODE, edges: [ROAD], hover: null, cost: '1.5 CP' });
+    const line = view.pickTargets().find((t) => t.edge === ROAD)?.line ?? [];
+    expect(line.length).toBeGreaterThan(1);
+    const first = line[0];
+    const last = line[line.length - 1];
+    if (first === undefined || last === undefined) throw new Error('no line');
+    // The line lies a few units inside the cell (its offset), so its ends are that close to the
+    // ends of the border, whichever way round the run goes.
+    const near = (p: { x: number; y: number }) =>
+      Math.min(...ends.map((q) => (q === undefined ? Infinity : Math.hypot(p.x - q.x, p.y - q.y))));
+    expect(near(first)).toBeLessThan(12);
+    expect(near(last)).toBeLessThan(12);
     view.destroy();
   });
 });

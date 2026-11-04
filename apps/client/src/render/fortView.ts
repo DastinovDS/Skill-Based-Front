@@ -9,12 +9,14 @@ import {
   dashAlong,
   markScale,
   ringOrder,
+  ringStretch,
   runLine,
   runPoint,
+  runSpan,
   runStrip,
   stackLevels,
   stubRun,
-  tickFits,
+  tickCentres,
   tickLayout,
   tickPolygon,
   type Run,
@@ -236,16 +238,20 @@ export class FortView {
     if (to === null || cross === undefined || from === undefined) return undefined;
     const ownerAcross = this.owners[to] ?? null;
     const half = lay.half + lay.reach;
+    const ring = this.ringOf(node);
+    // The whole border with the cell the road leads to (#734). A road between cells that do not
+    // touch (only some test maps have one) falls back to the border with a cell of the same owner,
+    // as long as a stub, then to a straight stub.
     const run =
+      borderRun({ ring, shared: (e) => e.neighbour === to, cross, node: from }) ??
       borderRun({
-        ring: this.ringOf(node),
-        shared: (e) =>
-          e.neighbour !== null &&
-          (e.neighbour === to || (this.owners[e.neighbour] ?? null) === ownerAcross),
+        ring,
+        shared: (e) => e.neighbour !== null && (this.owners[e.neighbour] ?? null) === ownerAcross,
         cross,
         node: from,
         half,
-      }) ?? stubRun(from, cross, half);
+      }) ??
+      stubRun(from, cross, half);
     this.runs.set(key, run);
     return run;
   }
@@ -260,8 +266,7 @@ export class FortView {
         stackLevels(
           found
             .filter((r) => r.spec.node === node)
-            .map((r) => ({ key: r.spec.key, ringAt: r.run.ringAt, ringLength: r.run.ringLength })),
-          lay.half,
+            .map((r) => ({ key: r.spec.key, ringLength: r.run.ringLength, ...ringStretch(r.run) })),
         ),
       );
     }
@@ -331,18 +336,18 @@ export class FortView {
     }
   }
 
-  /** Which part of a line is built: from `lo` to `hi` (relative to the crossing), and whether it is known at all. */
-  private stateOf(spec: FortSpec, lay: TickLayout): { lo: number; hi: number; known: boolean } {
-    const half = lay.half + lay.reach;
-    if (spec.built) return { lo: -half, hi: half, known: true };
+  /** Which part of the run of a line is built: from `lo` to `hi` (relative to the crossing), and whether it is known at all. */
+  private stateOf(spec: FortSpec, run: Run): { lo: number; hi: number; known: boolean } {
+    const span = runSpan(run);
+    if (spec.built) return { ...span, known: true };
     // An own build tells its progress; an enemy line being built is only known to exist.
     if (spec.owner !== this.me || spec.doneTick === null) return { lo: 0, hi: 0, known: false };
     const p = buildProgress(spec.doneTick, this.tick, this.buildTicks);
-    return { lo: -half, hi: -half + 2 * half * p, known: true };
+    return { lo: span.lo, hi: span.lo + (span.hi - span.lo) * p, known: true };
   }
 
   private drawHalo(p: Placed, lay: TickLayout): void {
-    const { lo, hi, known } = this.stateOf(p.spec, lay);
+    const { lo, hi, known } = this.stateOf(p.spec, p.run);
     if (!known || hi - lo < 1) return;
     this.haloOf(this.halos, p, lay, lo, hi, 1);
   }
@@ -376,10 +381,11 @@ export class FortView {
   private drawLine(p: Placed, lay: TickLayout): void {
     const { spec, run } = p;
     const g = this.lines;
-    const { lo, hi, known } = this.stateOf(spec, lay);
+    const { lo, hi, known } = this.stateOf(spec, run);
     const d = lay.off + p.level * FORT.stackStep * this.mk;
     const color = this.colorOf(spec.owner);
-    const half = lay.half + lay.reach;
+    const span = runSpan(run);
+    const ticks = tickCentres(run, lay);
     const rk = this.mk;
     const dash = (line: readonly Point[], width: number, on: number, off: number): void => {
       for (const piece of dashAlong(line, on, off)) {
@@ -392,15 +398,14 @@ export class FortView {
     };
     if (!known) {
       // An enemy line being built: only that it exists, a dashed outline of the whole line.
-      dash(runLine(run, -half, half, -d), 1.5 * rk, 4 * rk, 4 * rk);
-      for (const a of lay.cs) {
-        if (!tickFits(run, a, lay.tw)) continue;
+      dash(runLine(run, span.lo, span.hi, -d), 1.5 * rk, 4 * rk, 4 * rk);
+      for (const a of ticks) {
         const poly = tickPolygon(run, a, lay.tw, d, lay.lw, lay.tl);
         dash([...poly, poly[0] as Point], 1.3 * rk, 2.6 * rk, 2.2 * rk);
       }
       return;
     }
-    const built = hi - lo >= 2 * half - 0.01;
+    const built = hi >= span.hi - 0.01;
     if (hi - lo > 0.5) {
       const line = runLine(run, lo, hi, -d);
       const first = line[0];
@@ -412,11 +417,10 @@ export class FortView {
     }
     if (!built) {
       // The part not built yet: a thin dashed line.
-      dash(runLine(run, hi, half, -d), 1.5 * rk, 4 * rk, 4 * rk);
+      dash(runLine(run, hi, span.hi, -d), 1.5 * rk, 4 * rk, 4 * rk);
     }
     const unbuilt: Point[][] = [];
-    for (const a of lay.cs) {
-      if (!tickFits(run, a, lay.tw)) continue;
+    for (const a of ticks) {
       const poly = tickPolygon(run, a, lay.tw, d, lay.lw, lay.tl);
       if (built || a + lay.tw / 2 <= hi + 0.01) {
         g.poly(poly.flatMap((q) => [q.x, q.y])).fill(color);
@@ -463,23 +467,22 @@ export class FortView {
       if (isHover) hover = p;
       const d = lay.off + p.level * FORT.stackStep * this.mk;
       const alpha = isHover ? FORT.ghostHoverAlpha : FORT.ghostAlpha;
-      const half = lay.half + lay.reach;
+      const { lo, hi } = runSpan(p.run);
       // The dark band under it keeps a ghost readable on a pale ground and over a cell line.
-      this.haloOf(g, p, lay, -half, half, isHover ? 1 : 0.8);
-      const line = runLine(p.run, -half, half, -d);
+      this.haloOf(g, p, lay, lo, hi, isHover ? 1 : 0.8);
+      const line = runLine(p.run, lo, hi, -d);
       const first = line[0];
       if (first !== undefined) {
         g.moveTo(first.x, first.y);
         for (const q of line.slice(1)) g.lineTo(q.x, q.y);
         g.stroke({ width: lay.lw, color, alpha, cap: 'butt', join: 'round' });
       }
-      for (const a of lay.cs) {
-        if (!tickFits(p.run, a, lay.tw)) continue;
+      for (const a of tickCentres(p.run, lay)) {
         const poly = tickPolygon(p.run, a, lay.tw, d, lay.lw, lay.tl);
         g.poly(poly.flatMap((q) => [q.x, q.y])).fill({ color, alpha });
       }
       // Where the pointer counts as on this ghost: the line, a little way out.
-      this.targets.push({ edge: p.spec.edge, line: runLine(p.run, -half, half, -d + lay.tl / 2) });
+      this.targets.push({ edge: p.spec.edge, line: runLine(p.run, lo, hi, -d + lay.tl / 2) });
     }
     if (hover === undefined) {
       this.hidePrice();
