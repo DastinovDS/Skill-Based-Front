@@ -257,6 +257,8 @@ class _Field:
     outward: dict[int, list[tuple[int, int]]]
     """The level nodes that may send: their enclave neighbours ``m`` with ``c(m) > c(n)`` (item
     L4), by road id."""
+    up: dict[int, list[tuple[int, int]]]
+    """PROTOTYPE C1 (#738): the nodes behind the level: their uphill neighbours (``d(m) > d``)."""
 
 
 def _field(state: GameState, player: int) -> _Field:
@@ -404,6 +406,7 @@ def _field(state: GameState, player: int) -> _Field:
     down: dict[int, list[tuple[int, int]]] = {}
     level: dict[int, list[tuple[int, int]]] = {}
     outward: dict[int, list[tuple[int, int]]] = {}
+    up: dict[int, list[tuple[int, int]]] = {}
     flat: list[int] = []
     for n, dn in d.items():
         kn = k[n]
@@ -418,6 +421,7 @@ def _field(state: GameState, player: int) -> _Field:
         below: list[tuple[int, int]] = []
         same: list[tuple[int, int]] = []
         out: list[tuple[int, int]] = []
+        uphill: list[tuple[int, int]] = []
         for m, eid in adj[n]:
             dm = d[m]  # every own node has a field (item I2)
             if dm < dn:
@@ -427,12 +431,30 @@ def _field(state: GameState, player: int) -> _Field:
                 same.append((m, eid))
             elif dn == kn and m in beyond and hops[m] > hops[n]:
                 out.append((m, eid))  # the level gives outward into an enclave (item L4)
+            elif dn > kn:
+                uphill.append((m, eid))  # C1: uphill behind the level, towards a smaller feed
         down[n] = below
         level[n] = same
         if out:
             outward[n] = out
+        if uphill:
+            up[n] = uphill
     return _Field(
-        player, d, k, pocket, adj, down, level, holding, before, owed, flat, hops, beyond, outward
+        player,
+        d,
+        k,
+        pocket,
+        adj,
+        down,
+        level,
+        holding,
+        before,
+        owed,
+        flat,
+        hops,
+        beyond,
+        outward,
+        up,
     )
 
 
@@ -530,7 +552,7 @@ def _run(
     feed: dict[int, int] | None = None
     for n in senders:
         if (
-            (d[n] > k[n] and any(room[m] for m, _ in field.level[n]))
+            d[n] > k[n]
             or any(room[m] for m, _ in outward.get(n, ()))
             or (
                 n in beyond
@@ -558,6 +580,28 @@ def _run(
             down = [pair for pair in down if not _back(field, n, pair[0])]
             level = [pair for pair in level if not _back(field, n, pair[0])]
         out: list[tuple[int, int]] = []
+        if behind and feed is not None:
+            # C1 (#738): behind the level, first every road towards a smaller feed distance on room
+            # alone (uphill too), then downhill between equal feed distances (A6), then the level
+            # roads between equal ones by the gap rule; nothing towards a larger feed distance
+            uphill = [p for p in field.up.get(n, ()) if room[p[0]] and want.get(p[0], 1)]
+            if n in beyond and n in feed:
+                uphill = [pair for pair in uphill if not _back(field, n, pair[0])]
+            first = [p for p in down + level + uphill if feed.get(p[0], far) < fn]
+            stage = [p for p in down if feed.get(p[0], far) == fn]
+            level = [p for p in level if feed.get(p[0], far) == fn]
+            for group in (first, stage):
+                if len(group) > 1:
+                    group.sort(key=lambda pair: order(pair[0]))
+                for m, eid in group:
+                    if have == 0:
+                        break
+                    out.append((m, eid))
+                    room[m] -= 1
+                    if m in want:
+                        want[m] -= 1
+                    have -= 1
+            down = []
         if len(down) > 1:
             down.sort(key=lambda pair: order(pair[0]))
         for m, eid in down:
@@ -581,13 +625,7 @@ def _run(
                 break
             load = capacities[m] - room[m]
             if behind:
-                if feed is not None:
-                    # behind the level (item K): towards a hungry level node on room alone, the
-                    # gap rule between equal feed distances, nothing away from a hungry level node
-                    fm = feed.get(m, far)
-                    give = fm < fn or (fm == fn and load + 2 <= have)
-                else:
-                    give = load + 2 <= have  # a gap of 1 never moves
+                give = load + 2 <= have  # C1: only equal feed distances are left: the gap rule
             elif m in field.holding or field.before.get(m) == n:
                 give = True  # a pulling army takes without the gap (item I3), the path too (I7)
             elif cn is None:
@@ -646,13 +684,12 @@ def _feed(field: _Field, room: dict[int, int], want: dict[int, int]) -> dict[int
     queue = [n for n in field.flat if room[n] and want.get(n, 1)]
     feed = dict.fromkeys(queue, 0)
     for m in queue:  # the list grows while it is walked: a BFS in queue order
-        dm = d[m]
         step = feed[m] + 1
         for n, _ in adj[m]:
             # n sends to m: n is behind the level, m downhill of it or on its level (the nodes of
             # one component share k, and every own node has a field); for an enclave node only
             # the roads to a node not nearer the capital, or one that holds, count (item L6)
-            if n not in feed and d[n] >= dm and d[n] > k[n]:
+            if n not in feed and d[n] > k[n]:  # C1: uphill roads too
                 if n in beyond and _back(field, n, m):
                     continue
                 feed[n] = step
