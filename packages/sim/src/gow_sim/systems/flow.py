@@ -35,15 +35,17 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
   it`` (the fill order still reads its warehouse room);
 - the **room** of an own node: ``max(0, cap - stock - own packets on the way to it)``, a snapshot
   at the start of a dispatch that only decreases while it runs (item A5, the wave);
-- the **feed distance** (item K, #732): 0 for a **hungry** level node (``d == k``, room at the
-  snapshot, and a build node without an army still wants a charge), then a BFS backwards over the
-  roads a node behind the level sends along (downhill and level roads); a node without one feeds
-  no hungry level node;
-- the **capital distance** ``c(n)`` (item L, #735): hops from the own capital over internal roads,
-  for the capital's component only. An **enclave** is a connected set of its nodes behind the level
-  with no own factory: only the level can feed it. A node of an enclave with a feed distance (its
-  roads towards a smaller ``c`` not counted, but to a node that holds) is a **corridor** and gives
-  nothing towards a smaller ``c`` but to a node that holds.
+- the **capital distance** ``c(n)`` (item L1, #735): hops from the own capital over internal
+  roads, for the capital's component only;
+- **the nearest need** (item M, #738), the dispatch of the capital's component: every own node not
+  ahead of the level with room (a build node alone: while it still wants a charge) **calls** the
+  nearest stock **farther from the front** (a larger ``d``; a node that holds also calls the
+  level), the front first; a charge moves one road per dispatch along its **way**, which never
+  passes a node nearer the front than the caller, never a node that holds, and moves on the level
+  only away from the capital (item L); a full node at the caller's ``d`` on the way passes one of
+  its own on (a **relay**). What the level has left evens out along the capital distance (item
+  L2). A pocket keeps the rules of items A6, I3 and K (the **feed distance**: 0 for a hungry level
+  node, a BFS backwards over the roads a node behind the level sends along).
 
 Order inside the step (item A13):
 
@@ -55,32 +57,24 @@ Order inside the step (item A13):
 2. **Packets** move and land (``supply.move_packets``).
 3. **Recharge** of standing units (``supply.recharge``).
 4. The **field**: ``d0``, the clamp of the shift, the pull, ``d``.
-5. On a dispatch tick (``t > 0`` divisible by ``supply.dispatch_ticks``) the **dispatch** of item
-   A6, per player: senders in ``(d, node_key)`` order, the front first; a node ahead of the
-   level (``d < k``) sends nothing; the others send one charge per road, first **downhill** (own
-   neighbours with ``k <= d(m) < d(n)`` and room, by fill ``(cap - room) * 100 // cap`` then
-   ``node_key``), then along **level roads** (``d(m) == d(n)``, room, the same order): behind the
-   level by the feed distance (item K: towards a smaller one on room alone, the gap rule
-   ``load(m) + 2 <= have``, ``load = cap - room``, between equal ones, nothing towards a larger
-   one, so no charge bounces); on the level (``d == k``) along the capital distance (item L,
-   #735): outward ``load(m) + 1 <= have``, between equal distances the gap rule, never inward (a
-   pocket: the gap rule, #724), and outward into an enclave neighbour with a feed distance by the
-   same gap of 1, in one list with the level roads; a level node where an own group stands short
-   of a charge or gathering a plan (the groups that pull), or with an unpaid build (item J),
-   keeps, and its level neighbours give to it without the gap (room only). A lifted path node
-   gives only along its path, and the node before it on the path gives to it on room alone (item
-   I7). A corridor gives nothing towards a smaller capital distance but to a node that holds.
-   Each charge is a packet of 1 along one road (item A7).
+5. On a dispatch tick (``t > 0`` divisible by ``supply.dispatch_ticks``) the **dispatch**, per
+   player. The capital's component: the nearest need of item M (``_call``). A pocket: item A6,
+   senders in ``(d, node_key)`` order, the front first; a node ahead of the level (``d < k``)
+   sends nothing; the others send one charge per road, first **downhill** (own neighbours with
+   ``k <= d(m) < d(n)`` and room, by fill ``(cap - room) * 100 // cap`` then ``node_key``), then
+   along **level roads** (``d(m) == d(n)``, room, the same order): behind the level by the feed
+   distance (item K), on the level by the gap rule ``load(m) + 2 <= have`` (item I3); a level node
+   that holds keeps, and its level neighbours give to it on room alone. Each charge is a packet of
+   1 along one road (item A7).
 6. The **plan** of the next dispatch for the view: the same function run on the state now, without
    sending (item E: ``flow_next`` and ``flow_idle``), stored in ``Node.flow`` with the field.
 
-The full factory spills its new charge in ``systems.economy`` (item A8), reading ``Node.flow`` of
-the previous tick (``spill_target``).
+The full factory spills its new charge in ``systems.economy`` (items A8 and M8): one packet to the
+nearest own node with room, reading ``Node.flow`` of the previous tick (``spill_way``).
 
-Cost per tick and player: O(V + E) for the field, the capital distance, the enclaves and the
-plan (and the feed distance of a dispatch or plan with a level road behind the level, an enclave
-or an outward road into one), O(packets) for the room, O(groups) and O(V) (the builds) for the
-pull and the paths.
+Cost per tick and player: O(V + E) for the field and the capital distance, O(packets) for the
+room, O(groups) and O(V) (the builds) for the pull and the paths; the calls of item M are one
+bounded BFS per caller and tier (a caller stops when it is covered or no stock is left).
 """
 
 from collections import deque
@@ -102,7 +96,8 @@ from gow_sim.systems.supply import (
 __all__ = [
     "next_dispatch_tick",
     "send_one",
-    "spill_target",
+    "send_way",
+    "spill_way",
     "starve_pockets",
     "supply_flow",
     "update_flow",
@@ -226,12 +221,12 @@ class _Field:
     """Every own node: ``(neighbour, road)`` over internal roads, by road id."""
     down: dict[int, list[tuple[int, int]]]
     """Every own node that may send: behind the level (``d > k``), or on it (``d == k``) with no
-    own standing group short of a charge or gathering a plan; its downhill neighbours of item A6
-    (``k <= d(m) < d``; none on the level) with the road, by road id, room not considered."""
+    own standing group short of a charge or gathering a plan and no unpaid build. For a node of a
+    pocket its downhill neighbours of item A6 (``k <= d(m) < d``; none on the level) with the
+    road, by road id, room not considered; empty for the capital's component (item M)."""
     level: dict[int, list[tuple[int, int]]]
-    """The same nodes: the neighbours on its level (``d(m) == d``): level roads behind the level,
-    the equalization of the leaves on it (#724); for a lifted path node only its next nodes
-    towards the armies (item I7)."""
+    """The same nodes of a pocket: the neighbours on its level (``d(m) == d``): level roads behind
+    the level, the equalization of the leaves on it (#724); empty for the capital's component."""
     holding: dict[int, bool]
     """The own nodes where an own standing group is short of a charge or gathers a plan (the
     groups that pull), or with an unpaid build (item J): on the level they keep, and a level
@@ -244,19 +239,11 @@ class _Field:
     charges their own builds still owe; a dispatch sends them at most ``owed - stock -
     incoming``."""
     flat: list[int]
-    """The own nodes on the level (``d == k``), lifted and pulled nodes included: the candidates
-    for a hungry level node of item K."""
+    """The own nodes of the pockets on the level (``d == k``): the candidates for a hungry level
+    node of item K."""
     c: dict[int, int]
     """The nodes of the own capital's component: hops from the capital over internal roads (item
     L1, the BFS of item I2); pockets have none."""
-    beyond: dict[int, bool]
-    """The nodes of an **enclave** (item L5): an own connected set of nodes behind the level
-    (``d > k``) of the capital's component with no own factory among them; nothing but the level
-    can feed them. A **corridor** (an enclave node with a feed distance, ``_feed``) gives nothing to
-    a neighbour nearer the capital that does not hold (item L6)."""
-    outward: dict[int, list[tuple[int, int]]]
-    """The level nodes that may send: their enclave neighbours ``m`` with ``c(m) > c(n)`` (item
-    L4), by road id."""
 
 
 def _field(state: GameState, player: int) -> _Field:
@@ -372,7 +359,6 @@ def _field(state: GameState, player: int) -> _Field:
             if n in d:  # a pulled node and its component have a field
                 d[n] = min(d[n], k[n] + h)
     before: dict[int, int] = {}
-    after: dict[int, list[tuple[int, int]]] = {}
     if lifted:
         if d is d0:
             d = dict(d0)
@@ -398,26 +384,22 @@ def _field(state: GameState, player: int) -> _Field:
                 assert best is not None  # rise is a BFS distance: a neighbour one less exists
                 _, m, eid = best
                 before[n] = m
-                after.setdefault(m, []).append((n, eid))
                 n = m
-    beyond = _enclaves(state, player, adj, d, shift, hops) if hops else {}
     down: dict[int, list[tuple[int, int]]] = {}
     level: dict[int, list[tuple[int, int]]] = {}
-    outward: dict[int, list[tuple[int, int]]] = {}
     flat: list[int] = []
     for n, dn in d.items():
         kn = k[n]
+        if dn < kn or (dn == kn and n in holding):
+            continue  # ahead of the level, or a level node that holds: it never sends
+        if n in hops:  # the capital's component: the calls of item M (``_call``)
+            down[n] = []
+            level[n] = []
+            continue
         if dn == kn:
             flat.append(n)
-        if dn < kn or (dn == kn and n in holding):
-            continue  # ahead of the level, or a level node an army there holds: it never sends
-        if n in before:  # a lifted node between: only towards the armies (item I7)
-            down[n] = []
-            level[n] = sorted(after.get(n, []), key=lambda pair: pair[1])  # by road id
-            continue
         below: list[tuple[int, int]] = []
         same: list[tuple[int, int]] = []
-        out: list[tuple[int, int]] = []
         for m, eid in adj[n]:
             dm = d[m]  # every own node has a field (item I2)
             if dm < dn:
@@ -425,36 +407,12 @@ def _field(state: GameState, player: int) -> _Field:
                     below.append((m, eid))
             elif dm == dn:
                 same.append((m, eid))
-            elif dn == kn and m in beyond and hops[m] > hops[n]:
-                out.append((m, eid))  # the level gives outward into an enclave (item L4)
         down[n] = below
         level[n] = same
-        if out:
-            outward[n] = out
-    return _Field(
-        player, d, k, pocket, adj, down, level, holding, before, owed, flat, hops, beyond, outward
-    )
-
-
-def _enclaves(
-    state: GameState,
-    player: int,
-    adj: dict[int, list[tuple[int, int]]],
-    d: dict[int, int],
-    shift: int,
-    hops: dict[int, int],
-) -> dict[int, bool]:
-    """The enclaves of item L5: the nodes of the capital's component (``hops``, level ``shift``)
-    behind the level that no own factory behind the level reaches over such nodes. O(V + E)."""
-    nodes = state.nodes
-    queue = [n for n in hops if d[n] > shift and nodes[n].factory == player]
-    reached = dict.fromkeys(queue, True)
-    for n in queue:  # grows while it is walked: a BFS (only the reached set matters)
-        for m, _ in adj[n]:
-            if m not in reached and d[m] > shift:
-                reached[m] = True
-                queue.append(m)
-    return {n: True for n in hops if d[n] > shift and n not in reached}
+    for n in holding:  # a pocket's node that holds is a hungry level node too (item K1)
+        if n not in hops and d[n] == k[n]:
+            flat.append(n)
+    return _Field(player, d, k, pocket, adj, down, level, holding, before, owed, flat, hops)
 
 
 def _owed(node: Node, player: int) -> int:
@@ -503,60 +461,69 @@ type _Sends = list[tuple[int, list[tuple[int, int]]]]
 
 
 def _run(
-    state: GameState, field: _Field, capacities: tuple[int, ...], incoming: dict[int, int]
+    state: GameState,
+    field: _Field,
+    capacities: tuple[int, ...],
+    incoming: dict[int, int],
+    ways: dict[int, list[int]] | None = None,
 ) -> _Sends:
-    """One dispatch of item A6 on the state now, without sending. The dispatch sends what it
-    returns; the plan only shows it."""
+    """One dispatch on the state now, without sending: the calls of item M in the capital's
+    component, item A6 in the pockets. The dispatch sends what it returns; the plan only shows it
+    (``ways``: the next nodes of every node's called charges, item M9)."""
     player = field.player
     key = state.map.node_key
     nodes = state.nodes
     d = field.d
-    # The senders: behind the level (the level keeps, ahead is frozen) and with stock.
+    # The senders: not ahead of the level, not holding, with stock.
     senders = [n for n in field.down if nodes[n].warehouse > 0]
     if not senders:
         return []
     senders.sort(key=lambda n: (d[n], key(player, n)))
     room, want = _snapshot(state, field, capacities, incoming)
+    c = field.c
+    main = [n for n in senders if n in c]
+    sends = _call(state, field, capacities, main, room, want, incoming, ways) if main else []
+    rest = [n for n in senders if n not in c]
+    if rest:
+        sends.extend(_pocket(state, field, capacities, rest, room, want))
+    return sends
+
+
+def _pocket(
+    state: GameState,
+    field: _Field,
+    capacities: tuple[int, ...],
+    senders: list[int],
+    room: dict[int, int],
+    want: dict[int, int],
+) -> _Sends:
+    """The dispatch of the pockets (``k = 0``): item A6, the level roads behind the level by the
+    feed distance of item K, the level by the gap rule of item I3 (a node that holds takes on room
+    alone)."""
+    player = field.player
+    key = state.map.node_key
+    nodes = state.nodes
+    d = field.d
+    k = field.k
 
     def order(m: int) -> tuple[int, int]:
         cap = capacities[m]  # room > 0, so cap > 0
         return ((cap - room[m]) * 100 // cap, key(player, m))  # non-negative: rounded down
 
     # The feed distance of item K (the saddle), when a sender behind the level has a level road.
-    k = field.k
-    c = field.c
-    outward = field.outward
-    beyond = field.beyond
     feed: dict[int, int] | None = None
     for n in senders:
-        if (
-            (d[n] > k[n] and any(room[m] for m, _ in field.level[n]))
-            or any(room[m] for m, _ in outward.get(n, ()))
-            or (
-                n in beyond
-                and any(room[m] and _back(field, n, m) for m, _ in field.down[n] + field.level[n])
-            )
-        ):
+        if d[n] > k[n] and any(room[m] for m, _ in field.level[n]):
             feed = _feed(field, room, want)
             break
     far = len(field.adj) + 1  # above every feed distance: "feeds no hungry level node"
-
     sends: _Sends = []
     for n in senders:
         have = nodes[n].warehouse
         behind = d[n] > k[n]
         fn = feed.get(n, far) if feed is not None else far
-        if want:
-            down = [p for p in field.down[n] if room[p[0]] and want.get(p[0], 1)]
-            level = [p for p in field.level[n] if room[p[0]] and want.get(p[0], 1)]
-        else:
-            down = [pair for pair in field.down[n] if room[pair[0]]]
-            level = [pair for pair in field.level[n] if room[pair[0]]]
-        if n in beyond and feed is not None and n in feed:
-            # a corridor gives nothing to a neighbour nearer the capital, but to a node that holds
-            # (item L6)
-            down = [pair for pair in down if not _back(field, n, pair[0])]
-            level = [pair for pair in level if not _back(field, n, pair[0])]
+        down = [p for p in field.down[n] if room[p[0]] and want.get(p[0], 1)]
+        level = [p for p in field.level[n] if room[p[0]] and want.get(p[0], 1)]
         out: list[tuple[int, int]] = []
         if len(down) > 1:
             down.sort(key=lambda pair: order(pair[0]))
@@ -568,14 +535,8 @@ def _run(
             if m in want:
                 want[m] -= 1
             have -= 1
-        into = outward.get(n)
-        if into is not None and feed is not None:
-            # the level as a corridor (item L4): outward into an enclave that feeds a hungry level
-            # node, one list with the level roads in the order of item A6
-            level.extend(pair for pair in into if room[pair[0]] and pair[0] in feed)
         if len(level) > 1:
             level.sort(key=lambda pair: order(pair[0]))
-        cn = c.get(n)
         for m, eid in level:
             if have == 0:
                 break
@@ -588,15 +549,10 @@ def _run(
                     give = fm < fn or (fm == fn and load + 2 <= have)
                 else:
                     give = load + 2 <= have  # a gap of 1 never moves
-            elif m in field.holding or field.before.get(m) == n:
-                give = True  # a pulling army takes without the gap (item I3), the path too (I7)
-            elif cn is None:
-                give = load + 2 <= have  # a pocket: the gap rule of item I3
+            elif m in field.holding:
+                give = True  # a pulling army takes without the gap (item I3)
             else:
-                # on the level along the capital distance (item L2): outward (and into an enclave,
-                # item L4) by a gap of 1, between equal distances by the gap rule, never inward
-                cm = c[m]
-                give = load + 1 <= have if cm > cn else cm == cn and load + 2 <= have
+                give = load + 2 <= have  # the gap rule of item I3
             if give:
                 out.append((m, eid))
                 room[m] -= 1
@@ -605,6 +561,231 @@ def _run(
                 have -= 1
         if out:
             sends.append((n, out))
+    return sends
+
+
+def _call(
+    state: GameState,
+    field: _Field,
+    capacities: tuple[int, ...],
+    senders: list[int],
+    room: dict[int, int],
+    want: dict[int, int],
+    incoming: dict[int, int],
+    ways: dict[int, list[int]] | None,
+) -> _Sends:
+    """The nearest need (item M) in the capital's component, at the room snapshot of item A5.
+
+    **Callers**: own nodes not ahead of the level with room (a node that pulls for a build alone:
+    while it still wants a charge, item J5); a caller takes at most its room (its want). They call
+    by **tiers**: ``d`` ascending (the front first), in a tier the nodes that hold first, then the
+    others; in a tier by fill, then ``node_key``. **Stock**: the warehouse and the own packets on
+    the way of every own node not ahead of the level that does not hold. A caller is answered by
+    stock **farther from the front** (a larger ``d``); a caller that holds also by the level when
+    every road of the way goes away from the capital. **Ways**: BFS from each caller, all callers
+    of a tier one layer at a time, the nodes of a layer by ``node_key``; a way never passes a node
+    ahead of the level, a node that holds, a node nearer the front than the caller, another caller
+    of the tier (it stops the charge), a lifted node between but along its path (item I7); it moves
+    on the level and from the level behind it only away from the capital (``c`` grows, item L), but
+    the last road into a caller that holds. A node answers the nearest caller first, with its
+    packets on the way and at most one warehouse charge per road of its way; a covered caller
+    reaches no farther.
+
+    **Sends**, the senders in ``(d, node_key)`` order: each called charge goes one road along its
+    way, to the next node with room by fill, then ``node_key``; when every next node is full, a
+    full next node at the caller's ``d`` passes one of its own on (a **relay**, recursively). Then a
+    level node evens out with what it has left along level roads to the nodes that do not hold
+    (item L2: away from the capital ``load(m) + 1 <= have``, at an equal ``c`` ``load(m) + 2 <=
+    have``, never towards the capital). At most one charge per road and direction."""
+    player = field.player
+    key = state.map.node_key
+    nodes = state.nodes
+    d = field.d
+    k = field.k
+    c = field.c
+    adj = field.adj
+    holding = field.holding
+    before = field.before
+
+    def order(m: int) -> tuple[int, int]:
+        cap = capacities[m]  # room > 0, so cap > 0
+        return ((cap - room[m]) * 100 // cap, key(player, m))  # non-negative: rounded down
+
+    stock: dict[int, int] = {}
+    moving: dict[int, int] = {}
+    for n in c:  # independent entries: the order does not matter
+        if d[n] < k[n] or n in holding:
+            continue
+        on_way = incoming.get(n, 0)
+        total = nodes[n].warehouse + on_way
+        if total:
+            stock[n] = total
+            moving[n] = on_way
+    callers = [t for t in c if d[t] >= k[t] and room[t] and want.get(t, 1)]
+    tiers: dict[tuple[int, int], list[int]] = {}
+    for t in callers:
+        tiers.setdefault((d[t], 0 if t in holding else 1), []).append(t)
+    need = {t: min(room[t], want[t]) if t in want else room[t] for t in callers}
+    dist: dict[int, dict[int, int]] = {}
+    called: dict[int, list[list[int]]] = {}  # node -> [[caller, warehouse charges], ...]
+    left = sum(stock.values())
+    for tier_key in sorted(tiers):
+        if not left:
+            break
+        j, sub = tier_key
+        holds = sub == 0
+        if not any(v and (d[n] > j or (holds and d[n] == j)) for n, v in stock.items()):
+            continue  # no stock this tier can call
+        tier = tiers[tier_key]
+        tier.sort(key=order)
+        front: dict[int, list[int]] = {}
+        outward: dict[int, dict[int, bool]] = {}
+        for t in tier:
+            dist[t] = {t: 0}
+            front[t] = [t]
+            outward[t] = {t: True}
+        while True:
+            live = [t for t in tier if need[t] and front[t]]
+            if not live:
+                break
+            for t in live:
+                dt = dist[t]
+                ot = outward[t]
+                layer: list[int] = []
+                for m in front[t]:
+                    step = dt[m] + 1
+                    for n, _ in adj[m]:  # the charge would go n -> m
+                        if n in dt or d[n] < j or d[n] < k[n] or n in holding:
+                            continue
+                        if not holds and need.get(n) and d[n] == j:
+                            continue  # another caller of the tier: it would keep the charge
+                        if n in before and before.get(m) != n:
+                            continue  # a lifted node between: only along its path
+                        if d[n] == k[n] and c[m] <= c[n] and not (holds and m == t):
+                            continue  # the level passes on only away from the capital
+                        dt[n] = step
+                        if holds:
+                            ot[n] = m == t or (ot[m] and c[m] > c[n])
+                        layer.append(n)
+                if len(layer) > 1:
+                    layer.sort(key=lambda n: key(player, n))
+                front[t] = layer
+            covered = True
+            for t in live:
+                dt = dist[t]
+                ot = outward[t]
+                for n in front[t]:
+                    if not need[t]:
+                        break
+                    v = stock.get(n, 0)
+                    if not v or not (d[n] > j or (holds and ot[n])):
+                        continue
+                    dn = dt[n] - 1
+                    roads = 0
+                    for m, _ in adj[n]:
+                        if dt.get(m, -1) == dn and (n not in before or before.get(m) == n):
+                            roads += 1
+                    on_way = moving[n]
+                    a_way = on_way if on_way < need[t] else need[t]
+                    a_wh = min(v - on_way, roads, need[t] - a_way)
+                    if not a_way + a_wh:
+                        continue
+                    stock[n] = v - a_way - a_wh
+                    moving[n] = on_way - a_way
+                    need[t] -= a_way + a_wh
+                    left -= a_way + a_wh
+                    if a_wh:
+                        called.setdefault(n, []).append([t, a_wh])
+                if need[t]:
+                    covered = False
+            if covered or not left:
+                break
+
+    have: dict[int, int] = {}
+    out: dict[int, list[tuple[int, int]]] = {}
+    used: dict[tuple[int, int], bool] = {}
+
+    def give(n: int, m: int, eid: int) -> None:
+        out.setdefault(n, []).append((m, eid))
+        used[(n, eid)] = True
+        room[m] -= 1
+        if m in want:
+            want[m] -= 1
+        have[n] -= 1
+        if ways is not None:
+            ways.setdefault(n, []).append(m)
+
+    def nearer(n: int, dt: dict[int, int]) -> list[tuple[int, int]]:
+        """The next nodes of ``n`` on its ways to the caller of ``dt``, by fill then node_key."""
+        dn = dt[n] - 1
+        nxt = [
+            (m, eid)
+            for m, eid in adj[n]
+            if dt.get(m, -1) == dn and (n not in before or before.get(m) == n)
+        ]
+        if len(nxt) > 1:
+            nxt.sort(key=lambda pair: order(pair[0]))
+        return nxt
+
+    def relay(m: int, t: int) -> bool:
+        """The full node ``m`` at the caller's ``d`` passes one of its own on towards ``t`` (each
+        step one road nearer ``t``, so it ends)."""
+        if m == t or m in holding or d[m] != d[t]:
+            return False
+        if have.setdefault(m, nodes[m].warehouse) == 0:
+            return False
+        nxt = [pair for pair in nearer(m, dist[t]) if (m, pair[1]) not in used]
+        for x, eid in nxt:
+            if room[x] and want.get(x, 1):
+                give(m, x, eid)
+                return True
+        return any(relay(x, t) for x, _ in nxt)
+
+    for n in senders:
+        have.setdefault(n, nodes[n].warehouse)
+        for t, a in called.get(n, ()):
+            blocked: list[int] = []
+            for m, eid in nearer(n, dist[t]):
+                if ways is not None:
+                    ways.setdefault(n, []).append(m)
+                if a == 0 or have[n] == 0 or (n, eid) in used:
+                    continue
+                if room[m] and want.get(m, 1):
+                    give(n, m, eid)
+                    a -= 1
+                else:
+                    blocked.append(m)
+            if a:
+                for m in blocked:
+                    if relay(m, t):
+                        break
+        if d[n] == k[n] and n not in before and have[n]:
+            # the level evens out with what is left, away from the capital (item L2)
+            cn = c[n]
+            even = [
+                (m, eid)
+                for m, eid in adj[n]
+                if d[m] == k[m]
+                and m not in holding
+                and m not in before
+                and room[m]
+                and c[m] >= cn
+                and (n, eid) not in used
+            ]
+            if len(even) > 1:
+                even.sort(key=lambda pair: order(pair[0]))
+            for m, eid in even:
+                if have[n] == 0:
+                    break
+                load = capacities[m] - room[m]
+                if load + 1 <= have[n] if c[m] > cn else load + 2 <= have[n]:
+                    give(n, m, eid)
+    sends: _Sends = []
+    for n in senders:
+        if n in out:
+            sends.append((n, out.pop(n)))
+    for n in sorted(out, key=lambda n: (d[n], key(player, n))):  # relays of nodes not sending
+        sends.append((n, out[n]))
     return sends
 
 
@@ -626,23 +807,16 @@ def _snapshot(
     return room, want
 
 
-def _back(field: _Field, n: int, m: int) -> bool:
-    """``m`` is nearer the capital than the enclave node ``n`` and does not hold: a corridor does
-    not give to it, and the feed distance does not count the road (item L6)."""
-    return field.c[m] < field.c[n] and m not in field.holding
-
-
 def _feed(field: _Field, room: dict[int, int], want: dict[int, int]) -> dict[int, int]:
     """The feed distance of item K at the room snapshot of a dispatch: 0 for a **hungry** level
     node (``d == k``, ``room > 0``, and a build node without an army still wants a charge, item
     J), then a BFS backwards over the roads a node behind the level sends along: ``feed(n) = 1 +
     min(feed(m))`` over its downhill and level neighbours ``m`` (``down`` and ``level`` of the
     field). A node missing from the result feeds no hungry level node. A BFS distance: the order
-    of the queue does not change it. O(V + E)."""
+    of the queue does not change it. Pockets only (item M). O(V + E)."""
     d = field.d
     k = field.k
     adj = field.adj
-    beyond = field.beyond
     queue = [n for n in field.flat if room[n] and want.get(n, 1)]
     feed = dict.fromkeys(queue, 0)
     for m in queue:  # the list grows while it is walked: a BFS in queue order
@@ -650,11 +824,8 @@ def _feed(field: _Field, room: dict[int, int], want: dict[int, int]) -> dict[int
         step = feed[m] + 1
         for n, _ in adj[m]:
             # n sends to m: n is behind the level, m downhill of it or on its level (the nodes of
-            # one component share k, and every own node has a field); for an enclave node only
-            # the roads to a node not nearer the capital, or one that holds, count (item L6)
+            # one component share k, and every own node has a field)
             if n not in feed and d[n] >= dm and d[n] > k[n]:
-                if n in beyond and _back(field, n, m):
-                    continue
                 feed[n] = step
                 queue.append(n)
     return feed
@@ -683,20 +854,20 @@ def _store(
     key = state.map.node_key
     nodes = state.nodes
     d = field.d
-    plan = dict(_run(state, field, capacities, incoming))
-    # The corridors at the plan (item L6) leave their roads to a smaller capital distance out of
-    # ``flow_down`` (item L10): the chevrons never point back out of a corridor.
-    corridor: dict[int, bool] = {}
-    if field.beyond:
-        feed = _feed(field, *_snapshot(state, field, capacities, incoming))
-        corridor = {n: True for n in field.beyond if n in feed}
+    ways: dict[int, list[int]] = {}
+    plan = dict(_run(state, field, capacities, incoming, ways))
     for n in field.adj:
         dn = d.get(n)
         k = field.k[n]
         down: tuple[int, ...] = ()
-        below_pairs = field.down.get(n)
-        if below_pairs:
-            below = [m for m, _ in below_pairs if n not in corridor or not _back(field, n, m)]
+        if n in field.c:
+            # the chevrons of the capital's component: the next nodes of its called charges and
+            # of its evening at the plan (item M9)
+            nxt_ways = ways.get(n)
+            if nxt_ways:
+                down = tuple(sorted(dict.fromkeys(nxt_ways), key=lambda m: key(player, m)))
+        else:
+            below = [m for m, _ in field.down.get(n, ())]
             if len(below) > 1:
                 below.sort(key=lambda m: key(player, m))
             down = tuple(below)
@@ -733,13 +904,17 @@ def _clear_neutral(state: GameState) -> None:
             node.flow = None
 
 
-# The spill of a full factory (item A8) ---------------------------------------------------------
+# The spill of a full factory (items A8 and M8) ------------------------------------------------
 
 
-def spill_target(state: GameState, rules: Ruleset, factory: int) -> tuple[int, int] | None:
-    """``(neighbour, road)`` the full factory ``factory`` spills its new charge to: an own
-    neighbour with room and ``d(m) >= k``, the smallest ``d(m)`` first, then ``node_key``, by the
-    field stored by the flow step of the previous tick (item A8); ``None``: it burns."""
+def spill_way(
+    state: GameState, rules: Ruleset, factory: int
+) -> tuple[int, tuple[int, ...]] | None:
+    """``(receiver, roads)`` of the spill of the full factory ``factory`` (items A8 and M8): the
+    nearest own node with room (the fewest roads), over own nodes with ``d(m) >= k`` by the field
+    stored by the flow step of the previous tick; among the equally near the smallest ``d(m)``,
+    then ``node_key``; the way is the one a BFS finds first with the neighbours of every node in
+    ``node_key`` order. ``None``: it burns. A neighbour with room is the receiver of item A8."""
     mapdef = state.map
     nodes = state.nodes
     owner = nodes[factory].owner
@@ -748,19 +923,63 @@ def spill_target(state: GameState, rules: Ruleset, factory: int) -> tuple[int, i
     k = here.k if here is not None else 0
     capacities = warehouse_capacities(state, rules)
     incoming = _incoming(state, owner)
-    best: tuple[tuple[int, int], int, int] | None = None
-    for eid in mapdef.incident[factory]:
-        m = mapdef.edges[eid].other(factory)
-        node = nodes[m]
-        f = node.flow
-        if node.owner != owner or f is None or f.d is None or f.d < k:
-            continue
-        if capacities[m] - node.warehouse - incoming.get(m, 0) <= 0:
-            continue
-        cand = ((f.d, mapdef.node_key(owner, m)), m, eid)
-        if best is None or cand[0] < best[0]:
-            best = cand
-    return None if best is None else (best[1], best[2])
+    key = mapdef.node_key
+    parent: dict[int, tuple[int, int]] = {factory: (factory, -1)}
+    layer = [factory]
+    while layer:
+        nxt: list[int] = []
+        best: tuple[tuple[int, int], int] | None = None
+        for n in layer:
+            near: list[tuple[int, int, int]] = []
+            for eid in mapdef.incident[n]:
+                m = mapdef.edges[eid].other(n)
+                node = nodes[m]
+                f = node.flow
+                if m in parent or node.owner != owner or f is None or f.d is None or f.d < k:
+                    continue
+                near.append((key(owner, m), m, eid))
+            near.sort()
+            for _, m, eid in near:
+                if m in parent:
+                    continue  # reached from an earlier node of the layer
+                parent[m] = (n, eid)
+                nxt.append(m)
+                if capacities[m] - nodes[m].warehouse - incoming.get(m, 0) > 0:
+                    f = nodes[m].flow
+                    assert f is not None and f.d is not None
+                    cand = ((f.d, key(owner, m)), m)
+                    if best is None or cand[0] < best[0]:
+                        best = cand
+        if best is not None:
+            dest = best[1]
+            roads: list[int] = []
+            n = dest
+            while n != factory:
+                n, eid = parent[n]
+                roads.append(eid)
+            roads.reverse()
+            return dest, tuple(roads)
+        layer = nxt
+    return None
+
+
+def send_way(
+    state: GameState, rules: Ruleset, player: int, src: int, dst: int, roads: tuple[int, ...]
+) -> Event:
+    """One charge of ``src`` leaves along ``roads`` to ``dst`` as one packet (item M8); the caller
+    takes it from where it comes (the production of item A8)."""
+    ticks = tuple(edge_packet_ticks(state, rules, eid) for eid in roads)
+    packet = send_packet(state, player, src, roads, ticks, 1, transfer=False)
+    return event(
+        state.tick,
+        "packet_sent",
+        packet=packet.id,
+        player=player,
+        edge=roads[0],
+        from_node=src,
+        to_node=dst,
+        charges=1,
+    )
 
 
 def send_one(state: GameState, player: int, src: int, dst: int, eid: int, ticks: int) -> Event:

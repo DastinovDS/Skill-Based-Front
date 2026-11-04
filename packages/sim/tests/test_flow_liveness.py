@@ -56,7 +56,16 @@ import pytest
 
 from gow_sim.maps import MapDef, load_map
 from gow_sim.ruleset import load_ruleset
-from gow_sim.state import AtNode, FlowNode, GameState, Group, Mode, initial_state
+from gow_sim.state import (
+    AtNode,
+    FactoryBuild,
+    FlowNode,
+    GameState,
+    Group,
+    Mode,
+    Node,
+    initial_state,
+)
 from gow_sim.systems.capacity import warehouse_capacities
 from gow_sim.systems.flow import supply_flow, update_flow
 from gow_sim.systems.supply import edge_packet_ticks, packet_dest
@@ -70,6 +79,8 @@ LAYOUTS = ("rear", "random", "capital", "one")
 """Stock layouts per player: ``rear`` every node behind the level full, the level and ahead empty;
 ``random`` every own node 0..cap; ``capital`` the capital full, the rest empty; ``one`` one node
 behind the level full, the rest empty."""
+
+PULLS = ("none", "armies", "builds")
 
 SHAPES = ("downhill", "saddle", "ridge", "corridor out", "corridor in")
 
@@ -170,12 +181,14 @@ class Case:
     map: str
     split: int
     layout: str
-    armies: bool
+    pull: str
+    """``none``, ``armies`` (1 or 2 groups 3/0 in own nodes) or ``builds`` (1 or 2 factory builds
+    owing 2 in own nodes without a factory)."""
     shift: int
 
     def label(self) -> str:
-        armies = "armies" if self.armies else "no armies"
-        return f"{self.map} split {self.split} {self.layout} {armies} k={self.shift}"
+        pull = {"none": "no armies", "armies": "armies", "builds": "builds"}[self.pull]
+        return f"{self.map} split {self.split} {self.layout} {pull} k={self.shift}"
 
 
 _MAPS: dict[str, MapDef] = {}
@@ -234,11 +247,17 @@ def build(case: Case) -> GameState:
             else:
                 stock = cap if n == one else 0
             state.nodes[n].warehouse = stock
-        if case.armies and main:
+        if case.pull == "armies" and main:
             for _ in range(1 + rng.below(2)):
                 n = rng.pick(main)
                 gid = state.new_id()
                 state.groups[gid] = Group(gid, p, 3, 0, Mode.ATTACK, AtNode(n))
+        elif case.pull == "builds":
+            sites = [n for n in main if state.nodes[n].factory is None]
+            for _ in range(1 + rng.below(2)):
+                if sites:
+                    n = rng.pick(sites)
+                    state.nodes[n].factory_build = FactoryBuild(p, 0, 2)
     update_flow(state, RULES)
     return state
 
@@ -258,9 +277,9 @@ def cases(maps: tuple[str, ...], splits: range, layouts: tuple[str, ...]) -> lis
         for split in splits:
             top = max_shift(name, split)
             for layout in layouts:
-                for armies in (False, True):
+                for pull in PULLS:
                     for shift in range(top + 1):
-                        result.append(Case(name, split, layout, armies, shift))
+                        result.append(Case(name, split, layout, pull, shift))
     return result
 
 
@@ -307,15 +326,198 @@ class Result:
     returns: int = 0
     """Quick returns: a road used back within 60 ticks of a send the other way."""
     sends: int = 0
+    stuck: int = 0
+    """Contract item 1 at the fixed point: nodes holding an idle charge while an own node nearer
+    the front with room is reachable (``stuck_nodes``)."""
+    unfed: int = 0
+    """Contract item 3 at the fixed point: nodes that hold (an army short of a charge, an unpaid
+    build) with room while stock reaches them (``unfed_holders``)."""
+    waiting: int = 0
+    """Contract item 2: node-dispatches in which stock idles while it could go nearer the front
+    (``_order``)."""
+    aimless: int = 0
+    """Sends from a node that reaches no room nearer the front (nor a node that holds)."""
+    frozen: int = 0
+    """Contract item 6: sends from or into a node ahead of the level."""
+    level_back: int = 0
+    """Contract item 6: sends from the level to a node behind it that does not hold."""
+    level_side: int = 0
+    """Sends from the level to another level node that does not hold (evening, relays, paths)."""
+    undrawn: int = 0
+    """Contract item 7: node-ticks whose next receivers (``flow_next``) are not all in
+    ``flow_down`` (the chevrons)."""
 
 
 def _hold(state: GameState, player: int) -> dict[int, bool]:
+    """The nodes that hold: an own standing group short of a charge or gathering a plan, an own
+    build paid in charges that still owes (items A4, I3, J)."""
     holding: dict[int, bool] = {}
     for g in state.groups.values():
         loc = g.location
         if g.owner == player and isinstance(loc, AtNode) and (g.charged < g.units or g.plan > 0):
             holding[loc.node] = True
+    for n, node in state.nodes.items():
+        if node.owner == player and _owed(node, player) > 0:
+            holding[n] = True
     return holding
+
+
+def _owed(node: Node, player: int) -> int:
+    due = 0
+    for b in (node.build, node.factory_build, node.fort_build):
+        if b is not None and b.owner == player:
+            due += b.owed
+    return due
+
+
+def _takes(state: GameState, player: int, caps: tuple[int, ...]) -> dict[int, int]:
+    """What every own node of the capital's component takes now: its room (``cap - stock - own
+    packets on the way``); a node that pulls for a build alone (no short army there) at most what
+    the build still owes beyond its stock and packets (item J5)."""
+    incoming = _incoming(state, player)
+    armies: dict[int, bool] = {}
+    for g in state.groups.values():
+        loc = g.location
+        if g.owner == player and isinstance(loc, AtNode) and (g.charged < g.units or g.plan > 0):
+            armies[loc.node] = True
+    takes: dict[int, int] = {}
+    for n in _main(state, player):
+        node = state.nodes[n]
+        room = max(0, caps[n] - node.warehouse - incoming.get(n, 0))
+        due = _owed(node, player)
+        if due and n not in armies:
+            room = min(room, max(0, due - node.warehouse - incoming.get(n, 0)))
+        takes[n] = room
+    return takes
+
+
+def _incoming(state: GameState, player: int) -> dict[int, int]:
+    incoming: dict[int, int] = {}
+    for pk in state.packets.values():
+        if pk.owner == player:
+            dest = packet_dest(state, pk)
+            incoming[dest] = incoming.get(dest, 0) + pk.charges
+    return incoming
+
+
+def _tiers(
+    state: GameState, player: int, takes: dict[int, int]
+) -> tuple[dict[int, int], int, dict[int, bool], dict[int, dict[int, int]]]:
+    """The field ``d``, the level ``k``, the holders and, per tier ``j`` (the ``d`` of a node
+    with room), the nodes that reach a node of that tier with room over a **way**: own nodes of
+    the capital's component, none ahead of the level, none that holds but the end, none nearer the
+    front than the end (``d >= j``: a full node nearer the front keeps its charge), with the
+    roads to the nearest such node (0 for the callers themselves)."""
+    main = _main(state, player)
+    if not main:
+        return {}, 0, {}, {}
+    k = _flow(state, main[0]).k
+    d = {n: _d(state, n) for n in main}
+    holding = _hold(state, player)
+    c = _capital_distance(state, player, main)
+    mapdef = state.map
+    reach: dict[int, dict[int, int]] = {}
+    for j in sorted({d[t] for t in main if takes[t] and d[t] >= k}):
+        start = [t for t in main if takes[t] and d[t] == j]
+        seen = dict.fromkeys(start, 0)
+        queue = deque(start)
+        while queue:
+            m = queue.popleft()
+            if m in holding and seen[m]:
+                continue  # a node that holds keeps what it gets: no way through it
+            for n in _neighbours(mapdef, m):
+                if n in seen or n not in d or d[n] < j or d[n] < k:
+                    continue
+                if d[n] == k and c[m] <= c[n] and not (m in holding and m in start):
+                    continue  # the level passes on only away from the capital (item L)
+                seen[n] = seen[m] + 1
+                queue.append(n)
+        reach[j] = seen
+    return d, k, holding, reach
+
+
+def stuck_nodes(state: GameState, player: int, caps: tuple[int, ...]) -> list[int]:
+    """Contract item 1 (stock settles as close to the front as possible) at a fixed point: own
+    nodes of the capital's component, not ahead of the level and not holding, with a charge in the
+    warehouse, from which a way (``_tiers``) leads to an own node with room **nearer the front**
+    (a smaller ``d``, the field after the shift and the pull). The exceptions are those the rules
+    require: nodes ahead of the level (frozen, item A3), pockets (their own rules, item H), stock
+    that reaches only through enemy or neutral nodes, through a node that holds (it keeps what it
+    gets) or through a full node nearer the front than the receiver."""
+    takes = _takes(state, player, caps)
+    d, k, holding, reach = _tiers(state, player, takes)
+    stuck: list[int] = []
+    for n in sorted(d):
+        if d[n] < k or n in holding or state.nodes[n].warehouse == 0:
+            continue
+        if any(j < d[n] and n in seen for j, seen in reach.items()):
+            stuck.append(n)
+    return stuck
+
+
+def unfed_holders(state: GameState, player: int, caps: tuple[int, ...]) -> list[int]:
+    """Contract item 3 at a fixed point: own nodes that hold (an army short of a charge, an unpaid
+    build) and take a charge, while stock reaches them: from behind the level over a way (as in
+    ``stuck_nodes``), or from the level over the level only."""
+    takes = _takes(state, player, caps)
+    main = _main(state, player)
+    if not main:
+        return []
+    k = _flow(state, main[0]).k
+    d = {n: _d(state, n) for n in main}
+    holding = _hold(state, player)
+    c = _capital_distance(state, player, main)
+    mapdef = state.map
+    unfed: list[int] = []
+    for h in sorted(holding):
+        if h not in d or not takes[h]:
+            continue
+        seen = {h: True}  # node -> every road towards ``h`` goes away from the capital
+        queue = deque([h])
+        found = False
+        while queue and not found:
+            m = queue.popleft()
+            for n in _neighbours(mapdef, m):
+                if n in seen or n not in d or d[n] < k or d[n] < d[h] or n in holding:
+                    continue
+                if d[n] == k and c[m] <= c[n] and m != h:
+                    continue  # the level passes on only away from the capital (item L)
+                flat = m == h or (seen[m] and c[m] > c[n])
+                seen[n] = flat
+                if state.nodes[n].warehouse and (d[n] > d[h] or flat):
+                    found = True
+                    break
+                queue.append(n)
+        if found:
+            unfed.append(h)
+    return unfed
+
+
+def _order(
+    state: GameState, player: int, caps: tuple[int, ...], sent: list[tuple[int, int]]
+) -> tuple[int, int]:
+    """Contract item 2 at one dispatch (read after the step: the landings of the tick are in, the
+    packets of the dispatch are taken out of the room again): ``(waiting, aimless)``. Waiting: the
+    nodes that send nothing although a charge of theirs could go nearer the front (item 1 during
+    the run: the front waits while stock that could fill it idles). Aimless: the sends of a node
+    that reaches no node with room nearer the front over a way (nor, from the level, the level)."""
+    takes = _takes(state, player, caps)
+    senders: dict[int, bool] = {}
+    for a, b in sent:
+        takes[b] = takes.get(b, 0) + 1  # the room before the dispatch
+        senders[a] = True
+    d, k, holding, reach = _tiers(state, player, takes)
+    aimless = 0
+    for a, _ in sent:
+        if a in d and not any(a in r and (j < d[a] or j == d[a] == k) for j, r in reach.items()):
+            aimless += 1
+    waiting = 0
+    for n in sorted(d):
+        if n in senders or d[n] < k or n in holding or state.nodes[n].warehouse == 0:
+            continue
+        if any(j < d[n] and n in r for j, r in reach.items()):
+            waiting += 1
+    return waiting, aimless
 
 
 def _main(state: GameState, player: int) -> list[int]:
@@ -324,18 +526,6 @@ def _main(state: GameState, player: int) -> list[int]:
         for n in sorted(state.nodes)
         if state.nodes[n].owner == player and not _flow(state, n).pocket
     ]
-
-
-def _room(state: GameState, player: int, caps: tuple[int, ...]) -> dict[int, int]:
-    incoming: dict[int, int] = {}
-    for pk in state.packets.values():
-        if pk.owner == player:
-            dest = packet_dest(state, pk)
-            incoming[dest] = incoming.get(dest, 0) + pk.charges
-    return {
-        n: max(0, caps[n] - state.nodes[n].warehouse - incoming.get(n, 0))
-        for n in _main(state, player)
-    }
 
 
 def hungry_and_sources(
@@ -348,7 +538,7 @@ def hungry_and_sources(
     k = _flow(state, main[0]).k
     d = {n: _d(state, n) for n in main}
     holding = _hold(state, player)
-    room = _room(state, player, caps)
+    room = _takes(state, player, caps)
     mapdef = state.map
     member = dict.fromkeys(main, True)
     sources = {n for n in main if d[n] > k and state.nodes[n].warehouse > 0 and n not in holding}
@@ -502,11 +692,14 @@ def check(case: Case, settle_factor: int = 4) -> Result:
         state.events = []
         events = supply_flow(state, RULES)
         sent = False
+        by_player: dict[int, list[tuple[int, int]]] = {}
         for e in events:
             if e.kind == "packet_sent":
                 sent = True
                 a, b = e.get("from_node"), e.get("to_node")
-                assert isinstance(a, int) and isinstance(b, int)
+                p = e.get("player")
+                assert isinstance(a, int) and isinstance(b, int) and isinstance(p, int)
+                by_player.setdefault(p, []).append((a, b))
                 result.sends += 1
                 back = last_send.get((b, a))
                 if back is not None and state.tick - back <= 60:
@@ -517,6 +710,7 @@ def check(case: Case, settle_factor: int = 4) -> Result:
                 assert isinstance(p, int) and isinstance(n, int)
                 if n in waiting.get(p, ()):
                     fed[p] = True
+        _contract_tick(state, caps, by_player, result)
         if state.tick % dt:
             continue
         result.dispatches += 1
@@ -535,6 +729,9 @@ def check(case: Case, settle_factor: int = 4) -> Result:
         result.stalled = [p for p in sorted(waiting) if p not in fed]
     if result.settled:
         for p in sorted(state.players):
+            result.stuck += len(stuck_nodes(state, p, caps))
+            result.unfed += len(unfed_holders(state, p, caps))
+        for p in sorted(state.players):
             size = len(_main(state, p))
             for h, sources in hungry_and_sources(state, p, caps):
                 result.holes.append(
@@ -551,7 +748,46 @@ def check(case: Case, settle_factor: int = 4) -> Result:
     return result
 
 
+def _contract_tick(
+    state: GameState,
+    caps: tuple[int, ...],
+    by_player: dict[int, list[tuple[int, int]]],
+    result: Result,
+) -> None:
+    """The per-tick items of the contract: the order of the sends (2), the shift (6), the
+    chevrons (7)."""
+    for p in sorted(state.players):
+        main = _main(state, p)
+        if not main:
+            continue
+        k = _flow(state, main[0]).k
+        member = dict.fromkeys(main, True)
+        holding = _hold(state, p)
+        sent = [(a, b) for a, b in by_player.get(p, []) if a in member]
+        if state.tick % RULES.supply.dispatch_ticks == 0:
+            wait, aim = _order(state, p, caps, sent)
+            result.waiting += wait
+            result.aimless += aim
+        for a, b in sent:
+            da, db = _d(state, a), _d(state, b)
+            if da < k or db < k:
+                result.frozen += 1
+            elif da == k and b not in holding:
+                if db > k:
+                    result.level_back += 1
+                else:
+                    result.level_side += 1
+        for n in main:
+            f = _flow(state, n)
+            if any(m not in f.down for m in f.next):
+                result.undrawn += 1
+
+
 # The report ------------------------------------------------------------------------------------
+
+
+CONTRACT = ("stuck", "unfed", "waiting", "aimless", "frozen", "level_back", "level_side", "undrawn")
+"""The contract counters of a ``Result`` (items 1, 3, 2, 6, 7 of the supply contract)."""
 
 
 @dataclass(slots=True)
@@ -569,8 +805,12 @@ class Summary:
     returns: int = 0
     sends: int = 0
     max_dispatches: int = 0
+    contract: dict[str, int] = field(default_factory=dict[str, int])
+    """Contract counters summed over the results (``CONTRACT``)."""
 
     def add(self, r: Result) -> None:
+        for name in CONTRACT:
+            self.contract[name] = self.contract.get(name, 0) + getattr(r, name)
         self.states += 1
         self.churn += 0 if r.settled else 1
         self.stalled += len(r.stalled)
@@ -601,6 +841,7 @@ class Summary:
             f"failing state-players {sum(self.failing.values())}",
             f"sends {self.sends}, quick returns {self.returns}, "
             f"slowest settle {self.max_dispatches} dispatches",
+            "contract: " + ", ".join(f"{n} {self.contract.get(n, 0)}" for n in CONTRACT),
         ]
         maps = sorted({m for per in self.holes.values() for m in per})
         for s in SHAPES:
@@ -681,6 +922,8 @@ def main(argv: list[str]) -> None:
         total.returns += s.returns
         total.sends += s.sends
         total.max_dispatches = max(total.max_dispatches, s.max_dispatches)
+        for name, n in s.contract.items():
+            total.contract[name] = total.contract.get(name, 0) + n
         for shape_name, per in s.holes.items():
             total.holes.setdefault(shape_name, {}).update(per)
         total.failing.update(s.failing)
