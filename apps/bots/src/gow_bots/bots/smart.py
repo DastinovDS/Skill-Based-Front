@@ -151,9 +151,10 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     the shortest chain of free captures into the capital's component (a ``Move`` ends at the first
     foreign node, SIM-05; the capture is free under ``mvp-4``, DEC-38), and once it is back the
     flow pulls charges to it (item A4); a group too big for the way splits off the part that
-    fits. With no free way out it waits, and the foreign node that cut the pocket off (next to the
-    capital's component and a pocket) scores ``W_RESCUE`` more per unit it rejoins
-    (``pockets.rescue``), so a viable attack from either side retakes it first.
+    fits, and a city keeps one unit (an empty city falls for free, its VP with it). With no free
+    way out it waits, and the foreign node that cut the pocket off (next to the capital's
+    component and a pocket) scores ``W_RESCUE`` more per unit it rejoins (``pockets.rescue``), so
+    a viable attack from either side retakes it first.
 
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -606,7 +607,11 @@ class SmartBot(CampaignBot):
         (``hold_front``); a pinned node and a scout's last unit do. ``charged=True``: the charged
         groups that may leave (``may_leave``) a node that starves (``starve_in``, DEC-43 item H4),
         so their charges go back to the army instead of the starvation. The discharged pass goes
-        first: the CP of the decision are short (one move per CP)."""
+        first: the CP of the decision are short (one move per CP).
+
+        A city keeps one unit (``pocket_keep``): an empty one falls to any enemy group for free
+        (``capture.charge_cost = 0``) and its VP with it, while every unit standing there costs
+        the enemy a shot (DEC-07, rule 3); the rest splits off and leaves."""
         pk = self.pockets
         if pk is None:
             return
@@ -632,13 +637,13 @@ class SmartBot(CampaignBot):
             if not ways:
                 continue
             dest = ways[0]
-            size = self.fit(view, here, dest, g.units)
+            size = min(self.fit(view, here, dest, g.units), g.units - self.pocket_keep(ctx, g))
             if size == g.units and self.spend(ctx, Move(g.id, dest)):
                 ctx.used[g.id] = True
                 ctx.claimed[dest] = True
                 ctx.standing[here] -= g.units
             elif 1 <= size < g.units and self.spend(ctx, Split(g.id, size)):
-                ctx.used[g.id] = True  # the part that fits leaves in the next decision
+                ctx.used[g.id] = True  # the part that leaves goes in the next decision
 
     def pocket_leaves(self, ctx: Ctx, g: GroupView, charged: bool) -> bool:
         """Whether ``g``, standing in a pocket, is one ``leave_pockets`` sends out in this pass."""
@@ -649,6 +654,13 @@ class SmartBot(CampaignBot):
         if g.charged > 0 or (node.warehouse or 0) > 0 or self.pinned[here]:
             return False
         return not self.watch[here] or ctx.standing[here] - g.units >= 1
+
+    def pocket_keep(self, ctx: Ctx, g: GroupView) -> int:
+        """Units of ``g`` that stay when it leaves a pocket: 1 in a city (VP above 0) that no
+        other own unit holds, else 0 (``leave_pockets``)."""
+        here = node_of(g)
+        alone = ctx.standing[here] - g.units < 1
+        return 1 if alone and self.map.nodes[here].vp > 0 else 0
 
     def settled(self) -> bool:
         """The territory is split: the midgame or the late game (item 18)."""

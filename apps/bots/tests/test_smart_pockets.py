@@ -21,7 +21,7 @@ from gow_bots.bots import BOTS, SmartBot, bot_factory
 from gow_bots.bots.campaign import Ctx
 from gow_bots.bots.pockets import FACTORY_UNITS, read_pockets
 from gow_bots.bots.smart import W_RESCUE
-from gow_sim.commands import Command, Move
+from gow_sim.commands import Command, Move, Split
 from gow_sim.maps import load_map
 from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import AtNode, GameState, Group, Mode, initial_state
@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
 RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
-K, A, B, C, D, E, F, G = range(8)
+K, A, B, C, D, E, F, G, M = range(9)
 PASSES = (17, 18)
 POCKET = (B, C, D, F, G)
 MAIN = (K, E)
@@ -53,13 +53,18 @@ def _at(player: int, node: int) -> int:
     return MAP.node_key(player, node)
 
 
-def _state(player: int, groups: list[tuple[int, int, int, int]]) -> GameState:
+def _state(
+    player: int, groups: list[tuple[int, int, int, int]], own: tuple[int, ...] = ()
+) -> GameState:
     """The base of the table with A taken by the other player at tick ``TICK``, then the groups
-    ``(owner, node, units, charged)`` (nodes of the table, mirrored for player 1)."""
+    ``(owner, node, units, charged)`` (nodes of the table, mirrored for player 1); ``own``: more
+    nodes of ``player`` (M joins the pocket: its only own neighbour is C)."""
     state = initial_state(MAP, RULES)
     enemy = 1 - player
     for n in PASSES:
         state.nodes[_at(player, n)].owner = enemy
+    for n in own:
+        state.nodes[_at(player, n)].owner = player
     state.tick = TICK
     change_owner(state, _at(player, A), enemy)
     for owner, node, units, charged in groups:
@@ -153,11 +158,15 @@ def test_no_pocket_no_reading() -> None:
 def test_a_discharged_group_in_a_pocket_walks_out_through_the_free_cut(
     name: str, player: int
 ) -> None:
-    state = _state(player, [(player, B, 3, 0)])
+    """3/0 in the own province M (in the pocket through C): A, three roads away over own nodes,
+    is the free capture that rejoins K; Cedar East next to M is empty too and nearer, but it
+    leads deeper into the enemy's land."""
+    state = _state(player, [(player, M, 3, 0)], own=(M,))
     bot = bot_factory(name)(MAP, RULES, seed=0, player=player)
     assert isinstance(bot, SmartBot)
     view = _view(state, player)
-    group = _group_at(view, _at(player, B)).id
+    assert view.nodes[_at(player, M)].flow_pocket is True
+    group = _group_at(view, _at(player, M)).id
     sent: list[int] = []
     for i in range(2):  # within two decisions of the level (``Tempo.think_ticks`` apart)
         tick = TICK + i * bot.tempo.think_ticks
@@ -165,6 +174,18 @@ def test_a_discharged_group_in_a_pocket_walks_out_through_the_free_cut(
         if sent:
             break
     assert sent == [_at(player, A)]
+
+
+@pytest.mark.parametrize("player", [0, 1])
+@pytest.mark.parametrize("name", SMART)
+def test_a_pocket_city_keeps_one_unit(name: str, player: int) -> None:
+    """3/0 alone in the city B: an empty city falls to any enemy group for free
+    (``capture.charge_cost = 0``), so 2 units split off to leave and 1 stays."""
+    state = _state(player, [(player, B, 3, 0)])
+    view = _view(state, player)
+    group = _group_at(view, _at(player, B)).id
+    cmds = _bot(name, player).decide(view, TICK)
+    assert [c for c in cmds if getattr(c, "group", None) == group] == [Split(group, 2)]
 
 
 @pytest.mark.parametrize("player", [0, 1])
