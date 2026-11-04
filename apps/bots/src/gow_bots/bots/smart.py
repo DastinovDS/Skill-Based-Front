@@ -143,6 +143,18 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     while the forecast is ahead (garrisons by the threat, the spare army in the most threatened
     front city, bunkers or Defense, the own half retaken first) and pushes the weakest sector one
     node at a time while it is not (its docstring).
+20. **Pockets** (#684; DEC-43, item H; ``gow_bots.bots.pockets``). Under the supply flow a pocket
+    (an own component without the own capital, ``flow_pocket``) never gets a charge from the
+    capital's component and starves without a factory. Before the attacks (``leave_pockets``) a
+    discharged free group in a pocket node with an empty warehouse leaves it (a front node does
+    not keep it), then a charged one in a node that starves: it walks to the empty foreign node on
+    the shortest chain of free captures into the capital's component (a ``Move`` ends at the first
+    foreign node, SIM-05; the capture is free under ``mvp-4``, DEC-38), and once it is back the
+    flow pulls charges to it (item A4); a group too big for the way splits off the part that
+    fits, and a city keeps one unit (an empty city falls for free, its VP with it). With no free
+    way out it waits, and the foreign node that cut the pocket off (next to the capital's
+    component and a pocket) scores ``W_RESCUE`` more per unit it rejoins (``pockets.rescue``), so
+    a viable attack from either side retakes it first.
 
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -166,6 +178,7 @@ from gow_bots.bots.logistics import (
     incoming_charges,
     own_parts,
 )
+from gow_bots.bots.pockets import Pockets, read_pockets
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
 from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
 from gow_sim.commands import (
@@ -243,6 +256,9 @@ W_STAGE: Final = 400
 """Score added to the enemy build-up next to a worried capital (item 13)."""
 LATE_AWARDS: Final = 6
 """The late game: the last this many VP awards (three minutes, ``estimate.phase``)."""
+W_RESCUE: Final = 50
+"""Score per own unit (or stopped factory, ``pockets.FACTORY_UNITS``) a capture rejoins with the
+capital's component (item 20): a pocket of four units weighs like one VP of an enemy city."""
 COUNTER_TICKS: Final = 300
 """How long an enemy attack on an own node opens the counterattack of ``smart_reactive``."""
 V2_RECRUIT_KEEP_MOVES: Final = 2
@@ -506,6 +522,8 @@ class SmartBot(CampaignBot):
         self.attacked_at: dict[int, int] = {}
         """Enemy node next to an own node the enemy attacked, to the tick of that attack: its
         garrison left it (item 18, the counterattack)."""
+        self.pockets: Pockets | None = None
+        """The own pockets of this decision (item 20); ``None`` without one."""
         for e, edef in enumerate(mapdef.edges):
             self.edge_between[(edef.a, edef.b)] = e
             self.edge_between[(edef.b, edef.a)] = e
@@ -539,6 +557,7 @@ class SmartBot(CampaignBot):
         self._read_arrivals(view)
         self.watch = self._watch_nodes(view)
         self._estimate(view)
+        self.pockets = self.read_pockets(view, tick, supplied)
         self.params = self.adjusted(a)
         try:
             return self._decide(view, tick, a)
@@ -564,6 +583,84 @@ class SmartBot(CampaignBot):
             for m in self.neighbors[f.node]:
                 if view.nodes[m].owner == 1 - me:
                     self.attacked_at[m] = tick
+
+    def read_pockets(self, view: PlayerView, tick: int, main: list[bool]) -> Pockets | None:
+        """The own pockets of this decision (item 20): a foreign node is free to pass when the
+        estimate of the enemy there is empty and no fight goes on in it."""
+        if not self.rules.flow:
+            return None
+        fights = self.fight_nodes(view)
+
+        def free(node: int) -> bool:
+            return node not in fights and self.estimate(view, tick, node)[0] == 0
+
+        return read_pockets(view, self.neighbors, main, free)
+
+    def leave_pockets(self, ctx: Ctx, *, charged: bool) -> None:
+        """Free groups leave a pocket (item 20) by the shortest chain of free captures into the
+        capital's component: each walks to the empty foreign node on it, the nearest one first,
+        then ``node_key``; one too big for that way splits off the part that fits. With no free
+        way out a group stays: ``W_RESCUE`` sends the army instead.
+
+        ``charged=False``: the discharged groups in a node with an empty warehouse. They never
+        recharge in the pocket and fire no shot, so a front node does not keep them
+        (``hold_front``); a pinned node and a scout's last unit do. ``charged=True``: the charged
+        groups that may leave (``may_leave``) a node that starves (``starve_in``, DEC-43 item H4),
+        so their charges go back to the army instead of the starvation. The discharged pass goes
+        first: the CP of the decision are short (one move per CP).
+
+        A city keeps one unit (``pocket_keep``): an empty one falls to any enemy group for free
+        (``capture.charge_cost = 0``) and its VP with it, while every unit standing there costs
+        the enemy a shot (DEC-07, rule 3); the rest splits off and leaves."""
+        pk = self.pockets
+        if pk is None:
+            return
+        view, me, far = ctx.view, self.player, len(self.map.nodes)
+        for g in self.free_groups(ctx):
+            here = node_of(g)
+            if (
+                not pk.pocket[here]
+                or pk.exits[here] <= 0
+                or not self.pocket_leaves(ctx, g, charged)
+            ):
+                continue
+            left = pk.exits[here]
+            hops = self.hops[here]
+            ways = sorted(
+                (
+                    n
+                    for n in self.reachable(view, here, far)
+                    if view.nodes[n].owner != me and 0 <= pk.exits[n] < left
+                ),
+                key=lambda n: (pk.exits[n], hops[n], self.key(n)),
+            )
+            if not ways:
+                continue
+            dest = ways[0]
+            size = min(self.fit(view, here, dest, g.units), g.units - self.pocket_keep(ctx, g))
+            if size == g.units and self.spend(ctx, Move(g.id, dest)):
+                ctx.used[g.id] = True
+                ctx.claimed[dest] = True
+                ctx.standing[here] -= g.units
+            elif 1 <= size < g.units and self.spend(ctx, Split(g.id, size)):
+                ctx.used[g.id] = True  # the part that leaves goes in the next decision
+
+    def pocket_leaves(self, ctx: Ctx, g: GroupView, charged: bool) -> bool:
+        """Whether ``g``, standing in a pocket, is one ``leave_pockets`` sends out in this pass."""
+        here = node_of(g)
+        node = ctx.view.nodes[here]
+        if charged:
+            return g.charged > 0 and node.starve_in is not None and self.may_leave(ctx, g)
+        if g.charged > 0 or (node.warehouse or 0) > 0 or self.pinned[here]:
+            return False
+        return not self.watch[here] or ctx.standing[here] - g.units >= 1
+
+    def pocket_keep(self, ctx: Ctx, g: GroupView) -> int:
+        """Units of ``g`` that stay when it leaves a pocket: 1 in a city (VP above 0) that no
+        other own unit holds, else 0 (``leave_pockets``)."""
+        here = node_of(g)
+        alone = ctx.standing[here] - g.units < 1
+        return 1 if alone and self.map.nodes[here].vp > 0 else 0
 
     def settled(self) -> bool:
         """The territory is split: the midgame or the late game (item 18)."""
@@ -684,6 +781,8 @@ class SmartBot(CampaignBot):
             self.converge(ctx)
             held = max(plan_cp if self.hold is not None else 0, self.strike_cp(ctx))
         ctx.held = held
+        self.leave_pockets(ctx, charged=False)  # item 20
+        self.leave_pockets(ctx, charged=True)
         self._attack(ctx)
         self._fit_split(ctx)
         self._gather(ctx)
@@ -1462,6 +1561,8 @@ class SmartBot(CampaignBot):
         if self.worry is not None and dest == self.worry.stage:
             value += W_STAGE  # item 13: hit the build-up before it strikes
         value += self.mid_value(ctx, dest)
+        if self.pockets is not None:
+            value += W_RESCUE * self.pockets.rescue.get(dest, 0)  # item 20: retake the cut
         return value + p["w_closer"] * closer - p["w_need"] * need - p["w_hops"] * hops
 
     def in_reach(self, ctx: Ctx, g: GroupView, dest: int) -> bool:
