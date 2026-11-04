@@ -613,7 +613,7 @@ def _run(
     return sends_main + sends
 
 
-_CANDIDATE = "c2"
+_CANDIDATE = "c3"
 """PROTOTYPE (#738), not for merge: ``c2`` the nearest need (the front zone only outward), ``c3``
 every charge only outward from the capital."""
 
