@@ -11,6 +11,7 @@ import {
   runStrip,
   stackLevels,
   stubRun,
+  tickCentres,
   tickFits,
   tickLayout,
   tickPolygon,
@@ -199,6 +200,92 @@ describe('borderRun: the stretch of the shared border a line lies along', () => 
   });
 });
 
+describe('borderRun without a limit: the whole stretch of the shared border (#734)', () => {
+  /** The length of a polyline, from the points themselves. */
+  const lengthOf = (pts: readonly Point[]): number =>
+    pts
+      .slice(1)
+      .reduce(
+        (sum, p, i) => sum + Math.hypot(p.x - (pts[i] as Point).x, p.y - (pts[i] as Point).y),
+        0,
+      );
+
+  it('covers the shared edge end to end when the road crosses it near one end', () => {
+    // The right edge runs from y = -100 to y = 100; the road crosses at y = 70: 170 back, 30 on.
+    const run = borderRun({
+      ring: square(false),
+      shared: toNode1,
+      cross: { x: 100, y: 70 },
+      node: NODE,
+    });
+    if (run === null) throw new Error('no run');
+    expect(run.len).toBeCloseTo(200);
+    expect(run.s0).toBeCloseTo(170);
+    expect(run.pts[0]?.y).toBeCloseTo(-100);
+    expect(run.pts[run.pts.length - 1]?.y).toBeCloseTo(100);
+  });
+
+  it('follows a smooth S-curve of the border to its end', () => {
+    // x = 100 + 15 sin(2 pi (y + 150) / 250), y from -150 to 100: the direction swings by at most
+    // 21 degrees each way (42 in all, under FORT.drift) and bends with a radius of 100 or more
+    // (about 14 degrees over 2 * 12 units, under FORT.trim): nothing here is a corner.
+    const curve: Point[] = [];
+    for (let y = -150; y <= 100; y += 5) {
+      curve.push({ x: 100 + 15 * Math.sin((2 * Math.PI * (y + 150)) / 250), y });
+    }
+    const ring = curve.slice(0, -1).map((p, i) => edge(p, curve[i + 1] as Point, 1));
+    const at = curve.findIndex((p) => p.y === 70);
+    const run = borderRun({
+      ring,
+      shared: toNode1,
+      cross: curve[at] as Point,
+      node: { x: -200, y: 0 },
+    });
+    if (run === null) throw new Error('no run');
+    expect(run.len).toBeCloseTo(lengthOf(curve), 1);
+    expect(run.s0).toBeCloseTo(lengthOf(curve.slice(0, at + 1)), 1);
+  });
+
+  it('still never wraps a cell corner', () => {
+    const run = borderRun({
+      ring: square(true),
+      shared: toNode1,
+      cross: { x: 100, y: 70 },
+      node: NODE,
+    });
+    if (run === null) throw new Error('no run');
+    // The top edge faces the same cell, but the corner at the top right turns by 90 degrees.
+    expect(run.len).toBeCloseTo(200);
+    expect(Math.min(...run.pts.map((p) => p.x))).toBeCloseTo(100);
+  });
+});
+
+describe('tickCentres: the ticks on the whole run (#734)', () => {
+  it('lays them from end to end of the run, in step with the ticks round the crossing', () => {
+    // The run is the right edge, from 170 before the crossing to 30 after it. At 100% a tick is 3
+    // wide with a gap of 4: the centres are 3.5 + 7k, and a tick fits when it lies on the run.
+    const run = borderRun({
+      ring: square(false),
+      shared: toNode1,
+      cross: { x: 100, y: 70 },
+      node: NODE,
+    });
+    if (run === null) throw new Error('no run');
+    const cs = tickCentres(run, tickLayout(1));
+    expect(cs[0]).toBeCloseTo(-164.5);
+    expect(cs[cs.length - 1]).toBeCloseTo(24.5);
+    expect(cs).toHaveLength(28);
+    expect(cs).toContain(3.5);
+    expect(cs).toContain(-3.5);
+  });
+
+  it('lays the ticks of a stub as the tick layout says', () => {
+    const lay = tickLayout(1);
+    const run = stubRun(NODE, { x: 100, y: 0 }, lay.half + lay.reach);
+    expect(tickCentres(run, lay)).toHaveLength(lay.n);
+  });
+});
+
 describe('the line, its strips and its ticks follow the run', () => {
   const run = borderRun({
     ring: square(false),
@@ -307,24 +394,47 @@ describe('turnDegrees', () => {
 });
 
 describe('stackLevels: two lines on one stretch of a cell lie one behind the other', () => {
-  const at = (key: string, ringAt: number) => ({ key, ringAt, ringLength: 800 });
+  // Stretches of a ring 800 long, from `from` to `to`.
+  const at = (key: string, from: number, to: number, ringLength = 800) => ({
+    key,
+    from,
+    to,
+    ringLength,
+  });
 
-  it('gives the second line of a stretch the next level inwards', () => {
-    const levels = stackLevels([at('a', 100), at('b', 130), at('c', 160)], 85);
+  it('gives a line whose stretch overlaps a placed one the next level inwards', () => {
+    const levels = stackLevels([at('a', 0, 200), at('b', 150, 300), at('c', 180, 260)]);
     expect(levels.get('a')).toBe(0);
     expect(levels.get('b')).toBe(1);
     expect(levels.get('c')).toBe(2);
   });
 
   it('keeps lines apart on one level, and a line that clears the first takes its level again', () => {
-    const levels = stackLevels([at('a', 100), at('b', 400), at('c', 120)], 85);
+    const levels = stackLevels([at('a', 0, 200), at('b', 300, 500), at('c', 150, 280)]);
     expect(levels.get('a')).toBe(0);
     expect(levels.get('b')).toBe(0);
     expect(levels.get('c')).toBe(1);
   });
 
-  it('counts the way round the ring: the end and the start of it are neighbours', () => {
-    const levels = stackLevels([at('a', 20), at('b', 790)], 85);
+  it('stacks two lines of a long stretch whose crossings are far apart (#734)', () => {
+    // The crossings are 300 apart, but each run covers the whole 400 of the shared border.
+    const levels = stackLevels([at('a', 100, 500), at('b', 100, 500)]);
     expect(levels.get('b')).toBe(1);
+  });
+
+  it('keeps two lines that only meet at a corner of the cell on one level', () => {
+    const levels = stackLevels([at('a', 0, 200), at('b', 200, 350)]);
+    expect(levels.get('b')).toBe(0);
+  });
+
+  it('counts the way round the ring: the end and the start of it are neighbours', () => {
+    const levels = stackLevels([at('a', -40, 60), at('b', 760, 830)]);
+    expect(levels.get('b')).toBe(1);
+  });
+
+  it('stacks the stubs of a node, not a stub and a border run', () => {
+    const levels = stackLevels([at('a', 0, 200), at('s', -90, 90, 0), at('t', -90, 90, 0)]);
+    expect(levels.get('s')).toBe(0);
+    expect(levels.get('t')).toBe(1);
   });
 });
