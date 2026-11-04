@@ -4,6 +4,7 @@ import json
 import shutil
 from itertools import product
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -70,6 +71,15 @@ def test_smoke_tournament_is_reproducible_and_its_replays_agree(
         assert r["map"] == load_map(MAP).meta.name
         assert r["ruleset_hash"] == ruleset_hash(rules)
         assert r["ticks"] == rules.match_ticks or r["reason"] != "unfinished"
+        for key in (
+            "cp_burned",
+            "cp_cap_ticks",
+            "idle_discharged_connected",
+            "idle_discharged_pocket",
+        ):
+            values = cast("list[object]", r[key])  # #743: per side, integers
+            assert len(values) == 2
+            assert all(isinstance(x, int) and x >= 0 for x in values)
 
     # Same arguments, same bytes (the replays folder does not change the rows).
     _run(tmp_path / "b.jsonl", names)

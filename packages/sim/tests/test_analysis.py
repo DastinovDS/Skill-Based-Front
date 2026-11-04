@@ -2,7 +2,7 @@
 
 import dataclasses
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from gow_sim.analysis import (
     CP_CATEGORIES,
@@ -39,7 +39,7 @@ from gow_sim.maps import load_map
 from gow_sim.match import SIM_VERSION, Match, run_headless
 from gow_sim.replay import REPLAY_SUFFIX, analyze_replay, read_replay, replay_log
 from gow_sim.ruleset import KindTable, Ruleset, Stance, load_ruleset
-from gow_sim.state import AtNode, Event, Group, Mode, Packet, event
+from gow_sim.state import AtNode, Event, Group, Mode, OnEdge, Order, Packet, event
 
 TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parents[2]
@@ -729,3 +729,93 @@ def test_the_ledger_balances_on_the_v2_golden_matches() -> None:
         assert sum(f.built for f in m.flow) > 0 and sum(f.plans for f in m.flow) > 0
         for flow in m.flow:
             assert flow.residual == 0, (file.name, flow)
+
+
+# CP burned, ticks at the cap, idle discharged units (#743) ---------------------------------------
+
+
+def test_cp_burned_sums_the_events_of_each_player() -> None:
+    # Hundredths of CP: player 0 burned 150 at tick 50 and 25 at tick 100, a refund overflow of 40
+    # (the event after recruit_cancelled) also counts; player 1 burned 500 at tick 100.
+    events = [
+        event(50, "cp_burned", player=0, cp=150),
+        event(60, "recruit_cancelled", player=0, node=1, cp=100),
+        event(60, "cp_burned", player=0, cp=40),
+        event(100, "cp_burned", player=0, cp=25),
+        event(100, "cp_burned", player=1, cp=500),
+    ]
+    m = analyze(_log(events))
+    assert m.cp_burned == (215, 500)
+    assert analyze(_log([])).cp_burned == (0, 0)
+    assert m.to_json()["cp_burned"] == [215, 500]
+
+
+def test_idle_and_cap_fields_of_a_log_reach_the_metrics_and_the_json() -> None:
+    log = dataclasses.replace(_log([]), cp_cap_ticks=(7, 0), idle_discharged=((5, 6), (0, 1)))
+    m = analyze(log)
+    assert m.cp_cap_ticks == (7, 0)
+    assert (m.idle_discharged_connected, m.idle_discharged_pocket) == ((5, 0), (6, 1))
+    data = m.to_json()
+    assert data["cp_cap_ticks"] == [7, 0]
+    assert data["idle_discharged_connected"] == [5, 0]
+    assert data["idle_discharged_pocket"] == [6, 1]
+
+
+def test_recorder_counts_cap_ticks_and_idle_discharged_units_by_hand() -> None:
+    # Map dec18, cp.cap = 5000 (50 CP). Player 1 takes A = 1, so A is cut off from player 1's
+    # capital and player 0's B and C (which only touch A and the neutral P) are cut off from K.
+    # Connected to the own capital: player 0 {K}, player 1 its capital's component; pockets:
+    # player 0 {B, C}, player 1 {A}.
+    match = Match(load_map(TESTS / "maps" / "dec18.json"), _script_rules(), bytes(range(32)))
+    state = match.state
+    state.nodes[A].owner = 1
+    capital_1 = state.map.capital(1)
+    state.nodes[B].warehouse = 1  # a charge can still reach a unit standing in B
+    order = Order(path=(B,), planned=False, depart_tick=1)
+    groups: list[tuple[int, int, int, int, dict[str, Any]]] = [
+        # (owner, units, charged, node, extra); the comment is what the group adds per tick
+        (0, 3, 1, K, {}),  # 2 discharged, empty warehouse, connected: +2 connected
+        (0, 4, 1, C, {}),  # 3 discharged in a pocket: +3 pocket
+        (0, 2, 0, B, {}),  # B has a charge in its warehouse: not idle
+        (0, 5, 0, P, {}),  # a neutral node: not counted
+        (0, 6, 0, C, {"order": order}),  # has a movement order: not idle
+        (0, 7, 0, C, {"fight": 99}),  # in a fight: not idle
+        (0, 2, 2, K, {}),  # fully charged: nothing to count
+        (0, 4, 0, A, {}),  # an enemy-owned node: not counted
+        (1, 2, 0, capital_1, {}),  # player 1, connected: +2 connected
+        (1, 1, 0, A, {}),  # player 1 in its own pocket: +1 pocket
+    ]
+    for owner, units, charged, node, extra in groups:
+        gid = state.new_id()
+        state.groups[gid] = Group(gid, owner, units, charged, Mode.ATTACK, AtNode(node), **extra)
+    gid = state.new_id()  # on a road: not counted
+    state.groups[gid] = Group(gid, 0, 9, 0, Mode.ATTACK, OnEdge(0, K, 100))
+    state.players[0].cp = 5000  # at the cap
+    state.players[1].cp = 4999  # one hundredth below
+    recorder = MatchRecorder()
+    recorder.begin(match)
+    recorder.record(match, [])
+    recorder.record(match, [])
+    state.players[0].cp = 4000  # leaves the cap
+    state.nodes[B].warehouse = 0  # now the two units of B are idle in a pocket: +2 pocket
+    recorder.record(match, [])
+    log = recorder.log()
+    # three ticks: player 0 connected 2 * 3 = 6, pocket 3 * 3 + 2 (the third tick) = 11;
+    # player 1 connected 2 * 3 = 6, pocket 1 * 3 = 3
+    assert log.cp_cap_ticks == (2, 0)
+    assert log.idle_discharged == ((6, 11), (6, 3))
+    m = analyze(log)
+    assert m.idle_discharged_connected == (6, 6)
+    assert m.idle_discharged_pocket == (11, 3)
+
+
+def test_a_player_without_its_capital_has_only_pockets() -> None:
+    match = Match(load_map(TESTS / "maps" / "dec18.json"), _script_rules(), bytes(range(32)))
+    state = match.state
+    state.nodes[K].owner = 1  # player 0 loses its capital
+    gid = state.new_id()
+    state.groups[gid] = Group(gid, 0, 2, 0, Mode.ATTACK, AtNode(A))
+    recorder = MatchRecorder()
+    recorder.begin(match)
+    recorder.record(match, [])
+    assert recorder.log().idle_discharged[0] == (0, 2)
