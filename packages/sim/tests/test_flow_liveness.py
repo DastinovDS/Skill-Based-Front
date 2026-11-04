@@ -1,49 +1,51 @@
-"""Liveness of the automatic supply flow (DEC-43, ``supply.model = "flow"``, #738).
+"""Liveness of the automatic supply flow and the supply contract (DEC-43, ``supply.model =
+"flow"``, #738, item M).
 
 Every playtest of ``mvp-4`` found a node the flow never fed while the rear held stock: the saddle
-(item K, match 11), the corridor through a leaf (item L, match 12), the ridge (#738, match 12).
-This module looks for all such holes at once instead of one per playtest.
+(item K, match 11), the corridor through a leaf (item L, match 12), the ridge (#738, match 12),
+The Narrows behind a ridge (match 13). This module looks for all such holes at once instead of one
+per playtest, and checks the **supply contract** of item M12 (owner 2026-11-04).
 
-**The property** (per player, the own capital's component only, ``k`` the player's shift):
-a **hungry** level node (own, ``d == k``, room in its warehouse; a node where an own group stands
-short of a charge has room once its warehouse is empty) and an **idle source** (own, behind the
-level, ``d > k``, stock in its warehouse, no pulling army) that can reach it over own internal
-roads through nodes that are not ahead of the level (``d >= k``, frozen by item A3) and do not
-hold (a node with a pulling army keeps what it gets, item I3). Then:
+**The contract at a fixed point** (per player, the own capital's component; a fixed point: no
+production, the armies standing, a dispatch that sends nothing, no packet on the way, the same
+warehouses and armies at the next dispatch):
 
-1. **Settle**: without production and with the armies standing still, the flow reaches a fixed
-   point (a dispatch that sends nothing, no packet on the way, and the same warehouses and armies
-   at the next dispatch) within ``settle_cap`` dispatches. A state that does not settle has a
-   charge cycling while the demand stands still: **churn**.
-2. **Rest**: at the fixed point no hungry level node has an idle source that reaches it. The fixed
-   point never changes again (nothing moves at all), so such a pair is a node the flow will never
-   feed from that stock: a **hole**. This is stronger than "within N dispatches": it holds for
-   every N.
-3. **Progress**: from the start, if a hungry level node has an idle source that reaches it, at
-   least one charge lands in a node that was hungry at the start within ``progress_n`` dispatches
-   (``progress_n = (D + 1) * hop``: ``D`` the hop diameter of the map, ``hop`` the dispatches one
-   road takes at most, ``ceil(T / dispatch_ticks) + 1`` for the slowest packet ``T``: a charge
-   waits at most one dispatch to leave and ``T`` ticks on the road, and no shortest route is longer
-   than ``D`` roads).
+1. ``stuck_nodes`` (contract item 1, stock as close to the front as possible): no charge idles in a
+   node from which a **way** leads to an own node with room and a smaller ``d`` (the field after
+   the shift and the pull). A way: own nodes of the capital's component, none ahead of the level,
+   none that holds but the end, none nearer the front than the end, along the level and from the
+   level behind it only away from the capital (but the last road into a node that holds and the
+   roads into a lifted path, item I7), a lifted node between only along its path.
+2. ``unfed_holders`` (item 3): no node that holds (an army short of a charge, an unpaid build)
+   and takes a charge while stock reaches it (from behind the level over a way, from the level
+   over roads away from the capital or into its path).
 
-Shapes of a hole (the first that fits, by the paths from its idle sources to the hungry node over
-the allowed nodes): **downhill** (a path behind the level along which ``d`` falls at every step:
-the rule fails on its own terms), **saddle** (``d`` never rises, some step is a level road: item
-K's case), **ridge** (only through nodes behind the level, some step uphill: #738), **corridor out**
-(a path that crosses another level node, and every step out of a level node goes farther from the
-capital: item L's case), **corridor in** (only through the level sideways, at an equal
-capital distance, or towards the capital: item L allows the gap rule sideways and nothing inward,
-by design). Holes whose sources all lie in an enclave (a part behind the level without an own
-factory, item L5) are counted apart: the corridor rule L6 forbids them every road inward.
+**Per send and per tick**: ``frozen`` (item 6: no send from or into a node ahead of the level),
+``level_back`` and ``level_side`` (the level's sends to a node behind it or on it that does not
+hold: reported), ``undrawn`` (item 7: node-ticks whose ``flow_next`` is not inside ``flow_down``),
+``waiting`` and ``aimless`` (reported only: they cannot tell a covered need from a waiting one).
+**Settle** (item 5): the flow reaches a fixed point within ``settle_cap`` dispatches; a state that
+does not has a charge cycling while the demand stands still: **churn**.
+
+**The holes of #738** (kept for the comparison with ``docs/design/supply-flow-unified.md``): a
+**hungry** level node (own, ``d == k``, it takes a charge) and an **idle source** (own, behind
+the level, stock, no pulling army) that reaches it over own nodes not ahead of the level that do
+not hold, at the fixed point. Shapes of a hole (the first that fits, by the paths from its idle
+sources): **downhill**, **saddle** (item K's case), **ridge** (#738), **corridor out** (item L's
+case), **corridor in** (only through the level sideways or towards the capital: item L2 forbids
+it by design, and the contract's ways too). **Progress**: from the start, if a hungry level node
+has an idle source that reaches it, a charge lands in a node that was hungry at the start within
+``progress_n = (D + 1) * hop`` dispatches (``D`` the hop diameter of the map, ``hop`` the
+dispatches one road takes at most).
 
 The states: every pool map (``maps/*.json``), ownership splits grown from both capitals by a seeded
 generator (``_Rng``, splitmix64: no ``random``, AGENTS.md 4.1 applies to the tests too), then
-pushed (single captures, a salient, both), four stock layouts, with and without short armies, every
-leaf shift ``0..leaf_shift_max``. Both players are checked in every state.
+pushed (single captures, a salient, both), four stock layouts, no pull, short armies or unpaid
+factory builds, every leaf shift ``0..leaf_shift_max``. Both players are checked in every state.
 
-The test asserts that the counts on ``develop`` do not grow (``BASELINE``); the full sweep and its
-report: ``mise exec -- uv run python packages/sim/tests/test_flow_liveness.py --full`` (``--maps``,
-``--splits``; ``docs/design/supply-flow-unified.md``).
+The tests assert the contract (zero stuck, unfed, frozen and undrawn, no churn) and that the holes
+do not grow (``QUICK``, ``FULL``); the full sweep and its report: ``mise exec -- uv run python
+packages/sim/tests/test_flow_liveness.py --full`` (``--maps``, ``--splits``).
 """
 
 import sys
@@ -400,6 +402,51 @@ def _incoming(state: GameState, player: int) -> dict[int, int]:
     return incoming
 
 
+def _lifted(state: GameState, player: int, main: list[int], c: dict[int, int]) -> dict[int, int]:
+    """The paths of item I7 in the capital's component: every node lifted onto the level by a
+    pulling node ahead of it, mapped to the node before it on its path (towards the level). ``d0``
+    as items A1, A2, I1, I2 (hops to the nearest own node on a road to an enemy node, or, without
+    one, to the nodes farthest from the capital); ``h`` the hops from a node ahead (``d0 < k``) to
+    the nearest node not ahead; from each holding node ahead the path steps to the neighbour with
+    ``h`` one less, the smallest ``node_key`` first."""
+    mapdef = state.map
+    member = dict.fromkeys(main, True)
+    leaves = [
+        n
+        for n in main
+        if any(state.nodes[m].owner not in (None, player) for m in _neighbours(mapdef, n))
+    ]
+    if not leaves:
+        top = max(c.values())
+        leaves = [n for n in main if c[n] == top]
+    d0 = _hops(mapdef, member, leaves)
+    k = _flow(state, main[0]).k
+    rise = _hops(mapdef, member, [n for n in main if d0[n] >= k])
+    before: dict[int, int] = {}
+    for a in sorted(n for n in _hold(state, player) if n in member and d0[n] < k):
+        n = a
+        while rise[n] > 0 and n not in before:
+            nxt = min(
+                (m for m in _neighbours(mapdef, n) if m in member and rise[m] == rise[n] - 1),
+                key=lambda m: mapdef.node_key(player, m),
+            )
+            before[n] = nxt
+            n = nxt
+    return before
+
+
+def _hops(mapdef: MapDef, member: dict[int, bool], start: list[int]) -> dict[int, int]:
+    dist = dict.fromkeys(start, 0)
+    queue = deque(start)
+    while queue:
+        n = queue.popleft()
+        for m in _neighbours(mapdef, n):
+            if m in member and m not in dist:
+                dist[m] = dist[n] + 1
+                queue.append(m)
+    return dist
+
+
 def _tiers(
     state: GameState, player: int, takes: dict[int, int]
 ) -> tuple[dict[int, int], int, dict[int, bool], dict[int, dict[int, int]]]:
@@ -415,6 +462,7 @@ def _tiers(
     d = {n: _d(state, n) for n in main}
     holding = _hold(state, player)
     c = _capital_distance(state, player, main)
+    up = _lifted(state, player, main, c)
     mapdef = state.map
     reach: dict[int, dict[int, int]] = {}
     for j in sorted({d[t] for t in main if takes[t] and d[t] >= k}):
@@ -428,7 +476,9 @@ def _tiers(
             for n in _neighbours(mapdef, m):
                 if n in seen or n not in d or d[n] < j or d[n] < k:
                     continue
-                if d[n] == k and c[m] <= c[n] and not (m in holding and m in start):
+                if n in up and n not in holding and up.get(m) != n:
+                    continue  # a lifted node between passes only along its path (item I7)
+                if d[n] == k and c[m] <= c[n] and not ((m in holding and m in start) or m in up):
                     continue  # the level passes on only away from the capital (item L)
                 seen[n] = seen[m] + 1
                 queue.append(n)
@@ -467,6 +517,7 @@ def unfed_holders(state: GameState, player: int, caps: tuple[int, ...]) -> list[
     d = {n: _d(state, n) for n in main}
     holding = _hold(state, player)
     c = _capital_distance(state, player, main)
+    up = _lifted(state, player, main, c)
     mapdef = state.map
     unfed: list[int] = []
     for h in sorted(holding):
@@ -480,9 +531,11 @@ def unfed_holders(state: GameState, player: int, caps: tuple[int, ...]) -> list[
             for n in _neighbours(mapdef, m):
                 if n in seen or n not in d or d[n] < k or d[n] < d[h] or n in holding:
                     continue
-                if d[n] == k and c[m] <= c[n] and m != h:
+                if n in up and up.get(m) != n:
+                    continue  # a lifted node between passes only along its path (item I7)
+                if d[n] == k and c[m] <= c[n] and m != h and m not in up:
                     continue  # the level passes on only away from the capital (item L)
-                flat = m == h or (seen[m] and c[m] > c[n])
+                flat = m == h or (seen[m] and (c[m] > c[n] or m in up))
                 seen[n] = flat
                 if state.nodes[n].warehouse and (d[n] > d[h] or flat):
                     found = True
@@ -669,8 +722,9 @@ def _snapshot(state: GameState) -> tuple[tuple[int, ...], tuple[int, ...]]:
     )
 
 
-def check(case: Case, settle_factor: int = 4) -> Result:
-    """Run ``case`` to its fixed point (or ``settle_cap`` dispatches) and check it."""
+def check(case: Case, settle_factor: int = 4, report: bool = False) -> Result:
+    """Run ``case`` to its fixed point (or ``settle_cap`` dispatches) and check it; ``report``
+    also counts the reported-only ``waiting`` and ``aimless`` (slow)."""
     state = build(case)
     mapdef = state.map
     caps = warehouse_capacities(state, RULES)
@@ -710,7 +764,7 @@ def check(case: Case, settle_factor: int = 4) -> Result:
                 assert isinstance(p, int) and isinstance(n, int)
                 if n in waiting.get(p, ()):
                     fed[p] = True
-        _contract_tick(state, caps, by_player, result)
+        _contract_tick(state, caps, by_player, result, report)
         if state.tick % dt:
             continue
         result.dispatches += 1
@@ -753,6 +807,7 @@ def _contract_tick(
     caps: tuple[int, ...],
     by_player: dict[int, list[tuple[int, int]]],
     result: Result,
+    report: bool,
 ) -> None:
     """The per-tick items of the contract: the order of the sends (2), the shift (6), the
     chevrons (7)."""
@@ -764,7 +819,7 @@ def _contract_tick(
         member = dict.fromkeys(main, True)
         holding = _hold(state, p)
         sent = [(a, b) for a, b in by_player.get(p, []) if a in member]
-        if state.tick % RULES.supply.dispatch_ticks == 0:
+        if report and state.tick % RULES.supply.dispatch_ticks == 0:
             wait, aim = _order(state, p, caps, sent)
             result.waiting += wait
             result.aimless += aim
@@ -865,36 +920,50 @@ class Summary:
 
 
 def sweep(
-    maps: tuple[str, ...], splits: range, layouts: tuple[str, ...], summary: Summary | None = None
+    maps: tuple[str, ...],
+    splits: range,
+    layouts: tuple[str, ...],
+    summary: Summary | None = None,
+    report: bool = False,
 ) -> Summary:
     summary = Summary() if summary is None else summary
     for case in cases(maps, splits, layouts):
-        summary.add(check(case))
+        summary.add(check(case, report=report))
     return summary
 
 
 # The tests -------------------------------------------------------------------------------------
 
-QUICK: dict[str, int] = {"crossroads": 57, "highway": 63, "narrows": 28, "ridge": 111}
-"""The holes of the quick sweep (splits 0 and 1) on ``develop`` at ``SIM_VERSION`` 39, per map.
-A rule that fixes holes lowers them (update the numbers); one that adds holes fails here."""
+QUICK: dict[str, int] = {"crossroads": 25, "highway": 16, "narrows": 20, "ridge": 81}
+"""The holes of #738 in the quick sweep (splits 0 and 1) at ``SIM_VERSION`` 40 (item M), per map:
+the "corridor in" of item L2 (never towards the capital along the level). On ``develop`` at
+``SIM_VERSION`` 39 the same sweep had 88, 96, 45 and 155 (and 769 stuck nodes, 28 unfed
+holders). A rule that fixes holes lowers them (update the numbers); one that adds holes fails."""
 
-FULL: dict[str, int] = {"crossroads": 278, "highway": 437, "narrows": 138, "ridge": 366}
-"""The same for the full sweep (splits 0..11, the ``--full`` report)."""
+FULL: dict[str, int] = {"crossroads": 97, "highway": 125, "narrows": 94, "ridge": 173}
+"""The same for the full sweep (splits 0..11, the ``--full`` report); ``develop`` at 39: 429, 714,
+216, 574."""
+
+
+def _contract(summary: Summary) -> None:
+    """Contract items 1, 3, 5, 6, 7 of item M12 (``docs/design/mechanics.md``)."""
+    assert summary.churn == 0, summary.lines()
+    for name in ("stuck", "unfed", "frozen", "undrawn"):
+        assert summary.contract.get(name, 0) == 0, (name, summary.lines())
 
 
 @pytest.mark.parametrize("name", POOL)
-def test_the_holes_do_not_grow(name: str) -> None:
+def test_the_contract_holds_and_the_holes_do_not_grow(name: str) -> None:
     summary = sweep((name,), range(2), LAYOUTS)
-    assert summary.churn == 0, summary.lines()
+    _contract(summary)
     assert summary.total() <= QUICK[name], summary.lines()
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("name", POOL)
-def test_the_holes_of_the_full_sweep_do_not_grow(name: str) -> None:
+def test_the_contract_holds_in_the_full_sweep(name: str) -> None:
     summary = sweep((name,), range(12), LAYOUTS)
-    assert summary.churn == 0, summary.lines()
+    _contract(summary)
     assert summary.total() <= FULL[name], summary.lines()
 
 
@@ -912,7 +981,7 @@ def main(argv: list[str]) -> None:
             splits = range(int(next(args)))
     total = Summary()
     for name in maps:
-        s = sweep((name,), splits, layouts)
+        s = sweep((name,), splits, layouts, report=True)
         print(f"== {name}")
         for line in s.lines():
             print(line)

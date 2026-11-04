@@ -661,11 +661,12 @@ def _call(
                             continue  # another caller of the tier: it would keep the charge
                         if n in before and before.get(m) != n:
                             continue  # a lifted node between: only along its path
-                        if d[n] == k[n] and c[m] <= c[n] and not (holds and m == t):
+                        path = m in before  # into a lifted node of a path (item I7)
+                        if d[n] == k[n] and c[m] <= c[n] and not (path or (holds and m == t)):
                             continue  # the level passes on only away from the capital
                         dt[n] = step
                         if holds:
-                            ot[n] = m == t or (ot[m] and c[m] > c[n])
+                            ot[n] = m == t or (ot[m] and (path or c[m] > c[n]))
                         layer.append(n)
                 if len(layer) > 1:
                     layer.sort(key=lambda n: key(player, n))
@@ -705,6 +706,11 @@ def _call(
     out: dict[int, list[tuple[int, int]]] = {}
     used: dict[tuple[int, int], bool] = {}
 
+    def free(n: int, m: int, eid: int) -> bool:
+        """The road may carry a charge from ``n`` to ``m``: once per direction, and never back
+        against a charge sent along it in this dispatch."""
+        return (n, eid) not in used and (m, eid) not in used
+
     def give(n: int, m: int, eid: int) -> None:
         out.setdefault(n, []).append((m, eid))
         used[(n, eid)] = True
@@ -734,7 +740,7 @@ def _call(
             return False
         if have.setdefault(m, nodes[m].warehouse) == 0:
             return False
-        nxt = [pair for pair in nearer(m, dist[t]) if (m, pair[1]) not in used]
+        nxt = [pair for pair in nearer(m, dist[t]) if free(m, pair[0], pair[1])]
         for x, eid in nxt:
             if room[x] and want.get(x, 1):
                 give(m, x, eid)
@@ -748,7 +754,7 @@ def _call(
             for m, eid in nearer(n, dist[t]):
                 if ways is not None:
                     ways.setdefault(n, []).append(m)
-                if a == 0 or have[n] == 0 or (n, eid) in used:
+                if a == 0 or have[n] == 0 or not free(n, m, eid):
                     continue
                 if room[m] and want.get(m, 1):
                     give(n, m, eid)
@@ -770,7 +776,7 @@ def _call(
                 and m not in before
                 and room[m]
                 and c[m] >= cn
-                and (n, eid) not in used
+                and free(n, m, eid)
             ]
             if len(even) > 1:
                 even.sort(key=lambda pair: order(pair[0]))
@@ -907,9 +913,7 @@ def _clear_neutral(state: GameState) -> None:
 # The spill of a full factory (items A8 and M8) ------------------------------------------------
 
 
-def spill_way(
-    state: GameState, rules: Ruleset, factory: int
-) -> tuple[int, tuple[int, ...]] | None:
+def spill_way(state: GameState, rules: Ruleset, factory: int) -> tuple[int, tuple[int, ...]] | None:
     """``(receiver, roads)`` of the spill of the full factory ``factory`` (items A8 and M8): the
     nearest own node with room (the fewest roads), over own nodes with ``d(m) >= k`` by the field
     stored by the flow step of the previous tick; among the equally near the smallest ``d(m)``,

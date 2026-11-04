@@ -63,9 +63,11 @@ def _view(state: GameState, player: int = 0) -> PlayerView:
 
 def test_v1_before_the_dispatch() -> None:
     view = _view(_state({K: 6}))
-    assert _flow(view.nodes[K]) == (2, (A,), (A, E), None, False)
+    # since #738 (item M9) ``flow_down`` is the next nodes of the called charges: K's go to A (C
+    # and D call K over A); A carries nothing yet
+    assert _flow(view.nodes[K]) == (2, (A,), (A,), None, False)
     assert _flow(view.nodes[C]) == (0, (), (), FlowIdle.LEAF, False)
-    assert _flow(view.nodes[A]) == (1, (D,), (), FlowIdle.EMPTY, False)
+    assert _flow(view.nodes[A]) == (1, (), (), FlowIdle.EMPTY, False)
     me = view.me
     assert (me.leaf_shift, me.leaf_shift_max, me.next_dispatch_tick) == (0, 2, 10)
 
@@ -85,7 +87,7 @@ def test_v2_the_shift_changes_the_idle_reasons_not_the_field() -> None:
 
 def test_v3_after_the_dispatch() -> None:
     view = _view(_state({K: 6}, tick=10))
-    assert view.nodes[K].flow_next == (A, E)
+    assert view.nodes[K].flow_next == (A,)  # since #738: E has K's ``d`` and calls nothing of it
     assert view.me.next_dispatch_tick == 20
 
 

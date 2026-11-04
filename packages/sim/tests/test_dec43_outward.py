@@ -171,15 +171,22 @@ def test_o3_a_leaf_feeds_the_chain_beyond_through_an_enclave() -> None:
 
 
 def test_o3_the_view_of_a_corridor() -> None:
-    """Item L10: ``flow_down`` of a corridor leaves out its roads to a smaller capital distance
-    (Beaconford, ``c`` 4); without a hungry level node beyond it Flintcross is no corridor."""
+    """Since #738 (item M9) ``flow_down`` is the next nodes of a node's called charges at the
+    plan: Beaconford's charges go to Flintcross on the calls of the armies of Barrow and
+    Sedgeley; the empty Flintcross carries nothing yet; with nobody calling nothing is drawn."""
     state = _front({BEACONFORD: 3, FAR_FORK: 1}, mine=(BEACONFORD, SEDGELEY, BARROW))
+    _group(state, SEDGELEY, 3, 0)
+    _group(state, BARROW, 3, 0)
+    update_flow(state, RULES)
+    flow = state.nodes[BEACONFORD].flow
+    assert flow is not None and flow.down == (FLINTCROSS,) and flow.next == (FLINTCROSS,)
     flow = state.nodes[FLINTCROSS].flow
-    assert flow is not None and flow.down == (FAR_FORK, SEDGELEY, BARROW)
+    assert flow is not None and flow.down == ()
     full = {BEACONFORD: 3, FAR_FORK: 1, BARROW: 3, SEDGELEY: 3, TORCHESTER: 3}
     state = _front(full, mine=(BEACONFORD, SEDGELEY, BARROW))
-    flow = state.nodes[FLINTCROSS].flow
-    assert flow is not None and flow.down == (FAR_FORK, BEACONFORD, SEDGELEY, BARROW)
+    for n in (BEACONFORD, FLINTCROSS):
+        flow = state.nodes[n].flow
+        assert flow is not None and flow.down == ()
 
 
 def test_o3_no_corridor_without_a_hungry_level_node() -> None:
@@ -214,10 +221,9 @@ def test_o5_under_a_shift_the_level_feeds_an_enclave() -> None:
     sends = _run(state, 50)
     d = _d(state, MID_FORK, NARROWS_CITY, FAR_FORK)
     assert d == {MID_FORK: 2, NARROWS_CITY: 1, FAR_FORK: 0}
-    assert sends == {
-        10: [(BRACKENWAY, WRENFIELD), (STONECROSS, MID_FORK)],
-        50: [(MID_FORK, NARROWS_CITY)],  # not back to Brackenway or Stonecross
-    }
+    # since #738 (item M) the level gives into an enclave only on the call of a node that holds
+    # (reading M10): Brackenway evens out to Wrenfield (item L2), Stonecross keeps its 1
+    assert sends == {10: [(BRACKENWAY, WRENFIELD)]}
     state = _front({WRENFIELD: 3}, shift=1)
     assert _run(state, 30) == {}  # inward
 
@@ -243,7 +249,7 @@ def _dec41(stocks: dict[int, int], enemy: tuple[int, ...], shift: int = 0) -> Ga
 
 def test_o6_a_dead_end_is_no_corridor() -> None:
     state = _dec41({K: 6, A: 3, C: 2, F: 2}, (NORTH, SOUTH), shift=1)
-    assert _run(state, 10) == {10: [(A, B), (K, E), (F, B)]}  # as F12: F's stock rolls to B
+    assert _run(state, 10) == {10: [(A, B), (F, B)]}  # as F12: F's stock goes to B
 
 
 def test_o7_the_rear_is_no_enclave() -> None:

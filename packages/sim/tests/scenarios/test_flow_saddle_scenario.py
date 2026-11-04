@@ -59,13 +59,16 @@ def test_the_narrows_is_supplied_through_the_saddle() -> None:
         if sent:
             sends[match.tick] = sent  # type: ignore[assignment]
         armies[match.tick] = _army(match)
-    assert {t: s for t, s in sends.items() if t <= 110} == {
+    # since #738 (item M) the rest of the rear fills the nodes nearer the front at the same time
+    to_narrows = {
+        t: [p for p in s if p in ((THORNWAY, FAR_FORK), (FAR_FORK, THE_NARROWS))]
+        for t, s in sends.items()
+        if t <= 110
+    }
+    assert {t: s for t, s in to_narrows.items() if s} == {
         10: [(THORNWAY, FAR_FORK)],
-        20: [(LARKFIELD, THORNWAY)],
         50: [(FAR_FORK, THE_NARROWS)],
-        60: [(FLINTCROSS, FAR_FORK)],
-        70: [(BARROW, FLINTCROSS)],
-        80: [(IRON_HOLD, BARROW)],
+        60: [(THORNWAY, FAR_FORK)],
         100: [(FAR_FORK, THE_NARROWS)],
         110: [(THORNWAY, FAR_FORK)],
     }

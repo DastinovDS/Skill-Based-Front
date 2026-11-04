@@ -279,9 +279,11 @@ def test_the_initial_state_carries_the_field() -> None:
 
 
 def test_f2_downhill_then_the_level_road() -> None:
+    """Since #738 (item M) C and D call K over A; E is not nearer the front than K (``d`` 2
+    both), so K gives it nothing."""
     state = _state({K: 6})
-    assert _sent(_flow(state)) == [(K, A), (K, E)]
-    assert state.nodes[K].warehouse == 4
+    assert _sent(_flow(state)) == [(K, A)]
+    assert state.nodes[K].warehouse == 5
 
 
 def _f3(stocks: dict[int, int]) -> GameState:
@@ -320,15 +322,17 @@ def test_f6_no_room_below() -> None:
 
 
 def test_f7_the_wave() -> None:
-    """Since #735 C keeps its 3 (D is nearer the capital, item L2), so at 20 B refills A by the
-    saddle of item K instead of giving C one, and K finds A full."""
+    """Since #738 (item M) D calls A and, over the full A, K at 10 (K waits); at 20 A, with room
+    1, calls K (``d`` 2), the nearest stock behind it; B (``d`` 1 like A) gives nothing."""
     state = _state({K: 6, A: 3, B: 3, C: 3, E: 3, D: 0})
     assert _sent(_flow(state, 10)) == [(A, D)]
-    assert _sent(_flow(state, 20)) == [(A, D), (B, A)]
+    assert _sent(_flow(state, 20)) == [(A, D), (K, A)]
 
 
 def test_f8_a_level_road_moves_a_gap_of_two() -> None:
-    assert _sent(_flow(_state({A: 3, B: 0, D: 3, C: 3}))) == [(A, B)]
+    """Since #738 (item M) B calls only stock farther from the front than itself; A has its
+    ``d``, so nothing moves."""
+    assert _sent(_flow(_state({A: 3, B: 0, D: 3, C: 3}))) == []
     assert _sent(_flow(_state({A: 1, B: 0, D: 3, C: 3}))) == []
 
 
@@ -358,8 +362,8 @@ def test_f11_a_gathering_plan_pulls() -> None:
     events = _flow(state)
     assert _d(state, B) == {B: 0}
     assert _sent(events) == [] and state.nodes[B].warehouse == 2
-    state = _state({B: 2})
-    assert _sent(_flow(state)) == [(B, C)] and state.nodes[B].warehouse == 1
+    state = _state({B: 2})  # since #738: C calls B, D calls B over A
+    assert _sent(_flow(state)) == [(B, C), (B, A)] and state.nodes[B].warehouse == 0
 
 
 # The leaf shift (items B1 to B4) ----------------------------------------------------------------
@@ -368,8 +372,9 @@ def test_f11_a_gathering_plan_pulls() -> None:
 def test_f12_the_shift_moves_the_level_back() -> None:
     state = _state({K: 6, A: 3, C: 2, F: 2}, shift=1)
     events = _flow(state)
-    assert _sent(events) == [(A, B), (K, E), (F, B)]  # the level A, B evens out (#724)
-    assert [state.nodes[n].warehouse for n in (K, A, C, F)] == [5, 2, 2, 1]
+    # since #738: B calls F and K (over the full A, which has just given B one by item L2)
+    assert _sent(events) == [(A, B), (F, B)]
+    assert [state.nodes[n].warehouse for n in (K, A, C, F)] == [6, 2, 2, 1]
     assert _sent([e for e in events if e.get("player") == 0 and e.get("to_node") == C]) == []
 
 
@@ -378,7 +383,7 @@ def test_f13_ahead_of_the_level_no_pull_behind_it_a_pull_to_the_level() -> None:
     _group(state, D, 2, 0)
     events = _flow(state)
     assert _d(state, *OWN) == {**BASE_D, D: 1}  # D ahead pulls: on the level (item I6, #724)
-    assert _sent(events) == [(A, B), (A, D)]
+    assert _sent(events) == [(A, D), (A, B)]  # since #738: the army calls first (item M2)
     state = _state({K: 6}, shift=1)
     _group(state, K, 2, 0)
     events = _flow(state)
@@ -427,18 +432,33 @@ def test_f16_a_full_factory_spills() -> None:
     events = _produce(state)
     produced = [e for e in events if e.kind == "charges_produced" and e.get("player") == 0]
     assert [(e.get("node"), e.get("charges"), e.get("spill")) for e in produced] == [(K, 1, 1)]
-    assert [r for r in _sent(events) if r[0] == K] == [(K, E), (K, E)]
-    assert state.nodes[K].warehouse == 5
+    # since #738 the dispatch sends K nothing more to E (``d`` 2 like K); B calls K over the
+    # full A, and A passes one of its own on (a relay, item M6)
+    assert [r for r in _sent(events) if r[0] == K] == [(K, E)]
+    assert _sent(events) == [(K, E), (A, B)]
+    assert state.nodes[K].warehouse == 6
 
 
 def test_f17_no_room_burns_and_a_reserved_arrival_counts() -> None:
+    """Since #738 (item M8) the spill goes to the nearest own node with room, several roads away:
+    with A and E full it goes to B over A; it burns only when no own node has room."""
     state = _state({K: 6, A: 3, C: 3, D: 3, E: 3}, tick=99)
+    events = _produce(state)
+    spilled_to = [
+        (e.get("from_node"), e.get("to_node"), e.get("edge"))
+        for e in events
+        if e.kind == "packet_sent" and e.get("from_node") == K
+    ]
+    assert spilled_to == [(K, B, ROAD[K, A])]
+    assert [p.route for p in state.packets.values() if p.from_node == K] == [(ROAD[A, B],)]
+    full = {n: 3 for n in OWN}
+    state = _state({**full, K: 6}, tick=99)
     events = _produce(state)
     burned = [e for e in events if e.kind == "charge_burned" and e.get("player") == 0]
     assert [(e.get("node"), e.get("charges")) for e in burned] == [(K, 1)]
     assert [r for r in _sent(events) if r[0] == K] == []
     for e_stock, spilled in ((0, True), (3, False)):
-        state = _state({K: 5, A: 3, C: 3, D: 3, E: e_stock}, tick=99)
+        state = _state({**full, K: 5, E: e_stock}, tick=99)
         send_packet(state, 0, A, (ROAD[K, A],), (20,), 1, transfer=False)  # on the way to K
         events = economy_only(state)
         kinds = [(e.kind, e.get("spill") if e.kind == "charges_produced" else None) for e in events]

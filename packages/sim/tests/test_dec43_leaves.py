@@ -228,7 +228,10 @@ def test_l13_the_starving_front_node_of_replay_9_gets_a_charge() -> None:
     state = _narrows()
     events = _flow(state)
     assert _d(state) == {0: 3, 1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 8: 1, 9: 0, 10: 0}
-    assert _sent(events) == [(6, 9), (1, 2), (4, 8)]
+    # since #738 (item M): Highmoor (the army, first in the tier) calls Brackenway, Cairn over
+    # Brackenway and Granite Hold over Marlow; Torchester calls Reedwick over Millbrook; Cairn
+    # waits (Brackenway and Reedwick, its next nodes, are full)
+    assert _sent(events) == [(6, 9), (4, 8), (0, 2)]
 
 
 # Option A: a pulling army ahead of the level pulls (item I6) ----------------------------------
@@ -268,20 +271,22 @@ def test_l17_replay_9_with_the_shift_at_1() -> None:
     events = _flow(state)
     d = _d(state)
     assert (d[9], d[10], d[5], d[6], d[8], d[0]) == (1, 0, 1, 1, 1, 3)
-    # since #735 Brackenway's charge goes outward to Wrenfield (item L2; one order with the army
-    # of Highmoor: fill 0 both, node_key 5 < 9, item L3)
-    assert _sent(events) == [(6, 5), (1, 2), (4, 8)]
-    # 20: Cairn refills Brackenway, Reedwick sends Millbrook its second, Granite Hold refills Cairn
-    assert _sent(_flow(state, 20)) == [(1, 6), (4, 8), (0, 1)]
+    # since #738 (item M) the army of Highmoor calls first: Brackenway gives it its charge at 10
+    # (before #738 it went outward to Wrenfield and Highmoor got its first at 60)
+    assert _sent(events) == [(6, 9), (4, 8), (0, 2)]
+    # 20: Cairn refills Brackenway (Highmoor's call) and gives Reedwick one on Millbrook's call;
+    # Reedwick gives Millbrook one and one to Granite Hold on Wrenfield's long way (Brackenway, a
+    # caller of the tier, is no way)
+    assert _sent(_flow(state, 20)) == [(1, 6), (1, 4), (4, 8), (4, 0)]
     later = _flow(state, 60)
     assert [(e.tick, e.get("from_node")) for e in _packets(later) if e.get("to_node") == 9] == [
-        (60, 5),  # Wrenfield, the level end of Highmoor's path (landed at 54)
-        (60, 6),  # Brackenway (landed at 58): Highmoor holds, room alone
+        (60, 6)
     ]
     old = _narrows()  # without the army Highmoor stays frozen ahead of the level
     old.groups.clear()
     old.players[0].leaf_shift = 1
-    assert _sent(_flow(old)) == [(6, 5), (1, 2), (4, 8)]  # Brackenway outward as above
+    # Brackenway evens out outward to Wrenfield (item L2); Millbrook calls Reedwick
+    assert _sent(_flow(old)) == [(6, 5), (4, 8)]
 
 
 # Item I7: a pulling army ahead of the level lifts its path (#726) ------------------------------
@@ -345,16 +350,19 @@ def test_l19_an_army_three_roads_ahead_under_k_3() -> None:
     state = _state({K: 2, E: 1, D: 2}, owners={NORTH: 1}, shift=3)
     army = _group(state, C, 2, 0)
     sends, charged = _timeline(state, {"C": army}, 80)
+    # since #738 (item M) E, on the level, gives into the path too (a caller that holds calls the
+    # level over its path); C is full at 80 before the third charge lands
     assert sends == {
-        10: [(K, A)],
+        10: [(K, A), (E, A)],
         20: [(K, A)],
         30: [(A, B)],
         40: [(A, B)],
-        50: [(B, C)],
+        50: [(A, B), (B, C)],
         60: [(B, C)],
+        70: [(B, C)],
     }
     assert charged == {70: {"C": 1}, 80: {"C": 2}}
-    assert (state.nodes[D].warehouse, state.nodes[E].warehouse) == (2, 1)
+    assert (state.nodes[D].warehouse, state.nodes[E].warehouse) == (2, 0)
 
 
 def test_l19_the_field_of_the_path() -> None:
@@ -373,27 +381,36 @@ def test_l20_two_armies_share_a_path() -> None:
     north = _group(state, C, 2, 0)
     south = _group(state, D, 2, 0)
     sends, charged = _timeline(state, {"C": north, "D": south}, 70)
-    assert sends == {10: [(K, A)], 20: [(K, A)], 30: [(A, B)], 40: [(A, D)], 50: [(B, C)]}
-    assert charged == {60: {"D": 1}, 70: {"C": 1}}
+    # since #738 (item M) D, one road from A against C's two, gets A's charges first
+    assert sends == {
+        10: [(K, A), (E, A)],
+        20: [(K, A)],
+        30: [(A, D), (A, B)],
+        40: [(A, D)],
+        50: [(B, C)],
+    }
+    assert charged == {50: {"D": 1}, 60: {"D": 2}, 70: {"C": 1}}
 
 
 def test_l21_the_nearer_army_first() -> None:
-    """Since #735 K's third charge goes outward to E (item L2) and comes back to the path by the
-    gap rule between equal capital distances (E and A, ``c`` 1)."""
+    """Since #738 (item M): K gives A one on B's call and E one by item L2 (outward, ``1 + 1 <=
+    2``); E gives its own and later K's to the path (B calls the level over the path); B, the
+    nearer army, takes A's charges until full at 60, then B passes the next two on to C."""
     state = _state({K: 3, E: 1}, owners={NORTH: 1}, shift=3)
     near = _group(state, B, 2, 0)
     far = _group(state, C, 2, 0)
     sends, charged = _timeline(state, {"B": near, "C": far}, 110)
     assert sends == {
-        10: [(K, A), (K, E)],
+        10: [(K, A), (K, E), (E, A)],
         20: [(K, A)],
         30: [(A, B)],
-        40: [(A, B)],
-        50: [(E, A)],
-        70: [(A, B)],
-        90: [(B, C)],
+        40: [(A, B), (E, A)],
+        50: [(A, B)],
+        60: [(A, B)],
+        70: [(B, C)],
+        80: [(B, C)],
     }
-    assert charged == {50: {"B": 1}, 60: {"B": 2}, 110: {"C": 1}}
+    assert charged == {50: {"B": 1}, 60: {"B": 2}, 90: {"C": 1}, 100: {"C": 2}}
 
 
 def test_i7_the_path_is_mirrored() -> None:
@@ -417,8 +434,8 @@ def test_i7_the_path_is_mirrored() -> None:
             assert (b.d, b.k, b.idle) == (a.d, a.k, a.idle)
             assert b.next == tuple(mirror[m] for m in a.next)
     sent_west = _sent(events, 0)
-    # since #735 the level end K gives its second charge outward to E (item L2, one per road per
-    # dispatch), and E keeps it (A, equal ``c``: the gap rule)
-    assert sent_west == [(K, A), (K, E), (A, B), (B, C)]
+    # since #738 (item M) E, on the level, gives K's second charge into the path (a caller that
+    # holds calls the level over its path)
+    assert sent_west == [(K, A), (K, E), (A, B), (E, A), (B, C), (A, B), (B, C)]
     assert _sent(events, 1) == [(mirror[a], mirror[b]) for a, b in sent_west]
     assert west.charged == 1
