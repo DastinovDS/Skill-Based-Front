@@ -282,46 +282,42 @@ def _field(state: GameState, player: int) -> _Field:
                 contact[nid] = True  # a road to an enemy node; a neutral one never (item A1)
         adj[nid] = near
 
-    # Components over internal roads: the shift of the capital's one, pockets (items A10, B3, H1).
-    comp: dict[int, int] = {}
-    members: dict[int, list[int]] = {}
-    for nid in adj:  # ascending: the component id is its smallest node
-        if nid in comp:
-            continue
-        comp[nid] = nid
-        group = [nid]
-        head = 0
-        while head < len(group):
-            n = group[head]
-            head += 1
-            for m, _ in adj[n]:
-                if m not in comp:
-                    comp[m] = nid
-                    group.append(m)
-        members[nid] = group
+    # The capital's component by the BFS of the capital distance (``hops``, item L1; also the
+    # farthest leaves of item I2), then the other components, the pockets (items A10, B3, H1).
     capital = mapdef.capital(player)
-    main = comp.get(capital)
+    hops: dict[int, int] = {}
+    if capital in adj:
+        hops[capital] = 0
+        _bfs(adj, hops, deque([capital]))
+    pockets: list[list[int]] = []
+    seen: dict[int, bool] = {}
+    for nid in adj:  # ascending
+        if nid in hops or nid in seen:
+            continue
+        seen[nid] = True
+        group = [nid]
+        for n in group:  # grows while it is walked: a BFS
+            for m, _ in adj[n]:
+                if m not in seen:
+                    seen[m] = True
+                    group.append(m)
+        pockets.append(group)
 
     # The leaves of every component (items A1, A2): its nodes on a road to an enemy node; with
     # none, the capital's component takes its nodes farthest from the capital, a pocket all its
     # nodes. Then ``d0`` by one BFS from all leaves.
-    # ``hops``: the capital distance of item L1 (and of the farthest leaves of item I2).
-    hops: dict[int, int] = {}
-    if main is not None:
-        hops[capital] = 0
-        _bfs(adj, hops, deque([capital]))
     d0: dict[int, int] = {}
     leaves: list[int] = []
-    for c in sorted(members):
-        group = members[c]
-        touching = [n for n in group if n in contact]
+    if hops:
+        touching = [n for n in hops if n in contact]
         if touching:
             leaves.extend(touching)
-        elif c == main:
-            far = max(hops.values())
-            leaves.extend(n for n in group if hops[n] == far)
         else:
-            leaves.extend(group)
+            far = max(hops.values())
+            leaves.extend(n for n, h in hops.items() if h == far)
+    for group in pockets:
+        touching = [n for n in group if n in contact]
+        leaves.extend(touching if touching else group)
     leaves.sort()
     for n in leaves:
         d0[n] = 0
@@ -332,8 +328,8 @@ def _field(state: GameState, player: int) -> _Field:
     ps.leaf_shift_max = shift_max
     ps.leaf_shift = min(ps.leaf_shift, shift_max)  # the clamp is stored (item B3)
     shift = ps.leaf_shift
-    k = {n: shift if c == main else 0 for n, c in comp.items()}
-    pocket = {n: c != main for n, c in comp.items()}  # no own capital: all pockets
+    k = {n: shift if n in hops else 0 for n in adj}
+    pocket = {n: n not in hops for n in adj}  # no own capital: all pockets
 
     # The pull (item A4): a multi-source BFS from the pulled nodes behind the level; d = min(d0,
     # k + hops). A pulling army ahead of the level puts its node and its path on the level,
@@ -423,9 +419,7 @@ def _field(state: GameState, player: int) -> _Field:
         same: list[tuple[int, int]] = []
         out: list[tuple[int, int]] = []
         for m, eid in adj[n]:
-            dm = d.get(m)
-            if dm is None:
-                continue
+            dm = d[m]  # every own node has a field (item I2)
             if dm < dn:
                 if dm >= kn:
                     below.append((m, eid))
