@@ -19,6 +19,7 @@ describe('the How to play page (CLI-13, #72)', () => {
     component = mount(HowToPlay, { target: document.body });
     flushSync();
     const text = document.body.textContent;
+    expect(text).toContain(translate('en', 'howto.outdated'));
     for (const key of [
       'howto.charges.title',
       'howto.roads.title',

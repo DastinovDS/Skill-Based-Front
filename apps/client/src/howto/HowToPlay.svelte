@@ -80,6 +80,8 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- The panel around it scrolls: a focusable region lets the arrow keys scroll it. -->
 <div class="hw" role="region" aria-label={t('help.howTo')} tabindex="0">
+  <p class="outdated" role="note">{t('howto.outdated')}</p>
+
   <section aria-labelledby="hw-charges">
     <h3 id="hw-charges">{t('howto.charges.title')}</h3>
     <p>
@@ -311,6 +313,15 @@
   .hw:focus-visible {
     outline: 2px solid var(--paper);
     outline-offset: 4px;
+  }
+
+  .outdated {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+    font-size: 13px;
+    color: var(--text-dim);
   }
 
   .note {

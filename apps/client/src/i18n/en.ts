@@ -488,6 +488,8 @@ export const en = {
   'help.howToBack': 'Back to the keys',
   // The "How to play" screen (CLI-13, #72); the numbers come from the played ruleset.
   'howto.eyebrow': 'The rules in two minutes',
+  'howto.outdated':
+    'This page describes an older ruleset. Supply and economy work differently in the current game. A new tutorial is coming.',
   'howto.charges.title': 'Charges',
   'howto.charges.text':
     'Every unit is a battery, charged or empty. Your capital turns command points into charges. Your stance sets how many: {economy}% in Economy, {balance}% in Balance, {war}% in War. The rest stays command points for orders.',
