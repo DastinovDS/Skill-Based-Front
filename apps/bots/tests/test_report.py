@@ -284,3 +284,40 @@ def test_report_share_of_scheduled_attacks_without_siege_fields_is_na(tournament
     lines = [x for x in text.splitlines() if x.startswith("| **rusher** |") and "(0/" in x]
     assert len(lines) == 1  # the bots section: n/a, then the share of all attacks (2 + 1) / 6
     assert " | n/a | 0.50 | " in lines[0]
+
+
+def _cp_rows() -> list[dict[str, Any]]:
+    """Two matches of the rusher (side 0) against the expander, worked by hand."""
+    first = _row("alpha", 0, "rusher", "expander") | {
+        "ticks": 1000,
+        "cp_burned": [250, 0],
+        "cp_cap_ticks": [400, 0],
+        "idle_discharged_connected": [30, 0],
+        "idle_discharged_pocket": [90, 0],
+    }
+    second = _row("alpha", 1, "rusher", "expander") | {
+        "ticks": 3000,
+        "cp_burned": [0, 100],
+        "cp_cap_ticks": [0, 3000],
+        "idle_discharged_connected": [10, 40],
+        "idle_discharged_pocket": [0, 0],
+    }
+    return [first, second]
+
+
+def test_report_prints_the_cp_and_idle_unit_columns(tmp_path: Path) -> None:
+    text = render_report(load_rows(_write(tmp_path / "c.jsonl", _cp_rows())), "c.jsonl", "c")
+    assert "## CP and idle units (#743)" in text
+    # rusher (side 0 in both): CP burned (250 + 0) / (100 * 2) = 1.25; ticks at the cap
+    # 400 of 4000 = 10.0%; 1 of 2 matches reached the cap = 50%;
+    # idle connected (30 + 10) / 2 = 20, pocket (90 + 0) / 2 = 45, pockets 90 of 130 = 69%.
+    assert "| **rusher** | 2 | 1.25 | 10.0% | 50% | 20 | 45 | 69% |" in text
+    # expander (side 1): burned (0 + 100) / 200 = 0.50; cap 3000 of 4000 = 75.0%; 1 of 2 = 50%;
+    # idle connected (0 + 40) / 2 = 20, pocket 0, pockets 0 of 40 = 0%.
+    assert "| **expander** | 2 | 0.50 | 75.0% | 50% | 20 | 0 | 0% |" in text
+
+
+def test_report_cp_columns_without_the_fields_are_na(tournament: Path) -> None:
+    text = render_report(load_rows(tournament), "t.jsonl", "t")
+    section = text.split("## CP and idle units (#743)")[1]
+    assert "| **rusher** | 0 | n/a | n/a | n/a | n/a | n/a | n/a |" in section

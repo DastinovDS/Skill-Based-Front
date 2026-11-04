@@ -128,6 +128,9 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `stock_by_place_minute` | [{place: [int or null, ...]}, ...] | the stock by place and match minute in hundredths of a charge (#588); places `cap_wh`, `front_wh`, `rear_wh`, `units_node`, `units_road`, `packets`; `null`: no sample in that minute |
 | `marker_ticks`, `front_empty_ticks`, `front_empty_cap_has_ticks`, `cap_full_ticks` | [int, int] | the supply bottleneck in ticks (#588) |
 | `front_empty_permille`, `front_empty_cap_has_permille` | [int or null, ...] | the second and the third over `marker_ticks`, per mille, rounded down; `null` without marker ticks (#588) |
+| `cp_burned` | [int, int] | CP lost to the CP cap, in hundredths like `cp`: the sum of `cp` of the player's `cp_burned` events, the quantum that did not fit under `cp.cap` (and the rare overflow of a `CancelRecruit` refund). Divide by 100 for CP (#743, section "CP burned and idle discharged units") |
+| `cp_cap_ticks` | [int, int] | ticks `1..ticks` that ended with the player's CP at `cp.cap` (#743) |
+| `idle_discharged_connected`, `idle_discharged_pocket` | [int, int] | idle discharged unit-ticks (#743): units without a charge standing in an own node with an empty warehouse, in no fight and with no order, summed over ticks; the first in the component of the own capital, the second in a pocket (DEC-43, item H) |
 | `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name (`Move`, `CancelOrder`, `Split`, `Merge`, `SetMode`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `UpgradeWarehouse`, `UpgradeRoad`, `SetFront`, `SetRearMin`, `Transfer`, and the economy v2 commands `DrawLine`, `RemoveLine`, `BuildFactory`, `BuildBunker`, `ReleasePlan`, #648), a planned `Move` as `MovePlanned`; `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
 
 The fields `stock_*`, `charges_*` and `burned_permille` were added in #310 without changing `schema`: nothing was removed and
@@ -136,6 +139,7 @@ nothing changed meaning. Tournament files older than #310 do not contain them, t
 `siege_orders`, `planned_siege_orders` and `planned_siege_share` were added in #590 the same way (no field changed
 meaning); the report shows the gate share as n/a for older files, next to the share over all attacks. The charge ledger, flow, stock by place and
 bottleneck fields (#588) were added the same way (only additions, `schema` stays 1); the report shows n/a for older files.
+`cp_burned`, `cp_cap_ticks`, `idle_discharged_connected` and `idle_discharged_pocket` (#743) are additions too.
 
 The metric definitions are set in `packages/sim/src/gow_sim/analysis.py` (the module docstring).
 A "scheduled" and an "attacking" order is not visible in the event log (`Move` leaves no event),
@@ -260,6 +264,33 @@ means per player and match, the bottleneck shares summed over the group's ticks,
 `gow-bots analyze` (the same keys) and `gow-bots stats` (rows `charges ...`, `ledger residual`, `marker city empty`,
 `mean stock <place>` after the CP rows). Not included (needs a new event or a state sample at the start of a fight): the
 siege composition of charge-flow.md; the cost of the added counting is below 2% of a headless match.
+
+## CP burned and idle discharged units (#743)
+
+Two questions the charge ledger cannot answer: does a player have more command points than it spends, and do its
+discharged units wait where no charge can reach them. Not a game rule: no event or field was added, `SIM_VERSION` and
+the golden replays are untouched. `MatchRecorder` samples the end-of-tick state, `analyze` reads the `cp_burned` events
+(`gow_sim.analysis`, module docstring "CP and idle units"). All values per player, integers.
+
+- `cp_burned`: CP in hundredths that did not fit under `cp.cap`: the sum of `cp` of the player's `cp_burned` events (the
+  regeneration quantum; the overflow of a `CancelRecruit` refund emits the same event and is counted too, it is rare and
+  the log cannot tell it from a quantum burned in the same tick). A player that spends its CP as they come has 0.
+- `cp_cap_ticks`: the ticks that ended with the CP at the cap; the next quantum burns completely. Over `ticks` it is the
+  share of the match spent at the cap.
+- `idle_discharged_connected` and `idle_discharged_pocket`, unit-ticks: in every tick, a group of the player that stands
+  in a node (not on a road) the player owns, is in no fight and has no movement order (a waiting planned order is an
+  order) adds `units - charged` when the node's warehouse is empty (nothing there can recharge it). The node is
+  *connected* when it is joined to the player's capital over own nodes (`capacity.supplied_territory`), *pocket*
+  otherwise (DEC-43, item H1; a player without its capital has only pockets, a factory in a pocket does not make the
+  pocket connected). Groups in a node the player does not own are not counted. Divide by `tick_hz` (10) for
+  unit-seconds.
+
+Reading: the CP surplus question of #706 is answered by `cp_burned` and `cp_cap_ticks` of the bots that play at a human
+tempo (`@normal`, `@hard`); a slow (`@easy`) or a plain bot sits at the cap by itself, so mixing them into one mean
+reports a property of the field, not of the ruleset. `idle_discharged_pocket` over the sum of both is the share of the
+idle stacks that the supply cannot reach. `gow-bots report` has the section "CP and idle units (#743)" (a table per
+bot: means per player and match, the share of ticks at the cap, the share of matches that reached the cap, the pocket
+share of the idle unit-ticks); `gow-bots analyze` prints the same keys.
 
 ## Report
 

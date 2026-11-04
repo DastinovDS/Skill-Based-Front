@@ -111,6 +111,8 @@ class Row:
     siege_orders: tuple[int, int] | None = None
     """Attack orders into a node with an enemy garrison (#590); ``None`` in an older file."""
     planned_siege_orders: tuple[int, int] | None = None
+    cp: dict[str, tuple[int, int]] | None = None
+    """``CP_KEYS`` by side (#743); ``None`` in a file written before they existed."""
 
     @property
     def outcome(self) -> tuple[int | None, str, tuple[int, int], tuple[int, int]]:
@@ -177,6 +179,16 @@ PLACE_KEYS: Final[tuple[str, ...]] = (
 """The places of ``stock_by_place_minute``; the same as ``gow_sim.analysis.PLACES``."""
 
 
+CP_KEYS: Final[tuple[str, ...]] = (
+    "cp_burned",
+    "cp_cap_ticks",
+    "idle_discharged_connected",
+    "idle_discharged_pocket",
+)
+"""The per-side CP and idle unit fields (#743): CP burned in hundredths, ticks at the CP cap, idle
+discharged unit-ticks in the capital's component and in pockets."""
+
+
 V2_FLOW_KEYS: Final[tuple[str, ...]] = ("charges_built", "charges_plans")
 """The economy v2 sinks of the ledger (DEC-41, #646): 0 in a file written before them."""
 
@@ -188,6 +200,12 @@ def _flow(raw: dict[str, Any]) -> dict[str, tuple[int, int]] | None:
     for k in V2_FLOW_KEYS:
         flow[k] = _pair(raw, k) if k in raw else (0, 0)
     return flow
+
+
+def _cp(raw: dict[str, Any]) -> dict[str, tuple[int, int]] | None:
+    if any(k not in raw for k in CP_KEYS):
+        return None
+    return {k: _pair(raw, k) for k in CP_KEYS}
 
 
 def _places(
@@ -237,6 +255,7 @@ def _parse_row(raw: dict[str, Any]) -> Row:
         places=_places(raw),
         siege_orders=_opt_pair(raw, "siege_orders"),
         planned_siege_orders=_opt_pair(raw, "planned_siege_orders"),
+        cp=_cp(raw),
     )
 
 
@@ -645,6 +664,58 @@ def _section_flow(ps: Sequence[Persp], bots: Sequence[str]) -> str:
     )
 
 
+def _cp_cells(ps: Sequence[Persp]) -> list[str]:
+    """CP and idle unit columns of a group of perspectives: means per player and match."""
+    rows = [(p.row.cp, p.side, p.row.ticks) for p in ps if p.row.cp is not None]
+    if not rows:
+        return ["0", *["n/a"] * 6]
+    n = len(rows)
+
+    def total(key: str) -> int:
+        return sum(cp[key][side] for cp, side, _ in rows)
+
+    ticks = sum(t for _, _, t in rows)
+    connected = total("idle_discharged_connected")
+    pocket = total("idle_discharged_pocket")
+    reached = sum(cp["cp_cap_ticks"][side] > 0 for cp, side, _ in rows)
+    return [
+        str(n),
+        f"{total('cp_burned') / (100 * n):.2f}",
+        f"{total('cp_cap_ticks') * 100 / ticks:.1f}%" if ticks else "n/a",
+        f"{reached * 100 / n:.0f}%",
+        f"{connected / n:.0f}",
+        f"{pocket / n:.0f}",
+        f"{pocket * 100 / (connected + pocket):.0f}%" if connected + pocket else "n/a",
+    ]
+
+
+def _section_cp(ps: Sequence[Persp], bots: Sequence[str]) -> str:
+    header = [
+        "matches",
+        "CP burned",
+        "ticks at the cap",
+        "matches that reached the cap",
+        "idle discharged, connected",
+        "idle discharged, in pockets",
+        "of them in pockets",
+    ]
+    body = [[f"**{b}**", *_cp_cells([p for p in ps if p.bot == b])] for b in bots]
+    intro = (
+        "Whether a player has more command points than it spends, and whether its discharged "
+        "units wait where no charge can reach them (#743, definitions in "
+        "[README.md](README.md)). *CP burned*: the mean per player and match, in CP, that the "
+        "regeneration lost at the CP cap. *Ticks at the cap*: the share of all ticks that ended "
+        "with the CP at the cap. *Idle discharged*: the mean unit-ticks per player and match of "
+        "units without a charge standing in an own node with an empty warehouse, in no fight "
+        "and with no order, in the capital's component (*connected*) or in a pocket cut off "
+        "from the capital (DEC-43, item H); divide by the tick rate for unit-seconds. All "
+        "matches count, mirror matches included; a file written before #743 shows n/a. Read the "
+        "rule numbers on the bots that play at a human tempo: a slow or a plain bot sits at the "
+        "cap by itself.\n\n"
+    )
+    return intro + _table(["bot", *header], body)
+
+
 def _usage_cell(ps: Sequence[Persp], key: str) -> str:
     counts = [p.row.usage[p.side].get(key, 0) for p in ps if p.row.usage is not None]
     if not counts:
@@ -883,6 +954,7 @@ def render_report(rows: Sequence[Row], source: str, prefix: str) -> str:
         ("Metrics by bot", _section_bots(ps, bots)),
         ("Charge stock and burned share (#310)", _section_stock(ps, rows, bots)),
         ("Charge flow (#588)", _section_flow(ps, bots)),
+        ("CP and idle units (#743)", _section_cp(ps, bots)),
         ("Mechanic usage (#166)", _section_usage(ps, bots)),
         ("Strategy diversity", _section_diversity(ps, bots)),
         ("Captures at the end of the match", _section_late(rows)),

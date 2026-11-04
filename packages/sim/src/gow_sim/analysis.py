@@ -84,6 +84,26 @@ state samplings; nothing is added to the simulation:
   counted in all ticks). ``front_empty_permille`` and ``front_empty_cap_has_permille`` are the
   first two over ``marker_ticks`` (per mille, rounded down; ``None`` without marker ticks).
 
+**CP and idle units** (#743, balance statistics, not game rules; ``docs/balance/README.md`` has
+the same text). Per player, from the ``cp_burned`` events and a sampling of the end-of-tick state;
+nothing is added to the simulation:
+
+- ``cp_burned`` (hundredths of CP, like ``PlayerState.cp``): the sum of ``cp`` of the player's
+  ``cp_burned`` events, the CP that did not fit under ``cp.cap``: the regeneration quantum, and
+  also the (rare) overflow of a ``CancelRecruit`` refund, which the log cannot tell apart from a
+  quantum burned in the same tick. Both are CP lost to the cap.
+- ``cp_cap_ticks``: the ticks ``1..ticks`` that ended with the player's CP at ``cp.cap`` (the next
+  quantum burns completely).
+- ``idle_discharged_connected`` and ``idle_discharged_pocket``, unit-ticks: in every tick, for each
+  group of the player that stands in a node (not on an edge) the player owns, in no fight, with no
+  movement order (a waiting planned order is an order), the units without a charge
+  (``units - charged``) when the warehouse of the node is empty: nothing there can recharge them.
+  *Connected*: the node is connected to the player's capital over own nodes
+  (``capacity.supplied_territory``). *Pocket*: it is not (DEC-43, item H1: a component of own
+  nodes without the own capital; a player without its capital has only pockets). Groups in a
+  node the player does not own (the walk into a neutral or an enemy node ends in a capture or
+  a fight in the same tick) are not counted.
+
 Player statistics (#375), the actions of a player instead of the outcome: ``analyze_stats(log)``
 returns ``MatchStats``, one ``PlayerStats`` per side. They come from the command journal of the
 match (every command sent, accepted or rejected, with the price charged) and from existing events
@@ -141,7 +161,7 @@ from gow_sim.maps import PLAYERS
 from gow_sim.match import Match
 from gow_sim.ruleset import Stance
 from gow_sim.state import AtNode, Event, GameState, OnEdge
-from gow_sim.systems.capacity import warehouse_capacity
+from gow_sim.systems.capacity import supplied_territory, warehouse_capacity
 
 __all__ = [
     "CP_CATEGORIES",
@@ -298,6 +318,10 @@ class MatchLog:
     ``cap_full_ticks`` (module docstring)."""
     delivered_front: tuple[int, ...] = (0, 0)
     """By player id: charges delivered into a city with a front marker."""
+    cp_cap_ticks: tuple[int, ...] = (0, 0)
+    """By player id: ticks that ended with the CP at ``cp.cap`` (module docstring, #743)."""
+    idle_discharged: tuple[tuple[int, int], ...] = ((0, 0), (0, 0))
+    """By player id: ``(connected, pocket)`` idle discharged unit-ticks (module docstring)."""
 
 
 def charge_stock(state: GameState) -> tuple[int, ...]:
@@ -366,6 +390,8 @@ class MatchRecorder:
         self._samples: dict[int, list[tuple[int, ...]]] = {p: [] for p in PLAYERS}
         self._bottleneck = {p: [0, 0, 0, 0] for p in PLAYERS}
         self._delivered_front = _zeros()
+        self._cap_ticks = _zeros()
+        self._idle = {p: [0, 0] for p in PLAYERS}
         self._capitals: dict[int, int] = {}
         self._garrisons: dict[int, tuple[bool, ...]] = {}
         """Node -> per player id: a group of that player stands in it (end of the last tick)."""
@@ -419,6 +445,7 @@ class MatchRecorder:
         for p, charges in zip(PLAYERS, charge_stock(state), strict=True):
             self._stock[p].append(charges)
         self._count_bottleneck(match)
+        self._count_cp_and_idle(match)
         self._garrisons = _garrisons(state)
         if state.tick % PLACE_SAMPLE_TICKS == 0:
             for p, places in zip(PLAYERS, charge_places(state), strict=True):
@@ -447,6 +474,26 @@ class MatchRecorder:
                 if cap.warehouse > 0:
                     counts[2] += 1
 
+    def _count_cp_and_idle(self, match: Match) -> None:
+        """One tick of ``cp_cap_ticks`` and of the idle discharged unit-ticks (#743)."""
+        state = match.state
+        for p in PLAYERS:
+            if state.players[p].cp >= match.rules.cp.cap:
+                self._cap_ticks[p] += 1
+        supplied: dict[int, tuple[bool, ...]] = {}
+        for g in state.groups.values():  # the sums do not depend on the order
+            if g.charged >= g.units or g.fight is not None or g.order is not None:
+                continue
+            loc = g.location
+            if not isinstance(loc, AtNode):
+                continue
+            node = state.nodes[loc.node]
+            if node.owner != g.owner or node.warehouse > 0:
+                continue
+            if g.owner not in supplied:
+                supplied[g.owner] = supplied_territory(state, g.owner)
+            self._idle[g.owner][0 if supplied[g.owner][loc.node] else 1] += g.units - g.charged
+
     def log(self) -> MatchLog:
         """The log of the match as far as it was played."""
         match = self._match
@@ -472,6 +519,8 @@ class MatchRecorder:
                 (b[0], b[1], b[2], b[3]) for b in (self._bottleneck[p] for p in PLAYERS)
             ),
             delivered_front=tuple(self._delivered_front[p] for p in PLAYERS),
+            cp_cap_ticks=tuple(self._cap_ticks[p] for p in PLAYERS),
+            idle_discharged=tuple((self._idle[p][0], self._idle[p][1]) for p in PLAYERS),
         )
 
 
@@ -591,6 +640,14 @@ class MatchMetrics:
     """``charges_burned * 1000 // charges_produced``; ``None`` without production."""
     flow: tuple[ChargeFlow, ...]
     """The charge ledger and flow by player id (#588)."""
+    cp_burned: tuple[int, ...]
+    """CP in hundredths the regeneration lost at the cap (#743)."""
+    cp_cap_ticks: tuple[int, ...]
+    """Ticks that ended with the CP at the cap (#743)."""
+    idle_discharged_connected: tuple[int, ...]
+    """Idle discharged unit-ticks in the capital's component (#743)."""
+    idle_discharged_pocket: tuple[int, ...]
+    """Idle discharged unit-ticks in pockets (#743)."""
 
     def to_json(self) -> dict[str, object]:
         """Plain JSON data; per-player values are lists indexed by player id."""
@@ -628,6 +685,10 @@ class MatchMetrics:
             "charges_burned": list(self.charges_burned),
             "burned_permille": list(self.burned_permille),
             **flow,
+            "cp_burned": list(self.cp_burned),
+            "cp_cap_ticks": list(self.cp_cap_ticks),
+            "idle_discharged_connected": list(self.idle_discharged_connected),
+            "idle_discharged_pocket": list(self.idle_discharged_pocket),
         }
 
 
@@ -644,6 +705,7 @@ def analyze(log: MatchLog) -> MatchMetrics:
     produced = _zeros()
     burned = _zeros()
     ledger = {k: _zeros() for k in _EVENT_COUNTERS}
+    cp_burned = _zeros()
     fought: set[int] = set()  # nodes whose fight started or ended in the tick being read
     fight_tick = -1
     for e in log.events:
@@ -679,6 +741,10 @@ def analyze(log: MatchLog) -> MatchMetrics:
                 assert isinstance(player, int) and isinstance(charges, int)
                 produced[player] += charges
                 burned[player] += charges
+            case "cp_burned":
+                player, cp = e.get("player"), e.get("cp")
+                assert isinstance(player, int) and isinstance(cp, int)
+                cp_burned[player] += cp
             case "match_ended":
                 w, why = e.get("winner"), e.get("reason")
                 assert (w is None or isinstance(w, int)) and isinstance(why, str)
@@ -739,6 +805,10 @@ def analyze(log: MatchLog) -> MatchMetrics:
             )
             for p in PLAYERS
         ),
+        cp_burned=tuple(cp_burned[p] for p in PLAYERS),
+        cp_cap_ticks=log.cp_cap_ticks,
+        idle_discharged_connected=tuple(log.idle_discharged[p][0] for p in PLAYERS),
+        idle_discharged_pocket=tuple(log.idle_discharged[p][1] for p in PLAYERS),
     )
 
 
