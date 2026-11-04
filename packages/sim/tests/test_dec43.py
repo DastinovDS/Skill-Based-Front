@@ -320,9 +320,11 @@ def test_f6_no_room_below() -> None:
 
 
 def test_f7_the_wave() -> None:
+    """Since #735 C keeps its 3 (D is nearer the capital, item L2), so at 20 B refills A by the
+    saddle of item K instead of giving C one, and K finds A full."""
     state = _state({K: 6, A: 3, B: 3, C: 3, E: 3, D: 0})
-    assert _sent(_flow(state, 10)) == [(C, D), (A, D)]
-    assert _sent(_flow(state, 20)) == [(A, D), (B, C), (K, A)]
+    assert _sent(_flow(state, 10)) == [(A, D)]
+    assert _sent(_flow(state, 20)) == [(A, D), (B, A)]
 
 
 def test_f8_a_level_road_moves_a_gap_of_two() -> None:
@@ -331,10 +333,11 @@ def test_f8_a_level_road_moves_a_gap_of_two() -> None:
 
 
 def test_f9_a_leaf_keeps() -> None:
-    """Nothing goes back behind the level; the leaves even out (#724): C gives 1 to D."""
+    """Nothing goes back behind the level; since #735 nothing goes inward on the level either: D,
+    the other leaf, is nearer the capital (item L2)."""
     state = _state({C: 3, B: 0})
-    assert _sent(_flow(state)) == [(C, D)]
-    assert state.nodes[C].warehouse == 2
+    assert _sent(_flow(state)) == []
+    assert state.nodes[C].warehouse == 3
 
 
 # The pull (item A4) ----------------------------------------------------------------------------

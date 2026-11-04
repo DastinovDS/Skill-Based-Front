@@ -69,6 +69,10 @@ def _sent(events: list[Event], player: int = 0) -> list[tuple[int, int]]:
     ]
 
 
+def _packets(events: list[Event], player: int = 0) -> list[Event]:
+    return [e for e in events if e.kind == "packet_sent" and e.get("player") == player]
+
+
 def _d(state: GameState, player: int = 0) -> dict[int, int | None]:
     result: dict[int, int | None] = {}
     for n in sorted(state.nodes):
@@ -127,12 +131,17 @@ def test_l5_a_captured_m_touches_the_enemy() -> None:
 
 
 def test_l6_neighbouring_leaves_even_out() -> None:
+    """Since #735 (item L2) only outward: D (``c`` 2) gives to C (``c`` 3), never back."""
     passes: dict[int, int | None] = {NORTH: 1, SOUTH: 1}
     state = _state({C: 3}, owners=passes)
-    assert _sent(_flow(state)) == [(C, D)]
-    assert state.nodes[C].warehouse == 2
-    assert _sent(_flow(_state({C: 2}, owners=passes))) == [(C, D)]
-    assert _sent(_flow(_state({C: 2, D: 1}, owners=passes))) == []  # a gap of 1 never moves
+    assert _sent(_flow(state)) == []
+    assert state.nodes[C].warehouse == 3
+    assert _sent(_flow(_state({C: 2}, owners=passes))) == []
+    assert _sent(_flow(_state({C: 2, D: 1}, owners=passes))) == []
+    state = _state({D: 3}, owners=passes)
+    assert [_sent(_flow(state, t)) for t in (10, 20, 30)] == [[(D, C)], [(D, C)], []]
+    _flow(state, 60)  # landed at 48 and 58 (38 ticks)
+    assert (state.nodes[D].warehouse, state.nodes[C].warehouse) == (1, 2)
 
 
 def test_l7_one_charge_per_road_per_dispatch_until_even() -> None:
@@ -146,7 +155,9 @@ def test_l8_under_a_shift_the_level_evens_out() -> None:
     passes: dict[int, int | None] = {NORTH: 1, SOUTH: 1}
     state = _state({A: 3}, owners=passes, shift=1)
     assert _sent(_flow(state)) == [(A, B)]
-    assert _sent(_flow(_state({A: 2, B: 1}, owners=passes, shift=1))) == []
+    # since #735 outward by a gap of 1 (item L2), nothing inward
+    assert _sent(_flow(_state({A: 2, B: 1}, owners=passes, shift=1))) == [(A, B)]
+    assert _sent(_flow(_state({B: 3}, owners=passes, shift=1))) == []
 
 
 def test_l9_a_level_node_an_army_holds_keeps() -> None:
@@ -257,11 +268,20 @@ def test_l17_replay_9_with_the_shift_at_1() -> None:
     events = _flow(state)
     d = _d(state)
     assert (d[9], d[10], d[5], d[6], d[8], d[0]) == (1, 0, 1, 1, 1, 3)
-    assert _sent(events) == [(6, 9), (1, 2), (4, 8)]
+    # since #735 Brackenway's charge goes outward to Wrenfield (item L2; one order with the army
+    # of Highmoor: fill 0 both, node_key 5 < 9, item L3)
+    assert _sent(events) == [(6, 5), (1, 2), (4, 8)]
+    # 20: Cairn refills Brackenway, Reedwick sends Millbrook its second, Granite Hold refills Cairn
+    assert _sent(_flow(state, 20)) == [(1, 6), (4, 8), (0, 1)]
+    later = _flow(state, 60)
+    assert [(e.tick, e.get("from_node")) for e in _packets(later) if e.get("to_node") == 9] == [
+        (60, 5),  # Wrenfield, the level end of Highmoor's path (landed at 54)
+        (60, 6),  # Brackenway (landed at 58): Highmoor holds, room alone
+    ]
     old = _narrows()  # without the army Highmoor stays frozen ahead of the level
     old.groups.clear()
     old.players[0].leaf_shift = 1
-    assert _sent(_flow(old)) == [(1, 2), (4, 8)]
+    assert _sent(_flow(old)) == [(6, 5), (1, 2), (4, 8)]  # Brackenway outward as above
 
 
 # Item I7: a pulling army ahead of the level lifts its path (#726) ------------------------------
@@ -358,19 +378,22 @@ def test_l20_two_armies_share_a_path() -> None:
 
 
 def test_l21_the_nearer_army_first() -> None:
+    """Since #735 K's third charge goes outward to E (item L2) and comes back to the path by the
+    gap rule between equal capital distances (E and A, ``c`` 1)."""
     state = _state({K: 3, E: 1}, owners={NORTH: 1}, shift=3)
     near = _group(state, B, 2, 0)
     far = _group(state, C, 2, 0)
-    sends, charged = _timeline(state, {"B": near, "C": far}, 90)
+    sends, charged = _timeline(state, {"B": near, "C": far}, 110)
     assert sends == {
-        10: [(K, A)],
+        10: [(K, A), (K, E)],
         20: [(K, A)],
-        30: [(K, A), (A, B)],
+        30: [(A, B)],
         40: [(A, B)],
-        50: [(A, B)],
-        70: [(B, C)],
+        50: [(E, A)],
+        70: [(A, B)],
+        90: [(B, C)],
     }
-    assert charged == {50: {"B": 1}, 60: {"B": 2}, 90: {"C": 1}}
+    assert charged == {50: {"B": 1}, 60: {"B": 2}, 110: {"C": 1}}
 
 
 def test_i7_the_path_is_mirrored() -> None:
@@ -394,6 +417,8 @@ def test_i7_the_path_is_mirrored() -> None:
             assert (b.d, b.k, b.idle) == (a.d, a.k, a.idle)
             assert b.next == tuple(mirror[m] for m in a.next)
     sent_west = _sent(events, 0)
-    assert sent_west == [(K, A), (K, A), (A, B), (A, B), (B, C), (B, C)]
+    # since #735 the level end K gives its second charge outward to E (item L2, one per road per
+    # dispatch), and E keeps it (A, equal ``c``: the gap rule)
+    assert sent_west == [(K, A), (K, E), (A, B), (B, C)]
     assert _sent(events, 1) == [(mirror[a], mirror[b]) for a, b in sent_west]
-    assert west.charged == 2
+    assert west.charged == 1

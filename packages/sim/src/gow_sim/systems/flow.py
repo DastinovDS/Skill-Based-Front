@@ -38,7 +38,12 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
 - the **feed distance** (item K, #732): 0 for a **hungry** level node (``d == k``, room at the
   snapshot, and a build node without an army still wants a charge), then a BFS backwards over the
   roads a node behind the level sends along (downhill and level roads); a node without one feeds
-  no hungry level node.
+  no hungry level node;
+- the **capital distance** ``c(n)`` (item L, #735): hops from the own capital over internal roads,
+  for the capital's component only. An **enclave** is a connected set of its nodes behind the level
+  with no own factory: only the level can feed it. A node of an enclave with a feed distance (its
+  roads towards a smaller ``c`` not counted, but to a node that holds) is a **corridor** and gives
+  nothing towards a smaller ``c`` but to a node that holds.
 
 Order inside the step (item A13):
 
@@ -57,11 +62,14 @@ Order inside the step (item A13):
    ``node_key``), then along **level roads** (``d(m) == d(n)``, room, the same order): behind the
    level by the feed distance (item K: towards a smaller one on room alone, the gap rule
    ``load(m) + 2 <= have``, ``load = cap - room``, between equal ones, nothing towards a larger
-   one, so no charge bounces); on the level (``d == k``) by the gap rule: the leaves even out
-   (#724), except a level node where an own group stands short of a
-   charge or gathering a plan (the groups that pull), or with an unpaid build (item J): it keeps,
-   and its level neighbours give to it without the gap (room only). A lifted path node gives
-   only along its path, and the node before it on the path gives to it on room alone (item I7).
+   one, so no charge bounces); on the level (``d == k``) along the capital distance (item L,
+   #735): outward ``load(m) + 1 <= have``, between equal distances the gap rule, never inward (a
+   pocket: the gap rule, #724), and outward into an enclave neighbour with a feed distance by the
+   same gap of 1, in one list with the level roads; a level node where an own group stands short
+   of a charge or gathering a plan (the groups that pull), or with an unpaid build (item J),
+   keeps, and its level neighbours give to it without the gap (room only). A lifted path node
+   gives only along its path, and the node before it on the path gives to it on room alone (item
+   I7). A corridor gives nothing towards a smaller capital distance but to a node that holds.
    Each charge is a packet of 1 along one road (item A7).
 6. The **plan** of the next dispatch for the view: the same function run on the state now, without
    sending (item E: ``flow_next`` and ``flow_idle``), stored in ``Node.flow`` with the field.
@@ -69,9 +77,10 @@ Order inside the step (item A13):
 The full factory spills its new charge in ``systems.economy`` (item A8), reading ``Node.flow`` of
 the previous tick (``spill_target``).
 
-Cost per tick and player: O(V + E) for the field and the plan (and the feed distance of a
-dispatch or plan with a level road behind the level), O(packets) for the room, O(groups) and O(V)
-(the builds) for the pull and the paths.
+Cost per tick and player: O(V + E) for the field, the capital distance, the enclaves and the
+plan (and the feed distance of a dispatch or plan with a level road behind the level, an enclave
+or an outward road into one), O(packets) for the room, O(groups) and O(V) (the builds) for the
+pull and the paths.
 """
 
 from collections import deque
@@ -237,6 +246,17 @@ class _Field:
     flat: list[int]
     """The own nodes on the level (``d == k``), lifted and pulled nodes included: the candidates
     for a hungry level node of item K."""
+    c: dict[int, int]
+    """The nodes of the own capital's component: hops from the capital over internal roads (item
+    L1, the BFS of item I2); pockets have none."""
+    beyond: dict[int, bool]
+    """The nodes of an **enclave** (item L5): an own connected set of nodes behind the level
+    (``d > k``) of the capital's component with no own factory among them; nothing but the level
+    can feed them. A **corridor** (an enclave node with a feed distance, ``_feed``) gives nothing to
+    a neighbour nearer the capital that does not hold (item L6)."""
+    outward: dict[int, list[tuple[int, int]]]
+    """The level nodes that may send: their enclave neighbours ``m`` with ``c(m) > c(n)`` (item
+    L4), by road id."""
 
 
 def _field(state: GameState, player: int) -> _Field:
@@ -285,6 +305,11 @@ def _field(state: GameState, player: int) -> _Field:
     # The leaves of every component (items A1, A2): its nodes on a road to an enemy node; with
     # none, the capital's component takes its nodes farthest from the capital, a pocket all its
     # nodes. Then ``d0`` by one BFS from all leaves.
+    # ``hops``: the capital distance of item L1 (and of the farthest leaves of item I2).
+    hops: dict[int, int] = {}
+    if main is not None:
+        hops[capital] = 0
+        _bfs(adj, hops, deque([capital]))
     d0: dict[int, int] = {}
     leaves: list[int] = []
     for c in sorted(members):
@@ -293,8 +318,6 @@ def _field(state: GameState, player: int) -> _Field:
         if touching:
             leaves.extend(touching)
         elif c == main:
-            hops: dict[int, int] = {capital: 0}
-            _bfs(adj, hops, deque([capital]))
             far = max(hops.values())
             leaves.extend(n for n in group if hops[n] == far)
         else:
@@ -381,8 +404,10 @@ def _field(state: GameState, player: int) -> _Field:
                 before[n] = m
                 after.setdefault(m, []).append((n, eid))
                 n = m
+    beyond = _enclaves(state, player, adj, d, k, hops)
     down: dict[int, list[tuple[int, int]]] = {}
     level: dict[int, list[tuple[int, int]]] = {}
+    outward: dict[int, list[tuple[int, int]]] = {}
     flat: list[int] = []
     for n, dn in d.items():
         kn = k[n]
@@ -396,6 +421,7 @@ def _field(state: GameState, player: int) -> _Field:
             continue
         below: list[tuple[int, int]] = []
         same: list[tuple[int, int]] = []
+        out: list[tuple[int, int]] = []
         for m, eid in adj[n]:
             dm = d.get(m)
             if dm is None:
@@ -405,9 +431,49 @@ def _field(state: GameState, player: int) -> _Field:
                     below.append((m, eid))
             elif dm == dn:
                 same.append((m, eid))
+            elif dn == kn and m in beyond and hops[m] > hops[n]:
+                out.append((m, eid))  # the level gives outward into an enclave (item L4)
         down[n] = below
         level[n] = same
-    return _Field(player, d, k, pocket, adj, down, level, holding, before, owed, flat)
+        if out:
+            outward[n] = out
+    return _Field(
+        player, d, k, pocket, adj, down, level, holding, before, owed, flat, hops, beyond, outward
+    )
+
+
+def _enclaves(
+    state: GameState,
+    player: int,
+    adj: dict[int, list[tuple[int, int]]],
+    d: dict[int, int],
+    k: dict[int, int],
+    hops: dict[int, int],
+) -> dict[int, bool]:
+    """The enclaves of item L5: the components over internal roads of the nodes of the capital's
+    component (``hops``) behind the level (``d > k``) that hold no own factory. O(V + E)."""
+    nodes = state.nodes
+    beyond: dict[int, bool] = {}
+    seen: dict[int, bool] = {}
+    for nid in sorted(hops):
+        if nid in seen or d[nid] <= k[nid]:
+            continue
+        seen[nid] = True
+        group = [nid]
+        source = False
+        head = 0
+        while head < len(group):
+            n = group[head]
+            head += 1
+            source = source or nodes[n].factory == player
+            for m, _ in adj[n]:
+                if m not in seen and d[m] > k[m]:
+                    seen[m] = True
+                    group.append(m)
+        if not source:
+            for n in group:
+                beyond[n] = True
+    return beyond
 
 
 def _owed(node: Node, player: int) -> int:
@@ -486,9 +552,16 @@ def _run(
 
     # The feed distance of item K (the saddle), when a sender behind the level has a level road.
     k = field.k
+    c = field.c
+    outward = field.outward
+    beyond = field.beyond
     feed: dict[int, int] | None = None
     for n in senders:
-        if d[n] > k[n] and any(room[m] for m, _ in field.level[n]):
+        if (
+            (d[n] > k[n] and any(room[m] for m, _ in field.level[n]))
+            or any(room[m] for m, _ in outward.get(n, ()))
+            or n in beyond
+        ):
             feed = _feed(field, room, want)
             break
     far = len(field.adj) + 1  # above every feed distance: "feeds no hungry level node"
@@ -504,6 +577,11 @@ def _run(
         else:
             down = [pair for pair in field.down[n] if room[pair[0]]]
             level = [pair for pair in field.level[n] if room[pair[0]]]
+        if n in beyond and feed is not None and n in feed:
+            # a corridor gives nothing to a neighbour nearer the capital, but to a node that holds
+            # (item L6)
+            down = [pair for pair in down if not _back(field, n, pair[0])]
+            level = [pair for pair in level if not _back(field, n, pair[0])]
         out: list[tuple[int, int]] = []
         if len(down) > 1:
             down.sort(key=lambda pair: order(pair[0]))
@@ -515,24 +593,35 @@ def _run(
             if m in want:
                 want[m] -= 1
             have -= 1
+        into = outward.get(n)
+        if into is not None and feed is not None:
+            # the level as a corridor (item L4): outward into an enclave that feeds a hungry level
+            # node, one list with the level roads in the order of item A6
+            level.extend(pair for pair in into if room[pair[0]] and pair[0] in feed)
         if len(level) > 1:
             level.sort(key=lambda pair: order(pair[0]))
+        cn = c.get(n)
         for m, eid in level:
             if have == 0:
                 break
-            if behind and feed is not None:
-                # behind the level (item K): towards a hungry level node on room alone, the gap
-                # rule between equal feed distances, nothing away from a hungry level node
-                fm = feed.get(m, far)
-                give = fm < fn or (fm == fn and capacities[m] - room[m] + 2 <= have)
+            load = capacities[m] - room[m]
+            if behind:
+                if feed is not None:
+                    # behind the level (item K): towards a hungry level node on room alone, the
+                    # gap rule between equal feed distances, nothing away from a hungry level node
+                    fm = feed.get(m, far)
+                    give = fm < fn or (fm == fn and load + 2 <= have)
+                else:
+                    give = load + 2 <= have  # a gap of 1 never moves
+            elif m in field.holding or field.before.get(m) == n:
+                give = True  # a pulling army takes without the gap (item I3), the path too (I7)
+            elif cn is None:
+                give = load + 2 <= have  # a pocket: the gap rule of item I3
             else:
-                # a gap of 1 never moves; a pulling army takes without the gap (item I3), and so
-                # does the next node of a path (item I7)
-                give = (
-                    m in field.holding
-                    or field.before.get(m) == n
-                    or capacities[m] - room[m] + 2 <= have
-                )
+                # on the level along the capital distance (item L2): outward (and into an enclave,
+                # item L4) by a gap of 1, between equal distances by the gap rule, never inward
+                cm = c[m]
+                give = load + 1 <= have if cm > cn else cm == cn and load + 2 <= have
             if give:
                 out.append((m, eid))
                 room[m] -= 1
@@ -542,6 +631,12 @@ def _run(
         if out:
             sends.append((n, out))
     return sends
+
+
+def _back(field: _Field, n: int, m: int) -> bool:
+    """``m`` is nearer the capital than the enclave node ``n`` and does not hold: a corridor does
+    not give to it, and the feed distance does not count the road (item L6)."""
+    return field.c[m] < field.c[n] and m not in field.holding
 
 
 def _feed(field: _Field, room: dict[int, int], want: dict[int, int]) -> dict[int, int]:
@@ -554,6 +649,7 @@ def _feed(field: _Field, room: dict[int, int], want: dict[int, int]) -> dict[int
     d = field.d
     k = field.k
     adj = field.adj
+    beyond = field.beyond
     queue = [n for n in field.flat if room[n] and want.get(n, 1)]
     feed = dict.fromkeys(queue, 0)
     for m in queue:  # the list grows while it is walked: a BFS in queue order
@@ -561,8 +657,11 @@ def _feed(field: _Field, room: dict[int, int], want: dict[int, int]) -> dict[int
         step = feed[m] + 1
         for n, _ in adj[m]:
             # n sends to m: n is behind the level, m downhill of it or on its level (the nodes of
-            # one component share k, and every own node has a field)
+            # one component share k, and every own node has a field); for an enclave node only
+            # the roads to a node not nearer the capital, or one that holds, count (item L6)
             if n not in feed and d[n] >= dm and d[n] > k[n]:
+                if n in beyond and _back(field, n, m):
+                    continue
                 feed[n] = step
                 queue.append(n)
     return feed
