@@ -404,7 +404,7 @@ def _field(state: GameState, player: int) -> _Field:
                 before[n] = m
                 after.setdefault(m, []).append((n, eid))
                 n = m
-    beyond = _enclaves(state, player, adj, d, k, hops)
+    beyond = _enclaves(state, player, adj, d, shift, hops) if hops else {}
     down: dict[int, list[tuple[int, int]]] = {}
     level: dict[int, list[tuple[int, int]]] = {}
     outward: dict[int, list[tuple[int, int]]] = {}
@@ -447,33 +447,20 @@ def _enclaves(
     player: int,
     adj: dict[int, list[tuple[int, int]]],
     d: dict[int, int],
-    k: dict[int, int],
+    shift: int,
     hops: dict[int, int],
 ) -> dict[int, bool]:
-    """The enclaves of item L5: the components over internal roads of the nodes of the capital's
-    component (``hops``) behind the level (``d > k``) that hold no own factory. O(V + E)."""
+    """The enclaves of item L5: the nodes of the capital's component (``hops``, level ``shift``)
+    behind the level that no own factory behind the level reaches over such nodes. O(V + E)."""
     nodes = state.nodes
-    beyond: dict[int, bool] = {}
-    seen: dict[int, bool] = {}
-    for nid in sorted(hops):
-        if nid in seen or d[nid] <= k[nid]:
-            continue
-        seen[nid] = True
-        group = [nid]
-        source = False
-        head = 0
-        while head < len(group):
-            n = group[head]
-            head += 1
-            source = source or nodes[n].factory == player
-            for m, _ in adj[n]:
-                if m not in seen and d[m] > k[m]:
-                    seen[m] = True
-                    group.append(m)
-        if not source:
-            for n in group:
-                beyond[n] = True
-    return beyond
+    queue = [n for n in hops if d[n] > shift and nodes[n].factory == player]
+    reached = dict.fromkeys(queue, True)
+    for n in queue:  # grows while it is walked: a BFS (only the reached set matters)
+        for m, _ in adj[n]:
+            if m not in reached and d[m] > shift:
+                reached[m] = True
+                queue.append(m)
+    return {n: True for n in hops if d[n] > shift and n not in reached}
 
 
 def _owed(node: Node, player: int) -> int:
@@ -560,7 +547,10 @@ def _run(
         if (
             (d[n] > k[n] and any(room[m] for m, _ in field.level[n]))
             or any(room[m] for m, _ in outward.get(n, ()))
-            or n in beyond
+            or (
+                n in beyond
+                and any(room[m] and _back(field, n, m) for m, _ in field.down[n] + field.level[n])
+            )
         ):
             feed = _feed(field, room, want)
             break
