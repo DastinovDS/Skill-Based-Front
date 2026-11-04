@@ -104,25 +104,33 @@ def _army(state: GameState, node: int) -> tuple[int, int]:
 
 
 def test_k1_the_narrows_receives_through_the_saddle() -> None:
+    """Since #738 (item M, row M3): The Narrows (its army first) calls Thornway over Far Fork;
+    every other node with room calls the stock behind it: Tern Haven calls Sedgeley over the full
+    Weirbrook (a relay), Ashby calls Iron Hold over the full Fenmere (a relay), and the givers are
+    refilled from behind."""
     state = _match11()
     sends = _run(state, 99, 1)
     assert sends == {
-        10: [(THORNWAY, FAR_FORK)],
-        20: [(LARKFIELD, THORNWAY)],
-        50: [(FAR_FORK, NARROWS_CITY)],
-        60: [(FLINTCROSS, FAR_FORK)],
-        70: [(BARROW, FLINTCROSS)],
+        10: [(THORNWAY, FAR_FORK), (WEIRBROOK, TERN_HAVEN), (FENMERE, ASHBY)],
+        20: [(BARROW, THORNWAY), (SEDGELEY, WEIRBROOK), (IRON_HOLD, FENMERE)],
+        30: [(IRON_HOLD, BARROW), (IRON_HOLD, SEDGELEY)],
+        50: [(FAR_FORK, NARROWS_CITY), (ASHBY, LARKFIELD)],
+        60: [(THORNWAY, FAR_FORK), (FENMERE, ASHBY)],
+        70: [(BARROW, THORNWAY), (IRON_HOLD, FENMERE)],
         80: [(IRON_HOLD, BARROW)],
     }
     assert _army(state, NARROWS_CITY) == (4, 0)
     sends = _run(state, 110, 1)
     assert _army(state, NARROWS_CITY) == (4, 1)  # the first charge lands at 100
-    assert sends == {100: [(FAR_FORK, NARROWS_CITY)], 110: [(THORNWAY, FAR_FORK)]}
+    assert sends == {
+        100: [(FAR_FORK, NARROWS_CITY), (ASHBY, LARKFIELD)],
+        110: [(THORNWAY, FAR_FORK)],
+    }
 
 
 def test_k2_a_chain_of_two_saddles() -> None:
     state = _match11({BEACONFORD: 3, LOWMOOR: 3, LARKFIELD: 1})
-    sends = _run(state, 100, 1)
+    sends = _run(state, 100, 1)  # unchanged by #738: the chain is the only way
     assert sends == {
         10: [(LARKFIELD, THORNWAY)],
         60: [(THORNWAY, FAR_FORK)],
@@ -131,13 +139,23 @@ def test_k2_a_chain_of_two_saddles() -> None:
 
 
 def test_k3_a_saddle_next_to_a_full_leaf_moves_nothing() -> None:
+    """Since #738 (item M) the basin fills although its leaf is full: Far Fork (``d`` 1, empty)
+    calls Barrow (``d`` 2) over the full Thornway, which passes one of its own on (a relay)."""
     stocks = dict(MATCH11_STOCKS)
     stocks[NARROWS_CITY] = 3
     state = _match11(stocks, army=False)
-    assert _run(state, 100, 1) == {}
+    assert _run(state, 100, 1) == {
+        10: [(THORNWAY, FAR_FORK), (WEIRBROOK, TERN_HAVEN), (FENMERE, ASHBY)],
+        20: [(BARROW, THORNWAY), (SEDGELEY, WEIRBROOK), (IRON_HOLD, FENMERE)],
+        30: [(IRON_HOLD, BARROW), (IRON_HOLD, SEDGELEY)],
+        50: [(ASHBY, LARKFIELD)],
+        60: [(FENMERE, ASHBY)],
+        70: [(IRON_HOLD, FENMERE)],
+        100: [(ASHBY, LARKFIELD)],
+    }
     assert state.nodes[THORNWAY].warehouse == 1
     assert state.nodes[FLINTCROSS].warehouse == 1
-    assert state.nodes[FAR_FORK].warehouse == 0
+    assert state.nodes[FAR_FORK].warehouse == 1
 
 
 # K4: no ping-pong ---------------------------------------------------------------------------------
@@ -175,9 +193,8 @@ def test_k5_a_saddle_behind_the_level_at_k_2() -> None:
         30: [(IRON_HOLD, BARROW)],
         50: [(ASHBY, LARKFIELD)],
         60: [(FENMERE, ASHBY)],
-        70: [(IRON_HOLD, FENMERE)],
         100: [(ASHBY, LARKFIELD)],
-    }
+    }  # since #738: Fenmere, the relay at 60, is not refilled (Ashby has room 1 left)
     assert state.players[1].leaf_shift == 2
     assert state.nodes[LARKFIELD].warehouse == 2  # landed at 54 and 95
     d = {n: state.nodes[n].flow.d for n in (ASHBY, FENMERE, IRON_HOLD, LARKFIELD)}  # type: ignore[union-attr]
@@ -195,26 +212,6 @@ OWN1 = tuple(range(15, 29))
 the leaves of player 1 are Far Fork, Beaconford and Lowmoor."""
 
 
-def _feed(state: GameState, player: int) -> dict[int, int]:
-    """Item K2 from its definition: 0 for an own level node with an empty warehouse and no packet
-    on the way (the harness below keeps it so), then a BFS backwards to the nodes behind the level
-    that send to it (downhill or along a level road)."""
-    d: dict[int, int] = {}
-    k: dict[int, int] = {}
-    for n, node in state.nodes.items():
-        if node.owner == player and node.flow is not None and node.flow.d is not None:
-            d[n], k[n] = node.flow.d, node.flow.k
-    feed = {n: 0 for n in sorted(d) if d[n] == k[n] and state.nodes[n].warehouse == 0}
-    queue = sorted(feed)
-    for m in queue:  # grows while it is walked: a BFS
-        for eid in NARROWS.incident[m]:
-            n = NARROWS.edges[eid].other(m)
-            if n in d and n not in feed and d[n] > k[n] and d[n] >= d[m]:
-                feed[n] = feed[m] + 1
-                queue.append(n)
-    return feed
-
-
 @given(
     st.lists(st.integers(0, 6), min_size=len(OWN1), max_size=len(OWN1)),
     st.lists(st.booleans(), min_size=len(OWN1), max_size=len(OWN1)),
@@ -224,12 +221,11 @@ def _feed(state: GameState, player: int) -> dict[int, int]:
 def test_under_a_stable_demand_no_charge_bounces(
     stocks: list[int], hungry: list[bool], shift: int
 ) -> None:
-    """Item K5: the level nodes are held fixed after every tick, each either empty (hungry) or
-    full, so the hungry level nodes never change; packets land before the next dispatch. Over 300
-    ticks: no road carries charges both ways in one dispatch; no node behind the level gives to
-    a neighbour with a larger feed distance or uphill; a road between two different feed
-    distances never carries a charge back (only the gap rule of item A6 between equal ones can
-    even out both ways as stock arrives)."""
+    """Item M7 (formerly K5): the level nodes are held fixed after every tick, each either empty
+    (hungry) or full, so the demand of the level never changes; packets land before the next
+    dispatch. Over 300 ticks: no road carries charges both ways in one dispatch, nothing leaves or
+    enters a node ahead of the level. (Whether the flow settles is checked without such a harness,
+    which refills the level for ever: ``test_flow_liveness.py``.)"""
     state = initial_state(NARROWS, FAST)
     for nid, node in state.nodes.items():
         node.owner = 1 if nid in OWN1 else 0 if nid < NARROWS_CITY else None
@@ -249,25 +245,15 @@ def test_under_a_stable_demand_no_charge_bounces(
             state.nodes[n].warehouse = level[n]
         else:
             state.nodes[n].warehouse = min(stocks[i], caps[n])
-    feed = _feed(state, 1)
-    far = len(OWN1) + 1
     d = {n: state.nodes[n].flow.d for n in OWN1}  # type: ignore[union-attr]
     k = state.players[1].leaf_shift
-    seen: dict[tuple[int, int], bool] = {}
     while state.tick < 300:
         state.tick += 1
         state.events = []
         sent = _sent(supply_flow(state, FAST), 1)
         for src, dst in sent:
             assert (dst, src) not in sent, f"{src} <-> {dst} in one dispatch"
-            fs, fd = feed.get(src, far), feed.get(dst, far)
-            if d[src] > k:  # type: ignore[operator]
-                assert d[dst] <= d[src], f"{src} -> {dst} uphill"  # type: ignore[operator]
-                if d[dst] == d[src]:
-                    assert fd <= fs, f"{src} -> {dst} away from a hungry level node"
-            if (dst, src) in seen:
-                assert fs == fd, f"{src} -> {dst} after {dst} -> {src}"
-            seen[(src, dst)] = True
+            assert d[src] >= k and d[dst] >= k, f"{src} -> {dst} ahead"  # type: ignore[operator]
         for n, stock in level.items():
             state.nodes[n].warehouse = stock
 

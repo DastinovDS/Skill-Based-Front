@@ -1,6 +1,6 @@
 # Supply flow: a liveness check and one routing rule
 
-Status: **[awaiting the owner's decision]**. Refs #738 (the ridge), #697 (DEC-43). Nothing here changes the rules: `develop` is `SIM_VERSION` 39 (DEC-43 items A to L). The prototypes are throwaway branches, pushed and not merged: `proto/738-c1-feed-everywhere`, `proto/738-c2-nearest-need`, `proto/738-c3-outward-only`.
+Status: **decided** (owner 2026-11-04: C2, its herding fixed first, held to the supply contract): DEC-43 item M of `mechanics.md`, `SIM_VERSION` 40, section 6 below. Sections 1 to 5 are the analysis of `SIM_VERSION` 39 that led there. Refs #738 (the ridge), #697 (DEC-43). The prototypes are throwaway branches, pushed and not merged: `proto/738-c1-feed-everywhere`, `proto/738-c2-nearest-need`, `proto/738-c3-outward-only`.
 
 ## Why
 
@@ -137,3 +137,59 @@ C1 is the smallest code change and also closes the ridge (492 to 56), but it add
 - The re-runs of match 12 diverge from the original after tick 4454 under every version, so its whole-match numbers compare different games; the two windows start from the same saved state.
 - The prototypes leave pockets on today's rules and do not touch the view's chevrons (`flow_down`); `flow_next` follows the new dispatch because the plan is the same function.
 - The shapes are classified by geometry, not by the rule that blocks them; a "saddle" on `develop` is in practice the capital on the front (42 of 43 in an enclave).
+
+## 6. The decision and the final rule (item M, `SIM_VERSION` 40)
+
+The owner chose C2 on 2026-11-04, with two conditions: fix its herding first (the rear sent to the nearest need without counting the charges on the way, and stopped keeping a buffer behind each leaf), and hold the result to a **supply contract** of eight items, each an automated check, instead of single cases. Match 13 added one case: The Narrows, a city one road behind the front, stayed empty from tick 2500 to the end while four rear cities held idle stock (the ridge one level deeper); C2 calls from the level only, so it left The Narrows empty too.
+
+**What was tried** (each step measured by the checks below):
+
+| Variant | Idea | Result |
+|---|---|---|
+| C2 prototype | the BFS from the hungry level nodes, every rear node sends towards a smaller need distance | herding: 3x quick returns, more short armies |
+| M1, matched need | a hungry node's need is matched to the nearest stock (warehouse plus packets on the way), the rest rolls downhill (item A6) | quick returns 231 (seed 1), but 207 931 short-army node-ticks: one charge per need at a time |
+| M3, second line | M1 plus the nodes one road behind the level as a second tier | 244 returns, 191 656 short: still worse than `develop` (168 205); The Narrows of match 13 fed |
+| U, every node calls | every node with room calls the nearest stock farther from the front, by tiers from the front; relays; one warehouse charge per road | 24 matches: 544 263 short, 1063 returns, but the level never evened out (more empty leaves) and 79% of the burns had room behind |
+| U + the evening of item L2 | the level evens out with what is left | 503 048 short, 1128 returns (one above `develop`) |
+| **final (item M)** | U + L2 + the spill to the nearest room over several roads, the path of item I7 open to an army's call, no charge against a charge on one road | the table below |
+
+**The contract** (`packages/sim/tests/test_flow_liveness.py`, the full sweep: 2556 generated states, 5112 state-players: every pool map, 12 ownership splits, 4 stock layouts, no pull / tired armies / unpaid factory builds, every shift; the human replays and bot matches as in section 4; the bot matches are seeds 1 to 3 of `smart_reactive@normal` against `smart_turtle@normal` on every pool map and side order, 24 matches, seed 1 alone are the 8 matches of section 4):
+
+| Item | Check | develop (SIM 39) | C2 prototype | **final (SIM 40)** |
+|---|---|---|---|---|
+| 1 stock as close to the front as possible | stuck nodes at the fixed point | 4232 | 2952 | **0** |
+| | the holes of section 1 (the new sweep) | 1933 | 641 | **489** (486 "corridor in" by item L2, 3 "corridor out" of a build case) |
+| 2 fill order | the tiers of item M2; rows M4, M6 | no | no | **yes** |
+| 3 armies and builds at any shift | unfed holders at the fixed point | 171 | 369 | **0** |
+| 4 no burn with room | burns while an own node the factory reaches has room, 24 bot matches | 3017 of 3253 | 942 of 958 (seed 1) | **1 of 2892** |
+| 5 no churn | generated states that never settle | 0 | 0 | **0** |
+| | quick returns, 24 bot matches (seed 1) | 1127 (427) | 3207 (1259) | **944 (287)** |
+| | quick returns while settling, the sweep | 1299 | 2349 | 951 |
+| 6 the shift as now | sends from or into a node ahead of the level | 0 | 0 | **0** |
+| | sends from the level to a node behind it that does not hold (L4 corridors) | 2269 | 578 | 754 |
+| 7 one sentence, the chevrons | node-ticks whose `flow_next` is outside `flow_down` | 197 632 | 187 590 | **0** |
+| 8 perf | `test_bench_supply_flow_busy`, ms, grid40 / grid55 (budget 0.3) | 0.205 / 0.260 | 0.211 / 0.278 | **0.224 / 0.257** |
+| also | army short of charges on an empty warehouse, node-ticks, 24 bot matches (seed 1) | 558 361 (168 205) | 564 427 (196 070) | **531 047 (163 992)** |
+| | the starving mark `!`, node-ticks, 24 bot matches | 986 895 | 1 112 541 | 956 697 |
+| | charges burned, 24 bot matches (seed 1) | 3253 (988) | 3203 (958) | 2892 (909) |
+
+**The owner's matches** (the recorded commands of both sides re-run, group ids kept; the bots and the human do not react to the other supply, and matches 12 and 13 diverge after their first different fight):
+
+| | develop (SIM 39) | C2 prototype | **final (SIM 40)** |
+|---|---|---|---|
+| Match 9 (player 0): burned / quick returns / army short and empty / `!` | 130 / 1 / 486 / 1334 | 129 / 11 / 456 / 1426 | 127 / 20 / 526 / 1219 |
+| Match 11 (player 1): landed in The Narrows / burned / quick returns / army short and empty / `!` | 6 / 4 / 22 / 177 / 356 | 6 / 6 / 23 / 177 / 396 | 7 / 0 / 29 / 204 / 433 |
+| Match 12, 3520..4170: landed in Mid Fork / The Narrows; army short and empty; `!`; burned | 0 / 0; 37; 349; 12 | 5 / 5; 0; 121; 8 | 3 / 3; 0; 41; 2 |
+| Match 12, 5150..5705: landed in Flintcross / Sedgeley / Barrow; army short and empty; `!`; burned | 10 / 6 / 2; 693; 795; 3 | 10 / 7 / 3; 633; 755; 0 | 10 / 4 / 4; 630; 975; 0 |
+| Match 12 whole: captures / burned / quick returns / army short and empty | 33 / 71 / 24 / 2631 | 42 / 49 / 45 / 2412 | 42 / 35 / 20 / 2423 |
+| Match 13 (player 0) whole: landed in The Narrows / ticks it held 0 of 4480 owned / ticks it held 3 | 7 / 2800 / 110 | 8 / 3740 / 110 | 8 / 2200 / 970 |
+| Match 13: burned / quick returns / army short and empty / `!` | 8 / 23 / 493 / 1879 | 7 / 34 / 515 / 2424 | 0 / 32 / 725 / 2232 |
+| **Match 13 acceptance**: the state of tick 4600, the flow alone for 600 ticks: The Narrows | 0 | 0 | **3 (from 200 ticks on; row M8)** |
+
+Notes:
+
+- The bot matches are chaotic: one supply change moves a fight, and per match the short-army count varies from 886 to 63 871 under the same rule. Seed 1 alone (the 8 matches the owner named) gives `develop` 168 205 and the final 163 992; the 24 matches agree (558 361 against 531 047). The quick returns agree too (427 against 287; 1127 against 944).
+- Match 13 has more short-army node-ticks under the final rule (725 against 493: the capital, Torchester and Beaconford, where armies stood while the front-first tiers had moved the rear stock forward) and more quick returns in matches 11 and 13 (29 against 22, 32 against 23). The recorded human commands were played against SIM 39's supply, so the games diverge; this is the one place where the final rule measures worse, and the owner's playtest is the check.
+- "Corridor in" stays: the level never passes a charge towards the capital (item L2, kept by the owner's "the shift works as now"). The 3 "corridor out" holes are build cases where the old hole definition counts a node whose want is covered by packets on the way.
+
+**[reading, to confirm] points of item M** (each with its alternative in `mechanics.md`): the nodes that hold call first in their tier (M2); the level answers only a node that holds, over outward roads or its path (M3; the corridor of item L4 for an empty level node is dropped, row M12); a way does not pass another caller of its tier (M4); one warehouse charge per road of the way per answer (M5); the relay at the caller's `d` and no charge against a charge on one road (M6); the spill to the nearest room over several roads (M8); `flow_down` as the live ways (M9).

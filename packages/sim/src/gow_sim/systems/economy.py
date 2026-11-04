@@ -29,9 +29,10 @@ warehouse burns the charge: event ``charge_burned``, the only burn of production
 
 Supply flow (DEC-43, item A8; ``supply.model = "flow"``): a factory is **full** when its stock
 plus the own packets on the way to it reach its warehouse. A full factory's new charge **spills**:
-it leaves at once as a packet to an own neighbour with room and ``d(m) >= k`` by the field the flow
-step stored in the previous tick (``systems.flow.spill_target``; event ``charges_produced`` with
-``spill = 1`` and ``packet_sent``); with no such neighbour it burns (``charge_burned``).
+it leaves at once as one packet to the nearest own node with room, over own nodes with
+``d(m) >= k`` by the field the flow step stored in the previous tick, several roads away if no
+neighbour has room (item M8, #738; ``systems.flow.spill_way``; event ``charges_produced`` with
+``spill = 1`` and ``packet_sent``); with no such node it burns (``charge_burned``).
 A factory in a **pocket** (its own component does not contain the own capital, DEC-43 item H2)
 produces nothing, with no event; the test reads the ownership at the start of the tick
 (``capacity.supplied_territory``), before the captures of the tick's ``movement`` and ``combat``.
@@ -46,8 +47,8 @@ from typing import Final
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import Event, GameState, event
 from gow_sim.systems.capacity import supplied_territory, warehouse_capacity
-from gow_sim.systems.flow import send_one, spill_target
-from gow_sim.systems.supply import edge_packet_ticks, incoming_charges
+from gow_sim.systems.flow import send_way, spill_way
+from gow_sim.systems.supply import incoming_charges
 
 CENTI: Final = 100
 """The stance share of a CP quantum is kept in hundredths of a charge (DEC-02)."""
@@ -136,13 +137,13 @@ def _produce_flow(state: GameState, rules: Ruleset, owner: int, nid: int) -> lis
     if node.warehouse + incoming_charges(state, owner, nid) < warehouse_capacity(state, rules, nid):
         node.warehouse += 1
         return [event(tick, "charges_produced", player=owner, node=nid, charges=1, spill=0)]
-    target = spill_target(state, rules, nid)
-    if target is None:
+    way = spill_way(state, rules, nid)
+    if way is None:
         return [event(tick, "charge_burned", player=owner, node=nid, charges=1)]
-    m, eid = target
+    m, roads = way
     return [
         event(tick, "charges_produced", player=owner, node=nid, charges=1, spill=1),
-        send_one(state, owner, nid, m, eid, edge_packet_ticks(state, rules, eid)),
+        send_way(state, rules, owner, nid, m, roads),
     ]
 
 
