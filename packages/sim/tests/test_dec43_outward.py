@@ -170,6 +170,18 @@ def test_o3_a_leaf_feeds_the_chain_beyond_through_an_enclave() -> None:
     assert _stock(state, BEACONFORD, FAR_FORK) == (0, 1)
 
 
+def test_o3_the_view_of_a_corridor() -> None:
+    """Item L10: ``flow_down`` of a corridor leaves out its roads to a smaller capital distance
+    (Beaconford, ``c`` 4); without a hungry level node beyond it Flintcross is no corridor."""
+    state = _front({BEACONFORD: 3, FAR_FORK: 1}, mine=(BEACONFORD, SEDGELEY, BARROW))
+    flow = state.nodes[FLINTCROSS].flow
+    assert flow is not None and flow.down == (FAR_FORK, SEDGELEY, BARROW)
+    full = {BEACONFORD: 3, FAR_FORK: 1, BARROW: 3, SEDGELEY: 3, TORCHESTER: 3}
+    state = _front(full, mine=(BEACONFORD, SEDGELEY, BARROW))
+    flow = state.nodes[FLINTCROSS].flow
+    assert flow is not None and flow.down == (FAR_FORK, BEACONFORD, SEDGELEY, BARROW)
+
+
 def test_o3_no_corridor_without_a_hungry_level_node() -> None:
     """The corridor needs a hungry level node beyond it: with Barrow and Sedgeley full (and their
     armies charged) Flintcross has no feed distance and Beaconford keeps its 3."""

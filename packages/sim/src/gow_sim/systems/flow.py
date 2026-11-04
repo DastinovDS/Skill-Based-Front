@@ -516,16 +516,7 @@ def _run(
     if not senders:
         return []
     senders.sort(key=lambda n: (d[n], key(player, n)))
-    room: dict[int, int] = {}
-    for n in field.adj:
-        free = capacities[n] - nodes[n].warehouse - incoming.get(n, 0)
-        room[n] = free if free > 0 else 0
-    # The want of a node that pulls for a build alone (item J): what it still owes beyond its
-    # stock and its packets on the way; it takes no more than that. Its fill stays the warehouse's.
-    want: dict[int, int] = {}
-    for n, due in field.owed.items():
-        rest = due - nodes[n].warehouse - incoming.get(n, 0)
-        want[n] = rest if rest > 0 else 0
+    room, want = _snapshot(state, field, capacities, incoming)
 
     def order(m: int) -> tuple[int, int]:
         cap = capacities[m]  # room > 0, so cap > 0
@@ -617,6 +608,24 @@ def _run(
     return sends
 
 
+def _snapshot(
+    state: GameState, field: _Field, capacities: tuple[int, ...], incoming: dict[int, int]
+) -> tuple[dict[int, int], dict[int, int]]:
+    """The room of every own node at the start of a dispatch (item A5) and the want of the nodes
+    that pull for a build alone (item J): what they still owe beyond their stock and their
+    packets on the way; they take no more than that (their fill stays the warehouse's)."""
+    nodes = state.nodes
+    room: dict[int, int] = {}
+    for n in field.adj:
+        free = capacities[n] - nodes[n].warehouse - incoming.get(n, 0)
+        room[n] = free if free > 0 else 0
+    want: dict[int, int] = {}
+    for n, due in field.owed.items():
+        rest = due - nodes[n].warehouse - incoming.get(n, 0)
+        want[n] = rest if rest > 0 else 0
+    return room, want
+
+
 def _back(field: _Field, n: int, m: int) -> bool:
     """``m`` is nearer the capital than the enclave node ``n`` and does not hold: a corridor does
     not give to it, and the feed distance does not count the road (item L6)."""
@@ -675,13 +684,19 @@ def _store(
     nodes = state.nodes
     d = field.d
     plan = dict(_run(state, field, capacities, incoming))
+    # The corridors at the plan (item L6) leave their roads to a smaller capital distance out of
+    # ``flow_down`` (item L10): the chevrons never point back out of a corridor.
+    corridor: dict[int, bool] = {}
+    if field.beyond:
+        feed = _feed(field, *_snapshot(state, field, capacities, incoming))
+        corridor = {n: True for n in field.beyond if n in feed}
     for n in field.adj:
         dn = d.get(n)
         k = field.k[n]
         down: tuple[int, ...] = ()
         below_pairs = field.down.get(n)
         if below_pairs:
-            below = [m for m, _ in below_pairs]
+            below = [m for m, _ in below_pairs if n not in corridor or not _back(field, n, m)]
             if len(below) > 1:
                 below.sort(key=lambda m: key(player, m))
             down = tuple(below)

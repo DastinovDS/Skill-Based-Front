@@ -387,11 +387,12 @@ def test_bench_supply_flow(
     _check(benchmark, speed_factor, 0.1 * MS)
 
 
-FLOW_BUSY_BUDGET: Final = 0.2 * MS
+FLOW_BUSY_BUDGET: Final = 0.3 * MS
 """The busiest dispatch of the flow (``_flow_state``), a stress state like the one of
 ``test_bench_supply_many_donors_busy_roads``: not the section 12 budget (that one is
-``test_bench_supply_flow``); about 0.15 ms on the reference machine, half of it the 18 packets it
-sends. Accepted by the owner 2026-11-03 (#704)."""
+``test_bench_supply_flow``); about 0.2 ms on ``grid40`` and 0.25 ms on ``grid55`` since DEC-43
+items K and L, half of it the packets it sends. 0.2 ms accepted by the owner 2026-11-03 (#704),
+0.3 ms on both maps accepted by the owner 2026-11-04 (#735)."""
 
 
 def test_bench_supply_flow_busy(
