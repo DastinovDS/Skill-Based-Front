@@ -95,12 +95,12 @@ def test_map_is_built_from_its_half(name: str) -> None:
 
 @pytest.mark.parametrize("name", DEC27)
 def test_dec27_map_passes_the_size_check_and_the_warehouses(name: str) -> None:
-    # DEC-27, item 5: 45..55 nodes; DEC-26, item 5: no city starts above its warehouse (mvp-2).
-    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-2.toml")
+    # DEC-27, item 5: 45..55 nodes; DEC-26, item 5: no city starts above its warehouse (mvp-4).
+    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-4.toml")
     assert validate_file(_file(name), SIZE, rules) == []
 
 
-@pytest.mark.parametrize("ruleset", ["mvp-2", "mvp-3"])
+@pytest.mark.parametrize("ruleset", ["mvp-2", "mvp-3", "mvp-4"])
 def test_small_map_passes_the_warehouses(ruleset: str) -> None:
     # #664: narrows (29 nodes) is outside the 45..55 size range, so only the other checks run.
     rules = load_ruleset(MAPS.parent / "rulesets" / f"{ruleset}.toml")
@@ -178,7 +178,7 @@ def test_menu_map_is_built_from_its_half_and_passes_the_validator() -> None:
     half = json.loads((MENU / "src" / "valley.half.json").read_text(encoding="utf-8"))
     built = json.loads((MENU / "valley.json").read_text(encoding="utf-8"))
     assert mirror_half(half, CONFIG) == built
-    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-2.toml")
+    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-4.toml")
     assert validate_file(MENU / "valley.json", CONFIG, rules) == []
     assert preview_path(MENU / "valley.json").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 

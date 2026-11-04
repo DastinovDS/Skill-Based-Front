@@ -2,11 +2,11 @@
 
 The examples are rows of ``packages/protocol/vectors/combat.json`` (the inputs: who stands
 where, with which bonus). Each one is played here through the real systems of ``gow_sim`` under
-the ruleset that is played (``rulesets/mvp-2.toml``), and the state after every round is
-recorded. The client only draws the file (``apps/client/src/howto/combatExamples.gen.json``); it
-never works out a fight (AGENTS.md, 7.1). The rule numbers the page quotes (a round in seconds,
-the bonus per road, the price of a planned order, the VP period, ...) come from the same ruleset
-and go into the same file.
+the ruleset the page describes (``rulesets/mvp-2.toml``, economy v1: no longer the played one,
+#741), and the state after every round is recorded. The client only draws the file
+(``apps/client/src/howto/combatExamples.gen.json``); it never works out a fight (AGENTS.md, 7.1).
+The rule numbers the page quotes (a round in seconds, the bonus per road, the price of a planned
+order, the VP period, ...) come from the same ruleset and go into the same file.
 
     mise run regen:howto
 

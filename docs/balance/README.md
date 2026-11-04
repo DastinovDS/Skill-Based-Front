@@ -9,8 +9,10 @@ the report relies on.
 ## Running
 
 ```bash
-uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-2.toml
+uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-4.toml
 ```
+
+`mvp-4` is the played ruleset (owner decision 2026-11-04, #741); the tasks `tournament`, `search` and `tournament:gh` default to it. The older runs below (`mvp-2`, `mvp-3`) are history and are reproduced with `--ruleset rulesets/mvp-2.toml` and the like.
 
 | Key | Meaning |
 |---|---|
@@ -31,7 +33,7 @@ dispatch only, it is not a required check) plays it on GitHub runners:
 ```bash
 mise run tournament:gh -- --help                       # all options
 mise run tournament:gh --seeds 100 --shards 10 --label bal02
-mise run tournament:gh --ref feature/123-x --ruleset rulesets/mvp-2.toml --bots "rusher smart_rusher@normal" --seeds 20
+mise run tournament:gh --ref feature/123-x --ruleset rulesets/mvp-4.toml --bots "rusher smart_rusher@normal" --seeds 20
 ```
 
 | Option | Meaning |

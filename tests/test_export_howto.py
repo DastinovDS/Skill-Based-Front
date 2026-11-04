@@ -26,11 +26,12 @@ def test_committed_file_is_up_to_date() -> None:
     assert committed == BUILT, f"combatExamples.gen.json is out of date. Run: {REGENERATE}"
 
 
-def test_the_played_ruleset_is_mvp_2() -> None:
-    """The page explains the ruleset that is played (the tasks `stack` and `tournament` default)."""
+def test_the_page_still_describes_mvp_2() -> None:
+    """The played ruleset is `mvp-4` since 2026-11-04 (#741), but the page still describes economy
+    v1 (`mvp-2`) until a separate tutorial round replaces it; the screen says so in its notice."""
     assert BUILT["ruleset"] == "mvp-2"
     mise = (ROOT / "mise.toml").read_text(encoding="utf-8")
-    assert 'default="rulesets/mvp-2.toml"' in mise
+    assert 'default="rulesets/mvp-4.toml"' in mise
 
 
 @pytest.mark.parametrize("example", BUILT["examples"], ids=lambda e: e["id"])
