@@ -517,6 +517,11 @@ def _run(
         return []
     senders.sort(key=lambda n: (d[n], key(player, n)))
     room, want = _snapshot(state, field, capacities, incoming)
+    main = [n for n in senders if n in field.c]
+    sends_main = _run_need(state, field, capacities, main, room, want) if main else []
+    senders = [n for n in senders if n not in field.c]  # pockets: the rules as before
+    if not senders:
+        return sends_main
 
     def order(m: int) -> tuple[int, int]:
         cap = capacities[m]  # room > 0, so cap > 0
@@ -598,6 +603,119 @@ def _run(
                 cm = c[m]
                 give = load + 1 <= have if cm > cn else cm == cn and load + 2 <= have
             if give:
+                out.append((m, eid))
+                room[m] -= 1
+                if m in want:
+                    want[m] -= 1
+                have -= 1
+        if out:
+            sends.append((n, out))
+    return sends_main + sends
+
+
+_CANDIDATE = "c2"
+"""PROTOTYPE (#738), not for merge: ``c2`` the nearest need (the front zone only outward), ``c3``
+every charge only outward from the capital."""
+
+
+def _run_need(
+    state: GameState,
+    field: _Field,
+    capacities: tuple[int, ...],
+    senders: list[int],
+    room: dict[int, int],
+    want: dict[int, int],
+) -> _Sends:
+    """PROTOTYPE C2 / C3 (#738): the capital's component. ``g``: hops to the nearest hungry level
+    node (``d == k``, room, a build node wanting) over the roads a node may send along: from the
+    rear (behind the level, reached from an own factory) any own neighbour not ahead; from the
+    front zone (the level and the enclaves) only outward (``c`` larger) inside the front zone;
+    into a node that holds always (an army, an unpaid build), and a lifted path node only along
+    its path. C3: every node only outward. A sender gives one charge per road on room alone to
+    the neighbours with a smaller ``g`` (and to those that hold), by fill then ``node_key``; a rear
+    node then stages downhill between equal ``g`` (A6 when nothing is hungry)."""
+    player = field.player
+    key = state.map.node_key
+    nodes = state.nodes
+    d = field.d
+    k = field.k
+    c = field.c
+    holding = field.holding
+    before = field.before
+    c3 = _CANDIDATE == "c3"
+    hungry = [n for n in field.flat if n in c and room[n] and want.get(n, 1)]
+    # The corridors: enclave nodes with an outward way (``c`` growing, or into a node that holds)
+    # through the level and the enclaves to a hungry level node. The front zone is the level and
+    # the corridors; every other node behind the level (the rear, a dead-end enclave) sends
+    # towards the nearest need in any direction.
+    beyond = field.beyond
+    reach = dict.fromkeys(hungry, True)
+    queue = list(hungry)
+    for m in queue:  # grows while it is walked
+        for n, _ in field.adj[m]:
+            if n in reach or not (n in beyond or (d[n] == k[n] and n not in holding)):
+                continue
+            if c[m] > c[n] or m in holding or before.get(m) == n:
+                reach[n] = True
+                queue.append(n)
+    zone = {n: True for n in c if d[n] == k[n] or (n in beyond and n in reach)}
+
+    def allowed(n: int, m: int) -> bool:
+        if d[m] < k[m]:
+            return False  # ahead of the level: frozen
+        if m in holding or before.get(m) == n:
+            return True
+        if n in before:
+            return False  # a lifted node between: only along its path
+        if c3 or n in zone:
+            return c[m] > c[n] and (c3 or m in zone)
+        return True
+
+    g = dict.fromkeys(hungry, 0)
+    for m in hungry:  # the list grows while it is walked: a BFS
+        step = g[m] + 1
+        for n, _ in field.adj[m]:
+            if n in g or d[n] < k[n] or (d[n] == k[n] and n in holding):
+                continue
+            if allowed(n, m):
+                g[n] = step
+                hungry.append(n)
+    far = len(field.adj) + 1
+
+    def order(m: int) -> tuple[int, int]:
+        cap = capacities[m]
+        return ((cap - room[m]) * 100 // cap, key(player, m))  # non-negative: rounded down
+
+    sends: _Sends = []
+    for n in senders:
+        have = nodes[n].warehouse
+        gn = g.get(n, far)
+        first = [
+            (m, eid)
+            for m, eid in field.adj[n]
+            if room[m]
+            and want.get(m, 1)
+            and allowed(n, m)
+            and (g.get(m, far) < gn or m in holding or before.get(m) == n)
+        ]
+        lists = [first]
+        if not c3 and n not in zone and n not in before:
+            lists.append(
+                [
+                    (m, eid)
+                    for m, eid in field.down[n]
+                    if room[m] and want.get(m, 1) and g.get(m, far) == gn
+                ]
+            )
+        out: list[tuple[int, int]] = []
+        for group in lists:
+            if len(group) > 1:
+                group.sort(key=lambda pair: order(pair[0]))
+            for m, eid in group:
+                if have == 0:
+                    break
+                if room[m] == 0:
+                    continue
                 out.append((m, eid))
                 room[m] -= 1
                 if m in want:
