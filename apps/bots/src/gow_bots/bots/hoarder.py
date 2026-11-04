@@ -301,13 +301,12 @@ class SmartHoarder(SmartBot):
             g = groups[0]
             if node == spear or to_stage[node] <= to_stage[spear]:
                 continue
-            room = view.nodes[spear].capacity - ctx.standing[spear]
+            room = self.room(ctx, spear)  # #686: the arrivals too
             if g.units > room or spear not in self.reachable(view, node, far, g.units):
                 continue
             if self.spend(ctx, Move(g.id, spear)):
                 ctx.used[g.id] = True
                 ctx.standing[node] -= g.units
-                ctx.standing[spear] += g.units
 
     def consolidate(self, ctx: Ctx) -> None:
         """While advancing, the charged groups in the other held nodes walk into the held stage
@@ -317,7 +316,7 @@ class SmartHoarder(SmartBot):
             return
         if stage in self.fight_nodes(view):
             return
-        room = view.nodes[stage].capacity - ctx.standing[stage]
+        room = self.room(ctx, stage)  # #686: the arrivals too
         for g in self.free_groups(ctx):
             here = node_of(g)
             if room <= 0:
@@ -329,7 +328,6 @@ class SmartHoarder(SmartBot):
             if self.spend(ctx, Move(g.id, stage)):
                 ctx.used[g.id] = True
                 ctx.standing[here] -= g.units
-                ctx.standing[stage] += g.units
                 room -= g.units
 
     @override

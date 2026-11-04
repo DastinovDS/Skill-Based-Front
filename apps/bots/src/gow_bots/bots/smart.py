@@ -155,6 +155,11 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     way out it waits, and the foreign node that cut the pocket off (next to the capital's
     component and a pocket) scores ``W_RESCUE`` more per unit it rejoins (``pockets.rescue``), so
     a viable attack from either side retakes it first.
+21. **Capacity and the leaf shift** (#686, G-L of the ``mvp-4`` bot audit). No move, recall or
+    recruit puts an own node over capacity at the arrival (``CampaignBot``, "Capacity"): the
+    garrisons, the answers, the reinforcements and the walks home count the units already on the
+    way and pick a group that fits. The leaf shift holds ``economy.SHIFT_HOLD_TICKS`` after every
+    change and stays back while the enemy takes own nodes (``economy.leaf_shift_command``).
 
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -1159,14 +1164,13 @@ class SmartBot(CampaignBot):
                 break
             if not self.may_leave(ctx, g) or home not in self.reachable(view, here, far, g.units):
                 continue
-            if ctx.standing[home] + g.units > view.nodes[home].capacity:
-                continue
+            if g.units > self.room(ctx, home):
+                continue  # #686: the capital would be over capacity
             if self.spend(ctx, Move(g.id, home)):
                 ctx.used[g.id] = True
                 ctx.standing[here] -= g.units
-                ctx.standing[home] += g.units
                 missing -= g.charged
-        if self.can_queue(view, home, ctx.standing[home]) and self.spend(ctx, Recruit(home)):
+        if self.can_queue(view, home, self.load(ctx, home)) and self.spend(ctx, Recruit(home)):
             self.recruited[home] = ctx.tick
             ctx.standing[home] += 1
 
@@ -1227,7 +1231,7 @@ class SmartBot(CampaignBot):
                     for m in self.neighbors[node]
                     if view.nodes[m].owner == self.player
                     and m not in fights
-                    and view.nodes[m].capacity >= ctx.standing[m] + g.units
+                    and self.room(ctx, m) >= g.units
                 ]
                 if not exits:
                     continue
@@ -1247,7 +1251,6 @@ class SmartBot(CampaignBot):
                 if self.spend(ctx, Move(g.id, dest)):
                     ctx.used[g.id] = True
                     ctx.standing[node] -= g.units
-                    ctx.standing[dest] += g.units
                     self.left_from[node] = ctx.tick
 
     def _burning(self, stock: int, cap: int, waiting: int) -> bool:
@@ -1332,7 +1335,7 @@ class SmartBot(CampaignBot):
                 ctx.used[g.id] = True
                 ctx.standing[here] -= g.units
                 missing -= g.charged
-        if self.can_queue(view, home, ctx.standing[home]) and self.spend(ctx, Recruit(home)):
+        if self.can_queue(view, home, self.load(ctx, home)) and self.spend(ctx, Recruit(home)):
             self.recruited[home] = ctx.tick
             ctx.standing[home] += 1
 
@@ -1409,11 +1412,13 @@ class SmartBot(CampaignBot):
         return intent.created_tick + self.rules.orders.planned_delay_ticks + way
 
     def reinforce(self, ctx: Ctx, target: int) -> bool:
-        """The nearest charged group that can walk to ``target`` and may leave its node."""
+        """The nearest charged group that can walk to ``target``, may leave its node and fits
+        ``target`` at the arrival (#686)."""
         best: GroupView | None = None
+        room = self.room(ctx, target) if ctx.view.nodes[target].owner == self.player else None
         for g in self.free_groups(ctx):
             here = node_of(g)
-            if here == target or g.charged == 0:
+            if here == target or g.charged == 0 or (room is not None and g.units > room):
                 continue
             if not self.may_leave(ctx, g) or target not in self.reachable(
                 ctx.view, here, SEARCH_HOPS, g.units
@@ -1427,7 +1432,6 @@ class SmartBot(CampaignBot):
         if best is not None and self.spend(ctx, Move(best.id, target)):
             ctx.used[best.id] = True
             ctx.standing[node_of(best)] -= best.units
-            ctx.standing[target] += best.units
             ctx.claimed[target] = True
             return True
         return False
@@ -1452,22 +1456,23 @@ class SmartBot(CampaignBot):
         free groups within ``SEARCH_HOPS`` that may leave (VP first, then ``node_key``)."""
         view = ctx.view
         holds = [self.front_hold(n) if self.hot[n] else 0 for n in range(len(view.nodes))]
-        short = [n for n in range(len(view.nodes)) if ctx.standing[n] < holds[n]]
+        short = [n for n in range(len(view.nodes)) if self.load(ctx, n) < holds[n]]
         short.sort(key=lambda n: (-self.map.nodes[n].vp, self.key(n)))
         for node in short:
             hold = holds[node]
             for g in self.free_groups(ctx):
                 here = node_of(g)
-                if ctx.standing[node] >= hold:
+                if self.load(ctx, node) >= hold:
                     break
                 if here == node or self.hot[here] or not self.may_leave(ctx, g):
                     continue
+                if g.units > self.room(ctx, node):
+                    continue  # #686
                 if node not in self.reachable(view, here, SEARCH_HOPS, g.units):
                     continue
                 if self.spend(ctx, Move(g.id, node)):
                     ctx.used[g.id] = True
                     ctx.standing[here] -= g.units
-                    ctx.standing[node] += g.units
 
     @override
     def bunkers(self) -> int:
@@ -1888,7 +1893,7 @@ class SmartBot(CampaignBot):
                 continue
             if self.hot[node] or self.doomed[node] or not self.recruits_in(view, node):
                 continue
-            if ctx.standing[node] + queue + 1 > n.capacity:
+            if self.load(ctx, node) + queue + 1 > n.capacity:  # #686: the arrivals too
                 continue
             cities.append(node)
         if not cities:
@@ -1915,7 +1920,7 @@ class SmartBot(CampaignBot):
         view = ctx.view
         if not self.alarm or ctx.budget >= self.cost(Recruit(self.home)):
             return
-        if not self.can_queue(view, self.home, ctx.standing[self.home]):
+        if not self.can_queue(view, self.home, self.load(ctx, self.home)):
             return
         for n in view.nodes:
             if n.owner == self.player and n.id != self.home and n.recruit_queue:
@@ -1999,7 +2004,7 @@ class SmartBot(CampaignBot):
         move = self.rules.orders.cost.move
         heading = {g.order.dest: True for g in view.groups if g.order is not None}
         for node in sorted((n for n in range(len(view.nodes)) if self.watch[n]), key=self.key):
-            if ctx.standing[node] > 0 or node in heading:
+            if self.load(ctx, node) > 0 or node in heading:
                 continue
             if ctx.budget - move < self.params["recruit_keep"]:
                 return
@@ -2032,7 +2037,6 @@ class SmartBot(CampaignBot):
                 if self.spend(ctx, Move(best.id, node)):
                     ctx.used[best.id] = True
                     ctx.standing[here] -= 1
-                    ctx.standing[node] += 1
             elif self.spend(ctx, Split(best.id, best.units - 1)):
                 ctx.used[best.id] = True
                 self.scouted[node] = ctx.tick
