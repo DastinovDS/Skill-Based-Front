@@ -31,8 +31,10 @@ the allowed nodes): **downhill** (a path behind the level along which ``d`` fall
 the rule fails on its own terms), **saddle** (``d`` never rises, some step is a level road: item
 K's case), **ridge** (only through nodes behind the level, some step uphill: #738), **corridor out**
 (a path that crosses another level node, and every step out of a level node goes farther from the
-capital: item L's case), **corridor in** (only through the level towards the capital: item L
-forbids it by design).
+capital: item L's case), **corridor in** (only through the level sideways, at an equal
+capital distance, or towards the capital: item L allows the gap rule sideways and nothing inward,
+by design). Holes whose sources all lie in an enclave (a part behind the level without an own
+factory, item L5) are counted apart: the corridor rule L6 forbids them every road inward.
 
 The states: every pool map (``maps/*.json``), ownership splits grown from both capitals by a seeded
 generator (``_Rng``, splitmix64: no ``random``, AGENTS.md 4.1 applies to the tests too), then
