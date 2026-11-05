@@ -1199,3 +1199,24 @@ Before (the same seeds): pooled 0.47 [0.39; 0.56], 0.45 [0.36; 0.54], 0.52 [0.43
 their matches among themselves (432) isolate it: burned 38.9 to 30.8 charges per player and match (share 25.3% to
 20.2%), warehouses lost 34.6 to 37.0, the two together 73.4 to 67.8. Head to head (local, three `hard` personalities, 72
 matches) the bot without it won 0.60.
+
+## #754: no split/merge churn of the hoarder, pocket exits within the room of the way out (2026-11-05)
+
+GitHub run 42008336134 (`mise run tournament:gh --seeds 3`, the 16-bot field of #706, `mvp-4`, 4 maps, 3072 matches)
+against run 41992026732 (#749, the same seeds and field; the `hard` bots are named without `@hard` here, which seeds
+their parameters the same way: `choose_params` takes the class name).
+
+**Causes.** (1) The hoarder's splits are free (`orders.cost.split = 0`) and prepare a walk in the next decision, but its
+CP are kept for the barracks and the banked strike, or spent on another order after the split; the unmoved part was merged
+back by `_gather` (free too) and split again. (2) While advancing, `spearhead` merged the capital's spare units back
+into the guard that `_guard_split` had just split them off. (3) `leave_pockets` did not count the own units already on
+the way into the foreign node of the way out (`Ctx.incoming` counts own nodes only), so a big pocket overfilled it.
+Fixes: a hoarder split keeps the CP of its part's move; no merge in the capital in `spearhead`; `pockets.heading`.
+
+| Bot (384 matches) | Split | Merge | attrition | idle discharged in pockets | starved | score |
+|---|---|---|---|---|---|---|
+| smart_hoarder | 113.1 > 23.9 | 93.2 > 10.7 | 0.41 > 0.36 | 11005 > 12166 | 15.9 > 16.7 | 0.54 [0.49; 0.59] > 0.70 [0.65; 0.74] |
+
+The other 15 bots are unchanged within the noise (score moves of at most 0.03, attrition at most 0.02 a match). No
+crash. The benchmark is stronger beyond its interval: its spare units now march and its commands are not spent on the
+loop; against the five `hard` personalities 0.34 > 0.47 (120 matches).
