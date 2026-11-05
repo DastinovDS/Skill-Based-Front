@@ -5,7 +5,8 @@ own nodes none of which touches an enemy node (one capture at the front does not
 pocket, where a factory stops, DEC-43 item H2); the deepest first (up to ``SITE_DEPTH`` hops from
 every enemy node), then the farthest from the enemy capital. A build starts only from spare stock
 (the warehouses of the capital's component beyond what the own discharged units there want), and a
-lost site is never built again; past ``FACTORY_RESTARTS`` losses no factory is built. Every case
+lost site is never built again; past ``FACTORY_RESTARTS`` unpaid losses (a factory lost before it
+made ``factory.cost`` charges) no factory is built. Every case
 runs for player 0 and, mirrored, for player 1 (the map symmetry, ``MapDef.mirror_nodes``).
 
 The layout is ``crossroads`` (player 0's names): the capital 0; cities 1, 4, 6, 7, 8 and provinces
@@ -170,3 +171,61 @@ def test_a_lost_site_is_not_rebuilt_and_the_restarts_are_capped(
     assert factory_site(bot, _lost(view, one), EXTRA, memory) is None  # past the restarts
     assert memory.lost == {four: True, one: True}
     assert factory_site(bot, view, EXTRA, memory) is None  # past the restarts
+
+
+def _factory(view: PlayerView, node: int, tick: int, *, pocket: bool = False) -> PlayerView:
+    """``view`` at ``tick`` with an own built factory in ``node`` (``factory.built_period_ticks``
+    = 200), in a pocket or not."""
+    nodes = list(view.nodes)
+    nodes[node] = replace(
+        nodes[node], factory=True, factory_period=200, factory_build=None, flow_pocket=pocket
+    )
+    return replace(view, tick=tick, nodes=tuple(nodes))
+
+
+def _at(view: PlayerView, tick: int) -> PlayerView:
+    return replace(view, tick=tick)
+
+
+@pytest.mark.parametrize("player", [0, 1])
+def test_a_factory_that_paid_back_is_no_loss_for_the_restarts(
+    mvp4: Ruleset, crossroads: MapDef, player: int
+) -> None:
+    """``factory.cost = 4`` and ``factory.built_period_ticks = 200``: a factory that worked 800
+    ticks made its cost; two such factories lost (at 4, then at 1) leave the restarts untouched,
+    so a third site (8) is still offered. The lost sites stay excluded."""
+    assert (mvp4.factory_rules().cost, mvp4.factory_rules().built_period_ticks) == (4, 200)
+    bot, view = _setup(mvp4, crossroads, player, (11,))
+    four, one = _node(crossroads, player, 4), _node(crossroads, player, 1)
+    eight = _node(crossroads, player, 8)
+    memory = FactorySites()
+    assert factory_site(bot, _at(_with_build(view, four), 100), EXTRA, memory) is None
+    assert factory_site(bot, _factory(view, four, 200), EXTRA, memory) == eight  # the second one
+    assert factory_site(bot, _at(_lost(view, four), 1000), EXTRA, memory) == one
+    assert memory.unpaid == 0 and memory.lost == {four: True}
+    assert factory_site(bot, _at(_with_build(view, one), 1100), EXTRA, memory) is None
+    assert factory_site(bot, _factory(view, one, 1200), EXTRA, memory) == eight
+    assert factory_site(bot, _at(_lost(view, one), 2000), EXTRA, memory) == eight
+    assert memory.unpaid == 0 and memory.lost == {four: True, one: True}
+
+
+@pytest.mark.parametrize("player", [0, 1])
+def test_a_factory_lost_before_it_paid_back_counts(
+    mvp4: Ruleset, crossroads: MapDef, player: int
+) -> None:
+    """A factory lost after 795 ticks of work made 3 charges (rounded down): an unpaid loss. One
+    that stood 800 ticks in a pocket made nothing (DEC-43, item H2): unpaid too. Past
+    ``FACTORY_RESTARTS`` (1) unpaid losses no factory is started."""
+    bot, view = _setup(mvp4, crossroads, player, (11,))
+    four, one = _node(crossroads, player, 4), _node(crossroads, player, 1)
+    memory = FactorySites()
+    assert factory_site(bot, _at(_with_build(view, four), 100), EXTRA, memory) is None
+    factory_site(bot, _factory(view, four, 200), EXTRA, memory)
+    factory_site(bot, _factory(view, four, 995), EXTRA, memory)
+    assert factory_site(bot, _at(_lost(view, four), 995), EXTRA, memory) == one
+    assert memory.unpaid == 1
+    assert factory_site(bot, _at(_with_build(view, one), 1100), EXTRA, memory) is None
+    factory_site(bot, _factory(view, one, 1200, pocket=True), EXTRA, memory)
+    factory_site(bot, _factory(view, one, 2000, pocket=True), EXTRA, memory)
+    assert factory_site(bot, _at(_lost(view, one), 2000), EXTRA, memory) is None
+    assert memory.unpaid == 2

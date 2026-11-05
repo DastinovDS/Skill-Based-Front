@@ -482,7 +482,8 @@ the capital into every built factory (a hub); **factories** (two beside the capi
 rear city: no enemy node next to it, not a leaf, reached from the own capital over own nodes no enemy node touches, the
 deepest first up to 3 hops from every enemy node, then the farthest from the enemy capital; started only when the
 warehouses of the capital's component hold `factory.cost` beyond what the own discharged units there want; a lost site
-is never built again and at most one lost build is replaced in a match); **bunkers** for the personalities that used Defense (one, three
+is never built again and at most one unpaid loss is replaced in a match: a factory that had made `factory.cost` charges
+before it fell does not count); **bunkers** for the personalities that used Defense (one, three
 for `smart_turtle`; a front city with a full warehouse); **warehouse levels** in full supplying warehouses (charges, no
 CP); a **planned order** only where its bonus turns a bounce into a capture, asking for the missing shots at most the
 stock of its warehouse, released (`ReleasePlan`) when it gathered too long; the converging strike plans every group that

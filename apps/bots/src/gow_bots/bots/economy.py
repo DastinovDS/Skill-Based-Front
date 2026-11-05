@@ -28,8 +28,11 @@ supply. These helpers are the minimal v2 play every campaign bot shares; they re
   garrison the progressive payment of item 7 discharged takes a charge an army waits for (the
   rear garrison pays at once and pulls the spare back). ``FactorySites`` remembers the own
   factory builds: a node where one was lost (the build stopped or the factory captured) is
-  never a site again, and the bot replaces at most ``FACTORY_RESTARTS`` lost builds in a match
-  (no rebuild churn).
+  never a site again, and the bot replaces at most ``FACTORY_RESTARTS`` unpaid losses in a match
+  (no rebuild churn). A loss is unpaid unless the factory had made at least ``factory.cost``
+  charges by then (its ticks as an own factory outside a pocket over its ``factory_period``,
+  rounded down; DEC-43 item H2: a factory in a pocket makes nothing): one that paid itself back
+  does not count, so a factory that served before it fell is replaced.
 - **Bunkers** (``bunker_site``): an own city or the capital next to an enemy node, with a full
   (or a ``bunker.cost``) warehouse so the payment does not take the defenders' charges, no
   fight and no bunker build owing elsewhere; the most VP first.
@@ -99,8 +102,9 @@ FACTORY_LATE_TICKS: Final = 1500
 """No factory is started with fewer ticks left (its 4 charges pay back in 400 ticks plus the
 build and the delivery)."""
 FACTORY_RESTARTS: Final = 1
-"""Lost factory builds (a build stopped or a built factory captured) the bot replaces at most in a
-match; past them it builds no more factories (#683: no rebuild churn)."""
+"""Unpaid losses of factory builds (a build stopped, or a built factory captured before it made
+``factory.cost`` charges) the bot replaces at most in a match; past them it builds no more
+factories (#683: no rebuild churn). A factory that paid itself back is no such loss."""
 SITE_DEPTH: Final = 3
 """Road hops from every enemy node beyond which factory sites count as equally safe; among those the
 farthest from the enemy capital is picked (#683: the rear of the map, not the centre the enemy
@@ -127,17 +131,42 @@ class FactorySites:
     the player's."""
     lost: dict[int, bool] = field(default_factory=dict[int, bool])
     """Nodes where an own factory build or the factory it became was lost: never a site again."""
+    unpaid: int = 0
+    """Losses of those that had not made ``factory.cost`` charges (``FACTORY_RESTARTS``)."""
+    worked: dict[int, int] = field(default_factory=dict[int, int])
+    """Ticks each of ``mine`` has worked as an own factory outside a pocket, from the views."""
+    period: dict[int, int] = field(default_factory=dict[int, int])
+    """``factory_period`` of each of ``mine`` that has been seen as a factory."""
+    running: dict[int, bool] = field(default_factory=dict[int, bool])
+    """Those of ``mine`` that were working factories in the last view."""
+    tick: int | None = None
+    """The tick of the last view."""
 
-    def observe(self, view: PlayerView) -> None:
+    def observe(self, view: PlayerView, cost: int) -> None:
+        """Updates the memory from ``view``; ``cost``: ``factory.cost``."""
         me = view.player
+        dt = 0 if self.tick is None else view.tick - self.tick
+        self.tick = view.tick
         for n in view.nodes:
             if n.owner == me and n.factory_build is not None:
                 self.mine[n.id] = True
         for node in sorted(self.mine):
+            if self.running.get(node, False):  # it worked since the last view
+                self.worked[node] = self.worked.get(node, 0) + dt
             n = view.nodes[node]
             if n.owner == me and (n.factory or n.factory_build is not None):
+                working = bool(n.factory) and n.flow_pocket is not True
+                self.running[node] = working
+                if n.factory and n.factory_period:
+                    self.period[node] = n.factory_period
                 continue
+            period = self.period.get(node, 0)
+            made = self.worked.get(node, 0) // period if period > 0 else 0  # rounded down
+            if made < cost:
+                self.unpaid += 1
             del self.mine[node]
+            self.worked.pop(node, None)
+            self.running.pop(node, None)
             self.lost[node] = True
 
 
@@ -341,12 +370,12 @@ def safe_rear(bot: Bot, view: PlayerView) -> dict[int, int]:
 def factory_site(bot: Bot, view: PlayerView, extra: int, memory: FactorySites) -> int | None:
     """The own city that should start a factory now (module docstring), or ``None``; ``memory``
     is updated on every call."""
-    memory.observe(view)
     rules = bot.rules
+    memory.observe(view, rules.factory_rules().cost)
     me = view.player
     if extra <= 0 or rules.match_ticks - view.tick < FACTORY_LATE_TICKS:
         return None
-    if len(memory.lost) > FACTORY_RESTARTS:
+    if memory.unpaid > FACTORY_RESTARTS:
         return None  # no rebuild churn
     count = 0
     for n in view.nodes:
