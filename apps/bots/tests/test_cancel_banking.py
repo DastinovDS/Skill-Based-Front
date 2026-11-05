@@ -39,7 +39,9 @@ NORTH_PASS, SOUTH_PASS = 17, 18
 SOUTH_DALE = 24
 TICK = 4000
 SMART = ("smart_expander", "smart_reactive", "smart_rusher", "smart_strangler", "smart_turtle")
-"""The personalities with ``DISCIPLINE`` and a ``BANK``; ``smart_hoarder`` is the benchmark."""
+"""The personalities with ``DISCIPLINE``; ``smart_hoarder`` is the benchmark."""
+SAVERS = ("smart_expander", "smart_reactive", "smart_rusher", "smart_turtle")
+"""The personalities with a ``BANK`` (the strangler keeps its steady siege pressure)."""
 OLD = ("smart_hoarder", "rusher")
 """The benchmark and a plain BOT-03 bot keep the old recall and save nothing."""
 
@@ -266,7 +268,7 @@ def _price(bot: SmartBot) -> int:
 
 
 @pytest.mark.parametrize("player", [0, 1])
-@pytest.mark.parametrize("name", SMART)
+@pytest.mark.parametrize("name", SAVERS)
 def test_a_decided_fortification_is_saved_for_then_paid(name: str, player: int) -> None:
     """One quantum short of the fortification and its keep: no fortification, and the routine
     spending of the decision leaves the saving. Then a quantum a decision: the CP the decisions
@@ -295,7 +297,7 @@ def test_a_decided_fortification_is_saved_for_then_paid(name: str, player: int) 
 
 
 @pytest.mark.parametrize("player", [0, 1])
-@pytest.mark.parametrize("name", SMART)
+@pytest.mark.parametrize("name", SAVERS)
 def test_the_saving_opens_one_quantum_below_the_cap(name: str, player: int) -> None:
     """At 4 CP the next quantum would reach the cap of 5 and the one after it burn (DEC-02):
     nothing is saved, whatever the goal."""
@@ -307,7 +309,7 @@ def test_the_saving_opens_one_quantum_below_the_cap(name: str, player: int) -> N
 
 
 @pytest.mark.parametrize("player", [0, 1])
-@pytest.mark.parametrize("name", SMART)
+@pytest.mark.parametrize("name", SAVERS)
 def test_a_goal_left_unpaid_stops_the_saving(name: str, player: int) -> None:
     """A goal saved for more than ``BANK_TICKS`` without being paid stops the saving for
     ``BANK_TICKS`` (the CP go back to the routine spending)."""
@@ -322,10 +324,12 @@ def test_a_goal_left_unpaid_stops_the_saving(name: str, player: int) -> None:
 
 
 @pytest.mark.parametrize("player", [0, 1])
-def test_the_benchmark_saves_nothing_and_keeps_the_old_recall(player: int) -> None:
-    bot = _smart("smart_hoarder", player)
+@pytest.mark.parametrize("name", ["smart_hoarder", "smart_strangler"])
+def test_no_saving_without_a_bank(name: str, player: int) -> None:
+    """The benchmark (also with the old recall) and the strangler save nothing, goal or not."""
+    bot = _smart(name, player)
     assert bot.BANK == 0
-    assert not bot.DISCIPLINE
+    assert bot.DISCIPLINE is (name != "smart_hoarder")
     view = _view(_threat(player), player, 100)
     assert bot.saving(_ctx(bot, view)) == 0
 
@@ -337,4 +341,5 @@ def test_every_smart_personality_is_covered() -> None:
     for name in SMART:
         bot = _smart(name, 0)
         assert bot.DISCIPLINE
-        assert 0 < bot.BANK <= RULES.cp.cap - 2 * RULES.cp.per_period
+        limit = RULES.cp.cap - 2 * RULES.cp.per_period
+        assert (0 < bot.BANK <= limit) is (name in SAVERS)

@@ -2478,8 +2478,10 @@ class SmartStrangler(SmartBot):
 
     name: ClassVar[str] = "smart_strangler"
     DISCIPLINE: ClassVar[bool] = True
-    BANK: ClassVar[int] = 200
-    """Item 23: a strike of two groups; the sieges spend the rest."""
+    BANK: ClassVar[int] = 0
+    """Item 23: no saving. The siege lives on steady pressure: with a saving of 2 CP the
+    strangler won 5 of 16 matches against the benchmark, without it 14 (run 42011930257 and
+    local runs on the same seeds, #687)."""
     STANCE: ClassVar[Stance] = Stance.BALANCE
     STRIKE: ClassVar[bool] = True
     W_RING: ClassVar[int] = 60

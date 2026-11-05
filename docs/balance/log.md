@@ -1220,3 +1220,31 @@ Fixes: a hoarder split keeps the CP of its part's move; no merge in the capital 
 The other 15 bots are unchanged within the noise (score moves of at most 0.03, attrition at most 0.02 a match). No
 crash. The benchmark is stronger beyond its interval: its spare units now march and its commands are not spent on the
 loop; against the five `hard` personalities 0.34 > 0.47 (120 matches).
+
+## #687: cancel discipline and CP banking of the smart bots (2026-11-05)
+
+GitHub run 42011930257 (`mise run tournament:gh --seeds 3`, the 16-bot field of #706, `mvp-4`, 4 maps, 3072 matches)
+against run 41992026732 (the bot code of develop a37d5fa; the same seeds). `cp_cancelled` is not in the baseline file
+(written before #752); 8 local develop matches of the `hard` bots gave 3.0 to 10.8 CP a match, about 1 CP per cancel.
+
+| bot | `CancelOrder` a match | of the moves | `cp_cancelled` a match (of the income) | ticks at the cap | `FortifyRoad` a match | win rate against the field |
+|---|---|---|---|---|---|---|
+| smart_expander@hard | 9.2 -> 4.1 | 12.2% -> 5.6% | 3.46 CP (3.8%) | 0.1% -> 0.0% | 0.9 -> 3.7 | 0.72 -> 0.69 |
+| smart_reactive@hard | 6.4 -> 3.0 | 8.0% -> 4.1% | 2.53 CP (2.8%) | 0.0% -> 0.0% | 4.3 -> 8.0 | 0.72 -> 0.72 |
+| smart_rusher@hard | 8.5 -> 5.0 | 10.2% -> 6.2% | 2.68 CP (3.2%) | 0.0% -> 0.0% | 0.0 -> 1.1 | 0.82 -> 0.88 |
+| smart_strangler@hard | 9.5 -> 3.8 | 11.4% -> 4.9% | 2.96 CP (3.3%) | 0.0% -> 0.0% | 1.8 -> 5.9 | 0.87 -> 0.79 |
+| smart_turtle@hard | 3.4 -> 1.3 | 5.7% -> 2.3% | 1.15 CP (1.2%) | 0.7% -> 0.8% | 6.4 -> 7.0 | 0.45 -> 0.45 |
+| smart_hoarder (unchanged) | 6.2 -> 6.5 | 9.4% -> 9.7% | 5.75 CP (6.5%) | 2.5% -> 2.5% | 5.9 -> 5.7 | 0.54 -> 0.54 |
+
+The `normal` and `easy` bots cancel 30 to 45% less as well. `cp_burned` of every `hard` bot stays 0.00 to 0.73 CP a match.
+No crash; the data validity summary is the same as the baseline's (PASS 6, FAIL 4: V4b, V4c, V5a, V5b); the level ladder
+passes V2 for every personality, 14 of 18 pairs separated (13 before), the inversion `expert` below `smart_strangler@hard`
+is gone (0.25 to 0.42, not separated).
+
+**The strangler.** Its 0.87 to 0.79 came from the saving: against the benchmark it won 18 of 24 before and 10 after.
+Played locally on 16 of those matches (seeds 0 and 1, both sides) without its saving and with the discipline it won 14
+(13 before, 5 with the saving): the siege lives on steady pressure. So the strangler keeps `BANK` 0; the merged code is
+the run's code with that one number changed, the field was not run again (one smoke per PR).
+
+**The rusher** halves its recalls but not its cancels (8.5 to 5.0): what is left are fight withdrawals and recalls on a
+`RANGE` sighting (the top of the range is counted, DEC-21), both cancels that save units.
