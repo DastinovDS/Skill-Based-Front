@@ -20,7 +20,7 @@ import pytest
 
 from gow_bots.bots import BOTS, SmartBot
 from gow_bots.bots.campaign import CampaignBot, Ctx
-from gow_bots.bots.economy import CHURN_TICKS, SHIFT_HOLD_TICKS, LeafShift, leaf_shift_command
+from gow_bots.bots.economy import SHIFT_HOLD_TICKS, LeafShift, leaf_shift_command
 from gow_sim.commands import CancelOrder, Command, Move, PlayerCommand, Recruit, SetLeafShift, Split
 from gow_sim.maps import load_map
 from gow_sim.match import Match
@@ -224,30 +224,17 @@ def test_the_leaf_shift_does_not_flip_within_the_hold(player: int) -> None:
 
 
 @pytest.mark.parametrize("player", [0, 1])
-def test_the_leaf_shift_stays_back_while_the_front_changes_hands(player: int) -> None:
-    """The enemy takes an own node (Cedar) while the player attacks elsewhere, which the old
-    heuristic answered with 0: the shift goes back to 1 and stays there ``CHURN_TICKS``; an
-    own capture of an enemy node or of a neutral one does not count."""
+def test_a_lost_node_alone_does_not_move_the_leaf_shift_back(player: int) -> None:
+    """#749: the enemy takes an own node (Cedar) while the player attacks elsewhere: the shift
+    stays at the front (#686 moved it back for 300 ticks; that burned more charges than it kept
+    from captured warehouses). Own captures, of an enemy node and of a neutral one, do not move it
+    either."""
     bot = _bot("smart_rusher", player)
-    memory = LeafShift()
-    cedar = _at(player, CEDAR)
-    start = _shift_view(player, TICK, 0)
-    assert leaf_shift_command(bot, start, memory) is None
-    lost = _owned_by(_shift_view(player, TICK + 5, 0), cedar, 1 - player)
-    assert leaf_shift_command(bot, lost, memory) == SetLeafShift(1)
-    applied = TICK + 10  # the next view shows it in force
-    for t in (applied, TICK + 5 + CHURN_TICKS - 5):
-        held = _owned_by(_shift_view(player, t, 1), cedar, 1 - player)
-        assert leaf_shift_command(bot, held, memory) is None
-    quiet = max(TICK + 5 + CHURN_TICKS, applied + SHIFT_HOLD_TICKS)
-    calmed = _owned_by(_shift_view(player, quiet, 1), cedar, 1 - player)
-    assert leaf_shift_command(bot, calmed, memory) == SetLeafShift(0)
-    # Own captures, of an enemy node and of a neutral one, are no reason to go back.
-    for node in (_at(player, 12), _at(player, NORTH_PASS)):  # Dale East, North Pass
-        calm = LeafShift()
-        assert leaf_shift_command(bot, _shift_view(player, TICK, 0), calm) is None
-        taken = _owned_by(_shift_view(player, TICK + 5, 0), node, player)
-        assert leaf_shift_command(bot, taken, calm) is None
+    for node, owner in ((CEDAR, 1 - player), (12, player), (NORTH_PASS, player)):
+        memory = LeafShift()  # Dale East, North Pass: own captures
+        assert leaf_shift_command(bot, _shift_view(player, TICK, 0), memory) is None
+        changed = _owned_by(_shift_view(player, TICK + 5, 0), _at(player, node), owner)
+        assert leaf_shift_command(bot, changed, memory) is None
 
 
 def test_every_smart_bot_keeps_the_hold_in_a_match() -> None:

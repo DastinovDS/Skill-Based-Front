@@ -120,7 +120,8 @@ def test_the_hold_is_bounded_and_not_repeated_at_once(
 def test_a_bot_without_insight_does_not_hold(
     web: MapDef, rules: Ruleset, two_edges_are_planned: None
 ) -> None:
-    bot = _rusher(web, rules, level="easy")
+    bot = _rusher(web, rules)
+    bot.tempo = dataclasses.replace(bot.tempo, insight=False)  # every level has it (#749)
     bot.decide(_view(web, rules, rules.orders.cost.planned_move - 50), START)
     assert bot.hold is None
 

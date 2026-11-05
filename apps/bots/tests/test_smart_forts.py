@@ -74,9 +74,16 @@ def _view(state: GameState, player: int, cp: int) -> PlayerView:
     return replace(view, me=replace(view.me, cp=cp))
 
 
+BLIND = "~blind"
+"""A name suffix of ``_bot``: the bot without ``insight`` (no level has that since #749)."""
+
+
 def _bot(name: str, player: int) -> SmartBot:
-    bot = bot_factory(name)(MAP, RULES, seed=0, player=player)
+    blind = name.endswith(BLIND)
+    bot = bot_factory(name.removesuffix(BLIND))(MAP, RULES, seed=0, player=player)
     assert isinstance(bot, SmartBot)
+    if blind:
+        bot.tempo = replace(bot.tempo, insight=False)
     return bot
 
 
@@ -172,12 +179,12 @@ def test_a_threatened_front_city_is_fortified_below_the_cp_cap(name: str, player
 
 
 @pytest.mark.parametrize("player", [0, 1])
-@pytest.mark.parametrize("name", [*SMART, "smart_hoarder", "smart_turtle@easy"])
+@pytest.mark.parametrize("name", [*SMART, "smart_hoarder", f"smart_turtle@easy{BLIND}"])
 def test_no_fortification_against_a_scout_by_the_benchmark_or_without_insight(
     name: str, player: int
 ) -> None:
     """A single enemy unit is a scout, not a force (``FORT_SHOTS``); the benchmark keeps no
-    threat fortification; an ``easy`` bot does not read the position (item 9)."""
+    threat fortification; a bot without ``insight`` does not read the position (item 9)."""
     enemy = 1 - player
     scout = 1 if name in SMART else 4
     state = _state(

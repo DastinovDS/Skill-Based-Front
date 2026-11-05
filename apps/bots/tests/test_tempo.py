@@ -30,7 +30,7 @@ from gow_bots.tournament import MatchTask
 from gow_sim.commands import PlayerCommand, SetFront
 from gow_sim.maps import MapDef
 from gow_sim.match import Match
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.view import Detail, EnemyGroupView, IntentKind, IntentView, Mode, PlayerView
 
 KEY = bytes(range(32))
@@ -51,7 +51,19 @@ def test_levels_slow_down_from_hard_to_easy() -> None:
     assert easy.think_ticks > normal.think_ticks > hard.think_ticks == 5  # the call cadence
     assert easy.react_ticks > normal.react_ticks > hard.react_ticks == 0
     assert easy.apm < normal.apm < hard.apm
-    assert not easy.insight and normal.insight and hard.insight
+    assert easy.insight and normal.insight and hard.insight  # #749: not a strength lever
+    assert easy.burst <= normal.burst <= hard.burst
+
+
+def test_the_lower_levels_cannot_pay_the_demand_of_a_match() -> None:
+    # #749: under mvp-4 the smart bots send 118 to 136 commands in a 15-minute match (the field
+    # run of #706): that demand binds the ``easy`` and ``normal`` buckets, not ``hard``'s.
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+    minutes = rules.match_ticks // (60 * rules.tick_hz)
+    assert minutes == 15
+    for level in ("easy", "normal"):
+        assert DIFFICULTIES[level].apm * minutes + DIFFICULTIES[level].burst < 118, level
+    assert DIFFICULTIES["hard"].apm * minutes > 136
     with pytest.raises(ValueError):
         Tempo(think_ticks=0, react_ticks=0, apm=1, burst=1, insight=True)
 
