@@ -1383,3 +1383,72 @@ garrison can no longer capture its way out, so the idle discharged unit-seconds 
 of #684 assumes a free capture). The flow and the 8-item supply contract of DEC-43 (item M12) are not touched by the
 number (no flow rule reads it). A fair verdict needs a toll-aware empty-node target and a pocket exit that sends a
 charge first, then the same two runs again.
+
+### Round 2: the bots fixed (#760, 2026-11-05)
+
+The bot fix #760 (PR #761, develop 05b1872): the planner counts the capture price and the toll of the road the `Move`
+takes into an empty or weak target (the toll comes off the real charges first, DEC-43 item D6), a recall remembers
+the toll it saw (no reissue with the same shortfall), and a pocket group that cannot pay the capture of the way out
+waits for a charge. Locally (8 matches `smart_reactive@hard` against `smart_expander@hard` per row) the cancels per
+match went from 8.5 to 8.8 at cost 0 and from 67.9 to 13.8 at cost 1, the discharged moves into foreign nodes at
+cost 1 from 47.4 to 0.
+
+The branch merged `develop` 05b1872 (commit 9c2346a). GitHub runs 42082265867 (`mvp-4`) and 42082277013 (`mvp-4-cap1`),
+the same setup as round 1 (`mise run tournament:gh --ref exp/759-capture-cost-mvp4 --seeds 5 --shards 5`, the same
+17 bots, 4 maps, seeds 0..4, both sides), 5780 matches each, no crash. Round 1 numbers recomputed from its artifacts
+by the same script match the table above.
+
+| | round 1, cost 0 | round 1, cost 1 | round 2, cost 0 | round 2, cost 1 |
+|---|---|---|---|---|
+| exploiter against the field | 0.86 [0.84; 0.89] | 0.76 [0.73; 0.79] | 0.86 [0.83; 0.88] | 0.84 [0.81; 0.87] |
+| exploiter against `smart_rusher@hard` | 0.57 [0.42; 0.71] | 0.54 [0.39; 0.68] | 0.57 [0.42; 0.71] | 0.53 [0.37; 0.67] |
+| top 3 against the field | exploiter 0.86, rusher@hard 0.84, strangler@hard 0.84 | exploiter 0.76, rusher@hard 0.73, rusher@normal 0.72 | exploiter 0.86, strangler@hard 0.85, rusher@hard 0.84 | exploiter 0.84, rusher@hard 0.82, expander@hard and strangler@hard 0.73 |
+| Bradley-Terry, top and range | +2.29, 4.89 | +1.18, 2.77 | +2.22, 4.82 | +1.85, 3.52 |
+| Nash mix | exploiter 0.98, rusher@hard 0.01 | exploiter 0.95, rusher@hard 0.03, rusher@normal 0.01 | exploiter 0.98, rusher@hard 0.01 | exploiter 0.94, rusher@hard 0.05 |
+| intransitive share | 0.13 | 0.19 | 0.14 | 0.15 |
+| level ladder (V2), personality pairs not separated | PASS, 1 of 15 | FAIL, 9 of 15 | PASS, 2 of 15 | FAIL, 3 of 15, all `smart_turtle` (hard over easy 0.55) |
+| V6, server levels against the exploiter: easy / normal / hard / expert | 0.05 / 0.23 / 0.35 / 0.23 | 0.10 / 0.35 / 0.23 / 0.28 | 0.03 / 0.15 / 0.35 / 0.25 | 0.00 / 0.05 / 0.42 / 0.40 |
+| captures per player and match: all / neutral / enemy | 43.0 / 14.4 / 28.6 | 24.0 / 14.4 / 9.6 | 43.1 / 14.4 / 28.7 | 35.0 / 14.7 / 20.3 |
+| walk-ins / contested sieges (won) | 24.3 / 4.57 (3.01) | 8.0 / 2.19 (1.01) | 24.5 / 4.44 (2.93) | 18.1 / 2.72 (1.34) |
+| exploiter: walk-ins per match, toll charges it pays | 33.6, 5.73 | 11.6, 5.81 | 33.8, 5.20 | 26.2, 4.08 |
+| road fortifications built per player and match: all, the exploiter's opponents | 11.3, 11.7 | 10.3, 11.1 | 11.3, 11.7 | 12.3, 14.2 |
+| end reasons: vp / capital / cities / draw | 5211 / 546 / 5 / 18 | 5300 / 426 / 6 / 48 | 5222 / 533 / 8 / 17 | 5510 / 245 / 16 / 9 |
+| mean ticks, median first contact | 8681, 528..1166 | 8774, 828..1262 | 8687, 528..1166 | 8862, 828..1262 |
+| burned share | 0.236 | 0.326 | 0.243 | 0.210 |
+| charges starved per player and match | 12.3 | 5.6 | 12.3 | 7.8 |
+| idle discharged unit-seconds: connected / pocket | 251 / 729 | 571 / 1251 | 248 / 748 | 867 / 1833 |
+| CP burned at the cap per player and match, ticks at the cap | 1.5 CP, 1.8% | 4.7 CP, 5.9% | 1.5 CP, 1.8% | 2.2 CP, 2.6% |
+| `CancelOrder` per match, CP of cancelled orders: `@hard`, hoarder, exploiter | 1.6..7.0, 1.4..6.3 CP | 24.5..36.4, 24.4..35.8 CP | 1.5..6.5, 1.3..5.9 CP | 1.7..8.2, 1.6..7.8 CP |
+| mirror side 0, all maps | 0.46 [0.41; 0.51] | 0.48 [0.43; 0.54] | 0.45 [0.40; 0.51] | 0.47 [0.42; 0.53] |
+| Data validity | PASS 6, FAIL 5 | PASS 3, FAIL 8 (V2, V4a, V9) | PASS 6, FAIL 5 (V4b, V4c, V5a, V5b, V6) | PASS 4, FAIL 7 (also V2: turtle, V9: rho 0.48 crossroads/highway) |
+
+The V6 row of round 1 comes from its reports (not in the table above). The exploiter-against-rusher interval of round 1 at
+cost 1 is [0.38; 0.69] by the script (37 decided matches); the table above keeps the reported one.
+
+**Reading.**
+- The recall loop is gone: the cancels at cost 1 are back at the cost-0 level (1.7..8.2 a match at `@hard`, the
+  hoarder and the exploiter), the ladder separates every personality but the turtle, reliability passes (V4a, bots
+  r 0.94). The cost-1 file can now carry a reading of the field order; V9 (crossroads/highway rho 0.48) is the one
+  new reliability gap.
+- **Cost 1 does not break the dominance of the free empty-node capture.** The exploiter is 0.84 against the field
+  (0.86 at cost 0), alone in the Nash mix (0.94) with the rusher, and still has no counter (V5a). Round 1's drop to
+  0.76 was mostly the recall loop. Its walk-ins fall by a fifth (33.8 to 26.2), not by two thirds.
+- **Road fortifications work as a partial counter.** Under cost 1 the exploiter's opponents build more of them (14.2
+  against 11.7 a match), the exploiter pays less toll (4.08 against 5.20: it leaves fortified empty nodes alone), the
+  field's enemy captures fall by 29% and its walk-ins by 26%, capital wins halve (533 to 245) and the hard and expert
+  server levels gain against the exploiter (0.42 and 0.40 against 0.35 and 0.25, inside the intervals of n = 40),
+  while easy and normal lose (they pay the price but fortify little).
+- **The cost to pockets (DEC-43, item H).** Fewer charges starve (12.3 to 7.8), but a discharged group can no longer
+  capture its way out of a pocket or walk out of a connected node for free: the idle discharged unit-seconds grow by
+  2.5 times in pockets (748 to 1833) and 3.5 times connected (248 to 867). That is the price of the bots waiting for a
+  charge instead of the loop; whether humans feel it is a playtest question (V8).
+- **The supply contract (DEC-43, item M12) does not change.** No flow rule reads `capture.charge_cost` (the simulation
+  reads it only in `capture`, `movement`, `build` and `analysis`), so the eight items and their checks hold as they
+  are; the only indirect effect is more discharged armies waiting, which pull the flow (item I6) as the rules already
+  say. The burned share falls (0.243 to 0.210): the waiting armies take the charges that burned before.
+- The turtle's ladder does not separate at cost 1 (hard over easy 0.55 [0.40; 0.69]), a bot question of its own, not
+  the loop.
+
+### Decision
+
+Awaiting the owner's decision.
