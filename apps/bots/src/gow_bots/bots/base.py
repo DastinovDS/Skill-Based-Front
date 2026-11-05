@@ -130,6 +130,13 @@ class Bot:
 
     name: ClassVar[str] = "bot"
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {}
+    DISCIPLINE: ClassVar[bool] = False
+    """Cancel discipline (#687): cancels only where they save units. ``fight_commands`` counts
+    the silent charges of plains (``FightView.mute``) out of both stocks; ``CampaignBot``
+    recalls only an attack that would lose units (``recall_pays``) and a recalled target waits
+    ``RECALL_TICKS`` for a stronger group. Off: the play of BOT-03 (a recall of any attack that
+    would not take the target with the margin), which the plain bots and the benchmark
+    ``smart_hoarder`` keep."""
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> None:
         self.map = mapdef
@@ -306,6 +313,9 @@ class Bot:
             mine = [groups[gid] for gid in f.groups if gid in groups]
             stock = sum(g.charged for g in mine) + f.virtual_left[me]
             enemy = f.enemy_charged + f.virtual_left[1 - me]
+            if self.DISCIPLINE:  # #687: a silent charge never shoots (DEC-24, item F2)
+                stock -= f.mute[me]
+                enemy -= f.mute[1 - me]
             if enemy > stock + self.coming(view, f):
                 for g in sorted(mine, key=lambda g: (-g.units, -g.charged, g.id)):
                     if self._left.get(g.id, -1) >= f.start_tick:

@@ -5,7 +5,9 @@ scarce resource (about 0.5 CP per 50 ticks, mechanics.md, section 6) goes to the
 first:
 
 1. ``recall``: an attack on the way whose target turned out stronger (exact numbers seen this
-   tick) is cancelled, the group turns back (free since DEC-20);
+   tick) is cancelled, the group turns back (free since DEC-20, but the order's CP are not
+   refunded); with ``DISCIPLINE`` (#687) only an attack that would lose units, and the target
+   waits ``RECALL_TICKS`` for a group with more shots than the recall saw;
 2. ``respond`` (a hook; ``ReactiveBot`` answers the visible intents of the enemy here);
 3. attacks and captures: every idle group looks at the nodes it can reach under the stack limit
    (DEC-20, D), a node is a *viable target* when the group's charges are enough to take it
@@ -94,6 +96,10 @@ MAX_EXTRA = 4
 """Largest extra demand added to a node by failed waves."""
 STALE_TICKS = 600
 """A remembered enemy strength older than this is dropped (the enemy recruits and recharges)."""
+RECALL_TICKS = 300
+"""Cancel discipline (#687): a target an attack was recalled from is not ordered again for this
+many ticks by a group whose shots do not beat what the recall saw there (no cancel and reissue
+loop on the same target)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +139,9 @@ class Ctx:
     standing: list[int] = field(default_factory=list[int])
     held: int = 0
     """CP in hundredths kept for a chosen scheduled order (``SmartBot``): the rest leaves them."""
+    saved: int = 0
+    """CP in hundredths the routine spending leaves for a push or a fortification the bot decided
+    on (``SmartBot``, item 23, #687), scheduled orders included; 0: nothing saved."""
     incoming: list[int] = field(default_factory=list[int])
     """Own units on the way into each own node (#686): ordered there in an earlier decision or
     in this one (``spend`` adds every accepted move), or turning back to it on an edge
@@ -200,6 +209,9 @@ class CampaignBot(Bot):
         """Remembered enemy strength by node: ``(tick, units, charged)``."""
         self.extra: dict[int, int] = {}
         self.waves: dict[int, Wave] = {}
+        self.recalled: dict[int, tuple[int, int]] = {}
+        """Target to ``(tick, shots)`` of the last recall from it (``DISCIPLINE``): the shots the
+        recall saw it take (``shots_to_take`` of the exact numbers)."""
         self._net_tick = -1
         self._net: frozenset[int] = frozenset()
         self.leaf = LeafShift()
@@ -453,12 +465,72 @@ class CampaignBot(Bot):
                 bonus = orders.planned_bonus(len(g.order.path), g.charged)
             else:
                 bonus = 0
-            need = self.need(view, ctx.tick, dest)
-            if not takes(self.rules, g.charged, bonus, need) and self.spend(ctx, CancelOrder(g.id)):
+            if self.DISCIPLINE:
+                if not self.recall_pays(view, g, dest, bonus):
+                    if view.nodes[back].owner == self.player and not self.wins(
+                        view, g, dest, bonus
+                    ):
+                        ctx.incoming[back] += g.units  # #686: the bounce comes back here
+                    continue
+            elif takes(self.rules, g.charged, bonus, self.need(view, ctx.tick, dest)):
+                continue
+            if self.spend(ctx, CancelOrder(g.id)):
                 ctx.used[g.id] = True
                 ctx.claimed.pop(dest, None)
                 if view.nodes[back].owner == self.player:
                     ctx.incoming[back] += g.units
+                if self.DISCIPLINE:
+                    self.recalled[dest] = (ctx.tick, self.seen_shots(view, dest))
+
+    def recall_pays(self, view: PlayerView, g: GroupView, dest: int, bonus: int) -> bool:
+        """Cancel discipline (#687): whether turning ``g`` back from ``dest`` saves more than it
+        costs. The order's CP are spent either way (``orders.cost.cancel`` refunds nothing,
+        DEC-20, C) and the cancel takes a command, so the cancel pays only when the attack would
+        lose units: the defenders' pool ``Qd`` (the exact numbers of this tick, the terrain and a
+        bunker, ``defender_pool``) is above the group's charges and bonus less the toll of a
+        fortified road (DEC-43, item D6). Otherwise the attack at worst bounces (DEC-07, rules 2
+        to 4: ``min(Qa, Qd)`` charges cancel on both sides, the surplus kills defenders, nobody of
+        the group dies) and the CP already paid buy that trade. Under a capture price (DEC-38,
+        not ``mvp-4``) an attack that would kill every defender and not pay is recalled too: the
+        bots do not repeat unpaid captures (#580)."""
+        seen = self.enemy_at(view, dest)
+        if seen is None:
+            return False
+        terrain = self.map.nodes[dest].terrain
+        qd = defender_pool(self.rules, terrain, seen[1], self.defended(view, dest))
+        toll = self.toll_ahead(view, dest, g.charged)
+        qa = g.charged + bonus - toll
+        if qd > qa:
+            return True
+        clears = qa >= qd + seen[0]
+        return clears and not takes(self.rules, g.charged - toll, bonus, qd + seen[0])
+
+    def wins(self, view: PlayerView, g: GroupView, dest: int, bonus: int) -> bool:
+        """Whether ``g`` takes ``dest`` by the numbers the view shows there now (``seen_shots``,
+        the capture price, DEC-38); otherwise it bounces back to the start of its edge."""
+        return takes(self.rules, g.charged, bonus, self.seen_shots(view, dest))
+
+    def seen_shots(self, view: PlayerView, dest: int) -> int:
+        """The shots that take ``dest`` by the numbers the view shows there now, the toll of a
+        fortified road included (``need`` without the margin and the failed waves)."""
+        seen = self.enemy_at(view, dest)
+        if seen is None or seen[0] <= 0:
+            return 0
+        terrain = self.map.nodes[dest].terrain
+        base = shots_to_take(self.rules, terrain, seen[0], seen[1], self.defended(view, dest))
+        return base + self.toll_ahead(view, dest, base)
+
+    def recall_holds(self, tick: int, dest: int, shots: int) -> bool:
+        """``DISCIPLINE``: an attack of ``shots`` (charges and bonus) on ``dest`` waits, the target
+        was recalled from within ``RECALL_TICKS`` and the attack does not beat what the recall
+        saw there (``recalled``)."""
+        last = self.recalled.get(dest)
+        if last is None:
+            return False
+        if tick - last[0] >= RECALL_TICKS:
+            del self.recalled[dest]
+            return False
+        return shots < last[1] + self.rules.capture.charge_cost
 
     def committed(self, group: int) -> bool:
         """Hook: own group ``group`` is one of several groups sent together (``SmartBot``)."""
@@ -489,6 +561,9 @@ class CampaignBot(Bot):
                 planned = plan and (not plain or prefer_planned(rules, g.charged, need, edges))
                 # Under v2 the plan asks for the shots it misses only (DEC-41, item 10).
                 ask = max(1, need + rules.capture.charge_cost - g.charged)
+                shots = g.charged + (min(bonus, ask) if planned else 0)
+                if self.DISCIPLINE and self.recall_holds(ctx.tick, dest, shots):
+                    continue  # #687: no reissue of a recalled attack without more shots
                 score = self.score(ctx, g, dest, need)
                 if score is not None:
                     found.append(Option(score, g, dest, planned, need, min(bonus, ask)))

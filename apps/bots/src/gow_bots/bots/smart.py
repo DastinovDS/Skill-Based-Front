@@ -181,6 +181,18 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
       far at most. ``smart_turtle`` leans on them (6, no keep, 20%), ``smart_rusher`` least (1,
       2 CP kept, 5%); the benchmark ``smart_hoarder`` keeps the old
       capital defense and none (``DEFENSE_V2``). The CP sink of ``economy.fort_site`` stays.
+23. **Cancel discipline and CP banking** (#687, G5 of the bot audit). A cancel refunds nothing
+    (``orders.cost.cancel``, DEC-20, C) and takes a command of the APM bucket, so a personality
+    with ``DISCIPLINE`` recalls only an attack that would lose units and does not send the same
+    target again within ``RECALL_TICKS`` without more shots (``CampaignBot.recall_pays``). A
+    personality with ``BANK`` > 0 saves for a push or a fortification it has decided on and
+    cannot pay yet (``saving``): a converging strike that is ready by its forces (item 12, the
+    groups the budget pays go once that part is ready) or a road fortification whose site item
+    22 found. While it saves, the routine spending (attacks, rallies, recruits, scouts,
+    garrisons) leaves up to ``BANK`` CP, never more than the cap less two quanta; the urgent
+    answers (fights, the capital, the strikes) spend them. The saving opens at the cap less one
+    quantum (no CP burn at the cap, DEC-02) and stops for ``BANK_TICKS`` after a goal waited
+    ``BANK_TICKS`` unpaid. The benchmark ``smart_hoarder`` keeps neither (its ``STRIKE_BANK``).
 
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -307,6 +319,9 @@ W_FORT_VP: Final = 100
 """Rank of a threatened node for a fortification per VP it is worth (item 22)."""
 W_FORT_CUT: Final = 50
 """Rank of a threatened node for a fortification per own node its loss cuts off (item 22)."""
+BANK_TICKS: Final = 300
+"""Item 23 (#687): a goal saved for this long without being paid stops the saving for as long
+(three quanta of CP: the price of a fortification and a keep, or of a strike of three groups)."""
 STANCES: Final = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
 """From the most charges to the most CP (``economy.stance_to_charges_pct``)."""
 
@@ -456,6 +471,9 @@ class SmartBot(CampaignBot):
     FORT_SHARE: ClassVar[int] = 10
     """Item 22: percent of the CP the bot has had so far (``cp.start`` and the flat income, public)
     that its fortifications of nodes other than the capital may take at most."""
+    BANK: ClassVar[int] = 0
+    """Item 23 (#687): CP in hundredths the routine spending leaves for a push or a fortification
+    the bot decided on (``saving``); 0: no saving (the benchmark)."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **_COMMON,
         "radius": ParamRange(2, 3),
@@ -589,6 +607,10 @@ class SmartBot(CampaignBot):
         """CP in hundredths sent on fortifications of nodes other than the capital (item 22)."""
         self._threats: tuple[PlayerView | None, dict[tuple[int, int], RoadThreat]] = (None, {})
         """The view and the ``road_threats`` of the last decision (item 22)."""
+        self.saving_since: int | None = None
+        """Item 23: the tick the current saving began; ``None``: not saving."""
+        self.bank_rest = 0
+        """Item 23: no saving before this tick (a goal waited ``BANK_TICKS`` unpaid)."""
         for e, edef in enumerate(mapdef.edges):
             self.edge_between[(edef.a, edef.b)] = e
             self.edge_between[(edef.b, edef.a)] = e
@@ -842,20 +864,29 @@ class SmartBot(CampaignBot):
         plan_cp = self.held_cp(ctx)
         bank = self.strike_cp(ctx) if self.striking() else 0  # item 12: the strike's CP
         ctx.held = max(plan_cp, bank)  # item 10: from here on the spending leaves the plan's CP
+        save = self.saving(ctx)  # item 23: a push or a fortification decided on
+        ctx.saved = save
         if not self.alarm:
             cmd = self.development(view, ctx.budget)  # DEC-26, item 11: before the orders
             if cmd is not None:
                 self.spend(ctx, cmd)
         self._recall(ctx)
-        held, ctx.held = ctx.held, 0  # the urgent answers do not wait for the plan
+        held, ctx.held, ctx.saved = ctx.held, 0, 0  # the urgent answers do not wait for the plan
         self.defend_capital(ctx, a)
         self.answer_worry(ctx)
         self.respond(ctx)
         self.withdraw(ctx)
         ctx.held = bank  # a banked strike waits only for the capital and the strikes
+        saving = save > 0
+        if saving:
+            self.fortify(ctx)  # item 23: the saving goes to its fortification first
+            save = self.unpaid(ctx, save)
+        ctx.saved = save
         self.garrison(ctx)
         self.scout(ctx)
-        self.fortify(ctx)
+        ctx.saved = 0  # item 23: the strike spends what was saved
+        if not saving:
+            self.fortify(ctx)
         ctx.held = 0
         if self.striking():
             self.converge(ctx)
@@ -863,6 +894,7 @@ class SmartBot(CampaignBot):
         ctx.held = held
         self.leave_pockets(ctx, charged=False)  # item 20
         self.leave_pockets(ctx, charged=True)
+        ctx.saved = self.unpaid(ctx, save)
         self._attack(ctx)
         self._fit_split(ctx)
         self._gather(ctx)
@@ -881,6 +913,10 @@ class SmartBot(CampaignBot):
         plan = cmd if isinstance(cmd, Move) and cmd.planned else None
         if ctx.held and plan is None and self.cost(cmd) > ctx.budget - ctx.held:
             return False  # item 10: the CP are for the chosen plan
+        cost = self.cost(cmd)
+        short = ctx.saved and cost > 0 and ctx.budget - ctx.saved < cost
+        if short and not self.relieves(ctx, cmd):
+            return False  # item 23: the CP are saved for a push or a fortification
         if not super().spend(ctx, cmd):
             return False
         self.bucket.take()
@@ -920,6 +956,73 @@ class SmartBot(CampaignBot):
         self.held_at[opt.dest] = ctx.tick
         self.hold = Hold(opt.dest, opt.group.id, cost, ctx.tick + wait)
         ctx.held = cost
+
+    # CP banking (item 23, #687) -------------------------------------------------------------
+
+    def bank_limit(self) -> int:
+        """The most CP in hundredths the bot saves: ``BANK``, at most the cap less two quanta, so
+        the saving never holds the CP at the cap (DEC-02: the excess burns)."""
+        cp = self.rules.cp
+        return max(0, min(self.BANK, cp.cap - 2 * cp.per_period))
+
+    def saving_goal(self, ctx: Ctx) -> int:
+        """The price in hundredths of the push or fortification the bot has decided on now: a
+        converging strike ready by its forces with the CP of the cap (item 12) and none under
+        way, or the road fortification ``fort_road_site`` finds with its ``FORT_KEEP``; the
+        dearer of the two; 0: none."""
+        goal = 0
+        strike = self.striking() and self.strike is None and ctx.tick >= self.strike_rest
+        if strike and self.strike_wanted(ctx):
+            plan = self.strike_plan(ctx, self.rules.cp.cap)
+            if plan is not None and plan.ready and len(plan.picks) >= self.STRIKE_MIN:
+                goal = plan.cost
+        fort = self.rules.fort
+        if fort is not None and self.fort_road_site(ctx) is not None:
+            goal = max(goal, fort.cost + self.FORT_KEEP)
+        return goal
+
+    def saving(self, ctx: Ctx) -> int:
+        """The CP the routine spending of this decision leaves (item 23): the price of the goal
+        (``saving_goal``) up to ``bank_limit``. Nothing without ``insight``, with the CP at the cap
+        less one quantum (spend rather than burn), or before ``bank_rest``; a goal that waited
+        more than ``BANK_TICKS`` unpaid stops the saving for ``BANK_TICKS``."""
+        limit = self.bank_limit()
+        if limit <= 0 or not self.tempo.insight:
+            return 0
+        tick = ctx.tick
+        goal = 0 if tick < self.bank_rest else self.saving_goal(ctx)
+        if goal <= 0:
+            self.saving_since = None
+            return 0
+        if self.saving_since is None:
+            self.saving_since = tick
+        elif tick - self.saving_since > BANK_TICKS:
+            self.saving_since = None
+            self.bank_rest = tick + BANK_TICKS
+            return 0
+        cp = self.rules.cp
+        if ctx.view.me.cp >= cp.cap - cp.per_period:
+            return 0
+        return min(goal, limit)
+
+    def relieves(self, ctx: Ctx, cmd: Command) -> bool:
+        """Item 23: ``cmd`` moves a group out of an own node that is over its capacity at the
+        arrivals (``load``): the saving never keeps units where they die (DEC-12, #686)."""
+        if not isinstance(cmd, Move):
+            return False
+        g = ctx.groups.get(cmd.group)
+        if g is None or not isinstance(g.location, AtNode):
+            return False
+        node = g.location.node
+        n = ctx.view.nodes[node]
+        return n.owner == self.player and node != cmd.dest and self.load(ctx, node) > n.capacity
+
+    def unpaid(self, ctx: Ctx, save: int) -> int:
+        """What the saving ``save`` of this decision still keeps once the commands before have
+        paid their part of the goal (``saving_goal`` anew); 0 without a saving."""
+        if save <= 0:
+            return 0
+        return min(save, self.saving_goal(ctx))
 
     # A converging strike (item 12) ----------------------------------------------------------
 
@@ -1074,14 +1177,18 @@ class SmartBot(CampaignBot):
             if tick < self.strike_rest or not self.strike_wanted(ctx):
                 return
             full = self.strike_plan(ctx, self.rules.cp.cap)
-            if full is None or not full.ready or full.cost > ctx.budget:
-                return  # banked (``strike_cp``) or not ready
+            if full is None or not full.ready:
+                return
+            if full.cost > ctx.budget and self.bank_limit() <= 0:
+                return  # banked (``strike_cp``) or not paid
+            # Item 23: a saving personality goes with the part the CP pay once it is ready.
             plan = self.strike_plan(ctx, ctx.budget)
             if plan is None or not plan.ready or len(plan.picks) < self.STRIKE_MIN:
                 return
             arrive = tick + 1 + max(p.lead for p in plan.picks)
             s = Strike(self.enemy_home, arrive, list(plan.picks), arrive + STRIKE_TICKS)
             self.strike = s
+            self.saving_since = None
         ctx.claimed[s.target] = True
         free = {g.id: g for g in self.free_groups(ctx)}
         left: list[Pick] = []
@@ -1723,16 +1830,27 @@ class SmartBot(CampaignBot):
         a pocket, item H). At most ``FORTS`` such fortifications stand on roads from enemy nodes,
         ``FORT_KEEP`` CP stay, and all of them take at most ``FORT_SHARE`` percent of the CP the
         bot has had (a budget, not a sink). The most VP and cut first, then the most shots, then
-        ``node_key``. Needs ``insight`` (item 9)."""
+        ``node_key``. Needs ``insight`` (item 9). The site is ``fort_road_site``; a site the CP
+        cannot pay yet is saved for (item 23, ``saving``)."""
         fort = self.rules.fort
-        if fort is None or self.FORTS <= 0 or not self.tempo.insight:
+        if fort is None or ctx.budget - fort.cost < self.FORT_KEEP:
             return
-        if ctx.budget - fort.cost < self.FORT_KEEP:
-            return
+        site = self.fort_road_site(ctx)
+        if site is not None and self.spend(ctx, FortifyRoad(*site)):
+            self.fort_cp += fort.cost
+            self.fort_sent[site] = ctx.tick
+            self.saving_since = None
+
+    def fort_road_site(self, ctx: Ctx) -> tuple[int, int] | None:
+        """The ``(node, road)`` ``fortify_roads`` fortifies now with the CP aside (its docstring);
+        ``None``: none (no ``[fort]``, no ``insight``, ``FORTS`` 0 or no item 22)."""
+        fort = self.rules.fort
+        if fort is None or self.FORTS <= 0 or not self.tempo.insight or not self.defense_v2():
+            return None
         cp = self.rules.cp
         had = cp.start + cp.per_period * (ctx.tick // cp.period_ticks)
         if 100 * (self.fort_cp + fort.cost) > self.FORT_SHARE * had:
-            return
+            return None
         view, home, me = ctx.view, self.home, self.player
         standing = 0
         for e in view.edges:
@@ -1743,7 +1861,7 @@ class SmartBot(CampaignBot):
                 if view.nodes[edef.other(f.node)].owner == 1 - me:
                     standing += 1
         if standing >= self.FORTS:
-            return
+            return None
         fights = self.fight_nodes(view)
         units = [0] * len(view.nodes)
         charged = [0] * len(view.nodes)
@@ -1773,9 +1891,7 @@ class SmartBot(CampaignBot):
             rank = (-worth, -t.shots, self.key(node), self.edge_keys[edge])
             if best is None or rank < best:
                 best, site = rank, (node, edge)
-        if site is not None and self.spend(ctx, FortifyRoad(*site)):
-            self.fort_cp += fort.cost
-            self.fort_sent[site] = ctx.tick
+        return site
 
     @override
     def may_leave(self, ctx: Ctx, g: GroupView) -> bool:
@@ -2328,6 +2444,9 @@ class SmartRusher(SmartBot):
     capital first, neutral cities only as a side dish."""
 
     name: ClassVar[str] = "smart_rusher"
+    DISCIPLINE: ClassVar[bool] = True
+    BANK: ClassVar[int] = 300
+    """Item 23: a strike of three groups."""
     STANCE: ClassVar[Stance] = Stance.WAR
     FORTS: ClassVar[int] = 1
     FORT_KEEP: ClassVar[int] = 200
@@ -2358,6 +2477,11 @@ class SmartStrangler(SmartBot):
     a held cut-off city keeps a garrison."""
 
     name: ClassVar[str] = "smart_strangler"
+    DISCIPLINE: ClassVar[bool] = True
+    BANK: ClassVar[int] = 0
+    """Item 23: no saving. The siege lives on steady pressure: with a saving of 2 CP the
+    strangler won 5 of 16 matches against the benchmark, without it 14 (run 42011930257 and
+    local runs on the same seeds, #687)."""
     STANCE: ClassVar[Stance] = Stance.BALANCE
     STRIKE: ClassVar[bool] = True
     W_RING: ClassVar[int] = 60
@@ -2382,6 +2506,9 @@ class SmartReactive(SmartBot):
     city under a planned strike, then the bare origin of the strike."""
 
     name: ClassVar[str] = "smart_reactive"
+    DISCIPLINE: ClassVar[bool] = True
+    BANK: ClassVar[int] = 250
+    """Item 23: a fortification and its keep (the answers spend the saving first)."""
     STANCE: ClassVar[Stance] = Stance.BALANCE
     FORTS: ClassVar[int] = 3
     STRIKE: ClassVar[bool] = True
@@ -2407,6 +2534,9 @@ class SmartExpander(SmartBot):
     like enemy ones, the front keeps a garrison, spare CP go into roads."""
 
     name: ClassVar[str] = "smart_expander"
+    DISCIPLINE: ClassVar[bool] = True
+    BANK: ClassVar[int] = 150
+    """Item 23: territory first, so the least: a fortification without its keep."""
     STANCE: ClassVar[Stance] = Stance.WAR
     LATE_STANCE: ClassVar[Stance | None] = Stance.BALANCE
     STRIKE: ClassVar[bool] = True
@@ -2450,6 +2580,9 @@ class SmartTurtle(SmartBot):
     """
 
     name: ClassVar[str] = "smart_turtle"
+    DISCIPLINE: ClassVar[bool] = True
+    BANK: ClassVar[int] = 250
+    """Item 23: its fortifications (no keep, ``FORTS`` 6; no strike, item 12)."""
     STANCE: ClassVar[Stance] = Stance.ECONOMY
     BUNKERS: ClassVar[int] = 4
     FORTS: ClassVar[int] = 6

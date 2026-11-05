@@ -18,7 +18,7 @@ import pytest
 from gow_bots.bots import BOTS, SmartHoarder, bot_factory
 from gow_bots.bots.assess import edge_ticks
 from gow_bots.bots.campaign import Ctx
-from gow_bots.bots.smart import STRIKE_ALIGN, SmartBot
+from gow_bots.bots.smart import STRIKE_ALIGN, SmartBot, SmartTurtle
 from gow_bots.bots.tempo import Bucket, Perception, Tempo
 from gow_bots.bots.utility import shots_to_take
 from gow_sim.commands import PlayerCommand, Split
@@ -176,14 +176,21 @@ class _StrikeLog:
                 self.fight_groups = max(self.fight_groups, mine)
 
 
+class _OldTurtle(SmartTurtle):
+    """The opponent of the owner's strike as it was measured: the recall of BOT-03 and no saving
+    (#687 changed both for the personalities, the benchmark keeps them)."""
+
+    DISCIPLINE: ClassVar[bool] = False
+    BANK: ClassVar[int] = 0
+
+
 def test_the_hoarder_stages_and_strikes_like_the_owner(crossroads: MapDef, rules: Ruleset) -> None:
     # A full match on the owner's map against the easy level (seed fixed: the bots are
     # deterministic; #663 made the opponents of #624 hold back in the midgame, the easy turtle
     # still lets the build-up reach the stage). The owner's strike: Middle Court taken first,
     # then 2-4 groups, at least one planned, joining one capital fight.
     side = 1
-    turtle = bot_factory("smart_turtle@easy")(crossroads, rules, seed=1, player=0)
-    assert isinstance(turtle, SmartBot)
+    turtle = _OldTurtle(crossroads, rules, seed=1, player=0, difficulty="easy")
     # The easy level of #573 (#749 changed the levels; the opponent of this test stays): no
     # ``insight``, 12 commands a minute.
     turtle.tempo = Tempo(think_ticks=20, react_ticks=30, apm=12, burst=3, insight=False)
