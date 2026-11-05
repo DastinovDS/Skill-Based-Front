@@ -28,7 +28,7 @@ from gow_sim.maps import load_map
 from gow_sim.ruleset import load_ruleset
 from gow_sim.state import AtNode, Detail, GameState, Group, Mode, OnEdge, Sighting, initial_state
 from gow_sim.systems.flow import update_flow
-from gow_sim.view import GroupView, OrderView, PlayerView, project
+from gow_sim.view import FightView, GroupView, OrderView, PlayerView, project
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
@@ -176,6 +176,53 @@ def test_a_recalled_target_takes_a_group_that_beats_what_was_seen(name: str, pla
     dest = _targets(bot, view, TICK)[0]
     bot.recalled[dest] = (TICK, 3)
     assert dest in _targets(bot, view, TICK)
+
+
+def _fight(player: int, enemy_charged: int, mute: int) -> tuple[PlayerView, GroupView]:
+    """An own 2/2 attacker standing in North Pass (plains) in a fight with the enemy holder of
+    ``enemy_charged`` charged units, ``mute`` of them silent by the plains (DEC-24, item F2)."""
+    north = _at(player, NORTH_PASS)
+    view = _walk_view(player)
+    order = OrderView(dest=north, path=(north,), planned=False, depart_tick=TICK - 50)
+    attacker = GroupView(9999, 2, 2, Mode.ATTACK, AtNode(north), order)
+    view = _enemy_in(replace(view, groups=(*view.groups, attacker)), north, enemy_charged, 1)
+    silent = (0, mute) if player == 0 else (mute, 0)
+    fight = FightView(
+        id=1,
+        node=north,
+        edge=None,
+        point=None,
+        attacker=player,
+        start_tick=TICK - 20,
+        next_round_tick=TICK + 10,
+        groups=(attacker.id,),
+        enemy_units=enemy_charged,
+        enemy_charged=enemy_charged,
+        shots=(0, 0),
+        losses=(0, 0),
+        virtual_left=(0, 0),
+        mute=silent,
+        last_round=None,
+    )
+    return replace(view, fights=(fight,)), attacker
+
+
+@pytest.mark.parametrize("player", [0, 1])
+@pytest.mark.parametrize("name", [*SMART, *OLD])
+def test_an_attacker_stays_in_a_fight_the_silent_charge_evens(name: str, player: int) -> None:
+    """3 charged holders on plains, one of them silent: 2 shots against the attacker's 2, so it
+    loses no unit and stays (the old play counts the silent charge and leaves)."""
+    view, attacker = _fight(player, 3, 1)
+    cmds = _bot(name, player).fight_commands(view, TICK, view.me.cp)
+    assert (CancelOrder(attacker.id) in cmds) is (name in OLD)
+
+
+@pytest.mark.parametrize("player", [0, 1])
+@pytest.mark.parametrize("name", [*SMART, *OLD])
+def test_an_attacker_leaves_a_fight_it_loses(name: str, player: int) -> None:
+    """4 charged holders, one silent: 3 shots against 2, every round costs a unit: it leaves."""
+    view, attacker = _fight(player, 4, 1)
+    assert CancelOrder(attacker.id) in _bot(name, player).fight_commands(view, TICK, view.me.cp)
 
 
 # CP banking ------------------------------------------------------------------------------------

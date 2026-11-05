@@ -194,11 +194,6 @@ class CampaignBot(Bot):
     """Economy v2: factories built beside the capital (``factory.max`` caps the sum)."""
     BUNKERS: ClassVar[int] = 0
     """Economy v2: bunkers kept at most (``bunker_site``)."""
-    DISCIPLINE: ClassVar[bool] = False
-    """Cancel discipline (#687): ``recall`` cancels only an attack that would lose units
-    (``recall_pays``) and a recalled target waits ``RECALL_TICKS`` for a stronger group. Off: the
-    recall of BOT-03 (any attack that would not take the target with the margin), which the plain
-    bots and the benchmark ``smart_hoarder`` keep."""
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> None:
         super().__init__(mapdef, rules, seed=seed, player=player)
