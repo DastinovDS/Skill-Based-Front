@@ -14,7 +14,8 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
 2. **The capital.** When the shown enemy forces that can reach the own capital within ``alarm``
    ticks are enough to take it (``Threat.danger``), the capital comes first: its groups stay,
    the strongest one goes into Defense if the bonus grows before the arrival (DEC-30), free
-   charged groups that can arrive in time walk home, and the capital recruits. Only a garrison
+   charged groups that can arrive in time walk home, and the capital recruits (economy v2:
+   item 22). Only a garrison
    sees what comes (DEC-35), so while an enemy node is within ``watch`` hops of the capital it
    keeps at least ``watch_guard`` units.
 3. **Visible strikes** (DEC-08): ``respond`` 1 answers a planned strike at the capital, 2 at any
@@ -160,6 +161,25 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     garrisons, the answers, the reinforcements and the walks home count the units already on the
     way and pick a group that fits. The leaf shift holds ``economy.SHIFT_HOLD_TICKS`` after every
     change and stays back while the enemy takes own nodes (``economy.leaf_shift_command``).
+22. **Capital defense and road fortifications under economy v2** (#682, G-F of the ``mvp-4``
+    bot audit; ``gow_bots.bots.forts``). Economy v2 has no Defense (DEC-41, item 5) and
+    ``mvp-4`` no bunker: the road fortification (DEC-43, item D) is the defensive building.
+
+    - *The capital*: every road into it that a visible enemy force of ``FORT_SHOTS`` comes by
+      (a fresh sighting in the enemy neighbour, a planned strike, a figure heading in) is
+      fortified, any visible force while the capital is in danger; the capital keeps no CP for
+      it. While the danger is within ``alarm`` plus the build time and the alarm is not on,
+      ``DANGER_RESERVE_MOVES`` orders of CP are kept for it. The alarm walks home every free group
+      that joins the capital's fight before it can be over (``walk_home``: a round per shot that
+      takes it), a discharged one too while the capital warehouse has charges for it, and fills the
+      capital's recruit queue (``recruit_burst``).
+    - *Threatened nodes* (``fortify_roads``, with ``insight``): one fortification per decision on
+      the road a visible force of ``FORT_SHOTS`` comes by into an own city or chokepoint
+      (``forts.cut_off``) that holds units, is no fight and not doomed; at most ``FORTS`` of them
+      on roads from enemy nodes, ``FORT_KEEP`` CP left, ``FORT_SHARE`` percent of the CP had so
+      far at most. ``smart_turtle`` leans on them (6, no keep, 20%), ``smart_rusher`` least (1,
+      2 CP kept, 5%); the benchmark ``smart_hoarder`` keeps the old
+      capital defense and none (``DEFENSE_V2``). The CP sink of ``economy.fort_site`` stays.
 
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -176,6 +196,7 @@ from gow_bots.bots.assess import FRESH_TICKS, Assessment, Assessor, Travel, edge
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option
 from gow_bots.bots.estimate import EnemyForce, Phase, Sector, phase, sectors, strengths, threats
+from gow_bots.bots.forts import RoadThreat, cut_off, fortified, road_threats
 from gow_bots.bots.logistics import (
     Arrival,
     arrivals,
@@ -189,6 +210,7 @@ from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
 from gow_sim.commands import (
     CancelRecruit,
     Command,
+    FortifyRoad,
     Move,
     Recruit,
     SetFront,
@@ -268,6 +290,22 @@ COUNTER_TICKS: Final = 300
 """How long an enemy attack on an own node opens the counterattack of ``smart_reactive``."""
 V2_RECRUIT_KEEP_MOVES: Final = 2
 """Economy v2: ``recruit_keep`` is at most this many ordinary orders (``adjusted``)."""
+DANGER_RESERVE_MOVES: Final = 2
+"""Economy v2 (#682): CP kept, in ordinary orders, while the capital is in danger but the alarm
+is not on yet (item 22): the walk home and the recruits of the alarm, or a fortification."""
+FORT_SHOTS: Final = 3
+"""Visible enemy shots on a road into an own node that make it worth a road fortification
+(item 22): a toll of at least 1 charge (DEC-43, item D6), a force, not a scout."""
+FORT_MARGIN: Final = 2
+"""A threatened node is fortified only when the visible force is at most this many shots short of
+taking it (``shots_to_take``): the fortification may decide the fight (item 22)."""
+FORT_RETRY: Final = 600
+"""A road whose fortification the enemy destroyed (a capture, DEC-43 item D7) is not fortified
+again for this many ticks after the first one was sent: the front changes hands there (item 22)."""
+W_FORT_VP: Final = 100
+"""Rank of a threatened node for a fortification per VP it is worth (item 22)."""
+W_FORT_CUT: Final = 50
+"""Rank of a threatened node for a fortification per own node its loss cuts off (item 22)."""
 STANCES: Final = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
 """From the most charges to the most CP (``economy.stance_to_charges_pct``)."""
 
@@ -406,6 +444,17 @@ class SmartBot(CampaignBot):
     COUNTER: ClassVar[bool] = False
     """Midgame (item 18): ahead on the forecast, enemy nodes are attacked only for
     ``COUNTER_TICKS`` after an enemy attack on an own node (the counterattack)."""
+    DEFENSE_V2: ClassVar[bool] = True
+    """Item 22 on: the capital defense of #682 and the threat fortifications under economy v2;
+    the benchmark ``smart_hoarder`` keeps the old capital defense and no threat fortification."""
+    FORTS: ClassVar[int] = 2
+    """Item 22: fortifications on the roads into threatened own nodes other than the capital
+    (built or being built, on a road from an enemy node) kept at most; 0: none."""
+    FORT_KEEP: ClassVar[int] = 100
+    """Item 22: CP in hundredths left after a fortification of a node other than the capital."""
+    FORT_SHARE: ClassVar[int] = 10
+    """Item 22: percent of the CP the bot has had so far (``cp.start`` and the flat income, public)
+    that its fortifications of nodes other than the capital may take at most."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **_COMMON,
         "radius": ParamRange(2, 3),
@@ -456,6 +505,9 @@ class SmartBot(CampaignBot):
         """The assessment of the last decision (tests and the docstring's thresholds)."""
         self.alarm = False
         """The capital is in danger in this decision (module docstring, item 2)."""
+        self.danger = False
+        """Economy v2 (item 22): the capital is in danger within ``alarm`` plus the build time of
+        a road fortification, alarm or not."""
         self.paired: dict[int, int] = {}
         """Own node to the earliest arrival of two or more enemy strikes at it (item 17)."""
         self.left_from: dict[int, int] = {}
@@ -529,6 +581,13 @@ class SmartBot(CampaignBot):
         garrison left it (item 18, the counterattack)."""
         self.pockets: Pockets | None = None
         """The own pockets of this decision (item 20); ``None`` without one."""
+        self.fort_cp = 0
+        self.fort_sent: dict[tuple[int, int], int] = {}
+        """Own node and road to the tick a fortification of a node other than the capital was
+        sent for it (item 22, ``FORT_RETRY``)."""
+        """CP in hundredths sent on fortifications of nodes other than the capital (item 22)."""
+        self._threats: tuple[PlayerView | None, dict[tuple[int, int], RoadThreat]] = (None, {})
+        """The view and the ``road_threats`` of the last decision (item 22)."""
         for e, edef in enumerate(mapdef.edges):
             self.edge_between[(edef.a, edef.b)] = e
             self.edge_between[(edef.b, edef.a)] = e
@@ -556,6 +615,11 @@ class SmartBot(CampaignBot):
         self.paired = self._paired(view) if self.answering() and self.PAIRS else {}
         if self.home in self.paired and self.paired[self.home] - tick <= drawn["alarm"]:
             self.alarm = True  # item 17: two strikes at the capital
+        fort = self.rules.fort
+        lead = drawn["alarm"] + (0 if fort is None else fort.build_ticks)
+        self.danger = self.defense_v2() and (
+            self.alarm or (threat.danger and threat.eta is not None and threat.eta - tick <= lead)
+        )
         self.worry = self._worry(view, a) if self.answering() and self.WORRY else None
         self.hot = self._hot(view)
         self.watched = self.enemy_near_home(view)
@@ -706,7 +770,15 @@ class SmartBot(CampaignBot):
 
     def adjusted(self, a: Assessment) -> dict[str, int]:
         """The drawn parameters with the thresholds of this decision (module docstring, 1);
-        without ``insight`` (item 9) only the capital guard of an alarm."""
+        without ``insight`` (item 9) only the capital guard of an alarm. Economy v2 with item 22:
+        while the capital is in danger and the alarm is not on, ``DANGER_RESERVE_MOVES`` orders
+        of CP are kept for it (``defend_capital`` spends them)."""
+        p = self._adjusted(a)
+        if self.danger and not self.alarm:
+            p["reserve"] = max(p["reserve"], DANGER_RESERVE_MOVES * self.rules.orders.cost.move)
+        return p
+
+    def _adjusted(self, a: Assessment) -> dict[str, int]:
         p = dict(self.params)
         if self.rules.v2:
             # Economy v2 has no Defense to keep CP for (DEC-41, item 5) and doubles the CP
@@ -1311,7 +1383,11 @@ class SmartBot(CampaignBot):
     # The capital ----------------------------------------------------------------------------
 
     def defend_capital(self, ctx: Ctx, a: Assessment) -> None:
-        """Module docstring, item 2: Defense, the groups that arrive in time, a recruit."""
+        """Module docstring, item 2: Defense, the groups that arrive in time, a recruit; under
+        economy v2 with ``DEFENSE_V2`` item 22 (``defend_capital_v2``)."""
+        if self.defense_v2():
+            self.defend_capital_v2(ctx, a)
+            return
         if not self.alarm or a.threat.eta is None:
             return
         view, home = ctx.view, self.home
@@ -1339,9 +1415,137 @@ class SmartBot(CampaignBot):
             self.recruited[home] = ctx.tick
             ctx.standing[home] += 1
 
+    def defense_v2(self) -> bool:
+        """Item 22 applies: economy v2 (no Defense, DEC-41 item 5) and the personality's
+        ``DEFENSE_V2``."""
+        return self.rules.v2 and self.DEFENSE_V2
+
+    def defend_capital_v2(self, ctx: Ctx, a: Assessment) -> None:
+        """Item 22 (#682): the alarm walks home every free group that can join the fight at the
+        capital (``walk_home``) and fills the capital's recruit queue (``recruit_burst``); then,
+        alarm or not, the roads into the capital that a visible enemy force comes by are fortified
+        (``fortify_capital``). The CP kept by ``DANGER_RESERVE_MOVES`` are spent here."""
+        view, home = ctx.view, self.home
+        if view.nodes[home].owner != self.player or home in self.fight_nodes(view):
+            return
+        reserve = self.params["reserve"]
+        ctx.budget += reserve
+        try:
+            if self.alarm and a.threat.eta is not None:
+                self.walk_home(ctx, a.threat.eta, a.threat.units - a.threat.need + 1, a)
+                self.recruit_burst(ctx)
+            self.fortify_capital(ctx)
+        finally:
+            ctx.budget = max(0, ctx.budget - reserve)
+
+    def walk_home(self, ctx: Ctx, eta: int, missing: int, a: Assessment) -> None:
+        """The free groups that reach the capital (over own nodes, not pinned by DEC-37) while its
+        fight can still go on walk home, nearest first, until they bring ``missing`` shots. A
+        fight takes a round per shot (DEC-24, one shot a side a round), so a capital that needs
+        ``need`` shots holds about ``need`` rounds after ``eta`` and a group arriving within them
+        joins its fight (DEC-24, D1). A discharged unit counts when the capital warehouse has a
+        charge for it beyond the discharged units standing there (recharging, 1 per tick)."""
+        view, home = ctx.view, self.home
+        combat = self.rules.combat
+        holds = combat.round_ticks * max(1, a.threat.need) // max(1, combat.shots_per_round)
+        stock = view.nodes[home].warehouse or 0
+        for g in view.groups:
+            if g.location == AtNode(home):
+                stock -= g.units - g.charged
+        stock = max(0, stock)
+        to_home = [row[home] for row in self.travel.ticks]
+        far = len(self.map.nodes)
+        groups = sorted(
+            (g for g in self.free_groups(ctx) if node_of(g) != home),
+            key=lambda g: (to_home[node_of(g)], self.group_order(g)),
+        )
+        for g in groups:
+            if missing <= 0:
+                break
+            here = node_of(g)
+            if to_home[here] < 0 or ctx.tick + to_home[here] > eta + holds:
+                continue
+            if self.pinned[here]:
+                continue  # DEC-37: it would be caught on the way out
+            refill = min(g.units - g.charged, stock)
+            if g.charged + refill <= 0:
+                continue
+            if home not in self.reachable(view, here, far, g.units):
+                continue
+            if self.spend(ctx, Move(g.id, home)):
+                ctx.used[g.id] = True
+                ctx.standing[here] -= g.units
+                missing -= g.charged + refill
+                stock -= refill
+
+    def recruit_burst(self, ctx: Ctx) -> None:
+        """The capital queues recruits up to ``recruit.queue_max`` and its capacity at the
+        arrivals (#686), while the CP pay (DEC-25: CP at queueing, a cancel of an unstarted unit
+        refunds in full)."""
+        view, home = ctx.view, self.home
+        n = view.nodes[home]
+        queued = n.recruit_queue
+        if queued is None or (self.rules.city_upgrades.enabled and not n.has_barracks):
+            return
+        queue = queued  # ``standing`` counts the recruits of this decision, ``queue`` too
+        while (
+            queue < self.rules.recruit.queue_max and self.load(ctx, home) + queued + 1 <= n.capacity
+        ):
+            if not self.spend(ctx, Recruit(home)):
+                return
+            queue += 1
+            self.recruited[home] = ctx.tick
+            ctx.standing[home] += 1
+
+    def road_threats(self, view: PlayerView) -> dict[tuple[int, int], RoadThreat]:
+        """By own node and road the visible enemy shots coming in (``forts.road_threats``), once
+        per decision."""
+        if self._threats[0] is view:
+            return self._threats[1]
+        tick = view.tick
+
+        def seen(node: int) -> int:
+            sighting = view.nodes[node].seen
+            if sighting is None or Mode.ATTACK not in sighting.enemy_modes:
+                return 0
+            if tick - sighting.tick > FRESH_TICKS:
+                return 0
+            numbers = self.enemy_at(view, node)
+            return GUESS_UNITS if numbers is None else numbers[1]
+
+        found = road_threats(
+            view, self.map, seen, self.travel.ticks, self.edge_keys, guess=GUESS_UNITS, figures=True
+        )
+        self._threats = (view, found)
+        return found
+
+    def fortify_capital(self, ctx: Ctx) -> None:
+        """Item 22: every road into the own capital that a visible enemy force of ``FORT_SHOTS``
+        comes by (any visible force while the capital is in danger) gets a road fortification
+        (DEC-43, item D), the most shots first; the capital keeps no CP for it."""
+        fort = self.rules.fort
+        if fort is None:
+            return
+        view, home = ctx.view, self.home
+        least = 1 if self.danger else FORT_SHOTS
+        roads = sorted(
+            (
+                t
+                for t in self.road_threats(view).values()
+                if t.node == home and t.shots >= least and not fortified(view, home, t.edge)
+            ),
+            key=lambda t: (-t.shots, self.edge_keys[t.edge]),
+        )
+        for t in roads:
+            if not self.spend(ctx, FortifyRoad(home, t.edge)):
+                return
+
     def defend(self, ctx: Ctx, target: int, arrival: int) -> bool:
         """Defense for the strongest charged group standing in ``target``, if it gathers at least
-        +1 by ``arrival`` (it is switched on in the next tick, DEC-30)."""
+        +1 by ``arrival`` (it is switched on in the next tick, DEC-30). Never under v2: there is
+        no Defense (DEC-41, item 5)."""
+        if self.rules.v2:
+            return False
         if self.rules.orders.defense_bonus(max(0, arrival - ctx.tick - 1), 1) < 1:
             return False
         here = [
@@ -1483,8 +1687,12 @@ class SmartBot(CampaignBot):
     def fortify(self, ctx: Ctx) -> None:
         """Defense on the strongest charged group of every own node next to the enemy (and of
         the capital), once: the bonus gathers anew after a fight without a new payment
-        (DEC-30). Only while CP stay above the recruit keep."""
-        if self.params["fortify"] <= 0:
+        (DEC-30). Only while CP stay above the recruit keep. Under economy v2 with item 22 the
+        road fortifications of ``fortify_roads`` instead (no Defense, DEC-41 item 5)."""
+        if self.defense_v2():
+            self.fortify_roads(ctx)
+            return
+        if self.params["fortify"] <= 0 or self.rules.v2:
             return
         keep = self.params["recruit_keep"]
         by_node: dict[int, list[GroupView]] = {}
@@ -1500,6 +1708,71 @@ class SmartBot(CampaignBot):
             cmd = SetMode(best.id, Mode.DEFENSE)
             if ctx.budget - self.cost(cmd) >= keep and self.spend(ctx, cmd):
                 ctx.used[best.id] = True
+
+    def fortify_roads(self, ctx: Ctx) -> None:
+        """Item 22 (G-F): one road fortification per decision on the road into a threatened own
+        node other than the capital (``fortify_capital``): a visible enemy force of
+        ``FORT_SHOTS`` or more comes by it (``road_threats``), the node holds own units, is no
+        fight and not doomed (a capture destroys its fortifications, DEC-43 item D7), the force is
+        at most ``FORT_MARGIN`` shots short of taking it (the fortification may decide the fight),
+        the road lost no fortification within ``FORT_RETRY`` ticks, and the node is worth it: a
+        city (its VP) or a chokepoint whose loss cuts own nodes off the capital (``forts.cut_off``:
+        a pocket, item H). At most ``FORTS`` such fortifications stand on roads from enemy nodes,
+        ``FORT_KEEP`` CP stay, and all of them take at most ``FORT_SHARE`` percent of the CP the
+        bot has had (a budget, not a sink). The most VP and cut first, then the most shots, then
+        ``node_key``. Needs ``insight`` (item 9)."""
+        fort = self.rules.fort
+        if fort is None or self.FORTS <= 0 or not self.tempo.insight:
+            return
+        if ctx.budget - fort.cost < self.FORT_KEEP:
+            return
+        cp = self.rules.cp
+        had = cp.start + cp.per_period * (ctx.tick // cp.period_ticks)
+        if 100 * (self.fort_cp + fort.cost) > self.FORT_SHARE * had:
+            return
+        view, home, me = ctx.view, self.home, self.player
+        standing = 0
+        for e in view.edges:
+            edef = self.map.edges[e.id]
+            for f in e.forts:
+                if f.owner != me or f.node == home:
+                    continue
+                if view.nodes[edef.other(f.node)].owner == 1 - me:
+                    standing += 1
+        if standing >= self.FORTS:
+            return
+        fights = self.fight_nodes(view)
+        units = [0] * len(view.nodes)
+        charged = [0] * len(view.nodes)
+        for g in view.groups:
+            if isinstance(g.location, AtNode):
+                units[g.location.node] += g.units
+                charged[g.location.node] += g.charged
+        best: tuple[int, int, int, int] | None = None
+        site: tuple[int, int] | None = None
+        for (node, edge), t in self.road_threats(view).items():
+            if node == home or t.shots < FORT_SHOTS or fortified(view, node, edge):
+                continue
+            if node in fights or self.doomed[node] or self.load(ctx, node) < 1:
+                continue
+            sent = self.fort_sent.get((node, edge))
+            if sent is not None and ctx.tick - sent < FORT_RETRY:
+                continue  # it was destroyed: the node changed hands since
+            terrain = self.map.nodes[node].terrain
+            if t.shots + FORT_MARGIN < shots_to_take(
+                self.rules, terrain, units[node], charged[node]
+            ):
+                continue  # the garrison holds it: the fortification would not decide the fight
+            worth = W_FORT_VP * self.map.nodes[node].vp
+            worth += W_FORT_CUT * cut_off(view, self.neighbors, home, node)
+            if worth <= 0:
+                continue
+            rank = (-worth, -t.shots, self.key(node), self.edge_keys[edge])
+            if best is None or rank < best:
+                best, site = rank, (node, edge)
+        if site is not None and self.spend(ctx, FortifyRoad(*site)):
+            self.fort_cp += fort.cost
+            self.fort_sent[site] = ctx.tick
 
     @override
     def may_leave(self, ctx: Ctx, g: GroupView) -> bool:
@@ -1814,6 +2087,8 @@ class SmartBot(CampaignBot):
                 continue
             if n.recruit_queue:
                 self.spend(ctx, CancelRecruit(node))
+            if self.rules.v2:
+                continue  # no Transfer under v2 (DEC-41, item 1)
             spare = (n.warehouse or 0) - wait[node]
             if spare <= 0:
                 continue
@@ -2051,6 +2326,9 @@ class SmartRusher(SmartBot):
 
     name: ClassVar[str] = "smart_rusher"
     STANCE: ClassVar[Stance] = Stance.WAR
+    FORTS: ClassVar[int] = 1
+    FORT_KEEP: ClassVar[int] = 200
+    FORT_SHARE: ClassVar[int] = 5
     STRIKE: ClassVar[bool] = True
     MID_GROUP: ClassVar[int] = 3
     MID_GOAL: ClassVar[bool] = True
@@ -2102,6 +2380,7 @@ class SmartReactive(SmartBot):
 
     name: ClassVar[str] = "smart_reactive"
     STANCE: ClassVar[Stance] = Stance.BALANCE
+    FORTS: ClassVar[int] = 3
     STRIKE: ClassVar[bool] = True
     COUNTER: ClassVar[bool] = True
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
@@ -2170,6 +2449,11 @@ class SmartTurtle(SmartBot):
     name: ClassVar[str] = "smart_turtle"
     STANCE: ClassVar[Stance] = Stance.ECONOMY
     BUNKERS: ClassVar[int] = 4
+    FORTS: ClassVar[int] = 6
+    """Item 22: the turtle leans on road fortifications (its bunkers and Defense of v1 and
+    ``mvp-3``)."""
+    FORT_KEEP: ClassVar[int] = 0
+    FORT_SHARE: ClassVar[int] = 20
     FRONT_EXTRA: ClassVar[int] = 2
     """Units a threatened front node keeps above ``hold_front`` at most."""
     W_WEAK: ClassVar[int] = 40

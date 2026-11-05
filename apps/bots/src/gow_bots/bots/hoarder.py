@@ -78,6 +78,8 @@ class SmartHoarder(SmartBot):
     """The capital's spare units march by the build-up (``_guard_split``), not by item 18."""
     ANSWERS: ClassVar[bool] = False
     """The yardstick stays as it was measured (#624, PR 1): none of items 13-17."""
+    DEFENSE_V2: ClassVar[bool] = False
+    """The yardstick keeps the capital defense it was measured with: no item 22 of ``smart``."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartExpander.PARAMS,
         "radius": ParamRange(3, 4),
