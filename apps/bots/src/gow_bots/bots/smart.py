@@ -219,7 +219,7 @@ from gow_bots.bots.logistics import (
 )
 from gow_bots.bots.pockets import Pockets, heading, read_pockets
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
-from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
+from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take, takes
 from gow_sim.commands import (
     CancelRecruit,
     Command,
@@ -701,6 +701,11 @@ class SmartBot(CampaignBot):
         so their charges go back to the army instead of the starvation. The discharged pass goes
         first: the CP of the decision are short (one move per CP).
 
+        Under a capture price (DEC-38, ``capture.charge_cost`` above 0) a group leaves only when
+        its charged units pay the capture of the way out after the toll of a visible enemy road
+        fortification into it (DEC-43, item D6; ``takes``, #760): a discharged one never can, so
+        it waits for a charge instead of walking out, bouncing and being sent again.
+
         A city keeps one unit (``pocket_keep``): an empty one falls to any enemy group for free
         (``capture.charge_cost = 0``) and its VP with it, while every unit standing there costs
         the enemy a shot (DEC-07, rule 3); the rest splits off and leaves."""
@@ -732,6 +737,13 @@ class SmartBot(CampaignBot):
             room = view.nodes[dest].capacity - heading(view, ctx.cmds)[dest]  # #754
             fit = self.fit(view, here, dest, g.units)
             size = min(fit, g.units - self.pocket_keep(ctx, g), room)
+            # #760: the part that leaves (a split hands it the charged units first, SIM-04) must
+            # pay the capture of the way out (DEC-38) after the toll of a fortified road into it
+            # (DEC-43, item D6); else it waits for a charge (a merge, the army's rescue).
+            payer = min(size, g.charged)
+            toll = self.toll_from(view, here, dest, size, payer)
+            if size >= 1 and not takes(self.rules, payer, 0, 0, toll):
+                continue
             if size == g.units and self.spend(ctx, Move(g.id, dest)):
                 ctx.used[g.id] = True
                 ctx.claimed[dest] = True
@@ -1054,7 +1066,10 @@ class SmartBot(CampaignBot):
         known = self.memory.get(target)
         fresh = known is not None and ctx.tick - known[0] <= STALE_TICKS
         if fresh or (seen is not None and self.enemy_at(view, target) is not None):
-            base = self.need(view, ctx.tick, target) - self.params["margin"]
+            need = self.need(view, ctx.tick, target)
+            base = need - self.params["margin"]
+            if need > 0:  # the toll of a fortified road on top (DEC-43, item D6; not in ``need``)
+                base += self.toll_ahead(view, target, base - self.extra.get(target, 0))
         else:
             start = self.map.nodes[target]
             units = self.params.get("strike_guess", GUESS_UNITS)

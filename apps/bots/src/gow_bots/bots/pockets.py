@@ -9,7 +9,9 @@ recharges. Two readings of the ``PlayerView`` (AGENTS.md, section 4.4: only the 
   in the capital's component. A ``Move`` ends at the first foreign node (SIM-05), so a pocket is
   left one capture at a time; a capture is free when ``capture.charge_cost`` is 0 (DEC-38, the
   ``mvp-4`` value), and a node the bot estimates empty (``need`` of 0) is taken without a fight,
-  so even a discharged group takes it (``utility.takes``). Own nodes cost nothing to pass, a node
+  so even a discharged group takes it (``utility.takes``); under a price the group that walks out
+  must pay it after the toll of the way in (``SmartBot.leave_pockets``, #760), the search here
+  only finds the way. Own nodes cost nothing to pass, a node
   with a fight or one that needs shots cannot be passed (``-1``: no such way).
 - ``rescue``: by foreign node next to both the capital's component and a pocket (the node that cut
   it), what its capture rejoins: the own units standing in those pockets and ``FACTORY_UNITS`` per
