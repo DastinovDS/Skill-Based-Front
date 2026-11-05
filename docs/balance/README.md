@@ -341,7 +341,8 @@ The report (`gow_bots.report`, matplotlib only here) builds from a tournament fi
 the economy of the file (from `economy_model`, or inferred from the mechanics used in an older file) and the
 fair-field line (no bot played with an information grant: grants do not exist yet, #692), the data validity checks
 (below), the bot competence checks (BOT-05, rewritten for the smart field: a personality's `@hard` bot stands in for the
-old bot of that name, plus the exploiter gate of #688), the level ladder, the Bradley-Terry strength model, the matrix
+old bot of that name, plus the exploiter gate of #688), the level ladder, every server level against the exploiter
+(#688: the share with its Wilson interval and the capital lost and taken), the Bradley-Terry strength model, the matrix
 of pairs with 95% Wilson intervals, the style matrix with its Nash mix, the side advantage (mirrored matches), the
 metrics per bot (the share of scheduled attacks, the siege success, siege fights and walk-ins, contested sieges, the
 captures in the last 3 minutes), the charge ledger and its split by outcome, the supply flow (DEC-43: leaf shifts,
@@ -369,7 +370,7 @@ names the field and the checks it passed.
 | V4c | side bias | the side-0 share of the decided mirror matches per map, with the Wilson interval | 0.47..0.53 on every map |
 | V5a | counter for every bot | the opponents whose share against the bot has a Wilson lower bound above 0.5 | every bot has at least one |
 | V5b | no dominant bot | the win rate of every bot against the field | none above 0.65 |
-| V6 | exploiter | `expert` (`smart_expander@hard`, the server level) against `smart_exploiter` (#688) | at least 0.50; NO DATA until the bot exists |
+| V6 | exploiter | every server level (`LEVEL_BOTS`) against `smart_exploiter` (#688), both sides, all maps, the share of the decided matches with its Wilson interval (the section "Against the exploiter" adds the capital losses) | `easy` at least 0.05, `normal` 0.20, `hard` 0.35, `expert` 0.50; a level not in the file is named and not judged; NO DATA without the exploiter |
 | V7 | sensitivity | needs a second run with one rule number moved (NOT COMPUTABLE); prints the mechanics every bot uses less than 0.1 times per match: those are not judged by bots | |
 | V8 | similarity to humans | needs the owner's replays (`gow-bots stats`; NOT COMPUTABLE) | a metric off by more than 2x is bots-only |
 | V9 | rank stability across maps | Spearman's rho (ties get the mean rank) of the bots' win rates against the others for every two maps | at least 0.5 for every two maps, else decide per map |
@@ -473,6 +474,19 @@ a build-up next to the capital and the withdrawal of thin province garrisons are
 largest city next to the enemy capital, then a converging strike with banked CP. It is a yardstick, not a server level:
 put it in a tournament with `--bots "... smart_hoarder"`.
 
+**The benchmark `smart_exploiter`** (`gow_bots.bots.exploiter`, #688) plays the holes the bot audit of 2026-11 found in
+the field under `mvp-4`: the rusher's CP economy (every CP on a capture) with a **capital drive** (a group of 4 charged
+units or more scores per hop it gets closer to the enemy capital), a **converging strike whenever it is ready** (one
+group alone too, 2 shots above the estimate, scheduled orders where they can gather a bonus), **raids on enemy
+pockets** (an enemy node cut from the enemy capital over enemy nodes, public ownership: a score bonus, and the estimate
+of its garrison loses what the starvation of DEC-43 item H took since the cut), **raids on full leaf warehouses** (an
+enemy node held 300 ticks counts with a full warehouse, every charge scores), the cut of enemy nodes (`w_cut`), the
+**leaf shift at the front while a strike is under way**, and the capital defense and threat fortifications of item 22.
+The parameter `anti_rush` (0 by default) switches on an anti-rush opening: the capital keeps 3 units, its roads from the
+enemy side are fortified before an enemy is seen, and a city facing an enemy node fortifies the road from it at once.
+It is a yardstick and the regression gate V6, not a server level (`LEVEL_BOTS` does not name it): put it in a
+tournament with `--bots "... smart_exploiter"`.
+
 **Economy v2** (`mvp-3`, DEC-41, #648; `gow_bots.bots.economy`). Under `economy.model = "v2"` every bot sends no v1-only
 command (stance, front markers, rear minimum, transfers, road upgrades, Defense: `Bot.allowed`) and the campaign and
 smart bots play the v2 economy instead: **lines** from the own factories (only a factory starts a line, DEC-42) to the
@@ -506,6 +520,7 @@ node plus half of its enemy neighbours'): the least pressed sector is the *weak 
 | `smart_strangler` (Strangler) | Balance, cuts the enemy supply network | encircles: the most damaging cut first, every own neighbour of a target adds to it, cut-off cities are besieged | as midgame; not ahead: all in |
 | `smart_reactive` (Counter) | Balance, answers every visible strike, Defense on the front | counterattacks: ahead on the forecast it attacks enemy nodes only within 30 s after an enemy attack on its territory (the neighbours of the attacked node first, their garrisons left); not ahead, it attacks without waiting | as midgame; not ahead: all in |
 | `smart_hoarder` (benchmark) | War, claims in groups of 2+, the centre barracks | from tick 2400..3600 the build-up at the centre, then the stage next to the enemy capital, the converging strike | not ahead: the strike goes without waiting for the build-up |
+| `smart_exploiter` (benchmark) | the rusher's opening, the cuts of the enemy network | the capital drive of the big groups, raids on enemy pockets and full leaf warehouses, the strike whenever ready, the leaf shift at the front during a strike | as midgame; not ahead: all in |
 
 Every smart bot on a settled map also sends the spare units of its capital toward its objective (a pile at home earns
 no VP), except the benchmark, whose build-up does that itself. The tempo levels (`easy`, `normal`, `hard`) keep their

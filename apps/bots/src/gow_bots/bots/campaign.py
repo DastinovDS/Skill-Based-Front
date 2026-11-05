@@ -272,9 +272,13 @@ class CampaignBot(Bot):
         road = fort_site(self, view, ctx.budget)  # DEC-43, item D: the CP sink of mvp-4
         if road is not None:
             self.spend(ctx, FortifyRoad(*road))
-        shift = leaf_shift_command(self, view, self.leaf)  # the supply flow (DEC-43, item G)
+        shift = self.leaf_shift(ctx)  # the supply flow (DEC-43, item G)
         if shift is not None:
             self.spend(ctx, shift)
+
+    def leaf_shift(self, ctx: Ctx) -> Command | None:
+        """Hook: the leaf shift command of this decision (``economy.leaf_shift_command``)."""
+        return leaf_shift_command(self, ctx.view, self.leaf)
 
     def line_extra(self, ctx: Ctx) -> dict[int, int]:
         """Hook: the weight a personality adds to own nodes that want charges (``wants``)."""

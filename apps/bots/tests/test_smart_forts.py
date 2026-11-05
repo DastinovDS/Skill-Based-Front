@@ -37,7 +37,14 @@ SOUTH_PASS = 18
 PASSES = (17, 18)
 KA, AE, SD = 0, 5, 24
 TICK = 4000
-SMART = ("smart_expander", "smart_reactive", "smart_rusher", "smart_strangler", "smart_turtle")
+SMART = (
+    "smart_exploiter",
+    "smart_expander",
+    "smart_reactive",
+    "smart_rusher",
+    "smart_strangler",
+    "smart_turtle",
+)
 
 
 def _at(player: int, node: int) -> int:
