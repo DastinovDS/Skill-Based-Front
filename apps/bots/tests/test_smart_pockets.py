@@ -19,10 +19,11 @@ import pytest
 
 from gow_bots.bots import BOTS, SmartBot, bot_factory
 from gow_bots.bots.campaign import Ctx
-from gow_bots.bots.pockets import FACTORY_UNITS, read_pockets
+from gow_bots.bots.pockets import FACTORY_UNITS, heading, read_pockets
 from gow_bots.bots.smart import W_RESCUE
-from gow_sim.commands import Command, Move, Split
+from gow_sim.commands import Command, Move, PlayerCommand, Split
 from gow_sim.maps import load_map
+from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import AtNode, GameState, Group, Mode, initial_state
 from gow_sim.systems.capacity import change_owner
@@ -54,12 +55,17 @@ def _at(player: int, node: int) -> int:
 
 
 def _state(
-    player: int, groups: list[tuple[int, int, int, int]], own: tuple[int, ...] = ()
+    player: int,
+    groups: list[tuple[int, int, int, int]],
+    own: tuple[int, ...] = (),
+    *,
+    state: GameState | None = None,
 ) -> GameState:
     """The base of the table with A taken by the other player at tick ``TICK``, then the groups
     ``(owner, node, units, charged)`` (nodes of the table, mirrored for player 1); ``own``: more
-    nodes of ``player`` (M joins the pocket: its only own neighbour is C)."""
-    state = initial_state(MAP, RULES)
+    nodes of ``player`` (M joins the pocket: its only own neighbour is C). ``state``: the one to
+    set up (a ``Match``'s), a new initial state by default."""
+    state = initial_state(MAP, RULES) if state is None else state
     enemy = 1 - player
     for n in PASSES:
         state.nodes[_at(player, n)].owner = enemy
@@ -186,6 +192,52 @@ def test_a_pocket_city_keeps_one_unit(name: str, player: int) -> None:
     group = _group_at(view, _at(player, B)).id
     cmds = _bot(name, player).decide(view, TICK)
     assert [c for c in cmds if getattr(c, "group", None) == group] == [Split(group, 2)]
+
+
+@pytest.mark.parametrize("player", [0, 1])
+def test_heading_counts_the_units_ordered_into_foreign_nodes(player: int) -> None:
+    """#754: the own units on the way into a node that is not own, the moves of this decision in
+    place of the earlier orders; a move into an own node is not counted (``Ctx.incoming``
+    has it)."""
+    state = _state(player, [(player, B, 3, 0), (player, D, 2, 0), (player, C, 4, 0)])
+    view = _view(state, player)
+    b, d, c = (_group_at(view, _at(player, n)).id for n in (B, D, C))
+    assert heading(view, []) == [0] * len(MAP.nodes)
+    units = heading(
+        view, [Move(b, _at(player, A)), Move(d, _at(player, A)), Move(c, _at(player, B))]
+    )
+    expected = [0] * len(MAP.nodes)
+    expected[_at(player, A)] = 3 + 2
+    assert units == expected
+
+
+@pytest.mark.parametrize("player", [0, 1])
+@pytest.mark.parametrize("name", SMART)
+def test_pocket_exits_fill_the_cut_up_to_its_capacity(name: str, player: int) -> None:
+    """#754: 6/0 in B and 6/0 in D, both next to the free cut A (a large city, capacity 8,
+    DEC-22): each city keeps one unit and 10 want out, more than A holds; units above the
+    capacity die one every ``capacity.attrition_ticks`` (DEC-12). So within 300 ticks A is taken
+    (the pocket is gone) and no unit of the bot dies of attrition (``SmartBot`` items 20, 21)."""
+    match = Match(MAP, RULES, KEY)
+    _state(player, [(player, B, 6, 0), (player, D, 6, 0)], state=match.state)
+    for p in match.state.players.values():
+        p.cp = 500
+    bot = bot_factory(name)(MAP, RULES, seed=0, player=player)
+    attrition, seq = 0, 0
+    for _ in range(300):
+        cmds: list[PlayerCommand] = []
+        if match.tick % 5 == 0:
+            for cmd in bot.decide(match.view(player), match.tick):
+                cmds.append(PlayerCommand(player, seq, match.resolve(player, cmd)))
+                seq += 1
+        match.step(cmds)
+        attrition += sum(
+            1 for e in match.state.events if e.kind == "attrition" and e.get("player") == player
+        )
+    assert RULES.capacity.by_kind.of(MAP.nodes[A].kind) == 8
+    assert match.state.nodes[_at(player, A)].owner == player
+    assert not any(n.owner == player and n.flow_pocket for n in match.view(player).nodes)
+    assert attrition == 0
 
 
 @pytest.mark.parametrize("player", [0, 1])

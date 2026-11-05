@@ -182,6 +182,18 @@ class SmartHoarder(SmartBot):
 
     @override
     def spend(self, ctx: Ctx, cmd: Command) -> bool:
+        """``SmartBot.spend``; a split keeps the CP of the move of its part. The split is free and
+        its part walks in the next decision: a part whose move the CP do not pay then (kept for
+        the barracks or the banked strike, or spent on another order after the split) is merged
+        back by ``_gather`` and split again in the decision after it (#754, G-H of the ``mvp-4``
+        bot audit: 85 splits and 72 merges a match). So a split goes only while the CP outside
+        the kept ones pay a move, and that move's CP are left unspent in this decision."""
+        if isinstance(cmd, Split):
+            move = self.rules.orders.cost.move
+            if move > ctx.budget - ctx.held or not super().spend(ctx, cmd):
+                return False
+            ctx.budget -= move  # for the part's move in the next decision
+            return True
         march = isinstance(cmd, Move) and cmd.group in self._march
         if isinstance(cmd, BuildBarracks) and ctx.held:
             held, ctx.held = ctx.held, 0  # the barracks is what its CP were kept for
@@ -278,7 +290,8 @@ class SmartHoarder(SmartBot):
     def spearhead(self, ctx: Ctx) -> None:
         """While advancing, the marching groups merge where they stand and walk to one own node,
         the nearest to the stage (the largest, then ``node_key``), so the next node on the way
-        meets one group, not several small ones (item 3)."""
+        meets one group, not several small ones (item 3). In the capital they do not merge: the
+        spare units split off the guard walk, the guard stays (#754)."""
         view = ctx.view
         to_stage = self.hops[self.stage]
         own = [
@@ -296,19 +309,27 @@ class SmartHoarder(SmartBot):
         far = len(self.map.nodes)
         for node in sorted(by_node, key=self.key):
             groups = by_node[node]
-            if len(groups) >= 2 and self.spend(ctx, Merge(tuple(g.id for g in groups))):
+            if node == self.home:
+                # The capital's spare units were split off its guard to march (``_guard_split``):
+                # a merge there only undoes the split (#754).
+                walkers = groups
+            elif len(groups) >= 2 and self.spend(ctx, Merge(tuple(g.id for g in groups))):
                 for g in groups:
                     ctx.used[g.id] = True
                 continue
-            g = groups[0]
+            else:
+                walkers = groups[:1]
             if node == spear or to_stage[node] <= to_stage[spear]:
                 continue
-            room = self.room(ctx, spear)  # #686: the arrivals too
-            if g.units > room or spear not in self.reachable(view, node, far, g.units):
-                continue
-            if self.spend(ctx, Move(g.id, spear)):
-                ctx.used[g.id] = True
-                ctx.standing[node] -= g.units
+            for g in walkers:
+                room = self.room(ctx, spear)  # #686: the arrivals too
+                if g.units > room or spear not in self.reachable(view, node, far, g.units):
+                    continue
+                if node == self.home and not self.may_leave(ctx, g):
+                    continue  # the guard stays (``standing`` counts the walkers sent)
+                if self.spend(ctx, Move(g.id, spear)):
+                    ctx.used[g.id] = True
+                    ctx.standing[node] -= g.units
 
     def consolidate(self, ctx: Ctx) -> None:
         """While advancing, the charged groups in the other held nodes walk into the held stage

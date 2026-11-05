@@ -14,8 +14,8 @@ capacity, attrition above it), DEC-25 (a recruit costs 1 CP, the queue holds 3),
 is free), DEC-43 item D (a road fortification costs 1.5 CP, works after 100 ticks) and item H (a
 pocket starves and its discharged groups never recharge), ``SmartBot`` items 20 to 22.
 
-The capacity case at the end is marked ``xfail`` (not strict) for the bots that overfill the rescue
-province: it documents a gap, the bot code is not changed here.
+The capacity case at the end was a non-strict ``xfail`` for the bots that overfilled the rescue
+province; #754 counts the units on the way into it (``pockets.heading``) and it passes for all.
 
 The tables are written in the frame of the bot under test: its capital is node 0, the enemy
 capital node 48 (``crossroads`` is a 180 degree rotation, ``MapDef.node_key``); player 1 plays the
@@ -304,39 +304,8 @@ def test_discharged_units_do_not_walk_into_a_garrisoned_cut(name: str, player: i
     assert not [c for c in entering if isinstance(c, Move) and c.dest in foreign]
 
 
-OVERFILLED: Final = {
-    ("smart_rusher", 0),
-    ("smart_rusher", 1),
-    ("smart_strangler", 0),
-    ("smart_turtle", 0),
-}
-"""Bots and sides whose pocket exit puts more units into the rescue province than it holds (see
-``test_a_big_pocket_group_leaves_within_the_capacity_of_the_way_out``): found by this scenario,
-not fixed here (the smart bots are another issue's code)."""
-
-
-OVERFILLED_MARK: Final = pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "pocket exits keep sending units to the rescue province after it holds its 3 (the units "
-        "there and on the way are not counted): attrition, DEC-12; SmartBot items 20 and 21"
-    ),
-)
-
-
-@pytest.mark.parametrize(
-    ("name", "player"),
-    [
-        pytest.param(
-            n,
-            p,
-            marks=[OVERFILLED_MARK] if (n, p) in OVERFILLED else [],
-            id=f"{n}-{p}",
-        )
-        for n in POCKET_BOTS
-        for p in (0, 1)
-    ],
-)
+@pytest.mark.parametrize("player", [0, 1])
+@pytest.mark.parametrize("name", POCKET_BOTS)
 def test_a_big_pocket_group_leaves_within_the_capacity_of_the_way_out(
     name: str, player: int
 ) -> None:
