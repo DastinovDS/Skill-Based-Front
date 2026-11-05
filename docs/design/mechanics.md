@@ -367,6 +367,11 @@ Implementation: #242 (`SIM_VERSION` 7, `PROTOCOL_VERSION` 11). The details that 
   give (one search for both). The client highlights it under the travel-time label and never computes it. The path
   names nothing hidden: every node of it but the last is the group's node or an own node, and the last is the
   reachable node itself.
+- (#762) Each `STACK_LIMIT` node of `reach` also carries the size that fits: the most units a group from the same
+  node can have for its `Move` there to be accepted now (the same search under the stack limit of item D for a
+  smaller size; `0`: no smaller group either). The client opens the split menu with that size on a click at such a
+  node and sends the split part there; it never computes the size. The size names nothing hidden: it comes from the
+  public capacities and the own nodes, as the path does.
 - The auto-merge event `groups_merged` carries the node (`node`), like a manual merge, only to the owner.
 - A recruit that is given an order to move on the same tick has already left the node and does not merge.
 

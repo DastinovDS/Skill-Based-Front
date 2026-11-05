@@ -9,14 +9,17 @@
   import Radial from './Radial.svelte';
   import Slider from './Slider.svelte';
   import { cycleFocus } from './focusCycle.ts';
+  import type { NodeNamer } from './nodeName.ts';
 
   interface Props {
     orders: OrderController;
     /** Where the group is on screen: the menu opens on it. Without it, under the pointer. */
     anchors?: MapAnchors;
+    /** The name of a place by its id (the target of a split that sends its part on, #762). */
+    names?: NodeNamer;
   }
 
-  let { orders, anchors }: Props = $props();
+  let { orders, anchors, names }: Props = $props();
 
   /** Radius of the round menu; the preview, the slider and the buttons sit inside it. */
   const RADIUS = 150;
@@ -66,6 +69,12 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="split" onkeydown={onKey}>
         <p class="title"><Icon name="split" size={16} />{t('split.title')}</p>
+        {#if menu.dest !== null}
+          <!-- Opened by a click at a place too small for the group (#762): the part goes there. -->
+          <p class="dest">
+            {tf('split.sendTo', { place: names?.(menu.dest) ?? String(menu.dest), n: menu.max })}
+          </p>
+        {/if}
         <div class="groups">
           <div class="group stays">
             <UnitMark side="own" size={32} share={share(stays)} />
@@ -83,7 +92,7 @@
         <Slider
           value={menu.n}
           min={1}
-          max={menu.units - 1}
+          max={menu.max}
           label={t('orders.splitUnits')}
           focusOnMount
           oninput={(n: number) => {
@@ -104,7 +113,10 @@
             orders.confirmSplit();
           }}
         >
-          {t('split.confirm')}<kbd class="k" aria-hidden="true">↵</kbd>
+          {menu.dest === null ? t('split.confirm') : t('split.confirmSend')}<kbd
+            class="k"
+            aria-hidden="true">↵</kbd
+          >
         </button>
         <button
           type="button"
@@ -141,6 +153,13 @@
     color: var(--paper);
     font-size: 14px;
     font-weight: 700;
+  }
+
+  .dest {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.3;
   }
 
   .groups {

@@ -5,7 +5,9 @@ import {
   delayLeft,
   delayProgress,
   departPulse,
+  CP_REJECT,
   ghostLook,
+  ghostRejectMs,
   orderBend,
   pathBend,
   polylineLength,
@@ -28,7 +30,7 @@ import {
 } from './intentLayout.ts';
 import { vpBadgeAt } from './cityLayout.ts';
 import { barracksAt } from './defenseLayout.ts';
-import { GHOST_REJECT_MS, GHOST_SHAKE_MS, RIBBON } from './style.ts';
+import { GHOST_CP, GHOST_REJECT_MS, GHOST_SHAKE_MS, RIBBON } from './style.ts';
 
 const A = { x: 0, y: 0 };
 const B = { x: 200, y: 0 };
@@ -557,6 +559,19 @@ describe('ghostLook', () => {
 
   it('does not shake with less motion', () => {
     expect(ghostLook('rejected', 25, 0.85, true).dx).toBe(0);
+  });
+
+  it('holds the cut-off arrow of a move refused for its CP, then fades it over its end (#762)', () => {
+    expect(ghostRejectMs(CP_REJECT)).toBe(GHOST_CP.rejectMs);
+    expect(ghostRejectMs('GROUP_BUSY')).toBe(GHOST_REJECT_MS);
+    // Past the end of another refusal it is still whole.
+    expect(ghostLook('rejected', GHOST_REJECT_MS, 1, false, CP_REJECT).alpha).toBe(1);
+    const fadeFrom = GHOST_CP.rejectMs - GHOST_CP.fadeMs;
+    expect(ghostLook('rejected', fadeFrom, 1, false, CP_REJECT).alpha).toBe(1);
+    expect(
+      ghostLook('rejected', fadeFrom + GHOST_CP.fadeMs / 2, 1, false, CP_REJECT).alpha,
+    ).toBeCloseTo(0.5);
+    expect(ghostLook('rejected', GHOST_CP.rejectMs, 1, false, CP_REJECT).alpha).toBe(0);
   });
 });
 

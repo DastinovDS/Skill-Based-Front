@@ -22,6 +22,11 @@ export interface CityState {
  * has one); an own province (`province`) has only the bunker, kept while it stands (a menu is never
  * empty). A ruleset without a bunker (`bunker` false, DEC-43) offers none. A ruleset with road
  * fortifications (`fort`, DEC-43, item D) gives a city and a province the "Fortify road" sector.
+ *
+ * #762, by the same rule (nothing to do: not drawn): no factory while the own factories are at
+ * `factory.max` (`factoriesFull`, the counter of the top bar tells why), no "Fortify road" in a node
+ * whose every road has its line already, built or being built (`canFortify` false). The menu may
+ * then be empty (an own province of `mvp-4` with every road fortified): nothing is drawn.
  */
 export function cityChoices(
   development: { readonly enabled: boolean; readonly warehouse_max_level: number },
@@ -30,11 +35,14 @@ export function cityChoices(
   province = false,
   bunker = true,
   fort = false,
+  factoriesFull = false,
+  canFortify = true,
 ): CityChoice[] {
+  const fortify = fort && canFortify;
   // Without a bunker in the rules (`mvp-4`, DEC-43) a province has no menu and a city no bunker sector.
   // Road fortifications (DEC-43, item D) are for a city and a province alike, so a province keeps a menu with them.
   if (v2 && province)
-    return [...(bunker ? (['bunker'] as const) : []), ...(fort ? (['fortify'] as const) : [])];
+    return [...(bunker ? (['bunker'] as const) : []), ...(fortify ? (['fortify'] as const) : [])];
   const choices: CityChoice[] = [];
   if (!development.enabled) choices.push('recruit');
   else {
@@ -43,10 +51,10 @@ export function cityChoices(
     if ((city?.warehouseLevel ?? 0) < development.warehouse_max_level) choices.push('warehouse');
   }
   if (v2) {
-    if (city?.factory !== true) choices.push('factory');
+    if (city?.factory !== true && !factoriesFull) choices.push('factory');
     if (bunker && city?.fort !== true) choices.push('bunker');
   }
-  // Fortify a road: any number of lines, one per road of the node, so the sector is always there.
-  if (v2 && fort) choices.push('fortify');
+  // Fortify a road: one line per road of the node, so the sector is there while a road has none.
+  if (v2 && fortify) choices.push('fortify');
   return choices;
 }

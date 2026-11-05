@@ -7,8 +7,11 @@ export interface ReachInfo {
   readonly ticks: ReadonlyMap<number, number>;
   /** The route by node (`ReachNode.path`): the nodes from the group's node to it, ends included. */
   readonly routes: ReadonlyMap<number, readonly number[]>;
-  /** Nodes only a smaller group reaches (`STACK_LIMIT`). */
-  readonly split: ReadonlySet<number>;
+  /**
+   * Nodes only a smaller group reaches (`STACK_LIMIT`), each with the most units that get there
+   * (`ReachSplit.units`, the server's number; 0: no smaller group either).
+   */
+  readonly split: ReadonlyMap<number, number>;
 }
 
 /** The answer to the last command, for the panel. */
@@ -79,6 +82,17 @@ export interface OrderUiData {
    * stepper of the plan bar or `[` and `]`; at least 1.
    */
   readonly planBonus: number;
+  /**
+   * A planned order is being made now: the switch is on or Shift is held (the plan bar shows its
+   * bonus stepper prominently then, #762).
+   */
+  readonly planning: boolean;
+  /**
+   * The CP do not pay for the move a click would give now (the hovered target, the price of
+   * `ruleset_public.cost`), or a move was just refused with `NOT_ENOUGH_CP`: the CP badge is
+   * marked (#762). Display arithmetic only; the server decides.
+   */
+  readonly cpShort: boolean;
   readonly notice: OrderNotice | null;
   /** The answer to the last `reach_query` for the selected group; `null`: none yet. */
   readonly reach: ReachInfo | null;
@@ -103,6 +117,8 @@ export class OrderUiState {
     lineDraft: null,
     linePath: null,
     planBonus: 2,
+    planning: false,
+    cpShort: false,
     notice: null,
     reach: null,
   });

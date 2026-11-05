@@ -149,6 +149,31 @@ export interface SiteInfo {
   readonly owed: number;
 }
 
+/** Own factories against `ruleset_public.factory.max` (#762). */
+export interface FactoryCount {
+  readonly count: number;
+  readonly max: number;
+}
+
+/**
+ * The own factories for `factory.max` (DEC-41, item 2): the own factory cities and the factory
+ * builds under way, read from the own view (`NodeView.factory`, `factory_build`); `null` under v1.
+ */
+export function factoryCount(
+  rules: RulesetPublic,
+  nodes: readonly NodeView[],
+  me: PlayerId,
+): FactoryCount | null {
+  if (rules.economy.model !== 'v2' || rules.factory === null) return null;
+  let count = 0;
+  for (const node of nodes) {
+    if (node.owner !== me) continue;
+    if (node.factory === true) count += 1;
+    if (node.factory_build !== null) count += 1;
+  }
+  return { count, max: rules.factory.max };
+}
+
 /** An own supply line (economy v2, `View.lines`): the server's path from the source to the target. */
 export interface LineInfo {
   readonly id: number;
@@ -236,6 +261,11 @@ export interface HudData {
   /** Supply flow (DEC-43): the own leaf shift in force and its largest value; `null` under lines. */
   readonly leafShift: number | null;
   readonly leafShiftMax: number | null;
+  /**
+   * Economy v2 (DEC-41, item 2): the own factories, the builds under way counted as the server
+   * counts them for `factory.max`, and that max; `null` under v1 or without factories (#762).
+   */
+  readonly factories: FactoryCount | null;
   readonly vp: { readonly mine: number; readonly enemy: number };
   /** Whole seconds until the timer ends the match. */
   readonly secondsLeft: number;
@@ -465,6 +495,7 @@ export function buildHudData(
     autoLines: view.me.auto_lines,
     leafShift: view.me.leaf_shift,
     leafShiftMax: view.me.leaf_shift_max,
+    factories: factoryCount(rules, view.nodes, me),
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },
     secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
     group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes, tick),

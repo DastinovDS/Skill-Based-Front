@@ -1,6 +1,6 @@
 import type { AckMsg, Command, EventMsg } from '../protocol.gen.ts';
 import type { GhostArrow } from '../render/interaction.ts';
-import { GHOST_REJECT_MS } from '../render/style.ts';
+import { ghostRejectMs } from '../render/intentLayout.ts';
 
 /** An order the player sent that no snapshot shows yet. */
 export interface GhostOrder extends GhostArrow {
@@ -68,11 +68,9 @@ export class OrderBook {
   /** Ghost arrows, oldest first; the same array until they change. */
   ghosts(): readonly GhostOrder[] {
     const now = this.#now();
-    if (this.#ghosts.some((g) => g.rejectedAt !== null && now - g.rejectedAt >= GHOST_REJECT_MS)) {
-      this.#setGhosts(
-        this.#ghosts.filter((g) => g.rejectedAt === null || now - g.rejectedAt < GHOST_REJECT_MS),
-      );
-    }
+    const live = (g: GhostOrder): boolean =>
+      g.rejectedAt === null || now - g.rejectedAt < ghostRejectMs(g.rejectCode ?? null);
+    if (!this.#ghosts.every(live)) this.#setGhosts(this.#ghosts.filter(live));
     return this.#ghosts;
   }
 
@@ -92,6 +90,7 @@ export class OrderBook {
         path: null,
         status: 'pending',
         rejectedAt: null,
+        rejectCode: null,
       };
     }
     this.#pending.set(seq, { cmd, ghost });
@@ -106,7 +105,7 @@ export class OrderBook {
     this.#pending.delete(ack.seq);
     if (ack.reject_code !== null) {
       this.#forgetSplit(pending.cmd);
-      this.#reject(pending.ghost);
+      this.#reject(pending.ghost, ack.reject_code);
       this.onResult?.({ kind: 'rejected', seq: ack.seq, cmd: pending.cmd, code: ack.reject_code });
       return;
     }
@@ -185,9 +184,14 @@ export class OrderBook {
   }
 
   /** The ghost stays on the map, marked rejected: the view shakes it and lets it fade. */
-  #reject(ghost: GhostOrder | null): void {
+  #reject(ghost: GhostOrder | null, code: string): void {
     if (ghost === null || !this.#ghosts.includes(ghost)) return;
-    const rejected: GhostOrder = { ...ghost, status: 'rejected', rejectedAt: this.#now() };
+    const rejected: GhostOrder = {
+      ...ghost,
+      status: 'rejected',
+      rejectedAt: this.#now(),
+      rejectCode: code,
+    };
     this.#setGhosts(this.#ghosts.map((g) => (g === ghost ? rejected : g)));
   }
 

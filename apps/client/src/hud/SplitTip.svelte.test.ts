@@ -24,7 +24,7 @@ describe('SplitTip: the stack limit before the order is sent (#468)', () => {
     vi.useRealTimers();
   });
 
-  function setup() {
+  function setup(fit = 0) {
     const hud = new HudState({
       me: 0,
       nicks: ['Ember', 'Bot'],
@@ -47,7 +47,13 @@ describe('SplitTip: the stack limit before the order is sent (#468)', () => {
     });
     orders.click({ kind: 'group', id: group.id }, false);
     orders.overlay();
-    orders.onReach({ type: 'reach', group: group.id, tick: 30, nodes: [], split: [target.id] });
+    orders.onReach({
+      type: 'reach',
+      group: group.id,
+      tick: 30,
+      nodes: [],
+      split: [{ node: target.id, units: fit }],
+    });
     return { orders, hud, target, sent };
   }
 
@@ -75,6 +81,18 @@ describe('SplitTip: the stack limit before the order is sent (#468)', () => {
     expect(tip?.querySelector('kbd')?.textContent).toBe('S');
     // A shape too, not the colour alone: the split icon.
     expect(tip?.querySelector('svg')).not.toBeNull();
+  });
+
+  it('with the size that fits, says a click splits that many off and sends them (#762)', () => {
+    const { orders, hud, target, sent } = setup(2);
+    orders.hover({ kind: 'node', id: target.id });
+    orders.overlay();
+    const root = show(orders, hud);
+    const text = root.querySelector('[role="tooltip"]')?.textContent.replace(/\s+/g, ' ').trim();
+    expect(text).toBe(
+      `Too big to go to ${hud.nodeName(target.id)}: click to split off 2 and send them`,
+    );
+    expect(sent).toEqual([]);
   });
 
   it('shows nothing for a target the group fits to, and sends nothing', () => {

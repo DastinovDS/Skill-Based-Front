@@ -35,6 +35,10 @@
   const full = $derived(data !== null && atCap(data.cp.value, data.cp.cap));
   const share = $derived(data === null ? 50 : vpShare(data.vp.mine, data.vp.enemy));
   const lastMinute = $derived(data !== null && data.secondsLeft <= LAST_MINUTE_S);
+  // The CP do not pay for the move a click would give, or a move was just refused for its CP (#762).
+  const short = $derived(orders.ui.current.cpShort);
+  const factories = $derived(data?.factories ?? null);
+  const factoriesFull = $derived(factories !== null && factories.count >= factories.max);
 </script>
 
 <header class="bar">
@@ -42,9 +46,10 @@
     {#if data !== null}
       <div
         class="cp"
+        class:short
         role="img"
-        title={full ? t('bar.cpMaxHint') : undefined}
-        aria-label={tf(full ? 'bar.cpLabelMax' : 'bar.cpLabel', {
+        title={short ? t('bar.cpShortHint') : full ? t('bar.cpMaxHint') : undefined}
+        aria-label={tf(short ? 'bar.cpLabelShort' : full ? 'bar.cpLabelMax' : 'bar.cpLabel', {
           value: formatCentis(data.cp.value, locale),
           cap: formatCentis(data.cp.cap, locale),
         })}
@@ -62,13 +67,33 @@
           {#if track?.head === true}
             <span class="head" style:left="calc(2px + (100% - 4px) * {track.share})"></span>
           {/if}
-          {#if full}<span class="ring"></span>{/if}
+          {#if full && !short}<span class="ring"></span>{/if}
+          <!-- Too few CP for the move (#762): a solid red ring that pulses, and the alert icon. -->
+          {#if short}<span class="ring short-ring"></span>{/if}
         </span>
+        {#if short}<span class="short-icon" aria-hidden="true"><Icon name="alert" size={16} /></span
+          >{/if}
         <span class="num">
           {formatCentis(data.cp.value, locale)}/{formatCentis(data.cp.cap, locale)}
         </span>
-        {#if full}<span class="max">{t('bar.cpMax')}</span>{/if}
+        {#if full && !short}<span class="max">{t('bar.cpMax')}</span>{/if}
       </div>
+      <!-- Economy v2 (DEC-41, item 2; #762): own factories, builds under way counted, of the max. -->
+      {#if factories !== null}
+        <span
+          class="factories"
+          class:full={factoriesFull}
+          role="img"
+          title={factoriesFull ? t('bar.factoriesFull') : t('bar.factories')}
+          aria-label={tf(factoriesFull ? 'bar.factoriesLabelFull' : 'bar.factoriesLabel', {
+            count: factories.count,
+            max: factories.max,
+          })}
+        >
+          <Icon name="factory" size={16} />
+          <span class="num">{factories.count}/{factories.max}</span>
+        </span>
+      {/if}
       <!-- Economy v2 (DEC-41, item 1) has no stances: the chip is gone. -->
       {#if !orders.v2}
         <button
@@ -323,9 +348,53 @@
     }
   }
 
+  /* Too few CP for a move (#762): the track and the number go red, a solid ring pulses round the
+     track and the alert icon stands before the number (the shape tells it, not the colour). */
+  .cp.short .track {
+    border-color: var(--enemy);
+  }
+
+  .cp.short .fill {
+    background: var(--enemy);
+  }
+
+  .cp.short .num {
+    color: var(--enemy);
+    font-weight: 700;
+  }
+
+  .short-ring {
+    border: 2px solid var(--enemy);
+    animation-duration: 0.5s;
+  }
+
+  .short-icon {
+    display: inline-flex;
+    color: var(--enemy);
+    animation: cp-pulse 0.5s ease-in-out infinite;
+  }
+
+  /* The factory counter: the factory glyph and own/max; at the max a dashed frame (shape, not colour). */
+  .factories {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+  }
+
+  .factories.full {
+    border-style: dashed;
+    border-color: var(--text-dim);
+    color: var(--text-dim);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .ring,
-    .max {
+    .max,
+    .short-icon {
       animation: none;
     }
 

@@ -14,6 +14,8 @@
 
   // The node comes from the server's `reach` answer (`split`): the group is too big for the way there.
   const node = $derived(orders.ui.current.splitHover);
+  // The size that fits there (the server's, #762): a click opens the split menu with it.
+  const fit = $derived(node === null ? 0 : orders.splitFit(node));
 
   /** The key that opens the split menu (a key label, not a translation). */
   const KEY = 'S';
@@ -24,8 +26,12 @@
   {#if node !== null}
     <div class="split" data-node={node}>
       <Icon name="split" size={18} />
-      <span>{tf('split.tip', { place: names(node) })}</span>
-      <kbd class="k">{KEY}</kbd>
+      {#if fit > 0}
+        <span>{tf('split.tipClick', { place: names(node), n: fit })}</span>
+      {:else}
+        <span>{tf('split.tip', { place: names(node) })}</span>
+        <kbd class="k">{KEY}</kbd>
+      {/if}
     </div>
   {/if}
 </MapTip>

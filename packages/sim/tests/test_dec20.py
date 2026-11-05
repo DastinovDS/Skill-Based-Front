@@ -47,6 +47,8 @@ from gow_sim.systems.combat import combat
 from gow_sim.systems.movement import movement, reachable
 from gow_sim.systems.orders import active_bonuses, orders
 from gow_sim.systems.recruit import recruit
+from gow_sim.view import opaque_id
+from gow_sim.view import reach as view_reach
 
 TESTS_DIR = Path(__file__).resolve().parent
 MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
@@ -88,6 +90,7 @@ def _rules() -> Ruleset:
 
 
 RULES = _rules()
+KEY = b"dec20-test-key-0123456789abcdef!"
 
 K, A, B, D, E, P, C = range(7)
 _KINDS = ["capital", "city_medium", "city_small", "city_medium", "city_medium", "province"]
@@ -550,3 +553,24 @@ def test_reachable_nodes_under_the_stack_limit() -> None:
     # 5 units: B (4) and P (3) do not hold the group, C only over D and E (60 ticks).
     assert reachable(state, RULES, 0, A, size=5) == {K: 20, D: 20, E: 40, C: 60}
     assert reachable(state, RULES, 0, A, size=3) == {K: 20, B: 20, D: 20, E: 40, P: 25, C: 40}
+
+
+@pytest.mark.parametrize(
+    ("units", "split"),
+    [
+        # 5 units: B (4) and P (3) do not hold the group; a split of 4 gets to B, of 3 to P.
+        (5, ((B, 4), (P, 3))),
+        # 7 units: only K (10) holds it; D, E and C (over D-E) take 6, B 4, P 3.
+        (7, ((B, 4), (D, 6), (E, 6), (P, 3), (C, 6))),
+    ],
+)
+def test_reach_names_the_size_that_fits_a_split_node(
+    units: int, split: tuple[tuple[int, int], ...]
+) -> None:
+    """#762: a ``STACK_LIMIT`` node of ``reach`` carries the most units that get there (DEC-20, D:
+    a group goes only through nodes whose capacity is not less than its size)."""
+    state = _state()
+    gid = _add(state, units, units, A)
+    found = view_reach(state, RULES, 0, opaque_id(KEY, 0, gid), KEY)
+    assert found is not None
+    assert found.split == split

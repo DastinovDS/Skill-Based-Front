@@ -43,6 +43,20 @@ export interface GhostArrow {
   readonly status?: GhostStatus;
   /** When the server rejected it (`performance.now()` ms), for the shake and the fade. */
   readonly rejectedAt?: number | null;
+  /**
+   * The `reject_code` of the refusal; `NOT_ENOUGH_CP` draws the cut-off arrow of a move the CP did
+   * not pay for, bolder and longer (#762).
+   */
+  readonly rejectCode?: string | null;
+}
+
+/**
+ * What a click under the pointer would pick or aim at (#762): the area of a node (`node`) or an own
+ * group (`group`), lit lightly. One of the two is set.
+ */
+export interface HoverMark {
+  readonly node: number | null;
+  readonly group: string | null;
 }
 
 /** Where a click would send the selected group. */
@@ -113,6 +127,8 @@ export interface OverlayState {
   readonly eta: EtaMark | null;
   /** The road pick of a fortification; `null`: not picking. */
   readonly fortPick?: FortPick | null;
+  /** What a click under the pointer would pick or aim at (#762); `null`: nothing. */
+  readonly hover?: HoverMark | null;
 }
 
 export interface EtaMark {
@@ -136,6 +152,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   split: [],
   eta: null,
   fortPick: null,
+  hover: null,
 };
 
 export interface MapInteraction {

@@ -622,6 +622,35 @@ export const GHOST_SHAKE_MS = 200;
 export const GHOST_REJECT_MS = 500;
 export const GHOST_SHAKE_AMPLITUDE = 3;
 
+/**
+ * The light outline of the own group under the pointer (#762): the selection frame's triangle, a
+ * little smaller and faint, so the hover never reads as a selection.
+ */
+export const HOVER_FRAME = { scale: 1.3, width: 2, alpha: 0.75, haloAlpha: 0.5 } as const;
+
+/**
+ * The area of the city or province under the pointer (#762): a faint paper wash over the cell
+ * and a thin rim inside its edge (the rim is the cue, not the tint).
+ */
+export const HOVER_AREA = { alpha: 0.14, rimWidth: 2.5, rimAlpha: 0.7 } as const;
+
+/**
+ * The cut-off arrow (#762): a move refused because the CP did not pay for it. It stays clearly
+ * longer than another refusal (as long as the CP badge is marked, `CP_SHORT_FLASH_MS`), fades only
+ * over its last `fadeMs`, is bolder, in the alarm red, and is crossed out where it is cut: the
+ * cross is the shape that tells it, not the colour.
+ */
+export const GHOST_CP = {
+  rejectMs: 1600,
+  fadeMs: 500,
+  width: 6,
+  alpha: 1,
+  color: ENEMY,
+  /** Half the span of each bar of the cross, world units. */
+  cross: 8,
+  crossWidth: 3.5,
+} as const;
+
 // --- The «Supply» layer (DEC-28, item 8) ---------------------------------------------------------
 // A flat, minimal picture: the territory is a stronger flat tint than on the normal map, an own
 // road is a pipe whose bore is its level (#429), and only what supply is about is drawn on top.

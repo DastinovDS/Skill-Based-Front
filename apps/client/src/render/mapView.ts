@@ -30,12 +30,14 @@ import {
   CELL_BORDER,
   CELL_LINE,
   FLOW_LEVEL,
+  HOVER_AREA,
   MAP_BORDER,
   ROAD_BUFFER,
   ROAD_FOG,
   ROAD_LANE,
   ROAD_OWN,
   PATTERN_GROUND,
+  PAPER,
   TERRAIN_FILL,
   TERRITORY_GLOW,
   SUPPLY_FLOOR,
@@ -142,6 +144,9 @@ export class MapView {
   private readonly territory: Graphics;
   /** The supply level (T1, DEC-43): lit cells over the tint, and their rim toward the rear. */
   private readonly levelFill: Graphics;
+  /** The area under the pointer that a click would pick or aim at (#762): one cell, redrawn on a change. */
+  private readonly hoverFill: Graphics;
+  private hoverCell: number | null = null;
   private readonly levelRim: Graphics;
   private level: ReadonlySet<number> = new Set();
   private levelFrom: ReadonlySet<number> | null = null;
@@ -215,6 +220,7 @@ export class MapView {
     this.cellLines = layers.layer.territory.addChild(this.drawCellLines());
     this.territory = layers.layer.territory.addChild(new Graphics());
     this.levelFill = layers.layer.territory.addChild(new Graphics({ label: 'level-fill' }));
+    this.hoverFill = layers.layer.territory.addChild(new Graphics({ label: 'hover-area' }));
     this.buildGlow(layers.layer.territory, bounds);
     this.borderLines = layers.layer.territory.addChild(new Graphics());
     this.levelRim = layers.layer.territory.addChild(new Graphics({ label: 'level-rim' }));
@@ -419,6 +425,30 @@ export class MapView {
         cap: 'round',
       });
     }
+  }
+
+  /**
+   * Lights the area of node `cell` lightly (#762): what a click there would pick or aim at; `null`
+   * lights nothing. Called every frame: the same cell costs nothing, a new one redraws one polygon.
+   */
+  setHover(cell: number | null): void {
+    if (cell === this.hoverCell) return;
+    this.hoverCell = cell;
+    const g = this.hoverFill.clear();
+    const polygon = cell === null ? undefined : this.cells[cell];
+    if (polygon === undefined) return;
+    g.poly(polygon).fill({ color: PAPER, alpha: HOVER_AREA.alpha });
+    g.poly(polygon).stroke({
+      width: HOVER_AREA.rimWidth,
+      color: PAPER,
+      alpha: HOVER_AREA.rimAlpha,
+      join: 'round',
+    });
+  }
+
+  /** The node whose area is lit as under the pointer (`setHover`); `null`: none. */
+  get hovered(): number | null {
+    return this.hoverCell;
   }
 
   /** `owners[i]`: current owner of node `i` (`null`: nobody). */
@@ -751,6 +781,7 @@ export class MapView {
     this.cellLines.destroy();
     this.territory.destroy();
     this.levelFill.destroy();
+    this.hoverFill.destroy();
     this.levelRim.destroy();
     this.borderLines.destroy();
     this.glow.destroy({ children: true });

@@ -189,7 +189,7 @@
   <PlanBanner {orders} group={data?.group ?? null} />
   <SupplyMenu {orders} names={hud.nodeName} />
   <TransferDialog {orders} names={hud.nodeName} />
-  <SplitMenu {orders} {anchors} />
+  <SplitMenu {orders} {anchors} names={hud.nodeName} />
   <CityRadial
     {orders}
     {anchors}

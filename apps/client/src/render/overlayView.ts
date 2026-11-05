@@ -7,7 +7,7 @@ import { comet, cometPhase, routeSpans, type RouteSpan } from './etaRoute.ts';
 import hourglassUrl from './glyphs/hourglass.png';
 import type { Point } from './camera.ts';
 import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
-import { ghostLook } from './intentLayout.ts';
+import { CP_REJECT, ghostLook } from './intentLayout.ts';
 import { reducedMotion } from './motion.ts';
 import type { MapLayers } from './layers.ts';
 import {
@@ -26,6 +26,8 @@ import {
   ARROW_OUTLINE,
   BG,
   CAPITAL_RADIUS,
+  GHOST_CP,
+  HOVER_FRAME,
   ORDER_GHOST_ALPHA,
   ORDER_GHOST_DASH,
   ORDER_GHOST_GAP,
@@ -67,6 +69,10 @@ function rimSpan(a: Point, b: Point, ra: number, rb: number): [Point, Point] | n
 export class OverlayView {
   private readonly ring = new Graphics();
   private readonly frame = new Graphics({ label: 'select-frame' });
+  /** The light outline of the own group under the pointer (#762): what a click would pick. */
+  private readonly hoverFrame = new Graphics({ label: 'hover-frame' });
+  /** Side of the triangle the hover outline is drawn for (0: not drawn yet). */
+  private hoverSide = 0;
   private readonly lines = new Graphics({ label: 'order-lines' });
   /**
    * The dashed band of the road mode: a Graphics of its own because it has to show in the «Supply»
@@ -151,11 +157,13 @@ export class OverlayView {
       this.lines,
       this.comet,
       this.ring,
+      this.hoverFrame,
       this.frame,
       this.eta,
       this.ghosts,
     );
     this.frame.visible = false;
+    this.hoverFrame.visible = false;
   }
 
   /** `groupSpot`: the drawn centre, side and symbol scale of an own group's token. */
@@ -182,6 +190,18 @@ export class OverlayView {
       if (this.frameSide !== at.side) this.drawFrame(at.side);
       this.frame.position.set(at.x, at.y);
       this.frame.scale.set(at.scale);
+    }
+    // The group under the pointer gets a light outline, unless it is the selected one.
+    const hovered = next.hover?.group ?? null;
+    const spot =
+      hovered === null || (selected?.kind === 'group' && selected.id === hovered)
+        ? undefined
+        : groupSpot(hovered);
+    this.hoverFrame.visible = spot !== undefined;
+    if (spot !== undefined) {
+      if (this.hoverSide !== spot.side) this.drawHoverFrame(spot.side);
+      this.hoverFrame.position.set(spot.x, spot.y);
+      this.hoverFrame.scale.set(spot.scale);
     }
   }
 
@@ -288,6 +308,7 @@ export class OverlayView {
     this.lines.destroy();
     this.ghosts.destroy();
     this.ring.destroy();
+    this.hoverFrame.destroy();
     this.frame.destroy();
   }
 
@@ -342,6 +363,28 @@ export class OverlayView {
     g.poly(poly).stroke({ width: SELECT_WIDTH + 4, color: BG, alpha: 0.8, join: 'round' });
     g.poly(poly).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR, join: 'round' });
     this.frameSide = side;
+  }
+
+  /** The hover outline: the selection frame's triangle, thinner and faint (#762). */
+  private drawHoverFrame(side: number): void {
+    const g = this.hoverFrame;
+    g.clear();
+    const [left, right, tip] = triangleCorners(side * HOVER_FRAME.scale);
+    const dy = (triangleCorners(side)[2].y - tip.y) / 2;
+    const poly = [left, right, tip].flatMap((p) => [p.x, p.y + dy]);
+    g.poly(poly).stroke({
+      width: HOVER_FRAME.width + 3,
+      color: BG,
+      alpha: HOVER_FRAME.haloAlpha,
+      join: 'round',
+    });
+    g.poly(poly).stroke({
+      width: HOVER_FRAME.width,
+      color: SELECT_COLOR,
+      alpha: HOVER_FRAME.alpha,
+      join: 'round',
+    });
+    this.hoverSide = side;
   }
 
   private drawLines(state: OverlayState): void {
@@ -453,11 +496,15 @@ export class OverlayView {
    */
   private drawGhost(g: Graphics, ghost: GhostArrow, now: number): void {
     const status = ghost.status ?? 'pending';
+    // The cut-off arrow (#762): a move the CP did not pay for, bolder, red, crossed out, longer.
+    const cut = status === 'rejected' && ghost.rejectCode === CP_REJECT;
+    const base = cut ? GHOST_CP.alpha : status === 'accepted' ? 1 : ORDER_GHOST_ALPHA;
     const look = ghostLook(
       status,
       ghost.rejectedAt == null ? 0 : now - ghost.rejectedAt,
-      status === 'accepted' ? 1 : ORDER_GHOST_ALPHA,
+      base,
       reducedMotion(),
+      ghost.rejectCode ?? null,
     );
     if (look.alpha <= 0) return;
     // The server's path starts at the group's node; the unanswered arrow goes straight to `dest`.
@@ -466,7 +513,8 @@ export class OverlayView {
       .map((id) => nodePoint(this.map, id))
       .filter((p): p is Point => p !== undefined)
       .map((p) => ({ x: p.x + look.dx, y: p.y }));
-    const color = YOU;
+    const color = cut ? GHOST_CP.color : YOU;
+    const width = cut ? GHOST_CP.width : ORDER_GHOST_WIDTH;
     const last = points.at(-1);
     const before = points.at(-2);
     if (last === undefined || before === undefined) return;
@@ -478,10 +526,11 @@ export class OverlayView {
       ARROW_HEAD.length,
       ARROW_HEAD.width,
     );
-    const fade = Math.min(1, look.alpha / ORDER_GHOST_ALPHA);
+    const fade = Math.min(1, look.alpha / base);
+    const outline = cut ? { ...ARROW_OUTLINE, width: ARROW_OUTLINE.width + 2 } : ARROW_OUTLINE;
     for (const pass of [
-      { ...ARROW_OUTLINE, alpha: ARROW_OUTLINE.alpha * fade },
-      { width: ORDER_GHOST_WIDTH, color, alpha: look.alpha },
+      { ...outline, alpha: outline.alpha * fade },
+      { width, color, alpha: look.alpha },
     ]) {
       for (let i = 1; i < points.length; i++) {
         const a = points[i - 1];
@@ -503,5 +552,20 @@ export class OverlayView {
         });
       }
     }
+    if (cut) this.drawCross(g, before, head?.end ?? last, look.alpha);
+  }
+
+  /** The cross of the cut-off arrow, on the middle of its last road: a dark halo, then white. */
+  private drawCross(g: Graphics, a: Point, b: Point, alpha: number): void {
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const r = GHOST_CP.cross;
+    const bars = (): void => {
+      g.moveTo(mid.x - r, mid.y - r).lineTo(mid.x + r, mid.y + r);
+      g.moveTo(mid.x - r, mid.y + r).lineTo(mid.x + r, mid.y - r);
+    };
+    bars();
+    g.stroke({ width: GHOST_CP.crossWidth + 3, color: BG, alpha: 0.9 * alpha, cap: 'round' });
+    bars();
+    g.stroke({ width: GHOST_CP.crossWidth, color: PAPER, alpha, cap: 'round' });
   }
 }

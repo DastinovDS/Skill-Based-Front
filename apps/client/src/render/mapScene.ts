@@ -323,6 +323,10 @@ export class MapScene {
     this.setTerrainMode(overlay.terrain);
     // The selected city shows the free slots of its queue; the rings that ask for a look pulse.
     this.cities.setSelected(overlay.selection?.kind === 'node' ? overlay.selection.id : null);
+    // The area a click would pick or aim at is lit lightly (#762); not the selected city itself.
+    const hovered = overlay.hover?.node ?? null;
+    const selectedNode = overlay.selection?.kind === 'node' ? overlay.selection.id : null;
+    this.view.setHover(hovered === selectedNode ? null : hovered);
     this.cities.pulse(performance.now());
     const announce = frame.base !== this.base;
     if (announce) {
