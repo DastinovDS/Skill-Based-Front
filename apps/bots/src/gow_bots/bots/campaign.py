@@ -58,6 +58,7 @@ from typing import ClassVar, override
 
 from gow_bots.bots.base import Bot, ParamRange, node_of
 from gow_bots.bots.economy import (
+    FactorySites,
     LeafShift,
     bunker_site,
     factory_site,
@@ -204,6 +205,8 @@ class CampaignBot(Bot):
         self._net: frozenset[int] = frozenset()
         self.leaf = LeafShift()
         """The memory of the leaf shift policy (``economy.leaf_shift_command``)."""
+        self.factory_sites = FactorySites()
+        """The memory of the own factory builds (``economy.factory_site``, #683)."""
 
     # Decision -------------------------------------------------------------------------------
 
@@ -251,7 +254,7 @@ class CampaignBot(Bot):
             self, view, wants(self, view, self.line_extra(ctx)), self.lines_seen
         ):
             self.spend(ctx, cmd)
-        site = factory_site(self, view, self.FACTORIES)
+        site = factory_site(self, view, self.FACTORIES, self.factory_sites)
         if site is not None:
             self.spend(ctx, BuildFactory(site))
         site = bunker_site(self, view, self.bunkers())
