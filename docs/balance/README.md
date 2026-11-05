@@ -139,7 +139,11 @@ nothing changed meaning. Tournament files older than #310 do not contain them, t
 `siege_orders`, `planned_siege_orders` and `planned_siege_share` were added in #590 the same way (no field changed
 meaning); the report shows the gate share as n/a for older files, next to the share over all attacks. The charge ledger, flow, stock by place and
 bottleneck fields (#588) were added the same way (only additions, `schema` stays 1); the report shows n/a for older files.
-`cp_burned`, `cp_cap_ticks`, `idle_discharged_connected` and `idle_discharged_pocket` (#743) are additions too.
+`cp_burned`, `cp_cap_ticks`, `idle_discharged_connected` and `idle_discharged_pocket` (#743) are additions too, and so
+are the fields of #690 (section "Efficiency and contact"): `economy_model`, `supply_model`, `first_contact_tick`,
+`siege_fights`, `siege_walk_ins`, `contested_sieges`, `contested_sieges_won`, `units_killed`, `charges_per_kill_centi`,
+`charges_built_lost`, `cp_cancelled`. The report reads every one of them as optional: a file without them shows n/a in
+their cells and the economy is inferred from the mechanics used.
 
 The metric definitions are set in `packages/sim/src/gow_sim/analysis.py` (the module docstring).
 A "scheduled" and an "attacking" order is not visible in the event log (`Move` leaves no event),
@@ -177,6 +181,40 @@ A rejected command costs nothing. The real CP balance (regeneration, burning at 
 reconstructed: these are spendings by commands. The decisions on the disputed points were made by default
 (a comment in #375): net spending with refunds, `Forfeit` outside APM, an offline tool without
 display in the game and without a server API.
+
+`gow-bots analyze` also writes `usage` (the accepted commands per mechanic, as in a tournament row) and the fields of
+#690, so a human's mechanic usage is readable from a replay. The table of `gow-bots stats` follows the economy of the
+match (#690): its title line names the economy, the supply model and the first contact tick; under economy v2 it
+leaves out the rows of the v1 mechanics that v2 rejects (the stance timeline and ticks, `SetFront`, `SetRearMin`,
+`Transfer`, CP `road` and `transfer`, the front-marker columns and `mean stock front_wh`) and adds the v2 sinks
+(`charges into buildings`, `charges into buildings lost`, `charges into plans`, `charges to road tolls`), the tolls
+paid and taken and the road forts built; a row per mechanic the economy and the supply model accept
+(`<command> (accepted)`, `gow_bots.tournament.live_keys`: no `DrawLine` under the flow, no `SetLeafShift` under the
+lines); and for every economy the efficiency rows (enemy units killed, charges per kill, siege fights and walk-ins,
+contested sieges, CP of cancelled moves, CP burned, ticks at the CP cap, idle discharged units).
+
+## Efficiency and contact (#690)
+
+Per-player metrics of how well a player spent what it had, and one per-match metric of tempo. Not game rules: no event
+or field was added to the simulation, `SIM_VERSION` and the golden replays are untouched (`gow_sim.analysis`, module
+docstring "Efficiency and contact"). All values are integers.
+
+| Field | Meaning |
+|---|---|
+| `economy_model`, `supply_model` | `economy.model` and `supply.model` of the ruleset; a reader hides the rows of the other economy by them |
+| `first_contact_tick` | the earlier of the first `fight_started` (in a node or on an edge) and the first capture of a node the other player owned; `null` when the players never met (one value per match) |
+| `siege_fights`, `siege_walk_ins` | the two parts of `sieges`: fights for an enemy node with the player as attacker, and walks into an enemy node without defenders |
+| `contested_sieges`, `contested_sieges_won` | siege fights in which the defender spent a charge in a round (`spent_<defender>` of a `fight_round` above 0: a charged defender), and those of them that ended with the capture (`fight_ended` with `captured` and the attacker as winner) |
+| `units_killed` | the enemy units the player's shots killed (`losses` of the other player in every `fight_round`) |
+| `charges_per_kill_centi` | `charges_fights * 100 // units_killed`, hundredths rounded down; `null` without a kill |
+| `charges_built_lost` | the charges of `build_paid` of a build later stopped (`build_stopped` of its node and kind) and of a finished building (`barracks_built`, `warehouse_upgraded`, `factory_built`, `fort_built`) in a node the other player later captured; a part of `charges_built` |
+| `cp_cancelled` | CP in hundredths of the `Move` orders an accepted `CancelOrder` of the same group cancelled (the price of the group's last accepted `Move` while it still has an order at the end of a tick) |
+
+Reading: "siege success" (captures of enemy nodes over siege attempts) is 0.9 and more for every bot because most
+attempts are walk-ins; the contested sieges are the fights. `charges_built_lost` over `charges_built` is the share of the
+building charges that never paid back; the report splits the whole ledger by the outcome of the match (section "Charge
+sinks by outcome"). `first_contact_tick` measures the tempo of a map directly (the proposal of the map-economy notes of
+2026-11-05).
 
 ## Charge stock and burned share (#310)
 
@@ -300,10 +338,80 @@ uv run gow-bots report run.jsonl --out-dir /tmp/rep --name run
 ```
 
 The report (`gow_bots.report`, matplotlib only here) builds from a tournament file:
-the bot competence checks from BOT-05, the matrix of pairs with 95% Wilson intervals, the side
-advantage (mirrored matches), the metrics per bot (the share of scheduled attacks, the siege success, the captures in
-the last 3 minutes), the strategy diversity (a dominant strategy, "rock-paper-scissors" cycles),
-the number of unique outcomes and the breakdown by map. The output depends only on the lines of the file.
+the economy of the file (from `economy_model`, or inferred from the mechanics used in an older file) and the
+fair-field line (no bot played with an information grant: grants do not exist yet, #692), the data validity checks
+(below), the bot competence checks (BOT-05, rewritten for the smart field: a personality's `@hard` bot stands in for the
+old bot of that name, plus the exploiter gate of #688), the level ladder, the Bradley-Terry strength model, the matrix
+of pairs with 95% Wilson intervals, the style matrix with its Nash mix, the side advantage (mirrored matches), the
+metrics per bot (the share of scheduled attacks, the siege success, siege fights and walk-ins, contested sieges, the
+captures in the last 3 minutes), the charge ledger and its split by outcome, the supply flow (DEC-43: leaf shifts,
+road fortifications, tolls, starvation), CP and idle units, the mechanic usage, the strategy diversity (a dominant
+strategy, "rock-paper-scissors" cycles), the number of unique outcomes, the breakdown by map and the seeds of the file.
+Under economy v2 the v1-only columns (front markers, `front_wh`, the v1 commands in the usage table) are left out. The
+output depends only on the lines of the file (the bootstrap draws from a fixed seed). A report of the 16-bot field of
+20 seeds (20480 rows) takes about 10 seconds.
+
+## Data validity
+
+Reliability (does a number repeat on other seeds) and validity (does it say something about the rules, not the bot
+code) are different questions. The section "Data validity" of the report answers the ones a tournament file can
+answer (`gow_bots.validity`; the checklist of the data-quality notes of 2026-11-05). **The thresholds are proposals,
+not owner decisions**: a FAIL says what the file cannot carry, not that a rule is wrong. A verdict about a rule number
+names the field and the checks it passed.
+
+| Id | Check | Computed from the file | Threshold (proposal) |
+|---|---|---|---|
+| V1 | skill floor | every `smart_*` bot head to head against `random_legal` and `idle` | each at least 0.95; NO DATA without the floor bots |
+| V2 | level ladder | the head to head of `@hard`, `@normal`, `@easy` of every personality | hard over easy at least 0.60 with the Wilson lower bound above 0.5, normal over easy above 0.5, for every personality |
+| V3 | tempo binding | the mean accepted commands per match of `@easy` and `@hard` of a personality | they differ by at least 15% |
+| V4a | split-half reliability | Pearson's r of the bots' win rates against the others on the even and on the odd seeds (the pairs' r is printed too) | r at least 0.9 |
+| V4b | pair precision | the median matches of an unordered pair, `1.96 * sqrt(0.25 / n)` | at most 0.05 (385 matches of the pair) |
+| V4c | side bias | the side-0 share of the decided mirror matches per map, with the Wilson interval | 0.47..0.53 on every map |
+| V5a | counter for every bot | the opponents whose share against the bot has a Wilson lower bound above 0.5 | every bot has at least one |
+| V5b | no dominant bot | the win rate of every bot against the field | none above 0.65 |
+| V6 | exploiter | `expert` (`smart_expander@hard`, the server level) against `smart_exploiter` (#688) | at least 0.50; NO DATA until the bot exists |
+| V7 | sensitivity | needs a second run with one rule number moved (NOT COMPUTABLE); prints the mechanics every bot uses less than 0.1 times per match: those are not judged by bots | |
+| V8 | similarity to humans | needs the owner's replays (`gow-bots stats`; NOT COMPUTABLE) | a metric off by more than 2x is bots-only |
+| V9 | rank stability across maps | Spearman's rho (ties get the mean rank) of the bots' win rates against the others for every two maps | at least 0.5 for every two maps, else decide per map |
+| D1 | duplicate matches | rows with the same map, sides and seed | none |
+| D2 | repeated games | rows whose final `state_hash` another seed of the same map and ordered pair already reached | at most 5% of the rows |
+
+The **level ladder** section lists every pair of levels of every personality (a name without a level is `@hard`) and
+the adjacent server levels (`easy` `smart_turtle@easy` < `normal` `smart_reactive@normal` < `hard`
+`smart_strangler@hard` < `expert` `smart_expander@hard`, a copy of `gow_server.botmatch.LEVEL_BOTS` kept equal by a
+test): the share of the higher level among the decided matches of the pair, both sides, all maps, with the Wilson
+interval; *separated* when the interval excludes 0.5, *INVERTED* when it lies below. Next to it the accepted commands
+per match by level (V3).
+
+The **Bradley-Terry** section fits `P(side 0 wins) = sigmoid(s[bot0] - s[bot1] + h[map])` on the decided matches by
+Newton's method with a ridge of 0.01 on every parameter (it keeps a bot that never lost finite and makes
+`sum(s) = 0`): `s` is a bot's strength in log-odds, separated from the side and the map; `h` the side-0 advantage of a
+map. The 95% intervals are the percentiles of 200 refits on the seeds drawn with replacement (`random.Random(0)`: the
+same file gives the same text).
+
+The **style matrix** is `A[i][j]` = (wins of i + half the draws) / matches of i against j, minus 0.5, both sides and all
+maps. Its transitive part is `r[i] - r[j]` with `r[i]` the mean of row `i` (the least-squares fit of a single
+strength); the **intransitive share** is the sum of squares of the rest over that of `A` (0: one ladder explains every
+pair; 1: pure rock-paper-scissors; the combinatorial Hodge split of Balduzzi et al., 2018). The **Nash mix** is the
+symmetric equilibrium of the zero-sum game `A` (20000 rounds of multiplicative weights, the mean of the played mixes);
+its `gap` is the best pure answer to the mix, 0 at an exact equilibrium. A bot outside the mix is not needed against
+this field; a mix of one bot means that bot has no answer in the field (read it with V5a).
+
+## Seeds
+
+The 95% half-width of a share near 0.5 is about `1.96 * sqrt(0.25 / n)`. Every ordered pair plays every seed on every
+map, so the matches of one claim are:
+
+| Claim | `n` at 3 seeds | at 20 seeds | at 50 seeds | Half-width at 20 seeds | What it answers |
+|---|---|---|---|---|---|
+| one ordered pair on one map | 3 | 20 | 50 | 0.22 | nothing alone; a crash or a frozen match |
+| one pair, both sides, 4 maps | 24 | 160 | 400 | 0.08 | a pair or a ladder step only at 50 seeds (+-0.05) |
+| one bot against a 16-bot field, 4 maps | 360 | 2400 | 6000 | 0.02 | a bot's standing in the field, the level order |
+| one map's side skew, mirror matches of 16 bots | 48 | 320 | 800 | 0.055 | a skew of the map larger than about 0.05 |
+
+The 3-seed smoke run answers "a crash or a gross imbalance"; the 16-bot field at 20 seeds answers a bot's standing and
+the side skew of a map; a claim about one pair (a ladder step, the exploiter gate) needs about 400 matches of that pair
+(50 seeds on the 4 pool maps). The report prints the same numbers for the file it reads (section "Seeds").
 
 The BAL-02 confirming run (#40) is committed: `latest.md` and `latest-*.png` from 30000 matches of `mvp-2` (the 10
 strategic bots, the 3 pool maps, 100 seeds, GitHub runners); `latest.jsonl` holds seeds 0..9 of that run (the full

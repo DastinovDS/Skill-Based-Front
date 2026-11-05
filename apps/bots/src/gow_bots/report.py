@@ -17,6 +17,10 @@ Conventions:
   sieges, captures) but not for win rates.
 - Mechanic usage (#166): the share of a bot's perspectives in which it used a mechanic at least
   once, and the mean count per match (``usage`` of the rows; files without it show n/a).
+- The economy of the file (#690): ``economy_model`` and ``supply_model`` of the rows, or in an
+  older file the one its mechanics show (``file_economy``); under economy v2 the v1-only columns
+  are left out. The data validity checks, the level ladder, the Bradley-Terry model and the
+  style matrix come from ``gow_bots.validity``.
 """
 
 # matplotlib's inline types leave ``**kwargs`` of most Axes methods unannotated, so strict
@@ -30,9 +34,19 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
+from statistics import median
 from typing import Any, Final
 
-from gow_bots.tournament import SCHEMA_VERSION, USAGE_KEYS
+from gow_bots import validity
+from gow_bots.tournament import (
+    LINES_ONLY_KEYS,
+    SCHEMA_VERSION,
+    USAGE_KEYS,
+    V1_ONLY_KEYS,
+    V2_ONLY_KEYS,
+    live_keys,
+)
+from gow_bots.validity import wilson
 
 __all__ = [
     "REPORT_Z",
@@ -43,7 +57,7 @@ __all__ = [
     "write_report",
 ]
 
-REPORT_Z: Final = 1.96
+REPORT_Z: Final = validity.Z
 """z of the 95% confidence interval."""
 LATE_MINUTES: Final = 3
 """The tail of a match that the late-capture metric looks at."""
@@ -57,18 +71,6 @@ _STRANGLER, _EXPANDER, _REACTIVE, _RUSHER, _TURTLE = (
     "rusher",
     "turtle",
 )
-
-
-def wilson(successes: int, total: int, z: float = REPORT_Z) -> tuple[float, float]:
-    """Wilson score interval of a binomial proportion; ``(0.0, 1.0)`` when ``total`` is 0."""
-    if total <= 0:
-        return (0.0, 1.0)
-    p = successes / total
-    z2 = z * z
-    denom = 1 + z2 / total
-    centre = (p + z2 / (2 * total)) / denom
-    half = z * math.sqrt(p * (1 - p) / total + z2 / (4 * total * total)) / denom
-    return (max(0.0, centre - half), min(1.0, centre + half))
 
 
 # --- reading the rows ------------------------------------------------------------------------
@@ -113,6 +115,16 @@ class Row:
     planned_siege_orders: tuple[int, int] | None = None
     cp: dict[str, tuple[int, int]] | None = None
     """``CP_KEYS`` by side (#743); ``None`` in a file written before they existed."""
+    accepted: tuple[int, int] | None = None
+    """Accepted commands of all kinds by side."""
+    extra: dict[str, tuple[int, int]] | None = None
+    """The per-side ``EXTRA_KEYS`` the row has (#690, #707); a key the row lacks is absent."""
+    first_contact_tick: int | None = None
+    """The first fight or capture of an enemy node (#690); ``None`` also in an older file."""
+    economy_model: str | None = None
+    """``economy.model`` of the ruleset (#690); ``None`` in a file written before #690."""
+    supply_model: str | None = None
+    """``supply.model`` of the ruleset (#690)."""
 
     @property
     def outcome(self) -> tuple[int | None, str, tuple[int, int], tuple[int, int]]:
@@ -189,6 +201,22 @@ CP_KEYS: Final[tuple[str, ...]] = (
 discharged unit-ticks in the capital's component and in pockets."""
 
 
+EXTRA_KEYS: Final[tuple[str, ...]] = (
+    "charges_tolls",
+    "tolls_paid",
+    "forts_built",
+    "siege_fights",
+    "siege_walk_ins",
+    "contested_sieges",
+    "contested_sieges_won",
+    "units_killed",
+    "charges_built_lost",
+    "cp_cancelled",
+)
+"""Per-side fields read one by one, each may be missing: the road fortifications of DEC-43 (#707)
+and the efficiency fields of #690."""
+
+
 V2_FLOW_KEYS: Final[tuple[str, ...]] = ("charges_built", "charges_plans")
 """The economy v2 sinks of the ledger (DEC-41, #646): 0 in a file written before them."""
 
@@ -256,7 +284,22 @@ def _parse_row(raw: dict[str, Any]) -> Row:
         siege_orders=_opt_pair(raw, "siege_orders"),
         planned_siege_orders=_opt_pair(raw, "planned_siege_orders"),
         cp=_cp(raw),
+        accepted=_opt_pair(raw, "accepted"),
+        extra={k: _pair(raw, k) for k in EXTRA_KEYS if k in raw},
+        first_contact_tick=_opt_int(raw, "first_contact_tick"),
+        economy_model=_opt_str(raw, "economy_model"),
+        supply_model=_opt_str(raw, "supply_model"),
     )
+
+
+def _opt_int(raw: dict[str, Any], key: str) -> int | None:
+    value = raw.get(key)
+    return None if value is None else int(value)
+
+
+def _opt_str(raw: dict[str, Any], key: str) -> str | None:
+    value = raw.get(key)
+    return None if value is None else str(value)
 
 
 def load_rows(path: str | Path) -> list[Row]:
@@ -382,18 +425,94 @@ def _matrix(ps: Sequence[Persp], bots: Sequence[str], *, full: bool) -> str:
     return _table(header, body)
 
 
-def _section_overview(rows: Sequence[Row]) -> str:
+@dataclass(frozen=True, slots=True)
+class Economy:
+    """The economy of the file: ``economy.model`` and ``supply.model`` (``None``: unknown)."""
+
+    economy: str | None
+    supply: str | None
+    inferred: bool
+    """Read from the mechanics used, not from the rows (a file written before #690)."""
+
+    @property
+    def v2(self) -> bool:
+        return self.economy == "v2"
+
+    @property
+    def flow(self) -> bool:
+        return self.v2 and self.supply == "flow"
+
+    def describe(self) -> str:
+        if self.economy is None:
+            return "unknown (no `economy_model` and no telling mechanic, or a mix): all rows shown"
+        text = f"`{self.economy}`" + (
+            f", supply `{self.supply}`" if self.v2 and self.supply else ""
+        )
+        if self.inferred:
+            text += (
+                " (inferred from the mechanics used: the rows have no `economy_model`, a file "
+                "written before #690)"
+            )
+        return text
+
+
+def file_economy(rows: Sequence[Row]) -> Economy:
+    """The economy of all rows, or the one their mechanics show (#690): a v1-only command or a
+    front marker means v1, a v2-only command v2, ``SetLeafShift`` the flow, a line the lines."""
+    known = {(r.economy_model, r.supply_model) for r in rows}
+    if None not in {e for e, _ in known}:
+        if len(known) == 1:
+            economy, supply = next(iter(known))
+            return Economy(economy, supply, inferred=False)
+        return Economy(None, None, inferred=False)
+    used: Counter[str] = Counter()
+    for r in rows:
+        if r.usage is not None:
+            used.update(r.usage[0])
+            used.update(r.usage[1])
+    markers = any(r.flow is not None and any(r.flow["marker_ticks"]) for r in rows)
+    v1 = markers or any(used[k] for k in V1_ONLY_KEYS)
+    v2 = any(used[k] for k in V2_ONLY_KEYS)
+    if v1 == v2:
+        return Economy(None, None, inferred=True)
+    if v1:
+        return Economy("v1", None, inferred=True)
+    supply = (
+        "flow"
+        if used["SetLeafShift"]
+        else "lines"
+        if any(used[k] for k in LINES_ONLY_KEYS)
+        else None
+    )
+    return Economy("v2", supply, inferred=True)
+
+
+def _section_overview(rows: Sequence[Row], economy: Economy) -> str:
     maps = sorted({r.map for r in rows})
     reasons = Counter(r.reason for r in rows)
     draws = sum(r.winner is None for r in rows)
     seeds = sorted({r.seed for r in rows})
+    contact: list[str] = []
+    for m in maps:
+        ticks = [r.first_contact_tick for r in rows if r.map == m]
+        known = [t for t in ticks if t is not None]
+        if known:
+            contact.append(
+                f"{m} {int(median(known))} ({len(ticks) - len(known)} of {len(ticks)} never met)"
+            )
     lines = [
         f"- Matches: {len(rows)}; maps: {', '.join(maps)}; bots: {', '.join(_bots_of(rows))}.",
         f"- Seeds: {seeds[0]}..{seeds[-1]} ({len(seeds)}).",
         f"- Ruleset `{_one(r.ruleset_hash for r in rows)}`, `SIM_VERSION` "
         f"{_one(str(r.sim_version) for r in rows)}.",
+        f"- Economy: {economy.describe()}.",
+        "- Fair field: every bot of the file played without an information grant (the code has "
+        "no grants yet, #692, DEC-43); a balance verdict is read only from a fair file.",
         f"- No winner (a draw or not finished): {draws} ({_share(draws, len(rows))}).",
         "- End reasons: " + ", ".join(f"`{k}` {v}" for k, v in sorted(reasons.items())) + ".",
+        "- First contact, the median tick of the first fight or capture of an enemy node: "
+        + ("; ".join(contact) if contact else "n/a (a file written before #690)")
+        + ".",
     ]
     return "\n".join(lines)
 
@@ -473,6 +592,8 @@ def _section_bots(ps: Sequence[Persp], bots: Sequence[str]) -> str:
                 _share(planned_sieges, siege_orders) if with_siege else "n/a",
                 _share(planned, attacks),
                 f"{_share(sieges_won, sieges)} ({sieges_won}/{sieges})",
+                _siege_split(mine),
+                _contested_cell(mine),
                 f"{caps / len(mine):.2f}",
                 _share(late, caps),
             ]
@@ -485,6 +606,8 @@ def _section_bots(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         "share of scheduled attacks",
         "scheduled of all attacks",
         "siege success (taken/attempts)",
+        "siege fights / walk-ins per match",
+        "contested sieges won (won/fights)",
         "captures per match",
         f"share of captures in the last {LATE_MINUTES} min",
     ]
@@ -494,9 +617,37 @@ def _section_bots(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         "the `Move` orders into a node with an enemy garrison at the moment of the order: the "
         "scheduled ones (`planned=true`) over all of them (n/a in a file written before #590); "
         '"scheduled of all attacks" is the BAL-01 definition, every `Move` to an enemy or neutral '
-        'node. "Siege success" is captures of enemy nodes / siege attempts.'
+        'node. "Siege success" is captures of enemy nodes / siege attempts, and an attempt is '
+        "either a fight for an enemy node or a walk into one without defenders, so it reads "
+        'target choice more than fighting (#690); "contested sieges" are the fights in which '
+        "the defender spent a charge (a charged defender), and their share that ended with the "
+        "capture (n/a in a file written before #690)."
         "\n\n" + _table(header, body) + "\n\n![bots by map](PREFIX-bots.png)"
     )
+
+
+def _extra(p: Persp, key: str) -> int | None:
+    """The per-side ``EXTRA_KEYS`` field ``key`` of the perspective; ``None`` when missing."""
+    extra = p.row.extra
+    return None if extra is None or key not in extra else extra[key][p.side]
+
+
+def _extra_sum(ps: Sequence[Persp], key: str) -> tuple[int, int]:
+    """The sum of ``key`` over the perspectives that have it, and their number."""
+    values = [v for p in ps if (v := _extra(p, key)) is not None]
+    return sum(values), len(values)
+
+
+def _siege_split(ps: Sequence[Persp]) -> str:
+    fights, n = _extra_sum(ps, "siege_fights")
+    walks, _ = _extra_sum(ps, "siege_walk_ins")
+    return f"{fights / n:.2f} / {walks / n:.2f}" if n else "n/a"
+
+
+def _contested_cell(ps: Sequence[Persp]) -> str:
+    fights, n = _extra_sum(ps, "contested_sieges")
+    won, _ = _extra_sum(ps, "contested_sieges_won")
+    return f"{_share(won, fights)} ({won}/{fights})" if n else "n/a"
 
 
 def _side(pair: tuple[int, int] | None, side: int) -> int:
@@ -556,11 +707,13 @@ def _section_stock(ps: Sequence[Persp], rows: Sequence[Row], bots: Sequence[str]
     return intro + _table(["bot", *header], by_bot) + "\n\n" + _table(["map", *header], by_map)
 
 
-def _flow_cells(ps: Sequence[Persp]) -> list[str]:
-    """Charge flow columns of a group of perspectives: means per player and match."""
+def _flow_cells(ps: Sequence[Persp], economy: Economy) -> list[str]:
+    """Charge flow columns of a group of perspectives: means per player and match. Under economy
+    v2 the marker columns are left out and the tolls of the road fortifications come in."""
+    width = 15 if economy.v2 else 17
     rows = [(p.row.flow, p.side, p.row.ticks) for p in ps if p.row.flow is not None]
     if not rows:
-        return ["0", *["n/a"] * 17]
+        return ["0", *["n/a"] * width]
     n = len(rows)
 
     def total(key: str) -> int:
@@ -579,7 +732,8 @@ def _flow_cells(ps: Sequence[Persp]) -> list[str]:
     def pct(num: int, den: int) -> str:
         return f"{num * 100 / den:.0f}%" if den else "n/a"
 
-    return [
+    tolls, with_tolls = _extra_sum([p for p in ps if p.row.flow is not None], "charges_tolls")
+    head = [
         str(n),
         mean("charges_start"),
         f"{produced / n:.1f}",
@@ -592,6 +746,18 @@ def _flow_cells(ps: Sequence[Persp]) -> list[str]:
         mean("charges_attrition"),
         mean("charges_built"),
         mean("charges_plans"),
+    ]
+    if economy.v2:
+        return [
+            *head,
+            f"{tolls / with_tolls:.1f}" if with_tolls else "n/a",
+            mean("charges_end"),
+            str(total("charges_residual")),
+            f"{mean('charges_sent')} / {mean('charges_delivered')}",
+            pct(total("cap_full_ticks"), ticks),
+        ]
+    return [
+        *head,
         mean("charges_end"),
         str(total("charges_residual")),
         f"{mean('charges_sent')} / {mean('charges_delivered')} / {mean('charges_delivered_front')}",
@@ -601,24 +767,29 @@ def _flow_cells(ps: Sequence[Persp]) -> list[str]:
     ]
 
 
-def _place_cells(ps: Sequence[Persp]) -> list[str]:
+def _place_keys(economy: Economy) -> tuple[str, ...]:
+    """``PLACE_KEYS`` without the warehouses of the front markers under economy v2."""
+    return tuple(k for k in PLACE_KEYS if not (economy.v2 and k == "front_wh"))
+
+
+def _place_cells(ps: Sequence[Persp], keys: Sequence[str]) -> list[str]:
     """Mean stock by place: the mean over matches of the mean of each match's minutes."""
-    per_place: dict[str, list[int]] = {k: [] for k in PLACE_KEYS}
+    per_place: dict[str, list[int]] = {k: [] for k in keys}
     for p in ps:
         if p.row.places is None:
             continue
-        for k in PLACE_KEYS:
-            known = [v for v in p.row.places[p.side][k] if v is not None]
+        for k in keys:
+            known = [v for v in p.row.places[p.side].get(k, []) if v is not None]
             if known:
                 per_place[k].append(sum(known) // len(known))
     n = max(len(v) for v in per_place.values())
     if n == 0:
-        return ["0", *["n/a"] * len(PLACE_KEYS)]
+        return ["0", *["n/a"] * len(keys)]
     return [str(n), *(f"{sum(v) / (100 * len(v)):.2f}" if v else "n/a" for v in per_place.values())]
 
 
-def _section_flow(ps: Sequence[Persp], bots: Sequence[str]) -> str:
-    header = [
+def _section_flow(ps: Sequence[Persp], bots: Sequence[str], economy: Economy) -> str:
+    sinks = [
         "matches",
         "start",
         "produced",
@@ -631,37 +802,181 @@ def _section_flow(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         "died with units",
         "built",
         "plans",
-        "end",
-        "residual (sum, 0 = balanced)",
-        "sent / delivered / to markers",
-        "marker city empty",
-        "and capital has charges",
-        "capital full",
     ]
-    flow = [[f"**{b}**", *_flow_cells([p for p in ps if p.bot == b])] for b in bots]
-    places = [[f"**{b}**", *_place_cells([p for p in ps if p.bot == b])] for b in bots]
+    if economy.v2:
+        header = [*sinks, "tolls", "end", "residual (sum, 0 = balanced)", "sent / delivered"]
+        header.append("capital full")
+    else:
+        header = [
+            *sinks,
+            "end",
+            "residual (sum, 0 = balanced)",
+            "sent / delivered / to markers",
+            "marker city empty",
+            "and capital has charges",
+            "capital full",
+        ]
+    keys = _place_keys(economy)
+    flow = [[f"**{b}**", *_flow_cells([p for p in ps if p.bot == b], economy)] for b in bots]
+    places = [[f"**{b}**", *_place_cells([p for p in ps if p.bot == b], keys)] for b in bots]
     intro = (
         "Where the charges of a player come from and go (#588, definitions in "
         "[README.md](README.md)): *start* + *produced* = *burned* + *fights* + *captures* + "
         "*packets lost* + *warehouses lost* + *starved* + *died with units* + *built* + "
-        "*plans* + *end* (*built* and *plans*: the economy v2 sinks, buildings paid in charges "
-        "and the bonus a planned order gathers, DEC-41; 0 under v1); the "
-        "columns are the mean per player and match, charges. *Marker city empty* is the share "
-        "of the ticks with a front marker outside the capital in which such a warehouse is empty, "
-        "*and capital has charges* the part of those ticks in which the capital is not empty "
-        "(a supply bottleneck, not a lack of charges); *capital full* is the share of all ticks. "
-        "All matches count, mirror matches included; a file written before #588 shows n/a.\n\n"
+        "*plans* (+ *tolls* under the supply flow) + *end* (*built* and *plans*: the economy v2 "
+        "sinks, buildings paid in charges and the bonus a planned order gathers, DEC-41; *tolls*: "
+        "the charges road fortifications took, DEC-43 item D; 0 under v1); the "
+        "columns are the mean per player and match, charges. "
+    )
+    if economy.v2:
+        intro += (
+            "Under economy v2 the front-marker columns of v1 are left out (no markers: always 0, "
+            "#690). "
+        )
+    else:
+        intro += (
+            "*Marker city empty* is the share of the ticks with a front marker outside the "
+            "capital in which such a warehouse is empty, *and capital has charges* the part of "
+            "those ticks in which the capital is not empty (a supply bottleneck, not a lack of "
+            "charges). "
+        )
+    intro += (
+        "*Capital full* is the share of all ticks. All matches count, mirror matches included; a "
+        "file written before #588 shows n/a.\n\n"
     )
     stock = (
         "\n\nMean stock by place (charges, the mean over matches of the per-match mean of the "
         "minute means):\n\n"
     )
     return (
-        intro
-        + _table(["bot", *header], flow)
-        + stock
-        + _table(["bot", "matches", *PLACE_KEYS], places)
+        intro + _table(["bot", *header], flow) + stock + _table(["bot", "matches", *keys], places)
     )
+
+
+_OUTCOMES: Final[tuple[str, ...]] = ("won", "lost", "no winner")
+
+
+def _sink_columns(economy: Economy) -> list[tuple[str, str, bool]]:
+    """``(label, row key, an EXTRA_KEYS field)`` of the sinks-by-outcome table."""
+    columns = [
+        ("produced", "charges_produced", False),
+        ("burned", "charges_burned", False),
+        ("start", "charges_start", False),
+        ("fights", "charges_fights", False),
+        ("captures", "charges_captures", False),
+        ("packets lost", "charges_packets_lost", False),
+        ("warehouses lost", "charges_warehouses_lost", False),
+        ("starved", "charges_starved", False),
+        ("died with units", "charges_attrition", False),
+        ("built", "charges_built", False),
+    ]
+    if economy.v2:
+        columns.append(("of them lost", "charges_built_lost", True))
+    columns.append(("plans", "charges_plans", False))
+    if economy.v2:
+        columns.append(("tolls", "charges_tolls", True))
+    columns.append(("end", "charges_end", False))
+    return columns
+
+
+def _outcome(p: Persp) -> str:
+    return "no winner" if p.row.winner is None else "won" if p.won else "lost"
+
+
+def _section_sinks(ps: Sequence[Persp], economy: Economy) -> str:
+    columns = _sink_columns(economy)
+    body: list[list[str]] = []
+    for outcome in _OUTCOMES:
+        mine = [p for p in ps if p.row.flow is not None and _outcome(p) == outcome]
+        cells = [outcome, str(len(mine))]
+        for _, key, extra in columns:
+            if extra:
+                total, have = _extra_sum(mine, key)
+            else:
+                total, have = sum(_flow_side(p, key) for p in mine), len(mine)
+            cells.append(f"{total / have:.1f}" if have else "n/a")
+        body.append(cells)
+    intro = (
+        "The charge ledger split by how the match ended for the player (#690): the mean per "
+        "player and match of every source and sink, over all bots and the matches with the "
+        "ledger (mirror matches included). "
+        + (
+            "*Of them lost*: the charges of buildings later stopped or captured "
+            "(`charges_built_lost`, a part of *built*); n/a in a file written before #690. "
+            if economy.v2
+            else ""
+        )
+        + "A sink that is larger for the losers than for the winners is where a lost match "
+        "leaks.\n\n"
+    )
+    return intro + _table(["outcome", "players", *(c[0] for c in columns)], body)
+
+
+def _flow_side(p: Persp, key: str) -> int:
+    if key == "charges_produced":
+        return 0 if p.row.charges_produced is None else p.row.charges_produced[p.side]
+    if key == "charges_burned":
+        return 0 if p.row.charges_burned is None else p.row.charges_burned[p.side]
+    assert p.row.flow is not None
+    return p.row.flow[key][p.side]
+
+
+def _section_supply(ps: Sequence[Persp], bots: Sequence[str], economy: Economy) -> str:
+    if not economy.flow:
+        return 'Not a supply-flow file (DEC-43, `supply.model = "flow"`): nothing to show.'
+    header = [
+        "matches",
+        "SetLeafShift per match",
+        "FortifyRoad per match",
+        "forts built",
+        "tolls paid",
+        "charges lost to tolls",
+        "charges taken by own forts",
+        "starved",
+    ]
+    body: list[list[str]] = []
+    for b in bots:
+        mine = [p for p in ps if p.bot == b]
+        n = len(mine)
+        with_usage = [p for p in mine if p.row.usage is not None]
+        u = len(with_usage)
+
+        def per(key: str, group: Sequence[Persp] = with_usage, count: int = u) -> str:
+            usage = [p.row.usage[p.side].get(key, 0) for p in group if p.row.usage is not None]
+            return f"{sum(usage) / count:.2f}" if count else "n/a"
+
+        def extra(key: str, group: Sequence[Persp] = mine) -> str:
+            total, have = _extra_sum(group, key)
+            return f"{total / have:.2f}" if have else "n/a"
+
+        taken = [
+            p.row.extra["charges_tolls"][1 - p.side]
+            for p in mine
+            if p.row.extra is not None and "charges_tolls" in p.row.extra
+        ]
+        starved = [p.row.flow["charges_starved"][p.side] for p in mine if p.row.flow is not None]
+        body.append(
+            [
+                f"**{b}**",
+                str(n),
+                per("SetLeafShift"),
+                per("FortifyRoad"),
+                extra("forts_built"),
+                extra("tolls_paid"),
+                extra("charges_tolls"),
+                f"{sum(taken) / len(taken):.2f}" if taken else "n/a",
+                f"{sum(starved) / len(starved):.2f}" if starved else "n/a",
+            ]
+        )
+    intro = (
+        "The levers and costs of the supply flow (DEC-43, #690), the mean per player and match: "
+        "accepted `SetLeafShift` and `FortifyRoad`, the own road fortifications that started to "
+        "work, the tolls the own groups paid at enemy forts (count and charges), the charges "
+        "enemy groups lost at the own forts, the charges lost to starvation (a garrison cut off "
+        "from the capital, DEC-19). The idle discharged units of pockets are in the CP section. "
+        "All matches count, mirror matches included.\n\n"
+    )
+    return intro + _table(["bot", *header], body)
 
 
 def _cp_cells(ps: Sequence[Persp]) -> list[str]:
@@ -724,18 +1039,25 @@ def _usage_cell(ps: Sequence[Persp], key: str) -> str:
     return f"{used / len(counts):.2f} ({sum(counts) / len(counts):.1f})"
 
 
-def _section_usage(ps: Sequence[Persp], bots: Sequence[str]) -> str:
+def _section_usage(ps: Sequence[Persp], bots: Sequence[str], economy: Economy) -> str:
+    keys = live_keys(economy.economy, economy.supply)
+    hidden = [k for k in USAGE_KEYS if k not in keys]
     body = [
-        [f"**{b}**", *(_usage_cell([p for p in ps if p.bot == b], k) for k in USAGE_KEYS)]
-        for b in bots
+        [f"**{b}**", *(_usage_cell([p for p in ps if p.bot == b], k) for k in keys)] for b in bots
     ]
     intro = (
         "Accepted commands per mechanic (#166): the share of the bot's matches in which it used "
         "the mechanic at least once, and in brackets the mean count per match. `MovePlanned` is "
         "a `Move` with `planned=true`, `Move` the ordinary one. All matches count, mirror matches "
-        "included; a tournament file written before #166 shows n/a.\n\n"
+        "included; a tournament file written before #166 shows n/a."
+        + (
+            f" Left out, the economy of the file rejects them (#690): {', '.join(hidden)}."
+            if hidden
+            else ""
+        )
+        + "\n\n"
     )
-    return intro + _table(["bot", *USAGE_KEYS], body)
+    return intro + _table(["bot", *keys], body)
 
 
 def _section_late(rows: Sequence[Row]) -> str:
@@ -890,50 +1212,73 @@ def _cycles(
     return found
 
 
-def _section_checks(ps: Sequence[Persp], bots: Sequence[str]) -> str:
-    have = set(bots)
-    lines: list[str] = []
+def _find(bots: Sequence[str], personality: str) -> str | None:
+    """The bot of a check: the plain name of BOT-03, else the smart one at ``hard``."""
+    for name in (personality, f"smart_{personality}@hard", f"smart_{personality}"):
+        if name in bots:
+            return name
+    return None
 
-    if {_STRANGLER, _EXPANDER} <= have:
-        mine = _pair_ps(ps, _STRANGLER, _EXPANDER)
+
+def _section_checks(ps: Sequence[Persp], bots: Sequence[str]) -> str:
+    lines: list[str] = []
+    strangler, expander = _find(bots, _STRANGLER), _find(bots, _EXPANDER)
+    reactive, rusher, turtle = (_find(bots, x) for x in (_REACTIVE, _RUSHER, _TURTLE))
+
+    if strangler and expander:
+        mine = _pair_ps(ps, strangler, expander)
         rate = Rate(sum(p.row.sieges_won[p.side] >= 1 for p in mine), len(mine))
         ok = (rate.value or 0.0) >= STRANGLER_MIN_RATE
         lines.append(
-            f"- {_mark(ok)} `strangler` takes at least one city by siege in a match against "
-            f"`expander` in {rate.fmt()} of matches "
+            f"- {_mark(ok)} `{strangler}` takes at least one city by siege in a match against "
+            f"`{expander}` in {rate.fmt()} of matches "
             f"(threshold {STRANGLER_MIN_RATE:.0%}, n={rate.n})."
         )
     else:
         lines.append("- [no data] check of `strangler` against `expander`: these bots are missing.")
 
-    if {_REACTIVE, _EXPANDER, _RUSHER} <= have:
-        reactive = _win_rate(_pair_ps(ps, _REACTIVE, _RUSHER))
-        expander = _win_rate(_pair_ps(ps, _EXPANDER, _RUSHER))
-        ok = (reactive.value or 0.0) > (expander.value or 0.0)
-        apart = reactive.ci[0] > expander.ci[1] or expander.ci[0] > reactive.ci[1]
+    if reactive and expander and rusher:
+        r_rate = _win_rate(_pair_ps(ps, reactive, rusher))
+        e_rate = _win_rate(_pair_ps(ps, expander, rusher))
+        ok = (r_rate.value or 0.0) > (e_rate.value or 0.0)
+        apart = r_rate.ci[0] > e_rate.ci[1] or e_rate.ci[0] > r_rate.ci[1]
         lines.append(
-            f"- {_mark(ok)} `reactive` beats `rusher` more often than `expander` does: "
-            f"{reactive.fmt()} against {expander.fmt()}"
+            f"- {_mark(ok)} `{reactive}` beats `{rusher}` more often than `{expander}` does: "
+            f"{r_rate.fmt()} against {e_rate.fmt()}"
             + ("; the intervals do not overlap." if apart else "; the intervals overlap.")
         )
     else:
         lines.append("- [no data] check of `reactive` and `expander` against `rusher`.")
 
-    if _TURTLE in have:
-        versus = [p for p in ps if p.bot == _TURTLE and p.opp != _TURTLE]
+    if turtle:
+        versus = [p for p in ps if p.bot == turtle and p.opp != turtle]
         rate = _win_rate(versus)
         draws = sum(p.row.winner is None for p in versus)
         lines.append(
-            f"- Win rate of `turtle` against the others: {rate.fmt()}, "
+            f"- Win rate of `{turtle}` against the others: {rate.fmt()}, "
             f"draws {_share(draws, len(versus))}"
             f" (n={rate.n})."
         )
         lines.append(
             "  - by opponent: "
             + ", ".join(
-                f"{b} {_win_rate(_pair_ps(ps, _TURTLE, b)).short()}" for b in bots if b != _TURTLE
+                f"{b} {_win_rate(_pair_ps(ps, turtle, b)).short()}" for b in bots if b != turtle
             )
             + "."
+        )
+    expert = dict(validity.SERVER_LEVELS)["expert"]
+    rivals = [b for b in bots if validity.split_level(b)[0] == validity.EXPLOITER]
+    if expert in bots and rivals:
+        rate = _win_rate([p for p in ps if p.bot == expert and p.opp in rivals])
+        ok = (rate.value or 0.0) >= validity.EXPLOITER_MIN
+        lines.append(
+            f"- {_mark(ok)} `expert` (`{expert}`) scores at least "
+            f"{validity.EXPLOITER_MIN:.2f} against `{validity.EXPLOITER}` (#688): {rate.fmt()}."
+        )
+    else:
+        lines.append(
+            f"- [no data] the exploiter gate (#688): `{expert}` against `{validity.EXPLOITER}` "
+            "is not in the file."
         )
     return "\n".join(lines)
 
@@ -942,24 +1287,190 @@ def _mark(ok: bool) -> str:
     return "[done]" if ok else "[NOT done]"
 
 
+def _section_validity(checks: Sequence[validity.Check]) -> str:
+    counts = Counter(c.status for c in checks)
+    intro = (
+        "Whether the bot data of this file can carry a decision about the rules (#690; the "
+        "checks V1..V9 of the data-quality notes of 2026-11-05, plus D1 and D2). **Every "
+        "threshold is a proposal, not an owner decision**: a FAIL says what this file cannot "
+        "answer, not that the rules are wrong. NO DATA: the bots the check needs are not in the "
+        "file; NOT COMPUTABLE: the check needs a second run or human replays. A verdict about a "
+        "rule number names the field and the checks it passes. Definitions: "
+        '[README.md](README.md), section "Data validity".\n\n'
+    )
+    summary = ", ".join(
+        f"{status} {counts[status]}"
+        for status in (validity.PASS, validity.FAIL, validity.NO_DATA, validity.NOT_COMPUTABLE)
+        if counts[status]
+    )
+    table = _table(
+        ["id", "check", "threshold (proposal)", "measured", "result"],
+        [[c.id, c.name, c.threshold, c.measured, f"**{c.status}**"] for c in checks],
+    )
+    return intro + table + f"\n\nSummary: {summary}."
+
+
+def _section_ladder(tally: validity.Tally, steps: Sequence[validity.Step]) -> str:
+    if not steps:
+        return "No personality has two levels in the file, and no two server levels: no ladder."
+    body: list[list[str]] = []
+    for s in steps:
+        cell = Rate(s.wins, s.decided).fmt()
+        body.append([s.group, f"`{s.higher}` over `{s.lower}`", str(s.decided), cell, s.verdict])
+    levels = [lv for lv in validity.LEVELS]
+    personalities = sorted({s.group for s in steps if s.group != "server levels"})
+    tempo: list[list[str]] = []
+    for base in personalities:
+        cells = [base]
+        for lv in levels:
+            bot = next((b for b in tally.bots if validity.split_level(b) == (base, lv)), None)
+            per = None if bot is None else tally.commands(bot)
+            cells.append("n/a" if per is None else f"{per:.1f}")
+        tempo.append(cells)
+    return (
+        "Head to head of the levels of every personality (`@easy` < `@normal` < `@hard`; a name "
+        "without a level is `hard`) and of the adjacent server levels (easy < normal < hard < "
+        "expert, `gow_server.botmatch.LEVEL_BOTS`): the share of the higher level among the "
+        "decided matches of the pair, both sides, all maps, with the 95% Wilson interval. "
+        "*separated*: the interval excludes 0.5; *not separated*: it contains 0.5; *INVERTED*: "
+        "the lower level is significantly stronger.\n\n"
+        + _table(["ladder", "pair", "decided", "higher level's share [95%]", "verdict"], body)
+        + "\n\nAccepted commands per match by level (all matches of the bot): a level that "
+        "gives about as many commands as another does not bind the tempo.\n\n"
+        + _table(["personality", *levels], tempo)
+    )
+
+
+def _section_strength(tally: validity.Tally) -> str:
+    fit = validity.bradley_terry(tally)
+    if fit is None:
+        return "No decided matches: no model."
+    bots, maps = fit
+    rates = {b: tally.field_rate(b) for b in tally.bots}
+    ranked = sorted(bots, key=lambda s: (-s.value, s.name))
+    body = [
+        [
+            f"**{s.name}**",
+            f"{s.value:+.2f} [{s.low:+.2f}; {s.high:+.2f}]",
+            f"{_sigmoid(s.value):.2f}",
+            "n/a" if rates[s.name] is None else f"{rates[s.name]:.2f}",
+        ]
+        for s in ranked
+    ]
+    side = [
+        [
+            m.name,
+            f"{m.value:+.2f} [{m.low:+.2f}; {m.high:+.2f}]",
+            f"{_sigmoid(m.value):.2f} [{_sigmoid(m.low):.2f}; {_sigmoid(m.high):.2f}]",
+        ]
+        for m in maps
+    ]
+    return (
+        "A Bradley-Terry model of all decided matches: `P(side 0 wins) = sigmoid(s[bot0] - "
+        "s[bot1] + h[map])` (#690). `s` is the strength of a bot in log-odds with `sum(s) = 0`, "
+        "`h` the advantage of side 0 on a map; the model separates a bot's strength from the "
+        "side and the map, which the raw win rate mixes. The 95% intervals are percentiles of "
+        f"{validity.BOOTSTRAP} refits on the seeds drawn with replacement; a ridge of "
+        f"{validity.RIDGE} on every parameter keeps a bot that never lost finite. *Against an "
+        "average bot*: `sigmoid(s)`, the expected share against a bot of strength 0. A model "
+        "of strength alone misses the counters (see the style matrix).\n\n"
+        + _table(["bot", "strength s [95%]", "against an average bot", "win rate vs field"], body)
+        + "\n\nSide 0 advantage by map (with equal bots):\n\n"
+        + _table(["map", "h [95%]", "P(side 0 wins) [95%]"], side)
+    )
+
+
+def _sigmoid(x: float) -> float:
+    return 1.0 / (1.0 + math.exp(-x))
+
+
+def _section_style(tally: validity.Tally) -> str:
+    if len(tally.bots) < 2:
+        return "One bot: no style matrix."
+    a = validity.style_matrix(tally)
+    r, share = validity.transitive_split(a)
+    mix, gap = validity.nash(a)
+    order = sorted(range(len(tally.bots)), key=lambda i: (-mix[i], tally.bots[i]))
+    body = [
+        [f"**{tally.bots[i]}**", f"{mix[i]:.2f}", f"{r[i]:+.3f}"] for i in order if mix[i] >= 0.005
+    ]
+    out = [i for i in order if mix[i] < 0.005]
+    return (
+        "The style matrix `A[i][j]` = (wins + half the draws) / matches of i against j, minus "
+        "0.5 (both sides, all maps). The *transitive part* is a single strength per bot (the row "
+        "mean `r`), the *cyclic part* what is left (counters, rock-paper-scissors). The *Nash "
+        "mix* is the equilibrium of the zero-sum game `A`: a mix of bots that no single bot of "
+        "the field beats; a bot outside it is not needed against this field. Definitions: "
+        '[README.md](README.md), section "Data validity".\n\n'
+        f"- Intransitive share: {'n/a' if share is None else f'{share:.2f}'} (0: one ladder "
+        "explains every pair, 1: pure cycles).\n"
+        f"- Nash mix ({validity.NASH_ROUNDS} rounds of multiplicative weights; gap {gap:.3f}, the "
+        "best pure answer to the mix, 0 at an exact equilibrium):\n\n"
+        + _table(["bot", "weight", "transitive strength r"], body)
+        + (
+            "\n\nOutside the mix (weight below 0.005): "
+            + ", ".join(tally.bots[i] for i in out)
+            + "."
+            if out
+            else ""
+        )
+    )
+
+
+def _section_seeds(tally: validity.Tally) -> str:
+    seeds, maps, bots = len(tally.seeds), len(tally.maps), len(tally.bots)
+    pairs = [w + lo + d for (x, y), (w, lo, d) in tally.pair.items() if x < y]
+    pair_n = int(median(pairs)) if pairs else 0
+    field_n = int(median(wl.n for wl in tally.field.values())) if tally.field else 0
+    ordered = pair_n // 2 // max(1, maps)
+    rows = [
+        ["one ordered pair on one map", str(ordered), f"{validity.half_width(ordered):.2f}"],
+        ["one pair, both sides, all maps", str(pair_n), f"{validity.half_width(pair_n):.2f}"],
+        ["one bot against the field", str(field_n), f"{validity.half_width(field_n):.2f}"],
+    ]
+    need = math.ceil((validity.Z / (2 * validity.PAIR_HALF_WIDTH_MAX)) ** 2)
+    return (
+        f"This file: {seeds} seeds x {maps} maps x {bots} bots. The 95% half-width of a share "
+        "near 0.5 is about `1.96 * sqrt(0.25 / n)`; the table gives the median `n` of each kind "
+        "of claim in this file (the general table is in [README.md](README.md), section "
+        f'"Seeds"). A claim about one pair at +-{validity.PAIR_HALF_WIDTH_MAX:.2f} needs '
+        f"{need} matches of the pair.\n\n" + _table(["claim", "matches n", "half-width"], rows)
+    )
+
+
 def render_report(rows: Sequence[Row], source: str, prefix: str) -> str:
     """The Markdown text; charts are referenced as ``<prefix>-<chart>.png`` next to it."""
     ps = _persps(rows)
     bots = _bots_of(rows)
+    economy = file_economy(rows)
+    tally = validity.Tally(rows)
+    steps = validity.ladder(tally)
     sections: list[tuple[str, str]] = [
-        ("Overview", _section_overview(rows)),
+        ("Overview", _section_overview(rows, economy)),
+        (
+            "Data validity",
+            _section_validity(
+                validity.checks(tally, steps, live_keys(economy.economy, economy.supply))
+            ),
+        ),
         ("Bot competence checks", _section_checks(ps, bots)),
+        ("Level ladder", _section_ladder(tally, steps)),
+        ("Strength model (Bradley-Terry)", _section_strength(tally)),
         ("Strategy pair matrix", _section_pairs(ps, bots)),
+        ("Style matrix and Nash mix", _section_style(tally)),
         ("Side advantage", _section_sides(rows)),
         ("Metrics by bot", _section_bots(ps, bots)),
         ("Charge stock and burned share (#310)", _section_stock(ps, rows, bots)),
-        ("Charge flow (#588)", _section_flow(ps, bots)),
+        ("Charge flow (#588)", _section_flow(ps, bots, economy)),
+        ("Charge sinks by outcome (#690)", _section_sinks(ps, economy)),
+        ("Supply flow (DEC-43)", _section_supply(ps, bots, economy)),
         ("CP and idle units (#743)", _section_cp(ps, bots)),
-        ("Mechanic usage (#166)", _section_usage(ps, bots)),
+        ("Mechanic usage (#166)", _section_usage(ps, bots, economy)),
         ("Strategy diversity", _section_diversity(ps, bots)),
         ("Captures at the end of the match", _section_late(rows)),
         ("Unique outcomes", _section_outcomes(rows)),
         ("Breakdown by map", _section_maps(ps, rows, bots)),
+        ("Seeds", _section_seeds(tally)),
     ]
     head = (
         f"# Balance report: `{source}`\n\n"
