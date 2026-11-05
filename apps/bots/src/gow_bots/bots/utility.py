@@ -56,16 +56,23 @@ def shots_to_take(
     return defender_pool(rules, terrain, charged, defense) + units
 
 
-def takes(rules: Ruleset, charged: int, bonus: int, need: int) -> bool:
+def takes(rules: Ruleset, charged: int, bonus: int, need: int, toll: int = 0) -> bool:
     """Whether a group with ``charged`` real charges and ``bonus`` virtual shots takes a node that
     needs ``need`` shots (``shots_to_take``; ``0``: an empty node) and pays for the capture.
 
     Virtual shots are spent first (DEC-07, rule 2), so ``max(0, need - bonus)`` real charges go in
     the fight and ``capture.charge_cost`` must be left after it (DEC-38, items 2 and 3): an empty
     node never fires the bonus, and only real charges pay.
+
+    ``toll``: the charges a road fortification takes on the way in (DEC-43, item D6), before the
+    fight and before the capture, an empty node too; the bonus drops to the charged units left
+    (D6, "the planned bonus"). With ``charge_cost = 0`` a toll never stops the capture of an empty
+    node.
     """
     cost = rules.capture.charge_cost
-    return charged >= cost and charged + bonus >= need + cost
+    real = max(0, charged - toll)
+    bonus = min(bonus, real)
+    return real >= cost and real + bonus >= need + cost
 
 
 def prefer_planned(

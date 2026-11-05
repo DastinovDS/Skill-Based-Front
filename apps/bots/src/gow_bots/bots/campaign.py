@@ -12,7 +12,9 @@ first:
 3. attacks and captures: every idle group looks at the nodes it can reach under the stack limit
    (DEC-20, D), a node is a *viable target* when the group's charges are enough to take it
    (``shots_to_take`` against the estimate of the enemy below, plus ``margin``, and the price of
-   the capture on top: ``capture.charge_cost`` real charges, DEC-38, ``takes``), and ``score``
+   the capture on top: ``capture.charge_cost`` real charges, DEC-38, ``takes``; the toll of a
+   visible enemy road fortification on the road in comes off the real charges first, an empty
+   node too: DEC-43, item D6, ``Bot.toll_from``, #760), and ``score``
    ranks the viable (group, target) pairs; a group too big for every path to a target splits off
    an army that fits and could take it (``fit_split``), the army goes in the next decision;
 4. ``gather``: groups standing in one node are merged when together they can take a target
@@ -100,6 +102,8 @@ RECALL_TICKS = 300
 """Cancel discipline (#687): a target an attack was recalled from is not ordered again for this
 many ticks by a group whose shots do not beat what the recall saw there (no cancel and reissue
 loop on the same target)."""
+PERMILLE = 1000
+"""An edge in thousandths: the scale of ``border_permille`` and of ``OnEdge.progress``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,7 +215,8 @@ class CampaignBot(Bot):
         self.waves: dict[int, Wave] = {}
         self.recalled: dict[int, tuple[int, int]] = {}
         """Target to ``(tick, shots)`` of the last recall from it (``DISCIPLINE``): the shots the
-        recall saw it take (``shots_to_take`` of the exact numbers)."""
+        recall saw it take (``shots_to_take`` of the exact numbers) and the toll of the road in
+        the recalled group still had to pay (DEC-43, item D6; #760)."""
         self._net_tick = -1
         self._net: frozenset[int] = frozenset()
         self.leaf = LeafShift()
@@ -378,13 +383,15 @@ class CampaignBot(Bot):
         return (max(start.start_units, 2), max(start.start_charged, 2))
 
     def need(self, view: PlayerView, tick: int, dest: int) -> int:
-        """Shots that take ``dest`` by the estimate, with the margin and the failed waves."""
+        """Shots that take ``dest`` by the estimate, with the margin and the failed waves. The
+        toll of a fortified road (DEC-43, item D6) is not in it: it takes real charges of the
+        group before the fight, an empty node too, so the caller passes it to ``takes``
+        (``toll_from``, ``toll_left``; #760)."""
         units, charged = self.estimate(view, tick, dest)
         if units <= 0:
             return 0
         terrain = self.map.nodes[dest].terrain
         base = shots_to_take(self.rules, terrain, units, charged, self.defended(view, dest))
-        base += self.toll_ahead(view, dest, base)  # DEC-43, item D: a fortified road costs more
         return base + self.params["margin"] + self.extra.get(dest, 0)
 
     def enemy_net(self, view: PlayerView) -> frozenset[int]:
@@ -469,14 +476,15 @@ class CampaignBot(Bot):
                 bonus = orders.planned_bonus(len(g.order.path), g.charged)
             else:
                 bonus = 0
+            toll = self.toll_left(view, g, dest)
             if self.DISCIPLINE:
-                if not self.recall_pays(view, g, dest, bonus):
+                if not self.recall_pays(view, g, dest, bonus, toll):
                     if view.nodes[back].owner == self.player and not self.wins(
-                        view, g, dest, bonus
+                        view, g, dest, bonus, toll
                     ):
                         ctx.incoming[back] += g.units  # #686: the bounce comes back here
                     continue
-            elif takes(self.rules, g.charged, bonus, self.need(view, ctx.tick, dest)):
+            elif takes(self.rules, g.charged, bonus, self.need(view, ctx.tick, dest), toll):
                 continue
             if self.spend(ctx, CancelOrder(g.id)):
                 ctx.used[g.id] = True
@@ -484,50 +492,75 @@ class CampaignBot(Bot):
                 if view.nodes[back].owner == self.player:
                     ctx.incoming[back] += g.units
                 if self.DISCIPLINE:
-                    self.recalled[dest] = (ctx.tick, self.seen_shots(view, dest))
+                    # #760: with the toll it saw, so a group the toll leaves short again waits.
+                    self.recalled[dest] = (ctx.tick, self.seen_shots(view, dest) + toll)
 
-    def recall_pays(self, view: PlayerView, g: GroupView, dest: int, bonus: int) -> bool:
+    def toll_left(self, view: PlayerView, g: GroupView, dest: int) -> int:
+        """The toll ``g``, on an edge on its way to ``dest``, still pays on the way in (DEC-43,
+        item D6): its own order names the last node before ``dest`` (``OrderView.path``), so the
+        road in is known; on that road a group past the line point (item D5) has paid already,
+        its charges are what is left."""
+        loc, order = g.location, g.order
+        if not isinstance(loc, OnEdge) or order is None or not order.path:
+            return 0
+        if len(order.path) >= 2:
+            last = order.path[-2]
+            way = next(e for e in self.map.incident[last] if self.map.edges[e].other(last) == dest)
+            return self.toll_on(view, way, dest, g.units, g.charged)
+        edge = self.map.edges[loc.edge]
+        if loc.back or edge.other(loc.from_node) != dest:
+            return 0
+        line = edge.border_permille if dest == edge.b else PERMILLE - edge.border_permille
+        if loc.progress >= line:
+            return 0
+        return self.toll_on(view, loc.edge, dest, g.units, g.charged)
+
+    def recall_pays(
+        self, view: PlayerView, g: GroupView, dest: int, bonus: int, toll: int = 0
+    ) -> bool:
         """Cancel discipline (#687): whether turning ``g`` back from ``dest`` saves more than it
         costs. The order's CP are spent either way (``orders.cost.cancel`` refunds nothing,
         DEC-20, C) and the cancel takes a command, so the cancel pays only when the attack would
         lose units: the defenders' pool ``Qd`` (the exact numbers of this tick, the terrain and a
-        bunker, ``defender_pool``) is above the group's charges and bonus less the toll of a
-        fortified road (DEC-43, item D6). Otherwise the attack at worst bounces (DEC-07, rules 2
-        to 4: ``min(Qa, Qd)`` charges cancel on both sides, the surplus kills defenders, nobody of
-        the group dies) and the CP already paid buy that trade. Under a capture price (DEC-38,
-        not ``mvp-4``) an attack that would kill every defender and not pay is recalled too: the
-        bots do not repeat unpaid captures (#580)."""
+        bunker, ``defender_pool``) is above the group's charges and bonus less the ``toll`` of a
+        fortified road still ahead (DEC-43, item D6, ``toll_left``). Otherwise the attack at worst
+        bounces (DEC-07, rules 2 to 4: ``min(Qa, Qd)`` charges cancel on both sides, the surplus
+        kills defenders, nobody of the group dies) and the CP already paid buy that trade. Under a
+        capture price (DEC-38) an attack that would kill every defender and not pay is recalled
+        too: the bots do not repeat unpaid captures (#580)."""
         seen = self.enemy_at(view, dest)
         if seen is None:
             return False
         terrain = self.map.nodes[dest].terrain
         qd = defender_pool(self.rules, terrain, seen[1], self.defended(view, dest))
-        toll = self.toll_ahead(view, dest, g.charged)
-        qa = g.charged + bonus - toll
+        real = max(0, g.charged - toll)
+        qa = real + min(bonus, real)
         if qd > qa:
             return True
         clears = qa >= qd + seen[0]
-        return clears and not takes(self.rules, g.charged - toll, bonus, qd + seen[0])
+        return clears and not takes(self.rules, g.charged, bonus, qd + seen[0], toll)
 
-    def wins(self, view: PlayerView, g: GroupView, dest: int, bonus: int) -> bool:
+    def wins(self, view: PlayerView, g: GroupView, dest: int, bonus: int, toll: int = 0) -> bool:
         """Whether ``g`` takes ``dest`` by the numbers the view shows there now (``seen_shots``,
-        the capture price, DEC-38); otherwise it bounces back to the start of its edge."""
-        return takes(self.rules, g.charged, bonus, self.seen_shots(view, dest))
+        the capture price, DEC-38, the ``toll`` still ahead); otherwise it bounces back to the
+        start of its edge."""
+        return takes(self.rules, g.charged, bonus, self.seen_shots(view, dest), toll)
 
     def seen_shots(self, view: PlayerView, dest: int) -> int:
-        """The shots that take ``dest`` by the numbers the view shows there now, the toll of a
-        fortified road included (``need`` without the margin and the failed waves)."""
+        """The shots that take ``dest`` by the numbers the view shows there now (``need`` without
+        the margin and the failed waves; the toll is the caller's, ``takes``)."""
         seen = self.enemy_at(view, dest)
         if seen is None or seen[0] <= 0:
             return 0
         terrain = self.map.nodes[dest].terrain
-        base = shots_to_take(self.rules, terrain, seen[0], seen[1], self.defended(view, dest))
-        return base + self.toll_ahead(view, dest, base)
+        return shots_to_take(self.rules, terrain, seen[0], seen[1], self.defended(view, dest))
 
     def recall_holds(self, tick: int, dest: int, shots: int) -> bool:
         """``DISCIPLINE``: an attack of ``shots`` (charges and bonus) on ``dest`` waits, the target
         was recalled from within ``RECALL_TICKS`` and the attack does not beat what the recall
-        saw there (``recalled``)."""
+        saw there (``recalled``: the shots and the toll of the way in) with the price of the
+        capture: a recall for a capture it could not pay is not reissued with the same shortfall,
+        an empty node behind a toll too (#760)."""
         last = self.recalled.get(dest)
         if last is None:
             return False
@@ -554,17 +587,21 @@ class CampaignBot(Bot):
                 if view.nodes[dest].owner == self.player or dest in ctx.claimed:
                     continue
                 need = self.need(view, ctx.tick, dest)
+                # DEC-43, item D6: a fortified road in takes real charges first, an empty node
+                # too (#760: else a group of 1 charge is sent, cannot pay and is recalled).
+                toll = self.toll_from(view, here, dest, g.units, g.charged)
+                real = g.charged - toll
                 # The v2 bonus does not grow with the distance (DEC-41, item 10).
                 edges = 0 if rules.v2 else self.path_edges(view, here, dest, g.units)
                 bonus = self.plan_bonus(view, here, edges, g.charged)
                 # DEC-38: the charges must also pay the capture; virtual shots never pay.
-                plain = takes(rules, g.charged, 0, need)
-                plan = bonus >= 1 and takes(rules, g.charged, bonus, need)
+                plain = takes(rules, g.charged, 0, need, toll)
+                plan = bonus >= 1 and takes(rules, g.charged, bonus, need, toll)
                 if not (plain or plan):
                     continue
-                planned = plan and (not plain or prefer_planned(rules, g.charged, need, edges))
+                planned = plan and (not plain or prefer_planned(rules, real, need, edges))
                 # Under v2 the plan asks for the shots it misses only (DEC-41, item 10).
-                ask = max(1, need + rules.capture.charge_cost - g.charged)
+                ask = max(1, need + rules.capture.charge_cost - real)
                 shots = g.charged + (min(bonus, ask) if planned else 0)
                 if self.DISCIPLINE and self.recall_holds(ctx.tick, dest, shots):
                     continue  # #687: no reissue of a recalled attack without more shots

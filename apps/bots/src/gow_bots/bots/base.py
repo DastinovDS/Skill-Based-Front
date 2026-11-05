@@ -25,12 +25,14 @@ groups by the ``node_key`` of their node first, never by opaque id alone. On a s
 two sides of the same bot with the same parameters take mirrored decisions.
 """
 
+import heapq
 import random
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import ClassVar, Final, Protocol
 
+from gow_bots.bots.assess import edge_ticks
 from gow_sim.commands import (
     BuildBarracks,
     BuildBunker,
@@ -169,6 +171,10 @@ class Bot:
         ``node_key`` order."""
         self._left: dict[int, int] = {}
         """Own group id to the tick it was ordered out of a fight: no second withdrawal."""
+        self._ways_tick = -1
+        self._ways: dict[tuple[int, int], dict[int, int]] = {}
+        """By ``(start, size)``: the road each node is entered by on the fastest path (``ways_in``),
+        for the decision of ``_ways_tick``."""
 
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         raise NotImplementedError
@@ -623,12 +629,19 @@ class Bot:
         return (seen.enemy_units, seen.enemy_charged)
 
     def toll_ahead(self, view: PlayerView, dest: int, shots: int) -> int:
-        """The charges an attack of ``shots`` charged units on ``dest`` loses to a visible enemy
-        road fortification of ``dest`` (DEC-43, item D6), when every road from an own node into
-        ``dest`` has one (the bot cannot pick the road: the path is the simulation's); 0 when one
-        of them is free, without ``[fort]`` and for a node of no enemy."""
+        """``toll_for`` of a group of ``shots`` units, all charged (an attack of several groups
+        whose sizes are not known yet: the converging strike)."""
+        return self.toll_for(view, dest, shots, shots)
+
+    def toll_for(self, view: PlayerView, dest: int, units: int, charged: int) -> int:
+        """The charges a group of ``units`` units, ``charged`` of them charged, loses on its way
+        into ``dest`` to a visible enemy road fortification of ``dest`` (DEC-43, item D6,
+        ``FortRules.toll``), when every road from an own node into ``dest`` has a built one (the
+        bot cannot pick the road: the path is the simulation's); 0 when one of them is free,
+        without ``[fort]`` and for a node of no enemy. An empty node takes its toll too: the
+        charges are gone before the capture (DEC-38) is paid."""
         fort = self.rules.fort
-        if fort is None or shots <= 0 or view.nodes[dest].owner != 1 - view.player:
+        if fort is None or charged <= 0 or view.nodes[dest].owner != 1 - view.player:
             return 0
         approaches = 0
         for eid in self.map.incident[dest]:
@@ -637,7 +650,71 @@ class Bot:
             approaches += 1
             if not any(f.node == dest and f.built for f in view.edges[eid].forts):
                 return 0
-        return fort.toll(shots, shots) if approaches else 0
+        return fort.toll(units, charged) if approaches else 0
+
+    def toll_from(self, view: PlayerView, here: int, dest: int, units: int, charged: int) -> int:
+        """The toll a group of ``units``, ``charged`` standing in ``here`` pays on its way into
+        ``dest`` (DEC-43, item D6): the road it enters ``dest`` by is the last one of the fastest
+        path a ``Move`` gets (``ways_in``), so the fortification of that road alone decides;
+        ``toll_for`` when no path is found. Only built enemy fortifications the view shows."""
+        fort = self.rules.fort
+        if fort is None or charged <= 0 or view.nodes[dest].owner != 1 - view.player:
+            return 0
+        if not any(
+            f.node == dest and f.built for e in self.map.incident[dest] for f in view.edges[e].forts
+        ):
+            return 0  # no fortification in sight: no path search
+        edge = self.ways_in(view, here, units).get(dest)
+        if edge is None:
+            return self.toll_for(view, dest, units, charged)
+        return self.toll_on(view, edge, dest, units, charged)
+
+    def ways_in(self, view: PlayerView, start: int, size: int) -> dict[int, int]:
+        """By node, the road the fastest path of a group of ``size`` from ``start`` enters it by:
+        the search of a ``Move`` (``gow_sim.systems.movement.find_path``) on what the view
+        shows: only ``start`` and own nodes without a fight are expanded, every node but
+        ``start`` holds ``size`` (DEC-20, D), the road times of ``assess.edge_ticks`` at the
+        levels of the view, ties by the ``node_key`` sequence of the path. Once per decision."""
+        if self._ways_tick != view.tick:
+            self._ways_tick, self._ways = view.tick, {}
+        cached = self._ways.get((start, size))
+        if cached is not None:
+            return cached
+        me, nodes = view.player, view.nodes
+        fights = self.fight_nodes(view)
+        best: dict[int, tuple[int, tuple[int, ...]]] = {start: (0, (self.key(start),))}
+        via: dict[int, int] = {}
+        done: dict[int, bool] = {}
+        heap: list[tuple[int, tuple[int, ...], int]] = [(0, (self.key(start),), start)]
+        while heap:
+            ticks, keys, node = heapq.heappop(heap)
+            if node in done:
+                continue
+            done[node] = True
+            if node != start and (nodes[node].owner != me or node in fights):
+                continue  # a path ends at the first foreign node or at a fight
+            for eid in self.map.incident[node]:
+                nxt = self.map.edges[eid].other(node)
+                if nxt in done or (size > 0 and nodes[nxt].capacity < size):
+                    continue
+                t = ticks + edge_ticks(self.map, self.rules, eid, nxt, view.edges[eid].width)
+                cand = (t, (*keys, self.key(nxt)))
+                if nxt not in best or cand < best[nxt]:
+                    best[nxt] = cand
+                    via[nxt] = eid
+                    heapq.heappush(heap, (t, cand[1], nxt))
+        self._ways[(start, size)] = via
+        return via
+
+    def toll_on(self, view: PlayerView, edge: int, dest: int, units: int, charged: int) -> int:
+        """The toll a group of ``units``, ``charged`` pays crossing into ``dest`` over ``edge``: a
+        visible built enemy road fortification of ``dest`` there (DEC-43, items D6 and D8)."""
+        fort = self.rules.fort
+        if fort is None or charged <= 0 or view.nodes[dest].owner != 1 - view.player:
+            return 0
+        if not any(f.node == dest and f.built for f in view.edges[edge].forts):
+            return 0
+        return fort.toll(units, charged)
 
     def defended(self, view: PlayerView, node: int) -> int:
         """The Defense bonus the enemy may have gathered in ``node``, before its cap (DEC-30).
