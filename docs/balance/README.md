@@ -395,6 +395,26 @@ no VP), except the benchmark, whose build-up does that itself. The tempo levels 
 meaning: an `easy` bot reads the phase and the sectors too, but thinks, reacts and acts at its tempo and has no
 `insight` (section "Difficulty levels and tempo").
 
+## Scenario tests from a lost match (#691)
+
+A tournament between bots never reaches the positions in which an owner's match was lost, so a
+regression of their fixes needs a pinned position: `apps/bots/tests/test_scenarios_mvp4.py`. To turn a
+lost match into such a test:
+
+1. Find the tick. Re-simulate the replay (or a bot match, `run_headless` with an observer) and look at
+   `match.view(player)` around the failure: the owners of the nodes, the groups and where they stand.
+2. Write the position as a table in the frame of the bot (its capital is node 0), the way
+   `_scenario(player, own, foe, groups, tick=..., cp=...)` takes it: nodes of the bot, nodes of the
+   enemy, groups `(side, node, units, charged)`. The same table is played for player 1 on the mirror
+   nodes (`MapDef.node_key`), so every case is also a mirror check.
+3. Take the expected values from the rules (`mechanics.md`, the DEC table of the item), never from what
+   the bot does now: assert on the bot's commands for the view (`bot.decide(view, tick)`), or play a
+   few hundred ticks with `_play` (the bot decides every 5 ticks, the enemy stands still) and assert on
+   the state, the rejected commands and the attrition.
+4. Check that the test fails on the bot code from before the fix (export `apps/bots/src` of that
+   commit into a scratch directory and run pytest with `PYTHONPATH` pointing at it). A gap the test
+   finds and nobody fixes yet is `xfail(strict=False)` with the reason, and goes into the PR description.
+
 ## Budget
 
 AGENTS.md, section 12: 1000 matches on 8 cores of the reference machine in no more than 20 minutes. A match
