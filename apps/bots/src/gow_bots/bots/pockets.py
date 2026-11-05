@@ -14,6 +14,9 @@ recharges. Two readings of the ``PlayerView`` (AGENTS.md, section 4.4: only the 
 - ``rescue``: by foreign node next to both the capital's component and a pocket (the node that cut
   it), what its capture rejoins: the own units standing in those pockets and ``FACTORY_UNITS`` per
   own factory there (a stopped factory produces again from its next period, item H5).
+- ``heading``: the own units ordered into each foreign node, those sent earlier and in this
+  decision: the captured node holds them all at the arrivals, and units above its capacity die one
+  every ``capacity.attrition_ticks`` (DEC-22, DEC-12; #754).
 
 Pure functions, no randomness, no ``set`` iteration (AGENTS.md, section 4.1 holds for the bots).
 """
@@ -23,9 +26,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final
 
+from gow_sim.commands import Command, Move
 from gow_sim.view import AtNode, PlayerView
 
-__all__ = ["FACTORY_UNITS", "Pockets", "read_pockets"]
+__all__ = ["FACTORY_UNITS", "Pockets", "heading", "read_pockets"]
 
 FACTORY_UNITS: Final = 3
 """A stopped own factory in a pocket weighs like this many units in ``rescue``: the units of a
@@ -136,3 +140,24 @@ def read_pockets(
                 else:
                     queue.append(v)
     return Pockets(pocket, tuple(main), tuple(exits), rescue)
+
+
+def heading(view: PlayerView, sent: Sequence[Command]) -> list[int]:
+    """By node: the own units on the way into it while it is not own (module docstring): the own
+    groups whose order ends there, with the moves ``sent`` in this decision in place of their
+    earlier orders."""
+    me, nodes = view.player, view.nodes
+    dest: dict[int, int] = {}
+    size: dict[int, int] = {}
+    for g in view.groups:
+        size[g.id] = g.units
+        if g.order is not None:
+            dest[g.id] = g.order.dest
+    for cmd in sent:
+        if isinstance(cmd, Move) and cmd.group in size:
+            dest[cmd.group] = cmd.dest
+    units = [0] * len(nodes)
+    for gid in sorted(dest):
+        if nodes[dest[gid]].owner != me:
+            units[dest[gid]] += size[gid]
+    return units

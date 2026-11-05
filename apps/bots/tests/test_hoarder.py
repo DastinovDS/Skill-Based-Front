@@ -21,7 +21,7 @@ from gow_bots.bots.campaign import Ctx
 from gow_bots.bots.smart import STRIKE_ALIGN, SmartBot
 from gow_bots.bots.tempo import Bucket, Perception, Tempo
 from gow_bots.bots.utility import shots_to_take
-from gow_sim.commands import PlayerCommand
+from gow_sim.commands import PlayerCommand, Split
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset, load_ruleset
@@ -90,6 +90,29 @@ def test_way_follows_the_fastest_own_path(crossroads: MapDef, rules: Ruleset) ->
         assert bot.way(view, home, other, 1) == (1, edge_ticks(crossroads, rules, e, other))
     # The enemy capital is beyond neutral nodes: no own path reaches it at the start.
     assert bot.way(view, home, crossroads.capital(0), 1) is None
+
+
+@pytest.mark.parametrize("player", [0, 1])
+def test_a_split_keeps_the_cp_of_the_move_of_its_part(
+    crossroads: MapDef, rules: Ruleset, player: int
+) -> None:
+    """#754 (G-H): a split is free (``orders.cost.split``) and its part walks in the next
+    decision; the hoarder splits only while the CP outside the kept ones pay that move
+    (``orders.cost.move``), and leaves them unspent, so the part is not merged back unmoved."""
+    view = Match(crossroads, rules, KEY).view(player)
+    bot = SmartHoarder(crossroads, rules, seed=0, player=player)
+    home = next(g for g in view.groups if g.location == AtNode(crossroads.capital(player)))
+    move, split = rules.orders.cost.move, Split(home.id, 1)
+    assert rules.orders.cost.split == 0
+    ctx = Ctx(view, 0, move, standing=bot.standing(view))
+    assert bot.spend(ctx, split)
+    assert ctx.cmds == [split]
+    assert ctx.budget == 0  # the move of the part is kept
+    held = Ctx(view, 0, move, standing=bot.standing(view), held=1)
+    assert not bot.spend(held, split)  # the kept CP leave less than a move
+    assert held.cmds == []
+    broke = Ctx(view, 0, move - 1, standing=bot.standing(view))
+    assert not bot.spend(broke, split)
 
 
 def test_an_unseen_capital_counts_the_guessed_garrison(crossroads: MapDef, rules: Ruleset) -> None:

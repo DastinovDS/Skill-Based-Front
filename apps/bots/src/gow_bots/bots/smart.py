@@ -151,11 +151,12 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     not keep it), then a charged one in a node that starves: it walks to the empty foreign node on
     the shortest chain of free captures into the capital's component (a ``Move`` ends at the first
     foreign node, SIM-05; the capture is free under ``mvp-4``, DEC-38), and once it is back the
-    flow pulls charges to it (item A4); a group too big for the way splits off the part that
-    fits, and a city keeps one unit (an empty city falls for free, its VP with it). With no free
-    way out it waits, and the foreign node that cut the pocket off (next to the capital's
-    component and a pocket) scores ``W_RESCUE`` more per unit it rejoins (``pockets.rescue``), so
-    a viable attack from either side retakes it first.
+    flow pulls charges to it (item A4); a group too big for the way, or for the room the foreign
+    node has left once the own units on the way into it arrive (``pockets.heading``, item 21,
+    #754), splits off the part that fits, and a city keeps one unit (an empty city falls for
+    free, its VP with it). With no free way out it waits, and the foreign node that cut the
+    pocket off (next to the capital's component and a pocket) scores ``W_RESCUE`` more per unit
+    it rejoins (``pockets.rescue``), so a viable attack from either side retakes it first.
 21. **Capacity and the leaf shift** (#686, G-L of the ``mvp-4`` bot audit). No move, recall or
     recruit puts an own node over capacity at the arrival (``CampaignBot``, "Capacity"): the
     garrisons, the answers, the reinforcements and the walks home count the units already on the
@@ -204,7 +205,7 @@ from gow_bots.bots.logistics import (
     incoming_charges,
     own_parts,
 )
-from gow_bots.bots.pockets import Pockets, read_pockets
+from gow_bots.bots.pockets import Pockets, heading, read_pockets
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
 from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
 from gow_sim.commands import (
@@ -706,7 +707,9 @@ class SmartBot(CampaignBot):
             if not ways:
                 continue
             dest = ways[0]
-            size = min(self.fit(view, here, dest, g.units), g.units - self.pocket_keep(ctx, g))
+            room = view.nodes[dest].capacity - heading(view, ctx.cmds)[dest]  # #754
+            fit = self.fit(view, here, dest, g.units)
+            size = min(fit, g.units - self.pocket_keep(ctx, g), room)
             if size == g.units and self.spend(ctx, Move(g.id, dest)):
                 ctx.used[g.id] = True
                 ctx.claimed[dest] = True
