@@ -977,3 +977,190 @@ in one match, median 11 where it fires); by bot from 2.4 (`random_legal`) to 7.3
 smart bots 0.49 (turtle) to 0.75 (expander), `smart_strangler` 0.74 (0.79 before), `reactive` 0.73, `turtle` 0.18,
 `idle` 0.00. No gross imbalance; the smoke check passes. Mirror matches alone give side 0 0.39 [0.31; 0.49] (n=107),
 a small sample; the mirror test of the simulation covers the rule.
+
+## 2026-11-05: the 16-bot field run of `mvp-4` (DEC-43, #706)
+
+The owner declared the `mvp-4` mechanics settled (AGENTS.md, section 8), so this is the field run after the smoke
+(entries above) and after the three bot waves #745 (pockets), #746 (capacity-aware moves, a held leaf shift,
+`CHURN_TICKS`) and #747 (capital defense, threat fortifications). No code, rule or ruleset number changed.
+
+`mise run tournament:gh --ref develop --ruleset rulesets/mvp-4.toml --seeds 20 --shards 20 --label mvp4-field` with
+`--bots` the 16 names `smart_{expander,reactive,rusher,strangler,turtle}@{easy,normal,hard}` and `smart_hoarder`. Code:
+`develop` 7505264, ruleset hash `2ecffe4f3f336217d718a37347b920b7`, `SIM_VERSION` 40. The 4 pool maps (`crossroads`,
+`highway`, `narrows`, `ridge`), seeds 0..19, both sides, 20480 matches. GitHub run 41946191597 (artifact
+`tournament-mvp4-field-1793840781-51874-41946191597`: `tournament.jsonl`, `report.md`, charts).
+
+No crash, 0 `unfinished`, charge ledger residual 0 in every match, 0.10 rejected commands per player and match, one
+`double_defeat` (`smart_rusher@hard` mirror on `narrows`, seed 18). Rule numbers are read on the `normal`, `hard` and
+`smart_hoarder` rows (the judged set, 11 bots, 9680 matches among themselves); `easy` is shown apart.
+
+### Win rate against the other 15 [95%], and against the other judged bots
+
+| bot | vs all 15 | vs the judged others | vs the 5 `easy` |
+|---|---|---|---|
+| smart_rusher@normal | 0.71 [0.69; 0.72] | 0.72 [0.70; 0.74] | 0.68 [0.65; 0.71] |
+| smart_rusher@hard | 0.68 [0.66; 0.70] | 0.68 [0.65; 0.70] | 0.68 [0.65; 0.71] |
+| smart_strangler@normal | 0.60 [0.58; 0.62] | 0.62 [0.59; 0.64] | 0.57 [0.53; 0.60] |
+| smart_strangler@hard | 0.59 [0.57; 0.61] | 0.59 [0.57; 0.62] | 0.57 [0.54; 0.61] |
+| smart_reactive@normal | 0.49 [0.47; 0.51] | 0.51 [0.48; 0.53] | 0.47 [0.44; 0.50] |
+| smart_reactive@hard | 0.48 [0.46; 0.50] | 0.48 [0.46; 0.50] | 0.47 [0.44; 0.51] |
+| smart_expander@normal | 0.47 [0.45; 0.49] | 0.47 [0.45; 0.50] | 0.46 [0.43; 0.50] |
+| smart_expander@hard | 0.47 [0.45; 0.49] | 0.47 [0.45; 0.50] | 0.46 [0.43; 0.50] |
+| smart_hoarder | 0.39 [0.37; 0.41] | 0.39 [0.36; 0.41] | 0.39 [0.36; 0.42] |
+| smart_turtle@hard | 0.32 [0.30; 0.34] | 0.29 [0.27; 0.32] | 0.36 [0.33; 0.40] |
+| smart_turtle@normal | 0.30 [0.28; 0.32] | 0.27 [0.25; 0.29] | 0.36 [0.33; 0.40] |
+| smart_rusher@easy | 0.61 [0.59; 0.63] | 0.59 [0.57; 0.61] | 0.66 [0.62; 0.70] |
+| smart_strangler@easy | 0.60 [0.58; 0.62] | 0.62 [0.60; 0.64] | 0.55 [0.52; 0.59] |
+| smart_expander@easy | 0.49 [0.47; 0.51] | 0.48 [0.46; 0.50] | 0.50 [0.47; 0.54] |
+| smart_reactive@easy | 0.48 [0.46; 0.50] | 0.49 [0.47; 0.52] | 0.46 [0.43; 0.50] |
+| smart_turtle@easy | 0.31 [0.30; 0.33] | 0.32 [0.30; 0.34] | 0.30 [0.26; 0.34] |
+
+Standard deviation of the win rates (against all 15) of the 11 judged bots 0.128, range 0.30 to 0.71 (`mvp-3` after
+#663: 0.129, range 0.42 to 0.84). No gross imbalance: nobody is above 0.72 or below 0.27 against any slice, and the field
+is not polarised toward the holder any more (`mvp-3` after #663: `smart_turtle@hard` 0.84, here 0.32: the v2 bunker is
+gone and the fortifications are a toll). The rusher is the one personality above 0.65 (the #40 gate "no strategic bot
+beats the others more than 65%"): 0.68 to 0.72, mostly against the expander (`smart_expander@hard` wins 0.26 against
+`smart_rusher@hard`).
+
+**The tempo levels no longer separate.** Within a personality `easy`, `normal` and `hard` are within a few points
+(`smart_expander` 0.49, 0.47, 0.47) and play the same number of accepted commands per match (`smart_expander` 136.2,
+135.6, 136.1; `smart_turtle` 127.8, 127.7, 128.7). Head to head `smart_expander@hard` beats `@easy` 0.53 [0.45; 0.61],
+`smart_strangler@hard` loses to `@easy` 0.45 [0.37; 0.53]. On `mvp-3` after #663 the levels were 0.26, 0.42, 0.60, 0.81
+over the field. The server ladder (`LEVEL_BOTS`) is only partly kept: `smart_reactive@normal` beats `smart_turtle@easy`
+0.68 [0.60; 0.74], `smart_strangler@hard` beats `smart_reactive@normal` 0.71 [0.63; 0.77], but the expert
+`smart_expander@hard` loses to the hard `smart_strangler@hard` 0.36 [0.29; 0.44]. The CP are spent at 98% of the income
+at every level (see below); that the CP, not the tempo limit, is what binds is a hypothesis, not checked here.
+
+### Sides
+
+Side 0 wins 0.53 [0.52; 0.53] of the decided matches (n=20347), mirror matches 0.55 [0.52; 0.57] (n=1184); judged bots
+among themselves 0.52 [0.51; 0.53].
+
+| map | all matches | mirror matches | judged vs judged |
+|---|---|---|---|
+| crossroads | 0.52 [0.51; 0.54] | 0.52 [0.47; 0.58] | 0.52 [0.50; 0.54] |
+| highway | 0.53 [0.52; 0.55] | 0.55 [0.49; 0.60] | 0.53 [0.51; 0.55] |
+| narrows | 0.52 [0.50; 0.53] | 0.57 [0.52; 0.63] | 0.52 [0.50; 0.54] |
+| ridge | 0.53 [0.51; 0.54] | 0.55 [0.49; 0.60] | 0.51 [0.49; 0.53] |
+
+A mild skew toward side 0 on every map, below the 55% line of #40 for all matches; the mirror interval of `narrows`
+(and of all maps together) excludes 0.5. The smoke runs showed the opposite sign (0.47 to 0.48 for the same bots, 3
+seeds): the per-seed share of side 0 swings from 0.35 (seed 1) to 0.64 (seed 7), and the first three seeds alone give
+0.47 [0.42; 0.51] for the six `hard` bots and the hoarder, seeds 3 to 19 give 0.53 [0.51; 0.55]. The skew `highway` showed
+in the first smoke (mirror 0.29, n=21) is not there (mirror 0.55, n=266).
+
+### Match end
+
+| | matches | capital | vp | cities | draw | other | mean ticks |
+|---|---|---|---|---|---|---|---|
+| all | 20480 | 1885 (9.2%) | 18398 | 64 | 132 | 1 | 8646 |
+| judged vs judged | 9680 | 820 (8.5%) | 8763 | 33 | 63 | 1 | 8707 |
+
+Capital wins by map: `narrows` 13.5%, `highway` 8.5%, `crossroads` 8.2%, `ridge` 6.7%. By winner the strangler and the
+reactive take the capital most (`smart_strangler@hard` 206, `smart_strangler@normal` 195, `smart_reactive@normal` 181),
+the turtle almost never (8 in all). Draws 0.6% (`highway` 84 of 132).
+
+### Charges (mean per player and match)
+
+| group | produced | burned share | warehouses lost | starved | attrition | fights | built | left at the end |
+|---|---|---|---|---|---|---|---|---|
+| judged (normal, hard, hoarder) | 152.8 | 27.0% | 33.5 (21.9%) | 13.7 (8.9%) | 0.15 | 11.4 | 17.5 | 43.8 |
+| `easy` | 149.9 | 22.5% | 30.4 (20.3%) | 11.7 (7.8%) | 0.17 | 12.2 | 26.6 | 44.8 |
+
+Of the production about 58% goes to burning, lost warehouses and starvation, 7.5% to fights. Idle discharged unit-ticks
+per player and match: 3207 in the capital's component, 8924 in pockets (judged); 4510 and 9059 for `easy`. By bot the
+burned share runs from 16.6% (`smart_rusher@easy`) and 20.3% (`smart_hoarder`) to 35.2% (`smart_turtle@hard`); the
+turtle loses the fewest warehouse charges (17.2) and keeps the most at the end (60.7), so it burns what it does not spend.
+The capital is full in 40% of the ticks (judged). Per bot tables are in the artifact `report.md`.
+
+### CP (DEC-43 item F)
+
+| group | CP income | CP spent | burned | ticks at the cap | matches that reach the cap | moves | recruits | fortifications |
+|---|---|---|---|---|---|---|---|---|
+| judged | 89 | 87.6 (98%) | 0.4 CP (0.4%) | 0.4% | 3% | 86.8% | 8.3% | 4.9% |
+| `easy` | 88 | 86.7 (98%) | 0.2 CP (0.2%) | 0.2% | 2% | 87.2% | 9.8% | 3.0% |
+
+Spending is counted from the accepted commands and the prices of `orders.cost` (a move and a scheduled move 1 CP, a
+recruit 1 CP less the refunds, a fortification 1.5 CP); the buildings of `mvp-4` cost charges, not CP (`built` above).
+The income is `cp.start` plus 1 CP per 100 ticks of the match. The smart bots at human tempo have no CP surplus: they
+spend 98% of the income, reach the cap in 3% of the matches and burn 0.4 CP. Only `smart_hoarder` (2.4 CP burned, 10% of
+the matches at the cap) and `smart_turtle` (0.7 to 0.8 CP, 7 to 8%) get there. In the smoke (13 bots) the plain
+`expander` and `turtle` burned 47 and 60 CP per match, the `idle` bot 86: a slow player does sit on the cap, a bot that
+moves about 80 times a match does not. The bots therefore cannot tell whether C1 to C4 are needed for people: they say
+that a CP sink matters only for a slow player and that the bots spend everything on moves (a cut of the income, C4,
+would take moves from them).
+
+### Fortifications and tolls (mean per player and match)
+
+| bot | fortify commands | working | tolls paid (n / charges) | tolls collected (n / charges) |
+|---|---|---|---|---|
+| smart_turtle@normal | 8.77 | 8.39 | 0.67 / 0.72 | 1.87 / 2.34 |
+| smart_turtle@hard | 8.59 | 8.23 | 0.66 / 0.71 | 1.79 / 2.20 |
+| smart_turtle@easy | 4.17 | 3.95 | 0.54 / 0.58 | 0.90 / 1.11 |
+| smart_reactive@hard | 3.19 | 3.01 | 0.25 / 0.33 | 0.59 / 0.61 |
+| smart_hoarder | 2.72 | 2.56 | 0.39 / 0.46 | 0.41 / 0.43 |
+| smart_expander@hard | 1.57 | 1.51 | 0.55 / 0.65 | 0.34 / 0.43 |
+| smart_strangler@hard | 1.02 | 0.96 | 0.46 / 0.56 | 0.23 / 0.26 |
+| smart_rusher@hard | 0.01 | 0.01 | 0.67 / 0.84 | 0.00 / 0.00 |
+
+The turtle leans on them most (8.6 per match, 12.9 CP, 14% of its CP), the rusher never builds one and pays the most
+tolls (0.67 to 0.75 per match, 0.84 to 0.93 charges). Over the judged set 2.7 fortifications work per player and match,
+0.51 tolls and 0.60 charges paid: the tax is small next to the 33 charges of lost warehouses.
+
+### Against the smoke runs (like for like)
+
+The smoke runs play the 13-bot field with the smart bots at `hard`. The common slice is the six bots `smart_*` (hard) and
+`smart_hoarder` against each other (432 matches in a smoke, 2880 here; seeds 0..2 of this run give the number of the
+#747 smoke exactly, as the run is deterministic).
+
+| run | `smart_expander` | `smart_hoarder` | `smart_reactive` | `smart_rusher` | `smart_strangler` | `smart_turtle` |
+|---|---|---|---|---|---|---|
+| smoke #706, f883f19 (before the waves) | 0.54 [0.45; 0.63] | 0.38 [0.29; 0.46] | 0.51 [0.42; 0.60] | 0.63 [0.54; 0.71] | 0.70 [0.61; 0.77] | 0.23 [0.16; 0.31] |
+| smoke #745 branch, c8afdc4 | 0.52 [0.43; 0.60] | 0.38 [0.29; 0.46] | 0.48 [0.40; 0.57] | 0.71 [0.62; 0.78] | 0.67 [0.58; 0.74] | 0.23 [0.17; 0.32] |
+| smoke #746 branch, cf0813e | 0.53 [0.44; 0.62] | 0.33 [0.25; 0.41] | 0.46 [0.37; 0.55] | 0.72 [0.63; 0.79] | 0.63 [0.54; 0.71] | 0.32 [0.24; 0.40] |
+| smoke #747 branch, 67c4d44 | 0.50 [0.41; 0.59] | 0.35 [0.27; 0.44] | 0.47 [0.38; 0.56] | 0.74 [0.66; 0.81] | 0.67 [0.58; 0.74] | 0.26 [0.19; 0.34] |
+| this run, 7505264 | 0.47 [0.44; 0.50] | 0.40 [0.36; 0.43] | 0.49 [0.45; 0.52] | 0.71 [0.68; 0.74] | 0.63 [0.60; 0.66] | 0.29 [0.26; 0.33] |
+
+| run | burned share | capital wins | draws | mean ticks | side 0 (decided) | warehouses lost | starved | CP burned |
+|---|---|---|---|---|---|---|---|---|
+| smoke #706, f883f19 | 19.2% | 13.4% | 4 of 432 | 8449 | 0.48 | 36.1 | 14.6 | n/a |
+| smoke #745 branch | 17.1% | 12.3% | 4 | 8576 | 0.44 | 37.2 | 15.2 | n/a |
+| smoke #746 branch | 24.5% | 9.7% | 4 | 8742 | 0.48 | 34.8 | 14.5 | 0.49 |
+| smoke #747 branch | 25.3% | 9.0% | 4 | 8752 | 0.47 | 34.6 | 14.0 | 0.48 |
+| this run | 25.7% | 8.6% | 32 of 2880 | 8740 | 0.52 | 34.5 | 14.1 | 0.48 |
+
+**`smart_expander`.** In the smoke (13 bots, against all) it went 0.712 to 0.670 after #747; in this slice it goes 0.54
+(before the waves) to 0.47 [0.44; 0.50] now. The 20 seeds settle the level: the later seeds alone (3 to 19) give 0.46
+[0.43; 0.50], so the first three seeds were not a lucky draw. The step from the smoke before the waves (n=120, interval
+[0.45; 0.63]) is within that sample's noise, so the decline is a few points spread over #745 to #747, not one wave. It comes
+from the matches against the hoarder (0.71 to 0.58) and the reactive (0.62 to 0.47); against the strangler (0.38 to 0.36)
+and the rusher (0.29 to 0.26) it was already weak. Maps: `narrows` 0.39, `highway` 0.47, `crossroads` 0.49, `ridge`
+0.54. In the 16-bot field it is in the middle (0.47, below the rusher and the strangler, above the hoarder and the
+turtle), not a collapsed personality.
+
+**`CHURN_TICKS`.** The burned share of the common slice rose from 17.1% (#745) to 24.5% (#746) and stayed there; the
+warehouse charges lost fell only from 37.2 to 34.8 per player and match. Production is about 150 per player and match, so
+the 7 points of burn are about 10 charges against about 2 charges saved from captured warehouses; the capital wins fell
+12.3% to 9.7% in the same step. #746 changed three things together (capacity-aware moves, the held shift of
+`SHIFT_HOLD_TICKS`, `CHURN_TICKS` = 300), so the numbers do not isolate `CHURN_TICKS`. In the field run the burned share
+falls with the number of own nodes lost (57% with none lost, 18% with 31 to 60) and does not rise with the leaf shifts
+per match beyond 7 (25% with up to 6, 29% with 7 to 14), so the burn is largest where the bot lost no node at all, which
+a longer shift after a loss does not explain. A single-constant experiment `CHURN_TICKS = 0` is cheap and the numbers do
+not argue against it: its cost is the charges kept back from captured warehouses (33.5 per player and match are lost now,
+22% of the production), what it can gain is part of the 10 charges burned; the verdict needs a run (3 seeds smoke on the
+six bots above, then the field).
+
+### Candidates (proposed, not applied; the owner decides)
+
+- The charge economy has a large surplus: the judged bots burn 27% of the production and lose another 22% in captured
+  warehouses and 9% to starvation. If the owner wants less waste, the numbers to look at are `factory.built_period_ticks`
+  (200), `capital_period_ticks` (100) and the warehouses (3, 6, 1); the bots show no shortage of charges (43.8 left at
+  the end).
+- CP surplus (C1 to C4 of item F): none to cure for the bots, they spend 98% of the income. Whether people sit on the cap
+  needs a human playtest or `gow-bots analyze` of real replays (`cp_burned` is in the rows now); C4 (lower income) would
+  tighten the bots, which already spend everything on moves.
+- The tempo levels (`easy`, `normal`, `hard`) play alike under `mvp-4`; the bot screen and `LEVEL_BOTS` promise a ladder.
+  This is a bot question, not a ruleset number.
+- A mild side 0 skew (0.52 to 0.53) on every map with a large seed noise (0.35 to 0.64 per seed): watch it in the next
+  run; the mirror test of the simulation is in CI, so the bots' side-dependent parameters (AGENTS.md, section 8: chosen from
+  `(name, seed, side)`) are the first place to look.
