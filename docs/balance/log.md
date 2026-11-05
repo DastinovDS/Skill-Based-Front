@@ -1331,3 +1331,55 @@ test it: `capture.charge_cost = 1` against 0 with the same field (not run: #688 
 PASS 6 (V2, V3, V4a, V9, D1, D2), FAIL 5 (V4b: 24 matches a pair; V4c: side 0 of the mirror matches 0.36 to 0.53;
 V5a: no counter for the exploiter, `smart_rusher@hard`, `smart_strangler@hard`; V5b: `smart_strangler@hard` 0.88; V6),
 NO DATA 1 (V1: no floor bots), NOT COMPUTABLE 2 (V7, V8).
+
+## #759: capture cost 1 against 0 under `mvp-4` (experiment, 2026-11-05)
+
+Branch `exp/759-capture-cost-mvp4` (develop e15ebcd plus `rulesets/mvp-4-cap1.toml`: `mvp-4` with only
+`capture.charge_cost = 1`), never merged. GitHub runs 42057259261 (`mvp-4`) and 42057268666 (`mvp-4-cap1`), the same ref,
+the 16-bot field of #706 plus `smart_exploiter` (17 bots), 4 maps, seeds 0..4, both sides, 5780 matches each, no crash.
+The question: is the free capture of an empty node (#688) the dominant strategy, and does a cost of 1 break it?
+
+| | cost 0 | cost 1 |
+|---|---|---|
+| exploiter against the field | 0.86 [0.84; 0.89] | 0.76 [0.73; 0.79] |
+| exploiter against `smart_rusher@hard` | 0.57 [0.42; 0.71] | 0.54 [0.39; 0.68] |
+| top 3 against the field | exploiter 0.86, rusher@hard 0.84, strangler@hard 0.84 | exploiter 0.76, rusher@hard 0.73, rusher@normal 0.72 |
+| Bradley-Terry, top and range | exploiter +2.29, range 4.89 | exploiter +1.18, range 2.77 |
+| Nash mix | exploiter 0.98, rusher@hard 0.01 | exploiter 0.95, rusher@hard 0.03, rusher@normal 0.01 |
+| intransitive share | 0.13 | 0.19 |
+| level ladder (V2) | PASS, 5 of 5 | FAIL: 9 of 15 personality pairs not separated, hard over normal not separated in 4 of 5 |
+| captures per player and match: all / neutral / enemy | 43.0 / 14.4 / 28.6 | 24.0 / 14.4 / 9.6 |
+| walk-ins / contested sieges (won) | 24.3 / 4.57 (3.01) | 8.0 / 2.19 (1.01) |
+| end reasons: vp / capital / draw | 5211 / 546 / 18 | 5300 / 426 / 48 |
+| mean ticks, median first contact | 8681, 528..1166 by map | 8774, 828..1262 by map |
+| burned share | 0.236 | 0.326 |
+| charges starved per player and match | 12.3 | 5.6 |
+| idle discharged unit-seconds: connected / pocket | 251 / 729 | 571 / 1251 |
+| CP burned at the cap per player and match, ticks at the cap | 1.5 CP, 1.8% | 4.7 CP, 5.9% |
+| `CancelOrder` per match, CP of cancelled orders: `@hard`, hoarder, exploiter | 1.6..7.0, 1.4..6.3 CP | 24.5..36.4, 24.4..35.8 CP |
+| mirror side 0, all maps | 0.46 [0.41; 0.51] | 0.48 [0.43; 0.54] |
+| Data validity | PASS 6, FAIL 5 (V4b, V4c, V5a, V5b, V6) | PASS 3, FAIL 8 (also V2, V4a: pairs r 0.71, V9: rho 0.34) |
+
+**A bot defect the cost exposes** (not fixed, the experiment changes no code). A local probe (8 matches
+`smart_reactive@hard` against `smart_expander@hard`, seed 1, the 4 maps, `CampaignBot.spend` and `recall_pays` wrapped,
+no code change) counts 36 cancels at cost 0 and 179 at cost 1; 175 of them are the "clears, cannot pay" branch of
+`CampaignBot.recall_pays` (#687, #756), 166 on an empty enemy node: 127 a group of 1 charge whose only charge the toll of a
+fortified road takes (DEC-43, item D), 39 a discharged group (30 of them from a pocket, `leave_pockets`). The planner
+sends them because `seen_shots` and `need` count no toll for an empty node and the pocket exit counts an empty node as
+passable (`gow_bots.bots.pockets`, "a capture is free"); the recall then turns them back, the move and the cancel paid,
+and the next decision sends them again. About 25 to 36 CP a match of the `@hard` bots, the hoarder and the exploiter go
+into this loop (a third of the about 93 CP a match), while `@easy` and `@normal` cancel 1 to 4 times: the ladder
+collapses for that reason, so the cost-1 file cannot carry a verdict on the field order (V2, V4a, V9 FAIL).
+
+**Reading.** Cost 1 does not break the dominance: the exploiter stays first against the field and in the Nash mix (0.95),
+the rusher still plays it even, and nothing counters it (V5a). It mostly slows the game: the captures of enemy nodes fall
+by two thirds (walk-ins by two thirds, neutral captures unchanged), capital wins by a fifth, draws grow from 18 to 48,
+the first contact comes 100 to 300 ticks later, more charges burn and more CP burn at the cap. The flatter
+Bradley-Terry range comes with lower reliability (pairs r 0.71) and with the recall loop, not with new counters
+(the intransitive share moves from 0.13 to 0.19, the Nash mix stays one bot). The one rules signal: under cost 1 a road
+fortification does stop a 1-charge walk-in (the toll takes the payment), which is the counter #688 found missing; the
+bots cannot use it yet. The pocket rule pays: fewer pockets form (starved charges halve), but a discharged pocket
+garrison can no longer capture its way out, so the idle discharged unit-seconds in pockets grow by 72% (the bots' exit
+of #684 assumes a free capture). The flow and the 8-item supply contract of DEC-43 (item M12) are not touched by the
+number (no flow rule reads it). A fair verdict needs a toll-aware empty-node target and a pocket exit that sends a
+charge first, then the same two runs again.
