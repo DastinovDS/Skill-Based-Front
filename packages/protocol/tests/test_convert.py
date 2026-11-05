@@ -986,11 +986,12 @@ def test_reach_msg_promises_what_a_move_gets(name: str) -> None:
                 assert isinstance(ok, sim.Ok)
                 assert ok.arrive_tick == match.tick + rn.ticks - 1
                 assert rn.path == ok.path  # #448: the path of the ack
-            for node in msg.split:
-                cmd = match.resolve(player, sim.Move(g.id, node))
+            for item in msg.split:
+                cmd = match.resolve(player, sim.Move(g.id, item.node))
                 assert sim.validate(match.state, RULES, player, cmd) == sim.Reject(
                     sim.RejectCode.STACK_LIMIT
                 )
+                assert 0 <= item.units < g.units
             enemy = reach_msg(wire_id, match.tick, match.reach(1 - player, g.id))
             assert (enemy.nodes, enemy.split) == ((), ())
     assert reach_msg("x", 1, None).nodes == ()
@@ -1004,6 +1005,7 @@ class _ReachChecker:
         self.every = every
         self.longest = 0
         self.acked = 0
+        self.splits = 0
 
     def begin(self, match: Match) -> None:
         pass
@@ -1036,6 +1038,19 @@ class _ReachChecker:
                     # so); only the destination may be foreign, and it is in ``reach`` anyway
                     assert all(view.nodes[n].owner == player for n in rn.path[1:-1])
                     self.longest = max(self.longest, len(rn.path))
+                for item in msg.split:
+                    # #762: the size that fits is the largest one the stack limit lets through
+                    here = g.location.node
+                    if item.units > 0:
+                        assert find_path(
+                            match.state, RULES, player, here, item.node, size=item.units
+                        )
+                    for bigger in range(item.units + 1, g.units + 1):
+                        assert (
+                            find_path(match.state, RULES, player, here, item.node, size=bigger)
+                            is None
+                        )
+                    self.splits += 1
 
 
 def test_reach_paths_of_a_bot_match_are_the_ack_paths_and_hide_nothing() -> None:

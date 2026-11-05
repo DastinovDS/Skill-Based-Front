@@ -12,7 +12,11 @@
   let { orders, group }: Props = $props();
 
   const ui = $derived(orders.ui.current);
-  const bonus = $derived(ui.planBonus);
+  // The bonus asked for, capped by the charged units of the selected group (#762), and that cap.
+  const bonus = $derived(orders.planBonus);
+  const max = $derived(orders.planBonusMax);
+  // A planned order is being made (Shift held or the switch on): the stepper stands out (#762).
+  const planning = $derived(ui.planning);
   // Economy v2 (DEC-41, item 10): a planned order asks for a bonus and gathers it in its node, one
   // charge of the warehouse per `plan_ticks_per_bonus`. Shown while an own group in a node is selected
   // (that is when Shift+click gives the order), and for a gathering plan its progress and the release.
@@ -54,9 +58,13 @@
         >
       </div>
     {:else}
-      <div class="pill">
-        <strong>{t('plan.banner')}</strong><kbd class="k" aria-hidden="true">{SHIFT}</kbd>
+      <div class="pill" class:planning>
+        <strong>{planning ? t('plan.choosing') : t('plan.banner')}</strong><kbd
+          class="k"
+          aria-hidden="true">{SHIFT}</kbd
+        >
         <span class="sep" aria-hidden="true"></span>
+        <span class="label">{t('plan.bonusShort')}</span>
         <div class="step" role="group" aria-label={t('plan.bonus')} title={t('plan.bonusTip')}>
           <button
             type="button"
@@ -78,13 +86,14 @@
             type="button"
             class="sbtn"
             aria-label={t('plan.more')}
-            disabled={bonus >= PLAN_BONUS.max}
+            disabled={bonus >= max}
             onclick={(event) => {
               orders.stepPlanBonus(1);
               event.currentTarget.blur();
             }}>+</button
           >
         </div>
+        <span class="dim cap">{tf('plan.max', { max })}</span>
         <kbd class="k" aria-hidden="true">{STEP_KEYS}</kbd>
       </div>
     {/if}
@@ -125,6 +134,26 @@
     border-radius: 999px;
     background: var(--surface);
     white-space: nowrap;
+  }
+
+  /* A planned order is being made: a thicker frame, a bigger value and the words change (#762). */
+  .pill.planning {
+    border: 2px solid var(--you);
+    padding: 4px 7px 4px 13px;
+  }
+
+  .pill.planning output {
+    font-size: 20px;
+  }
+
+  .label {
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  .cap {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   }
 
   .pill.gather {

@@ -15,6 +15,7 @@
   import { OrderBook } from '../match/orderBook.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
+  import type { Command } from '../protocol.gen.ts';
   import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl, bundledGeo } from '../map/bundledMaps.ts';
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
@@ -37,12 +38,19 @@
   const at = params.has('at') && Number.isFinite(atParam) ? atParam : undefined;
   // `?eta=<from>,<to>,<ticks>[,<via>...]` pins the travel-time label of an order to a frozen scene (#432).
   const etaPinned = parseEta(params.get('eta'));
-  // `?split=<node>` makes a fixture scene answer the `reach` of a selected group with that node under
-  // `split` (the group is too big for it, DEC-20): the hint "split the group" (#468) can be looked at.
+  // `?split=<node>[,<units>]` makes a fixture scene answer the `reach` of a selected group with that
+  // node under `split` (the group is too big for it, DEC-20) and the size that fits there (0 by
+  // default): the hint "split the group" (#468) and the click that opens the split menu (#762).
+  const splitParts = (params.get('split') ?? '').split(',').map(Number);
   const splitPinned =
-    params.has('split') && Number.isInteger(Number(params.get('split')))
-      ? Number(params.get('split'))
+    params.has('split') && Number.isInteger(splitParts[0])
+      ? {
+          node: splitParts[0] ?? 0,
+          units: Number.isInteger(splitParts[1]) ? (splitParts[1] ?? 0) : 0,
+        }
       : null;
+  const cpParam = Number(params.get('cp'));
+  const cpPinned = params.has('cp') && Number.isInteger(cpParam) ? Math.max(0, cpParam) : null;
   // `?capture=<node>` turns on the price of a capture (`capture.charge_cost = 1`, DEC-38) and adds a
   // `capture_failed` event at that node to a fixture scene: its toast and the capture tip on a target
   // the player does not own (#580) can be looked at.
@@ -135,7 +143,15 @@
       const scene = fixture;
       // The HUD reads and writes its own state: feeding it must not make this effect depend on it.
       untrack(() => {
-        hud.onSnapshot(scene.snapshot);
+        // `?cp=<hundredths>` sets the own CP of the frozen scene (the CP shortage, #762).
+        hud.onSnapshot(
+          cpPinned === null
+            ? scene.snapshot
+            : {
+                ...scene.snapshot,
+                view: { ...scene.snapshot.view, me: { ...scene.snapshot.view.me, cp: cpPinned } },
+              },
+        );
         for (const event of scene.events) {
           hud.onEvent(event);
         }
@@ -153,17 +169,42 @@
     }
   });
 
+  // `?reject=<code>` (with `menus`) makes a fixture scene refuse every command with that code at
+  // once, as an `ack` would: the cut-off arrow of `NOT_ENOUGH_CP` (#762) can be looked at.
+  const rejectPinned = params.get('reject');
+  let rejectSeq = 0;
+  /** The `send` of a fixture scene with `menus`: nowhere, or refused at once (`?reject`). */
+  function frozenSend(book: OrderBook): (cmd: Command) => number {
+    if (rejectPinned === null) return () => 0;
+    return () => {
+      rejectSeq += 1;
+      const seq = rejectSeq;
+      queueMicrotask(() => {
+        book.onAck({
+          type: 'ack',
+          seq,
+          applied_tick: 0,
+          path: null,
+          arrive_tick: null,
+          reject_code: rejectPinned,
+        });
+      });
+      return seq;
+    };
+  }
+
   // Clicks and keys on the map; orders go to the match, a fixture scene only selects.
-  const orders = $derived(
-    new OrderController({
+  const orders = $derived.by(() => {
+    const book = match?.session.orders ?? new OrderBook();
+    return new OrderController({
       hud,
       map,
       // With `?menus` the city development is on too: the city menu shows all three sectors.
       rules: menusOn
         ? { ...sceneRules, city_upgrades: { ...sceneRules.city_upgrades, enabled: true } }
         : sceneRules,
-      book: match?.session.orders ?? new OrderBook(),
-      send: match === null ? (menusOn ? () => 0 : null) : (cmd) => match.session.send(cmd),
+      book,
+      send: match === null ? (menusOn ? frozenSend(book) : null) : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,
       focusNode: (node) => canvas?.focusNode(node),
       queryLineRoute: (points) => {
@@ -185,8 +226,8 @@
           orders.onReach({ type: 'reach', group, tick: 0, nodes: [], split: [splitPinned] });
         }
       },
-    }),
-  );
+    });
+  });
 
   $effect(() => {
     const current = orders;

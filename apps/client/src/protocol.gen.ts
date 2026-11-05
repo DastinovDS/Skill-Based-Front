@@ -1498,9 +1498,10 @@ export interface ReachMsg {
    */
   nodes: ReachNode[];
   /**
-   * Nodes a ``move`` is rejected to with ``STACK_LIMIT``: only a smaller group gets there.
+   * Nodes a ``move`` is rejected to with ``STACK_LIMIT``: only a smaller group gets there, by
+   * node id, each with the size that fits.
    */
-  split: number[];
+  split: ReachSplit[];
 }
 export interface ReachNode {
   node: number;
@@ -1516,6 +1517,14 @@ export interface ReachNode {
    * @minItems 2
    */
   path: [number, number, ...number[]];
+}
+export interface ReachSplit {
+  node: number;
+  /**
+   * The most units a group from the same node can have to be accepted there now (``0``: no
+   * smaller group either): the size of the split the interface offers (#762).
+   */
+  units: number;
 }
 /**
  * Answer to ``line_route_query``, computed by the server on the state after tick ``tick``
@@ -1611,7 +1620,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 37;
+export const PROTOCOL_VERSION = 38;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

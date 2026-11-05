@@ -10,6 +10,7 @@ import { ringRadius, vpBadgeAt } from './cityLayout.ts';
 import { barracksAt } from './defenseLayout.ts';
 import { clipToConvex } from './regionLayout.ts';
 import {
+  GHOST_CP,
   GHOST_REJECT_MS,
   GHOST_SHAKE_AMPLITUDE,
   GHOST_SHAKE_MS,
@@ -538,6 +539,14 @@ export function delayLeft(createdTick: number, tick: number, delayTicks: number)
   return Math.max(0, createdTick + delayTicks - Math.floor(tick));
 }
 
+/** The reject code of a move the CP did not pay for: its ghost is the cut-off arrow (#762). */
+export const CP_REJECT = 'NOT_ENOUGH_CP';
+
+/** How long the ghost of a refused order stays, ms: longer for the cut-off arrow of `CP_REJECT`. */
+export function ghostRejectMs(code: string | null): number {
+  return code === CP_REJECT ? GHOST_CP.rejectMs : GHOST_REJECT_MS;
+}
+
 export interface GhostLook {
   /** Sideways shake, world units. */
   dx: number;
@@ -549,13 +558,15 @@ export interface GhostLook {
 /**
  * The look of the ghost of a sent order (U6): dashed while the server has not answered, solid once
  * it accepted; a rejected one shakes for `GHOST_SHAKE_MS` and fades until `GHOST_REJECT_MS` after
- * the answer. "Less motion" fades without the shake. `ageMs`: time since the rejection.
+ * the answer. "Less motion" fades without the shake. `ageMs`: time since the rejection. The cut-off
+ * arrow (`code` `CP_REJECT`, #762) holds until its last `GHOST_CP.fadeMs` of `GHOST_CP.rejectMs`.
  */
 export function ghostLook(
   status: GhostStatus,
   ageMs: number,
   base: number,
   reduced: boolean,
+  code: string | null = null,
 ): GhostLook {
   if (status !== 'rejected') return { dx: 0, alpha: base, solid: status === 'accepted' };
   const shaking = ageMs < GHOST_SHAKE_MS && !reduced;
@@ -564,10 +575,9 @@ export function ghostLook(
       Math.sin((ageMs / GHOST_SHAKE_MS) * Math.PI * 8) *
       (1 - ageMs / GHOST_SHAKE_MS)
     : 0;
-  const fade = Math.min(
-    1,
-    Math.max(0, (ageMs - GHOST_SHAKE_MS) / (GHOST_REJECT_MS - GHOST_SHAKE_MS)),
-  );
+  const end = ghostRejectMs(code);
+  const from = code === CP_REJECT ? end - GHOST_CP.fadeMs : GHOST_SHAKE_MS;
+  const fade = Math.min(1, Math.max(0, (ageMs - from) / (end - from)));
   return { dx, alpha: base * (1 - fade), solid: false };
 }
 

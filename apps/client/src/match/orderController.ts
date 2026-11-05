@@ -13,6 +13,7 @@ import type {
 import {
   EMPTY_OVERLAY,
   type FortPick,
+  type HoverMark,
   type MapInteraction,
   type OverlayState,
   type PickHit,
@@ -34,8 +35,9 @@ import {
 import { getLocale, tf } from '../i18n/index.ts';
 import { formatCentis } from '../hud/format.ts';
 import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
+import { GHOST_CP } from '../render/style.ts';
 import { RadialState } from './radialState.svelte.ts';
-import { SplitState } from './splitState.svelte.ts';
+import { chargedOfSplit, SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState, type MenuLine } from './supplyState.svelte.ts';
 
@@ -65,6 +67,19 @@ export const REACH_REFRESH_TICKS = 10;
 
 /** The selection follows a split-off group only for this many ticks after the split (2 s). */
 export const FOLLOW_SPLIT_TICKS = 20;
+
+/** How long the CP badge stays marked after a move was refused for its CP, ms (#762). */
+export const CP_SHORT_FLASH_MS = GHOST_CP.rejectMs;
+
+/**
+ * The largest bonus a planned order of a group with `charged` charged units can ask for in the
+ * UI: `PLAN_BONUS.max`, but no more than its charged units (the simulation gathers no more,
+ * DEC-41, item 10), and never below `PLAN_BONUS.min` (a planned order asks for at least 1).
+ */
+export function planBonusCap(charged: number | null): number {
+  if (charged === null) return PLAN_BONUS.max;
+  return Math.max(PLAN_BONUS.min, Math.min(PLAN_BONUS.max, charged));
+}
 
 export interface OrderControllerOptions {
   hud: HudState;
@@ -188,6 +203,23 @@ export class OrderController implements MapInteraction {
    * soon as a snapshot shows it (`#followSplit`); `tick`: the snapshot tick it was noted at.
    */
   #follow: { readonly from: string; readonly to: string; readonly tick: number } | null = null;
+  /**
+   * The order a split menu opened by a click at a `reach.split` target gives its part (#762): the
+   * kind of order as it was at the click (Shift may be up by the time the split is confirmed).
+   */
+  #sendPlan: { readonly group: string; readonly planned: boolean; readonly bonus: number } | null =
+    null;
+  /** A split sent whose part goes on to `dest` as soon as the server names it (`group_split`). */
+  #pendingSend: {
+    readonly from: string;
+    readonly node: number | null;
+    readonly dest: number;
+    readonly planned: boolean;
+    readonly bonus: number;
+  } | null = null;
+  /** Until when (`now()`, ms) the CP badge stays marked after a refusal for CP (#762). */
+  #cpFlashUntil = 0;
+  #hoverMark: HoverMark | null = null;
 
   constructor(options: OrderControllerOptions) {
     this.#o = options;
@@ -251,7 +283,13 @@ export class OrderController implements MapInteraction {
   }
 
   setPlanned(planned: boolean): void {
-    this.ui.patch({ planned });
+    this.ui.patch({ planned, planning: planned || this.#shift });
+  }
+
+  /** Mirrors "a planned order is being made" (the switch or Shift) to `ui.current.planning`. */
+  #syncPlanning(): void {
+    const planning = this.planned;
+    if (planning !== this.ui.current.planning) this.ui.patch({ planning });
   }
 
   /**
@@ -314,15 +352,23 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'set_leaf_shift', shift: to }, null);
   }
 
-  /** The bonus the next planned order asks for (economy v2). */
+  /**
+   * The bonus the next planned order asks for (economy v2): the stepper's value, no more than the
+   * charged units of the selected group allow (`planBonusMax`).
+   */
   get planBonus(): number {
-    return this.ui.current.planBonus;
+    return Math.min(this.ui.current.planBonus, this.planBonusMax);
   }
 
-  /** One step of the requested plan bonus up (`delta` 1) or down (-1), within `PLAN_BONUS`. */
+  /** The top of the bonus stepper now: `PLAN_BONUS.max`, capped by the selected group's charged units. */
+  get planBonusMax(): number {
+    return planBonusCap(this.#selectedGroup()?.charged ?? null);
+  }
+
+  /** One step of the requested plan bonus up (`delta` 1) or down (-1), within `PLAN_BONUS` and the cap. */
   stepPlanBonus(delta: number): void {
-    const next = Math.min(PLAN_BONUS.max, Math.max(PLAN_BONUS.min, this.planBonus + delta));
-    if (next !== this.planBonus) this.ui.patch({ planBonus: next });
+    const next = Math.min(this.planBonusMax, Math.max(PLAN_BONUS.min, this.planBonus + delta));
+    if (next !== this.ui.current.planBonus) this.ui.patch({ planBonus: next });
   }
 
   /** Ticks per point of a gathering plan (`ruleset_public.orders.plan_ticks_per_bonus`, DEC-41). */
@@ -356,6 +402,20 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.factory?.max ?? 0;
   }
 
+  /**
+   * The own factories are at `factory.max` (builds under way counted, `HudData.factories`): the
+   * menu does not offer another one (#762). The server still checks it (`FACTORY_LIMIT`).
+   */
+  get factoriesFull(): boolean {
+    const factories = this.#o.hud.current?.factories ?? null;
+    return factories !== null && factories.count >= factories.max;
+  }
+
+  /** The own node has a road a fortification could still be asked for (#762); display only. */
+  fortifiable(node: number): boolean {
+    return this.#fortRoads(node).length > 0;
+  }
+
   // --- MapInteraction -----------------------------------------------------------------------
 
   overlay(): OverlayState {
@@ -374,11 +434,14 @@ export class OrderController implements MapInteraction {
     const beacon = this.#o.hud.beacon;
     const supply = this.#supplyOverlayNow();
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
-    const splitNodes = reach === null ? [] : [...reach.split];
+    const splitNodes = reach === null ? [] : [...reach.split.keys()];
     const eta = this.#eta(reach, preview);
     this.#syncSplitHover(reach, preview);
     this.#syncCaptureHover(preview);
-    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}`;
+    this.#syncCpShort(preview);
+    this.#syncPlanning();
+    const hover = this.#hoverMarkNow();
+    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
@@ -410,13 +473,73 @@ export class OrderController implements MapInteraction {
           eta === null || preview === null || from === null
             ? null
             : { from, node: preview, ticks: eta.ticks, path: eta.path },
+        hover,
       };
     }
     return this.#overlay;
   }
 
+  /**
+   * What a click under the pointer would pick or aim at, lit lightly on the map (#762): the area of
+   * a city or province (a selection, a menu, the target of the selected group), or an own group.
+   * The same reading of the hit as `click`; `null` where a click does nothing, and while a pick of
+   * its own runs (a road to fortify or raise, a line, a transfer). The same object while unchanged.
+   */
+  #hoverMarkNow(): HoverMark | null {
+    const mark = this.#hoverTarget();
+    const prev = this.#hoverMark;
+    if (mark?.node !== prev?.node || mark?.group !== prev?.group) this.#hoverMark = mark;
+    return this.#hoverMark;
+  }
+
+  #hoverTarget(): HoverMark | null {
+    const hit = this.#hover;
+    const ui = this.ui.current;
+    if (hit === null || this.#o.send === null) return null;
+    if (ui.fortFrom !== null || ui.roadMode || ui.lineDraft !== null || ui.transferFrom !== null) {
+      return null;
+    }
+    if (ui.supplyMode) {
+      // The «Supply» layer: a click opens the supply menu of an own node, nothing else.
+      const node = this.#cityOf(hit);
+      return node !== null && this.#isOwnNode(node) ? { node, group: null } : null;
+    }
+    const group = this.#selectedGroup();
+    if (
+      hit.kind === 'group' &&
+      (group === null || hit.node === undefined || hit.node === group.node)
+    ) {
+      return { node: null, group: hit.id };
+    }
+    const node = this.#cityOf(hit);
+    if (node === null) return null;
+    // The selected group: a click on another place orders it there; on its own place lets it go.
+    if (group !== null) return node === group.node ? null : { node, group: null };
+    if (hit.kind === 'stack') return { node, group: null };
+    return this.#isUnselectable(node) ? null : { node, group: null };
+  }
+
+  /** The CP price of the move a click would give now (`ruleset_public.cost`), hundredths. */
+  #movePrice(): number {
+    const cost = this.#o.rules.cost;
+    return this.planned ? cost.planned_move : cost.move;
+  }
+
+  /**
+   * The CP badge is marked while the CP do not pay for the move to the hovered target, and for
+   * `CP_SHORT_FLASH_MS` after a move was refused with `NOT_ENOUGH_CP` (#762). Display arithmetic:
+   * the price is the ruleset's, the refusal the server's.
+   */
+  #syncCpShort(preview: number | null): void {
+    const cp = this.cpNow;
+    const hovered = preview !== null && cp !== null && cp < this.#movePrice();
+    const short = hovered || this.#now() < this.#cpFlashUntil;
+    if (short !== this.ui.current.cpShort) this.ui.patch({ cpShort: short });
+  }
+
   click(picked: PickHit | null, shift: boolean): void {
     this.#shift = shift;
+    this.#syncPlanning();
     // The road pick of "Fortify road" takes the click first: a road gets the line, anything else cancels.
     if (this.ui.current.fortFrom !== null) {
       this.#fortClick(picked);
@@ -454,9 +577,19 @@ export class OrderController implements MapInteraction {
       hit = { kind: 'node', id: iconNode };
     }
     if (hit.kind === 'node' && group !== null && this.#o.send !== null && group.node !== hit.id) {
-      this.#closeTargetMenus();
       // Economy v2: a planned order asks for its bonus (DEC-41, item 10); otherwise 0.
       const bonus = this.planned && this.v2 ? this.planBonus : 0;
+      // The server says only a smaller group gets there (`reach.split`, the stack limit, DEC-20):
+      // the split menu opens with the size that fits, and its part goes there on confirm (#762).
+      const fit = this.splitFit(hit.id);
+      if (fit >= 1 && group.node !== null) {
+        this.#closeMenus();
+        if (this.splitMenu.open(group.id, group.units, group.charged, { n: fit, dest: hit.id })) {
+          this.#sendPlan = { group: group.id, planned: this.planned, bonus };
+        }
+        return;
+      }
+      this.#closeTargetMenus();
       this.#sendCommand(
         { type: 'move', group: group.id, dest: hit.id, planned: this.planned, bonus },
         group.node,
@@ -626,12 +759,37 @@ export class OrderController implements MapInteraction {
     this.splitMenu.open(group.id, group.units, group.charged);
   }
 
-  /** The split menu's button or Enter: split the chosen amount off and close the menu. */
+  /**
+   * The most units that get to `node` from the selected group's node, as the server's `reach`
+   * says for a `STACK_LIMIT` target (#762); 0: none, or not such a target.
+   */
+  splitFit(node: number): number {
+    return this.#reach()?.split.get(node) ?? 0;
+  }
+
+  /**
+   * The split menu's button or Enter: split the chosen amount off and close the menu. A menu
+   * opened by a click at a too small target (#762) also orders the new group there once the
+   * server names it (`#onSplit`), as the order was at the click.
+   */
   confirmSplit(): void {
-    const { open, group, n } = this.splitMenu.current;
+    const { open, group, n, charged, dest } = this.splitMenu.current;
+    const plan = this.#sendPlan;
+    this.#sendPlan = null;
     this.splitMenu.close();
     if (!open || this.#o.send === null) return;
     this.#sendCommand({ type: 'split', group, n }, null);
+    if (dest !== null && plan?.group === group) {
+      this.#pendingSend = {
+        from: group,
+        node: this.#selectedGroup()?.id === group ? (this.#selectedGroup()?.node ?? null) : null,
+        dest,
+        planned: plan.planned,
+        // The part asks for no more than its own charged units (`planBonusCap`).
+        bonus:
+          plan.bonus === 0 ? 0 : Math.min(plan.bonus, planBonusCap(chargedOfSplit(n, charged))),
+      };
+    }
   }
 
   closeSplit(): void {
@@ -648,7 +806,7 @@ export class OrderController implements MapInteraction {
       group: msg.group,
       ticks: new Map(msg.nodes.map((n) => [n.node, n.ticks])),
       routes: new Map(msg.nodes.map((n) => [n.node, n.path])),
-      split: new Set(msg.split),
+      split: new Map(msg.split.map((s) => [s.node, s.units])),
     };
     this.ui.patch({ reach: info });
   }
@@ -686,6 +844,19 @@ export class OrderController implements MapInteraction {
    * who has selected something else meanwhile keeps their selection.
    */
   #onSplit(from: string, to: string): void {
+    const send = this.#pendingSend;
+    if (send?.from === from) {
+      // The part of a split for a too small target (#762) goes there at once; the order is given,
+      // so the group is let go as after any order.
+      this.#pendingSend = null;
+      this.#sendCommand(
+        { type: 'move', group: to, dest: send.dest, planned: send.planned, bonus: send.bonus },
+        send.node,
+      );
+      const picked = this.#o.hud.selection;
+      if (picked?.kind === 'group' && picked.id === from) this.deselect();
+      return;
+    }
     const selection = this.#o.hud.selection;
     if (selection?.kind !== 'group' || selection.id !== from) return;
     this.#follow = { from, to, tick: this.#o.hud.current?.tick ?? 0 };
@@ -754,6 +925,8 @@ export class OrderController implements MapInteraction {
   startFortify(): void {
     const node = this.recruitNode();
     if (node === null || !this.hasFort || this.#o.send === null) return;
+    // Every road of the node has a line already (built or being built): there is nothing to pick.
+    if (!this.fortifiable(node)) return;
     this.closeCityMenu();
     this.ui.patch({ fortFrom: node, fortHover: null, roadMode: false });
   }
@@ -1286,6 +1459,7 @@ export class OrderController implements MapInteraction {
   /** Returns true if the key was used (the caller then prevents the browser default). */
   key(input: KeyInput): boolean {
     this.#shift = input.shiftKey;
+    this.#syncPlanning();
     if (input.type !== 'keydown') return this.#keyUp(input);
     if (input.code === 'Tab' || input.code === 'F2') {
       if (input.repeat !== true) this.toggleSupplyMode();
@@ -1876,6 +2050,19 @@ export class OrderController implements MapInteraction {
   }
 
   #onResult(result: CommandResult): void {
+    const { cmd } = result;
+    // A split that was to send its part on and did not happen sends nothing (#762).
+    if (
+      cmd.type === 'split' &&
+      result.kind !== 'accepted' &&
+      this.#pendingSend?.from === cmd.group
+    ) {
+      this.#pendingSend = null;
+    }
+    if (result.kind === 'rejected' && cmd.type === 'move' && result.code === 'NOT_ENOUGH_CP') {
+      this.#cpFlashUntil = this.#now() + CP_SHORT_FLASH_MS;
+      if (!this.ui.current.cpShort) this.ui.patch({ cpShort: true });
+    }
     this.ui.emit(
       result.kind === 'rejected'
         ? { kind: 'rejected', code: result.code, cmd: result.cmd }

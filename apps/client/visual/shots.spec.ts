@@ -659,6 +659,91 @@ test('shot of the split hint on a target the group is too big for', async ({ pag
   await page.screenshot({ path: join(OUT, 'split-hint-gray.png') });
 });
 
+// The UX batch of the 2026-11-05 playtest (#762), `ux-<name>.png` and grey:
+// - `hover-city`, `hover-group`: the pointer on the area of an own city, on an own group (scene `snapshot`);
+// - `hover-target`: a group selected, the pointer on the area of an enemy city (the target is lit);
+// - `split-tip`, `split-menu`: `?split=2,1` answers the `reach` with node 2 and the size 1 that fits; the
+//   tip says a click splits, the click opens the split menu at that size ("Split and send");
+// - `plan-shift`: scene `economy` (economy v2), a group selected, Shift held over a target: the plan bar stands out;
+// - `cp-hover`, `cp-cut`: `?cp=50` (less than a move) and `?reject=NOT_ENOUGH_CP`: the CP badge is marked
+//   over a target, the click leaves the cut-off arrow.
+const UX_SHOTS = [
+  'hover-city',
+  'hover-group',
+  'hover-target',
+  'split-tip',
+  'split-menu',
+  'plan-shift',
+  'cp-hover',
+  'cp-cut',
+] as const;
+
+for (const name of UX_SHOTS) {
+  test(`shot of the playtest batch (${name})`, async ({ page }) => {
+    const economy = name === 'plan-shift' || name.startsWith('cp-');
+    const query = economy
+      ? `scene=economy&menus${name.startsWith('cp-') ? '&cp=50&reject=NOT_ENOUGH_CP' : ''}`
+      : `scene=snapshot&menus${name.startsWith('split-') ? '&split=2,1' : ''}`;
+    await page.goto(`/?${query}`);
+    await expect(page.locator('.game-canvas')).toHaveAttribute(
+      'data-tick',
+      economy ? '2400' : '120',
+    );
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    switch (name) {
+      case 'hover-city':
+        await page.mouse.move(380, 430);
+        await page.mouse.move(381, 431);
+        break;
+      case 'hover-group':
+        await page.mouse.move(640, 245);
+        await page.mouse.move(641, 246);
+        break;
+      case 'hover-target':
+        await page.mouse.click(640, 245);
+        await page.waitForTimeout(300);
+        await page.mouse.move(880, 430);
+        await page.mouse.move(881, 431);
+        break;
+      case 'split-tip':
+      case 'split-menu':
+        await page.mouse.click(640, 245);
+        await page.waitForTimeout(400);
+        await page.mouse.move(640, 598);
+        await page.mouse.move(641, 599);
+        await expect(page.locator('[role="tooltip"]')).toBeVisible();
+        if (name === 'split-menu') {
+          await page.mouse.click(641, 599);
+          await page.mouse.move(1000, 700);
+        }
+        break;
+      case 'plan-shift':
+        await page.mouse.click(332, 518);
+        await page.waitForTimeout(300);
+        await page.keyboard.down('Shift');
+        await page.mouse.move(485, 160);
+        await page.mouse.move(486, 161);
+        break;
+      case 'cp-hover':
+      case 'cp-cut':
+        await page.mouse.click(332, 518);
+        await page.waitForTimeout(300);
+        await page.mouse.move(485, 160);
+        await page.mouse.move(486, 161);
+        if (name === 'cp-cut') {
+          await page.mouse.click(486, 161);
+          await page.mouse.move(1000, 700);
+        }
+        break;
+    }
+    await page.waitForTimeout(name === 'cp-cut' ? 600 : 400);
+    await page.screenshot({ path: join(OUT, `ux-${name}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `ux-${name}-gray.png`) });
+    if (name === 'plan-shift') await page.keyboard.up('Shift');
+  });
+}
+
 // The price of a capture (DEC-38, #580): `?capture=2&menus` turns on `capture.charge_cost = 1` and adds a `capture_failed`
 // event at node 2 (its toast at the top right). Select the group, rest the pointer on node 2, a target the player does not
 // own: the rule tip. `capture-tip.png` is the whole screen, `capture-tip-gray.png` the same in grey scale.

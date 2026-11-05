@@ -489,3 +489,22 @@ describe('MapView on a geography (DEC-36, #544)', () => {
     view.destroy();
   });
 });
+
+describe('MapView: the area under the pointer (#762)', () => {
+  it('lights one area, redraws only on a change, and lights nothing for null', () => {
+    const layers = createLayers();
+    const view = new MapView(GEO_MAP, layers, 0, {} as Renderer, true, null);
+    const fill = layers.layer.territory.children.find((c) => c.label === 'hover-area') as Graphics;
+    expect(fill.getLocalBounds().width).toBe(0);
+    view.setHover(0);
+    expect(view.hovered).toBe(0);
+    const box = fill.getLocalBounds();
+    const cell = view.cells[0] ?? [];
+    expect(box.minX).toBeCloseTo(Math.min(...cell.map((p) => p.x)), -1);
+    expect(box.maxX).toBeCloseTo(Math.max(...cell.map((p) => p.x)), -1);
+    view.setHover(null);
+    expect(view.hovered).toBeNull();
+    expect(fill.getLocalBounds().width).toBe(0);
+    view.destroy();
+  });
+});

@@ -34,8 +34,18 @@
   // warehouse is at its top level) is not drawn; the others spread evenly around the ring.
   const v2 = $derived(orders.v2);
   const province = $derived(menu.target !== null && orders.isProvince(menu.target));
+  // #762: no factory at the factory max, no "Fortify road" once every road of the node has its line.
   const choices = $derived(
-    cityChoices(upgrades, city, v2, province, orders.hasBunker, orders.hasFort),
+    cityChoices(
+      upgrades,
+      city,
+      v2,
+      province,
+      orders.hasBunker,
+      orders.hasFort,
+      orders.factoriesFull,
+      menu.target === null || orders.fortifiable(menu.target),
+    ),
   );
   const count = $derived(choices.length);
   const items = $derived.by<RadialItem[]>(() => {
@@ -136,7 +146,7 @@
 </script>
 
 <!-- A click on an own city (UI round 2): its actions around the circle. R does the same. -->
-{#if menu.open && menu.target !== null}
+{#if menu.open && menu.target !== null && count > 0}
   {@const target = menu.target}
   <Radial
     {items}

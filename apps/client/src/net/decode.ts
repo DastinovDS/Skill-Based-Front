@@ -93,7 +93,7 @@ const CHECKS: Record<ServerMsg['type'], (m: Obj) => boolean> = {
     isStr(m.group) &&
     isInt(m.tick) &&
     every(m.nodes, (n) => isObj(n) && isInt(n.node) && isInt(n.ticks)) &&
-    every(m.split, isInt),
+    every(m.split, (s) => isObj(s) && isInt(s.node) && isInt(s.units)),
   line_route: (m) => every(m.points, isInt) && isInt(m.tick) && every(m.path, isInt),
 };
 

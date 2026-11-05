@@ -33,7 +33,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 37
+PROTOCOL_VERSION: Final = 38
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -407,6 +407,13 @@ class ReachNode(WireModel):
         return self
 
 
+class ReachSplit(WireModel):
+    node: NodeId
+    units: NonNegInt
+    """The most units a group from the same node can have to be accepted there now (``0``: no
+    smaller group either): the size of the split the interface offers (#762)."""
+
+
 class ReachMsg(WireModel):
     """Answer to ``reach_query``, computed by the server on the state after tick ``tick``
     (DEC-20, D5; DEC-22, item 10). The client highlights ``nodes``, shows their travel time and
@@ -418,8 +425,9 @@ class ReachMsg(WireModel):
     tick: Tick
     nodes: tuple[ReachNode, ...]
     """Nodes a ``move`` of the group is accepted to now, by node id."""
-    split: tuple[NodeId, ...]
-    """Nodes a ``move`` is rejected to with ``STACK_LIMIT``: only a smaller group gets there."""
+    split: tuple[ReachSplit, ...]
+    """Nodes a ``move`` is rejected to with ``STACK_LIMIT``: only a smaller group gets there, by
+    node id, each with the size that fits."""
 
 
 class LineRouteMsg(WireModel):

@@ -68,6 +68,7 @@ from gow_protocol.messages import (
     RatingChange,
     ReachMsg,
     ReachNode,
+    ReachSplit,
     SnapshotMsg,
     UnratedReason,
 )
@@ -810,7 +811,7 @@ def reach_msg(group: str, tick: int, reach: sv.Reach | None) -> ReachMsg:
         group=group,
         tick=tick,
         nodes=tuple(ReachNode(node=n, ticks=t, path=p) for n, t, p in reach.nodes),
-        split=reach.split,
+        split=tuple(ReachSplit(node=n, units=u) for n, u in reach.split),
     )
 
 

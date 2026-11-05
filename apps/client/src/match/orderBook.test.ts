@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { expectDeclared, filledData, tracked } from '../net/eventFields.fixture.ts';
 import type { AckMsg, Command } from '../protocol.gen.ts';
-import { GHOST_REJECT_MS } from '../render/style.ts';
+import { GHOST_CP, GHOST_REJECT_MS } from '../render/style.ts';
 import { OrderBook, type CommandResult } from './orderBook.ts';
 
 const move = (group: string, dest: number, planned = false): Command => ({
@@ -44,6 +44,7 @@ describe('OrderBook', () => {
         path: null,
         status: 'pending',
         rejectedAt: null,
+        rejectCode: null,
       },
     ]);
   });
@@ -66,15 +67,29 @@ describe('OrderBook', () => {
   it('keeps a rejected ghost for the shake and the fade, then removes it, and reports the code', () => {
     const { book, results, clock } = setup();
     book.track(1, move('g', 5), 2);
-    book.onAck(ack(1, { reject_code: 'NOT_ENOUGH_CP' }));
-    expect(book.ghosts().map((g) => [g.status, g.rejectedAt])).toEqual([['rejected', 1000]]);
+    book.onAck(ack(1, { reject_code: 'GROUP_BUSY' }));
+    expect(book.ghosts().map((g) => [g.status, g.rejectedAt, g.rejectCode])).toEqual([
+      ['rejected', 1000, 'GROUP_BUSY'],
+    ]);
     clock.now += GHOST_REJECT_MS - 1;
     expect(book.ghosts()).toHaveLength(1);
     clock.now += 1;
     expect(book.ghosts()).toEqual([]);
-    expect(results).toEqual([
-      { kind: 'rejected', seq: 1, cmd: move('g', 5), code: 'NOT_ENOUGH_CP' },
-    ]);
+    expect(results).toEqual([{ kind: 'rejected', seq: 1, cmd: move('g', 5), code: 'GROUP_BUSY' }]);
+  });
+
+  it('keeps the cut-off arrow of a move refused for its CP clearly longer (#762)', () => {
+    const { book, clock } = setup();
+    book.track(1, move('g', 5), 2);
+    book.onAck(ack(1, { reject_code: 'NOT_ENOUGH_CP' }));
+    expect(book.ghosts()[0]?.rejectCode).toBe('NOT_ENOUGH_CP');
+    // Past the life of another refusal it is still there, until its own end.
+    clock.now += GHOST_REJECT_MS;
+    expect(book.ghosts()).toHaveLength(1);
+    clock.now += GHOST_CP.rejectMs - GHOST_REJECT_MS - 1;
+    expect(book.ghosts()).toHaveLength(1);
+    clock.now += 1;
+    expect(book.ghosts()).toEqual([]);
   });
 
   it('keeps one ghost per group: a newer order replaces the older', () => {
