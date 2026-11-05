@@ -1347,7 +1347,7 @@ The question: is the free capture of an empty node (#688) the dominant strategy,
 | Bradley-Terry, top and range | exploiter +2.29, range 4.89 | exploiter +1.18, range 2.77 |
 | Nash mix | exploiter 0.98, rusher@hard 0.01 | exploiter 0.95, rusher@hard 0.03, rusher@normal 0.01 |
 | intransitive share | 0.13 | 0.19 |
-| level ladder (V2) | PASS, 5 of 5 | FAIL: 9 of 15 personality pairs not separated, hard over normal not separated in 4 of 5 |
+| level ladder (V2) | PASS, 5 of 5 | FAIL: 9 of 15 personality pairs not separated, hard over normal not separated in 5 of 5 |
 | captures per player and match: all / neutral / enemy | 43.0 / 14.4 / 28.6 | 24.0 / 14.4 / 9.6 |
 | walk-ins / contested sieges (won) | 24.3 / 4.57 (3.01) | 8.0 / 2.19 (1.01) |
 | end reasons: vp / capital / draw | 5211 / 546 / 18 | 5300 / 426 / 48 |
