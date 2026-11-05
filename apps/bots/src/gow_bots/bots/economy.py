@@ -42,8 +42,8 @@ refill of the leaf warehouses. Hysteresis (G-L of the ``mvp-4`` bot audit): the 
 ``SHIFT_HOLD_TICKS`` after a change (``LeafShift``), it does not flap with every sighting.
 **Road fortifications** (``fort_site``, DEC-43 item D) are the CP sink there: while the CP are
 near the cap, an own node fortifies the road to an enemy neighbour where an enemy is in sight; an
-attack whose every road into the target is fortified asks for the toll on top of its shots
-(``Bot.toll_ahead``).
+attack whose road into the target is fortified pays the toll from its real charges first
+(``Bot.toll_from``, ``utility.takes``; an empty node too, #760).
 """
 
 from collections import deque
