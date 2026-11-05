@@ -19,6 +19,7 @@ from gow_bots.bots import BOTS, SmartHoarder, bot_factory
 from gow_bots.bots.assess import edge_ticks
 from gow_bots.bots.campaign import Ctx
 from gow_bots.bots.smart import STRIKE_ALIGN, SmartBot
+from gow_bots.bots.tempo import Bucket, Perception, Tempo
 from gow_bots.bots.utility import shots_to_take
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import MapDef, load_map
@@ -158,10 +159,14 @@ def test_the_hoarder_stages_and_strikes_like_the_owner(crossroads: MapDef, rules
     # still lets the build-up reach the stage). The owner's strike: Middle Court taken first,
     # then 2-4 groups, at least one planned, joining one capital fight.
     side = 1
-    bots = [
-        bot_factory("smart_turtle@easy")(crossroads, rules, seed=1, player=0),
-        bot_factory("smart_hoarder")(crossroads, rules, seed=1, player=side),
-    ]
+    turtle = bot_factory("smart_turtle@easy")(crossroads, rules, seed=1, player=0)
+    assert isinstance(turtle, SmartBot)
+    # The easy level of #573 (#749 changed the levels; the opponent of this test stays): no
+    # ``insight``, 12 commands a minute.
+    turtle.tempo = Tempo(think_ticks=20, react_ticks=30, apm=12, burst=3, insight=False)
+    turtle.bucket = Bucket(turtle.tempo, rules.tick_hz)
+    turtle.perception = Perception(turtle.tempo.react_ticks)
+    bots = [turtle, bot_factory("smart_hoarder")(crossroads, rules, seed=1, player=side)]
     log = _StrikeLog(side)
     result = run_headless(crossroads, rules, bots, observer=log)
     assert log.orders, "no strike"

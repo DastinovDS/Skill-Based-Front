@@ -31,9 +31,12 @@ Under the supply flow (DEC-43, ``supply.model = "flow"``, ``mvp-4``) there are n
 bunker: ``line_commands`` and ``bunker_site`` give nothing, and the flow carries the charges by
 itself. The one lever is the **leaf shift** (``leaf_shift_command``, DEC-43 item G): the level goes
 one road back (``SetLeafShift(1)``) so new charges stop short of a node the bot may lose (a
-captured warehouse is lost, DEC-43 item C), while the front changes hands (the enemy took an own
-node within ``CHURN_TICKS``, public ownership) or while an own leaf faces a visibly
-stronger enemy and the bot attacks from none of them; back to the front (``0``) otherwise. A
+captured warehouse is lost, DEC-43 item C), while an own leaf faces a visibly stronger enemy and
+the bot attacks from none of them; back to the front (``0``) otherwise. #686 also kept the shift
+back for 300 ticks after the enemy took an own node; #749 removed that: against the hold alone it
+burned 1.4 to 2.3 times the share of its charges (at full warehouses behind the level) to save
+about 5 charges a match from captured warehouses, and lost head to head (0.40 for it, 72 local
+matches of three ``hard`` personalities). A
 tired army ahead of the level still pulls its charges (items I6, I7), so the shift only stops the
 refill of the leaf warehouses. Hysteresis (G-L of the ``mvp-4`` bot audit): the shift stays
 ``SHIFT_HOLD_TICKS`` after a change (``LeafShift``), it does not flap with every sighting.
@@ -53,7 +56,6 @@ from gow_sim.maps import NodeKind
 from gow_sim.view import AtNode, NodeView, PlayerView
 
 __all__ = [
-    "CHURN_TICKS",
     "FACTORY_LATE_TICKS",
     "LINES_PER_FACTORY",
     "LINE_COMMANDS",
@@ -91,33 +93,18 @@ LEAF_MARGIN: Final = 1
 (``leaf_shift_command``)."""
 SHIFT_HOLD_TICKS: Final = 300
 """The leaf shift stays at least this many ticks (30 s) after it changed (G-L: no flapping)."""
-CHURN_TICKS: Final = 300
-"""The shift stays back this many ticks after the enemy took an own node (the front changes hands).
-Only losses count: with the own captures too the shift stayed back most of the match, and the
-charges kept from captured warehouses burned at full factories instead (2.5 burned per charge
-kept in local smart-vs-smart matches, #686)."""
 
 
 @dataclass(slots=True)
 class LeafShift:
     """What ``leaf_shift_command`` remembers between decisions, all from the own views."""
 
-    owners: tuple[int | None, ...] = ()
-    """The owner of every node in the last view (public)."""
-    churn: int | None = None
-    """The last tick an own node was seen to have passed to the enemy."""
     shift: int | None = None
     """The shift in force in the last view."""
     since: int | None = None
     """The tick that shift was first seen in force; ``None``: never changed in this match."""
 
     def observe(self, view: PlayerView) -> None:
-        owners = tuple(n.owner for n in view.nodes)
-        if self.owners:
-            for was, now in zip(self.owners, owners, strict=True):
-                if was == view.player and now == 1 - view.player:
-                    self.churn = view.tick
-        self.owners = owners
         shift = view.me.leaf_shift
         if self.shift is not None and shift != self.shift:
             self.since = view.tick
@@ -385,7 +372,6 @@ def leaf_shift_command(bot: Bot, view: PlayerView, memory: LeafShift) -> Command
     when it differs from the one in force and the one in force has stood ``SHIFT_HOLD_TICKS``;
     ``None`` otherwise and under any other supply model. ``memory`` is updated on every call.
 
-    "Changes hands": a node owned by the player in the previous view is the enemy's now.
     "Visibly stronger": a neighbour of the enemy whose charged units as the view tells them
     (``Bot.enemy_at``; a presence without numbers counts as nothing) exceed the own charged units
     standing in the leaf by more than ``LEAF_MARGIN``. "Attacks": an own group has an order to a
@@ -401,9 +387,8 @@ def leaf_shift_command(bot: Bot, view: PlayerView, memory: LeafShift) -> Command
     attacking = any(
         g.order is not None and view.nodes[g.order.dest].owner != player for g in view.groups
     )
-    churn = memory.churn is not None and view.tick - memory.churn < CHURN_TICKS
-    want = 1 if churn else 0
-    if not attacking and not churn:
+    want = 0
+    if not attacking:
         charged = [0] * len(view.nodes)
         for g in view.groups:
             if isinstance(g.location, AtNode):

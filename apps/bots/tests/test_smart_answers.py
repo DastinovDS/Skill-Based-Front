@@ -164,11 +164,22 @@ def test_a_thin_province_garrison_leaves_before_a_visible_stronger_force(
     assert not any(isinstance(c, Move) and c.group == 900 and c.dest == back for c in cmds)
 
 
-def test_the_benchmark_and_easy_bots_do_not_answer(crossroads: MapDef, rules: Ruleset) -> None:
+def _blind(bot: object) -> SmartBot:
+    """A smart bot without ``insight`` (no level has that since #749; the switch stays)."""
+    assert isinstance(bot, SmartBot)
+    bot.tempo = dataclasses.replace(bot.tempo, insight=False)
+    return bot
+
+
+def test_the_benchmark_and_bots_without_insight_do_not_answer(
+    crossroads: MapDef, rules: Ruleset
+) -> None:
     hoarder = SmartHoarder(crossroads, rules, seed=0, player=0)
     assert not hoarder.answering() and hoarder.striking()
+    blind = _blind(bot_factory("smart_strangler@easy")(crossroads, rules, seed=0, player=0))
+    assert not blind.answering() and not blind.striking()
     easy = bot_factory("smart_strangler@easy")(crossroads, rules, seed=0, player=0)
-    assert isinstance(easy, SmartBot) and not easy.answering() and not easy.striking()
+    assert isinstance(easy, SmartBot) and easy.answering() and easy.striking()
     for cls in PERSONALITIES:
         assert (cls is not SmartTurtle) == cls.STRIKE, cls.name
         assert cls.ANSWERS
@@ -183,10 +194,9 @@ def test_the_charges_burn_at_nine_tenths_even_with_units_waiting(
     bot = SmartStrangler(crossroads, rules, seed=0, player=0)
     assert bot._burning(9, 10, 3)  # pyright: ignore[reportPrivateUsage]
     assert not bot._burning(8, 10, 0)  # pyright: ignore[reportPrivateUsage]
-    easy = bot_factory("smart_strangler@easy")(crossroads, rules, seed=0, player=0)
-    assert isinstance(easy, SmartBot)
-    assert not easy._burning(9, 10, 0)  # pyright: ignore[reportPrivateUsage]
-    assert easy._burning(10, 10, 0)  # pyright: ignore[reportPrivateUsage]
+    blind = _blind(bot_factory("smart_strangler@easy")(crossroads, rules, seed=0, player=0))
+    assert not blind._burning(9, 10, 0)  # pyright: ignore[reportPrivateUsage]
+    assert blind._burning(10, 10, 0)  # pyright: ignore[reportPrivateUsage]
 
 
 # Item 16: the forward barracks in the centre ---------------------------------------------------

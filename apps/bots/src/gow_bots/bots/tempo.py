@@ -16,14 +16,30 @@ human pace, three ways:
 
 ``insight`` is the quality of the assessment: without it the bot plays its drawn thresholds
 whatever the position (no VP forecast, no enemy CP bound, ``SmartBot.adjusted``), does not see the
-engagement zone (DEC-37 pin), does not evacuate doomed cities and sends no scouts.
+engagement zone (DEC-37 pin), does not evacuate doomed cities and sends no scouts. Every level has
+it (#749): without it the bot is not weaker, only different (below); ``False`` stays for tests.
 
-The levels (``DIFFICULTIES``) are calibrated against the unlimited smart bots measured with
-``gow-bots stats`` on ``mvp-1`` (3 maps, PR 3 description): 12 to 16 commands a minute on
-average, peaks of 24 to 71 in one minute. ``hard`` is the unlimited play with the bursts cut to a
-fast human (40 a minute) and no reaction delay beyond the call (5 ticks); ``normal`` and ``easy``
-slow it down. There are no human replays to measure yet (the playtest replays are on the owner's
-server); the human figures are an assumption to check with ``mise run stats`` on them (#166).
+**What binds under ``mvp-4``** (#749; the 16-bot field run of #706 and short local runs). The CP
+income (1 CP per 100 ticks, about 93 CP a match, ``mvp-4``) binds every level: the bots spend 98%
+of it and send 118 to 136 commands a match (about 9 a minute, two thirds of them paid), whatever
+the level. So a think interval, a reaction delay or an APM above that demand changes almost
+nothing: the old ``normal`` (10 ticks, 15 ticks, 25 APM) and ``hard`` were within each other's
+interval for every personality, and the old ``easy`` (20, 30, 12 APM, no ``insight``) could send
+180 commands and sent 136. The old ``easy`` differed only by ``insight``, which is not a strength:
+a bot without it at the ``hard`` tempo plays even with ``hard`` (0.53 for ``smart_strangler`` and
+``smart_reactive``, 32 matches each), and since it reads no arrival, pin or plan it does not care
+about a late view, while the same late view (40-tick decisions, 100-tick reaction) costs a bot with
+``insight`` most of its matches (0.25 against ``hard``). Hence ``smart_reactive`` and
+``smart_strangler`` ``easy`` beat ``normal`` 0.61 in the field run.
+
+**The lever that binds is the APM bucket below the demand.** At 8 commands a minute a bot plays
+even with ``hard`` (0.53, 32 matches), at 7 it wins 0.38 (24), at 6 almost nothing (0 of 32,
+1 of 24): every command it cannot pay is one of the later, offensive priorities (the decision
+spends in order: fights, economy, garrisons, then attacks and recruits), while the CP keep coming.
+The human figure it models: the owner played ``mvp-3`` match 6 at 8.5 commands a minute on average
+(``docs/balance/bot-audit-2026-11.md``, section 1). ``hard`` keeps the unlimited play (40, above
+any demand); ``normal`` and ``easy`` cut it below the demand. The think and reaction delays keep
+their old values (they model the human pace, not the strength).
 
 Integers only, no randomness: a tempo is a pure function of the ticks, so a match stays a
 function of ``(map, ruleset, bots, seed)`` and the two sides stay mirror-symmetric.
@@ -54,8 +70,8 @@ class Tempo:
 
 
 DIFFICULTIES: Final[dict[str, Tempo]] = {
-    "easy": Tempo(think_ticks=20, react_ticks=30, apm=12, burst=3, insight=False),
-    "normal": Tempo(think_ticks=10, react_ticks=15, apm=25, burst=5, insight=True),
+    "easy": Tempo(think_ticks=20, react_ticks=30, apm=6, burst=3, insight=True),
+    "normal": Tempo(think_ticks=10, react_ticks=15, apm=7, burst=4, insight=True),
     "hard": Tempo(think_ticks=5, react_ticks=0, apm=40, burst=8, insight=True),
 }
 """Difficulty name to its tempo, easiest first."""

@@ -1164,3 +1164,38 @@ six bots above, then the field).
 - A mild side 0 skew (0.52 to 0.53) on every map with a large seed noise (0.35 to 0.64 per seed): watch it in the next
   run; the mirror test of the simulation is in CI, so the bots' side-dependent parameters (AGENTS.md, section 8: chosen from
   `(name, seed, side)`) are the first place to look.
+
+## #749: a difficulty ladder by the APM bucket, no churn hold of the leaf shift (2026-11-05)
+
+GitHub run 41992026732 (`mise run tournament:gh --seeds 3`, the 16-bot field of #706, `mvp-4`, 4 maps, 3072 matches)
+against run 41946191597 of #706 restricted to the same seeds 0..2.
+
+**Diagnosis.** The CP income (about 93 CP a match) binds every level: 98% of it is spent and every level sent 126 to 129
+commands a match on these seeds (the expander 138 / 138 / 140, easy / normal / hard). The tempo knobs of #573 never
+bound: 12 APM is 180 commands a match. `insight`, the only other difference of `easy`, is no strength: without it a bot
+at the `hard` tempo plays even with `hard` (0.53 for the strangler and the reactive, 32 local matches each), and with a
+late view (40-tick decisions, 100-tick reaction) the bot with `insight` loses to `hard` (0.25) while the one without
+does not (0.53): it reads no arrival, pin or plan, so it does not care how late it sees. Hence `easy` over `normal` for
+the reactive and the strangler (0.61 in the 20-seed field). The lever that binds is the APM bucket below the demand:
+local runs against `hard` gave 0.53 at 8 a minute, 0.38 at 7, 0.00 and 0.04 at 6.
+
+**Levels.** `easy` 6 APM (burst 3), `normal` 7 (burst 4), `hard` 40 (burst 8), `insight` on every level; think and
+reaction delays unchanged.
+
+| Personality (24 matches a pair) | normal vs easy | hard vs normal | hard vs easy |
+|---|---|---|---|
+| expander | 0.71 [0.51; 0.85] | 0.67 [0.47; 0.82] | 0.92 [0.74; 0.98] |
+| reactive | 0.83 [0.64; 0.93] | 0.67 [0.47; 0.82] | 0.92 [0.74; 0.98] |
+| rusher | 0.83 [0.64; 0.93] | 0.75 [0.55; 0.88] | 0.79 [0.60; 0.91] |
+| strangler | 0.92 [0.74; 0.98] | 1.00 [0.86; 1.00] | 1.00 [0.86; 1.00] |
+| turtle | 0.54 [0.35; 0.72] | 0.75 [0.55; 0.88] | 0.83 [0.64; 0.93] |
+| pooled (120) | 0.77 [0.68; 0.83] | 0.77 [0.68; 0.83] | 0.89 [0.82; 0.94] |
+
+Before (the same seeds): pooled 0.47 [0.39; 0.56], 0.45 [0.36; 0.54], 0.52 [0.43; 0.60]. Against the field: `easy` 0.26,
+`normal` 0.52, `hard` 0.72 (before 0.51, 0.52, 0.51); commands a match 90 / 102 / 134. The weak pair is the turtle's
+`normal` over `easy`. `easy` burns 35% of its production (it cannot send what it would spend them on).
+
+**`CHURN_TICKS`** (#746) removed. The `hard` bots and the benchmark play the same code in both runs except for it, so
+their matches among themselves (432) isolate it: burned 38.9 to 30.8 charges per player and match (share 25.3% to
+20.2%), warehouses lost 34.6 to 37.0, the two together 73.4 to 67.8. Head to head (local, three `hard` personalities, 72
+matches) the bot without it won 0.60.

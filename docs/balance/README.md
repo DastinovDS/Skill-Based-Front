@@ -436,19 +436,28 @@ seeds and overfits them: confirm a result with a tournament on fresh seeds (`--s
 
 The smart bots play at a human tempo (`gow_bots.bots.tempo`, #166): a decision at most every `think_ticks`, an enemy
 strike or figure noticed `react_ticks` after it is shown, at most `apm` commands a minute (a token bucket of `burst`),
-and `insight` (the position thresholds, the DEC-37 pin, the evacuation of doomed cities, the scouts) only from
-`normal` up. `apm_avg` and `apm_by_minute` of `gow-bots stats` measure the result on replays.
+and `insight` (the position thresholds, the DEC-37 pin, the evacuation of doomed cities, the scouts). `apm_avg` and
+`apm_by_minute` of `gow-bots stats` measure the result on replays.
 
 | Level | think | react | APM (burst) | insight |
 |---|---|---|---|---|
-| `easy` | 20 ticks | 30 ticks | 12 (3) | no |
-| `normal` | 10 ticks | 15 ticks | 25 (5) | yes |
+| `easy` | 20 ticks | 30 ticks | 6 (3) | yes |
+| `normal` | 10 ticks | 15 ticks | 7 (4) | yes |
 | `hard` (the name alone) | 5 ticks | 0 | 40 (8) | yes |
+
+**Why the APM is the lever (#749).** Under `mvp-4` the CP income (about 93 CP a match) binds every smart bot: they
+spend 98% of it and send 118 to 136 commands a match whatever the level, so the think and reaction delays and an
+APM above that demand change almost nothing (the levels of #573, 12 / 25 / 40 APM, were flat in the field run of
+#706: every level about 136 commands for the expander, `smart_reactive` and `smart_strangler` `easy` over `normal`
+0.61). The old `easy` differed by `insight` only, and `insight` is no strength: without it a bot at the `hard` tempo
+plays even with `hard`. An APM bucket below the demand binds: a bot at 8 a minute still plays even with `hard`, at 7
+it wins about 0.4, at 6 almost never. So `hard` keeps the unlimited play and `normal` and `easy` sit below the
+demand; the owner played match 6 (`mvp-3`) at 8.5 commands a minute. The numbers and the validation run: #749.
 
 Two behaviors of the smart bots that do not depend on the level (#618; module docstring of `gow_bots.bots.smart`,
 items 10 and 11): **a chosen plan gets its CP** (`wait_plan`: when the best attack is a scheduled order that the CP cannot
-pay yet, the bot keeps its price for that many ticks and spends nothing non-urgent meanwhile; not on `easy`, which does not
-plan ahead) and **a strike at a lesser city is answered** (`worth_defense`: with `respond` 1 the bot also switches to Defense
+pay yet, the bot keeps its price for that many ticks and spends nothing non-urgent meanwhile; not without `insight`) and **a strike at a lesser city is answered** (`worth_defense`: with `respond` 1
+the bot also switches to Defense
 and reinforces an own city of at least that many VP; the reaction delay of the level applies). `0` switches either off:
 `bot_factory("smart_rusher", {"wait_plan": ParamRange(0, 0)})`.
 
@@ -500,8 +509,8 @@ node plus half of its enemy neighbours'): the least pressed sector is the *weak 
 
 Every smart bot on a settled map also sends the spare units of its capital toward its objective (a pile at home earns
 no VP), except the benchmark, whose build-up does that itself. The tempo levels (`easy`, `normal`, `hard`) keep their
-meaning: an `easy` bot reads the phase and the sectors too, but thinks, reacts and acts at its tempo and has no
-`insight` (section "Difficulty levels and tempo").
+meaning: an `easy` bot reads the phase and the sectors too, but thinks, reacts and acts at its tempo (section
+"Difficulty levels and tempo").
 
 ## Scenario tests from a lost match (#691)
 

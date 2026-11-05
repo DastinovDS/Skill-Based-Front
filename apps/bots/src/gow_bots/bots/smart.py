@@ -922,7 +922,7 @@ class SmartBot(CampaignBot):
 
     def striking(self) -> bool:
         """Converging strikes instead of single attacks on the enemy capital: the personality's
-        ``STRIKE`` with ``insight`` (item 9: an ``easy`` bot does not plan ahead)."""
+        ``STRIKE`` with ``insight`` (item 9: a bot without it does not plan ahead)."""
         return self.STRIKE and self.tempo.insight
 
     def strike_wanted(self, ctx: Ctx) -> bool:
