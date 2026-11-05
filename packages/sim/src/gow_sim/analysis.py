@@ -104,6 +104,36 @@ nothing is added to the simulation:
   node the player does not own (the walk into a neutral or an enemy node ends in a capture or
   a fight in the same tick) are not counted.
 
+**Efficiency and contact** (#690, balance statistics, not game rules; ``docs/balance/README.md``
+has the same text). From the events of the match and the command journal; nothing is added to the
+simulation:
+
+- ``economy_model`` and ``supply_model``: ``economy.model`` and ``supply.model`` of the ruleset
+  (``"v1"`` / ``"v2"``, ``"lines"`` / ``"flow"``), so a reader can hide the rows of the other
+  economy. Under ``v1`` the supply model has no meaning and is written as it is in the ruleset.
+- ``first_contact_tick`` (one value per match): the earlier of the first ``fight_started`` (in a
+  node or on an edge) and the first capture of a node the other player owned; ``None`` when the
+  players never met.
+- ``siege_fights`` and ``siege_walk_ins``: the two parts of ``sieges``, the fights for an enemy
+  node with the player as attacker and the walks into an enemy node without defenders.
+- ``contested_sieges``: the siege fights in which the defender spent a charge (``spent_<d>`` of a
+  ``fight_round`` of that fight above 0: a real shot or a charged unit killed), that is a fight
+  against at least one charged defender; ``contested_sieges_won``: those that ended with the
+  capture of the node (``fight_ended`` with ``captured`` and the attacker as ``winner``). A fight
+  without its ``fight`` id in the events (a hand-made log) is not counted here.
+- ``units_killed``: the enemy units the player's shots killed (``losses`` of the other player in
+  every ``fight_round``); ``charges_per_kill_centi = charges_fights * 100 // units_killed``
+  (hundredths, rounded down; ``None`` without a kill).
+- ``charges_built_lost``: the charges of ``build_paid`` of a building that never served or stopped
+  serving the player: a build later stopped (``build_stopped`` of its node and kind) and a finished
+  building (``barracks_built``, ``warehouse_upgraded``, ``factory_built``, ``fort_built``) in a node
+  the other player later captured. Every charge counts once (a part of ``charges_built``).
+- ``cp_cancelled`` (hundredths of CP): the price of the ``Move`` orders that an accepted
+  ``CancelOrder`` of the same group cancelled; ``MatchRecorder`` keeps the price of the last
+  accepted ``Move`` of every group while the group has an order (``Group.order``) at the end of a
+  tick, and a ``CancelOrder`` takes it. A move that arrived or was replaced by a new ``Move`` is not
+  cancelled.
+
 Player statistics (#375), the actions of a player instead of the outcome: ``analyze_stats(log)``
 returns ``MatchStats``, one ``PlayerStats`` per side. They come from the command journal of the
 match (every command sent, accepted or rejected, with the price charged) and from existing events
@@ -156,11 +186,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from gow_sim.commands import Forfeit, Move, Ok, PlayerCommand
+from gow_sim.commands import CancelOrder, Forfeit, Move, Ok, PlayerCommand
 from gow_sim.maps import PLAYERS
 from gow_sim.match import Match
 from gow_sim.ruleset import Stance
 from gow_sim.state import AtNode, Event, GameState, OnEdge
+from gow_sim.systems.build import FACTORY_KIND, FORT_KIND
 from gow_sim.systems.capacity import supplied_territory, warehouse_capacity
 
 __all__ = [
@@ -322,6 +353,12 @@ class MatchLog:
     """By player id: ticks that ended with the CP at ``cp.cap`` (module docstring, #743)."""
     idle_discharged: tuple[tuple[int, int], ...] = ((0, 0), (0, 0))
     """By player id: ``(connected, pocket)`` idle discharged unit-ticks (module docstring)."""
+    cp_cancelled: tuple[int, ...] = (0, 0)
+    """By player id: CP in hundredths of the ``Move`` orders cancelled by ``CancelOrder`` (#690)."""
+    economy_model: str = "v1"
+    """``economy.model`` of the ruleset (#690)."""
+    supply_model: str = "lines"
+    """``supply.model`` of the ruleset (#690)."""
 
 
 def charge_stock(state: GameState) -> tuple[int, ...]:
@@ -393,6 +430,9 @@ class MatchRecorder:
         self._cap_ticks = _zeros()
         self._idle = {p: [0, 0] for p in PLAYERS}
         self._capitals: dict[int, int] = {}
+        self._order_cost: dict[int, tuple[int, int]] = {}
+        """Group id -> ``(player, cost)`` of its last accepted ``Move`` while it has an order."""
+        self._cancelled = _zeros()
         self._garrisons: dict[int, tuple[bool, ...]] = {}
         """Node -> per player id: a group of that player stands in it (end of the last tick)."""
 
@@ -422,6 +462,10 @@ class MatchRecorder:
             self._commands.append(
                 CommandRecord(r.tick, r.player, kind, True, r.outcome.cost, planned)
             )
+            if isinstance(cmd, CancelOrder):
+                cancelled = self._order_cost.pop(cmd.group, None)
+                if cancelled is not None and cancelled[0] == r.player:
+                    self._cancelled[r.player] += cancelled[1]
             if isinstance(cmd, Move):  # owners are still those from before this tick's events
                 attack = self._owners[cmd.dest] != r.player
                 held = self._garrisons.get(cmd.dest)
@@ -429,6 +473,7 @@ class MatchRecorder:
                     attack and held is not None and any(held[p] for p in PLAYERS if p != r.player)
                 )
                 self._moves.append(MoveRecord(r.tick, r.player, cmd.planned, attack, siege))
+                self._order_cost[cmd.group] = (r.player, r.outcome.cost)
         state = match.state
         for e in state.events:
             if e.kind == "node_captured":
@@ -447,6 +492,11 @@ class MatchRecorder:
         self._count_bottleneck(match)
         self._count_cp_and_idle(match)
         self._garrisons = _garrisons(state)
+        self._order_cost = {
+            gid: cost
+            for gid, cost in sorted(self._order_cost.items())
+            if gid in state.groups and state.groups[gid].order is not None
+        }
         if state.tick % PLACE_SAMPLE_TICKS == 0:
             for p, places in zip(PLAYERS, charge_places(state), strict=True):
                 self._samples[p].append(places)
@@ -521,6 +571,9 @@ class MatchRecorder:
             delivered_front=tuple(self._delivered_front[p] for p in PLAYERS),
             cp_cap_ticks=tuple(self._cap_ticks[p] for p in PLAYERS),
             idle_discharged=tuple((self._idle[p][0], self._idle[p][1]) for p in PLAYERS),
+            cp_cancelled=tuple(self._cancelled[p] for p in PLAYERS),
+            economy_model=match.rules.economy.model.value,
+            supply_model=match.rules.supply.model.value,
         )
 
 
@@ -648,6 +701,28 @@ class MatchMetrics:
     """Idle discharged unit-ticks in the capital's component (#743)."""
     idle_discharged_pocket: tuple[int, ...]
     """Idle discharged unit-ticks in pockets (#743)."""
+    economy_model: str = "v1"
+    """``economy.model`` of the ruleset (#690)."""
+    supply_model: str = "lines"
+    """``supply.model`` of the ruleset (#690)."""
+    first_contact_tick: int | None = None
+    """The first fight or capture of an enemy node (#690); ``None``: the players never met."""
+    siege_fights: tuple[int, ...] = (0, 0)
+    """Fights for an enemy node with the player as attacker: the fight part of ``sieges``."""
+    siege_walk_ins: tuple[int, ...] = (0, 0)
+    """Walks into an empty enemy node: the other part of ``sieges``."""
+    contested_sieges: tuple[int, ...] = (0, 0)
+    """Siege fights against a charged defender (#690)."""
+    contested_sieges_won: tuple[int, ...] = (0, 0)
+    """Contested sieges that ended with the capture of the node."""
+    units_killed: tuple[int, ...] = (0, 0)
+    """Enemy units killed by the player's shots."""
+    charges_per_kill_centi: tuple[int | None, ...] = (None, None)
+    """``charges_fights * 100 // units_killed``; ``None`` without a kill."""
+    charges_built_lost: tuple[int, ...] = (0, 0)
+    """Charges paid for buildings later stopped or captured (#690)."""
+    cp_cancelled: tuple[int, ...] = (0, 0)
+    """CP in hundredths of the ``Move`` orders cancelled by ``CancelOrder`` (#690)."""
 
     def to_json(self) -> dict[str, object]:
         """Plain JSON data; per-player values are lists indexed by player id."""
@@ -689,6 +764,17 @@ class MatchMetrics:
             "cp_cap_ticks": list(self.cp_cap_ticks),
             "idle_discharged_connected": list(self.idle_discharged_connected),
             "idle_discharged_pocket": list(self.idle_discharged_pocket),
+            "economy_model": self.economy_model,
+            "supply_model": self.supply_model,
+            "first_contact_tick": self.first_contact_tick,
+            "siege_fights": list(self.siege_fights),
+            "siege_walk_ins": list(self.siege_walk_ins),
+            "contested_sieges": list(self.contested_sieges),
+            "contested_sieges_won": list(self.contested_sieges_won),
+            "units_killed": list(self.units_killed),
+            "charges_per_kill_centi": list(self.charges_per_kill_centi),
+            "charges_built_lost": list(self.charges_built_lost),
+            "cp_cancelled": list(self.cp_cancelled),
         }
 
 
@@ -698,6 +784,7 @@ def analyze(log: MatchLog) -> MatchMetrics:
     minutes = max(1, -(-log.ticks // minute_ticks))
     owners = dict(enumerate(log.initial_owners))
     sieges = _zeros()
+    walk_ins = _zeros()
     won = _zeros()
     by_minute: dict[int, list[int]] = {p: [0] * minutes for p in PLAYERS}
     winner: int | None = None
@@ -706,6 +793,7 @@ def analyze(log: MatchLog) -> MatchMetrics:
     burned = _zeros()
     ledger = {k: _zeros() for k in _EVENT_COUNTERS}
     cp_burned = _zeros()
+    effort = _Effort(owners)
     fought: set[int] = set()  # nodes whose fight started or ended in the tick being read
     fight_tick = -1
     for e in log.events:
@@ -730,6 +818,7 @@ def analyze(log: MatchLog) -> MatchMetrics:
                     won[player] += 1
                     if node not in fought:  # walked into an empty node: a siege of one step
                         sieges[player] += 1
+                        walk_ins[player] += 1
                 owners[node] = player
                 by_minute[player][min((e.tick - 1) // minute_ticks, minutes - 1)] += 1
             case "charges_produced" | "charges_overflow":
@@ -752,6 +841,7 @@ def analyze(log: MatchLog) -> MatchMetrics:
             case _:
                 pass
         _count_ledger(e, ledger)
+        effort.read(e)
     orders = _zeros()
     attacks = _zeros()
     planned = _zeros()
@@ -809,7 +899,125 @@ def analyze(log: MatchLog) -> MatchMetrics:
         cp_cap_ticks=log.cp_cap_ticks,
         idle_discharged_connected=tuple(log.idle_discharged[p][0] for p in PLAYERS),
         idle_discharged_pocket=tuple(log.idle_discharged[p][1] for p in PLAYERS),
+        economy_model=log.economy_model,
+        supply_model=log.supply_model,
+        first_contact_tick=effort.contact,
+        siege_fights=tuple(effort.fights[p] for p in PLAYERS),
+        siege_walk_ins=tuple(walk_ins[p] for p in PLAYERS),
+        contested_sieges=tuple(effort.contested[p] for p in PLAYERS),
+        contested_sieges_won=tuple(effort.contested_won[p] for p in PLAYERS),
+        units_killed=tuple(effort.killed[p] for p in PLAYERS),
+        charges_per_kill_centi=tuple(
+            ledger["fights"][p] * 100 // effort.killed[p] if effort.killed[p] else None
+            for p in PLAYERS
+        ),
+        charges_built_lost=tuple(effort.built_lost[p] for p in PLAYERS),
+        cp_cancelled=log.cp_cancelled,
     )
+
+
+def _opt_int(e: Event, key: str) -> int | None:
+    """The integer field ``key`` of ``e``; ``None`` when the event has no such field (a road build,
+    a hand-made log) or it is not an integer."""
+    value = next((v for k, v in e.data if k == key), None)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+_COMPLETED: Final = {
+    "barracks_built": "barracks",
+    "warehouse_upgraded": "warehouse",
+    "factory_built": FACTORY_KIND,
+    "fort_built": FORT_KIND,
+}
+"""The event of a finished city building -> the ``kind`` of its ``build_paid`` events."""
+
+
+class _Effort:
+    """The contact, siege, kill and building counters of ``analyze`` (module docstring, #690).
+
+    It reads the events in order and keeps its own node owners (from ``initial_owners``).
+    """
+
+    def __init__(self, owners: dict[int, int | None]) -> None:
+        self.owners = dict(owners)
+        self.contact: int | None = None
+        self.fights = _zeros()
+        self.contested = _zeros()
+        self.contested_won = _zeros()
+        self.killed = _zeros()
+        self.built_lost = _zeros()
+        self._open: dict[int, tuple[int, bool]] = {}
+        """Fight id -> ``(attacker, the defender spent a charge)`` of an open siege fight."""
+        self._paying: dict[tuple[int, int, str], int] = {}
+        """``(player, node, kind)`` -> charges paid for a build that is not finished."""
+        self._standing: dict[tuple[int, int], int] = {}
+        """``(player, node)`` -> charges paid for the finished buildings of the node."""
+
+    def _touch(self, tick: int) -> None:
+        if self.contact is None:
+            self.contact = tick
+
+    def read(self, e: Event) -> None:
+        match e.kind:
+            case "fight_started":
+                self._touch(e.tick)
+                self._start(e)
+            case "fight_round":
+                self._round(e)
+            case "fight_ended":
+                fight = _opt_int(e, "fight")
+                if fight is not None and fight in self._open:
+                    attacker, spent = self._open.pop(fight)
+                    if spent:
+                        self.contested[attacker] += 1
+                        if e.get("captured") is True and _opt_int(e, "winner") == attacker:
+                            self.contested_won[attacker] += 1
+            case "node_captured":
+                node, player = e.get("node"), e.get("player")
+                assert isinstance(node, int) and isinstance(player, int)
+                before = self.owners[node]
+                if before is not None and before == 1 - player:
+                    self._touch(e.tick)
+                    self.built_lost[before] += self._standing.pop((before, node), 0)
+                self.owners[node] = player
+            case "build_paid":
+                player, node, kind = e.get("player"), e.get("node"), e.get("kind")
+                warehouse, units = e.get("warehouse"), e.get("units")
+                assert isinstance(player, int) and isinstance(node, int) and isinstance(kind, str)
+                assert isinstance(warehouse, int) and isinstance(units, int)
+                key = (player, node, kind)
+                self._paying[key] = self._paying.get(key, 0) + warehouse + units
+            case "build_stopped":
+                player, node, kind = e.get("player"), _opt_int(e, "node"), e.get("kind")
+                if isinstance(player, int) and node is not None and isinstance(kind, str):
+                    self.built_lost[player] += self._paying.pop((player, node, kind), 0)
+            case _ if e.kind in _COMPLETED:
+                player, node = e.get("player"), e.get("node")
+                assert isinstance(player, int) and isinstance(node, int)
+                paid = self._paying.pop((player, node, _COMPLETED[e.kind]), 0)
+                key = (player, node)
+                self._standing[key] = self._standing.get(key, 0) + paid
+            case _:
+                pass
+
+    def _start(self, e: Event) -> None:
+        node, attacker, fight = e.get("node"), e.get("attacker"), _opt_int(e, "fight")
+        if not (isinstance(node, int) and isinstance(attacker, int)):
+            return  # an edge meeting or a neutral node
+        if self.owners[node] != 1 - attacker:
+            return  # not a fight for an enemy node
+        self.fights[attacker] += 1
+        if fight is not None:
+            self._open[fight] = (attacker, False)
+
+    def _round(self, e: Event) -> None:
+        for p in PLAYERS:
+            self.killed[p] += _opt_int(e, f"losses_{1 - p}") or 0
+        fight = _opt_int(e, "fight")
+        if fight is not None and fight in self._open:
+            attacker, spent = self._open[fight]
+            defender = _opt_int(e, f"spent_{1 - attacker}") or 0
+            self._open[fight] = (attacker, spent or defender > 0)
 
 
 _EVENT_COUNTERS: Final[tuple[str, ...]] = (

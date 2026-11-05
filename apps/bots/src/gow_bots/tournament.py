@@ -33,10 +33,15 @@ from gow_sim.replay import REPLAY_SUFFIX, ReplayWriter
 from gow_sim.ruleset import load_ruleset, ruleset_hash
 
 __all__ = [
+    "FLOW_ONLY_KEYS",
+    "LINES_ONLY_KEYS",
     "SCHEMA_VERSION",
     "USAGE_KEYS",
+    "V1_ONLY_KEYS",
+    "V2_ONLY_KEYS",
     "MatchTask",
     "build_tasks",
+    "live_keys",
     "play_match",
     "play_tasks",
     "run_tournament",
@@ -72,6 +77,42 @@ USAGE_KEYS: Final[tuple[str, ...]] = (
 )
 """The mechanics of ``usage``, in report order: every command but ``Forfeit`` (the last five are
 economy v2 only, DEC-41)."""
+
+V1_ONLY_KEYS: Final[tuple[str, ...]] = (
+    "SetStance",
+    "UpgradeRoad",
+    "SetFront",
+    "SetRearMin",
+    "Transfer",
+)
+"""``usage`` keys that economy v2 rejects (``FEATURE_DISABLED``, DEC-41 item 14): dead under v2."""
+V2_ONLY_KEYS: Final[tuple[str, ...]] = (
+    "DrawLine",
+    "RemoveLine",
+    "BuildFactory",
+    "BuildBunker",
+    "ReleasePlan",
+    "SetLeafShift",
+)
+"""``usage`` keys that economy v1 rejects (DEC-41 item 14)."""
+LINES_ONLY_KEYS: Final[tuple[str, ...]] = ("DrawLine", "RemoveLine")
+"""``usage`` keys that the supply flow rejects (DEC-43, item A12)."""
+FLOW_ONLY_KEYS: Final[tuple[str, ...]] = ("SetLeafShift",)
+"""``usage`` keys that only the supply flow accepts (DEC-43, item B2)."""
+
+
+def live_keys(economy: str | None, supply: str | None) -> tuple[str, ...]:
+    """The ``USAGE_KEYS`` a match of ``economy.model`` and ``supply.model`` can use, in order;
+    all keys when the economy is unknown (``None``: a row written before #690), both supply
+    models' keys when only the supply model is unknown. ``BuildBunker``,
+    ``FortifyRoad`` and ``UpgradeWarehouse`` depend on ruleset sections the row does not name,
+    so they stay."""
+    if economy is None:
+        return USAGE_KEYS
+    dead: tuple[str, ...] = V2_ONLY_KEYS if economy == "v1" else V1_ONLY_KEYS
+    if economy != "v1" and supply is not None:
+        dead += LINES_ONLY_KEYS if supply == "flow" else FLOW_ONLY_KEYS
+    return tuple(k for k in USAGE_KEYS if k not in dead)
 
 
 def usage(log: MatchLog) -> list[dict[str, int]]:

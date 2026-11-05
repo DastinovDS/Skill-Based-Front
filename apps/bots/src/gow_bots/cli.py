@@ -20,7 +20,7 @@ from gow_bots.bots import BOTS
 from gow_bots.report import write_report
 from gow_bots.search import base_ranges, best_of_log, params_fragment, run_search, write_round
 from gow_bots.stats import render_stats
-from gow_bots.tournament import build_tasks, run_tournament
+from gow_bots.tournament import build_tasks, run_tournament, usage
 from gow_sim.analysis import analyze, analyze_stats
 from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, ReplayError, replay_log
 
@@ -131,11 +131,16 @@ def _analyze(args: argparse.Namespace, *, table: bool) -> int:
             failed += 1
             print(f"ERROR {exc}", file=sys.stderr)
             continue
-        metrics, stats = analyze(log), analyze_stats(log)
+        metrics, stats, used = analyze(log), analyze_stats(log), usage(log)
         if table:
-            print(("\n" if n else "") + render_stats(Path(file).name, metrics, stats))
+            print(("\n" if n else "") + render_stats(Path(file).name, metrics, stats, used))
         else:
-            row = {"replay": Path(file).name, **metrics.to_json(), "stats": stats.to_json()}
+            row = {
+                "replay": Path(file).name,
+                **metrics.to_json(),
+                "stats": stats.to_json(),
+                "usage": used,
+            }
             print(json.dumps(row, separators=(",", ":"), ensure_ascii=True))
     return 1 if failed else 0
 

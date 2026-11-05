@@ -819,3 +819,132 @@ def test_a_player_without_its_capital_has_only_pockets() -> None:
     recorder.begin(match)
     recorder.record(match, [])
     assert recorder.log().idle_discharged[0] == (0, 2)
+
+
+# Efficiency and contact (#690) ------------------------------------------------------------------
+#
+# Definitions: the docstring of ``gow_sim.analysis`` ("Efficiency and contact") and
+# ``docs/balance/README.md``. The expected numbers are counted by hand from the events.
+
+
+def test_first_contact_is_the_earlier_of_a_fight_and_a_capture_of_an_enemy_node() -> None:
+    neutral_then_edge = [
+        event(5, "node_captured", node=1, player=0),  # a neutral node: no contact
+        event(40, "fight_started", node=None, edge=4, attacker=None),  # an edge meeting
+        event(60, "node_captured", node=3, player=0),
+    ]
+    assert analyze(_log(neutral_then_edge)).first_contact_tick == 40
+    capture_first = [
+        event(30, "node_captured", node=3, player=0),  # the enemy capital, walked into
+        event(50, "fight_started", node=0, edge=None, attacker=1),
+    ]
+    assert analyze(_log(capture_first)).first_contact_tick == 30
+    m = analyze(_log([event(5, "node_captured", node=2, player=1)]))
+    assert m.first_contact_tick is None
+    assert m.to_json()["first_contact_tick"] is None
+
+
+def _fight(tick: int, kind: str, fight: int, node: int, attacker: int, **data: Any) -> Event:
+    return event(tick, kind, fight=fight, node=node, edge=None, attacker=attacker, **data)
+
+
+def _round(
+    tick: int, fight: int, node: int, spent: tuple[int, int], losses: tuple[int, int]
+) -> Event:
+    return event(
+        tick,
+        "fight_round",
+        fight=fight,
+        node=node,
+        edge=None,
+        spent_0=spent[0],
+        spent_1=spent[1],
+        losses_0=losses[0],
+        losses_1=losses[1],
+    )
+
+
+def test_contested_sieges_walk_ins_kills_and_charges_per_kill() -> None:
+    # Node 3 is player 1's, node 0 player 0's (``_log``).
+    events = [
+        # fight 1: player 0 attacks 3; the defender never spends a charge: not contested.
+        _fight(10, "fight_started", 1, 3, 0),
+        _round(15, 1, 3, spent=(2, 0), losses=(0, 2)),
+        _fight(20, "fight_ended", 1, 3, 0, winner=0, captured=True),
+        event(20, "node_captured", node=3, player=0),
+        # fight 2: player 1 attacks 0; the defender spends 1: contested, held by player 0.
+        _fight(30, "fight_started", 2, 0, 1),
+        _round(35, 2, 0, spent=(1, 0), losses=(0, 0)),
+        _fight(40, "fight_ended", 2, 0, 1, winner=0, captured=False),
+        # fight 3: player 1 attacks 3 (now player 0's); defender spends 3: contested and won.
+        _fight(50, "fight_started", 3, 3, 1),
+        _round(55, 3, 3, spent=(3, 2), losses=(1, 0)),
+        _fight(60, "fight_ended", 3, 3, 1, winner=1, captured=True),
+        event(60, "node_captured", node=3, player=1),
+        # player 1 walks into the empty node 0 later: a walk-in, not a fight
+        event(70, "node_captured", node=0, player=1),
+    ]
+    m = analyze(_log(events))
+    assert m.sieges == (1, 3)  # the old count: fights + walk-ins
+    assert m.siege_fights == (1, 2)
+    assert m.siege_walk_ins == (0, 1)
+    assert m.contested_sieges == (0, 2)
+    assert m.contested_sieges_won == (0, 1)
+    # kills: player 0 killed 2 (fight 1), player 1 killed 1 (fight 3)
+    assert m.units_killed == (2, 1)
+    # charges in fights: player 0 2 + 1 + 3 = 6 over 2 kills = 3.00; player 1 2 over 1 = 2.00
+    assert m.charges_per_kill_centi == (300, 200)
+    assert m.first_contact_tick == 10
+    data = m.to_json()
+    assert data["contested_sieges"] == [0, 2]
+    assert data["siege_walk_ins"] == [0, 1]
+    assert data["charges_per_kill_centi"] == [300, 200]
+    assert analyze(_log([])).charges_per_kill_centi == (None, None)
+
+
+def test_charges_built_lost_counts_stopped_builds_and_captured_buildings() -> None:
+    events = [
+        # player 0: a factory in node 1 paid 3 + 1, then stopped: 4 lost
+        event(3, "build_paid", player=0, node=1, kind="factory", warehouse=2, units=1, owed=1),
+        event(5, "build_paid", player=0, node=1, kind="factory", warehouse=1, units=0, owed=0),
+        event(
+            9, "build_stopped", player=0, node=1, kind="factory", edge=None, reason="interrupted"
+        ),
+        # player 0: a warehouse level of its capital (3), finished, then the capital is captured
+        event(10, "build_paid", player=0, node=0, kind="warehouse", warehouse=3, units=0, owed=0),
+        event(20, "warehouse_upgraded", player=0, node=0, level=1),
+        event(30, "node_captured", node=0, player=1),
+        event(40, "node_captured", node=0, player=0),  # taken back: nothing more is lost
+        # player 1: barracks of node 3 (2), finished and kept; a road build stopped (no node)
+        event(11, "build_paid", player=1, node=3, kind="barracks", warehouse=2, units=0, owed=0),
+        event(12, "barracks_built", player=1, node=3),
+        event(13, "build_stopped", player=1, kind="road", edge=4, reason="interrupted"),
+    ]
+    m = analyze(_log(events))
+    assert tuple(f.built for f in m.flow) == (7, 2)
+    assert m.charges_built_lost == (7, 0)
+    assert m.to_json()["charges_built_lost"] == [7, 0]
+
+
+def test_recorder_counts_the_cp_of_cancelled_moves_and_the_economy() -> None:
+    # The scripted match: g1 moves to P at tick 200 (100) and is cancelled on the road at 205;
+    # the planned moves of g2 and g3 are never cancelled. Player 1 never moves.
+    log = _scripted_match()
+    assert log.cp_cancelled == (100, 0)
+    m = analyze(log)
+    assert m.cp_cancelled == (100, 0)
+    assert (m.economy_model, m.supply_model) == ("v1", "lines")
+
+
+def test_the_efficiency_fields_agree_with_each_other_on_the_golden_matches() -> None:
+    files = sorted(GOLDEN.glob(f"*{REPLAY_SUFFIX}"))
+    for file in files:
+        log = replay_log(file, ROOT / "rulesets" / "archive", ROOT / "maps" / "fixtures")
+        m = analyze(log)
+        for p in (0, 1):
+            assert m.siege_fights[p] + m.siege_walk_ins[p] <= m.sieges[p]
+            assert m.contested_sieges_won[p] <= m.contested_sieges[p] <= m.siege_fights[p]
+            assert 0 <= m.charges_built_lost[p] <= m.flow[p].built
+        if file.name.endswith(f"-mvp4{REPLAY_SUFFIX}"):
+            assert (m.economy_model, m.supply_model) == ("v2", "flow")
+            assert m.first_contact_tick is not None
