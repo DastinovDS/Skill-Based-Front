@@ -1248,3 +1248,86 @@ the run's code with that one number changed, the field was not run again (one sm
 
 **The rusher** halves its recalls but not its cancels (8.5 to 5.0): what is left are fight withdrawals and recalls on a
 `RANGE` sighting (the top of the range is counted, DEC-21), both cancels that save units.
+
+## #688: the benchmark `smart_exploiter` and the V6 gate of every server level (2026-11-05)
+
+GitHub run 42035791469 (`mise run tournament:gh --seeds 3`, the 16-bot field of #706 plus `smart_exploiter`, 17 bots,
+`mvp-4`, 4 maps, seeds 0..2, both sides, 3468 matches; code: branch `feature/688-smart-exploiter` on develop 0fe99e0).
+No crash, no unfinished match, 11 draws. Local runs: 60 `run_headless` matches against `smart_rusher@hard`, one process
+at a time (seeds 0, 3, 4; the GitHub seeds are 0..2, so the local seeds 3 and 4 are an independent sample).
+
+**The bot** (`gow_bots.bots.exploiter`): the rusher's CP economy under `mvp-4` (about 93 CP a match bind every smart bot,
+a move captures at most one node, a capture is free) with a capital drive of the groups of 4 charged units or more, the
+converging strike whenever it is ready (one group alone too, 2 shots of margin, scheduled orders), raids on enemy
+pockets (public ownership; the garrison estimate loses the starvation of DEC-43 item H since the cut) and on full leaf
+warehouses, the cut of the enemy network, the leaf shift at the front while a strike is under way, and the
+fortifications of item 22. A first version on the hoarder (the build-up at the centre) lost 2 of 8 to
+`smart_rusher@hard` locally: its marches and recruits cost the CP the captures needed (the rusher recruited 0 units and
+held 35 nodes with 8). Decision time 0.41 to 0.53 ms against 0.38 to 0.46 ms of the rusher (`test_benchmarks`).
+
+### The exploiter against the field [95%]
+
+| opponent | won / lost / drawn | exploiter's share | capital taken | capital lost |
+|---|---|---|---|---|
+| `smart_expander@easy` | 24 / 0 / 0 | 1.00 [0.86; 1.00] | 5 | 0 |
+| `smart_expander@normal` | 20 / 4 / 0 | 0.83 [0.64; 0.93] | 2 | 1 |
+| `smart_expander@hard` | 19 / 5 / 0 | 0.79 [0.60; 0.91] | 5 | 2 |
+| `smart_hoarder` | 22 / 2 / 0 | 0.92 [0.74; 0.98] | 0 | 1 |
+| `smart_reactive@easy` | 23 / 1 / 0 | 0.96 [0.80; 0.99] | 1 | 1 |
+| `smart_reactive@normal` | 17 / 7 / 0 | 0.71 [0.51; 0.85] | 0 | 7 |
+| `smart_reactive@hard` | 19 / 5 / 0 | 0.79 [0.60; 0.91] | 1 | 4 |
+| `smart_rusher@easy` | 21 / 3 / 0 | 0.88 [0.69; 0.96] | 2 | 3 |
+| `smart_rusher@normal` | 20 / 4 / 0 | 0.83 [0.64; 0.93] | 12 | 3 |
+| `smart_rusher@hard` | 14 / 10 / 0 | 0.58 [0.39; 0.76] | 4 | 2 |
+| `smart_strangler@easy` | 24 / 0 / 0 | 1.00 [0.86; 1.00] | 3 | 0 |
+| `smart_strangler@normal` | 20 / 4 / 0 | 0.83 [0.64; 0.93] | 1 | 3 |
+| `smart_strangler@hard` | 15 / 9 / 0 | 0.62 [0.43; 0.79] | 1 | 5 |
+| `smart_turtle@easy` | 23 / 1 / 0 | 0.96 [0.80; 0.99] | 5 | 0 |
+| `smart_turtle@normal` | 24 / 0 / 0 | 1.00 [0.86; 1.00] | 1 | 0 |
+| `smart_turtle@hard` | 22 / 2 / 0 | 0.92 [0.74; 0.98] | 2 | 0 |
+| all 16 | 327 / 57 / 0 | 0.85 [0.81; 0.88] | 45 | 32 |
+
+Against the field: `smart_strangler@hard` 0.88, `smart_exploiter` 0.85, `smart_rusher@hard` 0.84, the rest 0.67 or less.
+Bradley-Terry: strangler +2.48 [+2.32; +2.79], exploiter +2.20 [+2.14; +2.38], rusher +2.09 [+1.15; +2.86]. The Nash mix
+of the style matrix is the exploiter 0.98, the rusher and the strangler 0.01 each (gap 0.004); intransitive share 0.13.
+On `narrows` against `smart_expander@hard` (the owner's match 6 shape): 4 wins of 6, 3 of them by the capital.
+
+### V6 (the thresholds are proposals)
+
+| level | bot | share against the exploiter [95%] | at least | capital lost | capital taken |
+|---|---|---|---|---|---|
+| easy | `smart_turtle@easy` | 0.04 [0.01; 0.20] | 0.05 | 0.21 | 0.00 |
+| normal | `smart_reactive@normal` | 0.29 [0.15; 0.49] | 0.20 | 0.00 | 0.29 |
+| hard | `smart_strangler@hard` | 0.38 [0.21; 0.57] | 0.35 | 0.04 | 0.21 |
+| expert | `smart_expander@hard` | 0.21 [0.09; 0.40] | 0.50 | 0.21 | 0.08 |
+
+V6 FAILS on `expert` (0.21, the interval below 0.50) and narrowly on `easy` (1 win of 24). The expert level loses to the
+human-style benchmark worse than the hard level does (the server ladder is inverted at the top in this run too:
+`smart_expander@hard` over `smart_strangler@hard` 0.12 [0.04; 0.31]). 24 matches a pair are a smoke: the gate wants
+about 400 (50 seeds on the 4 maps).
+
+### Can anything counter `smart_rusher@hard`?
+
+| exploiter variant against `smart_rusher@hard` | matches | exploiter's share [95%] | capital taken | capital lost |
+|---|---|---|---|---|
+| default, GitHub seeds 0..2 | 24 | 0.58 [0.39; 0.76] | 4 | 2 |
+| default, local seeds 0, 3, 4 | 24 | 0.54 [0.35; 0.72] | 3 | 6 |
+| default, pooled | 48 | 0.56 [0.42; 0.69] | 7 | 8 |
+| `anti_rush` 1 (capital roads fortified early, 3 units held at home, front cities fortified at once), local seeds 0, 3, 4 | 24 | 0.50 [0.31; 0.69] | 3 | 0 |
+
+Neither beats the rush significantly; the exploiter plays it even and beats the rest of the field more, so the rusher is
+no longer alone in the Nash mix (V5a still fails: the exploiter, the rusher and the strangler have no significant
+counter). The anti-rush opening removes the capital losses (8 in 48 for the default, 0 in 24) and wins no more: the rush
+wins on VP, not at the capital. Reading (a hypothesis, not checked by a rules run): under `mvp-4` the binding resource is
+the CP, a move captures at most one node and a capture is free (`capture.charge_cost = 0`), so the strongest play is
+"every CP a capture"; a garrison, a fortification or a guard does not stop a free capture of an empty node (a toll takes
+charges, an empty node needs none), so a defensive answer cannot beat it, only the same economy can match it. The rush
+dominance of #706 was a bot problem (the other personalities spend CP on recruits, rallies and marches that capture
+nothing), and the even match between two CP-efficient bots is a property of the rules. A rules experiment that would
+test it: `capture.charge_cost = 1` against 0 with the same field (not run: #688 changes no rule).
+
+### Data validity
+
+PASS 6 (V2, V3, V4a, V9, D1, D2), FAIL 5 (V4b: 24 matches a pair; V4c: side 0 of the mirror matches 0.36 to 0.53;
+V5a: no counter for the exploiter, `smart_rusher@hard`, `smart_strangler@hard`; V5b: `smart_strangler@hard` 0.88; V6),
+NO DATA 1 (V1: no floor bots), NOT COMPUTABLE 2 (V7, V8).

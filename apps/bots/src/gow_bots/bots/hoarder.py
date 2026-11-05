@@ -57,7 +57,7 @@ from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import GroupView, PlayerView, Stance
 
-__all__ = ["BENCHMARKS", "SmartHoarder"]
+__all__ = ["SmartHoarder"]
 
 W_HOARD: Final = 10
 """Economy v2: the weight of the hoard among the nodes that want charges (``line_extra``)."""
@@ -390,7 +390,3 @@ class SmartHoarder(SmartBot):
         a = self.assessment
         behind = a is not None and not a.ahead
         return self.advance or (self.phase is Phase.LATE and behind)
-
-
-BENCHMARKS: tuple[type[SmartBot], ...] = (SmartHoarder,)
-"""Smart bots that are yardsticks, not personalities of the server levels."""

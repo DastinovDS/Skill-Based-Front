@@ -38,9 +38,16 @@ KEEP, CEDAR, DALE = 0, 3, 4
 NORTH_PASS, SOUTH_PASS = 17, 18
 SOUTH_DALE = 24
 TICK = 4000
-SMART = ("smart_expander", "smart_reactive", "smart_rusher", "smart_strangler", "smart_turtle")
+SMART = (
+    "smart_exploiter",
+    "smart_expander",
+    "smart_reactive",
+    "smart_rusher",
+    "smart_strangler",
+    "smart_turtle",
+)
 """The personalities with ``DISCIPLINE``; ``smart_hoarder`` is the benchmark."""
-SAVERS = ("smart_expander", "smart_reactive", "smart_rusher", "smart_turtle")
+SAVERS = ("smart_exploiter", "smart_expander", "smart_reactive", "smart_rusher", "smart_turtle")
 """The personalities with a ``BANK`` (the strangler keeps its steady siege pressure)."""
 OLD = ("smart_hoarder", "rusher")
 """The benchmark and a plain BOT-03 bot keep the old recall and save nothing."""

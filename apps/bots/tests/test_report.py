@@ -489,3 +489,38 @@ def test_report_infers_the_economy_of_an_older_file(tmp_path: Path) -> None:
     old = render_report(load_rows(_write(tmp_path / "t.jsonl", _flow_rows())), "t.jsonl", "t")
     assert "- Economy: `v1` (inferred" in old  # marker ticks: v1
     assert "n/a (a file written before #690)" in old
+
+
+def test_report_prints_every_server_level_against_the_exploiter(tmp_path: Path) -> None:
+    # The expert wins 3 of 4 (one by the capital), loses 1 by the capital; the easy level loses
+    # all 4, two by the capital, two by VP.
+    expert, easy, rival = "smart_expander@hard", "smart_turtle@easy", "smart_exploiter"
+    rows: list[dict[str, Any]] = []
+    for seed, (bot, won, reason) in enumerate(
+        [
+            (expert, True, "capital"),
+            (expert, True, "vp"),
+            (expert, True, "vp"),
+            (expert, False, "capital"),
+            (easy, False, "capital"),
+            (easy, False, "capital"),
+            (easy, False, "vp"),
+            (easy, False, "vp"),
+        ]
+    ):
+        side = seed % 2
+        row = _row("alpha", seed, *((bot, rival) if side == 0 else (rival, bot)))
+        row["winner"], row["reason"] = (side if won else 1 - side), reason
+        rows.append(row)
+    text = render_report(load_rows(_write(tmp_path / "x.jsonl", rows)), "x.jsonl", "x")
+    section = _section(text, "Against the exploiter (#688)")
+    # Wilson of 3 of 4: [0.30; 0.95]; of 0 of 4: [0.00; 0.49]
+    assert (
+        "| expert | `smart_expander@hard` | 4 | 3 / 1 / 0 | 0.75 [0.30; 0.95] | 0.50 | 0.25 "
+        "| 0.25 |" in section
+    )
+    assert (
+        "| easy | `smart_turtle@easy` | 4 | 0 / 4 / 0 | 0.00 [0.00; 0.49] | 0.05 | 0.50 | 0.00 |"
+        in section
+    )
+    assert _check_line(text, "V6").endswith("| **FAIL** |")  # the easy level is below 0.05

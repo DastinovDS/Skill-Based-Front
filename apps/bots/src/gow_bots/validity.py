@@ -94,6 +94,14 @@ PAIR_HALF_WIDTH_MAX: Final = 0.05
 SIDE_BAND: Final = (0.47, 0.53)
 FIELD_MAX: Final = 0.65
 EXPLOITER_MIN: Final = 0.50
+"""V6: the share of ``expert`` against the exploiter (the gate of #688)."""
+EXPLOITER_GATE: Final[tuple[tuple[str, float], ...]] = (
+    ("easy", 0.05),
+    ("normal", 0.20),
+    ("hard", 0.35),
+    ("expert", EXPLOITER_MIN),
+)
+"""V6: the least share of every server level against the exploiter, easiest first."""
 MAP_RHO_MIN: Final = 0.5
 REPEAT_MAX: Final = 0.05
 BARELY_USED: Final = 0.1
@@ -516,21 +524,47 @@ def _counter(tally: Tally) -> list[Check]:
     return [first, second]
 
 
-def _exploiter(tally: Tally) -> Check:
-    expert = dict(SERVER_LEVELS)["expert"]
-    name = "exploiter"
-    threshold = f"`expert` ({expert}) >= {EXPLOITER_MIN:.2f} against `{EXPLOITER}` (#688)"
+def exploiter_rates(tally: Tally) -> list[tuple[str, str, int, int]]:
+    """V6: ``(level, bot, wins, decided)`` of every server level in the file against the exploiter
+    (any level of it), both sides, all maps, easiest first."""
     rivals = [b for b in tally.bots if split_level(b)[0] == EXPLOITER]
-    if expert not in tally.bots or not rivals:
-        return Check("V6", name, threshold, "the pair is not in the file", NO_DATA)
-    wins = decided = 0
-    for r in rivals:
-        w, d = tally.head_to_head(expert, r)
-        wins, decided = wins + w, decided + d
-    rate = wins / decided if decided else None
-    return Check(
-        "V6", name, threshold, f"{_fmt(rate)} (n={decided})", _ok((rate or 0.0) >= EXPLOITER_MIN)
+    if not rivals:
+        return []
+    found: list[tuple[str, str, int, int]] = []
+    for level, bot in SERVER_LEVELS:
+        if bot not in tally.bots:
+            continue
+        wins = decided = 0
+        for r in rivals:
+            w, d = tally.head_to_head(bot, r)
+            wins, decided = wins + w, decided + d
+        found.append((level, bot, wins, decided))
+    return found
+
+
+def _exploiter(tally: Tally) -> Check:
+    name = "exploiter"
+    gate: dict[str, float] = dict(EXPLOITER_GATE)
+    threshold = f"every server level against `{EXPLOITER}` (#688) at least: " + ", ".join(
+        f"`{level}` {least:.2f}" for level, least in EXPLOITER_GATE
     )
+    found = exploiter_rates(tally)
+    if not found:
+        return Check(
+            "V6", name, threshold, "no server level and exploiter pair in the file", NO_DATA
+        )
+    parts: list[str] = []
+    ok = True
+    for level, _, wins, decided in found:
+        rate = wins / decided if decided else None
+        low, high = wilson(wins, decided)
+        parts.append(f"{level} {_fmt(rate)} [{low:.2f}; {high:.2f}] (n={decided})")
+        ok = ok and rate is not None and rate >= gate[level]
+    present = [f[0] for f in found]
+    missing = [level for level, _ in SERVER_LEVELS if level not in present]
+    if missing:
+        parts.append("missing: " + ", ".join(missing))
+    return Check("V6", name, threshold, "; ".join(parts), _ok(ok))
 
 
 def barely_used(tally: Tally, keys: Sequence[str] = USAGE_KEYS) -> list[str]:

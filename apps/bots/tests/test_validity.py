@@ -103,3 +103,48 @@ def test_server_levels_are_the_levels_of_the_server() -> None:
     from gow_server.botmatch import LEVEL_BOTS  # the harness may not import it (AGENTS.md 2)
 
     assert tuple(LEVEL_BOTS.items()) == validity.SERVER_LEVELS
+
+
+def _against(bot: str, rival: str, wins: int, losses: int) -> list[_M]:
+    """``wins`` and ``losses`` of ``bot`` against ``rival``, on alternating sides."""
+    rows: list[_M] = []
+    for i in range(wins + losses):
+        side = i % 2
+        pair = (bot, rival) if side == 0 else (rival, bot)
+        rows.append(_M("m", i, pair, side if i < wins else 1 - side))
+    return rows
+
+
+def _v6(rows: list[_M]) -> validity.Check:
+    return next(c for c in validity.checks(Tally(rows), []) if c.id == "V6")
+
+
+def test_the_exploiter_gate_reads_every_server_level() -> None:
+    levels = dict(validity.SERVER_LEVELS)
+    rival = validity.EXPLOITER
+    shares = {"easy": (1, 9), "normal": (2, 8), "hard": (4, 6), "expert": (5, 5)}
+    rows = [r for lv, (w, n) in shares.items() for r in _against(levels[lv], rival, w, n)]
+    found = validity.exploiter_rates(Tally(rows))
+    assert [(lv, w, d) for lv, _, w, d in found] == [
+        ("easy", 1, 10),
+        ("normal", 2, 10),
+        ("hard", 4, 10),
+        ("expert", 5, 10),
+    ]
+    # The proposed least shares (not owner decisions).
+    assert validity.EXPLOITER_GATE == (
+        ("easy", 0.05),
+        ("normal", 0.20),
+        ("hard", 0.35),
+        ("expert", 0.50),
+    )
+    check = _v6(rows)
+    assert check.status == validity.PASS
+    assert "expert 0.50 [0.24; 0.76] (n=10)" in check.measured  # the Wilson interval of 5 of 10
+    # The expert at 4 of 10 fails the gate; a level not in the file is named.
+    shares = {"normal": (2, 8), "hard": (4, 6), "expert": (4, 6)}
+    rows = [r for lv, (w, n) in shares.items() for r in _against(levels[lv], rival, w, n)]
+    check = _v6(rows)
+    assert check.status == validity.FAIL
+    assert "missing: easy" in check.measured
+    assert _v6(_against("a", "b", 1, 1)).status == validity.NO_DATA

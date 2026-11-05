@@ -1341,6 +1341,58 @@ def _section_ladder(tally: validity.Tally, steps: Sequence[validity.Step]) -> st
     )
 
 
+def _section_exploiter(ps: Sequence[Persp], bots: Sequence[str]) -> str:
+    rivals = [b for b in bots if validity.split_level(b)[0] == validity.EXPLOITER]
+    levels = [(lv, b) for lv, b in validity.SERVER_LEVELS if b in bots]
+    if not rivals or not levels:
+        return (
+            f"No server level and `{validity.EXPLOITER}` pair in the file (the check V6 needs "
+            "both)."
+        )
+    gate: dict[str, float] = dict(validity.EXPLOITER_GATE)
+    body: list[list[str]] = []
+    for level, bot in levels:
+        mine = [p for p in ps if p.bot == bot and p.opp in rivals]
+        wins = sum(p.won for p in mine)
+        draws = sum(p.row.winner is None for p in mine)
+        lost = len(mine) - wins - draws
+        capital = sum(
+            not p.won and p.row.winner is not None and p.row.reason == "capital" for p in mine
+        )
+        taken = sum(p.won and p.row.reason == "capital" for p in mine)
+        body.append(
+            [
+                level,
+                f"`{bot}`",
+                str(len(mine)),
+                f"{wins} / {lost} / {draws}",
+                Rate(wins, wins + lost).fmt(),
+                f"{gate[level]:.2f}",
+                _share(capital, len(mine)),
+                _share(taken, len(mine)),
+            ]
+        )
+    return (
+        f"Every server level (`gow_server.botmatch.LEVEL_BOTS`) head to head against "
+        f"`{', '.join(rivals)}`, both sides, all maps: the level's share of the decided matches "
+        "with the 95% Wilson interval, the least share the check V6 asks (a proposal, not an "
+        "owner decision), and the share of all matches the level lost and won by the capital.\n\n"
+        + _table(
+            [
+                "level",
+                "bot",
+                "matches",
+                "won / lost / drawn",
+                "share [95%]",
+                "V6 at least",
+                "capital lost",
+                "capital taken",
+            ],
+            body,
+        )
+    )
+
+
 def _section_strength(tally: validity.Tally) -> str:
     fit = validity.bradley_terry(tally)
     if fit is None:
@@ -1455,6 +1507,7 @@ def render_report(rows: Sequence[Row], source: str, prefix: str) -> str:
         ),
         ("Bot competence checks", _section_checks(ps, bots)),
         ("Level ladder", _section_ladder(tally, steps)),
+        ("Against the exploiter (#688)", _section_exploiter(ps, bots)),
         ("Strength model (Bradley-Terry)", _section_strength(tally)),
         ("Strategy pair matrix", _section_pairs(ps, bots)),
         ("Style matrix and Nash mix", _section_style(tally)),

@@ -7,6 +7,7 @@
 
 from gow_bots.bots.base import Bot, BotFactory, Controller, ParamRange, choose_params
 from gow_bots.bots.basic import IdleBot, RandomLegalBot
+from gow_bots.bots.exploiter import SmartExploiter
 from gow_bots.bots.hoarder import SmartHoarder
 from gow_bots.bots.reactive import ReactiveBot
 from gow_bots.bots.registry import BOTS, LEVEL_SEP, bot_factory
@@ -40,6 +41,7 @@ __all__ = [
     "RusherBot",
     "SmartBot",
     "SmartExpander",
+    "SmartExploiter",
     "SmartHoarder",
     "SmartReactive",
     "SmartRusher",
