@@ -183,7 +183,7 @@ terrain mode draw the water flat (the part of the map no area covers). A map wit
 | `gow-maps` | | `generate --seed N` (`mise run maps:generate <seed>`), `score <files>` |
 
 **No rule.** A map enters a match as data, never as a seed: no `SIM_VERSION`, the loader only learns one more value. The
-client type `MapFile` takes it too (`Literal["rot180", "none"]`, `PROTOCOL_VERSION` 39): the client reads no `symmetry` and no
+client type `MapFile` takes it too (`Literal["rot180", "none"]`, `PROTOCOL_VERSION` 40): the client reads no `symmetry` and no
 `mirror`, nothing in it depends on them.
 
 ### Playing a generated map
