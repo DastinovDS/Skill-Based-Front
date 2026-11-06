@@ -1,0 +1,9 @@
+{
+  "project": "Skill-Based Front (SpriteCook project f2fcd6a0-fc8d-48aa-ada1-6c984d6a16f0)",
+  "model": "gpt-image-2, quality low, 1K, 2 credits per image, 4 credits in all",
+  "sheets": [
+    { "asset_id": "62156734-b165-41c9-a04f-691b9e170773", "label": "three side-view helmets, sheet A", "used_for": "variant Art: the left helmet, cut into a dome mask and a rim and strap mask" },
+    { "asset_id": "88556829-583e-47d1-a6f3-538b7bb5e6c9", "label": "three side-view helmets, sheet B", "used_for": "unused" }
+  ],
+  "note": "Asked for no visor and no face plate: neither sheet drew one. Variant Art uses the raster for the own helmet; its enemy is the vector Cut."
+}
