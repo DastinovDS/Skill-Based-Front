@@ -1331,3 +1331,106 @@ test it: `capture.charge_cost = 1` against 0 with the same field (not run: #688 
 PASS 6 (V2, V3, V4a, V9, D1, D2), FAIL 5 (V4b: 24 matches a pair; V4c: side 0 of the mirror matches 0.36 to 0.53;
 V5a: no counter for the exploiter, `smart_rusher@hard`, `smart_strangler@hard`; V5b: `smart_strangler@hard` 0.88; V6),
 NO DATA 1 (V1: no floor bots), NOT COMPUTABLE 2 (V7, V8).
+
+## #763: less supply generation under `mvp-4` (experiment, 2026-11-06)
+
+The owner's playtest of 2026-11-05: supply feels too plentiful (the factories barely felt, a bigger
+territory stores the surplus, the leaf shift pointless). The question: does a slower capital factory
+(DEC-41 item 2) make the factories and the leaf shift matter and a big army costly to feed?
+
+Branch [`exp/763-supply-cut-mvp4`](https://github.com/DastinovDS/Skill-Based-Front/tree/exp/763-supply-cut-mvp4) (develop 05b1872 plus three rulesets, each a copy of `mvp-4` that differs only in the keys named), not merged:
+
+| ruleset | `capital_period_ticks` | `built_period_ticks` | a built factory against the capital |
+|---|---|---|---|
+| `mvp-4` | 100 (1 charge / 10 s) | 200 | 0.5 |
+| `mvp-4-sup150` | 150 | 200 | 0.75 |
+| `mvp-4-sup200` | 200 | 200 | 1.0 |
+| `mvp-4-sup200f` | 200 | 150 | 1.33 |
+
+The three variants as proposed: they span a total cut of about 20 to 30% and a factory share from 0.75 to 1.33 times the capital, which is the spread the question needs; no other key (`factory.cost`, `max`, the warehouses) was touched. All load with `load_ruleset` and pass `gow-maps validate --ruleset` on the pool, the fixtures and the menu map.
+
+GitHub runs, all from the same ref, the 16-bot field of #706 plus `smart_exploiter` (17 bots), 4 pool maps, seeds 0..4, both sides, 5780 matches each, no crash (`mise run tournament:gh --ref exp/763-supply-cut-mvp4 --bots "<the 17>" --seeds 5 --shards 5`):
+
+- `mvp-4`: https://github.com/DastinovDS/Skill-Based-Front/actions/runs/42122837548 (byte for byte the same `state_hash` in every row as the #759 round 2 cost-0 run 42082265867: the same code, deterministic)
+- `mvp-4-sup150`: https://github.com/DastinovDS/Skill-Based-Front/actions/runs/42122847800
+- `mvp-4-sup200`: https://github.com/DastinovDS/Skill-Based-Front/actions/runs/42122858679
+- `mvp-4-sup200f`: https://github.com/DastinovDS/Skill-Based-Front/actions/runs/42122868728
+
+Rows marked *probe* come from 24 local headless matches per ruleset (seed 1, the 4 maps, `smart_rusher@hard`/`smart_turtle@hard`, `smart_expander@hard`/`smart_reactive@hard`, `smart_exploiter`/`smart_strangler@hard`, both sides; 97 local matches in all, one process): the tournament row has no factory ticks, no shift value and no node count by minute. All other rows are per player and match over the 5780 matches.
+
+| | `mvp-4` | `sup150` | `sup200` | `sup200f` |
+|---|---|---|---|---|
+| charges produced | 152.0 | 122.5 (-19%) | 107.5 (-29%) | 128.4 (-16%) |
+| charges burned, burned share | 36.9, 0.243 | 19.5, 0.159 | 12.8, 0.119 | 23.7, 0.185 |
+| stock: mean, at the end | 39.7, 46.7 | 35.0, 42.1 | 32.0, 38.9 | 36.0, 43.1 |
+| charges spent in fights / builds / plans / tolls | 14.1 / 15.7 / 4.5 / 3.3 | 13.5 / 15.4 / 4.0 / 3.3 | 13.0 / 15.2 / 3.7 / 3.2 | 13.3 / 15.4 / 4.0 / 3.3 |
+| charges lost with captured warehouses | 33.8 | 28.7 | 25.5 | 29.6 |
+| `BuildFactory` accepted | 3.75 | 3.73 | 3.74 | 3.73 |
+| *probe*: factories built, first / second factory (median tick) | 4.10, 184 / 469 | 3.96, 184 / 469 | 3.96, 184 / 509 | 3.77, 184 / 522 |
+| `SetLeafShift` accepted | 9.28 | 9.26 | 9.33 | 9.31 |
+| *probe*: mean leaf shift (share of ticks with a shift > 0), the exploiter | 0.29, 0.19 | 0.27, 0.19 | 0.29, 0.16 | 0.26, 0.18 |
+| charges starved | 12.3 | 11.9 | 11.4 | 11.8 |
+| idle discharged unit-seconds: connected / pocket | 248 / 748 | 294 / 783 | 354 / 814 | 320 / 780 |
+| captures: all / neutral / enemy | 43.1 / 14.4 / 28.7 | 43.2 / 14.4 / 28.7 | 43.6 / 14.5 / 29.2 | 43.3 / 14.4 / 28.8 |
+| walk-ins / contested sieges (won) | 24.5 / 4.44 (2.93) | 24.7 / 4.20 (2.75) | 25.1 / 4.05 (2.66) | 24.7 / 4.16 (2.74) |
+| end reasons: vp / capital / cities / draw | 5222 / 533 / 8 / 17 | 5211 / 549 / 10 / 10 | 5233 / 529 / 11 / 6 (+1 double defeat) | 5198 / 565 / 9 / 8 |
+| mean ticks; median first contact crossroads / highway / narrows / ridge | 8687; 933 / 1166 / 528 / 1043 | 8672; 1003 / 1166 / 528 / 1082 | 8704; 932 / 1166 / 548 / 1064 | 8676; 1003 / 1166 / 628 / 1043 |
+| more nodes at the end wins (non-mirror) | 0.83 [0.82; 0.84] | 0.84 [0.83; 0.85] | 0.83 [0.82; 0.84] | 0.84 [0.83; 0.85] |
+| more captures in minutes 0..4 wins (non-mirror) | 0.81 [0.80; 0.82] | 0.81 [0.80; 0.82] | 0.82 [0.81; 0.83] | 0.81 [0.80; 0.82] |
+| *probe*: more own nodes at minute 5 / minute 10 wins | 15 of 23 / 17 of 21 | 18 of 24 / 20 of 22 | 17 of 24 / 21 of 22 | 18 of 22 / 18 of 21 |
+| exploiter against the field | 0.86 [0.83; 0.88] | 0.88 [0.85; 0.90] | 0.89 [0.86; 0.91] | 0.86 [0.83; 0.89] |
+| exploiter against `smart_rusher@hard` | 0.57 [0.42; 0.71] | 0.60 [0.45; 0.74] | 0.55 [0.40; 0.69] | 0.53 [0.37; 0.67] |
+| top 3 against the field | exploiter 0.86, strangler@hard 0.85, rusher@hard 0.84 | exploiter 0.88, strangler@hard 0.85, rusher@hard 0.83 | exploiter 0.89, rusher@hard 0.84, strangler@hard 0.84 | exploiter 0.86, rusher@hard 0.85, strangler@hard 0.83 |
+| Nash mix | exploiter 0.98, rusher@hard 0.01 | exploiter 0.98, rusher@hard 0.01 | exploiter 0.98, rusher@hard 0.01 | exploiter 0.95, rusher@hard 0.04 |
+| intransitive share | 0.14 | 0.14 | 0.13 | 0.12 |
+| Bradley-Terry: top, range | exploiter +2.22, 4.82 | exploiter +2.37, 4.88 | exploiter +2.49, 5.00 | exploiter +2.26, 4.88 |
+| level ladder (V2) | PASS, 5 of 5 (not separated: reactive hard/normal, turtle normal/easy) | PASS, the same two | PASS, the same two | PASS, the same two |
+| V6, server levels against the exploiter: easy / normal / hard / expert | 0.03 / 0.15 / 0.35 / 0.25 | 0.05 / 0.07 / 0.28 / 0.12 | 0.03 / 0.12 / 0.25 / 0.17 | 0.03 / 0.12 / 0.30 / 0.17 |
+| CP burned at the cap, ticks at the cap | 1.5 CP, 1.8% | 1.5 CP, 1.8% | 1.5 CP, 1.8% | 1.6 CP, 1.9% |
+| mirror side 0, all maps | 0.45 [0.40; 0.51] | 0.55 [0.50; 0.60] | 0.53 [0.47; 0.58] | 0.52 [0.47; 0.57] |
+| Data validity | PASS 6, FAIL 5 (V4b, V4c, V5a, V5b, V6) | the same | the same | the same (V5a: no counter for the exploiter and `smart_rusher@hard`; `smart_strangler@hard` gets one under every variant) |
+
+Per bot, the win rate against the field moves by at most 0.04 between the four runs (the hoarder 0.67 to 0.63..0.64, the exploiter 0.86 to 0.89 at `sup200`); the order does not change. The burn sits in the weak and passive bots: at `mvp-4` `smart_turtle@hard` burns 55 of 162, the exploiter 14 of 157, `smart_rusher@hard` 14 of 155; at `sup200` 23, 3 and 3.
+
+### The supply contract (DEC-43, item M12)
+
+- Items 1, 2, 3, 5, 6, 7 at the fixed points: the quick sweep of `packages/sim/tests/test_flow_liveness.py` run against every ruleset (the module's `RULES` swapped by a runner, no code change): **PASS** for all four, with identical numbers (churn 0, stuck 0, unfed 0, frozen 0, undrawn 0, holes 25 / 16 / 20 / 81 = `QUICK`). The full sweep (`--full`, splits 0..11) against `sup200f`: PASS, holes 97 / 125 / 94 / 173 = `FULL`. Expected: the sweep has no production, and `systems/flow.py` (including the spill `spill_way`) reads no factory period (only `systems/economy.py` and `view.py` do).
+- Item 8 (`test_bench_supply_flow_busy`): not rerun, `supply_flow` reads no factory period, so the number cannot move.
+- The bot-match items (*probe*, 24 matches per ruleset):
+  - 4, burns of a full factory while an own node it reaches had room: 149 of 1048 burns at `mvp-4`, 21 of 426, 67 of 399, 46 of 509. My check is a rough one that runs outside the simulation. It reads the room from the end of the previous tick and does not take off the room that another factory's spill takes in the same tick. That is why the baseline is not 0 either, and why `sup200` scores highest: there the capital and the built factories fire on the same ticks. **No break attributable to the numbers** (the spill rule is unchanged).
+  - 5, quick returns (a road used back within 60 ticks): 1226 at `mvp-4`, 1212, 1032, 1199. None of the variants has more than the baseline: **PASS**. Per send they are about 0.3 points higher (4.7% against 5.0%), because there are fewer sends.
+  - 7, the chevrons (`flow_next` inside `flow_down`): 0 everywhere: **PASS**.
+  - 6, sends from or into a node ahead of the level, counted live: 78 at `mvp-4`, 74, 94, 116. The baseline is not 0 either. In a live match the shift and the owners change within the tick, while the test counter reads the state after the tick. Not investigated further, and this is a reading to confirm, not a measured break.
+
+**No contract item breaks.**
+
+### Reading
+
+- **For the bots, supply is not the binding resource, even at -29%.** `sup200` takes 44 charges a match out of production. About 24 of them come out of the burn, 8 out of captured warehouses and 8 out of the stock left at the end. The charges spent in fights fall by 1 (14.1 to 13.0), and captures, end reasons, match length, the field order, the Nash mix and the ladder do not move. The binding resource stays the CP (#688): the exploiter even gains a little (0.86 to 0.89).
+- **The burn halves.** It goes from 0.243 to 0.119 at `sup200`, but the warehouses are still far from empty: the mean stock is 32 against 40, and 39 charges are left at the end against 47. A territory with more cities still stores the surplus.
+- **Factories.** The bots build them as fast as they can at every number. The first factory is paid from the start stock at tick 184 under every variant, and the second comes 40 to 53 ticks later at `sup200` and `sup200f`. So the bot data cannot show whether a factory became a decision. What the numbers change is the stake: at `sup200` one built factory doubles the capital's output, while at `mvp-4` it adds half.
+- **The leaf shift.** Bot use is unchanged (9.3 commands a match, mean shift 0.26 to 0.29). The bots shift by threat, not by stock, so this run cannot say whether the shift became a decision.
+- **Territory.** A bigger territory wins just as often at every variant (0.83 to 0.84 by the end count; the probe at minute 10: 17 of 21 at `mvp-4`, 21 of 22 at `sup200`). Less supply does not make a big territory a burden for the bots.
+- **Feeding a big army.** The one signal that it got costlier: the idle discharged unit-seconds in connected nodes grow by 43% at `sup200` (248 to 354), and 19% at `sup150`. These are armies that wait for a charge where the flow would bring one. Starvation in pockets does not grow.
+- `sup200f` is a weaker cut: factories in the rear fill rear warehouses that already hold stock, so 0.185 of the production burns. It brings nothing that `sup200` does not.
+
+**Caveat, where the fixed bot policies bias this.**
+- The bots build factories as soon as they can and up to `factory.max`, whatever they cost. So the run cannot show a factory turning into a choice, and at a higher price it overstates their value.
+- The leaf shift policy reacts to threat, not to scarcity, so the run cannot show the shift becoming a decision.
+- The bots attack by CP, not by stock. A human who masses one army will meet the scarcity earlier than the bots do: this run understates how much less supply a human feels.
+- The exploiter's lead belongs to the CP economy (#688, #759), and less supply does not touch it.
+
+### Recommendation
+
+Playtest **`mvp-4-sup200`** (`factory.capital_period_ticks = 200`, the rest as `mvp-4`). It is the strongest cut tested. It halves the burn, keeps the supply contract and leaves the bot field, the ladder and the match length as they are. So it is safe to put in front of a human, and the bots cannot tell us more than this.
+
+What a human should feel differently:
+- The capital alone gives 1 charge per 20 s, and every built factory doubles that. An early second factory should feel like a real choice against an early attack.
+- The front warehouses no longer refill at once after a fight. Pulling the level back (the leaf shift) keeps charges out of a warehouse that is about to be lost.
+- A big stack waits longer for its charges.
+
+If even `sup200` still feels plentiful, the surplus is in the warehouses, not in the production (the mean stock is still 32). The next step would then be the factories or the warehouses (`factory.max`, `factory.cost`, smaller warehouses), not a third cut of the capital. That needs its own run.
+
+### Decision
+
+Awaiting the owner's decision.
