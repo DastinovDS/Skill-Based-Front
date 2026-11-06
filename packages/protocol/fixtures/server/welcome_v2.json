@@ -115,7 +115,8 @@
     },
     "fort": null,
     "supply_model": "lines",
-    "supply_dispatch_ticks": 10
+    "supply_dispatch_ticks": 10,
+    "stances": null
   },
   "map_id": "diamond",
   "last_seq": 0,

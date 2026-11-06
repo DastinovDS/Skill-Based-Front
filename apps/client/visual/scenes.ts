@@ -29,6 +29,7 @@ export const SCENES: readonly {
   { id: 'flow', tick: 2400 },
   { id: 'flow_supply', tick: 2400, keys: ['Tab'] },
   { id: 'flow_shift', tick: 2400, keys: ['Tab'] },
+  { id: 'stances', tick: 2400 },
   { id: 'forts', tick: 2400 },
   { id: 'forts_supply', tick: 2400, keys: ['Tab'] },
   { id: 'forts_toll', tick: 2400 },

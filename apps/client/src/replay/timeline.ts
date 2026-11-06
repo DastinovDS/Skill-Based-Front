@@ -156,6 +156,8 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
         leaf_shift: null,
         leaf_shift_max: null,
         next_dispatch_tick: null,
+        cp_ticks: null,
+        capital_ticks: null,
       },
       vp: [first[1], second[1]],
       nodes,

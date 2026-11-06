@@ -24,7 +24,8 @@ class RulesetError(ValueError):
 
 
 class Stance(StrEnum):
-    """CP stance: the share of CP regeneration that goes into charges (DEC-02)."""
+    """CP stance: the share of CP regeneration that goes into charges (DEC-02); under ``[stances]``
+    of economy v2 the rate of the CP income and of the own capital (DEC-44)."""
 
     ECONOMY = "economy"
     BALANCE = "balance"
@@ -387,6 +388,18 @@ class FactoryRules:
 
 
 @dataclass(frozen=True, slots=True)
+class StanceRules:
+    """Stances of economy v2 with local progress (DEC-44, section ``[stances]``; ``economy.model =
+    "v2"`` only). The periods of the player's stance replace ``cp.period_ticks`` and
+    ``factory.capital_period_ticks``, counted from the player's own last quantum."""
+
+    cp_period_ticks: StanceTable
+    """Ticks per CP quantum (``cp.per_period``) under each stance."""
+    capital_period_ticks: StanceTable
+    """Ticks per charge of the own capital under each stance."""
+
+
+@dataclass(frozen=True, slots=True)
 class BunkerRules:
     """The bunker (DEC-41, item 12; code name ``fort``; ``economy.model = "v2"`` only): a
     building of a city or a province that adds virtual shots to the node's defender."""
@@ -538,6 +551,10 @@ class Ruleset:
     fort: FortRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
     """Road fortifications (DEC-43, item D): only with ``economy.model = "v2"``, optional there;
     without it ``FortifyRoad`` gives ``FEATURE_DISABLED``."""
+    stances: StanceRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
+    """Stances with local progress (DEC-44): only with ``economy.model = "v2"``, optional there;
+    without it ``SetStance`` gives ``FEATURE_DISABLED`` (DEC-41, item 1). Left out of the hash when
+    absent, so the hash of every ruleset without the section stays as it was."""
 
     @property
     def v2(self) -> bool:
@@ -665,6 +682,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "lines",
             "bunker",
             "fort",
+            "stances",
         ),
     )
     economy = _parse_economy(
@@ -715,6 +733,11 @@ def parse_ruleset(data: object) -> Ruleset:
         )
     elif root.has("fort"):
         raise RulesetError("fort: only with economy.model = 'v2'")
+    stances = None
+    if v2 and root.has("stances"):  # optional under v2 (DEC-44)
+        stances = _parse_stances(root.table("stances", ("cp_period_ticks", "capital_period_ticks")))
+    elif root.has("stances"):
+        raise RulesetError("stances: only with economy.model = 'v2'")
     return Ruleset(
         tick_hz=root.integer("tick_hz", low=1),
         match_ticks=root.integer("match_ticks", low=1),
@@ -784,6 +807,7 @@ def parse_ruleset(data: object) -> Ruleset:
         lines=lines,
         bunker=bunker,
         fort=fort,
+        stances=stances,
     )
 
 
@@ -816,6 +840,21 @@ def _parse_economy(t: "_Table") -> EconomyRules:
         ),
         model=model,
         start_stock_capital_only=start_stock_capital_only,
+    )
+
+
+def _parse_stances(t: "_Table") -> StanceRules:
+    def periods(key: str) -> StanceTable:
+        table = t.table(key, tuple(s.value for s in Stance))
+        return StanceTable(
+            economy=table.integer("economy", low=1),
+            balance=table.integer("balance", low=1),
+            war=table.integer("war", low=1),
+        )
+
+    return StanceRules(
+        cp_period_ticks=periods("cp_period_ticks"),
+        capital_period_ticks=periods("capital_period_ticks"),
     )
 
 

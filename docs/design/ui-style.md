@@ -718,7 +718,8 @@ Height 48 px, three columns:
   head marker over the growing end; the number "2.4/5". At the cap the head goes and a dashed amber ring (pulsing) and the word `MAX` come
   (a shape and a word, not a colour: AGENTS.md 7.4), with the tooltip "CP are at the cap: new ones are lost" (DEC-02). HTML/CSS in
   `TopBar.svelte`, the numbers in `topBar.ts` (`cpTrack`); no map cost.
-- **Stance:** a chip with an icon, a name and `Q`; a click opens the radial menu.
+- **Stance:** a chip with an icon, a name and `Q`; a click opens the radial menu. Economy v2 shows it only under `[stances]` (DEC-44, `ruleset_public.stances`).
+- **Stance progress** (DEC-44, only under `[stances]`): right of the CP number two thin bars, one over the other: the next CP (the term "CP") and the next charge of the own capital (the charge dot), each filled by `me.cp_ticks` and `me.capital_ticks` over the period of the stance; the tooltip tells the seconds left and that a stance change resets both. A bar, its label and a text, not colour alone.
 - **The VP score as a "tug of war"** (Against the Storm): nicks, numbers and a common bar, the blue part on the left,
   the red on the right, a tick mark in the middle. Under the nick a triangle of its own shape (single and double outline).
 - **The timer** 18 px with an icon; in the last minute `--warn` (IM12).

@@ -315,6 +315,12 @@ class PlayerState:
     it to ``leaf_shift_max`` (item B3). Hidden from the enemy (item B5)."""
     leaf_shift_max: int = 0
     """``d0`` of the own capital stored by the last flow step: the largest ``SetLeafShift``."""
+    cp_ticks: int = 0
+    """Ticks since the last CP quantum, under ``[stances]`` (DEC-44): the quantum fires when this
+    reaches the period of the stance; a stance change sets it to 0. Hidden from the enemy."""
+    capital_ticks: int = 0
+    """Ticks since the last quantum of the own capital, under ``[stances]`` (DEC-44), the same
+    way. It keeps counting without an own capital, and the quantum then does nothing."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -714,6 +720,10 @@ def _v2_player_data(p: PlayerState) -> dict[str, object]:
         data["leaf_shift"] = p.leaf_shift
     if p.leaf_shift_max:
         data["leaf_shift_max"] = p.leaf_shift_max
+    if p.cp_ticks:
+        data["cp_ticks"] = p.cp_ticks
+    if p.capital_ticks:
+        data["capital_ticks"] = p.capital_ticks
     return data
 
 
@@ -989,7 +999,15 @@ def _parse_player(data: object, where: str) -> PlayerState:
             "fronts",
             "rear_min",
         ),
-        optional=("lines", "next_line", "auto_lines", "leaf_shift", "leaf_shift_max"),
+        optional=(
+            "lines",
+            "next_line",
+            "auto_lines",
+            "leaf_shift",
+            "leaf_shift_max",
+            "cp_ticks",
+            "capital_ticks",
+        ),
     )
     fronts = _list(raw["fronts"], f"{where}.fronts")
     lines: dict[int, Line] = {}
@@ -1020,6 +1038,8 @@ def _parse_player(data: object, where: str) -> PlayerState:
         auto_lines=_bool(raw.get("auto_lines", False), f"{where}.auto_lines"),
         leaf_shift=_int(raw.get("leaf_shift", 0), f"{where}.leaf_shift", low=0),
         leaf_shift_max=_int(raw.get("leaf_shift_max", 0), f"{where}.leaf_shift_max", low=0),
+        cp_ticks=_int(raw.get("cp_ticks", 0), f"{where}.cp_ticks", low=0),
+        capital_ticks=_int(raw.get("capital_ticks", 0), f"{where}.capital_ticks", low=0),
     )
 
 

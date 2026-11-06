@@ -75,11 +75,11 @@ TICKS = 600
 DECIDE_EVERY = 5
 
 
-@pytest.fixture(scope="module", params=["mvp-0", "mvp-1", "mvp-3", "mvp-4"])
+@pytest.fixture(scope="module", params=["mvp-0", "mvp-1", "mvp-3", "mvp-4", "mvp-4-stances"])
 def rules(request: pytest.FixtureRequest) -> Ruleset:
-    """mvp-0, mvp-1 (``city_upgrades`` on, DEC-26), mvp-3 (the economy v2, DEC-41) and mvp-4 (the
-    supply flow, DEC-43) with 50 CP to start with: CP do not limit the controller, every command is
-    used."""
+    """mvp-0, mvp-1 (``city_upgrades`` on, DEC-26), mvp-3 (the economy v2, DEC-41), mvp-4 (the
+    supply flow, DEC-43) and mvp-4-stances (the stances of DEC-44) with 50 CP to start with: CP do
+    not limit the controller, every command is used."""
     name: str = request.param
     base = load_ruleset(ROOT / "rulesets" / f"{name}.toml")
     return dataclasses.replace(base, cp=dataclasses.replace(base.cp, start=5000, cap=5000))
@@ -217,6 +217,8 @@ def _decide_v2(
     if rules.flow and tick % 40 == 20:  # DEC-43: the leaf shift up and down to its maximum
         ps = state.players[player]
         cmds.append(SetLeafShift(tick // 40 % (ps.leaf_shift_max + 1)))
+    if rules.stances is not None and tick % 70 == 0:  # DEC-44: every stance in turn, no cooldown
+        cmds.append(SetStance(list(Stance)[tick // 70 % len(Stance)]))
     return cmds
 
 
@@ -445,6 +447,7 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     assert p1.fronts == tuple(None if f is None else mirror[f] for f in p0.fronts), "fronts"
     assert p1.rear_min == p0.rear_min
     assert (p1.leaf_shift, p1.leaf_shift_max) == (p0.leaf_shift, p0.leaf_shift_max), "shift"
+    assert (p1.cp_ticks, p1.capital_ticks) == (p0.cp_ticks, p0.capital_ticks), "stance progress"
     assert p1.next_line == p0.next_line
     assert {k: tuple(mirror[n] for n in line.path) for k, line in p0.lines.items()} == {
         k: line.path for k, line in p1.lines.items()
@@ -566,7 +569,8 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         assert not {"DrawLine", "RemoveLine", "BuildBunker", "UpgradeWarehouse"} & set(kinds)
         assert sent > 0, "the flow carried charges"
         assert "SetMode" not in kinds
-        assert not {"SetStance", "SetFront", "SetRearMin", "Transfer", "UpgradeRoad"} & set(kinds)
+        assert not {"SetFront", "SetRearMin", "Transfer", "UpgradeRoad"} & set(kinds)
+        assert ("SetStance" in kinds) == (rules.stances is not None)  # DEC-44
     elif rules.v2:  # DEC-41: the v1 supply commands are disabled, the lines are mirrored
         assert {"DrawLine", "RemoveLine", "BuildBunker", "BuildFactory"} <= set(kinds)
         assert "SetMode" not in kinds  # "Defense" is removed (item 5, #645)

@@ -27,6 +27,14 @@ factory city makes one charge per period into its own warehouse, the own capital
 ``t > 0`` divisible by the period; event ``charges_produced`` with ``spill = 0``). A full
 warehouse burns the charge: event ``charge_burned``, the only burn of production (L6).
 
+Stances of economy v2 (DEC-44; section ``[stances]`` of the ruleset, revises DEC-41, item 1): the
+stance sets the CP income and the rate of the own capital, on local progress instead of the global
+clock. Every tick ``PlayerState.cp_ticks`` and ``capital_ticks`` grow by 1; a counter that reaches
+the period of the stance fires its quantum and restarts. A real stance change sets both to 0
+(``set_stance``, in ``apply_commands``, so the tick of the change is the first one counted). The
+capital counter never stops: without an own capital, or with its factory gone, the quantum fires
+and does nothing. Built factories and a captured capital stay on the global clock above.
+
 Supply flow (DEC-43, item A8; ``supply.model = "flow"``): a factory is **full** when its stock
 plus the own packets on the way to it reach its warehouse. A full factory's new charge **spills**:
 it leaves at once as one packet to the nearest own node with room, over own nodes with
@@ -94,25 +102,37 @@ def economy(state: GameState, rules: Ruleset) -> list[Event]:
 
 
 def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
-    """The CP quantum without a stance and the production of the factories (DEC-41)."""
+    """The CP quantum and the production of the factories (DEC-41; the stances of DEC-44)."""
     tick = state.tick
     events: list[Event] = []
-    if tick > 0 and tick % rules.cp.period_ticks == 0:
+    stances = rules.stances
+    capital_due: dict[int, bool] = {}
+    if stances is not None:
         for pid in sorted(state.players):
             player = state.players[pid]
-            total = player.cp + rules.cp.per_period
-            burned = max(0, total - rules.cp.cap)
-            player.cp = total - burned
-            if burned > 0:
-                events.append(event(tick, "cp_burned", player=pid, cp=burned))
+            player.cp_ticks += 1
+            if player.cp_ticks >= stances.cp_period_ticks.of(player.stance):
+                player.cp_ticks = 0
+                events.extend(_cp_quantum(state, rules, pid))
+            player.capital_ticks += 1
+            due = player.capital_ticks >= stances.capital_period_ticks.of(player.stance)
+            capital_due[pid] = due
+            if due:
+                player.capital_ticks = 0
+    elif tick > 0 and tick % rules.cp.period_ticks == 0:
+        for pid in sorted(state.players):
+            events.extend(_cp_quantum(state, rules, pid))
     connected: dict[int, tuple[bool, ...]] = {}
     for nid in sorted(state.nodes):
         node = state.nodes[nid]
         owner = node.owner
         if owner is None or node.factory != owner:
             continue
-        period = factory_period(state, rules, nid)
-        if tick <= 0 or tick % period != 0:
+        if stances is not None and nid == state.map.capital(owner):
+            due = capital_due[owner]  # the own capital: local progress (DEC-44)
+        else:
+            due = tick > 0 and tick % factory_period(state, rules, nid) == 0
+        if not due:
             continue
         if rules.flow:
             if owner not in connected:
@@ -128,6 +148,15 @@ def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
         else:
             events.append(event(tick, "charge_burned", player=owner, node=nid, charges=1))
     return events
+
+
+def _cp_quantum(state: GameState, rules: Ruleset, pid: int) -> list[Event]:
+    """The whole quantum into the CP of ``pid``, up to the cap; the excess burns."""
+    player = state.players[pid]
+    total = player.cp + rules.cp.per_period
+    burned = max(0, total - rules.cp.cap)
+    player.cp = total - burned
+    return [event(state.tick, "cp_burned", player=pid, cp=burned)] if burned > 0 else []
 
 
 def _produce_flow(state: GameState, rules: Ruleset, owner: int, nid: int) -> list[Event]:
@@ -149,25 +178,32 @@ def _produce_flow(state: GameState, rules: Ruleset, owner: int, nid: int) -> lis
 
 def factory_period(state: GameState, rules: Ruleset, node: int) -> int:
     """Ticks per charge of the factory in ``node`` (DEC-41, item 2): the own capital of its
-    owner ``factory.capital_period_ticks``, any other factory ``factory.built_period_ticks``."""
+    owner ``factory.capital_period_ticks`` (under ``[stances]`` the period of its owner's stance,
+    DEC-44), any other factory ``factory.built_period_ticks``."""
     factory = rules.factory_rules()
     owner = state.nodes[node].owner
     if owner is not None and node == state.map.capital(owner):
+        if rules.stances is not None:
+            return rules.stances.capital_period_ticks.of(state.players[owner].stance)
         return factory.capital_period_ticks
     return factory.built_period_ticks
 
 
 def stance_cooldown_left(state: GameState, rules: Ruleset, player: int) -> int:
-    """Ticks until ``player`` may change the stance again; 0 means now."""
+    """Ticks until ``player`` may change the stance again; 0 means now. Under ``[stances]`` there
+    is no cooldown: a change costs the progress of both counters (DEC-44)."""
     last = state.players[player].stance_changed_tick
-    if last is None:
+    if last is None or rules.stances is not None:
         return 0
     return max(0, last + rules.orders.stance_cooldown_ticks - state.tick)
 
 
 def set_stance(state: GameState, player: int, stance: Stance) -> list[Event]:
-    """Apply a validated stance change at the current tick (the cost is charged by SIM-04)."""
+    """Apply a validated stance change at the current tick (the cost is charged by SIM-04). The
+    local progress of DEC-44 starts over; without ``[stances]`` it is 0 anyway."""
     ps = state.players[player]
     ps.stance = stance
     ps.stance_changed_tick = state.tick
+    ps.cp_ticks = 0
+    ps.capital_ticks = 0
     return [event(state.tick, "stance_changed", player=player, stance=stance.value)]

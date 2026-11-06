@@ -21,6 +21,8 @@ import type {
   UpgradeGain,
 } from '../protocol.gen.ts';
 
+import { stanceProgress, type StanceProgress } from './topBar.ts';
+
 /** What the player picked to look at: one own group or one node. */
 export type Selection =
   { readonly kind: 'group'; readonly id: string } | { readonly kind: 'node'; readonly id: number };
@@ -252,6 +254,8 @@ export interface HudData {
   readonly hovered: GroupInfo | null;
   readonly cp: CpInfo;
   readonly stance: Stance;
+  /** Stances of economy v2 (DEC-44): the way to the next quanta; `null` without them. */
+  readonly stanceProgress: StanceProgress | null;
   /** The own front markers: the city of each, `null`: not placed (DEC-28, item 2). */
   readonly fronts: readonly (number | null)[];
   /** The own rear minimum of charges in the cities without a marker (DEC-28, item 3). */
@@ -487,9 +491,12 @@ export function buildHudData(
     cp: {
       value: view.me.cp,
       cap: rules.cp.cap,
-      regenPerSecond: (rules.cp.per_period * rules.tick_hz) / rules.cp.period_ticks,
+      regenPerSecond:
+        (rules.cp.per_period * rules.tick_hz) /
+        (rules.stances?.cp_period_ticks[view.me.stance] ?? rules.cp.period_ticks),
     },
     stance: view.me.stance,
+    stanceProgress: stanceProgress(rules, view.me),
     fronts: view.me.fronts,
     rearMin: view.me.rear_min,
     autoLines: view.me.auto_lines,

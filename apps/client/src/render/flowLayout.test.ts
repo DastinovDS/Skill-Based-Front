@@ -67,6 +67,8 @@ function view(shift: number, extra: Partial<View> = {}): View {
       leaf_shift: shift,
       leaf_shift_max: 3,
       next_dispatch_tick: 20,
+      cp_ticks: null,
+      capital_ticks: null,
     },
     vp: [0, 0],
     nodes: [

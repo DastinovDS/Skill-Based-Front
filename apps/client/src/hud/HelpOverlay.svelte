@@ -19,9 +19,19 @@
     flow?: boolean;
     /** Road fortifications (DEC-43, item D): `B` fortifies a road of the selected city. */
     fort?: boolean;
+    /** Economy v2 with stances (DEC-44): `Q` is back. */
+    stances?: boolean;
   }
 
-  let { open, onclose, captureCost = 0, v2 = false, flow = false, fort = false }: Props = $props();
+  let {
+    open,
+    onclose,
+    captureCost = 0,
+    v2 = false,
+    flow = false,
+    fort = false,
+    stances = false,
+  }: Props = $props();
 
   let close: HTMLButtonElement | undefined = $state();
   /** The rules page replaces the keys inside the sheet; the match runs on under it (nothing pauses). */
@@ -103,7 +113,9 @@
     ['Esc', 'help.key.escape'],
   ] as const;
 
-  const keys = $derived.by((): readonly (readonly [string, MessageKey])[] => {
+  type KeyRow = readonly [string, MessageKey];
+
+  const economyKeys = $derived.by((): readonly KeyRow[] => {
     if (!flow) return v2 ? KEYS_V2 : KEYS;
     // `B` goes after `R`, the other key of the menu of a city.
     return fort
@@ -112,6 +124,15 @@
         )
       : KEYS_FLOW;
   });
+
+  // `Q` goes after `G`, as in the keys of economy v1.
+  const keys = $derived(
+    v2 && stances
+      ? economyKeys.flatMap((row): KeyRow[] =>
+          row[0] === 'G' ? [row, ['Q', 'help.key.stance']] : [row],
+        )
+      : economyKeys,
+  );
 </script>
 
 {#if open}

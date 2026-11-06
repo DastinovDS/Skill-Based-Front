@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEV_RULES } from './devFeed.ts';
+import { DEV_RULES, DEV_RULES_STANCES } from './devFeed.ts';
 import {
   BIG_RING,
   RADIAL,
@@ -16,6 +16,16 @@ import {
 } from './radial.ts';
 
 describe('stanceRates', () => {
+  it('reads the periods of `stances` under economy v2 (DEC-44)', () => {
+    // 600 ticks a minute: War 600 / 80 CP and 600 / 400 charges, Balance 6 and 3, Economy 3 and 6.
+    const rates = stanceRates(DEV_RULES_STANCES);
+    expect(rates.map((r) => [r.stance, r.cpPerMinCenti / 100, r.chargesPerMin])).toEqual([
+      ['economy', 3, 6],
+      ['balance', 6, 3],
+      ['war', 7.5, 1.5],
+    ]);
+  });
+
   it('gives mvp-0 the table of the guide: 3/18, 6/12, 9/6', () => {
     const rates = stanceRates(DEV_RULES);
     expect(rates.map((r) => [r.stance, r.cpPerMinCenti / 100, r.chargesPerMin])).toEqual([

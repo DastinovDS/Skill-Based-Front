@@ -614,6 +614,19 @@ class SelfView(WireModel):
     """Supply flow: the largest shift now (the roads from the own capital to the front)."""
     next_dispatch_tick: Tick | None
     """Supply flow: the tick of the next dispatch."""
+    cp_ticks: NonNegInt | None
+    """Stances of economy v2 (DEC-44): the ticks since the own last CP quantum, of
+    ``ruleset_public.stances.cp_period_ticks``; ``null`` without ``stances``. The enemy's
+    counters are never in a view."""
+    capital_ticks: NonNegInt | None
+    """Stances of economy v2: the ticks since the last quantum of the own capital, of
+    ``ruleset_public.stances.capital_period_ticks``."""
+
+    @model_validator(mode="after")
+    def _check_stances(self) -> Self:
+        if (self.cp_ticks is None) != (self.capital_ticks is None):
+            raise ValueError("cp_ticks and capital_ticks go together")
+        return self
 
     @model_validator(mode="after")
     def _check_flow(self) -> Self:

@@ -394,6 +394,8 @@ export const en = {
   'radial.cpPerMin': '+{value} CP per minute',
   'radial.chargesPerMin': '+{value} charges per minute',
   'radial.close': 'Close the stance menu',
+  'radial.resetNote': 'A change restarts the next CP and the next charge',
+  'radial.builtNote': 'Charges: the capital only, built factories do not change',
   'orders.stanceOpen': 'Stance: {stance} [Q]',
   'alert.title': 'Alerts',
   'alert.incomingIn': 'they leave in {seconds} s',
@@ -411,6 +413,9 @@ export const en = {
   'bar.cpMaxHint': 'CP are at the cap: new ones are lost',
   'bar.cpLabelShort': 'CP: {value} of {cap}, not enough for this move',
   'bar.cpShortHint': 'Not enough CP for this move',
+  'bar.nextTip':
+    'Next CP in {cp} s, next charge of the capital in {capital} s. A change of stance restarts both',
+  'bar.nextLabel': 'Next CP in {cp} s, next charge of the capital in {capital} s',
   'bar.factories': 'Factories: own, builds included, of the most you may have',
   'bar.factoriesFull': 'Factories: at the most you may have, no more can be built',
   'bar.factoriesLabel': 'Factories: {count} of {max}',

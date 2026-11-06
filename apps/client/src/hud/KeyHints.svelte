@@ -1,14 +1,17 @@
 <script lang="ts">
   import { t } from '../i18n/index.ts';
+  import type { MessageKey } from '../i18n/messages.ts';
 
   interface Props {
     /** Economy v2 (DEC-41): no stance and no road levels; the supply lines and the plan instead. */
     v2?: boolean;
     /** The automatic supply flow (DEC-43): Tab is the supply layer, not the lines. */
     flow?: boolean;
+    /** Economy v2 with stances (DEC-44): `Q` is back. */
+    stances?: boolean;
   }
 
-  let { v2 = false, flow = false }: Props = $props();
+  let { v2 = false, flow = false, stances = false }: Props = $props();
 
   /** `[key, dictionary key of what it does]`: the keys themselves are not translated. */
   const HINTS_V1 = [
@@ -29,7 +32,10 @@
     ['R', 'hints.recruit'],
     ['?', 'hints.help'],
   ] as const;
-  const HINTS = $derived(flow ? HINTS_FLOW : v2 ? HINTS_V2 : HINTS_V1);
+  const HINTS = $derived.by((): readonly (readonly [string, MessageKey])[] => {
+    const hints = flow ? HINTS_FLOW : v2 ? HINTS_V2 : HINTS_V1;
+    return v2 && stances ? [['Q', 'hints.stance'], ...hints] : hints;
+  });
 </script>
 
 <!-- The key bar at the bottom right: the first matches only (ui-style 10.4). -->

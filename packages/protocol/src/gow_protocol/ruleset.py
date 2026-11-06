@@ -17,14 +17,16 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the range and the start value of the rear minimum (DEC-28, item 3), for the supply slider;
 - the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429);
 - the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help;
-- the economy model (DEC-41, ``economy.model``): ``v2`` hides the stance, the front markers, the
-  rear minimum, transfers, road upgrades and "Defense" of v1 and shows factories, lines,
-  bunkers and the requested bonus of planned orders, with their numbers (``factory``, ``lines``,
-  ``bunker``, ``orders.plan_ticks_per_bonus``, the charge prices of the buildings); ``null`` or 0
-  under v1;
+- the economy model (DEC-41, ``economy.model``): ``v2`` hides the stance (without ``stances``,
+  DEC-44), the front markers, the rear minimum, transfers, road upgrades and "Defense" of v1 and
+  shows factories, lines, bunkers and the requested bonus of planned orders, with their numbers
+  (``factory``, ``lines``, ``bunker``, ``orders.plan_ticks_per_bonus``, the charge prices of the
+  buildings); ``null`` or 0 under v1;
 - the supply model (DEC-43, ``supply_model``): ``flow`` hides the lines and shows the automatic
   flow and the leaf shift (``lines`` under v1 and the drawn lines of DEC-41), with the period of
-  the dispatch (``supply_dispatch_ticks``).
+  the dispatch (``supply_dispatch_ticks``);
+- the stances of economy v2 (DEC-44, ``stances``): the periods of the CP income and of the own
+  capital by stance, for the stance menu and the progress in the HUD; ``null`` without the section.
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -34,7 +36,15 @@ from typing import Annotated, Self
 from pydantic import Field
 
 from gow_protocol.base import Centi, NonNegInt, PosInt, SignedInt, WireModel
-from gow_sim.ruleset import EconomyModel, Ruleset, Sight, SightTable, Stance, SupplyModel
+from gow_sim.ruleset import (
+    EconomyModel,
+    Ruleset,
+    Sight,
+    SightTable,
+    Stance,
+    StanceTable,
+    SupplyModel,
+)
 
 
 class CostsPublic(WireModel):
@@ -119,6 +129,27 @@ class EconomyPublic(WireModel):
     """Charges per whole CP put into charges."""
 
 
+class StancePeriodsPublic(WireModel):
+    """Ticks per quantum under each stance (DEC-44)."""
+
+    economy: PosInt
+    balance: PosInt
+    war: PosInt
+
+    @classmethod
+    def from_table(cls, table: StanceTable) -> Self:
+        return cls(economy=table.economy, balance=table.balance, war=table.war)
+
+
+class StancesPublic(WireModel):
+    """Stances of economy v2 with local progress (``stances`` of the ruleset, DEC-44)."""
+
+    cp_period_ticks: StancePeriodsPublic
+    """One CP quantum (``cp.per_period``) per this many ticks; ``View.me.cp_ticks`` counts them."""
+    capital_period_ticks: StancePeriodsPublic
+    """One charge of the own capital per this many ticks; ``View.me.capital_ticks`` counts them."""
+
+
 class OrdersPublic(WireModel):
     """Delays of planned orders, the growth of Defense and the stance cooldown (``orders``)."""
 
@@ -127,6 +158,7 @@ class OrdersPublic(WireModel):
     """Defense gains one virtual shot per this many ticks in the mode, at most the charged units
     of the group when a fight begins (DEC-30)."""
     stance_cooldown_ticks: NonNegInt
+    """Ticks between two stance changes; 0 under ``stances`` (DEC-44: no cooldown)."""
     plan_ticks_per_bonus: NonNegInt
     """Economy v2 (DEC-41, item 10): a gathering planned order takes one charge and gains one
     bonus per this many ticks; 0 under v1."""
@@ -288,6 +320,9 @@ class RulesetPublic(WireModel):
     """``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it
     (DEC-43, item A6; the same period drives the lines of DEC-41 and the v1 supply), so the
     countdown to ``View.me.next_dispatch_tick`` is exact from the first snapshot (#705)."""
+    stances: StancesPublic | None
+    """Stances of economy v2: a ``[stances]`` section only (DEC-44); ``None`` otherwise (under v2
+    ``set_stance`` is then rejected with ``FEATURE_DISABLED``)."""
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -342,7 +377,9 @@ class RulesetPublic(WireModel):
             orders=OrdersPublic(
                 planned_delay_ticks=rules.orders.planned_delay_ticks,
                 defense_ticks_per_bonus=rules.orders.defense_ticks_per_bonus,
-                stance_cooldown_ticks=rules.orders.stance_cooldown_ticks,
+                stance_cooldown_ticks=(
+                    rules.orders.stance_cooldown_ticks if rules.stances is None else 0
+                ),
                 plan_ticks_per_bonus=rules.orders.plan_ticks_per_bonus,
             ),
             capacity=CapacityPublic(
@@ -402,4 +439,12 @@ class RulesetPublic(WireModel):
             ),
             supply_model=rules.supply.model,
             supply_dispatch_ticks=rules.supply.dispatch_ticks,
+            stances=None
+            if rules.stances is None
+            else StancesPublic(
+                cp_period_ticks=StancePeriodsPublic.from_table(rules.stances.cp_period_ticks),
+                capital_period_ticks=StancePeriodsPublic.from_table(
+                    rules.stances.capital_period_ticks
+                ),
+            ),
         )

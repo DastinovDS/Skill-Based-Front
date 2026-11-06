@@ -101,17 +101,20 @@ FLOW_ONLY_KEYS: Final[tuple[str, ...]] = ("SetLeafShift",)
 """``usage`` keys that only the supply flow accepts (DEC-43, item B2)."""
 
 
-def live_keys(economy: str | None, supply: str | None) -> tuple[str, ...]:
+def live_keys(economy: str | None, supply: str | None, stances: bool = False) -> tuple[str, ...]:
     """The ``USAGE_KEYS`` a match of ``economy.model`` and ``supply.model`` can use, in order;
     all keys when the economy is unknown (``None``: a row written before #690), both supply
     models' keys when only the supply model is unknown. ``BuildBunker``,
     ``FortifyRoad`` and ``UpgradeWarehouse`` depend on ruleset sections the row does not name,
-    so they stay."""
+    so they stay. ``stances``: the ruleset has ``[stances]``, so v2 accepts ``SetStance``
+    (DEC-44)."""
     if economy is None:
         return USAGE_KEYS
     dead: tuple[str, ...] = V2_ONLY_KEYS if economy == "v1" else V1_ONLY_KEYS
     if economy != "v1" and supply is not None:
         dead += LINES_ONLY_KEYS if supply == "flow" else FLOW_ONLY_KEYS
+    if stances:
+        dead = tuple(k for k in dead if k != "SetStance")
     return tuple(k for k in USAGE_KEYS if k not in dead)
 
 

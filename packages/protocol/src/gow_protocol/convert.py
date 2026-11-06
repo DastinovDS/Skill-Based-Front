@@ -335,6 +335,8 @@ def view_to_wire(view: sv.PlayerView) -> View:
             leaf_shift=view.me.leaf_shift,
             leaf_shift_max=view.me.leaf_shift_max,
             next_dispatch_tick=view.me.next_dispatch_tick,
+            cp_ticks=view.me.cp_ticks,
+            capital_ticks=view.me.capital_ticks,
         ),
         vp=(vp[0], vp[1]),
         nodes=tuple(
@@ -541,6 +543,8 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             "leaf_shift": me.leaf_shift,
             "leaf_shift_max": me.leaf_shift_max,
             "next_dispatch_tick": me.next_dispatch_tick,
+            "cp_ticks": me.cp_ticks,
+            "capital_ticks": me.capital_ticks,
         },
         "vp": view.vp[:2],
         "nodes": [

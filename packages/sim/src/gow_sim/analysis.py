@@ -145,7 +145,16 @@ simulation, so the state hash does not change. Definitions (the same text is in
   ``(0, economy.start_stance)``, then every accepted ``SetStance`` in order. A stance set at tick
   ``t`` works in tick ``t`` itself (``apply_commands`` runs before ``economy``), so the first tick
   under a stance is ``max(t, 1)`` and ``stance_ticks`` counts the ticks ``1..ticks`` under each
-  stance; the three values always sum to ``ticks``.
+  stance; the three values always sum to ``ticks``. ``stance_switches`` is the number of accepted
+  changes and ``stance_share`` the share of ``ticks`` under each stance (``None`` for
+  ``ticks = 0``).
+- **Earned by stance** (DEC-44, #772): ``cp_by_stance`` is the CP in hundredths a quantum really
+  added under each stance (the quantum minus its ``cp_burned``), filled only under ``[stances]``:
+  ``MatchRecorder`` reads a quantum from ``cp_ticks``, which is 0 at the end of a tick exactly when
+  the quantum fired. ``charges_by_stance`` is ``(stance, capital, built)``: the charges made under
+  each stance by the own capital and by every other factory (a captured capital too), and
+  ``charges_capital`` and ``charges_built`` their sums; they count the ``charges_produced`` and the
+  ``charge_burned`` events of a factory under economy v2, like ``MatchMetrics.charges_produced``.
 - **Commands** (``commands``): all commands the player sent except ``Forfeit``; ``rejected`` is
   the part that was rejected (also in ``MatchMetrics.rejected``, which counts ``Forfeit`` too).
   **APM**: ``apm_avg = commands * 60 * tick_hz / ticks`` (``None`` for ``ticks = 0``);
@@ -359,6 +368,12 @@ class MatchLog:
     """``economy.model`` of the ruleset (#690)."""
     supply_model: str = "lines"
     """``supply.model`` of the ruleset (#690)."""
+    stances: bool = False
+    """The ruleset has ``[stances]`` (DEC-44)."""
+    capitals: tuple[int, ...] = ()
+    """The own capital by player id; empty in a hand-made log."""
+    cp_by_stance: tuple[tuple[tuple[str, int], ...], ...] = ((), ())
+    """By player id: ``(stance, CP in hundredths)``, only under ``[stances]`` (module docstring)."""
 
 
 def charge_stock(state: GameState) -> tuple[int, ...]:
@@ -433,6 +448,7 @@ class MatchRecorder:
         self._order_cost: dict[int, tuple[int, int]] = {}
         """Group id -> ``(player, cost)`` of its last accepted ``Move`` while it has an order."""
         self._cancelled = _zeros()
+        self._cp_earned = {p: {s.value: 0 for s in Stance} for p in PLAYERS}
         self._garrisons: dict[int, tuple[bool, ...]] = {}
         """Node -> per player id: a group of that player stands in it (end of the last tick)."""
 
@@ -491,6 +507,8 @@ class MatchRecorder:
             self._stock[p].append(charges)
         self._count_bottleneck(match)
         self._count_cp_and_idle(match)
+        if match.rules.stances is not None:
+            self._count_stance_cp(match)
         self._garrisons = _garrisons(state)
         self._order_cost = {
             gid: cost
@@ -523,6 +541,22 @@ class MatchRecorder:
                 counts[1] += 1
                 if cap.warehouse > 0:
                     counts[2] += 1
+
+    def _count_stance_cp(self, match: Match) -> None:
+        """The CP of this tick's quanta by stance (DEC-44): the economy adds 1 to ``cp_ticks``
+        every tick, so it ends a tick at 0 only when the quantum fired in that tick."""
+        state = match.state
+        for p in PLAYERS:
+            player = state.players[p]
+            if player.cp_ticks != 0:
+                continue
+            burned = 0
+            for e in state.events:
+                if e.kind == "cp_burned" and e.get("player") == p:
+                    cp = e.get("cp")
+                    assert isinstance(cp, int)
+                    burned += cp
+            self._cp_earned[p][player.stance.value] += match.rules.cp.per_period - burned
 
     def _count_cp_and_idle(self, match: Match) -> None:
         """One tick of ``cp_cap_ticks`` and of the idle discharged unit-ticks (#743)."""
@@ -574,6 +608,9 @@ class MatchRecorder:
             cp_cancelled=tuple(self._cancelled[p] for p in PLAYERS),
             economy_model=match.rules.economy.model.value,
             supply_model=match.rules.supply.model.value,
+            stances=match.rules.stances is not None,
+            capitals=tuple(self._capitals[p] for p in PLAYERS),
+            cp_by_stance=tuple(tuple(self._cp_earned[p].items()) for p in PLAYERS),
         )
 
 
@@ -1166,6 +1203,18 @@ class PlayerStats:
     """``(tick, stance)``, the first entry is ``(0, start stance)``."""
     stance_ticks: tuple[tuple[str, int], ...]
     """Ticks under each stance, in ``Stance`` order; the values sum to ``MatchLog.ticks``."""
+    stance_switches: int
+    """Accepted stance changes."""
+    stance_share: tuple[tuple[str, float | None], ...]
+    """The share of the match under each stance, in ``Stance`` order."""
+    cp_by_stance: tuple[tuple[str, int], ...]
+    """CP in hundredths earned under each stance, only under ``[stances]`` (DEC-44)."""
+    charges_by_stance: tuple[tuple[str, int, int], ...]
+    """``(stance, capital, built)``: charges made under each stance (module docstring)."""
+    charges_capital: int
+    """Charges made by the own capital."""
+    charges_built: int
+    """Charges made by every other factory."""
     commands: int
     """Commands sent, ``Forfeit`` excluded."""
     rejected: int
@@ -1195,6 +1244,12 @@ class PlayerStats:
         return {
             "stance_timeline": [[t, s] for t, s in self.stance_timeline],
             "stance_ticks": dict(self.stance_ticks),
+            "stance_switches": self.stance_switches,
+            "stance_share": dict(self.stance_share),
+            "cp_by_stance": dict(self.cp_by_stance),
+            "charges_by_stance": {s: [c, b] for s, c, b in self.charges_by_stance},
+            "charges_capital": self.charges_capital,
+            "charges_built": self.charges_built,
             "commands": self.commands,
             "rejected": self.rejected,
             "apm_avg": self.apm_avg,
@@ -1222,14 +1277,16 @@ class MatchStats:
     """``PlayerStats`` of both sides, indexed by player id."""
 
     players: tuple[PlayerStats, ...]
+    stances: bool = False
+    """The ruleset of the match has ``[stances]`` (DEC-44)."""
 
     def to_json(self) -> dict[str, object]:
-        return {"players": [p.to_json() for p in self.players]}
+        return {"players": [p.to_json() for p in self.players], "stances": self.stances}
 
 
 def analyze_stats(log: MatchLog) -> MatchStats:
     """The statistics of both players from the log (module docstring)."""
-    return MatchStats(tuple(_player_stats(log, p) for p in PLAYERS))
+    return MatchStats(tuple(_player_stats(log, p) for p in PLAYERS), log.stances)
 
 
 def _stance_line(log: MatchLog, player: int) -> tuple[tuple[tuple[int, str], ...], dict[str, int]]:
@@ -1245,6 +1302,24 @@ def _stance_line(log: MatchLog, player: int) -> tuple[tuple[tuple[int, str], ...
     for (_, stance), first, nxt in zip(timeline, firsts, firsts[1:], strict=False):
         ticks[stance] += max(0, nxt - first)
     return tuple(timeline), ticks
+
+
+def _charges_by_stance(
+    log: MatchLog, player: int, timeline: Sequence[tuple[int, str]]
+) -> dict[str, list[int]]:
+    """Stance -> ``[capital, built]``: the charges the factories of ``player`` made under it."""
+    made = {s.value: [0, 0] for s in Stance}
+    capital = log.capitals[player] if log.capitals else None
+    at = 0
+    for e in log.events:  # in tick order, like the timeline
+        if e.kind not in ("charges_produced", "charge_burned") or e.get("player") != player:
+            continue
+        while at + 1 < len(timeline) and timeline[at + 1][0] <= e.tick:
+            at += 1
+        charges = e.get("charges")
+        assert isinstance(charges, int)
+        made[timeline[at][1]][0 if e.get("node") == capital else 1] += charges
+    return made
 
 
 def _player_stats(log: MatchLog, player: int) -> PlayerStats:
@@ -1288,9 +1363,18 @@ def _player_stats(log: MatchLog, player: int) -> PlayerStats:
     planned_attacks = sum(1 for m in attacks if m.planned)
     sieges = [m for m in log.moves if m.player == player and m.siege]
     planned_sieges = sum(1 for m in sieges if m.planned)
+    by_stance = _charges_by_stance(log, player, timeline)
     return PlayerStats(
         stance_timeline=timeline,
         stance_ticks=tuple(in_stance.items()),
+        stance_switches=len(timeline) - 1,
+        stance_share=tuple(
+            (s, round(t / log.ticks, 4) if log.ticks else None) for s, t in in_stance.items()
+        ),
+        cp_by_stance=log.cp_by_stance[player],
+        charges_by_stance=tuple((s, c, b) for s, (c, b) in by_stance.items()),
+        charges_capital=sum(c for c, _ in by_stance.values()),
+        charges_built=sum(b for _, b in by_stance.values()),
         commands=sent,
         rejected=rejected,
         apm_avg=round(sent * minute_ticks / log.ticks, 3) if log.ticks else None,

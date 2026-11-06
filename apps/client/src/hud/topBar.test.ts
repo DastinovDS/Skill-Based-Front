@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { atCap, cpTrack, vpShare } from './topBar.ts';
+import type { SelfView } from '../protocol.gen.ts';
+import { DEV_RULES_FLOW, DEV_RULES_STANCES } from './devFeed.ts';
+import { atCap, cpTrack, stanceProgress, vpShare } from './topBar.ts';
 
 describe('cpTrack', () => {
   it('fills the track by the share of the cap', () => {
@@ -51,5 +53,37 @@ describe('vpShare', () => {
     expect(vpShare(4, 6)).toBe(40);
     expect(vpShare(6, 0)).toBe(100);
     expect(vpShare(0, 6)).toBe(0);
+  });
+});
+
+describe('stanceProgress (DEC-44)', () => {
+  const me = (stance: SelfView['stance'], cp: number | null, capital: number | null): SelfView => ({
+    cp: 300,
+    stance,
+    fronts: [null, null],
+    rear_min: 0,
+    auto_lines: null,
+    leaf_shift: 0,
+    leaf_shift_max: 2,
+    next_dispatch_tick: 10,
+    cp_ticks: cp,
+    capital_ticks: capital,
+  });
+
+  it('divides the counters of the view by the periods of the stance', () => {
+    // War: 1 CP per 80 ticks, a charge of the capital per 400; 10 ticks are a second.
+    expect(stanceProgress(DEV_RULES_STANCES, me('war', 60, 100))).toEqual({
+      cp: { share: 0.75, seconds: 2 },
+      capital: { share: 0.25, seconds: 30 },
+    });
+    // Economy: 1 CP per 200 ticks, a charge per 100; the seconds round up.
+    expect(stanceProgress(DEV_RULES_STANCES, me('economy', 1, 99))).toEqual({
+      cp: { share: 0.005, seconds: 20 },
+      capital: { share: 0.99, seconds: 1 },
+    });
+  });
+
+  it('is null without stances in the ruleset', () => {
+    expect(stanceProgress(DEV_RULES_FLOW, me('balance', null, null))).toBeNull();
   });
 });

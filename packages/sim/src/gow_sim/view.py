@@ -213,6 +213,11 @@ class SelfView:
     """Supply flow: the largest shift, ``d0`` of the own capital (item B2)."""
     next_dispatch_tick: int | None = None
     """Supply flow: the tick of the next dispatch (item A6)."""
+    cp_ticks: int | None = None
+    """Stances of economy v2 (DEC-44): the ticks since the own last CP quantum, ``None`` without
+    ``[stances]``. The enemy's counters are never in a view."""
+    capital_ticks: int | None = None
+    """Stances of economy v2: the ticks since the last quantum of the own capital."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1007,6 +1012,8 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
             leaf_shift=me.leaf_shift if rules.flow else None,
             leaf_shift_max=me.leaf_shift_max if rules.flow else None,
             next_dispatch_tick=next_dispatch_tick(state, rules) if rules.flow else None,
+            cp_ticks=me.cp_ticks if rules.stances is not None else None,
+            capital_ticks=me.capital_ticks if rules.stances is not None else None,
         ),
         vp=tuple(state.players[p].vp for p in PLAYERS),
         nodes=tuple(nodes),
@@ -1119,6 +1126,8 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
             "leaf_shift": view.me.leaf_shift,
             "leaf_shift_max": view.me.leaf_shift_max,
             "next_dispatch_tick": view.me.next_dispatch_tick,
+            "cp_ticks": view.me.cp_ticks,
+            "capital_ticks": view.me.capital_ticks,
         },
         "vp": list(view.vp),
         "nodes": [

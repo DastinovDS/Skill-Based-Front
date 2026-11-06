@@ -42,7 +42,8 @@ export type Command =
  */
 export type Mode = 'attack' | 'defense';
 /**
- * CP stance: the share of CP regeneration that goes into charges (DEC-02).
+ * CP stance: the share of CP regeneration that goes into charges (DEC-02); under ``[stances]``
+ * of economy v2 the rate of the CP income and of the own capital (DEC-44).
  */
 export type Stance = 'economy' | 'balance' | 'war';
 export type ServerMsg =
@@ -466,6 +467,11 @@ export interface RulesetPublic {
    * countdown to ``View.me.next_dispatch_tick`` is exact from the first snapshot (#705).
    */
   supply_dispatch_ticks: number;
+  /**
+   * Stances of economy v2: a ``[stances]`` section only (DEC-44); ``None`` otherwise (under v2
+   * ``set_stance`` is then rejected with ``FEATURE_DISABLED``).
+   */
+  stances: StancesPublic | null;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -582,6 +588,9 @@ export interface OrdersPublic {
    * of the group when a fight begins (DEC-30).
    */
   defense_ticks_per_bonus: number;
+  /**
+   * Ticks between two stance changes; 0 under ``stances`` (DEC-44: no cooldown).
+   */
   stance_cooldown_ticks: number;
   /**
    * Economy v2 (DEC-41, item 10): a gathering planned order takes one charge and gains one
@@ -750,6 +759,27 @@ export interface FortPublic {
   toll_charges: number;
 }
 /**
+ * Stances of economy v2 with local progress (``stances`` of the ruleset, DEC-44).
+ */
+export interface StancesPublic {
+  /**
+   * One CP quantum (``cp.per_period``) per this many ticks; ``View.me.cp_ticks`` counts them.
+   */
+  cp_period_ticks: StancePeriodsPublic;
+  /**
+   * One charge of the own capital per this many ticks; ``View.me.capital_ticks`` counts them.
+   */
+  capital_period_ticks: StancePeriodsPublic;
+}
+/**
+ * Ticks per quantum under each stance (DEC-44).
+ */
+export interface StancePeriodsPublic {
+  economy: number;
+  balance: number;
+  war: number;
+}
+/**
  * Calibration progress of an account: the first matches of a rated account do not show its
  * rating (DEC-34, #414).
  */
@@ -833,6 +863,17 @@ export interface SelfView {
    * Supply flow: the tick of the next dispatch.
    */
   next_dispatch_tick: number | null;
+  /**
+   * Stances of economy v2 (DEC-44): the ticks since the own last CP quantum, of
+   * ``ruleset_public.stances.cp_period_ticks``; ``null`` without ``stances``. The enemy's
+   * counters are never in a view.
+   */
+  cp_ticks: number | null;
+  /**
+   * Stances of economy v2: the ticks since the last quantum of the own capital, of
+   * ``ruleset_public.stances.capital_period_ticks``.
+   */
+  capital_ticks: number | null;
 }
 export interface NodeView {
   id: number;
@@ -1620,7 +1661,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 38;
+export const PROTOCOL_VERSION = 39;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;
