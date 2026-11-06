@@ -464,6 +464,8 @@ def test_no_enemy_cp_stance_production_or_counters(rules: Ruleset) -> None:
         "leaf_shift",
         "leaf_shift_max",
         "next_dispatch_tick",
+        "cp_ticks",  # DEC-44: own local progress, tests/test_dec44.py
+        "capital_ticks",
     }
     me = state.players[0]
     assert before.me == SelfView(cp=me.cp, stance=me.stance, fronts=(None, None), rear_min=1)

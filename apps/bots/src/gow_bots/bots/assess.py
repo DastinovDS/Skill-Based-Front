@@ -24,7 +24,8 @@ and the ruleset. Four parts:
   first is a threat to that node (``logistics.arrivals``), not yet to the capital.
 - **Upper bound of the enemy CP** (``EnemyCp``): the enemy CP and stance are hidden (AGENTS.md,
   section 4.4), the regeneration is not: the bound starts at ``cp.start``, gains the largest CP
-  share of a quantum (the stance with the fewest charges) every ``cp.period_ticks``, stops at
+  share of a quantum (the stance with the fewest charges) every ``cp.period_ticks`` (under
+  ``[stances]``, DEC-44, the shortest CP period of a stance), stops at
   ``cp.cap``, and loses the price of every payment the view shows at the tick it is paid: the
   intents of planned orders and of Defense (public at their creation). Payments the view does not
   show (ordinary orders, recruits) are not subtracted, so the bound is never below the truth.
@@ -196,6 +197,12 @@ class EnemyCp:
         self.gain = per if rules.v2 else per - per * least // 100
         """The largest CP part of a regeneration quantum (the whole quantum under economy v2:
         no stances, DEC-41, item 1)."""
+        stances = rules.stances
+        self.period = rules.cp.period_ticks
+        """The shortest period of the CP income: under ``[stances]`` the enemy may sit in the
+        stance of the most CP from the first tick on (DEC-44), a change only loses progress."""
+        if stances is not None:
+            self.period = min(stances.cp_period_ticks.of(s) for s in Stance)
         self.bound = rules.cp.start
         self.tick = 0
         self.paid: dict[int, bool] = {}
@@ -214,7 +221,7 @@ class EnemyCp:
             price = cost.planned_move if i.kind is IntentKind.PLANNED_MOVE else cost.defense
             pays.append((i.created_tick, price))
         pays.sort()
-        period = self.rules.cp.period_ticks
+        period = self.period
         bound, at = self.bound, self.tick
         for tick, price in pays:
             # Commands are applied before the economy of their tick (AGENTS.md, section 4.2).
@@ -237,7 +244,7 @@ class EnemyCp:
             return 0
         if self.gain <= 0:
             return self.rules.match_ticks
-        period = self.rules.cp.period_ticks
+        period = self.period
         periods = -(-(cp - self.bound) // self.gain)
         return (tick // period + periods) * period - tick
 

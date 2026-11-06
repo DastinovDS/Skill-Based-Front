@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 38,
+    "PROTOCOL_VERSION": 39,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -2701,6 +2701,7 @@
           "type": "integer"
         },
         "stance_cooldown_ticks": {
+          "description": "Ticks between two stance changes; 0 under ``stances`` (DEC-44: no cooldown).",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
@@ -3305,6 +3306,17 @@
           "maximum": 2147483647,
           "minimum": 1,
           "type": "integer"
+        },
+        "stances": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StancesPublic"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stances of economy v2: a ``[stances]`` section only (DEC-44); ``None`` otherwise (under v2\n``set_stance`` is then rejected with ``FEATURE_DISABLED``)."
         }
       },
       "required": [
@@ -3326,7 +3338,8 @@
         "bunker",
         "fort",
         "supply_model",
-        "supply_dispatch_ticks"
+        "supply_dispatch_ticks",
+        "stances"
       ],
       "title": "RulesetPublic",
       "type": "object"
@@ -3479,6 +3492,32 @@
             }
           ],
           "description": "Supply flow: the tick of the next dispatch."
+        },
+        "cp_ticks": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stances of economy v2 (DEC-44): the ticks since the own last CP quantum, of\n``ruleset_public.stances.cp_period_ticks``; ``null`` without ``stances``. The enemy's\ncounters are never in a view."
+        },
+        "capital_ticks": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stances of economy v2: the ticks since the last quantum of the own capital, of\n``ruleset_public.stances.capital_period_ticks``."
         }
       },
       "required": [
@@ -3489,7 +3528,9 @@
         "auto_lines",
         "leaf_shift",
         "leaf_shift_max",
-        "next_dispatch_tick"
+        "next_dispatch_tick",
+        "cp_ticks",
+        "capital_ticks"
       ],
       "title": "SelfView",
       "type": "object"
@@ -3802,7 +3843,7 @@
       "type": "object"
     },
     "Stance": {
-      "description": "CP stance: the share of CP regeneration that goes into charges (DEC-02).",
+      "description": "CP stance: the share of CP regeneration that goes into charges (DEC-02); under ``[stances]``\nof economy v2 the rate of the CP income and of the own capital (DEC-44).",
       "enum": [
         "economy",
         "balance",
@@ -3837,6 +3878,62 @@
         "war"
       ],
       "title": "StancePctPublic",
+      "type": "object"
+    },
+    "StancePeriodsPublic": {
+      "additionalProperties": false,
+      "description": "Ticks per quantum under each stance (DEC-44).",
+      "properties": {
+        "economy": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "balance": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "war": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "economy",
+        "balance",
+        "war"
+      ],
+      "title": "StancePeriodsPublic",
+      "type": "object"
+    },
+    "StancesPublic": {
+      "additionalProperties": false,
+      "description": "Stances of economy v2 with local progress (``stances`` of the ruleset, DEC-44).",
+      "properties": {
+        "cp_period_ticks": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/StancePeriodsPublic"
+            }
+          ],
+          "description": "One CP quantum (``cp.per_period``) per this many ticks; ``View.me.cp_ticks`` counts them."
+        },
+        "capital_period_ticks": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/StancePeriodsPublic"
+            }
+          ],
+          "description": "One charge of the own capital per this many ticks; ``View.me.capital_ticks`` counts them."
+        }
+      },
+      "required": [
+        "cp_period_ticks",
+        "capital_period_ticks"
+      ],
+      "title": "StancesPublic",
       "type": "object"
     },
     "SupplyModel": {

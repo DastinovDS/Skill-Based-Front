@@ -30,6 +30,11 @@ const welcomeV4Files = import.meta.glob<WelcomeMsg>(
   { eager: true, import: 'default' },
 );
 
+const welcomeStancesFiles = import.meta.glob<WelcomeMsg>(
+  '../../../../packages/protocol/fixtures/server/welcome_stances.json',
+  { eager: true, import: 'default' },
+);
+
 /** The player on the dev screen. */
 export const DEV_PLAYER = 0;
 
@@ -59,6 +64,15 @@ export const DEV_RULES_FLOW: RulesetPublic = (() => {
   const welcome = Object.values(welcomeV4Files)[0];
   if (welcome === undefined) {
     throw new Error('packages/protocol/fixtures/server/welcome_v4.json is not bundled');
+  }
+  return welcome.ruleset_public;
+})();
+
+/** The rules of `mvp-4-stances` (DEC-44): `mvp-4-sup200` with stances, for the `stances` scene. */
+export const DEV_RULES_STANCES: RulesetPublic = (() => {
+  const welcome = Object.values(welcomeStancesFiles)[0];
+  if (welcome === undefined) {
+    throw new Error('packages/protocol/fixtures/server/welcome_stances.json is not bundled');
   }
   return welcome.ruleset_public;
 })();
@@ -197,6 +211,9 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         leaf_shift: rules.supply_model === 'flow' ? 0 : null,
         leaf_shift_max: rules.supply_model === 'flow' ? 2 : null,
         next_dispatch_tick: rules.supply_model === 'flow' ? (Math.floor(tick / 10) + 1) * 10 : null,
+        cp_ticks: rules.stances === null ? null : tick % rules.stances.cp_period_ticks.balance,
+        capital_ticks:
+          rules.stances === null ? null : tick % rules.stances.capital_period_ticks.balance,
       },
       vp: [Math.floor(tick / 100), Math.floor(tick / 150)],
       nodes,

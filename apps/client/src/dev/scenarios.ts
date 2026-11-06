@@ -4,7 +4,7 @@
  * its map, frozen at the tick of the snapshot. The Playwright test (`visual/`) takes its reference
  * screenshots from them. The live `demo` scene is the dev server's match (CLI-06, #62).
  */
-import { DEV_RULES, DEV_RULES_FLOW, DEV_RULES_V2 } from '../hud/devFeed.ts';
+import { DEV_RULES, DEV_RULES_FLOW, DEV_RULES_STANCES, DEV_RULES_V2 } from '../hud/devFeed.ts';
 import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
 import type {
@@ -27,7 +27,7 @@ import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 import { supplySnapshot } from './supplyScene.ts';
-import { FLOW_VIEW, flowSnapshot } from './flowScene.ts';
+import { FLOW_VIEW, flowSnapshot, stancesSnapshot } from './flowScene.ts';
 import {
   FORTS_GEO_VIEW,
   FORTS_VIEW,
@@ -593,6 +593,17 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     view: FLOW_VIEW,
     cityUpgrades: true,
     rules: DEV_RULES_FLOW,
+  },
+  {
+    // Stances of economy v2 (DEC-44, #772) under the rules of `mvp-4-stances`: the map of `flow`, the
+    // stance chip and the two progress bars in the top bar.
+    id: 'stances',
+    map: 'artery',
+    snapshot: stancesSnapshot(bundledMap('artery')),
+    events: [],
+    view: FLOW_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_STANCES,
   },
   {
     // Road fortifications (DEC-43, item D; #707) under the rules of `mvp-4`: an own line built with the

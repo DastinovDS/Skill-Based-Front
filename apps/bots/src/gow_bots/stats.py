@@ -7,7 +7,10 @@ shown in whole CP with two decimals (the journal counts hundredths).
 The rows follow the economy of the match (#690): under economy v2 the rows of v1 mechanics that
 v2 rejects (stances, front markers, the rear minimum, transfers, road upgrades) and the marker
 columns of the supply are left out; the mechanic counts (``usage``) list only the commands the
-economy and the supply model of the match accept (``gow_bots.tournament.live_keys``).
+economy and the supply model of the match accept (``gow_bots.tournament.live_keys``). With
+``[stances]`` (DEC-44) the stance rows are back, with the share of the match, the switches and the
+CP and charges earned under each stance; under v2 the charges of the capital and of the built
+factories always have a row.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -63,6 +66,22 @@ def _stance_row(stance: str) -> _Row:
     return f"ticks in {stance}", lambda p: str(dict(p.stance_ticks)[stance])
 
 
+def _share_row(stance: str) -> _Row:
+    return f"share of time in {stance}", lambda p: _share(dict(p.stance_share)[stance])
+
+
+def _earned_cp_row(stance: str) -> _Row:
+    return f"CP earned in {stance}", lambda p: _cp(dict(p.cp_by_stance)[stance])
+
+
+def _earned_charges_row(stance: str) -> _Row:
+    def cell(p: PlayerStats) -> str:
+        capital, built = next((c, b) for s, c, b in p.charges_by_stance if s == stance)
+        return f"{capital} / {built}"
+
+    return f"charges in {stance} (capital / built)", cell
+
+
 def _cp_row(category: str) -> _Row:
     return f"CP {category}", lambda p: _cp(dict(p.cp_by_category)[category])
 
@@ -77,9 +96,17 @@ def _rows(stats: MatchStats, v1: bool) -> list[_Row]:
         ("SetRearMin", lambda p: _ticks(p.rear_min_ticks)),
         ("Transfer (charges)", lambda p: f"{len(p.transfer_ticks)} ({p.transfer_charges})"),
     ]
+    stances = [s for s, _ in stats.players[0].stance_ticks]
+    stance_rows: list[_Row] = [
+        *v1_rows,
+        ("stance switches", lambda p: str(p.stance_switches)),
+        *(_share_row(s) for s in stances),
+        *(_earned_cp_row(s) for s in stances),
+        *(_earned_charges_row(s) for s in stances),
+    ]
     categories = [c for c in CP_CATEGORIES if v1 or c not in _V1_CP]
     return [
-        *(v1_rows if v1 else []),
+        *(stance_rows if stats.stances else v1_rows if v1 else []),
         ("commands (rejected)", lambda p: f"{p.commands} ({p.rejected})"),
         ("APM avg", lambda p: "-" if p.apm_avg is None else f"{p.apm_avg:.2f}"),
         ("APM peak (a minute)", lambda p: str(p.apm_peak)),
@@ -122,7 +149,11 @@ def _contested(m: MatchMetrics, i: int) -> str:
     return f"{m.contested_sieges[i]} ({m.contested_sieges_won[i]})"
 
 
-def _charge_rows(v1: bool) -> list[_FlowRow]:
+def _charge_rows(v1: bool, stats: MatchStats) -> list[_FlowRow]:
+    v2_sources: list[_FlowRow] = [
+        ("charges from the capital", lambda _, i: str(stats.players[i].charges_capital)),
+        ("charges from built factories", lambda _, i: str(stats.players[i].charges_built)),
+    ]
     v2_sinks: list[_FlowRow] = [
         ("charges into buildings", lambda m, i: str(m.flow[i].built)),
         ("charges into buildings lost", lambda m, i: str(m.charges_built_lost[i])),
@@ -146,6 +177,7 @@ def _charge_rows(v1: bool) -> list[_FlowRow]:
     return [
         ("charges start", lambda m, i: str(m.flow[i].start)),
         ("charges produced", lambda m, i: str(m.charges_produced[i])),
+        *([] if v1 else v2_sources),
         ("charges burned (overflow)", lambda m, i: str(m.charges_burned[i])),
         ("charges spent in fights", lambda m, i: str(m.flow[i].fights)),
         ("charges spent on captures", lambda m, i: str(m.flow[i].captures)),
@@ -193,11 +225,11 @@ def render_stats(
     v1 = metrics.economy_model == "v1"
     rows = [(label, [fmt(p) for p in stats.players]) for label, fmt in _rows(stats, v1)]
     if usage is not None:
-        keys = live_keys(metrics.economy_model, metrics.supply_model)
+        keys = live_keys(metrics.economy_model, metrics.supply_model, stats.stances)
         rows += [(f"{k} (accepted)", [str(u.get(k, 0)) for u in usage]) for k in keys]
     rows += [
         (label, [fmt(metrics, i) for i in range(len(stats.players))])
-        for label, fmt in _charge_rows(v1)
+        for label, fmt in _charge_rows(v1, stats)
     ]
     width = max(len(label) for label, _ in rows)
     cols = [max(len(cells[i]) for _, cells in rows) for i in range(len(stats.players))]

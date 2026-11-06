@@ -81,6 +81,11 @@ mise run stats path/to/match.jsonl.gz            # arguments after the task name
 uv run gow-bots stats a.jsonl.gz b.jsonl.gz --rulesets rulesets/archive --maps maps
 ```
 
+Stances of economy v2 (DEC-44, `mvp-4-stances`): the table of a match on such a ruleset adds, per player, the stance timeline,
+`stance switches`, `share of time in <stance>`, `CP earned in <stance>`, `charges in <stance> (capital / built)` and the row
+`SetStance (accepted)`. Every match under economy v2 has the rows `charges from the capital` and `charges from built factories`.
+The JSONL of `gow-bots analyze` has the same numbers under `stats` and the flag `stats.stances` (section "Player statistics").
+
 ## The line format (`schema` = 1)
 
 One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are indexed by the player id
@@ -167,6 +172,11 @@ these are separate fields, the only thing they share is `MatchRecorder`/`MatchLo
 |---|---|
 | `stance_timeline` | a list of `[tick, stance]`: the first entry is `[0, economy.start_stance]`, then every accepted `SetStance` |
 | `stance_ticks` | ticks in each stance; a stance set in tick `t` works from tick `t` (`apply_commands` goes before `economy`), the starting stance from tick 1; the sum equals `ticks` |
+| `stance_share` | `stance_ticks` as a share of `ticks`, 4 digits; `null` at `ticks = 0` |
+| `stance_switches` | accepted stance changes in the match |
+| `cp_by_stance` | CP in hundredths earned under each stance: the quantum minus what burned at the cap; only with `[stances]` (DEC-44), 0 otherwise. `MatchRecorder` reads a quantum from `cp_ticks`, which ends a tick at 0 only when the quantum fired |
+| `charges_by_stance` | `{stance: [capital, built]}`: the charges made in each stance by the own capital and by every other factory (a captured capital too), `charges_produced` and `charge_burned` of a factory counted, like `charges_produced` of the metrics |
+| `charges_capital`, `charges_built` | the sums of `charges_by_stance` over the stances; together they equal `charges_produced` of the metrics under economy v2 |
 | `commands` | all the commands the player sent, except `Forfeit`; `rejected` of them were rejected (`Forfeit` is counted in `MatchMetrics.rejected`) |
 | `apm_avg` | `commands * 60 * tick_hz / ticks`, 3 digits; `null` at `ticks = 0` |
 | `apm_by_minute`, `apm_peak` | commands by match minute (minute `m`: ticks `m*60*tick_hz < t <= (m+1)*60*tick_hz`, the last minute may be shorter) and the maximum of them |

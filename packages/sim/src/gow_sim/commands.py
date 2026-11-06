@@ -31,13 +31,14 @@ target and leaves in batches, the first in the tick it is applied (``systems.sup
 Economy v2 (DEC-41, items 2, 3, 5, 7, 12, 14; ``economy.model = "v2"``): ``BuildFactory``,
 ``BuildBunker``, ``DrawLine`` and ``RemoveLine`` (free of CP; ``systems.lines``,
 ``systems.build``); the buildings are paid in charges by the progressive payment of item 7
-(``systems.build.pay``), so no charge check rejects them. ``SetStance``, ``SetFront``,
-``SetRearMin``, ``Transfer``, ``UpgradeRoad`` and ``SetMode(DEFENSE)`` give ``FEATURE_DISABLED``
-there, and the four new commands give it under v1. None of them is public. A planned ``Move``
-of v2 names its requested bonus (``Move.bonus >= 1``, item 10) and gathers it in
-``systems.orders``; ``ReleasePlan`` sends it at once (v1: ``FEATURE_DISABLED``). ``SetAutoLines``
-turns the auto-extension of the player's lines on or off (#665, ``systems.lines``; free, not
-public; v1: ``FEATURE_DISABLED``).
+(``systems.build.pay``), so no charge check rejects them. ``SetStance`` (unless the ruleset has
+``[stances]``, DEC-44: then it is free, without a cooldown, and a real change resets the local
+progress), ``SetFront``, ``SetRearMin``, ``Transfer``, ``UpgradeRoad`` and ``SetMode(DEFENSE)``
+give ``FEATURE_DISABLED`` there, and the four new commands give it under v1. None of them is
+public. A planned ``Move`` of v2 names its requested bonus (``Move.bonus >= 1``, item 10) and
+gathers it in ``systems.orders``; ``ReleasePlan`` sends it at once (v1: ``FEATURE_DISABLED``).
+``SetAutoLines`` turns the auto-extension of the player's lines on or off (#665,
+``systems.lines``; free, not public; v1: ``FEATURE_DISABLED``).
 Supply flow (DEC-43, ``supply.model = "flow"``): ``SetLeafShift`` sets the player's leaf shift
 (item B2; free, not public, no event; ``FEATURE_DISABLED`` under any other supply model);
 ``DrawLine``, ``RemoveLine`` and ``SetAutoLines`` give ``FEATURE_DISABLED`` (item A12).
@@ -759,7 +760,9 @@ def _other_model(rules: Ruleset, cmd: Command) -> bool:
         cmd, BuildFactory | BuildBunker | DrawLine | RemoveLine | SetAutoLines | ReleasePlan
     ):
         return not rules.v2
-    if isinstance(cmd, SetStance | SetFront | SetRearMin | Transfer | UpgradeRoad):
+    if isinstance(cmd, SetStance):
+        return rules.v2 and rules.stances is None  # DEC-41, item 1; DEC-44
+    if isinstance(cmd, SetFront | SetRearMin | Transfer | UpgradeRoad):
         return rules.v2
     if isinstance(cmd, SetMode) and cmd.mode is Mode.DEFENSE:
         return rules.v2  # the bunker replaces "Defense" (DEC-41, items 5 and 12)

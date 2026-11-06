@@ -1425,7 +1425,7 @@ The key clarification from the discussion: the problem is not that CP are both a
 
 ### Economy model and CP stance (DEC-02, #8) **[accepted]**
 
-> **[superseded by DEC-41 under `economy.model = "v2"`]**: stances, the charge share of CP regeneration, `charges_per_cp`, the starting stance (DEC-09) and the stance cooldown; in v2 all CP goes to CP and charges come from factories. The text below is kept and is in force for `economy.model = "v1"`.
+> **[superseded by DEC-41 under `economy.model = "v2"`]**: stances, the charge share of CP regeneration, `charges_per_cp`, the starting stance (DEC-09) and the stance cooldown; in v2 all CP goes to CP and charges come from factories. The text below is kept and is in force for `economy.model = "v1"`. The block DEC-44 below brings stances back to v2 under the section `[stances]`, with other rates and no cooldown.
 
 A flat economy: only the capital produces supply. ~~Passively 1 charge per 50 ticks;~~ **[superseded by the decision of 2026-10-14, #253]**: there is no passive production (below). The stance has three positions (25 / 50 / 75% of the CP regen goes into charges at the rate 1 CP → 2 charges). Credited in a quantum: once per 50 ticks 100 hundredths of CP are divided by the stance; the share going to charges accumulates in an accumulator (in hundredths of a charge) and turns into whole charges. At the CP cap the excess CP burns up; the stance's share into charges is always credited. Changing the stance is free, not more often than once per 100 ticks.
 
@@ -1458,6 +1458,49 @@ The owner's decision of 2026-10-28; it confirms what is implemented (no change o
 Alternatives (not chosen):
 - A concave model (cities give a small income with diminishing returns): implemented only if BAL-02 fails.
 - Two independent flat flows (CP and charges) without conversion.
+
+### Stances in economy v2 with local progress (DEC-44, #772) **[accepted]**
+
+The owner's decision of 2026-11-06, after playing `mvp-4-sup200` (#763, the capital makes 1 charge per 20 s): the supply shortage is felt, and players should control the balance of CP against supply. The choice is supply for buildings (barracks 3 charges, factory 4) or CP for expansion and fights. It is an experiment for playtests: the owner doubts Balance is useful (it was unused in the past) and wants to see how much it is used, and how built factories feel independent of stances. `gow-bots stats` measures it (`docs/balance/README.md`).
+
+**Behind a flag.** Everything below applies only under the optional section `[stances]` of a ruleset (economy v2 only; in v1 the section is a load error) and revises DEC-41, item 1 there and nowhere else. `rulesets/mvp-4-stances.toml` is `mvp-4-sup200` plus the section. The default ruleset stays `mvp-4`; without the section `SetStance` gives `FEATURE_DISABLED` as before. An absent section is left out of `ruleset_hash()` and the two new counters are left out of `state_hash()` at 0 (`OPTIONAL` of `gow_sim.ruleset`, `_v2_player_data` of `gow_sim.state`), so the hashes of every existing ruleset, `rulesets/archive/` and the checkpoint hashes of earlier golden games stay valid.
+
+1. **Three stances.** The start stance is `economy.start_stance`, Balance (DEC-09). Rates per stance (`stances.cp_period_ticks`, `stances.capital_period_ticks`):
+
+   | Stance | CP: 1 quantum (`cp.per_period`, 1 CP) per | Own capital: 1 charge per |
+   |---|---|---|
+   | War | 80 ticks | 400 ticks |
+   | Balance | 100 ticks | 200 ticks |
+   | Economy | 200 ticks | 100 ticks |
+
+   Balance equals `mvp-4-sup200`. Under the section `cp.period_ticks`, `factory.capital_period_ticks` and `orders.stance_cooldown_ticks` have no effect; `economy.stance_to_charges_pct` and `economy.charges_per_cp` stay without effect, as in DEC-41, item 1.
+2. **What a stance acts on.** The CP income and the player's own capital, nothing else. Built factories and a captured capital (for the capturer) keep `factory.built_period_ticks` on the global clock (ticks `t > 0` divisible by it): they are independent of stances, of both players'.
+3. **Local progress.** Each player has two counters: CP ticks and capital ticks since the last quantum (`PlayerState.cp_ticks`, `capital_ticks`), 0 at the start. In `economy` of every tick each grows by 1; a counter that reaches the period of the stance in force fires its quantum and restarts at 0. There is no tie to the global clock.
+4. **A stance change.** A real change sets both counters to 0 when the command is applied. Commands go first in a tick, so the tick of the change is the first one counted: after a change at tick `t` the next quantum comes at `t + P - 1`, as if the match had started at tick `t - 1`. A change throws away whatever progress there was, even one tick before a quantum: this, not a cooldown, is what stops switch micro. `SetStance` to the stance in force is rejected with `NO_CHANGE`, as in v1, and changes and resets nothing.
+5. **No cooldown, no price.** `orders.stance_cooldown_ticks` has no effect under the section (`ruleset_public` shows 0), `orders.cost.stance` stays 0.
+6. **A capital that cannot produce.** The capital counter never stops: it keeps counting while the capital is lost or its factory is gone, and a quantum that fires then does nothing (no event, no charge, no debt). An own capital is never cut off: item H2 measures from it, so a held capital always produces. Taken back, the capital goes on with the counter as it stands. The rule is the same for both players and for every reason, and it is what the global clock did: a stopped factory lets its ticks go by. Item 7 keeps the rest.
+7. **Everything else is unchanged.** A full capital spills or burns (DEC-43, item A8), a factory cut off from the capital stops (item H2), the CP cap and `cp_burned` stay. Built factories are built, paid and captured as in DEC-41, item 2.
+8. **Fog.** The enemy's stance, its counters and its production stay hidden (`stance_changed` is an own event). The own counters are in `PlayerView.me` (`cp_ticks`, `capital_ticks`, `null` without the section), so the HUD draws the progress; the client only divides them by the period of `ruleset_public.stances`. `factory_period` of the own capital in the view follows the stance.
+9. **Bots.** No stance policy yet: they stay in Balance (`Bot.allowed`), a real policy goes to #689. The upper bound of the enemy CP counts the shortest CP period, since the enemy may be a human in War.
+
+| # | Situation | Expected |
+|---|---|---|
+| S1 | Balance from the start, 400 ticks | CP at 100, 200, 300, 400; charges of the capital at 200, 400 |
+| S2 | War set at tick 1 | CP at 80, 160, 240, 320, 400; a charge at 400 |
+| S3 | Economy set at tick 1 | CP at 200, 400; charges at 100, 200, 300, 400 |
+| S4 | Balance, War at tick 150 | the counters were 49 and 149; CP at 229, 309; a charge at 549 |
+| S5 | Balance, Economy at tick 200 | the quanta of tick 200 are lost; CP at 399; charges at 299, 399 |
+| S6 | War at 150, Balance at 151 | the progress does not come back: CP at 250, a charge at 350 |
+| S7 | `SetStance(balance)` in Balance at tick 150 | `NO_CHANGE`; counters 50 and 150 stay, a charge at 200 |
+| S8 | a built factory, stance changes at 50, 150, 250 | charges at 200, 400, 600 |
+| S9 | a capital lost, taken back at 290 | nothing at 200, a charge at 400 |
+
+Tests: `packages/sim/tests/test_dec44.py`, `packages/protocol/tests/test_stances.py`, `apps/bots/tests/test_stances.py`.
+
+Alternatives (not chosen):
+- Keep DEC-41, item 1 (`mvp-4`, `mvp-4-sup200` stay as they are for comparison).
+- Stances on the global clock: a change right before a quantum would cheat it, so the switch would be micro.
+- A cooldown on top of the reset: not needed, the reset already costs the progress of both counters.
 
 ---
 
@@ -1851,7 +1894,7 @@ The owner's decision of 2026-10-31, after the mechanics audit (#639, `docs/desig
 
 **Economy**
 
-1. **No stances.** CP income is the same for everyone: the whole quantum (100 hundredths per `cp.period_ticks`; 50 as accepted, **100 in `mvp-3` since the owner decision 2026-11-01, #659**) goes to CP (+67% against War, +100% against Balance of v1). Charges no longer come from CP. `SetStance`, `economy.stance_to_charges_pct`, `charges_per_cp`, `start_stance`, `orders.stance_cooldown_ticks` have no effect in v2 (`SetStance` gives `FEATURE_DISABLED`). The CP cap stays 5 CP (`cp.cap`), re-checked after the tournament.
+1. **No stances.** **[revised by DEC-44 under the section `[stances]`, section 6, for `rulesets/mvp-4-stances.toml` only]** CP income is the same for everyone: the whole quantum (100 hundredths per `cp.period_ticks`; 50 as accepted, **100 in `mvp-3` since the owner decision 2026-11-01, #659**) goes to CP (+67% against War, +100% against Balance of v1). Charges no longer come from CP. `SetStance`, `economy.stance_to_charges_pct`, `charges_per_cp`, `start_stance`, `orders.stance_cooldown_ticks` have no effect in v2 (`SetStance` gives `FEATURE_DISABLED`). The CP cap stays 5 CP (`cp.cap`), re-checked after the tournament.
 2. **Factories (F1 to F4).** A factory is a city (not a province) that produces charges **into its own warehouse**. Production is per factory and additive.
    - **The capital is the main factory from the start** with its own fixed rate: `factory.capital_period_ticks = 50` (1 charge per 50 ticks, the order of magnitude of today's Balance output; **100 in `mvp-3` since 2026-11-01, #659**).
    - **Every built factory has a smaller fixed rate:** `factory.built_period_ticks = 100` (1 charge per 100 ticks; **200 in `mvp-3` since 2026-11-01, #659**).
@@ -4255,7 +4298,7 @@ Matches the glossary of `AGENTS.md` (section 15). Changes only together with it.
 | modes | `Mode.ATTACK / DEFENSE` | "Attack", "Defense"; "Building" (`BUILD`) was removed by DEC-16 |
 | construction | ~~`UpgradeRoad(node, edge)`~~ `UpgradeRoad(edge)` | upgrading your own internal road by one level ~~by your own city for charges of its warehouse (DEC-16)~~ for CP, without a city (DEC-28, item 7) |
 | CP | `cp` | command points; flat regeneration, they do not grow with territory; stored in hundredths |
-| stance | `Stance.ECONOMY / BALANCE / WAR` | the share of CP regeneration that goes into charges |
+| stance | `Stance.ECONOMY / BALANCE / WAR` | economy v1: the share of CP regeneration that goes into charges (DEC-02); economy v2 with `[stances]`: the periods of the CP income and of the own capital (DEC-44) |
 | player view | `PlayerView` | the state filtered by fog for a player or a bot |
 | VP | `vp` | victory points for holding cities |
 
@@ -4308,6 +4351,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-41 | #642 | economy v2: factories (capital main, built smaller, both fixed), player-drawn supply lines with reroute, supply as the currency of buildings, no stances, bunker, planned-order accumulation, province warehouse 1, capture costs a charge | section 7 | [accepted] (2026-10-31, the owner; every other default [accepted] as a starting value tuned by playtests); behind `economy.model = "v2"` (`rulesets/mvp-3.toml`), v1 unchanged; supersedes the proposal DEC-39 (#625); simulation implemented: #644 (`SIM_VERSION` 26), #645 (27), #646 (28); protocol (#647), bots (#648), client (#649) await implementation; faster lines (suggested path, auto-extension; owner decision 2026-10-31) #665 (`SIM_VERSION` 30, `PROTOCOL_VERSION` 34); parts [superseded by DEC-42] |
 | DEC-42 | #674 | supply lines from factories only: no relays and no transit, no limit of lines, a factory target is a hub, the auto-extension copies the nearest own line | section 7 | [accepted] (2026-11-01, the owner); economy v2 only; supersedes DEC-41 item 3 (line trees, L4 limit, L5), the #661 relay transit and the #665 auto-extension source; implemented #674 (`SIM_VERSION` 31, `PROTOCOL_VERSION` 35) |
 | DEC-43 | #697 | automatic supply flow towards the front (a field of hops to the leaves, one charge per road downhill per dispatch, the wave, a tired army pulls, a full factory spills), one global leaf shift, fixed warehouses (city 3, capital 6, province 1), road fortifications replace the bunker | section 7 | [accepted] (2026-11-03, the owner, all #697 recommendations; the look #699, #701: Full kit without the band, T1, N4, P2); behind `supply.model = "flow"` (`rulesets/mvp-4.toml`), `mvp-3` unchanged; supersedes DEC-41 items 3, 6, 12, DEC-42 and #665 under flow; item D (fortifications) [accepted] 2026-11-03 (#707: 1.5 CP, 100 ticks, a toll of 1 charge per started 3 units at the border point, the look C7 + K6 + P2); CP surplus options C1..C4 [open]; the ten [reading, to confirm] points [accepted] 2026-11-03; implemented: sim, protocol, bots #704 (`SIM_VERSION` 32, `PROTOCOL_VERSION` 36); fortifications: sim, protocol, bots #707 (`SIM_VERSION` 33, `PROTOCOL_VERSION` 37); item D reading points [accepted] 2026-11-03; item H (pockets from the capital, cut-off factories stop, starvation in factory-less pockets) [accepted] 2026-11-03, sim #719 (`SIM_VERSION` 34); item I (the leaves face the enemy only, the farthest nodes before contact, the leaves even out) [accepted] 2026-11-03 after the first playtest, sim #724 (`SIM_VERSION` 35); item I6 (a tired army ahead of the level pulls, option A) [accepted] 2026-11-03; the two readings of I2 and I3 [accepted] 2026-11-03, two new [reading, to confirm] (I3 an army takes without the gap, I6 the node alone; I3 [accepted] 2026-11-03); item I7 (a pulling army ahead of the level lifts its path, replacing "the node alone") [accepted] 2026-11-03, sim #726 (`SIM_VERSION` 36), three [reading, to confirm] (the path, the lifted nodes pass towards the army only, the nearer army first), all [accepted] 2026-11-03; item J (unpaid buildings paid in charges pull supply like a discharged army, equal footing) [accepted] 2026-11-03, sim #729 (`SIM_VERSION` 37), two [reading, to confirm] (the want of a build node, the pull ends with the payment); item K (level roads feed the nodes that can pass supply on, the saddle) sim #732 (`SIM_VERSION` 38), four [reading, to confirm]; item L (the level passes outward along the capital distance, a leaf is a corridor into an enclave) [accepted] 2026-11-04, sim #735 (`SIM_VERSION` 39), its five readings (one order, the enclave, the corridor does not hand back, pockets keep the gap rule, a city pair ends at 1/2) [accepted] 2026-11-04; the flow stress budget 0.3 ms [accepted] 2026-11-04; item M (the nearest need: every node with room calls the nearest stock behind it, candidate C2 and the supply contract) [accepted] 2026-11-04, sim #738/#740 (`SIM_VERSION` 40), its readings (M2 tiers and holders first, M3 the level answers a holder, M4 the ways, M5 the nearest first, M6 the relay, M8 the spill to the nearest own node with room, M9 `flow_down` as the plan) [accepted] 2026-11-04, the four item K readings [accepted] 2026-11-04 (owner); await: client #705, tournament #706, the fortification client (#707) |
+| DEC-44 | #772 | stances in economy v2 with local progress: rates of the CP income and of the own capital by stance, a change resets both counters, no cooldown; under the optional section `[stances]`, revises DEC-41 item 1 there only | section 6 | [accepted] (2026-11-06); an experiment for playtests, `rulesets/mvp-4-stances.toml` |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in

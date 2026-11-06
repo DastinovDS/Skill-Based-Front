@@ -182,7 +182,7 @@
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
   {#if hints}
-    <KeyHints v2={orders.v2} flow={orders.flow} />
+    <KeyHints v2={orders.v2} flow={orders.flow} stances={orders.stances} />
   {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} />
   <SupplyBanner {orders} names={hud.nodeName} />
@@ -211,6 +211,7 @@
     v2={orders.v2}
     flow={orders.flow}
     fort={orders.hasFort}
+    stances={orders.stances}
     onclose={() => {
       chrome.helpOpen = false;
     }}

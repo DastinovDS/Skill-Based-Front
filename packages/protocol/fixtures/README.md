@@ -30,8 +30,12 @@ If you changed the schema: raise `PROTOCOL_VERSION` (`gow_protocol.messages`), f
 - `server/welcome_v2.json`: the same with `ruleset_public` of `rulesets/mvp-3.toml` (economy v2, DEC-41, #647).
 - `server/welcome_v4.json`: the same with `ruleset_public` of `rulesets/mvp-4.toml` (the supply flow, DEC-43, #704:
   `supply_model: "flow"`, no `bunker`; `fort` with the road fortification numbers of DEC-43, item D, #707).
+- `server/welcome_stances.json`: the same with `ruleset_public` of `rulesets/mvp-4-stances.toml` (the stances of economy v2, DEC-44, #772: `stances` with the
+  table, `orders.stance_cooldown_ticks` 0); every other `welcome` has `stances: null`.
+- `server/snapshot_stances.json`: the view of player 0 on `dec41` under `mvp-4-stances`, tick 130, after `set_stance {economy}` at tick 41 (written by code, like
+  `snapshot_flow.json`): `me` has `stance` economy and the local progress `cp_ticks` 90, `capital_ticks` 90; every other fixture has them `null`.
 - `server/snapshot_flow.json`: the view of player 0 on `dec41` (`packages/sim/tests/maps/dec41.json`) under `mvp-4`, tick 5,
-  after `set_leaf_shift {shift: 1}` (the only fixture written by code, from a real `project()`): the own nodes carry the
+  after `set_leaf_shift {shift: 1}` (written by code, from a real `project()`, like `snapshot_stances.json`): the own nodes carry the
   flow fields of DEC-43, item E (`front_dist`, `flow_down`, `flow_next`, `flow_idle`, `flow_pocket`), `me` the shift
   (`leaf_shift` 1, `leaf_shift_max` 2, `next_dispatch_tick` 10); every other fixture has them `null` (the drawn lines). Every edge of every snapshot carries `forts` (DEC-43, item D8), empty in all of them.
 - `server/snapshot.json`: the view of player 0 on `diamond`, tick 120. Nodes 0 and 1 are own (`exact`), nodes 2 and 3

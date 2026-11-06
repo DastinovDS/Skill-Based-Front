@@ -81,7 +81,8 @@ __all__ = [
 
 V1_ONLY: Final = (SetStance, SetFront, SetRearMin, Transfer, UpgradeRoad)
 """Commands economy v2 rejects with ``FEATURE_DISABLED`` (DEC-41, items 1, 5, 8); so does
-``SetMode(DEFENSE)`` (``Bot.allowed``)."""
+``SetMode(DEFENSE)`` (``Bot.allowed``). ``[stances]`` accepts ``SetStance`` (DEC-44), but the bots
+have no stance policy under it yet (#689): they stay in the start stance, Balance."""
 V2_ONLY: Final = (BuildFactory, BuildBunker, DrawLine, RemoveLine, ReleasePlan)
 """Commands of economy v2 only (DEC-41, item 14)."""
 LINES_ONLY: Final = (DrawLine, RemoveLine, SetAutoLines)

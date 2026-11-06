@@ -39,6 +39,7 @@
   const short = $derived(orders.ui.current.cpShort);
   const factories = $derived(data?.factories ?? null);
   const factoriesFull = $derived(factories !== null && factories.count >= factories.max);
+  const next = $derived(data?.stanceProgress ?? null);
 </script>
 
 <header class="bar">
@@ -78,6 +79,27 @@
         </span>
         {#if full && !short}<span class="max">{t('bar.cpMax')}</span>{/if}
       </div>
+      <!-- Stances of economy v2 (DEC-44): two thin bars, the next CP over the next charge of the
+           capital; the label of each tells which is which, not a colour. -->
+      {#if next !== null}
+        <span
+          class="next"
+          role="img"
+          title={tf('bar.nextTip', { cp: next.cp.seconds, capital: next.capital.seconds })}
+          aria-label={tf('bar.nextLabel', { cp: next.cp.seconds, capital: next.capital.seconds })}
+        >
+          <span class="next-mark" aria-hidden="true">{t('status.cp')}</span>
+          <span class="mini" aria-hidden="true">
+            <span class="mini-fill" style:width="{next.cp.share * 100}%"></span>
+          </span>
+          <svg class="next-dot" viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+            <circle cx="5" cy="5" r="3.6" />
+          </svg>
+          <span class="mini" aria-hidden="true">
+            <span class="mini-fill charge" style:width="{next.capital.share * 100}%"></span>
+          </span>
+        </span>
+      {/if}
       <!-- Economy v2 (DEC-41, item 2; #762): own factories, builds under way counted, of the max. -->
       {#if factories !== null}
         <span
@@ -94,8 +116,8 @@
           <span class="num">{factories.count}/{factories.max}</span>
         </span>
       {/if}
-      <!-- Economy v2 (DEC-41, item 1) has no stances: the chip is gone. -->
-      {#if !orders.v2}
+      <!-- Economy v2 has no stances (DEC-41, item 1) unless the ruleset brings them back (DEC-44). -->
+      {#if orders.stances}
         <button
           type="button"
           class="chip"
@@ -374,6 +396,44 @@
     animation: cp-pulse 0.5s ease-in-out infinite;
   }
 
+  /* The next CP and the next charge of the capital (DEC-44): a label and a thin bar each, in a grid. */
+  .next {
+    flex: none;
+    display: grid;
+    grid-template-columns: auto 44px;
+    align-items: center;
+    justify-items: center;
+    gap: 1px 4px;
+    color: var(--text-dim);
+    font-size: 10px;
+    line-height: 12px;
+  }
+
+  .next-dot {
+    fill: var(--paper);
+  }
+
+  .mini {
+    position: relative;
+    width: 44px;
+    height: 6px;
+    overflow: hidden;
+    border: 1px solid var(--text-dim);
+    border-radius: 3px;
+    background: var(--bg);
+  }
+
+  .mini-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--you);
+    transition: width 120ms linear;
+  }
+
+  .mini-fill.charge {
+    background: var(--paper);
+  }
+
   /* The factory counter: the factory glyph and own/max; at the max a dashed frame (shape, not colour). */
   .factories {
     display: inline-flex;
@@ -399,7 +459,8 @@
     }
 
     .fill,
-    .head {
+    .head,
+    .mini-fill {
       transition: none;
     }
   }

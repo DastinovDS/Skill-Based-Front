@@ -335,6 +335,23 @@ test('shot of the Supply layer with the pointer on a city (flow-hover-capital)',
   await page.screenshot({ path: join(OUT, 'flow-hover-capital-gray.png') });
 });
 
+// Stances of economy v2 (DEC-44, #772), the frozen scene `stances` under the rules of `mvp-4-stances`:
+// `menu-stances.png` and its `-gray` twin, the `Q` menu with the rates and the note on the reset.
+test('shot of the stance menu under economy v2 (Q key)', async ({ page }) => {
+  await page.goto('/?scene=stances&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.keyboard.down('KeyQ');
+  await page.waitForTimeout(80);
+  await page.keyboard.up('KeyQ');
+  await page.mouse.move(1000, 700);
+  await expect(page.locator('[role="menu"]')).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'menu-stances.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'menu-stances-gray.png') });
+});
+
 // The list of the groups of a city (#350): the scene `snapshot_clash` has three own groups in one
 // city; a click on their icon opens one sector per group. `stack.png` and `stack-gray.png`.
 test('shot of the list of the groups of a city (click on the icon of the stack)', async ({

@@ -136,7 +136,10 @@ export interface StanceRate {
   readonly stance: Stance;
   /** CP a minute that stay CP, in hundredths. */
   readonly cpPerMinCenti: number;
-  /** Charges a minute that the stance turns CP into (the capital's own production is extra). */
+  /**
+   * Charges a minute that the stance turns CP into (the capital's own production is extra); under
+   * `stances` (DEC-44) the charges of the own capital, two decimals at most.
+   */
   readonly chargesPerMin: number;
 }
 
@@ -144,11 +147,21 @@ export interface StanceRate {
  * The two numbers of a stance from the public ruleset (not rules, only arithmetic over them):
  * every `cp.period_ticks` the quantum `cp.per_period` is split, `pct` percent (rounded down) into
  * charges at `charges_per_cp`, the rest stays CP. Same arithmetic as `gow_sim.systems.economy`.
- * With `mvp-0`: economy 3 / 18, balance 6 / 12, war 9 / 6.
+ * With `mvp-0`: economy 3 / 18, balance 6 / 12, war 9 / 6. Under `stances` (DEC-44) the periods
+ * of `ruleset_public.stances` give both numbers: with `mvp-4-stances` economy 3 / 6, balance 6 / 3,
+ * war 7.5 / 1.5.
  */
 export function stanceRates(rules: RulesetPublic): StanceRate[] {
-  const { cp, economy, tick_hz } = rules;
+  const { cp, economy, stances, tick_hz } = rules;
   const ticksPerMinute = 60 * tick_hz;
+  if (stances !== null) {
+    return SECTORS.map(({ stance }) => ({
+      stance,
+      cpPerMinCenti: Math.floor((cp.per_period * ticksPerMinute) / stances.cp_period_ticks[stance]),
+      chargesPerMin:
+        Math.floor((100 * ticksPerMinute) / stances.capital_period_ticks[stance]) / 100,
+    }));
+  }
   return SECTORS.map(({ stance }) => {
     const toCharges = Math.floor((cp.per_period * economy.stance_to_charges_pct[stance]) / 100);
     return {

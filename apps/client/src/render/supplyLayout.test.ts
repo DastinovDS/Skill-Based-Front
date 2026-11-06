@@ -45,6 +45,8 @@ const view = (over: Partial<View>): View => ({
     leaf_shift: null,
     leaf_shift_max: null,
     next_dispatch_tick: null,
+    cp_ticks: null,
+    capital_ticks: null,
   },
   vp: [0, 0],
   nodes: [],

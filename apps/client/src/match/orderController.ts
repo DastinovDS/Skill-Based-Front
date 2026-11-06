@@ -309,6 +309,11 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.supply_model === 'flow';
   }
 
+  /** The ruleset has stances: economy v1, or economy v2 with `ruleset_public.stances` (DEC-44). */
+  get stances(): boolean {
+    return !this.v2 || this.#o.rules.stances !== null;
+  }
+
   /** The ruleset has a bunker (`ruleset_public.bunker`); `mvp-4` has none (DEC-43, item D1). */
   get hasBunker(): boolean {
     return this.#o.rules.bunker !== null;
@@ -1128,9 +1133,9 @@ export class OrderController implements MapInteraction {
     return stanceRates(this.#o.rules);
   }
 
-  /** The menu opens only in a match, where a stance can be sent (never under economy v2: no stances). */
+  /** The menu opens only in a match, where a stance can be sent, and only with stances (DEC-41, DEC-44). */
   openRadial(sticky: boolean): boolean {
-    if (this.#o.send === null || this.v2) return false;
+    if (this.#o.send === null || !this.stances) return false;
     this.#closeMenus();
     this.radial.open(sticky);
     return true;
@@ -1473,7 +1478,7 @@ export class OrderController implements MapInteraction {
       if (input.repeat !== true) this.toggleTerrainMode();
       return true;
     }
-    if (input.code === 'KeyQ' && !this.v2) return this.#qDown(input);
+    if (input.code === 'KeyQ' && this.stances) return this.#qDown(input);
     if (this.flow && this.leafShift !== null) {
       // The leaf shift (DEC-43): `-` moves the level one road back from the front (the control
       // reads "−1", "−2"), `=` / `+` moves it forward again.

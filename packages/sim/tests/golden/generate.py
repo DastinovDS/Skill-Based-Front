@@ -90,6 +90,7 @@ class MixBot:
         self.map = mapdef
         self.v2 = rules.v2
         self.flow = rules.flow
+        self.stances = rules.stances is not None
         self.plan_cost = rules.orders.cost.planned_move
         self.base = ExpandBot(mapdef, rules)
         self.forfeit_at = forfeit_at
@@ -137,6 +138,8 @@ class MixBot:
             cmds.append(Move(UNKNOWN_ID, 0))
         if k % 40 == 0:
             cmds.append(SetStance(list(Stance)[k // 40 % len(Stance)]))
+        if self.stances and k % 37 == 0:  # DEC-44: every stance, the schedule above skips Economy
+            cmds.append(SetStance(list(Stance)[k // 37 % len(Stance)]))
         if k % 29 == 0:
             cmds.extend(self._supply(view, k))
         if k % 31 == 0:  # the last unit of the capital's recruit queue comes back (DEC-25)
@@ -324,6 +327,7 @@ GAMES = (
     Game("artery-mvp3", "artery", "mvp-3"),
     Game("web-mvp3", "web", "mvp-3"),
     Game("web-mvp4", "web", "mvp-4"),
+    Game("web-mvp4-stances", "web", "mvp-4-stances"),
 )
 
 
