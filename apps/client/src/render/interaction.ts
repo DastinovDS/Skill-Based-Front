@@ -51,6 +51,21 @@ export interface GhostArrow {
 }
 
 /**
+ * The cue of `X` on the map (#764): what was undone, at its place, for a moment. `group` and `node`
+ * both `null`: there was nothing to undo, a neutral sign at the pointer.
+ */
+export interface UndoMark {
+  /** When it was undone, `performance.now()` ms, for the rollback and the fade. */
+  readonly at: number;
+  /** The own group whose order went; `node` is its node then, if it stands in one. */
+  readonly group: string | null;
+  /** The city that lost its last recruit, or the node of `group`. */
+  readonly node: number | null;
+  /** The nodes the cancelled order still had ahead (`OrderView.path`), rolled back to the group. */
+  readonly path: readonly number[];
+}
+
+/**
  * What a click under the pointer would pick or aim at (#762): the area of a node (`node`) or an own
  * group (`group`), lit lightly. One of the two is set.
  */
@@ -129,6 +144,8 @@ export interface OverlayState {
   readonly fortPick?: FortPick | null;
   /** What a click under the pointer would pick or aim at (#762); `null`: nothing. */
   readonly hover?: HoverMark | null;
+  /** The cues of `X` still on screen (#764), oldest first. */
+  readonly undo?: readonly UndoMark[];
 }
 
 export interface EtaMark {
@@ -153,6 +170,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   eta: null,
   fortPick: null,
   hover: null,
+  undo: [],
 };
 
 export interface MapInteraction {

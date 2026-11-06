@@ -676,6 +676,28 @@ test('shot of the split hint on a target the group is too big for', async ({ pag
   await page.screenshot({ path: join(OUT, 'split-hint-gray.png') });
 });
 
+// The cue of `X` with nothing selected (#764), pinned by `?undo` to a frozen scene (it has no server
+// to accept an undo), `undo-<name>.png` and grey: `move` (the order of a group on a road: the arrow
+// runs back into the group), `recruit` (a city), `empty` (nothing to undo: the sign at the pointer).
+const UNDO_SHOTS = [
+  { name: 'move', param: 'group,9f2c4a7e1b3d5f60,2' },
+  { name: 'recruit', param: 'node,0' },
+  { name: 'empty', param: 'empty' },
+] as const;
+
+for (const shot of UNDO_SHOTS) {
+  test(`shot of the undo cue: ${shot.name}`, async ({ page }) => {
+    await page.goto(`/?scene=snapshot&undo=${shot.param}`);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.mouse.move(640, 400);
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: join(OUT, `undo-${shot.name}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `undo-${shot.name}-gray.png`) });
+  });
+}
+
 // The UX batch of the 2026-11-05 playtest (#762), `ux-<name>.png` and grey:
 // - `hover-city`, `hover-group`: the pointer on the area of an own city, on an own group (scene `snapshot`);
 // - `hover-target`: a group selected, the pointer on the area of an enemy city (the target is lit);

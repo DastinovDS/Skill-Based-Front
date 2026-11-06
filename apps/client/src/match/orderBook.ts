@@ -1,6 +1,7 @@
 import type { AckMsg, Command, EventMsg } from '../protocol.gen.ts';
 import type { GhostArrow } from '../render/interaction.ts';
 import { ghostRejectMs } from '../render/intentLayout.ts';
+import { UndoList } from './undoList.ts';
 
 /** An order the player sent that no snapshot shows yet. */
 export interface GhostOrder extends GhostArrow {
@@ -43,6 +44,9 @@ interface Pending {
 export class OrderBook {
   readonly #now: () => number;
 
+  /** What `X` can undo (#764): lives as long as the match, whoever draws the orders. */
+  readonly undo = new UndoList();
+
   /** Called for every answered command; the match UI turns it into a message. */
   onResult: ((result: CommandResult) => void) | null = null;
 
@@ -72,6 +76,14 @@ export class OrderBook {
       g.rejectedAt === null || now - g.rejectedAt < ghostRejectMs(g.rejectCode ?? null);
     if (!this.#ghosts.every(live)) this.#setGhosts(this.#ghosts.filter(live));
     return this.#ghosts;
+  }
+
+  /** A move or a recruit is sent and not answered yet: it may become the newest thing to undo. */
+  get undoAwaited(): boolean {
+    for (const { cmd } of this.#pending.values()) {
+      if (cmd.type === 'move' || cmd.type === 'recruit') return true;
+    }
+    return false;
   }
 
   /**
@@ -162,6 +174,7 @@ export class OrderBook {
     this.#pending.clear();
     this.#splits.clear();
     this.#accepted.clear();
+    this.undo.clear();
     this.#setGhosts([]);
   }
 

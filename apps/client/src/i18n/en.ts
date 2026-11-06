@@ -557,7 +557,8 @@ export const en = {
   'help.key.select': 'pick a group or a city, give an order',
   'help.key.planned': 'planned order',
   'help.key.mode': 'group mode: attack, defense',
-  'help.key.cancel': 'cancel the order of the group, or the last recruit of the selected city',
+  'help.key.cancel':
+    'cancel the order of the group or the last recruit of the city; nothing selected: undo your last action, step by step',
   'help.key.recruit': 'queue a unit in the city',
   'terrain.banner': 'Terrain map mode [T]',
   'terrain.hint':

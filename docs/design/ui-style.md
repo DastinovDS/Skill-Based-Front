@@ -2131,3 +2131,13 @@ Small fixes from the `mvp-4` playtest of 2026-11-05, straight into code (no mock
 - **City menu.** By the rule of the menu (a sector with nothing to do is not drawn), "Factory" is not drawn at the factory max (the counter says why) and "Fortify road" not in a node whose every road has its line, built or being built; an empty menu draws nothing. Hiding was chosen over a dimmed sector with a reason: a sector carries no reason text (`CityRadial.svelte`) and both states have a visible reason elsewhere (the counter, the lines on the map).
 - **CP shortage.** While the CP do not pay for the move to the hovered target (the price of `ruleset_public.cost`), and for 1.6 s after a move was refused with `NOT_ENOUGH_CP`, the CP track and number turn `--enemy` red, a solid ring pulses round the track and the alert icon stands before the number. The refused arrow of such a move is the cut-off arrow (`GHOST_CP`): bolder, red, crossed out on the middle of its last road with a white cross on a dark halo, held for 1.1 s and faded over 0.5 s (other refusals keep the 0.5 s shake and fade).
 - **Plan bonus.** The plan bar always names the stepper ("Bonus") and its cap ("max N": the charged units of the selected group, at most 9, DEC-41, item 10); while a planned order is being made (Shift or the switch) the pill gets a thick own-colour frame, a bigger value and the words "Planned order: pick the bonus".
+
+## 44. The cue of undo (#764)
+
+`X` with nothing selected takes back the last move, planned order or recruit, one step per press. A small change of look, straight into code; no mockup. What went shows on the map at its place, never in a toast, because a group turned back that fails to retake its node dies (DEC-24, item G3) and a few presses of `X` can walk into that.
+
+- **The place.** A dashed ring closes in on the group (or on the city that lost its recruit) over 0.45 s, and a round-arrow sign on a dark disc stands at its upper right corner; the cue lasts 1.1 s and fades over its last 40%.
+- **The rollback.** The dashed arrow of the cancelled order, from the group along the nodes it still had ahead (`OrderView.path`), runs back into the group over the same 0.45 s.
+- **Nothing to undo.** The same sign, dimmer and crossed out, beside the pointer (the middle of the canvas when the pointer is off it): no toast, no sound, nothing sent.
+- **Not by color alone.** All of it is paper with a dark casing: the dashes, the ring and the sign tell it, and it reads the same in grey scale (`undo-*-gray.png`). With "less motion" nothing runs: the arrow and the ring stand still and only fade.
+- **Not on the Supply layer.** It shows no groups, so the cue would have nothing to mark: `X` with nothing selected does nothing there.

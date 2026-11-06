@@ -19,6 +19,7 @@ import { MapView } from './mapView.ts';
 import { NameView } from './nameView.ts';
 import { EMPTY_OVERLAY, type MapInteraction, type PickHit } from './interaction.ts';
 import { OverlayView } from './overlayView.ts';
+import { UndoView } from './undoView.ts';
 import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
@@ -105,6 +106,7 @@ export class MapScene {
   private readonly effects: EffectsView;
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
+  private readonly undo: UndoView;
   private readonly supply: SupplyView;
   private readonly flow: FlowView;
   /** The road fortifications (DEC-43, item D; #707). */
@@ -117,6 +119,8 @@ export class MapScene {
   private readonly alerts: AlertView;
   private interaction: MapInteraction | null;
   private hovering = false;
+  /** Where the pointer rests on the canvas, CSS px; `null`: off it. */
+  private pointer: Point | null = null;
   private readonly controller: CameraController;
   private source: RenderSource | null;
   private base: unknown = null;
@@ -182,6 +186,7 @@ export class MapScene {
       radiusOf,
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
+    this.undo = new UndoView(map, this.layers, radiusOf);
     this.supply = new SupplyView(map, this.layers, me, radiusOf, this.sprites);
     this.flow = new FlowView(map, this.layers, me, radiusOf, this.sprites);
     this.sight = new SightView(map, this.layers, me, radiusOf);
@@ -267,6 +272,7 @@ export class MapScene {
     this.intents.destroy();
     this.entities.destroy();
     this.overlay.destroy();
+    this.undo.destroy();
     this.supply.destroy();
     this.flow.destroy();
     this.forts.destroy();
@@ -399,6 +405,12 @@ export class MapScene {
     this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
+    this.undo.update(
+      overlay.undo ?? [],
+      (id) => this.entities.groupPoints().get(id),
+      this.pointerOnMap(),
+      Math.max(1, 1 / this.layers.world.scale.x),
+    );
     this.supply.setTickHz(tickHz);
     this.supply.setProvinceWarehouse(this.source.provinceWarehouse ?? 0);
     this.supply.update(frame, overlay.supply);
@@ -464,7 +476,18 @@ export class MapScene {
     this.interaction?.click(this.hitAt(at), shift);
   };
 
+  /** The pointer in world units; off the canvas: the middle of the canvas. */
+  private pointerOnMap(): Point {
+    const world = this.layers.world;
+    const at = this.pointer ?? { x: this.app.screen.width / 2, y: this.app.screen.height / 2 };
+    return {
+      x: (at.x - world.position.x) / world.scale.x,
+      y: (at.y - world.position.y) / world.scale.y,
+    };
+  }
+
   private readonly onHover = (at: Point | null): void => {
+    this.pointer = at;
     const hit = at === null ? null : this.hitAt(at);
     // The pointer cursor (CSSOM, allowed by the CSP) tells that a click does something here.
     const pointer = hit !== null && this.interaction !== null;

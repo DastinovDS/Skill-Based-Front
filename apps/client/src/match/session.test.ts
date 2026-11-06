@@ -211,6 +211,35 @@ describe('MatchSession', () => {
     expect(session.orders.ghosts().map((g) => g.status)).toEqual(['rejected']);
   });
 
+  it('empties the list of what X undoes on a reconnect and at the end of the match (#764)', () => {
+    const { session, socket, server } = setup();
+    const accept = (): void => {
+      session.orders.undo.onAccepted({ type: 'recruit', node: 1 });
+    };
+    accept();
+    expect(session.orders.undo.size).toBe(1);
+    socket.drop();
+    vi.advanceTimersByTime(1000);
+    const again = server.last();
+    again.accept();
+    again.reply(welcome);
+    expect(session.orders.undo.size).toBe(0);
+    accept();
+    again.reply({
+      type: 'match_end',
+      tick: 100,
+      reason: 'timer',
+      winner: 0,
+      vp: [1, 0],
+      rating: null,
+      rated: false,
+      unrated_reason: 'casual',
+      stats: null,
+      calibration: null,
+    });
+    expect(session.orders.undo.size).toBe(0);
+  });
+
   it('routes a group_split event to the order book: the new group of a split that was sent (#315)', () => {
     const { session, socket } = setup();
     const splits: string[][] = [];
