@@ -437,7 +437,7 @@ async def confirm_match(
     if proposal is not None:
         catalog: MapCatalog = request.app.state.maps
         rules: Ruleset = request.app.state.ruleset
-        pool = catalog.all()
+        pool = catalog.pool()
         if not pool:
             queue.cancel(proposal, "no_maps")
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="no maps")

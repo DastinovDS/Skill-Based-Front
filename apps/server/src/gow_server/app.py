@@ -131,7 +131,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         )
         log.info(
             "server started",
-            extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.all()]},
+            extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.pool()]},
         )
         try:
             yield

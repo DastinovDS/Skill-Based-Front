@@ -2,6 +2,7 @@
 
 import asyncio
 import itertools
+import json
 import math
 import shutil
 from collections.abc import AsyncGenerator, Callable
@@ -772,6 +773,76 @@ def test_unrated_matches_do_not_touch_ratings(live_settings: Settings) -> None:
                 assert session.execute(select(Rating)).first() is None
                 # even a match flagged as rated is not rated without a result or with a bot
                 assert apply_match(session, int(match_id)) is False
+
+    asyncio.run(scenario())
+
+
+def test_a_generated_map_is_never_rated(live_settings: Settings) -> None:
+    """DEC-27, item 8: whatever the caller passes. Only the queue passes ``rated``, and the queue
+    takes pool maps, so this is the net under that rule, with two calibrated accounts."""
+    mapdef = load_map(ROOT / "maps" / "gen" / "gen1-17.json")
+
+    async def scenario() -> None:
+        async with live_server(live_settings) as live:
+            _, alice = await live.member("alice")
+            _, bob = await live.member("bob")
+            runner = await live.lifecycle.start(
+                live.lifecycle.open_record(),
+                mapdef.meta.name,
+                mapdef,
+                load_ruleset(live_settings.ruleset_path),
+                (alice, bob),
+                private=False,
+                rated=True,
+            )
+            assert runner.rating_plan is None
+            assert runner.submit(0, 1, ForfeitCmd())
+            await live.run_until(lambda: live.row(runner.match_id)[0].status == "saved")
+            row, sides = live.row(runner.match_id)
+            assert not row.rated and not row.rating_applied
+            assert [s.rating_mode for s in sides] == ["none", "none"]
+            assert [s.rating_after for s in sides] == [None, None]
+            with live.sessions() as session:
+                ratings = session.execute(select(Rating)).scalars().all()
+                assert [r.rated_matches for r in ratings] == [5, 5]
+
+    asyncio.run(scenario())
+
+
+def test_an_invite_match_on_a_generated_map_is_unrated_and_has_a_replay(
+    live_settings: Settings,
+) -> None:
+    shutil.copytree(
+        ROOT / "maps" / "gen",
+        live_settings.maps_dir / "gen",
+        ignore=shutil.ignore_patterns("src", "geo", "*.png"),
+    )
+
+    async def scenario() -> None:
+        async with live_server(live_settings) as live:
+            alice, _ = await live.member("alice")
+            bob, _ = await live.member("bob")
+            created = await live.http.post(
+                "/api/matches", json={"map_id": "gen1-17"}, headers=alice
+            )
+            code = created.json()["code"]
+            await live.invite_post(bob, code, "join")
+            await live.invite_post(alice, code, "ready")
+            match_id = (await live.invite_post(bob, code, "ready")).json()["match_id"]
+            runner = live.lifecycle.manager.get(match_id)
+            assert runner is not None and runner.rating_plan is None and runner.private
+            await live.run_until(lambda: runner.match.tick >= 20)
+            assert runner.submit(0, 1, ForfeitCmd())
+            await live.run_until(lambda: live.row(match_id)[0].status == "saved")
+            row, _ = live.row(match_id)
+            assert (row.map_id, row.rated, row.rating_applied) == ("gen1-17", False, False)
+            # The server re-simulated the log on the map from ``maps/gen/`` into the frames file.
+            await live.run_until(lambda: live.row(match_id)[0].replay_path is not None)
+            got = await live.http.get(f"/api/replays/{match_id}", headers=alice)
+            assert got.status_code == 200
+            doc = json.loads(got.content)
+            assert doc["map"]["meta"]["name"] == "gen1-17"
+            assert doc["frames"][-1]["t"] == row.ticks
 
     asyncio.run(scenario())
 

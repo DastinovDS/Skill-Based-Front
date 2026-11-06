@@ -65,7 +65,7 @@ from gow_sim.commands import (
     UpgradeRoad,
     UpgradeWarehouse,
 )
-from gow_sim.maps import MapDef, MapFormatError, load_map, map_hash
+from gow_sim.maps import GENERATED_SUBDIR, MapDef, MapFormatError, load_map, map_hash
 from gow_sim.match import (
     HEADLESS_MATCH_KEY,
     SIM_VERSION,
@@ -556,7 +556,7 @@ def replay_run(
     replay = _read_current(path)
     header = replay.header
     rules = _find_ruleset(header.ruleset_hash, Path(rulesets_dir))
-    mapdef = _find_map(header, [path.parent / "maps", Path(maps_dir)])
+    mapdef = _find_map(header, _map_dirs(path, maps_dir))
     try:
         match = Match(mapdef, rules, header.match_key)
     except ValueError as exc:
@@ -602,7 +602,7 @@ def replay_match(
     replay = _read_current(path)
     header = replay.header
     rules = _find_ruleset(header.ruleset_hash, Path(rulesets_dir))
-    mapdef = _find_map(header, [path.parent / "maps", Path(maps_dir)])
+    mapdef = _find_map(header, _map_dirs(path, maps_dir))
     try:
         match = Match(mapdef, rules, header.match_key)
     except ValueError as exc:
@@ -651,6 +651,11 @@ def _find_ruleset(rules_hash: str, rulesets_dir: Path) -> Ruleset:
     if ruleset_hash(rules) != rules_hash:
         raise ReplayError(f"{file}: archived ruleset does not match its hash")
     return rules
+
+
+def _map_dirs(path: Path, maps_dir: str | Path) -> list[Path]:
+    """Where the map of a replay can lie: next to the log, in the pool, among the generated maps."""
+    return [path.parent / "maps", Path(maps_dir), Path(maps_dir) / GENERATED_SUBDIR]
 
 
 def _find_map(header: ReplayHeader, dirs: list[Path]) -> MapDef:

@@ -16,6 +16,34 @@ test('a match against a bot starts and ends with a forfeit', async ({ browser, b
   await player.close();
 });
 
+test('a bot match on a generated map names the map on the result screen', async ({
+  browser,
+  baseURL,
+}) => {
+  const player = await Player.create(browser, baseURL ?? '', nick('gen'));
+  await player.enter();
+  await player.page.getByRole('button', { name: 'Play a bot' }).click();
+  await expect(player.page.getByText('Generated, unrated')).toBeVisible();
+  await player.page.getByRole('radio', { name: /^gen1-17/ }).click();
+  await player.page.getByRole('button', { name: 'Start' }).click();
+  await player.expectPlaying();
+
+  await player.forfeit();
+  await expect(player.page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
+  await expect(player.page.getByText('Map: gen1-17')).toBeVisible();
+  await player.close();
+});
+
+test('the public lobby offers no generated map', async ({ browser, baseURL }) => {
+  const player = await Player.create(browser, baseURL ?? '', nick('pub'));
+  await player.enter();
+  await player.page.getByRole('button', { name: 'Open matches' }).click();
+  await player.page.getByRole('button', { name: 'Create an open match' }).first().click();
+  await expect(player.page.getByRole('radio', { name: /^ridge/ })).toBeVisible();
+  await expect(player.page.getByText('Generated, unrated')).toHaveCount(0);
+  await player.close();
+});
+
 test('the production build renders, the legal pages open', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

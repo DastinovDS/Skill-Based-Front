@@ -182,9 +182,22 @@ terrain mode draw the water flat (the part of the map no area covers). A map wit
 | validator | `symmetry`, `border` | with `"none"`: skipped; `symmetry` only requires the identity table, the new check `fairness` takes their place. All the other checks stay |
 | `gow-maps` | | `generate --seed N` (`mise run maps:generate <seed>`), `score <files>` |
 
-**No rule, no version.** A map enters a match as data, never as a seed: no `SIM_VERSION`, no `PROTOCOL_VERSION`, the
-loader only learns one more value. The client type `MapFile` keeps `"rot180"`: no generated map reaches a client in stage 1,
-and it is the one protocol change stage 2 needs (`Literal["rot180", "none"]`, `PROTOCOL_VERSION`++, regenerated types).
+**No rule.** A map enters a match as data, never as a seed: no `SIM_VERSION`, the loader only learns one more value. The
+client type `MapFile` takes it too (`Literal["rot180", "none"]`, `PROTOCOL_VERSION` 39): the client reads no `symmetry` and no
+`mirror`, nothing in it depends on them.
+
+### Playing a generated map
+
+The owner's decision of 2026-11-06: the batch is playable, so that he can judge it by hand. Still no generation per match.
+
+| Where | What |
+|---|---|
+| `gow_server.maps` | `MapCatalog.load` reads `maps/*.json` into the pool and `maps/gen/*.json` into the generated group; `pool()` and `generated()` are separate, `get(id)` finds both; one id in both groups stops the server |
+| `GET /api/maps` | the pool first, then the generated maps, each with the flag `generated`; `GET /api/maps/{id}` and the background serve both |
+| who can play | only by an explicit choice: `map_id`, or `random_generated: true` (a draw from the group), in `POST /api/matches` and `POST /api/bot-matches`. A random pick without them, and the queue, draw from the pool. `public: true` with a generated map is `422` |
+| rating | none: only the queue passes `rated`, and `MatchLifecycle.start` ignores it for `meta.symmetry = "none"` as well |
+| replays | `gow_sim.replay` looks for the map of a log in the map folder and in its `gen/` |
+| client | the group "Generated, unrated" in the map tiles of the invite and bot screens, not of the public lobby; the vector files `maps/gen/geo/<id>.json` are bundled like `maps/geo/` (`geography.ts`, `deploy/caddy.Dockerfile`); the result screen names the map |
 
 ### Fairness
 
@@ -475,8 +488,8 @@ and its character are described in [`maps/README.md`](../../maps/README.md).
 
 ## The map pool on the server
 
-At start the server (`gow_server.maps`, SRV-01) loads all `maps/*.json` (without subdirectories:
-`maps/src/` holds the halves, `maps/fixtures/` the MVP maps, `maps/menu/` the menu map and `maps/gen/` the generated maps, which the server does not serve) through `load_map`. The file name must match `meta.name`:
+At start the server (`gow_server.maps`, SRV-01) loads all `maps/*.json` into the pool and all `maps/gen/*.json` into the
+generated group (no other subdirectories: `maps/src/` holds the halves, `maps/fixtures/` the MVP maps, `maps/menu/` the menu map) through `load_map`. The file name must match `meta.name`:
 `maps/<id>.json`. A broken map or a name mismatch stops the server from starting.
 
 The map background (MAP-05) lies next to it: `maps/<id>.bg.webp`. It is optional; the PNG previews from MAP-04 (other

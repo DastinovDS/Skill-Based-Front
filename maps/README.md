@@ -201,8 +201,12 @@ Character: a short map, the capital is reachable in the mid-game. Not tuned for 
 
 A batch of maps from the generator (#771, `docs/design/map-format.md`, "Format changes under #771"): each has its own geography
 over the whole area, not a reflection of one half, and `meta.symmetry = "none"`. Fairness comes from the check `fairness`, equal
-access of the two capitals, approximately, so these maps are for a separate unrated mode: the server does not load `gen/`, so
-they are outside the pool, the queue and the default tournaments. The owner chooses from this batch by looking.
+access of the two capitals, approximately, so these maps are a separate unrated offer. The owner judges this batch by playing it.
+
+The server loads `gen/` as a group of its own (`MapCatalog.generated`, `GET /api/maps` flags each with `generated`). A map of it is
+played only by an explicit choice in a match by invite link or against a bot: the tile of the map, or "Random map" of the group
+(`random_generated` in the request). It never enters the queue, a random pick without a map, the public lobby (`422`), the rating
+or the default tournaments (`maps/*.json`). The replay of such a match finds its map in `gen/` too.
 
 ```bash
 mise run maps:generate 37       # maps/gen/gen1-37.json, src/, geo/, the background and the preview, validated

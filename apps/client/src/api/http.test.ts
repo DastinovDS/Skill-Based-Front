@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Api, ApiError, parseRetryAfter } from './http.ts';
+import { Api, ApiError, parseRetryAfter, RANDOM_GENERATED } from './http.ts';
 import { forgetGuest, GUEST_STORAGE_KEY, loadGuest, saveGuest } from './guestStore.ts';
 
 function respond(status: number, body: unknown = {}): typeof fetch {
@@ -42,8 +42,13 @@ describe('Api', () => {
     const api = new Api(fetchFn);
     await api.createBotMatch('t', 'hard', null);
     await api.createBotMatch('t', 'easy', 'pass');
+    await api.createBotMatch('t', 'easy', RANDOM_GENERATED);
     const bodies = vi.mocked(fetchFn).mock.calls.map(([, init]) => init?.body);
-    expect(bodies).toEqual(['{"level":"hard"}', '{"level":"easy","map_id":"pass"}']);
+    expect(bodies).toEqual([
+      '{"level":"hard"}',
+      '{"level":"easy","map_id":"pass"}',
+      '{"level":"easy","random_generated":true}',
+    ]);
   });
 
   it.each([

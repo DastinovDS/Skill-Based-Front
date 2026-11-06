@@ -37,6 +37,9 @@ NAME_MAX_LEN: Final = 24
 """Longest node name (DEC-23, item 4); the validator checks it (``names``), not the loader."""
 
 SYMMETRIES: Final = ("rot180", "none")
+
+GENERATED_SUBDIR: Final = "gen"
+"""The generated maps (#771) lie in this subfolder of the map folder, outside the pool."""
 """``rot180``: the players swap places by the ``mirror`` table. ``none``: a generated map (#771),
 the ``mirror`` table is the identity and the validator asks for equal access instead."""
 

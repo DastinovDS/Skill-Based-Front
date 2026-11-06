@@ -494,11 +494,21 @@ export interface components {
       level: 'easy' | 'normal' | 'hard' | 'expert';
       /** Map Id */
       map_id?: string | null;
+      /**
+       * Random Generated
+       * @default false
+       */
+      random_generated: boolean;
     };
     /** CreateMatch */
     CreateMatch: {
       /** Map Id */
       map_id?: string | null;
+      /**
+       * Random Generated
+       * @default false
+       */
+      random_generated: boolean;
       /**
        * Public
        * @default false
@@ -606,6 +616,8 @@ export interface components {
       height: number;
       /** Background Url */
       background_url: string | null;
+      /** Generated */
+      generated: boolean;
     };
     /** MatchEntry */
     MatchEntry: {

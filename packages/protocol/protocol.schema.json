@@ -1855,7 +1855,11 @@
           "type": "integer"
         },
         "symmetry": {
-          "const": "rot180",
+          "description": "``none``: a generated map (#771), its ``mirror`` table is the identity.",
+          "enum": [
+            "rot180",
+            "none"
+          ],
           "type": "string"
         },
         "width": {

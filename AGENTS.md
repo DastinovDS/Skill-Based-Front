@@ -47,7 +47,7 @@ apps/bots/           gow_bots      bots (gow_bots.bots) and the tournament harne
 apps/client/                       TypeScript + Vite + Svelte 5 + PixiJS 8
 e2e/                               Playwright E2E against the real stack (its own package, compose.e2e.yaml)
 tools/maps/          gow_maps      validator, mirroring script, generator, previews and backgrounds of maps (offline)
-maps/                              map pool of the server (JSON, previews, backgrounds); `maps/fixtures/`: MVP maps, test fixtures outside the pool; `maps/menu/`: the map behind the start menu, outside the pool; `maps/gen/`: generated maps, outside the pool
+maps/                              map pool of the server (JSON, previews, backgrounds); `maps/fixtures/`: MVP maps, test fixtures outside the pool; `maps/menu/`: the map behind the start menu, outside the pool; `maps/gen/`: generated maps, outside the pool, played only by an explicit choice (section 5.4)
 rulesets/                          rulesets (*.toml) and the archive of played ones by hash
 docs/design/                       mechanics.md, map format, archive
 docs/adr/  docs/balance/  docs/qa/ decisions, balance reports, checklists
@@ -342,6 +342,7 @@ async def run(self) -> None:
 - A player has at most one active match (`MatchLifecycle.claim`, 409): from the moment of pairing (a guest joining, a bot match) until the match ends. The queue (MM-01) occupies the player the same way.
 - Caps (#412): `GOW_MAX_MATCHES` running matches in all and the lower `GOW_MAX_BOT_MATCHES` against a bot; past them starting a match is `503` (`ServerFullError`, a metric and an alert). A bot match nobody connects to within `GOW_BOT_CONNECT_TIMEOUT_S` is dropped as never started: no replay, saved `aborted` with `end_reason = never_started`.
 - The server's ruleset is archived in `GOW_RULESETS_DIR/<hash>.toml` on start; `test-short` is not started when `GOW_ENV=prod`.
+- Maps (`gow_server.maps`, #771): `MapCatalog.pool()` is what the queue plays and every random pick draws from; `MapCatalog.generated()` (`maps/gen/`) is played only by an explicit choice (`map_id` or `random_generated`) in an invite by link or a bot match, a public match on one is `422`, and `MatchLifecycle.start` never rates a map with `meta.symmetry = "none"`.
 
 ### 5.5 Security
 

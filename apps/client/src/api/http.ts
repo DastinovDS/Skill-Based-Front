@@ -13,6 +13,15 @@ export type BotMatch = Schemas['BotMatchOut'];
 export type LobbyEntry = Schemas['LobbyEntry'];
 export type QueueStatus = Schemas['QueueStatus'];
 export type MapSummary = Schemas['MapSummary'];
+
+/** The map choice of a match besides a map id and `null` (a random pool map): the server draws
+ * from the generated maps (#771). No map id has this shape. */
+export const RANDOM_GENERATED = '?generated';
+
+function mapChoice(mapId: string | null): { map_id?: string; random_generated?: boolean } {
+  if (mapId === null) return {};
+  return mapId === RANDOM_GENERATED ? { random_generated: true } : { map_id: mapId };
+}
 export type Leaderboard = Schemas['Leaderboard'];
 export type LeaderboardEntry = Schemas['LeaderboardEntry'];
 export type PlayerProfile = Schemas['PlayerProfile'];
@@ -191,7 +200,7 @@ export class Api {
 
   createInvite(token: string, mapId: string | null, isPublic = false): Promise<Invite> {
     return this.#request('POST', '/api/matches', token, {
-      ...(mapId === null ? {} : { map_id: mapId }),
+      ...mapChoice(mapId),
       ...(isPublic ? { public: true } : {}),
     });
   }
@@ -248,7 +257,7 @@ export class Api {
   createBotMatch(token: string, level: BotLevel, mapId: string | null): Promise<BotMatch> {
     return this.#request('POST', '/api/bot-matches', token, {
       level,
-      ...(mapId === null ? {} : { map_id: mapId }),
+      ...mapChoice(mapId),
     });
   }
 

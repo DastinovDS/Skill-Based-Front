@@ -329,6 +329,16 @@
   margin-top: 8px;
 }
 
+/* The generated maps are many: narrower tiles, as tall as it takes to show a whole map, whose
+   capitals can stand at any edge. */
+.front .panel .tiles.gen {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.front .panel .tiles.gen .tile .thumb {
+  height: 72px;
+}
+
 .front .panel .tile {
   display: flex;
   flex-direction: column;

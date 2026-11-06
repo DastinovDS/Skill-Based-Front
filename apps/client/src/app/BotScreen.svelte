@@ -57,7 +57,7 @@
         level = next;
       }}
     />
-    <MapTiles maps={dock.maps} bind:value={mapId} />
+    <MapTiles maps={dock.maps} bind:value={mapId} generated />
   {/if}
   {#snippet actions()}
     {#if !busy}

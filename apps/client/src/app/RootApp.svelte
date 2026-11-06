@@ -295,7 +295,7 @@
         matchId={screen.matchId}
         mapId={screen.mapId}
         onend={(me: PlayerId, end: MatchEndMsg, summary: MatchSummary | null) => {
-          app.finishMatch(screen.matchId, me, end, summary);
+          app.finishMatch(screen.matchId, screen.mapId, me, end, summary);
         }}
         onexit={() => {
           app.menu();
@@ -309,6 +309,7 @@
     end={screen.end}
     summary={screen.summary}
     map={app.backdrop}
+    mapId={screen.mapId}
     onreplay={() => {
       app.openReplay(screen.matchId, screen.me);
     }}

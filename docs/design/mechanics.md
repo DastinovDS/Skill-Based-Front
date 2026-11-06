@@ -3373,8 +3373,9 @@ accepted and implemented (#266, closed 2026-10-22; validator and script #366, DE
    without a rule change: such a map has `meta.symmetry = "none"` and an identity `mirror` table, so `node_key` is the node
    id for both players (a tie-break inside one player, as before, and the ids of a generated map follow no direction of the
    map), and the fairness test is the validator check `fairness` (equal access, approximate equality accepted; start
-   forces stay exactly equal, the bots rely on it). No `SIM_VERSION`, no `PROTOCOL_VERSION`: a map is data. Format, metrics
-   and thresholds: `docs/design/map-format.md`, section "Format changes under #771".
+   forces stay exactly equal, the bots rely on it). No `SIM_VERSION`: a map is data. They are played only by an explicit
+   choice in a match by invite link or against a bot, and never rated. Format, metrics and thresholds:
+   `docs/design/map-format.md`, section "Format changes under #771".
 9. **The Windows and Mac discrepancy: found (#269).** The owner saw water on the background only on Windows,
    on Mac it was not there. The cause: the `caddy` image built the client, copying into the context only
    `maps/*.json`, without `maps/*.bg.png` (`deploy/caddy.Dockerfile`; since #344 the backgrounds are `maps/*.bg.webp`); the client takes the backgrounds from
