@@ -16,11 +16,13 @@
     summary?: MatchSummary | null;
     /** The map drawn behind the screen (null: the plain dark page). */
     map?: MapFile | null;
+    /** The map of the match, its code for the player to name it (#771). */
+    mapId?: string | null;
     onreplay: () => void;
     onmenu: () => void;
   }
 
-  let { me, end, summary = null, map = null, onreplay, onmenu }: Props = $props();
+  let { me, end, summary = null, map = null, mapId = null, onreplay, onmenu }: Props = $props();
 
   type Outcome = 'win' | 'lose' | 'draw';
   const outcome = $derived<Outcome>(
@@ -112,6 +114,9 @@
     {t(VERDICTS[outcome])}
   </h2>
   <p class="sub reason">{reason}</p>
+  {#if mapId !== null}
+    <p class="mapcode">{tf('result.map', { map: mapId })}</p>
+  {/if}
 
   <div
     class="score"
@@ -226,6 +231,11 @@
     margin: 0;
     font-size: 16px;
     color: var(--text);
+  }
+  .mapcode {
+    margin: 4px 0 0;
+    font-size: 14px;
+    color: var(--text-dim);
   }
 
   .score {

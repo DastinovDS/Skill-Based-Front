@@ -30,3 +30,30 @@ max_nodes = 55
 # DEC-36, check geography (only for a map with an authored geography maps/src/<id>.geo.json): every node is at
 # least water_clearance world units from a water cell (a sea or a lake), so a city never stands on a shore.
 water_clearance = 60
+
+# Fairness (#771): what stands in for the mirror on a map with meta.symmetry = "none". Metrics: gow_maps.fairness,
+# docs/design/map-format.md, section "Fairness". The pool maps are mirrored, so they score 0 on every gap: the gaps below are
+# the owner's "approximate equality" for an unrated mode, sized against what a pool map holds.
+contested_ticks = 60
+max_city_gap = 2
+max_province_gap = 3
+max_vp_gap = 2
+max_front_gap_pct = 15
+max_front_terrain_gap_pct = 20
+max_approach_gap = 1
+min_approaches = 3
+max_charge_gap_pct = 15
+warehouse_capital = 6
+warehouse_city = 3
+warehouse_province = 1
+speed_plains_pct = 125
+speed_forest_pct = 100
+speed_mountains_pct = 70
+min_mirror_shift_pct = 30
+max_mirror_roads_pct = 55
+max_mirror_profile_pct = 70
+max_dead_end_nodes = 0
+max_lane = 2
+min_capital_depth = 4
+max_cut_nodes = 0
+max_choke_pct = 30

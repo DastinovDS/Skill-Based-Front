@@ -45,6 +45,17 @@ describe('ResultScreen', () => {
     return document.body.textContent;
   }
 
+  it('names the map of the match by its code', () => {
+    expect(render(0, end(0))).not.toContain('gen1-17');
+    void unmount(component ?? {});
+    component = mount(ResultScreen, {
+      target: document.body,
+      props: { me: 0, end: end(0), mapId: 'gen1-17', onreplay: vi.fn(), onmenu: vi.fn() },
+    });
+    flushSync();
+    expect(document.body.textContent).toContain('gen1-17');
+  });
+
   it('says who won from the side we played', () => {
     expect(render(1, end(1))).toContain(translate('en', 'result.victory'));
   });

@@ -3308,7 +3308,7 @@ Alternatives (not chosen):
 - The border point always in the middle (no field): a "long approach" to a mountain fortress is impossible.
 - Names by i18n keys (two versions per node); the owner: one name per node.
 
-### Maps: symmetry of the rules without symmetry of the picture, size, no water (DEC-27, #266) **[accepted]**, asymmetric maps **[deferred]**; item 3 (no water) **[superseded by DEC-36]**
+### Maps: symmetry of the rules without symmetry of the picture, size, no water (DEC-27, #266) **[accepted]**, asymmetric maps **[deferred]**, **[accepted]** 2026-11-06 for generated maps outside ranked (#771); item 3 (no water) **[superseded by DEC-36]**
 
 The owner's decision of 2026-10-14 (#252): maps should look less symmetric and more interesting, be
 a bit larger, and the water on the background is confusing. Changes of the format and the tools:
@@ -3367,6 +3367,15 @@ accepted and implemented (#266, closed 2026-10-22; validator and script #366, DE
 8. **[deferred]** **Real asymmetric maps** (a different graph or different attributes for the sides):
    only later and only for unranked matches. They need a new tie-break instead of the mirrored
    `node_key` (AGENTS.md, 4.1, rule 6) and their own fairness test; without this they are not introduced in the MVP.
+   **[accepted]** by the owner on 2026-11-06 (#768, #771) for **generated maps outside ranked**: a separate unrated
+   mode, while ranked, the queue and tournaments stay on the hand-made maps. On 1500 to 2000 unit maps the pool nodes
+   deviate only 17 to 48 units on average from an exact rotation, so players see the mirror quickly. Both conditions are met
+   without a rule change: such a map has `meta.symmetry = "none"` and an identity `mirror` table, so `node_key` is the node
+   id for both players (a tie-break inside one player, as before, and the ids of a generated map follow no direction of the
+   map), and the fairness test is the validator check `fairness` (equal access, approximate equality accepted; start
+   forces stay exactly equal, the bots rely on it). No `SIM_VERSION`: a map is data. They are played only by an explicit
+   choice in a match by invite link or against a bot, and never rated. Format, metrics and thresholds:
+   `docs/design/map-format.md`, section "Format changes under #771".
 9. **The Windows and Mac discrepancy: found (#269).** The owner saw water on the background only on Windows,
    on Mac it was not there. The cause: the `caddy` image built the client, copying into the context only
    `maps/*.json`, without `maps/*.bg.png` (`deploy/caddy.Dockerfile`; since #344 the backgrounds are `maps/*.bg.webp`); the client takes the backgrounds from
@@ -4336,7 +4345,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-24 | #261 | fight over time: rounds, reinforcements, retreat, a bounce without a chain, the fight point | section 4 | [accepted] (2026-10-14, all 14 recommendations); absorbs #133, #141; `round_ticks = 10` and item I1 on the remaining bonus [superseded by DEC-32, implemented #329] |
 | DEC-25 | #262 | recruit queue | section 3 | [accepted] (2026-10-14: 3 s per unit, a queue of 3); implemented #278 |
 | DEC-26 | #265 | city development: roads without a type and cheaper (always); barracks and warehouse separate from capacity (behind the flag `city_upgrades.enabled`) | sections 3 and 8 | [accepted] (2026-10-14, all details; road prices 1 and 2, roads not behind the flag); implemented #265 (`SIM_VERSION` 12, `PROTOCOL_VERSION` 16); part [superseded by DEC-28]; parts [superseded by DEC-41] under `economy.model = "v2"` |
-| DEC-27 | #266 | maps: symmetry of rules without symmetry of the picture, size, no water | section 9 | [accepted] (2026-10-14, all details); asymmetric maps [deferred]; implemented: the background without water #269 (item 3 [superseded by DEC-36] 2026-10-29), the validator and script #366, the maps and `grid55` #266; the projection budget on 55 nodes 0.45 ms [accepted] 2026-10-22 (#371) |
+| DEC-27 | #266 | maps: symmetry of rules without symmetry of the picture, size, no water | section 9 | [accepted] (2026-10-14, all details); asymmetric maps [deferred], [accepted] 2026-11-06 for generated maps outside ranked (#771); implemented: the background without water #269 (item 3 [superseded by DEC-36] 2026-10-29), the validator and script #366, the maps and `grid55` #266; the projection budget on 55 nodes 0.45 ms [accepted] 2026-10-22 (#371) |
 | DEC-28 | #290 | supply and roads rework: transit, front markers, rear minimum, donors, roads for CP | sections 6, 7, 8 | [accepted] (2026-10-17); details [accepted] 2026-10-17; replaces the priorities of DEC-18, the road payment of DEC-16, DEC-26; supply implemented #292 (`SIM_VERSION` 14, `PROTOCOL_VERSION` 17); roads (#306) and the client (#293) await implementation; parts [superseded by DEC-41] under `economy.model = "v2"` |
 | DEC-29 | #291 | the bonus of a scheduled order by distance; revision of DEC-24 item 13 (the opponent's bonuses in a fight are visible) | sections 4, 5 | [accepted] (2026-10-17); details [accepted] 2026-10-17; `orders.planned_bonus` [superseded by DEC-29]; implemented (#294, `SIM_VERSION` 16; client: #295, the arena on the map: #325); the bonus forecast in your own order (`OrderView.bonus`) [accepted] 2026-10-21, implemented #329; parts [superseded by DEC-41] under `economy.model = "v2"` |
 | DEC-30 | #316 | accumulating the "Defense" bonus: +1 per `orders.defense_ticks_per_bonus` ticks, the cap by charged units, burns after a fight | section 5 | [accepted] (2026-10-21); replaces the part of DEC-08 about "Defense"; details [accepted] 2026-10-21; implemented (#317, `SIM_VERSION` 17, `PROTOCOL_VERSION` 20); client implemented (#318); parts [superseded by DEC-41] under `economy.model = "v2"` |

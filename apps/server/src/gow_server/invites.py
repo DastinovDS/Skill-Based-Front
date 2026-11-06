@@ -20,6 +20,7 @@ When the second one is ready the match starts (``MatchManager.create``) and ``GE
   list of open public matches; anyone joins from it by the code in the list (``join`` + ``ready``
   as above). A public match is not ``private``: no pauses (DEC-05 allows them only between
   friends; against a stranger a pause is a way to stall) and, like every invite match, no rating.
+  A generated map (#771) is for an invite by link only: a public match on one is refused.
   A public entry lives only while its host is there: the host's ``GET /api/matches/{code}``
   (the waiting room polls it) is a heartbeat, and an entry whose host was silent for
   ``lobby_stale_s`` is dropped (a closed tab). ``DELETE /api/matches/{code}`` removes an invite
@@ -42,7 +43,7 @@ from gow_server.abuse import Limits, enforce, server_full
 from gow_server.clock import Clock
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchRecord
-from gow_server.maps import MapCatalog
+from gow_server.maps import MapCatalog, choose_map
 from gow_server.matches import ManagerDrainingError, ServerFullError
 from gow_server.ratelimit import SlidingWindowLimiter
 from gow_sim.ruleset import Ruleset
@@ -164,7 +165,9 @@ class CreateMatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     map_id: str | None = None
-    """A map of the pool; a random one if omitted."""
+    """A map of the pool or a generated one; a random one if omitted."""
+    random_generated: bool = False
+    """With no ``map_id``: draw from the generated maps instead of the pool."""
     public: bool = False
     """List the match in the public lobby (``GET /api/lobby``) instead of sharing a link."""
 
@@ -261,16 +264,12 @@ async def create_match(
     enforce(limits.match_create, str(player.id), "too many matches created")
     if book.lifecycle.active_of(player.id) is not None:
         raise _busy(player.id, player.id)
-    if body.map_id is None:
-        pool = catalog.all()
-        if not pool:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="no maps")
-        map_id = secrets.choice(pool).id
-    elif catalog.get(body.map_id) is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="unknown map")
-    else:
-        map_id = body.map_id
-    invite = book.create(player.id, player.nick, map_id, public=body.public)
+    entry = choose_map(catalog, body.map_id, random_generated=body.random_generated)
+    if entry.generated and body.public:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="generated maps are for private matches"
+        )
+    invite = book.create(player.id, player.nick, entry.id, public=body.public)
     response.headers["Cache-Control"] = "no-store"
     return _view(invite, player.id, book)
 

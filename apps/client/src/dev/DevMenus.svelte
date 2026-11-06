@@ -108,6 +108,7 @@
     end={result}
     summary={RESULT_SUMMARY}
     {map}
+    mapId="gen1-17"
     onreplay={nothing}
     onmenu={nothing}
   />

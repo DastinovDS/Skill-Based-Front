@@ -250,7 +250,7 @@ describe('AppState', () => {
       calibration: null,
       stats: null,
     };
-    app.finishMatch('7', 0, end);
+    app.finishMatch('7', 'ridge', 0, end);
     const result = app.screen;
     app.openReplay('7');
     expect(app.screen).toMatchObject({ name: 'replay', matchId: '7' });

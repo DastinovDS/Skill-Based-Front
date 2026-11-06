@@ -4,11 +4,11 @@ import { usableGeo, type GeoFile } from './geography.ts';
 // Maps bundled into the client for the dev screen and the tests (CLI-05, #496: only they import this
 // module, so a production build contains none of it; the game takes the map and its background
 // from the server, `GET /api/maps/{id}` and `MapSummary.background_url`).
-// The maps of the server pool `maps/*.json` (DEC-27) and the MVP maps that stay as test fixtures in `maps/fixtures/` (#372) come first (all sorted by name), then the tiny
+// The maps of the server pool `maps/*.json` (DEC-27), the generated maps `maps/gen/` (#771) and the MVP maps that stay as test fixtures in `maps/fixtures/` (#372) come first (all sorted by name), then the tiny
 // test maps of the simulation (MAP-01, #13). The files stay where they are, Vite bundles them from
 // there (see `server.fs.allow` in vite.config.ts).
 const mvpFiles = import.meta.glob<MapFile>(
-  ['../../../../maps/*.json', '../../../../maps/fixtures/*.json'],
+  ['../../../../maps/*.json', '../../../../maps/gen/*.json', '../../../../maps/fixtures/*.json'],
   {
     eager: true,
     import: 'default',
@@ -42,7 +42,11 @@ export const DEFAULT_MAP: MapFile = (() => {
 // Baked backgrounds `maps/<id>.bg.webp` (MAP-05, #70, #344), those of the fixtures in `maps/fixtures/`.
 // The dev screen takes them from the repository through Vite.
 const backgrounds = import.meta.glob<string>(
-  ['../../../../maps/*.bg.webp', '../../../../maps/fixtures/*.bg.webp'],
+  [
+    '../../../../maps/*.bg.webp',
+    '../../../../maps/gen/*.bg.webp',
+    '../../../../maps/fixtures/*.bg.webp',
+  ],
   {
     eager: true,
     import: 'default',
@@ -58,10 +62,13 @@ export function backgroundUrl(mapName: string): string | null {
 
 // The vector files `maps/geo/<id>.json` of the maps with a geography (DEC-36, #544), eagerly for
 // the dev screen (the game loads them lazily, `geography.ts`).
-const geographies = import.meta.glob<unknown>('../../../../maps/geo/*.json', {
-  eager: true,
-  import: 'default',
-});
+const geographies = import.meta.glob<unknown>(
+  ['../../../../maps/geo/*.json', '../../../../maps/gen/geo/*.json'],
+  {
+    eager: true,
+    import: 'default',
+  },
+);
 
 /** The vector file of a bundled map, or `null` if it has none or the file does not fit the map. */
 export function bundledGeo(map: MapFile): GeoFile | null {

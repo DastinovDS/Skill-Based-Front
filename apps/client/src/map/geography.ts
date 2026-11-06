@@ -1,6 +1,6 @@
 /**
- * The vector file of a map with a geography (DEC-36, #544): `maps/geo/<id>.json`, written by
- * `gow-maps bake` next to the baked background (format: docs/design/map-format.md, "Format changes
+ * The vector file of a map with a geography (DEC-36, #544): `maps/geo/<id>.json` (a generated map:
+ * `maps/gen/geo/<id>.json`, #771), written by `gow-maps bake` next to the baked background (format: docs/design/map-format.md, "Format changes
  * under DEC-36"). The client reads only the shared border chains: the areas of the nodes come from
  * them instead of the Voronoi cells, so the tint, the borders, the fog veil and a click agree with
  * the ground the baker painted. Water, rivers and bridges are part of the picture and need no
@@ -68,10 +68,13 @@ export function usableGeo(map: MapFile, raw: unknown): GeoFile | null {
 // Lazy: one chunk per map, loaded on demand (the files are bundled at build time like the
 // backgrounds, but the player needs only the map of the match). A directory without files is an
 // empty record: the maps without a geography.
-const files = import.meta.glob<unknown>(['../../../../maps/geo/*.json'], { import: 'default' });
+const files = import.meta.glob<unknown>(
+  ['../../../../maps/geo/*.json', '../../../../maps/gen/geo/*.json'],
+  { import: 'default' },
+);
 
 /**
- * The geography of a pool map, or `null` if the map has none, its file is stale or malformed, or
+ * The geography of a map, or `null` if the map has none, its file is stale or malformed, or
  * the chunk failed to load: a missing geography is never fatal.
  */
 export async function geoOf(map: MapFile): Promise<GeoFile | null> {

@@ -46,6 +46,7 @@ export type Screen =
   | {
       readonly name: 'result';
       readonly matchId: string;
+      readonly mapId: string;
       readonly me: PlayerId;
       readonly end: MatchEndMsg;
       readonly summary: MatchSummary | null;
@@ -334,12 +335,13 @@ export class AppState {
   /** The match ended: the result screen needs the side we played to say who won. */
   finishMatch(
     matchId: string,
+    mapId: string,
     me: PlayerId,
     end: MatchEndMsg,
     summary: MatchSummary | null = null,
   ): void {
     this.activeMatch = null;
-    this.go({ name: 'result', matchId, me, end, summary });
+    this.go({ name: 'result', matchId, mapId, me, end, summary });
   }
 
   /** The replay of a match, opened from the current screen: "Back" returns here (#259). */

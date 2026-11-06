@@ -30,7 +30,8 @@ and advance the clock. After every tick the invariants below must hold:
   levels never exceed the true ones and equal them in sight; capacities are exact (DEC-22,
   item 1); enemy figures never carry internal ids (DEC-33, detail 5).
 
-The machine plays ``mvp-0`` (``city_upgrades`` off) or ``mvp-1`` (on, DEC-26).
+The machine plays ``mvp-0`` (``city_upgrades`` off) or ``mvp-1`` (on, DEC-26), on mirrored maps and
+on maps with an identity ``mirror`` table (``meta.symmetry = "none"``, #771).
 
 A counterexample found by Hypothesis goes into a regression test at the end of the file.
 """
@@ -98,9 +99,23 @@ KEY = bytes(range(32))
 
 TEST_MAPS: Final = ("line3", "diamond", "choke", "line6", "fork", "siege")
 MVP_MAPS: Final = ("artery", "web", "pass")
+
+
+def _no_mirror(mapdef: MapDef) -> MapDef:
+    """The map as a generated one (#771): ``symmetry = "none"``, an identity ``mirror`` table."""
+    return replace(
+        mapdef,
+        meta=replace(mapdef.meta, symmetry="none"),
+        mirror_nodes=tuple(range(len(mapdef.nodes))),
+        mirror_edges=tuple(range(len(mapdef.edges))),
+    )
+
+
 MAPS: Final[dict[str, MapDef]] = {
     **{n: load_map(TESTS_DIR / "maps" / f"{n}.json") for n in TEST_MAPS},
     **{n: load_map(ROOT / "maps" / "fixtures" / f"{n}.json") for n in MVP_MAPS},
+    "diamond-no-mirror": _no_mirror(load_map(TESTS_DIR / "maps" / "diamond.json")),
+    "artery-no-mirror": _no_mirror(load_map(ROOT / "maps" / "fixtures" / "artery.json")),
 }
 
 

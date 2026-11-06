@@ -25,7 +25,7 @@ from gow_bots.bots import bot_factory
 from gow_server.abuse import Limits, enforce, server_full
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchState
-from gow_server.maps import MapCatalog
+from gow_server.maps import MapCatalog, choose_map
 from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, ServerFullError
 from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset
@@ -54,7 +54,9 @@ class CreateBotMatch(BaseModel):
 
     level: Level = "normal"
     map_id: str | None = None
-    """A map of the pool; a random one if omitted."""
+    """A map of the pool or a generated one; a random one if omitted."""
+    random_generated: bool = False
+    """With no ``map_id``: draw from the generated maps instead of the pool."""
 
 
 class BotMatchOut(BaseModel):
@@ -75,16 +77,7 @@ async def create_bot_match(
     rules: Ruleset = request.app.state.ruleset
     limits: Limits = request.app.state.limits
     enforce(limits.match_create, str(player.id), "too many matches created")
-    if body.map_id is None:
-        pool = catalog.all()
-        if not pool:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="no maps")
-        entry = secrets.choice(pool)
-    else:
-        found = catalog.get(body.map_id)
-        if found is None:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="unknown map")
-        entry = found
+    entry = choose_map(catalog, body.map_id, random_generated=body.random_generated)
     if lifecycle.active_of(player.id) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="you already have an active match")
     slot = secrets.randbelow(len(PLAYERS))

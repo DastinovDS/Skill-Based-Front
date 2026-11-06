@@ -246,6 +246,26 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
     _check_fight_rounds(doc)
 
 
+def test_a_match_on_a_generated_map_replays_and_has_frames(
+    tmp_path: Path, short_rules: Ruleset
+) -> None:
+    """#771: the log names a map of ``maps/gen/``, the server gives only the map folder."""
+    mapdef = load_map(ROOT / "maps" / "gen" / "gen1-17.json")
+    bots = [BOTS["random_legal"](mapdef, short_rules, seed=s, player=s) for s in PLAYERS]
+    log = tmp_path / "8.jsonl.gz"
+    played = record_headless(log, mapdef, short_rules, bots)
+
+    assert replay_run(log, RULESETS, ROOT / "maps").ok
+    result = build_frames(log, tmp_path / "8.frames.json.gz", RULESETS, ROOT / "maps")
+
+    assert result.state_hash == played.state_hash
+    doc = json.loads(gzip.decompress(result.path.read_bytes()))
+    assert doc["map"]["meta"]["name"] == "gen1-17"
+    assert doc["map"]["meta"]["symmetry"] == "none"
+    assert len(doc["frames"][0]["n"]) == len(mapdef.nodes)
+    assert any(f["g"] for f in doc["frames"])
+
+
 class _ViewsAndLog:
     """A ``MatchObserver``: the replay log, plus the live ``project()`` of both players at some
     frame ticks (#598), to hold the frames file against."""

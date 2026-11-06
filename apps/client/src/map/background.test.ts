@@ -3,7 +3,14 @@ import type { MapSummary } from '../api/http.ts';
 import { backgroundUrlOf } from './background.ts';
 
 const summary = (id: string, background_url: string | null): MapSummary =>
-  ({ id, version: 1, width: 100, height: 100, background_url }) satisfies MapSummary;
+  ({
+    id,
+    version: 1,
+    width: 100,
+    height: 100,
+    background_url,
+    generated: false,
+  }) satisfies MapSummary;
 
 describe('backgroundUrlOf', () => {
   it('returns the URL the server states for the map', async () => {

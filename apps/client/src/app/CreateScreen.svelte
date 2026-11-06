@@ -43,7 +43,7 @@
   {onback}
   onenter={() => void submit()}
 >
-  <MapTiles maps={dock.maps} bind:value={mapId} />
+  <MapTiles maps={dock.maps} bind:value={mapId} generated={!isPublic} />
   {#snippet actions()}
     <button type="button" class="btn pri" disabled={busy} onclick={submit}>
       {t('create.submit')}

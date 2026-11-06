@@ -1,10 +1,10 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Api, Invite } from '../api/http.ts';
+import { RANDOM_GENERATED, type Api, type Invite } from '../api/http.ts';
 import { setLocale, translate, type MessageKey } from '../i18n/index.ts';
 import BotScreen from './BotScreen.svelte';
 import CreateScreen from './CreateScreen.svelte';
-import { makeDock } from './dockTestKit.ts';
+import { fakeMapApi, makeDock } from './dockTestKit.ts';
 import InviteScreen from './InviteScreen.svelte';
 
 // The Dock screens (#473) apart from the lobby: the create, bot and invite panels, the account
@@ -82,6 +82,28 @@ describe('the Dock screens', () => {
       expect(onstart).toHaveBeenCalledTimes(2);
     });
 
+    it('offers the generated maps as a group of their own, with a random one', async () => {
+      const onstart = vi.fn(() => Promise.resolve(null));
+      const { dock } = makeDock({}, fakeMapApi(['ridge', 'gen1-5', 'gen1-17']));
+      component = mount(BotScreen, {
+        target: document.body,
+        props: { dock, onstart, onback: vi.fn() },
+      });
+      await settle();
+      const radios = (selector: string): string[] =>
+        [...document.body.querySelectorAll<HTMLElement>(`${selector} [role="radio"]`)].map(
+          (r) => r.textContent,
+        );
+      expect(radios('.tiles:not(.gen)')).toHaveLength(2);
+      expect(radios('.tiles.gen')).toHaveLength(3);
+      expect(document.body.textContent).toContain(en('map.generated'));
+      document.body.querySelector<HTMLElement>('.tiles.gen [role="radio"]')?.click();
+      flushSync();
+      button(en('bot.start')).click();
+      await settle();
+      expect(onstart).toHaveBeenLastCalledWith('normal', RANDOM_GENERATED);
+    });
+
     it('describes the style of the chosen bot, and shows the seat while it starts', async () => {
       const { dock } = makeDock();
       component = mount(BotScreen, {
@@ -137,6 +159,24 @@ describe('the Dock screens', () => {
         en('menu.lobby'),
       );
       expect(document.body.textContent).toContain(en('dock.chip.noPause'));
+    });
+
+    it('offers the generated maps to a friend, not to the public lobby', async () => {
+      const { dock } = makeDock({}, fakeMapApi(['ridge', 'gen1-5']));
+      component = mount(CreateScreen, {
+        target: document.body,
+        props: { dock, isPublic: true, oncreate: vi.fn(), onback: vi.fn() },
+      });
+      await settle();
+      expect(document.body.querySelectorAll('.tiles [role="radio"]')).toHaveLength(2);
+      expect(document.body.textContent).not.toContain('gen1-5');
+      void unmount(component);
+      component = mount(CreateScreen, {
+        target: document.body,
+        props: { dock, oncreate: vi.fn(), onback: vi.fn() },
+      });
+      await settle();
+      expect(document.body.querySelector('.tiles.gen')?.textContent).toContain('gen1-5');
     });
 
     it('says the map list did not load and still creates a random match', async () => {

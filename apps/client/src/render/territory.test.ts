@@ -243,15 +243,21 @@ describe('steadyBank (#585)', () => {
   });
 });
 
-describe('the pool maps with a geography (#585)', () => {
-  const maps = import.meta.glob<MapFile>('../../../../maps/*.json', {
-    eager: true,
-    import: 'default',
-  });
-  const geos = import.meta.glob<unknown>('../../../../maps/geo/*.json', {
-    eager: true,
-    import: 'default',
-  });
+describe('the maps with a geography, pool and generated (#585, #771)', () => {
+  const maps = import.meta.glob<MapFile>(
+    ['../../../../maps/*.json', '../../../../maps/gen/*.json'],
+    {
+      eager: true,
+      import: 'default',
+    },
+  );
+  const geos = import.meta.glob<unknown>(
+    ['../../../../maps/geo/*.json', '../../../../maps/gen/geo/*.json'],
+    {
+      eager: true,
+      import: 'default',
+    },
+  );
   const pool = Object.entries(geos).map(([path, raw]) => {
     const name = path.split('/').pop() ?? '';
     const map = Object.entries(maps).find(([p]) => p.endsWith(`/${name}`))?.[1];
@@ -259,7 +265,7 @@ describe('the pool maps with a geography (#585)', () => {
   });
 
   it('are all found', () => {
-    expect(pool.length).toBeGreaterThanOrEqual(3);
+    expect(pool.length).toBeGreaterThanOrEqual(12);
     for (const { map, geo } of pool) expect(map !== undefined && geo !== null).toBe(true);
   });
 

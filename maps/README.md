@@ -12,7 +12,8 @@ stand on their graphs. The server does not serve them (it loads `maps/*.json` wi
 still checks them, and they are frozen: `maps:preview`, `maps:bake` and `maps:mirror` work on the pool only. The menu map
 `menu/valley.json` (#474) is drawn behind the start menu by the client, which bundles it; it is outside the pool too, built
 from `menu/src/valley.half.json`, validated, previewed and baked with the pool (`docs/design/map-format.md`, "The menu map"). The format:
-[`docs/design/map-format.md`](../docs/design/map-format.md).
+[`docs/design/map-format.md`](../docs/design/map-format.md). Generated maps without a mirror lie in `gen/` (#771), outside the pool:
+the section "Generated maps" at the end.
 
 Map ids and the names of cities and provinces are English (part 3 of the switch of the repository to English, #390): the names
 are chosen by meaning, not transliterated, and the text below quotes them as they are in `maps/*.json`. The ids were Russian
@@ -195,3 +196,22 @@ of them between the capitals (7 roads, about 450 ticks along the fastest path, a
 side starts with 5 nodes (the capital, one large, one medium and one small city, one province). The two large cities of vp 2
 on each side (Highmoor, Torchester) are linked across the middle by a cross road; "The Narrows" (vp 3) is the central city.
 Character: a short map, the capital is reachable in the mid-game. Not tuned for balance.
+
+## Generated maps (`gen/`)
+
+A batch of maps from the generator (#771, `docs/design/map-format.md`, "Format changes under #771"): each has its own geography
+over the whole area, not a reflection of one half, and `meta.symmetry = "none"`. Fairness comes from the check `fairness`, equal
+access of the two capitals, approximately, so these maps are a separate unrated offer. The owner judges this batch by playing it.
+
+The server loads `gen/` as a group of its own (`MapCatalog.generated`, `GET /api/maps` flags each with `generated`). A map of it is
+played only by an explicit choice in a match by invite link or against a bot: the tile of the map, or "Random map" of the group
+(`random_generated` in the request). It never enters the queue, a random pick without a map, the public lobby (`422`), the rating
+or the default tournaments (`maps/*.json`). The replay of such a match finds its map in `gen/` too.
+
+```bash
+mise run maps:generate 37       # maps/gen/gen1-37.json, src/, geo/, the background and the preview, validated
+uv run gow-maps score maps/gen/*.json maps/ridge.json   # the fairness scores
+```
+
+The id is `gen<generator version>-<seed>`. A map is rebuilt from its seed, it is not edited by hand: `tools/maps/tests/test_generated.py`
+checks that every file equals the output of the generator.

@@ -243,7 +243,8 @@ class MatchLifecycle:
 
         ``rated`` marks a queue match: ``gow_server.ladder`` decides at the start who of the two
         accounts changes a rating (DEC-34), so the stored match is flagged rated only if at least
-        one of them does. Against a bot the flag is ignored (DEC-06).
+        one of them does. Against a bot the flag is ignored (DEC-06), and so it is on a map without
+        a mirror (DEC-27, item 8: a generated map stays outside ranked).
         """
         if record.dead:
             raise IllegalTransitionError(f"{record.state.value} -> running")
@@ -253,7 +254,12 @@ class MatchLifecycle:
             raise ManagerDrainingError("the server is draining for a deploy")
         self.manager.check_capacity(bot is not None)  # before the row; ``create`` checks again
         deadline, record.deadline = record.deadline, None  # not swept while the row is written
-        rated = rated and bot is None and BOT_ACCOUNT not in players  # DEC-06: two humans only
+        rated = (
+            rated
+            and bot is None
+            and BOT_ACCOUNT not in players  # DEC-06: two humans only
+            and mapdef.meta.symmetry != "none"  # DEC-27, item 8
+        )
         try:
             pk, plan = await asyncio.to_thread(
                 self._insert, map_id, ruleset_hash(rules), rated, players, bot_name, rules.tick_hz

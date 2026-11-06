@@ -61,8 +61,22 @@ def test_list_maps(client: TestClient) -> None:
     response = client.get("/api/maps")
     assert response.status_code == 200
     assert response.json() == [
-        {"id": "diamond", "version": 1, "width": 400, "height": 400, "background_url": None},
-        {"id": "line3", "version": 1, "width": 400, "height": 200, "background_url": None},
+        {
+            "id": "diamond",
+            "version": 1,
+            "width": 400,
+            "height": 400,
+            "background_url": None,
+            "generated": False,
+        },
+        {
+            "id": "line3",
+            "version": 1,
+            "width": 400,
+            "height": 200,
+            "background_url": None,
+            "generated": False,
+        },
     ]
     assert response.headers["cache-control"] == "no-cache"
 
@@ -116,5 +130,5 @@ def test_the_pool_of_the_repository_is_the_dec27_maps_and_narrows() -> None:
     # #372: the MVP maps in maps/fixtures/ are not served (the catalog is not recursive), nor is
     # the menu map maps/menu/valley.json (#474).
     catalog = MapCatalog.load(ROOT / "maps")
-    assert [entry.id for entry in catalog.all()] == ["crossroads", "highway", "narrows", "ridge"]
-    assert all(entry.background is not None for entry in catalog.all())
+    assert [entry.id for entry in catalog.pool()] == ["crossroads", "highway", "narrows", "ridge"]
+    assert all(entry.background is not None for entry in catalog.pool())

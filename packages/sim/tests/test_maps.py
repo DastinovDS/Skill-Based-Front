@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from gow_sim.maps import MapDef, MapFormatError, Terrain, load_map, parse_map
+from gow_sim.maps import MapDef, MapFormatError, Terrain, load_map, map_to_data, parse_map
 
 MAPS_DIR = Path(__file__).parent / "maps"
 TEST_MAPS = ["line3", "diamond", "choke"]
@@ -44,6 +44,20 @@ def test_line3_values() -> None:
     assert mapdef.mirror_edges == (1, 0)
     assert mapdef.incident == ((0,), (0, 1), (1,))
     assert mapdef.edges[1].other(2) == 1
+
+
+def test_a_map_without_a_mirror_has_one_node_order_for_both_players() -> None:
+    # meta.symmetry = "none" (#771): the identity table is the whole of it, node_key is the id.
+    data = json.loads((MAPS_DIR / "diamond.json").read_text(encoding="utf-8"))
+    data["meta"]["symmetry"] = "none"
+    data["mirror"] = {
+        "nodes": {str(i): i for i in range(len(data["nodes"]))},
+        "edges": {str(i): i for i in range(len(data["edges"]))},
+    }
+    mapdef = parse_map(data)
+    assert mapdef.meta.symmetry == "none"
+    assert map_to_data(mapdef) == data
+    assert [mapdef.node_key(1, n.id) for n in mapdef.nodes] == [n.id for n in mapdef.nodes]
 
 
 def test_node_key_uses_mirror_for_player_1() -> None:
@@ -117,7 +131,12 @@ BROKEN: list[tuple[str, Path_, object, str]] = [
         "nodes[1].start_owner: expected null or a player",
     ),
     ("bad terrain", ("nodes", 1, "terrain"), "swamp", "nodes[1].terrain: expected one of"),
-    ("bad symmetry", ("meta", "symmetry"), "rot90", "meta.symmetry: expected one of ['rot180']"),
+    (
+        "bad symmetry",
+        ("meta", "symmetry"),
+        "rot90",
+        "meta.symmetry: expected one of ['rot180', 'none']",
+    ),
     ("bad name", ("meta", "name"), "", "meta.name: expected a non-empty"),
     ("id out of order", ("nodes", 1, "id"), 5, "nodes[1].id: node ids must be 0..N-1"),
     # Structure and invariants the simulation relies on.

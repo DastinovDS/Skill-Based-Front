@@ -1601,7 +1601,10 @@ export interface MapMetaFile {
    * Revision of the map, bumped on every edit.
    */
   version: number;
-  symmetry: 'rot180';
+  /**
+   * ``none``: a generated map (#771), its ``mirror`` table is the identity.
+   */
+  symmetry: 'rot180' | 'none';
   /**
    * World size: coordinates are in ``[0, width] x [0, height]``, ``y`` grows down.
    */
@@ -1661,7 +1664,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 39;
+export const PROTOCOL_VERSION = 40;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

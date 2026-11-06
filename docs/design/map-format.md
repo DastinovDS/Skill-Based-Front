@@ -1,6 +1,6 @@
 # Map format
 
-A map is a JSON file in `maps/` (the server pool), in `maps/fixtures/` (the three MVP maps `artery`, `web`, `pass`, kept as test fixtures since #372) or in `maps/menu/` (the map `valley` drawn behind the start menu, #474, outside the pool). The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
+A map is a JSON file in `maps/` (the server pool), in `maps/fixtures/` (the three MVP maps `artery`, `web`, `pass`, kept as test fixtures since #372), in `maps/menu/` (the map `valley` drawn behind the start menu, #474, outside the pool) or in `maps/gen/` (generated maps, #771, outside the pool). The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
 The map design checks (connectivity, planarity, rule symmetry, names, border points,
 neutral space) are run by the offline validator `uv run gow-maps validate maps/*.json maps/fixtures/*.json maps/menu/*.json` (MAP-02, #14).
 
@@ -167,6 +167,96 @@ terrain mode draw the water flat (the part of the map no area covers). A map wit
 
 **Symmetry** (DEC-27, item 1): the authored geography and the vectors need not be mirrored; `symmetry` does not read them.
 
+## Format changes under #771 (generated maps, stage 1)
+
+> Decision [accepted] 2026-11-06 (#768, #771): DEC-27, item 8, for generated maps outside ranked. A map of its own
+> geography, not a reflection of one half; fairness comes from a filter of equal access, not from a mirror, and approximate
+> equality is accepted, so such a map belongs to a separate unrated mode. Ranked, the queue and tournaments stay on the
+> hand-made maps. Stage 1 is the offline generator and the batch `maps/gen/`; stage 2, a new map for every match on the
+> server, is a separate issue.
+
+| Where | Now | Becomes |
+|---|---|---|
+| `meta.symmetry` | `"rot180"` | `"rot180"` or `"none"`: a map without a mirror |
+| `mirror` | swaps the players | with `"none"`: the identity, `m(x) = x` for every node and edge. It passes the involution check of the loader, and `node_key(player, node)` is the node id for both players. The simulation, the server and the bots read nothing else of the table (checked in the code: `node_key`, `Bot.edge_keys`) |
+| validator | `symmetry`, `border` | with `"none"`: skipped; `symmetry` only requires the identity table, the new check `fairness` takes their place. All the other checks stay |
+| `gow-maps` | | `generate --seed N` (`mise run maps:generate <seed>`), `score <files>` |
+
+**No rule.** A map enters a match as data, never as a seed: no `SIM_VERSION`, the loader only learns one more value. The
+client type `MapFile` takes it too (`Literal["rot180", "none"]`, `PROTOCOL_VERSION` 40): the client reads no `symmetry` and no
+`mirror`, nothing in it depends on them.
+
+### Playing a generated map
+
+The owner's decision of 2026-11-06: the batch is playable, so that he can judge it by hand. Still no generation per match.
+
+| Where | What |
+|---|---|
+| `gow_server.maps` | `MapCatalog.load` reads `maps/*.json` into the pool and `maps/gen/*.json` into the generated group; `pool()` and `generated()` are separate, `get(id)` finds both; one id in both groups stops the server |
+| `GET /api/maps` | the pool first, then the generated maps, each with the flag `generated`; `GET /api/maps/{id}` and the background serve both |
+| who can play | only by an explicit choice: `map_id`, or `random_generated: true` (a draw from the group), in `POST /api/matches` and `POST /api/bot-matches`. A random pick without them, and the queue, draw from the pool. `public: true` with a generated map is `422` |
+| rating | none: only the queue passes `rated`, and `MatchLifecycle.start` ignores it for `meta.symmetry = "none"` as well |
+| replays | `gow_sim.replay` looks for the map of a log in the map folder and in its `gen/` |
+| client | the group "Generated, unrated" in the map tiles of the invite and bot screens, not of the public lobby; the vector files `maps/gen/geo/<id>.json` are bundled like `maps/geo/` (`geography.ts`, `deploy/caddy.Dockerfile`); the result screen names the map |
+
+### Fairness
+
+`gow_maps.fairness` measures a map, the check `fairness` compares it with `validate.toml`. `gow-maps score <files>` and
+`gow-maps generate` print the scores. Standard library only, like `gow_maps.generate`: stage 2 runs them on the server, and
+`lint-imports` holds both to that. All times are by `travel_ticks` unless said otherwise. A node belongs to the capital that
+reaches it first (first reach; a tie to neither, the capitals to neither).
+
+The pool maps are mirrored, so they score 0 on every gap and the top of the scale on the mirror scores: a gap
+threshold cannot be read off them. The thresholds below are the owner's "approximate equality", sized against what a pool map
+holds (8 to 12 cities and 5 to 13 provinces on a side, 450 to 624 ticks between the capitals), and the mirror thresholds sit
+well away from the pool.
+
+| Metric | What it is | Pool maps | Threshold |
+|---|---|---|---|
+| first reach | cities, provinces, VP on each side | 8..12, 5..13, 10..15 on a side, gap 0 | gap at most 2, 3, 2 (`max_city_gap`, `max_province_gap`, `max_vp_gap`) |
+| front | the contested zone: the nodes the capitals reach within `contested_ticks` (60) of each other; from each capital the time to its nearest node of the zone | 249..324 ticks, gap 0 | gap at most 15% of the larger (`max_front_gap_pct`) |
+| front by terrain | the same at the terrain speed (`terrain.speed_pct`, mechanics.md, section 4; the percents repeat `mvp-4` in `validate.toml`, the validator may run without a ruleset) | 224..297, gap 0 | gap at most 20% (`max_front_terrain_gap_pct`) |
+| approaches | the roads of each capital | 3 and 3 | gap at most 1, at least 3 (`max_approach_gap`, `min_approaches`) |
+| charges | the start charges of a side (`start_charged + start_stock`) plus the warehouses (city 3, province 1, capital 6) of the nodes within half of the time between the capitals | 57..80, gap 0 | gap at most 15% (`max_charge_gap_pct`) |
+| start | units, charged units and stock of each side, and the stock of each capital | equal | must be equal (`estimate.py` and `smart.py` of the bots rely on it) |
+| mirror shift | the mean distance from the rot180 image of a node to the nearest node, in percent of the node spacing `sqrt(width * height / nodes)` | 7..21% | at least 30% (`min_mirror_shift_pct`) |
+| mirror roads | the roads whose rotated ends (the nearest nodes) have a road | 100% | at most 55% (`max_mirror_roads_pct`; a planar graph of this density lands near 45% by chance) |
+| mirror profile | no coordinates: nodes with a partner of the same degree and the two distances (in roads) to the capitals swapped | 100% | at most 70% (`max_mirror_profile_pct`) |
+| dead ends | nodes outside the 2-core: the dead-end lanes | 0 | 0 (`max_dead_end_nodes`) |
+| lane | the longest run of linked nodes with two roads | 1 | at most 2 (`max_lane`) |
+| capital depth | roads from a capital to the nearest node of the contested zone or of the other side | 4..5 | at least 4 (`min_capital_depth`) |
+| cut nodes | nodes whose removal separates the capitals (articulation points between them) | none | none (`max_cut_nodes`) |
+| choke | how much longer the way between the capitals gets without its most important node | 1..24% | at most 30% (`max_choke_pct`) |
+
+### The generator
+
+`gow-maps generate --seed N [-o maps/gen] [--bake]` (`gow_maps.generate`; the map id is `gen<version>-<seed>`, so one seed under
+another `GENERATOR_VERSION` is another map). The size comes from the seed: 29 to 55 nodes, about 50 000 square units a node, an
+aspect of 1.3 to 1.75. An attempt:
+
+1. **Land:** value noise minus the pits of an archetype (`coast`, `gulf`, `inland`, `straits`, `corners`, `lakes`) on a 16 unit
+   grid; the lowest cells are water; islands sink, ponds dry up.
+2. **Nodes:** Poisson-disc points at least 92 units from that water and 128 from each other, denser where a noise says so.
+3. **Roads:** Delaunay on the integer points, without roads over water or longer than 345 units, pruned to 1.5 to 1.72 roads a
+   node while no road becomes a bridge of the graph, two roads of a node stay about 29 degrees apart, and no node has more than
+   five. Planar by construction.
+4. **Capitals:** the pair with the most equal access, 430 to 680 ticks apart, one of the best four, never within 1.5 spacings of
+   each other's rotation.
+5. **Attributes:** terrain from a ridge field and a wet field, `kind` and VP from a settlement field. These are patches over the whole
+   map, not node pairs; the sides get equal counts by taking the top of each side. Both sides start with the same list of kinds
+   (5 own nodes on the smallest map, 8 at 50 nodes, as in the pool). `border_permille` moves 60 toward the lower end per terrain
+   step (a long approach to high ground), `max_level` is 3 on the fastest ways to the key cities, 2 elsewhere.
+6. **Geography:** `src/<id>.geo.json` with water cells (circles packed into the water, with radii that keep the water at 17 to
+   25 percent) and two to four river springs on high ground; the baker does the rest as for a hand-made map.
+7. **Filter:** `fairness`, then the next attempt of the seed (up to 400). The check `geography` needs the baker, so
+   `generate` without `--bake` cannot run it: 1 of the 28 seeds baked so far failed it (a river across a road away from the
+   border point), and such a seed is thrown out.
+
+An attempt takes about 40 ms in pure Python, a seed a median of 30 attempts (about 1 s; 1 of 60 seeds found no map in 400
+attempts), the bake 2 to 3 seconds. Determinism: a seed gives the same map on any platform, a test pins a `map_hash`. Only
+`+ - * /`, `sqrt` and `Random.random()` touch the numbers (`sin`, `sum()` of floats and `Random.shuffle` differ between platforms
+or Python versions).
+
 ## General rules
 
 - **All numbers are integers.** `1.0`, `"1"` and `true` instead of a number: a load error.
@@ -198,7 +288,7 @@ A load error names the file and the field: `maps/x.json: nodes[3].vp: expected a
 |---|---|---|
 | `name` | string `[A-Za-z0-9_-]+` | the map id (`map_id` in the replay and the protocol) |
 | `version` | integer ≥ 1 | the map revision; raised on any edit |
-| `symmetry` | `"rot180"` | the symmetry type: players and nodes swap places per the `mirror` table (DEC-27, item 6); a geometric rotation of the picture is not required |
+| `symmetry` | `"rot180"` \| `"none"` | the symmetry type. `rot180`: players and nodes swap places per the `mirror` table (DEC-27, item 6); a geometric rotation of the picture is not required. `none`: a generated map without a mirror, the table is the identity (#771) |
 | `width`, `height` | integers ≥ 1 | the size of the world |
 
 ### `nodes[]`
@@ -272,6 +362,7 @@ strings (this is how JSON works), values: integer ids.
 - A mirrored node has the same attributes (`kind`, `terrain`, `vp`, the starting fields), while `capital_of` and
   `start_owner` pass to the other player; `name` is its own. **The coordinates are free** (DEC-27, item 1):
   the requirement `(width − x, height − y)` is gone, the picture of the sides may differ.
+- A map with `meta.symmetry = "none"` (#771) has an identity table, and the three rules above do not apply to it.
 
 The loader checks only completeness and involutivity. The match of attributes, edge ends and border
 points is checked by the validator (MAP-02).
@@ -316,8 +407,9 @@ an unmatched pattern as is). The thresholds: `tools/maps/src/gow_maps/validate.t
 | `names` | every node has a name of 1..24 characters with no leading or trailing spaces, names do not repeat (DEC-23, item 4) |
 | `connectivity` | the graph is connected |
 | `planarity` | roads do not cross or overlap, a road does not pass through someone else's city, cities have different coordinates (the actual coordinates are checked: with free coordinates this is the main protection against crossings, DEC-27, item 5) |
-| `symmetry` | the `mirror` table swaps the players: the same attributes of nodes (`kind`, `terrain`, `vp`, the starting fields) and edges (`max_level`, `travel_ticks`), the owner and the capital pass to the other player, the ends of a mirrored edge are mirrored; the coordinates and the names are not compared (DEC-27, item 1) |
-| `border` | `border_permille` of the mirrored edge with direction taken into account: equal to the original if the end `a` of the mirror equals `m(a)`, otherwise `1000 − border_permille`; an edge mirrored to itself has 500 (DEC-23, item 7) |
+| `symmetry` | the `mirror` table swaps the players: the same attributes of nodes (`kind`, `terrain`, `vp`, the starting fields) and edges (`max_level`, `travel_ticks`), the owner and the capital pass to the other player, the ends of a mirrored edge are mirrored; the coordinates and the names are not compared (DEC-27, item 1). With `meta.symmetry = "none"`: only that the table is the identity (#771) |
+| `border` | `border_permille` of the mirrored edge with direction taken into account: equal to the original if the end `a` of the mirror equals `m(a)`, otherwise `1000 − border_permille`; an edge mirrored to itself has 500 (DEC-23, item 7). Not for `meta.symmetry = "none"` |
+| `fairness` | only for `meta.symmetry = "none"` (#771): equal access of the two capitals, not a mirror in disguise, no dead-end lanes, no capital next to the front, no single node between the capitals; the section "Fairness" |
 | `degree` | a node has at most `max_degree` (5) roads |
 | `disjoint_paths` | from each capital to each node with `vp ≥ 2` at least 2 paths with no common roads |
 | `neutral_space` | at least 20% of the nodes have no starting owner and have distances to the two capitals (in roads) differing by at most 1 |
@@ -396,8 +488,8 @@ and its character are described in [`maps/README.md`](../../maps/README.md).
 
 ## The map pool on the server
 
-At start the server (`gow_server.maps`, SRV-01) loads all `maps/*.json` (without subdirectories:
-`maps/src/` holds the halves, `maps/fixtures/` the MVP maps and `maps/menu/` the menu map, which the server does not serve) through `load_map`. The file name must match `meta.name`:
+At start the server (`gow_server.maps`, SRV-01) loads all `maps/*.json` into the pool and all `maps/gen/*.json` into the
+generated group (no other subdirectories: `maps/src/` holds the halves, `maps/fixtures/` the MVP maps, `maps/menu/` the menu map) through `load_map`. The file name must match `meta.name`:
 `maps/<id>.json`. A broken map or a name mismatch stops the server from starting.
 
 The map background (MAP-05) lies next to it: `maps/<id>.bg.webp`. It is optional; the PNG previews from MAP-04 (other

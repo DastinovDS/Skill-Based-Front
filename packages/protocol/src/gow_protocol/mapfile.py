@@ -26,7 +26,8 @@ class MapMetaFile(WireModel):
     """Map id: ``map_id`` in ``welcome`` and in the replay header."""
     version: PosInt
     """Revision of the map, bumped on every edit."""
-    symmetry: Literal["rot180"]
+    symmetry: Literal["rot180", "none"]
+    """``none``: a generated map (#771), its ``mirror`` table is the identity."""
     width: PosInt
     """World size: coordinates are in ``[0, width] x [0, height]``, ``y`` grows down."""
     height: PosInt
