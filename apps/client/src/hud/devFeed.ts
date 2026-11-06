@@ -366,6 +366,7 @@ export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['figh
               virtual: [...last.virtual],
               spent: [...last.spent],
               losses: [...last.losses],
+              burned: [0, 0],
             },
     };
   });

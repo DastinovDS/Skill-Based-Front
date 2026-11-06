@@ -357,11 +357,13 @@ def test_ruleset_public_vision_table_is_dec_21_item_2() -> None:
 def test_ruleset_public_has_the_combat_vector_parameter_names() -> None:
     """The vectors' ``params`` use the names of ``combat``; the plan bonus is not among them since
     DEC-29 (it depends on the path, every vector gives its amount), the gathered "Defense" of the
-    rows (``defense_bonus``) is not a ruleset number since DEC-30."""
+    rows (``defense_bonus``) is not a ruleset number since DEC-30, and the vectors are the rows of
+    DEC-24 without ``terrain_burn`` (DEC-45)."""
     params = _load(FIXTURES_DIR.parent / "vectors" / "combat.json")["params"]
     assert isinstance(params, dict)
     names = set(cast(dict[str, object], params))
-    assert names - {"defense_bonus"} | {"planned_bonus_per_edge"} == set(CombatPublic.model_fields)
+    public = set(CombatPublic.model_fields) - {"terrain_burn"}
+    assert names - {"defense_bonus"} | {"planned_bonus_per_edge"} == public
 
 
 def _schema_types(node: object) -> set[str]:

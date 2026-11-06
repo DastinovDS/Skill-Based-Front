@@ -31,7 +31,8 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
 - public: ``node_captured`` (ownership is public), ``vp_awarded`` (VP are public), ``forfeit``;
 - ``fight_started``, ``fight_round``, ``fight_ended`` (DEC-24, item I2): to both players, they
   both fight in it, with every field: the rounds of both sides are public (shots with the virtual
-  ones apart, spent charges, losses; I1 and I2 as revised with DEC-29);
+  ones apart, spent charges, losses, the charges the terrain burned; I1 and I2 as revised with
+  DEC-29, DEC-45);
 - everything else only to the player of the event (``player``, for ``warehouse_lost`` ``owner``),
   enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the build
   events ``build_started``, ``road_upgraded``, ``barracks_built``, ``warehouse_upgraded`` and
@@ -216,6 +217,8 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
         "units_before",
     ),
     "fight_round": (
+        "burned_0",
+        "burned_1",
         "edge",
         "fight",
         "losses_0",
@@ -480,6 +483,7 @@ def view_to_wire(view: sv.PlayerView) -> View:
                     virtual=f.last_round.virtual,
                     spent=f.last_round.spent,
                     losses=f.last_round.losses,
+                    burned=f.last_round.burned,
                 ),
             )
             for f in view.fights
@@ -703,6 +707,7 @@ def _round_data(r: sv.FightRound | None) -> dict[str, object] | None:
         "virtual": list(r.virtual),
         "spent": list(r.spent),
         "losses": list(r.losses),
+        "burned": list(r.burned),
     }
 
 

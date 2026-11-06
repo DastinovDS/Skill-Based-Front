@@ -663,7 +663,8 @@ export class FightView {
       if (round !== null && pulse !== 1) {
         const player: PlayerId = side === 'own' ? this.me : this.me === 0 ? 1 : 0;
         const changed = changedChips(sides[side], {
-          spent: round.spent[player],
+          // A charge the terrain burned goes out in the round like a shot (DEC-45).
+          spent: round.spent[player] + round.burned[player],
           losses: round.losses[player],
         });
         for (const index of changed) result[side].set(index, pulse);

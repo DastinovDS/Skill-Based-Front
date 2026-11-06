@@ -16,6 +16,7 @@ export const SCENES: readonly {
   { id: 'fights', tick: 400 },
   { id: 'fights_kill', tick: 395 },
   { id: 'fights_flight', tick: 398 },
+  { id: 'fights_burn', tick: 400 },
   { id: 'artery', tick: 2400 },
   { id: 'provinces', tick: 1200 },
   { id: 'progress', tick: 2400 },

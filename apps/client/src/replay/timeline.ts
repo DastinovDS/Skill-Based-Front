@@ -218,6 +218,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
                 virtual: [...last[2]],
                 spent: [...last[3]],
                 losses: [...last[4]],
+                burned: [0, 0], // the frames file does not carry it (DEC-45): only a chip pulse
               }
             : null,
         };

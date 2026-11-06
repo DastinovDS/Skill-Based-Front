@@ -7,7 +7,8 @@ and advance the clock. After every tick the invariants below must hold:
 - charge conservation: the charges that exist (warehouses + packets on the way + ``charged`` of
   the groups) equal the charges at the start, plus the ones the capitals produced
   (``charges_produced``), minus the documented sinks: shots and killed charged units
-  (``spent`` of ``fight_round``; a group dying by DEC-24 G3: ``fight_group`` with ``encircled``),
+  (``spent`` of ``fight_round``, and its ``burned`` under ``combat.terrain_burn``, DEC-45; a
+  group dying by DEC-24 G3: ``fight_group`` with ``encircled``),
   ``warehouse_lost``, ``packet_lost``, ``charges_overflow`` (the part of a delivered packet that
   does not fit the warehouse, and the production of a full capital that finds no room in the
   rear, DEC-28, item 4.4) and ``attrition`` deaths of charged units (a road level costs no
@@ -93,6 +94,7 @@ RULES = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
 RULESETS: Final[dict[str, Ruleset]] = {
     "mvp-0": RULES,
     "mvp-0-capture": replace(RULES, capture=CaptureRules(charge_cost=1)),  # DEC-38 on
+    "mvp-0-burn": replace(RULES, combat=replace(RULES.combat, terrain_burn=True)),  # DEC-45 on
     "mvp-1": load_ruleset(ROOT / "rulesets" / "mvp-1.toml"),
 }
 KEY = bytes(range(32))
@@ -182,6 +184,9 @@ class Ledger:
                         spent = _int(e, f"spent_{p}")
                         assert spent >= 0, f"a fight created charges: {e}"
                         self.shots += spent
+                        burned = dict(e.data).get(f"burned_{p}", 0)  # DEC-45
+                        assert isinstance(burned, int) and burned >= 0, f"a burn gave charges: {e}"
+                        self.shots += burned
                 case "fight_group" if e.get("encircled") is True:
                     self.shots += _int(e, "charged")  # DEC-24, G3: lost with the group
                 case "warehouse_lost":

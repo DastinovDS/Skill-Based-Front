@@ -43,14 +43,17 @@ virtual shots of its side when the group joins the fight and burns with the figh
 the terrain of the node count only for a defender that has a charged unit at contact, and
 "Defense" only for groups standing there from the start. "Defense" brings what it has gathered,
 capped by the charged units of the group at contact; joining a fight resets its count (DEC-30).
-Mountains add virtual shots, plains silence real ones in every round (``terrain.defense_mod``).
+Mountains add virtual shots, plains silence real ones in every round (``terrain.defense_mod``);
+under ``combat.terrain_burn`` plains burn that many charges of the defender at the start of the
+first round instead, and nothing is silent after it (DEC-45).
 A bunker of the node (economy v2, DEC-41, item 12) adds ``bunker.shots`` virtual shots to the
 defender on the same condition as the terrain.
 
 Events: ``fight_started``, ``fight_round``, ``fight_ended`` (both players, every field: the
 shots of both sides with the virtual ones apart, the spent charges and the losses; DEC-24 items
-I1, I2 as revised with DEC-29), ``fight_group`` (the owner of the group: at the end of the fight
-and when the group withdraws), ``node_captured``. The latest round stays in ``Fight.last_round``
+I1, I2 as revised with DEC-29; under ``combat.terrain_burn`` also the burned charges, DEC-45),
+``fight_group`` (the owner of the group: at the end of the fight and when the group withdraws),
+``node_captured``. The latest round stays in ``Fight.last_round``
 for the view; the virtual shots still left (``Fight.virtual``) stay hidden.
 """
 
@@ -84,6 +87,7 @@ __all__ = [
     "Fighter",
     "RoundResult",
     "Side",
+    "burn",
     "can_fire",
     "combat",
     "play_round",
@@ -120,7 +124,7 @@ class Side:
     """One side of a round; ``groups`` in ascending id order (ties by id inside a player).
 
     ``virtual``: virtual shots left (bonuses, mountains); ``mute``: real charges silent in every
-    round (plains, DEC-24 item F2).
+    round (plains, DEC-24 item F2) or still to burn (DEC-45): they do not shoot either way.
     """
 
     groups: list[Fighter]
@@ -185,12 +189,28 @@ def _spend(side: Side, shots: int) -> int:
     virtual = min(shots, side.virtual)
     side.virtual -= virtual
     for _ in range(shots - virtual):
-        shooter = max(
-            (g for g in side.groups if g.charged > 0),
-            key=lambda g: (g.charged, -g.id),
-        )
-        shooter.charged -= 1
+        _take_charge(side)
     return virtual
+
+
+def _take_charge(side: Side) -> None:
+    """One charged unit becomes discharged: the group with the most charged (rule 7)."""
+    max((g for g in side.groups if g.charged > 0), key=lambda g: (g.charged, -g.id)).charged -= 1
+
+
+def burn(sides: tuple[Side, Side]) -> tuple[int, int]:
+    """The start of the first round under ``combat.terrain_burn`` (DEC-45): the charges of
+    ``Side.mute`` are gone, as many as the side has, and nothing is silent any more. The shots of
+    the round are counted after it. A side alone in the fight burns nothing: there is no round."""
+    burned = [0, 0]
+    for p in PLAYERS:
+        side = sides[p]
+        if sides[1 - p].groups:
+            burned[p] = min(side.mute, sum(g.charged for g in side.groups))
+        for _ in range(burned[p]):
+            _take_charge(side)
+        side.mute = 0
+    return (burned[0], burned[1])
 
 
 def _kill(side: Side, kills: int) -> None:
@@ -674,6 +694,10 @@ def _run(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
 
 def _round(state: GameState, rules: Ruleset, fight: Fight) -> Event:
     sides = _sides(state, fight)
+    burning = rules.combat.terrain_burn
+    burned = burn(sides) if burning else (0, 0)
+    if burning:
+        fight.mute = (0, 0)
     result = play_round(sides, rules.combat.shots_per_round)
     for p in PLAYERS:
         for f in sides[p].groups:
@@ -685,9 +709,9 @@ def _round(state: GameState, rules: Ruleset, fight: Fight) -> Event:
     fight.shots = (fight.shots[0] + result.shots[0], fight.shots[1] + result.shots[1])
     fight.losses = (fight.losses[0] + result.losses[0], fight.losses[1] + result.losses[1])
     fight.last_round = FightRound(
-        state.tick, result.shots, result.virtual, result.spent, result.losses
+        state.tick, result.shots, result.virtual, result.spent, result.losses, burned
     )
-    return event(
+    played = event(
         state.tick,
         "fight_round",
         fight=fight.id,
@@ -702,7 +726,13 @@ def _round(state: GameState, rules: Ruleset, fight: Fight) -> Event:
         losses_1=result.losses[1],
         spent_0=result.spent[0],
         spent_1=result.spent[1],
+        burned_0=burned[0],
+        burned_1=burned[1],
     )
+    if burning:
+        return played
+    # A ruleset without the key keeps the canonical form of its events (DEC-45).
+    return replace(played, data=tuple(kv for kv in played.data if not kv[0].startswith("burned")))
 
 
 def _withdraw(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:

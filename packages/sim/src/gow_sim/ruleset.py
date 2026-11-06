@@ -259,6 +259,9 @@ class CombatRules:
     shots_per_round: int
     regroup_ticks: int
     engage_ticks: int
+    terrain_burn: bool = dataclasses.field(default=False, metadata=OPTIONAL)
+    """A negative ``terrain.defense_mod`` burns the defender's charges in the first round instead
+    of silencing them in every round (DEC-45). Left out of the hash when absent."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -760,7 +763,8 @@ def parse_ruleset(data: object) -> Ruleset:
         terrain=_parse_terrain(root.table("terrain", ("defense_mod", "speed_pct"))),
         combat=_parse_combat(
             root.table(
-                "combat", ("round_ticks", "shots_per_round", "regroup_ticks", "engage_ticks")
+                "combat",
+                ("round_ticks", "shots_per_round", "regroup_ticks", "engage_ticks", "terrain_burn"),
             )
         ),
         capture=CaptureRules(
@@ -935,6 +939,7 @@ def _parse_combat(t: "_Table") -> CombatRules:
         shots_per_round=t.integer("shots_per_round", low=1),
         regroup_ticks=t.integer("regroup_ticks", low=0),
         engage_ticks=t.integer("engage_ticks", low=0),
+        terrain_burn=t.boolean("terrain_burn") if t.has("terrain_burn") else False,
     )
 
 

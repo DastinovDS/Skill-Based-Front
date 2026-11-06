@@ -1287,7 +1287,7 @@ The principle: **one shape means one thing**, and the shape reads without color 
 | a cell (a wide frame) | one unit of a count or a duration: a CP, a queued unit, a build; **frame + dot** queued, **hatch + head line** in progress, **solid** done or ready, **dashed frame** a free slot; the dashed amber ring and `MAX` on a full bar (#439) | HUD CP bar, queue and build plates at a city |
 | `✂` | starvation (cut off from the capital, DEC-19) | city, "Supply" |
 | dashed outline | what does not exist or is not visible exactly: the opponent's scheduled order, an enemy without numbers "?", a ghost, a killed chip; a bonus shot (a dashed hit ring) | map |
-| an amber crossed circle, an amber dashed ring | a silent charge (DEC-24, F2): a sign on the group and a dim ring for one round tick (FX3, #351) | map, arena |
+| an amber crossed circle, an amber dashed ring | a silent charge (DEC-24, F2): a sign on the group and a dim ring for one round tick (FX3, #351); under `combat.terrain_burn` (DEC-45) the sign and the chip mark mean a charge that burns in the first round and are gone after it | map, arena |
 
 Checking against the map revealed one place where the language is broken (**[proposed]**, a small fix):
 

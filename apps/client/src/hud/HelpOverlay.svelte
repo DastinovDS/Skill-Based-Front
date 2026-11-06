@@ -13,6 +13,8 @@
     onclose: () => void;
     /** `ruleset_public.capture.charge_cost` (DEC-38): with more than 0 the help tells the price of a capture. */
     captureCost?: number;
+    /** Plains burn a charge in the first round instead of silencing one (DEC-45). */
+    terrainBurn?: boolean;
     /** Economy v2 (DEC-41): the keys of the v1 economy are gone, those of lines and plans come. */
     v2?: boolean;
     /** The automatic supply flow (DEC-43): no lines, the supply level keys instead. */
@@ -27,6 +29,7 @@
     open,
     onclose,
     captureCost = 0,
+    terrainBurn = false,
     v2 = false,
     flow = false,
     fort = false,
@@ -228,7 +231,7 @@
                   <circle cx="14" cy="12" r="7" class="silent" />
                   <path d="M9 17L19 7" class="silent" />
                 </svg>
-                {t('help.legend.silent')}
+                {t(terrainBurn ? 'help.legend.silentBurn' : 'help.legend.silent')}
               </li>
               <li>
                 <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">

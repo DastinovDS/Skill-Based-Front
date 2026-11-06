@@ -532,6 +532,11 @@ export interface CombatPublic {
    * The pause of an edge winner before it goes on (DEC-24, item G4).
    */
   regroup_ticks: number;
+  /**
+   * A negative ``terrain_defense_mod`` burns charges of the defender in the first round instead
+   * of silencing them in every round (DEC-45).
+   */
+  terrain_burn: boolean;
 }
 /**
  * ``terrain.defense_mod``: charges added to the node defender's pool; may be negative.
@@ -1309,7 +1314,8 @@ export interface IntentView {
  * (bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,
  * item 3); it grows when a reinforcement with a bonus joins and drops after each round.
  * ``mute``: by player, the charged units in the fight that do not shoot in a round because of
- * the terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units.
+ * the terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units;
+ * under ``combat.terrain_burn`` the charges the first round will burn, 0 after it (DEC-45).
  */
 export interface FightView {
   id: string;
@@ -1350,8 +1356,9 @@ export interface FightView {
 /**
  * The latest round of a fight (DEC-24, item I1 as revised with DEC-29), both players, index
  * = player id: ``shots`` made (cancelling and killing ones), ``virtual`` among them (bonuses,
- * terrain), ``spent`` charges that left the player's units, ``losses`` in units. The same
- * numbers as the ``fight_round`` event of that ``tick``.
+ * terrain), ``spent`` charges that left the player's units, ``losses`` in units, ``burned``
+ * charges the terrain took before the shots of the round (first round only, not in ``spent``,
+ * DEC-45). The same numbers as the ``fight_round`` event of that ``tick``.
  */
 export interface FightRoundView {
   tick: number;
@@ -1375,6 +1382,11 @@ export interface FightRoundView {
    * @maxItems 2
    */
   losses: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  burned: [number, number];
 }
 /**
  * An own supply line (economy v2, DEC-41, items 3 and 6). The enemy's are never sent.
@@ -1664,7 +1676,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 40;
+export const PROTOCOL_VERSION = 41;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

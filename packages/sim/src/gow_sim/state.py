@@ -196,15 +196,17 @@ class FightMember:
 @dataclass(frozen=True, slots=True)
 class FightRound:
     """The last round of a fight (DEC-24, item I1 as revised with DEC-29): by player, the shots
-    made, the virtual ones among them, the charges that left its units (``spent``) and the units
-    it lost. Public to both players, like the ``fight_round`` event of that round, and so are the
-    virtual shots still left (``Fight.virtual``, DEC-32)."""
+    made, the virtual ones among them, the charges that left its units (``spent``), the units it
+    lost and the charges the terrain burned before the shots (``burned``, DEC-45, not in
+    ``spent``). Public to both players, like the ``fight_round`` event of that round, and so are
+    the virtual shots still left (``Fight.virtual``, DEC-32)."""
 
     tick: int
     shots: tuple[int, int]
     virtual: tuple[int, int]
     spent: tuple[int, int]
     losses: tuple[int, int]
+    burned: tuple[int, int] = (0, 0)
 
 
 @dataclass(slots=True)
@@ -216,7 +218,8 @@ class Fight:
     player attacking a node; ``None`` for an edge and a neutral node (symmetric fights).
     ``start``: the contact tick; ``next_round``: the tick of the next round. ``virtual``: the
     virtual shots left by player (bonuses, mountains; item F); ``mute``: real charges of the
-    player silent in every round (plains, item F2); ``shots`` and ``losses``: totals of the fight
+    player silent in every round (plains, item F2), under ``combat.terrain_burn`` the charges the
+    first round will burn, 0 after it (DEC-45); ``shots`` and ``losses``: totals of the fight
     by player (the edge winner, item G4). ``members``: the groups in the fight by group id.
     ``last_round``: the latest round; ``None`` before the first one.
     """
@@ -861,13 +864,16 @@ def _fight_data(f: Fight) -> dict[str, object]:
 
 
 def _round_data(r: FightRound) -> dict[str, object]:
-    return {
+    data: dict[str, object] = {
         "tick": r.tick,
         "shots": list(r.shots),
         "virtual": list(r.virtual),
         "spent": list(r.spent),
         "losses": list(r.losses),
     }
+    if any(r.burned):  # DEC-45 only: a round without a burn keeps its canonical form
+        data["burned"] = list(r.burned)
+    return data
 
 
 def _order_data(o: Order) -> dict[str, object]:
@@ -1279,13 +1285,14 @@ def _parse_fight(data: object, where: str) -> Fight:
 
 
 def _parse_round(data: object, where: str) -> FightRound:
-    raw = _obj(data, where, ("tick", "shots", "virtual", "spent", "losses"))
+    raw = _obj(data, where, ("tick", "shots", "virtual", "spent", "losses"), ("burned",))
     return FightRound(
         tick=_int(raw["tick"], f"{where}.tick", low=0),
         shots=_pair(raw["shots"], f"{where}.shots"),
         virtual=_pair(raw["virtual"], f"{where}.virtual"),
         spent=_pair(raw["spent"], f"{where}.spent"),
         losses=_pair(raw["losses"], f"{where}.losses"),
+        burned=_pair(raw["burned"], f"{where}.burned") if "burned" in raw else (0, 0),
     )
 
 

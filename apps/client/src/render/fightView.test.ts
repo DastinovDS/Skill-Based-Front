@@ -51,7 +51,8 @@ const roundOf = (
   virtual: [number, number] = [0, 0],
   spent: [number, number] = [0, 0],
   losses: [number, number] = [0, 0],
-): NonNullable<WireFight['last_round']> => ({ tick, shots, virtual, spent, losses });
+  burned: [number, number] = [0, 0],
+): NonNullable<WireFight['last_round']> => ({ tick, shots, virtual, spent, losses, burned });
 
 /** The own group of a fight (listed in it), standing in the city. */
 function withOwn(fights: WireFight[], units: number, charged: number, tick = 150): SnapshotMsg {
@@ -503,6 +504,31 @@ describe('FightView', () => {
     expect(chips().map((chip) => chip.scale)).toEqual([1, 1]);
     view.update(frame(at(154.5)), [], ROUND, true);
     expect(chips().map((chip) => chip.scale)).toEqual([1, 1]);
+    view.destroy();
+  });
+
+  it('pulses a charge the terrain burned with the one that was shot (DEC-45)', () => {
+    const { view, frame, chips } = setup();
+    // 3 own units: the first round took a shot and a burned charge, one charged chip is left.
+    const at = (tick: number): SnapshotMsg =>
+      withOwn(
+        [
+          fightAt({
+            enemy_units: 0,
+            enemy_charged: 0,
+            last_round: roundOf(150, [1, 0], [0, 0], [1, 0], [0, 0], [1, 0]),
+          }),
+        ],
+        3,
+        1,
+        tick,
+      );
+    view.update(frame(at(150)), [], ROUND, false);
+    view.update(frame(at(154.5)), [], ROUND, false);
+    const swell = chips().map((chip) => chip.scale);
+    expect(swell[0]).toBe(1);
+    expect(swell[1]).toBeGreaterThan(1);
+    expect(swell[2]).toBeGreaterThan(1);
     view.destroy();
   });
 

@@ -20,6 +20,7 @@ Map ``dec41`` (rot180): player 0 owns K = 0 (capital) and A = 1, player 1 the mi
 import gzip
 import tomllib
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -120,6 +121,7 @@ def _raw(name: str) -> dict[str, Any]:
 def test_the_ruleset_is_sup200_plus_the_section() -> None:
     raw = _raw("mvp-4-stances")
     section = raw.pop("stances")
+    assert raw["combat"].pop("terrain_burn") is True  # the other change of the file: DEC-45
     assert raw == _raw("mvp-4-sup200")
     assert section == {
         "cp_period_ticks": {"war": 80, "balance": 100, "economy": 200},
@@ -456,9 +458,11 @@ def test_the_golden_games_of_the_version_before_are_unchanged(path: Path) -> Non
 def test_a_match_in_balance_is_a_match_of_sup200(
     expand_bot: Callable[[MapDef, Ruleset], Controller],
 ) -> None:
-    """Both players stay in Balance: the same commands give the same events tick by tick."""
+    """Both players stay in Balance: the same commands give the same events tick by tick (the
+    burn of DEC-45 is another rule of the file: off here)."""
     bots = [expand_bot(MAP, SUP200), expand_bot(MAP, SUP200)]
-    one, two = Match(MAP, SUP200, KEY), Match(MAP, RULES, KEY)
+    stances = replace(RULES, combat=replace(RULES.combat, terrain_burn=False))
+    one, two = Match(MAP, SUP200, KEY), Match(MAP, stances, KEY)
     seqs = [0, 0]
     for tick in range(1300):
         commands: list[PlayerCommand] = []

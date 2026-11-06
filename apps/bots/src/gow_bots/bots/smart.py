@@ -219,7 +219,13 @@ from gow_bots.bots.logistics import (
 )
 from gow_bots.bots.pockets import Pockets, heading, read_pockets
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
-from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take, takes
+from gow_bots.bots.utility import (
+    defender_pool,
+    prefer_planned,
+    shots_to_take,
+    takes,
+    terrain_burned,
+)
 from gow_sim.commands import (
     CancelRecruit,
     Command,
@@ -1335,7 +1341,8 @@ class SmartBot(CampaignBot):
                 charged += g.charged
                 defense += g.defense_bonus or 0
         terrain = self.map.nodes[home].terrain
-        hold = shots_to_take(self.rules, terrain, units, charged, defense)
+        burned = terrain_burned(self.rules, view, home)
+        hold = shots_to_take(self.rules, terrain, units, charged, defense, burned=burned)
         shots = seen_shots + self.hidden_shots(view, a)
         if shots < hold:
             return None

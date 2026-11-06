@@ -20,7 +20,7 @@ No randomness, no ``set`` iteration (AGENTS.md, section 4.1 holds for the bots t
 from dataclasses import dataclass
 
 from gow_bots.bots.assess import Travel
-from gow_bots.bots.utility import shots_to_take
+from gow_bots.bots.utility import shots_to_take, terrain_burned
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import AtNode, Detail, EnemyGroupView, IntentKind, PlayerView
@@ -106,7 +106,8 @@ def garrison_need(view: PlayerView, mapdef: MapDef, rules: Ruleset, node: int) -
             units += g.units
             charged += g.charged
             defense += g.defense_bonus or 0
-    return shots_to_take(rules, mapdef.nodes[node].terrain, units, charged, defense)
+    burned = terrain_burned(rules, view, node)
+    return shots_to_take(rules, mapdef.nodes[node].terrain, units, charged, defense, burned=burned)
 
 
 def incoming_charges(view: PlayerView) -> dict[int, int]:

@@ -533,14 +533,16 @@ class IntentView(WireModel):
 class FightRoundView(WireModel):
     """The latest round of a fight (DEC-24, item I1 as revised with DEC-29), both players, index
     = player id: ``shots`` made (cancelling and killing ones), ``virtual`` among them (bonuses,
-    terrain), ``spent`` charges that left the player's units, ``losses`` in units. The same
-    numbers as the ``fight_round`` event of that ``tick``."""
+    terrain), ``spent`` charges that left the player's units, ``losses`` in units, ``burned``
+    charges the terrain took before the shots of the round (first round only, not in ``spent``,
+    DEC-45). The same numbers as the ``fight_round`` event of that ``tick``."""
 
     tick: Tick
     shots: tuple[NonNegInt, NonNegInt]
     virtual: tuple[NonNegInt, NonNegInt]
     spent: tuple[NonNegInt, NonNegInt]
     losses: tuple[NonNegInt, NonNegInt]
+    burned: tuple[NonNegInt, NonNegInt]
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -561,7 +563,8 @@ class FightView(WireModel):
     (bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,
     item 3); it grows when a reinforcement with a bonus joins and drops after each round.
     ``mute``: by player, the charged units in the fight that do not shoot in a round because of
-    the terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units.
+    the terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units;
+    under ``combat.terrain_burn`` the charges the first round will burn, 0 after it (DEC-45).
     """
 
     id: OpaqueId

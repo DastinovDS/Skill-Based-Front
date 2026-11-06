@@ -561,6 +561,7 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | bounce | `bounce` | an attacker without a win returns to the source node discharged |
 | scheduled order | `planned=True` | more expensive, visible to everyone as an intent, sets out with a delay, gives a one-off bonus; economy v2: the price of a move, the requested bonus `Move.bonus` is gathered in the node, one warehouse charge per `orders.plan_ticks_per_bonus` ticks, departs at the request, at the cap or by `ReleasePlan` (DEC-41, item 10) |
 | fight | `Fight` | a fight over time (DEC-24): a node or an edge with a meeting point `point`, rounds every `combat.round_ticks`, reinforcements and retreat; visible to both (`PlayerView.fights`) |
+| terrain burn | `combat.terrain_burn`, `Fight.mute`, `burned_0`, `burned_1` | under the key (DEC-45, `rulesets/mvp-4-stances.toml`) a negative terrain takes that many charges of the defender at the start of the first round of a fight; without it plains silence a charge in every round (DEC-24, item F2) |
 | intent | `Intent` | the part of a scheduled order visible to everyone: from where, to where, the kind, without the size and group id |
 | modes | `Mode.ATTACK / DEFENSE` | "Attack", "Defense"; "Building" (`BUILD`) was removed by DEC-16; economy v2 has no "Defense" (DEC-41, item 5) |
 | bunker | `Node.fort`, `BuildBunker` | economy v2: a building of a city or a province, +`bunker.shots` virtual shots to a charged defender in every fight there, destroyed on capture (DEC-41, item 12) |

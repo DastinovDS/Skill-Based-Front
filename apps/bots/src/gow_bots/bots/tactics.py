@@ -46,7 +46,7 @@ from typing import Final
 
 from gow_bots.bots.base import Bot, node_of
 from gow_bots.bots.economy import factory_site, line_commands, wants
-from gow_bots.bots.utility import prefer_planned, shots_to_take, takes
+from gow_bots.bots.utility import prefer_planned, shots_to_take, takes, terrain_burned
 from gow_sim.commands import BuildFactory, Command, Move, Recruit, SetMode, SetStance, UpgradeRoad
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
@@ -369,7 +369,8 @@ class StrategyBot(Bot):
             units, charged = self.estimate(turn, target, est_pct)
             terrain = self.map.nodes[target].terrain
             defended = self.defended(turn.view, target)
-            need = shots_to_take(self.rules, terrain, units, charged, defended)
+            burned = terrain_burned(self.rules, turn.view, target)
+            need = shots_to_take(self.rules, terrain, units, charged, defended, burned=burned)
             comps = self._sources(turn, target)
             senders = sorted(
                 (g for g in turn.free() if turn.comp[node_of(g)] in comps),

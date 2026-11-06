@@ -71,7 +71,14 @@ from gow_bots.bots.economy import (
     release_commands,
     wants,
 )
-from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take, takes
+from gow_bots.bots.utility import (
+    defender_pool,
+    first_burn,
+    prefer_planned,
+    shots_to_take,
+    takes,
+    terrain_burned,
+)
 from gow_sim.commands import (
     BuildBunker,
     BuildFactory,
@@ -391,7 +398,10 @@ class CampaignBot(Bot):
         if units <= 0:
             return 0
         terrain = self.map.nodes[dest].terrain
-        base = shots_to_take(self.rules, terrain, units, charged, self.defended(view, dest))
+        burned = terrain_burned(self.rules, view, dest)
+        base = shots_to_take(
+            self.rules, terrain, units, charged, self.defended(view, dest), burned=burned
+        )
         return base + self.params["margin"] + self.extra.get(dest, 0)
 
     def enemy_net(self, view: PlayerView) -> frozenset[int]:
@@ -433,11 +443,12 @@ class CampaignBot(Bot):
 
     def _starve(self, dest: int, wave: Wave, tick: int) -> None:
         # The wave fought the pool of the node. A cut node does not recharge, so the shots that
-        # cancelled the pool are gone for good, and the surplus killed one unit each.
+        # cancelled the pool are gone for good, the charges the terrain burned too (DEC-45), and
+        # the surplus killed one unit each.
         units, charged = wave.estimate
         terrain = self.map.nodes[dest].terrain
         pool = defender_pool(self.rules, terrain, charged, 0)
-        cancelled = min(wave.charged, pool)
+        cancelled = min(wave.charged, pool) + first_burn(self.rules, terrain, charged)
         killed = max(0, wave.charged - pool)
         self.memory[dest] = (tick, max(0, units - killed), max(0, charged - cancelled))
 
@@ -532,7 +543,8 @@ class CampaignBot(Bot):
         if seen is None:
             return False
         terrain = self.map.nodes[dest].terrain
-        qd = defender_pool(self.rules, terrain, seen[1], self.defended(view, dest))
+        burned = terrain_burned(self.rules, view, dest)
+        qd = defender_pool(self.rules, terrain, seen[1], self.defended(view, dest), burned=burned)
         real = max(0, g.charged - toll)
         qa = real + min(bonus, real)
         if qd > qa:
@@ -553,7 +565,10 @@ class CampaignBot(Bot):
         if seen is None or seen[0] <= 0:
             return 0
         terrain = self.map.nodes[dest].terrain
-        return shots_to_take(self.rules, terrain, seen[0], seen[1], self.defended(view, dest))
+        burned = terrain_burned(self.rules, view, dest)
+        return shots_to_take(
+            self.rules, terrain, seen[0], seen[1], self.defended(view, dest), burned=burned
+        )
 
     def recall_holds(self, tick: int, dest: int, shots: int) -> bool:
         """``DISCIPLINE``: an attack of ``shots`` (charges and bonus) on ``dest`` waits, the target

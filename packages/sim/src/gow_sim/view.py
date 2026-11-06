@@ -528,7 +528,8 @@ class FightView:
     """Virtual shots still left by player (``Fight.virtual``: bonuses, mountains; DEC-32)."""
     mute: tuple[int, int]
     """Charged units of the player in the fight that do not shoot in a round (plains: one of the
-    defender, DEC-24 item F2): ``min(Fight.mute, charged)``. It follows from the public terrain and
+    defender, DEC-24 item F2; under ``combat.terrain_burn`` the charges the first round will burn,
+    0 after it, DEC-45): ``min(Fight.mute, charged)``. It follows from the public terrain and
     the counters of the fight, so the client shows it without computing it (AGENTS.md 7.1)."""
     last_round: FightRound | None
     """The latest round, by player; ``None`` before the first round."""
@@ -1276,6 +1277,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                     "virtual": list(f.last_round.virtual),
                     "spent": list(f.last_round.spent),
                     "losses": list(f.last_round.losses),
+                    "burned": list(f.last_round.burned),
                 },
             }
             for f in view.fights
