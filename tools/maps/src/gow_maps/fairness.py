@@ -303,14 +303,10 @@ def score(mapdef: MapDef, config: FairnessConfig) -> Scores:
     slow = terrain_ticks(mapdef, config)
     s0, s1 = shortest(slow, c0), shortest(slow, c1)
     shift, roads, profile = mirror_scores(mapdef, (h0, h1))
-    rear = (
-        [n for n in range(len(t0)) if t0[n] < t1[n]],
-        [n for n in range(len(t0)) if t1[n] < t0[n]],
-    )
-    front = [n for n in zone]
+    # Roads to the front: the zone or the first node the other capital reaches first.
     depth = (
-        min((h0[n] for n in [*front, *rear[1]]), default=0),
-        min((h1[n] for n in [*front, *rear[0]]), default=0),
+        min(h0[n] for n in range(len(t0)) if n in zone or t1[n] < t0[n]),
+        min(h1[n] for n in range(len(t0)) if n in zone or t0[n] < t1[n]),
     )
     return Scores(
         capital_ticks=t0[c1],
@@ -350,6 +346,7 @@ def _gap(pair: Pair) -> int:
 def check(s: Scores, config: FairnessConfig) -> list[str]:
     """What the map fails; one message per failed threshold."""
     rows: list[tuple[bool, str]] = [
+        (s.contested == 0, "no contested zone"),
         (_gap(s.cities) > config.max_city_gap, f"first reach: cities {s.cities}"),
         (_gap(s.provinces) > config.max_province_gap, f"first reach: provinces {s.provinces}"),
         (_gap(s.vp) > config.max_vp_gap, f"first reach: vp {s.vp}"),

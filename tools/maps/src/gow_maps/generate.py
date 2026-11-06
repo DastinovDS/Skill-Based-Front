@@ -962,12 +962,13 @@ def neutral_pct(data: dict[str, Any]) -> int:
     for e in edges:
         adjacent[e["a"]].append((e["b"], 1))
         adjacent[e["b"]].append((e["a"], 1))
-    capitals = sorted(
-        (n for n in nodes if n["capital_of"] is not None), key=lambda n: n["capital_of"]
-    )
-    d0, d1 = (shortest(adjacent, c["id"]) for c in capitals)
-    neutral = [n for n in nodes if n["start_owner"] is None and abs(d0[n["id"]] - d1[n["id"]]) <= 1]
-    return 100 * len(neutral) // len(nodes)
+    capital = {n["capital_of"]: int(n["id"]) for n in nodes if n["capital_of"] is not None}
+    d0, d1 = shortest(adjacent, capital[0]), shortest(adjacent, capital[1])
+    neutral = 0
+    for n in nodes:
+        node = int(n["id"])
+        neutral += n["start_owner"] is None and abs(d0[node] - d1[node]) <= 1
+    return 100 * neutral // len(nodes)
 
 
 def generate(seed: int, config: FairnessConfig | None = None) -> Generated:

@@ -46,8 +46,8 @@ apps/server/         gow_server    FastAPI: HTTP (lobby, rating) + WebSocket (ma
 apps/bots/           gow_bots      bots (gow_bots.bots) and the tournament harness
 apps/client/                       TypeScript + Vite + Svelte 5 + PixiJS 8
 e2e/                               Playwright E2E against the real stack (its own package, compose.e2e.yaml)
-tools/maps/          gow_maps      validator, mirroring script, previews and backgrounds of maps (offline)
-maps/                              map pool of the server (JSON, previews, backgrounds); `maps/fixtures/`: MVP maps, test fixtures outside the pool; `maps/menu/`: the map behind the start menu, outside the pool
+tools/maps/          gow_maps      validator, mirroring script, generator, previews and backgrounds of maps (offline)
+maps/                              map pool of the server (JSON, previews, backgrounds); `maps/fixtures/`: MVP maps, test fixtures outside the pool; `maps/menu/`: the map behind the start menu, outside the pool; `maps/gen/`: generated maps, outside the pool
 rulesets/                          rulesets (*.toml) and the archive of played ones by hash
 docs/design/                       mechanics.md, map format, archive
 docs/adr/  docs/balance/  docs/qa/ decisions, balance reports, checklists
@@ -63,7 +63,7 @@ deploy/                            Dockerfiles, Caddyfile, deployment scripts (c
 | `gow_bots.bots` | `gow_sim.view`, `gow_sim.commands`, `gow_sim.maps`, `gow_sim.ruleset` | none | import `gow_sim.state`, `gow_sim.systems`, `gow_sim.match` directly (otherwise a bot sees hidden information) |
 | `gow_bots` (harness) | all of `gow_sim` | `matplotlib` (reports only) | `gow_server`, `gow_protocol`, `gow_maps` |
 | `gow_server` | everything above | `fastapi`, `uvicorn`, `sqlalchemy`, `alembic`, `pydantic-settings` | none |
-| `gow_maps` | `gow_sim.maps`, `gow_sim.ruleset` (the `warehouse` check, DEC-26) | `networkx`, `matplotlib`, `numpy`, `Pillow` | `gow_server`, `gow_protocol`, `gow_bots`, other `gow_sim` modules |
+| `gow_maps` | `gow_sim.maps`, `gow_sim.ruleset` (the `warehouse` check, DEC-26) | `networkx`, `matplotlib`, `numpy`, `Pillow` (not `gow_maps.generate` and `gow_maps.fairness`: standard library only, the server runs them later, #771) | `gow_server`, `gow_protocol`, `gow_bots`, other `gow_sim` modules |
 | client | `src/protocol.gen.ts`, `src/api.gen.ts` | `pixi.js` (only under `src/render/` and in `src/main.ts`), `svelte` | its own copies of the game rules |
 
 Where each boundary is checked (`mise run check`):
@@ -143,10 +143,11 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `regen:howto` | the combat examples of the How to play screen (`apps/client/src/howto/combatExamples.gen.json`): rows of `combat.json` played through `gow_sim` under `rulesets/mvp-2.toml` (the page still describes economy v1 and carries a notice about it; a tutorial round replaces it later, #741), plus the rule numbers the page quotes; `tests/test_export_howto.py` fails when the file is out of date | CLI-13 |
 | `db:migrate` | apply Alembic migrations (the server also does this on start) | DB-01 |
 | `db:revision` | a new migration from the `gow_server.models` models (argument: message) | DB-01 |
-| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-4.toml maps/*.json maps/fixtures/*.json maps/menu/*.json`: the map validator (the pool, the fixtures and the menu map), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5); the check `geography` for a map with `maps/src/<name>.geo.json` (DEC-36) | MAP-02, #379, #474, #537 |
+| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-4.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json`: the map validator (the pool, the fixtures, the menu map and the generated maps), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5); the check `geography` for a map with `src/<name>.geo.json` (DEC-36), the check `fairness` for a map with `meta.symmetry = "none"` (#771) | MAP-02, #379, #474, #537, #771 |
+| `maps:generate` | the map of a seed in `maps/gen/` (argument: seed): `gow-maps generate --bake` writes the map, its geography, the background and the preview, prints the fairness scores and validates; outside the pool (`docs/design/map-format.md`, "Format changes under #771"). `gow-maps score <files>` prints the scores of any map | #771 |
 | `maps:mirror` | build `maps/<name>.json` from the half `maps/src/<name>.half.json` (argument: name) | MAP-03 |
-| `maps:preview` | draw the preview `maps/<name>.preview.png` (the pool and the menu map `maps/menu/`) | MAP-04, #474 |
-| `maps:bake` | bake the background `maps/<name>.bg.webp` (the pool and the menu map `maps/menu/`): numpy and Pillow, texture T2, WebP up to 0.5 MB; a map with an authored geography `maps/src/<name>.geo.json` also gets water and `maps/geo/<name>.json` (DEC-36) (after any map edit) | MAP-05, #344, #474, #537 |
+| `maps:preview` | draw the preview `maps/<name>.preview.png` (the pool, the menu map `maps/menu/` and the generated maps `maps/gen/`) | MAP-04, #474, #771 |
+| `maps:bake` | bake the background `maps/<name>.bg.webp` (the pool, the menu map `maps/menu/` and the generated maps `maps/gen/`): numpy and Pillow, texture T2, WebP up to 0.5 MB; a map with an authored geography `maps/src/<name>.geo.json` also gets water and `maps/geo/<name>.json` (DEC-36) (after any map edit) | MAP-05, #344, #474, #537 |
 | `tournament` | bot tournament (by default all maps and bots, 100 seeds, 8 processes, `mvp-4`; anything else after `--`, for example `-- --seeds 20`; `mvp-0` is only a test ruleset, we do not run tournaments on it) | BOT-04 |
 | `tournament:gh` | **for agents:** the tournament on GitHub runners (`.github/workflows/tournament.yml`, manual dispatch): the seeds are sharded over parallel jobs, the shards are merged (`scripts/tournament_shards.py`) into a file byte-identical to a local run, `gow-bots report` runs on it; the task dispatches, waits with one `gh run watch`, downloads `tournament.jsonl` and `report.md` into `--dir` (`.tournament/`). Options `--ref --ruleset --bots --maps --seeds --shards --label --dir` (`mise run tournament:gh --help`). **Agents run tournaments only through it**; a local `tournament` of at most 3 seeds only when GitHub is unavailable (section 8, `docs/balance/README.md`). Needs bash and an authenticated `gh` | #582 |
 | `search` | parameter search of one bot by tournament (`gow-bots search`, a hill climb over its `PARAMS` ranges, standard library): the pool maps, 8 processes, `mvp-4`; `--bot`, `--against`, `--keys` and the rest after `--` (`docs/balance/README.md`). Few seeds: confirm the result with `tournament` | #166 |
