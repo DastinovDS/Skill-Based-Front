@@ -18,8 +18,10 @@ import {
   type OverlayState,
   type PickHit,
   type SupplyOverlay,
+  type UndoMark,
 } from '../render/interaction.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
+import { undoCommand, type UndoEntry } from './undoList.ts';
 import { NO_LINE_FOCUS, type LineFocus } from '../render/supplyLayout.ts';
 import {
   frontOf,
@@ -35,7 +37,7 @@ import {
 import { getLocale, tf } from '../i18n/index.ts';
 import { formatCentis } from '../hud/format.ts';
 import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
-import { GHOST_CP } from '../render/style.ts';
+import { GHOST_CP, UNDO_CUE } from '../render/style.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { chargedOfSplit, SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
@@ -155,6 +157,13 @@ export interface KeyInput {
  * again, any click elsewhere and Esc close the menu (a click on another node still orders the
  * selected group).
  *
+ * X with nothing selected undoes the last action (#764): the newest accepted move, planned order
+ * or recruit (`UndoList`), through the same `cancel_order` and `cancel_recruit`; each press one step
+ * further back. One press is one real undo: an entry the server has nothing to cancel for is
+ * dropped quietly and the next one is asked. Entries of a group in a fight are skipped (a cancel
+ * there is a withdrawal under fire, DEC-24, item E). What went shows on the map at its place
+ * (`overlay().undo`), never in a toast.
+ *
  * Keys: Esc deselects, X cancels the order of
  * the selected group, 1 / 2 set the mode (attack / defense), D toggles defense, R recruits in the
  * selected city, Q the stance menu (hold and release over a sector, or
@@ -220,6 +229,13 @@ export class OrderController implements MapInteraction {
   /** Until when (`now()`, ms) the CP badge stays marked after a refusal for CP (#762). */
   #cpFlashUntil = 0;
   #hoverMark: HoverMark | null = null;
+  /** Presses of `X` not served yet: one real undo each (#764). */
+  #undoWanted = 0;
+  /** The undo on its way to the server and the cue it shows if accepted; one at a time. */
+  #undoSent: { readonly seq: number; readonly mark: Omit<UndoMark, 'at'> } | null = null;
+  /** The cues still on screen; the same array until they change. */
+  #undoMarks: readonly UndoMark[] = [];
+  #overlayUndo: readonly UndoMark[] = [];
 
   constructor(options: OrderControllerOptions) {
     this.#o = options;
@@ -446,15 +462,18 @@ export class OrderController implements MapInteraction {
     this.#syncCpShort(preview);
     this.#syncPlanning();
     const hover = this.#hoverMarkNow();
+    const undo = this.#undoMarksNow();
     const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
+      undo !== this.#overlayUndo ||
       supply !== this.#overlay.supply ||
       this.ui.current.terrainMode !== this.#overlay.terrain
     ) {
       this.#overlayKey = key;
       this.#overlayGhosts = ghosts;
+      this.#overlayUndo = undo;
       this.#overlay = {
         selection,
         ghosts,
@@ -479,6 +498,7 @@ export class OrderController implements MapInteraction {
             ? null
             : { from, node: preview, ticks: eta.ticks, path: eta.path },
         hover,
+        undo,
       };
     }
     return this.#overlay;
@@ -1619,6 +1639,12 @@ export class OrderController implements MapInteraction {
         else this.deselect();
         return true;
       case 'KeyX':
+        // Nothing selected on the ordinary map: the last action goes, step by step (#764). A held
+        // key does not repeat it, and the «Supply» layer shows no groups for the cue to mark.
+        if (this.isIdle() && !this.ui.current.supplyMode) {
+          if (input.repeat !== true) this.#undoPress();
+          return true;
+        }
         // A selected own city: its last recruit goes; otherwise the order of the selected group.
         if (this.#o.hud.selection?.kind === 'node') {
           if (this.selectedOwnCity() !== null) this.cancelRecruit();
@@ -1927,11 +1953,80 @@ export class OrderController implements MapInteraction {
   }
 
   /** Sends an intent and starts waiting for its `ack`; a new command clears the old notice. */
-  #sendCommand(cmd: Command, from: number | null): void {
+  #sendCommand(cmd: Command, from: number | null): number | null {
     const send = this.#o.send;
-    if (send === null) return;
+    if (send === null) return null;
     this.#clearNotice();
-    this.#o.book.track(send(cmd), cmd, from);
+    const seq = send(cmd);
+    this.#o.book.track(seq, cmd, from);
+    return seq;
+  }
+
+  /** `X` with nothing selected: one more step back (#764). */
+  #undoPress(): void {
+    if (this.#o.send === null) return;
+    this.#undoWanted += 1;
+    this.#undoNext();
+  }
+
+  /**
+   * Sends the next undo a press waits for: one at a time, and not before the answer to a move or
+   * a recruit still on its way, which may be the newest action. The list run out: the neutral cue.
+   */
+  #undoNext(): void {
+    const { book, hud } = this.#o;
+    if (this.#undoWanted === 0 || this.#undoSent !== null || book.undoAwaited) return;
+    const entry = book.undo.take((e) => e.kind === 'order' && hud.inFight(e.group));
+    if (entry === null) {
+      this.#undoWanted = 0;
+      this.#addUndoMark({ group: null, node: null, path: [] });
+      return;
+    }
+    const mark = this.#undoMarkOf(entry);
+    const seq = this.#sendCommand(undoCommand(entry), null);
+    if (seq !== null) this.#undoSent = { seq, mark };
+  }
+
+  /** Where the cue of `entry` goes: read now, while the snapshot still shows the order. */
+  #undoMarkOf(entry: UndoEntry): Omit<UndoMark, 'at'> {
+    if (entry.kind === 'recruit') return { group: null, node: entry.node, path: [] };
+    const group = this.#o.hud.ownGroup(entry.group);
+    const location = group?.location;
+    return {
+      group: entry.group,
+      node: location?.kind === 'node' ? location.node : null,
+      path: group?.order?.path ?? [],
+    };
+  }
+
+  /**
+   * The answer to a command, for the undo list; `true`: an undo the server refused, which stays
+   * silent (no toast, no notice): the entry is dropped and the next one is asked.
+   */
+  #undoAnswer(result: CommandResult): boolean {
+    const sent = this.#undoSent;
+    if (sent?.seq !== result.seq) {
+      if (result.kind === 'accepted') this.#o.book.undo.onAccepted(result.cmd);
+      return false;
+    }
+    this.#undoSent = null;
+    if (result.kind === 'rejected') return true;
+    this.#undoWanted = result.kind === 'accepted' ? this.#undoWanted - 1 : 0;
+    if (result.kind === 'accepted') this.#addUndoMark(sent.mark);
+    return false;
+  }
+
+  #addUndoMark(mark: Omit<UndoMark, 'at'>): void {
+    this.#undoMarks = [...this.#undoMarks, { ...mark, at: this.#now() }].slice(-UNDO_CUE.max);
+  }
+
+  /** The cues of `X` still on screen; the same array until one ends. */
+  #undoMarksNow(): readonly UndoMark[] {
+    const now = this.#now();
+    if (this.#undoMarks.some((m) => now - m.at >= UNDO_CUE.ms)) {
+      this.#undoMarks = this.#undoMarks.filter((m) => now - m.at < UNDO_CUE.ms);
+    }
+    return this.#undoMarks;
   }
 
   #selectedGroup() {
@@ -2055,6 +2150,9 @@ export class OrderController implements MapInteraction {
   }
 
   #onResult(result: CommandResult): void {
+    const quiet = this.#undoAnswer(result);
+    this.#undoNext();
+    if (quiet) return;
     const { cmd } = result;
     // A split that was to send its part on and did not happen sends nothing (#762).
     if (

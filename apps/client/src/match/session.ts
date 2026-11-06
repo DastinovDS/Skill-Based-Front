@@ -249,6 +249,8 @@ export class MatchSession implements RenderSource {
   #onMessage(msg: ServerMsg): void {
     switch (msg.type) {
       case 'welcome':
+        // A reconnect starts the list of what `X` can undo anew (#764).
+        this.orders.undo.clear();
         // The first welcome fixes the ruleset; after a reconnect it is the same match.
         if (this.#makeContext !== null && this.#hud === null) {
           this.#setContext(this.#makeContext(msg));
@@ -266,6 +268,9 @@ export class MatchSession implements RenderSource {
         break;
       case 'ack':
         this.orders.onAck(msg);
+        break;
+      case 'match_end':
+        this.orders.undo.clear();
         break;
       default:
         break;

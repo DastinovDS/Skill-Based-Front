@@ -11,6 +11,7 @@
   import { createDevMatch } from './devMatch.ts';
   import { devLinePath } from './devServer.ts';
   import { parseEta, pinEta } from './etaPin.ts';
+  import { parseUndo, pinUndo } from './undoPin.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource } from './scenarios.ts';
   import { OrderBook } from '../match/orderBook.ts';
   import { forwardKey } from '../match/keyEvents.ts';
@@ -38,6 +39,7 @@
   const at = params.has('at') && Number.isFinite(atParam) ? atParam : undefined;
   // `?eta=<from>,<to>,<ticks>[,<via>...]` pins the travel-time label of an order to a frozen scene (#432).
   const etaPinned = parseEta(params.get('eta'));
+  const undoPinned = parseUndo(params.get('undo'));
   // `?split=<node>[,<units>]` makes a fixture scene answer the `reach` of a selected group with that
   // node under `split` (the group is too big for it, DEC-20) and the size that fits there (0 by
   // default): the hint "split the group" (#468) and the click that opens the split menu (#762).
@@ -236,7 +238,10 @@
     };
   });
 
-  const interaction = $derived(etaPinned === null ? orders : pinEta(orders, etaPinned));
+  const etaInteraction = $derived(etaPinned === null ? orders : pinEta(orders, etaPinned));
+  const interaction = $derived(
+    undoPinned === null ? etaInteraction : pinUndo(etaInteraction, undoPinned),
+  );
 
   function handleKey(event: KeyboardEvent): void {
     if (routeKey(chrome, event, { fit: () => canvas?.fitMap(), idle: () => orders.isIdle() })) {

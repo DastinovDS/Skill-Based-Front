@@ -7,7 +7,7 @@
  * Besides `current` it owns the small pieces of the match HUD that are not a view of the snapshot:
  * the toasts, the start banner and the last-minute cue (ui-style 10.4, U4, U12).
  */
-import type { EventMsg, SnapshotMsg } from '../protocol.gen.ts';
+import type { EventMsg, GroupView, SnapshotMsg } from '../protocol.gen.ts';
 import {
   buildHudData,
   type HudContext,
@@ -121,6 +121,16 @@ export class HudState {
     this.#startOnce(snapshot);
     this.#lastMinute(snapshot);
     this.#publish();
+  }
+
+  /** The own group `id` in the newest snapshot; `null`: it is not there (any more). */
+  ownGroup(id: string): GroupView | null {
+    return this.#snapshot?.view.groups.find((g) => g.id === id) ?? null;
+  }
+
+  /** The newest snapshot shows the own group `id` in a fight (`FightView.groups`). */
+  inFight(id: string): boolean {
+    return this.#snapshot?.view.fights.some((f) => f.groups.includes(id)) ?? false;
   }
 
   /** A visible event for the feed; shown with the next snapshot. */

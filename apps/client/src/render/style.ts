@@ -623,6 +623,29 @@ export const GHOST_REJECT_MS = 500;
 export const GHOST_SHAKE_AMPLITUDE = 3;
 
 /**
+ * The cue of `X` on the map (#764): what was undone, at its place. `ms` it lasts in all; over
+ * `rollbackMs` the dashed arrow of the order runs back into the group and the dashed ring closes
+ * in from `ringFrom` times its size; it fades over the last part, from `fadeFrom`. `sign`: the
+ * radius of the round-arrow sign, `max`: cues at once.
+ */
+export const UNDO_CUE = {
+  ms: 1100,
+  rollbackMs: 450,
+  fadeFrom: 0.6,
+  ringFrom: 1.8,
+  ringWidth: 3,
+  ringDash: 7,
+  ringGap: 5,
+  arrowWidth: 4,
+  sign: 10,
+  signWidth: 2.2,
+  /** The sign "nothing to undo": dimmer, beside the pointer. */
+  emptyAlpha: 0.7,
+  emptyOffset: 22,
+  max: 4,
+} as const;
+
+/**
  * The light outline of the own group under the pointer (#762): the selection frame's triangle, a
  * little smaller and faint, so the hover never reads as a selection.
  */
