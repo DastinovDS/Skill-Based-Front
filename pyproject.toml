@@ -335,6 +335,25 @@ ignore_imports = [
 ]
 unmatched_ignore_imports_alerting = "none"
 
+# The generator and the fairness filter run on the server in stage 2 of #771: no map-tool package.
+[[tool.importlinter.contracts]]
+name = "gow_maps.generate and gow_maps.fairness use the standard library and gow_sim.maps only"
+type = "forbidden"
+source_modules = ["gow_maps.generate", "gow_maps.fairness"]
+forbidden_modules = [
+    "gow_maps.bake",
+    "gow_maps.cli",
+    "gow_maps.geo",
+    "gow_maps.mirror",
+    "gow_maps.preview",
+    "gow_maps.validate",
+    "matplotlib",
+    "networkx",
+    "numpy",
+    "PIL",
+]
+include_external_packages = true
+
 [[tool.importlinter.contracts]]
 name = "gow_maps uses the standard library, gow_sim, networkx, matplotlib, numpy and Pillow only"
 type = "forbidden"

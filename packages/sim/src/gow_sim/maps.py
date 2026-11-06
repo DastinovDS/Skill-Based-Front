@@ -36,7 +36,9 @@ ROAD_START_LEVEL: Final = 1
 NAME_MAX_LEN: Final = 24
 """Longest node name (DEC-23, item 4); the validator checks it (``names``), not the loader."""
 
-SYMMETRIES: Final = ("rot180",)
+SYMMETRIES: Final = ("rot180", "none")
+"""``rot180``: the players swap places by the ``mirror`` table. ``none``: a generated map (#771), the
+``mirror`` table is the identity and the validator asks for equal access instead."""
 
 
 class Terrain(StrEnum):

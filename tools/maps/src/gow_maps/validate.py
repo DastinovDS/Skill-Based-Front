@@ -9,7 +9,8 @@ road lengths and, when switched on, the map size (DEC-27, item 5). Given a rules
 warehouse holds (``warehouse``). A map with an authored geography (DEC-36, ``gow_maps.geo``) also
 gets the check ``geography``: areas of nodes share land only along a road, each area is one piece
 around its node, roads cross water only at a bridge, nodes keep clear of water, the vector file is
-baked for the map version.
+baked for the map version. A generated map without a mirror (``meta.symmetry = "none"``, #771) gets
+the check ``fairness`` in place of ``symmetry`` and ``border``.
 """
 
 import json
@@ -23,8 +24,9 @@ from typing import cast
 import networkx as nx
 import numpy as np
 
-from gow_maps import geo
+from gow_maps import fairness, geo
 from gow_maps.bake import STEP
+from gow_maps.fairness import FairnessConfig
 from gow_sim.maps import (
     BORDER_SELF_MIRROR,
     NAME_MAX_LEN,
@@ -39,7 +41,7 @@ from gow_sim.ruleset import Ruleset
 
 
 @dataclass(frozen=True, slots=True)
-class ValidatorConfig:
+class ValidatorConfig(FairnessConfig):
     """Thresholds of the map checks. Defaults: ``validate.toml`` next to this module."""
 
     max_degree: int
@@ -222,14 +224,18 @@ def check_vector_file(path: Path, mapdef: MapDef) -> list[Issue]:
 
 
 def validate(mapdef: MapDef, config: ValidatorConfig, rules: Ruleset | None = None) -> list[Issue]:
-    """Every check; ``warehouse`` only with ``rules`` that have ``city_upgrades`` on."""
+    """Every check; ``warehouse`` only with ``rules`` that have ``city_upgrades`` on.
+
+    A map with ``meta.symmetry = "none"`` (#771) has no mirror to keep: instead of ``symmetry``
+    and ``border`` it gets an identity ``mirror`` table and the check ``fairness``.
+    """
     graph = to_graph(mapdef)
+    free = mapdef.meta.symmetry == "none"
     issues = [
         *(check_size(mapdef, config) if config.size_check else []),
         *check_names(mapdef),
         *check_planarity(mapdef),
-        *check_symmetry(mapdef),
-        *check_border(mapdef),
+        *(check_mirror_table(mapdef) if free else [*check_symmetry(mapdef), *check_border(mapdef)]),
         *check_degree(mapdef, config),
         *check_travel_ticks(mapdef, config),
         *(check_warehouse(mapdef, rules) if rules is not None else []),
@@ -239,7 +245,23 @@ def validate(mapdef: MapDef, config: ValidatorConfig, rules: Ruleset | None = No
     if not connectivity:  # path and distance checks are meaningless on a disconnected graph
         issues += check_disjoint_paths(mapdef, graph, config)
         issues += check_neutral_space(mapdef, graph, config)
+        issues += check_fairness(mapdef, config) if free else []
     return issues
+
+
+def check_mirror_table(mapdef: MapDef) -> list[Issue]:
+    """A map without a mirror maps every node and edge to itself: ``node_key`` is then the id."""
+    moved = [i for i, m in enumerate(mapdef.mirror_nodes) if i != m]
+    moved_edges = [i for i, m in enumerate(mapdef.mirror_edges) if i != m]
+    if not moved and not moved_edges:
+        return []
+    return [Issue("symmetry", f"not an identity mirror: nodes {moved}, edges {moved_edges}")]
+
+
+def check_fairness(mapdef: MapDef, config: ValidatorConfig) -> list[Issue]:
+    """Equal access, not a mirror in disguise, interest (#771, ``gow_maps.fairness``)."""
+    scores = fairness.score(mapdef, config)
+    return [Issue("fairness", message) for message in fairness.check(scores, config)]
 
 
 def check_warehouse(mapdef: MapDef, rules: Ruleset) -> list[Issue]:

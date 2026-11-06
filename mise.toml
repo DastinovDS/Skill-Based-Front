@@ -68,7 +68,7 @@ run = [
   "uv run ruff format --check --quiet .",
   "uv run pyright",
   "uv run lint-imports --no-logo",
-  "uv run gow-maps validate --ruleset rulesets/mvp-4.toml maps/*.json maps/fixtures/*.json maps/menu/*.json",
+  "uv run gow-maps validate --ruleset rulesets/mvp-4.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json",
 ]
 
 [tasks."check:client"]
@@ -233,21 +233,26 @@ description = "Validate the maps (alias of maps:validate)"
 depends = ["maps:validate"]
 
 [tasks."maps:validate"]
-description = "gow-maps validate maps/*.json, maps/fixtures/*.json and the menu map maps/menu/*.json, with the start-stock check against the warehouses of rulesets/mvp-4.toml (DEC-26, item 5) and the check geography of the maps with maps/src/<name>.geo.json (DEC-36)"
-run = "uv run gow-maps validate --ruleset rulesets/mvp-4.toml maps/*.json maps/fixtures/*.json maps/menu/*.json"
+description = "gow-maps validate maps/*.json, maps/fixtures/*.json, the menu map maps/menu/*.json and the generated maps maps/gen/*.json, with the start-stock check against the warehouses of rulesets/mvp-4.toml (DEC-26, item 5) and the check geography of the maps with src/<name>.geo.json (DEC-36)"
+run = "uv run gow-maps validate --ruleset rulesets/mvp-4.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json"
 
 [tasks."maps:preview"]
-description = "Draw maps/<name>.preview.png (the pool and the menu map maps/menu/)"
-run = "uv run gow-maps preview maps/*.json maps/menu/*.json"
+description = "Draw maps/<name>.preview.png (the pool, the menu map maps/menu/ and the generated maps maps/gen/)"
+run = "uv run gow-maps preview maps/*.json maps/menu/*.json maps/gen/*.json"
 
 [tasks."maps:bake"]
-description = "Bake maps/<name>.bg.webp (the pool and the menu map maps/menu/): numpy and Pillow, texture T2; a map with maps/src/<name>.geo.json also gets water and maps/geo/<name>.json, DEC-36 (after any map edit)"
-run = "uv run gow-maps bake maps/*.json maps/menu/*.json"
+description = "Bake maps/<name>.bg.webp (the pool, the menu map maps/menu/ and the generated maps maps/gen/): numpy and Pillow, texture T2; a map with src/<name>.geo.json also gets water and geo/<name>.json, DEC-36 (after any map edit)"
+run = "uv run gow-maps bake maps/*.json maps/menu/*.json maps/gen/*.json"
 
 [tasks."maps:mirror"]
 description = "Build maps/<name>.json from maps/src/<name>.half.json (arg: name)"
 usage = 'arg "<name>"'
 run = "uv run gow-maps mirror maps/src/{{usage.name}}.half.json -o maps/{{usage.name}}.json"
+
+[tasks."maps:generate"]
+description = "Make the map of a seed in maps/gen/ (arg: seed): a whole map with its geography, baked and validated, outside the pool (#771)"
+usage = 'arg "<seed>"'
+run = "uv run gow-maps generate --seed {{usage.seed}} --bake --ruleset rulesets/mvp-4.toml"
 
 [tasks.tournament]
 description = "Bot tournament (defaults: the maps of the pool maps/*.json, not the fixtures, all bots, 100 seeds, 8 jobs, mvp-4; override after --)"
