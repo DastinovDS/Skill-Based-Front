@@ -1,0 +1,9 @@
+{
+  "project": "Skill-Based Front (SpriteCook project f2fcd6a0-fc8d-48aa-ada1-6c984d6a16f0)",
+  "model": "gpt-image-2, quality low, 1K, 2 credits per image, 4 credits in all",
+  "sheets": [
+    { "asset_id": "1758e619-38e3-4ab0-ae09-d50fcdb17773", "label": "two grey steel helmets, sheet B", "used_for": "variant Painted: the dome and the brim, cropped above the rim" },
+    { "asset_id": "9887da2f-ee08-4155-b371-8c58dc7e14f6", "label": "two grey steel helmets, sheet A", "used_for": "unused" }
+  ],
+  "note": "Both sheets drew a face plate under the rim that looks like a known film helmet. It is cropped away and must not be used."
+}
