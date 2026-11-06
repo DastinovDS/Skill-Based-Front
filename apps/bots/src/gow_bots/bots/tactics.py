@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from gow_bots.bots.base import Bot, node_of
-from gow_bots.bots.economy import factory_site, line_commands, wants
+from gow_bots.bots.economy import FactorySites, factory_site, line_commands, wants
 from gow_bots.bots.utility import prefer_planned, shots_to_take, takes
 from gow_sim.commands import BuildFactory, Command, Move, Recruit, SetMode, SetStance, UpgradeRoad
 from gow_sim.maps import MapDef
@@ -100,6 +100,8 @@ class StrategyBot(Bot):
         self.stance_tick: int | None = None
         self.lines_seen: dict[int, int] = {}
         """Economy v2: own line id to the tick it was first seen (``economy.line_commands``)."""
+        self.factory_sites = FactorySites()
+        """Economy v2: the memory of the own factory builds (``economy.factory_site``)."""
         self.memory: dict[int, tuple[int, int, int]] = {}
         """Last exact sighting of the enemy per node: ``(units, charged, tick)``."""
         self.value: tuple[int, ...] = tuple(
@@ -229,7 +231,7 @@ class StrategyBot(Bot):
             return
         for cmd in line_commands(self, view, wants(self, view, {}), self.lines_seen):
             self.spend(turn, cmd)
-        site = factory_site(self, view, FACTORIES)
+        site = factory_site(self, view, FACTORIES, self.factory_sites)
         if site is not None:
             self.spend(turn, BuildFactory(site))
 
