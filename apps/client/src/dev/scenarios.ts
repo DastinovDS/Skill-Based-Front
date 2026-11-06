@@ -170,6 +170,7 @@ function fightsSnapshot(moment: 'phases' | 'kill' | 'flight' = 'phases'): Snapsh
     virtual,
     spent: [shots[0] - virtual[0], shots[1] - virtual[1]] as [number, number],
     losses,
+    burned: [0, 0] as [number, number],
   });
   // The rounds of the moments with a shot in the air: bonus shots (all of a side's shots virtual) where
   // the tracers differ from the real ones.
@@ -267,10 +268,52 @@ function fightRoundEvents(snapshot: SnapshotMsg): EventMsg[] {
         spent_1: last.spent[1],
         losses_0: last.losses[0],
         losses_1: last.losses[1],
+        burned_0: last.burned[0],
+        burned_1: last.burned[1],
       },
     };
     return [event];
   });
+}
+
+/**
+ * The burn of a plains defender (DEC-45, #778) in two fights on the `siege` map at tick 400: in
+ * city 1 the first round is still to come, so the pending burn is the amber mark of the last
+ * charged chip (`mute`); in city 0 the first round was 4 ticks ago: the enemy defender (3 charged
+ * of 4) shot once and burned a charge, both chips went out, nothing is silent any more.
+ */
+function fightsBurnSnapshot(): SnapshotMsg {
+  const base = fightsSnapshot();
+  const [, city0, , city1] = base.view.fights;
+  if (city0 === undefined || city1 === undefined) throw new Error('the fights scene lists four');
+  return {
+    ...base,
+    view: {
+      ...base.view,
+      fights: [
+        {
+          ...city0,
+          attacker: 0,
+          enemy_units: 4,
+          enemy_charged: 1,
+          losses: [0, 0],
+          virtual_left: [0, 0],
+          mute: [0, 0],
+          start_tick: 376,
+          next_round_tick: 416,
+          last_round: {
+            tick: 396,
+            shots: [1, 1],
+            virtual: [0, 0],
+            spent: [1, 1],
+            losses: [0, 0],
+            burned: [0, 1],
+          },
+        },
+        city1,
+      ],
+    },
+  };
 }
 
 /**
@@ -688,6 +731,13 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     map: 'siege',
     snapshot: fightsSnapshot('flight'),
     events: fightRoundEvents(fightsSnapshot('flight')),
+  },
+  // The burn of a plains defender (DEC-45): pending in one fight, just done in the other.
+  {
+    id: 'fights_burn',
+    map: 'siege',
+    snapshot: fightsBurnSnapshot(),
+    events: fightRoundEvents(fightsBurnSnapshot()),
   },
   {
     id: 'snapshot_clash',

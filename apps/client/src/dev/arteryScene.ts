@@ -263,6 +263,7 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
         virtual: [0, 0],
         spent: [2, 1],
         losses: [0, 1],
+        burned: [0, 0],
       },
     },
   ];

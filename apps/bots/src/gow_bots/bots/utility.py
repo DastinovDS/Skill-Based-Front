@@ -22,6 +22,12 @@ node needs one shot per pooled charge (cancelling) and one per defending unit (k
 Defense bonus grows with the time in the mode, at most the charged units (DEC-30); the enemy's
 number is hidden, so the caller passes an estimate (``Bot.defended``).
 
+Plains under ``combat.terrain_burn`` (DEC-45): the first round of a fight burns the charges the
+modifier takes, so the pool of a defender about to be attacked is the same number as under the
+silence of DEC-24, item F2, but in a fight past its first round the charges the view shows all
+shoot: the caller says so with ``terrain_burned``. The burned charge is gone after the fight
+(``first_burn``), where a silent one stayed.
+
 The price of a capture (DEC-38): a capture spends ``capture.charge_cost`` real charges of the
 capturing groups in the node, and with fewer they bounce. Virtual shots fire first in a fight and
 never pay, so a group takes a node when its real charges cover the shots the bonus does not and
@@ -30,30 +36,65 @@ the price on top (``takes``). With ``charge_cost = 0`` every answer here is the 
 
 from gow_sim.maps import Terrain
 from gow_sim.ruleset import Ruleset
+from gow_sim.view import PlayerView
 
-__all__ = ["defender_pool", "prefer_planned", "shots_to_take", "takes"]
+__all__ = [
+    "defender_pool",
+    "first_burn",
+    "prefer_planned",
+    "shots_to_take",
+    "takes",
+    "terrain_burned",
+]
 
 
-def defender_pool(rules: Ruleset, terrain: Terrain, charged: int, defense: int) -> int:
+def terrain_burned(rules: Ruleset, view: PlayerView, node: int) -> bool:
+    """Whether a negative terrain of ``node`` no longer acts on the numbers the view shows: a fight
+    goes on there and nothing is left to burn (DEC-45). ``False`` without ``combat.terrain_burn``:
+    the silence of DEC-24, item F2 lasts to the end of the fight."""
+    if not rules.combat.terrain_burn:
+        return False
+    return any(f.node == node and not any(f.mute) for f in view.fights)
+
+
+def first_burn(rules: Ruleset, terrain: Terrain, charged: int) -> int:
+    """The charges of a defender with ``charged`` charged units that the first round burns (DEC-45);
+    0 without ``combat.terrain_burn``: a silent charge stays with the group."""
+    if not rules.combat.terrain_burn:
+        return 0
+    return min(charged, max(0, -rules.terrain.defense_mod.of(terrain)))
+
+
+def defender_pool(
+    rules: Ruleset, terrain: Terrain, charged: int, defense: int, *, burned: bool = False
+) -> int:
     """Pool ``Qd`` of the defenders of a node with ``charged`` firing charges (DEC-07, rule 1).
 
     ``defense``: the Defense bonus gathered by the start of the fight before its cap; the pool
-    takes at most ``charged`` of it (DEC-30, item 2)."""
+    takes at most ``charged`` of it (DEC-30, item 2). ``burned``: ``terrain_burned``, the
+    ``charged`` are what is left after the burn."""
     if charged <= 0:
         return 0
     bonus = min(defense, charged)
-    return max(0, charged + bonus + rules.terrain.defense_mod.of(terrain))
+    mod = rules.terrain.defense_mod.of(terrain)
+    return max(0, charged + bonus + (max(0, mod) if burned else mod))
 
 
 def shots_to_take(
-    rules: Ruleset, terrain: Terrain, units: int, charged: int, defense: int = 0
+    rules: Ruleset,
+    terrain: Terrain,
+    units: int,
+    charged: int,
+    defense: int = 0,
+    *,
+    burned: bool = False,
 ) -> int:
     """Attacker's pool that takes a node held by ``units`` units, ``charged`` of them charged.
 
     ``c = min(Qa, Qd)`` shots cancel, the surplus ``Qa - Qd`` kills one unit each (DEC-07, rules
     2 and 3), and the node falls when no defender is left (rule 4): ``Qa >= Qd + units``.
     """
-    return defender_pool(rules, terrain, charged, defense) + units
+    return defender_pool(rules, terrain, charged, defense, burned=burned) + units
 
 
 def takes(rules: Ruleset, charged: int, bonus: int, need: int, toll: int = 0) -> bool:

@@ -135,7 +135,8 @@ class Bot:
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {}
     DISCIPLINE: ClassVar[bool] = False
     """Cancel discipline (#687): cancels only where they save units. ``fight_commands`` counts
-    the silent charges of plains (``FightView.mute``) out of both stocks; ``CampaignBot``
+    the silent charges of plains (``FightView.mute``; under ``combat.terrain_burn`` the charges
+    still to burn, nothing after the first round, DEC-45) out of both stocks; ``CampaignBot``
     recalls only an attack that would lose units (``recall_pays``) and a recalled target waits
     ``RECALL_TICKS`` for a stronger group. Off: the play of BOT-03 (a recall of any attack that
     would not take the target with the margin), which the plain bots and the benchmark
@@ -320,7 +321,7 @@ class Bot:
             mine = [groups[gid] for gid in f.groups if gid in groups]
             stock = sum(g.charged for g in mine) + f.virtual_left[me]
             enemy = f.enemy_charged + f.virtual_left[1 - me]
-            if self.DISCIPLINE:  # #687: a silent charge never shoots (DEC-24, item F2)
+            if self.DISCIPLINE:  # #687: a silent or burning charge never shoots (DEC-45)
                 stock -= f.mute[me]
                 enemy -= f.mute[1 - me]
             if enemy > stock + self.coming(view, f):

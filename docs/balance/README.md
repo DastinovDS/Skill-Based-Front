@@ -284,7 +284,7 @@ values). Code and exact definitions: the module docstring of `gow_sim.analysis` 
 charges_packets_lost + charges_warehouses_lost + charges_starved + charges_attrition + charges_built + charges_plans +
 charges_tolls + charges_end`, and
 `charges_residual` is the difference (must be 0). Sources by event: `charges_fights` is the player's
-`spent_<p>` of every `fight_round`; `charges_captures` is the number of `node_captured` times `capture.charge_cost`
+`spent_<p>` of every `fight_round`, plus its `burned_<p>` under `combat.terrain_burn` (DEC-45); `charges_captures` is the number of `node_captured` times `capture.charge_cost`
 (DEC-38); `charges_packets_lost` is `packet_lost`; `charges_warehouses_lost` is `warehouse_lost` (its `owner`);
 `charges_starved` is `warehouse + units` of `starvation`; `charges_attrition` counts the `attrition` events that
 killed a charged unit; under economy v2 `charges_built` is `warehouse + units` of `build_paid` and `charges_plans` counts

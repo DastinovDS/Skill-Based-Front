@@ -40,7 +40,7 @@ import heapq
 from dataclasses import dataclass
 from typing import Final
 
-from gow_bots.bots.utility import shots_to_take
+from gow_bots.bots.utility import shots_to_take, terrain_burned
 from gow_sim.maps import MapDef, NodeKind, Terrain
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.view import AtNode, Detail, EnemyGroupView, IntentKind, Mode, PlayerView, Sighting
@@ -378,7 +378,8 @@ class Assessor:
                 own_charged += g.charged
                 defense += g.defense_bonus or 0
         terrain = self.map.nodes[cap].terrain
-        need = shots_to_take(self.rules, terrain, own_units, own_charged, defense)
+        burned = terrain_burned(self.rules, view, cap)
+        need = shots_to_take(self.rules, terrain, own_units, own_charged, defense, burned=burned)
         if not forces:
             return Threat(None, 0, need)
         eta = min(t for t, _ in forces)

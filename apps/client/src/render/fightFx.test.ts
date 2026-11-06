@@ -171,6 +171,7 @@ describe('exchange of the last round', () => {
     virtual,
     spent: [0, 0] as [number, number],
     losses: [0, 0] as [number, number],
+    burned: [0, 0] as [number, number],
   });
 
   it('splits the shots of each side into real and virtual ones, the virtual among them', () => {

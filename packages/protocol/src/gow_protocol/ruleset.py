@@ -90,6 +90,9 @@ class CombatPublic(WireModel):
     shots_per_round: PosInt
     regroup_ticks: NonNegInt
     """The pause of an edge winner before it goes on (DEC-24, item G4)."""
+    terrain_burn: bool
+    """A negative ``terrain_defense_mod`` burns charges of the defender in the first round instead
+    of silencing them in every round (DEC-45)."""
 
 
 class CapturePublic(WireModel):
@@ -362,6 +365,7 @@ class RulesetPublic(WireModel):
                 round_ticks=rules.combat.round_ticks,
                 shots_per_round=rules.combat.shots_per_round,
                 regroup_ticks=rules.combat.regroup_ticks,
+                terrain_burn=rules.combat.terrain_burn,
             ),
             capture=CapturePublic(charge_cost=rules.capture.charge_cost),
             build=BuildPublic(ticks_per_level=rules.build.ticks_per_level),

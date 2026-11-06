@@ -1,6 +1,8 @@
 # PLAYTEST VARIANT of mvp-4-sup200 from #772 (DEC-44; not a default, the default ruleset stays mvp-4). Use only
-# with `mise run stack:agent mvp-4-stances` or a playtest stack. The only change against mvp-4-sup200.toml is the
-# section [stances]: stances return to economy v2 with local progress, and Balance equals mvp-4-sup200.
+# with `mise run stack:agent mvp-4-stances` or a playtest stack. The changes against mvp-4-sup200.toml are the
+# section [stances]: stances return to economy v2 with local progress, and Balance equals mvp-4-sup200; and
+# combat.terrain_burn (DEC-45, #778): a plains defender burns a charge in the first round instead of keeping one
+# silent charge in every round.
 # Under [stances] cp.period_ticks, factory.capital_period_ticks and orders.stance_cooldown_ticks have no
 # effect, economy.start_stance acts (DEC-09); the notes below that "the stance keys have no effect" under v2
 # now hold only for economy.stance_to_charges_pct and economy.charges_per_cp.
@@ -147,6 +149,7 @@ mountains = 70 # slower
 # of a fight on an edge continues its order regroup_ticks after the fight ends (regrouping).
 round_ticks = 20 # a round: 2 s (DEC-32)
 shots_per_round = 1 # shots of a side per round
+terrain_burn = true # DEC-45: a negative terrain.defense_mod burns charges in the first round
 regroup_ticks = 10 # regrouping of the winner on an edge: 1 s
 engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is caught into the fight
 

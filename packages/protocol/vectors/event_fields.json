@@ -142,6 +142,8 @@
     },
     "fight_round": {
       "fields": [
+        "burned_0",
+        "burned_1",
         "edge",
         "fight",
         "losses_0",

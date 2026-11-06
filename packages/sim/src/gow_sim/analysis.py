@@ -55,7 +55,8 @@ state samplings; nothing is added to the simulation:
 
 - ``charges_start`` and ``charges_end`` are the charge stock (``charge_stock``) before tick 1 and
   after the last tick. Sources: ``charges_start`` + ``charges_produced``. Sinks: ``charges_burned``,
-  ``charges_fights`` (``spent_<p>`` of the public ``fight_round`` events), ``charges_captures``
+  ``charges_fights`` (``spent_<p>`` and, under ``combat.terrain_burn``, ``burned_<p>`` of the
+  public ``fight_round`` events, DEC-45), ``charges_captures``
   (``node_captured`` count times ``capture.charge_cost``, DEC-38), ``charges_packets_lost``
   (``packet_lost``), ``charges_warehouses_lost`` (``warehouse_lost``, its ``owner``),
   ``charges_starved`` (``starvation`` warehouse + units), ``charges_attrition`` (``attrition``
@@ -1083,7 +1084,7 @@ def _count_ledger(e: Event, ledger: dict[str, dict[int, int]]) -> None:
             for p in PLAYERS:
                 spent = e.get(f"spent_{p}")
                 assert isinstance(spent, int)
-                ledger["fights"][p] += spent
+                ledger["fights"][p] += spent + (_opt_int(e, f"burned_{p}") or 0)
         case "packet_lost" | "packet_sent" | "packet_delivered" | "transfer_started":
             player, charges = e.get("player"), e.get("charges")
             assert isinstance(player, int) and isinstance(charges, int)

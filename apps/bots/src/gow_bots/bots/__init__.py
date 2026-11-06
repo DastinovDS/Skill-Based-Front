@@ -23,7 +23,14 @@ from gow_bots.bots.smart import (
 from gow_bots.bots.strangler import StranglerBot
 from gow_bots.bots.strategy import ExpanderBot, TurtleBot
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Tempo
-from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take, takes
+from gow_bots.bots.utility import (
+    defender_pool,
+    first_burn,
+    prefer_planned,
+    shots_to_take,
+    takes,
+    terrain_burned,
+)
 
 __all__ = [
     "BOTS",
@@ -53,7 +60,9 @@ __all__ = [
     "bot_factory",
     "choose_params",
     "defender_pool",
+    "first_burn",
     "prefer_planned",
     "shots_to_take",
     "takes",
+    "terrain_burned",
 ]

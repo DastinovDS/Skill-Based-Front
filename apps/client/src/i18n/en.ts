@@ -500,6 +500,8 @@ export const en = {
     '◇ ×N under a half of the arena: the bonus shots the side has left; both players see it while the fight lasts',
   'help.legend.silent':
     'An amber crossed circle on a chip: a charge that does not shoot (a defender on plains)',
+  'help.legend.silentBurn':
+    'An amber crossed circle on a chip: a charge that burns in the first round (a defender on plains)',
   'help.legend.bonusShot':
     'A dashed arrow with a diamond and the caption "bonus attack": a bonus shot fired this round',
   'help.howTo': 'How to play',

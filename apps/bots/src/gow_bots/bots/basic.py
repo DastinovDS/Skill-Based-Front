@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from typing import ClassVar, override
 
 from gow_bots.bots.base import Bot, ParamRange, node_of
-from gow_bots.bots.utility import prefer_planned, shots_to_take
+from gow_bots.bots.utility import prefer_planned, shots_to_take, terrain_burned
 from gow_sim.commands import (
     Command,
     Move,
@@ -111,7 +111,10 @@ class RandomLegalBot(Bot):
         enemy = self.enemy_at(view, dest) if view.nodes[dest].owner != view.player else (0, 0)
         if enemy is not None:
             terrain = self.map.nodes[dest].terrain
-            need = shots_to_take(self.rules, terrain, *enemy, self.defended(view, dest))
+            burned = terrain_burned(self.rules, view, dest)
+            need = shots_to_take(
+                self.rules, terrain, *enemy, self.defended(view, dest), burned=burned
+            )
             planned = Move(g.id, dest, planned=True)
             edges = self.path_edges(view, node_of(g), dest, g.units)
             if prefer_planned(self.rules, g.charged, need, edges) and self.cost(planned) <= budget:

@@ -208,6 +208,7 @@
   <HelpOverlay
     open={chrome.helpOpen}
     captureCost={hud.context.rules.capture.charge_cost}
+    terrainBurn={hud.context.rules.combat.terrain_burn}
     v2={orders.v2}
     flow={orders.flow}
     fort={orders.hasFort}
