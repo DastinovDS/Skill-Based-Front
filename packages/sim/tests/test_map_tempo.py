@@ -7,13 +7,13 @@ and clamped to ``min_pct..max_pct``; a period ``p`` becomes ``max(1, p * 100 // 
 
 import dataclasses
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from gow_sim.analysis import MatchLog, MatchRecorder, analyze
 from gow_sim.maps import load_map
 from gow_sim.match import HEADLESS_MATCH_KEY, Match
-from gow_sim.state import event
 from gow_sim.ruleset import (
     MapTempoRules,
     Ruleset,
@@ -25,6 +25,7 @@ from gow_sim.ruleset import (
     ruleset_hash,
     to_canonical,
 )
+from gow_sim.state import event
 
 TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parents[2]
@@ -148,11 +149,11 @@ def test_the_match_plays_the_scaled_rules_and_the_replay_names_the_given_ones() 
 
 
 def test_bad_sections_are_rejected() -> None:
-    data = to_canonical(dataclasses.replace(load_ruleset(STANCES), map_tempo=_tempo(TempoForm.SQRT)))
-    tempo = data["map_tempo"]
-    assert isinstance(tempo, dict)
+    rules = dataclasses.replace(load_ruleset(STANCES), map_tempo=_tempo(TempoForm.SQRT))
+    data = to_canonical(rules)
+    tempo = cast(dict[str, object], data["map_tempo"])
     for key, value in (("form", "cube"), ("ref_nodes", 0), ("min_pct", 0), ("max_pct", 40)):
-        bad = {**data, "map_tempo": {**tempo, key: value}}
+        bad: dict[str, object] = {**data, "map_tempo": {**tempo, key: value}}
         with pytest.raises(RulesetError, match=f"map_tempo.{key}"):
             parse_ruleset(bad)
 

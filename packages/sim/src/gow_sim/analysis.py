@@ -1040,7 +1040,10 @@ def analyze(log: MatchLog) -> MatchMetrics:
             for p in PLAYERS
         ),
         front_pressure_centi=tuple(
-            ledger["fights"][p] * 100 * minute_ticks // (log.front_width_sum[p] * PLACE_SAMPLE_TICKS)
+            ledger["fights"][p]
+            * 100
+            * minute_ticks
+            // (log.front_width_sum[p] * PLACE_SAMPLE_TICKS)
             if log.front_width_sum[p]
             else None
             for p in PLAYERS
