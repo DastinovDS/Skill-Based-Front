@@ -117,14 +117,17 @@ class Perception:
         self.figures: dict[int, int] = {}
         """Opaque figure id to the tick it was first shown."""
 
+    def glance(self, tick: int, figures: tuple[int, ...]) -> None:
+        """Note the enemy figures shown at ``tick`` (their opaque ids in view order,
+        ``gow_sim.view.enemy_figure_ids``) without a view: what ``view`` notes of them."""
+        known = self.figures
+        self.figures = {f: known.get(f, tick) for f in figures}
+
     def view(self, view: PlayerView) -> PlayerView:
         """``view`` without the enemy strikes and figures not noticed yet."""
         tick, react, me = view.tick, self.react, view.player
-        shown: dict[int, int] = {}
-        for e in view.edges:
-            for f in e.enemy_groups:
-                shown[f.id] = self.figures.get(f.id, tick)
-        self.figures = shown
+        self.glance(tick, tuple(f.id for e in view.edges for f in e.enemy_groups))
+        shown = self.figures
         if react <= 0:
             return view
         intents = tuple(i for i in view.intents if i.owner == me or i.created_tick + react <= tick)

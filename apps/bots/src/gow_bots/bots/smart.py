@@ -623,14 +623,25 @@ class SmartBot(CampaignBot):
 
     # Decision -------------------------------------------------------------------------------
 
+    def thinks(self, tick: int) -> bool:
+        """Whether the call of ``tick`` decides (the think interval and the APM bucket, item 9);
+        otherwise ``decide`` only notes the figures (``gow_sim.match.Glancer``). The refill is
+        the one ``decide`` makes: a second one in the same tick adds nothing."""
+        if self.thought is not None and tick - self.thought < self.tempo.think_ticks:
+            return False
+        self.bucket.refill(tick)
+        return self.bucket.ready()
+
+    def glance(self, tick: int, figures: tuple[int, ...]) -> None:
+        """A call of ``tick`` that does not decide (``thinks`` is false), with the enemy figure
+        ids of its view alone: what ``decide`` would note of it."""
+        self.perception.glance(tick, figures)
+
     @override
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         self.check_view(view)
         view = self.perception.view(view)  # every call: the first sighting of a figure
-        if self.thought is not None and tick - self.thought < self.tempo.think_ticks:
-            return []
-        self.bucket.refill(tick)
-        if not self.bucket.ready():
+        if not self.thinks(tick):
             return []
         self.thought = tick
         drawn = self.params

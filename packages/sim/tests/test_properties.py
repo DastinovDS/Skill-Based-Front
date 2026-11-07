@@ -24,6 +24,9 @@ and advance the clock. After every tick the invariants below must hold:
   overfull city cannot fill up further on its own;
 - packets: the route and its times match, every edge of it exists (DEC-18, item 5);
 - fog: ``project()`` does not change when everything the player must not see is perturbed
+  (nor does the light projection of the enemy figure ids, ``enemy_figure_ids``, which equals the
+  figure ids of the view, #787; the view that reuses the vision of the step, ``Match.view(reuse=
+  True)``, equals the one computed from scratch)
   (extends the synthetic-state test of SIM-14 in ``test_view.py`` to states of real matches),
   including the levels of fogged roads and enemy builds on them (DEC-17, DEC-22), the enemy's
   barracks, warehouse levels and city builds (DEC-26, item 10), the charged units on the range
@@ -86,7 +89,7 @@ from gow_sim.state import (
 )
 from gow_sim.systems.capacity import node_capacities
 from gow_sim.systems.vision import half_node
-from gow_sim.view import opaque_id, project
+from gow_sim.view import enemy_figure_ids, opaque_id, project
 
 ROOT = Path(__file__).resolve().parents[3]
 TESTS_DIR = Path(__file__).resolve().parent
@@ -625,6 +628,12 @@ class MatchMachine(RuleBasedStateMachine):
         hidden = copy.deepcopy(m.state)
         perturb_hidden(data, hidden, player, levels)
         assert project(hidden, m.rules, player, KEY) == view
+        # #787: the view of the match (the sight of the vision system reused) is the view
+        # computed from scratch, and the light projection is exactly its figure ids.
+        assert m.view(player, reuse=True) == view  # every rule ends with a tick
+        ids = tuple(f.id for e in view.edges for f in e.enemy_groups)
+        assert m.figures(player) == ids
+        assert enemy_figure_ids(hidden, m.rules, player, KEY) == ids
 
 
 def _own(state: GameState, player: int) -> list[Packet]:

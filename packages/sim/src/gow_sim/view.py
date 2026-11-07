@@ -80,7 +80,7 @@ them as arguments besides the ``(state, player[, cmd])`` of AGENTS.md.
 """
 
 import hashlib
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Final
 
@@ -124,6 +124,7 @@ from gow_sim.systems.supply import (
     transfer_route,
 )
 from gow_sim.systems.vision import (
+    Sight,
     Vision,
     compute_vision,
     current_sightings,
@@ -167,6 +168,7 @@ __all__ = [
     "Stance",
     "UpgradeGain",
     "check_match_key",
+    "enemy_figure_ids",
     "line_route",
     "opaque_id",
     "project",
@@ -827,15 +829,21 @@ def _order_view(rules: Ruleset, g: Group) -> OrderView | None:
     )
 
 
-def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> PlayerView:
+def project(
+    state: GameState, rules: Ruleset, player: int, match_key: bytes, sight: Sight | None = None
+) -> PlayerView:
     """The view of ``player`` on ``state`` (DEC-04, DEC-17, DEC-21, DEC-33, DEC-10, DEC-35). A pure
-    function: never writes."""
+    function: never writes. ``sight``: what the ``vision`` system computed for ``player`` on this
+    very state (``systems.vision.observe``), reused instead of computed again."""
     opaque = _hasher(match_key)
     mapdef = state.map
-    levels = compute_vision(state, rules, player)
-    now_nodes, now_halves = current_sightings(state, rules, player, levels)
+    if sight is None:
+        levels = compute_vision(state, rules, player)
+        now_nodes, now_halves = current_sightings(state, rules, player, levels)
+        roads = known_roads(state, player, levels)
+    else:
+        levels, now_nodes, now_halves, roads = sight.levels, sight.nodes, sight.halves, sight.roads
     memory = state.vision_memory[player]
-    roads = known_roads(state, player, levels)
     capacities = node_capacities(state, rules)
 
     nodes: list[NodeView] = []
@@ -1028,23 +1036,47 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     )
 
 
-def _enemy_figures(
-    state: GameState, rules: Ruleset, player: int, match_key: bytes, levels: Vision
-) -> dict[int, list[EnemyGroupView]]:
-    """Enemy groups on the halves of edges not in fog, by edge (DEC-33). One pass over the
-    groups; a group in a fight is left to the fight (detail 6)."""
-    figure = _figure_hasher(match_key)
+def _in_sight(
+    state: GameState, player: int, levels: Vision
+) -> Iterator[tuple[int, Group, OnEdge, Detail]]:
+    """The enemy groups shown as figures (DEC-33): on the halves of edges not in fog, not in a
+    fight (detail 6), by internal id: ``(id, group, location, level of its half)``."""
     mapdef = state.map
-    spotted = state.vision_memory[player].spotted
-    figures: dict[int, list[EnemyGroupView]] = {}
     for gid in sorted(state.groups):
         g = state.groups[gid]
         loc = g.location
         if g.owner == player or g.fight is not None or not isinstance(loc, OnEdge):
             continue
         level = levels.half(half_node(mapdef, loc))
-        if level is Detail.FOG:
-            continue
+        if level is not Detail.FOG:
+            yield gid, g, loc, level
+
+
+def enemy_figure_ids(
+    state: GameState, rules: Ruleset, player: int, match_key: bytes, sight: Sight | None = None
+) -> tuple[int, ...]:
+    """The opaque ids of the enemy figures of ``project()`` without the rest of the view:
+    ``tuple(f.id for e in view.edges for f in e.enemy_groups)``, in that order (by edge, then by
+    id), under the same fog rules (DEC-33). A pure function; ``sight`` as in ``project()``. A bot
+    that will not decide on a call reads only these (``gow_sim.match.Glancer``)."""
+    figure = _figure_hasher(match_key)
+    levels = compute_vision(state, rules, player) if sight is None else sight.levels
+    spotted = state.vision_memory[player].spotted
+    by_edge: dict[int, list[int]] = {}
+    for gid, _, loc, _ in _in_sight(state, player, levels):
+        by_edge.setdefault(loc.edge, []).append(figure(player, gid, spotted.get(gid, state.tick)))
+    return tuple(i for e in sorted(by_edge) for i in sorted(by_edge[e]))
+
+
+def _enemy_figures(
+    state: GameState, rules: Ruleset, player: int, match_key: bytes, levels: Vision
+) -> dict[int, list[EnemyGroupView]]:
+    """Enemy groups on the halves of edges not in fog, by edge (DEC-33, ``_in_sight``)."""
+    figure = _figure_hasher(match_key)
+    mapdef = state.map
+    spotted = state.vision_memory[player].spotted
+    figures: dict[int, list[EnemyGroupView]] = {}
+    for gid, g, loc, level in _in_sight(state, player, levels):
         exact = level is Detail.EXACT
         figures.setdefault(loc.edge, []).append(
             EnemyGroupView(

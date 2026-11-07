@@ -3,10 +3,13 @@
 A *task* is one match: a map, a pair of bots ``(side 0, side 1)`` and a seed. Every ordered pair
 of the chosen bots plays, so every pair meets with both sides (and every bot meets itself); the
 seed is the match seed of both bots (``choose_params``, AGENTS.md section 8). Tasks are sorted by
-``(map, seed, bot0, bot1)``, run by a ``ProcessPoolExecutor`` with one match per worker process
-(``max_tasks_per_child=1``: no state survives a match) and written in that order, so the file is
-a function of the arguments: the same run gives the same bytes (``docs/balance/README.md``
-describes the row format).
+``(map, seed, bot0, bot1)``, run by a ``ProcessPoolExecutor`` and written in that order, so the
+file is a function of the arguments: the same run gives the same bytes (``docs/balance/README.md``
+describes the row format). A worker process plays match after match (#787: its start and imports
+cost about 5% of a match): neither the simulation nor the bots keep module state, everything of a
+match lives in its own ``Match`` and bot objects, so a match plays the same in a fresh worker and
+in a used one (``tests/test_tournament.py``). The worker freezes what it imported out of the
+garbage collector's scans (``gc.freeze``); collection never changes a result.
 
 Mechanic usage (#166): every row also counts the accepted commands of each player by mechanic
 (``usage``, the keys of ``USAGE_KEYS``: the command class name, a planned ``Move`` as
@@ -15,6 +18,7 @@ Mechanic usage (#166): every row also counts the accepted commands of each playe
 The harness imports ``gow_sim`` fully (AGENTS.md, section 4.1); it does not import the server.
 """
 
+import gc
 import json
 import multiprocessing
 import os
@@ -257,5 +261,10 @@ def play_tasks(tasks: Sequence[MatchTask], jobs: int | None = None) -> Iterator[
     """The rows of ``tasks`` in task order, played on ``jobs`` processes (module docstring)."""
     workers = jobs if jobs is not None else (os.cpu_count() or 1)
     context = multiprocessing.get_context("spawn")
-    with ProcessPoolExecutor(workers, mp_context=context, max_tasks_per_child=1) as pool:
+    with ProcessPoolExecutor(workers, mp_context=context, initializer=_worker_start) as pool:
         yield from pool.map(play_match, tasks, chunksize=1)
+
+
+def _worker_start() -> None:
+    """A worker process starts: what it imported stays out of the garbage collector's scans."""
+    gc.freeze()

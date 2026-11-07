@@ -10,7 +10,7 @@ import pytest
 
 from gow_bots.bots import BOTS
 from gow_bots.cli import main
-from gow_bots.tournament import SCHEMA_VERSION, build_tasks
+from gow_bots.tournament import SCHEMA_VERSION, build_tasks, play_match, play_tasks
 from gow_sim.maps import load_map
 from gow_sim.replay import analyze_replay
 from gow_sim.ruleset import load_ruleset, ruleset_hash
@@ -95,3 +95,12 @@ def test_smoke_tournament_is_reproducible_and_its_replays_agree(
     )
     metrics = analyze_replay(replay, archive, ROOT / "maps" / "fixtures").to_json()
     assert {k: row[k] for k in metrics} == metrics
+
+
+def test_a_used_worker_plays_every_match_as_a_fresh_one() -> None:
+    """#787: a worker process plays match after match; no state survives a match, so a match
+    gives the same row in a used worker as in this process."""
+    tasks = build_tasks([MAP], SHORT, ["smart_rusher@easy", "expander"], seeds=1)
+    rows = list(play_tasks([*tasks, *tasks], jobs=1))  # one worker plays all of them
+    assert rows[: len(tasks)] == rows[len(tasks) :]
+    assert rows[: len(tasks)] == [play_match(t) for t in tasks]

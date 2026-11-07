@@ -27,7 +27,7 @@ from gow_bots.bots import (
 from gow_bots.bots.tempo import Bucket, Perception
 from gow_bots.search import mutate, run_search, score_rows
 from gow_bots.tournament import MatchTask
-from gow_sim.commands import PlayerCommand, SetFront
+from gow_sim.commands import Command, PlayerCommand, SetFront
 from gow_sim.maps import MapDef
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, load_ruleset
@@ -319,3 +319,65 @@ def test_every_level_of_every_personality_plays(
             ]
             run_headless(mapdef, short_rules, bots)
             assert all(b.thought is not None for b in bots), (cls.name, level)
+
+
+# Glancing between decisions (#787) -------------------------------------------------------------
+
+
+class _Full:
+    """A smart bot behind a controller without the ``Glancer`` hooks: every call of
+    ``run_headless`` builds the full view, as before #787."""
+
+    def __init__(self, bot: SmartBot) -> None:
+        self.bot = bot
+
+    def decide(self, view: PlayerView, tick: int) -> list[Command]:
+        return self.bot.decide(view, tick)
+
+
+class _Counted:
+    """A smart bot whose glances are counted (and whether they carried enemy figures)."""
+
+    def __init__(self, bot: SmartBot) -> None:
+        self.bot = bot
+        self.glances = 0
+        self.with_figures = 0
+
+    def thinks(self, tick: int) -> bool:
+        return self.bot.thinks(tick)
+
+    def glance(self, tick: int, figures: tuple[int, ...]) -> None:
+        self.glances += 1
+        self.with_figures += bool(figures)
+        self.bot.glance(tick, figures)
+
+    def decide(self, view: PlayerView, tick: int) -> list[Command]:
+        return self.bot.decide(view, tick)
+
+
+def test_a_bot_between_decisions_glances_and_plays_the_same(maps: dict[str, MapDef]) -> None:
+    """``run_headless`` gives a smart bot that will not think on a call only the enemy figure
+    ids of its view (``Glancer``): the match, the commands and the bot's memory of the figures
+    are those of a full view on every call."""
+    from gow_sim.match import Glancer, run_headless
+
+    mapdef = maps["web"]
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+
+    def bots() -> list[SmartBot]:
+        return [
+            SmartRusher(mapdef, rules, seed=2, player=0, difficulty="normal"),
+            SmartExpander(mapdef, rules, seed=2, player=1, difficulty="easy"),
+        ]
+
+    full, glancing = bots(), bots()
+    assert all(isinstance(b, Glancer) for b in glancing)
+    counted = [_Counted(b) for b in glancing]
+    before = run_headless(mapdef, rules, [_Full(b) for b in full], max_ticks=3000)
+    after = run_headless(mapdef, rules, counted, max_ticks=3000)
+    assert after == before
+    for a, b in zip(full, glancing, strict=True):
+        assert a.perception.figures == b.perception.figures
+        assert (a.thought, a.bucket.tokens) == (b.thought, b.bucket.tokens)
+    assert all(c.glances > 0 for c in counted)
+    assert sum(c.with_figures for c in counted) > 0  # the figures were really noted

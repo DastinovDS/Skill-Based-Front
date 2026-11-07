@@ -258,24 +258,51 @@ def is_visible(
 # The fog memory --------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True, slots=True)
+class Sight:
+    """What one player sees at the end of a tick, as the vision system computed it (``observe``):
+    the levels, the sightings of now (``current_sightings``) and the known road levels
+    (``known_roads``). ``project()`` takes it in place of computing the same again; it is valid
+    only for the state it was computed on (``Match`` keeps it until the next step)."""
+
+    levels: Vision
+    nodes: dict[int, Sighting]
+    halves: dict[tuple[int, int], Sighting]
+    roads: tuple[int, ...]
+
+
 def vision(state: GameState, rules: Ruleset) -> list[Event]:
-    """Last system of a tick: record what each player sees now in ``vision_memory``.
+    """Last system of a tick: record what each player sees now in ``vision_memory``
+    (``observe``). Emits no events."""
+    observe(state, rules)
+    return []
+
+
+def observe(state: GameState, rules: Ruleset) -> dict[int, Sight]:
+    """The work of the ``vision`` system; returns what each player sees, by player id.
 
     Every node and half of an edge not in fog gets a fresh ``Sighting`` with the current tick,
     every edge whose road level is not in fog or that is an own internal edge its current level
     (DEC-17; DEC-35, detail 5); fogged ones keep their
     last sighting. ``spotted`` keeps the enemy groups in sight with the tick each came into sight
-    (DEC-33, detail 5). Emits no events.
+    (DEC-33, detail 5).
     """
+    sights: dict[int, Sight] = {}
+    owners = [state.nodes[n].owner for n in range(len(state.map.nodes))]  # ids are 0..n-1
     for player in sorted(state.players):
         levels = compute_vision(state, rules, player)
         nodes, halves = current_sightings(state, rules, player, levels)
         memory = state.vision_memory[player]
         memory.nodes.update(nodes)
         memory.halves.update(halves)
+        widths = memory.widths
         for e, level in enumerate(levels.edges):
-            if level is not Detail.FOG or own_internal(state, player, e):
-                memory.widths[e] = state.edges[e].width
+            if level is not Detail.FOG:
+                widths[e] = state.edges[e].width
+            else:  # ``own_internal``: both ends are the player's
+                ends = state.map.edges[e]
+                if owners[ends.a] == player and owners[ends.b] == player:
+                    widths[e] = state.edges[e].width
         before = memory.spotted
         memory.spotted = {
             gid: before.get(gid, state.tick)
@@ -283,7 +310,10 @@ def vision(state: GameState, rules: Ruleset) -> list[Event]:
             if state.groups[gid].owner != player
             and is_visible(state, rules, player, state.groups[gid], levels)
         }
-    return []
+        # ``known_roads`` of this state: every level the player knows exactly was just stored.
+        roads = tuple(widths.get(e, ROAD_START_LEVEL) for e in range(len(levels.edges)))
+        sights[player] = Sight(levels, nodes, halves, roads)
+    return sights
 
 
 def current_sightings(
