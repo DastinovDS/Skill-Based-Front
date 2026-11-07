@@ -5,9 +5,18 @@ import type { TokenSpot } from './layout.ts';
 import type { GhostArrow, OverlayState } from './interaction.ts';
 import { setReducedMotion } from './motion.ts';
 import { badgeScale } from './alertLayout.ts';
-import { ETA_MARK, GHOST_REJECT_MS, REACH_RING, roadSpan } from './style.ts';
+import {
+  ETA_MARK,
+  GHOST_REJECT_MS,
+  HELMET_FRAME,
+  REACH_RING,
+  UNIT_SIDES,
+  roadSpan,
+} from './style.ts';
 import { createLayers } from './layers.ts';
-import { OverlayView } from './overlayView.ts';
+import { OverlayView, framePolygon } from './overlayView.ts';
+import { helmetWidth } from './shapes.ts';
+import { helmet, inside, type Point } from '../units/helmet.ts';
 
 const map = DEFAULT_MAP;
 const [a, b] = [map.nodes[0], map.nodes[5]];
@@ -412,5 +421,27 @@ describe('OverlayView, the dashed band of the road mode (#469)', () => {
     view.update({ ...state({ source: null, targets: [], draft: [] }), candidates: [] }, none);
     expect(band(layers, 'roads')?.getLocalBounds().width).toBe(0);
     view.destroy();
+  });
+});
+
+describe('the selection and hover outline of a helmet (#784)', () => {
+  const pairs = (flat: readonly number[]): Point[] => {
+    const out: Point[] = [];
+    for (let i = 0; i + 1 < flat.length; i += 2) out.push({ x: flat[i] ?? 0, y: flat[i + 1] ?? 0 });
+    return out;
+  };
+
+  it('goes round the whole helmet, strap included, and flips with the opponent', () => {
+    const side = UNIT_SIDES[1];
+    for (const enemy of [false, true]) {
+      const h = helmet(enemy ? 'enemy' : 'own', helmetWidth(side, false));
+      const flip = enemy ? -1 : 1;
+      for (const offset of [HELMET_FRAME.select, HELMET_FRAME.hover]) {
+        const outline = pairs(framePolygon({ x: 0, y: 0, side, scale: 1, enemy }, offset));
+        for (const p of [...h.dome, ...h.strap]) {
+          expect(inside({ x: flip * p.x, y: p.y }, outline)).toBe(true);
+        }
+      }
+    }
   });
 });

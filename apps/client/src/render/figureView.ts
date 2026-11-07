@@ -18,9 +18,8 @@ import { knownOfFigure } from './rangeLabel.ts';
 import { spreadApart, type SpreadItem } from './spread.ts';
 import { Token, type EntityKit } from './shapes.ts';
 import { BG, ENEMY, PAPER, PLATE_FILL } from './style.ts';
-import { unitStyle, type UnitStyle } from '../units/unitStyle.ts';
 
-/** How much further out the pointer head of a helmet stands than a triangle's (world units, #775). */
+/** How far out the pointer head stands, clear of the brim of the helmet (world units, #775). */
 const HELMET_HEAD_PUSH = 9;
 
 const ORIGIN: Point = { x: 0, y: 0 };
@@ -34,9 +33,8 @@ interface Figure {
   readonly plate: Container;
   readonly plateBack: Graphics;
   readonly plateText: Text;
-  /** Which way the head was drawn: `toward_b` of the figure, and for which unit look. */
+  /** Which way the head was drawn: `toward_b` of the figure. */
   towardB: boolean | null;
-  look: UnitStyle | null;
   stamp: number;
 }
 
@@ -149,13 +147,11 @@ export class FigureView {
       const scale = symbolScale(token.side, cameraScale);
       entry.view.scale.set(scale);
       const dir = heading(ends.a, ends.b, figure.toward_b);
-      const look = unitStyle();
-      if (entry.towardB !== figure.toward_b || entry.look !== look) {
+      if (entry.towardB !== figure.toward_b) {
         entry.towardB = figure.toward_b;
-        entry.look = look;
-        this.drawHead(entry.head, dir, look);
+        this.drawHead(entry.head, dir);
       }
-      // The plate hangs under the token: a helmet with its strap reaches lower than a triangle.
+      // The plate hangs under the token: under the strap of the helmet.
       entry.plate.position.set(
         0,
         Math.max(FIGURE.plate.drop, token.bottom + FIGURE.plate.height / 2 + 2),
@@ -222,14 +218,13 @@ export class FigureView {
       plateBack,
       plateText: text,
       towardB: null,
-      look: null,
       stamp: this.stamp,
     };
   }
 
-  private drawHead(g: Graphics, dir: Point, look: UnitStyle): void {
-    // A helmet is wider than a triangle: the head stands further out, clear of the brim (#775).
-    const push = look === 'helmet' ? HELMET_HEAD_PUSH : 0;
+  private drawHead(g: Graphics, dir: Point): void {
+    // The head stands out of the helmet, clear of the brim (#775).
+    const push = HELMET_HEAD_PUSH;
     const points = headCorners(dir).flatMap((p) => [p.x + dir.x * push, p.y + dir.y * push]);
     // A dark casing under the light outline: the head reads on the red of the enemy's territory.
     g.clear()

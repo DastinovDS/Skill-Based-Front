@@ -34,7 +34,7 @@ export interface DefenseBonus {
   readonly cap: number;
 }
 
-/** A drawn city icon: the stack and where its triangle is (hit testing, anchors). */
+/** A drawn city icon: the stack and where its helmet is (hit testing, anchors). */
 export interface CityIcon extends CityStack {
   readonly spot: TokenSpot;
 }

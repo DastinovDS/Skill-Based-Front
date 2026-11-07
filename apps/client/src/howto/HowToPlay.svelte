@@ -1,9 +1,8 @@
 <script lang="ts">
   import BonusChevron from '../hud/BonusChevron.svelte';
   import HelmetIcon from '../units/HelmetIcon.svelte';
-  import { unitLook } from '../units/unitStyleState.svelte.ts';
   import { t, tf } from '../i18n/index.ts';
-  import Tri from './Tri.svelte';
+  import UnitCell from './UnitCell.svelte';
   import { HOWTO, type Count, type Example, type HowToData } from './data.ts';
 
   interface Props {
@@ -16,7 +15,7 @@
   const rules = $derived(data.rules);
   type Cell = 'charged' | 'empty' | 'gone';
 
-  /** The triangles of a side: charged first, then empty ones, then the fallen as dashed outlines. */
+  /** The units of a side: charged first, then empty ones, then the fallen as dashed outlines. */
   function cells(total: number, now: Count): Cell[] {
     return Array.from({ length: total }, (_, i) =>
       i < now.charged ? 'charged' : i < now.units ? 'empty' : 'gone',
@@ -76,8 +75,6 @@
     defenseless: 'howto.ex.defenseless.why',
     planned: 'howto.ex.planned.why',
   } as const;
-
-  const TRI = 'M2 2h18l-9 15.5z';
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -121,22 +118,11 @@
       />
       <circle cx="308" cy="24" r="16" class="city" />
       <g transform="translate(297 15)">
-        {#if unitLook.helmets}
-          <HelmetIcon side="own" size={24} />
-        {:else}
-          <path d={TRI} class="back" />
-          <path d={TRI} class="fill own" />
-          <path d={TRI} class="rim" />
-        {/if}
+        <HelmetIcon side="own" size={24} />
       </g>
       <circle cx="308" cy="72" r="16" class="city" />
       <g transform="translate(297 63)">
-        {#if unitLook.helmets}
-          <HelmetIcon side="own" size={24} share={0} />
-        {:else}
-          <path d={TRI} class="back" />
-          <path d={TRI} class="rim" />
-        {/if}
+        <HelmetIcon side="own" size={24} share={0} />
       </g>
     </svg>
   </section>
@@ -166,7 +152,7 @@
               <span class="lab" aria-hidden="true">{f.label}</span>
               <span class="side" aria-hidden="true">
                 {#each cells(totals.a.units, f.a) as cell, i (i)}
-                  <Tri side="own" {cell} />
+                  <UnitCell side="own" {cell} />
                 {/each}
                 {#if f.bonusA > 0}
                   <span class="bonus" aria-hidden="true"><BonusChevron size={14} />×{f.bonusA}</span
@@ -175,7 +161,7 @@
               </span>
               <span class="side" aria-hidden="true">
                 {#each cells(totals.b.units, f.b) as cell, i (i)}
-                  <Tri side="enemy" {cell} />
+                  <UnitCell side="enemy" {cell} />
                 {/each}
                 {#if f.bonusB > 0}
                   <span class="bonus" aria-hidden="true"><BonusChevron size={14} />×{f.bonusB}</span
@@ -220,13 +206,7 @@
       <circle cx="36" cy="26" r="16" class="city" />
       <circle cx="324" cy="26" r="16" class="city" />
       <g transform="translate(25 17)">
-        {#if unitLook.helmets}
-          <HelmetIcon side="own" size={24} />
-        {:else}
-          <path d={TRI} class="back" />
-          <path d={TRI} class="fill own" />
-          <path d={TRI} class="rim" />
-        {/if}
+        <HelmetIcon side="own" size={24} />
       </g>
       <path d="M58 16h200l24 10-24 10H58z" class="ribbon" />
       <!-- The bonus shots in front of the ribbon: the green chevrons of a bonus (#797). -->
@@ -472,21 +452,6 @@
     margin-left: 4px;
     font-size: 12px;
     color: var(--text-dim);
-  }
-
-  .back {
-    fill: #161b22;
-  }
-
-  .fill.own {
-    fill: var(--you);
-  }
-
-  .rim {
-    fill: none;
-    stroke: var(--paper);
-    stroke-width: 1.6;
-    stroke-linejoin: round;
   }
 
   .result {

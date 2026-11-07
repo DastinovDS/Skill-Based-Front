@@ -199,7 +199,7 @@ export type IconName = keyof typeof ICONS;
  * The icons of the radial menus (set I1 "line", mockup `docs/design/mockups/objects-style.html`,
  * block 4): the group (split, Defense, cancel, merge), the stance (economy, balance, war), the
  * supply (transfer, markers 1 and 2) and a group in the list of the groups of a city
- * (`stackGroup`). Own drawings. The city icons are raster (`RASTER_ICONS`).
+ * (`stackHelmet`). Own drawings. The city icons are raster (`RASTER_ICONS`).
  */
 export const MENU_ICONS = {
   split: [
@@ -231,11 +231,8 @@ export const MENU_ICONS = {
   transfer: [rect(3, 8.5, 7, 7, 0), path('M12.5 12H21'), path('M17.5 8l4 4-4 4')],
   front1: flag('1'),
   front2: flag('2'),
-  // One group of a city in the list of the groups: the down-pointing triangle a group is on the map
-  // (the own side points down) with its charge as a dot.
-  stackGroup: [path('M3.5 4.5h17L12 19.5z'), circle(12, 9.4, 0.6)],
-  // The same group in the helmet look of the map (#784): an own helmet facing right (the dome, the
-  // brim line, the strap) with its charge as a dot.
+  // One group of a city in the list of the groups, as on the map (#784): an own helmet facing right
+  // (the dome, the brim line, the strap) with its charge as a dot.
   stackHelmet: [
     path(
       'M3.6 15.6C3 9.4 6.6 5.2 11.8 5.2c4.4 0 7.2 2.9 7.8 6.2.2.9.8 1.5 1.9 2-3.4.3-5.6.9-6.8 1.9-1.1 1-1.9 2.3-3.7 2.3z',

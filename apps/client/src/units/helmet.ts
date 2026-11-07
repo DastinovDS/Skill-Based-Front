@@ -40,13 +40,12 @@ export const HELMET_PATHS: Readonly<Record<HelmetKind, HelmetPaths>> = {
   },
 };
 
-/** The width of a helmet against the side of the triangle it replaces (the mockup's 1.34). */
+/** The width of a helmet against the size step of its token (`UNIT_SIDES`, the mockup's 1.34). */
 export const HELMET_SCALE = 1.34;
 
 /**
  * Line widths of a helmet `width` wide (world units): the strap and the brim follow the size down to
- * a floor that still reads at 20 px; the dark casing and the light edge are fixed, like the
- * triangle's outline.
+ * a floor that still reads at 20 px; the dark casing and the light edge are fixed.
  */
 export function helmetLines(width: number): {
   strap: number;

@@ -30,7 +30,10 @@ import { fightPoint } from './layout.ts';
  * time to the next round along its bottom edge.
  */
 export const PLATE = { halfWidth: 96, halfHeight: 36 } as const;
-/** A chip is a triangle of this side (px): close to the 20 px of a significant symbol (ui-style 22). */
+/**
+ * The chips of the arena (px): `side` the room a chip takes from the middle line, `pitch` the step
+ * between chips and the width of a helmet chip (#784), close to the 20 px of a significant symbol (ui-style 22).
+ */
 export const CHIP = { side: 18, pitch: 20, max: 8, columns: 4 } as const;
 /** How far the arena keeps from what it floats over (px): room for the caption and the end label above it, and for the ring below. */
 export const ARENA_REACH = 36;
@@ -392,29 +395,6 @@ export function chipAt(index: number, shown: number, own: boolean): Point {
   const x = sign * (8 + CHIP.side / 2 + column * CHIP.pitch);
   const y = two ? -18 + row * CHIP.pitch : -8;
   return { x, y };
-}
-
-/**
- * The hatching of a discharged chip: horizontal lines across a triangle with the tip down and
- * `side` wide, from the middle of the box of the chip, `pitch` apart, none above the first pitch.
- */
-export function chipHatch(side: number, pitch: number): [Point, Point][] {
-  const height = chipHeight(side);
-  const lines: [Point, Point][] = [];
-  for (let y = pitch; y < height - 1; y += pitch) {
-    // Half the width of the triangle at this height (it narrows towards the tip at the bottom).
-    const half = (side / 2) * (1 - y / height);
-    lines.push([
-      { x: -half, y: y - height / 2 },
-      { x: half, y: y - height / 2 },
-    ]);
-  }
-  return lines;
-}
-
-/** Height of a chip triangle of `side`. */
-export function chipHeight(side: number): number {
-  return side * 0.88;
 }
 
 /** A colour moved `amount` (0..1) of the way to white: the lightened tone of discharged units. */

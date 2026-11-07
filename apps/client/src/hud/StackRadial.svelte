@@ -4,7 +4,6 @@
   import type { MapAnchors } from '../render/anchors.ts';
   import type { NodeNamer } from './nodeName.ts';
   import Radial from './Radial.svelte';
-  import { unitLook } from '../units/unitStyleState.svelte.ts';
   import { halfFor, spreadAngles, type RadialItem } from './radial.ts';
 
   interface Props {
@@ -26,7 +25,7 @@
     return groups.map((group, i) => ({
       id: group.id,
       angle: angles[i] ?? 0,
-      icon: unitLook.helmets ? 'stackHelmet' : 'stackGroup',
+      icon: 'stackHelmet',
       label: tf('stack.units', { units: group.units }),
       lines: [
         tf('stack.charged', { charged: group.charged }),

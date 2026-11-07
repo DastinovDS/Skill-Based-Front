@@ -13,15 +13,7 @@ import { reducedMotion } from './motion.ts';
 import type { MapLayers } from './layers.ts';
 import { helmetWidth } from './shapes.ts';
 import { helmetOutline } from '../units/helmet.ts';
-import { unitStyle } from '../units/unitStyle.ts';
-import {
-  arrowGeometry,
-  dashSegments,
-  edgeEnds,
-  nodePoint,
-  triangleCorners,
-  type TokenSpot,
-} from './layout.ts';
+import { arrowGeometry, dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
 import {
   ARROW_HEAD,
   BONUS_MARK,
@@ -46,31 +38,23 @@ import {
   roadSpan,
   SELECT_COLOR,
   SELECT_RING_GAP,
-  SELECT_UNIT_SCALE,
   SELECT_WIDTH,
   WARN,
 } from './style.ts';
 
-/** What a selection or hover outline is drawn for: the unit look, the size and the kind of token. */
+/** What a selection or hover outline is drawn for: the size and the kind of token. */
 function frameKey(at: TokenSpot): string {
-  return `${unitStyle()}:${String(at.side)}:${at.enemy === true ? 'e' : 'o'}:${at.inside === true ? 'i' : ''}`;
+  return `${String(at.side)}:${at.enemy === true ? 'e' : 'o'}:${at.inside === true ? 'i' : ''}`;
 }
 
 /**
- * The outline round a token, flat, around its centre (world units, unscaled): the triangle
- * `triangleScale` times bigger, centred on the token's box; or the line `offset` outside the whole
- * helmet, strap included, flipped for the opponent's (#784).
+ * The outline round a token, flat, around its centre (world units, unscaled): the line `offset`
+ * outside the whole helmet, strap included, flipped for the opponent's (#784).
  */
-export function framePolygon(at: TokenSpot, triangleScale: number, offset: number): number[] {
-  if (unitStyle() === 'helmet') {
-    const kind = at.enemy === true ? 'enemy' : 'own';
-    const outline = helmetOutline(kind, helmetWidth(at.side, at.inside === true), offset);
-    return kind === 'own' ? outline : outline.map((v, i) => (i % 2 === 0 ? -v : v));
-  }
-  const [left, right, tip] = triangleCorners(at.side * triangleScale);
-  // The bigger triangle has the same tip height offset: centre it on the token's box centre.
-  const dy = (triangleCorners(at.side)[2].y - tip.y) / 2;
-  return [left, right, tip].flatMap((p) => [p.x, p.y + dy]);
+export function framePolygon(at: TokenSpot, offset: number): number[] {
+  const kind = at.enemy === true ? 'enemy' : 'own';
+  const outline = helmetOutline(kind, helmetWidth(at.side, at.inside === true), offset);
+  return kind === 'own' ? outline : outline.map((v, i) => (i % 2 === 0 ? -v : v));
 }
 
 /** The stretch of the road `a`-`b` between the city rims (radius `ra` at `a`, `rb` at `b`); `null`: none. */
@@ -474,13 +458,13 @@ export class OverlayView {
   }
 
   /**
-   * The selection: a white `--paper` outline on a dark halo (9.5) round the token: the triangle 1.45
-   * times bigger, or a line round the whole helmet, strap included (#784).
+   * The selection: a white `--paper` outline on a dark halo (9.5) round the token: a line round the
+   * whole helmet, strap included (#784).
    */
   private drawFrame(at: TokenSpot, key: string): void {
     const g = this.frame;
     g.clear();
-    const poly = framePolygon(at, SELECT_UNIT_SCALE, HELMET_FRAME.select);
+    const poly = framePolygon(at, HELMET_FRAME.select);
     g.poly(poly).stroke({ width: SELECT_WIDTH + 4, color: BG, alpha: 0.8, join: 'round' });
     g.poly(poly).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR, join: 'round' });
     this.frameKey = key;
@@ -490,7 +474,7 @@ export class OverlayView {
   private drawHoverFrame(at: TokenSpot, key: string): void {
     const g = this.hoverFrame;
     g.clear();
-    const poly = framePolygon(at, HOVER_FRAME.scale, HELMET_FRAME.hover);
+    const poly = framePolygon(at, HELMET_FRAME.hover);
     g.poly(poly).stroke({
       width: HOVER_FRAME.width + 3,
       color: BG,

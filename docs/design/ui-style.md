@@ -297,7 +297,7 @@ Not doing: IM17.
    red and a double outline. A charge: a filled or an empty part of the figure. An alert: amber color,
    the `!` icon, a pulse and a countdown.
 4. **Red means only "the enemy".** Errors, rejections and alerts are not red.
-5. **One quantity, one variable.** The number of units sets the size of the triangle, the share of charged
+5. **One quantity, one variable.** The number of units sets the size of the unit, the share of charged
    sets the fill, the capacity sets the size of a city, the road width sets the thickness.
 6. **The enemy's intents in the same grammar as your own.** An own arrow differs from the enemy's by
    the outline, not by a new type of sign.
@@ -421,7 +421,7 @@ intents → effects (the groups moved above the fog in #419, 9.8). Only the cont
 - `background`: the baked background, a `--bg` dimming with alpha 0.18 (round 3: it was 0.3), terrain stamps; the owner's territory fill with alpha 0.2 (round 3, #272: it was 0.13, then 0.07, it got lost on the baked background);
 - `territory`: a thin 1 px line (`CELL_LINE`, light, alpha 0.16) around every area, including between areas of one owner (a shared edge once; the map edge is not drawn); on top of it the border of the owner's area as a light 2 px line in the owner's color (Northgard), stronger;
 - `nodes`: capacity rings and the warehouse bar;
-- `groups`: packets under the triangles, motion trails under the packets;
+- `groups`: packets under the helmets, motion trails under the packets;
 - `effects`: the starvation countdown, the fight animation (arena, exchange of blows, losses, result; 9.9), the start ring (IM4), the alert (IM7).
 
 ### 9.2 Terrain on the map
@@ -492,64 +492,57 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
 - A road construction: a ribbon on the edge itself, a "1→2" plate in the middle (9.3); the city has no construction icon.
 - **Place names (#449):** the name of every node from the map file (`MapNodeFile.name`, DEC-23, item 4) is a caption under the signs of the place (under the warehouse bar of a city, under the ring of a province), one pooled `Text` per node (`render/nameView.ts`, geometry and the zoom rule in `nameLayout.ts`). It keeps its size on screen at every zoom: a city 13 px bold, a province 12 px medium and lighter (alpha 0.78), both with a dark outline for roads and terrain, never below the 12 px minimum of section 22. A city caption hides below camera scale 0.45, a province caption below 0.7 (the province, the smaller and the more numerous, goes first). The captions are in the `nodes` layer: under the groups and the fog, over the cities. Toasts, alerts and menu titles name a place by the same name (`hud/nodeName.ts`), never by its number. Where the place of a caption is moved or the look of cities changes (#431), only `captionTop` changes.
 
-### 9.5 Units: inverted triangles
+### 9.5 Units: helmets **[accepted]**
 
-- **Figure:** an inverted equilateral triangle ▽.
-- **Size by the number of units:** side 24 (1-3), 30 (4-7), 36 (8-15), 42 (16+). An unknown number: 30.
-- **Charge as a level (#508):** from the tip a similar triangle in the owner's color is filled, and its
-  **height** equals the share of charged (`k = charged / units`): players read the height, so 1 of 4 charged
-  fills a quarter of it (earlier `sqrt(charged / units)`, area-true, read as half full). The empty part is `#161b22`.
-  Up to `UNIT_TICKS.max` (8) units there are **faint dividers**, one between every two units (a thin light line,
-  alpha 0.34, a baked sprite per side and unit count), so the charged units can be counted on the fill; a bigger group
-  has the fill and the number only. The fill does not rely on color: its height and the dividers carry the count.
-- **Charge motion (#508):** whenever `charged` or `units` change (a fight drains it, supply fills it, a merge or a split)
-  the shown fill eases to the new height in 320 ms, ease-out cubic, driven by real time (frame-rate independent),
-  from the value shown now when the target changes mid-way. It scales the one baked fill sprite: no texture is made per
-  frame. A new token, a token with unknown numbers, a memory (ghost) and "less motion" show the level at once. The
-  number under the tip is the value the snapshot gave. The easing is the small module `render/tween.ts` (`EaseTween`), reusable for any displayed number.
-- **Owner:** own a white outline 2.4; the enemy a white outline plus an inner dark outline at
-  62% of the size; an enemy without numbers (`PRESENCE`): a dashed outline in the enemy color and a "?".
-- **Mode:** "Defense" as a circle of radius 8 with a shield glyph at the upper right corner; "Attack" is not drawn.
-- **The caption** "charged/units" in a dark pill under the tip (the Songs of Conquest technique): for
-  the selected group, under the cursor, for own groups at a scale from 0.6, for the enemy where there are exact
-  numbers.
-- **Minimum size on the screen:** the side not smaller than 20 px, the mouse hit area not smaller than 28 px.
-- **Movement:** without rotation, a trail as a line of width 10 and length 40 with an alpha gradient 0.7 → 0;
-  oncoming stripes are spaced 18 units apart.
-- **Selection:** a white `--paper` outline of the same triangle 1.45 times bigger, with a dark halo.
-
-#### 9.5.1 Units: helmets (the default since #784) **[accepted]**
-
-The owner's choice of 2026-11-07 on #775: variant **Full** of `mockups/unit-helmets-r2.html`, with his corrections. The
-triangle stays as a viewer setting: the help (`?`) has "Units: Helmets / Triangles", kept per browser (`sbf.units`,
-`units/unitStyle.ts`); helmets are the default.
+The owner's choice of 2026-11-07 on #775: variant **Full** of `mockups/unit-helmets-r2.html`, with his corrections
+(#784), and the chevron badges of section 45. Since 2026-11-07 (#801) the helmets are the only unit look: there is no
+viewer setting.
 
 - **Figure:** a side view of a combat helmet (`units/helmet.ts`): own **Rim** (a dome with a light brim line), the
   opponent's **Cut** (a rounder dome with a cut-out at the ear, no brim). Both carry a **chin strap** everywhere: on
-  roads, in a city, in a province, in the arena. Fixed facing: own right, the opponent's left (as Full had it); the
-  sprites are baked facing right and flipped with `scale.x = -1`, so a facing costs no texture. The owner reads from
-  the silhouette and the facing, not from the hue alone (AGENTS.md 7.4).
-- **Size:** 1.34 times the side of the triangle it replaces (the steps of 9.5 stay: they set the minimum size on
-  screen and the hit area); in a city 8% smaller (`HELMET_INSIDE`), so the strap stays inside the ring.
-- **Charge as a level:** the dome fills from its lowest point by `charged / units` of its height (the same mapping as
-  the triangle, linear), with a smooth straight edge: **no dividers, no bands**. The change eases as in 9.5 (#508):
-  the fill is one baked sprite of the full dome, shown from the bottom by a crop of its texture frame
-  (`BakedSprite.cropBottom`), no texture per frame and no mask.
+  roads, in a city, in a province, in the arena. Fixed facing: own right, the opponent's left; the sprites are baked
+  facing right and flipped with `scale.x = -1`, so a facing costs no texture. The owner reads from the silhouette and
+  the facing, not from the hue alone (AGENTS.md 7.4).
+- **Size by the number of units:** the size step `UNIT_SIDES` is 24 (1-3), 30 (4-7), 36 (8-15), 42 (16+), an unknown
+  number 30 (`unitSide`); the helmet is 1.34 times the step wide (`HELMET_SCALE`), in a city 8% smaller
+  (`HELMET_INSIDE`), so the strap stays inside the ring. The step also sets the minimum size on screen (20 px) and the
+  mouse hit area (28 px).
+- **Charge as a level (#508):** the dome fills from its lowest point by `charged / units` of its height (linear: 1 of 4
+  charged fills a quarter), with a smooth straight edge: **no dividers, no bands**. The empty part is `#161b22`.
+- **Charge motion (#508):** whenever `charged` or `units` change (a fight drains it, supply fills it, a merge or a split)
+  the shown fill eases to the new height in 320 ms, ease-out cubic, driven by real time (frame-rate independent),
+  from the value shown now when the target changes mid-way. The fill is one baked sprite of the full dome, shown from
+  the bottom by a crop of its texture frame (`BakedSprite.cropBottom`): no texture per frame and no mask. A new token,
+  a token with unknown numbers, a memory (ghost) and "less motion" show the level at once. The easing is the small
+  module `render/tween.ts` (`EaseTween`), reusable for any displayed number.
 - **The number:** one number, all the units (`countLabel`), in the middle of the dome, on a road and in a city; no
   `3/5` chip. A range («3-5») stays in the pill under the helmet; an enemy figure on a road keeps its plate (DEC-33).
 - **Contrast:** a dark casing (6.4) round the dome, the strap and the brim, plus the light edge of the dome and the
   light strap and brim (the owner's colour mixed half with paper): one of the two reads at 3:1 on every terrain.
-  Unknown and memory: a faint plate, the dome dashed in a pale tone on a dark casing, "?" in the middle.
-- **Corners:** the top right corner stays free for the badges of #776; the "Defense" shield (economy v1 only) sits at
-  the top left.
-- **Selection and hover:** a line round the whole silhouette, strap and brim included (the level line of the
-  distance to the helmet, `helmetOutline`), 7.5 and 6 world units out (`HELMET_FRAME`), flipped with the opponent.
+  Unknown (`PRESENCE`) and memory: a faint plate, the dome dashed in a pale tone on a dark casing, "?" in the middle.
+- **Corners:** the top right corner carries the badges of section 45; the "Defense" shield (economy v1 only) sits at
+  the top left; "Attack" is not drawn.
+- **Movement:** without rotation, a trail as a line of width 10 and length 40 with an alpha gradient 0.7 → 0;
+  oncoming stripes are spaced 18 units apart.
+- **Selection and hover:** a white `--paper` line with a dark halo round the whole silhouette, strap and brim included
+  (the level line of the distance to the helmet, `helmetOutline`), 7.5 and 6 world units out (`HELMET_FRAME`),
+  flipped with the opponent.
 - **Arena chips:** helmets with a strap, one pitch wide, own facing right, the opponent's left (they look at each
   other); charged filled, discharged hatched, killed dashed.
-- **Elsewhere:** the shards of a killed unit are helmet domes; the presence mark of the «Supply» view is a hollow
-  enemy helmet; the undo cue ring (#764) is a little wider. Outside the map the unit icons follow the setting: the
-  top bar, `UnitMark` (menus, queue, result, board, split menu), the replay `SideMark`, the mark of `FrontTop`, the
-  menu backdrop (`menuMotion.ts`), the list of the groups of a city (`stackHelmet`), the legend of the help, the units of the How to play page.
+- **Elsewhere:** the shards of a killed unit are helmet domes; the fog ghost is a dashed helmet; the presence mark of
+  the «Supply» view is a hollow enemy helmet; the undo cue ring (#764) clears the strap. Outside the map every unit
+  icon is a helmet (`units/HelmetIcon.svelte`): the top bar, `UnitMark` (menus, queue, result, board, split menu),
+  the replay `SideMark`, the mark of `FrontTop`, the menu backdrop (`menuMotion.ts`), the list of the groups of a
+  city (`stackHelmet`), the legend of the help, the units of the How to play page.
+
+#### 9.5.1 Superseded: inverted triangles (owner, 2026-11-07)
+
+The inverted triangle ▽ (filled from the tip, faint dividers per unit, a single outline for own units and a double
+one for the opponent's, selection as the same triangle 1.45 times bigger) was the unit look until #784 and then a
+viewer setting ("Units: Helmets / Triangles", `sbf.units`). The owner removed it on 2026-11-07 (#801); the code and the
+`visual` references of the triangles are gone. A value `sbf.units` left in a browser is ignored. The triangles that
+are not units stay: arrow heads, the pointer head of an enemy figure, the starving `!` mark, the toll plate's down
+triangle, the valve caps of the «Supply» view.
 
 ### 9.6 Supply packets
 
@@ -625,9 +618,9 @@ The ribbon arrow (HOI4, Mini Motorways):
   (and any enemy figure seen on that road) was dimmed. It is safe: the server sends an enemy figure only where it is seen, the memory ghosts live in the `fog` layer
   itself, and cities and roads still darken under the veil. The thin lines of ordinary orders lie in the same layer, under the figures of own groups. The
   corridor cut-out (the visible halves of a road cut out of the veil) was not done: the road itself stays under the haze. The dev scene `fog_road` shows the case.
-- The "last seen" ghost: an enemy triangle dashed and an age caption "−1:10".
-- **Range** (DEC-21, item 4, #359): where the view gives only a range of units, the enemy triangle has a dashed outline
-  (like the "?") and a plate with "3-5" or "21+" under the tip instead of the number; there are no charges at the `range` level. Presence
+- The "last seen" ghost: an enemy helmet dashed and an age caption "−1:10".
+- **Range** (DEC-21, item 4, #359): where the view gives only a range of units, the enemy helmet is dashed
+  (like the "?") and a plate with "3-5" or "21+" under it instead of the number; there are no charges at the `range` level. Presence
   without numbers remains "?". The strings `range.closed` and `range.open` in the dictionaries.
 - **The border point of an edge** (DEC-21, item 5) is not drawn (the tick mark across the road was removed, #427).
   A half of an edge in the fog (`HalfView.detail = fog`) is darkened like a road body in the fog; by halves, not by edge.
@@ -756,7 +749,7 @@ Height 48 px, three columns:
 - **Stance:** a chip with an icon, a name and `Q`; a click opens the radial menu. Economy v2 shows it only under `[stances]` (DEC-44, `ruleset_public.stances`).
 - **Stance progress** (DEC-44, only under `[stances]`): right of the CP number two thin bars, one over the other: the next CP (the term "CP") and the next charge of the own capital (the charge dot), each filled by `me.cp_ticks` and `me.capital_ticks` over the period of the stance; the tooltip tells the seconds left and that a stance change resets both. A bar, its label and a text, not colour alone.
 - **The VP score as a "tug of war"** (Against the Storm): nicks, numbers and a common bar, the blue part on the left,
-  the red on the right, a tick mark in the middle. Under the nick a triangle of its own shape (single and double outline).
+  the red on the right, a tick mark in the middle. Beside the nick a helmet of its own shape (Rim facing right, Cut facing left).
 - **The timer** 18 px with an icon; in the last minute `--warn` (IM12).
 - **On the right:** sound on/off, pause (private matches only), `?`, "Exit".
 
@@ -907,7 +900,7 @@ and 5 are visible at once from `match_end`.
 Built in #599 (the UI catch-up #593): `replay/ReplayViewer.svelte`, `ReplayTimeline.svelte`.
 
 - The top bar is the match's (10.2): "Back" with the `Esc` chip on the left; in the middle the two sides, each a
-  triangle and a nick (the header key `nicks` of the frames file when it has one, otherwise "Player 1" and
+  helmet and a nick (the header key `nicks` of the frames file when it has one, otherwise "Player 1" and
   "Player 2"), the VP numbers and the same "tug of war"; on the right the "View as" choice.
 - **View as:** "Player 1", "Player 2", "Both" (a segmented choice, the pressed one filled and bold). A side makes that
   side blue and puts it on the left (ui-style 6, "Replay"); "Both" is player 1 blue, player 2 red. The choice
@@ -926,7 +919,7 @@ Built in #599 (the UI catch-up #593): `replay/ReplayViewer.svelte`, `ReplayTimel
   fights are dots on the track, captures are diamonds above it in the side's colour: blue single outline for the blue
   side, red with the inner outline for the other), then play (the main blue button with the `Space` chip), the speeds
   with their keys, the time, and a hint line (arrows, `Home`, the legend of the marks). The VP-difference graph is not done.
-- At the end of the match a chip under the top bar names the winner (a triangle and the nick) or "Draw".
+- At the end of the match a chip under the top bar names the winner (a helmet and the nick) or "Draw".
 - Keys: `Space` pause, `←`/`→` ±5 s, `1`/`2`/`3` speed ×1/×4/×16, `F` the fog, `Home` fit the map, `Esc` back; they are on the
   buttons as key chips (and in `aria-keyshortcuts`), the arrows and `Home` in the hint line.
 - Phone width (up to 640 px): the top bar is two rows (back and score, then the choice), the bottom bar two rows
@@ -1222,7 +1215,7 @@ log and the match menu from 10.1 and 10.4, and the radial menus from section 11 
 | Stance | `Q`: the menu is static in the center of the screen, chosen with the cursor (hold and release, or tap and click) |
 | `Esc` | Drops the selection and closes the menu. A double `Esc` opens the exit dialog only when nothing is selected and no menus are open |
 | Log and match menu | Removed. The language is chosen before the game (greeting, menu, legal pages). In development mode the map and scene choice is in `DevPanel` |
-| Unit icon | One number: the total of units; charges are the fill of the triangle; the exact "charged of" is in the hint |
+| Unit icon | One number: the total of units; charges are the fill of the helmet; the exact "charged of" is in the hint |
 | Road under the cursor | Is not highlighted and does not show the level; the level is read from the number of lanes of the road itself (R1, 9.3) |
 | Order | An arrow from the start of the order to the target along the server's path, the unit moves along it, the part of the road already passed fades. The unit has no trail |
 | Overflow and starvation | An amber pulsing ring of the city and small badges: `!` and the seconds until a unit is lost; `✂` and the seconds until starvation (DEC-19, the ring is dashed). The grace period after a capture: a thin gray ring. The dashed frame and the overflow segments are removed. The ring and the badge are not only color: pulse, dash, sign |
@@ -1232,7 +1225,7 @@ Part 2 (#274, tracking #236): units in a city and area selection.
 
 | What | How it is now |
 |---|---|
-| Units in a city | Your own units standing in a city, one icon in the middle of the city: an inverted triangle with a dark rim (so it does not merge with the city body), the number inside (total units), the fill by charges. Splitting a group does not change the picture. The opponent (as seen by the player; in a replay both sides) stands in the middle of the city in exactly the same way (the number inside or "?" without numbers) and shifts to the edge of the city only when there is already an icon of your own units in the middle; no slots under the city |
+| Units in a city | Your own units standing in a city, one icon in the middle of the city: a helmet with a dark casing (so it does not merge with the city body), the number inside (total units), the fill by charges. Splitting a group does not change the picture. The opponent (as seen by the player; in a replay both sides) stands in the middle of the city in exactly the same way (the number inside or "?" without numbers) and shifts to the edge of the city only when there is already an icon of your own units in the middle; no slots under the city |
 | Click on the icon | One group in a city: selects it, a second click opens the group menu. Several groups: the city is selected (if no group of them is selected) and a radial menu with a list of groups opens (units, charges, "Defense", a scheduled order; keys `1`..`9`). Choosing a sector selects the group; choosing an already selected one opens its menu (`S`, `D`, `X`, `G`) |
 | Order by the icon | If a group elsewhere is selected, a click on the icon of the target city is a click on the city: the order is given there |
 | City area | A click anywhere in the city cell (Voronoi) selects the city, including a click on a road outside the road selection mode; hover shows the order target in the same way. The city radial menu is centered on the city circle. A click outside the map drops the selection |
@@ -1253,7 +1246,7 @@ A map mode on `Tab` or `F2`, a separate minimalist layer (`LAYER_ORDER`: `supply
 | Packet | A circle on the road, a square for a transfer |
 | Road level | The thickness of the road line (as on the ordinary map) |
 | Cut-off city | A dashed amber ring and a `✂` plate with the time until starvation (`starve_in`) |
-| Opponent | Only the territory and a hollow inverted triangle "he is here" where visible right now; no numbers, warehouses, packets or markers |
+| Opponent | Only the territory and a hollow enemy helmet "he is here" where visible right now; no numbers, warehouses, packets or markers |
 | Mode plate | The name, a hint, the "Rear minimum" slider, a legend in five words; the slider is the only part of the plate that catches the pointer |
 | Click (#678) | The layer is not the ordinary map: a click on a city, a province, a road area or a unit icon opens the supply menu where it has entries and does nothing else; it never selects the object and never opens the city, group or stack menu. A click on empty ground drops the selection as usual |
 | City menu | Radial: marker 1 (`1`), marker 2 (`2`), transfer (`3`); the sector of a marker already standing here is "remove", the sector of the other marker is dim when it is taken by another city; the price of a marker in the sector only if the ruleset sets it (`cost.front`) |
@@ -1308,7 +1301,7 @@ The principle: **one shape means one thing**, and the shape reads without color 
 
 | Shape | What it means | Where |
 |---|---|---|
-| ▽ inverted triangle | a group of units; the fill from the tip = the share of charged; the number = units | map, arena chips (V3) |
+| helmet (own Rim facing right, the opponent's Cut facing left) | a group of units; the fill from the bottom of the dome = the share of charged; the number = units (9.5; the ▽ triangle was superseded 2026-11-07) | map, arena chips |
 | ■ square | a **charge**: a warehouse place (filled: there is a charge, a frame: room, dashed: a level not built yet, C1 #348), an auto-supply packet (with a tail of two pale squares), a one-off transfer on a road (larger, with a double outline), the warehouse stock on the "Supply" layer, the head of a real shot with a tail (the SH1 tracer) **[accepted]** (#325, #345, #352) | warehouse under a city, roads, "Supply", the fight map |
 | a ring segment | one capacity place; filled with white: a unit stands there | the ring around a city |
 | ^ chevron up (green, on a dark outline) | a bonus (#797, section 46, was ◇): a bonus (virtual) shot, the plan bonus, the badge of an advantage (section 45); **green = a "Defense" or plan bonus gathered, hollow (light contour, dark inside) = room or still asked for** (the counter of "Defense", D1, #349, DEC-30; a row of up to 6, above it "^ ×2 ^ ×6") | the head, echo and sparks of a bonus tracer, the plan pill and the Shift counter, the plan banner, the tooltips, the capsule beside the shield at a city, the arena badges, the help legend, How to play |
@@ -2116,10 +2109,10 @@ Mockup: `docs/design/mockups/menus-entry.html`. **Owner's decision (2026-10-30):
 
 | Screen | Variant | What it is in the client |
 | --- | --- | --- |
-| Nick entry | **N5 Title** | a separate screen: both triangles, the game title, the nick field with Play beside it, the map blurred and dimmed behind (`ScreenFrame entry`); the nick rule shows only as an inline amber error with the sign (a short nick after the field is left, a bad character at once, "Taken. Try another nick" from the server); "Log in · Create account" links; an invite says "Invited to a match" and Play becomes Join |
+| Nick entry | **N5 Title** | a separate screen: both units, the game title, the nick field with Play beside it, the map blurred and dimmed behind (`ScreenFrame entry`); the nick rule shows only as an inline amber error with the sign (a short nick after the field is left, a bad character at once, "Taken. Try another nick" from the server); "Log in · Create account" links; an invite says "Invited to a match" and Play becomes Join |
 | Main menu | **M5 Top tabs** | Play / Replays / Leaderboard / How to play as tabs on the top line (`MenuTabs`, the open tab is bold and underlined); the Play tab keeps the rail: Play (or Return, or Play dimmed with the dashed queue-lock chip), then Play a bot, Invite a friend, Open matches; the Dock screens (#473) stay under the Play tab, How to play is its own tab |
 | Replays | **R2 Cards** | the own matches as cards (`ReplaysScreen`, `MatchCard`): the map drawn small from `GET /api/maps/{id}`, the result as a shape and a word, the rating change, the opponent and the kind, the replay state |
-| Leaderboard | **L10 Record columns** | one table (`BoardTable`): #, player, matches, W–L–D, the share of wins (a bar and the number), rating; the own row is a band and the triangle; no match list and no profile on this tab |
+| Leaderboard | **L10 Record columns** | one table (`BoardTable`): #, player, matches, W–L–D, the share of wins (a bar and the number), rating; the own row is a band and the own helmet; no match list and no profile on this tab |
 | Queue | **Q1 Timer only** | the clock and "Searching", Stop; "Play a bot instead" with an Unrated chip only when the server offers it (60 s); "Keep this tab open" only once the tab was hidden |
 
 Everywhere: no key badges (the keys Enter and Esc keep working), no tagline at the bottom left. The mockup draws the old left rail beside R2 and L10; with M5 the tabs replace that rail, so these two tabs are one wide sheet under the tabs (`SheetFrame`).
@@ -2180,7 +2173,7 @@ Small fixes from the `mvp-4` playtest of 2026-11-05, straight into code (no mock
 
 ## 45. Advantage and disadvantage badges (#791, variant 8 "Chevrons" of #776) **[accepted]**
 
-The owner's decision of 2026-11-06 and 2026-11-07 (mockup `docs/design/mockups/unit-badges.html`, the choice in #776): the badge is variant 8 "Chevrons", a count by strokes, on helmets (the default) and on triangles; the arena follows "On chips".
+The owner's decision of 2026-11-06 and 2026-11-07 (mockup `docs/design/mockups/unit-badges.html`, the choice in #776): the badge is variant 8 "Chevrons", a count by strokes, on helmets (the only unit look since 2026-11-07, #801); the arena follows "On chips".
 
 - **The shape.** Up to three chevrons stacked `0.46` of their size apart: ^ up, green `--badge-up`, an advantage; v down, red `--badge-down`, a disadvantage. Above three one chevron and the number, `9+` above nine. Every stroke lies on a dark outline (`--bg`, the stroke plus 2.6 units), so the mark reads on every terrain, on the own blue and on the enemy red. The direction tells it, the colour only repeats it (AGENTS.md 7.4).
 - **Baked.** `chevronBadgeSpec` in `bakedShapes.ts`, one texture per key `direction, count, size`: two directions, ten counts (1 to 9 and `9+`), two sizes (map 11 units, chip 9 px), at most 40 keys. No filter per object. The self-shot of a burned chip (`selfShotSpec`) is one more key.

@@ -13,8 +13,6 @@ import {
   arenaSides,
   changedChips,
   chipAt,
-  chipHatch,
-  chipHeight,
   chipPulse,
   chipsOf,
   pinnedPenalty,
@@ -30,6 +28,7 @@ import {
   type SideCount,
 } from './fightFx.ts';
 import { ringRadius } from './cityLayout.ts';
+import { helmet, helmetExtent } from '../units/helmet.ts';
 
 const map = {
   nodes: [
@@ -340,24 +339,12 @@ describe('chips of an arena', () => {
     expect(new Set(row.map((p) => p.y)).size).toBe(1);
     expect(row[0]?.y).toBeGreaterThan(own[0]?.y ?? 0);
     expect(row[0]?.y).toBeLessThan(own[1]?.y ?? 0);
-    // Everything stays on the plate.
+    // Everything stays on the plate: a helmet chip is one pitch wide (#784), strap included.
+    const reach = helmetExtent(helmet('enemy', CHIP.pitch));
+    const chipHalfHeight = Math.max(-reach.top, reach.bottom);
     for (const p of [...own, ...enemy]) {
       expect(Math.abs(p.x) + CHIP.side / 2).toBeLessThan(PLATE.halfWidth);
-      expect(Math.abs(p.y) + chipHeight(CHIP.side) / 2).toBeLessThan(PLATE.halfHeight);
-    }
-  });
-
-  it('hatches a chip with lines inside the triangle, narrowing towards the tip', () => {
-    const lines = chipHatch(CHIP.side, 3.5);
-    expect(lines.length).toBeGreaterThan(2);
-    const widths = lines.map(([a, b]) => b.x - a.x);
-    for (let i = 1; i < widths.length; i++) {
-      expect(widths[i]).toBeLessThan(widths[i - 1] ?? Infinity);
-    }
-    for (const [a, b] of lines) {
-      expect(a.y).toBe(b.y);
-      expect(Math.abs(a.y)).toBeLessThanOrEqual(chipHeight(CHIP.side) / 2);
-      expect(b.x).toBeLessThanOrEqual(CHIP.side / 2);
+      expect(Math.abs(p.y) + chipHalfHeight).toBeLessThan(PLATE.halfHeight);
     }
   });
 

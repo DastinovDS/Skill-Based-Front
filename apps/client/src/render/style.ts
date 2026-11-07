@@ -79,7 +79,7 @@ export const TERRITORY_ALPHA = 0.2;
 export const TERRITORY_BORDER = { width: 2, alpha: 0.95, inset: 1.5 } as const;
 
 // --- Shading BL1-1 "Restrained" (ui-style 26.3, #347) ------------------------------------------------
-// Objects (cities, group triangles, badges, arena plates and chips) are baked into textures once
+// Objects (cities, group helmets, badges, arena plates and chips) are baked into textures once
 // (`bake.ts`) with a vertical fill gradient (the top lightened, the bottom darkened), a soft shadow
 // a little below and, on an owned object, a light rim at the top. The shadow is made of a few
 // stacked outlines (no blur filter): its size and strength follow the mockup (`map-style-2.html`,
@@ -275,42 +275,35 @@ export const VP_BADGE = { fill: BG, stroke: { width: 2, color: VP } } as const;
 export const VP_FONT_SIZE = 11;
 export const VP_TEXT_COLOR = PAPER;
 
-// --- Units on the map (9.5): inverted triangles ---------------------------------------------------
-// A group is a triangle pointing down. Its side steps with the number of units; the share of
-// charged units fills it from the tip (`sqrt(charged / units)` of the height), so the charge reads
-// as a level. The owner is told by the outline's hue and by its shape: own, one blue outline;
-// opponent, a red outline plus a light inner one; an opponent without numbers, dashed with "?".
-// The mode "Defense" is a shield disc at the top right corner ("Attack" is not drawn).
+// --- Units on the map (9.5): helmets (#784) ----------------------------------------------------------
+// A group is a helmet (`units/helmet.ts`): own Rim facing right, the opponent's Cut facing left. Its
+// size steps with the number of units; the share of charged units fills the dome from the bottom
+// (`charged / units` of its height), so the charge reads as a level. An opponent without numbers
+// and a memory are dashed with "?". The mode "Defense" is a shield disc at the top left corner
+// ("Attack" is not drawn); the top right carries the badges.
 
 export const PLATE_FILL = 0x161b22;
 export const PLATE_INNER_RING = { width: 1.5, color: PAPER, alpha: 0.9 } as const;
 export const GLYPH_COLOR = PAPER;
 export const COUNT_FONT_SIZE = 10;
 
-/** Side of the triangle by the number of units (steps: 1-3, 4-7, 8-15, 16+); unknown: `UNIT_SIDE_UNKNOWN`. */
+/**
+ * The size step of a unit token by the number of units (1-3, 4-7, 8-15, 16+; unknown:
+ * `UNIT_SIDE_UNKNOWN`): the helmet is `HELMET_SCALE` times this wide; it also sets the minimum size
+ * on screen and the hit area.
+ */
 export const UNIT_SIDES = [24, 30, 36, 42] as const;
 export const UNIT_SIDE_UNKNOWN = 30;
+/** The casing of the icon of units standing in a city: a little see-through over the city body. */
+export const UNIT_HALO_ALPHA = 0.9;
 /**
- * Faint dividers inside a triangle, one per unit (#508), so the charged units can be counted on the
- * fill: drawn up to `max` units, a bigger group is told by the number alone.
- */
-export const UNIT_TICKS = { max: 8, width: 1, color: PAPER, alpha: 0.34, inset: 2.4 } as const;
-/** The outline of a triangle (the colour is the owner's, set where it is drawn). */
-export const UNIT_OUTLINE = { width: 2.4, join: 'round' } as const;
-/** The light inner outline of an opponent triangle: visible on a dark empty plate and on its fill. */
-export const UNIT_INNER_OUTLINE = { width: 1.5, color: PAPER, alpha: 0.9, join: 'round' } as const;
-/** The inner outline of an opponent triangle: this share of the size. */
-export const UNIT_INNER_SCALE = 0.62;
-/** The casing of the icon of units standing in a city (round, in the colour of the background). */
-export const UNIT_HALO = { width: 7, alpha: 0.9, join: 'round' } as const;
-/**
- * A helmet in a city (#784) is this share of the one on a road: with its strap it is taller than the
- * triangle it replaces and stays inside the capacity ring (the mockup of #775 took 8% off too).
+ * A helmet in a city (#784) is this share of the one on a road: with its strap it stays inside the
+ * capacity ring (the mockup of #775 took 8% off too).
  */
 export const HELMET_INSIDE = 0.92;
 export const UNIT_DASH = { dash: 5, gap: 3.5 } as const;
 export const UNIT_QUESTION_FONT_SIZE = 15;
-/** On screen a triangle is at least this wide, and a click hits at least this wide (CSS px). */
+/** On screen a unit's size step is at least this wide, and a click hits at least this wide (CSS px). */
 export const UNIT_MIN_SIDE_PX = 20;
 export const UNIT_MIN_HIT_PX = 28;
 export const UNIT_LABEL = { fill: PLATE_FILL, alpha: 0.92, padX: 4, height: 13, gap: 3 } as const;
@@ -364,8 +357,6 @@ export const DEFENSE_PIPS = {
  * one column outside the capacity ring, `step` apart, never smaller than `iconPx` on screen.
  */
 export const CITY_COLUMN = { step: 19, clear: 1.5, iconPx: 16, badgeRadius: 9 } as const;
-/** The selection outline is a copy of the triangle this much bigger (9.5). */
-export const SELECT_UNIT_SCALE = 1.45;
 
 /**
  * A packet of the automatic supply is a small square with a tail of two fainter squares behind it
@@ -690,10 +681,10 @@ export const UNDO_CUE = {
 } as const;
 
 /**
- * The light outline of the own group under the pointer (#762): the selection frame's triangle, a
- * little smaller and faint, so the hover never reads as a selection.
+ * The light outline of the own group under the pointer (#762): the selection frame's line, a
+ * little closer (`HELMET_FRAME.hover`) and faint, so the hover never reads as a selection.
  */
-export const HOVER_FRAME = { scale: 1.3, width: 2, alpha: 0.75, haloAlpha: 0.5 } as const;
+export const HOVER_FRAME = { width: 2, alpha: 0.75, haloAlpha: 0.5 } as const;
 
 /**
  * The outlines round a helmet (#784): this far (world units) outside the drawing of the helmet,
@@ -852,5 +843,5 @@ export const SUPPLY_CUT = {
 export const SUPPLY_FLOW_LABEL = { fontSize: 11, padX: 4, height: 14, radius: 4 } as const;
 /** A bulkhead on a buffer road at its border point: supply stops there. */
 export const SUPPLY_BULKHEAD = { half: 5, width: 1.5, casing: 3.4, color: 0xaab2bd } as const;
-/** The mark of the enemy presence: a hollow inverted triangle, no number. */
+/** The mark of the enemy presence: a hollow enemy helmet `side` times `HELMET_SCALE` wide, no number. */
 export const SUPPLY_PRESENCE = { side: 12, width: 2.2, angle: 45, gap: 9 } as const;

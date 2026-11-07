@@ -1,13 +1,6 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import type { BakedSprite, SpriteCache } from './bake.ts';
-import {
-  arenaPlateSpec,
-  chevronBadgeSpec,
-  chipSpec,
-  helmetChipSpec,
-  selfShotSpec,
-} from './bakedShapes.ts';
-import { unitStyle } from '../units/unitStyle.ts';
+import { arenaPlateSpec, chevronBadgeSpec, helmetChipSpec, selfShotSpec } from './bakedShapes.ts';
 import { t } from '../i18n/index.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import type { EventMsg, FightRoundView, MapFile, PlayerId } from '../protocol.gen.ts';
@@ -667,16 +660,11 @@ export class FightView {
         if (chip === undefined) return;
         const at = chipAt(index, chips.shown.length, own);
         // Helmet chips (#784): the own ones face right, the opponent's left, so the sides look at each other.
-        const helmets = unitStyle() === 'helmet';
-        chip.set(
-          helmets
-            ? helmetChipSpec(state, !own, this.colorOf(side))
-            : chipSpec(state, !own, this.colorOf(side)),
-        );
+        chip.set(helmetChipSpec(state, !own, this.colorOf(side)));
         chip.label = `chip:${state}`;
         chip.position.set(at.x, at.y);
         const pulse = look.pulses[side].get(index) ?? 1;
-        chip.scale.set(helmets && !own ? -pulse : pulse, pulse);
+        chip.scale.set(own ? pulse : -pulse, pulse);
         chip.visible = true;
         badges = this.drawChipBadges(arena, badges, chips.badges[index] ?? null, at);
       });

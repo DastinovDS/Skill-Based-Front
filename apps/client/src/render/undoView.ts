@@ -6,7 +6,6 @@ import type { UndoMark } from './interaction.ts';
 import type { MapLayers } from './layers.ts';
 import { arrowGeometry, nodePoint, type TokenSpot } from './layout.ts';
 import { reducedMotion } from './motion.ts';
-import { unitStyle } from '../units/unitStyle.ts';
 import { ARROW_HEAD, BG, ORDER_GHOST_DASH, ORDER_GHOST_GAP, PAPER, UNDO_CUE } from './style.ts';
 import {
   circlePoints,
@@ -17,8 +16,6 @@ import {
   type UndoLook,
 } from './undoLayout.ts';
 
-/** The resting ring round a group token, against the side of its triangle (a helmet with its strap is bigger, #784). */
-const GROUP_RING = { triangle: 0.85, helmet: 1 } as const;
 /** The resting ring round a city: this far outside its circle (world units). */
 const NODE_RING_GAP = 8;
 
@@ -71,7 +68,8 @@ export class UndoView {
       if (at === undefined) continue;
       const radius =
         spot !== undefined
-          ? spot.side * spot.scale * GROUP_RING[unitStyle()]
+          ? // The resting ring round a group token: its size step clears the helmet and its strap (#784).
+            spot.side * spot.scale
           : this.radiusOf(mark.node ?? 0) + NODE_RING_GAP;
       this.drawArrow(mark, at, look, scale);
       this.drawRing(at, radius * look.ring, look.alpha, scale);

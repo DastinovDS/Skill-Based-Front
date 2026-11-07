@@ -3132,7 +3132,7 @@ a province and a foreign city have no warehouse), front markers as a flag with a
 per road and direction with the number of charges (the sum of own packets by the remainder of their route: solid, a one-off
 transfer dashed; flows to one city along different roads are each drawn with its own arrow),
 packets in transit (a circle, a transfer a square), a cut-off own city with a dashed ring and a timer
-`starve_in`, the enemy only with a hollow triangle "it is here" where it is visible now. The road level
+`starve_in`, the enemy only with a hollow enemy helmet "it is here" where it is visible now. The road level
 is read by line thickness. A click on an own city opens a radial menu: marker 1 (key `1`),
 marker 2 (`2`), transfer (`3`); a marker sector places or moves the marker (`set_front`, 0 CP) or
 removes it (`node = null`) if it is already on this city; a city with another marker does not give the sector

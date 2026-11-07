@@ -70,10 +70,13 @@ export function roadPosition(
 
 // --- Tokens (a group, or what is known about enemies in a place) -------------------------------
 
-// --- Unit triangles (9.5) ----------------------------------------------------------------------
+// --- Unit tokens (9.5) --------------------------------------------------------------------------
 
-/** Side of the triangle of a group: steps by the number of units; `null`: the number is unknown. */
-export function triangleSide(units: number | null): number {
+/**
+ * The size step of a group token (`UNIT_SIDES`): steps by the number of units; `null`: the number
+ * is unknown. The helmet is `HELMET_SCALE` times this wide.
+ */
+export function unitSide(units: number | null): number {
   if (units === null) return UNIT_SIDE_UNKNOWN;
   const [s1, s2, s3, s4] = UNIT_SIDES;
   if (units <= 3) return s1;
@@ -85,7 +88,7 @@ export function triangleSide(units: number | null): number {
 /** Where a group token is drawn: its centre, its side and the scale of the symbol on screen. */
 export interface TokenSpot extends Point {
   readonly side: number;
-  /** `symbolScale` now: 1, or more when the zoom would make the triangle smaller than 20 px. */
+  /** `symbolScale` now: 1, or more when the zoom would make the token smaller than 20 px. */
   readonly scale: number;
   /** The opponent's token (a replay shows both sides): its helmet is another shape, facing left. */
   readonly enemy?: boolean;
@@ -93,44 +96,14 @@ export interface TokenSpot extends Point {
   readonly inside?: boolean;
 }
 
-/** Height of an equilateral triangle of `side`. */
-export function triangleHeight(side: number): number {
-  return (side * Math.sqrt(3)) / 2;
-}
-
 /**
- * Height share of the charge fill, from the tip: `charged / units`. A player reads the height, so
+ * Height share of the charge fill, from the bottom of the dome: `charged / units`. A player reads the height, so
  * it is linear (1 of 4 charged fills a quarter of the height); the area is not the share (#508).
  * 0 for an empty group.
  */
 export function chargeLevel(units: number, charged: number): number {
   if (units <= 0 || charged <= 0) return 0;
   return Math.min(1, charged / units);
-}
-
-/**
- * Heights of the dividers inside a triangle, as shares of its height from the tip: one between
- * every two units, `(i / units)` for `i` in `1..units - 1`. No dividers for one unit or for more
- * than `max` (the fill alone, and the number, tell the rest).
- */
-export function chargeTicks(units: number, max: number): number[] {
-  if (units < 2 || units > max) return [];
-  return Array.from({ length: units - 1 }, (_, i) => (i + 1) / units);
-}
-
-/**
- * Corners of a triangle pointing down, around the centre of its bounding box: left, right, tip.
- * `tipOrigin`: relative to the tip instead (the shape of the charge fill, scaled from there).
- */
-export function triangleCorners(side: number, tipOrigin = false): [Point, Point, Point] {
-  const h = triangleHeight(side);
-  const top = tipOrigin ? -h : -h / 2;
-  const tip = tipOrigin ? 0 : h / 2;
-  return [
-    { x: -side / 2, y: top },
-    { x: side / 2, y: top },
-    { x: 0, y: tip },
-  ];
 }
 
 /** A packet near a city: scale and opacity while it glides into (or out of) the city icon. */
@@ -147,7 +120,7 @@ export function packetFade(
 
 /**
  * Text of the number on a token (UI round 2): ONE number, all the units. How many of them are
- * charged is the fill of the triangle; the exact numbers are in the tooltip.
+ * charged is the fill of the helmet; the exact numbers are in the tooltip.
  */
 export function countLabel(units: number): string {
   return String(units);

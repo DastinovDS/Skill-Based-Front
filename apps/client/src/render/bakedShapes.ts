@@ -18,8 +18,8 @@ import {
   type CellState,
   type QueueMark,
 } from './progressLayout.ts';
-import { CHIP, PLATE, chipHatch, chipHeight, lighten, type ChipState } from './fightFx.ts';
-import { chargeTicks, dashSegments, triangleCorners, triangleHeight } from './layout.ts';
+import { CHIP, PLATE, lighten, type ChipState } from './fightFx.ts';
+import { dashSegments } from './layout.ts';
 import { circleBox, darken, shadowBox, type Box } from './shading.ts';
 import {
   BAKE_MARGIN,
@@ -53,9 +53,7 @@ import {
   SHADOW,
   SUPPLY_LINE,
   UNIT_DASH,
-  UNIT_HALO,
-  UNIT_OUTLINE,
-  UNIT_TICKS,
+  UNIT_HALO_ALPHA,
   VP_BADGE,
   VP_BADGE_RADIUS,
   ENEMY,
@@ -449,119 +447,8 @@ function drawSiteGlyph(
   }
 }
 
-/** How the outline of a triangle is drawn: own, the opponent's (a second inner outline), dashed (unknown). */
-export type OutlineKind = 'own' | 'enemy' | 'dashed';
-
-function triangleBox(side: number, spread: number): Box {
-  const h = triangleHeight(side);
-  return {
-    x: -side / 2 - spread,
-    y: -h / 2 - spread,
-    width: side + 2 * spread,
-    height: h + 2 * spread,
-  };
-}
-
-/** The back of a triangle: the shadow, the casing of an icon in a city (`inside`) and the dark plate. */
-export function triangleBackSpec(side: number, inside: boolean): BakeSpec {
-  const corners = triangleCorners(side);
-  const spread = inside ? UNIT_HALO.width / 2 : UNIT_OUTLINE.width / 2;
-  return {
-    key: `tri-back:${String(side)}:${inside ? 'i' : ''}`,
-    box: shadowBox(triangleBox(side, spread + 1), BAKE_MARGIN),
-    draw(into) {
-      shadow(into, (g) => g.poly(flat(corners)), spread);
-      const g = graphics(into);
-      if (inside) g.poly(flat(corners)).stroke({ ...UNIT_HALO, color: BG });
-      g.poly(flat(corners)).fill(PLATE_FILL);
-    },
-  };
-}
-
-/** The charge fill of a triangle: a full triangle with its tip at the origin (scaled from there by the level). */
-export function triangleLevelSpec(side: number, color: number): BakeSpec {
-  const h = triangleHeight(side);
-  const corners = triangleCorners(side, true);
-  return {
-    key: `tri-level:${String(side)}:${String(color)}`,
-    box: { x: -side / 2 - 1, y: -h - 1, width: side + 2, height: h + 2 },
-    draw(into, tools) {
-      graphics(into).poly(flat(corners)).fill(tools.gradient(color));
-    },
-  };
-}
-
-/**
- * The dividers of a triangle with `units` units (#508): a faint line at every unit's height from the
- * tip, over the fill and the empty part, inside the outline. One texture per (side, units); nothing
- * to draw (`null`) for one unit or more than `UNIT_TICKS.max`.
- */
-export function triangleTicksSpec(side: number, units: number): BakeSpec | null {
-  const levels = chargeTicks(units, UNIT_TICKS.max);
-  if (levels.length === 0) return null;
-  const h = triangleHeight(side);
-  return {
-    key: `tri-ticks:${String(side)}:${String(units)}`,
-    box: triangleBox(side, 0),
-    draw(into) {
-      const g = graphics(into);
-      for (const level of levels) {
-        // Row `level` of the triangle from the tip: half-width grows linearly from the tip.
-        const y = h / 2 - level * h;
-        const half = (side * level) / 2 - UNIT_TICKS.inset;
-        if (half <= 0) continue;
-        g.moveTo(-half, y).lineTo(half, y);
-      }
-      g.stroke({ width: UNIT_TICKS.width, color: UNIT_TICKS.color, alpha: UNIT_TICKS.alpha });
-    },
-  };
-}
-
-/** The outline of a triangle with its light rim along the upper left side. */
-export function triangleFrontSpec(
-  side: number,
-  kind: OutlineKind,
-  color: number,
-  inner: number,
-): BakeSpec {
-  const corners = triangleCorners(side);
-  const [left, right, tip] = corners;
-  const centroid = { x: 0, y: (left.y + right.y + tip.y) / 3 };
-  return {
-    key: `tri-front:${String(side)}:${kind}:${String(color)}`,
-    box: shadowBox(triangleBox(side, UNIT_OUTLINE.width), 0),
-    draw(into) {
-      const g = graphics(into);
-      if (kind === 'dashed') {
-        for (const [from, to] of [
-          [left, right],
-          [right, tip],
-          [tip, left],
-        ] as const) {
-          for (const [a, b] of dashSegments(from, to, UNIT_DASH.dash, UNIT_DASH.gap)) {
-            g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-          }
-        }
-        g.stroke({ width: UNIT_OUTLINE.width, color, cap: 'round' });
-        return;
-      }
-      g.poly(flat(corners)).stroke({ ...UNIT_OUTLINE, color });
-      if (kind === 'enemy') {
-        const scaled = corners.map((p) => ({
-          x: centroid.x + (p.x - centroid.x) * inner,
-          y: centroid.y + (p.y - centroid.y) * inner,
-        }));
-        g.poly(flat(scaled)).stroke({ width: 1.5, color: PAPER, alpha: 0.9, join: 'round' });
-      }
-      g.moveTo(left.x + 3, left.y + 2.6)
-        .lineTo(tip.x - 1.6, tip.y - 4)
-        .stroke({ width: 1.2, color: 0xffffff, alpha: RIM.alpha * 0.8, cap: 'round' });
-    },
-  };
-}
-
 // --- Helmets (#784, variant Full of #775) ------------------------------------------------------------
-// A helmet is three baked sprites like the triangle: the back (shadow, dark casing, the light strap
+// A helmet is three baked sprites: the back (shadow, dark casing, the light strap
 // and brim, the empty plate of the dome), the charge fill (the whole dome in the gradient of the
 // owner, shown from the bottom by a crop of its frame, `BakedSprite.cropBottom`) and the front (the
 // light edge of the dome). All face right; a view flips them for the opponent (`scale.x = -1`).
@@ -629,7 +516,7 @@ export function helmetBackSpec(
         g.poly(dome).fill({ color: PLATE_FILL, alpha: 0.72 });
         return;
       }
-      const halo = inside ? UNIT_HALO.alpha : 1;
+      const halo = inside ? UNIT_HALO_ALPHA : 1;
       for (const line of gear(h)) {
         polyline(g, line).stroke({
           width: width(line) + casing,
@@ -850,60 +737,6 @@ export function arenaPlateSpec(): BakeSpec {
 
 /** The tone of the discharged units and the hatching on their chips. */
 const REST_LIGHTEN = 0.6;
-
-function chipCorners(side: number): Point[] {
-  const h = chipHeight(side);
-  return [
-    { x: -side / 2, y: -h / 2 },
-    { x: side / 2, y: -h / 2 },
-    { x: 0, y: h / 2 },
-  ];
-}
-
-/**
- * A chip of the arena: charged (a gradient fill, a light outline), discharged (hollow, hatched,
- * outlined in the side's colour) or killed (dashed and faint); the enemy's also have a dark inner outline.
- */
-export function chipSpec(state: ChipState, enemy: boolean, color: number): BakeSpec {
-  const corners = chipCorners(CHIP.side);
-  const inner = chipCorners(CHIP.side * 0.58);
-  const spread = 2;
-  return {
-    key: `chip:${state}:${enemy ? 'e' : 'o'}:${String(color)}`,
-    box: {
-      x: -CHIP.side / 2 - spread,
-      y: -chipHeight(CHIP.side) / 2 - spread,
-      width: CHIP.side + 2 * spread,
-      height: chipHeight(CHIP.side) + 2 * spread,
-    },
-    draw(into, tools) {
-      const g = graphics(into);
-      switch (state) {
-        case 'charged':
-          g.poly(flat(corners)).fill(tools.gradient(color));
-          g.poly(flat(corners)).stroke({ width: 1.6, color: GLYPH_COLOR, join: 'round' });
-          if (enemy) g.poly(flat(inner)).stroke({ width: 1.1, color: BG, join: 'round' });
-          return;
-        case 'empty':
-          g.poly(flat(corners)).fill(PLATE_FILL);
-          for (const [from, to] of chipHatch(CHIP.side, 3.5))
-            g.moveTo(from.x, from.y).lineTo(to.x, to.y);
-          g.stroke({ width: 1.2, color: lighten(color, REST_LIGHTEN), alpha: 0.85 });
-          g.poly(flat(corners)).stroke({ width: 1.8, color, join: 'round' });
-          if (enemy) g.poly(flat(inner)).stroke({ width: 1.1, color: BG, join: 'round' });
-          return;
-        case 'killed':
-          corners.forEach((from, i) => {
-            const to = corners[(i + 1) % corners.length];
-            if (to === undefined) return;
-            for (const [a, b] of dashSegments(from, to, 2.5, 2.5))
-              g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-          });
-          g.stroke({ width: 1.6, color, alpha: 0.6, cap: 'round' });
-      }
-    },
-  };
-}
 
 // --- Progress marks above an own city (variant A "Cells", #439) --------------------------------------
 // The plate of a recruit queue or of a build is one baked sprite per look: the key holds the states of

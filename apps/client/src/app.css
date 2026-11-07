@@ -188,22 +188,6 @@ body {
   letter-spacing: -0.01em;
 }
 
-.front .mark-you {
-  fill: var(--you);
-  stroke: var(--paper);
-}
-
-.front .mark-enemy {
-  fill: var(--enemy);
-  stroke: var(--paper);
-}
-
-.front .mark-hole {
-  fill: none;
-  stroke: var(--bg);
-  stroke-width: 1.4;
-}
-
 .front .mark-helmets {
   display: inline-flex;
   align-items: center;

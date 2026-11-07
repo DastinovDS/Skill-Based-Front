@@ -1,7 +1,6 @@
 <script lang="ts">
   import { sound } from '../audio/soundState.svelte.ts';
   import HelmetIcon from '../units/HelmetIcon.svelte';
-  import { unitLook } from '../units/unitStyleState.svelte.ts';
   import { getLocale, t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { HudChrome } from './chrome.svelte.ts';
@@ -148,13 +147,7 @@
       })}
     >
       <span class="side mine">
-        {#if unitLook.helmets}
-          <HelmetIcon side="own" size={18} />
-        {:else}
-          <svg class="mark" viewBox="0 0 16 14" width="16" height="14" aria-hidden="true">
-            <path d="M1.5 1.5h13L8 12.5z" class="one" />
-          </svg>
-        {/if}
+        <HelmetIcon side="own" size={18} />
         <span class="nick">{data.nicks.mine}</span>
       </span>
       <span class="vp mine-vp">{data.vp.mine}</span>
@@ -165,14 +158,7 @@
       <span class="vp enemy-vp">{data.vp.enemy}</span>
       <span class="side enemy">
         <span class="nick">{data.nicks.enemy}</span>
-        {#if unitLook.helmets}
-          <HelmetIcon side="enemy" size={18} />
-        {:else}
-          <svg class="mark" viewBox="0 0 16 14" width="16" height="14" aria-hidden="true">
-            <path d="M1.5 1.5h13L8 12.5z" class="two-outer" />
-            <path d="M4.6 3.6h6.8L8 9.6z" class="two-inner" />
-          </svg>
-        {/if}
+        <HelmetIcon side="enemy" size={18} />
       </span>
     </div>
   {:else}
@@ -522,31 +508,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .mark {
-    flex: none;
-  }
-
-  .one {
-    fill: var(--you);
-    stroke: var(--paper);
-    stroke-width: 1.4;
-    stroke-linejoin: round;
-  }
-
-  .two-outer {
-    fill: var(--enemy);
-    stroke: var(--paper);
-    stroke-width: 1.4;
-    stroke-linejoin: round;
-  }
-
-  .two-inner {
-    fill: none;
-    stroke: var(--bg);
-    stroke-width: 1.2;
-    stroke-linejoin: round;
   }
 
   .vp {

@@ -8,7 +8,7 @@ import type {
   PlayerId,
   SnapshotMsg,
 } from '../protocol.gen.ts';
-import { dashSegments, edgeEnds, triangleSide } from './layout.ts';
+import { dashSegments, edgeEnds, unitSide } from './layout.ts';
 import {
   ageLabel,
   ghostAlpha,
@@ -35,7 +35,7 @@ import {
 /** Where a snapshot says an enemy was last seen in a place that is hidden now. */
 type Memory = NodeView['seen'];
 
-/** A marker of what was last seen in a hidden place: a faded dashed enemy triangle and its age. */
+/** A marker of what was last seen in a hidden place: a faded dashed enemy helmet and its age. */
 class Ghost {
   readonly view = new Container({ visible: false });
   readonly token: Token;
@@ -56,7 +56,7 @@ class Ghost {
     this.view.visible = false;
   }
 
-  /** Sets the symbol scale (the minimum size on screen) and keeps the age above the triangle. */
+  /** Sets the symbol scale (the minimum size on screen) and keeps the age above the helmet. */
   setScale(scale: number): void {
     this.token.setScale(scale);
     this.age.position.set(0, (this.token.top - 3) * scale);
@@ -202,13 +202,6 @@ export class FogView {
     }
   }
 
-  /** The unit look changed (#784): the ghosts are drawn again. */
-  restyle(): void {
-    const base = this.base;
-    this.base = null;
-    if (base !== null) this.update(base);
-  }
-
   /** Redraws the fog when `base` is a snapshot not drawn yet; otherwise does nothing. */
   update(base: SnapshotMsg): void {
     if (base === this.base) return;
@@ -328,7 +321,7 @@ export class FogView {
       existing?.hide();
       return;
     }
-    const side = triangleSide(
+    const side = unitSide(
       memory.level === 'exact' && memory.enemy_units !== null ? memory.enemy_units : null,
     );
     const at = nodeMarkerPoint(this.map, node.id, side, this.radiusOf(node.id));
