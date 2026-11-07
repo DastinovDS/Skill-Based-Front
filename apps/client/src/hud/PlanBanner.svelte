@@ -95,6 +95,7 @@
         </div>
         <span class="dim cap">{tf('plan.max', { max })}</span>
         <kbd class="k" aria-hidden="true">{STEP_KEYS}</kbd>
+        <span class="dim cap">{t('plan.wheel')}</span>
       </div>
     {/if}
   </section>

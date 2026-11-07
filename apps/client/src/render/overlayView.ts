@@ -1,5 +1,5 @@
 import { Assets, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
-import { t } from '../i18n/index.ts';
+import { t, tf } from '../i18n/index.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { badgeScale } from './alertLayout.ts';
 import { etaPlace, secondsRight } from './etaLayout.ts';
@@ -23,6 +23,7 @@ import {
 } from './layout.ts';
 import {
   ARROW_HEAD,
+  BONUS_MARK,
   ETA_FONT_SIZE,
   ETA_MARK,
   ETA_ROUTE,
@@ -40,10 +41,6 @@ import {
   PICK_BAND,
   PAPER,
   YOU,
-  PREVIEW_ALPHA,
-  PREVIEW_DASH,
-  PREVIEW_GAP,
-  PREVIEW_WIDTH,
   REACH_RING,
   roadSpan,
   SELECT_COLOR,
@@ -137,6 +134,25 @@ export class OverlayView {
     fill: PAPER,
     stroke: { color: BG, width: 3, join: 'round' },
   });
+  /** The bonus counter over the target of a planned order (#793); drawn again when its text changes. */
+  private readonly bonus = new Container({ label: 'plan-bonus', visible: false });
+  private readonly bonusPill = new Graphics();
+  private readonly bonusText: Text;
+  private readonly bonusTime: Text;
+  /** The texts the pill was drawn for (empty: not drawn yet). */
+  private bonusKey = '';
+  private readonly bonusStyle = new TextStyle({
+    fontFamily: 'system-ui, sans-serif',
+    fontSize: BONUS_MARK.fontSize,
+    fontWeight: '700',
+    fill: PAPER,
+  });
+  private readonly bonusTimeStyle = new TextStyle({
+    fontFamily: 'system-ui, sans-serif',
+    fontSize: BONUS_MARK.timeFontSize,
+    fontWeight: '600',
+    fill: PAPER,
+  });
   private tickHz = 10;
   private cameraScale = 1;
   constructor(
@@ -159,6 +175,20 @@ export class OverlayView {
       .circle(0, 0, M.radius)
       .fill({ color: BG, alpha: M.fillAlpha })
       .stroke({ width: M.rim.width, color: PAPER, alpha: M.rim.alpha });
+    this.bonusText = new Text({
+      text: '',
+      style: this.bonusStyle,
+      anchor: { x: 0, y: 0.5 },
+      resolution: 1,
+    });
+    this.bonusTime = new Text({
+      text: '',
+      style: this.bonusTimeStyle,
+      anchor: { x: 0, y: 0.5 },
+      resolution: 1,
+    });
+    this.bonusTime.alpha = 0.75;
+    this.bonus.addChild(this.bonusPill, this.bonusText, this.bonusTime);
     this.etaGlyph.anchor.set(0.5);
     this.etaGlyph.visible = false;
     this.eta.addChild(this.etaDisc, this.etaGlyph, this.etaText);
@@ -186,6 +216,8 @@ export class OverlayView {
       this.hoverFrame,
       this.frame,
       this.eta,
+      this.bonus,
+      // Last: a rejected order's ghost lies over everything of the overlay.
       this.ghosts,
     );
     this.frame.visible = false;
@@ -206,6 +238,7 @@ export class OverlayView {
       this.drawRing(next);
     }
     this.placeEta(next);
+    this.placeBonus(next);
     this.drawComet(now);
     // A rejected ghost shakes and fades with the clock; the others only when the overlay changes.
     if (changed || next.ghosts.some((g) => g.status === 'rejected')) this.drawGhosts(next, now);
@@ -234,7 +267,9 @@ export class OverlayView {
   }
 
   setLabelResolution(resolution: number): void {
-    if (this.etaText.resolution !== resolution) this.etaText.resolution = resolution;
+    for (const text of [this.etaText, this.bonusText, this.bonusTime]) {
+      if (text.resolution !== resolution) text.resolution = resolution;
+    }
   }
 
   /** Ticks per second, to turn the travel time into seconds. */
@@ -291,6 +326,63 @@ export class OverlayView {
   }
 
   /**
+   * The bonus counter over the target (#793): "◇ +3  gathers 6 s" in a pill just above the city's
+   * ring, as big on screen at any zoom. The pill is drawn again only when its text changes.
+   */
+  private placeBonus(state: OverlayState): void {
+    const mark = state.bonus ?? null;
+    const at = mark === null ? undefined : nodePoint(this.map, mark.node);
+    if (mark === null || at === undefined) {
+      this.bonus.visible = false;
+      return;
+    }
+    const value = `+${String(mark.bonus)}`;
+    const time =
+      mark.ticks === null || this.tickHz <= 0
+        ? ''
+        : tf('plan.gatherIn', { seconds: Math.ceil(mark.ticks / this.tickHz) });
+    const key = `${value}|${time}`;
+    if (key !== this.bonusKey) this.drawBonus(value, time, key);
+    const M = BONUS_MARK;
+    const scale = badgeScale(this.cameraScale);
+    // The ring is in world units, the pill and its lift keep their size on screen.
+    const lift = this.radiusOf(mark.node) + REACH_RING.gap + (M.lift + M.height / 2) * scale;
+    this.bonus.scale.set(scale);
+    this.bonus.position.set(at.x, at.y - lift);
+    this.bonus.visible = true;
+  }
+
+  private drawBonus(value: string, time: string, key: string): void {
+    const M = BONUS_MARK;
+    this.bonusText.text = value;
+    this.bonusTime.text = time;
+    this.bonusTime.visible = time !== '';
+    const d = M.diamond;
+    const width =
+      M.padding * 2 +
+      2 * d +
+      M.gap +
+      this.bonusText.width +
+      (time === '' ? 0 : M.gap + this.bonusTime.width);
+    const left = -width / 2;
+    const g = this.bonusPill;
+    g.clear();
+    g.roundRect(left, -M.height / 2, width, M.height, M.height / 2)
+      .fill({ color: BG, alpha: M.fillAlpha })
+      .stroke({ width: M.rim.width, color: YOU, alpha: M.rim.alpha });
+    // The hollow diamond of a bonus shot, as on the plan banner and the pill of a planned order.
+    const cx = left + M.padding + d;
+    g.poly([cx, -d, cx + d, 0, cx, d, cx - d, 0]).stroke({
+      width: 2,
+      color: PAPER,
+      join: 'round',
+    });
+    this.bonusText.position.set(cx + d + M.gap, 0);
+    this.bonusTime.position.set(cx + d + M.gap + this.bonusText.width + M.gap, 1);
+    this.bonusKey = key;
+  }
+
+  /**
    * The comet of the hovered route (H10, #627): every frame while it runs, once for the still
    * frame of "less motion". Flat strokes in one small Graphics, no filter.
    */
@@ -330,6 +422,9 @@ export class OverlayView {
     // The glyph texture belongs to the Assets cache: only the sprite goes.
     this.etaGlyph.texture = Texture.EMPTY;
     this.eta.destroy({ children: true });
+    this.bonus.destroy({ children: true });
+    this.bonusStyle.destroy();
+    this.bonusTimeStyle.destroy();
     this.comet.destroy();
     this.etaStyle.destroy();
     this.band.destroy();
@@ -424,21 +519,13 @@ export class OverlayView {
     this.spans = state.eta === null ? [] : this.routeOf(state.eta.path);
     this.drawRoute(g, this.spans);
     if (preview !== null) {
-      // Along the route, node to node, as the order will go (a path of one road: that road).
-      for (let i = 1; i < preview.path.length; i++) {
-        const from = nodePoint(this.map, preview.path[i - 1] ?? -1);
-        const to = nodePoint(this.map, preview.path[i] ?? -1);
-        if (from === undefined || to === undefined) continue;
-        for (const [a, b] of dashSegments(from, to, PREVIEW_DASH, PREVIEW_GAP)) {
-          g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-        }
-      }
-      g.stroke({
-        width: PREVIEW_WIDTH,
-        color: SELECT_COLOR,
-        alpha: PREVIEW_ALPHA,
-        cap: 'round',
-      });
+      // The ghost of the planned order (#793): the look of a sent order's arrow, along the
+      // server's route; the controller gives a preview only for a target `reach` lists.
+      this.drawGhost(
+        g,
+        { from: preview.from, dest: preview.to, planned: true, path: preview.path },
+        0,
+      );
     }
   }
 

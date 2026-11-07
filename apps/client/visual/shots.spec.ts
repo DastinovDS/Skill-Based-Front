@@ -704,6 +704,8 @@ for (const shot of UNDO_SHOTS) {
 // - `split-tip`, `split-menu`: `?split=2,1` answers the `reach` with node 2 and the size 1 that fits; the
 //   tip says a click splits, the click opens the split menu at that size ("Split and send");
 // - `plan-shift`: scene `economy` (economy v2), a group selected, Shift held over a target: the plan bar stands out;
+//   `?reach=7,140,6` answers the `reach` with Bluff by Wood Hollow, so the ghost of the planned order and
+//   the bonus counter over Bluff show (#793), and one wheel notch raises the bonus;
 // - `cp-hover`, `cp-cut`: `?cp=50` (less than a move) and `?reject=NOT_ENOUGH_CP`: the CP badge is marked
 //   over a target, the click leaves the cut-off arrow.
 const UX_SHOTS = [
@@ -721,7 +723,7 @@ for (const name of UX_SHOTS) {
   test(`shot of the playtest batch (${name})`, async ({ page }) => {
     const economy = name === 'plan-shift' || name.startsWith('cp-');
     const query = economy
-      ? `scene=economy&menus${name.startsWith('cp-') ? '&cp=50&reject=NOT_ENOUGH_CP' : ''}`
+      ? `scene=economy&menus${name.startsWith('cp-') ? '&cp=50&reject=NOT_ENOUGH_CP' : '&reach=7,140,6'}`
       : `scene=snapshot&menus${name.startsWith('split-') ? '&split=2,1' : ''}`;
     await page.goto(`/?${query}`);
     await expect(page.locator('.game-canvas')).toHaveAttribute(
@@ -762,6 +764,7 @@ for (const name of UX_SHOTS) {
         await page.keyboard.down('Shift');
         await page.mouse.move(485, 160);
         await page.mouse.move(486, 161);
+        await page.mouse.wheel(0, -100);
         break;
       case 'cp-hover':
       case 'cp-cut':

@@ -17,7 +17,12 @@ import { IntentView } from './intentView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
 import { NameView } from './nameView.ts';
-import { EMPTY_OVERLAY, type MapInteraction, type PickHit } from './interaction.ts';
+import {
+  EMPTY_OVERLAY,
+  type MapInteraction,
+  type PickHit,
+  type WheelInput,
+} from './interaction.ts';
 import { OverlayView } from './overlayView.ts';
 import { UndoView } from './undoView.ts';
 import { nodePoint } from './layout.ts';
@@ -201,7 +206,11 @@ export class MapScene {
       this.onCamera,
       insets,
     );
-    this.controller.setHandlers({ onclick: this.onClick, onhover: this.onHover });
+    this.controller.setHandlers({
+      onclick: this.onClick,
+      onhover: this.onHover,
+      onwheel: this.onWheel,
+    });
     app.stage.addChild(this.layers.world);
     app.renderer.on('resize', this.onResize);
     app.ticker.add(this.onFrame);
@@ -484,6 +493,10 @@ export class MapScene {
   private readonly onClick = (at: Point, shift: boolean): void => {
     this.interaction?.click(this.hitAt(at), shift);
   };
+
+  /** The wheel goes to the match input first (Shift + wheel: the plan bonus, #793), else it zooms. */
+  private readonly onWheel = (input: WheelInput): boolean =>
+    this.interaction?.wheel?.(input) ?? false;
 
   /** The pointer in world units; off the canvas: the middle of the canvas. */
   private pointerOnMap(): Point {

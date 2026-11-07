@@ -135,10 +135,19 @@ describe('OrderController', () => {
     expect(hud.selection).toEqual({ kind: 'node', id: other.id });
   });
 
-  it('previews the target with the dotted line, and the combat estimate is gone', () => {
+  it('previews only a target the server says the group reaches (#793), no combat estimate', () => {
     const { controller } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     controller.hover({ kind: 'node', id: enemy.id });
+    // No `reach` answer yet: no ghost of the order (the client works out no path).
+    expect(controller.overlay().preview).toBeNull();
+    controller.onReach({
+      type: 'reach',
+      group: group.id,
+      tick: 30,
+      nodes: [{ node: enemy.id, ticks: 25, path: [home, enemy.id] }],
+      split: [],
+    });
     expect(controller.overlay().preview).toEqual({
       from: home,
       to: enemy.id,
@@ -152,6 +161,9 @@ describe('OrderController', () => {
       planned: true,
       path: [home, enemy.id],
     });
+    // A node the answer does not list: no ghost.
+    controller.hover({ kind: 'node', id: other.id });
+    expect(controller.overlay().preview).toBeNull();
     controller.hover(null);
     expect(controller.overlay().preview).toBeNull();
   });

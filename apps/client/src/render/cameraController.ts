@@ -21,6 +21,7 @@ import {
   type Point,
   type Size,
 } from './camera.ts';
+import type { WheelInput } from './interaction.ts';
 
 /** Time constant of the wheel zoom's smoothing, ms: the scale covers 63% of the way to the goal in this time. */
 const ZOOM_TAU_MS = 80;
@@ -47,6 +48,8 @@ export interface PointerHandlers {
   onclick?: (at: Point, shift: boolean) => void;
   /** The pointer is at `at` with no button pressed; `null`: it left the canvas. */
   onhover?: (at: Point | null) => void;
+  /** A wheel event, before the zoom; `true`: it was used for something else, no zoom (#793). */
+  onwheel?: (input: WheelInput) => boolean;
 }
 
 interface Press {
@@ -325,6 +328,7 @@ export class CameraController {
 
   private readonly onWheel = (event: WheelEvent): void => {
     event.preventDefault(); // the page itself never scrolls or zooms over the map
+    if (this.handlers.onwheel?.(event) === true) return;
     const factor = wheelZoomFactor(event.deltaY, event.deltaMode);
     if (factor === 1) return;
     if (reducedMotion()) {
