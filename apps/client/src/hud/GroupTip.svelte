@@ -40,22 +40,8 @@ in its city. The opponent's groups are not under this tip: they show their mode 
         >
       </p>
     {/if}
-    {#if group.gathering !== null}
-      <!-- Economy v2 (DEC-41, item 10): the plan gathers its bonus from the warehouse of its node. -->
-      <p class="extra">
-        <strong class="bonus"
-          ><BonusChevron />{tf('plan.title', {
-            bonus: group.gathering.bonus,
-            plan: group.gathering.plan,
-          })}</strong
-        >
-        <span class="rule"
-          >{tf('plan.rule', {
-            seconds: Math.round(rules.orders.plan_ticks_per_bonus / rules.tick_hz),
-          })}</span
-        >
-      </p>
-    {:else if group.plannedBonus > 0}
+    <!-- A plan that still gathers its bonus shows nothing extra: the charges say it (#811). -->
+    {#if group.gathering === null && group.plannedBonus > 0}
       <p class="extra">
         <span class="bonus"
           ><BonusChevron />{group.node !== null

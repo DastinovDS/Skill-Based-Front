@@ -124,6 +124,25 @@ describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)',
     expect(text).not.toContain('forecast');
   });
 
+  it('shows no plan block for a group whose plan gathers its bonus: the charges only (#811)', () => {
+    const text = tipOf([
+      group({
+        location: { kind: 'node', node: city },
+        order: {
+          dest: 2,
+          path: [2],
+          planned: true,
+          bonus: 1,
+          gathering: true,
+          plan: 2,
+          next_charge_tick: 50,
+        },
+      }),
+    ]);
+    expect(text).not.toContain('Plan bonus');
+    expect(text).not.toContain('Release');
+  });
+
   it('shows no bonus line for an ordinary order or a plan without a bonus', () => {
     expect(
       tipOf([
