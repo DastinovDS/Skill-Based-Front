@@ -466,29 +466,3 @@ export function devEvent(map: MapFile, tick: number): EventMsg | null {
       return { type: 'event', tick, kind: 'vp_awarded', data: { player: 1, vp: 1 } };
   }
 }
-
-export interface DevFeedHandlers {
-  onSnapshot: (snapshot: SnapshotMsg) => void;
-  onEvent: (event: EventMsg) => void;
-}
-
-/** Starts the feed at tick 0; returns the function that stops it. */
-export function startDevFeed(
-  map: MapFile,
-  rules: RulesetPublic,
-  handlers: DevFeedHandlers,
-): () => void {
-  let tick = 0;
-  const step = (): void => {
-    const event = devEvent(map, tick);
-    if (event !== null) handlers.onEvent(event);
-    for (const fight of devFightEvents(map, tick)) handlers.onEvent(fight);
-    handlers.onSnapshot(devSnapshot(map, rules, tick));
-    tick += 1;
-  };
-  step();
-  const timer = setInterval(step, 1000 / rules.tick_hz);
-  return () => {
-    clearInterval(timer);
-  };
-}

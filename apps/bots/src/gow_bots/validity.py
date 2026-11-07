@@ -42,7 +42,7 @@ Definitions (``docs/balance/README.md``, section "Data validity", has the same t
 import math
 import random
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from statistics import median
@@ -830,8 +830,3 @@ def nash(a: Sequence[Sequence[float]], rounds: int = NASH_ROUNDS) -> tuple[list[
     mix = [m / rounds for m in mean]
     gap = max(sum(a[i][j] * mix[j] for j in range(n)) for i in range(n))
     return mix, gap
-
-
-def by_name(values: Mapping[str, float]) -> list[tuple[str, float]]:
-    """``values`` sorted from the largest, ties by name."""
-    return sorted(values.items(), key=lambda kv: (-kv[1], kv[0]))

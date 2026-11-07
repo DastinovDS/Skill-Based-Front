@@ -449,11 +449,6 @@ def send_transfer(
     return packets
 
 
-def packet_target(state: GameState, packet: Packet) -> int:
-    """The node at the end of the packet's current edge."""
-    return state.map.edges[packet.edge].other(packet.from_node)
-
-
 def packet_dest(state: GameState, packet: Packet) -> int:
     """The node at the end of the packet's path."""
     edges = state.map.edges

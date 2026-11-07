@@ -3,7 +3,7 @@
 A command is an intent, never state. It names own groups by opaque id and map nodes and edges by
 their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``Move(group, dest, planned)``, ``Split(group, n)``, ``Merge(groups)``, ``SetMode(group, mode)``,
-``SetStance(stance)``, ``UpgradeRoad(node, edge)``, ``Recruit(node)``, ``CancelOrder(group)``,
+``SetStance(stance)``, ``UpgradeRoad(edge)``, ``Recruit(node)``, ``CancelOrder(group)``,
 ``Forfeit()``; DEC-18: ``Transfer(from, to, n)``; DEC-28: ``SetFront(marker, node)``,
 ``SetRearMin(n)``; DEC-25:
 ``CancelRecruit(node)``; DEC-26: ``BuildBarracks(node)``, ``UpgradeWarehouse(node)``; economy v2
