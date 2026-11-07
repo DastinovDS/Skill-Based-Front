@@ -40,7 +40,7 @@ mise run tournament:gh --ref feature/123-x --ruleset rulesets/mvp-4.toml --bots 
 |---|---|
 | `--ref` | the git ref to check out and to dispatch from (`develop` by default); a branch must be pushed and contain the workflow |
 | `--ruleset`, `--bots`, `--maps`, `--seeds` | as for `gow-bots tournament`; `--seeds` is the total over all shards, `--bots` is a space-separated list or `all`, `--maps` the pool `maps/*.json` by default |
-| `--shards` | parallel runner jobs, 10 by default, at most 20, never more than `--seeds` |
+| `--shards` | parallel runner jobs, 10 by default, at most 20, never more than maps x seeds (a 5-seed run on the 4 pool maps fills 20 runners) |
 | `--label` | a name for the run title and the artifact |
 | `--dir` | where the artifact lands (`.tournament/`, outside git) |
 
@@ -48,12 +48,21 @@ The task dispatches the run, waits with a single `gh run watch --exit-status` an
 `tournament-<label>-<run id>/` with `tournament.jsonl` and `report.md` (and the charts of the report).
 The inputs are in the job summary of the run and in the artifact name.
 
-How it keeps the result equal to a local run: the seeds `seed_base .. seed_base + seeds - 1` are split into
-contiguous ranges, each shard runs `mise run tournament` with its `--seed-base`/`--seeds` and `--jobs` = the CPU count of
-the runner, and `scripts/tournament_shards.py merge` puts the rows into the order of a single run
-(`map, seed, bot0, bot1`, see below) without touching their text. The merged file is byte-identical to the
-file of `mise run tournament` with the same arguments (the test `tests/test_tournament_shards.py`). Runners use the
-Python of `.python-version` (uv fetches it; a shard fails if the version differs).
+How the work is cut (#786): `scripts/tournament_shards.py plan` lists the cells `(map, seed)` seed-major (every
+map of a seed, then the next seed) and cuts the list into `min(--shards, maps x seeds)` contiguous parts with the
+least possible largest expected cost. The cost of a cell is the node count of its map: a match on a 49..54-node
+pool map takes about 1.6 times one on the 29-node `narrows` (#785). A shard plays its part as one to three pieces,
+each a `mise run tournament` with its `--maps`, `--seed-base`, `--seeds` and `--jobs` = the CPU count of the runner
+(the shard step prints `lscpu`). Bot pairs are not split (`gow-bots tournament` has no option for a subset of
+pairs), so a single-map run of 3 seeds has at most 3 shards.
+
+How it keeps the result equal to a local run: `scripts/tournament_shards.py merge` puts the rows of all pieces into
+the order of a single run (`map, seed, bot0, bot1`, see below) without touching their text, and fails on a
+duplicate or missing match (the rows must be the full product of maps, seeds and ordered pairs, with every seed
+and map file of the run), on mixed rulesets or simulation versions. The merged file is byte-identical to the file of
+`mise run tournament` with the same arguments (the test `tests/test_tournament_shards.py`; on GitHub, the same
+6-bot, 3-seed field with `--shards 1` and `--shards 12` gave identical files, #786). Runners use the Python of
+`.python-version` (uv fetches it; a shard fails if the version differs).
 
 **Agents run tournaments only here**; a local run of at most 3 seeds only when GitHub is unavailable. When to run one: after a rules change no tournament gates the merge: the required CI is the gate (golden replays, determinism and property tests, `py-slow` catch crashes). While the owner is still iterating the mechanics through playtests, tournaments are skipped. Once the owner declares the mechanics settled: one batched smoke `mise run tournament:gh --seeds 3` (crashes and gross imbalance), then the field run of 16 bots x 20 seeds (`tournament:gh`) for the ruleset numbers. Tournaments run on GitHub runners (`tournament:gh`), not on the owner's laptop; a local `mise run tournament -- --seeds 3` (at most 3 seeds) only when GitHub is unavailable (owner decision 2026-11-03).
 

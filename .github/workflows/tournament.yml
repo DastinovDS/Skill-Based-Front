@@ -102,6 +102,7 @@ jobs:
 
   shard:
     needs: plan
+    name: shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
     timeout-minutes: 350
     strategy:
@@ -130,7 +131,8 @@ jobs:
           echo "Python $got on $(nproc) CPUs (.python-version: $want)"
           case "$got" in "$want"|"$want".*) ;; *) echo "::error::Python $got differs from .python-version $want"; exit 1;; esac
           echo "shard ${{ matrix.shard }}: ${{ matrix.cells }} cells, cost ${{ matrix.cost }}, Python $got, $(nproc) CPUs" >> "$GITHUB_STEP_SUMMARY"
-      # Are the CPUs cores or SMT threads (#785)? `--jobs` below is the CPU count of the runner.
+      # Cores or SMT threads (#785)? On 2026-11-07 every runner had 4 CPUs = 2 cores x 2 threads
+      # (AMD EPYC 7763, 9V74, 9V45, Intel Xeon 8370C, #786); `--jobs` below is the CPU count.
       - name: Runner CPU
         env:
           SHARD: ${{ matrix.shard }}
