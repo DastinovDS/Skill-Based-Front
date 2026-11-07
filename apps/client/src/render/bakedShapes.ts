@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { BakeSpec } from './bake.ts';
 import {
   BARRACKS_HOUSE,
@@ -62,6 +62,9 @@ import {
   YOU,
   NEUTRAL_STROKE,
   WARN,
+  BADGE,
+  BADGE_DOWN,
+  BADGE_UP,
 } from './style.ts';
 import { counterLayout, type DefensePips } from './defenseLayout.ts';
 import {
@@ -74,6 +77,14 @@ import {
   type HelmetKind,
 } from '../units/helmet.ts';
 import type { Point } from './camera.ts';
+import {
+  badgeBox,
+  badgeCount,
+  badgeFont,
+  badgeLabel,
+  chevronStrokes,
+  type BadgeDir,
+} from './badgeLayout.ts';
 
 // The baked shapes of the map (BL1-1 "Restrained", ui-style 26.3, #347). Each function returns the
 // `BakeSpec` of one look: the key says which, `draw` puts the shape into a scratch container (see
@@ -1152,6 +1163,91 @@ export function starveMarkSpec(): BakeSpec {
       // The bang: a bar and a dot, cut from the dark of the background.
       g.roundRect(-1, -height / 2 + 5.5, 2, 5, 1).fill(BG);
       g.circle(0, height / 2 - 3.4, 1.25).fill(BG);
+    },
+  };
+}
+
+/**
+ * The self-shot of a chip whose charge the terrain burned (DEC-45, #791): a ring and six short rays
+ * in the red of the disadvantage badge, each over a dark outline; the arena scales and fades it.
+ */
+export function selfShotSpec(): BakeSpec {
+  const radius = 7;
+  const reach = 13;
+  return {
+    key: 'self-shot',
+    box: circleBox(reach + 3),
+    draw(into) {
+      const g = graphics(into);
+      const rays = (): void => {
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI / 3) * i + Math.PI / 6;
+          const c = Math.cos(a);
+          const s = Math.sin(a);
+          g.moveTo(c * (radius + 2), s * (radius + 2)).lineTo(c * reach, s * reach);
+        }
+      };
+      g.circle(0, 0, radius).stroke({ width: 4.2, color: BG });
+      rays();
+      g.stroke({ width: 4.2, color: BG, cap: 'round' });
+      g.circle(0, 0, radius).stroke({ width: 1.8, color: BADGE_DOWN });
+      rays();
+      g.stroke({ width: 1.8, color: BADGE_DOWN, cap: 'round' });
+    },
+  };
+}
+
+/** The number beside one chevron of a badge (a shared style: the baked texts are destroyed, not it). */
+const badgeStyles = new Map<string, TextStyle>();
+function badgeTextStyle(size: number, color: number): TextStyle {
+  const key = `${String(size)}:${String(color)}`;
+  let style = badgeStyles.get(key);
+  if (style === undefined) {
+    style = new TextStyle({
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: badgeFont(size),
+      fontWeight: '800',
+      fill: color,
+      stroke: { color: BG, width: 3, join: 'round' },
+    });
+    badgeStyles.set(key, style);
+  }
+  return style;
+}
+
+/**
+ * An advantage or disadvantage badge (#791, variant 8 "Chevrons" of #776, ui-style 32): up to
+ * three chevrons tell the count by strokes (green up, red down), each with a dark outline under it
+ * (3:1 on every terrain); above three one chevron and the number, "9+" above nine. The key is
+ * bounded: direction, the count capped (`badgeCount`), the size (the map or a chip).
+ */
+export function chevronBadgeSpec(dir: BadgeDir, count: number, size: number): BakeSpec {
+  const n = badgeCount(count);
+  const label = badgeLabel(n);
+  const font = badgeFont(size);
+  const labelWidth = label.length * font * 0.62;
+  const color = dir === 'up' ? BADGE_UP : BADGE_DOWN;
+  return {
+    key: `badge:${dir}:${String(n)}:${String(size)}`,
+    box: badgeBox(size, n, labelWidth),
+    draw(into) {
+      const strokes = chevronStrokes(dir, size, n);
+      const width = size * BADGE.stroke;
+      const g = graphics(into);
+      // The dark outline of every chevron first, then the colour over it.
+      for (const [tone, w] of [
+        [BG, width + BADGE.outline],
+        [color, width],
+      ] as const) {
+        for (const stroke of strokes) polyline(g, stroke);
+        g.stroke({ width: w, color: tone, cap: 'round', join: 'round' });
+      }
+      if (label !== '') {
+        const text = into.addChild(
+          new Text({ text: label, style: badgeTextStyle(size, color), anchor: { x: 0, y: 0.5 } }),
+        );
+        text.position.set(size * 0.56 + size * 0.1, 0);
+      }
     },
   };
 }

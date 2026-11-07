@@ -24,11 +24,12 @@ import { fightPoint } from './layout.ts';
 
 /**
  * The plate of the arena, CSS px (A1: two halves, own on the left, the enemy's on the right):
- * half of its width and of its height. It holds two rows of four chips per side, the stock of
- * bonus shots and the "+N" of the hidden chips under them, and a bar of the time to the next
- * round along its bottom edge.
+ * half of its width and of its height. It holds two rows of four chips per side with their badges
+ * (#791, "On chips" of #776: the badges carry the bonus and the penalty, so the row of the ◇ stock
+ * is gone and the plate is 12 px lower), the "+N" of the hidden chips under them, and a bar of the
+ * time to the next round along its bottom edge.
  */
-export const PLATE = { halfWidth: 96, halfHeight: 42 } as const;
+export const PLATE = { halfWidth: 96, halfHeight: 36 } as const;
 /** A chip is a triangle of this side (px): close to the 20 px of a significant symbol (ui-style 22). */
 export const CHIP = { side: 18, pitch: 20, max: 8, columns: 4 } as const;
 /** How far the arena keeps from what it floats over (px): room for the caption and the end label above it, and for the ring below. */
@@ -175,6 +176,8 @@ export function fightResult(end: EndFx): FightResult {
 export const END_SHARE = 1.5;
 /** A chip that changed pulses once over this share of a round. */
 export const PULSE_SHARE = 0.45;
+/** The self-shot of a chip whose charge the terrain burned (DEC-45, #791) lasts this share of a round. */
+export const SELF_SHOT_SHARE = 0.6;
 
 /** Progress 0..1 of an effect that lasts `share` of a round, `age` ticks old; `null`: not now. */
 export function roundEffect(age: number, share: number, roundTicks: number): number | null {
@@ -259,61 +262,123 @@ export function arenaSides(
 /** What a chip shows: a charged unit, a discharged one, one that died in this fight. */
 export type ChipState = 'charged' | 'empty' | 'killed';
 
+/** The badges of one chip (#791): bonus shots up, penalty charges down; 0: none of that kind. */
+export interface ChipBadge {
+  readonly up: number;
+  readonly down: number;
+}
+
 export interface Chips {
-  /** The chips drawn, at most `CHIP.max`: charged first, then discharged, then killed. */
+  /** The chips drawn, at most `CHIP.max`: the pinned penalty ones first, then charged, discharged, killed. */
   readonly shown: readonly ChipState[];
   /** Chips that do not fit: the "+N" with its exact number. */
   readonly hidden: number;
   /** How many of the hidden ones are charged (a small number under "+N"). */
   readonly hiddenCharged: number;
-  /** Indices (into `shown`) of the charged chips that do not shoot: the last ones of the charged. */
-  readonly silent: readonly number[];
+  /** The badges of the chips drawn, by index into `shown` (`null`: none). */
+  readonly badges: readonly (ChipBadge | null)[];
+  /** Indices of the pinned penalty chips whose charge the terrain burned (DEC-45): now empty. */
+  readonly burned: readonly number[];
+}
+
+/**
+ * How many penalty chips a side keeps pinned in front of its chips (#791): the most it was silenced
+ * or had pending to burn so far in this fight (`mute`), or burned in a round. The view remembers it
+ * per fight: under `combat.terrain_burn` the view's `mute` falls to 0 after the first round, the
+ * chip it marked stays where it was.
+ */
+export function pinnedPenalty(before: number, side: SideCount, burnedNow: number): number {
+  return Math.max(before, Math.max(0, side.mute), Math.max(0, burnedNow));
 }
 
 /**
  * The chips of a side: one per unit that was in the fight (`units + losses`: a reinforcement adds
- * chips, the dead stay as dashed ones), charged ones first. Beyond `CHIP.max` the rest is a "+N".
- * The silent ones (`mute`) are the last of the charged: a visual convention, the view only gives
- * the number.
+ * chips, the dead stay as dashed ones). The `pinned` penalty chips stand first and never move
+ * (#791): a charge plains silence (DEC-24 F2) keeps its chip charged with a badge down to the end;
+ * one plains burned (DEC-45) is that chip, now discharged and without a badge. Then the charged
+ * ones, the discharged, the killed: the charges spent go out at the end of the charged ones, so the
+ * first chips keep their state longest. Beyond `CHIP.max` the rest is a "+N".
+ *
+ * The bonus badges (`bonus`: the virtual shots left, `FightView.virtual_left`) sit one a chip on the
+ * living chips right after the penalty ones, the most stable ones; a shot fired takes the badge of
+ * the last of them, so the others stay where they were; with more bonus than living chips the last
+ * one carries the rest as a count. Which chip carries what is a visual convention: the view gives
+ * the numbers only (ui-style 27.2, item 5; AGENTS.md 7.1).
  */
-export function chipsOf(side: SideCount, max: number = CHIP.max): Chips {
+export function chipsOf(side: SideCount, pinned = 0, max: number = CHIP.max): Chips {
   const charged = Math.min(side.units, Math.max(0, side.charged));
   const empty = Math.max(0, side.units - charged);
   const killed = Math.max(0, side.losses);
+  const mute = Math.min(Math.max(0, side.mute), charged);
+  const burnt = Math.min(Math.max(0, pinned - mute), empty);
+  const front = mute + burnt;
   const all: ChipState[] = [
-    ...Array<ChipState>(charged).fill('charged'),
-    ...Array<ChipState>(empty).fill('empty'),
+    ...Array<ChipState>(mute).fill('charged'),
+    ...Array<ChipState>(burnt).fill('empty'),
+    ...Array<ChipState>(charged - mute).fill('charged'),
+    ...Array<ChipState>(empty - burnt).fill('empty'),
     ...Array<ChipState>(killed).fill('killed'),
   ];
   const shown = all.slice(0, max);
-  const silentCount = Math.min(Math.max(0, side.mute), charged);
-  const silent: number[] = [];
-  for (let i = charged - silentCount; i < charged; i++) {
-    if (i < shown.length) silent.push(i);
+  const up: number[] = shown.map(() => 0);
+  const down: number[] = shown.map(() => 0);
+  for (let i = 0; i < mute && i < shown.length; i++) down[i] = 1;
+  const living = Math.min(side.units, shown.length);
+  const bonus = Math.max(0, side.bonus);
+  if (bonus > 0 && living > 0) {
+    const first = Math.min(front, living - 1);
+    const slots = living - first;
+    for (let i = 0; i < bonus; i++) {
+      const index = first + Math.min(i, slots - 1);
+      up[index] = (up[index] ?? 0) + 1;
+    }
   }
+  const badges = shown.map((_, i): ChipBadge | null => {
+    const u = up[i] ?? 0;
+    const d = down[i] ?? 0;
+    return u > 0 || d > 0 ? { up: u, down: d } : null;
+  });
+  const burned: number[] = [];
+  for (let i = mute; i < front && i < shown.length; i++) burned.push(i);
   return {
     shown,
     hidden: all.length - shown.length,
-    hiddenCharged: Math.max(0, charged - max),
-    silent,
+    hiddenCharged: all.slice(max).filter((state) => state === 'charged').length,
+    badges,
+    burned,
   };
 }
 
 /**
  * The chips that changed in the last round of a side, by index among all of its chips (the ones
- * past `CHIP.max` are not drawn): the charges that went out (`spent`) are the first discharged
- * chips, the units that died (`losses`) the last killed ones. The view tells how many, not which:
- * the choice is a visual convention (ui-style 27.2, item 5).
+ * past `CHIP.max` are not drawn): the charges shot (`spent`) are the first discharged chips after
+ * the charged ones, the charges the terrain burned (`burned`, DEC-45) the last pinned penalty
+ * chips (`pinned`, see `chipsOf`), the units that died (`losses`) the last killed ones. The view
+ * tells how many, not which: the choice is a visual convention (ui-style 27.2, item 5).
  */
 export function changedChips(
   side: SideCount,
-  round: { readonly spent: number; readonly losses: number } | null,
+  round: {
+    readonly spent: number;
+    readonly losses: number;
+    readonly burned?: number;
+  } | null,
+  pinned = 0,
 ): number[] {
   if (round === null) return [];
   const charged = Math.min(side.units, Math.max(0, side.charged));
+  const empty = Math.max(0, side.units - charged);
+  const mute = Math.min(Math.max(0, side.mute), charged);
+  const burnt = Math.min(Math.max(0, pinned - mute), empty);
+  const front = mute + burnt;
   const total = side.units + Math.max(0, side.losses);
   const changed: number[] = [];
-  for (let i = charged; i < Math.min(side.units, charged + round.spent); i++) changed.push(i);
+  const burnedNow = Math.min(Math.max(0, round.burned ?? 0), burnt);
+  for (let i = front - burnedNow; i < front; i++) changed.push(i);
+  // The charges that went out by a shot (and a burn not pinned: no chip in front for it).
+  const out = Math.max(0, round.spent) + Math.max(0, (round.burned ?? 0) - burnedNow);
+  const start = front + (charged - mute);
+  for (let i = start; i < Math.min(side.units, start + out); i++) changed.push(i);
   for (let i = Math.max(side.units, total - round.losses); i < total; i++) changed.push(i);
   return changed;
 }
@@ -325,7 +390,7 @@ export function chipAt(index: number, shown: number, own: boolean): Point {
   const column = two ? Math.floor(index / 2) : index;
   const row = two ? index % 2 : 0;
   const x = sign * (8 + CHIP.side / 2 + column * CHIP.pitch);
-  const y = two ? -25 + row * CHIP.pitch : -15;
+  const y = two ? -18 + row * CHIP.pitch : -8;
   return { x, y };
 }
 

@@ -131,6 +131,7 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
       flow_next: [...next],
       flow_idle: next.length > 0 ? null : (variant.idle[node.id] ?? null),
       flow_pocket: POCKET.includes(node.id),
+      terrain_mark: null,
     };
   });
   const edges: EdgeView[] = base.view.edges.map((edge) => ({

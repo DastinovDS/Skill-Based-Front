@@ -1,6 +1,7 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import {
+  chevronBadgeSpec,
   drawPlaceOutline,
   helmetBackSpec,
   helmetFrontSpec,
@@ -25,7 +26,9 @@ import {
   type HelmetKind,
 } from '../units/helmet.ts';
 import { unitStyle, type UnitStyle } from '../units/unitStyle.ts';
+import { badgeFloor, stackBadges, type BadgeMark } from './badgeLayout.ts';
 import {
+  BADGE,
   BAR_BASE,
   HELMET_INSIDE,
   BAR_SEGMENT,
@@ -220,6 +223,11 @@ export interface TokenSpec {
   range?: string | null;
   ghost?: boolean;
   inside?: boolean;
+  /**
+   * The advantage and disadvantage badges at the top right corner (#791): on the map only the
+   * terrain mark of a node's defender, which the server computes (`NodeView.terrain_mark`).
+   */
+  badges?: readonly BadgeMark[];
 }
 
 /** Fade and swell of a token that comes or goes, ms, and the size it starts from (#508). */
@@ -233,7 +241,8 @@ function specKey(spec: TokenSpec, style: UnitStyle): string {
   // The charged count is the fill of the triangle, so it belongs to the key, not to the text.
   const counts =
     spec.counts === null ? '-' : `${String(spec.counts.units)}/${String(spec.counts.charged)}`;
-  return `${style}|${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}`;
+  const badges = (spec.badges ?? []).map((b) => `${b.dir}${String(b.count)}`).join(',');
+  return `${style}|${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}|${badges}`;
 }
 
 /** Width of the helmet of a token whose triangle would have `side` (a city icon is a little smaller). */
@@ -268,6 +277,11 @@ export class Token {
   private readonly fill = new EaseTween(0);
   private readonly outline: BakedSprite;
   private readonly shield: BakedSprite;
+  /** The badges at the top right corner (#791), in a layer that keeps them `BADGE.minPx` on screen. */
+  private readonly badgeLayer = new Container({ label: 'badges', visible: false });
+  private readonly badges: BakedSprite[] = [];
+  /** Screen px per unit of the token (`setBadgeFloor`); 0: unknown, no floor. */
+  private pxPerUnit = 0;
   private readonly question: Text;
   private readonly label = new Container({ visible: false });
   private readonly pill = new Graphics();
@@ -309,9 +323,24 @@ export class Token {
     this.count = new Text({ text: '', style: kit.textStyle, anchor: 0.5, resolution });
     this.label.addChild(this.pill, this.count);
     this.body.addChild(this.back, this.level, this.ticks, this.outline);
-    this.view.addChild(this.body, this.question, this.shield, this.label);
+    this.view.addChild(this.body, this.question, this.shield, this.label, this.badgeLayer);
   }
 
+  /**
+   * Screen px per unit of the token's drawing (the camera times every scale above it): the badges
+   * grow so that they are never under `BADGE.minPx` on screen (ui-style 32, the exception to 22).
+   */
+  setBadgeFloor(pxPerUnit: number): void {
+    if (pxPerUnit === this.pxPerUnit) return;
+    this.pxPerUnit = pxPerUnit;
+    this.badgeLayer.scale.set(badgeFloor(pxPerUnit));
+  }
+
+  /** The keys of the badges drawn now, top to bottom (a test reads them). */
+  get badgeKeys(): string[] {
+    if (!this.badgeLayer.visible) return [];
+    return this.badges.filter((b) => b.visible).map((b) => b.spec?.key ?? '');
+  }
   labels(): Text[] {
     return [this.count, this.question];
   }
@@ -464,6 +493,8 @@ export class Token {
       this.shield.position.set(shape.corner.x, shape.corner.y);
     }
 
+    this.drawBadges(spec.badges ?? [], shape.badge);
+
     const text = counts !== null ? countLabel(counts.units) : range;
     if (text !== null) {
       // The number of units sits in the middle of the shape (the triangle: only in a city); a range
@@ -488,6 +519,31 @@ export class Token {
   }
 
   /**
+   * The chevron badges (#791) stacked down from the top right corner `at` of the shape: baked
+   * sprites with a bounded key (`chevronBadgeSpec`), no filter.
+   */
+  private drawBadges(marks: readonly BadgeMark[], at: Point): void {
+    this.badgeLayer.visible = marks.length > 0;
+    this.badgeLayer.position.set(at.x, at.y);
+    const places = stackBadges({ x: 0, y: 0 }, marks, BADGE.size);
+    marks.forEach((mark, i) => {
+      let sprite = this.badges[i];
+      if (sprite === undefined) {
+        sprite = this.badgeLayer.addChild(this.kit.sprites.sprite());
+        this.badges.push(sprite);
+      }
+      sprite.set(chevronBadgeSpec(mark.dir, mark.count, BADGE.size));
+      const place = places[i] ?? { x: 0, y: 0 };
+      sprite.position.set(place.x, place.y);
+      sprite.visible = true;
+    });
+    for (let i = marks.length; i < this.badges.length; i++) {
+      const sprite = this.badges[i];
+      if (sprite !== undefined) sprite.visible = false;
+    }
+  }
+
+  /**
    * The triangle (9.5): the plate, the fill scaled from the tip, the dividers, the outline (the
    * opponent's double, dashed without numbers). Returns where the number and the shield go.
    */
@@ -497,7 +553,7 @@ export class Token {
     color: number,
     inside: boolean,
     dashed: boolean,
-  ): { number: Point | null; corner: Point } {
+  ): { number: Point | null; corner: Point; badge: Point } {
     this.shape = null;
     this.body.scale.x = 1;
     const h = triangleHeight(side);
@@ -518,7 +574,12 @@ export class Token {
     // and, in a city, the number.
     this.question.visible = counts === null && (spec.range ?? null) === null;
     this.question.position.set(0, -h / 6);
-    return { number: inside ? { x: 0, y: -h / 6 } : null, corner: { x: side / 2, y: -h / 2 } };
+    const corner = { x: side / 2, y: -h / 2 };
+    return {
+      number: inside ? { x: 0, y: -h / 6 } : null,
+      corner,
+      badge: { x: corner.x - 1, y: corner.y + 5 },
+    };
   }
 
   /**
@@ -533,7 +594,7 @@ export class Token {
     color: number,
     inside: boolean,
     dashed: boolean,
-  ): { number: Point | null; corner: Point } {
+  ): { number: Point | null; corner: Point; badge: Point } {
     const kind = helmetKind(this.kit.me, spec.owner);
     const width = helmetWidth(side, inside);
     const h = helmet(kind, width);
@@ -553,6 +614,12 @@ export class Token {
     this.question.position.set(middle.x, middle.y);
     // The top left corner on screen, whichever way the helmet faces.
     const left = facing === 1 ? reach.left : -reach.right;
-    return { number: middle, corner: { x: left, y: reach.top + 2 } };
+    // The top right corner on screen, kept free of the dome for the badges (#776).
+    const right = facing === 1 ? reach.right : -reach.left;
+    return {
+      number: middle,
+      corner: { x: left, y: reach.top + 2 },
+      badge: { x: right - 2, y: reach.top + 9 },
+    };
   }
 }

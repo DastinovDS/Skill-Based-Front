@@ -49,7 +49,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 1,
@@ -84,7 +85,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 2,
@@ -119,7 +121,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 3,
@@ -154,7 +157,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 4,
@@ -189,7 +193,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 5,
@@ -224,7 +229,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 6,
@@ -259,7 +265,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 7,
@@ -294,7 +301,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       }
     ],
     "edges": [

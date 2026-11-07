@@ -1001,6 +1001,15 @@ export interface NodeView {
    * capital (a pocket: its factories stop, without a factory it starves).
    */
   flow_pocket: boolean | null;
+  /**
+   * The terrain effect the defender of the node would get if attacked now (DEC-24, item F2;
+   * #791): positive, the bonus shots of mountains; negative, the charges plains silence (under
+   * ``combat.terrain_burn`` burn in the first round). Only for a node with an owner, no fight,
+   * a terrain effect and a charged group of the owner standing in it; for a node of the enemy only
+   * at ``exact``. ``null`` otherwise: an attacker, a discharged group, a road and a neutral node
+   * never carry it. The client draws it as is (AGENTS.md 7.1).
+   */
+  terrain_mark: number | null;
 }
 /**
  * What the player sees, or last saw, of one node or half of an edge
@@ -1676,7 +1685,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 41;
+export const PROTOCOL_VERSION = 42;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

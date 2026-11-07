@@ -254,16 +254,17 @@
               </li>
               <li>
                 <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                  <path d="M14 4l8 8-8 8-8-8z" class="thin" />
+                  <path d="M8 11l6-5 6 5M8 18l6-5 6 5" class="badge-out" />
+                  <path d="M8 11l6-5 6 5M8 18l6-5 6 5" class="badge-up" />
                 </svg>
-                {t('help.legend.stock')}
+                {t('help.legend.badgeUp')}
               </li>
               <li>
                 <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                  <circle cx="14" cy="12" r="7" class="silent" />
-                  <path d="M9 17L19 7" class="silent" />
+                  <path d="M8 9l6 5 6-5" class="badge-out" />
+                  <path d="M8 9l6 5 6-5" class="badge-down" />
                 </svg>
-                {t(terrainBurn ? 'help.legend.silentBurn' : 'help.legend.silent')}
+                {t(terrainBurn ? 'help.legend.badgeDownBurn' : 'help.legend.badgeDown')}
               </li>
               <li>
                 <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
@@ -540,11 +541,28 @@
   }
 
   /* A charge that does not shoot: the amber crossed circle. */
-  .silent {
+  /* The chevron badges (#791, ui-style 32): a dark outline under the colour, as on the map. */
+  .badge-out,
+  .badge-up,
+  .badge-down {
     fill: none;
-    stroke: var(--warn);
-    stroke-width: 2;
     stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .badge-out {
+    stroke: var(--bg);
+    stroke-width: 5.2;
+  }
+
+  .badge-up {
+    stroke: var(--badge-up);
+    stroke-width: 2.6;
+  }
+
+  .badge-down {
+    stroke: var(--badge-down);
+    stroke-width: 2.6;
   }
 
   .link {

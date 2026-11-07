@@ -374,6 +374,7 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 flow_next=n.flow_next,
                 flow_idle=n.flow_idle,
                 flow_pocket=n.flow_pocket,
+                terrain_mark=n.terrain_mark,
             )
             for n in view.nodes
         ),
@@ -585,6 +586,7 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "flow_next": None if n.flow_next is None else list(n.flow_next),
                 "flow_idle": n.flow_idle,
                 "flow_pocket": n.flow_pocket,
+                "terrain_mark": n.terrain_mark,
             }
             for n in view.nodes
         ],

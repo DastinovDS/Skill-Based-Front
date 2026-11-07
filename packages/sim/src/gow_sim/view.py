@@ -326,6 +326,15 @@ class NodeView:
     flow_pocket: bool | None = None
     """Own node only: its component over internal roads does not contain the own capital (item
     H1)."""
+    terrain_mark: int | None = None
+    """The terrain effect the defender of the node would get if attacked now (DEC-24, item F2;
+    #791): ``terrain.defense_mod`` of the node, positive for bonus shots (mountains), negative for
+    the charges silenced (or, under ``combat.terrain_burn``, burned) by plains, at most the
+    defender's charged. Set only when the node has an owner, no fight, a non-zero terrain effect
+    and a charged group of the owner standing in it; for a node of the enemy only where the view
+    shows the enemy's charges (``EXACT``). ``None`` otherwise: an attacker, a discharged group, an
+    edge, a neutral node never carry it. It shows nothing new: the terrain is public, the owner
+    and the charges are in the view."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -812,6 +821,43 @@ def _site_view(b: FactoryBuild | None, ticks: int) -> SiteBuildView | None:
     return SiteBuildView(done_tick=None if b.owed > 0 else b.since + ticks, owed=b.owed)
 
 
+def _standing_charged(state: GameState) -> dict[int, int]:
+    """Node -> the charged units of its owner standing in it, in no fight (DEC-24, item F2)."""
+    charged: dict[int, int] = {}
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        loc = g.location
+        if g.fight is not None or not isinstance(loc, AtNode) or g.charged <= 0:
+            continue
+        if state.nodes[loc.node].owner == g.owner:
+            charged[loc.node] = charged.get(loc.node, 0) + g.charged
+    return charged
+
+
+def _terrain_mark(
+    state: GameState,
+    rules: Ruleset,
+    player: int,
+    n: int,
+    level: Detail,
+    standing: dict[int, int],
+    fight_nodes: dict[int, int],
+) -> int | None:
+    """``NodeView.terrain_mark`` (#791): the terrain effect of item F2 for the defender of ``n``."""
+    owner = state.nodes[n].owner
+    if owner is None or n in fight_nodes:
+        return None
+    if owner != player and level is not Detail.EXACT:
+        return None  # the enemy's charges are not shown here
+    charged = standing.get(n, 0)
+    if charged <= 0:
+        return None
+    mod = rules.terrain.defense_mod.of(state.map.nodes[n].terrain)
+    if mod == 0:
+        return None
+    return mod if mod > 0 else -min(-mod, charged)
+
+
 def _order_view(rules: Ruleset, g: Group) -> OrderView | None:
     order = g.order
     if order is None or not order.path:
@@ -845,6 +891,8 @@ def project(
         levels, now_nodes, now_halves, roads = sight.levels, sight.nodes, sight.halves, sight.roads
     memory = state.vision_memory[player]
     capacities = node_capacities(state, rules)
+    standing = _standing_charged(state)
+    fight_nodes = state.fight_nodes()
 
     nodes: list[NodeView] = []
     for n, level in enumerate(levels.nodes):
@@ -887,6 +935,7 @@ def project(
                 flow_next=flow.next if flow is not None else None,
                 flow_idle=flow.idle if flow is not None else None,
                 flow_pocket=flow.pocket if flow is not None else None,
+                terrain_mark=_terrain_mark(state, rules, player, n, level, standing, fight_nodes),
             )
         )
 
@@ -1197,6 +1246,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "flow_next": None if n.flow_next is None else list(n.flow_next),
                 "flow_idle": None if n.flow_idle is None else n.flow_idle.value,
                 "flow_pocket": n.flow_pocket,
+                "terrain_mark": n.terrain_mark,
             }
             for n in view.nodes
         ],

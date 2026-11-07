@@ -254,6 +254,13 @@ class NodeView(WireModel):
     flow_pocket: bool | None
     """Supply flow, own node only: its own component over internal roads does not contain the own
     capital (a pocket: its factories stop, without a factory it starves)."""
+    terrain_mark: int | None
+    """The terrain effect the defender of the node would get if attacked now (DEC-24, item F2;
+    #791): positive, the bonus shots of mountains; negative, the charges plains silence (under
+    ``combat.terrain_burn`` burn in the first round). Only for a node with an owner, no fight,
+    a terrain effect and a charged group of the owner standing in it; for a node of the enemy only
+    at ``exact``. ``null`` otherwise: an attacker, a discharged group, a road and a neutral node
+    never carry it. The client draws it as is (AGENTS.md 7.1)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -295,6 +302,11 @@ class NodeView(WireModel):
             raise ValueError("flow_idle is given exactly when flow_next is empty")
         if self.flow_idle is not None and self.flow_next is None:
             raise ValueError("flow_idle only with the other flow fields")
+        if self.terrain_mark is not None:
+            if self.terrain_mark == 0 or self.owner is None:
+                raise ValueError("a terrain mark is non-zero and only for a node with an owner")
+            if self.detail is Detail.FOG:
+                raise ValueError("no terrain mark in fog")
         return self
 
 

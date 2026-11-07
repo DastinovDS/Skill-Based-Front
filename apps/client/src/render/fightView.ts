@@ -1,6 +1,12 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import type { BakedSprite, SpriteCache } from './bake.ts';
-import { arenaPlateSpec, chipSpec, helmetChipSpec } from './bakedShapes.ts';
+import {
+  arenaPlateSpec,
+  chevronBadgeSpec,
+  chipSpec,
+  helmetChipSpec,
+  selfShotSpec,
+} from './bakedShapes.ts';
 import { unitStyle } from '../units/unitStyle.ts';
 import { t } from '../i18n/index.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
@@ -15,43 +21,41 @@ import {
 import { ringRadius } from './cityLayout.ts';
 import { numbersLook } from './effectsLayout.ts';
 import {
-  CAPTION_RISE,
   CHIP,
   END_SHARE,
   PLATE,
+  SELF_SHOT_SHARE,
   arenaSides,
   changedChips,
   chipAt,
   chipPulse,
   chipsOf,
-  exchangeAlpha,
-  exchangeOf,
   fightFx,
   fightPlace,
   fightResult,
-  lighten,
+  pinnedPenalty,
   roundEffect,
   roundProgress,
   type ArenaSides,
+  type ChipBadge,
   type EndFx,
   type FightFx,
   type FightPlace,
   type FightResult,
   type RoundFx,
-  type SideCount,
 } from './fightFx.ts';
 import { HIT_SHARE, NUMBER_SHARE, sinceShare, type Contacts } from './fightImpact.ts';
-import { dashSegments } from './layout.ts';
 import type { MapLayers } from './layers.ts';
 import { drawModeGlyph } from './shapes.ts';
 import type { Point } from './camera.ts';
+import { stackBadges, type BadgeMark } from './badgeLayout.ts';
 import {
+  BADGE,
   BG,
   FIGHT_COLOR,
   GLYPH_COLOR,
   LOSS_FONT_SIZE,
   PLATE_FILL,
-  WARN,
   ownerColor,
 } from './style.ts';
 
@@ -64,16 +68,16 @@ const CHIPS_PER_ARENA = 2 * CHIP.max;
 const MINUS = '−';
 /** Where "-N" stands from the middle of the token that lost the units (world units at 100%). */
 const POP_OFFSET = { x: 17, y: 18 } as const;
-/** The plate: its inner margin and the rows of the bottom strip (px from the middle). */
-const STOCK_Y = 20;
+/** The plate: the row of "+N" under the chips and the bar along the bottom (px from the middle). */
+const STRIP_Y = 16;
 const BAR_Y = PLATE.halfHeight - 9;
 const BAR_HEIGHT = 3;
 const BAR_WIDTH = 2 * PLATE.halfWidth - 24;
 /** Where the "+N" and its small charged count sit on the strip (px from the middle line). */
 const MORE_X = PLATE.halfWidth - 38;
 const HIDDEN_CHARGED_X = PLATE.halfWidth - 22;
-/** A silent charge's badge sits at the lower right of its chip. */
-const BADGE_OFFSET = { x: 8, y: 7 } as const;
+/** The badges of a chip (#791) sit at its top right corner (px from its middle). */
+const CHIP_BADGE = { x: 7.5, y: -6.5 } as const;
 
 /** What the view draws in one arena: a fight going on, or the end of one. */
 type ArenaItem =
@@ -82,7 +86,6 @@ type ArenaItem =
       readonly fight: FightData;
       readonly place: FightPlace;
       readonly sides: ArenaSides;
-      readonly exchange: ReturnType<typeof exchangeOf>;
       readonly age: number;
     }
   | {
@@ -94,8 +97,8 @@ type ArenaItem =
 
 type FightData = RenderFrame['base']['view']['fights'][number];
 
-/** What an arena needs beyond its plate (px): the caption of a bonus shot; the end label. */
-const CAPTION_REACH = { top: 4, bottom: 4, caption: 28 } as const;
+/** What an arena needs beyond its plate (px): its badges over the top row; the end label. */
+const LIVE_REACH = { top: 4, bottom: 4 } as const;
 const END_REACH = { top: 32, bottom: 4 } as const;
 
 /** An arena that moved this far (px) from its usual spot gets a dotted line to its place. */
@@ -104,24 +107,19 @@ const TETHER_MIN = 8;
 type Side = 'own' | 'enemy';
 const SIDES: readonly Side[] = ['own', 'enemy'];
 
-/** The arena over a fight: the plate with its chips, stocks and bar, the caption of a bonus shot. */
+/** The arena over a fight: the plate with its chips and their badges, the "+N" and the bar. */
 interface Arena {
   readonly view: Container;
-  /**
-   * The caption of a bonus shot: on a layer over every plate, at the same place and scale as
-   * `view`, so the caption of one fight is never hidden under the plate of another.
-   */
-  readonly top: Container;
   /** A dotted line down to a fight on a road, and a cross there. */
   readonly tether: Graphics;
   readonly plate: BakedSprite;
   /** A finished fight: the halves tinted by the owners, the winner's outlined. */
   readonly tint: Graphics;
   readonly chips: BakedSprite[];
-  readonly badges: Graphics[];
-  /** Per side: the diamond of the bonus stock, "×N" beside it. */
-  readonly stockMark: Readonly<Record<Side, Graphics>>;
-  readonly stockText: Readonly<Record<Side, Text>>;
+  /** The chevron badges of the chips (#791), pooled: a chip has at most one up and one down. */
+  readonly badges: BakedSprite[];
+  /** The self-shot of a chip whose charge the terrain burned in the round (DEC-45), pooled. */
+  readonly burns: BakedSprite[];
   /** Per side: "+N" of the chips that do not fit, the dot and the number of the charged ones among them. */
   readonly more: Readonly<Record<Side, Text>>;
   readonly moreDot: Readonly<Record<Side, Graphics>>;
@@ -130,15 +128,6 @@ interface Arena {
   readonly loss: Readonly<Record<Side, Text>>;
   readonly track: Graphics;
   readonly fill: Graphics;
-  readonly caption: Caption;
-}
-
-/** The caption "bonus attack" over the plate in a round with a virtual shot. */
-interface Caption {
-  readonly view: Container;
-  readonly pill: Graphics;
-  readonly text: Text;
-  key: string;
 }
 
 /** A number that pops up after a round. */
@@ -155,14 +144,16 @@ interface EndLabel {
   result: FightResult | null;
 }
 
-/** What the view remembers of a fight from frame to frame: the chips of both sides, to see a reinforcement. */
+/**
+ * What the view remembers of a fight from frame to frame: the chips of both sides, to see a
+ * reinforcement, and the penalty chips pinned in front (#791, `pinnedPenalty`), own then enemy.
+ */
 interface Seen {
   totals: [number, number];
   /** Chips that joined since: from this index on, at this tick (`null`: none yet). */
   grew: [{ from: number; tick: number } | null, { from: number; tick: number } | null];
+  pinned: [number, number];
 }
-
-const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
 
 type Glyphs = Readonly<Record<FightResult, GraphicsContext>>;
 
@@ -179,14 +170,16 @@ const RESULT_KEY = {
  * the enemy's on the right, a chip for every unit that was in the fight: a charged one filled, a
  * discharged one hollow and hatched, a dead one dashed (the form tells it, not the hue; the
  * enemy's chips have a second, dark outline). Up to eight chips a side, the rest is "+N" with its
- * exact number (and a small number of the charged ones hidden in it). A charged chip that does
- * not shoot (the plains, DEC-24 F2) has an amber crossed badge. Under each half is the stock of
- * bonus shots left of that side (a diamond and "×N", dashed and dim at 0), along the bottom a bar
- * fills until the next round. A round with a bonus (virtual) shot (`FightView.last_round`) puts the
- * caption "bonus attack" over the plate (the source of the bonus is not told); the shots themselves
- * are the tracers on the map between the groups (`ShotView`, shot style 1, #352), not on the plate. A chip that
- * changed in the round, or joined with a reinforcement, pulses once. A fight without round data (an
- * old replay: #323) has chips, no caption and no stock. Every `fight_round` event also pops up the
+ * exact number (and a small number of the charged ones hidden in it). The badges are on the chips
+ * (#791, variant "Chevrons" and arena "On chips" of #776): a chip with a bonus shot left
+ * (`FightView.virtual_left`: a planned order, mountains) has green chevrons up, the badge goes when
+ * its shot fires; a charge the terrain takes (`FightView.mute`: plains) has red chevrons down on a
+ * chip pinned in front that never moves. Under item F2 that chip stays charged and silent with its
+ * badge to the end; under `combat.terrain_burn` (DEC-45) it shoots itself in the first round (a short
+ * self-shot, the charge goes out, the badge goes). Along the bottom a bar fills until the next
+ * round. The shots are the tracers on the map between the groups (`ShotView`, shot style 1, #352),
+ * not on the plate. A chip that changed in the round, or joined with a reinforcement, pulses once. A
+ * fight without round data (an old replay: #323) has chips and no badges. Every `fight_round` event also pops up the
  * losses of the round. The end of a fight (`fight_ended`) shows its plate again with the losses of
  * the whole fight, the winner's half outlined, and a word with a glyph: captured, held or both
  * bounced. A fight on a road floats above its meeting point with a dotted line down to it.
@@ -212,16 +205,10 @@ export class FightView {
   private readonly contexts: GraphicsContext[] = [];
   private readonly glyphs: Glyphs;
   private readonly barContext: GraphicsContext;
-  private readonly badgeContext: GraphicsContext;
-  private readonly stockContext: Readonly<
-    Record<Side, { readonly on: GraphicsContext; readonly off: GraphicsContext }>
-  >;
   private readonly dotContext: Readonly<Record<Side, GraphicsContext>>;
   private readonly styles: {
     more: TextStyle;
     small: TextStyle;
-    stock: TextStyle;
-    caption: TextStyle;
     own: TextStyle;
     enemy: TextStyle;
     /** The losses of a finished fight on the tinted halves of the plate: light, so it reads on both hues. */
@@ -264,8 +251,6 @@ export class FightView {
     this.styles = {
       more: text(GLYPH_COLOR, 12),
       small: text(GLYPH_COLOR, 10),
-      stock: text(GLYPH_COLOR, 12),
-      caption: text(GLYPH_COLOR, 12, false),
       own: text(ownerColor(me, me), LOSS_FONT_SIZE),
       enemy: text(ownerColor(me, enemy), LOSS_FONT_SIZE),
       total: text(GLYPH_COLOR, LOSS_FONT_SIZE + 3),
@@ -296,47 +281,13 @@ export class FightView {
     this.barContext = this.context((g) =>
       g.roundRect(0, 0, BAR_WIDTH, BAR_HEIGHT, BAR_HEIGHT / 2).fill(FIGHT_COLOR),
     );
-    this.badgeContext = this.context((g) =>
-      g
-        .circle(0, 0, 4.6)
-        .fill(PLATE_FILL)
-        .stroke({ width: 1.5, color: WARN })
-        .moveTo(-3, 3)
-        .lineTo(3, -3)
-        .stroke({ width: 1.5, color: WARN }),
-    );
     const colorOf = (side: Side): number => this.colorOf(side);
-    const diamond = (r: number): Point[] => [
-      { x: 0, y: -r },
-      { x: r, y: 0 },
-      { x: 0, y: r },
-      { x: -r, y: 0 },
-    ];
-    const stock = (side: Side): { on: GraphicsContext; off: GraphicsContext } => ({
-      // Left: a filled diamond. Empty: the same diamond dashed and dim, so zero reads by its form.
-      on: this.context((g) =>
-        g
-          .poly(flat(diamond(6)))
-          .fill(lighten(colorOf(side), 0.1))
-          .stroke({ width: 1.5, color: colorOf(side), join: 'round' }),
-      ),
-      off: this.context((g) => {
-        const corners = diamond(6);
-        corners.forEach((from, i) => {
-          const to = corners[(i + 1) % corners.length];
-          if (to === undefined) return;
-          for (const [a, b] of dashSegments(from, to, 2, 2)) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-        });
-        return g.stroke({ width: 1.5, color: colorOf(side), alpha: 0.6, cap: 'round' });
-      }),
-    });
-    this.stockContext = { own: stock('own'), enemy: stock('enemy') };
     const dot = (side: Side): GraphicsContext =>
       this.context((g) =>
         g.circle(0, 0, 2.6).fill(colorOf(side)).stroke({ width: 1, color: GLYPH_COLOR }),
       );
     this.dotContext = { own: dot('own'), enemy: dot('enemy') };
-    // Bottom to top: arenas (each with the caption of a bonus shot), results, the loss numbers.
+    // Bottom to top: arenas, results, the loss numbers.
     this.layer.addChild(this.arenaLayer, this.endLayer, this.shotLayer, this.popLayer);
     layers.layer.effects.addChild(this.layer);
   }
@@ -382,15 +333,9 @@ export class FightView {
   setScreenResolution(resolution: number): void {
     this.resolution = resolution;
     const texts: Text[] = [
-      ...this.arenas.flatMap((arena) => [
-        ...SIDES.flatMap((side) => [
-          arena.stockText[side],
-          arena.more[side],
-          arena.moreCharged[side],
-          arena.loss[side],
-        ]),
-        arena.caption.text,
-      ]),
+      ...this.arenas.flatMap((arena) =>
+        SIDES.flatMap((side) => [arena.more[side], arena.moreCharged[side], arena.loss[side]]),
+      ),
       ...this.pops.map((pop) => pop.text),
       ...this.ends.map((end) => end.text),
     ];
@@ -416,9 +361,8 @@ export class FightView {
       if (place === undefined) continue;
       live.add(fight.id);
       const sides = arenaSides(fight, frame.groups, this.me);
-      const exchange = exchangeOf(fight.last_round, this.me);
       const age = fight.last_round === null ? 0 : frame.tick - fight.last_round.tick;
-      items.push({ kind: 'live', fight, place, sides, exchange, age });
+      items.push({ kind: 'live', fight, place, sides, age });
     }
     for (const fx of this.effects) {
       if (fx.kind !== 'end') continue;
@@ -434,22 +378,25 @@ export class FightView {
       if (spot === undefined) return;
       this.placeArena(arena, item.place, spot, k);
       if (item.kind === 'live') {
-        const { fight, sides, exchange, age } = item;
+        const { fight, sides, age } = item;
+        const pulses = this.pulses(
+          fight.id,
+          sides,
+          fight.last_round,
+          age,
+          frame.tick,
+          roundTicks,
+          reduced,
+        );
         this.drawFight(arena, {
           sides,
-          pulses: this.pulses(
-            fight.id,
-            sides,
-            fight.last_round,
-            age,
-            frame.tick,
-            roundTicks,
-            reduced,
-          ),
+          pulses,
+          pinned: this.pinnedOf(fight.id),
+          burnedNow: this.burnedNow(fight.last_round),
           progress: roundProgress(fight.next_round_tick, frame.tick, roundTicks),
-          exchange,
           age,
           roundTicks,
+          reduced,
         });
       } else {
         this.drawEnded(arena, item.fx, item.phase);
@@ -462,10 +409,6 @@ export class FightView {
       if (!live.has(id)) this.seen.delete(id);
     }
     this.hide(this.arenas, items.length);
-    for (let i = items.length; i < this.arenas.length; i++) {
-      const arena = this.arenas[i];
-      if (arena !== undefined) arena.top.visible = false;
-    }
     for (let i = ends; i < this.ends.length; i++) {
       const label = this.ends[i];
       if (label !== undefined) label.view.visible = false;
@@ -482,14 +425,7 @@ export class FightView {
     const slots = items.map((item): ArenaSlot => {
       const base = { at: item.place.at, ring: item.place.ring, road: item.place.node === null };
       if (item.kind === 'end') return { ...base, top: END_REACH.top, bottom: END_REACH.bottom };
-      // The caption of a bonus shot over the plate (the shots themselves fly on the map, not over the plate).
-      const round = item.fight.last_round;
-      const bonus = round !== null && round.virtual.some((n) => n > 0);
-      return {
-        ...base,
-        top: CAPTION_REACH.top + (bonus ? CAPTION_REACH.caption : 0),
-        bottom: CAPTION_REACH.bottom,
-      };
+      return { ...base, top: LIVE_REACH.top, bottom: LIVE_REACH.bottom };
     });
     const cities: Obstacle[] = this.map.nodes.map((node) => ({
       at: { x: node.x, y: node.y },
@@ -549,13 +485,12 @@ export class FightView {
         chip.visible = false;
         return chip;
       });
-      const badges: Graphics[] = [];
+      const badges: BakedSprite[] = [];
+      const burns: BakedSprite[] = [];
       const pair = <T>(make: (side: Side) => T): Readonly<Record<Side, T>> => ({
         own: make('own'),
         enemy: make('enemy'),
       });
-      const stockMark = pair((side) => view.addChild(new Graphics(this.stockContext[side].on)));
-      const stockText = pair(() => this.text(view, this.styles.stock, 0.5));
       const more = pair(() => this.text(view, this.styles.more, 0.5));
       const moreDot = pair((side) => view.addChild(new Graphics(this.dotContext[side])));
       const moreCharged = pair(() => this.text(view, this.styles.small, { x: 0, y: 0.5 }));
@@ -563,28 +498,21 @@ export class FightView {
       const track = view.addChild(new Graphics(this.barContext));
       track.alpha = 0.18;
       const fill = view.addChild(new Graphics(this.barContext));
-      const top = this.shotLayer.addChild(new Container({ label: 'arena-shots' }));
-      const caption = this.captionLabel(top);
-      for (const g of [...Object.values(stockMark), ...Object.values(moreDot), tint]) {
-        g.visible = false;
-      }
+      for (const g of [...Object.values(moreDot), tint]) g.visible = false;
       arena = {
         view,
-        top,
         tether,
         plate,
         tint,
         chips,
         badges,
-        stockMark,
-        stockText,
+        burns,
         more,
         moreDot,
         moreCharged,
         loss,
         track,
         fill,
-        caption,
       };
       this.arenas.push(arena);
     }
@@ -592,12 +520,11 @@ export class FightView {
   }
 
   private placeArena(arena: Arena, place: FightPlace, spot: ArenaSpot, k: number): void {
-    for (const part of [arena.view, arena.top]) {
-      part.position.set(spot.x, spot.y);
-      part.scale.set(k);
-      part.alpha = 1;
-      part.visible = true;
-    }
+    const part = arena.view;
+    part.position.set(spot.x, spot.y);
+    part.scale.set(k);
+    part.alpha = 1;
+    part.visible = true;
     // A dotted line to the true place of a fight on a road (with a cross there), or of a fight in
     // a city whose arena had to move off its usual spot.
     const g = arena.tether.clear();
@@ -645,9 +572,17 @@ export class FightView {
       sides.enemy.units + sides.enemy.losses,
     ];
     const seen = this.seen.get(id);
+    const burnedNow = this.burnedNow(round);
+    const pinnedNow = (before: number, side: Side): number =>
+      pinnedPenalty(before, sides[side], burnedNow[side]);
     if (seen === undefined) {
-      this.seen.set(id, { totals, grew: [null, null] });
+      this.seen.set(id, {
+        totals,
+        grew: [null, null],
+        pinned: [pinnedNow(0, 'own'), pinnedNow(0, 'enemy')],
+      });
     } else {
+      seen.pinned = [pinnedNow(seen.pinned[0], 'own'), pinnedNow(seen.pinned[1], 'enemy')];
       for (const i of [0, 1] as const) {
         const before = seen.totals[i];
         const now = totals[i];
@@ -657,17 +592,23 @@ export class FightView {
       }
     }
     const grew = this.seen.get(id)?.grew ?? [null, null];
+    const pinned = this.pinnedOf(id);
     const result: Record<Side, Map<number, number>> = { own: new Map(), enemy: new Map() };
     if (reduced) return result;
     SIDES.forEach((side, i) => {
       const pulse = chipPulse(age, roundTicks, false);
       if (round !== null && pulse !== 1) {
         const player: PlayerId = side === 'own' ? this.me : this.me === 0 ? 1 : 0;
-        const changed = changedChips(sides[side], {
-          // A charge the terrain burned goes out in the round like a shot (DEC-45).
-          spent: round.spent[player] + round.burned[player],
-          losses: round.losses[player],
-        });
+        // A charge the terrain burned goes out in the round on its pinned chip (DEC-45, #791).
+        const changed = changedChips(
+          sides[side],
+          {
+            spent: round.spent[player],
+            burned: round.burned[player],
+            losses: round.losses[player],
+          },
+          pinned[side],
+        );
         for (const index of changed) result[side].set(index, pulse);
       }
       const joined = grew[i] ?? null;
@@ -683,26 +624,44 @@ export class FightView {
     return result;
   }
 
-  /** The arena of a fight going on: chips, stocks, the bar to the next round, the caption of a bonus shot. */
+  /** The penalty chips pinned in front of each side of a fight (#791), as the view remembers them. */
+  private pinnedOf(id: string): Readonly<Record<Side, number>> {
+    const pinned = this.seen.get(id)?.pinned ?? [0, 0];
+    return { own: pinned[0], enemy: pinned[1] };
+  }
+
+  /** The charges the terrain burned in `round`, by side (DEC-45); zeros without a round. */
+  private burnedNow(round: FightRoundView | null): Readonly<Record<Side, number>> {
+    if (round === null) return { own: 0, enemy: 0 };
+    const enemy: PlayerId = this.me === 0 ? 1 : 0;
+    return { own: round.burned[this.me], enemy: round.burned[enemy] };
+  }
+
+  /** The arena of a fight going on: chips with their badges, the bar to the next round. */
   private drawFight(
     arena: Arena,
     look: {
       sides: ArenaSides;
       pulses: Record<Side, ReadonlyMap<number, number>>;
+      pinned: Readonly<Record<Side, number>>;
+      burnedNow: Readonly<Record<Side, number>>;
       progress: number;
-      exchange: ReturnType<typeof exchangeOf>;
       age: number;
       roundTicks: number;
+      reduced: boolean;
     },
   ): void {
     arena.plate.visible = true;
     arena.tint.visible = false;
     let badges = 0;
+    let burns = 0;
     let used = 0;
+    // The self-shot of a burned charge (DEC-45): from the tick of the round, a share of a round long.
+    const burnPhase = roundEffect(look.age, SELF_SHOT_SHARE, look.roundTicks);
     for (const side of SIDES) {
       const counts = look.sides[side];
       const own = side === 'own';
-      const chips = chipsOf(counts);
+      const chips = chipsOf(counts, look.pinned[side]);
       chips.shown.forEach((state, index) => {
         const chip = arena.chips[used++];
         if (chip === undefined) return;
@@ -719,13 +678,22 @@ export class FightView {
         const pulse = look.pulses[side].get(index) ?? 1;
         chip.scale.set(helmets && !own ? -pulse : pulse, pulse);
         chip.visible = true;
-        if (chips.silent.includes(index)) {
-          const badge = this.badge(arena, badges++);
-          badge.position.set(at.x + BADGE_OFFSET.x, at.y + BADGE_OFFSET.y);
-          badge.visible = true;
-        }
+        badges = this.drawChipBadges(arena, badges, chips.badges[index] ?? null, at);
       });
-      this.drawStrip(arena, side, counts, chips.hidden, chips.hiddenCharged, own);
+      // The chips whose charge the terrain burned in the last round shoot themselves (DEC-45).
+      const burned = look.burnedNow[side];
+      if (burnPhase !== null && burned > 0) {
+        for (const index of chips.burned.slice(-burned)) {
+          const at = chipAt(index, chips.shown.length, own);
+          const burn = this.burn(arena, burns++);
+          const grow = look.reduced ? 1 : 0.7 + 0.7 * burnPhase;
+          burn.scale.set(grow);
+          burn.alpha = look.reduced ? 1 : 1 - burnPhase * burnPhase;
+          burn.position.set(at.x, at.y);
+          burn.visible = true;
+        }
+      }
+      this.drawStrip(arena, side, chips.hidden, chips.hiddenCharged, own);
     }
     for (let i = used; i < arena.chips.length; i++) {
       const chip = arena.chips[i];
@@ -735,6 +703,10 @@ export class FightView {
       const badge = arena.badges[i];
       if (badge !== undefined) badge.visible = false;
     }
+    for (let i = burns; i < arena.burns.length; i++) {
+      const burn = arena.burns[i];
+      if (burn !== undefined) burn.visible = false;
+    }
     for (const side of SIDES) arena.loss[side].visible = false;
     const x0 = -BAR_WIDTH / 2;
     arena.track.position.set(x0, BAR_Y);
@@ -742,36 +714,47 @@ export class FightView {
     arena.fill.position.set(x0, BAR_Y);
     arena.fill.scale.x = Math.max(0.0001, look.progress);
     arena.fill.visible = look.progress > 0;
-    this.drawBonusCaption(arena, look.exchange, look.age, look.roundTicks);
   }
 
-  /** The strip under the chips of a side: the bonus stock, "+N", the charged ones among the hidden. */
+  /**
+   * The chevron badges of one chip at its top right corner (#791): up for its bonus shots, down
+   * under it for its penalty; baked sprites with a bounded key, pooled per arena. Returns the next
+   * free slot of the pool.
+   */
+  private drawChipBadges(arena: Arena, used: number, badge: ChipBadge | null, at: Point): number {
+    if (badge === null) return used;
+    const marks: BadgeMark[] = [];
+    if (badge.up > 0) marks.push({ dir: 'up', count: badge.up });
+    if (badge.down > 0) marks.push({ dir: 'down', count: badge.down });
+    const corner = { x: at.x + CHIP_BADGE.x, y: at.y + CHIP_BADGE.y };
+    const places = stackBadges(corner, marks, BADGE.chipSize);
+    let next = used;
+    marks.forEach((mark, i) => {
+      const sprite = this.badgeSprite(arena, next++);
+      sprite.set(chevronBadgeSpec(mark.dir, mark.count, BADGE.chipSize));
+      sprite.label = `badge:${mark.dir}:${String(mark.count)}`;
+      const place = places[i] ?? corner;
+      sprite.position.set(place.x, place.y);
+      sprite.visible = true;
+    });
+    return next;
+  }
+
+  /** The strip under the chips of a side: "+N", the charged ones among the hidden. */
   private drawStrip(
     arena: Arena,
     side: Side,
-    counts: SideCount,
     hidden: number,
     hiddenCharged: number,
     own: boolean,
   ): void {
     const sign = own ? -1 : 1;
-    const mark = arena.stockMark[side];
-    const stock = counts.bonus;
-    mark.context = stock > 0 ? this.stockContext[side].on : this.stockContext[side].off;
-    mark.position.set(sign * 22, STOCK_Y);
-    mark.visible = true;
-    const text = arena.stockText[side];
-    const stockLabel = `×${String(stock)}`;
-    if (text.text !== stockLabel) text.text = stockLabel;
-    text.alpha = stock > 0 ? 1 : 0.5;
-    text.position.set(sign * 37, STOCK_Y);
-    text.visible = true;
     const more = arena.more[side];
     more.visible = hidden > 0;
     if (hidden > 0) {
       const label = `+${String(hidden)}`;
       if (more.text !== label) more.text = label;
-      more.position.set(sign * MORE_X, STOCK_Y);
+      more.position.set(sign * MORE_X, STRIP_Y);
     }
     const dot = arena.moreDot[side];
     const charged = arena.moreCharged[side];
@@ -780,24 +763,33 @@ export class FightView {
     if (hiddenCharged > 0) {
       const label = String(hiddenCharged);
       if (charged.text !== label) charged.text = label;
-      dot.position.set(sign * HIDDEN_CHARGED_X, STOCK_Y + 1);
+      dot.position.set(sign * HIDDEN_CHARGED_X, STRIP_Y + 1);
       // The number sits on the outer side of the dot, aligned away from it.
       charged.anchor.set(own ? 1 : 0, 0.5);
-      charged.position.set(sign * (HIDDEN_CHARGED_X + 5), STOCK_Y + 1);
+      charged.position.set(sign * (HIDDEN_CHARGED_X + 5), STRIP_Y + 1);
     }
   }
 
-  private badge(arena: Arena, index: number): Graphics {
+  private badgeSprite(arena: Arena, index: number): BakedSprite {
     let badge = arena.badges[index];
     if (badge === undefined) {
-      badge = arena.view.addChildAt(
-        new Graphics(this.badgeContext),
-        arena.view.getChildIndex(arena.track),
-      );
-      badge.label = 'mute-badge';
+      badge = arena.view.addChildAt(this.sprites.sprite(), arena.view.getChildIndex(arena.track));
       arena.badges.push(badge);
     }
     return badge;
+  }
+
+  private burn(arena: Arena, index: number): BakedSprite {
+    let burn = arena.burns[index];
+    if (burn === undefined) {
+      burn = arena.view.addChildAt(
+        this.sprites.sprite(selfShotSpec()),
+        arena.view.getChildIndex(arena.track),
+      );
+      burn.label = 'self-shot';
+      arena.burns.push(burn);
+    }
+    return burn;
   }
 
   /** A finished fight: the plate with the halves tinted, the losses of the whole fight, the winner outlined. */
@@ -806,16 +798,14 @@ export class FightView {
     arena.plate.visible = true;
     for (const chip of arena.chips) chip.visible = false;
     for (const badge of arena.badges) badge.visible = false;
+    for (const burn of arena.burns) burn.visible = false;
     for (const side of SIDES) {
-      arena.stockMark[side].visible = false;
-      arena.stockText[side].visible = false;
       arena.more[side].visible = false;
       arena.moreDot[side].visible = false;
       arena.moreCharged[side].visible = false;
     }
     arena.track.visible = false;
     arena.fill.visible = false;
-    arena.top.visible = false;
     const winner = fx.winner === null ? null : fx.winner === this.me ? 'own' : 'enemy';
     const g = arena.tint.clear();
     const { halfWidth: hw, halfHeight: hh } = PLATE;
@@ -847,54 +837,6 @@ export class FightView {
       text.position.set((side === 'own' ? -1 : 1) * PLATE.halfWidth * 0.5, -2);
       text.visible = true;
     }
-  }
-
-  // --- The caption of a bonus shot ----------------------------------------------------------------
-
-  /**
-   * The caption "bonus attack" over the plate while the last round of a fight is fresh, if a side
-   * shot a bonus (virtual) shot in it. The shots themselves are the tracers on the map (`ShotView`).
-   */
-  private drawBonusCaption(
-    arena: Arena,
-    exchange: ReturnType<typeof exchangeOf>,
-    age: number,
-    roundTicks: number,
-  ): void {
-    arena.caption.view.visible = false;
-    const alpha = exchangeAlpha(age, roundTicks);
-    const bonus = SIDES.some((side) => (exchange[side]?.virtual ?? 0) > 0);
-    if (alpha > 0 && bonus) this.drawCaption(arena.caption, alpha);
-  }
-
-  private captionLabel(parent: Container): Caption {
-    const view = parent.addChild(new Container({ label: 'fight-bonus-caption', visible: false }));
-    const pill = view.addChild(new Graphics());
-    return { view, pill, text: this.text(view, this.styles.caption, { x: 0, y: 0.5 }), key: '' };
-  }
-
-  /** "◇ bonus attack" over the plate: a diamond and the words, in a dark pill. */
-  private drawCaption(caption: Caption, alpha: number): void {
-    const word = t('fight.bonusAttack');
-    caption.text.visible = true;
-    if (caption.text.text !== word) caption.text.text = word;
-    const width = 8 + 8 + 5 + caption.text.width + 10;
-    const key = `${word}|${String(width)}`;
-    if (caption.key !== key) {
-      caption.key = key;
-      const left = -width / 2;
-      caption.pill
-        .clear()
-        .roundRect(left, -9.5, width, 19, 9.5)
-        .fill({ color: PLATE_FILL, alpha: 0.96 })
-        .stroke({ width: 1.6, color: FIGHT_COLOR })
-        .poly([left + 12, -4.5, left + 16.5, 0, left + 12, 4.5, left + 7.5, 0])
-        .stroke({ width: 1.6, color: GLYPH_COLOR, join: 'round' });
-      caption.text.position.set(left + 21, 0);
-    }
-    caption.view.position.set(0, -PLATE.halfHeight - CAPTION_RISE);
-    caption.view.alpha = alpha;
-    caption.view.visible = true;
   }
 
   // --- The end of a fight ------------------------------------------------------------------------

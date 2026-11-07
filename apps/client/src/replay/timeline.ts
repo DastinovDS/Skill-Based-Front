@@ -122,6 +122,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     flow_next: null,
     flow_idle: null,
     flow_pocket: null,
+    terrain_mark: null,
   }));
   const packets: PacketView[] = frame.k.map(
     ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => {

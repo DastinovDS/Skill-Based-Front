@@ -15,6 +15,8 @@
   --neutral-fill: #2b3139;
   --warn: #ffb020;
   --vp: #e3b341;
+  --badge-up: #3ddc72;
+  --badge-down: #ff4f4f;
   --ok: var(--you);
   --terrain-plains: #3a4630;
   --terrain-forest: #25392b;

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BADGE_DOWN,
+  BADGE_UP,
   BG,
   ENEMY,
   NEUTRAL_FILL,
@@ -41,6 +43,8 @@ describe('palette tokens', () => {
     ['neutral-fill', NEUTRAL_FILL],
     ['warn', WARN],
     ['vp', VP],
+    ['badge-up', BADGE_UP],
+    ['badge-down', BADGE_DOWN],
     ['terrain-plains', TERRAIN_FILL.plains],
     ['terrain-forest', TERRAIN_FILL.forest],
     ['terrain-mountains', TERRAIN_FILL.mountains],

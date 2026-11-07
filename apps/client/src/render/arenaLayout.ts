@@ -61,7 +61,7 @@ const PRICE = { reach: 1, plate: 4, city: 3, outside: 2 } as const;
 const PRICE_MOVE = 40;
 /** The steps of the search (px): aside by about half a plate, up by about half of one. */
 const STEP_X = 100;
-const STEP_UP = 45;
+const STEP_UP = PLATE.halfHeight + 3;
 /** Candidate columns, in steps; rows above the place and rows under it. */
 const COLUMNS = [0, 1, -1, 2, -2, 3, -3] as const;
 const ROWS_ABOVE = [0, 1, 2, 3] as const;
