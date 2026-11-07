@@ -392,13 +392,9 @@ no external requests; a new dependency only with a justification (AGENTS.md, 0.5
 - **Map: our own figures in PixiJS `Graphics`** (triangles, rings, stamps, arrows).
 - **Generated icon and art candidates (SpriteCook, owner, 2026-10-30):** allowed in mockups and, after the owner picks one, as
   client assets; section 22 lists the conditions.
-- **Sounds: CC0 (Kenney) or our own**, `.ogg` and `.mp3` files in `apps/client/public/sounds/`,
-  up to 300 KB in total. Check the license of each pack on its page when adding it.
-  CSP: `media-src` is not set in `csp.ts`, so `default-src 'self'` applies, and loading through
-  Web Audio goes under `connect-src 'self'`: our own files are allowed. [NOT SURE] whether Howler
-  uses `data:` URIs in `<audio>` to unlock sound on mobile (then `media-src 'self' data:` is needed);
-  to check: `grep -n "data:audio" node_modules/howler/dist/howler.js` and a production build
-  `pnpm build && pnpm preview` with the browser console.
+- **Sounds: made in code (#71).** Short tones from the Web Audio API (`apps/client/src/audio/recipes.ts`, played by
+  `engine.ts`): no sound files, no `howler`, no extra CSP rule. A sound pack with files would need its license in
+  `apps/client/THIRD_PARTY_NOTICES.md` and a check of `media-src` in `csp.ts`.
 - **Attribution:** `apps/client/THIRD_PARTY_NOTICES.md` (Lucide, sounds, the font if it appears) and
   the "Licenses" section on the legal page. An asset without an entry in this file is a review error.
 
@@ -1211,7 +1207,7 @@ log and the match menu from 10.1 and 10.4, and the radial menus from section 11 
 | Selection card | Removed (`SelectionPanel`, `OrdersPanel`). Round 3 (#252, #254): the hints with facts and the bottom line (`OrderHint`) are gone too, the fight estimate is removed; what is left is the group's charges on hover and the travel time plate on the road to the target node (#432) |
 | City menu | A click on your own city: a radial menu centered on the city circle (it follows the camera): "Recruit" (`R`), except for a city without a barracks (`has_barracks = false` with `city_upgrades.enabled`): there the sector is absent altogether, not grayed (#315); "Roads" is removed, roads are upgraded in the `U` mode (below); with `city_upgrades.enabled` there are also "Barracks" and "Warehouse", but a built barracks and a warehouse of the maximum level are not shown in the menu. The keys do the same without the menu. Your own barracks is visible on the map as a little-house icon to the left of the city ring; the built barracks of an enemy city adjacent to your own node, with the same little house (DEC-31, #319) |
 | Group menu | A second click on an already selected own group (the first only selects, so the ring does not get in the way of an order): a small radial menu on the group: "Split" (`S`, a count slider), "Merge" (`G`), "Cancel" (`X`), "Defense" (`D`, on or off) |
-| Radial menus | One component `hud/Radial.svelte` for the stance, road type, supply, city, group and split. All of them unfold from the center in 140 ms (scale 0.4 → 1 with opacity, ease-out; no animation with `prefers-reduced-motion` and "reduced motion"); the city ring is 54 px wide. Hover highlights a sector (by angle, as in CS:GO), an unavailable sector is dim. No more than one is open: opening a second one closes the first. They close with the same key that opened them, `Esc`, a click on the same object, and the modal ones (the stance after a `Q` tap, road type, supply, split) also with a click outside the menu. The city menu also closes after the barracks or the warehouse (the city is deselected with it, #426), but not after recruiting or cancelling a recruit (`R`, `X`, a sector): it stays open and the city selected, so several units are queued in a row (#450) |
+| Radial menus | One component `hud/Radial.svelte` for the stance, supply, city, group and split. All of them unfold from the center in 140 ms (scale 0.4 → 1 with opacity, ease-out; no animation with `prefers-reduced-motion` and "reduced motion"); the city ring is 54 px wide. Hover highlights a sector (by angle, as in CS:GO), an unavailable sector is dim. No more than one is open: opening a second one closes the first. They close with the same key that opened them, `Esc`, a click on the same object, and the modal ones (the stance after a `Q` tap, supply, split) also with a click outside the menu. The city menu also closes after the barracks or the warehouse (the city is deselected with it, #426), but not after recruiting or cancelling a recruit (`R`, `X`, a sector): it stays open and the city selected, so several units are queued in a row (#450) |
 | Stance | `Q`: the menu is static in the center of the screen, chosen with the cursor (hold and release, or tap and click) |
 | `Esc` | Drops the selection and closes the menu. A double `Esc` opens the exit dialog only when nothing is selected and no menus are open |
 | Log and match menu | Removed. The language is chosen before the game (greeting, menu, legal pages). In development mode the map and scene choice is in `DevPanel` |

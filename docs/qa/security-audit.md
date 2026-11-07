@@ -202,20 +202,19 @@ The base images are pinned by version and digest.
 ## 9. How to repeat
 
 ```sh
-export HTTP_PORT=8080 HTTPS_PORT=8443
-docker compose -p sbf-qa04 up --build -d
+mise run stack:agent                      # project sbf-agent, http://localhost:18080 (never the owner's stack)
 # Origin and the log (F1): after the fix there are no lines '"WebSocket ' from uvicorn.error in the log
-docker compose -p sbf-qa04 logs app | grep uvicorn.error
+docker compose -p sbf-agent logs app | grep uvicorn.error
 # /internal is not proxied: everywhere the client index.html, not the metrics
 for p in /internal/metrics /api/../internal/metrics /api/%2e%2e/internal/metrics; do
-  curl -s --path-as-is "http://localhost:8080$p" | grep -c gow_matches_active; done
+  curl -s --path-as-is "http://localhost:18080$p" | grep -c gow_matches_active; done
 # F2: from the internal network a forged XFF no longer opens /internal (404)
-docker exec sbf-qa04-caddy-1 wget -qO- --header 'X-Forwarded-For: 127.0.0.1' http://app:8000/internal/drain
+docker exec sbf-agent-caddy-1 wget -qO- --header 'X-Forwarded-For: 127.0.0.1' http://app:8000/internal/drain
 uvx pip-audit -r <(uv export --locked --all-packages --no-emit-workspace --no-hashes -q) --no-deps --disable-pip
 pnpm -C apps/client audit
-uv run pytest packages/protocol/tests/test_command_fuzz.py packages/protocol/tests/test_convert.py \
+mise run test:py -- packages/protocol/tests/test_command_fuzz.py packages/protocol/tests/test_convert.py \
   apps/server/tests/test_internal.py apps/server/tests/test_ws.py
-docker compose -p sbf-qa04 down -v
+mise run stack:agent:down
 ```
 
 ## 10. What remains to do by hand

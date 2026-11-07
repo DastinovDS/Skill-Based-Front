@@ -1,5 +1,7 @@
 # Skill-Based Front MVP plan: issues
 
+> Historical: the plan of the first MVP, kept as written. The current scope is the tracking issue #282, the rules are `docs/design/mechanics.md`, the commands are in `AGENTS.md` and `mise.toml`.
+
 > Generated from `issues.yaml`. Each block is a ready GitHub issue body; the issue title is the `### [ID] ...` line.
 
 ## M0: Foundation

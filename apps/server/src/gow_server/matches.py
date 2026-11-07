@@ -758,13 +758,6 @@ class MatchManager:
     def get(self, match_id: str) -> MatchRunner | None:
         return self._runners.get(match_id)
 
-    def running_bot_match_of(self, account_id: int) -> MatchRunner | None:
-        """The running match of ``account_id`` against a bot, if any."""
-        for runner in self._runners.values():
-            if runner.bot is not None and account_id in runner.players:
-                return runner
-        return None
-
     def create(
         self,
         map_id: str,

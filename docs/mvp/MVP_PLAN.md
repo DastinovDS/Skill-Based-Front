@@ -1,5 +1,7 @@
 # Skill-Based Front MVP plan
 
+> Historical: the plan of the first MVP, kept as written. The current scope is the tracking issue #282, the rules are `docs/design/mechanics.md`, the commands are in `AGENTS.md` and `mise.toml`.
+
 ## What the MVP is
 
 Two players find each other through a public lobby, a matchmaking queue, or an invite link and play a full 1v1 match in the browser over the network. Ranked matches change the Glicko-2 rating, there is a leaderboard, play against a bot, and a replay with full reveal. Balance is driven by a set of rules (a ruleset) verified by a bot tournament and an internal playtest.

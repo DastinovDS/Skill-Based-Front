@@ -376,14 +376,9 @@ export const PACKET_TAIL_TRANSFER_EXTRA = 4;
 /** Inside this distance past a city rim a packet shrinks and fades into the city icon. */
 export const PACKET_FADE_MARGIN = 8;
 export const PACKET_MIN_SCALE = 0.3;
-export const PACKET_LABEL_FONT_SIZE = 10;
 
-export const ARROW_WIDTH = 3;
-export const ARROW_DASH = 9;
-export const ARROW_GAP = 6;
 export const ARROW_HEAD = { length: 14, width: 14 } as const;
 export const ARROW_OUTLINE = { width: 6, color: BG, alpha: 0.7 } as const;
-export const ORDER_LINE_ALPHA = 0.7;
 
 /** Red means only "opponent" (6), so a fight mark is paper white. */
 export const FIGHT_COLOR = PAPER;
@@ -471,8 +466,6 @@ export const BONUS_MARK = {
   lift: 2,
 } as const;
 export const SELECT_WIDTH = 3;
-/** Group selection: a rounded frame this far outside the token. */
-export const SELECT_TOKEN_GAP = 4;
 /** An order sent and not yet seen in a snapshot: dashed, see-through. */
 export const ORDER_GHOST_ALPHA = 0.85;
 export const ORDER_GHOST_WIDTH = 4;
