@@ -330,7 +330,7 @@ class ReplayWriter:
         mapdef = match.state.map
         header = {
             "sim_version": SIM_VERSION,
-            "ruleset_hash": ruleset_hash(match.rules),
+            "ruleset_hash": ruleset_hash(match.source_rules),
             "python_version": platform.python_version(),
             "map_id": mapdef.meta.name,
             "map_hash": map_hash(mapdef),

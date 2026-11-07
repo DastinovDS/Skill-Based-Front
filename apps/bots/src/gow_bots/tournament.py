@@ -34,7 +34,7 @@ from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, load_map, map_hash
 from gow_sim.match import SIM_VERSION, Match, MatchObserver, MatchResult, run_headless
 from gow_sim.replay import REPLAY_SUFFIX, ReplayWriter
-from gow_sim.ruleset import load_ruleset, ruleset_hash
+from gow_sim.ruleset import apply_map_tempo, load_ruleset, ruleset_hash
 
 __all__ = [
     "FLOW_ONLY_KEYS",
@@ -176,7 +176,8 @@ def play_match(task: MatchTask) -> str:
     """Play one match and return its JSONL row (no newline). Runs in a worker process."""
     mapdef = load_map(task.map_path)
     rules = load_ruleset(task.rules_path)
-    controllers = [task.factory(p)(mapdef, rules, seed=task.seed, player=p) for p in PLAYERS]
+    played = apply_map_tempo(rules, mapdef)  # the bots see the periods the match plays (#803)
+    controllers = [task.factory(p)(mapdef, played, seed=task.seed, player=p) for p in PLAYERS]
     recorder = MatchRecorder()
     result: MatchResult
     if task.replay_dir is None:

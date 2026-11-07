@@ -135,6 +135,28 @@ simulation:
   tick, and a ``CancelOrder`` takes it. A move that arrived or was replaced by a new ``Move`` is not
   cancelled.
 
+**Front pressure** (#803, map tempo DEC-46; balance statistics, not game rules;
+``docs/balance/README.md`` has the same text). From a sampling of the end-of-tick state and the
+charge ledger; nothing is added to the simulation:
+
+- **Front width** of a player at a sample: the number of nodes it owns that share an edge with a
+  node the other player owns. Sampled at the end of every ``PLACE_SAMPLE_TICKS``-th tick (1 s):
+  ``front_width_sum`` is the sum of the samples (front node-seconds), ``front_samples`` the number
+  of samples with a width above 0 (seconds with a front);
+  ``front_width_centi = front_width_sum * 100 // front_samples`` is the mean width while a front
+  exists, in hundredths (rounded down; ``None`` without a front).
+- **Front pressure** ``front_pressure_centi``: the charges the player spent in fights
+  (``charges_fights``) per front node per minute, in hundredths:
+  ``charges_fights * 100 * 60 * tick_hz // (front_width_sum * PLACE_SAMPLE_TICKS)`` (rounded
+  down; ``None`` without a front). It weighs a minute with a wide front more, so it reads as
+  "how hard is each front node pushed on".
+- **CP income** ``cp_income`` (hundredths of CP): the CP quanta the player's economy fired times
+  ``cp.per_period``, before the burning at the cap (``cp_burned``) and, under economy v1, before
+  the share of the stance that goes into charges. A quantum is read like ``cp_by_stance``: under
+  ``[stances]`` from ``cp_ticks`` (0 at the end of a tick exactly when it fired), otherwise on the
+  ticks divisible by ``cp.period_ticks`` of the rules the match plays (``Match.rules``, the map
+  tempo applied).
+
 Player statistics (#375), the actions of a player instead of the outcome: ``analyze_stats(log)``
 returns ``MatchStats``, one ``PlayerStats`` per side. They come from the command journal of the
 match (every command sent, accepted or rejected, with the price charged) and from existing events
@@ -375,6 +397,12 @@ class MatchLog:
     """The own capital by player id; empty in a hand-made log."""
     cp_by_stance: tuple[tuple[tuple[str, int], ...], ...] = ((), ())
     """By player id: ``(stance, CP in hundredths)``, only under ``[stances]`` (module docstring)."""
+    front_width_sum: tuple[int, ...] = (0, 0)
+    """By player id: the sum of the front width samples (module docstring, front pressure)."""
+    front_samples: tuple[int, ...] = (0, 0)
+    """By player id: the samples with a front width above 0."""
+    cp_income: tuple[int, ...] = (0, 0)
+    """By player id: CP in hundredths of the quanta fired, before the cap (#803)."""
 
 
 def charge_stock(state: GameState) -> tuple[int, ...]:
@@ -452,6 +480,10 @@ class MatchRecorder:
         self._cp_earned = {p: {s.value: 0 for s in Stance} for p in PLAYERS}
         self._garrisons: dict[int, tuple[bool, ...]] = {}
         """Node -> per player id: a group of that player stands in it (end of the last tick)."""
+        self._neighbours: tuple[tuple[int, ...], ...] = ()
+        self._front_sum = _zeros()
+        self._front_samples = _zeros()
+        self._cp_income = _zeros()
 
     def begin(self, match: Match) -> None:
         if self._match is not None:
@@ -462,6 +494,10 @@ class MatchRecorder:
         self._owners = {nid: n.owner for nid, n in sorted(match.state.nodes.items())}
         self._initial = tuple(self._owners.values())
         self._garrisons = _garrisons(match.state)
+        mapdef = match.state.map
+        self._neighbours = tuple(
+            tuple(mapdef.edges[e].other(n.id) for e in mapdef.incident[n.id]) for n in mapdef.nodes
+        )
 
     def record(self, match: Match, commands: Sequence[PlayerCommand]) -> None:
         if self._match is not match:
@@ -516,9 +552,37 @@ class MatchRecorder:
             for gid, cost in sorted(self._order_cost.items())
             if gid in state.groups and state.groups[gid].order is not None
         }
+        self._count_cp_income(match)
         if state.tick % PLACE_SAMPLE_TICKS == 0:
             for p, places in zip(PLAYERS, charge_places(state), strict=True):
                 self._samples[p].append(places)
+            self._count_front(state)
+
+    def _count_front(self, state: GameState) -> None:
+        """One front width sample of both players (module docstring, front pressure)."""
+        width = _zeros()
+        nodes = state.nodes
+        for nid, node in nodes.items():  # the sums do not depend on the order
+            owner = node.owner
+            if owner is None:
+                continue
+            if any(nodes[m].owner == 1 - owner for m in self._neighbours[nid]):
+                width[owner] += 1
+        for p in PLAYERS:
+            if width[p]:
+                self._front_sum[p] += width[p]
+                self._front_samples[p] += 1
+
+    def _count_cp_income(self, match: Match) -> None:
+        """The CP quanta of this tick (module docstring, front pressure)."""
+        rules, state = match.rules, match.state
+        for p in PLAYERS:
+            if rules.stances is not None:
+                fired = state.players[p].cp_ticks == 0
+            else:
+                fired = state.tick % rules.cp.period_ticks == 0
+            if fired:
+                self._cp_income[p] += rules.cp.per_period
 
     def _count_bottleneck(self, match: Match) -> None:
         state = match.state
@@ -612,6 +676,9 @@ class MatchRecorder:
             stances=match.rules.stances is not None,
             capitals=tuple(self._capitals[p] for p in PLAYERS),
             cp_by_stance=tuple(tuple(self._cp_earned[p].items()) for p in PLAYERS),
+            front_width_sum=tuple(self._front_sum[p] for p in PLAYERS),
+            front_samples=tuple(self._front_samples[p] for p in PLAYERS),
+            cp_income=tuple(self._cp_income[p] for p in PLAYERS),
         )
 
 
@@ -761,6 +828,16 @@ class MatchMetrics:
     """Charges paid for buildings later stopped or captured (#690)."""
     cp_cancelled: tuple[int, ...] = (0, 0)
     """CP in hundredths of the ``Move`` orders cancelled by ``CancelOrder`` (#690)."""
+    front_width_sum: tuple[int, ...] = (0, 0)
+    """Front node-samples (#803, module docstring, front pressure)."""
+    front_samples: tuple[int, ...] = (0, 0)
+    """Samples with a front."""
+    front_width_centi: tuple[int | None, ...] = (None, None)
+    """Mean front width while a front exists, in hundredths."""
+    front_pressure_centi: tuple[int | None, ...] = (None, None)
+    """Fight charges per front node per minute, in hundredths."""
+    cp_income: tuple[int, ...] = (0, 0)
+    """CP in hundredths of the quanta fired, before the cap."""
 
     def to_json(self) -> dict[str, object]:
         """Plain JSON data; per-player values are lists indexed by player id."""
@@ -813,6 +890,11 @@ class MatchMetrics:
             "charges_per_kill_centi": list(self.charges_per_kill_centi),
             "charges_built_lost": list(self.charges_built_lost),
             "cp_cancelled": list(self.cp_cancelled),
+            "front_width_sum": list(self.front_width_sum),
+            "front_samples": list(self.front_samples),
+            "front_width_centi": list(self.front_width_centi),
+            "front_pressure_centi": list(self.front_pressure_centi),
+            "cp_income": list(self.cp_income),
         }
 
 
@@ -951,6 +1033,22 @@ def analyze(log: MatchLog) -> MatchMetrics:
         ),
         charges_built_lost=tuple(effort.built_lost[p] for p in PLAYERS),
         cp_cancelled=log.cp_cancelled,
+        front_width_sum=log.front_width_sum,
+        front_samples=log.front_samples,
+        front_width_centi=tuple(
+            log.front_width_sum[p] * 100 // log.front_samples[p] if log.front_samples[p] else None
+            for p in PLAYERS
+        ),
+        front_pressure_centi=tuple(
+            ledger["fights"][p]
+            * 100
+            * minute_ticks
+            // (log.front_width_sum[p] * PLACE_SAMPLE_TICKS)
+            if log.front_width_sum[p]
+            else None
+            for p in PLAYERS
+        ),
+        cp_income=log.cp_income,
     )
 
 

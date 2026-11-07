@@ -20,7 +20,8 @@ gives its planned orders a requested bonus and releases some of them early (#646
 v1-only commands (and "Defense") are rejected. Under the supply flow of ``mvp-4`` (DEC-43) it also
 sets its leaf shift now and then (in range, out of range, unchanged) and fortifies roads to
 foreign nodes (DEC-43, item D; with a wrong road and a second one on the same road now and
-then), and its line, bunker and warehouse commands are rejected.
+then), and its line, bunker and warehouse commands are rejected. One game plays the map tempo of
+DEC-46 (``mvp-4-stances-tempo``) on the pool map ``narrows``, where the multiplier is 76, not 100.
 """
 
 import argparse
@@ -60,7 +61,7 @@ from gow_sim.commands import (
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import SIM_VERSION, Controller
 from gow_sim.replay import REPLAY_SUFFIX, record_headless
-from gow_sim.ruleset import Ruleset, Stance, archive_ruleset, load_ruleset
+from gow_sim.ruleset import Ruleset, Stance, apply_map_tempo, archive_ruleset, load_ruleset
 from gow_sim.view import AtNode, GroupView, Mode, OnEdge, PlayerView
 
 TESTS = Path(__file__).resolve().parents[1]
@@ -313,6 +314,8 @@ class Game:
     ruleset: str
     forfeit_at: int | None = None
     """Player 1 forfeits at this tick."""
+    map_dir: str = "maps/fixtures"
+    """The folder of the map, relative to the repository root."""
 
     def controllers(self, mapdef: MapDef, rules: Ruleset) -> list[Controller]:
         return [MixBot(mapdef, rules), MixBot(mapdef, rules, self.forfeit_at)]
@@ -328,6 +331,7 @@ GAMES = (
     Game("web-mvp3", "web", "mvp-3"),
     Game("web-mvp4", "web", "mvp-4"),
     Game("web-mvp4-stances", "web", "mvp-4-stances"),
+    Game("narrows-mvp4-stances-tempo", "narrows", "mvp-4-stances-tempo", map_dir="maps"),
 )
 
 
@@ -336,13 +340,14 @@ def generate(out: Path, archive: Path) -> list[Path]:
     (out / "maps").mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for game in GAMES:
-        map_file = ROOT / "maps" / "fixtures" / f"{game.map_id}.json"
+        map_file = ROOT / game.map_dir / f"{game.map_id}.json"
         rules_file = ROOT / "rulesets" / f"{game.ruleset}.toml"
         archive_ruleset(rules_file, archive)
         shutil.copyfile(map_file, out / "maps" / map_file.name)
         mapdef, rules = load_map(map_file), load_ruleset(rules_file)
         path = out / f"{game.name}{REPLAY_SUFFIX}"
-        record_headless(path, mapdef, rules, game.controllers(mapdef, rules))
+        played = apply_map_tempo(rules, mapdef)  # the bots see the periods the match plays
+        record_headless(path, mapdef, rules, game.controllers(mapdef, played))
         written.append(path)
     return written
 
