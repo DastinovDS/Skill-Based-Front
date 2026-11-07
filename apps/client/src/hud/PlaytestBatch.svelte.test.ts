@@ -13,7 +13,7 @@ import SplitMenu from './SplitMenu.svelte';
 import TopBar from './TopBar.svelte';
 
 // The HUD side of the 2026-11-05 playtest batch (#762): the factory counter, the CP shortage, the
-// plan bonus stepper and the split that sends its part on.
+// plan banner (no bonus setting since #797) and the split that sends its part on.
 const RULES = DEV_RULES_FLOW;
 const base = devSnapshot(DEFAULT_MAP, RULES, 30);
 const own = base.view.nodes.filter((n) => n.owner === 0 && n.warehouse_cap !== null);
@@ -141,28 +141,25 @@ describe('the playtest batch in the HUD (#762)', () => {
     expect(cp?.getAttribute('aria-label')).toContain('not enough for this move');
   });
 
-  it('shows the bonus stepper with its value and the cap of the selected group', () => {
+  it('has no bonus setting: no stepper, no [ ] key, only Shift + wheel over the target (#797)', () => {
     const { hud, orders } = setup(snapshot(1000, 6, 3));
     orders.click({ kind: 'group', id: GROUP }, false);
     const root = show(PlanBanner, { orders, group: hud.current?.group ?? null });
     const pill = root.querySelector('.pill');
-    expect(pill?.textContent).toContain('Bonus');
-    expect(root.querySelector('output')?.textContent).toBe('+2');
-    expect(root.querySelector('.cap')?.textContent).toBe('max 3');
-    const more = root.querySelector<HTMLButtonElement>(
-      'button[aria-label="Ask for a bigger bonus"]',
+    expect(root.querySelector('output')).toBeNull();
+    expect(root.querySelectorAll('button')).toHaveLength(0);
+    expect(pill?.textContent).not.toContain('[ ]');
+    expect(pill?.textContent).toContain(
+      'Shift + wheel over the target sets the bonus, +1 at first',
     );
-    more?.click();
-    flushSync();
-    expect(root.querySelector('output')?.textContent).toBe('+3');
-    // At the cap the + button is off.
-    expect(more?.disabled).toBe(true);
+    // The bonus sign is the chevron of the badges, not a diamond.
+    expect(pill?.querySelector('svg.chevron')).not.toBeNull();
     // A planned order is being made: the pill stands out and says so.
     expect(pill?.classList.contains('planning')).toBe(false);
     orders.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
     flushSync();
     expect(pill?.classList.contains('planning')).toBe(true);
-    expect(pill?.textContent).toContain('Planned order: pick the bonus');
+    expect(pill?.textContent).toContain('Planned order: turn the wheel over the target');
   });
 
   it('opens the split menu at the size that fits, says where the part goes, and splits on confirm', () => {

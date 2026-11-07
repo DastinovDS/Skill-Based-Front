@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BonusChevron from '../hud/BonusChevron.svelte';
   import HelmetIcon from '../units/HelmetIcon.svelte';
   import { unitLook } from '../units/unitStyleState.svelte.ts';
   import { t, tf } from '../i18n/index.ts';
@@ -168,15 +169,7 @@
                   <Tri side="own" {cell} />
                 {/each}
                 {#if f.bonusA > 0}
-                  <span class="bonus" aria-hidden="true"
-                    ><svg
-                      class="dia"
-                      viewBox="0 0 14 14"
-                      width="14"
-                      height="14"
-                      aria-hidden="true"
-                      focusable="false"><path d="M7 1l6 6-6 6-6-6z" /></svg
-                    >×{f.bonusA}</span
+                  <span class="bonus" aria-hidden="true"><BonusChevron size={14} />×{f.bonusA}</span
                   >
                 {/if}
               </span>
@@ -185,15 +178,7 @@
                   <Tri side="enemy" {cell} />
                 {/each}
                 {#if f.bonusB > 0}
-                  <span class="bonus" aria-hidden="true"
-                    ><svg
-                      class="dia"
-                      viewBox="0 0 14 14"
-                      width="14"
-                      height="14"
-                      aria-hidden="true"
-                      focusable="false"><path d="M7 1l6 6-6 6-6-6z" /></svg
-                    >×{f.bonusB}</span
+                  <span class="bonus" aria-hidden="true"><BonusChevron size={14} />×{f.bonusB}</span
                   >
                 {/if}
               </span>
@@ -244,8 +229,9 @@
         {/if}
       </g>
       <path d="M58 16h200l24 10-24 10H58z" class="ribbon" />
-      <path d="M180 8l6 6-6 6-6-6z" class="bonusmark" />
-      <path d="M212 8l6 6-6 6-6-6z" class="bonusmark" />
+      <!-- The bonus shots in front of the ribbon: the green chevrons of a bonus (#797). -->
+      <path d="M174 17l6-6 6 6M206 17l6-6 6 6" class="bonusmark-out" />
+      <path d="M174 17l6-6 6 6M206 17l6-6 6 6" class="bonusmark" />
     </svg>
   </section>
 
@@ -407,11 +393,21 @@
     stroke-linejoin: round;
   }
 
-  .bonusmark {
+  .bonusmark,
+  .bonusmark-out {
     fill: none;
-    stroke: var(--paper);
-    stroke-width: 2;
+    stroke-linecap: round;
     stroke-linejoin: round;
+  }
+
+  .bonusmark-out {
+    stroke: var(--bg);
+    stroke-width: 5.6;
+  }
+
+  .bonusmark {
+    stroke: var(--badge-up);
+    stroke-width: 2.8;
   }
 
   .ex {
@@ -476,13 +472,6 @@
     margin-left: 4px;
     font-size: 12px;
     color: var(--text-dim);
-  }
-
-  .dia path {
-    fill: none;
-    stroke: var(--paper);
-    stroke-width: 1.6;
-    stroke-linejoin: round;
   }
 
   .back {

@@ -49,7 +49,7 @@ describe('OverlayView', () => {
     view.destroy();
   });
 
-  it('draws the bonus counter over the target: diamond, bonus and gathering time (#793)', () => {
+  it('draws the bonus counter over the target: chevron, bonus and gathering time (#793, #797)', () => {
     // jsdom has no canvas to measure text on: seven units a letter.
     vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
       (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,

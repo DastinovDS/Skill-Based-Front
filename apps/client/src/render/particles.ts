@@ -2,7 +2,7 @@
  * The particle core of the map effects (ui-style 20, item 7; 22; 27, 29; #351): two built-in
  * `ParticleContainer`s for every effect of every fight (one normal, one additive: the blend mode
  * belongs to a container), one atlas of baked white shapes that a particle tints, no filters.
- * The shots of #352 use the same core: the four heads of a tracer (a square or a diamond, own or the
+ * The shots of #352 use the same core: the four heads of a tracer (a square or a chevron, own or the
  * opponent's) are more frames of the atlas, baked in the colours of the sides and drawn untinted.
  *
  * Nothing here knows about fights. A frame is `begin()`, any number of `put()`, `end()`; the
@@ -21,14 +21,15 @@ import {
   Texture,
 } from 'pixi.js';
 import type { Point } from './camera.ts';
-import { BG, ENEMY, PAPER, PLATE_FILL, YOU } from './style.ts';
+import { BADGE_UP, BG, ENEMY, PAPER, YOU } from './style.ts';
 import { HELMET_PATHS } from '../units/helmet.ts';
 
 /**
  * What a particle looks like. Baked white (a tint colours it): the form says what it is, not the hue.
  * The four heads are the exception: a head of a shot (ui-style 29.1) is a real shot, a filled square
- * ■ (the charge, ui-style 21), or a bonus one, a hollow diamond ◇, in the colour of its side with
- * the second, dark (square) or light (diamond) contour of the opponent; baked in colour, tint white.
+ * ■ (the charge, ui-style 21) in the colour of its side with the second, dark contour of the
+ * opponent, or a bonus one, the green chevron up of the advantage badge on its dark outline (#797,
+ * #791), the opponent's with a light line along it; baked in colour, tint white.
  */
 export type HeadKind = 'headOwn' | 'headEnemy' | 'headOwnBonus' | 'headEnemyBonus';
 export type ParticleKind =
@@ -36,7 +37,7 @@ export type ParticleKind =
   | 'square'
   | 'triangle'
   | 'helmet'
-  | 'diamond'
+  | 'chevron'
   | 'ring'
   | 'dashRing'
   | 'cross'
@@ -49,7 +50,7 @@ export interface SideColors {
   readonly enemy: number;
 }
 
-/** The head of a shot of a side: a square, or a diamond for a bonus shot. */
+/** The head of a shot of a side: a square, or a chevron for a bonus shot. */
 export function headKind(side: 'own' | 'enemy', bonus: boolean): HeadKind {
   if (side === 'own') return bonus ? 'headOwnBonus' : 'headOwn';
   return bonus ? 'headEnemyBonus' : 'headEnemy';
@@ -159,7 +160,7 @@ const SHAPES: readonly ParticleKind[] = [
   'square',
   'triangle',
   'helmet',
-  'diamond',
+  'chevron',
   'ring',
   'dashRing',
   'cross',
@@ -197,28 +198,32 @@ function drawHead(c: CanvasRenderingContext2D, kind: HeadKind, colors: SideColor
     }
     return;
   }
-  // The bonus shot: a hollow diamond (dark inside, so it reads over the road), the opponent's with a second light contour.
-  const r = CELL / 2 - 4;
-  const diamond = (k: number): void => {
-    c.beginPath();
-    c.moveTo(m, m - r * k);
-    c.lineTo(m + r * k, m);
-    c.lineTo(m, m + r * k);
-    c.lineTo(m - r * k, m);
-    c.closePath();
-  };
-  diamond(1);
-  c.fillStyle = css(PLATE_FILL);
-  c.fill();
-  c.strokeStyle = color;
-  c.lineWidth = 8;
+  // The bonus shot (#797): the chevron up of the advantage badge, green on its dark outline (the
+  // shape tells the bonus, the tail's mark the side); the opponent's has a light line along it.
+  chevronPath(c);
+  c.lineCap = 'round';
+  c.strokeStyle = css(BG);
+  c.lineWidth = 20;
+  c.stroke();
+  c.strokeStyle = css(BADGE_UP);
+  c.lineWidth = 11;
   c.stroke();
   if (enemy) {
-    diamond(0.5);
     c.strokeStyle = css(PAPER);
-    c.lineWidth = 4;
+    c.lineWidth = 3.5;
     c.stroke();
   }
+}
+
+/** The chevron up of a cell (the badge's proportions, `chevronStrokes`), as a path to stroke. */
+function chevronPath(c: CanvasRenderingContext2D): void {
+  const m = CELL / 2;
+  const half = 20;
+  const rise = half * (0.26 / 0.56);
+  c.beginPath();
+  c.moveTo(m - half, m + rise);
+  c.lineTo(m, m - rise);
+  c.lineTo(m + half, m + rise);
 }
 
 function drawShape(c: CanvasRenderingContext2D, kind: ParticleKind, colors: SideColors): void {
@@ -264,14 +269,10 @@ function drawShape(c: CanvasRenderingContext2D, kind: ParticleKind, colors: Side
       c.restore();
       break;
     }
-    case 'diamond':
-      // Hollow: the bonus shot (ui-style 21).
-      c.lineWidth = 7;
-      c.moveTo(m, m - r + 3);
-      c.lineTo(m + r - 3, m);
-      c.lineTo(m, m + r - 3);
-      c.lineTo(m - r + 3, m);
-      c.closePath();
+    case 'chevron':
+      // A bonus shot's spark and echo (#797): the chevron up of a bonus, white to be tinted.
+      chevronPath(c);
+      c.lineWidth = 10;
       c.stroke();
       break;
     case 'ring':

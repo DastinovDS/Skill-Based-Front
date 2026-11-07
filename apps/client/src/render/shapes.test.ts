@@ -6,6 +6,7 @@ import { EntityKit, Token, helmetWidth } from './shapes.ts';
 import { helmet } from '../units/helmet.ts';
 import { ENEMY, UNIT_SIDES, UNIT_TICKS, YOU } from './style.ts';
 import { testSprites } from './testSprites.ts';
+import { createLayers } from './layers.ts';
 import { DEFAULT_UNIT_STYLE, setUnitStyle } from '../units/unitStyle.ts';
 
 // A group triangle is baked shapes (U1, #347): the back with its shadow (and the casing of an icon
@@ -320,5 +321,40 @@ describe('Token, the helmet as baked sprites', () => {
     expect(parts().back.spec?.key).toContain('tri-back');
     expect(parts().body.scale.x).toBe(1);
     expect(parts().level.scale.x).toBeCloseTo(0.5);
+  });
+});
+
+describe('Token, the badges over the outlines (#797)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('draws its badges through the badge layer, above the overlay, its token still their parent', () => {
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+    const layers = createLayers();
+    const kit = new EntityKit(0, testSprites(), layers.badges);
+    const token = new Token(kit, 1);
+    layers.layer.groups.addChild(token.view);
+    token.set({
+      owner: 0,
+      modes: ['attack'],
+      counts: { units: 3, charged: 3 },
+      inside: true,
+      badges: [{ dir: 'down', count: 1 }],
+    });
+    expect(token.badgeKeys).toHaveLength(1);
+    const [attached] = layers.badges.renderLayerChildren;
+    expect(layers.badges.renderLayerChildren).toHaveLength(1);
+    // The badges follow the token (position, scale, fade) and are drawn after the intents.
+    expect(attached?.parent).toBe(token.view);
+    const order = layers.world.children;
+    expect(order.indexOf(layers.badges)).toBeGreaterThan(order.indexOf(layers.layer.intents));
+    // A token that goes takes its badges out of the layer.
+    token.view.destroy({ children: true });
+    expect(layers.badges.renderLayerChildren).toHaveLength(0);
+    kit.destroy();
+    layers.world.destroy({ children: true });
   });
 });

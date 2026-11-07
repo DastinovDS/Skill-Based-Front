@@ -78,11 +78,6 @@ export interface OrderUiData {
    */
   readonly linePath: readonly number[] | null;
   /**
-   * Economy v2 (DEC-41, item 10): the bonus a planned order asks for (`move.bonus`), set by the
-   * stepper of the plan bar or `[` and `]`; at least 1.
-   */
-  readonly planBonus: number;
-  /**
    * A planned order is being made now: the switch is on or Shift is held (the plan bar shows its
    * bonus stepper prominently then, #762).
    */
@@ -116,7 +111,6 @@ export class OrderUiState {
     transferFrom: null,
     lineDraft: null,
     linePath: null,
-    planBonus: 2,
     planning: false,
     cpShort: false,
     notice: null,

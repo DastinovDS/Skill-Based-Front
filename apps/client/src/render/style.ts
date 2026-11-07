@@ -336,27 +336,25 @@ export const BADGE = {
   minFont: 9,
 } as const;
 /**
- * The counter of "Defense" (DEC-30, #349, D1 "Diamond pips"): a capsule of bonus diamonds beside the
- * shield badge, a filled one for each bonus gathered and a hollow one for room up to the cap. Above
+ * The counter of "Defense" (DEC-30, #349, D1 "Diamond pips"; chevrons since #797): a capsule of bonus
+ * chevrons beside the shield badge, a green one for each bonus gathered and a hollow one for room up to the cap. Above
  * `maxPips` places the row turns into the form of the arena stock, "filled x2, hollow x6", with the
  * numbers as text of `fontSize`. `gap`: the capsule starts this far from the middle of the badge.
  */
 export const DEFENSE_PIPS = {
   maxPips: 6,
   radius: 4,
-  /** Radius of the diamonds of the numbers form. */
+  /** Half the size of the chevrons of the numbers form. */
   smallRadius: 3.4,
   pitch: 8.6,
-  /** The first diamond's centre from the capsule's near end. */
+  /** The first chevron's centre from the capsule's near end. */
   inset: 6.8,
-  /** The capsule is wider than the row of diamonds by this much. */
+  /** The capsule is wider than the row of chevrons by this much. */
   padding: 5,
   height: 15,
   gap: 8,
   rim: 1.2,
   plateAlpha: 0.96,
-  /** The outline of a hollow diamond. */
-  hollow: { width: 1.1, color: 0x9da7b3 },
   fontSize: 10,
   /** Width of one character of the numbers, for the width of the capsule. */
   charWidth: 6,
@@ -464,16 +462,16 @@ export const ETA_MARK = {
 } as const;
 /**
  * The bonus counter over the target of a planned order while Shift is held (#793): a dark pill with
- * an own-coloured rim just above the target city's ring; the hollow diamond of a bonus
- * shot, the bonus as text ("+3") and the gathering time it implies. Sized in world units and
+ * an own-coloured rim just above the target city's ring; the green chevron of a bonus (#797,
+ * the badge's), the bonus as text ("+3") and the gathering time it implies. Sized in world units and
  * scaled like the travel time (`badgeScale`). Shape and text carry it, never colour alone.
  */
 export const BONUS_MARK = {
   height: 28,
   padding: 9,
   gap: 6,
-  /** The diamond's half diagonal. */
-  diamond: 6,
+  /** The size of the chevron of a bonus (the badge's units, `drawBonusChevron`). */
+  chevron: 12,
   fontSize: 16,
   timeFontSize: 12,
   fillAlpha: 0.92,
@@ -597,7 +595,7 @@ export const RIBBON = {
   foe: { width: 5.2, inner: 2 },
   /** The band of light that runs along the ribbon on the way: its length, alpha and one pass in seconds. */
   sheen: { length: 18, alpha: 0.3, periodS: 1.8 },
-  /** The tail marks: own a dot, the opponent a double ring (the diamond stays the bonus sign, ui-style 21). */
+  /** The tail marks: own a dot, the opponent a double ring (the chevron is the bonus sign, ui-style 21, #797). */
   tail: { dot: 4, dotRing: 1.5, ring: 5.2, ringWidth: 1.6, inner: 2.4, innerWidth: 1.1 },
   /** The ribbon bends at most this share of its chord toward the server's path (one smooth curve). */
   maxBend: 0.3,

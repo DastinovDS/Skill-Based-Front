@@ -2,6 +2,7 @@ import { Assets, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'p
 import { t, tf } from '../i18n/index.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { badgeScale } from './alertLayout.ts';
+import { chevronHalfWidth, drawBonusChevron } from './bonusChevron.ts';
 import { etaPlace, secondsRight } from './etaLayout.ts';
 import { comet, cometPhase, routeSpans, type RouteSpan } from './etaRoute.ts';
 import hourglassUrl from './glyphs/hourglass.png';
@@ -326,7 +327,8 @@ export class OverlayView {
   }
 
   /**
-   * The bonus counter over the target (#793): "◇ +3  gathers 6 s" in a pill just above the city's
+   * The bonus counter over the target (#793): "^ +3  gathers 6 s" (the green chevron of a bonus,
+   * #797) in a pill just above the city's
    * ring, as big on screen at any zoom. The pill is drawn again only when its text changes.
    */
   private placeBonus(state: OverlayState): void {
@@ -357,7 +359,7 @@ export class OverlayView {
     this.bonusText.text = value;
     this.bonusTime.text = time;
     this.bonusTime.visible = time !== '';
-    const d = M.diamond;
+    const d = chevronHalfWidth(M.chevron);
     const width =
       M.padding * 2 +
       2 * d +
@@ -370,13 +372,9 @@ export class OverlayView {
     g.roundRect(left, -M.height / 2, width, M.height, M.height / 2)
       .fill({ color: BG, alpha: M.fillAlpha })
       .stroke({ width: M.rim.width, color: YOU, alpha: M.rim.alpha });
-    // The hollow diamond of a bonus shot, as on the plan banner and the pill of a planned order.
+    // The chevron of a bonus, as on the plan banner, the pill of a planned order and the badges.
     const cx = left + M.padding + d;
-    g.poly([cx, -d, cx + d, 0, cx, d, cx - d, 0]).stroke({
-      width: 2,
-      color: PAPER,
-      join: 'round',
-    });
+    drawBonusChevron(g, cx, 0, M.chevron);
     this.bonusText.position.set(cx + d + M.gap, 0);
     this.bonusTime.position.set(cx + d + M.gap + this.bonusText.width + M.gap, 1);
     this.bonusKey = key;

@@ -462,7 +462,7 @@ export function ribbonSlice(
 }
 
 /**
- * Where the pill "◇ +N" sits: `RIBBON.bonusBack` before the end of the arc (not before
+ * Where the pill "^ +N" (the chevron of a bonus) sits: `RIBBON.bonusBack` before the end of the arc (not before
  * `RIBBON.bonusMin` from its start), moved off the arc to its outer side (the side it bulges to,
  * `sign(bend)` as `ribbonAxis` uses it) by half the body, `RIBBON.bonusMargin` and `halfPill`
  * (the half height of the pill, world units).

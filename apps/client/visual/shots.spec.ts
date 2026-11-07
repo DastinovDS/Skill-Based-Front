@@ -878,3 +878,22 @@ test('shot of the supply banner in grey scale', async ({ page }) => {
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.screenshot({ path: join(OUT, 'supply-hud-gray.png') });
 });
+
+// The selection and the hover outline beside a badge (#797): Watchpost's group (plains, chevrons
+// down) selected, the pointer on Stonegate's group (mountains, chevrons up); the badges are drawn
+// over both outlines. `badge-outline-zoom.png` is the strip of both, magnified by the device scale.
+test('shot of the outlines over a group with a badge', async ({ page }) => {
+  await page.goto('/?scene=badges&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(330, 520);
+  await page.waitForTimeout(300);
+  await page.mouse.move(116, 516);
+  await page.mouse.move(117, 517);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(OUT, 'badge-outline.png') });
+  await page.screenshot({
+    path: join(OUT, 'badge-outline-zoom.png'),
+    clip: { x: 60, y: 460, width: 340, height: 120 },
+  });
+});

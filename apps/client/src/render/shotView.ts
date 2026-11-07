@@ -31,7 +31,7 @@ const CORE_WIDTH = 1.3;
  * Size of a head (the width of the atlas cell, world units at 100%) and of the glow behind it. The baked square
  * fills 56 of the 64 px of its cell: 20 px, the least of a significant symbol (ui-style 22).
  */
-const HEAD_SIZE = { square: 23, diamond: 28 } as const;
+const HEAD_SIZE = { square: 23, chevron: 30 } as const;
 const HEAD_GLOW = 2 * 1.4 * 14;
 /** The width of the two thin lines of a bonus tail and of the faded path. */
 const EDGE_WIDTH = 1.5;
@@ -52,8 +52,8 @@ const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x,
  * The tracers of the map (shot style 1, ui-style 29.1, 29.4; #352): the curved comets of the shots of the rounds
  * that are still playing. A real shot has a solid tail that tapers (eight segments, each a little more
  * opaque than the one behind it, over a dark underlay) with a white core (the opponent's: dark), a glow
- * along it and a head that is a square ■; a bonus shot has a hollow tail, two thin lines, three diamonds trailing it and a
- * diamond ◇ for a head. Two shots that meet bend round each other and end in the middle. After the hit
+ * along it and a head that is a square ■; a bonus shot has a hollow tail, two thin lines, three chevrons trailing it and
+ * the green chevron up of a bonus (#797, the badge's) for a head. Two shots that meet bend round each other and end in the middle. After the hit
  * the path stays and fades as an arc, it is not cut off.
  *
  * The tails are pooled `Graphics` (one per shot, redrawn while the shot is in the air: its shape
@@ -61,7 +61,7 @@ const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x,
  * is the alpha of its segments, not a `FillGradient`: the prototype of #352 (PR description) found the
  * gradient cheap and CSP-safe on a test page, but the gradient polygon did not show in the app next to
  * the particle containers, and a texture-free fill needs no cause found. The heads, glows, sparks and
- * diamonds are particles of the shared `ParticleLayer` (`emit`), no filters. Everything is a function of the render tick and of the
+ * chevrons are particles of the shared `ParticleLayer` (`emit`), no filters. Everything is a function of the render tick and of the
  * fields of `fight_round` (shots, virtual shots, losses): a paused scene shows a round in the state of that
  * tick, nothing is decided here (AGENTS.md 7.1). `destroy()` frees the pool.
  */
@@ -241,7 +241,7 @@ export class ShotView {
       }
       for (const echo of echoesOf(shot, phase.s)) {
         emit({
-          kind: 'diamond',
+          kind: 'chevron',
           x: echo.at.x,
           y: echo.at.y,
           size: echo.size * 3 * scale,
@@ -276,7 +276,7 @@ export class ShotView {
       kind: headKind(shot.shooter, shot.bonus),
       x: head.x,
       y: head.y,
-      size: (shot.bonus ? HEAD_SIZE.diamond : HEAD_SIZE.square) * scale,
+      size: (shot.bonus ? HEAD_SIZE.chevron : HEAD_SIZE.square) * scale,
       color: 0xffffff,
       alpha: 1,
     });

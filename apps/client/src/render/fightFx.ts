@@ -25,7 +25,7 @@ import { fightPoint } from './layout.ts';
 /**
  * The plate of the arena, CSS px (A1: two halves, own on the left, the enemy's on the right):
  * half of its width and of its height. It holds two rows of four chips per side with their badges
- * (#791, "On chips" of #776: the badges carry the bonus and the penalty, so the row of the ◇ stock
+ * (#791, "On chips" of #776: the badges carry the bonus and the penalty, so the row of the bonus stock
  * is gone and the plate is 12 px lower), the "+N" of the hidden chips under them, and a bar of the
  * time to the next round along its bottom edge.
  */

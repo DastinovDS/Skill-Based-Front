@@ -55,7 +55,7 @@ export type CityChoice = 'recruit' | 'barracks' | 'warehouse' | 'factory' | 'bun
 /** A sector of the menu of a group (`release`: economy v2, a gathering plan departs now). */
 export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense' | 'release';
 
-/** The requested bonus of a planned order under economy v2: the stepper's range (the server caps it too). */
+/** The requested bonus of a planned order under economy v2: the wheel's range (the server caps it too). */
 export const PLAN_BONUS = { min: 1, max: 9 } as const;
 
 /** How long an answer stays in the panel, ms. */
@@ -197,6 +197,13 @@ export class OrderController implements MapInteraction {
   #hover: PickHit | null = null;
   /** Shift + wheel: notches and trackpad pixels turned into steps of the plan bonus (#793). */
   readonly #wheelSteps = new WheelSteps();
+  /**
+   * The bonus the wheel chose for one Shift hover (#797): the selected group, the target under the
+   * pointer and the value. Shift up, another target or another group drops it, so every new
+   * hover starts at `PLAN_BONUS.min` (there is no remembered value); `null`: none chosen.
+   */
+  #bonusPick: { readonly group: string; readonly node: number; readonly value: number } | null =
+    null;
   /** The last step of the rear minimum by key: where it started and where it was sent to. */
   #rearStep: { readonly from: number; readonly to: number } | null = null;
   /** The same for the leaf shift (`stepLeafShift`). */
@@ -379,22 +386,56 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * The bonus the next planned order asks for (economy v2): the stepper's value, no more than the
-   * charged units of the selected group allow (`planBonusMax`).
+   * The bonus a planned order to the target under the pointer asks for (economy v2): what the wheel
+   * chose in this Shift hover (#797), `PLAN_BONUS.min` until it turns, no more than the charged
+   * units of the selected group allow (`planBonusMax`).
    */
   get planBonus(): number {
-    return Math.min(this.ui.current.planBonus, this.planBonusMax);
+    return this.#bonusFor(this.#previewTarget());
   }
 
-  /** The top of the bonus stepper now: `PLAN_BONUS.max`, capped by the selected group's charged units. */
+  /** The top of the bonus now: `PLAN_BONUS.max`, capped by the selected group's charged units. */
   get planBonusMax(): number {
     return planBonusCap(this.#selectedGroup()?.charged ?? null);
   }
 
-  /** One step of the requested plan bonus up (`delta` 1) or down (-1), within `PLAN_BONUS` and the cap. */
-  stepPlanBonus(delta: number): void {
-    const next = Math.min(this.planBonusMax, Math.max(PLAN_BONUS.min, this.planBonus + delta));
-    if (next !== this.ui.current.planBonus) this.ui.patch({ planBonus: next });
+  /** The bonus of a planned order of the selected group to `node`: the wheel's pick there, else 1. */
+  #bonusFor(node: number | null): number {
+    const pick = this.#bonusPick;
+    const group = this.#selectedGroup();
+    const value =
+      pick !== null && group !== null && pick.group === group.id && pick.node === node
+        ? pick.value
+        : PLAN_BONUS.min;
+    return Math.min(value, this.planBonusMax);
+  }
+
+  /**
+   * One step of the bonus over the target under the pointer up (`delta` 1) or down (-1), within
+   * `PLAN_BONUS` and the cap (#793). Nothing without a target: the bonus belongs to its hover.
+   */
+  #stepPlanBonus(delta: number): void {
+    const group = this.#selectedGroup();
+    const node = this.#previewTarget();
+    if (group === null || node === null) return;
+    const value = Math.min(
+      this.planBonusMax,
+      Math.max(PLAN_BONUS.min, this.#bonusFor(node) + delta),
+    );
+    this.#bonusPick = { group: group.id, node, value };
+  }
+
+  /** Drops the wheel's pick once its hover is over: Shift up, another target, another group (#797). */
+  #syncBonusPick(): void {
+    const pick = this.#bonusPick;
+    if (pick === null) return;
+    if (
+      !this.#shift ||
+      pick.group !== this.#selectedGroup()?.id ||
+      pick.node !== this.#previewTarget()
+    ) {
+      this.#bonusPick = null;
+    }
   }
 
   /** Ticks per point of a gathering plan (`ruleset_public.orders.plan_ticks_per_bonus`, DEC-41). */
@@ -466,6 +507,7 @@ export class OrderController implements MapInteraction {
     this.#syncCaptureHover(preview);
     this.#syncCpShort(preview);
     this.#syncPlanning();
+    this.#syncBonusPick();
     const hover = this.#hoverMarkNow();
     const undo = this.#undoMarksNow();
     const bonus = this.#bonusMark(from, eta === null ? null : preview);
@@ -514,7 +556,7 @@ export class OrderController implements MapInteraction {
 
   /**
    * The bonus counter over the target of a planned order (#793): economy v2, a planned order (Shift
-   * or the switch), the target reachable (`reach`). The value is `planBonus`, the banner's; the
+   * or the switch), the target reachable (`reach`). The value is `planBonus`, 1 until the wheel turns; the
    * gathering time is display arithmetic from `ruleset_public` (one point per
    * `orders.plan_ticks_per_bonus` while the warehouse has charges, DEC-41, item 10).
    */
@@ -628,8 +670,10 @@ export class OrderController implements MapInteraction {
       hit = { kind: 'node', id: iconNode };
     }
     if (hit.kind === 'node' && group !== null && this.#o.send !== null && group.node !== hit.id) {
-      // Economy v2: a planned order asks for its bonus (DEC-41, item 10); otherwise 0.
-      const bonus = this.planned && this.v2 ? this.planBonus : 0;
+      // Economy v2: a planned order asks for its bonus (DEC-41, item 10), the wheel's pick over
+      // this target or 1 (#797); otherwise 0.
+      const bonus = this.planned && this.v2 ? this.#bonusFor(hit.id) : 0;
+      this.#bonusPick = null;
       // The server says only a smaller group gets there (`reach.split`, the stack limit, DEC-20):
       // the split menu opens with the size that fits, and its part goes there on confirm (#762).
       const fit = this.splitFit(hit.id);
@@ -680,6 +724,8 @@ export class OrderController implements MapInteraction {
     }
     this.#closeMenus();
     this.#o.hud.select(target);
+    // A selection starts the bonus of its planned orders afresh (#797).
+    this.#bonusPick = null;
     this.#hover = hit;
     if (this.#o.send !== null) {
       if (target.kind === 'group' && again && !groupWasOpen) this.groupMenu.open(target.id);
@@ -728,22 +774,23 @@ export class OrderController implements MapInteraction {
 
   /**
    * Shift + wheel (#793): with an own group in a node selected under economy v2 (the plan banner
-   * shows), one notch steps the bonus the next planned order asks for, the same value as `[` `]`
-   * and the banner (`stepPlanBonus`). `false` otherwise: the wheel zooms the map.
+   * shows), one notch steps the bonus a planned order to the target under the pointer asks for; it
+   * starts at 1 for every new hover (#797). `false` otherwise: the wheel zooms the map.
    */
   wheel(input: WheelInput): boolean {
     this.#shift = input.shiftKey;
     this.#syncPlanning();
+    this.#syncBonusPick();
     if (!input.shiftKey || !this.#planBonusShown()) {
       this.#wheelSteps.reset();
       return false;
     }
     const step = this.#wheelSteps.push(input, this.#now());
-    if (step !== 0) this.stepPlanBonus(step);
+    if (step !== 0) this.#stepPlanBonus(step);
     return true;
   }
 
-  /** The plan banner's stepper is up: economy v2, an own group in a node selected, the normal map. */
+  /** The plan banner is up: economy v2, an own group in a node selected, the normal map. */
   #planBonusShown(): boolean {
     const ui = this.ui.current;
     return (
@@ -760,6 +807,7 @@ export class OrderController implements MapInteraction {
 
   hover(hit: PickHit | null): void {
     this.#hover = hit;
+    this.#syncBonusPick();
     this.#syncRoadHover();
     this.#syncFortHover();
     this.#o.hud.hoverGroup(
@@ -793,6 +841,7 @@ export class OrderController implements MapInteraction {
   deselect(): void {
     this.#closeMenus();
     this.#o.hud.select(null);
+    this.#bonusPick = null;
   }
 
   /**
@@ -1543,6 +1592,7 @@ export class OrderController implements MapInteraction {
   key(input: KeyInput): boolean {
     this.#shift = input.shiftKey;
     this.#syncPlanning();
+    this.#syncBonusPick();
     if (!input.shiftKey) this.#wheelSteps.reset();
     if (input.type !== 'keydown') return this.#keyUp(input);
     if (input.code === 'Tab' || input.code === 'F2') {
@@ -1676,11 +1726,6 @@ export class OrderController implements MapInteraction {
         this.closeRadial();
         return true;
       }
-    }
-    if ((input.code === 'BracketLeft' || input.code === 'BracketRight') && this.v2) {
-      // Economy v2: `[` and `]` lower and raise the bonus a planned order asks for.
-      this.stepPlanBonus(input.code === 'BracketRight' ? 1 : -1);
-      return true;
     }
     if (
       (input.code === 'BracketLeft' || input.code === 'BracketRight') &&

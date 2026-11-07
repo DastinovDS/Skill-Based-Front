@@ -61,7 +61,7 @@ export interface Impact {
   readonly shooter: Side | null;
   /** Who was hit; `null` for two shots that cancel. */
   readonly victim: Side | null;
-  /** Only bonus (virtual) shots made it: drawn dashed and with hollow diamonds (ui-style 21). */
+  /** Only bonus (virtual) shots made it: drawn dashed and with chevrons (ui-style 21, #797). */
   readonly bonus: boolean;
   /** The same for the shot of each side (two shots that cancel can differ: a bonus one against a real one). */
   readonly bonusBy: Readonly<Record<Side, boolean>>;
@@ -278,7 +278,7 @@ const ease = (p: number): number => 1 - (1 - p) * (1 - p);
 
 /**
  * The particles of the burst of one impact at progress `u` (0..1 of `IMPACT_SHARE`): a ring (dashed,
- * if bonus), a flash, sparks (■, or hollow ◇ for a bonus shot) and, for a kill, shards ▽ in the
+ * if bonus), a flash, sparks (■, or chevrons ^ for a bonus shot, #797) and, for a kill, shards ▽ in the
  * colour of the side that lost the unit; two shots that meet draw ✕, rays of both colours and sparks.
  */
 export function impactParticles(emit: Emit, impact: Impact, u: number, look: ImpactLook): void {
@@ -291,7 +291,7 @@ export function impactParticles(emit: Emit, impact: Impact, u: number, look: Imp
       x: (contacts.own.x + contacts.enemy.x) / 2,
       y: (contacts.own.y + contacts.enemy.y) / 2,
     };
-    const sparkKind = impact.bonus ? 'diamond' : 'square';
+    const sparkKind = impact.bonus ? 'chevron' : 'square';
     if (u < 0.5) {
       const p = u / 0.5;
       emit({
@@ -391,7 +391,7 @@ export function impactParticles(emit: Emit, impact: Impact, u: number, look: Imp
     cone: [shotAngle, 2.6],
     colors: [FLASH_COLOR, shooterColor],
     size: (impact.bonus ? 9.5 : 6.4) * s,
-    kind: impact.bonus ? 'diamond' : 'square',
+    kind: impact.bonus ? 'chevron' : 'square',
     add: true,
     seed: look.seed + 1,
   });

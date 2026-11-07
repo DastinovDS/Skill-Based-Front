@@ -2,7 +2,7 @@
  * The shots of a round on the map, shot style 1 "Tracers" at strength "Stronger" (ui-style 29.1, 29.4; #352):
  * a curved comet that leaves the group that shot, tapers into a tail and lands on the other group; two
  * shots that meet bend round each other (a lens of two arcs) and meet in the middle; a bonus shot is
- * a hollow tail with three diamonds trailing it; the path stays a moment after the hit and fades.
+ * a hollow tail with three chevrons trailing it; the path stays a moment after the hit and fades.
  *
  * Pure functions, no PixiJS and no DOM. Nothing decides what happened: the shots are what
  * `impactsOf` made of the fields of `fight_round` (shots, virtual shots, losses), the places are the
@@ -41,7 +41,7 @@ export const AFTERGLOW_SHARE = 0.25;
 /** The sparks of a tracer at "Stronger": how many, and how long one lives (a share of a round, 0.32 s of 2 s). */
 export const SPARKS = 5;
 export const SPARK_LIFE_SHARE = 0.16;
-/** The diamonds that trail a bonus shot: how far behind the head (the share of the path), sizes and alphas. */
+/** The chevrons that trail a bonus shot (#797): how far behind the head (the share of the path), sizes and alphas. */
 export const ECHOES = [
   { back: 0.1, size: 6.5, alpha: 0.5 },
   { back: 0.2, size: 5.5, alpha: 0.35 },
@@ -68,7 +68,7 @@ export function brightness(strength: number = FIGHT_FX_STRENGTH): number {
 /** One shot of a round: where its path runs. */
 export interface Shot {
   readonly shooter: Side;
-  /** All its shots were virtual (ui-style 21): a hollow tail with a diamond. */
+  /** All its shots were virtual (ui-style 21): a hollow tail with a chevron. */
   readonly bonus: boolean;
   /** It meets the shot of the other side half way: nobody is hit. */
   readonly cancel: boolean;
@@ -278,7 +278,7 @@ export function sparksOf(
   return out;
 }
 
-/** The places of the diamonds that trail a bonus shot whose head is at `s`. */
+/** The places of the chevrons that trail a bonus shot whose head is at `s`. */
 export function echoesOf(
   shot: Pick<Shot, 'p0' | 'ctrl' | 'b'>,
   s: number,

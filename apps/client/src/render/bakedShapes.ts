@@ -85,6 +85,7 @@ import {
   chevronStrokes,
   type BadgeDir,
 } from './badgeLayout.ts';
+import { drawBonusChevron } from './bonusChevron.ts';
 
 // The baked shapes of the map (BL1-1 "Restrained", ui-style 26.3, #347). Each function returns the
 // `BakeSpec` of one look: the key says which, `draw` puts the shape into a scratch container (see
@@ -770,9 +771,9 @@ export function shieldSpec(color: number, enemy: boolean): BakeSpec {
 }
 
 /**
- * The counter of "Defense" (D1 "Diamond pips", #349): the shield badge at the origin and, for an own
- * group with places, a capsule of diamonds to its left (the side of the city's column): filled for a
- * bonus gathered, hollow for room. Above `DEFENSE_PIPS.maxPips` places only the two diamonds are
+ * The counter of "Defense" (D1 "Diamond pips", #349; chevrons since #797): the shield badge at the
+ * origin and, for an own group with places, a capsule of chevrons to its left (the side of the
+ * city's column): green for a bonus gathered, hollow for room. Above `DEFENSE_PIPS.maxPips` places only the two chevrons are
  * baked: the numbers are text laid over them (`counterLayout`). The opponent has the badge alone
  * (`pips: null`): its bonus is never public (DEC-30, item 5; AGENTS.md 4.4).
  */
@@ -783,7 +784,7 @@ export function defenseCounterSpec(
 ): BakeSpec {
   const layout = pips === null || enemy ? null : counterLayout(pips);
   if (layout === null) return shieldSpec(color, enemy);
-  const { gap, height, rim, plateAlpha, hollow } = DEFENSE_PIPS;
+  const { gap, height, rim, plateAlpha } = DEFENSE_PIPS;
   const left = -gap - layout.width;
   const box: Box = { x: left - 1, y: -height / 2 - 1, width: 9 + 2 - left + 1, height: height + 2 };
   const badge = circleBox(9 + 2);
@@ -809,12 +810,10 @@ export function defenseCounterSpec(
       const g = graphics(into);
       capsule(g);
       g.fill({ color: PLATE_FILL, alpha: plateAlpha }).stroke({ width: rim, color });
+      // The bonus as chevrons (#797, the badge's chevron up): green for a point gathered, hollow
+      // (a light contour, dark inside) for room, as wide as the pitch allows.
       for (const pip of layout.pips) {
-        const cx = left + pip.x;
-        const r = pip.radius;
-        g.poly([cx, -r, cx + r, 0, cx, r, cx - r, 0]);
-        if (pip.filled) g.fill(PAPER);
-        else g.fill(BG).stroke(hollow);
+        drawBonusChevron(g, left + pip.x, 0.5, pip.radius * 1.75, !pip.filled);
       }
       g.circle(0, 0, 9).fill(PLATE_FILL).stroke({ width: 2.5, color });
       g.poly([-4.5, -5, 4.5, -5, 4.5, 1, 0, 5.5, -4.5, 1]).fill(GLYPH_COLOR);

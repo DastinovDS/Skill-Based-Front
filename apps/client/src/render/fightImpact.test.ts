@@ -268,14 +268,14 @@ describe('the particles of an impact', () => {
     expect(flash(strong)).toBeGreaterThan(flash(medium));
   });
 
-  it('is told apart by form, not by hue: ■ real, ◇ bonus, a helmet shard kill, ✕ cancel', () => {
+  it('is told apart by form, not by hue: ■ real, ^ bonus (#797), a helmet shard kill, ✕ cancel', () => {
     const kinds = (list: ParticleSpec[]): Set<string> => new Set(list.map((p) => p.kind));
     const real = kinds(collect(impact({ kind: 'discharge', losses: 0 }), 0.1));
     expect(real.has('square')).toBe(true);
     expect(real.has('helmet')).toBe(false);
     expect(real.has('ring')).toBe(true);
     const bonus = kinds(collect(impact({ kind: 'discharge', losses: 0, bonus: true }), 0.1));
-    expect(bonus.has('diamond')).toBe(true);
+    expect(bonus.has('chevron')).toBe(true);
     expect(bonus.has('square')).toBe(false);
     expect(bonus.has('dashRing')).toBe(true);
     const kill = kinds(collect(impact({}), 0.1));
