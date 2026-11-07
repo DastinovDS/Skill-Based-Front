@@ -97,7 +97,7 @@ def protocol_json_schema() -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "Protocol",
-        "description": "Wire format of Skill-Based Front, generated from gow_protocol.",
+        "description": "Wire format of Fines Imperii, generated from gow_protocol.",
         "anyOf": [refs[(i, "serialization")] for i in range(len(ROOTS))],
         "x-constants": {
             "PROTOCOL_VERSION": PROTOCOL_VERSION,

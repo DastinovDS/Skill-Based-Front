@@ -3,7 +3,7 @@
 // in `} satisfies Messages;` (a missing or an extra key is then a type error), listed in
 // `LOCALES` (`locale.ts`) and in `DICTIONARIES` (`index.ts`).
 export const en = {
-  'app.title': 'Skill-Based Front',
+  'app.title': 'Fines Imperii',
   'hud.map': 'Map',
   'hud.scene': 'Scene',
   'hud.fps': 'FPS',

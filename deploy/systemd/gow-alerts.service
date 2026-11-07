@@ -2,7 +2,7 @@
 #   sudo cp deploy/systemd/gow-alerts.service /etc/systemd/system/ && sudo systemctl enable --now gow-alerts
 # Needs ALERT_WEBHOOK_URL in /home/gow/skill-based-front/.env.
 [Unit]
-Description=Skill-Based Front: forward server alerts to a webhook
+Description=Fines Imperii: forward server alerts to a webhook
 Requires=docker.service
 After=docker.service
 

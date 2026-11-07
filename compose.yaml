@@ -1,4 +1,4 @@
-# Skill-Based Front: production stack (OPS-01, #80). Usage and variables: README.md, section "Docker".
+# Fines Imperii: production stack (OPS-01, #80). Usage and variables: README.md, section "Docker".
 #
 #   cp .env.example .env        # optional: the defaults run the game on http://localhost
 #   docker compose up --build -d

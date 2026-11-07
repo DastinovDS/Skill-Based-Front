@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Protocol",
-  "description": "Wire format of Skill-Based Front, generated from gow_protocol.",
+  "description": "Wire format of Fines Imperii, generated from gow_protocol.",
   "anyOf": [
     {
       "$ref": "#/$defs/ClientMsg"

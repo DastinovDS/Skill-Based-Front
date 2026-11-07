@@ -1,5 +1,5 @@
 [Unit]
-Description=Skill-Based Front: nightly backup
+Description=Fines Imperii: nightly backup
 
 [Timer]
 OnCalendar=*-*-* 03:30:00 UTC

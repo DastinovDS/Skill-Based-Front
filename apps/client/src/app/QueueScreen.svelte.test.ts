@@ -127,7 +127,7 @@ describe('QueueScreen', () => {
 
   it('flashes the title of a tab in the background while a found opponent waits to be confirmed', async () => {
     const original = document.title;
-    document.title = 'Skill-Based Front';
+    document.title = 'Fines Imperii';
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     try {
       const confirmQueue = vi.fn(() => Promise.resolve(found({ you_confirmed: true })));
@@ -135,13 +135,13 @@ describe('QueueScreen', () => {
       await settle();
       expect(document.title).toBe(translate('en', 'queue.titleFlash'));
       await vi.advanceTimersByTimeAsync(1000);
-      expect(document.title).toBe('Skill-Based Front');
+      expect(document.title).toBe('Fines Imperii');
       await vi.advanceTimersByTimeAsync(1000);
       expect(document.title).toBe(translate('en', 'queue.titleFlash'));
       // Confirmed: nothing left to flash for.
       button(translate('en', 'queue.confirm'))?.click();
       await settle();
-      expect(document.title).toBe('Skill-Based Front');
+      expect(document.title).toBe('Fines Imperii');
     } finally {
       document.title = original;
       Reflect.deleteProperty(document, 'visibilityState');

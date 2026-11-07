@@ -1,7 +1,9 @@
 # VPS deployment, deploys, backups (OPS-03, #82)
 
 Placeholders: `<VPS_HOST>` (the server IP or name), `<DOMAIN>` (the game domain), `<REPO_URL>` (the repository URL
-for `git clone`). There are no real values in the repository.
+for `git clone`). The project domain is `finesimperii.com` (owner decision of 2026-11-07, DNS on Cloudflare); the
+examples below keep the `<DOMAIN>` placeholder where the text is generic. There are no server addresses or other personal
+data in the repository.
 
 What was checked locally (`HTTP_PORT=8080 HTTPS_PORT=8443 deploy/deploy-test.sh`, also in the CI job `docker`):
 a deploy, a rollback of a broken release with the data kept, a backup of a running server and a restore into a clean volume.
@@ -48,16 +50,20 @@ are enabled; [ ] `.env` has mode 600 and is not in git; [ ] backups are copied o
 
 ## 2. The first deploy [manual]
 
-DNS: the A record `<DOMAIN>` points to `<VPS_HOST>`, before Caddy starts (otherwise ACME will not issue a certificate).
+DNS: the A record `<DOMAIN>` (`finesimperii.com`) points to `<VPS_HOST>`, before Caddy starts (otherwise ACME will not issue a certificate).
+The record in Cloudflare is in "DNS only" mode (grey cloud, owner decision of 2026-11-07): the A record points straight to the VPS and
+Caddy gets the Let's Encrypt certificate itself. If the Cloudflare proxy (orange cloud) is turned on later: SSL mode Full (strict),
+WebSockets enabled, and `trusted_proxies` in Caddy with the Cloudflare ranges, so the per-IP limits see the player's address
+(see "The per-IP limit works only with the real client address" in section 8).
 No AAAA record (owner's decision of 2026-10-28): the production domain stays IPv4 only until the check in section 8, "IPv6 and the per-IP limits", is done on the VPS. The server keys IPv6 clients by their /64 since #415, but whether it sees the real client address behind Docker is still unverified.
 
 ```sh
 ssh gow@<VPS_HOST>
 git clone <REPO_URL> ~/skill-based-front && cd ~/skill-based-front   # private repository: a read-only deploy key
 cp .env.example .env && chmod 600 .env
-# In .env: SITE_ADDRESS=<DOMAIN>, DEPLOY_BASE_URL=https://<DOMAIN>, BACKUP_DIR=/var/backups/skill-based-front
+# In .env: SITE_ADDRESS=finesimperii.com, DEPLOY_BASE_URL=https://finesimperii.com, BACKUP_DIR=/var/backups/skill-based-front
 deploy/deploy.sh origin/main
-BASE_URL=https://<DOMAIN> deploy/check-caddy.sh   # needs Node to compare the CSP; can be run from a laptop
+BASE_URL=https://finesimperii.com deploy/check-caddy.sh   # needs Node to compare the CSP; can be run from a laptop
 sudo cp deploy/systemd/gow-backup.* /etc/systemd/system/ && sudo systemctl enable --now gow-backup.timer
 ```
 
