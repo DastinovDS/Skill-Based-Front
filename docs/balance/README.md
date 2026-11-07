@@ -240,7 +240,9 @@ sinks by outcome"). `first_contact_tick` measures the tempo of a map directly (t
 
 Per-player metrics of how hard the front is pushed, for comparing maps of different sizes. Not game rules: nothing was
 added to the simulation (`gow_sim.analysis`, module docstring "Front pressure"). Sampled at the end of every 10th tick
-(`PLACE_SAMPLE_TICKS`, 1 s).
+(`PLACE_SAMPLE_TICKS`, 1 s). The front pressure is the target of the map tempo (DEC-46, `rulesets/mvp-4-stances-tempo.toml`):
+about equal on every map size. To compare maps, pool it per map: all fight charges of the map over all its front
+node-minutes (the experiment of #803, `docs/balance/map-tempo-2026-11.md` on the branch `exp/803-map-tempo`).
 
 | Field | Meaning |
 |---|---|

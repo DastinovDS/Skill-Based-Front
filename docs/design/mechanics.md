@@ -1558,6 +1558,58 @@ Alternatives (not chosen):
 - The reset of item 4 as first accepted (2026-11-06): replaced by the proportional carry (#792), it cost up to a cycle.
 - Finish the old cycle first, then the new rate: rewards a switch timed just before a quantum.
 
+### Map tempo: economy periods scaled by the map size (DEC-46, #803) **[accepted]**
+
+The owner's decision of 2026-11-07, after the experiment of #803 (`docs/balance/map-tempo-2026-11.md` on the branch `exp/803-map-tempo`, three bot tournaments of 2160 matches each). **The goal: an equal pressure on the front on every map size**, measured as the charges spent in fights per front node per minute (`front_pressure_centi`, `docs/balance/README.md`, "Front pressure"). Before it nothing in the economy scaled with the map: the CP income and the capital and factory periods were flat, and a small map had the same fighting on fewer front nodes (`narrows`, 29 nodes, was pushed 1.26x harder than the 49..51-node pool maps). The square root removes that trend (1.03x); the linear form overcorrected (the small maps quieter than the big ones) and was rejected.
+
+**Behind a flag.** Everything below applies only under the optional section `[map_tempo]` of a ruleset. `rulesets/mvp-4-stances-tempo.toml` is `mvp-4-stances` plus the section, nothing else; every other ruleset (`mvp-4`, `mvp-4-stances` and the rest) has no section and plays as before: an absent section is left out of `ruleset_hash()` (`OPTIONAL` of `gow_sim.ruleset`), so their hashes, `rulesets/archive/` and the golden games stay valid. The default ruleset stays `mvp-4`.
+
+1. **The multiplier.** Once per match, from the node count `N` of its map (all nodes: cities, provinces, capitals):
+
+   `pct = isqrt(N * 10000 // ref_nodes)` (both steps rounded down), then clamped to `min_pct..max_pct`
+
+   with `ref_nodes = 49`, `min_pct = 50`, `max_pct = 150`. On 49 nodes (`crossroads`, `highway`) `pct` is exactly 100: the pool's big maps keep today's numbers. The clamp guards future generated maps (today's 29..54 nodes never reach it): a tiny map at most doubles the periods, a huge one shortens them by at most a third.
+2. **What scales.** Every economy period `p` becomes `max(1, p * 100 // pct)` (rounded down, at least 1): `cp.period_ticks`, `factory.capital_period_ticks`, `factory.built_period_ticks`, and under `[stances]` (DEC-44) every entry of `stances.cp_period_ticks` and `stances.capital_period_ticks`. A small map gets longer periods (a slower economy), a big one shorter.
+3. **What does not scale.** VP (`victory.*`), starvation, build times, combat, movement, supply dispatch (`supply.dispatch_ticks`), recruit times, the CP cap and quantum, warehouses, costs.
+4. **Where it is applied.** `gow_sim.ruleset.apply_map_tempo(rules, map)` is a pure integer function; `Match` plays its result (`Match.rules`, without the section) and keeps the ruleset as given (`Match.source_rules`): its hash goes into a replay header, the frames file and the `matches` row, so a replay is re-simulated from the archived ruleset and the map. The bots get the scaled rules (the tournament and the server's bot match).
+5. **Players see the scaled periods.** `ruleset_public` is built from `Match.rules`, so the stance menu, the HUD bars and every tooltip that derives a rate from a period show the rates of the current map. The multiplier itself is not sent (it is public anyway: a function of the map and the ruleset).
+6. **Fog.** Nothing new to hide.
+7. **Not covered: the map shape.** The formula counts nodes; it does not see the front width. Maps of one size can differ a lot (two 51-node maps: `gen1-40` 0.202 with a front of 6.4 nodes, `ridge` 0.115 with 10.5; the generated maps have narrow fronts at every size). Equalizing the shape is generator work (#771), separate from this decision.
+
+Multipliers and periods of the pool and `maps/gen/` (ticks; War / Balance / Economy under `mvp-4-stances-tempo`; the built factories keep `factory.built_period_ticks` of any stance):
+
+| Map | Nodes | `pct` | CP: 1 quantum per | Own capital: 1 charge per | Built factory: 1 charge per |
+|---|---|---|---|---|---|
+| `narrows` | 29 | 76 | 105 / 131 / 263 | 526 / 263 / 131 | 263 |
+| `gen1-17` | 29 | 76 | 105 / 131 / 263 | 526 / 263 / 131 | 263 |
+| `gen1-5` | 30 | 78 | 102 / 128 / 256 | 512 / 256 / 128 | 256 |
+| `gen1-25` | 38 | 88 | 90 / 113 / 227 | 454 / 227 / 113 | 227 |
+| `gen1-33` | 39 | 89 | 89 / 112 / 224 | 449 / 224 / 112 | 224 |
+| `gen1-36` | 44 | 94 | 85 / 106 / 212 | 425 / 212 / 106 | 212 |
+| `gen1-37` | 48 | 98 | 81 / 102 / 204 | 408 / 204 / 102 | 204 |
+| `crossroads` | 49 | 100 | 80 / 100 / 200 | 400 / 200 / 100 | 200 |
+| `highway` | 49 | 100 | 80 / 100 / 200 | 400 / 200 / 100 | 200 |
+| `ridge` | 51 | 102 | 78 / 98 / 196 | 392 / 196 / 98 | 196 |
+| `gen1-40` | 51 | 102 | 78 / 98 / 196 | 392 / 196 / 98 | 196 |
+| `gen1-58` | 54 | 104 | 76 / 96 / 192 | 384 / 192 / 96 | 192 |
+
+| # | Situation | Expected |
+|---|---|---|
+| T1 | `N = 29` | `29 * 10000 // 49 = 5918`, `isqrt` 76 (`76 * 76 = 5776 <= 5918 < 5929`): `pct = 76` |
+| T2 | `N = 49` | `pct = 100`, every period as in the ruleset |
+| T3 | `N = 54` | `11020`, `isqrt` 104: `pct = 104` |
+| T4 | `N = 6` | `1224`, `isqrt` 34, clamped up to 50: every period doubles |
+| T5 | `N = 200` | `40816`, `isqrt` 202, clamped down to 150 |
+| T6 | `narrows`, Balance | CP every `100 * 100 // 76 = 131` ticks, a capital charge every `200 * 100 // 76 = 263` |
+| T7 | a period 1 at `pct = 1000` | `1 * 100 // 1000 = 0`, at least 1 |
+
+Tests: `packages/sim/tests/test_map_tempo.py`; the golden game `narrows-mvp4-stances-tempo` (`SIM_VERSION` 44).
+
+Alternatives (not chosen):
+- None (flat economy): the small maps are pushed harder (`narrows` 1.26x).
+- Linear `pct = N * 100 // ref_nodes`: overcorrects, the small maps become quieter than the big ones for four bots of six.
+- A per-map tempo measured by a tournament and stored in the map file: would also cover the shape, but needs a measurement per map; the shape goes to the generator instead (#771).
+
 ---
 
 ## 7. Supply
@@ -4364,6 +4416,7 @@ Matches the glossary of `AGENTS.md` (section 15). Changes only together with it.
 | construction | ~~`UpgradeRoad(node, edge)`~~ `UpgradeRoad(edge)` | upgrading your own internal road by one level ~~by your own city for charges of its warehouse (DEC-16)~~ for CP, without a city (DEC-28, item 7) |
 | CP | `cp` | command points; flat regeneration, they do not grow with territory; stored in hundredths |
 | terrain burn | `combat.terrain_burn` | a negative terrain takes charges of the defender at the start of the first round of a fight instead of silencing them in every round (DEC-45) |
+| map tempo | `[map_tempo]`, `apply_map_tempo`, `Match.rules` | the economy periods of a match scaled once by the node count of its map, `pct = isqrt(N * 10000 // ref_nodes)` clamped; `Match.rules` are the scaled rules, `Match.source_rules` the given ones (DEC-46) |
 | stance | `Stance.ECONOMY / BALANCE / WAR` | economy v1: the share of CP regeneration that goes into charges (DEC-02); economy v2 with `[stances]`: the periods of the CP income and of the own capital (DEC-44) |
 | player view | `PlayerView` | the state filtered by fog for a player or a bot |
 | VP | `vp` | victory points for holding cities |
@@ -4419,6 +4472,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-43 | #697 | automatic supply flow towards the front (a field of hops to the leaves, one charge per road downhill per dispatch, the wave, a tired army pulls, a full factory spills), one global leaf shift, fixed warehouses (city 3, capital 6, province 1), road fortifications replace the bunker | section 7 | [accepted] (2026-11-03, the owner, all #697 recommendations; the look #699, #701: Full kit without the band, T1, N4, P2); behind `supply.model = "flow"` (`rulesets/mvp-4.toml`), `mvp-3` unchanged; supersedes DEC-41 items 3, 6, 12, DEC-42 and #665 under flow; item D (fortifications) [accepted] 2026-11-03 (#707: 1.5 CP, 100 ticks, a toll of 1 charge per started 3 units at the border point, the look C7 + K6 + P2); CP surplus options C1..C4 [open]; the ten [reading, to confirm] points [accepted] 2026-11-03; implemented: sim, protocol, bots #704 (`SIM_VERSION` 32, `PROTOCOL_VERSION` 36); fortifications: sim, protocol, bots #707 (`SIM_VERSION` 33, `PROTOCOL_VERSION` 37); item D reading points [accepted] 2026-11-03; item H (pockets from the capital, cut-off factories stop, starvation in factory-less pockets) [accepted] 2026-11-03, sim #719 (`SIM_VERSION` 34); item I (the leaves face the enemy only, the farthest nodes before contact, the leaves even out) [accepted] 2026-11-03 after the first playtest, sim #724 (`SIM_VERSION` 35); item I6 (a tired army ahead of the level pulls, option A) [accepted] 2026-11-03; the two readings of I2 and I3 [accepted] 2026-11-03, two new [reading, to confirm] (I3 an army takes without the gap, I6 the node alone; I3 [accepted] 2026-11-03); item I7 (a pulling army ahead of the level lifts its path, replacing "the node alone") [accepted] 2026-11-03, sim #726 (`SIM_VERSION` 36), three [reading, to confirm] (the path, the lifted nodes pass towards the army only, the nearer army first), all [accepted] 2026-11-03; item J (unpaid buildings paid in charges pull supply like a discharged army, equal footing) [accepted] 2026-11-03, sim #729 (`SIM_VERSION` 37), two [reading, to confirm] (the want of a build node, the pull ends with the payment); item K (level roads feed the nodes that can pass supply on, the saddle) sim #732 (`SIM_VERSION` 38), four [reading, to confirm]; item L (the level passes outward along the capital distance, a leaf is a corridor into an enclave) [accepted] 2026-11-04, sim #735 (`SIM_VERSION` 39), its five readings (one order, the enclave, the corridor does not hand back, pockets keep the gap rule, a city pair ends at 1/2) [accepted] 2026-11-04; the flow stress budget 0.3 ms [accepted] 2026-11-04; item M (the nearest need: every node with room calls the nearest stock behind it, candidate C2 and the supply contract) [accepted] 2026-11-04, sim #738/#740 (`SIM_VERSION` 40), its readings (M2 tiers and holders first, M3 the level answers a holder, M4 the ways, M5 the nearest first, M6 the relay, M8 the spill to the nearest own node with room, M9 `flow_down` as the plan) [accepted] 2026-11-04, the four item K readings [accepted] 2026-11-04 (owner); await: client #705, tournament #706, the fortification client (#707) |
 | DEC-44 | #772 | stances in economy v2 with local progress: rates of the CP income and of the own capital by stance, a change carries both counters over in proportion to the periods (revised 2026-11-07, #792; first: a reset), no cooldown; under the optional section `[stances]`, revises DEC-41 item 1 there only | section 6 | [accepted] (2026-11-06); an experiment for playtests, `rulesets/mvp-4-stances.toml` |
 | DEC-45 | #778 | plains: the defender burns a charge in the first round instead of keeping a silent one; under the optional key `combat.terrain_burn`, revises DEC-24 item F2 there only | section 4 | [accepted] (2026-11-06); `rulesets/mvp-4-stances.toml` |
+| DEC-46 | #803 | map tempo: the economy periods (CP, capital, factories, both stance tables) scaled once per match by `pct = isqrt(N * 10000 // 49)` of the map node count, clamped 50..150, `p * 100 // pct`; the target is an equal pressure on the front across map sizes; the map shape (front width) is not covered (generator work, #771); under the optional section `[map_tempo]` | section 6 | [accepted] (owner decision 2026-11-07, sqrt; linear rejected); `rulesets/mvp-4-stances-tempo.toml`, `SIM_VERSION` 44 |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in
