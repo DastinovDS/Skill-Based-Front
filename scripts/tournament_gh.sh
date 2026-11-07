@@ -2,6 +2,8 @@
 # `mise run tournament:gh`: dispatches .github/workflows/tournament.yml (#582), waits for the run with
 # one `gh run watch --exit-status` and downloads the artifact (tournament.jsonl and report.md) into
 # $TGH_DIR/<artifact name>. Options come from the task as environment variables (see mise.toml).
+# The workflow cuts the (map, seed) cells into at most TGH_SHARDS jobs (scripts/tournament_shards.py
+# plan, #786): more shards than seeds help as long as there are maps x seeds cells.
 set -euo pipefail
 
 : "${TGH_REF:?}" "${TGH_RULESET:?}" "${TGH_BOTS:?}" "${TGH_MAPS:?}" "${TGH_SEEDS:?}" "${TGH_SHARDS:?}" "${TGH_DIR:?}"
@@ -39,6 +41,9 @@ for attempt in 1 2 3; do
   esac
 done
 echo "finished in $(( $(date +%s) - started )) s of waiting" >&2
+# The wall time of the run itself (queue included), from GitHub's timestamps.
+gh run view "$run_id" -R "$repo" --json createdAt,updatedAt \
+  --jq '"run wall time: \((.updatedAt | fromdateiso8601) - (.createdAt | fromdateiso8601)) s"' >&2 || true
 
 mkdir -p "$TGH_DIR"
 gh run download "$run_id" -R "$repo" --pattern 'tournament-*' --dir "$TGH_DIR"
