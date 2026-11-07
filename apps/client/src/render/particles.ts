@@ -21,19 +21,19 @@ import {
   Texture,
 } from 'pixi.js';
 import type { Point } from './camera.ts';
-import { BADGE_UP, BG, ENEMY, PAPER, YOU } from './style.ts';
+import { BG, ENEMY, PAPER, YOU } from './style.ts';
 import { HELMET_PATHS } from '../units/helmet.ts';
 
 /**
  * What a particle looks like. Baked white (a tint colours it): the form says what it is, not the hue.
- * The four heads are the exception: a head of a shot (ui-style 29.1) is a real shot, a filled square
+ * The two heads are the exception: the head of a real shot (ui-style 29.1) is a filled square
  * ■ (the charge, ui-style 21) in the colour of its side with the second, dark contour of the
- * opponent, or a bonus one, the green chevron up of the advantage badge on its dark outline (#797,
- * #791), the opponent's with a light line along it; baked in colour, tint white.
+ * opponent; baked in colour, tint white. The head of a bonus shot (#812, "Octagram") is not a particle:
+ * it is two baked sprites (`octagramSpec`, `ShotView`).
  */
-export type HeadKind = 'headOwn' | 'headEnemy' | 'headOwnBonus' | 'headEnemyBonus';
+export type HeadKind = 'headOwn' | 'headEnemy';
 export type ParticleKind =
-  'dot' | 'square' | 'helmet' | 'chevron' | 'ring' | 'dashRing' | 'cross' | 'glow' | HeadKind;
+  'dot' | 'square' | 'helmet' | 'ring' | 'dashRing' | 'cross' | 'glow' | HeadKind;
 
 /** The colours of the two sides, for the heads of the shots. */
 export interface SideColors {
@@ -41,10 +41,9 @@ export interface SideColors {
   readonly enemy: number;
 }
 
-/** The head of a shot of a side: a square, or a chevron for a bonus shot. */
-export function headKind(side: 'own' | 'enemy', bonus: boolean): HeadKind {
-  if (side === 'own') return bonus ? 'headOwnBonus' : 'headOwn';
-  return bonus ? 'headEnemyBonus' : 'headEnemy';
+/** The head of a real shot of a side: a square in its colour. */
+export function headKind(side: 'own' | 'enemy'): HeadKind {
+  return side === 'own' ? 'headOwn' : 'headEnemy';
 }
 
 /** A particle of a frame: `size` is the width of its shape in world units, `aspect` stretches the height. */
@@ -150,15 +149,12 @@ const SHAPES: readonly ParticleKind[] = [
   'dot',
   'square',
   'helmet',
-  'chevron',
   'ring',
   'dashRing',
   'cross',
   'glow',
   'headOwn',
   'headEnemy',
-  'headOwnBonus',
-  'headEnemyBonus',
 ];
 const COLUMNS = 4;
 
@@ -166,63 +162,29 @@ const css = (color: number): string => `#${(color & 0xffffff).toString(16).padSt
 
 function drawHead(c: CanvasRenderingContext2D, kind: HeadKind, colors: SideColors): void {
   const m = CELL / 2;
-  const enemy = kind === 'headEnemy' || kind === 'headEnemyBonus';
+  const enemy = kind === 'headEnemy';
   const color = css(enemy ? colors.enemy : colors.own);
   c.lineJoin = 'round';
-  if (kind === 'headOwn' || kind === 'headEnemy') {
-    // The charge: a filled square with a light contour; the opponent's has a second, dark one inside,
-    // the own one a light patch (so the side reads without the hue).
-    const half = 25;
-    c.fillStyle = color;
-    c.strokeStyle = css(PAPER);
-    c.lineWidth = 6;
-    c.fillRect(m - half, m - half, 2 * half, 2 * half);
-    c.strokeRect(m - half, m - half, 2 * half, 2 * half);
-    if (enemy) {
-      c.strokeStyle = css(BG);
-      c.lineWidth = 4;
-      c.strokeRect(m - half + 9, m - half + 9, 2 * half - 18, 2 * half - 18);
-    } else {
-      c.fillStyle = 'rgba(255,255,255,0.55)';
-      c.fillRect(m - half + 5, m - half + 5, half * 0.8, half * 0.8);
-    }
-    return;
-  }
-  // The bonus shot (#797): the chevron up of the advantage badge, green on its dark outline (the
-  // shape tells the bonus, the tail's mark the side); the opponent's has a light line along it.
-  chevronPath(c);
-  c.lineCap = 'round';
-  c.strokeStyle = css(BG);
-  c.lineWidth = 20;
-  c.stroke();
-  c.strokeStyle = css(BADGE_UP);
-  c.lineWidth = 11;
-  c.stroke();
+  // The charge: a filled square with a light contour; the opponent's has a second, dark one inside,
+  // the own one a light patch (so the side reads without the hue).
+  const half = 25;
+  c.fillStyle = color;
+  c.strokeStyle = css(PAPER);
+  c.lineWidth = 6;
+  c.fillRect(m - half, m - half, 2 * half, 2 * half);
+  c.strokeRect(m - half, m - half, 2 * half, 2 * half);
   if (enemy) {
-    c.strokeStyle = css(PAPER);
-    c.lineWidth = 3.5;
-    c.stroke();
+    c.strokeStyle = css(BG);
+    c.lineWidth = 4;
+    c.strokeRect(m - half + 9, m - half + 9, 2 * half - 18, 2 * half - 18);
+  } else {
+    c.fillStyle = 'rgba(255,255,255,0.55)';
+    c.fillRect(m - half + 5, m - half + 5, half * 0.8, half * 0.8);
   }
-}
-
-/** The chevron up of a cell (the badge's proportions, `chevronStrokes`), as a path to stroke. */
-function chevronPath(c: CanvasRenderingContext2D): void {
-  const m = CELL / 2;
-  const half = 20;
-  const rise = half * (0.26 / 0.56);
-  c.beginPath();
-  c.moveTo(m - half, m + rise);
-  c.lineTo(m, m - rise);
-  c.lineTo(m + half, m + rise);
 }
 
 function drawShape(c: CanvasRenderingContext2D, kind: ParticleKind, colors: SideColors): void {
-  if (
-    kind === 'headOwn' ||
-    kind === 'headEnemy' ||
-    kind === 'headOwnBonus' ||
-    kind === 'headEnemyBonus'
-  ) {
+  if (kind === 'headOwn' || kind === 'headEnemy') {
     drawHead(c, kind, colors);
     return;
   }
@@ -251,12 +213,6 @@ function drawShape(c: CanvasRenderingContext2D, kind: ParticleKind, colors: Side
       c.restore();
       break;
     }
-    case 'chevron':
-      // A bonus shot's spark and echo (#797): the chevron up of a bonus, white to be tinted.
-      chevronPath(c);
-      c.lineWidth = 10;
-      c.stroke();
-      break;
     case 'ring':
       c.lineWidth = 5;
       c.arc(m, m, r - 3, 0, 2 * Math.PI);

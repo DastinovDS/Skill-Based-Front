@@ -277,7 +277,7 @@ const ease = (p: number): number => 1 - (1 - p) * (1 - p);
 
 /**
  * The particles of the burst of one impact at progress `u` (0..1 of `IMPACT_SHARE`): a ring (dashed,
- * if bonus), a flash, sparks (■, or chevrons ^ for a bonus shot, #797) and, for a kill, shards ▽ in the
+ * if bonus), a flash, sparks (■, bigger for a bonus shot, #812) and, for a kill, shards ▽ in the
  * colour of the side that lost the unit; two shots that meet draw ✕, rays of both colours and sparks.
  */
 export function impactParticles(emit: Emit, impact: Impact, u: number, look: ImpactLook): void {
@@ -290,7 +290,6 @@ export function impactParticles(emit: Emit, impact: Impact, u: number, look: Imp
       x: (contacts.own.x + contacts.enemy.x) / 2,
       y: (contacts.own.y + contacts.enemy.y) / 2,
     };
-    const sparkKind = impact.bonus ? 'chevron' : 'square';
     if (u < 0.5) {
       const p = u / 0.5;
       emit({
@@ -345,7 +344,7 @@ export function impactParticles(emit: Emit, impact: Impact, u: number, look: Imp
       speed: 30 * (0.6 + 0.4 * k) * s,
       colors: [FLASH_COLOR, colors.own, colors.enemy],
       size: (impact.bonus ? 9 : 6) * s,
-      kind: sparkKind,
+      kind: 'square',
       add: true,
       seed: look.seed + 4,
     });
@@ -390,7 +389,7 @@ export function impactParticles(emit: Emit, impact: Impact, u: number, look: Imp
     cone: [shotAngle, 2.6],
     colors: [FLASH_COLOR, shooterColor],
     size: (impact.bonus ? 9.5 : 6.4) * s,
-    kind: impact.bonus ? 'chevron' : 'square',
+    kind: 'square',
     add: true,
     seed: look.seed + 1,
   });

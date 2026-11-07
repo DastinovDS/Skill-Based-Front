@@ -1,7 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import type { BakeSpec } from './bake.ts';
-import { provinceBodySpec, warehouseBarSpec } from './bakedShapes.ts';
+import { feedRowSpec, octagramSpec, provinceBodySpec, warehouseBarSpec } from './bakedShapes.ts';
 import { BAR_SEGMENT, ENEMY, PLATE_FILL, PROVINCE, YOU } from './style.ts';
 
 // The look of the shapes of C1 (#348, ui-style 9.4), read from what they draw. Nothing here needs
@@ -125,5 +125,30 @@ describe('warehouseBarSpec: the places of a warehouse (C1)', () => {
     const bar = warehouseBarSpec(3, 0, YOU, 1);
     // The sprite is as wide as the places plus the base and the room for the shadow.
     expect(bar.box.width).toBeGreaterThan(4 * BAR_SEGMENT.pitch);
+  });
+});
+
+describe('the baked shapes of the bonus shot and the kill feed (#812)', () => {
+  it('has a key per look, one for each part, side and colour of an octagram', () => {
+    const keys = [
+      octagramSpec('outer', false, YOU).key,
+      octagramSpec('inner', false, YOU).key,
+      octagramSpec('outer', true, ENEMY).key,
+      octagramSpec('inner', true, ENEMY).key,
+    ];
+    expect(new Set(keys).size).toBe(4);
+    expect(octagramSpec('inner', false, YOU).key).toBe(keys[1]);
+  });
+
+  it('boxes the larger square of an octagram around its origin, turned or not', () => {
+    const outer = octagramSpec('outer', false, YOU).box;
+    const inner = octagramSpec('inner', false, YOU).box;
+    expect(outer.width).toBeGreaterThan(inner.width);
+    expect(outer.x).toBeCloseTo(-outer.width / 2);
+  });
+
+  it('bakes two looks of a feed row, the winner outlined thicker', () => {
+    expect(feedRowSpec(true).key).not.toBe(feedRowSpec(false).key);
+    expect(feedRowSpec(true).box.width).toBeGreaterThan(100);
   });
 });

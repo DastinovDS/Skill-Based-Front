@@ -7,6 +7,7 @@ import type { ParticleSpec } from './particles.ts';
 import { ShotView } from './shotView.ts';
 import { GLOW_SPOT_COUNT, SPARKS, TRACER_END_SHARE, tracerBudget } from './shotLayout.ts';
 import { FIGHT_FX_STRENGTH } from './style.ts';
+import { testSprites } from './testSprites.ts';
 
 const map = {
   nodes: [
@@ -42,7 +43,7 @@ afterEach(() => {
 
 function setup(me: 0 | 1 = 0) {
   const parent = new Container();
-  const view = new ShotView(parent, me);
+  const view = new ShotView(parent, me, testSprites());
   const run = (
     rounds: readonly RoundFx[],
     tick: number,
@@ -67,35 +68,39 @@ const heads = (particles: readonly ParticleSpec[]): string[] =>
   particles.filter((p) => p.kind.startsWith('head')).map((p) => p.kind);
 
 describe('ShotView: the form of a tracer by the fields of the round', () => {
-  it('draws a head by the form: a square for a real shot, a chevron for a bonus one, by side', () => {
+  it('draws a head by the form: a square for a real shot, an octagram for a bonus one, by side', () => {
     const { run, view } = setup();
     // The own real shot that killed a unit: the own square, one tail.
     expect(heads(run([fx([1, 0], [0, 1])], 101))).toEqual(['headOwn']);
     expect(view.shown()).toBe(1);
-    // An own bonus shot: the own chevron (#797).
-    expect(heads(run([fx([1, 0], [0, 0], [1, 0])], 101))).toEqual(['headOwnBonus']);
-    // The enemy's, real and bonus: the squares and chevrons of the opponent.
+    expect(view.bonusHeads()).toBe(0);
+    // An own bonus shot: two baked squares instead of a particle head (#812).
+    expect(heads(run([fx([1, 0], [0, 0], [1, 0])], 101))).toEqual([]);
+    expect(view.bonusHeads()).toBe(1);
+    // The enemy's, real and bonus.
     expect(heads(run([fx([0, 1], [1, 0])], 101))).toEqual(['headEnemy']);
-    expect(heads(run([fx([0, 1], [0, 0], [0, 1])], 101))).toEqual(['headEnemyBonus']);
+    expect(view.bonusHeads()).toBe(0);
+    expect(heads(run([fx([0, 1], [0, 0], [0, 1])], 101))).toEqual([]);
+    expect(view.bonusHeads()).toBe(1);
     view.destroy();
   });
 
   it('draws two heads for two shots that cancel, a bonus one against a real one', () => {
     const { run, view } = setup();
-    expect(heads(run([fx([1, 1], [0, 0], [1, 0])], 101))).toEqual(['headOwnBonus', 'headEnemy']);
+    expect(heads(run([fx([1, 1], [0, 0], [1, 0])], 101))).toEqual(['headEnemy']);
+    expect(view.bonusHeads()).toBe(1);
     expect(view.shown()).toBe(2);
     view.destroy();
   });
 
-  it('draws a bonus tail hollow, with three chevrons behind the head, a real one with sparks', () => {
+  it('draws a bonus tail like a real one, with no chevron anywhere (#812), and sparks', () => {
     const { run, view } = setup();
     const real = run([fx([1, 0], [0, 1])], 102.5);
-    expect(real.filter((p) => p.kind === 'chevron')).toHaveLength(0);
     // The glow of the head and the soft spots along the tail.
     expect(real.filter((p) => p.kind === 'glow')).toHaveLength(1 + GLOW_SPOT_COUNT);
     expect(real.filter((p) => p.kind === 'square').length).toBeGreaterThan(0);
     const bonus = run([fx([1, 0], [0, 0], [1, 0])], 102.5);
-    expect(bonus.filter((p) => p.kind === 'chevron')).toHaveLength(3);
+    expect(bonus.filter((p) => p.kind === 'glow')).toHaveLength(1 + GLOW_SPOT_COUNT);
     view.destroy();
   });
 

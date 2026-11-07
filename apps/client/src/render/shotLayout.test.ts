@@ -4,7 +4,6 @@ import { fightPlace } from './fightFx.ts';
 import { CANCEL_SHARE, HIT_SHARE, impactsOf, type Contacts } from './fightImpact.ts';
 import {
   AFTERGLOW_SHARE,
-  ECHOES,
   MIN_BEND,
   MIN_REACH,
   SPARKS,
@@ -15,7 +14,7 @@ import {
   TRACER_END_SHARE,
   arcAt,
   brightness,
-  echoesOf,
+  octaAngles,
   pathPoints,
   shotPhase,
   shotsOf,
@@ -270,18 +269,22 @@ describe('the sparks and the echoes', () => {
     expect(sparksOf(shot, 0.9, 3, 1).length).toBeLessThanOrEqual(sparkCount(1));
   });
 
-  it('trail a bonus shot as three chevrons (#797), smaller and fainter behind it', () => {
-    const echoes = echoesOf(bonus, 0.95);
-    expect(echoes).toHaveLength(ECHOES.length);
-    expect(echoes.map((e) => e.size)).toEqual([...echoes.map((e) => e.size)].sort((a, b) => b - a));
-    expect(echoes.map((e) => e.alpha)).toEqual(
-      [...echoes.map((e) => e.alpha)].sort((a, b) => b - a),
-    );
+  it('turns the two squares of a bonus head against each other, easing in from a still start (#812)', () => {
+    const start = octaAngles(0, 20);
+    // The outer square starts turned 45 degrees, the inner one upright.
+    expect(start.outer).toBeCloseTo(Math.PI / 4);
+    expect(start.inner).toBeCloseTo(0);
+    const later = octaAngles(10, 20);
+    expect(later.outer).toBeGreaterThan(start.outer);
+    expect(later.inner).toBeLessThan(start.inner);
+    // The first tick turns less than a tick in the middle of the flight does.
+    const first = octaAngles(1, 20).outer - start.outer;
+    const mid = octaAngles(11, 20).outer - octaAngles(10, 20).outer;
+    expect(first).toBeLessThan(mid);
   });
 
   it('keep the particles of a tracer in a small budget', () => {
     expect(tracerBudget(shot)).toBeLessThanOrEqual(11);
-    expect(tracerBudget(bonus)).toBeLessThanOrEqual(14);
-    expect(tracerBudget(bonus)).toBeGreaterThan(tracerBudget(shot));
+    expect(tracerBudget(bonus)).toBeLessThanOrEqual(11);
   });
 });

@@ -161,6 +161,24 @@ function setup() {
     );
     return found;
   };
+  const feedViews = (): Container[] => {
+    const found: Container[] = [];
+    walk(
+      (node) => {
+        if (labelOf(node) === 'fight-feed') found.push(node);
+      },
+      (node) => labelOf(node) === 'fight-feed',
+    );
+    return found;
+  };
+  /** The labels of the verdict glyphs shown. */
+  const glyphs = (): string[] => {
+    const found: string[] = [];
+    walk((node) => {
+      if (labelOf(node).startsWith('feed-glyph:')) found.push(labelOf(node));
+    });
+    return found;
+  };
   /** The box of what is drawn (an empty Graphics sits at the origin and would count in a Container's). */
   const extent = (): { width: number; height: number } => {
     let minX = Infinity;
@@ -178,7 +196,20 @@ function setup() {
     });
     return { width: maxX - minX, height: maxY - minY };
   };
-  return { layers, view, frame, texts, chips, badges, selfShots, arenaViews, extent, walk };
+  return {
+    layers,
+    view,
+    frame,
+    texts,
+    chips,
+    badges,
+    selfShots,
+    arenaViews,
+    feedViews,
+    glyphs,
+    extent,
+    walk,
+  };
 }
 
 describe('FightView', () => {
@@ -240,19 +271,22 @@ describe('FightView', () => {
     view.destroy();
   });
 
-  it('keeps the plate of a fight that has just ended clear of the live one at the same city (#360)', () => {
-    const { view, frame, arenaViews } = setup();
+  it('keeps the kill feed of a fight that has just ended clear of the live plate at the same city (#812)', () => {
+    const { view, frame, arenaViews, feedViews } = setup();
     // One fight goes on in the city, another has just ended there.
     view.update(frame(snapshot([fightAt({ id: 'a' })], 160)), [ended(160, 0, true)], ROUND, false);
     const arenas = arenaViews();
-    expect(arenas).toHaveLength(2);
-    const k = arenas[0]?.scale.x ?? 1;
-    const [live, end] = arenas;
-    if (live === undefined || end === undefined) throw new Error('no arena');
-    const apartX = Math.abs(live.x - end.x) >= 2 * PLATE.halfWidth * k;
-    const apartY = Math.abs(live.y - end.y) >= 2 * PLATE.halfHeight * k;
+    expect(arenas).toHaveLength(1);
+    const feeds = feedViews();
+    expect(feeds).toHaveLength(1);
+    const [live] = arenas;
+    const [feed] = feeds;
+    if (live === undefined || feed === undefined) throw new Error('no arena');
+    const k = live.scale.x;
+    const apartX = Math.abs(live.x - feed.x) >= (PLATE.halfWidth + 59) * k;
+    const apartY = Math.abs(live.y - feed.y) >= (PLATE.halfHeight + 72) * k;
     expect(apartX || apartY).toBe(true);
-    // The live fight keeps the usual spot; the one that ended moved off it.
+    // The live fight keeps the usual spot.
     const place = fightPlace(map, city, null, null, radiusOf);
     if (place === undefined) throw new Error('no place');
     const usual = arenaCenter(place, 1);
@@ -604,17 +638,19 @@ describe('FightView', () => {
     }
   });
 
-  it('tells the end: captured, held, both bounced, in the page language', () => {
-    const { view, frame, texts } = setup();
+  it('tells the end as a kill feed: a row for each side with its losses, the verdict glyph on the winner (#812)', () => {
+    const { view, frame, texts, glyphs, feedViews } = setup();
     view.update(frame(snapshot([], 160)), [ended(160, 0, true)], ROUND, false);
-    expect(texts()).toContain('Captured');
+    // The losses of the whole fight: own then the opponent's, two rows in one feed.
+    expect(texts().filter((text) => text.startsWith('−'))).toEqual(['−1', '−2']);
+    expect(feedViews()).toHaveLength(1);
+    expect(glyphs()).toEqual(['feed-glyph:captured']);
     view.update(frame(snapshot([], 160)), [ended(160, 1, false)], ROUND, false);
-    expect(texts()).toContain('Held');
+    expect(glyphs()).toEqual(['feed-glyph:held']);
+    // Nobody won: the rows stand without a verdict.
     view.update(frame(snapshot([], 160)), [ended(160, null, false)], ROUND, false);
-    expect(texts()).toContain('Both retreated');
-    // The losses of the whole fight sit in the halves of the plate: own left, enemy right.
+    expect(glyphs()).toEqual([]);
     expect(texts()).toContain('−1');
-    expect(texts()).toContain('−2');
     view.destroy();
   });
 
@@ -622,7 +658,7 @@ describe('FightView', () => {
     const { view, frame, texts } = setup();
     const events = [ended(160, 0, true)];
     view.update(frame(snapshot([], 160 + ROUND)), events, ROUND, false);
-    expect(texts()).toContain('Captured');
+    expect(texts()).toContain('−2');
     view.update(frame(snapshot([], 160 + ROUND * 2)), events, ROUND, false);
     expect(texts()).toEqual([]);
     view.destroy();

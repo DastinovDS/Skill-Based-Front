@@ -528,6 +528,28 @@ export const WAVE_MS = 500;
 export const WAVE_FILL_ALPHA = 0.28;
 export const WAVE_STROKE = { width: 3, alpha: 0.9 } as const;
 export const LOSS_FONT_SIZE = 13;
+/**
+ * The kill feed of a finished fight (#812, variant 9 of the mockup fight-bonus-and-outcome.html): two rows
+ * beside the node, own then the opponent's, each a chip and the losses of the whole fight; the winner's row is
+ * outlined thick and carries the verdict glyph, the other has a thin grey outline (px at 100%).
+ */
+export const FEED = {
+  halfWidth: 59,
+  rowHeight: 34,
+  rowGap: 4,
+  radius: 9,
+  chipX: -37,
+  textX: 6,
+  glyphX: 41,
+  glyphScale: 1.35,
+  fontSize: 19,
+  fillAlpha: 0.94,
+  winner: { width: 2.4, color: PAPER },
+  other: { width: 1.4, color: 0x96a0ac, alpha: 0.55 },
+  /** The feed slides in from this far (px), in this share of its life. */
+  slide: 30,
+  slideShare: 0.08,
+} as const;
 
 // --- Fight effects on the map, E3 "Expressive" (ui-style 27.3, 29; #351) -----------------------------
 /**
