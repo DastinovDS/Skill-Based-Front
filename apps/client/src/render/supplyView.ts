@@ -1,5 +1,4 @@
 import { HELMET_SCALE, helmet } from '../units/helmet.ts';
-import { unitStyle } from '../units/unitStyle.ts';
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { t, tf, getLocale } from '../i18n/index.ts';
 import { formatSeconds } from '../hud/format.ts';
@@ -104,7 +103,7 @@ interface FlowRun {
  * - the own packets gliding along their pipes: a circle growing with the charges, a transfer a square;
  * - own cities cut off from the capital: hatched, with a dashed ring and the time to the next
  *   starvation;
- * - the enemy as presence only: a hollow triangle where it is seen now, without a number.
+ * - the enemy as presence only: a hollow enemy helmet where it is seen now, without a number.
  *
  * While a transfer is being picked, the source is ringed and the cities a click would pick get
  * dashed rings. The snapshot part is redrawn only when the snapshot or the overlay changes; the
@@ -606,7 +605,6 @@ export class SupplyView {
   private drawPresence(scene: SupplyScene): void {
     const g = this.plates;
     const { side, width, angle, gap } = SUPPLY_PRESENCE;
-    const h = (side * Math.sqrt(3)) / 2;
     for (const mark of scene.presence) {
       let at: Point | undefined;
       if (mark.kind === 'node') {
@@ -617,21 +615,12 @@ export class SupplyView {
         at = ends && edgePoint(ends.a, ends.b, true, 500);
       }
       if (at === undefined) continue;
-      if (unitStyle() === 'helmet') {
-        // A hollow enemy helmet facing left (the sign of a unit, #784) in the enemy colour: "he is here".
-        const helm = helmet('enemy', side * HELMET_SCALE);
-        const place = (p: Point): Point => ({ x: at.x - p.x, y: at.y + p.y });
-        helm.strap
-          .map(place)
-          .forEach((p, i) => (i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y)));
-        g.stroke({ width, color: ENEMY, cap: 'round', join: 'round' });
-        g.poly(helm.dome.map(place).flatMap((p) => [p.x, p.y]))
-          .fill({ color: BG, alpha: 0.9 })
-          .stroke({ width, color: ENEMY, join: 'round' });
-        continue;
-      }
-      // A hollow inverted triangle (the sign of a unit) in the enemy colour: "he is here".
-      g.poly([at.x - side / 2, at.y - h / 2, at.x + side / 2, at.y - h / 2, at.x, at.y + h / 2])
+      // A hollow enemy helmet facing left (the sign of a unit, #784) in the enemy colour: "he is here".
+      const helm = helmet('enemy', side * HELMET_SCALE);
+      const place = (p: Point): Point => ({ x: at.x - p.x, y: at.y + p.y });
+      helm.strap.map(place).forEach((p, i) => (i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y)));
+      g.stroke({ width, color: ENEMY, cap: 'round', join: 'round' });
+      g.poly(helm.dome.map(place).flatMap((p) => [p.x, p.y]))
         .fill({ color: BG, alpha: 0.9 })
         .stroke({ width, color: ENEMY, join: 'round' });
     }

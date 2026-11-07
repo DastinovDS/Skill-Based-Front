@@ -21,7 +21,7 @@ describe('pickAt, size of the click area of a group', () => {
   const lonely = new Map([['g', spot(at.x, at.y - 200, 24)]]);
 
   it('is at least 28 px on screen when zoomed out', () => {
-    // Scale 0.5: the triangle is drawn 40 world units wide (20 px), the click area 56 (28 px).
+    // Scale 0.5: the size step is drawn 40 world units wide (20 px), the click area 56 (28 px).
     expect(pickAt(map, off(27), { groups: lonely }, 0.5)).toEqual({ kind: 'group', id: 'g' });
     expect(pickAt(map, off(29), { groups: lonely }, 0.5)?.kind).not.toBe('group');
   });

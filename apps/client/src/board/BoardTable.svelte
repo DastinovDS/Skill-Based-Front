@@ -215,7 +215,7 @@
     vertical-align: -1px;
   }
 
-  /* The own row: a band and a bar at the left edge, the own triangle and "You" for assistive technology. */
+  /* The own row: a band and a bar at the left edge, the own helmet and "You" for assistive technology. */
   tr.me :global(td) {
     background: #1a2740;
   }

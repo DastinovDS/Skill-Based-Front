@@ -119,7 +119,7 @@ describe('ResultScreen', () => {
     expect(document.querySelectorAll('.stats > div')).toHaveLength(1);
   });
 
-  it('marks the outcome by shape: our triangle, the enemy one, both', () => {
+  it('marks the outcome by shape: our helmet, the enemy one, both', () => {
     render(0, end(0));
     expect(document.querySelectorAll('.verdict svg')).toHaveLength(1);
     document.body.innerHTML = '';

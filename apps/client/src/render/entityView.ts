@@ -41,7 +41,7 @@ import {
 
 const ORIGIN: Point = { x: 0, y: 0 };
 
-/** Radius of a token on a road for spreading, as a share of its side (the triangle plus a margin). */
+/** Radius of a token on a road for spreading, as a share of its size step (the helmet plus a margin). */
 const SPREAD_RADIUS = 0.55;
 
 function other(player: PlayerId): PlayerId {
@@ -87,7 +87,7 @@ interface BuildMark {
 
 /**
  * Everything the snapshot puts on top of the map (CLI-04, #60; units and packets: ui-style 9.5 and
- * 9.6): warehouse bars, own groups as inverted triangles (no trail: the arrow of their order is the intent view's), own packets gliding
+ * 9.6): warehouse bars, own groups as helmets (no trail: the arrow of their order is the intent view's), own packets gliding
  * along roads into and out of the city icons, what is known about enemies (a marker per city or
  * road, with numbers only where the snapshot has them), intents of both players as arrows, road
  * builds (DEC-28, item 7: a hazard tape under the lanes of the road with the part done, a plate
@@ -285,7 +285,7 @@ export class EntityView implements EnemyAnchors {
     return tokens;
   }
 
-  /** Camera scale (CSS px per world unit): triangles never get smaller than 20 px on screen. */
+  /** Camera scale (CSS px per world unit): unit tokens never get smaller than 20 px on screen. */
   setCameraScale(scale: number): void {
     if (scale === this.cameraScale) return;
     this.cameraScale = scale;
@@ -310,11 +310,6 @@ export class EntityView implements EnemyAnchors {
   /** The plate of a build keeps the minimum size of a symbol on screen (ui-style 22). */
   private plateScale(): number {
     return symbolScale(BUILD_PLATE.height, this.cameraScale);
-  }
-
-  /** The unit look changed (#784): the enemy markers, set only on a new snapshot, are drawn again. */
-  restyle(): void {
-    if (this.base !== null) this.applyBase(this.base);
   }
 
   update(frame: RenderFrame): void {
@@ -584,7 +579,7 @@ export class EntityView implements EnemyAnchors {
       const normal = fromIsA
         ? sideways(ends.a, ends.b, ORIGIN, 1)
         : sideways(ends.b, ends.a, ORIGIN, 1);
-      // The triangle and the number pill under its tip.
+      // The helmet and the pill under it.
       const radius =
         (entry.token.side * SPREAD_RADIUS + (UNIT_LABEL.height + UNIT_LABEL.gap) / 2) *
         symbolScale(entry.token.side, this.cameraScale);

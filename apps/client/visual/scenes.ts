@@ -39,25 +39,6 @@ export const SCENES: readonly {
 ];
 
 /**
- * The scenes with a second reference in the helmet look of the units (#784, `<scene>-helmet.png`):
- * the main ones, where groups, cities, the fog, fights, figures and orders show.
- */
-export const HELMET_SCENES: readonly string[] = [
-  'snapshot',
-  'snapshot_fog',
-  'snapshot_clash',
-  'ranges',
-  'fights',
-  'fights_kill',
-  'artery',
-  'badges',
-  'fights_burn',
-  'figures',
-  'orders',
-  'flow',
-];
-
-/**
  * The screens before a match (`/?menu=<id>`, src/dev/menuScenes.ts, #471): shot by `mise run shots`
  * as `menu-<id>.png` (and in grey scale); they have no reference screenshots.
  */

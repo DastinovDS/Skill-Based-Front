@@ -6,11 +6,8 @@ import {
   dashSegments,
   edgePoint,
   chargeLevel,
-  chargeTicks,
   packetFade,
-  triangleCorners,
-  triangleHeight,
-  triangleSide,
+  unitSide,
   roadPosition,
   sideways,
   timeLeftLabel,
@@ -19,13 +16,13 @@ import {
 const A = { x: 0, y: 0 };
 const B = { x: 100, y: 0 };
 
-describe('unit triangles (9.5)', () => {
+describe('unit tokens (9.5)', () => {
   it('steps the side by the number of units, 30 when unknown', () => {
-    expect([1, 3, 4, 7, 8, 15, 16, 99].map(triangleSide)).toEqual([24, 24, 30, 30, 36, 36, 42, 42]);
-    expect(triangleSide(null)).toBe(30);
+    expect([1, 3, 4, 7, 8, 15, 16, 99].map(unitSide)).toEqual([24, 24, 30, 30, 36, 36, 42, 42]);
+    expect(unitSide(null)).toBe(30);
   });
 
-  it('fills from the tip by charged / units of the height, so the height reads the share', () => {
+  it('fills from the bottom by charged / units of the height, so the height reads the share', () => {
     expect(chargeLevel(4, 1)).toBe(0.25);
     expect(chargeLevel(4, 2)).toBe(0.5);
     expect(chargeLevel(4, 4)).toBe(1);
@@ -33,23 +30,6 @@ describe('unit triangles (9.5)', () => {
     expect(chargeLevel(0, 0)).toBe(0);
     expect(chargeLevel(2, 9)).toBe(1);
     expect(chargeLevel(10, 3)).toBeCloseTo(0.3);
-  });
-
-  it('puts a divider between every two units of a small group, none above the cap', () => {
-    expect(chargeTicks(4, 8)).toEqual([0.25, 0.5, 0.75]);
-    expect(chargeTicks(2, 8)).toEqual([0.5]);
-    expect(chargeTicks(1, 8)).toEqual([]);
-    expect(chargeTicks(0, 8)).toEqual([]);
-    expect(chargeTicks(8, 8)).toHaveLength(7);
-    expect(chargeTicks(9, 8)).toEqual([]);
-  });
-
-  it('points down: the tip is the lowest corner, the box is centred on the origin', () => {
-    const [left, right, tip] = triangleCorners(24);
-    expect(left.y).toBeCloseTo(-triangleHeight(24) / 2);
-    expect(right.x).toBe(12);
-    expect(tip).toEqual({ x: 0, y: triangleHeight(24) / 2 });
-    expect(triangleCorners(24, true)[2]).toEqual({ x: 0, y: 0 });
   });
 
   it('fades a packet into a city icon: 30% and see-through at the centre, whole outside', () => {

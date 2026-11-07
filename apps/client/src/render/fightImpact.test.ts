@@ -24,7 +24,6 @@ import {
 } from './fightImpact.ts';
 import type { ParticleSpec } from './particles.ts';
 import { FIGHT_FX_STRENGTH, FIGHT_GAP } from './style.ts';
-import { DEFAULT_UNIT_STYLE, setUnitStyle } from '../units/unitStyle.ts';
 
 const map = {
   nodes: [
@@ -288,17 +287,6 @@ describe('the particles of an impact', () => {
     );
     expect(cancel.has('cross')).toBe(true);
     expect(cancel.has('helmet')).toBe(false);
-  });
-
-  it('breaks a killed unit into shards of the unit look the viewer chose (#784)', () => {
-    setUnitStyle('triangle', null);
-    try {
-      const kinds = new Set(collect(impact({}), 0.1).map((p) => p.kind));
-      expect(kinds.has('triangle')).toBe(true);
-      expect(kinds.has('helmet')).toBe(false);
-    } finally {
-      setUnitStyle(DEFAULT_UNIT_STYLE, null);
-    }
   });
 
   it('puts the shards in the colour of the side that lost the unit', () => {

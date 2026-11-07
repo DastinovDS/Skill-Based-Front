@@ -827,6 +827,15 @@ test('shot of the help sheet', async ({ page }) => {
   await shootBoth(page, 'help');
 });
 
+// A tall window: the whole help sheet, its bottom (the sound volume) included, without scrolling.
+test('shot of the whole help sheet', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await openScene(page, 'snapshot_fog');
+  await page.keyboard.press('?');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.screenshot({ path: join(OUT, 'help-tall.png') });
+});
+
 // The whole page of the rules at once: a tall window, so the panel needs no scrolling.
 test('shot of the whole How to play screen (CLI-13)', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 2300 });

@@ -78,7 +78,7 @@ export function cellAt(
  * What a click at `world` hits: an own group token on a road, or the icon of own units in a city
  * (the topmost, i.e. the last drawn), then the nearest city circle, then the nearest road, then
  * the area of a city (any other place inside its cell). `scale` is the camera scale (CSS px per
- * world unit): a triangle is hit within at least 28 px on screen, whatever the zoom (`hitHalf`).
+ * world unit): a unit token is hit within at least 28 px on screen, whatever the zoom (`hitHalf`).
  * Pure: the order of the checks is the only rule.
  */
 export function pickAt(map: MapFile, world: Point, scene: PickScene, scale = 1): PickHit | null {
