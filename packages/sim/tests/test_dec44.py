@@ -10,8 +10,10 @@ Expected values come from the table of DEC-44 (mechanics.md, section 6), worked 
 
 A counter starts at 0 and grows by 1 in ``economy`` of every tick, so a player who stays in a
 stance gets its quantum at the ticks ``P, 2P, ...``. A command of tick ``t`` is applied before
-``economy`` of tick ``t``, so after a change at tick ``t`` the counters show 1 at the end of the
-tick and the first quantum comes at ``t + P - 1``.
+``economy`` of tick ``t``. A real change carries each counter over to the periods of the new
+stance, ``c * P_new // P_old`` (revised 2026-11-07, #792), so after a change at tick ``t`` the
+counter shows ``c' + 1`` at the end of the tick and the next quantum comes at
+``t + P_new - c' - 1``.
 
 Map ``dec41`` (rot180): player 0 owns K = 0 (capital) and A = 1, player 1 the mirror, ``16 - n``.
 ``K`` starts with a warehouse of 6 under ``mvp-4``; the tests below empty it so that nothing spills.
@@ -42,13 +44,14 @@ from gow_sim.ruleset import (
     Ruleset,
     RulesetError,
     Stance,
+    StanceTable,
     load_ruleset,
     parse_ruleset,
     ruleset_hash,
 )
 from gow_sim.ruleset import to_canonical as rules_canonical
 from gow_sim.state import Event, GameState, from_canonical, initial_state, state_hash, to_canonical
-from gow_sim.systems.economy import economy, factory_period
+from gow_sim.systems.economy import carry, economy, factory_period
 from gow_sim.view import PlayerView, project
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -205,36 +208,141 @@ def test_the_cap_and_the_burn_stay() -> None:
 # The switch -------------------------------------------------------------------------------------
 
 
-def test_a_switch_resets_both_counters() -> None:
-    """Balance to War at tick 150. Before it the CP counter holds 49 (the quantum of tick 100, then
-    ticks 101..149) and the capital counter 149. After the change tick 150 counts as 1, so the CP
-    quantum comes at 150 + 80 - 1 = 229 and 309, the charge at 150 + 400 - 1 = 549."""
+# The carry of 2026-11-07 (#792, DEC-44 item 4 revised): ``new = old * new_period // old_period``.
+CARRY_TABLE = [
+    # (counter, before, stance before, stance after, after): worked out by hand.
+    ("capital", 300, Stance.WAR, Stance.ECONOMY, 75),  # 300 * 100 // 400
+    ("cp", 60, Stance.WAR, Stance.ECONOMY, 150),  # 60 * 200 // 80
+    ("cp", 50, Stance.BALANCE, Stance.WAR, 40),  # 50 * 80 // 100
+    ("cp", 33, Stance.BALANCE, Stance.WAR, 26),  # 33 * 80 // 100 = 26.4, rounded down
+]
+
+
+def _periods(counter: str) -> StanceTable:
+    assert RULES.stances is not None
+    if counter == "cp":
+        return RULES.stances.cp_period_ticks
+    return RULES.stances.capital_period_ticks
+
+
+@pytest.mark.parametrize(
+    ("counter", "before", "old", "new", "after"), CARRY_TABLE, ids=["C1", "C2", "C3", "C4"]
+)
+def test_the_carry_table(counter: str, before: int, old: Stance, new: Stance, after: int) -> None:
+    periods = _periods(counter)
+    assert carry(before, periods.of(old), periods.of(new)) == after
     state = _state()
-    _run(state, 149)
     me = state.players[0]
-    assert (me.cp_ticks, me.capital_ticks) == (49, 149)
-    switches = {150: Stance.WAR}
-    assert _cp_ticks(state, 320, switches) == [229, 309]
-    assert (me.cp_ticks, me.capital_ticks) == (11, 171)
-    assert _charges(_run(state, 560), K) == [549]
+    me.stance = old
+    setattr(me, f"{counter}_ticks", before)
+    assert isinstance(_set(state, new), Ok)
+    assert getattr(me, f"{counter}_ticks") == after
 
 
-def test_progress_is_lost_right_before_a_quantum() -> None:
-    """The counters hold 99 and 199 at tick 199; a change at tick 200 takes the quantum of that
-    tick away: Economy gives its CP at 200 + 200 - 1 = 399 and its charge at 299."""
+def test_war_300_ticks_then_economy() -> None:
+    """C1 and C2 in a match: War from tick 1, so at the end of tick 300 the CP counter holds
+    300 - 3 * 80 = 60 and the capital counter 300. Economy at tick 301 carries them to 150 and 75;
+    tick 301 makes them 151 and 76, so the CP quantum comes at 301 + 49 = 350 and the charges of
+    the capital at 301 + 24 = 325, 425."""
     state = _state()
+    _run(state, 300, {1: Stance.WAR})
+    me = state.players[0]
+    assert (me.cp_ticks, me.capital_ticks) == (60, 300)
+    state.tick = 301
+    assert isinstance(_set(state, Stance.ECONOMY), Ok)
+    assert (me.cp_ticks, me.capital_ticks) == (150, 75)
+    switches = {1: Stance.WAR, 301: Stance.ECONOMY}
+    assert _cp_ticks(_state(), 360, switches) == [80, 160, 240, 350]
+    assert _charges(_run(_state(), 430, switches), K) == [325, 425]
+
+
+def test_a_switch_carries_both_counters() -> None:
+    """C3 in a match: Balance to War at tick 151. Before it the counters hold 50 (the quantum of
+    tick 100, then ticks 101..150) and 150; War carries them to 50 * 80 // 100 = 40 and
+    150 * 400 // 200 = 300, tick 151 makes them 41 and 301. The CP quanta come at 151 + 39 = 190
+    and 270, the charge at 151 + 99 = 250."""
+    state = _state()
+    _run(state, 150)
+    me = state.players[0]
+    assert (me.cp_ticks, me.capital_ticks) == (50, 150)
+    switches = {151: Stance.WAR}
+    assert _cp_ticks(_state(), 280, switches) == [100, 190, 270]
+    assert _charges(_run(_state(), 640, switches), K) == [250]
+    assert _charges(_run(_state(), 650, switches), K) == [250, 650]
+
+
+def test_no_progress_is_lost_right_before_a_quantum() -> None:
+    """The counters hold 99 and 199 at the end of tick 199; Economy at tick 200 carries them to
+    99 * 200 // 100 = 198 and 199 * 100 // 200 = 99. Tick 200 makes the capital 100: its charge
+    comes at 200 as in Balance, then 300, 400; the CP counter is 199 and its quantum comes at 201
+    (the share it had, 99 of 100, is 198 of 200), then 401."""
     switches = {200: Stance.ECONOMY}
-    quanta = _cp_ticks(state, 400, switches)
-    assert quanta == [100, 399]
-    assert _charges(_run(_state(), 400, switches), K) == [299, 399]
+    assert _cp_ticks(_state(), 410, switches) == [100, 201, 401]
+    assert _charges(_run(_state(), 400, switches), K) == [200, 300, 400]
 
 
-def test_a_switch_back_does_not_return_the_progress() -> None:
-    """War at 150 and Balance again at 151: the counters are 1 and 1 at tick 151 (the change back
-    is real), so the next CP comes at 151 + 100 - 1 = 250 and the charge at 151 + 200 - 1 = 350."""
+def test_a_switch_back_costs_at_most_the_rounding() -> None:
+    """War at 150 and Balance again at 151. At 150: 49 and 149 carry to 39 and 298, then 40 and
+    299. At 151: back to 40 * 100 // 80 = 50 and 299 * 200 // 400 = 149, then 51 and 150. Without
+    the switch they would be 51 and 151: the next CP comes at 200 as before, the charge at 201
+    instead of 200."""
     switches = {150: Stance.WAR, 151: Stance.BALANCE}
-    assert _cp_ticks(_state(), 260, switches) == [100, 250]
-    assert _charges(_run(_state(), 360, switches), K) == [350]
+    state = _state()
+    _run(state, 151, switches)
+    assert (state.players[0].cp_ticks, state.players[0].capital_ticks) == (51, 150)
+    assert _cp_ticks(_state(), 260, switches) == [100, 200]
+    assert _charges(_run(_state(), 360, switches), K) == [201]
+
+
+PAIRS = [(a, b) for a in Stance for b in Stance if a is not b]
+
+
+@pytest.mark.parametrize(("a", "b"), PAIRS, ids=[f"{a}-{b}" for a, b in PAIRS])
+def test_a_switch_and_straight_back_never_raises_a_counter(a: Stance, b: Stance) -> None:
+    """A to B and back to A in one tick, for every value of both counters below the period of A:
+    each ends at or below where it was, so flipping never pays."""
+    state = _state()
+    me = state.players[0]
+    cp, capital = _periods("cp").of(a), _periods("capital").of(a)
+    for value in range(max(cp, capital)):
+        me.stance, me.cp_ticks, me.capital_ticks = a, value % cp, value % capital
+        before = (me.cp_ticks, me.capital_ticks)
+        commands = [PlayerCommand(0, 0, SetStance(b)), PlayerCommand(0, 1, SetStance(a))]
+        results, _ = apply_commands(state, RULES, commands)
+        assert all(isinstance(r.outcome, Ok) for r in results)
+        assert me.cp_ticks <= before[0] and me.capital_ticks <= before[1]
+        for counter, start in zip(("cp", "capital"), before, strict=True):
+            periods = _periods(counter)
+            there = carry(start, periods.of(a), periods.of(b))
+            assert carry(there, periods.of(b), periods.of(a)) <= start
+
+
+@pytest.mark.parametrize(("a", "b"), PAIRS, ids=[f"{a}-{b}" for a, b in PAIRS])
+def test_a_tick_in_another_stance_counts_at_its_rate_and_no_more(a: Stance, b: Stance) -> None:
+    """A to B at tick ``t`` and back at ``t + 1``: the one tick under B adds at most ``1 / P_B``
+    of a cycle, the rate of B, to the share the counter had (``c / P_A``). So a counter that B
+    makes slower never ends above the counter without the switch; one that B makes faster gains
+    what that tick under B is worth, which is the trade of the stance."""
+    state = _state()
+    me = state.players[0]
+    for counter in ("cp", "capital"):
+        periods = _periods(counter)
+        pa, pb = periods.of(a), periods.of(b)
+        for start in range(pa - 1):  # ``start + 1`` stays below P_A: no quantum without a switch
+            me.stance = a
+            setattr(me, f"{counter}_ticks", start)
+            state.nodes[K].warehouse = 0
+            state.tick = 1000
+            _set(state, b)
+            economy(state, RULES)
+            if getattr(me, f"{counter}_ticks") == 0:
+                continue  # the tick under B finished a cycle of B: a quantum at the rate of B
+            state.tick = 1001
+            _set(state, a)
+            back = getattr(me, f"{counter}_ticks")
+            assert back * pb <= start * pb + pa
+            if pb >= pa:
+                assert back <= start + 1
 
 
 def test_a_command_for_the_current_stance_changes_nothing() -> None:
@@ -266,7 +374,8 @@ def test_a_switch_of_one_player_leaves_the_other_alone() -> None:
     _run(state, 150)
     _set(state, Stance.WAR, player=1)
     assert (state.players[0].cp_ticks, state.players[0].capital_ticks) == (50, 150)
-    assert (state.players[1].cp_ticks, state.players[1].capital_ticks) == (0, 0)
+    # Player 1 carries 50 and 150 to 50 * 80 // 100 = 40 and 150 * 400 // 200 = 300.
+    assert (state.players[1].cp_ticks, state.players[1].capital_ticks) == (40, 300)
 
 
 # What the stance does not touch -----------------------------------------------------------------
@@ -407,7 +516,7 @@ def test_a_view_has_the_own_counters_only() -> None:
     _set(state, Stance.WAR, player=1)
     _run(state, 170)
     assert _views(state, 0) == (70, 170, Stance.BALANCE)
-    assert _views(state, 1) == (20, 20, Stance.WAR)
+    assert _views(state, 1) == (60, 320, Stance.WAR)  # 40 and 300 at tick 150, then 20 ticks
 
 
 def test_the_enemy_stance_and_counters_change_nothing_in_a_view() -> None:
@@ -455,6 +564,19 @@ def test_the_golden_games_of_the_version_before_are_unchanged(path: Path) -> Non
     assert after.split("\n")[1:] == before[1:]
 
 
+@pytest.mark.parametrize(
+    "path",
+    sorted(p for p in (TESTS_DIR / "golden" / "v42").glob("*.gz") if "stances" not in p.name),
+    ids=str,
+)
+def test_the_carry_changed_no_golden_game_without_the_section(path: Path) -> None:
+    """The carry of #792 (SIM 43) acts only under ``[stances]``: the other golden games of v42
+    are the same line by line in v43, only ``sim_version`` of the header differs."""
+    before = gzip.decompress(path.read_bytes()).decode().split("\n")
+    after = gzip.decompress((TESTS_DIR / "golden" / "v43" / path.name).read_bytes()).decode()
+    assert after.split("\n")[1:] == before[1:]
+
+
 def test_a_match_in_balance_is_a_match_of_sup200(
     expand_bot: Callable[[MapDef, Ruleset], Controller],
 ) -> None:
@@ -498,8 +620,9 @@ class _Script:
 
 def test_the_statistics_by_stance() -> None:
     """600 ticks, nobody spends. Player 0: Balance in ticks 1..145, War from tick 146: the CP of
-    tick 100 (3 -> 4 CP) in Balance, the War quanta at 146 + 79 = 225, 305, 385, 465 and 545, of
-    which only the first fits under the cap of 5 CP; the capital at 146 + 399 = 545. Player 1:
+    tick 100 (3 -> 4 CP) in Balance; the counters 45 and 145 carry to 36 and 290, so the War
+    quanta come at 146 + 43 = 189, 269, 349, 429, 509 and 589, of which only the first fits under
+    the cap of 5 CP, and the capital at 146 + 109 = 255. Player 1:
     Balance all match: CP at 100 and 200 (the cap), the capital at 200, 400 and 600."""
     recorder = MatchRecorder()
     run_headless(

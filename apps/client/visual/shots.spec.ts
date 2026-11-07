@@ -336,7 +336,7 @@ test('shot of the Supply layer with the pointer on a city (flow-hover-capital)',
 });
 
 // Stances of economy v2 (DEC-44, #772), the frozen scene `stances` under the rules of `mvp-4-stances`:
-// `menu-stances.png` and its `-gray` twin, the `Q` menu with the rates and the note on the reset.
+// `menu-stances.png` and its `-gray` twin, the `Q` menu with the rates and the note on the carried progress.
 test('shot of the stance menu under economy v2 (Q key)', async ({ page }) => {
   await page.goto('/?scene=stances&menus');
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');

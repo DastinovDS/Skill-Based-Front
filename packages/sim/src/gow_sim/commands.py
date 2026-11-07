@@ -32,13 +32,13 @@ Economy v2 (DEC-41, items 2, 3, 5, 7, 12, 14; ``economy.model = "v2"``): ``Build
 ``BuildBunker``, ``DrawLine`` and ``RemoveLine`` (free of CP; ``systems.lines``,
 ``systems.build``); the buildings are paid in charges by the progressive payment of item 7
 (``systems.build.pay``), so no charge check rejects them. ``SetStance`` (unless the ruleset has
-``[stances]``, DEC-44: then it is free, without a cooldown, and a real change resets the local
-progress), ``SetFront``, ``SetRearMin``, ``Transfer``, ``UpgradeRoad`` and ``SetMode(DEFENSE)``
-give ``FEATURE_DISABLED`` there, and the four new commands give it under v1. None of them is
-public. A planned ``Move`` of v2 names its requested bonus (``Move.bonus >= 1``, item 10) and
-gathers it in ``systems.orders``; ``ReleasePlan`` sends it at once (v1: ``FEATURE_DISABLED``).
-``SetAutoLines`` turns the auto-extension of the player's lines on or off (#665,
-``systems.lines``; free, not public; v1: ``FEATURE_DISABLED``).
+``[stances]``, DEC-44: then it is free, without a cooldown, and a real change carries the local
+progress over to the new periods, #792), ``SetFront``, ``SetRearMin``, ``Transfer``,
+``UpgradeRoad`` and ``SetMode(DEFENSE)`` give ``FEATURE_DISABLED`` there, and the four new
+commands give it under v1. None of them is public. A planned ``Move`` of v2 names its requested
+bonus (``Move.bonus >= 1``, item 10) and gathers it in ``systems.orders``; ``ReleasePlan`` sends
+it at once (v1: ``FEATURE_DISABLED``). ``SetAutoLines`` turns the auto-extension of the player's
+lines on or off (#665, ``systems.lines``; free, not public; v1: ``FEATURE_DISABLED``).
 Supply flow (DEC-43, ``supply.model = "flow"``): ``SetLeafShift`` sets the player's leaf shift
 (item B2; free, not public, no event; ``FEATURE_DISABLED`` under any other supply model);
 ``DrawLine``, ``RemoveLine`` and ``SetAutoLines`` give ``FEATURE_DISABLED`` (item A12).
@@ -1151,7 +1151,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             set_intent(state, group, None)
             return []
         case SetStance(stance=stance):
-            return set_stance(state, player, stance)
+            return set_stance(state, rules, player, stance)
         case SetFront(marker=marker, node=node):
             ps = state.players[player]
             ps.fronts = tuple(node if i == marker else f for i, f in enumerate(ps.fronts))

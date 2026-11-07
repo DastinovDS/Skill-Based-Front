@@ -570,7 +570,7 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | construction | `UpgradeRoad(edge)` | upgrading your own internal road by one level for CP (`orders.cost.build`), construction on an edge `Edge.build` (DEC-28, item 7) |
 | CP | `cp` | command points; flat regeneration, they do not grow with territory; stored in hundredths |
 | stance | `Stance.ECONOMY / BALANCE / WAR` | economy v1: the share of CP regeneration that goes into charges (DEC-02); economy v2 has no stances (DEC-41, item 1) unless the ruleset has the section `[stances]` (DEC-44, `rulesets/mvp-4-stances.toml`): then the stance sets the periods of the CP income and of the own capital |
-| stance progress | `PlayerState.cp_ticks`, `capital_ticks` | under `[stances]`: ticks since the last CP quantum and the last charge of the own capital; a counter that reaches the period of the stance fires and restarts, a real stance change sets both to 0 (DEC-44) |
+| stance progress | `PlayerState.cp_ticks`, `capital_ticks` | under `[stances]`: ticks since the last CP quantum and the last charge of the own capital; a counter that reaches the period of the stance fires and restarts, a real stance change carries each over to the new period, `ticks * new // old` rounded down (DEC-44, revised 2026-11-07, #792) |
 | player view | `PlayerView` | the state filtered by fog for a player or a bot |
 | VP | `vp` | victory points for holding cities |
 | auto-merge | `groups_merged` | your own group that finished moving in your own node, or was recruited there, merges with the node's group at the end of the tick (DEC-20) |

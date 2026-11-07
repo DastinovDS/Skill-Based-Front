@@ -71,7 +71,8 @@ war = 40 # "War" (BAL-02 iteration 3, H1: mvp-1 25)
 # income and the rate of the own capital only: built factories and a captured capital keep
 # factory.built_period_ticks on the global clock. Each player counts ticks since the last CP quantum and since
 # the last charge of the own capital; a counter that reaches the period of the stance fires its quantum and
-# restarts, and a real stance change sets both counters to 0. No cooldown, the change is free.
+# restarts. A real stance change carries each counter over: counter * new_period // old_period, rounded
+# down (owner decision 2026-11-07, #792). No cooldown, the change is free.
 
 [stances.cp_period_ticks]
 # Ticks per CP quantum (cp.per_period, 1 CP).

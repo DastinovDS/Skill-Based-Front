@@ -200,7 +200,8 @@ class EnemyCp:
         stances = rules.stances
         self.period = rules.cp.period_ticks
         """The shortest period of the CP income: under ``[stances]`` the enemy may sit in the
-        stance of the most CP from the first tick on (DEC-44), a change only loses progress."""
+        stance of the most CP from the first tick on (DEC-44); a change carries the share of
+        the cycle and rounds down, so no schedule of changes beats this period."""
         if stances is not None:
             self.period = min(stances.cp_period_ticks.of(s) for s in Stance)
         self.bound = rules.cp.start
