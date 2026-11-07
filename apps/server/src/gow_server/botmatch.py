@@ -28,7 +28,7 @@ from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchState
 from gow_server.maps import MapCatalog, choose_map
 from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, ServerFullError
 from gow_sim.maps import PLAYERS
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import Ruleset, apply_map_tempo
 
 Level = Literal["easy", "normal", "hard", "expert"]
 
@@ -83,7 +83,10 @@ async def create_bot_match(
     slot = secrets.randbelow(len(PLAYERS))
     bot_slot = 1 - slot
     controller = bot_factory(LEVEL_BOTS[body.level])(
-        entry.definition, rules, seed=secrets.randbits(SEED_BITS), player=bot_slot
+        entry.definition,
+        apply_map_tempo(rules, entry.definition),  # the periods the match plays (#803)
+        seed=secrets.randbits(SEED_BITS),
+        player=bot_slot,
     )
     accounts = [BOT_ACCOUNT, BOT_ACCOUNT]
     accounts[slot] = player.id

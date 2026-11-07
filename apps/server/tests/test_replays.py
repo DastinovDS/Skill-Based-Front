@@ -29,7 +29,14 @@ from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Match as SimMatch
 from gow_sim.match import run_headless
 from gow_sim.replay import ReplayWriter, read_replay, record_headless, replay_run
-from gow_sim.ruleset import Ruleset, Stance, load_ruleset, ruleset_hash
+from gow_sim.ruleset import (
+    Ruleset,
+    Stance,
+    apply_map_tempo,
+    archive_ruleset,
+    load_ruleset,
+    ruleset_hash,
+)
 from gow_sim.state import (
     Build,
     BuildKind,
@@ -404,6 +411,33 @@ def _check_fight_rounds(doc: dict[str, Any]) -> None:
             ]
             checked += 1
     assert checked > 0, "no fight round in this match: the check above was empty"
+
+
+def test_frames_of_a_map_tempo_match_name_the_given_ruleset(
+    tmp_path: Path, maps_dir: Path, line3: MapDef
+) -> None:
+    """DEC-46: the match plays the scaled rules, but the frames header names the ruleset as
+    given, the one the ``matches`` row and the replay header carry (``_header_agrees``)."""
+    source = tmp_path / "tempo.toml"
+    source.write_text(
+        (ROOT / "rulesets" / "test-short.toml").read_text()
+        + "\n[map_tempo]\nref_nodes = 49\nmin_pct = 50\nmax_pct = 150\n"
+    )
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    archive_ruleset(source, archive)
+    rules = load_ruleset(source)
+    played = apply_map_tempo(rules, line3)
+    assert played.cp.period_ticks == 2 * rules.cp.period_ticks  # 3 nodes: pct clamped to 50
+    log = tmp_path / "1.jsonl.gz"
+    bots = [BOTS["random_legal"](line3, played, seed=s, player=s) for s in (0, 1)]
+    record_headless(log, line3, rules, bots)
+
+    result = build_frames(log, tmp_path / "1.frames.json.gz", archive, maps_dir)
+
+    doc = json.loads(gzip.decompress(result.path.read_bytes()))
+    assert doc["ruleset_hash"] == ruleset_hash(rules) != ruleset_hash(played)
+    assert read_replay(log).header.ruleset_hash == ruleset_hash(rules)
 
 
 def test_log_with_a_wrong_hash_is_refused(

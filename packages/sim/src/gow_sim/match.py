@@ -24,7 +24,7 @@ from typing import Final, Protocol, runtime_checkable
 
 from gow_sim.commands import Command, CommandResult, PlayerCommand, Reject, apply_commands
 from gow_sim.maps import PLAYERS, MapDef
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import Ruleset, apply_map_tempo
 from gow_sim.state import Event, GameState, initial_state, state_hash
 from gow_sim.systems.build import build
 from gow_sim.systems.capacity import capacity
@@ -62,7 +62,7 @@ __all__ = [
     "run_headless",
 ]
 
-SIM_VERSION: Final = 43
+SIM_VERSION: Final = 44
 """Version of the rules and the system order; replays and golden hashes are per version."""
 
 HEADLESS_MATCH_KEY: Final = b"gow_sim headless match key 0001"
@@ -111,9 +111,13 @@ class Match:
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, match_key: bytes) -> None:
         check_match_key(match_key)
-        self.rules: Final = rules
+        self.source_rules: Final = rules
+        """The ruleset as given (its hash goes into a replay header)."""
+        self.rules: Final = apply_map_tempo(rules, mapdef)
+        """The rules this match plays: ``source_rules`` with ``[map_tempo]`` applied to the map
+        (DEC-46, #803); ``source_rules`` itself without the section."""
         self.match_key: Final = match_key
-        self.state: Final = initial_state(mapdef, rules)
+        self.state: Final = initial_state(mapdef, self.rules)
         self.results: list[CommandResult] = []
         """Results of the commands of the last ``step()``, in ``(player, seq)`` order."""
         self.outcome: Outcome | None = None

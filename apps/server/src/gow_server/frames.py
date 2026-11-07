@@ -298,7 +298,7 @@ def build_frames(
     document: dict[str, object] = {
         "format": FORMAT,
         "sim_version": SIM_VERSION,
-        "ruleset_hash": ruleset_hash(match.rules),
+        "ruleset_hash": ruleset_hash(match.source_rules),  # the ruleset as given (DEC-46)
         "map_id": state.map.meta.name,
         "map_hash": map_hash(state.map),
         "tick_hz": match.rules.tick_hz,
