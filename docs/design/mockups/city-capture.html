@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>City capture animation</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif}
+header{position:sticky;top:0;z-index:5;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--border)}
+.row{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.row+.row{margin-top:6px}
+h1{font-size:15px;margin:0 8px 0 0;font-weight:600}
+h1 a{color:var(--you);text-decoration:none;font-weight:400}
+fieldset{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center}
+legend{float:left;color:var(--dim);font-size:12px;min-width:50px;padding-right:6px;line-height:32px}
+.seg{display:flex;flex-wrap:wrap;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg label{position:relative;cursor:pointer;background:var(--surface2);border-right:1px solid var(--border)}
+.seg label:last-child{border-right:0}
+.seg input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.seg span{display:block;padding:6px 10px;min-height:32px;font-size:13px;white-space:nowrap}
+.seg input:checked+span{background:var(--you);color:#0d1117;font-weight:600}
+.seg input:focus-visible+span{outline:2px solid #f0f6fc;outline-offset:-2px}
+.tog{display:inline-flex;gap:6px;align-items:center;min-height:32px;padding:0 4px;font-size:13px;cursor:pointer}
+.tog input{width:16px;height:16px;margin:0;accent-color:var(--you)}
+button{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;min-height:32px;padding:0 12px;font:inherit;font-size:13px;cursor:pointer}
+button:focus-visible,select:focus-visible,input[type=range]:focus-visible{outline:2px solid #f0f6fc}
+input[type=range]{width:min(360px,60vw);accent-color:var(--you)}
+#clock{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim);min-width:64px}
+main{padding:10px 12px 28px}
+#panes{display:grid;gap:10px;justify-content:center}
+#panes.n1{grid-template-columns:minmax(0,1100px)}
+#panes.n2,#panes.n4{grid-template-columns:repeat(2,minmax(0,1fr))}
+#panes.all{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.pane{min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.cap{display:flex;gap:8px;align-items:center;padding:4px 8px;min-height:36px;font-size:13px}
+.cap b{font-weight:600}
+.cap .d{color:var(--dim);margin-left:auto;font-size:12px}
+.cap select{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font:inherit;min-height:28px}
+canvas{display:block;width:100%;height:auto;aspect-ratio:800/520;background:#0d1117}
+.all .pane{cursor:pointer}
+.gray canvas{filter:grayscale(1)}
+.rg canvas{filter:url(#deutan)}
+.gray.rg canvas{filter:grayscale(1)}
+@media (max-width:760px){#panes.n2,#panes.n4{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="deutan"><feColorMatrix type="matrix" values="0.625 0.375 0 0 0  0.7 0.3 0 0 0  0 0.3 0.7 0 0  0 0 0 1 0"/></filter></svg>
+<header>
+  <div class="row">
+    <h1>City capture <a href="https://github.com/DastinovDS/Skill-Based-Front/issues/819">#819</a></h1>
+    <fieldset><legend>Case</legend><div class="seg" id="case"></div></fieldset>
+    <fieldset><legend>Zoom</legend><div class="seg" id="zoom"></div></fieldset>
+    <fieldset><legend>Panes</legend><div class="seg" id="num"></div></fieldset>
+  </div>
+  <div class="row">
+    <fieldset><legend>Variant</legend><div class="seg" id="var"></div></fieldset>
+  </div>
+  <div class="row">
+    <button id="play" aria-pressed="true">Pause</button>
+    <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Time">
+    <span id="clock">0.00 s</span>
+    <div class="seg" id="spd"></div>
+    <label class="tog"><input type="checkbox" id="gray">Grayscale</label>
+    <label class="tog"><input type="checkbox" id="rg">Red-green</label>
+    <label class="tog"><input type="checkbox" id="rm">Reduced motion</label>
+  </div>
+</header>
+<main><div id="panes" class="n2"></div></main>
+<script>
+'use strict';
+/* Frames: the real client (dev build, map "narrows", ruleset mvp-4 numbers), drawn by its own renderer and
+   captured with Playwright: "before" (old owner), "mid" (the snapshot of the capture before the client's
+   450 ms fades start), "after" (settled). Every variant composites these real frames; the effect layer is
+   drawn with the client's own particle shapes (the glow and ring of particles.ts) and colours (style.ts). */
+const META = {"own-near":{"k":1.7538,"me":0,"flips":[{"n":18,"from":1,"to":0,"x":400,"y":260,"r":35.1,"cell":[[272.0,114.4],[268.0,135.2],[263.8,148.2],[260.8,153.9],[257.1,158.9],[252.5,163.0],[247.3,166.2],[235.8,170.6],[199.5,178.9],[180.8,184.6],[187.3,317.3],[190.6,335.7],[198.6,363.1],[201.3,381.5],[201.8,451.2],[221.3,446.3],[232.8,442.3],[288.5,415.3],[299.8,410.5],[316.8,405.3],[335.0,402.9],[347.5,403.8],[353.2,405.4],[358.3,407.8],[362.6,411.1],[366.1,415.1],[368.7,419.7],[370.4,424.7],[371.2,430.0],[371.1,435.5],[369.3,450.2],[369.5,453.0],[370.8,454.1],[376.6,451.4],[390.7,441.4],[406.4,431.6],[427.8,419.4],[439.3,414.7],[445.2,413.3],[451.1,413.0],[457.0,413.8],[462.7,415.8],[468.3,418.8],[478.7,427.0],[492.6,441.7],[510.5,465.2],[515.6,423.9],[518.8,410.9],[521.2,404.8],[528.0,393.5],[536.8,383.1],[560.5,358.0],[568.6,347.2],[571.9,341.4],[574.7,335.3],[579.2,322.4],[594.7,261.8],[594.7,247.7],[592.3,234.7],[588.3,222.5],[575.5,194.8],[564.7,166.5],[559.9,156.4],[557.0,152.2],[553.4,148.7],[549.1,146.0],[538.6,142.5],[485.1,156.5],[472.3,158.0],[466.2,157.5],[460.4,156.0],[454.8,153.5],[433.7,138.3],[428.1,135.1],[416.0,130.7],[402.9,128.9],[382.3,128.6],[369.0,129.1],[346.1,131.3],[341.1,131.2],[330.8,129.2],[296.8,118.1],[284.8,115.6]],"nbrs":[[757.8,393.3],[745.5,112.7],[361.4,-4.8],[-29.7,279.3]],"dx":0.999,"dy":-0.0449,"s0":-215.6,"s1":195.0,"t0":-208.3,"t1":223.2,"reach":430.1,"creach":275.4,"start":9,"perim":1430.6}]},"own-far":{"k":0.7015,"me":0,"flips":[{"n":18,"from":1,"to":0,"x":400,"y":185.6,"r":14.0,"cell":[[348.8,127.4],[347.2,135.7],[345.5,140.9],[344.3,143.2],[342.8,145.2],[341.0,146.8],[338.9,148.1],[334.3,149.9],[319.8,153.2],[312.3,155.5],[314.9,208.5],[316.3,215.9],[319.5,226.9],[320.5,234.2],[320.7,262.1],[328.5,260.2],[333.1,258.5],[355.4,247.7],[359.9,245.8],[366.7,243.8],[374.0,242.8],[379.0,243.2],[381.3,243.8],[383.3,244.8],[385.0,246.1],[386.4,247.7],[387.5,249.5],[388.2,251.5],[388.5,253.6],[388.4,255.8],[387.7,261.7],[387.8,262.8],[388.3,263.3],[390.6,262.2],[396.3,258.2],[402.6,254.3],[411.1,249.4],[415.7,247.5],[418.1,247.0],[420.5,246.8],[422.8,247.2],[425.1,248.0],[427.3,249.2],[431.5,252.4],[437.0,258.3],[444.2,267.7],[446.2,251.2],[447.5,246.0],[448.5,243.5],[451.2,239.0],[454.7,234.9],[464.2,224.9],[467.4,220.5],[468.8,218.2],[469.9,215.7],[471.7,210.6],[477.9,186.3],[477.9,180.7],[476.9,175.5],[475.3,170.7],[470.2,159.6],[465.9,148.2],[464.0,144.2],[462.8,142.5],[461.4,141.1],[459.6,140.0],[455.4,138.6],[434.0,144.3],[428.9,144.8],[426.5,144.7],[424.1,144.0],[421.9,143.0],[413.5,137.0],[411.2,135.7],[406.4,133.9],[401.1,133.2],[392.9,133.1],[387.6,133.3],[378.5,134.2],[376.4,134.1],[372.3,133.3],[358.7,128.9],[353.9,127.9]],"nbrs":[[543.1,239.0],[538.2,126.7],[384.6,79.7],[228.1,193.4]],"dx":0.999,"dy":-0.0449,"s0":-86.3,"s1":78.0,"t0":-83.3,"t1":89.3,"reach":172.1,"creach":110.1,"start":9,"perim":572.2}]},"enemy-near":{"k":1.7538,"me":0,"flips":[{"n":10,"from":0,"to":1,"x":400,"y":260,"r":35.1,"cell":[[301.8,-20.6],[273.7,7.4],[263.9,90.1],[262.0,103.5],[259.2,116.1],[246.5,151.4],[230.2,187.8],[221.0,220.7],[216.2,233.2],[209.2,244.2],[204.9,248.9],[200.2,253.0],[189.9,259.3],[184.6,261.7],[173.3,264.9],[154.5,267.0],[155.0,278.4],[156.6,283.8],[159.4,288.8],[163.4,293.3],[173.8,300.9],[191.7,310.4],[203.0,317.9],[212.8,327.2],[217.0,332.5],[223.7,344.1],[233.3,368.0],[238.5,379.0],[245.0,389.7],[252.7,400.3],[498.8,387.4],[518.1,384.1],[529.7,379.9],[547.3,372.2],[546.7,338.7],[547.4,326.9],[548.8,321.6],[551.3,316.8],[554.9,312.5],[559.4,308.8],[564.7,305.8],[577.0,301.8],[597.2,298.9],[638.5,295.1],[643.8,276.4],[645.2,256.3],[644.0,236.8],[639.5,206.8],[639.5,194.2],[641.0,182.0],[643.5,170.4],[648.3,152.7],[652.6,140.7],[533.5,129.2],[520.1,126.8],[508.0,122.4],[502.8,119.1],[494.6,110.5],[482.7,90.6],[461.9,59.3],[454.0,49.9],[449.3,46.2],[427.8,32.9],[401.7,11.0],[390.2,4.2],[377.6,-0.2],[350.7,-4.9],[338.1,-8.0]],"nbrs":[[49.2,154.8],[49.2,435.4],[435.1,523.1],[887.6,240.7]],"dx":-0.9992,"dy":0.0395,"s0":-257.1,"s1":245.6,"t0":-267.9,"t1":193.5,"reach":488.0,"creach":297.3,"start":52,"perim":1532.7}]},"enemy-far":{"k":0.7015,"me":0,"flips":[{"n":10,"from":0,"to":1,"x":400,"y":325.2,"r":14.0,"cell":[[360.7,213.0],[349.5,224.2],[345.6,257.3],[344.8,262.7],[343.7,267.7],[338.6,281.8],[332.1,296.4],[328.4,309.5],[326.5,314.5],[323.7,318.9],[322.0,320.8],[320.1,322.4],[316.0,325.0],[313.8,325.9],[309.3,327.2],[301.8,328.0],[302.0,332.6],[302.6,334.8],[303.8,336.8],[305.4,338.6],[309.5,341.6],[316.7,345.4],[321.2,348.4],[325.1,352.1],[326.8,354.2],[329.5,358.9],[333.3,368.4],[335.4,372.8],[338.0,377.1],[341.1,381.4],[439.5,376.2],[447.2,374.9],[451.9,373.2],[458.9,370.1],[458.7,356.7],[459.0,352.0],[459.5,349.9],[460.5,348.0],[461.9,346.2],[463.8,344.8],[465.9,343.6],[470.8,342.0],[478.9,340.8],[495.4,339.3],[497.5,331.8],[498.1,323.8],[497.6,316.0],[495.8,304.0],[495.8,298.9],[496.4,294.0],[497.4,289.4],[499.3,282.3],[501.0,277.5],[453.4,272.9],[448.0,272.0],[443.2,270.2],[441.1,268.9],[437.8,265.4],[433.1,257.5],[424.8,245.0],[421.6,241.2],[419.7,239.7],[411.1,234.4],[400.7,225.7],[396.1,222.9],[391.0,221.2],[380.3,219.3],[375.3,218.1]],"nbrs":[[259.7,283.2],[259.7,395.4],[414.0,430.5],[595.0,317.5]],"dx":-0.9992,"dy":0.0395,"s0":-102.8,"s1":98.2,"t0":-107.1,"t1":77.4,"reach":195.2,"creach":118.9,"start":52,"perim":613.1}]},"neutral-near":{"k":1.7538,"me":0,"flips":[{"n":12,"from":null,"to":0,"x":400,"y":344.2,"r":24.6,"cell":[[495.6,404.8],[494.1,401.2],[486.3,387.4],[482.6,375.3],[480.4,361.9],[474.9,313.1],[473.6,299.2],[473.3,285.6],[475.5,273.0],[478.0,267.1],[492.7,245.0],[499.2,233.1],[504.2,220.2],[512.2,193.4],[494.6,201.0],[483.0,205.2],[463.8,208.5],[217.6,221.4],[217.1,242.0],[215.7,254.6],[205.5,307.7],[204.1,320.4],[203.5,411.2],[202.3,431.2],[199.9,443.3],[193.4,467.7],[189.5,488],[428.1,488],[437.6,461.7],[443.7,449.5],[447.5,443.9],[451.8,438.7],[461.9,429.7],[467.5,426.0],[489.8,414.2],[493.5,411.3],[495.4,408.2]],"nbrs":[[14.2,256.5],[364.9,81.1]],"dx":0.1322,"dy":0.9912,"s0":-145.8,"s1":146.3,"t0":-215.8,"t1":121.5,"reach":395.7,"creach":254.9,"start":17,"perim":1141.4}]},"neutral-far":{"k":0.7015,"me":0,"flips":[{"n":12,"from":null,"to":0,"x":400,"y":430.5,"r":9.8,"cell":[[438.2,454.7],[437.7,453.3],[434.5,447.8],[433.0,442.9],[432.2,437.6],[430.0,418.0],[429.4,412.5],[429.3,407.1],[430.2,402.0],[431.2,399.7],[437.1,390.8],[439.7,386.0],[441.7,380.9],[444.9,370.1],[437.9,373.2],[433.2,374.9],[425.5,376.2],[327.0,381.4],[326.8,389.6],[326.3,394.7],[322.2,415.9],[321.6,421.0],[321.4,457.3],[320.9,465.3],[320.0,470.1],[317.4,479.9],[315.8,488],[411.2,488],[415.0,477.5],[417.5,472.6],[419.0,470.3],[420.7,468.3],[424.7,464.7],[427.0,463.2],[435.9,458.5],[437.4,457.3],[438.2,456.1]],"nbrs":[[245.7,395.4],[386.0,325.2]],"dx":0.1322,"dy":0.9912,"s0":-58.3,"s1":58.5,"t0":-86.3,"t1":48.6,"reach":158.3,"creach":102.0,"start":17,"perim":456.6}]},"province-near":{"k":1.7538,"me":0,"flips":[{"n":17,"from":1,"to":0,"x":400,"y":260,"r":15.8,"cell":[[261.4,53.0],[261.2,80.7],[260.1,92.4],[259.1,96.4],[257.6,98.6],[255.7,98.7],[253.7,96.6],[249.6,87.5],[236.6,41.5],[231.1,29.5],[227.5,24.5],[223.2,20.5],[218.3,17.8],[213.1,16.7],[207.6,17.0],[202.1,18.8],[191.3,25.0],[183.1,51.8],[178.0,64.3],[171.7,75.5],[129.7,138.9],[124.6,150.7],[123.4,157.0],[123.2,163.4],[123.9,169.8],[125.6,176.0],[128.2,181.9],[135.8,192.8],[154.4,213.4],[162.5,224.0],[168.4,235.2],[172.2,246.6],[174.3,258.2],[174.7,270.9],[170.2,326.6],[254.7,326.9],[268.3,328.1],[280.9,331.7],[292.2,338.3],[297.3,342.7],[306.3,352.6],[313.0,363.8],[319.0,381.3],[321.4,386.2],[324.6,390.2],[328.8,393.1],[334.0,394.9],[346.5,396.5],[486.9,396.5],[500.0,395.6],[542.7,388.9],[548.3,387.5],[553.2,385.3],[557.1,382.1],[560.0,378.0],[563.7,367.5],[567.4,350.2],[569.2,337.8],[570.1,317.6],[569.8,254.5],[568.7,241.5],[566.4,229.7],[550.1,176.7],[548.8,167.1],[549.1,158.3],[540.2,140.1],[536.6,135.0],[532.3,130.9],[527.4,127.8],[521.7,125.6],[515.5,124.4],[474.4,122.1],[461.4,119.5],[449.4,114.9],[407.1,95.0],[361.9,81.3],[355.7,78.4],[344.3,71.0],[313.7,43.0],[303.4,36.0],[298.3,34.3],[293.2,34.0],[288.3,35.1],[283.7,37.5],[270.7,47.5]],"nbrs":[[557.8,552.9],[508.7,-25.9],[-50.7,272.3]],"dx":0.9996,"dy":-0.0272,"s0":-274.1,"s1":169.9,"t0":-313.8,"t1":197.4,"reach":450.9,"creach":314.3,"start":23,"perim":1489.1}]},"province-far":{"k":0.7015,"me":0,"flips":[{"n":17,"from":1,"to":0,"x":404.9,"y":260,"r":6.3,"cell":[[349.5,177.2],[349.4,188.3],[349.0,192.9],[348.5,194.6],[347.9,195.5],[347.2,195.5],[346.4,194.7],[344.8,191.0],[339.6,172.6],[337.4,167.8],[335.9,165.8],[334.2,164.2],[332.2,163.1],[330.1,162.7],[328.0,162.8],[325.8,163.5],[321.4,166.0],[318.2,176.7],[316.1,181.7],[313.6,186.2],[296.8,211.5],[294.8,216.3],[294.3,218.8],[294.2,221.4],[294.5,223.9],[295.2,226.4],[296.2,228.7],[299.2,233.1],[306.7,241.3],[309.9,245.6],[312.3,250.1],[313.8,254.6],[314.6,259.3],[314.8,264.4],[313.0,286.7],[346.8,286.8],[352.2,287.3],[357.3,288.7],[361.8,291.3],[363.8,293.1],[367.4,297.0],[370.1,301.5],[372.5,308.5],[373.5,310.5],[374.7,312.1],[376.4,313.2],[378.5,314.0],[383.5,314.6],[439.7,314.6],[444.9,314.2],[462.0,311.5],[464.2,311.0],[466.2,310.1],[467.8,308.9],[468.9,307.2],[470.4,303.0],[471.9,296.1],[472.6,291.1],[472.9,283.0],[472.8,257.8],[472.4,252.6],[471.5,247.9],[465.0,226.7],[464.4,222.9],[464.5,219.3],[461.0,212.0],[459.5,210.0],[457.8,208.3],[455.9,207.1],[453.6,206.3],[451.1,205.7],[434.7,204.8],[429.5,203.8],[424.7,202.0],[407.8,194.0],[389.7,188.5],[387.2,187.3],[382.6,184.4],[370.4,173.2],[366.3,170.4],[364.2,169.7],[362.2,169.6],[360.2,170.1],[358.4,171.0],[353.2,175.0]],"nbrs":[[468.0,377.2],[448.4,145.6],[224.6,264.9]],"dx":0.9996,"dy":-0.0272,"s0":-109.6,"s1":68.0,"t0":-125.5,"t1":79.0,"reach":180.4,"creach":125.7,"start":23,"perim":595.7}]},"capital-near":{"k":1.7538,"me":0,"flips":[{"n":28,"from":1,"to":0,"x":587.7,"y":260,"r":35.1,"cell":[[750.8,503.8],[750.8,-57.4],[715.7,-43.4],[701.9,-31.0],[665.2,-4.6],[627.5,14.2],[599.6,25.4],[553.7,46.0],[460.9,102.7],[445.2,115.4],[431.0,130.5],[423.1,141.6],[414.0,160.0],[425.9,161.9],[430.5,163.6],[433.7,166.1],[435.2,169.5],[435.1,173.5],[433.7,178.1],[420.3,205.6],[416.4,218.1],[415.2,224.8],[413.3,266.3],[408.3,303.5],[409.0,316.4],[410.2,322.9],[414.0,335.4],[425.0,355.1],[432.1,365.7],[441.1,375.4],[451.6,383.4],[463.2,388.8],[492.7,396.0],[508.7,401.6],[524.7,409.1],[534.6,415.9],[542.4,425.4],[554.6,449.0],[558.2,454.8],[566.4,465.6],[576.1,475.2],[581.3,479.4],[592.6,486.1],[605.3,490.0],[618.8,492.1]],"nbrs":[[449.1,547.6],[236.9,240.7],[379.0,-83.8]],"dx":0.9985,"dy":0.0549,"s0":-178.9,"s1":176.2,"t0":-203.0,"t1":287.7,"reach":402.2,"creach":356.9,"start":12,"perim":1568.5}]},"capital-far":{"k":0.7015,"me":0,"flips":[{"n":28,"from":1,"to":0,"x":685.5,"y":260,"r":14.0,"cell":[[750.8,357.5],[750.8,133.0],[736.7,138.6],[731.2,143.6],[716.6,154.1],[701.5,161.7],[690.3,166.2],[671.9,174.4],[634.8,197.1],[628.5,202.2],[622.9,208.2],[619.7,212.6],[616.1,220.0],[620.8,220.8],[622.7,221.4],[624.0,222.5],[624.6,223.8],[624.5,225.4],[623.9,227.2],[618.6,238.2],[617.0,243.3],[616.6,245.9],[615.8,262.5],[613.8,277.4],[614.0,282.6],[614.5,285.1],[616.1,290.2],[620.5,298.0],[623.3,302.3],[626.9,306.2],[631.1,309.4],[635.8,311.5],[647.6,314.4],[654.0,316.6],[660.3,319.6],[664.3,322.4],[667.4,326.2],[672.3,335.6],[673.7,337.9],[677.0,342.2],[680.9,346.1],[683.0,347.8],[687.5,350.4],[692.6,352.0],[698.0,352.8]],"nbrs":[[630.1,375.1],[545.2,252.3],[602.0,122.5]],"dx":0.9985,"dy":0.0549,"s0":-71.5,"s1":70.5,"t0":-81.2,"t1":115.1,"reach":160.9,"creach":142.8,"start":12,"perim":627.4}]},"two-near":{"k":1.4031,"me":0,"flips":[{"n":18,"from":1,"to":0,"x":294.8,"y":89.5,"r":28.1,"cell":[[192.3,-26.9],[189.1,-10.3],[185.8,0.1],[183.4,4.6],[180.4,8.6],[176.8,11.9],[172.6,14.5],[163.4,18.0],[134.4,24.6],[119.4,29.2],[124.6,135.4],[127.3,150.1],[133.7,172.0],[135.8,186.7],[136.2,242.5],[151.8,238.6],[161.0,235.3],[205.6,213.7],[214.6,209.9],[228.2,205.8],[242.8,203.9],[252.8,204.6],[257.3,205.8],[261.4,207.8],[264.8,210.4],[267.6,213.6],[269.7,217.3],[271.1,221.3],[271.7,225.6],[271.7,229.9],[270.2,241.7],[270.4,243.9],[271.4,244.8],[276.0,242.6],[287.3,234.7],[299.9,226.8],[317.0,217.1],[326.2,213.3],[330.9,212.2],[335.7,211.9],[340.4,212.6],[345.0,214.2],[349.4,216.6],[357.7,223.1],[368.9,234.9],[383.2,253.7],[387.2,220.7],[389.8,210.2],[391.7,205.3],[397.2,196.3],[404.2,188.0],[423.2,168.0],[429.7,159.3],[432.3,154.6],[434.6,149.7],[438.1,139.4],[450.5,90.9],[450.5,79.7],[448.6,69.3],[445.4,59.6],[435.1,37.4],[426.5,14.7],[422.7,6.7],[420.4,3.3],[417.5,0.5],[414.0,-1.7],[405.6,-4.5],[362.8,6.8],[352.6,7.9],[347.7,7.6],[343.1,6.3],[338.6,4.3],[321.7,-7.8],[317.3,-10.4],[307.6,-13.9],[297.1,-15.3],[280.6,-15.6],[270.0,-15.2],[251.7,-13.4],[247.6,-13.5],[239.4,-15.1],[212.2,-24.0],[202.6,-26.0]],"nbrs":[[581.0,196.2],[571.2,-28.3],[263.9,-122.3],[-49.0,105.0]],"dx":0.999,"dy":-0.0449,"s0":-172.5,"s1":156.0,"t0":-166.7,"t1":178.6,"reach":344.1,"creach":220.3,"start":9,"perim":1144.5},{"n":17,"from":1,"to":0,"x":494.0,"y":424.9,"r":12.6,"cell":[[383.2,259.3],[383.0,281.4],[382.1,290.8],[381.3,294.0],[380.1,295.8],[378.6,295.8],[376.9,294.2],[373.7,286.9],[363.3,250.0],[358.9,240.5],[356.0,236.5],[352.5,233.3],[348.7,231.1],[344.5,230.2],[340.1,230.5],[335.7,231.9],[327.0,236.8],[320.5,258.3],[316.4,268.3],[311.4,277.3],[277.7,328.0],[273.7,337.4],[272.7,342.5],[272.5,347.6],[273.1,352.7],[274.5,357.6],[276.6,362.4],[282.6,371.1],[297.5,387.6],[304.0,396.1],[308.7,405.0],[311.7,414.1],[313.4,423.5],[313.8,433.6],[310.2,478.2],[377.8,478.4],[388.7,479.4],[398.8,482.2],[407.8,487.5],[411.9,491.0],[419.1,498.9],[424.4,507.9],[429.2,521.9],[431.1,525.9],[433.7,529.0],[437.0,531.3],[441.2,532.8],[451.2,534.0],[563.5,534.1],[574.0,533.3],[608.1,528.0],[612.7,526.8],[616.6,525.1],[619.7,522.6],[622.0,519.2],[624.9,510.9],[627.9,497.0],[629.4,487.1],[630.1,470.9],[629.8,420.5],[629.0,410.1],[627.2,400.6],[614.1,358.3],[613.0,350.6],[613.3,343.5],[606.2,328.9],[603.3,324.9],[599.9,321.6],[595.9,319.1],[591.4,317.4],[586.4,316.3],[553.5,314.5],[543.1,312.4],[533.6,308.8],[499.7,292.9],[463.5,281.9],[458.6,279.6],[449.5,273.7],[424.9,251.3],[416.8,245.7],[412.6,244.3],[408.6,244.0],[404.7,245.0],[400.9,246.9],[390.5,254.8]],"nbrs":[[620.3,659.2],[581.0,196.2],[133.4,434.7]],"dx":0.9996,"dy":-0.0272,"s0":-219.3,"s1":135.9,"t0":-251.0,"t1":158.0,"reach":360.7,"creach":251.4,"start":23,"perim":1191.3}]},"two-far":{"k":0.7015,"me":0,"flips":[{"n":18,"from":1,"to":0,"x":347.4,"y":175.1,"r":14.0,"cell":[[296.2,116.9],[294.6,125.2],[292.9,130.4],[291.7,132.7],[290.2,134.7],[288.4,136.3],[286.3,137.6],[281.7,139.4],[267.2,142.7],[259.7,144.9],[262.3,198.0],[263.6,205.4],[266.8,216.4],[267.9,223.7],[268.1,251.6],[275.9,249.6],[280.5,248.0],[302.8,237.2],[307.3,235.3],[314.1,233.2],[321.4,232.3],[326.4,232.6],[328.7,233.3],[330.7,234.2],[332.4,235.6],[333.8,237.2],[334.9,239.0],[335.5,241.0],[335.8,243.1],[335.8,245.3],[335.1,251.2],[335.2,252.3],[335.7,252.7],[338.0,251.7],[343.7,247.7],[350.0,243.7],[358.5,238.9],[363.1,237.0],[365.5,236.4],[367.8,236.3],[370.2,236.6],[372.5,237.4],[374.7,238.6],[378.8,241.9],[384.4,247.8],[391.6,257.2],[393.6,240.7],[394.9,235.5],[395.9,233.0],[398.6,228.5],[402.1,224.4],[411.6,214.3],[414.8,210.0],[416.2,207.7],[417.3,205.2],[419.1,200.1],[425.3,175.8],[425.3,170.2],[424.3,165.0],[422.7,160.1],[417.6,149.1],[413.3,137.7],[411.3,133.7],[410.2,132.0],[408.8,130.6],[407.0,129.5],[402.8,128.1],[381.4,133.7],[376.3,134.3],[373.9,134.1],[371.5,133.5],[369.3,132.5],[360.9,126.5],[358.6,125.1],[353.8,123.4],[348.5,122.7],[340.3,122.5],[335.0,122.7],[325.8,123.6],[323.8,123.6],[319.7,122.8],[306.1,118.3],[301.3,117.4]],"nbrs":[[490.5,228.4],[485.6,116.2],[332.0,69.2],[175.5,182.8]],"dx":0.999,"dy":-0.0449,"s0":-86.3,"s1":78.0,"t0":-83.3,"t1":89.3,"reach":172.1,"creach":110.1,"start":9,"perim":572.2},{"n":17,"from":1,"to":0,"x":447.0,"y":342.8,"r":6.3,"cell":[[391.6,260],[391.5,271.1],[391.1,275.7],[390.6,277.4],[390.0,278.2],[389.3,278.3],[388.5,277.4],[386.9,273.8],[381.7,255.4],[379.4,250.6],[378.0,248.6],[376.3,247.0],[374.3,245.9],[372.2,245.4],[370.1,245.6],[367.9,246.3],[363.5,248.8],[360.3,259.5],[358.2,264.5],[355.7,269.0],[338.9,294.3],[336.8,299.1],[336.4,301.6],[336.3,304.2],[336.6,306.7],[337.2,309.2],[338.3,311.5],[341.3,315.9],[348.8,324.1],[352.0,328.4],[354.4,332.9],[355.9,337.4],[356.7,342.1],[356.9,347.1],[355.1,369.4],[388.9,369.5],[394.3,370.0],[399.4,371.5],[403.9,374.1],[405.9,375.8],[409.5,379.8],[412.2,384.3],[414.6,391.3],[415.6,393.3],[416.8,394.9],[418.5,396.0],[420.6,396.7],[425.6,397.4],[481.8,397.4],[487.0,397.0],[504.1,394.3],[506.3,393.8],[508.3,392.9],[509.8,391.6],[511.0,390.0],[512.5,385.8],[514.0,378.9],[514.7,373.9],[515.0,365.8],[514.9,340.6],[514.5,335.4],[513.6,330.6],[507.1,309.5],[506.5,305.6],[506.6,302.1],[503.1,294.8],[501.6,292.8],[499.9,291.1],[498.0,289.9],[495.7,289.0],[493.2,288.5],[476.8,287.6],[471.6,286.6],[466.8,284.7],[449.8,276.8],[431.8,271.3],[429.3,270.1],[424.7,267.2],[412.5,256.0],[408.4,253.2],[406.3,252.5],[404.3,252.4],[402.3,252.8],[400.5,253.8],[395.3,257.8]],"nbrs":[[510.1,459.9],[490.5,228.4],[266.7,347.7]],"dx":0.9996,"dy":-0.0272,"s0":-109.6,"s1":68.0,"t0":-125.5,"t1":79.0,"reach":180.4,"creach":125.7,"start":23,"perim":595.7}]}};
+const A = 'assets/city-capture/';
+const SRC = null;
+const W = 800, H = 520;
+const PRE = 700, LOOP = 3700;
+const YOU = '#5b9bff', ENEMY = '#e5484d', PAPER = '#f0f6fc', BG = '#0d1117', NEUTRAL = '#8b949e';
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const eo = (t) => 1 - Math.pow(1 - t, 3);            // ease-out cubic (the client's fades)
+const eoq = (t) => t * (2 - t);                      // ease-out (the client's wave)
+const sm = (t) => t * t * (3 - 2 * t);               // smooth step
+const eio = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const ph = (t, a, b) => clamp((t - a) / (b - a));
+function rnd(i, s) { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); }
+function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${clamp(a)})`; }
+function mix(hex, to, t) {
+  const a = parseInt(hex.slice(1), 16), b = parseInt(to.slice(1), 16);
+  const c = (s) => Math.round(lerp((a >> s) & 255, (b >> s) & 255, t));
+  return `#${((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, '0')}`;
+}
+
+/* ---------- drawing kit: the client's particle glow and ring, soft strokes ---------- */
+function glow(c, x, y, R, col, a) {
+  if (a <= 0 || R <= 0) return;
+  const g = c.createRadialGradient(x, y, 0, x, y, R);
+  g.addColorStop(0, rgba(col, a)); g.addColorStop(0.35, rgba(col, a * 0.45)); g.addColorStop(1, rgba(col, 0));
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = g; c.beginPath(); c.arc(x, y, R, 0, TAU); c.fill(); c.restore();
+}
+function annulus(c, x, y, r0, r1, col, a, add = true) {
+  if (a <= 0 || r1 <= r0) return;
+  const g = c.createRadialGradient(x, y, r0, x, y, r1);
+  g.addColorStop(0, rgba(col, 0)); g.addColorStop(0.25, rgba(col, a)); g.addColorStop(1, rgba(col, 0));
+  c.save(); if (add) c.globalCompositeOperation = 'lighter'; c.fillStyle = g; c.beginPath(); c.arc(x, y, r1, 0, TAU); c.arc(x, y, r0, 0, TAU, true); c.fill('evenodd'); c.restore();
+}
+function softStroke(c, pathFn, w, col, a, core = PAPER, coreA = 0) {
+  if (a <= 0) return;
+  c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+  c.globalCompositeOperation = 'lighter';
+  for (const [k, al] of [[3.2, 0.12], [2.0, 0.22], [1.2, 0.35]]) { c.strokeStyle = rgba(col, a * al); c.lineWidth = w * k; pathFn(c); c.stroke(); }
+  c.globalCompositeOperation = 'source-over';
+  c.strokeStyle = rgba(col, a); c.lineWidth = w; pathFn(c); c.stroke();
+  if (coreA > 0) { c.strokeStyle = rgba(core, coreA); c.lineWidth = w * 0.42; pathFn(c); c.stroke(); }
+  c.restore();
+}
+function circlePath(x, y, r) { return (c) => { c.beginPath(); c.arc(x, y, Math.max(0.1, r), 0, TAU); }; }
+function polyPath(pts, close = true) { return (c) => { c.beginPath(); pts.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); if (close) c.closePath(); }; }
+function clipPoly(c, pts) { polyPath(pts)(c); c.clip(); }
+function dotSpark(c, x, y, s, col, a) {
+  if (a <= 0) return;
+  glow(c, x, y, s * 2.6, col, a * 0.8);
+  c.save(); c.globalAlpha = clamp(a); c.fillStyle = mix(col, PAPER, 0.35); c.beginPath(); c.arc(x, y, s * 0.55, 0, TAU); c.fill(); c.restore();
+}
+
+/* ---------- a pane: the frames of a case, the mask canvas, the composite ---------- */
+const IMG = {};
+function frames(key) {
+  if (!IMG[key]) {
+    IMG[key] = {};
+    for (const n of ['before', 'mid', 'after']) {
+      const im = new Image(); im.decoding = 'async';
+      im.src = SRC ? SRC[`${key}-${n}`] : `${A}${key}-${n}.webp`;
+      im.onload = () => { dirty = true; };
+      IMG[key][n] = im;
+    }
+  }
+  return IMG[key];
+}
+const ready = (im) => im.complete && im.naturalWidth > 0;
+
+class Ctx {
+  constructor(pane) {
+    this.cv = pane.cv; this.c = this.cv.getContext('2d');
+    this.m = document.createElement('canvas'); this.mc = this.m.getContext('2d');
+    this.u = document.createElement('canvas'); this.uc = this.u.getContext('2d');
+  }
+  size(px) {
+    const w = Math.round(px), h = Math.round(px * H / W);
+    for (const cv of [this.cv, this.m, this.u]) if (cv.width !== w) { cv.width = w; cv.height = h; }
+    this.sx = w / W;
+  }
+  begin(F, meta) {
+    this.F = F; this.meta = meta; this.k = meta.k; this.se = Math.max(1, 1 / meta.k);
+    const c = this.c; c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.filter = 'none';
+    c.clearRect(0, 0, this.cv.width, this.cv.height);
+    c.setTransform(this.sx, 0, 0, this.sx, 0, 0);
+  }
+  img(im, a = 1) { if (a <= 0) return; const c = this.c; c.save(); c.globalAlpha = clamp(a); c.drawImage(im, 0, 0, W, H); c.restore(); }
+  /** Draws `src` (default the settled frame) through an alpha mask that `mask(mc)` paints, over the pane. */
+  through(mask, src = this.F.after, srcFn = null) {
+    const mc = this.mc;
+    mc.setTransform(1, 0, 0, 1, 0, 0); mc.globalCompositeOperation = 'source-over'; mc.globalAlpha = 1; mc.filter = 'none';
+    mc.clearRect(0, 0, this.m.width, this.m.height);
+    mc.setTransform(this.sx, 0, 0, this.sx, 0, 0);
+    mc.fillStyle = '#fff'; mc.strokeStyle = '#fff';
+    mask(mc);
+    mc.setTransform(this.sx, 0, 0, this.sx, 0, 0); mc.filter = 'none'; mc.globalAlpha = 1;
+    mc.globalCompositeOperation = 'source-in';
+    if (srcFn) srcFn(mc); else mc.drawImage(src, 0, 0, W, H);
+    mc.globalCompositeOperation = 'source-over';
+    const c = this.c; c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(this.m, 0, 0); c.restore();
+  }
+  /** Mask with one alpha (or painter) for the territory and another for the cities of the flips. */
+  split(terr, city) {
+    this.through((mc) => {
+      mc.save();
+      if (typeof terr === 'number') { mc.globalAlpha = clamp(terr); mc.fillRect(0, 0, W, H); } else terr(mc);
+      mc.restore();
+      mc.save(); mc.globalCompositeOperation = 'destination-out'; mc.globalAlpha = 1;
+      for (const f of this.meta.flips) { zonePath(f, this)(mc); mc.fill(); }
+      mc.restore();
+      mc.save();
+      for (const f of this.meta.flips) {
+        mc.save(); zonePath(f, this)(mc); mc.clip();
+        if (typeof city === 'number') { mc.globalAlpha = clamp(city); mc.fillRect(0, 0, W, H); } else city(mc, f);
+        mc.restore();
+      }
+      mc.restore();
+    });
+  }
+  feather(px) { return `blur(${(px * this.sx).toFixed(2)}px)`; }
+}
+/** The part of the frame that is the city: its body, capacity ring and warehouse bar (not the territory). */
+function zonePath(f, P, grow = 1) {
+  const r = f.r, k = P.k * P.se;
+  return (c) => {
+    c.beginPath(); c.arc(f.x, f.y, (r + 12.5 * k) * grow, 0, TAU);
+    const bw = Math.max(26 * k, r * 2.3), top = f.y + r + 8 * k, bh = 9 * k;
+    c.rect(f.x - bw / 2, top, bw, bh);
+  };
+}
+function radialMask(x, y, R, feather) {
+  return (mc) => {
+    if (R <= 0) return;
+    const f0 = Math.max(0, R - feather);
+    const g = mc.createRadialGradient(x, y, f0, x, y, Math.max(R, f0 + 0.01));
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    mc.fillStyle = g; mc.beginPath(); mc.arc(x, y, R, 0, TAU); mc.fill();
+  };
+}
+function linearMask(x, y, dx, dy, front, feather, span) {
+  return (mc) => {
+    const ax = x + dx * (front - feather), ay = y + dy * (front - feather), bx = x + dx * front, by = y + dy * front;
+    const g = mc.createLinearGradient(ax, ay, bx, by);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    mc.fillStyle = g; mc.fillRect(0, 0, W, H);
+  };
+}
+const colOf = (p) => (p === 0 ? YOU : p === 1 ? ENEMY : NEUTRAL);
+
+/* ---------- the current look (ui-style 9.9, effectsView.ts, mapView.ts, cityView.ts) ---------- */
+function drawFlag(c, f, P, t, a, owner = f.to, lift = 0, sway = 0, scale = 1) {
+  const u = P.k * P.se * scale, Rw = f.r / P.k;
+  const x = f.x + (Rw + 6) * P.se * P.k, y = f.y - (Rw + 14) * P.se * P.k;
+  c.save(); c.globalAlpha = clamp(a); c.translate(x, y); c.scale(u, u);
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = PAPER; c.lineWidth = 2; c.beginPath(); c.moveTo(0, 14); c.lineTo(0, -6); c.stroke();
+  c.fillStyle = colOf(owner); c.beginPath(); c.moveTo(0, -6); c.lineTo(14, -1 + sway); c.lineTo(0, 4); c.closePath(); c.fill();
+  c.strokeStyle = PAPER; c.lineWidth = 1.4; c.stroke();
+  c.restore();
+}
+const CURRENT = {
+  id: 'current', name: 'Current', dur: 1600,
+  draw(P, t) {
+    const F = P.F;
+    P.img(F.before);
+    if (t < 0) return;
+    if (P.reduced) { P.img(F.after); }
+    else { P.img(F.mid); P.img(F.after, eo(clamp(t / 450))); }
+    const c = P.c, k = P.k, se = P.se;
+    for (const f of P.meta.flips) {
+      const col = colOf(f.to);
+      const u = t / 500;
+      if (u < 1) {
+        if (!P.reduced) {
+          const s = eoq(u);
+          const pts = f.cell.map(([x, y]) => [f.x + (x - f.x) * s, f.y + (y - f.y) * s]);
+          c.save(); polyPath(pts)(c); c.fillStyle = rgba(col, 0.28 * (1 - u)); c.fill();
+          c.lineJoin = 'round'; c.lineWidth = 3 * k; c.strokeStyle = rgba(col, 0.9 * (1 - u)); c.stroke(); c.restore();
+        }
+        const size = 2 * (8 + 28 * 1.6 * eoq(u)) * se * k;
+        c.save(); c.strokeStyle = rgba(PAPER, 0.8 * (1 - u)); c.lineWidth = size * 5 / 64;
+        c.beginPath(); c.arc(f.x, f.y, size * 26 / 64, 0, TAU); c.stroke(); c.restore();
+      }
+      const v = t / 1600;
+      if (v < 1) drawFlag(c, f, P, t, v <= 0.375 ? 1 : 1 - (v - 0.375) / 0.625);
+    }
+  },
+};
+
+/* ---------- variants (round 1: distinct directions) ---------- */
+const V = [CURRENT];
+function variant(id, name, dur, draw) { V.push({ id, name, dur, draw }); }
+const fl = (P) => P.meta.flips;
+
+// 1. Flood: the new colour spreads from the city to the edge of its area, a soft lit front.
+variant('flood', 'Flood', 1000, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  const pr = eo(ph(t, 60, 960));
+  P.split((mc) => { for (const f of fl(P)) radialMask(f.x, f.y, f.creach * 1.06 * pr + 1, f.creach * 0.24)(mc); mc.globalAlpha = sm(ph(t, 700, 1000)); mc.fillRect(0, 0, W, H); mc.globalAlpha = 1; }, sm(ph(t, 0, 200)));
+  for (const f of fl(P)) {
+    const col = colOf(f.to);
+    glow(c, f.x, f.y, f.r * 3.4, PAPER, 0.55 * Math.pow(1 - ph(t, 0, 300), 2));
+    annulus(c, f.x, f.y, f.r * 1.2, f.r * (1.4 + 1.2 * eo(ph(t, 0, 450))), col, 0.55 * (1 - ph(t, 0, 450)));
+    const R = f.creach * 1.06 * pr, fe = f.creach * 0.24;
+    if (pr < 1 && R > f.r) {
+      c.save(); clipPoly(c, f.cell);
+      const g = c.createRadialGradient(f.x, f.y, Math.max(0, R - fe), f.x, f.y, R + 2 * k);
+      const a = 0.4 * (1 - pr * pr);
+      g.addColorStop(0, rgba(col, 0)); g.addColorStop(0.6, rgba(col, a)); g.addColorStop(0.86, rgba(mix(col, PAPER, 0.3), a * 0.85)); g.addColorStop(1, rgba(col, 0));
+      c.globalCompositeOperation = 'lighter'; c.fillStyle = g; c.fillRect(0, 0, W, H); c.restore();
+    }
+  }
+});
+
+// 2. Rim sweep: a lit head runs once round the capacity ring and turns the city; the area follows.
+variant('rim', 'Rim sweep', 1050, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  const s = eio(ph(t, 0, 640));
+  const terr = eo(ph(t, 420, 1000));
+  P.split(terr, (mc, f) => {
+    // the ground round the ring follows the area; only the body, the ring and the bar turn under the head
+    mc.globalAlpha = terr; mc.fillRect(0, 0, W, H); mc.globalAlpha = 1;
+    if (s >= 1) { mc.fillRect(0, 0, W, H); return; }
+    const R = f.r + 11.5 * k;
+    mc.beginPath(); mc.moveTo(f.x, f.y); mc.arc(f.x, f.y, R, -Math.PI / 2, -Math.PI / 2 + TAU * s); mc.closePath(); mc.fill();
+    if (s > 0.5) { const bw = Math.max(26 * k, f.r * 2.3); mc.globalAlpha = sm(ph(s, 0.5, 0.75)); mc.fillRect(f.x - bw / 2, f.y + f.r + 8 * k, bw, 9 * k); }
+  });
+  for (const f of fl(P)) {
+    const col = colOf(f.to), R = f.r + 9 * k;
+    if (s > 0 && s < 1) {
+      const th = -Math.PI / 2 + TAU * s, n = 28, span = Math.min(TAU * s, 1.9);
+      c.save(); c.lineCap = 'round';
+      for (let i = 0; i < n; i++) {
+        const a0 = th - span * (i + 1) / n, a1 = th - span * i / n, q = Math.pow(1 - i / n, 1.7);
+        c.globalCompositeOperation = 'lighter';
+        c.strokeStyle = rgba(col, 0.38 * q); c.lineWidth = 9 * k; c.beginPath(); c.arc(f.x, f.y, R, a0, a1); c.stroke();
+        c.globalCompositeOperation = 'source-over';
+        c.strokeStyle = rgba(mix(col, PAPER, 0.25), 0.95 * q); c.lineWidth = 3.4 * k; c.beginPath(); c.arc(f.x, f.y, R, a0, a1); c.stroke();
+      }
+      c.restore();
+      const hx = f.x + Math.cos(th) * R, hy = f.y + Math.sin(th) * R;
+      glow(c, hx, hy, 16 * k, col, 0.9); glow(c, hx, hy, 6.5 * k, PAPER, 1);
+    }
+    const q = ph(t, 600, 1000);
+    if (q > 0 && q < 1) {
+      softStroke(c, circlePath(f.x, f.y, R * (1 + 0.5 * eo(q))), 2.6 * k * (1 - 0.5 * q), col, 0.85 * (1 - q), PAPER, 0.8 * (1 - q));
+    }
+  }
+});
+
+// 3. Heartbeat: the city swells once (sine) in the new colour with a bloom; the area cross-fades slowly.
+variant('pulse', 'Heartbeat', 900, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c;
+  const k = P.k * P.se;
+  P.split(sm(ph(t, 60, 860)), sm(ph(t, 0, 200)));
+  for (const f of fl(P)) {
+    const col = colOf(f.to);
+    annulus(c, f.x, f.y, f.r * 1.15, f.r * (2.4 + 1.4 * eo(ph(t, 0, 700))), col, 0.62 * Math.sin(Math.PI * ph(t, 0, 700)));
+    const bump = Math.sin(Math.PI * ph(t, 0, 440)), s = 1 + 0.15 * bump;
+    if (bump > 0.01) {
+      // the swollen city: the settled city drawn larger through a soft disc (the shape grows, nothing is redrawn)
+      const R = (f.r + 12 * k) * s;
+      P.through((mc) => {
+        const g = mc.createRadialGradient(f.x, f.y, R * 0.82, f.x, f.y, R);
+        g.addColorStop(0, `rgba(255,255,255,${clamp(bump * 1.6)})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+        mc.fillStyle = g; mc.beginPath(); mc.arc(f.x, f.y, R, 0, TAU); mc.fill();
+      }, null, (mc) => { mc.translate(f.x, f.y); mc.scale(s, s); mc.translate(-f.x, -f.y); mc.drawImage(P.F.after, 0, 0, W, H); });
+    }
+    glow(c, f.x, f.y, f.r * 2.2, PAPER, 0.35 * bump);
+  }
+});
+
+// 4. Border trace: two lit heads draw the new border from the side of the attack and meet behind; the fill follows.
+function walk(cell, start, L) {
+  const n = cell.length, out = { fwd: [cell[start]], bwd: [cell[start]] };
+  for (const [dir, arr] of [[1, out.fwd], [-1, out.bwd]]) {
+    let left = L, i = start;
+    while (left > 0) {
+      const j = (i + dir + n) % n, a = cell[i], b = cell[j], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (d >= left) { arr.push([a[0] + (b[0] - a[0]) * left / d, a[1] + (b[1] - a[1]) * left / d]); break; }
+      arr.push(b); left -= d; i = j;
+    }
+  }
+  return out;
+}
+variant('trace', 'Border trace', 1200, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  const q = eio(ph(t, 100, 900));
+  const rest = sm(ph(t, 800, 1100));
+  P.split((mc) => {
+    mc.filter = P.feather(7 * k);
+    for (const f of fl(P)) {
+      const w = walk(f.cell, f.start, q * f.perim / 2 + 0.01);
+      for (const arr of [w.fwd, w.bwd]) { mc.beginPath(); mc.moveTo(f.x, f.y); for (const p of arr) mc.lineTo(p[0], p[1]); mc.closePath(); mc.fill(); }
+    }
+    mc.filter = 'none';
+    mc.globalAlpha = rest; mc.fillRect(0, 0, W, H); mc.globalAlpha = 1;
+  }, sm(ph(t, 0, 220)));
+  for (const f of fl(P)) {
+    const col = colOf(f.to);
+    glow(c, f.x, f.y, f.r * 3, PAPER, 0.45 * Math.pow(1 - ph(t, 0, 320), 2));
+    const fade = 1 - ph(t, 950, 1200);
+    if (q > 0 && fade > 0) {
+      const w = walk(f.cell, f.start, q * f.perim / 2 + 0.01);
+      for (const arr of [w.fwd, w.bwd]) {
+        softStroke(c, polyPath(arr, false), 2.6 * k, col, 0.95 * fade, PAPER, 0.7 * fade);
+        if (q < 1) { const h = arr[arr.length - 1]; glow(c, h[0], h[1], 18 * k, col, 0.9); glow(c, h[0], h[1], 7 * k, PAPER, 1); }
+      }
+      if (q >= 1) { const h = w.fwd[w.fwd.length - 1]; glow(c, h[0], h[1], 26 * k, PAPER, 0.7 * (1 - ph(t, 900, 1150))); }
+    }
+  }
+});
+
+// 5. Shockwave: a flash, a white ring and sparks in the FX3 manner; the colour rides behind the ring.
+variant('shock', 'Shockwave', 820, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  const p = ph(t, 0, 640), e = eo(p);
+  P.split((mc) => { for (const f of fl(P)) radialMask(f.x, f.y, f.r + (f.creach * 1.08 - f.r) * e, 14 * k)(mc); mc.globalAlpha = sm(ph(t, 480, 700)); mc.fillRect(0, 0, W, H); mc.globalAlpha = 1; }, sm(ph(t, 0, 90)));
+  for (const f of fl(P)) {
+    const col = colOf(f.to);
+    glow(c, f.x, f.y, f.r * 4.2, PAPER, 0.95 * Math.pow(1 - ph(t, 0, 240), 2));
+    glow(c, f.x, f.y, f.r * 6, col, 0.5 * (1 - ph(t, 0, 420)));
+    const R = f.r * 1.1 + (f.creach * 1.05 - f.r * 1.1) * e;
+    if (p < 1) softStroke(c, circlePath(f.x, f.y, R), (2.8 - 1.8 * p) * k, col, 0.8 * Math.pow(1 - p, 1.2), PAPER, 0.95 * Math.pow(1 - p, 1.4));
+    const p2 = ph(t, 90, 760);
+    if (p2 > 0 && p2 < 1) softStroke(c, circlePath(f.x, f.y, f.r * 1.1 + (f.creach * 0.8 - f.r) * eo(p2)), 4.5 * k, col, 0.42 * (1 - p2));
+    const ps = ph(t, 0, 700);
+    if (ps < 1) for (let j = 0; j < 14; j++) {
+      const ang = rnd(j, f.n) * TAU, reach = f.r * (1.6 + 2.6 * rnd(j, f.n + 3)) * eoq(ps);
+      dotSpark(c, f.x + Math.cos(ang) * (f.r + reach), f.y + Math.sin(ang) * (f.r + reach), 3.4 * k * (1 - 0.45 * ps), j % 3 === 0 ? PAPER : col, Math.pow(1 - ps, 1.4));
+    }
+  }
+});
+
+// 6. Banner: the old banner lowers, the new one climbs the pole and settles; the colour follows it.
+function banner(c, f, P, owner, rise, a, flutter) {
+  if (a <= 0) return;
+  const u = P.k * P.se * 1.25, Rw = f.r / P.k;
+  const bx = f.x - (Rw + 13) * P.se * P.k, by = f.y - (Rw + 1) * P.se * P.k;
+  const pole = 30, h = 12, w = 19;
+  c.save(); c.translate(bx, by); c.scale(u, u); c.lineCap = 'round'; c.lineJoin = 'round';
+  // pole: dark casing, light core, a knob
+  c.strokeStyle = rgba(BG, 0.75 * a); c.lineWidth = 3.6; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -pole); c.stroke();
+  const pg = c.createLinearGradient(-1, 0, 1, 0); pg.addColorStop(0, rgba(PAPER, a)); pg.addColorStop(1, rgba('#aab2bd', a));
+  c.strokeStyle = pg; c.lineWidth = 1.8; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -pole); c.stroke();
+  c.fillStyle = rgba(PAPER, a); c.beginPath(); c.arc(0, -pole - 1, 1.7, 0, TAU); c.fill();
+  if (owner !== null && owner !== undefined) {
+    const top = -pole + (pole - h - 2) * (1 - rise), col = colOf(owner);
+    const fx = (x, y) => [x, y + flutter * Math.sin((x / w) * Math.PI) ];
+    const pts = [[0, top], [w, top + 0.5], [w - 5, top + h / 2], [w, top + h - 0.5], [0, top + h]].map(([x, y]) => fx(x, y));
+    c.shadowColor = rgba(BG, 0.55 * a); c.shadowBlur = 3; c.shadowOffsetY = 1.5;
+    c.strokeStyle = rgba(BG, 0.8 * a); c.lineWidth = 3.2; polyPath(pts)(c); c.stroke();
+    c.shadowColor = 'transparent';
+    const g = c.createLinearGradient(0, top, 0, top + h);
+    g.addColorStop(0, rgba(mix(col, '#ffffff', 0.18), a)); g.addColorStop(1, rgba(mix(col, '#000000', 0.16), a));
+    c.fillStyle = g; polyPath(pts)(c); c.fill();
+    c.strokeStyle = rgba(PAPER, a); c.lineWidth = 1.3; c.stroke();
+    if (owner !== P.meta.me) { // the opponent's second, dark contour (ui-style 9.4, 21)
+      const inner = [[1.6, top + 2], [w - 3.2, top + 2.3], [w - 7.5, top + h / 2], [w - 3.2, top + h - 2.3], [1.6, top + h - 2]].map(([x, y]) => fx(x, y));
+      c.strokeStyle = rgba(BG, 0.85 * a); c.lineWidth = 1; polyPath(inner)(c); c.stroke();
+    }
+    c.fillStyle = rgba('#ffffff', 0.35 * a); c.beginPath(); c.moveTo(pts[0][0] + 1.4, pts[0][1] + 1.4); c.lineTo(w * 0.55, top + 1.7); c.lineTo(1.4, top + h * 0.45); c.closePath(); c.fill();
+  }
+  c.restore();
+}
+variant('banner', 'Banner', 1000, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c;
+  P.split(sm(ph(t, 380, 950)), sm(ph(t, 300, 600)));
+  for (const f of fl(P)) {
+    const out = 1 - Math.pow(1 - ph(t, 0, 320), 2);
+    banner(c, f, P, f.from, 1 - out, f.from === null ? 0 : 1 - out, 0);
+    const rise = eo(ph(t, 260, 780)), hold = 1 - ph(t, 2300, 2700);
+    const flutter = 1.4 * Math.sin(TAU * t / 460) * (1 - ph(t, 260, 1500));
+    banner(c, f, P, f.to, rise, (f.from === null ? 1 : sm(ph(t, 240, 360))) * hold, flutter);
+    const u = P.k * P.se * 1.25, Rw = f.r / P.k;
+    glow(c, f.x - (Rw + 13) * P.se * P.k, f.y - (Rw + 1) * P.se * P.k - 31 * u, 9 * u, PAPER, 0.8 * Math.sin(Math.PI * ph(t, 700, 1050)));
+  }
+});
+
+// 7. Inbound: the colour pushes in across the area from the road the attackers took.
+variant('inbound', 'From the road', 950, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  const q = eio(ph(t, 0, 880));
+  const fe = 46 * k;
+  P.through((mc) => { for (const f of fl(P)) linearMask(f.x, f.y, f.dx, f.dy, lerp(f.s0, f.s1 + fe, q), fe)(mc); });
+  for (const f of fl(P)) {
+    const col = colOf(f.to), front = lerp(f.s0, f.s1 + fe, q);
+    if (q > 0 && q < 1) {
+      c.save(); clipPoly(c, f.cell); c.globalCompositeOperation = 'lighter';
+      const ax = f.x + f.dx * (front - fe * 1.1), ay = f.y + f.dy * (front - fe * 1.1), bx = f.x + f.dx * (front + 4 * k), by = f.y + f.dy * (front + 4 * k);
+      const g = c.createLinearGradient(ax, ay, bx, by), a = 0.55 * Math.sin(Math.PI * q);
+      g.addColorStop(0, rgba(col, 0)); g.addColorStop(0.62, rgba(col, a)); g.addColorStop(0.86, rgba(PAPER, a * 0.45)); g.addColorStop(1, rgba(col, 0));
+      c.fillStyle = g; c.fillRect(0, 0, W, H); c.restore();
+    }
+    glow(c, f.x, f.y, f.r * 3, PAPER, 0.32 * Math.exp(-Math.pow(front - fe * 0.4, 2) / Math.pow(30 * k, 2)));
+  }
+});
+
+// 8. Close in: a lit ring tightens on the city (the wind-up of a shot), the colour closes in behind it; a flash.
+variant('close', 'Close in', 900, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  const p = ph(t, 0, 540), e = p * p;
+  const hit = ph(t, 540, 880);
+  P.split((mc) => {
+    mc.fillRect(0, 0, W, H);
+    mc.globalCompositeOperation = 'destination-out';
+    for (const f of fl(P)) { const R = lerp(f.creach * 1.05, f.r * 1.2, e); if (p < 1) radialMask(f.x, f.y, R, 22 * k)(mc); }
+  }, sm(ph(t, 500, 620)));
+  for (const f of fl(P)) {
+    const col = colOf(f.to);
+    if (p < 1) {
+      const R = lerp(f.creach * 1.0, f.r * 1.2, e);
+      c.save(); clipPoly(c, f.cell); softStroke(c, circlePath(f.x, f.y, R), 3.2 * k, col, 0.55 + 0.4 * p, PAPER, 0.45 + 0.5 * p); c.restore();
+    }
+    if (hit > 0 && hit < 1) {
+      glow(c, f.x, f.y, f.r * 3.6, PAPER, 0.95 * Math.pow(1 - hit, 2));
+      softStroke(c, circlePath(f.x, f.y, f.r * (1.2 + 1.5 * eo(hit))), 2.2 * k, col, 0.75 * (1 - hit), PAPER, 0.8 * (1 - hit));
+    }
+  }
+});
+
+// 9. Outline flare: the new border flares bright and wide, then settles to the normal line.
+variant('flare', 'Outline flare', 1400, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  P.split(sm(ph(t, 0, 450)), sm(ph(t, 0, 280)));
+  const p = ph(t, 80, 1400), rise = sm(ph(t, 0, 120));
+  for (const f of fl(P)) {
+    const col = colOf(f.to);
+    c.save(); clipPoly(c, f.cell); c.globalCompositeOperation = "lighter"; c.fillStyle = rgba(col, 0.13 * (1 - p) * rise); c.fillRect(0, 0, W, H); c.globalCompositeOperation = "source-over";
+    softStroke(c, polyPath(f.cell), (3 + 7 * (1 - eo(p))) * k, col, 0.9 * Math.pow(1 - p, 1.2) * rise, PAPER, 0.85 * Math.pow(1 - p, 2) * rise);
+    c.restore();
+  }
+});
+
+// 10. Wash: the whole area lights up in the new colour at once and the light ebbs to the normal tint.
+variant('wash', 'Wash', 1100, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  P.split(sm(ph(t, 0, 260)), sm(ph(t, 0, 200)));
+  const p = eo(ph(t, 120, 1100)), rise = sm(ph(t, 0, 140));
+  for (const f of fl(P)) {
+    const col = colOf(f.to), a = (1 - p) * rise;
+    if (a <= 0) continue;
+    // light poured into the area: additive, so the painted ground shows through; brightest at the rim like the territory glow
+    c.save(); clipPoly(c, f.cell); c.globalCompositeOperation = 'lighter';
+    const g = c.createRadialGradient(f.x, f.y, f.r * 1.2, f.x, f.y, f.creach);
+    g.addColorStop(0, rgba(col, 0.24 * a)); g.addColorStop(0.65, rgba(col, 0.12 * a)); g.addColorStop(1, rgba(col, 0.2 * a));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.filter = P.feather(9 * k); c.lineJoin = 'round';
+    c.strokeStyle = rgba(col, 0.55 * a); c.lineWidth = 20 * k; polyPath(f.cell)(c); c.stroke();
+    c.restore();
+    glow(c, f.x, f.y, f.r * 3.2, col, 0.5 * a);
+    glow(c, f.x, f.y, f.r * 1.9, PAPER, 0.35 * a);
+  }
+});
+
+// 11. Roads first: the colour runs out along the roads of the city, then fills the area between them.
+variant('roads', 'Roads first', 1150, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  const q = eo(ph(t, 60, 600));
+  P.split((mc) => {
+    mc.filter = P.feather(6 * k); mc.lineCap = 'round'; mc.lineWidth = 24 * k;
+    for (const f of fl(P)) for (const [nx, ny] of f.nbrs) { mc.beginPath(); mc.moveTo(f.x, f.y); mc.lineTo(lerp(f.x, nx, q), lerp(f.y, ny, q)); mc.stroke(); }
+    mc.filter = 'none';
+    for (const f of fl(P)) radialMask(f.x, f.y, f.creach * 1.06 * eo(ph(t, 380, 1050)), f.creach * 0.3)(mc); mc.globalAlpha = sm(ph(t, 900, 1150)); mc.fillRect(0, 0, W, H); mc.globalAlpha = 1;
+  }, sm(ph(t, 0, 180)));
+  for (const f of fl(P)) {
+    const col = colOf(f.to);
+    glow(c, f.x, f.y, f.r * 3, PAPER, 0.45 * Math.pow(1 - ph(t, 0, 300), 2));
+    const fade = 1 - ph(t, 560, 760);
+    if (q > 0 && fade > 0) for (const [nx, ny] of f.nbrs) {
+      const hx = lerp(f.x, nx, q), hy = lerp(f.y, ny, q);
+      const tx = lerp(f.x, nx, Math.max(0, q - 0.35)), ty = lerp(f.y, ny, Math.max(0, q - 0.35));
+      c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+      const g = c.createLinearGradient(tx, ty, hx, hy); g.addColorStop(0, rgba(col, 0)); g.addColorStop(1, rgba(col, 0.75 * fade));
+      c.strokeStyle = g; c.lineWidth = 6 * k; c.beginPath(); c.moveTo(tx, ty); c.lineTo(hx, hy); c.stroke(); c.restore();
+      glow(c, hx, hy, 15 * k, col, 0.85 * fade); glow(c, hx, hy, 6 * k, PAPER, fade);
+    }
+  }
+});
+
+// 12. Sheen: a band of light passes over the area from the upper left (the light of the rims); the colour turns under it.
+variant('sheen', 'Sheen', 950, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  const q = eio(ph(t, 0, 900)), fe = 30 * k;
+  P.through((mc) => { for (const f of fl(P)) linearMask(f.x, f.y, 0.7071, 0.7071, lerp(f.t0 - fe, f.t1 + fe, q), fe)(mc); });
+  for (const f of fl(P)) {
+    const front = lerp(f.t0 - fe, f.t1 + fe, q), col = colOf(f.to);
+    if (q > 0 && q < 1) {
+      c.save(); clipPoly(c, f.cell); c.globalCompositeOperation = 'lighter';
+      const d = 0.7071, ax = f.x + d * (front - 70 * k), ay = f.y + d * (front - 70 * k), bx = f.x + d * (front + 26 * k), by = f.y + d * (front + 26 * k);
+      const g = c.createLinearGradient(ax, ay, bx, by);
+      g.addColorStop(0, rgba(col, 0)); g.addColorStop(0.55, rgba(col, 0.16)); g.addColorStop(0.78, rgba(PAPER, 0.34)); g.addColorStop(0.86, rgba(PAPER, 0.12)); g.addColorStop(1, rgba(PAPER, 0));
+      c.fillStyle = g; c.fillRect(0, 0, W, H); c.restore();
+    }
+    const near = Math.exp(-Math.pow(front - fe * 0.3, 2) / Math.pow(26 * k, 2));
+    if (near > 0.01) {
+      c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+      c.strokeStyle = rgba(PAPER, 0.85 * near); c.lineWidth = 2.4 * k; c.beginPath(); c.arc(f.x, f.y, f.r + 1.5 * k, Math.PI * 1.05, Math.PI * 1.55); c.stroke(); c.restore();
+      glow(c, f.x - f.r * 0.5, f.y - f.r * 0.5, f.r * 1.6, PAPER, 0.5 * near);
+    }
+  }
+});
+
+// 13. Echo: three rings leave the city; each one deepens the colour by a third.
+variant('echo', 'Echo', 1350, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  let a = 0; for (let i = 0; i < 3; i++) a += sm(ph(t, i * 260 + 140, i * 260 + 400)) / 3;
+  P.split(a, sm(ph(t, 0, 240)));
+  for (const f of fl(P)) {
+    const col = colOf(f.to);
+    for (let i = 0; i < 3; i++) {
+      const p = ph(t, i * 260, i * 260 + 720);
+      if (p <= 0 || p >= 1) continue;
+      c.save(); clipPoly(c, f.cell);
+      softStroke(c, circlePath(f.x, f.y, f.r * 1.3 + (f.creach - f.r * 1.3) * eo(p)), (3.4 - 0.6 * i) * k, col, 0.85 * (1 - p), PAPER, 0.4 * (1 - p));
+      c.restore();
+    }
+    glow(c, f.x, f.y, f.r * 2.6, col, 0.4 * Math.sin(Math.PI * ph(t, 0, 600)));
+  }
+});
+
+// 14. Seal: a large ring of the side (own: one ring; opponent: a double ring) sets on the city, holds, dissolves.
+variant('seal', 'Seal', 1200, (P, t) => {
+  P.img(P.F.before); if (t < 0) return;
+  const c = P.c, k = P.k * P.se;
+  P.split(sm(ph(t, 160, 760)), sm(ph(t, 120, 340)));
+  for (const f of fl(P)) {
+    const col = colOf(f.to);
+    const inP = eo(ph(t, 0, 280)), outP = ph(t, 680, 1150);
+    const s = lerp(0.72, 1, inP) * (1 + 0.28 * eo(outP)), a = inP * (1 - outP);
+    if (a <= 0) continue;
+    const R = (f.r + 21 * k) * s;
+    annulus(c, f.x, f.y, R - 9 * k, R + 14 * k, col, 0.45 * a);
+    c.save(); c.globalAlpha = a; c.lineCap = 'round';
+    c.strokeStyle = rgba(BG, 0.8); c.lineWidth = 7.4 * k; c.beginPath(); c.arc(f.x, f.y, R, 0, TAU); c.stroke();
+    const g = c.createLinearGradient(f.x, f.y - R, f.x, f.y + R);
+    g.addColorStop(0, mix(col, '#ffffff', 0.2)); g.addColorStop(1, mix(col, '#000000', 0.18));
+    c.strokeStyle = g; c.lineWidth = 4.6 * k; c.beginPath(); c.arc(f.x, f.y, R, 0, TAU); c.stroke();
+    c.strokeStyle = rgba(PAPER, 0.9); c.lineWidth = 1.3 * k; c.beginPath(); c.arc(f.x, f.y, R + 2.3 * k, Math.PI * 0.95, Math.PI * 1.75); c.stroke();
+    if (f.to !== P.meta.me) { c.strokeStyle = rgba(PAPER, 0.95); c.lineWidth = 1.3 * k; c.beginPath(); c.arc(f.x, f.y, R - 5.6 * k, 0, TAU); c.stroke(); }
+    c.restore();
+  }
+});
+
+/* ---------- reduced motion: no travel, no pulse; a short cross-fade (ui-style 20, item 6) ---------- */
+function reducedDraw(P, t, v) {
+  if (v.id === 'current') return CURRENT.draw(P, t);
+  P.img(P.F.before); if (t < 0) return;
+  P.img(P.F.after, sm(ph(t, 0, 200)));
+  if (v.id === 'banner') for (const f of fl(P)) banner(P.c, f, P, f.to, 1, 1 - ph(t, 2300, 2700), 0);
+}
+
+/* ---------- UI ---------- */
+const CASES = [['own', 'You capture'], ['enemy', 'Enemy captures'], ['neutral', 'Neutral city'], ['province', 'Province'], ['capital', 'Capital'], ['two', 'Two at once']];
+const ZOOMS = [['near', 'In'], ['far', 'Out']];
+const NUMS = [['1', '1'], ['2', '2'], ['4', '4'], ['all', 'All']];
+const SPEEDS = [['1', '1×'], ['0.25', '0.25×'], ['0.1', '0.1×']];
+const st = { c: 'own', z: 'near', n: '2', v: ['current', 'flood', 'shock', 'banner'], s: '1', gray: false, rg: false, rm: false };
+(function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('c')) st.c = h.get('c'); if (h.get('z')) st.z = h.get('z'); if (h.get('n')) st.n = h.get('n'); if (h.get('s')) st.s = h.get('s');
+  if (h.get('v')) { const v = h.get('v').split(',').filter((x) => V.some((y) => y.id === x)); while (v.length < 4) v.push(st.v[v.length]); st.v = v; }
+  for (const k of ['gray', 'rg', 'rm']) st[k] = h.get(k) === '1';
+})();
+function writeHash() {
+  const h = new URLSearchParams({ c: st.c, z: st.z, n: st.n, v: st.v.join(','), s: st.s });
+  for (const k of ['gray', 'rg', 'rm']) if (st[k]) h.set(k, '1');
+  history.replaceState(null, '', '#' + h.toString());
+}
+function seg(id, items, get, set) {
+  const el = document.getElementById(id); el.innerHTML = '';
+  for (const [val, label] of items) {
+    const l = document.createElement('label'); const i = document.createElement('input'); i.type = 'radio'; i.name = id; i.value = val; i.checked = get() === val;
+    i.onchange = () => { set(val); writeHash(); build(); };
+    const s = document.createElement('span'); s.textContent = label; l.append(i, s); el.append(l);
+  }
+}
+const durLabel = (v) => (v.id === 'banner' ? '1.0 s, banner 2.7 s' : v.id === 'current' ? '0.45 s, flag 1.6 s' : `${(v.dur / 1000).toFixed(2)} s`);
+let panes = [];
+function build() {
+  seg('case', CASES, () => st.c, (v) => { st.c = v; });
+  seg('zoom', ZOOMS, () => st.z, (v) => { st.z = v; });
+  seg('num', NUMS, () => st.n, (v) => { st.n = v; });
+  seg('var', V.map((v) => [v.id, v.name]), () => st.v[0], (v) => { st.v[0] = v; });
+  seg('spd', SPEEDS, () => st.s, (v) => { st.s = v; });
+  document.getElementById('gray').checked = st.gray; document.getElementById('rg').checked = st.rg; document.getElementById('rm').checked = st.rm;
+  const host = document.getElementById('panes'); host.innerHTML = '';
+  host.className = st.n === 'all' ? 'all' : 'n' + st.n;
+  host.classList.toggle('gray', st.gray); host.classList.toggle('rg', st.rg);
+  const ids = st.n === 'all' ? V.map((v) => v.id) : st.v.slice(0, Number(st.n));
+  panes = ids.map((id, i) => {
+    const d = document.createElement('div'); d.className = 'pane';
+    const cap = document.createElement('div'); cap.className = 'cap';
+    const v = V.find((x) => x.id === id);
+    if (st.n === 'all' || i === 0) { const b = document.createElement('b'); b.textContent = v.name; cap.append(b); }
+    else {
+      const sel = document.createElement('select'); sel.setAttribute('aria-label', `Variant of pane ${i + 1}`);
+      for (const x of V) { const o = document.createElement('option'); o.value = x.id; o.textContent = x.name; o.selected = x.id === id; sel.append(o); }
+      sel.onchange = () => { st.v[i] = sel.value; writeHash(); build(); }; cap.append(sel);
+    }
+    const dd = document.createElement('span'); dd.className = 'd'; dd.textContent = durLabel(v); cap.append(dd);
+    const cv = document.createElement('canvas'); cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', `${v.name}: ${CASES.find((c) => c[0] === st.c)[1]}`);
+    d.append(cap, cv); host.append(d);
+    if (st.n === 'all') d.onclick = () => { st.n = '1'; st.v[0] = id; writeHash(); build(); };
+    const p = { id, cv }; p.P = new Ctx(p); return p;
+  });
+  dirty = true;
+}
+for (const k of ['gray', 'rg', 'rm']) document.getElementById(k).onchange = (e) => { st[k] = e.target.checked; writeHash(); build(); };
+
+let T = 0, playing = true, last = performance.now(), dirty = true;
+const playBtn = document.getElementById('play'), scrub = document.getElementById('scrub'), clock = document.getElementById('clock');
+playBtn.onclick = () => { playing = !playing; playBtn.textContent = playing ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(playing)); };
+scrub.oninput = () => { T = (scrub.value / 1000) * LOOP; dirty = true; };
+document.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playBtn.click(); } });
+
+function frame(now) {
+  const dt = Math.min(100, now - last); last = now;
+  if (playing) { T = (T + dt * Number(st.s)) % LOOP; dirty = true; scrub.value = String(Math.round((T / LOOP) * 1000)); }
+  if (dirty) {
+    dirty = false;
+    const key = `${st.c}-${st.z}`, F = frames(key), meta = META[key];
+    const t = T - PRE;
+    clock.textContent = `${(t / 1000).toFixed(2)} s`;
+    if (ready(F.before) && ready(F.mid) && ready(F.after)) {
+      for (const p of panes) {
+        const P = p.P, w = p.cv.clientWidth || 400;
+        P.size(Math.min(1600, w * Math.min(2, devicePixelRatio || 1)));
+        P.begin(F, meta); P.reduced = st.rm;
+        const v = V.find((x) => x.id === p.id);
+        if (st.rm) reducedDraw(P, t, v); else v.draw(P, t);
+      }
+    } else dirty = true;
+  }
+  requestAnimationFrame(frame);
+}
+window.__seek = (ms) => { playing = false; T = ms + PRE; dirty = true; };
+build(); writeHash(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

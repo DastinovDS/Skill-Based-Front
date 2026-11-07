@@ -1348,9 +1348,13 @@ A **major visual decision** (a new map or unit style, a change of the icon shape
 the look of most frames or costs more than a day) **does not start with code.** The order:
 
 1. **A mockup.** A self-contained interactive HTML in `docs/design/mockups/` (one file, opens from a file by double click, no network, no third-party
-   assets; drawn with code, generated images from `mockups/assets/<name>/` referenced by a relative path): switchable variants of the same scene,
-   **at least 10 design variants for each element plus the current look** (the owner, 2026-10-30; it was 3-4 since 2026-10-21), weak variants
-   pruned with `design:design-critique` before the owner sees them (the 10 count after pruning). **As little text and as few tables as possible
+   assets; drawn with code, generated images from `mockups/assets/<name>/` referenced by a relative path): switchable variants of the same scene
+   plus the current look, in **two rounds** (the owner, 2026-11-07; replaces "at least 10 variants" of 2026-10-30): **round 1 is broad**, many clearly
+   different directions (12 or more, not tweaks of one idea) at the game's finish level, no placeholders, foreign styles dropped; **round 2 is deep**,
+   several fully polished variations of the direction the owner picked. Every variant is checked against a style-fit list of the existing look
+   (palette, strokes, rims, glow, easing and timings of the current effects) before it goes on the page, and is drawn with the game's own material
+   (real baked frames, gradients, rims, soft glow, eased motion): nothing flat, crude or unfinished. Weak variants are pruned with
+   `design:design-critique` before the owner sees them. **As little text and as few tables as possible
    on the page** (the owner, 2026-10-30): only switches between elements and variants, a side-by-side comparison of 2 to 4 variants, and time
    controls (play, pause, scrub) where something moves; the explanations go into the issue. Switches for what affects readability
    (grayscale, "reduced motion"), the state in the address (`#el=...&v=...`) for reproducible frames. The mockup engine, where there are rules,
