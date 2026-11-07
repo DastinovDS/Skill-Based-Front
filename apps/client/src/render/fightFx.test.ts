@@ -17,6 +17,7 @@ import {
   chipHeight,
   chipPulse,
   chipsOf,
+  pinnedPenalty,
   exchangeAlpha,
   exchangeOf,
   fightFx,
@@ -219,13 +220,16 @@ describe('exchange of the last round', () => {
 });
 
 describe('chips of an arena', () => {
-  const side = (units: number, charged: number, losses = 0, mute = 0): SideCount => ({
+  const side = (units: number, charged: number, losses = 0, mute = 0, bonus = 0): SideCount => ({
     units,
     charged,
     losses,
-    bonus: 0,
+    bonus,
     mute,
   });
+  const ups = (chips: ReturnType<typeof chipsOf>): number[] => chips.badges.map((b) => b?.up ?? 0);
+  const downs = (chips: ReturnType<typeof chipsOf>): number[] =>
+    chips.badges.map((b) => b?.down ?? 0);
 
   it('draws a chip per unit that was in the fight: charged, then discharged, then dead', () => {
     expect(chipsOf(side(4, 2, 1)).shown).toEqual([
@@ -257,13 +261,56 @@ describe('chips of an arena', () => {
     expect(chipsOf(side(11, 4)).hiddenCharged).toBe(0);
   });
 
-  it('marks the silent charges as the last charged chips, never more than the charged ones', () => {
-    expect(chipsOf(side(4, 3, 0, 1)).silent).toEqual([2]);
-    expect(chipsOf(side(4, 3, 0, 2)).silent).toEqual([1, 2]);
-    expect(chipsOf(side(4, 1, 0, 5)).silent).toEqual([0]);
-    expect(chipsOf(side(4, 0, 0, 1)).silent).toEqual([]);
-    // A silent charge among the hidden chips is not drawn.
-    expect(chipsOf(side(10, 10, 0, 1)).silent).toEqual([]);
+  it('pins the penalty to the first chips, never more than the charged ones (#791)', () => {
+    expect(downs(chipsOf(side(4, 3, 0, 1), 1))).toEqual([1, 0, 0, 0]);
+    expect(downs(chipsOf(side(4, 3, 0, 2), 2))).toEqual([1, 1, 0, 0]);
+    expect(downs(chipsOf(side(4, 1, 0, 5), 5))).toEqual([1, 0, 0, 0]);
+    expect(downs(chipsOf(side(4, 0, 0, 1), 1))).toEqual([0, 0, 0, 0]);
+  });
+
+  it('keeps the silent chip charged while the others shoot: the badge never moves (item F2)', () => {
+    // 3 charged on plains: the first chip is silent; the shots empty the last charged ones.
+    const before = chipsOf(side(3, 3, 0, 1), 1);
+    const after = chipsOf(side(3, 1, 0, 1), 1);
+    expect(before.shown).toEqual(['charged', 'charged', 'charged']);
+    expect(after.shown).toEqual(['charged', 'empty', 'empty']);
+    expect(downs(before)).toEqual([1, 0, 0]);
+    expect(downs(after)).toEqual([1, 0, 0]);
+  });
+
+  it('leaves the burned chip where it was, discharged and without a badge (DEC-45)', () => {
+    // Pending burn: the first chip has the badge; after the first round the view has mute 0.
+    const pending = chipsOf(side(3, 3, 0, 1), 1);
+    expect(downs(pending)).toEqual([1, 0, 0]);
+    const burned = chipsOf(side(3, 1, 0, 0), 1);
+    expect(burned.shown).toEqual(['empty', 'charged', 'empty']);
+    expect(downs(burned)).toEqual([0, 0, 0]);
+    expect(burned.burned).toEqual([0]);
+    // Without a pinned chip (nothing was seen pending) the order is the plain one.
+    expect(chipsOf(side(3, 1, 0, 0)).shown).toEqual(['charged', 'empty', 'empty']);
+  });
+
+  it('puts one bonus badge on each chip after the penalty ones; a shot takes the last (#791)', () => {
+    expect(ups(chipsOf(side(3, 3, 0, 0, 2)))).toEqual([1, 1, 0]);
+    expect(ups(chipsOf(side(3, 3, 0, 0, 1)))).toEqual([1, 0, 0]);
+    // Mountains and a plan on plains: the first chip is the penalty, the bonus goes next to it.
+    expect(ups(chipsOf(side(3, 3, 0, 1, 1), 1))).toEqual([0, 1, 0]);
+    expect(downs(chipsOf(side(3, 3, 0, 1, 1), 1))).toEqual([1, 0, 0]);
+    // More bonus than living chips: the last one carries the rest as a count; the dead get none.
+    expect(ups(chipsOf(side(2, 2, 1, 0, 5)))).toEqual([1, 4, 0]);
+    // A single chip carries both.
+    const one = chipsOf(side(1, 1, 0, 1, 2), 1);
+    expect(one.badges).toEqual([{ up: 2, down: 1 }]);
+    // No living chip, no badge.
+    expect(chipsOf(side(0, 0, 2, 0, 1)).badges).toEqual([null, null]);
+  });
+
+  it('remembers the most penalty chips seen in a fight', () => {
+    expect(pinnedPenalty(0, side(3, 3, 0, 1), 0)).toBe(1);
+    expect(pinnedPenalty(1, side(3, 1, 0, 0), 0)).toBe(1);
+    // A fight first seen after its burn: the round tells it.
+    expect(pinnedPenalty(0, side(3, 1, 0, 0), 1)).toBe(1);
+    expect(pinnedPenalty(0, side(3, 3), 0)).toBe(0);
   });
 
   it('points at the chips that changed in the last round: out of charge, and dead', () => {
@@ -273,6 +320,10 @@ describe('chips of an arena', () => {
     expect(changedChips(side(4, 1, 1), null)).toEqual([]);
     // The charges that went out cannot be more than the units.
     expect(changedChips(side(2, 0, 0), { spent: 5, losses: 0 })).toEqual([0, 1]);
+    // DEC-45: the burned charge is the pinned chip in front, the shot one the end of the charged.
+    expect(changedChips(side(3, 1, 0, 0), { spent: 1, burned: 1, losses: 0 }, 1)).toEqual([0, 2]);
+    // Nothing pinned: the burn goes out with the shot at the end of the charged ones.
+    expect(changedChips(side(3, 1, 0, 0), { spent: 1, burned: 1, losses: 0 })).toEqual([1, 2]);
   });
 
   it('lays the chips out in two rows of four columns, a single row when four fit', () => {

@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 41,
+    "PROTOCOL_VERSION": 42,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -2574,6 +2574,17 @@
             }
           ],
           "description": "Supply flow, own node only: its own component over internal roads does not contain the own\ncapital (a pocket: its factories stop, without a factory it starves)."
+        },
+        "terrain_mark": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The terrain effect the defender of the node would get if attacked now (DEC-24, item F2;\n#791): positive, the bonus shots of mountains; negative, the charges plains silence (under\n``combat.terrain_burn`` burn in the first round). Only for a node with an owner, no fight,\na terrain effect and a charged group of the owner standing in it; for a node of the enemy only\nat ``exact``. ``null`` otherwise: an attacker, a discharged group, a road and a neutral node\nnever carry it. The client draws it as is (AGENTS.md 7.1)."
         }
       },
       "required": [
@@ -2602,7 +2613,8 @@
         "flow_down",
         "flow_next",
         "flow_idle",
-        "flow_pocket"
+        "flow_pocket",
+        "terrain_mark"
       ],
       "title": "NodeView",
       "type": "object"

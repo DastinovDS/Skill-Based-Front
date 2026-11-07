@@ -20,6 +20,7 @@ import type {
 } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
+import { badgesSnapshot } from './badgesScene.ts';
 import { DEFENSE_VIEW, defenseSnapshot } from './defenseScene.ts';
 import { ECONOMY_VIEW, economySnapshot } from './economyScene.ts';
 import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
@@ -528,6 +529,15 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     events: [round(ARTERY_TICK - 12, { node: 4 }, 2, 0, 1)],
     view: ARTERY_VIEW,
     // As in `mvp-1`: the own capital and the enemy city 5 next door show the barracks (DEC-31).
+    cityUpgrades: true,
+  },
+  {
+    // The artery moment with the chevron badges (#791): terrain marks on the map, badges on chips.
+    id: 'badges',
+    map: 'artery',
+    snapshot: badgesSnapshot(bundledMap('artery')),
+    events: [],
+    view: ARTERY_VIEW,
     cityUpgrades: true,
   },
   {

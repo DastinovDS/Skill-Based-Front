@@ -216,6 +216,25 @@ def test_economy_v2_fields_are_validated() -> None:
             decode(**patch)
 
 
+def test_the_terrain_mark_is_validated() -> None:
+    """#791: a non-zero terrain mark of a node with an owner, never in fog. (Who carries it is the
+    simulation's fog test, ``packages/sim/tests/test_terrain_mark.py``.)"""
+    raw = json.loads((FIXTURES_DIR / "server" / "snapshot.json").read_text())
+    view = raw["view"]
+    own, neutral = view["nodes"][0], view["nodes"][2]
+
+    def decode(node: object, mark: object) -> None:
+        nodes = [{**n, "terrain_mark": mark} if n is node else n for n in view["nodes"]]
+        decode_server(json.dumps({**raw, "view": {**view, "nodes": nodes}}))
+
+    decode(own, 1)
+    decode(own, -1)
+    decode(own, None)
+    for node, mark in ((own, 0), (neutral, 1)):
+        with pytest.raises(ValidationError):
+            decode(node, mark)
+
+
 def test_supply_flow_fields_are_validated() -> None:
     """DEC-43, item E (#704): the flow fields of a node go together and only for an own node,
     ``flow_idle`` exactly when ``flow_next`` is empty, ``front_dist`` may be ``null`` (no field);

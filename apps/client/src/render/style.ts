@@ -15,6 +15,13 @@ export const NEUTRAL_STROKE = 0x8b949e;
 export const NEUTRAL_FILL = 0x2b3139;
 export const WARN = 0xffb020;
 export const VP = 0xe3b341;
+/**
+ * The two colours of the advantage and disadvantage badges (#791, variant 8 "Chevrons" of #776):
+ * green chevrons up, red chevrons down. Never alone: the direction of the chevrons tells them
+ * apart (and in grey), and a dark outline gives at least 3:1 on every terrain (ui-style 6, 32).
+ */
+export const BADGE_UP = 0x3ddc72;
+export const BADGE_DOWN = 0xff4f4f;
 /** Empty segment of a capacity ring and of a warehouse bar. */
 export const SEGMENT_EMPTY = 0x59636e;
 export const SEGMENT_EMPTY_BAR = 0x3b4450;
@@ -308,6 +315,26 @@ export const UNIT_MIN_SIDE_PX = 20;
 export const UNIT_MIN_HIT_PX = 28;
 export const UNIT_LABEL = { fill: PLATE_FILL, alpha: 0.92, padX: 4, height: 13, gap: 3 } as const;
 export const SHIELD_BADGE_SCALE = 0.9;
+/**
+ * The chevron badges (#791, ui-style 32): `size` is the side of a mark in world units on the map
+ * (in px in the arena, `chipSize`); on screen a map mark is at least `minPx` (the exception to the
+ * 20 px of section 22). Up to `maxStrokes` chevrons tell the count by strokes; above it one chevron
+ * and the number, up to `maxCount`, then "9+": the keys of the baked badges stay bounded
+ * (2 directions x 10 counts x 2 sizes = 40).
+ */
+export const BADGE = {
+  size: 11,
+  chipSize: 9,
+  minPx: 8,
+  maxStrokes: 3,
+  maxCount: 9,
+  /** The stroke of a chevron, a share of the size; the dark outline is this much wider (units). */
+  stroke: 0.3,
+  outline: 2.6,
+  /** The number beside one chevron: its font size (a share of the size, at least `minFont`). */
+  font: 1.05,
+  minFont: 9,
+} as const;
 /**
  * The counter of "Defense" (DEC-30, #349, D1 "Diamond pips"): a capsule of bonus diamonds beside the
  * shield badge, a filled one for each bonus gathered and a hollow one for room up to the cap. Above

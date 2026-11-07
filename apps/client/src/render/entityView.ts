@@ -24,6 +24,7 @@ import { nodeMarkerPoint } from './fogLayout.ts';
 import { spreadApart, type SpreadItem } from './spread.ts';
 import { buildProgress } from './roadLayout.ts';
 import { knownOfSeen } from './rangeLabel.ts';
+import { terrainBadges } from './badgeLayout.ts';
 import type { SpriteCache } from './bake.ts';
 import { EntityKit, Token } from './shapes.ts';
 import { FigureView } from './figureView.ts';
@@ -124,6 +125,11 @@ export class EntityView implements EnemyAnchors {
   private readonly groups = new Map<string, GroupEntry>();
   private readonly packets = new Map<string, PacketEntry>();
   private base: SnapshotMsg | null = null;
+  /**
+   * The terrain mark of each node and its owner, by node id (`NodeView.terrain_mark`, #791): the
+   * server says which defender carries one; the icon of that owner in the city shows it.
+   */
+  private marks: { owner: PlayerId | null; mark: number | null }[] = [];
   private stamp = 0;
   private spots: ReadonlyMap<string, TokenSpot> = new Map();
   private edgeSpots: ReadonlyMap<string, TokenSpot> = new Map();
@@ -283,8 +289,22 @@ export class EntityView implements EnemyAnchors {
   setCameraScale(scale: number): void {
     if (scale === this.cameraScale) return;
     this.cameraScale = scale;
-    for (const token of this.enemyTokens()) token.setScale(symbolScale(token.side, scale));
+    for (const token of this.enemyTokens()) this.scaleEnemy(token);
     for (const mark of this.buildMarks) mark.view.scale.set(this.plateScale());
+  }
+
+  /** An enemy token at its size on screen; its badges keep their own floor (ui-style 32). */
+  private scaleEnemy(token: Token): void {
+    const scale = symbolScale(token.side, this.cameraScale);
+    token.setScale(scale);
+    token.setBadgeFloor(this.cameraScale * scale);
+  }
+
+  /** The badges of the icon of `owner` in `node`: its terrain mark if it holds the node (#791). */
+  private badgesAt(node: number, owner: PlayerId): ReturnType<typeof terrainBadges> {
+    const known = this.marks[node];
+    if (known === undefined || known.owner !== owner) return [];
+    return terrainBadges(known.mark);
   }
 
   /** The plate of a build keeps the minimum size of a symbol on screen (ui-style 22). */
@@ -342,6 +362,10 @@ export class EntityView implements EnemyAnchors {
 
   private applyBase(base: SnapshotMsg): void {
     const { nodes } = base.view;
+    this.marks = [];
+    for (const node of nodes) {
+      this.marks[node.id] = { owner: node.owner, mark: node.terrain_mark };
+    }
     nodes.forEach((node) => {
       this.setEnemyNode(node);
     });
@@ -436,6 +460,7 @@ export class EntityView implements EnemyAnchors {
     detail: NodeView['detail'],
     parent: Container,
     inside: boolean,
+    badges: ReturnType<typeof terrainBadges> = [],
   ): Token | null {
     const shown =
       seen !== null && detail !== 'fog' && seen.level !== 'fog' && seen.enemy_modes.length > 0;
@@ -448,9 +473,9 @@ export class EntityView implements EnemyAnchors {
     // Seen again after a gap (or for the first time): fade in; the very first frame is as it is.
     if ((current === null || !current.view.visible) && this.warm) token.enter();
     const { counts, range } = knownOfSeen(seen);
-    token.set({ owner: this.enemy, modes: seen.enemy_modes, counts, range, inside });
+    token.set({ owner: this.enemy, modes: seen.enemy_modes, counts, range, inside, badges });
     token.setLabel(true);
-    token.setScale(symbolScale(token.side, this.cameraScale));
+    this.scaleEnemy(token);
     token.view.visible = true;
     return token;
   }
@@ -463,6 +488,7 @@ export class EntityView implements EnemyAnchors {
       node.detail,
       this.enemyLayer,
       true,
+      this.badgesAt(node.id, this.enemy),
     );
   }
 
@@ -505,6 +531,7 @@ export class EntityView implements EnemyAnchors {
         modes: stack.modes,
         counts: { units: stack.units, charged: stack.charged },
         inside: true,
+        badges: this.badgesAt(stack.node, stack.owner),
       });
       const city = nodePoint(this.map, stack.node);
       const own = stack.owner === this.me;
@@ -520,6 +547,7 @@ export class EntityView implements EnemyAnchors {
       entry.view.scale.set(scale);
       entry.view.position.set(at.x, at.y);
       entry.token.setLabel(true);
+      entry.token.setBadgeFloor(this.cameraScale * scale);
       const spot: TokenSpot = {
         x: at.x,
         y: at.y,

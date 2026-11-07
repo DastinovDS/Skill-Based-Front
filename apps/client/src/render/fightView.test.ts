@@ -133,10 +133,21 @@ function setup() {
     });
     return found;
   };
-  const badges = (): number => {
+  /** The chevron badges of the chips (#791), left to right: `up:1@-` own, `down:1@+` enemy. */
+  const badges = (): string[] => {
+    const found: { at: number; text: string }[] = [];
+    walk((node) => {
+      const label = labelOf(node);
+      if (label.startsWith('badge:')) {
+        found.push({ at: node.x, text: `${label.slice(6)}@${node.x < 0 ? '-' : '+'}` });
+      }
+    });
+    return found.sort((a, b) => a.at - b.at).map((b) => b.text);
+  };
+  const selfShots = (): number => {
     let count = 0;
     walk((node) => {
-      if (labelOf(node) === 'mute-badge') count++;
+      if (labelOf(node) === 'self-shot') count++;
     });
     return count;
   };
@@ -167,7 +178,7 @@ function setup() {
     });
     return { width: maxX - minX, height: maxY - minY };
   };
-  return { layers, view, frame, texts, chips, badges, arenaViews, extent, walk };
+  return { layers, view, frame, texts, chips, badges, selfShots, arenaViews, extent, walk };
 }
 
 describe('FightView', () => {
@@ -297,71 +308,42 @@ describe('FightView', () => {
     view.destroy();
   });
 
-  it('shows the bonus stock of both sides from the view, dim at zero, and drops it with the fight', () => {
-    const { view, frame, texts, layers } = setup();
-    const alphaOf = (label: string): number => {
-      let alpha = Number.NaN;
-      const visit = (node: Container): void => {
-        if (node instanceof Text && node.visible && node.text === label) alpha = node.alpha;
-        for (const child of node.children) visit(child);
-      };
-      visit(layers.layer.effects);
-      return alpha;
-    };
-    view.update(frame(snapshot([fightAt({ virtual_left: [2, 0] })])), [], ROUND, false);
-    expect(texts()).toContain('×2');
-    expect(texts()).toContain('×0');
-    expect(alphaOf('×2')).toBe(1);
-    expect(alphaOf('×0')).toBeLessThan(1);
-    // The stock follows the view round after round.
-    view.update(frame(snapshot([fightAt({ virtual_left: [1, 3] })])), [], ROUND, false);
-    expect(texts()).toContain('×1');
-    expect(texts()).toContain('×3');
-    // Seen from the other player the pairs swap sides: the view's pairs are by player id.
-    const layers1 = createLayers();
-    const other = new FightView(map, layers1, 1, 1, radiusOf, testSprites());
-    other.update(frame(snapshot([fightAt({ virtual_left: [5, 4] })])), [], ROUND, false);
-    const xOf = (label: string): number => {
-      let x = Number.NaN;
-      const visit = (node: Container): void => {
-        if (node instanceof Text && node.visible && node.text === label) x = node.x;
-        for (const child of node.children) visit(child);
-      };
-      visit(layers1.layer.effects);
-      return x;
-    };
-    expect(xOf('×4')).toBeLessThan(0);
-    expect(xOf('×5')).toBeGreaterThan(0);
-    other.destroy();
-    // No fight, no stock.
-    view.update(frame(snapshot([])), [], ROUND, false);
+  it('puts the bonus shots of both sides on their chips as chevrons up, no stock row (#791)', () => {
+    const { view, frame, texts, badges } = setup();
+    const at = (virtual: [number, number]): SnapshotMsg =>
+      withOwn([fightAt({ enemy_units: 3, enemy_charged: 3, virtual_left: virtual })], 3, 3);
+    view.update(frame(at([2, 1])), [], ROUND, false);
+    expect(badges().filter((b) => b.endsWith('@-'))).toEqual(['up:1@-', 'up:1@-']);
+    expect(badges().filter((b) => b.endsWith('@+'))).toEqual(['up:1@+']);
     expect(texts().filter((text) => text.startsWith('×'))).toEqual([]);
+    // A virtual shot fired: the badge of the last of them goes, the first stays where it was.
+    const first = badges();
+    view.update(frame(at([1, 0])), [], ROUND, false);
+    expect(badges()).toEqual([first[1]]);
+    // No fight, no badge.
+    view.update(frame(snapshot([])), [], ROUND, false);
+    expect(badges()).toEqual([]);
     view.destroy();
   });
 
-  it('badges the silent charges: the last charged chips of the side, per the view', () => {
-    const { view, frame, badges } = setup();
-    view.update(
-      frame(withOwn([fightAt({ enemy_units: 3, enemy_charged: 3 })], 2, 2)),
-      [],
-      ROUND,
-      false,
-    );
-    expect(badges()).toBe(0);
-    view.update(
-      frame(withOwn([fightAt({ enemy_units: 3, enemy_charged: 3, mute: [0, 1] })], 2, 2)),
-      [],
-      ROUND,
-      false,
-    );
-    expect(badges()).toBe(1);
-    view.update(
-      frame(withOwn([fightAt({ enemy_units: 3, enemy_charged: 3, mute: [1, 2] })], 2, 2)),
-      [],
-      ROUND,
-      false,
-    );
-    expect(badges()).toBe(3);
+  it('pins the penalty to one chip that never moves while the others shoot (item F2, #791)', () => {
+    const { view, frame, badges, chips } = setup();
+    const at = (charged: number, mute: [number, number]): SnapshotMsg =>
+      withOwn([fightAt({ enemy_units: 3, enemy_charged: 3, mute })], 3, charged);
+    view.update(frame(at(3, [0, 0])), [], ROUND, false);
+    expect(badges()).toEqual([]);
+    view.update(frame(at(3, [1, 0])), [], ROUND, false);
+    const own = (): { state: string; x: number }[] =>
+      chips()
+        .filter((chip) => chip.x < 0)
+        .sort((a, b) => b.x - a.x);
+    expect(badges()).toEqual(['down:1@-']);
+    const before = own()[0];
+    // Two charges shot: the silent one is still the first chip, still charged, with its badge.
+    view.update(frame(at(1, [1, 0])), [], ROUND, false);
+    expect(badges()).toEqual(['down:1@-']);
+    expect(own()[0]).toMatchObject({ state: 'charged', x: before?.x });
+    expect(own().map((chip) => chip.state)).toEqual(['charged', 'empty', 'empty']);
     view.destroy();
   });
 
@@ -372,37 +354,20 @@ describe('FightView', () => {
         fightAt({ enemy_units: 0, enemy_charged: 0, last_round: roundOf(146, shots, virtual) }),
       ]);
     view.update(frame(withRound([3, 1], [1, 0])), [], ROUND, false);
-    // Nothing but the stocks and the caption of the bonus shot: no "2", "1", "1" of the labels of shots.
-    expect(texts().filter((text) => !text.startsWith('×'))).toEqual(['bonus attack']);
+    // No labels of shots ("2", "1", "1"), no caption of the bonus shot: the badges tell it (#791).
+    expect(texts()).toEqual([]);
     walk((node) => {
       expect(labelOf(node).startsWith('arrows')).toBe(false);
     });
     view.destroy();
   });
 
-  it('writes "bonus attack" over the plate only in a round with a virtual shot', () => {
-    const { view, frame, texts } = setup();
-    const at = (virtual: [number, number], shots: [number, number] = [1, 1]): SnapshotMsg =>
-      snapshot([fightAt({ last_round: roundOf(146, shots, virtual) })]);
-    view.update(frame(at([0, 0])), [], ROUND, false);
-    expect(texts()).not.toContain('bonus attack');
-    view.update(frame(at([1, 0])), [], ROUND, false);
-    expect(texts()).toContain('bonus attack');
-    // The enemy's bonus shot counts as well: the caption does not tell whose it is, or where from.
-    view.update(frame(at([0, 1])), [], ROUND, false);
-    expect(texts()).toContain('bonus attack');
-    // A round without shots has no caption even if the stock is there.
-    view.update(frame(at([0, 0], [0, 0])), [], ROUND, false);
-    expect(texts()).not.toContain('bonus attack');
-    view.destroy();
-  });
-
-  it('shows a fight without data of rounds (an old replay) with chips and no caption', () => {
-    const { view, frame, texts, chips } = setup();
+  it('shows a fight without data of rounds (an old replay) with chips and no badges', () => {
+    const { view, frame, texts, chips, badges } = setup();
     view.update(frame(running), [], ROUND, false);
     expect(chips()).toHaveLength(3);
-    // Nothing but the stock at zero: no caption.
-    expect(texts().sort()).toEqual(['×0', '×0']);
+    expect(texts()).toEqual([]);
+    expect(badges()).toEqual([]);
     view.destroy();
   });
 
@@ -444,39 +409,6 @@ describe('FightView', () => {
     expect(gap(1)).toBeGreaterThan(PLATE.halfHeight);
   });
 
-  it('keeps the caption of a bonus shot from the tick of the round, whatever its length (10 and 20 ticks)', () => {
-    for (const ticks of [10, 20]) {
-      const { view, frame, texts } = setup();
-      const at = (tick: number): SnapshotMsg =>
-        snapshot(
-          [fightAt({ enemy_units: 0, enemy_charged: 0, last_round: roundOf(150, [1, 0], [1, 0]) })],
-          tick,
-        );
-      const caption = (): boolean => texts().includes('bonus attack');
-      // Before the round nothing is said; at its tick the caption is there.
-      view.update(frame(at(149)), [], ticks, false);
-      expect(caption()).toBe(false);
-      view.update(frame(at(150)), [], ticks, false);
-      expect(caption()).toBe(true);
-      // It holds until the next round is due and is gone two rounds after the shots.
-      view.update(frame(at(150 + ticks * 0.9)), [], ticks, false);
-      expect(caption()).toBe(true);
-      view.update(frame(at(150 + ticks * 2)), [], ticks, false);
-      expect(caption()).toBe(false);
-      view.destroy();
-    }
-  });
-
-  it('with less motion the caption is there at once too', () => {
-    const { view, frame, texts } = setup();
-    const snap = snapshot([
-      fightAt({ enemy_units: 0, enemy_charged: 0, last_round: roundOf(150, [1, 2], [1, 0]) }),
-    ]);
-    view.update(frame(snap), [], ROUND, true);
-    expect(texts()).toContain('bonus attack');
-    view.destroy();
-  });
-
   it('pulses the chip that went out in the round once, and not with less motion', () => {
     const { view, frame, chips } = setup();
     // One of own two units lost its charge in the round: the first discharged chip swells.
@@ -507,6 +439,43 @@ describe('FightView', () => {
     view.destroy();
   });
 
+  it('burns the pinned chip in the first round: a self-shot, the badge goes (DEC-45, #791)', () => {
+    const { view, frame, chips, badges, selfShots } = setup();
+    const at = (tick: number, mute: number, charged: number, round: boolean): SnapshotMsg =>
+      withOwn(
+        [
+          fightAt({
+            enemy_units: 0,
+            enemy_charged: 0,
+            mute: [mute, 0],
+            last_round: round ? roundOf(150, [1, 0], [0, 0], [1, 0], [0, 0], [1, 0]) : null,
+          }),
+        ],
+        3,
+        charged,
+        tick,
+      );
+    const own = (): string[] =>
+      chips()
+        .filter((chip) => chip.x < 0)
+        .sort((a, b) => b.x - a.x)
+        .map((chip) => chip.state);
+    // Before the round: the pending burn is the badge down of the first chip.
+    view.update(frame(at(145, 1, 3, false)), [], ROUND, false);
+    expect(badges()).toEqual(['down:1@-']);
+    expect(selfShots()).toBe(0);
+    // The round: that very chip shot itself, its charge went out, the badge is gone.
+    view.update(frame(at(151, 0, 1, true)), [], ROUND, false);
+    expect(badges()).toEqual([]);
+    expect(own()).toEqual(['empty', 'charged', 'empty']);
+    expect(selfShots()).toBe(1);
+    // The self-shot lasts a share of a round, then only the empty chip tells it.
+    view.update(frame(at(150 + ROUND, 0, 1, true)), [], ROUND, false);
+    expect(selfShots()).toBe(0);
+    expect(own()).toEqual(['empty', 'charged', 'empty']);
+    view.destroy();
+  });
+
   it('pulses a charge the terrain burned with the one that was shot (DEC-45)', () => {
     const { view, frame, chips } = setup();
     // 3 own units: the first round took a shot and a burned charge, one charged chip is left.
@@ -525,9 +494,13 @@ describe('FightView', () => {
       );
     view.update(frame(at(150)), [], ROUND, false);
     view.update(frame(at(154.5)), [], ROUND, false);
-    const swell = chips().map((chip) => chip.scale);
-    expect(swell[0]).toBe(1);
-    expect(swell[1]).toBeGreaterThan(1);
+    // Nearest the middle first: the burned chip is pinned in front, the shot one is the last.
+    const swell = chips()
+      .filter((chip) => chip.x < 0)
+      .sort((a, b) => b.x - a.x)
+      .map((chip) => chip.scale);
+    expect(swell[0]).toBeGreaterThan(1);
+    expect(swell[1]).toBe(1);
     expect(swell[2]).toBeGreaterThan(1);
     view.destroy();
   });
@@ -549,32 +522,29 @@ describe('FightView', () => {
   });
 
   it('shows several fights at once, each with its own arena', () => {
-    const { view, frame, arenaViews, texts } = setup();
+    const { view, frame, arenaViews, badges } = setup();
     const other = map.nodes[2]?.id ?? 2;
     const snap = snapshot([
       fightAt({
         id: 'a',
-        enemy_units: 0,
-        enemy_charged: 0,
-        virtual_left: [1, 0],
+        enemy_units: 3,
+        enemy_charged: 3,
+        virtual_left: [0, 1],
         last_round: roundOf(146, [1, 0]),
       }),
       fightAt({
         id: 'b',
         node: other,
-        enemy_units: 0,
-        enemy_charged: 0,
+        enemy_units: 3,
+        enemy_charged: 3,
         virtual_left: [0, 2],
         last_round: roundOf(146, [0, 2]),
       }),
     ]);
     view.update(frame(snap), [], ROUND, false);
     expect(arenaViews()).toHaveLength(2);
-    expect(
-      texts()
-        .filter((text) => text.startsWith('×'))
-        .sort(),
-    ).toEqual(['×0', '×0', '×1', '×2']);
+    // Each arena its own badges: one bonus shot left in the first, two in the second.
+    expect(badges()).toEqual(['up:1@+', 'up:1@+', 'up:1@+']);
     view.destroy();
   });
 

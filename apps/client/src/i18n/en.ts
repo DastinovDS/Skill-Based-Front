@@ -452,7 +452,6 @@ export const en = {
   'fight.captured': 'Captured',
   'fight.held': 'Held',
   'fight.bounced': 'Both retreated',
-  'fight.bonusAttack': 'bonus attack',
   'fight.silent': 'silent',
   'help.key.defense': 'group Defense on or off',
   'defense.bonus': '+{bonus} / {cap}',
@@ -499,14 +498,13 @@ export const en = {
   'help.legend.alert': 'Amber ring: they are coming for the city, or it is overcrowded',
   'help.legend.chips':
     'Fight arena: a chip per unit (filled: charged, hatched: discharged, dashed: dead), up to 8 a side, then "+N"',
-  'help.legend.stock':
-    '◇ ×N under a half of the arena: the bonus shots the side has left; both players see it while the fight lasts',
-  'help.legend.silent':
-    'An amber crossed circle on a chip: a charge that does not shoot (a defender on plains)',
-  'help.legend.silentBurn':
-    'An amber crossed circle on a chip: a charge that burns in the first round (a defender on plains)',
-  'help.legend.bonusShot':
-    'A dashed arrow with a diamond and the caption "bonus attack": a bonus shot fired this round',
+  'help.legend.badgeUp':
+    'Green chevrons up: an advantage, a stroke per bonus shot. On the map, a defender on mountains; in a fight, gone when the shot fires',
+  'help.legend.badgeDown':
+    'Red chevrons down: a defender on plains. If attacked, one charge stays silent for the whole fight',
+  'help.legend.badgeDownBurn':
+    'Red chevrons down: a defender on plains. If attacked, one charge burns in the first round',
+  'help.legend.bonusShot': 'A dashed arrow with a diamond: a bonus shot fired this round',
   'help.howTo': 'How to play',
   'help.howToBack': 'Back to the keys',
   // The "How to play" screen (CLI-13, #72); the numbers come from the played ruleset.

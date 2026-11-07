@@ -49,7 +49,8 @@
         "flow_down": [1],
         "flow_next": [1, 5],
         "flow_idle": null,
-        "flow_pocket": false
+        "flow_pocket": false,
+        "terrain_mark": -1
       },
       {
         "id": 1,
@@ -84,7 +85,8 @@
         "flow_down": [],
         "flow_next": [],
         "flow_idle": "leaf",
-        "flow_pocket": false
+        "flow_pocket": false,
+        "terrain_mark": null
       },
       {
         "id": 2,
@@ -119,7 +121,8 @@
         "flow_down": [],
         "flow_next": [],
         "flow_idle": "leaf",
-        "flow_pocket": false
+        "flow_pocket": false,
+        "terrain_mark": null
       },
       {
         "id": 3,
@@ -154,7 +157,8 @@
         "flow_down": [],
         "flow_next": [],
         "flow_idle": "ahead",
-        "flow_pocket": false
+        "flow_pocket": false,
+        "terrain_mark": null
       },
       {
         "id": 4,
@@ -189,7 +193,8 @@
         "flow_down": [],
         "flow_next": [],
         "flow_idle": "ahead",
-        "flow_pocket": false
+        "flow_pocket": false,
+        "terrain_mark": null
       },
       {
         "id": 5,
@@ -224,7 +229,8 @@
         "flow_down": [1],
         "flow_next": [],
         "flow_idle": "empty",
-        "flow_pocket": false
+        "flow_pocket": false,
+        "terrain_mark": null
       },
       {
         "id": 6,
@@ -259,7 +265,8 @@
         "flow_down": [2],
         "flow_next": [],
         "flow_idle": "empty",
-        "flow_pocket": false
+        "flow_pocket": false,
+        "terrain_mark": null
       },
       {
         "id": 7,
@@ -294,7 +301,8 @@
         "flow_down": [2],
         "flow_next": [],
         "flow_idle": "empty",
-        "flow_pocket": false
+        "flow_pocket": false,
+        "terrain_mark": null
       },
       {
         "id": 8,
@@ -322,7 +330,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 9,
@@ -350,7 +359,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 10,
@@ -378,7 +388,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 11,
@@ -406,7 +417,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 12,
@@ -434,7 +446,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 13,
@@ -462,7 +475,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 14,
@@ -490,7 +504,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 15,
@@ -518,7 +533,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 16,
@@ -546,7 +562,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 17,
@@ -574,7 +591,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 18,
@@ -602,7 +620,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 19,
@@ -630,7 +649,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       },
       {
         "id": 20,
@@ -658,7 +678,8 @@
         "flow_down": null,
         "flow_next": null,
         "flow_idle": null,
-        "flow_pocket": null
+        "flow_pocket": null,
+        "terrain_mark": null
       }
     ],
     "edges": [
