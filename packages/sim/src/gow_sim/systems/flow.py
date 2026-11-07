@@ -246,16 +246,91 @@ class _Field:
     L1, the BFS of item I2); pockets have none."""
 
 
+@dataclass(slots=True)
+class _Base:
+    """The part of a player's field that depends only on the owners of the nodes and the
+    clamped leaf shift (items A1 to A3, B3): the memo of ``_field`` keeps it while they stay."""
+
+    owners: list[int | None]
+    adj: dict[int, list[tuple[int, int]]]
+    hops: dict[int, int]
+    d0: dict[int, int]
+    shift_max: int
+    shift: int
+    k: dict[int, int]
+    pocket: dict[int, bool]
+
+
+@dataclass(slots=True)
+class _FieldMemo:
+    """The last field of a player and its inputs (``_field``); ``GameState.memo``."""
+
+    base: _Base
+    holding: list[int] | None = None
+    owed: dict[int, int] | None = None
+    field: _Field | None = None
+
+
+_MEMO: tuple[str, str] = ("flow.field.0", "flow.field.1")
+"""``GameState.memo`` keys of the field memo, by player id."""
+
+
 def _field(state: GameState, player: int) -> _Field:
     """Items A1 to A4 (as revised by #724) and B3 for ``player``; stores the clamped shift and its
-    maximum."""
-    mapdef = state.map
+    maximum.
+
+    A pure function of the owners of the nodes, the leaf shift, the own standing groups that hold
+    and the charges the own builds owe; the last field of the player is kept with these inputs in
+    ``GameState.memo`` and returned again while they are equal (the part of the owners and the
+    shift alone too, ``_Base``)."""
     nodes = state.nodes
+    owners = [nodes[nid].owner for nid in range(len(state.map.incident))]  # ids are 0..n-1
+    ps = state.players[player]
+    memo = state.memo.get(_MEMO[player])
+    if (
+        not isinstance(memo, _FieldMemo)
+        or memo.base.owners != owners
+        or min(ps.leaf_shift, memo.base.shift_max) != memo.base.shift
+    ):
+        memo = _FieldMemo(_base(state, player, owners))
+        state.memo[_MEMO[player]] = memo
+    base = memo.base
+    ps.leaf_shift_max = base.shift_max
+    ps.leaf_shift = base.shift  # the clamp is stored (item B3)
+    d0 = base.d0
+    adj = base.adj
+    holding: dict[int, bool] = {}
+    for g in state.groups.values():  # flags (the order is kept for ``flat``)
+        loc = g.location
+        if g.owner != player or not isinstance(loc, AtNode):
+            continue
+        n = loc.node
+        if (g.charged < g.units or g.plan > 0) and n in d0:
+            holding[n] = True
+    # An unpaid build pulls like such an army (item J): its node joins the same set; without an
+    # army there its intake is capped by what it still owes (``_run``).
+    owed: dict[int, int] = {}
+    for n in adj:  # ascending
+        if n not in holding:
+            due = _owed(nodes[n], player)
+            if due > 0:
+                owed[n] = due
+                holding[n] = True
+    order = list(holding)
+    if memo.field is not None and memo.holding == order and memo.owed == owed:
+        return memo.field
+    field = _pull(state, player, base, holding, owed)
+    memo.holding, memo.owed, memo.field = order, owed, field
+    return field
+
+
+def _base(state: GameState, player: int, owners: list[int | None]) -> _Base:
+    """The ``_Base`` of ``player`` for ``owners`` and the leaf shift of the player now."""
+    mapdef = state.map
     edges = mapdef.edges
     adj: dict[int, list[tuple[int, int]]] = {}
     contact: dict[int, bool] = {}
     incident = mapdef.incident
-    owners = [nodes[nid].owner for nid in range(len(incident))]  # ids are 0..n-1 (``MapDef``)
     for nid, owner in enumerate(owners):  # ascending
         if owner != player:
             continue
@@ -310,13 +385,23 @@ def _field(state: GameState, player: int) -> _Field:
         d0[n] = 0
     _bfs(adj, d0, deque(leaves))
 
-    ps = state.players[player]
     shift_max = d0.get(capital, 0) if capital in adj else 0
-    ps.leaf_shift_max = shift_max
-    ps.leaf_shift = min(ps.leaf_shift, shift_max)  # the clamp is stored (item B3)
-    shift = ps.leaf_shift
+    shift = min(state.players[player].leaf_shift, shift_max)  # stored by ``_field`` (item B3)
     k = {n: shift if n in hops else 0 for n in adj}
     pocket = {n: n not in hops for n in adj}  # no own capital: all pockets
+    return _Base(owners, adj, hops, d0, shift_max, shift, k, pocket)
+
+
+def _pull(
+    state: GameState,
+    player: int,
+    base: _Base,
+    holding: dict[int, bool],
+    owed: dict[int, int],
+) -> _Field:
+    """The rest of ``_field`` on its ``_Base``: the pull and the downhill roads (items A4, I, J)."""
+    mapdef = state.map
+    adj, hops, d0, k, pocket = base.adj, base.hops, base.d0, base.k, base.pocket
 
     # The pull (item A4): a multi-source BFS from the pulled nodes behind the level; d = min(d0,
     # k + hops). A pulling army ahead of the level puts its node and its path on the level,
@@ -324,23 +409,6 @@ def _field(state: GameState, player: int) -> _Field:
     # from its level neighbours without the gap (item I3).
     pulled: dict[int, bool] = {}
     lifted: dict[int, bool] = {}
-    holding: dict[int, bool] = {}
-    for g in state.groups.values():  # flags: the order does not matter
-        loc = g.location
-        if g.owner != player or not isinstance(loc, AtNode):
-            continue
-        n = loc.node
-        if (g.charged < g.units or g.plan > 0) and n in d0:
-            holding[n] = True
-    # An unpaid build pulls like such an army (item J): its node joins the same set; without an
-    # army there its intake is capped by what it still owes (``_run``).
-    owed: dict[int, int] = {}
-    for n in adj:  # ascending
-        if n not in holding:
-            due = _owed(nodes[n], player)
-            if due > 0:
-                owed[n] = due
-                holding[n] = True
     for n in holding:  # flags: the order does not matter
         if d0[n] > k[n]:
             pulled[n] = True

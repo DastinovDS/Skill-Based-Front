@@ -544,6 +544,10 @@ class GameState:
     """Events of the current tick."""
     fights: dict[int, Fight] = field(default_factory=dict[int, Fight])
     """Fights going on (DEC-24), by id."""
+    memo: dict[str, object] = field(default_factory=dict[str, object], compare=False, repr=False)
+    """Caches of pure functions of the state, each kept with its full inputs and used only while
+    they are equal (the flow field, ``systems.flow._field``). Not part of the state:
+    ``to_canonical`` and ``state_hash`` leave it out, nothing reads it as state."""
 
     def fight_nodes(self) -> dict[int, int]:
         """Nodes with a fight going on: node id to fight id."""

@@ -62,7 +62,8 @@ side 1)` plays: each pair meets from both sides, each bot also plays itself (thi
 estimate of the skew between the sides of a map). The match seed is shared by both bots; the bot's parameters are chosen from
 `(name, seed, side)` (AGENTS.md, section 8).
 
-One match = one process (`ProcessPoolExecutor`, `max_tasks_per_child=1`, the `spawn` start). The order of
+Matches run on worker processes (`ProcessPoolExecutor`, the `spawn` start); a worker plays match after match (#787:
+no module state survives a match, a match plays the same in a fresh and in a used worker). The order of
 lines is fixed: `(map, seed, bot0, bot1)`, where maps and bots are sorted by name. The result
 depends only on the arguments and the code: a repeated run gives the same file byte for byte (there is no
 time or paths in the lines). The file is written to `<out>.tmp` and renamed when finished.

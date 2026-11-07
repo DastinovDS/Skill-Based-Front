@@ -20,7 +20,7 @@ The system order is part of ``SIM_VERSION``: changing it means a new version (se
 
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Final, Protocol
+from typing import Final, Protocol, runtime_checkable
 
 from gow_sim.commands import Command, CommandResult, PlayerCommand, Reject, apply_commands
 from gow_sim.maps import PLAYERS, MapDef
@@ -37,11 +37,12 @@ from gow_sim.systems.orders import active_bonuses, orders
 from gow_sim.systems.recruit import recruit
 from gow_sim.systems.supply import supply
 from gow_sim.systems.victory import EndReason, Outcome, victory
-from gow_sim.systems.vision import vision
+from gow_sim.systems.vision import Sight, observe, vision
 from gow_sim.view import (
     PlayerView,
     Reach,
     check_match_key,
+    enemy_figure_ids,
     line_route,
     project,
     reach,
@@ -53,6 +54,7 @@ __all__ = [
     "SIM_VERSION",
     "SYSTEMS",
     "Controller",
+    "Glancer",
     "Match",
     "MatchFinishedError",
     "MatchObserver",
@@ -116,6 +118,10 @@ class Match:
         """Results of the commands of the last ``step()``, in ``(player, seq)`` order."""
         self.outcome: Outcome | None = None
         """Set by the ``match_ended`` event; ``None`` while the match goes on."""
+        self._sight: dict[int, Sight] = {}
+        """What the ``vision`` system of the last step computed, by player; ``view()`` reuses it
+        while ``state.tick`` is still the tick of that step."""
+        self._sight_tick = -1
 
     @property
     def tick(self) -> int:
@@ -134,8 +140,13 @@ class Match:
         state.events = []
         self.results, applied = apply_commands(state, rules, commands)
         state.events.extend(applied)
+        self._sight_tick = -1
         for _, system in SYSTEMS:
-            state.events.extend(system(state, rules))
+            if system is vision:  # the same system, keeping what it saw for ``view()``
+                self._sight = observe(state, rules)
+                self._sight_tick = state.tick
+            else:
+                state.events.extend(system(state, rules))
         for e in state.events:
             if e.kind == "match_ended":
                 winner, reason = e.get("winner"), e.get("reason")
@@ -144,9 +155,22 @@ class Match:
                 self.outcome = Outcome(winner, EndReason(reason))
         return list(state.events)
 
-    def view(self, player: int) -> PlayerView:
-        """``project()`` of the current state for ``player``."""
-        return project(self.state, self.rules, player, self.match_key)
+    def view(self, player: int, *, reuse: bool = False) -> PlayerView:
+        """``project()`` of the current state for ``player``. ``reuse``: the caller has not
+        changed the state since the last ``step()``, so what the ``vision`` system of that step
+        saw (``Sight``) is reused instead of computed again (``run_headless``)."""
+        sight = self._fresh(player) if reuse else None
+        return project(self.state, self.rules, player, self.match_key, sight)
+
+    def figures(self, player: int, *, reuse: bool = False) -> tuple[int, ...]:
+        """``enemy_figure_ids()`` of the current state for ``player``: the figure ids of
+        ``view(player)`` alone; ``reuse`` as in ``view``."""
+        sight = self._fresh(player) if reuse else None
+        return enemy_figure_ids(self.state, self.rules, player, self.match_key, sight)
+
+    def _fresh(self, player: int) -> Sight | None:
+        """The sight of the last step, while ``state.tick`` is still its tick."""
+        return self._sight.get(player) if self._sight_tick == self.state.tick else None
 
     def reach(self, player: int, group: int) -> Reach | None:
         """Where the own group with opaque id ``group`` can go (``gow_sim.view.reach``)."""
@@ -171,6 +195,21 @@ class Controller(Protocol):
     """A player that sees only its ``PlayerView`` and answers with commands in opaque ids."""
 
     def decide(self, view: PlayerView, tick: int) -> list[Command]: ...
+
+
+@runtime_checkable
+class Glancer(Protocol):
+    """A ``Controller`` that can say before its view is built whether a call will decide
+    anything (a bot between two decisions of its tempo). ``run_headless`` then calls ``glance``
+    with the enemy figure ids of the view alone (``Match.figures``) instead of ``decide``.
+
+    The promise: when ``thinks(tick)`` is false, ``decide(view, tick)`` would return no commands
+    and read nothing of ``view`` but those ids, so ``glance(tick, ids)`` leaves the controller as
+    that call would. ``thinks`` may change the controller only the way that ``decide`` would."""
+
+    def thinks(self, tick: int) -> bool: ...
+
+    def glance(self, tick: int, figures: tuple[int, ...]) -> None: ...
 
 
 class MatchObserver(Protocol):
@@ -216,7 +255,10 @@ def run_headless(
     tick; its commands (``seq`` counts per player from 0) are resolved like the server does it
     and applied at the start of the next tick. Stops when the match ends or after ``max_ticks``
     ticks (default: ``rules.match_ticks``, where the timer ends the match anyway).
-    ``observer`` sees the match before the first tick and after every tick (a replay writer).
+    ``observer`` sees the match before the first tick and after every tick (a replay writer) and
+    does not change it; the views reuse the vision of the step (``Match.view(reuse=True)``).
+    A ``Glancer`` that will not think on a call gets only the figure ids of its view (``glance``),
+    which leaves the match as the full call would.
     """
     if len(controllers) != len(PLAYERS):
         raise ValueError(f"need {len(PLAYERS)} controllers, got {len(controllers)}")
@@ -228,12 +270,18 @@ def run_headless(
     accepted: dict[int, int] = dict.fromkeys(PLAYERS, 0)
     rejected: dict[int, int] = dict.fromkeys(PLAYERS, 0)
     pending: list[PlayerCommand] = []
+    glancers = [c if isinstance(c, Glancer) else None for c in controllers]
     if observer is not None:
         observer.begin(match)
     while not match.finished and match.tick < limit:
         if match.tick % decide_every == 0:
             for player in PLAYERS:
-                for cmd in controllers[player].decide(match.view(player), match.tick):
+                glancer = glancers[player]
+                if glancer is not None and not glancer.thinks(match.tick):
+                    glancer.glance(match.tick, match.figures(player, reuse=True))
+                    continue
+                view = match.view(player, reuse=True)  # only ``step()`` changed the state
+                for cmd in controllers[player].decide(view, match.tick):
                     pending.append(PlayerCommand(player, seqs[player], match.resolve(player, cmd)))
                     seqs[player] += 1
         match.step(pending)

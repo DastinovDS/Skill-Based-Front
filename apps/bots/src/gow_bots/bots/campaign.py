@@ -226,6 +226,9 @@ class CampaignBot(Bot):
         the recalled group still had to pay (DEC-43, item D6; #760)."""
         self._net_tick = -1
         self._net: frozenset[int] = frozenset()
+        self._needs: tuple[PlayerView, int, dict[int, int]] | None = None
+        """``need`` by target while ``_fit_split`` runs (for its view and tick): nothing it reads
+        changes there, and ``_fit_split`` asks the options of every free group and trial army."""
         self.leaf = LeafShift()
         """The memory of the leaf shift policy (``economy.leaf_shift_command``)."""
 
@@ -394,15 +397,24 @@ class CampaignBot(Bot):
         toll of a fortified road (DEC-43, item D6) is not in it: it takes real charges of the
         group before the fight, an empty node too, so the caller passes it to ``takes``
         (``toll_from``, ``toll_left``; #760)."""
+        memo = self._needs
+        if memo is not None and memo[0] is view and memo[1] == tick:
+            known = memo[2].get(dest)
+            if known is not None:
+                return known
         units, charged = self.estimate(view, tick, dest)
         if units <= 0:
-            return 0
-        terrain = self.map.nodes[dest].terrain
-        burned = terrain_burned(self.rules, view, dest)
-        base = shots_to_take(
-            self.rules, terrain, units, charged, self.defended(view, dest), burned=burned
-        )
-        return base + self.params["margin"] + self.extra.get(dest, 0)
+            value = 0
+        else:
+            terrain = self.map.nodes[dest].terrain
+            burned = terrain_burned(self.rules, view, dest)
+            base = shots_to_take(
+                self.rules, terrain, units, charged, self.defended(view, dest), burned=burned
+            )
+            value = base + self.params["margin"] + self.extra.get(dest, 0)
+        if memo is not None and memo[0] is view and memo[1] == tick:
+            memo[2][dest] = value
+        return value
 
     def enemy_net(self, view: PlayerView) -> frozenset[int]:
         """Enemy nodes connected to the enemy capital through enemy nodes (public ownership)."""
@@ -678,8 +690,17 @@ class CampaignBot(Bot):
 
         The army (the new group of ``Split``, charged units first) has the size of the biggest
         group that reaches the target (``fit``) and must be able to take it; it gets its order in
-        the next decision. The best such target by ``score`` decides the size.
+        the next decision. The best such target by ``score`` decides the size. The options of
+        an army of one size are asked once per group, ``need`` once per target (#787: nothing
+        they read changes here, a ``Split`` claims no target and moves no unit).
         """
+        self._needs = (ctx.view, ctx.tick, {})
+        try:
+            self._fit_split_groups(ctx)
+        finally:
+            self._needs = None
+
+    def _fit_split_groups(self, ctx: Ctx) -> None:
         view, radius = ctx.view, self.params["radius"]
         for g in self.free_groups(ctx):
             here = node_of(g)
@@ -690,14 +711,18 @@ class CampaignBot(Bot):
             if spare < 1 or g.charged < self.rules.capture.charge_cost or self.options(ctx, [g]):
                 continue  # DEC-38: the army gets the charged units first, none can pay
             best: tuple[int, int] | None = None
+            by_size: dict[int, list[Option]] = {}
             for dest in self.reachable(view, here, radius):
                 if view.nodes[dest].owner == self.player or dest in ctx.claimed:
                     continue
                 size = min(spare, self.fit(view, here, dest, g.units))
                 if size < 1:
                     continue
-                army = self.fake_group(g, size, min(size, g.charged))
-                found = [o for o in self.options(ctx, [army]) if o.dest == dest]
+                opts = by_size.get(size)
+                if opts is None:
+                    army = self.fake_group(g, size, min(size, g.charged))
+                    opts = by_size[size] = self.options(ctx, [army])
+                found = [o for o in opts if o.dest == dest]
                 if found and (best is None or found[0].score > best[0]):
                     best = (found[0].score, size)
             if best is not None and self.spend(ctx, Split(g.id, best[1])):
