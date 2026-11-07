@@ -8,7 +8,6 @@ import type { Command, GroupView, SnapshotMsg } from '../protocol.gen.ts';
 import { HudChrome } from './chrome.svelte.ts';
 import { DEV_RULES, DEV_RULES_FLOW, devSnapshot } from './devFeed.ts';
 import { HudState } from './hudState.svelte.ts';
-import PlanBanner from './PlanBanner.svelte';
 import SplitMenu from './SplitMenu.svelte';
 import TopBar from './TopBar.svelte';
 
@@ -139,27 +138,6 @@ describe('the playtest batch in the HUD (#762)', () => {
     expect(cp?.querySelector('.short-icon svg')).not.toBeNull();
     expect(cp?.querySelector('.short-ring')).not.toBeNull();
     expect(cp?.getAttribute('aria-label')).toContain('not enough for this move');
-  });
-
-  it('has no bonus setting: no stepper, no [ ] key, only Shift + wheel over the target (#797)', () => {
-    const { hud, orders } = setup(snapshot(1000, 6, 3));
-    orders.click({ kind: 'group', id: GROUP }, false);
-    const root = show(PlanBanner, { orders, group: hud.current?.group ?? null });
-    const pill = root.querySelector('.pill');
-    expect(root.querySelector('output')).toBeNull();
-    expect(root.querySelectorAll('button')).toHaveLength(0);
-    expect(pill?.textContent).not.toContain('[ ]');
-    expect(pill?.textContent).toContain(
-      'Shift + wheel over the target sets the bonus, +1 at first',
-    );
-    // The bonus sign is the chevron of the badges, not a diamond.
-    expect(pill?.querySelector('svg.chevron')).not.toBeNull();
-    // A planned order is being made: the pill stands out and says so.
-    expect(pill?.classList.contains('planning')).toBe(false);
-    orders.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
-    flushSync();
-    expect(pill?.classList.contains('planning')).toBe(true);
-    expect(pill?.textContent).toContain('Planned order: turn the wheel over the target');
   });
 
   it('opens the split menu at the size that fits, says where the part goes, and splits on confirm', () => {

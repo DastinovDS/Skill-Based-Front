@@ -20,7 +20,6 @@
   import StackRadial from './StackRadial.svelte';
   import StartBanner from './StartBanner.svelte';
   import SupplyBanner from './SupplyBanner.svelte';
-  import PlanBanner from './PlanBanner.svelte';
   import SupplyMenu from './SupplyMenu.svelte';
   import TransferDialog from './TransferDialog.svelte';
   import ToastStack from './ToastStack.svelte';
@@ -186,7 +185,6 @@
   {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} />
   <SupplyBanner {orders} names={hud.nodeName} />
-  <PlanBanner {orders} group={data?.group ?? null} />
   <SupplyMenu {orders} names={hud.nodeName} />
   <TransferDialog {orders} names={hud.nodeName} />
   <SplitMenu {orders} {anchors} names={hud.nodeName} />

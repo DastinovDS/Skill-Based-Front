@@ -276,6 +276,25 @@ for (const name of V2_SHOTS) {
   });
 }
 
+// A group whose plan gathers its bonus (#811), the frozen scene `economy`, Watchhouse: selected (no
+// banner at the foot of the screen any more) and under the pointer (the tooltip has the charges
+// only). `plan-select.png` and `plan-hover.png`.
+for (const name of ['select', 'hover'] as const) {
+  test(`shot of the gathering plan (${name})`, async ({ page }) => {
+    await page.goto('/?scene=economy&menus');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    if (name === 'select') {
+      await page.mouse.click(557, 328);
+      await page.mouse.move(1000, 700);
+    } else {
+      await page.mouse.move(557, 328);
+    }
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: join(OUT, `plan-${name}.png`) });
+  });
+}
+
 // The focus on the supply lines (#672), the frozen scene `economy` on the «Supply» layer (Tab): the
 // supply menu of the capital Stonegate shows its lines alone (`lines-source`), of the hub factory
 // Watchpost its two lines and the one that feeds it (`lines-factory`), of the target Forkway the line

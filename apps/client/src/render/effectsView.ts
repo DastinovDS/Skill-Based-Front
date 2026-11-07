@@ -3,6 +3,7 @@ import type { EventMsg, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import { contactPoints, type Contacts } from './fightImpact.ts';
 import { fightPlace, placeKey, type FightPlace } from './fightFx.ts';
+import { LEAVER_STILL, leaversOf, type PlaceMemory } from './leaverLayout.ts';
 import { HitView, type Punch } from './hitView.ts';
 import { ParticleLayer } from './particles.ts';
 import { ShotView } from './shotView.ts';
@@ -21,7 +22,8 @@ import {
   type CaptureInfo,
 } from './effectsLayout.ts';
 import type { Rect } from './arenaLayout.ts';
-import type { SpriteCache } from './bake.ts';
+import type { BakedSprite, SpriteCache } from './bake.ts';
+import { helmetChipSpec } from './bakedShapes.ts';
 import { FightView } from './fightView.ts';
 import type { MapLayers } from './layers.ts';
 import { dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
@@ -70,7 +72,10 @@ export class EffectsView {
   private readonly hits: HitView;
   private readonly shots: ShotView;
   /** Where the two sides of each fight stood the last time they were seen (the tokens): ended fights keep it. */
-  private readonly contacts = new Map<string, Contacts>();
+  private readonly contacts = new Map<string, PlaceMemory & { readonly contacts: Contacts }>();
+  /** The faded helmets of sides that left a fight while its last shots are in the air (#811). */
+  private readonly leaverLayer = new Container({ label: 'fight-leavers', eventMode: 'none' });
+  private readonly leavers: BakedSprite[] = [];
   private cameraScale = 1;
   private readonly waves: Graphics[] = [];
   private readonly arrows = new Graphics();
@@ -93,9 +98,9 @@ export class EffectsView {
     /** Radius of a city now (`CityView.radiusOf`). */
     private readonly radiusOf: (node: number) => number,
     /** The baked shapes drawn in screen px (the plate and chips of the arenas). */
-    sprites: SpriteCache,
+    private readonly sprites: SpriteCache,
   ) {
-    this.layer.addChild(this.arrows);
+    this.layer.addChild(this.arrows, this.leaverLayer);
     const flag = (owner: PlayerId): GraphicsContext =>
       new GraphicsContext()
         .moveTo(0, 14)
@@ -146,7 +151,7 @@ export class EffectsView {
   ): readonly Punch[] {
     this.readEvents(events);
     const reduced = reducedMotion();
-    this.trackContacts(frame, spots, enemies);
+    const live = this.trackContacts(frame, spots, enemies);
     this.fightView.update(frame, events, roundTicks, reduced);
     // Effects keep their size on the screen when the map is zoomed out; zoomed in they grow with it.
     const scale = Math.max(1, 1 / this.cameraScale);
@@ -171,6 +176,7 @@ export class EffectsView {
       (place) => this.contactsAt(place),
       scale,
     );
+    this.drawLeavers(frame.tick, roundTicks, live, spots, enemies);
     this.captureRings(frame.tick, tickHz, scale);
     this.particles.end();
     this.drawWaves(frame.tick, tickHz, reduced);
@@ -193,7 +199,8 @@ export class EffectsView {
     frame: RenderFrame,
     spots: ReadonlyMap<string, TokenSpot>,
     enemies: EnemyAnchors | null,
-  ): void {
+  ): Set<string> {
+    const live = new Set<string>();
     for (const fight of frame.base.view.fights) {
       const place = fightPlace(this.map, fight.node, fight.edge, fight.point, this.radiusOf);
       if (place === undefined) continue;
@@ -216,12 +223,77 @@ export class EffectsView {
         if (enemy !== undefined && !near(enemy, place.at)) enemy = undefined;
       }
       if (this.contacts.size > MAX_REMEMBERED_PLACES) this.contacts.clear();
-      this.contacts.set(placeKey(place), contactPoints(this.map, place, { own, enemy }));
+      const points = contactPoints(this.map, place, { own, enemy });
+      this.contacts.set(placeKey(place), {
+        contacts: points,
+        points,
+        seen: { own: own !== undefined, enemy: enemy !== undefined },
+      });
+      live.add(placeKey(place));
     }
+    return live;
   }
 
   private contactsAt(place: FightPlace): Contacts {
-    return this.contacts.get(placeKey(place)) ?? contactPoints(this.map, place, {});
+    return this.contacts.get(placeKey(place))?.contacts ?? contactPoints(this.map, place, {});
+  }
+
+  /**
+   * A side whose fight is over and whose token is gone (it died or it retreated) still has the last
+   * shots of its fight flying at it: its place keeps a faded helmet until they have landed (#811).
+   */
+  private drawLeavers(
+    tick: number,
+    roundTicks: number,
+    live: ReadonlySet<string>,
+    spots: ReadonlyMap<string, TokenSpot>,
+    enemies: EnemyAnchors | null,
+  ): void {
+    const standing = (side: 'own' | 'enemy', place: FightPlace, at: Point): boolean => {
+      const still = (p: Point | undefined): boolean =>
+        p !== undefined && Math.hypot(p.x - at.x, p.y - at.y) <= LEAVER_STILL;
+      if (side === 'own') {
+        for (const spot of spots.values()) if (still(spot)) return true;
+        return false;
+      }
+      // No anchors of the enemy: nothing says it left, so no ghost.
+      if (enemies === null) return true;
+      return still(
+        place.node !== null
+          ? enemies.nodePoint(place.node)
+          : place.edge === null
+            ? undefined
+            : enemies.nearestOnEdge(place.edge, at),
+      );
+    };
+    const ghosts = leaversOf(
+      this.fightView.rounds(),
+      tick,
+      roundTicks,
+      live,
+      (key) => this.contacts.get(key),
+      standing,
+    );
+    const k = 1.5 / this.cameraScale;
+    ghosts.forEach((ghost, i) => {
+      let sprite = this.leavers[i];
+      if (sprite === undefined) {
+        sprite = this.leaverLayer.addChild(this.sprites.sprite());
+        this.leavers.push(sprite);
+      }
+      const own = ghost.side === 'own';
+      sprite.set(
+        helmetChipSpec('charged', !own, ownerColor(this.me, own ? this.me : this.me === 0 ? 1 : 0)),
+      );
+      sprite.position.set(ghost.at.x, ghost.at.y);
+      sprite.scale.set(own ? k : -k, k);
+      sprite.alpha = ghost.alpha;
+      sprite.visible = true;
+    });
+    for (let i = ghosts.length; i < this.leavers.length; i++) {
+      const sprite = this.leavers[i];
+      if (sprite !== undefined) sprite.visible = false;
+    }
   }
 
   destroy(): void {
