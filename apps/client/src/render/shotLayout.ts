@@ -2,7 +2,7 @@
  * The shots of a round on the map, shot style 1 "Tracers" at strength "Stronger" (ui-style 29.1, 29.4; #352):
  * a curved comet that leaves the group that shot, tapers into a tail and lands on the other group; two
  * shots that meet bend round each other (a lens of two arcs) and meet in the middle; a bonus shot is
- * a hollow tail with three chevrons trailing it; the path stays a moment after the hit and fades.
+ * the same tail with a head of two turning squares (#812); the path stays a moment after the hit and fades.
  *
  * Pure functions, no PixiJS and no DOM. Nothing decides what happened: the shots are what
  * `impactsOf` made of the fields of `fight_round` (shots, virtual shots, losses), the places are the
@@ -41,12 +41,28 @@ export const AFTERGLOW_SHARE = 0.25;
 /** The sparks of a tracer at "Stronger": how many, and how long one lives (a share of a round, 0.32 s of 2 s). */
 export const SPARKS = 5;
 export const SPARK_LIFE_SHARE = 0.16;
-/** The chevrons that trail a bonus shot (#797): how far behind the head (the share of the path), sizes and alphas. */
-export const ECHOES = [
-  { back: 0.1, size: 6.5, alpha: 0.5 },
-  { back: 0.2, size: 5.5, alpha: 0.35 },
-  { back: 0.3, size: 4.5, alpha: 0.2 },
-] as const;
+/**
+ * The head of a bonus shot (#812, "Octagram"): two squares turning against each other, the outer one turned
+ * 45 degrees to start with. The pace is told in milliseconds of a round of `OCTA_ROUND_MS` (the mockup's), so it keeps
+ * its pace if the round length changes. The turn eases in like the tail does: it starts still and reaches its pace
+ * over `OCTA_EASE_MS` (the angle is the integral of a speed that approaches its pace exponentially).
+ */
+const OCTA_ROUND_MS = 2000;
+const OCTA_MS_PER_RAD = { outer: 240, inner: -300 } as const;
+const OCTA_EASE_MS = 260;
+/** The head swells from this share of its size to the full one over this share of the path from the start. */
+export const OCTA_POP = { from: 0.55, over: 0.14 } as const;
+
+/** The angles (radians) of the outer and the inner square of a bonus head `age` ticks into a round of `roundTicks`. */
+export function octaAngles(age: number, roundTicks: number): { outer: number; inner: number } {
+  const ms = (Math.max(0, age) / Math.max(1, roundTicks)) * OCTA_ROUND_MS;
+  // The integral of 1 - exp(-t / tau): the speed grows from nothing to the full pace.
+  const eased = ms - OCTA_EASE_MS * (1 - Math.exp(-ms / OCTA_EASE_MS));
+  return {
+    outer: eased / OCTA_MS_PER_RAD.outer + Math.PI / 4,
+    inner: eased / OCTA_MS_PER_RAD.inner,
+  };
+}
 
 /** The strength factor of the length and the width of a tail: 0.7 at no strength, 1.18 at "Stronger". */
 export function tailFactor(strength: number = FIGHT_FX_STRENGTH): number {
@@ -278,25 +294,16 @@ export function sparksOf(
   return out;
 }
 
-/** The places of the chevrons that trail a bonus shot whose head is at `s`. */
-export function echoesOf(
-  shot: Pick<Shot, 'p0' | 'ctrl' | 'b'>,
-  s: number,
-): { at: Point; size: number; alpha: number }[] {
-  return ECHOES.map((echo) => ({
-    at: arcAt(shot, Math.max(0, s - echo.back)),
-    size: echo.size,
-    alpha: echo.alpha,
-  }));
-}
-
 /** Soft glow spots along a tail (`ShotView`). */
 export const GLOW_SPOT_COUNT = 3;
 
-/** Particles a tracer has at most in flight: the head and its glow, the glow along the tail, the sparks, the echoes. */
+/**
+ * Particles a tracer has at most in flight: the head (a bonus head is two baked sprites instead) and its glow, the
+ * glow along the tail, the sparks.
+ */
 export function tracerBudget(
-  shot: Pick<Shot, 'bonus'>,
+  _shot: Pick<Shot, 'bonus'>,
   strength: number = FIGHT_FX_STRENGTH,
 ): number {
-  return 2 + GLOW_SPOT_COUNT + sparkCount(strength) + (shot.bonus ? ECHOES.length : 0);
+  return 2 + GLOW_SPOT_COUNT + sparkCount(strength);
 }

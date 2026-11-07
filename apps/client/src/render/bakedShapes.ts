@@ -57,6 +57,7 @@ import {
   VP_BADGE,
   VP_BADGE_RADIUS,
   ENEMY,
+  FEED,
   YOU,
   NEUTRAL_STROKE,
   WARN,
@@ -731,6 +732,92 @@ export function arenaPlateSpec(): BakeSpec {
       g.moveTo(-hw + 8, -hh + 1)
         .lineTo(hw - 8, -hh + 1)
         .stroke({ width: 1, color: 0xffffff, alpha: RIM.alpha * 0.5 });
+    },
+  };
+}
+
+/**
+ * A row of the kill feed (#812): the plate of a side's losses beside a node, dark and outlined like the arena
+ * plate, on its soft shadow with a light rim at the top. The winner's row has the thick light outline, the other a
+ * thin muted one (the weight tells it, not the hue). The origin is the middle of the row.
+ */
+export function feedRowSpec(winner: boolean): BakeSpec {
+  const { halfWidth: hw, rowHeight: h, radius } = FEED;
+  const body: Box = { x: -hw, y: -h / 2, width: 2 * hw, height: h };
+  const line = winner ? FEED.winner : FEED.other;
+  return {
+    key: `feed-row:${winner ? 'win' : 'other'}`,
+    box: shadowBox(body, BAKE_MARGIN),
+    draw(into) {
+      shadow(into, (g) => g.roundRect(body.x, body.y, body.width, body.height, radius));
+      const g = graphics(into);
+      g.roundRect(body.x, body.y, body.width, body.height, radius)
+        .fill({ color: PLATE_FILL, alpha: FEED.fillAlpha })
+        .stroke({
+          width: line.width,
+          color: line.color,
+          alpha: 'alpha' in line ? line.alpha : 0.95,
+        });
+      g.moveTo(body.x + 9, body.y + line.width + 0.5)
+        .lineTo(body.x + body.width - 9, body.y + line.width + 0.5)
+        .stroke({ width: 1, color: 0xffffff, alpha: RIM.alpha * 0.5 });
+    },
+  };
+}
+
+/** The squares of the head of a bonus shot (#812): `outer` is the larger and lighter, `inner` carries the middle one. */
+export type OctaPart = 'outer' | 'inner';
+
+/** The sides of the two squares of an octagram and the weights of its lines (world units at 100%). */
+export const OCTA_LOOK = { inner: 17, outer: 22, outline: 2.1, rim: 1.2, middle: 5.8 } as const;
+
+/**
+ * One square of the octagram head of a bonus shot (#812, variant 7): the side's colour in the gradient of the
+ * other baked shapes under a dark outline, a light rim and a soft highlight inside; the opponent's has the second,
+ * dark contour inside (as the head of its real shot), the own one a light patch. The inner square carries the small
+ * middle one (a light square on a dark rim; the opponent's: dark on a light rim). The outer square is the lighter tone
+ * of the colour. The origin is the middle; both squares are drawn upright, the view turns them.
+ */
+export function octagramSpec(part: OctaPart, enemy: boolean, color: number): BakeSpec {
+  const half = (part === 'outer' ? OCTA_LOOK.outer : OCTA_LOOK.inner) / 2;
+  const tone = part === 'outer' ? lighten(color, 0.45) : color;
+  return {
+    key: `octa:${part}:${enemy ? 'e' : 'o'}:${String(color)}`,
+    box: circleBox(Math.ceil(half * Math.SQRT2) + 3),
+    draw(into, tools) {
+      const g = graphics(into);
+      // The dark outline first, then the body in the gradient of the side, the light rim on its edge.
+      g.rect(-half, -half, 2 * half, 2 * half).stroke({
+        width: OCTA_LOOK.outline * 2,
+        color: BG,
+        join: 'miter',
+      });
+      g.rect(-half, -half, 2 * half, 2 * half).fill(tools.gradient(tone));
+      g.rect(-half + 0.6, -half + 0.6, 2 * half - 1.2, 2 * half - 1.2).stroke({
+        width: OCTA_LOOK.rim,
+        color: lighten(tone, 0.6),
+        alpha: 0.9,
+        join: 'miter',
+      });
+      if (enemy) {
+        // The second, dark contour inside: the opponent's side reads without the hue.
+        g.rect(-half + 3.4, -half + 3.4, 2 * half - 6.8, 2 * half - 6.8).stroke({
+          width: 1.2,
+          color: BG,
+          alpha: 0.85,
+          join: 'miter',
+        });
+      } else {
+        g.rect(-half + 1.8, -half + 1.8, half * 0.85, half * 0.85).fill({
+          color: 0xffffff,
+          alpha: 0.28,
+        });
+      }
+      if (part === 'inner') {
+        const m = OCTA_LOOK.middle / 2;
+        g.rect(-m - 1, -m - 1, 2 * m + 2, 2 * m + 2).fill(enemy ? PAPER : BG);
+        g.rect(-m, -m, 2 * m, 2 * m).fill(enemy ? BG : PAPER);
+      }
     },
   };
 }

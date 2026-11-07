@@ -113,12 +113,13 @@ export class EffectsView {
     layers.layer.effects.addChild(this.layer);
     // The tails of the tracers (shot style 1) lie under the particles (their heads, glows and sparks), which lie
     // under the arenas: a spark over a city does not hide the plate that floats above it.
-    this.shots = new ShotView(layers.layer.effects, me);
+    this.shots = new ShotView(layers.layer.effects, me, sprites);
     const enemy: PlayerId = me === 0 ? 1 : 0;
     this.particles = new ParticleLayer(layers.layer.effects, {
       own: ownerColor(me, me),
       enemy: ownerColor(me, enemy),
     });
+    this.shots.raiseHeads(layers.layer.effects);
     this.hits = new HitView(layers.layer.effects, map, me, labelResolution, radiusOf);
     this.fightView = new FightView(map, layers, me, labelResolution, radiusOf, sprites);
     this.fightView.setContacts((place) => this.contactsAt(place));
