@@ -12,11 +12,12 @@ import tomllib
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import pairwise
+from math import isqrt
 from pathlib import Path
 from typing import Final, cast
 
 from gow_sim.canonical import digest
-from gow_sim.maps import MAX_LEVEL, NodeKind, Terrain
+from gow_sim.maps import MAX_LEVEL, MapDef, NodeKind, Terrain
 
 
 class RulesetError(ValueError):
@@ -46,6 +47,13 @@ class SupplyModel(StrEnum):
 
     LINES = "lines"
     FLOW = "flow"
+
+
+class TempoForm(StrEnum):
+    """``map_tempo.form`` (#803, experiment): how the economy tempo grows with the map size."""
+
+    SQRT = "sqrt"
+    LINEAR = "linear"
 
 
 OPTIONAL: Final = {"optional": True}
@@ -403,6 +411,28 @@ class StanceRules:
 
 
 @dataclass(frozen=True, slots=True)
+class MapTempoRules:
+    """Map tempo (#803, an experiment, [proposed]): the economy periods of a match scaled once by
+    the node count of its map (``apply_map_tempo``)."""
+
+    form: TempoForm
+    ref_nodes: int
+    """The node count where the multiplier is exactly 100."""
+    min_pct: int
+    """The multiplier is clamped to ``min_pct..max_pct`` (percent)."""
+    max_pct: int
+
+    def pct(self, nodes: int) -> int:
+        """The multiplier in percent for a map of ``nodes`` nodes, rounded down, then clamped:
+        sqrt ``isqrt(nodes * 10000 // ref_nodes)``, linear ``nodes * 100 // ref_nodes``."""
+        if self.form is TempoForm.SQRT:
+            raw = isqrt(nodes * 10000 // self.ref_nodes)  # non-negative: rounded down
+        else:
+            raw = nodes * 100 // self.ref_nodes  # non-negative: rounded down
+        return max(self.min_pct, min(self.max_pct, raw))
+
+
+@dataclass(frozen=True, slots=True)
 class BunkerRules:
     """The bunker (DEC-41, item 12; code name ``fort``; ``economy.model = "v2"`` only): a
     building of a city or a province that adds virtual shots to the node's defender."""
@@ -558,6 +588,9 @@ class Ruleset:
     """Stances with local progress (DEC-44): only with ``economy.model = "v2"``, optional there;
     without it ``SetStance`` gives ``FEATURE_DISABLED`` (DEC-41, item 1). Left out of the hash when
     absent, so the hash of every ruleset without the section stays as it was."""
+    map_tempo: MapTempoRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
+    """Map tempo (#803, experiment): the economy periods scaled by the map size. ``Match`` plays
+    ``apply_map_tempo(rules, map)``, which has no section. Left out of the hash when absent."""
 
     @property
     def v2(self) -> bool:
@@ -586,6 +619,51 @@ class Ruleset:
         if self.bunker is None:
             raise ValueError("bunker rules exist only with a [bunker] section under v2")
         return self.bunker
+
+
+def _scaled(period: int, pct: int) -> int:
+    """``period * 100 // pct`` rounded down, at least 1 (#803)."""
+    return max(1, period * 100 // pct)
+
+
+def _scaled_table(table: StanceTable, pct: int) -> StanceTable:
+    return StanceTable(
+        economy=_scaled(table.economy, pct),
+        balance=_scaled(table.balance, pct),
+        war=_scaled(table.war, pct),
+    )
+
+
+def apply_map_tempo(rules: Ruleset, mapdef: MapDef) -> Ruleset:
+    """The rules a match on ``mapdef`` plays (#803, experiment): without ``[map_tempo]``
+    ``rules`` itself; with it a copy without the section whose economy periods are scaled by
+    ``map_tempo.pct(len(mapdef.nodes))``: ``cp.period_ticks``, ``factory.capital_period_ticks``,
+    ``factory.built_period_ticks`` and both ``[stances]`` tables, each ``max(1, p * 100 // pct)``
+    (rounded down). Nothing else changes. Pure, integers only."""
+    tempo = rules.map_tempo
+    if tempo is None:
+        return rules
+    pct = tempo.pct(len(mapdef.nodes))
+    factory = rules.factory
+    if factory is not None:
+        factory = dataclasses.replace(
+            factory,
+            capital_period_ticks=_scaled(factory.capital_period_ticks, pct),
+            built_period_ticks=_scaled(factory.built_period_ticks, pct),
+        )
+    stances = rules.stances
+    if stances is not None:
+        stances = StanceRules(
+            cp_period_ticks=_scaled_table(stances.cp_period_ticks, pct),
+            capital_period_ticks=_scaled_table(stances.capital_period_ticks, pct),
+        )
+    return dataclasses.replace(
+        rules,
+        cp=dataclasses.replace(rules.cp, period_ticks=_scaled(rules.cp.period_ticks, pct)),
+        factory=factory,
+        stances=stances,
+        map_tempo=None,
+    )
 
 
 def load_ruleset(path: str | Path) -> Ruleset:
@@ -686,6 +764,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "bunker",
             "fort",
             "stances",
+            "map_tempo",
         ),
     )
     economy = _parse_economy(
@@ -812,6 +891,23 @@ def parse_ruleset(data: object) -> Ruleset:
         bunker=bunker,
         fort=fort,
         stances=stances,
+        map_tempo=_parse_map_tempo(
+            root.table("map_tempo", ("form", "ref_nodes", "min_pct", "max_pct"))
+            if root.has("map_tempo")
+            else None
+        ),
+    )
+
+
+def _parse_map_tempo(t: "_Table | None") -> MapTempoRules | None:
+    if t is None:
+        return None
+    min_pct = t.integer("min_pct", low=1)
+    return MapTempoRules(
+        form=TempoForm(t.choice("form", tuple(f.value for f in TempoForm))),
+        ref_nodes=t.integer("ref_nodes", low=1),
+        min_pct=min_pct,
+        max_pct=t.integer("max_pct", low=min_pct),
     )
 
 

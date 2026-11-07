@@ -236,6 +236,20 @@ building charges that never paid back; the report splits the whole ledger by the
 sinks by outcome"). `first_contact_tick` measures the tempo of a map directly (the proposal of the map-economy notes of
 2026-11-05).
 
+## Front pressure (#803, map tempo experiment)
+
+Per-player metrics of how hard the front is pushed, for comparing maps of different sizes. Not game rules: nothing was
+added to the simulation (`gow_sim.analysis`, module docstring "Front pressure"). Sampled at the end of every 10th tick
+(`PLACE_SAMPLE_TICKS`, 1 s).
+
+| Field | Meaning |
+|---|---|
+| `front_width_sum` | the sum over the samples of the front width: the nodes the player owns that share an edge with a node the other player owns (front node-seconds) |
+| `front_samples` | the samples with a front width above 0 (seconds with a front) |
+| `front_width_centi` | `front_width_sum * 100 // front_samples`: the mean front width while a front exists, hundredths; `null` without a front |
+| `front_pressure_centi` | `charges_fights * 100 * 60 * tick_hz // (front_width_sum * 10)`: the charges the player spent in fights per front node per minute, hundredths; `null` without a front |
+| `cp_income` | CP in hundredths of the quanta the player's economy fired, before the cap (`cp_burned`); under `[stances]` read from `cp_ticks`, otherwise on the ticks divisible by `cp.period_ticks` of the rules the match plays (the map tempo applied) |
+
 ## Charge stock and burned share (#310)
 
 A balance statistic of how much a player stores and how much of the production is wasted. It is

@@ -24,7 +24,7 @@ from typing import Final, Protocol, runtime_checkable
 
 from gow_sim.commands import Command, CommandResult, PlayerCommand, Reject, apply_commands
 from gow_sim.maps import PLAYERS, MapDef
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import Ruleset, apply_map_tempo
 from gow_sim.state import Event, GameState, initial_state, state_hash
 from gow_sim.systems.build import build
 from gow_sim.systems.capacity import capacity
@@ -111,7 +111,11 @@ class Match:
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, match_key: bytes) -> None:
         check_match_key(match_key)
-        self.rules: Final = rules
+        self.source_rules: Final = rules
+        """The ruleset as given (its hash goes into a replay header)."""
+        self.rules: Final = apply_map_tempo(rules, mapdef)
+        """The rules this match plays: ``source_rules`` with ``[map_tempo]`` applied to the map
+        (#803); ``source_rules`` itself without the section."""
         self.match_key: Final = match_key
         self.state: Final = initial_state(mapdef, rules)
         self.results: list[CommandResult] = []
