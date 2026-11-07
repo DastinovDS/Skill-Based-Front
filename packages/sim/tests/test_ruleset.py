@@ -384,3 +384,12 @@ def test_archive_detects_a_tampered_file(tmp_path: Path) -> None:
     target.write_text(TEST_SHORT.read_text(encoding="utf-8"))
     with pytest.raises(RulesetError, match="does not match its hash"):
         archive_ruleset(MVP0, archive)
+
+
+def test_mvp5_has_the_rules_of_mvp4_stances_and_no_map_tempo() -> None:
+    """mvp-5 is the main ruleset (#805): the rule values of mvp-4-stances (same hash, comments do
+    not count), without the DEC-46 section ``[map_tempo]`` that only mvp-4-stances-tempo has."""
+    mvp5 = RULESETS_DIR / "mvp-5.toml"
+    stances = RULESETS_DIR / "mvp-4-stances.toml"
+    assert ruleset_hash(load_ruleset(mvp5)) == ruleset_hash(load_ruleset(stances))
+    assert "map_tempo" not in _raw(mvp5)
