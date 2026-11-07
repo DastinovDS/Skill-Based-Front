@@ -1255,9 +1255,9 @@ The owner's decision of 2026-11-06, while designing the arena badges (#776). A p
 | P13 | 2/2 | 1/1, G (1/1) arrives in `t+10` | burn (the side 2/1); r1 canc. (1 / 0); r2 the attack kills 1 | the defense 1/0; the attack 2/0 bounces; `t+40` | the defense 1/1 |
 | P14 | 4/4 | 2/2, `Move` before r1 | burn; r1 canc. (3 / 0); the defense leaves | the node is taken by 4/3 in `t+20`; the defense 2/0 walks away | the defense 2/1 walks away |
 | P15 | 4/4 | 2/2, `Move` in `t+24` | burn; r1 canc. (3 / 0); r2 the attack kills 1; the defense leaves | the node is taken by 4/2 in `t+40`; the defense 1/0 walks away | the defense 1/1 walks away |
-| P16 | 4/4 | D 2/2 with a `Move` before r1, G 1/1 stays | burn from D; r1 D shoots, canc. (3 / D 0, G 1); D leaves; r2 G shoots, canc. (2 / 0); r3 the attack kills G | the node is taken by 4/1 in `t+60`; D 2/0 walks away | r1 D shoots, D 2/1 leaves; G stays silent, r2 G is killed; the node is taken by 4/2 in `t+40` |
+| P16 **[accepted]** (owner 2026-11-07) | 4/4 | D 2/2 with a `Move` before r1, G 1/1 stays | burn from D; r1 D shoots, canc. (3 / D 0, G 1); D leaves; r2 G shoots, canc. (2 / 0); r3 the attack kills G | the node is taken by 4/1 in `t+60`; D 2/0 walks away | r1 D shoots, D 2/1 leaves; G stays silent, r2 G is killed; the node is taken by 4/2 in `t+40` |
 
-Row P16 is the one place where the real shots differ from `charged - 1`: when a side splits by a retreat, the silence of item F2 stayed with the node, and by item 3 nothing is silent any more. It follows from the rule and needs a retreat of one of several groups.
+**[accepted]** (owner 2026-11-07). Row P16 is the one place where the real shots differ from `charged - 1`: when a side splits by a retreat, the silence of item F2 stayed with the node, and by item 3 nothing is silent any more. It follows from the rule and needs a retreat of one of several groups.
 
 Tests: `packages/sim/tests/test_dec45.py`, `packages/protocol/tests/test_terrain_burn.py`, `apps/bots/tests/test_terrain_burn.py`. Implementation: `SIM_VERSION` 42, `PROTOCOL_VERSION` 41 (#778). Bots: a fresh target needs the same shots (`defender_pool`, `shots_to_take`); past the first round the charges the view shows all shoot (`terrain_burned`), `FightView.mute` reads the pending burn, and the memory of a cut node drops the burned charge (`first_burn`).
 
