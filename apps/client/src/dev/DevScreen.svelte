@@ -16,7 +16,7 @@
   import { OrderBook } from '../match/orderBook.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
-  import type { Command } from '../protocol.gen.ts';
+  import type { Command, ReachNode } from '../protocol.gen.ts';
   import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl, bundledGeo } from '../map/bundledMaps.ts';
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
@@ -50,6 +50,14 @@
           node: splitParts[0] ?? 0,
           units: Number.isInteger(splitParts[1]) ? (splitParts[1] ?? 0) : 0,
         }
+      : null;
+  // `?reach=<to>,<ticks>[,<via>...]` makes a fixture scene answer the `reach` of a selected group with
+  // that target, its travel time and the route through `via` (#793): the ghost and the bonus counter
+  // of a planned order (Shift over the target) are drawn only for a target the answer lists.
+  const reachParts = (params.get('reach') ?? '').split(',').map(Number);
+  const reachPinned =
+    params.has('reach') && reachParts.length >= 2 && reachParts.every(Number.isInteger)
+      ? { node: reachParts[0] ?? 0, ticks: reachParts[1] ?? 0, via: reachParts.slice(2) }
       : null;
   const cpParam = Number(params.get('cp'));
   const cpPinned = params.has('cp') && Number.isInteger(cpParam) ? Math.max(0, cpParam) : null;
@@ -224,8 +232,19 @@
       },
       queryReach: (group) => {
         match?.session.queryReach(group);
-        if (match === null && splitPinned !== null) {
-          orders.onReach({ type: 'reach', group, tick: 0, nodes: [], split: [splitPinned] });
+        const from = hud.current?.group?.node ?? null;
+        if (match === null && (splitPinned !== null || (reachPinned !== null && from !== null))) {
+          const nodes: ReachNode[] = [];
+          if (reachPinned !== null && from !== null) {
+            const [next, ...rest] = [...reachPinned.via, reachPinned.node];
+            nodes.push({
+              node: reachPinned.node,
+              ticks: reachPinned.ticks,
+              path: [from, next, ...rest],
+            });
+          }
+          const split = splitPinned === null ? [] : [splitPinned];
+          orders.onReach({ type: 'reach', group, tick: 0, nodes, split });
         }
       },
     });

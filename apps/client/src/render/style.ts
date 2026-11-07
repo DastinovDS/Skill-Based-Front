@@ -435,6 +435,25 @@ export const ETA_MARK = {
   /** A city on the way is cleared by this much more than its ring: its VP badge sits above it. */
   badgeClear: 14,
 } as const;
+/**
+ * The bonus counter over the target of a planned order while Shift is held (#793): a dark pill with
+ * an own-coloured rim just above the target city's ring; the hollow diamond of a bonus
+ * shot, the bonus as text ("+3") and the gathering time it implies. Sized in world units and
+ * scaled like the travel time (`badgeScale`). Shape and text carry it, never colour alone.
+ */
+export const BONUS_MARK = {
+  height: 28,
+  padding: 9,
+  gap: 6,
+  /** The diamond's half diagonal. */
+  diamond: 6,
+  fontSize: 16,
+  timeFontSize: 12,
+  fillAlpha: 0.92,
+  rim: { width: 2, alpha: 1 },
+  /** The pill's lower edge stands this far above the reach ring of the city. */
+  lift: 2,
+} as const;
 export const SELECT_WIDTH = 3;
 /** Group selection: a rounded frame this far outside the token. */
 export const SELECT_TOKEN_GAP = 4;
@@ -443,11 +462,6 @@ export const ORDER_GHOST_ALPHA = 0.85;
 export const ORDER_GHOST_WIDTH = 4;
 export const ORDER_GHOST_DASH = 7;
 export const ORDER_GHOST_GAP = 6;
-/** Where a click would send the group with a planned order (Shift): a fine dotted line. */
-export const PREVIEW_ALPHA = 0.55;
-export const PREVIEW_DASH = 2;
-export const PREVIEW_GAP = 6;
-export const PREVIEW_WIDTH = 2;
 /**
  * The route of the hovered order (#448; H10 "Comet", #627): a faint thin paper line on a dark casing
  * along its roads, rim to rim, and a comet that runs along it to the target every `periodMs`: a head dot and a tail

@@ -730,6 +730,8 @@ export const en = {
   'plan.choosing': 'Planned order: pick the bonus',
   'plan.bonusShort': 'Bonus',
   'plan.max': 'max {max}',
+  'plan.wheel': 'or Shift + wheel over the target',
+  'plan.gatherIn': 'gathers {seconds} s',
   'plan.bonus': 'Requested bonus',
   'plan.bonusTip':
     'A planned order waits in its node and takes one charge of the warehouse per bonus point, then sets off',
@@ -776,6 +778,8 @@ export const en = {
   'event.line_auto': 'Supply line {from} → {to} drawn by itself',
   'help.key.plannedV2': 'planned order: it gathers its bonus in the node, then sets off',
   'help.key.planBonus': 'the bonus a planned order asks for',
+  'help.key.planWheel':
+    'over a target: the ghost of the planned order and its bonus; the wheel sets the bonus',
   'help.key.release': 'the gathering plan of the group sets off now',
   'help.key.supplyV2': 'supply map mode: draw and remove supply lines',
   'help.economyV2':

@@ -11,6 +11,7 @@ import type {
   Stance,
 } from '../protocol.gen.ts';
 import {
+  type BonusMark,
   EMPTY_OVERLAY,
   type FortPick,
   type HoverMark,
@@ -19,7 +20,9 @@ import {
   type PickHit,
   type SupplyOverlay,
   type UndoMark,
+  type WheelInput,
 } from '../render/interaction.ts';
+import { WheelSteps } from './wheelSteps.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
 import { undoCommand, type UndoEntry } from './undoList.ts';
 import { NO_LINE_FOCUS, type LineFocus } from '../render/supplyLayout.ts';
@@ -192,6 +195,8 @@ export class OrderController implements MapInteraction {
   readonly #o: OrderControllerOptions;
   #shift = false;
   #hover: PickHit | null = null;
+  /** Shift + wheel: notches and trackpad pixels turned into steps of the plan bonus (#793). */
+  readonly #wheelSteps = new WheelSteps();
   /** The last step of the rear minimum by key: where it started and where it was sent to. */
   #rearStep: { readonly from: number; readonly to: number } | null = null;
   /** The same for the leaf shift (`stepLeafShift`). */
@@ -463,7 +468,8 @@ export class OrderController implements MapInteraction {
     this.#syncPlanning();
     const hover = this.#hoverMarkNow();
     const undo = this.#undoMarksNow();
-    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}`;
+    const bonus = this.#bonusMark(from, eta === null ? null : preview);
+    const key = `${bonus === null ? '-' : `${String(bonus.bonus)}/${String(bonus.max)}`}|${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
@@ -477,13 +483,14 @@ export class OrderController implements MapInteraction {
       this.#overlay = {
         selection,
         ghosts,
+        // The ghost of the order goes only where the server's `reach` says it gets (#793).
         preview:
-          from !== null && preview !== null
+          from !== null && preview !== null && eta !== null
             ? {
                 from,
                 to: preview,
                 planned: this.planned,
-                path: eta?.path ?? [from, preview],
+                path: eta.path,
               }
             : null,
         candidates,
@@ -499,9 +506,28 @@ export class OrderController implements MapInteraction {
             : { from, node: preview, ticks: eta.ticks, path: eta.path },
         hover,
         undo,
+        bonus,
       };
     }
     return this.#overlay;
+  }
+
+  /**
+   * The bonus counter over the target of a planned order (#793): economy v2, a planned order (Shift
+   * or the switch), the target reachable (`reach`). The value is `planBonus`, the banner's; the
+   * gathering time is display arithmetic from `ruleset_public` (one point per
+   * `orders.plan_ticks_per_bonus` while the warehouse has charges, DEC-41, item 10).
+   */
+  #bonusMark(from: number | null, target: number | null): BonusMark | null {
+    if (!this.v2 || !this.planned || from === null || target === null) return null;
+    const bonus = this.planBonus;
+    const per = this.planTicksPerBonus;
+    return {
+      node: target,
+      bonus,
+      max: this.planBonusMax,
+      ticks: per > 0 ? bonus * per : null,
+    };
   }
 
   /**
@@ -698,6 +724,38 @@ export class OrderController implements MapInteraction {
     if (selected?.kind === 'group' && selected.id === id && this.#o.send !== null) {
       this.groupMenu.open(id);
     }
+  }
+
+  /**
+   * Shift + wheel (#793): with an own group in a node selected under economy v2 (the plan banner
+   * shows), one notch steps the bonus the next planned order asks for, the same value as `[` `]`
+   * and the banner (`stepPlanBonus`). `false` otherwise: the wheel zooms the map.
+   */
+  wheel(input: WheelInput): boolean {
+    this.#shift = input.shiftKey;
+    this.#syncPlanning();
+    if (!input.shiftKey || !this.#planBonusShown()) {
+      this.#wheelSteps.reset();
+      return false;
+    }
+    const step = this.#wheelSteps.push(input, this.#now());
+    if (step !== 0) this.stepPlanBonus(step);
+    return true;
+  }
+
+  /** The plan banner's stepper is up: economy v2, an own group in a node selected, the normal map. */
+  #planBonusShown(): boolean {
+    const ui = this.ui.current;
+    return (
+      this.v2 &&
+      this.#o.send !== null &&
+      this.#selectedGroup()?.node != null &&
+      !ui.supplyMode &&
+      !ui.terrainMode &&
+      ui.fortFrom === null &&
+      ui.lineDraft === null &&
+      ui.transferFrom === null
+    );
   }
 
   hover(hit: PickHit | null): void {
@@ -1485,6 +1543,7 @@ export class OrderController implements MapInteraction {
   key(input: KeyInput): boolean {
     this.#shift = input.shiftKey;
     this.#syncPlanning();
+    if (!input.shiftKey) this.#wheelSteps.reset();
     if (input.type !== 'keydown') return this.#keyUp(input);
     if (input.code === 'Tab' || input.code === 'F2') {
       if (input.repeat !== true) this.toggleSupplyMode();

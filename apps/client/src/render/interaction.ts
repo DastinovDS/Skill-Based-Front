@@ -146,6 +146,21 @@ export interface OverlayState {
   readonly hover?: HoverMark | null;
   /** The cues of `X` still on screen (#764), oldest first. */
   readonly undo?: readonly UndoMark[];
+  /** The bonus counter over the target of a planned order (#793); `null`: none. */
+  readonly bonus?: BonusMark | null;
+}
+
+/**
+ * The bonus a planned order to `node` would ask for (economy v2, DEC-41, item 10; #793), drawn over
+ * the target while Shift is held: the value of the banner, its cap, and the gathering time it implies.
+ */
+export interface BonusMark {
+  readonly node: number;
+  readonly bonus: number;
+  /** The largest bonus now (`PLAN_BONUS.max`, capped by the group's charged units). */
+  readonly max: number;
+  /** Ticks to gather it while the warehouse has charges; `null`: not known. */
+  readonly ticks: number | null;
 }
 
 export interface EtaMark {
@@ -171,6 +186,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   fortPick: null,
   hover: null,
   undo: [],
+  bonus: null,
 };
 
 export interface MapInteraction {
@@ -180,4 +196,18 @@ export interface MapInteraction {
   click(hit: PickHit | null, shift: boolean): void;
   /** The pointer moved over `hit`, or left the map (`null`). */
   hover(hit: PickHit | null): void;
+  /**
+   * A wheel event over the map, before the camera sees it (#793). `true`: it was used (the map
+   * does not zoom); absent or `false`: the wheel zooms.
+   */
+  wheel?(input: WheelInput): boolean;
+}
+
+/** The parts of a `WheelEvent` the map input needs (#793). */
+export interface WheelInput {
+  readonly deltaX: number;
+  readonly deltaY: number;
+  /** `WheelEvent.deltaMode`: 0 pixels, 1 lines, 2 pages. */
+  readonly deltaMode: number;
+  readonly shiftKey: boolean;
 }

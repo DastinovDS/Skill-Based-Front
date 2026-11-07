@@ -49,7 +49,40 @@ describe('OverlayView', () => {
     view.destroy();
   });
 
-  it('draws the dotted preview of a planned order only', () => {
+  it('draws the bonus counter over the target: diamond, bonus and gathering time (#793)', () => {
+    // jsdom has no canvas to measure text on: seven units a letter.
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+    const { layers, view, none } = setup();
+    const state = (bonus: OverlayState['bonus']): OverlayState => ({
+      selection: null,
+      ghosts: [],
+      preview: null,
+      candidates: [],
+      beacon: null,
+      supply: null,
+      terrain: false,
+      reach: [],
+      split: [],
+      eta: null,
+      bonus,
+    });
+    const counter = layers.layer.intents.children.find((c) => c.label === 'plan-bonus');
+    view.update(state(null), none);
+    expect(counter?.visible).toBe(false);
+    view.update(state({ node: b.id, bonus: 3, max: 5, ticks: 90 }), none);
+    expect(counter?.visible).toBe(true);
+    // Above the target city, as text (never colour alone): "+3" and 90 ticks of gathering = 9 s.
+    expect(counter?.position.x).toBe(b.x);
+    expect(counter?.position.y).toBeLessThan(b.y);
+    const texts = (counter?.children ?? []).flatMap((c) => ('text' in c ? [String(c.text)] : []));
+    expect(texts).toEqual(['+3', 'gathers 9 s']);
+    view.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('draws the ghost of a planned order of a planned order only', () => {
     const { layers, view, none } = setup();
     const state = (planned: boolean): OverlayState => ({
       selection: null,
