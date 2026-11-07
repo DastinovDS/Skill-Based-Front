@@ -30,8 +30,9 @@ warehouse burns the charge: event ``charge_burned``, the only burn of production
 Stances of economy v2 (DEC-44; section ``[stances]`` of the ruleset, revises DEC-41, item 1): the
 stance sets the CP income and the rate of the own capital, on local progress instead of the global
 clock. Every tick ``PlayerState.cp_ticks`` and ``capital_ticks`` grow by 1; a counter that reaches
-the period of the stance fires its quantum and restarts. A real stance change sets both to 0
-(``set_stance``, in ``apply_commands``, so the tick of the change is the first one counted). The
+the period of the stance fires its quantum and restarts. A real stance change carries both over
+in proportion to the periods (``carry`` in ``set_stance``, applied by ``apply_commands``, so the
+tick of the change is the first one counted at the new rate; revised 2026-11-07, #792). The
 capital counter never stops: without an own capital, or with its factory gone, the quantum fires
 and does nothing. Built factories and a captured capital stay on the global clock above.
 
@@ -191,19 +192,30 @@ def factory_period(state: GameState, rules: Ruleset, node: int) -> int:
 
 def stance_cooldown_left(state: GameState, rules: Ruleset, player: int) -> int:
     """Ticks until ``player`` may change the stance again; 0 means now. Under ``[stances]`` there
-    is no cooldown: a change costs the progress of both counters (DEC-44)."""
+    is no cooldown: the progress carries over, so a change gains nothing by its timing (DEC-44)."""
     last = state.players[player].stance_changed_tick
     if last is None or rules.stances is not None:
         return 0
     return max(0, last + rules.orders.stance_cooldown_ticks - state.tick)
 
 
-def set_stance(state: GameState, player: int, stance: Stance) -> list[Event]:
-    """Apply a validated stance change at the current tick (the cost is charged by SIM-04). The
-    local progress of DEC-44 starts over; without ``[stances]`` it is 0 anyway."""
+def carry(ticks: int, old_period: int, new_period: int) -> int:
+    """A local counter after a stance change (DEC-44, item 4, revised 2026-11-07, #792): it keeps
+    its share of the cycle, ``ticks * new_period // old_period``. All three are non-negative, so
+    ``//`` rounds down: a change and a change back never raise a counter."""
+    return ticks * new_period // old_period
+
+
+def set_stance(state: GameState, rules: Ruleset, player: int, stance: Stance) -> list[Event]:
+    """Apply a validated stance change at the current tick (the cost is charged by SIM-04). Under
+    ``[stances]`` the local progress of DEC-44 carries over to the periods of the new stance;
+    without the section the counters are 0 and stay 0."""
     ps = state.players[player]
+    stances = rules.stances
+    if stances is not None:
+        cp, capital = stances.cp_period_ticks, stances.capital_period_ticks
+        ps.cp_ticks = carry(ps.cp_ticks, cp.of(ps.stance), cp.of(stance))
+        ps.capital_ticks = carry(ps.capital_ticks, capital.of(ps.stance), capital.of(stance))
     ps.stance = stance
     ps.stance_changed_tick = state.tick
-    ps.cp_ticks = 0
-    ps.capital_ticks = 0
     return [event(state.tick, "stance_changed", player=player, stance=stance.value)]

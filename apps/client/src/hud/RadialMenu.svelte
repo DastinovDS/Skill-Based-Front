@@ -17,9 +17,10 @@
   const menu = $derived(orders.radial.current);
   const rates = $derived(orders.stanceRates);
   const cp = (centis: number): string => formatCentis(centis, getLocale());
-  // Under economy v2 (DEC-44) a change costs the progress, and the stance is not the whole supply.
+  // Under economy v2 (DEC-44) a change keeps the progress (#792), and the stance is not the whole
+  // supply.
   const captions = $derived(
-    orders.v2 ? [{ text: t('radial.resetNote') }, { text: t('radial.builtNote') }] : [],
+    orders.v2 ? [{ text: t('radial.carryNote') }, { text: t('radial.builtNote') }] : [],
   );
 
   const items = $derived<RadialItem[]>(

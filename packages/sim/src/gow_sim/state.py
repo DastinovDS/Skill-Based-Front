@@ -320,7 +320,8 @@ class PlayerState:
     """``d0`` of the own capital stored by the last flow step: the largest ``SetLeafShift``."""
     cp_ticks: int = 0
     """Ticks since the last CP quantum, under ``[stances]`` (DEC-44): the quantum fires when this
-    reaches the period of the stance; a stance change sets it to 0. Hidden from the enemy."""
+    reaches the period of the stance; a stance change carries it over to the new period
+    (``systems.economy.carry``, #792). Hidden from the enemy."""
     capital_ticks: int = 0
     """Ticks since the last quantum of the own capital, under ``[stances]`` (DEC-44), the same
     way. It keeps counting without an own capital, and the quantum then does nothing."""

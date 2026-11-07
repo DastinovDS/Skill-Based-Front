@@ -262,7 +262,7 @@ def test_first_stance_change_is_free_of_the_cooldown() -> None:
 def test_stance_cooldown() -> None:
     state = _roomy_state()
     state.tick = 10
-    events = set_stance(state, 0, Stance.WAR)
+    events = set_stance(state, DEC02, 0, Stance.WAR)
     assert [(e.kind, e.get("player"), e.get("stance")) for e in events] == [
         ("stance_changed", 0, "war")
     ]
@@ -279,7 +279,7 @@ def test_stance_change_applies_to_the_next_quantum() -> None:
         p.cp = 0
     _run(state, 49)
     state.tick = 50
-    set_stance(state, 0, Stance.WAR)  # commands are applied before the economy in tick 50
+    set_stance(state, DEC02, 0, Stance.WAR)  # commands are applied before the economy in tick 50
     economy(state, DEC02)
     assert state.players[0].cp == 75
     assert state.players[1].cp == 50  # still BALANCE

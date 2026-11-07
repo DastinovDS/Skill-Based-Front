@@ -83,6 +83,20 @@ describe('stanceProgress (DEC-44)', () => {
     });
   });
 
+  it('keeps the share of the bars across a stance change', () => {
+    // The server carries the counters over (DEC-44, #792): War 60 of 80 and 100 of 400 become
+    // Economy 60 * 200 // 80 = 150 of 200 and 100 * 100 // 400 = 25 of 100.
+    const war = stanceProgress(DEV_RULES_STANCES, me('war', 60, 100));
+    const economy = stanceProgress(DEV_RULES_STANCES, me('economy', 150, 25));
+    expect(economy?.cp.share).toBe(war?.cp.share);
+    expect(economy?.capital.share).toBe(war?.capital.share);
+    // Rounded down: Balance 33 of 100 becomes War 33 * 80 // 100 = 26 of 80, under one tick less.
+    const balance = stanceProgress(DEV_RULES_STANCES, me('balance', 33, 0));
+    const after = stanceProgress(DEV_RULES_STANCES, me('war', 26, 0));
+    expect(after?.cp.share).toBeLessThanOrEqual(balance?.cp.share ?? 0);
+    expect((balance?.cp.share ?? 0) - (after?.cp.share ?? 0)).toBeLessThan(1 / 80);
+  });
+
   it('is null without stances in the ruleset', () => {
     expect(stanceProgress(DEV_RULES_FLOW, me('balance', null, null))).toBeNull();
   });

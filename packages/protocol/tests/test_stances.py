@@ -42,15 +42,16 @@ def test_ruleset_public_without_the_section() -> None:
 
 
 def test_the_snapshot_has_the_own_counters_and_no_enemy_ones() -> None:
-    """Player 1 changes to War at tick 3: at tick 10 its counters are 8 and 8, and player 0 holds
-    10 and 10; the frame of player 0 is the same with any counters and stance of player 1."""
+    """Player 1 changes to War at tick 3: its counters 2 and 2 carry to 2 * 80 // 100 = 1 and
+    2 * 400 // 200 = 4 (DEC-44, item 4), so at tick 10 they are 9 and 12, and player 0 holds 10
+    and 10; the frame of player 0 is the same with any counters and stance of player 1."""
     match = Match(MAP, RULES, KEY)
     for tick in range(1, 11):
         cmds = [sim.PlayerCommand(1, 0, sim.SetStance(Stance.WAR))] if tick == 3 else []
         match.step(cmds)
     mine, theirs = view_to_wire(match.view(0)).me, view_to_wire(match.view(1)).me
     assert (mine.cp_ticks, mine.capital_ticks, mine.stance) == (10, 10, Stance.BALANCE)
-    assert (theirs.cp_ticks, theirs.capital_ticks, theirs.stance) == (8, 8, Stance.WAR)
+    assert (theirs.cp_ticks, theirs.capital_ticks, theirs.stance) == (9, 12, Stance.WAR)
     frame = snapshot_frame(match.view(0))
     enemy = match.state.players[1]
     enemy.stance, enemy.cp_ticks, enemy.capital_ticks = Stance.ECONOMY, 55, 66
