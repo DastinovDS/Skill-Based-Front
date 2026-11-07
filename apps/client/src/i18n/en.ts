@@ -464,8 +464,8 @@ export const en = {
     '+1 for every {seconds} s in the mode, at most the charged units; burns after a fight; costs {cost} CP',
   'defense.radialRule': '+1 bonus per {seconds} s in the mode, cap: charged units',
   'defense.radialBurn': 'The bonus burns after a fight',
-  'order.bonus': 'Plan bonus ◇ +{n}',
-  'order.bonusForecast': 'Plan bonus ◇ +{n}: a forecast, the number is settled at the departure',
+  'order.bonus': 'Plan bonus +{n}',
+  'order.bonusForecast': 'Plan bonus +{n}: a forecast, the number is settled at the departure',
   'help.key.rearMin': 'Supply layer: rear minimum lower / higher',
   'start.title': 'You are blue. Your capital is here',
   'start.capital': 'Opponent: {nick}',
@@ -504,7 +504,7 @@ export const en = {
     'Red chevrons down: a defender on plains. If attacked, one charge stays silent for the whole fight',
   'help.legend.badgeDownBurn':
     'Red chevrons down: a defender on plains. If attacked, one charge burns in the first round',
-  'help.legend.bonusShot': 'A dashed arrow with a diamond: a bonus shot fired this round',
+  'help.legend.bonusShot': 'A dashed arrow with a green chevron: a bonus shot fired this round',
   'help.howTo': 'How to play',
   'help.howToBack': 'Back to the keys',
   // The "How to play" screen (CLI-13, #72); the numbers come from the played ruleset.
@@ -525,7 +525,7 @@ export const en = {
   'howto.fight.bounce':
     'An attack that does not win the place turns back, discharged. Equal charges mean a bounce.',
   'howto.fight.legend':
-    'Blue attacks, red defends. Filled: charged. Empty: no charge. Dashed: fallen. A diamond is a bonus shot.',
+    'Blue attacks, red defends. Filled: charged. Empty: no charge. Dashed: fallen. A green chevron is a bonus shot.',
   'howto.col.attack': 'You attack',
   'howto.col.defense': 'They defend',
   'howto.ex.equal.title': 'Equal charges',
@@ -725,21 +725,14 @@ export const en = {
   'city.costCharges': '{charges}●',
   'group.release': 'Release',
   'plan.banner': 'Planned order',
-  'plan.choosing': 'Planned order: pick the bonus',
-  'plan.bonusShort': 'Bonus',
-  'plan.max': 'max {max}',
-  'plan.wheel': 'or Shift + wheel over the target',
+  'plan.choosing': 'Planned order: turn the wheel over the target',
+  'plan.wheel': 'Shift + wheel over the target sets the bonus, +1 at first',
   'plan.gatherIn': 'gathers {seconds} s',
-  'plan.bonus': 'Requested bonus',
-  'plan.bonusTip':
-    'A planned order waits in its node and takes one charge of the warehouse per bonus point, then sets off',
-  'plan.less': 'Ask for a smaller bonus',
-  'plan.more': 'Ask for a bigger bonus',
-  'plan.gathering': 'Gathering ◇ +{bonus} of {plan}',
+  'plan.gathering': 'Gathering +{bonus} of {plan}',
   'plan.next': 'next in {seconds} s',
   'plan.release': 'Release now',
   'plan.gathered': '+{bonus} / {plan}',
-  'plan.title': 'Plan bonus ◇ +{bonus} of {plan}',
+  'plan.title': 'Plan bonus +{bonus} of {plan}',
   'plan.rule':
     '+1 for every {seconds} s, one charge of the warehouse each; it sets off when the bonus is gathered, or now with Release (F)',
   'plan.radialRule': '+1 bonus per {seconds} s, one warehouse charge each',
@@ -775,9 +768,8 @@ export const en = {
   'event.line_rerouted': 'Supply line {from} → {to} goes another way',
   'event.line_auto': 'Supply line {from} → {to} drawn by itself',
   'help.key.plannedV2': 'planned order: it gathers its bonus in the node, then sets off',
-  'help.key.planBonus': 'the bonus a planned order asks for',
   'help.key.planWheel':
-    'over a target: the ghost of the planned order and its bonus; the wheel sets the bonus',
+    'over a target: the ghost of the planned order and its bonus, +1 at first; each notch of the wheel adds or takes one, up to the charged units',
   'help.key.release': 'the gathering plan of the group sets off now',
   'help.key.supplyV2': 'supply map mode: draw and remove supply lines',
   'help.economyV2':

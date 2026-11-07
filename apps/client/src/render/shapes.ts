@@ -1,4 +1,4 @@
-import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics, GraphicsContext, Text, TextStyle, type RenderLayer } from 'pixi.js';
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import {
   chevronBadgeSpec,
@@ -115,6 +115,11 @@ export class EntityKit {
   constructor(
     readonly me: PlayerId,
     sprites: SpriteCache,
+    /**
+     * Where the badges of the tokens are drawn (#797, `MapLayers.badges`): over the selection and
+     * hover outlines; `null` (tests, views without badges): with the token itself.
+     */
+    readonly badgeLayer: RenderLayer | null = null,
   ) {
     this.sprites = sprites;
     const square = (g: GraphicsContext, side: number): GraphicsContext =>
@@ -324,6 +329,9 @@ export class Token {
     this.label.addChild(this.pill, this.count);
     this.body.addChild(this.back, this.level, this.ticks, this.outline);
     this.view.addChild(this.body, this.question, this.shield, this.label, this.badgeLayer);
+    // The token stays the parent of its badges (transform, fade, visibility); the render layer
+    // only draws them above the outlines of the overlay (#797).
+    kit.badgeLayer?.attach(this.badgeLayer);
   }
 
   /**

@@ -76,27 +76,32 @@ describe('OrderController under economy v2 (DEC-41)', () => {
     expect(sent).toEqual([]);
   });
 
-  it('a planned order asks for the bonus of the stepper; an ordinary one for none', () => {
+  it('a Shift click with no wheel step asks for bonus 1; an ordinary order for none (#797)', () => {
     const { controller, sent } = setup();
-    expect(controller.planBonus).toBe(2);
-    controller.key(down('BracketRight'));
-    expect(controller.planBonus).toBe(3);
     controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.planBonus).toBe(PLAN_BONUS.min);
     controller.click({ kind: 'node', id: enemy.id }, true);
     controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
     expect(sent).toEqual([
-      { type: 'move', group: group.id, dest: enemy.id, planned: true, bonus: 3 },
+      { type: 'move', group: group.id, dest: enemy.id, planned: true, bonus: 1 },
       { type: 'move', group: group.id, dest: enemy.id, planned: false, bonus: 0 },
     ]);
   });
 
-  it('keeps the requested bonus within its range', () => {
-    const { controller } = setup();
-    for (let i = 0; i < 20; i++) controller.stepPlanBonus(-1);
+  it('has no [ ] keys for the bonus any more (#797): they are not taken and change nothing', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.hover({ kind: 'node', id: enemy.id });
+    expect(controller.key(down('BracketRight'))).toBe(false);
+    // Not with Shift held either.
+    expect(controller.key({ type: 'keydown', code: 'BracketRight', shiftKey: true })).toBe(false);
+    expect(controller.key(down('BracketLeft'))).toBe(false);
     expect(controller.planBonus).toBe(PLAN_BONUS.min);
-    for (let i = 0; i < 20; i++) controller.stepPlanBonus(1);
-    expect(controller.planBonus).toBe(PLAN_BONUS.max);
+    controller.click({ kind: 'node', id: enemy.id }, true);
+    expect(sent).toEqual([
+      { type: 'move', group: group.id, dest: enemy.id, planned: true, bonus: 1 },
+    ]);
   });
 
   it('F and the group menu let the plan of the selected group go', () => {

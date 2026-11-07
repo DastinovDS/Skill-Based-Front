@@ -1,4 +1,4 @@
-import { Container } from 'pixi.js';
+import { Container, RenderLayer } from 'pixi.js';
 
 /**
  * Layer names from bottom to top (AGENTS.md §7.2). The groups and the intents lie ABOVE the fog
@@ -8,6 +8,10 @@ import { Container } from 'pixi.js';
  * server sends an enemy figure only where it is seen, and the memory ghosts of the fog are drawn in
  * the fog layer itself. `tolls` (the toll of a road fortification, #707) is not hidden by the «Supply»
  * mode, so it has a layer of its own above the effects. `supply` is above everything.
+ *
+ * `badges` (#797) holds no children of its own: it is a `RenderLayer` that draws the advantage and
+ * disadvantage badges of the unit tokens (#791) over the selection and hover outlines of `intents`,
+ * while each badge keeps its token as its parent (position, scale, fade and visibility come from it).
  */
 export const LAYER_ORDER = [
   'background',
@@ -18,6 +22,7 @@ export const LAYER_ORDER = [
   'fog',
   'groups',
   'intents',
+  'badges',
   'effects',
   'tolls',
   'supply',
@@ -34,13 +39,17 @@ export type LayerName = (typeof LAYER_ORDER)[number];
 export interface MapLayers {
   readonly world: Container;
   readonly layer: Readonly<Record<LayerName, Container>>;
+  /** The same object as `layer.badges`: a token attaches its badges to it (`EntityKit`). */
+  readonly badges: RenderLayer;
 }
 
 export function createLayers(): MapLayers {
   const world = new Container({ label: 'world' });
   const layer = {} as Record<LayerName, Container>;
+  const badges = new RenderLayer();
+  badges.label = 'badges';
   for (const name of LAYER_ORDER) {
-    layer[name] = world.addChild(new Container({ label: name }));
+    layer[name] = world.addChild(name === 'badges' ? badges : new Container({ label: name }));
   }
-  return { world, layer };
+  return { world, layer, badges };
 }

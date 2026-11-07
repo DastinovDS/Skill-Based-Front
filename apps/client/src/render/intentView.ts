@@ -30,6 +30,7 @@ import { nodePoint } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import { splitOrder, trackOrder } from './orderTrack.ts';
 import { lighten } from './fightFx.ts';
+import { chevronHalfWidth, drawBonusChevron } from './bonusChevron.ts';
 import type { OrderDelays } from './source.ts';
 import { BG, CHEVRON, ORDER_LINE, ownerColor, PAPER, PLATE_FILL, RIBBON, WARN } from './style.ts';
 
@@ -42,8 +43,11 @@ interface BonusPill {
   key: string;
 }
 
-/** The pill "◇ +N" beside an own planned ribbon (screen px): the diamond, the padding, the height. */
-const BONUS_PILL = { diamond: 5, gap: 4, padX: 7, height: 20 } as const;
+/**
+ * The pill "^ +N" beside an own planned ribbon (screen px): the size of the chevron of a bonus
+ * (#797, the badge's chevron up), the padding, the height.
+ */
+const BONUS_PILL = { chevron: 9, gap: 4, padX: 7, height: 20 } as const;
 const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
 
 /**
@@ -269,7 +273,7 @@ export class IntentView {
         .fill(color)
         .stroke({ width: tail.dotRing, color: PLATE_FILL });
       // The bonus of the plan (DEC-29) is the server's number and only the owner's view has it
-      // (the opponent's intent has no size and no bonus): "◇ +N" beside the arc, dashed while a forecast.
+      // (the opponent's intent has no size and no bonus): "^ +N" beside the arc, dashed while a forecast.
       const bonus = item?.group.order?.bonus ?? 0;
       const spot =
         bonus > 0 || gathering
@@ -338,7 +342,7 @@ export class IntentView {
   }
 
   /**
-   * The pill "◇ +N" beside an own planned ribbon, at `spot` (world units, from `bonusSpot`), N the
+   * The pill "^ +N" (the green chevron of a bonus, #797) beside an own planned ribbon, at `spot` (world units, from `bonusSpot`), N the
    * server's bonus of the order (`OrderView.bonus`). Before the group leaves it is a forecast (the
    * cap is taken at the departure): the outline is dashed, then it turns solid. Drawn at one unit
    * a screen px.
@@ -355,8 +359,9 @@ export class IntentView {
     const pill = this.bonusPill(index);
     const label = plan === null ? `+${String(bonus)}` : `+${String(bonus)}/${String(plan)}`;
     if (pill.text.text !== label) pill.text.text = label;
-    const { diamond, gap, padX, height } = BONUS_PILL;
-    const width = padX * 2 + diamond * 2 + gap + pill.text.width;
+    const { chevron, gap, padX, height } = BONUS_PILL;
+    const half = chevronHalfWidth(chevron);
+    const width = padX * 2 + half * 2 + gap + pill.text.width;
     const key = `${label}|${forecast ? 'f' : 's'}|${String(Math.round(width))}|${String(color)}`;
     if (pill.key !== key) {
       pill.key = key;
@@ -385,13 +390,9 @@ export class IntentView {
       } else {
         g.roundRect(left, -height / 2, width, height, height / 2).stroke({ width: 1.8, color });
       }
-      const cx = left + padX + diamond;
-      g.poly([cx - diamond, 0, cx, -diamond, cx + diamond, 0, cx, diamond]).stroke({
-        width: 1.6,
-        color: PAPER,
-        join: 'round',
-      });
-      pill.text.position.set(left + padX + diamond * 2 + gap, 0);
+      const cx = left + padX + half;
+      drawBonusChevron(g, cx, 0, chevron);
+      pill.text.position.set(left + padX + half * 2 + gap, 0);
     }
     pill.view.scale.set(1 / this.cameraScale);
     pill.view.position.set(spot.x, spot.y);

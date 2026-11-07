@@ -101,7 +101,7 @@ describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)',
         },
       });
     expect(tipOf([planned({ kind: 'node', node: city })])).toContain(
-      'Plan bonus ◇ +2: a forecast, the number is settled at the departure',
+      'Plan bonus +2: a forecast, the number is settled at the departure',
     );
   });
 
@@ -120,7 +120,7 @@ describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)',
         },
       }),
     ]);
-    expect(text).toContain('Plan bonus ◇ +1');
+    expect(text).toContain('Plan bonus +1');
     expect(text).not.toContain('forecast');
   });
 

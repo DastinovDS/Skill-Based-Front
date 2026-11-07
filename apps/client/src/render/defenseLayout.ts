@@ -12,7 +12,7 @@ export interface DefensePips {
   readonly cap: number;
 }
 
-/** A diamond of the counter: the centre from the near end of the capsule, filled when gathered. */
+/** A chevron of the counter (#797): the centre from the near end of the capsule, filled when gathered; `radius` is half its size. */
 export interface Pip {
   readonly x: number;
   readonly radius: number;
@@ -25,7 +25,7 @@ export interface PipNumber {
   readonly text: string;
 }
 
-/** The capsule beside the badge: its width, its diamonds and, above 6 places, the two numbers. */
+/** The capsule beside the badge: its width, its chevrons and, above 6 places, the two numbers. */
 export interface CounterLayout {
   readonly width: number;
   readonly pips: readonly Pip[];
@@ -33,8 +33,8 @@ export interface CounterLayout {
 }
 
 /**
- * The capsule of an own group's counter: one diamond per cap place (filled = gathered, hollow =
- * room), so a cap that grows adds a hollow diamond and nothing looks lost. Above `maxPips` places:
+ * The capsule of an own group's counter: one chevron per cap place (filled = gathered, hollow =
+ * room), so a cap that grows adds a hollow chevron and nothing looks lost. Above `maxPips` places:
  * "filled x gathered, hollow x room". `null`: no charged units, so no places (the badge alone).
  */
 export function counterLayout(pips: DefensePips): CounterLayout | null {
@@ -43,25 +43,25 @@ export function counterLayout(pips: DefensePips): CounterLayout | null {
   const bonus = Math.min(cap, Math.max(0, Math.floor(pips.bonus)));
   const { maxPips, radius, smallRadius, pitch, inset, padding, charWidth } = DEFENSE_PIPS;
   if (cap <= maxPips) {
-    const diamonds: Pip[] = [];
+    const chevrons: Pip[] = [];
     for (let i = 0; i < cap; i++) {
-      diamonds.push({ x: inset + i * pitch, radius, filled: i < bonus });
+      chevrons.push({ x: inset + i * pitch, radius, filled: i < bonus });
     }
-    return { width: cap * pitch + padding, pips: diamonds, numbers: [] };
+    return { width: cap * pitch + padding, pips: chevrons, numbers: [] };
   }
   const gathered = `×${String(bonus)}`;
   const room = `×${String(cap - bonus)}`;
   const firstText = 12 - 1;
-  const secondDiamond = 12 + gathered.length * charWidth + 6;
+  const secondChevron = 12 + gathered.length * charWidth + 6;
   return {
     width: 12 + gathered.length * charWidth + 12 + room.length * charWidth + 4,
     pips: [
       { x: 6, radius: smallRadius, filled: true },
-      { x: secondDiamond, radius: smallRadius, filled: false },
+      { x: secondChevron, radius: smallRadius, filled: false },
     ],
     numbers: [
       { x: firstText, text: gathered },
-      { x: secondDiamond + 5, text: room },
+      { x: secondChevron + 5, text: room },
     ],
   };
 }

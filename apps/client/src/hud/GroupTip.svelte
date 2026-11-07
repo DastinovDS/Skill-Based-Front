@@ -2,6 +2,7 @@
   import { getLocale, tf } from '../i18n/index.ts';
   import type { RulesetPublic } from '../protocol.gen.ts';
   import type { GroupInfo } from './hudData.ts';
+  import BonusChevron from './BonusChevron.svelte';
   import ChargeTip from './ChargeTip.svelte';
   import { formatCentis } from './format.ts';
   import MapTip from './MapTip.svelte';
@@ -42,8 +43,11 @@ in its city. The opponent's groups are not under this tip: they show their mode 
     {#if group.gathering !== null}
       <!-- Economy v2 (DEC-41, item 10): the plan gathers its bonus from the warehouse of its node. -->
       <p class="extra">
-        <strong
-          >{tf('plan.title', { bonus: group.gathering.bonus, plan: group.gathering.plan })}</strong
+        <strong class="bonus"
+          ><BonusChevron />{tf('plan.title', {
+            bonus: group.gathering.bonus,
+            plan: group.gathering.plan,
+          })}</strong
         >
         <span class="rule"
           >{tf('plan.rule', {
@@ -53,9 +57,11 @@ in its city. The opponent's groups are not under this tip: they show their mode 
       </p>
     {:else if group.plannedBonus > 0}
       <p class="extra">
-        {group.node !== null
-          ? tf('order.bonusForecast', { n: group.plannedBonus })
-          : tf('order.bonus', { n: group.plannedBonus })}
+        <span class="bonus"
+          ><BonusChevron />{group.node !== null
+            ? tf('order.bonusForecast', { n: group.plannedBonus })
+            : tf('order.bonus', { n: group.plannedBonus })}</span
+        >
       </p>
     {/if}
   {/if}
@@ -76,5 +82,12 @@ in its city. The opponent's groups are not under this tip: they show their mode 
 
   .rule {
     color: var(--text-dim);
+  }
+
+  /* The chevron of a bonus (#797) in front of its line. */
+  .bonus {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
   }
 </style>

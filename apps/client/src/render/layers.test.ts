@@ -21,6 +21,11 @@ describe('layer order', () => {
     expect(at('effects')).toBeGreaterThan(at('intents'));
   });
 
+  it('draws the badges of the units over the outlines of the intents, under the effects (#797)', () => {
+    expect(at('badges')).toBe(at('intents') + 1);
+    expect(at('effects')).toBeGreaterThan(at('badges'));
+  });
+
   it('adds one container per layer in that order', () => {
     const { world, layer } = createLayers();
     expect(world.children.map((child) => child.label)).toEqual([...LAYER_ORDER]);

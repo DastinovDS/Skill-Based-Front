@@ -79,20 +79,20 @@ function turn(controller: OrderController, clock: { now: number }, n: number): b
   return used;
 }
 
-describe('the plan bonus by Shift, hover and wheel (#793)', () => {
-  it('Shift over a reachable target: the ghost and the counter with the bonus and its time', () => {
+describe('the plan bonus by Shift, hover and wheel (#793, #797)', () => {
+  it('Shift over a reachable target: the ghost and the counter at +1 with its time', () => {
     const { controller } = setup();
     controller.hover({ kind: 'node', id: enemy });
     expect(controller.overlay().bonus).toBeNull();
     controller.key(shiftDown);
     const overlay = controller.overlay();
     expect(overlay.preview).toEqual({ from: home, to: enemy, planned: true, path: [home, enemy] });
-    // The banner's value, the cap, and one `plan_ticks_per_bonus` per point (DEC-41, item 10).
+    // A new hover starts at 1 (#797), the cap, one `plan_ticks_per_bonus` per point (DEC-41, item 10).
     expect(overlay.bonus).toEqual({
       node: enemy,
-      bonus: controller.planBonus,
+      bonus: 1,
       max: PLAN_BONUS.max,
-      ticks: controller.planBonus * RULES.orders.plan_ticks_per_bonus,
+      ticks: RULES.orders.plan_ticks_per_bonus,
     });
     // Shift up: an ordinary order, no counter.
     controller.key(shiftUp);
@@ -108,21 +108,51 @@ describe('the plan bonus by Shift, hover and wheel (#793)', () => {
     expect(controller.overlay().bonus).toBeNull();
   });
 
-  it('the wheel with Shift steps the bonus, one notch one step, the same value as [ ]', () => {
+  it('the wheel with Shift steps the bonus, one notch one step', () => {
     const { controller, clock } = setup();
     controller.key(shiftDown);
     controller.hover({ kind: 'node', id: enemy });
-    const start = controller.planBonus;
     expect(turn(controller, clock, 2)).toEqual([true, true]);
-    expect(controller.planBonus).toBe(start + 2);
-    expect(controller.overlay().bonus?.bonus).toBe(start + 2);
-    controller.key({ type: 'keydown', code: 'BracketLeft', shiftKey: true });
-    expect(controller.planBonus).toBe(start + 1);
+    expect(controller.planBonus).toBe(3);
+    expect(controller.overlay().bonus?.bonus).toBe(3);
     turn(controller, clock, -1);
-    expect(controller.planBonus).toBe(start);
-    // The banner's buttons call the same stepper.
-    controller.stepPlanBonus(1);
-    expect(controller.overlay().bonus?.bonus).toBe(start + 1);
+    expect(controller.planBonus).toBe(2);
+    expect(controller.overlay().bonus?.bonus).toBe(2);
+  });
+
+  it('has no [ ] keys: they neither step the bonus nor are taken (#797)', () => {
+    const { controller, clock } = setup();
+    controller.key(shiftDown);
+    controller.hover({ kind: 'node', id: enemy });
+    turn(controller, clock, 1);
+    expect(controller.key({ type: 'keydown', code: 'BracketRight', shiftKey: true })).toBe(false);
+    expect(controller.key({ type: 'keydown', code: 'BracketLeft', shiftKey: true })).toBe(false);
+    expect(controller.planBonus).toBe(2);
+  });
+
+  it('every new hover starts at 1: Shift up, another target, another selection (#797)', () => {
+    const { controller, clock } = setup();
+    controller.key(shiftDown);
+    controller.hover({ kind: 'node', id: enemy });
+    turn(controller, clock, 3);
+    expect(controller.planBonus).toBe(4);
+    // Shift up and down again over the same target: a new hover.
+    controller.key(shiftUp);
+    controller.key(shiftDown);
+    expect(controller.overlay().bonus?.bonus).toBe(1);
+    turn(controller, clock, 2);
+    expect(controller.planBonus).toBe(3);
+    // The pointer leaves the target and comes back: a new hover.
+    controller.hover({ kind: 'node', id: far });
+    controller.hover({ kind: 'node', id: enemy });
+    expect(controller.planBonus).toBe(1);
+    expect(controller.overlay().bonus?.bonus).toBe(1);
+    // Another selection: a new hover.
+    turn(controller, clock, 2);
+    controller.deselect();
+    controller.click({ kind: 'group', id: GROUP }, true);
+    controller.hover({ kind: 'node', id: enemy });
+    expect(controller.planBonus).toBe(1);
   });
 
   it('keeps the wheel within 1 and the charged units of the group', () => {
@@ -139,32 +169,32 @@ describe('the plan bonus by Shift, hover and wheel (#793)', () => {
   it('a trackpad swipe does not jump to the cap', () => {
     const { controller, clock } = setup();
     controller.key(shiftDown);
-    const start = controller.planBonus;
+    controller.hover({ kind: 'node', id: enemy });
     for (let i = 0; i < 40; i++) {
       clock.now += 16;
       controller.wheel(roll(-5));
     }
     // 200 px a frame apart: the first event and one full step after it.
-    expect(controller.planBonus).toBe(start + 2);
+    expect(controller.planBonus).toBe(3);
   });
 
   it('without Shift the wheel is left to the zoom; Shift up starts the gathering afresh', () => {
     const { controller, clock } = setup();
-    const start = controller.planBonus;
+    controller.hover({ kind: 'node', id: enemy });
     expect(controller.wheel(roll(-100, false))).toBe(false);
-    expect(controller.planBonus).toBe(start);
+    expect(controller.planBonus).toBe(1);
     controller.key(shiftDown);
     clock.now += 16;
     controller.wheel(roll(-5));
     clock.now += 16;
     controller.wheel(roll(-90));
-    expect(controller.planBonus).toBe(start + 1);
+    expect(controller.planBonus).toBe(2);
     controller.key(shiftUp);
     controller.key(shiftDown);
-    // The 90 px gathered before Shift went up are gone: a new gesture, one step at once.
+    // The 90 px gathered before Shift went up are gone, and so is the bonus: one step from 1.
     clock.now += 16;
     controller.wheel(roll(-20));
-    expect(controller.planBonus).toBe(start + 2);
+    expect(controller.planBonus).toBe(2);
   });
 
   it('a click sends the planned order with the bonus the wheel chose', () => {
@@ -172,9 +202,16 @@ describe('the plan bonus by Shift, hover and wheel (#793)', () => {
     controller.key(shiftDown);
     controller.hover({ kind: 'node', id: enemy });
     turn(controller, clock, 3);
-    const bonus = controller.planBonus;
     controller.click({ kind: 'node', id: enemy }, true);
-    expect(sent).toEqual([{ type: 'move', group: GROUP, dest: enemy, planned: true, bonus }]);
+    expect(sent).toEqual([{ type: 'move', group: GROUP, dest: enemy, planned: true, bonus: 4 }]);
+  });
+
+  it('a Shift click with no wheel step sends bonus 1 (#797)', () => {
+    const { controller, sent } = setup();
+    controller.key(shiftDown);
+    controller.hover({ kind: 'node', id: enemy });
+    controller.click({ kind: 'node', id: enemy }, true);
+    expect(sent).toEqual([{ type: 'move', group: GROUP, dest: enemy, planned: true, bonus: 1 }]);
   });
 
   it('without a selected group the wheel zooms even with Shift', () => {

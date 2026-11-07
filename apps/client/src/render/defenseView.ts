@@ -18,7 +18,7 @@ interface Sign {
 
 /**
  * The sign of "Defense" at a city (D1 "Diamond pips" in the left column L1, #349; ui-style 35): the
- * shield badge and, for an own group with places, a capsule of diamonds growing outward, filled for
+ * shield badge and, for an own group with places, a capsule of chevrons (#797) growing outward, green for
  * the bonus gathered, hollow for room. One sign per city and side (`defenseSigns`): from the group's
  * mode where it is seen, from the public intent elsewhere. The opponent shows the badge alone, so
  * its bonus never reaches the screen. It lies over the fog (the intents layer), is baked (one

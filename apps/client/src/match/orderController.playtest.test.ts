@@ -59,6 +59,21 @@ function ack(seq: number, reject: string | null = null): AckMsg {
   };
 }
 
+/** Shift held over `node` and the wheel turned up `notches` notches, a pause apart (#793, #797). */
+function wheelOver(
+  controller: OrderController,
+  clock: { now: number },
+  node: number,
+  notches: number,
+): void {
+  controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
+  controller.hover({ kind: 'node', id: node });
+  for (let i = 0; i < notches; i++) {
+    clock.now += 200;
+    controller.wheel({ deltaX: 0, deltaY: -100, deltaMode: 0, shiftKey: true });
+  }
+}
+
 function setup(snap: SnapshotMsg = snapshot()) {
   const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map: DEFAULT_MAP });
   hud.onSnapshot(snap);
@@ -184,8 +199,8 @@ describe('a click at a place too small for the group splits and sends (#762)', (
 
   it('keeps a planned order planned, its bonus capped by the charged units of the part', () => {
     // 6 units, 2 charged: a part of 3 takes both charged ones (the charged go first, DEC-20, B1).
-    const { controller, sent, book } = selected(snapshot({ units: 6, charged: 2 }));
-    controller.stepPlanBonus(1);
+    const { controller, sent, book, clock } = selected(snapshot({ units: 6, charged: 2 }));
+    wheelOver(controller, clock, enemy, 2);
     controller.click({ kind: 'node', id: enemy }, true);
     controller.confirmSplit();
     book.onEvent({
@@ -270,24 +285,25 @@ describe('CP shortage (#762)', () => {
 });
 
 describe('the bonus of a planned order (#762)', () => {
-  it('caps the stepper by the charged units of the selected group (DEC-41, item 10)', () => {
+  it('caps the wheel by the charged units of the selected group (DEC-41, item 10)', () => {
     expect(planBonusCap(null)).toBe(PLAN_BONUS.max);
     expect(planBonusCap(0)).toBe(PLAN_BONUS.min);
     expect(planBonusCap(3)).toBe(3);
     expect(planBonusCap(40)).toBe(PLAN_BONUS.max);
-    const { controller } = setup(snapshot({ units: 6, charged: 1 }));
+    const { controller, clock } = setup(snapshot({ units: 6, charged: 1 }));
     controller.click({ kind: 'group', id: GROUP }, false);
     expect(controller.planBonusMax).toBe(1);
-    // The default 2 is shown and sent as 1, the most a group with one charged unit gathers.
+    // The most a group with one charged unit gathers is 1, whatever the wheel does.
+    wheelOver(controller, clock, enemy, 0);
     expect(controller.planBonus).toBe(1);
-    controller.stepPlanBonus(1);
+    wheelOver(controller, clock, enemy, 1);
     expect(controller.planBonus).toBe(1);
   });
 
   it('steps up to the charged units and sends that bonus', () => {
-    const { controller, sent } = setup(snapshot({ units: 6, charged: 4 }));
+    const { controller, sent, clock } = setup(snapshot({ units: 6, charged: 4 }));
     controller.click({ kind: 'group', id: GROUP }, false);
-    for (let i = 0; i < 6; i++) controller.stepPlanBonus(1);
+    wheelOver(controller, clock, enemy, 6);
     expect(controller.planBonus).toBe(4);
     controller.click({ kind: 'node', id: enemy }, true);
     expect(sent).toEqual([{ type: 'move', group: GROUP, dest: enemy, planned: true, bonus: 4 }]);

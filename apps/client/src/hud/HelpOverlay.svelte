@@ -89,7 +89,6 @@
   const KEYS_V2 = [
     ['LMB', 'help.key.select'],
     ['Shift + LMB', 'help.key.plannedV2'],
-    ['[ / ]', 'help.key.planBonus'],
     ['Shift + wheel', 'help.key.planWheel'],
     ['F', 'help.key.release'],
     ['X', 'help.key.cancel'],
@@ -109,7 +108,6 @@
   const KEYS_FLOW = [
     ['LMB', 'help.key.select'],
     ['Shift + LMB', 'help.key.plannedV2'],
-    ['[ / ]', 'help.key.planBonus'],
     ['Shift + wheel', 'help.key.planWheel'],
     ['F', 'help.key.release'],
     ['X', 'help.key.cancel'],
@@ -268,8 +266,9 @@
               </li>
               <li>
                 <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                  <path d="M2 18q12-18 20-6" class="dashed" />
-                  <path d="M22 12l-3 -4 -3 4 3 4z" class="thin" />
+                  <path d="M2 18q12-18 18-8" class="dashed" />
+                  <path d="M16 13l4.5-4.5 4.5 4.5" class="badge-out" />
+                  <path d="M16 13l4.5-4.5 4.5 4.5" class="badge-up" />
                 </svg>
                 {t('help.legend.bonusShot')}
               </li>

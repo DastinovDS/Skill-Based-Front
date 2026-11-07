@@ -270,7 +270,7 @@ describe('the sparks and the echoes', () => {
     expect(sparksOf(shot, 0.9, 3, 1).length).toBeLessThanOrEqual(sparkCount(1));
   });
 
-  it('trail a bonus shot as three diamonds, smaller and fainter behind it', () => {
+  it('trail a bonus shot as three chevrons (#797), smaller and fainter behind it', () => {
     const echoes = echoesOf(bonus, 0.95);
     expect(echoes).toHaveLength(ECHOES.length);
     expect(echoes.map((e) => e.size)).toEqual([...echoes.map((e) => e.size)].sort((a, b) => b - a));

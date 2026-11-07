@@ -149,7 +149,7 @@ export class EntityView implements EnemyAnchors {
     /** The baked shapes of the tokens (`bake.ts`). */
     sprites: SpriteCache,
   ) {
-    this.kit = new EntityKit(me, sprites);
+    this.kit = new EntityKit(me, sprites, layers.badges);
     this.enemy = other(me);
     this.enemyNodes = map.nodes.map(() => null);
     this.figures = new FigureView(
