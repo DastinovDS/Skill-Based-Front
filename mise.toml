@@ -101,6 +101,14 @@ depends = ["test:py", "test:client"]
 description = "pytest -n auto -m 'not perf and not slow' (extra pytest arguments after --)"
 run = 'uv run pytest -n auto -m "not perf and not slow" -q --tb=short'
 
+[tasks."check:shards"]
+description = "The CI shards of test:py (scripts/pytest_shards.py) collect exactly the tests of one test:py run, each once; their names match the matrix of ci.yml"
+run = "uv run python scripts/pytest_shards.py check"
+
+[tasks."check:changed"]
+description = "An agent's local check before a push: check, then by the diff against a base the tests of the touched packages, golden:check, regen, test:client, build (args: [base] [--dry-run], base origin/develop by default)"
+run = "uv run python scripts/check_changed.py"
+
 [tasks."test:client"]
 description = "Vitest of the client"
 run = "pnpm --silent -C apps/client test --reporter=dot"

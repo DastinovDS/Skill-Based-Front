@@ -66,7 +66,8 @@ Daily commands:
 ```sh
 mise tasks                  # all tasks with descriptions
 mise run check              # ruff, pyright, lint-imports, maps, lint and check of the client and e2e
-mise run test               # quick pytest (like the job py) and Vitest
+mise run test               # quick pytest (like the py-test shards) and Vitest
+mise run check:changed      # before a push: check and the tests of what the diff touches (agents)
 mise run test:perf          # benchmarks and tick lag, sequential only
 mise run test:slow          # long bot matches (the job py-slow)
 mise run dev                # server (port 8000) and client (http://localhost:5173), Ctrl-C stops both
@@ -117,11 +118,20 @@ and manually (`workflow_dispatch`).
 
 | Check | What it does |
 |---|---|
-| `py` | `mise run setup:py`, `check:py` (`ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `gow-maps validate`), `test:py` (`pytest -n auto -m "not perf and not slow"`, pytest-xdist, `HYPOTHESIS_PROFILE=ci`), then `test:perf` (`pytest -m perf`, sequentially, performance budgets), `golden:check HEAD^1` (replays re-simulate and stay frozen against the base) |
+| `py` | green only when all its parallel jobs are green (it fails on a failed or cancelled one, and is skipped only when they are skipped by `changes`): `py-check` runs `check:py` (`ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `gow-maps validate`) and `check:shards`; `py-test (<shard>)` runs `test:py` (`pytest -n auto -m "not perf and not slow"`, pytest-xdist, `HYPOTHESIS_PROFILE=ci`) on one shard of the tests; `py-perf` runs `test:perf` (`pytest -m perf`, sequentially and alone on its runner, performance budgets); `py-golden` runs `golden:check HEAD^1` (replays re-simulate and stay frozen against the base) |
 | `web` | `mise run setup:client` and `setup:py`, the steps `protocol-drift` and `api-drift` (`regen:protocol` and `regen:api`: regenerate the protocol schema with `protocol.gen.ts` and the server OpenAPI with `api.gen.ts`, fail if they differ from the committed ones), `check:client` (lint, check), `test:client`, `build` |
 | `docker` | `hadolint` for `deploy/*.Dockerfile`, then `deploy/smoke.sh`: build the images, `docker compose up`, checks through Caddy |
 
-- The not required job `py-slow` runs in parallel with `py` on the same paths: `pytest -n auto -m slow`, that is the long
+- The shards of `test:py` (#798) are defined in `scripts/pytest_shards.py` by test location (`sim-replays`: the long
+  replay and determinism files of `packages/sim`; `sim`; `bots-matches`: the full bot-match files of `apps/bots`; `bots`;
+  `server-protocol`; `rest`: `tools/maps`, `tests/` and any test no other shard names), balanced by `--durations`: the
+  longest shard is bounded by its longest single test. `mise run check:shards` (in `py-check`) collects one whole
+  `test:py` run and every shard and fails unless each test is in exactly one shard, and unless the shard names equal
+  the matrix of `py-test` in `ci.yml`. A shard is run as `mise run test:py -- $(uv run python scripts/pytest_shards.py args <shard>)`.
+- The not required job `visual` (screenshots of the dev scenes, `apps/client/visual/README.md`) runs in four shards
+  `visual (i/4)` (Playwright's `--shard=i/4 --fully-parallel`); a failed shard uploads the frames and the difference as
+  the artifact `visual-diff-<i>`.
+- The not required job `py-slow` runs in parallel with the Python jobs on the same paths: `pytest -n auto -m slow`, that is the long
   tests of full matches (win shares of bots against `random_legal` over 3 and 10 seeds per map, diversity across seeds,
   the tournament harness on all bots). It does not delay the merge, but its red result must be analyzed before a release.
   The pytest marks: `perf` (timing measurements, not run under xdist), `slow` (long matches); both are described in
@@ -139,7 +149,8 @@ and manually (`workflow_dispatch`).
   (the only place; the version of mise itself is `MISE_VERSION` at the top of the workflow); Python comes from
   `.python-version` through uv. The job steps call `mise run <task>`, the same tasks as on a developer machine
   (`MISE_TASK_OUTPUT=interleave` in CI prints each command, so a red log shows which one failed). Caches:
-  the mise tools (the action), the uv cache (`uv.lock`) and the pnpm store (the lock files of `apps/client` and `e2e`).
+  the mise tools (the action), the uv cache (`uv.lock`, in every Python job) and the pnpm store (the lock files of
+  `apps/client` and `e2e`, in `web`, every `visual` shard and `e2e`).
   The job `docker` calls `deploy/smoke.sh` directly (the task `smoke` uses the agents' own compose project) and
   needs only node from mise; the job `e2e` runs the parts of the task `e2e` as separate steps to keep the stack logs
   of a failed run.
