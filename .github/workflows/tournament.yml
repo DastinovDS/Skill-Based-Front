@@ -4,10 +4,11 @@ name: Tournament
 # or on a PR, so it is not part of the required checks (py, web, docker). Run it with
 # `mise run tournament:gh` (AGENTS.md section 3, docs/balance/README.md).
 #
-# The seeds are split into contiguous ranges (scripts/tournament_shards.py plan), every shard runs
-# the same `mise run tournament` task as a local run with --seed-base/--seeds, and the last job
-# merges the shards into one JSONL identical, byte for byte, to a single run with the same
-# arguments, then runs `gow-bots report` on it.
+# The (map, seed) cells are split into shards balanced by the expected cost of a map
+# (scripts/tournament_shards.py plan, #786). A shard is a list of pieces (maps and a seed range);
+# every piece runs the same `mise run tournament` task as a local run with --maps/--seed-base/--seeds,
+# and the last job merges the pieces into one JSONL identical, byte for byte, to a single run with
+# the same arguments, then runs `gow-bots report` on it.
 on:
   workflow_dispatch:
     inputs:
@@ -27,7 +28,7 @@ on:
         description: "Seeds per map and pair (total over all shards)"
         default: "100"
       shards:
-        description: "Parallel jobs (at most 20, never more than seeds)"
+        description: "Parallel jobs (at most 20, never more than maps x seeds)"
         default: "10"
       label:
         description: "Name for the run and the artifact (letters, digits, . _ -)"
@@ -49,6 +50,7 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       artifact: ${{ steps.plan.outputs.artifact }}
+      map_count: ${{ steps.plan.outputs.map_count }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -74,9 +76,13 @@ jobs:
           for v in "$RULESET" "$BOTS" "$MAPS"; do
             case "$v" in *[!A-Za-z0-9._/@*\ -]*) echo "::error::unexpected character in an input"; exit 1;; esac
           done
-          matrix="$(python3 scripts/tournament_shards.py plan --seeds "$SEEDS" --shards "$SHARDS")"
+          # MAPS is split into words and globbed by the shell on purpose (several maps, a glob).
+          # shellcheck disable=SC2086
+          matrix="$(python3 scripts/tournament_shards.py plan --maps $MAPS --seeds "$SEEDS" --shards "$SHARDS")"
+          map_count="$(python3 -c 'import json,sys; print(len({m for s in json.loads(sys.argv[1]) for p in s["pieces"] for m in p["maps"]}))' "$matrix")"
           artifact="tournament-${LABEL:-run}-${GITHUB_RUN_ID}"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "map_count=$map_count" >> "$GITHUB_OUTPUT"
           echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
           {
             echo "## Tournament run"
@@ -88,7 +94,9 @@ jobs:
             echo "| bots | \`$BOTS\` |"
             echo "| maps | \`$MAPS\` |"
             echo "| seeds | $SEEDS |"
+            echo "| map files | $map_count |"
             echo "| shards | $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])))' "$matrix") |"
+            echo "| shard costs (nodes x seeds) | $(python3 -c 'import json,sys; print(" ".join(str(s["cost"]) for s in json.loads(sys.argv[1])))' "$matrix") |"
             echo "| artifact | \`$artifact\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -121,23 +129,41 @@ jobs:
           got="$(mise exec -- uv run python -c 'import platform; print(platform.python_version())')"
           echo "Python $got on $(nproc) CPUs (.python-version: $want)"
           case "$got" in "$want"|"$want".*) ;; *) echo "::error::Python $got differs from .python-version $want"; exit 1;; esac
-          echo "shard ${{ matrix.shard }}: seeds ${{ matrix.seed_base }}..$(( ${{ matrix.seed_base }} + ${{ matrix.seeds }} - 1 )), Python $got, $(nproc) CPUs" >> "$GITHUB_STEP_SUMMARY"
+          echo "shard ${{ matrix.shard }}: ${{ matrix.cells }} cells, cost ${{ matrix.cost }}, Python $got, $(nproc) CPUs" >> "$GITHUB_STEP_SUMMARY"
+      # Are the CPUs cores or SMT threads (#785)? `--jobs` below is the CPU count of the runner.
+      - name: Runner CPU
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          lscpu
+          cpu="$(lscpu | grep -E '^(Model name|CPU\(s\)|Thread\(s\) per core|Core\(s\) per socket):' | sed -E 's/: +/: /' | paste -sd ';' -)"
+          echo "shard $SHARD CPU: $cpu" >> "$GITHUB_STEP_SUMMARY"
       - name: Play the shard
         env:
           RULESET: ${{ inputs.ruleset }}
           BOTS: ${{ inputs.bots }}
-          MAPS: ${{ inputs.maps }}
+          PIECES: ${{ toJSON(matrix.pieces) }}
+          SHARD: ${{ matrix.shard }}
         run: |
-          # Same task as a local run; the later options override the task's defaults.
-          # BOTS is split into words on purpose (several bots).
-          # shellcheck disable=SC2086
-          mise run tournament -- --maps $MAPS --bots $BOTS \
-            --seeds "${{ matrix.seeds }}" --seed-base "${{ matrix.seed_base }}" \
-            --jobs "$(nproc)" --ruleset "$RULESET" --out "shard-${{ matrix.shard }}.jsonl"
+          set -eu
+          # One line per piece: seed_base, seeds, the map files.
+          python3 -c 'import json,sys; [print(p["seed_base"], p["seeds"], *p["maps"]) for p in json.loads(sys.argv[1])]' \
+            "$PIECES" > "$RUNNER_TEMP/pieces.txt"
+          cat "$RUNNER_TEMP/pieces.txt"
+          i=0
+          while read -r base n maps <&3; do
+            # Same task as a local run; the later options override the task's defaults.
+            # BOTS and maps are split into words on purpose (several bots and maps).
+            # shellcheck disable=SC2086
+            mise run tournament -- --maps $maps --bots $BOTS \
+              --seeds "$n" --seed-base "$base" \
+              --jobs "$(nproc)" --ruleset "$RULESET" --out "shard-$SHARD-$i.jsonl"
+            i=$((i + 1))
+          done 3< "$RUNNER_TEMP/pieces.txt"
       - uses: actions/upload-artifact@v7
         with:
           name: shard-${{ matrix.shard }}
-          path: shard-${{ matrix.shard }}.jsonl
+          path: shard-${{ matrix.shard }}-*.jsonl
           retention-days: 1
       - run: mise exec -- uv cache prune --ci
 
@@ -164,9 +190,13 @@ jobs:
           path: shards
           merge-multiple: true
       - name: Merge and report
+        env:
+          SEEDS: ${{ inputs.seeds }}
+          MAP_COUNT: ${{ needs.plan.outputs.map_count }}
         run: |
           mkdir -p result
-          python3 scripts/tournament_shards.py merge --out result/tournament.jsonl shards/shard-*.jsonl
+          python3 scripts/tournament_shards.py merge --out result/tournament.jsonl \
+            --seeds "$SEEDS" --map-count "$MAP_COUNT" shards/shard-*.jsonl
           mise exec -- uv run gow-bots report result/tournament.jsonl --out-dir result --name report
           {
             echo
