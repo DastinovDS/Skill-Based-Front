@@ -516,6 +516,39 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
   oncoming stripes are spaced 18 units apart.
 - **Selection:** a white `--paper` outline of the same triangle 1.45 times bigger, with a dark halo.
 
+#### 9.5.1 Units: helmets (the default since #784) **[accepted]**
+
+The owner's choice of 2026-11-07 on #775: variant **Full** of `mockups/unit-helmets-r2.html`, with his corrections. The
+triangle stays as a viewer setting: the help (`?`) has "Units: Helmets / Triangles", kept per browser (`sbf.units`,
+`units/unitStyle.ts`); helmets are the default.
+
+- **Figure:** a side view of a combat helmet (`units/helmet.ts`): own **Rim** (a dome with a light brim line), the
+  opponent's **Cut** (a rounder dome with a cut-out at the ear, no brim). Both carry a **chin strap** everywhere: on
+  roads, in a city, in a province, in the arena. Fixed facing: own right, the opponent's left (as Full had it); the
+  sprites are baked facing right and flipped with `scale.x = -1`, so a facing costs no texture. The owner reads from
+  the silhouette and the facing, not from the hue alone (AGENTS.md 7.4).
+- **Size:** 1.34 times the side of the triangle it replaces (the steps of 9.5 stay: they set the minimum size on
+  screen and the hit area); in a city 8% smaller (`HELMET_INSIDE`), so the strap stays inside the ring.
+- **Charge as a level:** the dome fills from its lowest point by `charged / units` of its height (the same mapping as
+  the triangle, linear), with a smooth straight edge: **no dividers, no bands**. The change eases as in 9.5 (#508):
+  the fill is one baked sprite of the full dome, shown from the bottom by a crop of its texture frame
+  (`BakedSprite.cropBottom`), no texture per frame and no mask.
+- **The number:** one number, all the units (`countLabel`), in the middle of the dome, on a road and in a city; no
+  `3/5` chip. A range («3-5») stays in the pill under the helmet; an enemy figure on a road keeps its plate (DEC-33).
+- **Contrast:** a dark casing (6.4) round the dome, the strap and the brim, plus the light edge of the dome and the
+  light strap and brim (the owner's colour mixed half with paper): one of the two reads at 3:1 on every terrain.
+  Unknown and memory: a faint plate, the dome dashed in a pale tone on a dark casing, "?" in the middle.
+- **Corners:** the top right corner stays free for the badges of #776; the "Defense" shield (economy v1 only) sits at
+  the top left.
+- **Selection and hover:** a line round the whole silhouette, strap and brim included (the level line of the
+  distance to the helmet, `helmetOutline`), 7.5 and 6 world units out (`HELMET_FRAME`), flipped with the opponent.
+- **Arena chips:** helmets with a strap, one pitch wide, own facing right, the opponent's left (they look at each
+  other); charged filled, discharged hatched, killed dashed.
+- **Elsewhere:** the shards of a killed unit are helmet domes; the presence mark of the «Supply» view is a hollow
+  enemy helmet; the undo cue ring (#764) is a little wider. Outside the map the unit icons follow the setting: the
+  top bar, `UnitMark` (menus, queue, result, board, split menu), the replay `SideMark`, the mark of `FrontTop`, the
+  menu backdrop (`menuMotion.ts`), the list of the groups of a city (`stackHelmet`), the legend of the help, the units of the How to play page.
+
 ### 9.6 Supply packets
 
 - **A square** 8 in the owner's color with a dark rim 1.5 (a charge is a square, section 21; #345) and a tail

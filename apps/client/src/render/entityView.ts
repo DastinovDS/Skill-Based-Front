@@ -292,6 +292,11 @@ export class EntityView implements EnemyAnchors {
     return symbolScale(BUILD_PLATE.height, this.cameraScale);
   }
 
+  /** The unit look changed (#784): the enemy markers, set only on a new snapshot, are drawn again. */
+  restyle(): void {
+    if (this.base !== null) this.applyBase(this.base);
+  }
+
   update(frame: RenderFrame): void {
     this.updateFrame(frame);
     this.warm = true;
@@ -515,7 +520,14 @@ export class EntityView implements EnemyAnchors {
       entry.view.scale.set(scale);
       entry.view.position.set(at.x, at.y);
       entry.token.setLabel(true);
-      const spot: TokenSpot = { x: at.x, y: at.y, side: entry.token.side, scale };
+      const spot: TokenSpot = {
+        x: at.x,
+        y: at.y,
+        side: entry.token.side,
+        scale,
+        enemy: !own,
+        inside: true,
+      };
       for (const id of stack.ids) spots.set(id, spot);
       if (own) icons.push({ ...stack, spot });
     }
@@ -560,7 +572,13 @@ export class EntityView implements EnemyAnchors {
       entry.view.position.set(at.x, at.y);
       // One short number: always shown (the exact units and charged are the tooltip's).
       entry.token.setLabel(true);
-      const spot: TokenSpot = { x: at.x, y: at.y, side: entry.token.side, scale };
+      const spot: TokenSpot = {
+        x: at.x,
+        y: at.y,
+        side: entry.token.side,
+        scale,
+        enemy: entry.owner !== this.me,
+      };
       spots.set(id, spot);
       edgeSpots.set(id, spot);
     });

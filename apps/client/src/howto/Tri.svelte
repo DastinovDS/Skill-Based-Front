@@ -1,4 +1,7 @@
 <script lang="ts">
+  import HelmetIcon from '../units/HelmetIcon.svelte';
+  import { unitLook } from '../units/unitStyleState.svelte.ts';
+
   interface Props {
     /** Whose unit: the attacker (blue, one outline) or the defender (red, a double outline). */
     side: 'own' | 'enemy';
@@ -12,18 +15,23 @@
   const INNER = 'M6.5 4.8h9l-4.5 7.8z';
 </script>
 
-<svg class="tri" viewBox="0 0 22 20" width="22" height="20" aria-hidden="true" focusable="false">
-  {#if cell === 'gone'}
-    <path d={TRI} class="gone" />
-  {:else}
-    <path d={TRI} class="back" />
-    {#if cell === 'charged'}
-      <path d={TRI} class={side} />
+{#if unitLook.helmets}
+  <!-- The unit look of the map (#784): a helmet, full when charged, empty, or dashed when it fell. -->
+  <HelmetIcon {side} size={24} share={cell === 'charged' ? 1 : 0} dashed={cell === 'gone'} />
+{:else}
+  <svg class="tri" viewBox="0 0 22 20" width="22" height="20" aria-hidden="true" focusable="false">
+    {#if cell === 'gone'}
+      <path d={TRI} class="gone" />
+    {:else}
+      <path d={TRI} class="back" />
+      {#if cell === 'charged'}
+        <path d={TRI} class={side} />
+      {/if}
+      <path d={TRI} class="rim" />
+      {#if side === 'enemy'}<path d={INNER} class="inner" />{/if}
     {/if}
-    <path d={TRI} class="rim" />
-    {#if side === 'enemy'}<path d={INNER} class="inner" />{/if}
-  {/if}
-</svg>
+  </svg>
+{/if}
 
 <style>
   .tri {

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import HelmetIcon from '../units/HelmetIcon.svelte';
+  import { unitLook } from '../units/unitStyleState.svelte.ts';
   import { t, tf } from '../i18n/index.ts';
   import Tri from './Tri.svelte';
   import { HOWTO, type Count, type Example, type HowToData } from './data.ts';
@@ -118,14 +120,22 @@
       />
       <circle cx="308" cy="24" r="16" class="city" />
       <g transform="translate(297 15)">
-        <path d={TRI} class="back" />
-        <path d={TRI} class="fill own" />
-        <path d={TRI} class="rim" />
+        {#if unitLook.helmets}
+          <HelmetIcon side="own" size={24} />
+        {:else}
+          <path d={TRI} class="back" />
+          <path d={TRI} class="fill own" />
+          <path d={TRI} class="rim" />
+        {/if}
       </g>
       <circle cx="308" cy="72" r="16" class="city" />
       <g transform="translate(297 63)">
-        <path d={TRI} class="back" />
-        <path d={TRI} class="rim" />
+        {#if unitLook.helmets}
+          <HelmetIcon side="own" size={24} share={0} />
+        {:else}
+          <path d={TRI} class="back" />
+          <path d={TRI} class="rim" />
+        {/if}
       </g>
     </svg>
   </section>
@@ -225,9 +235,13 @@
       <circle cx="36" cy="26" r="16" class="city" />
       <circle cx="324" cy="26" r="16" class="city" />
       <g transform="translate(25 17)">
-        <path d={TRI} class="back" />
-        <path d={TRI} class="fill own" />
-        <path d={TRI} class="rim" />
+        {#if unitLook.helmets}
+          <HelmetIcon side="own" size={24} />
+        {:else}
+          <path d={TRI} class="back" />
+          <path d={TRI} class="fill own" />
+          <path d={TRI} class="rim" />
+        {/if}
       </g>
       <path d="M58 16h200l24 10-24 10H58z" class="ribbon" />
       <path d="M180 8l6 6-6 6-6-6z" class="bonusmark" />

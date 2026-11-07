@@ -1,3 +1,5 @@
+import { HELMET_SCALE, helmet } from '../units/helmet.ts';
+import { unitStyle } from '../units/unitStyle.ts';
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { t, tf, getLocale } from '../i18n/index.ts';
 import { formatSeconds } from '../hud/format.ts';
@@ -615,6 +617,19 @@ export class SupplyView {
         at = ends && edgePoint(ends.a, ends.b, true, 500);
       }
       if (at === undefined) continue;
+      if (unitStyle() === 'helmet') {
+        // A hollow enemy helmet facing left (the sign of a unit, #784) in the enemy colour: "he is here".
+        const helm = helmet('enemy', side * HELMET_SCALE);
+        const place = (p: Point): Point => ({ x: at.x - p.x, y: at.y + p.y });
+        helm.strap
+          .map(place)
+          .forEach((p, i) => (i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y)));
+        g.stroke({ width, color: ENEMY, cap: 'round', join: 'round' });
+        g.poly(helm.dome.map(place).flatMap((p) => [p.x, p.y]))
+          .fill({ color: BG, alpha: 0.9 })
+          .stroke({ width, color: ENEMY, join: 'round' });
+        continue;
+      }
       // A hollow inverted triangle (the sign of a unit) in the enemy colour: "he is here".
       g.poly([at.x - side / 2, at.y - h / 2, at.x + side / 2, at.y - h / 2, at.x, at.y + h / 2])
         .fill({ color: BG, alpha: 0.9 })

@@ -92,6 +92,11 @@ and the same frames in grayscale `menu-<name>-gray.png`; the list of the groups 
 `?at=<tick>` (for example `/?scene=fights&at=397.5`) freezes a fixture scene at another tick of the frame, a fractional one too: fight effects
 are functions of the tick, so a round is viewed frame by frame (the shot frames in the description of #352 were taken this way). References have no such parameter.
 
+The unit look (#784): the units are helmets by default and triangles by the viewer's choice (`sbf.units` in the browser storage).
+Every scene has a reference with the triangles (`<scene>.png`, the test sets `sbf.units` to `triangle` before the page loads), and
+the main ones (`HELMET_SCENES` in `visual/scenes.ts`) a second one with the helmets (`<scene>-helmet.png`). `mise run shots` takes
+the default look, the helmets.
+
 A new scene: add it to `src/dev/scenarios.ts` and to `visual/scenes.ts` (the test `src/dev/sceneList.test.ts` will remind you),
 and record a reference.
 

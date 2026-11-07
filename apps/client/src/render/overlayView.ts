@@ -10,6 +10,9 @@ import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction
 import { CP_REJECT, ghostLook } from './intentLayout.ts';
 import { reducedMotion } from './motion.ts';
 import type { MapLayers } from './layers.ts';
+import { helmetWidth } from './shapes.ts';
+import { helmetOutline } from '../units/helmet.ts';
+import { unitStyle } from '../units/unitStyle.ts';
 import {
   arrowGeometry,
   dashSegments,
@@ -27,6 +30,7 @@ import {
   BG,
   CAPITAL_RADIUS,
   GHOST_CP,
+  HELMET_FRAME,
   HOVER_FRAME,
   ORDER_GHOST_ALPHA,
   ORDER_GHOST_DASH,
@@ -48,6 +52,28 @@ import {
   SELECT_WIDTH,
   WARN,
 } from './style.ts';
+
+/** What a selection or hover outline is drawn for: the unit look, the size and the kind of token. */
+function frameKey(at: TokenSpot): string {
+  return `${unitStyle()}:${String(at.side)}:${at.enemy === true ? 'e' : 'o'}:${at.inside === true ? 'i' : ''}`;
+}
+
+/**
+ * The outline round a token, flat, around its centre (world units, unscaled): the triangle
+ * `triangleScale` times bigger, centred on the token's box; or the line `offset` outside the whole
+ * helmet, strap included, flipped for the opponent's (#784).
+ */
+export function framePolygon(at: TokenSpot, triangleScale: number, offset: number): number[] {
+  if (unitStyle() === 'helmet') {
+    const kind = at.enemy === true ? 'enemy' : 'own';
+    const outline = helmetOutline(kind, helmetWidth(at.side, at.inside === true), offset);
+    return kind === 'own' ? outline : outline.map((v, i) => (i % 2 === 0 ? -v : v));
+  }
+  const [left, right, tip] = triangleCorners(at.side * triangleScale);
+  // The bigger triangle has the same tip height offset: centre it on the token's box centre.
+  const dy = (triangleCorners(at.side)[2].y - tip.y) / 2;
+  return [left, right, tip].flatMap((p) => [p.x, p.y + dy]);
+}
 
 /** The stretch of the road `a`-`b` between the city rims (radius `ra` at `a`, `rb` at `b`); `null`: none. */
 function rimSpan(a: Point, b: Point, ra: number, rb: number): [Point, Point] | null {
@@ -71,8 +97,8 @@ export class OverlayView {
   private readonly frame = new Graphics({ label: 'select-frame' });
   /** The light outline of the own group under the pointer (#762): what a click would pick. */
   private readonly hoverFrame = new Graphics({ label: 'hover-frame' });
-  /** Side of the triangle the hover outline is drawn for (0: not drawn yet). */
-  private hoverSide = 0;
+  /** The look the hover outline is drawn for (`frameKey`; empty: not drawn yet). */
+  private hoverKey = '';
   private readonly lines = new Graphics({ label: 'order-lines' });
   /**
    * The dashed band of the road mode: a Graphics of its own because it has to show in the «Supply»
@@ -85,8 +111,8 @@ export class OverlayView {
   /** Ghost arrows of sent orders: redrawn every frame while one shakes and fades. */
   private readonly ghosts = new Graphics();
   private overlay: OverlayState = EMPTY_OVERLAY;
-  /** Side of the triangle the selection frame is drawn for (0: not drawn yet). */
-  private frameSide = 0;
+  /** The look the selection frame is drawn for (`frameKey`; empty: not drawn yet). */
+  private frameKey = '';
   /**
    * The time to the hovered reachable node (E4 "Hourglass", #627): a disc with the hourglass glyph
    * beside the road, the seconds on its far side; no window. The disc is drawn once, only the
@@ -187,7 +213,8 @@ export class OverlayView {
     const at = selected?.kind === 'group' ? groupSpot(selected.id) : undefined;
     this.frame.visible = at !== undefined;
     if (at !== undefined) {
-      if (this.frameSide !== at.side) this.drawFrame(at.side);
+      const key = frameKey(at);
+      if (this.frameKey !== key) this.drawFrame(at, key);
       this.frame.position.set(at.x, at.y);
       this.frame.scale.set(at.scale);
     }
@@ -199,7 +226,8 @@ export class OverlayView {
         : groupSpot(hovered);
     this.hoverFrame.visible = spot !== undefined;
     if (spot !== undefined) {
-      if (this.hoverSide !== spot.side) this.drawHoverFrame(spot.side);
+      const key = frameKey(spot);
+      if (this.hoverKey !== key) this.drawHoverFrame(spot, key);
       this.hoverFrame.position.set(spot.x, spot.y);
       this.hoverFrame.scale.set(spot.scale);
     }
@@ -352,26 +380,24 @@ export class OverlayView {
     }
   }
 
-  /** The white outline of the triangle, 1.45 times bigger, on a dark halo (9.5). */
-  private drawFrame(side: number): void {
+  /**
+   * The selection: a white `--paper` outline on a dark halo (9.5) round the token: the triangle 1.45
+   * times bigger, or a line round the whole helmet, strap included (#784).
+   */
+  private drawFrame(at: TokenSpot, key: string): void {
     const g = this.frame;
     g.clear();
-    const [left, right, tip] = triangleCorners(side * SELECT_UNIT_SCALE);
-    // The bigger triangle has the same tip height offset: centre it on the token's box centre.
-    const dy = (triangleCorners(side)[2].y - tip.y) / 2;
-    const poly = [left, right, tip].flatMap((p) => [p.x, p.y + dy]);
+    const poly = framePolygon(at, SELECT_UNIT_SCALE, HELMET_FRAME.select);
     g.poly(poly).stroke({ width: SELECT_WIDTH + 4, color: BG, alpha: 0.8, join: 'round' });
     g.poly(poly).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR, join: 'round' });
-    this.frameSide = side;
+    this.frameKey = key;
   }
 
-  /** The hover outline: the selection frame's triangle, thinner and faint (#762). */
-  private drawHoverFrame(side: number): void {
+  /** The hover outline: the selection frame's shape, closer, thinner and faint (#762). */
+  private drawHoverFrame(at: TokenSpot, key: string): void {
     const g = this.hoverFrame;
     g.clear();
-    const [left, right, tip] = triangleCorners(side * HOVER_FRAME.scale);
-    const dy = (triangleCorners(side)[2].y - tip.y) / 2;
-    const poly = [left, right, tip].flatMap((p) => [p.x, p.y + dy]);
+    const poly = framePolygon(at, HOVER_FRAME.scale, HELMET_FRAME.hover);
     g.poly(poly).stroke({
       width: HOVER_FRAME.width + 3,
       color: BG,
@@ -384,7 +410,7 @@ export class OverlayView {
       alpha: HOVER_FRAME.alpha,
       join: 'round',
     });
-    this.hoverSide = side;
+    this.hoverKey = key;
   }
 
   private drawLines(state: OverlayState): void {

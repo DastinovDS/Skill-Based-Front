@@ -202,6 +202,12 @@ body {
   stroke-width: 1.4;
 }
 
+.front .mark-helmets {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .front .mark-road {
   stroke: var(--text-dim);
   stroke-width: 2;

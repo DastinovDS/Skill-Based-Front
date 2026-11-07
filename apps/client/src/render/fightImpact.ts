@@ -15,6 +15,7 @@
  * The shot itself (the tracer between the wind-up and the hit) is #352's: the hit lands after the
  * time its flight will take, so that the tracer fills the gap without a change here.
  */
+import { unitStyle } from '../units/unitStyle.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { FightPlace, RoundFx } from './fightFx.ts';
@@ -405,7 +406,7 @@ export function impactParticles(emit: Emit, impact: Impact, u: number, look: Imp
       fall: 36 * s,
       colors: [victimColor, lighten(victimColor, 0.35)],
       size: 13 * s,
-      kind: 'triangle',
+      kind: unitStyle() === 'helmet' ? 'helmet' : 'triangle',
       spin: 6.6,
       seed: look.seed + 2,
     });

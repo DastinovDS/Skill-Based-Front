@@ -22,6 +22,7 @@ import {
 } from 'pixi.js';
 import type { Point } from './camera.ts';
 import { BG, ENEMY, PAPER, PLATE_FILL, YOU } from './style.ts';
+import { HELMET_PATHS } from '../units/helmet.ts';
 
 /**
  * What a particle looks like. Baked white (a tint colours it): the form says what it is, not the hue.
@@ -31,7 +32,16 @@ import { BG, ENEMY, PAPER, PLATE_FILL, YOU } from './style.ts';
  */
 export type HeadKind = 'headOwn' | 'headEnemy' | 'headOwnBonus' | 'headEnemyBonus';
 export type ParticleKind =
-  'dot' | 'square' | 'triangle' | 'diamond' | 'ring' | 'dashRing' | 'cross' | 'glow' | HeadKind;
+  | 'dot'
+  | 'square'
+  | 'triangle'
+  | 'helmet'
+  | 'diamond'
+  | 'ring'
+  | 'dashRing'
+  | 'cross'
+  | 'glow'
+  | HeadKind;
 
 /** The colours of the two sides, for the heads of the shots. */
 export interface SideColors {
@@ -148,6 +158,7 @@ const SHAPES: readonly ParticleKind[] = [
   'dot',
   'square',
   'triangle',
+  'helmet',
   'diamond',
   'ring',
   'dashRing',
@@ -243,6 +254,16 @@ function drawShape(c: CanvasRenderingContext2D, kind: ParticleKind, colors: Side
       c.closePath();
       c.fill();
       break;
+    case 'helmet': {
+      // The dome of a helmet (#784): a shard of a unit that died, in the helmet look.
+      const k = (2 * r) / 100;
+      c.save();
+      c.translate(m - 50 * k, m - 44 * k);
+      c.scale(k, k);
+      c.fill(new Path2D(HELMET_PATHS.own.dome));
+      c.restore();
+      break;
+    }
     case 'diamond':
       // Hollow: the bonus shot (ui-style 21).
       c.lineWidth = 7;

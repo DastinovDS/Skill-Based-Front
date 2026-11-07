@@ -1,7 +1,7 @@
 /**
  * The motion behind the start menu (#474, BG5 "Set" of docs/design/mockups/menu-background.html): a
  * scripted decoration drawn on one 2D canvas. Nothing here is the game: no simulation, no server,
- * no rule. The pieces borrow the looks of the match map (a supply packet, a unit triangle, the
+ * no rule. The pieces borrow the looks of the match map (a supply packet, a unit in its look, the
  * planned order ODb, the opponent's intent IN3, the shot tracer SH1) and move along the roads of the
  * menu map on a fixed script that depends only on the clock:
  *
@@ -14,6 +14,8 @@
  * - queue locked: the supply stands, dimmed.
  */
 import type { BackdropPhase, Point, Scene } from './menuScene.ts';
+import { helmet } from '../units/helmet.ts';
+import { unitStyle } from '../units/unitStyle.ts';
 import type { Story } from './menuStory.ts';
 
 export interface MotionClock {
@@ -166,7 +168,7 @@ function ring(
   c.restore();
 }
 
-/** A unit triangle of the match map: filled when charged, a count next to a stack. */
+/** A unit of the match map (a triangle, or a helmet, #784): filled when charged, a count next to a stack. */
 function unit(
   c: CanvasRenderingContext2D,
   k: Palette,
@@ -176,6 +178,10 @@ function unit(
   count = 0,
 ): void {
   const colour = side === 0 ? k.you : k.enemy;
+  if (unitStyle() === 'helmet') {
+    helmetUnit(c, k, p, side, alpha, count);
+    return;
+  }
   c.save();
   c.globalAlpha *= alpha;
   c.beginPath();
@@ -201,6 +207,68 @@ function unit(
     c.fillText(`×${String(count)}`, p.x + 9, p.y + 3);
   }
   c.restore();
+}
+
+/**
+ * The same unit in the helmet look of the map (#784): the own helmet faces right, the enemy's left;
+ * a dark casing, the dome in the side's colour, the strap and the edge in paper.
+ */
+function helmetUnit(
+  c: CanvasRenderingContext2D,
+  k: Palette,
+  p: Point,
+  side: 0 | 1,
+  alpha: number,
+  count: number,
+): void {
+  // 18 px wide, centred on the point like the triangle; the enemy's mirrored.
+  const h = helmet(side === 0 ? 'own' : 'enemy', 18);
+  const flip = side === 0 ? 1 : -1;
+  const trace = (points: readonly Point[], close: boolean): void => {
+    c.beginPath();
+    points.forEach((q, i) => {
+      if (i === 0) c.moveTo(p.x + flip * q.x, p.y + q.y);
+      else c.lineTo(p.x + flip * q.x, p.y + q.y);
+    });
+    if (close) c.closePath();
+  };
+  const gear = h.band === null ? [h.strap] : [h.strap, h.band];
+  c.save();
+  c.globalAlpha *= alpha;
+  c.lineJoin = 'round';
+  c.lineCap = 'round';
+  c.strokeStyle = 'rgba(13, 17, 23, 0.85)';
+  c.lineWidth = 3;
+  for (const line of gear) {
+    trace(line, false);
+    c.stroke();
+  }
+  c.lineWidth = 2.6;
+  trace(h.dome, true);
+  c.stroke();
+  c.fillStyle = side === 0 ? k.you : k.enemy;
+  c.fill();
+  c.strokeStyle = k.paper;
+  c.lineWidth = 1.3;
+  for (const line of gear) {
+    trace(line, false);
+    c.stroke();
+  }
+  c.lineWidth = 1.1;
+  trace(h.dome, true);
+  c.stroke();
+  c.restore();
+  if (count > 1) {
+    c.save();
+    c.globalAlpha *= alpha;
+    c.font = '700 10px system-ui, sans-serif';
+    c.lineWidth = 3;
+    c.strokeStyle = k.bg;
+    c.fillStyle = k.paper;
+    c.strokeText(`×${String(count)}`, p.x + 11, p.y + 3);
+    c.fillText(`×${String(count)}`, p.x + 11, p.y + 3);
+    c.restore();
+  }
 }
 
 /** A supply packet: a square with a short tail of two fading squares. */

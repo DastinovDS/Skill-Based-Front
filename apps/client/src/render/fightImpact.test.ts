@@ -24,6 +24,7 @@ import {
 } from './fightImpact.ts';
 import type { ParticleSpec } from './particles.ts';
 import { FIGHT_FX_STRENGTH, FIGHT_GAP } from './style.ts';
+import { DEFAULT_UNIT_STYLE, setUnitStyle } from '../units/unitStyle.ts';
 
 const map = {
   nodes: [
@@ -251,7 +252,7 @@ describe('the particles of an impact', () => {
     for (const k of [1, FIGHT_FX_STRENGTH]) {
       for (const kind of ['kill', 'discharge'] as const) {
         const burst = collect(impact({ kind }), 0.05, k).filter(
-          (p) => p.kind === 'square' || p.kind === 'triangle',
+          (p) => p.kind === 'square' || p.kind === 'helmet',
         );
         expect(burst.length).toBeGreaterThanOrEqual(6);
         expect(burst.length).toBeLessThanOrEqual(16);
@@ -267,18 +268,18 @@ describe('the particles of an impact', () => {
     expect(flash(strong)).toBeGreaterThan(flash(medium));
   });
 
-  it('is told apart by form, not by hue: ■ real, ◇ bonus, ▽ kill, ✕ cancel', () => {
+  it('is told apart by form, not by hue: ■ real, ◇ bonus, a helmet shard kill, ✕ cancel', () => {
     const kinds = (list: ParticleSpec[]): Set<string> => new Set(list.map((p) => p.kind));
     const real = kinds(collect(impact({ kind: 'discharge', losses: 0 }), 0.1));
     expect(real.has('square')).toBe(true);
-    expect(real.has('triangle')).toBe(false);
+    expect(real.has('helmet')).toBe(false);
     expect(real.has('ring')).toBe(true);
     const bonus = kinds(collect(impact({ kind: 'discharge', losses: 0, bonus: true }), 0.1));
     expect(bonus.has('diamond')).toBe(true);
     expect(bonus.has('square')).toBe(false);
     expect(bonus.has('dashRing')).toBe(true);
     const kill = kinds(collect(impact({}), 0.1));
-    expect(kill.has('triangle')).toBe(true);
+    expect(kill.has('helmet')).toBe(true);
     const cancel = kinds(
       collect(
         impact({ kind: 'cancel', shooter: null, victim: null, losses: 0, at: CANCEL_SHARE }),
@@ -286,18 +287,29 @@ describe('the particles of an impact', () => {
       ),
     );
     expect(cancel.has('cross')).toBe(true);
-    expect(cancel.has('triangle')).toBe(false);
+    expect(cancel.has('helmet')).toBe(false);
+  });
+
+  it('breaks a killed unit into shards of the unit look the viewer chose (#784)', () => {
+    setUnitStyle('triangle', null);
+    try {
+      const kinds = new Set(collect(impact({}), 0.1).map((p) => p.kind));
+      expect(kinds.has('triangle')).toBe(true);
+      expect(kinds.has('helmet')).toBe(false);
+    } finally {
+      setUnitStyle(DEFAULT_UNIT_STYLE, null);
+    }
   });
 
   it('puts the shards in the colour of the side that lost the unit', () => {
-    const shards = collect(impact({}), 0.1).filter((p) => p.kind === 'triangle');
+    const shards = collect(impact({}), 0.1).filter((p) => p.kind === 'helmet');
     expect(shards.length).toBeGreaterThan(0);
     for (const shard of shards) {
       // Enemy red or its lightened tone: the red channel is the strongest.
       expect(((shard.color >> 16) & 0xff) >= (shard.color & 0xff)).toBe(true);
     }
     const own = collect(impact({ shooter: 'enemy', victim: 'own' }), 0.1).filter(
-      (p) => p.kind === 'triangle',
+      (p) => p.kind === 'helmet',
     );
     for (const shard of own)
       expect((shard.color & 0xff) >= ((shard.color >> 16) & 0xff)).toBe(true);

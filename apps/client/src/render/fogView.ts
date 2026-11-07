@@ -8,7 +8,7 @@ import type {
   PlayerId,
   SnapshotMsg,
 } from '../protocol.gen.ts';
-import { dashSegments, edgeEnds, triangleHeight, triangleSide } from './layout.ts';
+import { dashSegments, edgeEnds, triangleSide } from './layout.ts';
 import {
   ageLabel,
   ghostAlpha,
@@ -59,7 +59,7 @@ class Ghost {
   /** Sets the symbol scale (the minimum size on screen) and keeps the age above the triangle. */
   setScale(scale: number): void {
     this.token.setScale(scale);
-    this.age.position.set(0, (-triangleHeight(this.token.side) / 2 - 3) * scale);
+    this.age.position.set(0, (this.token.top - 3) * scale);
   }
 
   show(
@@ -200,6 +200,13 @@ export class FogView {
         if (text.resolution !== resolution) text.resolution = resolution;
       }
     }
+  }
+
+  /** The unit look changed (#784): the ghosts are drawn again. */
+  restyle(): void {
+    const base = this.base;
+    this.base = null;
+    if (base !== null) this.update(base);
   }
 
   /** Redraws the fog when `base` is a snapshot not drawn yet; otherwise does nothing. */

@@ -87,6 +87,10 @@ export interface TokenSpot extends Point {
   readonly side: number;
   /** `symbolScale` now: 1, or more when the zoom would make the triangle smaller than 20 px. */
   readonly scale: number;
+  /** The opponent's token (a replay shows both sides): its helmet is another shape, facing left. */
+  readonly enemy?: boolean;
+  /** The icon of the units standing in a city (its helmet is a little smaller). */
+  readonly inside?: boolean;
 }
 
 /** Height of an equilateral triangle of `side`. */

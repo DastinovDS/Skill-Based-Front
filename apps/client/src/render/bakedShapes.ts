@@ -64,6 +64,15 @@ import {
   WARN,
 } from './style.ts';
 import { counterLayout, type DefensePips } from './defenseLayout.ts';
+import {
+  dashLoop,
+  helmet,
+  helmetExtent,
+  helmetLines,
+  scanLines,
+  type Helmet,
+  type HelmetKind,
+} from '../units/helmet.ts';
 import type { Point } from './camera.ts';
 
 // The baked shapes of the map (BL1-1 "Restrained", ui-style 26.3, #347). Each function returns the
@@ -535,6 +544,201 @@ export function triangleFrontSpec(
       g.moveTo(left.x + 3, left.y + 2.6)
         .lineTo(tip.x - 1.6, tip.y - 4)
         .stroke({ width: 1.2, color: 0xffffff, alpha: RIM.alpha * 0.8, cap: 'round' });
+    },
+  };
+}
+
+// --- Helmets (#784, variant Full of #775) ------------------------------------------------------------
+// A helmet is three baked sprites like the triangle: the back (shadow, dark casing, the light strap
+// and brim, the empty plate of the dome), the charge fill (the whole dome in the gradient of the
+// owner, shown from the bottom by a crop of its frame, `BakedSprite.cropBottom`) and the front (the
+// light edge of the dome). All face right; a view flips them for the opponent (`scale.x = -1`).
+
+/** A polyline (the strap, the brim) into `g`, to be stroked. */
+function polyline(g: Graphics, points: readonly Point[]): Graphics {
+  const [first, ...rest] = points;
+  if (first === undefined) return g;
+  g.moveTo(first.x, first.y);
+  for (const p of rest) g.lineTo(p.x, p.y);
+  return g;
+}
+
+/** The lines of a helmet under the dome: the strap, then the brim (own). */
+function gear(h: Helmet): (readonly Point[])[] {
+  return h.band === null ? [h.strap] : [h.strap, h.band];
+}
+
+function helmetBox(h: Helmet): Box {
+  const e = helmetExtent(h);
+  return { x: e.left, y: e.top, width: e.right - e.left, height: e.bottom - e.top };
+}
+
+/** The light tone of the owner's colour: the strap, the brim and the edge of the dome. */
+export function helmetLight(color: number): number {
+  return lighten(color, 0.5);
+}
+
+/**
+ * The back of a helmet `width` wide: the shadow, the dark casing round the dome, the strap and the
+ * brim (thicker in a city, where it parts the icon from the city disc), the strap and the brim in the
+ * light tone, the dark plate of the dome. `dashed` (numbers unknown, a memory): a faint plate, pale
+ * strap and brim on a casing, the dome dashed in the pale tone on a dark casing; nothing goes over it.
+ */
+export function helmetBackSpec(
+  kind: HelmetKind,
+  width: number,
+  color: number,
+  look: 'solid' | 'dashed',
+  inside: boolean,
+): BakeSpec {
+  const h = helmet(kind, width);
+  const lines = helmetLines(width);
+  const casing = inside ? lines.casing + 1.6 : lines.casing;
+  const dome = flat(h.dome);
+  return {
+    key: `hel-back:${kind}:${String(width)}:${String(color)}:${look}:${inside ? 'i' : ''}`,
+    box: shadowBox(helmetBox(h), BAKE_MARGIN + 1),
+    draw(into) {
+      const width = (line: readonly Point[]): number =>
+        line === h.strap ? lines.strap : lines.band;
+      shadow(into, (g) => g.poly(dome), casing / 2);
+      for (const line of gear(h)) {
+        shadow(into, (g) => polyline(g, line), (width(line) + casing) / 2);
+      }
+      const g = graphics(into);
+      if (look === 'dashed') {
+        const pale = lighten(color, 0.3);
+        for (const line of gear(h)) {
+          polyline(g, line).stroke({ width: 2.2 + 2.4, color: BG, cap: 'round', join: 'round' });
+          polyline(g, line).stroke({ width: 2.2, color: pale, cap: 'round', join: 'round' });
+        }
+        // A dark casing under the dashes (the front): the pale dash alone is lost on plains and snow (#775).
+        g.poly(dome).stroke({ width: 4.4, color: BG, join: 'round' });
+        g.poly(dome).fill({ color: PLATE_FILL, alpha: 0.72 });
+        return;
+      }
+      const halo = inside ? UNIT_HALO.alpha : 1;
+      for (const line of gear(h)) {
+        polyline(g, line).stroke({
+          width: width(line) + casing,
+          color: BG,
+          alpha: halo,
+          cap: 'round',
+          join: 'round',
+        });
+      }
+      g.poly(dome).stroke({ width: casing, color: BG, alpha: halo, join: 'round' });
+      const light = helmetLight(color);
+      for (const line of gear(h)) {
+        polyline(g, line).stroke({ width: width(line), color: light, cap: 'round', join: 'round' });
+      }
+      g.poly(dome).fill(PLATE_FILL);
+    },
+  };
+}
+
+/** The box of the charge fill: the dome and a margin; its bottom is the bottom of the dome plus 1. */
+export function helmetLevelBox(h: Helmet): Box {
+  const top = h.domeTop - 1;
+  return {
+    x: h.bounds.x - 1,
+    y: top,
+    width: h.bounds.width + 2,
+    height: h.domeBottom + 1 - top,
+  };
+}
+
+/** The charge fill of a helmet: the whole dome in the owner's gradient (shown from the bottom up). */
+export function helmetLevelSpec(kind: HelmetKind, width: number, color: number): BakeSpec {
+  const h = helmet(kind, width);
+  return {
+    key: `hel-level:${kind}:${String(width)}:${String(color)}`,
+    box: helmetLevelBox(h),
+    draw(into, tools) {
+      graphics(into).poly(flat(h.dome)).fill(tools.gradient(color));
+    },
+  };
+}
+
+/**
+ * The light edge of the dome, over the fill: with the casing it reads on every terrain (#775).
+ * `dashed` (numbers unknown, a memory): the dome dashed in a pale tone instead.
+ */
+export function helmetFrontSpec(
+  kind: HelmetKind,
+  width: number,
+  color: number,
+  look: 'solid' | 'dashed',
+): BakeSpec {
+  const h = helmet(kind, width);
+  const { edge } = helmetLines(width);
+  const box = helmetLevelBox(h);
+  const grow = 2.2;
+  return {
+    key: `hel-front:${kind}:${String(width)}:${String(color)}:${look}`,
+    box: {
+      x: box.x - grow,
+      y: box.y - grow,
+      width: box.width + 2 * grow,
+      height: box.height + 2 * grow,
+    },
+    draw(into) {
+      const g = graphics(into);
+      if (look === 'dashed') {
+        for (const piece of dashLoop(h.dome, UNIT_DASH.dash + 1, UNIT_DASH.gap)) polyline(g, piece);
+        g.stroke({ width: 2.2, color: lighten(color, 0.3), cap: 'round', join: 'round' });
+        return;
+      }
+      g.poly(flat(h.dome)).stroke({ width: edge, color: helmetLight(color), join: 'round' });
+    },
+  };
+}
+
+/** Width of a helmet chip of the arena (px): one pitch, so the chips touch and do not overlap. */
+export const CHIP_HELMET_WIDTH = CHIP.pitch;
+
+/**
+ * A helmet chip of the arena, facing right (the opponent's is flipped where it is placed): charged
+ * (the dome in the owner's gradient, a light edge), discharged (the dark plate hatched in the light
+ * tone, the edge in the owner's colour) or killed (a dashed faint dome); the strap on all of them.
+ */
+export function helmetChipSpec(state: ChipState, enemy: boolean, color: number): BakeSpec {
+  const kind: HelmetKind = enemy ? 'enemy' : 'own';
+  const h = helmet(kind, CHIP_HELMET_WIDTH);
+  const box = helmetBox(h);
+  const strap = 1.8;
+  const casing = 2.4;
+  const dome = flat(h.dome);
+  return {
+    key: `hel-chip:${state}:${kind}:${String(color)}`,
+    box: { x: box.x - 1, y: box.y - 1, width: box.width + 2, height: box.height + 2 },
+    draw(into, tools) {
+      const g = graphics(into);
+      const light = helmetLight(color);
+      if (state === 'killed') {
+        for (const line of gear(h)) {
+          polyline(g, line).stroke({ width: strap, color, alpha: 0.6, cap: 'round' });
+        }
+        for (const piece of dashLoop(h.dome, 2.5, 2.5)) polyline(g, piece);
+        g.stroke({ width: 1.6, color, alpha: 0.6, cap: 'round' });
+        return;
+      }
+      for (const line of gear(h)) {
+        polyline(g, line).stroke({ width: strap + casing, color: BG, cap: 'round', join: 'round' });
+      }
+      g.poly(dome).stroke({ width: casing, color: BG, join: 'round' });
+      for (const line of gear(h)) {
+        polyline(g, line).stroke({ width: strap, color: light, cap: 'round', join: 'round' });
+      }
+      if (state === 'charged') {
+        g.poly(dome).fill(tools.gradient(color));
+        g.poly(dome).stroke({ width: 1.4, color: GLYPH_COLOR, join: 'round' });
+        return;
+      }
+      g.poly(dome).fill(PLATE_FILL);
+      for (const [from, to] of scanLines(h.dome, 3.5)) g.moveTo(from.x, from.y).lineTo(to.x, to.y);
+      g.stroke({ width: 1.2, color: lighten(color, REST_LIGHTEN), alpha: 0.85 });
+      g.poly(dome).stroke({ width: 1.6, color, join: 'round' });
     },
   };
 }
