@@ -1,4 +1,4 @@
-# Skill-Based Front: mechanics
+# Fines Imperii: mechanics
 
 > **Status: mechanics frozen for the first release on 2026-10-28 (owner decision).** Bugs are fixed at once; new rules
 > and mechanics go to the queue after the release (#282).

@@ -144,7 +144,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             engine.dispose()
             log.info("server stopped")
 
-    app = FastAPI(title="Skill-Based Front", lifespan=lifespan)
+    app = FastAPI(title="Fines Imperii", lifespan=lifespan)
     app.state.settings = settings
     app.state.guest_limiter = SlidingWindowLimiter(
         settings.guest_rate_limit, settings.guest_rate_window_s, MonotonicClock()

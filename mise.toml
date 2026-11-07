@@ -1,4 +1,4 @@
-# Skill-Based Front: the single source of project commands and tool versions (#301).
+# Fines Imperii: the single source of project commands and tool versions (#301).
 #
 #   mise install        # node, pnpm, uv (versions below)
 #   mise run setup      # dependencies of the Python workspace, the client and e2e

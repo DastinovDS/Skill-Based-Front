@@ -20,7 +20,7 @@ export const en = {
       {
         heading: 'Nature of the service',
         body: [
-          'Skill-Based Front is a free browser strategy game for two players. There is no payment, no advertising and no editorial content.',
+          'Fines Imperii is a free browser strategy game for two players. There is no payment, no advertising and no editorial content.',
         ],
       },
     ],

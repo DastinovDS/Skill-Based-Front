@@ -1,4 +1,4 @@
-# Skill-Based Front
+# Fines Imperii
 
 A competitive 1v1 strategy game in the browser, a match takes 10 to 15 minutes. The map is a graph of cities and roads.
 A unit works like a "battery": charged or discharged. The capital produces charges, roads carry them,
@@ -408,5 +408,5 @@ lives in the working tree. It is kept in the tag `v0-pygame-prototype` of this r
 `DastinovDS/Game-of-War`. The new simulation does not reuse this code; the map generator formulas
 were moved to `tools/maps/src/gow_maps/bake.py` (MAP-05).
 
-The first version of the Skill-Based Front design document is in `docs/design/archive/DESIGN-v1.md`
+The first version of the design document (written under the working title "Skill-Based Front") is in `docs/design/archive/DESIGN-v1.md`
 (in the prototype repository the file was not tracked by git and was copied separately from the working copy).

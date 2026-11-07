@@ -6,7 +6,7 @@
 
 ## Context
 
-Skill-Based Front: a competitive 1v1 strategy game in the browser, a match of 10 to 15 minutes, a Glicko-2 rating
+Fines Imperii: a competitive 1v1 strategy game in the browser, a match of 10 to 15 minutes, a Glicko-2 rating
 and replays (`docs/mvp/MVP_PLAN.md`). The game rules (`docs/design/mechanics.md`) are integer-based and without
 randomness, only the opponent's state is hidden. The requirements follow from this:
 

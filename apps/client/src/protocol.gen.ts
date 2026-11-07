@@ -1,7 +1,7 @@
 // Generated from packages/protocol/protocol.schema.json (gow_protocol), do not edit. Regenerate: uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol
 
 /**
- * Wire format of Skill-Based Front, generated from gow_protocol.
+ * Wire format of Fines Imperii, generated from gow_protocol.
  */
 export type Protocol = ClientMsg | ServerMsg | MapFile;
 export type ClientMsg =
