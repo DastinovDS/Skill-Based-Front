@@ -62,6 +62,7 @@ canvas{display:block;width:100%;height:auto;background:#000}
     <button id="play" aria-pressed="true">Pause</button>
     <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Time">
     <div class="seg" id="spd"></div>
+    <fieldset id="f-bg"><legend>Ground</legend><div class="seg" id="bg"></div></fieldset>
     <fieldset id="f-src"><legend>Source</legend><div class="seg" id="src"></div></fieldset>
     <label class="tog"><input type="checkbox" id="gray">Grayscale</label>
     <label class="tog"><input type="checkbox" id="rg">Red-green sim</label>
@@ -74,7 +75,7 @@ canvas{display:block;width:100%;height:auto;background:#000}
 const A='assets/fight-bonus-and-outcome/';
 const FILES={cityOwn:'city-own.png',cityEnemy:'city-enemy.png',helmetOwn:'helmet-own.png',helmetEnemy:'helmet-enemy.png',
  chipB:'chip-blue.png',chipBE:'chip-blue-empty.png',chipBD:'chip-blue-dead.png',chipR:'chip-red.png',chipRE:'chip-red-empty.png',chipRD:'chip-red-dead.png',
- bgPlains:'bg-plains.jpg',bgMountain:'bg-mountain.jpg'};
+ bgPlains:'bg-plains.jpg',bgMountain:'bg-mountain.jpg',bgSnow:'bg-snow.jpg'};
 const IMG={};
 const SP=0.75; // sprite px (2x capture) -> logical px
 const W=800,H=420;
@@ -161,6 +162,20 @@ function glowSpot(c,x,y,d,rgb,a){if(a<=0)return;c.save();c.globalCompositeOperat
 function sq(c,x,y,side,ang,fill,{outline=BG,ow=3.2,a=1}={}){c.save();c.globalAlpha*=a;c.translate(x,y);c.rotate(ang);c.beginPath();c.rect(-side/2,-side/2,side,side);if(outline){c.lineJoin='miter';c.strokeStyle=outline;c.lineWidth=ow;c.stroke();}if(fill){c.fillStyle=fill;c.fill();}c.restore();}
 function fillPoly(c,pts,style,a=1){c.save();c.globalAlpha*=a;c.fillStyle=style;polyPath(c,pts);c.closePath();c.fill();c.restore();}
 
+function rayLine(c,x,y,an,r0,r1,w,col,a=1){const p0=pt(x+Math.cos(an)*r0,y+Math.sin(an)*r0),p1=pt(x+Math.cos(an)*r1,y+Math.sin(an)*r1);strokePts(c,[p0,p1],w+2.4,'#0d1117',.9*a);strokePts(c,[p0,p1],w,col,a);}
+/* the rays of a radiant head: fixed to the corners of the square (never radial from a point, so they do not read as the cancel rays) */
+function drawRays(c,h,H,age,dir,base,mode){
+  const r0=H*.78,bc=`rgb(${base[0]},${base[1]},${base[2]})`,w=2.1*U,D=Math.PI/4;
+  if(mode==='fixed'){for(let i=0;i<4;i++)rayLine(c,h.x,h.y,D+i*Math.PI/2,r0,r0+9*U*(.8+.2*Math.sin(age/80+i)),w,'#fff');}
+  else if(mode==='rotate'){for(let i=0;i<4;i++)rayLine(c,h.x,h.y,age/170+D+i*Math.PI/2,r0,r0+10*U,w,'#fff');}
+  else if(mode==='pulse'){const q=.5+.5*Math.sin(age/90);for(let i=0;i<4;i++)rayLine(c,h.x,h.y,D+i*Math.PI/2,r0,r0+(3+13*q)*U,w,'#fff');}
+  else if(mode==='forward'){[[-.55,9],[0,14],[.55,9]].forEach(([k,L])=>rayLine(c,h.x,h.y,dir+k,H*.62,H*.62+L*U,w,'#fff'));}
+  else if(mode==='twinkle'){for(let i=0;i<4;i++){const on=(Math.floor(age/70)+i)%2===0;rayLine(c,h.x,h.y,D+i*Math.PI/2,r0,r0+(on?13:4)*U,w,'#fff');}}
+  else if(mode==='colour'){for(let i=0;i<4;i++){rayLine(c,h.x,h.y,D+i*Math.PI/2,r0,r0+12*U,3.2*U,bc);rayLine(c,h.x,h.y,D+i*Math.PI/2,r0+1*U,r0+10*U,1.2*U,'#fff');}}
+}
+function flareFx(c,s,u){if(u>=.5)return;const p=u/.5,ez=1-(1-p)*(1-p),x=s.to.x,y=s.to.y,bc=`rgb(${sideRgb(s.side).join(',')})`;
+  for(let i=0;i<4;i++){rayLine(c,x,y,i*Math.PI/2,5*U,(10+22*ez)*U,3*U*(1-p)+.8,'#fff',1-p);rayLine(c,x,y,i*Math.PI/2,(10+22*ez)*U*.6,(10+22*ez)*U,2.2*U*(1-p)+.6,bc,1-p);}
+  glowSpot(c,x,y,60*U*(1-.5*p),[255,255,255],.9*(1-p)*(1-p));}
 /* the tracer: o = {tail,head,echo,...}; the base look (tail 'solid', head 'square') is exactly the ordinary shot */
 function tracer(c,s,age,seed,o={}){
   const ph=phaseOf(s,age);if(!ph)return;
@@ -220,21 +235,25 @@ function tracer(c,s,age,seed,o={}){
   // the head: the baked square (20 units), the owner colour with a light spot (the opponent's: a dark one)
   const tg=arcTan(s,t),ang=0,H=(o.headK||1)*20*U*.62;
   const hd=o.head||'square';
+  if(o.echoHeads)for(const [back,k,al] of [[.08,.7,.55],[.16,.5,.4],[.24,.34,.25]]){const q=arcAt(s,Math.max(0,t-back));c.save();c.globalAlpha*=al;drawRays(c,q,H*k,age,0,base,'fixed');sq(c,q.x,q.y,H*k,0,rgba(base,1),{ow:2});c.restore();}
   if(hd==='square'||hd==='rays'||hd==='tandem'||hd==='heavy'){
     if(hd==='tandem'){const q=arcAt(s,Math.max(0,t-.09)),tq=arcTan(s,Math.max(0,t-.09));sq(c,q.x,q.y,H*.62,Math.atan2(tq.y,tq.x),rgba(base,1),{ow:2.6,a:.95});}
-    if(hd==='rays'){for(let i=0;i<4;i++){const an=ang+Math.PI/4+i*Math.PI/2,r0=H*.78,r1=H*.78+9*U*(.8+.2*Math.sin(age/80+i));strokePts(c,[pt(head.x+Math.cos(an)*r0,head.y+Math.sin(an)*r0),pt(head.x+Math.cos(an)*r1,head.y+Math.sin(an)*r1)],2.6*U*.8+2,'#0d1117',.9);strokePts(c,[pt(head.x+Math.cos(an)*r0,head.y+Math.sin(an)*r0),pt(head.x+Math.cos(an)*r1,head.y+Math.sin(an)*r1)],2.6*U*.8,'#fff',1);}}
+    if(hd==='rays')drawRays(c,head,H,age,Math.atan2(tg.y,tg.x),base,o.rayMode||'fixed');
     sq(c,head.x,head.y,H,ang,rgba(base,1));sq(c,head.x,head.y,H*.34,ang,enemy?'#0d1117':'#fff',{outline:null,a:.95});}
   else if(hd==='hollow'){sq(c,head.x,head.y,H,ang,'#0d1117',{outline:null});sq(c,head.x,head.y,H-3,ang,null,{outline:rgba(base,1),ow:3.4});sq(c,head.x,head.y,H*.26,ang,'#fff',{outline:null});}
+  else if(hd==='octa'){sq(c,head.x,head.y,H*1.3,age/240+Math.PI/4,`rgb(${mixw(HX[s.side],.45).join(',')})`,{ow:2.6});sq(c,head.x,head.y,H,age/-300,rgba(base,1));sq(c,head.x,head.y,H*.34,0,enemy?'#0d1117':'#fff',{outline:null,a:.95});}
+  else if(hd==='hollowrays'){drawRays(c,head,H,age,Math.atan2(tg.y,tg.x),base,'fixed');sq(c,head.x,head.y,H,ang,'#0d1117',{outline:null});sq(c,head.x,head.y,H-3,ang,null,{outline:rgba(base,1),ow:3.4});sq(c,head.x,head.y,H*.26,ang,'#fff',{outline:null});}
   else if(hd==='whitesq'){sq(c,head.x,head.y,H,ang,'#fff',{outline:'#0d1117'});sq(c,head.x,head.y,H-2,ang,null,{outline:rgba(base,1),ow:3});}
   else if(hd==='ring'){fillC(c,head.x,head.y,H*.72,'#0d1117');ringC(c,head.x,head.y,H*.5,3.6,`rgb(${base[0]},${base[1]},${base[2]})`);fillC(c,head.x,head.y,H*.14,'#fff');}
   // the sparks: five little squares left along the way, alternately the colour and white
   for(let j=0;j<5;j++){const born=(j+1)/6,ageSh=(ph.flown-born)*s.at;if(ageSh<0||ageSh>=.16)continue;const life=ageSh/.16,q=arcAt(s,s.start+(1-s.start)*born),dr=(rnd(j+seed*3)-.5)*9*life*U;
-    sq(c,q.x+s.normal.x*dr,q.y+s.normal.y*dr,4.8*(1-life)*U,0,j%2?'#fff':rgba(base,1),{outline:null,a:1-life});}
+    if(o.sparkKind==='cross'){const px=q.x+s.normal.x*dr,py=q.y+s.normal.y*dr,r=4.8*U*(1-life)*1.5;star4(c,px,py,r*1.3,life*3,'#0d1117',.8*(1-life),.3);star4(c,px,py,r,life*3,j%2?'#fff':rgba(base,1),1-life,.3);}
+    else sq(c,q.x+s.normal.x*dr,q.y+s.normal.y*dr,4.8*(1-life)*U,0,j%2?'#fff':rgba(base,1),{outline:null,a:1-life});}
 }
 /* the wind-up: a glow grows on the group and a ring closes in on it, 0.35 s before the tick (render/fightImpact.ts) */
 function wind(c,at,side,t){const w=clamp((t-(T.fire-.175*ROUND))/(.175*ROUND));if(w<=0||w>=1&&t>T.fire)return;const rgb=sideRgb(side);glowSpot(c,at.x,at.y,2*1.4*(9+9*w*1.6)*U,rgb,.55*w);ringC(c,at.x,at.y,(25-10*w)*U,2.2,`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,.7*w);}
 /* the hit burst (impactParticles, kill): ring, flash, sparks in a cone from the shooter, shards of a unit that died; bonus: dashed ring, paler flash */
-function hitFx(c,s,th,{spark='square',bonus=false,ringK=1,extra=null}={}){
+function hitFx(c,s,th,{spark='square',bonus=false,ringK=1,extra=null,flare=false}={}){
   const u=th/(.5*ROUND);if(u<0||u>=1)return;const to=s.to,from=s.from,ang=Math.atan2(to.y-from.y,to.x-from.x),shooter=sideRgb(s.side),victim=s.side==='own'?'enemy':'own',vrgb=sideRgb(victim),ez=p=>1-(1-p)*(1-p);
   if(u<.5){const p=u/.5,r=(5+32.8*ez(p))*.55*U*ringK,col=mixw(HX[s.side],.5);c.save();if(bonus)c.setLineDash([6*U*.6,5*U*.6]);ringC(c,to.x,to.y,r,4.4,'#0d1117',(1-p)*.8);ringC(c,to.x,to.y,r,2.6,`rgb(${col[0]},${col[1]},${col[2]})`,1-p);c.restore();}
   if(u<.3){const p=u/.3;glowSpot(c,to.x,to.y,2*(8+12.8)*1.3*U*(1-.4*p)*.6,[255,255,255],(bonus?.55:.8)*(1-p)*(1-p));}
@@ -242,6 +261,7 @@ function hitFx(c,s,th,{spark='square',bonus=false,ringK=1,extra=null}={}){
     if(spark==='hollow')sq(c,x,y,sz*1.5,an,null,{outline:j%2?'#fff':`rgb(${shooter[0]},${shooter[1]},${shooter[2]})`,ow:1.8,a:1-p});
     else sq(c,x,y,sz,an,j%2?'#fff':`rgb(${shooter[0]},${shooter[1]},${shooter[2]})`,{outline:null,a:1-p});}}
   const q=u/.95;if(q<1)for(let j=0;j<5;j++){const an=ang+(rnd(j+31)-.5)*3.4,d=ez(q)*48*U*.6,x=to.x+Math.cos(an)*d,y=to.y+Math.sin(an)*d+q*q*36*U*.6;c.save();c.translate(x,y);c.rotate(q*6.6+j);c.globalAlpha=1-q;const im=IMG.chipR;c.drawImage(im,-im.width*SP*.2,-im.height*SP*.2,im.width*SP*.4,im.height*SP*.4);c.restore();}
+  if(flare)flareFx(c,s,u);
   if(extra)extra(c,s,u);
 }
 function cancelFx(c,s,th,bonusBy){const u=th/(.5*ROUND);if(u<0||u>=1)return;const m=s.b,ez=p=>1-(1-p)*(1-p);
@@ -252,16 +272,18 @@ function cancelFx(c,s,th,bonusBy){const u=th/(.5*ROUND);if(u<0||u>=1)return;cons
 
 const V=[];
 V.push({id:'cur',name:'Current',o:{tail:'edges',head:'chevron',echo:'chevrons'},hit:{bonus:true,spark:'hollow'}});
-V.push({id:'hollow',name:'Hollow squares',o:{tail:'edges',head:'hollow',echo:'squares'},hit:{bonus:true,spark:'hollow'}});
-V.push({id:'dashed',name:'Dashed tracer',o:{tail:'dashed',head:'square'},hit:{bonus:true,spark:'square'}});
-V.push({id:'twin',name:'Twin tail',o:{tail:'twin',head:'tandem'},hit:{bonus:true,spark:'square'}});
-V.push({id:'hot',name:'Hot core',o:{tail:'hot',head:'whitesq',glowK:1.35,glowA:1.2},hit:{bonus:false,spark:'square',ringK:1.15}});
-V.push({id:'inverse',name:'Inverse',o:{tail:'inverse',head:'whitesq',bonusPath:true},hit:{bonus:true,spark:'square'}});
-V.push({id:'beads',name:'Beaded',o:{tail:'beads',head:'square',bonusPath:true},hit:{bonus:true,spark:'square'}});
-V.push({id:'links',name:'Links',o:{tail:'links',head:'square'},hit:{bonus:true,spark:'square'}});
-V.push({id:'ring',name:'Ring head',o:{tail:'solid',head:'ring',bonusPath:true},hit:{bonus:true,spark:'hollow'}});
-V.push({id:'rays',name:'Radiant head',o:{tail:'solid',head:'rays'},hit:{bonus:true,spark:'square'}});
-V.push({id:'heavy',name:'Heavy',o:{tail:'heavy',head:'square',tailK:1.5,shareK:.62,headK:1.4,glowK:1.25},hit:{bonus:false,spark:'square',ringK:1.25}});
+V.push({id:'rays',name:'Radiant head (was 9)',o:{tail:'solid',head:'rays'},hit:{bonus:true,spark:'square'}});
+V.push({id:'rotate',name:'Rotating rays',o:{tail:'solid',head:'rays',rayMode:'rotate'},hit:{bonus:true,spark:'square'}});
+V.push({id:'pulse',name:'Pulsing rays',o:{tail:'solid',head:'rays',rayMode:'pulse'},hit:{bonus:true,spark:'square'}});
+V.push({id:'forward',name:'Forward flare',o:{tail:'solid',head:'rays',rayMode:'forward'},hit:{bonus:true,spark:'square'}});
+V.push({id:'twinkle',name:'Twinkle',o:{tail:'solid',head:'rays',rayMode:'twinkle'},hit:{bonus:true,spark:'square'}});
+V.push({id:'colour',name:'Coloured rays',o:{tail:'solid',head:'rays',rayMode:'colour'},hit:{bonus:true,spark:'square'}});
+V.push({id:'octa',name:'Octagram',o:{tail:'solid',head:'octa'},hit:{bonus:true,spark:'square'}});
+V.push({id:'echo',name:'Echo heads',o:{tail:'solid',head:'rays',echoHeads:true},hit:{bonus:true,spark:'square'}});
+V.push({id:'cross',name:'Cross-spark trail',o:{tail:'solid',head:'rays',sparkKind:'cross'},hit:{bonus:true,spark:'square'}});
+V.push({id:'impact',name:'Radiant impact',o:{tail:'solid',head:'rays'},hit:{bonus:true,spark:'square',flare:true}});
+V.push({id:'rich',name:'Rotating, trail, impact',o:{tail:'solid',head:'rays',rayMode:'rotate',sparkKind:'cross',glowK:1.15},hit:{bonus:true,spark:'square',flare:true}});
+V.push({id:'hollowrays',name:'Hollow radiant',o:{tail:'solid',head:'hollowrays'},hit:{bonus:true,spark:'hollow'}});
 
 /* the current bonus look (#797): hollow tail with three trailing chevrons and a chevron head, drawn here as it is today */
 function curBonusExtras(c,s,age){const ph=phaseOf(s,age);if(!ph||ph.kind!=='flight')return;const t=ph.s,base=sideRgb(s.side),head=arcAt(s,t);
@@ -293,7 +315,7 @@ function lane(c,st,v,t,y,mode){ // mode: 'bonus' or 'ordinary' shot by `shooter`
   c.restore();
 }
 function bonusFrame(c,st,v,t){
-  drawBg(c,st.src==='terrain'?'bgMountain':'bgPlains');
+  drawBg(c,st.bg==='snow'?'bgSnow':(st.bg==='mountain'||st.src==='terrain')?'bgMountain':'bgPlains');
   if(st.sc==='pair'){lane(c,st,V[0],t,112,'ordinary');lane(c,st,v,t,300,'bonus');}
   else lane(c,st,v,t,215,'bonus');
 }
@@ -404,11 +426,11 @@ OV.push({id:'plate2',name:'Plate and centre glyph',draw(c,D){const{cx,py}=D,w=28
    ============================================================ */
 const ELS={bonus:{name:'Bonus shot',vars:V,loop:T.loop,frame:bonusFrame,cases:[['pair','Pair'],['hit','Hit'],['clash','Clash'],['enemy','Enemy bonus']]},
   outcome:{name:'Fight outcome',vars:OV,loop:O.loop,frame:outcomeFrame,cases:[['held','Held'],['lost','City lost'],['take','We capture'],['repel','Repelled'],['bounce','Both retreat']]}};
-const st={el:'bonus',n:2,v:[0,1,2,3],sc:'pair',src:'any',gray:false,rg:false,t:0,play:true,spd:1};
+const st={el:'bonus',n:2,v:[1,2,3,4],sc:'pair',src:'any',bg:'plains',gray:false,rg:false,t:0,play:true,spd:1};
 const $=id=>document.getElementById(id);
 function seg_(host,name,items,cur,on){host.innerHTML='';items.forEach(([val,label])=>{const l=document.createElement('label');const i=document.createElement('input');i.type='radio';i.name=name;i.value=val;i.checked=String(val)===String(cur);i.onchange=()=>on(val);const s=document.createElement('span');s.textContent=label;l.append(i,s);host.append(l);});}
-function readHash(){const h=new URLSearchParams(location.hash.slice(1));if(h.get('el')&&ELS[h.get('el')])st.el=h.get('el');if(h.get('n'))st.n=h.get('n')==='all'?'all':+h.get('n');if(h.get('v'))st.v=h.get('v').split(',').map(Number);if(h.get('sc'))st.sc=h.get('sc');if(h.get('src'))st.src=h.get('src');if(h.get('t'))st.t=+h.get('t');if(h.get('pause')){st.play=false;}}
-function writeHash(){const h=new URLSearchParams({el:st.el,n:st.n,v:st.v.join(','),sc:st.sc,src:st.src});history.replaceState(null,'','#'+h);}
+function readHash(){const h=new URLSearchParams(location.hash.slice(1));if(h.get('el')&&ELS[h.get('el')])st.el=h.get('el');if(h.get('n'))st.n=h.get('n')==='all'?'all':+h.get('n');if(h.get('v'))st.v=h.get('v').split(',').map(Number);if(h.get('sc'))st.sc=h.get('sc');if(h.get('src'))st.src=h.get('src');if(h.get('bg'))st.bg=h.get('bg');if(h.get('t'))st.t=+h.get('t');if(h.get('pause')){st.play=false;}}
+function writeHash(){const h=new URLSearchParams({el:st.el,n:st.n,v:st.v.join(','),sc:st.sc,src:st.src,bg:st.bg});history.replaceState(null,'','#'+h);}
 let panes=[];
 function build(){
   const E=ELS[st.el];if(!E.cases.some(x=>x[0]===st.sc))st.sc=E.cases[0][0];
@@ -416,8 +438,9 @@ function build(){
   seg_($('cmp'),'cmp',[[1,'1'],[2,'2'],[3,'3'],[4,'4'],['all','All']],st.n,v=>{st.n=v==='all'?'all':+v;build();});
   seg_($('sc'),'sc',E.cases,st.sc,v=>{st.sc=v;writeHash();});
   seg_($('var'),'var',E.vars.map((v,i)=>[i,i===0?'Current':i+' '+v.name]),st.v[0],v=>{st.v[0]=+v;build();});
+  seg_($('bg'),'bg',[['plains','Plains'],['mountain','Mountain'],['snow','Snow']],st.bg,v=>{st.bg=v;writeHash();});
   seg_($('src'),'src',[['any','Any'],['terrain','Terrain'],['plan','Plan'],['bunker','Bunker']],st.src,v=>{st.src=v;writeHash();});
-  $('f-src').hidden=st.el!=='bonus';
+  $('f-src').hidden=$('f-bg').hidden=st.el!=='bonus';
   const host=$('panes');host.innerHTML='';host.className=st.n==='all'?'all':'n'+st.n;
   const count=st.n==='all'?E.vars.length:st.n;panes=[];
   for(let i=0;i<count;i++){const vi=st.n==='all'?i:((st.v[i]??(st.v[0]+i))%E.vars.length);if(st.n!=='all')st.v[i]=vi;
