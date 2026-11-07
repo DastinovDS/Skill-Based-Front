@@ -1,4 +1,7 @@
 <script lang="ts">
+  import HelmetIcon from '../units/HelmetIcon.svelte';
+  import { unitLook } from '../units/unitStyleState.svelte.ts';
+
   interface Props {
     /** The viewing side (blue, a single outline) or the other one (red, a double outline). */
     side: 'own' | 'enemy';
@@ -10,21 +13,26 @@
 </script>
 
 <!-- The triangle of the match top bar: the side is the colour plus the outline, never colour alone. -->
-<svg
-  class="side-mark"
-  viewBox="0 0 16 14"
-  width={size}
-  height={(size * 14) / 16}
-  aria-hidden="true"
-  focusable="false"
->
-  {#if side === 'own'}
-    <path d="M1.5 1.5h13L8 12.5z" class="one" />
-  {:else}
-    <path d="M1.5 1.5h13L8 12.5z" class="two-outer" />
-    <path d="M4.6 3.6h6.8L8 9.6z" class="two-inner" />
-  {/if}
-</svg>
+{#if unitLook.helmets}
+  <!-- The unit look of the map (#784): the side is the colour plus the helmet's shape and facing. -->
+  <HelmetIcon {side} size={size + 2} />
+{:else}
+  <svg
+    class="side-mark"
+    viewBox="0 0 16 14"
+    width={size}
+    height={(size * 14) / 16}
+    aria-hidden="true"
+    focusable="false"
+  >
+    {#if side === 'own'}
+      <path d="M1.5 1.5h13L8 12.5z" class="one" />
+    {:else}
+      <path d="M1.5 1.5h13L8 12.5z" class="two-outer" />
+      <path d="M4.6 3.6h6.8L8 9.6z" class="two-inner" />
+    {/if}
+  </svg>
+{/if}
 
 <style>
   .side-mark {

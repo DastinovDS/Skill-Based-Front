@@ -7,6 +7,8 @@
   import HowToPlay from '../howto/HowToPlay.svelte';
   import Icon from './Icon.svelte';
   import Slider from './Slider.svelte';
+  import HelmetIcon from '../units/HelmetIcon.svelte';
+  import { unitLook } from '../units/unitStyleState.svelte.ts';
 
   interface Props {
     open: boolean;
@@ -54,6 +56,12 @@
   $effect(() => {
     if (open) void tick().then(() => close?.focus());
   });
+
+  /** The two unit looks of the switch, helmets first (the default, #784). */
+  const UNIT_LOOKS = [
+    ['helmet', 'help.units.helmets'],
+    ['triangle', 'help.units.triangles'],
+  ] as const;
 
   /** The keys: a label (the key itself, not a translation) and the dictionary key of its effect. */
   const KEYS = [
@@ -173,26 +181,41 @@
           <section aria-labelledby="help-legend">
             <h3 id="help-legend">{t('help.legend')}</h3>
             <ul class="legend">
-              <li>
-                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                  <path d="M3 3h22L14 21z" class="you" />
-                </svg>
-                {t('help.legend.mine')}
-              </li>
-              <li>
-                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                  <path d="M3 3h22L14 21z" class="enemy" />
-                  <path d="M8.5 6.5h11L14 15.5z" class="inner" />
-                </svg>
-                {t('help.legend.enemy')}
-              </li>
-              <li>
-                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                  <path d="M3 3h22L14 21z" class="you" />
-                  <path d="M8.5 6.5h11L14 15.5z" class="fill" />
-                </svg>
-                {t('help.legend.charge')}
-              </li>
+              {#if unitLook.helmets}
+                <li>
+                  <span class="cell"><HelmetIcon side="own" size={28} /></span>
+                  {t('help.legend.mineHelmet')}
+                </li>
+                <li>
+                  <span class="cell"><HelmetIcon side="enemy" size={28} /></span>
+                  {t('help.legend.enemyHelmet')}
+                </li>
+                <li>
+                  <span class="cell"><HelmetIcon side="own" size={28} share={0.5} /></span>
+                  {t('help.legend.chargeHelmet')}
+                </li>
+              {:else}
+                <li>
+                  <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                    <path d="M3 3h22L14 21z" class="you" />
+                  </svg>
+                  {t('help.legend.mine')}
+                </li>
+                <li>
+                  <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                    <path d="M3 3h22L14 21z" class="enemy" />
+                    <path d="M8.5 6.5h11L14 15.5z" class="inner" />
+                  </svg>
+                  {t('help.legend.enemy')}
+                </li>
+                <li>
+                  <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                    <path d="M3 3h22L14 21z" class="you" />
+                    <path d="M8.5 6.5h11L14 15.5z" class="fill" />
+                  </svg>
+                  {t('help.legend.charge')}
+                </li>
+              {/if}
               <li>
                 <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
                   <path d="M2 12h20" class="thin" />
@@ -213,11 +236,18 @@
                 {t('help.legend.alert')}
               </li>
               <li>
-                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                  <path d="M2 4h10l-5 9z" class="you" />
-                  <path d="M16 4h10l-5 9z" class="thin" />
-                  <path d="M2 15h10l-5 8z" class="dashed" />
-                </svg>
+                {#if unitLook.helmets}
+                  <span class="cell chips">
+                    <HelmetIcon side="own" size={14} />
+                    <HelmetIcon side="own" size={14} share={0} />
+                  </span>
+                {:else}
+                  <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                    <path d="M2 4h10l-5 9z" class="you" />
+                    <path d="M16 4h10l-5 9z" class="thin" />
+                    <path d="M2 15h10l-5 8z" class="dashed" />
+                  </svg>
+                {/if}
                 {t('help.legend.chips')}
               </li>
               <li>
@@ -282,6 +312,22 @@
               />
               <span class="percent">{sound.volume}%</span>
             </div>
+            <!-- The unit look of the map (#784), remembered per browser: the owner compares the two. -->
+            <div class="units" role="group" aria-label={t('help.units')}>
+              <span>{t('help.units')}</span>
+              <div class="seg">
+                {#each UNIT_LOOKS as [look, label] (look)}
+                  <button
+                    type="button"
+                    class="dlg-btn"
+                    aria-pressed={unitLook.current === look}
+                    onclick={() => {
+                      unitLook.current = look;
+                    }}>{t(label)}</button
+                  >
+                {/each}
+              </div>
+            </div>
           </section>
         </div>
       {/if}
@@ -301,6 +347,38 @@
   .volume :global(.slider) {
     flex: 1;
     min-width: 0;
+  }
+
+  .units {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 14px;
+  }
+
+  .units .seg {
+    display: flex;
+    gap: 4px;
+  }
+
+  /* The pressed look is filled and bold, so it reads without the hue. */
+  .units .seg button[aria-pressed='true'] {
+    border-color: var(--you);
+    background: var(--you);
+    color: var(--bg);
+    font-weight: 700;
+  }
+
+  .cell.chips {
+    gap: 0;
+  }
+
+  .cell {
+    display: inline-flex;
+    justify-content: center;
+    width: 28px;
+    flex: none;
   }
 
   .percent {

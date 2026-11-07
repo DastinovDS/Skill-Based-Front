@@ -1,4 +1,4 @@
-import { Container, FillGradient, Rectangle, Sprite, type Texture } from 'pixi.js';
+import { Container, FillGradient, Rectangle, Sprite, Texture } from 'pixi.js';
 import { shadeEnds } from './shading.ts';
 
 /**
@@ -230,6 +230,12 @@ export class SpriteCache implements BakeTools {
  */
 export class BakedSprite extends Sprite {
   spec: BakeSpec | null = null;
+  /** The cached texture of `spec`; the sprite may show only a part of it (`cropBottom`). */
+  private full: Texture | null = null;
+  /** World units of the box shown from its bottom up; `null`: the whole box. */
+  private crop: number | null = null;
+  /** The sprite's own view of the bottom of `full`: the same pixels, a smaller frame. */
+  private part: Texture | null = null;
 
   constructor(private readonly cache: SpriteCache) {
     super();
@@ -242,26 +248,73 @@ export class BakedSprite extends Sprite {
       this.release();
       return;
     }
-    if (this.spec?.key === spec.key && !this.texture.destroyed) return;
+    if (this.spec?.key === spec.key && this.full !== null && !this.full.destroyed) return;
     // Take the new texture before letting go of the old one: the same key twice must not drop it.
     const texture = this.cache.acquire(spec);
     this.release();
     this.spec = spec;
-    this.texture = texture;
+    this.full = texture;
+    this.show();
+  }
+
+  /**
+   * Shows only the bottom `height` world units of the box: a level that fills from the bottom (the
+   * charge of a helmet, #784). The frame of a view of the cached texture shrinks, so no texture is
+   * made per frame and nothing is masked. `null` shows the whole box again.
+   */
+  cropBottom(height: number | null): void {
+    if (height === this.crop) return;
+    this.crop = height;
+    this.show();
+  }
+
+  private show(): void {
+    const full = this.full;
+    const spec = this.spec;
+    if (full === null || spec === null) return;
     const { x, y, width, height } = spec.box;
-    this.anchor.set(-x / width, -y / height);
+    if (this.crop === null || this.crop >= height) {
+      this.texture = full;
+      this.anchor.set(-x / width, -y / height);
+      return;
+    }
+    const shown = Math.max(this.crop, 0.01);
+    const frame = full.frame;
+    const rows = (frame.height * shown) / height;
+    if (this.part === null || this.part.source !== full.source) {
+      this.part?.destroy(false);
+      this.part = new Texture({
+        source: full.source,
+        frame: new Rectangle(frame.x, frame.y + frame.height - rows, frame.width, rows),
+        dynamic: true,
+      });
+    } else {
+      this.part.frame.x = frame.x;
+      this.part.frame.y = frame.y + frame.height - rows;
+      this.part.frame.width = frame.width;
+      this.part.frame.height = rows;
+      this.part.update();
+    }
+    this.texture = this.part;
+    // The origin of the shape stays put: the strip shown starts `shown` above the bottom of the box.
+    this.anchor.set(-x / width, (shown - y - height) / shown);
   }
 
   /** Lets go of the texture (it stays cached). */
   release(): void {
     if (this.spec !== null) this.cache.letGo(this.spec.key);
     this.spec = null;
+    this.full = null;
   }
 
   override destroy(options?: Parameters<Sprite['destroy']>[0]): void {
     this.release();
     this.cache.register(this, false);
+    const part = this.part;
+    this.part = null;
     // A Sprite leaves its texture alone unless asked: the cache owns it, so it is never asked.
     super.destroy(options);
+    // The view of a part is the sprite's own; its source is the cache's and stays.
+    part?.destroy(false);
   }
 }

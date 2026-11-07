@@ -1,10 +1,13 @@
 <script lang="ts">
+  import HelmetIcon from '../units/HelmetIcon.svelte';
+  import { unitLook } from '../units/unitStyleState.svelte.ts';
+
   interface Props {
-    /** Whose triangle: the player's (blue) or the opponent's (red, with the inner outline). */
+    /** Whose unit: the player's (blue) or the opponent's (red: the inner outline, or the other helmet facing left). */
     side: 'own' | 'enemy';
     /** Width in px. */
     size?: number;
-    /** The share of the triangle filled from the tip: charged units (ui-style 9.5). */
+    /** The share filled: charged units (ui-style 9.5; a helmet fills from the bottom, #784). */
     share?: number;
   }
 
@@ -21,21 +24,26 @@
   }
 </script>
 
-<svg
-  class="unit-mark"
-  width={size + pad * 2}
-  height={h + pad * 2}
-  viewBox={`0 0 ${String(size + pad * 2)} ${String(h + pad * 2)}`}
-  aria-hidden="true"
-  focusable="false"
->
-  <polygon points={points(1)} class="back" />
-  <polygon points={points(Math.sqrt(share))} class={side} />
-  <polygon points={points(1)} class="rim" />
-  {#if side === 'enemy'}
-    <polygon points={points(0.62)} class="inner" />
-  {/if}
-</svg>
+{#if unitLook.helmets}
+  <!-- The unit look of the map (#784): a helmet, filled from the bottom by the share. -->
+  <HelmetIcon {side} size={size + 8} {share} />
+{:else}
+  <svg
+    class="unit-mark"
+    width={size + pad * 2}
+    height={h + pad * 2}
+    viewBox={`0 0 ${String(size + pad * 2)} ${String(h + pad * 2)}`}
+    aria-hidden="true"
+    focusable="false"
+  >
+    <polygon points={points(1)} class="back" />
+    <polygon points={points(Math.sqrt(share))} class={side} />
+    <polygon points={points(1)} class="rim" />
+    {#if side === 'enemy'}
+      <polygon points={points(0.62)} class="inner" />
+    {/if}
+  </svg>
+{/if}
 
 <style>
   .unit-mark {

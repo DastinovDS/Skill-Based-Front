@@ -85,7 +85,7 @@ describe('the list of the groups standing in a city', () => {
     expect(text[1]).toContain('2');
     // Every sector has the icon of a group, at least 20 px (#350).
     const glyphs = items.map((i) => i.querySelector('.glyph'));
-    expect(glyphs.map((g) => g?.getAttribute('data-icon'))).toEqual(['stackGroup', 'stackGroup']);
+    expect(glyphs.map((g) => g?.getAttribute('data-icon'))).toEqual(['stackHelmet', 'stackHelmet']);
     expect(glyphs.every((g) => Number(g?.querySelector('svg')?.getAttribute('width')) >= 20)).toBe(
       true,
     );

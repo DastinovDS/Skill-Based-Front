@@ -14,6 +14,7 @@ const NAMES = [
   'front1',
   'front2',
   'stackGroup',
+  'stackHelmet',
   'factory',
   'bunker',
   'fortify',

@@ -46,7 +46,7 @@ describe('the How to play page (CLI-13, #72)', () => {
     const last = [...figure.querySelectorAll('.frames li')].at(-1) as HTMLElement;
     // 4 attackers and 2 defenders are drawn in every frame; at the end both defenders have fallen.
     expect(last.querySelectorAll('.side')[0]?.querySelectorAll('svg')).toHaveLength(4);
-    expect(last.querySelectorAll('.side')[1]?.querySelectorAll('.gone')).toHaveLength(2);
+    expect(last.querySelectorAll('.side')[1]?.querySelectorAll('.gone, .dashed')).toHaveLength(2);
     expect(last.querySelector('.sr')?.textContent).toContain('Defense: 0 units, 0 charged');
   });
 

@@ -30,6 +30,7 @@ import { levelNodes } from './flowLayout.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
+import { onUnitStyle } from '../units/unitStyle.ts';
 
 /** Failed frames in a row before the player is told (a transient error is only skipped). */
 export const FRAME_FAILURE_LIMIT = 3;
@@ -132,6 +133,7 @@ export class MapScene {
   /** A frame that throws is skipped, not the end of the loop (CLI-03, #418). */
   private readonly guard: FrameGuard;
   private readonly onbackground: ((state: 'loaded' | 'failed') => void) | undefined;
+  private readonly stopStyle: () => void;
 
   constructor(
     private readonly app: Application,
@@ -203,6 +205,12 @@ export class MapScene {
     app.stage.addChild(this.layers.world);
     app.renderer.on('resize', this.onResize);
     app.ticker.add(this.onFrame);
+    // The viewer switched the unit look (#784): what is drawn only on a new snapshot is drawn again;
+    // the rest follows on the next frame.
+    this.stopStyle = onUnitStyle(() => {
+      this.entities.restyle();
+      this.fog.restyle();
+    });
     if (options.backgroundUrl !== undefined && options.backgroundUrl !== null) {
       void this.loadBackground(options.backgroundUrl);
     }
@@ -262,6 +270,7 @@ export class MapScene {
 
   destroy(): void {
     this.destroyed = true;
+    this.stopStyle();
     this.app.renderer.off('resize', this.onResize);
     this.app.ticker.remove(this.onFrame);
     this.controller.destroy();

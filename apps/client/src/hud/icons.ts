@@ -234,6 +234,16 @@ export const MENU_ICONS = {
   // One group of a city in the list of the groups: the down-pointing triangle a group is on the map
   // (the own side points down) with its charge as a dot.
   stackGroup: [path('M3.5 4.5h17L12 19.5z'), circle(12, 9.4, 0.6)],
+  // The same group in the helmet look of the map (#784): an own helmet facing right (the dome, the
+  // brim line, the strap) with its charge as a dot.
+  stackHelmet: [
+    path(
+      'M3.6 15.6C3 9.4 6.6 5.2 11.8 5.2c4.4 0 7.2 2.9 7.8 6.2.2.9.8 1.5 1.9 2-3.4.3-5.6.9-6.8 1.9-1.1 1-1.9 2.3-3.7 2.3z',
+    ),
+    path('M3.3 18.4c3.4.5 6.4.6 8.8.4 2.4-.3 3.6-2 4.8-3'),
+    path('M11.8 18.9l1.6 3.3'),
+    circle(11.4, 11.6, 0.6),
+  ],
   // Economy v2 (DEC-41, #649): a factory (a saw-tooth roof and a chimney), a bunker (a low dome with
   // a firing slit), a supply line drawn from a city (two nodes and an arrow), a line taken off (the
   // line crossed out), a gathering plan let go (an arrow out of a gate).

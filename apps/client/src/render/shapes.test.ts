@@ -1,10 +1,12 @@
-import { CanvasTextMetrics } from 'pixi.js';
+import { CanvasTextMetrics, type Container, type Text } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BakedSprite } from './bake.ts';
 import { TWEEN_MS } from './tween.ts';
-import { EntityKit, Token } from './shapes.ts';
+import { EntityKit, Token, helmetWidth } from './shapes.ts';
+import { helmet } from '../units/helmet.ts';
 import { ENEMY, UNIT_SIDES, UNIT_TICKS, YOU } from './style.ts';
 import { testSprites } from './testSprites.ts';
+import { DEFAULT_UNIT_STYLE, setUnitStyle } from '../units/unitStyle.ts';
 
 // A group triangle is baked shapes (U1, #347): the back with its shadow (and the casing of an icon
 // in a city), the charge fill scaled from the tip by the level, the outline with its rim, the shield.
@@ -19,7 +21,8 @@ describe('Token, the group triangle as baked sprites', () => {
     outline: BakedSprite;
     shield: BakedSprite;
   } => {
-    const [back, level, ticks, outline, , shield] = token.view.children as BakedSprite[];
+    const [body, , shield] = token.view.children as BakedSprite[];
+    const [back, level, ticks, outline] = (body?.children ?? []) as BakedSprite[];
     if (
       back === undefined ||
       level === undefined ||
@@ -36,6 +39,7 @@ describe('Token, the group triangle as baked sprites', () => {
     vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
       (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
     );
+    setUnitStyle('triangle', null);
     kit = new EntityKit(0, testSprites());
     token = new Token(kit, 1);
   });
@@ -43,6 +47,7 @@ describe('Token, the group triangle as baked sprites', () => {
     token.view.destroy({ children: true });
     kit.destroy();
     vi.restoreAllMocks();
+    setUnitStyle(DEFAULT_UNIT_STYLE, null);
   });
 
   it('fills the triangle from the tip by the share of charged units, scaling one sprite', () => {
@@ -164,5 +169,156 @@ describe('Token, the group triangle as baked sprites', () => {
       inside: true,
     });
     expect(sprites().shield.visible).toBe(false);
+  });
+});
+
+// The helmet (#784, variant Full of #775): the same three baked sprites, the fill shown from the
+// bottom by a crop of its frame, the opponent's body flipped, the number in the middle of the dome.
+describe('Token, the helmet as baked sprites', () => {
+  let kit: EntityKit;
+  let token: Token;
+  const parts = (): {
+    body: Container;
+    back: BakedSprite;
+    level: BakedSprite;
+    ticks: BakedSprite;
+    outline: BakedSprite;
+    question: Text;
+    shield: BakedSprite;
+    label: Container;
+  } => {
+    const [body, question, shield, label] = token.view.children;
+    const [back, level, ticks, outline] = (body?.children ?? []) as BakedSprite[];
+    if (
+      body === undefined ||
+      back === undefined ||
+      level === undefined ||
+      ticks === undefined ||
+      outline === undefined
+    ) {
+      throw new Error('a token is made of sprites');
+    }
+    return {
+      body,
+      back,
+      level,
+      ticks,
+      outline,
+      question: question as Text,
+      shield: shield as BakedSprite,
+      label: label as Container,
+    };
+  };
+  /** The share of the dome the fill shows now. */
+  const shown = (): number => {
+    const { level } = parts();
+    const h = helmet('own', helmetWidth(UNIT_SIDES[1], false));
+    return (level.texture.frame.height - 1) / (h.domeBottom - h.domeTop);
+  };
+
+  beforeEach(() => {
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+    setUnitStyle('helmet', null);
+    kit = new EntityKit(0, testSprites());
+    token = new Token(kit, 1);
+  });
+  afterEach(() => {
+    token.view.destroy({ children: true });
+    kit.destroy();
+    vi.restoreAllMocks();
+    setUnitStyle(DEFAULT_UNIT_STYLE, null);
+  });
+
+  it('fills the dome from the bottom by the share of charged units: a crop of one baked fill', () => {
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 1 } });
+    const { level } = parts();
+    const width = String(helmetWidth(UNIT_SIDES[1], false));
+    expect(level.visible).toBe(true);
+    expect(level.spec?.key).toBe(`hel-level:own:${width}:${String(YOU)}`);
+    expect(level.scale.x).toBe(1);
+    // The height reads the share, as the triangle's does (#508): 1 of 4 is a quarter of the dome.
+    expect(shown()).toBeCloseTo(0.25);
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 3 } });
+    kit.advance(TWEEN_MS);
+    expect(level.spec?.key).toBe(`hel-level:own:${width}:${String(YOU)}`);
+    expect(shown()).toBeCloseTo(0.75);
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 0 } });
+    kit.advance(TWEEN_MS);
+    expect(level.visible).toBe(false);
+  });
+
+  it('eases the fill to a new level without a new texture (#508)', () => {
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 4 } });
+    const baked = kit.sprites.baked;
+    expect(shown()).toBeCloseTo(1);
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 1 } });
+    expect(shown()).toBeCloseTo(1);
+    kit.advance(TWEEN_MS / 4);
+    const mid = shown();
+    expect(mid).toBeLessThan(1);
+    expect(mid).toBeGreaterThan(0.25);
+    kit.advance(TWEEN_MS);
+    expect(shown()).toBeCloseTo(0.25);
+    expect(kit.sprites.baked).toBe(baked);
+  });
+
+  it('has no dividers: the fill edge is smooth', () => {
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 2 } });
+    expect(parts().ticks.visible).toBe(false);
+  });
+
+  it('tells the owner by the shape and the facing: own Rim to the right, the opponent Cut to the left', () => {
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 1 } });
+    expect(parts().body.scale.x).toBe(1);
+    expect(parts().back.spec?.key).toContain('hel-back:own:');
+    token.set({ owner: 1, modes: ['attack'], counts: { units: 4, charged: 1 } });
+    expect(parts().body.scale.x).toBe(-1);
+    expect(parts().back.spec?.key).toContain('hel-back:enemy:');
+    expect(parts().outline.spec?.key).toContain(':solid');
+    token.set({ owner: 1, modes: ['attack'], counts: null });
+    expect(parts().outline.spec?.key).toContain(':dashed');
+    expect(parts().question.visible).toBe(true);
+  });
+
+  it('puts the one number, all the units, in the middle of the dome, on a road and in a city', () => {
+    for (const inside of [false, true]) {
+      token.set({ owner: 0, modes: ['attack'], counts: { units: 5, charged: 3 }, inside });
+      token.setLabel(true);
+      const { label } = parts();
+      const count = label.children[1] as Text;
+      expect(count.text).toBe('5');
+      const h = helmet('own', helmetWidth(UNIT_SIDES[1], inside));
+      expect(label.position.y).toBeCloseTo(h.middle.y);
+      // No pill: the number is not a chip under the helmet.
+      expect(label.position.y).toBeLessThan(token.bottom);
+    }
+  });
+
+  it('keeps the strap in a city: the icon in a city is the same helmet, a little smaller, with a casing', () => {
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 5, charged: 3 }, inside: true });
+    const key = parts().back.spec?.key ?? '';
+    expect(key).toContain(`:${String(helmetWidth(UNIT_SIDES[1], true))}:`);
+    expect(key.endsWith(':i')).toBe(true);
+    const h = helmet('own', helmetWidth(UNIT_SIDES[1], true));
+    expect(token.bottom).toBeGreaterThan(h.domeBottom);
+  });
+
+  it('keeps the top right corner free: the shield of "Defense" goes to the top left (#776)', () => {
+    token.set({ owner: 0, modes: ['defense'], counts: { units: 3, charged: 3 } });
+    const { shield } = parts();
+    expect(shield.visible).toBe(true);
+    expect(shield.position.x).toBeLessThan(0);
+  });
+
+  it('draws again in the other look when the viewer switches it', () => {
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 2 } });
+    expect(parts().back.spec?.key).toContain('hel-back');
+    setUnitStyle('triangle', null);
+    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 2 } });
+    expect(parts().back.spec?.key).toContain('tri-back');
+    expect(parts().body.scale.x).toBe(1);
+    expect(parts().level.scale.x).toBeCloseTo(0.5);
   });
 });

@@ -2,6 +2,9 @@ import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import {
   drawPlaceOutline,
+  helmetBackSpec,
+  helmetFrontSpec,
+  helmetLevelSpec,
   triangleBackSpec,
   triangleFrontSpec,
   triangleLevelSpec,
@@ -10,11 +13,21 @@ import {
 } from './bakedShapes.ts';
 import type { Mode, PlayerId } from '../protocol.gen.ts';
 import type { WarehouseBar } from './cityLayout.ts';
+import type { Point } from './camera.ts';
 import { reducedMotion } from './motion.ts';
 import { EaseTween } from './tween.ts';
 import { chargeLevel, countLabel, triangleHeight, triangleSide } from './layout.ts';
 import {
+  HELMET_SCALE,
+  helmet,
+  helmetExtent,
+  type Helmet,
+  type HelmetKind,
+} from '../units/helmet.ts';
+import { unitStyle, type UnitStyle } from '../units/unitStyle.ts';
+import {
   BAR_BASE,
+  HELMET_INSIDE,
   BAR_SEGMENT,
   BG,
   BUILD_PLATE,
@@ -216,11 +229,21 @@ const ENTER_SCALE = 0.78;
 const BUMP_SCALE = 1.14;
 const BUMP_MS = 260;
 
-function specKey(spec: TokenSpec): string {
+function specKey(spec: TokenSpec, style: UnitStyle): string {
   // The charged count is the fill of the triangle, so it belongs to the key, not to the text.
   const counts =
     spec.counts === null ? '-' : `${String(spec.counts.units)}/${String(spec.counts.charged)}`;
-  return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}`;
+  return `${style}|${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}`;
+}
+
+/** Width of the helmet of a token whose triangle would have `side` (a city icon is a little smaller). */
+export function helmetWidth(side: number, inside: boolean): number {
+  return Math.round(side * HELMET_SCALE * (inside ? HELMET_INSIDE : 1) * 100) / 100;
+}
+
+/** The helmet a token of `owner` shows: the viewer's faces right, the opponent's left. */
+export function helmetKind(me: PlayerId, owner: PlayerId): HelmetKind {
+  return owner === me ? 'own' : 'enemy';
 }
 
 /**
@@ -232,6 +255,12 @@ function specKey(spec: TokenSpec): string {
  */
 export class Token {
   readonly view = new Container();
+  /** The shape sprites: flipped (`scale.x = -1`) for an opponent's helmet, which faces left. */
+  private readonly body = new Container();
+  /** The helmet drawn now; `null`: a triangle. */
+  private shape: Helmet | null = null;
+  /** How far the drawing reaches above and below the origin (unscaled world units). */
+  private extent = { top: 0, bottom: 0 };
   private readonly back: BakedSprite;
   private readonly level: BakedSprite;
   private readonly ticks: BakedSprite;
@@ -279,19 +308,22 @@ export class Token {
     });
     this.count = new Text({ text: '', style: kit.textStyle, anchor: 0.5, resolution });
     this.label.addChild(this.pill, this.count);
-    this.view.addChild(
-      this.back,
-      this.level,
-      this.ticks,
-      this.outline,
-      this.question,
-      this.shield,
-      this.label,
-    );
+    this.body.addChild(this.back, this.level, this.ticks, this.outline);
+    this.view.addChild(this.body, this.question, this.shield, this.label);
   }
 
   labels(): Text[] {
     return [this.count, this.question];
+  }
+
+  /** The top of the drawing above the origin (negative), unscaled world units: what hangs over it goes higher. */
+  get top(): number {
+    return this.extent.top;
+  }
+
+  /** The bottom of the drawing below the origin, unscaled world units: a plate under it goes lower. */
+  get bottom(): number {
+    return this.extent.bottom;
   }
 
   /** Scale of the whole token (the minimum size on screen, `symbolScale`). */
@@ -350,16 +382,27 @@ export class Token {
     this.label.visible = show && this.counted;
   }
 
-  /** Puts the shown fill height on the sprite: scaled from the tip, hidden when empty. */
+  /**
+   * Puts the shown fill height on the sprite, hidden when empty: a triangle scales the fill from the
+   * tip; a helmet shows the bottom of the baked dome up to the level (a crop of its frame, #784).
+   */
   private showFill(): void {
     const shown = this.fill.value;
     this.level.visible = shown > 0 && this.level.spec !== null;
-    if (shown > 0) this.level.scale.set(shown);
+    const h = this.shape;
+    if (h === null) {
+      this.level.cropBottom(null);
+      if (shown > 0) this.level.scale.set(shown);
+      return;
+    }
+    this.level.scale.set(1);
+    // The level box ends 1 unit under the dome: the crop counts from there.
+    if (shown > 0) this.level.cropBottom(1 + shown * (h.domeBottom - h.domeTop));
   }
 
   /**
    * Steps the easing fill by `dtMs` (called by `EntityKit.advance`); `false` once it has settled.
-   * Only the scale of the baked fill changes: no texture is made.
+   * Only the scale (or the crop) of the baked fill changes: no texture is made.
    */
   advance(dtMs: number): boolean {
     this.fill.step(dtMs);
@@ -371,9 +414,12 @@ export class Token {
   }
 
   set(spec: TokenSpec): void {
-    const key = specKey(spec);
+    const style = unitStyle();
+    const key = specKey(spec, style);
     if (key === this.key) return;
     const first = this.key === '';
+    // A switch of the unit look shows the level at once, like a new token.
+    const restyled = !first && !this.key.startsWith(`${style}|`);
     this.key = key;
     // A change of the number of units swells the token for a moment (not a new one, not "less motion").
     const units = spec.counts?.units ?? -1;
@@ -387,74 +433,126 @@ export class Token {
     const { counts, owner } = spec;
     const side = triangleSide(counts === null ? null : counts.units);
     this.side = side;
-    const h = triangleHeight(side);
     const range = spec.range ?? null;
     this.counted = counts !== null || range !== null;
-    const { me } = this.kit;
-    const color = ownerColor(me, owner);
+    const color = ownerColor(this.kit.me, owner);
+    const inside = spec.inside === true;
+    // A token with unknown numbers and a memory (ghost) are dashed.
+    const dashed = counts === null || spec.ghost === true;
 
-    this.back.set(triangleBackSpec(side, spec.inside === true));
-    // The fill: the same baked triangle scaled from the tip; a new level eases in (#508). A token
-    // that is new, unknown or a memory shows the level at once.
+    // The fill eases to a new level (#508); a token that is new, unknown or a memory, a switch of
+    // the look and "less motion" show the level at once.
     const level = counts === null ? 0 : chargeLevel(counts.units, counts.charged);
-    if (counts !== null) this.level.set(triangleLevelSpec(side, color));
-    this.level.position.set(0, h / 2);
-    if (first || counts === null || spec.ghost === true || reducedMotion()) {
-      this.fill.snap(level);
-    } else {
-      this.fill.setTarget(level);
-    }
+    const snap = first || restyled || counts === null || spec.ghost === true || reducedMotion();
+
+    const shape =
+      style === 'helmet'
+        ? this.drawHelmet(spec, side, color, inside, dashed)
+        : this.drawTriangle(spec, side, color, inside, dashed);
+    if (snap) this.fill.snap(level);
+    else this.fill.setTarget(level);
     this.showFill();
     if (this.fill.active) this.kit.startEasing(this);
-    // The dividers: one texture per (side, units), only for a small group with known numbers.
-    const dividers = counts === null ? null : triangleTicksSpec(side, counts.units);
-    this.ticks.visible = dividers !== null;
-    if (dividers !== null) this.ticks.set(dividers);
-    // The outline carries the owner's colour, so an empty triangle still tells whose it is; the
-    // opponent's second, inner outline tells it without the hue (AGENTS.md 7.4).
-    const dashed = counts === null || spec.ghost === true;
-    this.outline.set(
-      triangleFrontSpec(
-        side,
-        dashed ? 'dashed' : owner === me ? 'own' : 'enemy',
-        color,
-        UNIT_INNER_SCALE,
-      ),
-    );
 
-    this.question.visible = counts === null && range === null;
-    // Centre of mass of the triangle, a third of the height above the middle of the box.
-    this.question.position.set(0, -h / 6);
-
-    // The shield of "Defense" sits on the corner of a token on a road. The icon of the units in a
-    // city has none: the city's own column carries the one sign (L1, #349, `defenseView.ts`).
-    const defended = spec.modes.includes('defense') && spec.inside !== true;
+    // The shield of "Defense" sits on a corner of a token on a road (the top left of a helmet: the top
+    // right is kept for the badges of #776). The icon of the units in a city has none: the city's own
+    // column carries the one sign (L1, #349, `defenseView.ts`).
+    const defended = spec.modes.includes('defense') && !inside;
     this.shield.visible = defended;
     if (defended) {
-      this.shield.set(shieldSpec(color, owner !== me));
-      this.shield.position.set(side / 2, -h / 2);
+      this.shield.set(shieldSpec(color, owner !== this.kit.me));
+      this.shield.position.set(shape.corner.x, shape.corner.y);
     }
 
     const text = counts !== null ? countLabel(counts.units) : range;
     if (text !== null) {
-      // A range is wider than a number: always in the pill under the tip.
-      const inside = spec.inside === true && counts !== null;
-      this.count.style = inside ? this.kit.insideStyle : this.kit.textStyle;
+      // The number of units sits in the middle of the shape (the triangle: only in a city); a range
+      // is wider than a number, so it always goes into the pill under the shape.
+      const middle = shape.number !== null && counts !== null;
+      this.count.style = middle ? this.kit.insideStyle : this.kit.textStyle;
       this.count.text = text;
       this.pill.clear();
-      if (inside) {
-        // At the centre of mass of the triangle, where the "?" of an unknown group sits too.
-        this.label.position.set(0, -h / 6);
+      if (middle) {
+        this.label.position.set(shape.number?.x ?? 0, shape.number?.y ?? 0);
         this.count.position.set(0, 0);
       } else {
         const w = this.count.width + 2 * UNIT_LABEL.padX;
         this.pill
           .roundRect(-w / 2, 0, w, UNIT_LABEL.height, 3)
           .fill({ color: UNIT_LABEL.fill, alpha: UNIT_LABEL.alpha });
-        this.label.position.set(0, h / 2 + UNIT_LABEL.gap);
+        this.label.position.set(0, this.extent.bottom + UNIT_LABEL.gap);
         this.count.position.set(0, UNIT_LABEL.height / 2);
       }
     }
     this.label.visible = this.labelWanted && this.counted;
+  }
+
+  /**
+   * The triangle (9.5): the plate, the fill scaled from the tip, the dividers, the outline (the
+   * opponent's double, dashed without numbers). Returns where the number and the shield go.
+   */
+  private drawTriangle(
+    spec: TokenSpec,
+    side: number,
+    color: number,
+    inside: boolean,
+    dashed: boolean,
+  ): { number: Point | null; corner: Point } {
+    this.shape = null;
+    this.body.scale.x = 1;
+    const h = triangleHeight(side);
+    this.extent = { top: -h / 2, bottom: h / 2 };
+    const { counts } = spec;
+    this.back.set(triangleBackSpec(side, inside));
+    if (counts !== null) this.level.set(triangleLevelSpec(side, color));
+    this.level.position.set(0, h / 2);
+    // The dividers: one texture per (side, units), only for a small group with known numbers.
+    const dividers = counts === null ? null : triangleTicksSpec(side, counts.units);
+    this.ticks.visible = dividers !== null;
+    if (dividers !== null) this.ticks.set(dividers);
+    // The outline carries the owner's colour, so an empty triangle still tells whose it is; the
+    // opponent's second, inner outline tells it without the hue (AGENTS.md 7.4).
+    const kind = dashed ? 'dashed' : spec.owner === this.kit.me ? 'own' : 'enemy';
+    this.outline.set(triangleFrontSpec(side, kind, color, UNIT_INNER_SCALE));
+    // Centre of mass of the triangle, a third of the height above the middle of the box: the "?"
+    // and, in a city, the number.
+    this.question.visible = counts === null && (spec.range ?? null) === null;
+    this.question.position.set(0, -h / 6);
+    return { number: inside ? { x: 0, y: -h / 6 } : null, corner: { x: side / 2, y: -h / 2 } };
+  }
+
+  /**
+   * The helmet (#784, variant Full of #775): own Rim facing right, the opponent's Cut facing left
+   * (the body is flipped), the strap everywhere, the charge as a level in the dome with a smooth
+   * edge (no dividers), the number of units in the middle of the dome. Returns where the number and
+   * the shield go.
+   */
+  private drawHelmet(
+    spec: TokenSpec,
+    side: number,
+    color: number,
+    inside: boolean,
+    dashed: boolean,
+  ): { number: Point | null; corner: Point } {
+    const kind = helmetKind(this.kit.me, spec.owner);
+    const width = helmetWidth(side, inside);
+    const h = helmet(kind, width);
+    this.shape = h;
+    const facing = kind === 'own' ? 1 : -1;
+    this.body.scale.x = facing;
+    const reach = helmetExtent(h);
+    this.extent = { top: reach.top, bottom: reach.bottom };
+    const { counts } = spec;
+    this.back.set(helmetBackSpec(kind, width, color, dashed ? 'dashed' : 'solid', inside));
+    if (counts !== null) this.level.set(helmetLevelSpec(kind, width, color));
+    this.level.position.set(0, 0);
+    this.ticks.visible = false;
+    this.outline.set(helmetFrontSpec(kind, width, color, dashed ? 'dashed' : 'solid'));
+    const middle = { x: h.middle.x * facing, y: h.middle.y };
+    this.question.visible = counts === null && (spec.range ?? null) === null;
+    this.question.position.set(middle.x, middle.y);
+    // The top left corner on screen, whichever way the helmet faces.
+    const left = facing === 1 ? reach.left : -reach.right;
+    return { number: middle, corner: { x: left, y: reach.top + 2 } };
   }
 }

@@ -296,6 +296,11 @@ export const UNIT_INNER_OUTLINE = { width: 1.5, color: PAPER, alpha: 0.9, join: 
 export const UNIT_INNER_SCALE = 0.62;
 /** The casing of the icon of units standing in a city (round, in the colour of the background). */
 export const UNIT_HALO = { width: 7, alpha: 0.9, join: 'round' } as const;
+/**
+ * A helmet in a city (#784) is this share of the one on a road: with its strap it is taller than the
+ * triangle it replaces and stays inside the capacity ring (the mockup of #775 took 8% off too).
+ */
+export const HELMET_INSIDE = 0.92;
 export const UNIT_DASH = { dash: 5, gap: 3.5 } as const;
 export const UNIT_QUESTION_FONT_SIZE = 15;
 /** On screen a triangle is at least this wide, and a click hits at least this wide (CSS px). */
@@ -650,6 +655,12 @@ export const UNDO_CUE = {
  * little smaller and faint, so the hover never reads as a selection.
  */
 export const HOVER_FRAME = { scale: 1.3, width: 2, alpha: 0.75, haloAlpha: 0.5 } as const;
+
+/**
+ * The outlines round a helmet (#784): this far (world units) outside the drawing of the helmet,
+ * strap and brim included; the dark casing reaches 3.2 out, so both keep a gap from it.
+ */
+export const HELMET_FRAME = { select: 7.5, hover: 6 } as const;
 
 /**
  * The area of the city or province under the pointer (#762): a faint paper wash over the cell

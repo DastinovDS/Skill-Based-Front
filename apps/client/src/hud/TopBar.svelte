@@ -1,5 +1,7 @@
 <script lang="ts">
   import { sound } from '../audio/soundState.svelte.ts';
+  import HelmetIcon from '../units/HelmetIcon.svelte';
+  import { unitLook } from '../units/unitStyleState.svelte.ts';
   import { getLocale, t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { HudChrome } from './chrome.svelte.ts';
@@ -146,9 +148,13 @@
       })}
     >
       <span class="side mine">
-        <svg class="mark" viewBox="0 0 16 14" width="16" height="14" aria-hidden="true">
-          <path d="M1.5 1.5h13L8 12.5z" class="one" />
-        </svg>
+        {#if unitLook.helmets}
+          <HelmetIcon side="own" size={18} />
+        {:else}
+          <svg class="mark" viewBox="0 0 16 14" width="16" height="14" aria-hidden="true">
+            <path d="M1.5 1.5h13L8 12.5z" class="one" />
+          </svg>
+        {/if}
         <span class="nick">{data.nicks.mine}</span>
       </span>
       <span class="vp mine-vp">{data.vp.mine}</span>
@@ -159,10 +165,14 @@
       <span class="vp enemy-vp">{data.vp.enemy}</span>
       <span class="side enemy">
         <span class="nick">{data.nicks.enemy}</span>
-        <svg class="mark" viewBox="0 0 16 14" width="16" height="14" aria-hidden="true">
-          <path d="M1.5 1.5h13L8 12.5z" class="two-outer" />
-          <path d="M4.6 3.6h6.8L8 9.6z" class="two-inner" />
-        </svg>
+        {#if unitLook.helmets}
+          <HelmetIcon side="enemy" size={18} />
+        {:else}
+          <svg class="mark" viewBox="0 0 16 14" width="16" height="14" aria-hidden="true">
+            <path d="M1.5 1.5h13L8 12.5z" class="two-outer" />
+            <path d="M4.6 3.6h6.8L8 9.6z" class="two-inner" />
+          </svg>
+        {/if}
       </span>
     </div>
   {:else}
