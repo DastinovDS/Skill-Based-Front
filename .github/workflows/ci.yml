@@ -102,9 +102,11 @@ jobs:
               - '.github/workflows/ci.yml'
               - 'e2e/**'
 
-  # Required check. A job skipped by `if` reports "Success", so a PR without relevant
-  # changes is not blocked. If `changes` itself fails, the checks run anyway (fail-closed).
-  py:
+  # The Python checks run as parallel jobs (#798): py-check, the shards of py-test, py-perf and
+  # py-golden; the job `py` below collects their results under the name of the required check.
+  # Each has the skip rule of `py`: a job skipped by `if` reports "Success", so a PR without
+  # relevant changes is not blocked. If `changes` itself fails, the checks run anyway (fail-closed).
+  py-check:
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.py == 'true') }}
     runs-on: ubuntu-latest
@@ -112,8 +114,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          # HEAD^1 (the base branch of a PR merge commit) for check_golden_frozen.py.
-          fetch-depth: 2
       # node (pyright from PyPI runs on it), pnpm and uv at the versions of mise.toml.
       - uses: jdx/mise-action@v5
         with:
@@ -125,19 +125,89 @@ jobs:
           restore-keys: uv-${{ runner.os }}-
       - run: mise run setup:py
       - run: mise run check:py
-      # pytest-xdist: the tests are independent (own tmp_path, in-memory servers, ManualClock),
-      # a runner has 2 cores. Timing tests (mark `perf`: benchmarks, tick lag) and the long
-      # full-match tests (mark `slow`, job `py-slow`) are not run here.
-      - run: mise run test:py -- --durations=25
+      # The shards of py-test together collect every test of one `test:py` run, each once.
+      - run: mise run check:shards
+      # Keep only what this run used before the cache is saved (what setup-uv did).
+      - run: mise exec -- uv cache prune --ci
+
+  # `test:py` in shards by test location (scripts/pytest_shards.py, balanced by --durations).
+  # pytest-xdist inside each shard: the tests are independent (own tmp_path, in-memory servers,
+  # ManualClock), a runner has 2 cores. Timing tests (mark `perf`: benchmarks, tick lag) and the
+  # long full-match tests (mark `slow`, job `py-slow`) are not run here.
+  py-test:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.py == 'true') }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The names of scripts/pytest_shards.py; `check:shards` fails if the two lists differ.
+        shard: [sim-replays, sim, bots-matches, bots, server-protocol, rest]
+    name: py-test (${{ matrix.shard }})
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+        with:
+          version: ${{ env.MISE_VERSION }}
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+      - run: mise run setup:py
+      - run: mise run test:py -- --durations=25 $(mise exec -- uv run python scripts/pytest_shards.py args "$SHARD")
         env:
+          SHARD: ${{ matrix.shard }}
           HYPOTHESIS_PROFILE: ci
-      # Performance budgets (AGENTS.md, section 12): serial, alone on the runner. pytest-benchmark
-      # switches itself off under xdist, so these never go through `-n`.
+      - run: mise exec -- uv cache prune --ci
+
+  # Performance budgets (AGENTS.md, section 12): serial, alone on its runner (no other job shares
+  # it). pytest-benchmark switches itself off under xdist, so these never go through `-n`.
+  py-perf:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.py == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+        with:
+          version: ${{ env.MISE_VERSION }}
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+      - run: mise run setup:py
       - run: mise run test:perf
         env:
           HYPOTHESIS_PROFILE: ci
-      # Golden replays (SIM-16): the current version re-simulates (also in pytest), and
-      # the files of earlier commits stay frozen against the base branch.
+      - run: mise exec -- uv cache prune --ci
+
+  # Golden replays (SIM-16): the current version re-simulates (also in pytest), and
+  # the files of earlier commits stay frozen against the base branch.
+  py-golden:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.py == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # HEAD^1 (the base branch of a PR merge commit) for check_golden_frozen.py.
+          fetch-depth: 2
+      - uses: jdx/mise-action@v5
+        with:
+          version: ${{ env.MISE_VERSION }}
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+      - run: mise run setup:py
       - run: mise run golden:check HEAD^1
       - if: failure()
         uses: actions/upload-artifact@v7
@@ -145,13 +215,36 @@ jobs:
           name: replay-divergence
           path: replay-divergence
           if-no-files-found: ignore
-      # Keep only what this run used before the cache is saved (what setup-uv did).
       - run: mise exec -- uv cache prune --ci
+
+  # Required check `py`: green only when every Python job above is green. It runs with
+  # `always()`, so a failed or cancelled job makes it red instead of skipping it (a skipped
+  # required check counts as passed); it is skipped exactly when the jobs above are skipped
+  # by the `changes` filter.
+  py:
+    needs: [changes, py-check, py-test, py-perf, py-golden]
+    if: ${{ always() && (needs.changes.result != 'success' || needs.changes.outputs.py == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: all Python jobs passed
+        env:
+          RESULTS: >-
+            py-check=${{ needs.py-check.result }}
+            py-test=${{ needs.py-test.result }}
+            py-perf=${{ needs.py-perf.result }}
+            py-golden=${{ needs.py-golden.result }}
+        run: |
+          status=0
+          for r in $RESULTS; do
+            echo "$r"
+            [ "${r#*=}" = success ] || status=1
+          done
+          exit "$status"
 
   # Long full-match tests (mark `slow`: win rates of the bots against random_legal over many
   # seeds, seed variability, the tournament harness over all bots). Not a required check, so it
   # does not delay the merge; it runs in parallel with `py` on every PR and push to develop and
-  # must be green before a release. Same skip rules as `py`.
+  # must be green before a release. Same skip rules as the Python jobs.
   py-slow:
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.py == 'true') }}
@@ -233,11 +326,18 @@ jobs:
   # Screenshot tests of the map scenes (CLI-04, #60): Playwright against the dev server, the
   # references are apps/client/visual/**-snapshots. Not a required check: software WebGL and fonts
   # of the runner may differ from the machine that recorded the references; refresh them with
-  # `mise run test:visual` (Linux ones: see apps/client/visual/README.md).
+  # `mise run test:visual` (Linux ones: see apps/client/visual/README.md). Four shards of
+  # Playwright's own `--shard` (#798); `--fully-parallel` lets a shard split a spec file by test
+  # (the tests are independent pages), so the shards are even. Each shard is a check of its own.
   visual:
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.web == 'true') }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    name: visual (${{ matrix.shard }}/4)
     steps:
       - uses: actions/checkout@v7
         with:
@@ -255,11 +355,11 @@ jobs:
       - run: mise run setup:client
       # The system libraries of Chromium (apt); the task `visual:browser` then only finds the browser.
       - run: mise exec -- pnpm -C apps/client exec playwright install --with-deps chromium
-      - run: mise run test:visual
+      - run: mise run test:visual -- --fully-parallel --shard=${{ matrix.shard }}/4
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: visual-diff
+          name: visual-diff-${{ matrix.shard }}
           path: apps/client/node_modules/.playwright
           if-no-files-found: ignore
 

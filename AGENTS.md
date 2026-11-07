@@ -85,10 +85,10 @@ List the tasks with `mise tasks`; a task's arguments with `mise run <task> --hel
 `mise run -o prefix <task>` brings back the task labels.
 
 A new or changed project command is edited in `mise.toml` and in this table in the same PR. If a task from the table
-does not work, that is a bug: fix it. CI installs the tools with `jdx/mise-action` and calls the same tasks (`check:py`, `test:py`,
-`test:perf`, `golden:check HEAD^1`, `check:client`, `test:client`, `build`, `regen:protocol`, `regen:api`, `e2e:up`),
+does not work, that is a bug: fix it. CI installs the tools with `jdx/mise-action` and calls the same tasks (`check:py`, `check:shards`, `test:py`
+(in shards by path), `test:perf`, `golden:check HEAD^1`, `check:client`, `test:client`, `build`, `regen:protocol`, `regen:api`, `test:visual` (in shards), `e2e:up`),
 so a task that passes locally is what CI runs; the tasks `check`, `test`, `test:perf`, `golden:check` repeat what the
-jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in `.github/workflows/ci.yml`.
+Python jobs (the required check `py`) and the job `web` run. A tool version is edited only in `mise.toml`, never in `.github/workflows/ci.yml`.
 
 ### For agents
 
@@ -109,8 +109,15 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
   (and `SBF_E2E_*` for `e2e`). Direct `docker compose ...` without `-p` lands in the owner's stack: do not use it
   (`docker compose down` there too). Agents also must not run `deploy/deploy-test.sh`, `deploy/deploy.sh`,
   `deploy/backup.sh`, `deploy/restore.sh` (they work with the project `skill-based-front`).
-- Before pushing: `mise run check` and `mise run test` (plus `test:perf`, `golden:check` and `build` if you changed
-  the simulation or the client; everything together: `mise run ci`).
+- **Before pushing: check only what you touched** (#798); GitHub runs everything else in parallel jobs.
+  One command does it: `mise run check:changed` (the diff against `origin/develop`; `--dry-run` prints the plan). By hand
+  it is: `mise run check`, plus the tests of the touched packages (`mise run test:py -- packages/sim`, `-- apps/bots`
+  and so on, `mise run test:client` for the client), plus `golden:check` when the simulation or a ruleset changed,
+  `regen` when the protocol, the server API or the simulation changed (commit what it regenerates), `build` when the
+  client changed, and `shots` when the look changed (section 7.5). **Locally do not run** `test:perf`, `test:slow` or
+  the full `ci`: timing on a machine shared by agents is noise, and CI runs them on its own runners (`test:bench`
+  only when a task is about performance). When a CI job fails, fix it from its log (`gh run view --log-failed`) and
+  rerun the touched part locally; `mise run ci` stays for a person who wants the whole set.
 
 ### Tasks
 
@@ -124,18 +131,20 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `check:e2e` | prettier and tsc of the `e2e/` package | QA-02 |
 | `check:i18n` | UI strings only in dictionaries, the same keys in every locale dictionary (part of `test:client`) | CLI-11 |
 | `test` | quick run: `test:py` and `test:client` | INF-02 |
-| `test:py` | `pytest -n auto -m "not perf and not slow"` (pytest-xdist; this is how the required job `py` runs; in CI `HYPOTHESIS_PROFILE=ci`) | INF-02 |
+| `test:py` | `pytest -n auto -m "not perf and not slow"` (pytest-xdist; in CI `HYPOTHESIS_PROFILE=ci`, one job per shard of `scripts/pytest_shards.py`, `mise run test:py -- <paths>`); test paths after `--` run one package | INF-02 |
+| `check:shards` | the CI shards of `test:py` (`scripts/pytest_shards.py`) together collect exactly the tests of one `test:py` run, each in one shard, and their names match the matrix of the job `py-test` (job `py-check`) | #798 |
+| `check:changed` | **for agents, before a push:** `check`, then by the diff against a base (argument, `origin/develop` by default; `--dry-run` prints the plan) the tests of the touched packages, `golden:check`, `regen`, `test:client`, `build` (`scripts/check_changed.py`); no `test:perf`, `test:slow` | #798 |
 | `test:client` | Vitest of the client | INF-03 |
 | `test:visual` | snapshots of the dev scenes against the references, like the job `visual` (not required; Playwright Chromium installs itself, the dev server starts on port 5199). References are updated per `apps/client/visual/README.md` | CLI-04 |
 | `shots` | **for agents:** a PNG of every dev scene and of the replay viewer in `.shots/<label>/` (label as an argument, `current` by default; the directory is outside git), without comparing to a reference; look at them yourself with Read. The dev server runs on a free port, Playwright stops it itself. Needs a POSIX shell | #332 |
 | `shots:publish` | **for agents:** PNGs from `.shots/` to the branch `shots/<number>` in origin (it holds only images, is not merged; delete it after the PR is merged) and prints markdown links for the PR description (argument: issue or PR number). Needs bash | #332 |
 | `test:all` | the whole pytest in one go, without `-n` (slow) | INF-02 |
 | `test:slow` | long tests of full bot matches (mark `slow`, not required job `py-slow`) | BOT-04 |
-| `test:perf` | benchmarks and tick lag (mark `perf`), strictly sequential: xdist disables the measurements; a step of the job `py` | SIM-15 |
+| `test:perf` | benchmarks and tick lag (mark `perf`), strictly sequential: xdist disables the measurements; the job `py-perf`, alone on its runner | SIM-15 |
 | `test:bench` | simulation benchmarks and the budgets of section 12 (`docs/perf.md`) | SIM-15 |
 | `golden:check` | golden replays are re-simulated (`python -m gow_sim.replay check`) and unchanged relative to the base (`scripts/check_golden_frozen.py`; argument: a git ref, `origin/develop` by default; CI: `HEAD^1`) | SIM-16 |
 | `golden:generate` | create the golden replays `v{SIM_VERSION}` (after raising `SIM_VERSION`; does not overwrite an existing directory) | SIM-16 |
-| `ci` | what the jobs `py` and `web` run, locally: `check`, `test`, `golden:check`, `build` in parallel, then `test:perf` last and alone (timing benchmarks do not compete with the other load) | #301, #653 |
+| `ci` | for a person who wants the whole set (agents use `check:changed`): what the Python jobs and `web` run, locally: `check`, `test`, `golden:check`, `build` in parallel, then `test:perf` last and alone (timing benchmarks do not compete with the other load) | #301, #653 |
 | `dev` | dev servers together: the game server (`dev:server`, port 8000) and the client (`dev:client`, `http://localhost:5173`, Vite proxies `/api` and `/ws`) | SRV-01 |
 | `build` | production build of the client | INF-03 |
 | `preview` | `build` and a local preview of the production build under the target CSP (`apps/client/csp.ts`) | INF-03 |
@@ -464,7 +473,7 @@ Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). I
   - `type`: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`.
   - `scope`: `sim`, `protocol`, `server`, `bots`, `client`, `maps`, `infra`, `docs`.
 - **A PR** into `develop`, the description has `Closes #<number>` and the acceptance criteria ticked. `develop` is the default branch on GitHub (otherwise `Closes` does not close the issue). `main` is for releases only.
-- **CI:** the required checks are `py`, `web` and `docker` (`.github/workflows/ci.yml`, details in the README). The not required `py-slow` runs the tests marked `slow` (long statistical bot matches); mark a new test longer than about 5 s per full match with `@pytest.mark.slow`, and timing measurements with `@pytest.mark.perf`. Merge only when all required checks are green (`gh pr checks <PR> --watch`; analyze a red `py-slow`, but it does not block). GitHub does not enforce this: branch protection is unavailable on the current plan, and the rule rests on the process.
+- **CI:** the required checks are `py`, `web` and `docker` (`.github/workflows/ci.yml`, details in the README); `py` is green only when its parallel jobs `py-check`, `py-test (<shard>)`, `py-perf` and `py-golden` are (#798). The not required `py-slow` runs the tests marked `slow` (long statistical bot matches); mark a new test longer than about 5 s per full match with `@pytest.mark.slow`, and timing measurements with `@pytest.mark.perf`. Merge only when all required checks are green (`gh pr checks <PR> --watch`; analyze a red `py-slow`, but it does not block). GitHub does not enforce this: branch protection is unavailable on the current plan, and the rule rests on the process.
 - **Templates:** `.github/pull_request_template.md` (the Definition of Done checklist below) and `.github/ISSUE_TEMPLATE/` (feature, bug, decision). If you change the Definition of Done, change the PR template too.
 - **`Closes #N` closes the issue automatically** when the PR is merged into `develop` (the default branch). A PR that must **not** close its issue (a docs-only or mockup PR of a decision issue, one step of a multi-step issue) writes `Refs #N` instead. After the merge check that the issue is closed (`gh issue view <N>`); if it is still open, close it: `gh issue close <N> --comment "Done in #<PR>"`.
 
