@@ -413,6 +413,56 @@ for (const shot of ETAS) {
   });
 }
 
+// The capture of a city, "Fitted" (#819, ui-style 49): `?flood=<ms>,<node>:<owner before>` holds a
+// capture under way on a frozen scene at that age. `capture-<case>-<ms>.png` is the map alone: own
+// (artery, Forkway taken from the enemy) frame by frame, the enemy's (calmer), two at once, one in
+// the fog, one on a map with a geography (non-convex areas), "less motion", and grey scale. No references.
+const CAPTURES = [
+  ...[0, 150, 300, 500, 700, 900, 1200].map((ms) => ({
+    name: 'own',
+    scene: 'artery',
+    tick: 2400,
+    nodes: '4:1',
+    ms,
+  })),
+  ...[300, 600].map((ms) => ({ name: 'enemy', scene: 'artery', tick: 2400, nodes: '5:0', ms })),
+  { name: 'two', scene: 'artery', tick: 2400, nodes: '4:1,5:0', ms: 400 },
+  { name: 'fog', scene: 'artery', tick: 2400, nodes: '20:0', ms: 400 },
+  ...[250, 550].map((ms) => ({ name: 'geo', scene: 'forts_geo', tick: 1200, nodes: '7:1', ms })),
+] as const;
+
+for (const shot of CAPTURES) {
+  test(`shot of a capture under way (${shot.name}, ${String(shot.ms)} ms)`, async ({ page }) => {
+    await page.goto(`/?scene=${shot.scene}&flood=${String(shot.ms)},${shot.nodes}`);
+    // The frame is as old as the flood: 10 ticks a second.
+    const tick = String(shot.tick + shot.ms / 100);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', tick);
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.addStyleTag({ content: '.hud { display: none !important; }' });
+    await page.mouse.move(5, 5);
+    // The city body flips over 120 ms of real time.
+    await page.waitForTimeout(400);
+    await page
+      .locator('canvas')
+      .screenshot({ path: join(OUT, `capture-${shot.name}-${String(shot.ms)}.png`) });
+    if (shot.name === 'own' && shot.ms === 300) {
+      await page.evaluate(`document.documentElement.style.filter = 'grayscale(1)'`);
+      await page.locator('canvas').screenshot({ path: join(OUT, 'capture-own-300-gray.png') });
+    }
+  });
+}
+
+test('shot of a capture under way with less motion (own, 100 ms)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/?scene=artery&flood=100,4:1');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2401');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.addStyleTag({ content: '.hud { display: none !important; }' });
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(400);
+  await page.locator('canvas').screenshot({ path: join(OUT, 'capture-reduced-100.png') });
+});
+
 // The still frame of the comet under "less motion" (H10, #627), in colour and in grey scale.
 test('shot of the travel time of an order, less motion (artery-bend)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });

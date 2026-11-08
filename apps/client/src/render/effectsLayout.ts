@@ -25,12 +25,7 @@ export function numbersLook(t: number, reduced: boolean): { alpha: number; rise:
   };
 }
 
-/** The capture wave grows quickly and slows down (ease out), and fades out. */
-export function waveLook(t: number): { scale: number; alpha: number } {
-  return { scale: t * (2 - t), alpha: 1 - t };
-}
-
-/** How long the flag over a captured city stays (ui-style 29.1: the wave, then the flag). */
+/** How long the flag over a captured city stays (ui-style 29.1; the light of a capture comes first, #819). */
 export const FLAG_MS = 1600;
 
 /** The flag of a capture stays whole, then fades over its last 1.0 s of 1.6 s. */
@@ -48,14 +43,6 @@ export function starPolygon(outer: number, inner: number, points: number): numbe
     out.push(radius * Math.cos(angle), radius * Math.sin(angle));
   }
   return out;
-}
-
-/** The polygon `cell` scaled by `scale` about `centre`, as x, y, x, y... */
-export function scaledPolygon(cell: readonly Point[], centre: Point, scale: number): number[] {
-  return cell.flatMap((p) => [
-    centre.x + (p.x - centre.x) * scale,
-    centre.y + (p.y - centre.y) * scale,
-  ]);
 }
 
 export interface CaptureInfo {

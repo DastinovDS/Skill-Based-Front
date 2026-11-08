@@ -78,6 +78,13 @@ function quadsOf(g: Graphics): Quad[] {
     );
 }
 
+/** The cached glow of the territory, in its holder. */
+function glowOf(layers: MapLayers): Container | undefined {
+  return layers.layer.territory.children
+    .find((c) => c.label === 'territory-glow-holder')
+    ?.children.find((c) => c.label === 'territory-glow');
+}
+
 describe('MapView, the roads of R1', () => {
   let layers: MapLayers;
   let view: MapView;
@@ -87,8 +94,9 @@ describe('MapView, the roads of R1', () => {
       (layers.layer.roads.children.find((c) => c.label === label)?.children ?? []) as Graphics[];
     const per = map.edges.length;
     expect(group('road-casings')).toHaveLength(per * 2);
-    // The first of the lanes is the one Graphics of all the dashes.
-    expect(group('road-lanes')).toHaveLength(per * 2 + 1);
+    // The first of the lanes is the one Graphics of all the dashes, the last the dashes of the
+    // roads a capture runs out along (#819).
+    expect(group('road-lanes')).toHaveLength(per * 2 + 2);
     return {
       casings: group('road-casings').slice(0, 2),
       lanes: group('road-lanes').slice(1, 3),
@@ -281,8 +289,7 @@ describe('MapView, the roads of R1', () => {
 describe('MapView, the glow along the borders of the territories (BL1, #347)', () => {
   let layers: MapLayers;
   let view: MapView;
-  const glow = (): Container | undefined =>
-    layers.layer.territory.children.find((c) => c.label === 'territory-glow');
+  const glow = (): Container | undefined => glowOf(layers);
   /** Owners: every city of the first half of the map is player 0's, of the second half player 1's. */
   const halves = (): (0 | 1)[] => map.nodes.map((_, i) => (i < map.nodes.length / 2 ? 0 : 1));
 
@@ -302,10 +309,11 @@ describe('MapView, the glow along the borders of the territories (BL1, #347)', (
     expect(glow()?.visible).toBe(true);
     // The blur runs inside the cache (a filter on a cached container would run every frame).
     expect(glow()?.filters ?? []).toHaveLength(0);
-    expect(layer.indexOf(glow() as Container)).toBeGreaterThan(
+    // In a holder that the floods of captures mask (#819).
+    expect(index('territory-glow-holder')).toBeGreaterThan(
       layer.findIndex((c) => c instanceof Graphics),
     );
-    expect(index('territory-glow')).toBeLessThan(layer.length - 1);
+    expect(index('territory-glow-holder')).toBeLessThan(layer.length - 1);
     expect(layer[layer.length - 1]).toBeInstanceOf(Graphics);
   });
 
@@ -348,7 +356,7 @@ describe('MapView, the glow along the borders of the territories (BL1, #347)', (
   });
 });
 
-describe('MapView, a capture cross-fades the territory (#508)', () => {
+describe('MapView, a capture floods the area of the node (#819)', () => {
   const map = DEFAULT_MAP;
   let layers: MapLayers;
   let view: MapView;
@@ -390,25 +398,71 @@ describe('MapView, a capture cross-fades the territory (#508)', () => {
     expect(fills().get(ENEMY)).toHaveLength(map.nodes.length);
   });
 
-  it('fades the old colour out and the new one in over a capture, then settles', () => {
+  const floods = (): number =>
+    layers.layer.territory.children.find((c) => c.label === 'flood-fill')?.children.length ?? 0;
+
+  it('floods a captured area: the flood draws it until it lands, then the map does (#819)', () => {
     view.setOwners(all(0));
     view.setOwners(all(1), true);
-    // Nothing has moved yet: the old colour is whole.
-    const start = fills();
-    expect(start.get(YOU)?.[0]).toBeGreaterThan(0);
-    view.advance(100);
-    const mid = fills();
-    const you = mid.get(YOU)?.[0] ?? 0;
-    const enemy = mid.get(ENEMY)?.[0] ?? 0;
-    expect(you).toBeGreaterThan(0);
-    expect(enemy).toBeGreaterThan(0);
-    expect(you).toBeLessThan(start.get(YOU)?.[0] ?? 0);
-    view.advance(2000);
+    // The areas under way are the floods' (fill, glow and rim meshes), not the map's tint.
     expect(fills().get(YOU)).toBeUndefined();
+    expect(fills().get(ENEMY)).toBeUndefined();
+    expect(floods()).toBe(map.nodes.length);
+    expect(view.captures).toHaveLength(map.nodes.length);
+    // The enemy took them: the calmer look.
+    expect(view.captures.every((c) => c.calm && c.from === 0 && c.to === 1)).toBe(true);
+    view.advance(500);
+    expect(floods()).toBe(map.nodes.length);
+    expect(view.captures[0]?.look.pos).toBeGreaterThan(0);
+    view.advance(1000);
+    expect(floods()).toBe(0);
+    expect(view.captures).toHaveLength(0);
     expect(fills().get(ENEMY)).toHaveLength(map.nodes.length);
     // Done: another call changes nothing.
     view.advance(100);
     expect(fills().get(ENEMY)).toHaveLength(map.nodes.length);
+  });
+
+  it('floods only the areas that changed hands, and an own capture is not calm', () => {
+    view.setOwners(all(1));
+    const next = all(1);
+    next[0] = 0;
+    view.setOwners(next, true);
+    expect(view.captures.map((c) => [c.node, c.calm])).toEqual([[0, false]]);
+    expect(fills().get(ENEMY)).toHaveLength(map.nodes.length - 1);
+    expect(floods()).toBe(1);
+  });
+
+  it('keeps a flood running over snapshots that change nothing', () => {
+    view.setOwners(all(0));
+    view.setOwners(all(1), true);
+    view.advance(300);
+    view.setOwners(all(1), true);
+    expect(view.captures[0]?.ms).toBe(300);
+    expect(floods()).toBe(map.nodes.length);
+  });
+
+  it('ends the floods at once on a call that does not animate, and in the «Supply» mode', () => {
+    view.setOwners(all(0));
+    view.setOwners(all(1), true);
+    view.setOwners(all(1));
+    expect(floods()).toBe(0);
+    view.setOwners(all(0), true);
+    expect(floods()).toBe(map.nodes.length);
+    view.setSupplyMode(true);
+    expect(floods()).toBe(0);
+  });
+
+  it('holds the floods at an age for the dev scenes', () => {
+    view.holdFloods(400);
+    view.setOwners(all(0));
+    view.setOwners(all(1), true);
+    view.advance(16);
+    view.advance(5000);
+    expect(view.captures[0]?.ms).toBe(400);
+    view.holdFloods(null);
+    view.advance(1000);
+    expect(view.captures).toHaveLength(0);
   });
 });
 
@@ -446,7 +500,7 @@ describe('MapView, the terrain mode (#429)', () => {
 
   it('keeps the glow of the territory in the terrain mode, unlike «Supply»', () => {
     view.setOwners(map.nodes.map((_, i) => (i % 2 === 0 ? 0 : 1)));
-    const glow = layers.layer.territory.children.find((c) => c.label === 'territory-glow');
+    const glow = glowOf(layers);
     expect(glow?.visible).toBe(true);
     view.setTerrainMode(true);
     expect(glow?.visible).toBe(true);

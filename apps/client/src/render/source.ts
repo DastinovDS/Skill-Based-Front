@@ -1,4 +1,4 @@
-import type { EventMsg } from '../protocol.gen.ts';
+import type { EventMsg, PlayerId } from '../protocol.gen.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 
 /**
@@ -74,6 +74,13 @@ export interface RenderSource {
    * the part done of the line of an own build. Without it an own build shows no part done.
    */
   readonly fortBuildTicks?: number;
+  /**
+   * Dev scenes only (#819): the owners of the nodes just before the first snapshot, so that a frozen
+   * scene shows the capture of the nodes whose owner differs as under way.
+   */
+  readonly floodFrom?: readonly (PlayerId | null)[];
+  /** Dev scenes only: the captures under way stay this old (ms), to be looked at frame by frame. */
+  readonly floodHoldMs?: number;
   /** The frame to draw now; `null` until the first snapshot. */
   frame(): RenderFrame | null;
   /**

@@ -5,6 +5,7 @@ import { barTop, cityRadius, lockedPlaces, vpBadgeAt, showsBarracks } from './ci
 import { columnKinds, columnSlots, markScale } from './defenseLayout.ts';
 import {
   CAPITAL_RADIUS,
+  CAPTURE,
   ENEMY,
   NODE_RADIUS,
   PROVINCE,
@@ -136,8 +137,8 @@ function stateKey(s: CityState): string {
  * for a look (a unit ready with no room, production stopped by a fight) is a sprite of its own and
  * pulses (`pulse`). `destroy()` releases every object (the textures belong to the cache).
  */
-/** How long a replaced city body takes to fade out, ms. */
-const BODY_FADE_MS = 450;
+/** How long a replaced city body takes to fade out, ms: the city flips at the start of a capture (#819). */
+const BODY_FADE_MS = CAPTURE.cityMs;
 
 export class CityView {
   private readonly cities: Container[];

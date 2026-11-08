@@ -692,8 +692,9 @@ drawn **only from server data**: the view field `fights` and the events `fight_r
   the winner stayed, the node is not taken), the other row a thin grey outline and no glyph. When nobody won there is no outline and no glyph. The words "Captured", "Held" and "Both retreated" are gone from the map.
   For the events of old replays (`fight`, `sim_version` before 10) the rows stand without an outline or a glyph.
 - **A bounce** of the attacker: a short arrow back along the edge in the attacker's color with dashes, 1 s.
-- **City capture**: a wave in the color of the new owner from the center over the cell, 500 ms, and a white ring from the city (the radius by the strength
-  of the effects), a flag of the new owner above the city for 1.6 s (it fades during the last 1.0 s); a toast "City 7 captured".
+- **City capture** ("Fitted", the owner's choice of 2026-11-08, #819, section 49): the new owner's colour floods the area from the city in the shape of the area and
+  reaches the whole border at once in 1.0 s; the border lines, the glow and the roads join as the front reaches them; one flash at the city and a ring of the owner's colour
+  (the enemy's captures: no flash, the lights at half); a flag of the new owner above the city for 1.6 s (it fades during the last 1.0 s); a toast "City 7 captured".
 - **Fight effects on the map FX3 "Expressive", the strength "Stronger"** (the owner's decision of 2026-10-21, sections 27.3 and 29.4; #351):
   on top of the arena, under the plates, in the `effects` layer, above the haze where the fight is visible. Everything is computed from the view fields and events
   (`fight_round`: shots, virtual, losses; `FightView`: charged, the ◇ stock, silent, `next_round_tick`), the client does not compute the outcome. The times are in fractions of the round `combat.round_ticks` (a round of 2 s: a wind-up of 0.35 s before the tick, a hit of 0.6 s after it, 0.3 s for oncoming
@@ -973,7 +974,7 @@ The same frame 13.1, the text of width 680 px, 16 px, line height 1.5; the langu
     stood (an arrival into a city icon, a kill) and is destroyed when gone; a token that returns while fading is taken back;
   - a token whose number of units changes (a merge, a split, a loss) swells to 1.14 and settles in 260 ms;
   - the charge fill eases (section 9.5); a captured city keeps its old body on top of the new one and fades it out
-    (450 ms); the territory (fill and border lines) cross-fades over 450 ms, the cached glow switches once at 40%;
+    (120 ms since #819); the territory floods from the city in 1.0 s (section 49, it replaced the 450 ms cross-fade);
   - the wheel zoom sets a goal and the camera eases to it around the pointer (time constant 80 ms; a spin adds
     notches to the goal); "Fit map" and the jump to an alert glide 380 ms (ease-out); a drag takes over at once;
   - not changed, on purpose: the fog veil is one cached blurred texture, a cross-fade of two such layers would
@@ -1268,7 +1269,7 @@ the new ones are marked **[proposed]**.
 | Feedback to an action (an order ghost, highlight) | up to 100 ms | at once |
 | Unfolding of the radial menu | 140 ms, scale 0.4 → 1 with opacity | ease-out |
 | Shake of the ghost on a server rejection | 200 ms | as implemented |
-| Wave of a city capture | 500 ms | as implemented |
+| Flood of a city capture (#819, section 49) | 1.0 s, the city flips in 120 ms, the flash 0.32 s | ease-out quad, the flash fades squared |
 | Toast | up to 6 s on screen, appearing and leaving **[proposed]** 200 ms (`transition` on `opacity` and `transform`) | ease-out, ease-in |
 | Pulse of pinning a scheduled order | 8 ticks (0.8 s), once | sine squared |
 | Pulse of an alert and overflow (goes on while the state exists) | period 0.8 s, alpha 0.5 ↔ 1 | sine (rule 2) |
@@ -2211,3 +2212,20 @@ The owner's choice of 2026-11-07 on the mockup [`mockups/fight-bonus-and-outcome
 - **The outcome: variant 9 "Kill feed".** Replaces the two tinted plates with `−0` and `−2` and the word pill above them. `render/fightView.ts` (`drawFeeds`) and `render/feedLayout.ts`: for each `fight_ended` event within 3 s two rows (118 by 34 px, `FEED` in `style.ts`) beside the node, the own one above. A row is a dark plate, the baked helmet chip of the side (the opponent's faces left, as in the arena), `−N` (the losses of the whole fight, as in the event) and, on the winner's row only, the glyph of `fightResult` (flag for `captured`, shield for `held`). The winner is told by a thick light outline and the glyph, the other row by a thin grey outline, so nothing rests on colour alone (the chip's shape and the side of the pair also tell who is who). A fight nobody won (both retreated) has no outline and no glyph, as in the mockup. The verdict is read from `winner` and `captured` of the event, nothing is computed. The feed slides in from the side of the node's far edge over the first 8 % of its life (not with "less motion"), then fades in the last 30 %.
 - **Several fights ending together.** The feeds are placed one by one by `layoutFeeds` (scaled-world px, like `arenaLayout.ts`): the default spot is up and to the right of the node; if it is taken by another feed, a plate of a fight going on, another city or the edge of the screen, the search tries the other side of the node and blocks above and below it and takes the cheapest. At most six feeds at once.
 - **Left out on purpose.** The bonus source is not drawn, and the blinking of the unit's chevron badge on a bonus shot (an option of the mockup) is not done.
+
+## 49. City capture: the Fitted flood (#819) **[accepted]**
+
+The owner's choice of 2026-11-08 on the mockup [`mockups/city-capture.html`](mockups/city-capture.html) (round 2, variation 2 "Fitted"; round 1 picked the Flood direction). Client only: no protocol, simulation or ruleset change. It replaces the 450 ms cross-fade, the wave over the cell and the white ring of a capture (#508); the small flag, the toast, the sound, the edge marker of a lost city and the kill feed stay as they were.
+
+- **When.** On the snapshot that already shows the new owner (`MapScene` sees the owner change, AGENTS.md 7.1, 7.3), never earlier. A picture that jumped (a replay scrubbed back or more than 2 s ahead, a reconnect) and the «Supply» mode draw the new owners at once.
+- **The front** (`captureLayout.ts`, `floodView.ts`): the new owner's tint grows from the city in the shape of the node's own area (the area's outline scaled from the city, so the front reaches the whole border at the same moment) in 1.0 s, ease-out quad, with a soft edge of 18 % of the way. The field is worked out per pixel by a small shader from the area's reach round the city (256 rays, the farthest crossing of each, smoothed: an inlet or a river mouth does not tear the front). The old tint goes under the front by a mix, not by stacking two tints.
+- **The layers join as the front reaches them** (`CAPTURE` in `style.ts`): the city body flips in the first 120 ms (the old baked body fades over the new one); the territory fill follows the front; the cached border glow before and after the capture are both kept as textures for the length of the flood and mixed by the same field, so the new glow arrives with the front and the map's own glow is masked out over the area and its neighbours meanwhile; the border lines of the area cross-fade when the front reaches the border (just inside it), the neighbours' lines a moment later (just outside it); each road of the node shows its new look from the city outward as the front runs along it (a cut 1.15 times as fast as the front); what is left outside the area (the neighbours' side of the border) settles from 0.86 to 1.12 s. The capacity ring, the warehouse bar and the units switch at once, as before.
+- **The light.** A soft rim of the new owner's colour rides just inside the front (a mix toward the colour by 0.42 of a Gaussian band, plus a tenth of it added), fading in over the first 8 % and out over the last 22 %; it lies over the border lines and under the roads, the cities and the veil. At the city one flash of the particle glow (alpha 0.55, 0.32 s, 3.4 city radii) and a ring of the owner's colour leaving it (0.5 s), in the `effects` layer.
+- **The enemy's captures are calmer**: no flash, the rim and the ring at half.
+- **In fog** the same flood plays under the fog veil, which dims it; ownership is public, nothing extra is drawn or hidden.
+- **Two captures at once** each run their own flood (own field, own clock); the glow of a neighbour shared by two goes to the first, so nothing is drawn twice.
+- **A capital.** When the match ends by the capture of a capital (`match_end.reason = capital_captured`), the result screen opens 1.7 s after `match_end` (`CAPITAL_RESULT_DELAY_MS`: 0.2 s until the last snapshot is drawn, the 1.0 s flood, 0.5 s on the settled frame); the snapshot buffer lets the render time run on to the last snapshot once the match is over. Every other end opens the result at once.
+- **Replays** play the same flood: the viewer draws the owners of its frames through the same scene.
+- **"Less motion"**: a 0.2 s cross-fade of the fill, the glow and the border lines, the roads at once, no travel and no light; the flag stays.
+- **Cost.** Per capture three meshes of the area's outline (fill, glow, rim) with a tiny shader, triangulated once; only a few uniforms change per frame. Two world-sized glow textures at half resolution live for the length of the flood; nothing has a filter, the glow cache is drawn once at the start as before. The border lines and the roads of the node are restroked per frame while the flood runs, as the old cross-fade did.
+- **Looking at it.** A frozen dev scene can show a capture under way: `?flood=<ms>,<node>:<owner before>,...` (`0`, `1` or `n` for nobody), for example `/?scene=artery&flood=300,4:1`; `mise run shots` takes `capture-*.png` this way.

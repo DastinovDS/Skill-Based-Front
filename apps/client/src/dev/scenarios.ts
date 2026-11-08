@@ -14,6 +14,7 @@ import type {
   EventMsg,
   HalfView,
   NodeView,
+  PlayerId,
   RulesetPublic,
   Seen,
   SnapshotMsg,
@@ -764,6 +765,59 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
   },
 ];
 
+/**
+ * A capture under way on a frozen scene (#819, `?flood=<ms>,<node>:<owner before>,...`): the nodes
+ * had the owner before (`0`, `1` or `n` for nobody) and the scene's owner now, and the flood is `ms`
+ * old. The frames of `mise run shots` (`capture-*.png`) are taken this way.
+ */
+export interface FloodPin {
+  readonly ms: number;
+  readonly nodes: readonly { readonly node: number; readonly from: PlayerId | null }[];
+}
+
+/** `?flood=` read; `null` when absent or malformed. */
+export function parseFlood(value: string | null): FloodPin | null {
+  if (value === null) return null;
+  const [msText, ...parts] = value.split(',');
+  const ms = Number(msText);
+  if (!Number.isFinite(ms) || ms < 0 || parts.length === 0) return null;
+  const nodes: { node: number; from: PlayerId | null }[] = [];
+  for (const part of parts) {
+    const [nodeText, fromText] = part.split(':');
+    const node = Number(nodeText);
+    if (!Number.isInteger(node) || node < 0) return null;
+    if (fromText === '0' || fromText === '1')
+      nodes.push({ node, from: Number(fromText) as PlayerId });
+    else if (fromText === 'n') nodes.push({ node, from: null });
+    else return null;
+  }
+  return { ms, nodes };
+}
+
+/** The owners of the scene before the capture of `flood`. */
+function floodOwners(snapshot: SnapshotMsg, flood: FloodPin): (PlayerId | null)[] {
+  const owners = snapshot.view.nodes.map((node) => node.owner);
+  for (const { node, from } of flood.nodes) if (node < owners.length) owners[node] = from;
+  return owners;
+}
+
+/** The `node_captured` events of `flood`, at the tick of the scene (the flag over each city). */
+function floodEvents(scene: FixtureScene, flood: FloodPin): EventMsg[] {
+  return flood.nodes.flatMap(({ node }) => {
+    const owner = scene.snapshot.view.nodes[node]?.owner;
+    return owner === 0 || owner === 1
+      ? [
+          {
+            type: 'event' as const,
+            tick: scene.snapshot.tick,
+            kind: 'node_captured',
+            data: { node, player: owner },
+          },
+        ]
+      : [];
+  });
+}
+
 /** The scene that is not a fixture: a live match against the dev server (`dev/devServer.ts`). */
 export const DEMO_SCENE = 'demo';
 
@@ -772,15 +826,24 @@ export const DEMO_SCENE = 'demo';
  * rendering at another tick (`?at=397.5`; fractional too): the effects of the fights are functions of the
  * render tick, so a round can be looked at frame by frame (`mise run shots`, the shots of #352).
  */
-export function frozenSource(scene: FixtureScene, at?: number): RenderSource {
+export function frozenSource(scene: FixtureScene, at?: number, flood?: FloodPin): RenderSource {
+  // A capture under way (#819) is seen `flood.ms` after it: the flag of its event is that old too.
+  const floodAt =
+    flood === undefined ? undefined : scene.snapshot.tick + (flood.ms * DEV_RULES.tick_hz) / 1000;
+  const tick = at ?? floodAt;
   // `interpolateFrame` holds the tick inside the snapshot: a later render tick is the snapshot taken then.
-  const snapshot = at === undefined ? scene.snapshot : { ...scene.snapshot, tick: at };
+  const snapshot = tick === undefined ? scene.snapshot : { ...scene.snapshot, tick };
   const frame: RenderFrame = interpolateFrame(snapshot, null, snapshot.tick);
   const rules = scene.rules ?? DEV_RULES;
   const v2 = rules.economy.model === 'v2';
+  const events =
+    flood === undefined ? scene.events : [...scene.events, ...floodEvents(scene, flood)];
   return {
     frame: () => frame,
-    events: () => scene.events,
+    events: () => events,
+    ...(flood === undefined
+      ? {}
+      : { floodFrom: floodOwners(scene.snapshot, flood), floodHoldMs: flood.ms }),
     // Economy v2: a plan has no delay, it gathers its bonus (DEC-41, item 10).
     orderDelays: { planned: v2 ? 0 : rules.orders.planned_delay_ticks },
     roundTicks: DEV_RULES.combat.round_ticks,

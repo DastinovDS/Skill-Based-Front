@@ -14,8 +14,20 @@ import type { MapLayers } from './layers.ts';
 import { borderPermille } from './fogLayout.ts';
 import { reducedMotion } from './motion.ts';
 import { levelRim, levelShare, type RimSegment } from './levelLayout.ts';
-import { territoryBorders, type CellEdge } from './regionLayout.ts';
+import { territoryBorders, type Border, type CellEdge } from './regionLayout.ts';
 import { easeOutCubic } from './tween.ts';
+import {
+  BORDER_FIT,
+  floodLook,
+  glowRegions,
+  neighboursOf,
+  radialReach,
+  revealAt,
+  roadParts,
+  type FloodLook,
+  type Owner,
+} from './captureLayout.ts';
+import { FloodView, premultiplied, type GlowPair } from './floodView.ts';
 import {
   laneDashes,
   laneOffsets,
@@ -54,7 +66,21 @@ import { TerrainView } from './terrainView.ts';
 import { territoryOf } from './territory.ts';
 import type { GeoFile } from '../map/geography.ts';
 
-type Owner = PlayerId | null;
+/** A capture under way on the map (#819): the area of `node` floods from `from` to `to`. */
+export interface Flood {
+  readonly node: number;
+  readonly from: Owner;
+  readonly to: PlayerId | null;
+  /** Where the city stands: the flood grows from it. */
+  readonly at: Point;
+  /** Real time since the flood started, ms. */
+  ms: number;
+  /** The enemy took the node: the calmer look (no flash, the lights at half). */
+  readonly calm: boolean;
+  /** "Less motion" when it started: a short cross-fade instead. */
+  readonly reduced: boolean;
+  look: FloodLook;
+}
 
 /** Dashed (buffer) and dotted (fog) lanes are drawn together; the solid ones per stretch. */
 const isDashed = (style: RoadStyle): boolean => style === 'buffer' || style === 'fog';
@@ -64,9 +90,12 @@ const isDashed = (style: RoadStyle): boolean => style === 'buffer' || style === 
  * under the lanes and the lanes themselves. All four are placed along the road by `place`.
  */
 interface Road {
-  readonly casings: readonly [Graphics, Graphics];
+  /** One band per stretch: two at most, four while a capture runs out along the road (#819). */
+  readonly casings: Graphics[];
   /** The solid lanes of an own road; dashed and dotted lanes are drawn together, see `dashes`. */
-  readonly lanes: readonly [Graphics, Graphics];
+  readonly lanes: Graphics[];
+  /** A capture runs out along it: its dashes are drawn by `floodDashes`, every frame. */
+  flooding: boolean;
   /** The stretches drawn now and the level: what the dashes layer draws of this road. */
   stretches: readonly RoadSegment[];
   level: number;
@@ -85,9 +114,6 @@ export interface RoadLook {
   readonly width: number;
   readonly halves?: readonly { readonly detail: Detail }[];
 }
-
-/** How long the territory takes to change hands on the map, ms (#508). */
-const OWNER_FADE_MS = 450;
 
 /**
  * Static part of the map (ui-style.md 9.1-9.3): the terrain background with its dimming and
@@ -133,13 +159,20 @@ export class MapView {
   private ground: Graphics | null = null;
   private terrainMode = false;
   private owners: readonly Owner[] = [];
-  /** A capture under way: the owners before it, their borders and how long it has run. */
-  private fade: {
-    from: readonly Owner[];
-    fromBorders: ReturnType<typeof territoryBorders>;
-    elapsed: number;
-    glowed: boolean;
-  } | null = null;
+  /** The border lines of `owners`, and of the owners before the first capture under way. */
+  private borders: readonly Border[] = [];
+  private bordersBefore: readonly Border[] | null = null;
+  /** The captures under way (#819), by node, oldest first. */
+  private readonly floods = new Map<number, Flood>();
+  /** The dev scenes hold every flood at this age (ms) to look at it frame by frame; `null`: real time. */
+  private floodHold: number | null = null;
+  private readonly floodView: FloodView;
+  /** The areas next to each area (the glow of a border lies on both sides of it). */
+  private readonly neighbours: number[][];
+  /** The glow before the first capture under way and after the last; `null`: none under way. */
+  private glowPair: GlowPair | null = null;
+  /** Where the floods draw the glow themselves: the map's own glow is masked out there. */
+  private readonly glowHole = new Graphics({ label: 'flood-glow-hole' });
   private readonly cellLines: Graphics;
   private readonly territory: Graphics;
   /** The supply level (T1, DEC-43): lit cells over the tint, and their rim toward the rear. */
@@ -163,6 +196,8 @@ export class MapView {
    * The blur is a filter INSIDE the cached container, so it runs only when the cache is built.
    */
   private readonly glow = new Container({ label: 'territory-glow', visible: false });
+  /** Holds the glow: the floods under way mask it out where they draw it (a cached container keeps its own effects in its cache). */
+  private readonly glowHolder = new Container({ label: 'territory-glow-holder' });
   private readonly glowLines: Record<0 | 1, Graphics> = {
     0: new Graphics({ label: 'glow-lines-0' }),
     1: new Graphics({ label: 'glow-lines-1' }),
@@ -183,6 +218,8 @@ export class MapView {
    * rectangles each, too many vertices to batch, so every road would cost a draw call of its own.
    */
   private readonly dashes: Graphics;
+  /** The dashed lanes of the roads a capture runs out along: redrawn every frame of it. */
+  private readonly floodDashes: Graphics;
   private dashesDirty = false;
   private readonly layers: MapLayers;
 
@@ -219,32 +256,35 @@ export class MapView {
     // the stronger border of the owners, under the roads.
     this.cellLines = layers.layer.territory.addChild(this.drawCellLines());
     this.territory = layers.layer.territory.addChild(new Graphics());
+    // The floods of captures (#819): the fill over the tint, the glow over the map's glow, the rim
+    // over the border lines.
+    const floodFill = layers.layer.territory.addChild(new Container({ label: 'flood-fill' }));
     this.levelFill = layers.layer.territory.addChild(new Graphics({ label: 'level-fill' }));
     this.hoverFill = layers.layer.territory.addChild(new Graphics({ label: 'hover-area' }));
     this.buildGlow(layers.layer.territory, bounds);
+    const floodGlow = layers.layer.territory.addChild(new Container({ label: 'flood-glow' }));
     this.borderLines = layers.layer.territory.addChild(new Graphics());
+    const floodRim = layers.layer.territory.addChild(new Container({ label: 'flood-rim' }));
     this.levelRim = layers.layer.territory.addChild(new Graphics({ label: 'level-rim' }));
+    // A mask is placed by the world like the rest; it is never drawn itself.
+    layers.layer.territory.addChild(this.glowHole);
+    this.floodView = new FloodView({ fill: floodFill, glow: floodGlow, rim: floodRim }, bounds);
+    this.neighbours = neighboursOf(this.edges, map.nodes.length);
 
     // All casings first, so no casing covers the lanes of a neighbouring road.
     this.casingLayer = layers.layer.roads.addChild(new Container({ label: 'road-casings' }));
     this.laneLayer = layers.layer.roads.addChild(new Container({ label: 'road-lanes' }));
     this.dashes = this.laneLayer.addChild(new Graphics());
-    const hidden = this.context((g) => g);
     this.roads = map.edges.map((edge) => {
       const a = map.nodes[edge.a];
       const b = map.nodes[edge.b];
       const origin = a === undefined ? { x: 0, y: 0 } : { x: a.x, y: a.y };
       const length = a === undefined || b === undefined ? 0 : Math.hypot(b.x - a.x, b.y - a.y);
       const angle = a === undefined || b === undefined ? 0 : Math.atan2(b.y - a.y, b.x - a.x);
-      const part = (parent: Container): Graphics => {
-        const g = parent.addChild(new Graphics(hidden));
-        g.rotation = angle;
-        g.visible = false;
-        return g;
-      };
-      return {
-        casings: [part(this.casingLayer), part(this.casingLayer)] as const,
-        lanes: [part(this.laneLayer), part(this.laneLayer)] as const,
+      const road: Road = {
+        casings: [],
+        lanes: [],
+        flooding: false,
         stretches: [],
         level: 1,
         a: origin,
@@ -252,12 +292,32 @@ export class MapView {
         angle,
         key: '',
       };
+      this.addStretchSlot(road);
+      this.addStretchSlot(road);
+      return road;
     });
 
+    // The dashes of the roads a capture runs out along, over the lanes of every road.
+    this.floodDashes = this.laneLayer.addChild(new Graphics({ label: 'flood-dashes' }));
     this.setOwners(map.nodes.map((node) => node.start_owner));
     // Every road starts at level 1 (DEC-22): the map has no starting level.
     this.setRoads(map.edges.map(() => ({ width: 1 })));
   }
+
+  /** One more band and lanes for a stretch of `road`, hidden until a stretch is placed on it. */
+  private addStretchSlot(road: Road): void {
+    const part = (parent: Container): Graphics => {
+      const g = parent.addChild(new Graphics(this.hiddenContext));
+      g.rotation = road.angle;
+      g.visible = false;
+      return g;
+    };
+    road.casings.push(part(this.casingLayer));
+    road.lanes.push(part(this.laneLayer));
+  }
+
+  /** An empty drawing: what a stretch slot shows before it is placed. */
+  private readonly hiddenContext = this.context((g) => g);
 
   /**
    * Put the baked background (maps/<id>.bg.webp, 1 px per world unit, origin 0,0) under the map.
@@ -451,78 +511,200 @@ export class MapView {
     return this.hoverCell;
   }
 
-  /** `owners[i]`: current owner of node `i` (`null`: nobody). */
+  /**
+   * `owners[i]`: current owner of node `i` (`null`: nobody). With `animate` a node that changed hands
+   * floods into the new owner's colour (#819, "Fitted", ui-style 49); the first call, the «Supply»
+   * tint and a call without `animate` are instant (and end the floods under way).
+   */
   setOwners(owners: readonly Owner[], animate = false): void {
     const previous = this.owners;
-    this.owners = owners;
-    // A capture cross-fades the territory (the fill and the border lines) over `OWNER_FADE_MS`
-    // instead of flipping it (#508); the first call, the «Supply» tint and "less motion" are instant.
     const changed =
-      animate &&
-      !this.supplyMode &&
-      !reducedMotion() &&
-      previous.length === owners.length &&
-      previous.some((owner, i) => owner !== owners[i]);
-    this.fade = changed
-      ? {
-          from: previous,
-          fromBorders: territoryBorders(this.cells, previous, TERRITORY_BORDER.inset, this.edges),
-          elapsed: 0,
-          glowed: false,
-        }
-      : null;
-    this.drawTerritory(changed ? 0 : 1);
+      previous.length === owners.length
+        ? owners.flatMap((owner, i) => (owner === previous[i] ? [] : [i]))
+        : null;
+    if (animate && changed !== null && changed.length === 0) return;
+    this.owners = owners;
+    const flood = animate && !this.supplyMode && changed !== null;
+    if (!flood) this.endFloods();
+    this.borders = territoryBorders(this.cells, owners, TERRITORY_BORDER.inset, this.edges);
+    if (flood) this.startFloods(changed, previous);
+    else this.drawGlow(owners);
+    this.drawTerritory();
+    this.drawBorderLines();
     // The rim of the level follows the owners (a capture moves the border).
     this.rims.clear();
     if (this.levelSet) this.drawLevel(this.levelShareNow());
-    if (!changed) this.drawGlow(owners);
     // A road between two cities of one owner looks different from a buffer road.
     this.roads.forEach((_, i) => {
       this.drawRoad(i);
     });
     this.flushDashes();
+    this.drawFloodDashes();
+  }
+
+  /** The captures under way (the effects light their cities, #819). */
+  get captures(): readonly Flood[] {
+    return [...this.floods.values()];
+  }
+
+  /** Dev scenes: every flood stays `ms` old (`null`: they run on real time again). */
+  holdFloods(ms: number | null): void {
+    this.floodHold = ms;
   }
 
   /**
-   * Draws the fill of the territory and its border lines. `share` (0..1) is how far a capture has
-   * faded: a cell that changed owner shows the old colour at `1 - share` and the new at `share`, a
-   * border segment of the old map fades out and one of the new fades in, the rest stays.
+   * Floods start on the nodes `changed` (the owners before them: `previous`). The glow is taken as a
+   * texture before (unless floods are under way: theirs stays) and after the change; the map's own
+   * glow is redrawn for the new owners and masked out where the floods draw it.
    */
-  private drawTerritory(share: number): void {
+  private startFloods(changed: readonly number[], previous: readonly Owner[]): void {
+    if (this.floods.size === 0) {
+      this.bordersBefore = territoryBorders(
+        this.cells,
+        previous,
+        TERRITORY_BORDER.inset,
+        this.edges,
+      );
+    }
+    const before = this.glowPair?.before ?? this.glowTexture();
+    const reduced = reducedMotion();
+    for (const node of changed) {
+      const at = this.map.nodes[node];
+      const to = this.owners[node] ?? null;
+      const calm = to !== this.me;
+      this.floods.delete(node);
+      this.floods.set(node, {
+        node,
+        from: previous[node] ?? null,
+        to,
+        at: at === undefined ? { x: 0, y: 0 } : { x: at.x, y: at.y },
+        ms: 0,
+        calm,
+        reduced,
+        look: floodLook(0, calm, reduced),
+      });
+    }
+    this.drawGlow(this.owners);
+    const after = before === null ? null : this.glowTexture();
+    if (this.glowPair !== null && this.glowPair.after !== after) this.glowPair.after.destroy(true);
+    this.glowPair = before !== null && after !== null ? { before, after } : null;
+    this.buildFloods();
+  }
+
+  /** The meshes of every flood under way, their glow and the hole they make in the map's glow. */
+  private buildFloods(): void {
+    const nodes = [...this.floods.keys()];
+    const regions = glowRegions(nodes, this.neighbours);
+    const hole = this.glowHole.clear();
+    const alpha = TERRITORY_ALPHA;
+    this.floodView.setGlow(this.glowPair);
+    nodes.forEach((node, i) => {
+      const flood = this.floods.get(node);
+      const cell = this.cells[node];
+      if (flood === undefined || cell === undefined) return;
+      const glowCells = (regions[i] ?? []).flatMap((c) => {
+        const polygon = this.cells[c];
+        return polygon === undefined ? [] : [polygon];
+      });
+      const color = flood.to === null ? null : ownerColor(this.me, flood.to);
+      this.floodView.add(node, {
+        centre: flood.at,
+        cell,
+        glowCells: this.glowPair === null ? [] : glowCells,
+        reach: radialReach(cell, flood.at),
+        from: premultiplied(flood.from === null ? null : ownerColor(this.me, flood.from), alpha),
+        to: premultiplied(color, alpha),
+        color: color ?? PAPER,
+      });
+      this.floodView.update(node, flood.look);
+      if (this.glowPair !== null)
+        for (const polygon of glowCells) hole.poly(polygon).fill(0xffffff);
+    });
+    if (this.glowPair !== null && nodes.length > 0) {
+      this.glowHolder.setMask({ mask: hole, inverse: true });
+    } else {
+      this.glowHolder.mask = null;
+    }
+  }
+
+  /** The map's glow as a world-sized texture; `null` without a renderer that can make one (tests). */
+  private glowTexture(): Texture | null {
+    const renderer = this.renderer as Partial<Renderer>;
+    if (typeof renderer.generateTexture !== 'function') return null;
+    // The glow itself, not its holder: the hole of the floods under way is not part of it.
+    return renderer.generateTexture({
+      target: this.glow,
+      frame: new Rectangle(0, 0, this.map.meta.width, this.map.meta.height),
+      resolution: TERRITORY_GLOW.resolution,
+      antialias: true,
+    });
+  }
+
+  /** Every flood ends now: the map is drawn as it is. */
+  private endFloods(): void {
+    if (this.floods.size === 0) return;
+    for (const node of this.floods.keys()) this.floodView.remove(node);
+    this.floods.clear();
+    this.afterFloods();
+  }
+
+  /** The textures and the mask of the glow go when no flood is left. */
+  private afterFloods(): void {
+    if (this.floods.size > 0) return;
+    this.bordersBefore = null;
+    this.glowHolder.mask = null;
+    this.glowHole.clear();
+    this.floodView.setGlow(null);
+    if (this.glowPair !== null) {
+      this.glowPair.before.destroy(true);
+      this.glowPair.after.destroy(true);
+      this.glowPair = null;
+    }
+  }
+
+  /** The fill of the territory; an area under a flood is drawn by its flood. */
+  private drawTerritory(): void {
     const alpha = this.supplyMode ? SUPPLY_TERRITORY_ALPHA : TERRITORY_ALPHA;
-    const owners = this.owners;
-    const from = this.fade?.from ?? owners;
     const g = this.territory;
     g.clear();
-    owners.forEach((owner, i) => {
+    this.owners.forEach((owner, i) => {
       const cell = this.cells[i];
-      if (cell === undefined) return;
-      const before = from[i] ?? null;
-      if (before === owner) {
-        if (owner !== null) g.poly(cell).fill({ color: ownerColor(this.me, owner), alpha });
-        return;
-      }
-      if (before !== null && share < 1) {
-        g.poly(cell).fill({ color: ownerColor(this.me, before), alpha: alpha * (1 - share) });
-      }
-      if (owner !== null)
-        g.poly(cell).fill({ color: ownerColor(this.me, owner), alpha: alpha * share });
+      if (cell === undefined || owner === null || this.floods.has(i)) return;
+      g.poly(cell).fill({ color: ownerColor(this.me, owner), alpha });
     });
-    // The border of an area: a light line of the owner colour, one stroke per owner and fade.
+  }
+
+  /**
+   * The border of an area: a light line of the owner colour, one stroke per owner and share. While
+   * floods run, a line that a capture adds joins as the front reaches it (just inside the area, or
+   * just outside it for a neighbour's line) and a line it removes leaves the same way.
+   */
+  private drawBorderLines(): void {
     const lines = this.borderLines.clear();
-    const now = territoryBorders(this.cells, owners, TERRITORY_BORDER.inset, this.edges);
-    const key = (b: { owner: number; a: Point; b: Point }): string =>
+    const now = this.borders;
+    const before = this.bordersBefore ?? now;
+    const key = (b: Border): string =>
       `${String(b.owner)}:${String(b.a.x)},${String(b.a.y)}:${String(b.b.x)},${String(b.b.y)}`;
-    const old = this.fade?.fromBorders ?? now;
-    const oldKeys = new Set(old.map(key));
+    const share = (b: Border): number => {
+      const own = this.floods.get(b.cell);
+      if (own !== undefined) return revealAt(own.look, BORDER_FIT.inside);
+      const across = b.neighbour === null ? undefined : this.floods.get(b.neighbour);
+      return across === undefined ? 1 : revealAt(across.look, BORDER_FIT.outside);
+    };
+    const oldKeys = new Set(before.map(key));
     const nowKeys = new Set(now.map(key));
-    const groups: { borders: typeof now; fade: number }[] = [
-      { borders: now.filter((b) => oldKeys.has(key(b))), fade: 1 },
-      { borders: now.filter((b) => !oldKeys.has(key(b))), fade: share },
-      { borders: old.filter((b) => !nowKeys.has(key(b))), fade: 1 - share },
-    ];
-    for (const { borders, fade } of groups) {
-      if (fade <= 0) continue;
+    const groups = new Map<number, Border[]>();
+    const put = (border: Border, fade: number): void => {
+      if (fade <= 0) return;
+      // Shares are rounded to a few steps of a frame: one stroke each.
+      const step = Math.round(fade * 64) / 64;
+      const list = groups.get(step);
+      if (list === undefined) groups.set(step, [border]);
+      else list.push(border);
+    };
+    for (const border of now) put(border, oldKeys.has(key(border)) ? 1 : share(border));
+    for (const border of before) if (!nowKeys.has(key(border))) put(border, 1 - share(border));
+    for (const [fade, borders] of groups) {
       for (const owner of [0, 1] as const) {
         const own = borders.filter((border) => border.owner === owner);
         for (const { a, b } of own) lines.moveTo(a.x, a.y).lineTo(b.x, b.y);
@@ -538,21 +720,40 @@ export class MapView {
     }
   }
 
-  /** Runs the fade of a capture by `dtMs` of real time; once per frame (a no-op when none is under way). */
+  /** Runs the floods of captures by `dtMs` of real time; once per frame (a no-op when none is under way). */
   advance(dtMs: number): void {
     this.advanceLevel(dtMs);
-    const fade = this.fade;
-    if (fade === null) return;
-    fade.elapsed += Math.max(0, dtMs);
-    const t = Math.min(1, fade.elapsed / OWNER_FADE_MS);
-    const share = easeOutCubic(t);
-    // The glow is one cached blurred texture: it changes once, half way, not every frame.
-    if (!fade.glowed && t >= 0.4) {
-      fade.glowed = true;
-      this.drawGlow(this.owners);
+    if (this.floods.size === 0) return;
+    const done: number[] = [];
+    for (const flood of this.floods.values()) {
+      flood.ms = this.floodHold ?? flood.ms + Math.max(0, dtMs);
+      flood.look = floodLook(flood.ms, flood.calm, flood.reduced);
+      if (flood.look.done) done.push(flood.node);
+      else this.floodView.update(flood.node, flood.look);
     }
-    if (t >= 1) this.fade = null;
-    this.drawTerritory(t >= 1 ? 1 : share);
+    for (const node of done) {
+      this.floods.delete(node);
+      this.floodView.remove(node);
+    }
+    if (done.length > 0) {
+      this.afterFloods();
+      // The claims of the glow change with the set of floods.
+      if (this.floods.size > 0) this.buildFloods();
+      this.drawTerritory();
+    }
+    this.drawBorderLines();
+    this.roads.forEach((road, i) => {
+      if (road.flooding || this.floodAt(i) !== undefined) this.drawRoad(i);
+    });
+    this.flushDashes();
+    this.drawFloodDashes();
+  }
+
+  /** The flood under way at an end of road `i`, if any. */
+  private floodAt(i: number): Flood | undefined {
+    const edge = this.map.edges[i];
+    if (edge === undefined || this.floods.size === 0) return undefined;
+    return this.floods.get(edge.a) ?? this.floods.get(edge.b);
   }
 
   /** The fade of the supply level by `dtMs` of real time (a no-op when none is under way). */
@@ -591,7 +792,8 @@ export class MapView {
     }
     this.glow.boundsArea = new Rectangle(0, 0, bounds.width, bounds.height);
     this.glow.cacheAsTexture({ resolution: TERRITORY_GLOW.resolution, antialias: true });
-    parent.addChild(this.glow);
+    this.glowHolder.addChild(this.glow);
+    parent.addChild(this.glowHolder);
   }
 
   /** Redraws the glow (and its cache) when the owners changed; the tint of the «Supply» mode has none. */
@@ -637,7 +839,10 @@ export class MapView {
     this.flushDashes();
   }
 
-  /** The look of road `i` from its level, the owners of its ends and its halves in fog. */
+  /**
+   * The look of road `i` from its level, the owners of its ends and its halves in fog. While a
+   * capture floods one of its ends, the new look runs out along it from that end (#819).
+   */
   private drawRoad(i: number): void {
     const road = this.roads[i];
     const look = this.looks[i];
@@ -654,54 +859,95 @@ export class MapView {
     // In the «Supply» mode an own road with both halves in sight is a pipe of `SupplyView` (#429):
     // its lanes and band are hidden here, the other roads keep their look.
     const piped = this.supplyMode && kind.kind === 'internal' && kind.owner === this.me;
-    const key = `${String(level)}|${kind.kind === 'buffer' ? 'b' : String(kind.owner)}|${fog[0] ? 'f' : 's'}${fog[1] ? 'f' : 's'}${piped ? '|pipe' : ''}`;
+    const flood = this.floodAt(i);
+    const split = borderPermille(this.map, i) / 1000;
+    const kindKey = (k: ReturnType<typeof roadKind>): string =>
+      k.kind === 'buffer' ? 'b' : String(k.owner);
+    let segments: RoadSegment[] = roadSegments(kind, fog, split);
+    let floodKey = '';
+    if (flood !== undefined) {
+      const ownerBefore = (end: number): Owner =>
+        this.floods.get(end)?.from ?? this.owners[end] ?? null;
+      const before = roadKind(ownerBefore(edge.a), ownerBefore(edge.b));
+      const cut = flood.look.road;
+      segments = roadParts(roadSegments(before, fog, split), segments, cut, edge.a === flood.node);
+      floodKey = `|flood:${kindKey(before)}:${cut.toFixed(4)}`;
+    }
+    const key = `${String(level)}|${kindKey(kind)}|${fog[0] ? 'f' : 's'}${fog[1] ? 'f' : 's'}${piped ? '|pipe' : ''}${floodKey}`;
     if (key === road.key) return;
     road.key = key;
-    const segments = roadSegments(kind, fog, borderPermille(this.map, i) / 1000);
-    if ([...road.stretches, ...segments].some((s) => isDashed(s.style))) this.dashesDirty = true;
+    const flooding = flood !== undefined;
+    const dashed = (list: readonly RoadSegment[]): boolean => list.some((s) => isDashed(s.style));
+    // A road leaving or joining the dashes of the map, or changing them there, redraws them.
+    if ((!road.flooding && dashed(road.stretches)) || (!flooding && dashed(segments))) {
+      this.dashesDirty = true;
+    }
+    road.flooding = flooding;
     road.stretches = segments;
     road.level = level;
-    for (const slot of [0, 1] as const) {
+    while (road.casings.length < segments.length) this.addStretchSlot(road);
+    road.casings.forEach((casing, slot) => {
       const segment = segments[slot];
-      const casing = road.casings[slot];
       const lanes = road.lanes[slot];
+      if (lanes === undefined) return;
       casing.visible = segment !== undefined && !piped;
       lanes.visible = segment !== undefined && !isDashed(segment.style) && !piped;
       if (segment !== undefined) this.placeSegment(road, segment, level, casing, lanes);
-    }
+    });
   }
 
-  /** Redraw the dashed and dotted lanes of all roads, if any of them changed. */
+  /** The dashed and dotted lanes of `road`'s stretches of `style` into `g`; whether any was drawn. */
+  private drawDashes(g: Graphics, road: Road, style: 'buffer' | 'fog'): boolean {
+    const spec = style === 'fog' ? ROAD_FOG : ROAD_BUFFER;
+    let any = false;
+    for (const stretch of road.stretches) {
+      if (stretch.style !== style) continue;
+      const along = stretch.from * road.length;
+      const origin = {
+        x: road.a.x + Math.cos(road.angle) * along,
+        y: road.a.y + Math.sin(road.angle) * along,
+      };
+      const quads = laneDashes(
+        origin,
+        road.angle,
+        (stretch.to - stretch.from) * road.length,
+        road.level,
+        spec.dash,
+        spec.gap,
+        ROAD_LANE.width,
+      );
+      for (const quad of quads) {
+        g.poly(quad.flatMap((p) => [p.x, p.y]));
+        any = true;
+      }
+    }
+    return any;
+  }
+
+  /** Redraw the dashed and dotted lanes of all roads, if any of them changed (not the flooding ones). */
   private flushDashes(): void {
     if (!this.dashesDirty) return;
     this.dashesDirty = false;
-    const g = this.dashes.clear();
+    this.fillDashes(
+      this.dashes,
+      this.roads.filter((road) => !road.flooding),
+    );
+  }
+
+  /** The dashes of the roads a capture runs out along: every frame of it, a few roads. */
+  private drawFloodDashes(): void {
+    this.fillDashes(
+      this.floodDashes,
+      this.roads.filter((road) => road.flooding),
+    );
+  }
+
+  private fillDashes(g: Graphics, roads: readonly Road[]): void {
+    g.clear();
     for (const style of ['buffer', 'fog'] as const) {
       const spec = style === 'fog' ? ROAD_FOG : ROAD_BUFFER;
       let any = false;
-      for (const road of this.roads) {
-        for (const stretch of road.stretches) {
-          if (stretch.style !== style) continue;
-          const along = stretch.from * road.length;
-          const origin = {
-            x: road.a.x + Math.cos(road.angle) * along,
-            y: road.a.y + Math.sin(road.angle) * along,
-          };
-          const quads = laneDashes(
-            origin,
-            road.angle,
-            (stretch.to - stretch.from) * road.length,
-            road.level,
-            spec.dash,
-            spec.gap,
-            ROAD_LANE.width,
-          );
-          for (const quad of quads) {
-            g.poly(quad.flatMap((p) => [p.x, p.y]));
-            any = true;
-          }
-        }
-      }
+      for (const road of roads) any = this.drawDashes(g, road, style) || any;
       if (any) g.fill({ color: spec.lane, alpha: spec.laneAlpha });
     }
   }
@@ -775,6 +1021,11 @@ export class MapView {
   }
 
   destroy(): void {
+    // The floods first: their meshes and the textures of the glow.
+    this.floods.clear();
+    this.floodView.destroy();
+    this.afterFloods();
+    this.glowHole.destroy();
     // The stretches use shared contexts (a Graphics leaves those alone): the layers first.
     this.casingLayer.destroy({ children: true });
     this.laneLayer.destroy({ children: true });

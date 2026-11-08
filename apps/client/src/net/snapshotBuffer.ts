@@ -30,6 +30,7 @@ export type PushResult = 'added' | 'duplicate' | 'stale';
 
 export class SnapshotBuffer {
   #delayTicks: number;
+  #finished = false;
   readonly #capacity: number;
   readonly #tickMs: number;
   readonly #now: () => number;
@@ -83,6 +84,16 @@ export class SnapshotBuffer {
   /** Forget everything: on `resync` and on reconnect the next snapshot starts a new timeline. */
   clear(): void {
     this.#snapshots = [];
+    this.#finished = false;
+  }
+
+  /**
+   * The match is over (`match_end`): no snapshot will follow the last one, so the render time may
+   * run on up to it instead of staying `delayTicks` behind (#819: the capture that ends a match is
+   * drawn before the result screen). Still no extrapolation past the last snapshot.
+   */
+  finish(): void {
+    this.#finished = true;
   }
 
   /** The frame to draw now; `null` until the first snapshot. */
@@ -95,7 +106,7 @@ export class SnapshotBuffer {
     this.#renderTick += (now - this.#lastSampleAt) / this.#tickMs;
     this.#lastSampleAt = now;
     const earliest = newest - this.#delayTicks;
-    const latest = Math.min(newest, earliest + 1);
+    const latest = this.#finished ? newest : Math.min(newest, earliest + 1);
     this.#renderTick = Math.min(latest, Math.max(earliest, this.#renderTick));
 
     // `a`: the newest snapshot not after the render time (the oldest one if none is);

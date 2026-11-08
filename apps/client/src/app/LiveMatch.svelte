@@ -10,6 +10,7 @@
   import { OrderController } from '../match/orderController.ts';
   import { PauseState } from '../match/pauseState.svelte.ts';
   import { MatchSession } from '../match/session.ts';
+  import { resultDelayMs } from '../match/resultDelay.ts';
   import type { GeoFile } from '../map/geography.ts';
   import type { ConnectionStatus } from '../net/matchConnection.ts';
   import type {
@@ -85,13 +86,30 @@
   // The key hints show in the first matches only; a match counts once, also after a reload.
   const hints = $derived(hintsVisible(registerMatch(matchId)));
 
+  // The result screen after a capital capture waits for its flood (#819).
+  let endTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => () => {
+    clearTimeout(endTimer);
+  });
+
   function handle(msg: ServerMsg): void {
     pauseState.onMessage(msg, me);
     if (msg.type === 'paused') {
       paused = msg.paused ? msg : null;
       pauseLeft = msg.ends_in_s ?? 0;
     } else if (msg.type === 'match_end') {
-      onend(me, msg, hud?.summary() ?? null);
+      // The capture of a capital is seen before the result screen (#819); other ends go at once.
+      const summary = hud?.summary() ?? null;
+      const player = me;
+      const wait = resultDelayMs(msg);
+      if (wait <= 0) onend(player, msg, summary);
+      else {
+        clearTimeout(endTimer);
+        endTimer = setTimeout(() => {
+          endTimer = undefined;
+          onend(player, msg, summary);
+        }, wait);
+      }
     } else if (msg.type === 'reach') {
       orders?.onReach(msg);
     } else if (msg.type === 'line_route') {

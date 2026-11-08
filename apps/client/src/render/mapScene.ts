@@ -43,6 +43,8 @@ export const FRAME_FAILURE_LIMIT = 3;
 const DEFAULT_TICK_HZ = 10;
 /** Frame time assumed when the ticker gives none (60 FPS), ms. */
 const DEFAULT_FRAME_MS = 1000 / 60;
+/** A snapshot further on than this (seconds) from the last one drawn is a jump: its captures do not flood. */
+const FLOOD_MAX_STEP_S = 2;
 
 /**
  * The baked shapes of the map (`bake.ts`): in world units (cities, tokens: re-baked when the zoom
@@ -129,6 +131,8 @@ export class MapScene {
   private readonly controller: CameraController;
   private source: RenderSource | null;
   private base: unknown = null;
+  /** The tick of the snapshot drawn: a capture floods only when the picture runs on from it. */
+  private baseTick: number | null = null;
   private destroyed = false;
   private supplyOn = false;
   private readonly me: PlayerId;
@@ -168,15 +172,7 @@ export class MapScene {
       this.cities.hasBarracks(node),
     );
     this.forts = new FortView(map, this.layers, me, () => this.view.territoryEdges);
-    this.effects = new EffectsView(
-      map,
-      this.layers,
-      me,
-      1,
-      this.view.cells,
-      radiusOf,
-      this.screenSprites,
-    );
+    this.effects = new EffectsView(map, this.layers, me, 1, radiusOf, this.screenSprites);
     this.tolls = new TollView(this.layers.layer.tolls, map, me, 1, (node, edge) =>
       this.forts.lineAt(node, edge),
     );
@@ -220,6 +216,7 @@ export class MapScene {
   setSource(source: RenderSource | null): void {
     this.source = source;
     this.base = null;
+    this.baseTick = null;
   }
 
   setInteraction(interaction: MapInteraction | null): void {
@@ -345,12 +342,22 @@ export class MapScene {
     this.cities.pulse(performance.now());
     const announce = frame.base !== this.base;
     if (announce) {
-      // The first snapshot shows the map as it is; later changes of owners fade (#508).
+      // The first snapshot shows the map as it is; later changes of owners flood (#819), unless the
+      // picture jumped (a replay scrubbed back or far ahead, a reconnect): then they are drawn at once.
       const first = this.base === null;
+      const step = this.baseTick === null ? 0 : frame.base.tick - this.baseTick;
+      const flowing =
+        step > 0 && step <= FLOOD_MAX_STEP_S * (this.source.tickHz ?? DEFAULT_TICK_HZ);
       this.base = frame.base;
+      this.baseTick = frame.base.tick;
+      // A dev scene may show a capture under way (#819): the owners before it come first.
+      const before = first ? this.source.floodFrom : undefined;
+      if (before !== undefined) this.view.setOwners(before);
+      this.view.holdFloods(this.source.floodHoldMs ?? null);
+      // A change of owners floods the area of the node into the new owner's colour (#819).
       this.view.setOwners(
         frame.base.view.nodes.map((node) => node.owner),
-        !first,
+        (!first && flowing) || before !== undefined,
       );
       const edges = frame.base.view.edges;
       this.view.setRoads(edges);
@@ -400,6 +407,7 @@ export class MapScene {
       tickHz,
       this.source.roundTicks,
       this.entities,
+      this.view.captures,
     );
     // The toll of the road fortifications (#707), on both maps; its hits swell the tokens as a fight's do.
     const tollPunches = this.tolls.update(
