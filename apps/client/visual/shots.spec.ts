@@ -527,7 +527,7 @@ for (const id of MENU_SCENES) {
         .first(),
     ).toBeVisible();
     // The self-hosted fonts (#841) swap in when loaded: take the frame in them, not the fallback.
-    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate('document.fonts.ready.then(() => true)');
     const press = DOCK_CLICKS[id];
     if (press !== undefined) {
       await page.locator('.panel').getByRole('button', { name: press }).first().click();
