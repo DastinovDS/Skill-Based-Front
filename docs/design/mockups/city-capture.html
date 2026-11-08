@@ -665,22 +665,23 @@ const LOOP2 = 3900;
 const R2V = [
   { id: 'cur', name: 'Current', legacy: 'current', dur: 450 },
   { id: 'r1', name: 'Flood, round 1', legacy: 'r1', dur: 1000 },
-  { id: 'flood', name: 'Flood', field: 'radial', norm: 1.3, dur: 1000, ease: 'out', fe: 0.24, edge: 'glow', city: 'flash', roads: 'front' },
-  { id: 'fit', name: 'Fitted', field: 'fit', dur: 1000, ease: 'out', fe: 0.16, edge: 'line', city: 'flash', roads: 'front' },
-  { id: 'organic', name: 'Organic', field: 'organic', dur: 1200, ease: 'out', fe: 0.2, edge: 'glow', edgeA: 0.85, city: 'soft', roads: 'front' },
-  { id: 'roads', name: 'Roads lead', field: 'road', dur: 1100, ease: 'out', fe: 0.18, edge: 'glow', city: 'flash', roads: 'lead' },
+  { id: 'flood', name: 'Flood', field: 'radial', norm: 1.3, dur: 1000, ease: 'outq', fe: 0.24, edge: 'glow', city: 'flash', roads: 'front' },
+  { id: 'fit', name: 'Fitted', field: 'fit', dur: 1000, ease: 'outq', fe: 0.18, edge: 'glow', city: 'flash', roads: 'front' },
+  { id: 'organic', name: 'Organic', field: 'organic', dur: 1200, ease: 'sine', fe: 0.2, edge: 'glow', edgeA: 0.85, city: 'soft', roads: 'front' },
+  { id: 'roads', name: 'Roads lead', field: 'road', dur: 1100, ease: 'outq', fe: 0.18, edge: 'glow', city: 'flash', roads: 'lead' },
   { id: 'quick', name: 'Quick', field: 'fit', dur: 600, ease: 'out', fe: 0.22, edge: 'line', edgeA: 0.8, city: 'soft', roads: 'start' },
   { id: 'tide', name: 'Tide', field: 'fit', dur: 1400, ease: 'inout', fe: 0.18, edge: 'glow', city: 'gather', roads: 'end' },
-  { id: 'ripple', name: 'Ripple', field: 'radial', norm: 1.3, dur: 1000, ease: 'out', fe: 0.3, edge: 'ripple', city: 'soft', roads: 'front' },
-  { id: 'push', name: 'Push out', field: 'fit', dur: 1100, ease: 'out', fe: 0.14, edge: 'glow', edgeA: 0.6, old: 'push', city: 'flash', roads: 'front' },
-  { id: 'dim', name: 'Dim first', field: 'fit', delay: 220, dur: 1000, ease: 'out', fe: 0.16, edge: 'line', old: 'dark', city: 'soft', roads: 'front' },
-  { id: 'seal', name: 'Border seal', field: 'fit', dur: 1000, ease: 'out', fe: 0.2, edge: 'glow', edgeA: 0.7, border: 'end', city: 'flash', roads: 'front' },
-  { id: 'calm', name: 'Calm', field: 'fit', dur: 900, ease: 'out', fe: 0.22, edge: 'none', city: 'soft', roads: 'front' },
+  { id: 'ripple', name: 'Ripple', field: 'radial', norm: 1.3, dur: 1000, ease: 'outq', fe: 0.3, edge: 'ripple', city: 'soft', roads: 'front' },
+  { id: 'push', name: 'Push out', field: 'fit', dur: 1100, ease: 'outq', fe: 0.14, edge: 'glow', edgeA: 0.6, old: 'push', city: 'flash', roads: 'front' },
+  { id: 'dim', name: 'Dim first', field: 'fit', delay: 220, dur: 1000, ease: 'outq', fe: 0.16, edge: 'line', old: 'dark', city: 'soft', roads: 'front' },
+  { id: 'seal', name: 'Border seal', field: 'fit', dur: 1000, ease: 'outq', fe: 0.2, edge: 'glow', edgeA: 0.7, border: 'end', city: 'flash', roads: 'front' },
+  { id: 'calm', name: 'Calm', field: 'fit', dur: 900, ease: 'outq', fe: 0.22, edge: 'none', city: 'soft', roads: 'front' },
   { id: 'slow', name: 'Slow', field: 'radial', norm: 1.3, dur: 1500, ease: 'out', fe: 0.26, edge: 'glow', city: 'flash', roads: 'front' },
 ];
 const RENDER_DELAY = 200; // the client draws 2 ticks behind the newest snapshot (snapshotBuffer.ts)
 const HOLD = 500;         // the settled frame stays this long before the result screen
-const resultAt = (v) => Math.ceil((RENDER_DELAY + (v.delay || 0) + v.dur + HOLD) / 100) * 100;
+// Today the result screen opens on match_end at once (LiveMatch.svelte): the capital's capture is never drawn.
+const resultAt = (v) => (v.legacy === 'current' ? 0 : Math.ceil((RENDER_DELAY + (v.delay || 0) + v.dur + HOLD) / 100) * 100);
 const durLabel2 = (v) => (v.legacy === 'current' ? '0.45 s' : `${((v.dur + (v.delay || 0)) / 1000).toFixed(v.dur % 100 ? 2 : 1)} s`);
 
 /* ---------- the fields of a case: the fitted distance, the road-led arrival, the road position ---------- */
@@ -771,7 +772,7 @@ precision highp float;
 in vec2 vUv; out vec4 o;
 uniform sampler2D tG, tF0, tF1, tW0, tW1, tB0, tB1, tR0, tR1, tN0, tN1, tU0, tU1, tX;
 uniform vec2 uRes; uniform int uN; uniform vec2 uC[2]; uniform float uRn[2]; uniform float uCr[2];
-uniform vec3 uNew, uOld;
+uniform vec3 uNew, uOld; uniform int uSide;
 uniform int uField, uEdge, uBM, uWM, uRM, uMode;
 uniform float uFe, uPos, uRoadPos, uRoadFe, uEdgeA, uMB, uMW, uMR, uMN, uMU, uMF, uClean, uDark, uPush;
 uniform float uFlash, uRingR, uRingW, uRingA, uPulse, uGather, uGlint, uTime, uZ, uOrg, uHead;
@@ -813,21 +814,25 @@ void main() {
   // territory-level light: under the roads, the cities and the veil (where the client's mask sprite would sit)
   if (uEdgeA > 0.0) {
     if (uEdge == 1) {
-      col.rgb += uNew * 0.42 * uEdgeA * band(fld - (uPos - uFe * 0.42), max(uFe * 0.4, 6.0 * pw * uZ)) * ins;
-      col.rgb += PAPER * 0.10 * uEdgeA * band(fld - (uPos - uFe * 0.16), 1.6 * pw) * ins;
+      // a moving copy of the territory glow (owner colour, normal blend) with a faint additive sheen
+      float g = band(fld - (uPos - uFe * 0.42), max(uFe * 0.38, 6.0 * pw * uZ)) * ins * uEdgeA;
+      col.rgb = mix(col.rgb, uNew, 0.42 * g);
+      col.rgb += uNew * 0.10 * g;
     } else if (uEdge == 2) {
       float x = fld - (uPos - uFe * 0.12);
       // a line of the owner colour, a touch lighter than the border line, with a faint halo
       col.rgb += uNew * 0.16 * uEdgeA * band(x, 4.5 * pw * uZ) * ins;
       col.rgb = mix(col.rgb, mix(uNew, PAPER, 0.3), 0.7 * uEdgeA * band(x, 0.95 * pw * max(uZ, 0.8)) * ins);
+      // the opponent's front is a double line (ui-style 21: a double contour marks the opponent)
+      if (uSide == 1) col.rgb = mix(col.rgb, mix(uNew, PAPER, 0.3), 0.6 * uEdgeA * band(x + 3.2 * pw * max(uZ, 0.8), 0.85 * pw * max(uZ, 0.8)) * ins);
     } else if (uEdge == 3) {
       for (int k = 1; k <= 2; k++) { float off = float(k) * 0.07 - 0.03;
-        col.rgb += mix(uNew, PAPER, 0.5) * (0.2 / float(k)) * uEdgeA * band(fld - (uPos + off), 1.2 * pw * max(uZ, 0.75)) * ins; }
-      col.rgb += uNew * 0.12 * uEdgeA * band(fld - (uPos - uFe * 0.45), uFe * 0.5) * ins;
+        col.rgb = mix(col.rgb, mix(uNew, PAPER, 0.35), (0.42 / float(k)) * uEdgeA * band(fld - (uPos + off), 1.1 * pw * max(uZ, 0.75)) * ins); }
+      col.rgb = mix(col.rgb, uNew, 0.18 * uEdgeA * band(fld - (uPos - uFe * 0.45), uFe * 0.5) * ins);
     }
   }
   if (uPush > 0.0) col.rgb += uOld * uPush * band(fld - (uPos + 0.05), 0.06) * ins;
-  if (uGlint > 0.0) col.rgb += b1.rgb * uGlint;
+  if (uGlint > 0.0) col.rgb += b1.rgb * uGlint * (1.0 - smoothstep(1.03, 1.15, fit));
   vec4 r1 = texture(tR1, uv);
   col = over(col, mix(texture(tR0, uv), r1, mR));
   // the head of the change running out along a road: the new road itself lit, no new shape
@@ -845,7 +850,7 @@ void main() {
   if (uRingA > 0.0) col.rgb += uNew * uRingA * band(dc - uRingR, uRingW);
   if (uWRingA > 0.0) col.rgb = mix(col.rgb, PAPER, uWRingA * band(dc - uWRingR, uWRingW));
   if (uPulse > 0.0) col.rgb += uNew * uPulse * gp(dc / (cr * 2.8));
-  if (uGather > 0.0) col.rgb += uNew * uGather * gp(dc / (cr * 2.4)) + PAPER * 0.3 * uGather * gp(dc / (cr * 1.4));
+  if (uGather > 0.0) col.rgb += uNew * uGather * gp(dc / (cr * 2.4)) + PAPER * 0.15 * uGather * gp(dc / (cr * 1.3));
   o = vec4(col.rgb, 1.0);
 }`;
 const TEXN = ['tG', 'tF0', 'tF1', 'tW0', 'tW1', 'tB0', 'tB1', 'tR0', 'tR1', 'tN0', 'tN1', 'tU0', 'tU1', 'tX'];
@@ -933,7 +938,7 @@ function upload(key) {
 }
 
 /* ---------- the timeline of a variant: everything the shader needs at time t (ms after the capture) ---------- */
-const EASE2 = { out: eo, inout: eio, outq: eoq };
+const EASE2 = { out: eo, inout: eio, outq: eoq, sine: (t) => Math.sin((t * Math.PI) / 2) };
 const hexRGB = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 const bump = (t, a, b) => Math.sin(Math.PI * ph(t, a, b));
 function params(v, t, F, k, opt) {
@@ -993,16 +998,16 @@ function params(v, t, F, k, opt) {
   }
   else if (v.roads === 'start') { u.uRM = 1; u.uMR = sm(ph(t, 0, 160)); }
   else if (v.roads === 'end') { u.uRM = 1; u.uMR = sm(ph(t, d0 + dur * 0.72, d0 + dur)); }
-  if (v.old === 'dark') u.uDark = sm(ph(t, 0, 220));
+  if (v.old === 'dark') u.uDark = 0.8 * sm(ph(t, 0, 220));
   if (v.old === 'push') u.uPush = (0.1 + 0.24 * p) * (1 - sm(ph(x, 0.82, 1)));
   u.uMU = 1;
   const ring = (a, ms) => { u.uRingR = cr * (1.25 + 1.35 * eo(ph(t, 0, ms))); u.uRingW = cr * 0.2; u.uRingA = a * (1 - ph(t, 0, ms)) * (calm ? 0.5 : 1); };
-  if (v.city === 'flash') { u.uMN = sm(ph(t, 0, 180)); u.uFlash = calm ? 0 : 0.55 * Math.pow(1 - ph(t, 0, 320), 2); ring(0.5, 500); }
+  if (v.city === 'flash') { u.uMN = sm(ph(t, 0, 120)); u.uFlash = calm ? 0 : 0.55 * Math.pow(1 - ph(t, 0, 320), 2); ring(0.38, 500); }
   else if (v.city === 'soft') { u.uMN = sm(ph(t, 0, 360)); ring(0.28, 600); }
   else if (v.city === 'gather') {
     u.uMN = sm(ph(t, 0, 300));
     u.uGather = 0.5 * bump(t, 0, d0 + dur * 0.5) * (calm ? 0.5 : 1);
-    u.uFlash = calm ? 0 : 0.3 * bump(t, dur * 0.18, dur * 0.42);
+    u.uFlash = calm ? 0 : 0.18 * bump(t, dur * 0.18, dur * 0.42);
   }
   return u;
 }
@@ -1029,6 +1034,7 @@ function draw2(pane, key, v, t, opt) {
   gl.uniform2f(U.uRes, W, H); gl.uniform1i(U.uN, F.flips.length);
   gl.uniform2fv(U.uC, F.flips.flatMap((x) => [x.f.x, x.f.y]).concat([0, 0]).slice(0, 4));
   gl.uniform1fv(U.uRn, u.uRn.concat([1]).slice(0, 2)); gl.uniform1fv(U.uCr, u.uCr.concat([1]).slice(0, 2));
+  if (U.uSide) gl.uniform1i(U.uSide, m.flips[0].to === 0 ? 0 : 1);
   gl.uniform3fv(U.uNew, hexRGB(colOf(m.flips[0].to))); gl.uniform3fv(U.uOld, hexRGB(colOf(m.flips[0].from)));
   for (const [n, val] of Object.entries(u)) {
     if (n === 'uRn' || n === 'uCr' || !U[n]) continue;
@@ -1078,7 +1084,7 @@ function seg(id, items, get, set) {
     const s = document.createElement('span'); s.textContent = label; l.append(i, s); el.append(l);
   }
 }
-const label = (v) => (st.r === '1' ? durLabel(v) : durLabel2(v) + (st.c === 'capital' ? ` · result ${(resultAt(v) / 1000).toFixed(1)} s` : ''));
+const label = (v) => (st.r === '1' ? durLabel(v) : durLabel2(v) + (st.c === 'capital' ? (resultAt(v) ? ` · result after ${(resultAt(v) / 1000).toFixed(1)} s` : ' · result at once') : ''));
 const durLabel = (v) => (v.id === 'banner' ? '1.0 s, banner 2.7 s' : v.id === 'current' ? '0.45 s, flag 1.6 s' : `${(v.dur / 1000).toFixed(2)} s`);
 let panes = [];
 function build() {
