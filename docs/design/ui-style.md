@@ -1374,7 +1374,9 @@ the look of most frames or costs more than a day) **does not start with code.** 
    assets; drawn with code, generated images from `mockups/assets/<name>/` referenced by a relative path): switchable variants of the same scene
    plus the current look, in **two rounds** (the owner, 2026-11-07; replaces "at least 10 variants" of 2026-10-30): **round 1 is broad**, many clearly
    different directions (12 or more, not tweaks of one idea) at the game's finish level, no placeholders, foreign styles dropped; **round 2 is deep**,
-   several fully polished variations of the direction the owner picked. Every variant is checked against a style-fit list of the existing look
+   several fully polished variations of the direction the owner picked. **A whole-style round** (one complete UI style across many
+   screens, as #826) is capped at **5 complete directions** per round (the owner, 2026-11-08), an exception to the 12 or more of a
+   normal round 1. Every variant is checked against a style-fit list of the existing look
    (palette, strokes, rims, glow, easing and timings of the current effects) before it goes on the page, and is drawn with the game's own material
    (real baked frames, gradients, rims, soft glow, eased motion): nothing flat, crude or unfinished. Weak variants are pruned with
    `design:design-critique` before the owner sees them. **As little text and as few tables as possible
@@ -2251,7 +2253,7 @@ The owner's choice of 2026-11-08 on the mockup [`mockups/city-capture.html`](moc
 - **Cost.** Per capture three meshes of the area's outline (fill, glow, rim) with a tiny shader, triangulated once; only a few uniforms change per frame. Two world-sized glow textures at half resolution live for the length of the flood; nothing has a filter, the glow cache is drawn once at the start as before. The border lines and the roads of the node are restroked per frame while the flood runs, as the old cross-fade did.
 - **Looking at it.** A frozen dev scene can show a capture under way: `?flood=<ms>,<node>:<owner before>,...` (`0`, `1` or `n` for nobody), for example `/?scene=artery&flood=300,4:1`; `mise run shots` takes `capture-*.png` this way.
 
-## 50. Out-of-game style, round 1 (#826) **[awaiting the owner's decision]**
+## 50. Out-of-game style, round 1 (#826) **[decided: Lapis, 2026-11-08]**
 
 The owner asked on 2026-11-08 for a complete new style for everything outside the match, in two rounds: round 1 shows at most five complete directions, the owner picks or steers one, round 2 refines it, and the chosen style is later carried into the match (the match may lose its glow or change to match; the finished game has one style). This round follows that brief instead of the "12 or more variants that fit the existing style" of section 23.
 
@@ -2266,3 +2268,24 @@ Mockup: [`mockups/out-of-game-style.html`](mockups/out-of-game-style.html) (font
 | V | Nocturne | Bodoni Moda, Public Sans | restrained dark strategy, the nearest to the game today: the real map full screen, solid graphite panels |
 
 The opening scene (all directions, defaults until the owner decides): about 6.6 s, four fights light the map at the left and right edges and fade from the edge of their light to its centre, the letters of the title appear one by one, the title moves up and the nick field with Log in and Create an account appears; skippable by a click or a key, once a session and not after a match, one still frame with a 0.5 s fade under reduced motion. All fonts are SIL OFL 1.1 and self-hosted (`font-src 'self'`). No direction needs a DEC, a protocol, simulation or server change. Atlas and Raster are light outside the match, which section 22 ("one dark theme") does not allow without the owner's decision. The table of costs and risks, the checks and the questions are in #826.
+
+The owner picked **I Lapis** on 2026-11-08 (with the title rule and the letter assembly of Atlas; dark only: the light Atlas and Raster and the Ordre look are rejected). Round 2 is section 51.
+
+## 51. Out-of-game style, round 2: Lapis in depth and the match map (#826) **[awaiting the owner's decision]**
+
+Mockup: [`mockups/out-of-game-style-r2.html`](mockups/out-of-game-style-r2.html) (two sections, Screens and Match map; compare up to four, zoom, grayscale, reduced motion), frames in [`mockups/img/out-of-game-style-r2/`](mockups/img/out-of-game-style-r2/), the baked backgrounds in [`mockups/assets/out-of-game-style-r2/`](mockups/assets/out-of-game-style-r2/).
+
+What changed from round 1 by the owner's feedback: the title is Cinzel with the Atlas rule under it and the Atlas letter assembly; five fights light the edges at staggered, irregular moments, each with its own rise, hold and fade, eased in and out in size and strength; the opening scene plays once a browser session, is skipped by a click or a key, never after a match and is off (a still frame) under reduced motion; nothing under Play and no line at the foot of the main screen; overlay windows (dialogs) sit on the same blurred stone as Profile and Replays; the result screen has the new stats (units killed, units lost, cities and provinces captured, attacks won X of Y, defenses held X of Y, length).
+
+The match map, on the pool map narrows at minute 6 (territory, roads, cities and provinces, fog, both sides' helmets charged and empty, a fight with its tablet, two scheduled orders, the HUD and an alert). Every background is baked by the production baker (`gow_maps.bake`, `gow_maps.geo`) with the variant's palette, detail drawers and one post step; the pieces come in the current style or in Lapis ("Pieces" swaps them on any background):
+
+| Id | Variant | Terrain | Bake change |
+| --- | --- | --- | --- |
+| 0 | Current | the T2 painted map | none (reference; 0′ is a frame of the real client on narrows) |
+| I | Fresco | the painted map graded down: less saturation, lower value, warm, a plaster tooth | one grade step after `render` |
+| II | Inlay | pietra dura: one polished stone per terrain (verde, giallo, malachite, granite, white marble, petrol water), fitted with fine dark joints | hard-edged areas, stone generators, joints, inlaid bridges |
+| III | Intaglio | tinted stone, each terrain carved with its own sign (furrows, drilled points, crowns, chevrons), water-lining along the shores | palette, six detail drawers, the water-lining |
+| IV | Mosaic | tesserae in terrain colours, dark rows along shores and terrain changes | a tessellation step; WebP quality 80 to stay under 0.5 MB |
+
+Lapis pieces (shared by I to IV): the helmets keep their silhouettes and facing, the charge is the fill level with a cut level line; cities keep their discs and capacity rings in ivory on cut stone; VP is a gilt lozenge; own roads are an inlaid band of the owner's stone; territory has no glow: a groove with the owner's rule inside, doubled on the own side, toothed on the enemy's; the fog takes the colour out, darkens and hatches; the enemy's scheduled order is hatched; names in Cinzel.
+
