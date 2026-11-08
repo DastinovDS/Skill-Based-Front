@@ -21,8 +21,10 @@
  * `close` only when the browser's own TCP timeout expires, long after the server has started the
  * disconnect window of DEC-05 (CLI-02, #417). So the client watches for life itself: while ready
  * (and not in a pause, when the server sends no snapshots) no frame of any kind for `deadAfterMs`
- * is a dead link, and so are two unanswered pings; either closes the socket on this side and takes
- * the normal reconnect path. `online` and a tab that becomes visible again reconnect at once, or
+ * is a dead link, and so are two unanswered pings with no frame since the later one; either closes
+ * the socket on this side and takes the normal reconnect path. A frame after the ping keeps the link:
+ * a page that runs behind the server (a busy main thread, a slow device) gets its pongs late,
+ * queued behind seconds of snapshots, and must not drop a live link for that (#852). `online` and a tab that becomes visible again reconnect at once, or
  * check the link at once.
  */
 import {
@@ -178,6 +180,8 @@ export class MatchConnection {
   readonly #pending = new Map<number, ClientMsg>();
   #nextPingId = 0;
   readonly #pingSentAt = new Map<number, number>();
+  /** When the latest ping was sent (`now()`). */
+  #lastPingAt = 0;
 
   constructor(opts: MatchConnectionOptions) {
     this.#opts = opts;
@@ -366,7 +370,10 @@ export class MatchConnection {
   #checkAlive(): void {
     if (this.#status !== 'ready') return;
     const silent = !this.#paused && this.#now() - this.#lastFrameAt > this.#deadAfterMs;
-    if (silent || this.#pingSentAt.size >= 2) this.#onClose(CLOSE_ABNORMAL);
+    // Two pings without a pong, and not a frame since the later one: frames still coming in are
+    // life, the pongs are only queued behind them on a page that runs late (#852).
+    const unanswered = this.#pingSentAt.size >= 2 && this.#lastFrameAt <= this.#lastPingAt;
+    if (silent || unanswered) this.#onClose(CLOSE_ABNORMAL);
   }
 
   /**
@@ -430,7 +437,8 @@ export class MatchConnection {
       this.#watch();
       if (this.#status !== 'ready') return;
       const id = this.#nextPingId++;
-      this.#pingSentAt.set(id, this.#now());
+      this.#lastPingAt = this.#now();
+      this.#pingSentAt.set(id, this.#lastPingAt);
       this.#write({ type: 'ping', id });
     }, this.#pingMs);
   }
