@@ -2328,3 +2328,40 @@ The owner picked **III Engraved** of round 1 (section 52): line and hatching, th
 
 Common to all picks: no glow, every coloured mark on a dark casing, and a charge always solid against hatched.
 
+
+## 54. In-game style, round 3: the Engraved picks and the open topics (#829) **[awaiting the owner's decision]**
+
+The owner's round 2 picks (section 53) are applied: CP **Rule and needle**, undo **Rewind**, forts **Frontier wall**, plan fill **Eased steps**, menus **Cut and ring**. Round 3 polishes them and opens the topics the owner asked to see more of. Mockup: [`mockups/in-game-style-r3.html`](mockups/in-game-style-r3.html) (rounds 1 and 2 are unchanged). Frames: [`mockups/img/in-game-style-r3/`](mockups/img/in-game-style-r3/). The page has 17 topics, each with its round 2 look (or the client today) as the first variant. It also has compare, grayscale, reduced motion, a scrubber with the story marked, a map zoom and a frame camera in the address (`fc=x,y,zoom`). The combined scenes are the whole map, the front (a fight where both sides fire and one where only one side does), the fight, the capture, the Supply view, the city menu and the group menu. A scene compare shows the round 2 picks against the round 3 picks.
+
+| Topic | Variants (the first is round 2 or today) | Pick |
+| --- | --- | --- |
+| a CP | Round 2, Double frame, Paper bar | Double frame. Nothing runs past the scale. At the cap an engraved double frame with lozenge serifs closes round the bar, and a CP burnt at the cap shows nothing. |
+| b Undo | Round 2, Rewind fixed | Rewind fixed. The order winds back behind a double barb that points at the group, and the ring's head leads the way it turns. |
+| c Forts | Round 2, Through the border points | The wall lies on the own border band, and near each road it bends to cross that road at its border point (`border_permille`, where the toll is taken). The road passes through a gate with two posts, so the wall never runs over a road. Built neighbours are one stroke, open ends get a bar, and the shore stays open. Zoomed out, the wall keeps its screen weight (ticks at least 4 px apart). |
+| d Fight | Round 2, Cross cut, Shatter, Parry | Cross cut. See the fight data below. |
+| e Plan fill | Round 2, Eased steps with slots | Eased steps with slots: the pill shows one chevron slot per asked bonus, solid when gathered. |
+| f Supply | Round 2 Streams, Canal, Chain, Pulse | Canal: every downhill road carries one channel width from ring to ring. The amount is the packets themselves, and the hachures run only while the road carries. |
+| g Menus | Round 2, Cut and ring | Cut and ring with the new fortify icon (l). |
+| h Arrows | Round 2 Burin, Cased, Cased running, Heavy core | Cased running: a paper casing outside the dark one, the owner's colour between the hairlines, and a burin point running to the head. It reads on forest, plains, mountains, water, fog and the enemy's land. |
+| i Path | Round 2 Shadow order, Cased shadow, Cased running, Node rings | Cased running, hollow: the shadow of the arrow pick along `ReachNode.path`. |
+| j Capture | The jump, Walk in, Walk in and plant, Through the gate | Walk in: a 0.6 s walk from the gate, and the flood starts as the unit crosses the ring. |
+| k Builds | Round 2, Courses, Pips | Courses. One course of the tower is laid per paid charge, and the charge flies from where it was paid (the warehouse or the group). Then the owner's hatch and a ruled time arc show the build time. A unit made by the recruit queue drops into the city. Towers keep a minimum screen size. |
+| l Fort icon | Today, Gate, Gate and toll | Gate: a stretch of the frontier wall cut by the road, two posts, ticks outward. |
+| m Bounce | Today, Hook, Retrace, Chevrons home | Retrace: the way home as an amber burin outline that shortens as the group walks. Only own bounces are shown, because `fight_group` with `bounce` goes to the owner only. |
+| n Fog | Round 2, Ruled veil, Stipple veil | Ruled veil: one run of fine rules on grey land, with the owner hatch and borders kept. The edge of sight is a double line with ticks into the fog, and the memory keeps its outline and age. |
+| o Map | Round 2, Border band, Even hatch | Border band: no hatch inside the land and a stronger band along the land borders, so the terrain reads clean. |
+| p City highlight | Round 2, Rings, Corners | Rings: each state is its own stroke round the capacity ring. Selected is a double ring, hovered a single ring, a valid target cut ticks with the time, under attack an amber notch towards the enemy, a fight the wedges, the capital crenels, and cut off a broken amber ring. |
+| q Tips and alerts | Round 2 Cartouche, Ribbon, Leader | Leader: tips are tags tied to their object by a ruled leader, and alerts hang as strips under the top bar. The text is only a place name or a number. |
+
+**The fight, from the data the client already has.** A round arrives as `fight_round` (and as `FightView.last_round`), and each side has `shots`, `virtual`, `spent`, `losses` and `burned`. With `shots_per_round = 1` (mvp-5), the client lays a round out from these alone (AGENTS.md 7.1):
+
+- The pairs that met and cancelled number `shots[p] - losses[1 - p]`. This is the same for both sides (DEC-07 rule 2, `play_round`: `shots = cancel + kills`).
+- The hits by side `p` number `losses[1 - p]`. A surplus shot always kills, and a shot with no unit left is not made, so every non-cancelled shot is a hit.
+- Shot `i` of side `p` is a bonus shot (the octagram head) when `i < virtual[p]` (virtual first, B4).
+- `burned[p]` is the charges the terrain takes from side `p` at the start of the round, before the shots (DEC-45). It is drawn first: the charge sinks into the plains.
+
+A pair flies one shallow arch from its two ends and meets at its top. A hit flies the whole arch into the unit, and a small hatched helmet drops away. No field is missing. With `shots_per_round > 1`, which shots of a side are the bonus ones among its pairs and hits is not stated by the event. The simulation spends them together in one round, so the client may draw the bonus shots first.
+
+**The winner's jump.** The server puts the attacker in the node at contact (its location is the node; `FightMember.edge` and `from_node` keep the road it came by) and does not move it at the capture. The jump is the client's layout. The own icon always stands in the middle of the city, and the opponent's icon stands at a fixed spot right of the ring (`nodeMarkerPoint`) while an own icon is there, whatever road it came by (`iconPoint`). So an enemy attacker appears beside the city, not on its road, and snaps to the middle on the frame the last own defender is gone. An own attacker walks into the middle at its arrival, and the enemy defender is pushed beside it at once. The fix is client only: stand the attacker at the gate of its road (an own group: the edge of its previous snapshot; an enemy: the edge figure last seen arriving), and on `fight_ended` with `captured` tween it from the gate into the middle (0.6 s). The flood starts as it crosses the ring. No server or protocol change is needed. If the road should also be exact for an enemy arriving out of sight, it could be added to `FightView` (the attacker's `from_node`), but this is not needed for mvp-5, because the defended node's half of the road is in sight.
+
+Common to all: no glow, every coloured mark on a dark casing, a charge solid against hatched, and only the mechanics of mvp-5.
