@@ -7,7 +7,6 @@ import {
   ghostAlpha,
   sameVeil,
   veilCities,
-  veilPolygon,
 } from './fogLayout.ts';
 
 /** Two nodes 1000 apart on the x axis and one road between them (#366). */
@@ -100,38 +99,5 @@ describe('sameVeil', () => {
     expect(sameVeil([], [])).toBe(true);
     expect(sameVeil([1, 2], [1, 3])).toBe(false);
     expect(sameVeil([1, 2], [1, 2, 3])).toBe(false);
-  });
-});
-
-describe('veilPolygon', () => {
-  const bounds = { width: 100, height: 60 };
-
-  it('pushes the vertices on the edge of the map outward and leaves the inner ones', () => {
-    const cell = [
-      { x: 0, y: 0 },
-      { x: 50, y: 0 },
-      { x: 60, y: 30 },
-      { x: 0, y: 60 },
-    ];
-    expect(veilPolygon(cell, bounds, 10)).toEqual([
-      { x: -10, y: -10 },
-      { x: 50, y: -10 },
-      { x: 60, y: 30 },
-      { x: -10, y: 70 },
-    ]);
-  });
-
-  it('moves the far edges outward too and keeps the vertex count', () => {
-    const cell = [
-      { x: 100, y: 10 },
-      { x: 100, y: 60 },
-      { x: 40, y: 60 },
-    ];
-    const out = veilPolygon(cell, bounds, 5);
-    expect(out).toEqual([
-      { x: 105, y: 10 },
-      { x: 105, y: 65 },
-      { x: 40, y: 65 },
-    ]);
   });
 });

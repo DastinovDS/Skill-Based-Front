@@ -9,6 +9,7 @@ import { EffectsView } from './effectsView.ts';
 import { FrameGuard } from './frameGuard.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
+import { veilCities } from './fogLayout.ts';
 import { FortView } from './fortView.ts';
 import { TollView } from './tollView.ts';
 import { DefenseView } from './defenseView.ts';
@@ -183,7 +184,6 @@ export class MapScene {
       this.entities.kit,
       1,
       this.source?.tickHz ?? DEFAULT_TICK_HZ,
-      this.view.cells,
       radiusOf,
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
@@ -359,6 +359,8 @@ export class MapScene {
         frame.base.view.nodes.map((node) => node.owner),
         (!first && flowing) || before !== undefined,
       );
+      // The Ruled veil over the areas the snapshot hides (#842).
+      this.view.setHidden(veilCities(frame.base.view.nodes));
       const edges = frame.base.view.edges;
       this.view.setRoads(edges);
       this.levelCells = levelNodes(frame.base.view, this.me);
@@ -526,6 +528,8 @@ export class MapScene {
   private readonly onCamera = (camera: Camera): void => {
     // Also runs on resize, so a new device pixel ratio (window moved to another screen) applies.
     const resolution = labelResolution(camera.scale, this.app.renderer.resolution);
+    // The hatches of the map keep their screen pitch, the hairlines one device pixel at least (#842).
+    this.view.setCamera(camera.scale, this.app.renderer.resolution);
     this.sprites.setResolution(resolution);
     this.cities.setLabelResolution(resolution);
     this.defense.setLabelResolution(resolution);

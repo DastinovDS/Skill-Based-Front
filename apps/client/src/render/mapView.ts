@@ -1,5 +1,4 @@
 import {
-  BlurFilter,
   Container,
   Graphics,
   GraphicsContext,
@@ -14,7 +13,25 @@ import type { MapLayers } from './layers.ts';
 import { borderPermille } from './fogLayout.ts';
 import { reducedMotion } from './motion.ts';
 import { levelRim, levelShare, type RimSegment } from './levelLayout.ts';
-import { territoryBorders, type Border, type CellEdge } from './regionLayout.ts';
+import { type Border, type CellEdge } from './regionLayout.ts';
+import {
+  AREA_LINE,
+  BORDER_BAND,
+  BORDER_ENGRAVING,
+  BORDER_LINE_KINDS,
+  ENGRAVE,
+  HatchTile,
+  bandStrips,
+  borderLines,
+  engravedOwnerColor,
+  hairFloor,
+  pointsAlong,
+  withInward,
+  type BorderLineKind,
+  type BorderLines,
+  type Strip,
+} from './engraving.ts';
+import { VeilView, bandAngle } from './veilView.ts';
 import { easeOutCubic } from './tween.ts';
 import {
   BORDER_FIT,
@@ -40,7 +57,6 @@ import {
   BACKDROP_DIM,
   BG,
   CELL_BORDER,
-  CELL_LINE,
   FLOW_LEVEL,
   HOVER_AREA,
   MAP_BORDER,
@@ -51,13 +67,10 @@ import {
   PATTERN_GROUND,
   PAPER,
   TERRAIN_FILL,
-  TERRITORY_GLOW,
   SUPPLY_FLOOR,
   SUPPLY_WATER,
   WATER_FLAT,
   SUPPLY_TERRITORY_ALPHA,
-  TERRITORY_ALPHA,
-  TERRITORY_BORDER,
   ownerColor,
   roadLanesWidth,
 } from './style.ts';
@@ -159,9 +172,22 @@ export class MapView {
   private ground: Graphics | null = null;
   private terrainMode = false;
   private owners: readonly Owner[] = [];
-  /** The border lines of `owners`, and of the owners before the first capture under way. */
-  private borders: readonly Border[] = [];
-  private bordersBefore: readonly Border[] | null = null;
+  /** The engraved border lines of `owners`, and of the owners before the first capture under way. */
+  private lines: BorderLines = { cut: [], rule: [], rule2: [], beads: [] };
+  private linesBefore: BorderLines | null = null;
+  /** The quadrilaterals of the Border band of `owners` (#842). */
+  private strips: readonly Strip[] = [];
+  /** The edges of the areas with an inward normal on each: the borders are mitred everywhere. */
+  private readonly mitred: readonly CellEdge[];
+  /** The hatch of the Border band, in zoom buckets (one tile, turned per owner). */
+  private readonly bandTile = new HatchTile(BORDER_BAND.hatch);
+  /** The Ruled veil of the fog over the hidden areas (#842). */
+  private readonly veil: VeilView;
+  /** The camera: css px per world unit and the device pixel ratio. */
+  private zoom = 1;
+  private resolution = 1;
+  /** The thinnest stroke (one device pixel) in world units, rounded up (`hairFloor`). */
+  private hairMin = hairFloor(1, 1);
   /** The captures under way (#819), by node, oldest first. */
   private readonly floods = new Map<number, Flood>();
   /** The dev scenes hold every flood at this age (ms) to look at it frame by frame; `null`: real time. */
@@ -188,25 +214,20 @@ export class MapView {
   private levelStrength = 0;
   private levelSet = false;
   private rims = new Map<ReadonlySet<number>, readonly RimSegment[]>();
-  /** The line of an owner's border, over its glow. */
+  /** The engraved lines of the owners' borders, over the band. */
   private readonly borderLines: Graphics;
   /**
-   * The glow along the borders of the territories (BL1, #347): per owner a blurred wide line on the
-   * owner's side of the border, cached as one texture and drawn again only when an owner changes.
-   * The blur is a filter INSIDE the cached container, so it runs only when the cache is built.
+   * The Border band (#829 round 3, topic o; #842): per owner a hatched band inside the land borders,
+   * own horizontal, the enemy's at 45 degrees. It replaces the blurred glow of BL1 (#347); the
+   * floods of captures still take it as a texture before and after a change (`GlowPair`).
    */
-  private readonly glow = new Container({ label: 'territory-glow', visible: false });
-  /** Holds the glow: the floods under way mask it out where they draw it (a cached container keeps its own effects in its cache). */
-  private readonly glowHolder = new Container({ label: 'territory-glow-holder' });
-  private readonly glowLines: Record<0 | 1, Graphics> = {
-    0: new Graphics({ label: 'glow-lines-0' }),
-    1: new Graphics({ label: 'glow-lines-1' }),
+  private readonly glow = new Container({ label: 'territory-band', visible: false });
+  /** Holds the band: the floods under way mask it out where they draw it. */
+  private readonly glowHolder = new Container({ label: 'territory-band-holder' });
+  private readonly bands: Record<0 | 1, Graphics> = {
+    0: new Graphics({ label: 'band-0' }),
+    1: new Graphics({ label: 'band-1' }),
   };
-  private readonly glowMasks: Record<0 | 1, Graphics> = {
-    0: new Graphics({ label: 'glow-mask-0' }),
-    1: new Graphics({ label: 'glow-mask-1' }),
-  };
-  private readonly glowBlurs: BlurFilter[] = [];
   private glowKey = '';
   private glowDrawn = false;
   private readonly roads: Road[];
@@ -238,11 +259,33 @@ export class MapView {
     this.cells = territory.cells;
     this.edges = territory.edges;
     this.convex = territory.convex;
+    this.mitred = withInward(this.cells, this.edges);
 
     this.layers = layers;
     const background = layers.layer.background;
     this.stampParent = background;
     this.terrainFill = background.addChild(this.drawTerrain());
+    this.veil = new VeilView(
+      map,
+      background,
+      background.getChildIndex(this.terrainFill) + 1,
+      layers.layer.fog,
+      this.cells,
+      this.mitred,
+      renderer,
+      {
+        band: (g, cells, alpha) => {
+          this.fillBand(g, (strip) => cells.has(strip.cell), alpha);
+        },
+        lines: (g, cells, alpha) => {
+          for (const kind of BORDER_LINE_KINDS) {
+            const list = this.lines[kind].filter((border) => cells.has(border.cell));
+            this.strokeLines(g, kind, list, alpha);
+          }
+        },
+      },
+    );
+    this.bandTile.update(this.zoom, this.resolution);
     this.dim = background.addChild(
       new Graphics().rect(0, 0, bounds.width, bounds.height).fill(BACKDROP_DIM),
     );
@@ -252,10 +295,11 @@ export class MapView {
       new Graphics().rect(0, 0, bounds.width, bounds.height).stroke(MAP_BORDER),
     );
     if (!bakedBackground) this.showStamps();
-    // A thin line round every area, also between areas of one owner or nobody: under the tint and
-    // the stronger border of the owners, under the roads.
-    this.cellLines = layers.layer.territory.addChild(this.drawCellLines());
-    this.territory = layers.layer.territory.addChild(new Graphics());
+    // A thin cut round every area, also between areas of one owner or nobody: under the band and
+    // the engraved border of the owners, under the roads.
+    this.cellLines = layers.layer.territory.addChild(new Graphics({ label: 'area-lines' }));
+    this.drawCellLines();
+    this.territory = layers.layer.territory.addChild(new Graphics({ label: 'territory' }));
     // The floods of captures (#819): the fill over the tint, the glow over the map's glow, the rim
     // over the border lines.
     const floodFill = layers.layer.territory.addChild(new Container({ label: 'flood-fill' }));
@@ -263,7 +307,7 @@ export class MapView {
     this.hoverFill = layers.layer.territory.addChild(new Graphics({ label: 'hover-area' }));
     this.buildGlow(layers.layer.territory, bounds);
     const floodGlow = layers.layer.territory.addChild(new Container({ label: 'flood-glow' }));
-    this.borderLines = layers.layer.territory.addChild(new Graphics());
+    this.borderLines = layers.layer.territory.addChild(new Graphics({ label: 'border-lines' }));
     const floodRim = layers.layer.territory.addChild(new Container({ label: 'flood-rim' }));
     this.levelRim = layers.layer.territory.addChild(new Graphics({ label: 'level-rim' }));
     // A mask is placed by the world like the rest; it is never drawn itself.
@@ -333,6 +377,44 @@ export class MapView {
     this.backdrop = sprite;
     this.terrainFill.visible = false;
     if (this.flatGround) sprite.visible = false;
+    // The Intaglio picture is already dark stone (#842): no dimming over it.
+    this.dim.visible = false;
+    this.veil.setPicture(texture);
+  }
+
+  /**
+   * The areas under the fog (sorted node ids, `veilCities`): the Ruled veil covers them. The same
+   * set costs nothing.
+   */
+  setHidden(hidden: readonly number[]): void {
+    this.veil.setHidden(hidden);
+  }
+
+  /**
+   * The camera (css px per world unit) and the device pixel ratio: the hatches keep their screen
+   * pitch in zoom buckets, the hairlines at least one device pixel (#829, round 2).
+   */
+  setCamera(zoom: number, resolution: number): void {
+    if (zoom === this.zoom && resolution === this.resolution) return;
+    this.zoom = zoom;
+    this.resolution = resolution;
+    const floor = hairFloor(zoom, resolution);
+    const floorChanged = floor !== this.hairMin;
+    this.hairMin = floor;
+    if (this.bandTile.update(zoom, resolution)) {
+      this.drawGlow(this.owners, true);
+      this.veil.bandChanged();
+    }
+    if (floorChanged) {
+      this.drawBorderLines();
+      this.drawCellLines();
+    }
+    this.veil.setCamera(zoom, resolution, floorChanged);
+  }
+
+  /** A stroke of `width` world units, at least one device pixel wide. */
+  private hair(width: number): number {
+    return Math.max(width, this.hairMin);
   }
 
   /**
@@ -391,7 +473,8 @@ export class MapView {
 
   private applyGround(): void {
     const flat = this.flatGround;
-    this.dim.visible = !flat;
+    this.dim.visible = !flat && this.backdrop === null;
+    this.veil.setGroundVisible(!flat);
     this.stamps?.setVisible(!flat);
     if (this.ground !== null) this.ground.visible = this.terrainMode;
     if (this.backdrop !== null) this.backdrop.visible = !flat;
@@ -526,11 +609,12 @@ export class MapView {
     this.owners = owners;
     const flood = animate && !this.supplyMode && changed !== null;
     if (!flood) this.endFloods();
-    this.borders = territoryBorders(this.cells, owners, TERRITORY_BORDER.inset, this.edges);
+    this.lines = borderLines(this.cells, owners, this.mitred);
     if (flood) this.startFloods(changed, previous);
     else this.drawGlow(owners);
     this.drawTerritory();
     this.drawBorderLines();
+    this.veil.ownersChanged();
     // The rim of the level follows the owners (a capture moves the border).
     this.rims.clear();
     if (this.levelSet) this.drawLevel(this.levelShareNow());
@@ -558,14 +642,7 @@ export class MapView {
    * glow is redrawn for the new owners and masked out where the floods draw it.
    */
   private startFloods(changed: readonly number[], previous: readonly Owner[]): void {
-    if (this.floods.size === 0) {
-      this.bordersBefore = territoryBorders(
-        this.cells,
-        previous,
-        TERRITORY_BORDER.inset,
-        this.edges,
-      );
-    }
+    if (this.floods.size === 0) this.linesBefore = borderLines(this.cells, previous, this.mitred);
     const before = this.glowPair?.before ?? this.glowTexture();
     const reduced = reducedMotion();
     for (const node of changed) {
@@ -596,7 +673,7 @@ export class MapView {
     const nodes = [...this.floods.keys()];
     const regions = glowRegions(nodes, this.neighbours);
     const hole = this.glowHole.clear();
-    const alpha = TERRITORY_ALPHA;
+    const alpha = this.territoryAlpha;
     this.floodView.setGlow(this.glowPair);
     nodes.forEach((node, i) => {
       const flood = this.floods.get(node);
@@ -635,7 +712,7 @@ export class MapView {
     return renderer.generateTexture({
       target: this.glow,
       frame: new Rectangle(0, 0, this.map.meta.width, this.map.meta.height),
-      resolution: TERRITORY_GLOW.resolution,
+      resolution: 1,
       antialias: true,
     });
   }
@@ -651,7 +728,7 @@ export class MapView {
   /** The textures and the mask of the glow go when no flood is left. */
   private afterFloods(): void {
     if (this.floods.size > 0) return;
-    this.bordersBefore = null;
+    this.linesBefore = null;
     this.glowHolder.mask = null;
     this.glowHole.clear();
     this.floodView.setGlow(null);
@@ -662,11 +739,20 @@ export class MapView {
     }
   }
 
+  /**
+   * The flat tint of the territory: none on the normal map (the Border band, #842: the land reads
+   * clean), the stronger flat tint in the «Supply» mode.
+   */
+  private get territoryAlpha(): number {
+    return this.supplyMode ? SUPPLY_TERRITORY_ALPHA : 0;
+  }
+
   /** The fill of the territory; an area under a flood is drawn by its flood. */
   private drawTerritory(): void {
-    const alpha = this.supplyMode ? SUPPLY_TERRITORY_ALPHA : TERRITORY_ALPHA;
+    const alpha = this.territoryAlpha;
     const g = this.territory;
     g.clear();
+    if (alpha <= 0) return;
     this.owners.forEach((owner, i) => {
       const cell = this.cells[i];
       if (cell === undefined || owner === null || this.floods.has(i)) return;
@@ -675,14 +761,14 @@ export class MapView {
   }
 
   /**
-   * The border of an area: a light line of the owner colour, one stroke per owner and share. While
-   * floods run, a line that a capture adds joins as the front reaches it (just inside the area, or
-   * just outside it for a neighbour's line) and a line it removes leaves the same way.
+   * The engraved border of the areas (#842): every line kind of `BORDER_ENGRAVING`. While floods
+   * run, a line that a capture adds joins as the front reaches it (just inside the area, or just
+   * outside it for a neighbour's line) and a line it removes leaves the same way.
    */
   private drawBorderLines(): void {
-    const lines = this.borderLines.clear();
-    const now = this.borders;
-    const before = this.bordersBefore ?? now;
+    const g = this.borderLines.clear();
+    const now = this.lines;
+    const before = this.linesBefore ?? now;
     const key = (b: Border): string =>
       `${String(b.owner)}:${String(b.a.x)},${String(b.a.y)}:${String(b.b.x)},${String(b.b.y)}`;
     const share = (b: Border): number => {
@@ -691,32 +777,63 @@ export class MapView {
       const across = b.neighbour === null ? undefined : this.floods.get(b.neighbour);
       return across === undefined ? 1 : revealAt(across.look, BORDER_FIT.outside);
     };
-    const oldKeys = new Set(before.map(key));
-    const nowKeys = new Set(now.map(key));
-    const groups = new Map<number, Border[]>();
-    const put = (border: Border, fade: number): void => {
-      if (fade <= 0) return;
-      // Shares are rounded to a few steps of a frame: one stroke each.
-      const step = Math.round(fade * 64) / 64;
-      const list = groups.get(step);
-      if (list === undefined) groups.set(step, [border]);
-      else list.push(border);
-    };
-    for (const border of now) put(border, oldKeys.has(key(border)) ? 1 : share(border));
-    for (const border of before) if (!nowKeys.has(key(border))) put(border, 1 - share(border));
-    for (const [fade, borders] of groups) {
-      for (const owner of [0, 1] as const) {
-        const own = borders.filter((border) => border.owner === owner);
-        for (const { a, b } of own) lines.moveTo(a.x, a.y).lineTo(b.x, b.y);
-        if (own.length > 0) {
-          lines.stroke({
-            width: TERRITORY_BORDER.width,
-            color: ownerColor(this.me, owner),
-            alpha: TERRITORY_BORDER.alpha * fade,
-            cap: 'round',
-          });
-        }
+    for (const kind of BORDER_LINE_KINDS) {
+      const oldKeys = new Set(before[kind].map(key));
+      const nowKeys = new Set(now[kind].map(key));
+      const groups = new Map<number, Border[]>();
+      const put = (border: Border, fade: number): void => {
+        if (fade <= 0) return;
+        // Shares are rounded to a few steps of a frame: one stroke each.
+        const step = Math.round(fade * 64) / 64;
+        const list = groups.get(step);
+        if (list === undefined) groups.set(step, [border]);
+        else list.push(border);
+      };
+      for (const border of now[kind]) put(border, oldKeys.has(key(border)) ? 1 : share(border));
+      for (const border of before[kind]) {
+        if (!nowKeys.has(key(border))) put(border, 1 - share(border));
       }
+      for (const [fade, borders] of groups) this.strokeLines(g, kind, borders, fade);
+    }
+  }
+
+  /**
+   * One kind of the engraved border lines into `g` at `alpha`: the cut on the border for every
+   * owner, the owner's rule inside it, the second rule on the own side, the beads on the enemy's.
+   */
+  private strokeLines(
+    g: Graphics,
+    kind: BorderLineKind,
+    borders: readonly Border[],
+    alpha: number,
+  ): void {
+    if (borders.length === 0 || alpha <= 0) return;
+    if (kind === 'cut') {
+      const { width, alpha: cutAlpha } = BORDER_ENGRAVING.cut;
+      for (const { a, b } of borders) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      g.stroke({
+        width: this.hair(width),
+        color: ENGRAVE.cut,
+        alpha: cutAlpha * alpha,
+        cap: 'round',
+      });
+      return;
+    }
+    for (const owner of [0, 1] as const) {
+      const own = owner === this.me;
+      if ((kind === 'rule2' && !own) || (kind === 'beads' && own)) continue;
+      const list = borders.filter((border) => border.owner === owner);
+      if (list.length === 0) continue;
+      const color = engravedOwnerColor(this.me, owner);
+      if (kind === 'beads') {
+        const { step, radius } = BORDER_ENGRAVING.beads;
+        for (const { at } of pointsAlong(list, step)) g.circle(at.x, at.y, radius);
+        g.fill({ color, alpha });
+        continue;
+      }
+      const { width } = BORDER_ENGRAVING[kind];
+      for (const { a, b } of list) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      g.stroke({ width: this.hair(width), color, alpha, cap: 'round' });
     }
   }
 
@@ -768,63 +885,52 @@ export class MapView {
   }
 
   private buildGlow(parent: Container, bounds: { width: number; height: number }): void {
-    for (const owner of [0, 1] as const) {
-      const blur = new BlurFilter({
-        strength: TERRITORY_GLOW.blur,
-        quality: TERRITORY_GLOW.blurQuality,
-        resolution: TERRITORY_GLOW.resolution,
-        // Not cut to the canvas: the filter runs inside the world-sized cache texture (#441).
-        clipToViewport: false,
-      });
-      this.glowBlurs.push(blur);
-      // Opaque strokes, the alpha on the blurred whole: where two lines meet nothing doubles.
-      const blurred = new Container({
-        label: `glow-blur-${String(owner)}`,
-        alpha: TERRITORY_GLOW.alpha,
-      });
-      blurred.filters = [blur];
-      blurred.addChild(this.glowLines[owner]);
-      // The glow stays on the owner's side of the border: the cells of the owner clip it.
-      const clip = new Container({ label: `glow-clip-${String(owner)}` });
-      clip.addChild(blurred, this.glowMasks[owner]);
-      clip.mask = this.glowMasks[owner];
-      this.glow.addChild(clip);
-    }
+    this.glow.addChild(this.bands[0], this.bands[1]);
     this.glow.boundsArea = new Rectangle(0, 0, bounds.width, bounds.height);
-    this.glow.cacheAsTexture({ resolution: TERRITORY_GLOW.resolution, antialias: true });
     this.glowHolder.addChild(this.glow);
     parent.addChild(this.glowHolder);
   }
 
-  /** Redraws the glow (and its cache) when the owners changed; the tint of the «Supply» mode has none. */
-  private drawGlow(owners: readonly Owner[]): void {
-    const key = owners.map((owner) => String(owner)).join('');
-    if (key === this.glowKey) return;
-    this.glowKey = key;
-    const borders = territoryBorders(this.cells, owners, 0, this.edges);
-    let drawn = 0;
+  /**
+   * The hatched strips of the band that pass `keep` into `g`, per owner (own horizontal, the
+   * enemy's at 45 degrees), at `alpha` of the band's own. Whether any was drawn.
+   */
+  private fillBand(g: Graphics, keep: (strip: Strip) => boolean, alpha: number): boolean {
+    let drawn = false;
     for (const owner of [0, 1] as const) {
-      const lines = this.glowLines[owner].clear();
-      const mask = this.glowMasks[owner].clear();
-      const own = borders.filter((border) => border.owner === owner);
-      for (const { a, b } of own) lines.moveTo(a.x, a.y).lineTo(b.x, b.y);
-      if (own.length > 0) {
-        lines.stroke({
-          width: TERRITORY_GLOW.width,
-          color: ownerColor(this.me, owner),
-          cap: 'round',
-        });
-        drawn += own.length;
-        owners.forEach((o, i) => {
-          const cell = this.cells[i];
-          if (o === owner && cell !== undefined) mask.poly(cell);
-        });
-        mask.fill(0xffffff);
-      }
+      const strips = this.strips.filter((strip) => strip.owner === owner && keep(strip));
+      if (strips.length === 0) continue;
+      for (const strip of strips) g.poly([...strip.points]);
+      g.fill({
+        texture: this.bandTile.texture,
+        textureSpace: 'global',
+        matrix: this.bandTile.matrix(bandAngle(this.me, owner)),
+        color: engravedOwnerColor(this.me, owner),
+        alpha: BORDER_BAND.alpha * alpha,
+      });
+      drawn = true;
     }
-    this.glowDrawn = drawn > 0;
+    return drawn;
+  }
+
+  /**
+   * Redraws the band when the owners changed (or `force`: a new zoom bucket of its hatch); the
+   * «Supply» mode has none.
+   */
+  private drawGlow(owners: readonly Owner[], force = false): void {
+    const key = owners.map((owner) => String(owner)).join('');
+    if (key === this.glowKey && !force) return;
+    if (key !== this.glowKey) {
+      this.glowKey = key;
+      this.strips = bandStrips(this.cells, owners, this.mitred, BORDER_BAND.depth);
+    }
+    let drawn = false;
+    for (const owner of [0, 1] as const) {
+      const g = this.bands[owner].clear();
+      drawn = this.fillBand(g, (strip) => strip.owner === owner, 1) || drawn;
+    }
+    this.glowDrawn = drawn;
     this.glow.visible = this.glowDrawn && !this.supplyMode;
-    if (drawn > 0) this.glow.updateCacheTexture();
   }
 
   /**
@@ -1036,7 +1142,8 @@ export class MapView {
     this.levelRim.destroy();
     this.borderLines.destroy();
     this.glow.destroy({ children: true });
-    for (const blur of this.glowBlurs) blur.destroy();
+    this.veil.destroy();
+    this.bandTile.destroy();
     this.stamps?.destroy();
     this.backdrop?.destroy();
     this.terrainFill.destroy();
@@ -1053,18 +1160,18 @@ export class MapView {
   }
 
   /**
-   * Each edge shared by two land areas once; the edge on the border of the map is the map frame's.
-   * No line where an area ends at water (DEC-36, the owner's decision of 2026-10-29): the water
-   * itself is the border.
+   * Each edge shared by two land areas once, a faint cut (#842); the edge on the border of the map
+   * is the map frame's. No line where an area ends at water (DEC-36, the owner's decision of
+   * 2026-10-29): the water itself is the border.
    */
-  private drawCellLines(): Graphics {
-    const g = new Graphics();
+  private drawCellLines(): void {
+    const g = this.cellLines.clear();
     for (const { cell, a, b, neighbour, water } of this.edges) {
       if (neighbour !== null && water !== true && cell < neighbour) {
         g.moveTo(a.x, a.y).lineTo(b.x, b.y);
       }
     }
-    return g.stroke({ width: CELL_LINE.width, color: CELL_LINE.color, alpha: CELL_LINE.alpha });
+    g.stroke({ width: this.hair(AREA_LINE.width), color: ENGRAVE.cut, alpha: AREA_LINE.alpha });
   }
 
   /**

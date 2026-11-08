@@ -249,8 +249,8 @@ description = "Draw maps/<name>.preview.png (the pool, the menu map maps/menu/ a
 run = "uv run gow-maps preview maps/*.json maps/menu/*.json maps/gen/*.json"
 
 [tasks."maps:bake"]
-description = "Bake maps/<name>.bg.webp (the pool, the menu map maps/menu/ and the generated maps maps/gen/): numpy and Pillow, texture T2; a map with src/<name>.geo.json also gets water and geo/<name>.json, DEC-36 (after any map edit)"
-run = "uv run gow-maps bake maps/*.json maps/menu/*.json maps/gen/*.json"
+description = "Bake maps/<name>.bg.webp (the pool, the fixtures maps/fixtures/, the menu map maps/menu/ and the generated maps maps/gen/): numpy and Pillow, the Intaglio look (#842); a map with src/<name>.geo.json also gets water and geo/<name>.json, DEC-36 (after any map edit)"
+run = "uv run gow-maps bake maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json"
 
 [tasks."maps:mirror"]
 description = "Build maps/<name>.json from maps/src/<name>.half.json (arg: name)"

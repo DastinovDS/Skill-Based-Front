@@ -93,20 +93,3 @@ export function veilCities(nodes: readonly Pick<NodeView, 'id' | 'detail'>[]): n
 export function sameVeil(a: readonly number[], b: readonly number[]): boolean {
   return a.length === b.length && a.every((id, i) => id === b[i]);
 }
-
-/**
- * A Voronoi cell for the veil: every vertex that lies on the edge of the map `[0, width] x [0, height]`
- * moves `margin` outward along that edge's normal, so that the blur does not thin the veil at the
- * edge of the map (the map mask cuts what is outside). Inner vertices stay.
- */
-export function veilPolygon(
-  cell: readonly Point[],
-  bounds: { readonly width: number; readonly height: number },
-  margin: number,
-): Point[] {
-  const eps = 1e-6;
-  return cell.map((p) => ({
-    x: p.x <= eps ? p.x - margin : p.x >= bounds.width - eps ? p.x + margin : p.x,
-    y: p.y <= eps ? p.y - margin : p.y >= bounds.height - eps ? p.y + margin : p.y,
-  }));
-}

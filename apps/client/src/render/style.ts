@@ -56,8 +56,6 @@ export const PATTERN_GROUND = {
 export const WATER_FLAT = 0x345c74;
 /** The baked background (or the flat terrain colours) is darkened by this (9.1). */
 export const BACKDROP_DIM = { color: BG, alpha: 0.18 } as const;
-/** The thin line round every area of the map (also between areas of one owner): subtle. */
-export const CELL_LINE = { width: 1, color: PAPER, alpha: 0.16 } as const;
 export const CELL_BORDER = { width: 1, color: BG, alpha: 0.5 } as const;
 export const MAP_BORDER = { width: 2, color: 0x484f58 } as const;
 
@@ -74,10 +72,8 @@ export function ownerColor(me: PlayerId, owner: PlayerId): number {
   return sideOf(me, owner) === 'you' ? YOU : ENEMY;
 }
 
-/** Territory: the cell of an owned city is tinted with the owner colour (9.1). */
-export const TERRITORY_ALPHA = 0.2;
-/** The border of an area of one owner: a light line of the owner colour. */
-export const TERRITORY_BORDER = { width: 2, alpha: 0.95, inset: 1.5 } as const;
+// Territory: the Border band and the engraved border lines of `engraving.ts` (#842); the flat tint
+// is only the «Supply» mode's (`SUPPLY_TERRITORY_ALPHA`).
 
 // --- Shading BL1-1 "Restrained" (ui-style 26.3, #347) ------------------------------------------------
 // Objects (cities, group helmets, badges, arena plates and chips) are baked into textures once
@@ -104,20 +100,6 @@ export const SHADOW = {
 export const RIM = { alpha: 0.3, width: 1.4 } as const;
 /** The room a baked sprite keeps around its shape for the shadow (world units). */
 export const BAKE_MARGIN = 4;
-
-/**
- * The glow along the border of a territory (BL1 "pronounced" border, owner's choice 2026-10-21): a
- * line of the owner's colour `width` wide at `alpha`, blurred by `blur`, on the owner's side of the
- * border only. It is drawn once into a cached texture and drawn again only when an owner changes.
- * `resolution` is the cache's pixel density: the glow is soft, half the pixels are enough.
- */
-export const TERRITORY_GLOW = {
-  width: 12,
-  alpha: 0.85,
-  blur: 4.5,
-  blurQuality: 3,
-  resolution: 0.5,
-} as const;
 
 // --- Terrain stamps (9.2): dark "ink" stamps on the cell of a city ------------------------------
 export interface StampSpec {
@@ -384,27 +366,11 @@ export const ARROW_OUTLINE = { width: 6, color: BG, alpha: 0.7 } as const;
 /** Red means only "opponent" (6), so a fight mark is paper white. */
 export const FIGHT_COLOR = PAPER;
 
-// --- Fog of war (CLI-05, #61; the haze F1, #346) -----------------------------------------------
-// A hidden area is a cool grey veil with a soft edge, no hatching (ui-style 26.3): the cells of the
-// hidden cities are filled, blurred once and cached as one texture, redrawn only when the set of
-// the hidden cities changes. What is not known of a place is carried by the dotted half of a road
-// (`ROAD_FOG`, a road never seen too), the memory ghosts and the tick at the border point.
+// --- Fog of war (CLI-05, #61) -------------------------------------------------------------------
+// A hidden area is the Ruled veil of `engraving.ts` (#842). What is not known of a place is carried
+// by the dotted half of a road (`ROAD_FOG`, a road never seen too), the memory ghosts and the tick at
+// the border point.
 
-/**
- * The veil: `color` at `alpha` over the hidden cells, blurred by `blur` px (world units). The blur
- * runs at `blurResolution` of the cache texture on `blurQuality` passes: the edge is soft anyway
- * and a quarter of the pixels cost about a quarter of the rebuild (measured in #346); it is not
- * redrawn per frame. `margin` is how far the cells are pushed past the map edge so that the veil
- * stays dense up to it (the mask of the map cuts it there).
- */
-export const FOG_VEIL = {
-  color: 0x252d38,
-  alpha: 0.66,
-  blur: 9,
-  blurQuality: 2,
-  blurResolution: 0.25,
-  margin: 40,
-} as const;
 /** Opacity of a fresh memory ghost (the marker of what was last seen in a hidden place). */
 export const GHOST_ALPHA = 0.6;
 /** Ghosts fade linearly from `GHOST_FADE_START_S` to nothing at `GHOST_HIDE_S` seconds after the sighting (9.8). */

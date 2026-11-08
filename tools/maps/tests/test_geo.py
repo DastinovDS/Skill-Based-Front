@@ -416,15 +416,16 @@ def test_ridge_mockup_geography_passes_the_check(
         assert (bridge.x, bridge.y) == geo.border_point(mapdef, bridge.edge)
 
 
-def test_no_dark_line_along_water_and_the_water_is_blue(
+def test_no_dark_halo_on_land_and_the_water_is_engraved_dark_stone(
     ridge: tuple[MapDef, geo.Geography, float],
 ) -> None:
     mapdef, g, compute_seconds = ridge
     started = time.process_time()
     pixels = geo.render(mapdef, g).astype(np.float64)
     assert compute_seconds + time.process_time() - started < BAKE_SECONDS
-    # Land right beside the water is not darker than the land a little farther away: no dark
-    # stroke, halo or bank line where an area border runs along water.
+    # Land right beside the water is not darker than the land a little farther away: the coast is
+    # one thin cut rule (Intaglio, #842), no dark band or halo where an area border runs along
+    # water.
     water = geo.is_water(g.labels)
     dist = geo.distance_to(water)
     lum = pixels.mean(axis=2)
@@ -436,7 +437,20 @@ def test_no_dark_line_along_water_and_the_water_is_blue(
     beside = cells[(dist > 0) & (dist <= 8)].mean()
     farther = cells[(dist > 16) & (dist <= 32)].mean()
     assert beside >= farther - 2.0, (beside, farther)
-    # W4 water is blue: blue above red in the water, unlike the land palette.
+    # Intaglio water (#826, round 2 variant III) is dark stone with a cool hue: blue above red,
+    # darker than the land.
     rgb = pixels.reshape(g.labels.shape[0], STEP, g.labels.shape[1], STEP, 3).mean(axis=(1, 3))
     lakes = rgb[g.labels >= geo.WATER_BASE]
-    assert (lakes[:, 2] - lakes[:, 0]).mean() > 40
+    assert (lakes[:, 2] - lakes[:, 0]).mean() > 20
+    assert lakes.mean() < rgb[~water].mean()
+    # The engraved water lines: the water near the shore is cut with lines (contrast inside a cell)
+    # that open water has not.
+    contrast = (
+        lum[: g.labels.shape[0] * STEP, : g.labels.shape[1] * STEP]
+        .reshape(g.labels.shape[0], STEP, g.labels.shape[1], STEP)
+        .std(axis=(1, 3))
+    )
+    lake = g.labels >= geo.WATER_BASE
+    shore = geo.distance_to(~water)
+    near_shore = contrast[lake & (shore > 4) & (shore <= 16)].mean()
+    assert near_shore > contrast[lake & (shore > 48)].mean() * 1.5

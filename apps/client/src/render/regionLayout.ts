@@ -188,6 +188,8 @@ export interface Border extends Segment {
   /** The area the line lies in, and the area across its edge (`null`: the sea or the border of the map). */
   readonly cell: number;
   readonly neighbour: number | null;
+  /** Water lies across the edge (a coast or a river bank, DEC-36): the land band stops there (#842). */
+  readonly water?: boolean;
 }
 
 /** The corner shifts per `edges` array (the edges of a map never change; a capture redraws per frame). */
@@ -260,6 +262,7 @@ export function territoryBorders(
         owner,
         cell: edge.cell,
         neighbour: edge.neighbour,
+        ...(edge.water === true ? { water: true } : {}),
         a: at(edge.a),
         b: at(edge.b),
       });
@@ -270,6 +273,7 @@ export function territoryBorders(
       owner,
       cell: edge.cell,
       neighbour: edge.neighbour,
+      ...(edge.water === true ? { water: true } : {}),
       a: { x: edge.a.x + d.x, y: edge.a.y + d.y },
       b: { x: edge.b.x + d.x, y: edge.b.y + d.y },
     });
