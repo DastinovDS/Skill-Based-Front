@@ -130,7 +130,7 @@
 }
 
 .dlg-btn.pri:disabled {
-  background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, #1a1f26 6px 12px);
+  background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, #1b1814 6px 12px);
   border-color: var(--border);
   color: var(--text-dim);
   opacity: 0.8;
