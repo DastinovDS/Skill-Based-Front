@@ -1381,7 +1381,7 @@ the look of most frames or costs more than a day) **does not start with code.** 
    (real baked frames, gradients, rims, soft glow, eased motion): nothing flat, crude or unfinished. Weak variants are pruned with
    `design:design-critique` before the owner sees them. **As little text and as few tables as possible
    on the page** (the owner, 2026-10-30): only switches between elements and variants, a side-by-side comparison of 2 to 4 variants, and time
-   controls (play, pause, scrub) where something moves; the explanations go into the issue. Switches for what affects readability
+   controls (play, pause, scrub) where something moves; the explanations go into the issue. **In-match designs show only the mechanics of the played ruleset, and keep in-match text to a minimum (no legend panels)** (the owner, 2026-11-08): every element is checked against the played ruleset and the client before it is drawn, and meaning comes from shape, hatch, motion and position; text stays only where a number is the information. Switches for what affects readability
    (grayscale, "reduced motion"), the state in the address (`#el=...&v=...`) for reproducible frames. The mockup engine, where there are rules,
    is checked against the tables of `mechanics.md` right on the page (like `simulate` in `fight-arena.html`).
    **Design tools are mandatory** (the owner, 2026-10-30): `design:design-critique` (pruning, the recommendation), `design:accessibility-review`
@@ -2305,4 +2305,26 @@ This round carries Lapis into every element of a match, on the fixed Intaglio ba
 | V | Planar | flat matte colour, hairline rules, cut corners | hue kept under a flat veil; owner tint kept | 4 to 5 days |
 
 Common to I to V: no glow anywhere; the amber fight sign is a ring of small cut wedges, a buffer road a row of cut lozenges, a road in fog fine beads (no dashes); an unknown enemy figure is an open shape (hatched, wired, stippled, sunk or outlined); the ghost of a sent order is the ribbon's outline only; a road fortification is a crenellated line (the wall of cartography); a road upgrade lays its work along the road; a shot is a tapered sliver with a fading tail and its hit throws fragments; the flood front is the variant's line on the scaled area outline. The HUD is the round 2 stone strip in each variant's material, the radial menus are sectors of that material. All keep the baked sprites and `SpriteCache` keys and add no per-object filter. Recommendation in #829: I Lapidary with the fog of II (the owner tint kept under the fog).
+
+## 53. In-game style, round 2: Engraved in depth (#829) **[awaiting the owner's decision]**
+
+The owner picked **III Engraved** of round 1 (section 52): line and hatching, the owner told by colour and hatch direction (own horizontal, the enemy 45 degrees), kept through the fog. Round 2 goes deep on it, with two binding rules: only the mechanics of `rulesets/mvp-5.toml`, and as little text in the match as possible. Mockup: [`mockups/in-game-style-r2.html`](mockups/in-game-style-r2.html) (round 1 is unchanged). Frames: [`mockups/img/in-game-style-r2/`](mockups/img/in-game-style-r2/). The mockup has nine topics with their variants (0 is the client today), a compare of every variant, grayscale, reduced motion, a time scrubber with the story marked on it, a map zoom (50 to 250 %), and the combined scenes of the picks (whole map, front, city menu, group menu, fight, capture, Supply view, zoom proof).
+
+| Topic | Variants (0 is the client today) | Pick |
+| --- | --- | --- |
+| a CP indicator | 1 Ruled cells, 2 Rule and needle, 3 Roundels | 1: a cell per CP. What you have is solid, the next CP is ruled in line by line, and the price of a hovered order is a bracket (red with a down chevron over the CP you lack). |
+| b Reverse of the global cancel (X) | 1 Rewind, 2 Cancelled plate, 3 Pull back | 1: the order winds back into the group and a three-quarter ring turns back round it. A refunded recruit sends its CP back to the gauge. |
+| c Road fortifications as one line | 1 Frontier wall, 2 Ring wall, 3 Bastion trace | 1: the land border of the cell is cut into one piece per road. Built neighbours are one stroke (a short river mouth is bridged), open ends get a bar, and the shore stays open. A build grows from the road crossing. A capture breaks the line into lengths that sink. |
+| d Fight on the map | 1 Burin, 2 Etched arc, 3 Volley | 2: a fine arc cut from the shooter with a lozenge head; a hit throws six cuts and a ring of stipple. The octagram bonus head and the kill feed are kept, as engraved cartouches. |
+| e Scheduled order fill | 1 Eased steps, 2 Glide, 3 Segments | 3: the asked bonus as segments, each easing full over 0.9 s behind a burin front. The gathered charge flies from the warehouse into the ribbon. No pill. A tween between server values, never a guess ahead. |
+| f Supply view (Tab) | 1 Hachure slope, 2 Streams, 3 Schematic | 1: the own field as hachure, dense at the rear and light at the front. The level is a contour line with ticks, the nodes ahead are crosshatched, the downhill roads carry engraved Vs (running with a packet), and a spill opens two arcs. |
+| g Menu icons and buildings | 1 Line, 2 Cut and plots, 3 Seal and ring towers, 4 Cut and ring towers | 4: cut silhouette icons; the radial shows icons, prices and keys, and the hovered name in the hub. Barracks, factory and the recruit queue are towers and cells on the city's ring, which read better at whole-map zoom than plots on the ground. |
+| h Arrows | 1 Burin, 2 Band, 3 Quill | 2: two rails with the owner's hachures drifting to the head. A ghost is the outline alone; a refusal for CP is red and crossed. |
+| i Path on hover | 1 Ruled route, 2 Beads, 3 Shadow order | 1: each road of the server's `ReachNode.path` between two hairlines, rim to rim, with chevrons to the target and the time beside it. No protocol change. |
+
+**Line weights under zoom** (the round 1 risk). A stroke is never thinner than one device pixel. Hatches live in zoom buckets of a power of two: inside a bucket the pattern scales with the map, and towards the next bucket the in-between lines fade in, so the pitch halves without a jump. The fine inner hatch of the pieces keeps a pitch of at least 3 css px. In PixiJS this is a baked tiling texture per bucket with mipmaps, plus one crossfaded tile. The zoom proof scene shows the naive round 1 drawing against these rules from 45 % to 210 %.
+
+**Dropped as not in mvp-5:** the bunker (no `[bunker]`), road levels and road upgrades (economy v2 has none), the warehouse levels (`warehouse.max_level = 0`; warehouses are 6, 3 and 1), the Defense mode, transfers, front markers, the rear minimum, supply lines, the help legend panel, the alert sentences (now a sign, a place and the enemy coming), and the nicks in the top bar.
+
+Common to all picks: no glow, every coloured mark on a dark casing, and a charge always solid against hatched.
 
