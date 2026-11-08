@@ -12,7 +12,6 @@ export const en = {
   'error.renderer': 'The map could not be drawn. Reload the page.',
   'error.crash.title': 'Something went wrong',
   'error.crash.text': 'This screen stopped working. Reload the page, or go back to the menu.',
-  'status.cp': 'CP',
   'status.time': 'Time left',
   'stance.economy': 'Economy',
   'stance.balance': 'Balance',
@@ -665,6 +664,8 @@ export const en = {
     'The interface icons come from the Lucide set and are changed only in colour. The city menu icons were generated with SpriteCook for this game.',
   'legal.licenses.lucide':
     'Lucide: ISC licence; icons taken from Feather are under the MIT licence. The full notices are in THIRD_PARTY_NOTICES.md in the repository.',
+  'legal.licenses.fonts':
+    'The fonts Cinzel and EB Garamond are under the SIL Open Font License 1.1; their licences are in THIRD_PARTY_NOTICES.md in the repository.',
   'legal.licenses.libraries':
     'The game also bundles PixiJS, Svelte and their dependencies (MIT, ISC and BSD-3-Clause licences). The licence text of each one:',
   'legal.licenses.libraries.link': 'third-party licences',

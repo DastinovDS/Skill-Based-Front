@@ -313,6 +313,10 @@ Not doing: IM17.
 
 ## 6. Palette and tokens
 
+**Superseded for the interface by section 58 (#841):** the CSS variables below now point at the Lapis and
+Engraved tokens (`--bg` is `var(--stone-bg)`, `--you` is `var(--own)` and so on). The table stays the palette
+of the map (`render/style.ts`) until the map's Engraved piece (#829).
+
 The values below are the only source of colors: the CSS variables `:root` (`app.css`) and the constants of
 `style.ts`. There is one dark theme.
 
@@ -2447,3 +2451,34 @@ The last refinements before implementation. Mockup: [`mockups/in-game-style-r5.h
 **Code impact.** Client only. `hud/`: the CP widget timings and the sum of running tweens; the shared reveal helper becomes a left-to-right wipe (a CSS `mask-image` gradient animated across the card with a small burin element on the rules; `prefers-reduced-motion` gives the fade); the radial price markup as marks. `render/`: `cityView` draws the warehouse as marks and the build arc and continuous tower fill (`building.owed`, `build_paid`, `done_tick`). `bakedShapes.ts`: the filled and hollow lozenge (two keys), the arc casing. The fortify icon as three hand-drawn SVGs in the icon set. No DEC, protocol, simulation or server change.
 
 **Estimate.** Round 4 came to about 20 days. Round 5: CP 0.25 day more (1.25 in all), builds the same 2 days, the fort icon 0.25 day more (0.5), the reveal the same 1 day, charges 0.5 day less than the battery (1 day). The whole locked set with my round 5 picks comes to about 20 days of client work.
+
+## 58. Style foundation: fonts, tokens, primitives and the CP mark (#841) **[implemented]**
+
+The first implementation piece of the decided Lapis (#826, sections 51 and 56) and Engraved (#829, sections 53 to 57) styles. Later pieces restyle the screens, the HUD and the map on top of it.
+
+**Fonts.** Cinzel (cut capitals: titles, labels, buttons, place names) and EB Garamond (text and numerals, upright and italic), self-hosted Latin subsets in `woff2` with their SIL OFL licences beside them (`apps/client/src/theme/fonts/`), `@font-face` in `app.css` (`font-src 'self'`, `font-display: swap`). The root font is `var(--font-text)`. A PixiJS text waits for `document.fonts.load()` of its family.
+
+**Tokens.** One `:root` block in `app.css`, mirrored by `apps/client/src/theme/tokens.ts` (`LAPIS`, `ENGRAVED`, `HATCH`, `LINE`, `RADIUS`, `DURATION`, `EASE`, `FONT`, the JS easings) and kept in step by `tokens.test.ts`:
+
+| Group | CSS custom properties |
+| --- | --- |
+| Lapis | `--stone-bg`, `--stone-panel`, `--stone-raised`, `--stone-tex` (the stone texture of round 3, `theme/stone.webp`), `--ink`, `--ink-soft`, `--ink-dim`, `--rule`, `--rule-faint`, `--line`, `--cut`, `--lit`, `--lit-faint`, `--frame-lozenge`, `--own-lapis`, `--enemy-lapis` |
+| Engraved | `--plate`, `--casing`, `--own`, `--enemy`, `--neutral`, `--neutral-fill`, `--segment-empty`, `--vp`, `--warn`, `--badge-up`, `--badge-down`, `--hatch-own` (horizontal), `--hatch-enemy` (45 degrees) |
+| Lines, corners, type | `--line-hair`, `--line-casing`, `--frame-gap`, `--radius` (0: cut stone), `--font-display`, `--font-text` |
+| Motion | `--ease-engrave` (easeInOutSine), `--ease-settle`, `--ease-travel`; `--t-cp-spend` 700 ms, `--t-cp-sliver` 1000, `--t-cp-income` 800, `--t-cp-roll` 500, `--t-cp-frame-in` 700, `--t-cp-frame-out` 400, `--t-reveal-leader` 80, `--t-reveal-in` 550 (the Burin reveal slowed by the owner), `--t-reveal-out` 160, `--t-reveal-hover` 120, `--t-reveal-reduced` 100, `--t-capture-walk` 600, `--t-build-run` 350, `--t-build-done` 500, `--t-plan-step` 900, `--t-intro` 7000 |
+
+The older names of section 6 (`--bg`, `--surface`, `--surface-2`, `--border`, `--text`, `--text-dim`, `--paper`, `--you`, `--ok`) are aliases of the new tokens, so the screens not yet restyled take the new look.
+
+**Primitives** (`apps/client/src/theme/`, global classes in `theme/primitives.css`):
+
+| Primitive | Component | Classes |
+| --- | --- | --- |
+| Double rule frame (round 3 edges II): two incised rules, a lozenge where they turn | `RuleFrame.svelte` (`as`, `stone`) | `.rule-frame`, a doubled rule `.rule-double`, a stone panel `.stone-panel` |
+| The blurred stone overlay of Profile, Replays and the dialogs (the blur is the overlay's backdrop only) | `StoneOverlay.svelte` (`label`, `kind` window or sheet, `role`, `onclose` on Escape) | `.stone-overlay`, `.stone-window` |
+| Buttons: primary (ivory tablet with an inner rule), secondary (two rules), danger | `LapisButton.svelte` (`variant`, `size` sm, md, lg, `danger`) | `.lapis-btn.primary`, `.lapis-btn.secondary`, `.sm`, `.lg`, `.danger` |
+| Section label in cut capitals, with its doubled rule | `SectionLabel.svelte` (`as`, `rule`) | `.lapis-label`, `.lapis-section` |
+
+**The CP mark.** Command points have a sign of their own, a Roman standard (vexillum): a pole, a crossbar and a banner with a cut-in foot, ivory on the dark casing. It is never the charge lozenge (section 57u), and the two differ in shape also in grey. One geometry (`theme/cpMark.ts`, `CP_MARK`) for the SVG (`CpMark.svelte`, decorative unless given a `label`) and for a PixiJS bake (stroke the polygons with the casing, then fill with the ink). It is the CP sign of the top bar now; the CP prices of the radials take it in the HUD piece.
+
+**Dev scenes.** `?menu=style` (every token and primitive, the CP mark at 12, 14, 16, 24 and 48 px beside the charge lozenge) and `?menu=style-overlay` (the stone overlay over the main menu), shot by `mise run shots` as `screen-style*.png`.
+

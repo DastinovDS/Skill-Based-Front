@@ -130,7 +130,7 @@
 }
 
 .dlg-btn.pri:disabled {
-  background: repeating-linear-gradient(135deg, #21262d 0 6px, #1a1f26 6px 12px);
+  background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, #1b1814 6px 12px);
   border-color: var(--border);
   color: var(--text-dim);
   opacity: 0.8;
@@ -162,7 +162,7 @@
 }
 
 .dlg-btn.pri .dlg-k {
-  border-color: rgb(13 17 23 / 35%);
-  background: rgb(13 17 23 / 18%);
+  border-color: rgb(22 19 15 / 35%);
+  background: rgb(22 19 15 / 18%);
   color: var(--bg);
 }

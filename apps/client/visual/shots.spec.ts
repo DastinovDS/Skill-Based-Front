@@ -522,10 +522,12 @@ for (const id of MENU_SCENES) {
     await expect(
       page
         .locator(
-          '.front svg.scene, .card, [role="alertdialog"], main.failure, main.loading, .crash',
+          '.front svg.scene, .card, [role="alertdialog"], main.failure, main.loading, .crash, .specimen',
         )
         .first(),
     ).toBeVisible();
+    // The self-hosted fonts (#841) swap in when loaded: take the frame in them, not the fallback.
+    await page.evaluate('document.fonts.ready.then(() => true)');
     const press = DOCK_CLICKS[id];
     if (press !== undefined) {
       await page.locator('.panel').getByRole('button', { name: press }).first().click();

@@ -10,6 +10,7 @@
   import Icon from './Icon.svelte';
   import type { IconName } from './icons.ts';
   import { atCap, cpTrack, vpShare } from './topBar.ts';
+  import CpMark from '../theme/CpMark.svelte';
 
   interface Props {
     data: HudData | null;
@@ -56,7 +57,8 @@
           cap: formatCentis(data.cp.cap, locale),
         })}
       >
-        <span class="term">{t('status.cp')}</span>
+        <!-- The CP mark (#841): the sign of command points, never the charge lozenge. -->
+        <span class="term"><CpMark size={16} /></span>
         <!-- Variant C "Track" (#439): one notched pill with a head marker on the growing end. At the
              cap the head goes, a dashed amber ring and the word MAX come: a shape and a word, not a colour. -->
         <span class="gauge" aria-hidden="true">
@@ -89,7 +91,7 @@
           title={tf('bar.nextTip', { cp: next.cp.seconds, capital: next.capital.seconds })}
           aria-label={tf('bar.nextLabel', { cp: next.cp.seconds, capital: next.capital.seconds })}
         >
-          <span class="next-mark" aria-hidden="true">{t('status.cp')}</span>
+          <span class="next-mark" aria-hidden="true"><CpMark size={12} /></span>
           <span class="mini" aria-hidden="true">
             <span class="mini-fill" style:width="{next.cp.share * 100}%"></span>
           </span>
@@ -285,7 +287,7 @@
   }
 
   .term {
-    color: var(--text-dim);
+    display: inline-flex;
   }
 
   .gauge {
@@ -568,8 +570,7 @@
 
   @media (max-width: 960px) {
     .exit-label,
-    .chip-name,
-    .term {
+    .chip-name {
       display: none;
     }
   }

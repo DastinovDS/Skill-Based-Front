@@ -111,6 +111,8 @@ export const MENU_SCENES = [
   'replays-empty',
   'replays-loading',
   'replays-network',
+  'style',
+  'style-overlay',
 ] as const;
 
 /**

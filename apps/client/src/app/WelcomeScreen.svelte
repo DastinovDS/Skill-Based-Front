@@ -322,7 +322,7 @@
     margin: 10px 0 0;
     padding: 2px 8px;
     border-radius: 4px;
-    background: rgb(13 17 23 / 90%);
+    background: rgb(22 19 15 / 90%);
     color: var(--warn);
     font-size: 14px;
   }

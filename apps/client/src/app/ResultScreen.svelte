@@ -298,7 +298,7 @@
     gap: 14px 20px;
     margin: 22px 0 0;
     padding: 12px 0 0;
-    border-top: 1px solid rgb(230 237 243 / 10%);
+    border-top: 1px solid rgb(236 228 209 / 10%);
     width: 370px;
     max-width: 100%;
   }
@@ -381,8 +381,8 @@
     filter: brightness(1.1);
   }
   .cta :global(.k) {
-    background: rgb(13 17 23 / 18%);
-    border-color: rgb(13 17 23 / 45%);
+    background: rgb(22 19 15 / 18%);
+    border-color: rgb(22 19 15 / 45%);
     color: var(--bg);
   }
 </style>

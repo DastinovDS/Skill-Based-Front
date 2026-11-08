@@ -261,8 +261,8 @@
   }
 
   .confirm .k {
-    border-color: rgb(13 17 23 / 35%);
-    background: rgb(13 17 23 / 18%);
+    border-color: rgb(22 19 15 / 35%);
+    background: rgb(22 19 15 / 18%);
     color: var(--bg);
   }
 </style>

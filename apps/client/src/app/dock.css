@@ -26,7 +26,7 @@
 }
 
 .front .row.cur {
-  background: linear-gradient(90deg, rgb(91 155 255 / 18%), transparent);
+  background: linear-gradient(90deg, rgb(134 166 234 / 18%), transparent);
   border-bottom-color: var(--you);
   cursor: default;
 }
@@ -86,7 +86,7 @@
   height: 26px;
   padding: 0 10px;
   font-size: 13px;
-  background: rgb(13 17 23 / 55%);
+  background: rgb(22 19 15 / 55%);
 }
 
 .front .panel .ps {
@@ -154,8 +154,8 @@
 }
 
 .front .panel .btn.pri .k {
-  border-color: rgb(13 17 23 / 35%);
-  background: rgb(13 17 23 / 18%);
+  border-color: rgb(22 19 15 / 35%);
+  background: rgb(22 19 15 / 18%);
   color: var(--bg);
 }
 
@@ -172,7 +172,7 @@
 }
 
 .front .panel .btn.pri:disabled {
-  background: repeating-linear-gradient(135deg, #21262d 0 6px, #1a1f26 6px 12px);
+  background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, #1b1814 6px 12px);
   border-color: var(--border);
   color: var(--text-dim);
   opacity: 0.8;
@@ -195,7 +195,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 4px;
-  border-bottom: 1px solid rgb(230 237 243 / 10%);
+  border-bottom: 1px solid rgb(236 228 209 / 10%);
   font-size: 18px;
 }
 
@@ -242,8 +242,8 @@
   border-radius: 6px;
   background: repeating-linear-gradient(
     135deg,
-    rgb(230 237 243 / 7%) 0 7px,
-    rgb(230 237 243 / 2%) 7px 14px
+    rgb(236 228 209 / 7%) 0 7px,
+    rgb(236 228 209 / 2%) 7px 14px
   );
 }
 
@@ -308,7 +308,7 @@
 }
 
 .front .ghost {
-  fill: rgb(229 72 77 / 8%);
+  fill: rgb(229 120 94 / 8%);
   stroke: var(--enemy);
   stroke-width: 2.4;
   stroke-dasharray: 7 5;
@@ -347,7 +347,7 @@
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgb(13 17 23 / 55%);
+  background: rgb(22 19 15 / 55%);
   color: var(--text);
   font: inherit;
   text-align: left;
@@ -452,7 +452,7 @@
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgb(13 17 23 / 45%);
+  background: rgb(22 19 15 / 45%);
 }
 
 .front .panel .lvdesc .l1 {
@@ -697,7 +697,7 @@
   outline: none;
   /* The tint alone is faint: the underline turns paper-white so the focus reads in grey scale. */
   border-bottom-color: var(--paper);
-  background: rgb(91 155 255 / 10%);
+  background: rgb(134 166 234 / 10%);
 }
 
 .front .panel .fields .hint {

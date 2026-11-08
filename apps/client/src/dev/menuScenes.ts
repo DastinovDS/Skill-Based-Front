@@ -75,6 +75,9 @@ export const MENU_SCENE_IDS = [
   'match-error-map',
   'crash',
   ...BOARD_SCENE_IDS,
+  // The style foundation (#841): the specimen of the tokens and primitives, the stone overlay.
+  'style',
+  'style-overlay',
 ] as const;
 
 export type MenuSceneId = (typeof MENU_SCENE_IDS)[number];
