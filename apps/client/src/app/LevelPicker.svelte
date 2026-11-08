@@ -10,8 +10,6 @@
 
   let { value, onchange }: Props = $props();
 
-  const style = $derived(BOT_STYLES[value]);
-
   /** Arrow keys move the level, like a radio group. */
   function onkeydown(event: KeyboardEvent): void {
     const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
@@ -30,33 +28,33 @@
   }
 </script>
 
+<!-- The four levels in a row (Lapis, #845): the difficulty as lozenges, the level, the style of
+     the bot in italics. Spare captions: no description. -->
 <!-- svelte-ignore a11y_interactive_supports_focus -->
-<div class="sg" role="radiogroup" aria-label={t('bot.level')} {onkeydown}>
+<div class="sg levels" role="radiogroup" aria-label={t('bot.level')} {onkeydown}>
   {#each BOT_LEVELS as level (level)}
+    {@const style = BOT_STYLES[level]}
     <button
       type="button"
+      class="level"
       role="radio"
       aria-checked={value === level}
       tabindex={value === level ? 0 : -1}
-      class:on={value === level}
       onclick={() => {
         onchange(level);
-      }}>{t(`bot.level.${level}`)}</button
+      }}
     >
+      <span
+        class="pips"
+        role="img"
+        aria-label={tf('bot.difficultyAria', { level: style.cells, total: BOT_CELLS })}
+      >
+        {#each Array.from({ length: BOT_CELLS }, (_, i) => i) as i (i)}
+          <i class:on={i < style.cells}></i>
+        {/each}
+      </span>
+      <span class="lv">{t(`bot.level.${level}`)}</span>
+      <span class="ls">{t(style.style)}</span>
+    </button>
   {/each}
-</div>
-<div class="lvdesc" aria-live="polite">
-  <div class="l1">
-    <b>{t(style.style)}</b>
-    <span
-      class="cells d"
-      role="img"
-      aria-label={tf('bot.difficultyAria', { level: t(`bot.level.${value}`), total: BOT_CELLS })}
-    >
-      {#each Array.from({ length: BOT_CELLS }, (_, i) => i) as i (i)}
-        <i class:on={i < style.cells}></i>
-      {/each}
-    </span>
-  </div>
-  <div class="ds">{t(style.desc)}</div>
 </div>

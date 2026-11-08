@@ -6,6 +6,7 @@
   import MenuTabs from '../app/MenuTabs.svelte';
   import type { MenuTabActions } from '../app/menuTabs.ts';
   import Icon from '../hud/Icon.svelte';
+  import LapisButton from '../theme/LapisButton.svelte';
   import { t, tf } from '../i18n/index.ts';
   import type { Calibration, MapFile } from '../protocol.gen.ts';
   import { failed, type Load } from './boardState.svelte.ts';
@@ -113,33 +114,36 @@
     />
   {/snippet}
 
-  <h2>{t('menu.replays')}</h2>
+  <div class="sheethead">
+    <p class="kicker">{t('replays.kicker')}</p>
+    <h2>{t('menu.replays')}</h2>
+  </div>
   {#if own.status === 'loading'}
     <p class="sr" role="status">{t('profile.loading')}</p>
     <div class="cards skel" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
   {:else if own.status === 'failed'}
-    <p class="wl" role="alert">
-      <Icon name="alert" size={16} />
-      <span>
-        {#if own.failure === 'limited'}
-          {own.retryAfterS === null
-            ? t('profile.error.limited')
-            : tf('profile.error.limitedIn', { seconds: own.retryAfterS })}
-        {:else if own.failure === 'network'}
-          {t('profile.error.network')}
-        {:else}
-          {t('profile.error.server')}
-        {/if}
-      </span>
-    </p>
-    <button type="button" class="retry" onclick={load}>
-      <Icon name="refresh" size={15} />{t('board.retry')}
-    </button>
+    <div class="empty">
+      <p class="wl" role="alert">
+        <Icon name="alert" size={16} />
+        <span>
+          {#if own.failure === 'limited'}
+            {own.retryAfterS === null
+              ? t('profile.error.limited')
+              : tf('profile.error.limitedIn', { seconds: own.retryAfterS })}
+          {:else if own.failure === 'network'}
+            {t('profile.error.network')}
+          {:else}
+            {t('profile.error.server')}
+          {/if}
+        </span>
+      </p>
+      <LapisButton onclick={load}>{t('board.retry')}</LapisButton>
+    </div>
   {:else if matches.length === 0}
     <div class="empty">
-      <b>{t('replays.empty.title')}</b>
-      <span>{t('replays.empty.body')}</span>
-      <button type="button" class="pri" onclick={onbot}>{t('menu.bot')}</button>
+      <p class="eh">{t('replays.empty.title')}</p>
+      <p>{t('replays.empty.body')}</p>
+      <LapisButton variant="primary" onclick={onbot}>{t('menu.bot')}</LapisButton>
     </div>
   {:else}
     <ul class="cards">
@@ -158,81 +162,26 @@
 </SheetFrame>
 
 <style>
+  /* The cards in two columns, each under a doubled rule (Lapis, #845). */
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-    gap: 12px;
-    max-width: 1180px;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 22px 56px;
+    max-width: 1024px;
     margin: 0;
     padding: 0;
   }
 
   .skel i {
     display: block;
-    height: 230px;
-    border-radius: 10px;
-    background: repeating-linear-gradient(
-      135deg,
-      rgb(236 228 209 / 7%) 0 7px,
-      rgb(236 228 209 / 2%) 7px 14px
-    );
-  }
-
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-
-  .empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    max-width: 1180px;
-    box-sizing: border-box;
-    padding: 56px 20px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface);
-    text-align: center;
-  }
-
-  .empty b {
-    font-size: 20px;
-  }
-
-  .empty span {
-    margin-bottom: 10px;
-    color: var(--text-dim);
-  }
-
-  .pri,
-  .retry {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 40px;
-    padding: 0 18px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-2);
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-  }
-
-  .pri {
-    border-color: var(--paper);
-    background: var(--you);
-    color: var(--bg);
-    font-weight: 700;
-  }
-
-  .retry {
-    margin-top: 10px;
+    height: 130px;
+    background:
+      linear-gradient(var(--cut), var(--cut)) 0 0 / 100% 1px no-repeat,
+      linear-gradient(var(--line), var(--line)) 0 1px / 100% 1px no-repeat,
+      repeating-linear-gradient(
+        135deg,
+        rgb(236 228 209 / 5%) 0 7px,
+        rgb(236 228 209 / 1%) 7px 14px
+      );
   }
 </style>

@@ -3,6 +3,7 @@
   import Icon from '../hud/Icon.svelte';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import { apiErrorKey } from './appState.svelte.ts';
+  import LapisButton from '../theme/LapisButton.svelte';
   import DockFrame from './DockFrame.svelte';
   import type { DockContext } from './dock.ts';
   import { startPolling } from './poll.ts';
@@ -151,39 +152,48 @@
 >
   {#if invite !== null}
     {#if waitingForLink}
-      <div class="lnk">
-        <input
-          readonly
-          aria-label={t('invite.link')}
-          value={link}
-          onfocus={(event) => {
-            event.currentTarget.select();
-          }}
-        />
-        <button type="button" class="btn" class:pri={!copied} onclick={copy}>
-          {#if copied}<Icon name="check" size={18} />{t('invite.copied')}{:else}<Icon
-              name="copy"
-              size={18}
-            />{t('invite.copy')}{/if}
-        </button>
+      <div class="link">
+        <div class="field">
+          <label class="label" for="invite-link">{t('invite.link')}</label>
+          <span class="box">
+            <input
+              id="invite-link"
+              readonly
+              value={link}
+              onfocus={(event) => {
+                event.currentTarget.select();
+              }}
+            />
+            <LapisButton onclick={copy}>
+              {#if copied}<Icon name="check" size={16} />{t('invite.copied')}{:else}{t(
+                  'invite.copy',
+                )}{/if}
+            </LapisButton>
+          </span>
+        </div>
       </div>
     {/if}
     {#if opponent === null}
-      <VersusStrip opponent={null} />
-      <p class="note" role="status">{listed ? t('invite.waitingLobby') : t('invite.waiting')}</p>
+      <VersusStrip opponent={null} you={nick} />
+      <p class="status" role="status">
+        {listed ? t('invite.waitingLobby') : t('invite.waiting')}
+      </p>
     {:else}
-      <VersusStrip {opponent} youReady={invite.you_ready} opponentReady={invite.opponent_ready} />
-      <p class="note" role="status">{status}</p>
+      <VersusStrip
+        {opponent}
+        you={nick}
+        youReady={invite.you_ready}
+        opponentReady={invite.opponent_ready}
+      />
+      <p class="status" role="status">{status}</p>
     {/if}
   {/if}
   {#snippet actions()}
     {#if invite !== null && opponent !== null && !starting}
-      <button type="button" class="btn pri" disabled={busy || invite.you_ready} onclick={ready}>
-        {t('invite.ready')}
-      </button>
+      <LapisButton variant="primary" disabled={busy || invite.you_ready} onclick={ready}
+        >{t('invite.ready')}</LapisButton
+      >
     {/if}
-    <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={leave}>
-      {t('invite.leave')}
-    </button>
+    <LapisButton aria-keyshortcuts="Escape" onclick={leave}>{t('invite.leave')}</LapisButton>
   {/snippet}
 </DockFrame>

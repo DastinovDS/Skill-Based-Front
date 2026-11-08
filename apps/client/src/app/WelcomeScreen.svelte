@@ -6,7 +6,6 @@
   import LocaleSelect from './LocaleSelect.svelte';
   import PasswordFields from './PasswordFields.svelte';
   import ScreenFrame from './ScreenFrame.svelte';
-  import UnitMark from './UnitMark.svelte';
 
   type Mode = 'guest' | 'login' | 'register';
 
@@ -97,6 +96,9 @@
     }
   }
 
+  // The title in cut capitals: the words, with the interpunct between them (Lapis, #845).
+  const words = $derived(t('app.title').split(' '));
+
   const cta = $derived(
     mode === 'login'
       ? t('welcome.login')
@@ -108,255 +110,370 @@
   );
 </script>
 
-<!-- The entry screen (#629, N5 "Title"): the game's title, the nick field under it, the map
-     blurred behind. The rule of the nick shows only as an inline error. -->
+<!-- The entry screen (#629; Lapis, #845): the title in cut capitals with its rule, the nick with
+     Play beside it, the map dim behind. Logging in or creating an account opens a framed sheet of
+     stone under the title. This is the still, final state; the opening scene is its own piece. -->
 <ScreenFrame {map} label={t('app.title')} entry>
-  <form class="title" class:wide={mode !== 'guest'} onsubmit={submit}>
-    <div class="pair" aria-hidden="true">
-      <UnitMark side="own" size={54} />
-      <UnitMark side="enemy" size={54} />
-    </div>
-    <h1>{t('app.title')}</h1>
-    {#if invited}
-      <p class="chip inv"><Icon name="link" size={14} />{t('welcome.invitedChip')}</p>
+  <div class="welcome">
+    <h1 class="title">
+      <!-- The space before a word is in its text, for assistive technology; the interpunct shows. -->
+      {#each words as word, i (i)}{#if i > 0}<span class="sp"></span>{/if}<span class="w"
+          >{i > 0 ? ` ${word}` : word}</span
+        >{/each}
+    </h1>
+    {#if mode === 'guest'}
+      <form class="gate" onsubmit={submit}>
+        {#if invited}
+          <p class="invited"><span class="chip inv">{t('welcome.invitedChip')}</span></p>
+        {/if}
+        <div class="field" class:bad={shownError !== null}>
+          <div class="box">
+            <label class="nick">
+              <span class="label">{t('welcome.nick')}</span>
+              <!-- svelte-ignore a11y_autofocus -->
+              <input
+                bind:value={nick}
+                autofocus
+                required
+                maxlength="16"
+                name="username"
+                placeholder={t('welcome.nickPlaceholder')}
+                autocomplete="nickname"
+                spellcheck="false"
+                aria-invalid={shownError !== null}
+                aria-describedby={shownError === null ? undefined : 'welcome-error'}
+                onblur={() => {
+                  if (typed.length > 0) touched = true;
+                }}
+              />
+            </label>
+            <button type="submit" class="go lapis-btn primary" disabled={busy || blocked}
+              >{cta}</button
+            >
+          </div>
+          {#if shownError !== null}
+            <p class="err" id="welcome-error" role="alert">
+              <Icon name="alert" size={15} />{shownError}
+            </p>
+          {/if}
+        </div>
+        <div class="alt">
+          <button
+            type="button"
+            class="small"
+            onclick={() => {
+              choose('login');
+            }}>{t('welcome.toLogin')}</button
+          >
+          <button
+            type="button"
+            class="small"
+            onclick={() => {
+              choose('register');
+            }}>{t('welcome.toRegister')}</button
+          >
+        </div>
+      </form>
+    {:else}
+      <form class="gate sheet rule-frame" onsubmit={submit}>
+        <h2 class="formh">
+          {mode === 'login' ? t('welcome.login') : t('welcome.registerTitle')}
+        </h2>
+        {#if shownError !== null}
+          <p class="err" id="welcome-error" role="alert">
+            <Icon name="alert" size={15} />{shownError}
+          </p>
+        {/if}
+        <label class="field">
+          <span class="label">{t('welcome.nick')}</span>
+          <span class="box">
+            <!-- svelte-ignore a11y_autofocus -->
+            <input
+              bind:value={nick}
+              autofocus
+              required
+              maxlength="16"
+              name="username"
+              autocomplete="username"
+              spellcheck="false"
+              aria-invalid={shownError !== null}
+            />
+          </span>
+        </label>
+        {#if mode === 'login'}
+          <label class="field">
+            <span class="label">{t('account.password')}</span>
+            <span class="box">
+              <input
+                type="password"
+                name="password"
+                bind:value={password}
+                required
+                maxlength="1024"
+                autocomplete="current-password"
+              />
+            </span>
+          </label>
+        {:else}
+          <div class="pw"><PasswordFields bind:password bind:repeat /></div>
+        {/if}
+        <button type="submit" class="lapis-btn primary wide" disabled={busy}>{cta}</button>
+        <div class="alt">
+          <button
+            type="button"
+            class="small"
+            onclick={() => {
+              choose('guest');
+            }}>{t('welcome.toGuest')}</button
+          >
+          {#if mode !== 'login'}
+            <button
+              type="button"
+              class="small"
+              onclick={() => {
+                choose('login');
+              }}>{t('welcome.toLogin')}</button
+            >
+          {:else}
+            <button
+              type="button"
+              class="small"
+              onclick={() => {
+                choose('register');
+              }}>{t('welcome.toRegister')}</button
+            >
+          {/if}
+        </div>
+      </form>
     {/if}
-    <div class="line">
-      <label class="nick">
-        <span class="sr">{t('welcome.nick')}</span>
-        <!-- svelte-ignore a11y_autofocus -->
-        <input
-          bind:value={nick}
-          class:bad={shownError !== null}
-          autofocus
-          required
-          maxlength="16"
-          name="username"
-          placeholder={t('welcome.nickPlaceholder')}
-          autocomplete={mode === 'guest' ? 'nickname' : 'username'}
-          spellcheck="false"
-          aria-invalid={shownError !== null}
-          aria-describedby={shownError === null ? undefined : 'welcome-error'}
-          onblur={() => {
-            if (typed.length > 0) touched = true;
-          }}
-        />
-      </label>
-      {#if mode === 'guest'}
-        <button type="submit" class="go" disabled={busy || blocked}>{cta}</button>
-      {/if}
-    </div>
-    {#if mode === 'login'}
-      <label class="pw">
-        {t('account.password')}
-        <input
-          type="password"
-          name="password"
-          bind:value={password}
-          required
-          maxlength="1024"
-          autocomplete="current-password"
-        />
-      </label>
-    {:else if mode === 'register'}
-      <div class="pw"><PasswordFields bind:password bind:repeat /></div>
-    {/if}
-    {#if shownError !== null}
-      <p class="err" id="welcome-error" role="alert">
-        <Icon name="alert" size={15} />{shownError}
-      </p>
-    {/if}
-    {#if mode !== 'guest'}
-      <button type="submit" class="go" disabled={busy}>{cta}</button>
-    {/if}
-    <div class="links">
-      {#if mode !== 'guest'}
-        <button
-          type="button"
-          onclick={() => {
-            choose('guest');
-          }}>{t('welcome.toGuest')}</button
-        >
-      {/if}
-      {#if mode !== 'login'}
-        <button
-          type="button"
-          onclick={() => {
-            choose('login');
-          }}>{t('welcome.toLogin')}</button
-        >
-      {/if}
-      {#if mode !== 'register'}
-        <button
-          type="button"
-          onclick={() => {
-            choose('register');
-          }}>{t('welcome.toRegister')}</button
-        >
-      {/if}
-    </div>
     <div class="locale"><LocaleSelect /></div>
-  </form>
+  </div>
 </ScreenFrame>
 
 <style>
-  .title {
+  .welcome {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: min(460px, 100%);
-    margin: 0 auto;
+    box-sizing: border-box;
+    min-height: 100%;
+    padding: clamp(28px, 19vh, 150px) 24px 40px;
+  }
+
+  /* The title (ui-style 51): Cinzel with the Atlas rule under it and an interpunct between the words. */
+  .title {
+    position: relative;
+    margin: 0;
+    font: 400 67px / 1.1 var(--font-display);
+    letter-spacing: 0.15em;
+    white-space: nowrap;
+    text-align: center;
+    color: var(--ink);
+    text-shadow:
+      0 -1px 0 #000,
+      0 2px 0 rgb(236 228 209 / 12%);
+  }
+
+  .title::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 180px;
+    margin: 4px 0 0 -90px;
+    border-top: 1.5px solid var(--ink);
+    box-shadow: 0 -1px 0 rgb(0 0 0 / 85%);
+  }
+
+  .title .w {
+    display: inline-block;
+  }
+
+  .title .sp {
+    position: relative;
+    display: inline-block;
+    width: 0.62em;
+  }
+
+  .title .sp::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -0.5em;
+    margin-left: -0.07em;
+    border-left: 0.07em solid transparent;
+    border-right: 0.07em solid transparent;
+    border-top: 0.12em solid var(--ink);
+  }
+
+  /* The nick and Play on one incised line. */
+  .gate {
+    display: grid;
+    width: min(470px, 100%);
+    margin-top: 94px;
+  }
+
+  .invited {
+    margin: 0 0 18px;
     text-align: center;
   }
 
-  .pair {
-    display: flex;
-    gap: 16px;
+  .invited .chip {
+    border-color: var(--own-lapis);
+    color: var(--own-lapis);
   }
 
-  h1 {
-    margin: 12px 0 36px;
-    font-size: 56px;
-    font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: -0.02em;
-  }
-
-  .inv {
-    gap: 6px;
-    height: 26px;
-    margin: -18px 0 14px;
-    border-color: var(--you);
-    color: var(--text);
-    font-size: 13px;
-  }
-
-  .line {
-    display: flex;
-    gap: 10px;
-    width: 100%;
+  .gate .field input {
+    font-size: 24px;
   }
 
   .nick {
+    display: grid;
     flex: 1;
+    gap: 6px;
     min-width: 0;
   }
 
-  input {
-    box-sizing: border-box;
-    width: 100%;
-    height: 52px;
-    padding: 0 14px;
-    border: 1px solid var(--border);
-    border-bottom: 2px solid var(--you);
-    border-radius: 0;
-    background: #111a27;
-    color: var(--text);
-    font: inherit;
-    font-size: 20px;
-  }
-
-  input::placeholder {
-    color: var(--neutral);
-  }
-
-  input.bad {
-    border-bottom-color: var(--warn);
-  }
-
-  input:focus-visible {
-    outline: 2px solid var(--paper);
-    outline-offset: 2px;
-  }
-
-  .go {
-    flex: none;
-    height: 52px;
-    padding: 0 22px;
-    border: 1px solid var(--paper);
-    border-radius: 8px;
-    background: var(--you);
-    color: var(--bg);
-    font: inherit;
-    font-size: 22px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-
-  .go:disabled {
-    opacity: 0.45;
-    cursor: default;
-  }
-
-  .wide .go {
-    align-self: stretch;
-    margin-top: 14px;
-  }
-
-  .pw {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    width: 100%;
-    margin-top: 12px;
-    color: var(--text-dim);
+  .go.lapis-btn {
+    align-self: flex-end;
+    margin-bottom: 6px;
+    height: 46px;
+    margin-left: 14px;
+    padding: 0 26px;
     font-size: 14px;
-    text-align: left;
-  }
-
-  .pw :global(label) {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-bottom: 8px;
-  }
-
-  .pw :global(.hint) {
-    margin: 0;
-    font-size: 13px;
+    letter-spacing: 0.24em;
   }
 
   .err {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 6px;
-    margin: 10px 0 0;
-    padding: 2px 8px;
-    border-radius: 4px;
-    background: rgb(22 19 15 / 90%);
+    gap: 8px;
+    margin: 6px 0 0;
     color: var(--warn);
-    font-size: 14px;
+    font-size: 16px;
+    font-style: italic;
   }
 
-  .links {
+  .alt {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 4px 18px;
-    margin-top: 22px;
+    align-items: center;
+    margin-top: 26px;
   }
 
-  .links button {
-    padding: 2px 0;
+  .small {
+    padding: 6px 2px;
     border: 0;
     background: none;
-    color: var(--text);
-    font: inherit;
-    font-size: 15px;
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    color: var(--ink-dim);
+    font: 500 12px / 1.2 var(--font-display);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
     cursor: pointer;
   }
 
-  .links button:hover {
-    color: var(--paper);
+  .small:hover {
+    color: var(--ink);
   }
 
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
+  .small + .small::before {
+    content: '';
+    display: inline-block;
+    margin: 0 20px;
+    border-left: 3px solid transparent;
+    border-right: 3px solid transparent;
+    border-top: 4px solid var(--ink-dim);
+    vertical-align: 4px;
+  }
+
+  /* Log in, create an account: a sheet of stone in the Double rule frame. */
+  .gate.sheet {
+    gap: 18px;
+    box-sizing: border-box;
+    width: min(540px, 100%);
+    margin-top: 44px;
+    padding: 34px 50px 30px;
+    background:
+      linear-gradient(rgb(24 21 17 / 60%), rgb(24 21 17 / 60%)),
+      var(--stone-tex) rgb(24 21 17 / 90%);
+  }
+
+  .formh {
+    margin: 0;
+    padding-bottom: 6px;
+    font: 400 22px / 1.2 var(--font-display);
+    letter-spacing: 0.16em;
+    text-align: center;
+  }
+
+  .sheet .alt {
+    margin-top: 8px;
+  }
+
+  .wide {
+    width: 100%;
+  }
+
+  /* The new-password fields of PasswordFields: the same labels and incised lines. */
+  .pw {
+    display: grid;
+    gap: 18px;
+  }
+
+  .pw :global(label) {
+    display: grid;
+    gap: 6px;
+    font: 500 11.5px / 1.3 var(--font-display);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  .pw :global(input) {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px 0 10px;
+    border: 0;
+    border-bottom: 1px solid var(--cut);
+    border-radius: 0;
+    box-shadow: 0 1px 0 var(--line);
+    background: none;
+    color: var(--ink);
+    font: 400 20px / 1.2 var(--font-text);
+    letter-spacing: 0.02em;
+  }
+
+  .pw :global(input:focus-visible) {
+    outline: none;
+    border-bottom-color: var(--ink);
+    box-shadow: 0 1px 0 var(--ink);
+  }
+
+  .pw :global(.hint) {
+    margin: -10px 0 0;
+    font-size: 15px;
+  }
+
+  @media (max-height: 719px) {
+    .gate {
+      margin-top: 56px;
+    }
+
+    .gate.sheet {
+      margin-top: 30px;
+      padding: 26px 40px 24px;
+      gap: 14px;
+    }
+  }
+
+  @media (max-width: 699px) {
+    .title {
+      font-size: 40px;
+    }
+
+    .gate.sheet {
+      padding: 26px 24px 24px;
+    }
   }
 </style>

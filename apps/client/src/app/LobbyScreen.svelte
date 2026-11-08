@@ -1,12 +1,11 @@
 <script lang="ts">
   import { Api, ApiError, type LobbyEntry } from '../api/http.ts';
-  import Icon from '../hud/Icon.svelte';
+  import LapisButton from '../theme/LapisButton.svelte';
   import { formatClock } from '../hud/format.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import { apiErrorKey } from './appState.svelte.ts';
   import DockFrame from './DockFrame.svelte';
   import type { DockContext } from './dock.ts';
-  import MapThumb from './MapThumb.svelte';
   import { startPolling } from './poll.ts';
 
   interface Props {
@@ -61,11 +60,6 @@
     };
   });
 
-  // The thumbnails: every map of the list, fetched once and kept.
-  $effect(() => {
-    for (const entry of entries ?? []) void dock.maps.ensure(entry.map_id);
-  });
-
   const selected = $derived(
     entries === null ? null : (entries.find((e) => e.code === selectedCode) ?? entries[0] ?? null),
   );
@@ -81,9 +75,6 @@
         : entries.length === 0
           ? t('lobby.none')
           : tf('lobby.waiting', { count: entries.length }),
-  );
-  const sub = $derived(
-    entries !== null && entries.length === 0 ? t('lobby.empty') : t('lobby.intro'),
   );
   const alert = $derived(
     joinFailure !== null
@@ -151,19 +142,22 @@
   mode="lobby"
   eyebrow={t('menu.lobby')}
   {head}
-  {sub}
   pause="none"
   {alert}
-  note={entries !== null && entries.length === 0 ? t('lobby.emptyNote') : null}
   {onback}
   onenter={enter}
 >
+  <!-- Open matches (Lapis, #845): one ruled row per match: the host, the map, the wait, Join. -->
   {#if entries === null}
     <div class="ents" aria-hidden="true">
       <i class="sk"></i><i class="sk"></i><i class="sk"></i>
     </div>
-  {:else if entries.length > 0}
-    <ul class="ents" class:scroll={entries.length > 5} aria-label={t('lobby.listAria')}>
+  {:else if entries.length === 0}
+    <div class="empty">
+      <p>{t('lobby.empty')}</p>
+    </div>
+  {:else}
+    <ul class="ents" aria-label={t('lobby.listAria')}>
       {#each entries as entry (entry.code)}
         <li
           class="ent"
@@ -173,43 +167,25 @@
             selectedCode = entry.code;
           }}
         >
-          <MapThumb map={dock.maps.get(entry.map_id)} />
-          <span class="tx">
-            <span class="nm">{entry.host_nick}</span>
-            <small
-              >{tf('lobby.entryInfo', { map: entry.map_id, time: formatClock(entry.age_s) })}</small
-            >
-          </span>
-          <span class="go">
-            <button
-              type="button"
-              class="btn pri"
-              disabled={joining !== null}
-              onclick={() => join(entry.code)}
-              >{joining === entry.code ? t('lobby.joinBusy') : t('lobby.join')}</button
-            >
-          </span>
+          <span class="ln">{entry.host_nick}</span>
+          <span class="lm">{entry.map_id}</span>
+          <span class="lt">{tf('lobby.waitingFor', { time: formatClock(entry.age_s) })}</span>
+          <LapisButton size="sm" disabled={joining !== null} onclick={() => join(entry.code)}
+            >{joining === entry.code ? t('lobby.joinBusy') : t('lobby.join')}</LapisButton
+          >
         </li>
       {/each}
     </ul>
   {/if}
   {#snippet actions()}
     {#if entries !== null && entries.length === 0}
-      <button type="button" class="btn pri" onclick={oncreate}>
-        {t('lobby.create')}
-      </button>
+      <LapisButton variant="primary" onclick={oncreate}>{t('lobby.create')}</LapisButton>
     {:else}
-      <button
-        type="button"
-        class="btn"
-        aria-keyshortcuts={KEY_CREATE}
-        disabled={joining !== null}
-        onclick={oncreate}
+      <LapisButton aria-keyshortcuts={KEY_CREATE} disabled={joining !== null} onclick={oncreate}
+        >{t('lobby.create')}</LapisButton
       >
-        <Icon name="plus" size={18} />{t('lobby.create')}
-      </button>
     {/if}
-    <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
+    <button type="button" class="lnk" aria-keyshortcuts="Escape" onclick={onback}>
       {t('common.back')}
     </button>
   {/snippet}

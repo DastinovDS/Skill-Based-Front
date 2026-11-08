@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { MessageKey } from '../i18n/index.ts';
   import { t } from '../i18n/index.ts';
+  import LapisButton from '../theme/LapisButton.svelte';
   import DockFrame from './DockFrame.svelte';
   import type { DockContext } from './dock.ts';
   import MapTiles from './MapTiles.svelte';
@@ -37,7 +38,6 @@
   mode={isPublic ? 'lobby' : 'friend'}
   eyebrow={isPublic ? t('menu.lobby') : t('menu.create')}
   head={isPublic ? t('create.titlePublic') : t('create.title')}
-  sub={isPublic ? t('create.introPublic') : t('create.intro')}
   pause={isPublic ? 'none' : 'each'}
   alert={failure === null ? null : t(failure)}
   {onback}
@@ -45,10 +45,10 @@
 >
   <MapTiles maps={dock.maps} bind:value={mapId} generated={!isPublic} />
   {#snippet actions()}
-    <button type="button" class="btn pri" disabled={busy} onclick={submit}>
-      {t('create.submit')}
-    </button>
-    <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
+    <LapisButton variant="primary" disabled={busy} onclick={submit}
+      >{t('create.submit')}</LapisButton
+    >
+    <button type="button" class="lnk" aria-keyshortcuts="Escape" onclick={onback}>
       {t('common.back')}
     </button>
   {/snippet}

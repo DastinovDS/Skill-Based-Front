@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Icon from '../hud/Icon.svelte';
   import { t, tf } from '../i18n/index.ts';
   import type { Calibration } from '../protocol.gen.ts';
 
@@ -27,8 +26,8 @@
   }: Props = $props();
 </script>
 
-<!-- The rating and the calibration live here and nowhere else on the menu (#471). Calibration is
-     cells (filled or empty) plus the numbers, never colour alone. -->
+<!-- The player in the corner (Lapis, #845): the nick in cut capitals, the standing in italics
+     ("Guest", "Calibration 3/5", the rating). The words carry the state, never colour alone. -->
 <button
   type="button"
   class="who"
@@ -38,35 +37,16 @@
   {disabled}
   onclick={ontoggle}
 >
+  <b class="nick">{nick}</b>
   {#if !hasPassword}
-    <Icon name="user" size={18} />
-    <b class="nick">{nick}</b>
-    <span class="chip">{t('menu.guest')}</span>
+    <span class="st">{t('menu.guest')}</span>
   {:else if calibration !== null}
-    <b class="nick">{nick}</b>
-    <span
-      class="cells"
-      role="img"
-      aria-label={tf('menu.calibrationAria', {
-        played: calibration.played,
-        total: calibration.total,
-      })}
-    >
-      {#each Array.from({ length: calibration.total }, (_, i) => i) as i (i)}
-        <i class:on={i < calibration.played}></i>
-      {/each}
-    </span>
-    <span class="cap"
+    <span class="st"
       >{tf('menu.calibration', { played: calibration.played, total: calibration.total })}</span
     >
+  {:else if rating === null}
+    <span class="st">{t('menu.ranked')}</span>
   {:else}
-    <b class="nick">{nick}</b>
-    {#if rating === null}
-      <span class="cap">{t('menu.ranked')}</span>
-    {:else}
-      <span class="score"
-        ><span class="num">{rating}</span><span class="cap">{t('menu.rating')}</span></span
-      >
-    {/if}
+    <span class="st" title={t('menu.rating')}>{rating}</span>
   {/if}
 </button>

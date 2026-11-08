@@ -55,7 +55,7 @@ describe('the Dock screens', () => {
       document.body.querySelector<HTMLElement>('[role="radio"][aria-checked="false"]')?.click();
       flushSync();
       const level = [...document.body.querySelectorAll<HTMLElement>('.sg [role="radio"]')].find(
-        (r) => r.textContent === en('bot.level.expert'),
+        (r) => r.querySelector('.lv')?.textContent === en('bot.level.expert'),
       );
       level?.click();
       flushSync();
@@ -71,7 +71,7 @@ describe('the Dock screens', () => {
         en('error.api.unavailable'),
       );
       // The choices are still there, on the same screen.
-      expect(document.body.querySelector('.sg [aria-checked="true"]')?.textContent).toBe(
+      expect(document.body.querySelector('.sg [aria-checked="true"] .lv')?.textContent).toBe(
         en('bot.level.expert'),
       );
       expect(document.body.querySelector('.tiles [aria-checked="true"]')?.textContent).toContain(
@@ -104,15 +104,18 @@ describe('the Dock screens', () => {
       expect(onstart).toHaveBeenLastCalledWith('normal', RANDOM_GENERATED);
     });
 
-    it('describes the style of the chosen bot, and shows the seat while it starts', async () => {
+    it('names the style of every level, no description (Spare), and shows the seat while it starts', async () => {
       const { dock } = makeDock();
       component = mount(BotScreen, {
         target: document.body,
         props: { dock, onstart: () => new Promise<null>(() => undefined), onback: vi.fn() },
       });
       await settle();
-      expect(document.body.querySelector('.lvdesc')?.textContent).toContain(en('bot.style.normal'));
-      expect(document.body.querySelector('.lvdesc')?.textContent).toContain(en('bot.desc.normal'));
+      expect(document.body.querySelector('.sg [aria-checked="true"] .ls')?.textContent).toBe(
+        en('bot.style.normal'),
+      );
+      expect(document.body.querySelectorAll('.sg .ls')).toHaveLength(4);
+      expect(document.body.textContent).not.toContain(en('bot.desc.normal'));
       button(en('bot.start')).click();
       await settle();
       expect(document.body.querySelector('h2')?.textContent).toBe(en('bot.starting'));
@@ -319,14 +322,17 @@ describe('the Dock screens', () => {
         'dock.unrated.calibration',
       ],
       ['a rated account', { calibration: null }, 'dock.unrated.rated'],
-    ] as const)('says every match here is unrated for %s', async (_who, over, key) => {
-      mountBot(over);
-      await settle();
-      expect(document.body.querySelector('.panel .note')?.textContent).toBe(en(key));
-      expect(document.body.querySelector('.panel .tags')?.textContent).toContain(
-        en('dock.chip.unrated'),
-      );
-    });
+    ] as const)(
+      'says every match here is unrated by its chip, with no caption, for %s (#845)',
+      async (_who, over, key) => {
+        mountBot(over);
+        await settle();
+        expect(document.body.textContent).not.toContain(en(key));
+        expect(document.body.querySelector('.panel .tags')?.textContent).toContain(
+          en('dock.chip.unrated'),
+        );
+      },
+    );
 
     it('adds the queue lock: a chip with the time and the line, bots stay open', async () => {
       mountBot({ banUntil: 287_000, now: () => 0 });

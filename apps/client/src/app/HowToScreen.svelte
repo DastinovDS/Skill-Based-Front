@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../i18n/index.ts';
   import HowToPlay from '../howto/HowToPlay.svelte';
+  import LapisButton from '../theme/LapisButton.svelte';
   import DockFrame from './DockFrame.svelte';
   import type { DockContext } from './dock.ts';
 
@@ -27,16 +28,16 @@
   <HowToPlay />
   <p class="copyright">{t('howto.copyright')}</p>
   {#snippet actions()}
-    <button type="button" class="btn pri" aria-keyshortcuts="Enter Escape" onclick={onback}>
-      {t('common.back')}
-    </button>
+    <LapisButton variant="primary" aria-keyshortcuts="Enter Escape" onclick={onback}
+      >{t('common.back')}</LapisButton
+    >
   {/snippet}
 </DockFrame>
 
 <style>
   .copyright {
     margin: 24px 0 0;
-    font-size: 12px;
-    color: var(--text-dim);
+    font-size: 14px;
+    color: var(--ink-dim);
   }
 </style>

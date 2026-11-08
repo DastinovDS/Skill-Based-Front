@@ -188,6 +188,7 @@
     api={app.api}
     token={guest.token}
     map={app.backdrop}
+    nick={guest.nick}
     onstart={(matchId: string, mapId: string) => {
       app.go({ name: 'match', matchId, mapId });
     }}

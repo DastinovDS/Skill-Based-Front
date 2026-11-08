@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Icon from '../hud/Icon.svelte';
+  import LapisButton from '../theme/LapisButton.svelte';
   import { formatClock } from '../hud/format.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import type { Calibration, MapFile } from '../protocol.gen.ts';
@@ -82,10 +83,25 @@
   let menuOpen = $state(false);
 
   const modes = $derived([
-    { icon: 'bot', label: t('menu.bot'), go: onbot },
-    { icon: 'link', label: t('menu.create'), go: oncreate },
-    { icon: 'users', label: t('menu.lobby'), go: onlobby },
+    { label: t('menu.bot'), go: onbot },
+    { label: t('menu.create'), go: oncreate },
+    { label: t('menu.lobby'), go: onlobby },
   ] as const);
+
+  // The line over Play says what Play is now (a data line, not a caption): the running match, the
+  // calibration match to come, the ranked queue, or the unrated play of a guest.
+  const kicker = $derived(
+    hasActiveMatch
+      ? t('menu.matchRunning')
+      : !hasPassword
+        ? t('menu.kicker.guest')
+        : calibration !== null
+          ? tf('menu.kicker.calibration', {
+              next: Math.min(calibration.played + 1, calibration.total),
+              total: calibration.total,
+            })
+          : t('menu.kicker.ranked'),
+  );
 
   const primary = $derived(hasActiveMatch ? onresume : banned ? null : onqueue);
 
@@ -120,44 +136,40 @@
     />
   {/snippet}
 
-  <!-- The Play tab (#629, M5): Play (or Return, or the lock), then the three ways to play. -->
+  <!-- The Play tab (Lapis, #845): a line over Play, Play (or Return, or the lock), then the three
+       ways to play, numbered. Nothing under Play but the lock. -->
   {#if notice !== null}
     <p class="wl" role="alert"><Icon name="alert" size={16} />{t(notice)}</p>
   {/if}
+  <p class="kicker">{kicker}</p>
   {#if hasActiveMatch}
-    <button type="button" class="big" onclick={onresume}>
-      <UnitMark side="own" size={44} share={0.6} />{t('menu.resume')}
-    </button>
-    <div class="sub">{t('menu.matchRunning')}</div>
-  {:else if banned}
-    <button type="button" class="big" disabled>
-      <UnitMark side="own" size={46} />{t('menu.play')}
-    </button>
-    <div class="sub">
-      <span
-        class="chip ban"
-        role="timer"
-        aria-label={tf('menu.banAria', { time: formatClock(secondsLeft) })}
-      >
-        <Icon name="lock" size={14} />{tf('dock.banChip', { time: formatClock(secondsLeft) })}
-      </span>
-    </div>
+    <LapisButton variant="primary" size="lg" class="play" onclick={onresume}>
+      <UnitMark side="own" size={36} share={0.6} />{t('menu.resume')}
+    </LapisButton>
   {:else}
-    <button type="button" class="big" onclick={onqueue}>
-      <UnitMark side="own" size={46} />{t('menu.play')}
-    </button>
-    <div class="sub">
-      {#if !hasPassword}
-        <button type="button" class="lnk" onclick={onpassword}>{t('menu.guestHint')}</button>
-      {/if}
-    </div>
+    <LapisButton variant="primary" size="lg" class="play" disabled={banned} onclick={onqueue}>
+      <UnitMark side="own" size={36} />{t('menu.play')}
+    </LapisButton>
+    {#if banned}
+      <p class="sub">
+        <span
+          class="chip ban"
+          role="timer"
+          aria-label={tf('menu.banAria', { time: formatClock(secondsLeft) })}
+        >
+          <Icon name="lock" size={13} />{tf('dock.banChip', { time: formatClock(secondsLeft) })}
+        </span>
+      </p>
+    {/if}
   {/if}
-  <div class="rows">
+  <ol class="modes">
     {#each modes as mode (mode.label)}
-      <button type="button" class="row" disabled={hasActiveMatch} onclick={mode.go}>
-        <Icon name={mode.icon} size={22} />{mode.label}
-      </button>
+      <li>
+        <button type="button" class="row" disabled={hasActiveMatch} onclick={mode.go}
+          >{mode.label}</button
+        >
+      </li>
     {/each}
-  </div>
+  </ol>
   <div class="locale"><LocaleSelect /></div>
 </ScreenFrame>

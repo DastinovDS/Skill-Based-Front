@@ -31,7 +31,7 @@
     pause: 'none' | 'each' | null;
     /** An error or a notice that stays on the screen (amber, with the sign). */
     alert?: string | null;
-    /** One more line under the "Unrated" line. */
+    /** A data line beside the actions ("The invite expires in 14 min."). */
     note?: string | null;
     /** Esc: the way back (the screen decides what leaving does). */
     onback?: () => void;
@@ -80,18 +80,10 @@
   let accountOpen = $state(false);
 
   const modes = $derived([
-    { id: 'bot', icon: 'bot', label: t('menu.bot'), go: dock.onbot },
-    { id: 'friend', icon: 'link', label: t('menu.create'), go: dock.oncreate },
-    { id: 'lobby', icon: 'users', label: t('menu.lobby'), go: dock.onlobby },
+    { id: 'bot', label: t('menu.bot'), go: dock.onbot },
+    { id: 'friend', label: t('menu.create'), go: dock.oncreate },
+    { id: 'lobby', label: t('menu.lobby'), go: dock.onlobby },
   ] as const);
-
-  const unrated = $derived(
-    !dock.hasPassword
-      ? t('dock.unrated.guest')
-      : dock.calibration !== null
-        ? t('dock.unrated.calibration')
-        : t('dock.unrated.rated'),
-  );
 
   // Esc goes back, Enter does the main action. A field or a button keeps its own keys; the tiles
   // and levels (radios) do not, so Enter after a choice starts the match.
@@ -156,52 +148,56 @@
     />
   {/snippet}
 
-  <!-- The rail is the Play tab, still (#629, M5): Play is dimmed (it is the way back to the menu),
-       the open mode is marked. -->
+  <!-- The rail is the Play tab, still (#629, M5; Lapis, #845): Play, quiet, is the way back to the
+       menu; the ways to play are numbered, the open one is ivory with a pointer. -->
   <div class="dockhead">
     <button type="button" class="big dim" disabled={locked} onclick={dock.onmenu}>
-      <UnitMark side="own" size={46} />{t('menu.play')}
+      <UnitMark side="own" size={28} />{t('menu.play')}
     </button>
-    <div class="sub"></div>
   </div>
-  <div class="rows">
+  <ol class="modes">
     {#each modes as m (m.id)}
-      <button
-        type="button"
-        class="row"
-        class:cur={m.id === mode}
-        aria-current={m.id === mode ? 'page' : undefined}
-        disabled={locked && m.id !== mode}
-        onclick={m.id === mode ? undefined : m.go}
-      >
-        <Icon name={m.icon} size={22} />{m.label}
-      </button>
+      <li>
+        <button
+          type="button"
+          class="row"
+          class:cur={m.id === mode}
+          aria-current={m.id === mode ? 'page' : undefined}
+          disabled={locked && m.id !== mode}
+          onclick={m.id === mode ? undefined : m.go}>{m.label}</button
+        >
+      </li>
     {/each}
-  </div>
+  </ol>
 
   {#snippet panel()}
-    <div class="pe">{eyebrow}</div>
-    <div class="ph">
+    <div class="dhead">
+      <p class="kicker">{eyebrow}</p>
       <h2>{head}</h2>
-      {#if pause !== null}
-        <div class="tags">
-          <span class="chip">{t('dock.chip.unrated')}</span>
-          <span class="chip"
-            >{pause === 'none' ? t('dock.chip.noPause') : t('dock.chip.pause')}</span
-          >
+      {#if pause !== null || (sub !== null && sub !== '')}
+        <div class="chips">
+          {#if pause !== null}
+            <span class="tags">
+              <span class="chip">{t('dock.chip.unrated')}</span>
+              <span class="chip"
+                >{pause === 'none' ? t('dock.chip.noPause') : t('dock.chip.pause')}</span
+              >
+            </span>
+          {/if}
+          {#if sub !== null && sub !== ''}<span class="csub">{sub}</span>{/if}
         </div>
       {/if}
     </div>
-    {#if sub !== null && sub !== ''}<p class="ps">{sub}</p>{/if}
     {@render children()}
     {#if alert !== null}
       <p class="wl" role="alert"><Icon name="alert" size={16} /><span>{alert}</span></p>
     {/if}
     {#if banned}
-      <p class="wl"><Icon name="alert" size={16} /><span>{t('dock.banLine')}</span></p>
+      <p class="wl"><Icon name="lock" size={16} /><span>{t('dock.banLine')}</span></p>
     {/if}
-    {#if pause !== null}<p class="note">{unrated}</p>{/if}
-    {#if note !== null}<p class="note">{note}</p>{/if}
-    <div class="acts">{@render actions()}</div>
+    <div class="acts">
+      {@render actions()}
+      {#if note !== null}<span class="hint note">{note}</span>{/if}
+    </div>
   {/snippet}
 </ScreenFrame>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { BotLevel } from '../api/http.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
+  import LapisButton from '../theme/LapisButton.svelte';
   import DockFrame from './DockFrame.svelte';
   import type { DockContext } from './dock.ts';
   import LevelPicker from './LevelPicker.svelte';
@@ -49,7 +50,7 @@
   onenter={() => void submit()}
 >
   {#if busy}
-    <VersusStrip opponent={seat} youReady={true} opponentReady={true} />
+    <VersusStrip opponent={seat} you={dock.nick} youReady={true} opponentReady={true} />
   {:else}
     <LevelPicker
       value={level}
@@ -61,10 +62,8 @@
   {/if}
   {#snippet actions()}
     {#if !busy}
-      <button type="button" class="btn pri" onclick={submit}>
-        {t('bot.start')}
-      </button>
-      <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
+      <LapisButton variant="primary" onclick={submit}>{t('bot.start')}</LapisButton>
+      <button type="button" class="lnk" aria-keyshortcuts="Escape" onclick={onback}>
         {t('common.back')}
       </button>
     {/if}

@@ -1,34 +1,71 @@
-/* ===== The Replays and Leaderboard tabs (#629, R2 and L10 of docs/design/mockups/menus-entry.html) =====
-   The frame of the start screens (`.front`, app.css) with the tabs on top and one wide sheet on the
-   dimmed map. Used by SheetFrame. */
+/* ===== The Replays and Leaderboard tabs (#629; Lapis, #845) =====
+   The bar of the start screens on top, the page itself on the blurred stone (the overlay of
+   Profile, Replays and the dialogs, ui-style 51): the map behind dissolves. Used by SheetFrame;
+   the bar, labels, chips and buttons are app/front.css. */
 
+/* The blurred stone over the map: the blur is this one layer's backdrop, nothing else is filtered. */
 .front.sheet .shade {
-  background: rgb(22 19 15 / 80%);
+  background: var(--stone-tex) rgb(22 19 15 / 80%);
+  backdrop-filter: blur(9px) saturate(0.55);
 }
 
 .front.sheet .body {
   position: absolute;
-  left: 56px;
-  right: 44px;
-  top: 96px;
-  bottom: 24px;
+  inset: 72px 0 0;
   z-index: 6;
+  box-sizing: border-box;
+  padding: 34px 128px 32px;
   overflow: auto;
 }
 
-.front.sheet h2 {
-  margin: 0 0 12px;
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+@media (max-width: 1279px) {
+  .front.sheet .body {
+    padding: 30px 64px 28px;
+  }
 }
 
-/* A short or narrow window: the sheet flows down the page under the top line. */
+.front.sheet .sheethead {
+  margin-bottom: 20px;
+}
+
+.front.sheet .sheethead h2 {
+  margin: 6px 0 0;
+  font: 400 42px / 1.1 var(--font-display);
+  letter-spacing: 0.12em;
+}
+
+.front.sheet .empty {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 34px 0 12px;
+}
+
+.front.sheet .empty .eh {
+  margin: 0;
+  font: 400 24px / 1.2 var(--font-display);
+  letter-spacing: 0.1em;
+}
+
+.front.sheet .empty p {
+  margin: 0;
+}
+
+.front.sheet .sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* A short or narrow window: the sheet flows down the page under the bar. */
 @media (max-width: 899px), (max-height: 560px) {
   .front.sheet .body {
     position: relative;
     inset: auto;
-    margin: 24px 20px;
+    padding: 24px;
     overflow: visible;
   }
 }
