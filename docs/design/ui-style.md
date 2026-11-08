@@ -2271,7 +2271,7 @@ The opening scene (all directions, defaults until the owner decides): about 6.6 
 
 The owner picked **I Lapis** on 2026-11-08 (with the title rule and the letter assembly of Atlas; dark only: the light Atlas and Raster and the Ordre look are rejected). Round 2 is section 51.
 
-## 51. Out-of-game style, round 2: Lapis in depth and the match map (#826) **[awaiting the owner's decision]**
+## 51. Out-of-game style, round 2: Lapis in depth and the match map (#826) **[decided: the Lapis set, the map III Intaglio, 2026-11-08]**
 
 Mockup: [`mockups/out-of-game-style-r2.html`](mockups/out-of-game-style-r2.html) (two sections, Screens and Match map; compare up to four, zoom, grayscale, reduced motion), frames in [`mockups/img/out-of-game-style-r2/`](mockups/img/out-of-game-style-r2/), the baked backgrounds in [`mockups/assets/out-of-game-style-r2/`](mockups/assets/out-of-game-style-r2/).
 
@@ -2288,4 +2288,21 @@ The match map, on the pool map narrows at minute 6 (territory, roads, cities and
 | IV | Mosaic | tesserae in terrain colours, dark rows along shores and terrain changes | a tessellation step; WebP quality 80 to stay under 0.5 MB |
 
 Lapis pieces (shared by I to IV): the helmets keep their silhouettes and facing, the charge is the fill level with a cut level line; cities keep their discs and capacity rings in ivory on cut stone; VP is a gilt lozenge; own roads are an inlaid band of the owner's stone; territory has no glow: a groove with the owner's rule inside, doubled on the own side, toothed on the enemy's; the fog takes the colour out, darkens and hatches; the enemy's scheduled order is hatched; names in Cinzel.
+
+The owner accepted this Lapis set outside the match and picked **III Intaglio** for the map on 2026-11-08; the pieces of the match go to round 1 of the in-game style (section 52).
+
+## 52. In-game style, round 1: variants on the Intaglio map (#829) **[awaiting the owner's decision]**
+
+This round carries Lapis into every element of a match, on the fixed Intaglio background. Mockup: [`mockups/in-game-style.html`](mockups/in-game-style.html) (the fonts and the background are the round 2 assets), frames in [`mockups/img/in-game-style/`](mockups/img/in-game-style/). Eight scenes (whole map, front close-up, city menu, group menu, fight arena and kill feed, capture, HUD with alerts and tooltips, a specimen sheet of every piece), a side-by-side compare of all six variants, zoom, grayscale, reduced motion and a time scrubber; shots, the bonus octagram, packets, the bounce, the gathering of a scheduled order, the kill feed and the Fitted flood play. The arena keeps its structure; the octagram and the kill feed (section 48) and the flood (section 49) keep their behaviour; only the material changes.
+
+| Id | Variant | Pieces | Fog and owner territory | Estimate |
+| --- | --- | --- | --- | --- |
+| 0 | Current | today's pieces (reference) | grey-blue veil, hues and tint lost | 0 |
+| I | Lapidary | ivory cut into black stone, crisp offset shadows, lit lips | colour out, darkened, hatched; owner borders kept over the fog | 6 to 7 days |
+| II | Cloisonné | gilt wire edges, blue and cinnabar enamel with a glassy band | smoked glass; owner tint kept over the fog | 7 days |
+| III | Engraved | line and hatching: a charge solid, none hatched; land hatched by owner (own horizontal, enemy 45 degrees), stronger along land borders | ruled crosshatch; owner hatching kept through the fog | 7 to 8 days |
+| IV | Relief | lapis and porphyry in relief: on raised and lit, off sunk | 40 % of the colour kept, no tint | 7 days |
+| V | Planar | flat matte colour, hairline rules, cut corners | hue kept under a flat veil; owner tint kept | 4 to 5 days |
+
+Common to I to V: no glow anywhere; the amber fight sign is a ring of small cut wedges, a buffer road a row of cut lozenges, a road in fog fine beads (no dashes); an unknown enemy figure is an open shape (hatched, wired, stippled, sunk or outlined); the ghost of a sent order is the ribbon's outline only; a road fortification is a crenellated line (the wall of cartography); a road upgrade lays its work along the road; a shot is a tapered sliver with a fading tail and its hit throws fragments; the flood front is the variant's line on the scaled area outline. The HUD is the round 2 stone strip in each variant's material, the radial menus are sectors of that material. All keep the baked sprites and `SpriteCache` keys and add no per-object filter. Recommendation in #829: I Lapidary with the fog of II (the owner tint kept under the fog).
 
