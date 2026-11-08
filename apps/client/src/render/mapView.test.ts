@@ -8,6 +8,7 @@ import { voronoiTerritory } from './territory.ts';
 import { polygonArea } from './voronoi.ts';
 import { MapView } from './mapView.ts';
 import { BG, ROAD_BUFFER, ROAD_FOG, ROAD_OWN, YOU, ENEMY } from './style.ts';
+import { BORDER_BAND, BORDER_ENGRAVING, ENGRAVE } from './engraving.ts';
 
 // The roads read without colour (R1, #345): the level is the number of lanes, an own road has solid
 // lanes on a band of its owner's colour, a buffer road dashed lanes, and a half in fog dotted ones.
@@ -78,11 +79,37 @@ function quadsOf(g: Graphics): Quad[] {
     );
 }
 
-/** The cached glow of the territory, in its holder. */
-function glowOf(layers: MapLayers): Container | undefined {
+/** The Border band of the territory (#842), in its holder. */
+function bandOf(layers: MapLayers): Container | undefined {
   return layers.layer.territory.children
-    .find((c) => c.label === 'territory-glow-holder')
-    ?.children.find((c) => c.label === 'territory-glow');
+    .find((c) => c.label === 'territory-band-holder')
+    ?.children.find((c) => c.label === 'territory-band');
+}
+
+interface TextureFill {
+  readonly color: number;
+  readonly alpha: number;
+  readonly shapes: number;
+  readonly textured: boolean;
+}
+
+/** The fills of a Graphics: colour, opacity, the shapes in each and whether a texture fills them. */
+function textureFillsOf(g: Graphics | undefined): TextureFill[] {
+  const instructions = (g?.context.instructions ?? []) as unknown as {
+    action: string;
+    data: {
+      style: { color: number; alpha: number; texture: unknown; textureSpace: string };
+      path: { shapePath: { shapePrimitives: unknown[] } };
+    };
+  }[];
+  return instructions
+    .filter((i) => i.action === 'fill')
+    .map((i) => ({
+      color: i.data.style.color,
+      alpha: i.data.style.alpha,
+      shapes: i.data.path.shapePath.shapePrimitives.length,
+      textured: i.data.style.textureSpace === 'global',
+    }));
 }
 
 describe('MapView, the roads of R1', () => {
@@ -286,10 +313,12 @@ describe('MapView, the roads of R1', () => {
   });
 });
 
-describe('MapView, the glow along the borders of the territories (BL1, #347)', () => {
+describe('MapView, the Border band along the borders of the territories (#842)', () => {
   let layers: MapLayers;
   let view: MapView;
-  const glow = (): Container | undefined => glowOf(layers);
+  const band = (): Container | undefined => bandOf(layers);
+  const bandFills = (owner: 0 | 1): TextureFill[] =>
+    textureFillsOf(band()?.children.find((c) => c.label === `band-${String(owner)}`) as Graphics);
   /** Owners: every city of the first half of the map is player 0's, of the second half player 1's. */
   const halves = (): (0 | 1)[] => map.nodes.map((_, i) => (i < map.nodes.length / 2 ? 0 : 1));
 
@@ -301,58 +330,112 @@ describe('MapView, the glow along the borders of the territories (BL1, #347)', (
     view.destroy();
   });
 
-  it('is one cached texture over the territory fill, under the line of the border', () => {
+  it('is a hatch of each owner, own and enemy colours, under the engraved lines of the border', () => {
     view.setOwners(halves());
     const layer = layers.layer.territory.children;
     const index = (label: string) => layer.findIndex((c) => c.label === label);
-    expect(glow()?.isCachedAsTexture).toBe(true);
-    expect(glow()?.visible).toBe(true);
-    // The blur runs inside the cache (a filter on a cached container would run every frame).
-    expect(glow()?.filters ?? []).toHaveLength(0);
-    // In a holder that the floods of captures mask (#819).
-    expect(index('territory-glow-holder')).toBeGreaterThan(
+    expect(band()?.visible).toBe(true);
+    // No filter, no cache: plain textured fills that keep their screen pitch (zoom buckets).
+    expect(band()?.filters ?? []).toHaveLength(0);
+    expect(band()?.isCachedAsTexture).toBe(false);
+    const own = bandFills(0);
+    const enemy = bandFills(1);
+    expect(own).toHaveLength(1);
+    expect(enemy).toHaveLength(1);
+    expect(own[0]).toMatchObject({ color: ENGRAVE.own, textured: true });
+    expect(enemy[0]).toMatchObject({ color: ENGRAVE.enemy, textured: true });
+    expect(own[0]?.alpha).toBeCloseTo(BORDER_BAND.alpha);
+    // In a holder that the floods of captures mask (#819), under the line of the border.
+    expect(index('territory-band-holder')).toBeGreaterThan(
       layer.findIndex((c) => c instanceof Graphics),
     );
-    expect(index('territory-glow-holder')).toBeLessThan(layer.length - 1);
+    expect(index('territory-band-holder')).toBeLessThan(layer.length - 1);
     expect(layer[layer.length - 1]).toBeInstanceOf(Graphics);
   });
 
-  it('does not cut the blur to the canvas: the cache texture is the size of the world (#441)', () => {
+  it('leaves the inside of the land clear: no tint on the normal map, the flat tint in «Supply»', () => {
     view.setOwners(halves());
-    const blurs = (glow()?.children ?? [])
-      .flatMap((clip) => clip.children)
-      .filter((c) => c.label.startsWith('glow-blur-'));
-    expect(blurs).toHaveLength(2);
-    for (const blurred of blurs) {
-      const filters = blurred.filters as readonly { clipToViewport: boolean }[];
-      expect(filters).toHaveLength(1);
-      expect(filters[0]?.clipToViewport).toBe(false);
-    }
+    const tint = (): TextureFill[] =>
+      textureFillsOf(
+        layers.layer.territory.children.find((c) => c.label === 'territory') as Graphics,
+      );
+    expect(tint()).toEqual([]);
+    view.setSupplyMode(true);
+    expect(tint().length).toBe(map.nodes.length);
+    view.setSupplyMode(false);
+    expect(tint()).toEqual([]);
   });
 
-  it('is rebuilt when an owner changes and not for the same owners', () => {
-    const rebuild = vi.spyOn(Container.prototype, 'updateCacheTexture');
+  it('is redrawn when an owner changes and not for the same owners', () => {
     view.setOwners(halves());
-    const first = rebuild.mock.calls.length;
-    expect(first).toBeGreaterThan(0);
+    const g = band()?.children[0] as Graphics;
+    const redraw = vi.spyOn(g, 'clear');
     view.setOwners(halves());
-    expect(rebuild.mock.calls.length).toBe(first);
+    expect(redraw).not.toHaveBeenCalled();
     const changed = halves();
     changed[0] = 1;
     view.setOwners(changed);
-    expect(rebuild.mock.calls.length).toBeGreaterThan(first);
-    rebuild.mockRestore();
+    expect(redraw).toHaveBeenCalled();
+  });
+
+  it('is redrawn when the zoom crosses into another bucket of its hatch, not inside one', () => {
+    view.setOwners(halves());
+    const g = band()?.children[0] as Graphics;
+    const redraw = vi.spyOn(g, 'clear');
+    view.setCamera(1.2, 1);
+    view.setCamera(1.6, 1);
+    expect(redraw).not.toHaveBeenCalled();
+    view.setCamera(2.1, 1);
+    expect(redraw).toHaveBeenCalledTimes(1);
   });
 
   it('is not shown without a border between owners, nor in the «Supply» mode', () => {
     view.setOwners(map.nodes.map(() => 0));
-    expect(glow()?.visible).toBe(false);
+    expect(band()?.visible).toBe(false);
     view.setOwners(halves());
-    expect(glow()?.visible).toBe(true);
+    expect(band()?.visible).toBe(true);
     view.setSupplyMode(true);
-    expect(glow()?.visible).toBe(false);
+    expect(band()?.visible).toBe(false);
     view.setSupplyMode(false);
-    expect(glow()?.visible).toBe(true);
+    expect(band()?.visible).toBe(true);
+  });
+
+  it('engraves the border: a cut for both sides, the own rule doubled, the enemy beads', () => {
+    view.setOwners(halves());
+    const border = layers.layer.territory.children.find(
+      (c) => c.label === 'border-lines',
+    ) as Graphics;
+    const instructions = border.context.instructions as unknown as {
+      action: string;
+      data: { style: { color: number; width: number } };
+    }[];
+    const strokes = instructions.filter((i) => i.action === 'stroke').map((i) => i.data.style);
+    const fills = instructions.filter((i) => i.action === 'fill').map((i) => i.data.style);
+    expect(strokes.filter((st) => st.color === ENGRAVE.cut)).toHaveLength(1);
+    // The own rule and the second own rule; the enemy's rule; the enemy's beads are a fill.
+    expect(strokes.filter((st) => st.color === ENGRAVE.own)).toHaveLength(2);
+    expect(strokes.filter((st) => st.color === ENGRAVE.enemy)).toHaveLength(1);
+    expect(fills.map((f) => f.color)).toEqual([ENGRAVE.enemy]);
+  });
+
+  it('keeps every hairline at least one device pixel wide when zoomed out', () => {
+    view.setOwners(halves());
+    const border = layers.layer.territory.children.find(
+      (c) => c.label === 'border-lines',
+    ) as Graphics;
+    const widths = (): number[] =>
+      (
+        border.context.instructions as unknown as {
+          action: string;
+          data: { style: { width: number } };
+        }[]
+      )
+        .filter((i) => i.action === 'stroke')
+        .map((i) => i.data.style.width);
+    expect(Math.min(...widths())).toBeCloseTo(BORDER_ENGRAVING.rule.width);
+    view.setCamera(0.4, 1);
+    // 1 / 0.4 = 2.5 world units is one device pixel there.
+    expect(Math.min(...widths())).toBeGreaterThanOrEqual(2.5);
   });
 });
 
@@ -368,11 +451,10 @@ describe('MapView, a capture floods the area of the node (#819)', () => {
     view.destroy();
   });
 
-  /** The fills of the territory by colour: the alphas drawn for each. */
+  /** The fills of the territory tint by colour (the «Supply» tint): the alphas drawn for each. */
   const fills = (): Map<number, number[]> => {
-    const g = layers.layer.territory.children.filter(
-      (c): c is Graphics => c instanceof Graphics,
-    )[1];
+    const g = layers.layer.territory.children.find((c) => c.label === 'territory') as
+      Graphics | undefined;
     const instructions = (g?.context.instructions ?? []) as unknown as {
       action: string;
       data: { style: { color: number; alpha: number } };
@@ -390,6 +472,8 @@ describe('MapView, a capture floods the area of the node (#819)', () => {
   const all = (n: 0 | 1 | null): (0 | 1 | null)[] => map.nodes.map(() => n);
 
   it('shows the first owners and the ones of a call that does not animate at once', () => {
+    // The normal map has no tint (#842): the «Supply» mode shows the owners as a fill.
+    view.setSupplyMode(true);
     view.setOwners(all(0));
     expect(fills().get(YOU)).toHaveLength(map.nodes.length);
     expect(fills().get(ENEMY)).toBeUndefined();
@@ -404,7 +488,7 @@ describe('MapView, a capture floods the area of the node (#819)', () => {
   it('floods a captured area: the flood draws it until it lands, then the map does (#819)', () => {
     view.setOwners(all(0));
     view.setOwners(all(1), true);
-    // The areas under way are the floods' (fill, glow and rim meshes), not the map's tint.
+    // The areas under way are the floods' (fill, band and rim meshes); the normal map has no tint.
     expect(fills().get(YOU)).toBeUndefined();
     expect(fills().get(ENEMY)).toBeUndefined();
     expect(floods()).toBe(map.nodes.length);
@@ -417,10 +501,9 @@ describe('MapView, a capture floods the area of the node (#819)', () => {
     view.advance(1000);
     expect(floods()).toBe(0);
     expect(view.captures).toHaveLength(0);
-    expect(fills().get(ENEMY)).toHaveLength(map.nodes.length);
     // Done: another call changes nothing.
     view.advance(100);
-    expect(fills().get(ENEMY)).toHaveLength(map.nodes.length);
+    expect(floods()).toBe(0);
   });
 
   it('floods only the areas that changed hands, and an own capture is not calm', () => {
@@ -429,7 +512,6 @@ describe('MapView, a capture floods the area of the node (#819)', () => {
     next[0] = 0;
     view.setOwners(next, true);
     expect(view.captures.map((c) => [c.node, c.calm])).toEqual([[0, false]]);
-    expect(fills().get(ENEMY)).toHaveLength(map.nodes.length - 1);
     expect(floods()).toBe(1);
   });
 
@@ -498,12 +580,12 @@ describe('MapView, the terrain mode (#429)', () => {
     expect(layers.layer.roads.visible).toBe(true);
   });
 
-  it('keeps the glow of the territory in the terrain mode, unlike «Supply»', () => {
+  it('keeps the band of the territory in the terrain mode, unlike «Supply»', () => {
     view.setOwners(map.nodes.map((_, i) => (i % 2 === 0 ? 0 : 1)));
-    const glow = glowOf(layers);
-    expect(glow?.visible).toBe(true);
+    const band = bandOf(layers);
+    expect(band?.visible).toBe(true);
     view.setTerrainMode(true);
-    expect(glow?.visible).toBe(true);
+    expect(band?.visible).toBe(true);
   });
 
   it('a flat ground stays flat when «Supply» is switched off while the terrain mode is on', () => {

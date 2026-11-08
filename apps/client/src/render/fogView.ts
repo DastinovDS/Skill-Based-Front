@@ -1,4 +1,4 @@
-import { BlurFilter, Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { Point } from './camera.ts';
 import type {
   EdgeView,
@@ -15,16 +15,12 @@ import {
   borderPoint,
   halfMarkerPoint,
   nodeMarkerPoint,
-  sameVeil,
-  veilCities,
-  veilPolygon,
 } from './fogLayout.ts';
 import { knownOfSeen } from './rangeLabel.ts';
 import { symbolScale } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { Token, type EntityKit } from './shapes.ts';
 import {
-  FOG_VEIL,
   GHOST_AGE_FONT_SIZE,
   GHOST_AGE_STROKE,
   GLYPH_COLOR,
@@ -90,14 +86,12 @@ class Ghost {
 }
 
 /**
- * The fog layer (CLI-05, #61; the haze F1, #346): what the snapshot says is hidden, drawn as hidden.
+ * The fog layer (CLI-05, #61): what the snapshot says is hidden, drawn as hidden.
  *
  * The server decides visibility: a node or an edge with `detail: 'fog'` is hidden, anything else
- * is (at least partly) seen. The client lays a cool grey veil over the Voronoi cell of every hidden
- * city: the cells are filled in one Graphics, blurred by one `BlurFilter` and cached as a texture
- * (`cacheAsTexture`), so a frame draws one sprite; the cache is rebuilt only when the SET of hidden
- * cities changes (a snapshot with the same set costs nothing). The veil darkens what lies under the
- * fog layer: the terrain, the roads and the cities; the intents lie above it (`LAYER_ORDER`). The half
+ * is (at least partly) seen. The veil over the areas of the hidden cities is the Ruled veil of
+ * `MapView` (`VeilView`, #842), which lies at the bottom of the fog layer; this view draws the
+ * memory over it. The intents lie above the fog layer (`LAYER_ORDER`). The half
  * of a road in fog has dotted lanes (`MapView`), a road never seen included (its level is the 1
  * of DEC-17, not a known one): it has no mark of its own (the "?" was removed, #348). It puts a "last seen" ghost on a hidden
  * place when the snapshot still carries a `Seen` with enemy groups in it: the enemy token, faded,
@@ -108,29 +102,9 @@ class Ghost {
  * releases everything.
  */
 export class FogView {
-  /** The veil: the hidden cells filled; blurred and cached through `veilCache`. */
-  private readonly veil = new Graphics({ label: 'fog-veil-cells' });
-  private readonly blur = new BlurFilter({
-    strength: FOG_VEIL.blur,
-    quality: FOG_VEIL.blurQuality,
-    resolution: FOG_VEIL.blurResolution,
-    // The filter runs inside the cache texture, which is the size of the world. By default Pixi
-    // cuts a filter area to the canvas (the root viewport), so on a screen smaller than the
-    // world (a 1920x1080 window at devicePixelRatio 1) the veil would stop at the canvas size
-    // (#441). The cache texture is the area that matters here.
-    clipToViewport: false,
-  });
-  /** The blur is a filter of this container, INSIDE the cached one: it runs only when the cache is built. */
-  private readonly veilBlur = new Container({ label: 'fog-veil-blur' });
-  /** The map edge cuts the veil (and what the blur spreads past it). */
-  private readonly veilMask = new Graphics({ label: 'fog-veil-mask' });
-  private readonly veilClip = new Container({ label: 'fog-veil-clip' });
-  private readonly veilCache = new Container({ label: 'fog-veil', visible: false });
-  private hiddenCities: number[] = [];
   private readonly nodeGhosts: (Ghost | null)[];
   /** The memory of a half of a road in fog, by `edge * 2 + half`. */
   private readonly halfGhosts: (Ghost | null)[];
-  private readonly shadeLayer = new Container({ label: 'fog-shades' });
   private readonly ghostLayer = new Container({ label: 'fog-ghosts' });
   /** The dashed tick across the road on the border point of a half whose memory is drawn (#354, leaving the haze). */
   private readonly halfTicks = new Graphics({ label: 'fog-half-ticks' });
@@ -147,8 +121,6 @@ export class FogView {
     private readonly kit: EntityKit,
     private labelResolution: number,
     private tickHz: number,
-    /** The Voronoi cells of the cities (`MapView.cells`). */
-    private readonly cells: readonly (readonly Point[])[],
     /** Radius of a city now (`CityView.radiusOf`). */
     private readonly radiusOf: (node: number) => number,
   ) {
@@ -160,17 +132,9 @@ export class FogView {
       fill: GLYPH_COLOR,
       stroke: GHOST_AGE_STROKE,
     });
-    this.veilMask.rect(0, 0, map.meta.width, map.meta.height).fill(0xffffff);
-    this.veilBlur.filters = [this.blur];
-    this.veilBlur.addChild(this.veil);
-    this.veilClip.addChild(this.veilBlur, this.veilMask);
-    this.veilClip.mask = this.veilMask;
-    this.veilCache.addChild(this.veilClip);
-    this.veilCache.cacheAsTexture({ resolution: 1, antialias: true });
-    this.shadeLayer.addChild(this.veilCache);
     this.nodeGhosts = map.nodes.map(() => null);
     this.halfGhosts = map.edges.flatMap(() => [null, null]);
-    layers.layer.fog.addChild(this.shadeLayer, this.halfTicks, this.ghostLayer);
+    layers.layer.fog.addChild(this.halfTicks, this.ghostLayer);
   }
 
   /** Ticks per second, for the age of a memory; set when the ruleset is known. */
@@ -207,7 +171,6 @@ export class FogView {
     if (base === this.base) return;
     this.base = base;
     const { nodes, edges } = base.view;
-    this.setRegions(nodes);
     for (const node of nodes) this.setNode(node, base.tick);
     this.tickMarks = [];
     for (const edge of edges) this.setEdge(edge, base.tick);
@@ -242,35 +205,9 @@ export class FogView {
   }
 
   destroy(): void {
-    this.shadeLayer.destroy({ children: true });
-    this.blur.destroy();
     this.halfTicks.destroy();
     this.ghostLayer.destroy({ children: true });
     this.ageStyle.destroy();
-  }
-
-  // --- Shapes -------------------------------------------------------------------------------
-
-  /**
-   * The veil over the cells of the hidden cities. Redrawn (and the cache rebuilt) only when the set
-   * of hidden cities changes; with none hidden the veil is not drawn at all.
-   */
-  private setRegions(nodes: readonly NodeView[]): void {
-    const hidden = veilCities(nodes);
-    if (sameVeil(hidden, this.hiddenCities)) return;
-    this.hiddenCities = hidden;
-    const veil = this.veil.clear();
-    const bounds = { width: this.map.meta.width, height: this.map.meta.height };
-    let drawn = 0;
-    for (const id of hidden) {
-      const cell = this.cells[id];
-      if (cell === undefined) continue;
-      veil.poly(veilPolygon(cell, bounds, FOG_VEIL.margin));
-      drawn++;
-    }
-    veil.fill({ color: FOG_VEIL.color, alpha: FOG_VEIL.alpha });
-    this.veilCache.visible = drawn > 0;
-    this.veilCache.updateCacheTexture();
   }
 
   // --- Snapshot-driven part -----------------------------------------------------------------

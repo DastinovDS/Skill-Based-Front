@@ -6,7 +6,6 @@ import type { EdgeView, HalfView, Seen, SnapshotMsg } from '../protocol.gen.ts';
 import { borderPoint, halfMarkerPoint } from './fogLayout.ts';
 import { FogView } from './fogView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
-import { voronoiCells } from './voronoi.ts';
 import { EntityKit } from './shapes.ts';
 import { testSprites } from './testSprites.ts';
 
@@ -62,32 +61,6 @@ const textsOf = (item: Container): string[] => {
   visit(item);
   return found;
 };
-/** The haze (F1): the container of the cached veil and the number of cells filled in it. */
-const veilOf = (layers: MapLayers): Container | undefined => {
-  const shades = layers.layer.fog.children.find((c) => c.label === 'fog-shades');
-  return shades?.children.find((c) => c.label === 'fog-veil');
-};
-const veilCells = (layers: MapLayers): Graphics | undefined => {
-  const find = (node: Container): Graphics | undefined => {
-    if (node.label === 'fog-veil-cells') return node as Graphics;
-    for (const child of node.children) {
-      const found = find(child);
-      if (found !== undefined) return found;
-    }
-    return undefined;
-  };
-  const veil = veilOf(layers);
-  return veil === undefined ? undefined : find(veil);
-};
-const veilCellCount = (layers: MapLayers): number => {
-  const instructions = (veilCells(layers)?.context.instructions ?? []) as unknown as {
-    action: string;
-    data: { path: { shapePath: { shapePrimitives: unknown[] } } };
-  }[];
-  return instructions
-    .filter((i) => i.action === 'fill')
-    .reduce((n, i) => n + i.data.path.shapePath.shapePrimitives.length, 0);
-};
 
 describe('FogView, the memory of the halves of a road', () => {
   let layers: MapLayers;
@@ -101,7 +74,7 @@ describe('FogView, the memory of the halves of a road', () => {
     );
     layers = createLayers();
     kit = new EntityKit(0, testSprites());
-    view = new FogView(map, layers, 0, kit, 1, 10, [], () => 17);
+    view = new FogView(map, layers, 0, kit, 1, 10, () => 17);
   });
   afterEach(() => {
     view.destroy();
@@ -180,9 +153,9 @@ describe('FogView, the memory of the halves of a road', () => {
 
   it('draws no dark shade of its own on a half in fog: the dotted lanes of the road carry it', () => {
     view.update(withHalves(half('exact', null), half('fog', null)));
-    // Only the haze of the hidden cities (none here, the nodes are all seen): no shade per half.
-    expect(veilCellCount(layers)).toBe(0);
-    expect(veilOf(layers)?.visible).toBe(false);
+    // The veil of the hidden areas is the map's (`VeilView`, #842): the fog view only has the
+    // ticks of the halves and the ghosts.
+    expect(layers.layer.fog.children.map((c) => c.label)).toEqual(['fog-half-ticks', 'fog-ghosts']);
   });
 });
 
@@ -207,7 +180,7 @@ describe('FogView, a road that was never seen (no "?" mark since #348)', () => {
     );
     layers = createLayers();
     kit = new EntityKit(0, testSprites());
-    view = new FogView(map, layers, 0, kit, 1, 10, [], () => 17);
+    view = new FogView(map, layers, 0, kit, 1, 10, () => 17);
   });
   afterEach(() => {
     view.destroy();
@@ -249,92 +222,5 @@ describe('FogView, a road that was never seen (no "?" mark since #348)', () => {
     view.update(withRoad('fog', half('fog', null), half('fog', null)));
     view.setCameraScale(0.5);
     expect(fogTexts()).not.toContain('?');
-  });
-});
-
-describe('FogView, the haze F1 over the hidden cities', () => {
-  let layers: MapLayers;
-  let kit: EntityKit;
-  let view: FogView;
-  const cells = voronoiCells(map.nodes, { width: map.meta.width, height: map.meta.height });
-
-  /** The base snapshot where exactly the cities `fogged` are in fog (with this memory, if any). */
-  function withFog(fogged: readonly number[], memory: Seen | null = null): SnapshotMsg {
-    const nodes = base.view.nodes.map((node) =>
-      fogged.includes(node.id)
-        ? { ...node, detail: 'fog' as const, seen: memory }
-        : { ...node, detail: 'exact' as const, seen: null },
-    );
-    return { ...base, view: { ...base.view, nodes } };
-  }
-
-  beforeEach(() => {
-    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
-      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
-    );
-    layers = createLayers();
-    kit = new EntityKit(0, testSprites());
-    view = new FogView(map, layers, 0, kit, 1, 10, cells, () => 17);
-  });
-  afterEach(() => {
-    view.destroy();
-    kit.destroy();
-    vi.restoreAllMocks();
-  });
-
-  it('does not cut the blur to the canvas: the cache texture is the size of the world (#441)', () => {
-    // A filter area is clipped to the root viewport by default; the veil is built into a texture
-    // of the whole map, so on a canvas smaller than the map (a 1920x1080 window at devicePixelRatio 1)
-    // the veil would stop at the canvas size.
-    const blurred = veilOf(layers)?.children[0]?.children.find((c) => c.label === 'fog-veil-blur');
-    const filters = (blurred?.filters ?? []) as readonly { clipToViewport: boolean }[];
-    expect(filters).toHaveLength(1);
-    expect(filters[0]?.clipToViewport).toBe(false);
-  });
-
-  it('is one cached texture of the hidden cells, with the blur inside the cache, not on it', () => {
-    view.update(withFog([1, 2]));
-    const veil = veilOf(layers);
-    expect(veil?.visible).toBe(true);
-    expect(veil?.isCachedAsTexture).toBe(true);
-    // A filter on the cached container itself would run every frame: it sits on a child.
-    expect(veil?.filters ?? []).toHaveLength(0);
-    expect(veilCellCount(layers)).toBe(2);
-  });
-
-  it('is not drawn at all while nothing is hidden', () => {
-    view.update(withFog([]));
-    expect(veilOf(layers)?.visible).toBe(false);
-    expect(veilCellCount(layers)).toBe(0);
-  });
-
-  it('is rebuilt when the set of hidden cities changes, and only then', () => {
-    const rebuild = vi.spyOn(Container.prototype, 'updateCacheTexture');
-    view.update(withFog([1, 2]));
-    expect(rebuild).toHaveBeenCalledTimes(1);
-    // A new snapshot of the same set (even with a new memory in it): no rebuild.
-    view.update(withFog([2, 1], seen()));
-    view.update(withFog([1, 2], seen({ tick: 100 })));
-    expect(rebuild).toHaveBeenCalledTimes(1);
-    view.update(withFog([1, 2, 3]));
-    expect(rebuild).toHaveBeenCalledTimes(2);
-    expect(veilCellCount(layers)).toBe(3);
-    view.update(withFog([]));
-    expect(rebuild).toHaveBeenCalledTimes(3);
-    expect(veilOf(layers)?.visible).toBe(false);
-  });
-
-  it('keeps a seen city clear: the veil is only over the cities the view says are in fog', () => {
-    view.update(withFog([4]));
-    expect(veilCellCount(layers)).toBe(1);
-    view.update(withFog([]));
-    expect(veilCellCount(layers)).toBe(0);
-  });
-
-  it('leaves the ghosts of the memories above the veil', () => {
-    view.update(withFog([1], seen()));
-    const order = layers.layer.fog.children.map((c) => c.label);
-    expect(order.indexOf('fog-shades')).toBeLessThan(order.indexOf('fog-ghosts'));
-    expect(ghosts(layers).length).toBeGreaterThan(0);
   });
 });

@@ -977,3 +977,30 @@ test('shot of the outlines over a group with a badge', async ({ page }) => {
     clip: { x: 60, y: 460, width: 340, height: 120 },
   });
 });
+
+// The map treatment under zoom (#842, #829 round 2): the Border band and the Ruled veil keep their
+// screen pitch in zoom buckets of a power of two, the lines in between fading in towards the next
+// bucket, and no stroke thinner than one device pixel. `zoom-<n>.png`: the scene `forts_geo`, the
+// map alone, zoomed by the wheel in even steps (about 1.25x a step, from far out to close in), so
+// neighbouring frames can be compared for a jump.
+test('shot of the map treatment at a run of zooms', async ({ page }) => {
+  await page.goto('/?scene=forts_geo');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '1200');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.addStyleTag({ content: '.hud { display: none !important; }' });
+  const box = await page.locator('canvas').boundingBox();
+  if (box === null) throw new Error('no canvas');
+  await page.mouse.move(box.x + box.width * 0.62, box.y + box.height * 0.55);
+  // Far out first (the camera's minimum), then in by about 1.25x a step.
+  for (let i = 0; i < 6; i++) {
+    await page.mouse.wheel(0, 250);
+    await page.waitForTimeout(120);
+  }
+  await page.waitForTimeout(600);
+  for (let step = 0; step < 12; step++) {
+    const name = `zoom-${String(step).padStart(2, '0')}.png`;
+    await page.locator('canvas').screenshot({ path: join(OUT, name) });
+    await page.mouse.wheel(0, -112);
+    await page.waitForTimeout(700);
+  }
+});
