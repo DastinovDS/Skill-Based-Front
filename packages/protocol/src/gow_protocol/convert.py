@@ -52,6 +52,7 @@ The simulation's ``victory.EndReason`` is finer than the wire's: ``vp``, ``citie
 are all ``timer``; ``double_defeat`` (both players lost in one tick, #136) is its own reason.
 """
 
+import dataclasses
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Final
@@ -99,6 +100,7 @@ from gow_protocol.view import (
     View,
 )
 from gow_sim import commands as sim
+from gow_sim.analysis import ResultTotals
 from gow_sim import view as sv
 from gow_sim.state import Event, EventValue
 from gow_sim.systems.victory import EndReason as SimEndReason
@@ -896,14 +898,14 @@ def match_end_msg(
     rating: RatingChange | None = None,
     unrated_reason: UnratedReason | None = UnratedReason.CASUAL,
     calibration: Calibration | None = None,
-    stats: tuple[int, int] | None = None,
+    stats: ResultTotals | None = None,
 ) -> MatchEndMsg:
     """``match_end`` of a finished match; ``disconnect``: the ``Forfeit`` was a technical defeat.
 
     ``rating``: the receiving player's rating change in a rated match (RAT-02), ``None`` while
     the rating is hidden. ``unrated_reason``: why the match did not change the rating, ``None``
     when it did (DEC-34). ``calibration``: the player's progress after the match. ``stats``:
-    the receiving player's ``(units_lost, charges_delivered)`` (``gow_sim.analysis.result_totals``).
+    the receiving player's totals over the match (``gow_sim.analysis.ResultTally``).
     """
     reason = _END_REASONS[outcome.reason]
     if disconnect and reason is EndReason.FORFEIT:
@@ -917,7 +919,5 @@ def match_end_msg(
         rated=unrated_reason is None,
         unrated_reason=unrated_reason,
         calibration=calibration,
-        stats=None
-        if stats is None
-        else MatchEndStats(units_lost=stats[0], charges_delivered=stats[1]),
+        stats=None if stats is None else MatchEndStats(**dataclasses.asdict(stats)),
     )

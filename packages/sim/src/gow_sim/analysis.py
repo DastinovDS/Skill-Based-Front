@@ -202,24 +202,44 @@ simulation, so the state hash does not change. Definitions (the same text is in
   Rejected commands cost nothing; the real CP balance (regeneration, burning at the cap) is not
   reconstructed.
 
-**Result totals** (#607, the result screen): ``result_totals(events, player)`` returns the two
-numbers of one player the ``match_end`` message carries. ``units_lost`` is the units of that player
-destroyed in the match: the ``losses_<p>`` of every ``fight_round`` (units killed by shots; units
-of a retreat are not lost) plus one per ``attrition`` event of the player (a unit that dies from
-over-capacity). Starvation spends charges, not units, so it is not counted. ``charges_delivered``
-is the same number as ``ChargeFlow.charges_delivered``: the ``charges`` of all the player's
-``packet_delivered`` events, one-off transfers included. Both are counted over the whole event
-list, so a reconnect does not change them.
+**Result totals** (#824, the result screen; ``docs/design/ui-style.md`` 13.6 has the same text):
+``ResultTally`` reads the events of every tick of a match (the server's match runner feeds it
+after each step, so the totals cover the whole match, not the last tick) and ``totals(player)``
+returns the numbers of one player that ``match_end`` carries. Counted only from existing events;
+nothing is added to the simulation. Per player ``p`` (the other player is ``q``):
+
+- ``units_killed``: units of ``q`` destroyed in fights: ``losses_q`` of every ``fight_round``
+  (units killed by shots), plus the units of ``q`` that died at the end of a fight by DEC-24,
+  item G3 (a returning group that bounced in the node it lost: ``losses_q`` of ``fight_ended`` minus
+  the round losses of that fight). Over-capacity attrition is no kill.
+- ``units_lost``: units of ``p`` destroyed, by the same two fight rules, plus one per ``attrition``
+  event of ``p`` (a unit that dies from over-capacity, DEC-12): a lost unit is lost whatever killed
+  it. Not counted: a returning group that walks into its lost, empty node, cannot pay the capture
+  and dies (``capture_failed`` with ``encircled`` outside a fight, DEC-38 item 4), because that
+  event carries no unit count; starvation spends charges, not units; a retreat loses nothing.
+- ``cities_captured`` and ``provinces_captured``: every ``node_captured`` of ``p`` (a fight won, a
+  walk into an empty node; neutral and enemy nodes, a recapture counts again), split by the kind of
+  the node in the map: ``province`` or a city (the capital included).
+- ``attacks`` / ``attacks_won``: node fights that ended (``fight_ended`` with a ``node``) in a node
+  ``p`` did not own when the fight started (``attacker`` is ``p``, or ``None``: a neutral node both
+  players entered) / of them those that ended with ``p`` capturing the node (``captured`` and
+  ``winner`` is ``p``). A walk into an empty node is no attack (no fight), but it is a capture; an
+  edge meeting is neither attack nor defense.
+- ``defenses`` / ``defenses_held``: node fights that ended in a node of ``p`` (``attacker`` is
+  ``q``) / of them those after which the node is still ``p``'s (not ``captured`` by ``q``: a
+  ``q`` win whose groups could not pay the capture, DEC-38, also holds the node).
+- A fight still going when the match ends counts its rounds (kills and losses) but is neither an
+  attack nor a defense.
 
 Pure: no I/O, no clock (AGENTS.md, section 4.1).
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Final
 
 from gow_sim.commands import CancelOrder, Forfeit, Move, Ok, PlayerCommand
-from gow_sim.maps import PLAYERS
+from gow_sim.maps import PLAYERS, MapDef, NodeKind
 from gow_sim.match import Match
 from gow_sim.ruleset import Stance
 from gow_sim.state import AtNode, Event, GameState, OnEdge
@@ -239,11 +259,12 @@ __all__ = [
     "MatchStats",
     "MoveRecord",
     "PlayerStats",
+    "ResultTally",
+    "ResultTotals",
     "analyze",
     "analyze_stats",
     "charge_places",
     "charge_stock",
-    "result_totals",
 ]
 
 UNFINISHED: Final = "unfinished"
@@ -290,21 +311,103 @@ _KIND_CATEGORY: Final = {
 """``CommandRecord.kind`` to category; ``Move`` goes by ``planned``, the rest is ``other``."""
 
 
-def result_totals(events: Sequence[Event], player: int) -> tuple[int, int]:
-    """``(units_lost, charges_delivered)`` of ``player`` over ``events`` (module docstring)."""
-    lost = delivered = 0
-    for e in events:
-        if e.kind == "fight_round":
-            n = e.get(f"losses_{player}")
-            assert isinstance(n, int)
-            lost += n
-        elif e.kind == "attrition" and e.get("player") == player:
-            lost += 1
-        elif e.kind == "packet_delivered" and e.get("player") == player:
-            charges = e.get("charges")
-            assert isinstance(charges, int)
-            delivered += charges
-    return lost, delivered
+@dataclass(frozen=True, slots=True)
+class ResultTotals:
+    """The result screen numbers of one player over a whole match (module docstring)."""
+
+    units_killed: int
+    units_lost: int
+    cities_captured: int
+    provinces_captured: int
+    attacks: int
+    attacks_won: int
+    defenses: int
+    defenses_held: int
+
+
+class ResultTally:
+    """Counts ``ResultTotals`` of both players from the events of a match, tick by tick.
+
+    ``read`` takes the events of one or more ticks in order; it keeps only counters and the round
+    losses of the fights still going, so a tick costs one pass over its own events.
+    """
+
+    def __init__(self, mapdef: MapDef) -> None:
+        self._province: Final = tuple(n.kind is NodeKind.PROVINCE for n in mapdef.nodes)
+        self._killed = _zeros()
+        self._lost = _zeros()
+        self._cities = _zeros()
+        self._provinces = _zeros()
+        self._attacks = _zeros()
+        self._attacks_won = _zeros()
+        self._defenses = _zeros()
+        self._held = _zeros()
+        self._rounds: dict[int, tuple[int, int]] = {}
+        """Fight id -> the round losses ``(losses_0, losses_1)`` of a fight that has not ended."""
+
+    def read(self, events: Iterable[Event]) -> None:
+        """Add the events (of whole ticks, in order) to the counters."""
+        for e in events:
+            match e.kind:
+                case "fight_round":
+                    losses = (_int(e, "losses_0"), _int(e, "losses_1"))
+                    self._units_died(losses)
+                    fight = _opt_int(e, "fight")
+                    if fight is not None:
+                        before = self._rounds.get(fight, (0, 0))
+                        self._rounds[fight] = (before[0] + losses[0], before[1] + losses[1])
+                case "fight_ended":
+                    self._fight_ended(e)
+                case "attrition":
+                    self._lost[_int(e, "player")] += 1
+                case "node_captured":
+                    node, player = _int(e, "node"), _int(e, "player")
+                    (self._provinces if self._province[node] else self._cities)[player] += 1
+                case _:
+                    pass
+
+    def _units_died(self, losses: tuple[int, int]) -> None:
+        for p in PLAYERS:
+            self._lost[p] += losses[p]
+            self._killed[1 - p] += losses[p]
+
+    def _fight_ended(self, e: Event) -> None:
+        fight = _opt_int(e, "fight")
+        rounds = (0, 0) if fight is None else self._rounds.pop(fight, (0, 0))
+        # The units that died at the end of the fight (DEC-24, item G3), beyond its rounds.
+        self._units_died((_int(e, "losses_0") - rounds[0], _int(e, "losses_1") - rounds[1]))
+        if _opt_int(e, "node") is None:
+            return  # an edge meeting: neither attack nor defense
+        attacker, winner = _opt_int(e, "attacker"), _opt_int(e, "winner")
+        taken_by = winner if e.get("captured") is True else None  # the player that took the node
+        for p in PLAYERS:
+            if attacker is None or attacker == p:
+                self._attacks[p] += 1
+                if taken_by == p:
+                    self._attacks_won[p] += 1
+            else:
+                self._defenses[p] += 1
+                if taken_by != attacker:
+                    self._held[p] += 1
+
+    def totals(self, player: int) -> ResultTotals:
+        """The numbers of ``player`` over the events read so far."""
+        return ResultTotals(
+            units_killed=self._killed[player],
+            units_lost=self._lost[player],
+            cities_captured=self._cities[player],
+            provinces_captured=self._provinces[player],
+            attacks=self._attacks[player],
+            attacks_won=self._attacks_won[player],
+            defenses=self._defenses[player],
+            defenses_held=self._held[player],
+        )
+
+
+def _int(e: Event, key: str) -> int:
+    value = e.get(key)
+    assert isinstance(value, int)
+    return value
 
 
 def _zeros() -> dict[int, int]:

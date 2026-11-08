@@ -52,7 +52,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import AtNodeLoc, OnEdgeLoc, View
 from gow_sim import commands as sim
 from gow_sim import view as sv
-from gow_sim.analysis import result_totals
+from gow_sim.analysis import ResultTally, ResultTotals
 from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
@@ -938,21 +938,44 @@ def test_match_end_disconnect() -> None:
 
 
 def test_match_end_carries_only_the_own_totals() -> None:
-    """#607: each player's ``match_end`` has that player's totals and no field of the other side."""
-    events = [
-        event(5, "fight_round", fight=1, node=1, spent_0=0, spent_1=0, losses_0=4, losses_1=1),
-        event(6, "packet_delivered", packet=1, player=0, node=1, charges=7),
-        event(7, "packet_delivered", packet=2, player=1, node=2, charges=2),
-    ]
+    """#824: each player's ``match_end`` has that player's totals and no field of the other side."""
+    tally = ResultTally(load_map(ROOT / "maps" / "fixtures" / "artery.json"))
+    tally.read(
+        [
+            event(5, "fight_round", fight=1, node=1, losses_0=4, losses_1=1),
+            event(6, "attrition", node=0, player=1, group=2, charged=False, destroyed=True),
+            event(7, "node_captured", node=1, player=0),
+        ]
+    )
     outcome = Outcome(0, SimEndReason.CAPITAL)
-    ends = [match_end_msg(outcome, 100, (1, 0), stats=result_totals(events, p)) for p in (0, 1)]
+    ends = [match_end_msg(outcome, 100, (1, 0), stats=tally.totals(p)) for p in (0, 1)]
     assert [e.stats for e in ends] == [
-        MatchEndStats(units_lost=4, charges_delivered=7),
-        MatchEndStats(units_lost=1, charges_delivered=2),
+        MatchEndStats(
+            units_killed=1,
+            units_lost=4,
+            cities_captured=1,
+            provinces_captured=0,
+            attacks=0,
+            attacks_won=0,
+            defenses=0,
+            defenses_held=0,
+        ),
+        MatchEndStats(
+            units_killed=4,
+            units_lost=2,
+            cities_captured=0,
+            provinces_captured=0,
+            attacks=0,
+            attacks_won=0,
+            defenses=0,
+            defenses_held=0,
+        ),
     ]
     for end in ends:
         assert end.stats is not None
-        assert set(end.stats.model_dump()) == {"units_lost", "charges_delivered"}
+        assert set(end.stats.model_dump()) == {
+            f.name for f in dataclasses.fields(ResultTotals)
+        }  # one field per total, none about the opponent's own numbers
         assert decode_server(encode(end)) == end
     assert match_end_msg(outcome, 100, (1, 0)).stats is None
 

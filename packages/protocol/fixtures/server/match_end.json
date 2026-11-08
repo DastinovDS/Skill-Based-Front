@@ -1,1 +1,1 @@
-{"type": "match_end", "tick": 4210, "reason": "capital_captured", "winner": 0, "vp": [214, 180], "rating": null, "rated": false, "unrated_reason": "casual", "stats": {"units_lost": 23, "charges_delivered": 412}, "calibration": null}
+{"type": "match_end", "tick": 4210, "reason": "capital_captured", "winner": 0, "vp": [214, 180], "rating": null, "rated": false, "unrated_reason": "casual", "stats": {"units_killed": 31, "units_lost": 23, "cities_captured": 6, "provinces_captured": 3, "attacks": 9, "attacks_won": 5, "defenses": 4, "defenses_held": 3}, "calibration": null}

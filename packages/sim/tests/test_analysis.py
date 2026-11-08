@@ -2,7 +2,7 @@
 
 import dataclasses
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from gow_sim.analysis import (
     CP_CATEGORIES,
@@ -12,10 +12,11 @@ from gow_sim.analysis import (
     MatchLog,
     MatchRecorder,
     MoveRecord,
+    ResultTally,
+    ResultTotals,
     analyze,
     analyze_stats,
     charge_stock,
-    result_totals,
 )
 from gow_sim.commands import (
     BuildBarracks,
@@ -672,24 +673,135 @@ def test_an_idle_match_ledger_balances_and_places_add_up() -> None:
         assert exact - len(PLACES) < parts <= exact
 
 
-def test_result_totals_count_own_units_lost_and_charges_delivered() -> None:
-    """#607: fight kills (``losses_<p>``) and attrition are units lost; starvation and a retreat
-    are not; delivered charges are the packets and transfers that arrived."""
-    events = [
-        event(6, "fight_round", fight=1, node=1, spent_0=0, spent_1=0, losses_0=2, losses_1=1),
-        event(7, "fight_round", fight=1, node=1, spent_0=0, spent_1=0, losses_0=0, losses_1=3),
-        event(8, "attrition", node=0, player=0, group=1, charged=True, destroyed=False),
-        event(8, "attrition", node=0, player=1, group=2, charged=False, destroyed=True),
-        event(9, "starvation", player=0, node=0, warehouse=1, units=1),
-        event(10, "packet_delivered", packet=2, player=0, node=1, charges=3),
-        event(11, "packet_delivered", packet=3, player=1, node=2, charges=5),
-        event(12, "packet_delivered", packet=4, player=0, node=1, charges=2),
-        event(13, "packet_sent", packet=5, player=0, edge=0, from_node=0, to_node=1, charges=9),
-    ]
-    assert result_totals(events, 0) == (3, 5)
-    assert result_totals(events, 1) == (5, 5)
-    log = dataclasses.replace(_log(events), places_start=((0,) * 6, (0,) * 6))
-    assert [result_totals(events, p)[1] for p in (0, 1)] == [f.delivered for f in analyze(log).flow]
+def _fight_round(tick: int, fight: int, node: int | None, losses: tuple[int, int]) -> Event:
+    return event(
+        tick,
+        "fight_round",
+        fight=fight,
+        node=node,
+        edge=None if node is not None else 3,
+        point=None,
+        shots_0=0,
+        shots_1=0,
+        virtual_0=0,
+        virtual_1=0,
+        spent_0=0,
+        spent_1=0,
+        losses_0=losses[0],
+        losses_1=losses[1],
+    )
+
+
+def _fight_ended(
+    tick: int,
+    fight: int,
+    node: int | None,
+    attacker: int | None,
+    winner: int | None,
+    captured: bool,
+    losses: tuple[int, int],
+) -> Event:
+    return event(
+        tick,
+        "fight_ended",
+        fight=fight,
+        node=node,
+        edge=None if node is not None else 3,
+        point=None,
+        attacker=attacker,
+        start=tick - 1,
+        winner=winner,
+        captured=captured,
+        shots_0=0,
+        shots_1=0,
+        losses_0=losses[0],
+        losses_1=losses[1],
+    )
+
+
+# The match of the result tally test (#824), on ``dec18.json``: nodes 4 and 9 are provinces,
+# the rest cities (0 and 13 the capitals); 0..3 belong to player 0, 10..13 to player 1.
+RESULT_EVENTS: Final = [
+    # Fight 1, an edge meeting: kills and losses, no attack or defense.
+    _fight_round(10, 1, None, (1, 2)),
+    _fight_ended(30, 1, None, None, 0, False, (1, 2)),
+    # Fight 2 in the neutral node 5: an attack of both; player 0 takes the city.
+    _fight_round(40, 2, 5, (0, 1)),
+    _fight_ended(41, 2, 5, None, 0, True, (0, 1)),
+    event(41, "node_captured", node=5, player=0),
+    # Fight 3: player 1 attacks node 5 of player 0 and takes it back (a lost defense).
+    _fight_round(60, 3, 5, (1, 0)),
+    _fight_round(80, 3, 5, (2, 1)),
+    _fight_ended(80, 3, 5, 1, 1, True, (3, 1)),
+    event(80, "node_captured", node=5, player=1),
+    # Fight 4: player 0 attacks city 10 and fails; 2 units of a returning group die at the end
+    # (DEC-24, item G3): losses 2 beyond the rounds.
+    _fight_round(100, 4, 10, (0, 1)),
+    _fight_ended(101, 4, 10, 0, 1, False, (2, 1)),
+    # Fight 5: player 1 wins in city 2 of player 0 but cannot pay the capture (DEC-38): held.
+    _fight_ended(120, 5, 2, 1, 1, False, (0, 0)),
+    # Walk-ins without a fight: captures, no attacks.
+    event(130, "node_captured", node=4, player=0),
+    event(131, "node_captured", node=3, player=1),
+    event(132, "node_captured", node=9, player=1),
+    # Over-capacity attrition is a loss of the player and no kill.
+    event(140, "attrition", node=0, player=0, group=1, charged=True, destroyed=False),
+    event(141, "attrition", node=13, player=1, group=2, charged=False, destroyed=True),
+    # Not units: starvation spends charges; a failed walk-in outside a fight has no unit count.
+    event(150, "starvation", player=0, node=1, warehouse=1, units=1),
+    event(151, "capture_failed", node=7, player=1, group=9, result="encircled"),
+    # Fight 6 in city 11, still going when the match ends: its round counts, no attack.
+    _fight_round(200, 6, 11, (1, 1)),
+]
+
+
+def test_result_tally_counts_the_result_screen_numbers() -> None:
+    """#824: every number of the result screen from a hand-built match (module docstring).
+
+    Player 0: killed 2 + 1 + 1 + 1 + 1 = 6 in fights 1, 2, 3, 4, 6; lost 1 + 3 + 2 + 1 = 7 in
+    fights 1, 3, 4 (G3), 6, plus 1 by attrition = 8; captured the city 5 and the province 4;
+    attacked in fights 2 and 4, won fight 2; defended in fights 3 (lost) and 5 (held).
+    Player 1: killed 7 (the fight losses of player 0); lost 6 + 1 by attrition = 7; captured the
+    cities 5 and 3 and the province 9; attacked in fights 2, 3, 5, won fight 3; defended in fight 4,
+    held.
+    """
+    tally = ResultTally(load_map(TESTS / "maps" / "dec18.json"))
+    tally.read(RESULT_EVENTS)
+    assert tally.totals(0) == ResultTotals(
+        units_killed=6,
+        units_lost=8,
+        cities_captured=1,
+        provinces_captured=1,
+        attacks=2,
+        attacks_won=1,
+        defenses=2,
+        defenses_held=1,
+    )
+    assert tally.totals(1) == ResultTotals(
+        units_killed=7,
+        units_lost=7,
+        cities_captured=2,
+        provinces_captured=1,
+        attacks=3,
+        attacks_won=1,
+        defenses=1,
+        defenses_held=1,
+    )
+
+
+def test_result_tally_reads_tick_by_tick() -> None:
+    """The server feeds one tick at a time: the totals are those of the whole match, and a
+    fight's rounds read in earlier ticks are not counted again at its end."""
+    mapdef = load_map(TESTS / "maps" / "dec18.json")
+    whole = ResultTally(mapdef)
+    whole.read(RESULT_EVENTS)
+    by_tick = ResultTally(mapdef)
+    for tick in sorted({e.tick for e in RESULT_EVENTS}):
+        by_tick.read([e for e in RESULT_EVENTS if e.tick == tick])
+    assert [by_tick.totals(p) for p in (0, 1)] == [whole.totals(p) for p in (0, 1)]
+    assert by_tick.totals(0).units_killed == 6
+    empty = ResultTally(mapdef).totals(0)
+    assert empty == ResultTotals(0, 0, 0, 0, 0, 0, 0, 0)
 
 
 def test_the_v2_sinks_are_counted_from_their_events() -> None:

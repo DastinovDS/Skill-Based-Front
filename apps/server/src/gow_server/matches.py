@@ -79,7 +79,7 @@ from gow_server.metrics import ServerMetrics
 
 if TYPE_CHECKING:
     from gow_server.replays import ReplayService
-from gow_sim.analysis import result_totals
+from gow_sim.analysis import ResultTally
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.match import Match
@@ -226,6 +226,9 @@ class MatchRunner:
         self.players: Final = players
         self.clock = clock
         self.match: Final = Match(mapdef, rules, match_key or secrets.token_bytes(MATCH_KEY_BYTES))
+        self.tally: Final = ResultTally(mapdef)
+        """The result screen totals of both players (#824), fed with the events of every tick:
+        ``Match.step`` keeps only the events of the last tick."""
         self.dt: Final = 1.0 / rules.tick_hz
         self.replay = replay
         """Writer of the command log; ``None``: not recorded, finished or the recording failed."""
@@ -526,6 +529,7 @@ class MatchRunner:
         self._inbox = []
         self._record_start()
         events = match.step(commands)
+        self.tally.read(events)
         self._record(commands)
         outcome = match.outcome
         disconnect = outcome is not None and (
@@ -553,7 +557,7 @@ class MatchRunner:
                         rating=notice.rating,
                         unrated_reason=notice.unrated_reason,
                         calibration=notice.calibration,
-                        stats=result_totals(match.state.events, player),
+                        stats=self.tally.totals(player),
                     )
                 )
                 box.close()
