@@ -17,39 +17,29 @@ import {
   sideOf,
 } from './style.ts';
 
-const sources = import.meta.glob<string>('../app.css', {
-  eager: true,
-  import: 'default',
-  query: '?raw',
-});
-const css = Object.values(sources)[0] ?? '';
-
-function token(name: string): string {
-  const match = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(css);
-  return match?.[1]?.toLowerCase() ?? '';
-}
-
+// The map keeps the palette of ui-style 6 until its Engraved piece (#829); the interface tokens of
+// app.css moved to Lapis and Engraved (#841, src/theme/tokens.test.ts). These pin the map colours.
 function hex(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
 
-describe('palette tokens', () => {
+describe('the map palette (ui-style 6)', () => {
   it.each([
-    ['bg', BG],
-    ['paper', PAPER],
-    ['you', YOU],
-    ['enemy', ENEMY],
-    ['neutral', NEUTRAL_STROKE],
-    ['neutral-fill', NEUTRAL_FILL],
-    ['warn', WARN],
-    ['vp', VP],
-    ['badge-up', BADGE_UP],
-    ['badge-down', BADGE_DOWN],
-    ['terrain-plains', TERRAIN_FILL.plains],
-    ['terrain-forest', TERRAIN_FILL.forest],
-    ['terrain-mountains', TERRAIN_FILL.mountains],
-  ])('--%s in app.css equals the constant in style.ts', (name, value) => {
-    expect(token(name)).toBe(hex(value));
+    [BG, '#0d1117'],
+    [PAPER, '#f0f6fc'],
+    [YOU, '#5b9bff'],
+    [ENEMY, '#e5484d'],
+    [NEUTRAL_STROKE, '#8b949e'],
+    [NEUTRAL_FILL, '#2b3139'],
+    [WARN, '#ffb020'],
+    [VP, '#e3b341'],
+    [BADGE_UP, '#3ddc72'],
+    [BADGE_DOWN, '#ff4f4f'],
+    [TERRAIN_FILL.plains, '#3a4630'],
+    [TERRAIN_FILL.forest, '#25392b'],
+    [TERRAIN_FILL.mountains, '#4a453e'],
+  ])('%#: is %s', (value, expected) => {
+    expect(hex(value)).toBe(expected);
   });
 });
 

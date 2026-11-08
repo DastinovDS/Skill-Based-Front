@@ -76,6 +76,19 @@ The hourglass glyph of the order travel time on the map, `src/render/glyphs/hour
 "Hourglass", issue #627), was cut from the same SpriteCook sheet (asset
 `d26e22f1-d6f4-4d72-8608-c7e76f9228bd`), keyed to transparency and scaled to 96 px, under the same terms.
 
-## Sounds and fonts
+## Fonts
+
+The interface type (#841, the Lapis and Engraved styles of #826 and #829) is self-hosted from
+`src/theme/fonts/`: Latin subsets of the variable fonts in `woff2`, unchanged otherwise. Both are
+licensed under the SIL Open Font License, Version 1.1; the full licence text with the copyright
+notice of each family is kept next to the font files.
+
+- **Cinzel** (`cinzel.woff2`): Copyright 2020 The Cinzel Project Authors
+  (https://github.com/NDISCOVER/Cinzel). Licence: `src/theme/fonts/Cinzel-OFL.txt`.
+- **EB Garamond** (`ebgaramond.woff2`, `ebgaramond-italic.woff2`): Copyright 2017 The EB Garamond
+  Project Authors (https://github.com/octaviopardo/EBGaramond12). Licence:
+  `src/theme/fonts/EBGaramond-OFL.txt`.
+
+## Sounds
 
 None yet (package F adds the sounds under CC0 and lists them here).

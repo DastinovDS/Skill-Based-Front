@@ -9,6 +9,7 @@
   import MatchScreen from '../app/MatchScreen.svelte';
   import DevBoom from './DevBoom.svelte';
   import DevDock from './DevDock.svelte';
+  import DevStyle from './DevStyle.svelte';
   import ResultScreen from '../app/ResultScreen.svelte';
   import QueueView from '../app/QueueView.svelte';
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
@@ -59,7 +60,20 @@
   const result = RESULT_SCENES[id];
 </script>
 
-{#if id === 'welcome' || id === 'welcome-notice' || id === 'welcome-invited'}
+{#if id === 'style'}
+  <DevStyle part="sheet" />
+{:else if id === 'style-overlay'}
+  <MenuScreen
+    {map}
+    nick="Ember"
+    notice={null}
+    hasPassword
+    calibration={null}
+    rating={1480}
+    {...handlers}
+  />
+  <DevStyle part="overlay" />
+{:else if id === 'welcome' || id === 'welcome-notice' || id === 'welcome-invited'}
   <WelcomeScreen
     {map}
     invited={id === 'welcome-invited'}

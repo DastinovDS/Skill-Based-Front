@@ -5,7 +5,8 @@ import type { PlayerId, Terrain } from '../protocol.gen.ts';
 // the map. State is never shown by colour alone (AGENTS.md §7.4): see the comments below.
 
 // --- Palette (docs/design/ui-style.md, section 6): the only place with map colours ---------------
-// Mirrors the CSS variables of `app.css`; `style.test.ts` keeps the two in step.
+// The map keeps this palette until its Engraved piece (#829) moves it to `theme/tokens.ts`; the
+// interface (app.css) already has the Lapis and Engraved tokens (#841).
 
 export const BG = 0x0d1117;
 export const PAPER = 0xf0f6fc;

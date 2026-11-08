@@ -53,7 +53,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
-    // style.test.ts reads the palette tokens of app.css as text.
+    // theme/tokens.test.ts reads the design tokens of app.css as text.
     css: { include: [/app\.css/] },
   },
 });

@@ -1,23 +1,115 @@
+@import './theme/primitives.css';
+
+/* The fonts of Lapis and Engraved (#841): self-hosted woff2 subsets (Latin), SIL OFL 1.1, the
+   licences beside them in src/theme/fonts/ and in THIRD_PARTY_NOTICES.md. One variable file per
+   style covers every weight. `swap`: the text shows at once in the fallback serif. */
+@font-face {
+  font-family: Cinzel;
+  src: url('./theme/fonts/cinzel.woff2') format('woff2');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  src: url('./theme/fonts/ebgaramond.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  src: url('./theme/fonts/ebgaramond-italic.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
-  /* Palette (docs/design/ui-style.md, section 6): the single source of colours; the map reads the
-     same values from render/style.ts (style.test.ts keeps the two in step). */
-  --bg: #0d1117;
-  --surface: rgb(22 27 34 / 94%);
-  --scrim: rgb(13 17 23 / 70%);
-  --surface-2: #21262d;
-  --border: #30363d;
-  --text: #e6edf3;
-  --text-dim: #9da7b3;
-  --paper: #f0f6fc;
-  --you: #5b9bff;
-  --enemy: #e5484d;
-  --neutral: #8b949e;
-  --neutral-fill: #2b3139;
-  --warn: #ffb020;
-  --vp: #e3b341;
-  --badge-up: #3ddc72;
-  --badge-down: #ff4f4f;
-  --ok: var(--you);
+  /* ===== Design tokens (#841): Lapis outside the match (#826), Engraved in it (#829) =====
+     The single source of the interface's colours, lines and motion; src/theme/tokens.ts carries
+     the same values for the render side and the HUD tweens (tokens.test.ts keeps them in step).
+     Dark only. The map (render/style.ts) keeps its own palette until its Engraved piece. */
+
+  /* Lapis: black stone, ivory ink, incised rules (ui-style 51, 56). */
+  --stone-bg: #16130f;
+  --stone-panel: #1d1a15;
+  --stone-raised: #221e18;
+  --stone-tex: url('./theme/stone.webp');
+  --ink: #ece4d1;
+  --ink-soft: #cfc4ab;
+  --ink-dim: #ada38f;
+  --rule: #7d7363;
+  --rule-faint: rgb(125 115 99 / 60%);
+  --line: #3d372d;
+  --cut: #050403;
+  --lit: rgb(214 200 172 / 30%);
+  --lit-faint: rgb(214 200 172 / 15%);
+  --frame-lozenge: #8f8573;
+  --own-lapis: #7d9ce2;
+  --enemy-lapis: #e0735a;
+
+  /* Engraved: line and hatching on a dark plate, every coloured mark on a dark casing (52 to 57). */
+  --plate: #0e0c09;
+  --casing: #060504;
+  --own: #86a6ea;
+  --enemy: #e5785e;
+  --neutral: #b3a88f;
+  --neutral-fill: #221e18;
+  --segment-empty: #5a5243;
+  --vp: #cfab62;
+  --warn: #e6ab42;
+  --badge-up: #8cc79a;
+  --badge-down: #ec6654;
+  /* The owner hatch: own horizontal, the enemy at 45 degrees (ui-style 52 III). */
+  --hatch-own: repeating-linear-gradient(0deg, var(--own) 0 1px, transparent 1px 3px);
+  --hatch-enemy: repeating-linear-gradient(45deg, var(--enemy) 0 1.2px, transparent 1.2px 3.4px);
+
+  /* Lines and corners: never thinner than a device pixel; cut stone has square corners. */
+  --line-hair: 1px;
+  --line-casing: 3px;
+  --frame-gap: 4px;
+  --radius: 0px;
+
+  /* Type: Cinzel for cut capitals (titles, labels, buttons, names), EB Garamond for text. */
+  --font-display: 'Cinzel', 'Times New Roman', serif;
+  --font-text: 'EB Garamond', Georgia, 'Times New Roman', serif;
+
+  /* Motion (ui-style 53e, 54j, 56, 57a, 57k, 57r); `prefers-reduced-motion` turns moves into jumps. */
+  --ease-engrave: cubic-bezier(0.37, 0, 0.63, 1);
+  --ease-settle: cubic-bezier(0.33, 1, 0.68, 1);
+  --ease-travel: cubic-bezier(0.65, 0, 0.35, 1);
+  --t-cp-spend: 700ms;
+  --t-cp-sliver: 1000ms;
+  --t-cp-income: 800ms;
+  --t-cp-roll: 500ms;
+  --t-cp-frame-in: 700ms;
+  --t-cp-frame-out: 400ms;
+  --t-reveal-leader: 80ms;
+  --t-reveal-in: 550ms;
+  --t-reveal-out: 160ms;
+  --t-reveal-hover: 120ms;
+  --t-reveal-reduced: 100ms;
+  --t-capture-walk: 600ms;
+  --t-build-run: 350ms;
+  --t-build-done: 500ms;
+  --t-plan-step: 900ms;
+  --t-intro: 7000ms;
+
+  /* The older names (ui-style 6), now on the new values: the screens not yet restyled use them. */
+  --bg: var(--stone-bg);
+  --surface: rgb(29 26 21 / 94%);
+  --scrim: rgb(22 19 15 / 70%);
+  --surface-2: var(--stone-raised);
+  --border: var(--line);
+  --text: var(--ink);
+  --text-dim: var(--ink-dim);
+  --paper: var(--ink);
+  --you: var(--own);
+  --ok: var(--own);
+  /* The terrain colours of the old map (the terrain banner, the menu picture). */
   --terrain-plains: #3a4630;
   --terrain-forest: #25392b;
   --terrain-mountains: #4a453e;
@@ -25,9 +117,11 @@
      above it, so the links never cover the controls, the score or the map (#185). */
   --legal-footer-h: 28px;
   color-scheme: dark;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
-  background: var(--bg);
+  font-family: var(--font-text);
+  font-variant-numeric: lining-nums tabular-nums;
+  background: var(--stone-tex) var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
 html,
@@ -158,13 +252,13 @@ body {
   background:
     linear-gradient(
       90deg,
-      rgb(13 17 23 / 97%) 0,
-      rgb(13 17 23 / 90%) 330px,
-      rgb(13 17 23 / 45%) 470px,
-      rgb(13 17 23 / 8%) 640px,
-      rgb(13 17 23 / 0%) 100%
+      rgb(22 19 15 / 97%) 0,
+      rgb(22 19 15 / 90%) 330px,
+      rgb(22 19 15 / 45%) 470px,
+      rgb(22 19 15 / 8%) 640px,
+      rgb(22 19 15 / 0%) 100%
     ),
-    linear-gradient(0deg, rgb(13 17 23 / 70%), rgb(13 17 23 / 0%) 140px);
+    linear-gradient(0deg, rgb(22 19 15 / 70%), rgb(22 19 15 / 0%) 140px);
 }
 
 .front .top {
@@ -261,7 +355,7 @@ body {
   padding: 5px 14px 5px 12px;
   border: 1px solid var(--border);
   border-radius: 22px;
-  background: rgb(13 17 23 / 70%);
+  background: rgb(22 19 15 / 70%);
   color: var(--text);
   font: inherit;
   font-size: 15px;
@@ -334,7 +428,7 @@ body {
   border-radius: 13px;
   font-size: 13px;
   color: var(--warn);
-  background: rgb(13 17 23 / 55%);
+  background: rgb(22 19 15 / 55%);
 }
 
 /* A quiet link inside the rail ("Set a password to play ranked"). */
@@ -483,7 +577,7 @@ body {
   width: 100%;
   padding: 11px 4px;
   border: 0;
-  border-bottom: 1px solid rgb(230 237 243 / 10%);
+  border-bottom: 1px solid rgb(236 228 209 / 10%);
   background: none;
   font: inherit;
   font-size: 22px;
@@ -502,7 +596,7 @@ body {
 
 .front .row:hover:not(:disabled),
 .front .row:focus-visible {
-  background: linear-gradient(90deg, rgb(91 155 255 / 18%), transparent);
+  background: linear-gradient(90deg, rgb(134 166 234 / 18%), transparent);
   border-bottom-color: var(--you);
 }
 
@@ -609,7 +703,7 @@ body {
 
 .front .form input:focus-visible {
   outline: none;
-  background: rgb(91 155 255 / 10%);
+  background: rgb(134 166 234 / 10%);
 }
 
 .front .form .error {
@@ -673,7 +767,7 @@ body {
 }
 
 .front.entry .shade {
-  background: rgb(13 17 23 / 30%);
+  background: rgb(22 19 15 / 30%);
 }
 
 /* A small window or a big UI scale: the rail flows over the picture instead of standing beside it. */
@@ -712,7 +806,7 @@ body {
 
   /* The rail lies over the map here: a flat shade keeps the text legible. */
   .front .shade {
-    background: rgb(13 17 23 / 72%);
+    background: rgb(22 19 15 / 72%);
   }
 }
 

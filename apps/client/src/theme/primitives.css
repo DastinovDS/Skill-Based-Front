@@ -1,0 +1,245 @@
+/*
+ * The primitives of the Lapis and Engraved style (#841), as global classes so that a screen can
+ * put them on its own elements; the Svelte components of src/theme/ (RuleFrame, StoneOverlay,
+ * LapisButton, SectionLabel) are thin wrappers over them. Geometry and colours follow the decided
+ * mockups: docs/design/mockups/out-of-game-style-r2.html (Lapis) and -r3.html, edges II "Double
+ * rule" (ui-style 56). Pure CSS: 1 px gradient rules and one small SVG lozenge, no filter, no glow.
+ * The tokens are in app.css (:root).
+ */
+
+/* ---- The Double rule frame -------------------------------------------------------------------
+   Two incised rules and a lozenge where they turn (the frame of the CP gauge in the match, ui-style
+   54a). The outer rule is a dark cut over a lit lip at the element's edge, the inner one a faint
+   lit rule `--frame-gap` inside it; the lozenges sit on the corners. Drawn by a ::before laid over
+   the element, so it needs no wrapper and takes no room. */
+.rule-frame {
+  position: relative;
+}
+
+.rule-frame::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  pointer-events: none;
+  background:
+    url('./frame-lozenge.svg') left top / 10px 10px no-repeat,
+    url('./frame-lozenge.svg') right top / 10px 10px no-repeat,
+    url('./frame-lozenge.svg') right bottom / 10px 10px no-repeat,
+    url('./frame-lozenge.svg') left bottom / 10px 10px no-repeat,
+    /* the cut, at the element's edge */ linear-gradient(var(--cut), var(--cut)) 4px 4px /
+      calc(100% - 8px) 1px no-repeat,
+    linear-gradient(var(--cut), var(--cut)) 4px calc(100% - 4px) / calc(100% - 8px) 1px no-repeat,
+    linear-gradient(var(--cut), var(--cut)) 4px 4px / 1px calc(100% - 8px) no-repeat,
+    linear-gradient(var(--cut), var(--cut)) calc(100% - 4px) 4px / 1px calc(100% - 8px) no-repeat,
+    /* its lit lip, one pixel in */ linear-gradient(var(--lit), var(--lit)) 5px 5px /
+      calc(100% - 10px) 1px no-repeat,
+    linear-gradient(var(--lit), var(--lit)) 5px calc(100% - 5px) / calc(100% - 10px) 1px no-repeat,
+    linear-gradient(var(--lit), var(--lit)) 5px 5px / 1px calc(100% - 10px) no-repeat,
+    linear-gradient(var(--lit), var(--lit)) calc(100% - 5px) 5px / 1px calc(100% - 10px) no-repeat,
+    /* the inner rule */ linear-gradient(var(--lit-faint), var(--lit-faint)) 9px 9px /
+      calc(100% - 18px) 1px no-repeat,
+    linear-gradient(var(--lit-faint), var(--lit-faint)) 9px calc(100% - 9px) / calc(100% - 18px) 1px
+      no-repeat,
+    linear-gradient(var(--lit-faint), var(--lit-faint)) 9px 9px / 1px calc(100% - 18px) no-repeat,
+    linear-gradient(var(--lit-faint), var(--lit-faint)) calc(100% - 9px) 9px / 1px calc(100% - 18px)
+      no-repeat;
+}
+
+/* A doubled rule between rows and under a section label: the cut, its lip, a faint rule 4 px down. */
+.rule-double {
+  height: 5px;
+  border: 0;
+  margin: 0;
+  background:
+    linear-gradient(var(--cut), var(--cut)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) 0 1px / 100% 1px no-repeat,
+    linear-gradient(var(--lit-faint), var(--lit-faint)) 0 4px / 100% 1px no-repeat;
+}
+
+/* ---- Stone ----------------------------------------------------------------------------------- */
+
+/* A panel of cut stone: the texture over the panel colour. */
+.stone-panel {
+  background: var(--stone-tex) var(--stone-panel);
+  color: var(--ink);
+}
+
+/* The overlay of Profile, Replays and every dialog (ui-style 51): the screen behind dissolves
+   under blurred stone. The blur is a backdrop of this one layer, nothing else is filtered. */
+.stone-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--stone-tex) rgb(22 19 15 / 80%);
+  backdrop-filter: blur(9px) saturate(0.55);
+  color: var(--ink);
+}
+
+/* The window on the overlay: a stone panel in the Double rule frame with a deep shadow. */
+.stone-window {
+  box-sizing: border-box;
+  width: min(540px, 100%);
+  max-height: 100%;
+  padding: 38px 44px 36px;
+  background: var(--stone-tex) var(--stone-panel);
+  box-shadow: 0 30px 60px rgb(0 0 0 / 50%);
+}
+
+.stone-window:focus {
+  outline: none;
+}
+
+/* ---- Labels ---------------------------------------------------------------------------------- */
+
+/* A label in cut capitals: section heads, field names, kickers, table heads (Lapis `.lab`). */
+.lapis-label {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* A section label followed by its doubled rule to the end of the line (Lapis `.sec`, edges II). */
+.lapis-section {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.lapis-section::after {
+  content: '';
+  flex: 1;
+  height: 5px;
+  background:
+    linear-gradient(var(--cut), var(--cut)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) 0 1px / 100% 1px no-repeat,
+    linear-gradient(var(--lit-faint), var(--lit-faint)) 0 4px / 100% 1px no-repeat;
+}
+
+/* ---- Buttons --------------------------------------------------------------------------------- */
+
+/* Shared: cut capitals, square corners. Sizes: `sm` 34 px, the default 46 px (primary 50 px),
+   `lg` the 96 px Play button. */
+.lapis-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-sizing: border-box;
+  height: 46px;
+  padding: 0 22px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink);
+  font: 500 13px / 1 var(--font-display);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lapis-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.lapis-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* Primary: an ivory tablet with an inner rule 4 px in (edges II). */
+.lapis-btn.primary {
+  height: 50px;
+  padding: 0 28px;
+  background: var(--ink);
+  color: var(--stone-bg);
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  box-shadow:
+    inset 0 0 0 4px var(--ink),
+    inset 0 0 0 5px var(--stone-bg);
+}
+
+.lapis-btn.primary:hover:not(:disabled) {
+  background: #fff8e9;
+  box-shadow:
+    inset 0 0 0 4px #fff8e9,
+    inset 0 0 0 5px var(--stone-bg);
+}
+
+.lapis-btn.primary:disabled {
+  box-shadow:
+    inset 0 0 0 4px var(--ink),
+    inset 0 0 0 5px rgb(22 19 15 / 50%);
+}
+
+/* Secondary: no fill, two rules (the outer one firm, the inner one faint, 3 px in). */
+.lapis-btn.secondary::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--rule), var(--rule)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--rule), var(--rule)) 0 100% / 100% 1px no-repeat,
+    linear-gradient(var(--rule), var(--rule)) 0 0 / 1px 100% no-repeat,
+    linear-gradient(var(--rule), var(--rule)) 100% 0 / 1px 100% no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) 3px 3px / calc(100% - 6px) 1px no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) 3px calc(100% - 3px) / calc(100% - 6px)
+      1px no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) 3px 3px / 1px calc(100% - 6px) no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) calc(100% - 3px) 3px / 1px
+      calc(100% - 6px) no-repeat;
+}
+
+.lapis-btn.secondary:hover:not(:disabled)::before {
+  background:
+    linear-gradient(var(--ink-soft), var(--ink-soft)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--ink-soft), var(--ink-soft)) 0 100% / 100% 1px no-repeat,
+    linear-gradient(var(--ink-soft), var(--ink-soft)) 0 0 / 1px 100% no-repeat,
+    linear-gradient(var(--ink-soft), var(--ink-soft)) 100% 0 / 1px 100% no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) 3px 3px / calc(100% - 6px) 1px no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) 3px calc(100% - 3px) / calc(100% - 6px)
+      1px no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) 3px 3px / 1px calc(100% - 6px) no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) calc(100% - 3px) 3px / 1px
+      calc(100% - 6px) no-repeat;
+}
+
+/* A destructive secondary action keeps its own outline (the opponent red, plus the words). */
+.lapis-btn.secondary.danger {
+  border-color: currentColor;
+  color: var(--enemy);
+}
+
+.lapis-btn.secondary.danger::before {
+  display: none;
+}
+
+.lapis-btn.sm {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 11px;
+}
+
+.lapis-btn.lg {
+  height: 96px;
+  min-width: min(430px, 100%);
+  justify-content: flex-start;
+  gap: 22px;
+  padding: 0 30px;
+  font-size: 32px;
+  letter-spacing: 0.24em;
+}

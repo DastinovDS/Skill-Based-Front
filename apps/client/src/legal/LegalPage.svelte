@@ -45,6 +45,7 @@
       <h2 id="licenses-title">{t('legal.licenses')}</h2>
       <p>{t('legal.licenses.intro')}</p>
       <p>{t('legal.licenses.lucide')}</p>
+      <p>{t('legal.licenses.fonts')}</p>
       <p>
         {t('legal.licenses.libraries')}
         <a href="/third-party-licenses.txt" target="_blank" rel="noopener"

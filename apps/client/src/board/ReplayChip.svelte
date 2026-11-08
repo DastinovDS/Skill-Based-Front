@@ -78,7 +78,7 @@
     padding: 0 10px;
     border: 1px solid var(--border);
     border-radius: 14px;
-    background: rgb(13 17 23 / 55%);
+    background: rgb(22 19 15 / 55%);
     color: var(--text-dim);
     font-size: 13px;
   }

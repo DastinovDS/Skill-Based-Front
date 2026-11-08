@@ -279,8 +279,8 @@
     border-radius: 6px;
     background: repeating-linear-gradient(
       135deg,
-      rgb(230 237 243 / 7%) 0 7px,
-      rgb(230 237 243 / 2%) 7px 14px
+      rgb(236 228 209 / 7%) 0 7px,
+      rgb(236 228 209 / 2%) 7px 14px
     );
   }
 
