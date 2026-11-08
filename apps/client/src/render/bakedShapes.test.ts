@@ -1,8 +1,17 @@
 import { Container, Graphics } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import type { BakeSpec } from './bake.ts';
-import { feedRowSpec, octagramSpec, provinceBodySpec, warehouseBarSpec } from './bakedShapes.ts';
-import { BAR_SEGMENT, ENEMY, PLATE_FILL, PROVINCE, YOU } from './style.ts';
+import { cityBodySpec, feedRowSpec, octagramSpec, provinceBodySpec } from './bakedShapes.ts';
+import { warehouseMarksSpec } from './pieceShapes.ts';
+import {
+  CASING,
+  CITY_ENGRAVED,
+  DARK_PLATE,
+  ENEMY,
+  PROVINCE,
+  PROVINCE_ENGRAVED,
+  YOU,
+} from './style.ts';
 
 // The look of the shapes of C1 (#348, ui-style 9.4), read from what they draw. Nothing here needs
 // WebGL: `draw` only puts vector shapes into a scratch container.
@@ -22,7 +31,7 @@ interface Instruction {
  */
 function drawn(spec: BakeSpec): Instruction[] {
   const into = new Container();
-  spec.draw(into, { gradient: (color) => color });
+  spec.draw(into, { gradient: (color) => color, hair: (width) => width });
   const shape = into.children
     .filter((child): child is Graphics => child instanceof Graphics)
     .at(-1);
@@ -38,93 +47,105 @@ function circles(spec: BakeSpec, action: 'stroke' | 'fill'): number[] {
     .map((p) => p.shape.radius ?? 0);
 }
 
-/** The colour of the first filled circle of the spec, or `null`. */
-function fillOf(spec: BakeSpec): { color: number; alpha: number } | null {
-  const fill = drawn(spec).find((i) => i.action === 'fill') as unknown as
-    { data: { style?: { color: number; alpha: number } } } | undefined;
-  return fill?.data.style ?? null;
-}
-
-const luma = (c: number): number =>
-  0.299 * ((c >> 16) & 0xff) + 0.587 * ((c >> 8) & 0xff) + 0.114 * (c & 0xff);
-
-describe('provinceBodySpec: a pale dot (PB, DEC-23, #431)', () => {
-  it('is a small solid dot, smaller than the capacity ring and than a city', () => {
+describe('provinceBodySpec: the Engraved province (DEC-23, #847)', () => {
+  it('is a small dot on a dark disc, inside the capacity ring', () => {
     for (const kind of ['you', 'enemy', 'neutral'] as const) {
-      expect(circles(provinceBodySpec(kind), 'fill')).toEqual([PROVINCE.dot]);
-      expect(PROVINCE.dot).toBeLessThan(PROVINCE.radius);
-      // The biggest circle is the opponent's outer ring or the casing: nothing reaches the ring (16).
+      const filled = circles(provinceBodySpec(kind), 'fill');
+      expect(filled[0]).toBe(PROVINCE_ENGRAVED.plate);
       const stroked = circles(provinceBodySpec(kind), 'stroke');
-      expect(Math.max(...stroked, 0)).toBeLessThan(PROVINCE.radius + 6);
+      expect(Math.max(...stroked, ...filled)).toBeLessThan(PROVINCE.radius + 7);
     }
   });
 
-  it('has no dark centre: the dot is paler than the owner colour and far lighter than the old plate', () => {
-    for (const [kind, owner] of [
-      ['you', YOU],
-      ['enemy', ENEMY],
-    ] as const) {
-      const fill = fillOf(provinceBodySpec(kind));
-      expect(fill).not.toBeNull();
-      expect(luma(fill?.color ?? 0)).toBeGreaterThan(luma(owner));
-      expect(luma(fill?.color ?? 0)).toBeGreaterThan(luma(PLATE_FILL) + 80);
-      expect(fill?.alpha).toBe(1);
-    }
-  });
-
-  it("shows nobody's province paler and see-through, with a dashed outline of arcs", () => {
-    const neutral = provinceBodySpec('neutral');
-    const fill = fillOf(neutral);
-    expect(fill?.alpha).toBeLessThan(1);
-    // The outline is a ring of dashes (arcs of the dot's radius), not a closed circle: only the
-    // casing is a stroked circle, and it is bigger than the dot.
-    expect(circles(neutral, 'stroke').every((radius) => radius > PROVINCE.dot)).toBe(true);
-    expect(drawn(neutral).filter((i) => i.action === 'stroke')).toHaveLength(2);
+  it("fills an owner's dot with the owner's colour, nobody's is only a thin ring and a dot", () => {
+    expect(circles(provinceBodySpec('you'), 'fill')).toEqual([
+      PROVINCE_ENGRAVED.plate,
+      PROVINCE_ENGRAVED.dot,
+    ]);
+    expect(circles(provinceBodySpec('neutral'), 'fill')).toEqual([
+      PROVINCE_ENGRAVED.plate,
+      PROVINCE_ENGRAVED.neutral.dot,
+    ]);
   });
 
   it('carries the side by an extra ring for the opponent, not only by the hue (grey scale)', () => {
     const rings = (kind: 'you' | 'enemy') => circles(provinceBodySpec(kind), 'stroke');
-    // own: the casing and the outline; the opponent's: plus a light ring outside the dot.
-    expect(rings('you')).toHaveLength(2);
-    expect(rings('enemy')).toHaveLength(3);
-    expect(Math.max(...rings('enemy'))).toBeCloseTo(PROVINCE.dot + PROVINCE.enemy.inset);
+    expect(rings('you')).toEqual([PROVINCE_ENGRAVED.rim.radius]);
+    expect(rings('enemy')).toEqual([PROVINCE_ENGRAVED.rim.radius, PROVINCE_ENGRAVED.enemy.radius]);
   });
 
-  it('has a key of its own per side, shared by every province of it', () => {
+  it('is only the dark disc when units stand there (their helmet is the picture)', () => {
+    expect(circles(provinceBodySpec('you', true), 'fill')).toEqual([PROVINCE_ENGRAVED.plate]);
+    expect(circles(provinceBodySpec('you', true), 'stroke')).toEqual([]);
+  });
+
+  it('has a key of its own per side and plate, shared by every province of it', () => {
     const keys = ['you', 'enemy', 'neutral'].map((k) => provinceBodySpec(k as 'you').key);
     expect(new Set(keys).size).toBe(3);
-    expect(provinceBodySpec('you').key).toBe(provinceBodySpec('you').key);
+    expect(provinceBodySpec('you').key).not.toBe(provinceBodySpec('you', true).key);
   });
 });
 
-describe('warehouseBarSpec: the places of a warehouse (C1)', () => {
-  /** Rectangles filled (charges) and stroked (frames) in the bar. */
-  function rects(action: 'stroke' | 'fill'): number {
-    return drawn(warehouseBarSpec(4, 1, YOU, 2))
-      .filter((i) => i.action === action)
-      .flatMap((i) => i.data.path?.shapePath.shapePrimitives ?? [])
-      .filter((p) => p.shape.type === 'rectangle').length;
-  }
-
-  it('fills a place per charge, frames the room and dashes the levels not built yet', () => {
-    // 4 places of capacity, 1 charge, 2 places of levels to build: 1 filled rectangle (and the
-    // rounded base), 3 framed rectangles; the 2 dashed places are lines, not rectangles.
-    expect(rects('fill')).toBe(1);
-    expect(rects('stroke')).toBe(3);
+describe('cityBodySpec: the Engraved city (#847)', () => {
+  it("fills an empty city with the owner's colour, an occupied one with the dark plate", () => {
+    const fills = (spec: BakeSpec): number[] =>
+      (
+        drawn(spec).filter((i) => i.action === 'fill') as unknown as {
+          data: { style?: { color: number } };
+        }[]
+      ).map((i) => i.data.style?.color ?? -1);
+    expect(fills(cityBodySpec('you', 14, false))).toContain(YOU);
+    expect(fills(cityBodySpec('enemy', 14, false))).toContain(ENEMY);
+    expect(fills(cityBodySpec('you', 14, false, true))).toContain(DARK_PLATE);
+    expect(fills(cityBodySpec('you', 14, false, true))).not.toContain(YOU);
   });
 
-  it('has a key per state, so a texture is shared only by bars that look the same', () => {
+  it("gives the opponent's city two ink rings inside it: the side reads without the hue", () => {
+    const own = circles(cityBodySpec('you', 14, false), 'stroke');
+    const enemy = circles(cityBodySpec('enemy', 14, false), 'stroke');
+    expect(enemy.length - own.length).toBe(2);
+    for (const inset of CITY_ENGRAVED.enemy.insets) expect(enemy).toContain(14 - inset);
+  });
+
+  it('hatches a neutral city instead of filling it', () => {
+    const fills = drawn(cityBodySpec('neutral', 14, false)).filter((i) => i.action === 'fill');
+    // Only the dark cut under it is filled; the hatch is strokes.
+    expect(fills).toHaveLength(1);
+  });
+
+  it('keys the plate of units standing there apart from the empty city', () => {
+    expect(cityBodySpec('you', 14, true).key).not.toBe(cityBodySpec('you', 14, true, true).key);
+  });
+});
+
+describe('warehouseMarksSpec: the warehouse as lozenges (57u)', () => {
+  /** The lozenges drawn, as the polygons filled with the side's colour (in stock) or the plate (room). */
+  function fills(spec: BakeSpec, color: number): number {
+    return (
+      drawn(spec).filter((i) => i.action === 'fill') as unknown as {
+        data: { style?: { color: number } };
+      }[]
+    ).filter((i) => i.data.style?.color === color).length;
+  }
+
+  it('fills a lozenge per charge and leaves the room hollow, no bar and no number', () => {
+    const spec = warehouseMarksSpec(6, 4, YOU);
+    expect(fills(spec, YOU)).toBe(4);
+    expect(fills(spec, DARK_PLATE)).toBe(2);
+    expect(fills(spec, CASING)).toBe(6);
+  });
+
+  it('adds faint hollow places for the levels not built yet (economy v1)', () => {
+    expect(fills(warehouseMarksSpec(3, 1, YOU, 2), CASING)).toBe(5);
+  });
+
+  it('has a key per look, so a texture is shared only by warehouses that look the same', () => {
     const key = (cap: number, stock: number, locked: number) =>
-      warehouseBarSpec(cap, stock, YOU, locked).key;
+      warehouseMarksSpec(cap, stock, YOU, locked).key;
     expect(key(4, 1, 2)).not.toBe(key(4, 1, 0));
     expect(key(4, 1, 2)).not.toBe(key(4, 2, 2));
     expect(key(4, 1, 2)).toBe(key(4, 1, 2));
-  });
-
-  it('keeps every place in the 5 x 4 cell of a charge', () => {
-    const bar = warehouseBarSpec(3, 0, YOU, 1);
-    // The sprite is as wide as the places plus the base and the room for the shadow.
-    expect(bar.box.width).toBeGreaterThan(4 * BAR_SEGMENT.pitch);
+    expect(warehouseMarksSpec(4, 1, YOU).key).not.toBe(warehouseMarksSpec(4, 1, ENEMY).key);
   });
 });
 

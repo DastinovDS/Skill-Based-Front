@@ -22,6 +22,7 @@ import {
   type HelmetKind,
 } from '../units/helmet.ts';
 import { badgeFloor, stackBadges, type BadgeMark } from './badgeLayout.ts';
+import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import {
   BADGE,
   BAR_BASE,
@@ -30,6 +31,9 @@ import {
   BG,
   BUILD_PLATE,
   COUNT_FONT_SIZE,
+  CUT,
+  HELMET_ENGRAVED,
+  INK,
   GLYPH_COLOR,
   PACKET_OUTLINE,
   PACKET_SIDE,
@@ -38,7 +42,6 @@ import {
   PAPER,
   SHIELD_BADGE_SCALE,
   UNIT_LABEL,
-  UNIT_QUESTION_FONT_SIZE,
   UNIT_SIDES,
   ownerColor,
 } from './style.ts';
@@ -161,20 +164,22 @@ export class EntityKit {
       fontWeight: '700',
       fill: GLYPH_COLOR,
     });
+    // The number in the dome and the "?" of the Engraved helmet (#847): EB Garamond, ink on a cut.
     this.insideStyle = new TextStyle({
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: COUNT_FONT_SIZE + 1,
-      fontWeight: '700',
-      fill: GLYPH_COLOR,
-      stroke: { color: BG, width: 3, join: 'round' },
+      fontFamily: pieceFamily(),
+      fontSize: HELMET_ENGRAVED.font,
+      fontWeight: '600',
+      fill: INK,
+      stroke: { color: CUT, width: 3, join: 'round' },
     });
     this.questionStyle = new TextStyle({
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: UNIT_QUESTION_FONT_SIZE,
-      fontWeight: '700',
-      fill: GLYPH_COLOR,
-      stroke: { color: BG, width: 3, join: 'round' },
+      fontFamily: pieceFamily(),
+      fontSize: HELMET_ENGRAVED.question,
+      fontWeight: '600',
+      fill: INK,
+      stroke: { color: CUT, width: 3, join: 'round' },
     });
+    usePieceFont([this.insideStyle, this.questionStyle]);
   }
 
   /** Registers a token whose fill started to ease. */

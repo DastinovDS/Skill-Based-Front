@@ -1,31 +1,43 @@
 import type { PlayerId, Terrain } from '../protocol.gen.ts';
+import { ENGRAVED } from '../theme/tokens.ts';
 
 // Visual constants of the map. Sizes are in world units (docs/design/map-format.md): cities are
 // about 100 units apart on MVP maps (100 units = 3 s of travel), so these sizes do not depend on
 // the map. State is never shown by colour alone (AGENTS.md §7.4): see the comments below.
 
 // --- Palette (docs/design/ui-style.md, section 6): the only place with map colours ---------------
-// The map keeps this palette until its Engraved piece (#829) moves it to `theme/tokens.ts`; the
-// interface (app.css) already has the Lapis and Engraved tokens (#841).
+// The pieces of the map (helmets, cities, marks) take the Engraved pair of `theme/tokens.ts` (#847,
+// part 2 of #829), so the map, its pieces and the interface share one own blue and one enemy red.
+// `BG` and `PAPER` stay the old dark and white of the parts not restyled yet (roads, arrows, plates).
 
 export const BG = 0x0d1117;
 export const PAPER = 0xf0f6fc;
-export const YOU = 0x5b9bff;
-export const ENEMY = 0xe5484d;
-export const NEUTRAL_STROKE = 0x8b949e;
-export const NEUTRAL_FILL = 0x2b3139;
-export const WARN = 0xffb020;
-export const VP = 0xe3b341;
+export const YOU = ENGRAVED.own;
+export const ENEMY = ENGRAVED.enemy;
+export const NEUTRAL_STROKE = ENGRAVED.neutral;
+export const NEUTRAL_FILL = ENGRAVED.neutralFill;
+export const WARN = ENGRAVED.warn;
+export const VP = ENGRAVED.vp;
 /**
  * The two colours of the advantage and disadvantage badges (#791, variant 8 "Chevrons" of #776):
  * green chevrons up, red chevrons down. Never alone: the direction of the chevrons tells them
  * apart (and in grey), and a dark outline gives at least 3:1 on every terrain (ui-style 6, 32).
  */
-export const BADGE_UP = 0x3ddc72;
-export const BADGE_DOWN = 0xff4f4f;
+export const BADGE_UP = ENGRAVED.up;
+export const BADGE_DOWN = ENGRAVED.down;
 /** Empty segment of a capacity ring and of a warehouse bar. */
-export const SEGMENT_EMPTY = 0x59636e;
+export const SEGMENT_EMPTY = ENGRAVED.segmentEmpty;
 export const SEGMENT_EMPTY_BAR = 0x3b4450;
+
+/**
+ * The Engraved material of the pieces (ui-style 52 III to 57): ivory `INK` lines on a dark `CASING`
+ * round every coloured mark, the `DARK_PLATE` of a dome or a city with units in it, and the `CUT`
+ * into the stone under a ring.
+ */
+export const INK = ENGRAVED.ink;
+export const CASING = ENGRAVED.casing;
+export const DARK_PLATE = ENGRAVED.plate;
+export const CUT = 0x050403;
 
 export const CANVAS_BACKGROUND = BG;
 
@@ -158,19 +170,10 @@ export function roadSpan(level: number): number {
 /** Radius when the capacity is not known (a map without a snapshot). */
 export const NODE_RADIUS = 14;
 export const CAPITAL_RADIUS = 17;
-export const OWNER_OUTLINE = { width: 3, color: PAPER } as const;
-export const NEUTRAL_OUTLINE = { width: 2, color: NEUTRAL_STROKE } as const;
-/** An enemy city has a second, dark inner ring (the shape carries the side, not only the hue). */
-export const INNER_RING = { width: 1.6, color: BG } as const;
-export const INNER_RING_INSET = 5;
-export const CITY_HALO = { width: 3, color: BG, alpha: 0.85 } as const;
-export const CITY_HALO_INSET = 3;
-export const CAPITAL_STAR = { fill: PAPER, stroke: { width: 1.4, color: BG } } as const;
 
 /** The capacity ring: `RING_GAP` outside the body, segments 4 wide on a 7 wide dark base. */
 export const RING_GAP = 7;
 export const RING_SEGMENT = { width: 4, base: 7, baseAlpha: 0.75, gap: 0.16 } as const;
-export const RING_FILLED = PAPER;
 /** Above this capacity the ring is one solid arc with a notch at every fifth unit. */
 export const RING_MAX_SEGMENTS = 10;
 
@@ -253,10 +256,8 @@ export const BARRACKS_MARK = {
   enemy: { innerRadius: 5.6, ringWidth: 1, ringAlpha: 0.85, house: 0.78 },
 } as const;
 
-export const VP_BADGE_RADIUS = 8.5;
-export const VP_BADGE = { fill: BG, stroke: { width: 2, color: VP } } as const;
-export const VP_FONT_SIZE = 11;
-export const VP_TEXT_COLOR = PAPER;
+/** The middle of the gilt VP lozenge lies this far outside the capacity ring's centre line (#847). */
+export const VP_BADGE_LIFT = 1;
 
 // --- Units on the map (9.5): helmets (#784) ----------------------------------------------------------
 // A group is a helmet (`units/helmet.ts`): own Rim facing right, the opponent's Cut facing left. Its
@@ -266,7 +267,6 @@ export const VP_TEXT_COLOR = PAPER;
 // ("Attack" is not drawn); the top right carries the badges.
 
 export const PLATE_FILL = 0x161b22;
-export const PLATE_INNER_RING = { width: 1.5, color: PAPER, alpha: 0.9 } as const;
 export const GLYPH_COLOR = PAPER;
 export const COUNT_FONT_SIZE = 10;
 
@@ -277,14 +277,11 @@ export const COUNT_FONT_SIZE = 10;
  */
 export const UNIT_SIDES = [24, 30, 36, 42] as const;
 export const UNIT_SIDE_UNKNOWN = 30;
-/** The casing of the icon of units standing in a city: a little see-through over the city body. */
-export const UNIT_HALO_ALPHA = 0.9;
 /**
  * A helmet in a city (#784) is this share of the one on a road: with its strap it stays inside the
  * capacity ring (the mockup of #775 took 8% off too).
  */
 export const HELMET_INSIDE = 0.92;
-export const UNIT_DASH = { dash: 5, gap: 3.5 } as const;
 export const UNIT_QUESTION_FONT_SIZE = 15;
 /** On screen a unit's size step is at least this wide, and a click hits at least this wide (CSS px). */
 export const UNIT_MIN_SIDE_PX = 20;
@@ -340,6 +337,178 @@ export const DEFENSE_PIPS = {
  * one column outside the capacity ring, `step` apart, never smaller than `iconPx` on screen.
  */
 export const CITY_COLUMN = { step: 19, clear: 1.5, iconPx: 16, badgeRadius: 9 } as const;
+
+// --- The Engraved pieces (#847, part 2 of #829; ui-style 52 III to 57) ------------------------------
+// Line and hatching on the dark plate, every coloured mark on a dark casing, no shadow and no glow;
+// a charge is solid against hatched or hollow, so the state reads in grey. World units at 100 %.
+// Mockup: docs/design/mockups/in-game-style-r5.html, the Combined view.
+
+/**
+ * A city (`cityBody`): the disc on a `cut` that reaches `grow` past it, an ink `rim` outside it, a
+ * faint dark `inner` cut inside an owned one and the enemy's two ink rings (the side without the
+ * hue); a neutral one is hatched in its grey. A city with units in it is the dark plate (the helmet
+ * stands on it); the capital star is dark with an ink edge when the city is empty.
+ */
+export const CITY_ENGRAVED = {
+  cut: { grow: 3.2, alpha: 0.85 },
+  rim: { grow: 1.6, width: 1.1 },
+  inner: { inset: 1.2, width: 0.8, alpha: 0.6 },
+  enemy: { insets: [4.4, 6.4], width: 0.9 },
+  neutralHatch: { pitch: 2.6, width: 0.7, alpha: 0.7 },
+  star: { outer: 0.6, inner: 0.27, width: 1.2 },
+} as const;
+/** A province (`provinceAt`): a dark disc, the owner's dot with an ink ring, the enemy's outer ring. */
+export const PROVINCE_ENGRAVED = {
+  plate: 8,
+  dot: 6.4,
+  rim: { radius: 7.6, width: 0.9 },
+  enemy: { radius: 10, width: 0.8 },
+  neutral: { radius: 6, width: 0.9, dot: 1.5 },
+} as const;
+/**
+ * The capacity ring (`ringAt`): every place on a dark cut `cut` wide; a place with a unit of the
+ * viewer a solid ink arc `filled` wide, room two ink hairlines `offset` either side of the ring.
+ */
+export const RING_ENGRAVED = {
+  cut: 6,
+  cutAlpha: 0.8,
+  filled: 3.4,
+  room: { width: 0.8, offset: 1.5 },
+  notch: 1.3,
+} as const;
+/**
+ * A charge (Lozenges, 57u): a square turned 45 degrees on its own casing (`casing` across), filled in
+ * the side's colour (`fill`) or hollow (the dark plate with an ink square `hollow` across). The
+ * warehouse is a row of them `pitch` apart, set in threes past four (`groupGap`), its middle `drop`
+ * under the capacity ring. A warehouse level not built yet (economy v1, DEC-26) is a faint hollow one.
+ */
+export const LOZENGE = {
+  casing: 8.2,
+  fill: 5.8,
+  hollow: 4.7,
+  line: 0.9,
+  lineAlpha: 0.92,
+  lockedAlpha: 0.45,
+  pitch: 8.8,
+  groupGap: 3.5,
+  drop: 8.5,
+} as const;
+/** The VP badge (`vpBadge`): a gilt lozenge, a dark square `side` across with two gilt squares. */
+export const VP_LOZENGE = { side: 14, outer: 13, inner: 9.2, width: 1, font: 11 } as const;
+/**
+ * The helmet (`helmet`, engraved): a dark casing (`casing`, thicker by `inside` in a city) under the
+ * dome and the strap, the dome on the dark plate, hatched in the side's colour above the charge and
+ * solid below it, the strap and the brim as ink lines `gear` of their width, the dome's ink `edge`.
+ * The hatch runs at 45 degrees, `pitch` apart, `width` wide (mirrored with an enemy helmet).
+ * A helmet without numbers or a memory: the dome on a see-through plate, its outline `beads` of
+ * `radius`, the strap pale (`pale` toward white).
+ */
+export const HELMET_ENGRAVED = {
+  casing: 6,
+  inside: 1.6,
+  gear: 0.55,
+  edge: 1.25,
+  hatch: { pitch: 3, width: 0.9 },
+  bead: { count: 44, radius: 1.05 },
+  pale: 0.3,
+  unknownPlate: 0.85,
+  /** The number in the dome: EB Garamond at this size, an ink fill on a dark halo. */
+  font: 12.5,
+  question: 15,
+} as const;
+/**
+ * Cut and ring towers (53g, 55k): the barracks and the factory stand on the capacity ring, `out`
+ * past its centre line, the barracks at the upper left, the factory at the left; the block is
+ * `halfHeight` high either side of its middle at scale 1, drawn at `towerScale` (at least
+ * `minScale`, and `screen` css px per unit). A built tower is the owner's hatch (own horizontal, the
+ * enemy's 45 degrees) in an ink outline on a casing; the barracks has a dark gate.
+ */
+export const TOWER = {
+  barracksAngle: Math.PI * 1.25,
+  factoryAngle: Math.PI * 0.95,
+  out: 4,
+  minScale: 1.35,
+  screen: 1.7,
+  halfHeight: 5.2,
+  casing: 3.2,
+  line: 1,
+  hatch: { pitch: 1.7, width: 0.8 },
+  gate: { x: -1.4, y: 1.2, side: 2.8 },
+  /** The bed joints of a tower filling with its build time: faint dark lines this far apart. */
+  joint: { every: 2.3, width: 0.4, alpha: 0.55 },
+  /** While charges are owed the tower is a plan: a light casing, a half-dark ground, a dotted ink outline. */
+  plan: { casingAlpha: 0.55, groundAlpha: 0.5, lineAlpha: 0.75, dot: 1.3, gap: 1.5 },
+  barracks: [
+    [-4.6, -5.2],
+    [4.6, -5.2],
+    [4.6, 4],
+    [-4.6, 4],
+  ],
+  factory: [
+    [-5.4, 4],
+    [-5.4, -1.6],
+    [-1.6, -5.2],
+    [-1.6, -1.6],
+    [2.2, -5.2],
+    [2.2, -1.6],
+    [5.4, -1.6],
+    [5.4, 4],
+  ],
+} as const;
+/**
+ * The Crown arc of a build (57k): one arc `lift` outside the top of the tower, concentric with the
+ * city ring, at least `minSpan` radians; the owed charges sit on it as lozenges `step` apart (at
+ * `lozenge` of their warehouse size). The time fills the arc in the side's colour (`width`) behind a
+ * small ink burin point over a faint ink line, between two ink serifs. `steps`: the baked shares of
+ * the time; built, the arc fades over `fadeMs` and a ring opens from the tower (`ring`).
+ */
+export const CROWN = {
+  lift: 8,
+  step: 11,
+  minSpan: 1,
+  lozenge: 0.9,
+  width: 2.4,
+  casing: 2.2,
+  line: { width: 0.8, alpha: 0.55 },
+  serif: { half: 3.6, width: 1, casing: 3 },
+  burin: { casing: 5.4, ink: 3.4 },
+  steps: 48,
+  fadeMs: 500,
+  ring: { ms: 600, from: 7, grow: 10, casing: 3, width: 1 },
+} as const;
+/**
+ * The recruit queue (55k Pips): a small helmet `width` wide per unit on the ring after the barracks
+ * tower, the first `first` radians past it, `step` apart; the unit in production fills from the
+ * bottom (`steps` baked levels), a queued one is hatched, a free slot of the selected city beaded.
+ */
+export const RECRUIT_PIPS = { width: 9, first: 0.38, step: 0.27, steps: 12 } as const;
+/**
+ * Fine rings (55p): every city highlight on one weight system, a 1 px ink line on a 2.6 px casing at
+ * `R + 5`, `R + 8` and `R + 11` from the capacity ring `R`. Selected: two rings over a dark band and
+ * four lozenges; hovered: one ring; a reachable target: a ring of `ticks` ticks; one reachable only
+ * after a split: a dashed amber ring.
+ */
+export const FINE_RING = {
+  r1: 5,
+  r2: 8,
+  r3: 11,
+  ink: 1,
+  casing: 2.6,
+  select: { band: 3.6, outer: 1.4, lozenge: 3.4, lozengeCasing: 1.1 },
+  hover: { width: 1.2, alpha: 0.85 },
+  target: { ticks: 16, short: 2.6, long: 4.6, every: 4, casing: 2.4 },
+  split: { dash: 4, gap: 3, width: 1.3 },
+} as const;
+/**
+ * The outline round a selected helmet (Engraved): a dark casing `casing` wide with two ink hairlines
+ * `offset` either side of it; a hovered one a single fainter hairline on a thinner casing.
+ */
+export const HELMET_SELECT = {
+  casing: 4,
+  ink: 0.9,
+  offset: 1.2,
+  hover: { casing: 2.6, ink: 1, alpha: 0.8 },
+} as const;
 
 /**
  * A packet of the automatic supply is a small square with a tail of two fainter squares behind it

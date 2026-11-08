@@ -859,7 +859,10 @@ export function frozenSource(scene: FixtureScene, at?: number, flood?: FloodPin)
             warehouse: DEV_RULES.city_upgrades.warehouse_ticks,
             warehouseMaxLevel: DEV_RULES.city_upgrades.warehouse_max_level,
             warehouseGainPerLevel: DEV_RULES.city_upgrades.warehouse_gain_per_level,
-            ...(rules.factory === null ? {} : { factory: rules.factory.build_ticks }),
+            barracksCharges: rules.city_upgrades.barracks_charges,
+            ...(rules.factory === null
+              ? {}
+              : { factory: rules.factory.build_ticks, factoryCharges: rules.factory.cost }),
             ...(rules.bunker === null ? {} : { fort: rules.bunker.build_ticks }),
           }
         : null,

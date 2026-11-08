@@ -1,17 +1,9 @@
 import type { Container } from 'pixi.js';
 import { setReducedMotion } from './motion.ts';
-import { buildMark, queueMark } from './progressLayout.ts';
+import { buildMark } from './progressLayout.ts';
 import type { BakedSprite } from './bake.ts';
-import {
-  barracksSpec,
-  buildMarkSpec,
-  cityBodySpec,
-  progressAlertSpec,
-  provinceBodySpec,
-  queueMarkSpec,
-  stockColor,
-  warehouseBarSpec,
-} from './bakedShapes.ts';
+import { buildMarkSpec, cityBodySpec, provinceBodySpec, stockColor } from './bakedShapes.ts';
+import { pipAlertSpec, towerBackSpec, warehouseMarksSpec } from './pieceShapes.ts';
 import { CanvasTextMetrics } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
@@ -38,11 +30,12 @@ function withBarracks(base: SnapshotMsg, id: number, value: boolean | null): Sna
   return { ...base, view: { ...base.view, nodes } };
 }
 
-/** The barracks mark of the city `id`: the baked shape it shows (`null`: none) and whether it is drawn. */
+/** The barracks tower of the city `id` (#847): the baked back it shows (`null`: none drawn). */
 function barracksMark(nodes: Container, id: number): string | null {
   const city = nodes.children.find((c) => c.label === `node-${String(id)}`) as Container;
-  const mark = city.children.find((c) => c.label === 'barracks') as BakedSprite;
-  return mark.visible ? (mark.spec?.key ?? null) : null;
+  const tower = city.children.find((c) => c.label === 'tower-barracks') as Container;
+  const back = tower.children[0] as BakedSprite;
+  return tower.visible ? (back.spec?.key ?? null) : null;
 }
 
 describe('CityView: the barracks of an enemy city next door (DEC-31)', () => {
@@ -53,7 +46,7 @@ describe('CityView: the barracks of an enemy city next door (DEC-31)', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('draws the same house as on an own city and drops it when the city is no longer next door', () => {
+  it('draws the same tower as on an own city, hatched as the enemy, and drops it when no longer next door', () => {
     const snapshot = devSnapshot(map, DEV_RULES, 100);
     const own = snapshot.view.nodes.find((n) => n.owner === 0 && n.has_barracks === true);
     const enemy = map.nodes.find((n) => n.start_owner === 1 && n.kind !== 'province');
@@ -64,12 +57,12 @@ describe('CityView: the barracks of an enemy city next door (DEC-31)', () => {
     const view = new CityView(map, layers, 0, 1, testSprites());
     const nodes = layers.layer.nodes;
 
-    // Next to an own node, barracks built: the same mark as on an own city, the house (not a colour)
-    // says «barracks»; only the rim takes the colour of the owner.
+    // Next to an own node, barracks built: the same tower as on an own city (its shape says
+    // «barracks»); the owner's hatch, at 45 degrees for the enemy, says whose.
     view.update(withBarracks(snapshot, enemy.id, true), null, UPGRADES);
     const drawn = barracksMark(nodes, enemy.id);
-    expect(drawn).toBe(barracksSpec(ENEMY).key);
-    expect(barracksMark(nodes, own.id)).toBe(barracksSpec(YOU).key);
+    expect(drawn).toBe(towerBackSpec('barracks', 'built', ENEMY, true).key);
+    expect(barracksMark(nodes, own.id)).toBe(towerBackSpec('barracks', 'built', YOU, false).key);
 
     // Next door, but no barracks yet (or being built): no mark.
     view.update(withBarracks(snapshot, enemy.id, false), null, UPGRADES);
@@ -130,7 +123,7 @@ describe('CityView: the warehouse places of an own city (C1, DEC-26)', () => {
       const bar = barOf(layers.layer.nodes, own.id);
       expect(bar.visible).toBe(true);
       expect(bar.spec?.key).toBe(
-        warehouseBarSpec(cap, 1, stockColor('you'), (top - level) * gain).key,
+        warehouseMarksSpec(cap, 1, stockColor('you'), (top - level) * gain).key,
       );
       view.destroy();
     },
@@ -143,8 +136,12 @@ describe('CityView: the warehouse places of an own city (C1, DEC-26)', () => {
     view.update(snapshot, null, null);
     const bar = barOf(layers.layer.nodes, own.id);
     expect(bar.spec?.key).toBe(
-      warehouseBarSpec(own.warehouse_cap ?? own.capacity, own.warehouse ?? 0, stockColor('you'), 0)
-        .key,
+      warehouseMarksSpec(
+        own.warehouse_cap ?? own.capacity,
+        own.warehouse ?? 0,
+        stockColor('you'),
+        0,
+      ).key,
     );
     view.destroy();
   });
@@ -156,7 +153,7 @@ describe('CityView: the warehouse places of an own city (C1, DEC-26)', () => {
     view.update(snapshot, null, UPGRADES);
     const bar = barOf(layers.layer.nodes, foreign.id);
     expect(bar.spec?.key).toBe(
-      warehouseBarSpec(foreign.warehouse, foreign.warehouse, stockColor('enemy'), 0).key,
+      warehouseMarksSpec(foreign.warehouse, foreign.warehouse, stockColor('enemy'), 0).key,
     );
     view.destroy();
   });
@@ -195,10 +192,10 @@ describe('CityView: a province is a pale dot (PB, #431, DEC-23)', () => {
     const view = new CityView(pool, layers, 0, 1, testSprites());
     view.update(snapshot, null, UPGRADES);
     const nodes = layers.layer.nodes;
-    expect(bodyOf(nodes, ownProvince.id).spec?.key).toBe(provinceBodySpec('you').key);
+    expect(bodyOf(nodes, ownProvince.id).spec?.key).toMatch(/^province:you:/);
     expect(bodyOf(nodes, neutralProvince.id).spec?.key).toBe(provinceBodySpec('neutral').key);
-    expect(bodyOf(nodes, ownCity.id).spec?.key).toBe(
-      cityBodySpec('you', view.radiusOf(ownCity.id), false).key,
+    expect(bodyOf(nodes, ownCity.id).spec?.key).toMatch(
+      new RegExp(`^${cityBodySpec('you', view.radiusOf(ownCity.id), false).key}`),
     );
     // The three looks differ by shape, not only by colour.
     const keys = new Set(['you', 'enemy', 'neutral'].map((k) => provinceBodySpec(k as 'you').key));
@@ -245,9 +242,10 @@ describe('CityView: a province is a pale dot (PB, #431, DEC-23)', () => {
     const view = new CityView(forged, layers, 0, 1, testSprites());
     view.update(snapshot, null, UPGRADES);
     const container = city(layers.layer.nodes, ownProvince.id);
-    // body, ring, bar, queue, build, the alert ring, the barracks house, the factory and bunker
-    // badges and the two plates of their builds (economy v2): no VP badge after them.
-    expect(container.children).toHaveLength(11);
+    // body, ring, warehouse, the crown, tower and ring of the barracks and of the factory, the
+    // recruits, the build plate, the alert ring, the bunker badge and the plate of its build: no VP
+    // badge after them.
+    expect(container.children).toHaveLength(14);
     expect(barracksMark(layers.layer.nodes, ownProvince.id)).toBeNull();
     view.destroy();
   });
@@ -305,7 +303,23 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     return { view: new CityView(map, layers, 0, 1, testSprites()), nodes: layers.layer.nodes };
   };
 
-  it('draws the queue as cells: the first by its progress, the rest queued', () => {
+  /** The recruits of a city (#847, 55k Pips): the small helmets shown. */
+  const recruits = (nodes: Container, id: number): Container[] => {
+    const layer = (
+      nodes.children.find((c) => c.label === `node-${String(id)}`) as Container
+    ).children.find((c) => c.label === 'recruits') as Container;
+    return layer.children.filter((c) => c.visible);
+  };
+  /** The back of a recruit's helmet: `solid` (in the queue) or `dashed` (a free slot). */
+  const look = (pip: Container): string =>
+    ((pip.children[0] as BakedSprite).spec?.key ?? '').includes(':dashed') ? 'free' : 'unit';
+  const level = (pip: Container): boolean => (pip.children[1] as BakedSprite).visible;
+  const tower = (nodes: Container, id: number, kind: string): Container =>
+    (nodes.children.find((c) => c.label === `node-${String(id)}`) as Container).children.find(
+      (c) => c.label === `tower-${kind}`,
+    ) as Container;
+
+  it('draws the queue as small helmets on the ring: the first fills, the rest are hatched', () => {
     const { view, nodes } = make();
     view.update(
       withCity({ recruit_queue: 3, recruit_progress: 15 }),
@@ -313,44 +327,34 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       UPGRADES,
       rules.queueMax,
     );
-    const plate = queueMark({
-      count: 3,
-      progress: 15,
-      unitTicks: rules.unitTicks,
-      waiting: false,
-      paused: false,
-      slots: 0,
-    });
-    if (plate === null) throw new Error('no plate');
-    const queue = sprite(nodes, own.id, 'queue');
-    expect(queue.visible).toBe(true);
-    expect(queue.spec?.key).toBe(queueMarkSpec(plate).key);
+    const pips = recruits(nodes, own.id);
+    expect(pips.map(look)).toEqual(['unit', 'unit', 'unit']);
+    expect(pips.map(level)).toEqual([true, false, false]);
     expect(sprite(nodes, own.id, 'progress-alert').visible).toBe(false);
     view.destroy();
   });
 
-  it('shows no queue plate for an empty queue, and none on a foreign city', () => {
+  it('shows no recruits for an empty queue, and none on a foreign city', () => {
     const { view, nodes } = make();
     view.update(withCity({ recruit_queue: 0 }), rules.unitTicks, UPGRADES, rules.queueMax);
-    expect(sprite(nodes, own.id, 'queue').visible).toBe(false);
-    expect(sprite(nodes, foreign.id, 'queue').visible).toBe(false);
+    expect(recruits(nodes, own.id)).toHaveLength(0);
+    expect(recruits(nodes, foreign.id)).toHaveLength(0);
     view.destroy();
   });
 
-  it('shows the free slots, dashed, only on the selected city', () => {
+  it('shows the free slots, beaded, only on the selected city', () => {
     const { view, nodes } = make();
     view.update(withCity({ recruit_queue: 1 }), rules.unitTicks, UPGRADES, rules.queueMax);
-    const queue = sprite(nodes, own.id, 'queue');
-    const plain = queue.spec?.key;
+    expect(recruits(nodes, own.id).map(look)).toEqual(['unit']);
     view.setSelected(own.id);
-    expect(queue.spec?.key).not.toBe(plain);
-    expect(queue.spec?.key).toContain('qss');
+    const free = Array.from({ length: rules.queueMax - 1 }, () => 'free');
+    expect(recruits(nodes, own.id).map(look)).toEqual(['unit', ...free]);
     // Another selection takes the slots away again.
     view.setSelected(foreign.id);
-    expect(queue.spec?.key).toBe(plain);
+    expect(recruits(nodes, own.id).map(look)).toEqual(['unit']);
     view.setSelected(own.id);
     view.setSelected(null);
-    expect(queue.spec?.key).toBe(plain);
+    expect(recruits(nodes, own.id).map(look)).toEqual(['unit']);
     view.destroy();
   });
 
@@ -358,8 +362,9 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     const { view, nodes } = make();
     view.update(withCity({ recruit_queue: 0 }), rules.unitTicks, UPGRADES, rules.queueMax);
     view.setSelected(own.id);
-    expect(sprite(nodes, own.id, 'queue').visible).toBe(true);
-    expect(sprite(nodes, own.id, 'queue').spec?.key).toBe('queue:sss');
+    expect(recruits(nodes, own.id).map(look)).toEqual(
+      Array.from({ length: rules.queueMax }, () => 'free'),
+    );
     // The same city without a barracks (the city development is on): the menu has no recruit.
     view.update(
       withCity({ recruit_queue: 0, has_barracks: false }),
@@ -367,11 +372,11 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       UPGRADES,
       rules.queueMax,
     );
-    expect(sprite(nodes, own.id, 'queue').visible).toBe(false);
+    expect(recruits(nodes, own.id)).toHaveLength(0);
     view.destroy();
   });
 
-  it('rings the first cell of a unit that is ready with no room', () => {
+  it('rings the first recruit when it is ready with no room, its helmet full', () => {
     const { view, nodes } = make();
     view.update(
       withCity({ recruit_queue: 2, recruit_progress: rules.unitTicks, recruit_waiting: true }),
@@ -381,9 +386,8 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     );
     const ring = sprite(nodes, own.id, 'progress-alert');
     expect(ring.visible).toBe(true);
-    expect(ring.spec?.key).toBe(progressAlertSpec(16 + 2 * 2, 10 + 2 * 2).key);
-    // The ready cell is solid, the one behind it queued.
-    expect(sprite(nodes, own.id, 'queue').spec?.key).toBe('queue:rq');
+    expect(ring.spec?.key).toBe(pipAlertSpec(8).key);
+    expect(recruits(nodes, own.id).map(level)).toEqual([true, false]);
     view.destroy();
   });
 
@@ -393,8 +397,8 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.update(withCity(change, true), rules.unitTicks, UPGRADES, rules.queueMax);
     const ring = sprite(nodes, own.id, 'progress-alert');
     expect(ring.visible).toBe(true);
-    // The progress cell keeps showing how far the unit got.
-    expect(sprite(nodes, own.id, 'queue').spec?.key).toBe('queue:a4q');
+    // The first helmet keeps showing how far the unit got.
+    expect(recruits(nodes, own.id).map(level)).toEqual([true, false]);
     view.update(withCity(change, false), rules.unitTicks, UPGRADES, rules.queueMax);
     expect(ring.visible).toBe(false);
     view.destroy();
@@ -414,43 +418,80 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.destroy();
   });
 
-  it('draws a barracks and a warehouse build with the same plate, told by the badge', () => {
+  it('builds the barracks as a tower under the Crown arc: a plan while owed, then it fills', () => {
     const { view, nodes } = make();
-    const left = (ticks: number) => ({ done_tick: NOW + ticks, owed: 0 });
+    const upgrades = { ...UPGRADES, barracksCharges: 3 };
     view.update(
-      withCity({ building: { kind: 'barracks', ...left(50) } }),
+      withCity({ has_barracks: false, building: { kind: 'barracks', done_tick: null, owed: 2 } }),
+      rules.unitTicks,
+      upgrades,
+      rules.queueMax,
+    );
+    const root = tower(nodes, own.id, 'barracks');
+    const crown = sprite(nodes, own.id, 'crown-barracks');
+    expect(root.visible).toBe(true);
+    expect((root.children[0] as BakedSprite).spec?.key).toContain(':plan:');
+    expect(crown.visible).toBe(true);
+    // Three charges, one paid: the key names the cost and what is paid.
+    expect(crown.spec?.key).toContain(':barracks:3:1:');
+    // Paid in full: the time runs from `done_tick`, the tower fills from its base.
+    view.update(
+      withCity({
+        has_barracks: false,
+        building: { kind: 'barracks', done_tick: NOW + 50, owed: 0 },
+      }),
+      rules.unitTicks,
+      upgrades,
+      rules.queueMax,
+    );
+    view.setTick(NOW);
+    view.advance(16);
+    expect((root.children[0] as BakedSprite).spec?.key).toContain(':rising:');
+    expect((root.children[1] as BakedSprite).visible).toBe(true);
+    // No plate above the city for a barracks build any more.
+    expect(sprite(nodes, own.id, 'build').visible).toBe(false);
+    view.destroy();
+  });
+
+  it('fades the arc and opens a ring from the tower when the build is done', () => {
+    setReducedMotion(false);
+    const { view, nodes } = make();
+    const upgrades = { ...UPGRADES, barracksCharges: 3 };
+    view.update(
+      withCity({
+        has_barracks: false,
+        building: { kind: 'barracks', done_tick: NOW + 5, owed: 0 },
+      }),
+      rules.unitTicks,
+      upgrades,
+      rules.queueMax,
+    );
+    view.update(withCity({ has_barracks: true, building: null }), rules.unitTicks, upgrades);
+    const ring = sprite(nodes, own.id, 'tower-ring-barracks');
+    const crown = sprite(nodes, own.id, 'crown-barracks');
+    expect(ring.visible).toBe(true);
+    view.advance(200);
+    expect(crown.alpha).toBeLessThan(1);
+    view.advance(2000);
+    expect(ring.visible).toBe(false);
+    expect(crown.visible).toBe(false);
+    expect((tower(nodes, own.id, 'barracks').children[0] as BakedSprite).spec?.key).toContain(
+      ':built:',
+    );
+    view.destroy();
+  });
+
+  it('keeps the plate of a warehouse build (economy v1)', () => {
+    const { view, nodes } = make();
+    view.update(
+      withCity({ building: { kind: 'warehouse', done_tick: NOW + 50, owed: 0 } }),
       rules.unitTicks,
       UPGRADES,
       rules.queueMax,
     );
     const build = sprite(nodes, own.id, 'build');
     expect(build.visible).toBe(true);
-    expect(build.spec?.key).toBe(buildMarkSpec(buildMark('barracks', 0.5)).key);
-    const y = build.y;
-    view.update(
-      withCity({ building: { kind: 'warehouse', ...left(50) } }),
-      rules.unitTicks,
-      UPGRADES,
-      rules.queueMax,
-    );
     expect(build.spec?.key).toBe(buildMarkSpec(buildMark('warehouse', 0.5)).key);
-    expect(build.y).toBe(y);
-    view.destroy();
-  });
-
-  it('stacks the build plate above the queue plate', () => {
-    const { view, nodes } = make();
-    view.update(
-      withCity({
-        recruit_queue: 1,
-        recruit_progress: 5,
-        building: { kind: 'warehouse', done_tick: NOW + 20, owed: 0 },
-      }),
-      rules.unitTicks,
-      UPGRADES,
-      rules.queueMax,
-    );
-    expect(sprite(nodes, own.id, 'build').y).toBeLessThan(sprite(nodes, own.id, 'queue').y);
     view.destroy();
   });
 
@@ -476,22 +517,22 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
   it('clamps a build that is past its end or has not started', () => {
     const { view, nodes } = make();
     view.update(
-      withCity({ building: { kind: 'barracks', done_tick: NOW - 5, owed: 0 } }),
+      withCity({ building: { kind: 'warehouse', done_tick: NOW - 5, owed: 0 } }),
       rules.unitTicks,
       UPGRADES,
       rules.queueMax,
     );
     expect(sprite(nodes, own.id, 'build').spec?.key).toBe(
-      buildMarkSpec(buildMark('barracks', 1)).key,
+      buildMarkSpec(buildMark('warehouse', 1)).key,
     );
     view.update(
-      withCity({ building: { kind: 'barracks', done_tick: NOW + 500, owed: 0 } }),
+      withCity({ building: { kind: 'warehouse', done_tick: NOW + 500, owed: 0 } }),
       rules.unitTicks,
       UPGRADES,
       rules.queueMax,
     );
     expect(sprite(nodes, own.id, 'build').spec?.key).toBe(
-      buildMarkSpec(buildMark('barracks', 0)).key,
+      buildMarkSpec(buildMark('warehouse', 0)).key,
     );
     view.destroy();
   });
@@ -509,12 +550,14 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       UPGRADES,
       rules.queueMax,
     );
-    const marks = ['queue', 'build', 'progress-alert'].map((l) => sprite(nodes, own.id, l));
-    expect(marks.map((m) => m.visible)).toEqual([true, true, true]);
+    const marks = ['recruits', 'build', 'progress-alert', 'tower-barracks'].map(
+      (l) => sprite(nodes, own.id, l) as Container,
+    );
+    expect(marks.map((m) => m.visible)).toEqual([true, true, true, true]);
     view.setSupplyMode(true);
-    expect(marks.map((m) => m.visible)).toEqual([false, false, false]);
+    expect(marks.map((m) => m.visible)).toEqual([false, false, false, false]);
     view.setSupplyMode(false);
-    expect(marks.map((m) => m.visible)).toEqual([true, true, true]);
+    expect(marks.map((m) => m.visible)).toEqual([true, true, true, true]);
     view.destroy();
   });
 
@@ -566,12 +609,16 @@ describe('CityView: a captured city cross-fades its body (#508)', () => {
     const nodes = layers.layer.nodes;
     view.update(snapshot);
     const before = city(nodes, own.id).children.length;
-    expect(bodyOf(nodes, own.id).spec?.key).toBe(
-      cityBodySpec(
-        'you',
-        view.radiusOf(own.id),
-        own.id === map.nodes.find((n) => n.capital_of === 0)?.id,
-      ).key,
+    expect(bodyOf(nodes, own.id).spec?.key).toMatch(
+      new RegExp(
+        `^${
+          cityBodySpec(
+            'you',
+            view.radiusOf(own.id),
+            own.id === map.nodes.find((n) => n.capital_of === 0)?.id,
+          ).key
+        }`,
+      ),
     );
 
     view.update(captured(snapshot, own.id));
@@ -632,10 +679,10 @@ describe('CityView: the warehouse of an own province under economy v2 (DEC-41, i
     view.update(holding(ownProvince.id, 1), null, UPGRADES, null, 1);
     const bar = barOf(layers.layer.nodes, ownProvince.id);
     expect(bar.visible).toBe(true);
-    expect(bar.spec?.key).toBe(warehouseBarSpec(1, 1, stockColor('you'), 0).key);
+    expect(bar.spec?.key).toBe(warehouseMarksSpec(1, 1, stockColor('you'), 0).key);
     view.update(holding(ownProvince.id, 0), null, UPGRADES, null, 1);
     expect(barOf(layers.layer.nodes, ownProvince.id).spec?.key).toBe(
-      warehouseBarSpec(1, 0, stockColor('you'), 0).key,
+      warehouseMarksSpec(1, 0, stockColor('you'), 0).key,
     );
     view.destroy();
   });

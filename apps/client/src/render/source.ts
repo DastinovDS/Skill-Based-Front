@@ -32,6 +32,13 @@ export interface CityDevelopment {
   readonly factory?: number;
   /** Economy v2: ticks from the full payment to a bunker (`bunker.build_ticks`). */
   readonly fort?: number;
+  /**
+   * Economy v2 (DEC-41, item 7): the charges the barracks costs (`city_upgrades.barracks_charges`)
+   * and a factory (`factory.cost`): the lozenges of the Crown arc of a build (#847). Without them a
+   * build shows only the charges it still owes.
+   */
+  readonly barracksCharges?: number;
+  readonly factoryCharges?: number;
 }
 
 export interface RenderSource {

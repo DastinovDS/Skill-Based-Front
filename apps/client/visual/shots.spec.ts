@@ -1030,3 +1030,30 @@ test('shot of the map treatment at a run of zooms', async ({ page }) => {
     await page.waitForTimeout(700);
   }
 });
+
+// The Engraved pieces close up (#847): the scene `economy` (economy v2) zoomed in on Watchpost and
+// Forkway: the helmets, the city bodies and rings, the warehouse lozenges, the towers on the ring and
+// the Crown arc of the factory Forkway is paying for (`pieces-close.png`; `pieces-gray.png` in grey
+// scale; `pieces-far.png` zoomed out: the towers keep their screen size).
+test('shot of the Engraved pieces close up', async ({ page }) => {
+  await page.goto('/?scene=economy');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.addStyleTag({ content: '.hud { display: none !important; }' });
+  await page.mouse.move(430, 520);
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, -112);
+    await page.waitForTimeout(150);
+  }
+  await page.waitForTimeout(800);
+  await page.locator('canvas').screenshot({ path: join(OUT, 'pieces-close.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.locator('canvas').screenshot({ path: join(OUT, 'pieces-gray.png') });
+  await page.addStyleTag({ content: 'html { filter: none; }' });
+  for (let i = 0; i < 8; i++) {
+    await page.mouse.wheel(0, 250);
+    await page.waitForTimeout(120);
+  }
+  await page.waitForTimeout(800);
+  await page.locator('canvas').screenshot({ path: join(OUT, 'pieces-far.png') });
+});

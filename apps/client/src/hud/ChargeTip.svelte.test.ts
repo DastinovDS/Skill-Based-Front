@@ -16,17 +16,27 @@ function show(units: number, charged: number): HTMLElement {
   return target;
 }
 
-describe('ChargeTip', () => {
-  it('shows a filled circle with the charged number and an empty one with the discharged number', () => {
+/** Per helmet: whether its dome is filled (a charged unit). */
+function filled(target: HTMLElement): boolean[] {
+  return [...target.querySelectorAll('.helmet-icon')].map(
+    (icon) => icon.querySelector('.fill') !== null,
+  );
+}
+
+describe('ChargeTip: the unit card keeps its helmets (#847, ui-style 57u)', () => {
+  it('shows a filled helmet per charged unit and an empty one per discharged unit', () => {
     const target = show(5, 2);
-    expect(target.querySelectorAll('.dot.filled')).toHaveLength(1);
-    expect(target.querySelectorAll('.dot.hollow')).toHaveLength(1);
-    expect([...target.querySelectorAll('.num')].map((n) => n.textContent)).toEqual(['2', '3']);
+    expect(filled(target)).toEqual([true, true, false, false, false]);
+    expect(target.querySelectorAll('.helmet-icon.engraved')).toHaveLength(5);
   });
 
-  it('shows only the filled circle for a fully charged group', () => {
-    const target = show(4, 4);
-    expect(target.querySelectorAll('.dot.hollow')).toHaveLength(0);
-    expect([...target.querySelectorAll('.num')].map((n) => n.textContent)).toEqual(['4']);
+  it('sets the helmets in threes', () => {
+    const target = show(7, 7);
+    expect([...target.querySelectorAll('.three')].map((t) => t.children.length)).toEqual([3, 3, 1]);
+  });
+
+  it('tells a screen reader the numbers', () => {
+    const target = show(4, 3);
+    expect(target.querySelector('[role="img"]')?.getAttribute('aria-label')).toMatch(/3/);
   });
 });

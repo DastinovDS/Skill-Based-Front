@@ -1,61 +1,36 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { BakeSpec } from './bake.ts';
 import {
-  BARRACKS_HOUSE,
   BUNKER_GLYPH,
   BUNKER_SLIT,
   FACTORY_GLYPH,
   capacityRing,
   ringRadius,
-  warehouseSegments,
   type Arc,
   type PlaceState,
 } from './cityLayout.ts';
-import {
-  hatchPolygons,
-  innerWidth,
-  type BuildMark,
-  type CellState,
-  type QueueMark,
-} from './progressLayout.ts';
+import { hatchPolygons, innerWidth, type BuildMark, type CellState } from './progressLayout.ts';
 import { CHIP, PLATE, lighten, type ChipState } from './fightFx.ts';
 import { dashSegments } from './layout.ts';
-import { circleBox, darken, shadowBox, type Box } from './shading.ts';
+import { circleBox, shadowBox, type Box } from './shading.ts';
 import {
   BAKE_MARGIN,
-  BAR_BASE,
   BAR_SEGMENT,
   BARRACKS_MARK,
   BG,
-  CAPITAL_STAR,
-  CITY_HALO,
-  CITY_HALO_INSET,
   DEFENSE_PIPS,
   FIGHT_COLOR,
   FLOW_STARVE,
   GLYPH_COLOR,
-  INNER_RING,
-  INNER_RING_INSET,
-  NEUTRAL_FILL,
-  NEUTRAL_OUTLINE,
-  OWNER_OUTLINE,
   PAPER,
   PLACE_DASHED,
   PLACE_FRAME,
   PLATE_FILL,
-  PLATE_INNER_RING,
   PROGRESS,
-  PROVINCE,
-  RING_FILLED,
-  RING_SEGMENT,
   RIM,
   SEGMENT_EMPTY,
   SHADOW,
   SUPPLY_LINE,
-  UNIT_DASH,
-  UNIT_HALO_ALPHA,
-  VP_BADGE,
-  VP_BADGE_RADIUS,
   ENEMY,
   FEED,
   YOU,
@@ -64,8 +39,19 @@ import {
   BADGE,
   BADGE_DOWN,
   BADGE_UP,
+  CASING,
+  CITY_ENGRAVED,
+  CUT,
+  HELMET_ENGRAVED,
+  INK,
+  DARK_PLATE,
+  PROVINCE_ENGRAVED,
+  RING_ENGRAVED,
+  VP,
+  VP_LOZENGE,
 } from './style.ts';
 import { counterLayout, type DefensePips } from './defenseLayout.ts';
+import { hatchAcross } from './pieceShapes.ts';
 import {
   dashLoop,
   helmet,
@@ -117,95 +103,100 @@ const graphics = (into: Container): Graphics => into.addChild(new Graphics());
 
 export type CityKind = 'neutral' | 'you' | 'enemy';
 
-/** The upper left of a rim: from 1.08 to 1.75 pi, light from the upper left (the mockup). */
-const RIM_ARC = { from: Math.PI * 1.08, to: Math.PI * 1.75, inset: 2.2 } as const;
+/** A circle as a closed outline of `n` points (the hatch of a neutral city is cut to it). */
+function circlePoints(radius: number, n = 48): Point[] {
+  const out: Point[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i) / n;
+    out.push({ x: radius * Math.cos(a), y: radius * Math.sin(a) });
+  }
+  return out;
+}
 
 /**
- * The body of a city: halo, a gradient fill with its outline (own: blue and white, enemy: red with
- * a dark inner ring, neutral: grey), the light rim of an owned one, the star of a capital, all on
- * the soft shadow of the halo.
+ * The body of a city (Engraved, #847; mockup `cityBody`): the disc on a dark cut, filled with the
+ * owner's colour (own blue, the enemy red with two ink rings inside, so the side reads without the
+ * hue; a neutral one hatched in its grey), an ink ring outside it and a faint cut inside an owned one.
+ * `occupied`: units stand there, the disc is the dark plate the helmet stands on. The capital star
+ * (dark, an ink edge) shows on an empty capital.
  */
-export function cityBodySpec(kind: CityKind, radius: number, capital: boolean): BakeSpec {
-  const reach = radius + CITY_HALO_INSET + CITY_HALO.width / 2;
+export function cityBodySpec(
+  kind: CityKind,
+  radius: number,
+  capital: boolean,
+  occupied = false,
+): BakeSpec {
+  const E = CITY_ENGRAVED;
+  const reach = radius + E.cut.grow;
   return {
-    key: `city:${kind}:${String(radius)}:${capital ? 'c' : ''}`,
-    box: shadowBox(circleBox(reach), BAKE_MARGIN),
+    key: `city:${kind}:${String(radius)}:${capital ? 'c' : ''}:${occupied ? 'o' : ''}`,
+    box: circleBox(reach + 1),
     draw(into, tools) {
-      shadow(into, (g) => g.circle(0, 0, reach));
       const g = graphics(into);
-      g.circle(0, 0, radius + CITY_HALO_INSET).stroke(CITY_HALO);
-      const color = kind === 'you' ? YOU : kind === 'enemy' ? ENEMY : NEUTRAL_FILL;
-      g.circle(0, 0, radius).fill(tools.gradient(color));
-      g.circle(0, 0, radius).stroke(kind === 'neutral' ? NEUTRAL_OUTLINE : OWNER_OUTLINE);
-      if (kind === 'enemy') g.circle(0, 0, radius - INNER_RING_INSET).stroke(INNER_RING);
-      if (kind !== 'neutral') {
-        const r = radius - RIM_ARC.inset;
-        g.moveTo(r * Math.cos(RIM_ARC.from), r * Math.sin(RIM_ARC.from))
-          .arc(0, 0, r, RIM_ARC.from, RIM_ARC.to)
-          .stroke({ width: RIM.width, color: 0xffffff, alpha: RIM.alpha, cap: 'round' });
+      g.circle(0, 0, reach).fill({ color: CUT, alpha: E.cut.alpha });
+      if (occupied) {
+        g.circle(0, 0, radius).fill(DARK_PLATE);
+      } else if (kind === 'neutral') {
+        const { pitch, width, alpha } = E.neutralHatch;
+        for (const [a, b] of hatchAcross(circlePoints(radius), -Math.PI / 4, pitch))
+          g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+        g.stroke({ width: tools.hair(width), color: NEUTRAL_STROKE, alpha });
+      } else {
+        g.circle(0, 0, radius).fill(kind === 'you' ? YOU : ENEMY);
       }
-      if (capital) {
-        g.star(0, 0, 5, radius * 0.6, radius * 0.27, -Math.PI / 2)
-          .fill(CAPITAL_STAR.fill)
-          .stroke(CAPITAL_STAR.stroke);
+      g.circle(0, 0, radius + E.rim.grow).stroke({
+        width: tools.hair(E.rim.width),
+        color: kind === 'neutral' ? NEUTRAL_STROKE : INK,
+      });
+      if (kind !== 'neutral') {
+        g.circle(0, 0, radius - E.inner.inset).stroke({
+          width: tools.hair(E.inner.width),
+          color: CUT,
+          alpha: E.inner.alpha,
+        });
+      }
+      if (kind === 'enemy') {
+        for (const inset of E.enemy.insets) {
+          g.circle(0, 0, radius - inset).stroke({ width: tools.hair(E.enemy.width), color: INK });
+        }
+      }
+      if (capital && !occupied) {
+        g.star(0, 0, 5, radius * E.star.outer, radius * E.star.inner, -Math.PI / 2)
+          .fill(DARK_PLATE)
+          .stroke({ width: tools.hair(E.star.width), color: INK, join: 'miter' });
       }
     },
   };
 }
 
 /**
- * A province (DEC-23, PB "Pale dot", #431): a small solid dot in a pale tint of the owner with a
- * thin darker outline, a dark casing and a soft shadow; the opponent's has a second thin light ring
- * outside; nobody's is a paler see-through grey dot with a dashed outline. The capacity ring is
- * the city ring (`cityRingSpec`) and the garrison token lies on top of it, so there is no dark
- * centre. No gradient, no rim, no star, no warehouse.
+ * A province (DEC-23; Engraved, #847, mockup `provinceAt`): a dark disc, the owner's dot with an ink
+ * ring, the opponent's with a second ink ring outside (the side without the hue); nobody's a thin
+ * grey ring with a dot. `occupied`: units stand there, only the dark disc under the helmet. The
+ * capacity ring is the city ring (`cityRingSpec`).
  */
-export function provinceBodySpec(kind: CityKind): BakeSpec {
-  const { dot: r, casing, tint, outline, neutralOutline, enemy } = PROVINCE;
-  const reach = Math.max(r + casing.inset + casing.width / 2, r + enemy.inset + enemy.width / 2);
+export function provinceBodySpec(kind: CityKind, occupied = false): BakeSpec {
+  const P = PROVINCE_ENGRAVED;
+  const reach = P.enemy.radius + P.enemy.width;
   return {
-    key: `province:${kind}`,
-    box: shadowBox(circleBox(reach), BAKE_MARGIN),
-    draw(into) {
-      shadow(into, (g) => g.circle(0, 0, r + casing.inset));
+    key: `province:${kind}:${occupied ? 'o' : ''}`,
+    box: circleBox(reach + 1),
+    draw(into, tools) {
       const g = graphics(into);
-      g.circle(0, 0, r + casing.inset).stroke({
-        width: casing.width,
-        color: BG,
-        alpha: casing.alpha,
-      });
+      g.circle(0, 0, P.plate).fill(DARK_PLATE);
+      if (occupied) return;
       if (kind === 'neutral') {
-        g.circle(0, 0, r).fill({
-          color: lighten(NEUTRAL_STROKE, tint.neutral),
-          alpha: tint.neutralAlpha,
+        g.circle(0, 0, P.neutral.radius).stroke({
+          width: tools.hair(P.neutral.width),
+          color: NEUTRAL_STROKE,
         });
-        const arcs = Math.max(
-          1,
-          Math.round((2 * Math.PI * r) / (neutralOutline.dash + neutralOutline.gap)),
-        );
-        const step = (2 * Math.PI) / arcs;
-        const span = (neutralOutline.dash / (neutralOutline.dash + neutralOutline.gap)) * step;
-        for (let i = 0; i < arcs; i++) {
-          g.moveTo(r * Math.cos(i * step), r * Math.sin(i * step)).arc(
-            0,
-            0,
-            r,
-            i * step,
-            i * step + span,
-          );
-        }
-        g.stroke({ width: neutralOutline.width, color: NEUTRAL_STROKE });
+        g.circle(0, 0, P.neutral.dot).fill(NEUTRAL_STROKE);
         return;
       }
-      const color = kind === 'you' ? YOU : ENEMY;
-      g.circle(0, 0, r).fill(lighten(color, tint.owned));
-      g.circle(0, 0, r).stroke({ width: outline.width, color: darken(color, outline.darken) });
+      g.circle(0, 0, P.dot).fill(kind === 'you' ? YOU : ENEMY);
+      g.circle(0, 0, P.rim.radius).stroke({ width: tools.hair(P.rim.width), color: INK });
       if (kind === 'enemy') {
-        g.circle(0, 0, r + enemy.inset).stroke({
-          width: enemy.width,
-          color: PAPER,
-          alpha: enemy.alpha,
-        });
+        g.circle(0, 0, P.enemy.radius).stroke({ width: tools.hair(P.enemy.width), color: INK });
       }
     },
   };
@@ -229,53 +220,44 @@ function strokeArcs(
   g.stroke({ ...style, cap: 'butt' });
 }
 
-/** The capacity ring: a dark base, white segments for the garrison, grey for room, on a soft shadow. */
+/**
+ * The capacity ring (Engraved, #847; mockup `ringAt`): every place on a dark cut; a place with a unit
+ * of the viewer a solid ink arc, room two ink hairlines either side of the ring (filled against
+ * hollow, never the colour alone). Above `RING_MAX_SEGMENTS` one arc with a dark notch every fifth.
+ */
 export function cityRingSpec(radius: number, capacity: number, garrison: number): BakeSpec {
   const r = ringRadius(radius);
-  const reach = r + RING_SEGMENT.base / 2;
+  const R = RING_ENGRAVED;
+  const reach = r + R.cut / 2;
   return {
     key: `ring:${String(radius)}:${String(capacity)}:${String(garrison)}`,
-    box: shadowBox(circleBox(reach), BAKE_MARGIN),
-    draw(into) {
+    box: circleBox(reach + 1),
+    draw(into, tools) {
       const ring = capacityRing(capacity, garrison);
-      // The shadow follows the arcs, so the gaps between the segments stay see-through.
-      for (const { grow, alpha } of SHADOW.layers) {
-        const s = new Graphics();
-        s.y = SHADOW.dy;
-        strokeArcs(s, r, ring.arcs, {
-          width: RING_SEGMENT.base + 2 * grow,
-          color: 0x000000,
-          alpha,
-        });
-        into.addChild(s);
-      }
       const g = graphics(into);
-      strokeArcs(g, r, ring.arcs, {
-        width: RING_SEGMENT.base,
-        color: BG,
-        alpha: RING_SEGMENT.baseAlpha,
-      });
+      strokeArcs(g, r, ring.arcs, { width: R.cut, color: CUT, alpha: R.cutAlpha });
       strokeArcs(
         g,
         r,
         ring.arcs.filter((arc) => arc.filled),
-        { width: RING_SEGMENT.width, color: RING_FILLED },
+        { width: R.filled, color: INK },
       );
-      strokeArcs(
-        g,
-        r,
-        ring.arcs.filter((arc) => !arc.filled),
-        { width: RING_SEGMENT.width, color: SEGMENT_EMPTY },
-      );
+      const room = ring.arcs.filter((arc) => !arc.filled);
+      for (const side of [-1, 1]) {
+        strokeArcs(g, r + side * R.room.offset, room, {
+          width: tools.hair(R.room.width),
+          color: INK,
+        });
+      }
       for (const angle of ring.notches) {
-        const inner = r - RING_SEGMENT.base / 2;
-        const outer = r + RING_SEGMENT.base / 2;
+        const inner = r - R.cut / 2;
+        const outer = r + R.cut / 2;
         g.moveTo(inner * Math.cos(angle), inner * Math.sin(angle)).lineTo(
           outer * Math.cos(angle),
           outer * Math.sin(angle),
         );
       }
-      if (ring.notches.length > 0) g.stroke({ width: 1.5, color: BG });
+      if (ring.notches.length > 0) g.stroke({ width: R.notch, color: CUT });
     },
   };
 }
@@ -319,84 +301,24 @@ export function drawPlaceOutline(
 }
 
 /**
- * The warehouse bar under the ring: a dark base, a place per unit of capacity (a charge filled with
- * a gradient, room a frame) and `locked` dashed places for the levels not built yet. The sprite's
- * origin is the middle of its top edge.
+ * The VP badge (Engraved, #847; mockup `vpBadge`): a gilt lozenge, a dark square turned 45 degrees
+ * with two gilt squares inside its edge (the number is a Text over it, gilt too).
  */
-export function warehouseBarSpec(
-  capacity: number,
-  stock: number,
-  color: number,
-  locked = 0,
-): BakeSpec {
-  const bar = warehouseSegments(stock, capacity, locked);
-  const base: Box = {
-    x: -bar.width / 2 - 1,
-    y: -1,
-    width: bar.width + 2,
-    height: BAR_SEGMENT.height + 4,
-  };
-  return {
-    key: `bar:${String(capacity)}:${String(stock)}:${String(locked)}:${String(color)}`,
-    box: shadowBox(base, BAKE_MARGIN),
-    draw(into, tools) {
-      shadow(into, (g) => g.roundRect(base.x, base.y, base.width, base.height, BAR_BASE.radius));
-      const g = graphics(into);
-      g.roundRect(base.x, base.y, base.width, base.height, BAR_BASE.radius).fill(BAR_BASE.color);
-      for (const segment of bar.segments) {
-        if (segment.state === 'filled') {
-          g.rect(segment.x, 1, BAR_SEGMENT.width, BAR_SEGMENT.height).fill(tools.gradient(color));
-        } else {
-          drawPlaceOutline(g, segment.x, 1, segment.state);
-        }
-      }
-    },
-  };
-}
-
-/** The VP badge: a dark disc with a gold rim and a faint inner light ring (the number is a Text over it). */
 export function vpBadgeSpec(): BakeSpec {
+  const V = VP_LOZENGE;
+  const lozenge = (g: Graphics, side: number): Graphics => {
+    const h = (side * Math.SQRT2) / 2;
+    return g.poly([0, -h, h, 0, 0, h, -h, 0]);
+  };
+  const reach = (V.side * Math.SQRT2) / 2;
   return {
     key: 'vp-badge',
-    box: shadowBox(circleBox(VP_BADGE_RADIUS + 1), BAKE_MARGIN),
-    draw(into) {
-      shadow(into, (g) => g.circle(0, 0, VP_BADGE_RADIUS));
+    box: circleBox(reach + 1),
+    draw(into, tools) {
       const g = graphics(into);
-      g.circle(0, 0, VP_BADGE_RADIUS).fill(VP_BADGE.fill).stroke(VP_BADGE.stroke);
-      g.circle(0, 0, VP_BADGE_RADIUS - 2.1).stroke({
-        width: 1,
-        color: 0xffffff,
-        alpha: RIM.alpha * 0.35,
-      });
-    },
-  };
-}
-
-/**
- * The barracks badge (B1, #349): a dark disc with a house, the rim in the owner's colour. The
- * opponent's has a light inner ring and a smaller house, so the side reads without the hue.
- */
-export function barracksSpec(rim: number): BakeSpec {
-  const radius = BARRACKS_MARK.radius;
-  const enemy = rim === ENEMY;
-  return {
-    key: `barracks:${String(rim)}`,
-    box: shadowBox(circleBox(radius + 1), BAKE_MARGIN),
-    draw(into) {
-      shadow(into, (g) => g.circle(0, 0, radius));
-      const g = graphics(into);
-      g.circle(0, 0, radius)
-        .fill(BARRACKS_MARK.fill)
-        .stroke({ ...BARRACKS_MARK.stroke, color: rim });
-      const k = enemy ? BARRACKS_MARK.enemy.house : 1;
-      if (enemy) {
-        g.circle(0, 0, BARRACKS_MARK.enemy.innerRadius).stroke({
-          width: BARRACKS_MARK.enemy.ringWidth,
-          color: PAPER,
-          alpha: BARRACKS_MARK.enemy.ringAlpha,
-        });
-      }
-      g.poly(BARRACKS_HOUSE.flatMap(([x, y]) => [x * k, y * k])).fill(PAPER);
+      lozenge(g, V.side).fill(DARK_PLATE);
+      lozenge(g, V.outer).stroke({ width: tools.hair(V.width), color: VP, join: 'miter' });
+      lozenge(g, V.inner).stroke({ width: tools.hair(V.width), color: VP, join: 'miter' });
     },
   };
 }
@@ -478,11 +400,17 @@ export function helmetLight(color: number): number {
   return lighten(color, 0.5);
 }
 
+/** The pitch of the hatch of a helmet `width` wide: finer on a small one, never under 1.4 units. */
+export function helmetHatchPitch(width: number): number {
+  return Math.min(HELMET_ENGRAVED.hatch.pitch, Math.max(1.4, width * 0.075));
+}
+
 /**
- * The back of a helmet `width` wide: the shadow, the dark casing round the dome, the strap and the
- * brim (thicker in a city, where it parts the icon from the city disc), the strap and the brim in the
- * light tone, the dark plate of the dome. `dashed` (numbers unknown, a memory): a faint plate, pale
- * strap and brim on a casing, the dome dashed in the pale tone on a dark casing; nothing goes over it.
+ * The back of a helmet `width` wide (Engraved, #847; mockup `helmet`): the dark casing round the
+ * dome, the strap and the brim (thicker in a city, where it parts the icon from the city disc), the
+ * dome on the dark plate hatched in the side's `color` (the part without a charge: the charge fill
+ * covers the rest), the strap and the brim as ink lines. `dashed` (numbers unknown, a memory): the
+ * dome on a see-through plate and a pale strap; its beaded outline is the front.
  */
 export function helmetBackSpec(
   kind: HelmetKind,
@@ -493,46 +421,50 @@ export function helmetBackSpec(
 ): BakeSpec {
   const h = helmet(kind, width);
   const lines = helmetLines(width);
-  const casing = inside ? lines.casing + 1.6 : lines.casing;
+  const E = HELMET_ENGRAVED;
+  const casing = E.casing + (inside ? E.inside : 0);
   const dome = flat(h.dome);
+  const box = helmetBox(h);
   return {
     key: `hel-back:${kind}:${String(width)}:${String(color)}:${look}:${inside ? 'i' : ''}`,
-    box: shadowBox(helmetBox(h), BAKE_MARGIN + 1),
-    draw(into) {
-      const width = (line: readonly Point[]): number =>
-        line === h.strap ? lines.strap : lines.band;
-      shadow(into, (g) => g.poly(dome), casing / 2);
-      for (const line of gear(h)) {
-        shadow(into, (g) => polyline(g, line), (width(line) + casing) / 2);
-      }
+    box: { x: box.x - 1, y: box.y - 1, width: box.width + 2, height: box.height + 2 },
+    draw(into, tools) {
+      const lineWidth = (line: readonly Point[]): number =>
+        (line === h.strap ? lines.strap : lines.band) * E.gear;
       const g = graphics(into);
       if (look === 'dashed') {
-        const pale = lighten(color, 0.3);
+        g.poly(dome).fill({ color: DARK_PLATE, alpha: E.unknownPlate });
         for (const line of gear(h)) {
-          polyline(g, line).stroke({ width: 2.2 + 2.4, color: BG, cap: 'round', join: 'round' });
-          polyline(g, line).stroke({ width: 2.2, color: pale, cap: 'round', join: 'round' });
+          polyline(g, line).stroke({
+            width: tools.hair(0.9),
+            color: lighten(color, E.pale),
+            cap: 'round',
+            join: 'round',
+          });
         }
-        // A dark casing under the dashes (the front): the pale dash alone is lost on plains and snow (#775).
-        g.poly(dome).stroke({ width: 4.4, color: BG, join: 'round' });
-        g.poly(dome).fill({ color: PLATE_FILL, alpha: 0.72 });
         return;
       }
-      const halo = inside ? UNIT_HALO_ALPHA : 1;
       for (const line of gear(h)) {
         polyline(g, line).stroke({
-          width: width(line) + casing,
-          color: BG,
-          alpha: halo,
+          width: lineWidth(line) + casing * 0.8,
+          color: CASING,
           cap: 'round',
           join: 'round',
         });
       }
-      g.poly(dome).stroke({ width: casing, color: BG, alpha: halo, join: 'round' });
-      const light = helmetLight(color);
+      g.poly(dome).stroke({ width: casing * 0.9, color: CASING, join: 'round' });
+      g.poly(dome).fill(DARK_PLATE);
+      for (const [a, b] of hatchAcross(h.dome, -Math.PI / 4, helmetHatchPitch(width)))
+        g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      g.stroke({ width: tools.hair(E.hatch.width), color });
       for (const line of gear(h)) {
-        polyline(g, line).stroke({ width: width(line), color: light, cap: 'round', join: 'round' });
+        polyline(g, line).stroke({
+          width: tools.hair(lineWidth(line)),
+          color: INK,
+          cap: 'round',
+          join: 'round',
+        });
       }
-      g.poly(dome).fill(PLATE_FILL);
     },
   };
 }
@@ -548,21 +480,21 @@ export function helmetLevelBox(h: Helmet): Box {
   };
 }
 
-/** The charge fill of a helmet: the whole dome in the owner's gradient (shown from the bottom up). */
+/** The charge fill of a helmet: the whole dome solid in the side's colour (shown from the bottom up). */
 export function helmetLevelSpec(kind: HelmetKind, width: number, color: number): BakeSpec {
   const h = helmet(kind, width);
   return {
     key: `hel-level:${kind}:${String(width)}:${String(color)}`,
     box: helmetLevelBox(h),
-    draw(into, tools) {
-      graphics(into).poly(flat(h.dome)).fill(tools.gradient(color));
+    draw(into) {
+      graphics(into).poly(flat(h.dome)).fill(color);
     },
   };
 }
 
 /**
- * The light edge of the dome, over the fill: with the casing it reads on every terrain (#775).
- * `dashed` (numbers unknown, a memory): the dome dashed in a pale tone instead.
+ * The ink edge of the dome, over the fill. `dashed` (numbers unknown, a memory): a row of pale beads
+ * along the outline instead (a stippled contour, not a dash).
  */
 export function helmetFrontSpec(
   kind: HelmetKind,
@@ -571,7 +503,7 @@ export function helmetFrontSpec(
   look: 'solid' | 'dashed',
 ): BakeSpec {
   const h = helmet(kind, width);
-  const { edge } = helmetLines(width);
+  const E = HELMET_ENGRAVED;
   const box = helmetLevelBox(h);
   const grow = 2.2;
   return {
@@ -582,16 +514,47 @@ export function helmetFrontSpec(
       width: box.width + 2 * grow,
       height: box.height + 2 * grow,
     },
-    draw(into) {
+    draw(into, tools) {
       const g = graphics(into);
       if (look === 'dashed') {
-        for (const piece of dashLoop(h.dome, UNIT_DASH.dash + 1, UNIT_DASH.gap)) polyline(g, piece);
-        g.stroke({ width: 2.2, color: lighten(color, 0.3), cap: 'round', join: 'round' });
+        const pale = lighten(color, E.pale);
+        const k = width / 40;
+        for (const p of beadsAlong(h.dome, Math.max(12, Math.round(E.bead.count * Math.min(1, k)))))
+          g.circle(p.x, p.y, Math.max(0.5, E.bead.radius * Math.min(1, k * 1.2)));
+        g.fill(pale);
         return;
       }
-      g.poly(flat(h.dome)).stroke({ width: edge, color: helmetLight(color), join: 'round' });
+      g.poly(flat(h.dome)).stroke({ width: tools.hair(E.edge), color: INK, join: 'round' });
     },
   };
+}
+
+/** `n` points evenly along a closed outline (the beads of a stippled contour). */
+function beadsAlong(polygon: readonly Point[], n: number): Point[] {
+  const lengths: number[] = [];
+  let total = 0;
+  polygon.forEach((p, i) => {
+    const q = polygon[(i + 1) % polygon.length] ?? p;
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    lengths.push(d);
+    total += d;
+  });
+  const out: Point[] = [];
+  let i = 0;
+  let walked = 0;
+  for (let k = 0; k < n; k++) {
+    const at = (k / n) * total;
+    while (i < polygon.length - 1 && walked + (lengths[i] ?? 0) < at) {
+      walked += lengths[i] ?? 0;
+      i++;
+    }
+    const p = polygon[i] ?? { x: 0, y: 0 };
+    const q = polygon[(i + 1) % polygon.length] ?? p;
+    const d = lengths[i] ?? 0;
+    const t = d > 0 ? (at - walked) / d : 0;
+    out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+  }
+  return out;
 }
 
 /** Width of a helmet chip of the arena (px): one pitch, so the chips touch and do not overlap. */
@@ -647,13 +610,17 @@ export function helmetChipSpec(state: ChipState, enemy: boolean, color: number):
 export function shieldSpec(color: number, enemy: boolean): BakeSpec {
   return {
     key: `shield:${String(color)}:${enemy ? 'e' : ''}`,
-    box: shadowBox(circleBox(9 + 2), BAKE_MARGIN),
-    draw(into) {
-      shadow(into, (g) => g.circle(0, 0, 9));
+    box: circleBox(9 + 2),
+    draw(into, tools) {
+      // Engraved (#847, mockup `siteSign`): a dark disc on a casing, two fine rings in the side's
+      // colour, the opponent's an ink ring inside them, the ink shield.
       const g = graphics(into);
-      g.circle(0, 0, 9).fill(PLATE_FILL).stroke({ width: 2.5, color });
-      if (enemy) g.circle(0, 0, 5.5).stroke(PLATE_INNER_RING);
-      g.poly([-4.5, -5, 4.5, -5, 4.5, 1, 0, 5.5, -4.5, 1]).fill(GLYPH_COLOR);
+      g.circle(0, 0, 10).fill(CASING);
+      g.circle(0, 0, 9).fill(DARK_PLATE);
+      g.circle(0, 0, 8.6).stroke({ width: tools.hair(0.9), color });
+      g.circle(0, 0, 6.8).stroke({ width: tools.hair(0.9), color });
+      if (enemy) g.circle(0, 0, 5.2).stroke({ width: tools.hair(0.8), color: INK });
+      g.poly([-3.8, -4.2, 3.8, -4.2, 3.8, 0.8, 0, 4.6, -3.8, 0.8]).fill(INK);
     },
   };
 }
@@ -912,42 +879,6 @@ function drawCell(
   }
 }
 
-const QUEUE_LETTER: Readonly<Record<CellState, string>> = {
-  slot: 's',
-  queued: 'q',
-  active: 'a',
-  ready: 'r',
-};
-
-/** The plate of a recruit queue (DEC-25): the cells, the first in production or ready. */
-export function queueMarkSpec(mark: QueueMark): BakeSpec {
-  const { width, height } = mark;
-  const states = mark.cells
-    .map((cell) => QUEUE_LETTER[cell.state] + (cell.state === 'active' ? String(cell.fill) : ''))
-    .join('');
-  return {
-    key: `queue:${states}`,
-    box: { x: -width / 2 - 1, y: -1, width: width + 2, height: height + 2 },
-    draw(into) {
-      progressPlate(into, -width / 2, width, height);
-      const g = graphics(into);
-      for (const cell of mark.cells) {
-        const tone = cell.state === 'ready' ? WARN : YOU;
-        drawCell(
-          g,
-          cell.x,
-          PROGRESS.pad,
-          PROGRESS.cell.width,
-          PROGRESS.cell.height,
-          cell.state,
-          cell.fill,
-          tone,
-        );
-      }
-    },
-  };
-}
-
 /** The little house of the barracks badge, in units of the glyph size around its middle. */
 const HOUSE: readonly (readonly [number, number])[] = [
   [-1, -0.05],
@@ -1014,20 +945,6 @@ export function buildMarkSpec(mark: BuildMark): BakeSpec {
         return;
       }
       drawCell(g, left + mark.cellX, PROGRESS.pad, cw, ch, 'active', mark.fill, YOU);
-    },
-  };
-}
-
-/** The dashed amber ring that asks for a look at a cell (ready with no room, stopped by a fight). */
-export function progressAlertSpec(width: number, height: number): BakeSpec {
-  const { width: stroke, dash, gap } = PROGRESS.alert;
-  return {
-    key: `progress-alert:${String(width)}x${String(height)}`,
-    box: { x: -width / 2 - 1, y: -height / 2 - 1, width: width + 2, height: height + 2 },
-    draw(into) {
-      const g = graphics(into);
-      dashedRect(g, -width / 2, -height / 2, width, height, dash, gap);
-      g.stroke({ width: stroke, color: WARN });
     },
   };
 }
@@ -1127,7 +1044,7 @@ function badgeTextStyle(size: number, color: number): TextStyle {
       fontSize: badgeFont(size),
       fontWeight: '800',
       fill: color,
-      stroke: { color: BG, width: 3, join: 'round' },
+      stroke: { color: CUT, width: 3, join: 'round' },
     });
     badgeStyles.set(key, style);
   }
@@ -1155,7 +1072,7 @@ export function chevronBadgeSpec(dir: BadgeDir, count: number, size: number): Ba
       const g = graphics(into);
       // The dark outline of every chevron first, then the colour over it.
       for (const [tone, w] of [
-        [BG, width + BADGE.outline],
+        [CUT, width + BADGE.outline],
         [color, width],
       ] as const) {
         for (const stroke of strokes) polyline(g, stroke);

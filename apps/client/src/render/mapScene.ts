@@ -393,6 +393,8 @@ export class MapScene {
     this.entities.update(frame);
     this.entities.advance(this.frameMs);
     this.view.advance(this.frameMs);
+    // A build's time fills the tower and its Crown arc by the render tick (#847).
+    this.cities.setTick(frame.tick);
     this.cities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
     // The sign of "Defense" and the barracks mark share one column on the left of a city (#349).

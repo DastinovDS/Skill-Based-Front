@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tf } from '../i18n/index.ts';
+  import HelmetIcon from '../units/HelmetIcon.svelte';
 
   interface Props {
     units: number;
@@ -8,48 +9,40 @@
 
   let { units, charged }: Props = $props();
 
-  const empty = $derived(units - charged);
+  /** The helmets in threes (ui-style 57u): `true` a charged unit, `false` a discharged one. */
+  const threes = $derived.by(() => {
+    const out: boolean[][] = [];
+    for (let j = 0; j < units; j++) {
+      if (j % 3 === 0) out.push([]);
+      out[out.length - 1]?.push(j < charged);
+    }
+    return out;
+  });
 </script>
 
-<!-- Filled circle: charged units, empty circle: discharged ones. A fully charged group shows only
-the filled one. The text is for screen readers; the numbers are the picture. -->
+<!-- The unit card (#847, ui-style 57u): a helmet per unit, filled for a charged one and empty (the
+dark dome) for a discharged one, set in threes. The text is for screen readers; the helmets are the
+picture. -->
 <div class="charges" role="img" aria-label={tf('sel.chargedOf', { charged, units })}>
-  {#if charged > 0}
-    <span class="item"><span class="dot filled"></span><span class="num">{charged}</span></span>
-  {/if}
-  {#if empty > 0}
-    <span class="item"><span class="dot hollow"></span><span class="num">{empty}</span></span>
-  {/if}
+  {#each threes as three, k (k)}
+    <span class="three">
+      {#each three as full, j (j)}
+        <HelmetIcon side="own" size={21} share={full ? 1 : 0} engraved />
+      {/each}
+    </span>
+  {/each}
 </div>
 
 <style>
   .charges {
     display: flex;
-    gap: 14px;
+    flex-wrap: wrap;
+    max-width: 260px;
+    gap: 3px 6px;
   }
 
-  .item {
+  .three {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .dot {
-    box-sizing: border-box;
-    width: 14px;
-    height: 14px;
-    border: 2px solid var(--paper);
-    border-radius: 50%;
-  }
-
-  .dot.filled {
-    background: var(--paper);
-  }
-
-  .num {
-    font-weight: 700;
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
+    gap: 3px;
   }
 </style>
