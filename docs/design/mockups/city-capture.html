@@ -52,6 +52,7 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:800/520;background:#0d1
 <header>
   <div class="row">
     <h1>City capture <a href="https://github.com/DastinovDS/Skill-Based-Front/issues/819">#819</a></h1>
+    <fieldset><legend>Round</legend><div class="seg" id="round"></div></fieldset>
     <fieldset><legend>Case</legend><div class="seg" id="case"></div></fieldset>
     <fieldset><legend>Zoom</legend><div class="seg" id="zoom"></div></fieldset>
     <fieldset><legend>Panes</legend><div class="seg" id="num"></div></fieldset>
@@ -67,9 +68,11 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:800/520;background:#0d1
     <label class="tog"><input type="checkbox" id="gray">Grayscale</label>
     <label class="tog"><input type="checkbox" id="rg">Red-green</label>
     <label class="tog"><input type="checkbox" id="rm">Reduced motion</label>
+    <label class="tog" id="calmw"><input type="checkbox" id="calm">Calmer when the enemy captures</label>
   </div>
 </header>
 <main><div id="panes" class="n2"></div></main>
+<script src="assets/city-capture/r2-layers.js"></script>
 <script>
 'use strict';
 /* Frames: the real client (dev build, map "narrows", ruleset mvp-4 numbers), drawn by its own renderer and
@@ -642,21 +645,435 @@ function reducedDraw(P, t, v) {
   if (v.id === 'banner') for (const f of fl(P)) banner(P.c, f, P, f.to, 1, 1 - ph(t, 2300, 2700), 0);
 }
 
+/* ====================== Round 2: Flood in depth (the owner picked Flood, #819) ======================
+   Frames: the real client again (dev build, map "narrows", mvp-4 numbers), but captured LAYER BY LAYER
+   from its own containers (a throwaway local patch): the ground with the cell lines, the territory fill,
+   the cached border glow, the border lines, the roads, the cities (nodes layer), the veil and the units,
+   each before and after the capture. Stacked back they equal the client's frame (checked: mean error
+   0.3 of 255). The page composites them per pixel with WebGL, so every layer can join the flood at its
+   own moment; the fronts and lights are drawn with the client's material (the particle glow profile,
+   the owner colours, the border glow), under the veil where the client would draw them. */
+const R2META = {"own-near":{"k":1.5385,"flips":[{"n":18,"kind":"city_large","x":400,"y":260,"rw":20,"from":1,"to":0,"cell":[[287.7,132.3],[284.2,150.6],[280.6,161.9],[277.9,166.9],[274.6,171.3],[270.6,174.9],[266.1,177.8],[255.9,181.6],[224.2,188.8],[207.7,193.8],[213.4,310.2],[216.3,326.4],[223.4,350.4],[225.7,366.6],[226.2,427.7],[243.2,423.5],[253.4,419.9],[302.2,396.2],[312.1,392],[327,387.5],[343,385.4],[353.9,386.2],[358.9,387.5],[363.4,389.7],[367.2,392.5],[370.2,396.1],[372.5,400.1],[374,404.5],[374.7,409.2],[374.7,414],[373,426.8],[373.3,429.3],[374.4,430.2],[379.5,427.9],[391.8,419.2],[405.6,410.5],[424.4,399.8],[434.5,395.7],[439.7,394.5],[444.9,394.2],[450,394.9],[455,396.7],[459.9,399.3],[469,406.5],[481.2,419.4],[496.9,440],[501.4,403.8],[504.2,392.4],[506.3,387],[512.3,377.1],[520,368],[540.8,346],[547.9,336.5],[550.8,331.4],[553.3,326],[557.2,314.7],[570.8,261.5],[570.8,249.2],[568.7,237.8],[565.2,227.1],[553.9,202.8],[544.4,178],[540.3,169.2],[537.7,165.4],[534.6,162.3],[530.8,160],[521.5,156.9],[474.6,169.3],[463.4,170.5],[458,170.1],[452.9,168.8],[448.1,166.6],[429.6,153.3],[424.7,150.4],[414.1,146.6],[402.5,145],[384.5,144.7],[372.8,145.2],[352.7,147.1],[348.3,147],[339.3,145.3],[309.5,135.5],[299,133.4]],"nbrs":[[713.8,376.9],[703.1,130.8],[366.2,27.7],[23.1,276.9]]}],"files":{"ground":["own-near-ground.webp"],"fill":["own-near-fill-before.webp","own-near-fill-after.webp"],"fill_patch":[405,254,747,636],"glow":["own-near-glow-before.webp","own-near-glow-after.webp"],"glow_patch":[344,36,865,1004],"border":["own-near-border-before.webp","own-near-border-after.webp"],"border_patch":[398,247,761,694],"roads":["own-near-roads-before.webp","own-near-roads-after.webp"],"roads_patch":[35,44,1406,727],"nodes":["own-near-nodes-before.webp","own-near-nodes-after.webp"],"nodes_patch":[687,421,225,252],"fog":[null,null],"top":["own-near-top-before.webp","own-near-top-before.webp"]}},"own-far":{"k":0.6154,"flips":[{"n":18,"kind":"city_large","x":409.1,"y":134.8,"rw":20,"from":1,"to":0,"cell":[[364.2,83.8],[362.8,91.1],[361.3,95.6],[360.3,97.6],[359,99.4],[357.4,100.8],[355.5,102],[351.5,103.5],[338.8,106.4],[332.2,108.4],[334.5,154.9],[335.6,161.4],[338.5,171],[339.4,177.5],[339.6,201.9],[346.4,200.2],[350.5,198.8],[370,189.3],[374,187.7],[379.9,185.8],[386.3,185],[390.7,185.3],[392.7,185.9],[394.5,186.7],[396,187.9],[397.2,189.3],[398.1,190.9],[398.7,192.7],[399,194.5],[399,196.4],[398.3,201.6],[398.4,202.6],[398.9,202.9],[400.9,202],[405.8,198.5],[411.4,195.1],[418.9,190.8],[422.9,189.1],[425,188.6],[427.1,188.5],[429.1,188.8],[431.1,189.5],[433.1,190.6],[436.7,193.5],[441.6,198.6],[447.9,206.8],[449.7,192.4],[450.8,187.8],[451.6,185.6],[454,181.7],[457.1,178],[465.4,169.2],[468.3,165.4],[469.4,163.4],[470.4,161.3],[472,156.7],[477.4,135.5],[477.4,130.5],[476.6,126],[475.2,121.7],[470.7,112],[466.9,102],[465.2,98.5],[464.2,97],[462.9,95.8],[461.4,94.8],[457.7,93.6],[439,98.5],[434.5,99.1],[432.3,98.9],[430.3,98.4],[428.3,97.5],[420.9,92.2],[419,91],[414.7,89.5],[410.1,88.9],[402.9,88.7],[398.2,88.9],[390.2,89.7],[388.4,89.7],[384.8,89],[372.9,85],[368.7,84.2]],"nbrs":[[534.6,181.6],[530.3,83.2],[395.6,41.9],[258.3,141.6]]}],"files":{"ground":["own-far-ground.webp"],"fill":["own-far-fill-before.webp","own-far-fill-after.webp"],"fill_patch":[654,157,311,267],"glow":["own-far-glow-before.webp","own-far-glow-after.webp"],"glow_patch":[30,0,1273,1040],"border":["own-far-border-before.webp","own-far-border-after.webp"],"border_patch":[651,154,317,290],"roads":["own-far-roads-before.webp","own-far-roads-after.webp"],"roads_patch":[506,73,575,303],"nodes":["own-far-nodes-before.webp","own-far-nodes-after.webp"],"nodes_patch":[767,224,103,113],"fog":[null,null],"top":["own-far-top-before.webp","own-far-top-before.webp"]}},"enemy-near":{"k":1.5385,"flips":[{"n":10,"kind":"city_large","x":400,"y":260,"rw":20,"from":0,"to":1,"cell":[[313.8,13.8],[289.2,38.5],[280.6,111],[278.9,122.7],[276.5,133.8],[265.4,164.7],[251.1,196.7],[243,225.6],[238.7,236.5],[232.6,246.2],[228.9,250.3],[224.7,253.9],[215.7,259.4],[211.1,261.5],[201.2,264.3],[184.6,266.2],[185.1,276.2],[186.5,280.9],[189,285.3],[192.4,289.2],[201.5,295.9],[217.3,304.2],[227.2,310.8],[235.8,319],[239.5,323.6],[245.4,333.7],[253.8,354.7],[258.4,364.4],[264,373.8],[270.8,383.1],[486.7,371.7],[503.6,368.8],[513.8,365.2],[529.2,358.5],[528.7,329],[529.3,318.7],[530.5,314],[532.7,309.8],[535.8,306],[539.8,302.8],[544.5,300.2],[555.2,296.6],[573,294.1],[609.2,290.8],[613.8,274.3],[615.1,256.7],[614.1,239.6],[610.1,213.3],[610,202.2],[611.4,191.5],[613.6,181.4],[617.8,165.9],[621.5,155.4],[517.1,145.3],[505.3,143.2],[494.7,139.3],[490.2,136.4],[483,128.8],[472.5,111.4],[454.3,83.9],[447.4,75.7],[443.3,72.4],[424.4,60.8],[401.5,41.6],[391.4,35.6],[380.3,31.8],[356.7,27.6],[345.7,24.9]],"nbrs":[[92.3,167.7],[92.3,413.8],[430.8,490.8],[827.7,243.1]]}],"files":{"ground":["enemy-near-ground.webp"],"fill":["enemy-near-fill-before.webp","enemy-near-fill-after.webp"],"fill_patch":[359,18,894,758],"glow":["enemy-near-glow-before.webp","enemy-near-glow-after.webp"],"glow_patch":[298,0,1302,874],"border":["enemy-near-border-before.webp","enemy-near-border-after.webp"],"border_patch":[351,6,909,778],"roads":["enemy-near-roads-before.webp","enemy-near-roads-after.webp"],"roads_patch":[171,317,1429,675],"nodes":["enemy-near-nodes-before.webp","enemy-near-nodes-after.webp"],"nodes_patch":[687,453,225,220],"fog":[null,null],"top":["enemy-near-top-before.webp","enemy-near-top-before.webp"]}},"enemy-far":{"k":0.6154,"flips":[{"n":10,"kind":"city_large","x":381.7,"y":377.2,"rw":20,"from":0,"to":1,"cell":[[347.2,278.7],[337.4,288.5],[333.9,317.5],[333.2,322.2],[332.2,326.7],[327.8,339],[322.1,351.8],[318.8,363.4],[317.2,367.8],[314.7,371.6],[313.2,373.3],[311.5,374.7],[308,376.9],[306.1,377.7],[302.1,378.9],[295.5,379.6],[295.7,383.6],[296.3,385.5],[297.3,387.3],[298.6,388.8],[302.3,391.5],[308.6,394.8],[312.5,397.5],[316,400.7],[317.5,402.6],[319.8,406.6],[323.2,415],[325,418.9],[327.3,422.7],[330,426.4],[416.3,421.8],[423.1,420.7],[427.2,419.2],[433.4,416.5],[433.1,404.8],[433.4,400.6],[433.9,398.8],[434.8,397.1],[436,395.6],[437.6,394.3],[439.5,393.2],[443.8,391.8],[450.8,390.8],[465.4,389.5],[467.2,382.9],[467.7,375.8],[467.3,369],[465.7,358.5],[465.7,354],[466.2,349.8],[467.1,345.7],[468.8,339.5],[470.3,335.3],[428.5,331.3],[423.8,330.4],[419.5,328.9],[417.7,327.7],[414.9,324.7],[410.7,317.7],[403.4,306.7],[400.6,303.4],[399,302.1],[391.4,297.5],[382.2,289.8],[378.2,287.4],[373.8,285.9],[364.4,284.2],[360,283.1]],"nbrs":[[258.6,340.2],[258.6,438.7],[394,469.5],[552.7,370.4]]}],"files":{"ground":["enemy-far-ground.webp"],"fill":["enemy-far-fill-before.webp","enemy-far-fill-after.webp"],"fill_patch":[581,547,370,316],"glow":["enemy-far-glow-before.webp","enemy-far-glow-after.webp"],"glow_patch":[556,0,566,886],"border":["enemy-far-border-before.webp","enemy-far-border-after.webp"],"border_patch":[578,542,375,324],"roads":["enemy-far-roads-before.webp","enemy-far-roads-after.webp"],"roads_patch":[505,667,611,282],"nodes":["enemy-far-nodes-before.webp","enemy-far-nodes-after.webp"],"nodes_patch":[712,722,103,100],"fog":[null,null],"top":["enemy-far-top-before.webp","enemy-far-top-before.webp"]}},"neutral-near":{"k":1.5385,"flips":[{"n":12,"kind":"city_small","x":400,"y":393.8,"rw":14,"from":null,"to":0,"cell":[[483.8,447],[482.6,443.8],[475.7,431.7],[472.4,421.1],[470.5,409.3],[465.7,366.5],[464.5,354.3],[464.3,342.4],[466.3,331.3],[468.4,326.2],[481.3,306.7],[487,296.3],[491.4,285],[498.5,261.5],[483,268.2],[472.8,271.8],[455.9,274.7],[240,286.1],[239.5,304.1],[238.3,315.2],[229.3,361.7],[228.2,372.9],[227.6,452.5],[226.6,470.1],[224.5,480.7],[218.8,502.1],[215.4,519.9],[424.6,519.9],[433,496.9],[438.4,486.1],[441.7,481.2],[445.4,476.6],[454.3,468.8],[459.2,465.5],[478.8,455.2],[482,452.6],[483.7,449.9]],"nbrs":[[61.5,316.8],[369.2,163]]}],"files":{"ground":["neutral-near-ground.webp"],"fill":["neutral-near-fill-before.webp","neutral-near-fill-after.webp"],"fill_patch":[420,513,587,527],"glow":["neutral-near-glow-before.webp","neutral-near-glow-after.webp"],"glow_patch":[359,445,778,595],"border":["neutral-near-border-before.webp","neutral-near-border-after.webp"],"border_patch":[414,499,675,541],"roads":["neutral-near-roads-before.webp","neutral-near-roads-after.webp"],"roads_patch":[111,315,708,491],"nodes":["neutral-near-nodes-before.webp","neutral-near-nodes-after.webp"],"nodes_patch":[724,707,157,215],"fog":[null,null],"top":["neutral-near-top-before.webp","neutral-near-top-before.webp"]}},"neutral-far":{"k":0.6154,"flips":[{"n":12,"kind":"city_small","x":394,"y":469.5,"rw":14,"from":null,"to":0,"cell":[[427.5,490.7],[427,489.5],[424.2,484.6],[422.9,480.4],[422.2,475.7],[420.3,458.5],[419.8,453.7],[419.7,448.9],[420.5,444.5],[421.3,442.4],[426.5,434.6],[428.8,430.5],[430.5,426],[433.4,416.5],[427.2,419.2],[423.1,420.7],[416.3,421.8],[330,426.4],[329.8,433.6],[329.3,438],[325.7,456.7],[325.2,461.1],[325,493],[324.6,500],[323.8,504.2],[321.5,512.8],[320.1,519.9],[403.8,519.9],[407.2,510.7],[409.3,506.4],[410.6,504.4],[412.1,502.6],[415.7,499.5],[417.7,498.2],[425.5,494],[426.8,493],[427.4,491.9]],"nbrs":[[258.6,438.7],[381.7,377.2]]}],"files":{"ground":["neutral-far-ground.webp"],"fill":["neutral-far-fill-before.webp","neutral-far-fill-after.webp"],"fill_patch":[630,823,247,217],"glow":["neutral-far-glow-before.webp","neutral-far-glow-after.webp"],"glow_patch":[606,796,322,244],"border":["neutral-far-border-before.webp","neutral-far-border-after.webp"],"border_patch":[627,817,283,223],"roads":["neutral-far-roads-before.webp","neutral-far-roads-after.webp"],"roads_patch":[506,744,296,208],"nodes":["neutral-far-nodes-before.webp","neutral-far-nodes-after.webp"],"nodes_patch":[751,901,76,98],"fog":[null,null],"top":["neutral-far-top-before.webp","neutral-far-top-before.webp"]}},"province-near":{"k":1.5385,"flips":[{"n":17,"kind":"province","x":400,"y":260,"rw":9,"from":1,"to":0,"cell":[[278.5,78.5],[278.2,102.7],[277.3,113],[276.4,116.5],[275.1,118.5],[273.4,118.5],[271.6,116.7],[268.1,108.7],[256.7,68.3],[251.8,57.8],[248.7,53.4],[244.9,49.9],[240.6,47.6],[236,46.5],[231.2,46.9],[226.4,48.4],[216.9,53.8],[209.8,77.4],[205.3,88.3],[199.8,98.2],[162.9,153.7],[158.4,164.2],[157.4,169.7],[157.2,175.3],[157.8,180.9],[159.3,186.3],[161.6,191.5],[168.2,201.1],[184.6,219.1],[191.7,228.4],[196.8,238.2],[200.1,248.2],[202,258.5],[202.4,269.6],[198.5,318.5],[272.6,318.7],[284.5,319.8],[295.6,322.9],[305.4,328.7],[309.9,332.5],[317.8,341.2],[323.6,351.1],[329,366.4],[331,370.7],[333.8,374.2],[337.5,376.7],[342.1,378.3],[353.1,379.7],[476.2,379.8],[487.7,378.9],[525.2,373],[530.1,371.8],[534.4,369.9],[537.8,367.1],[540.3,363.5],[543.6,354.3],[546.9,339.1],[548.4,328.3],[549.2,310.5],[548.9,255.2],[548,243.8],[546,233.4],[531.7,187],[530.5,178.5],[530.8,170.8],[523,154.8],[519.8,150.4],[516.1,146.7],[511.7,144],[506.8,142.1],[501.4,141],[465.3,139],[453.9,136.7],[443.4,132.7],[406.2,115.3],[366.6,103.2],[361.2,100.7],[351.2,94.2],[324.3,69.6],[315.3,63.6],[310.8,62],[306.3,61.7],[302,62.8],[297.9,64.9],[286.5,73.6]],"nbrs":[[538.5,516.9],[495.4,9.2],[4.6,270.8]]}],"files":{"ground":["province-near-ground.webp"],"fill":["province-near-fill-before.webp","province-near-fill-after.webp"],"fill_patch":[304,83,805,687],"glow":["province-near-glow-before.webp","province-near-glow-after.webp"],"glow_patch":[243,0,945,906],"border":["province-near-border-before.webp","province-near-border-after.webp"],"border_patch":[296,35,840,815],"roads":["province-near-roads-before.webp","province-near-roads-after.webp"],"roads_patch":[0,8,1095,1032],"nodes":["province-near-nodes-before.webp","province-near-nodes-after.webp"],"nodes_patch":[740,455,126,205],"fog":[null,null],"top":["province-near-top-before.webp","province-near-top-before.webp"]}},"province-far":{"k":0.6154,"flips":[{"n":17,"kind":"province","x":496.5,"y":260,"rw":9,"from":1,"to":0,"cell":[[447.9,187.4],[447.8,197.1],[447.4,201.2],[447,202.6],[446.5,203.4],[445.9,203.4],[445.2,202.7],[443.7,199.5],[439.2,183.3],[437.2,179.1],[436,177.4],[434.4,176],[432.7,175],[430.9,174.6],[429,174.7],[427.1,175.4],[423.3,177.5],[420.4,187],[418.6,191.3],[416.4,195.3],[401.6,217.5],[399.9,221.7],[399.4,223.9],[399.4,226.1],[399.6,228.3],[400.2,230.5],[401.1,232.6],[403.8,236.4],[410.3,243.6],[413.2,247.4],[415.2,251.3],[416.5,255.3],[417.3,259.4],[417.4,263.8],[415.9,283.4],[445.5,283.5],[450.3,283.9],[454.7,285.2],[458.7,287.5],[460.5,289],[463.6,292.5],[465.9,296.4],[468.1,302.6],[468.9,304.3],[470,305.7],[471.5,306.7],[473.3,307.3],[477.7,307.9],[527,307.9],[531.6,307.6],[546.6,305.2],[548.5,304.7],[550.2,304],[551.6,302.9],[552.6,301.4],[553.9,297.7],[555.2,291.6],[555.9,287.3],[556.2,280.2],[556.1,258.1],[555.7,253.5],[554.9,249.4],[549.2,230.8],[548.7,227.4],[548.8,224.3],[545.7,217.9],[544.4,216.1],[542.9,214.7],[541.2,213.6],[539.2,212.9],[537,212.4],[522.6,211.6],[518,210.7],[513.8,209.1],[499,202.1],[483.1,197.3],[481,196.3],[477,193.7],[466.2,183.9],[462.6,181.4],[460.8,180.8],[459,180.7],[457.3,181.1],[455.7,181.9],[451.1,185.4]],"nbrs":[[551.9,362.8],[534.6,159.7],[338.3,264.3]]}],"files":{"ground":["province-far-ground.webp"],"fill":["province-far-fill-before.webp","province-far-fill-after.webp"],"fill_patch":[788,339,335,287],"glow":["province-far-glow-before.webp","province-far-glow-after.webp"],"glow_patch":[43,300,1111,739],"border":["province-far-border-before.webp","province-far-border-after.webp"],"border_patch":[785,320,348,338],"roads":["province-far-roads-before.webp","province-far-roads-after.webp"],"roads_patch":[666,309,450,427],"nodes":["province-far-nodes-before.webp","province-far-nodes-after.webp"],"nodes_patch":[965,488,60,86],"fog":[null,null],"top":["province-far-top-before.webp","province-far-top-before.webp"]}},"capital-near":{"k":1.5385,"flips":[{"n":28,"kind":"capital","x":656.8,"y":260,"rw":20,"from":1,"to":0,"cell":[[799.9,473.8],[799.9,-18.5],[769.1,-6.2],[757,4.7],[724.8,27.9],[691.7,44.4],[667.3,54.2],[627,72.3],[545.6,122],[531.8,133.2],[519.4,146.4],[512.5,156.1],[504.5,172.3],[514.9,173.9],[519,175.5],[521.8,177.7],[523.1,180.6],[523,184.1],[521.8,188.2],[510,212.3],[506.5,223.3],[505.6,229.1],[503.9,265.5],[499.5,298.1],[500,309.5],[501.1,315.1],[504.5,326.2],[514.1,343.4],[520.4,352.7],[528.3,361.3],[537.4,368.3],[547.6,373],[573.5,379.3],[587.6,384.2],[601.6,390.8],[610.2,396.8],[617.1,405.1],[627.8,425.8],[630.9,430.9],[638.2,440.4],[646.6,448.8],[651.2,452.5],[661.2,458.3],[672.2,461.8],[684.1,463.6]],"nbrs":[[535.3,512.3],[349.1,243.1],[473.7,-41.5]]}],"files":{"ground":["capital-near-ground.webp"],"fill":["capital-near-fill-before.webp","capital-near-fill-after.webp"],"fill_patch":[989,0,611,958],"glow":["capital-near-glow-before.webp","capital-near-glow-after.webp"],"glow_patch":[0,0,1600,1040],"border":["capital-near-border-before.webp","capital-near-border-after.webp"],"border_patch":[981,0,619,965],"roads":["capital-near-roads-before.webp","capital-near-roads-after.webp"],"roads_patch":[687,0,644,1038],"nodes":["capital-near-nodes-before.webp","capital-near-nodes-after.webp"],"nodes_patch":[1150,421,295,252],"fog":[null,null],"top":["capital-near-top-before.webp","capital-near-top-after.webp"],"top_patch":[1388,471,158,148]}},"capital-far":{"k":0.6154,"flips":[{"n":28,"kind":"capital","x":742.6,"y":260,"rw":20,"from":1,"to":0,"cell":[[799.9,345.5],[799.9,148.6],[787.6,153.5],[782.7,157.9],[769.9,167.1],[756.6,173.7],[746.8,177.7],[730.7,184.9],[698.2,204.8],[692.7,209.3],[687.7,214.5],[684.9,218.5],[681.7,224.9],[685.9,225.6],[687.5,226.2],[688.6,227.1],[689.2,228.2],[689.1,229.7],[688.6,231.3],[683.9,240.9],[682.5,245.3],[682.1,247.6],[681.5,262.2],[679.7,275.3],[679.9,279.8],[680.4,282.1],[681.7,286.5],[685.6,293.4],[688.1,297.1],[691.2,300.5],[694.9,303.3],[699,305.2],[709.3,307.7],[714.9,309.7],[720.6,312.3],[724,314.7],[726.8,318],[731.1,326.3],[732.3,328.4],[735.2,332.1],[738.6,335.5],[740.4,337],[744.4,339.3],[748.8,340.7],[753.6,341.4]],"nbrs":[[694,360.9],[619.6,253.2],[669.4,139.4]]}],"files":{"ground":["capital-far-ground.webp"],"fill":["capital-far-fill-before.webp","capital-far-fill-after.webp"],"fill_patch":[1349,287,251,414],"glow":["capital-far-glow-before.webp","capital-far-glow-after.webp"],"glow_patch":[43,31,1557,967],"border":["capital-far-border-before.webp","capital-far-border-after.webp"],"border_patch":[1346,288,254,416],"roads":["capital-far-roads-before.webp","capital-far-roads-after.webp"],"roads_patch":[1229,267,269,466],"nodes":["capital-far-nodes-before.webp","capital-far-nodes-after.webp"],"nodes_patch":[1400,474,144,114],"fog":[null,null],"top":["capital-far-top-before.webp","capital-far-top-after.webp"],"top_patch":[1507,492,80,76]}},"two-near":{"k":1.2308,"flips":[{"n":18,"kind":"city_large","x":312.6,"y":112.9,"rw":20,"from":1,"to":0,"cell":[[222.8,10.8],[220,25.4],[217.1,34.4],[215,38.5],[212.3,42],[209.1,44.9],[205.5,47.1],[197.4,50.2],[171.9,56],[158.8,60],[163.4,153.1],[165.7,166],[171.3,185.3],[173.2,198.2],[173.5,247.1],[187.2,243.7],[195.3,240.8],[234.4,221.9],[242.3,218.5],[254.3,214.9],[267,213.2],[275.8,213.9],[279.8,214.9],[283.3,216.6],[286.4,219],[288.8,221.8],[290.6,225],[291.8,228.5],[292.4,232.2],[292.3,236.1],[291.1,246.4],[291.2,248.3],[292.1,249.1],[296.2,247.2],[306.1,240.3],[317.1,233.3],[332.2,224.8],[340.2,221.5],[344.3,220.5],[348.5,220.3],[352.6,220.9],[356.6,222.3],[360.5,224.4],[367.8,230.1],[377.6,240.4],[390.2,256.9],[393.7,228],[396,218.8],[397.7,214.5],[402.5,206.6],[408.6,199.3],[425.3,181.7],[430.9,174.1],[433.3,170],[435.2,165.7],[438.4,156.7],[449.2,114.2],[449.2,104.3],[447.6,95.2],[444.8,86.6],[435.7,67.2],[428.2,47.3],[424.8,40.2],[422.8,37.3],[420.3,34.8],[417.2,32.9],[409.8,30.5],[372.3,40.3],[363.3,41.4],[359.1,41],[355,40],[351.1,38.2],[336.3,27.5],[332.3,25.2],[323.9,22.2],[314.6,21],[300.2,20.7],[290.9,21.1],[274.8,22.6],[271.3,22.5],[264,21.1],[240.2,13.3],[231.8,11.6]],"nbrs":[[563.7,206.5],[555.1,9.5],[285.5,-72.9],[11.1,126.5]]},{"n":17,"kind":"province","x":487.4,"y":407.1,"rw":9,"from":1,"to":0,"cell":[[390.2,261.8],[390,281.2],[389.2,289.4],[388.5,292.3],[387.4,293.8],[386.1,293.9],[384.7,292.4],[381.9,286],[372.7,253.7],[368.9,245.3],[366.3,241.8],[363.3,239],[359.9,237.1],[356.2,236.3],[352.4,236.6],[348.5,237.8],[340.9,242.2],[335.2,261],[331.6,269.7],[327.2,277.6],[297.7,322.1],[294.1,330.4],[293.3,334.8],[293.1,339.3],[293.6,343.8],[294.8,348.1],[296.7,352.2],[302,360],[315,374.4],[320.7,381.8],[324.8,389.7],[327.5,397.6],[329,405.8],[329.3,414.7],[326.2,453.8],[385.4,454],[395,454.9],[403.8,457.4],[411.7,462.1],[415.3,465.1],[421.7,472.1],[426.3,479.9],[430.6,492.2],[432.2,495.7],[434.4,498.4],[437.4,500.5],[441.1,501.8],[449.9,502.9],[548.4,502.9],[557.6,502.2],[587.5,497.5],[591.5,496.5],[594.9,495],[597.6,492.8],[599.7,489.9],[602.2,482.5],[604.9,470.4],[606.1,461.7],[606.7,447.5],[606.5,403.2],[605.8,394.1],[604.2,385.8],[592.7,348.6],[591.8,341.9],[592,335.7],[585.8,322.9],[583.2,319.4],[580.2,316.5],[576.8,314.3],[572.8,312.8],[568.5,311.9],[539.6,310.3],[530.5,308.5],[522.1,305.3],[492.4,291.3],[460.6,281.6],[456.3,279.6],[448.3,274.4],[426.8,254.8],[419.6,249.9],[416,248.7],[412.4,248.5],[409,249.3],[405.7,251],[396.6,257.9]],"nbrs":[[598.2,612.6],[563.7,206.5],[171.1,415.7]]}],"files":{"ground":["two-near-ground.webp"],"fill":["two-near-fill-before.webp","two-near-fill-after.webp"],"fill_patch":[307,11,917,1005],"glow":["two-near-glow-before.webp","two-near-glow-after.webp"],"glow_patch":[258,0,1179,1019],"border":["two-near-border-before.webp","two-near-border-after.webp"],"border_patch":[301,5,944,1010],"roads":["two-near-roads-before.webp","two-near-roads-after.webp"],"roads_patch":[12,0,1132,1040],"nodes":["two-near-nodes-before.webp","two-near-nodes-after.webp"],"nodes_patch":[533,145,502,790],"fog":[null,null],"top":["two-near-top-before.webp","two-near-top-before.webp"]}},"two-far":{"k":0.6154,"flips":[{"n":18,"kind":"city_large","x":409.1,"y":134.8,"rw":20,"from":1,"to":0,"cell":[[364.2,83.8],[362.8,91.1],[361.3,95.6],[360.3,97.6],[359,99.4],[357.4,100.8],[355.5,102],[351.5,103.5],[338.8,106.4],[332.2,108.4],[334.5,154.9],[335.6,161.4],[338.5,171],[339.4,177.5],[339.6,201.9],[346.4,200.2],[350.5,198.8],[370,189.3],[374,187.7],[379.9,185.8],[386.3,185],[390.7,185.3],[392.7,185.9],[394.5,186.7],[396,187.9],[397.2,189.3],[398.1,190.9],[398.7,192.7],[399,194.5],[399,196.4],[398.3,201.6],[398.4,202.6],[398.9,202.9],[400.9,202],[405.8,198.5],[411.4,195.1],[418.9,190.8],[422.9,189.1],[425,188.6],[427.1,188.5],[429.1,188.8],[431.1,189.5],[433.1,190.6],[436.7,193.5],[441.6,198.6],[447.9,206.8],[449.7,192.4],[450.8,187.8],[451.6,185.6],[454,181.7],[457.1,178],[465.4,169.2],[468.3,165.4],[469.4,163.4],[470.4,161.3],[472,156.7],[477.4,135.5],[477.4,130.5],[476.6,126],[475.2,121.7],[470.7,112],[466.9,102],[465.2,98.5],[464.2,97],[462.9,95.8],[461.4,94.8],[457.7,93.6],[439,98.5],[434.5,99.1],[432.3,98.9],[430.3,98.4],[428.3,97.5],[420.9,92.2],[419,91],[414.7,89.5],[410.1,88.9],[402.9,88.7],[398.2,88.9],[390.2,89.7],[388.4,89.7],[384.8,89],[372.9,85],[368.7,84.2]],"nbrs":[[534.6,181.6],[530.3,83.2],[395.6,41.9],[258.3,141.6]]},{"n":17,"kind":"province","x":496.5,"y":281.9,"rw":9,"from":1,"to":0,"cell":[[447.9,209.3],[447.8,219],[447.4,223.1],[447,224.5],[446.5,225.3],[445.9,225.3],[445.2,224.6],[443.7,221.4],[439.2,205.3],[437.2,201],[436,199.3],[434.4,197.9],[432.7,197],[430.9,196.5],[429,196.7],[427.1,197.3],[423.3,199.5],[420.4,208.9],[418.6,213.3],[416.4,217.2],[401.6,239.4],[399.9,243.6],[399.4,245.8],[399.4,248],[399.6,250.3],[400.2,252.4],[401.1,254.5],[403.8,258.4],[410.3,265.6],[413.2,269.3],[415.2,273.2],[416.5,277.2],[417.3,281.3],[417.4,285.8],[415.9,305.3],[445.5,305.4],[450.3,305.8],[454.7,307.1],[458.7,309.4],[460.5,310.9],[463.6,314.4],[465.9,318.4],[468.1,324.5],[468.9,326.2],[470,327.6],[471.5,328.6],[473.3,329.3],[477.7,329.8],[527,329.8],[531.6,329.5],[546.6,327.1],[548.5,326.7],[550.2,325.9],[551.6,324.8],[552.6,323.3],[553.9,319.7],[555.2,313.6],[555.9,309.2],[556.2,302.1],[556.1,280],[555.7,275.4],[554.9,271.3],[549.2,252.7],[548.7,249.3],[548.8,246.2],[545.7,239.8],[544.4,238.1],[542.9,236.6],[541.2,235.5],[539.2,234.8],[537,234.3],[522.6,233.5],[518,232.6],[513.8,231],[499,224],[483.1,219.2],[481,218.2],[477,215.6],[466.2,205.8],[462.6,203.3],[460.8,202.7],[459,202.6],[457.3,203],[455.7,203.9],[451.1,207.4]],"nbrs":[[551.9,384.7],[534.6,181.6],[338.3,286.2]]}],"files":{"ground":["two-far-ground.webp"],"fill":["two-far-fill-before.webp","two-far-fill-after.webp"],"fill_patch":[654,157,469,513],"glow":["two-far-glow-before.webp","two-far-glow-after.webp"],"glow_patch":[30,0,1273,1040],"border":["two-far-border-before.webp","two-far-border-after.webp"],"border_patch":[651,154,482,548],"roads":["two-far-roads-before.webp","two-far-roads-after.webp"],"roads_patch":[506,73,610,707],"nodes":["two-far-nodes-before.webp","two-far-nodes-after.webp"],"nodes_patch":[767,224,258,394],"fog":[null,null],"top":["two-far-top-before.webp","two-far-top-before.webp"]}},"fog-near":{"k":1.5385,"flips":[{"n":18,"kind":"city_large","x":400,"y":260,"rw":20,"from":1,"to":0,"cell":[[287.7,132.3],[284.2,150.6],[280.6,161.9],[277.9,166.9],[274.6,171.3],[270.6,174.9],[266.1,177.8],[255.9,181.6],[224.2,188.8],[207.7,193.8],[213.4,310.2],[216.3,326.4],[223.4,350.4],[225.7,366.6],[226.2,427.7],[243.2,423.5],[253.4,419.9],[302.2,396.2],[312.1,392],[327,387.5],[343,385.4],[353.9,386.2],[358.9,387.5],[363.4,389.7],[367.2,392.5],[370.2,396.1],[372.5,400.1],[374,404.5],[374.7,409.2],[374.7,414],[373,426.8],[373.3,429.3],[374.4,430.2],[379.5,427.9],[391.8,419.2],[405.6,410.5],[424.4,399.8],[434.5,395.7],[439.7,394.5],[444.9,394.2],[450,394.9],[455,396.7],[459.9,399.3],[469,406.5],[481.2,419.4],[496.9,440],[501.4,403.8],[504.2,392.4],[506.3,387],[512.3,377.1],[520,368],[540.8,346],[547.9,336.5],[550.8,331.4],[553.3,326],[557.2,314.7],[570.8,261.5],[570.8,249.2],[568.7,237.8],[565.2,227.1],[553.9,202.8],[544.4,178],[540.3,169.2],[537.7,165.4],[534.6,162.3],[530.8,160],[521.5,156.9],[474.6,169.3],[463.4,170.5],[458,170.1],[452.9,168.8],[448.1,166.6],[429.6,153.3],[424.7,150.4],[414.1,146.6],[402.5,145],[384.5,144.7],[372.8,145.2],[352.7,147.1],[348.3,147],[339.3,145.3],[309.5,135.5],[299,133.4]],"nbrs":[[713.8,376.9],[703.1,130.8],[366.2,27.7],[23.1,276.9]]}],"files":{"ground":["fog-near-ground.webp"],"fill":["fog-near-fill-before.webp","fog-near-fill-after.webp"],"fill_patch":[405,254,747,636],"glow":["fog-near-glow-before.webp","fog-near-glow-after.webp"],"glow_patch":[344,36,865,1004],"border":["fog-near-border-before.webp","fog-near-border-after.webp"],"border_patch":[398,247,761,694],"roads":["fog-near-roads-before.webp","fog-near-roads-after.webp"],"roads_patch":[35,276,1406,495],"nodes":["fog-near-nodes-before.webp","fog-near-nodes-after.webp"],"nodes_patch":[687,421,225,252],"fog":["fog-near-fog-before.webp","fog-near-fog-before.webp"],"top":["fog-near-top-before.webp","fog-near-top-before.webp"]}},"fog-far":{"k":0.6154,"flips":[{"n":18,"kind":"city_large","x":409.1,"y":134.8,"rw":20,"from":1,"to":0,"cell":[[364.2,83.8],[362.8,91.1],[361.3,95.6],[360.3,97.6],[359,99.4],[357.4,100.8],[355.5,102],[351.5,103.5],[338.8,106.4],[332.2,108.4],[334.5,154.9],[335.6,161.4],[338.5,171],[339.4,177.5],[339.6,201.9],[346.4,200.2],[350.5,198.8],[370,189.3],[374,187.7],[379.9,185.8],[386.3,185],[390.7,185.3],[392.7,185.9],[394.5,186.7],[396,187.9],[397.2,189.3],[398.1,190.9],[398.7,192.7],[399,194.5],[399,196.4],[398.3,201.6],[398.4,202.6],[398.9,202.9],[400.9,202],[405.8,198.5],[411.4,195.1],[418.9,190.8],[422.9,189.1],[425,188.6],[427.1,188.5],[429.1,188.8],[431.1,189.5],[433.1,190.6],[436.7,193.5],[441.6,198.6],[447.9,206.8],[449.7,192.4],[450.8,187.8],[451.6,185.6],[454,181.7],[457.1,178],[465.4,169.2],[468.3,165.4],[469.4,163.4],[470.4,161.3],[472,156.7],[477.4,135.5],[477.4,130.5],[476.6,126],[475.2,121.7],[470.7,112],[466.9,102],[465.2,98.5],[464.2,97],[462.9,95.8],[461.4,94.8],[457.7,93.6],[439,98.5],[434.5,99.1],[432.3,98.9],[430.3,98.4],[428.3,97.5],[420.9,92.2],[419,91],[414.7,89.5],[410.1,88.9],[402.9,88.7],[398.2,88.9],[390.2,89.7],[388.4,89.7],[384.8,89],[372.9,85],[368.7,84.2]],"nbrs":[[534.6,181.6],[530.3,83.2],[395.6,41.9],[258.3,141.6]]}],"files":{"ground":["fog-far-ground.webp"],"fill":["fog-far-fill-before.webp","fog-far-fill-after.webp"],"fill_patch":[654,157,311,267],"glow":["fog-far-glow-before.webp","fog-far-glow-after.webp"],"glow_patch":[30,0,1273,1040],"border":["fog-far-border-before.webp","fog-far-border-after.webp"],"border_patch":[651,154,317,290],"roads":["fog-far-roads-before.webp","fog-far-roads-after.webp"],"roads_patch":[506,166,575,210],"nodes":["fog-far-nodes-before.webp","fog-far-nodes-after.webp"],"nodes_patch":[767,224,103,113],"fog":["fog-far-fog-before.webp","fog-far-fog-before.webp"],"top":["fog-far-top-before.webp","fog-far-top-before.webp"]}}};
+const A2 = 'assets/city-capture/r2/';
+const SRC2 = window.R2_LAYERS || null; // assets/city-capture/r2-layers.js
+const LOOP2 = 3900;
+
+/* Variants. field: radial (distance from the city), fit (the cell itself scaled from the city: the front
+   reaches every part of the border together), organic (fit with a slow irregular edge), road (faster
+   along the city's roads). edge: glow rim, line, ripple, none. old: fade, push, dark. city: flash, soft,
+   gather. border, glow, roads: when they join (front, start, end). */
+const R2V = [
+  { id: 'cur', name: 'Current', legacy: 'current', dur: 450 },
+  { id: 'r1', name: 'Flood, round 1', legacy: 'r1', dur: 1000 },
+  { id: 'flood', name: 'Flood', field: 'radial', norm: 1.3, dur: 1000, ease: 'outq', fe: 0.24, edge: 'glow', city: 'flash', roads: 'front' },
+  { id: 'fit', name: 'Fitted', field: 'fit', dur: 1000, ease: 'outq', fe: 0.18, edge: 'glow', city: 'flash', roads: 'front' },
+  { id: 'organic', name: 'Organic', field: 'organic', dur: 1200, ease: 'sine', fe: 0.2, edge: 'glow', edgeA: 0.85, city: 'soft', roads: 'front' },
+  { id: 'roads', name: 'Roads lead', field: 'road', dur: 1100, ease: 'outq', fe: 0.18, edge: 'glow', city: 'flash', roads: 'lead' },
+  { id: 'quick', name: 'Quick', field: 'fit', dur: 600, ease: 'out', fe: 0.22, edge: 'line', edgeA: 0.8, city: 'soft', roads: 'start' },
+  { id: 'tide', name: 'Tide', field: 'fit', dur: 1400, ease: 'inout', fe: 0.18, edge: 'glow', city: 'gather', roads: 'end' },
+  { id: 'ripple', name: 'Ripple', field: 'radial', norm: 1.3, dur: 1000, ease: 'outq', fe: 0.3, edge: 'ripple', city: 'soft', roads: 'front' },
+  { id: 'push', name: 'Push out', field: 'fit', dur: 1100, ease: 'outq', fe: 0.14, edge: 'glow', edgeA: 0.6, old: 'push', city: 'flash', roads: 'front' },
+  { id: 'dim', name: 'Dim first', field: 'fit', delay: 220, dur: 1000, ease: 'outq', fe: 0.16, edge: 'line', old: 'dark', city: 'soft', roads: 'front' },
+  { id: 'seal', name: 'Border seal', field: 'fit', dur: 1000, ease: 'outq', fe: 0.2, edge: 'glow', edgeA: 0.7, border: 'end', city: 'flash', roads: 'front' },
+  { id: 'calm', name: 'Calm', field: 'fit', dur: 900, ease: 'outq', fe: 0.22, edge: 'none', city: 'soft', roads: 'front' },
+  { id: 'slow', name: 'Slow', field: 'radial', norm: 1.3, dur: 1500, ease: 'out', fe: 0.26, edge: 'glow', city: 'flash', roads: 'front' },
+];
+const RENDER_DELAY = 200; // the client draws 2 ticks behind the newest snapshot (snapshotBuffer.ts)
+const HOLD = 500;         // the settled frame stays this long before the result screen
+// Today the result screen opens on match_end at once (LiveMatch.svelte): the capital's capture is never drawn.
+const resultAt = (v) => (v.legacy === 'current' ? 0 : Math.ceil((RENDER_DELAY + (v.delay || 0) + v.dur + HOLD) / 100) * 100);
+const durLabel2 = (v) => (v.legacy === 'current' ? '0.45 s' : `${((v.dur + (v.delay || 0)) / 1000).toFixed(v.dur % 100 ? 2 : 1)} s`);
+
+/* ---------- the fields of a case: the fitted distance, the road-led arrival, the road position ---------- */
+const FW = 800, FH = 520;
+function rayFar(cx, cy, dx, dy, poly) {
+  let best = -1;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const ex = b[0] - a[0], ey = b[1] - a[1];
+    const den = dx * ey - dy * ex;
+    if (Math.abs(den) < 1e-9) continue;
+    const ax = a[0] - cx, ay = a[1] - cy;
+    const t = (ax * ey - ay * ex) / den, u = (ax * dy - ay * dx) / den;
+    if (t > 0 && u >= 0 && u <= 1 && t > best) best = t;
+  }
+  return best;
+}
+const FIELDS = {};
+function field(key) {
+  if (FIELDS[key]) return FIELDS[key];
+  const m = R2META[key], k = m.k, NA = 1440;
+  const flips = m.flips.map((f) => {
+    const R = new Float32Array(NA);
+    let last = 50;
+    for (let a = 0; a < NA; a++) {
+      const th = (a / NA) * TAU, r = rayFar(f.x, f.y, Math.cos(th), Math.sin(th), f.cell);
+      R[a] = r > 0 ? r : last; last = R[a];
+    }
+    // a cell that is not star-shaped round its city (an inlet, a river mouth) makes the farthest border
+    // jump between two rays: a short circular blur keeps the front free of seams there
+    for (let pass = 0; pass < 3; pass++) {
+      const S = R.slice(), Wn = 10;
+      for (let a = 0; a < NA; a++) { let s = 0; for (let j = -Wn; j <= Wn; j++) s += S[(a + j + NA) % NA]; R[a] = s / (2 * Wn + 1); }
+    }
+    let mean = 0, max = 0; for (const r of R) { mean += r; max = Math.max(max, r); } mean /= NA;
+    const roads = f.nbrs.map(([nx, ny]) => { const dx = nx - f.x, dy = ny - f.y, len = Math.hypot(dx, dy); return { ux: dx / len, uy: dy / len, len }; });
+    const V = 4.0;
+    const arrive = (px, py) => {
+      const dx = px - f.x, dy = py - f.y; let a = Math.hypot(dx, dy);
+      for (const r of roads) {
+        const t = Math.min(r.len, Math.max(0, dx * r.ux + dy * r.uy));
+        const lat = Math.hypot(dx - r.ux * t, dy - r.uy * t);
+        a = Math.min(a, t / V + lat * 1.25);
+      }
+      return a;
+    };
+    let norm = 1;
+    for (let a = 0; a < NA; a += 4) { const th = (a / NA) * TAU; norm = Math.max(norm, arrive(f.x + Math.cos(th) * R[a], f.y + Math.sin(th) * R[a])); }
+    return { f, R, mean, max, roads, arrive, norm };
+  });
+  // inside the captured cells, anti-aliased: drawn by the canvas
+  const ic = document.createElement('canvas'); ic.width = FW; ic.height = FH;
+  const icx = ic.getContext('2d'); icx.fillStyle = '#fff';
+  for (const f of m.flips) { polyPath(f.cell)(icx); icx.fill('evenodd'); }
+  const inside = icx.getImageData(0, 0, FW, FH).data;
+  const hw = Math.max(8, 7.5 * k);
+  const data = new Float32Array(FW * FH * 4);
+  for (let y = 0; y < FH; y++) {
+    for (let x = 0; x < FW; x++) {
+      const px = x + 0.5, py = y + 0.5, o = (y * FW + x) * 4;
+      let fit = 1e3, road = 1e3, rs = -1;
+      for (const F of flips) {
+        const dx = px - F.f.x, dy = py - F.f.y, r = Math.hypot(dx, dy);
+        let th = Math.atan2(dy, dx); if (th < 0) th += TAU;
+        const ai = (th / TAU) * NA, i0 = Math.floor(ai) % NA, i1 = (i0 + 1) % NA, fr = ai - Math.floor(ai);
+        const Rt = F.R[i0] * (1 - fr) + F.R[i1] * fr;
+        const fi = r / Math.max(1, Rt);
+        if (fi < fit) { fit = fi; road = F.arrive(px, py) / F.norm; }
+        for (const rd of F.roads) {
+          const t = dx * rd.ux + dy * rd.uy;
+          if (t < 0 || t > rd.len) continue;
+          const lat = Math.abs(dx * rd.uy - dy * rd.ux);
+          if (lat < hw) { const s = t / rd.len; if (rs < 0 || s < rs) rs = s; }
+        }
+      }
+      data[o] = Math.min(fit, 4); data[o + 1] = Math.min(road, 4); data[o + 2] = rs; data[o + 3] = inside[o + 3] / 255;
+    }
+  }
+  return (FIELDS[key] = { data, flips });
+}
+
+/* ---------- WebGL: one shared canvas renders each pane, the pane copies it ---------- */
+const VS2 = `#version 300 es
+in vec2 a; out vec2 vUv;
+void main(){ vUv = vec2(a.x * 0.5 + 0.5, 0.5 - a.y * 0.5); gl_Position = vec4(a, 0.0, 1.0); }`;
+const FS2 = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D tG, tF0, tF1, tW0, tW1, tB0, tB1, tR0, tR1, tN0, tN1, tU0, tU1, tX;
+uniform vec2 uRes; uniform int uN; uniform vec2 uC[2]; uniform float uRn[2]; uniform float uCr[2];
+uniform vec3 uNew, uOld; uniform int uSide;
+uniform int uField, uEdge, uBM, uWM, uRM, uMode;
+uniform float uFe, uPos, uRoadPos, uRoadFe, uEdgeA, uMB, uMW, uMR, uMN, uMU, uMF, uClean, uDark, uPush;
+uniform float uFlash, uRingR, uRingW, uRingA, uPulse, uGather, uGlint, uTime, uZ, uOrg, uHead;
+uniform float uWaveS, uWaveA, uWaveW, uWRingR, uWRingW, uWRingA;
+const vec3 PAPER = vec3(0.941, 0.965, 0.988);
+vec4 over(vec4 d, vec4 s) { return s + d * (1.0 - s.a); }
+float band(float x, float w) { return exp(-(x * x) / (w * w)); }
+float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
+float fbm(vec2 p) { return 0.55 * vn(p) + 0.3 * vn(p * 2.03 + 7.1) + 0.15 * vn(p * 4.1 + 3.3); }
+// the client's particle glow (particles.ts): 1 at the centre, 0.45 at 35%, 0 at the edge
+float gp(float x) { if (x >= 1.0) return 0.0; return x < 0.35 ? mix(1.0, 0.45, x / 0.35) : mix(0.45, 0.0, (x - 0.35) / 0.65); }
+void main() {
+  vec2 uv = vUv, p = uv * uRes;
+  vec4 X = texture(tX, uv); float fit = X.r, rfl = X.g, rs = X.b, ins = X.a;
+  float rad = 1e3; vec2 c = uC[0]; float cr = uCr[0];
+  for (int i = 0; i < 2; i++) { if (i >= uN) break; float d = distance(p, uC[i]) / uRn[i]; if (d < rad) { rad = d; c = uC[i]; cr = uCr[i]; } }
+  float fld = fit;
+  if (uField == 0) fld = rad;
+  else if (uField == 2) { float th = atan(p.y - c.y, p.x - c.x); vec2 q = vec2(cos(th), sin(th)) * 1.7;
+    float n = fbm(q + vec2(uTime * 0.3, -uTime * 0.22) + fit * 0.8); fld = fit * (1.0 + uOrg * (n - 0.5)); }
+  else if (uField == 3) fld = rfl;
+  float pw = max(fwidth(fld), 1e-4);
+  float mT = uMode == 1 ? uMF : smoothstep(0.0, 1.0, clamp((uPos - fld) / uFe, 0.0, 1.0));
+  mT = max(mT, uClean);
+  float mW = uWM == 0 ? mT : max(uMW, uClean);
+  float mB = uBM == 0 ? mT : max(uMB, uClean);
+  float mR = uMR;
+  if (uRM == 0) mR = max(rs >= 0.0 ? smoothstep(0.0, 1.0, clamp((uRoadPos - rs) / uRoadFe, 0.0, 1.0)) : mT, uClean);
+  else if (uRM == 2) mR = mT;
+  vec4 col = texture(tG, uv);
+  float ahead = ins * (1.0 - mT);
+  col = over(col, mix(texture(tF0, uv) * (1.0 - uDark * ins), texture(tF1, uv), mT));
+  col.rgb *= 1.0 - 0.2 * uDark * ahead;
+  col = over(col, mix(texture(tW0, uv) * (1.0 - 0.6 * uDark * ins), texture(tW1, uv), mW));
+  vec4 b1 = texture(tB1, uv);
+  col = over(col, mix(texture(tB0, uv) * (1.0 - 0.6 * uDark * ins), b1, mB));
+  // territory-level light: under the roads, the cities and the veil (where the client's mask sprite would sit)
+  if (uEdgeA > 0.0) {
+    if (uEdge == 1) {
+      // a moving copy of the territory glow (owner colour, normal blend) with a faint additive sheen
+      float g = band(fld - (uPos - uFe * 0.42), max(uFe * 0.38, 6.0 * pw * uZ)) * ins * uEdgeA;
+      col.rgb = mix(col.rgb, uNew, 0.42 * g);
+      col.rgb += uNew * 0.10 * g;
+    } else if (uEdge == 2) {
+      float x = fld - (uPos - uFe * 0.12);
+      // a line of the owner colour, a touch lighter than the border line, with a faint halo
+      col.rgb += uNew * 0.16 * uEdgeA * band(x, 4.5 * pw * uZ) * ins;
+      col.rgb = mix(col.rgb, mix(uNew, PAPER, 0.3), 0.7 * uEdgeA * band(x, 0.95 * pw * max(uZ, 0.8)) * ins);
+      // the opponent's front is a double line (ui-style 21: a double contour marks the opponent)
+      if (uSide == 1) col.rgb = mix(col.rgb, mix(uNew, PAPER, 0.3), 0.6 * uEdgeA * band(x + 3.2 * pw * max(uZ, 0.8), 0.85 * pw * max(uZ, 0.8)) * ins);
+    } else if (uEdge == 3) {
+      for (int k = 1; k <= 2; k++) { float off = float(k) * 0.07 - 0.03;
+        col.rgb = mix(col.rgb, mix(uNew, PAPER, 0.35), (0.42 / float(k)) * uEdgeA * band(fld - (uPos + off), 1.1 * pw * max(uZ, 0.75)) * ins); }
+      col.rgb = mix(col.rgb, uNew, 0.18 * uEdgeA * band(fld - (uPos - uFe * 0.45), uFe * 0.5) * ins);
+    }
+  }
+  if (uPush > 0.0) col.rgb += uOld * uPush * band(fld - (uPos + 0.05), 0.06) * ins;
+  if (uGlint > 0.0) col.rgb += b1.rgb * uGlint * (1.0 - smoothstep(1.03, 1.15, fit));
+  vec4 r1 = texture(tR1, uv);
+  col = over(col, mix(texture(tR0, uv), r1, mR));
+  // the head of the change running out along a road: the new road itself lit, no new shape
+  if (uHead > 0.0 && rs >= 0.0) col.rgb += (uNew * 0.9 + PAPER * 0.5) * r1.a * uHead * band(rs - (uRoadPos - 0.04), 0.05);
+  col = over(col, mix(texture(tN0, uv), texture(tN1, uv), uMN));
+  col = over(col, mix(texture(tU0, uv), texture(tU1, uv), uMU));
+  // the effects layer
+  if (uWaveA > 0.0) { // today's wave: the cell scaled from the city (fill 0.28, a 3-unit line)
+    float inW = 1.0 - smoothstep(uWaveS - pw, uWaveS + pw, fit);
+    col.rgb = mix(col.rgb, uNew, 0.28 * uWaveA * inW * ins);
+    col.rgb = mix(col.rgb, uNew, 0.9 * uWaveA * band(fit - uWaveS, uWaveW * pw));
+  }
+  float dc = distance(p, c);
+  if (uFlash > 0.0) col.rgb += PAPER * uFlash * gp(dc / (cr * 3.4));
+  if (uRingA > 0.0) col.rgb += uNew * uRingA * band(dc - uRingR, uRingW);
+  if (uWRingA > 0.0) col.rgb = mix(col.rgb, PAPER, uWRingA * band(dc - uWRingR, uWRingW));
+  if (uPulse > 0.0) col.rgb += uNew * uPulse * gp(dc / (cr * 2.8));
+  if (uGather > 0.0) col.rgb += uNew * uGather * gp(dc / (cr * 2.4)) + PAPER * 0.15 * uGather * gp(dc / (cr * 1.3));
+  o = vec4(col.rgb, 1.0);
+}`;
+const TEXN = ['tG', 'tF0', 'tF1', 'tW0', 'tW1', 'tB0', 'tB1', 'tR0', 'tR1', 'tN0', 'tN1', 'tU0', 'tU1', 'tX'];
+let GL2 = null;
+function gl2() {
+  if (GL2) return GL2;
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+  const gl = cv.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: true });
+  if (!gl) return (GL2 = { fail: true });
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS2)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS2)); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const al = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al, 2, gl.FLOAT, false, 0, 0);
+  TEXN.forEach((n, i) => gl.uniform1i(gl.getUniformLocation(prog, n), i));
+  const U = {}; const n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(prog, i); U[info.name.replace('[0]', '')] = gl.getUniformLocation(prog, info.name); }
+  const empty = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, empty);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+  return (GL2 = { cv, gl, U, empty, key: null, tex: null });
+}
+
+/* ---------- loading a case: the layers, the after-state patches, the units over the veil ---------- */
+const IMG2 = {};
+function img2(name) {
+  if (!name) return null;
+  if (!IMG2[name]) { const im = new Image(); im.decoding = 'async'; im.src = SRC2 ? SRC2[name] : A2 + name; im.onload = () => { dirty = true; }; IMG2[name] = im; }
+  return IMG2[name];
+}
+function layerCanvas(base, patchIm, patch) {
+  const cv = document.createElement('canvas'); cv.width = 1600; cv.height = 1040; const c = cv.getContext('2d');
+  if (base) c.drawImage(base, 0, 0);
+  if (patchIm) { c.clearRect(patch[0], patch[1], patch[2], patch[3]); c.drawImage(patchIm, patch[0], patch[1]); }
+  return cv;
+}
+function caseReady(key) {
+  const f = R2META[key].files;
+  const names = [...f.ground, ...['fill', 'glow', 'border', 'roads', 'nodes', 'fog', 'top'].flatMap((L) => f[L])].filter(Boolean);
+  return names.every((n) => ready(img2(n)));
+}
+function upload(key) {
+  const G = gl2(), gl = G.gl;
+  if (G.key === key) return true;
+  if (!caseReady(key)) return false;
+  if (G.tex) for (const t of Object.values(G.tex)) if (t !== G.empty) gl.deleteTexture(t);
+  const f = R2META[key].files;
+  const src = {};
+  const pair = (L) => {
+    const [b, a] = f[L], patch = f[L + '_patch'];
+    const bi = img2(b), ai = img2(a);
+    return [bi, a === b ? bi : patch ? layerCanvas(bi, ai, patch) : ai];
+  };
+  [src.tF0, src.tF1] = pair('fill'); [src.tW0, src.tW1] = pair('glow'); [src.tB0, src.tB1] = pair('border');
+  [src.tR0, src.tR1] = pair('roads'); [src.tN0, src.tN1] = pair('nodes');
+  const [fg0, fg1] = pair('fog'), [tp0, tp1] = pair('top');
+  // the veil and the units, stacked (both lie over the cities, nothing animates between them)
+  src.tU0 = layerCanvas(fg0, null); src.tU0.getContext('2d').drawImage(tp0, 0, 0);
+  src.tU1 = layerCanvas(fg1, null); src.tU1.getContext('2d').drawImage(tp1, 0, 0);
+  src.tG = img2(f.ground[0]);
+  const tex = {};
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+  for (const [n, s] of Object.entries(src)) {
+    if (!s) { tex[n] = G.empty; continue; }
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, s);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    tex[n] = t;
+  }
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  const F = field(key);
+  const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, FW, FH, 0, gl.RGBA, gl.FLOAT, F.data);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  tex.tX = tx;
+  TEXN.forEach((n, i) => { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, tex[n]); });
+  G.tex = tex; G.key = key;
+  return true;
+}
+
+/* ---------- the timeline of a variant: everything the shader needs at time t (ms after the capture) ---------- */
+const EASE2 = { out: eo, inout: eio, outq: eoq, sine: (t) => Math.sin((t * Math.PI) / 2) };
+const hexRGB = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
+const bump = (t, a, b) => Math.sin(Math.PI * ph(t, a, b));
+function params(v, t, F, k, opt) {
+  const f0 = F.flips[0].f, se = Math.max(1, 1 / k);
+  const u = {
+    uMode: 0, uField: 1, uEdge: 0, uBM: 0, uWM: 0, uRM: 0, uFe: 0.2, uPos: -1, uRoadPos: -1, uRoadFe: 0.15, uEdgeA: 0,
+    uMB: 0, uMW: 0, uMR: 0, uMN: 0, uMU: 0, uMF: 0, uClean: 0, uDark: 0, uPush: 0, uFlash: 0, uRingR: 0, uRingW: 1, uRingA: 0,
+    uPulse: 0, uGather: 0, uGlint: 0, uHead: 0, uTime: t / 1000, uZ: clamp(k / 1.54, 0.5, 1), uOrg: 0.3,
+    uWaveS: 0, uWaveA: 0, uWaveW: 1, uWRingR: 0, uWRingW: 1, uWRingA: 0,
+    uRn: F.flips.map((x) => x.mean), uCr: F.flips.map((x) => x.f.rw * k * se),
+  };
+  const cr = u.uCr[0];
+  if (t < 0) { Object.assign(u, { uMode: 1, uBM: 1, uWM: 1, uRM: 1 }); return u; }
+  if (opt.reduced) { // ui-style 20.6: no travel, no light; a short cross-fade
+    const m = sm(ph(t, 0, 200));
+    Object.assign(u, { uMode: 1, uMF: m, uBM: 1, uMB: m, uWM: 1, uMW: m, uRM: 1, uMR: m, uMN: m, uMU: 1 });
+    return u;
+  }
+  const calm = opt.calm && f0.to !== 0 ? 1 : 0;
+  if (v.legacy === 'current') { // mapView.ts, cityView.ts, effectsView.ts
+    const m = eo(clamp(t / 450)), w = t / 500;
+    Object.assign(u, { uMode: 1, uMF: m, uBM: 1, uMB: m, uWM: 1, uMW: t >= 180 ? 1 : 0, uRM: 1, uMR: 1, uMN: m, uMU: 1 });
+    if (w < 1) {
+      const size = 2 * (8 + 28 * 1.6 * eoq(w)) * se * k;
+      Object.assign(u, { uWaveS: eoq(w), uWaveA: 1 - w, uWaveW: 1.5 * k, uWRingR: (size * 26) / 64, uWRingW: (size * 5) / 128, uWRingA: 0.8 * (1 - w) });
+    }
+    return u;
+  }
+  if (v.legacy === 'r1') { // round 1 Flood, as it was
+    const pr = eo(ph(t, 60, 960));
+    Object.assign(u, {
+      uField: 0, uRn: F.flips.map((x) => x.mean * 1.06), uFe: 0.226, uPos: pr, uClean: sm(ph(t, 700, 1000)), uRM: 2, uWM: 0, uBM: 0,
+      uMN: sm(ph(t, 0, 200)), uMU: 1, uEdge: 1, uEdgeA: 0.95 * (1 - pr * pr),
+      uFlash: 0.55 * Math.pow(1 - ph(t, 0, 300), 2),
+      uRingR: cr * (1.3 + 0.6 * eo(ph(t, 0, 450))), uRingW: cr * (0.2 + 0.5 * eo(ph(t, 0, 450))), uRingA: 0.45 * (1 - ph(t, 0, 450)),
+    });
+    return u;
+  }
+  const d0 = v.delay || 0, dur = v.dur, x = ph(t, d0, d0 + dur), p = (EASE2[v.ease] || eo)(x);
+  const fe = v.fe, extra = v.field === 'organic' ? 0.16 : 0;
+  u.uField = { radial: 0, fit: 1, organic: 2, road: 3 }[v.field];
+  if (v.field === 'radial') u.uRn = F.flips.map((x) => Math.min(x.max, x.mean * (v.norm || 1.3)));
+  u.uFe = fe; u.uPos = x <= 0 ? -1 : p * (1 + fe + extra);
+  u.uClean = sm(ph(t, d0 + dur - 140, d0 + dur + 120));
+  u.uEdge = { none: 0, glow: 1, line: 2, ripple: 3 }[v.edge];
+  u.uEdgeA = (v.edgeA || 1) * sm(ph(x, 0, 0.08)) * (1 - sm(ph(x, 0.78, 1))) * (calm ? 0.5 : 1);
+  if (v.border === 'end') {
+    Object.assign(u, { uBM: 1, uWM: 1, uMB: sm(ph(t, d0 + dur * 0.8, d0 + dur + 60)) });
+    u.uMW = u.uMB; u.uGlint = 0.85 * bump(t, d0 + dur * 0.78, d0 + dur + 380) * (calm ? 0.5 : 1);
+  }
+  if (v.roads === 'front') { u.uRoadPos = x <= 0 ? -1 : p * 1.15; }
+  else if (v.roads === 'lead') {
+    const q = ph(t, d0, d0 + dur * 0.6);
+    u.uRoadPos = x <= 0 ? -1 : eo(q) * 1.1;
+    u.uRoadFe = 0.06;
+    u.uHead = (calm ? 0.5 : 1) * sm(ph(q, 0, 0.1)) * (1 - sm(ph(q, 0.75, 1)));
+  }
+  else if (v.roads === 'start') { u.uRM = 1; u.uMR = sm(ph(t, 0, 160)); }
+  else if (v.roads === 'end') { u.uRM = 1; u.uMR = sm(ph(t, d0 + dur * 0.72, d0 + dur)); }
+  if (v.old === 'dark') u.uDark = 0.8 * sm(ph(t, 0, 220));
+  if (v.old === 'push') u.uPush = (0.1 + 0.24 * p) * (1 - sm(ph(x, 0.82, 1)));
+  u.uMU = 1;
+  const ring = (a, ms) => { u.uRingR = cr * (1.25 + 1.35 * eo(ph(t, 0, ms))); u.uRingW = cr * 0.2; u.uRingA = a * (1 - ph(t, 0, ms)) * (calm ? 0.5 : 1); };
+  if (v.city === 'flash') { u.uMN = sm(ph(t, 0, 120)); u.uFlash = calm ? 0 : 0.55 * Math.pow(1 - ph(t, 0, 320), 2); ring(0.38, 500); }
+  else if (v.city === 'soft') { u.uMN = sm(ph(t, 0, 360)); ring(0.28, 600); }
+  else if (v.city === 'gather') {
+    u.uMN = sm(ph(t, 0, 300));
+    u.uGather = 0.5 * bump(t, 0, d0 + dur * 0.5) * (calm ? 0.5 : 1);
+    u.uFlash = calm ? 0 : 0.18 * bump(t, dur * 0.18, dur * 0.42);
+  }
+  return u;
+}
+
+/* ---------- the capture flag of today (effectsView.ts), unchanged ---------- */
+function flag2(c, f, k, t, owner) {
+  const v = t / 1600; if (t < 0 || v >= 1) return;
+  const a = v <= 0.375 ? 1 : 1 - (v - 0.375) / 0.625, sc = Math.max(1, 1 / k), u = k * sc;
+  c.save(); c.globalAlpha = clamp(a); c.translate(f.x + (f.rw + 6) * u, f.y - (f.rw + 14) * u); c.scale(u, u);
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = PAPER; c.lineWidth = 2; c.beginPath(); c.moveTo(0, 14); c.lineTo(0, -6); c.stroke();
+  c.fillStyle = colOf(owner); c.beginPath(); c.moveTo(0, -6); c.lineTo(14, -1); c.lineTo(0, 4); c.closePath(); c.fill();
+  c.strokeStyle = PAPER; c.lineWidth = 1.4; c.stroke(); c.restore();
+}
+
+function draw2(pane, key, v, t, opt) {
+  const G = gl2(), gl = G.gl, m = R2META[key], F = field(key);
+  const cv = pane.cv, w = Math.round(Math.min(1600, (cv.clientWidth || 400) * Math.min(2, devicePixelRatio || 1))), h = Math.round((w * H) / W);
+  if (cv.width !== w) { cv.width = w; cv.height = h; }
+  if (G.cv.width < w || G.cv.height < h) { G.cv.width = Math.max(G.cv.width, w); G.cv.height = Math.max(G.cv.height, h); }
+  gl.viewport(0, 0, w, h);
+  const u = params(v, t, F, m.k, opt);
+  const U = G.U;
+  gl.uniform2f(U.uRes, W, H); gl.uniform1i(U.uN, F.flips.length);
+  gl.uniform2fv(U.uC, F.flips.flatMap((x) => [x.f.x, x.f.y]).concat([0, 0]).slice(0, 4));
+  gl.uniform1fv(U.uRn, u.uRn.concat([1]).slice(0, 2)); gl.uniform1fv(U.uCr, u.uCr.concat([1]).slice(0, 2));
+  if (U.uSide) gl.uniform1i(U.uSide, m.flips[0].to === 0 ? 0 : 1);
+  gl.uniform3fv(U.uNew, hexRGB(colOf(m.flips[0].to))); gl.uniform3fv(U.uOld, hexRGB(colOf(m.flips[0].from)));
+  for (const [n, val] of Object.entries(u)) {
+    if (n === 'uRn' || n === 'uCr' || !U[n]) continue;
+    if (['uMode', 'uField', 'uEdge', 'uBM', 'uWM', 'uRM'].includes(n)) gl.uniform1i(U[n], val); else gl.uniform1f(U[n], val);
+  }
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  const c = cv.getContext('2d');
+  c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'copy';
+  c.drawImage(G.cv, 0, G.cv.height - h, w, h, 0, 0, w, h);
+  c.globalCompositeOperation = 'source-over';
+  c.setTransform(w / W, 0, 0, w / W, 0, 0);
+  for (const f of m.flips) flag2(c, f, m.k, t, f.to);
+  if (opt.result !== null && t > opt.result) { // the capital ends the match: where the result screen would take over
+    c.fillStyle = rgba(BG, 0.82 * sm(ph(t, opt.result, opt.result + 300))); c.fillRect(0, 0, W, H);
+  }
+}
+
 /* ---------- UI ---------- */
-const CASES = [['own', 'You capture'], ['enemy', 'Enemy captures'], ['neutral', 'Neutral city'], ['province', 'Province'], ['capital', 'Capital'], ['two', 'Two at once']];
+const CASES = [['own', 'You capture'], ['enemy', 'Enemy captures'], ['neutral', 'Neutral city'], ['province', 'Province'], ['capital', 'Capital'], ['two', 'Two at once'], ['fog', 'In fog']];
+const ROUNDS = [['2', 'Round 2: Flood'], ['1', 'Round 1']];
 const ZOOMS = [['near', 'In'], ['far', 'Out']];
 const NUMS = [['1', '1'], ['2', '2'], ['4', '4'], ['all', 'All']];
 const SPEEDS = [['1', '1×'], ['0.25', '0.25×'], ['0.1', '0.1×']];
-const st = { c: 'own', z: 'near', n: '2', v: ['current', 'flood', 'shock', 'banner'], s: '1', gray: false, rg: false, rm: false };
+const DEF = { '1': ['current', 'flood', 'shock', 'banner'], '2': ['flood', 'fit', 'organic', 'r1'] };
+const st = { r: '2', c: 'own', z: 'near', n: '4', v: [...DEF['2']], s: '1', gray: false, rg: false, rm: false, calm: false };
+const VL = () => (st.r === '1' ? V : R2V);
+const cases = () => (st.r === '1' ? CASES.filter((c) => c[0] !== 'fog') : CASES);
 (function readHash() {
   const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('r') === '1' || h.get('r') === '2') st.r = h.get('r');
+  st.v = [...DEF[st.r]];
   if (h.get('c')) st.c = h.get('c'); if (h.get('z')) st.z = h.get('z'); if (h.get('n')) st.n = h.get('n'); if (h.get('s')) st.s = h.get('s');
-  if (h.get('v')) { const v = h.get('v').split(',').filter((x) => V.some((y) => y.id === x)); while (v.length < 4) v.push(st.v[v.length]); st.v = v; }
-  for (const k of ['gray', 'rg', 'rm']) st[k] = h.get(k) === '1';
+  if (!cases().some((c) => c[0] === st.c)) st.c = 'own';
+  if (h.get('v')) { const v = h.get('v').split(',').filter((x) => VL().some((y) => y.id === x)); while (v.length < 4) v.push(DEF[st.r][v.length]); st.v = v; }
+  for (const k of ['gray', 'rg', 'rm', 'calm']) st[k] = h.get(k) === '1';
 })();
 function writeHash() {
-  const h = new URLSearchParams({ c: st.c, z: st.z, n: st.n, v: st.v.join(','), s: st.s });
-  for (const k of ['gray', 'rg', 'rm']) if (st[k]) h.set(k, '1');
+  const h = new URLSearchParams({ r: st.r, c: st.c, z: st.z, n: st.n, v: st.v.join(','), s: st.s });
+  for (const k of ['gray', 'rg', 'rm', 'calm']) if (st[k]) h.set(k, '1');
   history.replaceState(null, '', '#' + h.toString());
 }
 function seg(id, items, get, set) {
@@ -667,60 +1084,73 @@ function seg(id, items, get, set) {
     const s = document.createElement('span'); s.textContent = label; l.append(i, s); el.append(l);
   }
 }
+const label = (v) => (st.r === '1' ? durLabel(v) : durLabel2(v) + (st.c === 'capital' ? (resultAt(v) ? ` · result after ${(resultAt(v) / 1000).toFixed(1)} s` : ' · result at once') : ''));
 const durLabel = (v) => (v.id === 'banner' ? '1.0 s, banner 2.7 s' : v.id === 'current' ? '0.45 s, flag 1.6 s' : `${(v.dur / 1000).toFixed(2)} s`);
 let panes = [];
 function build() {
-  seg('case', CASES, () => st.c, (v) => { st.c = v; });
+  seg('round', ROUNDS, () => st.r, (v) => { if (st.r !== v) { st.r = v; st.v = [...DEF[v]]; if (!cases().some((c) => c[0] === st.c)) st.c = 'own'; } });
+  seg('case', cases(), () => st.c, (v) => { st.c = v; });
   seg('zoom', ZOOMS, () => st.z, (v) => { st.z = v; });
   seg('num', NUMS, () => st.n, (v) => { st.n = v; });
-  seg('var', V.map((v) => [v.id, v.name]), () => st.v[0], (v) => { st.v[0] = v; });
+  seg('var', VL().map((v) => [v.id, v.name]), () => st.v[0], (v) => { st.v[0] = v; });
   seg('spd', SPEEDS, () => st.s, (v) => { st.s = v; });
-  document.getElementById('gray').checked = st.gray; document.getElementById('rg').checked = st.rg; document.getElementById('rm').checked = st.rm;
+  for (const k of ['gray', 'rg', 'rm', 'calm']) document.getElementById(k).checked = st[k];
+  document.getElementById('calmw').hidden = st.r !== '2';
   const host = document.getElementById('panes'); host.innerHTML = '';
   host.className = st.n === 'all' ? 'all' : 'n' + st.n;
   host.classList.toggle('gray', st.gray); host.classList.toggle('rg', st.rg);
-  const ids = st.n === 'all' ? V.map((v) => v.id) : st.v.slice(0, Number(st.n));
+  const ids = st.n === 'all' ? VL().map((v) => v.id) : st.v.slice(0, Number(st.n));
   panes = ids.map((id, i) => {
     const d = document.createElement('div'); d.className = 'pane';
     const cap = document.createElement('div'); cap.className = 'cap';
-    const v = V.find((x) => x.id === id);
+    const v = VL().find((x) => x.id === id);
     if (st.n === 'all' || i === 0) { const b = document.createElement('b'); b.textContent = v.name; cap.append(b); }
     else {
       const sel = document.createElement('select'); sel.setAttribute('aria-label', `Variant of pane ${i + 1}`);
-      for (const x of V) { const o = document.createElement('option'); o.value = x.id; o.textContent = x.name; o.selected = x.id === id; sel.append(o); }
+      for (const x of VL()) { const o = document.createElement('option'); o.value = x.id; o.textContent = x.name; o.selected = x.id === id; sel.append(o); }
       sel.onchange = () => { st.v[i] = sel.value; writeHash(); build(); }; cap.append(sel);
     }
-    const dd = document.createElement('span'); dd.className = 'd'; dd.textContent = durLabel(v); cap.append(dd);
-    const cv = document.createElement('canvas'); cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', `${v.name}: ${CASES.find((c) => c[0] === st.c)[1]}`);
+    const dd = document.createElement('span'); dd.className = 'd'; dd.textContent = label(v); cap.append(dd);
+    const cv = document.createElement('canvas'); cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', `${v.name}: ${cases().find((c) => c[0] === st.c)[1]}`);
     d.append(cap, cv); host.append(d);
     if (st.n === 'all') d.onclick = () => { st.n = '1'; st.v[0] = id; writeHash(); build(); };
-    const p = { id, cv }; p.P = new Ctx(p); return p;
+    const p = { id, cv }; if (st.r === '1') p.P = new Ctx(p); return p;
   });
   dirty = true;
 }
-for (const k of ['gray', 'rg', 'rm']) document.getElementById(k).onchange = (e) => { st[k] = e.target.checked; writeHash(); build(); };
+for (const k of ['gray', 'rg', 'rm', 'calm']) document.getElementById(k).onchange = (e) => { st[k] = e.target.checked; writeHash(); build(); };
 
 let T = 0, playing = true, last = performance.now(), dirty = true;
 const playBtn = document.getElementById('play'), scrub = document.getElementById('scrub'), clock = document.getElementById('clock');
+const loopLen = () => (st.r === '1' ? LOOP : LOOP2);
 playBtn.onclick = () => { playing = !playing; playBtn.textContent = playing ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(playing)); };
-scrub.oninput = () => { T = (scrub.value / 1000) * LOOP; dirty = true; };
+scrub.oninput = () => { T = (scrub.value / 1000) * loopLen(); dirty = true; };
 document.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playBtn.click(); } });
 
 function frame(now) {
   const dt = Math.min(100, now - last); last = now;
-  if (playing) { T = (T + dt * Number(st.s)) % LOOP; dirty = true; scrub.value = String(Math.round((T / LOOP) * 1000)); }
+  if (playing) { T = (T + dt * Number(st.s)) % loopLen(); dirty = true; scrub.value = String(Math.round((T / loopLen()) * 1000)); }
   if (dirty) {
     dirty = false;
-    const key = `${st.c}-${st.z}`, F = frames(key), meta = META[key];
-    const t = T - PRE;
+    const key = `${st.c}-${st.z}`, t = T - PRE;
     clock.textContent = `${(t / 1000).toFixed(2)} s`;
-    if (ready(F.before) && ready(F.mid) && ready(F.after)) {
+    if (st.r === '1') {
+      const F = frames(key), meta = META[key];
+      if (ready(F.before) && ready(F.mid) && ready(F.after)) {
+        for (const p of panes) {
+          const P = p.P, w = p.cv.clientWidth || 400;
+          P.size(Math.min(1600, w * Math.min(2, devicePixelRatio || 1)));
+          P.begin(F, meta); P.reduced = st.rm;
+          const v = V.find((x) => x.id === p.id);
+          if (st.rm) reducedDraw(P, t, v); else v.draw(P, t);
+        }
+      } else dirty = true;
+    } else if (gl2().fail) {
+      clock.textContent = 'WebGL2 is off in this browser';
+    } else if (upload(key)) {
       for (const p of panes) {
-        const P = p.P, w = p.cv.clientWidth || 400;
-        P.size(Math.min(1600, w * Math.min(2, devicePixelRatio || 1)));
-        P.begin(F, meta); P.reduced = st.rm;
-        const v = V.find((x) => x.id === p.id);
-        if (st.rm) reducedDraw(P, t, v); else v.draw(P, t);
+        const v = R2V.find((x) => x.id === p.id);
+        draw2(p, key, v, t, { reduced: st.rm, calm: st.calm, result: st.c === 'capital' ? resultAt(v) - RENDER_DELAY : null });
       }
     } else dirty = true;
   }
