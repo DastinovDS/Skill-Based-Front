@@ -471,12 +471,6 @@
 
 /* ---- The password screen ---------------------------------------------------------------------- */
 
-.front .panel .intro {
-  margin: 14px 0 0;
-  max-width: 620px;
-  font-size: 18px;
-}
-
 .front .panel .fields {
   display: grid;
   gap: 18px;

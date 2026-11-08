@@ -447,11 +447,6 @@
   max-width: 100%;
 }
 
-.front .play .helm-mark {
-  display: inline-flex;
-  flex: none;
-}
-
 /* A headline in cut capitals (the replay screen's loading and error states). */
 .front .big {
   display: flex;
@@ -681,11 +676,6 @@
   font: italic 400 18px var(--font-text);
   letter-spacing: 0;
   color: var(--ink-dim);
-}
-
-.front .confirm-count {
-  font-style: normal;
-  color: var(--ink);
 }
 
 /* ---- The entry screen: the title, the nick, the log-in sheet -------------------------------- */
