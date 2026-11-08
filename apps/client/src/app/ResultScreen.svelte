@@ -12,7 +12,7 @@
   interface Props {
     me: PlayerId;
     end: MatchEndMsg;
-    /** Own data of the match (nicks, cities, VP peak); null when the client has none (a reload). */
+    /** Own data of the match (the nicks); null when the client has none (a reload). */
     summary?: MatchSummary | null;
     /** The map drawn behind the screen (null: the plain dark page). */
     map?: MapFile | null;
@@ -62,23 +62,23 @@
   const enemyVp = $derived(end.vp[me === 0 ? 1 : 0]);
   const share = $derived(vpShare(mineVp, enemyVp));
 
-  // Cities and VP peak come from the client's own screen; units lost and charges delivered are the
-  // server's totals in match_end (#607), absent when the server sent none.
-  const stats = $derived(
-    [
-      summary?.cities != null ? { key: 'result.stat.cities', value: String(summary.cities) } : null,
-      summary?.vpPeak != null
-        ? { key: 'result.stat.vpPeak', value: String(Math.max(summary.vpPeak, mineVp)) }
-        : null,
-      { key: 'result.stat.length', value: lengthText(end.tick) ?? '' },
-      end.stats != null
-        ? { key: 'result.stat.unitsLost', value: String(end.stats.units_lost) }
-        : null,
-      end.stats != null
-        ? { key: 'result.stat.chargesDelivered', value: String(end.stats.charges_delivered) }
-        : null,
-    ].filter((stat) => stat !== null),
-  );
+  // The numbers are the server's totals of the whole match in match_end (#824; definitions:
+  // docs/design/ui-style.md 13.6); without them only the match length is shown.
+  const outOf = (n: number, total: number): string => tf('result.stat.outOf', { n, total });
+  const stats = $derived.by((): { key: MessageKey; value: string }[] => {
+    const length = { key: 'result.stat.length', value: lengthText(end.tick) ?? '' } as const;
+    const s = end.stats;
+    if (s === null) return [length];
+    return [
+      { key: 'result.stat.unitsKilled', value: String(s.units_killed) },
+      { key: 'result.stat.unitsLost', value: String(s.units_lost) },
+      { key: 'result.stat.attacksWon', value: outOf(s.attacks_won, s.attacks) },
+      { key: 'result.stat.defensesHeld', value: outOf(s.defenses_held, s.defenses) },
+      { key: 'result.stat.citiesCaptured', value: String(s.cities_captured) },
+      { key: 'result.stat.provincesCaptured', value: String(s.provinces_captured) },
+      length,
+    ];
+  });
 
   const delta = $derived(end.rating === null ? 0 : end.rating.after - end.rating.before);
 
@@ -141,7 +141,7 @@
   <dl class="stats">
     {#each stats as stat (stat.key)}
       <div>
-        <dt>{t(stat.key as MessageKey)}</dt>
+        <dt>{t(stat.key)}</dt>
         <dd>{stat.value}</dd>
       </div>
     {/each}
@@ -292,8 +292,10 @@
   }
 
   .stats {
-    display: flex;
-    gap: 28px;
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    justify-content: space-between;
+    gap: 14px 20px;
     margin: 22px 0 0;
     padding: 12px 0 0;
     border-top: 1px solid rgb(230 237 243 / 10%);
@@ -303,6 +305,7 @@
   .stats div {
     display: flex;
     flex-direction: column;
+    justify-content: space-between; /* the numbers of a row line up under captions of 1 or 2 lines */
   }
   .stats dd {
     margin: 0;

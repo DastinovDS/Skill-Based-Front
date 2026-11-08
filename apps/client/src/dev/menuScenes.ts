@@ -124,7 +124,16 @@ const ended: MatchEndMsg = {
   rated: false,
   unrated_reason: null,
   calibration: null,
-  stats: { units_lost: 14, charges_delivered: 236 },
+  stats: {
+    units_killed: 19,
+    units_lost: 14,
+    cities_captured: 5,
+    provinces_captured: 3,
+    attacks: 7,
+    attacks_won: 4,
+    defenses: 3,
+    defenses_held: 2,
+  },
 };
 
 const unrated = (reason: UnratedReason): MatchEndMsg => ({
@@ -148,8 +157,6 @@ export const RESULT_SCENES: Readonly<Record<string, MatchEndMsg>> = {
 /** What the client knows of its own side at the end of the result scenes (#596). */
 export const RESULT_SUMMARY: MatchSummary = {
   nicks: { mine: 'Ember', enemy: 'Marta' },
-  cities: 4,
-  vpPeak: 9,
 };
 
 export function isDockScene(id: string): boolean {

@@ -26,24 +26,11 @@ describe('HudState', () => {
     expect(hud.current).toBeNull();
   });
 
-  it('summarises our side for the result screen (#596): nicks, own cities, VP peak', () => {
+  it('gives the result screen the nicks of our side (#596)', () => {
     const hud = newState();
-    expect(hud.summary()).toEqual({
-      nicks: { mine: 'Ember', enemy: 'Bot' },
-      cities: null,
-      vpPeak: null,
-    });
-    const first = snapshot(5);
-    hud.onSnapshot(first);
-    const summary = hud.summary();
-    const own = first.view.nodes.filter(
-      (n) => n.owner === 0 && map.nodes[n.id]?.kind !== 'province',
-    ).length;
-    expect(summary.cities).toBe(own);
-    expect(summary.vpPeak).toBe(first.view.vp[0]);
-    const lower = { ...first, view: { ...first.view, vp: [0, 0] as [number, number] } };
-    hud.onSnapshot(lower);
-    expect(hud.summary().vpPeak).toBe(first.view.vp[0]); // a peak never goes down
+    expect(hud.summary()).toEqual({ nicks: { mine: 'Ember', enemy: 'Bot' } });
+    hud.onSnapshot(snapshot(5));
+    expect(hud.summary()).toEqual({ nicks: { mine: 'Ember', enemy: 'Bot' } });
   });
 
   it('replaces `current` once per snapshot and not otherwise', () => {
