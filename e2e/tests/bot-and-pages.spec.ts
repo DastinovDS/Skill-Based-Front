@@ -30,7 +30,7 @@ test('a bot match on a generated map names the map on the result screen', async 
 
   await player.forfeit();
   await expect(player.page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
-  await expect(player.page.getByText('Map: gen1-17')).toBeVisible();
+  await expect(player.page.getByText('Match result · gen1-17')).toBeVisible();
   await player.close();
 });
 

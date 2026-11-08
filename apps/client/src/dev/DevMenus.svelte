@@ -160,7 +160,7 @@
   <QueueView
     {map}
     status={queue}
-    hidden={id === 'queue-long'}
+    nick="Ember"
     failure={null}
     busy={false}
     {...{ onconfirm: nothing, onleave: nothing, onbot: nothing }}

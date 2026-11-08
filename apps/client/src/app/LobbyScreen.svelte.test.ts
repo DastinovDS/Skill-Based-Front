@@ -80,7 +80,8 @@ describe('LobbyScreen (Dock, #473)', () => {
   it('shows how long a match waits, its map and the "no pauses" and "unrated" chips', async () => {
     render({ lobby: () => Promise.resolve([entry('c1', 'alice', 'ridge')]) });
     await settle();
-    expect(document.body.textContent).toContain('ridge · waiting 1:05');
+    expect(document.body.querySelector('.ent .lm')?.textContent).toBe('ridge');
+    expect(document.body.querySelector('.ent .lt')?.textContent).toBe('waiting 1:05');
     expect(document.body.textContent).toContain(translate('en', 'dock.chip.noPause'));
     expect(document.body.textContent).toContain(translate('en', 'dock.chip.unrated'));
   });

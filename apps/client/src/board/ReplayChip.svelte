@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { ReplayLinkState } from '../api/http.ts';
-  import Icon from '../hud/Icon.svelte';
   import { t, tf } from '../i18n/index.ts';
 
   interface Props {
@@ -14,101 +13,86 @@
   let { state, opponent, onwatch }: Props = $props();
 </script>
 
-<!-- One chip per state of the replay; the state is a shape and a word, never colour alone. Only
-     `ready` opens the viewer: the server decides what can be watched (AGENTS.md, section 7.1). -->
+<!-- One mark per state (Lapis, #845): Watch is a quiet button; the other states are words in
+     italics (Preparing with its waiting dots), never colour alone. Only `ready` opens the viewer: the
+     server decides what can be watched (AGENTS.md, section 7.1). -->
 {#if state === 'ready'}
   <button
     type="button"
-    class="watch"
+    class="watch lapis-btn secondary sm"
     aria-label={tf('history.replay.watchAria', { opponent })}
     onclick={onwatch}
   >
-    <Icon name="eye" size={15} />{t('history.replay.watch')}
+    {t('history.replay.watch')}
   </button>
 {:else if state === 'preparing'}
-  <span class="chip" title={t('history.replay.preparingTitle')}>
-    <i class="dot" aria-hidden="true"></i>{t('history.replay.preparing')}
+  <span class="st" title={t('history.replay.preparingTitle')}>
+    <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>{t(
+      'history.replay.preparing',
+    )}
   </span>
 {:else if state === 'expired'}
-  <span class="chip dashed" title={t('history.replay.expiredTitle')}>
-    <Icon name="clock" size={13} />{t('history.replay.expired')}
-  </span>
+  <span class="st" title={t('history.replay.expiredTitle')}>{t('history.replay.expired')}</span>
 {:else if state === 'unavailable'}
-  <span class="chip dashed" title={t('history.replay.unavailableTitle')}>
-    <Icon name="ban" size={13} />{t('history.replay.unavailable')}
-  </span>
+  <span class="st" title={t('history.replay.unavailableTitle')}
+    >{t('history.replay.unavailable')}</span
+  >
 {:else}
-  <span class="chip" title={t('history.replay.privateTitle')}>
-    <Icon name="lock" size={13} />{t('history.replay.private')}
-  </span>
+  <span class="st" title={t('history.replay.privateTitle')}>{t('history.replay.private')}</span>
 {/if}
 
 <style>
-  .watch,
-  .chip {
+  .watch {
+    letter-spacing: 0.2em;
+  }
+
+  .st {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    color: var(--ink-dim);
+    font-size: 18px;
+    font-style: italic;
     white-space: nowrap;
   }
 
-  .watch {
-    height: 30px;
-    padding: 0 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-2);
-    color: var(--text);
-    font: inherit;
-    font-size: 14px;
-    cursor: pointer;
+  .dots {
+    display: inline-flex;
+    gap: 3px;
   }
 
-  .watch:hover {
-    border-color: var(--text-dim);
+  .dots i {
+    display: block;
+    width: 5px;
+    height: 5px;
+    background: currentColor;
+    animation: dots 1.2s ease-in-out infinite;
   }
 
-  .watch:focus-visible {
-    outline: 2px solid var(--paper);
-    outline-offset: 2px;
+  .dots i:nth-child(2) {
+    animation-delay: 0.15s;
   }
 
-  .chip {
-    height: 28px;
-    padding: 0 10px;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    background: rgb(22 19 15 / 55%);
-    color: var(--text-dim);
-    font-size: 13px;
+  .dots i:nth-child(3) {
+    animation-delay: 0.3s;
   }
 
-  .chip.dashed {
-    border-style: dashed;
-  }
-
-  .dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--text-dim);
-    animation: pulse 1.25s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
+  @keyframes dots {
     0%,
+    60%,
     100% {
-      opacity: 0.35;
+      opacity: 0.25;
     }
-    50% {
+
+    30% {
       opacity: 1;
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .dot {
+    .dots i {
       animation: none;
+      opacity: 0.7;
     }
   }
 </style>

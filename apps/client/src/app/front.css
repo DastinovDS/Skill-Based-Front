@@ -1,0 +1,822 @@
+/* ===== The screens before a match: Lapis (#826, #845) =====
+   docs/design/mockups/out-of-game-style-r2.html (Lapis, layout of round 2) with round 3's edges II
+   "Double rule" and the Spare captions (out-of-game-style-r3.html, ui-style 51 and 56). Black stone,
+   cut capitals (Cinzel), ivory ink, incised rules; the sides are lapis and minium. The top bar
+   carries the brand, the tabs and the player; the main screen is Play and the numbered ways to play.
+   Used by ScreenFrame (the frame of every screen before a match), DockFrame (dock.css) and
+   SheetFrame (board/sheet.css). The tokens and the primitives are app.css and theme/primitives.css. */
+
+.front {
+  /* A doubled rule along the top of a row: the cut, its lip and a faint rule 4 px down (edges II). */
+  --rule-dbl:
+    linear-gradient(var(--cut), var(--cut)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) 0 1px / 100% 1px no-repeat,
+    linear-gradient(var(--lit-faint), var(--lit-faint)) 0 4px / 100% 1px no-repeat;
+  /* The frame of a chosen tile or level: an ivory rule and a fainter one 3 px in. */
+  --frame-chosen:
+    linear-gradient(var(--ink), var(--ink)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 0 100% / 100% 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 0 0 / 1px 100% no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 100% 0 / 1px 100% no-repeat,
+    linear-gradient(rgb(236 228 209 / 35%), rgb(236 228 209 / 35%)) 3px 3px / calc(100% - 6px) 1px
+      no-repeat,
+    linear-gradient(rgb(236 228 209 / 35%), rgb(236 228 209 / 35%)) 3px calc(100% - 3px) /
+      calc(100% - 6px) 1px no-repeat,
+    linear-gradient(rgb(236 228 209 / 35%), rgb(236 228 209 / 35%)) 3px 3px / 1px calc(100% - 6px)
+      no-repeat,
+    linear-gradient(rgb(236 228 209 / 35%), rgb(236 228 209 / 35%)) calc(100% - 3px) 3px / 1px
+      calc(100% - 6px) no-repeat;
+  /* The quiet frame of a secondary button: a firm rule and a faint one 3 px in. */
+  --frame-quiet:
+    linear-gradient(var(--rule), var(--rule)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--rule), var(--rule)) 0 100% / 100% 1px no-repeat,
+    linear-gradient(var(--rule), var(--rule)) 0 0 / 1px 100% no-repeat,
+    linear-gradient(var(--rule), var(--rule)) 100% 0 / 1px 100% no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) 3px 3px / calc(100% - 6px) 1px no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) 3px calc(100% - 3px) / calc(100% - 6px)
+      1px no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) 3px 3px / 1px calc(100% - 6px) no-repeat,
+    linear-gradient(var(--rule-faint), var(--rule-faint)) calc(100% - 3px) 3px / 1px
+      calc(100% - 6px) no-repeat;
+
+  position: fixed;
+  inset: 0 0 var(--legal-footer-h);
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: 18px;
+  line-height: 1.45;
+  background: var(--stone-tex) var(--stone-bg);
+}
+
+.front button {
+  font-family: inherit;
+}
+
+.front :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* The map behind the play screens: dimmed, then a shade from the left so the text stands on stone. */
+.front .backdrop {
+  opacity: 0.75;
+}
+
+.front .shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    var(--stone-bg) 0%,
+    rgb(22 19 15 / 94%) 46%,
+    rgb(22 19 15 / 30%) 74%,
+    rgb(22 19 15 / 62%) 100%
+  );
+}
+
+/* ---- The top bar: the brand, the tabs, the player ------------------------------------------- */
+
+.front .top {
+  position: absolute;
+  inset: 0 0 auto;
+  /* Over the rail and the dock panel: the account menu and its dialog open from here. */
+  z-index: 8;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 72px;
+  padding: 0 64px;
+  border-bottom: 1px solid var(--cut);
+  box-shadow: 0 1px 0 var(--line);
+  background: rgb(22 19 15 / 82%);
+}
+
+/* Edges II: the bar's rule is doubled by a faint one 4 px under it. */
+.front .top::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 1px;
+  background: var(--lit-faint);
+  pointer-events: none;
+}
+
+.front .mark {
+  flex: none;
+  margin: 0;
+  font: 400 17px / 1 var(--font-display);
+  letter-spacing: 0.34em;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.front .corner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+/* The tabs: cut capitals; the open one is ivory with a small triangle under it, not only brighter. */
+.front .tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 40px;
+  margin-left: 72px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1279px) {
+  .front .top {
+    padding: 0 40px;
+  }
+
+  .front .tabs {
+    gap: 4px 28px;
+    margin-left: 40px;
+  }
+}
+
+.front .tab {
+  position: relative;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--ink-dim);
+  font: 500 12.5px / 1.2 var(--font-display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.front button.tab:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.front .tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.front .tab.cur {
+  color: var(--ink);
+}
+
+.front .tab.cur::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top: 6px solid var(--ink);
+  border-bottom: 0;
+}
+
+.front span.tab.cur {
+  cursor: default;
+}
+
+/* The player: the nick in cut capitals, the standing in italics (Guest, Calibration 3/5, the rating). */
+.front .acct {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.front .who {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: 100%;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.front .who:disabled {
+  cursor: default;
+}
+
+.front .who .nick {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 13px / 1.2 var(--font-display);
+  letter-spacing: 0.16em;
+}
+
+.front .who .st {
+  font-size: 17px;
+  font-style: italic;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.front .who:hover:not(:disabled) .nick {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-thickness: 1px;
+}
+
+/* The account menu under the player: a stone panel in the Double rule frame. */
+.front .pop {
+  position: absolute;
+  top: calc(100% + 14px);
+  right: 0;
+  z-index: 30;
+  box-sizing: border-box;
+  width: 280px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--stone-tex) var(--stone-panel);
+  box-shadow: 0 20px 40px rgb(0 0 0 / 45%);
+}
+
+.front .pop button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 17px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.front .pop button:hover {
+  background: rgb(236 228 209 / 6%);
+}
+
+.front .pop button svg {
+  color: var(--ink-dim);
+}
+
+/* ---- Labels, chips, notices ----------------------------------------------------------------- */
+
+/* A label in cut capitals over a heading or a field (the kicker of the mockup). */
+.front .eyebrow,
+.front .kicker,
+.front .label {
+  margin: 0;
+  font: 500 11.5px / 1.3 var(--font-display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.front .eyebrow.warn {
+  color: var(--warn);
+}
+
+.front .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 4px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: 500 11.5px / 1.2 var(--font-display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The queue lock (DEC-34): the amber chip with a lock and the time left. */
+.front .chip.ban {
+  border-color: currentColor;
+  color: var(--warn);
+  font-style: italic;
+}
+
+/* A notice on the stone: the amber sign and the words in ink (the sign carries the state). */
+.front .wl {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 0;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.front .wl svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--warn);
+}
+
+.front .hint {
+  margin: 6px 0 0;
+  color: var(--ink-dim);
+  font-size: 16px;
+  font-style: italic;
+}
+
+/* A line of text under a heading: italic, dim (data lines such as "Map: crossroads"). */
+.front .sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 14px 0 0;
+  color: var(--ink-dim);
+  font-size: 18px;
+  font-style: italic;
+}
+
+.front .sub:empty {
+  display: none;
+}
+
+/* A quiet link in the words of the page ("To the menu", "Stay", "Back"). */
+.front .lnk,
+.front .linkbtn {
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 18px;
+  font-style: italic;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+}
+
+.front .lnk:hover,
+.front .linkbtn:hover {
+  color: #fff8e9;
+}
+
+/* Three dots that wait (a search, a join, a start); still under reduced motion. */
+.front .busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.front .busy i {
+  display: block;
+  width: 5px;
+  height: 5px;
+  background: currentColor;
+  animation: lapis-busy 1.2s infinite ease-in-out;
+}
+
+.front .busy i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.front .busy i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes lapis-busy {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+
+  30% {
+    opacity: 1;
+  }
+}
+
+/* Calibration as cells: filled is played, open is to come (never colour alone). */
+.front .cells {
+  display: inline-flex;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.front .cells i {
+  display: block;
+  width: 18px;
+  height: 8px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ink);
+}
+
+.front .cells i.on {
+  background: var(--ink);
+}
+
+/* ---- The rail: the main screen's Play and the ways to play --------------------------------- */
+
+.front .rail {
+  position: absolute;
+  left: 128px;
+  top: 142px;
+  z-index: 5;
+  width: 540px;
+  max-width: calc(100% - 152px);
+}
+
+@media (max-width: 1279px) {
+  .front .rail {
+    left: 64px;
+    max-width: calc(100% - 88px);
+  }
+}
+
+.front .rail > .kicker {
+  margin-bottom: 14px;
+}
+
+/* Play: the ivory tablet with its inner rule (LapisButton primary, lg). */
+.front .play.lapis-btn {
+  width: 430px;
+  max-width: 100%;
+}
+
+/* A headline in cut capitals (the replay screen's loading and error states). */
+.front .big {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 10px 0 0;
+  font: 400 40px / 1.1 var(--font-display);
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+
+.front .big.warn {
+  color: var(--warn);
+}
+
+/* The ways to play: a numbered list, a doubled rule over each row, Roman numerals. */
+.front .modes {
+  width: 540px;
+  max-width: 100%;
+  margin: 52px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: mode;
+}
+
+.front .modes li {
+  background: var(--rule-dbl);
+  counter-increment: mode;
+}
+
+.front .row {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: baseline;
+  width: 100%;
+  padding: 22px 0 21px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 500 19px / 1.2 var(--font-display);
+  letter-spacing: 0.12em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.front .modes .row::before {
+  content: counter(mode, upper-roman);
+  font: 400 26px / 1 var(--font-display);
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+.front .row:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 6px;
+  text-decoration-thickness: 1px;
+}
+
+.front .row:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+/* Rows outside the numbered list (the replay screen's Retry and Back): the same cut, no numeral. */
+.front .rows {
+  width: 540px;
+  max-width: 100%;
+  margin-top: 40px;
+}
+
+.front .rows .row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 0 17px;
+  background: var(--rule-dbl);
+}
+
+.front .rows .row svg {
+  color: var(--ink-dim);
+}
+
+/* ---- Buttons of the Lapis set beyond the primitives ---------------------------------------- */
+
+.front .lapis-btn.danger.primary {
+  background: var(--enemy-lapis);
+  color: var(--stone-bg);
+  box-shadow:
+    inset 0 0 0 4px var(--enemy-lapis),
+    inset 0 0 0 5px var(--stone-bg);
+}
+
+.front .acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+/* ---- Fields (the entry form, the password screen) ------------------------------------------ */
+
+.front .field {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.front .field .box {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--cut);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.front .field input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 0 10px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+}
+
+.front .field input::placeholder {
+  color: var(--ink-dim);
+  opacity: 0.8;
+}
+
+.front .field .box:focus-within {
+  border-bottom-color: var(--ink);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.front .field.bad .box {
+  border-bottom-color: var(--warn);
+  box-shadow: 0 1px 0 var(--warn);
+}
+
+.front .field .hint {
+  margin: 0;
+  font-size: 15px;
+}
+
+/* ---- The result: the width of the page under the bar --------------------------------------- */
+
+.front.wide .rail {
+  inset: 72px 0 0;
+  box-sizing: border-box;
+  width: auto;
+  max-width: none;
+  padding: 54px 128px 0;
+  overflow: auto;
+}
+
+@media (max-width: 1279px) {
+  .front.wide .rail {
+    padding: 40px 64px 0;
+  }
+}
+
+/* ---- The queue and other centred states ---------------------------------------------------- */
+
+.front.center .rail {
+  inset: 72px 24px 0;
+  width: auto;
+  max-width: none;
+  display: grid;
+  place-items: center;
+}
+
+.front .lead {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.front .lead .sub {
+  justify-content: center;
+  margin: 0;
+}
+
+.front .lead .acts {
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.front .clock {
+  margin: 0;
+  font: 400 132px / 1 var(--font-text);
+  letter-spacing: 0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.front .offer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 22px;
+  background: var(--rule-dbl);
+}
+
+.front .versus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 8px 0;
+  font: 500 22px / 1.2 var(--font-display);
+  letter-spacing: 0.12em;
+}
+
+.front .versus .name {
+  overflow-wrap: anywhere;
+}
+
+.front .versus .vs-x {
+  font: italic 400 18px var(--font-text);
+  letter-spacing: 0;
+  color: var(--ink-dim);
+}
+
+/* ---- The entry screen: the title, the nick, the log-in sheet -------------------------------- */
+
+.front.entry .backdrop {
+  opacity: 0.5;
+  filter: blur(6px);
+}
+
+.front.entry .shade {
+  background: radial-gradient(
+    ellipse 70% 62% at 50% 46%,
+    rgb(11 10 8 / 15%) 0%,
+    rgb(11 10 8 / 72%) 70%,
+    #0b0a08 100%
+  );
+}
+
+.front.entry .rail {
+  inset: 0;
+  width: auto;
+  max-width: none;
+  overflow: auto;
+}
+
+.front .locale {
+  margin-top: 18px;
+  font-size: 15px;
+  color: var(--ink-dim);
+}
+
+.front .locale select {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  background: var(--stone-raised);
+  color: inherit;
+  font: inherit;
+}
+
+/* ---- A small window or a big UI scale: the rail flows over the picture --------------------- */
+@media (max-width: 899px), (max-height: 560px) {
+  .front {
+    overflow: auto;
+  }
+
+  .front .top {
+    position: relative;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 72px;
+    padding: 12px 24px;
+  }
+
+  .front .tabs {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+    padding-bottom: 10px;
+    gap: 4px 24px;
+  }
+
+  .front .rail {
+    position: relative;
+    inset: auto;
+    left: auto;
+    top: auto;
+    width: auto;
+    max-width: none;
+    margin: 28px 24px 0;
+  }
+
+  .front.center .rail {
+    inset: auto;
+    display: block;
+  }
+
+  .front.wide .rail {
+    inset: auto;
+    padding: 0 0 24px;
+    overflow: visible;
+  }
+
+  .front .play.lapis-btn {
+    width: 100%;
+  }
+
+  .front .modes {
+    margin-top: 32px;
+  }
+
+  .front .clock {
+    font-size: 96px;
+  }
+
+  /* The rail lies over the map here: a flat shade keeps the text legible. */
+  .front .shade {
+    background: rgb(22 19 15 / 80%);
+  }
+}
+
+/* ---- Dialogs on the blurred stone (StoneOverlay, ui-style 51) ------------------------------- */
+
+.stone-window .kicker {
+  margin: 0;
+  font: 500 11.5px / 1.3 var(--font-display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.stone-window .dlg-h {
+  margin: 6px 0 12px;
+  font: 400 28px / 1.2 var(--font-display);
+  letter-spacing: 0.1em;
+}
+
+.stone-window .dlg-p {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.stone-window .dlg-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.stone-window .dlg-acts + .dlg-acts {
+  margin-top: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .front * {
+    transition: none;
+  }
+
+  .front .busy i {
+    animation: none;
+    opacity: 0.7;
+  }
+}

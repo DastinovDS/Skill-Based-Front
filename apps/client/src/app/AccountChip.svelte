@@ -2,6 +2,8 @@
   import Icon from '../hud/Icon.svelte';
   import { t } from '../i18n/index.ts';
   import type { Calibration } from '../protocol.gen.ts';
+  import LapisButton from '../theme/LapisButton.svelte';
+  import StoneOverlay from '../theme/StoneOverlay.svelte';
   import PlayerChip from './PlayerChip.svelte';
 
   interface Props {
@@ -29,21 +31,27 @@
     inert = false,
   }: Props = $props();
 
-  // A guest without a password loses the account by logging out: ask once before that.
+  // A guest without a password loses the account by logging out: a dialog on the stone asks once
+  // before that (Lapis, #845).
   let confirmingLogout = $state(false);
 
   function close(): void {
     open = false;
-    confirmingLogout = false;
   }
 
+  // While the dialog shows, `open` stays true: the screen behind keeps its keys quiet.
   function logout(): void {
-    if (hasPassword || confirmingLogout) onlogout();
+    if (hasPassword) onlogout();
     else confirmingLogout = true;
   }
 
+  function stay(): void {
+    confirmingLogout = false;
+    open = false;
+  }
+
   function onkeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && open) {
+    if (event.key === 'Escape' && open && !confirmingLogout) {
       close();
       event.preventDefault();
     }
@@ -69,30 +77,36 @@
       else open = true;
     }}
   />
-  {#if open}
-    <div class="pop" id="account-menu" role="menu">
-      {#if confirmingLogout}
-        <p class="wl" role="alert">
-          <Icon name="alert" size={16} />{t('menu.logoutWarning')}
-        </p>
-      {/if}
+  {#if open && !confirmingLogout}
+    <div class="pop rule-frame" id="account-menu" role="menu">
       <button type="button" role="menuitem" onclick={onpassword}>
         <Icon name="key" size={18} />
         {hasPassword ? t('menu.changePassword') : t('menu.setPassword')}
       </button>
       <button type="button" role="menuitem" onclick={logout}>
         <Icon name="logout" size={18} />
-        {confirmingLogout ? t('menu.logoutConfirm') : t('menu.logout')}
+        {t('menu.logout')}
       </button>
-      {#if confirmingLogout}
-        <button
-          type="button"
-          role="menuitem"
+    </div>
+  {/if}
+  {#if confirmingLogout}
+    <StoneOverlay label={t('menu.logoutTitle')} role="alertdialog" onclose={stay}>
+      <p class="kicker">{t('account.eyebrow')}</p>
+      <h2 class="dlg-h">{t('menu.logoutTitle')}</h2>
+      <p class="dlg-p">{t('menu.logoutWarning')}</p>
+      <div class="dlg-acts">
+        <LapisButton
+          variant="primary"
           onclick={() => {
             confirmingLogout = false;
-          }}>{t('menu.logoutCancel')}</button
+            onpassword();
+          }}>{t('menu.setPassword')}</LapisButton
         >
-      {/if}
-    </div>
+      </div>
+      <div class="dlg-acts">
+        <LapisButton danger onclick={onlogout}>{t('menu.logoutConfirm')}</LapisButton>
+        <button type="button" class="lnk" onclick={stay}>{t('menu.logoutCancel')}</button>
+      </div>
+    </StoneOverlay>
   {/if}
 </div>

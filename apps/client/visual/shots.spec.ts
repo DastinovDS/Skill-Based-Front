@@ -616,13 +616,39 @@ for (const id of ['queue-search', 'queue-found', 'queue-confirmed'] as const) {
   });
 }
 
-test('shot of the account menu', async ({ page }) => {
+// The log-in and the new-account sheets of the entry screen (#845): `screen-welcome-login.png`,
+// `screen-welcome-register.png`, each with the grey-scale twin.
+for (const [name, link] of [
+  ['login', 'Log in'],
+  ['register', 'Create account'],
+] as const) {
+  test(`shot of the entry sheet ${name}`, async ({ page }) => {
+    await page.goto('/?menu=welcome');
+    await page.evaluate('document.fonts.ready.then(() => true)');
+    await page.getByRole('button', { name: link, exact: true }).click();
+    await expect(page.locator('form.sheet')).toBeVisible();
+    await page.mouse.move(1000, 700);
+    await page.screenshot({ path: join(OUT, `screen-welcome-${name}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `screen-welcome-${name}-gray.png`) });
+  });
+}
+
+// The account menu (`screen-account-menu.png`), then the log-out dialog of a guest without a
+// password on the blurred stone (#845, `screen-account-logout.png` and grey).
+test('shot of the account menu and the log-out dialog', async ({ page }) => {
   await page.goto('/?menu=menu-guest');
+  await page.evaluate('document.fonts.ready.then(() => true)');
   await page.locator('button.who').click();
-  await page.getByRole('menuitem', { name: 'Log out' }).click();
   await expect(page.getByRole('menu')).toBeVisible();
   await page.mouse.move(600, 700);
   await page.screenshot({ path: join(OUT, 'screen-account-menu.png') });
+  await page.getByRole('menuitem', { name: 'Log out' }).click();
+  await expect(page.getByRole('alertdialog')).toBeVisible();
+  await page.mouse.move(1000, 700);
+  await page.screenshot({ path: join(OUT, 'screen-account-logout.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'screen-account-logout-gray.png') });
 });
 
 for (const size of [

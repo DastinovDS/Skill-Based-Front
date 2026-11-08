@@ -156,20 +156,21 @@ describe('MenuScreen', () => {
   });
 
   describe('the player chip in the corner', () => {
-    it('shows a guest as unrated with a hint to set a password', () => {
+    it('shows a guest as a guest, with nothing under Play (#845)', () => {
       render({ hasPassword: false });
       expect(document.querySelector('.who')?.textContent).toContain(translate('en', 'menu.guest'));
-      expect(named('menu.guestHint')).toBeTruthy();
+      expect(named('menu.guestHint')).toBeUndefined();
+      expect(document.querySelector('.rail .kicker')?.textContent).toBe(
+        translate('en', 'menu.kicker.guest'),
+      );
     });
 
-    it('shows calibration k/5 there and nowhere else', () => {
+    it('shows calibration k/5 in the chip, and the match to come over Play', () => {
       render({ hasPassword: true, calibration: { played: 2, total: 5 } });
-      const chip = document.querySelector('.who');
-      expect(chip?.textContent).toContain('Calibration 2/5');
-      expect(chip?.querySelectorAll('.cells i.on')).toHaveLength(2);
-      expect(chip?.querySelectorAll('.cells i')).toHaveLength(5);
-      const outside = document.body.textContent.replace(chip?.textContent ?? '', '');
-      expect(outside).not.toMatch(/Calibration|Rating shows/);
+      expect(document.querySelector('.who')?.textContent).toContain('Calibration 2/5');
+      expect(document.querySelector('.rail .kicker')?.textContent).toBe(
+        'Calibration, match 3 of 5',
+      );
     });
 
     it('shows a calibrated account as ranked', () => {
@@ -274,9 +275,11 @@ describe('MenuScreen', () => {
       flushSync();
       expect(onlogout).not.toHaveBeenCalled();
       expect(document.body.textContent).toContain(translate('en', 'menu.logoutWarning'));
+      expect(document.querySelector('[role=alertdialog]')).not.toBeNull();
       named('menu.logoutCancel')?.click();
       flushSync();
       expect(document.body.textContent).not.toContain(translate('en', 'menu.logoutWarning'));
+      openAccount();
       named('menu.logout')?.click();
       flushSync();
       named('menu.logoutConfirm')?.click();

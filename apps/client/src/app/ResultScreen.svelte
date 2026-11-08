@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { lengthText } from '../board/time.ts';
-  import Icon from '../hud/Icon.svelte';
+  import LapisButton from '../theme/LapisButton.svelte';
   import { vpShare } from '../hud/topBar.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import type { EndReason, MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
@@ -64,18 +64,26 @@
 
   // The numbers are the server's totals of the whole match in match_end (#824; definitions:
   // docs/design/ui-style.md 13.6); without them only the match length is shown.
-  const outOf = (n: number, total: number): string => tf('result.stat.outOf', { n, total });
-  const stats = $derived.by((): { key: MessageKey; value: string }[] => {
+  // The order of the Lapis result (#845): the units, the places, the attacks and defenses, the length.
+  interface Stat {
+    key: MessageKey;
+    value: string;
+    /** "9 of 11": the total, set apart by an italic "of". */
+    of?: number;
+  }
+  // The spaces round "of" are part of the text (read aloud and copied as "9 of 11").
+  const ofWord = $derived(` ${t('result.stat.of')} `);
+  const stats = $derived.by((): Stat[] => {
     const length = { key: 'result.stat.length', value: lengthText(end.tick) ?? '' } as const;
     const s = end.stats;
     if (s === null) return [length];
     return [
       { key: 'result.stat.unitsKilled', value: String(s.units_killed) },
       { key: 'result.stat.unitsLost', value: String(s.units_lost) },
-      { key: 'result.stat.attacksWon', value: outOf(s.attacks_won, s.attacks) },
-      { key: 'result.stat.defensesHeld', value: outOf(s.defenses_held, s.defenses) },
       { key: 'result.stat.citiesCaptured', value: String(s.cities_captured) },
       { key: 'result.stat.provincesCaptured', value: String(s.provinces_captured) },
+      { key: 'result.stat.attacksWon', value: String(s.attacks_won), of: s.attacks },
+      { key: 'result.stat.defensesHeld', value: String(s.defenses_held), of: s.defenses },
       length,
     ];
   });
@@ -104,285 +112,280 @@
 
 <svelte:window {onkeydown} />
 
-<ScreenFrame {map} label={t('result.title')}>
-  <div class="eyebrow">{t('result.title')}</div>
-  <h2 class="verdict {outcome}" tabindex="-1" bind:this={verdictEl}>
-    <span class="marks" aria-hidden="true">
-      {#if outcome !== 'lose'}<UnitMark side="own" size={34} />{/if}
-      {#if outcome !== 'win'}<UnitMark side="enemy" size={34} />{/if}
-    </span>
-    {t(VERDICTS[outcome])}
-  </h2>
-  <p class="sub reason">{reason}</p>
-  {#if mapId !== null}
-    <p class="mapcode">{tf('result.map', { map: mapId })}</p>
-  {/if}
-
-  <div
-    class="score"
-    role="group"
-    aria-label={tf('result.score', {
-      mine: mineVp,
-      mineNick,
-      enemy: enemyVp,
-      enemyNick,
-    })}
-  >
-    <b class="nm mine">{mineNick}</b>
-    <b class="nm enemy">{enemyNick}</b>
-    <span class="vp mine" aria-hidden="true">{mineVp}</span>
-    <span class="tug" aria-hidden="true">
-      <span class="tug-mine" style:flex-basis="{share}%"></span>
-      <span class="tug-enemy"></span>
-    </span>
-    <span class="vp enemy" aria-hidden="true">{enemyVp}</span>
-  </div>
-
-  <dl class="stats">
-    {#each stats as stat (stat.key)}
-      <div>
-        <dt>{t(stat.key)}</dt>
-        <dd>{stat.value}</dd>
-      </div>
-    {/each}
-  </dl>
-
-  {#if end.rating !== null}
-    <div class="rate">
-      <span class="cap">{t('result.rating')}</span>
-      <span class="delta"
-        ><span aria-hidden="true">{delta < 0 ? '↓' : delta > 0 ? '↑' : '='}</span>
-        {delta > 0 ? `+${String(delta)}` : String(delta)}</span
-      >
-      <span class="range"
-        >{tf('result.ratingFrom', { before: end.rating.before, after: end.rating.after })}</span
-      >
-    </div>
-  {/if}
-  {#if end.calibration !== null}
-    <div class="cal">
-      <span
-        class="cells"
-        role="img"
-        aria-label={tf('result.calibration', {
-          played: end.calibration.played,
-          total: end.calibration.total,
-        })}
-      >
-        {#each Array.from({ length: end.calibration.total }, (_, i) => i) as i (i)}
-          <i class:on={i < (end.calibration?.played ?? 0)}></i>
-        {/each}
-      </span>
-      <span class="cap"
-        >{tf('result.calibration', {
-          played: end.calibration.played,
-          total: end.calibration.total,
-        })}</span
-      >
-    </div>
-    {#if end.rating === null}
-      <p class="hint">{t('result.calibrationHidden')}</p>
-    {/if}
-  {/if}
-  <!-- DEC-34: a match that did not change the rating says why. -->
-  {#if !end.rated && end.unrated_reason !== null}
-    <p class="unrated" role="status">
-      <span class="chip">{t('result.notRanked')}</span>
-      {t(`result.unrated.${end.unrated_reason}`)}
+<ScreenFrame {map} label={t('result.title')} wide>
+  <!-- The result (Lapis, #845): the verdict in big cut capitals with the helmets of the outcome,
+       the reason, the score as a tug, the server's totals, the rating; the replay first. -->
+  <div class="res">
+    <p class="kicker">
+      {mapId === null ? t('result.title') : `${t('result.title')} · ${mapId}`}
     </p>
-  {/if}
+    <h2 class="verdict" tabindex="-1" bind:this={verdictEl}>
+      <span class="marks" aria-hidden="true">
+        {#if outcome !== 'lose'}<UnitMark side="own" size={46} />{/if}
+        {#if outcome !== 'win'}<UnitMark side="enemy" size={46} />{/if}
+      </span>
+      {t(VERDICTS[outcome])}
+    </h2>
+    <p class="reason">{reason}</p>
 
-  <div class="acts">
-    <button type="button" class="cta" aria-keyshortcuts="Enter" onclick={onreplay}>
-      <Icon name="history" size={20} />{t('result.replay')}
-    </button>
-    <button type="button" class="linkbtn" aria-keyshortcuts="Escape" onclick={onmenu}>
-      {t('result.menu')}
-    </button>
+    <div
+      class="score"
+      role="group"
+      aria-label={tf('result.score', {
+        mine: mineVp,
+        mineNick,
+        enemy: enemyVp,
+        enemyNick,
+      })}
+    >
+      <b class="nm mine">{mineNick}</b>
+      <span class="vp mine" aria-hidden="true">{mineVp}</span>
+      <span class="tug" aria-hidden="true">
+        <span class="tug-mine" style:flex-basis="{share}%"></span>
+        <span class="tug-enemy"></span>
+      </span>
+      <span class="vp enemy" aria-hidden="true">{enemyVp}</span>
+      <b class="nm enemy">{enemyNick}</b>
+    </div>
+
+    <dl class="stats">
+      {#each stats as stat (stat.key)}
+        <div>
+          <dt>{t(stat.key)}</dt>
+          <dd>
+            {stat.value}{#if stat.of !== undefined}<span class="of">{ofWord}</span>{stat.of}{/if}
+          </dd>
+        </div>
+      {/each}
+    </dl>
+
+    {#if end.rating !== null}
+      <div class="rate">
+        <span class="cap">{t('result.rating')}</span>
+        <span class="delta" class:up={delta > 0}
+          ><span aria-hidden="true">{delta < 0 ? '↓' : delta > 0 ? '↑' : '='}</span>
+          {delta > 0 ? `+${String(delta)}` : String(delta)}</span
+        >
+        <span class="range"
+          >{tf('result.ratingFrom', { before: end.rating.before, after: end.rating.after })}</span
+        >
+      </div>
+    {/if}
+    {#if end.calibration !== null}
+      <div class="rate">
+        <span
+          class="cells"
+          role="img"
+          aria-label={tf('result.calibration', {
+            played: end.calibration.played,
+            total: end.calibration.total,
+          })}
+        >
+          {#each Array.from({ length: end.calibration.total }, (_, i) => i) as i (i)}
+            <i class:on={i < (end.calibration?.played ?? 0)}></i>
+          {/each}
+        </span>
+        <span class="cap"
+          >{tf('result.calibration', {
+            played: end.calibration.played,
+            total: end.calibration.total,
+          })}</span
+        >
+      </div>
+    {/if}
+    <!-- DEC-34: a match that did not change the rating says why (the reason of this match). -->
+    {#if !end.rated && end.unrated_reason !== null}
+      <p class="rate unrated" role="status">
+        <span class="chip">{t('result.notRanked')}</span>
+        <span class="range">{t(`result.unrated.${end.unrated_reason}`)}</span>
+      </p>
+    {/if}
+
+    <div class="acts">
+      <LapisButton variant="primary" aria-keyshortcuts="Enter" onclick={onreplay}
+        >{t('result.replay')}</LapisButton
+      >
+      <button type="button" class="lnk" aria-keyshortcuts="Escape" onclick={onmenu}>
+        {t('result.menu')}
+      </button>
+    </div>
   </div>
 </ScreenFrame>
 
 <style>
+  /* The result stands on the stone of the play screens, left, under the bar (Lapis, #845). */
+  .res {
+    padding-bottom: 32px;
+  }
+
   .verdict {
     display: flex;
     align-items: center;
-    gap: 14px;
-    margin: 8px 0 4px;
-    font-size: 40px;
-    line-height: 1.1;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    color: var(--text);
+    gap: 28px;
+    margin: 10px 0 0;
+    font: 400 104px / 1.05 var(--font-display);
+    letter-spacing: 0.14em;
+    color: var(--ink);
   }
+
   .verdict:focus {
     outline: none;
   }
-  .verdict.win {
-    color: var(--you);
-  }
-  .verdict.lose {
-    color: var(--enemy);
-  }
+
   .marks {
     display: inline-flex;
-    gap: 2px;
+    gap: 6px;
   }
+
   .reason {
-    margin: 0;
-    font-size: 16px;
-    color: var(--text);
-  }
-  .mapcode {
-    margin: 4px 0 0;
-    font-size: 14px;
-    color: var(--text-dim);
+    margin: 6px 0 0;
+    font-size: 23px;
+    font-style: italic;
+    color: var(--ink);
   }
 
   .score {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 4px 12px;
-    margin-top: 22px;
-    width: 370px;
+    gap: 14px;
+    width: 760px;
     max-width: 100%;
+    margin-top: 34px;
   }
+
   .nm {
-    grid-row: 1;
-    font-size: 14px;
+    min-width: 0;
     overflow-wrap: anywhere;
+    font: 500 15px / 1.2 var(--font-display);
+    letter-spacing: 0.14em;
   }
-  .nm.mine {
-    grid-column: 1 / 3;
+
+  .mine {
+    color: var(--own-lapis);
   }
-  .nm.enemy {
-    grid-column: 3;
-    text-align: right;
+
+  .enemy {
+    color: var(--enemy-lapis);
   }
+
   .vp {
-    grid-row: 2;
-    font-size: 28px;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
+    font-size: 42px;
+    line-height: 1;
   }
-  .vp.mine {
-    grid-column: 1;
-    color: var(--you);
-  }
-  .vp.enemy {
-    grid-column: 3;
-    color: var(--enemy);
-  }
+
   .tug {
-    grid-row: 2;
-    grid-column: 2;
     display: flex;
-    height: 10px;
-    overflow: hidden;
-    border: 1px solid var(--paper);
-    border-radius: 3px;
+    height: 6px;
   }
+
   .tug-mine {
     flex: 0 0 auto;
-    background: var(--you);
+    background: var(--own-lapis);
   }
+
   .tug-enemy {
     flex: 1 1 0;
-    background: var(--enemy);
+    background: var(--enemy-lapis);
   }
 
   .stats {
     display: grid;
-    grid-template-columns: repeat(4, auto);
-    justify-content: space-between;
-    gap: 14px 20px;
-    margin: 22px 0 0;
-    padding: 12px 0 0;
-    border-top: 1px solid rgb(236 228 209 / 10%);
-    width: 370px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: 40px;
+    width: 1024px;
     max-width: 100%;
-  }
-  .stats div {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between; /* the numbers of a row line up under captions of 1 or 2 lines */
-  }
-  .stats dd {
-    margin: 0;
-    font-size: 26px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-  .stats dt {
-    font-size: 13px;
-    color: var(--text-dim);
+    margin: 30px 0 0;
+    padding-top: 5px;
+    background:
+      linear-gradient(var(--cut), var(--cut)) 0 0 / 100% 1px no-repeat,
+      linear-gradient(var(--line), var(--line)) 0 1px / 100% 1px no-repeat,
+      linear-gradient(var(--lit-faint), var(--lit-faint)) 0 4px / 100% 1px no-repeat;
   }
 
-  .rate,
-  .cal {
+  .stats div {
+    padding: 14px 0 12px;
+    border-bottom: 1px solid rgb(61 55 45 / 45%);
+  }
+
+  .stats dt {
+    font: 500 11.5px / 1.3 var(--font-display);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  .stats dd {
+    margin: 2px 0 0;
+    font-size: 34px;
+    line-height: 1.1;
+  }
+
+  .of {
+    margin: 0 2px;
+    font-size: 19px;
+    font-style: italic;
+    color: var(--ink-dim);
+  }
+
+  .rate {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 4px 14px;
-    margin-top: 18px;
+    gap: 6px 14px;
+    margin: 26px 0 0;
   }
-  .cal {
-    align-items: center;
+
+  .rate .cells {
+    align-self: center;
   }
+
   .cap {
-    font-size: 13px;
-    letter-spacing: 0.14em;
+    font: 500 11.5px / 1.3 var(--font-display);
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: var(--text-dim);
+    color: var(--ink-dim);
   }
+
   .delta {
-    font-size: 28px;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
+    font-size: 30px;
   }
+
+  .delta.up {
+    color: var(--own-lapis);
+  }
+
   .range {
-    font-size: 14px;
-    color: var(--text-dim);
-    font-variant-numeric: tabular-nums;
+    color: var(--ink-dim);
+    font-style: italic;
   }
+
   .unrated {
-    display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 6px 10px;
-    margin: 18px 0 0;
-    font-size: 14px;
-    color: var(--text-dim);
   }
 
   .acts {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-    margin-top: 28px;
-  }
-  .cta {
-    display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
-    height: 48px;
-    padding: 0 16px;
-    border: 0;
-    border-radius: 8px;
-    background: var(--you);
-    color: var(--bg);
-    font: inherit;
-    font-size: 18px;
-    font-weight: 700;
-    cursor: pointer;
+    gap: 16px;
+    margin-top: 34px;
   }
-  .cta:hover {
-    filter: brightness(1.1);
+
+  @media (max-width: 1279px) {
+    .verdict {
+      font-size: 80px;
+    }
   }
-  .cta :global(.k) {
-    background: rgb(22 19 15 / 18%);
-    border-color: rgb(22 19 15 / 45%);
-    color: var(--bg);
+
+  @media (max-width: 899px), (max-height: 560px) {
+    .verdict {
+      gap: 16px;
+      font-size: 52px;
+    }
+
+    .stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 </style>

@@ -4,6 +4,7 @@
   import { formatClock } from '../hud/format.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import type { MapFile } from '../protocol.gen.ts';
+  import LapisButton from '../theme/LapisButton.svelte';
   import ScreenFrame from './ScreenFrame.svelte';
   import UnitMark from './UnitMark.svelte';
 
@@ -17,8 +18,8 @@
     onconfirm: () => void;
     onleave: () => void;
     onbot: () => void;
-    /** The tab was hidden while searching: a sleeping tab can drop out of the queue. */
-    hidden?: boolean;
+    /** The own nick, for the pair once an opponent is found. */
+    nick?: string | null;
   }
 
   let {
@@ -29,7 +30,7 @@
     onconfirm,
     onleave,
     onbot,
-    hidden = false,
+    nick = null,
   }: Props = $props();
 
   const searching = $derived(status === null || status.state === 'searching');
@@ -65,73 +66,68 @@
   opponent={found ? opponent : null}
   waited={status?.waited_s ?? 0}
   label={t('queue.title')}
+  center
 >
-  <!-- The queue (#629, Q1 "Timer only"): the clock and one word; the bot offer only after the
-       server makes it (60 s); "Keep this tab open" only once the tab was hidden. -->
-  {#if status === null || status.state === 'searching'}
-    {@const waited = status?.waited_s ?? 0}
-    <div
-      class="big static clock"
-      role="timer"
-      aria-label={tf('queue.waited', { time: formatClock(waited) })}
-    >
-      {formatClock(waited)}
-    </div>
-    <div class="sub" role="status">
-      {status === null ? t('common.loading') : t('queue.searching')}
-    </div>
-    {#if hidden}
-      <p class="wl"><Icon name="alert" size={16} />{t('queue.keepOpen')}</p>
-    {/if}
-    <div class="qacts">
-      {#if status?.bot_offer === true}
-        <button type="button" class="qbtn" onclick={onbot}>
-          <Icon name="bot" size={18} />{t('queue.playBot')}<span class="chip"
-            >{t('dock.chip.unrated')}</span
-          >
-        </button>
-      {/if}
-      <button type="button" class="qbtn ghost" aria-keyshortcuts="Escape" onclick={onleave}>
-        {t('queue.leave')}
-      </button>
-    </div>
-  {:else}
-    <div class="versus">
-      <UnitMark side="enemy" size={34} />
-      <span class="name">{opponent}</span>
-    </div>
-    {#if status.state === 'found' && !status.you_confirmed}
-      <div class="confirm">
-        <button
-          type="button"
-          class="qbtn pri"
-          aria-keyshortcuts="Enter"
-          disabled={busy}
-          onclick={onconfirm}
-        >
-          {t('queue.confirm')}
-        </button>
-        <span class="count"
-          >{tf('queue.seconds', { seconds: Math.ceil(status.confirm_in_s ?? 0) })}</span
-        >
-      </div>
-      <div class="qacts">
-        <button type="button" class="qbtn ghost" aria-keyshortcuts="Escape" onclick={onleave}>
-          {t('queue.decline')}
-        </button>
-      </div>
-    {:else if status.state === 'found'}
-      <p class="sub" role="status">
-        {tf('queue.waitingFor', {
-          nick: opponent,
-          seconds: Math.ceil(status.confirm_in_s ?? 0),
-        })}
+  <!-- The queue (#629, Q1; Lapis, #845): in the middle, a label, the clock and one word; the bot
+       offer only after the server makes it (60 s). Spare captions: no "Keep this tab open". -->
+  <section class="lead">
+    {#if status === null || status.state === 'searching'}
+      {@const waited = status?.waited_s ?? 0}
+      <p class="kicker">{t('queue.title')}</p>
+      <p class="clock" role="timer" aria-label={tf('queue.waited', { time: formatClock(waited) })}>
+        {formatClock(waited)}
       </p>
+      <p class="sub" role="status">
+        <span class="busy" aria-hidden="true"><i></i><i></i><i></i></span>
+        {status === null ? t('common.loading') : t('queue.searching')}
+      </p>
+      <div class="acts">
+        <LapisButton aria-keyshortcuts="Escape" onclick={onleave}>{t('queue.leave')}</LapisButton>
+      </div>
+      {#if status?.bot_offer === true}
+        <div class="offer">
+          <LapisButton variant="primary" onclick={onbot}>{t('queue.playBot')}</LapisButton>
+          <span class="chip">{t('dock.chip.unrated')}</span>
+        </div>
+      {/if}
     {:else}
-      <p class="sub" role="status">{t('queue.starting')}</p>
+      <p class="kicker">{t('queue.found')}</p>
+      <div class="versus">
+        <UnitMark side="own" size={38} />
+        {#if nick !== null}<span class="name">{nick}</span>{/if}
+        <span class="vs-x">{t('versus.against')}</span>
+        <span class="name">{opponent}</span>
+        <UnitMark side="enemy" size={38} />
+      </div>
+      {#if status.state === 'found' && !status.you_confirmed}
+        <p class="sub" role="timer">
+          {tf('queue.confirmWithin', { seconds: Math.ceil(status.confirm_in_s ?? 0) })}
+        </p>
+        <div class="acts">
+          <LapisButton
+            variant="primary"
+            aria-keyshortcuts="Enter"
+            disabled={busy}
+            onclick={onconfirm}>{t('queue.confirm')}</LapisButton
+          >
+          <LapisButton aria-keyshortcuts="Escape" onclick={onleave}
+            >{t('queue.decline')}</LapisButton
+          >
+        </div>
+      {:else if status.state === 'found'}
+        <p class="sub" role="status">
+          <span class="busy" aria-hidden="true"><i></i><i></i><i></i></span>
+          {tf('queue.waitingFor', {
+            nick: opponent,
+            seconds: Math.ceil(status.confirm_in_s ?? 0),
+          })}
+        </p>
+      {:else}
+        <p class="sub" role="status">{t('queue.starting')}</p>
+      {/if}
     {/if}
-  {/if}
-  {#if failure !== null}
-    <p class="wl" role="alert"><Icon name="alert" size={16} />{t(failure)}</p>
-  {/if}
+    {#if failure !== null}
+      <p class="wl" role="alert"><Icon name="alert" size={16} />{t(failure)}</p>
+    {/if}
+  </section>
 </ScreenFrame>

@@ -20,6 +20,8 @@
     onbanned?: (seconds: number) => void;
     /** The map drawn behind the screen (null: the plain dark page). */
     map?: MapFile | null;
+    /** The own nick, for the pair once an opponent is found. */
+    nick?: string | null;
     /** How often the status is asked again, ms (it is also the heartbeat of the place). */
     pollMs?: number;
   }
@@ -32,22 +34,11 @@
     onleave,
     onbanned,
     map = null,
+    nick = null,
     pollMs = 1000,
   }: Props = $props();
 
   let status = $state.raw<QueueStatus | null>(null);
-  /** The tab was hidden while in the queue: then, and only then, the screen asks to keep it open. */
-  let hidden = $state(false);
-  $effect(() => {
-    const seen = (): void => {
-      if (document.visibilityState === 'hidden') hidden = true;
-    };
-    seen();
-    document.addEventListener('visibilitychange', seen);
-    return () => {
-      document.removeEventListener('visibilitychange', seen);
-    };
-  });
   let failure = $state.raw<MessageKey | null>(null);
   let busy = $state(false);
   let done = false;
@@ -159,7 +150,7 @@
   {failure}
   {busy}
   {map}
-  {hidden}
+  {nick}
   onconfirm={confirm}
   onleave={leave}
   onbot={playBot}

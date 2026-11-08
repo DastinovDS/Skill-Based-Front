@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { t, tf } from '../i18n/index.ts';
+  import { t } from '../i18n/index.ts';
   import { RANDOM_GENERATED, type MapSummary } from '../api/http.ts';
   import type { MapCache } from './mapCache.svelte.ts';
   import MapThumb from './MapThumb.svelte';
@@ -62,12 +62,14 @@
   }
 </script>
 
-<div class="label">{t('map.label')}</div>
+<!-- The map choice (Lapis, #845): each group opens with its random tile; the chosen tile is
+     framed in ivory. Spare captions: no node counts, no notes under the groups. -->
+<p class="label">{t('map.label')}</p>
 <!-- svelte-ignore a11y_interactive_supports_focus -->
 <div role="radiogroup" aria-label={t('map.label')} {onkeydown}>
   {#each groups as group (group.random)}
     {#if group.random !== null}
-      <div class="label">{t('map.generated')}</div>
+      <p class="label">{t('map.generated')}</p>
     {/if}
     <div class="tiles" class:gen={group.random !== null}>
       <button
@@ -77,21 +79,14 @@
         role="radio"
         aria-checked={chosen === group.random}
         tabindex={chosen === group.random ? 0 : -1}
-        aria-label={group.random === null ? undefined : t('map.randomGenerated')}
         onclick={() => {
           choose(group.random);
         }}
       >
-        <span class="thumb rnd" aria-hidden="true">
-          <svg viewBox="0 0 40 36" width="30" height="27" focusable="false">
-            <polygon points="3,3 37,3 20,33" class="ghost" />
-            <text x="20" y="16.5" text-anchor="middle" class="ghost-q">?</text>
-          </svg>
-        </span>
-        <span class="row2"><b>{t('map.random')}</b></span>
+        <span class="thumb rnd" aria-hidden="true">?</span>
+        <span class="tl">{group.random === null ? t('map.random') : t('map.randomGenerated')}</span>
       </button>
       {#each group.maps as map (map.id)}
-        {@const file = maps.get(map.id)}
         <button
           type="button"
           class="tile"
@@ -103,20 +98,13 @@
             choose(map.id);
           }}
         >
-          <MapThumb map={file} />
-          <span class="row2"
-            ><b>{map.id}</b>
-            {#if file !== null}<small>{tf('map.nodes', { count: file.nodes.length })}</small
-              >{/if}</span
-          >
+          <MapThumb map={maps.get(map.id)} />
+          <span class="tl">{map.id}</span>
         </button>
       {/each}
     </div>
-    {#if group.random !== null}
-      <p class="note">{t('map.generatedHint')}</p>
-    {/if}
   {/each}
 </div>
 {#if maps.failed}
-  <p class="note">{t('map.listFailed')}</p>
+  <p class="hint">{t('map.listFailed')}</p>
 {/if}

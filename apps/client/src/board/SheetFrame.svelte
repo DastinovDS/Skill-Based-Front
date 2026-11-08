@@ -20,8 +20,8 @@
   let { map, label, tabs, corner, children }: Props = $props();
 </script>
 
-<!-- The frame of the Replays and Leaderboard tabs (#629, R2 and L10): the tabs on top, one wide
-     sheet under them on the dimmed map, no rail. -->
+<!-- The frame of the Replays and Leaderboard tabs (#629; Lapis, #845): the bar on top, one wide
+     sheet under it on the blurred stone over the map, no rail. -->
 <main class="front sheet">
   <MenuBackdrop {map} phase="idle" />
   <div class="shade"></div>

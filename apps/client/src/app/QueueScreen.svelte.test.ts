@@ -84,23 +84,6 @@ describe('QueueScreen', () => {
     expect(document.querySelector('kbd')).toBeNull();
   });
 
-  it('asks to keep the tab open only once the tab was hidden (#629, Q1)', async () => {
-    render({
-      joinQueue: () => Promise.resolve(searching()),
-      queueStatus: () => Promise.resolve(searching()),
-    });
-    await settle();
-    expect(document.body.textContent).not.toContain(translate('en', 'queue.keepOpen'));
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
-    try {
-      document.dispatchEvent(new Event('visibilitychange'));
-      flushSync();
-      expect(document.body.textContent).toContain(translate('en', 'queue.keepOpen'));
-    } finally {
-      Reflect.deleteProperty(document, 'visibilityState');
-    }
-  });
-
   it('does not start a new poll while the last one is unanswered, and gives a slow one up', async () => {
     let signal: AbortSignal | undefined;
     const queueStatus = vi.fn((_token: string, given?: AbortSignal) => {

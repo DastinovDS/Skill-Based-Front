@@ -118,7 +118,7 @@ describe('PasswordScreen (#374)', () => {
     expect(document.querySelector('main.front')).not.toBeNull();
     expect(document.querySelector('.rail [aria-current]')).toBeNull();
     expect(document.querySelector('.panel .tags')).toBeNull();
-    expect(document.querySelector('.panel .pe')?.textContent).toBe(
+    expect(document.querySelector('.panel .kicker')?.textContent).toBe(
       translate('en', 'account.eyebrow'),
     );
   });

@@ -24,6 +24,10 @@
      * blurred map.
      */
     entry?: boolean;
+    /** The content stands in the middle under the bar (the queue). */
+    center?: boolean;
+    /** The content takes the width of the page under the bar (the result). */
+    wide?: boolean;
     children: Snippet;
     /** The "Dock" panel beside the rail (#473): the rail keeps the menu, the mode opens here. */
     panel?: Snippet;
@@ -40,15 +44,17 @@
     tabs,
     corner,
     entry = false,
+    center = false,
+    wide = false,
     children,
     panel,
     panelLabel = '',
   }: Props = $props();
 </script>
 
-<!-- One frame for the screens before a match (#471, variant A "Front"): the map is the postcard, a
-     text rail stands on the left, the tabs of the menu and the player are on the top line. -->
-<main class="front" class:docked={panel !== undefined} class:entry>
+<!-- One frame for the screens before a match (#471; Lapis, #845): the map behind, the bar with the
+     brand, the tabs and the player on top, the rail of text on the left (or in the middle). -->
+<main class="front" class:docked={panel !== undefined} class:entry class:center class:wide>
   <MenuBackdrop {map} {phase} {opponent} {waited} docked={panel !== undefined} />
   <div class="shade"></div>
   {#if !entry}<FrontTop {tabs} {corner} />{/if}
@@ -56,8 +62,9 @@
     {@render children()}
   </section>
   {#if panel !== undefined}
-    <section class="panel" aria-label={panelLabel}>
-      {@render panel()}
+    <!-- The frame is drawn round the panel; the content scrolls inside it. -->
+    <section class="panel rule-frame" aria-label={panelLabel}>
+      <div class="pscroll">{@render panel()}</div>
     </section>
   {/if}
 </main>

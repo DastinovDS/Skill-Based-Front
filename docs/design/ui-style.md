@@ -2486,3 +2486,17 @@ The older names of section 6 (`--bg`, `--surface`, `--surface-2`, `--border`, `-
 
 **Dev scenes.** `?menu=style` (every token and primitive, the CP mark at 12, 14, 16, 24 and 48 px beside the charge lozenge) and `?menu=style-overlay` (the stone overlay over the main menu), shot by `mise run shots` as `screen-style*.png`.
 
+
+## 59. Out-of-game screens in Lapis (#845) **[implemented]**
+
+The first out-of-game piece of #826 on the foundation of section 58: every screen before and after a match takes the Lapis set of round 2 (section 51) in layout "0 Round 2" with round 3's edges II "Double rule" and the Spare captions (section 56). The opening scene (intro B Grain) is the next piece; the menu map art is #839.
+
+- **Frame** (`app/front.css`, used by `ScreenFrame`): the bar of 72 px with the brand in Cinzel, the tabs in cut capitals (the open one ivory with a small triangle under it) and the player in the corner (the nick in capitals, the standing in italics: Guest, Calibration 3/5, the rating), over a doubled rule. The map behind is dimmed and shaded from the left.
+- **Main**: a data line over Play (Unrated as a guest, Calibration, match k of n, Ranked queue, Match in progress), Play as the ivory tablet with its inner rule (`LapisButton` primary lg), the queue lock as an amber chip under it, then the three ways to play numbered I to III over doubled rules. Nothing else under Play, no line at the foot.
+- **Dock** (`app/dock.css`, `DockFrame`): the rail keeps a quiet Play (two rules, the way back) and the numbered ways, the open one ivory with a pointer; the panel is stone in the Double rule frame: a label, the title, the chips (Unrated, the pauses) with a data line, the content, the actions. Play a bot shows the four levels in a row (lozenges for the difficulty, the level, the style in italics); the map tiles have the graph and the id only; open matches are ruled rows (host, map, wait, Join); the waiting room has the link field and the two seats.
+- **Sheets** (`board/sheet.css`): the Leaderboard and the Replays stand on the blurred stone over the map; the own row has a lapis band, the helmet and a "You" badge; a replay is a card under a doubled rule with the result as a shape and a word.
+- **Result**: the verdict in 104 px capitals with the helmets of the outcome, the reason, the score as a tug, the server's totals (units, places, attacks and defenses "won X of Y", length), the rating or the calibration cells; the DEC-34 reason of an unrated match stays.
+- **Dialogs**: the log-out warning of a guest is a dialog on the blurred stone (`StoneOverlay`).
+- **Entry**: the title in Cinzel with the Atlas rule and the interpunct, the nick with Play on one incised line; Log in and Create an account open a framed sheet. This is the final still frame the intro piece animates into.
+
+Spare captions removed: the mode and bot level descriptions, the dock intros (`create.intro`, `create.introPublic`, `lobby.intro`, `lobby.emptyNote`), every "Unrated: ..." line under the panel (`dock.unrated.*`), "The server picks", the node counts, "One of a kind ...", "Keep this tab open", the calibration hint of the result, the sublines of the sheets and the guest hint under Play.

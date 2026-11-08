@@ -3,6 +3,7 @@
   import Icon from '../hud/Icon.svelte';
   import { t } from '../i18n/index.ts';
   import { failureText, passwordLengthOk, type AccountFailure } from './account.ts';
+  import LapisButton from '../theme/LapisButton.svelte';
   import DockFrame from './DockFrame.svelte';
   import type { DockContext } from './dock.ts';
   import PasswordFields from './PasswordFields.svelte';
@@ -92,14 +93,14 @@
   {/if}
   {#snippet actions()}
     {#if saved}
-      <button type="button" class="btn pri" aria-keyshortcuts="Enter Escape" onclick={onback}>
-        {t('common.back')}
-      </button>
+      <LapisButton variant="primary" aria-keyshortcuts="Enter Escape" onclick={onback}
+        >{t('common.back')}</LapisButton
+      >
     {:else}
-      <button type="submit" form="password-form" class="btn pri" disabled={busy}>
-        {t('account.save')}
-      </button>
-      <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
+      <LapisButton variant="primary" type="submit" form="password-form" disabled={busy}
+        >{t('account.save')}</LapisButton
+      >
+      <button type="button" class="lnk" aria-keyshortcuts="Escape" onclick={onback}>
         {t('common.back')}
       </button>
     {/if}

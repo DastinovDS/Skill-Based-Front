@@ -39,155 +39,166 @@
   );
   const rating = $derived(ratingOf(match));
   const details = $derived(
-    [match.map_id, lengthText(match.ticks), agoText(match.ended_at, now, getLocale())]
+    [t(KINDS[match.kind]), match.map_id, lengthText(match.ticks)]
       .filter((part) => part !== null)
       .join(' · '),
   );
+  const when = $derived(agoText(match.ended_at, now, getLocale()));
 </script>
 
-<!-- One match as a card (#629, R2): the map drawn small, the result as a shape and a word, the
-     opponent, the kind, then the replay. The server says the result, the rating and the replay. -->
+<!-- One match as a card (#629, R2; Lapis, #845): the map drawn small, then the result as a shape
+     and a word (a triangle up, down, a bar), the opponent, the kind, the map and the length, when,
+     and the replay. The server says the result, the rating and the replay. -->
 <li class="card">
   <MapThumb {map} />
-  <div class="head">
-    <span class="result {result.shape}"><i aria-hidden="true"></i>{t(result.key)}</span>
-    {#if rating.kind === 'change'}
-      <span
-        class="delta"
-        aria-label={tf('history.rating.range', { before: rating.before, after: rating.after })}
-        >{rating.delta}</span
-      >
-    {:else if rating.kind === 'hidden'}
-      <small class="hidden" title={t('history.rating.hiddenTitle')}
-        >{t('history.rating.hidden')}</small
-      >
-    {/if}
-  </div>
-  <div class="opp">
-    {#if match.opponent.bot}<Icon name="bot" size={15} />{/if}<b>{opponent}</b>
-    <span
-      class="kind"
-      class:ranked={match.kind === 'rated'}
-      class:calibration={match.kind === 'calibration'}>{t(KINDS[match.kind])}</span
-    >
-  </div>
-  <small>{details}</small>
-  <div class="replay">
-    <ReplayChip
-      state={match.replay.state}
-      {opponent}
-      onwatch={() => {
-        onwatch(match.match_id);
-      }}
-    />
+  <div class="cb">
+    <p class="result {result.shape}">
+      <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true" focusable="false">
+        {#if result.shape === 'w'}<path d="M7 1.5 13 12.5H1z" />{:else if result.shape === 'l'}<path
+            d="M7 12.5 1 1.5h12z"
+          />{:else}<rect x="2" y="5" width="10" height="4" />{/if}
+      </svg>{t(result.key)}
+      {#if rating.kind === 'change'}
+        <span
+          class="delta"
+          aria-label={tf('history.rating.range', { before: rating.before, after: rating.after })}
+          >{rating.delta}</span
+        >
+      {:else if rating.kind === 'hidden'}
+        <small class="hidden" title={t('history.rating.hiddenTitle')}
+          >{t('history.rating.hidden')}</small
+        >
+      {/if}
+    </p>
+    <p class="opp">
+      {t('history.against')}
+      {#if match.opponent.bot}<Icon name="bot" size={15} />{/if}<b>{opponent}</b>
+    </p>
+    <p class="cx">{details}</p>
+    {#if when !== null}<p class="cd">{when}</p>{/if}
+    <div class="replay">
+      <ReplayChip
+        state={match.replay.state}
+        {opponent}
+        onwatch={() => {
+          onwatch(match.match_id);
+        }}
+      />
+    </div>
   </div>
 </li>
 
 <style>
+  /* Not the old `.card` of app.css: no box, a doubled rule over the card. */
   .card {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    display: grid;
+    grid-template-columns: 168px minmax(0, 1fr);
+    gap: 20px;
+    box-sizing: border-box;
+    width: auto;
     min-width: 0;
-    padding: 10px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface);
+    padding: 16px 0 0;
+    border: 0;
+    border-radius: 0;
     list-style: none;
-    font-size: 15px;
+    background:
+      linear-gradient(var(--cut), var(--cut)) 0 0 / 100% 1px no-repeat,
+      linear-gradient(var(--line), var(--line)) 0 1px / 100% 1px no-repeat,
+      linear-gradient(var(--lit-faint), var(--lit-faint)) 0 4px / 100% 1px no-repeat;
   }
 
   .card :global(.thumb) {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 16 / 9;
-    margin-bottom: 4px;
+    width: 168px;
+    height: 98px;
   }
 
-  .head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+  .cb {
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .cb p {
+    margin: 0;
   }
 
   .result {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
+    font: 500 13px / 1.3 var(--font-display);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
   }
 
-  /* The result is a shape and a word: a filled, an empty or a half dot. */
-  .result i {
-    flex: none;
-    width: 12px;
-    height: 12px;
-    border: 2px solid var(--you);
-    border-radius: 50%;
+  .result svg {
+    fill: currentColor;
   }
 
-  .result.w i {
-    background: var(--you);
+  .result.w {
+    color: var(--own-lapis);
   }
 
-  .result.l i {
-    border-color: var(--paper);
+  .result.l {
+    color: var(--enemy-lapis);
   }
 
-  .result.d i {
-    background: linear-gradient(90deg, var(--you) 50%, transparent 50%);
+  .result.d {
+    color: var(--ink);
   }
 
   .delta {
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
+    margin-left: 4px;
+    color: var(--ink);
+    font: 400 17px var(--font-text);
+    letter-spacing: 0;
+  }
+
+  .hidden {
+    margin-left: 4px;
+    color: var(--ink-dim);
+    font: italic 400 15px var(--font-text);
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .opp {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 5px;
     min-width: 0;
+    max-width: 100%;
+    font-size: 18px;
   }
 
   .opp b {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 500;
   }
 
-  .kind {
-    display: inline-flex;
-    align-items: center;
-    flex: none;
-    height: 20px;
-    padding: 0 8px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text-dim);
-    font-size: 12px;
-  }
-
-  .kind.ranked {
-    border-color: var(--you);
-    color: var(--text);
-  }
-
-  .kind.calibration {
-    border-style: dashed;
-    color: var(--text);
-  }
-
-  small {
+  .cx {
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--text-dim);
-    font-size: 13px;
+    color: var(--ink-dim);
+    font-size: 16px;
+    font-style: italic;
+  }
+
+  .cb .cd {
+    margin: 2px 0 8px;
+    font: 500 10px / 1.3 var(--font-display);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
   }
 
   .replay {
     display: flex;
-    margin-top: 6px;
   }
 </style>

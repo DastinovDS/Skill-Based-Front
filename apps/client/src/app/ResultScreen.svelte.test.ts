@@ -107,15 +107,15 @@ describe('ResultScreen', () => {
     render(0, { ...end(0), stats: totals });
     const rows = [...document.querySelectorAll('.stats > div')].map((row) => [
       row.querySelector('dt')?.textContent,
-      row.querySelector('dd')?.textContent,
+      row.querySelector('dd')?.textContent.replace(/\s+/g, ' ').trim(),
     ]);
     expect(rows).toEqual([
       ['Units killed', '19'],
       ['Units lost', '12'],
-      ['Attacks won', '4 of 7'],
-      ['Defenses held', '2 of 3'],
       ['Cities captured', '5'],
       ['Provinces captured', '3'],
+      ['Attacks won', '4 of 7'],
+      ['Defenses held', '2 of 3'],
       ['Match length', '0:10'],
     ]);
   });
@@ -165,7 +165,7 @@ describe('ResultScreen', () => {
   it('names a draw and opens the replay', () => {
     const onreplay = vi.fn();
     expect(render(0, end(null), onreplay)).toContain(translate('en', 'result.draw'));
-    document.querySelector<HTMLButtonElement>('button.cta')?.click();
+    document.querySelector<HTMLButtonElement>('button.lapis-btn.primary')?.click();
     expect(onreplay).toHaveBeenCalledOnce();
   });
 
@@ -194,7 +194,7 @@ describe('ResultScreen', () => {
       expect(text).not.toMatch(/Not ranked|did not change/);
     });
 
-    it('shows the calibration progress and that the rating is still hidden', () => {
+    it('shows the calibration progress and no rating yet (Spare: no hint line, #845)', () => {
       const text = render(0, {
         ...end(0),
         rated: true,
@@ -202,7 +202,7 @@ describe('ResultScreen', () => {
         calibration: { played: 3, total: 5 },
       });
       expect(text).toContain('Calibration 3/5');
-      expect(text).toContain(translate('en', 'result.calibrationHidden'));
+      expect(text).not.toContain(translate('en', 'result.calibrationHidden'));
       expect(text).not.toContain('from ');
     });
 
