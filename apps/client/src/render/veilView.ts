@@ -163,6 +163,9 @@ export class VeilView {
     const renderer = this.renderer as Partial<Renderer>;
     if (typeof renderer.generateTexture !== 'function') return null;
     const filter = new ColorMatrixFilter();
+    // The picture is the size of the world: a filter cut to the canvas would leave the rest
+    // of the copy empty on a screen smaller than the map (#441).
+    filter.clipToViewport = false;
     filter.matrix = greyMatrix(RULED_VEIL.grey) as ColorMatrixFilter['matrix'];
     const sprite = new Sprite(texture);
     sprite.width = this.map.meta.width;
