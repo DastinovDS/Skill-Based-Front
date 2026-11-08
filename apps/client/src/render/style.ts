@@ -524,9 +524,34 @@ export const BUILD_TIME_FONT_SIZE = 10;
 export const NUMBERS_RISE = 12;
 export const BOUNCE_MS = 1000;
 export const BOUNCE_LENGTH = 40;
-export const WAVE_MS = 500;
-export const WAVE_FILL_ALPHA = 0.28;
-export const WAVE_STROKE = { width: 3, alpha: 0.9 } as const;
+/**
+ * The capture of a node: "Fitted" (#819, round 2 of the mockup city-capture.html, the owner's choice of
+ * 2026-11-08). The new owner's colour grows from the city in the shape of its own area and reaches the
+ * whole border at once in `ms` (ease-out quad); `feather` is the soft edge of the front as a share of the
+ * way from the city to the border. A soft rim in the owner's colour rides just inside the front (`rim`,
+ * in shares of the feather: its centre and width); the border lines and the glow join where the front
+ * reaches them, the roads of the city as the front runs out along them (`roads`), and what is left
+ * outside the area switches in `clean` (ms). The city flips in `cityMs` with one `flash` (its reach in
+ * radii of the city) and a `ring` of the owner's colour leaves it. An enemy capture is calmer: no flash,
+ * the rim and the ring at `calm`. "Less motion": a cross-fade of `reducedMs`, no travel, no lights.
+ */
+export const CAPTURE = {
+  ms: 1000,
+  feather: 0.18,
+  clean: { from: 860, to: 1120 },
+  roads: { reach: 1.15, feather: 0.15 },
+  rim: { alpha: 0.42, add: 0.1, centre: 0.42, width: 0.38, in: 0.08, out: 0.78 },
+  cityMs: 120,
+  flash: { alpha: 0.55, ms: 320, reach: 3.4 },
+  ring: { alpha: 0.38, ms: 500, from: 1.25, grow: 1.35 },
+  calm: 0.5,
+  reducedMs: 200,
+} as const;
+/**
+ * How long the result screen waits after `match_end` when a capital was captured (#819): the render
+ * delay of the snapshots (0.2 s), the flood (`CAPTURE.ms`) and 0.5 s on the settled frame.
+ */
+export const CAPITAL_RESULT_DELAY_MS = 1700;
 export const LOSS_FONT_SIZE = 13;
 /**
  * The kill feed of a finished fight (#812, variant 9 of the mockup fight-bonus-and-outcome.html): two rows

@@ -6,6 +6,8 @@ import { fightPlace, placeKey, type FightPlace } from './fightFx.ts';
 import { LEAVER_STILL, leaversOf, type PlaceMemory } from './leaverLayout.ts';
 import { HitView, type Punch } from './hitView.ts';
 import { ParticleLayer } from './particles.ts';
+import { cityLight } from './captureLayout.ts';
+import type { Flood } from './mapView.ts';
 import { ShotView } from './shotView.ts';
 import type { EnemyAnchors } from './entityView.ts';
 import type { Point } from './camera.ts';
@@ -16,8 +18,6 @@ import {
   FLAG_MS,
   effectProgress,
   flagLook,
-  scaledPolygon,
-  waveLook,
   type BounceInfo,
   type CaptureInfo,
 } from './effectsLayout.ts';
@@ -32,20 +32,19 @@ import {
   BG,
   BOUNCE_LENGTH,
   BOUNCE_MS,
-  FIGHT_FX_STRENGTH,
-  FLASH_COLOR,
   ORDER_GHOST_DASH,
   ORDER_GHOST_GAP,
-  WAVE_FILL_ALPHA,
-  WAVE_MS,
-  WAVE_STROKE,
+  CAPTURE,
   PAPER,
   ownerColor,
 } from './style.ts';
 
 /** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`, DEC-32). */
 const DEFAULT_ROUND_TICKS = 20;
-const MAX_WAVES = 4;
+/** Flags of captures drawn at once. */
+const MAX_FLAGS = 4;
+/** The radius of the ring of the particle atlas, a share of its size (`particles.ts`: 26 of 64). */
+const RING_RADIUS_SHARE = 26 / 64;
 /** A token this close to the place of a fight (world units) is a group of that fight: the token of a city, a marker beside it, a figure on its road. */
 const CONTACT_REACH = 80;
 const near = (a: Point, b: Point): boolean => Math.hypot(a.x - b.x, a.y - b.y) <= CONTACT_REACH;
@@ -57,8 +56,8 @@ type BounceArrow = NonNullable<ReturnType<typeof bounceArrow>> | null;
 /**
  * Effects of events on the map (ui-style 9.9, U8): the animation of fights (`FightView`: arena,
  * shots, losses, result), the short dashed arrow of an own group bounced back along its road, and
- * the wave of the new owner over the cell of a captured city. With "less motion" the shots, the
- * wave and the arrow are left out and the numbers do not rise. Events come from the server
+ * the light and the flag of a captured city (#819; its colour floods the area in `MapView`). With
+ * "less motion" the shots, the light and the arrow are left out and the numbers do not rise. Events come from the server
  * (`fight_round`, `fight_ended`, `fight_group`, `node_captured`); nothing is guessed: the enemy's
  * bounces are not sent, so none is drawn.
  *
@@ -77,7 +76,6 @@ export class EffectsView {
   private readonly leaverLayer = new Container({ label: 'fight-leavers', eventMode: 'none' });
   private readonly leavers: BakedSprite[] = [];
   private cameraScale = 1;
-  private readonly waves: Graphics[] = [];
   private readonly arrows = new Graphics();
   /** The flag over a captured city, one drawing per owner, pooled. */
   private readonly flags: Graphics[] = [];
@@ -93,8 +91,6 @@ export class EffectsView {
     layers: MapLayers,
     private readonly me: PlayerId,
     labelResolution: number,
-    /** The Voronoi cells of the cities (`MapView.cells`). */
-    private readonly cells: readonly (readonly Point[])[],
     /** Radius of a city now (`CityView.radiusOf`). */
     private readonly radiusOf: (node: number) => number,
     /** The baked shapes drawn in screen px (the plate and chips of the arenas). */
@@ -149,6 +145,8 @@ export class EffectsView {
     tickHz: number,
     roundTicks: number = DEFAULT_ROUND_TICKS,
     enemies: EnemyAnchors | null = null,
+    /** The captures under way (`MapView.captures`): their light at the city. */
+    floods: readonly Flood[] = [],
   ): readonly Punch[] {
     this.readEvents(events);
     const reduced = reducedMotion();
@@ -178,9 +176,8 @@ export class EffectsView {
       scale,
     );
     this.drawLeavers(frame.tick, roundTicks, live, spots, enemies);
-    this.captureRings(frame.tick, tickHz, scale);
+    this.captureLights(floods, scale);
     this.particles.end();
-    this.drawWaves(frame.tick, tickHz, reduced);
     this.drawFlags(frame.tick, tickHz, scale);
     this.drawBounces(frame, spots, tickHz, reduced);
     return punches;
@@ -326,23 +323,39 @@ export class EffectsView {
     }
   }
 
-  // --- Capture: the ring and the flag over the city (E3) ---------------------------------------
+  // --- Capture: the light at the city and the flag over it (#819, ui-style 49) ------------------
 
-  /** A white ring leaves the captured city with the wave over its cell: as far as the strength of the effects. */
-  private captureRings(tick: number, tickHz: number, scale: number): void {
-    let used = 0;
-    for (const capture of this.captures) {
-      const t = effectProgress(tick - capture.tick, WAVE_MS, tickHz);
-      if (t === null || used >= MAX_WAVES) continue;
-      used++;
-      const ease = t * (2 - t);
+  /**
+   * The light of a capture at its city: one flash (not when the enemy captured) and a ring of the new
+   * owner's colour leaving it. The colour itself floods the area in `MapView`; both run on the
+   * flood's own clock, so the flash starts with the flood.
+   */
+  private captureLights(floods: readonly Flood[], scale: number): void {
+    for (const flood of floods) {
+      if (flood.to === null) continue;
+      const light = cityLight(flood.ms, flood.calm, flood.reduced);
+      if (light === null) continue;
+      const radius = this.radiusOf(flood.node) * scale;
+      if (light.flash > 0) {
+        this.particles.put({
+          kind: 'glow',
+          x: flood.at.x,
+          y: flood.at.y,
+          // The glow of the atlas reaches half its size.
+          size: 2 * CAPTURE.flash.reach * radius,
+          color: PAPER,
+          alpha: light.flash,
+          add: true,
+        });
+      }
       this.particles.put({
         kind: 'ring',
-        x: capture.at.x,
-        y: capture.at.y,
-        size: 2 * (8 + 28 * FIGHT_FX_STRENGTH * ease) * scale,
-        color: FLASH_COLOR,
-        alpha: 0.8 * (1 - t),
+        x: flood.at.x,
+        y: flood.at.y,
+        size: (light.ringRadius * radius) / RING_RADIUS_SHARE,
+        color: ownerColor(this.me, flood.to),
+        alpha: light.ring,
+        add: true,
       });
     }
   }
@@ -351,7 +364,7 @@ export class EffectsView {
     let used = 0;
     for (const capture of this.captures) {
       const t = effectProgress(tick - capture.tick, FLAG_MS, tickHz);
-      if (t === null || used >= MAX_WAVES) continue;
+      if (t === null || used >= MAX_FLAGS) continue;
       const flag = this.flag(used++);
       const radius = this.radiusOf(capture.node);
       flag.context = this.flagContext[capture.player];
@@ -374,40 +387,6 @@ export class EffectsView {
       this.flags.push(flag);
     }
     return flag;
-  }
-
-  // --- Capture: the wave over the cell -------------------------------------------------------
-
-  private drawWaves(tick: number, tickHz: number, reduced: boolean): void {
-    let used = 0;
-    if (!reduced) {
-      for (const capture of this.captures) {
-        const t = effectProgress(tick - capture.tick, WAVE_MS, tickHz);
-        const cell = this.cells[capture.node];
-        if (t === null || cell === undefined || used >= MAX_WAVES) continue;
-        const g = this.wave(used++);
-        const look = waveLook(t);
-        const color = ownerColor(this.me, capture.player);
-        const polygon = scaledPolygon(cell, capture.at, look.scale);
-        g.clear();
-        g.poly(polygon).fill({ color, alpha: WAVE_FILL_ALPHA * look.alpha });
-        g.poly(polygon).stroke({ ...WAVE_STROKE, color, alpha: WAVE_STROKE.alpha * look.alpha });
-        g.visible = true;
-      }
-    }
-    for (let i = used; i < this.waves.length; i++) {
-      const g = this.waves[i];
-      if (g !== undefined) g.visible = false;
-    }
-  }
-
-  private wave(index: number): Graphics {
-    let g = this.waves[index];
-    if (g === undefined) {
-      g = this.layer.addChildAt(new Graphics(), 0);
-      this.waves.push(g);
-    }
-    return g;
   }
 
   // --- Bounce: an arrow back along the road ---------------------------------------------------

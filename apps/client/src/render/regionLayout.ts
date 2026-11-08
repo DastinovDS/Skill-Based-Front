@@ -185,6 +185,9 @@ function inward(a: Point, b: Point, towards: Point, distance: number): Point {
 
 export interface Border extends Segment {
   readonly owner: number;
+  /** The area the line lies in, and the area across its edge (`null`: the sea or the border of the map). */
+  readonly cell: number;
+  readonly neighbour: number | null;
 }
 
 /** The corner shifts per `edges` array (the edges of a map never change; a capture redraws per frame). */
@@ -253,12 +256,20 @@ export function territoryBorders(
         const reach = inset / Math.max(cos, 1 / MITER_LIMIT);
         return { x: p.x + bisector.x * reach, y: p.y + bisector.y * reach };
       };
-      borders.push({ owner, a: at(edge.a), b: at(edge.b) });
+      borders.push({
+        owner,
+        cell: edge.cell,
+        neighbour: edge.neighbour,
+        a: at(edge.a),
+        b: at(edge.b),
+      });
       continue;
     }
     const d = inward(edge.a, edge.b, centroid(cell), inset);
     borders.push({
       owner,
+      cell: edge.cell,
+      neighbour: edge.neighbour,
       a: { x: edge.a.x + d.x, y: edge.a.y + d.y },
       b: { x: edge.b.x + d.x, y: edge.b.y + d.y },
     });

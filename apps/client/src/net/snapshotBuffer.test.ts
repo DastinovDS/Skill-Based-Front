@@ -172,6 +172,24 @@ describe('SnapshotBuffer', () => {
     expect(progressOf(buffer)).toBe(1010);
   });
 
+  it('runs on to the last snapshot once the match is over, and no further (#819)', () => {
+    const buffer = new SnapshotBuffer({ delayTicks: 2 });
+    for (const tick of [100, 101, 102]) buffer.push(moving(tick));
+    buffer.sample();
+    buffer.finish();
+    vi.advanceTimersByTime(150);
+    expect(buffer.sample()?.tick).toBe(101.5);
+    vi.advanceTimersByTime(10_000);
+    const frame = buffer.sample();
+    expect(frame?.tick).toBe(102);
+    expect(frame?.base.tick).toBe(102);
+    // A new timeline (a reconnect) keeps the delay again.
+    buffer.clear();
+    for (const tick of [200, 201, 202]) buffer.push(moving(tick));
+    vi.advanceTimersByTime(10_000);
+    expect(buffer.sample()?.tick).toBe(201);
+  });
+
   it('jumps into the window after a long pause of rendering', () => {
     const buffer = new SnapshotBuffer({ delayTicks: 2 });
     buffer.push(moving(100));

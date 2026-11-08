@@ -271,6 +271,8 @@ export class MatchSession implements RenderSource {
         break;
       case 'match_end':
         this.orders.undo.clear();
+        // The last snapshot is drawn too (#819: a capital's capture is seen before the result).
+        this.buffer.finish();
         break;
       default:
         break;

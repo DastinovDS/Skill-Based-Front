@@ -7,9 +7,7 @@ import {
   captureInfo,
   effectProgress,
   numbersLook,
-  scaledPolygon,
   starPolygon,
-  waveLook,
 } from './effectsLayout.ts';
 
 const event = (kind: string, data: EventMsg['data'], tick = 10): EventMsg => ({
@@ -41,11 +39,6 @@ describe('effect looks', () => {
     expect(numbersLook(1, true).rise).toBe(0);
     expect(numbersLook(0.5, true).alpha).toBe(1);
   });
-
-  it('grows the wave to the whole cell and fades it', () => {
-    expect(waveLook(0)).toEqual({ scale: 0, alpha: 1 });
-    expect(waveLook(1)).toEqual({ scale: 1, alpha: 0 });
-  });
 });
 
 describe('geometry', () => {
@@ -54,14 +47,6 @@ describe('geometry', () => {
     expect(star).toHaveLength(16);
     expect(Math.hypot(star[0] ?? 0, star[1] ?? 0)).toBeCloseTo(10);
     expect(Math.hypot(star[2] ?? 0, star[3] ?? 0)).toBeCloseTo(4);
-  });
-
-  it('scales a cell about the city', () => {
-    const cell = [
-      { x: 0, y: 0 },
-      { x: 20, y: 0 },
-    ];
-    expect(scaledPolygon(cell, { x: 10, y: 0 }, 0.5)).toEqual([5, 0, 15, 0]);
   });
 
   it('points a bounce arrow towards the node the group came from', () => {
