@@ -24,6 +24,7 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/map-geography.html`](mockups/map-geography.html) (map geography: water cells, rivers as area borders, areas touch only along roads, #537, DEC-36: **[accepted]** 2026-10-29, W4 Painted without a dark line along water, section 39; the owner's feedback on #429, 2026-10-29),
 [`mockups/supply-terrain.html`](mockups/supply-terrain.html) (nicer supply lines in the Supply view, a terrain and vision concept, rivers and lakes as visual borders, #429: **[awaiting the owner's decision]**, section 37; moved before the release by the owner, 2026-10-29),
 [`mockups/map-overlays.html`](mockups/map-overlays.html) (the Supply mode panel, the travel-time marker of an order, the recruit and city-upgrade icons of the city menu, #627: **[accepted]**, section 40; the owner's review of 2026-10-30),
+[`mockups/out-of-game-style.html`](mockups/out-of-game-style.html) (five complete style directions for every screen outside the match, the opening scene and an in-game carry-over, #826: **[awaiting the owner's decision]**, section 50),
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
@@ -2249,3 +2250,19 @@ The owner's choice of 2026-11-08 on the mockup [`mockups/city-capture.html`](moc
 - **"Less motion"**: a 0.2 s cross-fade of the fill, the glow and the border lines, the roads at once, no travel and no light; the flag stays.
 - **Cost.** Per capture three meshes of the area's outline (fill, glow, rim) with a tiny shader, triangulated once; only a few uniforms change per frame. Two world-sized glow textures at half resolution live for the length of the flood; nothing has a filter, the glow cache is drawn once at the start as before. The border lines and the roads of the node are restroked per frame while the flood runs, as the old cross-fade did.
 - **Looking at it.** A frozen dev scene can show a capture under way: `?flood=<ms>,<node>:<owner before>,...` (`0`, `1` or `n` for nobody), for example `/?scene=artery&flood=300,4:1`; `mise run shots` takes `capture-*.png` this way.
+
+## 50. Out-of-game style, round 1 (#826) **[awaiting the owner's decision]**
+
+The owner asked on 2026-11-08 for a complete new style for everything outside the match, in two rounds: round 1 shows at most five complete directions, the owner picks or steers one, round 2 refines it, and the chosen style is later carried into the match (the match may lose its glow or change to match; the finished game has one style). This round follows that brief instead of the "12 or more variants that fit the existing style" of section 23.
+
+Mockup: [`mockups/out-of-game-style.html`](mockups/out-of-game-style.html) (fonts and their licences in [`mockups/assets/out-of-game-style/fonts/`](mockups/assets/out-of-game-style/fonts/)), frames in [`mockups/img/out-of-game-style/`](mockups/img/out-of-game-style/). Nineteen screens with 55 states, the opening scene with play, pause, scrub and replay, a side-by-side compare, 100 % and 200 % zoom, grayscale and reduced motion. The opening scene and the menus use the start menu map (`maps/menu/valley.json`) and the client's helmets (`units/helmet.ts`).
+
+| Id | Direction | Type | In short |
+| --- | --- | --- | --- |
+| I | Lapis | Cinzel, EB Garamond | imperial epigraphy: black stone, cut capitals, incised rules, Roman numerals |
+| II | Atlas (**recommended**) | Cormorant Garamond, Alegreya, Alegreya SC | a historical atlas: paper plates with a neatline, an inset map, a gazetteer; the opening is lamplight on the atlas at night |
+| III | Ordre | Big Shoulders Stencil, Barlow Semi Condensed, JetBrains Mono | a staff briefing: numbered sheets, boxed fields, stamps, a gridded map on the table |
+| IV | Raster | Archivo | the Swiss grid: 12 columns, rules, numbers as structure, the map as a diagram |
+| V | Nocturne | Bodoni Moda, Public Sans | restrained dark strategy, the nearest to the game today: the real map full screen, solid graphite panels |
+
+The opening scene (all directions, defaults until the owner decides): about 6.6 s, four fights light the map at the left and right edges and fade from the edge of their light to its centre, the letters of the title appear one by one, the title moves up and the nick field with Log in and Create an account appears; skippable by a click or a key, once a session and not after a match, one still frame with a 0.5 s fade under reduced motion. All fonts are SIL OFL 1.1 and self-hosted (`font-src 'self'`). No direction needs a DEC, a protocol, simulation or server change. Atlas and Raster are light outside the match, which section 22 ("one dark theme") does not allow without the owner's decision. The table of costs and risks, the checks and the questions are in #826.
