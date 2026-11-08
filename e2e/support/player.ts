@@ -41,6 +41,11 @@ export class Player {
       viewport: { width: 1280, height: 800 },
       deviceScaleFactor: 1,
     });
+    // The opening scene of the entry screen plays once a browser session (#826): mark it seen, so
+    // the players reach the form at once (the tests that open a bare page still see it play).
+    await context.addInitScript(() => {
+      window.sessionStorage.setItem('sbf.introSeen', '1');
+    });
     const player = new Player(nick, await context.newPage());
     await player.page.routeWebSocket(/\/ws\/match\//, (route) => {
       const server = route.connectToServer();

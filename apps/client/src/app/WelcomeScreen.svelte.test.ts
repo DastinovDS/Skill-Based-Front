@@ -17,7 +17,9 @@ describe('WelcomeScreen accounts (#374)', () => {
   const onlogin = vi.fn<(n: string, p: string) => Promise<AccountFailure | null>>();
   const onregister = vi.fn<(n: string, p: string) => Promise<AccountFailure | null>>();
 
-  function render(over: { invited?: boolean; notice?: MessageKey | null } = {}): void {
+  function render(
+    over: { invited?: boolean; notice?: MessageKey | null; intro?: boolean } = {},
+  ): void {
     setLocale('en');
     onsubmit.mockClear();
     onlogin.mockReset().mockResolvedValue(null);
@@ -174,5 +176,39 @@ describe('WelcomeScreen accounts (#374)', () => {
     expect(document.querySelector('input[type=password]')).toBeNull();
     press('welcome.toLogin');
     expect(field('account.password').value).toBe('');
+  });
+
+  describe('the opening scene (#826)', () => {
+    afterEach(() => {
+      window.sessionStorage.clear();
+    });
+
+    it('is not played when the screen does not ask for it', () => {
+      render();
+      expect(document.querySelector('.welcome.intro')).toBeNull();
+      expect(window.sessionStorage.getItem('sbf.introSeen')).toBeNull();
+    });
+
+    it('marks the session and ends in the still screen without a 2D canvas', async () => {
+      // jsdom has no 2D canvas: the scene gives up at once and shows the final frame.
+      const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+      render({ intro: true });
+      expect(window.sessionStorage.getItem('sbf.introSeen')).toBe('1');
+      await vi.waitFor(() => {
+        flushSync();
+        expect(document.querySelector('.welcome.intro')).toBeNull();
+      });
+      expect(document.querySelector('canvas')).toBeNull();
+      expect(document.querySelector('h1')?.textContent).toBe(translate('en', 'app.title'));
+      expect(document.querySelector('h1')?.getAttribute('style') ?? '').toBe('');
+      expect(document.querySelector('.gate .field')?.hasAttribute('inert')).toBe(false);
+      getContext.mockRestore();
+    });
+
+    it('is not played twice in one session', () => {
+      window.sessionStorage.setItem('sbf.introSeen', '1');
+      render({ intro: true });
+      expect(document.querySelector('.welcome.intro')).toBeNull();
+    });
   });
 });

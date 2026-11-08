@@ -169,6 +169,8 @@ export const en = {
   'welcome.login': 'Log in',
   'welcome.register': 'Create the account and play',
   'welcome.registerTitle': 'Create an account',
+  /** The opening scene of the entry screen (#826): skips to the still screen. */
+  'welcome.introSkip': 'Skip',
   'account.password': 'Password',
   'account.passwordNew': 'New password',
   'account.passwordOld': 'Current password',
