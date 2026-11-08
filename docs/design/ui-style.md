@@ -2390,3 +2390,38 @@ The owner's round 3 picks are locked into one set. Mockup: [`mockups/in-game-sty
 **Code impact.** Everything is client work: `hud/` (the CP widget, the cards, the radial prices, one reveal helper), `render/` (`fortLayout` and `fortView` with the offset and the two masonries, `cityView` for the towers, pips, courses, batteries and highlights), and `bakedShapes.ts` (the masonry, the battery and the highlight sprites, a bounded set of keys). No DEC, protocol, simulation or server change. The walls use `border_permille` and the node's cell as round 3 did. The pips and the courses use `building.owed`, `build_paid` and `done_tick`. The recruits use `recruit_queue`. The CP motion uses the two values of consecutive snapshots.
 
 **Estimate.** Round 3 came to 15.75 days. Round 4 adds 1 day to the forts (3 in all), 0.5 day for the CP motion, 0.5 day for the combined builds (2 in all), 1 day for the reveal and 1.5 days for the batteries. The fort icon (0.25 day) and the highlights (1 day) stay at their round 3 estimates. The whole locked set, with my picks for the open topics, comes to about 20 days of client work.
+
+## 56. Out-of-game style, round 3: the fog intro, the layouts and the menu edges (#826) **[awaiting the owner's decision]**
+
+The owner's feedback on round 2 (section 51) is applied in [`mockups/out-of-game-style-r3.html`](mockups/out-of-game-style-r3.html) (rounds 1 and 2 are unchanged). Frames: [`mockups/img/out-of-game-style-r3/`](mockups/img/out-of-game-style-r3/). The page has four independent switches (intro, layout, edges, captions), a compare mode (A and B side by side, or every layout, every edge or every intro at once), grayscale, reduced motion, zoom, a replayable intro with a scrubber, and the state in the address (`#s=main&st=cal&i=b&l=1&e=2&sp=0&cmp=layouts`). Every screen of round 2 is there in every layout; the main screen, Play a bot, Invite a friend, Open matches and the Leaderboard come first in the side list.
+
+**Removed captions (base).** "Unrated: it does not count toward calibration." (Play a bot), "The server picks" (the Random map tile), the node counts under the map tiles ("29 nodes" and the rest, pool and generated), "One of a kind" (the Random generated tile) and "One of a kind, not mirrored: the two sides differ. Never rated." (the note beside "Generated, unrated"), on Play a bot and Invite a friend. Nothing replaces them. The **Spare** captions variant also drops the other purely explanatory sublines (the mode descriptions, the bot level descriptions, the dock intros, the sheet sublines, "Keep this tab open", the tutorial hint and the result hints); data sublines ("3 waiting", "Map: crossroads", "The invite expires in 14 min.") stay.
+
+**Intro.** The fights at the edges, the Cinzel title, the Atlas rule, once a session, the skip and the reduced-motion still frame are round 2's. The letters now come out of fog one at a time in a fixed irregular order (M, N, R, F, S, I and so on, never left to right), each over 1.6 to 2.2 s with most of them overlapping; the scene is 7.0 s.
+
+| Id | Intro | How the letter appears | Client cost |
+| --- | --- | --- | --- |
+| A | Mist | it thickens out of a 12 px blur that clears only as it firms up | CSS per letter (opacity, blur, 6 px settle) |
+| B | Grain (**pick**) | density builds up: clumps of the stone first, then the grain fills in, until the letter is solid | one canvas over the title, a noise threshold per pixel while the letters form, then the DOM title |
+| C | Drift | the same density build-up against fog banks that drift to the right, under a faint low mist that thins and lifts | as B, plus two layers of a cached mist image |
+
+**Layouts** (round 2 is 0):
+
+| Id | Layout | Menu and player | Play and the ways to play | A way to play, opened |
+| --- | --- | --- | --- | --- |
+| 0 | Round 2 | top bar; nick and status at the right | Play, then a numbered list | rail and panel |
+| I | Codex (**pick**) | a left rail: the stacked brand, the menu with Roman numerals, the player at the foot with calibration cells | Play, then three tablets in a row | sub-tabs over one panel (Ranked, Play a bot, Invite a friend, Open matches) |
+| II | Ledger | top bar; the player as a seal with cells | one framed list: Play is its first row | the row opens in place; Play stays as a slim first row |
+| III | Plinth | a light bar over the full map; the player compact at the right | the map is the hero; a stone plinth at the foot holds the ways and Play | a drawer rises from the plinth; Start sits where Play was |
+| IV | Triptych | menu centred over the tablets; nick only (calibration moves to the Play tablet) | three tablets: the bot levels, Play, invite and open matches | the chosen tablet widens, the others fold to labelled spines |
+
+**Edges** (independent of the layout; 0 is round 2's plain incised rules). All are CSS: a `::before` frame of 1 px gradient rules and small SVG corner drawings (`img-src data:`), no filter, no glow.
+
+| Id | Edges | Panels | Buttons | Rules |
+| --- | --- | --- | --- | --- |
+| I | Chamfer | corners cut at 45 degrees, the cut incised twice | chamfered, an inner cut on Play | plain |
+| II | Double rule (**pick**) | two incised rules with a lozenge where they turn (the CP frame of section 54a) | an inner rule on Play | doubled |
+| III | Ansate | one firm frame with a fine inner rule | Play, the dialogs and the log-in sheet carry ansae (the dovetail handles of a Roman tablet) | plain |
+| IV | Brackets | incised corner brackets, no outline | small ivory corner marks | terminal ticks at the ends |
+
+Checks: a script renders every screen state in every layout under edges II and III (with spare captions) and finds nothing leaving the board or its framed panel. Text on the panel stone: ivory 11.1 to 14.4:1, secondary 5.6 to 7.3:1, own 5.2 to 6.7:1, enemy 4.5 to 5.9:1, the rail numerals 4.2 to 5.5:1, button rules 3.0 to 3.9:1. The stone texture's light clouds are cut to a third so they never read as soft lights. Calibration is cells (filled, open) plus the words. The intro frame costs about 2.7 ms on average at 1x and 9.7 ms at 2x in headless Chromium (A is 0.3 ms cheaper); building the noise fields once takes 20 to 50 ms before the scene. No DEC, protocol, simulation or server change.
