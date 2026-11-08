@@ -16,9 +16,10 @@ world units per cell), the label of every cell (``compute``):
 * a land piece cut off from its node becomes the water around it (no slivers, no exclaves).
 
 From the labels: the vector file ``maps/geo/<id>.json`` (``vector_file``: shared border chains,
-water kinds, river and stream lines, bridges) and the W4 Painted water over the T2 ground
-(``render``; the owner's decision of 2026-10-29: no dark line where an area border runs along
-water, the shore is only lighter, inside the water). The rules never read any of it: the
+water kinds, river and stream lines, bridges) and the Intaglio water over the Intaglio ground
+(``render``; #826, round 2 variant III, #842: dark stone water engraved with lines that follow the
+shores, the coast a cut rule; it replaces the W4 Painted water and its owner's decision of
+2026-10-29 of no dark line along water). The rules never read any of it: the
 simulation, the server, the bots and the protocol do not change (DEC-36, item 7).
 
 Deterministic for a pinned numpy and Pillow: the noise is the baker's (``map_seed``), every
@@ -738,17 +739,21 @@ def dump_vector_file(data: dict[str, Any]) -> str:
     return body[:-1] + ',"chains":[\n' + ",\n".join(lines) + "\n]}\n"
 
 
-# ---- the picture: W4 Painted -------------------------------------------------------------------
-WATER_TONES = ((52, 92, 116), (66, 108, 130))  # two tones in soft blotches (mockup W4)
-RIVER_LIGHT = ((118, 160, 168), 0.42)  # a river is shallow: lighter than a lake
-SHALLOWS = ((150, 194, 186), 0.34)  # the shore of a sea or a lake: lighter inside the water
-CURRENT = ((30, 62, 84), 0.24)  # a river is a little darker along the current
-REED = ((74, 104, 62), 0.45)  # muted reed tufts on the land beside the water
+# ---- the picture: Intaglio water (#826, round 2 variant III; #842) -----------------------------
+WATER_TONES = ((30, 48, 58), (36, 56, 66))  # two tones of dark stone in soft blotches
+RIVER_LIGHT = ((50, 76, 86), 0.5)  # a river is shallow: lighter than a lake
+CURRENT = ((20, 34, 42), 0.3)  # a river is a little darker along the current
+# The engraved water lines inside a sea or a lake, following its shore: (level of the shore field,
+# strength), the first one nearest the shore. They fade out towards open water.
+WATER_LINES = ((0.6, 0.95), (0.72, 0.8), (0.82, 0.62), (0.9, 0.45), (0.955, 0.28))
+WATER_LINE_CUT = ((14, 22, 28), 0.85)  # the cut of a water line
+WATER_LINE_LIP = ((78, 104, 114), 0.5)  # its lit lip, one px below and to the right
+SHORE_FIELD = 9  # blur radius (px) of the field whose levels the water lines follow
+COAST_CUT = (bake.CUT, 0.9)  # the coast of a sea or a lake: a cut rule on the land side
 DECK, PLANK, RAIL, SHADOW = (155, 132, 102), (60, 44, 28), (91, 70, 50), (0, 0, 0)
 BRIDGE_LEN, BRIDGE_W = 34.0, 11.0
 EDGE_ROUND = 3  # blur radius (px) that rounds the 4-unit cells of the water off
-EDGE_SOFT = 1.2  # half width (px) of the anti-aliased water edge: soft, no line
-REED_ROWS = ((7.0, 0.30), (13.0, 0.14), (20.0, 0.05))  # (distance from the water, keep share)
+EDGE_SOFT = 1.2  # half width (px) of the anti-aliased water edge
 
 
 def _upscale(cells: NDArray[Any]) -> Field:
@@ -844,36 +849,45 @@ def _draw_bridges(img: Field, mapdef: MapDef, bridges: Iterable[Bridge]) -> Fiel
     return np.asarray(out, dtype=np.float32)
 
 
-def _reeds(
-    size: tuple[int, int], near: Field, land: Field, rng: np.random.Generator
-) -> list[tuple[float, float, float]]:
-    """Reed tufts ``(x, y, row)`` on the land beside the water, thinning away from it."""
-    w, h = size
-    step = 6
-    xs = np.arange(step / 2, w, step, dtype=np.float64)
-    ys = np.arange(step / 2, h, step, dtype=np.float64)
-    gx = xs[None, :] + (rng.random((len(ys), len(xs))) - 0.5) * step
-    gy = ys[:, None] + (rng.random((len(ys), len(xs))) - 0.5) * step
-    ix = np.clip(gx, 0, w - 1).astype(np.intp)
-    iy = np.clip(gy, 0, h - 1).astype(np.intp)
-    dist = near[iy, ix]
-    on_land = land[iy, ix] > 0.99
-    roll = rng.random(gx.shape)
-    out: list[tuple[float, float, float]] = []
-    lo = 3.0
-    for row, (hi, keep) in enumerate(REED_ROWS):
-        sel = on_land & (dist >= lo) & (dist < hi) & (roll < keep)
-        out += [(float(a), float(b), float(row)) for a, b in zip(gx[sel], gy[sel], strict=True)]
-        lo = hi
-    out.sort(key=lambda t: (t[1], t[0]))
+def _shift(a: Field, dx: int, dy: int) -> Field:
+    """``a`` moved by ``dx``, ``dy`` px (zeros come in at the edges)."""
+    out = np.zeros_like(a)
+    h, w = a.shape
+    out[max(dy, 0) : h + min(dy, 0), max(dx, 0) : w + min(dx, 0)] = a[
+        max(-dy, 0) : h - max(dy, 0), max(-dx, 0) : w - max(dx, 0)
+    ]
     return out
 
 
+def _water_lines(img: Field, lake_cells: Mask, from_land: Field) -> Field:
+    """The engraved lines inside a sea or a lake, along its shore, and the cut rule of the coast.
+
+    The lines are the levels of a blurred mask of the water: near the shore they follow it closely,
+    farther out they round off and fade, like the water-lining of an engraved chart.
+    """
+    lake = np.clip(bake.blur(_upscale(lake_cells.astype(np.float32)), 3) * 2 - 0.5, 0.0, 1.0)
+    soft = bake.blur(lake, SHORE_FIELD)
+    gy, gx = np.gradient(soft)
+    grad = np.hypot(gx, gy) + 1e-4
+    lines = np.zeros(soft.shape, np.float32)
+    for level, strength in WATER_LINES:
+        near = 1.0 - _smoothstep(0.0, 0.85, (np.abs(soft - level) / grad).astype(np.float64))
+        lines = np.maximum(lines, np.asarray(near * strength, np.float32))
+    lines = np.asarray(lines * lake, np.float32)
+    img = _mix(img, WATER_LINE_CUT[0], lines * WATER_LINE_CUT[1])
+    lip = np.clip(_shift(lines, 1, 1) - lines, 0.0, 1.0)
+    img = _mix(img, WATER_LINE_LIP[0], lip * WATER_LINE_LIP[1])
+    rule = 1.0 - _smoothstep(0.0, 1.1, np.abs(from_land + 1.0).astype(np.float64))
+    coast = np.asarray(np.clip(rule, 0.0, 1.0) * lake, np.float32)
+    return _mix(img, COAST_CUT[0], coast * COAST_CUT[1])
+
+
 def render(mapdef: MapDef, geo: Geography, seed: int | None = None) -> Image8:
-    """The background of a map with a geography: the T2 ground of the new areas, details thinning
-    toward a shore, and the water of W4 Painted on top (no dark line along water)."""
+    """The background of a map with a geography: the Intaglio ground of the new areas, signs
+    thinning toward a shore, and the Intaglio water on top (dark stone, water lines, a cut
+    coast)."""
     seq = np.random.SeedSequence([map_seed(mapdef) if seed is None else seed, 36])
-    rng_tone, rng_reeds = (np.random.default_rng(c) for c in seq.spawn(2))
+    rng_tone = np.random.default_rng(seq.spawn(1)[0])
     water_cells = is_water(geo.labels)
     lake_cells = geo.labels >= WATER_BASE
     h, w = geo.labels.shape[0] * STEP, geo.labels.shape[1] * STEP
@@ -882,7 +896,7 @@ def render(mapdef: MapDef, geo: Geography, seed: int | None = None) -> Image8:
     water = np.clip((water_f - 0.5) / (2 * EDGE_SOFT) * EDGE_ROUND + 0.5, 0.0, 1.0)
     lake_f = bake.blur(_upscale(lake_cells.astype(np.float32)), EDGE_ROUND)
     lake = np.clip((lake_f - 0.5) * 2.5 + 0.5, 0.0, 1.0)
-    # Distance (px) from the water, for the details and the reeds; inside the water, from land.
+    # Distance (px) from the water, for the signs; inside the water, from land.
     near = _upscale(distance_to(water_cells)) - STEP / 2
     from_land = _upscale(distance_to(~water_cells)) - STEP / 2
     thin = np.asarray(_smoothstep(4.0, 26.0, near.astype(np.float64)), dtype=np.float32)
@@ -895,38 +909,17 @@ def render(mapdef: MapDef, geo: Geography, seed: int | None = None) -> Image8:
         )
         rivers_only = np.asarray(water * (1.0 - lake), dtype=np.float32)
         tone = _mix(tone, RIVER_LIGHT[0], rivers_only * RIVER_LIGHT[1])
-        shallow = np.asarray(
-            (1.0 - _smoothstep(0.0, 26.0, from_land.astype(np.float64))) * lake, dtype=np.float32
-        )
-        tone = _mix(tone, SHALLOWS[0], shallow * SHALLOWS[1])
         lines = (*geo.rivers, *geo.streams)
         current = bake.blur(_paint_lines((w, h), lines, -0.5), 2) * water
         tone = _mix(tone, CURRENT[0], current * CURRENT[1])
-        # No light flow streaks on the rivers: the owner read the short pale dashes as rendering
-        # artifacts (2026-10-30, #585); the river is the lighter tone and its darker current.
         out = np.asarray(img * (1.0 - water[..., None]) + tone * water[..., None], np.float32)
-        out = _draw_reeds(out, _reeds((w, h), near, 1.0 - water, rng_reeds))
         return _draw_bridges(out, mapdef, geo.bridges)
 
-    return bake.render_cells(mapdef, _ground_cells(mapdef, geo, seed), seed, thin, paint)
+    def finish(img: Field) -> Field:
+        return _water_lines(img, lake_cells, from_land)
 
-
-def _draw_reeds(img: Field, reeds: list[tuple[float, float, float]]) -> Field:
-    s = bake.SUPERSAMPLE
-    h, w = img.shape[:2]
-    alpha = Image.new("L", (w * s, h * s), 0)
-    draw = ImageDraw.Draw(alpha)
-    for x, y, row in reeds:
-        tall = 3.2 - row * 0.6
-        a = round(255 * (REED[1] - row * 0.1))
-        for dx0, dx1, top in ((-1.6, -2.4, tall), (0.0, 0.0, tall + 1), (1.6, 2.6, tall)):
-            draw.line(
-                [((x + dx0) * s, (y + 1) * s), ((x + dx1) * s, (y - top) * s)],
-                fill=a,
-                width=max(1, round(1.1 * s)),
-            )
-    mask = np.asarray(alpha.reduce(s), dtype=np.float32) / 255.0
-    return _mix(img, REED[0], mask)
+    cells = _ground_cells(mapdef, geo, seed)
+    return bake.render_cells(mapdef, cells, seed, thin, paint, finish)
 
 
 def bake_geography(

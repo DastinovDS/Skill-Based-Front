@@ -9,14 +9,20 @@ plains, forest, mountains. The prototype moisture and detail noise only pick a v
 terrain (steppe or savanna, forest or jungle, rock or snow). The field is sampled on a ``STEP``
 grid (``bake_cells``), exactly as before #344, so the layout of biomes stays recognisable.
 
-The picture is the texture "T2 Thinning" chosen by the owner (ui-style.md, 26.3; prototype and
-mockup: docs/design/mockups/map-style-2.html, src/map_textures.py):
+The picture is the map "III Intaglio" chosen by the owner (#826, round 2; ui-style.md, section 51;
+mockup: docs/design/mockups/out-of-game-style-r2.html), built on the layout of the texture T2
+(ui-style.md, 26.3):
 
-* flat ground of a biome in two tones (soft blotches, no light, no shadows, no relief shading);
+* toned stone: the ground of a biome in two dark, muted tones of its own hue (soft blotches, no
+  light, no relief shading);
 * a narrow band of colour (about 14 px) between biomes that wanders along a noise field;
-* flat details (tree canopies, grass tufts, stones, snow strokes) that thin out and shrink towards
-  the edge of the biome, so the transition reads as an ecotone and not as a seam;
+* every biome carved with its own sign (furrows, drilled points, crowns, chevrons): a dark cut with
+  a lit lip, thinning out and shrinking towards the edge of the biome, so the transition reads as
+  an ecotone and not as a seam;
 * a little film grain on top.
+
+The water of a map with a geography (``gow_maps.geo``) is dark stone too, engraved with lines that
+follow the shores, and the coast is a cut rule.
 
 The picture covers exactly the world rectangle ``[0, width] x [0, height]`` at one pixel per world
 unit, so the client stretches nothing: the sprite sits at ``(0, 0)`` with the map's own size.
@@ -31,7 +37,6 @@ with a tolerance, never bytes (``tools/maps/tests/test_bake.py``).
 
 import hashlib
 import io
-import math
 import random
 from collections.abc import Callable
 from enum import StrEnum
@@ -81,15 +86,15 @@ Field = NDArray[np.float32]
 Grid = NDArray[np.floating[Any]]
 Image8 = NDArray[np.uint8]
 
-# Two flat ground tones per biome (patches of one and the other). Jungle is a dark green, not the
-# prototype teal that reads as water (DEC-27).
+# Two ground tones per biome (patches of one and the other): the toned stone of Intaglio (#826,
+# round 2 variant III; #842), each terrain its own hue, all of them dark and muted under the pieces.
 GROUND: dict[Biome, tuple[Rgb, Rgb]] = {
-    Biome.STEPPE: ((124, 158, 86), (140, 172, 98)),
-    Biome.SAVANNA: ((176, 178, 98), (192, 192, 110)),
-    Biome.FOREST: ((40, 112, 52), (46, 124, 58)),
-    Biome.JUNGLE: ((26, 88, 62), (30, 100, 70)),
-    Biome.ROCK: ((122, 113, 100), (136, 127, 113)),
-    Biome.SNOW: ((222, 229, 234), (234, 239, 243)),
+    Biome.STEPPE: ((70, 82, 56), (76, 88, 60)),
+    Biome.SAVANNA: ((104, 92, 58), (112, 98, 62)),
+    Biome.FOREST: ((40, 68, 46), (44, 74, 50)),
+    Biome.JUNGLE: ((32, 60, 52), (36, 66, 56)),
+    Biome.ROCK: ((80, 75, 70), (88, 82, 76)),
+    Biome.SNOW: ((152, 152, 146), (162, 162, 156)),
 }
 
 
@@ -273,10 +278,6 @@ def _ellipse(d: Draw, x: float, y: float, rx: float, ry: float, fill: Rgb) -> No
     d.ellipse([(x - rx) * s, (y - ry) * s, (x + rx) * s, (y + ry) * s], fill=fill)
 
 
-def _poly(d: Draw, pts: list[tuple[float, float]], fill: Rgb) -> None:
-    d.polygon([(px * SUPERSAMPLE, py * SUPERSAMPLE) for px, py in pts], fill=fill)
-
-
 def _line(d: Draw, pts: list[tuple[float, float]], fill: Rgb, width: float) -> None:
     d.line(
         [(px * SUPERSAMPLE, py * SUPERSAMPLE) for px, py in pts],
@@ -285,76 +286,81 @@ def _line(d: Draw, pts: list[tuple[float, float]], fill: Rgb, width: float) -> N
     )
 
 
-def _tree(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
-    """A flat canopy seen from above: three concentric tones, no light direction."""
-    r = (3.8 + 2.2 * rng.random()) * s
-    _ellipse(d, x, y, r, r, (28, 88, 46))
-    _ellipse(d, x, y, r * 0.76, r * 0.76, (38, 108, 56))
-    _ellipse(d, x, y, r * 0.36, r * 0.36, (56, 130, 68))
+Sign = Callable[[Draw, float, float, float, np.random.Generator], None]
+
+# Intaglio (#826, round 2 variant III; #842): every terrain is carved with its own sign. A cut is a
+# dark stroke with a lighter lip just below and to the right of it (light from the upper left), so
+# the sign reads as incised into the stone, not painted on it.
+CUT: Rgb = (12, 10, 8)
+LIP_OFFSET = (0.7, 0.8)  # world units: where the lip of a cut lies
 
 
-def _jungle(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
-    r = (4.6 + 2.6 * rng.random()) * s
-    _ellipse(d, x, y, r, r, (18, 70, 52))
-    _ellipse(d, x, y, r * 0.74, r * 0.74, (26, 90, 66))
+def _lip(rgb: Rgb, k: float = 1.7) -> Rgb:
+    """The lit lip of a cut into a ground of colour ``rgb``."""
+    r, g, b = (min(255, int(c * k + 14)) for c in rgb)
+    return (r, g, b)
+
+
+def _cut(d: Draw, pts: list[tuple[float, float]], lip: Rgb, width: float, cut: Rgb = CUT) -> None:
+    ox, oy = LIP_OFFSET
+    _line(d, [(x + ox, y + oy) for x, y in pts], lip, width)
+    _line(d, pts, cut, width)
+
+
+def _furrow(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
+    """Steppe: two short parallel furrows."""
+    lip = _lip(GROUND[Biome.STEPPE][0])
+    for dy in (-1.6, 1.6):
+        ln = (2.6 + 1.4 * rng.random()) * s
+        _cut(d, [(x - ln, y + dy), (x + ln, y + dy)], lip, 0.9)
+
+
+def _drill(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
+    """Savanna: three drilled points."""
+    lip = _lip(GROUND[Biome.SAVANNA][0], 1.5)
     for _ in range(3):
-        ang = rng.random() * math.tau
-        _ellipse(
-            d, x + math.cos(ang) * r * 0.3, y + math.sin(ang) * r * 0.3, r * 0.2, r * 0.2,
-            (48, 122, 88),
-        )  # fmt: skip
+        cx, cy = x + (rng.random() - 0.5) * 7, y + (rng.random() - 0.5) * 6
+        rr = 0.8 + 0.5 * rng.random()
+        _ellipse(d, cx + 0.6, cy + 0.7, rr, rr, lip)
+        _ellipse(d, cx, cy, rr, rr, CUT)
 
 
-def _tuft(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
-    tone = (88, 124, 62) if rng.random() < 0.8 else (150, 160, 80)
-    for dx in (-2.2, 0.0, 2.2):
-        _line(
-            d, [(x + dx, y + 2 * s), (x + dx * 1.6, y - (2.6 + 1.6 * rng.random()) * s)], tone, 1.0
-        )
+def _crown(base: Rgb, size: float) -> Sign:
+    """Forest and jungle: a crown cut round, its middle left a little darker than the ground."""
+    lip = _lip(base, 1.9)
+    inner: Rgb = (int(base[0] * 0.82), int(base[1] * 0.82), int(base[2] * 0.82))
+
+    def draw(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
+        rr = (size + 1.6 * rng.random()) * s
+        _ellipse(d, x + 0.8, y + 0.9, rr, rr, lip)
+        _ellipse(d, x, y, rr, rr, CUT)
+        _ellipse(d, x - 0.2, y - 0.2, rr * 0.62, rr * 0.62, inner)
+
+    return draw
 
 
-def _dry(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
-    for dx in (-2.4, 0.0, 2.4):
-        _line(
-            d, [(x + dx, y + 2 * s), (x + dx * 1.5, y - (2.0 + 1.5 * rng.random()) * s)],
-            (140, 140, 72), 1.0,
-        )  # fmt: skip
-    if rng.random() < 0.07:  # a rare flat-topped tree
-        _ellipse(d, x, y, 7 * s, 3 * s, (96, 112, 52))
+def _chevron(base: Rgb, k: float, cut: Rgb) -> Sign:
+    """Rock and snow: a peak as a chevron, sometimes with a second stroke on its flank."""
+    lip = _lip(base, k)
+
+    def draw(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
+        sz = (4.0 + 2.2 * rng.random()) * s
+        pts = [(x - sz, y + sz * 0.55), (x, y - sz * 0.6), (x + sz, y + sz * 0.55)]
+        _cut(d, pts, lip, 1.1, cut)
+        if rng.random() < 0.55:
+            _line(d, [(x - sz * 0.5, y + sz * 0.05), (x, y - sz * 0.25)], cut, 0.8)
+
+    return draw
 
 
-def _rock(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
-    """A cluster of flat stones: one tone darker than the ground, no facets, no light."""
-    for _ in range(2 + int(rng.random() * 2)):
-        cx, cy = x + (rng.random() - 0.5) * 10 * s, y + (rng.random() - 0.5) * 7 * s
-        rr = (1.8 + 2.2 * rng.random()) * s
-        k = 5 + int(rng.random() * 2)
-        pts = [
-            (cx + math.cos(i / k * math.tau + 0.6) * rr * (0.75 + 0.5 * rng.random()),
-             cy + math.sin(i / k * math.tau + 0.6) * rr * (0.6 + 0.35 * rng.random()))
-            for i in range(k)
-        ]  # fmt: skip
-        _poly(d, pts, (104, 96, 85))
-
-
-def _snow(d: Draw, x: float, y: float, s: float, rng: np.random.Generator) -> None:
-    ang = (rng.random() - 0.5) * 0.6
-    ln = (4 + 3 * rng.random()) * s
-    _line(
-        d, [(x - ln * math.cos(ang), y - ln * math.sin(ang) * 0.4),
-            (x + ln * math.cos(ang), y + ln * math.sin(ang) * 0.4)],
-        (176, 192, 206), 1.0,
-    )  # fmt: skip
-
-
-# Grid step of the details of a biome (world units) and the function that draws one detail.
-SPRITES = {
-    Biome.STEPPE: (11, _tuft),
-    Biome.SAVANNA: (13, _dry),
-    Biome.FOREST: (9, _tree),
-    Biome.JUNGLE: (10, _jungle),
-    Biome.ROCK: (16, _rock),
-    Biome.SNOW: (18, _snow),
+# Grid step of the signs of a biome (world units) and the function that cuts one sign.
+SPRITES: dict[Biome, tuple[int, Sign]] = {
+    Biome.STEPPE: (11, _furrow),
+    Biome.SAVANNA: (12, _drill),
+    Biome.FOREST: (10, _crown(GROUND[Biome.FOREST][0], 3.7)),
+    Biome.JUNGLE: (11, _crown(GROUND[Biome.JUNGLE][0], 4.4)),
+    Biome.ROCK: (15, _chevron(GROUND[Biome.ROCK][0], 1.75, CUT)),
+    Biome.SNOW: (17, _chevron(GROUND[Biome.SNOW][0], 1.12, (92, 92, 88))),
 }
 
 
@@ -416,11 +422,13 @@ def render_cells(
     seed: int | None = None,
     thin: Field | None = None,
     paint: Paint | None = None,
+    finish: Paint | None = None,
 ) -> Image8:
     """The T2 picture of a biome grid (``cells``: one biome index per ``STEP`` cell).
 
     ``thin`` (``height x width``, 0..1) scales the density of the details (DEC-36: they thin out
-    toward a shore); ``paint`` draws over the finished ground and details, before the grain.
+    toward a shore); ``paint`` draws over the finished ground and details, before the grain;
+    ``finish`` draws over the grain (fine engraved lines that must stay crisp).
     """
     seq = np.random.SeedSequence(map_seed(mapdef) if seed is None else seed)
     rngs = [np.random.default_rng(child) for child in seq.spawn(3 + len(BIOMES))]
@@ -446,6 +454,8 @@ def render_cells(
     if paint is not None:
         flat = paint(flat)
     flat = flat + rng_grain.normal(0, GRAIN, flat.shape[:2]).astype(np.float32)[..., None]
+    if finish is not None:
+        flat = finish(flat)
     return np.clip(flat, 0, 255).astype(np.uint8)
 
 
