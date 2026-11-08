@@ -881,7 +881,27 @@ The hierarchy (Overwatch 2 Match Summary, VALORANT):
 1. The outcome word 40 px ("Victory" in the `--you` color, "Defeat" `--enemy`, "Draw" `--text`) and
    the reason in a line below.
 2. A line "Ember 96 : 134 Guest · artery · 12:00", the rating change as an arrow (if ranked).
-3. A row of 4 numbers with a caption: "Cities at the end", "Units lost", "Charges delivered", "VP peak".
+3. The numbers of the player with a caption (#824, owner 2026-11-08; built: `app/ResultScreen.svelte`): "Match
+   length", "Units killed", "Units lost", "Cities captured", "Provinces captured", "Attacks won" and "Defenses held"
+   (each as "won of all"). The server counts them over the whole match from the events (`gow_sim.analysis.ResultTally`,
+   `match_end.stats`); the client counts nothing. Definitions, per player `p` (the other is `q`):
+   - **Units killed**: units of `q` destroyed in fights: the `losses` of `q` of every fight round (killed by shots),
+     plus the units of `q` that died at the end of a fight by DEC-24, item G3 (a returning group that bounced in the
+     node it lost). Over-capacity attrition is no kill.
+   - **Units lost**: units of `p` destroyed by the same fight rules, plus every unit of `p` that died of over-capacity
+     attrition (DEC-12): a lost unit is lost whatever killed it. Not counted: a returning group that walks into its
+     lost, empty node and cannot pay the capture (DEC-38, item 4; its event has no unit count). Starvation spends
+     charges, not units; a retreat loses nothing.
+   - **Cities captured**, **Provinces captured**: every capture by `p` (a fight won or a walk into an empty node;
+     neutral and enemy nodes, a recapture counts again), split by the kind of the node; the capital is a city.
+   - **Attacks won**: of the node fights that ended in a node `p` did not own when the fight started (an enemy node, or
+     a neutral node both players entered), those that ended with `p` capturing the node. A walk into an empty node is
+     a capture but no attack; a meeting on a road is neither attack nor defense.
+   - **Defenses held**: of the node fights `q` started in a node of `p` that ended, those after which the node is still
+     `p`'s (a `q` win that cannot pay the capture, DEC-38, also holds).
+   - A fight still going when the match ends counts its kills and losses, but is neither an attack nor a defense.
+   "VP peak" (VP never decrease, so it equalled the final VP), "Cities at the end" and "Charges delivered" were removed
+   (#824).
 4. A graph of the VP difference over time (LoL Gold Diff): above zero a blue fill, below a red one; the marks of
    own captures above the graph, the other side's under it; hover shows the time and the values; a click opens
    the replay at that tick.

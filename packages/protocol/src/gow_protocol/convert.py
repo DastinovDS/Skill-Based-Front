@@ -100,8 +100,8 @@ from gow_protocol.view import (
     View,
 )
 from gow_sim import commands as sim
-from gow_sim.analysis import ResultTotals
 from gow_sim import view as sv
+from gow_sim.analysis import ResultTotals
 from gow_sim.state import Event, EventValue
 from gow_sim.systems.victory import EndReason as SimEndReason
 from gow_sim.systems.victory import Outcome
