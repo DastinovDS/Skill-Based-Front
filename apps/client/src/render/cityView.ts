@@ -444,12 +444,13 @@ export class CityView {
       )
         occupied.add(node.id);
     }
-    // A city with a fight in it: its production stands (DEC-25, item 9).
+    // A city with a fight in it: its production stands (DEC-25, item 9). Its units are drawn by the
+    // fight, not as a helmet in the city, so the city keeps its owner's disc.
     const fighting = new Set<number>();
     for (const fight of base.view.fights) {
       if (fight.node !== null) {
         fighting.add(fight.node);
-        occupied.add(fight.node);
+        occupied.delete(fight.node);
       }
     }
     if (this.tick < base.tick - 1) this.tick = base.tick;

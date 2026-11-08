@@ -513,7 +513,10 @@ export class OverlayView {
     this.drawReach(g, state);
     const selected = state.selection;
     const hovered = state.hover?.group == null ? (state.hover?.node ?? null) : null;
-    if (hovered !== null && !(selected?.kind === 'node' && selected.id === hovered)) {
+    // A hovered target keeps its target mark alone: the hover ring would lie over it.
+    const target =
+      hovered !== null && (state.reach.includes(hovered) || state.split.includes(hovered));
+    if (hovered !== null && !target && !(selected?.kind === 'node' && selected.id === hovered)) {
       const at = nodePoint(this.map, hovered);
       if (at !== undefined) drawHoverRing(g, at, ringRadius(this.radiusOf(hovered)));
     }
