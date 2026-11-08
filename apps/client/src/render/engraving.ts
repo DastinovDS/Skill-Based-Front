@@ -18,21 +18,22 @@
  * The geometry and the bucket arithmetic are pure functions; `HatchTile` owns one texture.
  * Mockups: docs/design/mockups/in-game-style-r2.html (zoom), -r3.html (topics n and o), -r5.html.
  *
- * The colours are the Engraved theme of the mockups, kept here until the style foundation (#829,
- * part 0) moves the shared ones into its tokens.
+ * The colours are the Engraved tokens of the style foundation (`theme/tokens.ts`, #841), the same
+ * own/enemy pair as the pieces of the map (#847).
  */
 import { BufferImageSource, Matrix, Texture } from 'pixi.js';
 import type { PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
+import { ENGRAVED } from '../theme/tokens.ts';
 import { centroid, territoryBorders, type Border, type CellEdge } from './regionLayout.ts';
 
 /** The Engraved theme colours used by the map treatment (mockup `VARIANTS.engraved`). */
 export const ENGRAVE = {
-  own: 0x86a6ea,
-  enemy: 0xe5785e,
-  ink: 0xece4d1,
+  own: ENGRAVED.own,
+  enemy: ENGRAVED.enemy,
+  ink: ENGRAVED.ink,
   /** The dark casing under a coloured mark. */
-  casing: 0x060504,
+  casing: ENGRAVED.casing,
   /** The colour of a cut into the stone. */
   cut: 0x050403,
 } as const;

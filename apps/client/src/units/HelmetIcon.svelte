@@ -10,9 +10,14 @@
     share?: number;
     /** A unit that fell: the dome dashed and faint, no fill. */
     dashed?: boolean;
+    /**
+     * The Engraved look of the match (#847, ui-style 57u): ink lines on a dark casing, the charge
+     * solid in the side's colour, no charge the dark plate (hollow, never a lighter tone).
+     */
+    engraved?: boolean;
   }
 
-  let { side, size = 40, share = 1, dashed = false }: Props = $props();
+  let { side, size = 40, share = 1, dashed = false, engraved = false }: Props = $props();
 
   // The same outlines as the map (`units/helmet.ts`), in their 100-unit box, with room for the casing.
   const PAD = 6;
@@ -42,6 +47,7 @@
 <svg
   class="helmet-icon {side}"
   class:dashed
+  class:engraved
   width={size}
   height={(size * box.height) / box.width}
   viewBox={`${String(box.x)} ${String(box.y)} ${String(box.width)} ${String(box.height)}`}
@@ -105,5 +111,27 @@
     stroke: color-mix(in srgb, var(--tone) 50%, var(--paper));
     stroke-width: 4.5;
     stroke-linejoin: round;
+  }
+  /* Engraved (#847): the mockup's `helmet`, an ink edge and strap on a dark casing. */
+  .engraved {
+    --tone: var(--own);
+  }
+  .engraved.enemy {
+    --tone: var(--enemy);
+  }
+  .engraved .casing {
+    stroke: var(--casing);
+    stroke-width: 11;
+  }
+  .engraved .gear {
+    stroke: var(--ink);
+    stroke-width: 4;
+  }
+  .engraved .plate {
+    fill: var(--plate);
+  }
+  .engraved .edge {
+    stroke: var(--ink);
+    stroke-width: 4;
   }
 </style>

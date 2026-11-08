@@ -22,6 +22,12 @@ export interface BakeSpec {
 export interface BakeTools {
   /** The gradient of a colour (BL1: lighter at the top, darker at the bottom), made once and kept by the cache. */
   gradient(color: number): FillGradient | number;
+  /**
+   * A line `width` world units wide, at least one texture pixel at the resolution of the bake (an
+   * Engraved hairline never thinner than a device pixel, ui-style 53): a texture is baked anew when
+   * the resolution changes, so the floor follows the zoom.
+   */
+  hair(width: number): number;
 }
 
 /** What turns a scratch container into a texture: `renderer.generateTexture` (a fake one in tests). */
@@ -167,6 +173,10 @@ export class SpriteCache implements BakeTools {
   register(sprite: BakedSprite, on: boolean): void {
     if (on) this.sprites.add(sprite);
     else this.sprites.delete(sprite);
+  }
+
+  hair(width: number): number {
+    return Math.max(width, 1 / Math.max(1e-6, this.current));
   }
 
   gradient(color: number): FillGradient | number {

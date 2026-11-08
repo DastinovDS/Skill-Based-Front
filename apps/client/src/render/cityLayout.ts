@@ -11,7 +11,7 @@ import {
   RING_GAP,
   RING_MAX_SEGMENTS,
   RING_SEGMENT,
-  VP_BADGE_RADIUS,
+  VP_BADGE_LIFT,
 } from './style.ts';
 
 /**
@@ -190,10 +190,10 @@ export const BUNKER_GLYPH: readonly (readonly [number, number])[] = (() => {
 export const BUNKER_SLIT = { x: -2.6, y: -0.3, width: 5.2, height: 1.3 } as const;
 
 /**
- * Where the VP badge sits: outside the capacity ring at the upper right (the angle of -45 degrees),
- * from the city centre.
+ * Where the VP badge sits: the gilt lozenge on the capacity ring at its upper right (the angle of
+ * -45 degrees, the Engraved mockup's `vpBadge`, #847), from the city centre.
  */
 export function vpBadgeAt(radius: number): { x: number; y: number } {
-  const d = ringRadius(radius) + VP_BADGE_RADIUS + 1;
+  const d = ringRadius(radius) + VP_BADGE_LIFT;
   return { x: d * Math.cos(-Math.PI / 4), y: d * Math.sin(-Math.PI / 4) };
 }

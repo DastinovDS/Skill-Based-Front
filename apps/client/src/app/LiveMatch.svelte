@@ -163,9 +163,13 @@
                 warehouseMaxLevel: welcome.ruleset_public.city_upgrades.warehouse_max_level,
                 warehouseGainPerLevel:
                   welcome.ruleset_public.city_upgrades.warehouse_gain_per_level,
+                barracksCharges: welcome.ruleset_public.city_upgrades.barracks_charges,
                 ...(welcome.ruleset_public.factory === null
                   ? {}
-                  : { factory: welcome.ruleset_public.factory.build_ticks }),
+                  : {
+                      factory: welcome.ruleset_public.factory.build_ticks,
+                      factoryCharges: welcome.ruleset_public.factory.cost,
+                    }),
                 ...(welcome.ruleset_public.bunker === null
                   ? {}
                   : { fort: welcome.ruleset_public.bunker.build_ticks }),

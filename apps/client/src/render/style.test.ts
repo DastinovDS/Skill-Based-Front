@@ -3,10 +3,13 @@ import {
   BADGE_DOWN,
   BADGE_UP,
   BG,
+  CASING,
   ENEMY,
+  INK,
   NEUTRAL_FILL,
   NEUTRAL_STROKE,
   PAPER,
+  DARK_PLATE,
   TERRAIN_FILL,
   VP,
   WARN,
@@ -17,24 +20,28 @@ import {
   sideOf,
 } from './style.ts';
 
-// The map keeps the palette of ui-style 6 until its Engraved piece (#829); the interface tokens of
-// app.css moved to Lapis and Engraved (#841, src/theme/tokens.test.ts). These pin the map colours.
+// The pieces of the map take the Engraved pair of the tokens (#847, part 2 of #829, ui-style 57),
+// the same as the interface (`src/theme/tokens.test.ts`); the dark and white of the parts not
+// restyled yet stay the old ones of ui-style 6. These pin the map colours.
 function hex(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
 
-describe('the map palette (ui-style 6)', () => {
+describe('the map palette (Engraved, ui-style 57)', () => {
   it.each([
     [BG, '#0d1117'],
     [PAPER, '#f0f6fc'],
-    [YOU, '#5b9bff'],
-    [ENEMY, '#e5484d'],
-    [NEUTRAL_STROKE, '#8b949e'],
-    [NEUTRAL_FILL, '#2b3139'],
-    [WARN, '#ffb020'],
-    [VP, '#e3b341'],
-    [BADGE_UP, '#3ddc72'],
-    [BADGE_DOWN, '#ff4f4f'],
+    [YOU, '#86a6ea'],
+    [ENEMY, '#e5785e'],
+    [NEUTRAL_STROKE, '#b3a88f'],
+    [NEUTRAL_FILL, '#221e18'],
+    [WARN, '#e6ab42'],
+    [VP, '#cfab62'],
+    [BADGE_UP, '#8cc79a'],
+    [BADGE_DOWN, '#ec6654'],
+    [INK, '#ece4d1'],
+    [CASING, '#060504'],
+    [DARK_PLATE, '#0e0c09'],
     [TERRAIN_FILL.plains, '#3a4630'],
     [TERRAIN_FILL.forest, '#25392b'],
     [TERRAIN_FILL.mountains, '#4a453e'],

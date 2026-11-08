@@ -7,6 +7,7 @@ import type { TokenSpot } from './layout.ts';
 import { createLayers } from './layers.ts';
 import { setReducedMotion } from './motion.ts';
 import { ParticleLayer, type ParticleSpec } from './particles.ts';
+import { WARN } from './style.ts';
 import { TollView } from './tollView.ts';
 import { HIT_AT_MS } from './tollLayout.ts';
 
@@ -79,7 +80,7 @@ describe('TollView', () => {
     // The beam starts at the line and ends at the own group.
     const beam = emitted().filter((p) => p.kind === 'square' && p.aspect !== undefined);
     expect(beam.length).toBeGreaterThan(0);
-    expect(emitted().some((p) => p.kind === 'dashRing' && p.color === 0xffb020)).toBe(true);
+    expect(emitted().some((p) => p.kind === 'dashRing' && p.color === WARN)).toBe(true);
     // At 0.1 s the hit has just landed: the plate shows.
     expect(plates()).toHaveLength(1);
     expect(text(plates()[0] as Container)).toBe('-2');

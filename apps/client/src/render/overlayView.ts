@@ -14,6 +14,7 @@ import type { MapLayers } from './layers.ts';
 import { helmetWidth } from './shapes.ts';
 import { helmetOutline } from '../units/helmet.ts';
 import { arrowGeometry, dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
+import { ringRadius } from './cityLayout.ts';
 import {
   ARROW_HEAD,
   BONUS_MARK,
@@ -25,7 +26,6 @@ import {
   CAPITAL_RADIUS,
   GHOST_CP,
   HELMET_FRAME,
-  HOVER_FRAME,
   ORDER_GHOST_ALPHA,
   ORDER_GHOST_DASH,
   ORDER_GHOST_GAP,
@@ -37,9 +37,11 @@ import {
   REACH_RING,
   roadSpan,
   SELECT_COLOR,
-  SELECT_RING_GAP,
-  SELECT_WIDTH,
   WARN,
+  CASING,
+  FINE_RING,
+  HELMET_SELECT,
+  INK,
 } from './style.ts';
 
 /** What a selection or hover outline is drawn for: the size and the kind of token. */
@@ -55,6 +57,90 @@ export function framePolygon(at: TokenSpot, offset: number): number[] {
   const kind = at.enemy === true ? 'enemy' : 'own';
   const outline = helmetOutline(kind, helmetWidth(at.side, at.inside === true), offset);
   return kind === 'own' ? outline : outline.map((v, i) => (i % 2 === 0 ? -v : v));
+}
+
+// --- Fine rings (ui-style 55p; mockup `highlight4`, H3) -----------------------------------------------
+// One weight system round the capacity ring `R`: a 1 px ink line on a 2.6 px casing at R + 5, 8, 11.
+
+function ring(g: Graphics, at: Point, r: number, width: number, color: number, alpha = 1): void {
+  g.circle(at.x, at.y, r).stroke({ width: width + FINE_RING.casing, color: CASING, alpha });
+  g.circle(at.x, at.y, r).stroke({ width, color, alpha });
+}
+
+/** Selected: two ink rings over a dark band, four lozenges on the outer one. */
+export function drawSelectRings(g: Graphics, at: Point, R: number): void {
+  const F = FINE_RING;
+  const r1 = R + F.r1;
+  const r2 = R + F.r2;
+  g.circle(at.x, at.y, (r1 + r2) / 2).stroke({
+    width: r2 - r1 + F.select.band,
+    color: CASING,
+    alpha: 0.9,
+  });
+  g.circle(at.x, at.y, r1).stroke({ width: F.ink, color: INK });
+  g.circle(at.x, at.y, r2).stroke({ width: F.select.outer, color: INK });
+  const lozenge = (cx: number, cy: number, side: number): void => {
+    const h = (side * Math.SQRT2) / 2;
+    g.poly([cx, cy - h, cx + h, cy, cx, cy + h, cx - h, cy]);
+  };
+  for (let j = 0; j < 4; j++) {
+    const a = Math.PI / 4 + (j * Math.PI) / 2;
+    const cx = at.x + r2 * Math.cos(a);
+    const cy = at.y + r2 * Math.sin(a);
+    lozenge(cx, cy, F.select.lozenge + 2 * F.select.lozengeCasing);
+    g.fill(CASING);
+    lozenge(cx, cy, F.select.lozenge);
+    g.fill(INK);
+  }
+}
+
+/** Hovered: one ink ring. */
+export function drawHoverRing(g: Graphics, at: Point, R: number): void {
+  ring(g, at, R + FINE_RING.r1 + 1, FINE_RING.hover.width, INK, FINE_RING.hover.alpha);
+}
+
+/** A reachable target: a ring of ink ticks, every fourth longer. */
+export function drawTargetTicks(g: Graphics, at: Point, R: number): void {
+  const T = FINE_RING.target;
+  const r1 = R + FINE_RING.r1;
+  const ticks = (pass: 'casing' | 'ink'): void => {
+    for (let j = 0; j < T.ticks; j++) {
+      const a = (j / T.ticks) * Math.PI * 2;
+      const r2 = r1 + (j % T.every === 0 ? T.long : T.short);
+      const pad = pass === 'casing' ? 0.8 : 0;
+      g.moveTo(at.x + (r1 - pad) * Math.cos(a), at.y + (r1 - pad) * Math.sin(a)).lineTo(
+        at.x + (r2 + pad) * Math.cos(a),
+        at.y + (r2 + pad) * Math.sin(a),
+      );
+    }
+    g.stroke(
+      pass === 'casing'
+        ? { width: FINE_RING.ink + T.casing, color: CASING }
+        : { width: FINE_RING.ink, color: INK },
+    );
+  };
+  ticks('casing');
+  ticks('ink');
+}
+
+/** A target the group reaches only after a split (DEC-20): a dashed amber ring on a casing. */
+export function drawSplitRing(g: Graphics, at: Point, R: number): void {
+  const S = FINE_RING.split;
+  const r = R + FINE_RING.r1 + 1;
+  const n = Math.max(8, Math.round((2 * Math.PI * r) / (S.dash + S.gap)));
+  const span = ((2 * Math.PI) / n) * (S.dash / (S.dash + S.gap));
+  for (const pass of ['casing', 'ink'] as const) {
+    for (let i = 0; i < n; i++) {
+      const from = (2 * Math.PI * i) / n;
+      g.moveTo(at.x + r * Math.cos(from), at.y + r * Math.sin(from));
+      g.arc(at.x, at.y, r, from, from + span);
+    }
+    g.stroke(
+      pass === 'casing'
+        ? { width: S.width + FINE_RING.casing, color: CASING, cap: 'butt' }
+        : { width: S.width, color: WARN, cap: 'butt' },
+    );
+  }
 }
 
 /** The stretch of the road `a`-`b` between the city rims (radius `ra` at `a`, `rb` at `b`); `null`: none. */
@@ -417,43 +503,38 @@ export class OverlayView {
     this.frame.destroy();
   }
 
+  /**
+   * The city highlights (Fine rings, ui-style 55p, #847): a reachable target, one that needs a split
+   * first, the hovered city and the selected one, each its own stroke round the capacity ring.
+   */
   private drawRing(state: OverlayState): void {
     const g = this.ring;
     g.clear();
     this.drawReach(g, state);
     const selected = state.selection;
+    const hovered = state.hover?.group == null ? (state.hover?.node ?? null) : null;
+    // A hovered target keeps its target mark alone: the hover ring would lie over it.
+    const target =
+      hovered !== null && (state.reach.includes(hovered) || state.split.includes(hovered));
+    if (hovered !== null && !target && !(selected?.kind === 'node' && selected.id === hovered)) {
+      const at = nodePoint(this.map, hovered);
+      if (at !== undefined) drawHoverRing(g, at, ringRadius(this.radiusOf(hovered)));
+    }
     if (selected?.kind !== 'node') return;
     const at = nodePoint(this.map, selected.id);
     if (at === undefined) return;
-    // Outside the capacity ring: a white ring on a dark one.
-    const radius = this.radiusOf(selected.id) + SELECT_RING_GAP;
-    g.circle(at.x, at.y, radius + SELECT_WIDTH).stroke({ width: 2, color: BG });
-    g.circle(at.x, at.y, radius).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR });
+    drawSelectRings(g, at, ringRadius(this.radiusOf(selected.id)));
   }
 
-  /** Rings of the nodes the selected group can go to, solid; dashed where it must split first. */
+  /** The nodes the selected group can go to: a ring of ticks; a dashed amber ring where it must split first. */
   private drawReach(g: Graphics, state: OverlayState): void {
     for (const id of state.reach) {
       const at = nodePoint(this.map, id);
-      if (at === undefined) continue;
-      g.circle(at.x, at.y, this.radiusOf(id) + REACH_RING.gap);
-    }
-    if (state.reach.length > 0) {
-      g.stroke({ width: REACH_RING.width, color: YOU, alpha: REACH_RING.alpha });
+      if (at !== undefined) drawTargetTicks(g, at, ringRadius(this.radiusOf(id)));
     }
     for (const id of state.split) {
       const at = nodePoint(this.map, id);
-      if (at === undefined) continue;
-      const r = this.radiusOf(id) + REACH_RING.gap;
-      const dashes = Math.max(8, Math.round((2 * Math.PI * r) / (2 * REACH_RING.dash)));
-      for (let i = 0; i < dashes; i++) {
-        const from = (2 * Math.PI * i) / dashes;
-        g.moveTo(at.x + r * Math.cos(from), at.y + r * Math.sin(from));
-        g.arc(at.x, at.y, r, from, from + Math.PI / dashes);
-      }
-    }
-    if (state.split.length > 0) {
-      g.stroke({ width: REACH_RING.width, color: WARN, alpha: REACH_RING.alpha });
+      if (at !== undefined) drawSplitRing(g, at, ringRadius(this.radiusOf(id)));
     }
   }
 
@@ -464,9 +545,21 @@ export class OverlayView {
   private drawFrame(at: TokenSpot, key: string): void {
     const g = this.frame;
     g.clear();
-    const poly = framePolygon(at, HELMET_FRAME.select);
-    g.poly(poly).stroke({ width: SELECT_WIDTH + 4, color: BG, alpha: 0.8, join: 'round' });
-    g.poly(poly).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR, join: 'round' });
+    // Engraved (#847): a dark casing with two ink hairlines along it, round the whole helmet.
+    const S = HELMET_SELECT;
+    g.poly(framePolygon(at, HELMET_FRAME.select)).stroke({
+      width: S.casing,
+      color: CASING,
+      alpha: 0.9,
+      join: 'round',
+    });
+    for (const offset of [-S.offset, S.offset]) {
+      g.poly(framePolygon(at, HELMET_FRAME.select + offset)).stroke({
+        width: S.ink,
+        color: INK,
+        join: 'round',
+      });
+    }
     this.frameKey = key;
   }
 
@@ -475,18 +568,9 @@ export class OverlayView {
     const g = this.hoverFrame;
     g.clear();
     const poly = framePolygon(at, HELMET_FRAME.hover);
-    g.poly(poly).stroke({
-      width: HOVER_FRAME.width + 3,
-      color: BG,
-      alpha: HOVER_FRAME.haloAlpha,
-      join: 'round',
-    });
-    g.poly(poly).stroke({
-      width: HOVER_FRAME.width,
-      color: SELECT_COLOR,
-      alpha: HOVER_FRAME.alpha,
-      join: 'round',
-    });
+    const H = HELMET_SELECT.hover;
+    g.poly(poly).stroke({ width: H.casing, color: CASING, alpha: H.alpha, join: 'round' });
+    g.poly(poly).stroke({ width: H.ink, color: INK, alpha: H.alpha, join: 'round' });
     this.hoverKey = key;
   }
 
