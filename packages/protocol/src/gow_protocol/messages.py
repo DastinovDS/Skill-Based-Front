@@ -33,7 +33,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 42
+PROTOCOL_VERSION: Final = 43
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -311,14 +311,24 @@ class RatingChange(WireModel):
 
 
 class MatchEndStats(WireModel):
-    """Totals of the receiving player only (#607); the opponent's are never sent (fog).
+    """Totals of the receiving player only (#824); the opponent's are never sent (fog).
 
-    ``units_lost``: own units destroyed in fights (killed by shots) and by over-capacity attrition;
-    ``charges_delivered``: charges that reached a city as supply packets or transfers. Both count
-    the whole match from the event log, so a reconnect does not change them."""
+    Counted over the whole match by ``gow_sim.analysis.ResultTally`` (the exact definitions are
+    in its module docstring and in ``docs/design/ui-style.md`` 13.6). ``units_killed``: enemy
+    units destroyed in the player's fights; ``units_lost``: own units destroyed in fights and by
+    over-capacity attrition; ``cities_captured`` / ``provinces_captured``: nodes the player took;
+    ``attacks`` / ``attacks_won``: ended fights in a node the player did not own / of them those
+    it captured; ``defenses`` / ``defenses_held``: ended fights the enemy started in a node of
+    the player / of them those after which the node is still the player's."""
 
+    units_killed: NonNegInt
     units_lost: NonNegInt
-    charges_delivered: NonNegInt
+    cities_captured: NonNegInt
+    provinces_captured: NonNegInt
+    attacks: NonNegInt
+    attacks_won: NonNegInt
+    defenses: NonNegInt
+    defenses_held: NonNegInt
 
 
 class MatchEndMsg(WireModel):

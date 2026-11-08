@@ -18,6 +18,7 @@ from gow_protocol.messages import (
     ServerMsg,
     SnapshotMsg,
 )
+from gow_protocol.view import AtNodeLoc
 from gow_server.clock import ManualClock
 from gow_server.matches import (
     ManagerDrainingError,
@@ -465,5 +466,42 @@ def test_technical_defeat_ends_a_pause(line3: MapDef, short_rules: Ruleset) -> N
         await task
         outcome = runner.match.outcome
         assert outcome is not None and outcome.winner == 0
+
+    run(scenario)
+
+
+def test_match_end_totals_cover_the_whole_match(line3: MapDef, short_rules: Ruleset) -> None:
+    """#824: ``match_end.stats`` counts every tick, not only the last one (``Match.step`` keeps
+    only the events of its own tick). Player 0 walks into the neutral city ``n1`` (a capture, no
+    fight), player 1 then attacks it; player 1 gives up long after the capture."""
+
+    async def scenario() -> None:
+        runner = MatchRunner("m", "line3", line3, short_rules, (1, 2), ManualClock())
+        boxes = [runner.attach(0), runner.attach(1)]
+        runner.step()
+        for player, box in enumerate(boxes):
+            snap = [m for m in drain(box) if isinstance(m, SnapshotMsg)][-1]
+            home = next(g for g in snap.view.groups if isinstance(g.location, AtNodeLoc))
+            if player == 1:
+                for _ in range(20):  # player 1 sets out later: n1 is player 0's by then
+                    runner.step()
+            assert runner.submit(player, 1, wire.MoveCmd(group=home.id, dest=1, planned=False))
+            runner.step()
+        while runner.match.tick < 300:
+            runner.step()
+        assert runner.submit(1, 2, wire.ForfeitCmd())
+        runner.step()
+        ends = [[m for m in drain(box) if isinstance(m, MatchEndMsg)] for box in boxes]
+        stats = [e[-1].stats for e in ends]
+        mine, theirs = stats
+        assert mine is not None and theirs is not None
+        assert (mine.cities_captured, mine.provinces_captured) == (1, 0)  # n1, at about tick 31
+        assert theirs.cities_captured == 0
+        # Player 1 attacked n1 of player 0: an attack of one is a defense of the other.
+        assert (theirs.attacks, theirs.attacks_won) == (mine.defenses, 1 - mine.defenses_held)
+        assert mine.attacks == theirs.defenses == 0
+        # No over-capacity on line3: every unit lost was killed by the other side.
+        assert (mine.units_killed, mine.units_lost) == (theirs.units_lost, theirs.units_killed)
+        assert mine.units_killed + mine.units_lost > 0
 
     run(scenario)

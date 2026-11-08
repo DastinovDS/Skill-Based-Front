@@ -72,11 +72,7 @@ describe('ResultScreen', () => {
     expect(document.querySelector('.score')?.textContent).toContain('Marta');
   });
 
-  const summary: MatchSummary = {
-    nicks: { mine: 'Ember', enemy: 'Marta' },
-    cities: 4,
-    vpPeak: 9,
-  };
+  const summary: MatchSummary = { nicks: { mine: 'Ember', enemy: 'Marta' } };
 
   it('words the reason from our side', () => {
     expect(render(0, { ...end(1), reason: 'capital_captured' })).toContain('Your capital fell.');
@@ -96,27 +92,43 @@ describe('ResultScreen', () => {
     );
   });
 
-  it('shows the numbers the client has, and the match length', () => {
-    const text = render(0, end(0), vi.fn(), summary);
-    expect(text).toContain('Cities held');
-    expect(text).toContain('VP peak');
-    expect(text).toContain('Match length');
-    expect(document.querySelector('.stats')?.textContent).toContain('0:10');
+  const totals: NonNullable<MatchEndMsg['stats']> = {
+    units_killed: 19,
+    units_lost: 12,
+    cities_captured: 5,
+    provinces_captured: 3,
+    attacks: 7,
+    attacks_won: 4,
+    defenses: 3,
+    defenses_held: 2,
+  };
+
+  it('shows the server totals of the match (#824), each under its caption', () => {
+    render(0, { ...end(0), stats: totals });
+    const rows = [...document.querySelectorAll('.stats > div')].map((row) => [
+      row.querySelector('dt')?.textContent,
+      row.querySelector('dd')?.textContent,
+    ]);
+    expect(rows).toEqual([
+      ['Units killed', '19'],
+      ['Units lost', '12'],
+      ['Attacks won', '4 of 7'],
+      ['Defenses held', '2 of 3'],
+      ['Cities captured', '5'],
+      ['Provinces captured', '3'],
+      ['Match length', '0:10'],
+    ]);
   });
 
-  it('shows the server totals of units lost and charges delivered', () => {
-    const withStats: MatchEndMsg = { ...end(0), stats: { units_lost: 12, charges_delivered: 340 } };
-    render(0, withStats);
-    const row = document.querySelector('.stats')?.textContent ?? '';
-    expect(row).toContain('Units lost');
-    expect(row).toContain('12');
-    expect(row).toContain('Charges delivered');
-    expect(row).toContain('340');
+  it('shows no VP peak, cities held or charges delivered any more (#824)', () => {
+    const text = render(0, { ...end(0), stats: totals }, vi.fn(), summary);
+    expect(text).not.toMatch(/VP peak|Cities held|Charges delivered/);
   });
 
-  it('shows only the match length when the client has no summary', () => {
-    render(0, end(0));
+  it('shows only the match length when the server sent no totals', () => {
+    render(0, end(0), vi.fn(), summary);
     expect(document.querySelectorAll('.stats > div')).toHaveLength(1);
+    expect(document.querySelector('.stats')?.textContent).toContain('Match length');
   });
 
   it('marks the outcome by shape: our helmet, the enemy one, both', () => {

@@ -1503,15 +1503,25 @@ export interface RatingChange {
   after: number;
 }
 /**
- * Totals of the receiving player only (#607); the opponent's are never sent (fog).
+ * Totals of the receiving player only (#824); the opponent's are never sent (fog).
  *
- * ``units_lost``: own units destroyed in fights (killed by shots) and by over-capacity attrition;
- * ``charges_delivered``: charges that reached a city as supply packets or transfers. Both count
- * the whole match from the event log, so a reconnect does not change them.
+ * Counted over the whole match by ``gow_sim.analysis.ResultTally`` (the exact definitions are
+ * in its module docstring and in ``docs/design/ui-style.md`` 13.6). ``units_killed``: enemy
+ * units destroyed in the player's fights; ``units_lost``: own units destroyed in fights and by
+ * over-capacity attrition; ``cities_captured`` / ``provinces_captured``: nodes the player took;
+ * ``attacks`` / ``attacks_won``: ended fights in a node the player did not own / of them those
+ * it captured; ``defenses`` / ``defenses_held``: ended fights the enemy started in a node of
+ * the player / of them those after which the node is still the player's.
  */
 export interface MatchEndStats {
+  units_killed: number;
   units_lost: number;
-  charges_delivered: number;
+  cities_captured: number;
+  provinces_captured: number;
+  attacks: number;
+  attacks_won: number;
+  defenses: number;
+  defenses_held: number;
 }
 /**
  * A protocol-level error (malformed message, rate limit, ...); game rejections are ``ack``.
@@ -1685,7 +1695,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 42;
+export const PROTOCOL_VERSION = 43;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;
