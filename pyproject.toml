@@ -2,6 +2,7 @@
 name = "skill-based-front"
 version = "0.1.0"
 description = "Fines Imperii: competitive 1v1 browser strategy game (workspace root)."
+license = { text = "Proprietary" }
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [

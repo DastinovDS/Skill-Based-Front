@@ -25,9 +25,18 @@
   onenter={onback}
 >
   <HowToPlay />
+  <p class="copyright">{t('howto.copyright')}</p>
   {#snippet actions()}
     <button type="button" class="btn pri" aria-keyshortcuts="Enter Escape" onclick={onback}>
       {t('common.back')}
     </button>
   {/snippet}
 </DockFrame>
+
+<style>
+  .copyright {
+    margin: 24px 0 0;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+</style>

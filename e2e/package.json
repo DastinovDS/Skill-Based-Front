@@ -1,6 +1,7 @@
 {
   "name": "skill-based-front-e2e",
   "private": true,
+  "license": "UNLICENSED",
   "version": "0.0.0",
   "type": "module",
   "packageManager": "pnpm@12.8.1",

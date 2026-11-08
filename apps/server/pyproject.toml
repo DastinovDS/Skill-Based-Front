@@ -2,6 +2,7 @@
 name = "gow-server"
 version = "0.1.0"
 description = "FastAPI server: HTTP (lobby, rating) and WebSocket (matches)."
+license = { text = "Proprietary" }
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.20.0",

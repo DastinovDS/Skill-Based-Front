@@ -1,0 +1,18 @@
+Copyright (c) 2026 Daniil Stepanov. All rights reserved.
+
+This repository and everything in it (the software, the game rules and their
+documentation, art, maps, rulesets, designs and all other materials) is
+proprietary.
+
+No permission is granted to use, copy, modify, merge, publish, distribute,
+sublicense or sell the software, the game rules documentation, art, maps or
+other materials, in whole or in part, or to create derivative works from them,
+without the prior written permission of the copyright holder.
+
+Being able to view this repository, or any part of it, does not grant a licence.
+
+Third-party components remain under their own licences. This includes the
+fonts licensed under the SIL Open Font License (their licence texts are kept
+next to the font files, for example under
+docs/design/mockups/assets/out-of-game-style/fonts/licenses/) and the software
+dependencies installed from package registries.

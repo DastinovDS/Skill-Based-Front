@@ -2,6 +2,7 @@
 name = "gow-sim"
 version = "0.1.0"
 description = "Game rules: pure deterministic simulation."
+license = { text = "Proprietary" }
 requires-python = ">=3.12"
 dependencies = []
 

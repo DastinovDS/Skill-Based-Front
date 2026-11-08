@@ -506,6 +506,7 @@ export const en = {
   'help.howToBack': 'Back to the keys',
   // The "How to play" screen (CLI-13, #72); the numbers come from the played ruleset.
   'howto.eyebrow': 'The rules in two minutes',
+  'howto.copyright': '© 2026 Daniil Stepanov',
   'howto.outdated':
     'This page describes an older ruleset. Supply and economy work differently in the current game. A new tutorial is coming.',
   'howto.charges.title': 'Charges',

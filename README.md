@@ -410,3 +410,7 @@ were moved to `tools/maps/src/gow_maps/bake.py` (MAP-05).
 
 The first version of the design document (written under the working title "Skill-Based Front") is in `docs/design/archive/DESIGN-v1.md`
 (in the prototype repository the file was not tracked by git and was copied separately from the working copy).
+
+## License
+
+Proprietary, all rights reserved. See [`LICENSE`](LICENSE).

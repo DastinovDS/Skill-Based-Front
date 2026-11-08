@@ -69,6 +69,7 @@ describe('the How to play page (CLI-13, #72)', () => {
       translate('en', 'help.howTo'),
     );
     expect(document.body.textContent).toContain(translate('en', 'menu.tagline'));
+    expect(document.body.textContent).toContain(translate('en', 'howto.copyright'));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
     expect(onback).toHaveBeenCalledOnce();
   });
