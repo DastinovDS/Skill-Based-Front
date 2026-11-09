@@ -24,6 +24,7 @@
   const defenseSeconds = $derived(Math.round(orders.defenseTicksPerBonus / orders.tickHz));
 
   const angles = spreadAngles(4);
+  const held = $derived(group !== null && orders.isHeldInFight(group) && !orders.canCancel(group));
   // Economy v2 (DEC-41): no «Defense» (the bunker replaces it); its sector lets a gathering plan go.
   const v2 = $derived(orders.v2);
   const release = $derived<RadialItem>({
@@ -77,7 +78,9 @@
       angle: angles[2] ?? 90,
       label: t('group.cancel'),
       key: 'X',
-      disabled: group === null || (group.destination === null && group.mode !== 'defense'),
+      // Under `combat.retreat = "none"` a group in a fight cannot leave (DEC-40): say why.
+      lines: held ? [t('group.stays')] : [],
+      disabled: group === null || !orders.canCancel(group),
     },
     {
       id: 'merge',

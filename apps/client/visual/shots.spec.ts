@@ -228,6 +228,22 @@ for (const menu of MENUS) {
   });
 }
 
+// No retreat from a fight (DEC-40, #880): the group menu of an own group in a fight, under
+// `combat.retreat = "none"` (the Cancel sector is off and says why) and under `"round"` (as before).
+for (const retreat of ['none', 'round'] as const) {
+  test(`shot of the group menu in a fight, retreat ${retreat}`, async ({ page }) => {
+    await page.goto(`/?scene=fights&menus&retreat=${retreat}`);
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.mouse.click(233, 420);
+    await page.waitForTimeout(300);
+    await page.mouse.click(233, 420);
+    await page.mouse.move(1000, 700);
+    await expect(page.locator('[role="menu"]')).toBeVisible();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: join(OUT, `menu-group-fight-${retreat}.png`) });
+  });
+}
+
 // Economy v2 (DEC-41, #649), the frozen scene `economy` under the rules of `mvp-3`: the menu of an own
 // city with the factory and the bunker priced in charges (Ford), the menu of a group whose plan gathers
 // (Watchhouse: the release and the plan bar), the plan bar with the requested bonus (a group in

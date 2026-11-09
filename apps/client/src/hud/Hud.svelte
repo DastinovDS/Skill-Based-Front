@@ -161,7 +161,13 @@
             ? t('orders.lost')
             : tf('orders.rejected', {
                 command,
-                reason: t(rejectMessageKey(feedback.code, feedback.cmd.type)),
+                reason: t(
+                  rejectMessageKey(
+                    feedback.code,
+                    feedback.cmd.type,
+                    hud.context.rules.combat.retreat,
+                  ),
+                ),
               }),
       });
     });

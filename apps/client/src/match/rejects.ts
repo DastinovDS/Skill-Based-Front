@@ -1,4 +1,5 @@
 import type { MessageKey } from '../i18n/messages.ts';
+import type { Retreat } from '../protocol.gen.ts';
 
 /**
  * Reject codes of the simulation (`RejectCode` in `packages/sim/src/gow_sim/commands.py`), each
@@ -60,9 +61,13 @@ export const REJECT_MESSAGES_BY_COMMAND = {
 
 /**
  * The message for a `reject_code` from `ack`, told for the command `type` it answers when the code
- * reads differently there; a code this client does not know gets a generic one.
+ * reads differently there; a code this client does not know gets a generic one. Under
+ * `combat.retreat = "none"` (DEC-40) `IN_FIGHT` is not "the group can only withdraw": nobody can.
  */
-export function rejectMessageKey(code: string, command?: string): MessageKey {
+export function rejectMessageKey(code: string, command?: string, retreat?: Retreat): MessageKey {
+  if (retreat === 'none' && code === 'IN_FIGHT' && command !== 'release_plan') {
+    return 'reject.IN_FIGHT.stays';
+  }
   const special = `${code}:${command ?? ''}`;
   if (Object.hasOwn(REJECT_MESSAGES_BY_COMMAND, special)) {
     return REJECT_MESSAGES_BY_COMMAND[special as keyof typeof REJECT_MESSAGES_BY_COMMAND];

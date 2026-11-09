@@ -1,6 +1,6 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
-import type { GroupChoice as GroupBrief, Selection } from '../hud/hudData.ts';
+import type { GroupChoice as GroupBrief, GroupInfo, Selection } from '../hud/hudData.ts';
 import type {
   Command,
   LineRouteMsg,
@@ -661,6 +661,9 @@ export class OrderController implements MapInteraction {
       hit = { kind: 'node', id: hit.cell };
     }
     const group = this.#selectedGroup();
+    // A group in a fight cannot leave it under `combat.retreat = "none"` (DEC-40): a click on a
+    // place is no order for it, the server would answer `IN_FIGHT`. The rest of the click stays.
+    const held = group !== null && this.isHeldInFight(group);
     // A click on the node the selected group stands in only lets the group go: no city menu, no
     // city selection (a click on another node stays an order).
     if (hit.kind === 'node' && group !== null && group.node === hit.id) {
@@ -672,7 +675,13 @@ export class OrderController implements MapInteraction {
     if (iconNode !== undefined && group !== null && group.node !== iconNode) {
       hit = { kind: 'node', id: iconNode };
     }
-    if (hit.kind === 'node' && group !== null && this.#o.send !== null && group.node !== hit.id) {
+    if (
+      hit.kind === 'node' &&
+      group !== null &&
+      !held &&
+      this.#o.send !== null &&
+      group.node !== hit.id
+    ) {
       // Economy v2: a planned order asks for its bonus (DEC-41, item 10), the wheel's pick over
       // this target or 1 (#797); otherwise 0.
       const bonus = this.planned && this.v2 ? this.#bonusFor(hit.id) : 0;
@@ -859,8 +868,35 @@ export class OrderController implements MapInteraction {
     const group = this.#selectedGroup();
     if (group === null) return;
     this.groupMenu.close();
+    // Under `combat.retreat = "none"` a cancel would be a retreat from a fight: not sent (DEC-40).
+    if (this.isHeldInFight(group) && !this.canCancel(group)) return;
     this.#sendCommand({ type: 'cancel_order', group: group.id }, null);
     if (this.#o.send !== null) this.deselect();
+  }
+
+  /**
+   * `combat.retreat = "none"` (DEC-40): a group in a fight stays until the fight ends. The server
+   * rejects its `Move` and its `CancelOrder` with `IN_FIGHT`; the client does not offer them or
+   * send them (it decides nothing: the rule is the ruleset's, and the answer is the server's).
+   */
+  get noRetreat(): boolean {
+    return this.#o.rules.combat.retreat === 'none';
+  }
+
+  /**
+   * The group is in a fight it cannot leave under `combat.retreat = "none"`: no order, no cancel.
+   * A plan waiting in the fight node is the one thing `CancelOrder` still cancels (DEC-40, item 4):
+   * the group stays in the fight, the plan goes.
+   */
+  isHeldInFight(group: GroupInfo): boolean {
+    return this.noRetreat && this.#o.hud.inFight(group.id);
+  }
+
+  /** `cancel_order` of this group would be sent: not a retreat from a fight under `"none"`. */
+  canCancel(group: GroupInfo): boolean {
+    if (group.destination === null && group.mode !== 'defense') return false;
+    if (!this.isHeldInFight(group)) return true;
+    return group.planned && group.node !== null;
   }
 
   /** Switch the mode of the selected group (attack / defense; under economy v2 there is no «Defense»). */
