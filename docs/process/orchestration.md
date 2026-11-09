@@ -19,7 +19,7 @@ An executor needs only the brief and `AGENTS.md`; it does not need to read this 
 - Do not launch an agent for every trifle: put small repository edits into the brief of the nearest agent. Give truly simple things to Haiku.
 - Check the state of work from outside: `git log`, `git worktree list`, `gh pr list`, `gh pr checks`. Not from agents' retellings or their transcripts.
 - If the owner said "for now we are only discussing", do not launch agents: end the answer with a list of open questions and a recommendation for each.
-- Cost decisions that exceed the remaining limit and questions of scope and design go to the owner. The rest (model, parallelism) the orchestrator decides itself: it announces what it launches and why, and does not ask.
+- Questions of scope and design go to the owner. The rest (model, parallelism) the orchestrator decides itself: it announces what it launches and why, and does not ask.
 
 ---
 
@@ -31,32 +31,13 @@ An executor needs only the brief and `AGENTS.md`; it does not need to read this 
 | Sonnet | the client (interface, PixiJS, Svelte), documents with decisions already accepted, recording accepted DECs, a small server task, merging, cleanup, fixing tests |
 | Haiku | trivial edits of issues and checklists, renames, small text edits, rebuilding the stack from instructions, read-only analysis (replays, brainstorms) |
 
-Parallelism: by default one Opus and one Sonnet. Two Opus at once quickly burn through the five-hour window. When the window is about half used, launch only small Sonnet tasks.
+Parallelism is limited by machine load and by file conflicts between agents, not by token cost.
 
 ---
 
-## 3. Budget
+## 3. Brief template for an agent
 
-The limits (the five-hour window and the weekly one) are real; running out stops work until the reset.
-
-| Rule | How |
-|---|---|
-| Price before launch | the launch message names the expected price in percent of the weekly limit |
-| Guides | a rules task on Opus: 10-20%; a client package on Sonnet: 4-6%; documents: 1-3%; a small thing on Haiku: under 1% |
-| When | put heavy Opus work at the start of the week |
-| Soft thresholds | around 75% of the week: warn the owner and offer cheaper options; around 90%: recommend urgent bugs only; the owner decides |
-| Idle agent | do not resume an agent that has been idle for more than an hour: the cache has gone cold, resuming reads the whole history again at full price; launch a new one with the note from the PR (section 4) |
-| Cut-off | resume an agent cut off by a limit right after the reset if less than an hour has passed; otherwise launch a new one |
-| Orchestrator context | at a large context (around 300 thousand tokens) propose a new session: the state lives in issues and notes (section 8) |
-| Reading | the brief names exact sections; do not read `mechanics.md` in full (about 2000 lines), read `AGENTS.md` in full only where the task needs it |
-
-The limits and thresholds are soft: there are no hard daily quotas.
-
----
-
-## 4. Brief template for an agent
-
-The brief is short. It names the task, the sections to read and the specifics; the general way of working comes from section 5 of this document and `AGENTS.md`. **Briefs are written in English.**
+The brief is short. It names the task, the sections to read and the specifics; the general way of working comes from section 4 of this document and `AGENTS.md`. **Briefs are written in English.**
 
 ```
 Task: issue #<N> (<title>). One PR.
@@ -67,7 +48,7 @@ What to do: <briefly; take the acceptance criteria from the issue>.
 Out of scope: <what not to touch>.
 Expected test values: from mechanics.md and the DEC tables, not from the code's output.
 Specifics: <dependencies, versions, neighbouring PRs, what must not be touched>.
-Process: work autonomously, do not ask the owner questions; workflow per docs/process/orchestration.md, section 5.
+Process: work autonomously, do not ask the owner questions; workflow per docs/process/orchestration.md, section 4.
 Report: for each issue: number, PR URL, merged or not, acceptance criteria, deviations,
 new issues; then QUESTIONS (questions you are waiting for a decision on) and RISKS (risks, assumptions).
 ```
@@ -78,15 +59,17 @@ Brief rules:
 - **A rules change:** simulation, protocol and bots are done by Opus; the **client part** of the change is done by a separate Sonnet agent **after the merge** of the server part.
 - **Early push.** The agent pushes WIP early and often, so a limit cut-off erases nothing.
 - **A note in the PR.** On every WIP push the agent updates the block "done / left / next step" in the PR description. A new agent continues from this note.
+- **Idle agent.** Do not resume an agent that has been idle for more than an hour: launch a new one with the note from the PR.
+- **Reading.** Briefs name the exact sections to read; do not read `mechanics.md` in full (about 2000 lines).
 - **Tests.** Expected values come from `mechanics.md` and the DEC tables (`AGENTS.md`, section 0, item 4).
 - **The report** ends with the blocks `QUESTIONS:` and `RISKS:` (they may be empty). For tasks that need a human (a manual check, the owner's verdict) a block `MANUAL:` is added.
 - If a brief has several issues, the agent does them strictly one after another, each in its own PR.
-- **A task that changes the look:** the brief names the scenes of `visual/scenes.ts` the agent looks at before and after (`mise run shots`) and requires links to the frames in the PR (`AGENTS.md`, section 7.5). A major visual decision does not go into a brief until the owner has chosen a variant (section 7).
+- **A task that changes the look:** the brief names the scenes of `visual/scenes.ts` the agent looks at before and after (`mise run shots`) and requires links to the frames in the PR (`AGENTS.md`, section 7.5). A major visual decision does not go into a brief until the owner has chosen a variant (section 6).
 - **Design skills:** if the session has the `design:*` skills, a look-changing task names them in the brief: `design:design-critique` on the before/after shots, `design:accessibility-review` before merge. Skills are per-account, not part of the repository: a task must not fail when they are missing. SpriteCook (generative art) is not used until the owner's decision changes `ui-style.md` section 22.
 
 ---
 
-## 5. The agent's workflow
+## 4. The agent's workflow
 
 Details of branches and commits: `AGENTS.md`, section 11; commands of the checks: section 3.
 
@@ -114,7 +97,7 @@ The agent does everything that can be automated or checked locally (scripts, a l
 
 ---
 
-## 6. Safety and environment
+## 5. Safety and environment
 
 | Rule | Explanation |
 |---|---|
@@ -132,7 +115,7 @@ The agent does everything that can be automated or checked locally (scripts, a l
 
 ---
 
-## 7. The owner's feedback
+## 6. The owner's feedback
 
 - Feedback after a game comes in a batch. **Every item** goes into the checklist of a tracking issue, none is lost. The agent creates and maintains the checklist (simple things go to Haiku).
 - Before editing the rules, state the decision **exactly** per the text of the DEC. A discrepancy between a retelling and the record in `mechanics.md` is unacceptable.
@@ -146,7 +129,7 @@ The agent does everything that can be automated or checked locally (scripts, a l
 
 ---
 
-## 8. Where the state is kept
+## 7. Where the state is kept
 
 | What | Where |
 |---|---|
@@ -155,6 +138,8 @@ The agent does everything that can be automated or checked locally (scripts, a l
 | Game rules and decisions | `docs/design/mechanics.md` |
 | Balance reports, decisions, checklists | `docs/balance/`, `docs/adr/`, `docs/qa/` |
 | Notes of the current orchestrator session | may live outside the repository (the tool's personal notes); work must not depend on them: everything another orchestrator needs is written in issues |
+
+At a large orchestrator context (around 300 thousand tokens) propose a new session: the state lives in issues and notes.
 
 A new orchestrator session starts with the tracking issues and the external state (`git log`, `gh pr list`, `git worktree list`), then reads this document and `AGENTS.md`.
 Leave unfinished worktrees (for example postponed balance tasks) alone until the work resumes: they are removed only by the owner's decision.
