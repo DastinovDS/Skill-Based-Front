@@ -41,8 +41,16 @@ export interface RadialItem {
    * colour. Every sector of a menu has one.
    */
   readonly icon?: MenuIconName;
-  /** Small lines under the name (a price, a number from the ruleset). */
+  /** Small lines under the name (a number from the ruleset, a count). */
   readonly lines?: readonly string[];
+  /**
+   * The price as signs (ui-style 57u, #829): CP as the number and the CP mark, charges as one
+   * lozenge each, filled for those the warehouse holds (`have`), hollow for the rest. The words are
+   * in `label` and `priceLabel` for assistive technology.
+   */
+  readonly price?: RadialPrice;
+  /** The accessible name when the sector says more than its label (its price); default `label`. */
+  readonly aria?: string;
   /** The key that does the same (not translated); drawn as a key cap. */
   readonly key?: string;
   /** The choice that is on now: a thicker outline and a tick. */
@@ -54,6 +62,19 @@ export interface RadialItem {
   readonly compact?: boolean;
   /** Cannot be chosen now: dimmed, never lit by the pointer. */
   readonly disabled?: boolean;
+}
+
+/** A price in a radial sector (or a rate of the stance menu), as signs. */
+export interface RadialPrice {
+  /** CP as the page writes them ("1.5"), drawn with the CP mark. */
+  readonly cp?: string;
+  /** Charges it costs, one lozenge each; `have` of them filled (the warehouse holds them). */
+  readonly charges?: number;
+  readonly have?: number;
+  /** A rate of charges as the page writes it ("1.5"), drawn with one lozenge. */
+  readonly chargeRate?: string;
+  /** The numbers are per minute (the stance menu). */
+  readonly perMinute?: boolean;
 }
 
 /**

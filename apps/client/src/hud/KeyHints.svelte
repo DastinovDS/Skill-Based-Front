@@ -54,21 +54,20 @@
     display: flex;
     gap: 12px;
     margin: 0;
-    padding: 4px 10px;
+    padding: 5px 12px;
     list-style: none;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text-dim);
-    font-size: 12px;
+    border: 1px solid rgb(236 228 209 / 55%);
+    background: rgb(14 12 9 / 94%);
+    color: var(--ink-dim);
+    font: 500 14px/1.3 var(--font-text);
     pointer-events: none;
   }
 
   kbd {
-    padding: 0 5px;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    color: var(--text);
-    font: inherit;
+    padding: 0 4px;
+    border: 1px solid rgb(236 228 209 / 40%);
+    color: var(--ink);
+    font: 500 10.5px/16px var(--font-display);
+    letter-spacing: 0.06em;
   }
 </style>

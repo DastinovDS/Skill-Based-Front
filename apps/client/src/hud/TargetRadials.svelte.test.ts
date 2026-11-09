@@ -106,9 +106,12 @@ describe('the radial menus of a city and of a group', () => {
     const items = [...target.querySelectorAll('[role="menuitem"]')];
     // The glyph, the price and the key: no name, no description. Roads are not here: a click on
     // the road itself raises it (DEC-28, item 7).
-    expect(texts(target)).toEqual(['1 CPR']);
+    expect(texts(target)).toEqual(['1R']);
+    // The CP price is the figure and the CP mark, never the charge lozenge (#829).
+    expect(items[0]?.querySelector('.cp-mark')).not.toBeNull();
+    expect(items[0]?.querySelector('.mark')).toBeNull();
     expect(icons(target).map((i) => i.name)).toEqual(['recruit']);
-    expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['Recruit']);
+    expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['Recruit, 1 CP']);
     expect(items[0]?.getAttribute('aria-disabled')).not.toBe('true');
     items[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     flushSync();
@@ -175,11 +178,11 @@ describe('the radial menus of a city and of a group', () => {
     flushSync();
     const items = [...target.querySelectorAll('[role="menuitem"]')];
     expect(items.map((i) => i.getAttribute('aria-label'))).toEqual([
-      'Recruit',
-      'Barracks',
-      'Warehouse',
+      'Recruit, 1 CP',
+      'Barracks, 3 CP',
+      'Warehouse, 2 CP',
     ]);
-    expect(texts(target).slice(1)).toEqual(['3 CP', '2 CP']);
+    expect(texts(target).slice(1)).toEqual(['3', '2']);
     // Every sector has its icon (#350), at least 20 px.
     expect(icons(target).map((i) => i.name)).toEqual(['recruit', 'barracks', 'warehouse']);
     expect(icons(target).every((i) => i.size >= 20)).toBe(true);
@@ -194,7 +197,9 @@ describe('the radial menus of a city and of a group', () => {
       city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true },
     };
     const labels = (target: HTMLElement): (string | null)[] =>
-      [...target.querySelectorAll('[role="menuitem"]')].map((i) => i.getAttribute('aria-label'));
+      [...target.querySelectorAll('[role="menuitem"]')].map(
+        (i) => i.getAttribute('aria-label')?.split(',')[0] ?? null,
+      );
     const top = rules.city_upgrades.warehouse_max_level;
 
     const barracks = render(0, rules, { hasBarracks: true, warehouseLevel: 0 });
@@ -219,7 +224,9 @@ describe('the radial menus of a city and of a group', () => {
     const on = { ...DEV_RULES, city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true } };
     const off = { ...DEV_RULES, city_upgrades: { ...DEV_RULES.city_upgrades, enabled: false } };
     const labels = (target: HTMLElement): (string | null)[] =>
-      [...target.querySelectorAll('[role="menuitem"]')].map((i) => i.getAttribute('aria-label'));
+      [...target.querySelectorAll('[role="menuitem"]')].map(
+        (i) => i.getAttribute('aria-label')?.split(',')[0] ?? null,
+      );
     const open = (
       rules: typeof on,
       city: { hasBarracks: boolean | null; warehouseLevel: number },
@@ -246,7 +253,7 @@ describe('the radial menus of a city and of a group', () => {
     expect(icons(target)).toHaveLength(4);
     expect(icons(target).map((i) => i.name)).toEqual(['split', 'defense', 'cancel', 'merge']);
     expect(icons(target).every((i) => i.size >= 20)).toBe(true);
-    const merge = items.find((i) => i.textContent.includes('Merge'));
+    const merge = items.find((i) => i.getAttribute('aria-label') === 'Merge');
     expect(merge?.getAttribute('aria-disabled')).toBe('true');
     expect(hud.current?.group?.id).toBe(group.id);
   });

@@ -57,15 +57,35 @@
     const poor = (centis: number): boolean => funds !== null && funds < centis;
     // A build of the city (the barracks or the warehouse) holds the other back.
     const busy = city?.building != null;
-    const price = (centis: number): string[] =>
-      centis > 0 ? [tf('city.cost', { cost: cp(centis) })] : [];
-    // Economy v2 (DEC-41, item 7): the buildings are paid in charges, taken from the warehouse and
-    // then from the own units standing there; a build that still owes charges waits for them.
+    // The price as signs (ui-style 57u, #829): CP as the number and the CP mark, charges as one
+    // lozenge each, filled for those the warehouse holds and hollow for those the groups standing
+    // there pay (DEC-41, item 7). The words go to the accessible name.
     const charges = orders.chargeCosts;
-    const chargePrice = (n: number): string[] =>
-      n > 0 ? [tf('city.costCharges', { charges: n })] : [];
-    const buildPrice = (centis: number, n: number): string[] =>
-      v2 ? [...price(centis), ...chargePrice(n)] : price(centis);
+    const stock = city?.warehouse ?? 0;
+    const priced = (
+      label: string,
+      centis: number,
+      n: number,
+    ): Pick<RadialItem, 'price' | 'aria'> => {
+      const cpPart = centis > 0 ? cp(centis) : null;
+      const chargePart = v2 && n > 0 ? n : null;
+      if (cpPart === null && chargePart === null) return { aria: label };
+      const words =
+        cpPart !== null && chargePart !== null
+          ? tf('price.cpAndCharges', { cost: cpPart, charges: chargePart })
+          : cpPart !== null
+            ? tf('price.cp', { cost: cpPart })
+            : tf('price.charges', { charges: chargePart ?? 0 });
+      return {
+        price: {
+          ...(cpPart !== null ? { cp: cpPart } : {}),
+          ...(chargePart !== null
+            ? { charges: chargePart, have: Math.min(stock, chargePart) }
+            : {}),
+        },
+        aria: tf('price.label', { label, price: words }),
+      };
+    };
     const sector = (choice: CityChoice): Omit<RadialItem, 'angle'> => {
       switch (choice) {
         case 'recruit':
@@ -73,7 +93,7 @@
             id: 'recruit',
             icon: 'recruit',
             label: t('city.recruit'),
-            lines: price(costs.recruit),
+            ...priced(t('city.recruit'), costs.recruit, 0),
             key: 'R',
             compact: true,
             disabled: poor(costs.recruit) || queued >= orders.recruitQueueMax,
@@ -83,7 +103,7 @@
             id: 'barracks',
             icon: 'barracks',
             label: t('city.barracks'),
-            lines: buildPrice(costs.barracks, charges.barracks),
+            ...priced(t('city.barracks'), costs.barracks, charges.barracks),
             compact: true,
             // Only a city known to lack it builds it (a built one has no sector at all).
             disabled: city?.hasBarracks !== false || busy || poor(costs.barracks),
@@ -93,7 +113,7 @@
             id: 'warehouse',
             icon: 'warehouse',
             label: t('city.warehouse'),
-            lines: buildPrice(costs.warehouse, charges.warehouse),
+            ...priced(t('city.warehouse'), costs.warehouse, charges.warehouse),
             compact: true,
             disabled: busy || poor(costs.warehouse),
           };
@@ -102,7 +122,7 @@
             id: 'factory',
             icon: 'factory',
             label: t('city.factory'),
-            lines: chargePrice(charges.factory),
+            ...priced(t('city.factory'), 0, charges.factory),
             compact: true,
             // One factory build at a time in a city; the cap of factories is the server's call.
             disabled: city?.factoryBuild != null,
@@ -112,7 +132,7 @@
             id: 'fortify',
             icon: 'fortify',
             label: t('city.fortify'),
-            lines: price(orders.fortCost),
+            ...priced(t('city.fortify'), orders.fortCost, 0),
             key: 'B',
             compact: true,
             // The road is picked next: the sector is dimmed by the CP only (a fight does not stop it).
@@ -123,7 +143,7 @@
             id: 'bunker',
             icon: 'bunker',
             label: t('city.bunker'),
-            lines: chargePrice(charges.bunker),
+            ...priced(t('city.bunker'), 0, charges.bunker),
             compact: true,
             // A province keeps its sector once the bunker stands: it is shown as built.
             ...(city?.fort === true ? { current: true } : {}),

@@ -3,6 +3,7 @@
   import type { OrderController } from '../match/orderController.ts';
   import type { Stance } from '../protocol.gen.ts';
   import { formatCentis } from './format.ts';
+  import CutIcon from '../theme/CutIcon.svelte';
   import Radial from './Radial.svelte';
   import { SECTORS, type RadialItem } from './radial.ts';
 
@@ -17,27 +18,35 @@
   const menu = $derived(orders.radial.current);
   const rates = $derived(orders.stanceRates);
   const cp = (centis: number): string => formatCentis(centis, getLocale());
-  // Under economy v2 (DEC-44) a change keeps the progress (#792), and the stance is not the whole
-  // supply.
-  const captions = $derived(
-    orders.v2 ? [{ text: t('radial.carryNote') }, { text: t('radial.builtNote') }] : [],
-  );
+  const num = (value: number): string => value.toLocaleString(getLocale());
 
+  // Cut and ring (ui-style 54g): the icon, the rates as signs (CP with the CP mark, the capital's
+  // charges with one lozenge, per minute) and the key; the name is in the hub and the accessible
+  // name. The explanatory captions of #792 are gone with the rule of as little text as possible.
   const items = $derived<RadialItem[]>(
     SECTORS.map((sector) => {
       const rate = rates.find((r) => r.stance === sector.stance);
+      const label = t(`stance.${sector.stance}`);
       return {
         id: sector.stance,
         angle: sector.angle,
         icon: sector.icon,
-        label: t(`stance.${sector.stance}`),
-        lines:
-          rate === undefined
-            ? []
-            : [
-                tf('radial.cpPerMin', { value: cp(rate.cpPerMinCenti) }),
-                tf('radial.chargesPerMin', { value: rate.chargesPerMin }),
-              ],
+        label,
+        compact: true,
+        ...(rate === undefined
+          ? { aria: label }
+          : {
+              price: {
+                cp: cp(rate.cpPerMinCenti),
+                chargeRate: num(rate.chargesPerMin),
+                perMinute: true,
+              },
+              aria: tf('radial.rateLabel', {
+                stance: label,
+                cp: cp(rate.cpPerMinCenti),
+                charges: num(rate.chargesPerMin),
+              }),
+            }),
         key: sector.key,
         current: stance === sector.stance,
       };
@@ -49,7 +58,6 @@
 {#if menu.open}
   <Radial
     {items}
-    {captions}
     label={t('radial.title')}
     at="centre"
     hover={menu.hover}
@@ -67,14 +75,14 @@
     interactive={menu.sticky}
   >
     {#snippet centre()}
-      <span class="cancel">{t('radial.cancel')}</span>
+      <span class="cancel" title={t('radial.cancel')}><CutIcon name="cancel" size={14} /></span>
     {/snippet}
   </Radial>
 {/if}
 
 <style>
   .cancel {
-    color: var(--text-dim);
-    font-size: 10px;
+    display: inline-flex;
+    color: var(--ink-dim);
   }
 </style>

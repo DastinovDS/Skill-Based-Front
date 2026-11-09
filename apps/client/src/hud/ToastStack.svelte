@@ -33,7 +33,7 @@
 <style>
   .toasts {
     position: absolute;
-    top: 56px;
+    top: 60px;
     right: 12px;
     z-index: 4;
     display: flex;
@@ -46,23 +46,26 @@
     pointer-events: none;
   }
 
+  /* An Engraved plate in a double rule; the tone is a coloured edge and its icon (never colour alone). */
   .toast {
     pointer-events: auto;
     display: flex;
     align-items: flex-start;
     gap: 8px;
     padding: 6px 8px 6px 10px;
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--neutral);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text);
-    font-size: 13px;
-    animation: toast-in 160ms ease-out;
+    border: 1px solid rgb(236 228 209 / 55%);
+    border-left: 3px solid var(--neutral);
+    background: rgb(14 12 9 / 95%);
+    box-shadow:
+      inset 0 0 0 2px rgb(14 12 9 / 95%),
+      inset 0 0 0 3px rgb(236 228 209 / 18%);
+    color: var(--ink);
+    font: 500 15px/1.3 var(--font-text);
+    animation: toast-in 160ms var(--ease-settle);
   }
 
   .toast.mine {
-    border-left-color: var(--you);
+    border-left-color: var(--own);
   }
 
   .toast.enemy {

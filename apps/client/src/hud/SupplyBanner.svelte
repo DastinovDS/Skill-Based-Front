@@ -85,7 +85,10 @@
       </div>
     {/if}
     <div class="pill">
-      <strong>{t('supply.banner')}</strong><kbd class="k" aria-hidden="true">{TAB}</kbd>
+      <!-- The supply flow needs no word (the round 5 Combined view): the key, then the level. -->
+      {#if !flow}<strong>{t('supply.banner')}</strong>{/if}<kbd class="k" aria-hidden="true"
+        >{TAB}</kbd
+      >
       {#if orders.v2 && !flow && draft === null}
         <span class="dim">{t('supply.lineHint')}</span>
       {/if}
@@ -154,7 +157,6 @@
   <!-- Out of the Supply mode the shift stays in sight while it is not "front". -->
   <section class="supply" aria-label={t('supply.banner')}>
     <div class="pill">
-      <strong>{t('supply.banner')}</strong>
       <LeafShift {orders} />
     </div>
   </section>
@@ -178,22 +180,25 @@
     align-items: flex-start;
     gap: 6px;
     max-width: calc(100% - 24px);
-    color: var(--text);
-    font-size: 14px;
+    color: var(--ink);
+    font: 500 15px/1.3 var(--font-text);
     pointer-events: none;
   }
 
+  /* An Engraved plate in a double rule (one rule, a dark gap, a faint inner rule), square cut. */
   .pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 9px;
     margin: 0;
     min-height: 40px;
-    padding: 5px 8px 5px 14px;
+    padding: 5px 12px;
     box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: var(--surface);
+    border: 1px solid rgb(236 228 209 / 60%);
+    background: rgb(14 12 9 / 94%);
+    box-shadow:
+      inset 0 0 0 3px rgb(14 12 9 / 94%),
+      inset 0 0 0 4px rgb(236 228 209 / 25%);
     white-space: nowrap;
   }
 
@@ -347,19 +352,12 @@
 
   .k {
     display: inline-block;
-    min-width: 20px;
-    height: 20px;
     box-sizing: border-box;
-    padding: 0 5px;
-    border: 1px solid #3d444d;
-    border-bottom-width: 2px;
-    border-radius: 5px;
-    background: var(--surface-2);
-    color: var(--text-dim);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 17px;
+    padding: 0 4px;
+    border: 1px solid rgb(236 228 209 / 40%);
+    color: var(--ink-dim);
+    font: 500 11px/16px var(--font-display);
+    letter-spacing: 0.06em;
     text-align: center;
   }
 </style>

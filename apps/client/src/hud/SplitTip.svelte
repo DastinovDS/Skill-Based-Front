@@ -62,7 +62,7 @@
     background: var(--surface-2);
     color: var(--text-dim);
     font: inherit;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     line-height: 17px;
     text-align: center;
