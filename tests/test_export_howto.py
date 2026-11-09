@@ -27,11 +27,11 @@ def test_committed_file_is_up_to_date() -> None:
 
 
 def test_the_page_still_describes_mvp_2() -> None:
-    """The played ruleset is `mvp-5` since 2026-11-07 (#805), but the page still describes economy
+    """The played ruleset is `mvp-6` since 2026-11-09 (#626, #759), but the page still describes economy
     v1 (`mvp-2`) until a separate tutorial round replaces it; the screen says so in its notice."""
     assert BUILT["ruleset"] == "mvp-2"
     mise = (ROOT / "mise.toml").read_text(encoding="utf-8")
-    assert 'default="rulesets/mvp-5.toml"' in mise
+    assert 'default="rulesets/mvp-6.toml"' in mise
 
 
 @pytest.mark.parametrize("example", BUILT["examples"], ids=lambda e: e["id"])

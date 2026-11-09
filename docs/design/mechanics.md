@@ -694,6 +694,13 @@ the implementation the code works by DEC-07.
 5. All groups of a side left: the fight ends in this tick; if the defender left, the attacker takes the node
    (item G1).
 
+**[superseded by DEC-40 under `combat.retreat = "none"` (`rulesets/mvp-6.toml`), owner decision 2026-11-09, #626]**:
+there a group that entered a fight stays in it until the fight ends; the defender's `Move` (item E1) and the
+`CancelOrder` of an attacker or of a group on an edge (item E2) are rejected with `IN_FIGHT`. Unchanged there: a
+returning group (E2), the other commands (E4, including the cancel of a waiting scheduled order) and the caught groups
+of DEC-37 (they leave after one round, E3). The block "No retreat from a fight (DEC-40, #626)" after DEC-38. Without
+the key (`"round"`, the default of every other ruleset) items E1 to E5 are in force as written.
+
 **F. Bonuses and terrain**
 
 1. The plan bonuses (~~`orders.planned_bonus`~~ **[superseded by DEC-29]**: by distance, `orders.planned_bonus_per_edge`) and "Defense" (~~`orders.defense_bonus`~~ **[superseded by DEC-30]**: the accumulated bonus, `orders.defense_ticks_per_bonus`) act on the fight, not
@@ -765,7 +772,7 @@ the implementation the code works by DEC-07.
 
 - handle `IN_FIGHT`; groups in a fight are given only a retreat;
 - reinforce a fight if their own group gets there before its end (the remaining rounds by `PlayerView.fights`),
-  and leave a lost fight;
+  and leave a lost fight (**[superseded by DEC-40 under `combat.retreat = "none"`]**: no withdrawal there);
 - the outcome estimate is as before (item B7), the duration of the fight is added to the attack time;
 - do not lead groups through a node with a fight (the server would not lay such a path anyway).
 
@@ -816,8 +823,8 @@ New examples. Edge a-b: forest at both ends, `travel_ticks = 30`, `T = 30`, `pro
 | 18 | **The fight point.** X (3 charged), Y (1, 1 charged) set out 4 ticks later | the 17th tick of X: 566 + 433 = 999; the 18th (tick `t`): 600 + 466 = 1066: contact. `pos_0 = 600`, `pos_1 = 1000 - 466 = 534`, `point = 1134` (567 thousandths from a); X stands at 600, Y at 466. r1 canc.; r2 Y is destroyed | the fight until `t+20`; X (1 charged) makes the 19th step in tick `t+30` and arrives in b in tick `t+41` |
 | 19 | **The race home.** As 18, but Y: 2 units, 2 charged, b: an empty city of player 1 | r1, r2 canc.; r3 X kills 1. Shots 3 and 2: X won, the fight until `t+30` | Y (1, discharged) bounces 14 steps from `t+31`, home in `t+44`. X goes from `t+40` (12 steps), in b in `t+51`: 0 charges against 0, the fight ends at once, X bounces. Without regrouping X would be in b in `t+42`, would take the empty b, and Y would die in `t+44` (item G3) |
 | 20 | **A reinforcement into a node.** Attack 3 charged, defense 2 charged; in `t+15` the defense's own group G (2, 2 charged) arrives in the node | r1 canc. (2 / 1); G joins (2 / 3); r2 canc. (1 / 2); r3 canc. (0 / 1); r4 the defense kills 1 | the attack (2, discharged) bounces; the defense has 4 units, discharged; `t+40`. Without G: row 2 |
-| 21 | **The defender's retreat.** Attack 4 charged, defense 2 charged; in `t+12` the defender gets a `Move` into its neighboring node (1 CP) | r1 canc. (3 / 1); r2 canc. (2 / 0); after r2 the defense leaves | the node is taken in `t+20` by the attack (4, 2 charged); the defense kept 2 units (in row 3 it is destroyed) |
-| 22 | **The attack's retreat.** As row 10; in `t+11` the attack gives `CancelOrder` | r1 canc. (2 / defense `V` 1); r2 canc. (1 / `V` 0, 2 charged); after r2 the attack goes back | the attack without losses: 3 units, 1 charged (in row 10 it lost 1); the "Defense" bonus burned; the fight until `t+20`, the node stays with the defense |
+| 21 | **The defender's retreat.** Attack 4 charged, defense 2 charged; in `t+12` the defender gets a `Move` into its neighboring node (1 CP) | r1 canc. (3 / 1); r2 canc. (2 / 0); after r2 the defense leaves | the node is taken in `t+20` by the attack (4, 2 charged); the defense kept 2 units (in row 3 it is destroyed). **[under `combat.retreat = "none"`, DEC-40]**: the `Move` is rejected `IN_FIGHT`; as row 3: the defense destroyed, the node taken in `t+40` by 4 discharged |
+| 22 | **The attack's retreat.** As row 10; in `t+11` the attack gives `CancelOrder` | r1 canc. (2 / defense `V` 1); r2 canc. (1 / `V` 0, 2 charged); after r2 the attack goes back | the attack without losses: 3 units, 1 charged (in row 10 it lost 1); the "Defense" bonus burned; the fight until `t+20`, the node stays with the defense. **[under `combat.retreat = "none"`, DEC-40]**: the `CancelOrder` is rejected `IN_FIGHT`; as row 10: the attack loses 1 and bounces with 2 discharged in `t+40`, the defense 2 discharged |
 | 23 | **A reinforcement on an edge.** As row 11 (X 2 charged, Y 2 charged, the point from 18: `point = 1134`); X2 (1, 1 charged) set out 5 ticks later than X | in `t+4` X2 at 566 (`2 * 566 = 1132 < 1134`), in `t+5` at 600: joins, stands at 600. r1 canc. (2 / 1); r2 canc. (1 / 0); r3 player 0 kills 1 | the fight until `t+30`; shots 3 and 2: player 0 won; Y (1, discharged) bounces; X and X2 go on from `t+40`. Without X2: a draw, row 11 |
 
 What the implementation changes: the state (`Fight`, `Group.fight`), the systems `combat` and `movement`
@@ -964,8 +971,8 @@ New examples (the same layout as in the DEC-24 table above). Edge a-b: forest at
 | 18 | **The fight point.** X (3 charged), Y (1, 1 charged) set out 4 ticks later | the 17th tick of X: 566 + 433 = 999; the 18th (tick `t`): 600 + 466 = 1066: contact. `pos_0 = 600`, `pos_1 = 1000 - 466 = 534`, `point = 1134` (567 thousandths from a); X stands at 600, Y at 466. r1 canc.; r2 Y is destroyed | the fight until `t+40`; X (1 charged) makes the 19th step in tick `t+50` and arrives in b in tick `t+61` |
 | 19 | **The race home.** As 18, but Y: 2 units, 2 charged, b: an empty city of player 1 | r1, r2 canc.; r3 X kills 1. Shots 3 and 2: X won, the fight until `t+60` | Y (1, discharged) bounces 14 steps from `t+61`, home in `t+74`. X goes from `t+70` (12 steps), in b in `t+81`: 0 charges against 0, the fight ends at once, X bounces. Without regrouping X would be in b in `t+72`, would take the empty b, and Y would die in `t+74` (item G3). A margin of 7 ticks, as at `round_ticks = 10` |
 | 20 | **A reinforcement into a node.** Attack 3 charged, defense 2 charged; in `t+30` (between r1 and r2) the defense's own group G (2, 2 charged) arrives in the node | r1 canc. (2 / 1); G joins (2 / 3); r2 canc. (1 / 2); r3 canc. (0 / 1); r4 the defense kills 1 | the attack (2, discharged) bounces; the defense has 4 units, discharged; `t+80`. Without G: row 2 |
-| 21 | **The defender's retreat.** Attack 4 charged, defense 2 charged; in `t+24` (between r1 and r2) the defender gets a `Move` into its neighboring node (1 CP) | r1 canc. (3 / 1); r2 canc. (2 / 0); after r2 the defense leaves | the node is taken in `t+40` by the attack (4, 2 charged); the defense kept 2 units (in row 3 it is destroyed) |
-| 22 | **The attack's retreat.** As row 10; in `t+22` (between r1 and r2) the attack gives `CancelOrder` | r1 canc. (2 / defense `V` 1); r2 canc. (1 / `V` 0, 2 charged); after r2 the attack goes back | the attack without losses: 3 units, 1 charged (in row 10 it lost 1); the "Defense" bonus burned; the fight until `t+40`, the node stays with the defense |
+| 21 | **The defender's retreat.** Attack 4 charged, defense 2 charged; in `t+24` (between r1 and r2) the defender gets a `Move` into its neighboring node (1 CP) | r1 canc. (3 / 1); r2 canc. (2 / 0); after r2 the defense leaves | the node is taken in `t+40` by the attack (4, 2 charged); the defense kept 2 units (in row 3 it is destroyed). **[under `combat.retreat = "none"`, DEC-40, #626]**: the `Move` is rejected `IN_FIGHT`; as row 3: the defense destroyed, the node taken at `t+80` by 4 discharged (`combat.json`, scenario `21N`) |
+| 22 | **The attack's retreat.** As row 10; in `t+22` (between r1 and r2) the attack gives `CancelOrder` | r1 canc. (2 / defense `V` 1); r2 canc. (1 / `V` 0, 2 charged); after r2 the attack goes back | the attack without losses: 3 units, 1 charged (in row 10 it lost 1); the "Defense" bonus burned; the fight until `t+40`, the node stays with the defense. **[under `combat.retreat = "none"`, DEC-40, #626]**: the `CancelOrder` is rejected `IN_FIGHT`; as row 10: the attack loses 1 and bounces with 2 discharged at `t+80`, the defense 2 discharged (`combat.json`, scenario `22N`) |
 | 23 | **A reinforcement on an edge.** As row 11 (X 2 charged, Y 2 charged, the point from 18: `point = 1134`); X2 (1, 1 charged) set out 5 ticks later than X | in `t+4` X2 at 566 (`2 * 566 = 1132 < 1134`), in `t+5` at 600: joins (before r1 in `t+20`), stands at 600. r1 canc. (2 / 1); r2 canc. (1 / 0); r3 player 0 kills 1 | the fight until `t+60`; shots 3 and 2: player 0 won; Y (1, discharged) bounces; X and X2 go on from `t+70`. Without X2: a draw, row 11 |
 
 **Cross-check with the mockup** (`docs/design/mockups/fight-arena.html`, the function `simulate`, the rules "as now"; the engine's calculation and a manual calculation). Examples 1-4, 6, 7, 9-16: the rounds, the charged after rounds and the final units and charges matched the tables; the mockup's built-in check (`checkTable`, examples 6, 9, 10, 15) gives no discrepancies. The mockup engine does not model plains (the silent charge, example 8), movement, reinforcements and retreat (examples 17-23): they were computed manually by the DEC-24 rules (the rounds are the same as in the DEC-24 tables, the ticks shifted by `round_ticks = 20`; for 19 by the steps from the table above). There are no discrepancies.
@@ -1157,6 +1164,17 @@ DEC-24 and DEC-37 stays as it is.
 **The number** (a new section `[capture]` of the ruleset): `charge_cost = 0` in `mvp-0`, `mvp-1`, `test-short` and the
 test rulesets (the rule is off, current play does not change); BAL-02 sets `1` in `rulesets/mvp-2.toml`.
 
+**`mvp-6`: `charge_cost = 1` [accepted] (owner decision 2026-11-09, #759).** The main ruleset `mvp-6` (`mvp-5` plus
+this, the built factory period 100 of DEC-41 item 2 and no retreat of DEC-40; the owner wants the three together) sets
+the capture cost to 1 (`mvp-3` to `mvp-5`: 0, #659). The owner's reason: the War stance lasts too long, through a couple
+of big mid-game clashes; captures should cost charges. The #759 experiment (two rounds on GitHub runners, `mvp-4` with
+cost 0 and 1, the 17-bot field, 5 seeds) found that cost 1 does not break the dominance of `smart_exploiter` (0.84
+against the field, 0.86 at cost 0) and slows the game (enemy captures per player and match 28.7 to 20.3, capital wins
+533 to 245 of 5780). **The pocket consequence, recorded as measured:** a discharged group in a pocket (DEC-43, item H)
+can no longer capture its way out of it, and a discharged group in a connected node no longer walks out for free; in
+#759 round 2 the idle discharged unit-seconds per player and match grew from 748 to 1833 in pockets and from 248 to 867
+connected (the bots wait for a charge, #760). No rule change for it now: the owner judges it in a playtest.
+
 **Worked examples** (`charge_cost = 1` unless said otherwise). Forest, `travel_ticks = 30` (`T = 30`),
 `round_ticks = 20` (DEC-32), `engage_ticks = 3`; the groups are of player 0 and arrive in tick `t`; "a/b": units /
 charged; "plan (+2)": a scheduled order with a bonus of 2. These rows become the implementation tests.
@@ -1222,6 +1240,68 @@ Alternatives (not chosen):
 - Neutral nodes only (enemy empty nodes free): a discharged raider would still cut supply by flipping empty rear
   cities, and the rule would differ by owner.
 - Groups that cannot pay stay in the node (a vision post): see item 4.
+
+### No retreat from a fight (DEC-40, #626) **[accepted]**
+
+The owner's proposal of 2026-10-30 (`docs/balance/playtest-2026-10-30.md`, observation 1: "after a round the enemy
+retreats calmly, finishing it costs extra CP"); the variants R (today), N (no retreat), P (leave after
+`combat.retreat_rounds` rounds), P2 (`combat.shots_per_round = 2`) and V (retreat with a parting volley) with the data
+of four matches: #626. **Decision (the owner, 2026-11-09): [accepted] variant N, "no retreat"**, in the new main
+ruleset `mvp-6` together with `capture.charge_cost = 1` (DEC-38) and `factory.built_period_ticks = 100` (DEC-41, item
+2). The open questions of #626 take their defaults (below).
+
+**Behind a key.** `combat.retreat` (`"round"` | `"none"`), optional: absent means `"round"` (DEC-24, item E as
+written), and at `"round"` it is left out of `ruleset_hash()`, so every older ruleset keeps its hash, its golden
+replays and its behavior. `mvp-6` sets `"none"`. Variant V (`"volley"`) was not chosen and is not a value.
+
+**The rule under `combat.retreat = "none"`.**
+
+1. A group that entered a fight stays in it until the fight ends: by DEC-24 item B5 (nobody can shoot at a living
+   opponent) or because a side has no groups left (destroyed).
+2. In a fight the defender's `Move` (DEC-24, E1) and the `CancelOrder` of an attacker of a node or of a group on an
+   edge (E2) are rejected with `IN_FIGHT`; a rejected command changes nothing and costs no CP. A command with nothing
+   to cancel keeps its code (`NOTHING_TO_CANCEL`: a returning group, a caught or leaving group, an attacker without an
+   edge, a defender without an order).
+3. **The bounce at the end of a fight is not a retreat** and is unchanged: G1 (the attackers that did not take the node
+   bounce), G2 (a neutral node), G3 (a returning group dies at its lost origin), G4 (the loser on an edge, and both on
+   a draw, bounce; the winner regroups).
+4. **Scheduled groups waiting in a fight node** (E4) are unchanged: they stand in the fight and set out after it if
+   alive; their `CancelOrder` cancels the plan and keeps them in the fight (#626, open question 4: *default yes*).
+5. **DEC-37 caught groups** are exempt: they leave after one round without a command, as today (#626, open question
+   3: *default unchanged, the catch already is the price*), and go on with their order (open question 5: *default
+   yes*, as E3).
+6. Reinforcements (DEC-24, item D) are unchanged: a side that sees a fight going badly can only feed it or let it
+   finish. The plan bonus and the bonus shots (F1) of a group that cannot leave are spent in full.
+7. Fog: no new field in `PlayerView`, no new event (a fight is public, DEC-24 I1). The rule is public:
+   `ruleset_public.combat.retreat`, so the client hides the retreat hints and the cancel in a fight (it computes
+   nothing from it, AGENTS.md 7.1).
+8. Bots (DEC-24, item K): no withdrawal from a fight under `"none"` (the server would reject it); reinforcing stays.
+   The attack estimate before contact matters more (a separate bot wave).
+
+**Worked examples** (the DEC-32 table at `round_ticks = 20`, rows 21 and 22, the column N of #626; recomputed by hand
+from DEC-24 B4, E3, G1; `combat.json`, scenarios `21N` and `22N`; capture cost 0 as in the table):
+
+| # | Situation | Result under `combat.retreat = "none"` | Under `"round"` (the DEC-32 table) |
+|---|---|---|---|
+| 21N | attack 4/4, defense 2/2, the defender's `Move` at `t+24` | `Move` rejected `IN_FIGHT`; as row 3: r1, r2 canc. (2 / 0); r3, r4 1 killed each: the defense destroyed, the node taken at `t+80` by 4 discharged | r1, r2 canc.; the defense leaves after r2 with 2 units; the node taken at `t+40` by 4 (2 charged) |
+| 22N | row 10 (attack 3/3 against 2/2 + "Defense" 2), the attack's `CancelOrder` at `t+22` | `CancelOrder` rejected `IN_FIGHT`; as row 10: the attack loses 1 and bounces with 2 discharged at `t+80`, the defense 2 discharged | after r2 the attack goes back: 3 units, 1 charged; the defense 2 charged |
+
+Under `mvp-6` the capture cost of DEC-38 applies on top: in row 21N the attack ends 4/0 and cannot pay, so it bounces
+and the node stays the defender's, empty (DEC-38, row 13).
+
+**What it changes for the bigger side** (#626, "Pinning"): a fight against `u` units with `c` charges lasts about
+`c + u` rounds whatever the size of the other side, so a 1/1 unit holds any group 2 rounds (4 s), a 3/3 garrison 6
+rounds; an attacker that meets a defender's reinforcement can no longer call the attack off. Counterplay: scouting
+before the attack (DEC-21, DEC-33) and reinforcing the attack too.
+
+**Implementation** (#626): `Ruleset.combat.retreat` (`gow_sim.ruleset.Retreat`), the checks of `Move` and
+`CancelOrder` in a fight (`gow_sim.commands`), `RulesetPublic.combat.retreat`, `SIM_VERSION` 45 (golden replays `v45`,
+with a game on `mvp-6`), `PROTOCOL_VERSION` 44, the bots (`Bot.fight_commands`). The client (the retreat hints, the
+cancel in a fight, the help texts) follows in a separate issue.
+
+Alternatives (not chosen, #626): R (today's retreat after one round), P (a retreat after two rounds: a charged
+leaver still leaves whole), P2 (two shots per round: every fight twice as short, against DEC-32), V (retreat with a
+parting volley; the recommendation of #626, the owner chose N).
 
 ### Plains: the defender burns a charge in the first round (DEC-45, #778) **[accepted]**
 
@@ -2005,7 +2085,7 @@ The owner's decision of 2026-10-31, after the mechanics audit (#639, `docs/desig
 1. **No stances.** **[revised by DEC-44 under the section `[stances]`, section 6, for `rulesets/mvp-4-stances.toml` only]** CP income is the same for everyone: the whole quantum (100 hundredths per `cp.period_ticks`; 50 as accepted, **100 in `mvp-3` since the owner decision 2026-11-01, #659**) goes to CP (+67% against War, +100% against Balance of v1). Charges no longer come from CP. `SetStance`, `economy.stance_to_charges_pct`, `charges_per_cp`, `start_stance`, `orders.stance_cooldown_ticks` have no effect in v2 (`SetStance` gives `FEATURE_DISABLED`). The CP cap stays 5 CP (`cp.cap`), re-checked after the tournament.
 2. **Factories (F1 to F4).** A factory is a city (not a province) that produces charges **into its own warehouse**. Production is per factory and additive.
    - **The capital is the main factory from the start** with its own fixed rate: `factory.capital_period_ticks = 50` (1 charge per 50 ticks, the order of magnitude of today's Balance output; **100 in `mvp-3` since 2026-11-01, #659**).
-   - **Every built factory has a smaller fixed rate:** `factory.built_period_ticks = 100` (1 charge per 100 ticks; **200 in `mvp-3` since 2026-11-01, #659**).
+   - **Every built factory has a smaller fixed rate:** `factory.built_period_ticks = 100` (1 charge per 100 ticks; **200 in `mvp-3` since 2026-11-01, #659**; **100 again in `mvp-6` [accepted] (owner decision 2026-11-09): the effect of a built factory was barely felt; at 200 a factory of 4 charges pays back in 80 s, at 100 in 40 s; the capital keeps its stance periods (DEC-44)**).
    - **Building:** any own city, cost `factory.cost = 4` **charges** (paid by the progressive payment of item 7), `factory.build_ticks = 100`. A factory is not CP-priced.
    - **Cap:** at most `factory.max = 3` factories per player including the capital.
    - **Capture:** a captured factory passes to the capturer as a built factory (built rate) if the capturer has fewer than `factory.max` factories, otherwise it is destroyed; all lines that start at it are cut (item 3). A captured capital counts as a built factory for the capturer.
@@ -2053,7 +2133,7 @@ The owner's decision of 2026-10-31, after the mechanics audit (#639, `docs/desig
     - **Cap:** as DEC-29, the bonus is at most the group's charged units.
     - The group departs by itself when the requested bonus or the cap is reached. The bonus burns in the first fight or when the order ends, as in DEC-08.
     - Accumulation works in a **province** too (item 13).
-11. **Capture (DEC-38).** The rule stays parametric: a capture spends `capture.charge_cost` real charges of the capturing groups, otherwise they bounce; `0` means a capture is free. **Owner decision 2026-11-01, #659: `mvp-3` uses the candidate `balanced` (`docs/balance/v2-params-2026-10.md`): capture cost 0** (and `cp.period_ticks = 100`, `factory.capital_period_ticks = 100`, `factory.built_period_ticks = 200`). The first value was 1 (re-measured under v2 in #659: the BAL-02 result "the bot field polarizes" was measured under v1 supply).
+11. **Capture (DEC-38).** The rule stays parametric: a capture spends `capture.charge_cost` real charges of the capturing groups, otherwise they bounce; `0` means a capture is free. **Owner decision 2026-11-01, #659: `mvp-3` uses the candidate `balanced` (`docs/balance/v2-params-2026-10.md`): capture cost 0** (and `cp.period_ticks = 100`, `factory.capital_period_ticks = 100`, `factory.built_period_ticks = 200`). The first value was 1 (re-measured under v2 in #659: the BAL-02 result "the bot field polarizes" was measured under v1 supply). **`mvp-6`: capture cost 1 [accepted] (owner decision 2026-11-09, #759; DEC-38, the `mvp-6` note).**
 12. **Bunker (B).** A building for a **province or a city**, one per node, cost 3 charges, `bunker.build_ticks = 100`. Effect: **+1 virtual shot** to the node's defender in every fight there, and only if the defender has a charged unit (as terrain, DEC-07 rule 1). It replaces the "Defense" mode (item 5). **A bunker is destroyed when the node is captured** (the owner's decision: it does not pass to the capturer, unlike a barracks, DEC-26 item 4). Fog: visible like an enemy barracks (DEC-31: only a built one, next to an own node). **Name:** the rule is called "bunker" in the interface; section 12 "Bunker (Topic 2)" uses the word for the turtle strategy, so the code identifier is `fort` (the sim issue may change it, the rule text stays).
 13. **Province warehouse (W).** A province has a warehouse of **capacity 1, always** (no command, no building). It receives charges only as the target of a line (and from groups); units recharge from it and spoils on capture apply. This **reverses DEC-23 item 2** for v2 (no warehouse, no recharge, no spoils in a province).
 
@@ -2339,6 +2419,12 @@ The owner's decision of 2026-11-03 (#719, refs #697). Under the flow a cut-off p
 5. **Reconnecting** to the capital stops the starvation at once (the check of that tick resets `cut_since`; the grace starts again on the next cut, DEC-19 example 6) and restarts production from the next production tick (item 2).
 6. **Other rulesets.** Under `supply.model = "lines"` (`mvp-3`) nothing changes: no starvation (DEC-41 item 5), a cut-off factory produces, `flow_pocket` is `null`. `mvp-0` to `mvp-2` (v1) keep DEC-19 as it is. The `[starvation]` numbers of `mvp-4` are those of `mvp-3`; nothing in the ruleset changes.
 7. **Bots** need nothing new: they play on. Optionally a bot avoids leaving a big stack in a factory-less pocket.
+
+**Under `capture.charge_cost = 1` (`mvp-6`, owner decision 2026-11-09, #759).** A discharged group in a pocket can no
+longer capture its way out (a capture costs a real charge, DEC-38); it waits for a charge from the pocket's flow or a
+reconnection. #759 round 2 measured the idle discharged unit-seconds per player and match: 748 to 1833 in pockets, 248
+to 867 connected (starvation fell from 12.3 to 7.8 charges: fewer pockets form). The pocket rules above do not change;
+the owner judges the effect in a playtest.
 
 **Examples** (map `dec41`, `mvp-4`, player 0 as in the table F; stocks 0 unless the row says so, no groups but the start garrison of K (2/2, in the capital's component) unless the row says so; "A captured in tick `t`": A belongs to player 1 from the `movement` of tick `t` on, after the `economy` of that tick, its warehouse emptied; then B, C, D, F, G are a pocket of player 0 (A was their only way to K), K and E are not; 17 and 18 belong to player 1 as in the base of table F (since #724: a neutral never makes a leaf), so C is always a leaf (road C-17), and after the cut so are B and D (roads to A): C gives nothing back behind the level, and evens out with B and D by item I3; the factory period of a built factory is 200, of the capital 100).
 
@@ -4416,6 +4502,7 @@ Matches the glossary of `AGENTS.md` (section 15). Changes only together with it.
 | construction | ~~`UpgradeRoad(node, edge)`~~ `UpgradeRoad(edge)` | upgrading your own internal road by one level ~~by your own city for charges of its warehouse (DEC-16)~~ for CP, without a city (DEC-28, item 7) |
 | CP | `cp` | command points; flat regeneration, they do not grow with territory; stored in hundredths |
 | terrain burn | `combat.terrain_burn` | a negative terrain takes charges of the defender at the start of the first round of a fight instead of silencing them in every round (DEC-45) |
+| no retreat | `combat.retreat = "none"` | a group that entered a fight stays in it until the fight ends; the retreat commands give `IN_FIGHT` (DEC-40, `mvp-6`) |
 | map tempo | `[map_tempo]`, `apply_map_tempo`, `Match.rules` | the economy periods of a match scaled once by the node count of its map, `pct = isqrt(N * 10000 // ref_nodes)` clamped; `Match.rules` are the scaled rules, `Match.source_rules` the given ones (DEC-46) |
 | stance | `Stance.ECONOMY / BALANCE / WAR` | economy v1: the share of CP regeneration that goes into charges (DEC-02); economy v2 with `[stances]`: the periods of the CP income and of the own capital (DEC-44) |
 | player view | `PlayerView` | the state filtered by fog for a player or a bot |
@@ -4452,7 +4539,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-21 | #233 | terrain vision and the border point of an edge | section 10 | [accepted]; item 5 on position and direction in an edge half [superseded by DEC-33]; implemented #296 (`SIM_VERSION` 19, `PROTOCOL_VERSION` 22); item 1 (the sources) [superseded by DEC-35] |
 | DEC-22 | #234 | roads of two types, fixed capacity, a 15-minute match | section 8 | [accepted]; road types and prices [superseded by DEC-26] (always); warehouse equals capacity [superseded by DEC-26 with `city_upgrades.enabled = true`] |
 | DEC-23 | #235 | map rework: provinces, kinds of cities, names, the border point | section 9 | [accepted]; implemented: the format (#366, `SIM_VERSION` 20, `PROTOCOL_VERSION` 24), maps with provinces (#266); parts [superseded by DEC-41] under `economy.model = "v2"` |
-| DEC-24 | #261 | fight over time: rounds, reinforcements, retreat, a bounce without a chain, the fight point | section 4 | [accepted] (2026-10-14, all 14 recommendations); absorbs #133, #141; `round_ticks = 10` and item I1 on the remaining bonus [superseded by DEC-32, implemented #329] |
+| DEC-24 | #261 | fight over time: rounds, reinforcements, retreat, a bounce without a chain, the fight point | section 4 | [accepted] (2026-10-14, all 14 recommendations); absorbs #133, #141; `round_ticks = 10` and item I1 on the remaining bonus [superseded by DEC-32, implemented #329]; item E (retreat) [superseded by DEC-40 under `combat.retreat = "none"`] |
 | DEC-25 | #262 | recruit queue | section 3 | [accepted] (2026-10-14: 3 s per unit, a queue of 3); implemented #278 |
 | DEC-26 | #265 | city development: roads without a type and cheaper (always); barracks and warehouse separate from capacity (behind the flag `city_upgrades.enabled`) | sections 3 and 8 | [accepted] (2026-10-14, all details; road prices 1 and 2, roads not behind the flag); implemented #265 (`SIM_VERSION` 12, `PROTOCOL_VERSION` 16); part [superseded by DEC-28]; parts [superseded by DEC-41] under `economy.model = "v2"` |
 | DEC-27 | #266 | maps: symmetry of rules without symmetry of the picture, size, no water | section 9 | [accepted] (2026-10-14, all details); asymmetric maps [deferred], [accepted] 2026-11-06 for generated maps outside ranked (#771); implemented: the background without water #269 (item 3 [superseded by DEC-36] 2026-10-29), the validator and script #366, the maps and `grid55` #266; the projection budget on 55 nodes 0.45 ms [accepted] 2026-10-22 (#371) |
@@ -4466,7 +4553,8 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-35 | #477 | vision comes only from units: own nodes are no longer vision sources; a group on an edge is a source in the node of its half; an enemy in an own node without a group is `PRESENCE` | section 10 | [accepted] (2026-10-28, a rule change after the freeze); details [accepted] (2026-10-29, all items as written: the readings that reveal less); implemented #477 (`SIM_VERSION` 22, `PROTOCOL_VERSION` 28: the wire allows own data on an own node at any level) |
 | DEC-36 | #537 | map geography: water cells (sea, lakes), rivers as area borders, areas of nodes touch only where a road links them; visual only, the rules do not read it | section 9 | [accepted] 2026-10-29 (W4 Painted, no dark line along water, the defaults of the open questions); supersedes DEC-27, item 3; step 1 (baker, vector file, validator `geography`) #537, step 2 (client territory) #544, step 3 (pool maps and the menu map with water, no node moved) #545 |
 | DEC-37 | #549 | an engagement zone around a node: a defender that left the node within the last `combat.engage_ticks` ticks (3) is caught into the fight as a leaving defender | section 4 | [accepted] (2026-10-29, the owner's direction, a rule change after the freeze); the number `engage_ticks = 3` [default, chosen by the orchestrator; the owner may tune it]; implemented #549 |
-| DEC-38 | #578 | capture costs a charge: a capture spends `capture.charge_cost` real charges of the capturing groups in the node, otherwise they bounce | section 4 | [accepted] (2026-10-30, the owner, all defaults: variant C, every capture costs, provinces and the capital too, bounce, G3, no virtual charges); implemented #578 (sim, protocol); `charge_cost = 0` (off) in `mvp-0`, `mvp-1`, `test-short`, BAL-02 tests `1` in `mvp-2`; `charge_cost = 0` in `mvp-3` (v2, DEC-41; owner decision 2026-11-01, #659: `balanced`, capture cost 0; it was 1) |
+| DEC-38 | #578 | capture costs a charge: a capture spends `capture.charge_cost` real charges of the capturing groups in the node, otherwise they bounce | section 4 | [accepted] (2026-10-30, the owner, all defaults: variant C, every capture costs, provinces and the capital too, bounce, G3, no virtual charges); implemented #578 (sim, protocol); `charge_cost = 0` (off) in `mvp-0`, `mvp-1`, `test-short`, BAL-02 tests `1` in `mvp-2`; `charge_cost = 0` in `mvp-3` (v2, DEC-41; owner decision 2026-11-01, #659: `balanced`, capture cost 0; it was 1); `charge_cost = 1` in `mvp-6` (owner decision 2026-11-09, #759) |
+| DEC-40 | #626 | no retreat from a fight (variant N): a group that entered a fight stays in it until the fight ends; the defender's `Move` and the `CancelOrder` of an attacker or a group on an edge give `IN_FIGHT`; the end-of-fight bounce, E4 and the DEC-37 catch unchanged | section 4 | [accepted] (2026-11-09, the owner, variant N, the defaults of the open questions); under the optional key `combat.retreat = "none"`, revises DEC-24 item E there only; `rulesets/mvp-6.toml` (with DEC-38 cost 1 and the built factory period 100); implemented #626 (`SIM_VERSION` 45, `PROTOCOL_VERSION` 44) |
 | DEC-41 | #642 | economy v2: factories (capital main, built smaller, both fixed), player-drawn supply lines with reroute, supply as the currency of buildings, no stances, bunker, planned-order accumulation, province warehouse 1, capture costs a charge | section 7 | [accepted] (2026-10-31, the owner; every other default [accepted] as a starting value tuned by playtests); behind `economy.model = "v2"` (`rulesets/mvp-3.toml`), v1 unchanged; supersedes the proposal DEC-39 (#625); simulation implemented: #644 (`SIM_VERSION` 26), #645 (27), #646 (28); protocol (#647), bots (#648), client (#649) await implementation; faster lines (suggested path, auto-extension; owner decision 2026-10-31) #665 (`SIM_VERSION` 30, `PROTOCOL_VERSION` 34); parts [superseded by DEC-42] |
 | DEC-42 | #674 | supply lines from factories only: no relays and no transit, no limit of lines, a factory target is a hub, the auto-extension copies the nearest own line | section 7 | [accepted] (2026-11-01, the owner); economy v2 only; supersedes DEC-41 item 3 (line trees, L4 limit, L5), the #661 relay transit and the #665 auto-extension source; implemented #674 (`SIM_VERSION` 31, `PROTOCOL_VERSION` 35) |
 | DEC-43 | #697 | automatic supply flow towards the front (a field of hops to the leaves, one charge per road downhill per dispatch, the wave, a tired army pulls, a full factory spills), one global leaf shift, fixed warehouses (city 3, capital 6, province 1), road fortifications replace the bunker | section 7 | [accepted] (2026-11-03, the owner, all #697 recommendations; the look #699, #701: Full kit without the band, T1, N4, P2); behind `supply.model = "flow"` (`rulesets/mvp-4.toml`), `mvp-3` unchanged; supersedes DEC-41 items 3, 6, 12, DEC-42 and #665 under flow; item D (fortifications) [accepted] 2026-11-03 (#707: 1.5 CP, 100 ticks, a toll of 1 charge per started 3 units at the border point, the look C7 + K6 + P2); CP surplus options C1..C4 [open]; the ten [reading, to confirm] points [accepted] 2026-11-03; implemented: sim, protocol, bots #704 (`SIM_VERSION` 32, `PROTOCOL_VERSION` 36); fortifications: sim, protocol, bots #707 (`SIM_VERSION` 33, `PROTOCOL_VERSION` 37); item D reading points [accepted] 2026-11-03; item H (pockets from the capital, cut-off factories stop, starvation in factory-less pockets) [accepted] 2026-11-03, sim #719 (`SIM_VERSION` 34); item I (the leaves face the enemy only, the farthest nodes before contact, the leaves even out) [accepted] 2026-11-03 after the first playtest, sim #724 (`SIM_VERSION` 35); item I6 (a tired army ahead of the level pulls, option A) [accepted] 2026-11-03; the two readings of I2 and I3 [accepted] 2026-11-03, two new [reading, to confirm] (I3 an army takes without the gap, I6 the node alone; I3 [accepted] 2026-11-03); item I7 (a pulling army ahead of the level lifts its path, replacing "the node alone") [accepted] 2026-11-03, sim #726 (`SIM_VERSION` 36), three [reading, to confirm] (the path, the lifted nodes pass towards the army only, the nearer army first), all [accepted] 2026-11-03; item J (unpaid buildings paid in charges pull supply like a discharged army, equal footing) [accepted] 2026-11-03, sim #729 (`SIM_VERSION` 37), two [reading, to confirm] (the want of a build node, the pull ends with the payment); item K (level roads feed the nodes that can pass supply on, the saddle) sim #732 (`SIM_VERSION` 38), four [reading, to confirm]; item L (the level passes outward along the capital distance, a leaf is a corridor into an enclave) [accepted] 2026-11-04, sim #735 (`SIM_VERSION` 39), its five readings (one order, the enclave, the corridor does not hand back, pockets keep the gap rule, a city pair ends at 1/2) [accepted] 2026-11-04; the flow stress budget 0.3 ms [accepted] 2026-11-04; item M (the nearest need: every node with room calls the nearest stock behind it, candidate C2 and the supply contract) [accepted] 2026-11-04, sim #738/#740 (`SIM_VERSION` 40), its readings (M2 tiers and holders first, M3 the level answers a holder, M4 the ways, M5 the nearest first, M6 the relay, M8 the spill to the nearest own node with room, M9 `flow_down` as the plan) [accepted] 2026-11-04, the four item K readings [accepted] 2026-11-04 (owner); await: client #705, tournament #706, the fortification client (#707) |

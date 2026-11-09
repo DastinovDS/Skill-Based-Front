@@ -57,7 +57,7 @@ from gow_sim.commands import (
     command_cost,
 )
 from gow_sim.maps import MapDef, NodeKind
-from gow_sim.ruleset import RecruitLocation, Ruleset
+from gow_sim.ruleset import RecruitLocation, Retreat, Ruleset
 from gow_sim.view import (
     AtNode,
     BuildKind,
@@ -173,6 +173,9 @@ class Bot:
         ``node_key`` order."""
         self._left: dict[int, int] = {}
         """Own group id to the tick it was ordered out of a fight: no second withdrawal."""
+        self.retreat = rules.combat.retreat is Retreat.ROUND
+        """A group may leave a fight (DEC-24, item E); not under ``combat.retreat = "none"``
+        (DEC-40, variant N)."""
         self._ways_tick = -1
         self._ways: dict[tuple[int, int], dict[int, int]] = {}
         """By ``(start, size)``: the road each node is entered by on the fastest path (``ways_in``),
@@ -306,7 +309,9 @@ class Bot:
         (``FightView.virtual_left``, public to both in a fight: DEC-32, items 3 and 8).
         Withdraw: the own stock is smaller than the enemy's, so every round costs a unit.
         Attackers and groups on edges cancel (free, back along the edge); defenders of an own node
-        leave by ``Move`` to a neighbouring own node only when they cannot shoot at all.
+        leave by ``Move`` to a neighbouring own node only when they cannot shoot at all. Without
+        retreat (``combat.retreat = "none"``, DEC-40) nobody withdraws: the server would reject it
+        with ``IN_FIGHT``.
         Reinforce: an idle charged group of a neighbouring own node goes to an own node whose
         fight it reaches before its expected end (``max`` of the stocks of the sides rounds from
         the next one, ``combat.round_ticks`` each; a rough estimate on purpose).
@@ -324,7 +329,7 @@ class Bot:
             if self.DISCIPLINE:  # #687: a silent or burning charge never shoots (DEC-45)
                 stock -= f.mute[me]
                 enemy -= f.mute[1 - me]
-            if enemy > stock + self.coming(view, f):
+            if self.retreat and enemy > stock + self.coming(view, f):
                 for g in sorted(mine, key=lambda g: (-g.units, -g.charged, g.id)):
                     if self._left.get(g.id, -1) >= f.start_tick:
                         continue
