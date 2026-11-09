@@ -75,7 +75,14 @@
   const statusParam = params.get('status');
   const statusId = isStatusScene(statusParam) ? statusParam : null;
   const status = statusId === null ? null : statusView(STATUS_INPUTS[statusId]);
-  const rules = capturePinned === null ? DEV_RULES : { ...DEV_RULES, capture: { charge_cost: 1 } };
+  // `?retreat=none` plays the rules of DEC-40 (`combat.retreat = "none"`): a group in a fight has
+  // no cancel in its menu and sends no move.
+  const retreatNone = params.get('retreat') === 'none';
+  const rules = {
+    ...DEV_RULES,
+    ...(capturePinned === null ? {} : { capture: { charge_cost: 1 } }),
+    ...(retreatNone ? { combat: { ...DEV_RULES.combat, retreat: 'none' as const } } : {}),
+  };
   const fixtureScene = (id: string | null) => FIXTURE_SCENES.find((scene) => scene.id === id);
   let rendererFailed = $state(statusId === 'renderer');
   let sceneId = $state(
