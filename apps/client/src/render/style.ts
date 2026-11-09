@@ -1,5 +1,6 @@
 import type { PlayerId, Terrain } from '../protocol.gen.ts';
 import { ENGRAVED } from '../theme/tokens.ts';
+import { SOFT } from './softness.ts';
 
 // Visual constants of the map. Sizes are in world units (docs/design/map-format.md): cities are
 // about 100 units apart on MVP maps (100 units = 3 s of travel), so these sizes do not depend on
@@ -32,9 +33,10 @@ export const SEGMENT_EMPTY_BAR = 0x3b4450;
 /**
  * The Engraved material of the pieces (ui-style 52 III to 57): ivory `INK` lines on a dark `CASING`
  * round every coloured mark, the `DARK_PLATE` of a dome or a city with units in it, and the `CUT`
- * into the stone under a ring.
+ * into the stone under a ring. The ink is the token's ivory, darker and warmer at a softer level
+ * (`SOFT.ink`, #865).
  */
-export const INK = ENGRAVED.ink;
+export const INK = SOFT.ink;
 export const CASING = ENGRAVED.casing;
 export const DARK_PLATE = ENGRAVED.plate;
 export const CUT = 0x050403;
@@ -138,11 +140,16 @@ export const SNOW_ALPHA = 0.45;
 // has dotted lanes. Nothing here is animated.
 export const ROAD_LANE = { width: 2, gap: 1.7 } as const;
 /** The lanes and the band under them of a road between two cities of one owner. */
-export const ROAD_OWN = { lane: 0xe6edf3, laneAlpha: 0.95, bandAlpha: 0.62, casing: 3.6 } as const;
+export const ROAD_OWN = {
+  lane: 0xe6edf3,
+  laneAlpha: 0.95 * SOFT.line,
+  bandAlpha: 0.62 * SOFT.line,
+  casing: 3.6,
+} as const;
 /** A buffer road: dashed lanes, a dark casing and no band of an owner. */
 export const ROAD_BUFFER = {
   lane: 0xaab2bd,
-  laneAlpha: 0.95,
+  laneAlpha: 0.95 * SOFT.line,
   dash: 7,
   gap: 5,
   casingAlpha: 0.4,
@@ -151,7 +158,7 @@ export const ROAD_BUFFER = {
 /** A half of a road in fog: dotted lanes (the veil of the fog over the cell carries the state too). */
 export const ROAD_FOG = {
   lane: 0xaab2bd,
-  laneAlpha: 0.75,
+  laneAlpha: 0.75 * SOFT.line,
   dash: 1.5,
   gap: 4.5,
   casingAlpha: 0.3,
@@ -913,7 +920,7 @@ export const CASED = {
   head: { length: 12, width: 0.56, paper: 5.4, casing: 3, ink: 1, overlap: 2 },
   burin: { step: 46, speed: 30, half: 4.2, side: 2.3, casing: 2.2, fade: 14, margin: 4 },
   /** The hatch across a hollow body: `pitch` world units, at least `minPx` css px (zoom buckets). */
-  hatch: { pitch: 2.6, width: 0.9, alpha: 0.9, minPx: 3 },
+  hatch: { pitch: 2.6, width: 0.9, alpha: 0.9 * SOFT.hatch, minPx: 3 },
   /** The part of an order already walked: ink dots. */
   walked: { step: 5, radius: 0.75, alpha: 0.6 },
   /** The arrow leaves the ring of its start city by `startGap`, and stops `endGap` outside the ring of the target. */
@@ -999,9 +1006,9 @@ export const REWIND = {
 export const RIBBON_ENGRAVED = {
   casing: 4,
   plateAlpha: 0.9,
-  own: { angle: 0, pitch: 2.6, width: 0.9, alpha: 0.85 },
+  own: { angle: 0, pitch: 2.6, width: 0.9, alpha: 0.85 * SOFT.hatch },
   /** The enemy's at the angle of its Border band (`BORDER_BAND.enemyAngle`), so the two read alike. */
-  enemy: { angle: -45, pitch: 2.4, width: 1.1, alpha: 1 },
+  enemy: { angle: -45, pitch: 2.4, width: 1.1, alpha: SOFT.hatch },
   outline: 1,
   inner: { share: 0.64, alpha: 0.7, width: 0.8 },
   front: { casing: 3, ink: 1.2, lozenge: 4.4 },

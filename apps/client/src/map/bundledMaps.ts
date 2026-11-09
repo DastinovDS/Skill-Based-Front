@@ -54,8 +54,31 @@ const backgrounds = import.meta.glob<string>(
   },
 );
 
+// The softness comparison of the map texture (#865, dev only): `gow-maps bake --soft <n> --out-dir
+// .shots/softness/bg` writes `<id>.soft<n>.bg.webp` outside git, and `?ground=<n>` puts it under the
+// map instead of the committed background (when there is one for the map).
+const softGrounds = import.meta.glob<string>('../../../../.shots/softness/bg/*.bg.webp', {
+  eager: true,
+  import: 'default',
+  query: '?url',
+});
+
+/** The `?ground=<n>` of the dev page, or `null`. */
+function groundLevel(): string | null {
+  if (typeof window === 'undefined') return null;
+  const raw = new URLSearchParams(window.location.search).get('ground');
+  return raw !== null && /^[0-9]$/.test(raw) ? raw : null;
+}
+
 /** URL of the baked background of a bundled map, or `null` if it has none (the test maps). */
 export function backgroundUrl(mapName: string): string | null {
+  const level = groundLevel();
+  if (level !== null) {
+    const soft = Object.entries(softGrounds).find(([path]) =>
+      path.endsWith(`/${mapName}.soft${level}.bg.webp`),
+    );
+    if (soft !== undefined) return soft[1];
+  }
   const found = Object.entries(backgrounds).find(([path]) => path.endsWith(`/${mapName}.bg.webp`));
   return found === undefined ? null : found[1];
 }

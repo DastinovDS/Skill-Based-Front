@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from gow_maps import fairness
-from gow_maps.bake import background_path, bake_background
+from gow_maps.bake import SOFT_LEVELS, background_path, bake_background
 from gow_maps.generate import generate, water_share_pct
 from gow_maps.geo import bake_geography, find_spec, spec_path, vector_path
 from gow_maps.mirror import HalfFormatError, dump_map, mirror_file
@@ -87,16 +87,25 @@ def _preview(args: argparse.Namespace) -> int:
 
 def _bake(args: argparse.Namespace) -> int:
     ok = True
+    level: int | None = getattr(args, "soft", None)
+    soft = None if level is None else SOFT_LEVELS[level]
+    out_dir: str | None = getattr(args, "out_dir", None)
     for path in _expand(args.files):
         try:
             mapdef = load_map(path)
             out = background_path(path)
+            vectors = vector_path(path)
+            if out_dir is not None:  # a dev comparison (#865): outside the map folders
+                tag = "" if level is None else f".soft{level}"
+                Path(out_dir).mkdir(parents=True, exist_ok=True)
+                out = Path(out_dir) / f"{Path(path).stem}{tag}.bg.webp"
+                vectors = Path(out_dir) / f"{Path(path).stem}{tag}.geo.json"
             spec = find_spec(path)
             if spec is None:  # a land-only map (DEC-27, item 3)
-                bake_background(mapdef, out, args.seed)
+                bake_background(mapdef, out, args.seed, soft)
             else:  # a map with a geography (DEC-36): water, and the vector file for the client
-                bake_geography(mapdef, spec, out, vector_path(path), args.seed)
-                print(f"wrote {vector_path(path)}")
+                bake_geography(mapdef, spec, out, vectors, args.seed, soft)
+                print(f"wrote {vectors}")
         except (MapFormatError, ValueError) as exc:
             print(f"FAIL {path}\n  {exc}")
             ok = False
@@ -182,6 +191,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     bake.add_argument("files", nargs="+", help="map JSON files (glob patterns allowed)")
     bake.add_argument(
         "--seed", type=int, help="noise seed (default: derived from the map name and version)"
+    )
+    bake.add_argument(
+        "--soft",
+        type=int,
+        choices=range(len(SOFT_LEVELS)),
+        help="softness level of the texture (default: bake.DEFAULT_SOFT), #865",
+    )
+    bake.add_argument(
+        "--out-dir", help="write <id>[.soft<n>].bg.webp here instead of next to the map (dev)"
     )
     bake.set_defaults(handler=_bake)
     gen = commands.add_parser("generate", help="make the map of a seed, outside the pool (#771)")

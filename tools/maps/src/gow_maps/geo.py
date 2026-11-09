@@ -859,11 +859,12 @@ def _shift(a: Field, dx: int, dy: int) -> Field:
     return out
 
 
-def _water_lines(img: Field, lake_cells: Mask, from_land: Field) -> Field:
+def _water_lines(img: Field, lake_cells: Mask, from_land: Field, keep: float = 1.0) -> Field:
     """The engraved lines inside a sea or a lake, along its shore, and the cut rule of the coast.
 
     The lines are the levels of a blurred mask of the water: near the shore they follow it closely,
-    farther out they round off and fade, like the water-lining of an engraved chart.
+    farther out they round off and fade, like the water-lining of an engraved chart. ``keep``
+    scales their alpha and the coast's (``bake.Softness.water``, #865).
     """
     lake = np.clip(bake.blur(_upscale(lake_cells.astype(np.float32)), 3) * 2 - 0.5, 0.0, 1.0)
     soft = bake.blur(lake, SHORE_FIELD)
@@ -874,15 +875,17 @@ def _water_lines(img: Field, lake_cells: Mask, from_land: Field) -> Field:
         near = 1.0 - _smoothstep(0.0, 0.85, (np.abs(soft - level) / grad).astype(np.float64))
         lines = np.maximum(lines, np.asarray(near * strength, np.float32))
     lines = np.asarray(lines * lake, np.float32)
-    img = _mix(img, WATER_LINE_CUT[0], lines * WATER_LINE_CUT[1])
+    img = _mix(img, WATER_LINE_CUT[0], lines * (WATER_LINE_CUT[1] * keep))
     lip = np.clip(_shift(lines, 1, 1) - lines, 0.0, 1.0)
-    img = _mix(img, WATER_LINE_LIP[0], lip * WATER_LINE_LIP[1])
+    img = _mix(img, WATER_LINE_LIP[0], lip * (WATER_LINE_LIP[1] * keep))
     rule = 1.0 - _smoothstep(0.0, 1.1, np.abs(from_land + 1.0).astype(np.float64))
     coast = np.asarray(np.clip(rule, 0.0, 1.0) * lake, np.float32)
-    return _mix(img, COAST_CUT[0], coast * COAST_CUT[1])
+    return _mix(img, COAST_CUT[0], coast * (COAST_CUT[1] * keep))
 
 
-def render(mapdef: MapDef, geo: Geography, seed: int | None = None) -> Image8:
+def render(
+    mapdef: MapDef, geo: Geography, seed: int | None = None, soft: bake.Softness | None = None
+) -> Image8:
     """The background of a map with a geography: the Intaglio ground of the new areas, signs
     thinning toward a shore, and the Intaglio water on top (dark stone, water lines, a cut
     coast)."""
@@ -915,11 +918,13 @@ def render(mapdef: MapDef, geo: Geography, seed: int | None = None) -> Image8:
         out = np.asarray(img * (1.0 - water[..., None]) + tone * water[..., None], np.float32)
         return _draw_bridges(out, mapdef, geo.bridges)
 
+    soft = bake.SOFT_LEVELS[bake.DEFAULT_SOFT] if soft is None else soft
+
     def finish(img: Field) -> Field:
-        return _water_lines(img, lake_cells, from_land)
+        return _water_lines(img, lake_cells, from_land, soft.water)
 
     cells = _ground_cells(mapdef, geo, seed)
-    return bake.render_cells(mapdef, cells, seed, thin, paint, finish)
+    return bake.render_cells(mapdef, cells, seed, thin, paint, finish, soft)
 
 
 def bake_geography(
@@ -928,6 +933,7 @@ def bake_geography(
     background: str | Path,
     vectors: str | Path,
     seed: int | None = None,
+    soft: bake.Softness | None = None,
 ) -> Geography:
     """Write the background with water (WebP, the budget of ``bake``) and the vector file.
 
@@ -936,7 +942,7 @@ def bake_geography(
     """
     geography = compute(mapdef, spec, seed)
     text = dump_vector_file(vector_file(mapdef, geography))
-    bake.write_background(mapdef, render(mapdef, geography, seed), background)
+    bake.write_background(mapdef, render(mapdef, geography, seed, soft), background)
     out = Path(vectors)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")

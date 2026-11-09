@@ -10,6 +10,7 @@ import json
 import math
 import time
 from functools import cache
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +21,9 @@ from PIL import Image
 
 from gow_maps import geo
 from gow_maps.bake import (
+    DEFAULT_SOFT,
     MAX_WEBP_BYTES,
+    SOFT_LEVELS,
     STEP,
     TERRAIN_BIOMES,
     THUMB_WIDTH,
@@ -133,6 +136,24 @@ def test_bake_is_deterministic() -> None:
     assert np.array_equal(first, render_background(mapdef))
     assert np.array_equal(render_background(mapdef, seed=1), render_background(mapdef, seed=1))
     assert not np.array_equal(render_background(mapdef, seed=1), render_background(mapdef, seed=2))
+
+
+def _fine_contrast(pixels: NDArray[np.uint8]) -> float:
+    """The mean difference of a pixel's luminance from its right and lower neighbours."""
+    lum = pixels.astype(np.float64).mean(axis=2)
+    return float(np.abs(np.diff(lum, axis=0)).mean() + np.abs(np.diff(lum, axis=1)).mean())
+
+
+def test_softer_levels_lower_the_fine_contrast_of_the_texture() -> None:
+    """#865: each level of ``SOFT_LEVELS`` carves the signs and the grain fainter than the one
+    before, on the same layout; the default level is the picture without a ``soft`` argument."""
+    mapdef = _map(TEST_MAPS / "line3.json")
+    pictures = [render_background(mapdef, soft=soft) for soft in SOFT_LEVELS]
+    assert np.array_equal(render_background(mapdef), pictures[DEFAULT_SOFT])
+    contrast = [_fine_contrast(picture) for picture in pictures]
+    assert all(a > b for a, b in pairwise(contrast)), contrast
+    # The layout stays: the biome areas (block means) barely move between the levels.
+    assert np.abs(_blocks(pictures[0]) - _blocks(pictures[-1])).mean() < 6.0
 
 
 def test_default_seed_depends_on_name_and_version(tmp_path: Path) -> None:
