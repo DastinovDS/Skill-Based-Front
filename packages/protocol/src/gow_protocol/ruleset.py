@@ -3,31 +3,22 @@
 Only what the client uses (AGENTS.md, section 7.1):
 
 - command costs, for the cost preview of an order (CLI-06, #62);
-- the combat parameters (CLI-08, #64): terrain defense modifier and the planned bonus per edge
-  (DEC-07, rule 1; DEC-29), the pace of the Defense bonus (DEC-30, in ``orders``);
-- the clock and the CP regeneration, for the HUD timer and the CP bar (CLI-08);
-- the road level prices and duration, for the road upgrade hint (DEC-16);
-- the stance table and the delays of planned orders, for the stance menu and the countdown on
-  order arrows (ui-style 11 and 9.7);
+- the combat parameters (CLI-08, #64): the terrain defense modifier (DEC-07, rule 1; a negative
+  one burns charges in the first round, DEC-45), the pace of a fight, whether a group may leave
+  a fight (DEC-40, ``combat.retreat``), for the retreat hints;
+- the clock and the CP income, for the HUD timer and the CP bar (CLI-08);
+- the stances (DEC-44, ``stances``): the periods of the CP income and of the own capital by
+  stance, for the stance menu and the progress in the HUD;
+- the gathering pace of planned orders (DEC-41, item 10);
 - the attrition and grace ticks, for the overcrowding countdown (ui-style 12);
 - the recruit queue numbers, for the production progress over a city and the cancel refund
   (DEC-25);
-- the flag and the numbers of the city development (DEC-26, item 10): the barracks and the
-  warehouse levels, their prices and durations, for the city menu;
-- the range and the start value of the rear minimum (DEC-28, item 3), for the supply slider;
+- the barracks (DEC-26), its price in charges and duration, and the warehouse of a province
+  (DEC-41, item 13), for the city menu;
+- the factories (DEC-41, item 2) and the road fortifications (DEC-43, item D);
+- the period of the supply dispatch (DEC-43, ``supply_dispatch_ticks``);
 - the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429);
-- the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help;
-- whether a group may leave a fight (DEC-40, ``combat.retreat``), for the retreat hints;
-- the economy model (DEC-41, ``economy.model``): ``v2`` hides the stance (without ``stances``,
-  DEC-44), the front markers, the rear minimum, transfers, road upgrades and "Defense" of v1 and
-  shows factories, lines, bunkers and the requested bonus of planned orders, with their numbers
-  (``factory``, ``lines``, ``bunker``, ``orders.plan_ticks_per_bonus``, the charge prices of the
-  buildings); ``null`` or 0 under v1;
-- the supply model (DEC-43, ``supply_model``): ``flow`` hides the lines and shows the automatic
-  flow and the leaf shift (``lines`` under v1 and the drawn lines of DEC-41), with the period of
-  the dispatch (``supply_dispatch_ticks``);
-- the stances of economy v2 (DEC-44, ``stances``): the periods of the CP income and of the own
-  capital by stance, for the stance menu and the progress in the HUD; ``null`` without the section.
+- the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help.
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -38,14 +29,11 @@ from pydantic import Field
 
 from gow_protocol.base import Centi, NonNegInt, PosInt, SignedInt, WireModel
 from gow_sim.ruleset import (
-    EconomyModel,
     Retreat,
     Ruleset,
     Sight,
     SightTable,
-    Stance,
     StanceTable,
-    SupplyModel,
 )
 
 
@@ -57,25 +45,15 @@ class CostsPublic(WireModel):
     cancel: Centi
     split: Centi
     merge: Centi
-    attack: Centi
-    defense: Centi
-    build: Centi
     recruit: Centi
     stance: Centi
-    front: Centi
-    """``set_front`` (DEC-28, item 2)."""
-    rear_min: Centi
-    """``set_rear_min`` (DEC-28, item 3)."""
-    transfer: Centi
-    """``transfer`` (DEC-18, item 6)."""
     barracks: Centi
-    """``build_barracks`` (DEC-26, item 2)."""
-    warehouse: Centi
-    """``upgrade_warehouse``, per level (DEC-26, item 3)."""
+    """``build_barracks`` (DEC-26, item 2); its charges are ``city_upgrades.barracks_charges``."""
 
 
 class TerrainDefensePublic(WireModel):
-    """``terrain.defense_mod``: charges added to the node defender's pool; may be negative."""
+    """``terrain.defense_mod``: charges added to the node defender's pool; a negative value burns
+    that many of its charges at the start of the first round (DEC-45)."""
 
     plains: SignedInt
     forest: SignedInt
@@ -84,17 +62,11 @@ class TerrainDefensePublic(WireModel):
 
 class CombatPublic(WireModel):
     terrain_defense_mod: TerrainDefensePublic
-    planned_bonus_per_edge: NonNegInt
-    """Virtual shots of a planned order per edge of its path, at most the charged units of the
-    group when it departs (DEC-29)."""
     round_ticks: PosInt
     """Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight."""
     shots_per_round: PosInt
     regroup_ticks: NonNegInt
     """The pause of an edge winner before it goes on (DEC-24, item G4)."""
-    terrain_burn: bool
-    """A negative ``terrain_defense_mod`` burns charges of the defender in the first round instead
-    of silencing them in every round (DEC-45)."""
     retreat: Retreat
     """``round``: a group may leave a fight after the nearest round (DEC-24, item E); ``none``:
     no retreat (DEC-40, variant N), the client hides the retreat hints and the cancel in a fight."""
@@ -108,33 +80,14 @@ class CapturePublic(WireModel):
 
 
 class CpPublic(WireModel):
-    """CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``."""
+    """CP: ``per_period`` hundredths per quantum, up to ``cap``; the period of the quantum is
+    ``stances.cp_period_ticks`` of the own stance."""
 
     cap: Centi
     per_period: Centi
-    period_ticks: PosInt
 
 
 Percent = Annotated[int, Field(ge=0, le=100)]
-
-
-class StancePctPublic(WireModel):
-    """``economy.stance_to_charges_pct``: the share of the CP quantum put into charges, in %."""
-
-    economy: Percent
-    balance: Percent
-    war: Percent
-
-
-class EconomyPublic(WireModel):
-    """The charge production the stance menu shows (``economy`` of the ruleset, DEC-02)."""
-
-    model: EconomyModel
-    """``v1``: stances, front markers, donors (DEC-02, DEC-28); ``v2``: factories and drawn supply
-    lines (DEC-41): the commands of the other model are rejected with ``FEATURE_DISABLED``."""
-    stance_to_charges_pct: StancePctPublic
-    charges_per_cp: NonNegInt
-    """Charges per whole CP put into charges."""
 
 
 class StancePeriodsPublic(WireModel):
@@ -150,7 +103,7 @@ class StancePeriodsPublic(WireModel):
 
 
 class StancesPublic(WireModel):
-    """Stances of economy v2 with local progress (``stances`` of the ruleset, DEC-44)."""
+    """Stances with local progress (``stances`` of the ruleset, DEC-44)."""
 
     cp_period_ticks: StancePeriodsPublic
     """One CP quantum (``cp.per_period``) per this many ticks; ``View.me.cp_ticks`` counts them."""
@@ -164,17 +117,11 @@ class StancesPublic(WireModel):
 
 
 class OrdersPublic(WireModel):
-    """Delays of planned orders, the growth of Defense and the stance cooldown (``orders``)."""
+    """Planned orders (``orders`` of the ruleset)."""
 
-    planned_delay_ticks: NonNegInt
-    defense_ticks_per_bonus: PosInt
-    """Defense gains one virtual shot per this many ticks in the mode, at most the charged units
-    of the group when a fight begins (DEC-30)."""
-    stance_cooldown_ticks: NonNegInt
-    """Ticks between two stance changes; 0 under ``stances`` (DEC-44: no cooldown)."""
-    plan_ticks_per_bonus: NonNegInt
-    """Economy v2 (DEC-41, item 10): a gathering planned order takes one charge and gains one
-    bonus per this many ticks; 0 under v1."""
+    plan_ticks_per_bonus: PosInt
+    """A gathering planned order takes one charge and gains one bonus per this many ticks
+    (DEC-41, item 10)."""
 
 
 class CapacityPublic(WireModel):
@@ -184,13 +131,6 @@ class CapacityPublic(WireModel):
     """Ticks over the capacity in a row before one unit dies."""
     grace_ticks: NonNegInt
     """Ticks after a capture in which the garrison is not counted."""
-
-
-class BuildPublic(WireModel):
-    """Road upgrades (``build`` of the ruleset, DEC-28, item 7): the price is ``cost.build`` per
-    level, what a level gives is ``upgrade_gain`` of the own edges in the view."""
-
-    ticks_per_level: PosInt
 
 
 class RecruitPublic(WireModel):
@@ -206,31 +146,23 @@ class RecruitPublic(WireModel):
 
 
 class CityUpgradesPublic(WireModel):
-    """City development (DEC-26): ``city_upgrades`` and ``warehouse`` of the ruleset."""
+    """The barracks (DEC-26; ``city_upgrades`` of the ruleset) and the warehouse of a province."""
 
-    enabled: bool
-    """Off: every city recruits, the warehouse holds the node capacity, no barracks and no
-    warehouse levels (the commands are rejected with ``FEATURE_DISABLED``)."""
     barracks_ticks: PosInt
-    warehouse_ticks: PosInt
-    warehouse_max_level: NonNegInt
-    warehouse_gain_per_level: NonNegInt
+    """Ticks from the full payment to the barracks."""
     barracks_charges: NonNegInt
-    """Economy v2 (DEC-41, item 7): the barracks costs this many charges; 0 under v1."""
-    warehouse_charges: NonNegInt
-    """Economy v2: every warehouse level costs this many charges; 0 under v1."""
+    """The barracks costs this many charges (DEC-41, item 7)."""
     warehouse_province: NonNegInt
-    """Economy v2 (DEC-41, item 13): the warehouse of every province holds this many charges; 0
-    under v1 (a province has no warehouse)."""
+    """The warehouse of every province holds this many charges (DEC-41, item 13)."""
 
 
 class FactoryPublic(WireModel):
-    """Factories (``factory`` of the ruleset, DEC-41, item 2; economy v2 only)."""
+    """Factories (``factory`` of the ruleset, DEC-41, item 2). The own capital makes one charge
+    per ``stances.capital_period_ticks`` of the own stance."""
 
-    capital_period_ticks: PosInt
-    """The own capital makes one charge per this many ticks."""
-    built_period_ticks: PosInt
-    """Every other factory makes one charge per this many ticks."""
+    built_period_ticks: PosInt | None
+    """Every other factory makes one charge per this many ticks; ``None`` under
+    ``stances.factories_follow`` (DEC-47): then it follows the stance like the capital."""
     cost: NonNegInt
     """Charges ``build_factory`` pays (progressive payment, item 7)."""
     build_ticks: PosInt
@@ -250,28 +182,6 @@ class FortPublic(WireModel):
     """The toll: ``toll_charges`` per started ``toll_units`` units of an enemy group crossing the
     line towards the node, never more than its charged units."""
     toll_charges: NonNegInt
-
-
-class BunkerPublic(WireModel):
-    """The bunker (``bunker`` of the ruleset, DEC-41, item 12; economy v2 only)."""
-
-    cost: NonNegInt
-    """Charges ``build_bunker`` pays (progressive payment, item 7)."""
-    build_ticks: PosInt
-    """Ticks from the full payment to the bunker."""
-    shots: NonNegInt
-    """Virtual shots of the node's defender in a fight there, if it has a charged unit."""
-
-
-class SupplyPublic(WireModel):
-    """The supply settings of a player (DEC-28): the range of the rear minimum slider."""
-
-    rear_min_max: NonNegInt
-    """``set_rear_min`` accepts ``0..rear_min_max``."""
-    rear_min_default: NonNegInt
-    """The rear minimum every player starts with."""
-    front_markers: NonNegInt
-    """Front markers of a player: ``set_front`` accepts ``marker`` ``0..front_markers - 1``."""
 
 
 class SightRowPublic(WireModel):
@@ -309,61 +219,36 @@ class RulesetPublic(WireModel):
     cost: CostsPublic
     combat: CombatPublic
     capture: CapturePublic
-    build: BuildPublic
-    economy: EconomyPublic
     orders: OrdersPublic
     capacity: CapacityPublic
     recruit: RecruitPublic
     city_upgrades: CityUpgradesPublic
-    supply: SupplyPublic
     vision: VisionPublic
-    factory: FactoryPublic | None
-    """Economy v2 only; ``None`` under v1."""
-    bunker: BunkerPublic | None
-    """Economy v2 with a ``[bunker]`` section only; ``None`` under v1 and in ``mvp-4`` (DEC-43,
-    item D1: ``build_bunker`` is rejected with ``FEATURE_DISABLED``)."""
-    fort: FortPublic | None
-    """Road fortifications: a ``[fort]`` section only (``mvp-4``, DEC-43, item D); ``None``
-    otherwise (``fortify_road`` is rejected with ``FEATURE_DISABLED``)."""
-    supply_model: SupplyModel
-    """``supply.model`` (DEC-43): ``flow`` is the automatic supply flow with the leaf shift
-    (``set_leaf_shift``; the line commands are rejected with ``FEATURE_DISABLED``); ``lines``
-    otherwise."""
+    factory: FactoryPublic
+    fort: FortPublic
     supply_dispatch_ticks: PosInt
     """``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it
-    (DEC-43, item A6; the same period drives the lines of DEC-41 and the v1 supply), so the
-    countdown to ``View.me.next_dispatch_tick`` is exact from the first snapshot (#705)."""
-    stances: StancesPublic | None
-    """Stances of economy v2: a ``[stances]`` section only (DEC-44); ``None`` otherwise (under v2
-    ``set_stance`` is then rejected with ``FEATURE_DISABLED``)."""
+    (DEC-43, item A6), so the countdown to ``View.me.next_dispatch_tick`` is exact from the first
+    snapshot (#705)."""
+    stances: StancesPublic
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
         cost = rules.orders.cost
         defense_mod = rules.terrain.defense_mod
-        pct = rules.economy.stance_to_charges_pct
         return cls(
             tick_hz=rules.tick_hz,
             match_ticks=rules.match_ticks,
-            cp=CpPublic(
-                cap=rules.cp.cap, per_period=rules.cp.per_period, period_ticks=rules.cp.period_ticks
-            ),
+            cp=CpPublic(cap=rules.cp.cap, per_period=rules.cp.per_period),
             cost=CostsPublic(
                 move=cost.move,
                 planned_move=cost.planned_move,
                 cancel=cost.cancel,
                 split=cost.split,
                 merge=cost.merge,
-                attack=cost.attack,
-                defense=cost.defense,
-                build=cost.build,
                 recruit=cost.recruit,
                 stance=cost.stance,
-                front=cost.front,
-                rear_min=cost.rear_min,
-                transfer=cost.transfer,
                 barracks=cost.barracks,
-                warehouse=cost.warehouse,
             ),
             combat=CombatPublic(
                 terrain_defense_mod=TerrainDefensePublic(
@@ -371,32 +256,13 @@ class RulesetPublic(WireModel):
                     forest=defense_mod.forest,
                     mountains=defense_mod.mountains,
                 ),
-                planned_bonus_per_edge=rules.orders.planned_bonus_per_edge,
                 round_ticks=rules.combat.round_ticks,
                 shots_per_round=rules.combat.shots_per_round,
                 regroup_ticks=rules.combat.regroup_ticks,
-                terrain_burn=rules.combat.terrain_burn,
                 retreat=rules.combat.retreat,
             ),
             capture=CapturePublic(charge_cost=rules.capture.charge_cost),
-            build=BuildPublic(ticks_per_level=rules.build.ticks_per_level),
-            economy=EconomyPublic(
-                model=rules.economy.model,
-                stance_to_charges_pct=StancePctPublic(
-                    economy=pct.of(Stance.ECONOMY),
-                    balance=pct.of(Stance.BALANCE),
-                    war=pct.of(Stance.WAR),
-                ),
-                charges_per_cp=rules.economy.charges_per_cp,
-            ),
-            orders=OrdersPublic(
-                planned_delay_ticks=rules.orders.planned_delay_ticks,
-                defense_ticks_per_bonus=rules.orders.defense_ticks_per_bonus,
-                stance_cooldown_ticks=(
-                    rules.orders.stance_cooldown_ticks if rules.stances is None else 0
-                ),
-                plan_ticks_per_bonus=rules.orders.plan_ticks_per_bonus,
-            ),
+            orders=OrdersPublic(plan_ticks_per_bonus=rules.orders.plan_ticks_per_bonus),
             capacity=CapacityPublic(
                 attrition_ticks=rules.capacity.attrition_ticks,
                 grace_ticks=rules.capacity.grace_ticks,
@@ -407,19 +273,9 @@ class RulesetPublic(WireModel):
                 refund_started_pct=rules.recruit.refund_started_pct,
             ),
             city_upgrades=CityUpgradesPublic(
-                enabled=rules.city_upgrades.enabled,
                 barracks_ticks=rules.city_upgrades.barracks_ticks,
-                warehouse_ticks=rules.city_upgrades.warehouse_ticks,
-                warehouse_max_level=rules.warehouse.max_level,
-                warehouse_gain_per_level=rules.warehouse.gain_per_level,
                 barracks_charges=rules.city_upgrades.barracks_charges,
-                warehouse_charges=rules.city_upgrades.warehouse_charges,
                 warehouse_province=rules.warehouse.province,
-            ),
-            supply=SupplyPublic(
-                rear_min_max=rules.supply.rear_min_max,
-                rear_min_default=rules.supply.rear_min_default,
-                front_markers=rules.supply.front_markers,
             ),
             vision=VisionPublic(
                 by_terrain=VisionTablePublic(
@@ -428,35 +284,20 @@ class RulesetPublic(WireModel):
                     mountains=SightRowPublic.from_table(rules.vision.by_terrain.mountains),
                 )
             ),
-            factory=None
-            if rules.factory is None
-            else FactoryPublic(
-                capital_period_ticks=rules.factory.capital_period_ticks,
+            factory=FactoryPublic(
                 built_period_ticks=rules.factory.built_period_ticks,
                 cost=rules.factory.cost,
                 build_ticks=rules.factory.build_ticks,
                 max=rules.factory.max,
             ),
-            bunker=None
-            if rules.bunker is None
-            else BunkerPublic(
-                cost=rules.bunker.cost,
-                build_ticks=rules.bunker.build_ticks,
-                shots=rules.bunker.shots,
-            ),
-            fort=None
-            if rules.fort is None
-            else FortPublic(
+            fort=FortPublic(
                 cost=rules.fort.cost,
                 build_ticks=rules.fort.build_ticks,
                 toll_units=rules.fort.toll_units,
                 toll_charges=rules.fort.toll_charges,
             ),
-            supply_model=rules.supply.model,
             supply_dispatch_ticks=rules.supply.dispatch_ticks,
-            stances=None
-            if rules.stances is None
-            else StancesPublic(
+            stances=StancesPublic(
                 cp_period_ticks=StancePeriodsPublic.from_table(rules.stances.cp_period_ticks),
                 capital_period_ticks=StancePeriodsPublic.from_table(
                     rules.stances.capital_period_ticks

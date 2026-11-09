@@ -31,7 +31,7 @@ from gow_sim.view import opaque_id, project
 
 KEY = b"road fortifications test key 32b"
 ROOT = Path(__file__).resolve().parents[3]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
 C, D, M = 3, 4, 8
 ROAD_DC, ROAD_CM = 4, 8
@@ -82,11 +82,8 @@ def test_the_command_on_the_wire() -> None:
 
 def test_the_public_ruleset_carries_the_fort_numbers() -> None:
     public = RulesetPublic.from_ruleset(RULES)
-    assert public.fort is not None
     assert (public.fort.cost, public.fort.build_ticks) == (150, 100)
     assert (public.fort.toll_units, public.fort.toll_charges) == (3, 1)
-    mvp3 = RulesetPublic.from_ruleset(load_ruleset(ROOT / "rulesets" / "mvp-3.toml"))
-    assert mvp3.fort is None
 
 
 def test_the_forts_of_a_snapshot() -> None:
@@ -117,7 +114,7 @@ def test_a_built_fort_has_no_done_tick() -> None:
         RoadFort(node=C, owner=0, built=True, done_tick=10)
 
 
-@pytest.mark.parametrize("name", ["mvp-0", "mvp-3", "mvp-4", "test-short"])
+@pytest.mark.parametrize("name", ["mvp-5", "mvp-6", "mvp-7", "test-short"])
 def test_the_public_ruleset_carries_the_dispatch_period(name: str) -> None:
     """#705: ``supply_dispatch_ticks`` is ``supply.dispatch_ticks`` of the ruleset, so the client's
     countdown ring is exact from the first snapshot."""

@@ -6,8 +6,7 @@
     "match_ticks": 9000,
     "cp": {
       "cap": 500,
-      "per_period": 100,
-      "period_ticks": 50
+      "per_period": 100
     },
     "cost": {
       "move": 100,
@@ -15,16 +14,9 @@
       "cancel": 0,
       "split": 0,
       "merge": 0,
-      "attack": 0,
-      "defense": 200,
-      "build": 50,
       "recruit": 100,
       "stance": 0,
-      "front": 0,
-      "rear_min": 0,
-      "transfer": 0,
-      "barracks": 0,
-      "warehouse": 0
+      "barracks": 0
     },
     "combat": {
       "terrain_defense_mod": {
@@ -32,32 +24,15 @@
         "forest": 0,
         "mountains": 1
       },
-      "planned_bonus_per_edge": 1,
       "round_ticks": 20,
       "shots_per_round": 1,
       "regroup_ticks": 10,
-      "terrain_burn": false,
       "retreat": "round"
     },
     "capture": {
-      "charge_cost": 1
-    },
-    "build": {
-      "ticks_per_level": 150
-    },
-    "economy": {
-      "model": "v2",
-      "stance_to_charges_pct": {
-        "economy": 60,
-        "balance": 50,
-        "war": 40
-      },
-      "charges_per_cp": 2
+      "charge_cost": 0
     },
     "orders": {
-      "planned_delay_ticks": 30,
-      "defense_ticks_per_bonus": 60,
-      "stance_cooldown_ticks": 100,
       "plan_ticks_per_bonus": 30
     },
     "capacity": {
@@ -70,19 +45,9 @@
       "refund_started_pct": 50
     },
     "city_upgrades": {
-      "enabled": true,
       "barracks_ticks": 100,
-      "warehouse_ticks": 100,
-      "warehouse_max_level": 2,
-      "warehouse_gain_per_level": 1,
       "barracks_charges": 3,
-      "warehouse_charges": 2,
       "warehouse_province": 1
-    },
-    "supply": {
-      "rear_min_max": 8,
-      "rear_min_default": 1,
-      "front_markers": 2
     },
     "vision": {
       "by_terrain": {
@@ -104,25 +69,38 @@
       }
     },
     "factory": {
-      "capital_period_ticks": 50,
-      "built_period_ticks": 100,
+      "built_period_ticks": 200,
       "cost": 4,
       "build_ticks": 100,
       "max": 3
     },
-    "bunker": {
-      "cost": 3,
+    "fort": {
+      "cost": 150,
       "build_ticks": 100,
-      "shots": 1
+      "toll_units": 3,
+      "toll_charges": 1
     },
-    "fort": null,
-    "supply_model": "lines",
     "supply_dispatch_ticks": 10,
-    "stances": null
+    "stances": {
+      "cp_period_ticks": {
+        "economy": 200,
+        "balance": 100,
+        "war": 80
+      },
+      "capital_period_ticks": {
+        "economy": 100,
+        "balance": 200,
+        "war": 400
+      },
+      "factories_follow": false
+    }
   },
   "map_id": "diamond",
   "last_seq": 0,
-  "nicks": ["Ember", "Guest"],
+  "nicks": [
+    "Ember",
+    "Guest"
+  ],
   "rated": false,
   "unrated_reason": "casual",
   "calibration": null,

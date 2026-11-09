@@ -1,6 +1,5 @@
-"""The stances of economy v2 on the wire (DEC-44, #772): ``set_stance`` goes through under
-``[stances]``, ``ruleset_public.stances`` carries the table of DEC-44, the own counters are in the
-snapshot and the enemy's never are.
+"""The stances on the wire (DEC-44, #772): ``ruleset_public.stances`` carries the table of DEC-44,
+the own counters are in the snapshot and the enemy's never are.
 
 Expected values come from the table of DEC-44 (mechanics.md, section 6).
 """
@@ -21,19 +20,16 @@ from gow_sim.state import event
 
 KEY = b"stances of economy v2 test key32"
 ROOT = Path(__file__).resolve().parents[3]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4-stances.toml")
-SUP200 = load_ruleset(ROOT / "rulesets" / "mvp-4-sup200.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
 
 
 def test_ruleset_public_carries_the_table() -> None:
     public = RulesetPublic.from_ruleset(RULES)
-    assert public.stances is not None
     cp, capital = public.stances.cp_period_ticks, public.stances.capital_period_ticks
     assert (cp.war, cp.balance, cp.economy) == (80, 100, 200)
     assert (capital.war, capital.balance, capital.economy) == (400, 200, 100)
-    assert public.orders.stance_cooldown_ticks == 0  # no cooldown under the section
-    assert public.stances.factories_follow is False  # no DEC-47 key in mvp-4-stances
+    assert public.stances.factories_follow is False  # no DEC-47 key in mvp-5
 
 
 def test_ruleset_public_tells_that_factories_follow_the_stance() -> None:
@@ -43,14 +39,8 @@ def test_ruleset_public_tells_that_factories_follow_the_stance() -> None:
     rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     match = Match(load_map(ROOT / "maps" / "narrows.json"), rules, KEY)
     public = RulesetPublic.from_ruleset(match.rules)
-    assert public.stances is not None and public.stances.factories_follow is True
+    assert public.stances.factories_follow is True
     assert public.stances.capital_period_ticks.balance == 263
-
-
-def test_ruleset_public_without_the_section() -> None:
-    public = RulesetPublic.from_ruleset(SUP200)
-    assert public.stances is None
-    assert public.orders.stance_cooldown_ticks == SUP200.orders.stance_cooldown_ticks
 
 
 def test_the_snapshot_has_the_own_counters_and_no_enemy_ones() -> None:
@@ -69,11 +59,6 @@ def test_the_snapshot_has_the_own_counters_and_no_enemy_ones() -> None:
     enemy.stance, enemy.cp_ticks, enemy.capital_ticks = Stance.ECONOMY, 55, 66
     assert snapshot_frame(match.view(0)) == frame
     assert snapshot_msg(match.view(0)).view.me == mine
-
-
-def test_the_counters_are_null_without_the_section() -> None:
-    me = view_to_wire(Match(MAP, SUP200, KEY).view(0)).me
-    assert me.cp_ticks is None and me.capital_ticks is None
 
 
 def test_a_stance_change_stays_with_its_owner() -> None:

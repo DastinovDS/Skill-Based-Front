@@ -24,7 +24,7 @@ from gow_sim.ruleset import load_ruleset
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 CLIENT_FIXTURES = sorted((FIXTURES_DIR / "client").glob("*.json"))
 SERVER_FIXTURES = sorted((FIXTURES_DIR / "server").glob("*.json"))
-RULESET_PATH = Path(__file__).resolve().parents[3] / "rulesets" / "mvp-0.toml"
+RULESET_PATH = Path(__file__).resolve().parents[3] / "rulesets" / "mvp-7.toml"
 
 # Message and command types named by PRO-01 (#44) and SIM-04 (#20); ``reach``: DEC-20 (#242).
 CLIENT_TYPES = {
@@ -35,7 +35,6 @@ CLIENT_TYPES = {
     "pause",
     "resume",
     "reach_query",
-    "line_route_query",
 }
 SERVER_TYPES = {
     "welcome",
@@ -47,31 +46,19 @@ SERVER_TYPES = {
     "pong",
     "paused",
     "reach",
-    "line_route",
 }
 COMMAND_TYPES = {
     "move",
     "split",
     "merge",
-    "set_mode",
     "set_stance",
-    "upgrade_road",
     "recruit",
     "cancel_order",
     "cancel_recruit",
     "build_barracks",
-    "upgrade_warehouse",
-    "set_front",
-    "set_rear_min",
-    "transfer",
     "forfeit",
-    # Economy v2 (DEC-41, item 14; #647).
     "build_factory",
-    "build_bunker",
-    "draw_line",
-    "remove_line",
     "release_plan",
-    "set_auto_lines",
     "set_leaf_shift",
     "fortify_road",
 }
@@ -170,10 +157,10 @@ def test_overcrowding_countdown_fields_are_validated() -> None:
         decode(other, attrition_in=5)
 
 
-def test_economy_v2_fields_are_validated() -> None:
-    """DEC-41 (#647): the v2 fields of a node, an order and the lines keep their shape: a rate only
-    for an own factory, a build only for an own node, ``done_tick`` exactly when nothing is owed,
-    a request only while a planned order gathers, a line only over nodes of the map. (Which
+def test_factory_and_plan_fields_are_validated() -> None:
+    """DEC-41 (#647): the factory fields of a node and the plan of an order keep their shape: a
+    rate only for an own factory, a build only for an own city without a factory, ``done_tick``
+    exactly when nothing is owed, a request only while a planned order gathers. (Which
     player a snapshot is for is not in it, so the rule "own only" is the simulation's fog test,
     ``packages/sim/tests/test_dec41_view.py``.)"""
     raw = json.loads((FIXTURES_DIR / "server" / "snapshot.json").read_text())
@@ -193,20 +180,17 @@ def test_economy_v2_fields_are_validated() -> None:
 
     built = {"done_tick": 220, "owed": 0}
     unpaid = {"done_tick": None, "owed": 2}
-    decode(nodes=nodes(own, factory=True, factory_period=50, fort=False, fort_build=unpaid))
-    decode(nodes=nodes(own, factory=False, factory_build=built, fort=True))
-    decode(nodes=nodes(enemy, factory=True, fort=True))  # next to an own node (DEC-31 rule)
-    decode(lines=[{"id": 0, "path": [0, 1]}, {"id": 3, "path": [1, 0]}])
+    decode(nodes=nodes(own, factory=True, factory_period=50))
+    decode(nodes=nodes(own, factory=False, factory_build=built))
+    decode(nodes=nodes(own, factory=False, factory_build=unpaid))
+    decode(nodes=nodes(enemy, factory=True))  # next to an own node (DEC-31 rule)
     decode(groups=order(planned=True, gathering=True, plan=2, next_charge_tick=150))
     bad: list[dict[str, object]] = [
         {"nodes": nodes(own, factory=False, factory_period=50)},
-        {"nodes": nodes(neutral, fort=True)},
-        {"nodes": nodes(own, fort=False, fort_build={"done_tick": None, "owed": 0})},
-        {"nodes": nodes(own, fort=False, fort_build={"done_tick": 10, "owed": 1})},
+        {"nodes": nodes(neutral, factory=True)},
+        {"nodes": nodes(own, factory=False, factory_build={"done_tick": None, "owed": 0})},
+        {"nodes": nodes(own, factory=False, factory_build={"done_tick": 10, "owed": 1})},
         {"nodes": nodes(own, building={"kind": "barracks", "done_tick": None, "owed": 0})},
-        {"lines": [{"id": 0, "path": [0]}]},
-        {"lines": [{"id": 0, "path": [0, 9]}]},
-        {"lines": [{"id": 0, "path": [0, 1]}, {"id": 0, "path": [1, 0]}]},
         {"groups": order(planned=True, gathering=True, plan=2, next_charge_tick=None)},
         {"groups": order(planned=False, gathering=True, plan=2, next_charge_tick=150)},
         {"groups": order(planned=True, gathering=False, plan=2, next_charge_tick=None)},
@@ -297,21 +281,18 @@ def test_hello_fixture_uses_the_current_protocol_version() -> None:
     assert msg.protocol_version == PROTOCOL_VERSION
 
 
-def test_ruleset_public_has_the_stance_table_and_order_delays_of_mvp_0() -> None:
-    """The numbers of the stance menu and of the countdown on order arrows (ui-style 11 and 9.7)."""
+def test_ruleset_public_has_the_stance_table_and_the_plan_pace_of_mvp_7() -> None:
+    """The numbers of the stance menu (DEC-44, DEC-47: the periods of ``rulesets/mvp-7.toml``)
+    and of the gathering of a planned order (DEC-41, item 10)."""
     public = RulesetPublic.from_ruleset(load_ruleset(RULESET_PATH))
-    assert public.economy.model_dump() == {
-        "model": "v1",
-        "stance_to_charges_pct": {"economy": 75, "balance": 50, "war": 25},
-        "charges_per_cp": 2,
+    assert public.stances.model_dump() == {
+        "cp_period_ticks": {"economy": 200, "balance": 100, "war": 80},
+        "capital_period_ticks": {"economy": 100, "balance": 200, "war": 400},
+        "factories_follow": True,
     }
-    assert public.orders.model_dump() == {
-        "planned_delay_ticks": 30,
-        "defense_ticks_per_bonus": 60,
-        "stance_cooldown_ticks": 100,
-        "plan_ticks_per_bonus": 0,
-    }
-    # The overcrowding countdown of ui-style 12 (rulesets/mvp-0.toml, [capacity]).
+    assert public.factory.built_period_ticks is None  # DEC-47: every factory follows the stance
+    assert public.orders.model_dump() == {"plan_ticks_per_bonus": 30}
+    # The overcrowding countdown of ui-style 12 (rulesets/mvp-7.toml, [capacity]).
     assert public.capacity.model_dump() == {"attrition_ticks": 30, "grace_ticks": 50}
 
 
@@ -320,11 +301,7 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
     public = RulesetPublic.from_ruleset(rules)
     assert public.tick_hz == rules.tick_hz
     assert public.match_ticks == rules.match_ticks
-    assert (public.cp.cap, public.cp.per_period, public.cp.period_ticks) == (
-        rules.cp.cap,
-        rules.cp.per_period,
-        rules.cp.period_ticks,
-    )
+    assert (public.cp.cap, public.cp.per_period) == (rules.cp.cap, rules.cp.per_period)
     cost = rules.orders.cost
     assert public.cost.model_dump() == {
         "move": cost.move,
@@ -332,16 +309,9 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
         "cancel": cost.cancel,
         "split": cost.split,
         "merge": cost.merge,
-        "attack": cost.attack,
-        "defense": cost.defense,
-        "build": cost.build,
         "recruit": cost.recruit,
         "stance": cost.stance,
-        "front": cost.front,
-        "rear_min": cost.rear_min,
-        "transfer": cost.transfer,
         "barracks": cost.barracks,
-        "warehouse": cost.warehouse,
     }
     mod = rules.terrain.defense_mod
     assert public.combat.terrain_defense_mod.model_dump() == {
@@ -349,14 +319,19 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
         "forest": mod.forest,
         "mountains": mod.mountains,
     }
-    assert public.combat.planned_bonus_per_edge == rules.orders.planned_bonus_per_edge
-    assert public.orders.defense_ticks_per_bonus == rules.orders.defense_ticks_per_bonus
-    assert public.supply.model_dump() == {  # DEC-28, items 2 and 3: markers, the slider
-        "rear_min_max": rules.supply.rear_min_max,
-        "rear_min_default": rules.supply.rear_min_default,
-        "front_markers": rules.supply.front_markers,
+    assert public.combat.retreat == rules.combat.retreat
+    assert public.supply_dispatch_ticks == rules.supply.dispatch_ticks
+    assert public.city_upgrades.model_dump() == {
+        "barracks_ticks": rules.city_upgrades.barracks_ticks,
+        "barracks_charges": rules.city_upgrades.barracks_charges,
+        "warehouse_province": rules.warehouse.province,
     }
-    assert public.build.model_dump() == {"ticks_per_level": rules.build.ticks_per_level}
+    assert public.fort.model_dump() == {
+        "cost": rules.fort.cost,
+        "build_ticks": rules.fort.build_ticks,
+        "toll_units": rules.fort.toll_units,
+        "toll_charges": rules.fort.toll_charges,
+    }
 
 
 def test_ruleset_public_vision_table_is_dec_21_item_2() -> None:
@@ -374,15 +349,13 @@ def test_ruleset_public_vision_table_is_dec_21_item_2() -> None:
 
 
 def test_ruleset_public_has_the_combat_vector_parameter_names() -> None:
-    """The vectors' ``params`` use the names of ``combat``; the plan bonus is not among them since
-    DEC-29 (it depends on the path, every vector gives its amount), the gathered "Defense" of the
-    rows (``defense_bonus``) is not a ruleset number since DEC-30, and the vectors are the rows of
-    DEC-24 without ``terrain_burn`` (DEC-45) and ``retreat`` (DEC-40: rows 21N and 22N set it)."""
+    """The vectors' ``params`` use the names of ``combat``; the vectors are the rows of DEC-24
+    without ``retreat`` (DEC-40: row 21N sets it)."""
     params = _load(FIXTURES_DIR.parent / "vectors" / "combat.json")["params"]
     assert isinstance(params, dict)
     names = set(cast(dict[str, object], params))
-    public = set(CombatPublic.model_fields) - {"terrain_burn", "retreat"}
-    assert names - {"defense_bonus"} | {"planned_bonus_per_edge"} == public
+    public = set(CombatPublic.model_fields) - {"retreat"}
+    assert names == public
 
 
 def _schema_types(node: object) -> set[str]:

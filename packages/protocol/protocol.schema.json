@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 45,
+    "PROTOCOL_VERSION": 46,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -23,7 +23,7 @@
   "$defs": {
     "AckMsg": {
       "additionalProperties": false,
-      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an\naccepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws\nit and never computes it); ``None`` otherwise.\n``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` (planned delay\nincluded; DEC-22, item 10); for an accepted ``transfer``, the tick the charges reach\n``to_node``; both if nothing stops them; ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20).",
+      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client\ndraws it and never computes it); ``None`` otherwise.\n``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` if nothing\nstops it (the gathering of a planned order included; DEC-22, item 10); ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20).",
       "properties": {
         "type": {
           "const": "ack",
@@ -117,7 +117,7 @@
     },
     "BuildBarracksCmd": {
       "additionalProperties": false,
-      "description": "The own city ``node`` builds the barracks (DEC-26, ``city_upgrades``): then it recruits.",
+      "description": "The own city ``node`` builds the barracks (DEC-26): then it recruits.",
       "properties": {
         "type": {
           "const": "build_barracks",
@@ -137,31 +137,9 @@
       "title": "BuildBarracksCmd",
       "type": "object"
     },
-    "BuildBunkerCmd": {
-      "additionalProperties": false,
-      "description": "The own city or province ``node`` builds a bunker (economy v2, DEC-41, item 12):\n``bunker.cost`` charges by the progressive payment (item 7), no CP.",
-      "properties": {
-        "type": {
-          "const": "build_bunker",
-          "default": "build_bunker",
-          "type": "string"
-        },
-        "node": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "type",
-        "node"
-      ],
-      "title": "BuildBunkerCmd",
-      "type": "object"
-    },
     "BuildFactoryCmd": {
       "additionalProperties": false,
-      "description": "The own city ``node`` builds a factory (economy v2, DEC-41, item 2): ``factory.cost``\ncharges by the progressive payment (item 7), no CP.",
+      "description": "The own city ``node`` builds a factory (DEC-41, item 2): ``factory.cost``\ncharges by the progressive payment (item 7), no CP.",
       "properties": {
         "type": {
           "const": "build_factory",
@@ -182,61 +160,12 @@
       "type": "object"
     },
     "BuildKind": {
-      "description": "What a city builds (DEC-26, item 9): a road level, the barracks or a warehouse level.",
+      "description": "What a city builds in its build slot (DEC-26, item 9): the barracks.",
       "enum": [
-        "road",
-        "barracks",
-        "warehouse"
+        "barracks"
       ],
       "title": "BuildKind",
       "type": "string"
-    },
-    "BuildPublic": {
-      "additionalProperties": false,
-      "description": "Road upgrades (``build`` of the ruleset, DEC-28, item 7): the price is ``cost.build`` per\nlevel, what a level gives is ``upgrade_gain`` of the own edges in the view.",
-      "properties": {
-        "ticks_per_level": {
-          "maximum": 2147483647,
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "ticks_per_level"
-      ],
-      "title": "BuildPublic",
-      "type": "object"
-    },
-    "BunkerPublic": {
-      "additionalProperties": false,
-      "description": "The bunker (``bunker`` of the ruleset, DEC-41, item 12; economy v2 only).",
-      "properties": {
-        "cost": {
-          "description": "Charges ``build_bunker`` pays (progressive payment, item 7).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "build_ticks": {
-          "description": "Ticks from the full payment to the bunker.",
-          "maximum": 2147483647,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "shots": {
-          "description": "Virtual shots of the node's defender in a fight there, if it has a charged unit.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "cost",
-        "build_ticks",
-        "shots"
-      ],
-      "title": "BunkerPublic",
-      "type": "object"
     },
     "Calibration": {
       "additionalProperties": false,
@@ -346,59 +275,30 @@
     },
     "CityUpgradesPublic": {
       "additionalProperties": false,
-      "description": "City development (DEC-26): ``city_upgrades`` and ``warehouse`` of the ruleset.",
+      "description": "The barracks (DEC-26; ``city_upgrades`` of the ruleset) and the warehouse of a province.",
       "properties": {
-        "enabled": {
-          "description": "Off: every city recruits, the warehouse holds the node capacity, no barracks and no\nwarehouse levels (the commands are rejected with ``FEATURE_DISABLED``).",
-          "type": "boolean"
-        },
         "barracks_ticks": {
+          "description": "Ticks from the full payment to the barracks.",
           "maximum": 2147483647,
           "minimum": 1,
-          "type": "integer"
-        },
-        "warehouse_ticks": {
-          "maximum": 2147483647,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "warehouse_max_level": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "warehouse_gain_per_level": {
-          "maximum": 2147483647,
-          "minimum": 0,
           "type": "integer"
         },
         "barracks_charges": {
-          "description": "Economy v2 (DEC-41, item 7): the barracks costs this many charges; 0 under v1.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "warehouse_charges": {
-          "description": "Economy v2: every warehouse level costs this many charges; 0 under v1.",
+          "description": "The barracks costs this many charges (DEC-41, item 7).",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
         },
         "warehouse_province": {
-          "description": "Economy v2 (DEC-41, item 13): the warehouse of every province holds this many charges; 0\nunder v1 (a province has no warehouse).",
+          "description": "The warehouse of every province holds this many charges (DEC-41, item 13).",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
         }
       },
       "required": [
-        "enabled",
         "barracks_ticks",
-        "warehouse_ticks",
-        "warehouse_max_level",
-        "warehouse_gain_per_level",
         "barracks_charges",
-        "warehouse_charges",
         "warehouse_province"
       ],
       "title": "CityUpgradesPublic",
@@ -409,7 +309,6 @@
         "mapping": {
           "command": "#/$defs/CommandMsg",
           "hello": "#/$defs/HelloMsg",
-          "line_route_query": "#/$defs/LineRouteQueryMsg",
           "pause": "#/$defs/PauseMsg",
           "ping": "#/$defs/PingMsg",
           "reach_query": "#/$defs/ReachQueryMsg",
@@ -439,9 +338,6 @@
         },
         {
           "$ref": "#/$defs/ReachQueryMsg"
-        },
-        {
-          "$ref": "#/$defs/LineRouteQueryMsg"
         }
       ]
     },
@@ -450,12 +346,6 @@
       "properties": {
         "terrain_defense_mod": {
           "$ref": "#/$defs/TerrainDefensePublic"
-        },
-        "planned_bonus_per_edge": {
-          "description": "Virtual shots of a planned order per edge of its path, at most the charged units of the\ngroup when it departs (DEC-29).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
         },
         "round_ticks": {
           "description": "Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight.",
@@ -474,10 +364,6 @@
           "minimum": 0,
           "type": "integer"
         },
-        "terrain_burn": {
-          "description": "A negative ``terrain_defense_mod`` burns charges of the defender in the first round instead\nof silencing them in every round (DEC-45).",
-          "type": "boolean"
-        },
         "retreat": {
           "allOf": [
             {
@@ -489,11 +375,9 @@
       },
       "required": [
         "terrain_defense_mod",
-        "planned_bonus_per_edge",
         "round_ticks",
         "shots_per_round",
         "regroup_ticks",
-        "terrain_burn",
         "retreat"
       ],
       "title": "CombatPublic",
@@ -503,28 +387,18 @@
       "discriminator": {
         "mapping": {
           "build_barracks": "#/$defs/BuildBarracksCmd",
-          "build_bunker": "#/$defs/BuildBunkerCmd",
           "build_factory": "#/$defs/BuildFactoryCmd",
           "cancel_order": "#/$defs/CancelOrderCmd",
           "cancel_recruit": "#/$defs/CancelRecruitCmd",
-          "draw_line": "#/$defs/DrawLineCmd",
           "forfeit": "#/$defs/ForfeitCmd",
           "fortify_road": "#/$defs/FortifyRoadCmd",
           "merge": "#/$defs/MergeCmd",
           "move": "#/$defs/MoveCmd",
           "recruit": "#/$defs/RecruitCmd",
           "release_plan": "#/$defs/ReleasePlanCmd",
-          "remove_line": "#/$defs/RemoveLineCmd",
-          "set_auto_lines": "#/$defs/SetAutoLinesCmd",
-          "set_front": "#/$defs/SetFrontCmd",
           "set_leaf_shift": "#/$defs/SetLeafShiftCmd",
-          "set_mode": "#/$defs/SetModeCmd",
-          "set_rear_min": "#/$defs/SetRearMinCmd",
           "set_stance": "#/$defs/SetStanceCmd",
-          "split": "#/$defs/SplitCmd",
-          "transfer": "#/$defs/TransferCmd",
-          "upgrade_road": "#/$defs/UpgradeRoadCmd",
-          "upgrade_warehouse": "#/$defs/UpgradeWarehouseCmd"
+          "split": "#/$defs/SplitCmd"
         },
         "propertyName": "type"
       },
@@ -539,19 +413,10 @@
           "$ref": "#/$defs/MergeCmd"
         },
         {
-          "$ref": "#/$defs/SetModeCmd"
-        },
-        {
           "$ref": "#/$defs/SetStanceCmd"
         },
         {
-          "$ref": "#/$defs/UpgradeRoadCmd"
-        },
-        {
           "$ref": "#/$defs/BuildBarracksCmd"
-        },
-        {
-          "$ref": "#/$defs/UpgradeWarehouseCmd"
         },
         {
           "$ref": "#/$defs/RecruitCmd"
@@ -563,31 +428,10 @@
           "$ref": "#/$defs/CancelOrderCmd"
         },
         {
-          "$ref": "#/$defs/SetFrontCmd"
-        },
-        {
-          "$ref": "#/$defs/SetRearMinCmd"
-        },
-        {
-          "$ref": "#/$defs/TransferCmd"
-        },
-        {
           "$ref": "#/$defs/BuildFactoryCmd"
         },
         {
-          "$ref": "#/$defs/BuildBunkerCmd"
-        },
-        {
           "$ref": "#/$defs/FortifyRoadCmd"
-        },
-        {
-          "$ref": "#/$defs/DrawLineCmd"
-        },
-        {
-          "$ref": "#/$defs/RemoveLineCmd"
-        },
-        {
-          "$ref": "#/$defs/SetAutoLinesCmd"
         },
         {
           "$ref": "#/$defs/SetLeafShiftCmd"
@@ -655,21 +499,6 @@
           "minimum": 0,
           "type": "integer"
         },
-        "attack": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "defense": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "build": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
         "recruit": {
           "maximum": 2147483647,
           "minimum": 0,
@@ -680,32 +509,8 @@
           "minimum": 0,
           "type": "integer"
         },
-        "front": {
-          "description": "``set_front`` (DEC-28, item 2).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "rear_min": {
-          "description": "``set_rear_min`` (DEC-28, item 3).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "transfer": {
-          "description": "``transfer`` (DEC-18, item 6).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
         "barracks": {
-          "description": "``build_barracks`` (DEC-26, item 2).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "warehouse": {
-          "description": "``upgrade_warehouse``, per level (DEC-26, item 3).",
+          "description": "``build_barracks`` (DEC-26, item 2); its charges are ``city_upgrades.barracks_charges``.",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
@@ -717,23 +522,16 @@
         "cancel",
         "split",
         "merge",
-        "attack",
-        "defense",
-        "build",
         "recruit",
         "stance",
-        "front",
-        "rear_min",
-        "transfer",
-        "barracks",
-        "warehouse"
+        "barracks"
       ],
       "title": "CostsPublic",
       "type": "object"
     },
     "CpPublic": {
       "additionalProperties": false,
-      "description": "CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.",
+      "description": "CP: ``per_period`` hundredths per quantum, up to ``cap``; the period of the quantum is\n``stances.cp_period_ticks`` of the own stance.",
       "properties": {
         "cap": {
           "maximum": 2147483647,
@@ -744,17 +542,11 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
-        },
-        "period_ticks": {
-          "maximum": 2147483647,
-          "minimum": 1,
-          "type": "integer"
         }
       },
       "required": [
         "cap",
-        "per_period",
-        "period_ticks"
+        "per_period"
       ],
       "title": "CpPublic",
       "type": "object"
@@ -770,96 +562,6 @@
       "title": "Detail",
       "type": "string"
     },
-    "DrawLineCmd": {
-      "additionalProperties": false,
-      "description": "Draw a supply line along ``path`` (economy v2, DEC-41, items 3 and 6): own nodes, each\nnext one joined by a road, from the source (an own factory or the target of an own line) to\nthe target (an own node with a warehouse). Free; the path is used as drawn while intact.",
-      "properties": {
-        "type": {
-          "const": "draw_line",
-          "default": "draw_line",
-          "type": "string"
-        },
-        "path": {
-          "items": {
-            "maximum": 2147483647,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 128,
-          "minItems": 2,
-          "type": "array"
-        }
-      },
-      "required": [
-        "type",
-        "path"
-      ],
-      "title": "DrawLineCmd",
-      "type": "object"
-    },
-    "EconomyModel": {
-      "description": "``economy.model`` (DEC-41, #642): ``v1`` is the economy of stances, front markers and\ndonors; ``v2`` the economy of factories and drawn supply lines.",
-      "enum": [
-        "v1",
-        "v2"
-      ],
-      "title": "EconomyModel",
-      "type": "string"
-    },
-    "EconomyPublic": {
-      "additionalProperties": false,
-      "description": "The charge production the stance menu shows (``economy`` of the ruleset, DEC-02).",
-      "properties": {
-        "model": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/EconomyModel"
-            }
-          ],
-          "description": "``v1``: stances, front markers, donors (DEC-02, DEC-28); ``v2``: factories and drawn supply\nlines (DEC-41): the commands of the other model are rejected with ``FEATURE_DISABLED``."
-        },
-        "stance_to_charges_pct": {
-          "$ref": "#/$defs/StancePctPublic"
-        },
-        "charges_per_cp": {
-          "description": "Charges per whole CP put into charges.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "model",
-        "stance_to_charges_pct",
-        "charges_per_cp"
-      ],
-      "title": "EconomyPublic",
-      "type": "object"
-    },
-    "EdgeBuild": {
-      "additionalProperties": false,
-      "description": "A road level being built on the edge (DEC-28, item 7).",
-      "properties": {
-        "done_tick": {
-          "anyOf": [
-            {
-              "maximum": 2147483647,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "The tick the level grows; only for an own build."
-        }
-      },
-      "required": [
-        "done_tick"
-      ],
-      "title": "EdgeBuild",
-      "type": "object"
-    },
     "EdgeView": {
       "additionalProperties": false,
       "properties": {
@@ -868,30 +570,13 @@
           "minimum": 0,
           "type": "integer"
         },
-        "width": {
-          "description": "Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is\n``fog``, and always on an own internal edge (DEC-35, detail 5); otherwise in fog the last seen\nlevel, or 1 if never seen. Never above the true level.",
-          "maximum": 3,
-          "minimum": 1,
-          "type": "integer"
-        },
         "detail": {
           "allOf": [
             {
               "$ref": "#/$defs/Detail"
             }
           ],
-          "description": "The road level visibility (DEC-17): ``presence`` while an end is a source of vision (DEC-35;\nthe edge of an own group on it is one), else ``fog``. What is seen of enemies is in\n``halves`` and ``enemy_groups``."
-        },
-        "upgrade_gain": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/UpgradeGain"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Only for own internal edges that can still be upgraded."
+          "description": "The edge visibility (DEC-17): ``presence`` while an end is a source of vision (DEC-35;\nthe edge of an own group on it is one), else ``fog``. What is seen of enemies is in\n``halves`` and ``enemy_groups``."
         },
         "halves": {
           "description": "The half of the end ``a``, then the half of the end ``b`` (DEC-21, item 5).",
@@ -902,17 +587,6 @@
           "minItems": 2,
           "type": "array"
         },
-        "build": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/EdgeBuild"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "The road level being built here (DEC-28, item 7): an own build always, an enemy one only\nwhile the edge is not in fog (DEC-17, item 5)."
-        },
         "enemy_groups": {
           "description": "Enemy figures on the halves not in fog (DEC-33).",
           "items": {
@@ -921,7 +595,7 @@
           "type": "array"
         },
         "forts": {
-          "description": "The road fortifications of its ends the player knows of (DEC-43, item D8), the end ``a``\nfirst; empty without ``ruleset_public.fort``.",
+          "description": "The road fortifications of its ends the player knows of (DEC-43, item D8), the end ``a``\nfirst.",
           "items": {
             "$ref": "#/$defs/RoadFort"
           },
@@ -930,11 +604,8 @@
       },
       "required": [
         "id",
-        "width",
         "detail",
-        "upgrade_gain",
         "halves",
-        "build",
         "enemy_groups",
         "forts"
       ],
@@ -1123,19 +794,20 @@
     },
     "FactoryPublic": {
       "additionalProperties": false,
-      "description": "Factories (``factory`` of the ruleset, DEC-41, item 2; economy v2 only).",
+      "description": "Factories (``factory`` of the ruleset, DEC-41, item 2). The own capital makes one charge\nper ``stances.capital_period_ticks`` of the own stance.",
       "properties": {
-        "capital_period_ticks": {
-          "description": "The own capital makes one charge per this many ticks.",
-          "maximum": 2147483647,
-          "minimum": 1,
-          "type": "integer"
-        },
         "built_period_ticks": {
-          "description": "Every other factory makes one charge per this many ticks.",
-          "maximum": 2147483647,
-          "minimum": 1,
-          "type": "integer"
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Every other factory makes one charge per this many ticks; ``None`` under\n``stances.factories_follow`` (DEC-47): then it follows the stance like the capital."
         },
         "cost": {
           "description": "Charges ``build_factory`` pays (progressive payment, item 7).",
@@ -1157,7 +829,6 @@
         }
       },
       "required": [
-        "capital_period_ticks",
         "built_period_ticks",
         "cost",
         "build_ticks",
@@ -1239,7 +910,7 @@
     },
     "FightView": {
       "additionalProperties": false,
-      "description": "A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.\n\n``point``: twice the meeting position in thousandths from the end ``a`` of the edge\n(0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:\nthe own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this\nfight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.\n``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest\nround of both players, ``None`` before the first one. ``virtual_left``: the virtual shots\n(bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,\nitem 3); it grows when a reinforcement with a bonus joins and drops after each round.\n``mute``: by player, the charged units in the fight that do not shoot in a round because of\nthe terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units;\nunder ``combat.terrain_burn`` the charges the first round will burn, 0 after it (DEC-45).",
+      "description": "A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.\n\n``point``: twice the meeting position in thousandths from the end ``a`` of the edge\n(0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:\nthe own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this\nfight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.\n``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest\nround of both players, ``None`` before the first one. ``virtual_left``: the virtual shots\n(bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,\nitem 3); it grows when a reinforcement with a bonus joins and drops after each round.\n``mute``: by player, the charged units in the fight the first round will burn because of the\nterrain (plains, DEC-45), at most the side's charged units, 0 after it; they do not shoot.",
       "properties": {
         "id": {
           "pattern": "^[A-Za-z0-9_-]{1,32}$",
@@ -1455,7 +1126,7 @@
     },
     "FortifyRoadCmd": {
       "additionalProperties": false,
-      "description": "The own city or province ``node`` fortifies the road ``edge`` leaving it (DEC-43, item D):\n``ruleset_public.fort.cost`` CP. ``NOT_ADJACENT`` when the road does not leave the node,\n``ALREADY_BUILT`` for a second one of the node on that road; ``FEATURE_DISABLED`` when\n``ruleset_public.fort`` is ``null``.",
+      "description": "The own city or province ``node`` fortifies the road ``edge`` leaving it (DEC-43, item D):\n``ruleset_public.fort.cost`` CP. ``NOT_ADJACENT`` when the road does not leave the node,\n``ALREADY_BUILT`` for a second one of the node on that road.",
       "properties": {
         "type": {
           "const": "fortify_road",
@@ -1514,32 +1185,6 @@
               "type": "null"
             }
           ]
-        },
-        "defense_bonus": {
-          "anyOf": [
-            {
-              "maximum": 2147483647,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "In Defense (DEC-30): the bonus the group would bring into a fight beginning now, what it\nhas gathered at most ``defense_cap``; ``None`` in another mode. Enemy groups never have it."
-        },
-        "defense_cap": {
-          "anyOf": [
-            {
-              "maximum": 2147483647,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "In Defense: the cap of its bonus, the charged units of the group (DEC-30, item 2)."
         }
       },
       "required": [
@@ -1548,9 +1193,7 @@
         "charged",
         "mode",
         "location",
-        "order",
-        "defense_bonus",
-        "defense_cap"
+        "order"
       ],
       "title": "GroupView",
       "type": "object"
@@ -1615,17 +1258,16 @@
       "type": "object"
     },
     "IntentKind": {
-      "description": "Publicly visible intent types (DEC-04, DEC-08).",
+      "description": "Publicly visible intent types (DEC-04, DEC-08): the planned order.",
       "enum": [
-        "planned_move",
-        "defense"
+        "planned_move"
       ],
       "title": "IntentKind",
       "type": "string"
     },
     "IntentView": {
       "additionalProperties": false,
-      "description": "Public part of a planned order or a mode switch: no group id and no group size.",
+      "description": "Public part of a planned order: no group id and no group size.",
       "properties": {
         "id": {
           "pattern": "^[A-Za-z0-9_-]{1,32}$",
@@ -1653,7 +1295,7 @@
               "type": "null"
             }
           ],
-          "description": "``None`` for an intent without a destination (``defense``)."
+          "description": "The target of the planned order (always set; nullable on the wire until the client\ncleanup of #894)."
         },
         "created_tick": {
           "maximum": 2147483647,
@@ -1670,103 +1312,6 @@
         "created_tick"
       ],
       "title": "IntentView",
-      "type": "object"
-    },
-    "LineRouteMsg": {
-      "additionalProperties": false,
-      "description": "Answer to ``line_route_query``, computed by the server on the state after tick ``tick``\n(#665): the fastest path over own nodes through ``points`` in order, each leg avoiding the\nnodes of the legs before it (the sum of the packet times, ties by ``node_key``). ``path`` is\nempty when a point is not own, repeated or out of range, or a leg has no way. Only own nodes\nare on a path. The rules of ``draw_line`` (source, limit, cycle) are not checked here.",
-      "properties": {
-        "type": {
-          "const": "line_route",
-          "default": "line_route",
-          "type": "string"
-        },
-        "points": {
-          "description": "The points of the query, as asked: the client matches the answer by them.",
-          "items": {
-            "maximum": 2147483647,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "tick": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "path": {
-          "description": "``(points[0], ..., points[-1])`` or ``()``.",
-          "items": {
-            "maximum": 2147483647,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "type",
-        "points",
-        "tick",
-        "path"
-      ],
-      "title": "LineRouteMsg",
-      "type": "object"
-    },
-    "LineRouteQueryMsg": {
-      "additionalProperties": false,
-      "description": "Ask for the suggested path of a supply line through ``points`` (economy v2, DEC-41,\nitem 6; owner decision 2026-10-31, #665): the source, the nodes to route through, the target.\n\nThe answer is ``line_route``. The interface sends it when the player clicks the target or a\nnode to route through; the connection's message rate limit covers it like every other\nmessage. The suggestion is only a default: the player confirms it with ``draw_line``.",
-      "properties": {
-        "type": {
-          "const": "line_route_query",
-          "default": "line_route_query",
-          "type": "string"
-        },
-        "points": {
-          "items": {
-            "maximum": 2147483647,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 128,
-          "minItems": 2,
-          "type": "array"
-        }
-      },
-      "required": [
-        "type",
-        "points"
-      ],
-      "title": "LineRouteQueryMsg",
-      "type": "object"
-    },
-    "LineView": {
-      "additionalProperties": false,
-      "description": "An own supply line (economy v2, DEC-41, items 3 and 6). The enemy's are never sent.",
-      "properties": {
-        "id": {
-          "description": "The per-player id of the line (``remove_line``, the ``line`` of ``line_cut`` and\n``line_rerouted``); only its owner ever sees it.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "path": {
-          "description": "The own nodes from the source to the target: the drawn path while it is intact, the\nserver's reroute after a break (item 3).",
-          "items": {
-            "maximum": 2147483647,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "minItems": 2,
-          "type": "array"
-        }
-      },
-      "required": [
-        "id",
-        "path"
-      ],
-      "title": "LineView",
       "type": "object"
     },
     "Location": {
@@ -2222,10 +1767,9 @@
       "type": "object"
     },
     "Mode": {
-      "description": "Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16).",
+      "description": "Group mode (mechanics.md, section 3). \"Defense\" was removed with economy v1 (DEC-41,\nitem 5; #894): every group attacks.",
       "enum": [
-        "attack",
-        "defense"
+        "attack"
       ],
       "title": "Mode",
       "type": "string"
@@ -2248,12 +1792,12 @@
           "type": "integer"
         },
         "planned": {
-          "description": "Planned order (DEC-08): visible to everyone as an intent. Economy v1: costlier, starts\nafter a delay. Economy v2 (DEC-41, item 10): the price of a move, the group waits and gathers\n``bonus``.",
+          "description": "Planned order (DEC-08): visible to everyone as an intent; the group waits and gathers\n``bonus`` (DEC-41, item 10).",
           "type": "boolean"
         },
         "bonus": {
           "default": 0,
-          "description": "Economy v2, a planned order only: the requested attack bonus, at least 1. An ordinary\norder and any order under v1 give 0; otherwise ``INVALID_ARGUMENT``.",
+          "description": "A planned order only: the requested attack bonus, at least 1. An ordinary order gives 0;\notherwise ``INVALID_ARGUMENT``.",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
@@ -2271,7 +1815,7 @@
     },
     "NodeBuilding": {
       "additionalProperties": false,
-      "description": "The current build of an own city, of any kind (DEC-26, item 10).",
+      "description": "The current build of an own city (DEC-26, item 10).",
       "properties": {
         "kind": {
           "allOf": [
@@ -2279,7 +1823,7 @@
               "$ref": "#/$defs/BuildKind"
             }
           ],
-          "description": "``barracks`` or ``warehouse`` (roads are built on edges, ``EdgeView.build``)."
+          "description": "``barracks``."
         },
         "done_tick": {
           "anyOf": [
@@ -2292,10 +1836,10 @@
               "type": "null"
             }
           ],
-          "description": "The tick it ends, if nothing interrupts it; ``None`` while ``owed`` is above 0 (economy\nv2, DEC-41, item 7: the build time starts in the tick of the full payment)."
+          "description": "The tick it ends, if nothing interrupts it; ``None`` while ``owed`` is above 0 (DEC-41,\nitem 7: the build time starts in the tick of the full payment)."
         },
         "owed": {
-          "description": "Economy v2: the charges the build still takes from the city's warehouse and the own\ngroups standing there (the progressive payment of DEC-41, item 7); always 0 under v1.",
+          "description": "The charges the build still takes from the city's warehouse and the own groups standing\nthere (the progressive payment of DEC-41, item 7).",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
@@ -2409,7 +1953,7 @@
               "type": "null"
             }
           ],
-          "description": "Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8). ``None``\nfor every other node."
+          "description": "Own node of a starving pocket only: ticks until its garrison next starves (DEC-19, item 8;\nDEC-43, item H4). ``None`` for every other node."
         },
         "recruit_queue": {
           "anyOf": [
@@ -2457,20 +2001,7 @@
               "type": "null"
             }
           ],
-          "description": "Own city: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities with\nthe barracks, without it every city). A city of the enemy joined by an edge of the map to any\nown node, at any ``detail`` (DEC-31): its barracks are built (``false`` while there are none\nor they are being built; no memory). ``None`` for provinces, neutral nodes and the other\ncities of the enemy (DEC-26, item 10)."
-        },
-        "warehouse_level": {
-          "anyOf": [
-            {
-              "maximum": 2147483647,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Own city only: warehouse upgrades (DEC-26, item 2; always 0 without ``city_upgrades``)."
+          "description": "Own city: it may recruit (DEC-26: the capital and the cities with the barracks). A city of\nthe enemy joined by an edge of the map to any own node, at any ``detail`` (DEC-31): its barracks\nare built (``false`` while there are none or they are being built; no memory). ``None`` for\nprovinces, neutral nodes and the other cities of the enemy (DEC-26, item 10)."
         },
         "warehouse_cap": {
           "anyOf": [
@@ -2483,7 +2014,7 @@
               "type": "null"
             }
           ],
-          "description": "Own city only: charges its warehouse holds (DEC-26, item 2; the node capacity without\n``city_upgrades``)."
+          "description": "Own city only: charges its warehouse holds (DEC-43, item C)."
         },
         "building": {
           "anyOf": [
@@ -2494,7 +2025,7 @@
               "type": "null"
             }
           ],
-          "description": "Own city only: its current build of any kind; ``None`` without one."
+          "description": "Own city only: its current build; ``None`` without one."
         },
         "factory": {
           "anyOf": [
@@ -2505,7 +2036,7 @@
               "type": "null"
             }
           ],
-          "description": "Economy v2 (DEC-41, item 2): an own city is an own factory; a city of the enemy joined by\nan edge of the map to any own node (the DEC-31 rule, no memory): it is a built factory of the\nenemy. ``None`` under v1, for provinces, neutral nodes and the other cities of the enemy."
+          "description": "DEC-41, item 2: an own city is an own factory; a city of the enemy joined by an edge of the\nmap to any own node (the DEC-31 rule, no memory): it is a built factory of the enemy. ``None``\nfor provinces, neutral nodes and the other cities of the enemy."
         },
         "factory_period": {
           "anyOf": [
@@ -2518,7 +2049,7 @@
               "type": "null"
             }
           ],
-          "description": "Own factory only: ticks per charge it makes into its warehouse (the own capital\n``factory.capital_period_ticks``, any other ``factory.built_period_ticks``; under\n``ruleset_public.stances`` the own capital the period of the own stance, and with\n``stances.factories_follow`` (DEC-47) every other factory too)."
+          "description": "Own factory only: ticks per charge it makes into its warehouse (the own capital the period\nof the own stance, ``ruleset_public.stances``; any other ``factory.built_period_ticks``, with\n``stances.factories_follow`` (DEC-47) the period of the stance too)."
         },
         "factory_build": {
           "anyOf": [
@@ -2529,29 +2060,7 @@
               "type": "null"
             }
           ],
-          "description": "Own city only: the factory being built there (economy v2)."
-        },
-        "fort": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Economy v2 (DEC-41, item 12, the bunker; code name ``fort``): an own node, a city or a\nprovince, has a bunker; a node of the enemy joined by an edge to any own node (the DEC-31\nrule): it has a built bunker. ``None`` under v1, for neutral nodes and the other nodes of the\nenemy."
-        },
-        "fort_build": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SiteBuild"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Own node only: the bunker being built there (economy v2)."
+          "description": "Own city only: the factory being built there."
         },
         "front_dist": {
           "anyOf": [
@@ -2564,7 +2073,7 @@
               "type": "null"
             }
           ],
-          "description": "Supply flow (DEC-43, item E), own node only: the effective field ``d`` of the current\ntick, the roads to the nearest leaf after the pull of a tired army; ``null`` without a field,\nfor every other node and under ``supply_model = \"lines\"``. The level is\n``front_dist == View.me.leaf_shift``, ahead of it ``front_dist < leaf_shift``."
+          "description": "Supply flow (DEC-43, item E), own node only: the effective field ``d`` of the current\ntick, the roads to the nearest leaf after the pull of a tired army; ``null`` without a field\nand for every other node. The level is\n``front_dist == View.me.leaf_shift``, ahead of it ``front_dist < leaf_shift``."
         },
         "flow_down": {
           "anyOf": [
@@ -2629,7 +2138,7 @@
               "type": "null"
             }
           ],
-          "description": "The terrain effect the defender of the node would get if attacked now (DEC-24, item F2;\n#791): positive, the bonus shots of mountains; negative, the charges plains silence (under\n``combat.terrain_burn`` burn in the first round). Only for a node with an owner, no fight,\na terrain effect and a charged group of the owner standing in it; for a node of the enemy only\nat ``exact``. ``null`` otherwise: an attacker, a discharged group, a road and a neutral node\nnever carry it. The client draws it as is (AGENTS.md 7.1)."
+          "description": "The terrain effect the defender of the node would get if attacked now (DEC-24, item F2;\n#791): positive, the bonus shots of mountains; negative, the charges plains burn in the first\nround (DEC-45). Only for a node with an owner, no fight,\na terrain effect and a charged group of the owner standing in it; for a node of the enemy only\nat ``exact``. ``null`` otherwise: an attacker, a discharged group, a road and a neutral node\nnever carry it. The client draws it as is (AGENTS.md 7.1)."
         }
       },
       "required": [
@@ -2646,14 +2155,11 @@
         "recruit_progress",
         "recruit_waiting",
         "has_barracks",
-        "warehouse_level",
         "warehouse_cap",
         "building",
         "factory",
         "factory_period",
         "factory_build",
-        "fort",
-        "fort_build",
         "front_dist",
         "flow_down",
         "flow_next",
@@ -2721,13 +2227,13 @@
           "type": "boolean"
         },
         "bonus": {
-          "description": "A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,\nat most the charged units of the group). Before the departure a forecast by the charged units\nnow; the cap is taken in the departure tick. 0 for a normal order and once the bonus entered\na fight. Only own orders exist in a view (owner 2026-10-21, mockup #339). Economy v2 (DEC-41,\nitem 10): the bonus gathered so far.",
+          "description": "A planned order: the bonus gathered so far (DEC-41, item 10), at most the charged units of\nthe group; the cap is taken again in the departure tick (DEC-29). 0 for a normal order and\nonce the bonus entered a fight. Only own orders exist in a view (owner 2026-10-21, mockup\n#339).",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
         },
         "gathering": {
-          "description": "Economy v2: the planned order waits in its node and gathers its bonus, one real charge of\nthe node's warehouse per ``orders.plan_ticks_per_bonus`` ticks (``release_plan`` departs at\nonce with what it has).",
+          "description": "The planned order waits in its node and gathers its bonus, one real charge of\nthe node's warehouse per ``orders.plan_ticks_per_bonus`` ticks (``release_plan`` departs at\nonce with what it has).",
           "type": "boolean"
         },
         "plan": {
@@ -2764,36 +2270,16 @@
     },
     "OrdersPublic": {
       "additionalProperties": false,
-      "description": "Delays of planned orders, the growth of Defense and the stance cooldown (``orders``).",
+      "description": "Planned orders (``orders`` of the ruleset).",
       "properties": {
-        "planned_delay_ticks": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "defense_ticks_per_bonus": {
-          "description": "Defense gains one virtual shot per this many ticks in the mode, at most the charged units\nof the group when a fight begins (DEC-30).",
+        "plan_ticks_per_bonus": {
+          "description": "A gathering planned order takes one charge and gains one bonus per this many ticks\n(DEC-41, item 10).",
           "maximum": 2147483647,
           "minimum": 1,
-          "type": "integer"
-        },
-        "stance_cooldown_ticks": {
-          "description": "Ticks between two stance changes; 0 under ``stances`` (DEC-44: no cooldown).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "plan_ticks_per_bonus": {
-          "description": "Economy v2 (DEC-41, item 10): a gathering planned order takes one charge and gains one\nbonus per this many ticks; 0 under v1.",
-          "maximum": 2147483647,
-          "minimum": 0,
           "type": "integer"
         }
       },
       "required": [
-        "planned_delay_ticks",
-        "defense_ticks_per_bonus",
-        "stance_cooldown_ticks",
         "plan_ticks_per_bonus"
       ],
       "title": "OrdersPublic",
@@ -2801,7 +2287,7 @@
     },
     "PacketView": {
       "additionalProperties": false,
-      "description": "Own charges on the way along a path of roads (mechanics.md, section 7; DEC-18, item 5).\n\n``edge`` is the current road, travelled away from ``from_node`` during\n``depart_tick..arrive_tick``; ``path``: the nodes still to reach, the end of ``edge`` first,\nthe destination last; ``dest_tick``: the tick it reaches the destination if nothing stops it.\n``transfer``: a one-off transfer (DEC-18, item 6), not the automatic dispatch.",
+      "description": "Own charges on the way along a path of roads (mechanics.md, section 7; DEC-18, item 5).\n\n``edge`` is the current road, travelled away from ``from_node`` during\n``depart_tick..arrive_tick``; ``path``: the nodes still to reach, the end of ``edge`` first,\nthe destination last; ``dest_tick``: the tick it reaches the destination if nothing stops it.",
       "properties": {
         "id": {
           "pattern": "^[A-Za-z0-9_-]{1,32}$",
@@ -2845,9 +2331,6 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
-        },
-        "transfer": {
-          "type": "boolean"
         }
       },
       "required": [
@@ -2858,8 +2341,7 @@
         "depart_tick",
         "arrive_tick",
         "path",
-        "dest_tick",
-        "transfer"
+        "dest_tick"
       ],
       "title": "PacketView",
       "type": "object"
@@ -3176,7 +2658,7 @@
     },
     "ReleasePlanCmd": {
       "additionalProperties": false,
-      "description": "The own group waiting on a gathering planned order departs now with the bonus gathered so\nfar, free (economy v2, DEC-41, item 10).",
+      "description": "The own group waiting on a gathering planned order departs now with the bonus gathered so\nfar, free (DEC-41, item 10).",
       "properties": {
         "type": {
           "const": "release_plan",
@@ -3193,28 +2675,6 @@
         "group"
       ],
       "title": "ReleasePlanCmd",
-      "type": "object"
-    },
-    "RemoveLineCmd": {
-      "additionalProperties": false,
-      "description": "Remove the own line ``line`` (``View.lines[].id``; economy v2, DEC-41, item 3). Free.",
-      "properties": {
-        "type": {
-          "const": "remove_line",
-          "default": "remove_line",
-          "type": "string"
-        },
-        "line": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "type",
-        "line"
-      ],
-      "title": "RemoveLineCmd",
       "type": "object"
     },
     "ResumeMsg": {
@@ -3322,12 +2782,6 @@
         "capture": {
           "$ref": "#/$defs/CapturePublic"
         },
-        "build": {
-          "$ref": "#/$defs/BuildPublic"
-        },
-        "economy": {
-          "$ref": "#/$defs/EconomyPublic"
-        },
         "orders": {
           "$ref": "#/$defs/OrdersPublic"
         },
@@ -3340,69 +2794,23 @@
         "city_upgrades": {
           "$ref": "#/$defs/CityUpgradesPublic"
         },
-        "supply": {
-          "$ref": "#/$defs/SupplyPublic"
-        },
         "vision": {
           "$ref": "#/$defs/VisionPublic"
         },
         "factory": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FactoryPublic"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Economy v2 only; ``None`` under v1."
-        },
-        "bunker": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/BunkerPublic"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Economy v2 with a ``[bunker]`` section only; ``None`` under v1 and in ``mvp-4`` (DEC-43,\nitem D1: ``build_bunker`` is rejected with ``FEATURE_DISABLED``)."
+          "$ref": "#/$defs/FactoryPublic"
         },
         "fort": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FortPublic"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Road fortifications: a ``[fort]`` section only (``mvp-4``, DEC-43, item D); ``None``\notherwise (``fortify_road`` is rejected with ``FEATURE_DISABLED``)."
-        },
-        "supply_model": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/SupplyModel"
-            }
-          ],
-          "description": "``supply.model`` (DEC-43): ``flow`` is the automatic supply flow with the leaf shift\n(``set_leaf_shift``; the line commands are rejected with ``FEATURE_DISABLED``); ``lines``\notherwise."
+          "$ref": "#/$defs/FortPublic"
         },
         "supply_dispatch_ticks": {
-          "description": "``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it\n(DEC-43, item A6; the same period drives the lines of DEC-41 and the v1 supply), so the\ncountdown to ``View.me.next_dispatch_tick`` is exact from the first snapshot (#705).",
+          "description": "``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it\n(DEC-43, item A6), so the countdown to ``View.me.next_dispatch_tick`` is exact from the first\nsnapshot (#705).",
           "maximum": 2147483647,
           "minimum": 1,
           "type": "integer"
         },
         "stances": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StancesPublic"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Stances of economy v2: a ``[stances]`` section only (DEC-44); ``None`` otherwise (under v2\n``set_stance`` is then rejected with ``FEATURE_DISABLED``)."
+          "$ref": "#/$defs/StancesPublic"
         }
       },
       "required": [
@@ -3412,18 +2820,13 @@
         "cost",
         "combat",
         "capture",
-        "build",
-        "economy",
         "orders",
         "capacity",
         "recruit",
         "city_upgrades",
-        "supply",
         "vision",
         "factory",
-        "bunker",
         "fort",
-        "supply_model",
         "supply_dispatch_ticks",
         "stances"
       ],
@@ -3446,7 +2849,7 @@
           "items": {
             "$ref": "#/$defs/Mode"
           },
-          "maxItems": 2,
+          "maxItems": 1,
           "type": "array"
         },
         "enemy_units": {
@@ -3507,39 +2910,6 @@
         "stance": {
           "$ref": "#/$defs/Stance"
         },
-        "fronts": {
-          "description": "The own cities of the front markers (DEC-28, item 2; ``supply.front_markers`` of\n``ruleset_public``), ``null``: not placed. The enemy's markers are never in a view.",
-          "items": {
-            "anyOf": [
-              {
-                "maximum": 2147483647,
-                "minimum": 0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "type": "array"
-        },
-        "rear_min": {
-          "description": "The own rear minimum (DEC-28, item 3); the enemy's is never in a view.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "auto_lines": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Economy v2: the own lines extend to captured cities by themselves (``set_auto_lines``,\n#665); ``null`` under v1 and the supply flow. The enemy's toggle is never in a view."
-        },
         "leaf_shift": {
           "anyOf": [
             {
@@ -3551,7 +2921,7 @@
               "type": "null"
             }
           ],
-          "description": "Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``);\n``null`` under ``supply_model = \"lines\"``. The enemy's shift is never in a view."
+          "description": "Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``); always set\n(nullable on the wire until the client cleanup of #894). The enemy's shift is never in a\nview."
         },
         "leaf_shift_max": {
           "anyOf": [
@@ -3590,7 +2960,7 @@
               "type": "null"
             }
           ],
-          "description": "Stances of economy v2 (DEC-44): the ticks since the own last CP quantum, of\n``ruleset_public.stances.cp_period_ticks``; ``null`` without ``stances``. The enemy's\ncounters are never in a view."
+          "description": "Stances (DEC-44): the ticks since the own last CP quantum, of\n``ruleset_public.stances.cp_period_ticks``; always set. The enemy's counters are never in a\nview."
         },
         "capital_ticks": {
           "anyOf": [
@@ -3603,15 +2973,12 @@
               "type": "null"
             }
           ],
-          "description": "Stances of economy v2: the ticks since the last quantum of the own capital, of\n``ruleset_public.stances.capital_period_ticks``."
+          "description": "Stances: the ticks since the last quantum of the own capital, of\n``ruleset_public.stances.capital_period_ticks``."
         }
       },
       "required": [
         "cp",
         "stance",
-        "fronts",
-        "rear_min",
-        "auto_lines",
         "leaf_shift",
         "leaf_shift_max",
         "next_dispatch_tick",
@@ -3627,7 +2994,6 @@
           "ack": "#/$defs/AckMsg",
           "error": "#/$defs/ErrorMsg",
           "event": "#/$defs/EventMsg",
-          "line_route": "#/$defs/LineRouteMsg",
           "match_end": "#/$defs/MatchEndMsg",
           "paused": "#/$defs/PausedMsg",
           "pong": "#/$defs/PongMsg",
@@ -3664,70 +3030,12 @@
         },
         {
           "$ref": "#/$defs/ReachMsg"
-        },
-        {
-          "$ref": "#/$defs/LineRouteMsg"
         }
       ]
     },
-    "SetAutoLinesCmd": {
-      "additionalProperties": false,
-      "description": "Turn the auto-extension of the own lines on or off (economy v2, DEC-41, owner decision\n2026-10-31, #665): with it on, a city the player captures gets a line from the nearest own\nsource by itself. Free; ``NO_CHANGE`` when it is already so (``View.me.auto_lines``).",
-      "properties": {
-        "type": {
-          "const": "set_auto_lines",
-          "default": "set_auto_lines",
-          "type": "string"
-        },
-        "on": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "type",
-        "on"
-      ],
-      "title": "SetAutoLinesCmd",
-      "type": "object"
-    },
-    "SetFrontCmd": {
-      "additionalProperties": false,
-      "description": "Put the front marker ``marker`` (``0..supply.front_markers - 1`` of ``ruleset_public``,\nchecked by the simulation) on the own city ``node``; ``node = null`` takes it off the map\n(DEC-28, item 2). Free (``cost.front``).",
-      "properties": {
-        "type": {
-          "const": "set_front",
-          "default": "set_front",
-          "type": "string"
-        },
-        "marker": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "node": {
-          "anyOf": [
-            {
-              "maximum": 2147483647,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "type",
-        "marker",
-        "node"
-      ],
-      "title": "SetFrontCmd",
-      "type": "object"
-    },
     "SetLeafShiftCmd": {
       "additionalProperties": false,
-      "description": "The own leaf shift (DEC-43, item B2): the level of the supply flow moves ``shift`` roads\nback from the front, ``0..View.me.leaf_shift_max``; the range is checked by the simulation\n(``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public; only under\n``supply_model = \"flow\"`` (``FEATURE_DISABLED`` otherwise).",
+      "description": "The own leaf shift (DEC-43, item B2): the level of the supply flow moves ``shift`` roads\nback from the front, ``0..View.me.leaf_shift_max``; the range is checked by the simulation\n(``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public.",
       "properties": {
         "type": {
           "const": "set_leaf_shift",
@@ -3745,52 +3053,6 @@
         "shift"
       ],
       "title": "SetLeafShiftCmd",
-      "type": "object"
-    },
-    "SetModeCmd": {
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "const": "set_mode",
-          "default": "set_mode",
-          "type": "string"
-        },
-        "group": {
-          "pattern": "^[A-Za-z0-9_-]{1,32}$",
-          "type": "string"
-        },
-        "mode": {
-          "$ref": "#/$defs/Mode"
-        }
-      },
-      "required": [
-        "type",
-        "group",
-        "mode"
-      ],
-      "title": "SetModeCmd",
-      "type": "object"
-    },
-    "SetRearMinCmd": {
-      "additionalProperties": false,
-      "description": "The own rear minimum ``n``, ``0..supply.rear_min_max`` of ``ruleset_public`` (DEC-28,\nitem 3); the range is checked by the simulation (``INVALID_ARGUMENT``).",
-      "properties": {
-        "type": {
-          "const": "set_rear_min",
-          "default": "set_rear_min",
-          "type": "string"
-        },
-        "n": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "type",
-        "n"
-      ],
-      "title": "SetRearMinCmd",
       "type": "object"
     },
     "SetStanceCmd": {
@@ -3846,7 +3108,7 @@
     },
     "SiteBuild": {
       "additionalProperties": false,
-      "description": "A factory (DEC-41, item 2) or a bunker (item 12) being built in an own node.",
+      "description": "A factory being built in an own city (DEC-41, item 2).",
       "properties": {
         "done_tick": {
           "anyOf": [
@@ -3929,7 +3191,7 @@
       "type": "object"
     },
     "Stance": {
-      "description": "CP stance: the share of CP regeneration that goes into charges (DEC-02); under ``[stances]``\nof economy v2 the rate of the CP income and of the own capital (DEC-44).",
+      "description": "The stance of a player (DEC-44): the rate of the CP income and of the own capital (with\n``stances.factories_follow``, DEC-47, of every factory).",
       "enum": [
         "economy",
         "balance",
@@ -3937,34 +3199,6 @@
       ],
       "title": "Stance",
       "type": "string"
-    },
-    "StancePctPublic": {
-      "additionalProperties": false,
-      "description": "``economy.stance_to_charges_pct``: the share of the CP quantum put into charges, in %.",
-      "properties": {
-        "economy": {
-          "maximum": 100,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "balance": {
-          "maximum": 100,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "war": {
-          "maximum": 100,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "economy",
-        "balance",
-        "war"
-      ],
-      "title": "StancePctPublic",
-      "type": "object"
     },
     "StancePeriodsPublic": {
       "additionalProperties": false,
@@ -3996,7 +3230,7 @@
     },
     "StancesPublic": {
       "additionalProperties": false,
-      "description": "Stances of economy v2 with local progress (``stances`` of the ruleset, DEC-44).",
+      "description": "Stances with local progress (``stances`` of the ruleset, DEC-44).",
       "properties": {
         "cp_period_ticks": {
           "allOf": [
@@ -4027,46 +3261,6 @@
       "title": "StancesPublic",
       "type": "object"
     },
-    "SupplyModel": {
-      "description": "``supply.model`` (DEC-43, #697; economy v2 only): ``lines`` is the supply of drawn lines\n(DEC-41, DEC-42); ``flow`` the automatic flow towards the front with the leaf shift.",
-      "enum": [
-        "lines",
-        "flow"
-      ],
-      "title": "SupplyModel",
-      "type": "string"
-    },
-    "SupplyPublic": {
-      "additionalProperties": false,
-      "description": "The supply settings of a player (DEC-28): the range of the rear minimum slider.",
-      "properties": {
-        "rear_min_max": {
-          "description": "``set_rear_min`` accepts ``0..rear_min_max``.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "rear_min_default": {
-          "description": "The rear minimum every player starts with.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "front_markers": {
-          "description": "Front markers of a player: ``set_front`` accepts ``marker`` ``0..front_markers - 1``.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "rear_min_max",
-        "rear_min_default",
-        "front_markers"
-      ],
-      "title": "SupplyPublic",
-      "type": "object"
-    },
     "Terrain": {
       "enum": [
         "plains",
@@ -4078,7 +3272,7 @@
     },
     "TerrainDefensePublic": {
       "additionalProperties": false,
-      "description": "``terrain.defense_mod``: charges added to the node defender's pool; may be negative.",
+      "description": "``terrain.defense_mod``: charges added to the node defender's pool; a negative value burns\nthat many of its charges at the start of the first round (DEC-45).",
       "properties": {
         "plains": {
           "maximum": 2147483647,
@@ -4102,40 +3296,6 @@
         "mountains"
       ],
       "title": "TerrainDefensePublic",
-      "type": "object"
-    },
-    "TransferCmd": {
-      "additionalProperties": false,
-      "description": "Ship ``n`` charges from the warehouse of the own city ``from_node`` to the own city\n``to_node`` along own roads, once (DEC-18, item 6). The ``ack`` carries the path and the\narrival tick; the client never computes them.",
-      "properties": {
-        "type": {
-          "const": "transfer",
-          "default": "transfer",
-          "type": "string"
-        },
-        "from_node": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "to_node": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "n": {
-          "maximum": 2147483647,
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "type",
-        "from_node",
-        "to_node",
-        "n"
-      ],
-      "title": "TransferCmd",
       "type": "object"
     },
     "UnitsRange": {
@@ -4179,81 +3339,6 @@
       ],
       "title": "UnratedReason",
       "type": "string"
-    },
-    "UpgradeGain": {
-      "additionalProperties": false,
-      "description": "What the next road level would give (DEC-28, item 7).",
-      "properties": {
-        "speed_pct": {
-          "description": "Packet speed gain in percentage points.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "unit_speed_pct": {
-          "description": "Unit speed gain in percentage points (``road.speed_pct``).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "amount": {
-          "description": "Gain of charges per dispatch period (``supply.amount_by_level``).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "speed_pct",
-        "unit_speed_pct",
-        "amount"
-      ],
-      "title": "UpgradeGain",
-      "type": "object"
-    },
-    "UpgradeRoadCmd": {
-      "additionalProperties": false,
-      "description": "Raise the own internal road ``edge`` by one level for ``cost.build`` CP (DEC-28, item 7);\nno city pays or builds it.",
-      "properties": {
-        "type": {
-          "const": "upgrade_road",
-          "default": "upgrade_road",
-          "type": "string"
-        },
-        "edge": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "type",
-        "edge"
-      ],
-      "title": "UpgradeRoadCmd",
-      "type": "object"
-    },
-    "UpgradeWarehouseCmd": {
-      "additionalProperties": false,
-      "description": "The own city ``node`` raises its warehouse by one level (DEC-26, item 3).",
-      "properties": {
-        "type": {
-          "const": "upgrade_warehouse",
-          "default": "upgrade_warehouse",
-          "type": "string"
-        },
-        "node": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "type",
-        "node"
-      ],
-      "title": "UpgradeWarehouseCmd",
-      "type": "object"
     },
     "View": {
       "additionalProperties": false,
@@ -4310,13 +3395,6 @@
             "$ref": "#/$defs/FightView"
           },
           "type": "array"
-        },
-        "lines": {
-          "description": "Economy v2: the own supply lines by id (DEC-41, item 3); empty under v1.",
-          "items": {
-            "$ref": "#/$defs/LineView"
-          },
-          "type": "array"
         }
       },
       "required": [
@@ -4327,8 +3405,7 @@
         "groups",
         "packets",
         "intents",
-        "fights",
-        "lines"
+        "fights"
       ],
       "title": "View",
       "type": "object"

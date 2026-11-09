@@ -89,10 +89,10 @@ BAD_CLIENT_FRAMES: dict[str, str | bytes] = {
     "merge one group": _cmd(type="merge", groups=["g1"]),
     "merge duplicate groups": _cmd(type="merge", groups=["g1", "g1"]),
     "merge too many groups": _cmd(type="merge", groups=[f"g{i}" for i in range(17)]),
-    "set_mode unknown mode": _cmd(type="set_mode", group="g1", mode="sleep"),
-    "set_mode upper-case mode": _cmd(type="set_mode", group="g1", mode="ATTACK"),
+    "removed command set_mode": _cmd(type="set_mode", group="g1", mode="attack"),
+    "removed command upgrade_road": _cmd(type="upgrade_road", edge=1),
     "set_stance unknown": _cmd(type="set_stance", stance="panic"),
-    "upgrade_road negative edge": _cmd(type="upgrade_road", group="g1", edge=-1),
+    "fortify_road negative edge": _cmd(type="fortify_road", node=1, edge=-1),
     "recruit without node": _cmd(type="recruit"),
     "forfeit with field": _cmd(type="forfeit", player=1),
 }
@@ -239,12 +239,13 @@ BAD_SERVER_FRAMES: dict[str, str | bytes] = {
     "snapshot progress above scale": _snapshot(
         _set(("view", "groups", 2, "location"), "progress", 1001)
     ),
-    "snapshot intent with group id": _snapshot(_set(("view", "intents", 1), "group", "x")),
-    "snapshot intent with size": _snapshot(_set(("view", "intents", 1), "units", 3)),
+    "snapshot intent with group id": _snapshot(_set(("view", "intents", 0), "group", "x")),
+    "snapshot intent with size": _snapshot(_set(("view", "intents", 0), "units", 3)),
     "snapshot packet arrives before departure": _snapshot(
         _set(("view", "packets", 0), "arrive_tick", 100)
     ),
-    "snapshot width zero": _snapshot(_set(EDGE2, "width", 0)),
+    "snapshot edge with a road level": _snapshot(_set(EDGE2, "width", 1)),
+    "snapshot group in defense": _snapshot(_set(GROUP0, "mode", "defense")),
 }
 
 

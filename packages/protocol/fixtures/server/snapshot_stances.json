@@ -5,12 +5,6 @@
     "me": {
       "cp": 300,
       "stance": "economy",
-      "fronts": [
-        null,
-        null
-      ],
-      "rear_min": 1,
-      "auto_lines": null,
       "leaf_shift": 0,
       "leaf_shift_max": 3,
       "next_dispatch_tick": 140,
@@ -43,14 +37,11 @@
         "recruit_progress": 0,
         "recruit_waiting": false,
         "has_barracks": true,
-        "warehouse_level": 0,
         "warehouse_cap": 6,
         "building": null,
         "factory": true,
         "factory_period": 100,
         "factory_build": null,
-        "fort": false,
-        "fort_build": null,
         "front_dist": 3,
         "flow_down": [],
         "flow_next": [],
@@ -79,14 +70,11 @@
         "recruit_progress": 0,
         "recruit_waiting": false,
         "has_barracks": false,
-        "warehouse_level": 0,
         "warehouse_cap": 3,
         "building": null,
         "factory": false,
         "factory_period": null,
         "factory_build": null,
-        "fort": false,
-        "fort_build": null,
         "front_dist": 2,
         "flow_down": [],
         "flow_next": [],
@@ -115,14 +103,11 @@
         "recruit_progress": 0,
         "recruit_waiting": false,
         "has_barracks": false,
-        "warehouse_level": 0,
         "warehouse_cap": 3,
         "building": null,
         "factory": false,
         "factory_period": null,
         "factory_build": null,
-        "fort": false,
-        "fort_build": null,
         "front_dist": 1,
         "flow_down": [],
         "flow_next": [],
@@ -151,14 +136,11 @@
         "recruit_progress": 0,
         "recruit_waiting": false,
         "has_barracks": false,
-        "warehouse_level": 0,
         "warehouse_cap": 3,
         "building": null,
         "factory": false,
         "factory_period": null,
         "factory_build": null,
-        "fort": false,
-        "fort_build": null,
         "front_dist": 0,
         "flow_down": [],
         "flow_next": [],
@@ -187,14 +169,11 @@
         "recruit_progress": 0,
         "recruit_waiting": false,
         "has_barracks": false,
-        "warehouse_level": 0,
         "warehouse_cap": 3,
         "building": null,
         "factory": false,
         "factory_period": null,
         "factory_build": null,
-        "fort": false,
-        "fort_build": null,
         "front_dist": 1,
         "flow_down": [],
         "flow_next": [],
@@ -223,14 +202,11 @@
         "recruit_progress": 0,
         "recruit_waiting": false,
         "has_barracks": false,
-        "warehouse_level": 0,
         "warehouse_cap": 3,
         "building": null,
         "factory": false,
         "factory_period": null,
         "factory_build": null,
-        "fort": false,
-        "fort_build": null,
         "front_dist": 3,
         "flow_down": [],
         "flow_next": [],
@@ -259,14 +235,11 @@
         "recruit_progress": 0,
         "recruit_waiting": false,
         "has_barracks": false,
-        "warehouse_level": 0,
         "warehouse_cap": 3,
         "building": null,
         "factory": false,
         "factory_period": null,
         "factory_build": null,
-        "fort": false,
-        "fort_build": null,
         "front_dist": 0,
         "flow_down": [],
         "flow_next": [],
@@ -295,14 +268,11 @@
         "recruit_progress": 0,
         "recruit_waiting": false,
         "has_barracks": false,
-        "warehouse_level": 0,
         "warehouse_cap": 3,
         "building": null,
         "factory": false,
         "factory_period": null,
         "factory_build": null,
-        "fort": false,
-        "fort_build": null,
         "front_dist": 0,
         "flow_down": [],
         "flow_next": [],
@@ -324,14 +294,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -353,14 +320,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -382,14 +346,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -411,14 +372,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -440,14 +398,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -469,14 +424,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -498,14 +450,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -527,14 +476,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -556,14 +502,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -585,14 +528,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -614,14 +554,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -643,14 +580,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -672,14 +606,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -691,9 +622,7 @@
     "edges": [
       {
         "id": 0,
-        "width": 1,
         "detail": "presence",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "exact",
@@ -718,15 +647,12 @@
             }
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 1,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "exact",
@@ -744,15 +670,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 2,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -763,15 +686,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 3,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "exact",
@@ -789,15 +709,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 4,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -808,15 +725,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 5,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "exact",
@@ -841,15 +755,12 @@
             }
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 6,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -860,15 +771,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 7,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -879,15 +787,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 8,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -898,15 +803,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 9,
-        "width": 1,
         "detail": "presence",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "exact",
@@ -931,15 +833,12 @@
             }
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 10,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -950,15 +849,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 11,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -969,15 +865,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 12,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -988,15 +881,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 13,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1007,15 +897,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 14,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1026,15 +913,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 15,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1045,15 +929,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 16,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1064,15 +945,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 17,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1083,15 +961,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 18,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1102,15 +977,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 19,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1121,15 +993,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 20,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1140,15 +1009,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 21,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1159,15 +1025,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 22,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1178,15 +1041,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 23,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1197,15 +1057,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 24,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1216,15 +1073,12 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 25,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "fog",
@@ -1235,7 +1089,6 @@
             "seen": null
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       }
@@ -1250,14 +1103,11 @@
           "kind": "node",
           "node": 0
         },
-        "order": null,
-        "defense_bonus": null,
-        "defense_cap": null
+        "order": null
       }
     ],
     "packets": [],
     "intents": [],
-    "fights": [],
-    "lines": []
+    "fights": []
   }
 }

@@ -1,6 +1,6 @@
-"""The burn of a plains defender on the wire (DEC-45, #778): the key in ``ruleset_public``, the
-burned charges in ``fight_round`` and ``last_round``, public to both players (DEC-24, item I2),
-and the pending burn in ``FightView.mute``.
+"""The burn of a plains defender on the wire (DEC-45, #778): the burned charges in ``fight_round``
+and ``last_round``, public to both players (DEC-24, item I2), and the pending burn in
+``FightView.mute``.
 
 Expected values come from row 8 of the DEC-45 table (mechanics.md, section 4).
 """
@@ -8,7 +8,6 @@ Expected values come from row 8 of the DEC-45 table (mechanics.md, section 4).
 from pathlib import Path
 
 from gow_protocol.convert import event_for_player, view_to_wire
-from gow_protocol.ruleset import RulesetPublic
 from gow_sim.maps import PLAYERS, load_map
 from gow_sim.ruleset import load_ruleset
 from gow_sim.state import (
@@ -26,14 +25,8 @@ from gow_sim.view import opaque_id, project
 
 KEY = b"plains burn test key, 32 bytes!!"
 ROOT = Path(__file__).resolve().parents[3]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4-stances.toml")
-PLAIN = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-
-
-def test_ruleset_public_carries_the_key() -> None:
-    assert RulesetPublic.from_ruleset(RULES).combat.terrain_burn is True
-    assert RulesetPublic.from_ruleset(PLAIN).combat.terrain_burn is False
 
 
 def test_both_players_get_the_burn_of_a_round() -> None:

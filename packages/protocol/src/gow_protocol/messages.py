@@ -1,10 +1,9 @@
 """WebSocket messages of a match: ``ClientMsg`` and ``ServerMsg``, tagged unions by ``type``.
 
 Client -> server: ``hello`` (first message, with the token), ``command``, ``ping``, ``resync``,
-``pause`` and ``resume`` (private matches only, DEC-05), ``reach_query`` (DEC-20),
-``line_route_query`` (#665).
+``pause`` and ``resume`` (private matches only, DEC-05), ``reach_query`` (DEC-20).
 Server -> client: ``welcome``, ``snapshot``, ``ack``, ``event``, ``match_end``, ``error``, ``pong``,
-``paused``, ``reach``, ``line_route``.
+``paused``, ``reach``.
 The connection rules are in AGENTS.md, section 5.3 (SRV-03 #48, SRV-04 #50).
 
 Any change of these models is a protocol change: bump ``PROTOCOL_VERSION`` and regenerate the
@@ -28,12 +27,12 @@ from gow_protocol.base import (
     Tick,
     WireModel,
 )
-from gow_protocol.commands import MAX_LINE_NODES, Command
+from gow_protocol.commands import Command
 from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 45
+PROTOCOL_VERSION: Final = 46
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -113,28 +112,8 @@ class ReachQueryMsg(WireModel):
     group: OpaqueId
 
 
-class LineRouteQueryMsg(WireModel):
-    """Ask for the suggested path of a supply line through ``points`` (economy v2, DEC-41,
-    item 6; owner decision 2026-10-31, #665): the source, the nodes to route through, the target.
-
-    The answer is ``line_route``. The interface sends it when the player clicks the target or a
-    node to route through; the connection's message rate limit covers it like every other
-    message. The suggestion is only a default: the player confirms it with ``draw_line``.
-    """
-
-    type: Literal["line_route_query"] = "line_route_query"
-    points: Annotated[tuple[NodeId, ...], Field(min_length=2, max_length=MAX_LINE_NODES)]
-
-
 type ClientMsg = Annotated[
-    HelloMsg
-    | CommandMsg
-    | PingMsg
-    | ResyncMsg
-    | PauseMsg
-    | ResumeMsg
-    | ReachQueryMsg
-    | LineRouteQueryMsg,
+    HelloMsg | CommandMsg | PingMsg | ResyncMsg | PauseMsg | ResumeMsg | ReachQueryMsg,
     Field(discriminator="type"),
 ]
 
@@ -244,12 +223,10 @@ class AckMsg(WireModel):
     """Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.
 
     ``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.
-    ``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an
-    accepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws
-    it and never computes it); ``None`` otherwise.
-    ``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` (planned delay
-    included; DEC-22, item 10); for an accepted ``transfer``, the tick the charges reach
-    ``to_node``; both if nothing stops them; ``None`` otherwise.
+    ``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client
+    draws it and never computes it); ``None`` otherwise.
+    ``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` if nothing
+    stops it (the gathering of a planned order included; DEC-22, item 10); ``None`` otherwise.
     ``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,
     ``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20).
     """
@@ -440,21 +417,6 @@ class ReachMsg(WireModel):
     node id, each with the size that fits."""
 
 
-class LineRouteMsg(WireModel):
-    """Answer to ``line_route_query``, computed by the server on the state after tick ``tick``
-    (#665): the fastest path over own nodes through ``points`` in order, each leg avoiding the
-    nodes of the legs before it (the sum of the packet times, ties by ``node_key``). ``path`` is
-    empty when a point is not own, repeated or out of range, or a leg has no way. Only own nodes
-    are on a path. The rules of ``draw_line`` (source, limit, cycle) are not checked here."""
-
-    type: Literal["line_route"] = "line_route"
-    points: tuple[NodeId, ...]
-    """The points of the query, as asked: the client matches the answer by them."""
-    tick: Tick
-    path: tuple[NodeId, ...]
-    """``(points[0], ..., points[-1])`` or ``()``."""
-
-
 type ServerMsg = Annotated[
     WelcomeMsg
     | SnapshotMsg
@@ -464,7 +426,6 @@ type ServerMsg = Annotated[
     | ErrorMsg
     | PongMsg
     | PausedMsg
-    | ReachMsg
-    | LineRouteMsg,
+    | ReachMsg,
     Field(discriminator="type"),
 ]
