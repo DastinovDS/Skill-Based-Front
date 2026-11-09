@@ -1,4 +1,5 @@
-# Ruleset mvp-6: the main (played) ruleset since 2026-11-09 (owner decision, #626, #759). A copy of mvp-5.toml
+# Ruleset mvp-6: the main (played) ruleset on 2026-11-09 (owner decision, #626, #759), until mvp-7 replaced it
+# the same day (#885); a historical ruleset since. A copy of mvp-5.toml
 # with exactly three changes, which only make sense together:
 # - capture.charge_cost = 1 (DEC-38, #759; mvp-5: 0): a capture spends a real charge, so the War stance does not
 #   last through a couple of big mid-game clashes;

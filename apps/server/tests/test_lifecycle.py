@@ -446,7 +446,7 @@ def test_mvp3_is_a_selectable_ruleset_with_a_bundled_archive() -> None:
     """DEC-41 (#647): the economy v2 ruleset ``mvp-3`` is chosen like any other by
     ``GOW_RULESET_PATH`` (``mise run stack:agent mvp-3``), in prod too, and its archive file ships
     with the image, so the replays of its matches re-simulate (AGENTS.md, section 4.5). The
-    default is ``mvp-6`` in ``compose.yaml`` and the image (#626)."""
+    default is ``mvp-7`` in ``compose.yaml`` and the image (#885)."""
     path = ROOT / "rulesets" / "mvp-3.toml"
     rules = load_ruleset(path)
     assert rules.v2

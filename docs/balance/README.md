@@ -9,10 +9,10 @@ the report relies on.
 ## Running
 
 ```bash
-uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-6.toml
+uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-7.toml
 ```
 
-`mvp-6` is the played ruleset (owner decision 2026-11-09, #626, #759: `mvp-5` with `capture.charge_cost = 1`, `factory.built_period_ticks = 100` and `combat.retreat = "none"`; `mvp-5` (= `mvp-4-stances`) before it, 2026-11-07, #805; `mvp-4`, 2026-11-04, #741); the tasks `tournament`, `search` and `tournament:gh` default to it. The older runs below (`mvp-2`, `mvp-3`) are history and are reproduced with `--ruleset rulesets/mvp-2.toml` and the like.
+`mvp-7` is the played ruleset (owner decision 2026-11-09, #885: `mvp-6` with `[map_tempo]` on (DEC-46) and `factory.built_period_ticks = 150`); `mvp-6` before it (owner decision 2026-11-09, #626, #759: `mvp-5` with `capture.charge_cost = 1`, `factory.built_period_ticks = 100` and `combat.retreat = "none"`; `mvp-5` (= `mvp-4-stances`) before it, 2026-11-07, #805; `mvp-4`, 2026-11-04, #741); the tasks `tournament`, `search` and `tournament:gh` default to it. The older runs below (`mvp-2`, `mvp-3`) are history and are reproduced with `--ruleset rulesets/mvp-2.toml` and the like.
 
 | Key | Meaning |
 |---|---|
@@ -33,7 +33,7 @@ dispatch only, it is not a required check) plays it on GitHub runners:
 ```bash
 mise run tournament:gh -- --help                       # all options
 mise run tournament:gh --seeds 100 --shards 10 --label bal02
-mise run tournament:gh --ref feature/123-x --ruleset rulesets/mvp-6.toml --bots "rusher smart_rusher@normal" --seeds 20
+mise run tournament:gh --ref feature/123-x --ruleset rulesets/mvp-7.toml --bots "rusher smart_rusher@normal" --seeds 20
 ```
 
 | Option | Meaning |

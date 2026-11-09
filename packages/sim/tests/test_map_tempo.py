@@ -6,6 +6,7 @@ The expected values are computed by hand from the formula of DEC-46 (mechanics.m
 """
 
 import dataclasses
+import tomllib
 from pathlib import Path
 from typing import cast
 
@@ -258,3 +259,47 @@ def test_front_pressure_from_a_hand_made_log() -> None:
     m = analyze(log)
     assert m.front_pressure_centi == (300, 100)
     assert m.front_width_centi == (200, 300)
+
+
+MVP6 = ROOT / "rulesets" / "mvp-6.toml"
+MVP7 = ROOT / "rulesets" / "mvp-7.toml"
+
+
+def test_mvp7_is_mvp6_with_map_tempo_and_a_slower_built_factory() -> None:
+    """mvp-7 (owner decision 2026-11-09, #885): mvp-6 plus ``[map_tempo]`` (the values of
+    mvp-4-stances-tempo) and ``factory.built_period_ticks = 150``, nothing else."""
+    mvp6 = tomllib.loads(MVP6.read_text(encoding="utf-8"))
+    mvp7 = tomllib.loads(MVP7.read_text(encoding="utf-8"))
+    assert mvp7["map_tempo"] == {"ref_nodes": 49, "min_pct": 50, "max_pct": 150}
+    assert mvp7["map_tempo"] == tomllib.loads(TEMPO.read_text(encoding="utf-8"))["map_tempo"]
+    assert mvp7["factory"]["built_period_ticks"] == 150
+    del mvp7["map_tempo"]
+    mvp7["factory"]["built_period_ticks"] = mvp6["factory"]["built_period_ticks"]
+    assert mvp7 == mvp6
+
+
+@pytest.mark.parametrize(
+    ("name", "pct", "cp", "capital", "built"),
+    [
+        # Expected values by hand (issue #885, mechanics.md DEC-46): pct, then p * 100 // pct.
+        # cp: War / Balance / Economy of 80 / 100 / 200; capital: of 400 / 200 / 100.
+        ("narrows", 76, (105, 131, 263), (526, 263, 131), 197),
+        ("crossroads", 100, (80, 100, 200), (400, 200, 100), 150),
+        ("highway", 100, (80, 100, 200), (400, 200, 100), 150),
+        ("ridge", 102, (78, 98, 196), (392, 196, 98), 147),
+    ],
+)
+def test_mvp7_periods_on_the_pool_maps(
+    name: str, pct: int, cp: tuple[int, int, int], capital: tuple[int, int, int], built: int
+) -> None:
+    rules = load_ruleset(MVP7)
+    assert rules.map_tempo is not None
+    mapdef = load_map(ROOT / "maps" / f"{name}.json")
+    assert rules.map_tempo.pct(len(mapdef.nodes)) == pct
+    played = apply_map_tempo(rules, mapdef)
+    assert played.map_tempo is None
+    assert played.stances is not None and played.factory is not None
+    t, c = played.stances.cp_period_ticks, played.stances.capital_period_ticks
+    assert (t.war, t.balance, t.economy) == cp
+    assert (c.war, c.balance, c.economy) == capital
+    assert played.factory.built_period_ticks == built
