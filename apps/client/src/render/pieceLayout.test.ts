@@ -56,7 +56,9 @@ describe('towers on the ring (ui-style 53g, 55k)', () => {
     expect(towerScale(TOWER.screen / TOWER.minScale)).toBe(towerScale(2));
     // At half zoom it grows by the square root only (#869): about 2.1, not 3.4, so it is smaller on
     // screen than near zoom 1 but larger than the map shrinks it.
-    expect(towerScale(0.5)).toBeGreaterThanOrEqual(TOWER.minScale * Math.sqrt(TOWER.screen / TOWER.minScale / 0.5));
+    expect(towerScale(0.5)).toBeGreaterThanOrEqual(
+      TOWER.minScale * Math.sqrt(TOWER.screen / TOWER.minScale / 0.5),
+    );
     expect(towerScale(0.5) * 0.5).toBeLessThan(TOWER.screen);
     expect(towerScale(0.5)).toBeGreaterThan(towerScale(1));
   });
