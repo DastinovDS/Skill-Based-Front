@@ -679,11 +679,10 @@
   }
 
   /* The state stays readable without the motion: the "?" ring still dashed, the ring still amber. */
-  @media (prefers-reduced-motion: reduce) {
-    .march,
-    .pulse,
-    .reveal {
-      animation: none;
-    }
+  /* The motion setting of the page (#871) decides, not the media query alone. */
+  :global(:root[data-motion='reduced']) .march,
+  :global(:root[data-motion='reduced']) .pulse,
+  :global(:root[data-motion='reduced']) .reveal {
+    animation: none;
   }
 </style>

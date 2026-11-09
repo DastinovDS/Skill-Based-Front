@@ -3,14 +3,14 @@
   import type { Api } from '../api/http.ts';
   import AccountChip from '../app/AccountChip.svelte';
   import MenuTabs from '../app/MenuTabs.svelte';
-  import type { MenuTabActions } from '../app/menuTabs.ts';
+  import type { AccountPages, MenuTabActions } from '../app/menuTabs.ts';
   import { t } from '../i18n/index.ts';
   import type { Calibration, MapFile } from '../protocol.gen.ts';
   import BoardTable from './BoardTable.svelte';
   import { BoardState } from './boardState.svelte.ts';
   import SheetFrame from './SheetFrame.svelte';
 
-  interface Props extends MenuTabActions {
+  interface Props extends MenuTabActions, AccountPages {
     api: Pick<Api, 'leaderboard' | 'player' | 'me'>;
     token: string;
     /** The own player id, if the app knows it (otherwise the screen asks the server). */
@@ -40,6 +40,8 @@
     onreplays,
     onboard,
     onhowto,
+    onprofile,
+    onsettings,
   }: Props = $props();
 
   // The data is asked once when the screen opens; the props that feed it do not change here.
@@ -80,6 +82,8 @@
       {hasPassword}
       {calibration}
       {rating}
+      {onprofile}
+      {onsettings}
       {onpassword}
       {onlogout}
       bind:open={accountOpen}

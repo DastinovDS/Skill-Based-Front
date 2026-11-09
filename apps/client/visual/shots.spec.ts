@@ -770,6 +770,30 @@ test('shot of the account menu and the log-out dialog', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'screen-account-logout-gray.png') });
 });
 
+// The nick change of the profile (#871): the dialog with a taken nick (`screen-profile-nick.png`),
+// and the settings at the 125 % interface scale (`screen-settings-125.png`, chosen on the page).
+test('shot of the nick dialog and of the interface scale', async ({ page }) => {
+  await page.goto('/?menu=profile-nick');
+  await page.evaluate('document.fonts.ready.then(() => true)');
+  await page.getByRole('button', { name: 'Change the nick' }).click();
+  const field = page.getByRole('textbox', { name: 'New nick' });
+  await expect(field).toBeFocused();
+  await field.fill('Vega');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.mouse.move(1000, 700);
+  await page.screenshot({ path: join(OUT, 'screen-profile-nick.png') });
+
+  await page.goto('/?menu=settings');
+  await page.evaluate('document.fonts.ready.then(() => true)');
+  await page.getByRole('radio', { name: '125%' }).click();
+  await expect(page.getByRole('radio', { name: '125%' })).toHaveAttribute('aria-checked', 'true');
+  await page.mouse.move(1000, 700);
+  await page.screenshot({ path: join(OUT, 'screen-settings-125.png') });
+  // Back to 100 % for the next shots of this browser context.
+  await page.getByRole('radio', { name: '100%' }).click();
+});
+
 for (const size of [
   { width: 1024, height: 640 },
   { width: 800, height: 500 },

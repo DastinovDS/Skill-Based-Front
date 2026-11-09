@@ -4,7 +4,7 @@
   import AccountChip from '../app/AccountChip.svelte';
   import type { MapCache } from '../app/mapCache.svelte.ts';
   import MenuTabs from '../app/MenuTabs.svelte';
-  import type { MenuTabActions } from '../app/menuTabs.ts';
+  import type { AccountPages, MenuTabActions } from '../app/menuTabs.ts';
   import Icon from '../hud/Icon.svelte';
   import LapisButton from '../theme/LapisButton.svelte';
   import { t, tf } from '../i18n/index.ts';
@@ -14,7 +14,7 @@
   import SheetFrame from './SheetFrame.svelte';
   import { visibleMatches } from './view.ts';
 
-  interface Props extends MenuTabActions {
+  interface Props extends MenuTabActions, AccountPages {
     api: Pick<Api, 'player' | 'me'>;
     token: string;
     /** The own player id, if the app knows it (otherwise the screen asks the server). */
@@ -54,6 +54,8 @@
     onreplays,
     onboard,
     onhowto,
+    onprofile,
+    onsettings,
   }: Props = $props();
 
   const clock = untrack(() => now());
@@ -108,6 +110,8 @@
       {hasPassword}
       {calibration}
       {rating}
+      {onprofile}
+      {onsettings}
       {onpassword}
       {onlogout}
       bind:open={accountOpen}

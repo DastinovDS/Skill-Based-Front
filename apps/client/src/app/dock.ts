@@ -34,6 +34,9 @@ export interface DockContext {
   /** The tab "How to play" (CLI-13, #72). */
   onhowto: () => void;
   onmenu: () => void;
+  /** The own profile and the settings of the account chip (#871). */
+  onprofile?: () => void;
+  onsettings?: () => void;
   onpassword: () => void;
   onlogout: () => void;
 }

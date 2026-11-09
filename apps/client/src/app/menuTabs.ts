@@ -8,3 +8,9 @@ export interface MenuTabActions {
   onboard: () => void;
   onhowto: () => void;
 }
+
+/** The pages of the account chip's menu (#871); absent: the menu has no such item. */
+export interface AccountPages {
+  onprofile?: () => void;
+  onsettings?: () => void;
+}

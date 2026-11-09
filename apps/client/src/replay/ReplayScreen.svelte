@@ -239,11 +239,10 @@
       transform: rotate(360deg);
     }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .spinner {
-      animation: none;
-      border-right-color: var(--text-dim);
-      border-style: dotted;
-    }
+  /* The motion setting of the page (#871) decides, not the media query alone. */
+  :global(:root[data-motion='reduced']) .spinner {
+    animation: none;
+    border-right-color: var(--text-dim);
+    border-style: dotted;
   }
 </style>

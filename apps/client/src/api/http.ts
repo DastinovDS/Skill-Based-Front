@@ -171,6 +171,14 @@ export class Api {
     return this.#request('GET', '/api/me', token);
   }
 
+  /**
+   * Change the nick (MOD-01): `conflict` if taken, `invalid` if the server's rules refuse it,
+   * `rate_limited` past the per-player limit (`retryAfterS` says when).
+   */
+  changeNick(token: string, nick: string): Promise<Schemas['Me']> {
+    return this.#request('PUT', '/api/me/nick', token, { nick });
+  }
+
   /** The running match of the guest (after a page reload or in another tab), `null` if none. */
   activeMatch(token: string): Promise<ActiveMatch | null> {
     return this.#request('GET', '/api/me/active-match', token);
@@ -262,7 +270,7 @@ export class Api {
   }
 
   async #request<T>(
-    method: 'GET' | 'POST' | 'DELETE',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     url: string,
     token: string | null,
     body?: unknown,

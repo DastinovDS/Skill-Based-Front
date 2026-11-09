@@ -471,18 +471,17 @@
     stroke-linejoin: miter;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .digits {
-      animation: none !important;
-    }
+  /* The motion setting of the page (#871) decides, not the media query alone. */
+  :global(:root[data-motion='reduced']) .digits {
+    animation: none !important;
+  }
 
-    .was {
-      display: none;
-    }
+  :global(:root[data-motion='reduced']) .was {
+    display: none;
+  }
 
-    .frame path,
-    .serif {
-      transition: none !important;
-    }
+  :global(:root[data-motion='reduced']) .frame path,
+  :global(:root[data-motion='reduced']) .serif {
+    transition: none !important;
   }
 </style>

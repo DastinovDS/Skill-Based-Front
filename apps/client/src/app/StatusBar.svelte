@@ -114,10 +114,9 @@
     }
   }
 
-  @media (prefers-reduced-motion: no-preference) {
-    .spin :global(svg) {
-      animation: bar-spin 1.4s linear infinite;
-    }
+  /* The motion setting of the page (#871) decides, not the media query alone. */
+  :global(:root:not([data-motion='reduced'])) .spin :global(svg) {
+    animation: bar-spin 1.4s linear infinite;
   }
 
   @keyframes bar-spin {

@@ -14,14 +14,16 @@
     tabs: Snippet;
     /** The top right corner: the player chip. */
     corner?: Snippet;
+    /** A dialog of the sheet (the nick change, the log-out warning): over the bar too. */
+    overlay?: Snippet;
     children: Snippet;
   }
 
-  let { map, label, tabs, corner, children }: Props = $props();
+  let { map, label, tabs, corner, overlay, children }: Props = $props();
 </script>
 
-<!-- The frame of the Replays and Leaderboard tabs (#629; Lapis, #845): the bar on top, one wide
-     sheet under it on the blurred stone over the map, no rail. -->
+<!-- The frame of the Replays and Leaderboard tabs (#629; Lapis, #845), the profile and the settings
+     (#871): the bar on top, one wide sheet under it on the blurred stone over the map, no rail. -->
 <main class="front sheet">
   <MenuBackdrop {map} phase="idle" />
   <div class="shade"></div>
@@ -29,4 +31,5 @@
   <section class="body" aria-label={label}>
     {@render children()}
   </section>
+  {#if overlay !== undefined}{@render overlay()}{/if}
 </main>

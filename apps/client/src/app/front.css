@@ -272,6 +272,15 @@
   color: var(--ink-dim);
 }
 
+/* Between the account pages (#871) and the password and log-out: a cut with its lip. */
+.front .pop .sep {
+  height: 2px;
+  margin: 6px 10px;
+  background:
+    linear-gradient(var(--cut), var(--cut)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) 0 1px / 100% 1px no-repeat;
+}
+
 /* ---- Labels, chips, notices ----------------------------------------------------------------- */
 
 /* A label in cut capitals over a heading or a field (the kicker of the mockup). */
@@ -827,13 +836,23 @@
   margin-top: 16px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .front * {
-    transition: none;
-  }
+/* The motion setting of the page (#871) decides, not the media query alone. */
+:root[data-motion='reduced'] .front * {
+  transition: none;
+}
 
-  .front .busy i {
-    animation: none;
-    opacity: 0.7;
-  }
+:root[data-motion='reduced'] .front .busy i {
+  animation: none;
+  opacity: 0.7;
+}
+
+/* The interface scale of the settings (#871, `--ui-scale` on the root): the screens before and
+   after a match grow as a whole, the map behind keeps its own size. The entry screen and its
+   opening scene are composed on the whole window and stay at 100 %. */
+.front:not(.entry) {
+  zoom: var(--ui-scale, 1);
+}
+
+.front:not(.entry) .backdrop {
+  zoom: calc(1 / var(--ui-scale, 1));
 }

@@ -9,6 +9,9 @@ import LegalFooter from './legal/LegalFooter.svelte';
 import { loadGuest } from './api/guestStore.ts';
 import ReplayScreen from './replay/ReplayScreen.svelte';
 import { installErrorLog } from './errorLog.ts';
+// The display settings of the viewer (#871): the scale and the motion choice go on the root
+// before the first screen mounts.
+import './app/settingsState.svelte.ts';
 import './app.css';
 
 // What nothing else catches (an uncaught error, an unhandled rejection) is logged, without tokens.

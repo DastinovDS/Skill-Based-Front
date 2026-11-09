@@ -103,9 +103,8 @@
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .toast {
-      animation: none;
-    }
+  /* The motion setting of the page (#871) decides, not the media query alone. */
+  :global(:root[data-motion='reduced']) .toast {
+    animation: none;
   }
 </style>

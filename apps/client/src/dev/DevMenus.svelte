@@ -1,6 +1,8 @@
 <script lang="ts">
   import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
   import ReplaysScreen from '../board/ReplaysScreen.svelte';
+  import ProfileScreen from '../board/ProfileScreen.svelte';
+  import SettingsScreen from '../app/SettingsScreen.svelte';
   import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
   import MenuScreen from '../app/MenuScreen.svelte';
   import { Api } from '../api/http.ts';
@@ -53,12 +55,21 @@
     onbot: nothing,
     onpassword: nothing,
     onlogout: nothing,
+    onprofile: nothing,
+    onsettings: nothing,
   };
   // The joining scenes: the real MatchScreen on a fetch that never answers (the map stage) or fails.
   const waiting = new Api(() => new Promise<Response>(() => undefined));
   const broken = new Api(() => Promise.reject(new TypeError('offline')));
   const board = isBoardScene(id) ? BOARD_SCENES[id] : null;
-  const tabs = { onplay: nothing, onreplays: nothing, onboard: nothing, onhowto: nothing };
+  const tabs = {
+    onplay: nothing,
+    onreplays: nothing,
+    onboard: nothing,
+    onhowto: nothing,
+    onprofile: nothing,
+    onsettings: nothing,
+  };
   // The pool maps of the replay cards, from the bundle: the scenes ask no server.
   const bundled = (mapId: string) => BUNDLED_MAPS.find((m) => m.meta.name === mapId) ?? null;
   const maps = { get: bundled, ensure: (mapId: string) => Promise.resolve(bundled(mapId)) };
@@ -92,6 +103,39 @@
   />
 {:else if isDockScene(id)}
   <DevDock {id} {map} />
+{:else if board !== null && board.mode === 'profile'}
+  <ProfileScreen
+    api={sceneApi(board)}
+    token="dev"
+    ownId={ME}
+    nick="Ember"
+    hasPassword={board.hasPassword}
+    calibration={board.calibration}
+    rating={board.rating}
+    {map}
+    onwatch={nothing}
+    onbot={nothing}
+    onnick={(nick: string) =>
+      Promise.resolve(
+        nick.toLowerCase() === 'vega' ? { key: 'welcome.error.taken' as const } : null,
+      )}
+    onpassword={nothing}
+    onlogout={nothing}
+    onback={nothing}
+    {...tabs}
+  />
+{:else if board !== null && board.mode === 'settings'}
+  <SettingsScreen
+    nick="Ember"
+    hasPassword={board.hasPassword}
+    calibration={board.calibration}
+    rating={board.rating}
+    {map}
+    onpassword={nothing}
+    onlogout={nothing}
+    onback={nothing}
+    {...tabs}
+  />
 {:else if board !== null && board.mode === 'history'}
   <ReplaysScreen
     api={sceneApi(board)}
