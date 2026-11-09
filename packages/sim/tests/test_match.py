@@ -106,7 +106,8 @@ def test_timer_ends_the_match(mvp_rules: Ruleset) -> None:
 
 def test_view_and_resolve_use_the_match_key(mvp_rules: Ruleset) -> None:
     match = Match(_map("line3"), mvp_rules, KEY)
-    assert match.view(0) == project(match.state, mvp_rules, 0, KEY)
+    # The match plays its rules with the map tempo applied (DEC-46), and projects with them.
+    assert match.view(0) == project(match.state, match.rules, 0, KEY)
     (own,) = [g for g in match.state.groups.values() if g.owner == 0]
     oid = opaque_id(KEY, 0, own.id)
     assert match.resolve(0, Move(oid, 1)) == Move(own.id, 1)

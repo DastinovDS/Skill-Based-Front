@@ -7,12 +7,11 @@ DEC-21 and DEC-33 are in ``test_dec21.py`` and ``test_dec33.py``. Expected detai
 worked out by hand from DEC-21 and the map file:
 
 - line6: 0 (capital of 0) -e0- 1 -e1- 2 -e2- 3 -e3- 4 -e4- 5 (capital of 1), all plains; player 0
-  owns 0 and 1, player 1 owns 4 and 5, nodes 2 and 3 are neutral; roads level 1, ``max_level`` 3;
-  the ``rules`` fixture gives capitals capacity 40 and the large cities 30 (DEC-22: by node kind).
-  The map has no starting groups. Player 0 at the start (DEC-35: only own groups are sources):
-  no sources, the own nodes 0, 1 ``PRESENCE`` (detail 3), 2..5 fog; every edge in fog for the road
-  level, the own internal e0 with its road level exact (detail 5). A group of player 0 in node 1
-  makes 0, 1 and 2 exact (plains sees plains) and e0, e1 not in fog.
+  owns 0 and 1, player 1 owns 4 and 5, nodes 2 and 3 are neutral; the ``rules`` fixture (mvp-5)
+  gives capitals capacity 40 and the large cities 30 (DEC-22: by node kind). The map has no
+  starting groups. Player 0 at the start (DEC-35: only own groups are sources): no sources, the
+  own nodes 0, 1 ``PRESENCE`` (detail 3), 2..5 fog; every edge in fog (DEC-17). A group of player
+  0 in node 1 makes 0, 1 and 2 exact (plains sees plains) and e0, e1 not in fog.
 """
 
 import dataclasses
@@ -27,16 +26,16 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from gow_sim.commands import (
+    CancelOrder,
     Merge,
     Move,
     Recruit,
     Reject,
     RejectCode,
-    SetMode,
     Split,
     validate,
 )
-from gow_sim.maps import ROAD_START_LEVEL, NodeKind, load_map
+from gow_sim.maps import NodeKind, load_map
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
@@ -44,7 +43,6 @@ from gow_sim.state import (
     Build,
     BuildKind,
     Detail,
-    Edge,
     Event,
     GameState,
     Group,
@@ -62,19 +60,17 @@ from gow_sim.state import (
 from gow_sim.systems.capacity import city_capacity
 from gow_sim.systems.vision import vision
 from gow_sim.view import (
-    BuildView,
     GroupView,
     IntentView,
     PlayerView,
     SelfView,
-    UpgradeGain,
     opaque_id,
     project,
     resolve,
 )
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP5 = TESTS_DIR.parents[2] / "rulesets" / "mvp-5.toml"
 TEST_MAPS = ("line3", "diamond", "choke", "line6", "fork", "siege")
 KEY = bytes(range(32))
 OTHER_KEY = bytes(range(1, 33))
@@ -89,7 +85,7 @@ def rules() -> Ruleset:
 
 
 def _line6_rules() -> Ruleset:
-    base = load_ruleset(MVP0)
+    base = load_ruleset(MVP5)
     by_kind = dataclasses.replace(base.capacity.by_kind, capital=40, city_large=30)
     return dataclasses.replace(base, capacity=dataclasses.replace(base.capacity, by_kind=by_kind))
 
@@ -129,62 +125,12 @@ def test_dec04_geography_and_ownership_of_all_nodes_are_public(rules: Ruleset) -
     assert [n.owner for n in view.nodes] == [0, 0, None, None, 1, 1]
 
 
-# DEC-17: fog of war for roads, rule by rule ---------------------------------------------------
-# line6, player 0: e0 own internal, e1 buffer with an own end; without own groups all in fog
-# (DEC-35), the road level of e0 exact (own data, DEC-35, detail 5); e4 internal edge of player
-# 1, in fog. Roads have no type (DEC-26, item 7).
-
-
-def test_dec17_upgrade_in_fog_does_not_change_the_view(rules: Ruleset) -> None:
-    state = _state("line6", rules)
-    before = _view(state, rules)
-    state.edges[3].width = 2
-    state.edges[4].width = 3  # upgraded in fog
-    after = _view(state, rules)
-    assert after == before
-    # Never seen: level 1 (point 2; DEC-22, item 8).
-    assert [e.width for e in after.edges] == [1, 1, 1, 1, 1]
-
-
-def test_dec17_own_and_buffer_edges_are_exact(rules: Ruleset) -> None:
-    state = _state("line6", rules)
-    state.edges[0].width = 3  # own internal edge
-    state.edges[1].width = 2  # buffer edge, own end
-    # No own group: both in fog (DEC-35); the own internal road is own data and exact (detail 5),
-    # the buffer road was never seen (level 1).
-    view = _view(state, rules)
-    assert [(e.width, e.detail) for e in view.edges[:2]] == [(3, F), (1, F)]
-    _add(state, 0, AtNode(1), units=1, charged=1)  # a source at their common end
-    view = _view(state, rules)
-    assert [(e.width, e.detail) for e in view.edges[:2]] == [(3, P), (2, P)]
-    # Player 1 sees its own internal e4 exactly as well.
-    state.edges[4].width = 3
-    assert _view(state, rules, 1).edges[4].width == 3
-
-
-def test_dec17_lost_edge_freezes_at_the_last_seen_width(rules: Ruleset) -> None:
-    state = _state("line6", rules)
-    scout = _add(state, 0, AtNode(4))  # node 4 exact: e3 and e4 are in sight
-    state.edges[4].width = 2
-    state.tick = 10
-    assert _view(state, rules).edges[4].width == 2  # in sight: exact
-    vision(state, rules)  # end of tick 10: memory keeps level 2
-    scout.location = AtNode(1)  # sight lost
-    state.edges[4].width = 3
-    state.tick = 20
-    lost = _view(state, rules).edges[4]
-    assert (lost.width, lost.detail) == (2, F)  # the last sighting
-    assert state.vision_memory[0].widths[4] == 2
-    scout.location = AtNode(5)  # sight back: exact again
-    back = _view(state, rules).edges[4]
-    assert (back.width, back.detail) == (3, P)
+# DEC-22: capacities ---------------------------------------------------------------------------
 
 
 def test_dec22_capacity_is_public_and_exact(rules: Ruleset) -> None:
-    """DEC-22, item 1: capacity by node kind, the same in every view, whatever roads and fog."""
+    """DEC-22, item 1: capacity by node kind, the same in every view, whatever the fog."""
     state = _state("line6", rules)
-    state.edges[0].width = 3
-    state.edges[4].width = 3  # in fog for player 0
     expected = [40, 30, 30, 30, 30, 40]
     assert [n.capacity for n in _view(state, rules).nodes] == expected
     assert [n.capacity for n in _view(state, rules, 1).nodes] == expected
@@ -272,16 +218,13 @@ def test_dec04_intents_are_public_without_group_id_or_size(rules: Ruleset) -> No
     iid = state.new_id()
     state.intents[iid] = Intent(iid, 1, IntentKind.PLANNED_MOVE, 5, 3, created_tick=0)
     enemy.intent = iid
-    bid = state.new_id()
-    state.intents[bid] = Intent(bid, 1, IntentKind.DEFENSE, 4, None, created_tick=0)
     view = _view(state, rules)  # nodes 3..5 are in fog for player 0
-    assert sorted((i.origin, i.owner, i.kind, i.target or -1) for i in view.intents) == [
-        (4, 1, IntentKind.DEFENSE, -1),
+    assert [(i.origin, i.owner, i.kind, i.target) for i in view.intents] == [
         (5, 1, IntentKind.PLANNED_MOVE, 3),
     ]
     fields = {f.name for f in dataclasses.fields(IntentView)}
     assert fields == {"id", "owner", "kind", "origin", "target", "created_tick"}
-    assert all(i.id not in (enemy.id, iid, bid) for i in view.intents)
+    assert all(i.id not in (enemy.id, iid) for i in view.intents)
 
 
 def test_dec04_exact_in_nodes_with_own_groups(rules: Ruleset) -> None:
@@ -291,7 +234,7 @@ def test_dec04_exact_in_nodes_with_own_groups(rules: Ruleset) -> None:
     state.nodes[1].warehouse = 5
     state.nodes[3].warehouse = 6
     _add(state, 1, AtNode(1), units=4, charged=1)
-    _add(state, 1, AtNode(1), units=2, charged=2, mode=Mode.DEFENSE)
+    _add(state, 1, AtNode(1), units=2, charged=2)
     _add(state, 0, AtNode(3), units=1, charged=1)  # own group makes neutral node 3 exact
     _add(state, 1, AtNode(3), units=7, charged=3)
     view = _view(state, rules)
@@ -299,7 +242,7 @@ def test_dec04_exact_in_nodes_with_own_groups(rules: Ruleset) -> None:
     assert (one.detail, one.warehouse, three.detail, three.warehouse) == (P, 5, E, 6)
     assert one.seen is not None and three.seen is not None
     assert (one.seen.enemy_units, one.seen.enemy_charged) == (None, None)
-    assert one.seen.enemy_modes == (Mode.ATTACK, Mode.DEFENSE)
+    assert one.seen.enemy_modes == (Mode.ATTACK,)  # enemies are there, no numbers
     assert (three.seen.enemy_units, three.seen.enemy_charged) == (7, 3)
     _add(state, 0, AtNode(1), units=1, charged=1)  # an own group in 1: exact
     one = _view(state, rules).nodes[1]
@@ -315,14 +258,14 @@ def test_dec21_neighbour_seen_by_terrain_without_its_warehouse(rules: Ruleset) -
     state = _state("line6", rules)
     _add(state, 0, AtNode(1), units=1, charged=1)  # the source (DEC-35)
     state.nodes[2].warehouse = 9
-    _add(state, 1, AtNode(2), units=8, charged=8, mode=Mode.DEFENSE)
+    _add(state, 1, AtNode(2), units=8, charged=8)
     _add(state, 1, OnEdge(edge=1, from_node=2, progress=600), units=5, charged=5)
     view = _view(state, rules)
     node, edge = view.nodes[2], view.edges[1]
     assert (node.detail, node.warehouse, edge.detail) == (E, None, P)
     assert node.seen is not None and node.seen.level is E
     assert (node.seen.enemy_modes, node.seen.enemy_units, node.seen.enemy_charged) == (
-        (Mode.DEFENSE,),
+        (Mode.ATTACK,),
         8,
         8,
     )
@@ -351,7 +294,7 @@ def test_dec04_fog_keeps_the_last_sighting(rules: Ruleset) -> None:
     state.tick = 5
     vision(state, rules)  # player 0 sees node 4 (plains from plains: exact) at tick 5
     scout.location = AtNode(1)
-    enemy.units, enemy.mode = 20, Mode.DEFENSE
+    enemy.units = 20
     state.tick = 9
     view = _view(state, rules)
     four, five = view.nodes[4], view.nodes[5]
@@ -360,46 +303,6 @@ def test_dec04_fog_keeps_the_last_sighting(rules: Ruleset) -> None:
     assert (four.seen.tick, four.seen.level, four.seen.enemy_modes) == (5, E, (Mode.ATTACK,))
     assert (four.seen.enemy_units, four.seen.enemy_charged) == (6, 4)
     assert five.detail is F and five.seen is None  # never seen
-
-
-@pytest.mark.parametrize(("where", "scout"), [(1, None), (1, 0)], ids=["presence", "exact"])
-def test_dec30_the_gathered_defense_of_the_enemy_is_hidden(
-    rules: Ruleset, where: int, scout: int | None
-) -> None:
-    """DEC-30, item 5: the enemy sees "Defense" as a mode, not what it has gathered; the view of
-    player 0 is the same whatever the count of the enemy group. Presence: the own node 1 without
-    an own group (DEC-35, detail 3); exact: from the own group in 0."""
-    state = _state("line6", rules)
-    if scout is not None:
-        _add(state, 0, AtNode(scout))
-    enemy = _add(state, 1, AtNode(where), units=4, charged=3, mode=Mode.DEFENSE)
-    vision(state, rules)
-    before = _view(state, rules)
-    enemy.ticks_in_defense = 10 * rules.orders.defense_ticks_per_bonus
-    assert _view(state, rules) == before
-    assert all(g.defense_bonus is None and g.defense_cap is None for g in before.groups)
-    seen = before.nodes[where].seen
-    assert seen is not None and seen.enemy_modes == (Mode.DEFENSE,)
-
-
-@pytest.mark.parametrize(
-    ("ticks", "charged", "bonus"),
-    [(30, 3, 0), (60, 3, 1), (130, 3, 2), (600, 3, 3), (180, 1, 1)],  # DEC-30, rows 1-5
-)
-def test_dec30_own_group_shows_its_gathered_bonus_and_cap(
-    rules: Ruleset, ticks: int, charged: int, bonus: int
-) -> None:
-    rules = dataclasses.replace(
-        rules, orders=dataclasses.replace(rules.orders, defense_ticks_per_bonus=60)
-    )
-    state = _state("line6", rules)
-    g = _add(state, 0, AtNode(1), units=4, charged=charged, mode=Mode.DEFENSE)
-    g.ticks_in_defense = ticks
-    (view,) = _view(state, rules).groups
-    assert (view.defense_bonus, view.defense_cap) == (bonus, charged)
-    g.mode, g.ticks_in_defense = Mode.ATTACK, 0
-    (view,) = _view(state, rules).groups
-    assert (view.defense_bonus, view.defense_cap) == (None, None)
 
 
 def test_dec04_vision_does_not_depend_on_group_size(rules: Ruleset) -> None:
@@ -446,29 +349,33 @@ def test_no_enemy_cp_stance_production_or_counters(rules: Ruleset) -> None:
     state = _state("line6", rules)
     before = _view(state, rules)
     enemy = state.players[1]
-    enemy.cp, enemy.stance, enemy.charge_acc, enemy.stance_changed_tick = 999, Stance.WAR, 77, 3
+    enemy.cp, enemy.stance, enemy.cp_ticks, enemy.capital_ticks = 999, Stance.WAR, 77, 3
+    enemy.leaf_shift = 1  # DEC-43, item B5: hidden
     state.nodes[5].warehouse = 42  # enemy capital production piles up in fog
     state.nodes[5].recruit_queue = 2  # the enemy's production is hidden (DEC-25, item 12)
     state.nodes[5].recruit_progress = 17
     assert _view(state, rules) == before
-    # Own counters only (DEC-28: the own front markers and rear minimum; #665: the own toggle of
-    # the auto-extension, tests/test_dec41_auto.py; DEC-43: the own leaf shift, its maximum and
-    # the next dispatch tick, tests/test_dec43_view.py).
+    # Own counters only (DEC-43: the own leaf shift, its maximum and the next dispatch tick,
+    # tests/test_dec43_view.py).
     names = {f.name for f in dataclasses.fields(SelfView)}
     assert names == {
         "cp",
         "stance",
-        "fronts",
-        "rear_min",
-        "auto_lines",
         "leaf_shift",
         "leaf_shift_max",
         "next_dispatch_tick",
         "cp_ticks",  # DEC-44: own local progress, tests/test_dec44.py
         "capital_ticks",
     }
-    me = state.players[0]
-    assert before.me == SelfView(cp=me.cp, stance=me.stance, fronts=(None, None), rear_min=1)
+    own = before.me
+    assert (own.cp, own.stance, own.leaf_shift, own.cp_ticks, own.capital_ticks) == (
+        300,  # cp.start (SIM-01)
+        Stance.BALANCE,  # DEC-09
+        0,
+        0,
+        0,
+    )
+    assert own.next_dispatch_tick == 10  # supply.dispatch_ticks: the first dispatch at tick 10
 
 
 def test_no_events_in_the_view(rules: Ruleset) -> None:
@@ -481,7 +388,7 @@ def test_no_events_in_the_view(rules: Ruleset) -> None:
 
 def test_own_entities_are_exact(rules: Ruleset) -> None:
     state = _state("line6", rules)
-    g = _add(state, 0, AtNode(1), units=5, charged=3, mode=Mode.DEFENSE)
+    g = _add(state, 0, AtNode(1), units=5, charged=3)
     w = _add(state, 0, AtNode(0), units=2, charged=1)
     w.order = Order(path=(1, 2), planned=True, depart_tick=30)
     m = _add(state, 0, OnEdge(edge=1, from_node=1, progress=250, back=True), units=1, charged=0)
@@ -489,9 +396,8 @@ def test_own_entities_are_exact(rules: Ruleset) -> None:
     state.packets[pid] = Packet(pid, 0, 0, from_node=0, charges=2, depart_tick=1, arrive_tick=8)
     view = _view(state, rules)
     by_id = {v.id: v for v in view.groups}
-    # "Defense" just switched on: nothing gathered yet, the cap is the charged units (DEC-30).
     assert by_id[opaque_id(KEY, 0, g.id)] == GroupView(
-        opaque_id(KEY, 0, g.id), 5, 3, Mode.DEFENSE, AtNode(1), None, 0, 3
+        opaque_id(KEY, 0, g.id), 5, 3, Mode.ATTACK, AtNode(1), None
     )
     order = by_id[opaque_id(KEY, 0, w.id)].order
     assert order is not None and (order.dest, order.path, order.planned) == (2, (1, 2), True)
@@ -506,31 +412,9 @@ def test_own_entities_are_exact(rules: Ruleset) -> None:
     )
 
 
-def test_dec28_own_front_markers_and_rear_minimum_in_the_view(rules: Ruleset) -> None:
-    """DEC-28: the view shows the own markers and rear minimum (``SelfView``)."""
-    state = _state("line6", rules)
-    state.players[0].fronts = (2, None)
-    state.players[0].rear_min = 3
-    me = _view(state, rules).me
-    assert (me.fronts, me.rear_min) == ((2, None), 3)
-
-
-def test_dec28_enemy_front_markers_and_rear_minimum_are_hidden(rules: Ruleset) -> None:
-    """DEC-28 (fog test of ``SelfView.fronts`` and ``SelfView.rear_min``): the enemy's markers
-    and rear minimum are not in the view, even when the marked city is seen exactly."""
-    state = _state("line6", rules)
-    state.nodes[2].owner = 1  # an enemy city next to an own one
-    _add(state, 0, AtNode(2))  # own group in it: exact
-    view = _view(state, rules)
-    assert view.nodes[2].detail is E
-    state.players[1].fronts = (2, 4)
-    state.players[1].rear_min = 5
-    assert _view(state, rules) == view
-    assert _view(state, rules, player=1).me.fronts == (2, 4)
-
-
 def test_dec19_starve_in_only_for_own_cut_off_cities(rules: Ruleset) -> None:
-    """DEC-19, item 8: the countdown of an own cut-off city; never for the enemy's."""
+    """DEC-19, item 8 (in the pockets of DEC-43, item H4): the countdown of an own starving node;
+    never for the enemy's."""
     state = _state("line6", rules)
     state.tick = 150
     state.nodes[1].cut_since = 100  # grace 100: the first consumption at 200
@@ -579,7 +463,7 @@ def test_dec25_enemy_recruit_queue_hidden_even_in_sight(rules: Ruleset) -> None:
 
 
 def test_dec19_no_starve_in_when_there_is_nothing_to_spend(rules: Ruleset) -> None:
-    """#253 (DEC-19, item 8): an own cut-off city with an empty warehouse and no charged standing
+    """#253 (DEC-19, item 8): an own starving node with an empty warehouse and no charged standing
     unit, or with no standing unit at all, has no countdown; charges bring it back."""
     state = _state("line6", rules)
     state.tick = 150
@@ -597,43 +481,21 @@ def test_dec19_no_starve_in_when_there_is_nothing_to_spend(rules: Ruleset) -> No
     assert _view(state, rules).nodes[1].starve_in is None
 
 
-def test_dec18_own_packet_path_and_transfer(rules: Ruleset) -> None:
+def test_dec18_own_packet_path(rules: Ruleset) -> None:
     state = _state("line6", rules)
     state.nodes[2].owner = 0
     pid = state.new_id()
-    state.packets[pid] = Packet(
-        pid, 0, 0, 0, 3, 5, 35, route=(1,), route_ticks=(30,), transfer=True
-    )
+    state.packets[pid] = Packet(pid, 0, 0, 0, 3, 5, 35, route=(1,), route_ticks=(30,))
     [packet] = _view(state, rules).packets
-    assert (packet.path, packet.dest_tick, packet.transfer) == ((1, 2), 65, True)
+    assert (packet.path, packet.dest_tick) == ((1, 2), 65)
 
 
-def test_dec18_enemy_transfer_is_never_visible(rules: Ruleset) -> None:
+def test_dec18_enemy_packet_on_its_way_is_never_visible(rules: Ruleset) -> None:
     state = _state("line6", rules)
     before = _view(state, rules)
     pid = state.new_id()
-    state.packets[pid] = Packet(
-        pid, 1, 4, 5, 3, 5, 35, route=(3,), route_ticks=(30,), transfer=True
-    )
+    state.packets[pid] = Packet(pid, 1, 4, 5, 3, 5, 35, route=(3,), route_ticks=(30,))
     assert _view(state, rules) == before
-
-
-def test_upgrade_gain_only_on_own_internal_edges(rules: Ruleset) -> None:
-    state = _state("line6", rules)
-    state.edges[0].width = 2
-    view0, view1 = _view(state, rules, 0), _view(state, rules, 1)
-    speeds, units = rules.supply.fast_speed_pct, rules.road.speed_pct
-    amount = rules.supply.amount_by_level
-    gain = view0.edges[0].upgrade_gain
-    assert gain == UpgradeGain(  # DEC-26, item 7; DEC-28, item 7
-        speed_pct=speeds.of(3) - speeds.of(2),
-        unit_speed_pct=units.of(3) - units.of(2),
-        amount=amount.of(3) - amount.of(2),
-    )
-    assert [e.upgrade_gain is not None for e in view0.edges] == [True, False, False, False, False]
-    assert [e.upgrade_gain is not None for e in view1.edges] == [False, False, False, False, True]
-    state.edges[0].width = state.map.edges[0].max_level
-    assert _view(state, rules, 0).edges[0].upgrade_gain is None
 
 
 # Opaque ids and resolve() ---------------------------------------------------------------------
@@ -682,7 +544,7 @@ def test_resolve_unknown_ids_are_not_found_or_hidden(rules: Ruleset) -> None:
         12345,
     ]
     for guess in guesses:
-        for cmd in (Move(guess, 1), Split(guess, 1), SetMode(guess, Mode.DEFENSE)):
+        for cmd in (Move(guess, 1), Split(guess, 1), CancelOrder(guess)):
             resolved = resolve(state, 0, cmd, KEY)
             assert validate(state, rules, 0, resolved) == Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
     merge = resolve(state, 0, Merge((opaque_id(KEY, 0, own.id), 1, 2)), KEY)
@@ -711,10 +573,10 @@ from gow_sim.state import AtNode, Group, Mode, initial_state
 from gow_sim.systems.vision import vision
 from gow_sim.view import project, view_hash
 tests = Path({tests!r})
-rules = load_ruleset(tests.parents[2] / "rulesets" / "mvp-0.toml")
+rules = load_ruleset(tests.parents[2] / "rulesets" / "mvp-5.toml")
 state = initial_state(load_map(tests / "maps" / "diamond.json"), rules)
 gid = state.new_id()
-state.groups[gid] = Group(gid, 1, 4, 2, Mode.DEFENSE, AtNode(1))
+state.groups[gid] = Group(gid, 1, 4, 2, Mode.ATTACK, AtNode(1))
 vision(state, rules)
 print(*(view_hash(project(state, rules, p, bytes(range(32)))) for p in (0, 1)))
 """
@@ -755,7 +617,7 @@ _ORDER = (E, R, P, F)
 
 def _levels(state: GameState, player: int) -> tuple[list[Detail], list[Detail], list[bool]]:
     """DEC-21 levels with the sources of DEC-35, computed independently of ``systems.vision``:
-    the levels of the nodes (an own node at least ``PRESENCE``, DEC-35, detail 3), the road level
+    the levels of the nodes (an own node at least ``PRESENCE``, DEC-35, detail 3), the
     visibility of edges (DEC-17) and whether the node's warehouse is shown (own, or an own group
     stands there; DEC-35, detail 2)."""
     mapdef = state.map
@@ -804,11 +666,6 @@ def _zones(state: GameState, player: int) -> list[Detail]:
     return zones
 
 
-def _own_internal(state: GameState, player: int, edge: int) -> bool:
-    e = state.map.edges[edge]
-    return state.nodes[e.a].owner == player and state.nodes[e.b].owner == player
-
-
 def _half(state: GameState, loc: OnEdge) -> int:
     """The end whose half holds a group (DEC-21, item 5), border point 500."""
     e = state.map.edges[loc.edge]
@@ -828,7 +685,7 @@ def _place_level(state: GameState, nodes: list[Detail], zones: list[Detail], g: 
 
 
 _MAPS = {name: load_map(TESTS_DIR / "maps" / f"{name}.json") for name in TEST_MAPS}
-_RULES = load_ruleset(MVP0)
+_RULES = _line6_rules()
 
 
 def _location(draw: st.DrawFn, state: GameState) -> AtNode | OnEdge:
@@ -852,16 +709,10 @@ def _random_group(draw: st.DrawFn, state: GameState, owner: int) -> None:
         _location(draw, state),
         units=units,
         charged=draw(st.integers(0, units)),
-        mode=draw(st.sampled_from(list(Mode))),
     )
     if draw(st.booleans()):
         path = draw(st.lists(st.integers(0, len(state.map.nodes) - 1), min_size=1, max_size=3))
         g.order = Order(tuple(path), draw(st.booleans()), draw(st.integers(0, 50)))
-
-
-def _upgrade(edge: Edge, level: int) -> None:
-    """Raise ``edge`` to ``level``."""
-    edge.width = level
 
 
 @st.composite
@@ -871,18 +722,12 @@ def _states(draw: st.DrawFn) -> tuple[GameState, int]:
     for node in state.nodes.values():
         node.owner = draw(st.sampled_from([None, 0, 1]))
         node.warehouse = draw(st.integers(0, 30))
-    for edge in state.edges.values():
-        static = state.map.edges[edge.id]
-        _upgrade(edge, draw(st.integers(ROAD_START_LEVEL, static.max_level)))
     for _ in range(draw(st.integers(0, 3))):  # earlier ticks leave fog memory
         state.groups = {}
         for _ in range(draw(st.integers(0, 6))):
             _random_group(draw, state, draw(st.sampled_from([0, 1])))
         vision(state, _RULES)
         state.tick += draw(st.integers(1, 20))
-        for edge in state.edges.values():  # roads are upgraded, never torn down
-            level = draw(st.integers(edge.width, state.map.edges[edge.id].max_level))
-            _upgrade(edge, level)
     state.groups = {}
     for _ in range(draw(st.integers(0, 8))):
         _random_group(draw, state, draw(st.sampled_from([0, 1])))
@@ -894,36 +739,27 @@ def _states(draw: st.DrawFn) -> tuple[GameState, int]:
         )
     for _ in range(draw(st.integers(0, 4))):
         iid = state.new_id()
-        kind = draw(st.sampled_from(list(IntentKind)))
         edge = state.map.edges[draw(st.integers(0, len(state.map.edges) - 1))]
-        target = None if kind is IntentKind.DEFENSE else edge.b
-        state.intents[iid] = Intent(iid, draw(st.sampled_from([0, 1])), kind, edge.a, target, 0)
-    for _ in range(draw(st.integers(0, 3))):  # road builds of cities (DEC-16)
-        edge = state.map.edges[draw(st.integers(0, len(state.map.edges) - 1))]
-        node = draw(st.sampled_from([edge.a, edge.b]))
-        state.nodes[node].build = Build(edge.id, draw(st.sampled_from([0, 1])), 0)
-    for node in state.nodes.values():  # DEC-26: the barracks, warehouse levels, city builds
+        owner = draw(st.sampled_from([0, 1]))
+        state.intents[iid] = Intent(iid, owner, IntentKind.PLANNED_MOVE, edge.a, edge.b, 0)
+    for node in state.nodes.values():  # DEC-26: the barracks and the city builds
         node.has_barracks = draw(st.booleans())
-        node.warehouse_level = draw(st.integers(0, 2))
-        if node.build is None and node.owner is not None and draw(st.booleans()):
+        if node.owner is not None and draw(st.booleans()):
             # The build system removes a city build whose city changed hands in the same tick.
-            kind = draw(st.sampled_from([BuildKind.BARRACKS, BuildKind.WAREHOUSE]))
-            node.build = Build(None, node.owner, 0, kind)
+            node.build = Build(node.owner, 0, BuildKind.BARRACKS, draw(st.integers(0, 3)))
     return state, draw(st.sampled_from([0, 1]))
 
 
 def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     """Change only what ``player`` must not know; the view must stay the same."""
     draw = data.draw
-    nodes, edges, warehouse = _levels(state, player)
+    nodes, _, warehouse = _levels(state, player)
     zones = _zones(state, player)
     enemy = 1 - player
     for gid in sorted(state.groups):
         g = state.groups[gid]
         if g.owner != enemy:
             continue
-        if g.mode is Mode.DEFENSE:  # DEC-30, item 5: what it has gathered is hidden everywhere
-            g.ticks_in_defense = draw(st.integers(0, 1000))
         level = _place_level(state, nodes, zones, g)
         g.order = None  # the target of a normal order is never shown (DEC-21, item 6)
         if level is F and draw(st.booleans()):
@@ -943,7 +779,6 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     for pid in sorted(state.packets):
         if state.packets[pid].owner == enemy:
             state.packets[pid].charges = draw(st.integers(1, 9))
-            state.packets[pid].transfer = draw(st.booleans())
     for node in state.nodes.values():  # DEC-19: enemy starvation hidden
         if node.owner == enemy:
             node.cut_since = draw(st.none() | st.integers(0, max(0, state.tick)))
@@ -952,31 +787,20 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     other = state.players[enemy]
     other.cp = draw(st.integers(0, 10_000))
     other.stance = draw(st.sampled_from(list(Stance)))
-    other.charge_acc = draw(st.integers(0, 99))
-    other.fronts = (draw(st.none() | st.integers(0, len(nodes) - 1)), None)  # DEC-28: hidden
-    other.rear_min = draw(st.integers(0, 8))
+    other.cp_ticks = draw(st.integers(0, 99))  # DEC-44: the enemy's progress is hidden
+    other.capital_ticks = draw(st.integers(0, 99))
+    other.leaf_shift = draw(st.integers(0, 3))  # DEC-43, item B5
     state.events = [Event(state.tick, "fight", (("node", 0),))]
     state.vision_memory[enemy] = VisionMemory()  # the enemy's fog memory
-    # DEC-17: roads in fog may be upgraded further, enemy builds on them may start or stop.
-    for e, level in enumerate(edges):
-        if level is F and not _own_internal(state, player, e):  # own roads: DEC-35, detail 5
-            edge = state.edges[e]
-            level = data.draw(st.integers(edge.width, state.map.edges[e].max_level))
-            _upgrade(edge, level)
     for node in state.nodes.values():
         b = node.build
         if node.owner == player:  # the builds of an own city are own data, whoever started them
             continue
-        if b is not None and b.owner == enemy and b.edge is not None and edges[b.edge] is F:
-            if draw(st.booleans()):
-                node.build = None
-        elif b is not None and b.owner == enemy and b.edge is None and draw(st.booleans()):
-            node.build = None  # the barracks and warehouse builds of the enemy: never shown
-    for node in state.nodes.values():  # DEC-26, item 10: the enemy's barracks and levels hidden
-        if node.owner == enemy:
-            if not _borders_own(state, player, node.id):  # DEC-31: seen next to an own node
-                node.has_barracks = draw(st.booleans())
-            node.warehouse_level = draw(st.integers(0, 2))
+        if b is not None and b.owner == enemy and draw(st.booleans()):
+            node.build = None  # the barracks builds of the enemy: never shown
+    for node in state.nodes.values():  # DEC-26, item 10: the enemy's barracks hidden
+        if node.owner == enemy and not _borders_own(state, player, node.id):  # DEC-31
+            node.has_barracks = draw(st.booleans())
 
 
 def _borders_own(state: GameState, player: int, node: int) -> bool:
@@ -1012,13 +836,7 @@ def test_property_nothing_leaks_from_places_out_of_sight(data: st.DataObject) ->
         for h, n in zip(e.halves, (edef.a, edef.b), strict=True):
             _check_place(h.detail, h.seen, memory.halves.get((e.id, n)))
     _check_figures(state, player, zones, view)
-    # DEC-17, DEC-22: known levels never exceed the true ones and equal them in sight;
-    # capacities are exact everywhere.
-    for e in view.edges:
-        road = state.edges[e.id]
-        assert e.width <= road.width
-        assert e.detail is F or e.width == road.width
-        assert not _own_internal(state, player, e.id) or e.width == road.width  # DEC-35, detail 5
+    # DEC-22: capacities are exact everywhere.
     for n in view.nodes:
         assert n.capacity == city_capacity(state, _RULES, n.id)
     # DEC-26, item 10; DEC-31: the barracks of own cities and of enemy cities next to an own
@@ -1031,9 +849,7 @@ def test_property_nothing_leaks_from_places_out_of_sight(data: st.DataObject) ->
         seen = (city and node.owner == player) or next_door
         assert n.has_barracks == (node.has_barracks if seen else None)
         if enemy_city:
-            assert (n.warehouse_level, n.warehouse_cap, n.building, n.recruit_queue) == (
-                (None,) * 4
-            )
+            assert (n.warehouse_cap, n.building, n.recruit_queue) == (None,) * 3
 
     _hide(data, state, player)
     assert project(state, _RULES, player, KEY) == view
@@ -1083,41 +899,3 @@ def _check_figures(state: GameState, player: int, zones: list[Detail], view: Pla
             else:
                 assert (f.units, f.charged) == (None, None)
                 assert (f.units_range is not None) == (f.detail is R)
-
-
-# DEC-16, item 8 and DEC-17, item 5: road builds of cities ---------------------------------------
-
-
-def test_dec28_own_build_is_exact(rules: Ruleset) -> None:
-    """The road build sits on the edge (DEC-28, item 7; ``EdgeView.build``)."""
-    state = _state("line6", rules)
-    state.edges[0].build = Build(edge=0, owner=0, since=40)
-    view = _view(state, rules)
-    done = 40 + rules.build.ticks_per_level
-    assert view.edges[0].build == BuildView(done_tick=done)
-    assert [e.id for e in view.edges if e.build is not None] == [0]
-
-
-def test_dec28_enemy_build_in_fog_is_hidden(rules: Ruleset) -> None:
-    """Fog test of ``EdgeView.build`` (DEC-17, item 5): not shown and not remembered."""
-    state = _state("line6", rules)
-    state.edges[4].build = Build(edge=4, owner=1, since=40)  # e4 = 4-5: fog for player 0
-    view = _view(state, rules)
-    assert view.edges[4].detail is Detail.FOG
-    assert all(e.build is None for e in view.edges)
-    assert _view(state, rules, player=1).edges[4].build == BuildView(
-        done_tick=40 + rules.build.ticks_per_level
-    )
-    _add(state, 0, AtNode(4), units=1, charged=0)  # seen now ...
-    assert _view(state, rules).edges[4].build is not None
-    state.groups.clear()  # ... and in fog again: nothing remembered
-    assert _view(state, rules).edges[4].build is None
-
-
-def test_dec28_enemy_build_on_a_seen_edge_shows_no_end_tick(rules: Ruleset) -> None:
-    state = _state("line6", rules)
-    state.edges[4].build = Build(edge=4, owner=1, since=40)
-    _add(state, 0, AtNode(4), units=1, charged=0)  # node 4 exact, so e4 is not in fog
-    view = _view(state, rules)
-    assert view.edges[4].detail is Detail.PRESENCE
-    assert view.edges[4].build == BuildView(done_tick=None)

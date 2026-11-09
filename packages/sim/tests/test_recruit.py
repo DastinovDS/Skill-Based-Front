@@ -1,11 +1,11 @@
 """The recruit queue of a city (DEC-25, #262): table tests of the 15 worked examples.
 
 Expected values come from DEC-25 (mechanics.md, section 3), not from the code: city X is medium
-(capacity 6) with 1 standing unit of its owner, ``recruit.location = any_city``, CP 300,
-``recruit.unit_ticks = 30``, ``recruit.queue_max = 3``, ``recruit.refund_started_pct = 50``,
-``orders.cost.recruit = 100``, CP cap 500. These numbers are pinned in ``RULES`` (CP
-regeneration off, as the examples do not count it), so balance changes of ``mvp-0.toml`` do not
-break the rule tests.
+(capacity 6) with 1 standing unit of its owner and a barracks (DEC-26: only a city with a
+barracks recruits), CP 300, ``recruit.unit_ticks = 30``, ``recruit.queue_max = 3``,
+``recruit.refund_started_pct = 50``, ``orders.cost.recruit = 100``, CP cap 500. These numbers are
+pinned in ``RULES`` (built from mvp-7 with the CP quantum 0 and no production of the capital, as
+the examples count neither), so balance changes of ``mvp-7.toml`` do not break the rule tests.
 
 Map ``dec18``: player 0 owns K = 0 (capital), 1, X = 2 and 3 (medium cities); 4 is a neutral
 province between K and X (the tests give it to player 0 where a province is needed). X is
@@ -31,13 +31,7 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import load_map
 from gow_sim.match import Match
-from gow_sim.ruleset import (
-    KindTable,
-    RecruitLocation,
-    RecruitRules,
-    Ruleset,
-    load_ruleset,
-)
+from gow_sim.ruleset import KindTable, RecruitRules, Ruleset, StanceTable, load_ruleset
 from gow_sim.state import (
     AtNode,
     Event,
@@ -53,17 +47,20 @@ from gow_sim.state import (
 from gow_sim.systems.capacity import change_owner
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP7 = TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml"
 K, X, P = 0, 2, 4
 START = 1000
 """The tick of the first ``Recruit`` of the examples."""
 
 
-def _rules(location: RecruitLocation = RecruitLocation.ANY_CITY) -> Ruleset:
-    base = load_ruleset(MVP0)
+def _rules() -> Ruleset:
+    base = load_ruleset(MVP7)
+    never = StanceTable(economy=10**6, balance=10**6, war=10**6)
     return dataclasses.replace(
         base,
         cp=dataclasses.replace(base.cp, start=300, cap=500, per_period=0),
+        stances=dataclasses.replace(base.stances, capital_period_ticks=never),
+        map_tempo=None,
         orders=dataclasses.replace(
             base.orders, cost=dataclasses.replace(base.orders.cost, recruit=100)
         ),
@@ -71,7 +68,7 @@ def _rules(location: RecruitLocation = RecruitLocation.ANY_CITY) -> Ruleset:
             base.capacity,
             by_kind=KindTable(capital=10, city_large=8, city_medium=6, city_small=4, province=3),
         ),
-        recruit=RecruitRules(unit_ticks=30, queue_max=3, refund_started_pct=50, location=location),
+        recruit=RecruitRules(unit_ticks=30, queue_max=3, refund_started_pct=50),
     )
 
 
@@ -85,6 +82,9 @@ class _Run:
         self.match = Match(load_map(TESTS_DIR / "maps" / "dec18.json"), rules, bytes(range(32)))
         self.state = self.match.state
         self.state.tick = START - 1
+        for node in self.state.nodes.values():
+            node.warehouse = 0  # no supply flow in the examples
+        self.state.nodes[X].has_barracks = True
         self.garrison = self.add(1, 1, AtNode(X))
         self.seq = 0
         self.events: list[Event] = []
@@ -280,7 +280,6 @@ def test_example_13_a_province_is_not_a_city() -> None:
 def test_example_14_the_new_unit_takes_a_charge_from_the_warehouse_next_tick() -> None:
     run = _Run()
     run.x.warehouse = 2
-    run.state.players[0].rear_min = 2  # DEC-28: X keeps its 2, it is not a donor
     run.step(Recruit(X))
     run.until(1029)
     assert run.recruited() == [1029]
@@ -302,16 +301,16 @@ def test_example_15_with_an_empty_warehouse_the_unit_stays_discharged() -> None:
 
 
 def test_reject_order_of_recruit() -> None:
-    """DEC-25, item 11: NOT_FOUND_OR_HIDDEN, NOT_OWNER, NOT_CITY, NOT_CAPITAL, QUEUE_FULL,
-    CITY_FULL, NOT_ENOUGH_CP."""
-    run = _Run(_rules(RecruitLocation.CAPITAL))
+    """DEC-25, item 11 with DEC-26: NOT_FOUND_OR_HIDDEN, NOT_OWNER, NOT_CITY, NO_BARRACKS,
+    QUEUE_FULL, CITY_FULL, NOT_ENOUGH_CP."""
+    run = _Run()
     state = run.state
     rules = run.match.rules
     cases = (
         (99, RejectCode.NOT_FOUND_OR_HIDDEN),
         (10, RejectCode.NOT_OWNER),  # the enemy's
         (5, RejectCode.NOT_OWNER),  # neutral
-        (X, RejectCode.NOT_CAPITAL),
+        (1, RejectCode.NO_BARRACKS),  # an own city without a barracks
     )
     for node, code in cases:
         assert validate(state, rules, 0, Recruit(node)) == Reject(code)
@@ -342,9 +341,11 @@ def test_groups_on_edges_do_not_fill_the_city() -> None:
     assert run.step(Recruit(X)) == [Ok(cost=100)]
 
 
-def test_location_capital_allows_only_the_own_capital() -> None:
-    run = _Run(_rules(RecruitLocation.CAPITAL))
-    assert run.step(Recruit(X), Recruit(K)) == [Reject(RejectCode.NOT_CAPITAL), Ok(cost=100)]
+def test_only_a_city_with_a_barracks_recruits() -> None:
+    """DEC-26: the capital has a barracks from the start, another city once it built one."""
+    run = _Run()
+    assert run.state.nodes[K].has_barracks and not run.state.nodes[1].has_barracks
+    assert run.step(Recruit(1), Recruit(K)) == [Reject(RejectCode.NO_BARRACKS), Ok(cost=100)]
 
 
 def test_the_queue_roundtrips_through_the_canonical_form() -> None:

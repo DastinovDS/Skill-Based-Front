@@ -16,13 +16,22 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from gow_sim.maps import load_map
-from gow_sim.ruleset import load_ruleset
+from gow_sim.ruleset import StanceTable, load_ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Mode, initial_state
 from gow_sim.systems.flow import supply_flow, update_flow
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+_MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+_EVERY_100 = StanceTable(economy=100, balance=100, war=100)
+RULES = dataclasses.replace(
+    _MVP5,
+    stances=dataclasses.replace(
+        _MVP5.stances, cp_period_ticks=_EVERY_100, capital_period_ticks=_EVERY_100
+    ),
+)
+"""``mvp-5`` with the periods of ``mvp-4`` the tables of DEC-43 were written for: a CP quantum and a
+charge of the capital every 100 ticks under every stance (DEC-44)."""
 NARROWS = load_map(ROOT / "maps" / "narrows.json")
 DEC41 = load_map(TESTS_DIR / "maps" / "dec41.json")
 
@@ -203,7 +212,7 @@ def test_k5_a_saddle_behind_the_level_at_k_2() -> None:
 
 # Properties ---------------------------------------------------------------------------------------
 
-FAST = dataclasses.replace(RULES, supply=dataclasses.replace(RULES.supply, base_speed_pct=100_000))
+FAST = dataclasses.replace(RULES, supply=dataclasses.replace(RULES.supply, speed_pct=100_000))
 """Every packet lands one tick after it leaves (``max(1, ticks * 100 // pct)``), before the next
 dispatch, so the room of a node at a dispatch is its warehouse alone."""
 

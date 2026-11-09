@@ -13,18 +13,28 @@ no groups but the start garrison of K (2/2), no packets; the dispatch at tick 10
 replay-9 situation on ``narrows`` (the owner's playtest of 2026-11-03).
 """
 
+import dataclasses
 from pathlib import Path
 
 from gow_sim.maps import load_map
 from gow_sim.match import HEADLESS_MATCH_KEY
-from gow_sim.ruleset import load_ruleset
+from gow_sim.ruleset import StanceTable, load_ruleset
 from gow_sim.state import AtNode, Event, FlowIdle, GameState, Group, Mode, OnEdge, initial_state
 from gow_sim.systems.flow import supply_flow, update_flow
 from gow_sim.view import project
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+_MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+_EVERY_100 = StanceTable(economy=100, balance=100, war=100)
+RULES = dataclasses.replace(
+    _MVP5,
+    stances=dataclasses.replace(
+        _MVP5.stances, cp_period_ticks=_EVERY_100, capital_period_ticks=_EVERY_100
+    ),
+)
+"""``mvp-5`` with the periods of ``mvp-4`` the tables of DEC-43 were written for: a CP quantum and a
+charge of the capital every 100 ticks under every stance (DEC-44)."""
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 NARROWS = load_map(ROOT / "maps" / "narrows.json")
 K, A, B, C, D, E, F, G, M = range(9)

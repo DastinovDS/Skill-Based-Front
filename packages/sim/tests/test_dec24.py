@@ -1,5 +1,5 @@
 """DEC-24 beyond the worked examples (mechanics.md, section 4, "Fight over time"): commands in a
-fight (item E), movement around a fight (items B6, D1), supply (item H1), production (DEC-25,
+fight (item E), movement around a fight (items B6, D1), recharge (item H1), production (DEC-25,
 item 9), bonuses (item F1), the view of a fight (item I1 and the bonus stock of DEC-32, with
 their fog tests, AGENTS.md 4.4) and the canonical state.
 
@@ -22,7 +22,6 @@ from gow_sim.commands import (
     Recruit,
     Reject,
     RejectCode,
-    SetMode,
     Split,
     apply_commands,
     validate,
@@ -45,10 +44,10 @@ from gow_sim.state import (
     to_canonical,
 )
 from gow_sim.systems.combat import combat
+from gow_sim.systems.flow import supply_flow
 from gow_sim.systems.movement import find_path, leg, movement, reachable
 from gow_sim.systems.orders import active_bonuses, orders
 from gow_sim.systems.recruit import recruit
-from gow_sim.systems.supply import supply
 from gow_sim.view import project
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -123,8 +122,8 @@ class _Run:
         results, events = apply_commands(state, rules, batch)
         state.events = events
         state.events += movement(state, rules)
-        state.events += combat(state, rules, active_bonuses(state, rules))
-        state.events += supply(state, rules)
+        state.events += combat(state, rules, active_bonuses(state))
+        state.events += supply_flow(state, rules)
         state.events += recruit(state, rules)
         state.events += orders(state, rules)
         return [r.outcome for r in results]
@@ -136,6 +135,7 @@ class _Run:
 def _node_fight(rules: Ruleset = RULES) -> tuple[_Run, int, int]:
     """Row 2 in node 1: defender 2/2 (player 1), attacker 3/3 arrives in tick 1."""
     state = initial_state(_line(), rules)
+    state.nodes[1].has_barracks = True  # setup: the city recruits (DEC-26)
     d = _add(state, 1, 2, 2, AtNode(1))
     a = _add(state, 0, 3, 3, _before_arrival(state, 0, 0), order=Order((1,), False, 0))
     run = _Run(state, rules)
@@ -156,7 +156,6 @@ def test_commands_to_a_group_in_a_fight_are_in_fight() -> None:
     in_fight = Reject(RejectCode.IN_FIGHT)
     assert validate(state, RULES, 1, Split(d, 1)) == in_fight
     assert validate(state, RULES, 1, Merge((d, d2))) == in_fight
-    assert validate(state, RULES, 1, SetMode(d, Mode.DEFENSE)) == in_fight
     assert validate(state, RULES, 1, Move(d, 2, planned=True)) == in_fight  # E1
     assert validate(state, RULES, 0, Move(a, 0)) == in_fight  # the attacker cancels instead
     assert validate(state, RULES, 1, Recruit(1)) == Ok(cost=100)  # queued, paused (DEC-25, 9)
@@ -366,7 +365,7 @@ def test_both_players_see_the_fight_with_exact_enemy_counters() -> None:
         )
         assert (fight.enemy_units, fight.enemy_charged) == enemy
         assert fight.virtual_left == (0, 0)  # forest, no orders: no virtual shots
-        assert fight.mute == (0, 0)  # forest: every charge shoots
+        assert fight.mute == (0, 0)  # forest: nothing to burn
 
 
 def test_both_players_see_the_rounds_and_the_bonus_stock_of_both_sides() -> None:
@@ -407,8 +406,8 @@ def test_both_players_see_the_rounds_and_the_bonus_stock_of_both_sides() -> None
 
 def test_fog_the_bonus_stock_is_exact_for_both_players() -> None:
     """AGENTS.md 4.4 for ``FightView.virtual_left`` (DEC-32, item 3) and ``FightView.mute``
-    (DEC-24, item F2): in a fight both numbers of both sides are in the views of both players,
-    exactly; a silent count is at most the charged units of its side."""
+    (DEC-45): in a fight both numbers of both sides are in the views of both players, exactly; a
+    count to burn is at most the charged units of its side."""
     run, d, _ = _node_fight()
     state = run.state
     fid = state.groups[d].fight
@@ -419,25 +418,6 @@ def test_fog_the_bonus_stock_is_exact_for_both_players() -> None:
         (fight,) = project(state, RULES, player, KEY).fights
         assert fight.virtual_left == (1, 4)
         assert fight.mute == (3, 1)
-
-
-def test_both_players_see_the_silent_charge_of_a_defender_on_plains() -> None:
-    """Row 8 of the table (DEC-24, F2; ticks of DEC-32): 2/2 attacks 2/2 on plains, one charge of
-    the defender is silent in every round. After r1 (both cancel, 1 / 1) the defender's last
-    charge is the silent one; after r2 (the attack kills a discharged unit) it is still there."""
-    state = initial_state(_line(middle="plains"), RULES)
-    _add(state, 1, 2, 2, AtNode(1))
-    _add(state, 0, 2, 2, _before_arrival(state, 0, 0), order=Order((1,), False, 0))
-    run = _Run(state)
-    run.step()
-    for player in PLAYERS:
-        (fight,) = project(state, RULES, player, KEY).fights
-        assert fight.mute == (0, 1)
-    while state.tick < 21:
-        run.step()
-    for player in PLAYERS:
-        (fight,) = project(state, RULES, player, KEY).fights
-        assert fight.mute == (0, 1)  # the defender's 1 charged unit stays silent
 
 
 def test_fog_a_withdrawal_is_hidden() -> None:
@@ -451,28 +431,25 @@ def test_fog_a_withdrawal_is_hidden() -> None:
 
 
 def _without_bonuses(state: GameState, gids: list[int]) -> GameState:
-    """A copy of ``state`` where the groups ``gids`` have no bonus and no gathered "Defense"."""
+    """A copy of ``state`` where the groups ``gids`` have no bonus."""
     copy = from_canonical(to_canonical(state))
     for gid in gids:
         copy.groups[gid].bonus = 0
-        copy.groups[gid].ticks_in_defense = 0
     return copy
 
 
 def test_fog_an_enemy_bonus_outside_a_fight_is_hidden() -> None:
-    """DEC-32, item 3 (DEC-30, item 5): outside a fight the gathered "Defense" and the bonus of a
-    waiting planned order of an enemy group are not in a view: player 0's view is the same with
-    and without them, while player 1 sees its own "Defense" bonus."""
+    """DEC-32, item 3: outside a fight the bonus of a waiting planned order of an enemy group is
+    not in a view: player 0's view is the same with and without it, while player 1 sees its own
+    bonus."""
     state = initial_state(_line(), RULES)
-    gathered = 2 * RULES.orders.defense_ticks_per_bonus
-    guard = _add(state, 1, 2, 2, AtNode(1), mode=Mode.DEFENSE, ticks_in_defense=gathered)
     waiting = _add(state, 1, 2, 2, AtNode(1), order=Order((0,), True, 50), bonus=2, bonus_tick=50)
     _add(state, 0, 1, 1, AtNode(0))
-    bare = _without_bonuses(state, [guard, waiting])
+    bare = _without_bonuses(state, [waiting])
     assert project(state, RULES, 0, KEY) == project(bare, RULES, 0, KEY)
     assert project(state, RULES, 0, KEY).fights == ()
-    own = {g.units: g for g in project(state, RULES, 1, KEY).groups if g.mode is Mode.DEFENSE}
-    assert own[2].defense_bonus == 2  # the own view has it: the test above is not vacuous
+    (own,) = project(state, RULES, 1, KEY).groups
+    assert own.order is not None and own.order.bonus == 2  # the own view has it: not vacuous
 
 
 def test_fog_a_reinforcement_shows_its_bonus_only_when_it_joins() -> None:

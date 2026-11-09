@@ -9,7 +9,8 @@ once and skips the budget checks.
 Step budget: 40 nodes and 40 groups (``grid40`` of ``conftest.py``: 10 garrisons and 10 extra
 groups per player), both players driven by ``ExpandBot``; the controllers and projections run in
 the untimed setup, so the timed part is ``Match.step`` alone. The maps of DEC-27 (45..55 nodes)
-are checked against the same budgets on ``grid55`` (55 nodes, 56 groups; DEC-27, item 7).
+are checked against the same budgets on ``grid55`` (55 nodes, 56 groups; DEC-27, item 7). The
+rules are ``mvp-7`` (the shared ``mvp_rules``): the supply step is the flow of DEC-43.
 """
 
 import copy
@@ -25,12 +26,10 @@ import pytest
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Controller, Match, MatchResult, run_headless
-from gow_sim.ruleset import Ruleset, load_ruleset
-from gow_sim.state import AtNode, Detail, GameState, Group, Line, Mode, OnEdge, Packet
+from gow_sim.ruleset import Ruleset
+from gow_sim.state import AtNode, Detail, GameState, Group, Mode, OnEdge, Packet
 from gow_sim.systems.capacity import warehouse_capacities
 from gow_sim.systems.flow import supply_flow, update_flow
-from gow_sim.systems.lines import supply_lines
-from gow_sim.systems.supply import supply, supply_tree
 from gow_sim.systems.vision import compute_vision
 from gow_sim.view import project
 
@@ -162,10 +161,6 @@ class _Driver:
         return self.match.state
 
 
-def _supply(state: GameState, rules: Ruleset) -> None:
-    supply(state, rules)
-
-
 @pytest.fixture(params=["grid40", "grid55"])
 def grid_map(request: pytest.FixtureRequest) -> MapDef:
     """The budgets of section 12 on 40 nodes and, by DEC-27, item 7, on 55 nodes."""
@@ -195,148 +190,6 @@ def test_bench_step(
 
     benchmark.pedantic(driver.step, setup=setup, rounds=2000)
     _check(benchmark, speed_factor, 0.3 * MS, 1.0 * MS)
-
-
-def test_bench_supply(
-    benchmark: BenchmarkFixture,
-    speed_factor: float,
-    grid_map: MapDef,
-    mvp_rules: Ruleset,
-    expand_bot: BotFactory,
-) -> None:
-    state = _Driver(grid_map, mvp_rules, expand_bot).warm(300)
-    assert state.packets, "the benchmark state has packets on the way"
-
-    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
-        return (copy.deepcopy(state),), {}
-
-    benchmark.pedantic(partial(_supply, rules=mvp_rules), setup=setup, rounds=500)
-    _check(benchmark, speed_factor, 0.1 * MS)
-
-
-def _donor_state(mapdef: MapDef, rules: Ruleset) -> GameState:
-    """A dispatch tick of a busy supply (DEC-28, #306): each player owns half of ``grid40`` (20
-    cities), every other city is a donor (4 charges over a rear minimum of 2), the others lack 2,
-    both markers sit on empty front cities, and transfer packets hold the roads next to the
-    capital, so most sends hit a road with no throughput left and look for a detour (#309)."""
-    state = Match(mapdef, rules, KEY).state
-    cols = 20
-    for n in range(2 * cols):
-        state.nodes[n].owner = 0 if n % cols < cols // 2 else 1
-    for pid in PLAYERS:
-        state.players[pid].rear_min = 2
-    for n in range(cols // 2):  # player 0 (the mirror half for player 1)
-        for node in (n, cols + n):
-            stock = 4 if (n + node // cols) % 2 else 0
-            state.nodes[node].warehouse = stock
-            state.nodes[2 * cols - 1 - node].warehouse = stock
-    fronts = (cols // 2 - 1, cols + cols // 2 - 1)  # both front cities of player 0
-    state.players[0].fronts = fronts
-    state.players[1].fronts = tuple(2 * cols - 1 - f for f in fronts)
-    for pid in PLAYERS:
-        state.nodes[mapdef.capital(pid)].warehouse = 10
-        for f in fronts:
-            state.nodes[f if pid == 0 else 2 * cols - 1 - f].warehouse = 0
-    for pid, (a, b) in ((0, (0, 1)), (0, (0, cols)), (1, (39, 38)), (1, (39, 19))):
-        eid = next(e.id for e in mapdef.edges if {e.a, e.b} == {a, b})
-        packet_id = state.new_id()
-        state.packets[packet_id] = Packet(
-            id=packet_id,
-            owner=pid,
-            edge=eid,
-            from_node=a,
-            charges=3,
-            depart_tick=0,
-            arrive_tick=1000,
-            transfer=True,
-            share=3,
-        )
-    state.groups.clear()
-    state.tick = 1000  # a dispatch tick
-    return state
-
-
-def test_bench_supply_many_donors_busy_roads(
-    benchmark: BenchmarkFixture, speed_factor: float, grid40_map: MapDef, mvp_rules: Ruleset
-) -> None:
-    """A dispatch tick at its worst (the risk noted in #292): 20 cities per player, ten deficits,
-    ten donors, used-up roads and detours. The budget of section 12 (0.1 ms) is for the state of a
-    bot match (``test_bench_supply``); this stress state has its own budget, 1 ms per dispatch
-    tick (once in ``supply.dispatch_ticks``), ``docs/perf.md``."""
-    state = _donor_state(grid40_map, mvp_rules)
-    sent = [e for e in supply(copy.deepcopy(state), mvp_rules) if e.kind == "packet_sent"]
-    assert len(sent) >= 10, "the benchmark state sends many packets"
-
-    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
-        return (copy.deepcopy(state),), {}
-
-    benchmark.pedantic(partial(_supply, rules=mvp_rules), setup=setup, rounds=500)
-    _check(benchmark, speed_factor, 1.0 * MS)
-
-
-def _lines_state(mapdef: MapDef, rules: Ruleset) -> GameState:
-    """A dispatch tick of the economy v2 (DEC-41, DEC-42): every own node of a player is the
-    target of a line from its capital along the supply tree (no limit of lines, DEC-42), two more
-    cities on the tree are factories, so the lines through them pass hubs; the warehouses hold 3
-    (two levels), every other target is full and the rest are empty, and packets of the last
-    dispatch are on the way. No groups: the step is the supply alone."""
-    match = Match(mapdef, rules, KEY)
-    state = match.state
-    state.groups.clear()
-    for pid in PLAYERS:
-        tree = supply_tree(state, rules, pid)
-        ps = state.players[pid]
-        for node in tree.order[1:]:
-            path = [node]
-            while (parent := tree.parent[path[-1]]) is not None:
-                path.append(parent)
-            ps.lines[ps.next_line] = Line(ps.next_line, tuple(reversed(path)))
-            ps.next_line += 1
-        for node in (tree.order[3], tree.order[6]):
-            state.nodes[node].factory = pid
-    for node in state.nodes.values():
-        node.warehouse_level = rules.warehouse.max_level
-
-    def fill() -> None:
-        caps = warehouse_capacities(state, rules)
-        for node in state.nodes.values():
-            if node.owner is None:
-                continue
-            if node.factory == node.owner:
-                node.warehouse = caps[node.id]
-            else:
-                node.warehouse = caps[node.id] if node.id % 2 else 0
-            node.rr = 1  # the second line's turn
-
-    for _ in range(289):
-        match.step()
-    fill()
-    for _ in range(10):  # the dispatch of tick 290: its packets are on the way at 300
-        match.step()
-    fill()
-    state.tick += 1  # tick 300: a dispatch tick (``supply.dispatch_ticks`` 10 divides it)
-    return state
-
-
-def test_bench_supply_lines(
-    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef
-) -> None:
-    """The supply budget of section 12 (0.1 ms) on the economy v2 (#644): a dispatch tick with a
-    line from the capital to every own node, the worst tick of the lines (the others only move
-    packets)."""
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
-    state = _lines_state(grid_map, rules)
-    probe = supply_lines(copy.deepcopy(state), rules)
-    assert state.packets and any(e.kind == "packet_sent" for e in probe)
-
-    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
-        return (copy.deepcopy(state),), {}
-
-    benchmark.pedantic(partial(supply_lines, rules=rules), setup=setup, rounds=500)
-    _check(benchmark, speed_factor, 0.1 * MS)
-
-
-MVP4: Final = ROOT / "rulesets" / "mvp-4.toml"
 
 
 def _flow_state(mapdef: MapDef, rules: Ruleset) -> GameState:
@@ -371,12 +224,16 @@ def _flow_state(mapdef: MapDef, rules: Ruleset) -> GameState:
 
 
 def test_bench_supply_flow(
-    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef, expand_bot: BotFactory
+    benchmark: BenchmarkFixture,
+    speed_factor: float,
+    grid_map: MapDef,
+    mvp_rules: Ruleset,
+    expand_bot: BotFactory,
 ) -> None:
-    """The supply budget of section 12 (0.1 ms) on the supply flow (DEC-43, #704), measured like
-    ``test_bench_supply``: the state after 300 ticks of a bot match under ``mvp-4``, a dispatch
-    tick, with the field, the pull, the dispatch and the plan of the view (item A13) in the step."""
-    rules = load_ruleset(MVP4)
+    """The supply budget of section 12 (0.1 ms) on the supply flow (DEC-43, #704): the state
+    after 300 ticks of a bot match, a dispatch tick, with the field, the pull, the dispatch and
+    the plan of the view (item A13) in the step."""
+    rules = mvp_rules
     state = _Driver(grid_map, rules, expand_bot).warm(300)
     assert state.tick % rules.supply.dispatch_ticks == 0
 
@@ -388,19 +245,18 @@ def test_bench_supply_flow(
 
 
 FLOW_BUSY_BUDGET: Final = 0.3 * MS
-"""The busiest dispatch of the flow (``_flow_state``), a stress state like the one of
-``test_bench_supply_many_donors_busy_roads``: not the section 12 budget (that one is
-``test_bench_supply_flow``); about 0.2 ms on ``grid40`` and 0.25 ms on ``grid55`` since DEC-43
-items K and L, half of it the packets it sends. 0.2 ms accepted by the owner 2026-11-03 (#704),
-0.3 ms on both maps accepted by the owner 2026-11-04 (#735)."""
+"""The busiest dispatch of the flow (``_flow_state``), a stress state: not the section 12
+budget (that one is ``test_bench_supply_flow``); about 0.2 ms on ``grid40`` and 0.25 ms on
+``grid55`` since DEC-43 items K and L, half of it the packets it sends. 0.2 ms accepted by the
+owner 2026-11-03 (#704), 0.3 ms on both maps accepted by the owner 2026-11-04 (#735)."""
 
 
 def test_bench_supply_flow_busy(
-    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef
+    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef, mvp_rules: Ruleset
 ) -> None:
     """The busiest dispatch tick of the flow: ``_flow_state``, nearly every node behind the level
     sends, the plan of the view computed after it."""
-    rules = load_ruleset(MVP4)
+    rules = mvp_rules
     state = _flow_state(grid_map, rules)
     probe = supply_flow(copy.deepcopy(state), rules)
     assert sum(e.kind == "packet_sent" for e in probe) >= 10
@@ -412,26 +268,12 @@ def test_bench_supply_flow_busy(
     _check(benchmark, speed_factor, FLOW_BUSY_BUDGET)
 
 
-def test_bench_step_flow(
-    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef, expand_bot: BotFactory
-) -> None:
-    """The step budget of section 12 under ``mvp-4`` (the supply flow, DEC-43)."""
-    driver = _Driver(grid_map, load_ruleset(MVP4), expand_bot)
-    driver.warm(50)
-
-    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
-        return (driver.commands(),), {}
-
-    benchmark.pedantic(driver.step, setup=setup, rounds=2000)
-    _check(benchmark, speed_factor, 0.3 * MS, 1.0 * MS)
-
-
 def test_bench_project_flow(
-    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef
+    benchmark: BenchmarkFixture, speed_factor: float, grid_map: MapDef, mvp_rules: Ruleset
 ) -> None:
-    """The projection budget under ``mvp-4``: the own-only flow fields of item E on every own
-    node of the busy state of ``_flow_state``."""
-    rules = load_ruleset(MVP4)
+    """The projection budget with the own-only flow fields of item E on every own node of the
+    busy state of ``_flow_state``."""
+    rules = mvp_rules
     state = _flow_state(grid_map, rules)
     supply_flow(state, rules)
     view = project(state, rules, 0, KEY)

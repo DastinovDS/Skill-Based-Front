@@ -1,16 +1,14 @@
-"""DEC-29: the bonus of a planned order by distance (mechanics.md, section 5, "Scheduled order bonus
-by distance (DEC-29, #291)").
-
-The bonus is the number of edges of the path of the order (the path of ``Move``, the one in
-``ack.path``, chosen at the command) times ``orders.planned_bonus_per_edge``, at most the charged
-units of the group in the tick it departs; a group without charged units gets 0, the order still
-runs and its CP are not returned. Expected values: the table of examples of DEC-29 (ruleset
-``mvp-1``, ``planned_bonus_per_edge = 1``).
+"""DEC-29, the cap of a planned bonus (mechanics.md, section 5): the bonus a planned order brings
+into its first fight is at most the charged units of the group in the tick it departs; a group
+without charged units brings 0, the order still runs. The bonus itself is the one the order
+gathered (DEC-41, item 10, ``test_dec41_plans.py``); the distance bonus of DEC-29 (per edge of
+the path) was removed with economy v1 (#894).
 
 Maps: a line ``0 - 1 - ... - 6`` of player 0's cities with the capitals at the ends (player 1's
-at 6), 30 ticks per edge; the planned order waits ``orders.planned_delay_ticks = 30`` ticks, so a
-command applied at tick 1 departs at tick 31. Only the systems that act here run (commands,
-movement, combat, orders), so the charged units change only where a test changes them.
+at 6), 30 ticks per edge, ruleset ``mvp-7``. The tests set up a planned order that has gathered
+its bonus and departs at ``DEPART`` (the state a released plan leaves). Only the systems that act
+here run (commands, movement, combat, orders), so the charged units change only where a test
+changes them.
 """
 
 from dataclasses import fields
@@ -22,17 +20,17 @@ import pytest
 from gow_sim.commands import Command, Move, Ok, PlayerCommand, Reject, apply_commands
 from gow_sim.maps import MapDef, parse_map
 from gow_sim.ruleset import load_ruleset
-from gow_sim.state import AtNode, GameState, Group, Mode, OnEdge, initial_state
+from gow_sim.state import AtNode, GameState, Group, IntentKind, Mode, OnEdge, Order, initial_state
 from gow_sim.systems.combat import combat
 from gow_sim.systems.movement import movement
-from gow_sim.systems.orders import active_bonuses, orders
+from gow_sim.systems.orders import active_bonuses, orders, set_intent
 from gow_sim.view import IntentView, OrderView, opaque_id, project
 
 ROOT = Path(__file__).resolve().parents[3]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 N = 7
-DEPART = 1 + 30
-"""The departure tick of a planned order applied at tick 1."""
+DEPART = 31
+"""The departure tick of the planned orders the tests set up."""
 KEY = bytes(range(32))
 
 
@@ -93,7 +91,7 @@ class _Run:
         self.seq += len(cmds)
         results, events = apply_commands(state, RULES, commands)
         state.events = events + movement(state, RULES)
-        state.events += combat(state, RULES, active_bonuses(state, RULES))
+        state.events += combat(state, RULES, active_bonuses(state))
         state.events += orders(state, RULES)
         return [r.outcome for r in results]
 
@@ -102,88 +100,35 @@ class _Run:
             self.step()
 
 
-def test_mvp1_has_one_virtual_shot_per_edge() -> None:
-    assert RULES.orders.planned_bonus_per_edge == 1
-    assert RULES.orders.planned_delay_ticks == 30
-    assert RULES.orders.cost.planned_move == 200
-
-
-# The table of examples ---------------------------------------------------------------------------
-
-EXAMPLES = [
-    # (row, edges of the path, units, charged in the departure tick, bonus)
-    (1, 1, 3, 3, 1),
-    (2, 2, 3, 3, 2),
-    (3, 4, 3, 3, 3),  # the cap: the charged units
-    (4, 3, 4, 1, 1),
-    (5, 3, 3, 0, 0),
-    (6, 2, 5, 5, 2),
-]
-
-
-@pytest.mark.parametrize(
-    ("row", "edges", "units", "charged", "bonus"), EXAMPLES, ids=[f"row{e[0]}" for e in EXAMPLES]
-)
-def test_dec29_example(row: int, edges: int, units: int, charged: int, bonus: int) -> None:
-    del row
-    state = initial_state(_map(), RULES)
-    gid = _add(state, 0, units, charged, 0)
-    cp = state.players[0].cp
-    run = _Run(state)
-    (ok,) = run.step((0, Move(gid, edges, planned=True)))
-    assert isinstance(ok, Ok)
-    assert len(ok.path) - 1 == edges  # the path of the order, as in ``ack.path``
-    assert state.players[0].cp == cp - 200  # 2 CP, never returned (row 5 too)
-    run.until(DEPART - 1)
-    assert state.groups[gid].location == AtNode(0)  # waits the delay
-    assert active_bonuses(state, RULES) == {}  # not active before the departure
-    run.step()
+def _planned(state: GameState, gid: int, dest: int, bonus: int) -> None:
+    """Setup: ``gid`` holds a planned order to ``dest`` along the line with ``bonus`` gathered,
+    departing at ``DEPART`` (DEC-41, item 10), and its public intent."""
     group = state.groups[gid]
-    assert isinstance(group.location, OnEdge)  # departs, also without a bonus (row 5)
-    assert group.bonus == bonus
-    active = active_bonuses(state, RULES)
-    assert (active[gid].amount if gid in active else 0) == bonus
-    assert state.players[0].cp == cp - 200
-
-
-def test_the_bonus_is_the_rule_function_of_the_ruleset() -> None:
-    for _, edges, _, charged, bonus in EXAMPLES:
-        assert RULES.orders.planned_bonus(edges, charged) == bonus
-
-
-# Details -----------------------------------------------------------------------------------------
-
-
-def test_the_path_is_the_fastest_one_not_the_one_with_fewest_edges() -> None:
-    """ "Which path": the path of ``Move`` (the fastest, DEC-20), not a graph of its own. The
-    direct road 0-3 takes 300 ticks, the way 0-1-2-3 90: three edges, bonus 3."""
-    pairs = [(0, 1, 30), (1, 2, 30), (2, 3, 30), (0, 3, 300), (3, 4, 30), (4, 5, 30), (5, 6, 30)]
-    state = initial_state(_map(pairs), RULES)
-    gid = _add(state, 0, 4, 4, 0)
-    run = _Run(state)
-    (ok,) = run.step((0, Move(gid, 3, planned=True)))
-    assert isinstance(ok, Ok) and ok.path == (0, 1, 2, 3)
-    run.until(DEPART)
-    assert state.groups[gid].bonus == 3
+    assert isinstance(group.location, AtNode)
+    here = group.location.node
+    step = 1 if dest > here else -1
+    path = tuple(range(here + step, dest + step, step))
+    group.order = Order(path, True, DEPART)
+    group.bonus = bonus
+    group.bonus_tick = DEPART
+    set_intent(state, group, IntentKind.PLANNED_MOVE, dest)
 
 
 @pytest.mark.parametrize(
-    ("at_command", "at_departure", "bonus"),
+    ("at_departure", "bonus"),
     [
-        (1, 3, 3),  # recharged from the warehouse during the delay: 3 edges, 3 charged
-        (3, 1, 1),  # lost charges during the delay (starvation): 1
-        (3, 0, 0),  # no charged unit left: 0
+        (3, 3),  # the gathered 3 within 3 charged units
+        (1, 1),  # lost charges before the departure (a build, a toll, starvation): 1
+        (0, 0),  # no charged unit left: 0, the order still runs
     ],
 )
-def test_the_cap_is_measured_in_the_departure_tick(
-    at_command: int, at_departure: int, bonus: int
-) -> None:
-    """ "When the cap is measured": by the charged units in the departure tick, not at the
-    command. The test sets the charged units as supply or starvation would during the delay."""
+def test_the_cap_is_measured_in_the_departure_tick(at_departure: int, bonus: int) -> None:
+    """ "When the cap is measured": by the charged units in the departure tick. The test sets the
+    charged units as a payment or starvation would before the departure."""
     state = initial_state(_map(), RULES)
-    gid = _add(state, 0, 3, at_command, 0)
+    gid = _add(state, 0, 3, 3, 0)
+    _planned(state, gid, 3, 3)
     run = _Run(state)
-    run.step((0, Move(gid, 3, planned=True)))
     run.until(DEPART - 1)
     state.groups[gid].charged = at_departure
     run.step()
@@ -192,14 +137,14 @@ def test_the_cap_is_measured_in_the_departure_tick(
 
 
 def test_the_capped_bonus_enters_the_fight() -> None:
-    """The bonus of row 2 (2 edges, 3 charged: +2) enters the fight as the virtual shots of the
-    attacker (DEC-24, item F1): a 3/3 planned strike from node 0 on player 1's node 2."""
+    """A 3/3 planned strike with a bonus of 2 from node 0 on player 1's node 2: the bonus enters
+    the fight as the virtual shots of the attacker (DEC-24, item F1) and leaves the group."""
     state = initial_state(_map(), RULES)
     state.nodes[2].owner = 1  # setup: node 2 is player 1's, held by 2/2
     _add(state, 1, 2, 2, 2)
     gid = _add(state, 0, 3, 3, 0)
+    _planned(state, gid, 2, 2)
     run = _Run(state)
-    run.step((0, Move(gid, 2, planned=True)))
     run.until(DEPART)
     assert state.groups[gid].bonus == 2
     while state.groups[gid].fight is None:
@@ -209,7 +154,7 @@ def test_the_capped_bonus_enters_the_fight() -> None:
     assert state.groups[gid].bonus == 0  # it left the group: it burns with the fight
 
 
-# The forecast in the own view (owner 2026-10-21, mockup #339) -------------------------------------
+# The own view and the fog ------------------------------------------------------------------------
 
 
 def _own_order(state: GameState, gid: int) -> OrderView:
@@ -219,21 +164,20 @@ def _own_order(state: GameState, gid: int) -> OrderView:
     return group.order
 
 
-def test_the_own_order_shows_the_bonus_forecast() -> None:
-    """``OrderView.bonus``: 3 edges with 1 charged unit at the command show 1 (row 4 of the
-    table: the cap is the charged units); recharged to 3 during the delay the forecast is 3, and
-    it departs with 3 (the cap of the departure tick). A normal order shows 0."""
+def test_the_own_order_shows_the_capped_bonus() -> None:
+    """``OrderView.bonus``: the bonus at most the charged units now (the cap of the departure
+    tick taken in advance); a normal order shows 0."""
     state = initial_state(_map(), RULES)
     gid = _add(state, 0, 3, 1, 0)
     plain = _add(state, 0, 2, 2, 1)
+    _planned(state, gid, 3, 3)
     run = _Run(state)
-    run.step((0, Move(gid, 3, planned=True)), (0, Move(plain, 2)))
+    run.step((0, Move(plain, 2)))
     assert _own_order(state, gid).bonus == 1
     assert _own_order(state, plain).bonus == 0
-    run.until(DEPART - 1)
-    state.groups[gid].charged = 3  # as supply would recharge it during the delay
+    state.groups[gid].charged = 3  # as a recharge would before the departure
     assert _own_order(state, gid).bonus == 3
-    run.step()
+    run.until(DEPART)
     assert isinstance(state.groups[gid].location, OnEdge)
     assert state.groups[gid].bonus == 3
     assert _own_order(state, gid).bonus == 3
@@ -246,7 +190,7 @@ def test_fog_the_enemy_sees_no_planned_bonus() -> None:
     state = initial_state(_map(), RULES)
     gid = _add(state, 0, 3, 3, 0)
     run = _Run(state)
-    run.step((0, Move(gid, 3, planned=True)))
+    run.step((0, Move(gid, 3, planned=True, bonus=2)))
     assert [f.name for f in fields(IntentView)] == [
         "id",
         "owner",

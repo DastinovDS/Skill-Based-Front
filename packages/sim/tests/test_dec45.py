@@ -1,8 +1,9 @@
 """Plains: the defender burns a charge in the first round (DEC-45, #778).
 
 Expected values come from the table of DEC-45 (mechanics.md, section 4), worked out by hand with
-``shots_per_round = 1``, attacker first; the column "old" is the same fight under DEC-24, item F2
-(``R = charged - 1`` in every round), so the flag off is pinned by the same rows.
+``shots_per_round = 1``, attacker first. Every kept ruleset burns (#894: the silence of DEC-24,
+item F2, in every round was removed with the rulesets without the key); ``BURN`` is ``mvp-5``
+(retreat after the nearest round, a free capture) with the pace of DEC-32 pinned.
 
 The setup is the line of ``test_combat.py``: ``0 - 1 - 2`` (30 ticks per edge), node 1 on plains in
 the hands of the defender, the attacker arrives over its edge in tick 1 (contact ``t = 1``, rounds
@@ -10,8 +11,6 @@ at 21, 41, 61 with ``round_ticks = 20``). Every row is played with the attacker 
 player 1.
 """
 
-import dataclasses
-import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -20,7 +19,7 @@ import pytest
 
 from gow_sim.commands import Command, Move, PlayerCommand, apply_commands
 from gow_sim.maps import PLAYERS, MapDef, parse_map
-from gow_sim.ruleset import Ruleset, RulesetError, load_ruleset, parse_ruleset, ruleset_hash
+from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import (
     AtNode,
     Event,
@@ -42,11 +41,15 @@ from gow_sim.view import project
 
 ROOT = Path(__file__).resolve().parents[3]
 TESTS_DIR = Path(__file__).resolve().parent
-OLD = load_ruleset(TESTS_DIR / "rulesets" / "dec07.toml")
-BURN = replace(OLD, combat=replace(OLD.combat, terrain_burn=True))
+_MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+BURN = replace(
+    _MVP5,
+    combat=replace(_MVP5.combat, round_ticks=20, shots_per_round=1),
+    capture=replace(_MVP5.capture, charge_cost=0),
+)
 KEY = bytes(range(32))
 CONTACT = 1
-ROUND = OLD.combat.round_ticks
+ROUND = BURN.combat.round_ticks
 
 
 def line(terrain: str, owner: int | None) -> MapDef:
@@ -86,7 +89,7 @@ def add(
     state: GameState, owner: int, units: int, charged: int, loc: AtNode | OnEdge, **kw: Any
 ) -> int:
     gid = state.new_id()
-    state.groups[gid] = Group(gid, owner, units, charged, kw.pop("mode", Mode.ATTACK), loc, **kw)
+    state.groups[gid] = Group(gid, owner, units, charged, Mode.ATTACK, loc, **kw)
     return gid
 
 
@@ -119,10 +122,8 @@ class Run:
         order = Order((1,), plan > 0, 0)
         return add(self.state, self.a, units, charged, self.on_way(self.a), order=order, bonus=plan)
 
-    def hold(self, units: int, charged: int, defense: int = 0) -> int:
-        ticks = defense * self.rules.orders.defense_ticks_per_bonus
-        mode = Mode.DEFENSE if defense else Mode.ATTACK
-        return add(self.state, self.d, units, charged, AtNode(1), mode=mode, ticks_in_defense=ticks)
+    def hold(self, units: int, charged: int) -> int:
+        return add(self.state, self.d, units, charged, AtNode(1))
 
     def step(self, *cmds: tuple[int, Command]) -> list[Event]:
         state = self.state
@@ -134,7 +135,7 @@ class Run:
         _, events = apply_commands(state, self.rules, batch)
         state.events = events
         state.events += movement(state, self.rules)
-        state.events += combat(state, self.rules, active_bonuses(state, self.rules))
+        state.events += combat(state, self.rules, active_bonuses(state))
         state.events += orders(state, self.rules)
         return list(state.events)
 
@@ -158,8 +159,8 @@ class Run:
 
 @dataclass(frozen=True, slots=True)
 class Row:
-    """A row of the DEC-45 table: the sides ``(units, charged)``, the plan and "Defense" bonuses,
-    then the result under the burn and the defender's result under the old silence."""
+    """A row of the DEC-45 table: the sides ``(units, charged)``, the plan bonus, then the result
+    under the burn."""
 
     name: str
     attack: tuple[int, int]
@@ -168,34 +169,31 @@ class Row:
     """Ticks from the contact to the end of the fight."""
     attack_after: tuple[int, int]
     defense_after: tuple[int, int]
-    defense_old: tuple[int, int]
     shots: tuple[int, int]
-    """Attack and defense, virtual ones included; the same under both rules."""
+    """Attack and defense, virtual ones included."""
     burned: int
     captured: bool
     plan: int = 0
-    guard: int = 0
 
 
 ROWS = [
-    Row("row8", (2, 2), (2, 2), 40, (2, 0), (1, 0), (1, 1), (2, 1), 1, False),
-    Row("one_on_one", (1, 1), (1, 1), 20, (1, 0), (0, 0), (0, 0), (1, 0), 1, True),
-    Row("row2", (3, 3), (2, 2), 60, (3, 0), (0, 0), (0, 0), (3, 1), 1, True),
-    Row("row3", (4, 4), (2, 2), 60, (4, 1), (0, 0), (0, 0), (3, 1), 1, True),
-    Row("row4", (1, 1), (10, 0), 20, (1, 0), (9, 0), (9, 0), (1, 0), 0, False),
-    Row("empty_attack", (1, 0), (1, 1), 0, (1, 0), (1, 1), (1, 1), (0, 0), 0, False),
-    Row("empty_attack_2", (1, 0), (2, 2), 20, (0, 0), (2, 0), (2, 1), (0, 1), 1, False),
-    Row("spare_unit", (1, 1), (3, 1), 20, (1, 0), (2, 0), (2, 1), (1, 0), 1, False),
-    Row("two_charged", (2, 2), (3, 2), 40, (2, 0), (2, 0), (2, 1), (2, 1), 1, False),
-    Row("row9", (2, 2), (2, 2), 60, (2, 1), (0, 0), (0, 0), (3, 1), 1, True, plan=2),
-    Row("row10", (3, 3), (2, 2), 60, (3, 0), (2, 0), (2, 1), (3, 3), 1, False, guard=2),
+    Row("row8", (2, 2), (2, 2), 40, (2, 0), (1, 0), (2, 1), 1, False),
+    Row("one_on_one", (1, 1), (1, 1), 20, (1, 0), (0, 0), (1, 0), 1, True),
+    Row("row2", (3, 3), (2, 2), 60, (3, 0), (0, 0), (3, 1), 1, True),
+    Row("row3", (4, 4), (2, 2), 60, (4, 1), (0, 0), (3, 1), 1, True),
+    Row("row4", (1, 1), (10, 0), 20, (1, 0), (9, 0), (1, 0), 0, False),
+    Row("empty_attack", (1, 0), (1, 1), 0, (1, 0), (1, 1), (0, 0), 0, False),
+    Row("empty_attack_2", (1, 0), (2, 2), 20, (0, 0), (2, 0), (0, 1), 1, False),
+    Row("spare_unit", (1, 1), (3, 1), 20, (1, 0), (2, 0), (1, 0), 1, False),
+    Row("two_charged", (2, 2), (3, 2), 40, (2, 0), (2, 0), (2, 1), 1, False),
+    Row("row9", (2, 2), (2, 2), 60, (2, 1), (0, 0), (3, 1), 1, True, plan=2),
 ]
 
 
 def play(row: Row, rules: Ruleset, attacker: int) -> tuple[Run, Event, list[int]]:
     run = Run(rules, attacker)
     run.attack(*row.attack, plan=row.plan)
-    run.hold(*row.defense, defense=row.guard)
+    run.hold(*row.defense)
     burned: list[int] = []
     for _ in range(200):
         events = run.step()
@@ -218,42 +216,6 @@ def test_the_table_under_the_burn(row: Row, attacker: int) -> None:
     assert end.get("captured") is row.captured
     assert sum(burned) == row.burned
     assert burned[1:] == [0] * len(burned[1:]), "only the first round burns"
-
-
-@pytest.mark.parametrize("attacker", PLAYERS, ids=["a=p0", "a=p1"])
-@pytest.mark.parametrize("row", ROWS, ids=lambda r: r.name)
-def test_the_table_with_the_flag_off_is_item_f2(row: Row, attacker: int) -> None:
-    run, end, _ = play(row, OLD, attacker)
-    assert run.state.tick == CONTACT + row.end
-    assert run.side(run.a) == row.attack_after
-    assert run.side(run.d) == row.defense_old
-    assert (end.get(f"shots_{run.a}"), end.get(f"shots_{run.d}")) == row.shots
-    assert end.get("captured") is row.captured
-
-
-def test_only_the_fate_of_the_unused_charge_changes() -> None:
-    """Every small fight without reinforcements and retreat, on plains, both rules: the same end,
-    shots and losses, the same attacker; the defender differs by the one charge that burned."""
-    count = 0
-    for attack in [(u, c) for u in range(1, 4) for c in range(u + 1)]:
-        for defense in [(u, c) for u in range(1, 4) for c in range(u + 1)]:
-            for plan in range(min(attack[1], 2) + 1):
-                for guard in range(min(defense[1], 2) + 1):
-                    count += 1
-                    row = Row("x", attack, defense, 0, (0, 0), (0, 0), (0, 0), (0, 0), 0, False)
-                    row = replace(row, plan=plan, guard=guard)
-                    old, old_end, _ = play(row, OLD, 0)
-                    new, new_end, burned = play(row, BURN, 0)
-                    where = f"{attack} {defense} plan {plan} defense {guard}"
-                    assert new.state.tick == old.state.tick, where
-                    for key in ("shots_0", "shots_1", "losses_0", "losses_1", "captured"):
-                        assert new_end.get(key) == old_end.get(key), where
-                    assert new.side(0) == old.side(0), where
-                    assert new.side(1)[0] == old.side(1)[0], where
-                    kept = old.side(1)[1] - new.side(1)[1]
-                    assert kept == (1 if sum(burned) and old.side(1)[0] else 0), where
-                    assert sum(burned) == (1 if defense[1] and burned else 0), where
-    assert count > 100
 
 
 # Terrain ------------------------------------------------------------------------------------------
@@ -314,11 +276,11 @@ def test_a_neutral_node_burns_nothing() -> None:
 # Reinforcements and retreat ----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(("rules", "after"), [(BURN, (4, 0)), (OLD, (4, 1))], ids=["burn", "old"])
-def test_a_reinforcement_after_the_first_round(rules: Ruleset, after: tuple[int, int]) -> None:
+def test_a_reinforcement_after_the_first_round() -> None:
     """Row 20 on plains: attack 3/3, defense 2/2, G (2/2) arrives in `t+30`, between r1 and r2.
     Burn: 2 units 1 charged; r1 canc. (2 / 0); G joins (2 / 2); r2 canc. (1 / 1); r3 canc. (0 / 0).
-    The defender made 3 real shots under both rules; old: 1 silent charge is left."""
+    The defender made 3 real shots."""
+    rules, after = BURN, (4, 0)
     run = Run(rules)
     run.attack(3, 3)
     run.hold(2, 2)
@@ -330,10 +292,10 @@ def test_a_reinforcement_after_the_first_round(rules: Ruleset, after: tuple[int,
     assert end.get(f"shots_{run.d}") == 3
 
 
-@pytest.mark.parametrize(("rules", "after"), [(BURN, (1, 0)), (OLD, (1, 1))], ids=["burn", "old"])
-def test_a_reinforcement_before_the_first_round(rules: Ruleset, after: tuple[int, int]) -> None:
+def test_a_reinforcement_before_the_first_round() -> None:
     """Attack 2/2, defense 1/1, G (1/1) arrives in `t+10`, before r1: the side has 2 charged.
     Burn: 2 units 1 charged; r1 canc. (1 / 0); r2 the attack kills 1. As row 8."""
+    rules, after = BURN, (1, 0)
     run = Run(rules)
     run.attack(2, 2)
     run.hold(1, 1)
@@ -345,11 +307,11 @@ def test_a_reinforcement_before_the_first_round(rules: Ruleset, after: tuple[int
     assert end.get(f"shots_{run.d}") == 1
 
 
-@pytest.mark.parametrize(("rules", "after"), [(BURN, (2, 0)), (OLD, (2, 1))], ids=["burn", "old"])
-def test_a_retreat_after_the_first_round(rules: Ruleset, after: tuple[int, int]) -> None:
+def test_a_retreat_after_the_first_round() -> None:
     """Row 21 on plains, the `Move` before r1: attack 4/4, defense 2/2. Burn, r1 canc. (3 / 0), the
-    defense leaves after r1 and the node falls in `t+20` to 4 units 3 charged. One real shot under
-    both rules; the charge that stayed silent left with the group, the burned one did not."""
+    defense leaves after r1 and the node falls in `t+20` to 4 units 3 charged. One real shot; the
+    burned charge did not leave with the group."""
+    rules, after = BURN, (2, 0)
     run = Run(rules)
     run.attack(4, 4)
     d = run.hold(2, 2)
@@ -363,10 +325,10 @@ def test_a_retreat_after_the_first_round(rules: Ruleset, after: tuple[int, int])
     assert end.get(f"shots_{run.d}") == 1
 
 
-@pytest.mark.parametrize(("rules", "after"), [(BURN, (1, 0)), (OLD, (1, 1))], ids=["burn", "old"])
-def test_a_retreat_between_the_rounds(rules: Ruleset, after: tuple[int, int]) -> None:
+def test_a_retreat_between_the_rounds() -> None:
     """Row 21 on plains as it stands: the `Move` in `t+24`. Burn, r1 canc. (3 / 0), r2 the attack
     kills 1, the defense leaves after r2 and the node falls in `t+40` to 4 units 2 charged."""
+    rules, after = BURN, (1, 0)
     run = Run(rules)
     run.attack(4, 4)
     d = run.hold(2, 2)
@@ -383,9 +345,8 @@ def test_what_stays_after_a_group_left_shoots() -> None:
     """DEC-45, item 3: from the first round on nothing is silent, so the split of a side by a
     retreat counts. A 4/4; D 2/2 ordered away, G 1/1 stays. Burn from D (rule 7: most charged);
     r1 D shoots (1 and 1: the lower id), canc. (A 3); D leaves 2/0. r2 G shoots, canc. (A 2);
-    r3 A kills G: `t+60`, A 4/1. Old: G stays silent, A kills it in r2: `t+40`, A 4/2, D 2/1."""
-    expected = {BURN: (3, (4, 1), (2, 0)), OLD: (2, (4, 2), (2, 1))}
-    for rules, (rounds, attack, leaver) in expected.items():
+    r3 A kills G: `t+60`, A 4/1."""
+    for rules, (rounds, attack, leaver) in {BURN: (3, (4, 1), (2, 0))}.items():
         run = Run(rules)
         run.attack(4, 4)
         d = run.hold(2, 2)
@@ -494,21 +455,6 @@ def test_both_players_see_the_pending_burn_then_nothing() -> None:
     assert run.rounds(run.state.events)[0].get("burned_1") == 0
 
 
-def test_with_the_flag_off_the_mute_stays_and_nothing_is_burned() -> None:
-    run = Run(OLD)
-    run.attack(2, 2)
-    run.hold(2, 2)
-    while run.state.tick < CONTACT + ROUND:
-        run.step()
-    (played,) = run.rounds(run.state.events)
-    assert "burned_1" not in dict(played.data)
-    (fight,) = run.state.fights.values()
-    assert fight.mute == (0, 1)
-    assert fight.last_round is not None and fight.last_round.burned == (0, 0)
-    (raw,) = to_canonical(run.state)["fights"]  # pyright: ignore
-    assert "burned" not in raw["last_round"]  # pyright: ignore
-
-
 def test_the_burn_survives_the_canonical_form() -> None:
     run = Run(BURN)
     run.attack(2, 2)
@@ -530,45 +476,3 @@ def test_the_same_fight_gives_the_same_hash() -> None:
         run.to_end()
         hashes.append(state_hash(run.state))
     assert hashes[0] == hashes[1]
-
-
-# The ruleset -------------------------------------------------------------------------------------
-
-
-def _raw(name: str) -> dict[str, Any]:
-    return tomllib.loads((ROOT / "rulesets" / f"{name}.toml").read_text(encoding="utf-8"))
-
-
-def test_the_key_is_absent_by_default_and_on_in_the_playtest_ruleset() -> None:
-    for name in ("mvp-0", "mvp-1", "mvp-2", "mvp-3", "mvp-4", "mvp-4-sup200", "test-short"):
-        assert not load_ruleset(ROOT / "rulesets" / f"{name}.toml").combat.terrain_burn, name
-        assert "terrain_burn" not in _raw(name)["combat"], name
-    assert load_ruleset(ROOT / "rulesets" / "mvp-4-stances.toml").combat.terrain_burn
-
-
-def test_the_key_off_keeps_the_hash() -> None:
-    """A ruleset without the key and one with ``terrain_burn = false`` are the same rules; the
-    playtest ruleset without the key has the hash it had before DEC-45, and it stays archived."""
-    raw = _raw("mvp-4")
-    plain = ruleset_hash(parse_ruleset(raw))
-    raw["combat"]["terrain_burn"] = False
-    assert ruleset_hash(parse_ruleset(raw)) == plain
-    raw["combat"]["terrain_burn"] = True
-    assert ruleset_hash(parse_ruleset(raw)) != plain
-    stances = _raw("mvp-4-stances")
-    del stances["combat"]["terrain_burn"]
-    played = ruleset_hash(parse_ruleset(stances))
-    archived = ROOT / "rulesets" / "archive" / f"{played}.toml"
-    assert ruleset_hash(load_ruleset(archived)) == played
-
-
-def test_the_key_must_be_a_boolean() -> None:
-    raw = _raw("mvp-4")
-    raw["combat"]["terrain_burn"] = 1
-    with pytest.raises(RulesetError, match=r"combat\.terrain_burn"):
-        parse_ruleset(raw)
-
-
-def test_the_field_is_optional_metadata() -> None:
-    field = next(f for f in dataclasses.fields(BURN.combat) if f.name == "terrain_burn")
-    assert field.metadata.get("optional")

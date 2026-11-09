@@ -1,10 +1,11 @@
 """Automatic supply flow, leaf shift, fixed warehouses (DEC-43, #697; implementation #704).
 
 Expected values come from mechanics.md, section 7, block "Automatic supply flow, leaf shift, fixed
-warehouses, road fortifications (DEC-43, #697)": items A, B, C, the key list of ``mvp-4.toml``
-and the table F1..F20 (the view rows V1..V4 are in ``test_dec43_view.py``).
+warehouses, road fortifications (DEC-43, #697)": items A, B, C and the table F1..F20 (the view
+rows V1..V4 are in ``test_dec43_view.py``).
 
-The map of the table is ``dec41`` (see ``test_dec41.py``), player 0, ``mvp-4``: own K = 0 (capital,
+The map of the table is ``dec41`` (see ``test_dec41.py``), player 0, ``mvp-4`` (pinned on
+``mvp-5``: a CP quantum and a charge of the capital every 100 ticks): own K = 0 (capital,
 warehouse 6), A = 1, B, C, D = 2, 3, 4, E, F, G = 5, 6, 7 (cities, warehouse 3); M = 8 is a neutral
 province (warehouse 1 when own); the provinces 17 and 18 are player 1's in the base (since #724 a
 neutral never makes a leaf; the map as it is: ``test_dec43_leaves.py``); roads K-A, K-E, A-B, A-D,
@@ -13,10 +14,9 @@ C-17 30; ``node_key(0, n) = n``. No groups and no packets unless a row says so (
 of K, 2 units charged, never pulls); stocks as set by the row, the rest 0; the dispatch at tick 10.
 """
 
-import tomllib
+import dataclasses
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
 
 import pytest
 from hypothesis import given, settings
@@ -24,30 +24,17 @@ from hypothesis import strategies as st
 
 from gow_sim.analysis import MatchMetrics, MatchRecorder, analyze
 from gow_sim.commands import (
-    BuildBunker,
     Command,
-    DrawLine,
     Ok,
     PlayerCommand,
     Reject,
     RejectCode,
-    RemoveLine,
-    SetAutoLines,
     SetLeafShift,
-    UpgradeWarehouse,
     apply_commands,
 )
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Controller, Match, run_headless
-from gow_sim.ruleset import (
-    Ruleset,
-    RulesetError,
-    SupplyModel,
-    load_ruleset,
-    parse_ruleset,
-    ruleset_hash,
-    to_canonical,
-)
+from gow_sim.ruleset import Ruleset, StanceTable, load_ruleset
 from gow_sim.state import (
     AtNode,
     Event,
@@ -64,13 +51,21 @@ from gow_sim.systems.capacity import warehouse_capacity
 from gow_sim.systems.economy import economy
 from gow_sim.systems.flow import supply_flow, update_flow
 from gow_sim.systems.supply import send_packet
-from gow_sim.view import PlayerView, line_route
+from gow_sim.view import PlayerView
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
 RULESETS = ROOT / "rulesets"
-RULES = load_ruleset(RULESETS / "mvp-4.toml")
-MVP3 = load_ruleset(RULESETS / "mvp-3.toml")
+_MVP5 = load_ruleset(RULESETS / "mvp-5.toml")
+_EVERY_100 = StanceTable(economy=100, balance=100, war=100)
+RULES = dataclasses.replace(
+    _MVP5,
+    stances=dataclasses.replace(
+        _MVP5.stances, cp_period_ticks=_EVERY_100, capital_period_ticks=_EVERY_100
+    ),
+)
+"""``mvp-5`` with the periods of ``mvp-4`` the table was written for: a CP quantum and a charge of
+the capital every 100 ticks under every stance (DEC-44)."""
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 K, A, B, C, D, E, F, G, M = range(9)
 ENEMY_PASSES = (17, 18)  # North Pass, South Pass: player 1's in the base of the tables (#724)
@@ -150,78 +145,7 @@ L1_D = {C: 0, F: 0, G: 0, B: 1, D: 1, A: 2, K: 3, E: 3}
 """Row L1: the passes neutral (the map as it is), no enemy contact: the farthest nodes from K."""
 
 
-# The ruleset (supply.model, mvp-4, item C) ------------------------------------------------------
-
-
-def _raw(path: Path) -> dict[str, Any]:
-    return tomllib.loads(path.read_text(encoding="utf-8"))
-
-
-def test_mvp4_is_mvp3_with_the_dec43_keys() -> None:
-    """The key list of ``mvp-4.toml``: ``supply.model = "flow"``, no ``[lines]``, no ``[bunker]``,
-    fixed warehouses, the ``[fort]`` of item D (#707); everything else as ``mvp-3``."""
-    expected = _raw(RULESETS / "mvp-3.toml")
-    expected["supply"]["model"] = "flow"
-    del expected["lines"]
-    del expected["bunker"]
-    expected["fort"] = {"cost": 150, "build_ticks": 100, "toll_units": 3, "toll_charges": 1}
-    expected["warehouse"]["max_level"] = 0
-    expected["warehouse"]["start_by_kind"] = {
-        "capital": 6,
-        "city_large": 3,
-        "city_medium": 3,
-        "city_small": 3,
-    }
-    assert to_canonical(RULES) == expected
-    assert parse_ruleset(expected) == RULES
-    assert RULES.flow and RULES.v2 and RULES.supply.model is SupplyModel.FLOW
-    assert RULES.lines is None and RULES.bunker is None
-    assert RULES.warehouse.province == 1
-    assert (RULESETS / "archive" / f"{ruleset_hash(RULES)}.toml").is_file()
-
-
-@pytest.mark.parametrize("name", ["mvp-0", "mvp-1", "mvp-2", "mvp-3", "test-short"])
-def test_the_other_rulesets_keep_lines_and_their_hash(name: str) -> None:
-    """``supply.model`` defaults to ``lines`` and is not part of the hash at its default."""
-    rules = load_ruleset(RULESETS / f"{name}.toml")
-    assert not rules.flow and rules.supply.model is SupplyModel.LINES
-    supply_data = to_canonical(rules)["supply"]
-    assert isinstance(supply_data, dict) and "model" not in supply_data
-    assert (RULESETS / "archive" / f"{ruleset_hash(rules)}.toml").is_file()
-
-
-def test_flow_only_with_v2_and_never_with_lines() -> None:
-    v1 = _raw(RULESETS / "mvp-2.toml")
-    v1["supply"]["model"] = "flow"
-    with pytest.raises(RulesetError, match=r"^supply\.model: 'flow' only with economy\.model"):
-        parse_ruleset(v1)
-    flow = _raw(RULESETS / "mvp-4.toml")
-    flow["lines"] = _raw(RULESETS / "mvp-3.toml")["lines"]
-    with pytest.raises(RulesetError, match=r"^lines: not allowed with supply\.model = 'flow'"):
-        parse_ruleset(flow)
-    lines = _raw(RULESETS / "mvp-3.toml")
-    del lines["lines"]
-    with pytest.raises(RulesetError, match=r"^lines: missing key"):
-        parse_ruleset(lines)
-    bad = _raw(RULESETS / "mvp-4.toml")
-    bad["supply"]["model"] = "pipes"
-    with pytest.raises(RulesetError, match=r"^supply\.model: expected one of"):
-        parse_ruleset(bad)
-
-
-def test_the_bunker_section_is_optional_under_v2() -> None:
-    """Item D1: without ``[bunker]`` ``BuildBunker`` gives ``FEATURE_DISABLED``; a v1 file still
-    must not have it."""
-    data = _raw(RULESETS / "mvp-3.toml")
-    del data["bunker"]
-    rules = parse_ruleset(data)
-    assert rules.bunker is None and not rules.flow
-    outcome, _ = _cmd(initial_state(MAP, rules), BuildBunker(K), rules)
-    assert _code(outcome) is RejectCode.FEATURE_DISABLED
-    v1 = _raw(RULESETS / "mvp-2.toml")
-    v1["bunker"] = _raw(RULESETS / "mvp-3.toml")["bunker"]
-    with pytest.raises(RulesetError, match=r"^bunker: only with economy\.model = 'v2'"):
-        parse_ruleset(v1)
+# Fixed warehouses (item C) ----------------------------------------------------------------------
 
 
 def test_c1_fixed_warehouses() -> None:
@@ -230,29 +154,6 @@ def test_c1_fixed_warehouses() -> None:
     assert [warehouse_capacity(state, RULES, n) for n in (K, A, B, E, M)] == [6, 3, 3, 3, 1]
     assert state.nodes[K].warehouse == 6  # the start stock of the capital
     assert all(state.nodes[n].warehouse == 0 for n in (A, B, C, D, E, F, G))
-
-
-@pytest.mark.parametrize(
-    "cmd", [DrawLine((K, A)), RemoveLine(0), SetAutoLines(False), BuildBunker(A)]
-)
-def test_a12_d1_the_line_and_bunker_commands_are_disabled(cmd: Command) -> None:
-    outcome, events = _cmd(_state(), cmd)
-    assert _code(outcome) is RejectCode.FEATURE_DISABLED and events == []
-
-
-def test_c2_upgrade_warehouse_is_disabled_with_max_level_0() -> None:
-    outcome, _ = _cmd(_state(), UpgradeWarehouse(A))
-    assert _code(outcome) is RejectCode.FEATURE_DISABLED
-    outcome, _ = _cmd(initial_state(MAP, MVP3), UpgradeWarehouse(A), MVP3)
-    assert _code(outcome) is None  # mvp-3 keeps its warehouse levels
-
-
-def test_a12_no_lines_and_no_suggested_path() -> None:
-    """Item A12: ``View.lines`` empty, ``auto_lines`` ``None``, ``line_route_query`` empty."""
-    state = _state()
-    assert line_route(state, RULES, 0, (K, A, B)) == ()
-    assert line_route(initial_state(MAP, MVP3), MVP3, 0, (K, A, B)) == (K, A, B)
-    assert state.players[0].auto_lines is False
 
 
 # The field (items A1 to A4, A10, A11) -----------------------------------------------------------
@@ -316,7 +217,7 @@ def test_f6_no_room_below() -> None:
     assert _from(_flow(state), A) == []
     assert state.nodes[A].flow.idle is FlowIdle.FULL  # type: ignore[union-attr]
     state = _state({A: 1, D: 2, B: 3, C: 3})
-    send_packet(state, 0, K, (ROAD[K, A], ROAD[A, D]), (20, 20), 1, transfer=False)
+    send_packet(state, 0, K, (ROAD[K, A], ROAD[A, D]), (20, 20), 1)
     assert _from(_flow(state), A) == []
     assert state.nodes[A].flow.idle is FlowIdle.FULL  # type: ignore[union-attr]
 
@@ -400,8 +301,6 @@ def test_f14_set_leaf_shift_checks() -> None:
     assert state.players[0].leaf_shift == 2 and state.players[0].cp == RULES.cp.start
     assert _code(_cmd(state, SetLeafShift(2))[0]) is RejectCode.NO_CHANGE
     assert _code(_cmd(state, SetLeafShift(-1))[0]) is RejectCode.INVALID_ARGUMENT
-    mvp3 = initial_state(MAP, MVP3)
-    assert _code(_cmd(mvp3, SetLeafShift(0), MVP3)[0]) is RejectCode.FEATURE_DISABLED
 
 
 def test_f15_the_clamp_is_stored() -> None:
@@ -417,9 +316,16 @@ def test_f15_the_clamp_is_stored() -> None:
 # A full factory (item A8) ------------------------------------------------------------------------
 
 
+def _due(state: GameState) -> None:
+    """The capital of player 0 makes its charge in the next ``economy``: its local counter
+    (DEC-44) stands one tick short of the period."""
+    state.players[0].capital_ticks = RULES.stances.capital_period_ticks.balance - 1
+
+
 def _produce(state: GameState, tick: int = 100) -> list[Event]:
     """The economy and the flow step of ``tick``; the field of the tick before is stored."""
     update_flow(state, RULES)
+    _due(state)
     state.tick = tick
     state.events = []
     events = economy(state, RULES)
@@ -459,7 +365,7 @@ def test_f17_no_room_burns_and_a_reserved_arrival_counts() -> None:
     assert [r for r in _sent(events) if r[0] == K] == []
     for e_stock, spilled in ((0, True), (3, False)):
         state = _state({**full, K: 5, E: e_stock}, tick=99)
-        send_packet(state, 0, A, (ROAD[K, A],), (20,), 1, transfer=False)  # on the way to K
+        send_packet(state, 0, A, (ROAD[K, A],), (20,), 1)  # on the way to K
         events = economy_only(state)
         kinds = [(e.kind, e.get("spill") if e.kind == "charges_produced" else None) for e in events]
         if spilled:
@@ -471,6 +377,7 @@ def test_f17_no_room_burns_and_a_reserved_arrival_counts() -> None:
 
 def economy_only(state: GameState) -> list[Event]:
     update_flow(state, RULES)
+    _due(state)
     state.tick = 100
     return [e for e in economy(state, RULES) if e.get("player") == 0]
 
@@ -523,13 +430,10 @@ def test_f20_an_enemy_group_does_not_block_a_packet() -> None:
 # The state ---------------------------------------------------------------------------------------
 
 
-def test_the_flow_fields_round_trip_and_the_lines_state_keeps_its_form() -> None:
+def test_the_flow_fields_round_trip() -> None:
     state = _state({K: 6}, shift=1)
     _flow(state)
     assert from_canonical(state_canonical(state)) == state
-    data = state_canonical(initial_state(MAP, MVP3))
-    assert all("flow" not in n for n in data["nodes"])  # type: ignore[union-attr]
-    assert all("leaf_shift" not in p for p in data["players"])  # type: ignore[union-attr]
 
 
 # Properties on whole matches: the ledger and the warehouses ---------------------------------------
@@ -587,7 +491,7 @@ def _play(
 
 
 @pytest.mark.parametrize("name", ["artery", "web", "pass"])
-def test_the_ledger_balances_in_mvp4_bot_matches(
+def test_the_ledger_balances_in_bot_matches(
     name: str, expand_bot: Callable[[MapDef, Ruleset], Controller]
 ) -> None:
     """Charges are conserved (the residual of the ``gow_sim.analysis`` ledger is 0) and no

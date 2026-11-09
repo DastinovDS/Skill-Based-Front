@@ -34,20 +34,18 @@ from gow_sim.state import (
 from gow_sim.systems.vision import (
     compute_vision,
     detail_level,
-    edge_detail_level,
     is_visible,
-    visible_edges,
     visible_nodes,
     vision,
 )
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP5 = TESTS_DIR.parents[2] / "rulesets" / "mvp-5.toml"
 
 E, R, P, F = Detail.EXACT, Detail.RANGE, Detail.PRESENCE, Detail.FOG
 
 
-_RULES = load_ruleset(MVP0)
+_RULES = load_ruleset(MVP5)
 
 
 @pytest.fixture(scope="module")
@@ -59,13 +57,21 @@ def _state(name: str, rules: Ruleset) -> GameState:
     return initial_state(load_map(TESTS_DIR / "maps" / f"{name}.json"), rules)
 
 
-def _add(
-    state: GameState, owner: int, location: AtNode | OnEdge, mode: Mode = Mode.ATTACK
-) -> Group:
+def _add(state: GameState, owner: int, location: AtNode | OnEdge) -> Group:
     gid = state.new_id()
-    group = Group(gid, owner, units=3, charged=2, mode=mode, location=location)
+    group = Group(gid, owner, units=3, charged=2, mode=Mode.ATTACK, location=location)
     state.groups[gid] = group
     return group
+
+
+def _edge(state: GameState, player: int, edge: int) -> Detail:
+    """The edge visibility of DEC-17 (``Vision.edges``): ``PRESENCE`` or ``FOG``."""
+    return compute_vision(state, _RULES, player).edges[edge]
+
+
+def _visible_edges(state: GameState, player: int) -> tuple[int, ...]:
+    edges = compute_vision(state, _RULES, player).edges
+    return tuple(e for e, level in enumerate(edges) if level is not Detail.FOG)
 
 
 def _levels(state: GameState, player: int) -> tuple[list[Detail], list[Detail]]:
@@ -79,7 +85,7 @@ def _levels(state: GameState, player: int) -> tuple[list[Detail], list[Detail]]:
 def test_line3_start(rules: Ruleset) -> None:
     state = _state("line3", rules)
     # Own capital exact, the neutral plains seen exactly from the mountains, the enemy capital
-    # two steps away fog. The road level is in sight on the edge of the own capital only.
+    # two steps away fog. The edges of the own capital are out of the fog (DEC-17), no other.
     assert _levels(state, 0) == ([E, E, F], [P, F])
     assert _levels(state, 1) == ([F, E, E], [F, P])
 
@@ -127,8 +133,8 @@ def test_group_on_edge_is_a_source_in_its_half(rules: Ruleset) -> None:
     assert (v.half(1), v.half(3), v.half(0), v.half(6)) == (R, E, F, F)
     assert v.sources == (False, False, False, True, False, False, False)
     assert v.stands == (False,) * 7  # no own group stands anywhere (DEC-35, detail 2)
-    assert edge_detail_level(state, 0, 1) is P
-    assert visible_edges(state, 0) == (1, 2, 4, 5)
+    assert _edge(state, 0, 1) is P
+    assert _visible_edges(state, 0) == (1, 2, 4, 5)
     assert visible_nodes(state, rules, 0) == (1, 2, 3, 4, 5)
     assert is_visible(state, rules, 0, own)
     assert is_visible(state, rules, 0, enemy)
@@ -154,11 +160,11 @@ def test_group_on_edge_before_the_border_sees_from_the_node_it_left(rules: Rules
 def test_single_node_and_edge_queries(rules: Ruleset) -> None:
     state = _state("diamond", rules)
     assert [detail_level(state, rules, 0, n) for n in range(4)] == [E, R, R, F]
-    assert [edge_detail_level(state, 1, e) for e in range(4)] == [F, F, P, P]
+    assert [_edge(state, 1, e) for e in range(4)] == [F, F, P, P]
     assert visible_nodes(state, rules, 0) == (0, 1, 2)
-    assert visible_edges(state, 0) == (0, 1)
+    assert _visible_edges(state, 0) == (0, 1)
     assert visible_nodes(state, rules, 1) == (1, 2, 3)
-    assert visible_edges(state, 1) == (2, 3)
+    assert _visible_edges(state, 1) == (2, 3)
 
 
 def test_levels_are_mirror_symmetric(rules: Ruleset) -> None:
@@ -217,10 +223,10 @@ def test_own_entities_are_always_visible(rules: Ruleset) -> None:
     pid = state.new_id()
     packet = Packet(pid, 0, edge=3, from_node=5, charges=1, depart_tick=0, arrive_tick=5)
     state.packets[pid] = packet
-    assert edge_detail_level(state, 0, 3) is F  # e3: 5 - 6; an own packet gives no vision
+    assert _edge(state, 0, 3) is F  # e3: 5 - 6; an own packet gives no vision
     assert is_visible(state, rules, 0, packet)
     far_group = _add(state, 0, OnEdge(edge=3, from_node=5, progress=10))
-    assert edge_detail_level(state, 0, 3) is P  # an own group on it does (DEC-35, detail 7)
+    assert _edge(state, 0, 3) is P  # an own group on it does (DEC-35, detail 7)
     assert is_visible(state, rules, 0, far_group)
 
 
@@ -228,24 +234,22 @@ def test_enemy_packets_are_never_visible(rules: Ruleset) -> None:
     # DEC-10, item 6. e0 joins the two own nodes of player 0.
     state = _state("choke", rules)
     packet = Packet(state.new_id(), 1, edge=0, from_node=0, charges=2, depart_tick=0, arrive_tick=9)
-    assert edge_detail_level(state, 0, 0) is P
+    assert _edge(state, 0, 0) is P
     assert not is_visible(state, rules, 0, packet)
     # Nor on the edge of an own group: e3 = 5 - 6, between two enemy nodes.
     _add(state, 0, OnEdge(edge=3, from_node=5, progress=500))
     on_own_edge = Packet(
         state.new_id(), 1, edge=3, from_node=6, charges=2, depart_tick=0, arrive_tick=9
     )
-    assert edge_detail_level(state, 0, 3) is P
+    assert _edge(state, 0, 3) is P
     assert not is_visible(state, rules, 0, on_own_edge)
 
 
 def test_intents_are_public(rules: Ruleset) -> None:
     state = _state("choke", rules)
     far = Intent(state.new_id(), 1, IntentKind.PLANNED_MOVE, origin=6, target=5, created_tick=0)
-    defense = Intent(state.new_id(), 1, IntentKind.DEFENSE, origin=6, target=None, created_tick=0)
     assert detail_level(state, rules, 0, 6) is F
     assert is_visible(state, rules, 0, far)
-    assert is_visible(state, rules, 0, defense)
 
 
 # Fog memory ----------------------------------------------------------------------------------
@@ -254,20 +258,18 @@ def test_intents_are_public(rules: Ruleset) -> None:
 def test_vision_records_sightings(rules: Ruleset) -> None:
     state = _state("choke", rules)
     state.tick = 40
-    _add(state, 1, AtNode(3), Mode.DEFENSE)
-    _add(state, 1, AtNode(3), Mode.ATTACK)
-    _add(state, 1, AtNode(3), Mode.DEFENSE)
-    on_edge = _add(state, 1, OnEdge(edge=1, from_node=3, progress=100), Mode.DEFENSE)
+    _add(state, 1, AtNode(3))
+    _add(state, 1, AtNode(3))
+    _add(state, 1, AtNode(3))
+    on_edge = _add(state, 1, OnEdge(edge=1, from_node=3, progress=100))
     assert vision(state, rules) == []
     memory = state.vision_memory[0]
-    # PRESENCE: enemy modes (distinct, sorted), no numbers.
-    assert memory.nodes[3] == Sighting(40, P, (Mode.ATTACK, Mode.DEFENSE), None, None)
+    # PRESENCE: enemy modes (distinct, sorted: every group attacks), no numbers.
+    assert memory.nodes[3] == Sighting(40, P, (Mode.ATTACK,), None, None)
     # Halves of edges by the level of their node (DEC-21, item 5): e1 = 1 - 3.
-    assert memory.halves[1, 3] == Sighting(40, P, (Mode.DEFENSE,), None, None)
+    assert memory.halves[1, 3] == Sighting(40, P, (Mode.ATTACK,), None, None)
     assert memory.halves[1, 1] == Sighting(40, E, (), 0, 0)
     assert memory.halves[0, 0] == Sighting(40, E, (), 0, 0)
-    # Road levels of the edges with a source end (DEC-17).
-    assert memory.widths == {0: 1, 1: 1}
     # EXACT: own nodes, enemy totals are known (none here).
     assert memory.nodes[0] == Sighting(40, E, (), 0, 0)
     assert memory.nodes[1] == Sighting(40, E, (), 0, 0)
@@ -282,30 +284,30 @@ def test_vision_records_sightings(rules: Ruleset) -> None:
 def test_range_sighting_has_the_range_of_the_units(rules: Ruleset) -> None:
     state = _state("diamond", rules)  # node 1 (forest) is a range for player 0
     state.tick = 3
-    _add(state, 1, AtNode(1), Mode.ATTACK)  # 3 units, 2 charged
-    _add(state, 1, AtNode(1), Mode.DEFENSE)
+    _add(state, 1, AtNode(1))  # 3 units, 2 charged
+    _add(state, 1, AtNode(1))
     vision(state, rules)
     seen = state.vision_memory[0].nodes[1]
-    assert seen == Sighting(3, R, (Mode.ATTACK, Mode.DEFENSE), None, None, enemy_range=(6, 10))
+    assert seen == Sighting(3, R, (Mode.ATTACK,), None, None, enemy_range=(6, 10))
     assert state.vision_memory[0].nodes[2] == Sighting(3, R, (), None, None)
 
 
 def test_exact_sighting_has_enemy_totals(rules: Ruleset) -> None:
     state = _state("choke", rules)
     state.tick = 7
-    _add(state, 1, AtNode(1), Mode.ATTACK)  # 3 units, 2 charged
-    _add(state, 1, AtNode(1), Mode.DEFENSE)
+    _add(state, 1, AtNode(1))  # 3 units, 2 charged
+    _add(state, 1, AtNode(1))
     vision(state, rules)
-    assert state.vision_memory[0].nodes[1] == Sighting(7, E, (Mode.ATTACK, Mode.DEFENSE), 6, 4)
+    assert state.vision_memory[0].nodes[1] == Sighting(7, E, (Mode.ATTACK,), 6, 4)
 
 
 def test_memory_keeps_last_sighting_in_fog(rules: Ruleset) -> None:
     state = _state("choke", rules)
     state.tick = 10
-    _add(state, 1, AtNode(3), Mode.DEFENSE)
+    _add(state, 1, AtNode(3))
     vision(state, rules)
     seen = state.vision_memory[0].nodes[3]
-    assert seen == Sighting(10, P, (Mode.DEFENSE,), None, None)
+    assert seen == Sighting(10, P, (Mode.ATTACK,), None, None)
     # Player 0 loses node 1 with its garrison: node 3 goes into fog. The enemy leaves node 3;
     # memory keeps the sighting of tick 10.
     state.nodes[1].owner = 1
@@ -329,8 +331,6 @@ def test_memory_is_per_player(rules: Ruleset) -> None:
     m0, m1 = state.vision_memory[0], state.vision_memory[1]
     assert sorted(m0.nodes) == [0, 1, 2]
     assert sorted(m1.nodes) == [1, 2, 3]
-    assert sorted(m0.widths) == [0, 1]
-    assert sorted(m1.widths) == [2, 3]
     # Each capital sees the other's garrison nowhere: both are in fog.
     assert 3 not in m0.nodes and 0 not in m1.nodes
     assert m0.spotted == {} and m1.spotted == {}

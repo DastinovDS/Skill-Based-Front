@@ -109,7 +109,7 @@ class _Run:
         results, events = apply_commands(state, rules, batch)
         state.events = events
         state.events += movement(state, rules)
-        state.events += combat(state, rules, active_bonuses(state, rules))
+        state.events += combat(state, rules, active_bonuses(state))
         state.events += orders(state, rules)
         return [r.outcome for r in results]
 

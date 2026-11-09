@@ -4,14 +4,15 @@ Expected values come from mechanics.md, section 7, block DEC-43, item D: the ite
 the table T1..T13, V1..V4 (the wire part of V4 is in ``packages/protocol/tests/
 test_road_forts.py``).
 
-The map of the table is ``dec41`` (see ``test_dec43.py``), ``mvp-4``: player 0 owns C = 3 and B =
-2, player 1 owns M = 8 for these rows; the road C-M is edge 8 (``a`` = C, ``b`` = M,
-``border_permille`` 500, 38 ticks: a group from M reaches the line point of C, progress 500
-towards C, on its 19th tick on the road); a fortification of C on road C-M, built unless a row
-says so. The start garrisons (2/2 in K and in its mirror) stay where they are; K is not next to
-C, so player 0 has no source of vision near C unless a row puts one there.
+The map of the table is ``dec41`` (see ``test_dec43.py``), ``mvp-4`` (pinned on ``mvp-5``): player 0
+owns C = 3 and B = 2, player 1 owns M = 8 for these rows; the road C-M is edge 8 (``a`` = C, ``b`` =
+M, ``border_permille`` 500, 38 ticks: a group from M reaches the line point of C, progress 500
+towards C, on its 19th tick on the road); a fortification of C on road C-M, built unless a row says
+so. The start garrisons (2/2 in K and in its mirror) stay where they are; K is not next to C, so
+player 0 has no source of vision near C unless a row puts one there.
 """
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -27,7 +28,14 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import load_map
 from gow_sim.match import Match
-from gow_sim.ruleset import FortRules, Ruleset, load_ruleset, parse_ruleset, to_canonical
+from gow_sim.ruleset import (
+    FortRules,
+    Ruleset,
+    StanceTable,
+    load_ruleset,
+    parse_ruleset,
+    to_canonical,
+)
 from gow_sim.state import (
     PROGRESS_SCALE,
     AtNode,
@@ -45,8 +53,16 @@ from gow_sim.view import RoadFortView, project
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
-MVP3 = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+_MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+_EVERY_100 = StanceTable(economy=100, balance=100, war=100)
+RULES = dataclasses.replace(
+    _MVP5,
+    stances=dataclasses.replace(
+        _MVP5.stances, cp_period_ticks=_EVERY_100, capital_period_ticks=_EVERY_100
+    ),
+)
+"""``mvp-5`` with the periods of ``mvp-4`` the tables of DEC-43 were written for: a CP quantum and a
+charge of the capital every 100 ticks under every stance (DEC-44)."""
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 KEY = bytes(range(32))
 K, A, B, C, D = 0, 1, 2, 3, 4
@@ -118,18 +134,11 @@ def _attack(units: int, charged: int, fort: bool = True) -> tuple[Match, Group, 
 # The ruleset ------------------------------------------------------------------------------------
 
 
-def test_the_fort_keys_of_mvp4() -> None:
-    """Item D2 and the ``[fort]`` of ``mvp-4.toml``: 1.5 CP, 100 ticks, 1 per started 3 units."""
+def test_the_fort_keys() -> None:
+    """Item D2 and the ``[fort]`` of the kept rulesets: 1.5 CP, 100 ticks, 1 per started 3
+    units."""
     assert RULES.fort == FortRules(cost=150, build_ticks=100, toll_units=3, toll_charges=1)
-    assert MVP3.fort is None
     assert parse_ruleset(to_canonical(RULES)) == RULES
-
-
-def test_fort_only_under_economy_v2() -> None:
-    data = to_canonical(load_ruleset(ROOT / "rulesets" / "mvp-0.toml"))
-    data["fort"] = {"cost": 150, "build_ticks": 100, "toll_units": 3, "toll_charges": 1}
-    with pytest.raises(ValueError, match=r"fort: only with economy\.model"):
-        parse_ruleset(data)
 
 
 @pytest.mark.parametrize(
@@ -338,7 +347,6 @@ def test_the_build_takes_cp_and_build_ticks() -> None:
             "node": C,
             "edge": ROAD_CM,
             "kind": "road_fort",
-            "level": None,
         }
         while state.tick < cross_tick - 1:
             events += _step(match)
@@ -380,8 +388,6 @@ def test_the_checks_in_order() -> None:
     # A province (M own for player 1) can fortify too.
     state.players[1].cp = 500
     assert _check(state, FortifyRoad(M, ROAD_CM), player=1) is None
-    mvp3 = Match(MAP, MVP3, KEY).state
-    assert _check(mvp3, FortifyRoad(C, ROAD_CM), rules=MVP3) is RejectCode.FEATURE_DISABLED
 
 
 def test_a_second_command_in_the_same_tick_is_already_built() -> None:

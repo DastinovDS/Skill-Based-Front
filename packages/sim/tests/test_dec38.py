@@ -151,7 +151,7 @@ class Scene:
         _, events = apply_commands(state, rules, batch)
         state.events = events
         state.events += movement(state, rules)
-        state.events += combat(state, rules, active_bonuses(state, rules))
+        state.events += combat(state, rules, active_bonuses(state))
         state.events += orders(state, rules)
 
     def until(self, tick: int) -> None:
@@ -317,7 +317,7 @@ def test_row_9_two_charges_one_from_each_group(cost: int, mirror: bool) -> None:
     s.state.events += movement(s.state, s.rules)
     if cost:  # equal ``charged``: the smaller id pays first, then the other one
         assert (s.counts(a), s.counts(b)) == ((2, 0), (1, 0))
-    s.state.events += combat(s.state, s.rules, active_bonuses(s.state, s.rules))
+    s.state.events += combat(s.state, s.rules, active_bonuses(s.state))
     s.state.events += orders(s.state, s.rules)
     assert s.captured() == [(1, 0)]
     assert s.merged(1) == ([(3, 0)] if cost else [(3, 2)])
@@ -555,19 +555,6 @@ def test_row_16_a_virtual_shot_kills_a_real_charge_pays(cost: int, mirror: bool)
     assert s.state.groups[a].bonus == 0  # the unused bonus burns
 
 
-@cases
-def test_row_17_defense_without_a_charge(cost: int, mirror: bool) -> None:
-    s = Scene(ENEMY_1, cost=cost, mirror=mirror)
-    a = s.arriving(0, 3, 3, 0, 1)
-    s.at(1, 2, 0, 1, mode=Mode.DEFENSE, ticks_in_defense=120)  # "Defense" (+2)
-    s.until(21)
-    assert not s.kinds("fight_ended")
-    s.until(41)
-    assert _ended(s) == (0, True)
-    assert s.captured() == [(1, 0)]
-    assert s.counts(a) == ((3, 0) if cost else (3, 1))
-
-
 @pytest.mark.parametrize("charged", (1, 0))
 @cases
 def test_row_27_the_last_defender_leaves_by_a_move(charged: int, cost: int, mirror: bool) -> None:
@@ -702,15 +689,14 @@ def test_row_28_a_move_of_a_discharged_group_is_accepted(cost: int, mirror: bool
 # Row 29 is the ``cost = 0`` half of every test above. ------------------------------------------
 
 
-def test_every_ruleset_of_the_repo_has_capture_off() -> None:
-    """The number of DEC-38: ``0`` (off) in ``mvp-0``, ``mvp-1``, ``test-short`` and the test
-    rulesets; BAL-02 sets ``1`` in its own ruleset."""
-    paths = [
-        *(ROOT / "rulesets" / f"{n}.toml" for n in ("mvp-0", "mvp-1", "test-short")),
-        *sorted((TESTS_DIR / "rulesets").glob("*.toml")),
-    ]
-    for path in paths:
+def test_the_price_of_a_capture_in_the_rulesets_of_the_repo() -> None:
+    """The number of DEC-38: ``0`` (off) in ``mvp-5`` and the test rulesets, ``1`` in ``mvp-6``,
+    ``mvp-7`` and ``test-short`` (a short ``mvp-7``; owner decision 2026-11-09, #759)."""
+    off = [ROOT / "rulesets" / "mvp-5.toml", *sorted((TESTS_DIR / "rulesets").glob("*.toml"))]
+    for path in off:
         assert load_ruleset(path).capture.charge_cost == 0, path
+    for name in ("mvp-6", "mvp-7", "test-short"):
+        assert load_ruleset(ROOT / "rulesets" / f"{name}.toml").capture.charge_cost == 1, name
 
 
 def test_a_negative_charge_cost_is_rejected() -> None:

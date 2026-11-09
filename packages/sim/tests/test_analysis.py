@@ -24,22 +24,17 @@ from gow_sim.commands import (
     CancelRecruit,
     Command,
     Forfeit,
+    FortifyRoad,
     Move,
     PlayerCommand,
     Recruit,
-    SetFront,
-    SetMode,
-    SetRearMin,
     SetStance,
     Split,
-    Transfer,
-    UpgradeRoad,
-    UpgradeWarehouse,
 )
 from gow_sim.maps import load_map
 from gow_sim.match import SIM_VERSION, Match, run_headless
 from gow_sim.replay import REPLAY_SUFFIX, analyze_replay, read_replay, replay_log
-from gow_sim.ruleset import KindTable, Ruleset, Stance, load_ruleset
+from gow_sim.ruleset import KindTable, Ruleset, Stance, StanceTable, load_ruleset
 from gow_sim.state import AtNode, Event, Group, Mode, OnEdge, Order, Packet, event
 
 TESTS = Path(__file__).resolve().parent
@@ -162,7 +157,7 @@ def test_recorder_marks_a_siege_order_by_the_garrison_before_the_tick() -> None:
     g_k, g_c, g_a, g_6 = gids
     batch = [
         PlayerCommand(0, 0, Move(g_k, P)),  # an attack into an empty neutral province
-        PlayerCommand(0, 1, Move(g_c, 6, planned=True)),  # into the garrison of player 1
+        PlayerCommand(0, 1, Move(g_c, 6, planned=True, bonus=1)),  # into the garrison of 1
         PlayerCommand(0, 2, Move(g_a, B)),  # an own node: no attack
         PlayerCommand(1, 0, Move(g_6, 7)),  # player 1 leaves 6 for the empty neutral 7
     ]
@@ -246,10 +241,10 @@ def test_stance_set_at_tick_one_leaves_no_ticks_to_the_start_stance() -> None:
 
 def test_apm_counts_minutes_by_tick_and_leaves_out_forfeit() -> None:
     commands = [
-        _cmd(1, "SetFront"),
-        _cmd(MINUTE, "SetFront"),  # the last tick of minute 0
-        _cmd(MINUTE + 1, "SetRearMin"),  # the first tick of minute 1
-        _cmd(MINUTE + 2, "SetRearMin", ok=False),  # sent, rejected: counts as sent
+        _cmd(1, "SetStance"),
+        _cmd(MINUTE, "SetStance"),  # the last tick of minute 0
+        _cmd(MINUTE + 1, "SetLeafShift"),  # the first tick of minute 1
+        _cmd(MINUTE + 2, "SetLeafShift", ok=False),  # sent, rejected: counts as sent
         _cmd(MINUTE + 3, "Forfeit"),
     ]
     p0, p1 = analyze_stats(_log([], ticks=MINUTE + 3, commands=commands)).players
@@ -267,20 +262,17 @@ def test_apm_of_an_empty_match_is_undefined() -> None:
 
 
 def test_cp_by_category_sums_the_prices_charged() -> None:
-    # Prices as in mvp-1: move 1 CP, planned move 2, defense 2, road 0.5, recruit 1, barracks 3,
-    # warehouse 2; transfer 0.4 and split 0.1 and cancel 0.1 are invented to fill the categories.
+    # Prices as in mvp-7: move 1 CP, planned move 1, recruit 1, a road fortification 1.5; the
+    # barracks 3, split 0.1 and cancel 0.1 are invented to fill the categories.
     commands = [
         _cmd(10, "Move", 100),
         _cmd(11, "Move", 100),
-        _cmd(12, "Move", 200, planned=True),
-        _cmd(13, "SetMode", 200),
+        _cmd(12, "Move", 100, planned=True),
         _cmd(14, "Recruit", 100),
         _cmd(15, "Recruit", 100),
         _cmd(16, "CancelRecruit"),
-        _cmd(17, "UpgradeRoad", 50),
         _cmd(18, "BuildBarracks", 300),
-        _cmd(19, "UpgradeWarehouse", 200),
-        _cmd(20, "Transfer", 40),
+        _cmd(19, "FortifyRoad", 150),
         _cmd(21, "Split", 10),
         _cmd(22, "CancelOrder", 10),
         _cmd(23, "Move", 100, ok=False),  # rejected: nothing charged
@@ -294,33 +286,24 @@ def test_cp_by_category_sums_the_prices_charged() -> None:
     assert tuple(c for c, _ in p0.cp_by_category) == CP_CATEGORIES
     assert dict(p0.cp_by_category) == {
         "move": 200,
-        "planned_move": 200,
-        "mode": 200,
+        "planned_move": 100,
         "recruit": 100,  # 2 * 100 - 100 refunded
-        "road": 50,
         "barracks": 300,
-        "warehouse": 200,
-        "transfer": 40,
-        "fort": 0,
+        "fort": 150,
         "other": 20,
     }
-    assert (p0.cp_refunded, p0.cp_total) == (100, 1310)
+    assert (p0.cp_refunded, p0.cp_total) == (100, 870)
     assert dict(p1.cp_by_category)["move"] == 100
     assert dict(p1.cp_by_category)["recruit"] == -50  # a refund with no charge in this log
     assert p1.cp_total == 50
 
 
 def test_stats_to_json_is_plain_data() -> None:
-    data = analyze_stats(_log([], commands=[_cmd(5, "SetFront")])).to_json()
+    data = analyze_stats(_log([], commands=[_cmd(5, "SetLeafShift")])).to_json()
     players = data["players"]
     assert isinstance(players, list)
     assert players[0]["stance_timeline"] == [[0, "balance"]]
-    assert players[0]["supply"] == {
-        "set_front": [5],
-        "set_rear_min": [],
-        "transfer": [],
-        "transfer_charges": 0,
-    }
+    assert players[0]["commands"] == 1
     assert list(cast(dict[str, int], players[0]["cp_by_category"])) == list(CP_CATEGORIES)
     assert players[1]["planned_share"] is None
 
@@ -329,23 +312,21 @@ def test_stats_to_json_is_plain_data() -> None:
 #
 # Map ``dec18`` (the same as in test_dec18.py): player 0 owns K = 0 (capital), A = 1, B = 2,
 # C = 3 (medium cities); P = 4 is a neutral province next to K and B; road K-A is edge 0.
-# Rules: ``mvp-0`` with the numbers pinned here, no CP regeneration, ``city_upgrades`` on (the
-# warehouse of a medium city holds 2 charges at level 0, the capital's holds 6).
-# Prices in hundredths of CP: move 100, planned move 250, defense 200, road 50, recruit 100,
-# barracks 300, warehouse 200, transfer 40, split 10, cancel 10; the rest is free.
+# Rules: ``mvp-6`` with the numbers pinned here, no CP regeneration (a quantum of 0).
+# Prices in hundredths of CP: move 100, planned move 250, recruit 100, barracks 300, a road
+# fortification 150, split 10, cancel 10; the rest is free.
 
 K, A, B, C, P = 0, 1, 2, 3, 4
 
 
 def _script_rules() -> Ruleset:
-    base = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+    base = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
     return dataclasses.replace(
         base,
         cp=dataclasses.replace(base.cp, start=3000, cap=5000, per_period=0),
         economy=dataclasses.replace(base.economy, start_stance=Stance.BALANCE),
         orders=dataclasses.replace(
             base.orders,
-            stance_cooldown_ticks=100,
             cost=dataclasses.replace(
                 base.orders.cost,
                 move=100,
@@ -353,22 +334,15 @@ def _script_rules() -> Ruleset:
                 cancel=10,
                 split=10,
                 merge=0,
-                attack=0,
-                defense=200,
-                build=50,
                 recruit=100,
                 stance=0,
-                front=0,
-                rear_min=0,
-                transfer=40,
                 barracks=300,
-                warehouse=200,
             ),
         ),
+        fort=dataclasses.replace(base.fort, cost=150),
         recruit=dataclasses.replace(
             base.recruit, unit_ticks=30, queue_max=3, refund_started_pct=50
         ),
-        city_upgrades=dataclasses.replace(base.city_upgrades, enabled=True),
         capacity=dataclasses.replace(
             base.capacity,
             by_kind=KindTable(capital=10, city_large=8, city_medium=6, city_small=4, province=3),
@@ -387,28 +361,24 @@ def _scripted_match() -> MatchLog:
     g1, g2, g3, g4 = (gids[n] for n in ("g1", "g2", "g3", "g4"))
     p0: dict[int, list[Command]] = {
         5: [SetStance(Stance.WAR)],
-        50: [SetStance(Stance.ECONOMY)],  # rejected: the cooldown of 100 ticks from tick 5
+        50: [SetStance(Stance.WAR)],  # rejected: the stance does not change (NO_CHANGE)
         105: [SetStance(Stance.ECONOMY)],
         150: [Recruit(K), Recruit(K)],
         160: [CancelRecruit(K)],  # the second unit of two: all 100 back
         170: [CancelRecruit(K)],  # the unit in production: 100 * 50 // 100 = 50 back
-        200: [Move(g1, P), Move(g2, P, planned=True), Move(g3, B, planned=True)],
+        200: [
+            Move(g1, P),
+            Move(g2, P, planned=True, bonus=1),
+            Move(g3, B, planned=True, bonus=1),
+        ],
         205: [CancelOrder(g1)],  # g1 is on the road
         215: [Split(g4, 1)],
-        220: [SetMode(g4, Mode.DEFENSE)],
-        230: [UpgradeRoad(0)],
-        240: [UpgradeRoad(0)],  # rejected: the road is being built
         250: [BuildBarracks(A)],
-        260: [UpgradeWarehouse(B)],
-        270: [UpgradeWarehouse(A)],  # rejected: A is building the barracks
-        300: [SetFront(0, A)],
-        310: [SetFront(1, B)],
-        320: [SetRearMin(3)],
-        330: [SetRearMin(2)],
-        400: [Transfer(K, A, 3)],  # cut to the room of A (2)
-        410: [Transfer(K, B, 1)],
-        600: [SetRearMin(0)],  # the last tick of minute 0
-        601: [SetFront(0, None)],  # the first tick of minute 1
+        270: [BuildBarracks(A)],  # rejected: A is building the barracks (CITY_BUSY)
+        300: [FortifyRoad(K, 0)],
+        310: [FortifyRoad(K, 0)],  # rejected: the road is fortified already
+        600: [SetStance(Stance.BALANCE)],  # the last tick of minute 0
+        601: [SetStance(Stance.WAR)],  # the first tick of minute 1
     }
     p1: dict[int, list[Command]] = {10: [SetStance(Stance.ECONOMY)], 650: [Forfeit()]}
     recorder = MatchRecorder()
@@ -420,10 +390,6 @@ def _scripted_match() -> MatchLog:
             for cmd in script.get(tick, []):
                 batch.append(PlayerCommand(player, seq[player], cmd))
                 seq[player] += 1
-        if tick == 400:  # warehouses as the transfers need them
-            state.nodes[K].warehouse, state.nodes[A].warehouse = 3, 0
-        if tick == 410:
-            state.nodes[K].warehouse, state.nodes[B].warehouse = 1, 0
         match.step(batch)
         recorder.record(match, batch)
     return recorder.log()
@@ -434,24 +400,25 @@ def test_scripted_match_statistics() -> None:
     assert log.ticks == 650
     p0, p1 = analyze_stats(log).players
 
-    # Stance: balance in ticks 1..4, war in 5..104, economy in 105..650.
-    assert p0.stance_timeline == ((0, "balance"), (5, "war"), (105, "economy"))
-    assert dict(p0.stance_ticks) == {"economy": 546, "balance": 4, "war": 100}
+    # Stance: balance in ticks 1..4, war in 5..104, economy in 105..599, balance in 600, war in
+    # 601..650.
+    assert p0.stance_timeline == (
+        (0, "balance"),
+        (5, "war"),
+        (105, "economy"),
+        (600, "balance"),
+        (601, "war"),
+    )
+    assert dict(p0.stance_ticks) == {"economy": 495, "balance": 5, "war": 150}
     assert p1.stance_timeline == ((0, "balance"), (10, "economy"))
     assert dict(p1.stance_ticks) == {"economy": 641, "balance": 9, "war": 0}
 
-    # APM: 26 commands (3 rejected), 25 in minute 0 (the last at tick 600) and 1 in minute 1.
-    assert (p0.commands, p0.rejected) == (26, 3)
-    assert p0.apm_by_minute == (25, 1)
-    assert (p0.apm_avg, p0.apm_peak) == (24.0, 25)  # 26 * 600 / 650
+    # APM: 18 commands (3 rejected), 17 in minute 0 (the last at tick 600) and 1 in minute 1.
+    assert (p0.commands, p0.rejected) == (18, 3)
+    assert p0.apm_by_minute == (17, 1)
+    assert (p0.apm_avg, p0.apm_peak) == (16.615, 17)  # 18 * 600 / 650 = 16.6153...
     assert (p1.commands, p1.rejected, p1.apm_by_minute) == (1, 0, (1, 0))  # Forfeit is not counted
     assert p1.apm_avg == 0.923  # 600 / 650
-
-    # Supply actions and the charges the transfers sent (3 cut to 2, then 1).
-    assert p0.front_ticks == (300, 310, 601)
-    assert p0.rear_min_ticks == (320, 330, 600)
-    assert p0.transfer_ticks == (400, 410)
-    assert p0.transfer_charges == 3
 
     # Orders: two planned of three, one planned among the two attacks (the neutral province).
     assert (p0.orders, p0.planned_orders) == (3, 2)
@@ -460,27 +427,24 @@ def test_scripted_match_statistics() -> None:
     assert p0.planned_siege_share is None  # no order went into an enemy garrison
     assert (p1.orders, p1.planned_share, p1.planned_attack_share) == (0, None, None)
 
-    # CP in hundredths: 1 move, 2 planned at 250, defense, 2 recruits less the refunds 100 + 50,
-    # road, barracks, warehouse, 2 transfers at 40, split and cancel at 10.
+    # CP in hundredths: 1 move, 2 planned at 250, 2 recruits less the refunds 100 + 50, the
+    # barracks, a road fortification, split and cancel at 10; the stance is free.
     assert dict(p0.cp_by_category) == {
         "move": 100,
         "planned_move": 500,
-        "mode": 200,
         "recruit": 50,
-        "road": 50,
         "barracks": 300,
-        "warehouse": 200,
-        "transfer": 80,
-        "fort": 0,
+        "fort": 150,
         "other": 20,
     }
-    assert (p0.cp_refunded, p0.cp_total) == (150, 1500)
+    assert (p0.cp_refunded, p0.cp_total) == (150, 1120)
     assert p1.cp_total == 0
-    assert (log.accepted, log.rejected) == ((23, 2), (3, 0))  # player 1: stance and Forfeit
+    assert (log.accepted, log.rejected) == ((15, 2), (3, 0))  # player 1: stance and Forfeit
 
 
 def test_analyze_replay_is_analyze_of_the_replay_log() -> None:
-    file = next(GOLDEN.glob(f"*-short-forfeit{REPLAY_SUFFIX}"))  # the shortest golden match
+    # the shortest golden match
+    file = min(GOLDEN.glob(f"*{REPLAY_SUFFIX}"), key=lambda f: read_replay(f).checkpoints[-1].tick)
     archive, maps = ROOT / "rulesets" / "archive", ROOT / "maps" / "fixtures"
     assert analyze_replay(file, archive, maps) == analyze(replay_log(file, archive, maps))
 
@@ -551,17 +515,26 @@ def test_charge_stock_sums_warehouses_packets_and_charged_units() -> None:
     assert recorder.log().stock == ((10, 7), (10, 10))
 
 
+def _idle_rules() -> Ruleset:
+    """``mvp-6`` with the own capital making a charge every 40 ticks in "Balance" (DEC-44)."""
+    base = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
+    periods = StanceTable(economy=20, balance=40, war=80)
+    return dataclasses.replace(
+        base, stances=dataclasses.replace(base.stances, capital_period_ticks=periods)
+    )
+
+
 def test_an_idle_match_stock_and_burning_by_hand() -> None:
-    # Map dec28, ruleset mvp-1, two idle players, 700 ticks. A quantum comes every 50 ticks:
-    # balance stance, 100 * 50 // 100 = 50 hundredths of CP into charges, times 2 charges per CP
-    # = 100 hundredths = 1 charge per quantum, at ticks 50, 100, ..., 700: 14 charges.
-    # Storage of a player: capital 6 + three medium cities 2 each = 12. Nothing leaves it (no
-    # units, no fights), so the stock at tick t is min(12, t // 50) and the 13th and 14th
-    # charge (ticks 650 and 700) burn, wherever the supply keeps the rest (packets count).
-    # Samples of t = 1..700: 49 zeros, then 50 ticks each at 1..11, then 12 for ticks
-    # 600..700 (101 ticks): sum = 50 * (1 + ... + 11) + 12 * 101 = 3300 + 1212 = 4512,
-    # mean = 4512 * 100 // 700 = 644 (6.44 charges), peak 12, burned 2 * 1000 // 14 = 142.
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
+    # Map dec28, two idle players, 700 ticks. The own capital makes one charge every 40 ticks of
+    # its local counter (balance stance, DEC-44): at ticks 40, 80, ..., 680: 17 charges.
+    # Storage of a player (fixed warehouses, DEC-43 item C): capital 6 + three medium cities 3
+    # each = 15. Nothing leaves it (no units, no fights), so the stock at tick t is
+    # min(15, t // 40) and the 16th and 17th charge (ticks 640 and 680) burn, wherever the
+    # supply keeps the rest (packets count).
+    # Samples of t = 1..700: 39 zeros, then 40 ticks each at 1..14, then 15 for ticks
+    # 600..700 (101 ticks): sum = 40 * (1 + ... + 14) + 15 * 101 = 4200 + 1515 = 5715,
+    # mean = 5715 * 100 // 700 = 816 (8.16 charges), peak 15, burned 2 * 1000 // 17 = 117.
+    rules = _idle_rules()
     mapdef = load_map(TESTS / "maps" / "dec28.json")
 
     class Idle:
@@ -575,13 +548,13 @@ def test_an_idle_match_stock_and_burning_by_hand() -> None:
     m = analyze(log)
     assert log.ticks == 700
     assert [len(s) for s in log.stock] == [700, 700]
-    assert log.stock[0][48:50] == (0, 1)  # ticks 49 and 50
-    assert max(log.stock[0]) == 12
-    assert m.stock_mean_centi == (644, 644)
-    assert m.stock_peak == (12, 12)
-    assert m.charges_produced == (14, 14)
+    assert log.stock[0][38:40] == (0, 1)  # ticks 39 and 40
+    assert max(log.stock[0]) == 15
+    assert m.stock_mean_centi == (816, 816)
+    assert m.stock_peak == (15, 15)
+    assert m.charges_produced == (17, 17)
     assert m.charges_burned == (2, 2)
-    assert m.burned_permille == (142, 142)
+    assert m.burned_permille == (117, 117)
 
 
 # Charge ledger and flow (#588) --------------------------------------------------------------------
@@ -606,51 +579,46 @@ def test_ledger_and_flow_from_a_hand_made_log() -> None:
         event(11, "attrition", node=0, player=0, group=2, charged=False, destroyed=True),
         event(12, "packet_sent", packet=2, player=0, edge=0, from_node=0, to_node=1, charges=4),
         event(13, "packet_delivered", packet=2, player=0, node=1, charges=3),
-        event(14, "transfer_started", packet=3, player=0, from_node=0, to_node=1, charges=2),
     ]
     log = dataclasses.replace(
         _log(events),
         capture_charge_cost=1,
-        places_start=((1, 2, 3, 4, 0, 0), (3, 0, 0, 0, 0, 0)),
-        places_end=((1, 0, 1, 1, 1, 0), (0, 0, 2, 0, 0, 0)),
+        places_start=((1, 5, 4, 0, 0), (3, 0, 0, 0, 0)),
+        places_end=((1, 1, 1, 1, 0), (0, 2, 0, 0, 0)),
     )
     a, b = analyze(log).flow
     assert (a.start, a.end, a.residual) == (10, 4, 1)
     assert (a.fights, a.captures, a.packets_lost, a.warehouses_lost) == (2, 2, 1, 1)
     assert (a.starved, a.attrition) == (2, 1)
-    assert (a.sent, a.delivered, a.transfers) == (4, 3, 2)
+    assert (a.sent, a.delivered) == (4, 3)
     assert (b.start, b.end, b.fights, b.captures, b.residual) == (3, 2, 1, 0, 0)
     data = analyze(log).to_json()
     assert data["charges_residual"] == [1, 0]
     assert data["charges_captures"] == [2, 0]
 
 
-def test_stock_by_place_means_and_bottleneck_from_a_hand_made_log() -> None:
+def test_stock_by_place_means_and_cap_full_from_a_hand_made_log() -> None:
     # Samples every 10 ticks; 600 ticks per minute. Player 0 has 61 samples (ticks 10..610):
     # the first 60 (ticks 10..600) belong to minute 0, the last (tick 610) to minute 1.
     # Capital 4 in minute 0 and 2 in minute 1; packets 1 for 30 samples and 2 for 30: 150 -> mean
     # (30 * 1 + 30 * 2) * 100 // 60 = 150.
-    samples = (*((4, 0, 0, 0, 0, 1 if i < 30 else 2) for i in range(60)), (2, 0, 0, 0, 0, 0))
+    samples = (*((4, 0, 0, 0, 1 if i < 30 else 2) for i in range(60)), (2, 0, 0, 0, 0))
     log = dataclasses.replace(
-        _log([], ticks=610),
-        place_samples=(samples, ()),
-        bottleneck=((100, 40, 30, 7), (0, 0, 0, 0)),
+        _log([], ticks=610), place_samples=(samples, ()), cap_full_ticks=(7, 0)
     )
     a, b = analyze(log).flow
     places = dict(a.stock_by_place_minute)
     assert places["cap_wh"] == (400, 200)
     assert places["packets"] == (150, 0)
-    assert places["front_wh"] == (0, 0)
+    assert places["rear_wh"] == (0, 0)
     assert dict(b.stock_by_place_minute)["cap_wh"] == (None, None)  # no sample
-    assert (a.front_empty_permille, a.front_empty_cap_has_permille) == (400, 300)
-    assert (b.front_empty_permille, b.front_empty_cap_has_permille) == (None, None)
-    assert a.cap_full_ticks == 7
+    assert (a.cap_full_ticks, b.cap_full_ticks) == (7, 0)
 
 
 def test_an_idle_match_ledger_balances_and_places_add_up() -> None:
-    # The idle match of the test above: nothing but the economy, 14 charges produced, 2 burned,
-    # no start stock on this map, 12 in the end; places at the end add up to the stock.
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
+    # The idle match of the test above: nothing but the economy, 17 charges produced, 2 burned,
+    # no start stock on this map, 15 in the end; places at the end add up to the stock.
+    rules = _idle_rules()
     mapdef = load_map(TESTS / "maps" / "dec28.json")
 
     class Idle:
@@ -662,12 +630,12 @@ def test_an_idle_match_ledger_balances_and_places_add_up() -> None:
     run_headless(mapdef, rules, [Idle(), Idle()], max_ticks=700, observer=recorder)
     log = recorder.log()
     for p, flow in enumerate(analyze(log).flow):
-        assert (flow.start, flow.end, flow.residual) == (0, 12, 0)
-        assert sum(log.places_end[p]) == log.stock[p][-1] == 12
+        assert (flow.start, flow.end, flow.residual) == (0, 15, 0)
+        assert sum(log.places_end[p]) == log.stock[p][-1] == 15
         assert len(log.place_samples[p]) == 70
         assert [len(v) for _, v in flow.stock_by_place_minute] == [2] * len(PLACES)
         # Each sample splits the stock without loss: sum of the means is within the rounding of
-        # the stock mean of the same samples (every sample is an integer, 6 places round down).
+        # the stock mean of the same samples (every sample is an integer, 5 places round down).
         exact = sum(sum(s) for s in log.place_samples[p][:60]) * 100 // 60
         parts = sum(v[0] or 0 for _, v in flow.stock_by_place_minute)
         assert exact - len(PLACES) < parts <= exact
@@ -804,8 +772,8 @@ def test_result_tally_reads_tick_by_tick() -> None:
     assert empty == ResultTotals(0, 0, 0, 0, 0, 0, 0, 0)
 
 
-def test_the_v2_sinks_are_counted_from_their_events() -> None:
-    # Economy v2 (DEC-41, #646): a building paid 2 from the warehouse and 1 from a group, a
+def test_the_building_and_plan_sinks_are_counted_from_their_events() -> None:
+    # DEC-41 (#646): a building paid 2 from the warehouse and 1 from a group, a
     # waiting planned order took 2 charges: 5 + 0 - 3 - 2 = 0 left, residual 0.
     events = [
         event(3, "build_paid", player=0, kind="barracks", node=2, warehouse=2, units=1, owed=0),
@@ -814,8 +782,8 @@ def test_the_v2_sinks_are_counted_from_their_events() -> None:
     ]
     log = dataclasses.replace(
         _log(events),
-        places_start=((5, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0)),
-        places_end=((0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0)),
+        places_start=((5, 0, 0, 0, 0), (0, 0, 0, 0, 0)),
+        places_end=((0, 0, 0, 0, 0), (0, 0, 0, 0, 0)),
     )
     a, b = analyze(log).flow
     assert (a.built, a.plans, a.residual) == (3, 2, 0)
@@ -825,22 +793,21 @@ def test_the_v2_sinks_are_counted_from_their_events() -> None:
     assert data["charges_plans"] == [2, 0]
 
 
-def test_the_ledger_balances_on_the_v2_golden_matches() -> None:
-    # The identity of the ledger (sources - sinks - end = 0) on the economy v2 golden games,
-    # which pay buildings in charges and gather planned bonuses (#646); since v31 they play the
-    # mvp-3 of #659, where a capture is free.
-    # Since v32 also on the mvp-4 game of the supply flow (DEC-43, #704): a full factory spills.
-    files = sorted(GOLDEN.glob(f"*-mvp3{REPLAY_SUFFIX}")) + sorted(
-        GOLDEN.glob(f"*-mvp4{REPLAY_SUFFIX}")
-    )
-    assert len(files) >= 3
+def test_the_ledger_balances_on_the_golden_matches() -> None:
+    # The identity of the ledger (sources - sinks - end = 0) on the golden games, which pay
+    # buildings in charges, gather planned bonuses (#646), pay captures (DEC-38) and spill the
+    # charges of a full factory (DEC-43, #704).
+    files = sorted(GOLDEN.glob(f"*{REPLAY_SUFFIX}"))
+    assert files
+    built = plans = 0
     for file in files:
         log = replay_log(file, ROOT / "rulesets" / "archive", ROOT / "maps" / "fixtures")
         m = analyze(log)
-        assert log.capture_charge_cost == 0
-        assert sum(f.built for f in m.flow) > 0 and sum(f.plans for f in m.flow) > 0
+        built += sum(f.built for f in m.flow)
+        plans += sum(f.plans for f in m.flow)
         for flow in m.flow:
             assert flow.residual == 0, (file.name, flow)
+    assert built > 0 and plans > 0
 
 
 # CP burned, ticks at the cap, idle discharged units (#743) ---------------------------------------
@@ -1019,18 +986,16 @@ def test_charges_built_lost_counts_stopped_builds_and_captured_buildings() -> No
         # player 0: a factory in node 1 paid 3 + 1, then stopped: 4 lost
         event(3, "build_paid", player=0, node=1, kind="factory", warehouse=2, units=1, owed=1),
         event(5, "build_paid", player=0, node=1, kind="factory", warehouse=1, units=0, owed=0),
-        event(
-            9, "build_stopped", player=0, node=1, kind="factory", edge=None, reason="interrupted"
-        ),
-        # player 0: a warehouse level of its capital (3), finished, then the capital is captured
-        event(10, "build_paid", player=0, node=0, kind="warehouse", warehouse=3, units=0, owed=0),
-        event(20, "warehouse_upgraded", player=0, node=0, level=1),
-        event(30, "node_captured", node=0, player=1),
-        event(40, "node_captured", node=0, player=0),  # taken back: nothing more is lost
-        # player 1: barracks of node 3 (2), finished and kept; a road build stopped (no node)
+        event(9, "build_stopped", player=0, node=1, kind="factory", reason="interrupted"),
+        # player 0 takes the neutral node 2, builds its barracks (3), then node 2 is captured
+        event(9, "node_captured", node=2, player=0),
+        event(10, "build_paid", player=0, node=2, kind="barracks", warehouse=3, units=0, owed=0),
+        event(20, "barracks_built", player=0, node=2),
+        event(30, "node_captured", node=2, player=1),
+        event(40, "node_captured", node=2, player=0),  # taken back: nothing more is lost
+        # player 1: barracks of node 3 (2), finished and kept
         event(11, "build_paid", player=1, node=3, kind="barracks", warehouse=2, units=0, owed=0),
         event(12, "barracks_built", player=1, node=3),
-        event(13, "build_stopped", player=1, kind="road", edge=4, reason="interrupted"),
     ]
     m = analyze(_log(events))
     assert tuple(f.built for f in m.flow) == (7, 2)
@@ -1043,9 +1008,7 @@ def test_recorder_counts_the_cp_of_cancelled_moves_and_the_economy() -> None:
     # the planned moves of g2 and g3 are never cancelled. Player 1 never moves.
     log = _scripted_match()
     assert log.cp_cancelled == (100, 0)
-    m = analyze(log)
-    assert m.cp_cancelled == (100, 0)
-    assert (m.economy_model, m.supply_model) == ("v1", "lines")
+    assert analyze(log).cp_cancelled == (100, 0)
 
 
 def test_the_efficiency_fields_agree_with_each_other_on_the_golden_matches() -> None:
@@ -1057,6 +1020,3 @@ def test_the_efficiency_fields_agree_with_each_other_on_the_golden_matches() -> 
             assert m.siege_fights[p] + m.siege_walk_ins[p] <= m.sieges[p]
             assert m.contested_sieges_won[p] <= m.contested_sieges[p] <= m.siege_fights[p]
             assert 0 <= m.charges_built_lost[p] <= m.flow[p].built
-        if file.name.endswith(f"-mvp4{REPLAY_SUFFIX}"):
-            assert (m.economy_model, m.supply_model) == ("v2", "flow")
-            assert m.first_contact_tick is not None

@@ -1,12 +1,15 @@
 """The match-11 saddle through the whole tick (DEC-43 item K, #732).
 
 The situation of row K1 of mechanics.md (section 7, DEC-43 item K): tick 2420 of the owner's match
-11 on ``narrows`` under ``mvp-4``, played by ``Match.step`` with every system, no commands. The
+11 on ``narrows`` under ``mvp-4``, played by ``Match.step`` with every system, no commands; the
+rules are ``mvp-5`` with the capital charge of ``mvp-4`` (every 100 ticks in "Balance": the stance
+counters of DEC-44 start at 0, so the quanta fall on the ticks of the old global clock). The
 capital's production of tick 100 goes into its own warehouse (Iron Hold holds 4 after its send of
 tick 80, room 2), so the sends of row K1 are unchanged; the first charge reaches The Narrows at
 tick 100 and its army is 4/1, 4/2 when the second lands at 150.
 """
 
+import dataclasses
 from pathlib import Path
 
 from gow_sim.maps import load_map
@@ -16,7 +19,14 @@ from gow_sim.state import AtNode, Group, Mode
 from gow_sim.systems.flow import update_flow
 
 ROOT = Path(__file__).resolve().parents[4]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+_MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+RULES = dataclasses.replace(
+    _MVP5,
+    stances=dataclasses.replace(
+        _MVP5.stances,
+        capital_period_ticks=dataclasses.replace(_MVP5.stances.capital_period_ticks, balance=100),
+    ),
+)
 NARROWS = load_map(ROOT / "maps" / "narrows.json")
 THE_NARROWS, FAR_FORK, BEACONFORD, LOWMOOR, FLINTCROSS, THORNWAY = 14, 17, 18, 19, 21, 22
 LARKFIELD, BARROW, IRON_HOLD = 23, 27, 28

@@ -1,7 +1,8 @@
 """Game state (SIM-02): initial state, canonical roundtrip, stable hash, no floats.
 
-Expected initial values come from the map files (packages/sim/tests/maps) and the SIM-01 table
-of mvp-0 (cp.start = 300), not from the code.
+Expected initial values come from the map files (packages/sim/tests/maps), the SIM-01 table
+(cp.start = 300), DEC-41 item 9 (only the capital keeps the start stock), DEC-43 item C (its
+warehouse holds 6) and DEC-26 (only the capital has a barracks), not from the code.
 """
 
 import json
@@ -24,6 +25,7 @@ from gow_sim.state import (
     Build,
     BuildKind,
     Detail,
+    FactoryBuild,
     GameState,
     Group,
     Intent,
@@ -44,12 +46,12 @@ from gow_sim.state import (
 TESTS_DIR = Path(__file__).resolve().parent
 MAPS_DIR = TESTS_DIR / "maps"
 TEST_MAPS = ["line3", "diamond", "choke"]
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP7 = TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml"
 
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(MVP0)
+    return load_ruleset(MVP7)
 
 
 def _map(name: str) -> MapDef:
@@ -62,8 +64,10 @@ def _rich_state(rules: Ruleset) -> GameState:
     state.tick = 137
     state.players[0].cp = 250
     state.players[1].stance = Stance.WAR
-    state.players[1].charge_acc = 50
-    state.players[1].stance_changed_tick = 101
+    state.players[1].cp_ticks = 50
+    state.players[1].capital_ticks = 101
+    state.players[0].leaf_shift = 1
+    state.players[0].leaf_shift_max = 2
     state.players[0].vp = 12
     state.nodes[1].owner = 0
     state.nodes[1].warehouse = 3
@@ -71,15 +75,15 @@ def _rich_state(rules: Ruleset) -> GameState:
     state.nodes[1].captured_tick = 120
     state.nodes[1].recruit_queue = 2
     state.nodes[1].recruit_progress = 17
-    state.edges[0].width = 2
     gid = state.new_id()
-    state.groups[gid] = Group(gid, 0, 2, 1, Mode.DEFENSE, OnEdge(edge=1, from_node=0, progress=333))
+    state.groups[gid] = Group(gid, 0, 2, 1, Mode.ATTACK, OnEdge(edge=1, from_node=0, progress=333))
     gid = state.new_id()
     state.groups[gid] = Group(gid, 1, 1, 0, Mode.ATTACK, AtNode(3))
-    state.nodes[1].build = Build(edge=0, owner=0, since=130, kind=BuildKind.ROAD)
-    state.nodes[3].build = Build(edge=None, owner=1, since=131, kind=BuildKind.WAREHOUSE)
-    state.nodes[3].has_barracks = True
-    state.nodes[3].warehouse_level = 1
+    state.nodes[1].build = Build(owner=0, since=130, kind=BuildKind.BARRACKS, owed=2)
+    state.nodes[1].factory_build = FactoryBuild(owner=0, since=125, owed=1)
+    state.nodes[1].road_forts = {0: 140, 3: 90}
+    state.nodes[2].factory = 1
+    state.nodes[2].factory_ticks = 33
     gid = state.new_id()
     state.groups[gid] = Group(
         gid,
@@ -105,26 +109,20 @@ def _rich_state(rules: Ruleset) -> GameState:
         arrive_tick=172,
         route=(1,),
         route_ticks=(30,),
-        transfer=True,
     )
-    state.players[0].fronts = (1, None)
-    state.players[1].rear_min = 3
     state.nodes[1].cut_since = 120
     iid = state.new_id()
     state.intents[iid] = Intent(
         iid, 1, IntentKind.PLANNED_MOVE, origin=3, target=2, created_tick=120
     )
-    iid = state.new_id()
-    state.intents[iid] = Intent(iid, 0, IntentKind.DEFENSE, origin=1, target=None, created_tick=100)
     state.vision_memory[0].nodes[3] = Sighting(90, Detail.PRESENCE, (Mode.ATTACK,), None, None)
-    state.vision_memory[1].nodes[0] = Sighting(12, Detail.EXACT, (Mode.ATTACK, Mode.DEFENSE), 4, 2)
+    state.vision_memory[1].nodes[0] = Sighting(12, Detail.EXACT, (Mode.ATTACK,), 4, 2)
     state.vision_memory[0].nodes[1] = Sighting(
-        91, Detail.RANGE, (Mode.DEFENSE,), None, None, enemy_range=(21, None)
+        91, Detail.RANGE, (Mode.ATTACK,), None, None, enemy_range=(21, None)
     )
     state.vision_memory[1].halves[2, 3] = Sighting(
         40, Detail.RANGE, (Mode.ATTACK,), None, None, enemy_range=(3, 5)
     )
-    state.vision_memory[1].widths[2] = 2
     state.vision_memory[0].spotted[5] = 33
     state.events.append(event(137, "packet_lost", edge=3, charges=1, owner=1, note=None))
     state.events.append(event(137, "captured", node=1, player=0, neutral=True))
@@ -139,14 +137,19 @@ def test_initial_state_follows_map_and_ruleset(name: str, rules: Ruleset) -> Non
     assert state.events == []
     assert sorted(state.players) == [0, 1]
     for player in state.players.values():
-        assert player.cp == 300  # cp.start of mvp-0 (SIM-01)
+        assert player.cp == 300  # cp.start (SIM-01)
         assert player.stance is Stance.BALANCE  # economy.start_stance, DEC-09
-        assert (player.charge_acc, player.vp) == (0, 0)
+        assert (player.vp, player.cp_ticks, player.capital_ticks) == (0, 0, 0)
     for node in raw["nodes"]:
-        assert state.nodes[node["id"]].owner == node["start_owner"]
-        assert state.nodes[node["id"]].warehouse == node["start_stock"]
-    for edge in raw["edges"]:
-        assert state.edges[edge["id"]].width == 1  # every road starts at level 1 (DEC-22)
+        n = state.nodes[node["id"]]
+        assert n.owner == node["start_owner"]
+        capital = node["kind"] == "capital"
+        # DEC-41, item 9: only the capital keeps its start stock, cut to its warehouse of 6
+        # (DEC-43, item C1; DEC-26, item 5); DEC-26: only the capital has a barracks; DEC-41,
+        # item 2: the own capital is the main factory.
+        assert n.warehouse == (min(node["start_stock"], 6) if capital else 0)
+        assert n.has_barracks is capital
+        assert n.factory == node["capital_of"]
     mirror = {int(k): v for k, v in raw["mirror"]["nodes"].items()}
     garrisons = sorted(
         (n for n in raw["nodes"] if n["start_units"] > 0),
@@ -166,10 +169,7 @@ def test_initial_state_follows_map_and_ruleset(name: str, rules: Ruleset) -> Non
         assert group.mode is Mode.ATTACK
     assert state.next_id == len(garrisons)
     assert state.packets == {} and state.intents == {}
-    assert all(
-        not m.nodes and not m.halves and not m.widths and not m.spotted
-        for m in state.vision_memory.values()
-    )
+    assert all(not m.nodes and not m.halves and not m.spotted for m in state.vision_memory.values())
 
 
 def test_line3_initial_garrisons(rules: Ruleset) -> None:
@@ -271,7 +271,7 @@ def test_state_hash_is_the_same_in_fresh_processes(rules: Ruleset, tmp_path: Pat
                 "-c",
                 _HASH_SCRIPT,
                 str(MAPS_DIR / "diamond.json"),
-                str(MVP0),
+                str(MVP7),
                 str(dump),
             ],
             env={**os.environ, "PYTHONHASHSEED": seed},  # noqa: TID251 (fresh process with PYTHONHASHSEED)
@@ -294,7 +294,6 @@ _GROUP0: dict[str, Any] = {
     "intent": None,
     "bonus": 0,
     "bonus_tick": 0,
-    "ticks_in_defense": 0,
     "fight": None,
 }
 
@@ -320,7 +319,7 @@ def _set(data: Any, path: tuple[str | int, ...], value: object) -> None:
         (("groups", 0, "charged"), 5, r"groups\[0\]\.charged: 5 is out of range"),
         (("groups", 0, "mode"), "sleep", r"groups\[0\]\.mode: expected one of"),
         (("groups", 2), _GROUP0, r"groups\[2\]\.id: duplicate id 0"),
-        (("nodes", 0, "build"), {"edge": 0}, r"nodes\[0\]\.build: missing keys"),
+        (("nodes", 0, "build"), {"owner": 0}, r"nodes\[0\]\.build: missing keys"),
         (("groups", 0, "bonus"), -1, r"groups\[0\]\.bonus: -1 is out of range"),
         (("groups", 0, "intent"), "x", r"groups\[0\]\.intent: expected an integer"),
         (
@@ -336,7 +335,6 @@ def _set(data: Any, path: tuple[str | int, ...], value: object) -> None:
                 "from_node": 0,
                 "progress": 1001,
                 "back": False,
-                "level": 1,
             },
             r"location\.progress: 1001 is out of range",
         ),
@@ -373,7 +371,7 @@ _build_kinds = st.sampled_from(list(BuildKind))
 
 @st.composite
 def _states(draw: st.DrawFn) -> GameState:
-    rules = load_ruleset(MVP0)
+    rules = load_ruleset(MVP7)
     mapdef = _map(draw(st.sampled_from(TEST_MAPS)))
     state = initial_state(mapdef, rules)
     nodes = st.integers(min_value=0, max_value=len(mapdef.nodes) - 1)
@@ -384,14 +382,12 @@ def _states(draw: st.DrawFn) -> GameState:
     for player in state.players.values():
         player.cp = draw(st.integers(min_value=0, max_value=500))
         player.stance = draw(st.sampled_from(list(Stance)))
-        player.charge_acc = draw(st.integers(min_value=0, max_value=99))
         player.vp = draw(st.integers(min_value=0, max_value=1000))
         player.forfeited = draw(st.booleans())
-        player.stance_changed_tick = draw(st.none() | st.integers(min_value=0, max_value=7200))
-        player.fronts = (draw(st.none() | nodes), draw(st.none() | nodes))
-        player.rear_min = draw(st.integers(min_value=0, max_value=8))
-    for edge in state.edges.values():
-        edge.width = draw(st.integers(min_value=1, max_value=3))
+        player.leaf_shift = draw(_small)
+        player.leaf_shift_max = draw(_small)
+        player.cp_ticks = draw(_small)
+        player.capital_ticks = draw(_small)
     for node in state.nodes.values():
         node.owner = draw(st.none() | players)
         node.warehouse = draw(_small)
@@ -401,11 +397,13 @@ def _states(draw: st.DrawFn) -> GameState:
         node.recruit_progress = draw(_small)
         node.cut_since = draw(_opt_small)
         if draw(st.booleans()):
-            kind = draw(_build_kinds)
-            edge = draw(edges) if kind is BuildKind.ROAD else None
-            node.build = Build(edge, draw(players), draw(_small), kind)
+            node.build = Build(draw(players), draw(_small), draw(_build_kinds), draw(_small))
         node.has_barracks = draw(st.booleans())
-        node.warehouse_level = draw(st.integers(min_value=0, max_value=2))
+        node.factory = draw(st.none() | players)
+        node.factory_ticks = draw(_small)
+        if draw(st.booleans()):
+            node.factory_build = FactoryBuild(draw(players), draw(_small), draw(_small))
+        node.road_forts = {e: draw(_small) for e in draw(st.lists(edges, max_size=2, unique=True))}
     for _ in range(draw(st.integers(min_value=0, max_value=6))):
         gid = state.new_id()
         units = draw(st.integers(min_value=1, max_value=20))
@@ -454,8 +452,6 @@ def _states(draw: st.DrawFn) -> GameState:
             draw(_small),
             route=route,
             route_ticks=tuple(draw(st.integers(1, 99)) for _ in route),
-            transfer=draw(st.booleans()),
-            share=draw(_small),
         )
     for _ in range(draw(st.integers(min_value=0, max_value=3))):
         iid = state.new_id()
@@ -486,7 +482,6 @@ def _states(draw: st.DrawFn) -> GameState:
                 None,
                 enemy_range=(low, draw(st.none() | st.integers(low, 30))),
             )
-            memory.widths[key] = draw(st.integers(1, 3))
         for key in draw(st.lists(_small, max_size=2, unique=True)):
             memory.spotted[key] = draw(_small)
     for _ in range(draw(st.integers(min_value=0, max_value=3))):

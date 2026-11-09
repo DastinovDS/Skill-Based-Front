@@ -2,19 +2,30 @@
 
 Rows M1 to M7 and M9 to M11 are the rows of the older tables re-read under item M (``test_dec43.py``
 F2, F7, F11, F12, F16, F17; ``test_dec43_leaves.py`` L13, L17, L20; ``test_dec43_build_pull.py``
-J1; ``test_dec43_saddle.py`` K1, K3). Map ``narrows``, ``mvp-4``, ``node_key(0, n) = n``.
+J1; ``test_dec43_saddle.py`` K1, K3). Map ``narrows``, ``mvp-4`` (pinned on ``mvp-5``),
+``node_key(0, n) = n``.
 """
 
+import dataclasses
 from pathlib import Path
 
 from gow_sim.maps import load_map
-from gow_sim.ruleset import load_ruleset
+from gow_sim.ruleset import StanceTable, load_ruleset
 from gow_sim.state import AtNode, GameState, Group, Mode, initial_state
 from gow_sim.systems.flow import supply_flow, update_flow
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+_MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+_EVERY_100 = StanceTable(economy=100, balance=100, war=100)
+RULES = dataclasses.replace(
+    _MVP5,
+    stances=dataclasses.replace(
+        _MVP5.stances, cp_period_ticks=_EVERY_100, capital_period_ticks=_EVERY_100
+    ),
+)
+"""``mvp-5`` with the periods of ``mvp-4`` the tables of DEC-43 were written for: a CP quantum and a
+charge of the capital every 100 ticks under every stance (DEC-44)."""
 NARROWS = load_map(ROOT / "maps" / "narrows.json")
 GRANITE, CAIRN, MARLOW, REEDWICK, BRACKENWAY, STONECROSS, MILLBROOK = 0, 1, 2, 4, 6, 7, 8
 TORCHESTER, MID_FORK, THE_NARROWS, FAR_FORK, BEACONFORD = 10, 11, 14, 17, 18

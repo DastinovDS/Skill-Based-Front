@@ -3,9 +3,10 @@
 Expected values are the table of worked examples of DEC-21 (mechanics.md, section 10): own city
 M (player 0), enemy city E (player 1), edge M-E with ``a`` = M and the border point 500 unless
 said otherwise; in E an enemy group of 4 units, 3 charged, "Attack". The view is player 0's. The
-terrain table of item 2 is the ``vision.by_terrain`` of ``mvp-0``; the ranges of item 4 its
-``vision.range_starts``. Example 18 is replaced by DEC-33 (``test_dec33.py``, example 4); its road
-level part is checked here.
+terrain table of item 2 is the ``vision.by_terrain`` of ``mvp-7``; the ranges of item 4 its
+``vision.range_starts``. Example 18 is replaced by DEC-33 (``test_dec33.py``, example 4); its
+edge part is checked here (the road levels went with economy v1, #894). Example 17 had a group in
+"Defense" (removed, #894): ``PRESENCE`` still shows that an enemy is there.
 
 DEC-35 (#477): own nodes are no longer sources of vision; mechanics.md reads examples 1-9, 11-15,
 17 and 18 "with an own group in M". ``_state`` puts a scout of player 0 (1 unit, 1 charged) in
@@ -48,7 +49,7 @@ type MakeMap = Callable[..., MapDef]
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 def _state(mapdef: MapDef, rules: Ruleset, tick: int = 10) -> GameState:
@@ -59,7 +60,7 @@ def _state(mapdef: MapDef, rules: Ruleset, tick: int = 10) -> GameState:
     for n in range(len(mapdef.nodes)):
         if state.nodes[n].owner == 0:
             gid = state.new_id()
-            state.groups[gid] = Group(gid, 0, 1, 1, Mode.DEFENSE, AtNode(n))
+            state.groups[gid] = Group(gid, 0, 1, 1, Mode.ATTACK, AtNode(n))
     return state
 
 
@@ -146,7 +147,7 @@ def test_example_10_not_a_neighbour_of_a_source_is_fog(
     enemy = _group(state, 1, AtNode(E_NODE))
     vision(state, rules)
     del state.groups[scout.id]
-    enemy.units, enemy.charged, enemy.mode = 9, 0, Mode.DEFENSE
+    enemy.units, enemy.charged = 9, 0
     state.tick = 9
     view = _view(state, rules)
     assert view.nodes[E_NODE].detail is F
@@ -247,28 +248,22 @@ def test_example_16_planned_order_is_public(make_fog_map: MakeMap, rules: Rulese
     ]
 
 
-def test_example_17_defense_is_seen_from_presence(make_fog_map: MakeMap, rules: Ruleset) -> None:
-    """E in "Defense": the mode is seen on ``PRESENCE`` (plains -> mountains), the intent public."""
+def test_example_17_an_enemy_is_seen_from_presence(make_fog_map: MakeMap, rules: Ruleset) -> None:
+    """An enemy group in E: on ``PRESENCE`` (plains -> mountains) only that it is there (its
+    mode), no numbers."""
     state = _state(_me(make_fog_map, "p", "m"), rules)
-    _group(state, 1, AtNode(E_NODE), mode=Mode.DEFENSE)
-    iid = state.new_id()
-    state.intents[iid] = Intent(iid, 1, IntentKind.DEFENSE, E_NODE, None, created_tick=4)
+    _group(state, 1, AtNode(E_NODE))
     view = _view(state, rules)
-    assert _seen(view, E_NODE) == Sighting(10, P, (Mode.DEFENSE,), None, None)
-    assert [(i.kind, i.origin) for i in view.intents] == [(IntentKind.DEFENSE, E_NODE)]
+    assert _seen(view, E_NODE) == Sighting(10, P, ATTACK, None, None)
 
 
-def test_example_18_road_level_between_two_non_sources_is_the_last_seen(
-    make_fog_map: MakeMap, rules: Ruleset
-) -> None:
-    """Edge E-F, E and F neighbours of M, neither a source: the road level is the last one seen
-    (DEC-17); the halves are seen by the levels of E and F (DEC-33, example 4)."""
+def test_example_18_an_edge_between_two_non_sources(make_fog_map: MakeMap, rules: Ruleset) -> None:
+    """Edge E-F, E and F neighbours of M, neither a source: the edge is in fog (DEC-17); the
+    halves are seen by the levels of E and F (DEC-33, example 4)."""
     mapdef = make_fog_map("pff", [(0, 1), (0, 2), (1, 2)])  # M, E, F; e2 = E - F
     state = _state(mapdef, rules)
-    state.vision_memory[0].widths[2] = 2
-    state.edges[2].width = 3
     edge = _view(state, rules).edges[2]
-    assert (edge.detail, edge.width) == (F, 2)
+    assert edge.detail is F
     assert [h.detail for h in edge.halves] == [R, R]
 
 

@@ -63,7 +63,7 @@ class _Compare:
                 assert enemy_figure_ids(state, rules, p, key) == ids, (state.tick, p)
                 self.views += 1
                 self.figures += len(ids)
-        if rules.flow and state.tick % FIELD_EVERY == 0:
+        if state.tick % FIELD_EVERY == 0:
             for p in PLAYERS:
                 kept, fresh = copy.deepcopy(state), copy.deepcopy(state)
                 fresh.memo.clear()
@@ -72,8 +72,9 @@ class _Compare:
                 self.fields += 1
 
 
-QUICK: Final = "web-mvp4.jsonl.gz"
-"""The replay of the quick run (the flow, fights and figures on edges); the others are ``slow``."""
+QUICK: Final = next((p.name for p in REPLAYS if p.name.startswith("web-")), None)
+"""The replay of the quick run, the first one on ``web`` (the flow, fights and figures on edges);
+the others are ``slow``."""
 
 
 @pytest.mark.parametrize(
@@ -86,15 +87,15 @@ QUICK: Final = "web-mvp4.jsonl.gz"
 def test_shortcuts_equal_the_full_computation(path: Path) -> None:
     seen = _Compare()
     replay_match(path, ARCHIVE, MAPS, seen)
-    assert seen.views > 0
-    if "mvp4" in path.name:  # the flow and enemy figures on edges: the comparisons bite
-        assert seen.figures > 0 and seen.fields > 0
+    assert seen.views > 0 and seen.fields > 0
+    if path.name == QUICK:  # enemy figures on edges: the comparisons bite
+        assert seen.figures > 0
 
 
 def test_a_view_after_a_change_outside_a_step_is_computed_again() -> None:
     """``Match.view(reuse=True)`` reuses the sight of a step only at the tick of that step."""
     mapdef = load_map(MAPS / "web.json")
-    match = Match(mapdef, load_ruleset(ROOT / "rulesets" / "mvp-4.toml"), bytes(range(32)))
+    match = Match(mapdef, load_ruleset(ROOT / "rulesets" / "mvp-7.toml"), bytes(range(32)))
     assert match._fresh(0) is None  # pyright: ignore[reportPrivateUsage]  # no step yet
     match.step()
     assert match._fresh(0) is not None  # pyright: ignore[reportPrivateUsage]

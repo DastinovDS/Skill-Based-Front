@@ -6,7 +6,6 @@ The expected values are computed by hand from the formula of DEC-46 (mechanics.m
 """
 
 import dataclasses
-import tomllib
 from pathlib import Path
 from typing import cast
 
@@ -19,6 +18,7 @@ from gow_sim.ruleset import (
     MapTempoRules,
     Ruleset,
     RulesetError,
+    StanceTable,
     apply_map_tempo,
     load_ruleset,
     parse_ruleset,
@@ -29,8 +29,10 @@ from gow_sim.state import event
 
 TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parents[2]
-STANCES = ROOT / "rulesets" / "mvp-4-stances.toml"
-TEMPO = ROOT / "rulesets" / "mvp-4-stances-tempo.toml"
+STANCES = ROOT / "rulesets" / "mvp-6.toml"
+"""mvp-6: the stances of DEC-44 without ``[map_tempo]``, a built factory every 100 ticks."""
+TEMPO = ROOT / "rulesets" / "mvp-7.toml"
+"""mvp-7: with ``[map_tempo]`` (ref_nodes 49, 50..150) and the factories following the stance."""
 
 
 def _tempo(min_pct: int = 50, max_pct: int = 150) -> MapTempoRules:
@@ -102,18 +104,22 @@ def test_narrows_sqrt_scales_every_economy_period_and_nothing_else() -> None:
     assert len(mapdef.nodes) == 29
     played = apply_map_tempo(rules, mapdef)
     assert played.map_tempo is None
-    assert played.cp.period_ticks == 131
-    factory = played.factory_rules()
-    assert (factory.capital_period_ticks, factory.built_period_ticks) == (263, 263)
-    assert played.stances is not None
     cp, capital = played.stances.cp_period_ticks, played.stances.capital_period_ticks
     assert (cp.economy, cp.balance, cp.war) == (263, 131, 105)
     assert (capital.economy, capital.balance, capital.war) == (131, 263, 526)
-    # The rest is the base ruleset: the variant differs from it only by [map_tempo].
-    base = load_ruleset(STANCES)
-    assert dataclasses.replace(
-        played, cp=base.cp, factory=base.factory, stances=base.stances
-    ) == dataclasses.replace(base, map_tempo=None)
+    assert played.factory.built_period_ticks is None  # DEC-47: every factory follows the stance
+    # The rest is the ruleset as given: only the stance periods and [map_tempo] differ.
+    assert dataclasses.replace(played, stances=rules.stances) == dataclasses.replace(
+        rules, map_tempo=None
+    )
+
+
+def test_the_built_period_scales_too() -> None:
+    # mvp-6 has a built period (100) and no section; with the section on narrows (pct 76):
+    # 100 * 100 // 76 = 131.
+    rules = dataclasses.replace(load_ruleset(STANCES), map_tempo=_tempo())
+    played = apply_map_tempo(rules, load_map(ROOT / "maps" / "narrows.json"))
+    assert played.factory.built_period_ticks == 131
 
 
 @pytest.mark.parametrize(
@@ -131,34 +137,28 @@ def test_balance_periods_of_other_maps(path: str, nodes: int, cp: int, capital: 
     mapdef = load_map(ROOT / "maps" / path)
     assert len(mapdef.nodes) == nodes
     played = apply_map_tempo(load_ruleset(TEMPO), mapdef)
-    assert played.stances is not None
     assert played.stances.cp_period_ticks.balance == cp
     assert played.stances.capital_period_ticks.balance == capital
 
 
 def test_ref_nodes_keeps_todays_numbers() -> None:
-    base = load_ruleset(STANCES)
     rules = load_ruleset(TEMPO)
     for name in ("crossroads", "highway"):
         played = apply_map_tempo(rules, load_map(ROOT / "maps" / f"{name}.json"))
-        assert played == dataclasses.replace(base, map_tempo=None)
-
-
-def test_the_tempo_ruleset_is_mvp_4_stances_plus_the_section() -> None:
-    base, rules = load_ruleset(STANCES), load_ruleset(TEMPO)
-    assert rules.map_tempo == MapTempoRules(ref_nodes=49, min_pct=50, max_pct=150)
-    assert dataclasses.replace(rules, map_tempo=None) == base
+        assert played == dataclasses.replace(rules, map_tempo=None)
 
 
 def test_a_period_never_drops_below_one() -> None:
     rules = load_ruleset(STANCES)
+    ones = StanceTable(economy=1, balance=1, war=1)
     tiny = dataclasses.replace(
         rules,
-        cp=dataclasses.replace(rules.cp, period_ticks=1),
+        stances=dataclasses.replace(rules.stances, cp_period_ticks=ones),
         map_tempo=MapTempoRules(ref_nodes=1, min_pct=1000, max_pct=1000),
     )
     played = apply_map_tempo(tiny, load_map(ROOT / "maps" / "narrows.json"))
-    assert played.cp.period_ticks == 1  # 1 * 100 // 1000 = 0, at least 1
+    assert played.stances.cp_period_ticks == ones  # 1 * 100 // 1000 = 0, at least 1
+    assert played.factory.built_period_ticks == 10  # 100 * 100 // 1000
 
 
 def test_the_match_plays_the_scaled_rules_and_the_replay_names_the_given_ones() -> None:
@@ -166,7 +166,7 @@ def test_the_match_plays_the_scaled_rules_and_the_replay_names_the_given_ones() 
     rules = dataclasses.replace(load_ruleset(STANCES), map_tempo=_tempo())
     match = Match(load_map(TESTS / "maps" / "line6.json"), rules, HEADLESS_MATCH_KEY)
     assert match.source_rules is rules
-    assert match.rules.cp.period_ticks == 200
+    assert match.rules.stances.cp_period_ticks.balance == 200
     start = match.state.players[0].cp
     for _ in range(199):
         match.step()
@@ -261,38 +261,22 @@ def test_front_pressure_from_a_hand_made_log() -> None:
     assert m.front_width_centi == (200, 300)
 
 
-MVP6 = ROOT / "rulesets" / "mvp-6.toml"
 MVP7 = ROOT / "rulesets" / "mvp-7.toml"
 
 
-def test_mvp7_is_mvp6_with_map_tempo_a_slower_built_factory_and_factories_following() -> None:
-    """mvp-7 (owner decision 2026-11-09, #885): mvp-6 plus ``[map_tempo]`` (the values of
-    mvp-4-stances-tempo) and ``factory.built_period_ticks = 150``; since the owner decision of
-    the same day (DEC-47, #888) also ``stances.factories_follow = true``; nothing else."""
-    mvp6 = tomllib.loads(MVP6.read_text(encoding="utf-8"))
-    mvp7 = tomllib.loads(MVP7.read_text(encoding="utf-8"))
-    assert mvp7["map_tempo"] == {"ref_nodes": 49, "min_pct": 50, "max_pct": 150}
-    assert mvp7["map_tempo"] == tomllib.loads(TEMPO.read_text(encoding="utf-8"))["map_tempo"]
-    assert mvp7["factory"]["built_period_ticks"] == 150
-    assert mvp7["stances"].pop("factories_follow") is True
-    del mvp7["map_tempo"]
-    mvp7["factory"]["built_period_ticks"] = mvp6["factory"]["built_period_ticks"]
-    assert mvp7 == mvp6
-
-
 @pytest.mark.parametrize(
-    ("name", "pct", "cp", "capital", "built"),
+    ("name", "pct", "cp", "capital"),
     [
         # Expected values by hand (issue #885, mechanics.md DEC-46): pct, then p * 100 // pct.
         # cp: War / Balance / Economy of 80 / 100 / 200; capital: of 400 / 200 / 100.
-        ("narrows", 76, (105, 131, 263), (526, 263, 131), 197),
-        ("crossroads", 100, (80, 100, 200), (400, 200, 100), 150),
-        ("highway", 100, (80, 100, 200), (400, 200, 100), 150),
-        ("ridge", 102, (78, 98, 196), (392, 196, 98), 147),
+        ("narrows", 76, (105, 131, 263), (526, 263, 131)),
+        ("crossroads", 100, (80, 100, 200), (400, 200, 100)),
+        ("highway", 100, (80, 100, 200), (400, 200, 100)),
+        ("ridge", 102, (78, 98, 196), (392, 196, 98)),
     ],
 )
 def test_mvp7_periods_on_the_pool_maps(
-    name: str, pct: int, cp: tuple[int, int, int], capital: tuple[int, int, int], built: int
+    name: str, pct: int, cp: tuple[int, int, int], capital: tuple[int, int, int]
 ) -> None:
     rules = load_ruleset(MVP7)
     assert rules.map_tempo is not None
@@ -300,8 +284,7 @@ def test_mvp7_periods_on_the_pool_maps(
     assert rules.map_tempo.pct(len(mapdef.nodes)) == pct
     played = apply_map_tempo(rules, mapdef)
     assert played.map_tempo is None
-    assert played.stances is not None and played.factory is not None
     t, c = played.stances.cp_period_ticks, played.stances.capital_period_ticks
     assert (t.war, t.balance, t.economy) == cp
     assert (c.war, c.balance, c.economy) == capital
-    assert played.factory.built_period_ticks == built
+    assert played.factory.built_period_ticks is None  # DEC-47: every factory follows the stance

@@ -2,34 +2,43 @@
 (DEC-43 item H, #719).
 
 Expected values come from mechanics.md, section 7, block "Automatic supply flow, leaf shift, fixed
-warehouses, road fortifications (DEC-43, #697)", item H and its table H1..H14.
+warehouses, road fortifications (DEC-43, #697)", item H and its table H1..H13 (H14, the lines model,
+went with the lines, #894).
 
-The map is ``dec41`` (see ``test_dec43.py``), player 0, ``mvp-4``: own K = 0 (capital), A = 1, B,
-C, D = 2, 3, 4, E, F, G = 5, 6, 7; M = 8 a neutral province (warehouse 1 when own); 17 and 18 are
-player 1's, as in the base of table F (#724), so C is always a leaf. Stocks 0 unless
-a row says so, no groups but the start garrison of K. "A captured in tick ``t``": A is player 1's
-from the ``movement`` of tick ``t`` on, after the ``economy`` of that tick (``_run`` applies the
+The map is ``dec41`` (see ``test_dec43.py``), player 0, ``mvp-4`` (pinned on ``mvp-5``): own K = 0
+(capital), A = 1, B, C, D = 2, 3, 4, E, F, G = 5, 6, 7; M = 8 a neutral province (warehouse 1 when
+own); 17 and 18 are player 1's, as in the base of table F (#724), so C is always a leaf. Stocks 0
+unless a row says so, no groups but the start garrison of K. "A captured in tick ``t``": A is player
+1's from the ``movement`` of tick ``t`` on, after the ``economy`` of that tick (``_run`` applies the
 change between ``economy`` and ``capacity``); then B, C, D, F, G are a pocket of player 0.
 """
 
+import dataclasses
 from collections.abc import Callable
 from pathlib import Path
 
 from gow_sim.maps import load_map
 from gow_sim.match import HEADLESS_MATCH_KEY
-from gow_sim.ruleset import Ruleset, load_ruleset
+from gow_sim.ruleset import Ruleset, StanceTable, load_ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Mode, OnEdge, initial_state
 from gow_sim.systems.capacity import capacity, change_owner
 from gow_sim.systems.economy import economy
 from gow_sim.systems.flow import starving_nodes, supply_flow, update_flow
-from gow_sim.systems.lines import supply_lines
 from gow_sim.systems.victory import EndReason, outcome
 from gow_sim.view import project
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
-MVP3 = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+_MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+_EVERY_100 = StanceTable(economy=100, balance=100, war=100)
+RULES = dataclasses.replace(
+    _MVP5,
+    stances=dataclasses.replace(
+        _MVP5.stances, cp_period_ticks=_EVERY_100, capital_period_ticks=_EVERY_100
+    ),
+)
+"""``mvp-5`` with the periods of ``mvp-4`` the tables of DEC-43 were written for: a CP quantum and a
+charge of the capital every 100 ticks under every stance (DEC-44)."""
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 K, A, B, C, D, E, F, G, M = range(9)
 ENEMY_PASSES = (17, 18)  # North Pass, South Pass: player 1's in the base of the tables (#724)
@@ -49,9 +58,10 @@ def _state(stocks: dict[int, int] | None = None, rules: Ruleset = RULES) -> Game
         state.nodes[n].owner = 1
     for n, stock in (stocks or {}).items():
         state.nodes[n].warehouse = stock
-    if rules.flow:
-        update_flow(state, rules)
+    update_flow(state, rules)
     state.tick = CUT - 1
+    for player in state.players.values():  # DEC-44: the local progress of 999 ticks, no change
+        player.cp_ticks = player.capital_ticks = (CUT - 1) % 100
     return state
 
 
@@ -73,7 +83,7 @@ def _run(
     rules: Ruleset = RULES,
 ) -> list[Event]:
     """The steps up to tick ``until``: ``economy``, the changes of the tick (the captures of its
-    ``movement`` and ``combat``), ``capacity``, the supply step of the ruleset."""
+    ``movement`` and ``combat``), ``capacity``, the supply flow."""
     events: list[Event] = []
     while state.tick < until:
         state.tick += 1
@@ -82,7 +92,7 @@ def _run(
         for change in (changes or {}).get(state.tick, ()):
             events += change(state)
         events += capacity(state, rules)
-        events += supply_flow(state, rules) if rules.flow else supply_lines(state, rules)
+        events += supply_flow(state, rules)
     return events
 
 
@@ -321,21 +331,6 @@ def test_h13_without_the_capital_every_node_is_in_a_pocket() -> None:
     assert result is not None and (result.winner, result.reason) == (1, EndReason.CAPITAL)
     events += _run(state, 1200)
     assert _made(events, C) == [1000]  # before the capture only
-
-
-# H14: the lines model is unchanged ------------------------------------------------------------
-
-
-def test_h14_no_starvation_and_no_stop_under_lines() -> None:
-    state = _state({C: 2}, rules=MVP3)
-    g = _group(state, C, 3, 3)
-    events = _run(state, 1500, _cut(), rules=MVP3)
-    assert _starved(events) == [] and g.charged == 3
-
-    factory = _state(rules=MVP3)
-    factory.nodes[C].factory = 0
-    events = _run(factory, 1400, _cut(), rules=MVP3)
-    assert {1200, 1400} <= set(_made(events, C))
 
 
 # Item H4 details: transit does not count, neutral nodes never starve --------------------------
