@@ -1,5 +1,5 @@
 import { Container, Text, TextStyle } from 'pixi.js';
-import type { MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
+import type { EventMsg, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { CityDevelopment } from './source.ts';
 import { cityRadius, lockedPlaces, vpBadgeAt, showsBarracks } from './cityLayout.ts';
 import { columnKinds, columnSlots, markScale } from './defenseLayout.ts';
@@ -23,6 +23,7 @@ import { beaconPulse } from './alertLayout.ts';
 import { alertAlpha, buildMark, markTops, type PlateKind } from './progressLayout.ts';
 import {
   buildProgress,
+  crownArc,
   lozengeRow,
   lozengeRowY,
   recruitPip,
@@ -48,6 +49,7 @@ import {
   type CityKind,
 } from './bakedShapes.ts';
 import {
+  chargeSpec,
   crownSpec,
   pipAlertSpec,
   towerBackSpec,
@@ -61,6 +63,7 @@ import {
 } from './pieceShapes.ts';
 import { helmet } from '../units/helmet.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
+import { PaymentLog, payShow, type Payment, type PayShow } from './buildPay.ts';
 
 /** A build of a tower (barracks, factory) in an own city, as the snapshot gives it. */
 interface TowerBuild {
@@ -163,6 +166,8 @@ const TOWER_KINDS: readonly TowerKind[] = ['barracks', 'factory'];
 /** The sprites of one tower on the ring of a city, and its build. */
 interface TowerSlot {
   readonly kind: TowerKind;
+  /** The node of its city. */
+  readonly node: number;
   /** The radius of its city now. */
   radius: number;
   /** At the tower's place on the ring, turned with its top away from the city, scaled by `towerScale`. */
@@ -182,7 +187,17 @@ interface TowerSlot {
   color: number;
   /** The fade of the arc and the opening of the ring once the build is done (`null`: none). */
   done: EaseTween | null;
+  /** The lozenges of a payment that pop on the arc or run into the tower (#872), under the tower. */
+  readonly loose: Container;
+  /** The payment in motion now and the cost it was laid out for (`null`: none). */
+  pay: { show: PayShow; cost: number } | null;
 }
+
+/**
+ * How far back a payment may still move, ms: longer than any flight, pop and run (`paymentSpan` of a
+ * build of a dozen charges paid one by one).
+ */
+const PAY_HORIZON_MS = 4000;
 
 /** A recruit of the queue: a small helmet on the ring after the barracks tower. */
 interface PipSlot {
@@ -262,6 +277,20 @@ export class CityView {
   private readonly moving = new Set<TowerSlot>();
   /** The recruits whose fill is still easing. */
   private readonly easing = new Set<PipSlot>();
+  /** The own `build_paid` of the events (#872). */
+  private readonly payLog: PaymentLog;
+  /** The tower builds with a payment in motion this frame, and its payments. */
+  private readonly paying = new Map<TowerSlot, Payment[]>();
+  /** The charges flying into a build, over the groups (the effects layer), a pool of sprites. */
+  private readonly flightLayer = new Container({ label: 'build-pay' });
+  private readonly flightSprites: BakedSprite[] = [];
+  /** Where each flight left from, fixed at its first frame (the warehouse row changes after). */
+  private readonly flightFrom = new Map<string, Point>();
+  /** Where the own group standing in a node is drawn (a charge it pays leaves from there). */
+  private groupAt: (node: number) => Point | null = () => null;
+  private tickHz = 10;
+  /** The tick of the snapshot drawn: a payment newer than it is not in the picture yet. */
+  private baseTick = 0;
 
   constructor(
     private readonly map: MapFile,
@@ -277,6 +306,8 @@ export class CityView {
       fill: VP,
     });
     usePieceFont([this.vpStyle]);
+    this.payLog = new PaymentLog(me);
+    layers.layer.effects.addChild(this.flightLayer);
     this.keys = map.nodes.map(() => '');
     this.states = map.nodes.map(() => null);
     this.radii = map.nodes.map((node) =>
@@ -306,7 +337,7 @@ export class CityView {
       bar.label = 'warehouse';
       this.bars.push(bar);
       const slots = {} as Record<TowerKind, TowerSlot>;
-      for (const kind of TOWER_KINDS) slots[kind] = this.towerSlot(city, kind);
+      for (const kind of TOWER_KINDS) slots[kind] = this.towerSlot(city, kind, node.id);
       this.towers.push(slots);
       const pipLayer = city.addChild(new Container({ label: 'recruits' }));
       this.pipLayers.push(pipLayer);
@@ -349,10 +380,11 @@ export class CityView {
     this.setOwners(map.nodes.map((node) => node.start_owner));
   }
 
-  private towerSlot(city: Container, kind: TowerKind): TowerSlot {
+  private towerSlot(city: Container, kind: TowerKind, node: number): TowerSlot {
     const crown = city.addChild(this.sprites.sprite());
     crown.label = `crown-${kind}`;
     crown.visible = false;
+    const loose = city.addChild(new Container({ label: `pay-${kind}`, visible: false }));
     const root = city.addChild(new Container({ label: `tower-${kind}`, visible: false }));
     const back = root.addChild(this.sprites.sprite());
     const fill = root.addChild(this.sprites.sprite());
@@ -365,6 +397,7 @@ export class CityView {
     ring.visible = false;
     return {
       kind,
+      node,
       radius: NODE_RADIUS,
       root,
       back,
@@ -376,6 +409,8 @@ export class CityView {
       build: null,
       color: YOU,
       done: null,
+      loose,
+      pay: null,
     };
   }
 
@@ -481,6 +516,7 @@ export class CityView {
       }
     }
     if (this.tick < base.tick - 1) this.tick = base.tick;
+    this.baseTick = base.tick;
     for (const node of base.view.nodes) {
       this.set(
         node.id,
@@ -565,6 +601,31 @@ export class CityView {
   }
 
   /**
+   * Every frame, after `setTick` (#872): the own `build_paid` among `events` move the builds they
+   * paid (the charges fly in, pop, run into the tower) by their age at the render tick; `groupAt`:
+   * where the own group standing in a node is drawn. Nothing moves with "less motion".
+   */
+  setPayments(
+    events: readonly EventMsg[],
+    tickHz: number,
+    groupAt: (node: number) => Point | null,
+  ): void {
+    this.tickHz = tickHz;
+    this.groupAt = groupAt;
+    this.payLog.read(events);
+    this.paying.clear();
+    if (reducedMotion()) return;
+    for (const payment of this.payLog.recent(this.tick, tickHz, PAY_HORIZON_MS)) {
+      const slot = this.towers[payment.node]?.[payment.kind];
+      if (slot === undefined || slot.build === null) continue;
+      const list = this.paying.get(slot);
+      if (list === undefined) this.paying.set(slot, [payment]);
+      else list.push(payment);
+      this.moving.add(slot);
+    }
+  }
+
+  /**
    * How many signs of "Defense" stand in the column of each city (`defenseSigns`): the bunker mark
    * is the top of the same column, so it moves up when a sign comes under it.
    */
@@ -618,6 +679,7 @@ export class CityView {
 
   destroy(): void {
     for (const city of this.cities) city.destroy({ children: true });
+    this.flightLayer.destroy({ children: true });
     this.vpStyle.destroy();
   }
 
@@ -798,11 +860,16 @@ export class CityView {
       if (slot.done !== null) {
         this.stepDone(slot, dtMs);
       } else if (slot.build !== null) {
-        this.showBuild(slot, slot.build);
+        const paying = this.showBuild(slot, slot.build);
+        // A build that owes charges stands still between its payments.
+        if (!paying && (slot.build.doneTick === null || slot.build.owed > 0)) {
+          this.moving.delete(slot);
+        }
       } else {
         this.moving.delete(slot);
       }
     }
+    this.drawFlights();
     for (const pip of this.easing) {
       if (pip.root.destroyed) {
         this.easing.delete(pip);
@@ -935,10 +1002,24 @@ export class CityView {
     }
   }
 
-  /** A tower being built at the render tick: the plan or the fill, and its Crown arc. */
-  private showBuild(slot: TowerSlot, build: TowerBuild): void {
+  /**
+   * A tower being built at the render tick: the plan or the fill, and its Crown arc; while a payment
+   * moves (#872), the charges still in the air stay owed on the arc, the landed ones pop and, paid in
+   * full, run into the tower. Returns whether a payment moves.
+   */
+  private showBuild(slot: TowerSlot, build: TowerBuild): boolean {
     const { kind, radius: r } = slot;
-    const progress = buildProgress(build.owed, build.price, build.doneTick, build.total, this.tick);
+    const told = buildProgress(build.owed, build.price, build.doneTick, build.total, this.tick);
+    const payments = this.paying.get(slot);
+    const show =
+      payments === undefined
+        ? null
+        : payShow(payments, told.cost, this.tick, this.baseTick, this.tickHz);
+    slot.pay = show === null ? null : { show, cost: told.cost };
+    const progress =
+      show === null || show.hidden === 0
+        ? told
+        : { cost: told.cost, paid: Math.max(0, told.paid - show.hidden), time: 0, running: false };
     const look: TowerLook = progress.running ? 'rising' : 'plan';
     slot.back.set(towerBackSpec(kind, look, slot.color, false));
     slot.front.set(towerFrontSpec(kind, look));
@@ -953,6 +1034,106 @@ export class CityView {
     slot.crown.set(crownSpec(r, kind, progress, slot.color, this.towerZoom));
     slot.crown.alpha = 1;
     slot.crown.visible = !this.supplyMode;
+    this.showLoose(slot, show, progress.cost);
+    return payments !== undefined;
+  }
+
+  /** The lozenges of a payment that pop on the arc as they land, then run into the tower (#872). */
+  private showLoose(slot: TowerSlot, show: PayShow | null, cost: number): void {
+    const { loose } = slot;
+    const marks: { at: Point; scale: number }[] = [];
+    if (show !== null && (show.pops.size > 0 || show.run !== null)) {
+      const crown = crownArc(slot.radius, slot.kind, cost, this.towerZoom);
+      const tower = towerPoint(slot.radius, slot.kind);
+      const k = (CROWN.lozenge * this.towerZoom) / TOWER.minScale;
+      const run = show.run;
+      if (run !== null) {
+        run.forEach((q, j) => {
+          const p = crown.lozenges[j];
+          if (p === undefined || q >= 1) return;
+          const at = { x: p.x + (tower.x - p.x) * q, y: p.y + (tower.y - p.y) * q };
+          marks.push({ at, scale: k * (1 - CROWN.run.shrink * q) * (show.pops.get(j) ?? 1) });
+        });
+      } else {
+        for (const [j, pop] of show.pops) {
+          const p = crown.lozenges[j];
+          if (p !== undefined) marks.push({ at: p, scale: k * pop });
+        }
+      }
+    }
+    loose.visible = marks.length > 0 && !this.supplyMode;
+    if (marks.length === 0) return;
+    const baked = this.bakedK();
+    const spec = chargeSpec(slot.color, baked);
+    while (loose.children.length < marks.length) loose.addChild(this.sprites.sprite());
+    loose.children.forEach((child, i) => {
+      const sprite = child as BakedSprite;
+      const mark = marks[i];
+      sprite.visible = mark !== undefined;
+      if (mark === undefined) return;
+      sprite.set(spec);
+      sprite.position.set(mark.at.x, mark.at.y);
+      sprite.scale.set(mark.scale / baked);
+    });
+  }
+
+  /** The size a flying or popping charge is baked at: the largest it is drawn (a pop on the arc). */
+  private bakedK(): number {
+    const k = (CROWN.lozenge * this.towerZoom) / TOWER.minScale;
+    return Math.max(1, k) * (1 + CROWN.pay.pop);
+  }
+
+  /**
+   * The charges in the air (#872): each from its place in the warehouse row, or from the own group
+   * standing in the city, to its lozenge on the Crown arc, along an arc up (the plan ribbon's flight
+   * language, #851), going from the warehouse size to the arc's.
+   */
+  private drawFlights(): void {
+    let used = 0;
+    const live = new Set<string>();
+    const lift = (CROWN.pay.lift * this.towerZoom) / TOWER.minScale;
+    const baked = this.bakedK();
+    const k = (CROWN.lozenge * this.towerZoom) / TOWER.minScale;
+    for (const slot of this.paying.keys()) {
+      const pay = slot.pay;
+      const city = this.map.nodes[slot.node];
+      if (pay === null || city === undefined || pay.show.flights.length === 0) continue;
+      const crown = crownArc(slot.radius, slot.kind, pay.cost, this.towerZoom);
+      for (const flight of pay.show.flights) {
+        const key = `${String(flight.payment.tick)}:${String(slot.node)}:${slot.kind}:${String(flight.k)}`;
+        live.add(key);
+        let from = this.flightFrom.get(key);
+        if (from === undefined) {
+          const stock = this.states[slot.node]?.warehouse ?? 0;
+          const at =
+            (flight.from === 'warehouse'
+              ? this.warehouseSlot(slot.node, stock + flight.behind)
+              : this.groupAt(slot.node)) ?? city;
+          from = { x: at.x, y: at.y };
+          this.flightFrom.set(key, from);
+        }
+        const p = crown.lozenges[flight.j];
+        if (p === undefined) continue;
+        const q = flight.q;
+        const x = from.x + (city.x + p.x - from.x) * q;
+        const y = from.y + (city.y + p.y - from.y) * q - Math.sin(q * Math.PI) * lift;
+        let sprite = this.flightSprites[used];
+        if (sprite === undefined) {
+          sprite = this.flightLayer.addChild(this.sprites.sprite());
+          this.flightSprites.push(sprite);
+        }
+        used++;
+        sprite.set(chargeSpec(slot.color, baked));
+        sprite.position.set(x, y);
+        sprite.scale.set((1 + (k - 1) * q) / baked);
+        sprite.visible = true;
+      }
+    }
+    for (let i = used; i < this.flightSprites.length; i++) {
+      const sprite = this.flightSprites[i];
+      if (sprite !== undefined) sprite.visible = false;
+    }
+    for (const key of this.flightFrom.keys()) if (!live.has(key)) this.flightFrom.delete(key);
   }
 
   /** The end of a build: the arc fades (`CROWN.fadeMs`) and a ring opens from the tower. */

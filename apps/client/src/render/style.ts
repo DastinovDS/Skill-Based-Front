@@ -1,5 +1,5 @@
 import type { PlayerId, Terrain } from '../protocol.gen.ts';
-import { ENGRAVED } from '../theme/tokens.ts';
+import { DURATION, ENGRAVED } from '../theme/tokens.ts';
 import { SOFT } from './softness.ts';
 
 // Visual constants of the map. Sizes are in world units (docs/design/map-format.md): cities are
@@ -485,6 +485,14 @@ export const CROWN = {
   steps: 48,
   fadeMs: 500,
   ring: { ms: 600, from: 7, grow: 10, casing: 3, width: 1 },
+  /**
+   * The payment in motion (#872, the mockup's `payFlight`): a charge flies `flightMs` from the
+   * warehouse or the group to its lozenge on an arc `lift` high, the charges of one `build_paid`
+   * `staggerMs` apart; landed, the lozenge pops by `pop` over `popMs`.
+   */
+  pay: { flightMs: 450, lift: 12, staggerMs: 150, popMs: 220, pop: 0.3 },
+  /** Paid in full: the lozenges run into the tower over `ms`, `staggerMs` apart, shrinking by `shrink`. */
+  run: { ms: DURATION.buildRun, staggerMs: 60, shrink: 0.6 },
 } as const;
 /**
  * The recruit queue (55k Pips): a small helmet `width` wide per unit on the ring after the barracks

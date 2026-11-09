@@ -242,10 +242,10 @@ describe('CityView: a province is a pale dot (PB, #431, DEC-23)', () => {
     const view = new CityView(forged, layers, 0, 1, testSprites());
     view.update(snapshot, null, UPGRADES);
     const container = city(layers.layer.nodes, ownProvince.id);
-    // body, ring, warehouse, the crown, tower and ring of the barracks and of the factory, the
-    // recruits, the build plate, the alert ring, the bunker badge and the plate of its build: no VP
-    // badge after them.
-    expect(container.children).toHaveLength(14);
+    // body, ring, warehouse, the crown, the paid lozenges, tower and ring of the barracks and of the
+    // factory, the recruits, the build plate, the alert ring, the bunker badge and the plate of its
+    // build: no VP badge after them.
+    expect(container.children).toHaveLength(16);
     expect(barracksMark(layers.layer.nodes, ownProvince.id)).toBeNull();
     view.destroy();
   });
@@ -477,6 +477,105 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     expect(crown.visible).toBe(false);
     expect((tower(nodes, own.id, 'barracks').children[0] as BakedSprite).spec?.key).toContain(
       ':built:',
+    );
+    view.destroy();
+  });
+
+  it('flies a paid charge into the arc, pops it, then runs the lozenges into the tower (#872)', () => {
+    setReducedMotion(false);
+    const layers = createLayers();
+    const view = new CityView(map, layers, 0, 1, testSprites());
+    const nodes = layers.layer.nodes;
+    const upgrades = { ...UPGRADES, barracksCharges: 3 };
+    const flights = (): BakedSprite[] =>
+      (
+        layers.layer.effects.children.find((c) => c.label === 'build-pay') as Container
+      ).children.filter((c) => c.visible) as BakedSprite[];
+    const loose = (): Container =>
+      (nodes.children.find((c) => c.label === `node-${String(ownId)}`) as Container).children.find(
+        (c) => c.label === 'pay-barracks',
+      ) as Container;
+    const paid = (tick: number, warehouse: number, units: number, owed: number) => ({
+      type: 'event' as const,
+      tick,
+      kind: 'build_paid',
+      data: { player: 0, node: ownId, kind: 'barracks', warehouse, units, owed },
+    });
+    // The second charge of three is paid at NOW from the warehouse.
+    view.update(
+      withCity({ has_barracks: false, building: { kind: 'barracks', done_tick: null, owed: 1 } }),
+      rules.unitTicks,
+      upgrades,
+      rules.queueMax,
+    );
+    const events = [paid(NOW, 1, 0, 1)];
+    const frame = (tick: number): void => {
+      view.setTick(tick);
+      view.setPayments(events, 10, () => null);
+      view.advance(16);
+    };
+    const crown = sprite(nodes, own.id, 'crown-barracks');
+    frame(NOW + 2);
+    expect(flights()).toHaveLength(1);
+    // In the air its lozenge is still owed: one of three shown paid.
+    expect(crown.spec?.key).toContain(':barracks:3:1:');
+    frame(NOW + 5.5);
+    expect(flights()).toHaveLength(0);
+    expect(crown.spec?.key).toContain(':barracks:3:2:');
+    expect(loose().visible).toBe(true);
+    // Paid in full by the group standing there: the last flight lands, the lozenges run in.
+    view.update(
+      {
+        ...withCity({
+          has_barracks: false,
+          building: { kind: 'barracks', done_tick: NOW + 110, owed: 0 },
+        }),
+        tick: NOW + 10,
+      },
+      rules.unitTicks,
+      upgrades,
+      rules.queueMax,
+    );
+    events.push(paid(NOW + 10, 0, 1, 0));
+    frame(NOW + 12);
+    expect(flights()).toHaveLength(1);
+    expect((tower(nodes, own.id, 'barracks').children[0] as BakedSprite).spec?.key).toContain(
+      ':plan:',
+    );
+    frame(NOW + 16);
+    expect(flights()).toHaveLength(0);
+    expect(loose().visible).toBe(true);
+    expect((tower(nodes, own.id, 'barracks').children[0] as BakedSprite).spec?.key).toContain(
+      ':rising:',
+    );
+    frame(NOW + 40);
+    expect(loose().visible).toBe(false);
+    view.destroy();
+  });
+
+  it('moves nothing with "less motion": the state of the snapshot at once', () => {
+    setReducedMotion(true);
+    const layers = createLayers();
+    const view = new CityView(map, layers, 0, 1, testSprites());
+    view.update(
+      withCity({ has_barracks: false, building: { kind: 'barracks', done_tick: null, owed: 1 } }),
+      rules.unitTicks,
+      { ...UPGRADES, barracksCharges: 3 },
+      rules.queueMax,
+    );
+    const event = {
+      type: 'event' as const,
+      tick: NOW,
+      kind: 'build_paid',
+      data: { player: 0, node: ownId, kind: 'barracks', warehouse: 1, units: 0, owed: 1 },
+    };
+    view.setTick(NOW + 2);
+    view.setPayments([event], 10, () => null);
+    view.advance(16);
+    const layer = layers.layer.effects.children.find((c) => c.label === 'build-pay') as Container;
+    expect(layer.children.filter((c) => c.visible)).toHaveLength(0);
+    expect(sprite(layers.layer.nodes, own.id, 'crown-barracks').spec?.key).toContain(
+      ':barracks:3:2:',
     );
     view.destroy();
   });

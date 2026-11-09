@@ -431,6 +431,17 @@ export class MapScene {
     this.view.advance(this.frameMs);
     // A build's time fills the tower and its Crown arc by the render tick (#847).
     this.cities.setTick(frame.tick);
+    // A charge a build takes flies in from the warehouse or the group standing there (#872).
+    const spots = this.entities.groupPoints();
+    const standing = frame.base.view.groups;
+    this.cities.setPayments(this.source.events(), tickHz, (node) => {
+      for (const group of standing) {
+        if (group.location.kind !== 'node' || group.location.node !== node) continue;
+        const spot = spots.get(group.id);
+        if (spot !== undefined) return spot;
+      }
+      return null;
+    });
     this.cities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
     // The sign of "Defense" and the barracks mark share one column on the left of a city (#349).
