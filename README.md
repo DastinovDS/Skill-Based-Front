@@ -207,6 +207,10 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_MAX_MATCHES` | `30` | #412: at most this many matches run at once (the AGENTS.md section 12 budget for one core); past it a new match is refused with `503` |
 | `GOW_MAX_BOT_MATCHES` | `10` | #412: of them at most this many against a bot; `0` turns bot matches off; `503` when full |
 | `GOW_BOT_CONNECT_TIMEOUT_S` | `15` | #412: a bot match nobody connected to within this time is dropped as never started (no replay, saved `aborted`) |
+| `GOW_MAPGEN_ENABLED` | `true` | #884: a private invite and a bot match without a map choice get a map made for them; `false`: a random pool map |
+| `GOW_MAPGEN_WORKERS` | `1` | #884: worker processes that make maps (each about 5 s and up to 0.65 GB per map) |
+| `GOW_MAPGEN_MAX_PENDING` | `4` | #884: maps made or waiting at once; past it a match plays a pool map |
+| `GOW_MAPGEN_WAIT_S` | `60` | #884: the longest a match waits for its map before it plays a pool map |
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | a JSON list of `Origin`s, other than the site itself, that may open the match WebSocket |
 | `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | the wait for `hello`; a send longer than this: the client is not reading, disconnect |
 | `GOW_MONITOR_INTERVAL_S` | `30` | OPS-04: the period of the tick lag check (the alert threshold is 10% of the tick period) |
