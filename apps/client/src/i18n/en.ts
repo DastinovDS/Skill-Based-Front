@@ -420,6 +420,8 @@ export const en = {
   'radial.close': 'Close the stance menu',
   'radial.perMinute': '/min',
   'radial.rateLabel': '{stance}: {cp} CP and {charges} charges per minute',
+  'radial.rateLabelAll':
+    '{stance}: {cp} CP and {charges} charges per minute from all your factories',
   'price.label': '{label}, {price}',
   'price.cp': '{cost} CP',
   'price.charges': '{charges} charges',
@@ -444,6 +446,8 @@ export const en = {
   'bar.cpShortHint': 'Not enough CP for this move',
   'bar.nextTip':
     'Next CP in {cp} s, next charge of the capital in {capital} s. A change of stance keeps the progress of both',
+  'bar.nextTipAll':
+    'Next CP in {cp} s, next charge of the capital in {capital} s. Your other factories run at the same pace on their own progress. A change of stance keeps the progress of all',
   'bar.factories': 'Factories: own, builds included, of the most you may have',
   'bar.factoriesFull': 'Factories: at the most you may have, no more can be built',
   'bar.factoriesLabel': 'Factories: {count} of {max}',

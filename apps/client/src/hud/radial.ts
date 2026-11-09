@@ -170,17 +170,20 @@ export interface StanceRate {
  * charges at `charges_per_cp`, the rest stays CP. Same arithmetic as `gow_sim.systems.economy`.
  * With `mvp-0`: economy 3 / 18, balance 6 / 12, war 9 / 6. Under `stances` (DEC-44) the periods
  * of `ruleset_public.stances` give both numbers: with `mvp-4-stances` economy 3 / 6, balance 6 / 3,
- * war 7.5 / 1.5.
+ * war 7.5 / 1.5. With `stances.factories_follow` (DEC-47) every working own factory makes the
+ * charges of the capital's period, so the charge rate is multiplied by `factories` (the own
+ * factories that work, the capital included; the client counts them in the view).
  */
-export function stanceRates(rules: RulesetPublic): StanceRate[] {
+export function stanceRates(rules: RulesetPublic, factories: number = 1): StanceRate[] {
   const { cp, economy, stances, tick_hz } = rules;
   const ticksPerMinute = 60 * tick_hz;
   if (stances !== null) {
+    const count = stances.factories_follow ? Math.max(1, factories) : 1;
     return SECTORS.map(({ stance }) => ({
       stance,
       cpPerMinCenti: Math.floor((cp.per_period * ticksPerMinute) / stances.cp_period_ticks[stance]),
       chargesPerMin:
-        Math.floor((100 * ticksPerMinute) / stances.capital_period_ticks[stance]) / 100,
+        Math.floor((100 * ticksPerMinute * count) / stances.capital_period_ticks[stance]) / 100,
     }));
   }
   return SECTORS.map(({ stance }) => {

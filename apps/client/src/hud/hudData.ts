@@ -176,6 +176,19 @@ export function factoryCount(
   return { count, max: rules.factory.max };
 }
 
+/**
+ * The own factories that work now (DEC-47, #891): own nodes with `NodeView.factory`, the capital
+ * and the built or captured ones, not the builds under way. The view shows them, the client only
+ * counts.
+ */
+export function workingFactoryCount(nodes: readonly NodeView[], me: PlayerId): number {
+  let count = 0;
+  for (const node of nodes) {
+    if (node.owner === me && node.factory === true) count += 1;
+  }
+  return count;
+}
+
 /** An own supply line (economy v2, `View.lines`): the server's path from the source to the target. */
 export interface LineInfo {
   readonly id: number;
@@ -270,6 +283,8 @@ export interface HudData {
    * counts them for `factory.max`, and that max; `null` under v1 or without factories (#762).
    */
   readonly factories: FactoryCount | null;
+  /** The own factories that work now, builds under way not counted (DEC-47, #891). */
+  readonly workingFactories: number;
   readonly vp: { readonly mine: number; readonly enemy: number };
   /** Whole seconds until the timer ends the match. */
   readonly secondsLeft: number;
@@ -503,6 +518,7 @@ export function buildHudData(
     leafShift: view.me.leaf_shift,
     leafShiftMax: view.me.leaf_shift_max,
     factories: factoryCount(rules, view.nodes, me),
+    workingFactories: workingFactoryCount(view.nodes, me),
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },
     secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
     group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes, tick),

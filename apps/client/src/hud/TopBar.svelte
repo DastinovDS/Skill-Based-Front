@@ -98,7 +98,10 @@
           aria-label={tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
           title={next === null
             ? undefined
-            : tf('bar.nextTip', { cp: next.cp.seconds, capital: next.capital.seconds })}
+            : tf(orders.factoriesFollow ? 'bar.nextTipAll' : 'bar.nextTip', {
+                cp: next.cp.seconds,
+                capital: next.capital.seconds,
+              })}
           onclick={() => {
             orders.openRadial(true);
           }}

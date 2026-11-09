@@ -41,7 +41,7 @@
                 chargeRate: num(rate.chargesPerMin),
                 perMinute: true,
               },
-              aria: tf('radial.rateLabel', {
+              aria: tf(orders.factoriesFollow ? 'radial.rateLabelAll' : 'radial.rateLabel', {
                 stance: label,
                 cp: cp(rate.cpPerMinCenti),
                 charges: num(rate.chargesPerMin),
