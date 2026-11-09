@@ -7,7 +7,15 @@ import type { EnemyGroup, GroupView, NodeView, PacketView, SnapshotMsg } from '.
 import { EntityView } from './entityView.ts';
 import { createLayers } from './layers.ts';
 import { edgeEnds, edgePoint, nodePoint } from './layout.ts';
-import { PACKET_SIDE, PACKET_TRANSFER, ROAD_TAPE, YOU } from './style.ts';
+import {
+  CASING,
+  INK,
+  PACKET_ENGRAVED,
+  PACKET_SIDE,
+  PACKET_TRANSFER,
+  ROAD_TAPE,
+  YOU,
+} from './style.ts';
 import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
@@ -339,46 +347,42 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
     return found;
   };
 
-  it('draws a packet as a filled square of its owner with a tail of two fainter squares', () => {
+  it('draws a packet as an engraved square of its owner: a casing, the colour, an ink outline (#858)', () => {
     const layers = createLayers();
     const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWithPacket(false));
-    const [far, near, dot] = packetView(layers).children as Graphics[];
+    const [dot] = packetView(layers).children as Graphics[];
     expect(dot).toBeDefined();
     const square = drawn(dot as Graphics);
     expect(square.map((s) => [s.action, s.type])).toEqual([
       ['fill', 'rectangle'],
+      ['fill', 'rectangle'],
       ['stroke', 'rectangle'],
     ]);
-    expect(square[0]?.color).toBe(YOU);
-    expect(square[0]?.width).toBe(PACKET_SIDE);
-    // Smaller and fainter the farther behind: the nearer square first in the list of the tail.
-    expect(drawn(near as Graphics)[0]).toMatchObject({ type: 'rectangle', alpha: 0.6, width: 6 });
-    expect(drawn(far as Graphics)[0]).toMatchObject({ type: 'rectangle', alpha: 0.3, width: 5 });
+    expect(square[0]?.color).toBe(CASING);
+    expect(square[0]?.width).toBe(PACKET_ENGRAVED.casing);
+    expect(square[1]?.color).toBe(YOU);
+    expect(square[1]?.width).toBe(PACKET_SIDE);
+    expect(square[2]?.color).toBe(INK);
     view.destroy();
   });
 
-  it('puts the tail behind the packet, against its way, whichever end it leaves from', () => {
+  it('turns the square along its road, whichever end it leaves from', () => {
     const layers = createLayers();
     const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     const ends = edgeEnds(map, edge.id);
     if (ends === undefined) throw new Error('no ends');
-    const way = { x: ends.b.x - ends.a.x, y: ends.b.y - ends.a.y };
+    const angle = Math.atan2(ends.b.y - ends.a.y, ends.b.x - ends.a.x);
     view.update(frameWithPacket(false));
-    const [far, first] = packetView(layers).children as Graphics[];
-    let near = first;
-    // Leaving `a` for `b`: both squares of the tail are on the side of `a`.
-    expect((near?.x ?? 0) * way.x + (near?.y ?? 0) * way.y).toBeLessThan(0);
-    expect(Math.hypot(near?.x ?? 0, near?.y ?? 0)).toBeCloseTo(8);
-    expect(Math.hypot(far?.x ?? 0, far?.y ?? 0)).toBeCloseTo(14);
-    // Leaving `b` for `a`: the other way round.
+    const dot = (): Graphics => packetView(layers).children[0] as Graphics;
+    expect(dot().rotation).toBeCloseTo(angle);
     const back = frameWithPacket(false);
     const packet = back.packets[0];
     if (packet === undefined) throw new Error('no packet');
     packet.packet = { ...packet.packet, from_node: edge.b };
     view.update(back);
-    near = packetView(layers).children[1] as Graphics | undefined;
-    expect((near?.x ?? 0) * way.x + (near?.y ?? 0) * way.y).toBeGreaterThan(0);
+    // The other way round: turned half a turn.
+    expect(Math.abs(Math.cos(dot().rotation - angle) + 1)).toBeLessThan(1e-9);
     view.destroy();
   });
 
@@ -386,7 +390,7 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
     const layers = createLayers();
     const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWithPacket(true));
-    const dot = packetView(layers).children[2] as Graphics;
+    const dot = packetView(layers).children[0] as Graphics;
     const shapes = drawn(dot);
     expect(shapes.map((s) => [s.action, s.type, s.width])).toEqual([
       ['fill', 'rectangle', PACKET_TRANSFER.side],
@@ -404,7 +408,7 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
       const graphics = packetView(layers).children.filter(
         (c): c is Graphics => c instanceof Graphics,
       );
-      expect(graphics).toHaveLength(3);
+      expect(graphics).toHaveLength(1);
       for (const g of graphics) {
         expect(drawn(g).filter((s) => s.type === 'circle')).toEqual([]);
       }

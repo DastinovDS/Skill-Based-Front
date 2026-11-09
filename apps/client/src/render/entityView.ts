@@ -42,8 +42,6 @@ import { FigureView } from './figureView.ts';
 import {
   BUILD_PLATE,
   BUILD_TIME_FONT_SIZE,
-  PACKET_TAIL,
-  PACKET_TAIL_TRANSFER_EXTRA,
   PACKET_TRANSFER,
   ROAD_TAPE,
   roadSpan,
@@ -80,8 +78,6 @@ export interface EnemyAnchors {
 }
 
 interface PacketEntry extends Labelled {
-  /** The squares behind the packet (`PACKET_TAIL`), nearest first. */
-  tail: Graphics[];
   dot: Graphics;
   label: Text;
   transfer: boolean;
@@ -786,14 +782,9 @@ export class EntityView implements EnemyAnchors {
       const far = packetFade(length - travelled, this.radiusOf(fromIsA ? edge.b : edge.a));
       entry.view.scale.set(Math.min(near.scale, far.scale));
       entry.view.alpha = Math.min(near.alpha, far.alpha);
-      // The tail lies behind the packet, along the road against its way.
+      // The square is turned along its road (#858).
       const way = fromIsA ? 1 : -1;
-      const ux = length > 0 ? (way * (ends.b.x - ends.a.x)) / length : 0;
-      const uy = length > 0 ? (way * (ends.b.y - ends.a.y)) / length : 0;
-      const extra = packet.transfer ? PACKET_TAIL_TRANSFER_EXTRA : 0;
-      PACKET_TAIL.forEach((step, i) => {
-        entry.tail[i]?.position.set(-ux * (step.distance + extra), -uy * (step.distance + extra));
-      });
+      entry.dot.rotation = Math.atan2(way * (ends.b.y - ends.a.y), way * (ends.b.x - ends.a.x));
       // The number of charges matters only when it is more than the one square.
       const text = packet.charges > 1 ? `\u00d7${String(packet.charges)}` : '';
       if (entry.label.text !== text) entry.label.text = text;
@@ -807,11 +798,6 @@ export class EntityView implements EnemyAnchors {
     if (entry === undefined) {
       const view = this.packetLayer.addChild(new Container({ label: `packet-${packet.id}` }));
       const owner = item.owner ?? this.me;
-      // The far square of the tail first, so that the packet lies on top.
-      const tail = [...this.kit.packetTail[owner]]
-        .reverse()
-        .map((context) => view.addChild(new Graphics(context)))
-        .reverse();
       const dot = view.addChild(
         new Graphics(packet.transfer ? this.kit.packetTransfer[owner] : this.kit.packet[owner]),
       );
@@ -825,7 +811,6 @@ export class EntityView implements EnemyAnchors {
       );
       label.position.set(packet.transfer ? PACKET_TRANSFER.ring / 2 + 3 : 8, 0);
       entry = {
-        tail,
         dot,
         label,
         transfer: packet.transfer,

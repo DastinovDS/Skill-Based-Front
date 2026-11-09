@@ -1,13 +1,15 @@
-import type { Container, Sprite, Text } from 'pixi.js';
+import type { Container, Graphics, Sprite, Text } from 'pixi.js';
 import { CanvasTextMetrics } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { flowSnapshot } from '../dev/flowScene.ts';
 import { interpolateFrame } from '../net/interpolate.ts';
 import type { SnapshotMsg } from '../protocol.gen.ts';
+import { CANAL } from './canalLayout.ts';
 import { FlowView } from './flowView.ts';
 import { createLayers } from './layers.ts';
 import { setReducedMotion } from './motion.ts';
+import { CASING, INK, YOU } from './style.ts';
 import { SupplyView } from './supplyView.ts';
 import { testSprites } from './testSprites.ts';
 
@@ -28,16 +30,40 @@ const visible = (c: Container) => c.children.filter((x) => x.visible);
 const shown = (texts: Container) =>
   texts.children.filter((c) => c.visible).map((c) => (c as Text).text);
 
-/** The parts of the SupplyView: the root of the layer (supply) and what lies in it. */
+/** The parts of the SupplyView: the root of the layer (supply) and what lies in it, and the canals. */
 function parts(layers: ReturnType<typeof createLayers>) {
   const [root] = layers.layer.supply.children as Container[];
   const children = root?.children ?? [];
   const find = (label: string) => children.find((c) => c.label === label) as Container;
+  const pipeRoot = layers.layer.roads.children.find((c) => c.label === 'supply-pipes') as Container;
   return {
     marks: find('supply-marks'),
     texts: find('supply-texts'),
+    canals: pipeRoot.children[0] as Graphics,
+    running: pipeRoot.children.find((c) => c.label === 'canal-run') as Graphics,
   };
 }
+
+/** The strokes of a Graphics: colour, width and the number of lines in each. */
+function strokesOf(g: Graphics): { color: number; width: number; lines: number }[] {
+  const instructions = g.context.instructions as unknown as {
+    action: string;
+    data: {
+      style: { color: number; width: number };
+      path: { shapePath: { shapePrimitives: unknown[] } };
+    };
+  }[];
+  return instructions
+    .filter((i) => i.action === 'stroke')
+    .map((i) => ({
+      color: i.data.style.color,
+      width: i.data.style.width,
+      lines: i.data.path.shapePath.shapePrimitives.length,
+    }));
+}
+
+const downhill = (s: SnapshotMsg): number =>
+  s.view.nodes.reduce((n, x) => n + (x.flow_down?.length ?? 0), 0);
 
 describe('SupplyView under the flow', () => {
   beforeEach(() => {
@@ -57,29 +83,53 @@ describe('SupplyView under the flow', () => {
     return { layers, view, supply, ...parts(layers) };
   }
 
-  it('puts a chevron on every downhill road: bright where a packet is, dim where it is idle', () => {
-    const { marks, view } = draw(snapshot);
-    const chevrons = visible(marks) as Sprite[];
-    const bright = chevrons.filter((c) => c.alpha === 1);
-    const dim = chevrons.filter((c) => c.alpha < 1);
+  it('lays a canal on every downhill road: a casing, two ink rails, a V at the receiving ring (#858)', () => {
+    const { canals, view } = draw(snapshot);
+    const strokes = strokesOf(canals);
+    const casing = strokes[0];
+    expect(casing?.color).toBe(CASING);
+    expect(casing?.width).toBeCloseTo(2 * (CANAL.half + CANAL.casing));
+    expect(casing?.lines).toBe(downhill(snapshot));
+    // The rails, two a canal, in ink; the heads, one a canal, ink over a casing.
+    const rails = strokes.find((st) => st.color === INK && st.width === CANAL.rail);
+    expect(rails?.lines).toBe(2 * downhill(snapshot));
+    const heads = strokes.filter((st) => st.width === CANAL.head.ink && st.color === INK);
+    expect(heads[0]?.lines).toBe(downhill(snapshot));
+    view.destroy();
+  });
+
+  it('runs the hachures of the roads that carry a packet, the idle ones faint and still', () => {
+    const { canals, running, view } = draw(snapshot);
     // The roads 3-4, 9-10, 0-3 and 12-7 carry a packet in the scene; the others are idle.
-    expect(bright.length).toBeGreaterThan(0);
-    expect(dim.length).toBeGreaterThan(0);
-    // One dim chevron per idle road: 11 downhill roads, 4 with a packet.
-    expect(dim).toHaveLength(
-      snapshot.view.nodes.reduce((n, x) => n + (x.flow_down?.length ?? 0), 0) - 4,
-    );
+    const idle = strokesOf(canals).find((st) => st.color === YOU);
+    expect(idle).toBeDefined();
+    const run = strokesOf(running);
+    expect(run).toHaveLength(1);
+    expect(run[0]?.color).toBe(YOU);
+    expect(run[0]?.lines).toBeGreaterThan(0);
     view.destroy();
   });
 
   it('a shifted level has fewer roads that flow: only the ones the server lists', () => {
     const shifted = flowSnapshot(map, 1);
-    const roads = (s: SnapshotMsg) =>
-      s.view.nodes.reduce((n, x) => n + (x.flow_down?.length ?? 0), 0);
-    expect(roads(shifted)).toBeLessThan(roads(snapshot));
-    const { marks, view } = draw(shifted);
-    // One of the five downhill roads (0-6) carries a packet; the packet 0-1 is on a level road.
-    expect(visible(marks).filter((c) => (c as Sprite).alpha < 1)).toHaveLength(roads(shifted) - 1);
+    expect(downhill(shifted)).toBeLessThan(downhill(snapshot));
+    const { canals, view } = draw(shifted);
+    expect(strokesOf(canals)[0]?.lines).toBe(downhill(shifted));
+    view.destroy();
+  });
+
+  it('rings the nodes of the level: the own colour on a casing, an ink ring outside', () => {
+    const { layers, view } = draw(snapshot);
+    const [root] = layers.layer.supply.children as Container[];
+    const plates = root?.children[1] as Graphics;
+    const level = snapshot.view.nodes.filter(
+      (n) => n.owner === 0 && n.front_dist === snapshot.view.me.leaf_shift,
+    );
+    expect(level.length).toBeGreaterThan(0);
+    const rings = strokesOf(plates).filter(
+      (st) => st.color === YOU && st.width === CANAL.level.width,
+    );
+    expect(rings).toHaveLength(level.length);
     view.destroy();
   });
 

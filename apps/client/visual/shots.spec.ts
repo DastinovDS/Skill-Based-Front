@@ -276,6 +276,24 @@ for (const name of V2_SHOTS) {
   });
 }
 
+// The road fortifications (#858), the frozen scene `forts`, Ford: its city menu with "Fortify road"
+// and the icon Wall on the road (`fort-menu.png`), then the pick: a ghost wall on every road it can
+// fortify, the pointer on the road to Forkway lights that one with its price (`fort-pick.png`).
+test('shot of the fortify menu and the pick', async ({ page }) => {
+  await page.goto('/?scene=forts&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(557, 708);
+  await expect(page.locator('[role="menu"]')).toBeVisible();
+  await page.mouse.move(1000, 700);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'fort-menu.png') });
+  await page.locator('[data-icon="fortify"]').click();
+  await page.mouse.move(553, 650);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'fort-pick.png') });
+});
+
 // A group whose plan gathers its bonus (#811), the frozen scene `economy`, Watchhouse: selected (no
 // banner at the foot of the screen any more) and under the pointer (the tooltip has the charges
 // only). `plan-select.png` and `plan-hover.png`.

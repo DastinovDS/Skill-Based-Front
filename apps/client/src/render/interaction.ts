@@ -115,6 +115,8 @@ export interface FortPick {
   readonly hover: number | null;
   /** The price as the player reads it ("1.5 CP"). */
   readonly cost: string;
+  /** The number of the price alone ("1.5"), drawn beside the CP mark (#858). */
+  readonly amount?: string;
 }
 
 export interface OverlayState {

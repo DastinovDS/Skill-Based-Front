@@ -5,7 +5,11 @@ import { BUNDLED_MAPS, DEFAULT_MAP, bundledGeo } from '../map/bundledMaps.ts';
 import type { RoadFort, SnapshotMsg } from '../protocol.gen.ts';
 import { buildProgress, FortView, fortsOf } from './fortView.ts';
 import { ringOrder } from './fortLayout.ts';
+import { borderPermille } from './fogLayout.ts';
 import { createLayers } from './layers.ts';
+import { setReducedMotion } from './motion.ts';
+import { ENEMY, YOU } from './style.ts';
+import { WALL } from './wallLayout.ts';
 import { territoryOf, voronoiTerritory } from './territory.ts';
 
 const map = DEFAULT_MAP;
@@ -52,24 +56,30 @@ function build() {
   const layers = createLayers();
   const view = new FortView(map, layers, 0, () => territory.edges);
   view.setBuildTicks(100);
-  view.setTickHz(10);
   const root = layers.layer.forts.children.find((c) => c.label === 'forts') as Container;
   const part = (label: string): Graphics =>
     root.children.find((c) => c.label === label) as Graphics;
-  const times = () =>
-    (part('fort-labels') as unknown as Container).children
-      .filter((c) => c.label === 'fort-time' && c.visible)
-      .map((c) => (c as Text).text);
   return {
     layers,
     view,
-    halos: part('fort-halos'),
-    lines: part('fort-lines'),
+    walls: part('fort-walls'),
+    falls: part('fort-falls'),
     ghosts: part('fort-ghosts'),
-    times,
     shapes: (g: Graphics) => g.context.instructions.length,
+    /** The shapes drawn, every one in every path (a fill of many circles counts each). */
+    primitives: (g: Graphics) =>
+      g.context.instructions.reduce(
+        (n, i) => n + (i.action === 'fill' ? i.data.path.shapePath.shapePrimitives.length : 1),
+        0,
+      ),
   };
 }
+
+/** The colours a Graphics fills with. */
+const fillColours = (g: Graphics): number[] =>
+  g.context.instructions.flatMap((i) =>
+    i.action === 'fill' ? [(i.data.style as { color: number }).color] : [],
+  );
 
 describe('fortsOf: the lines of a snapshot', () => {
   it('lists them by node and road, with the owner, the state and the end tick', () => {
@@ -100,25 +110,33 @@ describe('buildProgress: the part of an own build done', () => {
   });
 });
 
-describe('FortView: the lines of C7', () => {
-  it('draws nothing without a line', () => {
-    const { view, halos, lines, shapes } = build();
+describe('FortView: Set back, two masonries (#858)', () => {
+  it('draws nothing without a wall', () => {
+    const { view, walls, shapes } = build();
     view.update(base.view, TICK, null);
-    expect(shapes(halos)).toBe(0);
-    expect(shapes(lines)).toBe(0);
+    expect(shapes(walls)).toBe(0);
     view.destroy();
   });
 
-  it('draws the stroke, the ticks and the halo of a built line, and says where its beam starts', () => {
-    const { view, halos, lines, shapes } = build();
+  it('draws a built wall and says where its gate is: on the road, inside the own cell', () => {
+    const { view, walls, shapes } = build();
     view.update(withForts([own(true)]).view, TICK, null);
-    expect(shapes(halos)).toBeGreaterThan(0);
-    // The stroke and a polygon per tick that fits the run.
-    expect(shapes(lines)).toBeGreaterThan(3);
+    expect(shapes(walls)).toBeGreaterThan(3);
     const mark = view.lineAt(road.a, road.id);
     expect(mark).toBeDefined();
     expect(Math.hypot(mark?.nx ?? 0, mark?.ny ?? 0)).toBeCloseTo(1);
-    // Another end of the road has no line.
+    // The gate lies on the road, short of the border point on the own side (nearer the own node).
+    const a = map.nodes[road.a];
+    const b = map.nodes[road.b];
+    if (a === undefined || b === undefined || mark === undefined) throw new Error('no road');
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const along = ((mark.x - a.x) * (b.x - a.x) + (mark.y - a.y) * (b.y - a.y)) / length;
+    const off = Math.abs(((mark.x - a.x) * (b.y - a.y) - (mark.y - a.y) * (b.x - a.x)) / length);
+    expect(off).toBeLessThan(0.5);
+    const border = (borderPermille(map, road.id) / 1000) * length;
+    expect(along).toBeLessThan(border);
+    expect(along).toBeGreaterThan(border - 3 * WALL.offset);
+    // Another end of the road has no wall.
     expect(view.lineAt(road.b, road.id)).toBeUndefined();
     view.destroy();
   });
@@ -138,66 +156,137 @@ describe('FortView: the lines of C7', () => {
     view.destroy();
   });
 
-  it('shows the time left of an own build, and not of a finished one or an enemy one', () => {
-    const { view, times } = build();
-    // 150 - 100 = 50 ticks = 5 s at 10 Hz.
-    view.update(withForts([own(false, 150)]).view, TICK, null);
-    expect(times()).toEqual(['0:05']);
-    view.update(withForts([own(true)]).view, TICK, null);
-    expect(times()).toEqual([]);
-    view.update(withForts([enemyFort(false)]).view, TICK, null);
-    expect(times()).toEqual([]);
-    view.destroy();
-  });
-
-  it('an own build advances with the render tick: more of it is drawn later', () => {
-    const { view, lines, shapes } = build();
-    view.update(withForts([own(false, 200)]).view, 100, null);
-    const early = shapes(lines);
+  it('an own build grows from its gate with the render tick: more of it is drawn later', () => {
+    const { view, walls, primitives } = build();
+    view.update(withForts([own(false, 200)]).view, 110, null);
+    const early = primitives(walls);
     view.update(withForts([own(false, 200)]).view, 190, null);
-    expect(shapes(lines)).toBeGreaterThan(early);
+    // More teeth stand, fewer points of the part not built yet are left.
+    expect(primitives(walls)).not.toBe(early);
+    const teeth = (g: Graphics): number =>
+      g.context.instructions.reduce(
+        (n, i) =>
+          n +
+          (i.action === 'fill' && (i.data.style as { color: number }).color === YOU
+            ? i.data.path.shapePath.shapePrimitives.length
+            : 0),
+        0,
+      );
+    view.update(withForts([own(false, 200)]).view, 110, null);
+    const before = teeth(walls);
+    view.update(withForts([own(false, 200)]).view, 190, null);
+    expect(teeth(walls)).toBeGreaterThan(before);
     view.destroy();
   });
 
-  it('shows an enemy line that is being built only as a dashed outline, a built one filled', () => {
-    const { view, lines } = build();
-    const fills = (): number =>
-      lines.context.instructions.filter((i) => i.action === 'fill').length;
+  it('shows an enemy wall that is being built only as its points and gate, a built one in its colour', () => {
+    const { view, walls } = build();
     view.update(withForts([enemyFort(false)]).view, TICK, null);
-    expect(lines.context.instructions.length).toBeGreaterThan(0);
-    expect(fills()).toBe(0);
+    expect(walls.context.instructions.length).toBeGreaterThan(0);
+    expect(fillColours(walls)).not.toContain(ENEMY);
     view.update(withForts([enemyFort(true)]).view, TICK, null);
-    expect(fills()).toBeGreaterThan(3);
+    expect(fillColours(walls)).toContain(ENEMY);
     view.destroy();
   });
 
-  it('keeps no memory of an enemy line: it is gone from the picture when the snapshot drops it', () => {
-    const { view, halos, lines, shapes } = build();
+  it('builds the own wall as a battlement (square towers) and the enemy one as a palisade (round posts)', () => {
+    const { view, walls } = build();
+    const kinds = (): string[] =>
+      walls.context.instructions.flatMap((i) =>
+        i.action === 'fill' ? i.data.path.shapePath.shapePrimitives.map((p) => p.shape.type) : [],
+      );
+    view.update(withForts([own(true)]).view, TICK, null);
+    expect(kinds()).not.toContain('circle');
     view.update(withForts([enemyFort(true)]).view, TICK, null);
-    expect(shapes(lines)).toBeGreaterThan(0);
+    expect(kinds()).toContain('circle');
+    view.destroy();
+  });
+
+  it('draws the enemy wall first, so the own one is never under it', () => {
+    const { view, walls } = build();
+    view.update(withForts([own(true), enemyFort(true)]).view, TICK, null);
+    const colours = fillColours(walls);
+    expect(colours.indexOf(ENEMY)).toBeGreaterThanOrEqual(0);
+    expect(colours.indexOf(ENEMY)).toBeLessThan(colours.indexOf(YOU));
+    view.destroy();
+  });
+
+  it('keeps no memory of an enemy wall: it is gone from the picture when the snapshot drops it', () => {
+    const { view, walls, shapes } = build();
+    view.update(withForts([enemyFort(true)]).view, TICK, null);
+    expect(shapes(walls)).toBeGreaterThan(0);
     view.update(base.view, TICK + 1, null);
-    expect(shapes(halos)).toBe(0);
-    expect(shapes(lines)).toBe(0);
+    expect(shapes(walls)).toBe(0);
     expect(view.lineAt(road.b, road.id)).toBeUndefined();
+    // The node did not change hands: nothing falls.
+    expect(view.falling()).toBe(0);
     view.destroy();
   });
 
-  it('draws both sides of one road, each in its own cell', () => {
+  it('draws both sides of one road, each in its own half: two gates apart, facing each other', () => {
     const { view } = build();
     view.update(withForts([own(true), enemyFort(true)]).view, TICK, null);
     const a = view.lineAt(road.a, road.id);
     const b = view.lineAt(road.b, road.id);
     expect(a).toBeDefined();
     expect(b).toBeDefined();
-    // The two lines face each other: their outward vectors point opposite ways.
+    // The two walls face each other: their outward vectors point opposite ways.
     expect((a?.nx ?? 0) * (b?.nx ?? 0) + (a?.ny ?? 0) * (b?.ny ?? 0)).toBeLessThan(0);
+    // A strip between the gates: each is set back from the border point.
+    expect(Math.hypot((a?.x ?? 0) - (b?.x ?? 0), (a?.y ?? 0) - (b?.y ?? 0))).toBeGreaterThan(
+      1.5 * WALL.offset,
+    );
     view.destroy();
+  });
+
+  it('a captured node: its walls fall once the winner has walked in, then are gone', () => {
+    const { view, falls, shapes } = build();
+    view.update(withForts([own(true)]).view, TICK, null);
+    view.setCaptureDelays(new Map([[road.a, 300]]));
+    const taken = withForts([]);
+    const nodes = taken.view.nodes.map((n) => (n.id === road.a ? { ...n, owner: 1 as const } : n));
+    view.update({ ...taken.view, nodes }, TICK + 1, null);
+    expect(view.falling()).toBe(1);
+    // Standing until the walk-in is over, then breaking up.
+    view.advance(100);
+    const standing = shapes(falls);
+    expect(standing).toBeGreaterThan(0);
+    view.advance(500);
+    expect(shapes(falls)).toBeGreaterThan(0);
+    view.advance(WALL.fall.ms);
+    expect(view.falling()).toBe(0);
+    view.advance(16);
+    expect(shapes(falls)).toBe(0);
+    view.destroy();
+  });
+
+  it('with less motion a captured wall is just gone', () => {
+    setReducedMotion(true);
+    try {
+      const { view } = build();
+      view.update(withForts([own(true)]).view, TICK, null);
+      const taken = withForts([]);
+      const nodes = taken.view.nodes.map((n) =>
+        n.id === road.a ? { ...n, owner: 1 as const } : n,
+      );
+      view.update({ ...taken.view, nodes }, TICK + 1, null);
+      expect(view.falling()).toBe(0);
+      view.destroy();
+    } finally {
+      setReducedMotion(null);
+    }
   });
 });
 
 describe('FortView: the pick of "Fortify road" (P1 Ghosts)', () => {
   const roads = map.edges.filter((e) => e.a === road.a || e.b === road.a).map((e) => e.id);
-  const pick = (hover: number | null) => ({ node: road.a, edges: roads, hover, cost: '1.5 CP' });
+  const pick = (hover: number | null) => ({
+    node: road.a,
+    edges: roads,
+    hover,
+    cost: '1.5 CP',
+    amount: '1.5',
+  });
   const priceOf = (view: ReturnType<typeof build>['layers']) =>
     (view.layer.forts.children[0] as Container).children
       .flatMap((c) => (c.label === 'fort-labels' ? c.children : []))
@@ -223,7 +312,8 @@ describe('FortView: the pick of "Fortify road" (P1 Ghosts)', () => {
     view.update(base.view, TICK, pick(road.id));
     const price = priceOf(layers);
     expect(price?.visible).toBe(true);
-    expect(price?.text).toBe('1.5 CP');
+    // The number beside the CP mark (drawn with the ghosts), not the word.
+    expect(price?.text).toBe('1.5');
     view.update(base.view, TICK, null);
     expect(priceOf(layers)?.visible).toBe(false);
     view.destroy();
@@ -231,7 +321,7 @@ describe('FortView: the pick of "Fortify road" (P1 Ghosts)', () => {
 
   it('leaves no ghost and no target when the pick ends', () => {
     const { view, ghosts, shapes } = build();
-    view.update(base.view, TICK, pick(null));
+    view.update(base.view, TICK, pick(road.id));
     view.update(base.view, TICK, null);
     expect(shapes(ghosts)).toBe(0);
     expect(view.pickTargets()).toEqual([]);
@@ -253,7 +343,7 @@ describe('FortView: the pick of "Fortify road" (P1 Ghosts)', () => {
   });
 });
 
-describe('FortView: a line covers the whole shared border on a geography map (#734)', () => {
+describe('FortView: a wall covers the whole shared border on a geography map (#734)', () => {
   const narrows = BUNDLED_MAPS.find((m) => m.meta.name === 'narrows');
   if (narrows === undefined) throw new Error('the map narrows is not bundled');
   const land = territoryOf(narrows, bundledGeo(narrows));
@@ -277,7 +367,7 @@ describe('FortView: a line covers the whole shared border on a geography map (#7
     const first = line[0];
     const last = line[line.length - 1];
     if (first === undefined || last === undefined) throw new Error('no line');
-    // The line lies a few units inside the cell (its offset), so its ends are that close to the
+    // The wall lies a few units inside the cell (its offset), so its ends are that close to the
     // ends of the border, whichever way round the run goes.
     const near = (p: { x: number; y: number }) =>
       Math.min(...ends.map((q) => (q === undefined ? Infinity : Math.hypot(p.x - q.x, p.y - q.y))));

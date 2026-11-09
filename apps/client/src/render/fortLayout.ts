@@ -1,9 +1,10 @@
 /**
- * Geometry of the road fortifications (DEC-43, item D; #707; ui-style 42, the look C7 "Long run"):
- * a flat stroke inside the own cell, parallel to the territory border at the road crossing, with
- * fine ticks on its outer side. It covers the whole stretch of the border with the cell the road
- * leads to (it ends square where that border ends or turns by more than `FORT.trim` degrees, so it
- * never wraps a cell corner) and bends with the gentle curves of that border (#734).
+ * The runs of the road fortifications (DEC-43, item D; #707): the stretch of the border of the own
+ * cell a wall lies along. A run covers the whole stretch of the border with the cell the road leads to
+ * (it ends square where that border ends or turns by more than `FORT.trim` degrees, so it never wraps a
+ * cell corner) and bends with the gentle curves of that border (#734); the walls of one node on
+ * neighbouring stretches are one run round the ring (`stretchRun`, #858). The look of the walls is
+ * `wallLayout.ts`.
  *
  * Pure functions, no PixiJS and no DOM. Nothing here knows a rule: the server says which road of
  * which node is fortified and whether it is built (`EdgeView.forts`); the client only draws it.
@@ -11,83 +12,13 @@
 import type { Point } from './camera.ts';
 import type { CellEdge } from './regionLayout.ts';
 
-/** The look C7 "Long run", in world units at zoom 1 (docs/design/mockups/fortifications.html, round 4). */
+/** Where a run is cut short (degrees). */
 export const FORT = {
-  /**
-   * The length of a straight stub, when the cell has no border with the cell across the road (not
-   * scaled by the zoom: zoomed out fewer ticks fit). A border run is as long as the border (#734).
-   */
-  runLength: 170,
-  /** The stroke width, and how far it lies inside the own cell. */
-  line: 3,
-  offset: 8.5,
-  /** The ticks on the border side of the stroke. */
-  tickLength: 5,
-  tickWidth: 3,
-  tickGap: 4,
-  /** At least this many ticks, however far out the map is zoomed. */
-  minTicks: 3,
-  /** The soft dark halo under the stroke: its width, its alpha, and its distance from the border line. */
-  haloWidth: 14,
-  haloAlpha: 0.4,
-  haloClear: 3,
   /** The border run is trimmed where it turns by more than this (degrees)... */
   trim: 38,
   /** ...or has turned by more than this in all since the crossing (a corner rounded into a gentle curve). */
   drift: 70,
-  /** A second line on the same stretch lies this much further inside the cell. */
-  stackStep: 20,
-  /** The run reaches this much beyond the last tick. */
-  reach: 8,
-  /** Lighter tone of the owner colour: own, enemy (both lighter than the territory, the side reads by position). */
-  lightenOwn: 0.3,
-  lightenEnemy: 0.38,
-  /** The shield marker of the pick is not used (P1 "Ghosts"): a pickable crossing shows this much of the line. */
-  ghostAlpha: 0.5,
-  ghostHoverAlpha: 0.95,
 } as const;
-
-/** Marks grow when the map is zoomed out (like the construction plate): the factor for a camera scale. */
-export function markScale(cameraScale: number): number {
-  if (!(cameraScale > 0) || cameraScale >= 1) return 1;
-  // Bucketed to eighths, so a gliding camera redraws the lines a few times, not every frame.
-  return Math.round(Math.pow(1 / cameraScale, 0.6) * 8) / 8;
-}
-
-export interface TickLayout {
-  readonly n: number;
-  readonly tw: number;
-  readonly gap: number;
-  readonly tl: number;
-  readonly lw: number;
-  readonly off: number;
-  /** Centres of the ticks of a stub, relative to the crossing (`tickCentres` lays them on a run). */
-  readonly cs: readonly number[];
-  /** Half of the stretch the ticks of a stub cover, and the reach of its line beyond the last tick. */
-  readonly half: number;
-  readonly reach: number;
-}
-
-/** The number and place of the ticks for the mark scale `mk`: sizes grow, the run length does not. */
-export function tickLayout(mk: number): TickLayout {
-  const tw = FORT.tickWidth * mk;
-  const gap = FORT.tickGap * mk;
-  const n = Math.max(FORT.minTicks, Math.floor((FORT.runLength + gap) / (tw + gap)));
-  const used = n * tw + (n - 1) * gap;
-  const cs = Array.from({ length: n }, (_, i) => -used / 2 + tw / 2 + i * (tw + gap));
-  const half = used / 2 + gap * 0.5;
-  return {
-    n,
-    tw,
-    gap,
-    tl: FORT.tickLength * mk,
-    lw: FORT.line * mk,
-    off: FORT.offset * mk,
-    cs,
-    half,
-    reach: FORT.reach * mk,
-  };
-}
 
 /** A piece of the border of the cell that a fortification lies along. */
 export interface Run {
@@ -377,6 +308,61 @@ function nearestEdge(
   return best;
 }
 
+/**
+ * The run along the ring of a cell from ring arc `from` to `to` (`to > from`; either may lie past
+ * the ring's end, the ring is closed): what a wall of several roads of one node lies along when
+ * they are one stroke (#858). `s0` is 0 (the arcs of the run count from `from`). `null` when the
+ * stretch is empty or the ring has a gap inside it (a cell that does not close there).
+ */
+export function stretchRun(
+  ring: readonly CellEdge[],
+  node: Point,
+  from: number,
+  to: number,
+): Run | null {
+  const lengths = ring.map((edge) => dist(edge.a, edge.b));
+  const ringLength = lengths.reduce((sum, l) => sum + l, 0);
+  if (!(ringLength > 0) || !(to - from >= 1) || to - from > ringLength + 0.01) return null;
+  // The stretch moved by whole rings so that it starts on the first lap.
+  const k = Math.floor(from / ringLength);
+  const lo = from - k * ringLength;
+  const hi = to - k * ringLength;
+  const pts: Point[] = [];
+  const arc: number[] = [];
+  const normals: Point[] = [];
+  let total = 0;
+  let start = 0;
+  for (let lap = 0; lap < 3 && start < hi; lap++) {
+    for (let i = 0; i < ring.length && start < hi; i++) {
+      const edge = ring[i] as CellEdge;
+      const length = lengths[i] ?? 0;
+      const a = Math.max(start, lo);
+      const b = Math.min(start + length, hi);
+      start += length;
+      if (b - a < 1e-6 || length <= 0) continue;
+      const at = (s: number): Point => {
+        const u = (s - (start - length)) / length;
+        return { x: edge.a.x + (edge.b.x - edge.a.x) * u, y: edge.a.y + (edge.b.y - edge.a.y) * u };
+      };
+      const pa = at(a);
+      const pb = at(b);
+      const last = pts[pts.length - 1];
+      if (last === undefined) {
+        pts.push(pa);
+        arc.push(0);
+      } else if (dist(last, pa) > JOIN) return null;
+      const step = dist(pts[pts.length - 1] as Point, pb);
+      if (step < 0.01) continue;
+      total += step;
+      pts.push(pb);
+      arc.push(total);
+      normals.push(outwardNormal(edge, node));
+    }
+  }
+  if (pts.length < 2 || total < 1) return null;
+  return { pts, s: arc, s0: 0, len: total, normals, ringAt: from, ringLength };
+}
+
 /** A straight run across the road when the cell has no shared edge: perpendicular to the road at `cross`. */
 export function stubRun(node: Point, cross: Point, half: number): Run {
   const dx = cross.x - node.x;
@@ -465,110 +451,6 @@ export function runLine(run: Run, a0: number, a1: number, off: number): Point[] 
     line.push(p);
   }
   return line;
-}
-
-/** A band of the run between offsets `h0` and `h1` (out of the border positive), as one polygon. */
-export function runStrip(run: Run, a0: number, a1: number, h0: number, h1: number): Point[] {
-  const ss = arcs(run, a0, a1);
-  const first: Point[] = [];
-  const second: Point[] = [];
-  for (const s of ss) {
-    const q = runPoint(run, s);
-    first.push({ x: q.x + q.nx * h0 * q.m, y: q.y + q.ny * h0 * q.m });
-    second.push({ x: q.x + q.nx * h1 * q.m, y: q.y + q.ny * h1 * q.m });
-  }
-  return [...first, ...second.reverse()];
-}
-
-/**
- * A tick: a thin quadrilateral standing on the stroke (`off` inside the border), reaching `length`
- * towards the border. `a` is its centre along the run, relative to the crossing.
- */
-export function tickPolygon(
-  run: Run,
-  a: number,
-  width: number,
-  off: number,
-  lineWidth: number,
-  length: number,
-): Point[] {
-  const at = (aa: number, h: number): Point => {
-    const q = runPoint(run, run.s0 + Math.max(-run.s0, Math.min(run.len - run.s0, aa)));
-    return { x: q.x + q.nx * h * q.m, y: q.y + q.ny * h * q.m };
-  };
-  const h0 = -off - lineWidth * 0.3;
-  const h1 = -off + length;
-  return [
-    at(a - width / 2, h0),
-    at(a + width / 2, h0),
-    at(a + width / 2, h1),
-    at(a - width / 2, h1),
-  ];
-}
-
-/** Whether the tick at `a` lies on the run (a tick off its end is dropped). */
-export function tickFits(run: Run, a: number, width: number): boolean {
-  return a - width / 2 >= -run.s0 && a + width / 2 <= run.len - run.s0;
-}
-
-/** The whole run relative to the crossing: from its first point (`lo`, negative) to its last (`hi`). */
-export function runSpan(run: Run): { readonly lo: number; readonly hi: number } {
-  return { lo: -run.s0, hi: run.len - run.s0 };
-}
-
-/**
- * The centres of the ticks on the whole run, relative to the crossing: the spacing of `lay` (a tick
- * and a gap) kept in step with the crossing, every tick that fits on the run. A border run has ticks
- * up to its square ends; a stub (no ring) keeps `lay.reach` of bare stroke at each end, as before.
- */
-export function tickCentres(run: Run, lay: TickLayout): number[] {
-  const step = lay.tw + lay.gap;
-  if (!(step > 0)) return [];
-  const c0 = lay.cs[0] ?? 0;
-  const inset = run.ringLength > 0 ? 0 : lay.reach;
-  const span = runSpan(run);
-  const lo = span.lo + inset;
-  const hi = span.hi - inset;
-  const out: number[] = [];
-  for (let k = Math.ceil((lo + lay.tw / 2 - c0) / step - 1e-9); ; k++) {
-    const a = c0 + k * step;
-    if (a + lay.tw / 2 > hi + 1e-9) break;
-    out.push(a);
-  }
-  return out;
-}
-
-/** Dashes along a polyline: pieces of length `dash` with `gap` between, as pairs of points (a piece may bend). */
-export function dashAlong(line: readonly Point[], dash: number, gap: number): Point[][] {
-  const pieces: Point[][] = [];
-  let current: Point[] | null = null;
-  let inDash = true;
-  let left = dash;
-  for (let i = 0; i + 1 < line.length; i++) {
-    let a = line[i] as Point;
-    const b = line[i + 1] as Point;
-    let segment = dist(a, b);
-    while (segment > 1e-9) {
-      const step = Math.min(left, segment);
-      const k = step / segment;
-      const mid = { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
-      if (inDash) {
-        current ??= [a];
-        current.push(mid);
-      }
-      segment -= step;
-      left -= step;
-      a = mid;
-      if (left <= 1e-9) {
-        if (inDash && current !== null) pieces.push(current);
-        current = null;
-        inDash = !inDash;
-        left = inDash ? dash : gap;
-      }
-    }
-  }
-  if (inDash && current !== null && current.length > 1) pieces.push(current);
-  return pieces;
 }
 
 /** Where a run lies on the ring of its cell: from its first point to its last (arc length, may pass the ring's end). */

@@ -1,18 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import type { EventMsg } from '../protocol.gen.ts';
-import type { ParticleSpec } from './particles.ts';
 import {
-  BEAM_MS,
   HIT_AT_MS,
+  HIT_MS,
+  STRIKE,
+  STRIKE_MS,
+  TOLL_HIT,
   TOLL_MS,
+  hitCuts,
+  hitPhase,
+  strikeLines,
   tollInfo,
   tollMs,
   tollNumber,
-  tollParticles,
   tollPop,
   tollSeed,
   victimOf,
-  type TollLook,
 } from './tollLayout.ts';
 
 const event = (kind: string, data: EventMsg['data'], tick = 100): EventMsg => ({
@@ -52,7 +55,7 @@ describe('tollInfo: a toll event as an effect', () => {
     expect(victimOf(taken, 1)).toBe(0);
   });
 
-  it('seeds a different burst for tolls on different roads', () => {
+  it('seeds a different hit for tolls on different roads', () => {
     const a = tollInfo(event('toll_taken', { node: 1, edge: 1, charges: 1 }));
     const b = tollInfo(event('toll_taken', { node: 1, edge: 2, charges: 1 }));
     if (a === null || b === null) throw new Error('no info');
@@ -65,91 +68,69 @@ describe('tollMs: the age of a toll', () => {
     expect(tollMs(-1, 10)).toBeNull();
     expect(tollMs(0, 10)).toBe(0);
     expect(tollMs(3, 10)).toBe(300);
-    expect(tollMs(7, 10)).toBe(700);
-    expect(tollMs(8, 10)).toBeNull();
+    expect(tollMs(10, 10)).toBe(1000);
+    expect(tollMs(11, 10)).toBeNull();
     expect(tollMs(1, 0)).toBeNull();
   });
-  it('is over within 0.8 s of the event, as the mockup says', () => {
-    expect(TOLL_MS).toBeLessThanOrEqual(800);
-    expect(BEAM_MS).toBeLessThan(TOLL_MS);
+  it('is over within 1.1 s of the event, as the mockup says: the strike, then the hit', () => {
+    expect(TOLL_MS).toBe(1100);
+    expect(STRIKE_MS).toBeLessThan(TOLL_MS);
+    expect(HIT_AT_MS).toBe(STRIKE_MS);
+    expect(HIT_AT_MS + HIT_MS).toBeLessThanOrEqual(TOLL_MS);
   });
 });
 
-describe('tollParticles: K6 "Beam"', () => {
-  const colors = { own: 0x5b9bff, enemy: 0xe5484d };
-  const look = (victim: 'own' | 'enemy', charges = 2): TollLook => ({
-    from: { x: 0, y: 0 },
-    at: { x: 100, y: 0 },
-    colors,
-    victim,
-    charges,
-    scale: 1,
-    seed: 7,
-  });
-  const at = (ms: number, l: TollLook): ParticleSpec[] => {
-    const out: ParticleSpec[] = [];
-    tollParticles((p) => out.push(p), ms, l);
-    return out;
-  };
+describe('strikeLines: three hairlines from the gate to the group', () => {
+  const from = { x: 0, y: 0 };
+  const to = { x: 100, y: 0 };
 
-  it('is an instant beam from the line to the group at the start, with a white core', () => {
-    const beam = at(0, look('own')).filter((p) => p.kind === 'square' && p.aspect !== undefined);
-    expect(beam.length).toBeGreaterThanOrEqual(2);
-    // Centred between the line and the group, along the way to it, and as long as the way.
-    for (const part of beam) {
-      expect(part.x).toBeCloseTo(50);
-      expect(part.y).toBeCloseTo(0);
-      expect(part.size).toBeCloseTo(100);
-    }
-    expect(beam.some((p) => p.add === true && p.color === 0xffffff)).toBe(true);
-    // Nothing has hit yet.
-    expect(at(0, look('own')).some((p) => p.kind === 'ring')).toBe(false);
+  it('runs from the gate towards the group and has arrived when the hit lands', () => {
+    const early = strikeLines(from, to, 30);
+    const late = strikeLines(from, to, STRIKE_MS - 10);
+    expect(early).toHaveLength(3);
+    const head = (lines: ReturnType<typeof strikeLines>): number => lines?.[1]?.[1]?.x ?? 0;
+    expect(head(early)).toBeGreaterThan(0);
+    expect(head(late)).toBeGreaterThan(head(early));
+    expect(head(late)).toBeLessThanOrEqual(100);
+    expect(strikeLines(from, to, STRIKE_MS)).toBeNull();
+    expect(strikeLines(from, to, -1)).toBeNull();
   });
 
-  it('has no beam after its short life, and the ring and the flash come with the hit', () => {
-    const late = at(HIT_AT_MS + 50, look('own'));
-    expect(
-      late.filter((p) => p.kind === 'square' && p.aspect !== undefined && p.size > 90),
-    ).toEqual([]);
-    expect(late.some((p) => p.kind === 'ring')).toBe(true);
-    expect(late.some((p) => p.kind === 'glow' && p.add === true)).toBe(true);
+  it('spreads the three apart at the gate, the core in the middle, and meets at the head', () => {
+    const lines = strikeLines(from, to, 100, 2);
+    expect(lines?.map((l) => l[0]?.y)).toEqual([-STRIKE.spread * 2, 0, STRIKE.spread * 2]);
+    const heads = lines?.map((l) => l[1]);
+    expect(heads?.[0]).toEqual(heads?.[2]);
   });
 
-  it('flings one square per lost charge (not additive, no fall), at most eight', () => {
-    const flung = (charges: number): ParticleSpec[] =>
-      at(HIT_AT_MS + 200, look('own', charges)).filter(
-        (p) => p.kind === 'square' && p.add !== true,
-      );
-    expect(flung(1)).toHaveLength(1);
-    expect(flung(3)).toHaveLength(3);
-    expect(flung(8)).toHaveLength(8);
-    expect(flung(20)).toHaveLength(8);
+  it('draws nothing when the gate and the group are one point', () => {
+    expect(strikeLines(from, from, 50)).toBeNull();
+  });
+});
+
+describe('hitPhase and hitCuts: the engraved hit', () => {
+  it('lasts from the landing of the strike for its time', () => {
+    expect(hitPhase(HIT_AT_MS - 1)).toBeNull();
+    expect(hitPhase(HIT_AT_MS + HIT_MS / 2)).toBeCloseTo(0.5);
+    expect(hitPhase(HIT_AT_MS + HIT_MS)).toBeNull();
   });
 
-  it('colours the flung charges as the loser, the sparks as the shooter', () => {
-    const squares = (victim: 'own' | 'enemy'): ParticleSpec[] =>
-      at(HIT_AT_MS + 200, look(victim, 1)).filter((p) => p.kind === 'square' && p.add !== true);
-    expect(squares('own')[0]?.color).toBe(colors.own);
-    expect(squares('enemy')[0]?.color).toBe(colors.enemy);
+  it('throws seven cuts out, every other one in ink, further as it goes', () => {
+    const at = { x: 50, y: 50 };
+    const early = hitCuts(at, 0.1, 1, 7);
+    const late = hitCuts(at, 0.9, 1, 7);
+    expect(early.cuts).toHaveLength(TOLL_HIT.cuts);
+    expect(early.cuts.filter((c) => c.ink)).toHaveLength(Math.ceil(TOLL_HIT.cuts / 2));
+    const reach = (h: typeof early): number =>
+      Math.max(...h.cuts.map((c) => Math.hypot(c.to.x - at.x, c.to.y - at.y)));
+    expect(reach(late)).toBeGreaterThan(reach(early));
+    expect(late.ring).toBeGreaterThan(early.ring);
   });
 
-  it('emits nothing at the end of the effect', () => {
-    expect(at(TOLL_MS, look('own'))).toEqual([]);
-    expect(at(TOLL_MS - 1, look('own')).length).toBeGreaterThanOrEqual(0);
-  });
-
-  it('is the same for the same age: a paused scene shows a toll in the state of its tick', () => {
-    expect(at(300, look('enemy'))).toEqual(at(300, look('enemy')));
-  });
-
-  it('draws the ring in the lightened colour of the shooter: the enemy shoots when the viewer pays', () => {
-    const ring = (victim: 'own' | 'enemy'): number => {
-      const found = at(HIT_AT_MS + 20, look(victim)).find((p) => p.kind === 'ring');
-      return found?.color ?? 0;
-    };
-    // Lightened, so neither the plain colour of the owner nor white.
-    expect(ring('own')).not.toBe(colors.enemy);
-    expect(ring('own')).not.toBe(ring('enemy'));
+  it('is the same for the same age and seed: a paused scene shows the same frame', () => {
+    const at = { x: 0, y: 0 };
+    expect(hitCuts(at, 0.4, 1, 3)).toEqual(hitCuts(at, 0.4, 1, 3));
+    expect(hitCuts(at, 0.4, 1, 3)).not.toEqual(hitCuts(at, 0.4, 1, 4));
   });
 });
 
@@ -160,15 +141,15 @@ describe('tollPop and tollNumber', () => {
     expect(tollPop(HIT_AT_MS + 400)).toBe(1);
   });
 
-  it('shows "-N" from the hit: it rises and fades in the last third', () => {
-    expect(tollNumber(0, false, 12)).toBeNull();
-    const early = tollNumber(HIT_AT_MS + 10, false, 12);
-    const mid = tollNumber(HIT_AT_MS + 300, false, 12);
-    const end = tollNumber(TOLL_MS - 5, false, 12);
+  it('shows "-N" from the hit: it rises a little and fades in the last quarter', () => {
+    expect(tollNumber(0, false, 6)).toBeNull();
+    const early = tollNumber(HIT_AT_MS + 10, false, 6);
+    const mid = tollNumber(HIT_AT_MS + 300, false, 6);
+    const end = tollNumber(TOLL_MS - 5, false, 6);
     expect(early?.alpha).toBe(1);
     expect(mid?.lift ?? 0).toBeGreaterThan(early?.lift ?? 0);
-    expect(mid?.lift ?? 0).toBeLessThanOrEqual(12);
-    expect(end?.alpha ?? 1).toBeLessThan(0.2);
+    expect(mid?.lift ?? 0).toBeLessThanOrEqual(6);
+    expect(end?.alpha ?? 1).toBeLessThan(0.1);
   });
 
   it('with less motion the number stands still from the first frame', () => {

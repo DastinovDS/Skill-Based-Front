@@ -1089,6 +1089,7 @@ export class OrderController implements MapInteraction {
       edges: this.#fortRoads(node),
       hover: this.ui.current.fortHover,
       cost: tf('city.cost', { cost: formatCentis(this.fortCost, getLocale()) }),
+      amount: formatCentis(this.fortCost, getLocale()),
     };
   }
 

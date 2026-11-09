@@ -8,15 +8,23 @@ import type { Point } from './camera.ts';
 import type { SupplyOverlay } from './interaction.ts';
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import { lineChevronSpec, starveMarkSpec } from './bakedShapes.ts';
-import { FACTORY_GLYPH } from './cityLayout.ts';
+import {
+  CANAL,
+  canalHachures,
+  canalHead,
+  canalPhase,
+  canalRails,
+  canalSpan,
+  turnedSquare,
+  type CanalSpan,
+} from './canalLayout.ts';
+import { ringRadius } from './cityLayout.ts';
 import { borderPoint } from './fogLayout.ts';
 import {
-  aheadNodes,
   downhillRoads,
   flowOn,
-  fullNodes,
+  levelNodes,
   packetRoads,
-  pinchRoads,
   pocketNodes,
   roadKey,
   starvingNodes,
@@ -25,6 +33,7 @@ import { starvePoint } from './flowView.ts';
 import { EDGE_PROGRESS, edgeEnds, edgePoint, nodePoint } from './layout.ts';
 import type { MapLayers } from './layers.ts';
 import { reducedMotion } from './motion.ts';
+import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import {
   bulkheadLine,
   circleHatch,
@@ -39,19 +48,18 @@ import {
 } from './pipeLayout.ts';
 import {
   BG,
+  CASING,
+  CUT,
   ENEMY,
   FLOW_LAYER,
+  INK,
   PAPER,
-  SEGMENT_EMPTY,
-  SEGMENT_EMPTY_BAR,
   SELECT_COLOR,
   SELECT_WIDTH,
   SUPPLY_BULKHEAD,
   SUPPLY_CUT,
   SUPPLY_DRAFT,
-  SUPPLY_FACTORY,
   SUPPLY_FLOW_LABEL,
-  SUPPLY_GAUGE,
   SUPPLY_LINE,
   SUPPLY_MARKER,
   SUPPLY_PACKET,
@@ -60,6 +68,15 @@ import {
   WARN,
   YOU,
 } from './style.ts';
+
+/** A plate on the map (a label of the supply view): dark, a thin ivory rule inside. */
+const PLATE = { fill: 0x0e0c09, alpha: 0.94, rule: 0.8, ruleAlpha: 0.55 } as const;
+
+/** A downhill road as a canal: where it lies, and whether an own packet is on it now. */
+interface Canal {
+  readonly span: CanalSpan;
+  readonly busy: boolean;
+}
 import {
   edgeIndex,
   lanePoint,
@@ -88,8 +105,13 @@ interface FlowRun {
 }
 
 /**
- * The «Supply» map layer (DEC-28, item 8; Tab or F2): a flat, minimal picture of the supply on a
- * layer of its own, drawn as pipes (#429, variant B of `docs/design/mockups/supply-terrain.html`).
+ * The «Supply» map layer (DEC-28, item 8; Tab or F2). Under the supply flow (DEC-43, mvp-5) it is the
+ * "Canal" of #858 (#829, ui-style 54f): the map keeps its picture (`MapView` darkens the own land and
+ * crosshatches the nodes ahead of the level, the cities keep their warehouse lozenges), and this view
+ * draws every downhill road as a canal from ring to ring, its hachures running downhill while an own
+ * packet is on it, a ring round each node of the level, the own packets as engraved squares riding the
+ * canals, the starving sign, a pocket and the enemy's presence. The economies before the flow keep the
+ * picture of #429, drawn as pipes (variant B of `docs/design/mockups/supply-terrain.html`).
  * While it is on the scene hides the terrain, the groups, the intents, the fog and the effects;
  * this view draws what the supply is about and nothing else:
  *
@@ -123,6 +145,9 @@ export class SupplyView {
    */
   private readonly pipeRoot = new Container({ label: 'supply-pipes' });
   private readonly pipes = new Graphics();
+  /** The running hachures of the canals with a packet on them: redrawn when their phase moves. */
+  private readonly canalRun = new Graphics({ label: 'canal-run' });
+  private canals: readonly Canal[] = [];
   private readonly flowing = new Graphics();
   private readonly plates = new Graphics();
   private readonly dots = new Graphics();
@@ -137,7 +162,6 @@ export class SupplyView {
   private readonly style: TextStyle;
   private readonly flagStyle: TextStyle;
   private readonly pipeStyle: TextStyle;
-  private readonly gaugeStyle: TextStyle;
   private readonly index: EdgeIndex;
   private base: SnapshotMsg | null = null;
   private overlay: SupplyOverlay | null = null;
@@ -158,11 +182,12 @@ export class SupplyView {
     this.index = edgeIndex(map);
     const font = 'system-ui, sans-serif';
     this.style = new TextStyle({
-      fontFamily: font,
-      fontSize: SUPPLY_FLOW_LABEL.fontSize,
-      fontWeight: '700',
-      fill: PAPER,
+      fontFamily: pieceFamily(),
+      fontSize: 12.5,
+      fontWeight: '600',
+      fill: INK,
     });
+    usePieceFont([this.style]);
     this.flagStyle = new TextStyle({
       fontFamily: font,
       fontSize: SUPPLY_MARKER.font,
@@ -177,14 +202,7 @@ export class SupplyView {
       fill: PAPER,
       stroke: { color: BG, width: 3, join: 'round' },
     });
-    this.gaugeStyle = new TextStyle({
-      fontFamily: font,
-      fontSize: SUPPLY_GAUGE.font,
-      fontWeight: '700',
-      fill: PAPER,
-      stroke: { color: BG, width: 2.5, join: 'round' },
-    });
-    this.pipeRoot.addChild(this.pipes);
+    this.pipeRoot.addChild(this.pipes, this.canalRun);
     this.pipeRoot.visible = false;
     layers.layer.roads.addChild(this.pipeRoot);
     this.root.addChild(this.flowing, this.plates, this.marks, this.dots, this.texts);
@@ -252,11 +270,12 @@ export class SupplyView {
     this.style.destroy();
     this.flagStyle.destroy();
     this.pipeStyle.destroy();
-    this.gaugeStyle.destroy();
   }
 
   private clear(): void {
     this.pipes.clear();
+    this.canalRun.clear();
+    this.canals = [];
     this.flowing.clear();
     this.plates.clear();
     this.dots.clear();
@@ -320,18 +339,20 @@ export class SupplyView {
     this.clear();
     const seen = this.base?.view;
     const view = seen !== undefined && flowOn(seen) ? seen : null;
-    this.drawPipes(scene);
-    this.drawFlows(scene, view !== null);
-    this.drawBulkheads(scene);
-    if (view !== null) this.drawFlowRoads(view);
-    else this.drawGauges(scene);
-    this.drawMarkers(scene);
-    this.drawCut(scene);
+    if (view !== null) {
+      // The flow (DEC-43): the Canal of #858.
+      this.drawCanals(view);
+      this.drawFlowNodes(view);
+    } else {
+      this.drawPipes(scene);
+      this.drawFlows(scene);
+      this.drawBulkheads(scene);
+      this.drawMarkers(scene);
+      this.drawCut(scene);
+    }
     this.drawPresence(scene);
-    this.drawFactories(scene);
     this.drawLit(scene);
     this.drawPick(supply);
-    if (view !== null) this.drawFlowNodes(view);
   }
 
   /** The end of the lit line (#672): a solid ring, so the target the menu names is found at once. */
@@ -342,23 +363,6 @@ export class SupplyView {
     const r = this.radiusOf(scene.litTarget) + SUPPLY_LINE.ring;
     this.plates.circle(at.x, at.y, r + SELECT_WIDTH).stroke({ width: 2, color: BG });
     this.plates.circle(at.x, at.y, r).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR });
-  }
-
-  /**
-   * Economy v2 (DEC-41, item 2): the own factories, where the lines start, as the badge of the city
-   * marks (the marks themselves hide on this layer): a dark disc with the saw-tooth glyph, upper left.
-   */
-  private drawFactories(scene: SupplyScene): void {
-    const g = this.plates;
-    const { radius, lift } = SUPPLY_FACTORY;
-    for (const node of scene.factories) {
-      const city = this.point(node);
-      if (city === undefined) continue;
-      const at = polar(city, this.radiusOf(node) + lift, 225);
-      g.circle(at.x, at.y, radius + 1.5).fill({ color: BG, alpha: 0.9 });
-      g.circle(at.x, at.y, radius).fill(BG).stroke({ width: 2, color: YOU });
-      g.poly(FACTORY_GLYPH.flatMap(([x, y]) => [at.x + x, at.y + y])).fill(PAPER);
-    }
   }
 
   /** Where the pipe of a road lies: from the rim of one city to the rim of the other. */
@@ -406,7 +410,7 @@ export class SupplyView {
   }
 
   /** The flows: the fill of the pipe, the valve cap at the destination and the number along it. */
-  private drawFlows(scene: SupplyScene, auto = false): void {
+  private drawFlows(scene: SupplyScene): void {
     const fill = this.pipes;
     const g = this.plates;
     const runs: FlowRun[] = [];
@@ -438,7 +442,7 @@ export class SupplyView {
           .stroke({ width: band.width, color: YOU, alpha: SUPPLY_PIPE.fillAlpha * k });
         runs.push({ from, to, width: both ? 1.8 : 2.4, alpha: 0.95 * k });
         // The flow: one-charge packets need no valve cap and no number, the chevrons say the way.
-        if (auto || span.length < SUPPLY_PIPE.minFlow) return;
+        if (span.length < SUPPLY_PIPE.minFlow) return;
         const length = Math.hypot(b.x - a.x, b.y - a.y);
         const ux = (b.x - a.x) / length;
         const uy = (b.y - a.y) / length;
@@ -465,7 +469,7 @@ export class SupplyView {
       const pa = road === undefined ? undefined : this.point(road.a);
       const pb = road === undefined ? undefined : this.point(road.b);
       if (road === undefined || ends === null || pa === undefined || pb === undefined) continue;
-      if (auto || ends.length < SUPPLY_PIPE.minFlow) continue;
+      if (ends.length < SUPPLY_PIPE.minFlow) continue;
       const middle = this.radiusOf(road.a) + SUPPLY_PIPE.inset + ends.length / 2;
       // A leg of the drawn lines (economy v2) is told by its direction alone; a number only when
       // several lines share it ("×2").
@@ -518,29 +522,6 @@ export class SupplyView {
       g.moveTo(p.x, p.y)
         .lineTo(q.x, q.y)
         .stroke({ width: SUPPLY_BULKHEAD.width, color: SUPPLY_BULKHEAD.color, alpha: 0.9 });
-    }
-  }
-
-  /** The warehouse of an own city: a gauge (the filled share of the capacity) and «stock/capacity». */
-  private drawGauges(scene: SupplyScene): void {
-    const g = this.plates;
-    const { width, gap, height, bar, radius, restAlpha } = SUPPLY_GAUGE;
-    for (const { node, stock, cap } of scene.stocks) {
-      const at = this.point(node);
-      if (at === undefined || cap <= 0) continue;
-      const x = at.x - width / 2;
-      const y = at.y + this.radiusOf(node) + gap;
-      const inner = width - 2;
-      const filled = (inner * Math.min(cap, Math.max(0, stock))) / cap;
-      g.roundRect(x - 1, y - 1, width + 2, height, radius).fill({ color: BG, alpha: 0.85 });
-      g.rect(x + 1, y + 1, inner, bar).fill({ color: PAPER, alpha: restAlpha });
-      if (filled > 0) g.rect(x + 1, y + 1, filled, bar).fill(YOU);
-      this.text(
-        `${String(stock)}/${String(cap)}`,
-        { x: x + width + 4, y: y + 3.5 },
-        this.gaugeStyle,
-        0,
-      );
     }
   }
 
@@ -626,61 +607,53 @@ export class SupplyView {
     }
   }
 
-  // --- The supply flow (DEC-43, ui-style 42) -----------------------------------------------
+  // --- The supply flow (DEC-43): Canal (#858) -----------------------------------------------
 
   /**
-   * The chevrons along the downhill roads: bright and several where an own packet is on the road,
-   * one dim one in the middle when it is idle; the pinch mark `)(` of a bottleneck. All from the
-   * server's `flow_down` and the own packets.
+   * Every downhill road (`flow_down`) as a canal from ring to ring, under the cities: the casing, the
+   * hachures (faint and still on an idle road; those of a road with an own packet on it run in
+   * `drawFlowing`), the two ink rails and the cut V at the receiving ring.
    */
-  private drawFlowRoads(view: View): void {
-    const g = this.plates;
-    const active = packetRoads(view);
-    const pinch = new Set(pinchRoads(view, this.me, this.map, this.index, this.provinceWarehouse));
+  private drawCanals(view: View): void {
+    const g = this.pipes;
+    const busy = packetRoads(view);
+    const canals: Canal[] = [];
     for (const road of downhillRoads(view, this.me, this.index)) {
       const a = this.point(road.from);
       const b = this.point(road.to);
-      const span = this.span(road.from, road.to);
-      if (a === undefined || b === undefined || span === null) continue;
-      const length = Math.hypot(b.x - a.x, b.y - a.y);
-      const ux = (b.x - a.x) / length;
-      const uy = (b.y - a.y) / length;
-      if (span.length >= SUPPLY_PIPE.minFlow) {
-        if (active.has(roadKey(road.edge, road.from))) {
-          const from = lanePoint(span.start, span.end, 0, 0);
-          this.drawChevrons(from, span.end, span.length, ux, uy);
-        } else {
-          const mid = lanePoint(span.start, span.end, 0.5, 0);
-          this.chevron(mid, ux, uy, FLOW_LAYER.chevronDim);
-        }
-      }
-      if (pinch.has(road.edge)) {
-        const { at, arc, gap, width, casing } = FLOW_LAYER.pinch;
-        const spot = lanePoint(span.start, span.end, at, 0);
-        const angle = Math.atan2(uy, ux);
-        for (const [color, w] of [
-          [BG, casing],
-          [PAPER, width],
-        ] as const) {
-          // Two arcs facing each other across the road: the neck.
-          for (const side of [-1, 1] as const) {
-            const centre = {
-              x: spot.x + ux * side * gap,
-              y: spot.y + uy * side * gap,
-            };
-            const start = side === -1 ? angle - 0.95 : angle + Math.PI - 0.95;
-            g.moveTo(centre.x + Math.cos(start) * arc, centre.y + Math.sin(start) * arc).arc(
-              centre.x,
-              centre.y,
-              arc,
-              start,
-              start + 1.9,
-            );
-          }
-          g.stroke({ width: w, color, cap: 'round' });
-        }
-      }
+      if (a === undefined || b === undefined) continue;
+      const span = canalSpan(a, b, this.radiusOf(road.from), this.radiusOf(road.to));
+      if (span === null) continue;
+      canals.push({ span, busy: busy.has(roadKey(road.edge, road.from)) });
     }
+    const line = (pair: readonly Point[]): void => {
+      const [p, q] = pair as [Point, Point];
+      g.moveTo(p.x, p.y).lineTo(q.x, q.y);
+    };
+    for (const { span } of canals) line([span.a, span.b]);
+    g.stroke({ width: 2 * (CANAL.half + CANAL.casing), color: CASING, cap: 'butt' });
+    for (const canal of canals) {
+      if (!canal.busy) for (const pair of canalHachures(canal.span, 0)) line(pair);
+    }
+    g.stroke({ width: CANAL.hachure, color: YOU, alpha: CANAL.idleAlpha });
+    for (const { span } of canals) for (const rail of canalRails(span)) line(rail);
+    g.stroke({ width: CANAL.rail, color: INK });
+    for (const { span } of canals) {
+      const head = canalHead(span);
+      const [first, ...rest] = head;
+      if (first === undefined) continue;
+      g.moveTo(first.x, first.y);
+      for (const p of rest) g.lineTo(p.x, p.y);
+    }
+    g.stroke({ width: CANAL.head.casing, color: CASING, join: 'miter' });
+    for (const { span } of canals) {
+      const [first, ...rest] = canalHead(span);
+      if (first === undefined) continue;
+      g.moveTo(first.x, first.y);
+      for (const p of rest) g.lineTo(p.x, p.y);
+    }
+    g.stroke({ width: CANAL.head.ink, color: INK, join: 'miter' });
+    this.canals = canals;
   }
 
   /** The next sprite of the pool of starving marks. */
@@ -697,55 +670,27 @@ export class SupplyView {
   }
 
   /**
-   * The nodes under the flow: the warehouse squares (a lid when full, an amber frame and the `!`
-   * triangle when starving), the hatched disc of a node ahead of the level, the pocket hatch with
-   * "no source".
+   * The nodes under the flow: a ring round each node of the level (the own colour on a casing and an
+   * ink ring outside it), the starving sign, the pocket hatch with "no source". The warehouses are the
+   * cities' own lozenges; the nodes ahead of the level are crosshatched by `MapView`.
    */
   private drawFlowNodes(view: View): void {
     const g = this.plates;
-    const starving = new Set(starvingNodes(view, this.me));
-    const full = new Set(fullNodes(view, this.me));
-    const { w, h, gap, drop } = FLOW_LAYER.slot;
-    for (const node of view.nodes) {
-      if (node.owner !== this.me || node.warehouse === null) continue;
-      const cap = node.warehouse_cap ?? (this.provinceWarehouse > 0 ? this.provinceWarehouse : 0);
-      const at = this.point(node.id);
-      if (at === undefined || cap <= 0) continue;
-      const total = cap * w + (cap - 1) * gap;
-      const x0 = at.x - total / 2;
-      const y0 = at.y + this.radiusOf(node.id) + drop;
-      const hungry = starving.has(node.id);
-      g.roundRect(x0 - 2.5, y0 - 2.5, total + 5, h + 5, 2)
-        .fill({ color: BG, alpha: 0.92 })
-        .stroke(hungry ? { width: 1.6, color: WARN } : { width: 0 });
-      for (let i = 0; i < cap; i++) {
-        const x = x0 + i * (w + gap);
-        if (i < node.warehouse) g.rect(x, y0, w, h).fill(YOU);
-        else g.rect(x, y0, w, h).fill(SEGMENT_EMPTY_BAR).stroke({ width: 1, color: SEGMENT_EMPTY });
-      }
-      if (full.has(node.id)) {
-        // A lid over the squares: full is a shape, not a colour.
-        const top = y0 - FLOW_LAYER.lid.lift;
-        g.moveTo(x0 - 2.5, y0 - 0.5)
-          .lineTo(x0 - 2.5, top)
-          .lineTo(x0 + total + 2.5, top)
-          .lineTo(x0 + total + 2.5, y0 - 0.5)
-          .stroke({ width: FLOW_LAYER.lid.width, color: PAPER });
-      }
-    }
-    for (const node of starving) {
-      const city = this.point(node);
-      if (city !== undefined) this.bang(starvePoint(city, this.radiusOf(node)));
-    }
-    for (const node of aheadNodes(view, this.me)) {
-      // Ahead of the level: no supply goes there and none leaves (a hatched dark disc).
+    const look = CANAL.level;
+    for (const node of levelNodes(view, this.me)) {
       const city = this.point(node);
       if (city === undefined) continue;
-      const { period, width, alpha, grow } = FLOW_LAYER.aheadHatch;
-      for (const [p, q] of circleHatch(city, this.radiusOf(node) + grow, period)) {
-        g.moveTo(p.x, p.y).lineTo(q.x, q.y);
-      }
-      g.stroke({ width, color: BG, alpha });
+      const r = ringRadius(this.radiusOf(node)) + look.gap;
+      g.circle(city.x, city.y, r).stroke({ width: look.casing, color: CASING });
+      g.circle(city.x, city.y, r).stroke({ width: look.width, color: YOU });
+      g.circle(city.x, city.y, ringRadius(this.radiusOf(node)) + look.inkGap).stroke({
+        width: look.ink,
+        color: INK,
+      });
+    }
+    for (const node of starvingNodes(view, this.me)) {
+      const city = this.point(node);
+      if (city !== undefined) this.bang(starvePoint(city, this.radiusOf(node)));
     }
     for (const node of pocketNodes(view, this.me)) {
       // A pocket: its own component has no factory, so nothing is made for it.
@@ -754,20 +699,24 @@ export class SupplyView {
       const { period, width, alpha, grow } = FLOW_LAYER.pocketHatch;
       const r = this.radiusOf(node) + grow;
       for (const [p, q] of circleHatch(city, r, period)) g.moveTo(p.x, p.y).lineTo(q.x, q.y);
-      g.stroke({ width, color: PAPER, alpha });
+      g.stroke({ width, color: INK, alpha });
       this.plate(t('flow.noSource'), { x: city.x, y: city.y - r - FLOW_LAYER.plate.lift - 6 });
     }
   }
 
   /** A label on a dark plate, over the other marks (the text pool lies on top of the layer). */
-  private plate(content: string, spot: Point, border: number = SEGMENT_EMPTY): number {
+  private plate(content: string, spot: Point): number {
     const label = this.text(content, spot);
     const { height, padX, radius } = FLOW_LAYER.plate;
     const width = label.width + 2 * padX;
+    const x = spot.x - width / 2;
+    const y = spot.y - height / 2;
     this.plates
-      .roundRect(spot.x - width / 2, spot.y - height / 2, width, height, radius)
-      .fill({ color: BG, alpha: 0.94 })
-      .stroke({ width: 1.5, color: border });
+      .roundRect(x, y, width, height, radius)
+      .fill({ color: PLATE.fill, alpha: PLATE.alpha })
+      .stroke({ width: 1.6, color: CUT })
+      .roundRect(x + 1.5, y + 1.5, width - 3, height - 3, radius - 1)
+      .stroke({ width: PLATE.rule, color: INK, alpha: PLATE.ruleAlpha });
     return width;
   }
 
@@ -829,6 +778,10 @@ export class SupplyView {
    * scene, a paused match and "less motion" (a constant phase) cost nothing.
    */
   private drawFlowing(frame: RenderFrame): void {
+    if (this.canals.length > 0) {
+      this.drawCanalRun(frame);
+      return;
+    }
     const phase = flowPhase(frame.tick, this.tickHz, reducedMotion());
     if (phase === this.phase) return;
     this.phase = phase;
@@ -839,6 +792,24 @@ export class SupplyView {
       }
       g.stroke({ width: run.width, color: PAPER, alpha: run.alpha });
     }
+  }
+
+  /**
+   * The hachures of the canals with an own packet on them run downhill: redrawn when their phase
+   * moves (a few times a second, never with "less motion" or in a paused scene).
+   */
+  private drawCanalRun(frame: RenderFrame): void {
+    const busy = this.canals.filter((c) => c.busy);
+    const phase =
+      busy.length === 0 ? 0 : canalPhase(frame.tick / Math.max(1, this.tickHz), reducedMotion());
+    if (phase === this.phase) return;
+    this.phase = phase;
+    const g = this.canalRun.clear();
+    if (busy.length === 0) return;
+    for (const { span } of busy) {
+      for (const [p, q] of canalHachures(span, phase)) g.moveTo(p.x, p.y).lineTo(q.x, q.y);
+    }
+    g.stroke({ width: CANAL.hachure, color: YOU });
   }
 
   /** Every frame: the own packets on their pipes: a circle growing with its charges, a transfer a square. */
@@ -854,6 +825,16 @@ export class SupplyView {
       const from = fromIsA ? ends.a : ends.b;
       const to = fromIsA ? ends.b : ends.a;
       const at = lanePoint(from, to, Math.min(1, Math.max(0, progress / EDGE_PROGRESS)), 0);
+      if (this.canals.length > 0 && !packet.transfer) {
+        // The Canal (#858): a square of the own colour on a dark casing, an ink outline, turned along the road.
+        const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+        const dir = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
+        const { casing, fill, outline, ink } = CANAL.packet;
+        g.poly(turnedSquare(at, dir, casing)).fill(CASING);
+        g.poly(turnedSquare(at, dir, fill)).fill(YOU);
+        g.poly(turnedSquare(at, dir, outline)).stroke({ width: ink, color: INK, join: 'miter' });
+        continue;
+      }
       if (packet.transfer) {
         const side = SUPPLY_PACKET.transferSide;
         g.roundRect(at.x - side / 2, at.y - side / 2, side, side, 2)
