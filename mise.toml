@@ -219,7 +219,7 @@ run = [
 ]
 
 [tasks."regen:howto"]
-description = "Regenerate the combat examples of the How to play screen (played through gow_sim under rulesets/mvp-2.toml: the page still describes economy v1, #741)"
+description = "Regenerate the combat examples of the How to play screen (played through gow_sim under rulesets/mvp-5.toml, the kept ruleset with free captures like the DEC-24 table: the page still describes economy v1, #741, #806)"
 run = [
   "uv run python scripts/export_howto.py",
   "pnpm --silent -C apps/client exec prettier --write src/howto/combatExamples.gen.json",

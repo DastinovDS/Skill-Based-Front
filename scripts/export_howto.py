@@ -2,11 +2,15 @@
 
 The examples are rows of ``packages/protocol/vectors/combat.json`` (the inputs: who stands
 where, with which bonus). Each one is played here through the real systems of ``gow_sim`` under
-the ruleset the page describes (``rulesets/mvp-2.toml``, economy v1: no longer the played one,
-#741), and the state after every round is recorded. The client only draws the file
-(``apps/client/src/howto/combatExamples.gen.json``); it never works out a fight (AGENTS.md, 7.1).
-The rule numbers the page quotes (a round in seconds, the bonus per road, the price of a planned
-order, the VP period, ...) come from the same ruleset and go into the same file.
+``rulesets/mvp-5.toml``: the oldest kept ruleset, whose captures are free like the rows of the
+DEC-24 table (``mvp-7`` charges a capture one charge, DEC-38, so an attacker that won with its
+last charge would bounce there), and the state after every round is recorded. The
+client only draws the file (``apps/client/src/howto/combatExamples.gen.json``); it never works out
+a fight (AGENTS.md, 7.1). The rule numbers the page quotes (a round in seconds, the price of an
+order, the VP period, ...) come from the same ruleset and go into the same file; the page text
+still describes economy v1 (its stance shares, "Defense", the planned delay and the bonus per
+road), whose numbers are no longer in any ruleset (#894): they are kept frozen in ``PAGE_V1`` until
+a tutorial round replaces the page (#806).
 
     mise run regen:howto
 
@@ -24,22 +28,13 @@ from gow_sim.commands import apply_commands
 from gow_sim.maps import MapDef, parse_map
 from gow_sim.match import SIM_VERSION
 from gow_sim.ruleset import Ruleset, load_ruleset, ruleset_hash
-from gow_sim.state import (
-    AtNode,
-    Event,
-    GameState,
-    Group,
-    Mode,
-    OnEdge,
-    Order,
-    initial_state,
-)
+from gow_sim.state import AtNode, Event, GameState, Group, Mode, OnEdge, Order, initial_state
 from gow_sim.systems.combat import combat
 from gow_sim.systems.movement import leg, movement
 from gow_sim.systems.orders import active_bonuses, orders
 
 ROOT: Final = Path(__file__).resolve().parents[1]
-RULESET_PATH: Final = ROOT / "rulesets" / "mvp-2.toml"
+RULESET_PATH: Final = ROOT / "rulesets" / "mvp-5.toml"
 VECTORS_PATH: Final = ROOT / "packages" / "protocol" / "vectors" / "combat.json"
 OUT_PATH: Final = ROOT / "apps" / "client" / "src" / "howto" / "combatExamples.gen.json"
 
@@ -52,6 +47,16 @@ EXAMPLES: Final = (
 )
 
 TRAVEL: Final = 30  # ticks per edge of the little line the examples are played on
+
+PAGE_V1: Final = {
+    "planned_delay_seconds": 3,
+    "planned_bonus_per_road": 1,
+    "defense_seconds_per_bonus": 6,
+    "cost_defense_cp": 2,
+    "stance_charges_pct": {"economy": 60, "balance": 50, "war": 40},
+}
+"""The economy v1 numbers the page text still quotes (``rulesets/mvp-2.toml``, removed with the
+v1 code in #894, archived in ``rulesets/archive/``); frozen here until #806 replaces the page."""
 
 
 def _node(i: int, terrain: str, owner: int | None) -> dict[str, Any]:
@@ -107,7 +112,7 @@ def _step(state: GameState, rules: Ruleset) -> list[Event]:
     _, applied = apply_commands(state, rules, [])
     state.events += applied
     state.events += movement(state, rules)
-    state.events += combat(state, rules, active_bonuses(state, rules))
+    state.events += combat(state, rules, active_bonuses(state))
     state.events += orders(state, rules)
     return list(state.events)
 
@@ -149,11 +154,7 @@ def _play(vec: dict[str, Any], rules: Ruleset) -> dict[str, Any]:
             state.groups[gid] = Group(
                 gid, player, g["units"], g["charged"], Mode(g["mode"]), where, order=order
             )
-            if bonus is not None and bonus["source"] == "defense_mode":
-                state.groups[gid].ticks_in_defense = (
-                    bonus["amount"] * rules.orders.defense_ticks_per_bonus
-                )
-            elif bonus is not None:
+            if bonus is not None:
                 state.groups[gid].bonus = bonus["amount"]
     start = {"a": _side(state, 0), "b": _side(state, 1)}
     events = _step(state, rules)  # the contact, tick 1
@@ -218,7 +219,6 @@ def build() -> dict[str, Any]:
     rules = load_ruleset(RULESET_PATH)
     vectors = {v["id"]: v for v in json.loads(VECTORS_PATH.read_text(encoding="utf-8"))["vectors"]}
     hz = rules.tick_hz
-    stance = rules.economy.stance_to_charges_pct
     return {
         "generated_by": "scripts/export_howto.py (mise run regen:howto), do not edit",
         "ruleset": RULESET_PATH.stem,
@@ -226,17 +226,9 @@ def build() -> dict[str, Any]:
         "sim_version": SIM_VERSION,
         "rules": {
             "round_seconds": _seconds(rules.combat.round_ticks, hz),
-            "planned_delay_seconds": _seconds(rules.orders.planned_delay_ticks, hz),
-            "planned_bonus_per_road": rules.orders.planned_bonus_per_edge,
-            "defense_seconds_per_bonus": _seconds(rules.orders.defense_ticks_per_bonus, hz),
             "cost_move_cp": _cp(rules.orders.cost.move),
             "cost_planned_cp": _cp(rules.orders.cost.planned_move),
-            "cost_defense_cp": _cp(rules.orders.cost.defense),
-            "stance_charges_pct": {
-                "economy": stance.economy,
-                "balance": stance.balance,
-                "war": stance.war,
-            },
+            **PAGE_V1,
             "vp_period_seconds": _seconds(rules.victory.vp_period_ticks, hz),
             "capital_multiplier": rules.victory.capital_multiplier,
             "match_minutes": _seconds(rules.match_ticks, hz) // 60,
