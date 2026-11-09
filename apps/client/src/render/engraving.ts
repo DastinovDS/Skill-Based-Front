@@ -32,7 +32,7 @@ import { SOFT } from './softness.ts';
 export const ENGRAVE = {
   own: ENGRAVED.own,
   enemy: ENGRAVED.enemy,
-  /** The ink of the lines: the token's ivory, darker and warmer at a softer level (#865). */
+  /** The ink of the lines: darker and warmer than the token's ivory (`SOFT.ink`, #865). */
   ink: SOFT.ink,
   /** The dark casing under a coloured mark. */
   casing: ENGRAVED.casing,
@@ -100,8 +100,8 @@ export const RULED_VEIL = {
 // --- Line weights under zoom ------------------------------------------------------------------------
 
 /**
- * A stroke of `width` world units at least one device pixel wide at `zoom` css px per unit (`weight`
- * device pixels at a softer level, `SOFT.weight`, #865).
+ * A stroke of `width` world units at least `weight` device pixels wide at `zoom` css px per unit
+ * (`SOFT.weight`, #865; one device pixel before).
  */
 export function hairWidth(
   width: number,
@@ -114,7 +114,7 @@ export function hairWidth(
 }
 
 /**
- * The thinnest stroke in world units (one device pixel, `weight` at a softer level), rounded UP to
+ * The thinnest stroke in world units (`weight` device pixels, `SOFT.weight`), rounded UP to
  * a step of a quarter octave, so that a zoom gesture redraws the lines only when the floor moves
  * by about a fifth.
  */

@@ -35,8 +35,6 @@ export default defineConfig({
       allow: [
         '.',
         '../../maps',
-        // The softness comparison of the map texture (#865, dev only): `src/map/bundledMaps.ts`.
-        '../../.shots/softness/bg',
         '../../packages/sim/tests/maps',
         '../../packages/protocol/fixtures',
         '../../packages/protocol/vectors',

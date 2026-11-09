@@ -30,8 +30,6 @@
   // `?menus` lets a fixture scene open the menus of the map (orders go nowhere): the screenshots
   // of the radial menus (`mise run shots`) use it. Without it a fixture only selects.
   const menusOn = params.has('menus');
-  // `?whole` shows a fixture scene on its whole map, not on the part its `view` looks at (#865).
-  const wholeMap = params.has('whole');
   // `?motion` makes the live demo move: a group marches along a road, the charges cycle (#508, `devMotion.ts`).
   const motionOn = params.has('motion');
   // `?map=<name>` opens the demo on a bundled map (the FPS check wants a 45-55 node one).
@@ -317,7 +315,7 @@
     {interaction}
     backgroundUrl={backgroundUrl(map.meta.name)}
     geo={bundledGeo(map)}
-    viewRect={wholeMap ? null : (fixture?.view ?? null)}
+    viewRect={fixture?.view ?? null}
     onerror={handleRendererError}
     onfps={(value: number) => {
       fps = value;

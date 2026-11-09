@@ -74,7 +74,7 @@ class Softness:
     ``relief``: the share of the contrast of the carved signs (the dark cut and its lit lip) kept
     over the toned stone; ``grain``: a factor of the film grain; ``mottle``: a factor of the fine
     variation of the stone; ``water``: the share of the strength of the engraved water lines and of
-    the cut of the coast (``gow_maps.geo``).
+    the cut of the coast (``gow_maps.geo``). ``Softness()`` is the Intaglio of #842 as first merged.
     """
 
     relief: float = 1.0
@@ -83,14 +83,9 @@ class Softness:
     water: float = 1.0
 
 
-# 0 = the Intaglio as merged (#842), 1 = slight, 2 = medium, 3 = strong.
-SOFT_LEVELS: tuple[Softness, ...] = (
-    Softness(),
-    Softness(relief=0.8, grain=0.7, mottle=0.75, water=0.82),
-    Softness(relief=0.62, grain=0.45, mottle=0.5, water=0.66),
-    Softness(relief=0.45, grain=0.25, mottle=0.3, water=0.5),
-)
-DEFAULT_SOFT = 0  # the level every committed background is baked at
+# The softness every background is baked with: "medium" of the four levels compared in #865 (the
+# owner's pick, 2026-11-09; slight was 0.8 / 0.7 / 0.75 / 0.82, strong 0.45 / 0.25 / 0.3 / 0.5).
+SOFT = Softness(relief=0.62, grain=0.45, mottle=0.5, water=0.66)
 
 
 class Biome(StrEnum):
@@ -470,9 +465,9 @@ def render_cells(
     ``thin`` (``height x width``, 0..1) scales the density of the details (DEC-36: they thin out
     toward a shore); ``paint`` draws over the finished ground and details, before the grain;
     ``finish`` draws over the grain (fine engraved lines that must stay crisp); ``soft``: the
-    softness of the texture, ``SOFT_LEVELS[DEFAULT_SOFT]`` when absent.
+    softness of the texture, ``SOFT`` when absent.
     """
-    soft = SOFT_LEVELS[DEFAULT_SOFT] if soft is None else soft
+    soft = SOFT if soft is None else soft
     seq = np.random.SeedSequence(map_seed(mapdef) if seed is None else seed)
     rngs = [np.random.default_rng(child) for child in seq.spawn(3 + len(BIOMES))]
     rng_band, rng_sprites, rng_grain, *rng_ground = rngs

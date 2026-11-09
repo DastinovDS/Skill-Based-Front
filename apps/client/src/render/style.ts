@@ -33,8 +33,8 @@ export const SEGMENT_EMPTY_BAR = 0x3b4450;
 /**
  * The Engraved material of the pieces (ui-style 52 III to 57): ivory `INK` lines on a dark `CASING`
  * round every coloured mark, the `DARK_PLATE` of a dome or a city with units in it, and the `CUT`
- * into the stone under a ring. The ink is the token's ivory, darker and warmer at a softer level
- * (`SOFT.ink`, #865).
+ * into the stone under a ring. The ink is darker and warmer than the token's ivory (`SOFT.ink`,
+ * #865).
  */
 export const INK = SOFT.ink;
 export const CASING = ENGRAVED.casing;

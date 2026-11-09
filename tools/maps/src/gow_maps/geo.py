@@ -918,7 +918,7 @@ def render(
         out = np.asarray(img * (1.0 - water[..., None]) + tone * water[..., None], np.float32)
         return _draw_bridges(out, mapdef, geo.bridges)
 
-    soft = bake.SOFT_LEVELS[bake.DEFAULT_SOFT] if soft is None else soft
+    soft = bake.SOFT if soft is None else soft
 
     def finish(img: Field) -> Field:
         return _water_lines(img, lake_cells, from_land, soft.water)
