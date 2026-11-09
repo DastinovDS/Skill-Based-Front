@@ -248,10 +248,13 @@ class MapMaker:
     def _get_pool(self) -> Executor:
         if self._pool is None:
             # spawn: a forked child of a threaded process (uvicorn, SQLAlchemy) can deadlock.
+            # One map per process: the bake leaves about 0.2 GB behind in a process that made a
+            # map; a fresh one waits with a few MB and imports the map tools for its job only.
             self._pool = ProcessPoolExecutor(
                 self._workers,
                 mp_context=multiprocessing.get_context("spawn"),
                 initializer=lower_priority,
+                max_tasks_per_child=1,
             )
         return self._pool
 

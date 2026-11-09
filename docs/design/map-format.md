@@ -1,6 +1,6 @@
 # Map format
 
-A map is a JSON file in `maps/` (the server pool), in `maps/fixtures/` (the three MVP maps `artery`, `web`, `pass`, kept as test fixtures since #372), in `maps/menu/` (the maps `marches` and `valley` drawn behind the screens before a match, #474, #866, outside the pool) or in `maps/gen/` (generated maps, #771, outside the pool). The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
+A map is a JSON file in `maps/` (the server pool), in `maps/fixtures/` (the three MVP maps `artery`, `web`, `pass`, kept as test fixtures since #372), in `maps/menu/` (the maps `marches` and `valley` drawn behind the screens before a match, #474, #866, outside the pool) or in `maps/gen/` (generated maps, #771, outside the pool); a map made by the server for one match lives on its data volume (#884, "A new map for every match" below). The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
 The map design checks (connectivity, planarity, rule symmetry, names, border points,
 neutral space) are run by the offline validator `uv run gow-maps validate maps/*.json maps/fixtures/*.json maps/menu/*.json` (MAP-02, #14).
 
@@ -173,7 +173,7 @@ terrain mode draw the water flat (the part of the map no area covers). A map wit
 > geography, not a reflection of one half; fairness comes from a filter of equal access, not from a mirror, and approximate
 > equality is accepted, so such a map belongs to a separate unrated mode. Ranked, the queue and tournaments stay on the
 > hand-made maps. Stage 1 is the offline generator and the batch `maps/gen/`; stage 2, a new map for every match on the
-> server, is a separate issue.
+> server, is #884 (below, "A new map for every match").
 
 | Where | Now | Becomes |
 |---|---|---|
@@ -188,7 +188,8 @@ client type `MapFile` takes it too (`Literal["rot180", "none"]`, `PROTOCOL_VERSI
 
 ### Playing a generated map
 
-The owner's decision of 2026-11-06: the batch is playable, so that he can judge it by hand. Still no generation per match.
+The owner's decision of 2026-11-06: the batch is playable, so that he can judge it by hand. Generation per match came with
+stage 2 (#884, below).
 
 | Where | What |
 |---|---|
@@ -198,6 +199,34 @@ The owner's decision of 2026-11-06: the batch is playable, so that he can judge 
 | rating | none: only the queue passes `rated`, and `MatchLifecycle.start` ignores it for `meta.symmetry = "none"` as well |
 | replays | `gow_sim.replay` looks for the map of a log in the map folder and in its `gen/` |
 | client | the group "Generated, unrated" in the map tiles of the invite and bot screens, not of the public lobby; the vector files `maps/gen/geo/<id>.json` are bundled like `maps/geo/` (`geography.ts`, `deploy/caddy.Dockerfile`); the result screen names the map |
+
+### A new map for every match (stage 2, #884)
+
+The owner's decision of 2026-11-09 (#768): every ordinary, unrated match gets a freshly generated map at its start: a
+private invite and a bot match. Rated play, the matchmaking queue and the public lobby stay on the pool. The quality of
+the background is that of the offline bake. The map still enters the match as data: no rule, no `SIM_VERSION`.
+
+| Where | What |
+|---|---|
+| who gets one | `POST /api/matches` (private) and `POST /api/bot-matches` without `map_id`: the default `map_source` is `new`. `map_source: "pool"` draws from the pool, `"generated"` (or the older `random_generated: true`) from `maps/gen/`, `map_id` names a map; `map_id` with `map_source` is `422`. A public invite defaults to `pool`, and `new` there is `422`. With `GOW_MAPGEN_ENABLED=false` the default is the pool again |
+| how | `gow_server.mapgen.MapMaker` draws 4 seeds with `secrets` (32 bits) and reserves the id; `gow_server.mapworker.build` runs `gow_maps.matchmap.make_map` in a spawn `ProcessPoolExecutor` (one map per worker process, `GOW_MAPGEN_WORKERS`, `nice` 10, the out-of-memory killer's first choice): `generate(seed)` with the equal-access filter, renamed to the id; the bake of `gow-maps bake` (background with water, thumbnail, vector file); `validate_file` with the server's ruleset (every check of `gow-maps validate`, `geography`, `fairness`, `warehouse`); the preview. A seed that fails gives way to the next |
+| the id | `live-` and 12 hex digits (`gow_server.maps.MATCH_MAP_PREFIX`; a file of the pool or of `maps/gen/` with this prefix stops the server), so it never collides with a stored map. The generator's `gen<version>-<seed>` is not used: renaming changes only the noise of the bake; the server logs the seed (`map made`) |
+| storage | `<GOW_REPLAYS_DIR>/maps/` on the data volume (not `maps/` of the image), in the layout of `maps/gen/`: `<id>.json`, `src/<id>.geo.json`, `<id>.bg.webp`, `<id>.thumb.webp`, `geo/<id>.json`, `<id>.preview.png`. The worker writes into `.tmp-<id>/` and moves the map file in last |
+| serving | `GET /api/maps/{id}`, `/background.webp`, `/thumb.webp`, `/geo.json` and `/summary` (a `MapSummary` with `per_match: true`) serve it once it is made (404 before); `GET /api/maps` never lists it, and it cannot be chosen by `map_id` |
+| replays | the replay log names it by `map_id` and `map_hash` as any map; `gow_sim.replay` looks for the map of a log first in `maps/` next to the log, which is the store, so the re-simulation and the frames file need no change (the frames file embeds the map anyway) |
+| cleanup | the replay retention (#515, #525): a map goes with the last replay file of its match (when the match is over and no frames are being built), a map no match row names after a day (an invite that never started), a dropped invite or a failed start drops its map at once |
+| fallback | at most `GOW_MAPGEN_MAX_PENDING` maps are made or wait at once; past it, when no seed passes, when the worker dies or after `GOW_MAPGEN_WAIT_S`, the match plays a random pool map (`gow_maps_fallback_total`) |
+| rating | none: such a map has `meta.symmetry = "none"`, and `MatchLifecycle.start` never rates one |
+
+**Readiness.** A bot match answers `POST /api/bot-matches` when its map is made (the player is claimed meanwhile, a
+second match is `409`). An invite has its map id at once and `InviteOut.map_ready: false` until the map is made; the
+ready timer of a joined guest starts only then, and the second `ready` waits for the map before the match starts. No
+tick runs before the map is there, since the match is created only with it.
+
+**Cost** (this machine, Apple M-series, in the Linux container of `deploy/app.Dockerfile`; a map of 30 to 55 nodes):
+generate 0.1 to 6 s (the filter: 1 to 150 attempts of about 40 ms), bake 1.7 to 3.5 s, validate 0.3 to 0.7 s, preview
+0.4 to 0.6 s; in all 2.5 to 11 s, typically 5 s. The worker's memory peaks at 0.4 to 0.65 GB while it bakes (it was
+0.9 GB before #884 freed the large arrays early, with the same pixels), and the process exits after its map.
 
 ### Fairness
 

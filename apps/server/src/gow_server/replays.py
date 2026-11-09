@@ -374,7 +374,9 @@ class ReplayService:
                         )
                         if log_file is not None:
                             try:
-                                archive_log(log_file, self.stats_archive_dir, row)
+                                archive_log(
+                                    log_file, self.stats_archive_dir, row, self._map_file(row)
+                                )
                             except OSError:
                                 log.exception(
                                     "replay log not archived", extra={"match_id": match_id}
@@ -406,6 +408,13 @@ class ReplayService:
             archived,
             maps_removed,
         )
+
+    def _map_file(self, match: Match) -> Path | None:
+        """The file of the per-match map (#884) of ``match``, if it has one and it is stored."""
+        if not is_match_map(match.map_id):
+            return None
+        path = store_dir(self.replays_dir) / f"{match.map_id}.json"
+        return path if path.is_file() else None
 
     def _purge_maps(self, now: datetime) -> int:
         """Remove the per-match maps (#884) whose match is over and has no replay file left, and

@@ -70,25 +70,35 @@ def recent_match_ids(session: Session, per_player: int) -> set[int]:
     return set(session.execute(recent).scalars())
 
 
-def archive_log(log: Path, archive_dir: Path, match: Match) -> Path:
+def archive_log(log: Path, archive_dir: Path, match: Match, map_file: Path | None = None) -> Path:
     """Copy the command log of ``match`` into ``archive_dir/<date>/<id>-<created>.jsonl.gz``.
 
     The date is that of the creation of the match, so ``archive_dir/*/*.jsonl.gz`` lists the lot.
     The file appears whole (written to a ``.tmp`` and renamed) and an existing one is left alone:
     a log never changes once the match is over, so a second pass is a no-op. Raises ``OSError``.
+
+    ``map_file``: the map of a per-match map (#884), which leaves with the replay; it is copied to
+    ``archive_dir/<date>/maps/``, where ``gow_sim.replay`` looks for the map of a log next to it.
     """
     created = match.created_at
     target = archive_dir / f"{created:%Y-%m-%d}" / f"{match.id}-{created:%Y%m%dT%H%M%S}.jsonl.gz"
+    if map_file is not None:
+        _copy_whole(map_file, target.parent / "maps" / map_file.name)
+    _copy_whole(log, target)
+    return target
+
+
+def _copy_whole(source: Path, target: Path) -> None:
+    """Copy ``source`` to ``target`` through a ``.tmp`` unless ``target`` exists."""
     if target.exists():
-        return target
+        return
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(target.name + ".tmp")
     try:
-        shutil.copyfile(log, tmp)
+        shutil.copyfile(source, tmp)
         os.replace(tmp, target)
     finally:
         tmp.unlink(missing_ok=True)
-    return target
 
 
 @dataclass(frozen=True, slots=True)

@@ -38,6 +38,7 @@ from gow_server.maps import MapCatalog
 from gow_server.mapworker import STAGING_PREFIX, MapBuilt, MapJob, build, map_files
 from gow_server.matches import MatchManager
 from gow_server.models import Match
+from gow_server.replay_retention import archive_log
 from gow_server.replays import FRAMES_SUFFIX, LOG_SUFFIX, ReplayService
 from gow_server.settings import Settings
 from gow_sim.maps import PLAYERS, load_map
@@ -123,6 +124,13 @@ def test_a_match_on_a_per_match_map_replays_and_has_frames(
     assert result.state_hash == played.state_hash
     doc = json.loads(gzip.decompress(result.path.read_bytes()))
     assert doc["map"]["meta"]["name"] == MAP_ID
+
+    # The statistics archive (#525) takes the map along: the archived log replays on its own.
+    match = Match(id=9, map_id=MAP_ID, ruleset_hash="h", created_at=datetime(2026, 11, 9, 12))
+    archived = archive_log(log, tmp_path / "stats", match, store_dir(replays) / f"{MAP_ID}.json")
+    shutil.rmtree(store_dir(replays))
+    assert (archived.parent / "maps" / f"{MAP_ID}.json").is_file()
+    assert replay_run(archived, RULESETS, pool).ok
 
 
 def test_a_match_ticks_on_while_a_map_is_made(
