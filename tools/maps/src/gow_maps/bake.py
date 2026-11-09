@@ -42,6 +42,7 @@ import hashlib
 import io
 import random
 from collections.abc import Callable
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,27 @@ SUPERSAMPLE = 3  # the detail layer is drawn 3x larger and reduced, for smooth e
 BLEND_RADIUS = 7  # box-blur radius of the biome weights: the band between biomes is about 14 px
 BAND_WOBBLE = 0.10  # amplitude of the noise that makes the band wander
 GRAIN = 2.4  # standard deviation of the film grain, in 0..255 units
+
+
+@dataclass(frozen=True, slots=True)
+class Softness:
+    """How soft the texture of the picture is (#865: the owner found the Intaglio too sharp).
+
+    ``relief``: the share of the contrast of the carved signs (the dark cut and its lit lip) kept
+    over the toned stone; ``grain``: a factor of the film grain; ``mottle``: a factor of the fine
+    variation of the stone; ``water``: the share of the strength of the engraved water lines and of
+    the cut of the coast (``gow_maps.geo``). ``Softness()`` is the Intaglio of #842 as first merged.
+    """
+
+    relief: float = 1.0
+    grain: float = 1.0
+    mottle: float = 1.0
+    water: float = 1.0
+
+
+# The softness every background is baked with: "medium" of the four levels compared in #865 (the
+# owner's pick, 2026-11-09; slight was 0.8 / 0.7 / 0.75 / 0.82, strong 0.45 / 0.25 / 0.3 / 0.5).
+SOFT = Softness(relief=0.62, grain=0.45, mottle=0.5, water=0.66)
 
 
 class Biome(StrEnum):
@@ -376,11 +398,11 @@ SPRITES: dict[Biome, tuple[int, Sign]] = {
 
 
 # ---- the picture ---------------------------------------------------------------------------------
-def _ground(biome: Biome, h: int, w: int, rng: np.random.Generator) -> Field:
+def _ground(biome: Biome, h: int, w: int, rng: np.random.Generator, mottle: float = 1.0) -> Field:
     """Flat ground of a biome: two tones in soft blotches and a quiet mid-frequency variation."""
     blotch = _smoothstep(-0.18, 0.18, fbm(h, w, 90, 3, rng) * 1.6)
     out = lerp(*GROUND[biome], blotch)
-    out += fbm(h, w, 7, 2, rng)[..., None] * 3.0
+    out += fbm(h, w, 7, 2, rng)[..., None] * (3.0 * mottle)
     return out
 
 
@@ -419,9 +441,11 @@ def _details(
     return list(zip(x[order].tolist(), y[order].tolist(), q[order].tolist(), strict=True))
 
 
-def render_background(mapdef: MapDef, seed: int | None = None) -> Image8:
+def render_background(
+    mapdef: MapDef, seed: int | None = None, soft: Softness | None = None
+) -> Image8:
     """RGB pixels (``height x width x 3``, row 0 at the top) of the background of a map."""
-    return render_cells(mapdef, cell_indices(mapdef, seed), seed)
+    return render_cells(mapdef, cell_indices(mapdef, seed), seed, soft=soft)
 
 
 Paint = Callable[[Field], Field]
@@ -434,13 +458,16 @@ def render_cells(
     thin: Field | None = None,
     paint: Paint | None = None,
     finish: Paint | None = None,
+    soft: Softness | None = None,
 ) -> Image8:
     """The T2 picture of a biome grid (``cells``: one biome index per ``STEP`` cell).
 
     ``thin`` (``height x width``, 0..1) scales the density of the details (DEC-36: they thin out
     toward a shore); ``paint`` draws over the finished ground and details, before the grain;
-    ``finish`` draws over the grain (fine engraved lines that must stay crisp).
+    ``finish`` draws over the grain (fine engraved lines that must stay crisp); ``soft``: the
+    softness of the texture, ``SOFT`` when absent.
     """
+    soft = SOFT if soft is None else soft
     seq = np.random.SeedSequence(map_seed(mapdef) if seed is None else seed)
     rngs = [np.random.default_rng(child) for child in seq.spawn(3 + len(BIOMES))]
     rng_band, rng_sprites, rng_grain, *rng_ground = rngs
@@ -453,8 +480,9 @@ def render_cells(
 
     ground = np.zeros((h, w, 3), dtype=np.float32)
     for i, biome in enumerate(BIOMES):
-        ground += mask[i][..., None] * _ground(biome, h, w, rng_ground[i])
-    base = Image.fromarray(np.clip(ground, 0, 255).astype(np.uint8), "RGB")
+        ground += mask[i][..., None] * _ground(biome, h, w, rng_ground[i], soft.mottle)
+    stone = np.clip(ground, 0, 255).astype(np.uint8)
+    base = Image.fromarray(stone, "RGB")
     base = base.resize((w * SUPERSAMPLE, h * SUPERSAMPLE), Image.Resampling.BILINEAR)
     draw = ImageDraw.Draw(base)
     for i, biome in enumerate(BIOMES):
@@ -462,9 +490,15 @@ def render_cells(
         for x, y, q in _details(density[i], step, rng_sprites):
             sprite(draw, x, y, 0.55 + 0.45 * q, rng_sprites)
     flat = np.asarray(base.reduce(SUPERSAMPLE), dtype=np.float32)
+    if soft.relief != 1.0:  # the signs keep this share of their contrast over the stone
+        under = stone.astype(np.float32)
+        flat = np.asarray(under + (flat - under) * np.float32(soft.relief), dtype=np.float32)
     if paint is not None:
         flat = paint(flat)
-    flat = flat + rng_grain.normal(0, GRAIN, flat.shape[:2]).astype(np.float32)[..., None]
+    grain = rng_grain.normal(0, GRAIN, flat.shape[:2]).astype(np.float32)
+    if soft.grain != 1.0:
+        grain = np.asarray(grain * soft.grain, dtype=np.float32)
+    flat = flat + grain[..., None]
     if finish is not None:
         flat = finish(flat)
     return np.clip(flat, 0, 255).astype(np.uint8)
@@ -496,9 +530,11 @@ def write_thumb(background: str | Path) -> Path:
     return out
 
 
-def bake_background(mapdef: MapDef, out: str | Path, seed: int | None = None) -> None:
+def bake_background(
+    mapdef: MapDef, out: str | Path, seed: int | None = None, soft: Softness | None = None
+) -> None:
     """Write ``out`` (WebP). Raises ``ValueError``, writing nothing, if it is over the budget."""
-    write_background(mapdef, render_background(mapdef, seed), out)
+    write_background(mapdef, render_background(mapdef, seed, soft), out)
 
 
 def write_background(mapdef: MapDef, pixels: Image8, out: str | Path) -> None:

@@ -15,6 +15,7 @@ import {
   withInward,
 } from './engraving.ts';
 import { cellEdges } from './regionLayout.ts';
+import { SOFT } from './softness.ts';
 
 // The Engraved map treatment (#829, #842): the numbers come from the mockups
 // (in-game-style-r2.html `hatch`, `hair`; -r3.html topics n and o).
@@ -95,21 +96,24 @@ describe('paintRows: the lines over a flat ground in one tile (#854)', () => {
   });
 });
 
-describe('hairWidth and hairFloor: a stroke never thinner than one device pixel', () => {
+describe('hairWidth and hairFloor: a stroke never thinner than `weight` device pixels', () => {
   it('keeps the width when it is wide enough and floors it at one device pixel', () => {
-    expect(hairWidth(1.1, 2, 1)).toBe(1.1);
-    expect(hairWidth(1.1, 0.5, 1)).toBe(2);
-    expect(hairWidth(1.1, 0.5, 2)).toBe(1.1);
+    expect(hairWidth(1.1, 2, 1, 1)).toBe(1.1);
+    expect(hairWidth(1.1, 0.5, 1, 1)).toBe(2);
+    expect(hairWidth(1.1, 0.5, 2, 1)).toBe(1.1);
+    // The default weight is the softness of the lines (#865): a little over a device pixel.
+    expect(hairWidth(0.1, 1, 1)).toBeCloseTo(SOFT.weight);
   });
 
   it('rounds the floor up to a quarter octave, never below the exact pixel', () => {
     for (const zoom of [0.37, 0.5, 0.81, 1, 1.3, 2.2]) {
       const exact = 1 / zoom;
-      expect(hairFloor(zoom, 1)).toBeGreaterThanOrEqual(exact - 1e-9);
-      expect(hairFloor(zoom, 1)).toBeLessThan(exact * 2 ** 0.25 + 1e-9);
+      expect(hairFloor(zoom, 1, 1)).toBeGreaterThanOrEqual(exact - 1e-9);
+      expect(hairFloor(zoom, 1, 1)).toBeLessThan(exact * 2 ** 0.25 + 1e-9);
+      expect(hairFloor(zoom, 1)).toBeGreaterThanOrEqual(exact * SOFT.weight - 1e-9);
     }
     // A small change of the zoom keeps the same floor: the lines are not redrawn for it.
-    expect(hairFloor(0.46, 1)).toBe(hairFloor(0.45, 1));
+    expect(hairFloor(0.46, 1, 1)).toBe(hairFloor(0.45, 1, 1));
   });
 });
 

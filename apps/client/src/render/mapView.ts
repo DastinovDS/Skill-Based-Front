@@ -811,12 +811,18 @@ export class MapView {
       if (kind === 'beads') {
         const { step, radius } = BORDER_ENGRAVING.beads;
         for (const { at } of pointsAlong(list, step)) g.circle(at.x, at.y, radius);
-        g.fill({ color, alpha });
+        g.fill({ color, alpha: alpha * BORDER_ENGRAVING.alpha });
         continue;
       }
       const { width } = BORDER_ENGRAVING[kind];
       traceRuns(g, list);
-      g.stroke({ width: this.hair(width), color, alpha, cap: 'round', join: 'round' });
+      g.stroke({
+        width: this.hair(width),
+        color,
+        alpha: alpha * BORDER_ENGRAVING.alpha,
+        cap: 'round',
+        join: 'round',
+      });
     }
   }
 

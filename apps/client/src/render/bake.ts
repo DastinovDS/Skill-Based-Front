@@ -1,5 +1,6 @@
 import { Container, FillGradient, Rectangle, Sprite, Texture } from 'pixi.js';
 import { shadeEnds } from './shading.ts';
+import { SOFT } from './softness.ts';
 
 /**
  * What a baked shape is: a `key` that tells it apart from every other (look, size, owner, state:
@@ -176,7 +177,7 @@ export class SpriteCache implements BakeTools {
   }
 
   hair(width: number): number {
-    return Math.max(width, 1 / Math.max(1e-6, this.current));
+    return Math.max(width, SOFT.weight / Math.max(1e-6, this.current));
   }
 
   gradient(color: number): FillGradient | number {

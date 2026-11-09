@@ -8,7 +8,8 @@ import { voronoiTerritory } from './territory.ts';
 import { polygonArea } from './voronoi.ts';
 import { MapView } from './mapView.ts';
 import { BG, CANAL_LAND, ROAD_BUFFER, ROAD_FOG, ROAD_OWN, YOU, ENEMY } from './style.ts';
-import { BORDER_BAND, BORDER_ENGRAVING, ENGRAVE } from './engraving.ts';
+import { BORDER_BAND, BORDER_ENGRAVING, ENGRAVE, hairFloor } from './engraving.ts';
+import { SOFT } from './softness.ts';
 
 // The roads read without colour (R1, #345): the level is the number of lanes, an own road has solid
 // lanes on a band of its owner's colour, a buffer road dashed lanes, and a half in fog dotted ones.
@@ -435,7 +436,7 @@ describe('MapView, the Border band along the borders of the territories (#842)',
     expect(fills.map((f) => f.color)).toEqual([ENGRAVE.enemy]);
   });
 
-  it('keeps every hairline at least one device pixel wide when zoomed out', () => {
+  it('keeps every hairline at least `SOFT.weight` device pixels wide when zoomed out', () => {
     view.setOwners(halves());
     const border = layers.layer.territory.children.find(
       (c) => c.label === 'border-lines',
@@ -449,10 +450,12 @@ describe('MapView, the Border band along the borders of the territories (#842)',
       )
         .filter((i) => i.action === 'stroke')
         .map((i) => i.data.style.width);
-    expect(Math.min(...widths())).toBeCloseTo(BORDER_ENGRAVING.rule.width);
+    expect(Math.min(...widths())).toBeCloseTo(
+      Math.max(BORDER_ENGRAVING.rule.width, hairFloor(1, 1)),
+    );
     view.setCamera(0.4, 1);
     // 1 / 0.4 = 2.5 world units is one device pixel there.
-    expect(Math.min(...widths())).toBeGreaterThanOrEqual(2.5);
+    expect(Math.min(...widths())).toBeGreaterThanOrEqual(2.5 * SOFT.weight);
   });
 });
 

@@ -26,12 +26,14 @@ import type { PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { ENGRAVED } from '../theme/tokens.ts';
 import { centroid, territoryBorders, type Border, type CellEdge } from './regionLayout.ts';
+import { SOFT } from './softness.ts';
 
 /** The Engraved theme colours used by the map treatment (mockup `VARIANTS.engraved`). */
 export const ENGRAVE = {
   own: ENGRAVED.own,
   enemy: ENGRAVED.enemy,
-  ink: ENGRAVED.ink,
+  /** The ink of the lines: darker and warmer than the token's ivory (`SOFT.ink`, #865). */
+  ink: SOFT.ink,
   /** The dark casing under a coloured mark. */
   casing: ENGRAVED.casing,
   /** The colour of a cut into the stone. */
@@ -52,12 +54,12 @@ export interface HatchSpec {
 /**
  * The Border band (O1): `depth` world units inside the land border (the mockup's 26-unit stroke
  * clipped to the owner's side), hatched at `alpha`; the own hatch at `ownAngle` degrees, the enemy's
- * at `enemyAngle`.
+ * at `enemyAngle`. The alpha is softened with the hatches (`SOFT.hatch`, #865).
  */
 export const BORDER_BAND = {
   depth: 13,
   hatch: { pitch: 3.2, width: 0.85 },
-  alpha: 0.85,
+  alpha: 0.85 * SOFT.hatch,
   ownAngle: 0,
   enemyAngle: -45,
 } as const;
@@ -65,16 +67,18 @@ export const BORDER_BAND = {
 /**
  * The engraved border of an owner's land (world units): a dark `cut` on the border, the owner's
  * `rule` inside it, a second rule (`rule2`) on the own side and a row of `beads` on the enemy's.
+ * The rules and the beads are drawn at `alpha` (the light lines' softness, `SOFT.line`, #865).
  */
 export const BORDER_ENGRAVING = {
-  cut: { inset: 0, width: 1.6, alpha: 0.85 },
+  cut: { inset: 0, width: 1.6, alpha: 0.85 * SOFT.line },
   rule: { inset: 2.4, width: 1.1 },
   rule2: { inset: 4.6, width: 1.1 },
   beads: { inset: 5, step: 5.5, radius: 0.95 },
+  alpha: SOFT.line,
 } as const;
 
 /** The thin cut round every area (also between areas of one owner): faint, so the land reads clean. */
-export const AREA_LINE = { width: 0.9, alpha: 0.3 } as const;
+export const AREA_LINE = { width: 0.9, alpha: 0.3 * SOFT.line } as const;
 
 /**
  * The Ruled veil (N1): `grey` of the colour taken out of the hidden ground, a dark `veil`, the
@@ -83,30 +87,39 @@ export const AREA_LINE = { width: 0.9, alpha: 0.3 } as const;
 export const RULED_VEIL = {
   grey: 0.9,
   veil: { color: 0x0b0a08, alpha: 0.3 },
-  rules: { pitch: 3.4, width: 1, alpha: 0.5, color: 0x050403, angle: 0 },
+  rules: { pitch: 3.4, width: 1, alpha: 0.5 * SOFT.hatch, color: 0x050403, angle: 0 },
   band: 0.85,
   borders: 0.9,
   edge: {
     casing: 3.2,
-    line: { width: 0.7, alpha: 0.7, offset: 1 },
+    line: { width: 0.7, alpha: 0.7 * SOFT.line, offset: 1 },
     tick: { step: 7, from: 1.4, to: 4.4 },
   },
 } as const;
 
 // --- Line weights under zoom ------------------------------------------------------------------------
 
-/** A stroke of `width` world units at least one device pixel wide at `zoom` css px per unit. */
-export function hairWidth(width: number, zoom: number, resolution: number): number {
+/**
+ * A stroke of `width` world units at least `weight` device pixels wide at `zoom` css px per unit
+ * (`SOFT.weight`, #865; one device pixel before).
+ */
+export function hairWidth(
+  width: number,
+  zoom: number,
+  resolution: number,
+  weight = SOFT.weight,
+): number {
   const device = Math.max(1e-6, zoom * Math.max(1e-6, resolution));
-  return Math.max(width, 1 / device);
+  return Math.max(width, weight / device);
 }
 
 /**
- * The thinnest stroke in world units (one device pixel), rounded UP to a step of a quarter octave,
- * so that a zoom gesture redraws the lines only when the floor moves by about a fifth.
+ * The thinnest stroke in world units (`weight` device pixels, `SOFT.weight`), rounded UP to
+ * a step of a quarter octave, so that a zoom gesture redraws the lines only when the floor moves
+ * by about a fifth.
  */
-export function hairFloor(zoom: number, resolution: number): number {
-  const exact = 1 / Math.max(1e-6, zoom * Math.max(1e-6, resolution));
+export function hairFloor(zoom: number, resolution: number, weight = SOFT.weight): number {
+  const exact = weight / Math.max(1e-6, zoom * Math.max(1e-6, resolution));
   return 2 ** (Math.ceil(Math.log2(exact) * 4) / 4);
 }
 

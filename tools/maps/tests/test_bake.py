@@ -21,11 +21,13 @@ from PIL import Image
 from gow_maps import geo
 from gow_maps.bake import (
     MAX_WEBP_BYTES,
+    SOFT,
     STEP,
     TERRAIN_BIOMES,
     THUMB_WIDTH,
     WARP,
     Biome,
+    Softness,
     background_path,
     bake_background,
     bake_cells,
@@ -133,6 +135,25 @@ def test_bake_is_deterministic() -> None:
     assert np.array_equal(first, render_background(mapdef))
     assert np.array_equal(render_background(mapdef, seed=1), render_background(mapdef, seed=1))
     assert not np.array_equal(render_background(mapdef, seed=1), render_background(mapdef, seed=2))
+
+
+def _fine_contrast(pixels: NDArray[np.uint8]) -> float:
+    """The mean difference of a pixel's luminance from its right and lower neighbours."""
+    lum = pixels.astype(np.float64).mean(axis=2)
+    return float(np.abs(np.diff(lum, axis=0)).mean() + np.abs(np.diff(lum, axis=1)).mean())
+
+
+def test_the_soft_texture_lowers_the_fine_contrast_and_keeps_the_layout() -> None:
+    """#865: the default softness (``SOFT``) carves the signs and the grain fainter than the
+    Intaglio as first merged (``Softness()``), on the same layout; a bake without ``soft`` draws
+    it."""
+    mapdef = _map(TEST_MAPS / "line3.json")
+    sharp = render_background(mapdef, soft=Softness())
+    soft = render_background(mapdef)
+    assert np.array_equal(soft, render_background(mapdef, soft=SOFT))
+    assert _fine_contrast(soft) < _fine_contrast(sharp) * 0.85
+    # The layout stays: the biome areas (block means) barely move.
+    assert np.abs(_blocks(sharp) - _blocks(soft)).mean() < 6.0
 
 
 def test_default_seed_depends_on_name_and_version(tmp_path: Path) -> None:

@@ -39,7 +39,8 @@ describe('the map palette (Engraved, ui-style 57)', () => {
     [VP, '#cfab62'],
     [BADGE_UP, '#8cc79a'],
     [BADGE_DOWN, '#ec6654'],
-    [INK, '#ece4d1'],
+    // The ink of the map: darker and warmer than the ivory of the interface (#865).
+    [INK, '#ccc0a6'],
     [CASING, '#060504'],
     [DARK_PLATE, '#0e0c09'],
     [TERRAIN_FILL.plains, '#3a4630'],
