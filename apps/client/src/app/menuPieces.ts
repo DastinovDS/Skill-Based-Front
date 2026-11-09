@@ -11,18 +11,23 @@ import type { GeoFile } from '../map/geography.ts';
 import type { MapFile } from '../protocol.gen.ts';
 import { capacityRing, ringRadius } from '../render/cityLayout.ts';
 import { territoryBorders, type Border } from '../render/regionLayout.ts';
+import { SOFT } from '../render/softness.ts';
 import { ROAD_LANE } from '../render/style.ts';
 import { territoryOf, type Territory } from '../render/territory.ts';
 import { menuCityRadius, type Point } from './menuScene.ts';
 
+/** The ink of the map's lines as a CSS colour (`SOFT.ink`, #865): darker and warmer than the text's. */
+export const MENU_INK = `#${SOFT.ink.toString(16).padStart(6, '0')}`;
+
 /**
  * The Border band and the engraved border of the match (`BORDER_BAND`, `BORDER_ENGRAVING` of
- * `render/engraving.ts`, kept here as numbers: that module carries PixiJS).
+ * `render/engraving.ts`, kept here as numbers: that module carries PixiJS), softened as the match's
+ * (`SOFT`, #865): the hatch and the light lines fainter.
  */
 export const MENU_BORDER = {
-  band: { depth: 13, pitch: 3.2, width: 0.85, alpha: 0.85 },
-  cut: { inset: 0, width: 1.6, alpha: 0.85 },
-  rule: { inset: 2.4, width: 1.1 },
+  band: { depth: 13, pitch: 3.2, width: 0.85, alpha: 0.85 * SOFT.hatch },
+  cut: { inset: 0, width: 1.6, alpha: 0.85 * SOFT.line },
+  rule: { inset: 2.4, width: 1.1, alpha: SOFT.line },
   rule2: { inset: 4.6, width: 1.1 },
   beads: { inset: 5, step: 5.5, radius: 0.95 },
 } as const;

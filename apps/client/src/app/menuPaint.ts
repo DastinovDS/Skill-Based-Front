@@ -12,9 +12,17 @@
  * Decoration only: the owners come from the script of `menuCaptures.ts`, never from a game.
  */
 import type { FloodLook } from '../render/captureLayout.ts';
+import { SOFT } from '../render/softness.ts';
 import { CAPTURE } from '../render/style.ts';
 import type { Point } from './menuScene.ts';
-import { MENU_BORDER, MENU_LANE, MENU_RING, menuCity, type MenuLand } from './menuPieces.ts';
+import {
+  MENU_BORDER,
+  MENU_INK,
+  MENU_LANE,
+  MENU_RING,
+  menuCity,
+  type MenuLand,
+} from './menuPieces.ts';
 import type { Owners, Scene, SceneNode } from './menuScene.ts';
 
 /** The token colours the map layer takes from the page (`app.css`). */
@@ -36,7 +44,8 @@ export const FALLBACK_COLOURS: MapColours = {
   neutral: '#b3a88f',
   neutralFill: '#221e18',
   cut: '#050403',
-  ink: '#ece4d1',
+  // The ink of the map's lines, darker and warmer than the text's ivory (#865).
+  ink: MENU_INK,
   plate: '#0e0c09',
   casing: '#060504',
   display: "'Cinzel', 'Times New Roman', serif",
@@ -54,19 +63,46 @@ export function readColours(element: Element): MapColours {
     neutral: token('--neutral', F.neutral),
     neutralFill: token('--neutral-fill', F.neutralFill),
     cut: token('--cut', F.cut),
-    ink: token('--ink', F.ink),
+    ink: F.ink,
     plate: token('--plate', F.plate),
     casing: token('--casing', F.casing),
     display: token('--font-display', F.display),
   };
 }
 
-/** The lanes of a road (#839, the match's at level 1): light lanes on a band or dashed on a casing. */
+/**
+ * The lanes of a road (#839, the match's at level 1): light lanes on a band or dashed on a casing,
+ * softened as the match's (`SOFT.line`, #865).
+ */
 export const ROAD_LOOK = {
-  own: { casing: 3.6, casingAlpha: 0.62, lane: '#e6edf3', laneAlpha: 0.95, dash: null },
-  enemy: { casing: 3.6, casingAlpha: 0.62, lane: '#e6edf3', laneAlpha: 0.95, dash: null },
-  buffer: { casing: 3.6, casingAlpha: 0.4, lane: '#aab2bd', laneAlpha: 0.95, dash: [7, 5] },
-  fog: { casing: 3, casingAlpha: 0.3, lane: '#aab2bd', laneAlpha: 0.75, dash: [1.5, 4.5] },
+  own: {
+    casing: 3.6,
+    casingAlpha: 0.62 * SOFT.line,
+    lane: '#e6edf3',
+    laneAlpha: 0.95 * SOFT.line,
+    dash: null,
+  },
+  enemy: {
+    casing: 3.6,
+    casingAlpha: 0.62 * SOFT.line,
+    lane: '#e6edf3',
+    laneAlpha: 0.95 * SOFT.line,
+    dash: null,
+  },
+  buffer: {
+    casing: 3.6,
+    casingAlpha: 0.4,
+    lane: '#aab2bd',
+    laneAlpha: 0.95 * SOFT.line,
+    dash: [7, 5],
+  },
+  fog: {
+    casing: 3,
+    casingAlpha: 0.3,
+    lane: '#aab2bd',
+    laneAlpha: 0.75 * SOFT.line,
+    dash: [1.5, 4.5],
+  },
 } as const;
 
 export type RoadKind = keyof typeof ROAD_LOOK;
@@ -179,7 +215,7 @@ function drawLand(
   alpha: number,
 ): void {
   if (alpha <= 0) return;
-  const px = 1 / Math.max(0.05, p.scene.scale);
+  const px = SOFT.weight / Math.max(0.05, p.scene.scale);
   const k = p.k;
   const B = MENU_BORDER;
   c.save();
@@ -202,7 +238,7 @@ function drawLand(
     c.strokeStyle = p.colours.cut;
     c.lineWidth = Math.max(B.cut.width * k, px);
     c.stroke(new Path2D(part.cut));
-    c.globalAlpha = alpha;
+    c.globalAlpha = alpha * B.rule.alpha;
     c.strokeStyle = colour;
     c.lineWidth = Math.max(B.rule.width * k, px);
     c.stroke(new Path2D(part.rule));
@@ -232,7 +268,7 @@ function drawRoad(
   kind: RoadKind,
 ): void {
   if (to - from <= 1e-6) return;
-  const px = 1 / Math.max(0.05, p.scene.scale);
+  const px = SOFT.weight / Math.max(0.05, p.scene.scale);
   const k = p.k;
   const look = ROAD_LOOK[kind];
   const x0 = a.x + (b.x - a.x) * from;

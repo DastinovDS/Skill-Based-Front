@@ -30,7 +30,7 @@
     type FloodPaint,
     type MapPaint,
   } from './menuPaint.ts';
-  import { menuCity, menuLand, menuTerritory, type MenuLand } from './menuPieces.ts';
+  import { MENU_INK, menuCity, menuLand, menuTerritory, type MenuLand } from './menuPieces.ts';
   import {
     BAR_BOTTOM,
     FOG_TOP_FADE,
@@ -367,6 +367,7 @@
   bind:this={host}
   aria-hidden="true"
   data-map={ready ? 'ready' : 'pending'}
+  style:--map-ink={MENU_INK}
 >
   {#if scene !== null && map !== null}
     <canvas class="map layer" bind:this={mapCanvas}></canvas>

@@ -50,7 +50,7 @@
   }
   .ring-room {
     fill: none;
-    stroke: var(--ink);
+    stroke: var(--map-ink, var(--ink));
     stroke-opacity: 0.85;
   }
   .city-cut {
@@ -74,7 +74,7 @@
   }
   .city-ink {
     fill: none;
-    stroke: var(--ink);
+    stroke: var(--map-ink, var(--ink));
     stroke-width: 1.1;
   }
   .city-ink.thin {
@@ -82,7 +82,7 @@
   }
   .star {
     fill: var(--casing);
-    stroke: var(--ink);
+    stroke: var(--map-ink, var(--ink));
     stroke-width: 1.2;
     stroke-linejoin: round;
   }

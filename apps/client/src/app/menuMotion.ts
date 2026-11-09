@@ -32,6 +32,7 @@ import {
   type Point,
   type Scene,
 } from './menuScene.ts';
+import { MENU_INK } from './menuPieces.ts';
 import type { Story } from './menuStory.ts';
 
 export interface MotionClock {
@@ -61,7 +62,8 @@ export interface Palette {
 
 export const FALLBACK_PALETTE: Palette = {
   bg: '#16130f',
-  paper: '#ece4d1',
+  // The ink of the pieces' lines, darker and warmer than the text's ivory (#865).
+  paper: MENU_INK,
   dim: '#ada38f',
   you: '#86a6ea',
   enemy: '#e5785e',
@@ -76,7 +78,7 @@ export function readPalette(element: Element): Palette {
     style.getPropertyValue(name).trim() || fallback;
   return {
     bg: token('--bg', FALLBACK_PALETTE.bg),
-    paper: token('--paper', FALLBACK_PALETTE.paper),
+    paper: FALLBACK_PALETTE.paper,
     dim: token('--text-dim', FALLBACK_PALETTE.dim),
     you: token('--you', FALLBACK_PALETTE.you),
     enemy: token('--enemy', FALLBACK_PALETTE.enemy),
