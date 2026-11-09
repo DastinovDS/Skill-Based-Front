@@ -25,6 +25,9 @@ from gow_sim.ruleset import Ruleset
 NICE: Final = 10
 """How much lower than the server the worker runs: on a shared core the match ticks come first."""
 
+OOM_SCORE_ADJ: Final = 1000
+"""The most a process may ask to be the out-of-memory killer's first choice."""
+
 STAGING_PREFIX: Final = ".tmp-"
 
 
@@ -73,9 +76,13 @@ def map_files(folder: Path, map_id: str) -> list[Path]:
 
 
 def lower_priority() -> None:
-    """Initializer of a worker process: below the server, so a busy core serves the ticks first."""
+    """Initializer of a worker process: below the server, so a busy core serves the ticks first,
+    and the first to go when the container runs out of memory (Linux): the bake of a big map
+    peaks at about 0.65 GB, and a killed worker only costs its match a pool map."""
     with contextlib.suppress(OSError):  # raising the niceness needs no privilege
         os.nice(NICE)
+    with contextlib.suppress(OSError):  # raising it needs none either; no such file off Linux
+        Path("/proc/self/oom_score_adj").write_text(str(OOM_SCORE_ADJ))
 
 
 def build(job: MapJob) -> MapBuilt:

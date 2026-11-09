@@ -284,7 +284,13 @@ def _box(a: Field, r: int, axis: int) -> Field:
 
 
 def blur(a: Field, radius: int) -> Field:
-    """Gaussian-like blur of the last two axes: three box passes."""
+    """Gaussian-like blur of the last two axes: three box passes.
+
+    A stack of fields is blurred one field at a time: the same numbers (every pass runs along one
+    axis of one field), a sixth of the memory for the six biome weights (#884).
+    """
+    if a.ndim == 3:
+        return np.stack([blur(a[i], radius) for i in range(a.shape[0])])
     out = a
     for _ in range(3):
         out = _box(_box(out, radius, a.ndim - 1), radius, a.ndim - 2)
@@ -482,6 +488,9 @@ def render_cells(
     for i, biome in enumerate(BIOMES):
         ground += mask[i][..., None] * _ground(biome, h, w, rng_ground[i], soft.mottle)
     stone = np.clip(ground, 0, 255).astype(np.uint8)
+    # Memory, not pixels (#884: the server bakes in a worker of a 1 GB container): every large
+    # array goes as soon as it is used, so the peak is not the sum of all of them.
+    del ground, mask
     base = Image.fromarray(stone, "RGB")
     base = base.resize((w * SUPERSAMPLE, h * SUPERSAMPLE), Image.Resampling.BILINEAR)
     draw = ImageDraw.Draw(base)
@@ -490,9 +499,11 @@ def render_cells(
         for x, y, q in _details(density[i], step, rng_sprites):
             sprite(draw, x, y, 0.55 + 0.45 * q, rng_sprites)
     flat = np.asarray(base.reduce(SUPERSAMPLE), dtype=np.float32)
+    del draw, base, density  # the supersampled layer alone is 4 bytes a pixel, 9 pixels a unit
     if soft.relief != 1.0:  # the signs keep this share of their contrast over the stone
         under = stone.astype(np.float32)
         flat = np.asarray(under + (flat - under) * np.float32(soft.relief), dtype=np.float32)
+        del under
     if paint is not None:
         flat = paint(flat)
     grain = rng_grain.normal(0, GRAIN, flat.shape[:2]).astype(np.float32)

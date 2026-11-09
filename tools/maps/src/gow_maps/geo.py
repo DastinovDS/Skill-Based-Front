@@ -847,6 +847,7 @@ def _draw_bridges(img: Field, mapdef: MapDef, bridges: Iterable[Bridge]) -> Fiel
             [_deck_point(shifted, angle, u, v) for u, v in quad], fill=(*SHADOW, 71)
         )
     layer = Image.alpha_composite(layer, shade)
+    del shade, base  # memory (#884): the supersampled layers are 4 bytes a pixel
     draw = ImageDraw.Draw(layer)
     for br, angle in decks:
         draw.polygon([_deck_point(br, angle, u, v) for u, v in quad], fill=DECK)
@@ -916,6 +917,7 @@ def render(
     near = _upscale(distance_to(water_cells)) - STEP / 2
     from_land = _upscale(distance_to(~water_cells)) - STEP / 2
     thin = np.asarray(_smoothstep(4.0, 26.0, near.astype(np.float64)), dtype=np.float32)
+    del water_f, lake_f, near  # memory (#884): only their results are needed below
 
     def paint(img: Field) -> Field:
         noise = bake.fbm(h, w, 60, 3, rng_tone) * 1.6
