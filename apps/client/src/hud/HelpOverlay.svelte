@@ -175,15 +175,15 @@
             <h3 id="help-legend">{t('help.legend')}</h3>
             <ul class="legend">
               <li>
-                <span class="cell"><HelmetIcon side="own" size={28} /></span>
+                <span class="cell"><HelmetIcon side="own" size={28} engraved /></span>
                 {t('help.legend.mineHelmet')}
               </li>
               <li>
-                <span class="cell"><HelmetIcon side="enemy" size={28} /></span>
+                <span class="cell"><HelmetIcon side="enemy" size={28} engraved /></span>
                 {t('help.legend.enemyHelmet')}
               </li>
               <li>
-                <span class="cell"><HelmetIcon side="own" size={28} share={0.5} /></span>
+                <span class="cell"><HelmetIcon side="own" size={28} share={0.5} engraved /></span>
                 {t('help.legend.chargeHelmet')}
               </li>
               <li>
@@ -207,8 +207,8 @@
               </li>
               <li>
                 <span class="cell chips">
-                  <HelmetIcon side="own" size={14} />
-                  <HelmetIcon side="own" size={14} share={0} />
+                  <HelmetIcon side="own" size={14} engraved />
+                  <HelmetIcon side="own" size={14} share={0} engraved />
                 </span>
                 {t('help.legend.chips')}
               </li>

@@ -4,8 +4,8 @@
  * runs `WALL.offset` inside the land border, along the border with the cell the road leads to, and the
  * road passes through its gate short of the border point on the owner's side. The own wall is a
  * battlement (square merlons towards the border, square gate towers), the enemy's a palisade (pointed
- * stakes, round posts), so they differ in grey too. Zoomed out the offset and the masonry keep their
- * screen size (`wallScale`).
+ * stakes, round posts), so they differ in grey too. Zoomed out the offset and the masonry shrink on
+ * screen slower than the map (`wallScale`).
  *
  * Pure functions, no PixiJS: the runs come from `fortLayout.ts`, the view draws what these return.
  * Nothing here knows a rule: the server says which road of which node is fortified (`EdgeView.forts`).
@@ -49,18 +49,24 @@ export const WALL = {
   ghost: { alpha: 0.6, hover: 1, casingAlpha: 0.8 },
   /** A capture: the walls break into lengths that sink outwards and fade (mockup `frontierWall4`). */
   fall: { piece: 5, step: 6, ms: 1200, spread: 0.4, span: 0.7, drift: 6, drop: 3 },
+  /**
+   * Zoomed out past 95 % the masonry grows only by this power of the zoom (#869): it shrinks on
+   * screen with the map, slower than the map, so a wall stays readable without looking chunky.
+   */
+  keep: 0.5,
   /** The largest scale of the masonry zoomed out. */
-  maxScale: 2.5,
+  maxScale: 1.75,
 } as const;
 
 /**
  * The scale of the masonry for a camera scale (CSS px per world unit): 1 at 95 % and closer, growing
- * as the map is zoomed out so the walls keep their screen size, in steps of an eighth (a gliding
- * camera redraws a few times, not every frame).
+ * by the power `WALL.keep` of the zoom as the map is zoomed out (up to `WALL.maxScale`), in steps of
+ * an eighth (a gliding camera redraws a few times, not every frame).
  */
 export function wallScale(cameraScale: number): number {
   if (!(cameraScale > 0)) return 1;
-  return Math.min(WALL.maxScale, Math.max(1, Math.round((0.95 / cameraScale) * 8) / 8));
+  const exact = Math.max(1, 0.95 / cameraScale) ** WALL.keep;
+  return Math.min(WALL.maxScale, Math.round(exact * 8) / 8);
 }
 
 /** A gate: where along the run (arc length from its first point) and half its opening. */

@@ -47,11 +47,15 @@ export function towerAngle(kind: TowerKind): number {
 
 /**
  * The scale of a tower at `cameraScale` css px per world unit: at least `TOWER.minScale`, and big
- * enough to stay `TOWER.screen` css px per unit of its drawing (the mockup's `max(1.35, 1.7 / ZC)`),
- * rounded up to a quarter octave so that a zoom gesture redraws the towers only now and then.
+ * enough to stay `TOWER.screen` css px per unit of its drawing (the mockup's `max(1.35, 1.7 / ZC)`)
+ * down to the zoom where that needs more than `minScale`; zoomed out further it grows only by the
+ * power `TOWER.keep` of the zoom, so the towers shrink on screen with the cities and never compete
+ * with them (#869). Rounded up to a quarter octave so that a zoom gesture redraws the towers only now
+ * and then.
  */
 export function towerScale(cameraScale: number): number {
-  const exact = Math.max(TOWER.minScale, TOWER.screen / Math.max(1e-3, cameraScale));
+  const out = TOWER.screen / TOWER.minScale / Math.max(1e-3, cameraScale);
+  const exact = TOWER.minScale * Math.max(1, out) ** TOWER.keep;
   return 2 ** (Math.ceil(Math.log2(exact) * 4) / 4);
 }
 

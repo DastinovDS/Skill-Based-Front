@@ -10,6 +10,7 @@ pairs 0-3 and 1-2 have no road.
 import json
 import math
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,6 @@ ROOT = Path(__file__).parents[3]
 DIAMOND = ROOT / "packages" / "sim" / "tests" / "maps" / "diamond.json"
 RIDGE = ROOT / "maps" / "ridge.json"
 RIDGE_MOCKUP = ROOT / "docs" / "design" / "mockups" / "src" / "ridge.geography.json"
-BAKE_SECONDS = 10  # map-format.md, "Map background": baking one map takes up to 10 s
 
 # Example 6 (a river from the middle to a sea in the south-east corner): it passes the road 3-2.
 SEA_AND_RIVER: dict[str, Any] = {
@@ -417,12 +417,15 @@ def test_ridge_mockup_geography_passes_the_check(
 
 
 def test_no_dark_halo_on_land_and_the_water_is_engraved_dark_stone(
-    ridge: tuple[MapDef, geo.Geography, float],
+    ridge: tuple[MapDef, geo.Geography, float], bake_budget: Callable[[], float]
 ) -> None:
     mapdef, g, compute_seconds = ridge
     started = time.process_time()
     pixels = geo.render(mapdef, g).astype(np.float64)
-    assert compute_seconds + time.process_time() - started < BAKE_SECONDS
+    # map-format.md, "Map background": baking one map takes up to 10 s (on the reference machine;
+    # `bake_budget` scales it to this machine, conftest.py).
+    seconds, budget = compute_seconds + time.process_time() - started, bake_budget()
+    assert seconds < budget, (seconds, budget)
     # Land right beside the water is not darker than the land a little farther away: the coast is
     # one thin cut rule (Intaglio, #842), no dark band or halo where an area border runs along
     # water.
