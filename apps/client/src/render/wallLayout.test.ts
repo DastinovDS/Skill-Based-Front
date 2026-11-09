@@ -30,11 +30,13 @@ const run: Run = {
   ringLength: 0,
 };
 
-describe('wallScale: the masonry keeps its screen size zoomed out', () => {
-  it('is 1 at 95% and closer, grows below in steps of an eighth, and stops at the cap', () => {
+describe('wallScale: the masonry shrinks slower than the map zoomed out (#869)', () => {
+  it('is 1 at 95% and closer, grows below by the square root in eighths, and stops at the cap', () => {
     expect(wallScale(1)).toBe(1);
     expect(wallScale(0.95)).toBe(1);
-    expect(wallScale(0.5)).toBe(1.875);
+    // sqrt(0.95 / 0.5) = 1.378: smaller on screen than at 95 % (0.69 px a unit), not kept at 1.9.
+    expect(wallScale(0.5)).toBe(1.375);
+    expect(wallScale(0.5) * 0.5).toBeLessThan(0.95);
     expect((wallScale(0.6) * 8) % 1).toBe(0);
     expect(wallScale(0.1)).toBe(WALL.maxScale);
     expect(wallScale(0)).toBe(1);

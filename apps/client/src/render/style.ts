@@ -427,8 +427,9 @@ export const HELMET_ENGRAVED = {
  * Cut and ring towers (53g, 55k): the barracks and the factory stand on the capacity ring, `out`
  * past its centre line, the barracks at the upper left, the factory at the left; the block is
  * `halfHeight` high either side of its middle at scale 1, drawn at `towerScale` (at least
- * `minScale`, and `screen` css px per unit). A built tower is the owner's hatch (own horizontal, the
- * enemy's 45 degrees) in an ink outline on a casing; the barracks has a dark gate.
+ * `minScale`, `screen` css px per unit near zoom 1, smaller on screen zoomed far out). A built
+ * tower is the owner's hatch (own horizontal, the enemy's 45 degrees) in an ink outline on a casing;
+ * the barracks has a dark gate.
  */
 export const TOWER = {
   barracksAngle: Math.PI * 1.25,
@@ -436,6 +437,8 @@ export const TOWER = {
   out: 4,
   minScale: 1.35,
   screen: 1.7,
+  /** Zoomed out past `screen / minScale`, the scale grows by this power of the zoom only (#869). */
+  keep: 0.5,
   halfHeight: 5.2,
   casing: 3.2,
   line: 1,
@@ -674,10 +677,11 @@ export const CAPTURE = {
 } as const;
 /**
  * How long the result screen waits after `match_end` when a capital was captured (#819): the render
- * delay of the snapshots (0.2 s), the winner's walk to the ring once its last shots have landed (Walk
- * in, #856: up to 1.3 s), the flood (`CAPTURE.ms`) and 0.5 s on the settled frame.
+ * delay of the snapshots (0.2 s), the flood (`CAPTURE.ms`) and 0.5 s on the settled frame. The
+ * winner's walk to the ring (Walk in, #856) starts as before, but the result does not wait for it to
+ * finish (the owner's call, #869: 1.7 s as before #857).
  */
-export const CAPITAL_RESULT_DELAY_MS = 3000;
+export const CAPITAL_RESULT_DELAY_MS = 1700;
 export const LOSS_FONT_SIZE = 13;
 /**
  * The kill feed of a finished fight (#812, variant 9 of the mockup fight-bonus-and-outcome.html; Engraved,
