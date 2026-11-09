@@ -48,7 +48,7 @@ apps/client/                       TypeScript + Vite + Svelte 5 + PixiJS 8
 e2e/                               Playwright E2E against the real stack (its own package, compose.e2e.yaml)
 tools/maps/          gow_maps      validator, mirroring script, generator, previews and backgrounds of maps (offline)
 maps/                              map pool of the server (JSON, previews, backgrounds); `maps/fixtures/`: MVP maps, test fixtures outside the pool; `maps/menu/`: the maps behind the screens before a match (`marches`, the entry `valley`), outside the pool; `maps/gen/`: generated maps, outside the pool, played only by an explicit choice (section 5.4)
-rulesets/                          rulesets (*.toml) and the archive of played ones by hash
+rulesets/                          rulesets: mvp-7 (main), mvp-5, mvp-6, test-short (E2E); archive/: every played one by hash
 docs/design/                       mechanics.md, map format, archive
 docs/adr/  docs/balance/  docs/qa/ decisions, balance reports, checklists
 deploy/                            Dockerfiles, Caddyfile, deployment scripts (compose.yaml is in the root)
@@ -126,7 +126,7 @@ Python jobs (the required check `py`) and the job `web` run. A tool version is e
 | `setup` | dependencies: `setup:py` (`uv sync --locked`), `setup:client`, `setup:e2e` (`pnpm install --frozen-lockfile`) | INF-01 |
 | `hooks` | once per clone: `pre-commit install` (ruff before every commit) | INF-02 |
 | `check` | all static checks: `check:py`, `check:client`, `check:e2e` | INF-02 |
-| `check:py` | ruff (check and format), pyright (strict), lint-imports (package boundaries), `gow-maps validate` of the maps (including the starting warehouse against `rulesets/mvp-7.toml`, DEC-26, item 5) | INF-02 |
+| `check:py` | ruff (check and format), pyright (strict), lint-imports (package boundaries), `gow-maps validate` of the maps (including the starting warehouse against `rulesets/mvp-7.toml`, DEC-26, item 5; DEC-43, item C) | INF-02 |
 | `check:client` | eslint and prettier, svelte-check and tsc of the client | INF-03 |
 | `check:e2e` | prettier and tsc of the `e2e/` package | QA-02 |
 | `check:i18n` | UI strings only in dictionaries, the same keys in every locale dictionary (part of `test:client`) | CLI-11 |
@@ -150,15 +150,15 @@ Python jobs (the required check `py`) and the job `web` run. A tool version is e
 | `build` | production build of the client | INF-03 |
 | `preview` | `build` and a local preview of the production build under the target CSP (`apps/client/csp.ts`) | INF-03 |
 | `regen`, `regen:protocol`, `regen:api` | regenerate the protocol schema and TS types (`protocol.gen.ts`) and the server OpenAPI with `api.gen.ts`; `regen` also runs `regen:howto` | PRO-02, CLI-09 |
-| `regen:howto` | the combat examples of the How to play screen (`apps/client/src/howto/combatExamples.gen.json`): rows of `combat.json` played through `gow_sim` under `rulesets/mvp-2.toml` (the page still describes economy v1 and carries a notice about it; a tutorial round replaces it later, #741), plus the rule numbers the page quotes; `tests/test_export_howto.py` fails when the file is out of date | CLI-13 |
+| `regen:howto` | the combat examples of the How to play screen (`apps/client/src/howto/combatExamples.gen.json`): rows of `combat.json` played through `gow_sim` under `rulesets/mvp-7.toml` (the page text still describes economy v1 and carries a notice about it; a tutorial round replaces it later, #741, #806), plus the rule numbers the page quotes; `tests/test_export_howto.py` fails when the file is out of date | CLI-13 |
 | `db:migrate` | apply Alembic migrations (the server also does this on start) | DB-01 |
 | `db:revision` | a new migration from the `gow_server.models` models (argument: message) | DB-01 |
-| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-7.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json`: the map validator (the pool, the fixtures, the menu map and the generated maps), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5); the check `geography` for a map with `src/<name>.geo.json` (DEC-36), the check `fairness` for a map with `meta.symmetry = "none"` (#771) | MAP-02, #379, #474, #537, #771 |
+| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-7.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json`: the map validator (the pool, the fixtures, the menu map and the generated maps), and the starting warehouse is not above the fixed warehouse of the ruleset (DEC-26, item 5; DEC-43, item C); the check `geography` for a map with `src/<name>.geo.json` (DEC-36), the check `fairness` for a map with `meta.symmetry = "none"` (#771) | MAP-02, #379, #474, #537, #771 |
 | `maps:generate` | the map of a seed in `maps/gen/` (argument: seed): `gow-maps generate --bake` writes the map, its geography, the background and the preview, prints the fairness scores and validates; outside the pool (`docs/design/map-format.md`, "Format changes under #771"). `gow-maps score <files>` prints the scores of any map | #771 |
 | `maps:mirror` | build `maps/<name>.json` from the half `maps/src/<name>.half.json` (argument: name) | MAP-03 |
 | `maps:preview` | draw the preview `maps/<name>.preview.png` over the map's baked background, so after `maps:bake` (the pool, the menu map `maps/menu/` and the generated maps `maps/gen/`) | MAP-04, #474, #771, #839 |
 | `maps:bake` | bake the background `maps/<name>.bg.webp` and its thumbnail `<name>.thumb.webp` for the map cards (#839) (the pool, the fixtures `maps/fixtures/`, the menu map `maps/menu/` and the generated maps `maps/gen/`): numpy and Pillow, the Intaglio look (#842), WebP up to 0.5 MB; a map with an authored geography `maps/src/<name>.geo.json` also gets water and `maps/geo/<name>.json` (DEC-36) (after any map edit) | MAP-05, #344, #474, #537, #842 |
-| `tournament` | bot tournament (by default all maps and bots, 100 seeds, 8 processes, `mvp-7`; anything else after `--`, for example `-- --seeds 20`; `mvp-0` is only a test ruleset, we do not run tournaments on it) | BOT-04 |
+| `tournament` | bot tournament (by default all maps and bots, 100 seeds, 8 processes, `mvp-7`; anything else after `--`, for example `-- --seeds 20`) | BOT-04 |
 | `tournament:gh` | **for agents:** the tournament on GitHub runners (`.github/workflows/tournament.yml`, manual dispatch): the (map, seed) cells are sharded over parallel jobs, balanced by map size (`scripts/tournament_shards.py plan`, #786: up to `--shards` and at most maps x seeds jobs; bot pairs are not split), the shards are merged (`scripts/tournament_shards.py merge`) into a file byte-identical to a local run, `gow-bots report` runs on it; the task dispatches, waits with one `gh run watch`, downloads `tournament.jsonl` and `report.md` into `--dir` (`.tournament/`). Options `--ref --ruleset --bots --maps --seeds --shards --label --dir` (`mise run tournament:gh --help`). **Agents run tournaments only through it**; a local `tournament` of at most 3 seeds only when GitHub is unavailable (section 8, `docs/balance/README.md`). Needs bash and an authenticated `gh` | #582, #786 |
 | `search` | parameter search of one bot by tournament (`gow-bots search`, a hill climb over its `PARAMS` ranges, standard library): the pool maps, 8 processes, `mvp-7`; `--bot`, `--against`, `--keys` and the rest after `--` (`docs/balance/README.md`). Few seeds: confirm the result with `tournament` | #166 |
 | `report` | balance report (argument: file, `docs/balance/latest.jsonl` by default) | BOT-05 |
@@ -209,9 +209,10 @@ gow_sim/
   ruleset.py      Ruleset (frozen dataclass) + TOML loading
   canonical.py    canonical JSON and blake2b: the basis of ruleset_hash() and state_hash()
   maps.py         MapDef + loader
-  state.py        GameState, Group, Node, Edge, Packet, Intent; to_canonical(), state_hash()
+  state.py        GameState, Group, Node, Packet, Intent, Fight; to_canonical(), state_hash()
   commands.py     command types, validate(), apply_commands()
-  systems/        economy, movement, combat, capacity, supply, lines, flow, recruit, build, orders, victory, vision
+  systems/        economy, movement, combat, capture, fortify, capacity, supply (packet and recharge helpers),
+                  flow, recruit, build, orders, victory, vision
   view.py         project() -> PlayerView
   match.py        Match, order of systems, run_headless()
   replay.py       recording, verification, dump of divergences
@@ -238,12 +239,12 @@ apply_commands → economy → movement → combat → capacity → supply (incl
 → recruit → build → orders → victory → vision (updating the "last seen" memory)
 ```
 
-The order in code: `gow_sim.match.SYSTEMS`. Under `[stances]` (DEC-44) `economy` counts the local progress of each player instead of reading the global clock for the CP and the own capital. Under `economy.model = "v2"` (DEC-41) the `supply` step is `systems.lines` (factories and drawn supply lines) instead of `systems.supply`, and under `supply.model = "flow"` (DEC-43, `rulesets/mvp-4.toml`) it is `systems.flow` (the automatic flow towards the front and the leaf shift). `Match.step()` first increments `state.tick`, so all systems of tick `t` see `state.tick == t` (the first tick is 1); the events of each system are appended to `state.events` immediately, and the following systems read them.
+The order in code: `gow_sim.match.SYSTEMS`. Every ruleset plays economy v2 (DEC-41): `economy` counts the local stance progress of each player (DEC-44) for the CP and the own capital (with `stances.factories_follow`, DEC-47, for every factory) and produces the charges of the factories; the `supply` step is `systems.flow` (the automatic flow towards the front and the leaf shift, DEC-43; it also settles captured factories). Economy v1, the drawn supply lines, the bunker, road and warehouse upgrades and "Defense" were removed with the rulesets `mvp-0` to `mvp-4` (#894, 2026-11-09). `Match.step()` first increments `state.tick`, so all systems of tick `t` see `state.tick == t` (the first tick is 1); the events of each system are appended to `state.events` immediately, and the following systems read them.
 
 `combat` runs fights over time (DEC-24): a fight is a `Fight` in `GameState.fights` (iterated by id), a group has the field `fight`;
-rounds every `combat.round_ticks`, the groups of a fight do not move. `combat` gets the bonuses of scheduled orders and of "Defense" (accumulated, DEC-30) from `systems.orders.active_bonuses(state, rules)`
+rounds every `combat.round_ticks`, the groups of a fight do not move. `combat` gets the bonuses of scheduled orders (gathered, DEC-41, item 10) from `systems.orders.active_bonuses(state)`
 and removes the bonus from a group that entered a fight (it burns up with the fight);
-`orders` removes the intents and bonuses of finished orders and modes (SIM-10); road building (DEC-28, item 7: for CP, on an edge) creates no intents.
+`orders` gathers the bonuses of waiting planned orders and removes the intents and bonuses of finished orders (SIM-10).
 The toll of road fortifications (DEC-43, item D, `systems.fortify`) is the first step of `combat`, before the edge meetings and the node contacts: it reads the moves of the tick the same way the edge meetings do.
 
 The fog memory is stored in `GameState` (for each player), so `project()` stays a pure function and a replay stays reproducible.
@@ -266,20 +267,18 @@ The fog memory is stored in `GameState` (for each player), so `project()` stays 
     (DEC-21: `EXACT` gives `units` and `charged`, `RANGE` only a range of `units`, `PRESENCE` only
     "an enemy is there" and the modes); the warehouse of an enemy city where no own group stands (DEC-21, item 3, DEC-35: vision sources are own groups only, own nodes are not sources);
   - sequential global ids: only opaque per-player ids (keyed blake2b with the secret `match_key` of the match, not with public data);
-  - the enemy's CP, stance, production and overall counters, its local stance progress (DEC-44: `SelfView.cp_ticks`, `capital_ticks` are own only); its front markers and rear minimum (DEC-28);
+  - the enemy's CP, stance, production and overall counters, its local stance progress (DEC-44: `SelfView.cp_ticks`, `capital_ticks` are own only);
   - fight and supply events in the fog;
-  - the size and id of a group in intents; the target of an enemy's ordinary order; the enemy's accumulated "Defense" bonus and the bonus of the enemy's waiting plan outside a fight (DEC-30, only the mode; in a fight the remaining reserve of the fight is visible to both: `FightView.virtual_left`, DEC-32);
+  - the size and id of a group in intents; the target of an enemy's ordinary order; the bonus of the enemy's waiting plan outside a fight (in a fight the remaining reserve of the fight is visible to both: `FightView.virtual_left`, DEC-32);
   - enemy figures on edges (`EdgeView.enemy_groups`, DEC-33) outside the halves of visible nodes and
     of edges with an own group on them (DEC-35: the group is a vision source in the node of its half of the edge,
     the other half has the level the terrain table gives it; DEC-10's "only `PRESENCE`, end nodes hidden" is superseded) and
     groups in a fight (they are shown by `fights`); of a figure only the opaque `id` (new on every
     exit from the fog), `pos`, `toward_b` (the nearest node of the edge, not the destination), the mode and the numbers by
     the level of the half are visible; the memory of halves (`HalfView.seen` in the fog) has no position and no direction;
-  - an edge level in the fog newer than the last one seen (`VisionMemory.widths`, otherwise level 1; roads have no
-    type, DEC-26), enemy construction on edges in the fog (DEC-17, DEC-22);
-  - a barracks (except a built barracks of an enemy city adjacent to your own node: DEC-31), the warehouse level, the warehouse capacity, construction and the recruit queue of enemy cities (DEC-25, DEC-26);
-  - economy v2 (DEC-41): the enemy's supply lines (never, in any state), its factory and bunker builds, its factory rates and
-    the request or gathered bonus of its planned orders; a built enemy factory and bunker only by the DEC-31 rule (a node joined by an edge to an own node);
+  - a barracks (except a built barracks of an enemy city adjacent to your own node: DEC-31), the warehouse capacity, construction and the recruit queue of enemy cities (DEC-25, DEC-26);
+  - factories (DEC-41): the enemy's factory builds, its factory rates and the request or gathered bonus of its planned
+    orders; a built enemy factory only by the DEC-31 rule (a city joined by an edge to an own node);
   - road fortifications (DEC-43, item D): an enemy one (built or being built) outside the half of its node that is not in fog,
     the tick an enemy one starts to work, any memory of one; the toll of an enemy line is told to its owner (`toll_taken`) only
     when the owner sees that half in the tick of the toll, never with the id of the paying group.
@@ -293,7 +292,7 @@ The fog memory is stored in `GameState` (for each player), so `project()` stays 
 - The replay log: a header `{sim_version, ruleset_hash, python_version, map_id, map_hash, match_key}` + `(tick, player, seq, cmd)` + control hashes every 50 ticks. The format is `.jsonl.gz` (gzip from the standard library).
 - For viewing, after a match the server re-simulates the log in a `ProcessPoolExecutor` (not in the event loop and not in a thread) and writes a file of full frames: it does not depend on future simulation versions. Format: `docs/design/replay-frames.md`.
 - `state_hash()` is blake2b of the canonical JSON (`sort_keys=True`, no float).
-- Golden replays live in `tests/golden/v{SIM_VERSION}/`. **You changed a rule or the order of systems** → raise `SIM_VERSION`, create the directory of the new version, explain in the PR what changed. Directories of earlier versions are not changed.
+- Golden replays live in `tests/golden/v{SIM_VERSION}/`. **You changed a rule or the order of systems** → raise `SIM_VERSION`, create the directory of the new version, explain in the PR what changed. Directories of earlier versions are not changed; the directory of the current version is always kept, and older ones may be removed only by an owner-approved cleanup (the first: 2026-11-09, #894, kept only `v47` with the games of the kept rulesets).
 - The ruleset that was played is saved to `rulesets/archive/<hash>.toml`.
 
 ---
@@ -426,7 +425,7 @@ Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). I
 - Under `[stances]` (DEC-44) the smart bots change the stance by a policy (`gow_bots.bots.stance`, #881: the stance of the match phase by personality, a step toward Economy while CP burn or units wait for charges, toward War while the warehouses are full, at most one change per `stance_dwell` ticks; the numbers are `PARAMS`, tuned by #689); the plain bots stay in the start stance, Balance (`Bot.allowed`).
 - Under `combat.retreat = "none"` (DEC-40) the smart bots count, before an attack, the reinforcements the defender can bring while the fight lasts and the enemy figures met on the road in (`CampaignBot.support`, `meets`, #881); under `"round"` the estimate is unchanged.
 - Under `combat.retreat = "none"` (DEC-40, `mvp-6`) the bots send no withdrawal from a fight (`Bot.fight_commands`); they still reinforce.
-- Agents' tournaments run only on `mvp-7` (`mvp-6` with map tempo, DEC-46, the economy periods scaled by the node count of the map, and the built factory period 150; owner decision 2026-11-09, #885; since the owner decision of the same day every factory follows the stance like the capital, DEC-47, #888; `mvp-6` is `mvp-5` with a capture that costs a charge, DEC-38, built factories twice as fast, DEC-41 item 2, and no retreat from a fight, DEC-40; `mvp-5` = `mvp-4-stances`: economy v2 with the automatic supply flow, DEC-43, the stances of DEC-44 and the terrain burn of DEC-45; the played ruleset of `stack` and `compose.yaml`, owner decision 2026-11-09, #626, #759; `mvp-6` played on 2026-11-09 only; before it `mvp-5`, owner decision 2026-11-07, #805, `mvp-4`, owner decision 2026-11-04, #741, and `mvp-2`, owner decision 2026-10-30, #40); `mvp-0` to `mvp-6` stay as historical and test rulesets (unit tests, golden replays), we do not run tournaments on them. After a rules change no tournament gates the merge: the required CI is the gate (golden replays, determinism and property tests, `py-slow` catch crashes). While the owner is still iterating the mechanics through playtests, tournaments are skipped. Once the owner declares the mechanics settled: one batched smoke `mise run tournament:gh --seeds 3` (crashes and gross imbalance), then the field run of 16 bots x 20 seeds (`tournament:gh`) for the ruleset numbers. Tournaments run on GitHub runners (`tournament:gh`), not on the owner's laptop; a local `mise run tournament -- --seeds 3` (at most 3 seeds) only when GitHub is unavailable (owner decision 2026-11-03). A full tournament (default seeds) only before a release playtest (BAL-02).
+- Agents' tournaments run only on `mvp-7`, the played ruleset of `stack` and `compose.yaml` (owner decision 2026-11-09, #885: `mvp-6` with map tempo, DEC-46, and every factory following the stance of its owner, DEC-47, #888). `mvp-6` (played on 2026-11-09 only, #626, #759) is `mvp-5` with a capture that costs a charge (DEC-38), built factories twice as fast (DEC-41, item 2) and no retreat from a fight (DEC-40); `mvp-5` (played from 2026-11-07, #805) is economy v2 with the automatic supply flow (DEC-43), the stances of DEC-44 and the terrain burn of DEC-45. `mvp-5` and `mvp-6` stay as historical and test rulesets (unit tests, golden replays), we do not run tournaments on them; `mvp-0` to `mvp-4` were removed with their code (owner decision 2026-11-09, #894), their files stay only in `rulesets/archive/`. After a rules change no tournament gates the merge: the required CI is the gate (golden replays, determinism and property tests, `py-slow` catch crashes). While the owner is still iterating the mechanics through playtests, tournaments are skipped. Once the owner declares the mechanics settled: one batched smoke `mise run tournament:gh --seeds 3` (crashes and gross imbalance), then the field run of 16 bots x 20 seeds (`tournament:gh`) for the ruleset numbers. Tournaments run on GitHub runners (`tournament:gh`), not on the owner's laptop; a local `mise run tournament -- --seeds 3` (at most 3 seeds) only when GitHub is unavailable (owner decision 2026-11-03). A full tournament (default seeds) only before a release playtest (BAL-02).
 
 ---
 
@@ -501,7 +500,6 @@ The reference machine is described in `docs/perf.md`.
 | One `project()` projection | ≤ 0.3 ms |
 | The same on maps with 45..55 nodes (`grid55`, DEC-27, item 7) | step and supply: the 40-node budgets; projection: 0.45 ms (accepted by the owner 2026-10-22, #371) |
 | The supply step (part of the simulation step) | ≤ 0.1 ms |
-| The supply step on a stress state (`test_bench_supply_many_donors_busy_roads`, `docs/perf.md`): busy roads, detours, dispatch once per `supply.dispatch_ticks` | ≤ 1 ms (accepted by the owner 2026-10-21) |
 | The supply flow step on a stress state (`test_bench_supply_flow_busy`, `docs/perf.md`): the busiest dispatch of DEC-43, about 18 packets at once | ≤ 0.3 ms on `grid40` and `grid55` (accepted by the owner 2026-11-04, #735; 0.2 ms before) |
 | A bot decision (every 5 ticks) | ≤ 1 ms |
 | A full headless match of two bots | ≤ 8 s |
@@ -550,40 +548,33 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | ruleset | `Ruleset` | all numbers and flags of the rules, `rulesets/*.toml` |
 | city / node | `Node` | a vertex of the graph; a node is a city with a warehouse or a province (DEC-23) |
 | province | `kind = province` | a node without a city: no warehouse, capacity 3, no VP, position only (DEC-23) |
-| road / edge | `Edge` | a link between nodes; `width`: road level 1..3; there is no type, an upgrade only speeds up supply delivery (DEC-22, DEC-26) |
+| road / edge | `MapDef.edges` | a link between nodes; roads have no levels and no upgrades (#894; the map field `max_level` is read by no rule) |
 | border point | `border_permille` | a point on an edge in thousandths from the end `a`; splits the edge into halves for vision (DEC-21, DEC-23) |
-| internal edge | `is_internal` | both ends belong to one owner; only it can be upgraded and only along it does supply go |
+| internal edge | `is_internal` | both ends belong to one owner; only along it does supply go |
 | buffer edge | `is_buffer` | the ends belong to different owners, or one is neutral |
 | group | `Group` | units of one player in one place: `units`, `charged` |
 | charge | `charged` | a charged unit; each charge is one "shot" |
-| warehouse | `warehouse` | a city's stock of charges; warehouse capacity: the node capacity, with `city_upgrades.enabled` its own by kind and level `warehouse_level` (DEC-26) |
-| barracks | `has_barracks` | the city can recruit; with `city_upgrades.enabled` the capital has it from the start, other cities get it by an upgrade for 3 CP (DEC-26) |
+| warehouse | `warehouse` | a node's stock of charges; its capacity is fixed by the kind (`warehouse.start_by_kind`: city 3, capital 6; a province `warehouse.province` = 1; DEC-43, item C) |
+| barracks | `has_barracks` | the city can recruit; the capital has it from the start, other cities build it for `city_upgrades.barracks_charges` charges (DEC-26, DEC-41 item 7) |
 | recruit queue | `recruit_queue` | the units a city produces one per `recruit.unit_ticks`; CP at queueing, cancelling the last one refunds (DEC-25) |
-| capacity | `capacity` | how many units and charges a node holds; fixed by the kind of node (DEC-22) |
-| front marker | `fronts`, `SetFront` | one of a player's two markers: a city with a marker fills its warehouse to full, when the city is lost the marker moves back to the capital (DEC-28) |
-| rear minimum | `rear_min`, `SetRearMin` | how many charges the cities without a marker keep, `0..supply.rear_min_max` (DEC-28) |
-| transfer | `Transfer` | a one-off shipment of charges between your own cities (DEC-18) |
-| starvation | `starvation` | a garrison cut off from the capital spends charges (DEC-19) |
+| capacity | `capacity` | how many units a node holds; fixed by the kind of node (DEC-22) |
+| starvation | `starvation` | the garrison of a factory-less pocket (an own component without the own capital) spends charges (DEC-43, item H; the consumption of DEC-19) |
 | packet | `Packet` | charges travelling along a road |
-| economy model | `economy.model` | `v1` (stances, front markers, donors) or `v2` (factories, DEC-41; no stances without the section `[stances]`, DEC-44; with `supply.model = "lines"` the drawn lines of `rulesets/mvp-3.toml`, with `supply.model = "flow"` the automatic flow of `rulesets/mvp-4.toml`, DEC-43) |
-| factory | `Node.factory`, `BuildFactory`, `Node.factory_ticks` | economy v2: a city that makes charges into its own warehouse; the capital from the start, others built for charges (DEC-41, item 2); the only node that starts supply lines, and a factory that is the target of a line gives its charges out with its production, a hub (DEC-42); under `stances.factories_follow` (DEC-47, `mvp-7`) every factory, built or captured, makes 1 charge per the capital period of its owner's stance on its own counter `factory_ticks` (0 when it starts working or is captured, carried over on a stance change) |
-| supply line | `Line`, `DrawLine`, `RemoveLine` | economy v2: a path of own nodes drawn by the player from an own factory to a city, any number per factory; only the target receives its charges, 1 charge per dispatch on its turn (DEC-41, item 3; DEC-42) |
-| supply flow | `supply.model = "flow"`, `systems.flow`, `Node.flow` | economy v2 without lines (DEC-43, `mvp-4`): every own node knows its distance in roads to the nearest leaf (a node touching a foreign one); per dispatch each node behind the level sends one charge per road downhill to a neighbour with room, then evens out level roads; a tired army pulls the level to itself; a full factory spills |
+| factory | `Node.factory`, `BuildFactory`, `Node.factory_ticks` | a city that makes charges into its own warehouse; the capital from the start, others built for charges (DEC-41, item 2), at most `factory.max`; a captured one passes to the capturer (`systems.flow.settle_factories`); under `stances.factories_follow` (DEC-47, `mvp-7`) every factory, built or captured, makes 1 charge per the capital period of its owner's stance on its own counter `factory_ticks` (0 when it starts working or is captured, carried over on a stance change) |
+| supply flow | `systems.flow`, `Node.flow` | the only supply (DEC-43): every own node knows its distance in roads to the nearest leaf (a node touching a foreign one); per dispatch each node behind the level sends one charge per road downhill to a neighbour with room, then evens out level roads; a tired army pulls the level to itself; a full factory spills |
 | leaf shift | `PlayerState.leaf_shift`, `SetLeafShift` | the one lever of the supply flow: the level (the nodes that keep what they get) moves this many roads back from the front, `0..d0(capital)`; free, hidden from the enemy (DEC-43, item B) |
 | bounce | `bounce` | an attacker without a win returns to the source node discharged |
-| scheduled order | `planned=True` | more expensive, visible to everyone as an intent, sets out with a delay, gives a one-off bonus; economy v2: the price of a move, the requested bonus `Move.bonus` is gathered in the node, one warehouse charge per `orders.plan_ticks_per_bonus` ticks, departs at the request, at the cap or by `ReleasePlan` (DEC-41, item 10) |
+| scheduled order | `planned=True` | visible to everyone as an intent, gives a one-off bonus: the price of a move, the requested bonus `Move.bonus` is gathered in the node, one warehouse charge per `orders.plan_ticks_per_bonus` ticks, departs at the request, at the cap or by `ReleasePlan` (DEC-41, item 10) |
 | fight | `Fight` | a fight over time (DEC-24): a node or an edge with a meeting point `point`, rounds every `combat.round_ticks`, reinforcements and retreat (no retreat under `combat.retreat = "none"`, DEC-40, `mvp-6`); visible to both (`PlayerView.fights`) |
-| terrain burn | `combat.terrain_burn`, `Fight.mute`, `burned_0`, `burned_1` | under the key (DEC-45, `rulesets/mvp-4-stances.toml`) a negative terrain takes that many charges of the defender at the start of the first round of a fight; without it plains silence a charge in every round (DEC-24, item F2) |
-| map tempo | `[map_tempo]`, `apply_map_tempo`, `Match.rules`, `Match.source_rules` | under the section (DEC-46, on in the main ruleset `mvp-7`, #885; `rulesets/mvp-4-stances-tempo.toml`) the economy periods of a match (CP, capital, factories, both stance tables) are scaled once by the node count `N` of its map: `pct = isqrt(N * 10000 // ref_nodes)` clamped to `min_pct..max_pct`, each period `p * 100 // pct`; `Match.rules` are the scaled rules the match plays, `Match.source_rules` the given ones (their hash is in the replay header) |
+| terrain burn | `Fight.mute`, `burned_0`, `burned_1` | a negative terrain takes that many charges of the defender at the start of the first round of a fight (DEC-45; it replaced the silencing of DEC-24, item F2) |
+| map tempo | `[map_tempo]`, `apply_map_tempo`, `Match.rules`, `Match.source_rules` | under the section (DEC-46, on in the main ruleset `mvp-7`, #885) the economy periods of a match (both stance tables and `factory.built_period_ticks`) are scaled once by the node count `N` of its map: `pct = isqrt(N * 10000 // ref_nodes)` clamped to `min_pct..max_pct`, each period `p * 100 // pct`; `Match.rules` are the scaled rules the match plays, `Match.source_rules` the given ones (their hash is in the replay header) |
 | intent | `Intent` | the part of a scheduled order visible to everyone: from where, to where, the kind, without the size and group id |
-| modes | `Mode.ATTACK / DEFENSE` | "Attack", "Defense"; "Building" (`BUILD`) was removed by DEC-16; economy v2 has no "Defense" (DEC-41, item 5) |
-| bunker | `Node.fort`, `BuildBunker` | economy v2: a building of a city or a province, +`bunker.shots` virtual shots to a charged defender in every fight there, destroyed on capture (DEC-41, item 12) |
-| road fortification | `Node.road_forts`, `FortifyRoad`, `EdgeView.forts` | `mvp-4` (`[fort]`, DEC-43, item D): a line of an own node on a road leaving it, at the border point of the road, bought for CP; an enemy group crossing it towards the node loses 1 charge per started 3 units (`toll_paid`, `toll_taken`); destroyed when the node is captured. Code name `road_fort` (the bunker is `fort`) |
-| progressive payment | `Build.owed`, `systems.build.pay` | economy v2: a building takes charges from the node warehouse, then from the own standing groups, until paid; its build time starts then (DEC-41, item 7) |
-| construction | `UpgradeRoad(edge)` | upgrading your own internal road by one level for CP (`orders.cost.build`), construction on an edge `Edge.build` (DEC-28, item 7) |
+| mode | `Mode.ATTACK` | every group attacks; "Defense" was removed with economy v1 (DEC-41, item 5; #894); the mode stays in the views as the sign of an enemy in a place |
+| road fortification | `Node.road_forts`, `FortifyRoad`, `EdgeView.forts` | `[fort]`, DEC-43, item D: a line of an own node on a road leaving it, at the border point of the road, bought for CP; an enemy group crossing it towards the node loses 1 charge per started 3 units (`toll_paid`, `toll_taken`); destroyed when the node is captured. Code name `road_fort` |
+| progressive payment | `Build.owed`, `FactoryBuild.owed`, `systems.build.pay` | a building takes charges from the node warehouse, then from the own standing groups, until paid; its build time starts then (DEC-41, item 7) |
 | CP | `cp` | command points; flat regeneration, they do not grow with territory; stored in hundredths |
-| stance | `Stance.ECONOMY / BALANCE / WAR` | economy v1: the share of CP regeneration that goes into charges (DEC-02); economy v2 has no stances (DEC-41, item 1) unless the ruleset has the section `[stances]` (DEC-44, `rulesets/mvp-4-stances.toml`): then the stance sets the periods of the CP income and of the own capital, and with `stances.factories_follow` (DEC-47, `mvp-7`) of every other factory too |
-| stance progress | `PlayerState.cp_ticks`, `capital_ticks`, `Node.factory_ticks` | under `[stances]`: ticks since the last CP quantum and the last charge of the own capital (with `factories_follow`, DEC-47: of each other factory); a counter that reaches the period of the stance fires and restarts, a real stance change carries each over to the new period, `ticks * new // old` rounded down (DEC-44, revised 2026-11-07, #792) |
+| stance | `Stance.ECONOMY / BALANCE / WAR` | the section `[stances]` (DEC-44, every ruleset): the stance sets the periods of the CP income and of the own capital, and with `stances.factories_follow` (DEC-47, `mvp-7`) of every other factory too |
+| stance progress | `PlayerState.cp_ticks`, `capital_ticks`, `Node.factory_ticks` | ticks since the last CP quantum and the last charge of the own capital (with `factories_follow`, DEC-47: of each other factory); a counter that reaches the period of the stance fires and restarts, a real stance change carries each over to the new period, `ticks * new // old` rounded down (DEC-44, revised 2026-11-07, #792) |
 | player view | `PlayerView` | the state filtered by fog for a player or a bot |
 | VP | `vp` | victory points for holding cities |
 | auto-merge | `groups_merged` | your own group that finished moving in your own node, or was recruited there, merges with the node's group at the end of the tick (DEC-20) |

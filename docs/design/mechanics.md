@@ -3,6 +3,13 @@
 > **Status: mechanics frozen for the first release on 2026-10-28 (owner decision).** Bugs are fixed at once; new rules
 > and mechanics go to the queue after the release (#282).
 
+> **Removed from the code 2026-11-09 (#894):** the rulesets `mvp-0` to `mvp-4` (`mvp-4-stances`,
+> `mvp-4-stances-tempo`, `mvp-4-sup200` too) and everything only they reached: economy v1 (the stance share of CP,
+> front markers, the rear minimum, donors, transfers), the drawn supply lines, the bunker, road levels and their
+> upgrade, warehouse upgrades and "Defense". The kept rulesets are `mvp-5`, `mvp-6`, `mvp-7` (the main one) and
+> `test-short`. The decisions below that describe the removed rules stay as history only, each marked "removed" or
+> "partly removed"; their texts "in force for `economy.model = "v1"`" or "for `mvp-3`" describe no ruleset any more.
+
 > **The single source of truth about the game rules** (see `AGENTS.md`, section 0).
 > The basis of the document: a digest of the mechanics discussions (the "battery unit" model). The decisions of the DEC issues
 > are written into the matching sections; their summary list: section 21.
@@ -71,6 +78,8 @@ The rules whose violation breaks the main idea of the game.
 
 ### Unit modes
 
+> **Partly removed from the code 2026-11-09 (#894); history only:** the "Defense" mode (`SetMode`): every group attacks; `Mode` keeps only "Attack".
+
 - ~~**[accepted]** Three modes: **Attack / Defense / Building** (on the board: A / D / B).~~ **[superseded by DEC-16]**
 - **[accepted]** Two modes: **Attack / Defense** (DEC-16, section 8). Roads are upgraded by a city, not by a group.
 - ~~**[open]** "A builder upgrades roads": is it a separate unit type or a mode "B" of an ordinary unit? A separate unit type breaks the "one unit" principle and changes the triangle of modes.
@@ -79,9 +88,11 @@ The rules whose violation breaks the main idea of the game.
 
 ### Appearance of new units (DEC-01, #7) **[accepted]**
 
+> **Partly removed from the code 2026-11-09 (#894); history only:** the flag `recruit.location`: the capital and the cities with a barracks recruit (DEC-26).
+
 Recruiting in any own city with free capacity: ~~the command `Recruit(node)` creates one discharged unit as a new group for 1 CP; no more than one unit per city per 20 ticks, otherwise the rejection `RECRUIT_COOLDOWN`.~~ **[superseded by DEC-25]**: `Recruit(node)` puts a unit into the production queue of the city, CP at queueing (the DEC-25 block below). The flag `recruit.location = any_city | capital`. **[superseded by DEC-26 with `city_upgrades.enabled = true`]**: the capital and the cities with a barracks recruit (the block "Barracks (DEC-26)" below), `recruit.location` does not apply.
 
-Values in `rulesets/mvp-0.toml`: ~~`recruit.cooldown_ticks`~~ **[superseded by DEC-25]**: `recruit.unit_ticks`, `recruit.queue_max`, `recruit.refund_started_pct`; `recruit.location`, `orders.cost.recruit` (in hundredths of CP).
+Values in `rulesets/*.toml`: ~~`recruit.cooldown_ticks`~~ **[superseded by DEC-25]**: `recruit.unit_ticks`, `recruit.queue_max`, `recruit.refund_started_pct`; `recruit.location`, `orders.cost.recruit` (in hundredths of CP).
 
 ~~How the simulation computes this (SIM-12, #28): a unit appears when the command is applied (at the start of the tick), the new group is in "Attack", one unit without a charge. Free capacity: the own units standing in the city are fewer than its capacity (section 9; groups on edges in transit do not count). The cooldown belongs to the city: a recruit at tick `t` allows the next one in this city from tick `t + cooldown_ticks`. The rejections are checked in the order: the city does not exist (`NOT_FOUND_OR_HIDDEN`), not own (`NOT_OWNER`), not the capital when `recruit.location = capital` (`NOT_CAPITAL`), no room (`CITY_FULL`), cooldown (`RECRUIT_COOLDOWN`), not enough CP (`NOT_ENOUGH_CP`).~~ **[superseded by DEC-25]**: how the simulation computes this: the DEC-25 block below, "Implementation". Groups on edges in transit still do not occupy capacity.
 
@@ -208,6 +219,8 @@ Alternatives (not chosen):
 - Production during a fight too (reinforcements straight into the fight, discharged, die first).
 
 ### Barracks (DEC-26, #265) **[accepted]**
+
+> **Partly removed from the code 2026-11-09 (#894); history only:** the flag `city_upgrades.enabled` (the barracks always applies) and the CP price of the barracks (it is paid in charges, DEC-41 item 7).
 
 The owner's decision of 2026-10-14 (#252), all the details are accepted (#265). A part of the DEC-26 block (section 8: the flag,
 the warehouse, roads, the common construction of a city, commands, the player view, worked examples). The barracks works
@@ -603,6 +616,8 @@ Alternatives (not chosen):
 - Terrain acts on the defender even without charges (the siege of attrition is almost impossible in the mountains).
 
 ### Fight over time (DEC-24, #261) **[accepted]**
+
+> **Partly removed from the code 2026-11-09 (#894); history only:** item F2, plains silencing a charge of the defender in every round: plains always burn that many charges in the first round (DEC-45, the key `combat.terrain_burn` is gone).
 
 The owner's decision of 2026-10-14 (#252). Replaces rule 8 of DEC-07 (the fight entirely in the arrival tick) and
 the repeated bounce of rule 4; absorbs the open #133 and items 2-4 of #141 (their default values are
@@ -1307,6 +1322,8 @@ parting volley; the recommendation of #626, the owner chose N).
 
 ### Plains: the defender burns a charge in the first round (DEC-45, #778) **[accepted]**
 
+> **Since 2026-11-09 (#894) the burn always applies: the key `combat.terrain_burn` is gone.**
+
 The owner's decision of 2026-11-06, while designing the arena badges (#776). A plains defender had one silent charge: `R = charged - 1` in every round (DEC-24, item F2). The charge does not cancel a shot, may survive the fight unused, and with no discharged unit around a surplus shot kills a charged unit outright (1/1 on plains), the only exception to "a charged unit cannot be killed directly". Bonuses and penalties should be one-off and read the same way: mountains give a shot, plains take a charge, the badge is gone.
 
 **Behind a flag.** Everything below applies only under the optional key `combat.terrain_burn = true` and revises DEC-24, item F2 for a negative terrain there and nowhere else. An absent key is left out of `ruleset_hash()`, so every other ruleset keeps its hash and its behavior; `mvp-4` plays the silence of item F2. The key is on in `rulesets/mvp-4-stances.toml` (the owner's playtest ruleset); the hash of that ruleset changed, the previous one stays in `rulesets/archive/`. `ruleset_public.combat.terrain_burn` tells the client.
@@ -1387,6 +1404,8 @@ In the MVP, a prepared defense is given by the "Defense" mode with ~~the same +2
 
 ### Modes and scheduled orders (DEC-08, #12) **[accepted]**
 
+> **Partly removed from the code 2026-11-09 (#894); history only:** the "Defense" mode, its price and intent, and the fixed delay of a planned order (`orders.planned_delay_ticks`); a planned order gathers its requested bonus (DEC-41, item 10), its intent and its cancel stay.
+
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: the "Defense" mode and the scheduled order's fixed delay and price (DEC-41 item 10). The text below is kept and is in force for `economy.model = "v1"`.
 
 Extends sections 3 and 5: preparation time, cancelling, mode effects.
@@ -1416,6 +1435,8 @@ Alternatives (not chosen):
 - Asymmetric cancelling: free outside a threat, expensive under a threat.
 
 ### Scheduled order bonus by distance (DEC-29, #291) **[accepted]**
+
+> **Partly removed from the code 2026-11-09 (#894); history only:** the bonus by distance (`orders.planned_bonus_per_edge`) and the fixed delay; the cap of the bonus by the charged units at departure and the bonus shown in a fight stay.
 
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: the distance bonus; the bonus is accumulated in charges. The text below is kept and is in force for `economy.model = "v1"`.
 
@@ -1459,6 +1480,8 @@ Alternatives (not chosen):
 - A multiplier by group size: rewards big armies (section 5, "Why not x2").
 
 ### Accumulation of the "Defense" bonus (DEC-30, #316) **[accepted]**
+
+> **Removed from the code 2026-11-09 (#894); history only.**
 
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: the "Defense" mode; the bunker replaces it. The text below is kept and is in force for `economy.model = "v1"`.
 
@@ -1755,6 +1778,8 @@ The key clarification from the discussion: the problem is not that CP are both a
 
 ### Economy model and CP stance (DEC-02, #8) **[accepted]**
 
+> **Partly removed from the code 2026-11-09 (#894); history only:** the stance share of the CP quantum, `economy.charges_per_cp`, the charge accumulator, the stance cooldown, `cp.period_ticks` and `economy.model`; the CP quantum, the cap and the burn stay, the period comes from the stance (DEC-44).
+
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: stances, the charge share of CP regeneration, `charges_per_cp`, the starting stance (DEC-09) and the stance cooldown; in v2 all CP goes to CP and charges come from factories. The text below is kept and is in force for `economy.model = "v1"`. The block DEC-44 below brings stances back to v2 under the section `[stances]`, with other rates and no cooldown.
 
 A flat economy: only the capital produces supply. ~~Passively 1 charge per 50 ticks;~~ **[superseded by the decision of 2026-10-14, #253]**: there is no passive production (below). The stance has three positions (25 / 50 / 75% of the CP regen goes into charges at the rate 1 CP → 2 charges). Credited in a quantum: once per 50 ticks 100 hundredths of CP are divided by the stance; the share going to charges accumulates in an accumulator (in hundredths of a charge) and turns into whole charges. At the CP cap the excess CP burns up; the stance's share into charges is always credited. Changing the stance is free, not more often than once per 100 ticks.
@@ -1780,6 +1805,8 @@ produced charges are lost, CP regenerate as usual.
 
 #### Starting stance and the first stance change (DEC-09, #104) **[accepted]**
 
+> **Partly removed from the code 2026-11-09 (#894); history only:** the stance cooldown; the starting stance stays.
+
 The owner's decision of 2026-10-28; it confirms what is implemented (no change of rules, `SIM_VERSION` unchanged).
 
 - The starting stance of both players is "Balance" (`economy.start_stance = "balance"`).
@@ -1790,6 +1817,8 @@ Alternatives (not chosen):
 - Two independent flat flows (CP and charges) without conversion.
 
 ### Stances in economy v2 with local progress (DEC-44, #772) **[accepted]**, item 4 **[revised 2026-11-07, #792]**
+
+> **Since 2026-11-09 (#894) the section `[stances]` is required: every ruleset has it, so the flag paragraph below is history.**
 
 The owner's decision of 2026-11-06, after playing `mvp-4-sup200` (#763, the capital makes 1 charge per 20 s): the supply shortage is felt, and players should control the balance of CP against supply. The choice is supply for buildings (barracks 3 charges, factory 4) or CP for expansion and fights. It is an experiment for playtests: the owner doubts Balance is useful (it was unused in the past) and wants to see how much it is used, and how built factories feel independent of stances. `gow-bots stats` measures it (`docs/balance/README.md`).
 
@@ -1978,6 +2007,8 @@ Recommendation: start with flat, move to concave only if players stop expanding.
 - ~~**[open]** A priority lever: mark a city as a priority so that charges go there first. One button instead of a flow control panel.~~ **[superseded by DEC-18]**: three priority levels (block below).
 
 ### Supply management: priorities and transfers (DEC-18, #230) **[accepted]**
+
+> **Partly removed from the code 2026-11-09 (#894); history only:** the priorities, transit, donors and delivery passes, the one-off transfer (`Transfer`) and the throughput by road level; the rules of a packet on its path (item 5) and the recharge stay (`gow_sim.systems.supply`, used by the flow of DEC-43).
 
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: one-off transfers, the delivery passes, the priority and transit parts (supply lines replace them); recharge and spoils stay. The text below is kept and is in force for `economy.model = "v1"`.
 
@@ -2212,6 +2243,8 @@ Alternatives (not chosen):
 
 ### Starvation when cut off (DEC-19, #231) **[accepted]**
 
+> **Partly removed from the code 2026-11-09 (#894); history only:** the starvation of cut-off cities; the consumption (items 3 and 4) and `starve_in` stay for the factory-less pockets of DEC-43, item H.
+
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: starvation is removed (a cut line already stops resupply). The text below is kept and is in force for `economy.model = "v1"`. **Under `supply.model = "flow"`** (`mvp-4`) it is back by DEC-43 item H (#719): in a pocket (an own component without the own capital) that has no own factory, on every node, provinces included.
 
 The owner's decision 2026-10-12. Replaces the capacity drop of a cut-off city (section 9, SIM-07) together with DEC-22.
@@ -2297,6 +2330,8 @@ Alternatives (not chosen):
 
 ### How the simulation computes this (SIM-08, #24)
 
+> **Removed from the code 2026-11-09 (#894); history only.**
+
 > This block describes the code before the implementation of DEC-18 (#230, implemented in #243), DEC-19 (#231), DEC-22 (#234) and DEC-26 (#265: the warehouse "capacity" below, with `city_upgrades.enabled`, is its own, `supply.target_stock`; there are no road types); the current rules: the blocks above and section 8. Width below: the road level, "no more than `width` charges": `amount` (DEC-22). The values of #131 came into DEC-18 as the base algorithm; the "by descending deficit" order below was removed by DEC-18.
 
 `gow_sim.systems.supply`, numbers: the `[supply]` section of the ruleset.
@@ -2322,6 +2357,8 @@ Alternatives (not chosen):
   recharge, dispatch.
 
 ### Economy v2 (DEC-41, #642) **[accepted]**
+
+> **Partly removed from the code 2026-11-09 (#894); history only:** the flag `economy.model` (every ruleset is v2), items 3 and 6 (the drawn lines, the suggested path and the auto-extension of #665), the warehouse upgrade of item 7, item 12 (the bunker) and item 14's line and bunker commands and `FEATURE_DISABLED`; item 8's key is now `supply.speed_pct`.
 
 > **[superseded by DEC-43 under `supply.model = "flow"`]** (`mvp-4`): items 3 and 6 (lines, the drawn path), the burn of a full factory in item 2 (a spill first), the warehouse upgrade and the bunker of items 7 and 12, the line and bunker commands of item 14, and the #665 suggested path and auto-extension. The text below is in force for `mvp-3` (`supply.model = "lines"`).
 
@@ -2516,6 +2553,8 @@ Confirmed by the owner on 2026-10-31: items (1) radius by packet ticks, (2) work
 
 ### Lines from factories only (DEC-42, #674) **[accepted]**
 
+> **Removed from the code 2026-11-09 (#894); history only.**
+
 > **[superseded by DEC-43 under `supply.model = "flow"`]** (`mvp-4`): there are no lines; the block is in force for `mvp-3`.
 
 Owner decision of 2026-11-01 after a playtest of `mvp-3`: lines started from cities that are not factories (relays, line trees) are confusing, "you have to click many cities to understand what goes where". Economy v2 only (`economy.model = "v2"`); v1 is unchanged. `SIM_VERSION` 31, `PROTOCOL_VERSION` 35 (`ruleset_public.lines` is removed: it carried only `max_out`). It supersedes, under v2: in DEC-41 item 3 "any city that is the target of a line can start lines", the tree node of the round robin, L5 (relay), the limit of L4, the tree reading of L6 (#661), the rule "Relay transit" (#661, `Node.inbox`), and the source rule of the auto-extension (#665).
@@ -2550,6 +2589,8 @@ Owner decision of 2026-11-01 after a playtest of `mvp-3`: lines started from cit
 The owner's situations of item 3 read under DEC-42: situation 2 is the lines A -> B, A -> B -> D and A -> B -> C (B captured: all three cut, no way round); situation 3: C captured cuts only A -> B -> C.
 
 ### Automatic supply flow, leaf shift, fixed warehouses, road fortifications (DEC-43, #697) **[accepted]**
+
+> **Since 2026-11-09 (#894) the flow is the only supply: the key `supply.model` is gone and `[fort]` is required, so the flag paragraph below is history.**
 
 The owner's decision of 2026-11-03 on #697 (the algorithm and its options: `docs/design/supply-auto-flow.md`, all recommendations accepted), #699 and #701 (how the flow is drawn: `docs/design/ui-style.md`, section 42). The owner's reason: any supply system the player steers by hand moves the micromanagement from CP to supply, which is now the more important resource; so supply flows by itself towards the front, one local rule for every node, and the player has one lever, the leaf shift. Items A to E are **[accepted]**; item D (road fortifications) by the owner's decision of 2026-11-03 on #707. Points this block had to add to the owner's text were marked [reading, to confirm]; the owner accepted all ten as written on 2026-11-03 (#704), so they are marked **[accepted]** (owner 2026-11-03). Implemented by #704 (`SIM_VERSION` 32, `PROTOCOL_VERSION` 36): the simulation, the protocol and the bots of items A, B, C, E and G; the client is #705. Item D: #707 (`SIM_VERSION` 33, `PROTOCOL_VERSION` 37; the client is a later step of #707). Item I (the leaves face the enemy only, the farthest nodes before contact, the leaves even out): the owner's decision of 2026-11-03 after the first playtest, #724 (`SIM_VERSION` 35); it supersedes parts of items A1, A2, A6 and A10, marked there. Item J (unpaid buildings pull supply like a discharged army): the owner's decision of 2026-11-03, #729 (`SIM_VERSION` 37); it extends item A4. Item K (level roads feed the nodes that can pass supply on, the saddle of match 11): the owner's decision of 2026-11-03, #732 (`SIM_VERSION` 38); it supersedes the gap rule of item A6 on the level roads behind the level, marked there. Item L (the level passes outward along the capital distance, a leaf is a corridor, match 12): the owner's decision of 2026-11-04, #735 (`SIM_VERSION` 39); it supersedes the gap rule of item I3 on the level of the capital's component and item K6, marked there. Item M (the nearest need: every node with room calls the nearest stock behind it, the front first; the supply contract): the owner's decision of 2026-11-04, #738 (`SIM_VERSION` 40); in the capital's component it supersedes items A6 and K, items L3 to L6, the gap rule of item I7 for a lifted node's other level neighbours and the neighbour-only spill of item A8, marked there.
 
@@ -2947,6 +2988,8 @@ The owner's decisions of 2026-11-04 on #738: take candidate C2 of `docs/design/s
 
 ## 8. Roads
 
+> **Partly removed from the code 2026-11-09 (#894); history only:** road levels and their upgrade (`UpgradeRoad`, `[road]`, `[build]`, the road state of the simulation); roads have one level, the map field `max_level` is read by no rule.
+
 - **[accepted]** Roads **do not limit the number of units**. ~~They affect only the speed and volume of supply delivery.~~ **[superseded by DEC-28]**: an upgraded road speeds up units too (`[road.speed_pct]`: level 2 +15%, level 3 +30%), not only supply (DEC-28 block below, item 7).
 - **[accepted]** A road can be upgraded only **inside your own territory** (both ends of the edge are yours).
 - **[accepted]** A road that leads from your own city to an enemy or neutral one is a **buffer** road, nobody can upgrade it.
@@ -2958,6 +3001,8 @@ Consequences:
 - Deduction through the fog is kept in a soft form: how many bodies the enemy has at the front is unknown, but the number of **charged** ones is limited by how many charges reach there along the roads.
 
 ### Road upgrade as a function of the city (DEC-16, #203) **[accepted]**
+
+> **Removed from the code 2026-11-09 (#894); history only.**
 
 > **The numbers and the link to capacity are superseded by DEC-22 (#234), block below:** at most three levels, road type
 > at the first upgrade, prices `2 = 3`, `3 = 4`, capacity does not depend on roads; a province cannot
@@ -3077,6 +3122,8 @@ Alternatives (not chosen):
   cut-off city.
 
 ### Roads of two types, fixed capacity, a 15-minute match (DEC-22, #234) **[accepted]**
+
+> **Partly removed from the code 2026-11-09 (#894); history only:** the road levels and everything that depends on them (items 2 to 8, the packet speed and throughput by level of item 4, the level in the fog); the fixed capacity of item 1 and the 15-minute match stay.
 
 Playtest 2026-10-12: the match felt cramped, nobody upgraded roads, capacity from roads mixed supply and garrison size. The owner's decision. Replaces capacity from roads (sections 7, 9), the numbers of DEC-16 and its link to capacity, item 3 of DEC-17, the match length of DEC-03.
 
@@ -3200,6 +3247,8 @@ Alternatives (not chosen):
 - A 12-minute match (DEC-03).
 
 ### City development: barracks, warehouse separate from capacity, roads without a type (DEC-26, #265) **[accepted]**
+
+> **Partly removed from the code 2026-11-09 (#894); history only:** the flag `city_upgrades.enabled` (always on), the warehouse levels (`UpgradeWarehouse`, `warehouse.max_level`, `warehouse.gain_per_level`), the roads and their prices and the CP prices; the barracks and the fixed warehouses by city kind stay.
 
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: road upgrades and the CP prices of the barracks and the warehouse upgrade (paid in charges in v2). The text below is kept and is in force for `economy.model = "v1"`.
 > **[superseded by DEC-43 under `supply.model = "flow"`]** (`mvp-4`): items 2 and 3: fixed warehouses (city 3, capital 6, province 1), no `UpgradeWarehouse`.
@@ -3402,6 +3451,8 @@ Alternatives (not chosen):
 
 ### Rework of supply and roads (DEC-28, #290) **[accepted]**
 
+> **Removed from the code 2026-11-09 (#894); history only.**
+
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: front markers, `rear_min`, donors, the delivery passes and the road payment in CP (road upgrades are removed). The text below is kept and is in force for `economy.model = "v1"`.
 
 The owner's decision of 2026-10-17. Replaces the three priority levels and the delivery order of DEC-18 (section 7, items 1, 2, 4), the payment for a road with the charges of the city warehouse (DEC-16, DEC-26, item 7), the throughput of 1 at any level (DEC-22, item 4; DEC-26, item 7) and the burning of a capital charge above capacity (section 6). What stays: the supply tree as a distance metric (DEC-18, item 3), the one-off transfer (DEC-18, items 6 and 10), starvation in encirclement (DEC-19), provinces as transit. What the implementation changes in code, rulesets and protocol: #292 (sim, protocol, bots), #293 (client). The details the owner did not fix were marked [proposed]; the owner confirmed all of them on 2026-10-17, they are [accepted] (confirmed by the owner on 2026-10-17).
@@ -3598,6 +3649,8 @@ Alternatives (not chosen):
 ---
 
 ### How the simulation computes this (SIM-11, #27)
+
+> **Removed from the code 2026-11-09 (#894); history only.**
 
 > The struck-through items described construction by a group before the implementation of DEC-16 (#209, `SIM_VERSION` 3); the rule
 > in force: the DEC-16 block above. The items not struck through apply to construction by a city too.
@@ -4035,6 +4088,8 @@ Alternatives (not chosen):
 
 ### Fog of war for roads (DEC-17, #204) **[accepted]**
 
+> **Partly removed from the code 2026-11-09 (#894); history only:** road widths, their fog memory and the enemy's road construction; the edge level of item 1 stays as the edge visibility (`EdgeView.detail`).
+
 The owner's playtest of 2026-10-07: the enemy's road upgrades were visible through the fog. Decision: road widths, the capacity of enemy cities and its construction are visible only within the vision zone; outside vision the player sees the last seen state. Replaces the corresponding parts of DEC-04 (struck through above). Road construction by a city is introduced by DEC-16 (#203); the visibility rules below do not depend on the way of construction.
 
 1. **Visible edge.** The width of an edge is seen exactly while the edge is not in the fog for the player: edge level `PRESENCE` per DEC-04 (~~at least one end is seen exactly: an own node or a node where an own group stands~~ **[superseded by DEC-35]**: at least one end is a vision source of DEC-35, that is, a node with an own group or the node of the half an own group on the edge is in). There is no separate vision rule for widths: one edge-level function (`compute_vision`) decides both "is there an enemy" and the width.
@@ -4443,7 +4498,7 @@ This is the main remedy against the bunker strategy: a player who sealed themsel
 
 ~~A 12-minute match (7200 ticks).~~ **[superseded by DEC-22]**: 15 minutes (9000 ticks). VP are awarded every 300 ticks (30 seconds) for each of your cities (the `vp` value from the map, the capital ×3); per match ~~24 awards~~ 30 awards. Capturing the enemy capital is an instant victory. On the timer the one with more VP wins; on a tie, the one with more cities; otherwise a draw.
 
-Values in `rulesets/mvp-0.toml`: `tick_hz`, `match_ticks`, `victory.vp_period_ticks` (300), `victory.capital_multiplier` (3).
+Values in `rulesets/*.toml`: `tick_hz`, `match_ticks`, `victory.vp_period_ticks` (300), `victory.capital_multiplier` (3).
 
 The owner's decision of 2026-10-07 (#211): the award period was increased from 50 to 300 ticks, because huge VP numbers are hard to read. The values per city did not change, the ratio between the players is preserved; only the frequency of the award changes (and the step of the score in the interface). The end of the match (~~7200~~ 9000 ticks, DEC-22) and the 600 ticks of `test-short` are multiples of the period, the last award falls on the last tick.
 
@@ -4487,7 +4542,7 @@ If the bunker still dominates in playtests, first turn **the VP award rate and t
 
 Nothing is calibrated, this is a point of reference.
 
-The current starting values of the ruleset `rulesets/mvp-0.toml` (durations in ticks, CP in hundredths) are listed in SIM-01 (#17). The regen "1 CP per 5 s" is recorded there as 100 hundredths of CP per 50 ticks, the cap of 5 CP as 500.
+The starting values of the first playtest ruleset `rulesets/mvp-0.toml` (removed by #894; the current values: `rulesets/mvp-7.toml`) (durations in ticks, CP in hundredths) are listed in SIM-01 (#17). The regen "1 CP per 5 s" is recorded there as 100 hundredths of CP per 50 ticks, the cap of 5 CP as 500.
 
 | Parameter | Value |
 |---|---|
@@ -4731,32 +4786,32 @@ Matches the glossary of `AGENTS.md` (section 15). Changes only together with it.
 | ruleset | `Ruleset` | all numbers and flags of the rules, `rulesets/*.toml` |
 | city / node | `Node` | a vertex of the graph; a node is a city with a warehouse or a province (DEC-23) |
 | province | `kind = province` | a node without a city: no warehouse, capacity 3, no VP, position only (DEC-23) |
-| road / edge | `Edge` | a link between nodes; `width`: road level 1..3; ~~type fast or cargo from level 2 (DEC-22)~~ there is no type, an upgrade only speeds up delivery (DEC-26) |
+| road / edge | `MapDef.edges` | a link between nodes; roads have no levels and no upgrades (road levels and their upgrade of DEC-22, DEC-26, DEC-28 removed from the code 2026-11-09 (#894); the map field `max_level` is read by no rule) |
 | border point | `border_permille` | a point on an edge in thousandths from the end `a`; splits the edge into halves for vision (DEC-21, DEC-23) |
-| internal edge | `is_internal` | both ends belong to one owner; only it can be upgraded and only along it does supply go |
+| internal edge | `is_internal` | both ends belong to one owner; only along it does supply go |
 | buffer edge | `is_buffer` | the ends belong to different owners, or one is neutral |
 | group | `Group` | units of one player in one place: `units`, `charged` |
 | charge | `charged` | a charged unit; each charge is one "shot" |
-| warehouse | `warehouse` | a city's stock of charges; with `city_upgrades.enabled` the warehouse capacity is separate from the unit capacity and grows with upgrades (DEC-26) |
+| warehouse | `warehouse` | a node's stock of charges; its capacity is fixed by the kind (city 3, capital 6, province 1; DEC-43, item C); the warehouse levels of DEC-26 removed from the code 2026-11-09 (#894) |
 | recruit queue | `recruit_queue` | the units a city produces one per `recruit.unit_ticks`; CP at queueing, cancelling the last one refunds (DEC-25) |
-| barracks | `has_barracks` | the city can recruit; with `city_upgrades.enabled` the capital has it from the start, other cities get it by an upgrade for 3 CP (DEC-26) |
-| capacity | `capacity` | how many units (and charges when `enabled = false`) a node holds; fixed by the kind of node (DEC-22); warehouse capacity is separate (DEC-26) |
+| barracks | `has_barracks` | the city can recruit; the capital has it from the start, other cities build it for charges (DEC-26, DEC-41 item 7) |
+| capacity | `capacity` | how many units a node holds; fixed by the kind of node (DEC-22); the warehouse capacity is separate (DEC-26, DEC-43 item C) |
 | ~~priority~~ | ~~`priority`~~ | ~~the supply level of a city: high, normal, low (DEC-18)~~ **[superseded by DEC-28]** |
-| front marker | `front` | one of a player's two markers: a city fills its warehouse to full (DEC-28) |
-| rear minimum | `rear_min` | how many charges the cities without a marker keep (DEC-28) |
-| transfer | `Transfer` | a one-off shipment of charges between your own cities (DEC-18) |
-| starvation | `starvation` | a garrison cut off from the capital spends charges (DEC-19) |
+| ~~front marker~~ | ~~`front`~~ | ~~one of a player's two markers: a city fills its warehouse to full (DEC-28)~~ removed from the code 2026-11-09 (#894) |
+| ~~rear minimum~~ | ~~`rear_min`~~ | ~~how many charges the cities without a marker keep (DEC-28)~~ removed from the code 2026-11-09 (#894) |
+| ~~transfer~~ | ~~`Transfer`~~ | ~~a one-off shipment of charges between your own cities (DEC-18)~~ removed from the code 2026-11-09 (#894) |
+| starvation | `starvation` | the garrison of a factory-less pocket spends charges (DEC-43, item H; the consumption of DEC-19; the starvation of cut-off cities removed from the code 2026-11-09 (#894)) |
 | packet | `Packet` | charges travelling along a road |
 | bounce | `bounce` | an attacker without a win returns to the source node discharged |
-| scheduled order | `planned=True` | more expensive, visible to everyone as an intent, sets out with a delay, gives a one-off bonus |
+| scheduled order | `planned=True` | visible to everyone as an intent, gathers its requested bonus in the node before it sets out, gives a one-off bonus (DEC-41, item 10) |
 | intent | `Intent` | the part of a scheduled order visible to everyone: from where, to where, the kind, without the size and group id |
-| modes | `Mode.ATTACK / DEFENSE` | "Attack", "Defense"; "Building" (`BUILD`) was removed by DEC-16 |
-| construction | ~~`UpgradeRoad(node, edge)`~~ `UpgradeRoad(edge)` | upgrading your own internal road by one level ~~by your own city for charges of its warehouse (DEC-16)~~ for CP, without a city (DEC-28, item 7) |
+| modes | `Mode.ATTACK` | every group attacks; "Building" (`BUILD`) was removed by DEC-16, "Defense" removed from the code 2026-11-09 (#894) |
+| ~~construction~~ | ~~`UpgradeRoad(edge)`~~ | ~~upgrading your own internal road by one level for CP, without a city (DEC-28, item 7)~~ removed from the code 2026-11-09 (#894) |
 | CP | `cp` | command points; flat regeneration, they do not grow with territory; stored in hundredths |
-| terrain burn | `combat.terrain_burn` | a negative terrain takes charges of the defender at the start of the first round of a fight instead of silencing them in every round (DEC-45) |
+| terrain burn | `Fight.mute`, `burned_0`, `burned_1` | a negative terrain takes charges of the defender at the start of the first round of a fight (DEC-45, always since #894) |
 | no retreat | `combat.retreat = "none"` | a group that entered a fight stays in it until the fight ends; the retreat commands give `IN_FIGHT` (DEC-40, `mvp-6`) |
 | map tempo | `[map_tempo]`, `apply_map_tempo`, `Match.rules` | the economy periods of a match scaled once by the node count of its map, `pct = isqrt(N * 10000 // ref_nodes)` clamped; `Match.rules` are the scaled rules, `Match.source_rules` the given ones (DEC-46) |
-| stance | `Stance.ECONOMY / BALANCE / WAR` | economy v1: the share of CP regeneration that goes into charges (DEC-02); economy v2 with `[stances]`: the periods of the CP income and of the own capital (DEC-44), with `stances.factories_follow` of every factory (DEC-47) |
+| stance | `Stance.ECONOMY / BALANCE / WAR` | the periods of the CP income and of the own capital (DEC-44), with `stances.factories_follow` of every factory (DEC-47); the stance share of economy v1 (DEC-02) removed from the code 2026-11-09 (#894) |
 | player view | `PlayerView` | the state filtered by fog for a player or a bot |
 | VP | `vp` | victory points for holding cities |
 
@@ -4769,35 +4824,35 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 
 | DEC | Issue | Topic | Where recorded | Status |
 |---|---|---|---|---|
-| DEC-01 | #7 | how new units appear | section 3 | [accepted]; instant recruit and cooldown [superseded by DEC-25]; "any city" [superseded by DEC-26 with `city_upgrades.enabled = true`] |
-| DEC-02 | #8 | the economy model and the CP stance | section 6 | [accepted]; passive production removed 2026-10-14 (#253); parts [superseded by DEC-41] under `economy.model = "v2"` |
+| DEC-01 | #7 | how new units appear | section 3 | [accepted]; instant recruit and cooldown [superseded by DEC-25]; "any city" [superseded by DEC-26 with `city_upgrades.enabled = true`]; parts removed from the code 2026-11-09 (#894), marked in the block |
+| DEC-02 | #8 | the economy model and the CP stance | section 6 | [accepted]; passive production removed 2026-10-14 (#253); parts [superseded by DEC-41] under `economy.model = "v2"`; parts removed from the code 2026-11-09 (#894), marked in the block |
 | DEC-03 | #9 | victory condition and match length | section 11 | [accepted]; match length [superseded by DEC-22]; double defeat is a draw [accepted] 2026-10-28 (#136) |
 | DEC-04 | #10 | visibility rules in the MVP | section 10 | [accepted]; parts [superseded by DEC-17, DEC-21] |
 | DEC-05 | #49 | disconnect and pauses | section 19 | [accepted] |
 | DEC-06 | #74 | which matches are rated | section 19 | [accepted] |
 | DEC-07 | #11 | combat resolution (a table of worked examples) | section 4 | [accepted]; rule 8 and the repeated bounce [superseded by DEC-24] |
-| DEC-08 | #12 | modes and scheduled orders | section 5 | [accepted]; "Building" [superseded by DEC-16]; the cancel price [superseded by DEC-20]; the "Defense" bonus [superseded by DEC-30]; parts [superseded by DEC-41] under `economy.model = "v2"` |
-| DEC-09 | #104 | the starting CP stance and the first stance change | section 6 | [accepted] (2026-10-28); confirms the implementation |
+| DEC-08 | #12 | modes and scheduled orders | section 5 | [accepted]; "Building" [superseded by DEC-16]; the cancel price [superseded by DEC-20]; the "Defense" bonus [superseded by DEC-30]; parts [superseded by DEC-41] under `economy.model = "v2"`; parts removed from the code 2026-11-09 (#894), marked in the block |
+| DEC-09 | #104 | the starting CP stance and the first stance change | section 6 | [accepted] (2026-10-28); confirms the implementation; parts removed from the code 2026-11-09 (#894), marked in the block |
 | DEC-13 | #124 | road construction by a group: countdown, builders, interruption | section 8 | [superseded by DEC-16] |
 | DEC-10 | #112 | vision of a group on an edge and enemy packets | section 10 | [accepted] (2026-10-26): an own group on an edge sees its edge at the level `PRESENCE`, not the end nodes; enemy packets stay hidden; implemented #112 (`SIM_VERSION` 21, `PROTOCOL_VERSION` 25); the "edge source" [superseded by DEC-35]: a group on an edge is a source in the node of its half |
 | DEC-11 | #117 | splitting and merging groups, commands to a group on the way | section 3 | [superseded by DEC-20] |
 | DEC-12 | #118 | garrison attrition: the count, the grace period, transit, the unit that dies | section 9 | [accepted] (2026-10-28); confirms the implementation; item 5 (trimming the warehouse) obsolete after DEC-22 and DEC-26 |
 | DEC-14 | #131 | supply details SIM-08 | section 7 | [superseded by DEC-18] |
-| DEC-16 | #203 | road upgrade as a city function for warehouse charges | section 8 | [accepted]; the numbers and the link to capacity [superseded by DEC-22]; part [superseded by DEC-28] |
-| DEC-17 | #204 | fog of war for roads: widths, capacity and the enemy's construction | section 10 | [accepted]; item 3 [superseded by DEC-22]; the "own end" of item 1 [superseded by DEC-35] |
-| DEC-18 | #230 | supply control: priorities and transfer | section 7 | [accepted]; a transfer shares the `amount` of the edge with the automatics, item 10 (2026-10-14, #253); part [superseded by DEC-28]; parts [superseded by DEC-41] under `economy.model = "v2"` |
-| DEC-19 | #231 | starvation in an encirclement | section 7 | [accepted]; `starve_in` without charges, example 3 (2026-10-14, #253); parts [superseded by DEC-41] under `economy.model = "v2"`; back under `supply.model = "flow"` in factory-less pockets (DEC-43 item H, #719) |
+| DEC-16 | #203 | road upgrade as a city function for warehouse charges | section 8 | [accepted]; the numbers and the link to capacity [superseded by DEC-22]; part [superseded by DEC-28]; removed from the code 2026-11-09 (#894), history only |
+| DEC-17 | #204 | fog of war for roads: widths, capacity and the enemy's construction | section 10 | [accepted]; item 3 [superseded by DEC-22]; the "own end" of item 1 [superseded by DEC-35]; parts removed from the code 2026-11-09 (#894), marked in the block |
+| DEC-18 | #230 | supply control: priorities and transfer | section 7 | [accepted]; a transfer shares the `amount` of the edge with the automatics, item 10 (2026-10-14, #253); part [superseded by DEC-28]; parts [superseded by DEC-41] under `economy.model = "v2"`; parts removed from the code 2026-11-09 (#894), marked in the block |
+| DEC-19 | #231 | starvation in an encirclement | section 7 | [accepted]; `starve_in` without charges, example 3 (2026-10-14, #253); parts [superseded by DEC-41] under `economy.model = "v2"`; back under `supply.model = "flow"` in factory-less pockets (DEC-43 item H, #719); parts removed from the code 2026-11-09 (#894), marked in the block |
 | DEC-20 | #232 | groups and orders: auto-merge, free split, merge, cancel, stack limit | section 3 | [accepted] |
 | DEC-21 | #233 | terrain vision and the border point of an edge | section 10 | [accepted]; item 5 on position and direction in an edge half [superseded by DEC-33]; implemented #296 (`SIM_VERSION` 19, `PROTOCOL_VERSION` 22); item 1 (the sources) [superseded by DEC-35] |
-| DEC-22 | #234 | roads of two types, fixed capacity, a 15-minute match | section 8 | [accepted]; road types and prices [superseded by DEC-26] (always); warehouse equals capacity [superseded by DEC-26 with `city_upgrades.enabled = true`] |
+| DEC-22 | #234 | roads of two types, fixed capacity, a 15-minute match | section 8 | [accepted]; road types and prices [superseded by DEC-26] (always); warehouse equals capacity [superseded by DEC-26 with `city_upgrades.enabled = true`]; parts removed from the code 2026-11-09 (#894), marked in the block |
 | DEC-23 | #235 | map rework: provinces, kinds of cities, names, the border point | section 9 | [accepted]; implemented: the format (#366, `SIM_VERSION` 20, `PROTOCOL_VERSION` 24), maps with provinces (#266); parts [superseded by DEC-41] under `economy.model = "v2"` |
-| DEC-24 | #261 | fight over time: rounds, reinforcements, retreat, a bounce without a chain, the fight point | section 4 | [accepted] (2026-10-14, all 14 recommendations); absorbs #133, #141; `round_ticks = 10` and item I1 on the remaining bonus [superseded by DEC-32, implemented #329]; item E (retreat) [superseded by DEC-40 under `combat.retreat = "none"`] |
+| DEC-24 | #261 | fight over time: rounds, reinforcements, retreat, a bounce without a chain, the fight point | section 4 | [accepted] (2026-10-14, all 14 recommendations); absorbs #133, #141; `round_ticks = 10` and item I1 on the remaining bonus [superseded by DEC-32, implemented #329]; item E (retreat) [superseded by DEC-40 under `combat.retreat = "none"`]; parts removed from the code 2026-11-09 (#894), marked in the block |
 | DEC-25 | #262 | recruit queue | section 3 | [accepted] (2026-10-14: 3 s per unit, a queue of 3); implemented #278 |
-| DEC-26 | #265 | city development: roads without a type and cheaper (always); barracks and warehouse separate from capacity (behind the flag `city_upgrades.enabled`) | sections 3 and 8 | [accepted] (2026-10-14, all details; road prices 1 and 2, roads not behind the flag); implemented #265 (`SIM_VERSION` 12, `PROTOCOL_VERSION` 16); part [superseded by DEC-28]; parts [superseded by DEC-41] under `economy.model = "v2"` |
+| DEC-26 | #265 | city development: roads without a type and cheaper (always); barracks and warehouse separate from capacity (behind the flag `city_upgrades.enabled`) | sections 3 and 8 | [accepted] (2026-10-14, all details; road prices 1 and 2, roads not behind the flag); implemented #265 (`SIM_VERSION` 12, `PROTOCOL_VERSION` 16); part [superseded by DEC-28]; parts [superseded by DEC-41] under `economy.model = "v2"`; parts removed from the code 2026-11-09 (#894), marked in the block |
 | DEC-27 | #266 | maps: symmetry of rules without symmetry of the picture, size, no water | section 9 | [accepted] (2026-10-14, all details); asymmetric maps [deferred], [accepted] 2026-11-06 for generated maps outside ranked (#771); implemented: the background without water #269 (item 3 [superseded by DEC-36] 2026-10-29), the validator and script #366, the maps and `grid55` #266; the projection budget on 55 nodes 0.45 ms [accepted] 2026-10-22 (#371) |
-| DEC-28 | #290 | supply and roads rework: transit, front markers, rear minimum, donors, roads for CP | sections 6, 7, 8 | [accepted] (2026-10-17); details [accepted] 2026-10-17; replaces the priorities of DEC-18, the road payment of DEC-16, DEC-26; supply implemented #292 (`SIM_VERSION` 14, `PROTOCOL_VERSION` 17); roads (#306) and the client (#293) await implementation; parts [superseded by DEC-41] under `economy.model = "v2"` |
-| DEC-29 | #291 | the bonus of a scheduled order by distance; revision of DEC-24 item 13 (the opponent's bonuses in a fight are visible) | sections 4, 5 | [accepted] (2026-10-17); details [accepted] 2026-10-17; `orders.planned_bonus` [superseded by DEC-29]; implemented (#294, `SIM_VERSION` 16; client: #295, the arena on the map: #325); the bonus forecast in your own order (`OrderView.bonus`) [accepted] 2026-10-21, implemented #329; parts [superseded by DEC-41] under `economy.model = "v2"` |
-| DEC-30 | #316 | accumulating the "Defense" bonus: +1 per `orders.defense_ticks_per_bonus` ticks, the cap by charged units, burns after a fight | section 5 | [accepted] (2026-10-21); replaces the part of DEC-08 about "Defense"; details [accepted] 2026-10-21; implemented (#317, `SIM_VERSION` 17, `PROTOCOL_VERSION` 20); client implemented (#318); parts [superseded by DEC-41] under `economy.model = "v2"` |
+| DEC-28 | #290 | supply and roads rework: transit, front markers, rear minimum, donors, roads for CP | sections 6, 7, 8 | [accepted] (2026-10-17); details [accepted] 2026-10-17; replaces the priorities of DEC-18, the road payment of DEC-16, DEC-26; supply implemented #292 (`SIM_VERSION` 14, `PROTOCOL_VERSION` 17); roads (#306) and the client (#293) await implementation; parts [superseded by DEC-41] under `economy.model = "v2"`; removed from the code 2026-11-09 (#894), history only |
+| DEC-29 | #291 | the bonus of a scheduled order by distance; revision of DEC-24 item 13 (the opponent's bonuses in a fight are visible) | sections 4, 5 | [accepted] (2026-10-17); details [accepted] 2026-10-17; `orders.planned_bonus` [superseded by DEC-29]; implemented (#294, `SIM_VERSION` 16; client: #295, the arena on the map: #325); the bonus forecast in your own order (`OrderView.bonus`) [accepted] 2026-10-21, implemented #329; parts [superseded by DEC-41] under `economy.model = "v2"`; parts removed from the code 2026-11-09 (#894), marked in the block |
+| DEC-30 | #316 | accumulating the "Defense" bonus: +1 per `orders.defense_ticks_per_bonus` ticks, the cap by charged units, burns after a fight | section 5 | [accepted] (2026-10-21); replaces the part of DEC-08 about "Defense"; details [accepted] 2026-10-21; implemented (#317, `SIM_VERSION` 17, `PROTOCOL_VERSION` 20); client implemented (#318); parts [superseded by DEC-41] under `economy.model = "v2"`; removed from the code 2026-11-09 (#894), history only |
 | DEC-31 | #316 | enemy barracks are visible at neighboring cities (only a built one, no memory) | section 10 | [accepted] (2026-10-21); changes the barracks fog of DEC-25 and DEC-26; details [accepted] 2026-10-21; implemented (#319, `PROTOCOL_VERSION` 23); not affected by DEC-35 (adjacency is by ownership) |
 | DEC-32 | #327 | the fight arena: a 2 s round (`combat.round_ticks = 20`), the bonus reserve is visible to both sides in a fight (revision of DEC-24, item I1); the bonus rules do not change (B1, B2 not accepted); client A1, V3, ◇ | section 4 | [accepted] (2026-10-21); details [accepted] 2026-10-21; item 13 (mute charges in the fight view) [accepted] by the orchestrator 2026-10-21; variant B3 "bonuses at the end" [open], not accepted by the owner 2026-10-21; implemented (#329, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21); client implemented (#330) |
 | DEC-33 | #296 | visible movement of enemy groups in a node's vision zone: continuous position and direction in the halves of visible nodes | section 10 | [accepted] (2026-10-21); details [accepted] 2026-10-21 (all as recommended); replaces part of DEC-21, item 5; implemented together with DEC-21 (#296, `SIM_VERSION` 19, `PROTOCOL_VERSION` 22); client: ranges, the border point, the half memory and the smooth movement of figures are done in #359, the border point from the map (`border_permille`) since #366, the look of the figure awaits #354; the sources of item 1 [superseded by DEC-35] |
@@ -4807,15 +4862,15 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-37 | #549 | an engagement zone around a node: a defender that left the node within the last `combat.engage_ticks` ticks (3) is caught into the fight as a leaving defender | section 4 | [accepted] (2026-10-29, the owner's direction, a rule change after the freeze); the number `engage_ticks = 3` [default, chosen by the orchestrator; the owner may tune it]; implemented #549 |
 | DEC-38 | #578 | capture costs a charge: a capture spends `capture.charge_cost` real charges of the capturing groups in the node, otherwise they bounce | section 4 | [accepted] (2026-10-30, the owner, all defaults: variant C, every capture costs, provinces and the capital too, bounce, G3, no virtual charges); implemented #578 (sim, protocol); `charge_cost = 0` (off) in `mvp-0`, `mvp-1`, `test-short`, BAL-02 tests `1` in `mvp-2`; `charge_cost = 0` in `mvp-3` (v2, DEC-41; owner decision 2026-11-01, #659: `balanced`, capture cost 0; it was 1); `charge_cost = 1` in `mvp-6` (owner decision 2026-11-09, #759) |
 | DEC-40 | #626 | no retreat from a fight (variant N): a group that entered a fight stays in it until the fight ends; the defender's `Move` and the `CancelOrder` of an attacker or a group on an edge give `IN_FIGHT`; the end-of-fight bounce, E4 and the DEC-37 catch unchanged | section 4 | [accepted] (2026-11-09, the owner, variant N, the defaults of the open questions); under the optional key `combat.retreat = "none"`, revises DEC-24 item E there only; `rulesets/mvp-6.toml` (with DEC-38 cost 1 and the built factory period 100); implemented #626 (`SIM_VERSION` 45, `PROTOCOL_VERSION` 44) |
-| DEC-41 | #642 | economy v2: factories (capital main, built smaller, both fixed), player-drawn supply lines with reroute, supply as the currency of buildings, no stances, bunker, planned-order accumulation, province warehouse 1, capture costs a charge | section 7 | [accepted] (2026-10-31, the owner; every other default [accepted] as a starting value tuned by playtests); behind `economy.model = "v2"` (`rulesets/mvp-3.toml`), v1 unchanged; supersedes the proposal DEC-39 (#625); simulation implemented: #644 (`SIM_VERSION` 26), #645 (27), #646 (28); protocol (#647), bots (#648), client (#649) await implementation; faster lines (suggested path, auto-extension; owner decision 2026-10-31) #665 (`SIM_VERSION` 30, `PROTOCOL_VERSION` 34); parts [superseded by DEC-42] |
-| DEC-42 | #674 | supply lines from factories only: no relays and no transit, no limit of lines, a factory target is a hub, the auto-extension copies the nearest own line | section 7 | [accepted] (2026-11-01, the owner); economy v2 only; supersedes DEC-41 item 3 (line trees, L4 limit, L5), the #661 relay transit and the #665 auto-extension source; implemented #674 (`SIM_VERSION` 31, `PROTOCOL_VERSION` 35) |
-| DEC-43 | #697 | automatic supply flow towards the front (a field of hops to the leaves, one charge per road downhill per dispatch, the wave, a tired army pulls, a full factory spills), one global leaf shift, fixed warehouses (city 3, capital 6, province 1), road fortifications replace the bunker | section 7 | [accepted] (2026-11-03, the owner, all #697 recommendations; the look #699, #701: Full kit without the band, T1, N4, P2); behind `supply.model = "flow"` (`rulesets/mvp-4.toml`), `mvp-3` unchanged; supersedes DEC-41 items 3, 6, 12, DEC-42 and #665 under flow; item D (fortifications) [accepted] 2026-11-03 (#707: 1.5 CP, 100 ticks, a toll of 1 charge per started 3 units at the border point, the look C7 + K6 + P2); CP surplus options C1..C4 [open]; the ten [reading, to confirm] points [accepted] 2026-11-03; implemented: sim, protocol, bots #704 (`SIM_VERSION` 32, `PROTOCOL_VERSION` 36); fortifications: sim, protocol, bots #707 (`SIM_VERSION` 33, `PROTOCOL_VERSION` 37); item D reading points [accepted] 2026-11-03; item H (pockets from the capital, cut-off factories stop, starvation in factory-less pockets) [accepted] 2026-11-03, sim #719 (`SIM_VERSION` 34); item I (the leaves face the enemy only, the farthest nodes before contact, the leaves even out) [accepted] 2026-11-03 after the first playtest, sim #724 (`SIM_VERSION` 35); item I6 (a tired army ahead of the level pulls, option A) [accepted] 2026-11-03; the two readings of I2 and I3 [accepted] 2026-11-03, two new [reading, to confirm] (I3 an army takes without the gap, I6 the node alone; I3 [accepted] 2026-11-03); item I7 (a pulling army ahead of the level lifts its path, replacing "the node alone") [accepted] 2026-11-03, sim #726 (`SIM_VERSION` 36), three [reading, to confirm] (the path, the lifted nodes pass towards the army only, the nearer army first), all [accepted] 2026-11-03; item J (unpaid buildings paid in charges pull supply like a discharged army, equal footing) [accepted] 2026-11-03, sim #729 (`SIM_VERSION` 37), two [reading, to confirm] (the want of a build node, the pull ends with the payment); item K (level roads feed the nodes that can pass supply on, the saddle) sim #732 (`SIM_VERSION` 38), four [reading, to confirm]; item L (the level passes outward along the capital distance, a leaf is a corridor into an enclave) [accepted] 2026-11-04, sim #735 (`SIM_VERSION` 39), its five readings (one order, the enclave, the corridor does not hand back, pockets keep the gap rule, a city pair ends at 1/2) [accepted] 2026-11-04; the flow stress budget 0.3 ms [accepted] 2026-11-04; item M (the nearest need: every node with room calls the nearest stock behind it, candidate C2 and the supply contract) [accepted] 2026-11-04, sim #738/#740 (`SIM_VERSION` 40), its readings (M2 tiers and holders first, M3 the level answers a holder, M4 the ways, M5 the nearest first, M6 the relay, M8 the spill to the nearest own node with room, M9 `flow_down` as the plan) [accepted] 2026-11-04, the four item K readings [accepted] 2026-11-04 (owner); await: client #705, tournament #706, the fortification client (#707) |
-| DEC-44 | #772 | stances in economy v2 with local progress: rates of the CP income and of the own capital by stance, a change carries both counters over in proportion to the periods (revised 2026-11-07, #792; first: a reset), no cooldown; under the optional section `[stances]`, revises DEC-41 item 1 there only | section 6 | [accepted] (2026-11-06); an experiment for playtests, `rulesets/mvp-4-stances.toml` |
-| DEC-45 | #778 | plains: the defender burns a charge in the first round instead of keeping a silent one; under the optional key `combat.terrain_burn`, revises DEC-24 item F2 there only | section 4 | [accepted] (2026-11-06); `rulesets/mvp-4-stances.toml` |
+| DEC-41 | #642 | economy v2: factories (capital main, built smaller, both fixed), player-drawn supply lines with reroute, supply as the currency of buildings, no stances, bunker, planned-order accumulation, province warehouse 1, capture costs a charge | section 7 | [accepted] (2026-10-31, the owner; every other default [accepted] as a starting value tuned by playtests); behind `economy.model = "v2"` (`rulesets/mvp-3.toml`), v1 unchanged; supersedes the proposal DEC-39 (#625); simulation implemented: #644 (`SIM_VERSION` 26), #645 (27), #646 (28); protocol (#647), bots (#648), client (#649) await implementation; faster lines (suggested path, auto-extension; owner decision 2026-10-31) #665 (`SIM_VERSION` 30, `PROTOCOL_VERSION` 34); parts [superseded by DEC-42]; parts removed from the code 2026-11-09 (#894), marked in the block |
+| DEC-42 | #674 | supply lines from factories only: no relays and no transit, no limit of lines, a factory target is a hub, the auto-extension copies the nearest own line | section 7 | [accepted] (2026-11-01, the owner); economy v2 only; supersedes DEC-41 item 3 (line trees, L4 limit, L5), the #661 relay transit and the #665 auto-extension source; implemented #674 (`SIM_VERSION` 31, `PROTOCOL_VERSION` 35); removed from the code 2026-11-09 (#894), history only |
+| DEC-43 | #697 | automatic supply flow towards the front (a field of hops to the leaves, one charge per road downhill per dispatch, the wave, a tired army pulls, a full factory spills), one global leaf shift, fixed warehouses (city 3, capital 6, province 1), road fortifications replace the bunker | section 7 | [accepted] (2026-11-03, the owner, all #697 recommendations; the look #699, #701: Full kit without the band, T1, N4, P2); behind `supply.model = "flow"` (`rulesets/mvp-4.toml`), `mvp-3` unchanged; supersedes DEC-41 items 3, 6, 12, DEC-42 and #665 under flow; item D (fortifications) [accepted] 2026-11-03 (#707: 1.5 CP, 100 ticks, a toll of 1 charge per started 3 units at the border point, the look C7 + K6 + P2); CP surplus options C1..C4 [open]; the ten [reading, to confirm] points [accepted] 2026-11-03; implemented: sim, protocol, bots #704 (`SIM_VERSION` 32, `PROTOCOL_VERSION` 36); fortifications: sim, protocol, bots #707 (`SIM_VERSION` 33, `PROTOCOL_VERSION` 37); item D reading points [accepted] 2026-11-03; item H (pockets from the capital, cut-off factories stop, starvation in factory-less pockets) [accepted] 2026-11-03, sim #719 (`SIM_VERSION` 34); item I (the leaves face the enemy only, the farthest nodes before contact, the leaves even out) [accepted] 2026-11-03 after the first playtest, sim #724 (`SIM_VERSION` 35); item I6 (a tired army ahead of the level pulls, option A) [accepted] 2026-11-03; the two readings of I2 and I3 [accepted] 2026-11-03, two new [reading, to confirm] (I3 an army takes without the gap, I6 the node alone; I3 [accepted] 2026-11-03); item I7 (a pulling army ahead of the level lifts its path, replacing "the node alone") [accepted] 2026-11-03, sim #726 (`SIM_VERSION` 36), three [reading, to confirm] (the path, the lifted nodes pass towards the army only, the nearer army first), all [accepted] 2026-11-03; item J (unpaid buildings paid in charges pull supply like a discharged army, equal footing) [accepted] 2026-11-03, sim #729 (`SIM_VERSION` 37), two [reading, to confirm] (the want of a build node, the pull ends with the payment); item K (level roads feed the nodes that can pass supply on, the saddle) sim #732 (`SIM_VERSION` 38), four [reading, to confirm]; item L (the level passes outward along the capital distance, a leaf is a corridor into an enclave) [accepted] 2026-11-04, sim #735 (`SIM_VERSION` 39), its five readings (one order, the enclave, the corridor does not hand back, pockets keep the gap rule, a city pair ends at 1/2) [accepted] 2026-11-04; the flow stress budget 0.3 ms [accepted] 2026-11-04; item M (the nearest need: every node with room calls the nearest stock behind it, candidate C2 and the supply contract) [accepted] 2026-11-04, sim #738/#740 (`SIM_VERSION` 40), its readings (M2 tiers and holders first, M3 the level answers a holder, M4 the ways, M5 the nearest first, M6 the relay, M8 the spill to the nearest own node with room, M9 `flow_down` as the plan) [accepted] 2026-11-04, the four item K readings [accepted] 2026-11-04 (owner); await: client #705, tournament #706, the fortification client (#707); since #894 (2026-11-09) the flow is the only supply |
+| DEC-44 | #772 | stances in economy v2 with local progress: rates of the CP income and of the own capital by stance, a change carries both counters over in proportion to the periods (revised 2026-11-07, #792; first: a reset), no cooldown; under the optional section `[stances]`, revises DEC-41 item 1 there only | section 6 | [accepted] (2026-11-06); an experiment for playtests, `rulesets/mvp-4-stances.toml`; since #894 (2026-11-09) the section `[stances]` is required |
+| DEC-45 | #778 | plains: the defender burns a charge in the first round instead of keeping a silent one; under the optional key `combat.terrain_burn`, revises DEC-24 item F2 there only | section 4 | [accepted] (2026-11-06); `rulesets/mvp-4-stances.toml`; since #894 (2026-11-09) the burn always applies |
 | DEC-46 | #803 | map tempo: the economy periods (CP, capital, factories, both stance tables) scaled once per match by `pct = isqrt(N * 10000 // 49)` of the map node count, clamped 50..150, `p * 100 // pct`; the target is an equal pressure on the front across map sizes; the map shape (front width) is not covered (generator work, #771); under the optional section `[map_tempo]` | section 6 | [accepted] (owner decision 2026-11-07, sqrt; linear rejected); `rulesets/mvp-4-stances-tempo.toml`, `SIM_VERSION` 44; on in the main ruleset `mvp-7` (owner decision 2026-11-09, #885) |
 | DEC-47 | #888 | factories follow the stance like the capital: every factory other than the own capital (built or captured, a captured capital too) makes 1 charge per `stances.capital_period_ticks` of its owner's stance, after map tempo, on its own counter (0 when it starts working or is captured, carried over on a stance change); `factory.built_period_ticks` without effect; under the optional key `stances.factories_follow`, revises DEC-44 item 2 and the built rate of DEC-41 item 2 there only | section 6 | [accepted] (owner decision 2026-11-09; the counter, start, carry and fog defaults [accepted] with it); on in the main ruleset `mvp-7`, `SIM_VERSION` 46, `PROTOCOL_VERSION` 45 |
 | DEC-48 | #896 | group order: one command for several groups; a rally to an own node (each group departs at once, merges, price `ceil(n * move / 2)` rounded up to a whole CP) or a synchronized arrival at any other node (the server times each departure for one arrival tick, full price); planned parts gathered per group, timed once all are ready; `ReleasePlan` removed under the section; a recruit rally point behind `recruit.rally_point`; the selection by Shift, the planned order on `E` | section 5 | items A1 to A7 [accepted] (owner decision 2026-11-09); every other point [proposed], awaiting the owner (#896); under the optional section `[group_order]`; not implemented |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in
-`rulesets/mvp-0.toml`, if the DEC sets them.
+`rulesets/*.toml`, if the DEC sets them.

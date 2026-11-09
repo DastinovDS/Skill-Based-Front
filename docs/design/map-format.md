@@ -30,6 +30,10 @@ The game rules that rely on map fields are described in [`mechanics.md`](mechani
 
 ## Format changes under DEC-26 (implemented in #265)
 
+> Since #894 (2026-11-09) every ruleset has fixed warehouses (DEC-43, item C) and no flag
+> `city_upgrades.enabled`: the right column below is how it always works, the `warehouse` check runs against
+> `rulesets/mvp-7.toml` (`mise run maps:validate`). The rulesets `mvp-0` and `mvp-1` named below were removed.
+
 > Decision [accepted] (all details, 2026-10-14): DEC-26 (#265), mechanics.md, section 8. The map file
 > format does not change: the barracks and the warehouse level live in the match state, not in the map.
 > What changes is the meaning of `start_stock` and the validator checks, and only with `city_upgrades.enabled = true`.
@@ -245,7 +249,7 @@ well away from the pool.
 |---|---|---|---|
 | first reach | cities, provinces, VP on each side | 8..12, 5..13, 10..15 on a side, gap 0 | gap at most 2, 3, 2 (`max_city_gap`, `max_province_gap`, `max_vp_gap`) |
 | front | the contested zone: the nodes the capitals reach within `contested_ticks` (60) of each other; from each capital the time to its nearest node of the zone | 249..324 ticks, gap 0 | gap at most 15% of the larger (`max_front_gap_pct`) |
-| front by terrain | the same at the terrain speed (`terrain.speed_pct`, mechanics.md, section 4; the percents repeat `mvp-4` in `validate.toml`, the validator may run without a ruleset) | 224..297, gap 0 | gap at most 20% (`max_front_terrain_gap_pct`) |
+| front by terrain | the same at the terrain speed (`terrain.speed_pct`, mechanics.md, section 4; the percents repeat `mvp-7` in `validate.toml`, the validator may run without a ruleset) | 224..297, gap 0 | gap at most 20% (`max_front_terrain_gap_pct`) |
 | approaches | the roads of each capital | 3 and 3 | gap at most 1, at least 3 (`max_approach_gap`, `min_approaches`) |
 | charges | the start charges of a side (`start_charged + start_stock`) plus the warehouses (city 3, province 1, capital 6) of the nodes within half of the time between the capitals | 57..80, gap 0 | gap at most 15% (`max_charge_gap_pct`) |
 | start | units, charged units and stock of each side, and the stock of each capital | equal | must be equal (`estimate.py` and `smart.py` of the bots rely on it) |
@@ -338,7 +342,7 @@ mechanics.md, section 9).
 | `start_owner` | `null` \| `0` \| `1` | the owner at the start |
 | `start_units` | integer ≥ 0 | the starting garrison: the number of units |
 | `start_charged` | integer, `0..start_units` | how many of them are charged |
-| `start_stock` | integer ≥ 0 | the starting warehouse stock in charges (DEC-26: with `city_upgrades.enabled` not more than the starting warehouse capacity of the node kind) |
+| `start_stock` | integer ≥ 0 | the starting warehouse stock in charges (DEC-26: not more than the warehouse capacity of the node kind, DEC-43 item C); in a match only the capital keeps it (DEC-41, item 9) |
 
 The loader additionally requires:
 
@@ -356,7 +360,7 @@ A road is undirected. There is at most one road between two nodes, loops are for
 |---|---|---|
 | `id` | integer | equals the index in the list |
 | `a`, `b` | node ids | the ends of the road, `a ≠ b` |
-| `max_level` | integer, `1..3` | the last upgrade level (DEC-22, DEC-23, item 6); all roads start at level 1 with no type, there is no starting level in the map |
+| `max_level` | integer, `1..3` | the last upgrade level (DEC-22, DEC-23, item 6); all roads start at level 1 with no type, there is no starting level in the map. Since #894 no rule reads it: road upgrades were removed with the old rulesets; the field stays in the format (the validator, the symmetry check and the map hash still read it) |
 | `travel_ticks` | integer ≥ 1 | the base travel time in ticks; the speed by terrain zones of the edge ends comes from the ruleset (`terrain.speed_pct`, mechanics.md, section 4) |
 | `border_permille` | integer, `100..900` | the border point in thousandths of the length from end `a`, 500: the middle (DEC-23, item 5): splits the edge into halves for vision (DEC-21) and into terrain zones for speed (mechanics.md, section 4) |
 

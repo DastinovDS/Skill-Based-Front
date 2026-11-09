@@ -59,14 +59,14 @@ Common to all maps:
 - the capitals stand in mountains (mechanics.md, section 7: the capital is the only source of supply);
 - at the start each player has a capital (6 units, all charged, warehouse 6) and 5 cities (2 units each,
   warehouse 2, a small city has warehouse 1; the DEC-27 maps also give each 2 own provinces without a garrison);
-  neutral cities and provinces are empty; a city's starting warehouse is no larger than the warehouse of the ruleset
-  `rulesets/mvp-7.toml` (`city_upgrades`, DEC-26, item 5): `gow-maps validate --ruleset
-  rulesets/mvp-7.toml` flags an excess as `[warehouse]` (#379; `mise run maps:validate`);
+  neutral cities and provinces are empty; a city's starting warehouse is no larger than the fixed warehouse of the ruleset
+  `rulesets/mvp-7.toml` (DEC-26, item 5; DEC-43, item C): `gow-maps validate --ruleset
+  rulesets/mvp-7.toml` flags an excess as `[warehouse]` (#379; `mise run maps:validate`); in a match only the capital
+  keeps its start stock (DEC-41, item 9);
 - every node has a name (DEC-23, item 4; the preview labels it after the kind); the border point is in the middle of all
   roads (`border_permille` 500), the preview draws it as a small circle;
-- all roads start at level 1 (DEC-22); the upgrade limit `max_level` (at most 3) sets the character
-  of a map (on the pool maps no road is limited to level 1: flank and rim roads go up to 2, #422); roads affect only supply: there is no road type, an upgrade only speeds up
-  delivery (DEC-26);
+- roads have no levels in play: road upgrades were removed with the old rulesets (#894); the map field `max_level`
+  (at most 3) stays in the format but no rule reads it;
 - a city's capacity is set by its kind `kind` (capital 10, large 8, medium 6, small 4, DEC-22);
   the rule by which three maps got their kinds before the DEC-23 rework: `docs/design/map-format.md`,
   "Node kinds in the MVP maps (before DEC-23)"; the preview labels the kind with a letter (S, M, L);

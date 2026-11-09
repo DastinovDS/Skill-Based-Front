@@ -4,6 +4,9 @@ A checklist of a live match on a real stack (Caddy with the built client + the s
 The automatable part is repeated by the Playwright E2E (`e2e/`, QA-02 #84, section "E2E" in `README.md`),
 the rest is done by a human. The mark `[x]` means "checked", and next to it is written how and when.
 
+> The run below (2026-10-07) used `mvp-0` and economy v1 (stances by share, "Defense", road upgrades); those rulesets
+> and mechanics were removed on 2026-11-09 (#894). `test-short` is now a 60-second `mvp-7`.
+
 Run of 2026-10-07: the stack from `compose.yaml` + `e2e/compose.e2e.yaml` (ruleset `test-short`, the reconnect
 window and the pause 10 s each), port 8080; the commands (section 4) additionally on `mvp-0` (15 minutes, DEC-22); two
 players: two Playwright contexts and, for the interface, two tabs of the built-in browser on different
@@ -23,7 +26,7 @@ curl -s localhost:8080/api/health          # {"status":"ok"}
 
 - `e2e/compose.e2e.yaml`: `GOW_ENV=e2e`, ruleset `test-short` (a 60-second match), the reconnect window
   and the pause 10 seconds each. To run the production ruleset (section 4) add a third file with
-  `GOW_RULESET_PATH: /app/rulesets/mvp-1.toml` in `services.app.environment`.
+  `GOW_RULESET_PATH: /app/rulesets/mvp-7.toml` in `services.app.environment`.
 - The second player: another browser, a private window or another origin (`http://bob.localhost:8080`). Two tabs
   of one origin share the guest in `localStorage` (`sbf.guest`), it is one and the same player.
 - Stop: `docker compose -f compose.yaml -f e2e/compose.e2e.yaml down` (the data stays in the volumes).

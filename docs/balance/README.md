@@ -12,7 +12,7 @@ the report relies on.
 uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-7.toml
 ```
 
-`mvp-7` is the played ruleset (owner decision 2026-11-09, #885: `mvp-6` with `[map_tempo]` on (DEC-46) and `factory.built_period_ticks = 150`; since the owner decision of the same day, #888, `stances.factories_follow = true`: every factory follows the stance like the capital, DEC-47); `mvp-6` before it (owner decision 2026-11-09, #626, #759: `mvp-5` with `capture.charge_cost = 1`, `factory.built_period_ticks = 100` and `combat.retreat = "none"`; `mvp-5` (= `mvp-4-stances`) before it, 2026-11-07, #805; `mvp-4`, 2026-11-04, #741); the tasks `tournament`, `search` and `tournament:gh` default to it. The older runs below (`mvp-2`, `mvp-3`) are history and are reproduced with `--ruleset rulesets/mvp-2.toml` and the like.
+`mvp-7` is the played ruleset (owner decision 2026-11-09, #885: `mvp-6` with `[map_tempo]` on (DEC-46); since the owner decision of the same day, #888, `stances.factories_follow = true`: every factory follows the stance like the capital, DEC-47); `mvp-6` before it (owner decision 2026-11-09, #626, #759: `mvp-5` with `capture.charge_cost = 1`, `factory.built_period_ticks = 100` and `combat.retreat = "none"`; `mvp-5` before it, 2026-11-07, #805; `mvp-4`, 2026-11-04, #741); the tasks `tournament`, `search` and `tournament:gh` default to it. The rulesets `mvp-0` to `mvp-4` and the code only they reached (economy v1, the drawn supply lines, the bunker, road and warehouse upgrades, Defense) were removed on 2026-11-09 (#894); the older runs below (`mvp-0` to `mvp-4`) are history: their files stay only in `rulesets/archive/` by hash, and the current simulation no longer plays them.
 
 | Key | Meaning |
 |---|---|
@@ -21,7 +21,7 @@ uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --
 | `--seeds N` | `N` seeds per map and pair: `seed-base .. seed-base + N - 1` |
 | `--seed-base` | the first seed, 0 by default |
 | `--jobs` | the number of processes, the number of cores by default |
-| `--ruleset` | the ruleset, `rulesets/mvp-0.toml` by default |
+| `--ruleset` | the ruleset, `rulesets/mvp-7.toml` by default |
 | `--out` | the result file, `docs/balance/latest.jsonl` by default |
 | `--replays DIR` | additionally write the replay of every match into `DIR` |
 
@@ -91,9 +91,9 @@ mise run stats path/to/match.jsonl.gz            # arguments after the task name
 uv run gow-bots stats a.jsonl.gz b.jsonl.gz --rulesets rulesets/archive --maps maps
 ```
 
-Stances of economy v2 (DEC-44, `mvp-4-stances`): the table of a match on such a ruleset adds, per player, the stance timeline,
+Stances (DEC-44, every ruleset): the table of a match adds, per player, the stance timeline,
 `stance switches`, `share of time in <stance>`, `CP earned in <stance>`, `charges in <stance> (capital / built)` and the row
-`SetStance (accepted)`. Every match under economy v2 has the rows `charges from the capital` and `charges from built factories`.
+`SetStance (accepted)`. Every match has the rows `charges from the capital` and `charges from built factories`.
 The JSONL of `gow-bots analyze` has the same numbers under `stats` and the flag `stats.stances` (section "Player statistics").
 
 ## The line format (`schema` = 1)
@@ -240,7 +240,7 @@ sinks by outcome"). `first_contact_tick` measures the tempo of a map directly (t
 
 Per-player metrics of how hard the front is pushed, for comparing maps of different sizes. Not game rules: nothing was
 added to the simulation (`gow_sim.analysis`, module docstring "Front pressure"). Sampled at the end of every 10th tick
-(`PLACE_SAMPLE_TICKS`, 1 s). The front pressure is the target of the map tempo (DEC-46, `rulesets/mvp-4-stances-tempo.toml`):
+(`PLACE_SAMPLE_TICKS`, 1 s). The front pressure is the target of the map tempo (DEC-46, on in `rulesets/mvp-7.toml`):
 about equal on every map size. To compare maps, pool it per map: all fight charges of the map over all its front
 node-minutes (the experiment of #803, `docs/balance/map-tempo-2026-11.md` on the branch `exp/803-map-tempo`).
 
@@ -523,7 +523,11 @@ enemy side are fortified before an enemy is seen, and a city facing an enemy nod
 It is a yardstick and the regression gate V6, not a server level (`LEVEL_BOTS` does not name it): put it in a
 tournament with `--bots "... smart_exploiter"`.
 
-**Economy v2** (`mvp-3`, DEC-41, #648; `gow_bots.bots.economy`). Under `economy.model = "v2"` every bot sends no v1-only
+> History (#894, 2026-11-09): this paragraph describes the bots of `mvp-3` and `mvp-4`. Economy v1, the drawn lines, the
+> bunker, warehouse levels and Defense were removed with those rulesets, and so were the bot code paths that played them;
+> the bots now play only the automatic supply flow of DEC-43 with factories, road fortifications and planned orders.
+
+**Economy v2** (`mvp-3`, DEC-41, #648; `gow_bots.bots.economy`). Under `economy.model = "v2"` every bot sent no v1-only
 command (stance, front markers, rear minimum, transfers, road upgrades, Defense: `Bot.allowed`; under `[stances]` the
 smart bots send `SetStance` by their policy, #881) and the campaign and
 smart bots play the v2 economy instead: **lines** from the own factories (only a factory starts a line, DEC-42) to the
