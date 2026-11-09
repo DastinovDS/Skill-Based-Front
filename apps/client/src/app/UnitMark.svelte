@@ -14,4 +14,4 @@
 </script>
 
 <!-- The unit of the map (#784): a helmet, filled from the bottom by the share. -->
-<HelmetIcon {side} size={size + 8} {share} />
+<HelmetIcon {side} size={size + 8} {share} engraved />

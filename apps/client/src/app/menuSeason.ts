@@ -40,3 +40,32 @@ export function isSeason(value: string | null): value is Season {
 export function currentSeason(now: Date = new Date()): Season {
   return override ?? seasonOf(now);
 }
+
+/**
+ * The grade of the baked ground of the menu map by season (#839: the ground is the match's
+ * Intaglio now, not soft blobs of a season's colours): how much colour it keeps, how light it is,
+ * and a tint per channel. Summer is the ground as baked, only darker behind the text.
+ */
+const GRADE: Readonly<
+  Record<Season, { saturate: number; light: number; tint: readonly [number, number, number] }>
+> = {
+  summer: { saturate: 0.62, light: 0.6, tint: [1, 1, 1] },
+  spring: { saturate: 0.72, light: 0.6, tint: [0.94, 1.07, 0.94] },
+  autumn: { saturate: 0.66, light: 0.6, tint: [1.12, 0.98, 0.8] },
+  winter: { saturate: 0.3, light: 0.64, tint: [0.95, 1, 1.1] },
+};
+
+/** The `feColorMatrix` values (4 rows of 5) of the season's grade of the ground. */
+export function groundMatrix(season: Season): string {
+  const { saturate: s, light, tint } = GRADE[season];
+  // The luminance weights of the SVG `saturate` matrix.
+  const [lr, lg, lb] = [0.213, 0.715, 0.072];
+  const rows = [
+    [lr + (1 - lr) * s, lg - lg * s, lb - lb * s],
+    [lr - lr * s, lg + (1 - lg) * s, lb - lb * s],
+    [lr - lr * s, lg - lg * s, lb + (1 - lb) * s],
+  ].map((row, i) => [...row.map((v) => v * light * (tint[i] ?? 1)), 0, 0]);
+  return [...rows, [0, 0, 0, 1, 0]]
+    .map((row) => row.map((v) => Number(v.toFixed(4)).toString()).join(' '))
+    .join(' ');
+}

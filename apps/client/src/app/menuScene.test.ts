@@ -3,16 +3,18 @@ import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { MENU_MAP } from './menuMap.ts';
 import {
   BAR_BOTTOM,
-  DOCK_NARROW_LEFT,
-  DOCK_PANEL_LEFT,
-  DOCK_PANEL_RIGHT,
+  DOCK_PANEL,
   FOG_FADE,
   FOG_TOP_FADE,
   FOG_WIDTH,
+  RAIL,
   RAIL_BESIDE_MIN_WIDTH,
-  RAIL_RIGHT,
   dockOwnLeft,
+  dockPanelRight,
+  layoutEntry,
   layoutScene,
+  menuCityRadius,
+  railRight,
   starPoints,
 } from './menuScene.ts';
 
@@ -44,7 +46,7 @@ describe('layoutScene (#471)', () => {
         it('puts the own capital right of the text rail, the enemy one in the fog', () => {
           // #474: also at 1024 px, where 40% of the width put it under the key hints of the rail.
           expect(size.width).toBeGreaterThanOrEqual(RAIL_BESIDE_MIN_WIDTH);
-          expect(scene.ownCapital.x).toBeGreaterThanOrEqual(RAIL_RIGHT);
+          expect(scene.ownCapital.x).toBeGreaterThanOrEqual(railRight(size.width));
           expect(scene.enemyCapital.x).toBeGreaterThan(scene.ownCapital.x);
           expect(scene.enemyCapital.x).toBeGreaterThan(scene.fogStart);
           expect(scene.enemyCapital.x).toBeLessThan(size.width);
@@ -85,20 +87,28 @@ describe('layoutScene (#471)', () => {
     for (const size of WINDOWS) {
       it(`puts no node under the text rail in ${String(size.width)}x${String(size.height)}`, () => {
         const scene = layoutScene(MENU_MAP, size.width, size.height);
-        for (const node of scene.nodes) expect(node.x).toBeGreaterThanOrEqual(RAIL_RIGHT);
+        for (const node of scene.nodes) {
+          expect(node.x).toBeGreaterThanOrEqual(railRight(size.width));
+        }
       });
     }
 
-    it('lays out as drawn in the mockup at 1280x800: one world unit is one px', () => {
+    it('puts the own capital right of the rail of #845 at 1280x800, the map at one scale', () => {
       const scene = layoutScene(MENU_MAP, 1280, 800);
-      expect(scene.scale).toBe(1);
-      expect(scene.ownCapital).toEqual({ x: RAIL_RIGHT, y: 420 });
+      // The rail: 128 px from the left, 540 px wide, then the room of the capital's ring.
+      expect(railRight(1280)).toBe(RAIL.left + RAIL.width + 34);
+      expect(scene.ownCapital).toEqual({ x: railRight(1280), y: 420 });
+      // The baked ground starts at the map's 0,0: the capital (40, 280) is at 40 units from it.
+      expect(scene.origin.x + 40 * scene.scale).toBeCloseTo(scene.ownCapital.x, 6);
+      expect(scene.origin.y + 280 * scene.scale).toBeCloseTo(scene.ownCapital.y, 6);
     });
 
-    it('sizes the terrain and the territory by the spacing of the map, as in the mockup', () => {
+    it('keeps the world position of every node for the map layer', () => {
       const scene = layoutScene(MENU_MAP, 1280, 800);
-      expect(Math.round(scene.terrainRadius)).toBe(58);
-      expect(Math.round(scene.territoryRadius)).toBe(44);
+      for (const node of scene.nodes) {
+        expect(node.x).toBeCloseTo(scene.origin.x + node.world.x * scene.scale, 6);
+        expect(node.y).toBeCloseTo(scene.origin.y + node.world.y * scene.scale, 6);
+      }
     });
 
     it('runs the front road down the middle of the valley', () => {
@@ -106,6 +116,10 @@ describe('layoutScene (#471)', () => {
       expect(scene.front.length).toBe(5);
       for (const point of scene.front) expect(point.y).toBe(scene.ownCapital.y);
     });
+  });
+
+  it('moves the rail in by 64 px under 1280 px (front.css)', () => {
+    expect(railRight(1279)).toBe(RAIL.narrowLeft + RAIL.width + 34);
   });
 
   it('flows the map under the rail in a small window, where the rail is over the picture', () => {
@@ -135,39 +149,68 @@ describe('layoutScene (#471)', () => {
   });
 });
 
-describe('the map behind the Dock panel (#473)', () => {
+describe('the map behind the Dock panel (#473, the panel of #845)', () => {
   const map = POOL[0] as (typeof POOL)[number];
 
-  it('keeps the own capital between the rail and the panel, and the enemy one right of it', () => {
-    for (const width of [1280, 1366, 1600]) {
-      const scene = layoutScene(map, width, 720, dockOwnLeft(width));
-      // The ring of a capital is about 32 px; the pill with the opponent's nick is 70 px to each side.
-      expect(scene.ownCapital.x + 32).toBeLessThanOrEqual(DOCK_PANEL_LEFT);
-      expect(scene.enemyCapital.x - 70).toBeGreaterThanOrEqual(DOCK_PANEL_RIGHT);
-    }
+  it('knows where the panel ends: 64 px short of the edge (24 under 1280 px), at most 960 wide', () => {
+    expect(dockPanelRight(1024)).toBe(1024 - DOCK_PANEL.narrowRight);
+    expect(dockPanelRight(1280)).toBe(1280 - DOCK_PANEL.right);
+    expect(dockPanelRight(2560)).toBe(DOCK_PANEL.left + DOCK_PANEL.maxWidth);
   });
 
   it('moves the whole map out from under the panel in a wide window', () => {
     for (const width of [1920, 2560]) {
       const left = dockOwnLeft(width);
-      expect(left).toBeGreaterThan(DOCK_PANEL_RIGHT);
+      expect(left).toBeGreaterThan(dockPanelRight(width));
       const scene = layoutScene(map, width, 1080, left);
-      for (const node of scene.nodes) expect(node.x).toBeGreaterThan(DOCK_PANEL_RIGHT);
+      for (const node of scene.nodes) expect(node.x).toBeGreaterThan(dockPanelRight(width));
       expect(scene.enemyCapital.x).toBeLessThan(width);
       expect(width - scene.fogStart).toBeGreaterThanOrEqual(FOG_WIDTH);
     }
   });
 
-  it('keeps the own capital visible left of a narrower panel in a small window', () => {
-    for (const width of [900, 1024, 1099]) {
-      const scene = layoutScene(map, width, 640, dockOwnLeft(width));
-      expect(scene.ownCapital.x + 32).toBeLessThanOrEqual(DOCK_NARROW_LEFT);
-      expect(scene.ownCapital.x).toBeGreaterThan(RAIL_RIGHT - 160);
+  it('leaves the map of the main screen under the translucent panel where there is no room', () => {
+    for (const width of [800, 1024, 1280, 1600]) expect(dockOwnLeft(width)).toBeUndefined();
+  });
+});
+
+describe('layoutEntry (#839, the entry of out-of-game-style-r3.html)', () => {
+  it('covers the window with the whole menu map, centred, without fog', () => {
+    for (const [width, height] of [
+      [1280, 800],
+      [1280, 720],
+      [800, 500],
+      [2560, 1080],
+    ] as const) {
+      const scene = layoutEntry(MENU_MAP, width, height);
+      expect(scene.fog).toBe(false);
+      expect(scene.fadeStart).toBeGreaterThanOrEqual(width);
+      expect(scene.origin.x).toBeLessThanOrEqual(0.001);
+      expect(scene.origin.y).toBeLessThanOrEqual(0.001);
+      expect(scene.origin.x + MENU_MAP.meta.width * scene.scale).toBeGreaterThanOrEqual(
+        width - 0.001,
+      );
+      expect(scene.origin.y + MENU_MAP.meta.height * scene.scale).toBeGreaterThanOrEqual(
+        height - 0.001,
+      );
+      expect(scene.origin.x * 2 + MENU_MAP.meta.width * scene.scale).toBeCloseTo(width, 6);
     }
   });
 
-  it('leaves the default layout in the flowing column of a window under 900 px', () => {
-    expect(dockOwnLeft(800)).toBeUndefined();
+  it('lays the map out as the mockup does at 1280x800: Highhold at 63 px, Stormcrown at 1103', () => {
+    const scene = layoutEntry(MENU_MAP, 1280, 800);
+    expect(scene.scale).toBeCloseTo(1.6, 6);
+    expect(scene.ownCapital.x).toBeCloseTo(64, 6);
+    expect(scene.enemyCapital.x).toBeCloseTo(1104, 6);
+  });
+});
+
+describe('menuCityRadius', () => {
+  it('sizes a city by its kind as the match sizes it by the capacity of the kind', () => {
+    expect(menuCityRadius('capital')).toBe(20);
+    expect(menuCityRadius('city_medium')).toBe(17);
+    expect(menuCityRadius('city_small')).toBe(14);
+    expect(menuCityRadius('province')).toBe(8);
   });
 });
 

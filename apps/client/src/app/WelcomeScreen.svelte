@@ -57,6 +57,7 @@
   let title: HTMLHeadingElement | undefined = $state();
   let grainCanvas: HTMLCanvasElement | undefined = $state();
   let cover: HTMLDivElement | undefined = $state();
+  let stageCanvas: HTMLCanvasElement | undefined = $state();
   let skipButton: HTMLButtonElement | undefined = $state();
 
   $effect(() => {
@@ -80,6 +81,10 @@
           skip: skipButton ?? null,
           // The nick with Play first, then Log in and Create account with the language.
           steps: [pick('.gate > .invited, .gate > .field'), pick('.gate > .alt, .locale')],
+          stage:
+            stageCanvas === undefined || untrack(() => map) === null
+              ? null
+              : { canvas: stageCanvas, map: untrack(() => map) as MapFile },
         },
         {
           at: frozenAt,
@@ -186,8 +191,11 @@
 <ScreenFrame {map} label={t('app.title')} entry>
   <div class="welcome" class:intro={playing} bind:this={root}>
     {#if playing}
-      <!-- The opening scene: the dark stage over the map (it fades as the title rises). -->
-      <div class="cover" bind:this={cover} aria-hidden="true"></div>
+      <!-- The opening scene: the dark stage over the map (it fades as the title rises), with the
+           pools of light of the fights at the edges cut into it (#839). -->
+      <div class="cover" bind:this={cover} aria-hidden="true">
+        <canvas class="stage" bind:this={stageCanvas}></canvas>
+      </div>
     {/if}
     <h1 class="title" bind:this={title}>
       <!-- The space before a word is in its text, for assistive technology; the interpunct shows.
@@ -543,6 +551,17 @@
     inset: 0;
     background: #0b0a08;
     pointer-events: none;
+  }
+
+  /* The stage canvas paints the dark, with the pools of the fights cut into it (#839). */
+  .cover:global(.staged) {
+    background: none;
+  }
+
+  .stage {
+    display: block;
+    width: 100%;
+    height: 100%;
   }
 
   .intro > :is(.title, .gate, .locale) {

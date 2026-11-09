@@ -637,8 +637,9 @@ for (const id of ['queue-search', 'queue-found', 'queue-confirmed'] as const) {
 }
 
 // The opening scene of the entry screen (#826, intro B Grain), frozen at moments of its timeline
-// (`/?menu=welcome-intro&t=<s>`): `screen-intro-<s>.png`, letters forming, the rule, the rise.
-for (const at of ['0.9', '1.6', '2.4', '3.4', '4.2', '4.8', '5.6']) {
+// (`/?menu=welcome-intro&t=<s>`): `screen-intro-<s>.png`, the fights at the edges (#839), letters
+// forming, the rule, the rise.
+for (const at of ['0.9', '1.6', '2.4', '3.2', '4.2', '5.4', '6.6', '7.2']) {
   test(`shot of the opening scene at ${at} s`, async ({ page }) => {
     await page.goto(`/?menu=welcome-intro&t=${at}`);
     await expect(page.locator('[data-intro="frozen"]')).toHaveCount(1);
@@ -666,7 +667,7 @@ test('the opening scene plays, skips by a key and plays once a session', async (
 test('the opening scene plays to its end, and never under reduced motion', async ({ page }) => {
   await page.goto('/?menu=welcome&intro');
   await expect(page.locator('[data-intro="playing"]')).toHaveCount(1);
-  await expect(page.locator('.welcome.intro')).toHaveCount(0, { timeout: 9000 });
+  await expect(page.locator('.welcome.intro')).toHaveCount(0, { timeout: 12000 });
   await page.mouse.move(1000, 700);
   await page.screenshot({ path: join(OUT, 'screen-intro-end.png') });
   const other = await page.context().browser()?.newPage({ reducedMotion: 'reduce' });

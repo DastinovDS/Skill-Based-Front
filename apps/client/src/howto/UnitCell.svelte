@@ -2,7 +2,7 @@
   import HelmetIcon from '../units/HelmetIcon.svelte';
 
   interface Props {
-    /** Whose unit: the attacker (blue, Rim facing right) or the defender (red, Cut facing left). */
+    /** Whose unit: the attacker (blue, facing right) or the defender (red, facing left). */
     side: 'own' | 'enemy';
     /** Charged: filled. Empty: outline only. Gone: dashed, the unit fell. */
     cell: 'charged' | 'empty' | 'gone';
@@ -12,4 +12,4 @@
 </script>
 
 <!-- The unit of the map (#784): a helmet, full when charged, empty, or dashed when it fell. -->
-<HelmetIcon {side} size={24} share={cell === 'charged' ? 1 : 0} dashed={cell === 'gone'} />
+<HelmetIcon {side} size={24} share={cell === 'charged' ? 1 : 0} dashed={cell === 'gone'} engraved />

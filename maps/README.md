@@ -23,9 +23,9 @@ maps, the frames files of old matches); a bot or replay log recorded on an old i
 `map_hash` of a map changes with every edit). The baked backgrounds did not change: the renamed maps keep the bake seed of the old
 name (`PINNED_SEEDS` in `tools/maps/src/gow_maps/bake.py`).
 
-Next to a map lie the preview `<id>.preview.png` (for people) and the background `<id>.bg.webp` (MAP-05, #70, #344; the server
-serves it, the client draws it). After any map edit: `uv run gow-maps preview maps/*.json` and
-`uv run gow-maps bake maps/*.json` (or `mise run maps:bake`). The background has the texture T2 "Thinning"
+Next to a map lie the preview `<id>.preview.png` (for people), the background `<id>.bg.webp` (MAP-05, #70, #344; the server
+serves it, the client draws it) and its thumbnail `<id>.thumb.webp` (#839, the map cards of the client). After any map edit:
+`mise run maps:bake`, then `mise run maps:preview` (the preview lies on the baked background since #839). The background has the texture T2 "Thinning"
 (`ui-style.md`, 26.3), WebP no larger than 0.5 MB, baking one map takes up to 10 s. A map with an authored geography
 `src/<id>.geo.json` (DEC-36, #537) gets water cells, streams and long rivers with bridges in the look W4 Painted, and the
 bake writes the vector file `geo/<id>.json` next to the background; a map without one is all land (DEC-27, #269).

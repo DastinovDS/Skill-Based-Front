@@ -23,6 +23,7 @@ from gow_maps.bake import (
     MAX_WEBP_BYTES,
     STEP,
     TERRAIN_BIOMES,
+    THUMB_WIDTH,
     WARP,
     Biome,
     background_path,
@@ -30,6 +31,7 @@ from gow_maps.bake import (
     bake_cells,
     map_seed,
     render_background,
+    thumb_path,
 )
 from gow_maps.cli import main
 from gow_sim.maps import MapDef, load_map
@@ -262,3 +264,19 @@ def test_cli_bake_writes_next_to_the_map(
     decoded = _decode(out.read_bytes())
     assert decoded.shape == (mapdef.meta.height, mapdef.meta.width, 3)
     assert np.abs(_blocks(decoded) - _blocks(render_background(mapdef, seed=7))).mean() < 1.5
+    # The thumbnail of the map cards (#839): the same picture, THUMB_WIDTH wide, its aspect kept.
+    thumb = tmp_path / "line3.thumb.webp"
+    assert thumb_path(out) == thumb
+    with Image.open(thumb) as image:
+        assert image.width == THUMB_WIDTH
+        assert abs(image.height - mapdef.meta.height * THUMB_WIDTH / mapdef.meta.width) <= 1
+
+
+@pytest.mark.parametrize("folder", ["", "gen", "menu"])
+def test_every_background_has_its_thumbnail(folder: str) -> None:
+    backgrounds = sorted((MAPS / folder).glob("*.bg.webp"))
+    assert backgrounds
+    for background in backgrounds:
+        with Image.open(thumb_path(background)) as image:
+            assert image.format == "WEBP"
+            assert image.width == THUMB_WIDTH

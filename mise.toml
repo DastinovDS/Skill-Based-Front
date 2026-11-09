@@ -245,11 +245,11 @@ description = "gow-maps validate maps/*.json, maps/fixtures/*.json, the menu map
 run = "uv run gow-maps validate --ruleset rulesets/mvp-5.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json"
 
 [tasks."maps:preview"]
-description = "Draw maps/<name>.preview.png (the pool, the menu map maps/menu/ and the generated maps maps/gen/)"
+description = "Draw maps/<name>.preview.png over its baked background, so after maps:bake (the pool, the menu map maps/menu/ and the generated maps maps/gen/)"
 run = "uv run gow-maps preview maps/*.json maps/menu/*.json maps/gen/*.json"
 
 [tasks."maps:bake"]
-description = "Bake maps/<name>.bg.webp (the pool, the fixtures maps/fixtures/, the menu map maps/menu/ and the generated maps maps/gen/): numpy and Pillow, the Intaglio look (#842); a map with src/<name>.geo.json also gets water and geo/<name>.json, DEC-36 (after any map edit)"
+description = "Bake maps/<name>.bg.webp and its thumbnail <name>.thumb.webp (the pool, the fixtures maps/fixtures/, the menu map maps/menu/ and the generated maps maps/gen/): numpy and Pillow, the Intaglio look (#842); a map with src/<name>.geo.json also gets water and geo/<name>.json, DEC-36 (after any map edit)"
 run = "uv run gow-maps bake maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json"
 
 [tasks."maps:mirror"]

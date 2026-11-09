@@ -63,6 +63,11 @@
   opacity: 0.75;
 }
 
+/* The result spreads its numbers over the whole width: the map lies quieter under them (#839). */
+.front.wide .backdrop {
+  opacity: 0.45;
+}
+
 .front .shade {
   position: absolute;
   inset: 0;
@@ -680,17 +685,28 @@
 
 /* ---- The entry screen: the title, the nick, the log-in sheet -------------------------------- */
 
+/* The whole menu map under the title, sharp and dim (#839: the mockup's entry, the map at a fifth of
+   its light; the blur of #845 is gone), darker towards the corners. */
 .front.entry .backdrop {
-  opacity: 0.5;
-  filter: blur(6px);
+  opacity: 0.36;
+}
+
+/* The opening scene lights the map to its full strength under its dark stage while the fights at
+   the edges are on (introPlayer.ts, `lit`); it is dimmed again before the stage fades. */
+.front.entry:has(.welcome.lit) .backdrop {
+  opacity: 1;
+}
+
+.front.entry:has(.welcome.lit) .shade {
+  opacity: 0;
 }
 
 .front.entry .shade {
   background: radial-gradient(
     ellipse 70% 62% at 50% 46%,
-    rgb(11 10 8 / 15%) 0%,
-    rgb(11 10 8 / 72%) 70%,
-    #0b0a08 100%
+    rgb(11 10 8 / 30%) 0%,
+    rgb(11 10 8 / 62%) 70%,
+    rgb(11 10 8 / 86%) 100%
   );
 }
 

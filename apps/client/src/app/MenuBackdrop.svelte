@@ -2,26 +2,30 @@
   import { untrack } from 'svelte';
   import type { MapFile } from '../protocol.gen.ts';
   import { reducedMotion } from '../render/motion.ts';
+  import MenuCityMark from './MenuCityMark.svelte';
+  import { MENU_GEO, MENU_GROUND, MENU_MAP } from './menuMap.ts';
   import {
     FALLBACK_PALETTE,
     STILL_AT,
     drawMotion,
     sightOf,
     type MotionClock,
-    type Palette,
+    readPalette,
     type Sight,
   } from './menuMotion.ts';
+  import { MENU_BORDER, MENU_LANE, menuCity, menuLand, type MenuLand } from './menuPieces.ts';
   import {
     BAR_BOTTOM,
     FOG_TOP_FADE,
     dockOwnLeft,
+    layoutEntry,
     layoutScene,
-    starPoints,
     type BackdropPhase,
     type Point,
     type Scene,
+    type SceneEdge,
   } from './menuScene.ts';
-  import { currentSeason } from './menuSeason.ts';
+  import { currentSeason, groundMatrix } from './menuSeason.ts';
   import { storyOf, type Story } from './menuStory.ts';
 
   interface Props {
@@ -34,12 +38,23 @@
     waited?: number;
     /** A panel stands right of the rail (#473): the map moves out from under it where the window allows. */
     docked?: boolean;
+    /** The entry screen (#839): the whole map over the window, no fog. */
+    entry?: boolean;
   }
 
-  let { map, phase = 'idle', opponent = null, waited = 0, docked = false }: Props = $props();
+  let {
+    map,
+    phase = 'idle',
+    opponent = null,
+    waited = 0,
+    docked = false,
+    entry = false,
+  }: Props = $props();
 
   /** The motion is drawn 30 times a second; the hole of the scout's sight in the fog 10 times. */
   const FRAME_MS = 1000 / 30;
+  /** Px on the screen per world unit of a piece of the map at most (`k`). */
+  const PIECES_PX = 0.8;
   const SIGHT_MS = 100;
 
   let host: HTMLDivElement | undefined = $state();
@@ -48,6 +63,7 @@
   /** The hole in the fog round the scout, in whole px (the fog layer repaints only when it moves). */
   let sight = $state.raw<Sight | null>(null);
   const season = currentSeason();
+  const matrix = groundMatrix(season);
 
   $effect(() => {
     const element = host;
@@ -67,24 +83,27 @@
   const scene = $derived<Scene | null>(
     map === null
       ? null
-      : layoutScene(map, size.width, size.height, docked ? dockOwnLeft(size.width) : undefined),
+      : entry
+        ? layoutEntry(map, size.width, size.height)
+        : layoutScene(map, size.width, size.height, docked ? dockOwnLeft(size.width) : undefined),
   );
   const story = $derived<Story | null>(scene === null ? null : storyOf(scene));
   const revealed = $derived((phase === 'found' || phase === 'confirmed') && opponent !== null);
-
-  /** The token colours, read from the page once the backdrop is in it. */
-  function palette(element: Element): Palette {
-    const style = getComputedStyle(element);
-    const token = (name: string, fallback: string): string =>
-      style.getPropertyValue(name).trim() || fallback;
-    return {
-      bg: token('--bg', FALLBACK_PALETTE.bg),
-      paper: token('--paper', FALLBACK_PALETTE.paper),
-      dim: token('--text-dim', FALLBACK_PALETTE.dim),
-      you: token('--you', FALLBACK_PALETTE.you),
-      enemy: token('--enemy', FALLBACK_PALETTE.enemy),
-    };
-  }
+  /** The menu map has its baked ground and its areas; another map is drawn on the flat stone. */
+  const menuMap = $derived(map !== null && map.meta.name === MENU_MAP.meta.name);
+  const ground = $derived(menuMap ? MENU_GROUND : null);
+  /** The world units under one px: lines that must stay a hairline on the screen. */
+  const px = $derived(scene === null ? 1 : 1 / Math.max(0.05, scene.scale));
+  /**
+   * The pieces of the map (cities, roads, the border) at most `PIECES_PX` of their match size on
+   * the screen: a map laid out large (the entry screen) keeps small, quiet pieces.
+   */
+  const k = $derived(scene === null ? 1 : Math.min(1, PIECES_PX / scene.scale));
+  const land = $derived<MenuLand | null>(
+    map === null ? null : menuLand(map, menuMap ? MENU_GEO : null, k),
+  );
+  /** The hatch of the band: the match's pitch, never closer than 3 px on the screen. */
+  const pitch = $derived(Math.max(MENU_BORDER.band.pitch * k, 3 * px));
 
   function sameSight(a: Sight | null, b: Sight | null): boolean {
     if (a === null || b === null) return a === b;
@@ -118,7 +137,7 @@
     } catch {
       context = null;
     }
-    const colours = host === undefined ? FALLBACK_PALETTE : palette(host);
+    const colours = host === undefined ? FALLBACK_PALETTE : readPalette(host);
     const clockAt = (at: number, still: boolean): MotionClock =>
       still
         ? {
@@ -183,34 +202,45 @@
     };
   });
 
-  const line = (from: Point, to: Point): { x1: number; y1: number; x2: number; y2: number } => ({
-    x1: from.x,
-    y1: from.y,
-    x2: to.x,
-    y2: to.y,
-  });
-
-  /** A parallel copy of a road at `offset` px, for the lines of a wide road. */
-  function parallel(
-    a: Point,
-    b: Point,
-    offset: number,
-  ): { x1: number; y1: number; x2: number; y2: number } {
-    const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    const nx = (-(b.y - a.y) / length) * offset;
-    const ny = ((b.x - a.x) / length) * offset;
-    return { x1: a.x + nx, y1: a.y + ny, x2: b.x + nx, y2: b.y + ny };
+  /** How a road is drawn: an own road, the opponent's (in the fog), a buffer road, a road in the fog. */
+  function roadKind(edge: SceneEdge, laid: Scene): 'own' | 'enemy' | 'buffer' | 'fog' {
+    const hidden = laid.fog && edge.a.x > laid.fadeStart && edge.b.x > laid.fadeStart;
+    if (edge.own) return 'own';
+    if (edge.a.owner === 1 && edge.b.owner === 1) return hidden ? 'fog' : 'enemy';
+    return hidden ? 'fog' : 'buffer';
   }
 
-  const ring = 22;
-  const ringLength = 2 * Math.PI * ring;
+  /** The two capitals in world units (drawn on their own layer, over the fog). */
+  const capitalAt = (id: number | undefined): Point | null =>
+    scene?.nodes.find((n) => n.id === id)?.world ?? null;
+  const ownCapital = $derived(capitalAt(scene?.capitalIds[0]));
+  const enemyCapital = $derived(capitalAt(scene?.capitalIds[1]));
+
+  /** A transform that scales a piece by `by` about its centre `c` (world units). */
+  const about = (c: Point, by: number): string =>
+    `translate(${c.x.toFixed(2)} ${c.y.toFixed(2)}) scale(${by.toFixed(4)}) translate(${(-c.x).toFixed(2)} ${(-c.y).toFixed(2)})`;
+
+  /** The dashes of the lane of a road, in world units scaled with the pieces. */
+  const dashes = (kind: string): string | undefined =>
+    kind === 'buffer'
+      ? `${String(7 * k)} ${String(5 * k)}`
+      : kind === 'fog'
+        ? `${String(1.5 * k)} ${String(4.5 * k)}`
+        : undefined;
+
+  const world = $derived(
+    scene === null
+      ? ''
+      : `translate(${scene.origin.x.toFixed(2)} ${scene.origin.y.toFixed(2)}) scale(${scene.scale.toFixed(4)})`,
+  );
 </script>
 
-<!-- Four layers, each its own: the map is drawn once (its blurred terrain never repaints), the fog
+<!-- Four layers, each its own: the map is drawn once (its baked ground never repaints), the fog
      repaints only when the hole of the scout's sight moves (10 times a second at most), the motion is
-     one canvas, and the capitals stand on top. -->
-<div class={`backdrop ${season}`} bind:this={host} aria-hidden="true">
-  {#if scene !== null}
+     one canvas, and the capitals stand on top. The map is the match's (#839): the Intaglio ground of
+     the menu map, the start territory as the Border band, roads and cities engraved. -->
+<div class={`backdrop ${season}`} class:entry bind:this={host} aria-hidden="true">
+  {#if scene !== null && map !== null && land !== null}
     <svg
       class="scene layer"
       viewBox={`0 0 ${String(scene.width)} ${String(scene.height)}`}
@@ -219,201 +249,285 @@
       focusable="false"
     >
       <defs>
-        <radialGradient id="menu-you" cx="38%" cy="30%" r="80%">
-          <stop offset="0" class="stop-you-hi" />
-          <stop offset="1" class="stop-you" />
-        </radialGradient>
-        <radialGradient id="menu-enemy" cx="38%" cy="30%" r="80%">
-          <stop offset="0" class="stop-enemy-hi" />
-          <stop offset="1" class="stop-enemy" />
-        </radialGradient>
-        <filter id="menu-blur" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="16" />
+        <filter id="menu-grade" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values={matrix} />
         </filter>
-      </defs>
-
-      <!-- Terrain: soft blobs in the colours of the season, one blurred layer drawn once. -->
-      <g filter="url(#menu-blur)" opacity="0.7">
-        {#each scene.nodes as node (node.id)}
-          <circle
-            cx={node.x}
-            cy={node.y}
-            r={scene.terrainRadius}
-            class={`terrain ${node.terrain}`}
-          />
-        {/each}
-      </g>
-      <!-- Territory at the start: the own side in blue, the enemy's in red (it is in the fog). -->
-      {#each scene.nodes as node (node.id)}
-        {#if node.owner !== null}
-          <circle
-            cx={node.x}
-            cy={node.y}
-            r={scene.territoryRadius}
-            class={node.owner === 0 ? 'land-you' : 'land-enemy'}
-          />
-        {/if}
-      {/each}
-
-      <g opacity="0.5">
-        {#each scene.edges as edge, i (i)}
-          {#if !edge.own}
-            {@const hidden = edge.a.x > scene.fadeStart && edge.b.x > scene.fadeStart}
-            <line {...line(edge.a, edge.b)} class={hidden ? 'road-fog' : 'road-border-shade'} />
-            {#if !hidden}
-              <line {...line(edge.a, edge.b)} class="road-border" />
-            {/if}
-          {/if}
-        {/each}
-      </g>
-      {#each scene.edges as edge, i (i)}
-        {#if edge.own}
-          <line
-            {...line(edge.a, edge.b)}
-            class="road-own"
-            stroke-width={2 + edge.lines * 1.6 + 3.6}
-          />
-          {#each Array.from({ length: edge.lines }, (_, k) => k) as k (k)}
-            <line
-              {...parallel(edge.a, edge.b, (k - (edge.lines - 1) / 2) * 3.4)}
-              class="road-line"
-            />
-          {/each}
-        {/if}
-      {/each}
-
-      {#each scene.nodes as node (node.id)}
-        {#if node.city}
-          {#if !scene.capitalIds.includes(node.id)}
-            <circle
-              cx={node.x}
-              cy={node.y}
-              r={node.owner === 0 ? 9 : 8}
-              class={node.owner === 0
-                ? 'city-you'
-                : node.owner === 1
-                  ? 'city-enemy'
-                  : 'city-neutral'}
-            />
-          {/if}
-        {:else}
-          <circle cx={node.x} cy={node.y} r="7.5" class="prov-shade" />
-          <circle
-            cx={node.x}
-            cy={node.y}
-            r="5.5"
-            class={node.owner === 0 ? 'prov-you' : node.owner === 1 ? 'prov-enemy' : 'prov-neutral'}
-          />
-        {/if}
-      {/each}
-    </svg>
-
-    <!-- The fog on the enemy side: a veil with a soft left edge and hatching, as on the match map;
-         the scout's sight cuts a soft hole in it (DEC-35: own groups are the source of sight). -->
-    <svg
-      class="fog layer"
-      viewBox={`0 0 ${String(scene.width)} ${String(scene.height)}`}
-      width={scene.width}
-      height={scene.height}
-      focusable="false"
-    >
-      <defs>
-        <linearGradient
-          id="menu-fog"
-          gradientUnits="userSpaceOnUse"
-          x1={scene.fadeStart}
-          x2={scene.fogStart}
-          y1="0"
-          y2="0"
-        >
-          <stop offset="0" class="stop-fog-0" />
-          <stop offset="1" class="stop-fog-1" />
-        </linearGradient>
-        <linearGradient
-          id="menu-fog-mask"
-          gradientUnits="userSpaceOnUse"
-          x1={scene.fadeStart}
-          x2={scene.fogStart}
-          y1="0"
-          y2="0"
-        >
-          <stop offset="0" stop-color="#000" />
-          <stop offset="1" stop-color="#fff" />
-        </linearGradient>
-        <linearGradient
-          id="menu-top-mask"
-          gradientUnits="userSpaceOnUse"
-          x1="0"
-          x2="0"
-          y1={BAR_BOTTOM}
-          y2={BAR_BOTTOM + FOG_TOP_FADE}
-        >
-          <stop offset="0" stop-color="#000" />
-          <stop offset="1" stop-color="#fff" />
-        </linearGradient>
-        <radialGradient id="menu-sight-hole">
-          <stop offset="0.7" stop-color="#000" />
-          <stop offset="0.85" stop-color="#000" stop-opacity="0.55" />
-          <stop offset="1" stop-color="#000" stop-opacity="0" />
-        </radialGradient>
-        <!-- The fog does not reach the title bar: the chip of the player is there (#471). -->
+        <filter id="menu-soft" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="22" />
+        </filter>
+        <!-- The baked ground fades into the stone at its edges (the map does not fill the window). -->
         <mask
-          id="menu-fog-top"
+          id="menu-ground-edge"
           maskUnits="userSpaceOnUse"
-          x="0"
-          y="0"
-          width={scene.width}
-          height={scene.height}
+          x={-80}
+          y={-80}
+          width={map.meta.width + 160}
+          height={map.meta.height + 160}
         >
-          <rect x="0" y="0" width={scene.width} height={scene.height} fill="url(#menu-top-mask)" />
-          {#if sight !== null}
-            <circle
-              class="sight-hole"
-              cx={sight.x}
-              cy={sight.y}
-              r={sight.r}
-              fill="url(#menu-sight-hole)"
-            />
-          {/if}
+          <rect
+            x="34"
+            y="34"
+            width={Math.max(0, map.meta.width - 68)}
+            height={Math.max(0, map.meta.height - 68)}
+            fill="#fff"
+            filter="url(#menu-soft)"
+          />
         </mask>
-        <mask
-          id="menu-fog-hatch"
-          maskUnits="userSpaceOnUse"
-          x="0"
-          y="0"
-          width={scene.width}
-          height={scene.height}
-        >
-          <rect x="0" y="0" width={scene.width} height={scene.height} fill="url(#menu-fog-mask)" />
-        </mask>
+        <pattern id="menu-band-own" width={pitch} height={pitch} patternUnits="userSpaceOnUse">
+          <rect width={pitch} height={Math.max(MENU_BORDER.band.width, px)} class="hatch-own" />
+        </pattern>
         <pattern
-          id="menu-hatch"
-          width="9"
-          height="9"
+          id="menu-band-enemy"
+          width={pitch}
+          height={pitch}
+          patternUnits="userSpaceOnUse"
+          patternTransform="rotate(-45)"
+        >
+          <rect width={pitch} height={Math.max(MENU_BORDER.band.width, px)} class="hatch-enemy" />
+        </pattern>
+        <pattern
+          id="menu-neutral"
+          width="2.6"
+          height="2.6"
           patternUnits="userSpaceOnUse"
           patternTransform="rotate(45)"
         >
-          <rect width="1.6" height="9" class="hatch" />
+          <rect width="2.6" height="0.7" class="hatch-neutral" />
         </pattern>
+        <clipPath id="menu-land-own" clipPathUnits="userSpaceOnUse">
+          <path d={land.own.cells} />
+        </clipPath>
+        <clipPath id="menu-land-enemy" clipPathUnits="userSpaceOnUse">
+          <path d={land.enemy.cells} />
+        </clipPath>
       </defs>
-      <g mask="url(#menu-fog-top)">
-        <rect
-          x={scene.fadeStart}
-          y="0"
-          width={scene.width - scene.fadeStart}
-          height={scene.height}
-          fill="url(#menu-fog)"
-        />
-        <rect
-          x={scene.fadeStart}
-          y="0"
-          width={scene.width - scene.fadeStart}
-          height={scene.height}
-          fill="url(#menu-hatch)"
-          mask="url(#menu-fog-hatch)"
-        />
+
+      <g transform={world}>
+        <!-- The ground: the baked Intaglio of the menu map, graded by the season and darker. -->
+        {#if ground !== null}
+          <g mask="url(#menu-ground-edge)">
+            <image
+              href={ground}
+              width={map.meta.width}
+              height={map.meta.height}
+              preserveAspectRatio="none"
+              filter="url(#menu-grade)"
+            />
+          </g>
+        {/if}
+
+        <!-- The start territory: the Border band (own horizontal, the enemy's at 45 degrees) and
+             the engraved border (a dark cut, the owner's rule, a second rule or a row of beads). -->
+        {#each [['own', land.own], ['enemy', land.enemy]] as const as [side, part] (side)}
+          <path
+            d={part.band}
+            class="band"
+            stroke={`url(#menu-band-${side})`}
+            stroke-width={MENU_BORDER.band.depth * 2 * k}
+            clip-path={`url(#menu-land-${side})`}
+          />
+          <path d={part.cut} class="cut" stroke-width={Math.max(MENU_BORDER.cut.width * k, px)} />
+          <path
+            d={part.rule}
+            class={`rule ${side}`}
+            stroke-width={Math.max(MENU_BORDER.rule.width * k, px)}
+          />
+          {#if side === 'own'}
+            <path
+              d={part.inner}
+              class="rule own"
+              stroke-width={Math.max(MENU_BORDER.rule2.width * k, px)}
+            />
+          {:else}
+            <path
+              d={part.inner}
+              class="beads"
+              stroke-width={Math.max(MENU_BORDER.beads.radius * 2 * k, px)}
+              stroke-dasharray={`0 ${String(MENU_BORDER.beads.step * k)}`}
+            />
+          {/if}
+        {/each}
+
+        <!-- Roads as the match draws them at level 1: an own road is a band of the owner's colour
+             with a light lane, a buffer road dashed lanes on a dark casing, a road in fog dotted. -->
+        {#each scene.edges as edge, i (i)}
+          {@const kind = roadKind(edge, scene)}
+          {@const a = edge.a.world}
+          {@const b = edge.b.world}
+          <line
+            x1={a.x}
+            y1={a.y}
+            x2={b.x}
+            y2={b.y}
+            class={`road-casing ${kind}`}
+            stroke-width={(MENU_LANE + (kind === 'fog' ? 3 : 3.6)) * k}
+          />
+          <line
+            x1={a.x}
+            y1={a.y}
+            x2={b.x}
+            y2={b.y}
+            class={`road-lane ${kind}`}
+            stroke-width={Math.max(MENU_LANE * k, px)}
+            stroke-dasharray={dashes(kind)}
+          />
+        {/each}
+
+        <!-- Cities: the disc on a dark cut with an ink rim, on its ring of places; a province is a
+             dark plate with the owner's dot. The capitals stand on their own layer. -->
+        {#each scene.nodes as node (node.id)}
+          {#if !scene.capitalIds.includes(node.id)}
+            {@const c = node.world}
+            {@const side = node.owner === 0 ? 'own' : node.owner === 1 ? 'enemy' : 'neutral'}
+            {#if node.city}
+              <MenuCityMark piece={menuCity(node.kind, c)} {side} {k} />
+            {:else}
+              <g transform={about(c, k)}>
+                <circle cx={c.x} cy={c.y} r="8" class="prov-plate" />
+                {#if side === 'neutral'}
+                  <circle cx={c.x} cy={c.y} r="6" class="prov-ring" />
+                  <circle cx={c.x} cy={c.y} r="1.5" class="prov-dot" />
+                {:else}
+                  <circle cx={c.x} cy={c.y} r="6.4" class={`prov ${side}`} />
+                  <circle cx={c.x} cy={c.y} r="7.6" class="prov-ring" />
+                  {#if side === 'enemy'}<circle cx={c.x} cy={c.y} r="10" class="prov-ring" />{/if}
+                {/if}
+              </g>
+            {/if}
+          {/if}
+        {/each}
+
+        <!-- The names of the cities in cut capitals, small and faint (the Lapis plate of #826). -->
+        {#each scene.nodes as node (node.id)}
+          {#if node.city}
+            <text
+              x={node.world.x}
+              y={node.world.y + menuCity(node.kind, node.world).ring.radius * k + 11 * px}
+              class="name"
+              font-size={10 * px}
+              letter-spacing={1.8 * px}
+              text-anchor="middle">{node.name.toUpperCase()}</text
+            >
+          {/if}
+        {/each}
       </g>
     </svg>
+
+    <!-- The fog on the enemy side: the Ruled veil of the match (dark, one run of fine horizontal
+         rules) with a soft left edge; the scout's sight cuts a soft hole in it (DEC-35: own groups
+         are the source of sight). The entry screen has no fog. -->
+    {#if scene.fog}
+      <svg
+        class="fog layer"
+        viewBox={`0 0 ${String(scene.width)} ${String(scene.height)}`}
+        width={scene.width}
+        height={scene.height}
+        focusable="false"
+      >
+        <defs>
+          <linearGradient
+            id="menu-fog"
+            gradientUnits="userSpaceOnUse"
+            x1={scene.fadeStart}
+            x2={scene.fogStart}
+            y1="0"
+            y2="0"
+          >
+            <stop offset="0" class="stop-fog-0" />
+            <stop offset="1" class="stop-fog-1" />
+          </linearGradient>
+          <linearGradient
+            id="menu-fog-mask"
+            gradientUnits="userSpaceOnUse"
+            x1={scene.fadeStart}
+            x2={scene.fogStart}
+            y1="0"
+            y2="0"
+          >
+            <stop offset="0" stop-color="#000" />
+            <stop offset="1" stop-color="#fff" />
+          </linearGradient>
+          <linearGradient
+            id="menu-top-mask"
+            gradientUnits="userSpaceOnUse"
+            x1="0"
+            x2="0"
+            y1={BAR_BOTTOM}
+            y2={BAR_BOTTOM + FOG_TOP_FADE}
+          >
+            <stop offset="0" stop-color="#000" />
+            <stop offset="1" stop-color="#fff" />
+          </linearGradient>
+          <radialGradient id="menu-sight-hole">
+            <stop offset="0.7" stop-color="#000" />
+            <stop offset="0.85" stop-color="#000" stop-opacity="0.55" />
+            <stop offset="1" stop-color="#000" stop-opacity="0" />
+          </radialGradient>
+          <!-- The fog does not reach the title bar: the chip of the player is there (#471). -->
+          <mask
+            id="menu-fog-top"
+            maskUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width={scene.width}
+            height={scene.height}
+          >
+            <rect
+              x="0"
+              y="0"
+              width={scene.width}
+              height={scene.height}
+              fill="url(#menu-top-mask)"
+            />
+            {#if sight !== null}
+              <circle
+                class="sight-hole"
+                cx={sight.x}
+                cy={sight.y}
+                r={sight.r}
+                fill="url(#menu-sight-hole)"
+              />
+            {/if}
+          </mask>
+          <mask
+            id="menu-fog-rules"
+            maskUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width={scene.width}
+            height={scene.height}
+          >
+            <rect
+              x="0"
+              y="0"
+              width={scene.width}
+              height={scene.height}
+              fill="url(#menu-fog-mask)"
+            />
+          </mask>
+          <pattern id="menu-rules" width="8" height="3.4" patternUnits="userSpaceOnUse">
+            <rect width="8" height="1" class="rule-line" />
+          </pattern>
+        </defs>
+        <g mask="url(#menu-fog-top)">
+          <rect
+            x={scene.fadeStart}
+            y="0"
+            width={scene.width - scene.fadeStart}
+            height={scene.height}
+            fill="url(#menu-fog)"
+          />
+          <rect
+            x={scene.fadeStart}
+            y="0"
+            width={scene.width - scene.fadeStart}
+            height={scene.height}
+            fill="url(#menu-rules)"
+            mask="url(#menu-fog-rules)"
+          />
+        </g>
+      </svg>
+    {/if}
 
     <canvas class="motion layer" bind:this={canvas}></canvas>
 
@@ -424,69 +538,69 @@
       height={scene.height}
       focusable="false"
     >
-      <!-- The own capital. -->
-      {#if phase === 'banned'}
-        <circle class="ban-ring pulse" cx={scene.ownCapital.x} cy={scene.ownCapital.y} r="27" />
-      {/if}
-      <circle cx={scene.ownCapital.x} cy={scene.ownCapital.y} r="15" class="capital-you" />
-      <polygon points={starPoints(scene.ownCapital.x, scene.ownCapital.y, 7.5)} class="star" />
-      <circle cx={scene.ownCapital.x} cy={scene.ownCapital.y} r={ring} class="seg-shade" />
-      <circle
-        cx={scene.ownCapital.x}
-        cy={scene.ownCapital.y}
-        r={ring}
-        class="seg"
-        stroke-dasharray={`${String(ringLength / 5 - 3)} 3`}
-        transform={`rotate(-90 ${String(scene.ownCapital.x)} ${String(scene.ownCapital.y)})`}
-      />
+      {#if ownCapital !== null && enemyCapital !== null}
+        {@const own = menuCity('capital', ownCapital)}
+        {@const enemy = menuCity('capital', enemyCapital)}
+        {@const e = scene.enemyCapital}
+        {@const ringPx = own.ring.radius * k * scene.scale}
+        <g transform={world}>
+          <!-- The own capital: the engraved disc and star on its ring of places. -->
+          {#if phase === 'banned'}
+            <circle
+              class="ban-ring pulse"
+              cx={ownCapital.x}
+              cy={ownCapital.y}
+              r={(own.ring.radius + 9) * k}
+              stroke-width={2 * px}
+              stroke-dasharray={`${String(6 * px)} ${String(4 * px)}`}
+            />
+          {/if}
+          <MenuCityMark piece={own} side="own" capital {k} />
 
-      <!-- The enemy capital: unknown behind the fog, a name once a pair is found. -->
-      {#if revealed && opponent !== null}
-        <g class="reveal">
-          <circle cx={scene.enemyCapital.x} cy={scene.enemyCapital.y} r="34" class="enemy-plate" />
-          <circle
-            cx={scene.enemyCapital.x}
-            cy={scene.enemyCapital.y}
-            r="16"
-            class="capital-enemy"
-          />
-          <polygon
-            points={starPoints(scene.enemyCapital.x, scene.enemyCapital.y, 8)}
-            class="star"
-          />
-          <circle cx={scene.enemyCapital.x} cy={scene.enemyCapital.y} r="23" class="seg-shade" />
-          <circle
-            cx={scene.enemyCapital.x}
-            cy={scene.enemyCapital.y}
-            r="23"
-            class="seg-enemy"
-            stroke-dasharray={`${String((2 * Math.PI * 23) / 5 - 3)} 3`}
-            transform={`rotate(-90 ${String(scene.enemyCapital.x)} ${String(scene.enemyCapital.y)})`}
-          />
-          <rect
-            x={scene.enemyCapital.x - 48}
-            y={scene.enemyCapital.y + 32}
-            width="96"
-            height="24"
-            rx="12"
-            class="nick-plate"
-          />
-          <text
-            x={scene.enemyCapital.x}
-            y={scene.enemyCapital.y + 49}
-            text-anchor="middle"
-            class="nick-text">{opponent.length > 12 ? `${opponent.slice(0, 11)}…` : opponent}</text
-          >
+          <!-- The enemy capital: unknown behind the fog, the engraved city once a pair is found;
+               on the entry screen (no fog) a plain enemy capital. -->
+          {#if !scene.fog || revealed}
+            <g class:reveal={scene.fog}>
+              {#if scene.fog}
+                <circle
+                  cx={enemyCapital.x}
+                  cy={enemyCapital.y}
+                  r={(enemy.ring.radius + 12) * k}
+                  class="enemy-plate"
+                />
+              {/if}
+              <MenuCityMark piece={enemy} side="enemy" capital {k} />
+            </g>
+          {:else}
+            <circle
+              cx={enemyCapital.x}
+              cy={enemyCapital.y}
+              r={(enemy.radius + 3.2) * k}
+              class="unknown-plate"
+            />
+            <circle
+              cx={enemyCapital.x}
+              cy={enemyCapital.y}
+              r={enemy.radius * k}
+              class="unknown march"
+              stroke-width={1.6 * px}
+              stroke-dasharray={`${String(5 * px)} ${String(4 * px)}`}
+            />
+          {/if}
         </g>
-      {:else}
-        <circle cx={scene.enemyCapital.x} cy={scene.enemyCapital.y} r="17" class="unknown-plate" />
-        <circle cx={scene.enemyCapital.x} cy={scene.enemyCapital.y} r="16" class="unknown march" />
-        <text
-          x={scene.enemyCapital.x}
-          y={scene.enemyCapital.y + 6}
-          text-anchor="middle"
-          class="unknown-mark">?</text
-        >
+        {#if scene.fog && !revealed}
+          <text x={e.x} y={e.y + 6} text-anchor="middle" class="unknown-mark">?</text>
+        {/if}
+        {#if scene.fog && revealed && opponent !== null}
+          <!-- The opponent's name under its capital, on a dark tag in a double rule. -->
+          <g class="reveal">
+            <rect x={e.x - 52} y={e.y + ringPx + 8} width="104" height="26" class="nick-plate" />
+            <rect x={e.x - 49} y={e.y + ringPx + 11} width="98" height="20" class="nick-rule" />
+            <text x={e.x} y={e.y + ringPx + 25.5} text-anchor="middle" class="nick-text"
+              >{opponent.length > 12 ? `${opponent.slice(0, 11)}…` : opponent}</text
+            >
+          </g>
+        {/if}
       {/if}
     </svg>
   {/if}
@@ -511,190 +625,160 @@
     height: 100%;
   }
 
-  /* The season of the date as a still tint of the terrain (#474, BG4 in BG5); summer is the default of app.css. */
-  .backdrop.spring {
-    --terrain-plains: #405233;
-    --terrain-forest: #2b4632;
-    --terrain-mountains: #4a4740;
+  .hatch-own {
+    fill: var(--own);
+    opacity: 0.85;
   }
-  .backdrop.autumn {
-    --terrain-plains: #47452f;
-    --terrain-forest: #43382a;
+  .hatch-enemy {
+    fill: var(--enemy);
+    opacity: 0.85;
   }
-  .backdrop.winter {
-    --terrain-plains: #464c53;
-    --terrain-forest: #2f3c3b;
-    --terrain-mountains: #5b5e64;
+  .hatch-neutral {
+    fill: var(--neutral);
+    opacity: 0.7;
   }
 
-  .stop-you-hi {
-    stop-color: color-mix(in srgb, var(--you) 60%, white);
+  .band {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
-  .stop-you {
-    stop-color: var(--you);
+  .cut {
+    fill: none;
+    stroke: var(--cut);
+    stroke-opacity: 0.85;
+    stroke-linejoin: round;
   }
-  .stop-enemy-hi {
-    stop-color: color-mix(in srgb, var(--enemy) 60%, white);
+  .rule {
+    fill: none;
+    stroke-linejoin: round;
   }
-  .stop-enemy {
-    stop-color: var(--enemy);
+  .rule.own {
+    stroke: var(--own);
   }
+  .rule.enemy {
+    stroke: var(--enemy);
+  }
+  .beads {
+    fill: none;
+    stroke: var(--enemy);
+    stroke-linecap: round;
+  }
+
+  .road-casing {
+    stroke-linecap: butt;
+  }
+  .road-casing.own {
+    stroke: var(--own);
+    stroke-opacity: 0.62;
+  }
+  .road-casing.enemy {
+    stroke: var(--enemy);
+    stroke-opacity: 0.62;
+  }
+  .road-casing.buffer {
+    stroke: var(--cut);
+    stroke-opacity: 0.4;
+  }
+  .road-casing.fog {
+    stroke: var(--cut);
+    stroke-opacity: 0.3;
+  }
+  .road-lane.own,
+  .road-lane.enemy {
+    stroke: #e6edf3;
+    stroke-opacity: 0.95;
+  }
+  .road-lane.buffer {
+    stroke: #aab2bd;
+    stroke-opacity: 0.95;
+  }
+  .road-lane.fog {
+    stroke: #aab2bd;
+    stroke-opacity: 0.75;
+  }
+
+  .prov-plate {
+    fill: var(--plate);
+  }
+  .prov.own {
+    fill: var(--own);
+  }
+  .prov.enemy {
+    fill: var(--enemy);
+  }
+  .prov-ring {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 0.9;
+  }
+  .prov-dot {
+    fill: var(--neutral);
+  }
+  .name {
+    fill: var(--ink);
+    fill-opacity: 0.62;
+    font-family: var(--font-display);
+    font-weight: 500;
+    paint-order: stroke;
+    stroke: var(--plate);
+    stroke-opacity: 0.7;
+    stroke-width: 2.4px;
+    vector-effect: non-scaling-stroke;
+  }
+
   .stop-fog-0 {
-    stop-color: var(--bg);
+    stop-color: var(--plate);
     stop-opacity: 0;
   }
   .stop-fog-1 {
-    stop-color: var(--bg);
-    stop-opacity: 0.9;
+    stop-color: var(--plate);
+    stop-opacity: 0.86;
   }
-  .hatch {
-    fill: var(--text-dim);
-    opacity: 0.16;
-  }
-
-  .terrain.plains {
-    fill: var(--terrain-plains);
-  }
-  .terrain.forest {
-    fill: var(--terrain-forest);
-  }
-  .terrain.mountains {
-    fill: var(--terrain-mountains);
-  }
-  .land-you {
-    fill: var(--you);
-    opacity: 0.16;
-  }
-  .land-enemy {
-    fill: var(--enemy);
-    opacity: 0.12;
+  .rule-line {
+    fill: var(--cut);
+    opacity: 0.5;
   }
 
-  .road-fog {
-    stroke: #aab2bd;
-    stroke-opacity: 0.55;
-    stroke-width: 1.5;
-    stroke-dasharray: 1.5 4.5;
-    stroke-linecap: round;
-  }
-  .road-border-shade {
-    stroke: var(--bg);
-    stroke-opacity: 0.5;
-    stroke-width: 5;
-  }
-  .road-border {
-    stroke: #aab2bd;
-    stroke-width: 2;
-    stroke-dasharray: 7 5;
-  }
-  .road-own {
-    stroke: var(--you);
-    stroke-opacity: 0.55;
-    stroke-linecap: round;
-  }
-  .road-line {
-    stroke: var(--text);
-    stroke-width: 1.6;
-    stroke-linecap: round;
-  }
-
-  .city-you {
-    fill: url(#menu-you);
-    stroke: var(--paper);
-    stroke-width: 3;
-  }
-  .city-enemy {
-    fill: url(#menu-enemy);
-    stroke: var(--paper);
-    stroke-width: 3;
-  }
-  .city-neutral {
-    fill: var(--neutral-fill);
-    stroke: var(--neutral);
-    stroke-width: 2;
-  }
-  .prov-shade {
-    fill: var(--bg);
-    fill-opacity: 0.9;
-  }
-  .prov-you,
-  .prov-enemy,
-  .prov-neutral {
-    fill: none;
-    stroke-width: 2.4;
-  }
-  .prov-you {
-    stroke: var(--you);
-  }
-  .prov-enemy {
-    stroke: var(--enemy);
-  }
-  .prov-neutral {
-    stroke: var(--neutral);
-  }
-
-  .capital-you {
-    fill: url(#menu-you);
-    stroke: var(--paper);
-    stroke-width: 3;
-  }
-  .capital-enemy {
-    fill: url(#menu-enemy);
-    stroke: var(--paper);
-    stroke-width: 3;
-  }
-  .star {
-    fill: var(--bg);
-    stroke: var(--paper);
-    stroke-width: 1;
-    stroke-linejoin: round;
-  }
-  .seg-shade {
-    fill: none;
-    stroke: var(--bg);
-    stroke-opacity: 0.8;
-    stroke-width: 6;
-  }
-  .seg,
-  .seg-enemy {
-    fill: none;
-    stroke: var(--paper);
-    stroke-width: 3;
-  }
   .enemy-plate {
-    fill: var(--bg);
-    opacity: 0.7;
+    fill: var(--plate);
+    opacity: 0.72;
   }
   .nick-plate {
-    fill: var(--bg);
-    fill-opacity: 0.9;
+    fill: var(--plate);
+    fill-opacity: 0.92;
+    stroke: var(--cut);
+    stroke-width: 1;
+  }
+  .nick-rule {
+    fill: none;
     stroke: var(--enemy);
-    stroke-width: 1.5;
+    stroke-width: 1;
   }
   .nick-text {
-    fill: var(--text);
-    font-size: 14px;
-    font-weight: 700;
+    fill: var(--ink);
+    font: 500 12px var(--font-display);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
   .unknown-plate {
-    fill: var(--bg);
-    fill-opacity: 0.85;
+    fill: var(--plate);
+    fill-opacity: 0.9;
   }
   .unknown {
     fill: none;
     stroke: var(--enemy);
-    stroke-width: 2.4;
-    stroke-dasharray: 7 5;
+    stroke-width: 1.6;
+    stroke-dasharray: 5 4;
   }
   .unknown-mark {
     fill: var(--enemy);
-    font-size: 18px;
-    font-weight: 800;
+    font: 500 19px var(--font-text);
   }
   .ban-ring {
     fill: none;
     stroke: var(--warn);
-    stroke-width: 2.4;
+    stroke-width: 2;
     stroke-dasharray: 6 4;
   }
 
@@ -711,7 +795,7 @@
 
   @keyframes march {
     to {
-      stroke-dashoffset: -24;
+      stroke-dashoffset: -18;
     }
   }
   @keyframes reveal {
