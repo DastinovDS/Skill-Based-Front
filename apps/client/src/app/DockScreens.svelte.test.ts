@@ -1,11 +1,12 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RANDOM_GENERATED, type Api, type Invite } from '../api/http.ts';
+import { NEW_MAP, RANDOM_GENERATED, RANDOM_POOL, type Api, type Invite } from '../api/http.ts';
 import { setLocale, translate, type MessageKey } from '../i18n/index.ts';
 import BotScreen from './BotScreen.svelte';
 import CreateScreen from './CreateScreen.svelte';
 import { fakeMapApi, makeDock } from './dockTestKit.ts';
 import InviteScreen from './InviteScreen.svelte';
+import { DRAWING_SLOW_MS } from './waiting.ts';
 
 // The Dock screens (#473) apart from the lobby: the create, bot and invite panels, the account
 // notes, the queue lock and the keys of the rail.
@@ -43,7 +44,7 @@ describe('the Dock screens', () => {
   describe('bot', () => {
     it('starts with the chosen level and map and keeps them when the server refuses', async () => {
       const onstart = vi
-        .fn<(level: string, map: string | null) => Promise<MessageKey | null>>()
+        .fn<(level: string, map: string) => Promise<MessageKey | null>>()
         .mockResolvedValueOnce('error.api.unavailable')
         .mockResolvedValue(null);
       const { dock } = makeDock();
@@ -94,7 +95,8 @@ describe('the Dock screens', () => {
         [...document.body.querySelectorAll<HTMLElement>(`${selector} [role="radio"]`)].map(
           (r) => r.textContent,
         );
-      expect(radios('.tiles:not(.gen)')).toHaveLength(2);
+      // The new map, the random pool map and the pool; the random generated map and the generated.
+      expect(radios('.tiles:not(.gen)')).toHaveLength(3);
       expect(radios('.tiles.gen')).toHaveLength(3);
       expect(document.body.textContent).toContain(en('map.generated'));
       document.body.querySelector<HTMLElement>('.tiles.gen [role="radio"]')?.click();
@@ -102,6 +104,71 @@ describe('the Dock screens', () => {
       button(en('bot.start')).click();
       await settle();
       expect(onstart).toHaveBeenLastCalledWith('normal', RANDOM_GENERATED);
+    });
+
+    it('picks a new map by default and says the map is being drawn while the server makes it (#889)', async () => {
+      const onstart = vi.fn(() => new Promise<null>(() => undefined));
+      const { dock } = makeDock();
+      component = mount(BotScreen, {
+        target: document.body,
+        props: { dock, onstart, onback: vi.fn() },
+      });
+      await settle();
+      expect(document.body.querySelector('.tiles [aria-checked="true"]')?.textContent).toContain(
+        en('map.new'),
+      );
+      button(en('bot.start')).click();
+      await settle();
+      expect(onstart).toHaveBeenCalledWith('normal', NEW_MAP);
+      expect(document.body.querySelector('h2')?.textContent).toBe(en('wait.drawing'));
+      const line = document.body.querySelector('[role="status"]');
+      expect(line?.textContent).toContain(en('wait.line'));
+      expect(line?.querySelector('.busy')).not.toBeNull();
+      await vi.advanceTimersByTimeAsync(DRAWING_SLOW_MS);
+      flushSync();
+      expect(document.body.querySelector('[role="status"]')?.textContent).toContain(
+        en('wait.slow'),
+      );
+    });
+
+    it('leaves the wait with the message and the choices kept when the map takes too long', async () => {
+      let answer: (key: MessageKey | null) => void = () => undefined;
+      const onstart = vi.fn(
+        () =>
+          new Promise<MessageKey | null>((resolve) => {
+            answer = resolve;
+          }),
+      );
+      const { dock } = makeDock();
+      component = mount(BotScreen, {
+        target: document.body,
+        props: { dock, onstart, onback: vi.fn() },
+      });
+      await settle();
+      button(en('bot.start')).click();
+      await settle();
+      answer('error.bot.slow');
+      await settle();
+      expect(document.body.querySelector('[role="alert"]')?.textContent).toContain(
+        en('error.bot.slow'),
+      );
+      expect(document.body.querySelector('h2')?.textContent).toBe(en('bot.pick'));
+      expect(document.body.querySelector('.tiles [aria-checked="true"]')?.textContent).toContain(
+        en('map.new'),
+      );
+    });
+
+    it('starts at once from the bot offer of the queue', async () => {
+      const onstart = vi.fn(() => new Promise<null>(() => undefined));
+      const { dock } = makeDock();
+      component = mount(BotScreen, {
+        target: document.body,
+        props: { dock, onstart, onback: vi.fn(), start: 'normal' },
+      });
+      await settle();
+      expect(onstart).toHaveBeenCalledTimes(1);
+      expect(onstart).toHaveBeenCalledWith('normal', NEW_MAP);
+      expect(document.body.querySelector('h2')?.textContent).toBe(en('wait.drawing'));
     });
 
     it('names the style of every level, no description (Spare), and shows the seat while it starts', async () => {
@@ -116,6 +183,11 @@ describe('the Dock screens', () => {
       );
       expect(document.body.querySelectorAll('.sg .ls')).toHaveLength(4);
       expect(document.body.textContent).not.toContain(en('bot.desc.normal'));
+      // A pool map: nothing to draw, "Starting...".
+      [...document.body.querySelectorAll<HTMLElement>('.tiles [role="radio"]')]
+        .find((r) => r.textContent.includes(en('map.random')))
+        ?.click();
+      flushSync();
       button(en('bot.start')).click();
       await settle();
       expect(document.body.querySelector('h2')?.textContent).toBe(en('bot.starting'));
@@ -128,7 +200,7 @@ describe('the Dock screens', () => {
   describe('create', () => {
     it('creates with the chosen map and answers a failure on the screen', async () => {
       const oncreate = vi
-        .fn<(map: string | null) => Promise<MessageKey | null>>()
+        .fn<(map: string) => Promise<MessageKey | null>>()
         .mockResolvedValueOnce('error.api.network')
         .mockResolvedValue(null);
       const { dock } = makeDock();
@@ -141,7 +213,7 @@ describe('the Dock screens', () => {
       expect(document.body.textContent).toContain(en('dock.chip.pause'));
       button(en('create.submit')).click();
       await settle();
-      expect(oncreate).toHaveBeenCalledWith(null);
+      expect(oncreate).toHaveBeenCalledWith(NEW_MAP);
       expect(document.body.querySelector('[role="alert"]')?.textContent).toContain(
         en('error.api.network'),
       );
@@ -164,22 +236,32 @@ describe('the Dock screens', () => {
       expect(document.body.textContent).toContain(en('dock.chip.noPause'));
     });
 
-    it('offers the generated maps to a friend, not to the public lobby', async () => {
+    it('offers the new map, the pool and the generated maps to a friend and to the lobby (#889)', async () => {
+      const oncreate = vi.fn(() => Promise.resolve(null));
       const { dock } = makeDock({}, fakeMapApi(['ridge', 'gen1-5']));
-      component = mount(CreateScreen, {
-        target: document.body,
-        props: { dock, isPublic: true, oncreate: vi.fn(), onback: vi.fn() },
-      });
-      await settle();
-      expect(document.body.querySelectorAll('.tiles [role="radio"]')).toHaveLength(2);
-      expect(document.body.textContent).not.toContain('gen1-5');
-      void unmount(component);
-      component = mount(CreateScreen, {
-        target: document.body,
-        props: { dock, oncreate: vi.fn(), onback: vi.fn() },
-      });
-      await settle();
-      expect(document.body.querySelector('.tiles.gen')?.textContent).toContain('gen1-5');
+      for (const isPublic of [true, false]) {
+        component = mount(CreateScreen, {
+          target: document.body,
+          props: { dock, isPublic, oncreate, onback: vi.fn() },
+        });
+        await settle();
+        expect(document.body.querySelectorAll('.tiles [role="radio"]')).toHaveLength(5);
+        expect(document.body.querySelector('.tiles.gen')?.textContent).toContain('gen1-5');
+        expect(document.body.querySelector('[aria-checked="true"]')?.textContent).toContain(
+          en('map.new'),
+        );
+        [...document.body.querySelectorAll<HTMLElement>('.tiles [role="radio"]')]
+          .find((r) => r.textContent.includes(en('map.random')))
+          ?.click();
+        flushSync();
+        press('Enter');
+        await settle();
+        expect(oncreate).toHaveBeenLastCalledWith(RANDOM_POOL);
+        void unmount(component);
+        document.body.innerHTML = '';
+      }
+      component = undefined;
+      expect(oncreate).toHaveBeenCalledTimes(2);
     });
 
     it('says the map list did not load and still creates a random match', async () => {
@@ -191,10 +273,10 @@ describe('the Dock screens', () => {
       });
       await settle();
       expect(document.body.textContent).toContain(en('map.listFailed'));
-      expect(document.body.querySelectorAll('.tiles [role="radio"]')).toHaveLength(1);
+      expect(document.body.querySelectorAll('.tiles [role="radio"]')).toHaveLength(2);
       press('Enter');
       await settle();
-      expect(oncreate).toHaveBeenCalledWith(null);
+      expect(oncreate).toHaveBeenCalledWith(NEW_MAP);
     });
   });
 
@@ -295,6 +377,47 @@ describe('the Dock screens', () => {
       await settle();
       expect(document.body.querySelector('h2')?.textContent).toBe(en('bot.starting'));
       expect(document.body.querySelectorAll('.vs small.y')).toHaveLength(2);
+    });
+
+    it('says the map is being drawn until the poll says it is ready (#884)', async () => {
+      let ready = false;
+      const invites = vi.fn(() =>
+        Promise.resolve(invite({ map_id: 'live-0123456789ab', map_ready: ready })),
+      );
+      render({ invite: invites });
+      await settle();
+      expect(document.body.textContent).toContain(en('invite.mapDrawing'));
+      expect(document.body.querySelector('.status.drawing')?.textContent).toContain(
+        en('wait.drawing'),
+      );
+      ready = true;
+      await vi.advanceTimersByTimeAsync(1500);
+      flushSync();
+      expect(document.body.querySelector('.status.drawing')).toBeNull();
+      expect(document.body.textContent).toContain('Map: live-0123456789ab');
+      // The waiting room polls as before, no faster.
+      expect(invites).toHaveBeenCalledTimes(2);
+    });
+
+    it('both ready on a map still being drawn: the match starts when it is', async () => {
+      render({
+        invite: () =>
+          Promise.resolve(
+            invite({
+              state: 'joined',
+              guest_nick: 'Vega',
+              map_id: 'live-0123456789ab',
+              map_ready: false,
+              you_ready: true,
+              opponent_ready: true,
+            }),
+          ),
+      });
+      await settle();
+      expect(document.body.querySelector('h2')?.textContent).toBe(en('wait.drawing'));
+      expect(document.body.querySelector('[role="status"]')?.textContent).toContain(
+        en('invite.drawingStart'),
+      );
     });
 
     it('goes back to the menu with a notice when the invite is gone', async () => {

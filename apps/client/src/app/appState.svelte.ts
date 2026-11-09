@@ -11,6 +11,7 @@ import { forgetGuest, loadGuest, saveGuest } from '../api/guestStore.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import { loginFailure, nickFailure, passwordFailure, type AccountFailure } from './account.ts';
 import { apiErrorKey } from './apiErrors.ts';
+import { BOT_START_TIMEOUT_MS } from './waiting.ts';
 import { MapCache } from './mapCache.svelte.ts';
 import { MENU_MAP } from './menuMap.ts';
 import type { MatchSummary } from './matchSummary.ts';
@@ -25,7 +26,8 @@ export type Screen =
   | { readonly name: 'create'; readonly public: boolean }
   /** The public lobby: open matches of other players (LOB-01). */
   | { readonly name: 'lobby' }
-  | { readonly name: 'bot' }
+  /** Play a bot; `start`: start at once at this level on a new map (the bot offer of the queue). */
+  | { readonly name: 'bot'; readonly start?: BotLevel }
   /** The "How to play" page (CLI-13, #72). */
   | { readonly name: 'howto' }
   /**
@@ -81,6 +83,8 @@ export interface AppStateOptions {
   location?: Pick<Location, 'search' | 'pathname' | 'hash'>;
   /** Removes the invite code from the address bar. */
   replaceUrl?: (url: string) => void;
+  /** How long a bot match request may take (`BOT_START_TIMEOUT_MS`). */
+  botTimeoutMs?: number;
 }
 
 export { apiErrorKey };
@@ -111,11 +115,13 @@ export class AppState {
   readonly #storage: () => Storage;
   readonly #location: Pick<Location, 'search' | 'pathname' | 'hash'>;
   readonly #replaceUrl: (url: string) => void;
+  readonly #botTimeoutMs: number;
 
   constructor(opts: AppStateOptions = {}) {
     this.api = opts.api ?? new Api();
     this.maps = new MapCache(this.api);
     this.#storage = opts.storage ?? (() => window.localStorage);
+    this.#botTimeoutMs = opts.botTimeoutMs ?? BOT_START_TIMEOUT_MS;
     this.#location = opts.location ?? window.location;
     this.#replaceUrl =
       opts.replaceUrl ??
@@ -352,10 +358,10 @@ export class AppState {
    * choices are kept, #473): the answer is the line to show, or null on success. A lost session
    * (401) is not shown there: it starts over from the menu with the notice.
    */
-  async createInvite(mapId: string | null, isPublic = false): Promise<MessageKey | null> {
+  async createInvite(pick: string, isPublic = false): Promise<MessageKey | null> {
     const guest = this.#requireGuest();
     try {
-      const invite = await this.api.createInvite(guest.token, mapId, isPublic);
+      const invite = await this.api.createInvite(guest.token, pick, isPublic);
       this.go({ name: 'invite', code: invite.code });
       return null;
     } catch (error) {
@@ -363,15 +369,24 @@ export class AppState {
     }
   }
 
-  /** Starts a bot match; a failure is answered like `createInvite`. */
-  async playBot(level: BotLevel, mapId: string | null): Promise<MessageKey | null> {
+  /**
+   * Starts a bot match; a failure is answered like `createInvite`. The server answers once the
+   * map is made (#884); a request that hangs past `BOT_START_TIMEOUT_MS` is given up.
+   */
+  async playBot(level: BotLevel, pick: string): Promise<MessageKey | null> {
     const guest = this.#requireGuest();
+    const limit = new AbortController();
+    const timer = setTimeout(() => {
+      limit.abort();
+    }, this.#botTimeoutMs);
     try {
-      const match = await this.api.createBotMatch(guest.token, level, mapId);
+      const match = await this.api.createBotMatch(guest.token, level, pick, limit.signal);
       this.go({ name: 'match', matchId: match.match_id, mapId: match.map_id });
       return null;
     } catch (error) {
-      return this.#failHere(error);
+      return limit.signal.aborted ? 'error.bot.slow' : this.#failHere(error);
+    } finally {
+      clearTimeout(timer);
     }
   }
 

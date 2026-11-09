@@ -92,6 +92,17 @@
       opponent_ready: true,
       expires_in_s: 1740,
     }),
+    // A new map being drawn (#884, #889): the host with the link, and both ready.
+    'invite-drawing': invite({ map_id: 'live-3f9a07c1d2e4', map_ready: false }),
+    'invite-drawing-start': invite({
+      state: 'joined',
+      map_id: 'live-3f9a07c1d2e4',
+      map_ready: false,
+      guest_nick: 'Vega',
+      you_ready: true,
+      opponent_ready: true,
+      expires_in_s: 1740,
+    }),
   };
 
   function build(id: string, map: MapFile): { api: Api; dock: DockContext } {
@@ -180,7 +191,12 @@
 {:else}
   <BotScreen
     {dock}
-    onstart={() => (id === 'bot-error' ? Promise.resolve('error.api.unavailable') : never<null>())}
+    onstart={() =>
+      id === 'bot-error'
+        ? Promise.resolve('error.api.unavailable')
+        : id === 'bot-timeout'
+          ? Promise.resolve('error.bot.slow')
+          : never<null>()}
     onback={nothing}
   />
 {/if}

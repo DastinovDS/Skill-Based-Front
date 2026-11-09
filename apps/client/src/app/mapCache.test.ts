@@ -60,4 +60,21 @@ describe('MapCache (#473)', () => {
     expect(cache.get('a')).toBeNull();
     expect(await cache.ensure('a')).not.toBeNull();
   });
+
+  it('takes the thumbnail of a per-match map from its summary, a pool map from the bundle (#884)', async () => {
+    const live = 'live-0123456789ab';
+    const map = vi.fn((id: string) => Promise.resolve(file(id)));
+    const mapSummary = vi.fn((id: string) =>
+      Promise.resolve({ ...summary(id), per_match: true, thumb_url: `/api/maps/${id}/thumb.webp` }),
+    );
+    const cache = new MapCache({ map, mapSummary } as unknown as Api);
+    expect(cache.thumb(live)).toBeNull();
+    await cache.ensure(live);
+    await cache.ensure(live);
+    expect(cache.thumb(live)).toBe(`/api/maps/${live}/thumb.webp`);
+    expect(mapSummary).toHaveBeenCalledTimes(1);
+    await cache.ensure('crossroads');
+    expect(mapSummary).toHaveBeenCalledTimes(1);
+    expect(cache.thumb('crossroads')).not.toBeNull();
+  });
 });

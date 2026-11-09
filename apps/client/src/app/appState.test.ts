@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Api, ApiError, type Invite, type PlayerProfile } from '../api/http.ts';
+import {
+  Api,
+  ApiError,
+  NEW_MAP,
+  RANDOM_POOL,
+  type Invite,
+  type PlayerProfile,
+} from '../api/http.ts';
 import { GUEST_STORAGE_KEY } from '../api/guestStore.ts';
 import type { MatchEndMsg } from '../protocol.gen.ts';
 import { AppState } from './appState.svelte.ts';
@@ -31,13 +38,14 @@ function memory(initial: Record<string, string> = {}): Storage {
   } as unknown as Storage;
 }
 
-function setup(search: string, storage = memory(), api: Partial<Api> = {}) {
+function setup(search: string, storage = memory(), api: Partial<Api> = {}, botTimeoutMs?: number) {
   const replaceUrl = vi.fn();
   const app = new AppState({
     api: api as Api,
     storage: () => storage,
     location: { search, pathname: '/', hash: '' },
     replaceUrl,
+    ...(botTimeoutMs === undefined ? {} : { botTimeoutMs }),
   });
   return { app, storage, replaceUrl };
 }
@@ -188,10 +196,10 @@ describe('AppState', () => {
       createBotMatch,
     });
     await app.start();
-    await app.createInvite(null);
+    await app.createInvite(NEW_MAP);
     expect(app.screen).toEqual({ name: 'invite', code: 'xyz' });
     await app.playBot('hard', 'pass');
-    expect(createBotMatch).toHaveBeenCalledWith('t', 'hard', 'pass');
+    expect(createBotMatch).toHaveBeenCalledWith('t', 'hard', 'pass', expect.any(AbortSignal));
     expect(app.screen).toEqual({ name: 'match', matchId: 'm1', mapId: 'pass' });
   });
 
@@ -217,12 +225,35 @@ describe('AppState', () => {
     });
     await app.start();
     app.go({ name: 'create', public: false });
-    expect(await app.createInvite(null)).toBe('error.api.unavailable');
+    expect(await app.createInvite(RANDOM_POOL)).toBe('error.api.unavailable');
     expect(app.screen).toEqual({ name: 'create', public: false });
     app.go({ name: 'bot' });
-    expect(await app.playBot('easy', null)).toBe('error.api.network');
+    expect(await app.playBot('easy', NEW_MAP)).toBe('error.api.network');
     expect(app.screen).toEqual({ name: 'bot' });
     expect(app.notice).toBeNull();
+  });
+
+  it('gives up a bot match that hangs while its map is drawn, and says the map took too long (#889)', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
+    const { app } = setup(
+      '',
+      storage,
+      {
+        me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+        // Like fetch: the request ends only when its signal is aborted.
+        createBotMatch: (_token, _level, _pick, signal) =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => {
+              reject(new ApiError('network', 0));
+            });
+          }),
+      },
+      20,
+    );
+    await app.start();
+    app.go({ name: 'bot' });
+    expect(await app.playBot('easy', NEW_MAP)).toBe('error.bot.slow');
+    expect(app.screen).toEqual({ name: 'bot' });
   });
 
   it('starts over from the menu when the session is lost during a create (401)', async () => {
@@ -232,7 +263,7 @@ describe('AppState', () => {
       createInvite: () => Promise.reject(new ApiError('unauthorized', 401)),
     });
     await app.start();
-    expect(await app.createInvite(null)).toBeNull();
+    expect(await app.createInvite(NEW_MAP)).toBeNull();
     expect(app.screen.name).toBe('welcome');
     expect(app.notice).toBe('error.api.unauthorized');
   });

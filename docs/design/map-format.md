@@ -195,20 +195,21 @@ stage 2 (#884, below).
 |---|---|
 | `gow_server.maps` | `MapCatalog.load` reads `maps/*.json` into the pool and `maps/gen/*.json` into the generated group; `pool()` and `generated()` are separate, `get(id)` finds both; one id in both groups stops the server |
 | `GET /api/maps` | the pool first, then the generated maps, each with the flag `generated`; `GET /api/maps/{id}` and the background serve both |
-| who can play | only by an explicit choice: `map_id`, or `random_generated: true` (a draw from the group), in `POST /api/matches` and `POST /api/bot-matches`. A random pick without them, and the queue, draw from the pool. `public: true` with a generated map is `422` |
+| who can play | only by an explicit choice: `map_id`, or `random_generated: true` (a draw from the group), in `POST /api/matches` and `POST /api/bot-matches`. A random pick without them, and the queue, draw from the pool. A public match may name one too since #889 (it is unrated) |
 | rating | none: only the queue passes `rated`, and `MatchLifecycle.start` ignores it for `meta.symmetry = "none"` as well |
 | replays | `gow_sim.replay` looks for the map of a log in the map folder and in its `gen/` |
-| client | the group "Generated, unrated" in the map tiles of the invite and bot screens, not of the public lobby; the vector files `maps/gen/geo/<id>.json` are bundled like `maps/geo/` (`geography.ts`, `deploy/caddy.Dockerfile`); the result screen names the map |
+| client | the group "Generated, unrated" in the map tiles of the invite, public and bot screens (#889); the vector files `maps/gen/geo/<id>.json` are bundled like `maps/geo/` (`geography.ts`, `deploy/caddy.Dockerfile`); the result screen names the map |
 
 ### A new map for every match (stage 2, #884)
 
 The owner's decision of 2026-11-09 (#768): every ordinary, unrated match gets a freshly generated map at its start: a
-private invite and a bot match. Rated play, the matchmaking queue and the public lobby stay on the pool. The quality of
+private invite and a bot match, and since #889 a public lobby match (unrated too). Rated play and the matchmaking queue stay
+on the pool. The quality of
 the background is that of the offline bake. The map still enters the match as data: no rule, no `SIM_VERSION`.
 
 | Where | What |
 |---|---|
-| who gets one | `POST /api/matches` (private) and `POST /api/bot-matches` without `map_id`: the default `map_source` is `new`. `map_source: "pool"` draws from the pool, `"generated"` (or the older `random_generated: true`) from `maps/gen/`, `map_id` names a map; `map_id` with `map_source` is `422`. A public invite defaults to `pool`, and `new` there is `422`. With `GOW_MAPGEN_ENABLED=false` the default is the pool again |
+| who gets one | `POST /api/matches` (by link or public, #889) and `POST /api/bot-matches` without `map_id`: the default `map_source` is `new`. `map_source: "pool"` draws from the pool, `"generated"` (or the older `random_generated: true`) from `maps/gen/`, `map_id` names a map; `map_id` with `map_source` is `422`. With `GOW_MAPGEN_ENABLED=false` the default is the pool again |
 | how | `gow_server.mapgen.MapMaker` draws 4 seeds with `secrets` (32 bits) and reserves the id; `gow_server.mapworker.build` runs `gow_maps.matchmap.make_map` in a spawn `ProcessPoolExecutor` (one map per worker process, `GOW_MAPGEN_WORKERS`, `nice` 10, the out-of-memory killer's first choice): `generate(seed)` with the equal-access filter, renamed to the id; the bake of `gow-maps bake` (background with water, thumbnail, vector file); `validate_file` with the server's ruleset (every check of `gow-maps validate`, `geography`, `fairness`, `warehouse`); the preview. A seed that fails gives way to the next |
 | the id | `live-` and 12 hex digits (`gow_server.maps.MATCH_MAP_PREFIX`; a file of the pool or of `maps/gen/` with this prefix stops the server), so it never collides with a stored map. The generator's `gen<version>-<seed>` is not used: renaming changes only the noise of the bake; the server logs the seed (`map made`) |
 | storage | `<GOW_REPLAYS_DIR>/maps/` on the data volume (not `maps/` of the image), in the layout of `maps/gen/`: `<id>.json`, `src/<id>.geo.json`, `<id>.bg.webp`, `<id>.thumb.webp`, `geo/<id>.json`, `<id>.preview.png`. The worker writes into `.tmp-<id>/` and moves the map file in last |

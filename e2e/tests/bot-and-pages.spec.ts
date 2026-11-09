@@ -34,13 +34,21 @@ test('a bot match on a generated map names the map on the result screen', async 
   await player.close();
 });
 
-test('the public lobby offers no generated map', async ({ browser, baseURL }) => {
+test('the public lobby offers a new map first, then the pool and the generated maps', async ({
+  browser,
+  baseURL,
+}) => {
+  // The public lobby is unrated like an invite by link (#889): the same choices.
   const player = await Player.create(browser, baseURL ?? '', nick('pub'));
   await player.enter();
   await player.page.getByRole('button', { name: 'Open matches' }).click();
   await player.page.getByRole('button', { name: 'Create an open match' }).first().click();
+  await expect(player.page.getByRole('radio', { name: 'New map' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
   await expect(player.page.getByRole('radio', { name: /^ridge/ })).toBeVisible();
-  await expect(player.page.getByText('Generated, unrated')).toHaveCount(0);
+  await expect(player.page.getByText('Generated, unrated')).toBeVisible();
   await player.close();
 });
 

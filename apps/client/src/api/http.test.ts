@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Api, ApiError, parseRetryAfter, RANDOM_GENERATED } from './http.ts';
+import { Api, ApiError, NEW_MAP, parseRetryAfter, RANDOM_GENERATED, RANDOM_POOL } from './http.ts';
 import { forgetGuest, GUEST_STORAGE_KEY, loadGuest, saveGuest } from './guestStore.ts';
 
 function respond(status: number, body: unknown = {}): typeof fetch {
@@ -37,17 +37,38 @@ describe('Api', () => {
     expect(await new Api(respond(200, null)).activeMatch('tok')).toBeNull();
   });
 
-  it('sends the map only when one is chosen', async () => {
+  it('sends the map source explicitly, or the map when one is named (never both)', async () => {
     const fetchFn = respond(201, {});
     const api = new Api(fetchFn);
-    await api.createBotMatch('t', 'hard', null);
+    await api.createBotMatch('t', 'hard', NEW_MAP);
     await api.createBotMatch('t', 'easy', 'pass');
     await api.createBotMatch('t', 'easy', RANDOM_GENERATED);
+    await api.createBotMatch('t', 'easy', RANDOM_POOL);
     const bodies = vi.mocked(fetchFn).mock.calls.map(([, init]) => init?.body);
     expect(bodies).toEqual([
-      '{"level":"hard"}',
+      '{"level":"hard","map_source":"new"}',
       '{"level":"easy","map_id":"pass"}',
-      '{"level":"easy","random_generated":true}',
+      '{"level":"easy","map_source":"generated"}',
+      '{"level":"easy","map_source":"pool"}',
+    ]);
+  });
+
+  it('passes the signal of a bot match on, so a hung request can be given up', async () => {
+    const fetchFn = respond(201, {});
+    const stop = new AbortController();
+    await new Api(fetchFn).createBotMatch('t', 'easy', NEW_MAP, stop.signal);
+    expect(vi.mocked(fetchFn).mock.calls[0]?.[1]?.signal).toBe(stop.signal);
+  });
+
+  it('asks for the summary and the geography of any map, a per-match one too', async () => {
+    const fetchFn = respond(200, { id: 'live-0123456789ab' });
+    const api = new Api(fetchFn);
+    await api.mapSummary('live-0123456789ab');
+    await api.mapGeo('/api/maps/live-0123456789ab/geo.json');
+    const calls = vi.mocked(fetchFn).mock.calls.map(([url, init]) => [init?.method, url]);
+    expect(calls).toEqual([
+      ['GET', '/api/maps/live-0123456789ab/summary'],
+      ['GET', '/api/maps/live-0123456789ab/geo.json'],
     ]);
   });
 
@@ -229,14 +250,14 @@ describe('guest store', () => {
       Promise.resolve(new Response(JSON.stringify({ matches: [{ code: 'c' }] }), { status: 200 })),
     );
     const api = new Api(fetchFn);
-    await api.createInvite('t', null, true);
+    await api.createInvite('t', NEW_MAP, true);
     await api.createInvite('t', 'pass');
     expect(await api.lobby('t')).toEqual([{ code: 'c' }]);
     fetchFn.mockResolvedValueOnce(new Response(null, { status: 204 }));
     await expect(api.cancelInvite('t', 'a/b')).resolves.toBeUndefined();
     const calls = fetchFn.mock.calls as unknown as [string, RequestInit][];
     expect(calls.map(([url, init]) => [init.method, url, init.body])).toEqual([
-      ['POST', '/api/matches', '{"public":true}'],
+      ['POST', '/api/matches', '{"map_source":"new","public":true}'],
       ['POST', '/api/matches', '{"map_id":"pass"}'],
       ['GET', '/api/lobby', undefined],
       ['DELETE', '/api/matches/a%2Fb', undefined],

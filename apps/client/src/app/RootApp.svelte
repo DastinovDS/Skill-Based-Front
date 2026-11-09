@@ -186,7 +186,7 @@
   <CreateScreen
     dock={dockOf(guest)}
     isPublic={screen.public}
-    oncreate={(mapId: string | null) => app.createInvite(mapId, screen.public)}
+    oncreate={(pick: string) => app.createInvite(pick, screen.public)}
     onback={() => {
       if (screen.public) app.go({ name: 'lobby' });
       else app.menu();
@@ -216,7 +216,10 @@
     onstart={(matchId: string, mapId: string) => {
       app.go({ name: 'match', matchId, mapId });
     }}
-    onbot={() => app.playBot('normal', null)}
+    onbot={() => {
+      // The bot screen shows the wait for the new map and a failure (#889).
+      app.go({ name: 'bot', start: 'normal' });
+    }}
     onbanned={(seconds: number) => {
       app.banQueue(seconds);
     }}
@@ -227,7 +230,8 @@
 {:else if screen.name === 'bot'}
   <BotScreen
     dock={dockOf(guest)}
-    onstart={(level: BotLevel, mapId: string | null) => app.playBot(level, mapId)}
+    start={screen.start}
+    onstart={(level: BotLevel, pick: string) => app.playBot(level, pick)}
     onback={() => {
       app.menu();
     }}

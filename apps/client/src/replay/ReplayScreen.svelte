@@ -1,12 +1,11 @@
 <script lang="ts">
-  import type { Api } from '../api/http.ts';
   import CrashGuard from '../app/CrashGuard.svelte';
   import { MENU_MAP } from '../app/menuMap.ts';
   import ScreenFrame from '../app/ScreenFrame.svelte';
   import Icon from '../hud/Icon.svelte';
   import { t, type MessageKey } from '../i18n/index.ts';
-  import { backgroundUrlOf } from '../map/background.ts';
-  import { geoOf, type GeoFile } from '../map/geography.ts';
+  import { artOf, summaryOf, type ArtApi } from '../map/art.ts';
+  import type { GeoFile } from '../map/geography.ts';
   import { loadReplayWhenReady, ReplayLoadError, type ReplayLoadCode } from './loadReplay.ts';
   import type { PlayerId } from '../protocol.gen.ts';
   import { parseReplay, type ReplayFile } from './replayFile.ts';
@@ -15,7 +14,7 @@
 
   interface Props {
     /** For the background of the map, which the server states in its map list. */
-    api?: Pick<Api, 'maps'> | null;
+    api?: ArtApi | null;
     matchId: string;
     /** Guest token for a private match; rated replays are public. */
     token?: string | null;
@@ -118,14 +117,18 @@
     fetchFile(id, stop.signal, () => {
       if (current) preparing = true;
     })
-      .then(async (loadedFile) => ({
-        loadedFile,
-        background:
-          (await devBackground()) ??
-          (api === null ? null : await backgroundUrlOf(api, loadedFile.map_id)),
-        // The map as the replay played it: a stale vector file does not fit and is ignored.
-        geography: await geoOf(loadedFile.map),
-      }))
+      .then(async (loadedFile) => {
+        // The art of the map as its summary states it, a per-match map too (#884); the map as the
+        // replay played it: a stale vector file does not fit and is ignored. A map gone with an
+        // old replay is drawn without its picture.
+        const summary = api === null ? null : await summaryOf(api, loadedFile.map_id);
+        const art = await artOf(api, loadedFile.map, summary);
+        return {
+          loadedFile,
+          background: (await devBackground()) ?? art.backgroundUrl,
+          geography: art.geo,
+        };
+      })
       .then(
         ({ loadedFile, background, geography }) => {
           if (current) {

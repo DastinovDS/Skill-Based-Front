@@ -25,7 +25,7 @@
     rating: number | null;
     map: MapFile | null;
     /** The pool maps: the small picture of each card. */
-    maps: Pick<MapCache, 'get' | 'ensure'>;
+    maps: Pick<MapCache, 'get' | 'ensure' | 'thumb'>;
     /** The clock of "2 hr. ago"; tests and dev scenes pass their own. */
     now?: () => number;
     onwatch: (matchId: string) => void;
@@ -155,6 +155,7 @@
         <MatchCard
           {match}
           map={maps.get(match.map_id)}
+          ground={maps.thumb(match.map_id)}
           now={clock}
           onwatch={(matchId) => {
             onwatch(String(matchId));

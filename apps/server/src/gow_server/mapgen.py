@@ -1,7 +1,8 @@
-"""A new map for every unrated private and bot match (#884, stage 2 of #768).
+"""A new map for every unrated invite and bot match (#884, stage 2 of #768).
 
 The owner's decision of 2026-11-09: a private invite and a bot match without a map choice play a
-map made for them at their start; the queue, rated play and the public lobby stay on the pool.
+map made for them at their start; the queue and rated play stay on the pool. The public lobby is
+unrated too and plays a new map by default since #889.
 
 ``MapMaker.request`` reserves a map id (``live-`` and 12 hex digits, ``maps.MATCH_MAP_PREFIX``)
 and starts the work at once; the match starts only when ``MapMaker.settle`` has the map. The work

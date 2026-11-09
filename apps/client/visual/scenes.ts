@@ -80,11 +80,14 @@ export const MENU_SCENES = [
   'invite-opp-ready',
   'invite-you-ready',
   'invite-starting',
+  'invite-drawing',
+  'invite-drawing-start',
   'invite-banned',
   'bot-choose',
   'bot-rated',
   'bot-starting',
   'bot-error',
+  'bot-timeout',
   'password-set',
   'password-change',
   'howto',
@@ -138,6 +141,7 @@ export const DOCK_CLICKS: Readonly<Record<string, string>> = {
   'create-error': 'Create the match',
   'bot-starting': 'Start',
   'bot-error': 'Start',
+  'bot-timeout': 'Start',
 };
 
 /**

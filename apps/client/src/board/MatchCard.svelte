@@ -12,12 +12,14 @@
     match: MatchEntry;
     /** The file of the match's map for the small picture, null while it loads. */
     map: MapFile | null;
+    /** The ground thumbnail of the map (a per-match map has its own from the server, #884). */
+    ground?: string | null;
     /** The clock of "2 hr. ago" (ms since the epoch). */
     now: number;
     onwatch: (matchId: number) => void;
   }
 
-  let { match, map, now, onwatch }: Props = $props();
+  let { match, map, ground = null, now, onwatch }: Props = $props();
 
   const RESULTS = {
     win: { key: 'history.win', shape: 'w' },
@@ -50,7 +52,7 @@
      and a word (a triangle up, down, a bar), the opponent, the kind, the map and the length, when,
      and the replay. The server says the result, the rating and the replay. -->
 <li class="card">
-  <MapThumb {map} />
+  <MapThumb {map} {ground} />
   <div class="cb">
     <p class="result {result.shape}">
       <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true" focusable="false">
