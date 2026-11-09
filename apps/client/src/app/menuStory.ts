@@ -26,7 +26,11 @@ const SCOUT_INTO = 0.6;
 /** The scout keeps at least this far from the enemy capital (px). */
 const SCOUT_KEEP_OFF = 120;
 
-export function storyOf(scene: Scene): Story | null {
+/**
+ * The places of the story on `scene`; the nodes of `changing` (the captures of the loop,
+ * `menuCaptures.ts`) change hands, so the supply and the drills keep off them.
+ */
+export function storyOf(scene: Scene, changing: readonly number[] = []): Story | null {
   const byId = new Map(scene.nodes.map((n) => [n.id, n]));
   const front = scene.frontIds.flatMap((id) => {
     const node = byId.get(id);
@@ -65,11 +69,17 @@ export function storyOf(scene: Scene): Story | null {
   // The scout walks to the last node short of the enemy's, then a part of the next road.
   let si = ci;
   for (let i = ci; i < last; i += 1) if ((front[i] as SceneNode).owner !== 1) si = i;
+  // It always reaches the middle of the soft edge of the fog (#866: the front of the picture may
+  // stand short of it), walking on into the opponent's land if it has to.
+  const deep = (scene.fadeStart + scene.fogStart) / 2;
+  while (scene.fog && si + 2 < last && (front[si + 1] as SceneNode).x < deep) si += 1;
   const stopFrom = front[si] as SceneNode;
   const stopTo = front[si + 1] as SceneNode;
   const roadLength = Math.hypot(stopTo.x - stopFrom.x, stopTo.y - stopFrom.y) || 1;
   const toEnemy = (p: Point): number => Math.hypot(enemy.x - p.x, enemy.y - p.y);
-  let into = SCOUT_INTO;
+  const reach =
+    scene.fog && stopTo.x > stopFrom.x ? (deep - stopFrom.x) / (stopTo.x - stopFrom.x) : 0;
+  let into = Math.min(1, Math.max(SCOUT_INTO, reach));
   const stopAt = (u: number): Point => ({
     x: stopFrom.x + (stopTo.x - stopFrom.x) * u,
     y: stopFrom.y + (stopTo.y - stopFrom.y) * u,
@@ -99,7 +109,7 @@ export function storyOf(scene: Scene): Story | null {
   while (queue.length > 0) {
     const current = queue.shift() as number;
     for (const id of near.get(current) ?? []) {
-      if (came.has(id) || byId.get(id)?.owner !== 0) continue;
+      if (came.has(id) || byId.get(id)?.owner !== 0 || changing.includes(id)) continue;
       came.set(id, current);
       queue.push(id);
     }
@@ -116,7 +126,7 @@ export function storyOf(scene: Scene): Story | null {
   }
 
   const ownRoads = scene.edges
-    .filter((e) => e.own)
+    .filter((e) => e.own && !changing.includes(e.a.id) && !changing.includes(e.b.id))
     .map(
       (e) =>
         [

@@ -9,9 +9,10 @@ capital capture fit a 15-minute match on a smaller map; outside the size check o
 the picture rotated by 180°) left the pool (#372, owner decision) and are test fixtures in `maps/fixtures/`
 (with their previews, backgrounds and halves in `maps/fixtures/src/`): many tests and the client dev scene `artery`
 stand on their graphs. The server does not serve them (it loads `maps/*.json` without subdirectories), the validator
-still checks them, and they are frozen: `maps:preview`, `maps:bake` and `maps:mirror` work on the pool only. The menu map
-`menu/valley.json` (#474) is drawn behind the start menu by the client, which bundles it; it is outside the pool too, built
-from `menu/src/valley.half.json`, validated, previewed and baked with the pool (`docs/design/map-format.md`, "The menu map"). The format:
+still checks them, and they are frozen: `maps:preview`, `maps:bake` and `maps:mirror` work on the pool only. The menu maps
+`menu/marches.json` (#866, generated from seed 112) and `menu/valley.json` (#474, behind the entry screen) are drawn by
+the client, which bundles them; they are outside the pool too (`valley` built from `menu/src/valley.half.json`),
+validated, previewed and baked with the pool (`docs/design/map-format.md`, "The menu map"). The format:
 [`docs/design/map-format.md`](../docs/design/map-format.md). Generated maps without a mirror lie in `gen/` (#771), outside the pool:
 the section "Generated maps" at the end.
 
@@ -29,7 +30,7 @@ serves it, the client draws it) and its thumbnail `<id>.thumb.webp` (#839, the m
 (`ui-style.md`, 26.3), WebP no larger than 0.5 MB, baking one map takes up to 10 s. A map with an authored geography
 `src/<id>.geo.json` (DEC-36, #537) gets water cells, streams and long rivers with bridges in the look W4 Painted, and the
 bake writes the vector file `geo/<id>.json` next to the background; a map without one is all land (DEC-27, #269).
-The four pool maps and the menu map have a geography (#545, #664), the fixtures stay land only:
+The four pool maps and the menu maps have a geography (#545, #664), the fixtures stay land only:
 
 | Map | Water (seas and lakes, plus rivers and streams) | Long rivers | Bridges | Nodes moved |
 |---|---|---|---|---|
@@ -37,6 +38,7 @@ The four pool maps and the menu map have a geography (#545, #664), the fixtures 
 | `crossroads` | 17.6 % + 2.0 %: seas in the north-west and south-east corners, two bays, four lakes | 4 | 13 | none |
 | `highway` | 16.3 % + 2.8 %: seas in the four corners and a northern bay, four lakes | 4 | 10 | none |
 | `narrows` | seas in the north-east and south-west corners and two small bays, two lakes | 2 | 4 | none |
+| `menu/marches` | generated (#771, seed 112): 8 seas and 12 lakes | 3 | 5 | none |
 | `menu/valley` | 10.6 % + 3.6 %: seas in the four corners and a southern bay (the map is too tight for a lake 60 units off every node) | 2 | 5 | none |
 
 | File | Map id (`meta.name`) | World | Nodes (provinces) | Roads | Own at start | Neutral, of them contested | Path capital → capital |

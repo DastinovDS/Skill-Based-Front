@@ -93,8 +93,9 @@ else
 fi
 
 echo "== map backgrounds come from the server, not from the client bundle (CLI-05)"
-# The client takes the background of a map from MapSummary.background_url; the bundle carries none.
-if grep -qE '\.bg-[A-Za-z0-9_-]+\.webp' "$tmp/asset.b"; then
+# The client takes the background of a map from MapSummary.background_url; the bundle carries none
+# but the grounds of the two menu maps outside the pool (maps/menu/, src/app/menuMap.ts, #866).
+if grep -oE '[A-Za-z0-9_-]+\.bg-[A-Za-z0-9_-]+\.webp' "$tmp/asset.b" | grep -vE '^(marches|valley)\.bg-' >/dev/null; then
 	fail "the client bundle references a baked map background (/assets/<map>.bg-<hash>.webp)"
 fi
 status="$(fetch maps /api/maps)"

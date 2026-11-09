@@ -3,7 +3,14 @@
   import type { MapFile } from '../protocol.gen.ts';
   import { reducedMotion } from '../render/motion.ts';
   import MenuCityMark from './MenuCityMark.svelte';
-  import { MENU_GEO, MENU_GROUND, MENU_MAP } from './menuMap.ts';
+  import {
+    backdropFrozenAt,
+    captureLook,
+    capturedNodes,
+    capturesAt,
+    ownersAt,
+  } from './menuCaptures.ts';
+  import { menuWorldOf } from './menuMap.ts';
   import {
     FALLBACK_PALETTE,
     STILL_AT,
@@ -13,17 +20,27 @@
     readPalette,
     type Sight,
   } from './menuMotion.ts';
-  import { MENU_BORDER, MENU_LANE, menuCity, menuLand, type MenuLand } from './menuPieces.ts';
+  import {
+    FALLBACK_COLOURS,
+    floodBox,
+    gradeGround,
+    paintMap,
+    readColours,
+    type Box,
+    type FloodPaint,
+    type MapPaint,
+  } from './menuPaint.ts';
+  import { MENU_INK, menuCity, menuLand, menuTerritory, type MenuLand } from './menuPieces.ts';
   import {
     BAR_BOTTOM,
     FOG_TOP_FADE,
-    dockOwnLeft,
     layoutEntry,
     layoutScene,
+    pieceScale,
     type BackdropPhase,
+    type Owners,
     type Point,
     type Scene,
-    type SceneEdge,
   } from './menuScene.ts';
   import { currentSeason, groundMatrix } from './menuSeason.ts';
   import { storyOf, type Story } from './menuStory.ts';
@@ -34,34 +51,32 @@
     phase?: BackdropPhase;
     /** The opponent's nick, written under the enemy capital once a pair is found. */
     opponent?: string | null;
-    /** Seconds in the queue (the search): where the scout is, how big the stack at the front is. */
+    /** Seconds in the queue (the search): where the scout is. */
     waited?: number;
-    /** A panel stands right of the rail (#473): the map moves out from under it where the window allows. */
-    docked?: boolean;
-    /** The entry screen (#839): the whole map over the window, no fog. */
+    /** The entry screen (#839): the whole map over the window, no fog; muted and slower (#866). */
     entry?: boolean;
   }
 
-  let {
-    map,
-    phase = 'idle',
-    opponent = null,
-    waited = 0,
-    docked = false,
-    entry = false,
-  }: Props = $props();
+  let { map, phase = 'idle', opponent = null, waited = 0, entry = false }: Props = $props();
 
   /** The motion is drawn 30 times a second; the hole of the scout's sight in the fog 10 times. */
   const FRAME_MS = 1000 / 30;
-  /** Px on the screen per world unit of a piece of the map at most (`k`). */
-  const PIECES_PX = 0.8;
   const SIGHT_MS = 100;
+  /** The entry screen's clock runs slower than the main menu's (#866: muted behind the title). */
+  const ENTRY_PACE = 0.7;
 
   let host: HTMLDivElement | undefined = $state();
+  let mapCanvas: HTMLCanvasElement | undefined = $state();
   let canvas: HTMLCanvasElement | undefined = $state();
   let size = $state({ width: 1280, height: 720 });
   /** The hole in the fog round the scout, in whole px (the fog layer repaints only when it moves). */
   let sight = $state.raw<Sight | null>(null);
+  /** The baked ground graded by the season, once it has loaded. */
+  let ground = $state.raw<HTMLCanvasElement | null>(null);
+  /** The names are drawn in the self-hosted Cinzel: the map layer is drawn again once it is in. */
+  let fontsIn = $state(false);
+  /** The map layer is drawn with its ground and its fonts (`data-map`, for the shots). */
+  let ready = $state(false);
   const season = currentSeason();
   const matrix = groundMatrix(season);
 
@@ -80,34 +95,84 @@
     };
   });
 
+  $effect(() => {
+    const fonts = (document as Partial<Document>).fonts;
+    if (fonts === undefined) return;
+    let live = true;
+    void fonts.ready.then(() => {
+      if (live) fontsIn = true;
+    });
+    return () => {
+      live = false;
+    };
+  });
+
+  /** The menu maps have their ground, their areas and their loop of captures (#866). */
+  const world = $derived(map === null ? null : menuWorldOf(map));
+
+  // The ground: fetched once, graded by the season into a canvas of its own (drawn, never filtered).
+  $effect(() => {
+    const url = world?.ground ?? null;
+    const known = world;
+    if (url === null || known === null || typeof Image === 'undefined') {
+      ground = null;
+      return undefined;
+    }
+    let live = true;
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => {
+      if (!live) return;
+      try {
+        ground = gradeGround(image, matrix, {
+          width: known.map.meta.width,
+          height: known.map.meta.height,
+        });
+      } catch {
+        ground = null;
+      }
+    };
+    image.src = url;
+    return () => {
+      live = false;
+      image.onload = null;
+    };
+  });
+
   const scene = $derived<Scene | null>(
     map === null
       ? null
       : entry
-        ? layoutEntry(map, size.width, size.height)
-        : layoutScene(map, size.width, size.height, docked ? dockOwnLeft(size.width) : undefined),
+        ? layoutEntry(map, size.width, size.height, world?.owners)
+        : layoutScene(map, size.width, size.height, world?.owners),
   );
-  const story = $derived<Story | null>(scene === null ? null : storyOf(scene));
+  const story = $derived<Story | null>(
+    scene === null ? null : storyOf(scene, world === null ? [] : capturedNodes(world.script)),
+  );
   const revealed = $derived((phase === 'found' || phase === 'confirmed') && opponent !== null);
-  /** The menu map has its baked ground and its areas; another map is drawn on the flat stone. */
-  const menuMap = $derived(map !== null && map.meta.name === MENU_MAP.meta.name);
-  const ground = $derived(menuMap ? MENU_GROUND : null);
   /** The world units under one px: lines that must stay a hairline on the screen. */
   const px = $derived(scene === null ? 1 : 1 / Math.max(0.05, scene.scale));
-  /**
-   * The pieces of the map (cities, roads, the border) at most `PIECES_PX` of their match size on
-   * the screen: a map laid out large (the entry screen) keeps small, quiet pieces.
-   */
-  const k = $derived(scene === null ? 1 : Math.min(1, PIECES_PX / scene.scale));
-  const land = $derived<MenuLand | null>(
-    map === null ? null : menuLand(map, menuMap ? MENU_GEO : null, k),
-  );
-  /** The hatch of the band: the match's pitch, never closer than 3 px on the screen. */
-  const pitch = $derived(Math.max(MENU_BORDER.band.pitch * k, 3 * px));
+  /** The pieces at most `PIECES_PX` of their match size on the screen (`pieceScale`). */
+  const k = $derived(scene === null ? 1 : pieceScale(scene));
 
   function sameSight(a: Sight | null, b: Sight | null): boolean {
     if (a === null || b === null) return a === b;
     return a.x === b.x && a.y === b.y && a.r === b.r;
+  }
+
+  /** A 2D context of `target` sized to the scene, or null (jsdom has none). */
+  function contextOf(
+    target: HTMLCanvasElement,
+    laid: Scene,
+    ratio: number,
+  ): CanvasRenderingContext2D | null {
+    target.width = Math.round(laid.width * ratio);
+    target.height = Math.round(laid.height * ratio);
+    try {
+      return target.getContext('2d');
+    } catch {
+      return null;
+    }
   }
 
   // The phase clock: when the phase began and how long the queue had waited then.
@@ -117,10 +182,19 @@
 
   $effect(() => {
     const target = canvas;
+    const layer = mapCanvas;
     const laid = scene;
     const places = story;
     const current = phase;
-    if (target === undefined || laid === null || places === null) return undefined;
+    const known = world;
+    const graded = ground;
+    const pieces = k;
+    const fontsReady = fontsIn;
+    if (target === undefined || layer === undefined || laid === null || places === null) {
+      return undefined;
+    }
+    if (map === null) return undefined;
+    const drawn = map;
     const now = performance.now();
     if (current !== clockPhase) {
       clockPhase = current;
@@ -128,18 +202,37 @@
       waitedAtStart = untrack(() => waited);
     }
     const ratio = Math.min(2, window.devicePixelRatio || 1);
-    target.width = Math.round(laid.width * ratio);
-    target.height = Math.round(laid.height * ratio);
-    // jsdom has no 2D canvas: the picture then stays still, the fog hole still follows the clock.
-    let context: CanvasRenderingContext2D | null = null;
-    try {
-      context = target.getContext('2d');
-    } catch {
-      context = null;
-    }
+    const context = contextOf(target, laid, ratio);
+    const mapContext = contextOf(layer, laid, ratio);
     const colours = host === undefined ? FALLBACK_PALETTE : readPalette(host);
-    const clockAt = (at: number, still: boolean): MotionClock =>
-      still
+    const tokens = host === undefined ? FALLBACK_COLOURS : readColours(host);
+    const pace = entry ? ENTRY_PACE : 1;
+    const frozen = backdropFrozenAt();
+    const script = known?.script ?? null;
+    const base: Owners = known?.owners ?? laid.nodes.map((n) => n.owner);
+
+    // The land of each owner state, worked out once (a loop has a handful).
+    const lands: Record<string, MenuLand | undefined> = {};
+    const paint: MapPaint = {
+      scene: laid,
+      k: pieces,
+      colours: tokens,
+      ground: graded,
+      world: { width: drawn.meta.width, height: drawn.meta.height },
+      cells: menuTerritory(drawn, known?.geo ?? null).cells,
+      land: (owners) => {
+        const key = owners.join(',');
+        const land = lands[key] ?? menuLand(drawn, known?.geo ?? null, pieces, owners);
+        lands[key] = land;
+        return land;
+      },
+    };
+
+    const clockAt = (at: number, still: boolean): MotionClock => {
+      if (frozen !== null) {
+        return { phase: current, t: frozen, g: frozen, waited: waitedAtStart, reduced: false };
+      }
+      return still
         ? {
             phase: current,
             t: STILL_AT[current],
@@ -150,15 +243,58 @@
         : {
             phase: current,
             t: (at - phaseStart) / 1000,
-            g: at / 1000,
+            g: (at / 1000) * pace,
             waited: waitedAtStart,
             reduced: false,
           };
-    const paint = (clock: MotionClock): void => {
+    };
+
+    /** The capture flooding its area at `clock`, or null. */
+    const floodAt = (clock: MotionClock, owners: Owners): FloodPaint | null => {
+      if (script === null || clock.reduced) return null;
+      for (const { capture, u } of capturesAt(script, clock.g)) {
+        const look = captureLook(u, capture.by === 1).flood;
+        if (look === null) continue;
+        const before = [...owners];
+        before[capture.node] = capture.by === 0 ? 1 : 0;
+        return { node: capture.node, before, after: owners, look };
+      }
+      return null;
+    };
+
+    // The map layer: drawn whole once, then only the box of a capture while it floods.
+    let paintedKey: string | null = null;
+    let floodedBox: Box | null = null;
+    const paintLayer = (clock: MotionClock): void => {
+      if (mapContext === null) return;
+      const owners = script === null ? base : ownersAt(base, script, clock.g);
+      const key = owners.join(',');
+      const flood = floodAt(clock, owners);
+      mapContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+      if (paintedKey === null) {
+        paintMap(mapContext, paint, owners, flood);
+        paintedKey = key;
+      } else if (flood !== null) {
+        const box = floodBox(laid, paint.cells, flood.node, pieces);
+        paintMap(mapContext, paint, owners, flood, box);
+        floodedBox = box;
+        paintedKey = key;
+      } else if (floodedBox !== null) {
+        // The flood is over: its box once more in the new owners' look.
+        paintMap(mapContext, paint, owners, null, floodedBox);
+        floodedBox = null;
+        paintedKey = key;
+      } else if (key !== paintedKey) {
+        // The owners changed while nothing was drawn (a hidden tab): the whole layer again.
+        paintMap(mapContext, paint, owners, null);
+        paintedKey = key;
+      }
+    };
+    const paintMotion = (clock: MotionClock): void => {
       if (context === null) return;
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, laid.width, laid.height);
-      drawMotion(context, colours, laid, places, clock);
+      drawMotion(context, colours, laid, places, clock, script);
     };
     const place = (clock: MotionClock): void => {
       const found = sightOf(laid, places, clock);
@@ -171,10 +307,13 @@
     };
 
     const first = clockAt(now, reducedMotion());
-    paint(first);
+    paintLayer(first);
+    paintMotion(first);
     place(first);
-    // A locked queue is a still picture (the supply stands): no loop to run.
-    const still = first.reduced || current === 'banned';
+    const fontsKnown = fontsReady || (document as Partial<Document>).fonts === undefined;
+    ready = fontsKnown && (graded !== null || known === null || known.ground === null);
+    // A locked queue is a still picture (the supply stands), so is a frozen dev scene: no loop.
+    const still = first.reduced || current === 'banned' || frozen !== null;
     if (still || typeof requestAnimationFrame !== 'function') return undefined;
 
     let handle = 0;
@@ -182,6 +321,7 @@
     let lastSight = now;
     // "Less motion" switched on while the menu is open: one still frame, then nothing to repaint.
     let calmPainted = false;
+    // A hidden tab gets no frames at all (the browser stops them): the loop costs nothing then.
     const frame = (at: number): void => {
       handle = requestAnimationFrame(frame);
       if (at - lastFrame < FRAME_MS - 2) return;
@@ -190,7 +330,8 @@
       if (calm && calmPainted) return;
       calmPainted = calm;
       const clock = clockAt(at, calm);
-      paint(clock);
+      paintLayer(clock);
+      paintMotion(clock);
       if (calm || at - lastSight >= SIGHT_MS) {
         lastSight = at;
         place(clock);
@@ -202,216 +343,34 @@
     };
   });
 
-  /** How a road is drawn: an own road, the opponent's (in the fog), a buffer road, a road in the fog. */
-  function roadKind(edge: SceneEdge, laid: Scene): 'own' | 'enemy' | 'buffer' | 'fog' {
-    const hidden = laid.fog && edge.a.x > laid.fadeStart && edge.b.x > laid.fadeStart;
-    if (edge.own) return 'own';
-    if (edge.a.owner === 1 && edge.b.owner === 1) return hidden ? 'fog' : 'enemy';
-    return hidden ? 'fog' : 'buffer';
-  }
-
   /** The two capitals in world units (drawn on their own layer, over the fog). */
   const capitalAt = (id: number | undefined): Point | null =>
     scene?.nodes.find((n) => n.id === id)?.world ?? null;
   const ownCapital = $derived(capitalAt(scene?.capitalIds[0]));
   const enemyCapital = $derived(capitalAt(scene?.capitalIds[1]));
 
-  /** A transform that scales a piece by `by` about its centre `c` (world units). */
-  const about = (c: Point, by: number): string =>
-    `translate(${c.x.toFixed(2)} ${c.y.toFixed(2)}) scale(${by.toFixed(4)}) translate(${(-c.x).toFixed(2)} ${(-c.y).toFixed(2)})`;
-
-  /** The dashes of the lane of a road, in world units scaled with the pieces. */
-  const dashes = (kind: string): string | undefined =>
-    kind === 'buffer'
-      ? `${String(7 * k)} ${String(5 * k)}`
-      : kind === 'fog'
-        ? `${String(1.5 * k)} ${String(4.5 * k)}`
-        : undefined;
-
-  const world = $derived(
+  const worldTransform = $derived(
     scene === null
       ? ''
       : `translate(${scene.origin.x.toFixed(2)} ${scene.origin.y.toFixed(2)}) scale(${scene.scale.toFixed(4)})`,
   );
 </script>
 
-<!-- Four layers, each its own: the map is drawn once (its baked ground never repaints), the fog
-     repaints only when the hole of the scout's sight moves (10 times a second at most), the motion is
-     one canvas, and the capitals stand on top. The map is the match's (#839): the Intaglio ground of
-     the menu map, the start territory as the Border band, roads and cities engraved. -->
-<div class={`backdrop ${season}`} class:entry bind:this={host} aria-hidden="true">
-  {#if scene !== null && map !== null && land !== null}
-    <svg
-      class="scene layer"
-      viewBox={`0 0 ${String(scene.width)} ${String(scene.height)}`}
-      width={scene.width}
-      height={scene.height}
-      focusable="false"
-    >
-      <defs>
-        <filter id="menu-grade" color-interpolation-filters="sRGB">
-          <feColorMatrix type="matrix" values={matrix} />
-        </filter>
-        <filter id="menu-soft" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="22" />
-        </filter>
-        <!-- The baked ground fades into the stone at its edges (the map does not fill the window). -->
-        <mask
-          id="menu-ground-edge"
-          maskUnits="userSpaceOnUse"
-          x={-80}
-          y={-80}
-          width={map.meta.width + 160}
-          height={map.meta.height + 160}
-        >
-          <rect
-            x="34"
-            y="34"
-            width={Math.max(0, map.meta.width - 68)}
-            height={Math.max(0, map.meta.height - 68)}
-            fill="#fff"
-            filter="url(#menu-soft)"
-          />
-        </mask>
-        <pattern id="menu-band-own" width={pitch} height={pitch} patternUnits="userSpaceOnUse">
-          <rect width={pitch} height={Math.max(MENU_BORDER.band.width, px)} class="hatch-own" />
-        </pattern>
-        <pattern
-          id="menu-band-enemy"
-          width={pitch}
-          height={pitch}
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(-45)"
-        >
-          <rect width={pitch} height={Math.max(MENU_BORDER.band.width, px)} class="hatch-enemy" />
-        </pattern>
-        <pattern
-          id="menu-neutral"
-          width="2.6"
-          height="2.6"
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(45)"
-        >
-          <rect width="2.6" height="0.7" class="hatch-neutral" />
-        </pattern>
-        <clipPath id="menu-land-own" clipPathUnits="userSpaceOnUse">
-          <path d={land.own.cells} />
-        </clipPath>
-        <clipPath id="menu-land-enemy" clipPathUnits="userSpaceOnUse">
-          <path d={land.enemy.cells} />
-        </clipPath>
-      </defs>
-
-      <g transform={world}>
-        <!-- The ground: the baked Intaglio of the menu map, graded by the season and darker. -->
-        {#if ground !== null}
-          <g mask="url(#menu-ground-edge)">
-            <image
-              href={ground}
-              width={map.meta.width}
-              height={map.meta.height}
-              preserveAspectRatio="none"
-              filter="url(#menu-grade)"
-            />
-          </g>
-        {/if}
-
-        <!-- The start territory: the Border band (own horizontal, the enemy's at 45 degrees) and
-             the engraved border (a dark cut, the owner's rule, a second rule or a row of beads). -->
-        {#each [['own', land.own], ['enemy', land.enemy]] as const as [side, part] (side)}
-          <path
-            d={part.band}
-            class="band"
-            stroke={`url(#menu-band-${side})`}
-            stroke-width={MENU_BORDER.band.depth * 2 * k}
-            clip-path={`url(#menu-land-${side})`}
-          />
-          <path d={part.cut} class="cut" stroke-width={Math.max(MENU_BORDER.cut.width * k, px)} />
-          <path
-            d={part.rule}
-            class={`rule ${side}`}
-            stroke-width={Math.max(MENU_BORDER.rule.width * k, px)}
-          />
-          {#if side === 'own'}
-            <path
-              d={part.inner}
-              class="rule own"
-              stroke-width={Math.max(MENU_BORDER.rule2.width * k, px)}
-            />
-          {:else}
-            <path
-              d={part.inner}
-              class="beads"
-              stroke-width={Math.max(MENU_BORDER.beads.radius * 2 * k, px)}
-              stroke-dasharray={`0 ${String(MENU_BORDER.beads.step * k)}`}
-            />
-          {/if}
-        {/each}
-
-        <!-- Roads as the match draws them at level 1: an own road is a band of the owner's colour
-             with a light lane, a buffer road dashed lanes on a dark casing, a road in fog dotted. -->
-        {#each scene.edges as edge, i (i)}
-          {@const kind = roadKind(edge, scene)}
-          {@const a = edge.a.world}
-          {@const b = edge.b.world}
-          <line
-            x1={a.x}
-            y1={a.y}
-            x2={b.x}
-            y2={b.y}
-            class={`road-casing ${kind}`}
-            stroke-width={(MENU_LANE + (kind === 'fog' ? 3 : 3.6)) * k}
-          />
-          <line
-            x1={a.x}
-            y1={a.y}
-            x2={b.x}
-            y2={b.y}
-            class={`road-lane ${kind}`}
-            stroke-width={Math.max(MENU_LANE * k, px)}
-            stroke-dasharray={dashes(kind)}
-          />
-        {/each}
-
-        <!-- Cities: the disc on a dark cut with an ink rim, on its ring of places; a province is a
-             dark plate with the owner's dot. The capitals stand on their own layer. -->
-        {#each scene.nodes as node (node.id)}
-          {#if !scene.capitalIds.includes(node.id)}
-            {@const c = node.world}
-            {@const side = node.owner === 0 ? 'own' : node.owner === 1 ? 'enemy' : 'neutral'}
-            {#if node.city}
-              <MenuCityMark piece={menuCity(node.kind, c)} {side} {k} />
-            {:else}
-              <g transform={about(c, k)}>
-                <circle cx={c.x} cy={c.y} r="8" class="prov-plate" />
-                {#if side === 'neutral'}
-                  <circle cx={c.x} cy={c.y} r="6" class="prov-ring" />
-                  <circle cx={c.x} cy={c.y} r="1.5" class="prov-dot" />
-                {:else}
-                  <circle cx={c.x} cy={c.y} r="6.4" class={`prov ${side}`} />
-                  <circle cx={c.x} cy={c.y} r="7.6" class="prov-ring" />
-                  {#if side === 'enemy'}<circle cx={c.x} cy={c.y} r="10" class="prov-ring" />{/if}
-                {/if}
-              </g>
-            {/if}
-          {/if}
-        {/each}
-
-        <!-- The names of the cities in cut capitals, small and faint (the Lapis plate of #826). -->
-        {#each scene.nodes as node (node.id)}
-          {#if node.city}
-            <text
-              x={node.world.x}
-              y={node.world.y + menuCity(node.kind, node.world).ring.radius * k + 11 * px}
-              class="name"
-              font-size={10 * px}
-              letter-spacing={1.8 * px}
-              text-anchor="middle">{node.name.toUpperCase()}</text
-            >
-          {/if}
-        {/each}
-      </g>
-    </svg>
+<!-- Four layers, each its own: the map (the baked ground, the territory, the roads, the cities and
+     their names) is one canvas drawn once, and again only round a capture while it floods (#866);
+     the fog repaints only when the hole of the scout's sight moves (10 times a second at most); the
+     motion is one canvas; the capitals stand on top. The map is the match's (#839): the Intaglio
+     ground of the menu map, the territory as the Border band, roads and cities engraved. -->
+<div
+  class={`backdrop ${season}`}
+  class:entry
+  bind:this={host}
+  aria-hidden="true"
+  data-map={ready ? 'ready' : 'pending'}
+  style:--map-ink={MENU_INK}
+>
+  {#if scene !== null && map !== null}
+    <canvas class="map layer" bind:this={mapCanvas}></canvas>
 
     <!-- The fog on the enemy side: the Ruled veil of the match (dark, one run of fine horizontal
          rules) with a soft left edge; the scout's sight cuts a soft hole in it (DEC-35: own groups
@@ -543,7 +502,7 @@
         {@const enemy = menuCity('capital', enemyCapital)}
         {@const e = scene.enemyCapital}
         {@const ringPx = own.ring.radius * k * scene.scale}
-        <g transform={world}>
+        <g transform={worldTransform}>
           <!-- The own capital: the engraved disc and star on its ring of places. -->
           {#if phase === 'banned'}
             <circle
@@ -620,111 +579,14 @@
     inset: 0;
     will-change: transform;
   }
+  .map,
   .motion {
     width: 100%;
     height: 100%;
   }
-
-  .hatch-own {
-    fill: var(--own);
-    opacity: 0.85;
-  }
-  .hatch-enemy {
-    fill: var(--enemy);
-    opacity: 0.85;
-  }
-  .hatch-neutral {
-    fill: var(--neutral);
-    opacity: 0.7;
-  }
-
-  .band {
-    fill: none;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .cut {
-    fill: none;
-    stroke: var(--cut);
-    stroke-opacity: 0.85;
-    stroke-linejoin: round;
-  }
-  .rule {
-    fill: none;
-    stroke-linejoin: round;
-  }
-  .rule.own {
-    stroke: var(--own);
-  }
-  .rule.enemy {
-    stroke: var(--enemy);
-  }
-  .beads {
-    fill: none;
-    stroke: var(--enemy);
-    stroke-linecap: round;
-  }
-
-  .road-casing {
-    stroke-linecap: butt;
-  }
-  .road-casing.own {
-    stroke: var(--own);
-    stroke-opacity: 0.62;
-  }
-  .road-casing.enemy {
-    stroke: var(--enemy);
-    stroke-opacity: 0.62;
-  }
-  .road-casing.buffer {
-    stroke: var(--cut);
-    stroke-opacity: 0.4;
-  }
-  .road-casing.fog {
-    stroke: var(--cut);
-    stroke-opacity: 0.3;
-  }
-  .road-lane.own,
-  .road-lane.enemy {
-    stroke: #e6edf3;
-    stroke-opacity: 0.95;
-  }
-  .road-lane.buffer {
-    stroke: #aab2bd;
-    stroke-opacity: 0.95;
-  }
-  .road-lane.fog {
-    stroke: #aab2bd;
-    stroke-opacity: 0.75;
-  }
-
-  .prov-plate {
-    fill: var(--plate);
-  }
-  .prov.own {
-    fill: var(--own);
-  }
-  .prov.enemy {
-    fill: var(--enemy);
-  }
-  .prov-ring {
-    fill: none;
-    stroke: var(--ink);
-    stroke-width: 0.9;
-  }
-  .prov-dot {
-    fill: var(--neutral);
-  }
-  .name {
-    fill: var(--ink);
-    fill-opacity: 0.62;
-    font-family: var(--font-display);
-    font-weight: 500;
-    paint-order: stroke;
-    stroke: var(--plate);
-    stroke-opacity: 0.7;
-    stroke-width: 2.4px;
-    vector-effect: non-scaling-stroke;
+  /* The entry (#866): the motion is muted behind the title, lower in contrast than the main menu's. */
+  .entry .motion {
+    opacity: 0.6;
   }
 
   .stop-fog-0 {

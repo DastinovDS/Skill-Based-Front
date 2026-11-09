@@ -14,8 +14,25 @@
  *   is a hole in the fog (`sightOf`), cut by the fog layer, not drawn here;
  * - queue locked: the supply stands, dimmed.
  */
-import type { BackdropPhase, Point, Scene } from './menuScene.ts';
+import { ringRadius } from '../render/cityLayout.ts';
+import { CAPTURE } from '../render/style.ts';
+import { WALK, walkPoint } from '../render/walkLayout.ts';
 import { clipBelow, helmet } from '../units/helmet.ts';
+import {
+  CAPTURE_TIMES,
+  LAST_SHOT,
+  captureLook,
+  capturesAt,
+  type CaptureScript,
+} from './menuCaptures.ts';
+import {
+  PIECES_PX,
+  menuCityRadius,
+  type BackdropPhase,
+  type Point,
+  type Scene,
+} from './menuScene.ts';
+import { MENU_INK } from './menuPieces.ts';
 import type { Story } from './menuStory.ts';
 
 export interface MotionClock {
@@ -45,7 +62,8 @@ export interface Palette {
 
 export const FALLBACK_PALETTE: Palette = {
   bg: '#16130f',
-  paper: '#ece4d1',
+  // The ink of the pieces' lines, darker and warmer than the text's ivory (#865).
+  paper: MENU_INK,
   dim: '#ada38f',
   you: '#86a6ea',
   enemy: '#e5785e',
@@ -60,7 +78,7 @@ export function readPalette(element: Element): Palette {
     style.getPropertyValue(name).trim() || fallback;
   return {
     bg: token('--bg', FALLBACK_PALETTE.bg),
-    paper: token('--paper', FALLBACK_PALETTE.paper),
+    paper: FALLBACK_PALETTE.paper,
     dim: token('--text-dim', FALLBACK_PALETTE.dim),
     you: token('--you', FALLBACK_PALETTE.you),
     enemy: token('--enemy', FALLBACK_PALETTE.enemy),
@@ -198,24 +216,6 @@ function fineRing(
   c.restore();
 }
 
-/** A number in EB Garamond on a dark halo (the "×2" of a stack, the "−1" of a hit). */
-function figure(
-  c: CanvasRenderingContext2D,
-  k: Palette,
-  text: string,
-  x: number,
-  y: number,
-  size: number,
-): void {
-  c.font = `600 ${String(size)}px ${k.text}`;
-  c.lineJoin = 'round';
-  c.lineWidth = 3;
-  c.strokeStyle = k.casing;
-  c.fillStyle = k.paper;
-  c.strokeText(text, x, y);
-  c.fillText(text, x, y);
-}
-
 /**
  * A unit of the match map, the Engraved helmet (#847): the own faces right, the enemy's left; a
  * dark casing under the dome and the strap, the charged part solid in the side's colour, the strap,
@@ -279,22 +279,19 @@ export function drawHelmet(
   c.restore();
 }
 
-/** A unit 18 px wide, charged, with the count of its stack. */
+/**
+ * A unit 18 px wide, charged (`share` of it). No number over it: the backgrounds count nothing
+ * (owner, #866).
+ */
 function unit(
   c: CanvasRenderingContext2D,
   k: Palette,
   p: Point,
   side: 0 | 1,
   alpha = 1,
-  count = 0,
+  share = 1,
 ): void {
-  drawHelmet(c, k, p, side, { alpha });
-  if (count > 1) {
-    c.save();
-    c.globalAlpha *= alpha;
-    figure(c, k, `×${String(count)}`, p.x + 11, p.y + 4, 13);
-    c.restore();
-  }
+  drawHelmet(c, k, p, side, { alpha, share });
 }
 
 /**
@@ -576,12 +573,14 @@ function shot(
   const d = lengthOf(path) * clamp(u, 0, 1);
   const tail = Math.min(d, 26);
   const colour = side === 0 ? k.you : k.enemy;
+  // Relative to the alpha it is drawn at (a capture fading into the fog).
+  const base = c.globalAlpha;
   c.save();
   c.lineCap = 'round';
   trace(c, slice(path, Math.max(0, d - tail), Math.max(0.1, d)));
   c.strokeStyle = k.casing;
   c.lineWidth = 3;
-  c.globalAlpha = 0.8;
+  c.globalAlpha = base * 0.8;
   c.stroke();
   for (let i = 0; i < 6; i += 1) {
     const s0 = d - (tail * (i + 1)) / 6;
@@ -589,7 +588,7 @@ function shot(
     if (s0 < 0) continue;
     const p0 = along(path, s0);
     const p1 = along(path, s1);
-    c.globalAlpha = 1 - i / 6;
+    c.globalAlpha = base * (1 - i / 6);
     c.beginPath();
     c.moveTo(p0.x, p0.y);
     c.lineTo(p1.x, p1.y);
@@ -598,7 +597,7 @@ function shot(
     c.stroke();
   }
   const h = along(path, d);
-  c.globalAlpha = 1;
+  c.globalAlpha = base;
   c.translate(h.x, h.y);
   c.rotate(h.angle + Math.PI / 4);
   c.fillStyle = k.casing;
@@ -611,11 +610,11 @@ function shot(
   c.restore();
 }
 
-/** A unit hit by a shot (Parry): twelve cuts burst out, every other in ink; "−1" rises. */
+/** A unit hit by a shot (Parry): twelve cuts burst out, every other in ink (no "−1": #866). */
 function hit(c: CanvasRenderingContext2D, k: Palette, p: Point, u: number, side: 0 | 1): void {
   const colour = side === 0 ? k.you : k.enemy;
   c.save();
-  c.globalAlpha = 1 - u;
+  c.globalAlpha *= 1 - u;
   c.lineCap = 'round';
   for (let i = 0; i < 12; i += 1) {
     const a = (i * Math.PI) / 6 + 0.26;
@@ -631,7 +630,6 @@ function hit(c: CanvasRenderingContext2D, k: Palette, p: Point, u: number, side:
     c.lineWidth = 1;
     c.stroke();
   }
-  figure(c, k, '−1', p.x + 9, p.y - 10 - 12 * u, 14);
   c.restore();
 }
 
@@ -646,34 +644,7 @@ function fight(c: CanvasRenderingContext2D, k: Palette, at: Point, t: number): v
   const r = Math.floor(t / ROUND);
   const u = t - r * ROUND;
   if (r % 3 === 0) {
-    const f = clamp((u - 0.35) / 0.3, 0, 1);
-    if (u > 0.35 && u < 0.65) {
-      shot(c, k, a, b, f * 0.5, 0);
-      shot(c, k, b, a, f * 0.5, 1);
-    }
-    if (u >= 0.65 && u < 1.1) {
-      // The two glance off each other at the top of their arch: four ink ticks.
-      const q = (u - 0.65) / 0.45;
-      const mx = (a.x + b.x) / 2;
-      const my = Math.min(a.y, b.y) - 6;
-      c.save();
-      c.globalAlpha = 1 - q;
-      c.lineCap = 'round';
-      for (let i = 0; i < 4; i += 1) {
-        const angle = Math.PI / 4 + (i * Math.PI) / 2;
-        const r0 = 3 + 4 * ease(q);
-        c.beginPath();
-        c.moveTo(mx + Math.cos(angle) * r0, my + Math.sin(angle) * r0);
-        c.lineTo(mx + Math.cos(angle) * (r0 + 3.5), my + Math.sin(angle) * (r0 + 3.5));
-        c.strokeStyle = k.casing;
-        c.lineWidth = 2.6;
-        c.stroke();
-        c.strokeStyle = k.paper;
-        c.lineWidth = 1;
-        c.stroke();
-      }
-      c.restore();
-    }
+    glance(c, k, a, b, u);
     return;
   }
   const side: 0 | 1 = r % 2 === 0 ? 0 : 1;
@@ -681,6 +652,182 @@ function fight(c: CanvasRenderingContext2D, k: Palette, at: Point, t: number): v
   const to = side === 0 ? b : a;
   if (u > 0.35 && u < 0.95) shot(c, k, from, to, (u - 0.35) / 0.6, side);
   if (u >= 0.95 && u < 1.95) hit(c, k, to, u - 0.95, side === 0 ? 1 : 0);
+}
+
+/**
+ * The flag over a captured city (#819; Engraved, #856, `flagContext` of the match): a hatched
+ * pennant of the owner's colour on a dark casing, the pole and the outline in ink; `at` is the foot
+ * of the pole.
+ */
+function flag(
+  c: CanvasRenderingContext2D,
+  k: Palette,
+  at: Point,
+  colour: string,
+  alpha: number,
+): void {
+  if (alpha <= 0) return;
+  const pennant = (): void => {
+    c.beginPath();
+    c.moveTo(0, -16);
+    c.lineTo(11, -12.5);
+    c.lineTo(0, -9);
+    c.closePath();
+  };
+  const pole = (): void => {
+    c.beginPath();
+    c.moveTo(0, 0);
+    c.lineTo(0, -16);
+  };
+  c.save();
+  c.globalAlpha *= alpha;
+  c.translate(at.x, at.y);
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  c.strokeStyle = k.casing;
+  c.lineWidth = 4;
+  pole();
+  c.stroke();
+  pennant();
+  c.fillStyle = k.casing;
+  c.fill();
+  c.stroke();
+  // The hatch: lines of the owner's colour across the pennant, 1.8 apart.
+  c.beginPath();
+  for (let y = -15.2; y < -9.4; y += 1.8) {
+    const half = y < -12.5 ? (y + 16) / 3.5 : (-9 - y) / 3.5;
+    c.moveTo(0.8, y);
+    c.lineTo(Math.max(0.8, 11 * half), y);
+  }
+  c.strokeStyle = colour;
+  c.lineWidth = 0.9;
+  c.lineCap = 'butt';
+  c.stroke();
+  c.lineCap = 'round';
+  c.strokeStyle = k.paper;
+  c.lineWidth = 0.8;
+  pennant();
+  c.stroke();
+  c.lineWidth = 1.5;
+  pole();
+  c.stroke();
+  c.restore();
+}
+
+/** Two shots glance off each other at the top of their arch (Parry's collision): four ink ticks. */
+function glance(c: CanvasRenderingContext2D, k: Palette, a: Point, b: Point, u: number): void {
+  if (u > 0.35 && u < 0.65) {
+    const f = clamp((u - 0.35) / 0.3, 0, 1);
+    shot(c, k, a, b, f * 0.5, 0);
+    shot(c, k, b, a, f * 0.5, 1);
+  }
+  if (u < 0.65 || u >= 1.1) return;
+  const q = (u - 0.65) / 0.45;
+  const mx = (a.x + b.x) / 2;
+  const my = Math.min(a.y, b.y) - 6;
+  c.save();
+  c.globalAlpha *= 1 - q;
+  c.lineCap = 'round';
+  for (let i = 0; i < 4; i += 1) {
+    const angle = Math.PI / 4 + (i * Math.PI) / 2;
+    const r0 = 3 + 4 * ease(q);
+    c.beginPath();
+    c.moveTo(mx + Math.cos(angle) * r0, my + Math.sin(angle) * r0);
+    c.lineTo(mx + Math.cos(angle) * (r0 + 3.5), my + Math.sin(angle) * (r0 + 3.5));
+    c.strokeStyle = k.casing;
+    c.lineWidth = 2.6;
+    c.stroke();
+    c.strokeStyle = k.paper;
+    c.lineWidth = 1;
+    c.stroke();
+  }
+  c.restore();
+}
+
+/**
+ * The captures of the loop (#866, `menuCaptures.ts`) as the match draws one (#856, #857): the
+ * group walks from its city to the gate of the one it takes (just outside its ring, on the road it
+ * came by), the garrison shows in the middle; two rounds (the first two shots glance off each other,
+ * the second lands); the winner walks in, the ring of its colour leaves the city and the flag goes
+ * up as it crosses the ring (the flood of the area is the map layer's, `menuPaint.ts`). The
+ * opponent's pieces fade into the fog like everything of theirs; its capture is half as strong
+ * (`calm`, as the match draws an enemy capture).
+ */
+export function drawCaptures(
+  c: CanvasRenderingContext2D,
+  k: Palette,
+  scene: Scene,
+  script: CaptureScript,
+  g: number,
+  reduced: boolean,
+): void {
+  if (reduced) return;
+  // Px a world unit of a piece on the screen.
+  const ps = Math.min(scene.scale, PIECES_PX);
+  const fogged = (p: Point): number =>
+    scene.fog
+      ? 1 - clamp((p.x - scene.fadeStart) / Math.max(1, scene.fogStart - scene.fadeStart), 0, 1)
+      : 1;
+  for (const { capture, u } of capturesAt(script, g)) {
+    const node = scene.nodes.find((n) => n.id === capture.node);
+    const from = scene.nodes.find((n) => n.id === capture.from);
+    if (node === undefined || from === undefined) continue;
+    const look = captureLook(u, capture.by === 1);
+    const attacker = capture.by;
+    const defender: 0 | 1 = attacker === 0 ? 1 : 0;
+    const seen = (side: 0 | 1, p: Point): number => (side === 1 ? fogged(p) : 1);
+    const ring = ringRadius(menuCityRadius(node.kind)) * ps;
+    const fromRing = ringRadius(menuCityRadius(from.kind)) * ps;
+    const length = Math.hypot(from.x - node.x, from.y - node.y) || 1;
+    const ux = (from.x - node.x) / length;
+    const uy = (from.y - node.y) / length;
+    const off = (d: number): Point => ({ x: node.x + ux * d, y: node.y + uy * d });
+    const gate = off(Math.min(length / 2, ring + 9 + WALK.gap * ps));
+    const start = off(Math.max(length / 2, length - fromRing - 9));
+    if (look.guard !== null) {
+      unit(c, k, node, defender, look.guard.alpha * seen(defender, node), look.guard.share);
+    }
+    if (look.approach !== null) {
+      const p = walkPoint(start, gate, look.approach.share);
+      unit(c, k, p, attacker, look.approach.alpha * seen(attacker, p));
+    }
+    if (look.walk !== null) {
+      const p = walkPoint(gate, node, look.walk.share);
+      unit(c, k, p, attacker, look.walk.alpha * seen(attacker, p));
+    }
+    // The shots: a glance in the first round, the winner's shot landing in the second.
+    c.save();
+    c.globalAlpha = Math.min(seen(attacker, gate), seen(defender, node));
+    if (look.round?.index === 0) glance(c, k, gate, node, look.round.u);
+    if (look.round?.index === 1 && look.round.u > CAPTURE_TIMES.shot[0]) {
+      const q =
+        (look.round.u - CAPTURE_TIMES.shot[0]) / (CAPTURE_TIMES.shot[1] - CAPTURE_TIMES.shot[0]);
+      if (q < 1) shot(c, k, gate, node, q, attacker);
+    }
+    const hitU = u - LAST_SHOT;
+    if (hitU >= 0 && hitU < 1) hit(c, k, node, hitU, defender);
+    c.restore();
+    const colour = attacker === 0 ? k.you : k.enemy;
+    if (look.ring !== null && look.ring.ring > 0) {
+      const r = ring + look.ring.ringRadius * ps;
+      c.save();
+      c.globalAlpha = look.ring.ring * seen(attacker, node);
+      c.beginPath();
+      c.arc(node.x, node.y, r, 0, Math.PI * 2);
+      c.strokeStyle = k.casing;
+      c.lineWidth = CAPTURE.ring.casing;
+      c.stroke();
+      c.strokeStyle = colour;
+      c.lineWidth = CAPTURE.ring.line;
+      c.stroke();
+      c.restore();
+    }
+    if (look.flag !== null) {
+      // The foot of the pole just outside the ring, upper right (the match's place).
+      const foot = { x: node.x + ring + 4 * ps, y: node.y - ring + 4 * ps };
+      flag(c, k, foot, colour, look.flag * seen(attacker, node));
+    }
+  }
 }
 
 /**
@@ -750,22 +897,26 @@ export function drawMotion(
   scene: Scene,
   story: Story,
   clock: MotionClock,
+  script: CaptureScript | null = null,
 ): void {
   const { phase, t, g, reduced } = clock;
   const scale = scene.scale;
-  const stack = (count: number): void => {
-    unit(c, k, { x: story.frontCity.x + 12, y: story.frontCity.y - 14 }, 0, 1, count);
+  // The group gathering at the front city (no count over it: #866).
+  const stack = (): void => {
+    unit(c, k, { x: story.frontCity.x + 12, y: story.frontCity.y - 14 }, 0);
   };
 
   if (phase === 'banned') {
     supply(c, k, story, scale, 4.2, 0.45, true);
-    stack(2);
+    stack();
     return;
   }
+  // The captures of the loop go on behind every other phase (#866).
+  if (script !== null) drawCaptures(c, k, scene, script, g, reduced);
   if (phase === 'idle') {
     supply(c, k, story, scale, g, 1, false);
     drills(c, k, story, scale, g);
-    stack(2);
+    stack();
     return;
   }
 
@@ -788,12 +939,12 @@ export function drawMotion(
   }
 
   if (phase === 'search') {
-    stack(Math.min(9, 2 + Math.floor((clock.waited + t) / 12)));
+    stack();
     return;
   }
 
   if (phase === 'found') {
-    stack(6);
+    stack();
     const pulse = reduced ? 1 : clamp(t / 0.8, 0, 1);
     const shown = reduced ? 1 : ease(t / 0.6);
     order(c, k, story.entry, story.meeting, {
@@ -831,7 +982,7 @@ export function drawMotion(
     }
     const own = arc(story.frontCity, story.meeting, 0.28);
     const enemy = [story.entry, story.meeting];
-    unit(c, k, along(own, lengthOf(own) * ease(march) * 0.92), 0, 1, 6);
+    unit(c, k, along(own, lengthOf(own) * ease(march) * 0.92), 0);
     unit(c, k, along(enemy, lengthOf(enemy) * ease(march) * 0.85), 1);
   } else {
     fight(c, k, story.meeting, reduced ? -1 : t - 3);

@@ -33,13 +33,13 @@ describe('MenuBackdrop (#471, #474)', () => {
   it('is a decoration: hidden from assistive technology, plain dark without a map', () => {
     render('idle', null, false);
     expect(document.querySelector('.backdrop')?.getAttribute('aria-hidden')).toBe('true');
-    expect(has('svg.scene')).toBe(false);
+    expect(has('canvas.map')).toBe(false);
   });
 
   it('draws the map, the fog, the motion and the capitals as layers of their own', () => {
     render('idle');
     const layers = [...document.querySelectorAll('.backdrop > .layer')].map((e) => e.classList[0]);
-    expect(layers).toEqual(['scene', 'fog', 'motion', 'capitals']);
+    expect(layers).toEqual(['map', 'fog', 'motion', 'capitals']);
   });
 
   it('idle: a question mark where the enemy capital is, no hole in the fog', () => {

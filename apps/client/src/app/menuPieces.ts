@@ -11,18 +11,23 @@ import type { GeoFile } from '../map/geography.ts';
 import type { MapFile } from '../protocol.gen.ts';
 import { capacityRing, ringRadius } from '../render/cityLayout.ts';
 import { territoryBorders, type Border } from '../render/regionLayout.ts';
+import { SOFT } from '../render/softness.ts';
 import { ROAD_LANE } from '../render/style.ts';
-import { territoryOf } from '../render/territory.ts';
+import { territoryOf, type Territory } from '../render/territory.ts';
 import { menuCityRadius, type Point } from './menuScene.ts';
+
+/** The ink of the map's lines as a CSS colour (`SOFT.ink`, #865): darker and warmer than the text's. */
+export const MENU_INK = `#${SOFT.ink.toString(16).padStart(6, '0')}`;
 
 /**
  * The Border band and the engraved border of the match (`BORDER_BAND`, `BORDER_ENGRAVING` of
- * `render/engraving.ts`, kept here as numbers: that module carries PixiJS).
+ * `render/engraving.ts`, kept here as numbers: that module carries PixiJS), softened as the match's
+ * (`SOFT`, #865): the hatch and the light lines fainter.
  */
 export const MENU_BORDER = {
-  band: { depth: 13, pitch: 3.2, width: 0.85, alpha: 0.85 },
-  cut: { inset: 0, width: 1.6, alpha: 0.85 },
-  rule: { inset: 2.4, width: 1.1 },
+  band: { depth: 13, pitch: 3.2, width: 0.85, alpha: 0.85 * SOFT.hatch },
+  cut: { inset: 0, width: 1.6, alpha: 0.85 * SOFT.line },
+  rule: { inset: 2.4, width: 1.1, alpha: SOFT.line },
   rule2: { inset: 4.6, width: 1.1 },
   beads: { inset: 5, step: 5.5, radius: 0.95 },
 } as const;
@@ -67,15 +72,33 @@ export interface MenuLand {
   readonly enemy: SideLand;
 }
 
+/** The areas of a map, worked out once per map (a capture redraws the land with other owners). */
+const territories = new WeakMap<MapFile, { readonly geo: GeoFile | null; readonly t: Territory }>();
+
+/** The areas of the nodes of `map`: the vector file's, or the Voronoi cells without one. */
+export function menuTerritory(map: MapFile, geo: GeoFile | null): Territory {
+  const known = territories.get(map);
+  if (known !== undefined && known.geo === geo) return known.t;
+  const t = territoryOf(map, geo);
+  territories.set(map, { geo, t });
+  return t;
+}
+
 /**
- * The start territory of the menu map: the areas of the vector file (or the Voronoi cells), the
- * border lines at the match's insets times `k` (the size of the pieces against the match).
+ * The territory of the menu map: the areas of the vector file (or the Voronoi cells), the border
+ * lines at the match's insets times `k` (the size of the pieces against the match). The owners
+ * are `given` by node id (the picture's front, `MenuWorld.owners`), else the map file's.
  */
-export function menuLand(map: MapFile, geo: GeoFile | null, k = 1): MenuLand {
-  const territory = territoryOf(map, geo);
-  const owners = map.nodes.map((n) =>
-    n.start_owner === 0 || n.start_owner === 1 ? n.start_owner : null,
-  );
+export function menuLand(
+  map: MapFile,
+  geo: GeoFile | null,
+  k = 1,
+  given?: readonly (0 | 1 | null)[],
+): MenuLand {
+  const territory = menuTerritory(map, geo);
+  const owners =
+    given ??
+    map.nodes.map((n) => (n.start_owner === 0 || n.start_owner === 1 ? n.start_owner : null));
   const at = (inset: number): Border[] =>
     territoryBorders(territory.cells, owners, inset * k, territory.edges);
   const B = MENU_BORDER;

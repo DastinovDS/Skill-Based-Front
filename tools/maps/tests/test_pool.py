@@ -61,11 +61,11 @@ def test_pool_is_exactly_the_known_maps() -> None:
     assert not (FIXTURES / "geo").exists()
 
 
-@pytest.mark.parametrize("name", [*SERVED, "valley"])
+@pytest.mark.parametrize("name", [*SERVED, "valley", "marches"])
 def test_pool_and_menu_maps_have_a_geography_with_water(name: str) -> None:
-    # DEC-36, #545: the three pool maps and the menu map have water cells and long rivers; the
-    # check `geography` itself runs in test_map_passes_the_validator (and the menu test below).
-    path = MENU / f"{name}.json" if name == "valley" else MAPS / f"{name}.json"
+    # DEC-36, #545: the three pool maps and the menu maps have water cells and long rivers; the
+    # check `geography` itself runs in test_map_passes_the_validator (and the menu tests below).
+    path = MENU / f"{name}.json" if name in ("valley", "marches") else MAPS / f"{name}.json"
     spec = geo.find_spec(path)
     assert spec is not None and spec.map == name
     assert any(w.kind == "sea" for w in spec.water)
@@ -173,18 +173,35 @@ def test_cli_preview(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None
     assert "FAIL" in capsys.readouterr().out
 
 
-# The menu map (#474, MM1 "Valley"): drawn behind the screens before a match, outside the pool ---
+# The menu maps (#474, MM1 "Valley" behind the entry; #866 "marches" behind the other screens
+# before a match): outside the pool ---
 
 
-def test_menu_holds_only_the_valley_map() -> None:
+def test_menu_holds_the_valley_and_the_marches() -> None:
     # maps/menu/ is not read by the server (the pool is maps/*.json, not recursive).
-    assert sorted(p.name for p in MENU.glob("*.json")) == ["valley.json"]
+    assert sorted(p.name for p in MENU.glob("*.json")) == ["marches.json", "valley.json"]
     assert sorted(p.name for p in (MENU / "src").glob("*.json")) == [
+        "marches.geo.json",
         "valley.geo.json",
         "valley.half.json",
     ]
-    assert sorted(p.name for p in (MENU / "geo").glob("*.json")) == ["valley.json"]
+    assert sorted(p.name for p in (MENU / "geo").glob("*.json")) == ["marches.json", "valley.json"]
     assert "valley" not in SERVED + MVP
+    assert "marches" not in SERVED + MVP
+
+
+def test_marches_is_a_large_generated_map_that_passes_the_validator() -> None:
+    # #866: more nodes than the valley, laid over the whole window and cropped by it; no mirror, so
+    # the validator runs its fairness check on it.
+    mapdef = load_map(MENU / "marches.json")
+    assert mapdef.meta.symmetry == "none"
+    assert len(mapdef.nodes) == 48
+    own, enemy = mapdef.nodes[mapdef.capital(0)], mapdef.nodes[mapdef.capital(1)]
+    assert own.x < mapdef.meta.width / 2 < enemy.x
+    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-5.toml")
+    assert validate_file(MENU / "marches.json", CONFIG, rules) == []
+    assert preview_path(MENU / "marches.json").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+    assert (MENU / "marches.bg.webp").stat().st_size <= 500_000
 
 
 def test_menu_map_is_built_from_its_half_and_passes_the_validator() -> None:

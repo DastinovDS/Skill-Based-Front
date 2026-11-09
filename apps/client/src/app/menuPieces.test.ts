@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { MENU_GEO, MENU_GROUND, MENU_MAP } from './menuMap.ts';
+import { ENTRY_WORLD, MENU_WORLD } from './menuMap.ts';
 import { MENU_RING, arcPath, menuCity, menuLand, segmentsPath } from './menuPieces.ts';
 import { groundMatrix } from './menuSeason.ts';
 
 describe('the pieces of the menu map in the Engraved look (#839)', () => {
   it('bundles the baked ground and the areas of the menu map', () => {
-    expect(MENU_GROUND).not.toBeNull();
-    expect(MENU_GEO).not.toBeNull();
+    for (const world of [MENU_WORLD, ENTRY_WORLD]) expect(world.ground).not.toBeNull();
+    for (const world of [MENU_WORLD, ENTRY_WORLD]) expect(world.geo).not.toBeNull();
   });
 
   it('draws the start territory of both sides: areas, band, border and the inner lines', () => {
-    const land = menuLand(MENU_MAP, MENU_GEO);
+    const land = menuLand(MENU_WORLD.map, MENU_WORLD.geo);
     for (const side of [land.own, land.enemy]) {
       expect(side.cells.startsWith('M')).toBe(true);
       expect(side.band.length).toBeGreaterThan(0);
@@ -23,7 +23,7 @@ describe('the pieces of the menu map in the Engraved look (#839)', () => {
   });
 
   it('falls back to the Voronoi areas without a vector file', () => {
-    const land = menuLand(MENU_MAP, null);
+    const land = menuLand(MENU_WORLD.map, null);
     expect(land.own.band.length).toBeGreaterThan(0);
   });
 

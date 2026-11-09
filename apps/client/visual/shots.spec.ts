@@ -540,7 +540,7 @@ for (const id of MENU_SCENES) {
     await expect(
       page
         .locator(
-          '.front svg.scene, .card, [role="alertdialog"], main.failure, main.loading, .crash, .specimen',
+          '.front .backdrop[data-map="ready"], .card, [role="alertdialog"], main.failure, main.loading, .crash, .specimen',
         )
         .first(),
     ).toBeVisible();
@@ -620,7 +620,7 @@ for (const page of ['impressum', 'privacy'] as const) {
 for (const season of ['spring', 'summer', 'autumn', 'winter'] as const) {
   test(`shot of the menu picture in ${season}`, async ({ page }) => {
     await page.goto(`/?menu=menu-guest&season=${season}`);
-    await expect(page.locator('.front svg.scene')).toBeVisible();
+    await expect(page.locator('.front .backdrop[data-map="ready"]')).toBeVisible();
     await page.mouse.move(1000, 700);
     await page.screenshot({ path: join(OUT, `screen-season-${season}.png`) });
   });
@@ -630,9 +630,28 @@ for (const id of ['queue-search', 'queue-found', 'queue-confirmed'] as const) {
   test(`shot of the screen ${id} with reduced motion`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`/?menu=${id}`);
-    await expect(page.locator('.front svg.scene')).toBeVisible();
+    await expect(page.locator('.front .backdrop[data-map="ready"]')).toBeVisible();
     await page.mouse.move(1000, 700);
     await page.screenshot({ path: join(OUT, `screen-${id}-reduced.png`) });
+  });
+}
+
+// The loop of captures behind the menus (#866), the picture frozen at seconds of its clock
+// (`/?menu=<id>&bt=<s>`): `screen-capture-<id>-<s>.png`. The main menu's first capture (Raven Rise
+// taken from Amber Common) sets out at 1 s: the gate and the glance (3.6), the last shot (5.4), the
+// walk in (5.6), the flood (6.0, 6.4), the flag (7.2); its loop turns at 48 s (47.6 to 48.4: no jump
+// at the seam). The entry's first capture (Long Meadow from Millbrook) floods from 5.7 s.
+for (const [id, at] of [
+  ...['3.6', '5.4', '5.6', '6.0', '6.4', '7.2', '47.6', '47.8', '48.0', '48.2', '48.4'].map(
+    (s) => ['menu-guest', s] as const,
+  ),
+  ...['3.6', '6.0', '6.4'].map((s) => ['welcome', s] as const),
+]) {
+  test(`shot of the capture loop of ${id} at ${at} s`, async ({ page }) => {
+    await page.goto(`/?menu=${id}&bt=${at}`);
+    await expect(page.locator('.front .backdrop[data-map="ready"]')).toBeVisible();
+    await page.mouse.move(1000, 700);
+    await page.screenshot({ path: join(OUT, `screen-capture-${id}-${at}.png`) });
   });
 }
 
@@ -660,7 +679,7 @@ test('the opening scene plays, skips by a key and plays once a session', async (
   await expect(page.getByLabel('Your nick')).toBeFocused();
   await expect(page.locator('h1')).toHaveText('Fines Imperii');
   await page.reload();
-  await expect(page.locator('.front svg.scene')).toBeVisible();
+  await expect(page.locator('.front .backdrop[data-map="ready"]')).toBeVisible();
   await expect(page.locator('.welcome.intro')).toHaveCount(0);
 });
 
@@ -673,7 +692,7 @@ test('the opening scene plays to its end, and never under reduced motion', async
   const other = await page.context().browser()?.newPage({ reducedMotion: 'reduce' });
   if (other === undefined) return;
   await other.goto(page.url());
-  await expect(other.locator('.front svg.scene')).toBeVisible();
+  await expect(other.locator('.front .backdrop[data-map="ready"]')).toBeVisible();
   await expect(other.locator('.welcome.intro')).toHaveCount(0);
   await other.close();
 });
@@ -730,7 +749,7 @@ for (const size of [
     }) => {
       await page.setViewportSize(size);
       await page.goto(`/?menu=${id}`);
-      await expect(page.locator('.front svg.scene')).toBeVisible();
+      await expect(page.locator('.front .backdrop[data-map="ready"]')).toBeVisible();
       await page.screenshot({
         path: join(OUT, `screen-${id}-${String(size.width)}x${String(size.height)}.png`),
       });

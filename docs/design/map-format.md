@@ -1,6 +1,6 @@
 # Map format
 
-A map is a JSON file in `maps/` (the server pool), in `maps/fixtures/` (the three MVP maps `artery`, `web`, `pass`, kept as test fixtures since #372), in `maps/menu/` (the map `valley` drawn behind the start menu, #474, outside the pool) or in `maps/gen/` (generated maps, #771, outside the pool). The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
+A map is a JSON file in `maps/` (the server pool), in `maps/fixtures/` (the three MVP maps `artery`, `web`, `pass`, kept as test fixtures since #372), in `maps/menu/` (the maps `marches` and `valley` drawn behind the screens before a match, #474, #866, outside the pool) or in `maps/gen/` (generated maps, #771, outside the pool). The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
 The map design checks (connectivity, planarity, rule symmetry, names, border points,
 neutral space) are run by the offline validator `uv run gow-maps validate maps/*.json maps/fixtures/*.json maps/menu/*.json` (MAP-02, #14).
 
@@ -494,7 +494,7 @@ so it runs after `bake`. The PNG is a palette of the picture's colours plus the 
 ## The map pool on the server
 
 At start the server (`gow_server.maps`, SRV-01) loads all `maps/*.json` into the pool and all `maps/gen/*.json` into the
-generated group (no other subdirectories: `maps/src/` holds the halves, `maps/fixtures/` the MVP maps, `maps/menu/` the menu map) through `load_map`. The file name must match `meta.name`:
+generated group (no other subdirectories: `maps/src/` holds the halves, `maps/fixtures/` the MVP maps, `maps/menu/` the menu maps) through `load_map`. The file name must match `meta.name`:
 `maps/<id>.json`. A broken map or a name mismatch stops the server from starting.
 
 The map background (MAP-05) lies next to it: `maps/<id>.bg.webp`. It is optional; the PNG previews from MAP-04 (other
@@ -556,7 +556,16 @@ the JSON at build time (`apps/client/src/app/menuMap.ts`), so the start screen d
 request. Its world is 800 × 560: at a window of 1280 × 800 the client's `layoutScene` shows it at one px per unit,
 the own capital `Highhold` right of the text rail and `Stormcrown` in the fog; no node is above the line that keeps
 the title bar and the corner chip clear. 25 nodes, the road of the valley `Highhold`, `Mossgate`, `Fordham`, `Wickwood`,
-`Stormcrown` runs straight down the middle.
+`Stormcrown` runs straight down the middle. Since #866 it is drawn behind the entry screen and its opening scene
+only (the five fights of `introBattles.ts` stand on its roads), laid over the whole window.
+
+`maps/menu/marches.json` (#866) is drawn behind every other screen before a match: a generated map (`gow-maps generate
+--seed 112`, renamed from `gen1-112` with its geography `maps/menu/src/marches.geo.json`; `meta.symmetry = "none"`, so
+the validator runs its fairness check), 48 nodes on a world of 1904 × 1256, baked and previewed with the rest. The
+client lays it over the whole window, a tenth larger than it takes to cover it, and the window crops it: the enemy
+capital `Kelpcrown` in the fog at the right, the front through the middle, the own capital `Eaglekeep` under the shade
+at the left. The owners the client draws on both menu maps are a front in mid game, not the start owners of the files
+(`apps/client/src/app/menuMap.ts`).
 
 ## Test maps
 

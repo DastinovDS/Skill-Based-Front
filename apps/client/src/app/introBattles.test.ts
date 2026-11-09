@@ -8,7 +8,7 @@ import {
   drawStage,
 } from './introBattles.ts';
 import { INTRO } from './introScene.ts';
-import { MENU_MAP } from './menuMap.ts';
+import { ENTRY_MAP as MENU_MAP } from './menuMap.ts';
 import { FALLBACK_PALETTE } from './menuMotion.ts';
 import { layoutEntry } from './menuScene.ts';
 
