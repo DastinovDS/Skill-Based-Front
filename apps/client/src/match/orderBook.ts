@@ -88,9 +88,15 @@ export class OrderBook {
 
   /**
    * Remembers a sent command. `from` is the node of the group at the time, for the ghost arrow of
-   * a move; a move without it (group on a road) has none.
+   * a move; a move without it (group on a road) has none. `route`: the server's route to the
+   * target from its `reach` answer, which the ghost follows until the `ack` brings the order's path.
    */
-  track(seq: number, cmd: Command, from: number | null = null): void {
+  track(
+    seq: number,
+    cmd: Command,
+    from: number | null = null,
+    route: readonly number[] | null = null,
+  ): void {
     let ghost: GhostOrder | null = null;
     if (cmd.type === 'move' && from !== null) {
       ghost = {
@@ -99,7 +105,7 @@ export class OrderBook {
         from,
         dest: cmd.dest,
         planned: cmd.planned,
-        path: null,
+        path: route !== null && route[0] === from && route.at(-1) === cmd.dest ? route : null,
         status: 'pending',
         rejectedAt: null,
         rejectCode: null,

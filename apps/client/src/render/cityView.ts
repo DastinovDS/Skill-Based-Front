@@ -23,6 +23,7 @@ import { beaconPulse } from './alertLayout.ts';
 import { alertAlpha, buildMark, markTops, type PlateKind } from './progressLayout.ts';
 import {
   buildProgress,
+  lozengeRow,
   lozengeRowY,
   recruitPip,
   towerPoint,
@@ -31,6 +32,7 @@ import {
   type TowerKind,
 } from './pieceLayout.ts';
 import type { MapLayers } from './layers.ts';
+import type { Point } from './camera.ts';
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import {
   buildMarkSpec,
@@ -378,6 +380,21 @@ export class CityView {
   /** Radius of the city `id` now: by its capacity class, a default until the capacity is known. */
   radiusOf(id: number): number {
     return this.radii[id] ?? NODE_RADIUS;
+  }
+
+  /**
+   * The centre of the lozenge `index` of the warehouse row of the city `id` in world units (where a
+   * charge leaves for a gathering plan, #851); `null`: no row is drawn there.
+   */
+  warehouseSlot(id: number, index: number): Point | null {
+    const state = this.states[id];
+    const at = this.map.nodes[id];
+    if (state === null || state === undefined || at === undefined) return null;
+    if (state.capacity === null || state.warehouse === null) return null;
+    const xs = lozengeRow((state.warehouseCap ?? state.warehouse) + state.locked);
+    const x = xs[Math.min(xs.length - 1, Math.max(0, index))];
+    if (x === undefined) return null;
+    return { x: at.x + x, y: at.y + lozengeRowY(this.radiusOf(id)) };
   }
 
   /** The radii of all cities (kept in step with the snapshots; read by other views). */

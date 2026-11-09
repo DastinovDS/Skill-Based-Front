@@ -6,8 +6,8 @@
  */
 import type { EventMsg, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
-import { arrowGeometry, nodePoint } from './layout.ts';
-import { NUMBERS_RISE } from './style.ts';
+import { nodePoint } from './layout.ts';
+import { BOUNCE_HOME, NUMBERS_RISE } from './style.ts';
 
 /** Progress 0..1 of an effect of `ms` milliseconds `age` ticks after its event; `null`: not now. */
 export function effectProgress(age: number, ms: number, tickHz: number): number | null {
@@ -73,19 +73,56 @@ export function bounceInfo(event: EventMsg): BounceInfo | null {
   return typeof group === 'string' ? { group, tick: event.tick } : null;
 }
 
-/** The short arrow of a bounce: from where the group is back towards the node it came from. */
-export function bounceArrow(
+/** One chevron of a bounce going home: its centre, the way home there, its opacity. */
+export interface HomeChevron {
+  readonly at: Point;
+  readonly dir: Point;
+  readonly alpha: number;
+}
+
+/**
+ * Bounce, Chevrons home (#851, ui-style 54m; mockup `bounceHome` M3): three amber chevrons running
+ * ahead of a bounced group to the node it came from. `at`: the group's token now, `home`: where the
+ * way ends (the home ring), `width`: the helmet's width, `seconds` the render clock (0 with less
+ * motion: they stand), `ageMs` since the bounce (they fade in). None past the end of the way.
+ */
+export function homeChevrons(
   at: Point,
   home: Point,
-  length: number,
-  head: number,
-): { from: Point; to: Point; head: readonly [Point, Point, Point]; end: Point } | null {
-  const distance = Math.hypot(home.x - at.x, home.y - at.y);
-  if (distance === 0) return null;
-  const to = {
-    x: at.x + ((home.x - at.x) / distance) * length,
-    y: at.y + ((home.y - at.y) / distance) * length,
-  };
-  const arrow = arrowGeometry(at, to, 0, 0, head, head);
-  return arrow === null ? null : { from: at, to, head: arrow.head, end: arrow.end };
+  width: number,
+  seconds: number,
+  ageMs: number,
+  scale = 1,
+): HomeChevron[] {
+  const B = BOUNCE_HOME;
+  const length = Math.hypot(home.x - at.x, home.y - at.y);
+  if (length === 0) return [];
+  const dir = { x: (home.x - at.x) / length, y: (home.y - at.y) / length };
+  const gap = B.gap * scale;
+  const phase = (((seconds * B.speed * scale) % gap) + gap) % gap;
+  const fadeIn = Math.max(0, Math.min(1, (ageMs + 200) / B.inMs));
+  const out: HomeChevron[] = [];
+  for (let j = 0; j < B.count; j++) {
+    const d = width * 0.6 + B.lead * scale + j * gap + phase;
+    if (d > length - B.endGap * scale) continue;
+    out.push({
+      at: { x: at.x + dir.x * d, y: at.y + dir.y * d },
+      dir,
+      alpha: fadeIn * (1 - j * B.dim),
+    });
+  }
+  return out;
+}
+
+/** The outline of a home chevron (a barbed point along `dir`), flat, `scale` times its size. */
+export function homeChevronShape(c: HomeChevron, scale = 1): number[] {
+  const B = BOUNCE_HOME;
+  const { at, dir } = c;
+  const nx = -dir.y;
+  const ny = dir.x;
+  const p = (u: number, v: number): [number, number] => [
+    at.x + (dir.x * u + nx * v) * scale,
+    at.y + (dir.y * u + ny * v) * scale,
+  ];
+  return [...p(B.tip, 0), ...p(-B.back, -B.side), ...p(-B.notch, 0), ...p(-B.back, B.side)];
 }

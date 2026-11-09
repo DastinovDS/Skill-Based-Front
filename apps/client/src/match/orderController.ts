@@ -688,6 +688,9 @@ export class OrderController implements MapInteraction {
       this.#sendCommand(
         { type: 'move', group: group.id, dest: hit.id, planned: this.planned, bonus },
         group.node,
+        // The ghost follows the route the server gave for this target (`ReachNode.path`) until the
+        // `ack` brings the order's own (#851): the client finds no path.
+        this.#reach()?.routes.get(hit.id) ?? null,
       );
       // The order is given: the group is let go (the ghost of the order is drawn without it).
       this.deselect();
@@ -2057,12 +2060,16 @@ export class OrderController implements MapInteraction {
   }
 
   /** Sends an intent and starts waiting for its `ack`; a new command clears the old notice. */
-  #sendCommand(cmd: Command, from: number | null): number | null {
+  #sendCommand(
+    cmd: Command,
+    from: number | null,
+    route: readonly number[] | null = null,
+  ): number | null {
     const send = this.#o.send;
     if (send === null) return null;
     this.#clearNotice();
     const seq = send(cmd);
-    this.#o.book.track(seq, cmd, from);
+    this.#o.book.track(seq, cmd, from, route);
     return seq;
   }
 

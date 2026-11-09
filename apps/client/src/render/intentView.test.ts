@@ -1,4 +1,4 @@
-import { CanvasTextMetrics, Container, Text, type Graphics } from 'pixi.js';
+import { CanvasTextMetrics, Container, Text, Texture, type Graphics } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
@@ -9,8 +9,7 @@ import { createLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
 import { setReducedMotion } from './motion.ts';
 import { EntityKit } from './shapes.ts';
-import { lighten } from './fightFx.ts';
-import { BG, ENEMY, PAPER, PLATE_FILL, RIBBON, WARN, YOU } from './style.ts';
+import { CASING, DARK_PLATE, ENEMY, INK, RIBBON_ENGRAVED, WARN, YOU } from './style.ts';
 import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
@@ -45,8 +44,8 @@ function setup() {
     const frame = interpolateFrame(snapshot, null, tick);
     view.update(frame, new Map());
   };
-  const [ribbons] = layers.layer.intents.children;
-  return { layers, kit, view, draw, ribbons };
+  const [ribbons, rings, flights] = layers.layer.intents.children;
+  return { layers, kit, view, draw, ribbons, rings, flights };
 }
 
 interface Paint {
@@ -54,21 +53,36 @@ interface Paint {
   readonly color: number;
   readonly alpha: number;
   readonly width: number;
+  /** A fill with a texture: the owner's hatch. */
+  readonly hatch: boolean;
+  /** The points of the shape, flat. */
+  readonly points: number[];
 }
 
 /** The fills and strokes drawn into a Graphics, in order. */
 function paints(g: unknown): Paint[] {
   const instructions = (g as Graphics).context.instructions as unknown as {
     action: string;
-    data: { style: { color: number; alpha: number; width?: number } };
+    data: {
+      style: { color: number; alpha: number; width?: number; texture?: Texture };
+      path?: { shapePath: { shapePrimitives: { shape: { points?: number[] } }[] } };
+    };
   }[];
   return instructions.map((i) => ({
     action: i.action,
     color: i.data.style.color,
     alpha: i.data.style.alpha,
     width: i.data.style.width ?? 0,
+    hatch: i.data.style.texture !== undefined && i.data.style.texture !== Texture.WHITE,
+    points: (i.data.path?.shapePath.shapePrimitives ?? []).flatMap((p) => p.shape.points ?? []),
   }));
 }
+
+/** The width of the box round a flat list of points. */
+const spanX = (points: readonly number[]): number => {
+  const xs = points.filter((_, j) => j % 2 === 0);
+  return xs.length === 0 ? 0 : Math.max(...xs) - Math.min(...xs);
+};
 
 // jsdom has no canvas to measure text on: seven units a letter.
 beforeEach(() => {
@@ -83,7 +97,27 @@ afterEach(() => {
 /** Pixi's label is `null` until set, whatever its type says. */
 const labelOf = (node: { label: string | null }): string => node.label ?? '';
 
-describe('IntentView', () => {
+const group = (over: Partial<GroupView['order'] & object> = {}, planned = true): GroupView => ({
+  id: 'g',
+  units: 3,
+  charged: 3,
+  mode: 'attack',
+  location: { kind: 'node', node: home },
+  order: {
+    dest: far,
+    path: [via, far],
+    planned,
+    bonus: 2,
+    gathering: false,
+    plan: 0,
+    next_charge_tick: null,
+    ...over,
+  },
+  defense_bonus: null,
+  defense_cap: null,
+});
+
+describe('IntentView: the ribbons of scheduled orders (#851, Engraved)', () => {
   it('draws a ribbon from the origin to the target of a planned move', () => {
     const { view, draw, ribbons, kit } = setup();
     draw([intent({})]);
@@ -91,44 +125,25 @@ describe('IntentView', () => {
     const a = nodePoint(map, far);
     const b = nodePoint(map, home);
     if (a === undefined || b === undefined) throw new Error('no points');
-    expect(bounds?.width).toBeGreaterThan(Math.abs(a.x - b.x) * 0.6);
-    expect(bounds?.height).toBeGreaterThan(Math.abs(a.y - b.y) * 0.6);
+    expect(bounds?.width).toBeGreaterThan(Math.abs(a.x - b.x) * 0.5);
+    expect(bounds?.height).toBeGreaterThan(Math.abs(a.y - b.y) * 0.5);
     view.destroy();
     kit.destroy();
   });
 
-  it('bends one smooth curve toward the server path of an own planned order, enemy stays straight', () => {
+  it('bends one smooth curve toward the server path of an own planned order, enemy stays as it is', () => {
     const { view, draw, ribbons, kit } = setup();
     const own = intent({ owner: 0, origin: home, target: far });
     draw([own]);
     const straight = ribbons?.getLocalBounds();
     const h0 = straight?.height ?? 0;
     const w0 = straight?.width ?? 0;
-    const group: GroupView = {
-      id: 'g',
-      units: 2,
-      charged: 2,
-      mode: 'attack',
-      location: { kind: 'node', node: home },
-      order: {
-        dest: far,
-        path: [via, far],
-        planned: true,
-        bonus: 2,
-        gathering: false,
-        plan: 0,
-        next_charge_tick: null,
-      },
-      defense_bonus: null,
-      defense_cap: null,
-    };
-    draw([own], [group]);
+    draw([own], [group()]);
     const bent = ribbons?.getLocalBounds();
     const a = nodePoint(map, home);
     const b = nodePoint(map, far);
     const v = nodePoint(map, via);
     expect(w0).toBeGreaterThan(0);
-    // The curve leaves the straight line, but only toward the waypoint, not through it.
     if (a !== undefined && b !== undefined && v !== undefined) {
       const side =
         ((v.x - a.x) * (b.y - a.y) - (v.y - a.y) * (b.x - a.x)) / Math.hypot(b.x - a.x, b.y - a.y);
@@ -136,8 +151,7 @@ describe('IntentView', () => {
         expect((bent?.height ?? 0) + (bent?.width ?? 0)).not.toBeCloseTo(h0 + w0, 0);
       }
     }
-    // The opponent's intent has no path: the same bounds as without any group.
-    draw([intent({})], [group]);
+    draw([intent({})], [group()]);
     const enemy = ribbons?.getLocalBounds();
     draw([intent({})]);
     expect(enemy?.width).toBeCloseTo(ribbons?.getLocalBounds().width ?? NaN);
@@ -145,101 +159,53 @@ describe('IntentView', () => {
     kit.destroy();
   });
 
-  it('draws the ring round the target of an enemy intent, and nothing for an own one', () => {
-    const { view, draw, layers, kit } = setup();
-    const rings = layers.layer.intents.children[1];
-    draw([intent({ owner: 0, origin: home, target: via })]);
-    expect(rings?.getLocalBounds().width).toBe(0);
-    draw([intent({})]);
-    expect(rings?.getLocalBounds().width).toBeGreaterThan(40);
-    view.destroy();
-    kit.destroy();
-  });
-
-  it('ODb: the opponent intent is the same ribbon with a double outline, not a thin arrow', () => {
+  it('lays the enemy ribbon as a dark plate under its hatch, an ink outline and a second contour', () => {
     const { view, draw, ribbons, kit } = setup();
     draw([intent({})], [], 140);
     const all = paints(ribbons);
-    // The same tone of fill as an own ribbon.
-    expect(
-      all.some((p) => p.action === 'fill' && p.color === ENEMY && p.alpha === RIBBON.fillAlpha),
-    ).toBe(true);
-    // A wide line in the colour with a narrower plate line on top: two thin lines.
-    const wide = all.findIndex(
-      (p) => p.action === 'stroke' && p.color === ENEMY && p.width === RIBBON.foe.width,
-    );
-    expect(wide).toBeGreaterThanOrEqual(0);
-    expect(all[wide + 1]).toMatchObject({
+    expect(all[0]).toMatchObject({
       action: 'stroke',
-      color: PLATE_FILL,
-      width: RIBBON.foe.inner,
+      color: CASING,
+      width: RIBBON_ENGRAVED.casing,
     });
-    // No casing and no own-style line for the opponent.
-    expect(all.some((p) => p.action === 'stroke' && p.width === RIBBON.outline.casingWidth)).toBe(
-      false,
-    );
+    expect(all[1]).toMatchObject({ action: 'fill', color: DARK_PLATE });
+    expect(all[2]).toMatchObject({ action: 'fill', color: ENEMY, hatch: true });
+    // Hatched only: never a solid enemy fill.
+    expect(all.some((p) => p.action === 'fill' && p.color === ENEMY && !p.hatch)).toBe(false);
+    const inks = all.filter((p) => p.action === 'stroke' && p.color === INK);
+    expect(inks.some((p) => p.alpha === RIBBON_ENGRAVED.inner.alpha)).toBe(true);
     view.destroy();
     kit.destroy();
   });
 
-  it('ODb: the ribbon fills from the tail with a paper line at the front, and a tint ahead of it', () => {
+  it('fills an own ribbon from the tail behind a burin front while it waits, solid once it left', () => {
     const { view, draw, ribbons, kit } = setup();
+    const own = intent({ owner: 0, origin: home, target: far });
     // The delay is 30 ticks from 100: half way at 115.
-    draw([intent({})], [], 115);
+    draw([own], [], 115);
     const waiting = paints(ribbons);
-    expect(
-      waiting.some((p) => p.action === 'fill' && p.color === ENEMY && p.alpha === RIBBON.tintAlpha),
-    ).toBe(true);
-    expect(
-      waiting.some((p) => p.action === 'fill' && p.color === ENEMY && p.alpha === RIBBON.prepAlpha),
-    ).toBe(true);
+    expect(waiting.some((p) => p.action === 'fill' && p.color === YOU && p.hatch)).toBe(true);
+    expect(waiting.some((p) => p.action === 'fill' && p.color === YOU && !p.hatch)).toBe(true);
     expect(
       waiting.some(
-        (p) => p.action === 'stroke' && p.color === PAPER && p.width === RIBBON.front.width,
+        (p) =>
+          p.action === 'stroke' && p.color === CASING && p.width === RIBBON_ENGRAVED.front.casing,
       ),
     ).toBe(true);
-    draw([intent({})], [], 160);
+    draw([own], [], 160);
     const going = paints(ribbons);
     expect(
-      going.some((p) => p.action === 'fill' && p.color === ENEMY && p.alpha === RIBBON.prepAlpha),
-    ).toBe(false);
-    expect(
       going.some(
-        (p) => p.action === 'stroke' && p.color === PAPER && p.width === RIBBON.front.width,
+        (p) =>
+          p.action === 'stroke' && p.color === CASING && p.width === RIBBON_ENGRAVED.front.casing,
       ),
     ).toBe(false);
+    expect(going.some((p) => p.action === 'fill' && p.color === YOU && !p.hatch)).toBe(true);
     view.destroy();
     kit.destroy();
   });
 
-  it('ODb: a soft band runs along the ribbon on the way, not while it waits, nor with less motion', () => {
-    const { view, draw, ribbons, kit } = setup();
-    const sheen = (tick: number): boolean =>
-      paints(ribbons).some(
-        (p) => p.action === 'fill' && p.color === PAPER && p.alpha === RIBBON.sheen.alpha,
-      ) && tick > 0;
-    // The pass is 1.8 s: at 180 ticks the band is at the start, it is on the ribbon some time later.
-    const seen = [150, 153, 156, 159, 162, 165, 168, 171].some((tick) => {
-      draw([intent({})], [], tick);
-      return sheen(tick);
-    });
-    expect(seen).toBe(true);
-    draw([intent({})], [], 110);
-    expect(sheen(110)).toBe(false);
-    setReducedMotion(true);
-    try {
-      for (const tick of [150, 156, 162, 168]) {
-        draw([intent({})], [], tick);
-        expect(sheen(tick)).toBe(false);
-      }
-    } finally {
-      setReducedMotion(null);
-    }
-    view.destroy();
-    kit.destroy();
-  });
-
-  it('ODb: the tail of the opponent is a ring in a ring, the own tail a dot', () => {
+  it('the tail of the opponent is a ring in a ring, the own tail a dot', () => {
     const { view, draw, ribbons, kit } = setup();
     const circles = (g: unknown): number =>
       (
@@ -250,88 +216,35 @@ describe('IntentView', () => {
         .flatMap((i) => i.data.path.shapePath.shapePrimitives)
         .filter((p) => p.shape.type === 'circle').length;
     draw([intent({})], [], 140);
-    const theirs = circles(ribbons);
+    const enemy = circles(ribbons);
     draw([intent({ owner: 0, origin: home, target: via })], [], 140);
-    // Two rings (three instructions: one is filled and stroked) against one dot (two).
-    expect(theirs).toBe(3);
+    expect(enemy).toBe(3);
     expect(circles(ribbons)).toBe(2);
     view.destroy();
     kit.destroy();
   });
 
-  it('ODb: the ring round the target is dashed and open at the bottom; amber over my city, red elsewhere', () => {
-    const { view, draw, layers, kit } = setup();
-    const rings = layers.layer.intents.children[1];
-    draw([intent({ target: home })], [], 140);
-    const strokes = paints(rings).filter((p) => p.action === 'stroke');
-    // The casing and the ring, nothing else (no crosshair).
-    expect(strokes).toHaveLength(2);
-    expect(strokes.filter((p) => p.color === WARN)).toHaveLength(1);
-    expect(paints(rings).some((p) => p.color === YOU)).toBe(false);
-    // Open at the bottom: nothing is drawn straight below the centre of the target.
-    const at = nodePoint(map, home);
-    const box = rings?.getLocalBounds();
-    if (at === undefined || box === undefined) throw new Error('no ring');
-    const reach = 17 + RIBBON.ring.gap;
-    expect(box.width).toBeGreaterThan(2 * reach - 4);
-    expect(box.maxY).toBeLessThan(at.y + reach - 1);
-    draw([intent({ origin: home, target: far, owner: 1 })], [], 140);
-    expect(paints(rings).filter((p) => p.color === WARN)).toHaveLength(0);
-    expect(paints(rings).filter((p) => p.color === ENEMY)).toHaveLength(1);
-    view.destroy();
-    kit.destroy();
-  });
-
-  it('ODb: the ring pulses over my city, and holds still with less motion', () => {
-    const { view, draw, layers, kit } = setup();
-    const rings = layers.layer.intents.children[1];
-    const ringAlpha = (tick: number) => {
-      draw([intent({})], [], tick);
-      return paints(rings).filter((p) => p.action === 'stroke')[1]?.alpha;
-    };
-    // A period is 0.9 s: 9 ticks at 10 Hz; half a period apart it is at its two extremes.
-    expect(ringAlpha(144)).toBeCloseTo(RIBBON.ring.pulseLow);
-    expect(ringAlpha(148.5)).toBeCloseTo(1);
-    setReducedMotion(true);
-    try {
-      expect(ringAlpha(144)).toBe(1);
-      expect(ringAlpha(148.5)).toBe(1);
-    } finally {
-      setReducedMotion(null);
+  it('bulges toward the top of the screen whichever way the order goes', () => {
+    const { view, draw, ribbons, kit } = setup();
+    const wide = map.edges.find((e) => {
+      const p = nodePoint(map, e.a);
+      const q = nodePoint(map, e.b);
+      return p !== undefined && q !== undefined && Math.abs(p.x - q.x) > 60;
+    });
+    if (wide === undefined) throw new Error('a map with a wide road');
+    const from = nodePoint(map, wide.a);
+    const to = nodePoint(map, wide.b);
+    if (from === undefined || to === undefined) throw new Error('no points');
+    const midY = (from.y + to.y) / 2;
+    for (const [origin, target] of [
+      [wide.a, wide.b],
+      [wide.b, wide.a],
+    ] as const) {
+      draw([intent({ owner: 0, origin, target })]);
+      const box = ribbons?.getLocalBounds();
+      const centreY = (box?.y ?? 0) + (box?.height ?? 0) / 2;
+      expect(centreY).toBeLessThan(midY);
     }
-    view.destroy();
-    kit.destroy();
-  });
-
-  it('does not draw an ordinary order as a ribbon, only as a thin line', () => {
-    const { view, ribbons, layers, kit } = setup();
-    const group: GroupView = {
-      id: 'g',
-      units: 2,
-      charged: 2,
-      mode: 'attack',
-      location: { kind: 'node', node: home },
-      order: {
-        dest: via,
-        path: [via],
-        planned: false,
-        bonus: 0,
-        gathering: false,
-        plan: 0,
-        next_charge_tick: null,
-      },
-      defense_bonus: null,
-      defense_cap: null,
-    };
-    const spots = new Map([['g', nodePoint(map, home) ?? { x: 0, y: 0 }]]);
-    const frame = interpolateFrame(
-      { ...base, view: { ...base.view, intents: [], groups: [group] } },
-      null,
-      100,
-    );
-    view.update(frame, spots);
-    expect(ribbons?.getLocalBounds().width).toBe(0);
-    expect(layers.layer.groups.children[0]?.getLocalBounds().width).toBeGreaterThan(0);
     view.destroy();
     kit.destroy();
   });
@@ -350,86 +263,48 @@ describe('IntentView', () => {
   });
 });
 
-describe('IntentView: opaque arcs that pulse (#325)', () => {
-  const edge = map.edges[0];
-  if (edge === undefined) throw new Error('a map with a road');
-  const [a, b] = [edge.a, edge.b];
-
-  it('lays an opaque dark underlay under the tint, so the road does not show through', () => {
-    const { view, draw, ribbons, kit } = setup();
-    draw([intent({ owner: 0, origin: a, target: b })]);
-    const fills = paints(ribbons).filter((p) => p.action === 'fill');
-    const underlay = fills.find((p) => p.color === RIBBON.underlay.color);
-    expect(underlay?.alpha).toBeGreaterThanOrEqual(0.9);
-    // The cast shadow is under it, the underlay is under every tint.
-    expect(fills[0]).toMatchObject({ color: BG, alpha: RIBBON.shadow.alpha });
-    expect(fills[1]).toEqual(underlay);
-    // The enemy's arrow has it too.
-    draw([intent({ owner: 1, origin: a, target: b })]);
-    expect(paints(ribbons).some((p) => p.color === RIBBON.underlay.color && p.alpha >= 0.9)).toBe(
-      true,
-    );
+describe('IntentView: the target of an enemy order (Fine rings, under attack)', () => {
+  it('draws an arc round the target of an enemy intent, and nothing for an own one', () => {
+    const { view, draw, rings, kit } = setup();
+    draw([intent({ owner: 0, origin: home, target: via })]);
+    expect(rings?.getLocalBounds().width).toBe(0);
+    draw([intent({})]);
+    expect(rings?.getLocalBounds().width).toBeGreaterThan(5);
     view.destroy();
     kit.destroy();
   });
 
-  it('bulges toward the top of the screen whichever way the order goes', () => {
-    const { view, draw, ribbons, kit } = setup();
-    const wide = map.edges.find((e) => {
-      const p = nodePoint(map, e.a);
-      const q = nodePoint(map, e.b);
-      return p !== undefined && q !== undefined && Math.abs(p.x - q.x) > 60;
-    });
-    if (wide === undefined) throw new Error('a map with a wide road');
-    const from = nodePoint(map, wide.a);
-    const to = nodePoint(map, wide.b);
-    if (from === undefined || to === undefined) throw new Error('no points');
-    const midY = (from.y + to.y) / 2;
-    // The shadow-free middle of the ribbon: its bounds centre; the arc sits above the chord.
-    for (const [origin, target] of [
-      [wide.a, wide.b],
-      [wide.b, wide.a],
-    ] as const) {
-      draw([intent({ owner: 0, origin, target })]);
-      const box = ribbons?.getLocalBounds();
-      const centreY = (box?.y ?? 0) + (box?.height ?? 0) / 2;
-      expect(centreY).toBeLessThan(midY);
-    }
+  it('is amber with three chevrons marching in over my city, the enemy colour elsewhere', () => {
+    const { view, draw, rings, kit } = setup();
+    draw([intent({ target: home })], [], 140);
+    const mine = paints(rings);
+    expect(mine.some((p) => p.action === 'stroke' && p.color === WARN)).toBe(true);
+    const marching = mine.filter((p) => p.action === 'fill' && p.color === WARN);
+    expect(marching.length).toBeGreaterThan(0);
+    expect(marching.length).toBeLessThanOrEqual(RIBBON_ENGRAVED.march.count);
+    // An arc, not a ring: it does not go round the city.
+    const at = nodePoint(map, home);
+    const box = rings?.getLocalBounds();
+    if (at === undefined || box === undefined) throw new Error('no arc');
+    expect(box.width).toBeLessThan(2 * (17 + 7 + 8));
+    draw([intent({ origin: home, target: far, owner: 1 })], [], 140);
+    const other = paints(rings);
+    expect(other.some((p) => p.color === WARN)).toBe(false);
+    expect(other.some((p) => p.action === 'stroke' && p.color === ENEMY)).toBe(true);
     view.destroy();
     kit.destroy();
   });
 
-  it('pulses once when the delay ends: the own line swells, then settles', () => {
-    const { view, draw, ribbons, kit } = setup();
-    const line = lighten(YOU, RIBBON.outline.lighten);
-    const widthAt = (tick: number, created = 100): number => {
-      draw([intent({ owner: 0, origin: a, target: b, created_tick: created })], [], tick);
-      return paints(ribbons).find((p) => p.action === 'stroke' && p.color === line)?.width ?? NaN;
-    };
-    // The delay is 30 ticks: it ends at 130; the pulse is 8 ticks, its peak at 134.
-    expect(widthAt(120)).toBeCloseTo(RIBBON.outline.width);
-    expect(widthAt(134)).toBeCloseTo(RIBBON.outline.width + RIBBON.pulseWidth);
-    expect(widthAt(145)).toBeCloseTo(RIBBON.outline.width);
-    // It does not pulse again.
-    expect(widthAt(300)).toBeCloseTo(RIBBON.outline.width);
-    // A flash of paper over the ribbon at the peak, none after.
-    draw([intent({ owner: 0, origin: a, target: b, created_tick: 100 })], [], 134);
-    expect(
-      paints(ribbons).some((p) => p.action === 'fill' && p.color === PAPER && p.alpha > 0.4),
-    ).toBe(true);
-    view.destroy();
-    kit.destroy();
-  });
-
-  it('with less motion has no pulse', () => {
+  it('keeps the chevrons with less motion, standing', () => {
     setReducedMotion(true);
     try {
-      const { view, draw, ribbons, kit } = setup();
-      draw([intent({ owner: 0, origin: a, target: b, created_tick: 100 })], [], 134);
-      const line = paints(ribbons).find(
-        (p) => p.action === 'stroke' && p.color === lighten(YOU, RIBBON.outline.lighten),
-      );
-      expect(line?.width).toBeCloseTo(RIBBON.outline.width);
+      const { view, draw, rings, kit } = setup();
+      const count = (tick: number): number => {
+        draw([intent({})], [], tick);
+        return paints(rings).filter((p) => p.action === 'fill' && p.color === WARN).length;
+      };
+      expect(count(140)).toBe(RIBBON_ENGRAVED.march.count);
+      expect(count(147)).toBe(RIBBON_ENGRAVED.march.count);
       view.destroy();
       kit.destroy();
     } finally {
@@ -438,27 +313,35 @@ describe('IntentView: opaque arcs that pulse (#325)', () => {
   });
 });
 
-describe('IntentView, the bonus of an own plan at the head of its ribbon (DEC-29)', () => {
-  const own = intent({ owner: 0, origin: home, target: far });
-  const planned = (bonus: number, planned = true): GroupView => ({
-    id: 'g',
-    units: 2,
-    charged: 2,
-    mode: 'attack',
-    location: { kind: 'node', node: home },
-    order: {
-      dest: far,
-      path: [via, far],
-      planned,
-      bonus,
-      gathering: false,
-      plan: 0,
-      next_charge_tick: null,
-    },
-    defense_bonus: null,
-    defense_cap: null,
+describe('IntentView: the arrows of ordinary orders (Cased running)', () => {
+  it('draws an ordinary order as an arrow under the groups, not as a ribbon, with a ring round its target', () => {
+    const { view, ribbons, layers, kit } = setup();
+    const spots = new Map([['g', nodePoint(map, home) ?? { x: 0, y: 0 }]]);
+    const frame = interpolateFrame(
+      {
+        ...base,
+        view: { ...base.view, intents: [], groups: [group({ dest: via, path: [via] }, false)] },
+      },
+      null,
+      100,
+    );
+    view.update(frame, spots);
+    expect(ribbons?.getLocalBounds().width).toBe(0);
+    const arrows = layers.layer.groups.children[0];
+    expect(arrows?.getLocalBounds().width).toBeGreaterThan(0);
+    const all = paints(arrows);
+    // The paper casing, the dark casing, the own core, then the ring round the target.
+    expect(all.some((p) => p.action === 'stroke' && p.color === YOU)).toBe(true);
+    expect(all.some((p) => p.action === 'stroke' && p.color === CASING)).toBe(true);
+    expect(all.some((p) => p.action === 'fill' && p.color === YOU)).toBe(true);
+    view.destroy();
+    kit.destroy();
   });
-  /** The pills drawn: the text and whether it is a forecast or locked. */
+});
+
+describe('IntentView, the bonus of an own plan (DEC-29; Eased steps with slots)', () => {
+  const own = intent({ owner: 0, origin: home, target: far });
+  /** The pills drawn: the text and their kind. */
   function pills(layers: ReturnType<typeof createLayers>): { text: string; state: string }[] {
     const found: { text: string; state: string }[] = [];
     const visit = (node: Container): void => {
@@ -466,7 +349,7 @@ describe('IntentView, the bonus of an own plan at the head of its ribbon (DEC-29
       if (labelOf(node).startsWith('plan-bonus-pill:')) {
         const text = node.children.find((c): c is Text => c instanceof Text);
         found.push({
-          text: text?.text ?? '',
+          text: text?.visible === true ? text.text : '',
           state: labelOf(node).slice('plan-bonus-pill:'.length),
         });
       }
@@ -478,29 +361,27 @@ describe('IntentView, the bonus of an own plan at the head of its ribbon (DEC-29
 
   it('shows "+N" with the number of the server for an own planned order', () => {
     const { layers, draw, view } = setup();
-    draw([own], [planned(2)]);
-    expect(pills(layers).map((p) => p.text)).toEqual(['+2']);
-    // It follows the view: the forecast changes with the charged units.
-    draw([own], [planned(1)]);
+    draw([own], [group({ bonus: 2 })]);
+    expect(pills(layers)).toEqual([{ text: '+2', state: 'number' }]);
+    draw([own], [group({ bonus: 1 })]);
     expect(pills(layers).map((p) => p.text)).toEqual(['+1']);
     view.destroy();
   });
 
-  it('is a forecast while the delay runs and locked once it is over', () => {
+  it('shows a chevron slot per asked bonus of a gathering plan, solid as gathered', () => {
     const { layers, draw, view } = setup();
-    draw([own], [planned(2)], 100);
-    expect(pills(layers).map((p) => p.state)).toEqual(['forecast']);
-    // The delay is 30 ticks (setup): from the tick after it the group leaves.
-    draw([own], [planned(2)], 140);
-    expect(pills(layers).map((p) => p.state)).toEqual(['locked']);
+    draw([own], [group({ bonus: 1, gathering: true, plan: 3 })]);
+    expect(pills(layers)).toEqual([{ text: '', state: 'slots:1/3' }]);
+    draw([own], [group({ bonus: 0, gathering: true, plan: 2 })]);
+    expect(pills(layers)).toEqual([{ text: '', state: 'slots:0/2' }]);
     view.destroy();
   });
 
   it('shows nothing for a plan with no bonus, for an ordinary order, or without the group', () => {
     const { layers, draw, view } = setup();
-    draw([own], [planned(0)]);
+    draw([own], [group({ bonus: 0 })]);
     expect(pills(layers)).toEqual([]);
-    draw([own], [planned(2, false)]);
+    draw([own], [group({}, false)]);
     expect(pills(layers)).toEqual([]);
     draw([own], []);
     expect(pills(layers)).toEqual([]);
@@ -509,7 +390,7 @@ describe('IntentView, the bonus of an own plan at the head of its ribbon (DEC-29
 
   it('shows nothing at the ribbon of the opponent: its intent has no size and no bonus', () => {
     const { layers, draw, view } = setup();
-    draw([intent({ owner: 1, origin: far, target: home })], [planned(2)]);
+    draw([intent({ owner: 1, origin: far, target: home })], [group()]);
     expect(pills(layers)).toEqual([]);
     view.destroy();
   });
@@ -518,12 +399,41 @@ describe('IntentView, the bonus of an own plan at the head of its ribbon (DEC-29
     for (const scale of [0.6, 2]) {
       const { layers, draw, view } = setup();
       view.setCameraScale(scale);
-      draw([own], [planned(2)]);
+      draw([own], [group()]);
       const pill = layers.layer.intents.children
         .flatMap((c) => (c instanceof Container ? c.children : []))
         .find((c) => labelOf(c).startsWith('plan-bonus-pill:'));
       expect(pill?.scale.x).toBeCloseTo(1 / scale);
       view.destroy();
     }
+  });
+
+  it('eases each gathered bonus in after the server reported it, and flies the charge in', () => {
+    const { draw, view, ribbons, flights } = setup();
+    view.setWarehouseSlots(() => ({ x: 0, y: 0 }));
+    const gather = (bonus: number) => group({ bonus, gathering: true, plan: 3 });
+    const solid = (): number =>
+      spanX(
+        paints(ribbons)
+          .filter((p) => p.action === 'fill' && p.color === YOU && !p.hatch)
+          .flatMap((p) => p.points),
+      );
+    draw([own], [gather(0)], 100);
+    expect(solid()).toBe(0);
+    draw([own], [gather(1)], 101);
+    // Reported now: nothing filled yet, the charge leaves the warehouse.
+    expect(solid()).toBe(0);
+    expect((flights as Graphics).context.instructions.length).toBeGreaterThan(0);
+    draw([own], [gather(1)], 106);
+    const early = solid();
+    draw([own], [gather(1)], 115);
+    const done = solid();
+    expect(early).toBeGreaterThan(0);
+    expect(done).toBeGreaterThan(early);
+    // Landed: the flight is over, the fill holds.
+    expect((flights as Graphics).context.instructions).toHaveLength(0);
+    draw([own], [gather(1)], 130);
+    expect(solid()).toBeCloseTo(done);
+    view.destroy();
   });
 });

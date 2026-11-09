@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chevrons,
   dashAlong,
   delayLeft,
   delayProgress,
-  departPulse,
   CP_REJECT,
   ghostLook,
   ghostRejectMs,
@@ -20,12 +18,6 @@ import {
   bonusSpot,
   frontLine,
   ribbonHalfWidth,
-  ribbonSlice,
-  ringDashes,
-  ringOpacity,
-  sheenPhase,
-  sheenSpan,
-  signRim,
   tailStart,
 } from './intentLayout.ts';
 import { vpBadgeAt } from './cityLayout.ts';
@@ -66,7 +58,7 @@ describe('ribbonAxis', () => {
 describe('ribbonOutline', () => {
   const axis = ribbonAxis([A, B], 16, 20, 0);
 
-  it('has a 16 wide body, a 60% tail and a 38 x 30 head', () => {
+  it('has the body, the tail and the head of RIBBON (13.2 wide, an 82% tail, a 31 x 22 head)', () => {
     const ribbon = ribbonOutline(axis, RIBBON.body);
     expect(ribbon).not.toBeNull();
     if (ribbon === null) return;
@@ -75,18 +67,18 @@ describe('ribbonOutline', () => {
       const r = ribbon.outline[ribbon.outline.length - 1 - i];
       return Math.hypot((l?.x ?? 0) - (r?.x ?? 0), (l?.y ?? 0) - (r?.y ?? 0));
     };
-    expect(width(0)).toBeCloseTo(16 * RIBBON.tailRatio);
+    expect(width(0)).toBeCloseTo(RIBBON.body * RIBBON.tailRatio);
     const bodyEnd = ribbon.body.length - 1;
-    expect(width(bodyEnd)).toBeCloseTo(16);
+    expect(width(bodyEnd)).toBeCloseTo(RIBBON.body);
     // The head: two corners right after the body, then the tip.
     const head = ribbon.outline[bodyEnd + 1];
     const other = ribbon.outline[bodyEnd + 3];
     expect(
       Math.hypot((head?.x ?? 0) - (other?.x ?? 0), (head?.y ?? 0) - (other?.y ?? 0)),
-    ).toBeCloseTo(38);
+    ).toBeCloseTo(RIBBON.headWidth);
     const base = ribbon.body.at(-1);
     expect(Math.hypot(ribbon.tip.x - (base?.x ?? 0), ribbon.tip.y - (base?.y ?? 0))).toBeCloseTo(
-      30,
+      RIBBON.headLength,
       0,
     );
   });
@@ -136,43 +128,6 @@ describe('polylinePrefix and dashAlong', () => {
       .map(polylineLength)
       .reduce((a, b) => a + b, 0);
     expect(total).toBeCloseTo(40);
-  });
-});
-
-describe('chevrons', () => {
-  it('puts a chevron 22 from the start, then every 26, not within 10 of the end', () => {
-    const marks = chevrons([A, B], 26, 22, 10);
-    expect(marks.map((m) => m.at.x)).toEqual([22, 48, 74, 100, 126, 152, 178]);
-    expect(marks[0]?.dir).toEqual({ x: 1, y: 0 });
-  });
-});
-
-describe('chevrons along the whole path', () => {
-  const bent = [A, { x: 100, y: 0 }, { x: 100, y: 100 }];
-
-  it('go on over a corner as one flow, not restarted on the second leg', () => {
-    const marks = chevrons(bent, 26, 22, 10);
-    // 22, 48, 74 on the first leg, 100 is the corner, then 26, 52, 78 into the second.
-    expect(marks.map((m) => [m.at.x, m.at.y])).toEqual([
-      [22, 0],
-      [48, 0],
-      [74, 0],
-      [100, 0],
-      [100, 26],
-      [100, 52],
-      [100, 78],
-    ]);
-    expect(marks.at(-1)?.dir).toEqual({ x: 0, y: 1 });
-  });
-
-  it('run with the offset: the pattern slides along the whole path and wraps by one spacing', () => {
-    const slid = chevrons(bent, 26, 22, 10, 10);
-    expect(slid[0]?.at.x).toBe(32);
-    expect(slid.some((m) => m.at.x === 100 && m.at.y > 0)).toBe(true);
-    expect(chevrons(bent, 26, 22, 10, 26).map((m) => m.at)).toEqual(
-      chevrons(bent, 26, 22, 10, 0).map((m) => m.at),
-    );
-    expect(chevrons(bent, 26, 22, 10, -4)[0]?.at.x).toBe(44);
   });
 });
 
@@ -249,45 +204,6 @@ describe('ribbonFilled on a curve', () => {
   });
 });
 
-describe('departPulse', () => {
-  it('swells once, smoothly: nothing before the delay ends, nothing after the pulse, one peak', () => {
-    expect(departPulse(-1, 8, false)).toEqual({ swell: 0, lock: 0 });
-    const swells = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((since) => departPulse(since, 8, false).swell);
-    expect(swells[0]).toBe(0);
-    expect(swells[8]).toBe(0);
-    const peak = Math.max(...swells);
-    expect(peak).toBeCloseTo(1);
-    expect(swells.indexOf(peak)).toBe(4);
-    // Rises to the middle and falls after it: one swell, not a blink.
-    for (let i = 1; i <= 4; i++) expect(swells[i]).toBeGreaterThan(swells[i - 1] ?? 1);
-    for (let i = 5; i <= 8; i++) expect(swells[i]).toBeLessThan(swells[i - 1] ?? 0);
-    // No sudden jump between two steps of half a tick.
-    for (let since = 0; since < 8; since += 0.5) {
-      const step = Math.abs(
-        departPulse(since + 0.5, 8, false).swell - departPulse(since, 8, false).swell,
-      );
-      expect(step).toBeLessThan(0.5);
-    }
-  });
-
-  it('locks while it swells and stays locked afterwards', () => {
-    const locks = [0, 2, 4, 6, 8, 20, 400].map((since) => departPulse(since, 8, false).lock);
-    expect(locks[0]).toBe(0);
-    expect(locks[4]).toBe(1);
-    expect(locks[5]).toBe(1);
-    expect(locks[6]).toBe(1);
-    for (let i = 1; i < locks.length; i++) {
-      expect(locks[i]).toBeGreaterThanOrEqual(locks[i - 1] ?? 0);
-    }
-  });
-
-  it('with less motion has no swell and locks at once', () => {
-    expect(departPulse(0, 8, true)).toEqual({ swell: 0, lock: 1 });
-    expect(departPulse(3, 8, true)).toEqual({ swell: 0, lock: 1 });
-    expect(departPulse(-1, 8, true)).toEqual({ swell: 0, lock: 0 });
-  });
-});
-
 describe('orderBend', () => {
   it('keeps a pronounced path bend that already bulges up', () => {
     // Going right the arc bulges up with a negative bend, going left with a positive one.
@@ -360,13 +276,6 @@ describe('tailStart', () => {
   });
 });
 
-describe('signRim', () => {
-  it('is the outer edge of the capacity ring', () => {
-    expect(signRim(17)).toBeCloseTo(17 + 7 + 3.5);
-    expect(signRim(20)).toBeGreaterThan(signRim(14));
-  });
-});
-
 describe('axisPoint', () => {
   const line = ribbonAxis([A, B], 0, 0, 0);
 
@@ -384,14 +293,16 @@ describe('axisPoint', () => {
 });
 
 describe('ribbonHalfWidth', () => {
-  it('follows ribbonOutline: tail 60%, full body at the base of the head, the head down to the tip', () => {
+  it('follows ribbonOutline: the tail share, full body at the base of the head, the head down to the tip', () => {
     const total = 200;
-    expect(ribbonHalfWidth(total, 0, 16)).toBeCloseTo(8 * RIBBON.tailRatio);
-    expect(ribbonHalfWidth(total, total - 30 - 0.001, 16)).toBeCloseTo(8, 1);
-    expect(ribbonHalfWidth(total, total - 30 + 0.001, 16)).toBeCloseTo(19, 1);
-    expect(ribbonHalfWidth(total, total, 16)).toBeCloseTo(0);
+    const B = RIBBON.body;
+    const head = RIBBON.headLength;
+    expect(ribbonHalfWidth(total, 0, B)).toBeCloseTo((B / 2) * RIBBON.tailRatio);
+    expect(ribbonHalfWidth(total, total - head - 0.001, B)).toBeCloseTo(B / 2, 1);
+    expect(ribbonHalfWidth(total, total - head + 0.001, B)).toBeCloseTo(RIBBON.headWidth / 2, 1);
+    expect(ribbonHalfWidth(total, total, B)).toBeCloseTo(0);
     // A short ribbon has a smaller head.
-    expect(ribbonHalfWidth(40, 28, 16)).toBeLessThan(19);
+    expect(ribbonHalfWidth(30, 20, B)).toBeLessThan(RIBBON.headWidth / 2);
   });
 });
 
@@ -405,59 +316,17 @@ describe('frontLine', () => {
     const [p, q] = line;
     expect(p.x).toBeCloseTo(100);
     expect(q.x).toBeCloseTo(100);
-    // Half the body at the middle of a 200 long ribbon with a 30 head: 60% + 40% * 100 / 170.
-    const half = 8 * (RIBBON.tailRatio + (1 - RIBBON.tailRatio) * (100 / 170)) - RIBBON.front.inset;
+    // Half the body at the middle of a 200 long ribbon: the tail share widening to the base of the head.
+    const run = 200 - RIBBON.headLength;
+    const half =
+      (RIBBON.body / 2) * (RIBBON.tailRatio + (1 - RIBBON.tailRatio) * (100 / run)) -
+      RIBBON.front.inset;
     expect(Math.abs(p.y - q.y)).toBeCloseTo(2 * half);
   });
 
   it('is none at either end', () => {
     expect(frontLine(axis, 0, RIBBON.body)).toBeNull();
     expect(frontLine(axis, 1, RIBBON.body)).toBeNull();
-  });
-});
-
-describe('sheenSpan and sheenPhase', () => {
-  it('runs one band of 18 from before the tail to past the tip', () => {
-    // Before the tail the band is clipped to nothing.
-    expect(sheenSpan(200, 0)).toBeNull();
-    const early = sheenSpan(200, 30 / 230);
-    expect(early?.from).toBe(0);
-    expect((early?.to ?? 0) * 200).toBeCloseTo(18);
-    const mid = sheenSpan(200, 0.5);
-    expect(((mid?.to ?? 0) - (mid?.from ?? 0)) * 200).toBeCloseTo(18);
-    // Past the tip the band is cut at it.
-    const late = sheenSpan(200, 215 / 230);
-    expect(late?.to).toBe(1);
-    expect(((late?.to ?? 0) - (late?.from ?? 0)) * 200).toBeLessThan(18);
-    expect(sheenSpan(200, 1)).toBeNull();
-    expect(sheenSpan(0, 0.5)).toBeNull();
-  });
-
-  it('repeats every 1.8 s', () => {
-    const p = RIBBON.sheen.periodS;
-    expect(sheenPhase(0)).toBe(0);
-    expect(sheenPhase(p / 2)).toBeCloseTo(0.5);
-    expect(sheenPhase(p * 3 + p / 4)).toBeCloseTo(0.25);
-    expect(sheenPhase(-p / 4)).toBeCloseTo(0.75);
-  });
-});
-
-describe('ribbonSlice', () => {
-  const axis = ribbonAxis([A, B], 16, 0, 0);
-  const outline = ribbonOutline(axis, RIBBON.body)?.outline ?? [];
-
-  it('cuts the band of the ribbon between two shares of its axis', () => {
-    const band = ribbonSlice(outline, axis, 0.25, 0.5);
-    expect(band.length).toBeGreaterThanOrEqual(3);
-    expect(Math.min(...band.map((p) => p.x))).toBeCloseTo(16 + (200 - 16) * 0.25);
-    expect(Math.max(...band.map((p) => p.x))).toBeCloseTo(16 + (200 - 16) * 0.5);
-    // Inside the ribbon: never wider than its body.
-    expect(Math.max(...band.map((p) => Math.abs(p.y)))).toBeLessThanOrEqual(8 + 1e-6);
-  });
-
-  it('is empty for an empty band', () => {
-    expect(ribbonSlice(outline, axis, 0.5, 0.5)).toEqual([]);
-    expect(ribbonSlice(outline, axis, 0.6, 0.5)).toEqual([]);
   });
 });
 
@@ -470,7 +339,9 @@ describe('bonusSpot', () => {
     if (spot === null || on === null) throw new Error('no spot');
     // Going right with a negative bend: the outer side is up (negative y).
     expect(spot.y).toBeLessThan(on.at.y);
-    expect(Math.hypot(spot.x - on.at.x, spot.y - on.at.y)).toBeCloseTo(8 + RIBBON.bonusMargin + 10);
+    expect(Math.hypot(spot.x - on.at.x, spot.y - on.at.y)).toBeCloseTo(
+      RIBBON.body / 2 + RIBBON.bonusMargin + 10,
+    );
   });
 
   it('flips with the bend: an arrow going left bulges up with a positive bend, the pill goes up too', () => {
@@ -483,45 +354,6 @@ describe('bonusSpot', () => {
 
   it('is none without an axis', () => {
     expect(bonusSpot([], -0.45, RIBBON.body, 10)).toBeNull();
-  });
-});
-
-describe('the dashed ring round the target of an opponent order', () => {
-  const dashes = ringDashes({ x: 100, y: 50 }, 40);
-  const points = dashes.flat();
-
-  it('is dashed 5 / 4 and stays on the circle', () => {
-    expect(dashes.length).toBeGreaterThan(10);
-    for (const p of points) expect(Math.hypot(p.x - 100, p.y - 50)).toBeCloseTo(40, 0);
-    expect(polylineLength(dashes[0] ?? [])).toBeCloseTo(RIBBON.ring.dash, 0);
-  });
-
-  it('is open at the bottom, for the caption of the city', () => {
-    // Nothing within the opening straight under the centre.
-    const below = points.filter(
-      (p) => p.y > 50 && Math.abs(p.x - 100) < 40 * Math.sin(RIBBON.ring.open) - 1,
-    );
-    expect(below).toEqual([]);
-    // And it does go right round the other way: points above, left and right.
-    expect(points.some((p) => p.y < 50 - 39)).toBe(true);
-    expect(points.some((p) => p.x < 100 - 39)).toBe(true);
-    expect(points.some((p) => p.x > 100 + 39)).toBe(true);
-  });
-});
-
-describe('ringOpacity: the pulse of the ring over an own city', () => {
-  const { pulseS, pulseLow } = RIBBON.ring;
-
-  it('swells from the low value to 1 and back once every 0.9 s', () => {
-    expect(ringOpacity(0, false)).toBeCloseTo(pulseLow);
-    expect(ringOpacity(pulseS / 2, false)).toBeCloseTo(1);
-    expect(ringOpacity(pulseS, false)).toBeCloseTo(pulseLow);
-    expect(ringOpacity(-pulseS / 2, false)).toBeCloseTo(1);
-  });
-
-  it('holds still, fully opaque, with "less motion"', () => {
-    expect(ringOpacity(0, true)).toBe(1);
-    expect(ringOpacity(0.31, true)).toBe(1);
   });
 });
 
@@ -572,40 +404,5 @@ describe('ghostLook', () => {
       ghostLook('rejected', fadeFrom + GHOST_CP.fadeMs / 2, 1, false, CP_REJECT).alpha,
     ).toBeCloseTo(0.5);
     expect(ghostLook('rejected', GHOST_CP.rejectMs, 1, false, CP_REJECT).alpha).toBe(0);
-  });
-});
-
-describe('ribbonSlice on a strongly curved ribbon', () => {
-  // A short order with a big bend: the radius of the axis is well under 400.
-  const axis = ribbonAxis([A, { x: 160, y: 0 }], 16, 20, 0.3);
-  const outline = ribbonOutline(axis, RIBBON.body)?.outline ?? [];
-
-  it('keeps the running band visible at every phase of the pass', () => {
-    const total = polylineLength(axis);
-    for (let phase = 0.1; phase < 0.95; phase += 0.05) {
-      const span = sheenSpan(total, phase);
-      if (span === null) continue;
-      const band = ribbonSlice(outline, axis, span.from, span.to);
-      expect(band.length, `phase ${phase.toFixed(2)}`).toBeGreaterThanOrEqual(3);
-    }
-  });
-
-  it('stays inside the ribbon for every bend, short and long', () => {
-    for (const bend of [-0.3, -0.15, 0.15, 0.3]) {
-      for (const len of [90, 160, 400]) {
-        const ax = ribbonAxis([A, { x: len, y: 0 }], 16, 20, bend);
-        const out = ribbonOutline(ax, RIBBON.body)?.outline ?? [];
-        const total = polylineLength(ax);
-        for (let phase = 0.1; phase < 0.95; phase += 0.1) {
-          const span = sheenSpan(total, phase);
-          if (span === null) continue;
-          const band = ribbonSlice(out, ax, span.from, span.to);
-          expect(
-            band.length,
-            `bend ${String(bend)} len ${String(len)} phase ${phase.toFixed(1)}`,
-          ).toBeGreaterThanOrEqual(3);
-        }
-      }
-    }
   });
 });

@@ -169,6 +169,7 @@ export class MapScene {
     this.names = new NameView(map, this.layers, radiusOf, 1);
     this.entities = new EntityView(map, this.layers, me, 1, radiusOf, this.sprites);
     this.intents = new IntentView(map, this.layers, me, radiusOf);
+    this.intents.setWarehouseSlots((node, index) => this.cities.warehouseSlot(node, index));
     this.defense = new DefenseView(map, this.layers, me, this.sprites, radiusOf, (node) =>
       this.cities.hasBarracks(node),
     );
@@ -537,6 +538,10 @@ export class MapScene {
     this.defense.setLabelResolution(resolution);
     this.overlay.setLabelResolution(resolution);
     this.overlay.setCameraScale(camera.scale);
+    // The order arrows, ribbons and cues of #851: hairlines keep one device pixel.
+    this.overlay.setDeviceResolution(this.app.renderer.resolution);
+    this.intents.setDeviceResolution(this.app.renderer.resolution);
+    this.undo.setCamera(camera.scale, this.app.renderer.resolution);
     this.entities.setLabelResolution(resolution);
     this.alerts.setLabelResolution(resolution);
     this.supply.setLabelResolution(resolution);

@@ -1,8 +1,10 @@
+import { BOUNCE_HOME } from './style.ts';
 import { describe, expect, it } from 'vitest';
 import { expectDeclared, filledData, tracked } from '../net/eventFields.fixture.ts';
 import type { EventMsg, MapFile } from '../protocol.gen.ts';
 import {
-  bounceArrow,
+  homeChevronShape,
+  homeChevrons,
   bounceInfo,
   captureInfo,
   effectProgress,
@@ -49,11 +51,36 @@ describe('geometry', () => {
     expect(Math.hypot(star[2] ?? 0, star[3] ?? 0)).toBeCloseTo(4);
   });
 
-  it('points a bounce arrow towards the node the group came from', () => {
-    const arrow = bounceArrow({ x: 100, y: 0 }, { x: 0, y: 0 }, 40, 10);
-    expect(arrow?.to.x).toBeCloseTo(60);
-    expect(arrow?.head[0].x).toBeCloseTo(60);
-    expect(bounceArrow({ x: 5, y: 5 }, { x: 5, y: 5 }, 40, 10)).toBeNull();
+  it('runs three chevrons from a bounced group towards home, fainter one by one (Chevrons home)', () => {
+    const run = homeChevrons({ x: 100, y: 0 }, { x: 0, y: 0 }, 20, 0, 1000);
+    expect(run).toHaveLength(BOUNCE_HOME.count);
+    // Ahead of the helmet, towards home, the gap apart.
+    expect(run[0]?.at.x).toBeCloseTo(100 - 20 * 0.6 - BOUNCE_HOME.lead);
+    expect(run[1]?.at.x).toBeCloseTo((run[0]?.at.x ?? 0) - BOUNCE_HOME.gap);
+    expect(run.every((c) => c.dir.x === -1)).toBe(true);
+    expect(run[0]?.alpha).toBe(1);
+    expect(run[2]?.alpha).toBeCloseTo(1 - 2 * BOUNCE_HOME.dim);
+    // They run: a quarter of a gap later they stand a quarter gap on.
+    const later = homeChevrons(
+      { x: 100, y: 0 },
+      { x: 0, y: 0 },
+      20,
+      BOUNCE_HOME.gap / 4 / BOUNCE_HOME.speed,
+      1000,
+    );
+    expect(later[0]?.at.x).toBeCloseTo((run[0]?.at.x ?? 0) - BOUNCE_HOME.gap / 4);
+    // They fade in after the bounce, and none runs past home.
+    expect(homeChevrons({ x: 100, y: 0 }, { x: 0, y: 0 }, 20, 0, -200)[0]?.alpha).toBe(0);
+    expect(homeChevrons({ x: 30, y: 0 }, { x: 0, y: 0 }, 20, 0, 1000)).toHaveLength(1);
+    expect(homeChevrons({ x: 5, y: 5 }, { x: 5, y: 5 }, 20, 0, 1000)).toEqual([]);
+  });
+
+  it('points a home chevron along the way home', () => {
+    const [c] = homeChevrons({ x: 100, y: 0 }, { x: 0, y: 0 }, 20, 0, 1000);
+    if (c === undefined) throw new Error('no chevron');
+    const shape = homeChevronShape(c);
+    expect(shape[0]).toBeCloseTo(c.at.x - BOUNCE_HOME.tip);
+    expect(shape).toHaveLength(8);
   });
 });
 

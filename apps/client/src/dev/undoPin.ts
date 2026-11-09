@@ -1,7 +1,7 @@
 import type { MapInteraction, UndoMark } from '../render/interaction.ts';
 
-/** How old a pinned cue always is, ms: the arrow half way back, the ring closing in. */
-const PIN_AGE_MS = 120;
+/** How old a pinned cue always is, ms: the order mostly wound back, the ring winding (Rewind, #851). */
+const PIN_AGE_MS = 380;
 
 /**
  * `?undo=<what>` on the dev screen: the cue of `X` (#764) pinned to a frozen scene (a fixture scene

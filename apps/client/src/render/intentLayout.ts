@@ -6,7 +6,7 @@
  */
 import type { Point } from './camera.ts';
 import type { GhostStatus } from './interaction.ts';
-import { ringRadius, vpBadgeAt } from './cityLayout.ts';
+import { vpBadgeAt } from './cityLayout.ts';
 import { barracksAt } from './defenseLayout.ts';
 import { clipToConvex } from './regionLayout.ts';
 import {
@@ -15,7 +15,7 @@ import {
   GHOST_SHAKE_AMPLITUDE,
   GHOST_SHAKE_MS,
   RIBBON,
-  RING_SEGMENT,
+  RIBBON_ENGRAVED,
 } from './style.ts';
 
 function dist(a: Point, b: Point): number {
@@ -217,47 +217,6 @@ export function dashAlong(
   return out;
 }
 
-export interface Chevron {
-  at: Point;
-  /** Unit vector of the direction of the line. */
-  dir: Point;
-}
-
-/**
- * White chevrons along a thin order line, one flow over the WHOLE polyline (not restarted on every
- * leg): one every `spacing`, the first not before `first` from the start, none within `endMargin`
- * of the end. `offset` moves the whole pattern along the line (the running order); each chevron
- * points along the leg it stands on.
- */
-export function chevrons(
-  points: readonly Point[],
-  spacing: number,
-  first: number,
-  endMargin: number,
-  offset = 0,
-): Chevron[] {
-  const out: Chevron[] = [];
-  if (spacing <= 0) return out;
-  const total = polylineLength(points);
-  // The first mark `first` from the start, then every `spacing`; the pattern slides by `offset`.
-  let d = first + (((offset % spacing) + spacing) % spacing);
-  let start = 0;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1];
-    const b = points[i];
-    if (a === undefined || b === undefined) continue;
-    const len = dist(a, b);
-    if (len === 0) continue;
-    const dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
-    for (; d < start + len && d < total - endMargin; d += spacing) {
-      const into = d - start;
-      out.push({ at: { x: a.x + dir.x * into, y: a.y + dir.y * into }, dir });
-    }
-    start += len;
-  }
-  return out;
-}
-
 /**
  * How much one smooth curve from `from` to `to` must bend (share of the chord, positive: to the
  * side of the normal `(-dy, dx)`, as `ribbonAxis` bends) to roughly follow the waypoints `via` of the
@@ -348,11 +307,6 @@ export function tailStart(origin: Point, target: Point, radius: number): number 
   return gap;
 }
 
-/** The outer rim of a city sign: the outer edge of its capacity ring, from the centre. */
-export function signRim(radius: number): number {
-  return ringRadius(radius) + RING_SEGMENT.base / 2;
-}
-
 /** A point of a polyline at the distance `s` from its start, with the unit direction there. */
 export function axisPoint(axis: readonly Point[], s: number): { at: Point; dir: Point } | null {
   const first = axis[0];
@@ -412,56 +366,6 @@ export function frontLine(
 }
 
 /**
- * The band of light that runs along the ribbon after the departure: the stretch of the axis
- * `RIBBON.sheen.length` long whose head is at `phase` (0..1, repeated every pass) of the way from
- * before the tail to the tip, as shares of the axis length (clipped to 0..1). `null` when it is
- * off the ribbon.
- */
-export function sheenSpan(total: number, phase: number): { from: number; to: number } | null {
-  if (total <= 0) return null;
-  const start = phase * (total + 30) - 30;
-  const from = Math.max(0, start);
-  const to = Math.min(total, start + RIBBON.sheen.length);
-  return to > from ? { from: from / total, to: to / total } : null;
-}
-
-/** The phase (0..1) of the running band at `seconds`: one pass every `RIBBON.sheen.periodS`. */
-export function sheenPhase(seconds: number): number {
-  const period = RIBBON.sheen.periodS;
-  return (((seconds % period) + period) % period) / period;
-}
-
-/**
- * The part of a ribbon between the shares `from` and `to` (0..1) of its axis: its outline cut
- * across the axis at both shares. Empty if the band is empty. `body` is the ribbon width (the
- * cut lines reach just past the widest part, the head). They must not reach the centre of the
- * curve: there the two lines cross, the quad turns into a bow tie and the cut comes out empty.
- */
-export function ribbonSlice(
-  outline: readonly Point[],
-  axis: readonly Point[],
-  from: number,
-  to: number,
-  body: number = RIBBON.body,
-): Point[] {
-  if (to <= from || axis.length < 2) return [];
-  const total = polylineLength(axis);
-  const a = axisPoint(axis, total * from);
-  const b = axisPoint(axis, total * to);
-  if (a === null || b === null) return [];
-  // A quad across the axis from the front `a` to the front `b`, wider than the ribbon (the head is
-  // `headWidth` across, so this is twice its half) and short enough not to self-intersect.
-  const wide = RIBBON.headWidth * (body / RIBBON.body);
-  const quad = [
-    { x: a.at.x - a.dir.y * wide, y: a.at.y + a.dir.x * wide },
-    { x: b.at.x - b.dir.y * wide, y: b.at.y + b.dir.x * wide },
-    { x: b.at.x + b.dir.y * wide, y: b.at.y - b.dir.x * wide },
-    { x: a.at.x + a.dir.y * wide, y: a.at.y - a.dir.x * wide },
-  ];
-  return clipToConvex(outline, quad);
-}
-
-/**
  * Where the pill "^ +N" (the chevron of a bonus) sits: `RIBBON.bonusBack` before the end of the arc (not before
  * `RIBBON.bonusMin` from its start), moved off the arc to its outer side (the side it bulges to,
  * `sign(bend)` as `ribbonAxis` uses it) by half the body, `RIBBON.bonusMargin` and `halfPill`
@@ -479,53 +383,6 @@ export function bonusSpot(
   // The normal `(-dir.y, dir.x)` is the side `bend > 0` pushes the middle to.
   const out = (bend < 0 ? -1 : 1) * (body / 2 + RIBBON.bonusMargin + halfPill);
   return { x: p.at.x - p.dir.y * out, y: p.at.y + p.dir.x * out };
-}
-
-/**
- * The dashed ring round the target of the opponent's order, as dashes of points: the circle of
- * `radius` open at the bottom (`RIBBON.ring.open` each side of straight down), dashed 5 / 4.
- */
-export function ringDashes(centre: Point, radius: number): Point[][] {
-  const { open, dash, space } = RIBBON.ring;
-  const from = Math.PI / 2 + open;
-  const span = 2 * Math.PI - 2 * open;
-  const steps = Math.max(12, Math.ceil((span * radius) / 6));
-  const arc: Point[] = [];
-  for (let i = 0; i <= steps; i++) {
-    const a = from + (span * i) / steps;
-    arc.push({ x: centre.x + radius * Math.cos(a), y: centre.y + radius * Math.sin(a) });
-  }
-  return dashAlong(arc, dash, space, 0);
-}
-
-/** The opacity of the ring over an own city: it swells and fades every `RIBBON.ring.pulseS`; 1 with "less motion". */
-export function ringOpacity(seconds: number, reduced: boolean): number {
-  if (reduced) return 1;
-  const { pulseS, pulseLow } = RIBBON.ring;
-  const phase = (((seconds % pulseS) + pulseS) % pulseS) / pulseS;
-  return pulseLow + (1 - pulseLow) * (0.5 - 0.5 * Math.cos(2 * Math.PI * phase));
-}
-
-/** The pulse of a ribbon whose delay has just run out. */
-export interface DepartPulse {
-  /** 0..1..0 over the pulse: a smooth swell, 0 before it and after it. */
-  readonly swell: number;
-  /** 0 before the pulse, up to 1 at its end and 1 from then on: how locked the order is. */
-  readonly lock: number;
-}
-
-/**
- * One smooth pulse when the delay of a ribbon ends, instead of a blink: `swell` rises and falls
- * once over `ticks`, `lock` climbs to 1 meanwhile and stays (the contour stays stronger).
- * `since`: ticks after the end of the delay (negative before it). With `reduced` motion no swell,
- * only the locked state.
- */
-export function departPulse(since: number, ticks: number, reduced: boolean): DepartPulse {
-  if (since < 0) return { swell: 0, lock: 0 };
-  const phase = ticks <= 0 ? 1 : Math.min(1, since / ticks);
-  const lock = phase * phase * (3 - 2 * phase);
-  if (reduced || phase >= 1) return { swell: 0, lock: reduced ? 1 : lock };
-  return { swell: Math.sin(Math.PI * phase) ** 2, lock };
 }
 
 /** How much of the delay of a planned order has run: 0 at its creation, 1 once the group left. */
@@ -581,27 +438,68 @@ export function ghostLook(
   return { dx, alpha: base * (1 - fade), solid: false };
 }
 
+/** A ribbon laid out: its axis, outline, bend and body width. */
+export interface RibbonShape {
+  readonly axis: Point[];
+  readonly ribbon: Ribbon;
+  readonly bend: number;
+  readonly body: number;
+}
+
 /**
- * The outline of a rounded rectangle centred on the origin as a closed polyline (corners cut into
- * `steps` pieces): for a contour that is dashed with `dashAlong`.
+ * The ribbon of a scheduled order from `origin` to `target` (one arc that bulges up, following the
+ * waypoints `via` of the server's path when they bulge up too): the tail `startGap` from the centre
+ * of the start city, the tip `endGap` before the centre of the target. `null` when degenerate.
  */
-export function roundRectPoints(width: number, height: number, radius: number, steps = 4): Point[] {
-  const r = Math.min(radius, width / 2, height / 2);
-  const hw = width / 2;
-  const hh = height / 2;
-  const points: Point[] = [];
-  // Clockwise from the top left corner: the centres of the four corner arcs and where each starts.
-  const corners = [
-    { cx: -hw + r, cy: -hh + r, from: Math.PI },
-    { cx: hw - r, cy: -hh + r, from: -Math.PI / 2 },
-    { cx: hw - r, cy: hh - r, from: 0 },
-    { cx: -hw + r, cy: hh - r, from: Math.PI / 2 },
-  ];
-  for (const { cx, cy, from } of corners) {
-    for (let i = 0; i <= steps; i++) {
-      const angle = from + ((Math.PI / 2) * i) / steps;
-      points.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
-    }
+export function ribbonShape(
+  origin: Point,
+  target: Point,
+  via: readonly Point[],
+  startGap: number,
+  endGap: number,
+  cameraScale: number,
+): RibbonShape | null {
+  const bend = orderBend(
+    target.x - origin.x,
+    pathBend(origin, target, via, RIBBON.maxBend),
+    RIBBON.minBend,
+    RIBBON.arcBend,
+  );
+  const axis = ribbonAxis([origin, target], startGap, endGap, bend);
+  const body = ribbonBody(cameraScale);
+  const ribbon = ribbonOutline(axis, body);
+  return ribbon === null ? null : { axis, ribbon, bend, body };
+}
+
+/**
+ * The angle (radians, y down) from the tip of a ribbon `axis` back along the way it comes in: the
+ * side of the target the order arrives from. 0 for a degenerate axis.
+ */
+export function arrivalAngle(axis: readonly Point[]): number {
+  const tip = axis[axis.length - 1];
+  const before = axis[axis.length - 2];
+  if (tip === undefined || before === undefined) return 0;
+  return Math.atan2(before.y - tip.y, before.x - tip.x);
+}
+
+/**
+ * The chevrons marching in to a city under attack (Fine rings 'att'): for each, its distance from
+ * the centre (from `radius + march.from` in by `march.run`) and its opacity at `seconds`; evenly
+ * spread and still under `reduced` motion.
+ */
+export function marchIn(
+  radius: number,
+  seconds: number,
+  reduced: boolean,
+): { readonly d: number; readonly alpha: number }[] {
+  const { count, rate, from, run } = RIBBON_ENGRAVED.march;
+  const out: { d: number; alpha: number }[] = [];
+  for (let j = 0; j < count; j++) {
+    const phase = reduced ? (j + 0.5) / count : (((seconds * rate + j / count) % 1) + 1) % 1;
+    out.push({
+      d: radius + from - phase * run,
+      alpha: Math.max(0, Math.min(1, phase * 3, (1 - phase) * 3)),
+    });
   }
-  return points;
+  return out;
 }
