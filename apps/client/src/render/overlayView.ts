@@ -4,33 +4,35 @@ import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { badgeScale } from './alertLayout.ts';
 import { chevronHalfWidth, drawBonusChevron } from './bonusChevron.ts';
 import { etaPlace, secondsRight } from './etaLayout.ts';
-import { comet, cometPhase, routeSpans, type RouteSpan } from './etaRoute.ts';
 import hourglassUrl from './glyphs/hourglass.png';
 import type { Point } from './camera.ts';
 import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
-import { CP_REJECT, ghostLook } from './intentLayout.ts';
+import { CP_REJECT, ghostLook, ribbonShape, tailStart } from './intentLayout.ts';
+import { drawCasedArrow, pathLength, pointAlong, slicePath, trimPath } from './casedArrow.ts';
+import { hairFloor } from './engraving.ts';
+import { easeSettle } from '../theme/tokens.ts';
 import { reducedMotion } from './motion.ts';
 import type { MapLayers } from './layers.ts';
 import { helmetWidth } from './shapes.ts';
 import { helmetOutline } from '../units/helmet.ts';
-import { arrowGeometry, dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
+import { dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
 import { ringRadius } from './cityLayout.ts';
 import {
-  ARROW_HEAD,
   BONUS_MARK,
   ETA_FONT_SIZE,
   ETA_MARK,
-  ETA_ROUTE,
-  ARROW_OUTLINE,
   BG,
   CAPITAL_RADIUS,
+  CASED,
+  DARK_PLATE,
+  ENEMY,
   GHOST_CP,
   HELMET_FRAME,
   ORDER_GHOST_ALPHA,
-  ORDER_GHOST_DASH,
-  ORDER_GHOST_GAP,
-  ORDER_GHOST_WIDTH,
   NODE_RADIUS,
+  PATH_SHADOW,
+  REFUSED,
+  RIBBON_ENGRAVED,
   PICK_BAND,
   PAPER,
   YOU,
@@ -190,13 +192,20 @@ export class OverlayView {
   private readonly etaDisc = new Graphics();
   private readonly etaGlyph = new Sprite();
   private readonly etaText: Text;
-  /** The comet of the route (H10, #627): redrawn every frame while the route is shown. */
-  private readonly comet = new Graphics({ label: 'order-comet' });
-  /** The roads of the hovered route, rim to rim (empty: no route). */
-  private spans: RouteSpan[] = [];
-  /** The still comet is drawn for these spans (under "less motion" it is not redrawn per frame). */
-  private cometStill: RouteSpan[] | null = null;
-  private cometDrawn = false;
+  /**
+   * The path on hover (Cased running, hollow, 54i, #851): the shadow of the order a click would
+   * make, along the server's route (`ReachNode.path`); redrawn every frame while shown (the burin
+   * points run).
+   */
+  private readonly path = new Graphics({ label: 'order-path' });
+  /** The route shown (nodes joined), its points from ring to ring, and when it was first shown (ms). */
+  private pathKey = '';
+  private pathPoints: Point[] = [];
+  private pathSince = 0;
+  private pathDrawn = false;
+  /** Whether ghosts were drawn last frame (they are cleared once when the last one goes). */
+  private ghostsDrawn = false;
+  private deviceResolution = 1;
   private destroyed = false;
   private readonly etaStyle = new TextStyle({
     fontFamily: 'system-ui, sans-serif',
@@ -282,7 +291,7 @@ export class OverlayView {
     layers.layer.intents.addChild(
       this.band,
       this.lines,
-      this.comet,
+      this.path,
       this.ring,
       this.hoverFrame,
       this.frame,
@@ -310,9 +319,9 @@ export class OverlayView {
     }
     this.placeEta(next);
     this.placeBonus(next);
-    this.drawComet(now);
-    // A rejected ghost shakes and fades with the clock; the others only when the overlay changes.
-    if (changed || next.ghosts.some((g) => g.status === 'rejected')) this.drawGhosts(next, now);
+    this.drawPath(now);
+    // Ghosts run their burin points, shake and fade with the clock: redrawn every frame while any.
+    if (next.ghosts.length > 0 || this.ghostsDrawn) this.drawGhosts(next, now);
     const selected = next.selection;
     const at = selected?.kind === 'group' ? groupSpot(selected.id) : undefined;
     this.frame.visible = at !== undefined;
@@ -351,6 +360,16 @@ export class OverlayView {
   /** Camera scale (CSS px per world unit): the number keeps its size on screen. */
   setCameraScale(scale: number): void {
     this.cameraScale = scale;
+  }
+
+  /** The device pixel ratio: the hairlines of the arrows keep one device pixel. */
+  setDeviceResolution(resolution: number): void {
+    this.deviceResolution = resolution;
+  }
+
+  /** One device pixel in world units now. */
+  private hair(): number {
+    return hairFloor(this.cameraScale, this.deviceResolution);
   }
 
   /**
@@ -451,38 +470,48 @@ export class OverlayView {
   }
 
   /**
-   * The comet of the hovered route (H10, #627): every frame while it runs, once for the still
-   * frame of "less motion". Flat strokes in one small Graphics, no filter.
+   * The path on hover (54i): the hollow Cased arrow along the server's route from the ring of the
+   * group's city to the ring of the target, drawn out over `PATH_SHADOW.growMs` when the route
+   * changes, its burin points running; "less motion" draws it whole and still.
    */
-  private drawComet(now: number): void {
-    if (this.spans.length === 0) {
-      if (this.cometDrawn) this.comet.clear();
-      this.cometDrawn = false;
-      this.cometStill = null;
+  private drawPath(now: number): void {
+    const g = this.path;
+    if (this.pathPoints.length < 2) {
+      if (this.pathDrawn) g.clear();
+      this.pathDrawn = false;
       return;
     }
-    const phase = cometPhase(now, reducedMotion());
-    if (phase === null && this.cometStill === this.spans) return;
-    this.cometStill = phase === null ? this.spans : null;
-    const g = this.comet;
-    const { width } = ETA_ROUTE.comet;
-    const shape = comet(this.spans, phase);
+    const reduced = reducedMotion();
+    if (Number.isNaN(this.pathSince)) this.pathSince = now;
+    const grow = reduced ? 1 : easeSettle((now - this.pathSince) / PATH_SHADOW.growMs);
+    const points = slicePath(this.pathPoints, 0, pathLength(this.pathPoints) * grow);
     g.clear();
-    this.cometDrawn = true;
-    const casing = ETA_ROUTE.casing;
-    for (const piece of shape.pieces) {
-      for (const [a, b] of piece.segments) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    drawCasedArrow(g, points, {
+      color: YOU,
+      ghost: true,
+      seconds: reduced ? 0 : now / 1000,
+      hair: this.hair(),
+      zoom: this.cameraScale,
+    });
+    this.pathDrawn = true;
+  }
+
+  /** The polyline of `route` (nodes) from the ring of its first city to the ring of its last. */
+  private routePoints(route: readonly number[]): Point[] {
+    const points: Point[] = [];
+    for (const id of route) {
+      const at = nodePoint(this.map, id);
+      if (at === undefined) return [];
+      points.push(at);
     }
-    if (shape.pieces.length > 0) {
-      g.stroke({ width: width + casing.extra, color: BG, alpha: casing.alpha, cap: 'round' });
-    }
-    for (const piece of shape.pieces) {
-      for (const [a, b] of piece.segments) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-      g.stroke({ width, color: PAPER, alpha: piece.alpha, cap: 'round' });
-    }
-    if (shape.head !== null) {
-      g.circle(shape.head.x, shape.head.y, width / 2 + 1.5).fill({ color: PAPER });
-    }
+    const first = route[0];
+    const last = route[route.length - 1];
+    if (first === undefined || last === undefined || points.length < 2) return [];
+    return trimPath(
+      points,
+      ringRadius(this.radius(first)) + CASED.startGap,
+      ringRadius(this.radius(last)) + CASED.endGap,
+    );
   }
 
   destroy(): void {
@@ -493,7 +522,7 @@ export class OverlayView {
     this.bonus.destroy({ children: true });
     this.bonusStyle.destroy();
     this.bonusTimeStyle.destroy();
-    this.comet.destroy();
+    this.path.destroy();
     this.etaStyle.destroy();
     this.band.destroy();
     this.lines.destroy();
@@ -579,48 +608,15 @@ export class OverlayView {
     this.drawCandidates(this.band, state.candidates);
     const g = this.lines;
     g.clear();
-    // The dotted line of an ordinary order is gone (the arrow of the order is its picture); only a
-    // planned order shows where its ribbon will go.
-    const preview = state.preview !== null && state.preview.planned ? state.preview : null;
-    this.spans = state.eta === null ? [] : this.routeOf(state.eta.path);
-    this.drawRoute(g, this.spans);
-    if (preview !== null) {
-      // The ghost of the planned order (#793): the look of a sent order's arrow, along the
-      // server's route; the controller gives a preview only for a target `reach` lists.
-      this.drawGhost(
-        g,
-        { from: preview.from, dest: preview.to, planned: true, path: preview.path },
-        0,
-      );
+    // The path on hover (54i) is the shadow of the order a click would make, ordinary or planned
+    // (#793): the server's route to the hovered target (`ReachNode.path`), drawn by `drawPath`.
+    const route = state.eta?.path ?? [];
+    const key = route.join('>');
+    if (key !== this.pathKey) {
+      this.pathKey = key;
+      this.pathPoints = this.routePoints(route);
+      this.pathSince = Number.NaN;
     }
-  }
-
-  /** The roads of `route` (nodes) from rim to rim, as the comet runs them. */
-  private routeOf(route: readonly number[]): RouteSpan[] {
-    const points: Point[] = [];
-    const rims: number[] = [];
-    for (const id of route) {
-      const at = nodePoint(this.map, id);
-      if (at === undefined) return [];
-      points.push(at);
-      rims.push(this.radius(id) + ETA_ROUTE.rimGap);
-    }
-    return routeSpans(points, rims);
-  }
-
-  /** The route the travel time is for: a faint thin line on each of its roads, rim to rim (H10). */
-  private drawRoute(g: Graphics, spans: readonly RouteSpan[]): void {
-    if (spans.length === 0) return;
-    const { line, casing } = ETA_ROUTE;
-    for (const span of spans) g.moveTo(span.a.x, span.a.y).lineTo(span.b.x, span.b.y);
-    g.stroke({ width: line.width + casing.extra, color: BG, alpha: casing.alpha, cap: 'round' });
-    for (const span of spans) g.moveTo(span.a.x, span.a.y).lineTo(span.b.x, span.b.y);
-    g.stroke({
-      width: line.width,
-      color: PAPER,
-      alpha: line.alpha,
-      cap: 'round',
-    });
   }
 
   /** The band is drawn on the layer that is visible in the current view (see `band`). */
@@ -660,91 +656,91 @@ export class OverlayView {
     return this.radiusOf(node);
   }
 
+  /**
+   * The ghosts of sent orders (54h): an ordinary one is the hollow Cased arrow along the server's
+   * route until the snapshot shows the order (its arrow is then the picture), a planned one the
+   * outline of its ribbon; a refused one shakes and fades, a refusal for CP is the red arrow, crossed.
+   */
   private drawGhosts(state: OverlayState, now: number): void {
     this.ghosts.clear();
-    // Only a rejected order leaves a trace (it shakes and fades, U6): an accepted or unanswered one
-    // draws nothing, the order line or the ribbon of the snapshot is its picture.
-    for (const ghost of state.ghosts) {
-      if (ghost.status === 'rejected') this.drawGhost(this.ghosts, ghost, now);
-    }
+    for (const ghost of state.ghosts) this.drawGhost(this.ghosts, ghost, now);
+    this.ghostsDrawn = state.ghosts.length > 0;
   }
 
-  /**
-   * The arrow of a rejected order, shaking and fading (U6): along the server's path if it sent
-   * one, else straight to the destination.
-   */
   private drawGhost(g: Graphics, ghost: GhostArrow, now: number): void {
     const status = ghost.status ?? 'pending';
-    // The cut-off arrow (#762): a move the CP did not pay for, bolder, red, crossed out, longer.
+    // The cut-off arrow (#762): a move the CP did not pay for, red and crossed out, longer.
     const cut = status === 'rejected' && ghost.rejectCode === CP_REJECT;
-    const base = cut ? GHOST_CP.alpha : status === 'accepted' ? 1 : ORDER_GHOST_ALPHA;
+    const base = cut ? GHOST_CP.alpha : status === 'rejected' ? REFUSED.alpha : ORDER_GHOST_ALPHA;
+    const reduced = reducedMotion();
     const look = ghostLook(
       status,
       ghost.rejectedAt == null ? 0 : now - ghost.rejectedAt,
       base,
-      reducedMotion(),
+      reduced,
       ghost.rejectCode ?? null,
     );
     if (look.alpha <= 0) return;
-    // The server's path starts at the group's node; the unanswered arrow goes straight to `dest`.
-    const nodes = ghost.path ?? [ghost.from, ghost.dest];
-    const points = nodes
-      .map((id) => nodePoint(this.map, id))
-      .filter((p): p is Point => p !== undefined)
-      .map((p) => ({ x: p.x + look.dx, y: p.y }));
-    const color = cut ? GHOST_CP.color : YOU;
-    const width = cut ? GHOST_CP.width : ORDER_GHOST_WIDTH;
-    const last = points.at(-1);
-    const before = points.at(-2);
-    if (last === undefined || before === undefined) return;
-    const head = arrowGeometry(
-      before,
-      last,
-      0,
-      this.radiusOf(nodes.at(-1) ?? 0) + 2,
-      ARROW_HEAD.length,
-      ARROW_HEAD.width,
-    );
-    const fade = Math.min(1, look.alpha / base);
-    const outline = cut ? { ...ARROW_OUTLINE, width: ARROW_OUTLINE.width + 2 } : ARROW_OUTLINE;
-    for (const pass of [
-      { ...outline, alpha: outline.alpha * fade },
-      { width, color, alpha: look.alpha },
-    ]) {
-      for (let i = 1; i < points.length; i++) {
-        const a = points[i - 1];
-        const b = i === points.length - 1 && head !== null ? head.end : points[i];
-        if (a === undefined || b === undefined) continue;
-        if (look.solid) {
-          g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-          continue;
-        }
-        for (const [s, e] of dashSegments(a, b, ORDER_GHOST_DASH, ORDER_GHOST_GAP)) {
-          g.moveTo(s.x, s.y).lineTo(e.x, e.y);
-        }
-      }
-      g.stroke({ width: pass.width, color: pass.color, alpha: pass.alpha, cap: 'round' });
-      if (head !== null) {
-        g.poly([head.head[0], head.head[1], head.head[2]]).fill({
-          color: pass.color,
-          alpha: pass.alpha,
-        });
-      }
+    const route = ghost.path ?? [ghost.from, ghost.dest];
+    if (ghost.planned && status !== 'rejected') {
+      this.drawRibbonGhost(g, ghost.from, ghost.dest, route, look.alpha);
+      return;
     }
-    if (cut) this.drawCross(g, before, head?.end ?? last, look.alpha);
+    const points = this.routePoints(route).map((p) => ({ x: p.x + look.dx, y: p.y }));
+    if (points.length < 2) return;
+    drawCasedArrow(g, points, {
+      color: cut ? ENEMY : YOU,
+      ghost: !cut,
+      alpha: look.alpha,
+      seconds: reduced || status === 'rejected' ? null : now / 1000,
+      hair: this.hair(),
+      zoom: this.cameraScale,
+    });
+    if (cut) this.drawCross(g, points, look.alpha);
   }
 
-  /** The cross of the cut-off arrow, on the middle of its last road: a dark halo, then white. */
-  private drawCross(g: Graphics, a: Point, b: Point, alpha: number): void {
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const r = GHOST_CP.cross;
-    const bars = (): void => {
-      g.moveTo(mid.x - r, mid.y - r).lineTo(mid.x + r, mid.y + r);
-      g.moveTo(mid.x - r, mid.y + r).lineTo(mid.x + r, mid.y - r);
-    };
-    bars();
-    g.stroke({ width: GHOST_CP.crossWidth + 3, color: BG, alpha: 0.9 * alpha, cap: 'round' });
-    bars();
-    g.stroke({ width: GHOST_CP.crossWidth, color: PAPER, alpha, cap: 'round' });
+  /** The ghost of a planned order before the snapshot shows its ribbon: the outline alone. */
+  private drawRibbonGhost(
+    g: Graphics,
+    from: number,
+    dest: number,
+    route: readonly number[],
+    alpha: number,
+  ): void {
+    const origin = nodePoint(this.map, from);
+    const target = nodePoint(this.map, dest);
+    if (origin === undefined || target === undefined) return;
+    const via = route
+      .filter((id) => id !== from && id !== dest)
+      .map((id) => nodePoint(this.map, id))
+      .filter((p): p is Point => p !== undefined);
+    const shape = ribbonShape(
+      origin,
+      target,
+      via,
+      tailStart(origin, target, this.radius(from)),
+      ringRadius(this.radius(dest)) + CASED.endGap,
+      this.cameraScale,
+    );
+    if (shape === null) return;
+    const poly = shape.ribbon.outline.flatMap((p) => [p.x, p.y]);
+    const G = RIBBON_ENGRAVED.ghost;
+    g.poly(poly).fill({ color: YOU, alpha: G.fill * alpha });
+    g.poly(poly).stroke({ width: G.casing, color: CASING, alpha, join: 'round' });
+    g.poly(poly).stroke({ width: Math.max(G.ink, this.hair()), color: INK, alpha, join: 'round' });
+  }
+
+  /** The cross of a refusal for CP: a dark lozenge with an ink X, `REFUSED.at` along the arrow. */
+  private drawCross(g: Graphics, points: readonly Point[], alpha: number): void {
+    const { at } = pointAlong(points, pathLength(points) * REFUSED.at);
+    const h = REFUSED.half * Math.SQRT2;
+    const lozenge = [at.x, at.y - h, at.x + h, at.y, at.x, at.y + h, at.x - h, at.y];
+    g.poly(lozenge)
+      .fill({ color: DARK_PLATE, alpha })
+      .stroke({ width: Math.max(REFUSED.ink, this.hair()), color: INK, alpha, join: 'miter' });
+    const r = REFUSED.cross;
+    g.moveTo(at.x - r, at.y - r).lineTo(at.x + r, at.y + r);
+    g.moveTo(at.x + r, at.y - r).lineTo(at.x - r, at.y + r);
+    g.stroke({ width: REFUSED.crossWidth, color: INK, alpha, cap: 'round' });
   }
 }

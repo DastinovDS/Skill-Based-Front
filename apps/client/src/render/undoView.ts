@@ -1,48 +1,58 @@
 import { Graphics } from 'pixi.js';
 import type { MapFile } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
-import { dashAlong } from './intentLayout.ts';
+import { ringRadius } from './cityLayout.ts';
+import {
+  barbHead,
+  drawCasedArrow,
+  pathLength,
+  pointAlong,
+  slicePath,
+  trimPath,
+} from './casedArrow.ts';
+import { hairFloor } from './engraving.ts';
 import type { UndoMark } from './interaction.ts';
 import type { MapLayers } from './layers.ts';
-import { arrowGeometry, nodePoint, type TokenSpot } from './layout.ts';
+import { nodePoint, type TokenSpot } from './layout.ts';
 import { reducedMotion } from './motion.ts';
-import { ARROW_HEAD, BG, ORDER_GHOST_DASH, ORDER_GHOST_GAP, PAPER, UNDO_CUE } from './style.ts';
-import {
-  circlePoints,
-  cutPolyline,
-  insetEnd,
-  undoGlyph,
-  undoLook,
-  type UndoLook,
-} from './undoLayout.ts';
-
-/** The resting ring round a city: this far outside its circle (world units). */
-const NODE_RING_GAP = 8;
+import { CASED, CASING, FINE_RING, INK, REWIND, YOU } from './style.ts';
+import { nothingLook, rewindLook, rewindRing } from './undoLayout.ts';
+import { helmetWidth } from './shapes.ts';
 
 /**
- * The cue of `X` on the map (#764): the player sees which action was undone, because a group turned
- * back that fails to retake its node dies (DEC-24, item G3). At the place of the undone action a
- * dashed ring closes in on the group or the city and a round-arrow sign stands beside it; the dashed
- * arrow of a cancelled order runs back into the group. All of it in paper with a dark casing: the
- * shape and the dashes tell it, not a colour. "Nothing to undo" is a dim crossed sign at the pointer.
+ * The cue of `X` on the map (#764) in the Engraved style, Rewind fixed (#851, ui-style 54b): the
+ * player sees which action was undone, because a group turned back that fails to retake its node
+ * dies (DEC-24, item G3). The cancelled order winds back into the group behind a double barb that
+ * points at the group, and a three-quarter ring winds round the group (or round the city that lost
+ * its recruit), its head leading the turn. "Nothing to undo" is a crossed quarter ring beside the
+ * pointer. Ink on a dark casing, the order in the own colour; the shapes tell it, not a colour.
  *
- * `update` runs every frame; the cue lives on the clock, a few shapes for about a second.
+ * `update` runs every frame; a cue lives on the clock, a few shapes for about a second.
  */
 export class UndoView {
   private readonly g = new Graphics();
+  private zoom = 1;
+  private resolution = 1;
 
   constructor(
     private readonly map: MapFile,
     layers: MapLayers,
     private readonly radiusOf: (node: number) => number,
+    private readonly color: number = YOU,
   ) {
     this.g.label = 'undo-cue';
     layers.layer.effects.addChild(this.g);
   }
 
+  /** The camera (css px per world unit) and the device pixel ratio: hairlines keep one device pixel. */
+  setCamera(zoom: number, resolution: number): void {
+    this.zoom = zoom;
+    this.resolution = resolution;
+  }
+
   /**
-   * `pointer`: where the pointer is on the map; `scale`: keeps the cue readable zoomed out, like
-   * the other effects.
+   * `pointer`: where the pointer is on the map; `scale`: keeps the sign of "nothing to undo"
+   * readable zoomed out, like the other effects.
    */
   update(
     marks: readonly UndoMark[],
@@ -54,28 +64,32 @@ export class UndoView {
     const g = this.g;
     g.clear();
     const reduced = reducedMotion();
+    const hair = hairFloor(this.zoom, this.resolution);
     for (const mark of marks) {
-      const look = undoLook(now - mark.at, reduced);
-      if (look === null) continue;
       if (mark.group === null && mark.node === null) {
-        const off = UNDO_CUE.emptyOffset * scale;
-        const at = { x: pointer.x + off, y: pointer.y - off };
-        this.drawSign(at, scale, look.alpha * UNDO_CUE.emptyAlpha, true);
+        const look = nothingLook(now - mark.at, reduced);
+        if (look === null) continue;
+        const off = REWIND.empty.offset;
+        this.drawNothing(
+          { x: pointer.x + (off.x + look.dx) * scale, y: pointer.y + off.y * scale },
+          scale,
+          look.alpha,
+          hair,
+        );
         continue;
       }
+      const look = rewindLook(now - mark.at, reduced);
+      if (look === null) continue;
       const spot = mark.group === null ? undefined : spotOf(mark.group);
       const at = spot ?? (mark.node === null ? undefined : nodePoint(this.map, mark.node));
       if (at === undefined) continue;
+      // The ring hugs the helmet of a group (the mockup's `w * 0.62 + 5`), or the Fine ring of a city.
       const radius =
         spot !== undefined
-          ? // The resting ring round a group token: its size step clears the helmet and its strap (#784).
-            spot.side * spot.scale
-          : this.radiusOf(mark.node ?? 0) + NODE_RING_GAP;
-      this.drawArrow(mark, at, look, scale);
-      this.drawRing(at, radius * look.ring, look.alpha, scale);
-      const corner = radius * Math.SQRT1_2;
-      const sign = (UNDO_CUE.sign + 2) * scale * Math.SQRT1_2;
-      this.drawSign({ x: at.x + corner + sign, y: at.y - corner - sign }, scale, look.alpha, false);
+          ? helmetWidth(spot.side, spot.inside === true) * spot.scale * 0.62 + REWIND.ring.gap
+          : ringRadius(this.radiusOf(mark.node ?? 0)) + FINE_RING.r1;
+      if (look.arrowAlpha > 0) this.drawArrow(mark, at, spot, look.arrow, look.arrowAlpha, hair);
+      if (look.ringAlpha > 0) this.drawRing(at, radius, look.ring, look.ringAlpha, hair);
     }
   }
 
@@ -83,84 +97,107 @@ export class UndoView {
     this.g.destroy();
   }
 
-  /** The way the order still had, from the group to its target, running back into the group. */
-  private drawArrow(mark: UndoMark, at: Point, look: UndoLook, scale: number): void {
+  /**
+   * The way the order still had, from the group to its target, winding back into the group: the
+   * Cased arrow without its head, cut to `share` of its length, and two barbs at its end turned
+   * towards the group.
+   */
+  private drawArrow(
+    mark: UndoMark,
+    at: Point,
+    spot: TokenSpot | undefined,
+    share: number,
+    alpha: number,
+    hair: number,
+  ): void {
     const ahead = mark.path[0] === mark.node ? mark.path.slice(1) : mark.path;
     const dest = ahead.at(-1);
     const nodes = ahead.map((id) => nodePoint(this.map, id));
     if (dest === undefined || nodes.some((p) => p === undefined)) return;
-    const whole = insetEnd([at, ...(nodes as Point[])], this.radiusOf(dest) + 2);
-    const points = cutPolyline(whole, look.arrow);
-    const last = points.at(-1);
-    const before = points.at(-2);
-    if (last === undefined || before === undefined) return;
-    const g = this.g;
-    const head = arrowGeometry(before, last, 0, 0, ARROW_HEAD.length, ARROW_HEAD.width);
-    const dashes = dashAlong(
-      head === null ? points : [...points.slice(0, -1), head.end],
-      ORDER_GHOST_DASH,
-      ORDER_GHOST_GAP,
-      0,
+    const lead =
+      spot === undefined ? 0 : helmetWidth(spot.side, spot.inside === true) * spot.scale * 0.45;
+    const whole = trimPath(
+      [at, ...(nodes as Point[])],
+      lead,
+      ringRadius(this.radiusOf(dest)) + CASED.endGap,
     );
-    for (const pass of [
-      { width: (UNDO_CUE.arrowWidth + 3) * scale, color: BG, alpha: 0.6 * look.alpha },
-      { width: UNDO_CUE.arrowWidth * scale, color: PAPER, alpha: look.alpha },
-    ]) {
-      this.trace(dashes);
-      g.stroke({ ...pass, cap: 'round' });
-    }
-    if (head !== null) {
-      g.poly([head.head[0], head.head[1], head.head[2]])
-        .fill({ color: PAPER, alpha: look.alpha })
-        .stroke({ width: 1.5 * scale, color: BG, alpha: 0.8 * look.alpha });
-    }
-  }
-
-  private drawRing(at: Point, radius: number, alpha: number, scale: number): void {
-    const dashes = dashAlong(
-      circlePoints(at, radius),
-      UNDO_CUE.ringDash * scale,
-      UNDO_CUE.ringGap * scale,
-      0,
-      true,
-    );
+    const length = pathLength(whole);
+    if (length <= 0) return;
+    const part = slicePath(whole, 0, Math.min(length, Math.max(REWIND.keep, length * share)));
+    if (part.length < 2) return;
     const g = this.g;
-    this.trace(dashes);
-    g.stroke({
-      width: (UNDO_CUE.ringWidth + 3) * scale,
-      color: BG,
-      alpha: 0.7 * alpha,
-      cap: 'round',
+    drawCasedArrow(g, part, {
+      color: this.color,
+      alpha,
+      noHead: true,
+      seconds: null,
+      hair,
+      zoom: this.zoom,
     });
-    this.trace(dashes);
-    g.stroke({ width: UNDO_CUE.ringWidth * scale, color: PAPER, alpha, cap: 'round' });
+    // The rewind sign: two solid barbs pointing back along the line, the first at its end.
+    const end = pointAlong(part, pathLength(part));
+    const B = REWIND.barb;
+    const back = { x: -end.dir.x, y: -end.dir.y };
+    for (const off of [B.gap, 0]) {
+      const tip = {
+        x: end.at.x - end.dir.x * (off + B.length),
+        y: end.at.y - end.dir.y * (off + B.length),
+      };
+      const head = barbHead(tip, back, B.length, B.width).flatMap((p) => [p.x, p.y]);
+      g.poly(head).stroke({ width: B.casing, color: CASING, alpha, join: 'round' });
+      g.poly(head).fill({ color: this.color, alpha });
+      g.poly(head).stroke({ width: Math.max(B.ink, hair), color: INK, alpha, join: 'round' });
+    }
   }
 
-  /** The round-arrow sign on a dark disc; `crossed`: there was nothing to undo. */
-  private drawSign(at: Point, scale: number, alpha: number, crossed: boolean): void {
+  /** The three-quarter ring winding round the group, its head leading the turn. */
+  private drawRing(at: Point, radius: number, share: number, alpha: number, hair: number): void {
+    const ring = rewindRing(at, radius, share);
+    if (ring === null) return;
     const g = this.g;
-    const radius = UNDO_CUE.sign * scale;
-    const { arc, head } = undoGlyph(at, radius * 0.55);
-    g.circle(at.x, at.y, radius)
-      .fill({ color: BG, alpha: 0.85 * alpha })
-      .stroke({ width: 1.5 * scale, color: PAPER, alpha });
-    this.trace([arc]);
-    g.stroke({ width: UNDO_CUE.signWidth * scale, color: PAPER, alpha, cap: 'round' });
-    g.poly([head[0], head[1], head[2]]).fill({ color: PAPER, alpha });
-    if (crossed) {
-      const r = radius * Math.SQRT1_2;
-      g.moveTo(at.x - r, at.y + r).lineTo(at.x + r, at.y - r);
-      g.stroke({ width: (UNDO_CUE.signWidth + 2) * scale, color: BG, alpha, cap: 'round' });
-      g.moveTo(at.x - r, at.y + r).lineTo(at.x + r, at.y - r);
-      g.stroke({ width: UNDO_CUE.signWidth * scale, color: PAPER, alpha, cap: 'round' });
-    }
+    const R = REWIND.ring;
+    const trace = (): void => {
+      const [first, ...rest] = ring.arc;
+      if (first === undefined) return;
+      g.moveTo(first.x, first.y);
+      for (const p of rest) g.lineTo(p.x, p.y);
+    };
+    trace();
+    g.stroke({ width: R.casing, color: CASING, alpha, cap: 'round' });
+    trace();
+    g.stroke({ width: Math.max(R.ink, hair), color: INK, alpha, cap: 'round' });
+    const H = REWIND.ringHead;
+    const head = barbHead(ring.tip, ring.dir, H.length, H.width).flatMap((p) => [p.x, p.y]);
+    g.poly(head).stroke({ width: H.casing, color: CASING, alpha, join: 'round' });
+    g.poly(head).fill({ color: INK, alpha });
   }
 
-  private trace(lines: readonly (readonly Point[])[]): void {
-    for (const [first, ...rest] of lines) {
-      if (first === undefined) continue;
-      this.g.moveTo(first.x, first.y);
-      for (const p of rest) this.g.lineTo(p.x, p.y);
-    }
+  /** "Nothing to undo": a quarter ring (the rewind, going nowhere) struck through. */
+  private drawNothing(at: Point, scale: number, alpha: number, hair: number): void {
+    const g = this.g;
+    const E = REWIND.empty;
+    const r = E.radius * scale;
+    const s = E.slash * scale;
+    const arc = (): void => {
+      const from = -Math.PI;
+      g.moveTo(at.x + r * Math.cos(from), at.y + r * Math.sin(from)).arc(
+        at.x,
+        at.y,
+        r,
+        from,
+        -Math.PI / 2,
+      );
+    };
+    const slash = (): void => {
+      g.moveTo(at.x - s, at.y + s).lineTo(at.x + s, at.y - s);
+    };
+    arc();
+    g.stroke({ width: E.casing * scale, color: CASING, alpha, cap: 'round' });
+    arc();
+    g.stroke({ width: Math.max(E.ink * scale, hair), color: INK, alpha, cap: 'round' });
+    slash();
+    g.stroke({ width: (E.casing - 0.6) * scale, color: CASING, alpha, cap: 'round' });
+    slash();
+    g.stroke({ width: Math.max((E.ink - 0.1) * scale, hair), color: INK, alpha, cap: 'round' });
   }
 }

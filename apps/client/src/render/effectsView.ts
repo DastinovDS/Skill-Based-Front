@@ -12,8 +12,9 @@ import { ShotView } from './shotView.ts';
 import type { EnemyAnchors } from './entityView.ts';
 import type { Point } from './camera.ts';
 import {
-  bounceArrow,
   bounceInfo,
+  homeChevronShape,
+  homeChevrons,
   captureInfo,
   FLAG_MS,
   effectProgress,
@@ -26,18 +27,11 @@ import type { BakedSprite, SpriteCache } from './bake.ts';
 import { helmetChipSpec } from './bakedShapes.ts';
 import { FightView } from './fightView.ts';
 import type { MapLayers } from './layers.ts';
-import { dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
+import { nodePoint, type TokenSpot } from './layout.ts';
+import { ringRadius } from './cityLayout.ts';
+import { helmetWidth } from './shapes.ts';
 import { reducedMotion } from './motion.ts';
-import {
-  BG,
-  BOUNCE_LENGTH,
-  BOUNCE_MS,
-  ORDER_GHOST_DASH,
-  ORDER_GHOST_GAP,
-  CAPTURE,
-  PAPER,
-  ownerColor,
-} from './style.ts';
+import { BOUNCE_HOME, CAPTURE, CASING, PAPER, WARN, ownerColor } from './style.ts';
 
 /** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`, DEC-32). */
 const DEFAULT_ROUND_TICKS = 20;
@@ -50,14 +44,13 @@ const CONTACT_REACH = 80;
 const near = (a: Point, b: Point): boolean => Math.hypot(a.x - b.x, a.y - b.y) <= CONTACT_REACH;
 /** Places of fights whose contacts are remembered (a long match has many roads): past it the memory starts over. */
 const MAX_REMEMBERED_PLACES = 64;
-/** Where a bounced group goes back to, found once when its own token is on the road. */
-type BounceArrow = NonNullable<ReturnType<typeof bounceArrow>> | null;
 
 /**
  * Effects of events on the map (ui-style 9.9, U8): the animation of fights (`FightView`: arena,
- * shots, losses, result), the short dashed arrow of an own group bounced back along its road, and
- * the light and the flag of a captured city (#819; its colour floods the area in `MapView`). With
- * "less motion" the shots, the light and the arrow are left out and the numbers do not rise. Events come from the server
+ * shots, losses, result), the amber chevrons running ahead of an own group bounced home (Chevrons
+ * home, #851), and the light and the flag of a captured city (#819; its colour floods the area in
+ * `MapView`). With "less motion" the shots and the light are left out, the chevrons stand and the
+ * numbers do not rise. Events come from the server
  * (`fight_round`, `fight_ended`, `fight_group`, `node_captured`); nothing is guessed: the enemy's
  * bounces are not sent, so none is drawn.
  *
@@ -76,13 +69,17 @@ export class EffectsView {
   private readonly leaverLayer = new Container({ label: 'fight-leavers', eventMode: 'none' });
   private readonly leavers: BakedSprite[] = [];
   private cameraScale = 1;
-  private readonly arrows = new Graphics();
+  /** The chevrons of bounces going home (Chevrons home, #851). */
+  private readonly arrows = new Graphics({ label: 'bounce-home' });
   /** The flag over a captured city, one drawing per owner, pooled. */
   private readonly flags: Graphics[] = [];
   private readonly flagContext: readonly [GraphicsContext, GraphicsContext];
   private captures: CaptureInfo[] = [];
   private bounces: BounceInfo[] = [];
-  private readonly arrowAt = new Map<string, BounceArrow>();
+  /** Where each bounced group goes home to (the node it left), found on its first frame on the road. */
+  private readonly homeOf = new Map<string, number>();
+  /** Bounces whose group got home (or was lost): their chevrons are over. */
+  private readonly homeDone = new Set<string>();
   private eventsSeen: readonly EventMsg[] | null = null;
   private eventCount = -1;
 
@@ -316,10 +313,13 @@ export class EffectsView {
       const bounce = bounceInfo(event);
       if (bounce !== null) this.bounces.push(bounce);
     }
-    // Forget arrows of bounces that left the event list.
+    // Forget the homes of bounces that left the event list.
     const live = new Set(this.bounces.map(bounceKey));
-    for (const key of this.arrowAt.keys()) {
-      if (!live.has(key)) this.arrowAt.delete(key);
+    for (const key of this.homeOf.keys()) {
+      if (!live.has(key)) this.homeOf.delete(key);
+    }
+    for (const key of this.homeDone) {
+      if (!live.has(key)) this.homeDone.delete(key);
     }
   }
 
@@ -389,8 +389,13 @@ export class EffectsView {
     return flag;
   }
 
-  // --- Bounce: an arrow back along the road ---------------------------------------------------
+  // --- Bounce: Chevrons home (#851, ui-style 54m) ------------------------------------------------
 
+  /**
+   * Three amber chevrons run ahead of an own bounced group to the node it came from, while it walks
+   * the road home (the server puts it back on its edge going to `from_node`, DEC-38 item 4). They
+   * end when it stands in a node again, is gone, or after `BOUNCE_HOME.maxMs`.
+   */
   private drawBounces(
     frame: RenderFrame,
     spots: ReadonlyMap<string, TokenSpot>,
@@ -399,50 +404,52 @@ export class EffectsView {
   ): void {
     const g = this.arrows;
     g.clear();
-    if (reduced) return;
+    if (tickHz <= 0) return;
+    const seconds = reduced ? 0 : frame.tick / tickHz;
     for (const bounce of this.bounces) {
-      const t = effectProgress(frame.tick - bounce.tick, BOUNCE_MS, tickHz);
-      if (t === null) continue;
       const key = bounceKey(bounce);
-      if (!this.arrowAt.has(key)) {
-        // Found once, on the first frame the group is on a road: the arrow stays where it began.
-        const arrow = this.findArrow(bounce, frame, spots);
-        if (arrow === undefined) continue;
-        this.arrowAt.set(key, arrow);
+      const ageMs = ((frame.tick - bounce.tick) * 1000) / tickHz;
+      if (ageMs < 0 || ageMs > BOUNCE_HOME.maxMs || this.homeDone.has(key)) continue;
+      const item = frame.groups.find((entry) => entry.group.id === bounce.group);
+      const spot = spots.get(bounce.group);
+      if (item === undefined || spot === undefined) {
+        if (this.homeOf.has(key)) this.homeDone.add(key);
+        continue;
       }
-      const arrow = this.arrowAt.get(key);
-      if (arrow === null || arrow === undefined) continue;
-      const color = ownerColor(this.me, this.me);
-      const alpha = 1 - t;
-      for (const [a, b] of dashSegments(arrow.from, arrow.end, ORDER_GHOST_DASH, ORDER_GHOST_GAP)) {
-        g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      const location = item.location;
+      if (location.kind !== 'edge') {
+        // Home (or not yet on the road in the frames behind the event).
+        if (this.homeOf.has(key)) this.homeDone.add(key);
+        continue;
       }
-      g.stroke({ width: 5.5, color: BG, alpha: 0.6 * alpha, cap: 'round' });
-      for (const [a, b] of dashSegments(arrow.from, arrow.end, ORDER_GHOST_DASH, ORDER_GHOST_GAP)) {
-        g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      let home = this.homeOf.get(key);
+      if (home === undefined) {
+        home = location.from_node;
+        this.homeOf.set(key, home);
       }
-      g.stroke({ width: 3, color, alpha, cap: 'round' });
-      const [tip, left, right] = arrow.head;
-      g.poly([tip.x, tip.y, left.x, left.y, right.x, right.y])
-        .fill({ color, alpha })
-        .stroke({ width: 1.5, color: BG, alpha });
+      const centre = nodePoint(this.map, home);
+      if (centre === undefined) continue;
+      // The way ends at the home ring.
+      const far = Math.hypot(centre.x - spot.x, centre.y - spot.y);
+      if (far === 0) continue;
+      const rim = Math.min(far, ringRadius(this.radiusOf(home)) + BOUNCE_HOME.endGap);
+      const end = {
+        x: centre.x - ((centre.x - spot.x) / far) * rim,
+        y: centre.y - ((centre.y - spot.y) / far) * rim,
+      };
+      const width = helmetWidth(spot.side, false) * spot.scale;
+      for (const chevron of homeChevrons(spot, end, width, seconds, ageMs, spot.scale)) {
+        if (chevron.alpha <= 0) continue;
+        g.poly(homeChevronShape(chevron, spot.scale))
+          .stroke({
+            width: BOUNCE_HOME.casing * spot.scale,
+            color: CASING,
+            alpha: chevron.alpha,
+            join: 'round',
+          })
+          .fill({ color: WARN, alpha: chevron.alpha });
+      }
     }
-  }
-
-  /** `undefined`: the group is not on a road (yet); `null`: no arrow can be made. */
-  private findArrow(
-    bounce: BounceInfo,
-    frame: RenderFrame,
-    spots: ReadonlyMap<string, TokenSpot>,
-  ): BounceArrow | undefined {
-    const item = frame.groups.find((entry) => entry.group.id === bounce.group);
-    const spot = spots.get(bounce.group);
-    const location = item?.location;
-    if (location?.kind !== 'edge' || spot === undefined) return undefined;
-    // The bounce goes back to the node the group left from.
-    const home = nodePoint(this.map, location.from_node);
-    if (home === undefined || edgeEnds(this.map, location.edge) === undefined) return null;
-    return bounceArrow(spot, home, BOUNCE_LENGTH, 10);
   }
 }
 

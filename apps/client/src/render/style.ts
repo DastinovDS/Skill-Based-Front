@@ -529,9 +529,6 @@ export const PACKET_TAIL_TRANSFER_EXTRA = 4;
 export const PACKET_FADE_MARGIN = 8;
 export const PACKET_MIN_SCALE = 0.3;
 
-export const ARROW_HEAD = { length: 14, width: 14 } as const;
-export const ARROW_OUTLINE = { width: 6, color: BG, alpha: 0.7 } as const;
-
 /** Red means only "opponent" (6), so a fight mark is paper white. */
 export const FIGHT_COLOR = PAPER;
 
@@ -604,26 +601,6 @@ export const BONUS_MARK = {
 export const SELECT_WIDTH = 3;
 /** An order sent and not yet seen in a snapshot: dashed, see-through. */
 export const ORDER_GHOST_ALPHA = 0.85;
-export const ORDER_GHOST_WIDTH = 4;
-export const ORDER_GHOST_DASH = 7;
-export const ORDER_GHOST_GAP = 6;
-/**
- * The route of the hovered order (#448; H10 "Comet", #627): a faint thin paper line on a dark casing
- * along its roads, rim to rim, and a comet that runs along it to the target every `periodMs`: a head dot and a tail
- * of `pieces` stretches of `piece` units, each fainter than the one before. The comet is the light
- * pulse toward the target; under "less motion" it stands still at `still` of the route. World units.
- */
-export const ETA_ROUTE = {
-  line: { width: 3, alpha: 0.35 },
-  /**
-   * A dark casing under the line and the comet: an own road has light lanes of its own, and the
-   * paper light must not melt into them (the mockup's roads are a single faint line).
-   */
-  casing: { extra: 3, alpha: 0.5 },
-  /** The line and the comet stop this far outside the city rims. */
-  rimGap: 2,
-  comet: { width: 6, piece: 12, pieces: 6, alpha: 0.85, periodMs: 1800, still: 0.7 },
-} as const;
 /**
  * Road pick (key U, DEC-16): the roads a click would upgrade carry a dashed band.
  */
@@ -658,8 +635,6 @@ export const BUILD_TIME_FONT_SIZE = 10;
 // --- Fight, bounce, capture (9.9) ----------------------------------------------------------------
 /** The loss numbers rise this many world units while they stay (`fightFx.ts`: how long). */
 export const NUMBERS_RISE = 12;
-export const BOUNCE_MS = 1000;
-export const BOUNCE_LENGTH = 40;
 /**
  * The capture of a node: "Fitted" (#819, round 2 of the mockup city-capture.html, the owner's choice of
  * 2026-11-08). The new owner's colour grows from the city in the shape of its own area and reaches the
@@ -724,46 +699,21 @@ export const FIGHT_GAP = 46;
 /** The hot white of a flash, of sparks and of the contact ring. */
 export const FLASH_COLOR = 0xffffff;
 
-// --- Planned orders: ODb "Low relief" (#431, #519, ui-style 33.3) ----------------------------------
-// A planned order is a ribbon from the start city to the target, the same for both sides: body 16,
-// tail 60%, head 38 x 30, the body and the head ONE closed outline. The arc always bulges toward the
-// top of the screen (it never runs over the caption of its start or its target). Layers, bottom to
-// top: a short soft cast shadow (the outline moved by `shadow`), the opaque dark underlay (the road
-// below does not show through), the tint, the fill (it grows from the tail to the head while the
-// delay runs, with a paper line at its front; one flat tone after the departure with a soft band
-// that runs along the ribbon), one pulse at the departure, the outline. (The faint inner rim of the
-// mockup lies wholly under the outline and its casing: it is not drawn.) Own:
-// a dark casing under one lightened line, a dot at the tail. The opponent's: the double outline
-// (two thin lines with the plate between) and a double ring at the tail; the head stops on a dashed
-// ring round the target that is open at the bottom, where the caption of the city sits.
+// --- Planned orders: the geometry of the ribbon (#431, #519; Engraved #851) --------------------------
+// A planned order is a ribbon from the start city to the target, the same shape for both sides: the
+// body and the head ONE closed outline, an arc that always bulges toward the top of the screen (it
+// never runs over the caption of its start or its target). Its material is `RIBBON_ENGRAVED`.
 export const RIBBON = {
-  /** Body width; the tail narrows to `tailRatio` of it. Head 38 x 30 at this body. */
-  body: 16,
-  tailRatio: 0.6,
-  headWidth: 38,
-  headLength: 30,
-  /** Under the tint: the road and the terrain below do not show through the ribbon (almost opaque). */
-  underlay: { color: PLATE_FILL, alpha: 0.96 },
-  /** The cast shadow: the outline moved by (dx, dy) world units, in the dark of the map. */
-  shadow: { dx: 1, dy: 2, alpha: 0.35 },
-  /** The tint of the part the delay has not reached, the fill the delay has filled, the fill after the departure. */
-  tintAlpha: 0.14,
-  prepAlpha: 0.72,
-  fillAlpha: 0.74,
-  /** The paper line across the ribbon at the front of the fill (`inset` short of the edges). */
-  front: { width: 2, inset: 1.2 },
-  /** The departure pulse: one swell of a paper-white fill, `pulseTicks` long, and the outline swells by `pulseWidth`. */
-  flashAlpha: 0.5,
-  pulseTicks: 8,
-  pulseWidth: 2,
-  /** The own outline: a dark casing under one line (the owner colour lightened). */
-  outline: { width: 1.6, lighten: 0.15, casingWidth: 3.4, casingAlpha: 0.7 },
-  /** The opponent's double outline: a wide line in its colour with a narrower plate line on top. */
-  foe: { width: 5.2, inner: 2 },
-  /** The band of light that runs along the ribbon on the way: its length, alpha and one pass in seconds. */
-  sheen: { length: 18, alpha: 0.3, periodS: 1.8 },
-  /** The tail marks: own a dot, the opponent a double ring (the chevron is the bonus sign, ui-style 21, #797). */
-  tail: { dot: 4, dotRing: 1.5, ring: 5.2, ringWidth: 1.6, inner: 2.4, innerWidth: 1.1 },
+  /**
+   * Body width; the tail narrows to `tailRatio` of it. Head 31 x 22 at this body (the mockup's
+   * `arrowShape(..., 6.6, 22, 15.5)` with its taper 0.82).
+   */
+  body: 13.2,
+  tailRatio: 0.82,
+  headWidth: 31,
+  headLength: 22,
+  /** The burin front across the fill stops `inset` short of the edges. */
+  front: { inset: 1.2 },
   /** The ribbon bends at most this share of its chord toward the server's path (one smooth curve). */
   maxBend: 0.3,
   /**
@@ -775,57 +725,16 @@ export const RIBBON = {
   arcBend: -0.45,
   minBend: 0.12,
   /** The tail starts this far outside the circle of the start city, and at least `slotClear` from the barracks mark (the B1 column) and `badgeClear` from the VP badge. */
-  startGap: 22,
+  startGap: 13,
   startMax: 60,
   slotClear: 26,
   badgeClear: 20,
-  /** The own head stops this far outside the capacity ring of the target; the opponent's this far outside its circle (on the ring). */
-  ownEndGap: 5,
-  foeEndGap: 32,
   /** The narrow end of the body is never thinner than this on screen (CSS px). */
   minTailPx: 8,
   /** The bonus pill sits `bonusBack` before the end of the arc, on its outer side. */
   bonusBack: 62,
   bonusMin: 20,
   bonusMargin: 3,
-  /**
-   * The dashed ring round the target of the opponent's order: `gap` outside its circle (clear of the VP badge on its upper right), open at the
-   * bottom (`open` radians each side of straight down) for the caption; `--warn` over an own city, and
-   * it pulses then (`pulseS`, down to `pulseLow` of its opacity; steady with "less motion").
-   */
-  ring: {
-    gap: 22,
-    width: 2,
-    casingWidth: 4.5,
-    casingAlpha: 0.6,
-    dash: 5,
-    space: 4,
-    open: 0.75,
-    pulseS: 0.9,
-    pulseLow: 0.45,
-  },
-} as const;
-
-/** Thin line of an ordinary order (own only) with white chevrons every 26 units. */
-export const ORDER_LINE = {
-  width: 3,
-  alpha: 0.9,
-  casing: { width: 6, alpha: 0.5 },
-  /** The part of the road the group has walked: what is left of the arrow, faint. */
-  walkedAlpha: 0.22,
-  /** The ring round the target is this far outside its circle. */
-  ringGap: 5,
-  /** The arrowhead on the ring of the target. */
-  head: { length: 11, half: 6 },
-} as const;
-export const CHEVRON = {
-  spacing: 26,
-  first: 22,
-  endMargin: 10,
-  size: 5,
-  width: 1.8,
-  /** The chevrons run along the whole remaining path at this speed (world units per second). */
-  runSpeed: 30,
 } as const;
 
 /** A rejected order: the ghost shakes for `SHAKE_MS`, then fades out until `REJECT_MS` (U6). */
@@ -834,27 +743,10 @@ export const GHOST_REJECT_MS = 500;
 export const GHOST_SHAKE_AMPLITUDE = 3;
 
 /**
- * The cue of `X` on the map (#764): what was undone, at its place. `ms` it lasts in all; over
- * `rollbackMs` the dashed arrow of the order runs back into the group and the dashed ring closes
- * in from `ringFrom` times its size; it fades over the last part, from `fadeFrom`. `sign`: the
- * radius of the round-arrow sign, `max`: cues at once.
+ * The cue of `X` on the map (#764): what was undone, at its place, for `ms` (Rewind fixed, #851:
+ * `REWIND` below holds its look); at most `max` cues at once.
  */
-export const UNDO_CUE = {
-  ms: 1100,
-  rollbackMs: 450,
-  fadeFrom: 0.6,
-  ringFrom: 1.8,
-  ringWidth: 3,
-  ringDash: 7,
-  ringGap: 5,
-  arrowWidth: 4,
-  sign: 10,
-  signWidth: 2.2,
-  /** The sign "nothing to undo": dimmer, beside the pointer. */
-  emptyAlpha: 0.7,
-  emptyOffset: 22,
-  max: 4,
-} as const;
+export const UNDO_CUE = { ms: 1200, max: 4 } as const;
 
 /**
  * The light outline of the own group under the pointer (#762): the selection frame's line, a
@@ -1021,3 +913,157 @@ export const SUPPLY_FLOW_LABEL = { fontSize: 11, padX: 4, height: 14, radius: 4 
 export const SUPPLY_BULKHEAD = { half: 5, width: 1.5, casing: 3.4, color: 0xaab2bd } as const;
 /** The mark of the enemy presence: a hollow enemy helmet `side` times `HELMET_SCALE` wide, no number. */
 export const SUPPLY_PRESENCE = { side: 12, width: 2.2, angle: 45, gap: 9 } as const;
+
+// --- Orders on the map in the Engraved style (#851, part 3 of #829) ------------------------------
+// Sources: docs/design/mockups/in-game-style-r5.html, Combined view (`burinArrow` B2, `bounceHome`
+// M3, `undoArrowW` and `undoRingW` W1, `planRibbon` E1, `ribbonAt` engraved, `highlight4` H3 'att')
+// and ui-style 53 to 55. World units; every hairline at least one device pixel.
+
+/**
+ * The order arrow, Cased running (54h): a paper casing outside the dark one, the owner's colour
+ * between two ink hairlines `half` either side of the axis, a solid barbed head, and a burin point
+ * (a small ink lozenge) running to the head, one per `burin.step`. A ghost (an order the snapshot
+ * does not show yet, and the path on hover) is hollow: the owner's hatch across the body instead of
+ * the core, the head dark and hatched, the paper casing fainter.
+ */
+export const CASED = {
+  half: 1.9,
+  /** The dark casing is the body plus this. */
+  casing: 4.6,
+  paper: { extra: 2.4, alpha: 0.34, ghost: 0.22 },
+  /** The core is the body less this. */
+  coreInset: 0.6,
+  ink: 0.9,
+  head: { length: 12, width: 0.56, paper: 5.4, casing: 3, ink: 1, overlap: 2 },
+  burin: { step: 46, speed: 30, half: 4.2, side: 2.3, casing: 2.2, fade: 14, margin: 4 },
+  /** The hatch across a hollow body: `pitch` world units, at least `minPx` css px (zoom buckets). */
+  hatch: { pitch: 2.6, width: 0.9, alpha: 0.9, minPx: 3 },
+  /** The part of an order already walked: ink dots. */
+  walked: { step: 5, radius: 0.75, alpha: 0.6 },
+  /** The arrow leaves the ring of its start city by `startGap`, and stops `endGap` outside the ring of the target. */
+  startGap: 2,
+  endGap: 6,
+  /** The target ring of an own order: a Fine ring in the own colour at `R + FINE_RING.r1`. */
+  target: { width: 1.2, alpha: 0.9 },
+} as const;
+
+/** A refusal for CP (54h): a dark lozenge with an ink X on the arrow, `at` of its length. */
+export const REFUSED = {
+  at: 0.62,
+  half: 6.5,
+  ink: 0.9,
+  cross: 3.4,
+  crossWidth: 1.6,
+  alpha: 0.8,
+} as const;
+
+/** The path on hover (54i): the hollow Cased arrow along the server's route, drawn out in `growMs`. */
+export const PATH_SHADOW = { growMs: 350 } as const;
+
+/**
+ * Bounce, Chevrons home (54m): three amber chevrons running ahead of the group to the node it came
+ * from, `gap` apart, the first `lead` past the front of the helmet, at `speed` units a second, each
+ * fainter by `dim`; they fade in over `inMs`. A chevron is a barbed point `tip` ahead of its centre,
+ * `back` behind, `side` half wide, notched at `notch`.
+ */
+export const BOUNCE_HOME = {
+  count: 3,
+  gap: 9,
+  lead: 6,
+  speed: 18,
+  dim: 0.22,
+  inMs: 300,
+  casing: 2.6,
+  tip: 3.4,
+  back: 2.6,
+  notch: 0.6,
+  side: 4.6,
+  /** No chevron within this of the home ring; the cue gives up after `maxMs` on the road. */
+  endGap: 4,
+  maxMs: 8000,
+} as const;
+
+/**
+ * Undo, Rewind fixed (54b): the cancelled order winds back into the group over `arrowMs` (at least
+ * `keep` of it is left) behind a double barb that points at the group, fading from `fadeFrom` of the
+ * way; a three-quarter ring winds round the group from `ring.from` over `ring.ms`, its head leading
+ * the turn. "Nothing to undo" (`empty`): a crossed quarter ring beside the pointer, a short shake.
+ */
+export const REWIND = {
+  ms: 1200,
+  arrowMs: 550,
+  keep: 16,
+  fadeFrom: 0.85,
+  barb: { length: 7.5, width: 0.7, gap: 5.5, casing: 2.6, ink: 0.9 },
+  ring: { from: 300, ms: 400, fadeFrom: 800, fadeMs: 400, gap: 5, casing: 3.6, ink: 1.2 },
+  ringHead: { length: 7, width: 0.62, ahead: 5.5, casing: 2.4 },
+  empty: {
+    ms: 1100,
+    inMs: 150,
+    fadeFrom: 700,
+    fadeMs: 400,
+    alpha: 0.75,
+    radius: 6,
+    slash: 7,
+    casing: 3.6,
+    ink: 1.2,
+    shakeMs: 400,
+    shake: 1.6,
+    offset: { x: 18, y: -6 },
+  },
+} as const;
+
+/**
+ * The scheduled order's ribbon in the Engraved material (`ribbonAt`, 53e, 54e): a dark plate under
+ * the owner's hatch (own horizontal, `own`; the enemy's at 45 degrees, `enemy`), the prepared share
+ * solid behind a burin front, an ink outline; the enemy's has a second contour inside (`inner`, a
+ * share of the body). The fill of a gathering plan eases each new bonus in over `stepMs`, from
+ * `stepDelayMs` after the server reported it, while the charge flies in from the warehouse (`flightMs`).
+ */
+export const RIBBON_ENGRAVED = {
+  casing: 4,
+  plateAlpha: 0.9,
+  own: { angle: 0, pitch: 2.6, width: 0.9, alpha: 0.85 },
+  /** The enemy's at the angle of its Border band (`BORDER_BAND.enemyAngle`), so the two read alike. */
+  enemy: { angle: -45, pitch: 2.4, width: 1.1, alpha: 1 },
+  outline: 1,
+  inner: { share: 0.64, alpha: 0.7, width: 0.8 },
+  front: { casing: 3, ink: 1.2, lozenge: 4.4 },
+  tail: { own: 3.4, enemy: 5.2, inner: 2.4, ink: 1.4, innerInk: 1.1 },
+  /** The ghost of a sent plan (`ribbonGhost`): the outline alone on a faint own tint. */
+  ghost: { fill: 0.12, casing: 3.6, ink: 1.2 },
+  stepMs: 900,
+  stepDelayMs: 250,
+  flightMs: 500,
+  flightLift: 10,
+  charge: { outer: 7.2, inner: 4.8 },
+  /** The pill: a thin Engraved panel with a chevron slot per asked bonus (at most `slots`), or "+N". */
+  pill: {
+    height: 17,
+    slot: 11,
+    pad: 5,
+    chevron: 10,
+    slots: 5,
+    fontSize: 12.5,
+    rimAlpha: 0.4,
+    plateAlpha: 0.93,
+    gap: 4,
+  },
+  /**
+   * The target of an enemy order (Fine rings 'att'): an arc at `R + FINE_RING.r2`, `span` radians
+   * each side of the way the ribbon comes in, a tick at each end; amber with chevrons marching in
+   * over an own city, the enemy's colour otherwise. The enemy's head stops `foeGap` outside it.
+   */
+  attack: { span: 0.62, width: 1.8, tick: 2.6, tickWidth: 1.2, tickCasing: 2.4, foeGap: 3 },
+  march: {
+    count: 3,
+    rate: 0.9,
+    from: 12,
+    run: 9,
+    tip: 2.8,
+    back: 2.2,
+    notch: 0.4,
+    side: 3.8,
+    casing: 2.4,
+  },
+} as const;

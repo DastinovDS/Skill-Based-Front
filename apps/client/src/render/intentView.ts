@@ -2,84 +2,109 @@ import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { RenderFrame, RenderGroup } from '../net/interpolate.ts';
 import type { IntentView as WireIntent, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
+import { ringRadius } from './cityLayout.ts';
+import { drawCasedArrow, drawWalkedDots, trimPath } from './casedArrow.ts';
+import { HatchTile, hairFloor } from './engraving.ts';
 import {
+  arrivalAngle,
   bonusSpot,
-  chevrons,
-  dashAlong,
   delayProgress,
-  departPulse,
   frontLine,
-  orderBend,
-  pathBend,
-  polylineLength,
-  ribbonAxis,
-  ribbonBody,
+  marchIn,
   ribbonFilled,
   ribbonOutline,
-  ribbonSlice,
-  ringDashes,
-  ringOpacity,
-  roundRectPoints,
-  sheenPhase,
-  sheenSpan,
-  signRim,
+  ribbonShape,
   tailStart,
 } from './intentLayout.ts';
 import type { MapLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import { splitOrder, trackOrder } from './orderTrack.ts';
-import { lighten } from './fightFx.ts';
 import { chevronHalfWidth, drawBonusChevron } from './bonusChevron.ts';
+import { pieceFamily, usePieceFont } from './pieceFont.ts';
+import { planShown, planStep, type PlanFill } from './planFill.ts';
 import type { OrderDelays } from './source.ts';
-import { BG, CHEVRON, ORDER_LINE, ownerColor, PAPER, PLATE_FILL, RIBBON, WARN } from './style.ts';
+import {
+  CASED,
+  CASING,
+  DARK_PLATE,
+  FINE_RING,
+  INK,
+  ownerColor,
+  RIBBON_ENGRAVED,
+  WARN,
+} from './style.ts';
+import { easeTravel } from '../theme/tokens.ts';
 
 /** One pill of the bonus of an own planned order. */
 interface BonusPill {
   readonly view: Container;
   readonly plate: Graphics;
   readonly text: Text;
-  /** What the plate was drawn for: the number, forecast or not, the width; redrawn only when it changes. */
+  /** What the plate was drawn for; redrawn only when it changes. */
   key: string;
 }
 
-/**
- * The pill "^ +N" beside an own planned ribbon (screen px): the size of the chevron of a bonus
- * (#797, the badge's chevron up), the padding, the height.
- */
-const BONUS_PILL = { chevron: 9, gap: 4, padX: 7, height: 20 } as const;
+/** A charge on its way from the warehouse into the tail of a gathering plan. */
+interface Flight {
+  readonly group: string;
+  readonly from: Point;
+  readonly start: number;
+}
+
 const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
 
 /**
- * What the players intend, on the map (ui-style 9.7): planned orders of both sides as ribbon
- * arrows drawn the same way from the intent (`origin -> target`, an arc to the left of the way, or
- * along the server's path of an own order, ending in the centre of the target city: the client
- * finds no route), filling from the start to the tip while the delay runs and pulsing once when it
- * ends, the ring around the target of an enemy intent
- * (`--warn` over an own city: it is coming for you), and the thin order lines with running chevrons of own ordinary orders. Everything is
- * redrawn every frame (a few shapes): the fill and the dashes run, the positions of own groups
- * move. "Less motion" stops the running dashes and chevrons and the pulse.
+ * What the players intend, on the map, in the Engraved style (#851, part 3 of #829; ui-style 53 to
+ * 55, mockup `in-game-style-r5.html`, Combined view):
+ *
+ * - the arrow of every own ordinary order, Cased running (`casedArrow.ts`), along the server's path
+ *   from the group to a Fine ring round the target; the part walked as ink dots;
+ * - the ribbon of a scheduled order of either side (the intent `origin -> target`, an arc that
+ *   bulges up, following the server's path of an own order): a dark plate under the owner's hatch,
+ *   an ink outline; own: the prepared share solid behind a burin front, a dot at the tail; the
+ *   enemy's: a second contour inside, a ring in a ring at the tail, and an arc round its target
+ *   facing the way it comes (amber with chevrons marching in over an own city);
+ * - the fill of a gathering plan, Eased steps: a tween between the server's bonuses, the charge
+ *   flying in from the warehouse, and a pill with a chevron slot per asked bonus.
+ *
+ * Everything is redrawn every frame (a few shapes per order): the burin points run, the fill eases,
+ * own groups move. "Less motion" stops the running marks and makes the fill jump.
  */
 export class IntentView {
-  private readonly lines = new Graphics();
-  private readonly ribbons = new Graphics();
-  private readonly rings = new Graphics();
+  private readonly lines = new Graphics({ label: 'order-arrows' });
+  private readonly ribbons = new Graphics({ label: 'order-ribbons' });
+  private readonly rings = new Graphics({ label: 'order-rings' });
+  private readonly flights = new Graphics({ label: 'plan-flights' });
   /** The pills of the bonus of own planned orders, a pool; drawn at one unit a screen px. */
   private readonly bonusLayer = new Container({ label: 'plan-bonus' });
   private readonly bonusPills: BonusPill[] = [];
   private readonly bonusStyle = new TextStyle({
-    fontFamily: 'system-ui, sans-serif',
-    fontSize: 12,
-    fontWeight: '700',
-    fill: PAPER,
+    fontFamily: pieceFamily(),
+    fontSize: RIBBON_ENGRAVED.pill.fontSize,
+    fontWeight: '600',
+    fill: INK,
   });
+  /** The owner hatches of the ribbons, in zoom buckets. */
+  private readonly ownHatch = new HatchTile(RIBBON_ENGRAVED.own);
+  private readonly enemyHatch = new HatchTile(RIBBON_ENGRAVED.enemy);
   private bonusUsed = 0;
   private resolution = 1;
+  private deviceResolution = 1;
   private cameraScale = 1;
   /** The chain of nodes of each own ordinary order, kept while the order lives (`orderTrack.ts`). */
   private readonly chains = new Map<string, number[]>();
+  /** The eased fill of each gathering plan, by group. */
+  private readonly fills = new Map<string, PlanFill>();
+  private flightsLive: Flight[] = [];
+  /** Where the tail of each gathering plan is, this frame (the charges fly there). */
+  private readonly tailOf = new Map<string, Point>();
+  /** The charges in the warehouses of the latest view, by node (a gathered one left the first empty place). */
+  private stock: readonly { readonly warehouse: number | null }[] = [];
   private delays: OrderDelays | null = null;
   private tickHz = 10;
+  /** Where a charge of a city's warehouse sits (`CityView.warehouseSlot`); `null`: not known. */
+  private slotOf: (node: number, index: number) => Point | null = () => null;
 
   constructor(
     private readonly map: MapFile,
@@ -87,9 +112,12 @@ export class IntentView {
     private readonly me: PlayerId,
     private readonly radiusOf: (node: number) => number,
   ) {
-    // Order lines go under the tokens of the groups they belong to; arrows of intents on top.
+    // Order arrows go under the tokens of the groups they belong to; ribbons of intents on top.
     layers.layer.groups.addChildAt(this.lines, 0);
-    layers.layer.intents.addChild(this.ribbons, this.rings, this.bonusLayer);
+    layers.layer.intents.addChild(this.ribbons, this.rings, this.flights, this.bonusLayer);
+    usePieceFont([this.bonusStyle]);
+    this.ownHatch.update(1, 1);
+    this.enemyHatch.update(1, 1);
   }
 
   /** Texture pixels per text unit for what is drawn at one unit a CSS px (the bonus pills). */
@@ -98,45 +126,70 @@ export class IntentView {
     for (const pill of this.bonusPills) pill.text.resolution = resolution;
   }
 
+  /** The device pixel ratio: hairlines keep one device pixel, hatches their screen pitch. */
+  setDeviceResolution(resolution: number): void {
+    this.deviceResolution = resolution;
+    this.ownHatch.update(this.cameraScale, resolution);
+    this.enemyHatch.update(this.cameraScale, resolution);
+  }
+
   /** Camera scale (CSS px per world unit): the ribbon keeps its narrow tail readable. */
   setCameraScale(scale: number): void {
     this.cameraScale = scale;
+    this.ownHatch.update(scale, this.deviceResolution);
+    this.enemyHatch.update(scale, this.deviceResolution);
   }
 
-  /** `ruleset_public.orders` delays; without them the ribbons are drawn locked and no arc is drawn. */
+  /** `ruleset_public.orders` delays; without them the ribbons are drawn locked. */
   setDelays(delays: OrderDelays | null): void {
     this.delays = delays;
   }
 
-  /** Ticks per second: the dashes run with the render tick, so a frozen scene holds still. */
+  /** Ticks per second: the marks run with the render tick, so a frozen scene holds still. */
   setTickHz(tickHz: number): void {
     this.tickHz = tickHz;
+  }
+
+  /** Where the warehouse of a city keeps its charge `index` (a gathered charge flies from there). */
+  setWarehouseSlots(slotOf: (node: number, index: number) => Point | null): void {
+    this.slotOf = slotOf;
   }
 
   update(frame: RenderFrame, spots: ReadonlyMap<string, Point>): void {
     const { intents, nodes } = frame.base.view;
     // Own groups with a planned order: the server's path shapes the curve of their ribbon.
     const pool = frame.groups.filter((g) => g.group.order?.planned === true);
-    const seconds = reducedMotion() ? 0 : frame.tick / this.tickHz;
-    this.drawOrders(frame.groups, spots, seconds * CHEVRON.runSpeed);
+    const reduced = reducedMotion();
+    const clock = frame.tick / this.tickHz;
+    const seconds = reduced ? 0 : clock;
+    const hair = hairFloor(this.cameraScale, this.deviceResolution);
+    this.stock = nodes;
+    this.drawOrders(frame.groups, spots, seconds, hair);
     this.ribbons.clear();
     this.rings.clear();
+    this.flights.clear();
     this.bonusUsed = 0;
+    const gathering = new Set<string>();
     for (const intent of intents) {
-      const from = nodePoint(this.map, intent.origin);
-      if (from === undefined) continue;
-      const target = intent.target === null ? undefined : nodePoint(this.map, intent.target);
-      if (intent.kind === 'planned_move' && intent.target !== null && target !== undefined) {
-        const progress =
-          this.delays === null
-            ? null
-            : delayProgress(intent.created_tick, frame.tick, this.delays.planned);
-        const since =
-          this.delays === null ? -1 : frame.tick - (intent.created_tick + this.delays.planned);
-        this.drawRibbon(intent, pool, progress, since, seconds, nodes[intent.target]?.owner);
-      }
+      if (intent.kind !== 'planned_move' || intent.target === null) continue;
+      const progress =
+        this.delays === null
+          ? null
+          : delayProgress(intent.created_tick, frame.tick, this.delays.planned);
+      const id = this.drawRibbon(
+        intent,
+        pool,
+        progress,
+        clock,
+        reduced,
+        hair,
+        nodes[intent.target]?.owner,
+      );
+      if (id !== null) gathering.add(id);
       // The sign of "Defense" is the city's own (`DefenseView`, #349).
     }
+    for (const id of this.fills.keys()) if (!gathering.has(id)) this.fills.delete(id);
+    this.drawFlights(clock, reduced);
     for (let i = this.bonusUsed; i < this.bonusPills.length; i++) {
       const pill = this.bonusPills[i];
       if (pill !== undefined) pill.view.visible = false;
@@ -147,32 +200,29 @@ export class IntentView {
     this.lines.destroy();
     this.ribbons.destroy();
     this.rings.destroy();
+    this.flights.destroy();
     this.bonusLayer.destroy({ children: true });
     this.bonusStyle.destroy();
+    this.ownHatch.destroy();
+    this.enemyHatch.destroy();
   }
 
   /**
-   * The ribbon of a planned order, own or the opponent's (ODb "Low relief", #519): one smooth arc
-   * from the tail beside the start city to the head at the target, always bulging toward the top of
-   * the screen (it never runs over a caption), drawn as one closed outline. The own head stops just
-   * outside the capacity ring of the target; the opponent's on the dashed ring round it. The arc
-   * follows the server's path of an own order only when that path also bulges up. While the delay
-   * runs (`progress` < 1) the filled part is bright, the rest a faint tint, with a paper line at
-   * the front; `since` ticks after the end of the delay it pulses once, then the ribbon is one flat
-   * tone with a soft band that runs along it. Layers, bottom to top: shadow, underlay, tint and
-   * fill, pulse, outline (own: casing and a line; the opponent's: a double line).
+   * The ribbon of a scheduled order, own or the opponent's. Returns the group id of an own plan
+   * that gathers its bonus (its fill tween is kept), else `null`.
    */
   private drawRibbon(
     intent: WireIntent,
     pool: RenderGroup[],
     progress: number | null,
-    since: number,
-    seconds: number,
+    clock: number,
+    reduced: boolean,
+    hair: number,
     targetOwner: PlayerId | null | undefined,
-  ): void {
+  ): string | null {
     const origin = nodePoint(this.map, intent.origin);
     const target = intent.target === null ? undefined : nodePoint(this.map, intent.target);
-    if (origin === undefined || target === undefined || intent.target === null) return;
+    if (origin === undefined || target === undefined || intent.target === null) return null;
     const index = pool.findIndex(
       (g) => (g.owner ?? this.me) === intent.owner && g.group.order?.dest === intent.target,
     );
@@ -182,144 +232,233 @@ export class IntentView {
       .filter((id) => id !== intent.origin && id !== intent.target)
       .map((id) => nodePoint(this.map, id))
       .filter((p): p is Point => p !== undefined);
-    const bend = orderBend(
-      target.x - origin.x,
-      pathBend(origin, target, via, RIBBON.maxBend),
-      RIBBON.minBend,
-      RIBBON.arcBend,
-    );
     const own = intent.owner === this.me;
     const radius = this.radiusOf(intent.origin);
-    const targetRadius = this.radiusOf(intent.target);
-    const axis = ribbonAxis(
-      [origin, target],
+    const ring = ringRadius(this.radiusOf(intent.target));
+    const E = RIBBON_ENGRAVED;
+    const endGap = own
+      ? ring + CASED.endGap
+      : ring + FINE_RING.r2 + E.attack.width / 2 + E.attack.foeGap;
+    const shape = ribbonShape(
+      origin,
+      target,
+      via,
       tailStart(origin, target, radius),
-      own ? signRim(targetRadius) + RIBBON.ownEndGap : targetRadius + RIBBON.foeEndGap,
-      bend,
+      endGap,
+      this.cameraScale,
     );
-    const body = ribbonBody(this.cameraScale);
-    const ribbon = ribbonOutline(axis, body);
-    if (ribbon === null) return;
+    if (shape === null) return null;
+    const { axis, ribbon, bend, body } = shape;
     const color = ownerColor(this.me, intent.owner);
     // Economy v2 (DEC-41, item 10): an own plan that gathers its bonus fills as the bonus grows
-    // (the server's `bonus` of the requested `plan`), not with a delay.
+    // (the server's `bonus` of the requested `plan`), eased step by step; economy v1 by its delay.
     const order = item?.group.order;
-    const gathering = order?.gathering === true;
-    const fill = gathering
-      ? order.plan > 0
-        ? Math.min(1, order.bonus / order.plan)
-        : 0
-      : progress;
-    const prep = gathering || (fill !== null && fill < 1);
-    const pulse = departPulse(since, RIBBON.pulseTicks, reducedMotion());
+    const gatheringOn = own && order?.gathering === true && item !== undefined;
+    let fill: number | null = progress;
+    if (gatheringOn) {
+      const fillOf = this.planFill(item.group.id, order.bonus, intent.origin, clock, reduced);
+      fill = order.plan > 0 ? Math.min(1, fillOf / order.plan) : 0;
+    }
+    const prepared = own ? (fill ?? 1) : 0;
     const g = this.ribbons;
     const poly = flat(ribbon.outline);
+    const tile = own ? this.ownHatch : this.enemyHatch;
+    const hatch = own ? E.own : E.enemy;
 
-    // The cast shadow: the same outline moved a little down and to the right.
-    const { shadow } = RIBBON;
-    g.poly(ribbon.outline.flatMap((p) => [p.x + shadow.dx, p.y + shadow.dy])).fill({
-      color: BG,
-      alpha: shadow.alpha,
+    g.poly(poly).stroke({ width: E.casing, color: CASING, join: 'round' });
+    g.poly(poly).fill({ color: DARK_PLATE, alpha: E.plateAlpha });
+    g.poly(poly).fill({
+      texture: tile.texture,
+      textureSpace: 'global',
+      matrix: tile.matrix(hatch.angle),
+      color,
+      alpha: hatch.alpha,
     });
-    // Opaque dark under the tint: the road below does not show through the ribbon.
-    g.poly(poly).fill(RIBBON.underlay);
-    if (prep) {
-      // The delay runs: the whole arrow is a faint tint and fills from the tail to the head.
-      g.poly(poly).fill({ color, alpha: RIBBON.tintAlpha });
-      const filled = ribbonFilled(ribbon.outline, axis, fill ?? 0);
-      if (filled.length >= 3) g.poly(flat(filled)).fill({ color, alpha: RIBBON.prepAlpha });
-      const front = frontLine(axis, fill ?? 0, body);
-      if (front !== null) {
-        g.moveTo(front[0].x, front[0].y).lineTo(front[1].x, front[1].y);
-        g.stroke({ width: RIBBON.front.width, color: PAPER, cap: 'round' });
-      }
-    } else {
-      g.poly(poly).fill({ color, alpha: RIBBON.fillAlpha });
-      if (!reducedMotion()) {
-        // The soft band that runs along the ribbon after the departure.
-        const span = sheenSpan(polylineLength(axis), sheenPhase(seconds));
-        const band =
-          span === null ? [] : ribbonSlice(ribbon.outline, axis, span.from, span.to, body);
-        if (band.length >= 3) g.poly(flat(band)).fill({ color: PAPER, alpha: RIBBON.sheen.alpha });
-      }
+    if (prepared > 0) {
+      const filled = ribbonFilled(ribbon.outline, axis, prepared);
+      if (filled.length >= 3) g.poly(flat(filled)).fill({ color });
     }
-    if (pulse.swell > 0) {
-      g.poly(poly).fill({ color: PAPER, alpha: RIBBON.flashAlpha * pulse.swell });
-    }
-    if (own) {
-      const { outline } = RIBBON;
-      g.poly(poly).stroke({
-        width: outline.casingWidth,
-        color: BG,
-        alpha: outline.casingAlpha,
-        join: 'round',
-      });
-      g.poly(poly).stroke({
-        width: outline.width + RIBBON.pulseWidth * pulse.swell,
-        color: lighten(color, outline.lighten),
-        join: 'round',
-      });
-    } else {
-      // Two thin lines: a wide stroke in the colour with a narrower plate stroke on top.
-      g.poly(poly).stroke({ width: RIBBON.foe.width, color, join: 'round' });
-      g.poly(poly).stroke({ width: RIBBON.foe.inner, color: PLATE_FILL, join: 'round' });
+    if (own && prepared > 0 && prepared < 1) this.drawFront(axis, prepared, body, bend, hair);
+    g.poly(poly).stroke({ width: Math.max(E.outline, hair), color: INK, join: 'round' });
+    if (!own) {
+      const inner = ribbonOutline(axis, body * E.inner.share);
+      if (inner !== null)
+        g.poly(flat(inner.outline)).stroke({
+          width: Math.max(E.inner.width, hair),
+          color: INK,
+          alpha: E.inner.alpha,
+          join: 'round',
+        });
     }
     const start = axis[0];
-    if (start === undefined) return;
-    const { tail } = RIBBON;
-    if (own) {
-      // The dot says the order is own.
-      g.circle(start.x, start.y, tail.dot)
-        .fill(color)
-        .stroke({ width: tail.dotRing, color: PLATE_FILL });
-      // The bonus of the plan (DEC-29) is the server's number and only the owner's view has it
-      // (the opponent's intent has no size and no bonus): "^ +N" beside the arc, dashed while a forecast.
-      const bonus = item?.group.order?.bonus ?? 0;
-      const spot =
-        bonus > 0 || gathering
-          ? bonusSpot(axis, bend, body, BONUS_PILL.height / 2 / this.cameraScale)
-          : null;
-      if (spot !== null)
-        this.placeBonus(
-          this.bonusUsed++,
-          spot,
-          bonus,
-          fill === null || prep,
-          color,
-          gathering ? order.plan : null,
-        );
-    } else {
-      // The opponent's tail is a ring in a ring; the head stops on the dashed ring round the target.
-      g.circle(start.x, start.y, tail.ring)
-        .fill(PLATE_FILL)
-        .stroke({ width: tail.ringWidth, color });
-      g.circle(start.x, start.y, tail.inner).stroke({ width: tail.innerWidth, color: PAPER });
-      this.drawTargetRing(target, targetRadius, targetOwner === this.me, seconds);
+    if (start !== undefined) {
+      const T = E.tail;
+      g.circle(start.x, start.y, own ? T.own : T.enemy)
+        .fill(CASING)
+        .stroke({ width: T.ink, color: INK });
+      if (!own) g.circle(start.x, start.y, T.inner).stroke({ width: T.innerInk, color: INK });
     }
+    if (own) {
+      // The bonus of the plan (DEC-29) is the server's number and only the owner's view has it.
+      const bonus = order?.bonus ?? 0;
+      if (bonus > 0 || gatheringOn) {
+        const spot = bonusSpot(axis, bend, body, E.pill.height / 2 / this.cameraScale);
+        if (spot !== null)
+          this.placeBonus(this.bonusUsed++, spot, bonus, gatheringOn ? order.plan : null);
+      }
+    } else {
+      this.drawTarget(
+        target,
+        ring,
+        arrivalAngle(axis),
+        targetOwner === this.me,
+        clock,
+        reduced,
+        hair,
+      );
+    }
+    if (gatheringOn) this.tailOf.set(item.group.id, start ?? origin);
+    return gatheringOn ? item.group.id : null;
+  }
+
+  /** The bonus shown for the plan of `group` now; a new server value starts a step (and a flight). */
+  private planFill(
+    group: string,
+    value: number,
+    origin: number,
+    clock: number,
+    reduced: boolean,
+  ): number {
+    const { fill, gained } = planStep(this.fills.get(group) ?? null, value, clock, reduced);
+    this.fills.set(group, fill);
+    if (gained > 0 && !reduced) {
+      // The charges left the warehouse: they fly from the first empty places of its row.
+      for (let k = 0; k < gained; k++) {
+        const stock = this.stock[origin]?.warehouse ?? 0;
+        const from = this.slotOf(origin, stock + k);
+        if (from !== null) this.flightsLive.push({ group, from, start: clock });
+      }
+    }
+    return planShown(fill, clock);
+  }
+
+  /** The burin front across the fill: a casing and an ink line, a small ink lozenge on the outer edge. */
+  private drawFront(
+    axis: readonly Point[],
+    share: number,
+    body: number,
+    bend: number,
+    hair: number,
+  ): void {
+    const front = frontLine(axis, share, body);
+    if (front === null) return;
+    const F = RIBBON_ENGRAVED.front;
+    const g = this.ribbons;
+    const [a, b] = front;
+    g.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ width: F.casing, color: CASING, cap: 'round' });
+    g.moveTo(a.x, a.y)
+      .lineTo(b.x, b.y)
+      .stroke({ width: Math.max(F.ink, hair), color: INK, cap: 'round' });
+    // `frontLine` puts first the side `bend > 0` pushes to: the outer side of the arc.
+    const outer = bend > 0 ? a : b;
+    const h = (F.lozenge * Math.SQRT2) / 2;
+    g.poly([
+      outer.x,
+      outer.y - h,
+      outer.x + h,
+      outer.y,
+      outer.x,
+      outer.y + h,
+      outer.x - h,
+      outer.y,
+    ]).fill(INK);
   }
 
   /**
-   * The ring round the target of an opponent's order: dashed, open at the bottom for the caption of
-   * the city; `--warn` and pulsing over my city (it is coming for you), the opponent's red otherwise.
+   * The target of an enemy order (Fine rings 'att'): an arc at `R + r2` facing the way the ribbon
+   * comes in, a tick at each end; over an own city amber, with three chevrons marching in.
    */
-  private drawTargetRing(at: Point, radius: number, warn: boolean, seconds: number): void {
+  private drawTarget(
+    at: Point,
+    ring: number,
+    toward: number,
+    warn: boolean,
+    clock: number,
+    reduced: boolean,
+    hair: number,
+  ): void {
+    const A = RIBBON_ENGRAVED.attack;
     const g = this.rings;
     const color = warn ? WARN : ownerColor(this.me, this.me === 0 ? 1 : 0);
-    const alpha = warn ? ringOpacity(seconds, reducedMotion()) : 1;
-    const ring = RIBBON.ring;
-    const dashes = ringDashes(at, radius + ring.gap);
-    const lay = (): void => {
-      for (const dash of dashes) {
-        const [first, ...rest] = dash;
-        if (first === undefined) continue;
-        g.moveTo(first.x, first.y);
-        for (const p of rest) g.lineTo(p.x, p.y);
+    const r = ring + FINE_RING.r2;
+    const a0 = toward - A.span;
+    const a1 = toward + A.span;
+    const arc = (): void => {
+      g.moveTo(at.x + r * Math.cos(a0), at.y + r * Math.sin(a0)).arc(at.x, at.y, r, a0, a1);
+    };
+    arc();
+    g.stroke({ width: A.width + FINE_RING.casing, color: CASING, cap: 'butt' });
+    arc();
+    g.stroke({ width: Math.max(A.width, hair), color, cap: 'butt' });
+    const ticks = (pad: number): void => {
+      for (const e of [a0, a1]) {
+        const c = Math.cos(e);
+        const s = Math.sin(e);
+        g.moveTo(at.x + c * (r - A.tick - pad), at.y + s * (r - A.tick - pad)).lineTo(
+          at.x + c * (r + A.tick + pad),
+          at.y + s * (r + A.tick + pad),
+        );
       }
     };
-    lay();
-    g.stroke({ width: ring.casingWidth, color: BG, alpha: ring.casingAlpha, cap: 'round' });
-    lay();
-    g.stroke({ width: ring.width, color, alpha, cap: 'round' });
+    ticks(0.8);
+    g.stroke({ width: A.tickWidth + A.tickCasing, color: CASING, cap: 'butt' });
+    ticks(0);
+    g.stroke({ width: Math.max(A.tickWidth, hair), color, cap: 'butt' });
+    if (!warn) return;
+    const M = RIBBON_ENGRAVED.march;
+    const c = Math.cos(toward);
+    const s = Math.sin(toward);
+    for (const { d, alpha } of marchIn(r, clock, reduced)) {
+      if (alpha <= 0) continue;
+      // A barbed point turned to the city: `tip` towards the centre.
+      const x = at.x + c * d;
+      const y = at.y + s * d;
+      const point = [
+        x - c * M.tip,
+        y - s * M.tip,
+        x + c * M.back - s * M.side,
+        y + s * M.back + c * M.side,
+        x + c * M.notch,
+        y + s * M.notch,
+        x + c * M.back + s * M.side,
+        y + s * M.back - c * M.side,
+      ];
+      g.poly(point)
+        .stroke({ width: M.casing, color: CASING, alpha, join: 'round' })
+        .fill({ color: WARN, alpha });
+    }
+  }
+
+  /** The charges flying from the warehouse into the tail of their plan (0.5 s each, an arc up). */
+  private drawFlights(clock: number, reduced: boolean): void {
+    const E = RIBBON_ENGRAVED;
+    const span = E.flightMs / 1000;
+    this.flightsLive = this.flightsLive.filter(
+      (f) => !reduced && clock - f.start >= 0 && clock - f.start < span && this.tailOf.has(f.group),
+    );
+    const g = this.flights;
+    for (const f of this.flightsLive) {
+      const to = this.tailOf.get(f.group);
+      if (to === undefined) continue;
+      const q = easeTravel((clock - f.start) / span);
+      const x = f.from.x + (to.x - f.from.x) * q;
+      const y = f.from.y + (to.y - f.from.y) * q - Math.sin(q * Math.PI) * E.flightLift;
+      const o = E.charge.outer / Math.SQRT2;
+      const i = E.charge.inner / Math.SQRT2;
+      g.poly([x, y - o, x + o, y, x, y + o, x - o, y]).fill(CASING);
+      g.poly([x, y - i, x + i, y, x, y + i, x - i, y]).fill(ownerColor(this.me, this.me));
+    }
+    this.tailOf.clear();
   }
 
   private bonusPill(index: number): BonusPill {
@@ -342,57 +481,48 @@ export class IntentView {
   }
 
   /**
-   * The pill "^ +N" (the green chevron of a bonus, #797) beside an own planned ribbon, at `spot` (world units, from `bonusSpot`), N the
-   * server's bonus of the order (`OrderView.bonus`). Before the group leaves it is a forecast (the
-   * cap is taken at the departure): the outline is dashed, then it turns solid. Drawn at one unit
-   * a screen px.
+   * The pill beside an own planned ribbon at `spot` (world units, from `bonusSpot`), drawn at one
+   * unit a screen px on a thin Engraved panel. A gathering plan (economy v2, `plan` its asked bonus)
+   * shows a chevron slot per asked bonus, solid when gathered (Eased steps with slots, 54e); else
+   * the chevron and "+N", N the server's bonus (DEC-29).
    */
-  private placeBonus(
-    index: number,
-    spot: Point,
-    bonus: number,
-    forecast: boolean,
-    color: number,
-    /** Economy v2: the requested bonus of a gathering plan ("+1/3"); `null`: none. */
-    plan: number | null = null,
-  ): void {
+  private placeBonus(index: number, spot: Point, bonus: number, plan: number | null): void {
     const pill = this.bonusPill(index);
-    const label = plan === null ? `+${String(bonus)}` : `+${String(bonus)}/${String(plan)}`;
+    const P = RIBBON_ENGRAVED.pill;
+    const slots = plan === null ? 0 : Math.min(Math.max(plan, 1), P.slots);
+    const label = plan === null ? `+${String(bonus)}` : '';
     if (pill.text.text !== label) pill.text.text = label;
-    const { chevron, gap, padX, height } = BONUS_PILL;
-    const half = chevronHalfWidth(chevron);
-    const width = padX * 2 + half * 2 + gap + pill.text.width;
-    const key = `${label}|${forecast ? 'f' : 's'}|${String(Math.round(width))}|${String(color)}`;
+    pill.text.visible = plan === null;
+    const half = chevronHalfWidth(P.chevron);
+    const width =
+      plan === null
+        ? P.pad * 2 + half * 2 + P.gap + pill.text.width
+        : P.pad * 2 + (slots - 1) * P.slot + half * 2;
+    const gathered = Math.min(bonus, slots);
+    const key = `${label}|${String(slots)}:${String(gathered)}|${String(Math.round(width))}`;
     if (pill.key !== key) {
       pill.key = key;
-      // Forecast or locked: the dashed or the solid outline, told in the label for the tests too.
-      pill.view.label = forecast ? 'plan-bonus-pill:forecast' : 'plan-bonus-pill:locked';
+      // Told in the label for the tests too: the slots of a gathering plan, or the number.
+      pill.view.label =
+        plan === null
+          ? 'plan-bonus-pill:number'
+          : `plan-bonus-pill:slots:${String(gathered)}/${String(slots)}`;
       const g = pill.plate.clear();
       const left = -width / 2;
-      g.roundRect(left, -height / 2, width, height, height / 2).fill({
-        color: PLATE_FILL,
-        alpha: 0.96,
+      g.rect(left, -P.height / 2, width, P.height).fill({ color: DARK_PLATE, alpha: P.plateAlpha });
+      g.rect(left + 0.5, -P.height / 2 + 0.5, width - 1, P.height - 1).stroke({
+        width: 1,
+        color: INK,
+        alpha: P.rimAlpha,
       });
-      if (forecast) {
-        for (const dash of dashAlong(
-          roundRectPoints(width, height, height / 2),
-          3.5,
-          2.5,
-          0,
-          true,
-        )) {
-          const [first, ...rest] = dash;
-          if (first === undefined) continue;
-          g.moveTo(first.x, first.y);
-          for (const p of rest) g.lineTo(p.x, p.y);
-        }
-        g.stroke({ width: 1.6, color, cap: 'round' });
+      const first = left + P.pad + half;
+      if (plan === null) {
+        drawBonusChevron(g, first, 0.5, P.chevron);
+        pill.text.position.set(first + half + P.gap, 0);
       } else {
-        g.roundRect(left, -height / 2, width, height, height / 2).stroke({ width: 1.8, color });
+        for (let j = 0; j < slots; j++)
+          drawBonusChevron(g, first + j * P.slot, 0.5, P.chevron, j >= gathered);
       }
-      const cx = left + padX + half;
-      drawBonusChevron(g, cx, 0, chevron);
-      pill.text.position.set(left + padX + half * 2 + gap, 0);
     }
     pill.view.scale.set(1 / this.cameraScale);
     pill.view.position.set(spot.x, spot.y);
@@ -401,13 +531,14 @@ export class IntentView {
 
   /**
    * The arrow of every own ordinary order: from where the order began to its target, along the
-   * server's path, drawn once and left in place while the group walks it. The walked part of the
-   * current road fades, the roads behind are gone. A planned order is the ribbon's job.
+   * server's path, Cased running; the walked part of the current road as ink dots, the roads behind
+   * gone; a Fine ring in the own colour round the target. A planned order is the ribbon's job.
    */
   private drawOrders(
     groups: readonly RenderGroup[],
     points: ReadonlyMap<string, Point>,
-    run: number,
+    seconds: number,
+    hair: number,
   ): void {
     const g = this.lines;
     g.clear();
@@ -425,94 +556,38 @@ export class IntentView {
         .map((id) => nodePoint(this.map, id))
         .filter((p): p is Point => p !== undefined);
       if (places.length !== tracked.chain.length || places.length < 2) continue;
-      // The arrow leaves the circle of the city it began in.
+      // The arrow leaves the ring of the city it began in.
       const first = places[0];
       const second = places[1];
       if (first === undefined || second === undefined) continue;
-      const lead = this.radiusOf(tracked.chain[0] ?? start) + RIBBON.startGap;
+      const lead = ringRadius(this.radiusOf(tracked.chain[0] ?? start)) + CASED.startGap;
       const gap = Math.hypot(second.x - first.x, second.y - first.y) || 1;
       places[0] = {
         x: first.x + ((second.x - first.x) / gap) * lead,
         y: first.y + ((second.y - first.y) / gap) * lead,
       };
       const { walked, ahead } = splitOrder(places, tracked.segment, unit);
-      this.drawWalked(walked, color);
-      this.drawAhead(ahead, color, order.dest, run);
+      drawWalkedDots(g, walked, hair);
+      const target = places[places.length - 1];
+      const ring = ringRadius(this.radiusOf(order.dest));
+      const arrow = trimPath(ahead, 0, ring + CASED.endGap);
+      drawCasedArrow(g, arrow, { color, seconds, hair, zoom: this.cameraScale });
+      if (target !== undefined) {
+        const r = ring + FINE_RING.r1;
+        g.circle(target.x, target.y, r).stroke({
+          width: CASED.target.width + FINE_RING.casing,
+          color: CASING,
+          alpha: CASED.target.alpha,
+        });
+        g.circle(target.x, target.y, r).stroke({
+          width: Math.max(CASED.target.width, hair),
+          color,
+          alpha: CASED.target.alpha,
+        });
+      }
     }
     for (const id of this.chains.keys()) {
       if (!live.has(id)) this.chains.delete(id);
     }
-  }
-
-  /** The walked part of the road under the group: a faint line, what is left of the arrow. */
-  private drawWalked(walked: readonly Point[], color: number): void {
-    const [first, ...rest] = walked;
-    if (first === undefined || rest.length === 0) return;
-    const g = this.lines;
-    g.moveTo(first.x, first.y);
-    for (const p of rest) g.lineTo(p.x, p.y);
-    g.stroke({ width: ORDER_LINE.width, color, alpha: ORDER_LINE.walkedAlpha, cap: 'round' });
-  }
-
-  /** From the group to the target: casing, line, chevrons, the ring round the target, the head. */
-  private drawAhead(ahead: readonly Point[], color: number, dest: number, run: number): void {
-    const [first, ...rest] = ahead;
-    if (first === undefined || rest.length === 0) return;
-    const g = this.lines;
-    const target = rest[rest.length - 1] ?? first;
-    const before = rest[rest.length - 2] ?? first;
-    const radius = this.radiusOf(dest) + ORDER_LINE.ringGap;
-    // The line stops at the ring of the target, the head sits on it.
-    const length = Math.hypot(target.x - before.x, target.y - before.y) || 1;
-    const dir = { x: (target.x - before.x) / length, y: (target.y - before.y) / length };
-    const end = { x: target.x - dir.x * radius, y: target.y - dir.y * radius };
-    const body = [first, ...rest.slice(0, -1), end];
-    const trace = (): void => {
-      g.moveTo(first.x, first.y);
-      for (const p of body.slice(1)) g.lineTo(p.x, p.y);
-    };
-    trace();
-    g.stroke({
-      width: ORDER_LINE.casing.width,
-      color: BG,
-      alpha: ORDER_LINE.casing.alpha,
-      cap: 'round',
-      join: 'round',
-    });
-    trace();
-    g.stroke({
-      width: ORDER_LINE.width,
-      color,
-      alpha: ORDER_LINE.alpha,
-      cap: 'round',
-      join: 'round',
-    });
-    for (const { at, dir: d } of chevrons(
-      body,
-      CHEVRON.spacing,
-      CHEVRON.first,
-      CHEVRON.endMargin,
-      run,
-    )) {
-      const s = CHEVRON.size;
-      g.moveTo(at.x - d.x * s - d.y * s, at.y - d.y * s + d.x * s)
-        .lineTo(at.x + d.x * (s * 0.6), at.y + d.y * (s * 0.6))
-        .lineTo(at.x - d.x * s + d.y * s, at.y - d.y * s - d.x * s);
-    }
-    g.stroke({ width: CHEVRON.width, color: PAPER, alpha: 1, cap: 'round', join: 'round' });
-    // The arrowhead: a filled triangle whose tip touches the ring of the target.
-    const h = ORDER_LINE.head;
-    const base = { x: end.x - dir.x * h.length, y: end.y - dir.y * h.length };
-    g.poly([
-      end.x,
-      end.y,
-      base.x - dir.y * h.half,
-      base.y + dir.x * h.half,
-      base.x + dir.y * h.half,
-      base.y - dir.x * h.half,
-    ])
-      .fill({ color, alpha: ORDER_LINE.alpha })
-      .stroke({ width: 1.5, color: BG, alpha: ORDER_LINE.casing.alpha, join: 'round' });
-    g.circle(target.x, target.y, radius).stroke({ width: 2, color, alpha: ORDER_LINE.alpha });
   }
 }

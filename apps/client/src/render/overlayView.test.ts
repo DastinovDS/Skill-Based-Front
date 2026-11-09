@@ -1,4 +1,4 @@
-import { CanvasTextMetrics } from 'pixi.js';
+import { CanvasTextMetrics, type Graphics } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { TokenSpot } from './layout.ts';
@@ -6,6 +6,8 @@ import type { GhostArrow, OverlayState } from './interaction.ts';
 import { setReducedMotion } from './motion.ts';
 import { badgeScale } from './alertLayout.ts';
 import {
+  DARK_PLATE,
+  ENEMY,
   ETA_MARK,
   GHOST_REJECT_MS,
   HELMET_FRAME,
@@ -30,7 +32,7 @@ function setup() {
 }
 
 describe('OverlayView', () => {
-  it('draws no arrow for an order sent or accepted (the snapshot shows it)', () => {
+  it('draws a sent order as a ghost until the snapshot shows it (#851)', () => {
     const { layers, view, none } = setup();
     const via = map.nodes[1];
     if (via === undefined) throw new Error('map too small');
@@ -46,14 +48,18 @@ describe('OverlayView', () => {
       split: [],
       eta: null,
     });
+    // A hollow Cased arrow while the server has not answered; the outline of the ribbon of a plan.
     view.update(state([{ from: a.id, dest: b.id, planned: false, path: null }]), none);
-    expect(layers.layer.intents.getLocalBounds().width).toBe(0);
+    expect(layers.layer.intents.getLocalBounds().width).toBeGreaterThan(Math.abs(b.x - a.x) * 0.5);
     view.update(
       state([
         { from: a.id, dest: b.id, planned: true, path: [a.id, via.id, b.id], status: 'accepted' },
       ]),
       none,
     );
+    expect(layers.layer.intents.getLocalBounds().width).toBeGreaterThan(Math.abs(b.x - a.x) * 0.5);
+    // Gone with the ghost.
+    view.update(state([]), none);
     expect(layers.layer.intents.getLocalBounds().width).toBe(0);
     view.destroy();
   });
@@ -89,27 +95,6 @@ describe('OverlayView', () => {
     expect(texts).toEqual(['+3', 'gathers 9 s']);
     view.destroy();
     vi.restoreAllMocks();
-  });
-
-  it('draws the ghost of a planned order of a planned order only', () => {
-    const { layers, view, none } = setup();
-    const state = (planned: boolean): OverlayState => ({
-      selection: null,
-      ghosts: [],
-      preview: { from: a.id, to: b.id, planned, path: [a.id, b.id] },
-      candidates: [],
-      beacon: null,
-      supply: null,
-      terrain: false,
-      reach: [],
-      split: [],
-      eta: null,
-    });
-    view.update(state(false), none);
-    expect(layers.layer.intents.getLocalBounds().width).toBe(0);
-    view.update(state(true), none);
-    expect(layers.layer.intents.getLocalBounds().width).toBeGreaterThan(Math.abs(b.x - a.x) * 0.8);
-    view.destroy();
   });
 
   it('shows the frame of a selected group at its token, and hides it without one', () => {
@@ -188,12 +173,34 @@ describe('OverlayView', () => {
       }
     });
 
-    it('draws nothing for a pending or an accepted ghost', () => {
+    it('draws a pending and an accepted ghost, along the route the server gave', () => {
       const { layers, view, none } = setup();
       view.update(ghost({ status: 'pending' }), none, 0);
-      expect(bounds(layers).width).toBe(0);
-      view.update(ghost({ status: 'accepted', path: [a.id, b.id] }), none, 0);
-      expect(bounds(layers).width).toBe(0);
+      const straight = bounds(layers);
+      expect(straight.width).toBeGreaterThan(0);
+      const via = map.nodes.find(
+        (n) => n.id !== a.id && n.id !== b.id && Math.min(n.x, a.x, b.x) === n.x,
+      );
+      if (via !== undefined) {
+        view.update(ghost({ status: 'accepted', path: [a.id, via.id, b.id] }), none, 0);
+        expect(bounds(layers).x).toBeLessThan(straight.x);
+      }
+      view.destroy();
+    });
+
+    it('draws a refusal for CP as the red arrow, crossed', () => {
+      const { layers, view, none } = setup();
+      view.update(
+        ghost({ status: 'rejected', rejectedAt: 1000, rejectCode: 'NOT_ENOUGH_CP' }),
+        none,
+        1000,
+      );
+      const g = layers.layer.intents.children.at(-1) as Graphics;
+      const colors = (
+        g.context.instructions as unknown as { data: { style: { color: number } } }[]
+      ).map((i) => i.data.style.color);
+      expect(colors).toContain(ENEMY);
+      expect(colors).toContain(DARK_PLATE);
       view.destroy();
     });
   });
@@ -308,15 +315,17 @@ describe('OverlayView, the travel time and the route of an order (#432, #448)', 
   it('lights up the route, and draws it for every order, not only a planned one', () => {
     const { layers, view, none } = setup();
     view.setTickHz(10);
-    const lines = () => layers.layer.intents.children.find((c) => c.label === 'order-lines');
+    const lines = () => layers.layer.intents.children.find((c) => c.label === 'order-path');
     view.update(state(null), none);
     expect(lines()?.getLocalBounds().width).toBe(0);
     const edge = map.edges[0];
     if (edge === undefined) throw new Error('a map without roads');
-    view.update(state({ from: edge.a, node: edge.b, ticks: 25, path: [edge.a, edge.b] }), none);
+    const mark = state({ from: edge.a, node: edge.b, ticks: 25, path: [edge.a, edge.b] });
+    view.update(mark, none, 0);
+    view.update(mark, none, 1000);
     expect(lines()?.getLocalBounds().width).toBeGreaterThan(0);
     // Gone with the label.
-    view.update(state(null), none);
+    view.update(state(null), none, 1000);
     expect(lines()?.getLocalBounds().width).toBe(0);
     view.destroy();
   });
@@ -332,37 +341,38 @@ describe('OverlayView, the travel time and the route of an order (#432, #448)', 
     view.destroy();
   });
 
-  it('runs a comet along the route to the target, and stands it still under less motion (H10)', () => {
+  it('draws the path out along the route, runs its burin points, and stands still under less motion (54i)', () => {
     const { layers, view, none } = setup();
     view.setTickHz(10);
-    const cometOf = () => layers.layer.intents.children.find((c) => c.label === 'order-comet');
+    const pathOf = () => layers.layer.intents.children.find((c) => c.label === 'order-path');
     const edge = map.edges[0];
     if (edge === undefined) throw new Error('a map without roads');
     const mark = state({ from: edge.a, node: edge.b, ticks: 25, path: [edge.a, edge.b] });
-    view.update(mark, none, 0);
     // Bounds objects are reused: keep plain copies.
     const box = () => {
-      const b = cometOf()?.getLocalBounds();
+      const b = pathOf()?.getLocalBounds();
       return { x: b?.x ?? 0, y: b?.y ?? 0, width: b?.width ?? 0, height: b?.height ?? 0 };
     };
-    const start = box();
-    expect(start.width).toBeGreaterThan(0);
-    // Half a pass later the comet is elsewhere on the road.
-    view.update(mark, none, 600);
-    const later = box();
-    expect(later.width * later.height).toBeGreaterThan(start.width * start.height);
-    // Less motion: one still frame, the same whatever the clock.
+    view.update(mark, none, 0);
+    view.update(mark, none, 100);
+    const growing = box();
+    view.update(mark, none, 1000);
+    const whole = box();
+    expect(whole.width + whole.height).toBeGreaterThan(growing.width + growing.height);
+    // Less motion: drawn whole at once, the same whatever the clock.
     setReducedMotion(true);
     try {
-      view.update(mark, none, 100);
+      view.update(state(null), none, 0);
+      view.update(mark, none, 0);
       const still = box();
+      expect(still).toEqual(whole);
       view.update(mark, none, 1300);
       expect(box()).toEqual(still);
     } finally {
       setReducedMotion(null);
     }
     view.update(state(null), none, 0);
-    expect(cometOf()?.getLocalBounds().width).toBe(0);
+    expect(pathOf()?.getLocalBounds().width).toBe(0);
     view.destroy();
   });
 

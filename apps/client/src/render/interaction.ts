@@ -35,8 +35,9 @@ export interface GhostArrow {
   readonly dest: number;
   readonly planned: boolean;
   /**
-   * The server's path from `ack`, once it arrived (the client never computes it); `null` while
-   * the order is unanswered: the arrow is a straight line to `dest`.
+   * The server's path (the client never computes it): the route of the `reach` answer the order
+   * was given on until the `ack` arrives, then the `ack`'s; `null` when neither is known: the arrow
+   * is a straight line to `dest`.
    */
   readonly path: readonly number[] | null;
   /** Default `pending`. */

@@ -2468,6 +2468,20 @@ The last refinements before implementation. Mockup: [`mockups/in-game-style-r5.h
 
 Not done here: the lozenges running into the tower when paid in full, their pop as each lands, and the charge flying from the warehouse or the group to the build (the event `build_paid` carries `warehouse` and `units`, so a later piece can draw the flight from it), the capital's crenellated ring and the "cut off" ring (not in the Combined view), the Burin reveal (part 6).
 
+**Implemented (#851, part 3 of 6): orders on the map.** One arrow, Cased running (54h, `render/casedArrow.ts`, the mockup's `burinArrow` B2): a paper casing outside the dark one, the owner's colour between two ink hairlines, a barbed head, and a burin point (an ink lozenge) running to the head every 46 units at 30 units a second; every hairline at least one device pixel. It draws:
+
+- **own ordinary orders** (`intentView.ts`): from the ring of the city the order began in along the server's path to `R + 6` of the target, the walked part as ink dots, a Fine ring in the own colour round the target (`R + 5`);
+- **ghosts** (`overlayView.ts`): a sent order is the hollow arrow (no core, the own hatch across it, the head dark and hatched) until the snapshot shows the order, along the route of the `reach` answer it was given on and then the `ack`'s (`orderBook.track` keeps the route; the client finds no path); a sent plan is the outline of its ribbon; a refusal shakes and fades; a refusal for CP is the red arrow with a dark lozenge and an ink X at 62 % of it;
+- **the path on hover** (54i): the hollow arrow along `ReachNode.path`, drawn out in 0.35 s, its burin points running; it replaces the comet of H10 and the planned preview of #793 (the hourglass ETA mark stays).
+
+**Ribbons** of scheduled orders take the Engraved material (`ribbonAt`): a dark plate under the owner's hatch (own horizontal, the enemy's at the angle of its Border band), an ink outline; own the prepared share solid behind a burin front with an ink lozenge, a dot at the tail; the enemy's a second contour inside and a ring in a ring at the tail. The ribbon is the mockup's shape (body 13.2, tail 82 %, head 31 x 22); the cast shadow, the departure pulse and the running sheen are gone. The target of an enemy order is the Fine rings 'att' mark: an arc at `R + 8` facing the way the ribbon comes in, a tick at each end, amber with three chevrons marching in over an own city, the enemy's colour elsewhere; the enemy's head stops outside it.
+
+**Plan fill, Eased steps with slots** (53e, 54e, `render/planFill.ts`): each bonus the server reports eases in over 0.9 s from 0.25 s after the snapshot (a tween between two server values, never ahead), while the charge flies from the first empty place of the warehouse row into the tail (0.5 s, an arc up). The pill is a thin Engraved panel with a chevron slot per asked bonus, solid as gathered; economy v1 keeps "+N" with one chevron.
+
+**Bounce, Chevrons home** (54m): three amber chevrons on a casing run ahead of an own bounced group to the ring of the node it left, while it walks the road home. **Undo, Rewind fixed** (54b): the cancelled order winds back into the group (0.55 s) behind a double barb that points at the group, and a three-quarter ring winds round the group or the city (from 0.3 s), its head leading the turn; "nothing to undo" a crossed quarter ring at the pointer. Less motion: nothing runs (the burin points and chevrons stand, the fill and the path jump, the undo ring stands wound and fades).
+
+Not done here: the un-drawing of a cancelled ribbon from its head (the undo mark has no kind, so a cancelled plan winds back as an arrow along its path), the CP mote of an undone recruit (part 6, the HUD).
+
 ## 58. Style foundation: fonts, tokens, primitives and the CP mark (#841) **[implemented]**
 
 The first implementation piece of the decided Lapis (#826, sections 51 and 56) and Engraved (#829, sections 53 to 57) styles. Later pieces restyle the screens, the HUD and the map on top of it.

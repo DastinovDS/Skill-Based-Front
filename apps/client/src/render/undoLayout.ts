@@ -1,99 +1,83 @@
 /**
- * The look of the cue of `X` on the map (#764). Pure functions, no PixiJS and no DOM. Nothing here
- * decides what was undone: the marks come from the server's `ack` (`match/orderController.ts`).
+ * The look of the cue of `X` on the map (#764), Rewind fixed (#851, ui-style 54b; mockup
+ * `in-game-style-r5.html`, `undoArrowW`, `undoRingW`, `nothingCue` W1). Pure functions, no PixiJS
+ * and no DOM. Nothing here decides what was undone: the marks come from the server's `ack`
+ * (`match/orderController.ts`).
  */
 import type { Point } from './camera.ts';
-import { polylineLength } from './intentLayout.ts';
-import { UNDO_CUE } from './style.ts';
+import { easeSettle, easeTravel } from '../theme/tokens.ts';
+import { REWIND } from './style.ts';
 
-export interface UndoLook {
-  /** The share of the order's arrow still out, 1..0. */
+export interface RewindLook {
+  /** The share of the cancelled order's arrow still out (1..0, at least `REWIND.keep` units of it), and its opacity. */
   readonly arrow: number;
-  /** The size of the ring against its resting size, `ringFrom`..1. */
+  readonly arrowAlpha: number;
+  /** How far the three-quarter ring has wound (0..1; 0 before it starts), and its opacity. */
   readonly ring: number;
-  readonly alpha: number;
+  readonly ringAlpha: number;
 }
 
 /**
- * The cue `ageMs` after the undo; `null`: over. It rolls back quickly and slows down, holds, then
- * fades. With "less motion" nothing runs: the arrow and the ring stand still and only fade.
+ * The cue `ageMs` after the undo; `null`: over. The order winds back into the group over
+ * `REWIND.arrowMs` (eased in and out) and fades at the end; the ring winds from `ring.from` over
+ * `ring.ms` (eased out), holds, then fades. With "less motion" nothing runs: the ring stands wound
+ * and fades, the arrow is gone.
  */
-export function undoLook(ageMs: number, reduced: boolean): UndoLook | null {
-  if (ageMs < 0 || ageMs >= UNDO_CUE.ms) return null;
-  const t = ageMs / UNDO_CUE.ms;
-  const alpha = t <= UNDO_CUE.fadeFrom ? 1 : 1 - (t - UNDO_CUE.fadeFrom) / (1 - UNDO_CUE.fadeFrom);
-  if (reduced) return { arrow: 1, ring: 1, alpha };
-  const run = Math.min(1, ageMs / UNDO_CUE.rollbackMs);
-  const ease = run * (2 - run);
-  return { arrow: 1 - ease, ring: UNDO_CUE.ringFrom + (1 - UNDO_CUE.ringFrom) * ease, alpha };
+export function rewindLook(ageMs: number, reduced: boolean): RewindLook | null {
+  if (ageMs < 0 || ageMs >= REWIND.ms) return null;
+  const R = REWIND.ring;
+  const ringAlpha = ageMs <= R.fadeFrom ? 1 : Math.max(0, 1 - (ageMs - R.fadeFrom) / R.fadeMs);
+  if (reduced) return { arrow: 0, arrowAlpha: 0, ring: 1, ringAlpha };
+  const q = Math.min(1, ageMs / REWIND.arrowMs);
+  const arrowAlpha =
+    q >= 1 ? 0 : q > REWIND.fadeFrom ? 1 - (q - REWIND.fadeFrom) / (1 - REWIND.fadeFrom) : 1;
+  const wound = ageMs < R.from ? 0 : easeSettle((ageMs - R.from) / R.ms);
+  return {
+    arrow: 1 - easeTravel(q),
+    arrowAlpha,
+    ring: wound,
+    ringAlpha: ageMs < R.from ? 0 : ringAlpha,
+  };
 }
 
-/** The first `share` (0..1) of the polyline `points`, by length; fewer than 2 points: nothing left. */
-export function cutPolyline(points: readonly Point[], share: number): Point[] {
-  let left = polylineLength(points) * Math.min(1, Math.max(0, share));
-  if (left <= 0) return [];
-  const out: Point[] = [];
-  for (let i = 0; i < points.length; i++) {
-    const p = points[i];
-    if (p === undefined) continue;
-    const before = points[i - 1];
-    if (before !== undefined) {
-      const step = Math.hypot(p.x - before.x, p.y - before.y);
-      if (step >= left) {
-        const k = step === 0 ? 0 : left / step;
-        out.push({ x: before.x + (p.x - before.x) * k, y: before.y + (p.y - before.y) * k });
-        return out;
-      }
-      left -= step;
-    }
-    out.push(p);
-  }
-  return out;
+/** "Nothing to undo" `ageMs` after the press: its opacity and sideways shake; `null`: over. */
+export function nothingLook(ageMs: number, reduced: boolean): { alpha: number; dx: number } | null {
+  const E = REWIND.empty;
+  if (ageMs < 0 || ageMs >= E.ms) return null;
+  const alpha =
+    ageMs < E.inMs
+      ? ageMs / E.inMs
+      : ageMs > E.fadeFrom
+        ? Math.max(0, 1 - (ageMs - E.fadeFrom) / E.fadeMs)
+        : 1;
+  const dx = reduced
+    ? 0
+    : Math.sin((ageMs / 1000) * 40) * E.shake * Math.max(0, 1 - ageMs / E.shakeMs);
+  return { alpha: alpha * E.alpha, dx };
 }
 
-/** `points` with its end pulled back by `inset` along the last piece (the arrow stops at the city). */
-export function insetEnd(points: readonly Point[], inset: number): Point[] {
-  const last = points.at(-1);
-  const before = points.at(-2);
-  if (last === undefined || before === undefined) return [...points];
-  const length = Math.hypot(last.x - before.x, last.y - before.y);
-  const k = length <= inset ? 0 : (length - inset) / length;
-  const end = { x: before.x + (last.x - before.x) * k, y: before.y + (last.y - before.y) * k };
-  return [...points.slice(0, -1), end];
-}
-
-/** A full circle as a closed polyline, for dashes. */
-export function circlePoints(centre: Point, radius: number): Point[] {
-  const steps = Math.max(24, Math.ceil(radius));
-  return Array.from({ length: steps }, (_, i) => {
-    const a = (2 * Math.PI * i) / steps;
-    return { x: centre.x + radius * Math.cos(a), y: centre.y + radius * Math.sin(a) };
-  });
-}
-
-/** The round arrow of the sign: an arc that goes back round the top, and the head at its end. */
-export function undoGlyph(
+/**
+ * The three-quarter ring round `centre` wound to `share` (0..1): from straight up it turns
+ * anticlockwise on the screen (the way back), `radius` out; its head leads the turn. The arc as a
+ * polyline and the head (a barbed point) `REWIND.ringHead.ahead` past its leading end.
+ */
+export function rewindRing(
   centre: Point,
   radius: number,
-): { readonly arc: Point[]; readonly head: readonly [Point, Point, Point] } {
-  const from = (120 * Math.PI) / 180;
-  const to = (-150 * Math.PI) / 180;
-  const steps = 18;
-  const at = (a: number, r: number): Point => ({
-    x: centre.x + r * Math.cos(a),
-    y: centre.y + r * Math.sin(a),
-  });
-  const arc = Array.from({ length: steps + 1 }, (_, i) =>
-    at(from + ((to - from) * i) / steps, radius),
-  );
-  // Going round this way the tangent at `to` is (sin, -cos): the head points along it.
-  const size = radius * 0.8;
-  const end = at(to, radius);
-  const dir = { x: Math.sin(to), y: -Math.cos(to) };
-  const tip = { x: end.x + dir.x * size, y: end.y + dir.y * size };
-  const side = { x: -dir.y * size * 0.75, y: dir.x * size * 0.75 };
-  return {
-    arc,
-    head: [tip, { x: end.x + side.x, y: end.y + side.y }, { x: end.x - side.x, y: end.y - side.y }],
-  };
+  share: number,
+): { readonly arc: Point[]; readonly tip: Point; readonly dir: Point } | null {
+  if (share <= 0) return null;
+  const a0 = -Math.PI / 2;
+  const a1 = a0 - Math.PI * 1.5 * Math.min(1, share);
+  const steps = Math.max(6, Math.ceil(24 * share));
+  const arc: Point[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = a0 + ((a1 - a0) * i) / steps;
+    arc.push({ x: centre.x + radius * Math.cos(a), y: centre.y + radius * Math.sin(a) });
+  }
+  // Going round this way (the angle falling) the tangent is (sin a, -cos a).
+  const dir = { x: Math.sin(a1), y: -Math.cos(a1) };
+  const end = arc[arc.length - 1] ?? centre;
+  const ahead = REWIND.ringHead.ahead;
+  return { arc, tip: { x: end.x + dir.x * ahead, y: end.y + dir.y * ahead }, dir };
 }
