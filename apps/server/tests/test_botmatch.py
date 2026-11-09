@@ -252,7 +252,7 @@ def test_every_level_is_a_smart_bot_with_a_tempo_level() -> None:
 
     root = Path(__file__).resolve().parents[3]
     mapdef = load_map(root / "maps" / "fixtures" / "web.json")
-    rules = load_ruleset(root / "rulesets" / "mvp-2.toml")
+    rules = load_ruleset(root / "rulesets" / "mvp-7.toml")
     assert set(LEVEL_BOTS) == {"easy", "normal", "hard", "expert"}
     for name in LEVEL_BOTS.values():
         assert "@" in name

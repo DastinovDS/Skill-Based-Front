@@ -184,7 +184,8 @@ def test_invite_match_has_a_row_and_its_result_is_saved(live_settings: Settings)
             assert runner is not None
             row, sides = live.row(match_id)
             assert (row.status, row.rated, row.started_at is not None) == ("running", False, True)
-            assert row.ruleset_hash == ruleset_hash(runner.match.rules)
+            # The given ruleset, not the one scaled by the map tempo (DEC-46, mvp-7).
+            assert row.ruleset_hash == ruleset_hash(runner.match.source_rules)
             assert row.ended_at is None
             assert [s.player_id for s in sides] == list(runner.players)
 
@@ -434,7 +435,7 @@ def test_end_reason_of_a_normal_end() -> None:
 
 
 def test_test_short_ruleset_is_not_for_prod() -> None:
-    short, full = ROOT / "rulesets" / "test-short.toml", ROOT / "rulesets" / "mvp-0.toml"
+    short, full = ROOT / "rulesets" / "test-short.toml", ROOT / "rulesets" / "mvp-7.toml"
     for env in ("dev", "e2e"):
         assert Settings(env=env, ruleset_path=short).ruleset_path == short  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="only for dev and e2e"):
@@ -442,14 +443,14 @@ def test_test_short_ruleset_is_not_for_prod() -> None:
     assert Settings(env="prod", ruleset_path=full).env == "prod"
 
 
-def test_mvp3_is_a_selectable_ruleset_with_a_bundled_archive() -> None:
-    """DEC-41 (#647): the economy v2 ruleset ``mvp-3`` is chosen like any other by
-    ``GOW_RULESET_PATH`` (``mise run stack:agent mvp-3``), in prod too, and its archive file ships
-    with the image, so the replays of its matches re-simulate (AGENTS.md, section 4.5). The
-    default is ``mvp-7`` in ``compose.yaml`` and the image (#885)."""
-    path = ROOT / "rulesets" / "mvp-3.toml"
+@pytest.mark.parametrize("name", ["mvp-5", "mvp-6", "mvp-7"])
+def test_a_kept_ruleset_is_selectable_with_a_bundled_archive(name: str) -> None:
+    """A kept ruleset is chosen like any other by ``GOW_RULESET_PATH`` (``mise run stack:agent
+    mvp-6``), in prod too, and its archive file ships with the image, so the replays of its
+    matches re-simulate (AGENTS.md, section 4.5). The default is ``mvp-7`` in ``compose.yaml``,
+    the image (#885) and ``Settings``."""
+    path = ROOT / "rulesets" / f"{name}.toml"
     rules = load_ruleset(path)
-    assert rules.v2
     assert Settings(env="prod", ruleset_path=path).ruleset_path == path
     archived = ROOT / "rulesets" / "archive" / f"{ruleset_hash(rules)}.toml"
     assert archived.read_bytes() == path.read_bytes()

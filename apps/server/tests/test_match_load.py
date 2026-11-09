@@ -150,7 +150,7 @@ def _play(mapdef: MapDef, rules: Ruleset) -> tuple[float, float, list[MatchRunne
 
 def test_thirty_matches_keep_tick_lag_under_ten_percent() -> None:
     mapdef = load_map(ROOT / "maps" / "fixtures" / "web.json")
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     dt = 1.0 / rules.tick_hz
     failures: list[str] = []
     for _ in range(ATTEMPTS):

@@ -27,7 +27,6 @@ from gow_sim.match import SIM_VERSION, Match
 from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, replay_run
 from gow_sim.ruleset import Ruleset, ruleset_hash
 from gow_sim.state import AtNode, Detail, Fight, FightRound, GameState, Group, OnEdge, Sighting
-from gow_sim.systems.build import done_tick
 from gow_sim.systems.capacity import node_capacities, warehouse_capacity
 from gow_sim.systems.supply import is_city
 from gow_sim.view import EnemyGroupView, HalfView, PlayerView
@@ -45,6 +44,11 @@ __all__ = [
 
 FORMAT: Final = 1
 """Version of the frames file format; the viewer checks it."""
+
+ROAD_LEVEL: Final = 1
+"""The road level written where the format has one (``w`` of a frame, the first element of an
+edge in ``v``): roads have no levels since the road upgrades were removed (#894), every road is
+level 1. The format keeps the slot, so ``FORMAT`` stays 1."""
 
 FRAMES_PER_SECOND: Final = 2
 """Full-state frames per second of the match (the issue: "2 times per second")."""
@@ -121,7 +125,7 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
             ]
             for n in (state.nodes[i] for i in sorted(state.nodes))
         ],
-        "w": [state.edges[i].width for i in sorted(state.edges)],
+        "w": [ROAD_LEVEL] * len(state.map.edges),
         "g": [_group(state.groups[i]) for i in sorted(state.groups)],
         "k": [
             [p.id, p.owner, p.edge, p.from_node, p.charges, p.depart_tick, p.arrive_tick]
@@ -132,13 +136,7 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
             for i in (state.intents[k] for k in sorted(state.intents))
         ],
     }
-    builds = [
-        [eid, b.owner, done_tick(rules, b)]
-        for eid, b in ((i, state.edges[i].build) for i in sorted(state.edges))
-        if b is not None  # road builds (DEC-28); the barracks and the warehouse are not drawn
-    ]
-    if builds:  # only while a road is built: older files without the key stay valid
-        frame["e"] = builds
+    # No ``e`` (road builds, DEC-28) since #894: roads are not built; older files still carry it.
     # No ``b`` (road builds by cities) since DEC-28: files from before still carry it.
     # No ``r`` (road types) since DEC-26: roads have no type; files from before still carry it.
     fights = [_fight(state.fights[i]) for i in sorted(state.fights)]
@@ -211,14 +209,12 @@ def vision_of(view: PlayerView) -> dict[str, object]:
             for n in view.nodes
         ],
         "e": [
-            [e.width, e.detail.value, _half(e.halves[0], t), _half(e.halves[1], t)]
+            [ROAD_LEVEL, e.detail.value, _half(e.halves[0], t), _half(e.halves[1], t)]
             + ([[_figure(f) for f in e.enemy_groups]] if e.enemy_groups else [])
             for e in view.edges
         ],
     }
-    builds = [e.id for e in view.edges if e.build is not None]
-    if builds:  # only while the player sees a road build
-        out["b"] = builds
+    # No ``b`` (the road builds the player saw) since #894: older files still carry it.
     return out
 
 
