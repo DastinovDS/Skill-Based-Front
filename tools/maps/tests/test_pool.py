@@ -96,8 +96,8 @@ def test_map_is_built_from_its_half(name: str) -> None:
 
 @pytest.mark.parametrize("name", DEC27)
 def test_dec27_map_passes_the_size_check_and_the_warehouses(name: str) -> None:
-    # DEC-27, item 5: 45..55 nodes; DEC-26, item 5: no city starts above its warehouse (mvp-6).
-    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-6.toml")
+    # DEC-27, item 5: 45..55 nodes; DEC-26, item 5: no city starts above its warehouse (mvp-7).
+    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-7.toml")
     assert validate_file(_file(name), SIZE, rules) == []
 
 
@@ -198,7 +198,7 @@ def test_marches_is_a_large_generated_map_that_passes_the_validator() -> None:
     assert len(mapdef.nodes) == 48
     own, enemy = mapdef.nodes[mapdef.capital(0)], mapdef.nodes[mapdef.capital(1)]
     assert own.x < mapdef.meta.width / 2 < enemy.x
-    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-6.toml")
+    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-7.toml")
     assert validate_file(MENU / "marches.json", CONFIG, rules) == []
     assert preview_path(MENU / "marches.json").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     assert (MENU / "marches.bg.webp").stat().st_size <= 500_000
@@ -208,7 +208,7 @@ def test_menu_map_is_built_from_its_half_and_passes_the_validator() -> None:
     half = json.loads((MENU / "src" / "valley.half.json").read_text(encoding="utf-8"))
     built = json.loads((MENU / "valley.json").read_text(encoding="utf-8"))
     assert mirror_half(half, CONFIG) == built
-    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-6.toml")
+    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-7.toml")
     assert validate_file(MENU / "valley.json", CONFIG, rules) == []
     assert preview_path(MENU / "valley.json").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 

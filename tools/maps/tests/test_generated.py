@@ -116,7 +116,7 @@ def test_a_batch_map_is_what_its_seed_gives(path: Path) -> None:
 
 @pytest.mark.parametrize("path", BATCH, ids=[p.stem for p in BATCH])
 def test_a_batch_map_passes_the_validator(path: Path) -> None:
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     assert validate_file(path, CONFIG, rules) == []
 
 
