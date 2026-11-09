@@ -739,6 +739,19 @@ def dump_vector_file(data: dict[str, Any]) -> str:
     return body[:-1] + ',"chains":[\n' + ",\n".join(lines) + "\n]}\n"
 
 
+def dump_geography(data: dict[str, Any]) -> str:
+    """The authored-style geography, one water cell or river per line, like the hand-made ones."""
+
+    def rows(items: list[Any]) -> str:
+        return ",\n".join(f"    {json.dumps(item)}" for item in items)
+
+    return (
+        f'{{\n  "map": {json.dumps(data["map"])},\n'
+        f'  "water": [\n{rows(data["water"])}\n  ],\n'
+        f'  "rivers": [\n{rows(data["rivers"])}\n  ]\n}}\n'
+    )
+
+
 # ---- the picture: Intaglio water (#826, round 2 variant III; #842) -----------------------------
 WATER_TONES = ((30, 48, 58), (36, 56, 66))  # two tones of dark stone in soft blotches
 RIVER_LIGHT = ((50, 76, 86), 0.5)  # a river is shallow: lighter than a lake
@@ -834,6 +847,7 @@ def _draw_bridges(img: Field, mapdef: MapDef, bridges: Iterable[Bridge]) -> Fiel
             [_deck_point(shifted, angle, u, v) for u, v in quad], fill=(*SHADOW, 71)
         )
     layer = Image.alpha_composite(layer, shade)
+    del shade, base  # memory (#884): the supersampled layers are 4 bytes a pixel
     draw = ImageDraw.Draw(layer)
     for br, angle in decks:
         draw.polygon([_deck_point(br, angle, u, v) for u, v in quad], fill=DECK)
@@ -903,6 +917,7 @@ def render(
     near = _upscale(distance_to(water_cells)) - STEP / 2
     from_land = _upscale(distance_to(~water_cells)) - STEP / 2
     thin = np.asarray(_smoothstep(4.0, 26.0, near.astype(np.float64)), dtype=np.float32)
+    del water_f, lake_f, near  # memory (#884): only their results are needed below
 
     def paint(img: Field) -> Field:
         noise = bake.fbm(h, w, 60, 3, rng_tone) * 1.6

@@ -120,6 +120,21 @@ then `deploy/restore.sh <the predeploy backup of this deploy>`.
   set: result and rating are kept, and `GET /api/replays/{id}` answers `410` with `"reason": "expired"` (the viewer says
   "no longer available"). Each pass logs `replay cleanup` with the counts of files, bytes, matches and archived logs.
   Disk use of the volume: `docker compose exec app du -sh /data/replays`.
+- **Per-match maps** (#884). A private invite or a bot match without a map choice plays a map the server makes for it
+  (`docs/design/map-format.md`, "A new map for every match"). The maps live in `/data/replays/maps/` (on the data
+  volume, next to the replays; `<id>.json`, the background, thumbnail, preview, `src/` and `geo/`, about 0.5 MB a map)
+  and go with the replays: the same cleanup pass removes a map once its match is over and has no replay file left, a
+  map no match row names (an invite that never started) after a day, and a `.tmp-<id>/` folder of a worker that died
+  after a day; the `replay cleanup` log line counts them (`maps_removed`). The incremental replay backup mirrors only
+  the command logs and frames files: the frames file embeds its map, so a restored replay plays without the map folder,
+  and the statistics archive below copies the map of a log next to it. Settings: `GOW_MAPGEN_ENABLED` (`false`: pool
+  maps only, as before #884), `GOW_MAPGEN_WORKERS` (1), `GOW_MAPGEN_MAX_PENDING` (4: past it a match plays a pool map at
+  once), `GOW_MAPGEN_WAIT_S` (60: the longest a match waits for its map). Each map is made in a fresh worker process
+  (`nice` 10, the out-of-memory killer's first choice): about 5 s (2.5 to 20 s), and up to about 0.65 GB of memory while
+  it bakes a 55-node map. Under the 1 GB of `APP_MEM_LIMIT` a map made while the replay worker and many matches are busy
+  can run out of memory: the kernel then kills the map worker, not the server, and the match plays a pool map (checked
+  with a 450 MB limit). If `gow_maps_fallback_total` grows, raise `APP_MEM_LIMIT` (the VPS has 2 GB) or set
+  `GOW_MAPGEN_ENABLED=false`.
 - **Statistics archive for development and playtests** (#525). To collect the matches of a playtest for analysis, switch
   the archive on: before a replay expires, its command log (`*.jsonl.gz`, a few KB; not the frames file) is copied into
   `GOW_REPLAY_STATS_ARCHIVE_DIR` as `<dir>/<YYYY-MM-DD>/<match id>-<creation time>.jsonl.gz` (the date and time are those
@@ -127,6 +142,7 @@ then `deploy/restore.sh <the predeploy backup of this deploy>`.
   alone, so a repeated pass changes nothing; if a copy fails the replay is kept and tried again at the next pass. The
   server never deletes or serves the archive. A log enters it when the match leaves the last-N window of its players, so
   the newest matches of each account appear later (and `GOW_REPLAY_KEEP_PER_PLAYER=0` archives nothing: nothing expires).
+  The log of a match on a per-match map (#884) takes the map along: `<dir>/<YYYY-MM-DD>/maps/<id>.json`.
   The logs contain no nick (the match sides are in the database), see `docs/ops/legal.md`.
   - Enable (the compose stack has a volume `gow-replay-stats` mounted at `/replay-stats` for this): add
     `GOW_REPLAY_STATS_ARCHIVE_DIR=/replay-stats` to `~/skill-based-front/.env` (or the environment of `docker compose`)
@@ -219,6 +235,8 @@ docker compose exec app python -c "import urllib.request as u; print(u.urlopen('
 | `gow_ws_refused_unauth_total` | match WebSockets closed with 1013 because of the cap on connections before `hello` (#199) |
 | `gow_outbox_backlog_max` | the longest unsent queue of a connection (the client is not reading) |
 | `gow_queue_size` | players in the matchmaking queue: looking for an opponent or confirming a found pair (MM-01) |
+| `gow_maps_pending` | per-match maps being made or waiting for a worker (#884) |
+| `gow_maps_made_total`, `gow_maps_fallback_total` | per-match maps made; matches that asked for one and played a pool map (the cap, no seed passed, the worker died, `GOW_MAPGEN_WAIT_S`) (#884) |
 
 The load harness (`python -m gow_server.loadtest`, `docs/qa/load.md`) reads the same endpoint before and after a run of N matches.
 
@@ -279,6 +297,7 @@ All limits live in the memory of one process (a server restart zeroes the counte
 | WebSockets that have not sent `hello` | server | 200 (`GOW_WS_UNAUTH_TOTAL`) | the same: a backstop against a flood from many addresses |
 | Active match | player | 1 | `409` (SRV-09) |
 | Running matches | server | 30 (`GOW_MAX_MATCHES`: the budget of AGENTS.md section 12 for one core), of them against a bot 10 (`GOW_MAX_BOT_MATCHES`, 0 turns bot matches off) | `503` with `Retry-After` on `POST /api/bot-matches`, the second `ready` of an invite and the second `confirm` of the queue; the player stays free (#412) |
+| Per-match maps being made | server | 4 (`GOW_MAPGEN_MAX_PENDING`), one worker (`GOW_MAPGEN_WORKERS`) | past it a private invite or a bot match plays a random pool map at once; the creation of a match is limited as above (#884) |
 | Bot match without a WebSocket | match | 15 s (`GOW_BOT_CONNECT_TIMEOUT_S`) | the match is dropped as never started: no replay, saved `aborted` / `never_started`, the player is free again (#412) |
 | Repeated resigns in rated matches | player | 2nd in 24 hours: 5 minutes out of the queue; 3rd: 30 minutes; 4th and later: 2 hours (the 1st: none) | `POST /api/queue`: `429` with `Retry-After` and a `QueueBan` body (DEC-34, #414; `GOW_RESIGN_*`) |
 | Rated matches between the same two accounts | pair of accounts | 3 per 24 hours, then unrated | the matchmaking queue still pairs them, the match is unrated (DEC-34; `GOW_OPPONENT_LIMIT*`) |

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.12.*"
 
 [manifest]
@@ -235,6 +235,7 @@ dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
     { name = "gow-bots" },
+    { name = "gow-maps" },
     { name = "gow-protocol" },
     { name = "gow-sim" },
     { name = "pydantic-settings" },
@@ -248,6 +249,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.20.0" },
     { name = "fastapi", specifier = ">=0.142.2" },
     { name = "gow-bots", editable = "apps/bots" },
+    { name = "gow-maps", editable = "tools/maps" },
     { name = "gow-protocol", editable = "packages/protocol" },
     { name = "gow-sim", editable = "packages/sim" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },

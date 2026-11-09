@@ -3,7 +3,8 @@
 A match goes through these states (``TRANSITIONS`` is the whole table):
 
 ``created``    an invite exists, or a bot match is being started; nobody is claimed yet.
-``waiting``    a guest joined; both players are claimed and have ``ready_timeout_s`` to be ready.
+``waiting``    a guest joined; both players are claimed and have ``ready_timeout_s`` to be ready,
+               counted from when the map of the invite is made (#884: ``hold_ready_timer``).
 ``running``    the ``matches`` row exists (``status = running``) and the ``MatchRunner`` plays.
 ``finished``   the runner is over; the players are free again. Next: the result is written.
 ``saved``      winner, reason and duration are in the database (``status = saved``).
@@ -32,7 +33,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
@@ -204,6 +205,17 @@ class MatchLifecycle:
         self.claim(record, (host, guest))
         record.advance(MatchState.WAITING)
         record.deadline = self.clock.now() + self.ready_timeout_s
+
+    def hold_ready_timer(self, record: MatchRecord, until: "asyncio.Future[Any]") -> None:
+        """The ready timer of a ``waiting`` record starts only when ``until`` is done: the map of
+        the match is still being made (#884), and the players are not to blame for that."""
+        record.deadline = None
+
+        def start(_: "asyncio.Future[Any]") -> None:
+            if record.state is MatchState.WAITING and record.deadline is None:
+                record.deadline = self.clock.now() + self.ready_timeout_s
+
+        until.add_done_callback(start)
 
     def abort(self, record: MatchRecord, reason: str) -> None:
         """A match that did not start: ``-> aborted -> cleaned``. No-op on a started one."""

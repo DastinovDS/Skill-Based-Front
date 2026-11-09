@@ -59,6 +59,10 @@ class ServerMetrics:
     matches_refused_bot_full: int = 0
     matches_never_started: int = 0
     ws_refused_unauth: int = 0
+    maps_made: int = 0
+    """Per-match maps made (#884)."""
+    maps_fallback: int = 0
+    """Matches that asked for a new map and got a pool map: the cap, a failure, the wait (#884)."""
     step_seconds: Histogram = field(default_factory=lambda: Histogram(STEP_BUCKETS_S))
     tick_lag_seconds: Histogram = field(default_factory=lambda: Histogram(LAG_BUCKETS_S))
 
@@ -77,9 +81,24 @@ def _value(lines: list[str], kind: str, name: str, help_text: str, value: float)
     lines += [f"# HELP {name} {help_text}", f"# TYPE {name} {kind}", f"{name} {value}"]
 
 
-def render(manager: "MatchManager", queue_size: int = 0) -> str:
+def render(manager: "MatchManager", queue_size: int = 0, maps_pending: int = 0) -> str:
     m = manager.metrics
     lines: list[str] = []
+    _value(
+        lines,
+        "gauge",
+        "gow_maps_pending",
+        "Per-match maps being made or waiting for a worker (#884).",
+        maps_pending,
+    )
+    _value(lines, "counter", "gow_maps_made_total", "Per-match maps made (#884).", m.maps_made)
+    _value(
+        lines,
+        "counter",
+        "gow_maps_fallback_total",
+        "Matches that asked for a new map and played a pool map (#884).",
+        m.maps_fallback,
+    )
     _value(
         lines,
         "gauge",

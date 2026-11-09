@@ -44,6 +44,12 @@ services:
       GOW_MAX_MATCHES: ${GOW_MAX_MATCHES:-30}
       GOW_MAX_BOT_MATCHES: ${GOW_MAX_BOT_MATCHES:-10}
       GOW_BOT_CONNECT_TIMEOUT_S: ${GOW_BOT_CONNECT_TIMEOUT_S:-15}
+      # A new map for every private invite and bot match (#884): on or off, worker processes,
+      # maps made or waiting at once (past it: a pool map), the longest wait for one.
+      GOW_MAPGEN_ENABLED: ${GOW_MAPGEN_ENABLED:-true}
+      GOW_MAPGEN_WORKERS: ${GOW_MAPGEN_WORKERS:-1}
+      GOW_MAPGEN_MAX_PENDING: ${GOW_MAPGEN_MAX_PENDING:-4}
+      GOW_MAPGEN_WAIT_S: ${GOW_MAPGEN_WAIT_S:-60}
       GOW_MONITOR_INTERVAL_S: ${GOW_MONITOR_INTERVAL_S:-30}
       # Replay retention (#525): replays kept per account; optional extra age limits in days
       # (0: off); the pass period; the statistics archive (empty: off, else /replay-stats).

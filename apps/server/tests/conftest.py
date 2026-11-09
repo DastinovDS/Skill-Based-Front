@@ -28,6 +28,13 @@ def _replays_in_tmp(
     monkeypatch.setenv("GOW_REPLAYS_DIR", str(tmp_path_factory.mktemp("replays")))
 
 
+@pytest.fixture(autouse=True)
+def _no_new_maps(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests play the maps of their ``maps_dir``: no map is made per match (#884) unless a test
+    asks for it with ``mapgen_enabled=True`` (``test_mapgen.py``). Making one takes seconds."""
+    monkeypatch.setenv("GOW_MAPGEN_ENABLED", "false")
+
+
 @pytest.fixture
 def maps_dir(tmp_path: Path) -> Path:
     directory = tmp_path / "maps"

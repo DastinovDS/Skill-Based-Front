@@ -28,7 +28,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List Maps */
+    /**
+     * List Maps
+     * @description The pool, then the stored generated maps; never a per-match map (#884).
+     */
     get: operations['list_maps_api_maps_get'];
     put?: never;
     post?: never;
@@ -48,8 +51,30 @@ export interface paths {
     /**
      * Get Map
      * @description The map file as is (format: docs/design/map-format.md).
+     *
+     *     A per-match map (#884) is here once it is made; 404 while it is being made.
      */
     get: operations['get_map_api_maps__map_id__get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/maps/{map_id}/summary': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Summary
+     * @description What ``GET /api/maps`` says of a map, for every map served here, a per-match one too.
+     */
+    get: operations['get_summary_api_maps__map_id__summary_get'];
     put?: never;
     post?: never;
     delete?: never;
@@ -67,6 +92,43 @@ export interface paths {
     };
     /** Get Background */
     get: operations['get_background_api_maps__map_id__background_webp_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/maps/{map_id}/thumb.webp': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Thumb */
+    get: operations['get_thumb_api_maps__map_id__thumb_webp_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/maps/{map_id}/geo.json': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Geo
+     * @description The vector file of a map with a geography (format: map-format.md, DEC-36).
+     */
+    get: operations['get_geo_api_maps__map_id__geo_json_get'];
     put?: never;
     post?: never;
     delete?: never;
@@ -494,6 +556,8 @@ export interface components {
       level: 'easy' | 'normal' | 'hard' | 'expert';
       /** Map Id */
       map_id?: string | null;
+      /** Map Source */
+      map_source?: ('new' | 'pool' | 'generated') | null;
       /**
        * Random Generated
        * @default false
@@ -504,6 +568,8 @@ export interface components {
     CreateMatch: {
       /** Map Id */
       map_id?: string | null;
+      /** Map Source */
+      map_source?: ('new' | 'pool' | 'generated') | null;
       /**
        * Random Generated
        * @default false
@@ -545,6 +611,8 @@ export interface components {
       public: boolean;
       /** Map Id */
       map_id: string;
+      /** Map Ready */
+      map_ready: boolean;
       /** Host Nick */
       host_nick: string;
       /** Guest Nick */
@@ -618,6 +686,15 @@ export interface components {
       background_url: string | null;
       /** Generated */
       generated: boolean;
+      /** Thumb Url */
+      thumb_url?: string | null;
+      /** Geo Url */
+      geo_url?: string | null;
+      /**
+       * Per Match
+       * @default false
+       */
+      per_match: boolean;
     };
     /** MatchEntry */
     MatchEntry: {
@@ -923,7 +1000,96 @@ export interface operations {
       };
     };
   };
+  get_summary_api_maps__map_id__summary_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        map_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MapSummary'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
   get_background_api_maps__map_id__background_webp_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        map_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_thumb_api_maps__map_id__thumb_webp_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        map_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_geo_api_maps__map_id__geo_json_get: {
     parameters: {
       query?: never;
       header?: never;

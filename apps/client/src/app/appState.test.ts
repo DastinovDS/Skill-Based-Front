@@ -9,6 +9,7 @@ const invite = (code: string): Invite => ({
   state: 'joined',
   public: false,
   map_id: 'pass',
+  map_ready: true,
   host_nick: 'Host',
   guest_nick: 'Guest',
   you_ready: false,

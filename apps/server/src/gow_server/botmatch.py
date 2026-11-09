@@ -1,7 +1,9 @@
 """Match against a bot (SRV-06, #53).
 
-``POST /api/bot-matches`` starts a match at once: no invite, no waiting. The answer carries the
-``match_id`` for the WebSocket ``/ws/match/{match_id}``; the player connects like in any match.
+``POST /api/bot-matches`` starts a match: no invite. The answer carries the ``match_id`` for the
+WebSocket ``/ws/match/{match_id}``; the player connects like in any match. Without a map choice the
+match gets a map made for it (#884, ``gow_server.mapgen``): the answer comes when the map is made,
+a few seconds (at most ``GOW_MAPGEN_WAIT_S``, then a pool map); the player is claimed meanwhile.
 The match is ``private`` (unrated, one pause per player, DEC-05).
 
 Difficulty levels are smart bots with a tempo level (``bot_factory``, ``smart_reactive@easy``),
@@ -25,7 +27,8 @@ from gow_bots.bots import bot_factory
 from gow_server.abuse import Limits, enforce, server_full
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchState
-from gow_server.maps import MapCatalog, choose_map
+from gow_server.mapgen import MapMaker
+from gow_server.maps import MapCatalog, MapSource, choose_map
 from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, ServerFullError
 from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset, apply_map_tempo
@@ -54,9 +57,12 @@ class CreateBotMatch(BaseModel):
 
     level: Level = "normal"
     map_id: str | None = None
-    """A map of the pool or a generated one; a random one if omitted."""
+    """A map of the pool or a stored generated one; excludes ``map_source``."""
+    map_source: MapSource | None = None
+    """With no ``map_id``: ``new`` (the default: a map made for this match, #884), ``pool``
+    (a random pool map) or ``generated`` (a random stored generated map)."""
     random_generated: bool = False
-    """With no ``map_id``: draw from the generated maps instead of the pool."""
+    """The older spelling of ``map_source: "generated"`` (#771)."""
 
 
 class BotMatchOut(BaseModel):
@@ -77,21 +83,41 @@ async def create_bot_match(
     rules: Ruleset = request.app.state.ruleset
     limits: Limits = request.app.state.limits
     enforce(limits.match_create, str(player.id), "too many matches created")
-    entry = choose_map(catalog, body.map_id, random_generated=body.random_generated)
+    maker: MapMaker | None = getattr(request.app.state, "mapmaker", None)
+    entry = choose_map(
+        catalog,
+        body.map_id,
+        random_generated=body.random_generated,
+        source=body.map_source,
+        default="new",
+    )
     if lifecycle.active_of(player.id) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="you already have an active match")
-    slot = secrets.randbelow(len(PLAYERS))
-    bot_slot = 1 - slot
-    controller = bot_factory(LEVEL_BOTS[body.level])(
-        entry.definition,
-        apply_map_tempo(rules, entry.definition),  # the periods the match plays (#803)
-        seed=secrets.randbits(SEED_BITS),
-        player=bot_slot,
-    )
-    accounts = [BOT_ACCOUNT, BOT_ACCOUNT]
-    accounts[slot] = player.id
     record = lifecycle.open_record()
+    pending = None
     try:
+        if entry is None:  # a new map (#884): the answer waits for it
+            # Claimed meanwhile (a second request is 409) and checked: no map for a full server.
+            lifecycle.claim(record, (player.id,))
+            if lifecycle.manager.draining:
+                raise ManagerDrainingError("the server is draining for a deploy")
+            lifecycle.manager.check_capacity(True)
+            pending = maker.request() if maker is not None else None
+            if pending is not None and maker is not None:
+                entry = await maker.settle(pending)
+            if entry is None:  # off, full, failed or too slow: a pool map
+                entry = choose_map(catalog, None)
+            assert entry is not None
+        slot = secrets.randbelow(len(PLAYERS))
+        bot_slot = 1 - slot
+        controller = bot_factory(LEVEL_BOTS[body.level])(
+            entry.definition,
+            apply_map_tempo(rules, entry.definition),  # the periods the match plays (#803)
+            seed=secrets.randbits(SEED_BITS),
+            player=bot_slot,
+        )
+        accounts = [BOT_ACCOUNT, BOT_ACCOUNT]
+        accounts[slot] = player.id
         runner = await lifecycle.start(
             record,
             entry.id,
@@ -115,5 +141,7 @@ async def create_bot_match(
     finally:
         if record.state is MatchState.CREATED:
             lifecycle.abort(record, "start_failed")
+            if pending is not None and maker is not None:
+                maker.discard(pending)
     response.headers["Cache-Control"] = "no-store"
     return BotMatchOut(match_id=runner.match_id, map_id=entry.id, level=body.level, player=slot)

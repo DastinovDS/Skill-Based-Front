@@ -61,9 +61,13 @@ COPY rulesets/ /app/rulesets/
 
 WORKDIR /app
 
+# MPLCONFIGDIR: the preview of a per-match map (#884) draws with matplotlib in the map worker
+# process, which wants a writable config and font cache dir; the root file system is read-only
+# (compose.yaml), /tmp is a tmpfs.
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    MPLCONFIGDIR=/tmp/matplotlib \
     GOW_ENV=prod \
     GOW_HOST=0.0.0.0 \
     GOW_PORT=8000 \

@@ -20,6 +20,7 @@ from gow_server import (
     internal,
     invites,
     leaderboard,
+    mapgen,
     maps,
     matchqueue,
     replays,
@@ -108,8 +109,22 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         orphans = await asyncio.to_thread(abort_orphans, app.state.sessions)
         if orphans:
             log.warning("matches of the previous run aborted", extra={"count": orphans})
+        app.state.mapmaker = mapgen.MapMaker(
+            mapgen.store_dir(settings.replays_dir),
+            app.state.maps,
+            app.state.ruleset,
+            enabled=settings.mapgen_enabled,
+            workers=settings.mapgen_workers,
+            max_pending=settings.mapgen_max_pending,
+            wait_s=settings.mapgen_wait_s,
+            metrics=app.state.matches.metrics,
+        )
         app.state.invites = invites.InviteBook(
-            match_clock, settings.invite_ttl_s, app.state.lifecycle, settings.lobby_stale_s
+            match_clock,
+            settings.invite_ttl_s,
+            app.state.lifecycle,
+            settings.lobby_stale_s,
+            maker=app.state.mapmaker,
         )
         app.state.queue = matchqueue.MatchQueue(
             match_clock,
@@ -140,6 +155,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             cleanup.cancel()
             await app.state.matches.shutdown()
             await app.state.lifecycle.aclose()
+            await app.state.mapmaker.aclose()
             await app.state.replays.aclose()
             engine.dispose()
             log.info("server stopped")

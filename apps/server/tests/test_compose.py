@@ -46,6 +46,7 @@ def test_every_operator_setting_is_passed_through() -> None:
 
 
 def test_compose_defaults_are_the_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GOW_MAPGEN_ENABLED")  # set off for the other tests by conftest.py
     baseline = Settings()
     for name, value in compose_defaults().items():
         monkeypatch.setenv(name, value)

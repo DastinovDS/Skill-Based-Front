@@ -6,7 +6,9 @@ the database keeps only metadata and the path (AGENTS.md, section 9):
 - ``{id}.jsonl.gz``: the command log (``gow_sim.replay``), written tick by tick while the match
   runs; the secret ``match_key`` is in its header, so the log is never served;
 - ``{id}.frames.json.gz``: the full-state frames for the viewer (``gow_server.frames``), written
-  once after the match. ``matches.replay_path`` is its name relative to ``replays_dir``.
+  once after the match. ``matches.replay_path`` is its name relative to ``replays_dir``;
+- ``maps/``: the per-match maps (#884, ``gow_server.mapgen``), where ``gow_sim.replay`` looks first
+  for the map of a log; removed with the replays of their matches (``purge_expired``).
 
 ``{id}`` is ``MatchRunner.match_id``, which is ``str(matches.id)`` for a match with a database row
 (the lifecycle, SRV-09, creates the row first and starts the runner with that id).
@@ -41,10 +43,11 @@ import gzip
 import logging
 import multiprocessing
 import re
+import shutil
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final, Literal
@@ -61,6 +64,9 @@ from gow_server.db import DbSession
 from gow_server.frames import FramesResult, build_frames
 from gow_server.identity import hash_token
 from gow_server.lifecycle import STATUS_RUNNING
+from gow_server.mapgen import ORPHAN_GRACE, store_dir
+from gow_server.maps import is_match_map
+from gow_server.mapworker import STAGING_PREFIX, remove_map
 from gow_server.models import Match, MatchPlayer, Player
 from gow_server.replay_retention import (
     BATCH,
@@ -368,7 +374,9 @@ class ReplayService:
                         )
                         if log_file is not None:
                             try:
-                                archive_log(log_file, self.stats_archive_dir, row)
+                                archive_log(
+                                    log_file, self.stats_archive_dir, row, self._map_file(row)
+                                )
                             except OSError:
                                 log.exception(
                                     "replay log not archived", extra={"match_id": match_id}
@@ -390,9 +398,63 @@ class ReplayService:
                     continue
                 removed_files += 1
                 removed_bytes += size
+        maps_removed = self._purge_maps(now)
         return PurgeResult(
-            removed_files, removed_bytes, expired, orphans, kept - removed_bytes, archived
+            removed_files,
+            removed_bytes,
+            expired,
+            orphans,
+            kept - removed_bytes,
+            archived,
+            maps_removed,
         )
+
+    def _map_file(self, match: Match) -> Path | None:
+        """The file of the per-match map (#884) of ``match``, if it has one and it is stored."""
+        if not is_match_map(match.map_id):
+            return None
+        path = store_dir(self.replays_dir) / f"{match.map_id}.json"
+        return path if path.is_file() else None
+
+    def _purge_maps(self, now: datetime) -> int:
+        """Remove the per-match maps (#884) whose match is over and has no replay file left, and
+        those no match row names after ``ORPHAN_GRACE`` (blocking). Returns the maps removed.
+
+        Runs after the replays of this pass are gone, so a map leaves with its replay.
+        """
+        folder = store_dir(self.replays_dir)
+        if not folder.is_dir():
+            return 0
+        with_files = set(self._scan())
+        removed = 0
+        for path in folder.glob(f"{STAGING_PREFIX}*"):  # a worker that died while making a map
+            if path.is_dir() and _age(path, now) >= ORPHAN_GRACE:
+                shutil.rmtree(path, ignore_errors=True)
+        ids = sorted(p.stem for p in folder.glob("*.json") if is_match_map(p.stem))
+        for start in range(0, len(ids), BATCH):
+            chunk = ids[start : start + BATCH]
+            with self._sessions() as session:
+                rows = session.execute(
+                    select(Match.id, Match.map_id, Match.status).where(Match.map_id.in_(chunk))
+                ).all()
+            used: dict[str, list[tuple[str, str]]] = {}
+            for pk, map_id, match_status in rows:
+                used.setdefault(map_id, []).append((str(pk), match_status))
+            for map_id in chunk:
+                matches = used.get(map_id)
+                if matches is None:  # no match yet (an invite on its way) or never
+                    if _age(folder / f"{map_id}.json", now) < ORPHAN_GRACE:
+                        continue
+                elif any(
+                    match_status == STATUS_RUNNING
+                    or match_id in with_files
+                    or self.is_building(match_id)
+                    for match_id, match_status in matches
+                ):
+                    continue
+                if remove_map(folder, map_id):
+                    removed += 1
+        return removed
 
     def _get_pool(self) -> ProcessPoolExecutor:
         if self._pool is None:
@@ -441,6 +503,15 @@ class ReplayService:
         pool, self._pool = self._pool, None
         if pool is not None:
             await asyncio.to_thread(pool.shutdown)
+
+
+def _age(path: Path, now: datetime) -> timedelta:
+    """How long ago ``path`` was modified (``now`` is naive UTC); none if it is gone."""
+    try:
+        modified = datetime.fromtimestamp(path.stat().st_mtime, UTC).replace(tzinfo=None)
+    except OSError:
+        return timedelta(0)
+    return now - modified
 
 
 # HTTP ---------------------------------------------------------------------------------------

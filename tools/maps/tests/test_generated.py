@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from gow_maps import geo
-from gow_maps.cli import dump_geography, main
+from gow_maps.cli import main
 from gow_maps.generate import (
     GENERATOR_VERSION,
     MAX_NODES,
@@ -21,6 +21,7 @@ from gow_maps.generate import (
     plan_size,
     water_share_pct,
 )
+from gow_maps.geo import dump_geography
 from gow_maps.mirror import dump_map
 from gow_maps.validate import load_config, validate_file
 from gow_sim.maps import load_map, map_hash, parse_map

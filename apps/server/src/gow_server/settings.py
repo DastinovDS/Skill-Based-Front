@@ -154,7 +154,17 @@ class Settings(BaseSettings):
     replay, saved ``aborted`` (#412). The client connects right after ``POST /api/bot-matches``."""
     ready_timeout_s: float = 120.0
     """A guest who joined an invite and the host have this long to be ready; otherwise the
-    invite is dropped, a no-show (SRV-09)."""
+    invite is dropped, a no-show (SRV-09). The timer starts when the map of the invite is ready
+    (#884)."""
+    mapgen_enabled: bool = True
+    """A private invite and a bot match without a map choice get a new map made for them (#884,
+    ``gow_server.mapgen``). Off: they get a random pool map, as before #884."""
+    mapgen_workers: int = Field(default=1, ge=1)
+    """Worker processes that make maps; each runs one map at a time (generate, bake, validate)."""
+    mapgen_max_pending: int = Field(default=4, ge=1)
+    """Maps being made or waiting for a worker at once; past it a new match plays a pool map."""
+    mapgen_wait_s: float = Field(default=60.0, gt=0)
+    """The longest a match waits for its new map; then it plays a pool map."""
     queue_window_base: float = 100.0
     queue_window_per_s: float = 5.0
     queue_window_max: float = 400.0
