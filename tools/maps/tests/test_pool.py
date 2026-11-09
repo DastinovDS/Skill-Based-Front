@@ -173,8 +173,8 @@ def test_cli_preview(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None
     assert "FAIL" in capsys.readouterr().out
 
 
-# The menu maps (#474, MM1 "Valley" behind the entry; #866 "marches" behind the other screens before a
-# match): outside the pool ---
+# The menu maps (#474, MM1 "Valley" behind the entry; #866 "marches" behind the other screens
+# before a match): outside the pool ---
 
 
 def test_menu_holds_the_valley_and_the_marches() -> None:
