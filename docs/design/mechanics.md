@@ -374,6 +374,7 @@ Implementation: #242 (`SIM_VERSION` 7, `PROTOCOL_VERSION` 11). The details that 
   public capacities and the own nodes, as the path does.
 - The auto-merge event `groups_merged` carries the node (`node`), like a manual merge, only to the owner.
 - A recruit that is given an order to move on the same tick has already left the node and does not merge.
+- One command for several groups (a rally to an own node at half price, a synchronized arrival elsewhere) and a recruit rally point: DEC-48 (#896, section 5), the owner's points [accepted], the rest [proposed].
 
 Alternatives (not chosen):
 - **A front fight** (for later, at the owner's word): in a fight each side takes part with no more units than the capacity of the node of the fight; the rest wait. The stack limit is then not needed, a big group simply does not realize its strength.
@@ -1525,6 +1526,209 @@ Alternatives (not chosen):
 - The bonus does not burn up after a fight (stronger defense, harder siege; the owner chose burning up).
 
 
+### Group order: rally to an own node and synchronized arrival (DEC-48, #896) **[accepted]** items A1 to A7, the defaults **[proposed]**
+
+The owner's idea of 2026-11-09, quality of life: maps grow (generated maps up to 55 nodes, #771, #884), players end up with many scattered groups they do not want to manage one by one, and combined attacks arrive piecemeal; under `mvp-7` there is no retreat from a fight (DEC-40), so a group that arrives alone can be lost. The replay analysis of the owner's three `mvp-7` matches of 2026-11-09:
+
+- **Scattered small groups.** The owner left groups of 1 to 2 units untouched because gathering them one by one costs too much CP: on `crossroads` a median of 4 of his 7 groups were standing groups of at most 2 units (38% of his units); 9 such groups stood idle 2 minutes or more, the longest 7 minutes. Pushes of several groups to an own node were rare (one in three matches).
+- **Piecemeal attacks.** 13 pushes of 2 to 7 groups on one enemy node had an arrival spread of 37 ticks in the median (3.7 s, up to 160 ticks, 16 s); **all 11 of them that produced a fight started it with fewer groups than were sent** (10 with a single group), and 3 of the 11 were lost, each a drip-feed. 29% to 37% of the move CP went into such pushes, 1 CP per group.
+- **`ReleasePlan` was used 0 times in 24 planned orders**: the owner finds it inconvenient (item A7).
+
+Nothing below is implemented. The points of part A are the owner's and **[accepted]**; every other point is a default **[proposed]** with alternatives, awaiting the owner (#896). The implementation follows in separate issues (sim, protocol, bots, client with the selection mockup) once the owner has answered.
+
+**A. The owner's decisions [accepted]** (2026-11-09)
+
+1. **One command for several groups.** The player picks a target node and one or more own groups.
+2. **Rally.** If the target is an **own** node, the groups go there and merge (auto-merge, DEC-20, item A). Price: half the move price per group, rounded up against the player: `ceil(n * orders.cost.move / 2)` for `n` groups; with a move of 1 CP, 3 groups cost 2 CP and 5 groups 3 CP. Only an own node can be a rally target.
+3. **Synchronized attack.** If the target is **not** an own node, the groups **arrive in the same tick** (they do not depart together): the server computes each group's waiting time before its departure so that all arrive together; the client computes nothing (`AGENTS.md`, 7.1). Full price: the move price per group, no discount.
+4. **Planned orders in a synchronized attack.** The maximum bonus of the combined attack is the sum of the charged units of all its groups, but every group gathers its own part separately in its own node (DEC-41, item 10: one warehouse charge per `orders.plan_ticks_per_bonus`), its own cap being its own charged units. The departures of the groups are then timed for the common arrival.
+5. **A persistent rally point for recruits** (the newly recruited units of a city walk to a chosen own node by themselves) belongs to this DEC, behind its own ruleset flag, for a test.
+6. **Selection UI** (the owner's decision of 2026-11-09, refining his first note that Shift is taken by planned orders): **Shift becomes the multi-select modifier**: Shift+click adds a group to the selection or removes it, Shift+drag with the left button draws a selection box on the map. **The planned order moves from Shift to holding `E`** (the physical key `KeyE`, independent of the layout) while one or more groups are selected: `E` held + click on a target gives a planned order; the bonus wheel of #793 moves from Shift+wheel to `E`+wheel. The mockup (a separate step) confirms the look, not the keys. Constraints: item K.
+7. **The group order replaces `ReleasePlan`** (the owner's decision of 2026-11-09: the release is inconvenient, the synchronized strike does its job): when the group order lands, `ReleasePlan` is removed from the player's controls. A single planned order still departs by itself at its requested bonus or at its cap (DEC-41, item 10).
+
+Reading of item A7 **[proposed]**: the command stays in the simulation and the protocol for the older rulesets (their replays contain it and must re-simulate), and under the section `[group_order]` (item J) it gives `FEATURE_DISABLED`, for a single plan and for a member alike. The client hides the release control under the section (item K6), the bots stop sending it there (item L). Alternative: remove the command everywhere (breaks the re-simulation of older replays that used it, so it needs a replay migration).
+
+Reading of item A2 **[accepted]** (it follows from the owner's numbers): the rounding unit is a whole CP, not a hundredth (3 groups cost 2 CP, not 1.5). In hundredths of CP (`AGENTS.md`, 4.1, item 3): `price = (n * orders.cost.move * rally_pct + 9999) // 10000 * 100` with `rally_pct = 50` (`//` on non-negative numbers: the ceiling to a whole CP). With `orders.cost.move = 100`: 1 group 100, 2 groups 100, 3 groups 200, 4 groups 200, 5 groups 300, 6 groups 300.
+
+**B. The command and its validation [proposed]**
+
+1. **One command** `GroupMove(groups, dest, planned, bonus)`: `groups` a list of 1 to `group_order.max_groups` (16) distinct own group ids, `dest` the target, `planned` and `bonus` as in `Move` (DEC-41, item 10: `bonus >= 1` for a planned order, 0 for an ordinary one). The single `Move` stays as it is.
+2. **The kind is decided at application** by the owner of `dest` in the tick the command is applied: an own node gives a rally, anything else (an enemy node, a neutral one, a node in the fog) a synchronized attack. The `ack` says which. Alternative: an explicit `kind` in the command, rejected when it no longer matches the target (a target captured between the click and the tick).
+3. **Partial acceptance.** Each member is checked like a `Move` of that group to `dest` (the order of the checks of `Move`, `gow_sim.commands`); a member that fails is dropped with its own code, the others go. The command is rejected as a whole only when: the key is off (`FEATURE_DISABLED`); the list is empty, longer than `max_groups` or repeats a group, or `bonus` does not match `planned` (`INVALID_ARGUMENT`); `planned` with an own target (`INVALID_ARGUMENT`, item G1); `dest` does not exist (`NOT_FOUND_OR_HIDDEN`); no member is valid (the code of the first member in the list); the CP of the accepted members are short (`NOT_ENOUGH_CP`, all or nothing: no member goes). A rejected command changes nothing. Alternative: all or nothing on every member (simpler to explain, but a box selection that catches one busy group fails as a whole).
+4. **Which groups may be members:**
+   - a group standing in a node, without an order, not in a fight: yes;
+   - a group on an edge (moving, bouncing, returning): `GROUP_ON_EDGE`, as for any `Move` (DEC-20, item B3); its order is **not** replaced. Alternative: accept it and route it from the node it is heading to, timed from its arrival there (a new rule for moving groups);
+   - a group in a fight: `IN_FIGHT` under any value of `combat.retreat` (DEC-40; under `"round"` a defender's single `Move` stays the way to leave a fight);
+   - a group waiting to depart (a gathering plan of DEC-41, a waiting member of another group order): `GROUP_BUSY`, as today;
+   - a group too big for every path to `dest` (DEC-20, item D): `STACK_LIMIT` for that member only; there is **no automatic split**; the client offers the split of #762 for it, as for a single group. Alternative: split the member automatically into the part that fits (the size of #762) and send that part;
+   - a group already standing in `dest` (only possible for a rally): `INVALID_ARGUMENT` for that member, as `Move` to its own node; it is not charged.
+5. **CP are charged at acceptance**, for the accepted members only: a rally the price of item A2 over the accepted members, an attack `n * orders.cost.move` (planned: `n * orders.cost.planned_move`; both 100 in `mvp-7`). Under `mvp-7` the CP ceiling of 5 CP limits a synchronized attack to 5 groups and a rally to 10.
+6. **The `ack`** (one per command): `applied_tick`, `kind` (`rally` or `attack`), the cost, `arrive_tick` (an ordinary attack: the common arrival; a planned attack: `None` until the departures are fixed, item F4; a rally: the latest arrival of a member) and `members`: per group in the order of the list its `path`, `depart_tick`, `arrive_tick` (each as the `ack` of a single `Move` gives them today, DEC-20) or its `reject_code`. The client draws the members' paths and one arrival from it and computes nothing.
+7. **Cancel** (`CancelOrder(group)`, free, DEC-20, item C): a member leaves the group order; its CP are **not** refunded (DEC-20, C1); a waiting member stands in its node without an order; a member on an edge turns back (C2). **The others keep their schedule**: no member is re-timed. A whole order is cancelled by one `CancelOrder` per member (the client sends them together; they apply in one tick). Alternatives: re-time the members that have not departed yet to the earliest common arrival of the rest; a refund of the half price for a member cancelled before it departs.
+8. A waiting member takes no other command: `Move`, `GroupMove`, `Split`, `Merge`, `SetMode` give `GROUP_BUSY` (as a gathering plan today, DEC-41); only `CancelOrder` acts (`ReleasePlan` is gone under the section, item A7). Alternative: a new `Move` replaces the membership (as a cancel followed by the move).
+
+**C. The synchronized arrival [proposed]**
+
+1. **The path and the time of a member** are those of its single `Move` today: its own fastest path under its own stack limit (`find_path` with its units, DEC-20, item D), `T_i = path_ticks(path)` (the sum of the edge times of section 4, "Speed by terrain by zones"; transit through own nodes costs no tick).
+2. **The common arrival tick** `A = t + max_i(T_i) - 1`, `t` the tick of application: the earliest arrival of the slowest member (the first step is made in the tick of the departure, as for `ack.arrive_tick`, DEC-20). **Member `i` departs in the tick** `d_i = A - T_i + 1` (`d_i >= t`; the slowest departs at once). Members with equal times depart together; two members in one node with the same path depart in one tick and do not merge on the way (DEC-20, item A2).
+3. All members that arrive in tick `A` arrive together: in an enemy node with defenders they start one fight as attackers before its first round (DEC-24, items C1, D1), their plan bonuses add up (F1); an empty enemy node is taken at once and the capture costs 1 charge of the arriving groups in all (DEC-38); a neutral node with a simultaneous enemy arrival gives the symmetric fight of C1.
+4. **A member delayed on the way** (a meeting on an edge, DEC-24, C2; a node of its path with a fight, where it stops and its order ends, D1; a DEC-37 catch when it leaves, one round): the others **keep their schedule**; the delayed member goes on with its order as any group does and arrives late or never. No re-timing: nobody can know in advance how long a fight lasts. Alternative: the members that have not departed yet wait for the delayed one (a re-timing that would also tell the player something about the fight ahead).
+5. **A fight in the node of a waiting member** (it was attacked while waiting): it is a standing group, it defends, it cannot leave the fight (DEC-40); if its departure tick passes in the fight, it departs in the first tick after the fight ends, if alive (DEC-24, item E4), and arrives late. Alternative: it drops out of the order when its departure tick passes in a fight.
+6. **The target changes owner before the arrival:** an attack whose target became own (another own group took it) arrives in an own node and merges (DEC-20, A1); no refund. An attack on a neutral node the enemy took meanwhile is an ordinary attack. In every case the price stays the one paid at acceptance.
+7. **The path is fixed at the command** (as for a waiting plan today): a node of it that became foreign by the departure tick is handled as an ordinary `Move` handles it on the way.
+
+**D. Waiting members [proposed]**
+
+1. A waiting member stands in its node: for every rule it is an ordinary standing own group. It recharges from the warehouse (`supply.recharge_per_tick`), counts for the capacity and its attrition, for starvation in a pocket and for the pull of the supply flow (DEC-43), defends the node and can be attacked.
+2. It is no "Defense" (economy v2 has none, DEC-41, item 5) and gets no bonus while it waits (an ordinary member has none; a planned one gets its gathered bonus at the departure, F6).
+3. It is not a target group of auto-merge and does not merge with arrivals (it has an order, DEC-20, A1 and A2).
+4. **Fog:** the enemy sees a waiting ordinary member as an ordinary standing group (no intent, no departure tick, no link; DEC-21 levels); when it departs it is an ordinary figure on the edge (DEC-33). A planned member shows its planned intent (item F7).
+
+**E. Rally [proposed]**
+
+1. **No synchronization:** every member departs in the tick of application along its own path; the members arrive when they arrive and merge by auto-merge (DEC-20, A1): the first to arrive stands in the target (or merges into the own group standing there), each later one merges into the target group.
+2. **The capacity of the target is not checked** (DEC-20, item D4: other groups are not counted): a rally that brings more units than the capacity gets the death above capacity (DEC-12, #118), as the same moves one by one would. Alternative: reject the members that would push the target over its capacity (`TARGET_FULL`), or a warning flag in the `ack` (the client must not compute it, `AGENTS.md` 7.1).
+3. **A rally target captured before the arrival:** the members keep going as ordinary moves and arrive in a foreign node: a fight, or a capture of an empty node (DEC-38); no refund, no extra charge, no re-timing. Alternatives: the members still on the way turn back (an automatic cancel, DEC-20, C2); the order is cancelled with a refund of the members that have not arrived.
+4. A rally of one group costs as much as a `Move` (`ceil(1 / 2) = 1` CP); a rally is never planned (item G1).
+
+**F. Planned orders in a synchronized attack [proposed]** (item A4)
+
+1. **The request** is one number, the requested total bonus `b >= 1` (one wheel for the whole order, as #793 for one group). It is capped at the sum of the charged units of the accepted members at the command, `C = sum(c_i)` (the owner's maximum; a larger request is accepted and capped, as DEC-41 caps a single plan, row P4 there).
+2. **The split** into parts `p_i`, fixed at the command: as even as possible, each part at most the member's charged units `c_i`, the remainder to the members first in the order of the command list. Formally: `B = min(b, C)`; `L` the smallest number with `sum(min(c_i, L)) >= B`; `p_i = min(c_i, L - 1)`, then the members with `c_i >= L` get +1 each in list order until `sum(p_i) = B`. Even parts gather fastest: the members gather in parallel, so the order is ready after `max(p_i) * plan_ticks_per_bonus` ticks when the warehouses hold enough. Alternatives: each member gathers up to its own charged units (no request, the release cuts it short); the remainder to the member whose node holds the most charges.
+3. **Gathering** of each member is that of DEC-41, item 10 (the implementation notes of #646): one real warehouse charge of its own node per `orders.plan_ticks_per_bonus` ticks since the command or its last charge, recharge first, an empty warehouse or a fight in the node pauses it; its cap is its own charged units. A member with `p_i = 0` (a discharged member, or a small request) gathers nothing and is ready at once.
+4. **A member is ready** when its bonus reaches `p_i`, or reaches its charged units with a bonus of at least 1 (the departure rule of a single plan, DEC-41). **The departures are fixed once the last member is ready**, in that tick `g`: the slowest member departs in the first tick movement can run (`g + 1` when readiness came from the gathering at the end of tick `g`; `g` itself when the last member not ready was cancelled by a `CancelOrder` applied at the start of tick `g`), `A = d_slowest + max_i(T_i) - 1`, the others at `d_i = A - T_i + 1`, with the paths and times fixed at the command. Until then the ready members wait in their nodes with their bonus. Alternative: forecast the schedule at the command from the gathering rate and depart on time with whatever was gathered (an automatic release; an empty warehouse then costs bonus instead of time).
+5. **No release** (item A7): `ReleasePlan` gives `FEATURE_DISABLED` under the section, for a member and for a single plan. A member stalled by an empty warehouse (there is no timeout, DEC-41, P2) holds the whole order; the player's way out is the `CancelOrder` of that member, which fixes the departures of the rest in that tick (row P8). Alternatives: a timeout after which a gathering plan counts as ready with what it has (a new key, for example `orders.plan_max_wait_ticks`); a "go now" for the whole group order (a release by another name, which the owner just removed).
+6. **The bonus** of each member is capped again by its charged units in its departure tick and is active from its departure (DEC-41: a waiting group attacked in its node does not use it); in the fight at the target the bonuses of the members add up (DEC-24, F1).
+7. **Fog of a planned order:** each member gets its own public planned intent at the command, as a single planned order does today (from its node to `dest`, without size, group id or bonus, `AGENTS.md`, 4.4); **the link between the members is not shown** (no order id, no common arrival). The enemy can still notice several intents to one node born in the same tick: accepted, the same as several planned orders given by hand within a tick. Alternative: one intent for the whole order (it would reveal the number of groups less, but invents a new public object).
+8. **Cancel** of a planned member (item B7): the member, its intent and its gathered bonus end, the consumed charges are not returned, no CP refund; if it was the last one not ready, the departures of the rest are fixed in that tick (item F4).
+
+**G. What is not allowed [proposed]**
+
+1. A planned rally: `GroupMove(planned = true)` to an own node gives `INVALID_ARGUMENT`. A rally is a gathering at an own node, the bonus is for the first fight (DEC-41), and an own node has no fight to pay for.
+2. Defense, modes and splits inside a group order: none (economy v2 has no "Defense"; a member is a group, splitting it is a separate command before the order).
+
+**H. The recruit rally point [proposed]** (item A5)
+
+1. **The flag:** `recruit.rally_point` (optional, `false` when absent and left out of `ruleset_hash()` at `false`, like `combat.retreat`, DEC-40). Under `false` the command gives `FEATURE_DISABLED`.
+2. **The command** `SetRallyPoint(node, target)`: the own city `node` sends its new units to the own node `target`; `target = None` clears it. Checks in order: `node` not found or hidden (`NOT_FOUND_OR_HIDDEN`), not own (`NOT_OWNER`), a province (`NOT_CITY`), no barracks under `city_upgrades.enabled` (`NO_BARRACKS`); `target` not found (`NOT_FOUND_OR_HIDDEN`), not own (`NOT_OWNER`), equal to `node` (`INVALID_ARGUMENT`); clearing a city without a point or setting the same point again (`NO_CHANGE`). No path is required at setting time: the point is persistent.
+3. **The price:** free to set and to clear; **the walk is free** (it is no command). Alternatives: each walk costs `orders.cost.move` when the unit departs, and the unit stays home without the CP; or the rally price of item A2 per unit.
+4. **The walk.** A unit that appears in a city with a point (DEC-25, item 4) appears as a new group of one unit with an ordinary order to the point along its fastest own path (the path of a `Move`; one unit fits every node, so the stack limit never closes it); it does not merge with the city's group (it has an order, DEC-20, A2) and makes its first step in the next tick (the `recruit` system runs after `movement`), so it leaves **discharged** (`supply` recharges it only after `movement` of that tick) and recharges at the point. At the point it merges by auto-merge. Each unit walks alone. Alternative: the unit waits in the city until it is charged (when the warehouse has a charge), then walks.
+5. **No own path to the point** when the unit appears (the point is cut off): the unit stays in the city and merges as today; the point stays and works again once a path exists.
+6. **The point becomes foreign** (captured): the point is cleared in that tick, the owner gets the event `rally_point_cleared` (`player`, `node`, `target`); units already on the way keep their order and arrive in a foreign node as an ordinary `Move` does (E3). Alternative: they turn back.
+7. **The city is captured:** its point is lost with its queue (DEC-25, item 10).
+8. **Capacity** (DEC-22): the queue rule of DEC-25, item 7, is unchanged; units that leave free their room; arrivals at the point can bring it over its capacity, with the death above capacity (DEC-12), as any arrival.
+
+**I. Fog, `PlayerView`, events [proposed]** (`AGENTS.md`, 4.4; a fog test for every new field)
+
+1. `OrderView` (own groups only): `group_order` (an opaque per-player id shared by the members of one order, `None` for a single `Move`), `arrive_tick` (the common arrival once known, `None` before; the existing `depart_tick` gives a waiting member's departure, `None` while a planned order gathers). No field reaches the enemy: a fog test compares the enemy's projection with and without the group order (equal, except the planned intents of item F7).
+2. `NodeView.rally_point` (own cities only, `None` for every other node).
+3. Events: `rally_point_cleared` (own only; an `EVENT_FIELDS` entry with `node` and `target`, a fog test, `mise run regen:protocol`). No event for a group order: the `ack` and the views carry it. Alternative: an own-only `group_order_scheduled` (`arrive_tick`) when a planned order fixes its departures.
+4. `ruleset_public`: `group_order` (`max_groups`, `rally_pct`) or `None`, `recruit.rally_point`: the client hides the UI that the ruleset does not have (and the release control when `group_order` is set, item A7) and shows the price of an order as it shows the move price today.
+
+**J. Ruleset keys [proposed]**
+
+- An optional section `[group_order]`: absent means `GroupMove` gives `FEATURE_DISABLED` and the section is left out of `ruleset_hash()`, so every older ruleset keeps its hash and golden replays. Keys: `max_groups = 16` (the protocol bound of the list), `rally_pct = 50` (the price of item A2 in percent of `orders.cost.move`; the attack price has no key, it is the move price per group).
+- `recruit.rally_point = false` (optional, item H1).
+- Values: both on in the main ruleset `mvp-7` (the playtested ruleset; the flags let the owner switch either off), off in every other ruleset. `mvp-7`'s hash changes, the old hash stays in `rulesets/archive/`. Alternative: a separate test ruleset `mvp-7-group` with both on.
+
+**K. The client [accepted]** keys (item A6), **[proposed]** the rest; the look by a mockup
+
+1. **Selection** (owner): Shift+click adds or removes an own group; Shift+drag with the left button draws a box that selects the own groups inside it (on a node, standing or on an edge). The right button keeps panning the camera; a plain left drag and a plain click keep their current meaning.
+2. **Planned order** (owner): `E` held (`KeyE`) + click on a target gives a planned order for the selection; `E`+wheel sets the requested bonus (#793; for several groups the requested total, item F1). `E` is free today: the client's hotkeys use the codes `KeyQ`, `KeyU`, `KeyR`, `KeyS`, `KeyG`, `KeyX`, `KeyD`, `KeyF`, `KeyT`, `KeyB`, `KeyH`, `KeyM` (`apps/client/src/match/`, checked 2026-11-09). **The held state of `E` resets on `blur` of the window and whenever its `keyup` is lost (a focus change)**, so a later click never becomes a planned order by accident.
+3. **Texts that say Shift for a plan change with it:** the help rows `Shift + LMB` (`help.key.planned`, `help.key.plannedV2`) and `Shift + wheel` (`help.key.planWheel`) of `HelpOverlay.svelte`, the `Shift` hint (`hints.plan`) of `KeyHints.svelte`, the How to play line "A planned order (Shift + click)" (`apps/client/src/i18n/en.ts`), every tip and the playable tutorial round (#806).
+4. **What the client shows** (from the server only): each member's path from `ack.members`, one arrival label from `ack.arrive_tick` (for a planned order once `OrderView.arrive_tick` is set), the waiting countdown of a member from `OrderView.depart_tick`, the gathering of each member as today, the per-member rejections of the `ack` (for `STACK_LIMIT` the split offer of #762), the price from `ruleset_public` before the click; the rally point of an own city and its clearing (the mockup decides how).
+5. A selection with a single group sends a `Move` as today; two or more send a `GroupMove`.
+6. **The release control goes** under the section `[group_order]` (item A7): the `Release` button of a gathering plan (`group.release`), its help row (`help.key.release`) and the command label (`cmd.release_plan`) are hidden; the rest of the planned order UI stays.
+
+**L. Bots [proposed]**
+
+The first implementation keeps them valid: the bots and the tournament harness do not send `GroupMove` or `SetRallyPoint`; under the section `[group_order]` they stop sending `ReleasePlan` (item A7: today `gow_bots.bots.economy` releases a plan that waited its time and `CampaignBot` spends on it; there they cancel the plan instead, or wait for its cap); they see nothing new of the enemy (item D4); the new own fields have defaults. A later issue may let the smart bots use the synchronized attack (it fits `CampaignBot`), measured by a tournament.
+
+**M. Determinism and symmetry [proposed]**
+
+Everything is per player: the schedule, the bonus split and the walks read only the player's own groups and the public map. Ties: members with equal `T_i` depart in one tick (no tie-break needed); the remainder of the bonus split goes by the order of the command list (a mirrored command carries the mirrored list in the same order, so the mirror test holds without a group-id tie-break); several group orders of one tick apply in `(player, seq)` order (`AGENTS.md`, 4.3); several walking recruits follow the `recruit` system's `node_key` order (DEC-25, implementation). Integer ticks only; the price formula is integer (item A2). `SIM_VERSION` +1 with golden replays that contain a group order and a rally point; the mirror test with mirrored group orders.
+
+**Worked examples.** Ruleset `mvp-7` with item J. A test map `dec48` (to be added by the implementation), every node forest, so an edge takes exactly its `travel_ticks` (section 4, speed 100). Player 0 owns the capital H (capacity 10), the city_large R (8), the city_medium A (6, warehouse 3), the city_small B (4, warehouse 3) and the province C (3, warehouse 1); E is a city_medium of player 1, N a neutral province (3). Edges (ticks): H-R 40, R-A 30, R-B 50, R-C 20, A-E 40, B-E 60, C-E 30, C-N 20. Groups of player 0 (units / charged): g1 in A 3/3, g2 in B 2/2, g3 in C 2/2, g4 in R 4/4 (rows S2 and R3 only; R is empty elsewhere), g5 in H 5/5, g6 in H 1/0, g7 on the edge H-R moving to R. CP 500 and the command applied at tick 100 unless said; `A`: the common arrival, `d`: a departure tick. Implementation tests: exactly these tables.
+
+Synchronized attack (ordinary):
+
+| # | Situation | Result |
+|---|---|---|
+| S1 | `GroupMove([g1, g2, g3], E)` | attack, 3 CP (CP 200); `T` 40 / 60 / 30; `A = 100 + 60 - 1 = 159`; `d`: g1 120, g2 100, g3 130; all three arrive in E at tick 159 and enter one fight before its first round |
+| S2 | `GroupMove([g1, g4], E)` | g4 (4 units): R-C-E is closed by C (capacity 3), its path R-A-E takes 70; `A = 169`; `d`: g4 100, g1 130; g4 passes A in transit at tick 129 while g1 waits there: no merge; 2 CP |
+| S3 | `GroupMove([g3], E)` | as `Move(g3, E)`: arrives at 129, 1 CP |
+| S4 | `GroupMove([g1, g7, g3], E)` | g7 `GROUP_ON_EDGE`, its order unchanged; `A = 139`; `d`: g1 100, g3 110; 2 CP |
+| S5 | `GroupMove([g5, g3], N)` | g5 `STACK_LIMIT` (N and C are provinces, capacity 3); g3 departs at 100, arrives at 119; 1 CP |
+| S6 | `GroupMove([g5, g7], N)` | no valid member: rejected `STACK_LIMIT` (the first member's code), members `STACK_LIMIT` and `GROUP_ON_EDGE`; nothing changes |
+| S7 | as S1 with CP 250 | `NOT_ENOUGH_CP`: no member goes, CP 250 |
+| S8 | S1, `CancelOrder(g3)` at tick 110 (g3 waits in C) | g3 stands in C without an order; CP stay 200; g1 departs at 120, g1 and g2 arrive at 159 |
+| S9 | S1, `CancelOrder(g2)` at tick 110 (g2 made 10 steps on B-E) | g2 walks 10 steps back, stands in B at 119; g1 and g3 keep `d` 120 and 130 and arrive at 159 (no re-timing to 139) |
+| S10 | S1, an enemy group Y (1/1) meets g2 on B-E, contact at tick 130 (g2's 31st step) | r1 at 150 canc. (2/1 against 1/0); r2 at 170 g2 kills Y; g2 regroups and walks from 180, its last 29 steps, and arrives at 208 with 2/1; g1 and g3 arrive at 159 as scheduled and fight without g2 |
+| S11 | S1, the enemy attacks A at tick 110 (g1 waits there); the fight ends at tick 150, the attack bounces, g1 alive | g1 defends and cannot leave (DEC-40); its `d` 120 passes in the fight; it departs at 151 (DEC-24, E4) and arrives at 190; g2 and g3 arrive at 159 |
+| S12 | S1, another own group takes E at tick 140 | at 159 g1, g2, g3 arrive in an own node and merge (DEC-20, A1); no refund |
+| S13 | S1, E is empty (no group of player 1) at 159 | E is taken at 159 for 1 charge in all (DEC-38): the three groups hold 7 units, 6 charged |
+
+Rally (`rally_pct = 50`):
+
+| # | Situation | Result |
+|---|---|---|
+| R1 | `GroupMove([g1, g2, g3], R)` | rally, 2 CP (CP 300); all depart at 100; g3 arrives at 119 and stands in R; g1 at 129 merges into g3 (5/5); g2 at 149 merges (7/7) |
+| R2 | `GroupMove([g1, g2, g3, g5, g6], R)` | 5 groups, 3 CP (CP 200); as R1, g5 and g6 arrive at 139 and merge into g3 (11 units); at 149 g3 holds 13 units, 12 charged (before recharges): above the capacity 8, the death above capacity applies (DEC-12), as for the same moves one by one |
+| R3 | `GroupMove([g1, g4, g3], R)`, g4 stands in R | g4 `INVALID_ARGUMENT` (already in the target), not charged; 2 members, 1 CP |
+| R4 | `GroupMove([g3], R)` | 1 CP, as a `Move` |
+| R5 | `GroupMove([g1, g2], R)`; an enemy group W takes the empty R at tick 120 and leaves it at 122 | 1 CP; g1 arrives at 129 in an empty enemy node (W left more than `combat.engage_ticks` before, DEC-37) and takes it for 1 charge (DEC-38): 3/2; g2 arrives at 149 in an own R and merges: 5/4; no refund, no extra charge |
+| R6 | `GroupMove([g1, g2], R, planned = true, bonus = 2)` | `INVALID_ARGUMENT`, nothing charged |
+| R7 | the price by the number of accepted members `n` = 1, 2, 3, 4, 5, 6 | 1, 1, 2, 2, 3, 3 CP |
+
+Synchronized planned attack (`orders.plan_ticks_per_bonus = 30`; the warehouses hold A 2, B 1, C 1 charges; every group is fully charged, so no recharge comes first):
+
+| # | Situation | Result |
+|---|---|---|
+| P1 | `GroupMove([g1, g2, g3], E, planned = true, bonus = 4)` | 3 CP (CP 200); parts 2 / 1 / 1; three planned intents at 100 (A to E, B to E, C to E), not linked; `plan_charged`: g1 at 130 and 160, g2 at 130, g3 at 130; the last is ready at the end of tick 160; `d`: g2 161, g1 181, g3 191; `A = 161 + 60 - 1 = 220`; the attack brings a bonus of 4 into the fight at E; A, B, C are empty |
+| P2 | the parts of P1's groups (caps 3 / 2 / 2) for `bonus` = 1, 2, 3, 6, 7, 9 | 1/0/0, 1/1/0, 1/1/1, 2/2/2, 3/2/2, 3/2/2 (9 is capped at the sum of charged units, 7) |
+| P3 | P1, but g1 is 3/1 at the command, `bonus = 4` | caps 1 / 2 / 2: parts 1 / 2 / 1 |
+| P4 | P1, B is empty until a charge arrives at tick 200 | g2 takes it at 200 (DEC-41, the pause); all ready at the end of 200; `d`: g2 201, g1 221, g3 231; `A = 260` |
+| P5 | P1, `ReleasePlan(g1)` at tick 140 (g1 holds bonus 1) | `FEATURE_DISABLED` (item A7); P1 goes on unchanged |
+| P6 | P1, `CancelOrder(g1)` at tick 140 | g1 stands in A, its intent ends, its bonus 1 and the charge are lost, no CP refund; g2 and g3 (ready since 130) are the whole order: `d`: g2 140, g3 170; `A = 199`; bonus 2 |
+| P7 | P1 with `bonus = 2` | parts 1 / 1 / 0; g3 shows a planned intent and gathers nothing; g1 and g2 take a charge at 130; `d`: g2 131, g1 151, g3 161; `A = 190`; bonus 2 |
+| P8 | P1, but B stays empty: g2 never gets its charge; `CancelOrder(g2)` at tick 300 | g1 (ready since 160) and g3 (since 130) are the whole order, ready at 300: `d`: g1 300, g3 310; `A = 300 + 40 - 1 = 339`; bonus 3; g2 stands in B without an order, no CP refund |
+| P9 | a single `Move(g1, E, planned = true, bonus = 2)`, then `ReleasePlan(g1)` at tick 140 | `FEATURE_DISABLED`; g1 takes its charges at 130 and 160 and departs at 161 by itself (DEC-41); without the section `[group_order]` the release works as in DEC-41, row P5 |
+
+Recruit rally point (`recruit.rally_point = true`; H has a barracks, its queue is empty; `recruit.unit_ticks = 30`):
+
+| # | Situation | Result |
+|---|---|---|
+| RP1 | `SetRallyPoint(H, R)` at tick 90; `Recruit(H)` at 100 | the point is free; the unit appears at 129 (DEC-25) as a group of 1/0 with an order to R, does not merge in H, departs at 130 and arrives at 169; it merges in R; CP 400 |
+| RP2 | RP1 with three `Recruit(H)` at 100 | the units appear at 129, 159, 189 and arrive at R at 169, 199, 229, each alone; CP 200 |
+| RP3 | RP1; the enemy captures R at tick 150 | the point of H is cleared at 150 (`rally_point_cleared` to player 0); the unit on H-R arrives in the enemy R at 169 as an ordinary `Move` (a fight or a capture); later units merge in H |
+| RP4 | RP1; at tick 129 H has no own path to R | the unit stays in H and merges (DEC-20, A1); the point stays |
+| RP5 | `SetRallyPoint(H, N)` / `(C, R)` / `(H, H)` / `(A, R)` with A without a barracks / the flag off | `NOT_OWNER` / `NOT_CITY` / `INVALID_ARGUMENT` / `NO_BARRACKS` / `FEATURE_DISABLED` |
+| RP6 | `SetRallyPoint(H, None)` with no point / with the point R | `NO_CHANGE` / cleared, free |
+| RP7 | RP1; H is captured at tick 120 | the queue and the point are lost (DEC-25, item 10) |
+
+**Estimate** (after the owner's answers; one issue per part):
+
+- **sim (M):** `GroupMove` in `gow_sim.commands` (checks per member, partial acceptance, price), the schedule (`Order.depart_tick` exists; a waiting ordinary member needs `_waits_to_depart` for any order with a future departure, not only a planned one), the coordination of planned members in `systems.orders` (the readiness and the fixing of item F4; a small `GroupOrder` record per player while a planned order gathers), `SetRallyPoint` and the walk in `systems.recruit`, the section `[group_order]` and the key `recruit.rally_point`, the tests of the tables above, mirror and determinism, `SIM_VERSION` +1 and golden replays.
+- **protocol (S):** the commands `group_move` and `set_rally_point`, the `ack` with `kind` and `members`, `OrderView.group_order` and `arrive_tick`, `NodeView.rally_point`, the event `rally_point_cleared`, `ruleset_public`, the fog tests, `PROTOCOL_VERSION` +1, `regen`.
+- **bots (S):** keep them valid (the new command types in the exhaustive matches, the new defaults) and replace `ReleasePlan` under the section (item L).
+- **client (L):** the mockup of the selection, the member display and the rally point (S), then multi-select by Shift (click and box), the planned order on `E` with the blur reset and `E`+wheel, the member paths and the one arrival, the per-member rejections, the rally point UI, every text of item K3, `mise run shots` and the visual references.
+- **server (XS):** nothing beyond the protocol: a `group_move` counts as one command for the command token bucket (`AGENTS.md`, 5.3), its size is bounded by `max_groups`.
+
+**Risks.**
+
+- **Balance.** The rally makes regrouping cheap (half price, at most 5 CP for 10 groups under the ceiling) and the free recruit walk saves a move per recruit: the CP need falls while the CP surplus options of DEC-43, item F, are still open. A synchronized planned attack brings the bonuses of up to 5 groups into the first round with no retreat for the defender (DEC-40): a stronger opening strike than today; the defense's counter is to see the intents and the waiting groups.
+- **A promise that cannot always hold.** "Arrive together" holds only if nothing stops a member (items C4, C5); the client must show the arrival as a forecast, like `ack.arrive_tick` today.
+- **A stalled plan.** Without `ReleasePlan` (item A7) a planned member, or a single plan, in a node whose warehouse stays empty waits until it is cancelled (there is no timeout, DEC-41, P2); in a group order it holds every other member (row P8). The client must make the stall visible (the next charge tick of `OrderView` exists).
+- **Waiting groups stand still** for up to `max_i(T_i) - min_i(T_i)` ticks and can be picked off; the enemy sees them as standing groups and may read a pattern.
+- **The Shift migration:** the owner's muscle memory and every text, tip, How to play line and tutorial step that says Shift for a plan (item K3); a stuck `E` would turn clicks into planned orders (the blur reset of K2).
+- **Complexity:** a new kind of waiting order (an ordinary order with a future departure), partial acceptance with per-member codes, and the coordination of planned members are three new paths in `commands` and `orders`; the property and mirror tests must cover them.
+- **Performance:** one path search per member (at most 16) per command, within the budgets of section 12 of `AGENTS.md`.
+
+Alternatives (not chosen, besides those listed per item):
+- Depart together and arrive by speed (simple, but the piecemeal arrival is exactly what the owner wants to fix).
+- A "formation" that moves as one stack at the speed of the slowest (a new moving entity, the stack limit and the capacity of every node of a common path).
+- A rally that also synchronizes the arrival (nothing to gain at an own node; the owner set the half price for a plain gathering).
+
 ---
 
 ## 6. CP (command points)
@@ -2180,6 +2384,7 @@ The owner's decision of 2026-10-31, after the mechanics audit (#639, `docs/desig
     - **Cap:** as DEC-29, the bonus is at most the group's charged units.
     - The group departs by itself when the requested bonus or the cap is reached. The bonus burns in the first fight or when the order ends, as in DEC-08.
     - Accumulation works in a **province** too (item 13).
+    - Under the section `[group_order]` (DEC-48, #896, section 5) `ReleasePlan` gives `FEATURE_DISABLED` and a synchronized group order gathers its bonus per member.
 11. **Capture (DEC-38).** The rule stays parametric: a capture spends `capture.charge_cost` real charges of the capturing groups, otherwise they bounce; `0` means a capture is free. **Owner decision 2026-11-01, #659: `mvp-3` uses the candidate `balanced` (`docs/balance/v2-params-2026-10.md`): capture cost 0** (and `cp.period_ticks = 100`, `factory.capital_period_ticks = 100`, `factory.built_period_ticks = 200`). The first value was 1 (re-measured under v2 in #659: the BAL-02 result "the bot field polarizes" was measured under v1 supply). **`mvp-6`: capture cost 1 [accepted] (owner decision 2026-11-09, #759; DEC-38, the `mvp-6` note).**
 12. **Bunker (B).** A building for a **province or a city**, one per node, cost 3 charges, `bunker.build_ticks = 100`. Effect: **+1 virtual shot** to the node's defender in every fight there, and only if the defender has a charged unit (as terrain, DEC-07 rule 1). It replaces the "Defense" mode (item 5). **A bunker is destroyed when the node is captured** (the owner's decision: it does not pass to the capturer, unlike a barracks, DEC-26 item 4). Fog: visible like an enemy barracks (DEC-31: only a built one, next to an own node). **Name:** the rule is called "bunker" in the interface; section 12 "Bunker (Topic 2)" uses the word for the turtle strategy, so the code identifier is `fort` (the sim issue may change it, the rule text stays).
 13. **Province warehouse (W).** A province has a warehouse of **capacity 1, always** (no command, no building). It receives charges only as the target of a line (and from groups); units recharge from it and spoils on capture apply. This **reverses DEC-23 item 2** for v2 (no warehouse, no recharge, no spoils in a province).
@@ -4609,6 +4814,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-45 | #778 | plains: the defender burns a charge in the first round instead of keeping a silent one; under the optional key `combat.terrain_burn`, revises DEC-24 item F2 there only | section 4 | [accepted] (2026-11-06); `rulesets/mvp-4-stances.toml` |
 | DEC-46 | #803 | map tempo: the economy periods (CP, capital, factories, both stance tables) scaled once per match by `pct = isqrt(N * 10000 // 49)` of the map node count, clamped 50..150, `p * 100 // pct`; the target is an equal pressure on the front across map sizes; the map shape (front width) is not covered (generator work, #771); under the optional section `[map_tempo]` | section 6 | [accepted] (owner decision 2026-11-07, sqrt; linear rejected); `rulesets/mvp-4-stances-tempo.toml`, `SIM_VERSION` 44; on in the main ruleset `mvp-7` (owner decision 2026-11-09, #885) |
 | DEC-47 | #888 | factories follow the stance like the capital: every factory other than the own capital (built or captured, a captured capital too) makes 1 charge per `stances.capital_period_ticks` of its owner's stance, after map tempo, on its own counter (0 when it starts working or is captured, carried over on a stance change); `factory.built_period_ticks` without effect; under the optional key `stances.factories_follow`, revises DEC-44 item 2 and the built rate of DEC-41 item 2 there only | section 6 | [accepted] (owner decision 2026-11-09; the counter, start, carry and fog defaults [accepted] with it); on in the main ruleset `mvp-7`, `SIM_VERSION` 46, `PROTOCOL_VERSION` 45 |
+| DEC-48 | #896 | group order: one command for several groups; a rally to an own node (each group departs at once, merges, price `ceil(n * move / 2)` rounded up to a whole CP) or a synchronized arrival at any other node (the server times each departure for one arrival tick, full price); planned parts gathered per group, timed once all are ready; `ReleasePlan` removed under the section; a recruit rally point behind `recruit.rally_point`; the selection by Shift, the planned order on `E` | section 5 | items A1 to A7 [accepted] (owner decision 2026-11-09); every other point [proposed], awaiting the owner (#896); under the optional section `[group_order]`; not implemented |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in
