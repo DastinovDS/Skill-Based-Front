@@ -97,6 +97,10 @@ class SmartHoarder(SmartBot):
         "w_stage": ParamRange(600, 600),
         "army": ParamRange(4, 4),
         "spare": ParamRange(2, 3),
+        # Item 24 of ``smart`` (#881): Economy while it hoards, Balance, War for the late strike.
+        "stance_opening": ParamRange(0, 0),
+        "stance_midgame": ParamRange(1, 1),
+        "stance_late": ParamRange(2, 2),
     }
 
     def __init__(

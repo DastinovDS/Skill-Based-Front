@@ -1,6 +1,7 @@
 """The bots and ``gow-bots stats`` under ``[stances]`` (DEC-44, #772).
 
-The bots have no stance policy yet (#689): they stay in Balance, the rates of ``mvp-4-sup200``.
+The plain bots have no stance policy: they stay in Balance, the rates of ``mvp-4-sup200``; the
+smart bots have one since #881 (``test_stance_policy.py``).
 The bound of the enemy CP still has to hold, an enemy human may sit in War. ``stats`` reads the
 stance usage of a match from its replay.
 """
@@ -11,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from gow_bots.bots import BOTS
+from gow_bots.bots import BOTS, SmartBot
 from gow_bots.bots.assess import EnemyCp
 from gow_bots.cli import main
 from gow_bots.tournament import live_keys
@@ -35,8 +36,14 @@ def crossroads() -> MapDef:
     return load_map(ROOT / "maps" / "crossroads.json")
 
 
-@pytest.mark.parametrize("name", sorted(BOTS))
-def test_every_bot_stays_in_balance(rules: Ruleset, crossroads: MapDef, name: str) -> None:
+PLAIN = sorted(
+    n for n, cls in BOTS.items() if not (isinstance(cls, type) and issubclass(cls, SmartBot))
+)
+"""The bots without a stance policy (#881: the smart bots have one, ``test_stance_policy.py``)."""
+
+
+@pytest.mark.parametrize("name", PLAIN)
+def test_every_plain_bot_stays_in_balance(rules: Ruleset, crossroads: MapDef, name: str) -> None:
     match = Match(crossroads, rules, KEY)
     bots = [BOTS[n](crossroads, rules, seed=2, player=p) for p, n in enumerate((name, name))]
     sent: list[Command] = []

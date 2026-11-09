@@ -52,6 +52,26 @@ an own node, so it is ``PRESENCE`` at best), the estimate ``estimate()``:
   warehouse no longer refills, so the wave is assumed to have cancelled the pool it was
   strong enough to cancel (``_learn``).
 
+The estimate before contact (``CONTACT``, #881): under ``combat.retreat = "none"`` (DEC-40) a
+group that entered a fight stays until it ends, so an attack that meets more than it brings is a
+full loss, not a round under fire. With ``CONTACT`` there the demand also counts (``support``):
+
+- the reinforcements the defender can bring while the fight lasts (DEC-24, item D1: a group that
+  arrives in a node with a fight joins it): every enemy neighbour of the target, not in a fight
+  itself, whose last sighting (at most ``SUPPORT_TICKS`` old; the numbers of its level, DEC-21,
+  ``(2, 2)`` for presence only) shows charged units and whose road into the target takes fewer
+  ticks than the fight (``combat.round_ticks`` per round, a round per shot that takes the target
+  at ``combat.shots_per_round``: B4), and every enemy figure on a road heading into the target
+  (DEC-33). A reinforcement must be cancelled and killed too (its charges and units); the
+  strongest counts in full, half of each of the others (rounded down), ``contact_pct`` percent of
+  the sum (rounded down);
+- the enemy figures on the road the group enters the target by (``ways_in``) heading out of it,
+  toward the group: a meeting on the edge (DEC-24, item C2) cancels their charges first
+  (``meets``).
+
+An empty target is taken without a fight, so only the figures heading into it add to it. Under
+``"round"`` the demand is as before.
+
 All tie-breaks go through ``Bot.key`` / ``Bot.edge_keys`` (mirror-invariant), never through ids.
 """
 
@@ -60,6 +80,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import ClassVar, override
 
+from gow_bots.bots.assess import edge_ticks
 from gow_bots.bots.base import Bot, ParamRange, node_of
 from gow_bots.bots.economy import (
     LeafShift,
@@ -94,7 +115,7 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import AtNode, GroupView, Mode, OnEdge, PlayerView, Stance
+from gow_sim.view import AtNode, Detail, EnemyGroupView, GroupView, Mode, OnEdge, PlayerView, Stance
 
 __all__ = ["CampaignBot", "Ctx", "Option"]
 
@@ -111,6 +132,11 @@ many ticks by a group whose shots do not beat what the recall saw there (no canc
 loop on the same target)."""
 PERMILLE = 1000
 """An edge in thousandths: the scale of ``border_permille`` and of ``OnEdge.progress``."""
+SUPPORT_TICKS = 150
+"""``CONTACT`` (#881): a sighting of an enemy neighbour of a target at most this old counts as a
+reinforcement it can send (an older one moved on or was not there)."""
+SUPPORT_GUESS = 2
+"""``CONTACT``: units, all charged, of an enemy force seen without numbers (``PRESENCE``)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +231,8 @@ class CampaignBot(Bot):
     """Economy v2: factories built beside the capital (``factory.max`` caps the sum)."""
     BUNKERS: ClassVar[int] = 0
     """Economy v2: bunkers kept at most (``bunker_site``)."""
+    CONTACT: ClassVar[bool] = False
+    """The estimate before contact under ``combat.retreat = "none"`` (module docstring, #881)."""
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> None:
         super().__init__(mapdef, rules, seed=seed, player=player)
@@ -396,13 +424,15 @@ class CampaignBot(Bot):
         """Shots that take ``dest`` by the estimate, with the margin and the failed waves. The
         toll of a fortified road (DEC-43, item D6) is not in it: it takes real charges of the
         group before the fight, an empty node too, so the caller passes it to ``takes``
-        (``toll_from``, ``toll_left``; #760)."""
+        (``toll_from``, ``toll_left``; #760). With ``contact`` (#881) the reinforcements the
+        defender can bring during the fight are on top (``support``)."""
         memo = self._needs
         if memo is not None and memo[0] is view and memo[1] == tick:
             known = memo[2].get(dest)
             if known is not None:
                 return known
         units, charged = self.estimate(view, tick, dest)
+        base = 0
         if units <= 0:
             value = 0
         else:
@@ -412,9 +442,78 @@ class CampaignBot(Bot):
                 self.rules, terrain, units, charged, self.defended(view, dest), burned=burned
             )
             value = base + self.params["margin"] + self.extra.get(dest, 0)
+        if self.contact():
+            value += self.support(view, tick, dest, base)
         if memo is not None and memo[0] is view and memo[1] == tick:
             memo[2][dest] = value
         return value
+
+    def contact(self) -> bool:
+        """The estimate before contact is on: ``CONTACT`` without retreat (DEC-40)."""
+        return self.CONTACT and not self.retreat
+
+    def support(self, view: PlayerView, tick: int, dest: int, need: int) -> int:
+        """The shots the defender of ``dest`` can add while a fight there lasts (module docstring,
+        ``CONTACT``); ``need``: the shots that take it without them (0: an empty node, no fight,
+        only the figures heading in)."""
+        rules = self.rules
+        pct = self.params.get("contact_pct", 100)
+        if pct <= 0:
+            return 0
+        enemy = 1 - self.player
+        combat = rules.combat
+        window = -(-need // max(1, combat.shots_per_round)) * combat.round_ticks
+        fights = self.fight_nodes(view)
+        forces: list[int] = []
+        for eid in self.incident[dest]:
+            edge = self.map.edges[eid]
+            for f in view.edges[eid].enemy_groups:
+                if (edge.b if f.toward_b else edge.a) == dest:
+                    forces.append(sum(figure_numbers(f)))
+            other = edge.other(dest)
+            if need <= 0 or view.nodes[other].owner != enemy or other in fights:
+                continue
+            numbers = self.sighted(view, tick, other)
+            if numbers is None or numbers[1] <= 0:
+                continue
+            if edge_ticks(self.map, rules, eid, dest, view.edges[eid].width) >= window:
+                continue  # it arrives after the last round
+            forces.append(numbers[0] + numbers[1])
+        if not forces:
+            return 0
+        forces.sort(reverse=True)
+        return (forces[0] + sum(forces[1:]) // 2) * pct // 100
+
+    def sighted(self, view: PlayerView, tick: int, node: int) -> tuple[int, int] | None:
+        """``(units, charged)`` of the enemy in ``node`` by a sighting at most ``SUPPORT_TICKS``
+        old (``enemy_at``; ``SUPPORT_GUESS`` for presence only); ``None``: no such sighting."""
+        seen = view.nodes[node].seen
+        if seen is None or not seen.enemy_modes or tick - seen.tick > SUPPORT_TICKS:
+            return None
+        numbers = self.enemy_at(view, node)
+        return (SUPPORT_GUESS, SUPPORT_GUESS) if numbers is None else numbers
+
+    def meets(self, view: PlayerView, here: int, dest: int, units: int) -> int:
+        """``CONTACT``: the charges of the enemy figures a group of ``units`` from ``here`` meets
+        on the road it enters ``dest`` by (``ways_in``), heading out of ``dest`` toward it (module
+        docstring); 0 without retreat on, or without such a figure."""
+        if not self.contact():
+            return 0
+        if not any(
+            (self.map.edges[eid].b if f.toward_b else self.map.edges[eid].a) != dest
+            for eid in self.incident[dest]
+            for f in view.edges[eid].enemy_groups
+        ):
+            return 0  # the usual case: no path search
+        road = self.ways_in(view, here, units).get(dest)
+        if road is None:
+            return 0
+        edge = self.map.edges[road]
+        return sum(
+            figure_numbers(f)[1]
+            for f in view.edges[road].enemy_groups
+            if (edge.b if f.toward_b else edge.a) != dest
+        )
 
     def enemy_net(self, view: PlayerView) -> frozenset[int]:
         """Enemy nodes connected to the enemy capital through enemy nodes (public ownership)."""
@@ -613,7 +712,8 @@ class CampaignBot(Bot):
             for dest in self.reachable(view, here, self.params["radius"], g.units):
                 if view.nodes[dest].owner == self.player or dest in ctx.claimed:
                     continue
-                need = self.need(view, ctx.tick, dest)
+                # #881: a figure met on the road in cancels charges first (``meets``).
+                need = self.need(view, ctx.tick, dest) + self.meets(view, here, dest, g.units)
                 # DEC-43, item D6: a fortified road in takes real charges first, an empty node
                 # too (#760: else a group of 1 charge is sent, cannot pay and is recalled).
                 toll = self.toll_from(view, here, dest, g.units, g.charged)
@@ -815,3 +915,16 @@ class CampaignBot(Bot):
         if self.spend(ctx, Recruit(city)):
             self.recruited[city] = ctx.tick
             ctx.standing[city] += 1
+
+
+def figure_numbers(f: EnemyGroupView) -> tuple[int, int]:
+    """``(units, charged)`` of an enemy figure on an edge (DEC-33) by its level: exact, the top of
+    the range of units all charged (the start of the open last range), ``SUPPORT_GUESS`` for
+    presence only."""
+    if f.detail is Detail.EXACT and f.units is not None and f.charged is not None:
+        return (f.units, f.charged)
+    if f.units_range is not None:
+        low, high = f.units_range
+        top = low if high is None else high
+        return (top, top)
+    return (SUPPORT_GUESS, SUPPORT_GUESS)
