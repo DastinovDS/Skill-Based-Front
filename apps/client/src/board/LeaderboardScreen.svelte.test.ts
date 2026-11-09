@@ -140,7 +140,11 @@ describe('ReplaysScreen (#629, R2)', () => {
       onpassword: vi.fn(),
       onlogout: vi.fn(),
     };
-    const maps = { get: vi.fn(() => null), ensure: vi.fn((m: string) => Promise.resolve(map(m))) };
+    const maps = {
+      get: vi.fn(() => null),
+      ensure: vi.fn((m: string) => Promise.resolve(map(m))),
+      thumb: vi.fn(() => null),
+    };
     component = mount(ReplaysScreen, {
       target: document.body,
       props: {

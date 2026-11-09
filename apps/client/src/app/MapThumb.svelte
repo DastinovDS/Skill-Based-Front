@@ -6,9 +6,11 @@
   interface Props {
     /** The map file, or null while it loads (an empty frame keeps the size). */
     map: MapFile | null;
+    /** The ground thumbnail; by default the bundled one of the map (a per-match map has none). */
+    ground?: string | null;
   }
 
-  let { map }: Props = $props();
+  let { map, ground: given }: Props = $props();
 
   // The real graph, small, on the map's own baked ground (#839): the pieces of the match in
   // miniature, own side (left) blue, the enemy's red, the rest neutral. Cities are discs on a dark
@@ -27,7 +29,7 @@
         })),
   );
   const byId = $derived(new Map(nodes.map((n) => [n.id, n])));
-  const ground = $derived(map === null ? null : thumbnailUrl(map.meta.name));
+  const ground = $derived(given ?? (map === null ? null : thumbnailUrl(map.meta.name)));
 </script>
 
 <span class="thumb" aria-hidden="true">

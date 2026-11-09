@@ -6,6 +6,8 @@
  */
 import { SvelteMap } from 'svelte/reactivity';
 import type { Api, MapSummary } from '../api/http.ts';
+import { isMatchMap } from '../map/art.ts';
+import { thumbnailUrl } from '../map/thumbnails.ts';
 import type { MapFile } from '../protocol.gen.ts';
 
 export class MapCache {
@@ -15,6 +17,8 @@ export class MapCache {
   failed = $state(false);
   /** The files loaded so far, by map id. */
   files = $state.raw<Readonly<Record<string, MapFile>>>({});
+  /** The thumbnails the server states for the maps the client does not bundle (#884). */
+  thumbs = $state.raw<Readonly<Record<string, string>>>({});
 
   readonly #api: Api;
   #listing: Promise<void> | null = null;
@@ -44,12 +48,18 @@ export class MapCache {
     return this.files[id] ?? null;
   }
 
+  /** The ground thumbnail of a map: bundled, or for a per-match map from its summary. */
+  thumb(id: string): string | null {
+    return thumbnailUrl(id) ?? this.thumbs[id] ?? null;
+  }
+
   /** Fetches the file of a map unless it is there or on its way; null if it cannot be had. */
   ensure(id: string): Promise<MapFile | null> {
     const have = this.files[id];
     if (have !== undefined) return Promise.resolve(have);
     let pending = this.#fetching.get(id);
     if (pending === undefined) {
+      if (isMatchMap(id)) this.#askThumb(id);
       pending = this.#api.map(id).then(
         (file) => {
           this.files = { ...this.files, [id]: file };
@@ -64,5 +74,15 @@ export class MapCache {
       this.#fetching.set(id, pending);
     }
     return pending;
+  }
+
+  /** A per-match map is not bundled: its summary names the thumbnail (none: a plain frame). */
+  #askThumb(id: string): void {
+    this.#api.mapSummary(id).then(
+      (summary) => {
+        if (summary.thumb_url != null) this.thumbs = { ...this.thumbs, [id]: summary.thumb_url };
+      },
+      () => undefined,
+    );
   }
 }

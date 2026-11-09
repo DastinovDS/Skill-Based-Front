@@ -139,12 +139,16 @@ def test_random_generated_draws_from_the_generated_maps(
     assert seen == [{GENERATED}, {GENERATED}]
 
 
-@pytest.mark.parametrize("body", [{"map_id": GENERATED}, {"random_generated": True}])
-def test_the_public_lobby_takes_no_generated_map(api: TestClient, body: dict[str, object]) -> None:
+@pytest.mark.parametrize(
+    "body", [{"map_id": GENERATED}, {"random_generated": True}, {"map_source": "generated"}]
+)
+def test_the_public_lobby_takes_a_generated_map(api: TestClient, body: dict[str, object]) -> None:
+    """A public match is unrated like an invite by link (#889): it may play a generated map."""
     alice = guest(api, "alice")
     response = api.post("/api/matches", json={**body, "public": True}, headers=alice)
-    assert response.status_code == 422
-    assert "private" in response.text
+    assert response.status_code == 201, response.text
+    assert response.json()["map_id"] == GENERATED
+    assert response.json()["public"] is True
 
 
 def test_no_generated_map_to_draw_from(maps_dir: Path) -> None:

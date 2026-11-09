@@ -324,6 +324,23 @@ def test_an_invite_waits_for_its_map_and_the_ready_timer_too(
     assert api.get(f"/api/maps/{map_id}").status_code == 200
 
 
+def test_a_public_match_plays_a_new_map_too(api: TestClient, stand_in: StandIn) -> None:
+    """The public lobby is unrated like an invite by link (#889): a new map by default."""
+    host, joiner = guest(api, "host"), guest(api, "joiner")
+    invite = api.post("/api/matches", json={"public": True}, headers=host).json()
+    code, map_id = invite["code"], invite["map_id"]
+    assert ID_RE.fullmatch(map_id)
+    assert (invite["public"], invite["map_ready"]) == (True, False)
+    listed = api.get("/api/lobby", headers=joiner).json()["matches"]
+    assert [(entry["code"], entry["map_id"]) for entry in listed] == [(code, map_id)]
+    assert api.post(f"/api/matches/{code}/join", headers=joiner).status_code == 200
+    stand_in.go.set()
+    until(lambda: api.get(f"/api/matches/{code}", headers=host).json()["map_ready"])
+    api.post(f"/api/matches/{code}/ready", headers=host)
+    started = api.post(f"/api/matches/{code}/ready", headers=joiner).json()
+    assert (started["state"], started["map_id"]) == ("started", map_id)
+
+
 def test_the_second_ready_waits_for_the_map(api: TestClient, stand_in: StandIn) -> None:
     host, joiner = guest(api, "host"), guest(api, "joiner")
     code = api.post("/api/matches", json={}, headers=host).json()["code"]
@@ -376,8 +393,7 @@ def test_the_map_choices(api: TestClient) -> None:
 
     seen: list[int] = []
     for body, code, pool in (
-        ({"public": True}, 201, True),  # the public lobby plays the pool
-        ({"public": True, "map_source": "new"}, 422, False),
+        ({"public": True, "map_source": "pool"}, 201, True),
         ({"map_source": "pool"}, 201, True),
         ({"map_id": "line3", "map_source": "pool"}, 422, False),
         ({"random_generated": True, "map_source": "pool"}, 422, False),

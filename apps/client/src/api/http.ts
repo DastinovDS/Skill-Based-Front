@@ -14,13 +14,26 @@ export type LobbyEntry = Schemas['LobbyEntry'];
 export type QueueStatus = Schemas['QueueStatus'];
 export type MapSummary = Schemas['MapSummary'];
 
-/** The map choice of a match besides a map id and `null` (a random pool map): the server draws
- * from the generated maps (#771). No map id has this shape. */
+/**
+ * The map choice of a new match: a map id, or where the server takes one (no map id starts with
+ * `?`): a map made for this match (#884), the default of every unrated match; a random pool map;
+ * a random stored generated map (#771).
+ */
+export const NEW_MAP = '?new';
+export const RANDOM_POOL = '?pool';
 export const RANDOM_GENERATED = '?generated';
+export type MapSource = NonNullable<Schemas['CreateMatch']['map_source']>;
 
-function mapChoice(mapId: string | null): { map_id?: string; random_generated?: boolean } {
-  if (mapId === null) return {};
-  return mapId === RANDOM_GENERATED ? { random_generated: true } : { map_id: mapId };
+const SOURCES: Readonly<Record<string, MapSource>> = {
+  [NEW_MAP]: 'new',
+  [RANDOM_POOL]: 'pool',
+  [RANDOM_GENERATED]: 'generated',
+};
+
+/** The body fields of a choice: `map_source`, unless a map is named (the server refuses both). */
+function mapChoice(pick: string): { map_id?: string; map_source?: MapSource } {
+  const source = SOURCES[pick];
+  return source === undefined ? { map_id: pick } : { map_source: source };
 }
 export type Leaderboard = Schemas['Leaderboard'];
 export type LeaderboardEntry = Schemas['LeaderboardEntry'];
@@ -206,9 +219,19 @@ export class Api {
     return this.#request('GET', `/api/maps/${encodeURIComponent(id)}`, null);
   }
 
-  createInvite(token: string, mapId: string | null, isPublic = false): Promise<Invite> {
+  /** What the list says of a map, for any map the server serves, a per-match one too (#884). */
+  mapSummary(id: string): Promise<MapSummary> {
+    return this.#request('GET', `/api/maps/${encodeURIComponent(id)}/summary`, null);
+  }
+
+  /** The vector file of a map's geography, at the URL its summary states (`geo_url`). */
+  mapGeo(url: string): Promise<unknown> {
+    return this.#request('GET', url, null);
+  }
+
+  createInvite(token: string, pick: string, isPublic = false): Promise<Invite> {
     return this.#request('POST', '/api/matches', token, {
-      ...mapChoice(mapId),
+      ...mapChoice(pick),
       ...(isPublic ? { public: true } : {}),
     });
   }
@@ -262,11 +285,17 @@ export class Api {
     await this.#request('DELETE', '/api/queue', token);
   }
 
-  createBotMatch(token: string, level: BotLevel, mapId: string | null): Promise<BotMatch> {
-    return this.#request('POST', '/api/bot-matches', token, {
-      level,
-      ...mapChoice(mapId),
-    });
+  /**
+   * Starts a bot match. The server answers once the map is there: a new map takes a few seconds,
+   * at most about a minute (#884); `signal` gives up earlier.
+   */
+  createBotMatch(
+    token: string,
+    level: BotLevel,
+    pick: string,
+    signal?: AbortSignal,
+  ): Promise<BotMatch> {
+    return this.#request('POST', '/api/bot-matches', token, { level, ...mapChoice(pick) }, signal);
   }
 
   async #request<T>(

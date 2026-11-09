@@ -72,7 +72,11 @@
   };
   // The pool maps of the replay cards, from the bundle: the scenes ask no server.
   const bundled = (mapId: string) => BUNDLED_MAPS.find((m) => m.meta.name === mapId) ?? null;
-  const maps = { get: bundled, ensure: (mapId: string) => Promise.resolve(bundled(mapId)) };
+  const maps = {
+    get: bundled,
+    ensure: (mapId: string) => Promise.resolve(bundled(mapId)),
+    thumb: () => null,
+  };
   const queue = QUEUE_SCENES[id];
   const result = RESULT_SCENES[id];
 </script>

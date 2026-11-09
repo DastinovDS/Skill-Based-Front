@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Api } from '../api/http.ts';
   import { t } from '../i18n/index.ts';
-  import { backgroundUrlOf } from '../map/background.ts';
-  import { geoOf, type GeoFile } from '../map/geography.ts';
+  import { loadMatchMap } from '../map/art.ts';
+  import type { GeoFile } from '../map/geography.ts';
   import type { MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
   import type { MatchSummary } from './matchSummary.ts';
   import FailurePanel from './FailurePanel.svelte';
@@ -27,20 +27,18 @@
   // A newer load (a retry, or other props) makes the older answer stale.
   let loadId = 0;
 
-  // The map graph is public and comes over HTTP; the socket then carries only the state.
+  // The map graph is public and comes over HTTP; the socket then carries only the state. The
+  // background and the areas come from the summary of the map, a per-match one too (#884).
   function load(): void {
     const mine = ++loadId;
     map = null;
     failed = false;
-    Promise.all([
-      api.map(mapId).then(async (file) => ({ file, geography: await geoOf(file) })),
-      backgroundUrlOf(api, mapId),
-    ]).then(
-      ([{ file, geography }, background]) => {
+    loadMatchMap(api, mapId).then(
+      (loaded) => {
         if (mine === loadId) {
-          backgroundUrl = background;
-          geo = geography;
-          map = file;
+          backgroundUrl = loaded.backgroundUrl;
+          geo = loaded.geo;
+          map = loaded.file;
         }
       },
       () => {

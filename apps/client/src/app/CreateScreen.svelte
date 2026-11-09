@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { NEW_MAP } from '../api/http.ts';
   import type { MessageKey } from '../i18n/index.ts';
   import { t } from '../i18n/index.ts';
   import LapisButton from '../theme/LapisButton.svelte';
@@ -11,13 +12,14 @@
     /** A match for the public lobby instead of an invite link. */
     isPublic?: boolean;
     /** Creates the invite; answers why it failed (the screen stays, the choices are kept), or null. */
-    oncreate: (mapId: string | null) => Promise<MessageKey | null>;
+    oncreate: (pick: string) => Promise<MessageKey | null>;
     onback: () => void;
   }
 
   let { dock, isPublic = false, oncreate, onback }: Props = $props();
 
-  let mapId = $state<string | null>(null);
+  // A new map by default, a public match too: it is unrated as well (#889).
+  let pick = $state(NEW_MAP);
   let busy = $state(false);
   let failure = $state.raw<MessageKey | null>(null);
 
@@ -26,7 +28,7 @@
     busy = true;
     failure = null;
     try {
-      failure = await oncreate(mapId);
+      failure = await oncreate(pick);
     } finally {
       busy = false;
     }
@@ -43,7 +45,7 @@
   {onback}
   onenter={() => void submit()}
 >
-  <MapTiles maps={dock.maps} bind:value={mapId} generated={!isPublic} />
+  <MapTiles maps={dock.maps} bind:value={pick} />
   {#snippet actions()}
     <LapisButton variant="primary" disabled={busy} onclick={submit}
       >{t('create.submit')}</LapisButton

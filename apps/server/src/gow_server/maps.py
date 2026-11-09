@@ -5,11 +5,11 @@ served as is. Maps are loaded and checked once at startup; a broken map stops th
 
 The catalog holds two groups. The pool (``maps/*.json``) is what the queue plays and what a random
 pick draws from. The generated maps (``maps/gen/*.json``, #771) are played only by an explicit
-choice, in a private match or against a bot, and never rated: ``MapCatalog.pool`` keeps them out
-of every random pick, ``invites.create_match`` out of the public lobby, ``MatchLifecycle.start``
-out of the rating.
+choice, in an unrated match (by link, public or against a bot, #889), and never rated:
+``MapCatalog.pool`` keeps them out of every random pick and so out of the queue,
+``MatchLifecycle.start`` out of the rating.
 
-A third kind is not in the catalog: the per-match maps (#884), made by the server for one private
+A third kind is not in the catalog: the per-match maps (#884), made by the server for one unrated
 invite or bot match (``gow_server.mapgen``) and stored next to the replays. Their ids start with
 ``MATCH_MAP_PREFIX``, which no file of the catalog may use, so they never collide with a pool or a
 stored generated map. The endpoints below serve them like the catalog maps once they are made.
@@ -44,7 +44,7 @@ MATCH_MAP_PREFIX: Final = "live-"
 _MATCH_MAP_RE: Final = re.compile(r"live-[0-9a-f]{12}")
 
 MapSource = Literal["new", "pool", "generated"]
-"""Where the map of a private or a bot match comes from when no ``map_id`` is given (#884):
+"""Where the map of an unrated match comes from when no ``map_id`` is given (#884):
 ``new``, a map made for this match; ``pool``, a random pool map; ``generated``, a random stored
 generated map (``maps/gen/``)."""
 
@@ -143,7 +143,7 @@ def choose_map(
     source: MapSource | None = None,
     default: MapSource = "pool",
 ) -> MapEntry | None:
-    """The map asked for by a private or a bot match; ``None``: make a new map for it (#884).
+    """The map asked for by an unrated match (an invite or a bot match); ``None``: make a new map for it (#884).
 
     ``map_id`` names a map of the catalog (a per-match map is never chosen again). Without it,
     ``source`` says where the map comes from, ``default`` when absent; ``random_generated`` is the
@@ -181,7 +181,7 @@ class MapSummary(BaseModel):
     height: int
     background_url: str | None
     generated: bool
-    """Outside the pool: only by an explicit choice in a private or a bot match, never rated."""
+    """Outside the pool: only by an explicit choice in an unrated match, never rated."""
     thumb_url: str | None = None
     """The thumbnail of the background (#839), ``/api/maps/{id}/thumb.webp``."""
     geo_url: str | None = None

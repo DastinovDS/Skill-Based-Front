@@ -7,6 +7,7 @@ import RootApp from './app/RootApp.svelte';
 import LegalPage from './legal/LegalPage.svelte';
 import LegalFooter from './legal/LegalFooter.svelte';
 import { loadGuest } from './api/guestStore.ts';
+import { Api } from './api/http.ts';
 import ReplayScreen from './replay/ReplayScreen.svelte';
 import { installErrorLog } from './errorLog.ts';
 // The display settings of the viewer (#871): the scale and the motion choice go on the root
@@ -63,7 +64,7 @@ async function start(target: HTMLElement) {
     };
     return mount(ReplayScreen, {
       target,
-      props: { matchId: replayId, token, nick: guest?.nick ?? null, onback },
+      props: { api: new Api(), matchId: replayId, token, nick: guest?.nick ?? null, onback },
     });
   }
   if (devMenus) {

@@ -20,18 +20,19 @@ When the second one is ready the match starts (``MatchManager.create``) and ``GE
   list of open public matches; anyone joins from it by the code in the list (``join`` + ``ready``
   as above). A public match is not ``private``: no pauses (DEC-05 allows them only between
   friends; against a stranger a pause is a way to stall) and, like every invite match, no rating.
-  A generated map (#771) is for an invite by link only: a public match on one is refused.
+  A public match is unrated like an invite by link, so it plays a new map by default too and may
+  name a stored generated map (#889, the owner's decision of 2026-11-09); only the queue is rated.
   A public entry lives only while its host is there: the host's ``GET /api/matches/{code}``
   (the waiting room polls it) is a heartbeat, and an entry whose host was silent for
   ``lobby_stale_s`` is dropped (a closed tab). ``DELETE /api/matches/{code}`` removes an invite
   that has not started (the host leaves the waiting room). Creating an invite is rate limited per
   account (``invite_rate_limit`` per ``invite_rate_window_s``).
-- A new map (#884, ``gow_server.mapgen``): a private invite without a map choice gets a map made for
-  it; the work starts when the invite is created, so it is usually done before the guest arrives.
+- A new map (#884, ``gow_server.mapgen``): an invite without a map choice (by link or public, #889) gets a
+  map made for it; the work starts when the invite is created, so it is usually done before the guest arrives.
   ``InviteOut.map_ready`` says whether it is; until then ``GET /api/maps/{map_id}`` is 404, the
   ready timer of a joined guest does not run, and the second ``ready`` waits for the map (at most
   ``GOW_MAPGEN_WAIT_S``) before the match starts. A map that fails gives way to a random pool map:
-  ``map_id`` then changes. A dropped invite drops its map. A public invite plays the pool.
+  ``map_id`` then changes. A dropped invite drops its map.
 - Invites live in memory: matches do not survive a restart either, and no table is needed.
   The endpoints are ``async def`` without awaits between the check and the change, so the
   registry needs no lock; the guest token is checked by the sync ``current_player`` dependency.
@@ -228,8 +229,8 @@ class CreateMatch(BaseModel):
     """A map of the pool or a stored generated one; excludes ``map_source``."""
     map_source: MapSource | None = None
     """With no ``map_id``: ``new`` (a map made for this match, #884), ``pool`` (a random pool map)
-    or ``generated`` (a random stored generated map). Omitted: ``new`` for a private match,
-    ``pool`` for a public one; ``new`` is refused for a public one (422)."""
+    or ``generated`` (a random stored generated map). Omitted: ``new``, for a public match too
+    (#889)."""
     random_generated: bool = False
     """The older spelling of ``map_source: "generated"`` (#771)."""
     public: bool = False
@@ -340,12 +341,8 @@ async def create_match(
         body.map_id,
         random_generated=body.random_generated,
         source=body.map_source,
-        default="pool" if body.public else "new",
+        default="new",  # the public lobby too (#889): it is unrated like a private match
     )
-    if body.public and (entry is None or entry.generated):
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="generated maps are for private matches"
-        )
     pending = None
     if entry is None:  # a new map (#884): made while the host shares the link
         pending = book.maker.request() if book.maker is not None else None

@@ -39,6 +39,9 @@
   const starting = $derived(
     invite !== null && opponent !== null && invite.you_ready && invite.opponent_ready,
   );
+  // A new map is made from the creation of the invite (#884); the poll says when it is there,
+  // and the second "Ready" waits for it.
+  const drawing = $derived(invite !== null && !invite.map_ready);
 
   function update(next: Invite): void {
     invite = next;
@@ -110,7 +113,9 @@
     invite === null
       ? t('common.loading')
       : starting
-        ? t('bot.starting')
+        ? drawing
+          ? t('wait.drawing')
+          : t('bot.starting')
         : opponent !== null
           ? tf('invite.joined', { nick: opponent })
           : listed
@@ -123,7 +128,9 @@
       ? null
       : invite.you_ready
         ? invite.opponent_ready
-          ? t('invite.starting')
+          ? drawing
+            ? t('invite.drawingStart')
+            : t('invite.starting')
           : t('invite.youReady')
         : invite.opponent_ready
           ? t('invite.opponentReady')
@@ -141,7 +148,11 @@
   {opponent}
   eyebrow={t('invite.title')}
   {head}
-  sub={invite === null ? null : tf('invite.map', { map: invite.map_id })}
+  sub={invite === null
+    ? null
+    : drawing
+      ? t('invite.mapDrawing')
+      : tf('invite.map', { map: invite.map_id })}
   pause={invite?.public === true ? 'none' : 'each'}
   alert={failure === null ? null : t(failure)}
   note={invite === null
@@ -185,7 +196,15 @@
         youReady={invite.you_ready}
         opponentReady={invite.opponent_ready}
       />
-      <p class="status" role="status">{status}</p>
+      <p class="status" role="status">
+        {#if starting && drawing}<span class="busy" aria-hidden="true"><i></i><i></i><i></i></span
+          >{/if}{status}
+      </p>
+    {/if}
+    {#if drawing && !starting}
+      <p class="status drawing">
+        <span class="busy" aria-hidden="true"><i></i><i></i><i></i></span>{t('wait.drawing')}
+      </p>
     {/if}
   {/if}
   {#snippet actions()}
