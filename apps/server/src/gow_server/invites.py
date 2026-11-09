@@ -26,6 +26,12 @@ When the second one is ready the match starts (``MatchManager.create``) and ``GE
   ``lobby_stale_s`` is dropped (a closed tab). ``DELETE /api/matches/{code}`` removes an invite
   that has not started (the host leaves the waiting room). Creating an invite is rate limited per
   account (``invite_rate_limit`` per ``invite_rate_window_s``).
+- A new map (#884, ``gow_server.mapgen``): a private invite without a map choice gets a map made for
+  it; the work starts when the invite is created, so it is usually done before the guest arrives.
+  ``InviteOut.map_ready`` says whether it is; until then ``GET /api/maps/{map_id}`` is 404, the
+  ready timer of a joined guest does not run, and the second ``ready`` waits for the map (at most
+  ``GOW_MAPGEN_WAIT_S``) before the match starts. A map that fails gives way to a random pool map:
+  ``map_id`` then changes. A dropped invite drops its map. A public invite plays the pool.
 - Invites live in memory: matches do not survive a restart either, and no table is needed.
   The endpoints are ``async def`` without awaits between the check and the change, so the
   registry needs no lock; the guest token is checked by the sync ``current_player`` dependency.
@@ -43,7 +49,8 @@ from gow_server.abuse import Limits, enforce, server_full
 from gow_server.clock import Clock
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchRecord
-from gow_server.maps import MapCatalog, choose_map
+from gow_server.mapgen import MapMaker, MapStatus, PendingMap
+from gow_server.maps import MapCatalog, MapEntry, MapSource, choose_map
 from gow_server.matches import ManagerDrainingError, ServerFullError
 from gow_server.ratelimit import SlidingWindowLimiter
 from gow_sim.ruleset import Ruleset
@@ -70,9 +77,16 @@ class Invite:
     match_id: str | None = None
     starting: bool = False
     """The row is being written and the match started (the second ``ready`` is in flight)."""
+    pending: PendingMap | None = None
+    """The map being made for this invite (#884); ``None``: a map of the catalog."""
 
     def is_member(self, account_id: int) -> bool:
         return account_id in (self.host, self.guest)
+
+    @property
+    def map_ready(self) -> bool:
+        """The map can be loaded: a catalog map, or a per-match map that is made."""
+        return self.pending is None or self.pending.status is MapStatus.READY
 
     @property
     def state(self) -> Literal["open", "joined", "started"]:
@@ -90,11 +104,14 @@ class InviteBook:
         ttl_s: float,
         lifecycle: MatchLifecycle,
         lobby_stale_s: float = DEFAULT_LOBBY_STALE_S,
+        maker: MapMaker | None = None,
     ) -> None:
         self.clock = clock
         self.ttl_s = ttl_s
         self.lobby_stale_s = lobby_stale_s
         self.lifecycle = lifecycle
+        self.maker = maker
+        """Makes the new maps of the invites (#884); ``None``: pool maps only (tests)."""
         self._by_code: dict[str, Invite] = {}
         self._open_of_host: dict[int, str] = {}
 
@@ -102,13 +119,22 @@ class InviteBook:
         self._purge()
         return len(self._by_code)
 
-    def create(self, host: int, host_nick: str, map_id: str, *, public: bool = False) -> Invite:
+    def create(
+        self,
+        host: int,
+        host_nick: str,
+        map_id: str,
+        *,
+        public: bool = False,
+        pending: PendingMap | None = None,
+    ) -> Invite:
         self._purge()
         previous = self._open_of_host.pop(host, None)
         old = self._by_code.get(previous) if previous is not None else None
         if previous is not None and old is not None and old.match_id is None:
             self.lifecycle.abort(old.record, "replaced")
             del self._by_code[previous]
+            self._drop_map(old)
         expires_at = self.clock.now() + self.ttl_s
         invite = Invite(
             secrets.token_urlsafe(CODE_BYTES),
@@ -119,6 +145,7 @@ class InviteBook:
             self.lifecycle.open_record(expires_at),
             public=public,
             seen_at=self.clock.now(),
+            pending=pending,
         )
         self._by_code[invite.code] = invite
         self._open_of_host[host] = invite.code
@@ -127,7 +154,38 @@ class InviteBook:
     def get(self, code: str) -> Invite | None:
         """The live invite with this code, ``None`` if unknown or expired."""
         self._purge()
-        return self._by_code.get(code)
+        invite = self._by_code.get(code)
+        if invite is not None:
+            self._check_map(invite)
+        return invite
+
+    def _check_map(self, invite: Invite) -> None:
+        """A new map that failed gives way to a random pool map (#884): ``map_id`` changes."""
+        pending = invite.pending
+        if pending is None or pending.status is not MapStatus.FAILED or self.maker is None:
+            return
+        invite.map_id = self.maker.fallback().id
+        invite.pending = None
+
+    async def map_of(self, invite: Invite, catalog: MapCatalog) -> MapEntry:
+        """The map the match of ``invite`` plays; waits for a new map that is still being made
+        (at most ``GOW_MAPGEN_WAIT_S``, then a pool map)."""
+        pending = invite.pending
+        if pending is not None and self.maker is not None:
+            made = await self.maker.settle(pending)
+            if made is not None:
+                return made
+            invite.map_id = self.maker.fallback().id  # failed, or too slow and abandoned
+            invite.pending = None
+        entry = catalog.get(invite.map_id)
+        assert entry is not None  # checked at creation, the catalog does not change at runtime
+        return entry
+
+    def _drop_map(self, invite: Invite) -> None:
+        """An invite that will never start lets its new map go (#884)."""
+        if invite.pending is not None and self.maker is not None:
+            self.maker.discard(invite.pending)
+            invite.pending = None
 
     def lobby(self) -> list[Invite]:
         """Open public invites (nobody joined yet), oldest first, at most ``LOBBY_LIST_MAX``."""
@@ -159,15 +217,21 @@ class InviteBook:
             invite = self._by_code.pop(code)
             if self._open_of_host.get(invite.host) == code:
                 del self._open_of_host[invite.host]
+            if invite.match_id is None and not invite.starting:
+                self._drop_map(invite)
 
 
 class CreateMatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     map_id: str | None = None
-    """A map of the pool or a generated one; a random one if omitted."""
+    """A map of the pool or a stored generated one; excludes ``map_source``."""
+    map_source: MapSource | None = None
+    """With no ``map_id``: ``new`` (a map made for this match, #884), ``pool`` (a random pool map)
+    or ``generated`` (a random stored generated map). Omitted: ``new`` for a private match,
+    ``pool`` for a public one; ``new`` is refused for a public one (422)."""
     random_generated: bool = False
-    """With no ``map_id``: draw from the generated maps instead of the pool."""
+    """The older spelling of ``map_source: "generated"`` (#771)."""
     public: bool = False
     """List the match in the public lobby (``GET /api/lobby``) instead of sharing a link."""
 
@@ -177,6 +241,12 @@ class InviteOut(BaseModel):
     state: Literal["open", "joined", "started"]
     public: bool
     map_id: str
+    """The map of the match. A new map (#884) has its id at once; if making it fails, a random
+    pool map takes its place and this id changes (before ``map_ready``)."""
+    map_ready: bool
+    """The map can be loaded (``GET /api/maps/{map_id}``, its background). False while a new map
+    is being made (#884): show a waiting state; the ready timer of the guest has not started and
+    the second ``ready`` answers only when the map is there."""
     host_nick: str
     guest_nick: str | None
     you_ready: bool
@@ -216,6 +286,7 @@ def _view(invite: Invite, account_id: int, book: InviteBook) -> InviteOut:
         state=invite.state,
         public=invite.public,
         map_id=invite.map_id,
+        map_ready=invite.map_ready,
         host_nick=invite.host_nick,
         guest_nick=invite.guest_nick,
         you_ready=account_id in invite.ready,
@@ -264,12 +335,27 @@ async def create_match(
     enforce(limits.match_create, str(player.id), "too many matches created")
     if book.lifecycle.active_of(player.id) is not None:
         raise _busy(player.id, player.id)
-    entry = choose_map(catalog, body.map_id, random_generated=body.random_generated)
-    if entry.generated and body.public:
+    entry = choose_map(
+        catalog,
+        body.map_id,
+        random_generated=body.random_generated,
+        source=body.map_source,
+        default="pool" if body.public else "new",
+    )
+    if body.public and (entry is None or entry.generated):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, detail="generated maps are for private matches"
         )
-    invite = book.create(player.id, player.nick, entry.id, public=body.public)
+    pending = None
+    if entry is None:  # a new map (#884): made while the host shares the link
+        pending = book.maker.request() if book.maker is not None else None
+        entry = choose_map(catalog, None) if pending is None else None  # off or full: the pool
+    if pending is not None:
+        map_id = pending.id
+    else:
+        assert entry is not None  # a pool pick never asks for a new map
+        map_id = entry.id
+    invite = book.create(player.id, player.nick, map_id, public=body.public, pending=pending)
     response.headers["Cache-Control"] = "no-store"
     return _view(invite, player.id, book)
 
@@ -327,6 +413,8 @@ async def join_match(code: str, response: Response, player: CurrentPlayer, book:
         book.lifecycle.join(invite.record, invite.host, player.id)
     except AlreadyActiveError as busy:
         raise _busy(busy.account_id, player.id) from None
+    if invite.pending is not None and not invite.map_ready:  # #884: no clock before the map
+        book.lifecycle.hold_ready_timer(invite.record, invite.pending.task)
     invite.guest, invite.guest_nick = player.id, player.nick
     return _view(invite, player.id, book)
 
@@ -348,16 +436,16 @@ async def ready_match(
     ):
         catalog: MapCatalog = request.app.state.maps
         rules: Ruleset = request.app.state.ruleset
-        entry = catalog.get(invite.map_id)
-        assert entry is not None  # checked at creation, the pool does not change at runtime
         sides = [invite.host, invite.guest]
         if secrets.randbelow(2):  # who plays which side is random
             sides.reverse()
-        invite.starting = True  # the only await below is the database; no second start meanwhile
+        # The awaits below are the new map (#884) and the database; no second start meanwhile.
+        invite.starting = True
         try:
+            entry = await book.map_of(invite, catalog)
             runner = await book.lifecycle.start(
                 invite.record,
-                invite.map_id,
+                entry.id,
                 entry.definition,
                 rules,
                 (sides[0], sides[1]),

@@ -739,6 +739,19 @@ def dump_vector_file(data: dict[str, Any]) -> str:
     return body[:-1] + ',"chains":[\n' + ",\n".join(lines) + "\n]}\n"
 
 
+def dump_geography(data: dict[str, Any]) -> str:
+    """The authored-style geography, one water cell or river per line, like the hand-made ones."""
+
+    def rows(items: list[Any]) -> str:
+        return ",\n".join(f"    {json.dumps(item)}" for item in items)
+
+    return (
+        f'{{\n  "map": {json.dumps(data["map"])},\n'
+        f'  "water": [\n{rows(data["water"])}\n  ],\n'
+        f'  "rivers": [\n{rows(data["rivers"])}\n  ]\n}}\n'
+    )
+
+
 # ---- the picture: Intaglio water (#826, round 2 variant III; #842) -----------------------------
 WATER_TONES = ((30, 48, 58), (36, 56, 66))  # two tones of dark stone in soft blotches
 RIVER_LIGHT = ((50, 76, 86), 0.5)  # a river is shallow: lighter than a lake

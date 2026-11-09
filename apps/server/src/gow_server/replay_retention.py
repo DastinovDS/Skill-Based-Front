@@ -7,6 +7,10 @@ at least one of its human players (``recent_match_ids``). Two optional extra lim
 days, one for unrated matches (invites, the lobby, bot matches) and one for rated ones, whose
 replays are public; 0 switches a limit off. The age counts from the end of the match.
 
+A per-match map (#884, ``gow_server.mapgen``) lives next to the replays and goes with them: the
+same pass removes it once its match has no replay file left and is not running, and a map that no
+match row names (an invite that never started) after ``mapgen.ORPHAN_GRACE``.
+
 For game statistics during development and playtests the command log of a replay can be copied
 into an archive directory before the replay expires (``archive_log``).
 
@@ -122,6 +126,8 @@ class PurgeResult:
     orphans_removed: int = 0
     bytes_kept: int = 0
     archived: int = 0
+    maps_removed: int = 0
+    """Per-match maps (#884) removed: with the replay of their match, or unused."""
 
 
 async def run_cleanup(service: "ReplayService", clock: Clock, interval_s: float) -> None:
@@ -144,6 +150,7 @@ async def run_cleanup(service: "ReplayService", clock: Clock, interval_s: float)
                     "orphans_removed": result.orphans_removed,
                     "bytes_kept": result.bytes_kept,
                     "archived": result.archived,
+                    "maps_removed": result.maps_removed,
                 },
             )
         await clock.sleep(interval_s)

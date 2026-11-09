@@ -8,6 +8,7 @@ dependencies = [
     "alembic>=1.20.0",
     "fastapi>=0.142.2",
     "gow-bots",
+    "gow-maps",
     "gow-protocol",
     "gow-sim",
     "pydantic-settings>=2.15.0",
@@ -22,6 +23,7 @@ gow-admin = "gow_server.admin:main"
 
 [tool.uv.sources]
 gow-bots = { workspace = true }
+gow-maps = { workspace = true }
 gow-protocol = { workspace = true }
 gow-sim = { workspace = true }
 

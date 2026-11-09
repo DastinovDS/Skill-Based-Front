@@ -355,6 +355,17 @@ forbidden_modules = [
 ]
 include_external_packages = true
 
+# ---- gow_server: the map tools only in the worker process of a per-match map (#884).
+# gow_server.mapworker imports gow_maps.matchmap inside the function a ProcessPoolExecutor runs, so
+# the server process loads none of the map tools; that one edge is the only way in.
+
+[[tool.importlinter.contracts]]
+name = "gow_server reaches the map tools (numpy, Pillow, networkx, matplotlib) only in gow_server.mapworker"
+type = "forbidden"
+source_modules = ["gow_server"]
+forbidden_modules = ["gow_maps", "matplotlib", "mpl_toolkits", "networkx", "numpy", "PIL"]
+ignore_imports = ["gow_server.mapworker -> gow_maps.matchmap"]
+
 [[tool.importlinter.contracts]]
 name = "gow_maps uses the standard library, gow_sim, networkx, matplotlib, numpy and Pillow only"
 type = "forbidden"

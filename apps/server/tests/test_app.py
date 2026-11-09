@@ -68,6 +68,9 @@ def test_list_maps(client: TestClient) -> None:
             "height": 400,
             "background_url": None,
             "generated": False,
+            "thumb_url": None,
+            "geo_url": None,
+            "per_match": False,
         },
         {
             "id": "line3",
@@ -76,6 +79,9 @@ def test_list_maps(client: TestClient) -> None:
             "height": 200,
             "background_url": None,
             "generated": False,
+            "thumb_url": None,
+            "geo_url": None,
+            "per_match": False,
         },
     ]
     assert response.headers["cache-control"] == "no-cache"

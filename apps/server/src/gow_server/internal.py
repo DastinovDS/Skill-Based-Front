@@ -78,4 +78,8 @@ async def undrain(manager: Manager) -> DrainStatus:
 async def metrics(request: Request, manager: Manager) -> Response:
     queue = getattr(request.app.state, "queue", None)
     size = 0 if queue is None else len(queue)
-    return Response(render(manager, size), media_type="text/plain; version=0.0.4; charset=utf-8")
+    maker = getattr(request.app.state, "mapmaker", None)
+    pending = 0 if maker is None else maker.pending
+    return Response(
+        render(manager, size, pending), media_type="text/plain; version=0.0.4; charset=utf-8"
+    )

@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
@@ -204,6 +204,17 @@ class MatchLifecycle:
         self.claim(record, (host, guest))
         record.advance(MatchState.WAITING)
         record.deadline = self.clock.now() + self.ready_timeout_s
+
+    def hold_ready_timer(self, record: MatchRecord, until: "asyncio.Future[Any]") -> None:
+        """The ready timer of a ``waiting`` record starts only when ``until`` is done: the map of
+        the match is still being made (#884), and the players are not to blame for that."""
+        record.deadline = None
+
+        def start(_: "asyncio.Future[Any]") -> None:
+            if record.state is MatchState.WAITING and record.deadline is None:
+                record.deadline = self.clock.now() + self.ready_timeout_s
+
+        until.add_done_callback(start)
 
     def abort(self, record: MatchRecord, reason: str) -> None:
         """A match that did not start: ``-> aborted -> cleaned``. No-op on a started one."""

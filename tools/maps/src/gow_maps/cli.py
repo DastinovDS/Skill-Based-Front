@@ -8,16 +8,14 @@ writes the map of a seed and its geography (#771).
 
 import argparse
 import glob
-import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
 
 from gow_maps import fairness
 from gow_maps.bake import background_path, bake_background
 from gow_maps.generate import generate, water_share_pct
-from gow_maps.geo import bake_geography, find_spec, spec_path, vector_path
+from gow_maps.geo import bake_geography, dump_geography, find_spec, spec_path, vector_path
 from gow_maps.mirror import HalfFormatError, dump_map, mirror_file
 from gow_maps.preview import preview_path, render_preview
 from gow_maps.validate import Issue, load_config, validate, validate_file
@@ -134,19 +132,6 @@ def _generate(args: argparse.Namespace) -> int:
     ok = _bake(argparse.Namespace(files=[str(path)], seed=None)) == 0
     render_preview(mapdef, preview_path(path), background_path(path))
     return 0 if _report(str(path), validate_file(path, config, rules)) and ok else 1
-
-
-def dump_geography(data: dict[str, Any]) -> str:
-    """The authored-style geography, one water cell or river per line, like the hand-made ones."""
-
-    def rows(items: list[Any]) -> str:
-        return ",\n".join(f"    {json.dumps(item)}" for item in items)
-
-    return (
-        f'{{\n  "map": {json.dumps(data["map"])},\n'
-        f'  "water": [\n{rows(data["water"])}\n  ],\n'
-        f'  "rivers": [\n{rows(data["rivers"])}\n  ]\n}}\n'
-    )
 
 
 def _score(args: argparse.Namespace) -> int:
