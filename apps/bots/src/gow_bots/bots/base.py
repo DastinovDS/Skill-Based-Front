@@ -81,8 +81,12 @@ __all__ = [
 
 V1_ONLY: Final = (SetStance, SetFront, SetRearMin, Transfer, UpgradeRoad)
 """Commands economy v2 rejects with ``FEATURE_DISABLED`` (DEC-41, items 1, 5, 8); so does
-``SetMode(DEFENSE)`` (``Bot.allowed``). ``[stances]`` accepts ``SetStance`` (DEC-44), but the bots
-have no stance policy under it yet (#689): they stay in the start stance, Balance."""
+``SetMode(DEFENSE)`` (``Bot.allowed``). ``[stances]`` accepts ``SetStance`` (DEC-44): only a bot
+with ``STANCE_POLICY`` (the smart bots, ``gow_bots.bots.stance``, #881) sends it there; the others
+stay in the start stance, Balance."""
+LATE_KEYS: Final = ("stance_", "contact_")
+"""The prefixes of the ``PARAMS`` keys of #881 (the stance policy, the attack estimate before
+contact): ``choose_params`` draws them from a stream of their own."""
 V2_ONLY: Final = (BuildFactory, BuildBunker, DrawLine, RemoveLine, ReleasePlan)
 """Commands of economy v2 only (DEC-41, item 14)."""
 LINES_ONLY: Final = (DrawLine, RemoveLine, SetAutoLines)
@@ -123,9 +127,16 @@ def choose_params(
     One value per range, drawn by a ``random.Random`` seeded with a string of the three inputs
     (``str`` seeds are hashed with SHA-512 by ``random``, independent of ``PYTHONHASHSEED``).
     Ranges are drawn in the order of their names.
+
+    The keys that start with one of ``LATE_KEYS`` (#881) are drawn from a second stream of the
+    same inputs, so adding them left every other draw as it was.
     """
     rng = random.Random(f"gow-bots/{name}/params/{seed}/{player}")
-    return {key: rng.randint(r.low, r.high) for key, r in sorted(ranges.items())}
+    late = random.Random(f"gow-bots/{name}/params/late/{seed}/{player}")
+    return {
+        key: (late if key.startswith(LATE_KEYS) else rng).randint(r.low, r.high)
+        for key, r in sorted(ranges.items())
+    }
 
 
 class Bot:
@@ -133,6 +144,9 @@ class Bot:
 
     name: ClassVar[str] = "bot"
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {}
+    STANCE_POLICY: ClassVar[bool] = False
+    """Under ``[stances]`` (DEC-44) the bot changes its stance by a policy (``SmartBot``, #881);
+    without it ``SetStance`` is not sent under economy v2 (``allowed``)."""
     DISCIPLINE: ClassVar[bool] = False
     """Cancel discipline (#687): cancels only where they save units. ``fight_commands`` counts
     the silent charges of plains (``FightView.mute``; under ``combat.terrain_burn`` the charges
@@ -573,7 +587,8 @@ class Bot:
         """Whether the economy model of the ruleset has ``cmd`` at all: the commands of the
         other model only give ``FEATURE_DISABLED`` (DEC-41, items 5 and 14); so do the commands
         of the other supply model, the bunker without ``[bunker]`` and the road fortification
-        without ``[fort]`` (DEC-43, A12, B2, D1, D)."""
+        without ``[fort]`` (DEC-43, A12, B2, D1, D). ``SetStance`` under v2 only with ``[stances]``
+        (DEC-44) and for a bot with ``STANCE_POLICY``."""
         rules = self.rules
         if isinstance(cmd, FLOW_ONLY):
             return rules.flow
@@ -587,6 +602,8 @@ class Bot:
             return not isinstance(cmd, V2_ONLY)
         if isinstance(cmd, SetMode) and cmd.mode is Mode.DEFENSE:
             return False
+        if isinstance(cmd, SetStance):
+            return rules.stances is not None and self.STANCE_POLICY  # DEC-44, #881
         return not isinstance(cmd, V1_ONLY)
 
     def plan_bonus(self, view: PlayerView, node: int, edges: int, charged: int) -> int:

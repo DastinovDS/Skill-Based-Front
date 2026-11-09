@@ -193,6 +193,20 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     answers (fights, the capital, the strikes) spend them. The saving opens at the cap less one
     quantum (no CP burn at the cap, DEC-02) and stops for ``BANK_TICKS`` after a goal waited
     ``BANK_TICKS`` unpaid. The benchmark ``smart_hoarder`` keeps neither (its ``STRIKE_BANK``).
+24. **The stance policy under** ``[stances]`` (#881, DEC-44; ``gow_bots.bots.stance``). The stance
+    of the phase (``stance_opening``, ``stance_midgame``, ``stance_late``: 0 Economy, 1 Balance,
+    2 War), one step toward Economy while the next CP quantum would burn (on from the stance in
+    force while they keep burning) or units wait for charges the warehouses do not have, one step
+    toward War while the warehouses or the capital's are full or the capital is pressed with few
+    CP; at most one change per ``stance_dwell`` ticks. The rusher
+    (and the exploiter) stay in War, the expander opens in War, the turtle opens in Economy,
+    the hoarder hoards in Economy and strikes in War late; the others play Balance. Without
+    ``insight`` only the stance of the phase.
+25. **The attack estimate before contact** (#881, DEC-40; ``CampaignBot.support``, ``meets``).
+    Under ``combat.retreat = "none"`` a lost fight cannot be left, so the shots an attack needs
+    count the reinforcements the defender can bring while the fight lasts (``contact_pct``
+    percent of them) and the enemy figures met on the road in; an attack short of that is not
+    sent, the group gathers or rallies. Under ``"round"`` nothing changes.
 
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -218,6 +232,7 @@ from gow_bots.bots.logistics import (
     own_parts,
 )
 from gow_bots.bots.pockets import Pockets, heading, read_pockets
+from gow_bots.bots.stance import StanceInputs, StancePolicy, wanted_stance
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
 from gow_bots.bots.utility import (
     defender_pool,
@@ -341,6 +356,19 @@ _COMMON: Final[Mapping[str, ParamRange]] = {
     # The keys of #618 sort after every drawn key, so the draws of the others stay as they were.
     "wait_plan": ParamRange(100, 200),
     "worth_defense": ParamRange(0, 0),
+    # The stance policy under ``[stances]`` (item 24, ``gow_bots.bots.stance``; #881): drawn from
+    # their own stream (``base.LATE_KEYS``). The stance of each phase is an index of
+    # ``stance.STANCES``: 0 Economy, 1 Balance, 2 War.
+    "stance_opening": ParamRange(1, 1),
+    "stance_midgame": ParamRange(1, 1),
+    "stance_late": ParamRange(1, 1),
+    "stance_wait": ParamRange(3, 4),
+    "stance_full": ParamRange(70, 80),
+    "stance_cp_low": ParamRange(100, 200),
+    "stance_dwell": ParamRange(200, 400),
+    # Item 25 (#881): the percent of the reinforcements of the defender an attack counts under
+    # ``combat.retreat = "none"`` (``CampaignBot.support``).
+    "contact_pct": ParamRange(100, 100),
 }
 """Thresholds every personality shares (see the module docstring)."""
 
@@ -419,6 +447,10 @@ class SmartBot(CampaignBot):
     """The shared base: see the module docstring. Subclasses set ``PARAMS`` and the stances."""
 
     name: ClassVar[str] = "smart"
+    STANCE_POLICY: ClassVar[bool] = True
+    """Item 24: the stance policy under ``[stances]`` (#881)."""
+    CONTACT: ClassVar[bool] = True
+    """Item 25: the attack estimate before contact under ``combat.retreat = "none"`` (#881)."""
     STANCE: ClassVar[Stance] = Stance.BALANCE
     LATE_STANCE: ClassVar[Stance | None] = None
     """The stance from tick ``late`` on (``None``: ``STANCE`` all match)."""
@@ -617,6 +649,8 @@ class SmartBot(CampaignBot):
         """Item 23: the tick the current saving began; ``None``: not saving."""
         self.bank_rest = 0
         """Item 23: no saving before this tick (a goal waited ``BANK_TICKS`` unpaid)."""
+        self.stance_policy = StancePolicy()
+        """Item 24: the dwell of the stance policy under ``[stances]``."""
         for e, edef in enumerate(mapdef.edges):
             self.edge_between[(edef.a, edef.b)] = e
             self.edge_between[(edef.b, edef.a)] = e
@@ -881,6 +915,7 @@ class SmartBot(CampaignBot):
                 ctx.used[cmd.group] = True
         if self.rules.v2:
             self.economy_v2(ctx)  # lines, factories, bunkers, plans (DEC-41)
+            self.stance_v2(ctx, a)  # item 24: under ``[stances]`` only (DEC-44)
         else:
             self._set_stance(ctx, a)
             for cmd in self.fronts(view):  # front markers on the front cities (DEC-28)
@@ -1522,6 +1557,22 @@ class SmartBot(CampaignBot):
         stance = self.wanted_stance(a)
         if ctx.view.me.stance is not stance and self.spend(ctx, SetStance(stance)):
             self.stance_tick = ctx.tick
+
+    def stance_v2(self, ctx: Ctx, a: Assessment) -> None:
+        """Item 24: the stance of the policy (``gow_bots.bots.stance``) under ``[stances]``, at
+        most one change per ``stance_dwell`` ticks."""
+        if self.rules.stances is None:
+            return
+        view = ctx.view
+        pressed = self.danger or self.alarm or bool(self.strikes_at(view))
+        home = view.nodes[self.home]
+        full = home.owner == self.player and 0 < (home.warehouse_cap or 0) <= (home.warehouse or 0)
+        inputs = StanceInputs(self.phase, a.cp, a.own, pressed, view.me.stance, full)
+        want = wanted_stance(self.rules, self.params, inputs, insight=self.tempo.insight)
+        dwell = self.params["stance_dwell"]
+        cmd = self.stance_policy.command(view.me.stance, want, ctx.tick, dwell)
+        if cmd is not None and self.spend(ctx, cmd):
+            self.stance_policy.sent(ctx.tick)
 
     # The capital ----------------------------------------------------------------------------
 
@@ -2502,6 +2553,10 @@ class SmartRusher(SmartBot):
         "w_need": ParamRange(15, 15),
         "respond": ParamRange(1, 1),
         "worth_defense": ParamRange(3, 3),
+        "stance_opening": ParamRange(2, 2),  # item 24: War all match (CP for the captures)
+        "stance_midgame": ParamRange(2, 2),
+        "stance_late": ParamRange(2, 2),
+        "contact_pct": ParamRange(75, 75),  # item 25: the boldest estimate
     }
 
 
@@ -2594,6 +2649,7 @@ class SmartExpander(SmartBot):
         "road_keep": ParamRange(250, 350),
         "late": ParamRange(1200, 2400),
         "worth_defense": ParamRange(2, 2),
+        "stance_opening": ParamRange(2, 2),  # item 24: War for the claims, then Balance
     }
 
 
@@ -2643,6 +2699,7 @@ class SmartTurtle(SmartBot):
         "road_keep": ParamRange(250, 350),
         "respond": ParamRange(2, 2),
         "worth_defense": ParamRange(1, 1),
+        "stance_opening": ParamRange(0, 0),  # item 24: Economy while it claims its half
     }
 
     def __init__(
