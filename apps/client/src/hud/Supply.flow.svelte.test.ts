@@ -59,15 +59,18 @@ describe('the leaf shift control', () => {
     value: target.querySelector('output')?.textContent ?? null,
   });
 
-  it('shows "front" with the mode, minus on, plus off at the front', () => {
+  it('shows 0 with the mode, minus on, plus off at the front', () => {
     setLocale('en');
     const { target, orders } = render();
     expect(target.querySelector('.supply')).toBeNull();
     orders.toggleSupplyMode();
     flushSync();
+    // No word in the pill (the round 5 Combined view): the key, the level sign and its value.
     const pill = target.querySelector('.supply');
-    expect(pill?.textContent).toContain('Supply');
-    expect(buttons(target).value).toBe('front');
+    expect(pill?.getAttribute('aria-label')).toBe('Supply');
+    expect(pill?.textContent).toContain('Tab');
+    expect(pill?.querySelector('svg.level')).not.toBeNull();
+    expect(buttons(target).value).toBe('0');
     expect(buttons(target).back?.disabled).toBe(false);
     expect(buttons(target).forward?.disabled).toBe(true);
   });

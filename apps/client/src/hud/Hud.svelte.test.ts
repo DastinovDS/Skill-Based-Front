@@ -127,18 +127,18 @@ describe('Hud', () => {
     const bar = (target.querySelector('header')?.textContent ?? '').replace(/\s+/g, ' ');
     // Tick 250 at 10 Hz of a 9000-tick match (DEC-22): 875 s = 14:35 left; CP is at the cap.
     expect(bar).toContain('14:35');
-    expect(bar).toContain('Balance');
-    expect(bar).toContain('Ember');
-    expect(bar).toContain('Guest');
+    // No words where a sign says it (ui-style 53): the stance and the nicks are accessible names.
+    expect(bar).not.toContain('Ember');
+    expect(target.querySelector('[aria-label^="Stance: Balance"]')).not.toBeNull();
     expect(target.querySelector('[aria-label^="VP score"]')?.getAttribute('aria-label')).toBe(
       'VP score: Ember 2, Guest 1',
     );
-    // CP as one track with a notch at every whole CP below the cap: four for a cap of 5 CP.
-    expect(target.querySelectorAll('.track')).toHaveLength(1);
-    expect(target.querySelectorAll('.notch')).toHaveLength(4);
+    // CP as one Double frame gauge: the numeral and a ruled scale.
+    expect(target.querySelectorAll('.cp .gauge')).toHaveLength(1);
+    expect(target.querySelector('.cp .num')?.textContent.trim()).toBe('5');
   });
 
-  it('shows the CP as a track: a head marker while it grows, a ring and the word MAX at the cap (#439)', () => {
+  it('shows the CP as the Double frame: the bar while it grows, the frame drawn in at the cap (#860)', () => {
     setLocale('en');
     const { target, state } = render();
     // Tick 30 at 100 per 50 ticks: 0.6 CP of 5, growing.
@@ -146,16 +146,14 @@ describe('Hud', () => {
     flushSync();
     const cp = (): Element | null => target.querySelector('.cp');
     expect(cp()?.getAttribute('aria-label')).toBe('CP: 0.6 of 5');
-    expect(cp()?.querySelector('.head')).not.toBeNull();
-    expect(cp()?.querySelector('.ring')).toBeNull();
-    expect(cp()?.querySelector('.max')).toBeNull();
-    // Tick 250 is at the cap: the head goes, the ring and the word come (not a colour alone, AGENTS.md 7.4).
+    expect(cp()?.querySelector('.gauge.full')).toBeNull();
+    expect(Number(cp()?.querySelector('.bar')?.getAttribute('width'))).toBeGreaterThan(0);
+    // Tick 250 is at the cap: the frame is drawn in (a shape, not a colour; AGENTS.md 7.4).
     state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 250));
     flushSync();
     expect(cp()?.getAttribute('aria-label')).toBe('CP: 5 of 5, at the cap');
-    expect(cp()?.querySelector('.head')).toBeNull();
-    expect(cp()?.querySelector('.ring')).not.toBeNull();
-    expect(cp()?.querySelector('.max')?.textContent).toBe('MAX');
+    expect(cp()?.querySelector('.gauge.full')).not.toBeNull();
+    expect(cp()?.querySelectorAll('.frame path').length).toBeGreaterThan(0);
   });
 
   it('has no selection card: a selection is a data attribute, there is no hint line', () => {

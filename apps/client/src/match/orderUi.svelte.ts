@@ -88,6 +88,12 @@ export interface OrderUiData {
    * marked (#762). Display arithmetic only; the server decides.
    */
   readonly cpShort: boolean;
+  /**
+   * The CP price of the move a click would give now (hundredths, the ruleset's), while a target is
+   * hovered or a move was just refused for its CP: the CP gauge draws it as a bracket under its
+   * scale (ui-style 53a). `null`: nothing to price.
+   */
+  readonly cpPrice: number | null;
   readonly notice: OrderNotice | null;
   /** The answer to the last `reach_query` for the selected group; `null`: none yet. */
   readonly reach: ReachInfo | null;
@@ -113,6 +119,7 @@ export class OrderUiState {
     linePath: null,
     planning: false,
     cpShort: false,
+    cpPrice: null,
     notice: null,
     reach: null,
   });

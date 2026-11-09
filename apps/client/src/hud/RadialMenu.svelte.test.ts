@@ -59,13 +59,15 @@ describe('RadialMenu', () => {
     flushSync();
     const items = [...target.querySelectorAll('[role="menuitemradio"]')];
     expect(items).toHaveLength(3);
-    const text = items.map((i) => i.textContent.replace(/\s+/g, ' '));
-    expect(text[0]).toContain('+3 CP per minute');
-    expect(text[0]).toContain('+18 charges per minute');
-    expect(text[1]).toContain('+6 CP per minute');
-    expect(text[1]).toContain('+12 charges per minute');
-    expect(text[2]).toContain('+9 CP per minute');
-    expect(text[2]).toContain('+6 charges per minute');
+    // The rates as signs (the CP mark, one lozenge, per minute); the words are the accessible name.
+    const names = items.map((i) => i.getAttribute('aria-label'));
+    expect(names).toEqual([
+      'Economy: 3 CP and 18 charges per minute',
+      'Balance: 6 CP and 12 charges per minute',
+      'War: 9 CP and 6 charges per minute',
+    ]);
+    expect(items.every((i) => i.querySelector('.cp-mark') !== null)).toBe(true);
+    expect(items.every((i) => i.querySelector('.mark.fill') !== null)).toBe(true);
     // An icon in every sector (#350): the shape tells the stance as well as the order does.
     expect(items.map((i) => i.querySelector('.glyph')?.getAttribute('data-icon'))).toEqual([
       'stanceEconomy',
@@ -79,7 +81,7 @@ describe('RadialMenu', () => {
     expect(target.querySelector('.caption')).toBeNull();
   });
 
-  it('marks the current stance, and the state is told by a tick, not only by the frame', () => {
+  it('marks the current stance, and the state is told by a lozenge, not only by the frame', () => {
     setLocale('en');
     const { target, orders } = render();
     orders.openRadial(true);
@@ -88,7 +90,8 @@ describe('RadialMenu', () => {
       (i) => i.getAttribute('aria-checked') === 'true',
     );
     expect(checked).toHaveLength(1);
-    expect(checked[0]?.textContent).toContain('✓');
+    expect(checked[0]?.querySelector('.current-mark')).not.toBeNull();
+    expect(target.querySelectorAll('.current-mark')).toHaveLength(1);
   });
 
   it('sends the stance of a clicked sector and closes', () => {
@@ -116,7 +119,8 @@ describe('RadialMenu', () => {
     window.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 320 }));
     flushSync();
     expect(orders.radial.current.hover).toBe('balance');
-    expect(target.querySelector('.sector.hover')?.textContent).toContain('Balance');
-    expect(target.textContent).toContain('CP per minute');
+    expect(target.querySelector('.sector.hover')?.getAttribute('aria-label')).toContain('Balance');
+    // The hovered stance's name in the hub over the ring.
+    expect(target.querySelector('.hub')?.textContent).toBe('Balance');
   });
 });

@@ -124,7 +124,7 @@ describe('the playtest batch in the HUD (#762)', () => {
     );
   });
 
-  it('marks the CP badge red with the alert icon while the hovered move costs more than the CP', () => {
+  it('marks the CP gauge red with a short bracket and a down chevron while the hovered move costs more than the CP', () => {
     const { hud, orders } = setup(snapshot(RULES.cost.move - 1));
     const bar = show(TopBar, { data: hud.current, orders, chrome: new HudChrome() });
     expect(bar.querySelector('.cp.short')).toBeNull();
@@ -134,9 +134,10 @@ describe('the playtest batch in the HUD (#762)', () => {
     flushSync();
     const cp = bar.querySelector('.cp.short');
     expect(cp).not.toBeNull();
-    // Not by colour alone: the alert icon and a ring of its own, and the words for a screen reader.
-    expect(cp?.querySelector('.short-icon svg')).not.toBeNull();
-    expect(cp?.querySelector('.short-ring')).not.toBeNull();
+    // Not by colour alone: the price bracket marked short with a down chevron, and the words for a
+    // screen reader.
+    expect(cp?.querySelector('.bracket.short')).not.toBeNull();
+    expect(cp?.querySelector('.chevron')).not.toBeNull();
     expect(cp?.getAttribute('aria-label')).toContain('not enough for this move');
   });
 

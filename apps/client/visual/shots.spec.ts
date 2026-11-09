@@ -829,6 +829,8 @@ test('shot of the split hint on a target the group is too big for', async ({ pag
   await page.mouse.move(640, 598);
   await page.mouse.move(641, 599);
   await expect(page.locator('[role="tooltip"]')).toBeVisible();
+  // The tag comes in by the Burin reveal (about 550 ms, #860): shoot it whole.
+  await page.waitForTimeout(700);
   await page.screenshot({ path: join(OUT, 'split-hint.png') });
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.screenshot({ path: join(OUT, 'split-hint-gray.png') });
@@ -911,6 +913,8 @@ for (const name of UX_SHOTS) {
         await page.mouse.move(640, 598);
         await page.mouse.move(641, 599);
         await expect(page.locator('[role="tooltip"]')).toBeVisible();
+        // The tag comes in by the Burin reveal (about 550 ms, #860): shoot it whole.
+        await page.waitForTimeout(700);
         if (name === 'split-menu') {
           await page.mouse.click(641, 599);
           await page.mouse.move(1000, 700);
@@ -956,6 +960,8 @@ test('shot of the capture rule tip and the capture_failed toast', async ({ page 
   await page.mouse.move(640, 598);
   await page.mouse.move(641, 599);
   await expect(page.locator('[role="tooltip"]')).toBeVisible();
+  // The tag comes in by the Burin reveal (about 550 ms, #860): shoot it whole.
+  await page.waitForTimeout(700);
   await page.screenshot({ path: join(OUT, 'capture-tip.png') });
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.screenshot({ path: join(OUT, 'capture-tip-gray.png') });

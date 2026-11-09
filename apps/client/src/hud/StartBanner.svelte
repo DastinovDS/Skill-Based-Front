@@ -33,18 +33,20 @@
     align-items: center;
     gap: 4px;
     padding: 14px 28px;
-    border: 1px solid var(--paper);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
+    border: 1px solid rgb(236 228 209 / 60%);
+    background: rgb(14 12 9 / 94%);
+    box-shadow:
+      inset 0 0 0 3px rgb(14 12 9 / 94%),
+      inset 0 0 0 4px rgb(236 228 209 / 25%);
+    color: var(--ink);
     text-align: center;
     pointer-events: none;
     animation: banner-in 240ms ease-out;
   }
 
   .mark path {
-    fill: var(--you);
-    stroke: var(--paper);
+    fill: var(--own);
+    stroke: var(--ink);
     stroke-width: 1.4;
     stroke-linejoin: round;
   }
@@ -54,13 +56,14 @@
   }
 
   .title {
-    font-size: 22px;
-    font-weight: 700;
+    font: 500 22px/1.2 var(--font-display);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
 
   .sub {
-    color: var(--text-dim);
-    font-size: 14px;
+    color: var(--ink-soft);
+    font-size: 16px;
   }
 
   @keyframes banner-in {

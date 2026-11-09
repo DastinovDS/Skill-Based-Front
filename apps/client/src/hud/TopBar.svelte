@@ -4,12 +4,14 @@
   import { getLocale, t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { HudChrome } from './chrome.svelte.ts';
+  import CpGauge from './CpGauge.svelte';
   import { formatCentis, formatClock } from './format.ts';
   import type { HudData } from './hudData.ts';
   import { LAST_MINUTE_S } from './hudState.svelte.ts';
   import Icon from './Icon.svelte';
   import type { IconName } from './icons.ts';
-  import { atCap, cpTrack, vpShare } from './topBar.ts';
+  import { atCap, vpShare } from './topBar.ts';
+  import BarGlyph from '../theme/BarGlyph.svelte';
   import CpMark from '../theme/CpMark.svelte';
 
   interface Props {
@@ -33,17 +35,19 @@
   };
 
   const locale = $derived(getLocale());
-  const track = $derived(data === null ? null : cpTrack(data.cp.value, data.cp.cap));
   const full = $derived(data !== null && atCap(data.cp.value, data.cp.cap));
   const share = $derived(data === null ? 50 : vpShare(data.vp.mine, data.vp.enemy));
   const lastMinute = $derived(data !== null && data.secondsLeft <= LAST_MINUTE_S);
   // The CP do not pay for the move a click would give, or a move was just refused for its CP (#762).
   const short = $derived(orders.ui.current.cpShort);
+  const price = $derived(orders.ui.current.cpPrice);
   const factories = $derived(data?.factories ?? null);
   const factoriesFull = $derived(factories !== null && factories.count >= factories.max);
   const next = $derived(data?.stanceProgress ?? null);
 </script>
 
+<!-- The Engraved top bar (ui-style 53, the round 5 Combined view): a dark strip under a double rule,
+     numbers and signs only; the words are the accessible names and the tooltips. -->
 <header class="bar">
   <div class="left">
     {#if data !== null}
@@ -59,50 +63,16 @@
       >
         <!-- The CP mark (#841): the sign of command points, never the charge lozenge. -->
         <span class="term"><CpMark size={16} /></span>
-        <!-- Variant C "Track" (#439): one notched pill with a head marker on the growing end. At the
-             cap the head goes, a dashed amber ring and the word MAX come: a shape and a word, not a colour. -->
-        <span class="gauge" aria-hidden="true">
-          <span class="track">
-            <span class="fill" style:width="calc((100% - 1px) * {track?.share ?? 0})"></span>
-            {#each track?.notches ?? [] as at (at)}
-              <span class="notch" style:left="calc({at}% - 1px)"></span>
-            {/each}
-          </span>
-          {#if track?.head === true}
-            <span class="head" style:left="calc(2px + (100% - 4px) * {track.share})"></span>
-          {/if}
-          {#if full && !short}<span class="ring"></span>{/if}
-          <!-- Too few CP for the move (#762): a solid red ring that pulses, and the alert icon. -->
-          {#if short}<span class="ring short-ring"></span>{/if}
-        </span>
-        {#if short}<span class="short-icon" aria-hidden="true"><Icon name="alert" size={16} /></span
-          >{/if}
-        <span class="num">
-          {formatCentis(data.cp.value, locale)}/{formatCentis(data.cp.cap, locale)}
-        </span>
-        {#if full && !short}<span class="max">{t('bar.cpMax')}</span>{/if}
+        <!-- The Double frame (ui-style 57a): the scale, the next quantum ruled in, the frame at the cap. -->
+        <CpGauge
+          value={data.cp.value}
+          cap={data.cp.cap}
+          next={next?.cp.share ?? null}
+          {short}
+          {price}
+          text={formatCentis(data.cp.value, locale)}
+        />
       </div>
-      <!-- Stances of economy v2 (DEC-44): two thin bars, the next CP over the next charge of the
-           capital; the label of each tells which is which, not a colour. -->
-      {#if next !== null}
-        <span
-          class="next"
-          role="img"
-          title={tf('bar.nextTip', { cp: next.cp.seconds, capital: next.capital.seconds })}
-          aria-label={tf('bar.nextLabel', { cp: next.cp.seconds, capital: next.capital.seconds })}
-        >
-          <span class="next-mark" aria-hidden="true"><CpMark size={12} /></span>
-          <span class="mini" aria-hidden="true">
-            <span class="mini-fill" style:width="{next.cp.share * 100}%"></span>
-          </span>
-          <svg class="next-dot" viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
-            <circle cx="5" cy="5" r="3.6" />
-          </svg>
-          <span class="mini" aria-hidden="true">
-            <span class="mini-fill charge" style:width="{next.capital.share * 100}%"></span>
-          </span>
-        </span>
-      {/if}
       <!-- Economy v2 (DEC-41, item 2; #762): own factories, builds under way counted, of the max. -->
       {#if factories !== null}
         <span
@@ -115,22 +85,30 @@
             max: factories.max,
           })}
         >
-          <Icon name="factory" size={16} />
+          <Icon name="factory" size={22} cut />
           <span class="num">{factories.count}/{factories.max}</span>
         </span>
       {/if}
-      <!-- Economy v2 has no stances (DEC-41, item 1) unless the ruleset brings them back (DEC-44). -->
+      <!-- Economy v2 has no stances (DEC-41, item 1) unless the ruleset brings them back (DEC-44):
+           the stance as its icon, the capital's next charge as a small upright cell, and the key. -->
       {#if orders.stances}
         <button
           type="button"
           class="chip"
           aria-label={tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
+          title={next === null
+            ? undefined
+            : tf('bar.nextTip', { cp: next.cp.seconds, capital: next.capital.seconds })}
           onclick={() => {
             orders.openRadial(true);
           }}
         >
-          <Icon name={STANCE_ICONS[data.stance]} size={16} />
-          <span class="chip-name">{t(`stance.${data.stance}`)}</span>
+          <Icon name={STANCE_ICONS[data.stance]} size={20} cut />
+          {#if next !== null}
+            <span class="capital" aria-hidden="true">
+              <i style:height="{next.capital.share * 100}%"></i>
+            </span>
+          {/if}
           <kbd>{STANCE_KEY}</kbd>
         </button>
       {/if}
@@ -148,20 +126,14 @@
         enemyVp: data.vp.enemy,
       })}
     >
-      <span class="side mine">
-        <HelmetIcon side="own" size={18} />
-        <span class="nick">{data.nicks.mine}</span>
-      </span>
+      <HelmetIcon side="own" size={22} engraved />
       <span class="vp mine-vp">{data.vp.mine}</span>
       <span class="tug" aria-hidden="true">
         <span class="tug-mine" style:flex-basis="{share}%"></span>
         <span class="tug-enemy"></span>
       </span>
       <span class="vp enemy-vp">{data.vp.enemy}</span>
-      <span class="side enemy">
-        <span class="nick">{data.nicks.enemy}</span>
-        <HelmetIcon side="enemy" size={18} />
-      </span>
+      <HelmetIcon side="enemy" size={22} engraved />
     </div>
   {:else}
     <div></div>
@@ -170,7 +142,7 @@
   <div class="right">
     {#if data !== null}
       <span class="timer" class:last={lastMinute} role="timer" aria-label={t('status.time')}>
-        <Icon name="clock" size={lastMinute ? 20 : 18} />
+        <BarGlyph name="clock" size={17} />
         <span class="time">{formatClock(data.secondsLeft)}</span>
       </span>
     {/if}
@@ -182,7 +154,7 @@
         title={t('match.pause')}
         onclick={onpause}
       >
-        <Icon name="pause" />
+        <BarGlyph name="pause" />
       </button>
     {/if}
     <button
@@ -197,7 +169,7 @@
         sound.toggleMute();
       }}
     >
-      <Icon name={sound.muted ? 'volumeOff' : 'volumeOn'} />
+      <BarGlyph name={sound.muted ? 'soundOff' : 'soundOn'} />
     </button>
     <button
       type="button"
@@ -209,17 +181,18 @@
         chrome.helpOpen = !chrome.helpOpen;
       }}
     >
-      <Icon name="help" />
+      <BarGlyph name="help" />
     </button>
     <button
       type="button"
-      class="exit"
+      class="icon-button"
+      aria-label={t('bar.exit')}
+      title={t('bar.exit')}
       onclick={() => {
         chrome.openExit();
       }}
     >
-      <Icon name="logout" size={16} />
-      <span class="exit-label">{t('bar.exit')}</span>
+      <BarGlyph name="exit" />
     </button>
   </div>
 </header>
@@ -228,54 +201,68 @@
   .bar {
     pointer-events: auto;
     box-sizing: border-box;
-    height: 48px;
+    height: 52px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 12px;
-    padding: 0 12px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    font-size: 14px;
+    padding: 0 18px;
+    /* The double rule under the strip: a rule, a dark gap, a faint second rule. */
+    border-bottom: 1px solid rgb(236 228 209 / 55%);
+    background: rgb(14 12 9 / 96%);
+    box-shadow:
+      0 3px 0 rgb(14 12 9 / 96%),
+      0 4px 0 rgb(236 228 209 / 22%);
+    color: var(--ink);
+    font: 18px/1 var(--font-text);
+    font-variant-numeric: lining-nums tabular-nums;
   }
 
   .left,
   .right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     min-width: 0;
   }
 
   .right {
     justify-content: flex-end;
+    gap: 8px;
   }
 
+  /* A framed control: one rule, a dark gap and a faint inner rule (ui-style 53). */
   button {
+    box-sizing: border-box;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 9px;
+    border: 1px solid rgb(236 228 209 / 60%);
+    border-radius: 0;
+    background: none;
+    box-shadow:
+      inset 0 0 0 2px var(--plate),
+      inset 0 0 0 3px rgb(236 228 209 / 22%);
+    color: var(--ink);
     font: inherit;
-    color: inherit;
     cursor: pointer;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
+  }
+
+  button:hover {
+    border-color: var(--ink);
+    background: rgb(236 228 209 / 6%);
   }
 
   button:focus-visible {
-    outline: 2px solid var(--paper);
-    outline-offset: 1px;
-  }
-
-  .icon-button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
   }
 
   .icon-button {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
+    width: 30px;
     padding: 0;
   }
 
@@ -290,287 +277,135 @@
     display: inline-flex;
   }
 
-  .gauge {
-    position: relative;
-    flex: none;
-    width: 120px;
-    height: 12px;
+  .num {
+    white-space: nowrap;
   }
 
-  .track {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    border: 1.5px solid var(--you);
-    border-radius: 6px;
-    background: var(--bg);
-  }
-
-  .fill {
-    position: absolute;
-    inset: 0.5px auto 0.5px 0.5px;
-    max-width: calc(100% - 1px);
-    border-radius: 4px;
-    background: var(--you);
-    /* The HUD gets a new value 10 times a second; a linear glide a little longer than one
-       snapshot interval turns the steps of the regeneration into a continuous fill. */
-    transition: width 120ms linear;
-  }
-
-  /* A notch at every whole CP, cut through the fill: the old cells, as ticks. */
-  .notch {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: var(--bg);
-  }
-
-  /* The head marker: a small triangle over the growing end of the fill. */
-  .head {
-    position: absolute;
-    top: -6px;
-    width: 7px;
-    height: 5px;
-    margin-left: -3.5px;
-    background: var(--paper);
-    clip-path: polygon(0 0, 100% 0, 50% 100%);
-    transition: left 120ms linear;
-  }
-
-  /* At the cap: a dashed amber ring round the track (the word MAX is beside the number). */
-  .ring {
-    position: absolute;
-    inset: -3px;
-    border: 1.6px dashed var(--warn);
-    border-radius: 9px;
-    animation: cp-pulse 0.8s ease-in-out infinite;
-  }
-
-  .max {
-    padding: 0 6px;
-    border: 1.4px solid var(--warn);
-    border-radius: 8px;
-    color: var(--warn);
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 13px;
-    animation: cp-pulse 0.8s ease-in-out infinite;
-  }
-
-  @keyframes cp-pulse {
-    0%,
-    100% {
-      opacity: 0.45;
-    }
-    50% {
-      opacity: 1;
-    }
-  }
-
-  /* Too few CP for a move (#762): the track and the number go red, a solid ring pulses round the
-     track and the alert icon stands before the number (the shape tells it, not the colour). */
-  .cp.short .track {
-    border-color: var(--enemy);
-  }
-
-  .cp.short .fill {
-    background: var(--enemy);
-  }
-
-  .cp.short .num {
-    color: var(--enemy);
-    font-weight: 700;
-  }
-
-  .short-ring {
-    border: 2px solid var(--enemy);
-    animation-duration: 0.5s;
-  }
-
-  .short-icon {
-    display: inline-flex;
-    color: var(--enemy);
-    animation: cp-pulse 0.5s ease-in-out infinite;
-  }
-
-  /* The next CP and the next charge of the capital (DEC-44): a label and a thin bar each, in a grid. */
-  .next {
-    flex: none;
-    display: grid;
-    grid-template-columns: auto 44px;
-    align-items: center;
-    justify-items: center;
-    gap: 1px 4px;
-    color: var(--text-dim);
-    font-size: 10px;
-    line-height: 12px;
-  }
-
-  .next-dot {
-    fill: var(--paper);
-  }
-
-  .mini {
-    position: relative;
-    width: 44px;
-    height: 6px;
-    overflow: hidden;
-    border: 1px solid var(--text-dim);
-    border-radius: 3px;
-    background: var(--bg);
-  }
-
-  .mini-fill {
-    position: absolute;
-    inset: 0 auto 0 0;
-    background: var(--you);
-    transition: width 120ms linear;
-  }
-
-  .mini-fill.charge {
-    background: var(--paper);
-  }
-
-  /* The factory counter: the factory glyph and own/max; at the max a dashed frame (shape, not colour). */
+  /* The factory counter: the cut factory and own/max; at the max a dashed frame (shape, not colour). */
   .factories {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 6px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
+    gap: 5px;
+    font-size: 19px;
   }
 
   .factories.full {
-    border-style: dashed;
-    border-color: var(--text-dim);
-    color: var(--text-dim);
+    outline: 1px dashed rgb(236 228 209 / 50%);
+    outline-offset: 3px;
+    color: var(--ink-dim);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .ring,
-    .max,
-    .short-icon {
-      animation: none;
-    }
-
-    .fill,
-    .head,
-    .mini-fill {
-      transition: none;
-    }
+  /* The capital's next charge: a small upright cell that fills ruled from the bottom (DEC-44). */
+  .capital {
+    position: relative;
+    display: inline-block;
+    width: 12px;
+    height: 16px;
+    box-sizing: border-box;
+    border: 1px solid var(--ink);
+    box-shadow: 0 0 0 2px var(--plate);
   }
 
-  .num {
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .chip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    padding: 4px 8px;
-    white-space: nowrap;
-  }
-
-  .chip-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .capital i {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: 1px;
+    max-height: calc(100% - 2px);
+    background: repeating-linear-gradient(0deg, var(--own) 0 1px, transparent 1px 2.5px);
   }
 
   kbd {
-    padding: 0 5px;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    color: var(--text-dim);
-    font: inherit;
-    font-size: 12px;
+    padding: 0 4px;
+    border: 1px solid rgb(236 228 209 / 40%);
+    color: var(--ink-dim);
+    font: 500 11px/14px var(--font-display);
+    letter-spacing: 0.06em;
   }
 
   .score {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     min-width: 0;
-  }
-
-  .side {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    min-width: 0;
-    max-width: 14ch;
-  }
-
-  .nick {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .vp {
-    font-weight: 700;
-    font-size: 16px;
-    font-variant-numeric: tabular-nums;
+    min-width: 1.2ch;
+    font-size: 27px;
+    font-weight: 500;
+    text-align: center;
   }
 
   .mine-vp {
-    color: var(--you);
+    color: var(--own);
   }
 
   .enemy-vp {
     color: var(--enemy);
   }
 
+  /* The tug of war: a ruled band, mine solid, the enemy's hatched at 45 degrees, a tick at the half. */
   .tug {
     position: relative;
     display: flex;
-    width: clamp(80px, 14vw, 200px);
-    height: 10px;
-    overflow: hidden;
-    border: 1px solid var(--paper);
-    border-radius: 3px;
+    box-sizing: content-box;
+    width: clamp(80px, 14vw, 190px);
+    height: 8px;
+    padding: 1px 0;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .tug::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -5px;
+    bottom: -5px;
+    width: 1px;
+    background: var(--ink);
+    opacity: 0.55;
   }
 
   .tug-mine {
     flex: 0 0 auto;
-    background: var(--you);
+    background: var(--own);
   }
 
   .tug-enemy {
     flex: 1 1 0;
-    background: var(--enemy);
+    background: var(--hatch-enemy);
   }
 
   .timer {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 18px;
-    font-variant-numeric: tabular-nums;
+    margin-right: 8px;
   }
 
+  .time {
+    font-size: 27px;
+  }
+
+  /* The last minute: amber, heavier and a size up (more than the colour tells it). */
   .timer.last {
     color: var(--warn);
-    font-size: 22px;
+  }
+
+  .timer.last .time {
+    font-size: 31px;
     font-weight: 700;
   }
 
-  .exit {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    white-space: nowrap;
-  }
-
   @media (max-width: 960px) {
-    .exit-label,
-    .chip-name {
+    .bar {
+      padding: 0 10px;
+    }
+
+    .factories,
+    .term {
       display: none;
     }
   }

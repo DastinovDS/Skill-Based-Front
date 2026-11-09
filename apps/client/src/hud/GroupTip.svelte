@@ -61,8 +61,8 @@ in its city. The opponent's groups are not under this tip: they show their mode 
     max-width: 240px;
     margin: 6px 0 0;
     padding-top: 6px;
-    border-top: 1px solid var(--border);
-    font-size: 12px;
+    border-top: 1px solid rgb(236 228 209 / 25%);
+    font-size: 14px;
     line-height: 1.35;
   }
 

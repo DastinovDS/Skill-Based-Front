@@ -1,7 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { t } from '../i18n/index.ts';
   import { reducedMotion } from '../render/motion.ts';
+  import CpMark from '../theme/CpMark.svelte';
   import Icon from './Icon.svelte';
+  import { markPaths } from './marks.ts';
   import { pointerAt } from './pointer.ts';
   import {
     BIG_RING,
@@ -159,13 +162,36 @@
     else if (found.disabled !== true) onchoose(found.id);
   }
 
-  /** Side of the icon of a sector, px: 24 in the small rings, 28 in the big one (never under 20). */
-  const iconSize = $derived(small ? 24 : 28);
+  /** Side of the icon of a sector, px: 24 in the small rings, 30 in the big one (ui-style 54g). */
+  const iconSize = $derived(small ? 24 : 30);
 
-  /** Lines of a sector: the icon, the name, the small lines, the key; centred on the label point. */
-  function rows(item: RadialItem): { kind: string; text: string; dy: number }[] {
-    const list: { kind: string; text: string; h: number }[] = [];
-    if (item.icon !== undefined) list.push({ kind: 'icon', text: item.icon, h: iconSize + 2 });
+  /** The price row of a sector: a line of figures for CP and rates, a row of lozenges for charges. */
+  const PRICE_LINE = 19;
+  const MARK_ROW = 17;
+  const MARK_SCALE = 1.15;
+
+  function priceHeight(item: RadialItem): number {
+    const p = item.price;
+    if (p === undefined) return 0;
+    return (
+      (p.cp !== undefined ? PRICE_LINE : 0) +
+      (p.charges !== undefined && p.charges > 0 ? MARK_ROW : 0) +
+      (p.chargeRate !== undefined ? PRICE_LINE : 0)
+    );
+  }
+
+  interface Row {
+    readonly kind: 'icon' | 'name' | 'price' | 'line' | 'key';
+    readonly text: string;
+    /** The baseline of a text row from the label point (5 below the row's middle). */
+    readonly dy: number;
+    readonly h: number;
+  }
+
+  /** Rows of a sector: the icon, the name, the price, the small lines, the key; centred on the label point. */
+  function rows(item: RadialItem): Row[] {
+    const list: { kind: Row['kind']; text: string; h: number }[] = [];
+    if (item.icon !== undefined) list.push({ kind: 'icon', text: item.icon, h: iconSize + 4 });
     if (item.compact !== true) {
       list.push({
         kind: 'name',
@@ -173,17 +199,31 @@
         h: small ? 18 : 20,
       });
     }
+    const priceH = priceHeight(item);
+    if (priceH > 0) list.push({ kind: 'price', text: '', h: priceH });
     const extra = item.lines ?? [];
-    list.push(...extra.map((text) => ({ kind: 'line', text, h: 16 })));
-    if (item.key !== undefined) list.push({ kind: 'key', text: item.key, h: 24 });
+    list.push(...extra.map((text) => ({ kind: 'line' as const, text, h: 16 })));
+    if (item.key !== undefined) list.push({ kind: 'key', text: item.key, h: 20 });
     const total = list.reduce((sum, row) => sum + row.h, 0);
     let y = -total / 2;
     return list.map((row) => {
       const dy = y + row.h / 2 + 5;
       y += row.h;
-      return { kind: row.kind, text: row.text, dy };
+      return { ...row, dy };
     });
   }
+
+  /** The figures of a price row and where its sign stands, centred on `x` (EB Garamond digits). */
+  function figureRow(text: string, x: number, per: string): { tx: number; mx: number; px: number } {
+    const digits = text.length * 7.6;
+    const width = digits + 3 + 13 + (per === '' ? 0 : 3 + per.length * 6.4);
+    const left = x - width / 2;
+    return { tx: left + digits, mx: left + digits + 3, px: left + digits + 3 + 13 + 3 };
+  }
+
+  // The hovered sector's name in the hub over the ring (Cut and ring, ui-style 54g).
+  const hubName = $derived(items.find((item) => item.id === hover)?.label ?? null);
+  const perMinute = $derived(t('radial.perMinute'));
 </script>
 
 <svelte:window onpointermove={onmove} />
@@ -209,8 +249,16 @@
     width={halfW * 2}
     {height}
   >
+    <defs>
+      <!-- The hovered sector: ruled in the own colour on the dark plate (Cut and ring). -->
+      <pattern id="radial-lit" patternUnits="userSpaceOnUse" width="4" height="4">
+        <rect width="4" height="4" class="lit-plate" />
+        <rect width="4" height="1" class="lit-rule" />
+      </pattern>
+    </defs>
     {#if items.length === 0}
       <circle class="disc" r={outer} />
+      <circle class="frame" r={outer + 4} />
     {/if}
     {#each items as item (item.id)}
       {@const spot = labelPoint(item.angle, ring)}
@@ -221,7 +269,7 @@
         class:current={item.current === true}
         class:disabled={item.disabled === true}
         role={item.current === undefined ? 'menuitem' : 'menuitemradio'}
-        aria-label={item.compact === true ? item.label : undefined}
+        aria-label={item.aria ?? (item.compact === true ? item.label : undefined)}
         aria-disabled={item.disabled === true}
         aria-checked={item.current === undefined ? undefined : item.current}
         tabindex={item.disabled === true ? -1 : 0}
@@ -235,7 +283,8 @@
           }
         }}
       >
-        <path d={sectorPath(item.angle, half, ring)} />
+        <path class="plate" d={sectorPath(item.angle, half, ring)} />
+        <path class="edge" d={sectorPath(item.angle, half, ring)} />
         {#each rows(item) as row, i (i)}
           {#if row.kind === 'icon' && item.icon !== undefined}
             <!-- The icon is centred on the row (dy is the baseline of a text row: 5 below its middle). -->
@@ -244,18 +293,43 @@
               data-icon={item.icon}
               transform="translate({spot.x - iconSize / 2} {spot.y + row.dy - 5 - iconSize / 2})"
             >
-              <Icon name={item.icon} size={iconSize} />
+              <Icon name={item.icon} size={iconSize} cut />
             </g>
+            {#if item.current === true && item.compact === true}
+              <!-- The current choice: a lozenge over its icon (a shape, not a colour). -->
+              <path
+                class="current-mark"
+                d="M{spot.x} {spot.y + row.dy - iconSize / 2 - 13}l3.5 3.5l-3.5 3.5l-3.5 -3.5z"
+              />
+            {/if}
+          {:else if row.kind === 'price' && item.price !== undefined}
+            {@const p = item.price}
+            {@const per = p.perMinute === true ? perMinute : ''}
+            {@const top = spot.y + row.dy - 5 - row.h / 2}
+            {#if p.cp !== undefined}
+              {@const f = figureRow(p.cp, spot.x, per)}
+              <text x={f.tx} y={top + 14} class="figure end">{p.cp}</text>
+              <g transform="translate({f.mx} {top + 3})"><CpMark size={13} /></g>
+              {#if per !== ''}<text x={f.px} y={top + 14} class="per">{per}</text>{/if}
+            {/if}
+            {#if p.charges !== undefined && p.charges > 0}
+              {@const cy = top + (p.cp !== undefined ? PRICE_LINE : 0) + MARK_ROW / 2}
+              {#each markPaths(p.charges, p.have ?? 0, spot.x, cy, MARK_SCALE) as m, k (k)}
+                <path class="mark {m.kind}" d={m.d} />
+              {/each}
+            {/if}
+            {#if p.chargeRate !== undefined}
+              {@const at = top + (p.cp !== undefined ? PRICE_LINE : 0)}
+              {@const f = figureRow(p.chargeRate, spot.x, per)}
+              <text x={f.tx} y={at + 14} class="figure end">{p.chargeRate}</text>
+              {#each markPaths(1, 1, f.mx + 6.5, at + 9.5, 1) as m, k (k)}
+                <path class="mark {m.kind}" d={m.d} />
+              {/each}
+              {#if per !== ''}<text x={f.px} y={at + 14} class="per">{per}</text>{/if}
+            {/if}
           {:else if row.kind === 'key'}
-            <rect
-              x={spot.x - 10}
-              y={spot.y + row.dy - 13}
-              width="20"
-              height="17"
-              rx="4"
-              class="keycap"
-            />
-            <text x={spot.x} y={spot.y + row.dy} class="key">{row.text}</text>
+            <rect x={spot.x - 8} y={spot.y + row.dy - 12} width="16" height="15" class="keycap" />
+            <text x={spot.x} y={spot.y + row.dy - 1} class="key">{row.text}</text>
           {:else}
             <text x={spot.x} y={spot.y + row.dy} class={row.kind}>{row.text}</text>
           {/if}
@@ -263,7 +337,9 @@
       </g>
     {/each}
     {#if items.length > 0}
-      <circle class="hole" r={ring.inner - 4} />
+      <!-- The double frame of the ring: a rule outside the sectors and one inside the hole. -->
+      <circle class="frame" r={ring.outer + 4} />
+      <circle class="frame hole" r={ring.inner - 3} />
     {/if}
     {#each captions as caption, i (i)}
       <text class="caption" class:dim={caption.dim === true} y={outer + 22 + i * CAPTION_LINE}>
@@ -271,6 +347,10 @@
       </text>
     {/each}
   </svg>
+  {#if hubName !== null && items.length > 0}
+    <!-- The name of the sector under the pointer, in cut capitals over the ring. -->
+    <div class="hub" style:left="{halfW}px" aria-hidden="true">{hubName}</div>
+  {/if}
   {#if centre !== undefined}
     <div
       class="centre"
@@ -300,7 +380,9 @@
     visibility: hidden;
     /* The box never takes the pointer: only the sectors do, the rest is the map's (or the backdrop's). */
     pointer-events: none;
-    font-family: inherit;
+    color: var(--ink);
+    font-family: var(--font-text);
+    font-variant-numeric: lining-nums tabular-nums;
   }
 
   svg {
@@ -311,12 +393,12 @@
 
   /* Every radial menu opens growing from its centre: a short ease-out, none with less motion. */
   .radial.grow {
-    animation: radial-open 140ms ease-out;
+    animation: radial-open 160ms var(--ease-settle);
   }
 
   @keyframes radial-open {
     from {
-      transform: scale(0.4);
+      transform: scale(0.6);
       opacity: 0;
     }
     to {
@@ -352,90 +434,169 @@
     cursor: pointer;
   }
 
-  .sector path {
-    fill: var(--surface);
-    stroke: var(--border);
-    stroke-width: 1.5;
-    transition: fill 80ms;
+  /* Cut and ring (ui-style 54g): sectors of dark ink, a hairline round each. */
+  .plate {
+    fill: rgb(14 12 9 / 97%);
   }
 
-  /* The sector under the pointer: filled with the colour of the owner and outlined in white. */
-  .sector.hover path,
-  .sector:focus-visible path {
-    fill: color-mix(in srgb, var(--you) 38%, var(--bg));
-    stroke: var(--paper);
-    stroke-width: 2.5;
+  .lit-plate {
+    fill: rgb(14 12 9 / 97%);
   }
 
-  .sector.current path {
-    stroke: var(--paper);
-    stroke-width: 3;
+  .lit-rule {
+    fill: rgb(134 166 234 / 42%);
   }
 
-  /* Off is told by more than the dimming: a dashed outline and a fainter glyph. */
-  .sector.disabled {
+  .edge {
+    fill: none;
+    stroke: rgb(236 228 209 / 45%);
+    stroke-width: 0.8;
+  }
+
+  /* The sector under the pointer: ruled in the own colour, its edge in full ink. */
+  .sector.hover .plate,
+  .sector:focus-visible .plate {
+    fill: url(#radial-lit);
+  }
+
+  .sector.hover .edge,
+  .sector:focus-visible .edge {
+    stroke: rgb(236 228 209 / 95%);
+    stroke-width: 1.3;
+  }
+
+  .sector.current .edge {
+    stroke: var(--ink);
+    stroke-width: 1.6;
+  }
+
+  .current-mark {
+    fill: var(--ink);
+    stroke: var(--casing);
+    stroke-width: 1;
+  }
+
+  /* Off is told by more than the dimming: a dashed edge and a fainter glyph. */
+  /* The plate stays solid (the map never shows through a menu); its content dims. */
+  .sector.disabled .glyph,
+  .sector.disabled text,
+  .sector.disabled .keycap,
+  .sector.disabled .mark,
+  .sector.disabled g {
     opacity: 0.45;
   }
 
-  .sector.disabled path {
-    stroke-dasharray: 5 4;
+  .sector.disabled .edge {
+    stroke-dasharray: 4 3;
   }
 
   .sector.disabled .glyph {
-    opacity: 0.6;
+    opacity: 0.35;
   }
 
   .disc {
-    fill: var(--surface);
-    stroke: var(--border);
-    stroke-width: 1.5;
+    fill: rgb(14 12 9 / 97%);
+    stroke: rgb(236 228 209 / 45%);
+    stroke-width: 0.8;
   }
 
-  /* The icon draws with `currentColor`: the paper colour of the names, light on dark and on the lit sector. */
-  .glyph {
-    color: var(--paper);
-  }
-
-  .name {
-    fill: var(--paper);
-    font-size: 15px;
-    font-weight: 700;
-  }
-
-  .small .name {
-    font-size: 13px;
-  }
-
-  .line {
-    fill: var(--text);
-    font-size: 12px;
-  }
-
-  .keycap {
+  .frame {
     fill: none;
-    stroke: var(--text-dim);
-  }
-
-  .key {
-    fill: var(--text-dim);
-    font-size: 11px;
-  }
-
-  .hole {
-    fill: none;
-    stroke: var(--border);
+    stroke: rgb(236 228 209 / 55%);
+    stroke-width: 0.8;
     pointer-events: none;
   }
 
+  /* The icons draw with `currentColor`: ivory on the plate, brighter on the lit sector. */
+  .glyph {
+    color: #d9cfb8;
+  }
+
+  .sector.hover .glyph {
+    color: var(--ink);
+  }
+
+  .name {
+    fill: var(--ink);
+    font: 600 15px var(--font-text);
+  }
+
+  .small .name {
+    font-size: 14px;
+  }
+
+  .figure {
+    fill: var(--ink);
+    font: 500 16px var(--font-text);
+  }
+
+  .figure.end {
+    text-anchor: end;
+  }
+
+  .per {
+    fill: var(--ink-dim);
+    font: 500 13px var(--font-text);
+    text-anchor: start;
+  }
+
+  .mark.casing {
+    fill: var(--casing);
+  }
+
+  .mark.fill {
+    fill: var(--own);
+  }
+
+  .mark.hollow {
+    fill: var(--plate);
+    stroke: var(--ink);
+    stroke-opacity: 0.92;
+    stroke-width: 0.9;
+  }
+
+  .line {
+    fill: var(--ink-soft);
+    font: 500 13px var(--font-text);
+  }
+
+  /* The key in a small square in cut capitals. */
+  .keycap {
+    fill: none;
+    stroke: rgb(236 228 209 / 40%);
+    stroke-width: 1;
+  }
+
+  .key {
+    fill: var(--ink-dim);
+    font: 600 10px var(--font-display);
+    letter-spacing: 0.06em;
+  }
+
+  .hub {
+    position: absolute;
+    top: -16px;
+    transform: translateX(-50%);
+    padding: 4px 9px 3px;
+    border-top: 1px solid rgb(236 228 209 / 45%);
+    border-bottom: 1px solid rgb(236 228 209 / 45%);
+    background: rgb(14 12 9 / 92%);
+    color: var(--ink);
+    font: 600 11px/1.2 var(--font-display);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
   .caption {
-    fill: var(--text);
-    font-size: 12px;
+    fill: var(--ink-soft);
+    font: italic 500 14px var(--font-text);
     paint-order: stroke;
-    stroke: var(--bg);
+    stroke: var(--plate);
     stroke-width: 3px;
   }
 
   .caption.dim {
-    fill: var(--text-dim);
+    fill: var(--ink-dim);
   }
 </style>

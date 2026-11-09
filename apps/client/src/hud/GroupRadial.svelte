@@ -26,7 +26,6 @@
   const angles = spreadAngles(4);
   // Economy v2 (DEC-41): no «Defense» (the bunker replaces it); its sector lets a gathering plan go.
   const v2 = $derived(orders.v2);
-  const planSeconds = $derived(Math.round(orders.planTicksPerBonus / orders.tickHz));
   const release = $derived<RadialItem>({
     id: 'release',
     icon: 'release',
@@ -39,7 +38,11 @@
     key: 'F',
     disabled: group?.gathering == null,
   });
-  const items = $derived<RadialItem[]>([
+  // Cut and ring (ui-style 54g): icons, the gathered bonus and the keys; the name is in the hub.
+  const items = $derived.by<RadialItem[]>(() =>
+    sectors.map((item) => ({ ...item, compact: true })),
+  );
+  const sectors = $derived<RadialItem[]>([
     {
       id: 'split',
       icon: 'split',
@@ -56,12 +59,15 @@
           angle: angles[1] ?? 0,
           label: t('group.defense'),
           // The price, and the bonus the group has gathered (DEC-30; the server's numbers).
-          lines: [
-            tf('group.cost', { cost: cp(orders.modeCost('defense')) }),
-            ...(group?.defense == null
+          price: { cp: cp(orders.modeCost('defense')) },
+          aria: tf('price.label', {
+            label: t('group.defense'),
+            price: tf('price.cp', { cost: cp(orders.modeCost('defense')) }),
+          }),
+          lines:
+            group?.defense == null
               ? []
-              : [tf('defense.bonus', { bonus: group.defense.bonus, cap: group.defense.cap })]),
-          ],
+              : [tf('defense.bonus', { bonus: group.defense.bonus, cap: group.defense.cap })],
           key: 'D',
           current: group?.mode === 'defense',
         },
@@ -105,10 +111,7 @@
     }}
     closeLabel={t('group.close')}
     captions={v2
-      ? [
-          { text: tf('plan.radialRule', { seconds: planSeconds }), dim: true },
-          { text: t('plan.radialRelease'), dim: true },
-        ]
+      ? []
       : [
           { text: tf('defense.radialRule', { seconds: defenseSeconds }), dim: true },
           { text: t('defense.radialBurn'), dim: true },

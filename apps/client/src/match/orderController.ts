@@ -626,8 +626,11 @@ export class OrderController implements MapInteraction {
   #syncCpShort(preview: number | null): void {
     const cp = this.cpNow;
     const hovered = preview !== null && cp !== null && cp < this.#movePrice();
-    const short = hovered || this.#now() < this.#cpFlashUntil;
-    if (short !== this.ui.current.cpShort) this.ui.patch({ cpShort: short });
+    const flash = this.#now() < this.#cpFlashUntil;
+    const short = hovered || flash;
+    const price = preview !== null || flash ? this.#movePrice() : null;
+    if (short !== this.ui.current.cpShort || price !== this.ui.current.cpPrice)
+      this.ui.patch({ cpShort: short, cpPrice: price });
   }
 
   click(picked: PickHit | null, shift: boolean): void {
@@ -2276,7 +2279,7 @@ export class OrderController implements MapInteraction {
     }
     if (result.kind === 'rejected' && cmd.type === 'move' && result.code === 'NOT_ENOUGH_CP') {
       this.#cpFlashUntil = this.#now() + CP_SHORT_FLASH_MS;
-      if (!this.ui.current.cpShort) this.ui.patch({ cpShort: true });
+      if (!this.ui.current.cpShort) this.ui.patch({ cpShort: true, cpPrice: this.#movePrice() });
     }
     this.ui.emit(
       result.kind === 'rejected'

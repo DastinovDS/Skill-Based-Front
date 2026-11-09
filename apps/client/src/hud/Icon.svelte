@@ -1,4 +1,6 @@
 <script lang="ts">
+  import CutIcon from '../theme/CutIcon.svelte';
+  import { cutIconOf } from '../theme/cutIcons.ts';
   import FortIcon from '../theme/FortIcon.svelte';
   import { rasterOf, shapesOf, type AnyIconName } from './icons.ts';
 
@@ -6,17 +8,22 @@
     name: AnyIconName;
     /** Side in px; the stroke scales with it. */
     size?: number;
+    /** The Engraved "Cut" drawing of the in-match interface where the icon has one (ui-style 54g). */
+    cut?: boolean;
   }
 
-  let { name, size = 18 }: Props = $props();
+  let { name, size = 18, cut = false }: Props = $props();
 
   const raster = $derived(rasterOf(name));
+  const cutName = $derived(cut ? cutIconOf(name) : null);
 </script>
 
 <!-- Decorative: the button around it carries the name (aria-label or text). -->
 {#if name === 'fortify'}
   <!-- The wall on the road, drawn per size (#858, src/theme/fortIcon.ts). -->
   <FortIcon {size} />
+{:else if cutName !== null}
+  <CutIcon name={cutName} {size} />
 {:else}
   <svg
     class="icon"
