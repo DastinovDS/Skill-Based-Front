@@ -55,7 +55,7 @@
 <!-- One frame for the screens before a match (#471; Lapis, #845): the map behind, the bar with the
      brand, the tabs and the player on top, the rail of text on the left (or in the middle). -->
 <main class="front" class:docked={panel !== undefined} class:entry class:center class:wide>
-  <MenuBackdrop {map} {phase} {opponent} {waited} docked={panel !== undefined} {entry} />
+  <MenuBackdrop {map} {phase} {opponent} {waited} {entry} />
   <div class="shade"></div>
   {#if !entry}<FrontTop {tabs} {corner} />{/if}
   <section class="rail" aria-label={label}>

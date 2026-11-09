@@ -10,6 +10,7 @@
   import { reducedMotion } from '../render/motion.ts';
   import { claimIntro } from './introScene.ts';
   import { runIntro } from './introPlayer.ts';
+  import { ENTRY_MAP } from './menuMap.ts';
 
   type Mode = 'guest' | 'login' | 'register';
 
@@ -17,7 +18,10 @@
     /** An invite link was opened: the nick form leads straight into that match. */
     invited: boolean;
     notice: MessageKey | null;
-    /** The map drawn behind the form, blurred (null: the plain dark page). */
+    /**
+     * Whether a map is drawn behind the form (null: the plain dark page): the entry screen draws
+     * its own map, the valley (#866), not the one behind the menus.
+     */
     map?: MapFile | null;
     /** Play as a guest: a nick and nothing else. */
     onsubmit: (nick: string) => Promise<void>;
@@ -44,6 +48,9 @@
     intro = false,
     introAt = null,
   }: Props = $props();
+
+  /** The map of the entry screen and its opening scene (#866: not the menus' map). */
+  const entryMap = $derived(map === null ? null : ENTRY_MAP);
 
   // The opening scene: decided once when the screen opens (the session mark is taken then).
   const frozenAt = untrack(() => introAt);
@@ -82,9 +89,9 @@
           // The nick with Play first, then Log in and Create account with the language.
           steps: [pick('.gate > .invited, .gate > .field'), pick('.gate > .alt, .locale')],
           stage:
-            stageCanvas === undefined || untrack(() => map) === null
+            stageCanvas === undefined || untrack(() => entryMap) === null
               ? null
-              : { canvas: stageCanvas, map: untrack(() => map) as MapFile },
+              : { canvas: stageCanvas, map: untrack(() => entryMap) as MapFile },
         },
         {
           at: frozenAt,
@@ -188,7 +195,7 @@
 <!-- The entry screen (#629; Lapis, #845): the title in cut capitals with its rule, the nick with
      Play beside it, the map dim behind. Logging in or creating an account opens a framed sheet of
      stone under the title. This is the still, final state; the opening scene is its own piece. -->
-<ScreenFrame {map} label={t('app.title')} entry>
+<ScreenFrame map={entryMap} label={t('app.title')} entry>
   <div class="welcome" class:intro={playing} bind:this={root}>
     {#if playing}
       <!-- The opening scene: the dark stage over the map (it fades as the title rises), with the

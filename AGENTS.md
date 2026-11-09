@@ -47,7 +47,7 @@ apps/bots/           gow_bots      bots (gow_bots.bots) and the tournament harne
 apps/client/                       TypeScript + Vite + Svelte 5 + PixiJS 8
 e2e/                               Playwright E2E against the real stack (its own package, compose.e2e.yaml)
 tools/maps/          gow_maps      validator, mirroring script, generator, previews and backgrounds of maps (offline)
-maps/                              map pool of the server (JSON, previews, backgrounds); `maps/fixtures/`: MVP maps, test fixtures outside the pool; `maps/menu/`: the map behind the start menu, outside the pool; `maps/gen/`: generated maps, outside the pool, played only by an explicit choice (section 5.4)
+maps/                              map pool of the server (JSON, previews, backgrounds); `maps/fixtures/`: MVP maps, test fixtures outside the pool; `maps/menu/`: the maps behind the screens before a match (`marches`, the entry `valley`), outside the pool; `maps/gen/`: generated maps, outside the pool, played only by an explicit choice (section 5.4)
 rulesets/                          rulesets (*.toml) and the archive of played ones by hash
 docs/design/                       mechanics.md, map format, archive
 docs/adr/  docs/balance/  docs/qa/ decisions, balance reports, checklists
@@ -138,7 +138,7 @@ Python jobs (the required check `py`) and the job `web` run. A tool version is e
 | `test:visual` | snapshots of the dev scenes against the references, like the job `visual` (not required; Playwright Chromium installs itself, the dev server starts on port 5199). References are updated per `apps/client/visual/README.md` | CLI-04 |
 | `shots` | **for agents:** a PNG of every dev scene and of the replay viewer in `.shots/<label>/` (label as an argument, `current` by default; the directory is outside git), without comparing to a reference; look at them yourself with Read. The dev server runs on a free port, Playwright stops it itself. Needs a POSIX shell | #332 |
 | `shots:publish` | **for agents:** PNGs from `.shots/` to the branch `shots/<number>` in origin (it holds only images, is not merged; delete it after the PR is merged) and prints markdown links for the PR description (argument: issue or PR number). Needs bash | #332 |
-| `perf` | what a match screen costs under software WebGL (SwiftShader, as on the CI runners) on a few dev scenes: the main thread blocked while it comes up (long tasks) and the frame time (label as an argument, `current` by default; the numbers are printed and written to `.shots/<label>/perf.json`). A measurement to compare two commits on one machine, never a check: run both a few times and compare | #854 |
+| `perf` | what a match screen costs under software WebGL (SwiftShader, as on the CI runners) on a few dev scenes: the main thread blocked while it comes up (long tasks) and the frame time; and what the menu picture costs the main thread while it runs (task and script ms a second, #866) (label as an argument, `current` by default; the numbers are printed and written to `.shots/<label>/perf.json` and `perf-menu.json`). A measurement to compare two commits on one machine, never a check: run both a few times and compare | #854, #866 |
 | `test:all` | the whole pytest in one go, without `-n` (slow) | INF-02 |
 | `test:slow` | long tests of full bot matches (mark `slow`, not required job `py-slow`) | BOT-04 |
 | `test:perf` | benchmarks and tick lag (mark `perf`), strictly sequential: xdist disables the measurements; the job `py-perf`, alone on its runner | SIM-15 |

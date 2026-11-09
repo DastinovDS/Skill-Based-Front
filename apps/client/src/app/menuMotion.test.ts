@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MENU_MAP } from './menuMap.ts';
+import { capturedNodes } from './menuCaptures.ts';
+import { MENU_WORLD } from './menuMap.ts';
 import {
   FALLBACK_PALETTE,
   STILL_AT,
@@ -9,7 +10,7 @@ import {
   sightOf,
   type MotionClock,
 } from './menuMotion.ts';
-import { layoutScene, railRight, type BackdropPhase } from './menuScene.ts';
+import { layoutScene, type BackdropPhase } from './menuScene.ts';
 import { storyOf, type Story } from './menuStory.ts';
 
 /** The calls a frame makes on a 2D canvas, with the numbers they take. */
@@ -63,63 +64,61 @@ class Recorder {
   }
 }
 
-const scene = layoutScene(MENU_MAP, 1280, 800);
-/** The text rail of the main screen ends here at 1280 px (#845). */
-const RAIL_RIGHT = railRight(1280);
-const story = storyOf(scene) as Story;
+const scene = layoutScene(MENU_WORLD.map, 1280, 800, MENU_WORLD.owners);
+const story = storyOf(scene, capturedNodes(MENU_WORLD.script)) as Story;
 
-function frame(phase: BackdropPhase, t: number, waited = 0, reduced = false): Recorder {
+function frame(
+  phase: BackdropPhase,
+  t: number,
+  waited = 0,
+  reduced = false,
+  g = 1000 + t,
+): Recorder {
   const recorder = new Recorder();
-  const clock: MotionClock = { phase, t, g: 1000 + t, waited, reduced };
+  const clock: MotionClock = { phase, t, g, waited, reduced };
   drawMotion(
     recorder as unknown as CanvasRenderingContext2D,
     FALLBACK_PALETTE,
     scene,
     story,
     clock,
+    MENU_WORLD.script,
   );
   return recorder;
 }
 
 const PHASES: readonly BackdropPhase[] = ['idle', 'search', 'found', 'confirmed', 'banned'];
 
-describe('the places of the story on the menu map (#474)', () => {
-  it('gathers at Mossgate, meets at Fordham, the opponent comes from Long Meadow', () => {
+describe('the places of the story on the menu map (#474, #866)', () => {
+  it('gathers at Ottergate, meets at Wheatgate, the opponent comes from Cragkeep', () => {
     expect(story).not.toBeNull();
-    expect(story.frontCity.name).toBe('Mossgate');
-    expect(story.meeting.name).toBe('Fordham');
-    expect(story.entry.name).toBe('Long Meadow');
-    // On the middle line of the valley, as in the mockup.
-    expect(story.frontCity.y).toBe(story.meeting.y);
+    expect(story.frontCity.name).toBe('Ottergate');
+    expect(story.meeting.name).toBe('Wheatgate');
+    expect(story.entry.name).toBe('Cragkeep');
   });
 
-  it('sends the scout down the valley road into the fog edge, short of the enemy capital', () => {
+  it('sends the scout down the front road into the fog edge, short of the enemy capital', () => {
     const end = story.scoutPath.at(-1) as { x: number; y: number };
     expect(story.scoutPath[0]).toMatchObject(scene.ownCapital);
     expect(end.x).toBeGreaterThan(scene.fadeStart);
     expect(scene.enemyCapital.x - end.x).toBeGreaterThanOrEqual(120);
   });
 
-  it('rides the supply from the capital over own roads only', () => {
-    expect(story.supply).toHaveLength(7);
-    for (const route of story.supply) expect(route[0]).toMatchObject(scene.ownCapital);
-    expect(story.ownRoads).toHaveLength(11);
+  it('rides the supply from the capital over own roads only, never to a node that changes hands', () => {
+    const changing = capturedNodes(MENU_WORLD.script);
+    const at = (p: { x: number; y: number }): number =>
+      scene.nodes.find((n) => n.x === p.x && n.y === p.y)?.id ?? -1;
+    expect(story.supply.length).toBeGreaterThan(10);
+    for (const route of story.supply) {
+      expect(route[0]).toMatchObject(scene.ownCapital);
+      for (const point of route) expect(changing).not.toContain(at(point));
+    }
+    for (const road of story.ownRoads)
+      for (const end of road) expect(changing).not.toContain(at(end));
   });
 });
 
 describe('the motion (#474, BG5 "Set")', () => {
-  it('draws every phase, at every moment, without touching the text rail', () => {
-    for (const phase of PHASES) {
-      for (let t = 0; t < 30; t += 0.37) {
-        for (const call of frame(phase, t, 5).calls) {
-          const x = call.args[0] ?? RAIL_RIGHT;
-          // Shapes drawn about a translated origin have small offsets; the rest are page points.
-          if (Math.abs(x) > 40) expect(x).toBeGreaterThan(RAIL_RIGHT - 40);
-        }
-      }
-    }
-  });
-
   it('moves while idle, stands still while the queue is locked', () => {
     const idle = (t: number): string => JSON.stringify(frame('idle', t).calls);
     expect(idle(1)).not.toBe(idle(2));
@@ -128,21 +127,42 @@ describe('the motion (#474, BG5 "Set")', () => {
     expect(frame('banned', 1).calls.length).toBeGreaterThan(0);
   });
 
-  it('grows the stack at the front with the time in the queue', () => {
-    const count = (waited: number): string | undefined =>
-      frame('search', 0, waited)
-        .calls.map((c) => c.name)
-        .find((n) => n.startsWith('fillText'));
-    expect(count(0)).toBe('fillText ×2');
-    expect(count(60)).toBe('fillText ×7');
-    expect(count(600)).toBe('fillText ×9');
+  it('writes no number over a unit, in any phase (owner, #866)', () => {
+    for (const phase of PHASES) {
+      for (let t = 0; t < 40; t += 1.13) {
+        for (const call of frame(phase, t, 60).calls) expect(call.name).not.toMatch(/Text/);
+      }
+    }
   });
 
-  it('fights in rounds once confirmed: a shot and a loss', () => {
+  it('fights in rounds once confirmed: shots fly', () => {
     const names = new Set<string>();
     for (let t = 3; t < 12; t += 0.1)
-      for (const c of frame('confirmed', t).calls) names.add(c.name);
-    expect(names.has('fillText −1')).toBe(true);
+      for (const c of frame('confirmed', t, 0, false, 5).calls) names.add(c.name);
+    expect(names.has('fillRect')).toBe(true);
+  });
+
+  it('plays the captures of the loop over the idle motion, and none under reduced motion', () => {
+    const calls = (g: number, script: boolean, reduced = false): number => {
+      const recorder = new Recorder();
+      const clock: MotionClock = { phase: 'idle', t: 0, g, waited: 0, reduced };
+      drawMotion(
+        recorder as unknown as CanvasRenderingContext2D,
+        FALLBACK_PALETTE,
+        scene,
+        story,
+        clock,
+        script ? MENU_WORLD.script : null,
+      );
+      return recorder.calls.length;
+    };
+    // The first capture sets out at 1 s: at 4 s its group stands at the gate and the shots fly.
+    expect(calls(4, true)).toBeGreaterThan(calls(4, false));
+    // One loop later the same capture is under way again (the supply runs on its own clock).
+    expect(calls(4 + MENU_WORLD.script.period, true)).toBeGreaterThan(
+      calls(4 + MENU_WORLD.script.period, false),
+    );
+    expect(calls(4, true, true)).toBe(calls(4, false, true));
   });
 
   it('shows one still frame with reduced motion', () => {

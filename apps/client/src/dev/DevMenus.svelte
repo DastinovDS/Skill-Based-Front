@@ -16,6 +16,7 @@
   import ExitDialog from '../hud/ExitDialog.svelte';
   import BootScreen from '../app/BootScreen.svelte';
   import { MENU_MAP } from '../app/menuMap.ts';
+  import { freezeBackdrop } from '../app/menuCaptures.ts';
   import { isSeason, setSeasonOverride } from '../app/menuSeason.ts';
   import { BOARD_NOW, BOARD_SCENES, isBoardScene, ME, sceneApi } from './boardScenes.ts';
   import {
@@ -34,6 +35,9 @@
   // `&season=winter`: the picture in another season than the date's (#474).
   const season = params.get('season');
   setSeasonOverride(isSeason(season) ? season : null);
+  // `&bt=12.5`: the picture frozen at that second of its clock (a capture, the seam of its loop, #866).
+  const frozen = params.get('bt');
+  freezeBackdrop(frozen === null || !Number.isFinite(Number(frozen)) ? null : Number(frozen));
   const id = isMenuScene(requested) ? requested : 'menu-guest';
   const map = MENU_MAP;
   // `welcome-intro&t=2.6`: the opening scene frozen at that moment; `welcome&intro` plays it (#826).

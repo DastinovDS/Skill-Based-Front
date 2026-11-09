@@ -12,7 +12,7 @@ import type { MapFile } from '../protocol.gen.ts';
 import { capacityRing, ringRadius } from '../render/cityLayout.ts';
 import { territoryBorders, type Border } from '../render/regionLayout.ts';
 import { ROAD_LANE } from '../render/style.ts';
-import { territoryOf } from '../render/territory.ts';
+import { territoryOf, type Territory } from '../render/territory.ts';
 import { menuCityRadius, type Point } from './menuScene.ts';
 
 /**
@@ -67,15 +67,33 @@ export interface MenuLand {
   readonly enemy: SideLand;
 }
 
+/** The areas of a map, worked out once per map (a capture redraws the land with other owners). */
+const territories = new WeakMap<MapFile, { readonly geo: GeoFile | null; readonly t: Territory }>();
+
+/** The areas of the nodes of `map`: the vector file's, or the Voronoi cells without one. */
+export function menuTerritory(map: MapFile, geo: GeoFile | null): Territory {
+  const known = territories.get(map);
+  if (known !== undefined && known.geo === geo) return known.t;
+  const t = territoryOf(map, geo);
+  territories.set(map, { geo, t });
+  return t;
+}
+
 /**
- * The start territory of the menu map: the areas of the vector file (or the Voronoi cells), the
- * border lines at the match's insets times `k` (the size of the pieces against the match).
+ * The territory of the menu map: the areas of the vector file (or the Voronoi cells), the border
+ * lines at the match's insets times `k` (the size of the pieces against the match). The owners
+ * are `given` by node id (the picture's front, `MenuWorld.owners`), else the map file's.
  */
-export function menuLand(map: MapFile, geo: GeoFile | null, k = 1): MenuLand {
-  const territory = territoryOf(map, geo);
-  const owners = map.nodes.map((n) =>
-    n.start_owner === 0 || n.start_owner === 1 ? n.start_owner : null,
-  );
+export function menuLand(
+  map: MapFile,
+  geo: GeoFile | null,
+  k = 1,
+  given?: readonly (0 | 1 | null)[],
+): MenuLand {
+  const territory = menuTerritory(map, geo);
+  const owners =
+    given ??
+    map.nodes.map((n) => (n.start_owner === 0 || n.start_owner === 1 ? n.start_owner : null));
   const at = (inset: number): Border[] =>
     territoryBorders(territory.cells, owners, inset * k, territory.edges);
   const B = MENU_BORDER;

@@ -106,7 +106,78 @@ for (const scene of SCENES) {
   });
 }
 
+// The picture behind the screens before a match (#866, #864): always on screen, so what it costs
+// the main thread while it runs (Chromium's own task timer over `MENU_MS`, in ms per second) and the
+// frame time. `main-thread` is the busy share a 2-core CI runner pays for an idle start page.
+const MENU_SCENES = ['menu-guest', 'welcome', 'lobby-list'] as const;
+const MENU_MS = 6000;
+
+interface MenuResult {
+  readonly scene: string;
+  readonly taskMsPerS: number;
+  readonly scriptMsPerS: number;
+  readonly frameMs: number;
+}
+const menuResults: MenuResult[] = [];
+
+for (const id of MENU_SCENES) {
+  test(`cost of the menu picture ${id}`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto(`/?menu=${id}`);
+    await expect(page.locator('.front .backdrop[data-map="ready"]')).toBeVisible({
+      timeout: 60_000,
+    });
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(1000);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Performance.enable');
+    const metric = async (): Promise<Record<string, number>> => {
+      const { metrics } = await cdp.send('Performance.getMetrics');
+      return Object.fromEntries(metrics.map((m) => [m.name, m.value]));
+    };
+    const before = await metric();
+    const frames = await page.evaluate(
+      (ms) =>
+        new Promise<number>((resolve) => {
+          const frame = (
+            globalThis as unknown as {
+              requestAnimationFrame: (step: (now: number) => void) => void;
+            }
+          ).requestAnimationFrame;
+          let count = 0;
+          let first = 0;
+          const step = (now: number): void => {
+            if (count === 0) first = now;
+            count += 1;
+            if (now - first < ms) frame(step);
+            else resolve((now - first) / Math.max(1, count - 1));
+          };
+          frame(step);
+        }),
+      MENU_MS,
+    );
+    const after = await metric();
+    const perS = (name: string): number =>
+      Math.round((((after[name] ?? 0) - (before[name] ?? 0)) * 1000 * 10) / (MENU_MS / 1000)) / 10;
+    menuResults.push({
+      scene: id,
+      taskMsPerS: perS('TaskDuration'),
+      scriptMsPerS: perS('ScriptDuration'),
+      frameMs: Math.round(frames * 10) / 10,
+    });
+  });
+}
+
 test.afterAll(() => {
+  if (menuResults.length > 0) {
+    mkdirSync(OUT, { recursive: true });
+    writeFileSync(join(OUT, 'perf-menu.json'), `${JSON.stringify(menuResults, null, 2)}\n`);
+    console.log('\nmenu picture     task ms/s  script ms/s  frame (ms)');
+    for (const r of menuResults) {
+      const cells = [r.taskMsPerS, r.scriptMsPerS, r.frameMs];
+      console.log(`${r.scene.padEnd(14)} ${cells.map((c) => String(c).padStart(10)).join('  ')}`);
+    }
+  }
   if (results.length === 0) return;
   mkdirSync(OUT, { recursive: true });
   writeFileSync(join(OUT, 'perf.json'), `${JSON.stringify(results, null, 2)}\n`);

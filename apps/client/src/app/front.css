@@ -685,10 +685,11 @@
 
 /* ---- The entry screen: the title, the nick, the log-in sheet -------------------------------- */
 
-/* The whole menu map under the title, sharp and dim (#839: the mockup's entry, the map at a fifth of
-   its light; the blur of #845 is gone), darker towards the corners. */
+/* The whole valley under the title, sharp and dim (#839: the mockup's entry, the map at a fifth of
+   its light; the blur of #845 is gone), darker towards the corners; muted below the main menu's
+   picture so the title stays the focus (#866: its motion is fainter and slower too). */
 .front.entry .backdrop {
-  opacity: 0.36;
+  opacity: 0.3;
 }
 
 /* The opening scene lights the map to its full strength under its dark stage while the fights at
