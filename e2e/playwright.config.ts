@@ -7,11 +7,15 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests',
   // A full match is 60 s of game time plus the replay; the checks inside have their own timeouts.
-  // The CI runner has 2 cores and renders WebGL in software: there a match screen takes 30 to 50 s
-  // to come up after a reload and the result screen over 15 s after `match_end` (#852), and the
-  // invite tests took up to 174 s of the old 180 s budget on green runs. The budgets cover that.
-  timeout: 300_000,
-  expect: { timeout: 30_000 },
+  // The CI runner has 2 cores and renders WebGL in software, and its speed swings a lot from run
+  // to run (#864). Green e2e jobs measured on CI (#864): the slowest test is the invite match, up
+  // to 2.3 min (138 s) since the match screen got cheap (#863; before it up to 3.0 min), the
+  // reload test up to 1.6 min, the other tests under 40 s. So one test gets 240 s (1.7x the
+  // slowest) and a plain assertion 20 s (the slowest start-page test, with three of them and a
+  // page load, took 8.6 s). Steps that wait for a match to play out or a replay to open carry
+  // their own longer timeouts in the specs. If a run needs more, find what got slow first.
+  timeout: 240_000,
+  expect: { timeout: 20_000 },
   // One test = one match with its own two guests: tests do not share anything and may run in
   // parallel, but the CI runner is small and renders WebGL in software: one worker there.
   fullyParallel: true,
