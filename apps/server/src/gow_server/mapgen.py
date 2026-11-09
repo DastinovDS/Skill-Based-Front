@@ -29,7 +29,7 @@ import logging
 import multiprocessing
 import secrets
 from collections.abc import Callable
-from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -117,8 +117,11 @@ class MapMaker:
         wait_s: float = 60.0,
         metrics: "ServerMetrics | None" = None,
         job: Job = build,
-        seeds: Callable[[], tuple[int, ...]] = new_seeds,
+        seeds: Callable[[], tuple[int, ...]] | None = None,
+        executor: Executor | None = None,
     ) -> None:
+        """``job``, ``seeds`` and ``executor`` are for tests: the work, the seeds of a map
+        (``new_seeds``) and the executor (a spawn ``ProcessPoolExecutor`` of ``workers``)."""
         self.folder: Final = folder
         self.catalog: Final = catalog
         self.enabled: Final = enabled
@@ -128,8 +131,8 @@ class MapMaker:
         self._max_pending = max_pending
         self._metrics = metrics
         self._job = job
-        self._seeds = seeds
-        self._pool: ProcessPoolExecutor | None = None
+        self._seeds = new_seeds if seeds is None else seeds
+        self._pool: Executor | None = executor
         self._making: set[PendingMap] = set()
 
     @property
@@ -203,6 +206,9 @@ class MapMaker:
             if pending.abandoned and pending.job is not None and pending.job.cancelled():
                 return None  # discarded before a worker took it
             raise
+        except ValueError as exc:  # no seed gave a map that passes every check
+            log.warning("no map passed", extra={"map_id": pending.id, "reason": str(exc)[:1000]})
+            return None
         except BrokenProcessPool:
             self._pool = None  # a new pool for the next map
             log.error("map worker died", extra={"map_id": pending.id})
@@ -239,7 +245,7 @@ class MapMaker:
         if self._metrics is not None:
             self._metrics.maps_fallback += 1
 
-    def _get_pool(self) -> ProcessPoolExecutor:
+    def _get_pool(self) -> Executor:
         if self._pool is None:
             # spawn: a forked child of a threaded process (uvicorn, SQLAlchemy) can deadlock.
             self._pool = ProcessPoolExecutor(
