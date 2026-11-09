@@ -280,44 +280,6 @@
   font: 400 30px / 1 var(--font-text);
 }
 
-.front .th-road {
-  stroke: #5c5446;
-  stroke-width: 9;
-}
-
-.front .th-city {
-  fill: #cfc4ab;
-  stroke: #0f0d0a;
-}
-
-.front .th-city.you {
-  fill: var(--own-lapis);
-}
-
-.front .th-city.enemy {
-  fill: var(--enemy-lapis);
-}
-
-.front .th-prov {
-  fill: #0f0d0a;
-  stroke: #cfc4ab;
-  stroke-width: 9;
-}
-
-.front .th-prov.you {
-  stroke: var(--own-lapis);
-}
-
-.front .th-prov.enemy {
-  stroke: var(--enemy-lapis);
-}
-
-.front .th-hole {
-  fill: none;
-  stroke: #0f0d0a;
-  stroke-width: 12;
-}
-
 /* ---- Open matches: one ruled row per match ---------------------------------------------------- */
 
 .front .panel .ents {

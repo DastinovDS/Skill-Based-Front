@@ -12,4 +12,4 @@
 </script>
 
 <!-- The unit of the map (#784): the side is the colour plus the helmet's shape and facing, never colour alone. -->
-<HelmetIcon {side} size={size + 2} />
+<HelmetIcon {side} size={size + 2} engraved />

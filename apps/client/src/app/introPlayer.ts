@@ -2,10 +2,16 @@
  * Plays the opening scene (`introScene.ts`) on the entry screen's own elements: the title (its
  * grain canvas, the rule, the rise), the entries of the form, the dark stage over the map and the
  * Skip button. Everything is set through the CSSOM (CSP: no inline style attributes) and taken
- * back at the end, so the screen ends exactly in its still, final frame.
+ * back at the end, so the screen ends exactly in its still, final frame. The dark stage is drawn on
+ * a canvas with the pools of light of the fights at the edges cut into it (`introBattles.ts`, #839);
+ * without a 2D canvas it stays the plain dark of the cover.
  */
+import type { MapFile } from '../protocol.gen.ts';
+import { drawStage } from './introBattles.ts';
 import { buildGrain, type Grain } from './introGrain.ts';
 import { introFrame, letterTimes, type IntroFrame } from './introScene.ts';
+import { readPalette, type Palette } from './menuMotion.ts';
+import { layoutEntry, type Scene } from './menuScene.ts';
 
 export interface IntroParts {
   /** The screen: it carries `data-intro` (loading, playing, frozen) for the tests and shots. */
@@ -17,6 +23,8 @@ export interface IntroParts {
   readonly skip: HTMLElement | null;
   /** The entries of the form that come in one after another (each a list of elements). */
   readonly steps: readonly (readonly HTMLElement[])[];
+  /** The canvas of the dark stage in the cover and the map behind it, for the fights (#839). */
+  readonly stage?: { readonly canvas: HTMLCanvasElement; readonly map: MapFile } | null;
 }
 
 export interface IntroOptions {
@@ -34,6 +42,38 @@ const START_Y = 0.475;
 const FONT_WAIT_MS = 2500;
 /** An entry of the form takes clicks once it is this far in. */
 const LIVE_FROM = 0.6;
+/** The dark of the stage (the cover's own colour). */
+const DARK = '#0b0a08';
+
+interface Stage {
+  readonly context: CanvasRenderingContext2D;
+  readonly scene: Scene;
+  readonly palette: Palette;
+}
+
+/** The stage canvas sized to the cover, with the menu map laid out as the entry screen lays it. */
+function setUpStage(parts: IntroParts): Stage | null {
+  const stage = parts.stage;
+  if (stage === undefined || stage === null) return null;
+  const box = parts.cover.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0) return null;
+  let context: CanvasRenderingContext2D | null;
+  try {
+    context = stage.canvas.getContext('2d');
+  } catch {
+    context = null;
+  }
+  if (context === null) return null;
+  const ratio = Math.min(2, window.devicePixelRatio || 1);
+  stage.canvas.width = Math.round(box.width * ratio);
+  stage.canvas.height = Math.round(box.height * ratio);
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  return {
+    context,
+    scene: layoutEntry(stage.map, box.width, box.height),
+    palette: readPalette(parts.root),
+  };
+}
 
 function waitForFonts(title: HTMLElement): Promise<unknown> {
   const fonts = (document as Partial<Document>).fonts;
@@ -55,10 +95,15 @@ export function runIntro(parts: IntroParts, options: IntroOptions): () => void {
   let times: readonly (readonly [number, number])[] = [];
   let zoom = 1;
   let rise = 0;
+  let stage: Stage | null = null;
 
   root.dataset['intro'] = 'loading';
 
-  const apply = (frame: IntroFrame): void => {
+  const apply = (frame: IntroFrame, t: number): void => {
+    root.classList.toggle('lit', frame.lit);
+    if (stage !== null && frame.cover > 0) {
+      drawStage(stage.context, stage.palette, stage.scene, t, DARK);
+    }
     title.classList.toggle('solid', !frame.grain);
     canvas.hidden = !frame.grain;
     if (frame.grain) grain?.draw(frame.letters);
@@ -83,6 +128,8 @@ export function runIntro(parts: IntroParts, options: IntroOptions): () => void {
     window.removeEventListener('resize', finish);
     skip?.removeEventListener('click', finish);
     title.classList.remove('solid');
+    root.classList.remove('lit');
+    cover.classList.remove('staged');
     title.style.removeProperty('--sp');
     title.style.removeProperty('transform');
     for (const elements of steps) {
@@ -129,8 +176,11 @@ export function runIntro(parts: IntroParts, options: IntroOptions): () => void {
       return;
     }
     times = letterTimes(grain.count);
+    stage = setUpStage(parts);
+    // The canvas paints the dark (with the pools in it): the cover itself is clear then.
+    cover.classList.toggle('staged', stage !== null);
     if (frozen) {
-      apply(introFrame(times, options.at ?? 0));
+      apply(introFrame(times, options.at ?? 0), options.at ?? 0);
       root.dataset['intro'] = 'frozen';
       return;
     }
@@ -140,15 +190,16 @@ export function runIntro(parts: IntroParts, options: IntroOptions): () => void {
     const start = performance.now();
     const tick = (now: number): void => {
       if (stopped) return;
-      const frame = introFrame(times, (now - start) / 1000);
-      apply(frame);
+      const t = (now - start) / 1000;
+      const frame = introFrame(times, t);
+      apply(frame, t);
       if (frame.done) {
         finish();
         return;
       }
       handle = requestAnimationFrame(tick);
     };
-    apply(introFrame(times, 0));
+    apply(introFrame(times, 0), 0);
     handle = requestAnimationFrame(tick);
   });
 

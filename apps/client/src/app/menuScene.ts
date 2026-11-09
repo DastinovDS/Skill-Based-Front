@@ -1,12 +1,13 @@
 /**
  * The picture behind the start menu (#471, variant A "Front" of docs/design/mockups/start-menu.html):
  * a map drawn small (the menu map `maps/menu/valley.json`, #474), the own capital at the left of it,
- * the enemy capital far away in the fog.
+ * the enemy capital far away in the fog. The entry screen lays the whole map over the window
+ * instead (#839, the mockup's entry of out-of-game-style-r3.html).
  * Pure geometry: the map file and the size of the window in, screen points out. It draws nothing
  * and decides nothing about the game; it is decoration, so the road from one capital to the other
  * is a plain shortest path over the map file.
  */
-import type { MapFile, Terrain } from '../protocol.gen.ts';
+import type { MapFile, NodeKind } from '../protocol.gen.ts';
 
 /** What the picture says about the state of the menu (#474: the motion of each, `menuMotion.ts`). */
 export type BackdropPhase =
@@ -29,18 +30,19 @@ export interface Point {
 export interface SceneNode extends Point {
   readonly id: number;
   readonly city: boolean;
+  readonly kind: NodeKind;
+  readonly name: string;
   /** The player that owns it at the start, or null. */
   readonly owner: 0 | 1 | null;
-  readonly terrain: Terrain;
+  /** Where it stands on the map file (world units): the map layer is drawn in these. */
+  readonly world: Point;
 }
 
 export interface SceneEdge {
   readonly a: SceneNode;
   readonly b: SceneNode;
-  /** Both ends are the viewer's: drawn as a road (the rest are dashed borders). */
+  /** Both ends are the viewer's: an own road (the rest are buffer roads, or dotted in the fog). */
   readonly own: boolean;
-  /** Road lines: 3 at the capital, 2 elsewhere (decoration, not the level of a road). */
-  readonly lines: 2 | 3;
 }
 
 export interface Scene {
@@ -48,9 +50,8 @@ export interface Scene {
   readonly height: number;
   /** Px per unit of the map file. */
   readonly scale: number;
-  /** Px: the soft terrain blob of a node and the tint of the start territory round it. */
-  readonly terrainRadius: number;
-  readonly territoryRadius: number;
+  /** Where the point 0,0 of the map file is on the screen (px): the baked ground starts there. */
+  readonly origin: Point;
   readonly nodes: readonly SceneNode[];
   readonly edges: readonly SceneEdge[];
   /** The road from the own capital to the enemy one, node by node. */
@@ -61,28 +62,46 @@ export interface Scene {
   readonly enemyCapital: Point;
   /** Node ids of the two capitals: drawn on their own, not with the other cities. */
   readonly capitalIds: readonly [number, number];
+  /** The enemy side lies in the fog (the menus); the entry screen shows the whole map. */
+  readonly fog: boolean;
   /** Where the fog is solid: the enemy capital stands to the right of it. */
   readonly fogStart: number;
   /** Where the fog begins to fade in; left of it the map is clear. */
   readonly fadeStart: number;
 }
 
-/** The text rail takes this much from the left edge (56 px margin and the rail of 430 px). */
-export const RAIL_RIGHT = 520;
 /**
- * From this window width on the rail stands beside the picture (app.css: below it, or in a window
+ * The rail of text of the main screen (front.css `.front .rail`, #845): 128 px from the left edge
+ * (64 px in a window under 1280 px) and 540 px wide (the ways to play with their rules).
+ */
+export const RAIL = { left: 128, narrowLeft: 64, narrowBelow: 1280, width: 540 } as const;
+/** Room between the rail and the own capital: its capacity ring and the name under it. */
+const RAIL_CLEAR = 34;
+/** The own capital stands this far from the left edge at least: right of the rail of text. */
+export function railRight(width: number): number {
+  return (width < RAIL.narrowBelow ? RAIL.narrowLeft : RAIL.left) + RAIL.width + RAIL_CLEAR;
+}
+/**
+ * From this window width on the rail stands beside the picture (front.css: below it, or in a window
  * up to 560 px tall, the rail flows over the picture under a flat shade).
  */
 export const RAIL_BESIDE_MIN_WIDTH = 900;
 /**
- * The panel of the "Dock" screens (lobby, invite, bot; #473) stands right of the rail: from here
- * to `DOCK_PANEL_RIGHT` at the widest (the same numbers are in `.front.docked .panel` of dock.css).
+ * The panel of the "Dock" screens (bot, invite, open matches; dock.css `.front.docked .panel`,
+ * #845): from `left` to 64 px short of the right edge (24 px under 1280 px), at most `maxWidth` wide.
  */
-export const DOCK_PANEL_LEFT = 552;
-export const DOCK_PANEL_RIGHT = 1052;
-/** Under this window width the panel starts closer to the rail, at `DOCK_NARROW_LEFT` (dock.css). */
-export const DOCK_NARROW_BELOW = 1100;
-export const DOCK_NARROW_LEFT = 470;
+export const DOCK_PANEL = {
+  left: 334,
+  maxWidth: 960,
+  right: 64,
+  narrowRight: 24,
+  narrowBelow: 1280,
+} as const;
+/** The right edge of the Dock panel in a window `width` px wide. */
+export function dockPanelRight(width: number): number {
+  const margin = width < DOCK_PANEL.narrowBelow ? DOCK_PANEL.narrowRight : DOCK_PANEL.right;
+  return Math.min(width - margin, DOCK_PANEL.left + DOCK_PANEL.maxWidth);
+}
 /** A map needs at least this much room (px) between the panel and the enemy margin to stand beside it. */
 const DOCK_MAP_ROOM = 420;
 
@@ -91,8 +110,8 @@ export const FOG_WIDTH = 250;
 /** The soft edge of the fog, left of the solid part. */
 export const FOG_FADE = 130;
 /**
- * The fog starts below the title bar: the chip of the player in the top right corner (28 px from
- * the top, ~36 px tall) never touches the edge of the fog (owner, #471). The fog fades in over
+ * The fog starts below the title bar (72 px and its doubled rule, front.css): the player in the top
+ * right corner never touches the edge of the fog (owner, #471). The fog fades in over
  * `FOG_TOP_FADE` px below this line.
  */
 export const BAR_BOTTOM = 76;
@@ -104,38 +123,16 @@ const TOP_ROOM = BAR_BOTTOM + FOG_TOP_FADE + 4;
 const BOTTOM_ROOM = 100;
 
 const MIN_SCALE = 0.16;
-/**
- * The terrain blob and the territory tint by the spacing of the map (the median distance from a node
- * to its nearest neighbour): the look of the menu map sketch MM1 (#474, 58 and 44 units on it).
- */
-const TERRAIN_PER_SPACING = 0.52;
-const TERRITORY_PER_SPACING = 0.4;
-
-/** The median distance from a node to its nearest neighbour, in map units. */
-function spacing(map: MapFile): number {
-  const nearest = map.nodes
-    .map((n) =>
-      Math.min(
-        ...map.nodes.filter((o) => o.id !== n.id).map((o) => Math.hypot(o.x - n.x, o.y - n.y)),
-      ),
-    )
-    .filter((d) => Number.isFinite(d))
-    .sort((a, b) => a - b);
-  return nearest[Math.floor(nearest.length / 2)] ?? 100;
-}
 
 /**
  * Where the own capital stands behind a docked panel. A window wide enough puts the whole map to
- * the right of the panel, so the panel never covers the front of the postcard (#473). In a
- * narrower one the panel covers the middle of the map: the own capital stays between the rail and
- * the panel and the enemy capital, with its label, to the right of the panel.
+ * the right of the panel (#473). Otherwise the panel, translucent stone, covers most of the window
+ * and the map lies under it as on the main screen.
  */
 export function dockOwnLeft(width: number): number | undefined {
-  const clear = DOCK_PANEL_RIGHT + 56;
+  const clear = dockPanelRight(width) + 56;
   if (width - ENEMY_MARGIN - clear >= DOCK_MAP_ROOM) return clear;
-  if (width < RAIL_BESIDE_MIN_WIDTH) return undefined;
-  // The own capital stays visible between the rail and the panel.
-  return (width < DOCK_NARROW_BELOW ? DOCK_NARROW_LEFT : DOCK_PANEL_LEFT) - 36;
+  return undefined;
 }
 
 function owner(value: number | null): 0 | 1 | null {
@@ -179,52 +176,35 @@ function shortestPath(map: MapFile, from: number, to: number): number[] {
   return path;
 }
 
-/**
- * Lays the map out for a window of `width` x `height` px: the own capital right of the rail, the
- * enemy capital inside the fog at the right edge, the whole map in between at one scale. A tall
- * map in a short window is shrunk to fit its height; the fog then moves in front of the enemy
- * capital so that it is still hidden. `ownLeft` moves the own capital (`dockOwnLeft`).
- */
-export function layoutScene(map: MapFile, width: number, height: number, ownLeft?: number): Scene {
+/** The capitals of a map file: the own (player 0) and the enemy's. */
+function capitals(map: MapFile): [MapFile['nodes'][number], MapFile['nodes'][number]] | null {
   const capital0 = map.nodes.find((n) => n.capital_of === 0) ?? map.nodes[0];
   const capital1 = map.nodes.find((n) => n.capital_of === 1) ?? map.nodes[map.nodes.length - 1];
-  if (capital0 === undefined || capital1 === undefined) {
-    return {
-      width,
-      height,
-      scale: MIN_SCALE,
-      terrainRadius: 0,
-      territoryRadius: 0,
-      nodes: [],
-      edges: [],
-      front: [],
-      frontIds: [],
-      ownCapital: { x: RAIL_RIGHT, y: height / 2 },
-      enemyCapital: { x: width - ENEMY_MARGIN, y: height / 2 },
-      capitalIds: [-1, -1],
-      fogStart: width - FOG_WIDTH,
-      fadeStart: width - FOG_WIDTH - FOG_FADE,
-    };
-  }
-  // Beside the rail the own capital never stands under it or under its key hints (#474: at 1024 px
-  // 40% of the width put it at 410 px, under the hints that reach 426 px): the map shrinks instead.
-  const left =
-    ownLeft ?? (width >= RAIL_BESIDE_MIN_WIDTH ? RAIL_RIGHT : Math.max(width * 0.4, 260));
-  const spanX = Math.max(1, capital1.x - capital0.x);
-  const wantX = Math.max(80, width - ENEMY_MARGIN - left);
-  const fitY = Math.max(80, height - TOP_ROOM - BOTTOM_ROOM) / Math.max(1, map.meta.height);
-  const scale = Math.max(MIN_SCALE, Math.min(wantX / spanX, fitY));
-  const middle = (TOP_ROOM + height - BOTTOM_ROOM) / 2;
+  return capital0 === undefined || capital1 === undefined ? null : [capital0, capital1];
+}
+
+/** The nodes, the roads and the front road of `map` placed at `origin` px with `scale` px a unit. */
+function place(
+  map: MapFile,
+  width: number,
+  height: number,
+  scale: number,
+  origin: Point,
+  fog: { readonly on: boolean; readonly start: number },
+): Scene {
+  const ends = capitals(map);
   const at = (n: { x: number; y: number }): Point => ({
-    x: left + (n.x - capital0.x) * scale,
-    y: middle + (n.y - map.meta.height / 2) * scale,
+    x: origin.x + n.x * scale,
+    y: origin.y + n.y * scale,
   });
   const nodes: SceneNode[] = map.nodes.map((n) => ({
     ...at(n),
     id: n.id,
     city: n.kind !== 'province',
+    kind: n.kind,
+    name: n.name,
     owner: owner(n.start_owner),
-    terrain: n.terrain,
+    world: { x: n.x, y: n.y },
   }));
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const edges: SceneEdge[] = [];
@@ -232,46 +212,114 @@ export function layoutScene(map: MapFile, width: number, height: number, ownLeft
     const a = byId.get(edge.a);
     const b = byId.get(edge.b);
     if (a === undefined || b === undefined) continue;
-    edges.push({
-      a,
-      b,
-      own: a.owner === 0 && b.owner === 0,
-      lines: edge.a === capital0.id || edge.b === capital0.id ? 3 : 2,
-    });
+    edges.push({ a, b, own: a.owner === 0 && b.owner === 0 });
   }
-  const frontIds = shortestPath(map, capital0.id, capital1.id);
+  const frontIds = ends === null ? [] : shortestPath(map, ends[0].id, ends[1].id);
   const front = frontIds.flatMap((id) => {
     const found = byId.get(id);
     return found === undefined ? [] : [{ x: found.x, y: found.y }];
   });
-  const ownCapital = at(capital0);
-  const enemyCapital = at(capital1);
-  const fogStart = Math.min(width - FOG_WIDTH, enemyCapital.x - 90);
-  const gap = spacing(map);
   return {
     width,
     height,
     scale,
-    terrainRadius: gap * TERRAIN_PER_SPACING * scale,
-    territoryRadius: gap * TERRITORY_PER_SPACING * scale,
+    origin,
     nodes,
     edges,
     front,
     frontIds,
-    ownCapital,
-    enemyCapital,
-    capitalIds: [capital0.id, capital1.id],
-    fogStart,
-    fadeStart: fogStart - FOG_FADE,
+    ownCapital: ends === null ? { x: 0, y: height / 2 } : at(ends[0]),
+    enemyCapital: ends === null ? { x: width, y: height / 2 } : at(ends[1]),
+    capitalIds: ends === null ? [-1, -1] : [ends[0].id, ends[1].id],
+    fog: fog.on,
+    fogStart: fog.start,
+    fadeStart: fog.start - FOG_FADE,
   };
 }
 
+/**
+ * Lays the map out for a window of `width` x `height` px: the own capital right of the rail, the
+ * enemy capital inside the fog at the right edge, the whole map in between at one scale. A tall
+ * map in a short window is shrunk to fit its height; the fog then moves in front of the enemy
+ * capital so that it is still hidden. `ownLeft` moves the own capital (`dockOwnLeft`).
+ */
+export function layoutScene(map: MapFile, width: number, height: number, ownLeft?: number): Scene {
+  const ends = capitals(map);
+  if (ends === null) {
+    return place(
+      map,
+      width,
+      height,
+      MIN_SCALE,
+      { x: 0, y: 0 },
+      {
+        on: true,
+        start: width - FOG_WIDTH,
+      },
+    );
+  }
+  const [capital0, capital1] = ends;
+  // Beside the rail the own capital never stands under it (#474, #839: the rail of #845 is 540 px
+  // wide from 128 px): the map shrinks instead.
+  const left =
+    ownLeft ?? (width >= RAIL_BESIDE_MIN_WIDTH ? railRight(width) : Math.max(width * 0.4, 260));
+  const spanX = Math.max(1, capital1.x - capital0.x);
+  const wantX = Math.max(80, width - ENEMY_MARGIN - left);
+  const fitY = Math.max(80, height - TOP_ROOM - BOTTOM_ROOM) / Math.max(1, map.meta.height);
+  const scale = Math.max(MIN_SCALE, Math.min(wantX / spanX, fitY));
+  const middle = (TOP_ROOM + height - BOTTOM_ROOM) / 2;
+  const origin = {
+    x: left - capital0.x * scale,
+    y: middle - (map.meta.height / 2) * scale,
+  };
+  const enemyX = origin.x + capital1.x * scale;
+  return place(map, width, height, scale, origin, {
+    on: true,
+    start: Math.min(width - FOG_WIDTH, enemyX - 90),
+  });
+}
+
+/**
+ * The entry screen (#839, the mockup's entry of out-of-game-style-r3.html): the whole map covers
+ * the window, centred, and nothing is in the fog.
+ */
+export function layoutEntry(map: MapFile, width: number, height: number): Scene {
+  const scale = Math.max(
+    MIN_SCALE,
+    width / Math.max(1, map.meta.width),
+    height / Math.max(1, map.meta.height),
+  );
+  const origin = {
+    x: (width - map.meta.width * scale) / 2,
+    y: (height - map.meta.height * scale) / 2,
+  };
+  return place(map, width, height, scale, origin, { on: false, start: width + FOG_FADE });
+}
+
+/**
+ * The radius of a city of `kind` on the menu map (world units, as `cityRadius` of the match by the
+ * capacity of the kind in the played ruleset): decoration, the menu has no ruleset.
+ */
+export function menuCityRadius(kind: NodeKind): number {
+  switch (kind) {
+    case 'capital':
+    case 'city_large':
+      return 20;
+    case 'city_medium':
+      return 17;
+    case 'city_small':
+      return 14;
+    default:
+      return 8;
+  }
+}
+
 /** The points of a star with `tips` tips, for the mark of a capital. */
-export function starPoints(cx: number, cy: number, radius: number, tips = 5): string {
+export function starPoints(cx: number, cy: number, radius: number, tips = 5, inner = 0.45): string {
   const points: string[] = [];
   for (let i = 0; i < tips * 2; i += 1) {
     const angle = -Math.PI / 2 + (i * Math.PI) / tips;
-    const r = i % 2 === 1 ? radius * 0.45 : radius;
+    const r = i % 2 === 1 ? radius * inner : radius;
     points.push(
       `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`,
     );

@@ -6,26 +6,30 @@
  * title then rises slowly to its place on the entry screen while the map comes up and the nick
  * field comes in. Once a browser session, skipped by a click or a key, never under reduced motion.
  *
- * Timings are the mockup's (`docs/design/mockups/out-of-game-style-r3.html`, `TL` and `EMERGE`)
- * with two changes: the fights at the edges are not part of this piece (the title starts after a
- * short dark beat instead of after them), and the title rises more slowly (the owner, 2026-11-08).
+ * Timings are the mockup's (`docs/design/mockups/out-of-game-style-r3.html`, `TL` and `EMERGE`):
+ * the five fights at the edges of the map first (`introBattles.ts`, #839), the letters from 2.75 s;
+ * one change: the title rises more slowly (the owner, 2026-11-08), so what follows the rise moves
+ * with it.
  */
 
 /** The moments of the scene, in seconds from its start. */
 export const INTRO = {
-  /** The first letter starts to form (the mockup: 2.75 s, after the fights). */
-  title: 0.6,
+  /** The first letter starts to form, after the fights at the edges have begun (the mockup). */
+  title: 2.75,
   /** The rule under the title grows: start and length (the mockup: 0.95 s after the title, 2.35 s). */
-  rule: [1.55, 2.35],
+  rule: [3.7, 2.35],
   /** The title rises to its place: start and length (the mockup: 0.7 s; slower by the owner). */
-  move: 3.8,
+  move: 5.95,
   moveDur: 1.6,
   /** The nick field, then Log in and Create an account: start, step, length of each. */
-  menu: 4.75,
+  menu: 6.9,
   menuPer: 0.14,
   menuDur: 0.42,
-  /** The dark stage fades and the map behind comes up: start and end. */
-  ambient: [3.3, 5.2],
+  /**
+   * The dark stage fades and the map behind comes up: start and end. Until then the map is lit to
+   * its full strength under the stage, for the pools of the fights (`IntroFrame.lit`).
+   */
+  ambient: [5.55, 7.4],
   /** The Skip button shows after this. */
   skipFrom: 0.6,
 } as const;
@@ -109,6 +113,8 @@ export interface IntroFrame {
   readonly menu: readonly number[];
   /** The dark stage over the map, 1..0. */
   readonly cover: number;
+  /** The map under the stage is lit (the fights at the edges); then it dims to the entry screen. */
+  readonly lit: boolean;
   readonly skip: boolean;
   readonly done: boolean;
 }
@@ -125,6 +131,7 @@ export function introFrame(times: readonly (readonly [number, number])[], t: num
       easeOut(clamp((t - INTRO.menu - j * INTRO.menuPer) / INTRO.menuDur)),
     ),
     cover: 1 - easeInOut(ambient),
+    lit: t < INTRO.ambient[0],
     skip: t > INTRO.skipFrom && t < INTRO.menu,
     done: t >= INTRO_END,
   };

@@ -1,9 +1,10 @@
 /**
  * The motion behind the start menu (#474, BG5 "Set" of docs/design/mockups/menu-background.html): a
  * scripted decoration drawn on one 2D canvas. Nothing here is the game: no simulation, no server,
- * no rule. The pieces borrow the looks of the match map (a supply packet, a unit helmet, the
- * planned order ODb, the opponent's intent IN3, the shot tracer SH1) and move along the roads of the
- * menu map on a fixed script that depends only on the clock:
+ * no rule. The pieces borrow the Engraved looks of the match map (#839, after #829: the packet, the
+ * helmet, the planned order's ribbon of either side with the amber target, the etched shot and its
+ * hit of Parry, the edge of sight) and move along the roads of the menu map on a fixed script that
+ * depends only on the clock:
  *
  * - idle and from found on, BG1 "Living front": supply packets ride from the capital to the own
  *   cities, a recruit leaves the capital every 11 s, a group walks an own road; once a pair is found
@@ -14,7 +15,7 @@
  * - queue locked: the supply stands, dimmed.
  */
 import type { BackdropPhase, Point, Scene } from './menuScene.ts';
-import { helmet } from '../units/helmet.ts';
+import { clipBelow, helmet } from '../units/helmet.ts';
 import type { Story } from './menuStory.ts';
 
 export interface MotionClock {
@@ -36,15 +37,37 @@ export interface Palette {
   readonly dim: string;
   readonly you: string;
   readonly enemy: string;
+  /** The dark casing under every coloured mark (Engraved, #839). */
+  readonly casing: string;
+  /** The font of numbers (EB Garamond). */
+  readonly text: string;
 }
 
 export const FALLBACK_PALETTE: Palette = {
-  bg: '#0d1117',
-  paper: '#f0f6fc',
-  dim: '#9da7b3',
-  you: '#5b9bff',
-  enemy: '#e5484d',
+  bg: '#16130f',
+  paper: '#ece4d1',
+  dim: '#ada38f',
+  you: '#86a6ea',
+  enemy: '#e5785e',
+  casing: '#060504',
+  text: "'EB Garamond', Georgia, serif",
 };
+
+/** The token colours of the page (`app.css`), read from `element`. */
+export function readPalette(element: Element): Palette {
+  const style = getComputedStyle(element);
+  const token = (name: string, fallback: string): string =>
+    style.getPropertyValue(name).trim() || fallback;
+  return {
+    bg: token('--bg', FALLBACK_PALETTE.bg),
+    paper: token('--paper', FALLBACK_PALETTE.paper),
+    dim: token('--text-dim', FALLBACK_PALETTE.dim),
+    you: token('--you', FALLBACK_PALETTE.you),
+    enemy: token('--enemy', FALLBACK_PALETTE.enemy),
+    casing: token('--casing', FALLBACK_PALETTE.casing),
+    text: token('--font-text', FALLBACK_PALETTE.text),
+  };
+}
 
 /**
  * The moment a still frame shows for each phase (reduced motion): idle mid-loop, the scout on its
@@ -147,42 +170,71 @@ function trace(c: CanvasRenderingContext2D, path: readonly Point[]): void {
   });
 }
 
-function ring(
+/**
+ * A ring of the Engraved weight system (Fine rings, ui-style 55p): a hairline of `colour` on a dark
+ * casing, `dash` for a dashed one.
+ */
+function fineRing(
   c: CanvasRenderingContext2D,
+  k: Palette,
   p: Point,
   r: number,
   colour: string,
-  width: number,
   alpha: number,
   dash: readonly number[] = [],
 ): void {
+  if (alpha <= 0) return;
   c.save();
   c.globalAlpha *= alpha;
+  c.setLineDash(dash);
   c.beginPath();
   c.arc(p.x, p.y, Math.max(0.1, r), 0, Math.PI * 2);
+  c.strokeStyle = k.casing;
+  c.lineWidth = 2.6;
+  c.stroke();
   c.strokeStyle = colour;
-  c.lineWidth = width;
-  c.setLineDash(dash);
+  c.lineWidth = 1;
   c.stroke();
   c.restore();
 }
 
+/** A number in EB Garamond on a dark halo (the "×2" of a stack, the "−1" of a hit). */
+function figure(
+  c: CanvasRenderingContext2D,
+  k: Palette,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+): void {
+  c.font = `600 ${String(size)}px ${k.text}`;
+  c.lineJoin = 'round';
+  c.lineWidth = 3;
+  c.strokeStyle = k.casing;
+  c.fillStyle = k.paper;
+  c.strokeText(text, x, y);
+  c.fillText(text, x, y);
+}
+
 /**
- * A unit of the match map, a helmet (#784): the own helmet faces right, the enemy's left; a dark
- * casing, the dome in the side's colour, the strap and the edge in paper; a count next to a stack.
+ * A unit of the match map, the Engraved helmet (#847): the own faces right, the enemy's left; a
+ * dark casing under the dome and the strap, the charged part solid in the side's colour, the strap,
+ * the brim and the dome's edge as ink lines; the dark plate above the charge level (`share`).
  */
-function unit(
+export function drawHelmet(
   c: CanvasRenderingContext2D,
   k: Palette,
   p: Point,
   side: 0 | 1,
-  alpha = 1,
-  count = 0,
+  o: { readonly width?: number; readonly share?: number; readonly alpha?: number } = {},
 ): void {
-  // 18 px wide, centred on the point; the enemy's mirrored.
-  const h = helmet(side === 0 ? 'own' : 'enemy', 18);
+  const width = o.width ?? 18;
+  const share = Math.max(0, Math.min(1, o.share ?? 1));
+  const w = width / 18;
+  // Centred on the point; the enemy's mirrored.
+  const h = helmet(side === 0 ? 'own' : 'enemy', width);
   const flip = side === 0 ? 1 : -1;
-  const trace = (points: readonly Point[], close: boolean): void => {
+  const outline = (points: readonly Point[], close: boolean): void => {
     c.beginPath();
     points.forEach((q, i) => {
       if (i === 0) c.moveTo(p.x + flip * q.x, p.y + q.y);
@@ -192,62 +244,75 @@ function unit(
   };
   const gear = h.band === null ? [h.strap] : [h.strap, h.band];
   c.save();
-  c.globalAlpha *= alpha;
+  c.globalAlpha *= o.alpha ?? 1;
   c.lineJoin = 'round';
   c.lineCap = 'round';
-  c.strokeStyle = 'rgba(13, 17, 23, 0.85)';
-  c.lineWidth = 3;
+  c.strokeStyle = k.casing;
+  c.lineWidth = 3.4 * w;
   for (const line of gear) {
-    trace(line, false);
+    outline(line, false);
     c.stroke();
   }
-  c.lineWidth = 2.6;
-  trace(h.dome, true);
+  c.lineWidth = 3.2 * w;
+  outline(h.dome, true);
   c.stroke();
-  c.fillStyle = side === 0 ? k.you : k.enemy;
+  // The dark plate, the charge solid below its level (the share of charged units).
+  c.fillStyle = k.casing;
   c.fill();
+  if (share > 0) {
+    const ys = h.dome.map((q) => q.y);
+    const top = Math.min(...ys);
+    const bottom = Math.max(...ys);
+    outline(clipBelow(h.dome, bottom - share * (bottom - top)), true);
+    c.fillStyle = side === 0 ? k.you : k.enemy;
+    c.fill();
+  }
   c.strokeStyle = k.paper;
-  c.lineWidth = 1.3;
+  c.lineWidth = 1.1 * w;
   for (const line of gear) {
-    trace(line, false);
+    outline(line, false);
     c.stroke();
   }
-  c.lineWidth = 1.1;
-  trace(h.dome, true);
+  c.lineWidth = 1 * w;
+  outline(h.dome, true);
   c.stroke();
   c.restore();
+}
+
+/** A unit 18 px wide, charged, with the count of its stack. */
+function unit(
+  c: CanvasRenderingContext2D,
+  k: Palette,
+  p: Point,
+  side: 0 | 1,
+  alpha = 1,
+  count = 0,
+): void {
+  drawHelmet(c, k, p, side, { alpha });
   if (count > 1) {
     c.save();
     c.globalAlpha *= alpha;
-    c.font = '700 10px system-ui, sans-serif';
-    c.lineWidth = 3;
-    c.strokeStyle = k.bg;
-    c.fillStyle = k.paper;
-    c.strokeText(`×${String(count)}`, p.x + 11, p.y + 3);
-    c.fillText(`×${String(count)}`, p.x + 11, p.y + 3);
+    figure(c, k, `×${String(count)}`, p.x + 11, p.y + 4, 13);
     c.restore();
   }
 }
 
-/** A supply packet: a square with a short tail of two fading squares. */
+/**
+ * A supply packet, Engraved (#858): a square of the own colour on a dark casing with an ink outline,
+ * turned along its road; no tail.
+ */
 function packet(c: CanvasRenderingContext2D, k: Palette, p: At, alpha: number): void {
-  const dx = Math.cos(p.angle);
-  const dy = Math.sin(p.angle);
   c.save();
-  for (const [back, size, a] of [
-    [14, 4, 0.3],
-    [8, 5, 0.6],
-  ] as const) {
-    c.globalAlpha = alpha * a;
-    c.fillStyle = k.you;
-    c.fillRect(p.x - dx * back - size / 2, p.y - dy * back - size / 2, size, size);
-  }
   c.globalAlpha = alpha;
+  c.translate(p.x, p.y);
+  c.rotate(p.angle);
+  c.fillStyle = k.casing;
+  c.fillRect(-4.6, -4.6, 9.2, 9.2);
   c.fillStyle = k.you;
-  c.strokeStyle = k.bg;
-  c.lineWidth = 1.4;
-  c.fillRect(p.x - 3.5, p.y - 3.5, 7, 7);
-  c.strokeRect(p.x - 3.5, p.y - 3.5, 7, 7);
+  c.fillRect(-3, -3, 6, 6);
+  c.strokeStyle = k.paper;
+  c.lineWidth = 0.8;
+  c.strokeRect(-4, -4, 8, 8);
   c.restore();
 }
 
@@ -274,7 +339,7 @@ function supply(
     if (d <= length - 10) packet(c, k, along(route, d), alpha);
     else if (!frozen && s - length / speed < 0.6) {
       const u = (s - length / speed) / 0.6;
-      ring(c, route[route.length - 1] as Point, 11 + 3 * u, k.you, 1.6, (1 - u) * alpha);
+      fineRing(c, k, route[route.length - 1] as Point, 11 + 3 * u, k.you, (1 - u) * alpha);
     }
   }
 }
@@ -313,7 +378,7 @@ function drills(
   const capital = route[0] as Point;
   const length = lengthOf(route);
   if (s < 1.2) {
-    ring(c, capital, 18 + 8 * ease(s / 1.2), k.you, 1.5, 1 - s / 1.2);
+    fineRing(c, k, capital, 18 + 8 * ease(s / 1.2), k.you, 1 - s / 1.2);
     unit(c, k, { x: capital.x + 14, y: capital.y - 16 }, 0, clamp(s / 0.3, 0, 1));
   } else {
     const d = (s - 1.2) * speed;
@@ -324,32 +389,22 @@ function drills(
   }
 }
 
-/** The planned order ODb ("Low relief", smaller for the menu): a ribbon with a head on one outline. */
-function order(
-  c: CanvasRenderingContext2D,
-  k: Palette,
-  from: Point,
-  to: Point,
-  o: {
-    readonly flash: number;
-    readonly fixed: boolean;
-    readonly run: number | null;
-    readonly alpha: number;
-  },
-): void {
-  const full = arc(from, to, 0.28);
-  const total = lengthOf(full);
-  const path = slice(full, 14, total - 12);
+/** The outline of a ribbon along `path` (`body` wide at its head, `head` long), as points. */
+function ribbonOutline(
+  path: readonly Point[],
+  body: number,
+  head: number,
+  halfHead: number,
+): Point[] {
   const length = lengthOf(path);
-  const head = 17;
-  const halfHead = 11;
   const left: Point[] = [];
   const right: Point[] = [];
   const steps = 36;
   for (let i = 0; i <= steps; i += 1) {
     const d = ((length - head) * i) / steps;
     const p = along(path, d);
-    const w = (9 * (0.6 + 0.4 * clamp(d / (length * 0.35), 0, 1))) / 2;
+    // The tail narrows to 0.82 of the body (RIBBON.tailRatio of the match).
+    const w = (body * (0.82 + 0.18 * clamp(d / (length * 0.35), 0, 1))) / 2;
     const nx = -Math.sin(p.angle);
     const ny = Math.cos(p.angle);
     left.push({ x: p.x + nx * w, y: p.y + ny * w });
@@ -359,13 +414,39 @@ function order(
   const tip = along(path, length);
   const nx = -Math.sin(base.angle);
   const ny = Math.cos(base.angle);
-  const outline = [
+  return [
     ...left,
     { x: base.x + nx * halfHead, y: base.y + ny * halfHead },
     tip,
     { x: base.x - nx * halfHead, y: base.y - ny * halfHead },
     ...right.reverse(),
   ];
+}
+
+/**
+ * A planned order, the Engraved ribbon of the match (`RIBBON_ENGRAVED`, smaller for the menu): a
+ * dark casing round a dark plate hatched in the side's colour (the own horizontal, the enemy's at
+ * 45 degrees, as their Border bands) inside a hairline of the colour; the own one runs a dash
+ * while it is not fixed yet.
+ */
+function order(
+  c: CanvasRenderingContext2D,
+  k: Palette,
+  from: Point,
+  to: Point,
+  o: {
+    readonly side: 0 | 1;
+    readonly flash: number;
+    readonly fixed: boolean;
+    readonly run: number | null;
+    readonly alpha: number;
+  },
+): void {
+  const full = arc(from, to, o.side === 0 ? 0.28 : -0.28);
+  const total = lengthOf(full);
+  const path = slice(full, 14, total - 12);
+  const outline = ribbonOutline(path, 9.5, 15, 11);
+  const colour = o.side === 0 ? k.you : k.enemy;
   const shape = (): void => {
     trace(c, outline);
     c.closePath();
@@ -374,22 +455,53 @@ function order(
   c.globalAlpha = o.alpha;
   c.lineJoin = 'round';
   shape();
-  c.fillStyle = 'rgba(13, 17, 23, 0.96)';
-  c.fill();
-  c.lineWidth = 6;
-  c.strokeStyle = 'rgba(13, 17, 23, 0.45)';
+  c.strokeStyle = k.casing;
+  c.lineWidth = 4;
   c.stroke();
-  c.globalAlpha = o.alpha * 0.55;
-  c.fillStyle = k.you;
+  c.fillStyle = k.casing;
+  c.globalAlpha = o.alpha * 0.9;
   c.fill();
+  // The hatch: lines across a box round the ribbon, clipped to it.
+  c.save();
+  shape();
+  c.clip();
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const p of outline) {
+    x0 = Math.min(x0, p.x);
+    y0 = Math.min(y0, p.y);
+    x1 = Math.max(x1, p.x);
+    y1 = Math.max(y1, p.y);
+  }
+  c.globalAlpha = o.alpha * 0.85;
+  c.strokeStyle = colour;
+  c.lineWidth = o.side === 0 ? 0.9 : 1.1;
+  c.beginPath();
+  if (o.side === 0) {
+    for (let y = y0; y <= y1; y += 2.6) {
+      c.moveTo(x0, y);
+      c.lineTo(x1, y);
+    }
+  } else {
+    const span = x1 - x0 + (y1 - y0);
+    for (let d = 0; d <= span; d += 2.4 * Math.SQRT2) {
+      c.moveTo(x0 + d, y0);
+      c.lineTo(x0 + d - (y1 - y0), y1);
+    }
+  }
+  c.stroke();
   if (o.flash > 0) {
-    c.globalAlpha = o.alpha * 0.5 * o.flash;
-    c.fillStyle = '#fff';
+    c.globalAlpha = o.alpha * 0.45 * o.flash;
+    c.fillStyle = k.paper;
     c.fill();
   }
-  c.globalAlpha = o.alpha * 0.95;
-  c.lineWidth = o.fixed ? 3.2 : 2.2;
-  c.strokeStyle = k.you;
+  c.restore();
+  c.globalAlpha = o.alpha;
+  shape();
+  c.strokeStyle = colour;
+  c.lineWidth = o.fixed ? 1.4 : 1;
   if (o.run !== null) {
     c.setLineDash([8, 5]);
     c.lineDashOffset = -o.run;
@@ -398,61 +510,61 @@ function order(
   c.restore();
 }
 
-/** The opponent's intent IN3 "Crosshair": a thin dashed arrow, a small head, a crosshair on the target. */
-function intent(
+/**
+ * The target of the opponent's order over a node: an amber arc with marching chevrons, the match's
+ * 'att' mark over an own city (the meeting city is where the own order goes too).
+ */
+function target(
   c: CanvasRenderingContext2D,
   k: Palette,
-  from: Point,
-  to: Point,
-  o: { readonly alpha: number; readonly run: number; readonly pulse: number },
+  at: Point,
+  o: { readonly alpha: number; readonly run: number },
 ): void {
-  const target = 16;
-  const full = arc(from, to, 0.28);
-  const path = slice(full, 10, lengthOf(full) - target - 3);
+  const r = 17;
   c.save();
   c.globalAlpha = o.alpha;
   c.lineCap = 'round';
-  trace(c, path);
-  c.strokeStyle = 'rgba(13, 17, 23, 0.7)';
-  c.lineWidth = 4.5;
-  c.stroke();
-  c.strokeStyle = k.enemy;
-  c.lineWidth = 1.8;
-  c.setLineDash([9, 5]);
-  c.lineDashOffset = -o.run;
-  c.stroke();
-  c.setLineDash([]);
-  const head = along(path, lengthOf(path));
-  c.translate(head.x, head.y);
-  c.rotate(head.angle);
   c.beginPath();
-  c.moveTo(0, 0);
-  c.lineTo(-9, -5);
-  c.lineTo(-9, 5);
-  c.closePath();
-  c.fillStyle = k.enemy;
-  c.fill();
-  c.restore();
-  c.save();
-  c.globalAlpha = o.alpha;
-  ring(c, to, target, k.bg, 4.5, 0.7);
-  ring(c, to, target, k.enemy, 1.8, 1);
-  ring(c, to, target - 6, k.enemy, 1.2, 0.9);
-  c.strokeStyle = k.enemy;
+  c.arc(at.x, at.y, r, Math.PI * 0.95, Math.PI * 2.05);
+  c.strokeStyle = k.casing;
+  c.lineWidth = 4.2;
+  c.stroke();
+  c.strokeStyle = WARN;
   c.lineWidth = 1.6;
-  for (let q = 0; q < 4; q += 1) {
-    const a = (q * Math.PI) / 2;
+  c.stroke();
+  // Chevrons on the arc, pointing in, marching along it.
+  const count = 4;
+  for (let i = 0; i < count; i += 1) {
+    const u = (((i + o.run) % count) + count) % count;
+    const a = Math.PI * (1.05 + (0.9 * u) / count);
+    const x = at.x + Math.cos(a) * (r + 5);
+    const y = at.y + Math.sin(a) * (r + 5);
+    c.save();
+    c.translate(x, y);
+    c.rotate(a + Math.PI);
     c.beginPath();
-    c.moveTo(to.x + Math.cos(a) * (target - 3), to.y + Math.sin(a) * (target - 3));
-    c.lineTo(to.x + Math.cos(a) * (target + 4), to.y + Math.sin(a) * (target + 4));
+    c.moveTo(-2.4, -3);
+    c.lineTo(1.6, 0);
+    c.lineTo(-2.4, 3);
+    c.strokeStyle = k.casing;
+    c.lineWidth = 3;
     c.stroke();
+    c.strokeStyle = WARN;
+    c.lineWidth = 1.2;
+    c.stroke();
+    c.restore();
   }
-  ring(c, to, target + 3, k.enemy, 5 + 3 * o.pulse, 0.15 + 0.35 * o.pulse);
   c.restore();
 }
 
-/** A shot (SH1): a curved tracer with a square head, the opponent's with a dark core. */
-function tracer(
+/** The amber of warnings (`--warn`): never the opponent. */
+const WARN = '#e6ab42';
+
+/**
+ * An etched shot (Parry, #856): a casing with a hairline of the side's colour fading to its tail
+ * and a lozenge head of the side's colour in an ink outline.
+ */
+function shot(
   c: CanvasRenderingContext2D,
   k: Palette,
   from: Point,
@@ -462,64 +574,64 @@ function tracer(
 ): void {
   const path = arc(from, to, 0.35, 24);
   const d = lengthOf(path) * clamp(u, 0, 1);
-  const tail = Math.min(d, 28);
+  const tail = Math.min(d, 26);
   const colour = side === 0 ? k.you : k.enemy;
   c.save();
   c.lineCap = 'round';
+  trace(c, slice(path, Math.max(0, d - tail), Math.max(0.1, d)));
+  c.strokeStyle = k.casing;
+  c.lineWidth = 3;
+  c.globalAlpha = 0.8;
+  c.stroke();
   for (let i = 0; i < 6; i += 1) {
     const s0 = d - (tail * (i + 1)) / 6;
     const s1 = d - (tail * i) / 6;
     if (s0 < 0) continue;
     const p0 = along(path, s0);
     const p1 = along(path, s1);
-    c.globalAlpha = 0.8 * (1 - i / 6);
+    c.globalAlpha = 1 - i / 6;
     c.beginPath();
     c.moveTo(p0.x, p0.y);
     c.lineTo(p1.x, p1.y);
     c.strokeStyle = colour;
-    c.lineWidth = 2.6 - i * 0.3;
+    c.lineWidth = 1.2;
     c.stroke();
   }
   const h = along(path, d);
   c.globalAlpha = 1;
+  c.translate(h.x, h.y);
+  c.rotate(h.angle + Math.PI / 4);
+  c.fillStyle = k.casing;
+  c.fillRect(-4, -4, 8, 8);
   c.fillStyle = colour;
-  c.strokeStyle = side === 0 ? k.bg : k.paper;
-  c.lineWidth = 1.2;
-  c.fillRect(h.x - 3, h.y - 3, 6, 6);
-  c.strokeRect(h.x - 3, h.y - 3, 6, 6);
-  if (side === 1) {
-    c.fillStyle = k.bg;
-    c.fillRect(h.x - 1, h.y - 1, 2, 2);
-  }
+  c.fillRect(-2.6, -2.6, 5.2, 5.2);
+  c.strokeStyle = k.paper;
+  c.lineWidth = 0.8;
+  c.strokeRect(-2.6, -2.6, 5.2, 5.2);
   c.restore();
 }
 
-/** A unit hit by a shot: four shards fly off, "−1" rises. */
-function shatter(c: CanvasRenderingContext2D, k: Palette, p: Point, u: number, side: 0 | 1): void {
+/** A unit hit by a shot (Parry): twelve cuts burst out, every other in ink; "−1" rises. */
+function hit(c: CanvasRenderingContext2D, k: Palette, p: Point, u: number, side: 0 | 1): void {
+  const colour = side === 0 ? k.you : k.enemy;
   c.save();
-  c.fillStyle = side === 0 ? k.you : k.enemy;
-  for (let i = 0; i < 4; i += 1) {
-    const a = -Math.PI / 2 + (i - 1.5) * 0.7;
-    const d = 6 + 16 * ease(u);
-    c.globalAlpha = 1 - u;
-    c.save();
-    c.translate(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d + 8 * u * u);
-    c.rotate(u * 3 + i);
-    c.beginPath();
-    c.moveTo(-3, -2);
-    c.lineTo(3, -2);
-    c.lineTo(0, 3);
-    c.closePath();
-    c.fill();
-    c.restore();
-  }
   c.globalAlpha = 1 - u;
-  c.font = '700 12px system-ui, sans-serif';
-  c.lineWidth = 3;
-  c.strokeStyle = k.bg;
-  c.fillStyle = k.paper;
-  c.strokeText('−1', p.x + 8, p.y - 10 - 12 * u);
-  c.fillText('−1', p.x + 8, p.y - 10 - 12 * u);
+  c.lineCap = 'round';
+  for (let i = 0; i < 12; i += 1) {
+    const a = (i * Math.PI) / 6 + 0.26;
+    const r0 = 6 + 9 * ease(u);
+    const r1 = r0 + 4;
+    c.beginPath();
+    c.moveTo(p.x + Math.cos(a) * r0, p.y + Math.sin(a) * r0);
+    c.lineTo(p.x + Math.cos(a) * r1, p.y + Math.sin(a) * r1);
+    c.strokeStyle = k.casing;
+    c.lineWidth = 2.6;
+    c.stroke();
+    c.strokeStyle = i % 2 === 0 ? k.paper : colour;
+    c.lineWidth = 1;
+    c.stroke();
+  }
+  figure(c, k, '−1', p.x + 9, p.y - 10 - 12 * u, 14);
   c.restore();
 }
 
@@ -527,7 +639,7 @@ function shatter(c: CanvasRenderingContext2D, k: Palette, p: Point, u: number, s
 function fight(c: CanvasRenderingContext2D, k: Palette, at: Point, t: number): void {
   const a = { x: at.x - 15, y: at.y - 2 };
   const b = { x: at.x + 15, y: at.y - 2 };
-  ring(c, at, 26, k.paper, 1.2, 0.35, [3, 4]);
+  fineRing(c, k, at, 26, k.paper, 0.5, [3, 4]);
   unit(c, k, a, 0);
   unit(c, k, b, 1);
   if (t < 0) return;
@@ -536,23 +648,30 @@ function fight(c: CanvasRenderingContext2D, k: Palette, at: Point, t: number): v
   if (r % 3 === 0) {
     const f = clamp((u - 0.35) / 0.3, 0, 1);
     if (u > 0.35 && u < 0.65) {
-      tracer(c, k, a, b, f * 0.5, 0);
-      tracer(c, k, b, a, f * 0.5, 1);
+      shot(c, k, a, b, f * 0.5, 0);
+      shot(c, k, b, a, f * 0.5, 1);
     }
     if (u >= 0.65 && u < 1.1) {
+      // The two glance off each other at the top of their arch: four ink ticks.
       const q = (u - 0.65) / 0.45;
       const mx = (a.x + b.x) / 2;
       const my = Math.min(a.y, b.y) - 6;
       c.save();
       c.globalAlpha = 1 - q;
-      c.strokeStyle = k.paper;
-      c.lineWidth = 2;
-      c.beginPath();
-      c.moveTo(mx - 4, my - 4);
-      c.lineTo(mx + 4, my + 4);
-      c.moveTo(mx + 4, my - 4);
-      c.lineTo(mx - 4, my + 4);
-      c.stroke();
+      c.lineCap = 'round';
+      for (let i = 0; i < 4; i += 1) {
+        const angle = Math.PI / 4 + (i * Math.PI) / 2;
+        const r0 = 3 + 4 * ease(q);
+        c.beginPath();
+        c.moveTo(mx + Math.cos(angle) * r0, my + Math.sin(angle) * r0);
+        c.lineTo(mx + Math.cos(angle) * (r0 + 3.5), my + Math.sin(angle) * (r0 + 3.5));
+        c.strokeStyle = k.casing;
+        c.lineWidth = 2.6;
+        c.stroke();
+        c.strokeStyle = k.paper;
+        c.lineWidth = 1;
+        c.stroke();
+      }
       c.restore();
     }
     return;
@@ -560,8 +679,43 @@ function fight(c: CanvasRenderingContext2D, k: Palette, at: Point, t: number): v
   const side: 0 | 1 = r % 2 === 0 ? 0 : 1;
   const from = side === 0 ? a : b;
   const to = side === 0 ? b : a;
-  if (u > 0.35 && u < 0.95) tracer(c, k, from, to, (u - 0.35) / 0.6, side);
-  if (u >= 0.95 && u < 1.95) shatter(c, k, to, u - 0.95, side === 0 ? 1 : 0);
+  if (u > 0.35 && u < 0.95) shot(c, k, from, to, (u - 0.35) / 0.6, side);
+  if (u >= 0.95 && u < 1.95) hit(c, k, to, u - 0.95, side === 0 ? 1 : 0);
+}
+
+/**
+ * The edge of the scout's sight, as the match draws the edge of sight (the Ruled veil): a double
+ * hairline on a dark casing with short ticks out into the fog.
+ */
+function sightEdge(
+  c: CanvasRenderingContext2D,
+  k: Palette,
+  s: Point & { r: number },
+  alpha: number,
+): void {
+  c.save();
+  c.globalAlpha = alpha;
+  c.beginPath();
+  c.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+  c.strokeStyle = k.casing;
+  c.lineWidth = 3.2;
+  c.stroke();
+  c.strokeStyle = k.paper;
+  c.lineWidth = 0.7;
+  for (const off of [-1, 1]) {
+    c.beginPath();
+    c.arc(s.x, s.y, s.r + off, 0, Math.PI * 2);
+    c.stroke();
+  }
+  const ticks = Math.max(12, Math.round((2 * Math.PI * s.r) / 7));
+  c.beginPath();
+  for (let i = 0; i < ticks; i += 1) {
+    const a = (i * 2 * Math.PI) / ticks;
+    c.moveTo(s.x + Math.cos(a) * (s.r + 1.4), s.y + Math.sin(a) * (s.r + 1.4));
+    c.lineTo(s.x + Math.cos(a) * (s.r + 4.4), s.y + Math.sin(a) * (s.r + 4.4));
+  }
+  c.stroke();
+  c.restore();
 }
 
 /** Where the scout is and how far it sees; `null` outside the queue. */
@@ -629,7 +783,7 @@ export function drawMotion(
     c.restore();
     const breathe = sight.waiting && !reduced ? 0.5 - 0.5 * Math.cos((g * Math.PI * 2) / 2.4) : 0.5;
     const fade = phase === 'found' ? 1 - (reduced ? 1 : ease(t / 1.2)) : 1;
-    if (fade > 0) ring(c, sight, sight.r, k.paper, 1.2, (0.25 + 0.25 * breathe) * fade, [3, 5]);
+    if (fade > 0) sightEdge(c, k, sight, (0.45 + 0.35 * breathe) * fade);
     unit(c, k, { x: sight.x, y: sight.y - 2 }, 0);
   }
 
@@ -641,29 +795,40 @@ export function drawMotion(
   if (phase === 'found') {
     stack(6);
     const pulse = reduced ? 1 : clamp(t / 0.8, 0, 1);
+    const shown = reduced ? 1 : ease(t / 0.6);
+    order(c, k, story.entry, story.meeting, {
+      side: 1,
+      flash: 0,
+      fixed: true,
+      run: null,
+      alpha: shown,
+    });
     order(c, k, story.frontCity, story.meeting, {
+      side: 0,
       flash: reduced ? 0 : Math.sin(Math.PI * pulse) ** 2,
       fixed: pulse >= 1,
       run: reduced ? null : (g * 20) % 13,
       alpha: 1,
     });
-    intent(c, k, story.entry, story.meeting, {
-      alpha: reduced ? 1 : ease(t / 0.6),
-      run: reduced ? 0 : (g * 28) % 14,
-      pulse: reduced ? 0.5 : 0.5 - 0.5 * Math.cos((g * Math.PI * 2) / 0.8),
-    });
+    target(c, k, story.meeting, { alpha: shown, run: reduced ? 0 : (g * 1.6) % 4 });
     return;
   }
 
   // Confirmed: both groups march to the meeting point (3 s), then the rounds.
   const march = reduced ? 1 : clamp(t / 3, 0, 1);
   if (march < 1) {
-    order(c, k, story.frontCity, story.meeting, {
-      flash: 0,
-      fixed: true,
-      run: null,
-      alpha: 1 - march,
-    });
+    for (const [side, from] of [
+      [1, story.entry],
+      [0, story.frontCity],
+    ] as const) {
+      order(c, k, from, story.meeting, {
+        side,
+        flash: 0,
+        fixed: true,
+        run: null,
+        alpha: 1 - march,
+      });
+    }
     const own = arc(story.frontCity, story.meeting, 0.28);
     const enemy = [story.entry, story.meeting];
     unit(c, k, along(own, lengthOf(own) * ease(march) * 0.92), 0, 1, 6);

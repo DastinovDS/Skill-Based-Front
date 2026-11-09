@@ -2,6 +2,7 @@
   import BonusChevron from '../hud/BonusChevron.svelte';
   import HelmetIcon from '../units/HelmetIcon.svelte';
   import { t, tf } from '../i18n/index.ts';
+  import PicCity from './PicCity.svelte';
   import UnitCell from './UnitCell.svelte';
   import { HOWTO, type Count, type Example, type HowToData } from './data.ts';
 
@@ -103,26 +104,34 @@
       aria-label={t('howto.pic.supply')}
       focusable="false"
     >
-      <!-- One capital, two roads: the upper one carries charges to a charged unit, the lower one is cut. -->
+      <!-- One capital, two roads: the upper one carries charges to a charged unit, the lower one is
+           cut. The pieces are the match's Engraved ones (#839): an own road is a band of the own
+           colour with a light lane, a cut one dashed lanes on a dark casing, a packet a square of
+           the own colour on a casing with an ink outline, a city the disc on a dark cut. -->
       <path d="M52 44L292 26" class="road" />
-      <rect x="116" y="33" width="8" height="8" class="charge" />
-      <rect x="166" y="29" width="8" height="8" class="charge" />
-      <rect x="216" y="26" width="8" height="8" class="charge" />
+      <path d="M52 44L292 26" class="lane" />
+      {#each [120, 170, 220] as x (x)}
+        {@const y = 44 - ((x - 52) * 18) / 240}
+        <g transform={`translate(${String(x)} ${String(y)}) rotate(-4.3)`}>
+          <rect x="-4.6" y="-4.6" width="9.2" height="9.2" class="pk-casing" />
+          <rect x="-3" y="-3" width="6" height="6" class="pk" />
+          <rect x="-4" y="-4" width="8" height="8" class="pk-ink" />
+        </g>
+      {/each}
       <path d="M52 52L132 66" class="road" />
-      <path d="M212 80L292 72" class="road faint" />
+      <path d="M52 52L132 66" class="lane" />
+      <path d="M212 80L292 72" class="road buffer" />
+      <path d="M212 80L292 72" class="lane buffer" />
+      <path d="M154 60l22 22M176 60l-22 22" class="cut-casing" />
       <path d="M154 60l22 22M176 60l-22 22" class="cut" />
-      <circle cx="36" cy="48" r="16" class="city" />
-      <path
-        d="M36 37l3.2 6.5 7.1 1-5.15 5 1.2 7.1L36 53.2l-6.35 3.4 1.2-7.1-5.15-5 7.1-1z"
-        class="star"
-      />
-      <circle cx="308" cy="24" r="16" class="city" />
+      <PicCity x={36} y={48} kind="own" capital />
+      <PicCity x={308} y={24} kind="plate" />
       <g transform="translate(297 15)">
-        <HelmetIcon side="own" size={24} />
+        <HelmetIcon side="own" size={24} engraved />
       </g>
-      <circle cx="308" cy="72" r="16" class="city" />
+      <PicCity x={308} y={72} kind="plate" />
       <g transform="translate(297 63)">
-        <HelmetIcon side="own" size={24} share={0} />
+        <HelmetIcon side="own" size={24} share={0} engraved />
       </g>
     </svg>
   </section>
@@ -203,12 +212,20 @@
       aria-label={t('howto.pic.orders')}
       focusable="false"
     >
-      <circle cx="36" cy="26" r="16" class="city" />
-      <circle cx="324" cy="26" r="16" class="city" />
+      <defs>
+        <pattern id="howto-hatch-own" width="6" height="2.6" patternUnits="userSpaceOnUse">
+          <rect width="6" height="0.9" class="hatch-own" />
+        </pattern>
+      </defs>
+      <PicCity x={36} y={26} kind="plate" />
+      <PicCity x={324} y={26} kind="neutral" />
       <g transform="translate(25 17)">
-        <HelmetIcon side="own" size={24} />
+        <HelmetIcon side="own" size={24} engraved />
       </g>
+      <!-- The planned order: the match's Engraved ribbon, a dark plate hatched in the own colour. -->
+      <path d="M58 16h200l24 10-24 10H58z" class="ribbon-casing" />
       <path d="M58 16h200l24 10-24 10H58z" class="ribbon" />
+      <path d="M58 16h200l24 10-24 10H58z" class="ribbon-edge" />
       <!-- The bonus shots in front of the ribbon: the green chevrons of a bonus (#797). -->
       <path d="M174 17l6-6 6 6M206 17l6-6 6 6" class="bonusmark-out" />
       <path d="M174 17l6-6 6 6M206 17l6-6 6 6" class="bonusmark" />
@@ -232,17 +249,18 @@
       focusable="false"
     >
       <path d="M52 26h56M148 26h56M244 26h56" class="road" />
-      <circle cx="36" cy="26" r="16" class="city" />
-      <path
-        d="M36 15l3.2 6.5 7.1 1-5.15 5 1.2 7.1L36 31.2l-6.35 3.4 1.2-7.1-5.15-5 7.1-1z"
-        class="star"
-      />
-      <circle cx="128" cy="26" r="16" class="city" />
-      <text x="128" y="27" class="num">1</text>
-      <circle cx="224" cy="26" r="16" class="city" />
-      <text x="224" y="27" class="num">1</text>
-      <circle cx="320" cy="26" r="16" class="city" />
-      <text x="320" y="27" class="num">1</text>
+      <path d="M52 26h56M148 26h56M244 26h56" class="lane" />
+      <PicCity x={36} y={26} kind="own" capital />
+      {#each [128, 224, 320] as x (x)}
+        <PicCity {x} y={26} kind="own" />
+        <!-- The gilt lozenge of the city's victory points, as on the map. -->
+        <g transform={`translate(${String(x + 14)} 12) rotate(45)`}>
+          <rect x="-7" y="-7" width="14" height="14" class="vp-plate" />
+          <rect x="-6.5" y="-6.5" width="13" height="13" class="vp-rule" />
+          <rect x="-4.6" y="-4.6" width="9.2" height="9.2" class="vp-rule" />
+        </g>
+        <text x={x + 14} y="12.5" class="num vp">1</text>
+      {/each}
       <text x="36" y="52" class="num small">×{rules.capital_multiplier}</text>
     </svg>
   </section>
@@ -317,59 +335,114 @@
     overflow: visible;
   }
 
+  /* The match's Engraved pieces (#839; render/style.ts): an own road is a band of the own colour
+     under a light lane, a buffer road dashed lanes on a dark casing. */
   .road {
     fill: none;
-    stroke: var(--you);
-    stroke-width: 4;
-    stroke-linecap: round;
+    stroke: var(--own);
+    stroke-opacity: 0.62;
+    stroke-width: 5.6;
   }
 
-  .road.faint {
-    stroke-dasharray: 3 6;
-    stroke: var(--text-dim);
+  .road.buffer {
+    stroke: var(--cut);
+    stroke-opacity: 0.4;
   }
 
-  .charge {
-    fill: var(--paper);
-    stroke: var(--bg);
-    stroke-width: 1;
-  }
-
-  .city {
-    fill: var(--bg);
-    stroke: var(--paper);
+  .lane {
+    fill: none;
+    stroke: #e6edf3;
+    stroke-opacity: 0.95;
     stroke-width: 2;
   }
 
-  .star {
-    fill: var(--paper);
+  .lane.buffer {
+    stroke: #aab2bd;
+    stroke-dasharray: 7 5;
   }
 
-  .cut {
+  /* A packet: a square of the own colour on a dark casing with an ink outline. */
+  .pk-casing {
+    fill: var(--casing);
+  }
+
+  .pk {
+    fill: var(--own);
+  }
+
+  .pk-ink {
     fill: none;
-    stroke: var(--warn);
-    stroke-width: 3;
+    stroke: var(--ink);
+    stroke-width: 0.8;
+  }
+
+  .cut,
+  .cut-casing {
+    fill: none;
     stroke-linecap: round;
   }
 
+  .cut-casing {
+    stroke: var(--casing);
+    stroke-width: 5.6;
+  }
+
+  .cut {
+    stroke: var(--warn);
+    stroke-width: 2.4;
+  }
+
   .num {
-    fill: var(--paper);
-    font-size: 15px;
-    font-weight: 800;
+    fill: var(--ink);
+    font: 600 15px var(--font-text);
+    font-variant-numeric: lining-nums tabular-nums;
     text-anchor: middle;
     dominant-baseline: central;
   }
 
   .num.small {
-    font-size: 12px;
+    font-size: 13px;
     fill: var(--text-dim);
   }
 
+  .num.vp {
+    font-size: 11px;
+    fill: var(--vp);
+  }
+
+  /* The gilt lozenge of victory points: a dark square with two gilt squares. */
+  .vp-plate {
+    fill: var(--casing);
+  }
+
+  .vp-rule {
+    fill: none;
+    stroke: var(--vp);
+    stroke-width: 1;
+  }
+
+  /* The planned order: a dark casing round a dark plate hatched in the own colour, a hairline edge. */
+  .ribbon-casing {
+    fill: var(--plate);
+    fill-opacity: 0.9;
+    stroke: var(--casing);
+    stroke-width: 4;
+    stroke-linejoin: round;
+  }
+
   .ribbon {
-    fill: var(--you);
-    fill-opacity: 0.35;
-    stroke: var(--you);
-    stroke-width: 2;
+    fill: url(#howto-hatch-own);
+  }
+
+  .hatch-own {
+    fill: var(--own);
+    opacity: 0.85;
+  }
+
+  .ribbon-edge {
+    fill: none;
+    stroke: var(--own);
+    stroke-width: 1.2;
     stroke-linejoin: round;
   }
 

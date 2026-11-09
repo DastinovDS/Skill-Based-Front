@@ -9,7 +9,7 @@ import {
   sightOf,
   type MotionClock,
 } from './menuMotion.ts';
-import { RAIL_RIGHT, layoutScene, type BackdropPhase } from './menuScene.ts';
+import { layoutScene, railRight, type BackdropPhase } from './menuScene.ts';
 import { storyOf, type Story } from './menuStory.ts';
 
 /** The calls a frame makes on a 2D canvas, with the numbers they take. */
@@ -33,6 +33,7 @@ class Recorder {
   stroke(): void {}
   fill(): void {}
   setLineDash(): void {}
+  clip(): void {}
   rotate(): void {}
   setTransform(): void {}
   clearRect(): void {}
@@ -63,6 +64,8 @@ class Recorder {
 }
 
 const scene = layoutScene(MENU_MAP, 1280, 800);
+/** The text rail of the main screen ends here at 1280 px (#845). */
+const RAIL_RIGHT = railRight(1280);
 const story = storyOf(scene) as Story;
 
 function frame(phase: BackdropPhase, t: number, waited = 0, reduced = false): Recorder {
@@ -83,10 +86,11 @@ const PHASES: readonly BackdropPhase[] = ['idle', 'search', 'found', 'confirmed'
 describe('the places of the story on the menu map (#474)', () => {
   it('gathers at Mossgate, meets at Fordham, the opponent comes from Long Meadow', () => {
     expect(story).not.toBeNull();
-    const at = (p: { x: number; y: number }): [number, number] => [p.x, p.y];
-    expect(at(story.frontCity)).toEqual([690, 420]);
-    expect(at(story.meeting)).toEqual([845, 420]);
-    expect(at(story.entry)).toEqual([910, 525]);
+    expect(story.frontCity.name).toBe('Mossgate');
+    expect(story.meeting.name).toBe('Fordham');
+    expect(story.entry.name).toBe('Long Meadow');
+    // On the middle line of the valley, as in the mockup.
+    expect(story.frontCity.y).toBe(story.meeting.y);
   });
 
   it('sends the scout down the valley road into the fog edge, short of the enemy capital', () => {
