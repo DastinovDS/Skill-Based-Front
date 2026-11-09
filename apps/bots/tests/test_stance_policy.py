@@ -108,6 +108,28 @@ def test_the_burn_comes_before_full_warehouses() -> None:
     assert _want(cp=500, stock=12, cap=12) is Stance.ECONOMY
 
 
+def test_burning_cp_step_on_from_the_stance_in_force() -> None:
+    """A War personality whose CP still burn in Balance goes on to Economy; in Economy it stays."""
+    war = {**PARAMS, "stance_midgame": 2}
+    inputs = StanceInputs(Phase.MIDGAME, 500, _army(), False, Stance.WAR)
+    assert wanted_stance(MVP6, war, inputs, insight=True) is Stance.BALANCE
+    inputs = StanceInputs(Phase.MIDGAME, 500, _army(), False, Stance.BALANCE)
+    assert wanted_stance(MVP6, war, inputs, insight=True) is Stance.ECONOMY
+    inputs = StanceInputs(Phase.MIDGAME, 500, _army(), False, Stance.ECONOMY)
+    assert wanted_stance(MVP6, war, inputs, insight=True) is Stance.ECONOMY
+    inputs = StanceInputs(Phase.MIDGAME, 300, _army(), False, Stance.ECONOMY)
+    assert wanted_stance(MVP6, war, inputs, insight=True) is Stance.WAR  # no burn: back to War
+
+
+def test_a_full_capital_steps_toward_war() -> None:
+    """A full capital spills or burns its charge (DEC-43, item A8): a faster one adds nothing."""
+    economy = {**PARAMS, "stance_midgame": 0}
+    inputs = StanceInputs(Phase.MIDGAME, 300, _army(stock=2), False, Stance.ECONOMY, True)
+    assert wanted_stance(MVP6, economy, inputs, insight=True) is Stance.BALANCE
+    inputs = StanceInputs(Phase.MIDGAME, 300, _army(stock=2), False, Stance.ECONOMY, False)
+    assert wanted_stance(MVP6, economy, inputs, insight=True) is Stance.ECONOMY
+
+
 def test_the_steps_stay_in_the_three_stances() -> None:
     war = {**PARAMS, "stance_midgame": 2}
     economy = {**PARAMS, "stance_midgame": 0}

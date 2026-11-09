@@ -195,10 +195,11 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     ``BANK_TICKS`` unpaid. The benchmark ``smart_hoarder`` keeps neither (its ``STRIKE_BANK``).
 24. **The stance policy under** ``[stances]`` (#881, DEC-44; ``gow_bots.bots.stance``). The stance
     of the phase (``stance_opening``, ``stance_midgame``, ``stance_late``: 0 Economy, 1 Balance,
-    2 War), one step toward Economy while the next CP quantum would burn or units wait for
-    charges the warehouses do not have, one step toward War while the warehouses are full or the
-    capital is pressed with few CP; at most one change per ``stance_dwell`` ticks. The rusher
-    (and the exploiter) stay in War, the expander opens in War, the turtle digs in in Economy,
+    2 War), one step toward Economy while the next CP quantum would burn (on from the stance in
+    force while they keep burning) or units wait for charges the warehouses do not have, one step
+    toward War while the warehouses or the capital's are full or the capital is pressed with few
+    CP; at most one change per ``stance_dwell`` ticks. The rusher
+    (and the exploiter) stay in War, the expander opens in War, the turtle opens in Economy,
     the hoarder hoards in Economy and strikes in War late; the others play Balance. Without
     ``insight`` only the stance of the phase.
 25. **The attack estimate before contact** (#881, DEC-40; ``CampaignBot.support``, ``meets``).
@@ -1564,7 +1565,9 @@ class SmartBot(CampaignBot):
             return
         view = ctx.view
         pressed = self.danger or self.alarm or bool(self.strikes_at(view))
-        inputs = StanceInputs(self.phase, a.cp, a.own, pressed)
+        home = view.nodes[self.home]
+        full = home.owner == self.player and 0 < (home.warehouse_cap or 0) <= (home.warehouse or 0)
+        inputs = StanceInputs(self.phase, a.cp, a.own, pressed, view.me.stance, full)
         want = wanted_stance(self.rules, self.params, inputs, insight=self.tempo.insight)
         dwell = self.params["stance_dwell"]
         cmd = self.stance_policy.command(view.me.stance, want, ctx.tick, dwell)
@@ -2696,8 +2699,7 @@ class SmartTurtle(SmartBot):
         "road_keep": ParamRange(250, 350),
         "respond": ParamRange(2, 2),
         "worth_defense": ParamRange(1, 1),
-        "stance_opening": ParamRange(0, 0),  # item 24: Economy while it digs in, Balance late
-        "stance_midgame": ParamRange(0, 0),
+        "stance_opening": ParamRange(0, 0),  # item 24: Economy while it claims its half
     }
 
     def __init__(

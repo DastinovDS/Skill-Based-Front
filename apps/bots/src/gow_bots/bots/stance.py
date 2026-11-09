@@ -13,17 +13,19 @@ of the match (``estimate.phase``), all integer:
 1. **The stance of the phase** (``stance_opening``, ``stance_midgame``, ``stance_late``): an index
    of ``STANCES``, 0 Economy, 1 Balance, 2 War; the personality's character (the rusher leans War,
    the turtle and the hoarder lean Economy early).
-2. **One step toward Economy** while the next CP quantum does not fit under the cap (it burns in
-   part or in full, DEC-02: more CP buy nothing there, more charges do) or while ``stance_wait`` own
-   discharged units wait in own nodes and the own city warehouses are less than half full (the
-   charges are short).
-3. **One step toward War** otherwise, while the own city warehouses are at least ``stance_full``
-   percent full and fewer than ``stance_wait`` units wait (the charges are plenty, CP are what the
-   bot spends), or while the bot is *pressed* (the own capital in danger or an enemy planned strike
-   aimed at an own node, both public) with fewer than ``stance_cp_low`` CP in hundredths (the
-   answers are orders, recruits and fortifications: CP).
-4. Without ``insight`` (the ``easy`` level, ``gow_bots.bots.tempo``) only item 1: the bot does not
-   read the position.
+2. **The CP burn.** While the next CP quantum does not fit under the cap (it burns in part or in
+   full, DEC-02: more CP buy nothing there, more charges do) the stance is one step toward Economy
+   from the lower of item 1 and the stance in force: a bot that cannot spend its CP (a slow level,
+   ``gow_bots.bots.tempo``) steps on to Economy, one step per dwell, while they keep burning.
+3. **One step toward Economy** otherwise while ``stance_wait`` own discharged units wait in own
+   nodes and the own city warehouses are less than half full (the charges are short).
+4. **One step toward War** otherwise while the charges are plenty: the own city warehouses are at
+   least ``stance_full`` percent full with fewer than ``stance_wait`` units waiting, or the own
+   capital's warehouse is full (a full capital spills or burns its charge, DEC-43, item A8: a
+   faster capital adds nothing); or while the bot is *pressed* (the own capital in danger or an
+   enemy planned strike aimed at an own node, both public) with fewer than ``stance_cp_low`` CP in
+   hundredths (the answers are orders, recruits and fortifications: CP).
+5. Without ``insight`` (``Tempo.insight``) only item 1: the bot does not read the position.
 
 The ``PARAMS`` keys start with ``stance_`` (``base.LATE_KEYS``), so ``choose_params`` draws them
 from their own stream: the other parameters of a seed stay as they were.
@@ -59,6 +61,10 @@ class StanceInputs:
     own: Army
     pressed: bool
     """The own capital in danger, or an enemy planned strike aimed at an own node."""
+    now: Stance = Stance.BALANCE
+    """The stance in force (``SelfView.stance``)."""
+    capital_full: bool = False
+    """The own capital is held and its warehouse is full."""
 
 
 def wanted_stance(
@@ -77,9 +83,11 @@ def wanted_stance(
             and not waiting
         )
         short = inputs.pressed and inputs.cp < params["stance_cp_low"]
-        if burn or starving:
+        if burn:
+            at = min(at, STANCES.index(inputs.now)) - 1
+        elif starving:
             at -= 1
-        elif plenty or short:
+        elif plenty or inputs.capital_full or short:
             at += 1
     return STANCES[max(0, min(len(STANCES) - 1, at))]
 
