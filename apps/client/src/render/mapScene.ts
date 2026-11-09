@@ -6,6 +6,7 @@ import { CameraController } from './cameraController.ts';
 import { CityView } from './cityView.ts';
 import { AlertView } from './alertView.ts';
 import { EffectsView } from './effectsView.ts';
+import { hairFloor } from './engraving.ts';
 import { FrameGuard } from './frameGuard.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
@@ -32,7 +33,7 @@ import type { RenderSource } from './source.ts';
 import { SightView } from './sightView.ts';
 import { SupplyView } from './supplyView.ts';
 import { FlowView } from './flowView.ts';
-import { levelNodes } from './flowLayout.ts';
+import { aheadNodes, flowOn } from './flowLayout.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
@@ -123,7 +124,7 @@ export class MapScene {
   private readonly forts: FortView;
   /** The toll of the lines (K6): its own layer, shown in the «Supply» mode too. */
   private readonly tolls: TollView;
-  /** The own nodes of the supply level (T1) of the snapshot on screen. */
+  /** The own nodes ahead of the supply level of the snapshot on screen (crosshatched in the «Supply» view). */
   private levelCells: readonly number[] = [];
   private readonly sight: SightView;
   private readonly alerts: AlertView;
@@ -356,7 +357,7 @@ export class MapScene {
     if (frame === undefined || frame === null || this.source === null) return;
     // Asked once per frame and first: the «Supply» mode swaps the picture before anything draws.
     const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
-    this.setSupplyMode(overlay.supply !== null);
+    this.setSupplyMode(overlay.supply !== null, !flowOn(frame.base.view));
     this.setTerrainMode(overlay.terrain);
     // The selected city shows the free slots of its queue; the rings that ask for a look pulse.
     this.cities.setSelected(overlay.selection?.kind === 'node' ? overlay.selection.id : null);
@@ -390,11 +391,13 @@ export class MapScene {
         delays,
       );
       this.cities.setCaptureDelays(delays);
+      // The walls of a captured node fall once its winner has walked in (#858).
+      this.forts.setCaptureDelays(delays);
       // The Ruled veil over the areas the snapshot hides (#842).
       this.view.setHidden(veilCities(frame.base.view.nodes));
       const edges = frame.base.view.edges;
       this.view.setRoads(edges);
-      this.levelCells = levelNodes(frame.base.view, this.me);
+      this.levelCells = aheadNodes(frame.base.view, this.me);
       this.cities.update(
         frame.base,
         this.source.recruitTicks ?? null,
@@ -468,32 +471,33 @@ export class MapScene {
     this.supply.setTickHz(tickHz);
     this.supply.setProvinceWarehouse(this.source.provinceWarehouse ?? 0);
     this.supply.update(frame, overlay.supply);
-    // The supply flow (DEC-43): the level fill in the «Supply» mode only; the normal map shows the
-    // starving marks and nothing else of it (ui-style 42).
+    // The supply flow (DEC-43): the crosshatch ahead of the level in the «Supply» mode only (Canal,
+    // #858); the normal map shows the starving marks and nothing else of it (ui-style 42).
     this.view.setLevel(this.levelCells, overlay.supply === null ? 0 : 1);
     this.flow.update(frame.base, overlay.supply === null);
     // The road fortifications, on both maps; the road pick adds a ghost of the line on every road it reaches.
     this.forts.setBuildTicks(this.source.fortBuildTicks ?? 0);
-    this.forts.setTickHz(tickHz);
     this.forts.update(frame.base.view, frame.tick, overlay.fortPick ?? null);
+    this.forts.advance(this.frameMs);
     this.sight.update(this.terrainOn, frame.base.view.nodes, this.layers.world.scale.x);
     this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
 
   /**
-   * The «Supply» map mode (DEC-28, item 8): a flat picture of its own. The terrain, the groups, the
-   * intents, the fog and the effects are hidden (`SupplyView` draws on the `supply` layer); the
-   * territory gets a flat tint and the cities lose the garrison, queue and barracks marks.
+   * The «Supply» map mode (DEC-28, item 8), "Canal" (#858): the map keeps its picture and its fog; the
+   * groups, the intents and the effects are hidden (`SupplyView` draws on the `supply` layer), the own
+   * land is darkened and the cities lose the queue and alert marks. `pipes`: an economy before the
+   * flow, whose own roads are pipes.
    */
-  private setSupplyMode(on: boolean): void {
+  private setSupplyMode(on: boolean, pipes: boolean): void {
+    this.view.setSupplyMode(on, on && pipes);
     if (on === this.supplyOn) return;
     this.supplyOn = on;
-    this.view.setSupplyMode(on);
     this.cities.setSupplyMode(on);
     this.entities.setSupplyMode(on);
-    const { groups, intents, fog, effects } = this.layers.layer;
-    for (const layer of [groups, intents, fog, effects]) layer.visible = !on;
+    const { groups, intents, effects } = this.layers.layer;
+    for (const layer of [groups, intents, effects]) layer.visible = !on;
   }
 
   /**
@@ -579,6 +583,7 @@ export class MapScene {
     this.supply.setLabelResolution(resolution);
     this.forts.setLabelResolution(resolution);
     this.forts.setCameraScale(camera.scale);
+    this.forts.setDeviceResolution(this.app.renderer.resolution);
     // What is drawn at one unit a CSS px (the arenas of fights, the bonus of plans) needs the device pixel ratio only.
     const screen = labelResolution(1, this.app.renderer.resolution);
     this.names.setCameraScale(camera.scale);
@@ -586,6 +591,7 @@ export class MapScene {
     this.screenSprites.setResolution(screen);
     this.effects.setScreenResolution(screen);
     this.tolls.setScreenResolution(screen);
+    this.tolls.setHairFloor(hairFloor(camera.scale, this.app.renderer.resolution));
     this.intents.setScreenResolution(screen);
     this.effects.setCameraScale(camera.scale);
     // The canvas in the px of the world times the scale: the arenas of fights keep inside it.

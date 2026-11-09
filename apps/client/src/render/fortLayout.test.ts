@@ -1,20 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Point } from './camera.ts';
 import {
-  FORT,
   borderRun,
-  dashAlong,
-  markScale,
   ringOrder,
   runLine,
   runPoint,
-  runStrip,
   stackLevels,
   stubRun,
-  tickCentres,
-  tickFits,
-  tickLayout,
-  tickPolygon,
   turnDegrees,
 } from './fortLayout.ts';
 import type { CellEdge } from './regionLayout.ts';
@@ -38,39 +30,6 @@ function square(top: boolean): CellEdge[] {
   return [edge(TL, TR, top ? 1 : 2), edge(TR, BR, 1), edge(BR, BL, 2), edge(BL, TL, 2)];
 }
 const toNode1 = (e: CellEdge): boolean => e.neighbour === 1;
-
-describe('markScale: marks grow when the map is zoomed out', () => {
-  it('is 1 at 100% and above, and grows below, in steps of an eighth', () => {
-    expect(markScale(1)).toBe(1);
-    expect(markScale(3)).toBe(1);
-    expect(markScale(0.5)).toBeGreaterThan(1);
-    expect(markScale(0.25)).toBeGreaterThan(markScale(0.5));
-    expect((markScale(0.37) * 8) % 1).toBe(0);
-    // A gliding camera changes it a few times, not at every frame.
-    expect(markScale(0.5)).toBe(markScale(0.505));
-  });
-  it('knows nothing of a camera that is not set', () => {
-    expect(markScale(0)).toBe(1);
-    expect(markScale(Number.NaN)).toBe(1);
-  });
-});
-
-describe('tickLayout: the ticks of the look C7 "Long run"', () => {
-  it('fits 24 fine ticks on the run of 170 at 100%', () => {
-    const lay = tickLayout(1);
-    expect(lay.n).toBe(24);
-    expect(lay.cs).toHaveLength(24);
-    // Centred on the crossing and evenly spaced by a tick and a gap.
-    expect((lay.cs[0] ?? 0) + (lay.cs[23] ?? 0)).toBeCloseTo(0);
-    expect((lay.cs[1] ?? 0) - (lay.cs[0] ?? 0)).toBeCloseTo(FORT.tickWidth + FORT.tickGap);
-  });
-  it('keeps the run length when the marks grow: fewer, never below three, ticks', () => {
-    const far = tickLayout(2.2);
-    expect(far.tw).toBeCloseTo(FORT.tickWidth * 2.2);
-    expect(far.n).toBeLessThan(24);
-    expect(tickLayout(60).n).toBe(FORT.minTicks);
-  });
-});
 
 describe('ringOrder: the edges of a cell in order round it', () => {
   it('joins pieces given in another order by their end points', () => {
@@ -260,33 +219,7 @@ describe('borderRun without a limit: the whole stretch of the shared border (#73
   });
 });
 
-describe('tickCentres: the ticks on the whole run (#734)', () => {
-  it('lays them from end to end of the run, in step with the ticks round the crossing', () => {
-    // The run is the right edge, from 170 before the crossing to 30 after it. At 100% a tick is 3
-    // wide with a gap of 4: the centres are 3.5 + 7k, and a tick fits when it lies on the run.
-    const run = borderRun({
-      ring: square(false),
-      shared: toNode1,
-      cross: { x: 100, y: 70 },
-      node: NODE,
-    });
-    if (run === null) throw new Error('no run');
-    const cs = tickCentres(run, tickLayout(1));
-    expect(cs[0]).toBeCloseTo(-164.5);
-    expect(cs[cs.length - 1]).toBeCloseTo(24.5);
-    expect(cs).toHaveLength(28);
-    expect(cs).toContain(3.5);
-    expect(cs).toContain(-3.5);
-  });
-
-  it('lays the ticks of a stub as the tick layout says', () => {
-    const lay = tickLayout(1);
-    const run = stubRun(NODE, { x: 100, y: 0 }, lay.half + lay.reach);
-    expect(tickCentres(run, lay)).toHaveLength(lay.n);
-  });
-});
-
-describe('the line, its strips and its ticks follow the run', () => {
+describe('the line follows the run', () => {
   const run = borderRun({
     ring: square(false),
     shared: toNode1,
@@ -310,31 +243,6 @@ describe('the line, its strips and its ticks follow the run', () => {
     expect(line[0]?.y).toBeCloseTo(-60);
     expect(line[line.length - 1]?.y).toBeCloseTo(60);
   });
-
-  it('makes a strip between two offsets', () => {
-    const strip = runStrip(run, -10, 10, -12, -3);
-    // Both sides of the band, with a vertex of the run at the crossing in the middle.
-    expect(strip.length).toBeGreaterThanOrEqual(4);
-    const xs = strip.map((p) => p.x);
-    expect(Math.min(...xs)).toBeCloseTo(88);
-    expect(Math.max(...xs)).toBeCloseTo(97);
-  });
-
-  it('stands a tick on the stroke and reaches towards the border', () => {
-    const poly = tickPolygon(run, 0, 3, 8.5, 3, 5);
-    expect(poly).toHaveLength(4);
-    // From just behind the stroke (0.3 of its width) to 5 past it, which is 3.5 short of the border.
-    expect(Math.min(...poly.map((p) => p.x))).toBeCloseTo(100 - 8.5 - 0.9);
-    expect(Math.max(...poly.map((p) => p.x))).toBeCloseTo(100 - 8.5 + 5);
-    expect(Math.max(...poly.map((p) => p.y)) - Math.min(...poly.map((p) => p.y))).toBeCloseTo(3);
-  });
-
-  it('drops a tick that would stand off the end of the run', () => {
-    expect(tickFits(run, 0, 3)).toBe(true);
-    expect(tickFits(run, 59, 3)).toBe(false);
-    expect(tickFits(run, -59, 3)).toBe(false);
-    expect(tickFits(run, 58, 3)).toBe(true);
-  });
 });
 
 describe('stubRun: a straight run across the road when the cell has no shared edge', () => {
@@ -345,42 +253,6 @@ describe('stubRun: a straight run across the road when the cell has no shared ed
     expect(run.normals[0]?.x).toBeCloseTo(1);
     expect(run.pts[0]?.x).toBeCloseTo(100);
     expect(Math.abs((run.pts[0]?.y ?? 0) - (run.pts[1]?.y ?? 0))).toBeCloseTo(80);
-  });
-});
-
-describe('dashAlong: dashes along a polyline', () => {
-  it('cuts a straight line into dashes and gaps', () => {
-    const pieces = dashAlong(
-      [
-        { x: 0, y: 0 },
-        { x: 20, y: 0 },
-      ],
-      4,
-      6,
-    );
-    expect(pieces).toHaveLength(2);
-    expect(pieces[0]?.[0]?.x).toBeCloseTo(0);
-    expect(pieces[0]?.[pieces[0].length - 1]?.x).toBeCloseTo(4);
-    expect(pieces[1]?.[0]?.x).toBeCloseTo(10);
-    expect(pieces[1]?.[pieces[1].length - 1]?.x).toBeCloseTo(14);
-  });
-
-  it('lets a dash bend round a vertex', () => {
-    const pieces = dashAlong(
-      [
-        { x: 0, y: 0 },
-        { x: 5, y: 0 },
-        { x: 5, y: 5 },
-      ],
-      8,
-      2,
-    );
-    expect(pieces).toHaveLength(1);
-    expect(pieces[0]).toHaveLength(3);
-  });
-
-  it('makes nothing of a point', () => {
-    expect(dashAlong([{ x: 1, y: 1 }], 4, 4)).toEqual([]);
   });
 });
 

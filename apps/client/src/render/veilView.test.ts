@@ -106,10 +106,13 @@ describe('MapView, the Ruled veil over the hidden areas', () => {
     expect(fillsOf(ground()).map((f) => f.color)).toEqual([
       greyed(TERRAIN_FILL[terrain], RULED_VEIL.grey),
     ]);
-    // The ground goes with the picture in the «Supply» mode.
+    // The «Supply» mode keeps the picture (Canal, #858); the ground goes with it in the terrain mode.
     view.setSupplyMode(true);
-    expect(ground()?.visible).toBe(false);
+    expect(ground()?.visible).toBe(true);
     view.setSupplyMode(false);
+    view.setTerrainMode(true);
+    expect(ground()?.visible).toBe(false);
+    view.setTerrainMode(false);
     expect(ground()?.visible).toBe(true);
   });
 

@@ -511,20 +511,14 @@ export const HELMET_SELECT = {
 } as const;
 
 /**
- * A packet of the automatic supply is a small square with a tail of two fainter squares behind it
- * (a charge is a square, ui-style 21); a one-off transfer a bigger square with a double outline.
- * An opponent one (a replay shows both) has a dark centre.
+ * A packet of the automatic supply, Engraved (#858; mockup `packet`): a square of the owner's colour
+ * on a dark casing (`casing` wide), an ivory outline at `outline`, turned along its road; a one-off
+ * transfer is a bigger square with a double outline. An opponent one (a replay shows both) has a
+ * dark centre.
  */
-export const PACKET_SIDE = 8;
-export const PACKET_OUTLINE = { width: 1.5, color: BG } as const;
+export const PACKET_SIDE = 6;
+export const PACKET_ENGRAVED = { casing: 9.2, outline: 8, ink: 0.8 } as const;
 export const PACKET_TRANSFER = { side: 11, ring: 15, ringWidth: 1.2, outline: 1.6 } as const;
-/** The tail: two squares behind the packet, `distance` from it along the road, fainter and smaller. */
-export const PACKET_TAIL = [
-  { distance: 8, side: 6, alpha: 0.6 },
-  { distance: 14, side: 5, alpha: 0.3 },
-] as const;
-/** A transfer is bigger: its tail starts this much further back. */
-export const PACKET_TAIL_TRANSFER_EXTRA = 4;
 /** Inside this distance past a city rim a packet shrinks and fades into the city icon. */
 export const PACKET_FADE_MARGIN = 8;
 export const PACKET_MIN_SCALE = 0.3;
@@ -800,45 +794,27 @@ export const GHOST_CP = {
 // road is a pipe whose bore is its level (#429), and only what supply is about is drawn on top.
 // Opposite flows on one road use opposite halves of the pipe.
 
-/** The territory tint of the layer (the normal map: `TERRITORY_ALPHA`): flat, no terrain under it. */
-export const SUPPLY_TERRITORY_ALPHA = 0.34;
 /**
- * The supply level (T1 "Bright fill", DEC-43, ui-style 42): the cells of the leaf level are lit in
- * a lighter own blue with a thin light rim toward the rear (the rim carries it in grey scale). Only
- * in the «Supply» mode. A change of the level fades over `fadeMs` (instant under "less motion").
+ * The «Supply» view, "Canal" (#858; #829 rounds 3 to 5, ui-style 54f): the map keeps its picture; the
+ * own land is darkened (`shade`), the own nodes ahead of the level are crosshatched in the own colour
+ * (`ahead`: two hatches at +-45 degrees), and a change of the level fades over `fadeMs` (instant under
+ * "less motion").
  */
-export const FLOW_LEVEL = {
-  color: 0x6aa8ff,
-  alpha: 0.4,
-  rimColor: PAPER,
-  rimAlpha: 0.95,
-  rimWidth: 2,
-  rimInset: 2.5,
+export const CANAL_LAND = {
+  shade: 0x0e0c09,
+  shadeAlpha: 0.35,
+  ahead: { pitch: 3.4, width: 0.7, alpha: 0.55 },
   fadeMs: 600,
 } as const;
 /** The starving mark of a node under the flow: a triangle `half` wide each side and `height` high. */
 export const FLOW_STARVE = { half: 8, height: 14 } as const;
 /** The battle mode of the flow (the normal map): the starving mark off the lower right rim. */
 export const FLOW_BATTLE = { starveAngle: 45, starveGap: 9 } as const;
-/**
- * The «Supply» layer under the flow (DEC-43, ui-style 42): the warehouse as squares under the city
- * (a lid over a full one, an amber frame round a starving one), the hatched disc of a node ahead of
- * the level, the pocket hatch and the pinch mark of a bottleneck.
- */
+/** The «Supply» layer under the flow (Canal, #858): the pocket hatch and its plate. */
 export const FLOW_LAYER = {
-  slot: { w: 6, h: 5, gap: 1.6, drop: 5 },
-  /** The lid of a full warehouse: a bracket this far over the squares. */
-  lid: { lift: 4.5, width: 1.6 },
-  aheadHatch: { period: 4, width: 1.6, alpha: 0.85, grow: 2 },
   pocketHatch: { period: 5, width: 1.6, alpha: 0.5, grow: 3 },
-  pinch: { at: 0.72, arc: 7, gap: 9, width: 2.4, casing: 5.4 },
   plate: { height: 16, padX: 6, radius: 5, lift: 18 },
-  chevronDim: 0.45,
 } as const;
-/** The flat floor of the layer instead of the terrain. */
-export const SUPPLY_FLOOR = 0x141a22;
-/** The flat water of the layer on a map with a geography (DEC-36): darker than the land tint, bluer than the floor. */
-export const SUPPLY_WATER = 0x1b3347;
 /**
  * The pipes of the «Supply» layer (#429, variant B "Pipes"): the level of an own road is the bore of
  * its pipe (three widths, never a hue); a pipe with a flow is filled and its dashes run in the
@@ -875,16 +851,6 @@ export const SUPPLY_PACKET = {
   transferSide: 10,
   outline: 1.3,
 } as const;
-/** The warehouse gauge under an own city: a bar and the figure «stock/capacity» beside it. */
-export const SUPPLY_GAUGE = {
-  width: 32,
-  gap: 9,
-  height: 9,
-  bar: 5,
-  radius: 3,
-  restAlpha: 0.18,
-  font: 9.5,
-} as const;
 /** The front marker: a ring round the city and a badge with its number above it. */
 export const SUPPLY_MARKER = {
   ring: 8,
@@ -907,8 +873,6 @@ export const SUPPLY_LINE = {
   chevron: { half: 4.6, depth: 4, width: 2.4, casing: 1.7, every: 34 },
   ring: 7,
 } as const;
-/** Economy v2 (DEC-41, item 2): the factory badge of the «Supply» layer, off the rim of the city. */
-export const SUPPLY_FACTORY = { radius: 7.5, lift: 4 } as const;
 export const SUPPLY_CUT = {
   gap: 9,
   width: 2.6,

@@ -524,13 +524,14 @@ export class CityView {
   }
 
   /**
-   * The «Supply» map mode (DEC-28, item 8) shows no garrison ring, warehouse, recruit queue, towers
-   * or builds on the city: the layer of its own draws the warehouse.
+   * The «Supply» map mode (DEC-28, item 8), "Canal" (#858): the city keeps its ring, its warehouse
+   * lozenges, its towers and its bunker; the recruit queue, the alert rings, the build plates and the
+   * build arcs go (the layer draws what the supply is about).
    */
   setSupplyMode(on: boolean): void {
     if (on === this.supplyMode) return;
     this.supplyMode = on;
-    for (const marks of [this.rings, this.bars, this.forts, this.builds, ...this.siteBuilds]) {
+    for (const marks of [this.builds, ...this.siteBuilds]) {
       for (const mark of marks) mark.visible = !on && mark.spec !== null;
     }
     for (const layer of this.pipLayers) layer.visible = !on;
@@ -845,13 +846,13 @@ export class CityView {
     // Economy v2 (DEC-41): the bunker in the column on the left, the rim the owner's colour.
     const rim = kind === 'enemy' ? ENEMY : YOU;
     fort.set(state.fort ? siteMarkSpec('fort', rim) : null);
-    fort.visible = state.fort && !this.supplyMode;
+    fort.visible = state.fort;
     this.placeColumn(id, state, radius);
 
     const { capacity, warehouse } = state;
     const ringOn = capacity !== null;
     ring.set(ringOn ? cityRingSpec(radius, capacity, kind === 'you' ? state.garrison : 0) : null);
-    ring.visible = ringOn && !this.supplyMode;
+    ring.visible = ringOn;
     // A province has a warehouse only under economy v2 and only its owner sees it (DEC-41, item 13):
     // `stateOf` leaves `warehouse` null for every other province, so nothing is drawn there.
     const barOn = ringOn && warehouse !== null;
@@ -866,7 +867,7 @@ export class CityView {
         : null,
     );
     if (barOn) bar.position.set(0, lozengeRowY(radius));
-    bar.visible = barOn && !this.supplyMode;
+    bar.visible = barOn;
 
     const badge = this.badges[id];
     if (badge !== null && badge !== undefined) {
@@ -892,7 +893,7 @@ export class CityView {
       const { built, build } = state.towers[tower];
       const wasBuilding = slot.build !== null;
       const shown = (built || build !== null) && kind !== 'neutral';
-      slot.root.visible = shown && !this.supplyMode;
+      slot.root.visible = shown;
       slot.crown.visible = false;
       if (!shown) {
         slot.build = null;

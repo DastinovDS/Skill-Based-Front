@@ -12,7 +12,6 @@ import {
   BG,
   PAPER,
   SUPPLY_BULKHEAD,
-  SUPPLY_GAUGE,
   SUPPLY_LINE,
   SUPPLY_PACKET,
   SUPPLY_PIPE,
@@ -241,33 +240,20 @@ describe('SupplyView: the pipes (#429)', () => {
   });
 });
 
-describe('SupplyView: the warehouse gauge', () => {
+describe('SupplyView: the cities and the front markers', () => {
   beforeEach(() => {
     mockText();
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('draws the stock of an own city as a filled share of a bar with «stock/capacity» beside it', () => {
+  it('draws no gauge: the warehouse is the lozenges of the city (#858)', () => {
     const layers = createLayers();
     const view = new SupplyView(map, layers, 0, () => 14, testSprites());
     view.update(interpolateFrame(snapshot, null, 100), { source: null, targets: [], draft: [] });
     const { plates, texts } = parts(layers);
-    const places = snapshot.view.nodes.filter(
-      (n) =>
-        n.owner === 0 && n.warehouse !== null && n.warehouse_cap !== null && n.warehouse_cap > 0,
-    );
-    expect(places.length).toBeGreaterThan(0);
-    const rects = fills(plates).filter((s) => s.type === 'rectangle');
-    const held = rects.filter((s) => s.color === YOU);
-    expect(held).toHaveLength(places.filter((n) => (n.warehouse ?? 0) > 0).length);
+    expect(fills(plates).filter((s) => s.type === 'rectangle' && s.color === YOU)).toEqual([]);
     const shown = texts.children.filter((c) => c.visible).map((c) => (c as Text).text);
-    for (const n of places)
-      expect(shown).toContain(`${String(n.warehouse)}/${String(n.warehouse_cap)}`);
-    // The rest of the capacity is a pale bar, one for every city.
-    expect(rects.filter((s) => s.color === PAPER)).toHaveLength(places.length);
-    expect(SUPPLY_GAUGE.width).toBeGreaterThan(0);
-    // No circle stands for a charge of a warehouse.
-    expect(fills(plates).filter((s) => s.type === 'circle' && s.color === YOU)).toEqual([]);
+    expect(shown.some((t) => /^\d+\/\d+$/.test(t))).toBe(false);
     view.destroy();
   });
 

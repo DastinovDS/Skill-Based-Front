@@ -30,14 +30,14 @@ import {
   BAR_SEGMENT,
   BG,
   BUILD_PLATE,
+  CASING,
   COUNT_FONT_SIZE,
   CUT,
   HELMET_ENGRAVED,
   INK,
   GLYPH_COLOR,
-  PACKET_OUTLINE,
+  PACKET_ENGRAVED,
   PACKET_SIDE,
-  PACKET_TAIL,
   PACKET_TRANSFER,
   PAPER,
   SHIELD_BADGE_SCALE,
@@ -94,12 +94,10 @@ export class EntityKit {
   readonly contexts: GraphicsContext[] = [];
   /** The baked sprites of the tokens (`bakedShapes.ts`): helmets, shields. */
   readonly sprites: SpriteCache;
-  /** A packet of the automatic supply: a square (a charge, ui-style 21). */
+  /** A packet of the automatic supply: an engraved square (#858), turned along its road by the view. */
   readonly packet: Readonly<Record<PlayerId, GraphicsContext>>;
   /** A one-off transfer: a bigger square with a double outline. */
   readonly packetTransfer: Readonly<Record<PlayerId, GraphicsContext>>;
-  /** The squares of the tail behind a packet, nearest first (`PACKET_TAIL`). */
-  readonly packetTail: Readonly<Record<PlayerId, readonly GraphicsContext[]>>;
   /** The plate with the level change on a road being built. */
   readonly buildPlate: GraphicsContext;
   readonly textStyle: TextStyle;
@@ -123,10 +121,15 @@ export class EntityKit {
       g.rect(-side / 2, -side / 2, side, side);
     const packet = (owner: PlayerId): GraphicsContext =>
       this.context((g) => {
-        square(g, PACKET_SIDE).fill(ownerColor(me, owner)).stroke(PACKET_OUTLINE);
+        square(g, PACKET_ENGRAVED.casing).fill(CASING);
+        square(g, PACKET_SIDE).fill(ownerColor(me, owner));
         // The opponent's packet has a dark centre: the side is not told by the hue alone.
-        if (owner !== me) square(g, PACKET_SIDE * 0.4).fill(BG);
-        return g;
+        if (owner !== me) square(g, PACKET_SIDE * 0.4).fill(CASING);
+        return square(g, PACKET_ENGRAVED.outline).stroke({
+          width: PACKET_ENGRAVED.ink,
+          color: INK,
+          join: 'miter',
+        });
       });
     const transfer = (owner: PlayerId): GraphicsContext =>
       this.context((g) => {
@@ -137,15 +140,8 @@ export class EntityKit {
         // The second outline, apart from the square: a transfer is told from a packet by its shape.
         return square(g, ring).stroke({ width: ringWidth, color });
       });
-    const tail = (owner: PlayerId): GraphicsContext[] =>
-      PACKET_TAIL.map((step) =>
-        this.context((g) =>
-          square(g, step.side).fill({ color: ownerColor(me, owner), alpha: step.alpha }),
-        ),
-      );
     this.packet = { 0: packet(0), 1: packet(1) };
     this.packetTransfer = { 0: transfer(0), 1: transfer(1) };
-    this.packetTail = { 0: tail(0), 1: tail(1) };
     this.buildPlate = this.context((g) =>
       g
         .roundRect(

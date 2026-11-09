@@ -537,7 +537,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.destroy();
   });
 
-  it('hides the marks in the Supply view and brings them back', () => {
+  it('hides the queue, the build and the alert in the Supply view (Canal keeps the towers) and brings them back', () => {
     const { view, nodes } = make();
     view.update(
       withCity({
@@ -555,7 +555,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     );
     expect(marks.map((m) => m.visible)).toEqual([true, true, true, true]);
     view.setSupplyMode(true);
-    expect(marks.map((m) => m.visible)).toEqual([false, false, false, false]);
+    expect(marks.map((m) => m.visible)).toEqual([false, false, false, true]);
     view.setSupplyMode(false);
     expect(marks.map((m) => m.visible)).toEqual([true, true, true, true]);
     view.destroy();

@@ -4,10 +4,8 @@ import {
   aheadNodes,
   downhillRoads,
   flowOn,
-  fullNodes,
   levelNodes,
   packetRoads,
-  pinchRoads,
   pocketNodes,
   roadKey,
   shiftLabel,
@@ -156,7 +154,7 @@ describe('the roads of the flow (chevrons) and the packets on them', () => {
   });
 });
 
-describe('the node marks: starving, full, bottlenecks', () => {
+describe('the node marks: starving', () => {
   it('an empty level node with nothing on the way is starving, one with a packet coming is not', () => {
     const v = view(0);
     expect(starvingNodes(v, 0)).toEqual([3, 7]);
@@ -189,21 +187,6 @@ describe('the node marks: starving, full, bottlenecks', () => {
       location: { kind: 'edge' as const, edge: 1, from_node: 1, progress: 100 },
     };
     expect(starvingNodes(view(0, { groups: [moving] }), 0)).not.toContain(1);
-  });
-
-  it('a full warehouse is stock >= capacity', () => {
-    // The capital holds 6 of 6.
-    expect(fullNodes(view(0), 0)).toEqual([0]);
-    const v = view(0);
-    const nodes = v.nodes.map((n) => (n.id === 2 ? { ...n, warehouse: 3 } : n));
-    expect(fullNodes({ ...v, nodes }, 0)).toEqual([0, 2]);
-  });
-
-  it('a bottleneck is the road into a one-slot province, nothing for other warehouses', () => {
-    // Node 5 is a province the road 1 -> 5 (edge 4) leads into.
-    expect(pinchRoads(view(0), 0, map, index, 1)).toEqual([4]);
-    expect(pinchRoads(view(0), 0, map, index, 2)).toEqual([]);
-    expect(pinchRoads(view(0), 0, map, index, 0)).toEqual([]);
   });
 });
 

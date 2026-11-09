@@ -7,7 +7,7 @@
  * an own packet. What this module does is only picking: which nodes are the level, where the
  * chevrons of the «Supply» layer go, which nodes are starving.
  */
-import type { MapFile, PlayerId, View } from '../protocol.gen.ts';
+import type { PlayerId, View } from '../protocol.gen.ts';
 import type { EdgeIndex } from './supplyLayout.ts';
 
 /** The supply is the automatic flow (`ruleset_public.supply_model = "flow"`), seen in the view. */
@@ -106,40 +106,6 @@ export function starvingNodes(view: View, me: PlayerId): number[] {
       return n.front_dist === shift && !incoming.has(n.id);
     })
     .map((n) => n.id);
-}
-
-/** An own node whose warehouse is full (the lid over its squares). */
-export function fullNodes(view: View, me: PlayerId): number[] {
-  return view.nodes
-    .filter(
-      (n) =>
-        n.owner === me &&
-        n.warehouse !== null &&
-        n.warehouse_cap !== null &&
-        n.warehouse_cap > 0 &&
-        n.warehouse >= n.warehouse_cap,
-    )
-    .map((n) => n.id);
-}
-
-/**
- * Bottlenecks (the pinch mark `)(` of the mockup): the downhill road into an own province, whose
- * warehouse holds one charge and passes them on one at a time. Taken from the map (a province) and
- * the public warehouse numbers; no throughput is computed here.
- */
-export function pinchRoads(
-  view: View,
-  me: PlayerId,
-  map: MapFile,
-  index: EdgeIndex,
-  provinceWarehouse: number,
-): number[] {
-  if (provinceWarehouse !== 1) return [];
-  const edges = new Set<number>();
-  for (const road of downhillRoads(view, me, index)) {
-    if (map.nodes[road.to]?.kind === 'province') edges.add(road.edge);
-  }
-  return [...edges].sort((a, b) => a - b);
 }
 
 /** `leaf_shift` as the words of the control: "front" at 0, "−n" otherwise (a real minus sign). */
