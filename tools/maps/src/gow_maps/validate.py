@@ -6,11 +6,12 @@ graph and the attributes, not the picture: DEC-27, item 1), node names and borde
 (DEC-23, items 4, 5, 7), node degree, redundant approaches to valuable cities, neutral space,
 road lengths and, when switched on, the map size (DEC-27, item 5). Given a ruleset, also that
 no capital starts with more charges than its warehouse holds (``warehouse``; DEC-26, item 5; only
-the capital keeps the start stock of the map, DEC-41, item 9). A map with an authored geography (DEC-36, ``gow_maps.geo``) also
-gets the check ``geography``: areas of nodes share land only along a road, each area is one piece
-around its node, roads cross water only at a bridge, nodes keep clear of water, the vector file is
-baked for the map version. A generated map without a mirror (``meta.symmetry = "none"``, #771) gets
-the check ``fairness`` in place of ``symmetry`` and ``border``.
+the capital keeps the start stock of the map, DEC-41, item 9). A map with an authored geography
+(DEC-36, ``gow_maps.geo``) also gets the check ``geography``: areas of nodes share land only along
+a road, each area is one piece around its node, roads cross water only at a bridge, nodes keep
+clear of water, the vector file is baked for the map version. A generated map without a mirror
+(``meta.symmetry = "none"``, #771) gets the check ``fairness`` in place of ``symmetry`` and
+``border``.
 """
 
 import json
