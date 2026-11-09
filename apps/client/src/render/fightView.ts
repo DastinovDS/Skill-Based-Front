@@ -109,6 +109,8 @@ interface Arena {
   readonly view: Container;
   /** The ink leader down to the place of the fight, and on a road the meeting mark there. */
   readonly tether: Graphics;
+  /** What the leader was last drawn for: it is redrawn only when its geometry changes. */
+  leaderKey: string;
   readonly plate: BakedSprite;
   readonly chips: BakedSprite[];
   /** The chevron badges of the chips (#791), pooled: a chip has at most one up and one down. */
@@ -510,6 +512,7 @@ export class FightView {
         moreCharged,
         fill,
         head,
+        leaderKey: '',
       };
       this.arenas.push(arena);
     }
@@ -524,10 +527,13 @@ export class FightView {
     part.visible = true;
     // The ink leader (#856; mockup `leader`): from the foot of the plate down to the ring of the city,
     // or to the meeting point of a fight on a road, where a lozenge of amber rules marks it.
-    const g = arena.tether.clear();
     const road = place.node === null;
     const dx = (place.at.x - spot.x) / k;
     const dy = (place.at.y - spot.y) / k;
+    const key = `${road ? 'r' : 'n'}:${dx.toFixed(1)},${dy.toFixed(1)},${(place.ring / k).toFixed(1)}`;
+    if (key === arena.leaderKey) return;
+    arena.leaderKey = key;
+    const g = arena.tether.clear();
     const dist = Math.hypot(dx, dy);
     if (dist === 0) return;
     const ux = dx / dist;
