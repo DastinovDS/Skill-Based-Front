@@ -1,4 +1,4 @@
-"""scripts/check_golden_frozen.py (SIM-16): old golden replays stay untouched."""
+"""scripts/check_golden_frozen.py (SIM-16): old golden replays stay untouched or go whole."""
 
 import importlib.util
 from pathlib import Path
@@ -21,6 +21,7 @@ def test_rules() -> None:
         ("M", G + "v1/a.jsonl.gz"),  # regenerated: forbidden
         ("D", G + "v2/b.jsonl.gz"),  # removed: forbidden
         ("A", G + "v1/c.jsonl.gz"),  # added to an old version: forbidden
+        ("D", G + "v1/d.jsonl.gz"),  # an old version removed by a cleanup (#894): fine
     ]
     bad: list[str] = _mod.violations(changes, 2)
     assert [line.split()[1].rstrip(":") for line in bad] == [
