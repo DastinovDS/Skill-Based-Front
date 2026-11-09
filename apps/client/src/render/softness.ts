@@ -1,3 +1,5 @@
+// `import.meta.env` of Vite: the e2e package type-checks this file through `camera.ts` too.
+/// <reference types="vite/client" />
 /**
  * The softness of the Engraved lines of the map (#865): the owner found the light hairlines on the
  * dark ground too sharp. One place for the knobs every line of the map reads:
