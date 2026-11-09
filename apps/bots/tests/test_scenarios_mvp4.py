@@ -273,12 +273,12 @@ SLOW_SIDE: Final = {
 }
 """#894: under the stances of ``mvp-5`` (these positions were built for ``mvp-4``, which has none)
 these bots leave the pocket of player 1 later than 500 ticks while player 0 makes it; the code
-before #894 does the same under ``mvp-5``. A mirror difference to look into, not a rule."""
+before #894 does the same under ``mvp-5``. A mirror difference to look into (#899), not a rule."""
 
 
 def _slow_side(request: pytest.FixtureRequest, name: str, player: int, case: str) -> None:
     if (name, player, case) in SLOW_SIDE:
-        reason = "player 1 leaves the pocket late under mvp-5 (SLOW_SIDE)"
+        reason = "player 1 leaves the pocket late under mvp-5 (SLOW_SIDE, #899)"
         request.applymarker(pytest.mark.xfail(strict=True, reason=reason))
 
 
