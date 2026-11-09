@@ -1331,3 +1331,79 @@ test it: `capture.charge_cost = 1` against 0 with the same field (not run: #688 
 PASS 6 (V2, V3, V4a, V9, D1, D2), FAIL 5 (V4b: 24 matches a pair; V4c: side 0 of the mirror matches 0.36 to 0.53;
 V5a: no counter for the exploiter, `smart_rusher@hard`, `smart_strangler@hard`; V5b: `smart_strangler@hard` 0.88; V6),
 NO DATA 1 (V1: no floor bots), NOT COMPUTABLE 2 (V7, V8).
+
+## #881: the stance policy and the attack estimate before contact under `mvp-6` (2026-11-09)
+
+**The code** (`gow_bots.bots.stance`, `CampaignBot.support` and `meets`; items 24 and 25 of the `smart` docstring): under
+`[stances]` the smart bots take the stance of the match phase by personality (rusher and exploiter War; expander War,
+then Balance; turtle Economy, then Balance; hoarder Economy, Balance, War late; reactive and strangler Balance), one
+step toward Economy while units wait for charges the warehouses lack or the next CP quantum would burn (on from the stance
+in force while they keep burning), one step toward War while the warehouses or the capital are full or the capital is
+pressed with few CP; at most one change per `stance_dwell` (200..400) ticks. Under `combat.retreat = "none"` the shots an
+attack needs add the reinforcements a target can get within the fight (enemy neighbours seen at most 15 s ago whose
+road in is shorter than the rounds of the fight, the strongest in full and half of the others, times `contact_pct`) and
+the enemy figures met on the road in. Decision time: no measurable change (local full matches, a shared machine).
+
+GitHub run 42644204985 (`mise run tournament:gh --seeds 3`, the 16-bot field of #706 plus `smart_exploiter`, 17 bots,
+`mvp-6`, 4 maps, seeds 0..2, both sides, 3468 matches; code: branch `feature/881-bot-stances-no-retreat` 1ff1c02)
+against the post-merge smoke of #879, run 42634770750 (`develop` 88585c0, the same bots, seeds and maps). No crash,
+no unfinished match (1 draw), D1 and D2 pass. An earlier branch run (42639665178, the policy before its last commit:
+no step on toward Economy while CP keep burning, no "full capital" signal) is named where it differs.
+
+### Win rate against the other 16 [95%], and the new numbers per player and match (base / new)
+
+| bot | base | new | `SetStance` | contested sieges lost | captures | burned share | starved | CP income, burned (CP) |
+|---|---|---|---|---|---|---|---|---|
+| `smart_expander@easy` | 0.29 [0.25; 0.34] | 0.29 [0.24; 0.33] | 0 / 18.4 | 1.3 / 1.2 | 23.2 / 20.0 | 38.7% / 47.9% | 9.7 / 8.4 | 90, 8.5 / 81, 14.3 |
+| `smart_expander@normal` | 0.53 [0.48; 0.58] | 0.49 [0.45; 0.54] | 0 / 16.2 | 1.6 / 1.2 | 30.4 / 24.6 | 32.4% / 40.0% | 9.2 / 8.2 | 90, 2.0 / 86, 7.3 |
+| `smart_expander@hard` | 0.71 [0.67; 0.76] | 0.82 [0.77; 0.85] | 0 / 13.1 | 1.3 / 1.5 | 36.3 / 38.1 | 26.8% / 20.0% | 8.6 / 6.8 | 89, 0.1 / 96, 0.0 |
+| `smart_reactive@easy` | 0.23 [0.19; 0.28] | 0.19 [0.16; 0.24] | 0 / 15.9 | 1.2 / 0.9 | 30.9 / 24.7 | 31.3% / 43.0% | 8.6 / 10.2 | 89, 2.7 / 79, 7.1 |
+| `smart_reactive@normal` | 0.42 [0.37; 0.47] | 0.43 [0.38; 0.48] | 0 / 13.7 | 1.5 / 1.1 | 39.1 / 33.0 | 28.5% / 33.8% | 6.3 / 8.3 | 89, 0.8 / 83, 2.0 |
+| `smart_reactive@hard` | 0.49 [0.44; 0.54] | 0.66 [0.62; 0.71] | 0 / 17.4 | 0.9 / 1.0 | 42.6 / 40.4 | 27.0% / 29.6% | 5.6 / 6.5 | 89, 0.4 / 84, 0.1 |
+| `smart_rusher@easy` | 0.30 [0.26; 0.35] | 0.29 [0.24; 0.33] | 0 / 17.7 | 1.9 / 1.6 | 28.3 / 22.2 | 30.9% / 39.9% | 10.4 / 11.1 | 87, 3.0 / 87, 13.9 |
+| `smart_rusher@normal` | 0.70 [0.65; 0.74] | 0.47 [0.42; 0.52] | 0 / 13.7 | 3.0 / 2.1 | 40.3 / 30.2 | 19.5% / 29.2% | 7.5 / 9.8 | 84, 0.2 / 95, 6.4 |
+| `smart_rusher@hard` | 0.85 [0.82; 0.89] | 0.95 [0.92; 0.97] | 0 / 10.7 | 2.2 / 3.0 | 46.9 / 49.0 | 17.1% / 8.5% | 5.8 / 3.7 | 86, 0.0 / 103, 0.0 |
+| `smart_strangler@easy` | 0.19 [0.15; 0.23] | 0.15 [0.12; 0.19] | 0 / 16.7 | 1.6 / 1.2 | 30.4 / 24.6 | 28.8% / 41.6% | 8.9 / 9.6 | 89, 3.2 / 79, 7.9 |
+| `smart_strangler@normal` | 0.53 [0.48; 0.58] | 0.45 [0.40; 0.50] | 0 / 13.3 | 2.0 / 1.5 | 41.6 / 34.7 | 23.3% / 29.7% | 6.3 / 8.5 | 89, 0.3 / 84, 2.1 |
+| `smart_strangler@hard` | 0.76 [0.72; 0.80] | 0.79 [0.75; 0.83] | 0 / 17.7 | 1.4 / 1.3 | 46.9 / 44.5 | 23.3% / 22.4% | 4.1 / 4.7 | 88, 0.0 / 86, 0.0 |
+| `smart_turtle@easy` | 0.20 [0.16; 0.24] | 0.20 [0.16; 0.24] | 0 / 14.5 | 0.6 / 0.5 | 17.2 / 15.8 | 44.8% / 53.4% | 8.8 / 9.4 | 90, 12.3 / 73, 9.9 |
+| `smart_turtle@normal` | 0.34 [0.30; 0.39] | 0.28 [0.24; 0.33] | 0 / 14.6 | 0.7 / 0.5 | 19.0 / 17.1 | 44.0% / 50.7% | 7.8 / 8.8 | 90, 4.9 / 77, 5.5 |
+| `smart_turtle@hard` | 0.52 [0.47; 0.57] | 0.52 [0.47; 0.57] | 0 / 9.2 | 0.5 / 0.4 | 20.5 / 19.5 | 42.6% / 42.1% | 6.9 / 7.5 | 90, 0.8 / 89, 0.5 |
+| `smart_hoarder` | 0.60 [0.55; 0.65] | 0.61 [0.56; 0.65] | 0 / 12.7 | 0.9 / 1.0 | 41.3 / 34.9 | 23.5% / 28.6% | 5.8 / 8.4 | 87, 1.5 / 77, 1.3 |
+| `smart_exploiter` | 0.83 [0.78; 0.86] | 0.91 [0.88; 0.94] | 0 / 10.6 | 1.9 / 2.0 | 46.3 / 48.9 | 19.8% / 10.5% | 6.6 / 4.4 | 86, 0.0 / 102, 0.0 |
+
+`SetStance`: accepted stance changes per match (the stance switches). *Contested sieges lost*: the attacker's fights for
+an enemy node with a charged defender that did not end with the capture (`contested_sieges - contested_sieges_won`, the
+"fights lost by the attacker"). *Starved*: `charges_starved`. CP income: `cp_income` in CP. Over the whole field the
+contested sieges lost fall from 1.42 to 1.29 per player and match, the share won stays 0.17 / 0.16: the estimate sends
+fewer attacks into a defended node, but the reinforcements it sees are few (only sightings at most 15 s old count).
+
+The stance share of time (not in the tournament rows; 6 local matches on `crossroads`, seed 0, side 0 against
+`smart_exploiter`, the final policy): `smart_rusher` Economy 0% / Balance 89% / War 11% (6 switches), `smart_expander`
+43 / 36 / 21% (12), `smart_reactive` 73 / 11 / 16% (19), `smart_strangler` 69 / 24 / 6% (13), `smart_turtle` 40 / 43 /
+16% (18), `smart_hoarder` 59 / 29 / 13% (14). Under `mvp-6` a capture costs a charge, so units wait for charges most of
+the match and the "starving" step pulls every personality one step toward Economy from its phase stance.
+
+### Ladder, V6, validity
+
+- **Level ladder (V2):** 4 of 5 pass, as in the base (`smart_turtle` fails both times: hard over easy 0.92 [0.74; 0.98],
+  base 0.58, but normal over easy 0.50). `smart_expander@normal` over `@easy` 0.67 [0.47; 0.82] (base 0.92). Server
+  levels: `smart_strangler@hard` over `smart_reactive@normal` 1.00 (base 0.88), `smart_expander@hard` over
+  `smart_strangler@hard` 0.54 (base 0.54).
+- **V6** (share against `smart_exploiter`, n = 24 each): easy 0.00 (base 0.00), normal 0.00 (0.04), hard 0.21 [0.09;
+  0.40] (0.38), expert 0.33 [0.18; 0.53] (0.33). The exploiter itself gained (0.83 to 0.91 against the field): it got
+  the rusher's War policy too.
+- PASS 5 (V3, V4a, V9, D1, D2), FAIL 6 (V2, V4b, V4c, V5a, V5b `smart_rusher@hard` 0.95, V6), as the base (PASS 4: V9
+  failed there at 0.50).
+
+### Reading
+
+The `hard` bots gain (expander 0.71 to 0.82, reactive 0.49 to 0.66, rusher 0.85 to 0.95, exploiter 0.83 to 0.91): with
+their APM they spend the extra CP of War and cut the burned share (rusher 17% to 8.5%). The `normal` and `easy` levels
+lose ground against them (rusher@normal 0.70 to 0.47, strangler@normal 0.53 to 0.45) and burn more CP (rusher@easy 3 to
+14 CP a match): their command budget (6..7 APM, `tempo`) cannot spend the CP of a War stance, and every `SetStance`
+takes a command of the same bucket. The earlier branch run (42639665178) without the step on toward Economy had the
+same picture (rusher@normal 0.49, turtle@hard 0.37, hoarder 0.50); the step on toward Economy and the full-capital signal
+brought turtle@hard (0.52) and the hoarder (0.61) back to the base and left the rest about where they were. No number is
+tuned here: the `stance_*` and `contact_pct` `PARAMS` are for #689 (a per-level stance, or no War for a slow level, is a
+candidate there).
