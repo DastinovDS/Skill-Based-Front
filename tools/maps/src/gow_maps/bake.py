@@ -24,6 +24,9 @@ mockup: docs/design/mockups/out-of-game-style-r2.html), built on the layout of t
 The water of a map with a geography (``gow_maps.geo``) is dark stone too, engraved with lines that
 follow the shores, and the coast is a cut rule.
 
+Next to the background the bake writes its thumbnail ``maps/<id>.thumb.webp`` (#839): the same
+picture ``THUMB_WIDTH`` pixels wide, under the graph of a map card in the lobby and the replays.
+
 The picture covers exactly the world rectangle ``[0, width] x [0, height]`` at one pixel per world
 unit, so the client stretches nothing: the sprite sits at ``(0, 0)`` with the map's own size.
 
@@ -55,6 +58,8 @@ WARP = 40.0  # world units: how far the borders between node areas wander
 
 WEBP_QUALITY = 85
 MAX_WEBP_BYTES = 500_000  # #344: every background file is at most 0.5 MB
+THUMB_WIDTH = 200  # #839: the map card is 96 px wide; twice that for a dense screen, and a margin
+THUMB_QUALITY = 72
 SUPERSAMPLE = 3  # the detail layer is drawn 3x larger and reduced, for smooth edges
 BLEND_RADIUS = 7  # box-blur radius of the biome weights: the band between biomes is about 14 px
 BAND_WOBBLE = 0.10  # amplitude of the noise that makes the band wander
@@ -134,6 +139,12 @@ def background_path(map_path: str | Path) -> Path:
     """``maps/<id>.json`` -> ``maps/<id>.bg.webp`` (served by the server, map-format.md)."""
     path = Path(map_path)
     return path.with_name(f"{path.stem}.bg.webp")
+
+
+def thumb_path(background: str | Path) -> Path:
+    """``maps/<id>.bg.webp`` -> ``maps/<id>.thumb.webp`` (bundled by the client, #839)."""
+    path = Path(background)
+    return path.with_name(f"{path.name.removesuffix('.bg.webp')}.thumb.webp")
 
 
 # Seeds of the maps that were renamed in #390 (the Russian ids became English): they keep the seed
@@ -466,6 +477,25 @@ def encode_webp(pixels: Image8) -> bytes:
     return buf.getvalue()
 
 
+def encode_thumb(pixels: Image8) -> bytes:
+    """Lossy WebP of the picture ``THUMB_WIDTH`` pixels wide (its aspect kept)."""
+    image = Image.fromarray(pixels, "RGB")
+    height = max(1, round(image.height * THUMB_WIDTH / max(1, image.width)))
+    small = image.resize((THUMB_WIDTH, height), Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    small.save(buf, "WEBP", quality=THUMB_QUALITY, method=6)
+    return buf.getvalue()
+
+
+def write_thumb(background: str | Path) -> Path:
+    """Write the thumbnail of a baked background file next to it; returns its path."""
+    with Image.open(background) as image:
+        pixels: Image8 = np.asarray(image.convert("RGB"), dtype=np.uint8)
+    out = thumb_path(background)
+    out.write_bytes(encode_thumb(pixels))
+    return out
+
+
 def bake_background(mapdef: MapDef, out: str | Path, seed: int | None = None) -> None:
     """Write ``out`` (WebP). Raises ``ValueError``, writing nothing, if it is over the budget."""
     write_background(mapdef, render_background(mapdef, seed), out)
@@ -480,3 +510,4 @@ def write_background(mapdef: MapDef, pixels: Image8, out: str | Path) -> None:
             f"over the budget of {MAX_WEBP_BYTES}"
         )
     Path(out).write_bytes(data)
+    thumb_path(out).write_bytes(encode_thumb(pixels))

@@ -1,7 +1,9 @@
 """Command line: `gow-maps validate`, `mirror`, `preview`, `bake`, `generate`, `score`.
 
-`bake` of a map with an authored geography (DEC-36, `maps/src/<id>.geo.json`) also writes the
-vector file `maps/geo/<id>.json`. `generate` writes the map of a seed and its geography (#771).
+`bake` writes the background `maps/<id>.bg.webp` and its thumbnail `maps/<id>.thumb.webp` (#839);
+of a map with an authored geography (DEC-36, `maps/src/<id>.geo.json`) also the vector file
+`maps/geo/<id>.json`. `preview` draws over the background, so it runs after `bake`. `generate`
+writes the map of a seed and its geography (#771).
 """
 
 import argparse
@@ -77,8 +79,9 @@ def _preview(args: argparse.Namespace) -> int:
             ok = False
             continue
         out = preview_path(path)
-        render_preview(mapdef, out)
-        print(f"wrote {out}")
+        # Over the map's own baked ground when it has one (#839): bake first, then preview.
+        render_preview(mapdef, out, background_path(path))
+        print(f"wrote {out} ({out.stat().st_size} bytes)")
     return 0 if ok else 1
 
 
@@ -129,7 +132,7 @@ def _generate(args: argparse.Namespace) -> int:
     if not args.bake:  # the geography needs the bake: the rest of the checks can run now
         return 0 if _report(str(path), validate(mapdef, config, rules)) else 1
     ok = _bake(argparse.Namespace(files=[str(path)], seed=None)) == 0
-    render_preview(mapdef, preview_path(path))
+    render_preview(mapdef, preview_path(path), background_path(path))
     return 0 if _report(str(path), validate_file(path, config, rules)) and ok else 1
 
 

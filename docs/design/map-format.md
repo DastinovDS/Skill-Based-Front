@@ -480,11 +480,16 @@ themselves follow in file order, the mirror of node `i` is `N−1−i`. The road
 ## Preview
 
 `uv run gow-maps preview maps/*.json` (MAP-04, #16) draws next to each map
-`maps/<name>.preview.png` (matplotlib): roads (a dark line: level 1 at the start, a light
+`maps/<name>.preview.png` (matplotlib): roads (an ink line on a dark casing: level 1 at the start, a faint
 underlay: `max_level`), the border point (a circle on the road), nodes (color: the starting owner, shape:
 terrain, star: capital), labels with `id`, the node kind (S, M, L: small, medium, large city; P:
 province), the name, `vp` and the starting garrison "charged/units". The preview is for people only; the map pool
 and its character are described in [`maps/README.md`](../../maps/README.md).
+
+Since #839 it has the Engraved look of the match: the dark plate, the map's own baked background (`<id>.bg.webp`,
+darkened) under the graph, ink labels on a dark halo, the own and enemy colours of the match. It reads the background,
+so it runs after `bake`. The PNG is a palette of the picture's colours plus the exact colours of the pieces (about
+250 KB).
 
 ## The map pool on the server
 
@@ -503,7 +508,9 @@ files) are not served by the server. How the background works and how to rebake 
 
 ## Map background
 
-`uv run gow-maps bake maps/*.json` (MAP-05, #70) draws next to each map `maps/<id>.bg.webp`.
+`uv run gow-maps bake maps/*.json` (MAP-05, #70) draws next to each map `maps/<id>.bg.webp` and its thumbnail
+`maps/<id>.thumb.webp` (#839: the same picture 200 px wide, about 2 KB, under the graph of a map card in the lobby
+and the replays; the client bundles the thumbnails of the pool and of `maps/gen/`).
 The background is for looks only: the game rules do not read it. The baker is built on `numpy` and `Pillow` (the owner's decision
 2026-10-21, `ui-style.md`, 26.3; before #344 it was a PNG on the standard library).
 

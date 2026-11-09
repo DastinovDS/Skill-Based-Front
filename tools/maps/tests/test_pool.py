@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from gow_maps import geo
 from gow_maps.cli import main
@@ -147,6 +148,18 @@ def test_render_preview(tmp_path: Path) -> None:
     out = tmp_path / "pass.preview.png"
     render_preview(load_map(FIXTURES / "pass.json"), out)
     assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_render_preview_over_the_ground_keeps_the_owner_colours(tmp_path: Path) -> None:
+    # #839: the preview lies on the map's baked ground, a palette PNG that still has the exact
+    # colours of the two players and of the ink.
+    out = tmp_path / "narrows.preview.png"
+    render_preview(load_map(MAPS / "narrows.json"), out, MAPS / "narrows.bg.webp")
+    with Image.open(out) as image:
+        assert image.mode == "P"
+        colours = {colour for _, colour in image.convert("RGB").getcolors(1 << 16) or []}
+    for hex_colour in ("#86a6ea", "#e5785e", "#ece4d1"):
+        assert tuple(int(hex_colour[i : i + 2], 16) for i in (1, 3, 5)) in colours
 
 
 def test_cli_preview(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
