@@ -34,9 +34,9 @@ an own node the group does not fit (a group leaving a fight is exempt), ``recall
 into a node with room for the group, ``rally`` sends at most the free room (a split), and a
 recruit is queued only while the load leaves room for it.
 
-Each attack is a normal or a planned order by ``prefer_planned``, i.e. by the prices of the
-ruleset only (BOT-01). The capital keeps ``guard`` units at home: the group that would leave
-it below that is split first.
+Each attack is a normal order, or a planned one when only the bonus the group can gather makes
+it take the target (DEC-41, item 10). The capital keeps ``guard`` units at home: the group that
+would leave it below that is split first.
 
 Enemy strength (DEC-04 shows numbers only in ``EXACT`` places, and a target is a neighbour of
 an own node, so it is ``PRESENCE`` at best), the estimate ``estimate()``:
@@ -84,24 +84,13 @@ from gow_bots.bots.assess import edge_ticks
 from gow_bots.bots.base import Bot, ParamRange, node_of
 from gow_bots.bots.economy import (
     LeafShift,
-    bunker_site,
     factory_site,
     fort_site,
     leaf_shift_command,
-    line_commands,
     release_commands,
-    wants,
 )
-from gow_bots.bots.utility import (
-    defender_pool,
-    first_burn,
-    prefer_planned,
-    shots_to_take,
-    takes,
-    terrain_burned,
-)
+from gow_bots.bots.utility import defender_pool, first_burn, shots_to_take, takes, terrain_burned
 from gow_sim.commands import (
-    BuildBunker,
     BuildFactory,
     CancelOrder,
     Command,
@@ -110,12 +99,11 @@ from gow_sim.commands import (
     Move,
     Recruit,
     ReleasePlan,
-    SetStance,
     Split,
 )
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import AtNode, Detail, EnemyGroupView, GroupView, Mode, OnEdge, PlayerView, Stance
+from gow_sim.view import AtNode, Detail, EnemyGroupView, GroupView, Mode, OnEdge, PlayerView
 
 __all__ = ["CampaignBot", "Ctx", "Option"]
 
@@ -149,7 +137,7 @@ class Option:
     planned: bool
     need: int
     bonus: int = 0
-    """Economy v2: the bonus a planned order requests (DEC-41, item 10); 0 otherwise."""
+    """The bonus a planned order requests (DEC-41, item 10); 0 otherwise."""
 
 
 @dataclass(slots=True)
@@ -219,7 +207,6 @@ class CampaignBot(Bot):
     """Base of the strategy bots: see the module docstring."""
 
     name: ClassVar[str] = "strategy"
-    STANCE: ClassVar[Stance] = Stance.BALANCE
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         "radius": ParamRange(2, 3),  # farthest target of an order, in road hops
         "margin": ParamRange(0, 1),  # shots demanded above the estimate of the enemy
@@ -228,22 +215,17 @@ class CampaignBot(Bot):
         "recruit_keep": ParamRange(100, 250),  # CP left after a recruit
     }
     FACTORIES: ClassVar[int] = 2
-    """Economy v2: factories built beside the capital (``factory.max`` caps the sum)."""
-    BUNKERS: ClassVar[int] = 0
-    """Economy v2: bunkers kept at most (``bunker_site``)."""
+    """Factories built beside the capital (``factory.max`` caps the sum)."""
     CONTACT: ClassVar[bool] = False
     """The estimate before contact under ``combat.retreat = "none"`` (module docstring, #881)."""
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> None:
         super().__init__(mapdef, rules, seed=seed, player=player)
         self.gathering: dict[int, int] = {}
-        """Economy v2: own group id to the tick its gathering plan was first seen."""
-        self.lines_seen: dict[int, int] = {}
-        """Economy v2: own line id to the tick it was first seen."""
+        """Own group id to the tick its gathering plan was first seen (DEC-41, item 10)."""
         self.home = mapdef.capital(player)
         self.enemy_home = mapdef.capital(1 - player)
         self.recruited: dict[int, int] = {}
-        self.stance_tick: int | None = None
         self.memory: dict[int, tuple[int, int, int]] = {}
         """Remembered enemy strength by node: ``(tick, units, charged)``."""
         self.extra: dict[int, int] = {}
@@ -273,10 +255,7 @@ class CampaignBot(Bot):
         for cmd in self.fight_commands(view, tick, ctx.budget):  # DEC-24: fights first
             if self.spend(ctx, cmd) and isinstance(cmd, Move):
                 ctx.used[cmd.group] = True
-        self._stance(ctx)
-        for cmd in self.fronts(view):  # front markers on the front cities (DEC-28)
-            self.spend(ctx, cmd)
-        self.economy_v2(ctx)  # lines, factories, bunkers, plans (DEC-41)
+        self.economy_v2(ctx)  # factories, plans, the leaf shift, road fortifications (DEC-41)
         cmd = self.development(ctx.view, ctx.budget)  # DEC-26, item 11: before the orders
         if cmd is not None:
             self.spend(ctx, cmd)
@@ -289,47 +268,29 @@ class CampaignBot(Bot):
         self._recruit(ctx)
         return ctx.cmds
 
-    # Economy v2 (DEC-41) ---------------------------------------------------------------------
+    # Economy (DEC-41, DEC-43) ----------------------------------------------------------------
 
     def economy_v2(self, ctx: Ctx) -> None:
-        """The v2 play of ``gow_bots.bots.economy``: plans that waited depart, lines to the nodes
-        that want charges, one factory and one bunker build at a time; under the supply flow no
-        lines and no bunker, the leaf shift instead (DEC-43), and a road fortification when the
-        CP near their cap (``fort_site``, item D). Nothing under v1."""
-        if not self.rules.v2:
-            return
+        """The play of ``gow_bots.bots.economy``: plans that waited depart, one factory build at a
+        time, the leaf shift (DEC-43), and a road fortification when the CP near their cap
+        (``fort_site``, item D)."""
         view = ctx.view
         for cmd in release_commands(self, view, self.gathering, ctx.tick):
             if self.spend(ctx, cmd) and isinstance(cmd, ReleasePlan | CancelOrder):
                 ctx.used[cmd.group] = True
-        for cmd in line_commands(
-            self, view, wants(self, view, self.line_extra(ctx)), self.lines_seen
-        ):
-            self.spend(ctx, cmd)
         site = factory_site(self, view, self.FACTORIES)
         if site is not None:
             self.spend(ctx, BuildFactory(site))
-        site = bunker_site(self, view, self.bunkers())
-        if site is not None:
-            self.spend(ctx, BuildBunker(site))
-        road = fort_site(self, view, ctx.budget)  # DEC-43, item D: the CP sink of mvp-4
+        road = fort_site(self, view, ctx.budget)  # DEC-43, item D: the CP sink
         if road is not None:
             self.spend(ctx, FortifyRoad(*road))
-        shift = self.leaf_shift(ctx)  # the supply flow (DEC-43, item G)
+        shift = self.leaf_shift(ctx)  # DEC-43, item G
         if shift is not None:
             self.spend(ctx, shift)
 
     def leaf_shift(self, ctx: Ctx) -> Command | None:
         """Hook: the leaf shift command of this decision (``economy.leaf_shift_command``)."""
         return leaf_shift_command(self, ctx.view, self.leaf)
-
-    def line_extra(self, ctx: Ctx) -> dict[int, int]:
-        """Hook: the weight a personality adds to own nodes that want charges (``wants``)."""
-        return {}
-
-    def bunkers(self) -> int:
-        """Bunkers (and bunker builds) the bot keeps at most (``BUNKERS``)."""
-        return self.BUNKERS
 
     def respond(self, ctx: Ctx) -> None:
         """Hook: commands that come before everything else (``ReactiveBot``)."""
@@ -355,7 +316,7 @@ class CampaignBot(Bot):
         loses a unit every ``capacity.attrition_ticks``, DEC-12); it then counts in
         ``Ctx.incoming``. A group leaving a fight is exempt: a lost fight costs a unit a round."""
         if not self.allowed(cmd):
-            return False  # a command of the other economy model (DEC-41)
+            return False  # a stance without a policy (``Bot.allowed``)
         into = self.moves_in(ctx, cmd)
         if into is not None and into[1] > self.room(ctx, into[0]):
             return False
@@ -392,18 +353,6 @@ class CampaignBot(Bot):
     def free_groups(self, ctx: Ctx) -> list[GroupView]:
         return [g for g in self.idle_groups(ctx.view) if g.id not in ctx.used]
 
-    # Stance ---------------------------------------------------------------------------------
-
-    def _stance(self, ctx: Ctx) -> None:
-        last = self.stance_tick
-        ready = last is None or ctx.tick - last >= self.rules.orders.stance_cooldown_ticks
-        if (
-            ready
-            and ctx.view.me.stance is not self.STANCE
-            and self.spend(ctx, SetStance(self.STANCE))
-        ):
-            self.stance_tick = ctx.tick
-
     # Enemy strength -------------------------------------------------------------------------
 
     def estimate(self, view: PlayerView, tick: int, node: int) -> tuple[int, int]:
@@ -438,9 +387,7 @@ class CampaignBot(Bot):
         else:
             terrain = self.map.nodes[dest].terrain
             burned = terrain_burned(self.rules, view, dest)
-            base = shots_to_take(
-                self.rules, terrain, units, charged, self.defended(view, dest), burned=burned
-            )
+            base = shots_to_take(self.rules, terrain, units, charged, burned=burned)
             value = base + self.params["margin"] + self.extra.get(dest, 0)
         if self.contact():
             value += self.support(view, tick, dest, base)
@@ -476,7 +423,7 @@ class CampaignBot(Bot):
             numbers = self.sighted(view, tick, other)
             if numbers is None or numbers[1] <= 0:
                 continue
-            if edge_ticks(self.map, rules, eid, dest, view.edges[eid].width) >= window:
+            if edge_ticks(self.map, rules, eid, dest) >= window:
                 continue  # it arrives after the last round
             forces.append(numbers[0] + numbers[1])
         if not forces:
@@ -558,7 +505,7 @@ class CampaignBot(Bot):
         # the surplus killed one unit each.
         units, charged = wave.estimate
         terrain = self.map.nodes[dest].terrain
-        pool = defender_pool(self.rules, terrain, charged, 0)
+        pool = defender_pool(self.rules, terrain, charged)
         cancelled = min(wave.charged, pool) + first_burn(self.rules, terrain, charged)
         killed = max(0, wave.charged - pool)
         self.memory[dest] = (tick, max(0, units - killed), max(0, charged - cancelled))
@@ -573,7 +520,6 @@ class CampaignBot(Bot):
         it cannot be sent elsewhere; it goes on and the attack decides.
         """
         view = ctx.view
-        orders = self.rules.orders
         busy = self.fighting(view)
         for g in view.groups:
             loc = g.location
@@ -590,14 +536,7 @@ class CampaignBot(Bot):
                 continue
             if self.enemy_at(view, dest) is None:
                 continue
-            # The bonus was set by the whole path at the departure (DEC-29); the edges still to
-            # go are a lower bound of it.
-            if self.rules.v2:
-                bonus = g.order.bonus  # gathered, active from the departure (DEC-41, item 10)
-            elif g.order.planned:
-                bonus = orders.planned_bonus(len(g.order.path), g.charged)
-            else:
-                bonus = 0
+            bonus = g.order.bonus  # gathered, active from the departure (DEC-41, item 10)
             toll = self.toll_left(view, g, dest)
             if self.DISCIPLINE:
                 if not self.recall_pays(view, g, dest, bonus, toll):
@@ -643,8 +582,8 @@ class CampaignBot(Bot):
         """Cancel discipline (#687): whether turning ``g`` back from ``dest`` saves more than it
         costs. The order's CP are spent either way (``orders.cost.cancel`` refunds nothing,
         DEC-20, C) and the cancel takes a command, so the cancel pays only when the attack would
-        lose units: the defenders' pool ``Qd`` (the exact numbers of this tick, the terrain and a
-        bunker, ``defender_pool``) is above the group's charges and bonus less the ``toll`` of a
+        lose units: the defenders' pool ``Qd`` (the exact numbers of this tick and the terrain,
+        ``defender_pool``) is above the group's charges and bonus less the ``toll`` of a
         fortified road still ahead (DEC-43, item D6, ``toll_left``). Otherwise the attack at worst
         bounces (DEC-07, rules 2 to 4: ``min(Qa, Qd)`` charges cancel on both sides, the surplus
         kills defenders, nobody of the group dies) and the CP already paid buy that trade. Under a
@@ -655,7 +594,7 @@ class CampaignBot(Bot):
             return False
         terrain = self.map.nodes[dest].terrain
         burned = terrain_burned(self.rules, view, dest)
-        qd = defender_pool(self.rules, terrain, seen[1], self.defended(view, dest), burned=burned)
+        qd = defender_pool(self.rules, terrain, seen[1], burned=burned)
         real = max(0, g.charged - toll)
         qa = real + min(bonus, real)
         if qd > qa:
@@ -677,9 +616,7 @@ class CampaignBot(Bot):
             return 0
         terrain = self.map.nodes[dest].terrain
         burned = terrain_burned(self.rules, view, dest)
-        return shots_to_take(
-            self.rules, terrain, seen[0], seen[1], self.defended(view, dest), burned=burned
-        )
+        return shots_to_take(self.rules, terrain, seen[0], seen[1], burned=burned)
 
     def recall_holds(self, tick: int, dest: int, shots: int) -> bool:
         """``DISCIPLINE``: an attack of ``shots`` (charges and bonus) on ``dest`` waits, the target
@@ -718,16 +655,15 @@ class CampaignBot(Bot):
                 # too (#760: else a group of 1 charge is sent, cannot pay and is recalled).
                 toll = self.toll_from(view, here, dest, g.units, g.charged)
                 real = g.charged - toll
-                # The v2 bonus does not grow with the distance (DEC-41, item 10).
-                edges = 0 if rules.v2 else self.path_edges(view, here, dest, g.units)
-                bonus = self.plan_bonus(view, here, edges, g.charged)
+                # The bonus does not grow with the distance (DEC-41, item 10).
+                bonus = self.plan_bonus(view, here, g.charged)
                 # DEC-38: the charges must also pay the capture; virtual shots never pay.
                 plain = takes(rules, g.charged, 0, need, toll)
                 plan = bonus >= 1 and takes(rules, g.charged, bonus, need, toll)
                 if not (plain or plan):
                     continue
-                planned = plan and (not plain or prefer_planned(rules, real, need, edges))
-                # Under v2 the plan asks for the shots it misses only (DEC-41, item 10).
+                planned = plan and not plain  # the plan turns a bounce into a capture
+                # The plan asks for the shots it misses only (DEC-41, item 10).
                 ask = max(1, need + rules.capture.charge_cost - real)
                 shots = g.charged + (min(bonus, ask) if planned else 0)
                 if self.DISCIPLINE and self.recall_holds(ctx.tick, dest, shots):

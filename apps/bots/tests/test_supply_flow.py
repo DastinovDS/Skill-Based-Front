@@ -1,8 +1,8 @@
 """The supply flow in the bots (DEC-43, item G; #704).
 
-Under ``mvp-4`` (``supply.model = "flow"``) the bots draw no lines, build no bunker and raise no
-warehouse (all ``FEATURE_DISABLED`` there), and the campaign bots use the leaf shift by the
-heuristic of ``gow_bots.bots.economy.leaf_shift_command``. Under ``mvp-3`` nothing of it is sent.
+Under the supply flow every bot sends only commands the ruleset knows (no ``FEATURE_DISABLED``),
+and the campaign bots use the leaf shift by the heuristic of
+``gow_bots.bots.economy.leaf_shift_command``.
 """
 
 from collections import Counter
@@ -12,19 +12,8 @@ from pathlib import Path
 import pytest
 
 from gow_bots.bots import BOTS, SmartRusher
-from gow_bots.bots.base import LINES_ONLY, V1_ONLY
 from gow_bots.bots.economy import LeafShift, leaf_shift_command
-from gow_sim.commands import (
-    BuildBunker,
-    Command,
-    DrawLine,
-    Move,
-    Ok,
-    PlayerCommand,
-    SetAutoLines,
-    SetLeafShift,
-    UpgradeWarehouse,
-)
+from gow_sim.commands import Command, Move, Ok, PlayerCommand, SetLeafShift
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, load_ruleset
@@ -44,13 +33,8 @@ SMART = (
 
 
 @pytest.fixture(scope="module")
-def mvp3() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
-
-
-@pytest.fixture(scope="module")
-def mvp4() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+def rules() -> Ruleset:
+    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 
 
 @pytest.fixture(scope="module")
@@ -82,38 +66,23 @@ def _play(
     return sent, rejects
 
 
-def test_allowed_follows_the_supply_model(mvp3: Ruleset, mvp4: Ruleset, crossroads: MapDef) -> None:
-    lines = SmartRusher(crossroads, mvp3, seed=1, player=0)
-    flow = SmartRusher(crossroads, mvp4, seed=1, player=0)
-    assert all(lines.allowed(c) for c in (DrawLine((1, 2)), SetAutoLines(False), BuildBunker(1)))
-    assert not lines.allowed(SetLeafShift(1))
-    assert flow.allowed(SetLeafShift(1))
-    assert not any(flow.allowed(c) for c in (DrawLine((1, 2)), SetAutoLines(False), BuildBunker(1)))
-    assert (type(DrawLine((1, 2))), *LINES_ONLY[1:]) == LINES_ONLY
-
-
 @pytest.mark.parametrize("name", SMART)
-def test_smart_bots_play_the_flow(mvp4: Ruleset, crossroads: MapDef, name: str) -> None:
-    sent, rejects = _play(crossroads, mvp4, (name, "smart_rusher"), 1500)
+def test_smart_bots_play_the_flow(rules: Ruleset, crossroads: MapDef, name: str) -> None:
+    sent, rejects = _play(crossroads, rules, (name, "smart_rusher"), 1500)
     assert rejects["FEATURE_DISABLED"] == 0, rejects
     assert rejects["INVALID_ARGUMENT"] == 0, rejects
     mine = [c for p, c in sent if p == 0]
-    assert not any(isinstance(c, (*LINES_ONLY, *V1_ONLY)) for c in mine)
-    assert not any(isinstance(c, BuildBunker | UpgradeWarehouse) for c in mine)
     assert any(isinstance(c, Move) for c in mine)
 
 
 @pytest.mark.parametrize("name", sorted(BOTS))
-def test_every_bot_plays_mvp4_without_a_crash(mvp4: Ruleset, crossroads: MapDef, name: str) -> None:
-    sent, rejects = _play(crossroads, mvp4, (name, "smart_rusher"), 600)
+def test_every_bot_plays_the_flow_without_a_crash(
+    rules: Ruleset, crossroads: MapDef, name: str
+) -> None:
+    sent, rejects = _play(crossroads, rules, (name, "smart_rusher"), 600)
     if name != "random_legal":  # it tries what the view allows; the rest knows the ruleset
         assert rejects["FEATURE_DISABLED"] == 0, rejects
     assert sent
-
-
-def test_no_flow_command_under_lines(mvp3: Ruleset, crossroads: MapDef) -> None:
-    sent, _ = _play(crossroads, mvp3, ("smart_rusher", "smart_turtle"), 600)
-    assert not any(isinstance(c, SetLeafShift) for _, c in sent)
 
 
 # The heuristic of the leaf shift (DEC-43, item G) -----------------------------------------------
@@ -142,9 +111,9 @@ def _bot_and_match(rules: Ruleset, crossroads: MapDef) -> tuple[SmartRusher, Mat
 
 
 def test_leaf_shift_goes_back_when_a_leaf_faces_a_stronger_enemy(
-    mvp4: Ruleset, crossroads: MapDef
+    rules: Ruleset, crossroads: MapDef
 ) -> None:
-    bot, match, leaf, enemy = _bot_and_match(mvp4, crossroads)
+    bot, match, leaf, enemy = _bot_and_match(rules, crossroads)
     view = match.view(0)
     assert view.nodes[leaf].front_dist == 0
     assert view.me.leaf_shift_max is not None and view.me.leaf_shift_max >= 1
@@ -163,8 +132,3 @@ def test_leaf_shift_goes_back_when_a_leaf_faces_a_stronger_enemy(
     attack = OrderView(dest=enemy, path=(enemy,), planned=False, depart_tick=view.tick)
     attacking = replace(view, groups=(replace(group, order=attack),))
     assert leaf_shift_command(bot, attacking, LeafShift()) is None  # in force: 0
-
-
-def test_leaf_shift_is_none_under_lines(mvp3: Ruleset, crossroads: MapDef) -> None:
-    bot = SmartRusher(crossroads, mvp3, seed=1, player=0)
-    assert leaf_shift_command(bot, Match(crossroads, mvp3, KEY).view(0), LeafShift()) is None

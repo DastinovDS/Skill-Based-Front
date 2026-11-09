@@ -1,93 +1,60 @@
-"""Economy v2 for the bots (DEC-41, #642, #648; mechanics.md, section 7, "Economy v2").
+"""The factories, plans, leaf shift and road fortifications of the bots (DEC-41, DEC-43;
+mechanics.md, section 7).
 
-Under ``economy.model = "v2"`` charges come only from factories and travel only along the lines a
-player draws, so a bot that does not draw lines leaves every node but its capital without
-supply. These helpers are the minimal v2 play every campaign bot shares; they read only the
-``PlayerView``, the map and the ruleset, and every tie goes through ``Bot.key`` (mirror-invariant):
+Charges come only from factories and the automatic supply flow carries them (DEC-43). These
+helpers are the play every campaign bot shares; they read only the ``PlayerView``, the map and the
+ruleset, and every tie goes through ``Bot.key`` (mirror-invariant):
 
-- **Lines** (``line_commands``; DEC-42: only a factory starts a line, any number of them): the
-  own nodes that want charges (``wants``: own units without a charge standing there, a building
-  that still owes charges, a node next to a foreign one with room in its warehouse, and the
-  nodes a personality names), at most ``LINES_PER_FACTORY`` per own factory (a bot's choice: the
-  round robin of a factory splits its charges over its lines), get a line from the nearest own
-  factory. A built factory with no line into it is fed by a line from the own capital (a hub: it
-  gives out what that line brings with its own production); these feeds do not count for the
-  cap. Once the cap is reached, a line to a node no longer among the wanted ones gives its place
-  up after ``LINE_HOLD_TICKS``. At most ``LINE_COMMANDS`` per decision.
 - **Factories** (``factory_site``): one build at a time while the player has fewer than
   ``1 + extra`` factories (the capital is one) and the match has at least ``FACTORY_LATE_TICKS``
   left (4 charges pay back in 400 ticks at the built rate): the own city nearest the enemy
-  capital that no enemy node touches, the largest warehouse first. It is paid by the lines
-  (``wants``) and the groups standing there (the progressive payment of item 7).
-- **Bunkers** (``bunker_site``): an own city or the capital next to an enemy node, with a full
-  (or a ``bunker.cost``) warehouse so the payment does not take the defenders' charges, no
-  fight and no bunker build owing elsewhere; the most VP first.
+  capital that no enemy node touches, the largest warehouse first. It is paid by the flow and the
+  groups standing there (the progressive payment of DEC-41, item 7).
 - **Plans** (``Bot.plan_bonus``, ``release_commands``): a planned order requests at most the
   stock of its node's warehouse and the charged units of the group (DEC-41, item 10); a plan that
   gathered for its requested time plus ``RELEASE_SLACK`` ticks departs with what it has
   (``ReleasePlan``), one without any bonus is cancelled.
-
-Under the supply flow (DEC-43, ``supply.model = "flow"``, ``mvp-4``) there are no lines and no
-bunker: ``line_commands`` and ``bunker_site`` give nothing, and the flow carries the charges by
-itself. The one lever is the **leaf shift** (``leaf_shift_command``, DEC-43 item G): the level goes
-one road back (``SetLeafShift(1)``) so new charges stop short of a node the bot may lose (a
-captured warehouse is lost, DEC-43 item C), while an own leaf faces a visibly stronger enemy and
-the bot attacks from none of them; back to the front (``0``) otherwise. #686 also kept the shift
-back for 300 ticks after the enemy took an own node; #749 removed that: against the hold alone it
-burned 1.4 to 2.3 times the share of its charges (at full warehouses behind the level) to save
-about 5 charges a match from captured warehouses, and lost head to head (0.40 for it, 72 local
-matches of three ``hard`` personalities). A
-tired army ahead of the level still pulls its charges (items I6, I7), so the shift only stops the
-refill of the leaf warehouses. Hysteresis (G-L of the ``mvp-4`` bot audit): the shift stays
-``SHIFT_HOLD_TICKS`` after a change (``LeafShift``), it does not flap with every sighting.
-**Road fortifications** (``fort_site``, DEC-43 item D) are the CP sink there: while the CP are
-near the cap, an own node fortifies the road to an enemy neighbour where an enemy is in sight; an
-attack whose road into the target is fortified pays the toll from its real charges first
-(``Bot.toll_from``, ``utility.takes``; an empty node too, #760).
+- **Leaf shift** (``leaf_shift_command``, DEC-43 item G), the one lever of the flow: the level
+  goes one road back (``SetLeafShift(1)``) so new charges stop short of a node the bot may lose (a
+  captured warehouse is lost, DEC-43 item C), while an own leaf faces a visibly stronger enemy and
+  the bot attacks from none of them; back to the front (``0``) otherwise. #686 also kept the shift
+  back for 300 ticks after the enemy took an own node; #749 removed that: against the hold alone
+  it burned 1.4 to 2.3 times the share of its charges (at full warehouses behind the level) to
+  save about 5 charges a match from captured warehouses, and lost head to head (0.40 for it, 72
+  local matches of three ``hard`` personalities). A tired army ahead of the level still pulls its
+  charges (items I6, I7), so the shift only stops the refill of the leaf warehouses. Hysteresis
+  (G-L of the ``mvp-4`` bot audit): the shift stays ``SHIFT_HOLD_TICKS`` after a change
+  (``LeafShift``), it does not flap with every sighting.
+- **Road fortifications** (``fort_site``, DEC-43 item D) are the CP sink: while the CP are near
+  the cap, an own node fortifies the road to an enemy neighbour where an enemy is in sight; an
+  attack whose road into the target is fortified pays the toll from its real charges first
+  (``Bot.toll_from``, ``utility.takes``; an empty node too, #760).
 """
 
-from collections import deque
 from dataclasses import dataclass
 from typing import Final
 
 from gow_bots.bots.base import Bot
-from gow_sim.commands import CancelOrder, Command, DrawLine, ReleasePlan, RemoveLine, SetLeafShift
+from gow_sim.commands import CancelOrder, Command, ReleasePlan, SetLeafShift
 from gow_sim.maps import NodeKind
-from gow_sim.view import AtNode, NodeView, PlayerView
+from gow_sim.view import AtNode, PlayerView
 
 __all__ = [
     "FACTORY_LATE_TICKS",
-    "LINES_PER_FACTORY",
-    "LINE_COMMANDS",
-    "LINE_HOLD_TICKS",
     "RELEASE_SLACK",
     "SHIFT_HOLD_TICKS",
     "LeafShift",
-    "bunker_site",
     "factory_site",
     "fort_site",
     "leaf_shift_command",
-    "line_commands",
     "release_commands",
-    "wants",
 ]
 
-LINE_COMMANDS: Final = 2
-"""Line commands (``DrawLine``, ``RemoveLine``) per decision at most."""
-LINE_HOLD_TICKS: Final = 200
-"""A line stays at least this long before another wanted node takes its place (no flapping)."""
-LINES_PER_FACTORY: Final = 4
-"""Lines to wanted nodes per own factory at most (a bot's choice, not a rule: DEC-42 has no
-limit)."""
 FACTORY_LATE_TICKS: Final = 1500
 """No factory is started with fewer ticks left (its 4 charges pay back in 400 ticks plus the
 build and the delivery)."""
 RELEASE_SLACK: Final = 60
 """Ticks a gathering plan waits beyond its requested bonus times ``orders.plan_ticks_per_bonus``."""
-W_WAIT: Final = 3
-"""Weight of an own unit without a charge in ``wants``."""
-W_FRONT: Final = 2
-"""Weight of a node next to a foreign one in ``wants``."""
 LEAF_MARGIN: Final = 1
 """Charged enemy units beyond the own charged units of a leaf that make it "visibly stronger"
 (``leaf_shift_command``)."""
@@ -111,129 +78,6 @@ class LeafShift:
         self.shift = shift
 
 
-def waiting(view: PlayerView) -> list[int]:
-    """Own units without a charge standing in each node."""
-    wait = [0] * len(view.nodes)
-    for g in view.groups:
-        if isinstance(g.location, AtNode):
-            wait[g.location.node] += g.units - g.charged
-    return wait
-
-
-def _owed(n: NodeView) -> int:
-    owed = 0
-    for build in (n.factory_build, n.fort_build):
-        if build is not None:
-            owed += build.owed
-    if n.building is not None:
-        owed += n.building.owed
-    return owed
-
-
-def wants(bot: Bot, view: PlayerView, extra: dict[int, int]) -> list[int]:
-    """Own nodes with a warehouse that want charges, the most wanted first (module docstring);
-    ``extra``: a personality's weight by node. Own factories make their own (not listed)."""
-    me = view.player
-    wait = waiting(view)
-    far = bot.hops[bot.map.capital(1 - me)]
-    province = bot.rules.warehouse.province
-    scored: list[tuple[int, int, int, int]] = []
-    for n in view.nodes:
-        if n.owner != me or n.factory or n.warehouse is None:
-            continue
-        node = n.id
-        cap = n.warehouse_cap if n.warehouse_cap is not None else province
-        front = n.warehouse < cap and any(view.nodes[m].owner != me for m in bot.neighbors[node])
-        score = W_WAIT * wait[node] + _owed(n) + (W_FRONT if front else 0) + extra.get(node, 0)
-        if score > 0:
-            scored.append((-score, far[node] if far[node] >= 0 else len(far), bot.key(node), node))
-    scored.sort()
-    return [s[3] for s in scored]
-
-
-def _way(bot: Bot, view: PlayerView, start: int, ends: list[int]) -> tuple[int, ...] | None:
-    """The shortest path over own nodes from the nearest of ``ends`` to ``start``, the source
-    first, ties by ``node_key``; ``None``: none."""
-    me = view.player
-    parent: dict[int, int] = {start: start}
-    queue = deque([start])
-    found: int | None = None
-    while queue and found is None:
-        node = queue.popleft()
-        for other in bot.neighbors[node]:  # in node_key order
-            if other in parent or view.nodes[other].owner != me:
-                continue
-            parent[other] = node
-            if other in ends:
-                found = other
-                break
-            queue.append(other)
-    if found is None:
-        return None
-    path = [found]
-    while path[-1] != start:
-        path.append(parent[path[-1]])
-    return tuple(path)
-
-
-def line_commands(
-    bot: Bot, view: PlayerView, wanted: list[int], seen: dict[int, int]
-) -> list[Command]:
-    """Lines from the own factories to the most ``wanted`` nodes and the feeds of the built
-    factories (module docstring); ``seen``: own line id to the tick it was first seen, kept up
-    to date here (a line is removed only ``LINE_HOLD_TICKS`` after it). Nothing under the
-    supply flow (DEC-43, item A12)."""
-    if bot.rules.flow:
-        return []
-    me, tick = view.player, view.tick
-    factories = [n.id for n in view.nodes if n.owner == me and n.factory]
-    live = {line.id: True for line in view.lines}
-    for lid in sorted(seen):
-        if lid not in live:
-            del seen[lid]
-    for line in view.lines:
-        seen.setdefault(line.id, tick)
-    if not factories:
-        return []
-    into: dict[int, bool] = {line.path[-1]: True for line in view.lines}
-    plain = sum(1 for line in view.lines if not view.nodes[line.path[-1]].factory)
-    cap = LINES_PER_FACTORY * len(factories)
-    keep = {node: True for node in wanted[:cap]}
-    cmds: list[Command] = []
-    capital = bot.map.capital(me)
-    if view.nodes[capital].owner == me and view.nodes[capital].factory:
-        for hub in sorted(factories, key=bot.key):
-            if hub == capital or into.get(hub, False) or len(cmds) >= LINE_COMMANDS:
-                continue
-            path = _way(bot, view, hub, [capital])
-            if path is not None:
-                cmds.append(DrawLine(path))
-                into[hub] = True
-    for target in keep:
-        if len(cmds) >= LINE_COMMANDS:
-            break
-        if into.get(target, False):
-            continue
-        if plain >= cap:
-            spare = [
-                line
-                for line in view.lines
-                if not keep.get(line.path[-1], False)
-                and not view.nodes[line.path[-1]].factory  # a hub feed stays
-                and tick - seen[line.id] >= LINE_HOLD_TICKS
-            ]
-            if spare:
-                drop = min(spare, key=lambda line: (bot.key(line.path[-1]), line.id))
-                cmds.append(RemoveLine(drop.id))
-            break  # the place is free in the next decision
-        path = _way(bot, view, target, factories)
-        if path is not None:
-            cmds.append(DrawLine(path))
-            plain += 1
-            into[target] = True
-    return cmds
-
-
 def factory_site(bot: Bot, view: PlayerView, extra: int) -> int | None:
     """The own city that should start a factory now (module docstring), or ``None``."""
     rules = bot.rules
@@ -245,9 +89,9 @@ def factory_site(bot: Bot, view: PlayerView, extra: int) -> int | None:
         if n.owner != me:
             continue
         if n.factory_build is not None:
-            return None  # one at a time: the lines pay it first
+            return None  # one at a time: the flow pays it first
         count += bool(n.factory)
-    if count >= min(rules.factory_rules().max, 1 + extra):
+    if count >= min(rules.factory.max, 1 + extra):
         return None
     fights = bot.fight_nodes(view)
     far = bot.hops[bot.map.capital(1 - me)]
@@ -265,47 +109,8 @@ def factory_site(bot: Bot, view: PlayerView, extra: int) -> int | None:
     return site
 
 
-def bunker_site(bot: Bot, view: PlayerView, limit: int) -> int | None:
-    """The own city next to an enemy node that should build a bunker now, or ``None``; always
-    ``None`` without a ``[bunker]`` section (``mvp-4``, DEC-43 item D1)."""
-    rules = bot.rules
-    me = view.player
-    if limit <= 0 or rules.bunker is None:
-        return None
-    count = 0
-    for n in view.nodes:
-        if n.owner != me:
-            continue
-        if n.fort_build is not None and n.fort_build.owed > 0:
-            return None  # one payment at a time
-        count += bool(n.fort) or n.fort_build is not None
-    if count >= limit:
-        return None
-    cost = rules.bunker_rules().cost
-    fights = bot.fight_nodes(view)
-    best: tuple[int, int] | None = None
-    site: int | None = None
-    for n in view.nodes:
-        node = n.id
-        mdef = bot.map.nodes[node]
-        if n.owner != me or n.fort or n.fort_build is not None or node in fights:
-            continue
-        if mdef.kind is NodeKind.PROVINCE or n.warehouse is None:
-            continue
-        if n.warehouse < min(cost, n.warehouse_cap or 0):
-            continue
-        if not any(view.nodes[m].owner == 1 - me for m in bot.neighbors[node]):
-            continue
-        vp = mdef.vp * (rules.victory.capital_multiplier if mdef.kind is NodeKind.CAPITAL else 1)
-        rank = (-vp, bot.key(node))
-        if best is None or rank < best:
-            best, site = rank, node
-    return site
-
-
 def fort_site(bot: Bot, view: PlayerView, budget: int) -> tuple[int, int] | None:
-    """The road fortification to build now (DEC-43, item D), ``(node, edge)``, or ``None``; always
-    ``None`` without ``[fort]``.
+    """The road fortification to build now (DEC-43, item D), ``(node, edge)``, or ``None``.
 
     Only while the CP are near their cap (``cp.cap - cp.per_period`` or more: the next income
     would burn in part) and ``budget`` pays ``fort.cost``: an own node (a city or a province)
@@ -315,7 +120,7 @@ def fort_site(bot: Bot, view: PlayerView, budget: int) -> tuple[int, int] | None
     ``Bot.key`` of the node and of the neighbour (mirror-invariant)."""
     rules = bot.rules
     fort = rules.fort
-    if fort is None or budget < fort.cost or view.me.cp < rules.cp.cap - rules.cp.per_period:
+    if budget < fort.cost or view.me.cp < rules.cp.cap - rules.cp.per_period:
         return None
     me = view.player
     fights = bot.fight_nodes(view)
@@ -368,9 +173,9 @@ def release_commands(bot: Bot, view: PlayerView, since: dict[int, int], tick: in
 
 
 def leaf_shift_command(bot: Bot, view: PlayerView, memory: LeafShift) -> Command | None:
-    """The leaf shift the bot wants now under the supply flow (module docstring), as a command
-    when it differs from the one in force and the one in force has stood ``SHIFT_HOLD_TICKS``;
-    ``None`` otherwise and under any other supply model. ``memory`` is updated on every call.
+    """The leaf shift the bot wants now (module docstring), as a command when it differs from the
+    one in force and the one in force has stood ``SHIFT_HOLD_TICKS``; ``None`` otherwise.
+    ``memory`` is updated on every call.
 
     "Visibly stronger": a neighbour of the enemy whose charged units as the view tells them
     (``Bot.enemy_at``; a presence without numbers counts as nothing) exceed the own charged units
@@ -378,7 +183,7 @@ def leaf_shift_command(bot: Bot, view: PlayerView, memory: LeafShift) -> Command
     node the player does not own. Reads only the own view (ownership, the own ``front_dist`` and
     shift)."""
     me = view.me
-    if not bot.rules.flow or me.leaf_shift is None or me.leaf_shift_max is None:
+    if me.leaf_shift is None or me.leaf_shift_max is None:
         return None
     memory.observe(view)
     if memory.since is not None and view.tick - memory.since < SHIFT_HOLD_TICKS:

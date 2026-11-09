@@ -1,6 +1,6 @@
 """BOT-02: the strategy bots ``expander`` and ``turtle``.
 
-Win rates are measured on full matches of the ruleset ``mvp-0`` on the three MVP maps, each bot on
+Win rates are measured on full matches of the ruleset ``mvp-5`` on the three MVP maps, each bot on
 both sides against ``RandomLegalBot``. Expected enemy numbers in the estimate tests come from
 the rules of DEC-04 (what a view tells) and DEC-07, example 5 (an empty node falls).
 """
@@ -12,7 +12,7 @@ import pytest
 from gow_bots.bots import BOTS, ExpanderBot, ParamRange, TurtleBot, choose_params
 from gow_bots.bots.base import Controller
 from gow_bots.bots.tactics import MEMORY_TICKS, StrategyBot
-from gow_sim.commands import Command, Move, Recruit, SetMode, SetStance, UpgradeRoad
+from gow_sim.commands import Command, Move, Recruit, SetStance
 from gow_sim.maps import MapDef
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset
@@ -24,7 +24,6 @@ from gow_sim.view import (
     NodeView,
     PlayerView,
     Sighting,
-    Stance,
 )
 
 MVP_MAPS = ("artery", "web", "pass")
@@ -53,7 +52,7 @@ class _Recorder:
 # Strength against the baseline ------------------------------------------------------------------
 
 
-@pytest.mark.slow  # 12 cells x 6 full mvp-0 matches
+@pytest.mark.slow  # 12 cells x 6 full mvp-5 matches
 @pytest.mark.parametrize("name", STRATEGY)
 @pytest.mark.parametrize("map_name", MVP_MAPS)
 def test_strategy_bot_beats_random_legal_in_90_percent(
@@ -95,7 +94,7 @@ def test_params_stay_in_their_ranges_and_depend_on_the_seed(
 def test_one_pair_over_seeds_gives_different_matches(
     maps: dict[str, MapDef], mvp_rules: Ruleset, name: str
 ) -> None:
-    # The first 250 s of mvp-0: the 60 s of test-short end before the parameters matter.
+    # The first 250 s of mvp-5: the 60 s of test-short end before the parameters matter.
     mapdef = maps["web"]
     hashes = {
         run_headless(
@@ -112,10 +111,10 @@ def test_one_pair_over_seeds_gives_different_matches(
 # Mirror symmetry ----------------------------------------------------------------------------------
 
 
-# 4 short matches (test-short) per cell in the required path; one full mvp-0 match is ``slow``.
+# 4 short matches (test-short) per cell in the required path; one full mvp-5 match is ``slow``.
 _SELF_PLAY = [
     pytest.param("short", 4, id="short"),
-    pytest.param("mvp", 1, id="mvp-0", marks=pytest.mark.slow),
+    pytest.param("mvp", 1, id="mvp-5", marks=pytest.mark.slow),
 ]
 
 
@@ -156,24 +155,13 @@ def test_expander_spends_the_start_cp_on_neutral_nodes(
     view = Match(mapdef, mvp_rules, KEY).view(0)
     bot = ExpanderBot(mapdef, mvp_rules, seed=0, player=0)
     cmds = bot.decide(view, 0)
-    assert SetStance(Stance.WAR) in cmds
+    assert not any(isinstance(c, SetStance) for c in cmds)  # no stance policy (DEC-44)
     moves = [c for c in cmds if isinstance(c, Move)]
     # 3 CP at the start: three one-CP orders (a plan would cost two), all to neutral nodes.
     assert len(moves) + sum(isinstance(c, Recruit) for c in cmds) == 3
     assert all(not c.planned and view.nodes[c.dest].owner is None for c in moves)
     capital = {g.id for g in view.groups if g.location == AtNode(mapdef.capital(0))}
     assert not capital & {c.group for c in moves}  # the capital group stays at home
-
-
-def test_expander_builds_roads_in_the_rear(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
-    mapdef = maps["artery"]
-    rec = _Recorder(ExpanderBot(mapdef, mvp_rules, seed=2, player=0))
-    run_headless(mapdef, mvp_rules, [rec, BOTS["idle"](mapdef, mvp_rules, seed=0, player=1)])
-    upgrades = [c for c in rec.cmds if isinstance(c, UpgradeRoad)]
-    assert upgrades  # paid with CP (DEC-28, item 7)
-    capital = mapdef.capital(0)
-    # The rear first: the first road is one of the capital's.
-    assert capital in (mapdef.edges[upgrades[0].edge].a, mapdef.edges[upgrades[0].edge].b)
 
 
 def test_expander_takes_empty_enemy_nodes(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
@@ -188,36 +176,6 @@ def test_expander_takes_empty_enemy_nodes(maps: dict[str, MapDef], mvp_rules: Ru
     )
     assert result.outcome is not None and result.outcome.winner == 0
     assert result.vp[0] > 3 * result.vp[1]  # it did not stop at the neutral nodes
-
-
-def _front_view(mapdef: MapDef, rules: Ruleset) -> tuple[PlayerView, int]:
-    """The start view of side 0 where enemy groups stand in a neutral node next to an own node."""
-    view = Match(mapdef, rules, KEY).view(0)
-    own = {n.id for n in view.nodes if n.owner == 0}
-    front = next(
-        (n, m)
-        for n in sorted(own - {mapdef.capital(0)})
-        for m in sorted(e.other(n) for e in map(mapdef.edges.__getitem__, mapdef.incident[n]))
-        if m not in own
-    )
-    sighting = Sighting(view.tick, Detail.PRESENCE, (Mode.ATTACK,), None, None)
-    nodes = list(view.nodes)
-    nodes[front[1]] = dataclasses.replace(nodes[front[1]], detail=Detail.PRESENCE, seen=sighting)
-    return dataclasses.replace(view, nodes=tuple(nodes)), front[0]
-
-
-def test_turtle_sets_defense_on_the_front_group(
-    maps: dict[str, MapDef], mvp_rules: Ruleset
-) -> None:
-    mapdef = maps["web"]
-    view, front = _front_view(mapdef, mvp_rules)
-    bot = TurtleBot(mapdef, mvp_rules, seed=0, player=0)
-    cmds = bot.decide(view, 0)
-    assert SetStance(Stance.ECONOMY) in cmds
-    defended = {c.group for c in cmds if isinstance(c, SetMode) and c.mode is Mode.DEFENSE}
-    assert defended == {g.id for g in view.groups if g.location == AtNode(front)}
-    # The bunker pays 2 CP for Defense before it spends anything on expansion.
-    assert sum(isinstance(c, Move) for c in cmds) <= 1
 
 
 def test_turtle_stays_in_its_region_while_cp_do_not_burn(
@@ -269,7 +227,7 @@ def test_estimate_of_an_observed_empty_node_is_zero(
 def test_estimate_uses_exact_numbers_when_the_view_has_them(
     maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
-    exact = Sighting(100, Detail.EXACT, (Mode.DEFENSE,), 4, 3)
+    exact = Sighting(100, Detail.EXACT, (Mode.ATTACK,), 4, 3)
     assert _estimate(maps["web"], mvp_rules, Detail.EXACT, exact) == (4, 3)
 
 

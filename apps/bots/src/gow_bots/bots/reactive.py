@@ -1,31 +1,26 @@
 """``ReactiveBot``: answers the visible intents of the enemy (BOT-03).
 
-Planned orders and Defense are public (DEC-04, DEC-08): a planned strike shows its origin and
-its target 30 ticks before the group leaves. For every such strike at an own city the bot
-(``respond``, before anything else, spending the CP it keeps in reserve for that):
+Planned orders are public (DEC-04, DEC-08): a planned strike shows its origin and its target
+while it gathers its bonus, at least ``orders.plan_ticks_per_bonus`` ticks before the group
+leaves (DEC-41, item 10). For every such strike at an own city the bot (``respond``, before
+anything else, spending the CP it keeps in reserve for that):
 
-1. turns on Defense in the target where a charged group stands, if it gathers a bonus before the
-   strike can arrive: +1 per ``orders.defense_ticks_per_bonus`` ticks in the mode (DEC-30), and
-   the strike waits ``planned_delay_ticks`` and then walks at least the quickest roads of the
-   map at the fastest terrain speed (``arrival``);
-2. reinforces the target with the nearest charged group that can walk there;
-3. remembers the origin of the strike as exposed: the group has left it or is about to, so
+1. reinforces the target with the nearest charged group that can walk there;
+2. remembers the origin of the strike as exposed: the group has left it or is about to, so
    ``score`` puts a viable attack on that city first (the bare spot).
 
-The enemy Defense intent needs no code here: ``Bot.defended`` makes ``CampaignBot.need`` count
-its bonus. Without intents it plays like the base strategy.
+Without intents it plays like the base strategy.
 """
 
-import heapq
 from collections.abc import Mapping
 from typing import ClassVar, override
 
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import CampaignBot, Ctx
-from gow_sim.commands import Move, SetMode
-from gow_sim.maps import MapDef, Terrain
+from gow_sim.commands import Move
+from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import GroupView, IntentKind, IntentView, Mode, Stance
+from gow_sim.view import GroupView, IntentView
 
 __all__ = ["ReactiveBot"]
 
@@ -37,12 +32,11 @@ SEARCH_HOPS = 3
 
 class ReactiveBot(CampaignBot):
     name: ClassVar[str] = "reactive"
-    STANCE: ClassVar[Stance] = Stance.BALANCE
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         "radius": ParamRange(2, 3),
         "margin": ParamRange(0, 1),
         "guard": ParamRange(1, 2),
-        "reserve": ParamRange(200, 300),  # CP kept for Defense and reinforcements
+        "reserve": ParamRange(200, 300),  # CP kept for reinforcements
         "recruit_keep": ParamRange(250, 350),
     }
 
@@ -52,11 +46,6 @@ class ReactiveBot(CampaignBot):
         """Opaque ids of the intents that already got an answer."""
         self.exposed: dict[int, int] = {}
         """Origins of enemy strikes by the tick they were seen."""
-        self.fastest = max(rules.terrain.speed_pct.of(t) for t in Terrain)
-        """The fastest terrain speed in percent (#253): the travel times of ``arrival`` are lower
-        bounds."""
-        self.travel: dict[int, dict[int, int]] = {}
-        """By origin: the least travel ticks to every node over the roads of the map."""
 
     @override
     def respond(self, ctx: Ctx) -> None:
@@ -66,11 +55,13 @@ class ReactiveBot(CampaignBot):
         ctx.budget += self.params["reserve"]
         for intent in self.strikes(ctx):
             self.exposed[intent.origin] = ctx.tick
-            if intent.id not in self.answered and intent.target is not None:
-                done = self.defend(ctx, intent.target, self.arrival(intent))
-                done = self.reinforce(ctx, intent.target) or done
-                if done:
-                    self.answered[intent.id] = True
+            target = intent.target
+            if (
+                intent.id not in self.answered
+                and target is not None
+                and self.reinforce(ctx, target)
+            ):
+                self.answered[intent.id] = True
         ctx.budget -= self.params["reserve"]
 
     def strikes(self, ctx: Ctx) -> list[IntentView]:
@@ -80,57 +71,11 @@ class ReactiveBot(CampaignBot):
             i
             for i in view.intents
             if i.owner != self.player
-            and i.kind is IntentKind.PLANNED_MOVE
             and i.target is not None
             and view.nodes[i.target].owner == self.player
         ]
         found.sort(key=lambda i: (self.key(i.target or 0), self.key(i.origin), i.created_tick))
         return found
-
-    def arrival(self, intent: IntentView) -> int:
-        """The earliest tick the planned strike of ``intent`` can reach its target: the delay,
-        then the quickest roads of the map at the fastest terrain speed."""
-        assert intent.target is not None
-        if intent.origin not in self.travel:
-            self.travel[intent.origin] = self._travel_from(intent.origin)
-        way = self.travel[intent.origin].get(intent.target, 0)
-        return intent.created_tick + self.rules.orders.planned_delay_ticks + way
-
-    def _travel_from(self, origin: int) -> dict[int, int]:
-        """Dijkstra over the map edges, ``travel_ticks * 100 // fastest`` per edge."""
-        best = {origin: 0}
-        queue = [(0, self.key(origin), origin)]
-        while queue:
-            ticks, _, node = heapq.heappop(queue)
-            if ticks > best[node]:
-                continue
-            for edge in self.map.edges:
-                if node not in (edge.a, edge.b):
-                    continue
-                other = edge.other(node)
-                t = ticks + edge.travel_ticks * 100 // self.fastest
-                if t < best.get(other, t + 1):
-                    best[other] = t
-                    heapq.heappush(queue, (t, self.key(other), other))
-        return best
-
-    def defend(self, ctx: Ctx, target: int, arrival: int) -> bool:
-        """Defense for the strongest charged group standing in ``target``, if it gathers at least
-        +1 by ``arrival`` (it is switched on in the next tick, DEC-30)."""
-        if self.rules.orders.defense_bonus(max(0, arrival - ctx.tick - 1), 1) < 1:
-            return False
-        here = [
-            g
-            for g in self.idle_groups(ctx.view)
-            if node_of(g) == target and g.charged > 0 and g.id not in ctx.used
-        ]
-        if not here or any(g.mode is Mode.DEFENSE for g in here):
-            return False
-        best = max(here, key=lambda g: (g.charged, g.units))
-        if self.spend(ctx, SetMode(best.id, Mode.DEFENSE)):
-            ctx.used[best.id] = True
-            return True
-        return False
 
     def reinforce(self, ctx: Ctx, target: int) -> bool:
         """The nearest charged group that can walk to ``target`` and may leave its city."""

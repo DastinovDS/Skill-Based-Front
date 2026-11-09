@@ -3,7 +3,7 @@
 The campaign bots fortify the road of an own node to an enemy neighbour where an enemy is in sight
 while their CP are near the cap (``gow_bots.bots.economy.fort_site``), and an attack whose every
 road into the target carries a visible enemy fortification asks for the toll on top of its shots
-(``Bot.toll_ahead``). Under ``mvp-3`` (no ``[fort]``) nothing of it is sent.
+(``Bot.toll_ahead``).
 """
 
 from dataclasses import replace
@@ -26,7 +26,7 @@ KEY = bytes(range(32))
 
 @pytest.fixture(scope="module")
 def mvp4() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 
 
 @pytest.fixture(scope="module")
@@ -76,14 +76,6 @@ def test_a_front_road_is_fortified_when_the_cp_near_the_cap(
     edges[road] = replace(edges[road], forts=(RoadFortView(near, 0, False, 200),))
     assert fort_site(bot, replace(seen, edges=tuple(edges)), cap) != (near, road)
     assert bot.allowed(FortifyRoad(near, road))
-
-
-def test_no_fortification_without_the_section(crossroads: MapDef) -> None:
-    mvp3 = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
-    bot, view, near, enemy, road = _front(mvp3, crossroads)
-    seen = _seen(replace(view, me=replace(view.me, cp=mvp3.cp.cap)), enemy, 3)
-    assert fort_site(bot, seen, mvp3.cp.cap) is None
-    assert not bot.allowed(FortifyRoad(near, road))
 
 
 def test_a_fortified_approach_raises_the_shots_of_an_attack(

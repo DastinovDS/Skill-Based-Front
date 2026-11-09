@@ -1,10 +1,10 @@
 """The toll of a road fortification and the capture price in the attack planning (#760, #759).
 
 Expected values come from the rules. A capture spends ``capture.charge_cost`` real charges of the
-group in the node, with fewer it bounces (DEC-38); ``mvp-4`` has 0, the cases with 1 load
-``mvp-4`` with only that number changed (the experiment of #759). A road fortification of node
+group in the node, with fewer it bounces (DEC-38); ``mvp-5`` has 0, the cases with 1 load
+``mvp-5`` with only that number changed (the experiment of #759). A road fortification of node
 ``X`` takes ``min(charged, toll_charges * ceil(units / toll_units))`` charges from an enemy group
-crossing its line point towards ``X`` (DEC-43, item D6; ``mvp-4``: 1 charge per started 3 units),
+crossing its line point towards ``X`` (DEC-43, item D6; ``mvp-5``: 1 charge per started 3 units),
 before the fight and the capture, an empty ``X`` too; a group moving away or past the line pays
 nothing more. So under cost 1 a group of 1/1 or 3/1 that walks into an empty fortified node is left
 discharged and bounces, 2/2 is left 2/1 and takes it; under cost 0 every one of them takes it.
@@ -34,7 +34,7 @@ from gow_sim.view import GroupView, OrderView, PlayerView, project
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-MVP4 = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+MVP4 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 CAP1 = replace(MVP4, capture=replace(MVP4.capture, charge_cost=1))
 KEEP, ASH, CEDAR, MID = 0, 1, 3, 8
 NORTH_PASS = 17
@@ -316,7 +316,7 @@ def _pocket_moves(name: str, rules: Ruleset, player: int, state: GameState) -> l
 @pytest.mark.parametrize("name", [n for n in SMART if n != "smart_exploiter"])
 def test_a_discharged_pocket_group_waits_under_cost_1(name: str, player: int) -> None:
     """3/0 in the pocket under cost 1 cannot pay the capture of Ash: it stays (a walk out
-    would bounce and be sent again, #759) instead of the free walk of ``mvp-4``."""
+    would bounce and be sent again, #759) instead of the free walk of ``mvp-5``."""
     state = _pocket(CAP1, player, 3, 0, fort=False)
     assert _pocket_moves(name, CAP1, player, state) == []
 

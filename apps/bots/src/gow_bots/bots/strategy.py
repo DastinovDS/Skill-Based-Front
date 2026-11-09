@@ -3,15 +3,14 @@
 Both play the priorities of ``gow_bots.bots.tactics`` and differ in what they want:
 
 - ``ExpanderBot`` plays for VP through territory (mechanics.md, section 11): it spends CP on
-  capturing neutral nodes (and enemy nodes that stand empty) as early as possible, in the
-  War stance (75% of the CP income stays CP), holds only the capital and the nodes next to
-  the enemy, and puts spare groups in the rear on road construction. After ``war_until``
-  ticks, when the map is divided, it switches to the Balance stance to get charges for fights.
+  capturing neutral nodes (and enemy nodes that stand empty) as early as possible and holds only
+  the capital and the nodes next to the enemy.
 - ``TurtleBot`` is the bunker of Topic 2 (mechanics.md, section 12): it keeps a small region
-  around its capital (nodes within ``radius`` road hops), stays in the Economy stance (75% of
-  the income goes to charges, the warehouses fill up), keeps big garrisons on the front with
-  Defense on, attacks only when sure to win (a large ``margin``). Its result against the
-  expanding bots is the test of the claim that VP for holding cities beat the bunker.
+  around its capital (nodes within ``radius`` road hops), keeps big garrisons on the front and
+  attacks only when sure to win (a large ``margin``). Its result against the expanding bots is
+  the test of the claim that VP for holding cities beat the bunker.
+
+Neither has a stance policy: both stay in the start stance, Balance (DEC-44, ``Bot.allowed``).
 
 Parameters are drawn from the match seed (``choose_params``); the ranges are chosen so that
 every draw is a sensible player, the spread is the variability of a tournament.
@@ -25,7 +24,7 @@ from gow_bots.bots.tactics import StrategyBot, Turn
 from gow_sim.commands import Command
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import PlayerView, Stance
+from gow_sim.view import PlayerView
 
 __all__ = ["ExpanderBot", "TurtleBot"]
 
@@ -40,15 +39,16 @@ class ExpanderBot(StrategyBot):
         "hold_front": ParamRange(1, 2),  # units kept in every node next to the enemy
         "margin": ParamRange(0, 1),  # charges to spare in an attack
         "est_pct": ParamRange(30, 60),  # guess of the enemy garrison, % of the capacity
-        "road_keep": ParamRange(350, 450),  # CP in hundredths that roads never touch (DEC-28)
-        "war_until": ParamRange(1200, 2400),  # ticks in the War stance
+        # ``road_keep`` and ``war_until`` were read only by road upgrades and the stance of
+        # economy v1 (#894); they stay drawn, so the draws of the other keys stay as they were.
+        "road_keep": ParamRange(350, 450),
+        "war_until": ParamRange(1200, 2400),
     }
 
     @override
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         p = self.params
         turn = self.begin(view, tick)
-        self.set_stance(turn, Stance.WAR if tick < p["war_until"] else Stance.BALANCE)
         self.prioritize(turn)
         self.guard(turn, p["hold_capital"], p["hold_front"])
         self.strike(turn, None, p["margin"], p["est_pct"])
@@ -56,7 +56,6 @@ class ExpanderBot(StrategyBot):
         self.reinforce(turn)
         self.develop(turn, 0)
         self.strengthen(turn, SPARE_CP)
-        self.build_roads(turn, p["road_keep"])
         return turn.cmds
 
 
@@ -68,7 +67,7 @@ class TurtleBot(StrategyBot):
         "hold_front": ParamRange(2, 4),
         "margin": ParamRange(1, 2),
         "est_pct": ParamRange(50, 80),
-        "road_keep": ParamRange(350, 450),
+        "road_keep": ParamRange(350, 450),  # unused since #894 (road upgrades); kept drawn
         "spill": ParamRange(1, 2),  # extra hops claimed while CP is about to burn
         "spill_cp": ParamRange(350, 450),
     }
@@ -91,10 +90,8 @@ class TurtleBot(StrategyBot):
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         p = self.params
         turn: Turn = self.begin(view, tick)
-        self.set_stance(turn, Stance.ECONOMY)
         self.prioritize(turn)
         self.guard(turn, p["hold_capital"], p["hold_front"])
-        self.fortify(turn)
         self.strike(turn, self.region, p["margin"], p["est_pct"])
         self.claim(turn, self.region)
         self.reinforce(turn)
@@ -102,5 +99,4 @@ class TurtleBot(StrategyBot):
             self.claim(turn, self.spill)  # CP would burn on the cap: the bunker grows a ring
         self.develop(turn, 0)
         self.strengthen(turn, SPARE_CP)
-        self.build_roads(turn, p["road_keep"])
         return turn.cmds

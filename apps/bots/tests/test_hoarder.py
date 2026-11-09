@@ -1,15 +1,13 @@
 """#624: the benchmark ``smart_hoarder`` and the converging strike of ``SmartBot`` (item 12).
 
 Expected values come from the rules and the map: the travel time of mechanics.md, section 4
-("Speed by terrain by zones", the road speed of DEC-28, item 7), the plan bonus of DEC-29 (the
-edges of the path, capped by the charged units), the delay ``orders.planned_delay_ticks`` and the
+("Speed by terrain by zones"), a plan that gathers one bonus at least (DEC-41, item 10), the
 prices of DEC-08, ``shots_to_take`` of DEC-07, the capacities of DEC-22 and the owner's strike in
 ``docs/balance/playtest-2026-10-30.md`` (the stage Middle Court next to the bot capital, the
 centre Crossroads).
 """
 
 import dataclasses
-from collections.abc import Sequence
 from pathlib import Path
 from typing import ClassVar
 
@@ -18,10 +16,9 @@ import pytest
 from gow_bots.bots import BOTS, SmartHoarder, bot_factory
 from gow_bots.bots.assess import edge_ticks
 from gow_bots.bots.campaign import Ctx
-from gow_bots.bots.smart import STRIKE_ALIGN, SmartBot, SmartTurtle
-from gow_bots.bots.tempo import Bucket, Perception, Tempo
+from gow_bots.bots.smart import SmartBot
 from gow_bots.bots.utility import shots_to_take
-from gow_sim.commands import PlayerCommand, Split
+from gow_sim.commands import Split
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset, load_ruleset
@@ -34,7 +31,7 @@ KEY = bytes(range(32))
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-2.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 
 
 @pytest.fixture(scope="module")
@@ -75,9 +72,7 @@ def test_stage_and_centre_on_crossroads(crossroads: MapDef, rules: Ruleset) -> N
 def test_edge_ticks_is_the_travel_time_of_the_rules(crossroads: MapDef, rules: Ruleset) -> None:
     for e, edge in enumerate(crossroads.edges):
         for to in (edge.a, edge.b):
-            for level in (1, 2, 3):
-                expected = traversal_ticks(crossroads, rules, e, to, level)
-                assert edge_ticks(crossroads, rules, e, to, level) == expected
+            assert edge_ticks(crossroads, rules, e, to) == traversal_ticks(crossroads, rules, e, to)
 
 
 def test_way_follows_the_fastest_own_path(crossroads: MapDef, rules: Ruleset) -> None:
@@ -86,7 +81,7 @@ def test_way_follows_the_fastest_own_path(crossroads: MapDef, rules: Ruleset) ->
     home = crossroads.capital(1)
     for e in crossroads.incident[home]:
         other = crossroads.edges[e].other(home)
-        # A neutral neighbour ends the path: one edge at the level 1 time.
+        # A neutral neighbour ends the path: one edge.
         assert bot.way(view, home, other, 1) == (1, edge_ticks(crossroads, rules, e, other))
     # The enemy capital is beyond neutral nodes: no own path reaches it at the start.
     assert bot.way(view, home, crossroads.capital(0), 1) is None
@@ -131,87 +126,9 @@ def test_a_far_small_group_of_a_strike_goes_planned(crossroads: MapDef, rules: R
     view = Match(crossroads, rules, KEY).view(1)
     g = next(iter(view.groups))
     two = dataclasses.replace(g, units=2, charged=2)
-    one = dataclasses.replace(g, units=2, charged=1)
-    # DEC-29: two edges and two charged units bring the whole bonus of 2; one edge brings 1.
-    assert bot.plan_strike(two, 3, 2)
-    assert not bot.plan_strike(two, 3, 1)
-    assert not bot.plan_strike(one, 3, 3)  # capped at 1 charged unit
-
-
-class _StrikeLog:
-    """The hoarder's orders into the enemy capital, their arrivals and the fights there."""
-
-    def __init__(self, side: int) -> None:
-        self.side = side
-        self.orders: dict[int, tuple[int, bool]] = {}
-        """Internal group id to the tick of its order and whether it was planned."""
-        self.arrived: dict[int, int] = {}
-        self.fight_groups = 0
-        self.stage_owned: int | None = None
-
-    def begin(self, match: Match) -> None:
-        self.mapdef = match.state.map
-        self.target = self.mapdef.capital(1 - self.side)
-
-    def record(self, match: Match, commands: Sequence[PlayerCommand]) -> None:
-        st = match.state
-        stage = _named(self.mapdef, "Middle Court")
-        if self.stage_owned is None and st.nodes[stage].owner == self.side:
-            self.stage_owned = st.tick
-        for g in st.groups.values():
-            if g.owner != self.side:
-                continue
-            o = g.order
-            if o is not None and o.path[-1] == self.target and g.id not in self.orders:
-                self.orders[g.id] = (st.tick, o.planned)
-            fight = st.fights.get(g.fight) if g.fight is not None else None
-            there = g.location == AtNode(self.target) or (
-                fight is not None and fight.node == self.target
-            )
-            if g.id in self.orders and g.id not in self.arrived and there:
-                self.arrived[g.id] = st.tick
-        for f in st.fights.values():
-            if f.node == self.target:
-                mine = sum(1 for m in f.members.values() if m.player == self.side)
-                self.fight_groups = max(self.fight_groups, mine)
-
-
-class _OldTurtle(SmartTurtle):
-    """The opponent of the owner's strike as it was measured: the recall of BOT-03 and no saving
-    (#687 changed both for the personalities, the benchmark keeps them)."""
-
-    DISCIPLINE: ClassVar[bool] = False
-    BANK: ClassVar[int] = 0
-
-
-def test_the_hoarder_stages_and_strikes_like_the_owner(crossroads: MapDef, rules: Ruleset) -> None:
-    # A full match on the owner's map against the easy level (seed fixed: the bots are
-    # deterministic; #663 made the opponents of #624 hold back in the midgame, the easy turtle
-    # still lets the build-up reach the stage). The owner's strike: Middle Court taken first,
-    # then 2-4 groups, at least one planned, joining one capital fight.
-    side = 1
-    turtle = _OldTurtle(crossroads, rules, seed=1, player=0, difficulty="easy")
-    # The easy level of #573 (#749 changed the levels; the opponent of this test stays): no
-    # ``insight``, 12 commands a minute.
-    turtle.tempo = Tempo(think_ticks=20, react_ticks=30, apm=12, burst=3, insight=False)
-    turtle.bucket = Bucket(turtle.tempo, rules.tick_hz)
-    turtle.perception = Perception(turtle.tempo.react_ticks)
-    bots = [turtle, bot_factory("smart_hoarder")(crossroads, rules, seed=1, player=side)]
-    log = _StrikeLog(side)
-    result = run_headless(crossroads, rules, bots, observer=log)
-    assert log.orders, "no strike"
-    first = min(t for t, _ in log.orders.values())
-    assert log.stage_owned is not None and log.stage_owned < first
-    episode = [g for g, (t, _) in log.orders.items() if t - first <= 300]
-    assert len(episode) >= 2
-    assert any(log.orders[g][1] for g in episode)
-    arrivals = [log.arrived[g] for g in episode if g in log.arrived]
-    assert len(arrivals) >= 2
-    # The groups arrive within the alignment of the slowest one (a decision every 5 ticks and
-    # the round of a fight it joins add a few ticks).
-    assert max(arrivals) - min(arrivals) <= 2 * STRIKE_ALIGN + 20
-    assert log.fight_groups >= 2
-    assert result.outcome is not None
+    # DEC-41, item 10: a group that can gather a bonus from its warehouse goes planned.
+    assert bot.plan_strike(two, 3, 2, bonus=1)
+    assert not bot.plan_strike(two, 3, 2, bonus=0)
 
 
 def _mirrored(cls: type[SmartBot]) -> type[SmartBot]:

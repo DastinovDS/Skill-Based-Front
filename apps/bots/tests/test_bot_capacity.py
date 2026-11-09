@@ -32,7 +32,7 @@ from gow_sim.view import GroupView, NodeView, OrderView, PlayerView, project
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 KEEP, ASH, BIRCH, CEDAR, DALE, ELM = range(6)
 NORTH_PASS = 17
 TICK = 1000

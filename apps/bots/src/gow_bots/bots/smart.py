@@ -13,13 +13,11 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
    can pay for a planned strike (#166: no idle reserve against an enemy that cannot strike).
 2. **The capital.** When the shown enemy forces that can reach the own capital within ``alarm``
    ticks are enough to take it (``Threat.danger``), the capital comes first: its groups stay,
-   the strongest one goes into Defense if the bonus grows before the arrival (DEC-30), free
-   charged groups that can arrive in time walk home, and the capital recruits (economy v2:
-   item 22). Only a garrison
-   sees what comes (DEC-35), so while an enemy node is within ``watch`` hops of the capital it
-   keeps at least ``watch_guard`` units.
+   free charged groups that can arrive in time walk home, and the capital recruits (item 22).
+   Only a garrison sees what comes (DEC-35), so while an enemy node is within ``watch`` hops of
+   the capital it keeps at least ``watch_guard`` units.
 3. **Visible strikes** (DEC-08): ``respond`` 1 answers a planned strike at the capital, 2 at any
-   own city, with Defense and the nearest group (the reactive play); for ``EXPOSED_TICKS`` the
+   own city, with the nearest group (the reactive play); for ``EXPOSED_TICKS`` the
    origin of every strike scores ``w_exposed`` more as a target (a bare spot to hit back).
 4. **Targets** are ranked by one weighted sum (``score``): VP of the target (``w_vp`` for an enemy
    city, ``w_neutral`` for a neutral one), the damage to the enemy supply network (``w_cut``
@@ -28,31 +26,17 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
    reach always first. ``region`` > 0 keeps the targets within that many hops of the own capital
    (``spill`` more while CP are about to burn).
 5. **Garrisons and the rest**: ``hold_front`` units stay in own nodes next to the enemy, front
-   garrisons below it are filled from free groups nearby, ``fortify`` puts their strongest group
-   into Defense; the stance is the personality's, one step toward Economy while units wait for
-   charges and toward War while the warehouses are full and CP do not burn.
-6. **Supply** (#166, PR 2; DEC-18, DEC-25, DEC-28), from ``gow_bots.bots.logistics``:
+   garrisons below it are filled from free groups nearby; the stance is item 24.
+6. **Arrivals and recruit queues** (#166, PR 2; DEC-25), from ``gow_bots.bots.logistics``
+   (the supply itself is the automatic flow of DEC-43 and the leaf shift, item 21):
 
-   - *Front markers* go to the front cities an enemy is heading into first (the charges reach
-     the defenders before the fight), then to the front nearest the enemy capital; never to a
-     *doomed* city (losing its fight, or an arrival it cannot hold within ``DOOM_TICKS``).
-   - A doomed city cancels its recruit queue (the queue and its CP are lost with the city, a
-     cancel refunds them, DEC-25, items 3 and 10) and transfers the charges its own units do not
-     need to the nearest safe own city (a captured warehouse is zeroed, DEC-26, item 4).
-   - ``SetRearMin``: 0 while ``FEED_MIN`` units wait in a city with a marker and an empty
-     warehouse (the rear gives everything to the front, DEC-28, item 5), ``rear_full`` while
-     the capital warehouse is full (the stock spreads to the rear instead of burning), else
-     the ruleset default.
-   - ``Transfer``: a city without a marker where at least ``FEED_MIN`` own units wait for
-     charges that are not there or on the way gets them from the nearest own city with a stock
-     above its supply target (DEC-28, item 5), one transfer per decision.
+   - A *doomed* city (losing its fight, or an arrival it cannot hold within ``DOOM_TICKS``)
+     cancels its recruit queue (the queue and its CP are lost with the city, a cancel refunds
+     them, DEC-25, items 3 and 10).
    - *Recruit queues* (DEC-25): a rear city with the barracks queues a second unit when a whole
      price is spare (no idle tick between units; up to ``recruit.queue_max`` with CP about to
      burn); a unit that has not started refunds in full (item 3), so while the capital is in
      danger and cannot pay its own recruit, the other cities cancel theirs (``unbank``).
-   - *Roads*: one at a time while ``road_keep`` CP are left (DEC-28, item 7), the *arteries*
-     first (the roads from the capital to the cities with a marker, over own nodes), then the
-     road with the most gain.
 
 7. **Scouting** (DEC-35: only own groups see). The ``scouts`` own front nodes nearest the own
    capital (the capital aside: it keeps ``guard``) keep at least one unit; an empty one gets the
@@ -69,27 +53,28 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
    thresholds of item 1, the pin of item 8, the evacuation of item 6, the scouts of item 7).
 
 10. **A chosen plan gets its CP** (``wait_plan``, #618). When the best attack is a scheduled order
-    (``prefer_planned``) that the CP cannot pay yet, the bot holds its price for ``wait_plan``
-    ticks (a ``Hold``): every other command that is not urgent (Defense, fights, evacuation,
+    (the bonus it gathers takes the target, DEC-41, item 10) that the CP cannot pay yet, the bot
+    holds its price for ``wait_plan`` ticks (a ``Hold``): every other command that is not urgent
+    (fights, evacuation,
     the garrisons and the answers to strikes) leaves that price, so one-CP claims do not eat it
     up. The hold ends when the plan is sent, when its target or group is gone, or when it runs
     out; the same target is not held again for twice ``wait_plan`` ticks. Without ``insight``
     the bot does not plan ahead (no hold).
 11. **Strikes at lesser cities** (``worth_defense``, #618). ``respond`` 1 answers only the
     strikes at the capital; with ``worth_defense`` > 0 it also answers a strike at an own city
-    worth at least that many VP while an award is still to come (Defense and a reinforcement
-    like ``respond`` 2). The reaction delay of the level is the one of ``Perception``.
+    worth at least that many VP while an award is still to come (a reinforcement like
+    ``respond`` 2). The reaction delay of the level is the one of ``Perception``.
 
 12. **A converging strike on the enemy capital** (``STRIKE``). The free charged groups within
     ``STRIKE_HOPS`` edges of it whose path reaches it go together (``strike_plan``): the groups
-    next to it first, the most charged first, each by a scheduled order when ``plan_strike`` (the
-    shared ``prefer_planned`` with the shots the groups before it leave missing) says so, else by
-    an ordinary one, while the CP last. The strike goes when its pool (charges and plan bonuses,
-    DEC-29) reaches the shots that take the capital (``strike_need``) and it has ``STRIKE_MIN``
-    groups (one group alone is a single attack of item 4, unless ``STRIKE_ONLY``); with
-    ``STRIKE_BANK`` a ready strike keeps its price from the other spending until it is paid. The
-    orders are timed so that every group arrives within ``STRIKE_ALIGN`` ticks of the slowest one
-    (the plan's ``orders.planned_delay_ticks`` and the travel times of mechanics.md, section 4,
+    next to it first, the most charged first, each by a scheduled order when ``plan_strike`` says
+    so (a group that can gather a bonus, DEC-41, item 10), else by an ordinary one, while the CP
+    last. The strike goes when its pool (charges and plan bonuses) reaches the shots that take
+    the capital (``strike_need``) and it has ``STRIKE_MIN`` groups (one group alone is a single
+    attack of item 4, unless ``STRIKE_ONLY``); with ``STRIKE_BANK`` a ready strike keeps its
+    price from the other spending until it is paid. The orders are timed so that every group
+    arrives within ``STRIKE_ALIGN`` ticks of the slowest one (the gathering of a plan,
+    ``orders.plan_ticks_per_bonus`` a bonus, and the travel times of mechanics.md, section 4,
     ``edge_ticks``): the joins of the first rounds count in full (DEC-24, D1). The groups of a
     strike are not recalled one by one and do not leave a fight that the rest of the strike is
     still walking into (``committed``, ``coming``).
@@ -98,7 +83,7 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
 
 Items 13-17 answer the owner's staging strike (#624, playtest 2026-10-30, B1-B4); they need
 ``insight`` and the personality's ``ANSWERS`` (the benchmark ``smart_hoarder`` keeps them off),
-and each has its switch (``WORRY``, ``WITHDRAW``, ``BURN_WAR``, ``CENTRE_BARRACKS``, ``PAIRS``).
+and each has its switch (``WORRY``, ``WITHDRAW``, ``CENTRE_BARRACKS``, ``PAIRS``).
 Items 13 and 14 are off for every personality: on GitHub runners they made the hard bots weaker
 against the field and against the benchmark (``docs/balance/log.md``, #624):
 
@@ -116,13 +101,13 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     the safer own neighbour, not back into a node left within ``WITHDRAW_TICKS``. Cities are held
     (their VP and warehouse), numbers hidden by the fog are no reason, a pinned node (DEC-37)
     stays.
-15. **War while the charges burn** (B3): the stance steps toward War when the warehouses are
-    nine tenths full, whether units wait for delivery or not.
+15. **War while the charges burn** (B3): an item of the stance of economy v1, removed with it
+    (#894); the stance policy is item 24.
 16. **One forward barracks in the centre** (B4): the large city whose hops to the two capitals
     differ least, once held and not next to the enemy; no barracks in front cities.
 17. **Two strikes at one node** (the defensive pair): two or more enemy scheduled orders aimed at
     the capital raise the alarm (item 2) within ``alarm`` ticks of their arrival; at any other
-    own node they are answered like a strike at the capital (Defense and a reinforcement).
+    own node they are answered like a strike at the capital (a reinforcement).
 
 18. **The midgame and the late game** (#663; ``gow_bots.bots.estimate``). The *phase* is the
     opening while more than a tenth of the nodes is neutral, the midgame after it, the late game
@@ -142,7 +127,7 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     item 1: ahead, every attack demands ``secure_margin`` more; not ahead, all in.
 19. **The turtle** (``SmartTurtle``): the natural half in the opening; on a settled map it holds
     while the forecast is ahead (garrisons by the threat, the spare army in the most threatened
-    front city, bunkers or Defense, the own half retaken first) and pushes the weakest sector one
+    front city, road fortifications, the own half retaken first) and pushes the weakest sector one
     node at a time while it is not (its docstring).
 20. **Pockets** (#684; DEC-43, item H; ``gow_bots.bots.pockets``). Under the supply flow a pocket
     (an own component without the own capital, ``flow_pocket``) never gets a charge from the
@@ -150,7 +135,7 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     discharged free group in a pocket node with an empty warehouse leaves it (a front node does
     not keep it), then a charged one in a node that starves: it walks to the empty foreign node on
     the shortest chain of free captures into the capital's component (a ``Move`` ends at the first
-    foreign node, SIM-05; the capture is free under ``mvp-4``, DEC-38), and once it is back the
+    foreign node, SIM-05; the capture is free under ``mvp-5``, DEC-38), and once it is back the
     flow pulls charges to it (item A4); a group too big for the way, or for the room the foreign
     node has left once the own units on the way into it arrive (``pockets.heading``, item 21,
     #754), splits off the part that fits, and a city keeps one unit (an empty city falls for
@@ -162,9 +147,9 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     garrisons, the answers, the reinforcements and the walks home count the units already on the
     way and pick a group that fits. The leaf shift holds ``economy.SHIFT_HOLD_TICKS`` after every
     change and stays back while the enemy takes own nodes (``economy.leaf_shift_command``).
-22. **Capital defense and road fortifications under economy v2** (#682, G-F of the ``mvp-4``
-    bot audit; ``gow_bots.bots.forts``). Economy v2 has no Defense (DEC-41, item 5) and
-    ``mvp-4`` no bunker: the road fortification (DEC-43, item D) is the defensive building.
+22. **Capital defense and road fortifications** (#682, G-F of the ``mvp-4`` bot audit;
+    ``gow_bots.bots.forts``). There is no Defense (DEC-41, item 5) and no bunker: the road
+    fortification (DEC-43, item D) is the defensive building.
 
     - *The capital*: every road into it that a visible enemy force of ``FORT_SHOTS`` comes by
       (a fresh sighting in the enemy neighbour, a planned strike, a figure heading in) is
@@ -193,7 +178,7 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     answers (fights, the capital, the strikes) spend them. The saving opens at the cap less one
     quantum (no CP burn at the cap, DEC-02) and stops for ``BANK_TICKS`` after a goal waited
     ``BANK_TICKS`` unpaid. The benchmark ``smart_hoarder`` keeps neither (its ``STRIKE_BANK``).
-24. **The stance policy under** ``[stances]`` (#881, DEC-44; ``gow_bots.bots.stance``). The stance
+24. **The stance policy** (#881, DEC-44; ``gow_bots.bots.stance``). The stance
     of the phase (``stance_opening``, ``stance_midgame``, ``stance_late``: 0 Economy, 1 Balance,
     2 War), one step toward Economy while the next CP quantum would burn (on from the stance in
     force while they keep burning) or units wait for charges the warehouses do not have, one step
@@ -208,8 +193,8 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     percent of them) and the enemy figures met on the road in; an attack short of that is not
     sent, the group gathers or rallies. Under ``"round"`` nothing changes.
 
-The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
-prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
+An order is planned when the bonus it gathers makes it take its target (DEC-41, item 10), the
+same rule for all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
 (``Bot.key``, ``Bot.edge_keys``), nothing draws from ``self.rng``.
 """
 
@@ -224,19 +209,12 @@ from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option
 from gow_bots.bots.estimate import EnemyForce, Phase, Sector, phase, sectors, strengths, threats
 from gow_bots.bots.forts import RoadThreat, cut_off, fortified, road_threats
-from gow_bots.bots.logistics import (
-    Arrival,
-    arrivals,
-    garrison_need,
-    incoming_charges,
-    own_parts,
-)
+from gow_bots.bots.logistics import Arrival, arrivals, garrison_need
 from gow_bots.bots.pockets import Pockets, heading, read_pockets
 from gow_bots.bots.stance import StanceInputs, StancePolicy, factories_full, wanted_stance
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
 from gow_bots.bots.utility import (
     defender_pool,
-    prefer_planned,
     shots_to_take,
     takes,
     terrain_burned,
@@ -247,27 +225,18 @@ from gow_sim.commands import (
     FortifyRoad,
     Move,
     Recruit,
-    SetFront,
-    SetMode,
-    SetRearMin,
-    SetStance,
     Split,
-    Transfer,
-    UpgradeRoad,
 )
 from gow_sim.maps import MapDef, NodeKind
-from gow_sim.ruleset import RecruitLocation, Ruleset
+from gow_sim.ruleset import Ruleset
 from gow_sim.view import (
     AtNode,
     Detail,
     EnemyGroupView,
     FightView,
     GroupView,
-    IntentKind,
     IntentView,
-    Mode,
     PlayerView,
-    Stance,
 )
 
 __all__ = [
@@ -294,12 +263,6 @@ DOOM_TICKS: Final = 30
 """An own city that a shown enemy force able to take it reaches within this many ticks is doomed."""
 PIN_SLACK: Final = 1
 """Ticks added to ``combat.engage_ticks`` for the pin of DEC-37 (an order applies next tick)."""
-FEED_MIN: Final = 2
-"""Own units waiting for charges in a city that a transfer feeds."""
-FRONT_HOLD: Final = 300
-"""Ticks a front marker stays on a city that is still a candidate (hysteresis, item 6)."""
-REAR_MIN_TICKS: Final = 150
-"""The rear minimum changes at most this often (no flapping on every dispatch)."""
 SCOUT_TICKS: Final = 30
 """A node a scout was split off for waits this long before another split for it."""
 STRIKE_ALIGN: Final = 10
@@ -323,9 +286,10 @@ capital's component (item 20): a pocket of four units weighs like one VP of an e
 COUNTER_TICKS: Final = 300
 """How long an enemy attack on an own node opens the counterattack of ``smart_reactive``."""
 V2_RECRUIT_KEEP_MOVES: Final = 2
-"""Economy v2: ``recruit_keep`` is at most this many ordinary orders (``adjusted``)."""
+"""``recruit_keep`` is at most this many ordinary orders (``adjusted``): the keeps of the
+personalities were drawn for an economy with half the CP income and "Defense" to pay."""
 DANGER_RESERVE_MOVES: Final = 2
-"""Economy v2 (#682): CP kept, in ordinary orders, while the capital is in danger but the alarm
+"""#682: CP kept, in ordinary orders, while the capital is in danger but the alarm
 is not on yet (item 22): the walk home and the recruits of the alarm, or a fortification."""
 FORT_SHOTS: Final = 3
 """Visible enemy shots on a road into an own node that make it worth a road fortification
@@ -343,9 +307,6 @@ W_FORT_CUT: Final = 50
 BANK_TICKS: Final = 300
 """Item 23 (#687): a goal saved for this long without being paid stops the saving for as long
 (three quanta of CP: the price of a fortification and a keep, or of a strike of three groups)."""
-STANCES: Final = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
-"""From the most charges to the most CP (``economy.stance_to_charges_pct``)."""
-
 _COMMON: Final[Mapping[str, ParamRange]] = {
     "alarm": ParamRange(150, 250),
     "all_in": ParamRange(3, 5),
@@ -448,12 +409,9 @@ class SmartBot(CampaignBot):
 
     name: ClassVar[str] = "smart"
     STANCE_POLICY: ClassVar[bool] = True
-    """Item 24: the stance policy under ``[stances]`` (#881)."""
+    """Item 24: the stance policy (#881)."""
     CONTACT: ClassVar[bool] = True
     """Item 25: the attack estimate before contact under ``combat.retreat = "none"`` (#881)."""
-    STANCE: ClassVar[Stance] = Stance.BALANCE
-    LATE_STANCE: ClassVar[Stance | None] = None
-    """The stance from tick ``late`` on (``None``: ``STANCE`` all match)."""
     STRIKE: ClassVar[bool] = False
     """Converging strikes on the enemy capital instead of single attacks on it (item 12)."""
     STRIKE_HOPS: ClassVar[int] = 3
@@ -473,14 +431,10 @@ class SmartBot(CampaignBot):
     """Item 13 on (with ``ANSWERS``). Off: measured worse (#624, docs/balance/log.md)."""
     WITHDRAW: ClassVar[bool] = False
     """Item 14 on (with ``ANSWERS``). Off: measured worse (#624, docs/balance/log.md)."""
-    BURN_WAR: ClassVar[bool] = True
-    """Item 15 on (with ``ANSWERS``)."""
     CENTRE_BARRACKS: ClassVar[bool] = True
     """Item 16 on (with ``ANSWERS``)."""
     PAIRS: ClassVar[bool] = True
     """Item 17 on (with ``ANSWERS``)."""
-    BUNKERS: ClassVar[int] = 1
-    """Economy v2: bunkers of a personality that fortifies (``bunkers``)."""
     ANXIETY: ClassVar[int] = 50
     """Percent of the hidden enemy force (``hidden_shots``) a worried capital counts (item 13)."""
     WITHDRAW_GAP: ClassVar[int] = 2
@@ -499,8 +453,8 @@ class SmartBot(CampaignBot):
     """Midgame (item 18): ahead on the forecast, enemy nodes are attacked only for
     ``COUNTER_TICKS`` after an enemy attack on an own node (the counterattack)."""
     DEFENSE_V2: ClassVar[bool] = True
-    """Item 22 on: the capital defense of #682 and the threat fortifications under economy v2;
-    the benchmark ``smart_hoarder`` keeps the old capital defense and no threat fortification."""
+    """Item 22 on: the capital defense of #682 and the threat fortifications; the benchmark
+    ``smart_hoarder`` keeps the old capital defense and no threat fortification."""
     FORTS: ClassVar[int] = 2
     """Item 22: fortifications on the roads into threatened own nodes other than the capital
     (built or being built, on a road from an enemy node) kept at most; 0: none."""
@@ -531,6 +485,9 @@ class SmartBot(CampaignBot):
         "region": ParamRange(0, 0),
         "spill": ParamRange(0, 0),
         "hold_front": ParamRange(0, 0),
+        # ``fortify``, ``road_keep``, ``late`` and ``rear_full`` were read only by the play of
+        # economy v1 (Defense, road upgrades, the stance, the rear minimum), removed with it
+        # (#894). They stay drawn, so the draws of the other keys stay as they were.
         "fortify": ParamRange(0, 0),
         "road_keep": ParamRange(200, 300),
         "late": ParamRange(0, 0),
@@ -563,7 +520,7 @@ class SmartBot(CampaignBot):
         self.alarm = False
         """The capital is in danger in this decision (module docstring, item 2)."""
         self.danger = False
-        """Economy v2 (item 22): the capital is in danger within ``alarm`` plus the build time of
+        """Item 22: the capital is in danger within ``alarm`` plus the build time of
         a road fortification, alarm or not."""
         self.paired: dict[int, int] = {}
         """Own node to the earliest arrival of two or more enemy strikes at it (item 17)."""
@@ -607,9 +564,6 @@ class SmartBot(CampaignBot):
         """Own nodes whose groups may not leave in this decision (DEC-37, item 8)."""
         self.watch: list[bool] = [False] * count
         """Own nodes a scout keeps in this decision (item 7)."""
-        self.rear_tick: int | None = None
-        self.front_set: list[int | None] = []
-        """By marker index: the tick this bot last moved it (``fronts``)."""
         self.scouted: dict[int, int] = {}
         """Node to the tick a scout was split off for it."""
         self.strike: Strike | None = None
@@ -618,7 +572,7 @@ class SmartBot(CampaignBot):
         """No new strike before this tick."""
         self.strike_sent: dict[int, int] = {}
         """Opaque id of a group sent in a strike to the tick it was sent."""
-        self._edge_ticks: dict[tuple[int, int, int], int] = {}
+        self._edge_ticks: dict[tuple[int, int], int] = {}
         self.edge_between: dict[tuple[int, int], int] = {}
         """``(a, b)`` in both orders to the edge between the two nodes."""
         self.enemy_force = EnemyForce(mapdef, player)
@@ -689,9 +643,8 @@ class SmartBot(CampaignBot):
         self.paired = self._paired(view) if self.answering() and self.PAIRS else {}
         if self.home in self.paired and self.paired[self.home] - tick <= drawn["alarm"]:
             self.alarm = True  # item 17: two strikes at the capital
-        fort = self.rules.fort
-        lead = drawn["alarm"] + (0 if fort is None else fort.build_ticks)
-        self.danger = self.defense_v2() and (
+        lead = drawn["alarm"] + self.rules.fort.build_ticks
+        self.danger = self.DEFENSE_V2 and (
             self.alarm or (threat.danger and threat.eta is not None and threat.eta - tick <= lead)
         )
         self.worry = self._worry(view, a) if self.answering() and self.WORRY else None
@@ -730,8 +683,6 @@ class SmartBot(CampaignBot):
     def read_pockets(self, view: PlayerView, tick: int, main: list[bool]) -> Pockets | None:
         """The own pockets of this decision (item 20): a foreign node is free to pass when the
         estimate of the enemy there is empty and no fight goes on in it."""
-        if not self.rules.flow:
-            return None
         fights = self.fight_nodes(view)
 
         def free(node: int) -> bool:
@@ -858,8 +809,8 @@ class SmartBot(CampaignBot):
 
     def adjusted(self, a: Assessment) -> dict[str, int]:
         """The drawn parameters with the thresholds of this decision (module docstring, 1);
-        without ``insight`` (item 9) only the capital guard of an alarm. Economy v2 with item 22:
-        while the capital is in danger and the alarm is not on, ``DANGER_RESERVE_MOVES`` orders
+        without ``insight`` (item 9) only the capital guard of an alarm. With item 22: while the
+        capital is in danger and the alarm is not on, ``DANGER_RESERVE_MOVES`` orders
         of CP are kept for it (``defend_capital`` spends them)."""
         p = self._adjusted(a)
         if self.danger and not self.alarm:
@@ -868,12 +819,11 @@ class SmartBot(CampaignBot):
 
     def _adjusted(self, a: Assessment) -> dict[str, int]:
         p = dict(self.params)
-        if self.rules.v2:
-            # Economy v2 has no Defense to keep CP for (DEC-41, item 5) and doubles the CP
-            # income (item 1): the keeps of the v1 personalities shrink to a move or two.
-            move = self.rules.orders.cost.move
-            p["reserve"] = min(p["reserve"], move)
-            p["recruit_keep"] = min(p["recruit_keep"], V2_RECRUIT_KEEP_MOVES * move)
+        # No Defense to keep CP for (DEC-41, item 5) and the whole CP quantum goes to CP (item 1):
+        # the keeps of the personalities shrink to a move or two.
+        move = self.rules.orders.cost.move
+        p["reserve"] = min(p["reserve"], move)
+        p["recruit_keep"] = min(p["recruit_keep"], V2_RECRUIT_KEEP_MOVES * move)
         if not self.tempo.insight:
             p["scouts"] = 0
             if self.alarm:
@@ -891,7 +841,7 @@ class SmartBot(CampaignBot):
             p["guard"] = max(p["guard"], p["watch_guard"])
         if self.alarm:
             p["guard"] = max(p["guard"], a.threat.units)
-            p["reserve"] = 0  # the reserve is for this moment: Defense and the walk home
+            p["reserve"] = 0  # the reserve is for this moment: the walk home
         if self.worry is not None:
             p["scouts"] += 1  # item 13: one more watcher on the way in
             p["reserve"] = 0
@@ -913,18 +863,10 @@ class SmartBot(CampaignBot):
         for cmd in self.fight_commands(view, tick, ctx.budget):  # DEC-24: fights first
             if self.spend(ctx, cmd) and isinstance(cmd, Move):
                 ctx.used[cmd.group] = True
-        if self.rules.v2:
-            self.economy_v2(ctx)  # lines, factories, bunkers, plans (DEC-41)
-            self.stance_v2(ctx, a)  # item 24: under ``[stances]`` only (DEC-44)
-        else:
-            self._set_stance(ctx, a)
-            for cmd in self.fronts(view):  # front markers on the front cities (DEC-28)
-                self.spend(ctx, cmd)
+        self.economy_v2(ctx)  # factories, plans, the leaf shift, road fortifications (DEC-41)
+        self.stance_v2(ctx, a)  # item 24 (DEC-44)
         self.evacuate(ctx)
         self.unbank(ctx)
-        if not self.rules.v2:
-            self.set_rear_min(ctx)
-            self.feed(ctx)
         plan_cp = self.held_cp(ctx)
         bank = self.strike_cp(ctx) if self.striking() else 0  # item 12: the strike's CP
         ctx.held = max(plan_cp, bank)  # item 10: from here on the spending leaves the plan's CP
@@ -964,8 +906,6 @@ class SmartBot(CampaignBot):
         self._gather(ctx)
         self._rally(ctx)
         self._recruit(ctx)
-        if not self.rules.v2:
-            self.build_roads(ctx)  # no road levels under v2 (DEC-41, item 8)
         self.bank(ctx)
         return ctx.cmds
 
@@ -1040,9 +980,8 @@ class SmartBot(CampaignBot):
             plan = self.strike_plan(ctx, self.rules.cp.cap)
             if plan is not None and plan.ready and len(plan.picks) >= self.STRIKE_MIN:
                 goal = plan.cost
-        fort = self.rules.fort
-        if fort is not None and self.fort_road_site(ctx) is not None:
-            goal = max(goal, fort.cost + self.FORT_KEEP)
+        if self.fort_road_site(ctx) is not None:
+            goal = max(goal, self.rules.fort.cost + self.FORT_KEEP)
         return goal
 
     def saving(self, ctx: Ctx) -> int:
@@ -1125,23 +1064,21 @@ class SmartBot(CampaignBot):
         else:
             start = self.map.nodes[target]
             units = self.params.get("strike_guess", GUESS_UNITS)
-            base = shots_to_take(
-                self.rules, start.terrain, units, units, self.defended(view, target)
-            )
+            base = shots_to_take(self.rules, start.terrain, units, units)
         return base + self.strike_margin()
 
-    def edge_time(self, edge: int, to_node: int, level: int) -> int:
-        key = (edge, to_node, level)
+    def edge_time(self, edge: int, to_node: int) -> int:
+        key = (edge, to_node)
         ticks = self._edge_ticks.get(key)
         if ticks is None:
-            ticks = edge_ticks(self.map, self.rules, edge, to_node, level)
+            ticks = edge_ticks(self.map, self.rules, edge, to_node)
             self._edge_ticks[key] = ticks
         return ticks
 
     def way(self, view: PlayerView, start: int, dest: int, size: int) -> tuple[int, int] | None:
         """``(edges, ticks)`` of the fastest path a group of ``size`` units takes from ``start``
         to ``dest``: through own nodes without a fight, under the stack limit (SIM-05, DEC-20, D),
-        by the travel times of the current road levels; ties by ``node_key``. ``None``: none."""
+        by the travel times of the terrain; ties by ``node_key``. ``None``: none."""
         me, nodes = view.player, view.nodes
         fights = self.fight_nodes(view)
         best: dict[int, int] = {start: 0}
@@ -1158,7 +1095,7 @@ class SmartBot(CampaignBot):
                 other = self.map.edges[e].other(node)
                 if nodes[other].capacity < size:
                     continue
-                t = ticks + self.edge_time(e, other, view.edges[e].width)
+                t = ticks + self.edge_time(e, other)
                 if other not in best or t < best[other]:
                     best[other] = t
                     heapq.heappush(heap, (t, self.key(other), other, edges + 1))
@@ -1192,9 +1129,8 @@ class SmartBot(CampaignBot):
         spent = pool = 0
         chosen: list[Pick] = []
         for g, here, edges, ticks in found:
-            bonus = self.plan_bonus(view, here, edges, g.charged)
-            if rules.v2:
-                bonus = min(bonus, need - pool)  # a v2 plan asks for what is missing only
+            # a plan asks for what is missing only (DEC-41, item 10)
+            bonus = min(self.plan_bonus(view, here, g.charged), need - pool)
             plan = (
                 bonus >= 1
                 and need - pool > 0
@@ -1211,13 +1147,11 @@ class SmartBot(CampaignBot):
         return StrikePlan(pool, need, spent, tuple(chosen))
 
     def plan_strike(self, g: GroupView, missing: int, edges: int, bonus: int = 0) -> bool:
-        """Whether group ``g`` of a strike goes by a scheduled order: the shared utility
-        (``prefer_planned``) with the shots the groups before it leave ``missing``. Under v2
-        every group that can gather a ``bonus`` does (DEC-41, item 10): the strike is short,
-        and its arrival waits for the slowest group anyway."""
-        if self.rules.v2:
-            return bonus >= 1
-        return prefer_planned(self.rules, g.charged, missing, edges)
+        """Whether group ``g`` of a strike goes by a scheduled order: every group that can gather
+        a ``bonus`` does (DEC-41, item 10): the strike is short (``missing`` shots), and its
+        arrival waits for the slowest group anyway. ``edges``: the edges of its path."""
+        del g, missing, edges
+        return bonus >= 1
 
     def strike_cp(self, ctx: Ctx) -> int:
         """The CP kept for the strike: the orders of a strike under way not sent yet, or the price
@@ -1322,7 +1256,6 @@ class SmartBot(CampaignBot):
             i
             for i in view.intents
             if i.owner != self.player
-            and i.kind is IntentKind.PLANNED_MOVE
             and i.target is not None
             and view.nodes[i.target].owner == self.player
         ]
@@ -1380,15 +1313,14 @@ class SmartBot(CampaignBot):
                     seen_shots += _figure_shots(f)
         if seen_shots < WORRY_SEEN:
             return None
-        units = charged = defense = 0
+        units = charged = 0
         for g in view.groups:
             if g.location == AtNode(home):
                 units += g.units
                 charged += g.charged
-                defense += g.defense_bonus or 0
         terrain = self.map.nodes[home].terrain
         burned = terrain_burned(self.rules, view, home)
-        hold = shots_to_take(self.rules, terrain, units, charged, defense, burned=burned)
+        hold = shots_to_take(self.rules, terrain, units, charged, burned=burned)
         shots = seen_shots + self.hidden_shots(view, a)
         if shots < hold:
             return None
@@ -1426,13 +1358,13 @@ class SmartBot(CampaignBot):
 
     def enemy_shots_near(self, view: PlayerView, node: int) -> int:
         """The most shots of one visible enemy force next to own ``node``: a fresh sighting in a
-        neighbour in the Attack mode, or a figure on an incident edge heading into ``node``
+        neighbour, or a figure on an incident edge heading into ``node``
         (item 14). Only numbers the view shows count: a force hidden by the fog is not a reason
         to give a node up."""
         best = 0
         for m in self.neighbors[node]:
             sighting = view.nodes[m].seen
-            if sighting is None or Mode.ATTACK not in sighting.enemy_modes:
+            if sighting is None or not sighting.enemy_modes:
                 continue
             if view.tick - sighting.tick > FRESH_TICKS:
                 continue
@@ -1472,7 +1404,7 @@ class SmartBot(CampaignBot):
             units = sum(g.units for g in groups)
             charged = sum(g.charged for g in groups)
             terrain = self.map.nodes[node].terrain
-            pool = defender_pool(self.rules, terrain, charged, 0)
+            pool = defender_pool(self.rules, terrain, charged)
             if enemy - pool < self.WITHDRAW_GAP or enemy < pool + units:
                 continue
             for g in groups:
@@ -1503,23 +1435,14 @@ class SmartBot(CampaignBot):
                     ctx.standing[node] -= g.units
                     self.left_from[node] = ctx.tick
 
-    def _burning(self, stock: int, cap: int, waiting: int) -> bool:
-        """The warehouses are full, so new charges burn (item 15, playtest B3): without the
-        answers only a full stock with no unit waiting; with them nine tenths of the capacity,
-        units waiting or not (they wait for delivery, not for production)."""
-        if not self.answering() or not self.BURN_WAR:
-            return cap <= stock and waiting == 0
-        return 10 * stock >= 9 * cap
-
     @override
     def wanted_barracks(self, view: PlayerView) -> int | None:
         """Item 16 (playtest B4): with the answers, the one forward barracks goes to the centre
-        (the large city between the capitals) once it is held and not next to the enemy; no
-        barracks in the cities a front marker would put up and lose."""
+        (the large city between the capitals) once it is held and not next to the enemy."""
         if not self.answering() or not self.CENTRE_BARRACKS:
             return super().wanted_barracks(view)
         centre = self.centre
-        if centre == self.home or not self.rules.city_upgrades.enabled:
+        if centre == self.home:
             return None
         n = view.nodes[centre]
         if n.owner != self.player or n.has_barracks or n.building is not None:
@@ -1530,39 +1453,9 @@ class SmartBot(CampaignBot):
 
     # Stance ---------------------------------------------------------------------------------
 
-    def wanted_stance(self, a: Assessment) -> Stance:
-        """The personality's stance, one step toward Economy while ``starved`` own units wait
-        for charges and the warehouses are less than half full, one step toward War while the
-        warehouses are full, no unit waits and the CP are not about to burn (the stance only
-        splits the CP income, DEC-02)."""
-        p = self.params
-        late = p["late"]
-        stance = self.LATE_STANCE if self.LATE_STANCE and late and a.tick >= late else self.STANCE
-        at = STANCES.index(stance)
-        own = a.own
-        if own.uncharged_standing >= p["starved"] and 2 * own.warehouse < own.warehouse_cap:
-            at = max(0, at - 1)
-        elif (
-            own.warehouse_cap > 0
-            and self._burning(own.warehouse, own.warehouse_cap, own.uncharged_standing)
-            and a.cp < self.rules.cp.cap - 2 * self.rules.cp.per_period
-        ):
-            at = min(len(STANCES) - 1, at + 1)
-        return STANCES[at]
-
-    def _set_stance(self, ctx: Ctx, a: Assessment) -> None:
-        last = self.stance_tick
-        if last is not None and ctx.tick - last < self.rules.orders.stance_cooldown_ticks:
-            return
-        stance = self.wanted_stance(a)
-        if ctx.view.me.stance is not stance and self.spend(ctx, SetStance(stance)):
-            self.stance_tick = ctx.tick
-
     def stance_v2(self, ctx: Ctx, a: Assessment) -> None:
-        """Item 24: the stance of the policy (``gow_bots.bots.stance``) under ``[stances]``, at
-        most one change per ``stance_dwell`` ticks."""
-        if self.rules.stances is None:
-            return
+        """Item 24: the stance of the policy (``gow_bots.bots.stance``, DEC-44), at most one
+        change per ``stance_dwell`` ticks."""
         view = ctx.view
         pressed = self.danger or self.alarm or bool(self.strikes_at(view))
         full = factories_full(self.rules, view, self.home)
@@ -1576,9 +1469,9 @@ class SmartBot(CampaignBot):
     # The capital ----------------------------------------------------------------------------
 
     def defend_capital(self, ctx: Ctx, a: Assessment) -> None:
-        """Module docstring, item 2: Defense, the groups that arrive in time, a recruit; under
-        economy v2 with ``DEFENSE_V2`` item 22 (``defend_capital_v2``)."""
-        if self.defense_v2():
+        """Module docstring, item 2: the groups that arrive in time, a recruit; with
+        ``DEFENSE_V2`` item 22 (``defend_capital_v2``)."""
+        if self.DEFENSE_V2:
             self.defend_capital_v2(ctx, a)
             return
         if not self.alarm or a.threat.eta is None:
@@ -1586,7 +1479,6 @@ class SmartBot(CampaignBot):
         view, home = ctx.view, self.home
         if view.nodes[home].owner != self.player or home in self.fight_nodes(view):
             return
-        self.defend(ctx, home, a.threat.eta)
         missing = a.threat.units - a.threat.need + 1
         to_home = [row[home] for row in self.travel.ticks]
         far = len(self.map.nodes)
@@ -1607,11 +1499,6 @@ class SmartBot(CampaignBot):
         if self.can_queue(view, home, self.load(ctx, home)) and self.spend(ctx, Recruit(home)):
             self.recruited[home] = ctx.tick
             ctx.standing[home] += 1
-
-    def defense_v2(self) -> bool:
-        """Item 22 applies: economy v2 (no Defense, DEC-41 item 5) and the personality's
-        ``DEFENSE_V2``."""
-        return self.rules.v2 and self.DEFENSE_V2
 
     def defend_capital_v2(self, ctx: Ctx, a: Assessment) -> None:
         """Item 22 (#682): the alarm walks home every free group that can join the fight at the
@@ -1678,7 +1565,7 @@ class SmartBot(CampaignBot):
         view, home = ctx.view, self.home
         n = view.nodes[home]
         queued = n.recruit_queue
-        if queued is None or (self.rules.city_upgrades.enabled and not n.has_barracks):
+        if queued is None or not n.has_barracks:
             return
         queue = queued  # ``standing`` counts the recruits of this decision, ``queue`` too
         while (
@@ -1699,7 +1586,7 @@ class SmartBot(CampaignBot):
 
         def seen(node: int) -> int:
             sighting = view.nodes[node].seen
-            if sighting is None or Mode.ATTACK not in sighting.enemy_modes:
+            if sighting is None or not sighting.enemy_modes:
                 return 0
             if tick - sighting.tick > FRESH_TICKS:
                 return 0
@@ -1716,9 +1603,6 @@ class SmartBot(CampaignBot):
         """Item 22: every road into the own capital that a visible enemy force of ``FORT_SHOTS``
         comes by (any visible force while the capital is in danger) gets a road fortification
         (DEC-43, item D), the most shots first; the capital keeps no CP for it."""
-        fort = self.rules.fort
-        if fort is None:
-            return
         view, home = ctx.view, self.home
         least = 1 if self.danger else FORT_SHOTS
         roads = sorted(
@@ -1732,27 +1616,6 @@ class SmartBot(CampaignBot):
         for t in roads:
             if not self.spend(ctx, FortifyRoad(home, t.edge)):
                 return
-
-    def defend(self, ctx: Ctx, target: int, arrival: int) -> bool:
-        """Defense for the strongest charged group standing in ``target``, if it gathers at least
-        +1 by ``arrival`` (it is switched on in the next tick, DEC-30). Never under v2: there is
-        no Defense (DEC-41, item 5)."""
-        if self.rules.v2:
-            return False
-        if self.rules.orders.defense_bonus(max(0, arrival - ctx.tick - 1), 1) < 1:
-            return False
-        here = [
-            g
-            for g in self.idle_groups(ctx.view)
-            if node_of(g) == target and g.charged > 0 and g.id not in ctx.used
-        ]
-        if not here or any(g.mode is Mode.DEFENSE for g in here):
-            return False
-        best = max(here, key=lambda g: (g.charged, g.units))
-        if self.spend(ctx, SetMode(best.id, Mode.DEFENSE)):
-            ctx.used[best.id] = True
-            return True
-        return False
 
     # Visible strikes ------------------------------------------------------------------------
 
@@ -1773,9 +1636,7 @@ class SmartBot(CampaignBot):
             lesser = target != self.home and target not in self.paired  # item 17: pairs count
             if lesser and level == 1 and not self.worth_defending(target):
                 continue
-            done = self.defend(ctx, target, self.arrival(intent))
-            done = self.reinforce(ctx, target) or done
-            if done:
+            if self.reinforce(ctx, target):
                 self.answered[intent.id] = True
         ctx.budget -= self.params["reserve"]
 
@@ -1795,7 +1656,6 @@ class SmartBot(CampaignBot):
             i
             for i in view.intents
             if i.owner != self.player
-            and i.kind is IntentKind.PLANNED_MOVE
             and i.target is not None
             and view.nodes[i.target].owner == self.player
         ]
@@ -1803,10 +1663,11 @@ class SmartBot(CampaignBot):
         return found
 
     def arrival(self, intent: IntentView) -> int:
-        """The earliest tick the planned strike of ``intent`` can reach its target."""
+        """The earliest tick the planned strike of ``intent`` can reach its target: it departs once
+        it has gathered one bonus at least (DEC-41, item 10)."""
         assert intent.target is not None
         way = max(0, self.travel.ticks[intent.origin][intent.target])
-        return intent.created_tick + self.rules.orders.planned_delay_ticks + way
+        return intent.created_tick + self.rules.orders.plan_ticks_per_bonus + way
 
     def reinforce(self, ctx: Ctx, target: int) -> bool:
         """The nearest charged group that can walk to ``target``, may leave its node and fits
@@ -1871,36 +1732,10 @@ class SmartBot(CampaignBot):
                     ctx.used[g.id] = True
                     ctx.standing[here] -= g.units
 
-    @override
-    def bunkers(self) -> int:
-        """Economy v2: the personalities that fortify keep ``BUNKERS`` (DEC-41, item 12: the
-        bunker replaces Defense)."""
-        return self.BUNKERS if self.params["fortify"] > 0 else 0
-
     def fortify(self, ctx: Ctx) -> None:
-        """Defense on the strongest charged group of every own node next to the enemy (and of
-        the capital), once: the bonus gathers anew after a fight without a new payment
-        (DEC-30). Only while CP stay above the recruit keep. Under economy v2 with item 22 the
-        road fortifications of ``fortify_roads`` instead (no Defense, DEC-41 item 5)."""
-        if self.defense_v2():
+        """With item 22 (``DEFENSE_V2``) the road fortifications of ``fortify_roads``."""
+        if self.DEFENSE_V2:
             self.fortify_roads(ctx)
-            return
-        if self.params["fortify"] <= 0 or self.rules.v2:
-            return
-        keep = self.params["recruit_keep"]
-        by_node: dict[int, list[GroupView]] = {}
-        for g in self.free_groups(ctx):
-            by_node.setdefault(node_of(g), []).append(g)
-        for node in sorted(by_node, key=self.key):
-            if not self.hot[node] or any(g.mode is Mode.DEFENSE for g in by_node[node]):
-                continue
-            charged = [g for g in by_node[node] if g.charged > 0]
-            if not charged:
-                continue
-            best = max(charged, key=lambda g: (g.charged, g.units))
-            cmd = SetMode(best.id, Mode.DEFENSE)
-            if ctx.budget - self.cost(cmd) >= keep and self.spend(ctx, cmd):
-                ctx.used[best.id] = True
 
     def fortify_roads(self, ctx: Ctx) -> None:
         """Item 22 (G-F): one road fortification per decision on the road into a threatened own
@@ -1916,7 +1751,7 @@ class SmartBot(CampaignBot):
         ``node_key``. Needs ``insight`` (item 9). The site is ``fort_road_site``; a site the CP
         cannot pay yet is saved for (item 23, ``saving``)."""
         fort = self.rules.fort
-        if fort is None or ctx.budget - fort.cost < self.FORT_KEEP:
+        if ctx.budget - fort.cost < self.FORT_KEEP:
             return
         site = self.fort_road_site(ctx)
         if site is not None and self.spend(ctx, FortifyRoad(*site)):
@@ -1926,12 +1761,13 @@ class SmartBot(CampaignBot):
 
     def fort_road_site(self, ctx: Ctx) -> tuple[int, int] | None:
         """The ``(node, road)`` ``fortify_roads`` fortifies now with the CP aside (its docstring);
-        ``None``: none (no ``[fort]``, no ``insight``, ``FORTS`` 0 or no item 22)."""
+        ``None``: none (no ``insight``, ``FORTS`` 0 or no item 22)."""
         fort = self.rules.fort
-        if fort is None or self.FORTS <= 0 or not self.tempo.insight or not self.defense_v2():
+        if self.FORTS <= 0 or not self.tempo.insight or not self.DEFENSE_V2:
             return None
         cp = self.rules.cp
-        had = cp.start + cp.per_period * (ctx.tick // cp.period_ticks)
+        # The flat income of the Balance stance (DEC-44), as the bot was tuned on it.
+        had = cp.start + cp.per_period * (ctx.tick // self.rules.stances.cp_period_ticks.balance)
         if 100 * (self.fort_cp + fort.cost) > self.FORT_SHARE * had:
             return None
         view, home, me = ctx.view, self.home, self.player
@@ -2115,8 +1951,8 @@ class SmartBot(CampaignBot):
 
     def cut_value(self, view: PlayerView, node: int) -> int:
         """Damage to the enemy network if ``node`` were ours, in points: 100 per enemy node that
-        would lose its connection to the enemy capital, plus a quarter of 100 per road level of
-        the network roads into it (public ownership, known road levels)."""
+        would lose its connection to the enemy capital, plus a quarter of 100 per network road
+        into it (public ownership)."""
         net = self.enemy_net(view)
         if node not in net:
             return 0
@@ -2130,66 +1966,8 @@ class SmartBot(CampaignBot):
                     seen[other] = True
                     queue.append(other)
         lost = len(net) - 1 - len(seen)
-        roads = sum(
-            100 * view.edges[e].width
-            for e in self.incident[node]
-            if self.map.edges[e].other(node) in net
-        )
+        roads = sum(100 for e in self.incident[node] if self.map.edges[e].other(node) in net)
         return 100 * lost + roads // 4
-
-    # Roads ----------------------------------------------------------------------------------
-
-    def build_roads(self, ctx: Ctx) -> None:
-        """One road at a time (DEC-28, item 7): while no own road is being built and
-        ``road_keep`` CP stay after the price, the own internal road whose ends are not next to
-        the enemy: an artery first (``arteries``), then the most speed and throughput gain; ties
-        to the road nearer the own capital, then the edge key (mirror-invariant)."""
-        view = ctx.view
-        keep = self.params["road_keep"]
-        if ctx.budget - self.rules.orders.cost.build < keep:
-            return
-        if any(e.build is not None and e.upgrade_gain is not None for e in view.edges):
-            return
-        hops = self.hops[self.home]
-        artery = self.arteries(view)
-        best: tuple[bool, int, int, int] | None = None
-        best_edge: int | None = None
-        for e, edef in enumerate(self.map.edges):
-            gain = view.edges[e].upgrade_gain
-            if gain is None or not self.can_upgrade(view, e):
-                continue
-            if self.hot[edef.a] or self.hot[edef.b]:
-                continue
-            value = gain.speed_pct + gain.unit_speed_pct + 100 * gain.amount
-            rank = (not artery[e], -value, min(hops[edef.a], hops[edef.b]), self.edge_keys[e])
-            if best is None or rank < best:
-                best, best_edge = rank, e
-        if best_edge is not None:
-            self.spend(ctx, UpgradeRoad(best_edge))
-
-    def arteries(self, view: PlayerView) -> list[bool]:
-        """By edge: on a shortest way in hops over own nodes from the own capital to a city with
-        a front marker (the supply runs along it, DEC-28, items 4 and 7). Ways by ``node_key``
-        order of the neighbours (mirror-invariant)."""
-        me = self.player
-        found = [False] * len(self.map.edges)
-        if view.nodes[self.home].owner != me:
-            return found
-        parent: dict[int, int] = {self.home: self.home}
-        queue = deque([self.home])
-        while queue:
-            node = queue.popleft()
-            for other in self.neighbors[node]:
-                if other not in parent and view.nodes[other].owner == me:
-                    parent[other] = node
-                    queue.append(other)
-        for marker in view.me.fronts:
-            node = marker
-            while node is not None and node in parent and parent[node] != node:
-                up = parent[node]
-                found[self.edge_between[(node, up)]] = True
-                node = up
-        return found
 
     # Arrivals, doomed cities, the engagement zone ------------------------------------------
 
@@ -2218,130 +1996,23 @@ class SmartBot(CampaignBot):
         self.doomed = doomed
         self.pinned = pinned
 
-    @override
-    def fronts(self, view: PlayerView) -> list[Command]:
-        """The front markers of ``Bot.fronts`` with hysteresis (module docstring, item 6).
-
-        A marker moves only to a wanted city without one (the first ``front_cities``) and only
-        when its own city is lost, cut off or doomed, or ranks below the wanted ones plus one and
-        was set at least ``FRONT_HOLD`` ticks ago; an attacked wanted city without a marker ends
-        the hold (its defenders need the charges first). With no wanted city free a marker stays
-        on its own supplied city: a full rear warehouse does no harm.
-        """
-        cities = self.front_cities(view)
-        count = len(view.me.fronts)
-        wanted = cities[:count]
-        near = cities[: count + 1]
-        fronts = list(view.me.fronts)
-        if len(self.front_set) != count:
-            self.front_set = [None] * count
-        supplied = self.supplied(view)
-        free = [n for n in wanted if n not in fronts]
-        urgent = any(n in self.arrive for n in free)
-        cmds: list[Command] = []
-        for i, node in enumerate(fronts):
-            since = self.front_set[i]
-            held = since is not None and view.tick - since < FRONT_HOLD and not urgent
-            valid = node is not None and supplied[node] and not self.doomed[node]
-            if valid and (node in near or held or not free):
-                continue
-            new = free.pop(0) if free else None
-            if new != node:
-                cmds.append(SetFront(i, new))
-                self.front_set[i] = view.tick
-        return cmds
-
-    @override
-    def front_cities(self, view: PlayerView) -> list[int]:
-        """The front cities an enemy is heading into first, then the base order; never a doomed
-        city (its warehouse would be lost, DEC-26, item 4)."""
-        cities = [n for n in super().front_cities(view) if not self.doomed[n]]
-        attacked = [n for n in cities if n in self.arrive]
-        return attacked + [n for n in cities if n not in self.arrive]
-
-    # Supply ---------------------------------------------------------------------------------
+    # Doomed cities, recruit queues ------------------------------------------------------------
 
     def _is_city(self, node: int) -> bool:
         return self.map.nodes[node].kind is not NodeKind.PROVINCE
 
-    def _waiting(self, view: PlayerView) -> list[int]:
-        """Own units without a charge standing in each node."""
-        wait = [0] * len(view.nodes)
-        for g in view.groups:
-            loc = g.location
-            if isinstance(loc, AtNode):
-                wait[loc.node] += g.units - g.charged
-        return wait
-
     def evacuate(self, ctx: Ctx) -> None:
-        """A doomed own city cancels its recruit queue and ships the charges its own units do not
-        need to the nearest safe own city (module docstring, item 6)."""
+        """A doomed own city cancels its recruit queue (module docstring, item 6)."""
         view = ctx.view
         doomed = [n for n in range(len(view.nodes)) if self.doomed[n]]
         if not doomed or not self.tempo.insight:
             return
-        parts = own_parts(view, self.map)
-        incoming = incoming_charges(view)
-        wait = self._waiting(view)
         for node in sorted(doomed, key=self.key):
             n = view.nodes[node]
             if n.owner != self.player or not self._is_city(node):
                 continue
             if n.recruit_queue:
                 self.spend(ctx, CancelRecruit(node))
-            if self.rules.v2:
-                continue  # no Transfer under v2 (DEC-41, item 1)
-            spare = (n.warehouse or 0) - wait[node]
-            if spare <= 0:
-                continue
-            best: tuple[int, int] | None = None
-            room = dest = 0
-            for other in range(len(view.nodes)):
-                if other == node or parts[other] != parts[node] or self.doomed[other]:
-                    continue
-                o = view.nodes[other]
-                if not self._is_city(other) or o.warehouse_cap is None:
-                    continue
-                free = o.warehouse_cap - (o.warehouse or 0) - incoming.get(other, 0)
-                rank = (self.travel.ticks[node][other], self.key(other))
-                if free > 0 and (best is None or rank < best):
-                    best, room, dest = rank, free, other
-            if best is not None:
-                self.spend(ctx, Transfer(node, dest, min(spare, room)))
-
-    def set_rear_min(self, ctx: Ctx) -> None:
-        """``SetRearMin`` by the module docstring, item 6, at most once per ``REAR_MIN_TICKS``."""
-        view = ctx.view
-        if self.rear_tick is not None and ctx.tick - self.rear_tick < REAR_MIN_TICKS:
-            return
-        wait = self._waiting(view)
-        supply = self.rules.supply
-        now = view.me.rear_min
-        # Hysteresis: a setting holds until the reason for it is half gone.
-        starving = any(
-            m is not None
-            and (
-                (wait[m] >= FEED_MIN and not view.nodes[m].warehouse)
-                or (now == 0 and wait[m] > (view.nodes[m].warehouse or 0))
-            )
-            for m in view.me.fronts
-        )
-        home = view.nodes[self.home]
-        stock, cap = home.warehouse or 0, home.warehouse_cap or 0
-        full = (
-            home.owner == self.player
-            and cap > 0
-            and (stock >= cap or (now == self.params["rear_full"] and 2 * stock >= cap))
-        )
-        if starving:
-            want = 0
-        elif full:
-            want = self.params["rear_full"]
-        else:
-            want = supply.rear_min_default
-        want = min(want, supply.rear_min_max)
-        if want != view.me.rear_min and self.spend(ctx, SetRearMin(want)):
-            self.rear_tick = ctx.tick
 
     def bank(self, ctx: Ctx) -> None:
         """A second unit in the recruit queue of a rear city with the barracks (DEC-25): a queue
@@ -2380,13 +2051,8 @@ class SmartBot(CampaignBot):
             self.recruited[city] = ctx.tick
 
     def recruits_in(self, view: PlayerView, node: int) -> bool:
-        """``Recruit`` is allowed in the own city ``node`` by the barracks (DEC-26, item 11) or by
-        ``recruit.location`` (DEC-25, item 8)."""
-        if self.rules.city_upgrades.enabled:
-            return bool(view.nodes[node].has_barracks)
-        if self.rules.recruit.location is RecruitLocation.CAPITAL:
-            return node == self.home
-        return True
+        """``Recruit`` is allowed in the own city ``node`` by the barracks (DEC-26, item 11)."""
+        return bool(view.nodes[node].has_barracks)
 
     def unbank(self, ctx: Ctx) -> None:
         """While the capital is in danger, production moves to the capital (its recruits stand
@@ -2402,56 +2068,6 @@ class SmartBot(CampaignBot):
         for n in view.nodes:
             if n.owner == self.player and n.id != self.home and n.recruit_queue:
                 self.spend(ctx, CancelRecruit(n.id))
-
-    def supply_target(self, view: PlayerView, node: int) -> int:
-        """The supply target of the own city ``node`` (DEC-28, item 5): a full warehouse with a
-        marker, 0 for the capital without one, else ``min(rear_min, capacity)``."""
-        cap = view.nodes[node].warehouse_cap or 0
-        if node in view.me.fronts:
-            return cap
-        if node == self.home:
-            return 0
-        return min(view.me.rear_min, cap)
-
-    def feed(self, ctx: Ctx) -> None:
-        """One ``Transfer`` to the city without a marker where the most own units wait for
-        charges that are neither there nor on the way (at least ``FEED_MIN``), from the nearest
-        own city with a stock above its target (module docstring, item 6)."""
-        view = ctx.view
-        me = self.player
-        wait = self._waiting(view)
-        incoming = incoming_charges(view)
-        fronts = view.me.fronts
-        short: list[tuple[int, int]] = []
-        for n in view.nodes:
-            node = n.id
-            if n.owner != me or not self._is_city(node) or node in fronts or self.doomed[node]:
-                continue
-            if n.warehouse_cap is None or wait[node] < FEED_MIN:
-                continue
-            lack = wait[node] - (n.warehouse or 0) - incoming.get(node, 0)
-            room = n.warehouse_cap - (n.warehouse or 0) - incoming.get(node, 0)
-            if lack >= FEED_MIN and room > 0:
-                short.append((node, min(lack, room)))
-        if not short:
-            return
-        dest, amount = min(short, key=lambda s: (-s[1], self.key(s[0])))
-        parts = own_parts(view, self.map)
-        best: tuple[int, int] | None = None
-        give = 0
-        src = dest
-        for n in view.nodes:
-            node = n.id
-            if node == dest or parts[node] != parts[dest] or self.doomed[node]:
-                continue
-            if not self._is_city(node) or n.warehouse is None:
-                continue
-            spare = n.warehouse - self.supply_target(view, node) - wait[node]
-            rank = (self.travel.ticks[node][dest], self.key(node))
-            if spare > 0 and (best is None or rank < best):
-                best, give, src = rank, spare, node
-        if best is not None:
-            self.spend(ctx, Transfer(src, dest, min(amount, give)))
 
     # Scouting -------------------------------------------------------------------------------
 
@@ -2530,7 +2146,6 @@ class SmartRusher(SmartBot):
     DISCIPLINE: ClassVar[bool] = True
     BANK: ClassVar[int] = 300
     """Item 23: a strike of three groups."""
-    STANCE: ClassVar[Stance] = Stance.WAR
     FORTS: ClassVar[int] = 1
     FORT_KEEP: ClassVar[int] = 200
     FORT_SHARE: ClassVar[int] = 5
@@ -2569,7 +2184,6 @@ class SmartStrangler(SmartBot):
     """Item 23: no saving. The siege lives on steady pressure: with a saving of 2 CP the
     strangler won 5 of 16 matches against the benchmark, without it 14 (run 42011930257 and
     local runs on the same seeds, #687)."""
-    STANCE: ClassVar[Stance] = Stance.BALANCE
     STRIKE: ClassVar[bool] = True
     W_RING: ClassVar[int] = 60
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
@@ -2596,7 +2210,6 @@ class SmartReactive(SmartBot):
     DISCIPLINE: ClassVar[bool] = True
     BANK: ClassVar[int] = 250
     """Item 23: a fortification and its keep (the answers spend the saving first)."""
-    STANCE: ClassVar[Stance] = Stance.BALANCE
     FORTS: ClassVar[int] = 3
     STRIKE: ClassVar[bool] = True
     COUNTER: ClassVar[bool] = True
@@ -2624,8 +2237,6 @@ class SmartExpander(SmartBot):
     DISCIPLINE: ClassVar[bool] = True
     BANK: ClassVar[int] = 150
     """Item 23: territory first, so the least: a fortification without its keep."""
-    STANCE: ClassVar[Stance] = Stance.WAR
-    LATE_STANCE: ClassVar[Stance | None] = Stance.BALANCE
     STRIKE: ClassVar[bool] = True
     MID_GOAL: ClassVar[bool] = True
     W_WEAK: ClassVar[int] = 40
@@ -2656,12 +2267,12 @@ class SmartTurtle(SmartBot):
     """The bunker that holds the VP lead (#663, item 19 of the module docstring).
 
     - *Opening*: it claims its natural half of the map (the nodes no farther from the own capital
-      than from the enemy one), one ring more while the CP are about to burn; Economy (v1).
+      than from the enemy one), one ring more while the CP are about to burn.
     - *Hold* (the territory split, the VP forecast ahead): no attack outside the own half; every
       own node next to the enemy keeps a garrison sized to the enemy shots that can reach it
       (``estimate.threats``, at least ``hold_front``, at most ``hold_front + FRONT_EXTRA``), the
-      spare army stands in the most threatened front city, the front cities get the bunkers
-      (v2) and Defense (v1), lost nodes of the own half are retaken first.
+      spare army stands in the most threatened front city, the front roads get the road
+      fortifications (item 22), lost nodes of the own half are retaken first.
     - *Push* (the forecast not ahead): a slow advance, one enemy node next to the own territory
       at a time, the weakest sector first (``weak_spot``), with the bunker's margin; the army
       rallies there. The late game without a lead goes all in like every smart bot (item 1).
@@ -2671,11 +2282,8 @@ class SmartTurtle(SmartBot):
     DISCIPLINE: ClassVar[bool] = True
     BANK: ClassVar[int] = 250
     """Item 23: its fortifications (no keep, ``FORTS`` 6; no strike, item 12)."""
-    STANCE: ClassVar[Stance] = Stance.ECONOMY
-    BUNKERS: ClassVar[int] = 4
     FORTS: ClassVar[int] = 6
-    """Item 22: the turtle leans on road fortifications (its bunkers and Defense of v1 and
-    ``mvp-3``)."""
+    """Item 22: the turtle leans on road fortifications."""
     FORT_KEEP: ClassVar[int] = 0
     FORT_SHARE: ClassVar[int] = 20
     FRONT_EXTRA: ClassVar[int] = 2

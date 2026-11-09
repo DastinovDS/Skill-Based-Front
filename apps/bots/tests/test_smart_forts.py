@@ -1,4 +1,4 @@
-"""Capital defense and road fortifications of the smart bots under ``mvp-4`` (#682, G-F of the
+"""Capital defense and road fortifications of the smart bots under ``mvp-5`` (#682, G-F of the
 ``mvp-4`` bot audit; ``SmartBot`` item 22, ``gow_bots.bots.forts``).
 
 Expected values come from the rules (mechanics.md, section 7, DEC-43 item D; DEC-25; DEC-22): the
@@ -31,7 +31,7 @@ from gow_sim.view import IntentKind, IntentView, PlayerView, RoadFortView, proje
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 K, A, B, C, D, E, F, G = range(8)
 SOUTH_PASS = 18
 PASSES = (17, 18)

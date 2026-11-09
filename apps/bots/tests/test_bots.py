@@ -2,7 +2,7 @@
 an ordinary or a scheduled order.
 
 Expected fight numbers come from the DEC-07 table of mechanics.md, section 4 (example numbers in
-the comments); prices from ``rulesets/mvp-0.toml`` (DEC-08, DEC-02).
+the comments); the planned order of DEC-41, item 10 under ``rulesets/mvp-5.toml``.
 """
 
 import dataclasses
@@ -73,64 +73,47 @@ def test_bot_params_stay_in_their_ranges(maps: dict[str, MapDef], mvp_rules: Rul
 
 
 @pytest.mark.parametrize(
-    ("terrain", "units", "charged", "defense", "need"),
+    ("terrain", "units", "charged", "need"),
     [
-        (FOREST, 2, 2, 0, 4),  # example 3: 4 charged take 2 charged defenders
-        (FOREST, 0, 0, 0, 0),  # example 5: an empty node falls without a fight
-        (PLAINS, 2, 2, 0, 3),  # example 8: Qd = 1, 2 charged are not enough
-        (MOUNTAINS, 2, 2, 0, 5),  # example 6: Qd = 3, 3 charged bounce
-        (MOUNTAINS, 3, 0, 0, 3),  # example 7: no firing charge, no terrain
-        (FOREST, 2, 2, 2, 6),  # example 10: Qd = 4 with Defense (+2 gathered, DEC-30)
-        (FOREST, 2, 0, 2, 2),  # example 16: Defense needs a firing charge
-        (FOREST, 2, 2, 10, 6),  # DEC-30, item 2: the bonus is capped by the 2 charged
+        (FOREST, 2, 2, 4),  # example 3: 4 charged take 2 charged defenders
+        (FOREST, 0, 0, 0),  # example 5: an empty node falls without a fight
+        (PLAINS, 2, 2, 3),  # example 8: Qd = 1, 2 charged are not enough
+        (MOUNTAINS, 2, 2, 5),  # example 6: Qd = 3, 3 charged bounce
+        (MOUNTAINS, 3, 0, 3),  # example 7: no firing charge, no terrain
     ],
 )
 def test_shots_to_take_follows_dec07(
-    mvp_rules: Ruleset, terrain: Terrain, units: int, charged: int, defense: int, need: int
+    mvp_rules: Ruleset, terrain: Terrain, units: int, charged: int, need: int
 ) -> None:
-    assert shots_to_take(mvp_rules, terrain, units, charged, defense) == need
+    assert shots_to_take(mvp_rules, terrain, units, charged) == need
 
 
 def test_planned_order_pays_when_the_bonus_turns_a_bounce_into_a_capture(
     mvp_rules: Ruleset,
 ) -> None:
-    # Example 9: 2 charged + plan (+2: two edges away, DEC-29) take 2 charged defenders in a
-    # forest (need 4).
-    assert prefer_planned(mvp_rules, own_charged=2, need=4, edges=2)
+    # Example 9 with the gathered bonus of DEC-41, item 10: 2 charged + 2 gathered take 2 charged
+    # defenders in a forest (need 4); 1 gathered leaves them short.
+    assert prefer_planned(mvp_rules, own_charged=2, need=4, bonus=2)
+    assert not prefer_planned(mvp_rules, own_charged=2, need=4, bonus=1)
+    # The bonus never exceeds the charged units: 1 charged with 3 gathered is 1 + 1 < 3.
+    assert not prefer_planned(mvp_rules, own_charged=1, need=3, bonus=3)
 
 
-def test_planned_bonus_grows_with_the_distance(mvp_rules: Ruleset) -> None:
-    # DEC-29: a neighbour gives +1, which leaves 2 + 1 short of 4: no capture, and 1 shot is
-    # worth half the surcharge; two edges give +2 and the capture.
-    assert not prefer_planned(mvp_rules, own_charged=2, need=4, edges=1)
-    assert prefer_planned(mvp_rules, own_charged=2, need=4, edges=2)
-    # The cap: 1 charged unit gets +1 on any distance (example 4), too little for need 3.
-    assert not prefer_planned(mvp_rules, own_charged=1, need=3, edges=3)
+def test_planned_order_does_not_pay_without_a_turn(mvp_rules: Ruleset) -> None:
+    assert not prefer_planned(mvp_rules, own_charged=4, need=4, bonus=2)  # wins anyway
+    assert not prefer_planned(mvp_rules, own_charged=1, need=10, bonus=1)  # bounces anyway
+    assert not prefer_planned(mvp_rules, own_charged=3, need=0, bonus=2)  # an empty node
+    assert not prefer_planned(mvp_rules, own_charged=2, need=4)  # nothing to gather
 
 
-def test_planned_order_does_not_pay_for_shots_worth_its_surcharge(mvp_rules: Ruleset) -> None:
-    # mvp-0: the plan costs 1 CP more (200 - 100) and 2 shots are worth 1 CP (2 charges/CP).
-    assert not prefer_planned(mvp_rules, own_charged=4, need=4, edges=2)  # wins anyway
-    assert not prefer_planned(mvp_rules, own_charged=1, need=10, edges=2)  # bounces anyway
-    assert not prefer_planned(mvp_rules, own_charged=3, need=0, edges=2)  # an empty node
-
-
-def test_share_of_plans_follows_the_price(mvp_rules: Ruleset) -> None:
-    cost = mvp_rules.orders.cost
-    cheap = dataclasses.replace(
-        mvp_rules,
-        orders=dataclasses.replace(
-            mvp_rules.orders, cost=dataclasses.replace(cost, planned_move=cost.move + 50)
-        ),
+def test_planned_order_pays_the_capture_with_real_charges(mvp_rules: Ruleset) -> None:
+    # DEC-38: with a capture price of 1 the real charges pay it on top of the fight: 2 charged and
+    # 2 gathered fight 4 shots, and nothing is left for the price.
+    paid = dataclasses.replace(
+        mvp_rules, capture=dataclasses.replace(mvp_rules.capture, charge_cost=1)
     )
-    assert prefer_planned(cheap, own_charged=4, need=4, edges=2)
-    dear = dataclasses.replace(
-        mvp_rules,
-        orders=dataclasses.replace(
-            mvp_rules.orders, cost=dataclasses.replace(cost, planned_move=cost.move + 500)
-        ),
-    )
-    assert not prefer_planned(dear, own_charged=2, need=4, edges=2)
+    assert not prefer_planned(paid, own_charged=2, need=4, bonus=2)
+    assert prefer_planned(paid, own_charged=3, need=5, bonus=3)
 
 
 # Baseline bots ---------------------------------------------------------------------------------
@@ -167,7 +150,7 @@ def test_random_legal_full_match_on_mvp_maps(
 def test_one_bot_pair_over_100_seeds_gives_at_least_30_final_hashes(
     maps: dict[str, MapDef], short_rules: Ruleset
 ) -> None:
-    # Full matches on test-short (mvp-0 with a 60 s timer) to keep the test fast.
+    # Full matches on test-short (mvp-7 with a 60 s timer) to keep the test fast.
     mapdef = maps["web"]
     hashes = {
         run_headless(mapdef, short_rules, _pair("random_legal", mapdef, short_rules, s)).state_hash

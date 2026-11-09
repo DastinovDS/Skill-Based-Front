@@ -1,7 +1,7 @@
 """Road fortifications as a defensive tool of the smart bots (#682, G-F of the ``mvp-4`` bot audit).
 
-Under ``mvp-4`` (DEC-43, item D) the road fortification is the only defensive building: no bunker,
-no Defense mode. A line at the border point of a road leaving an own node ``X`` takes 1 charge per
+The road fortification (DEC-43, item D) is the only defensive building: no bunker, no Defense
+mode. A line at the border point of a road leaving an own node ``X`` takes 1 charge per
 started 3 units from an enemy group crossing it towards ``X`` (item D6), works ``fort.build_ticks``
 after the command (item D4) and goes with ``X`` (item D7). Two readings of the ``PlayerView``
 (AGENTS.md, section 4.4: only the view):
@@ -24,7 +24,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from gow_sim.maps import MapDef
-from gow_sim.view import Detail, EnemyGroupView, IntentKind, PlayerView
+from gow_sim.view import Detail, EnemyGroupView, PlayerView
 
 __all__ = ["RoadThreat", "cut_off", "fortified", "road_threats"]
 
@@ -90,7 +90,7 @@ def road_threats(
                 shots[(n.id, eid)] = seen
                 others[(n.id, eid)] = other
     for i in view.intents:
-        if i.owner == me or i.kind is not IntentKind.PLANNED_MOVE or i.target is None:
+        if i.owner == me or i.target is None:
             continue
         ways = entries.get(i.target)
         if not ways:

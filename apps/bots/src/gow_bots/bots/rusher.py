@@ -1,11 +1,11 @@
 """``RusherBot``: early pressure and planned strikes on weak cities (BOT-03).
 
-It does not wait for the economy: the stance is War (more CP for orders, fewer charges), the
-capital keeps at most one unit at home, and the first strong group goes for the enemy. Targets
+It does not wait for the economy: the capital keeps at most one unit at home, and the first
+strong group goes for the enemy. Targets
 are enemy cities, never a neutral one while an enemy city is in reach; among them the weak ones
 (small ``need``, by the estimate of ``CampaignBot``) and the ones closer to the enemy capital
-come first. A strike is a planned order when ``prefer_planned`` says the bonus is worth its price,
-which is a property of the ruleset, not of this bot.
+come first. A strike is a planned order when only the bonus the group can gather makes it take the
+target (DEC-41, item 10).
 """
 
 from collections.abc import Mapping
@@ -13,14 +13,13 @@ from typing import ClassVar, override
 
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import CampaignBot, Ctx
-from gow_sim.view import GroupView, Stance
+from gow_sim.view import GroupView
 
 __all__ = ["RusherBot"]
 
 
 class RusherBot(CampaignBot):
     name: ClassVar[str] = "rusher"
-    STANCE: ClassVar[Stance] = Stance.WAR
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         "radius": ParamRange(3, 4),
         "margin": ParamRange(0, 1),

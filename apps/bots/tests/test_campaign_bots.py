@@ -21,11 +21,11 @@ from gow_bots.bots import (
     StranglerBot,
 )
 from gow_bots.bots.base import Bot
-from gow_sim.commands import Command, Move, Ok, PlayerCommand, SetMode
+from gow_sim.commands import Command, Move, Ok, PlayerCommand
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import AtNode, Mode
+from gow_sim.view import AtNode
 
 ROOT = Path(__file__).resolve().parents[3]
 MVP_MAPS = ("artery", "web", "pass")
@@ -43,7 +43,7 @@ KEY = bytes(range(32))
 SEEDS = 10  # per map, half of them on each side: 90% means at most one loss
 
 
-@pytest.mark.slow  # 12 cells x 10 full mvp-0 matches
+@pytest.mark.slow  # 12 cells x 10 full mvp-5 matches
 @pytest.mark.parametrize("name", CAMPAIGN)
 @pytest.mark.parametrize("map_name", MVP_MAPS)
 def test_wins_at_least_90_percent_against_random_legal(
@@ -154,46 +154,21 @@ def test_strangler_cuts_the_enemy_road_on_siege(mvp_rules: Ruleset) -> None:
 
 
 def test_reactive_answers_a_visible_planned_strike_within_10_ticks(short_rules: Ruleset) -> None:
-    # Player 1 announces a planned strike from node 3 at the capital 0 of player 0 at tick 0.
+    # Player 1 announces a planned strike from node 3 at the capital 0 of player 0 in tick 1, before
+    # the first decision of player 0: the intent is public while the plan gathers its bonus
+    # (DEC-08; DEC-41, item 10). The answer is a reinforcement of the capital by the nearest
+    # charged group, the one of node 2 (``ReactiveBot``).
     mapdef = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "siege.json")
     match = Match(mapdef, short_rules, KEY)
     strike_group = next(
         g for g in match.view(1).groups if isinstance(g.location, AtNode) and g.location.node == 3
     )
-    script = {0: [PlayerCommand(1, 0, match.resolve(1, Move(strike_group.id, 0, planned=True)))]}
+    strike = Move(strike_group.id, 0, planned=True, bonus=1)
+    match.step([PlayerCommand(1, 0, match.resolve(1, strike))])
     bots: list[Controller] = [
         BOTS["reactive"](mapdef, short_rules, seed=1, player=0),
         IdleBot(mapdef, short_rules, seed=1, player=1),
     ]
-    sent = _play(match, bots, 11, script)
-    answers = [
-        s for s in sent if s.player == 0 and s.tick <= 10 and isinstance(s.cmd, SetMode | Move)
-    ]
-    assert any(
-        isinstance(s.cmd, SetMode) and s.cmd.mode is Mode.DEFENSE and s.accepted for s in answers
-    ), answers
-
-
-def test_reactive_holds_the_city_that_an_idle_bot_loses(short_rules: Ruleset) -> None:
-    # The strike goes to the neighbour: 2 charged + plan (+2) against 2 charged in a forest takes
-    # the city (DEC-24, row 9). Since DEC-29 a neighbour gives 1 per edge in the shipped
-    # rulesets, so the test doubles the per edge bonus to keep the strike that strong.
-    short_rules = replace(short_rules, orders=replace(short_rules.orders, planned_bonus_per_edge=2))
-    mapdef = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "siege.json")
-    held: dict[str, int | None] = {}
-    for name in ("reactive", "idle"):
-        match = Match(mapdef, short_rules, KEY)
-        strike = next(
-            g
-            for g in match.view(1).groups
-            if isinstance(g.location, AtNode) and g.location.node == 3
-        )
-        script = {0: [PlayerCommand(1, 0, match.resolve(1, Move(strike.id, 0, planned=True)))]}
-        bots: list[Controller] = [
-            BOTS[name](mapdef, short_rules, seed=1, player=0),
-            IdleBot(mapdef, short_rules, seed=1, player=1),
-        ]
-        _play(match, bots, 200, script)
-        held[name] = match.view(0).nodes[0].owner
-    assert held["reactive"] == 0
-    assert held["idle"] != 0
+    sent = _play(match, bots, 11, {})
+    answers = [s for s in sent if s.player == 0 and s.tick <= 10 and isinstance(s.cmd, Move)]
+    assert any(isinstance(s.cmd, Move) and s.cmd.dest == 0 and s.accepted for s in answers), answers

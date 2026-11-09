@@ -35,36 +35,20 @@ from typing import ClassVar, Final, Protocol
 from gow_bots.bots.assess import edge_ticks
 from gow_sim.commands import (
     BuildBarracks,
-    BuildBunker,
-    BuildFactory,
     CancelOrder,
     Command,
-    DrawLine,
-    FortifyRoad,
     Move,
-    ReleasePlan,
-    RemoveLine,
-    SetAutoLines,
-    SetFront,
-    SetLeafShift,
-    SetMode,
-    SetRearMin,
     SetStance,
     Split,
-    Transfer,
-    UpgradeRoad,
-    UpgradeWarehouse,
     command_cost,
 )
-from gow_sim.maps import MapDef, NodeKind
-from gow_sim.ruleset import RecruitLocation, Retreat, Ruleset
+from gow_sim.maps import MapDef
+from gow_sim.ruleset import Retreat, Ruleset
 from gow_sim.view import (
     AtNode,
     BuildKind,
     FightView,
     GroupView,
-    IntentKind,
-    Mode,
     NodeView,
     OnEdge,
     PlayerView,
@@ -79,20 +63,9 @@ __all__ = [
     "node_of",
 ]
 
-V1_ONLY: Final = (SetStance, SetFront, SetRearMin, Transfer, UpgradeRoad)
-"""Commands economy v2 rejects with ``FEATURE_DISABLED`` (DEC-41, items 1, 5, 8); so does
-``SetMode(DEFENSE)`` (``Bot.allowed``). ``[stances]`` accepts ``SetStance`` (DEC-44): only a bot
-with ``STANCE_POLICY`` (the smart bots, ``gow_bots.bots.stance``, #881) sends it there; the others
-stay in the start stance, Balance."""
 LATE_KEYS: Final = ("stance_", "contact_")
 """The prefixes of the ``PARAMS`` keys of #881 (the stance policy, the attack estimate before
 contact): ``choose_params`` draws them from a stream of their own."""
-V2_ONLY: Final = (BuildFactory, BuildBunker, DrawLine, RemoveLine, ReleasePlan)
-"""Commands of economy v2 only (DEC-41, item 14)."""
-LINES_ONLY: Final = (DrawLine, RemoveLine, SetAutoLines)
-"""Commands the supply flow rejects with ``FEATURE_DISABLED`` (DEC-43, item A12)."""
-FLOW_ONLY: Final = (SetLeafShift,)
-"""Commands of the supply flow only (DEC-43, item B2)."""
 
 
 class Controller(Protocol):
@@ -145,12 +118,12 @@ class Bot:
     name: ClassVar[str] = "bot"
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {}
     STANCE_POLICY: ClassVar[bool] = False
-    """Under ``[stances]`` (DEC-44) the bot changes its stance by a policy (``SmartBot``, #881);
-    without it ``SetStance`` is not sent under economy v2 (``allowed``)."""
+    """The bot changes its stance (DEC-44) by a policy (``SmartBot``, #881); without it
+    ``SetStance`` is not sent (``allowed``) and the bot stays in the start stance, Balance."""
     DISCIPLINE: ClassVar[bool] = False
     """Cancel discipline (#687): cancels only where they save units. ``fight_commands`` counts
-    the silent charges of plains (``FightView.mute``; under ``combat.terrain_burn`` the charges
-    still to burn, nothing after the first round, DEC-45) out of both stocks; ``CampaignBot``
+    the charges plains still burn (``FightView.mute``, nothing after the first round, DEC-45)
+    out of both stocks; ``CampaignBot``
     recalls only an attack that would lose units (``recall_pays``) and a recalled target waits
     ``RECALL_TICKS`` for a stronger group. Off: the play of BOT-03 (a recall of any attack that
     would not take the target with the margin), which the plain bots and the benchmark
@@ -409,8 +382,8 @@ class Bot:
         ]
         return Move(g.id, min(exits, key=self.key)) if exits else None
 
-    def _group_key(self, g: GroupView) -> tuple[int, int, int, str, int]:
-        return (self.key(node_of(g)), -g.units, -g.charged, g.mode.value, g.id)
+    def _group_key(self, g: GroupView) -> tuple[int, int, int, int]:
+        return (self.key(node_of(g)), -g.units, -g.charged, g.id)
 
     def supplied(self, view: PlayerView) -> list[bool]:
         """Own nodes connected to the own capital over own nodes (ownership is public)."""
@@ -429,90 +402,20 @@ class Bot:
                     queue.append(other)
         return result
 
-    def fronts(self, view: PlayerView) -> list[Command]:
-        """Front markers (DEC-28, item 2) on the two own supplied cities at the front nearest to
-        the enemy capital: their warehouses fill up first, the rear keeps the rear minimum.
-
-        A city is at the front when one of its neighbours is not own (public ownership). Markers
-        already on a wanted city stay; the others move to the wanted cities left or come off the
-        map. Ties by ``node_key`` (mirror-invariant); only changes are commanded.
-        """
-        wanted = self.front_cities(view)[: len(view.me.fronts)]
-        fronts = list(view.me.fronts)
-        free = [n for n in wanted if n not in fronts]
-        cmds: list[Command] = []
-        for i, node in enumerate(fronts):
-            if node is not None and node in wanted:
-                continue
-            new = free.pop(0) if free else None
-            if new != node:
-                fronts[i] = new
-                cmds.append(SetFront(i, new))
-        return cmds
-
-    def front_cities(self, view: PlayerView) -> list[int]:
-        """The cities ``fronts`` puts the markers on, best first: the own supplied cities at the
-        front, nearest to the enemy capital first (ties by ``node_key``)."""
-        me = view.player
-        supplied = self.supplied(view)
-        far = self.hops[self.map.capital(1 - me)]
-        cities = [
-            n
-            for n in range(len(view.nodes))
-            if supplied[n]
-            and self.map.nodes[n].kind is not NodeKind.PROVINCE
-            and any(view.nodes[m].owner != me for m in self.neighbors[n])
-        ]
-        cities.sort(key=lambda n: (far[n] if far[n] >= 0 else len(far), self.key(n)))
-        return cities
-
-    def can_upgrade(self, view: PlayerView, edge: int) -> bool:
-        """``UpgradeRoad(edge)`` passes the checks of DEC-28, item 7 that the view shows: an own
-        internal road below its last level (``upgrade_gain``) without a build on it. The CP are
-        the caller's (``orders.cost.build``)."""
-        e = view.edges[edge]
-        return e.upgrade_gain is not None and e.build is None
-
     def development(self, view: PlayerView, budget: int) -> Command | None:
-        """At most one city build of DEC-26 per decision (item 11; none without
-        ``city_upgrades``), from ``budget`` CP in hundredths.
-
-        - The barracks: when the nearest own city to the enemy capital is at least two hops
-          nearer than every own city with the barracks (recruits would walk far), that city builds
-          them: their price, three recruits in the capital, buys a shorter way for every later
-          recruit.
-        - A warehouse level: in a full warehouse of a city that supplies troops (own units stand
-          there, or it is at the front), only with CP that would soon burn on the cap; under
-          economy v2 it costs charges, not CP (DEC-41, item 7), so a full warehouse is enough.
-
-        Cities without a build and without a fight, in ``node_key`` order: mirror-invariant.
+        """At most one city build of DEC-26 per decision (item 11), from ``budget`` CP in
+        hundredths: the barracks, when the nearest own city to the enemy capital is at least two
+        hops nearer than every own city with the barracks (recruits would walk far); their price
+        buys a shorter way for every later recruit (``wanted_barracks``). Cities without a build
+        and without a fight, in ``node_key`` order: mirror-invariant.
         """
-        if not self.rules.city_upgrades.enabled:
-            return None
-        cost = self.rules.orders.cost
         want = self.wanted_barracks(view)
-        if want is not None and budget >= cost.barracks:
+        if want is not None and budget >= self.rules.orders.cost.barracks:
             return BuildBarracks(want)
-        if budget < cost.warehouse:
-            return None
-        if not self.rules.v2 and budget < self.rules.cp.cap - cost.recruit:
-            return None  # v1: CP about to burn; v2 pays in charges only (DEC-41, item 7)
-        standing = self.standing(view)
-        for n in self._free_cities(view):
-            supplies = standing[n.id] > 0 or self.front(view, n.id)
-            if (
-                supplies
-                and n.warehouse_level is not None
-                and n.warehouse_level < self.rules.warehouse.max_level
-                and n.warehouse == n.warehouse_cap
-            ):
-                return UpgradeWarehouse(n.id)
         return None
 
     def wanted_barracks(self, view: PlayerView) -> int | None:
         """The own city that should build the barracks now (``development``), or ``None``."""
-        if not self.rules.city_upgrades.enabled:
-            return None
         far = self.hops[self.map.capital(1 - view.player)]
         barracks = [far[n.id] for n in view.nodes if n.owner == view.player and n.has_barracks]
         if any(
@@ -544,8 +447,8 @@ class Bot:
         """``Recruit(node)`` is accepted and sensible now (DEC-25), with ``standing`` own units
         in the node as the caller counts them.
 
-        An own city (``recruit_queue`` is ``None`` for provinces and foreign nodes) where
-        ``recruit.location`` allows it, without a fight (the production would stand) and with an
+        An own city (``recruit_queue`` is ``None`` for provinces and foreign nodes) with the
+        barracks (DEC-26, item 11), without a fight (the production would stand) and with an
         empty queue: a decision comes every few ticks and a unit takes ``recruit.unit_ticks``, so
         one unit at a time per city is all that is made before the next decision, and a longer
         queue would only tie CP up and be lost with the city (DEC-25, items 10 and 13).
@@ -553,12 +456,7 @@ class Bot:
         n = view.nodes[node]
         if n.owner != view.player or n.recruit_queue is None:
             return False
-        if self.rules.city_upgrades.enabled:  # the barracks decides where (DEC-26, item 11)
-            if not n.has_barracks:
-                return False
-        elif self.rules.recruit.location is RecruitLocation.CAPITAL and node != self.map.capital(
-            view.player
-        ):
+        if not n.has_barracks:  # the barracks decides where (DEC-26, item 11)
             return False
         if node in self.fight_nodes(view):
             return False
@@ -584,52 +482,26 @@ class Bot:
         return command_cost(self.rules, cmd)
 
     def allowed(self, cmd: Command) -> bool:
-        """Whether the economy model of the ruleset has ``cmd`` at all: the commands of the
-        other model only give ``FEATURE_DISABLED`` (DEC-41, items 5 and 14); so do the commands
-        of the other supply model, the bunker without ``[bunker]`` and the road fortification
-        without ``[fort]`` (DEC-43, A12, B2, D1, D). ``SetStance`` under v2 only with ``[stances]``
-        (DEC-44) and for a bot with ``STANCE_POLICY``."""
-        rules = self.rules
-        if isinstance(cmd, FLOW_ONLY):
-            return rules.flow
-        if rules.flow and isinstance(cmd, LINES_ONLY):
-            return False
-        if isinstance(cmd, BuildBunker) and rules.bunker is None:
-            return False
-        if isinstance(cmd, FortifyRoad):
-            return rules.fort is not None  # DEC-43, item D
-        if not rules.v2:
-            return not isinstance(cmd, V2_ONLY)
-        if isinstance(cmd, SetMode) and cmd.mode is Mode.DEFENSE:
-            return False
+        """Whether the bot sends ``cmd`` at all: ``SetStance`` (DEC-44) only with
+        ``STANCE_POLICY``; every other command."""
         if isinstance(cmd, SetStance):
-            return rules.stances is not None and self.STANCE_POLICY  # DEC-44, #881
-        return not isinstance(cmd, V1_ONLY)
+            return self.STANCE_POLICY  # #881
+        return True
 
-    def plan_bonus(self, view: PlayerView, node: int, edges: int, charged: int) -> int:
-        """The bonus a planned order of a group with ``charged`` units in ``node`` brings over
-        ``edges`` edges: under v1 the distance bonus of DEC-29; under v2 what it can gather now,
+    def plan_bonus(self, view: PlayerView, node: int, charged: int) -> int:
+        """The bonus a planned order of a group with ``charged`` units in ``node`` can gather now:
         the stock of the own warehouse there, at most the charged units (DEC-41, item 10)."""
-        if not self.rules.v2:
-            return self.rules.orders.planned_bonus(edges, charged)
         return max(0, min(charged, view.nodes[node].warehouse or 0))
 
     def plan_lead(self, bonus: int) -> int:
-        """Ticks a planned order waits in its node before it departs: the delay of DEC-08 under
-        v1, the gathering of ``bonus`` charges under v2 (DEC-41, item 10; it departs the tick
-        after the last one)."""
-        if not self.rules.v2:
-            return self.rules.orders.planned_delay_ticks
+        """Ticks a planned order waits in its node before it departs: the gathering of ``bonus``
+        charges (DEC-41, item 10; it departs the tick after the last one)."""
         return bonus * self.rules.orders.plan_ticks_per_bonus + 1
 
     def order(self, group: int, dest: int, planned: bool, bonus: int) -> Move:
-        """The ``Move`` of an attack: under v2 a planned order names its requested ``bonus``
-        and is an ordinary one without any (DEC-41, item 10); under v1 ``bonus`` is not sent."""
-        if not planned:
-            return Move(group, dest)
-        if not self.rules.v2:
-            return Move(group, dest, planned=True)
-        if bonus < 1:
+        """The ``Move`` of an attack: a planned order names its requested ``bonus`` and is an
+        ordinary one without any (DEC-41, item 10)."""
+        if not planned or bonus < 1:
             return Move(group, dest)
         return Move(group, dest, planned=True, bonus=bonus)
 
@@ -661,11 +533,11 @@ class Bot:
         """The charges a group of ``units`` units, ``charged`` of them charged, loses on its way
         into ``dest`` to a visible enemy road fortification of ``dest`` (DEC-43, item D6,
         ``FortRules.toll``), when every road from an own node into ``dest`` has a built one (the
-        bot cannot pick the road: the path is the simulation's); 0 when one of them is free,
-        without ``[fort]`` and for a node of no enemy. An empty node takes its toll too: the
+        bot cannot pick the road: the path is the simulation's); 0 when one of them is free and
+        for a node of no enemy. An empty node takes its toll too: the
         charges are gone before the capture (DEC-38) is paid."""
         fort = self.rules.fort
-        if fort is None or charged <= 0 or view.nodes[dest].owner != 1 - view.player:
+        if charged <= 0 or view.nodes[dest].owner != 1 - view.player:
             return 0
         approaches = 0
         for eid in self.map.incident[dest]:
@@ -681,8 +553,7 @@ class Bot:
         ``dest`` (DEC-43, item D6): the road it enters ``dest`` by is the last one of the fastest
         path a ``Move`` gets (``ways_in``), so the fortification of that road alone decides;
         ``toll_for`` when no path is found. Only built enemy fortifications the view shows."""
-        fort = self.rules.fort
-        if fort is None or charged <= 0 or view.nodes[dest].owner != 1 - view.player:
+        if charged <= 0 or view.nodes[dest].owner != 1 - view.player:
             return 0
         if not any(
             f.node == dest and f.built for e in self.map.incident[dest] for f in view.edges[e].forts
@@ -697,8 +568,8 @@ class Bot:
         """By node, the road the fastest path of a group of ``size`` from ``start`` enters it by:
         the search of a ``Move`` (``gow_sim.systems.movement.find_path``) on what the view
         shows: only ``start`` and own nodes without a fight are expanded, every node but
-        ``start`` holds ``size`` (DEC-20, D), the road times of ``assess.edge_ticks`` at the
-        levels of the view, ties by the ``node_key`` sequence of the path. Once per decision."""
+        ``start`` holds ``size`` (DEC-20, D), the road times of ``assess.edge_ticks``, ties by the
+        ``node_key`` sequence of the path. Once per decision."""
         if self._ways_tick != view.tick:
             self._ways_tick, self._ways = view.tick, {}
         cached = self._ways.get((start, size))
@@ -721,7 +592,7 @@ class Bot:
                 nxt = self.map.edges[eid].other(node)
                 if nxt in done or (size > 0 and nodes[nxt].capacity < size):
                     continue
-                t = ticks + edge_ticks(self.map, self.rules, eid, nxt, view.edges[eid].width)
+                t = ticks + edge_ticks(self.map, self.rules, eid, nxt)
                 cand = (t, (*keys, self.key(nxt)))
                 if nxt not in best or cand < best[nxt]:
                     best[nxt] = cand
@@ -734,29 +605,11 @@ class Bot:
         """The toll a group of ``units``, ``charged`` pays crossing into ``dest`` over ``edge``: a
         visible built enemy road fortification of ``dest`` there (DEC-43, items D6 and D8)."""
         fort = self.rules.fort
-        if fort is None or charged <= 0 or view.nodes[dest].owner != 1 - view.player:
+        if charged <= 0 or view.nodes[dest].owner != 1 - view.player:
             return 0
         if not any(f.node == dest and f.built for f in view.edges[edge].forts):
             return 0
         return fort.toll(units, charged)
-
-    def defended(self, view: PlayerView, node: int) -> int:
-        """The Defense bonus the enemy may have gathered in ``node``, before its cap (DEC-30).
-
-        The number is hidden (DEC-30, item 5); the public intent tells since when the mode is on
-        (DEC-08), so ``ticks // orders.defense_ticks_per_bonus`` since then is an upper estimate
-        (a fight in between resets it). ``0`` without an enemy Defense there."""
-        since = [
-            i.created_tick
-            for i in view.intents
-            if i.owner != view.player and i.kind is IntentKind.DEFENSE and i.origin == node
-        ]
-        fort = 0
-        if self.rules.v2 and view.nodes[node].fort and view.nodes[node].owner != view.player:
-            fort = self.rules.bunker_rules().shots  # DEC-41, item 12: seen by the DEC-31 rule
-        if not since:
-            return fort
-        return fort + max(0, view.tick - min(since)) // self.rules.orders.defense_ticks_per_bonus
 
 
 def node_of(group: GroupView) -> int:

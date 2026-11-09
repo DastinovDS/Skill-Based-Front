@@ -1,4 +1,4 @@
-"""Shared fixtures of the bot tests: the MVP maps and rulesets."""
+"""Shared fixtures of the bot tests: the MVP maps and the kept rulesets (#894)."""
 
 from pathlib import Path
 from typing import Final
@@ -20,19 +20,14 @@ def maps() -> dict[str, MapDef]:
 
 @pytest.fixture(scope="session")
 def mvp_rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+    """``mvp-5``: the ruleset of the agents' tournaments (AGENTS.md, section 8), no map tempo."""
+    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 
 
 @pytest.fixture(scope="session")
-def mvp3_rules() -> Ruleset:
-    """The economy v2 ruleset (DEC-41, #642)."""
-    return load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
-
-
-@pytest.fixture(scope="session")
-def mvp1_rules() -> Ruleset:
-    """mvp-0 with the city development of DEC-26 (``city_upgrades.enabled``)."""
-    return load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
+def mvp7_rules() -> Ruleset:
+    """``mvp-7``, the main ruleset (its ``[map_tempo]`` applies only in ``Match``)."""
+    return load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 @pytest.fixture(scope="session")
