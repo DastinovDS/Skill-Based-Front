@@ -41,12 +41,14 @@ test.describe.configure({ mode: 'serial' });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    const w = window as unknown as { __longTasks: [number, number][] };
+    const w = globalThis as unknown as { __longTasks: [number, number][] };
     w.__longTasks = [];
     try {
+      // `longtask` is a Chromium entry type, missing from the Node typings of the spec.
       new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) w.__longTasks.push([entry.startTime, entry.duration]);
-      }).observe({ type: 'longtask', buffered: true });
+        for (const entry of list.getEntries())
+          w.__longTasks.push([entry.startTime, entry.duration]);
+      }).observe({ type: 'longtask' as 'mark', buffered: true });
     } catch {
       // No long task timing in this browser: the load numbers stay 0.
     }
@@ -64,7 +66,7 @@ for (const scene of SCENES) {
     await page.mouse.move(5, 5);
     await page.waitForTimeout(1000);
     const load = await page.evaluate((until) => {
-      const tasks = (window as unknown as { __longTasks: [number, number][] }).__longTasks;
+      const tasks = (globalThis as unknown as { __longTasks: [number, number][] }).__longTasks;
       const within = tasks.filter(([start]) => start < until);
       return {
         blocked: within.reduce((sum, [, duration]) => sum + duration, 0),
@@ -74,13 +76,19 @@ for (const scene of SCENES) {
     const frames = await page.evaluate(
       (ms) =>
         new Promise<number[]>((resolve) => {
+          // The page's frame clock (the spec is typed without the DOM library).
+          const frame = (
+            globalThis as unknown as {
+              requestAnimationFrame: (step: (now: number) => void) => void;
+            }
+          ).requestAnimationFrame;
           const times: number[] = [];
           const step = (now: number): void => {
             times.push(now);
-            if (now - (times[0] ?? now) < ms) requestAnimationFrame(step);
+            if (now - (times[0] ?? now) < ms) frame(step);
             else resolve(times.slice(1).map((t, i) => t - (times[i] ?? t)));
           };
-          requestAnimationFrame(step);
+          frame(step);
         }),
       FRAMES_MS,
     );
