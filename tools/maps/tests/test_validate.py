@@ -175,7 +175,7 @@ def test_cli_expands_glob_patterns(capsys: pytest.CaptureFixture[str]) -> None:
     assert "no files match" in capsys.readouterr().err
 
 
-# DEC-26, item 5: start stocks against the warehouses of a ruleset with city_upgrades ----------
+# DEC-26, item 5: the start stock of a capital against its warehouse (DEC-41, item 9) ----------
 
 ROOT_RULESETS = REPO / "rulesets"
 MVP_MAPS = sorted((REPO / "maps").glob("*.json")) + sorted(
@@ -183,50 +183,44 @@ MVP_MAPS = sorted((REPO / "maps").glob("*.json")) + sorted(
 )
 
 
-def _with_small_stock(tmp_path: Path, stock: int) -> Path:
-    """Example 20 of DEC-26: the map ``artery`` with ``start_stock = stock`` in its small cities.
-
-    A copy in ``tmp_path`` (the file name must equal ``meta.name``): the test does not depend on
-    the committed maps, which satisfy the check (#379).
-    """
+def _with_capital_stock(tmp_path: Path, stock: int) -> Path:
+    """The map ``artery`` with ``start_stock = stock`` in both capitals and 9 in the other own
+    cities (they start empty whatever the map says, DEC-41, item 9). A copy in ``tmp_path`` (the
+    file name must equal ``meta.name``): the test does not depend on the committed maps."""
     data = json.loads((REPO / "maps" / "fixtures" / "artery.json").read_text(encoding="utf-8"))
-    small = [n for n in data["nodes"] if n["kind"] == "city_small" and n["start_owner"] is not None]
-    assert small
-    for node in small:
-        node["start_stock"] = stock
+    for node in data["nodes"]:
+        if node["kind"] == "capital":
+            node["start_stock"] = stock
+        elif node["kind"] != "province" and node["start_owner"] is not None:
+            node["start_stock"] = 9
     path = tmp_path / "artery.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     return path
 
 
 @pytest.mark.parametrize("path", MVP_MAPS, ids=[p.stem for p in MVP_MAPS])
-def test_mvp_maps_pass_the_warehouse_check_of_mvp_1(path: Path, config: ValidatorConfig) -> None:
-    """The committed maps start within the warehouses of the ruleset with ``city_upgrades``
-    (DEC-26, item 5; #379): no small city holds more than ``warehouse.start_by_kind`` (1)."""
-    rules = load_ruleset(ROOT_RULESETS / "mvp-1.toml")
-    assert rules.city_upgrades.enabled
+def test_mvp_maps_pass_the_warehouse_check_of_mvp_7(path: Path, config: ValidatorConfig) -> None:
+    """The committed maps start within the warehouses of mvp-7 (DEC-26, item 5; #379)."""
+    rules = load_ruleset(ROOT_RULESETS / "mvp-7.toml")
     assert validate_file(path, config, rules) == []
 
 
-def test_warehouse_check_only_with_city_upgrades(config: ValidatorConfig, tmp_path: Path) -> None:
-    """Example 20 of DEC-26: a small city with ``start_stock = 2`` fails ``warehouse`` with the
-    flag on (its warehouse starts at 1) and passes with it off (the warehouse holds 4)."""
-    mvp_map = _with_small_stock(tmp_path, 2)
-    on = load_ruleset(ROOT_RULESETS / "mvp-1.toml")
-    off = load_ruleset(ROOT_RULESETS / "mvp-0.toml")
-    issues = [i for i in validate_file(mvp_map, config, on) if i.check == "warehouse"]
-    assert issues and all("city_small" in i.message for i in issues)
-    assert validate_file(mvp_map, config, off) == []
-    assert validate_file(mvp_map, config) == []
+def test_warehouse_check_reads_the_capital_only(config: ValidatorConfig, tmp_path: Path) -> None:
+    """DEC-26, item 5 with DEC-41, item 9: a capital with more than its warehouse (6 in mvp-7,
+    DEC-43, item C1) fails ``warehouse``; the other cities never do, they start empty."""
+    rules = load_ruleset(ROOT_RULESETS / "mvp-7.toml")
+    over = _with_capital_stock(tmp_path, 7)
+    issues = [i for i in validate_file(over, config, rules) if i.check == "warehouse"]
+    assert len(issues) == 2 and all("capital" in i.message for i in issues)
+    assert validate_file(over, config) == []  # no ruleset: no check
+    assert validate_file(_with_capital_stock(tmp_path, 6), config, rules) == []
 
 
 def test_cli_ruleset_option(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
-    mvp_map = str(_with_small_stock(tmp_path, 2))
-    assert main(["validate", mvp_map, "--ruleset", str(ROOT_RULESETS / "mvp-0.toml")]) == 0
-    assert main(["validate", mvp_map, "--ruleset", str(ROOT_RULESETS / "mvp-1.toml")]) == 1
+    mvp7 = str(ROOT_RULESETS / "mvp-7.toml")
+    assert main(["validate", str(_with_capital_stock(tmp_path, 7)), "--ruleset", mvp7]) == 1
     assert "[warehouse]" in capsys.readouterr().out
-    good = str(_with_small_stock(tmp_path, 1))
-    assert main(["validate", good, "--ruleset", str(ROOT_RULESETS / "mvp-1.toml")]) == 0
+    assert main(["validate", str(_with_capital_stock(tmp_path, 6)), "--ruleset", mvp7]) == 0
 
 
 # DEC-27, table of examples (mechanics.md, section 9): a 400 x 400 map -------------------------
