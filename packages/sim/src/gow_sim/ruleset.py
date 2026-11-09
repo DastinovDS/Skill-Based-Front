@@ -2,7 +2,11 @@
 
 Systems read rule numbers only from ``Ruleset`` (AGENTS.md, section 4.1, rule 7). The field names
 equal the keys of ``rulesets/*.toml``; the meaning of each key is commented in
-``rulesets/mvp-0.toml``. Units: durations in ticks, CP in hundredths, percentages as integers.
+``rulesets/mvp-7.toml``. Units: durations in ticks, CP in hundredths, percentages as integers.
+
+Every ruleset plays economy v2 (DEC-41) with the automatic supply flow (DEC-43), the stances of
+DEC-44, the road fortifications of DEC-43 item D and the terrain burn of DEC-45; the rulesets of
+economy v1 and of the drawn lines were removed with their code (#894, 2026-11-09).
 
 File I/O is allowed in this module (AGENTS.md, section 4.1, rule 1).
 """
@@ -17,7 +21,7 @@ from pathlib import Path
 from typing import Final, cast
 
 from gow_sim.canonical import digest
-from gow_sim.maps import MAX_LEVEL, MapDef, NodeKind, Terrain
+from gow_sim.maps import MapDef, NodeKind, Terrain
 
 
 class RulesetError(ValueError):
@@ -25,33 +29,17 @@ class RulesetError(ValueError):
 
 
 class Stance(StrEnum):
-    """CP stance: the share of CP regeneration that goes into charges (DEC-02); under ``[stances]``
-    of economy v2 the rate of the CP income and of the own capital (DEC-44)."""
+    """The stance of a player (DEC-44): the rate of the CP income and of the own capital (with
+    ``stances.factories_follow``, DEC-47, of every factory)."""
 
     ECONOMY = "economy"
     BALANCE = "balance"
     WAR = "war"
 
 
-class EconomyModel(StrEnum):
-    """``economy.model`` (DEC-41, #642): ``v1`` is the economy of stances, front markers and
-    donors; ``v2`` the economy of factories and drawn supply lines."""
-
-    V1 = "v1"
-    V2 = "v2"
-
-
-class SupplyModel(StrEnum):
-    """``supply.model`` (DEC-43, #697; economy v2 only): ``lines`` is the supply of drawn lines
-    (DEC-41, DEC-42); ``flow`` the automatic flow towards the front with the leaf shift."""
-
-    LINES = "lines"
-    FLOW = "flow"
-
-
 OPTIONAL: Final = {"optional": True}
-"""Metadata of a field whose key may be left out of the file (the economy v2 keys, DEC-41): at its
-default it is left out of ``to_canonical`` too, so the hash of a v1 ruleset stays as it was."""
+"""Metadata of a field whose key may be left out of the file: at its default it is left out of
+``to_canonical`` too."""
 
 
 class Retreat(StrEnum):
@@ -61,13 +49,6 @@ class Retreat(StrEnum):
 
     ROUND = "round"
     NONE = "none"
-
-
-class RecruitLocation(StrEnum):
-    """Where ``Recruit(node)`` is allowed (DEC-01)."""
-
-    ANY_CITY = "any_city"
-    CAPITAL = "capital"
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,47 +135,20 @@ class CityKindTable:
 
 
 @dataclass(frozen=True, slots=True)
-class LevelTable:
-    """One integer per upgraded road level ``2..MAX_LEVEL``: ``values[level - 2]`` (DEC-22)."""
-
-    values: tuple[int, ...]
-
-    def of(self, width: int) -> int:
-        if not 2 <= width <= len(self.values) + 1:
-            raise ValueError(f"road level {width} is out of range 2..{len(self.values) + 1}")
-        return self.values[width - 2]
-
-
-@dataclass(frozen=True, slots=True)
-class FullLevelTable:
-    """One integer per road level ``1..MAX_LEVEL``: ``values[level - 1]`` (DEC-28, item 7)."""
-
-    values: tuple[int, ...]
-
-    def of(self, width: int) -> int:
-        if not 1 <= width <= len(self.values):
-            raise ValueError(f"road level {width} is out of range 1..{len(self.values)}")
-        return self.values[width - 1]
-
-
-@dataclass(frozen=True, slots=True)
 class CpRules:
+    """CP (DEC-02): the stock at the start, the cap and the quantum; the period of the quantum is
+    set by the stance (``stances.cp_period_ticks``, DEC-44)."""
+
     start: int
     cap: int
     per_period: int
-    period_ticks: int
 
 
 @dataclass(frozen=True, slots=True)
 class EconomyRules:
-    charges_per_cp: int
     start_stance: Stance
-    stance_to_charges_pct: StanceTable
-    model: EconomyModel = dataclasses.field(default=EconomyModel.V1, metadata=OPTIONAL)
-    """DEC-41: under ``v2`` the stance keys above have no effect (item 1)."""
-    start_stock_capital_only: bool = dataclasses.field(default=False, metadata=OPTIONAL)
-    """DEC-41, item 9 (``v2`` only): the warehouses of the cities other than the capital start
-    empty; the capital keeps the start stock of the map."""
+    """The stance of both players at the start (DEC-09). Only the capital keeps the start stock of
+    the map, the other cities start empty (DEC-41, item 9)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,54 +160,25 @@ class OrderCosts:
     cancel: int
     split: int
     merge: int
-    attack: int
-    defense: int
-    build: int
     recruit: int
     stance: int
-    front: int
-    """``SetFront``: moving a front marker (DEC-28, item 2)."""
-    rear_min: int
-    """``SetRearMin``: the rear minimum of the player (DEC-28, item 3)."""
-    transfer: int
-    """``Transfer``: one-off shipment of charges between own cities (DEC-18, item 6)."""
     barracks: int
-    """``BuildBarracks``: the barracks of a city (DEC-26, item 2; with ``city_upgrades``)."""
-    warehouse: int
-    """``UpgradeWarehouse``: one warehouse level of a city (DEC-26, item 3)."""
+    """``BuildBarracks``: the barracks of a city (DEC-26, item 2), paid in charges besides."""
 
 
 @dataclass(frozen=True, slots=True)
 class OrderRules:
-    planned_delay_ticks: int
-    planned_bonus_per_edge: int
-    """Virtual shots of a planned order per edge of its path (DEC-29); see ``planned_bonus``."""
-    defense_ticks_per_bonus: int
-    """The "Defense" mode gains one virtual shot per this many ticks (DEC-30); see
-    ``defense_bonus``."""
-    stance_cooldown_ticks: int
+    plan_ticks_per_bonus: int
+    """A waiting planned order takes one real charge from the warehouse of its node and gains one
+    bonus once per this many ticks (DEC-41, item 10)."""
     cost: OrderCosts
-    plan_ticks_per_bonus: int = dataclasses.field(default=0, metadata=OPTIONAL)
-    """DEC-41, item 10 (``v2`` only): a waiting planned order takes one real charge from the
-    warehouse of its node and gains one bonus once per this many ticks; ``planned_delay_ticks``
-    and ``planned_bonus_per_edge`` have no effect under v2."""
-
-    def planned_bonus(self, edges: int, charged: int) -> int:
-        """The bonus of a planned order (DEC-29): ``edges`` of the path chosen at the command
-        times ``planned_bonus_per_edge``, at most the ``charged`` units of the group in the tick
-        it departs; a group without charged units gets 0."""
-        return min(edges * self.planned_bonus_per_edge, charged)
-
-    def defense_bonus(self, ticks: int, charged: int) -> int:
-        """The bonus of "Defense" (DEC-30): one per ``defense_ticks_per_bonus`` of the ``ticks``
-        the group has stood in the mode (rounded down, ``ticks >= 0``), at most the ``charged``
-        units of the group when the fight begins."""
-        return min(ticks // self.defense_ticks_per_bonus, charged)
 
 
 @dataclass(frozen=True, slots=True)
 class TerrainRules:
     defense_mod: TerrainTable
+    """Virtual shots of a node defender by the terrain; a negative value burns that many of its
+    charges at the start of the first round (DEC-45)."""
     speed_pct: TerrainTable
     """Movement speed in the zone of a node of this terrain, in percent (#253)."""
 
@@ -269,9 +194,6 @@ class CombatRules:
     shots_per_round: int
     regroup_ticks: int
     engage_ticks: int
-    terrain_burn: bool = dataclasses.field(default=False, metadata=OPTIONAL)
-    """A negative ``terrain.defense_mod`` burns the defender's charges in the first round instead
-    of silencing them in every round (DEC-45). Left out of the hash when absent."""
     retreat: Retreat = dataclasses.field(default=Retreat.ROUND, metadata=OPTIONAL)
     """``none``: no retreat from a fight (DEC-40, variant N): the defender's ``Move`` and the
     ``CancelOrder`` of an attacker or of a group on an edge in a fight are rejected with
@@ -297,8 +219,9 @@ class CapacityRules:
 
 @dataclass(frozen=True, slots=True)
 class StarvationRules:
-    """Starvation of a cut-off city (DEC-19): ``charges`` per started ``per_units`` standing units
-    every ``period_ticks``, the first time ``grace_ticks`` after the cut."""
+    """Starvation of a factory-less pocket (DEC-43, item H; the consumption of DEC-19):
+    ``charges`` per started ``per_units`` standing units every ``period_ticks``, the first time
+    ``grace_ticks`` after the cut."""
 
     grace_ticks: int
     period_ticks: int
@@ -308,38 +231,12 @@ class StarvationRules:
 
 @dataclass(frozen=True, slots=True)
 class SupplyRules:
+    """The automatic supply flow (DEC-43)."""
+
     dispatch_ticks: int
-    rear_min_default: int
-    """The rear minimum every player starts with (DEC-28, item 3)."""
-    rear_min_max: int
-    """The largest rear minimum ``SetRearMin`` accepts (DEC-28, item 3)."""
     recharge_per_tick: int
-    base_speed_pct: int
-    """Packet speed on a level 1 road (DEC-22, item 4)."""
-    fast_speed_pct: LevelTable
-    """Packet speed on an upgraded road by its level ``2..MAX_LEVEL`` (DEC-26, item 7)."""
-    amount_by_level: FullLevelTable
-    """Charges per road and dispatch period by the road level ``1..MAX_LEVEL`` (DEC-28, item 7)."""
-    front_markers: int
-    """Front markers of a player (DEC-28, item 2)."""
-    model: SupplyModel = dataclasses.field(default=SupplyModel.LINES, metadata=OPTIONAL)
-    """DEC-43: ``flow`` (only with ``economy.model = "v2"``) replaces the drawn lines by the
-    automatic flow; at the default it is not part of the ruleset hash."""
-
-
-@dataclass(frozen=True, slots=True)
-class RoadRules:
-    """Unit speed on an upgraded road (DEC-28, item 7): ``speed_pct`` by the level
-    ``2..MAX_LEVEL`` multiplies the terrain speed; level 1 is 100."""
-
-    speed_pct: LevelTable
-
-
-@dataclass(frozen=True, slots=True)
-class BuildRules:
-    """Road upgrades (DEC-28, item 7): one level per command, paid with ``orders.cost.build``."""
-
-    ticks_per_level: int
+    speed_pct: int
+    """Packet speed on every road (DEC-41, item 8)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,63 +250,50 @@ class RecruitRules:
     refund_started_pct: int
     """Share of ``orders.cost.recruit`` returned for a cancelled unit in production, in percent
     (DEC-25, item 3); a unit not started yet is returned in full."""
-    location: RecruitLocation
 
 
 @dataclass(frozen=True, slots=True)
 class CityUpgradeRules:
-    """City development (DEC-26): the barracks and a warehouse apart from the unit capacity.
+    """The barracks of a city (DEC-26): the capital has one from the start, another city builds
+    it; only a city with a barracks recruits."""
 
-    ``enabled`` is the flag of the ruleset; the other numbers apply only when it is ``True``.
-    """
-
-    enabled: bool
     barracks_ticks: int
-    """Ticks to build the barracks (item 2)."""
-    warehouse_ticks: int
-    """Ticks to raise the warehouse by one level (item 3)."""
-    barracks_charges: int = dataclasses.field(default=0, metadata=OPTIONAL)
-    """DEC-41, item 7 (``v2`` only): the barracks costs this many charges instead of CP."""
-    warehouse_charges: int = dataclasses.field(default=0, metadata=OPTIONAL)
-    """DEC-41, item 7 (``v2`` only): every warehouse level costs this many charges instead of
-    CP."""
+    """Ticks to build the barracks after its full payment (item 2)."""
+    barracks_charges: int
+    """The charges the barracks costs (DEC-41, item 7, the progressive payment)."""
 
 
 @dataclass(frozen=True, slots=True)
 class WarehouseRules:
-    """Warehouse capacity of a city with ``city_upgrades`` (DEC-26, item 2):
-    ``start_by_kind[kind] + level * gain_per_level``, ``level`` in ``0..max_level``."""
+    """Fixed warehouses (DEC-43, item C): the capacity of a city by its kind, of a province
+    ``province`` (DEC-41, item 13)."""
 
-    gain_per_level: int
-    max_level: int
     start_by_kind: CityKindTable
-    province: int = dataclasses.field(default=0, metadata=OPTIONAL)
-    """DEC-41, item 13 (``v2`` only): the warehouse of a province, always this capacity."""
+    province: int
 
 
 @dataclass(frozen=True, slots=True)
 class FactoryRules:
-    """Supply factories (DEC-41, item 2; ``economy.model = "v2"`` only): a factory city makes one
-    charge per period into its own warehouse."""
+    """Supply factories (DEC-41, item 2): a factory city makes one charge per period into its own
+    warehouse. The own capital at the period of its owner's stance (DEC-44); every other factory
+    at ``built_period_ticks``, or with ``stances.factories_follow`` (DEC-47) at the stance period
+    too."""
 
-    capital_period_ticks: int
-    """The own capital, the main factory from the start."""
-    built_period_ticks: int
-    """Every other factory: a built one or a captured one (a captured capital too)."""
     cost: int
     """Charges ``BuildFactory`` pays (the progressive payment of DEC-41, item 7)."""
     build_ticks: int
     """Ticks from the full payment of ``BuildFactory`` to the factory."""
     max: int
     """Factories of a player at most, the capital and the builds under way included."""
+    built_period_ticks: int | None = dataclasses.field(default=None, metadata=OPTIONAL)
+    """Every other factory (a built one or a captured one, a captured capital too); required
+    without ``stances.factories_follow`` and not allowed with it."""
 
 
 @dataclass(frozen=True, slots=True)
 class StanceRules:
-    """Stances of economy v2 with local progress (DEC-44, section ``[stances]``; ``economy.model =
-    "v2"`` only). The periods of the player's stance replace ``cp.period_ticks`` and
-    ``factory.capital_period_ticks`` (with ``factories_follow``, DEC-47, also
-    ``factory.built_period_ticks``), counted from the player's own last quantum."""
+    """Stances with local progress (DEC-44, section ``[stances]``): the periods of the player's
+    stance, counted from the player's own last quantum."""
 
     cp_period_ticks: StanceTable
     """Ticks per CP quantum (``cp.per_period``) under each stance."""
@@ -418,8 +302,7 @@ class StanceRules:
     factories_follow: bool = dataclasses.field(default=False, metadata=OPTIONAL)
     """DEC-47 (#888): every other factory of the player (built or captured, a captured capital
     too) makes its charges by ``capital_period_ticks`` of its owner's stance as well, each on its
-    own counter (``Node.factory_ticks``), and ``factory.built_period_ticks`` has no effect. Left
-    out of the hash when ``False``, so every ruleset without the key keeps its hash."""
+    own counter (``Node.factory_ticks``). Left out of the hash when ``False``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -443,23 +326,10 @@ class MapTempoRules:
 
 
 @dataclass(frozen=True, slots=True)
-class BunkerRules:
-    """The bunker (DEC-41, item 12; code name ``fort``; ``economy.model = "v2"`` only): a
-    building of a city or a province that adds virtual shots to the node's defender."""
-
-    cost: int
-    """Charges ``BuildBunker`` pays (progressive payment, item 7)."""
-    build_ticks: int
-    """Ticks from the full payment to the bunker."""
-    shots: int
-    """Virtual shots of the node's defender in every fight there, if it has a charged unit."""
-
-
-@dataclass(frozen=True, slots=True)
 class FortRules:
-    """Road fortifications (DEC-43, item D; code name ``road_fort``, the bunker is ``fort``;
-    ``economy.model = "v2"`` only): a line at the border point of a road leaving an own node that
-    takes charges from an enemy group crossing it towards the node."""
+    """Road fortifications (DEC-43, item D; code name ``road_fort``): a line at the border point
+    of a road leaving an own node that takes charges from an enemy group crossing it towards the
+    node."""
 
     cost: int
     """CP in hundredths ``FortifyRoad`` costs, flat (item D2)."""
@@ -475,20 +345,6 @@ class FortRules:
         ``min(charged, toll_charges * ceil(units / toll_units))``; non-negative, rounded down."""
         started = (units + self.toll_units - 1) // self.toll_units
         return min(charged, self.toll_charges * started)
-
-
-@dataclass(frozen=True, slots=True)
-class LineRules:
-    """Drawn supply lines (DEC-41, item 3; ``economy.model = "v2"`` only). Only a factory starts
-    a line and a factory starts any number of them (DEC-42, items 1 and 2): no limit key."""
-
-    auto_extend: bool = dataclasses.field(default=False, metadata=OPTIONAL)
-    """A city the player captures gets a copy of the nearest own line extended to it (DEC-42,
-    item 5; the toggle of #665): the start value of every player's toggle (``SetAutoLines``)."""
-    auto_extend_ticks: int = dataclasses.field(default=0, metadata=OPTIONAL)
-    """The farthest a node of an own line may be from the captured city for an auto-extension,
-    in ticks of a packet over own nodes (the sum of ``packet_ticks``). Required with
-    ``auto_extend``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -570,6 +426,7 @@ class Ruleset:
     match_ticks: int
     cp: CpRules
     economy: EconomyRules
+    stances: StanceRules
     orders: OrderRules
     terrain: TerrainRules
     combat: CombatRules
@@ -577,64 +434,21 @@ class Ruleset:
     capacity: CapacityRules
     starvation: StarvationRules
     supply: SupplyRules
-    road: RoadRules
-    build: BuildRules
     recruit: RecruitRules
     victory: VictoryRules
     city_upgrades: CityUpgradeRules
     warehouse: WarehouseRules
     vision: VisionRules
-    factory: FactoryRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
-    """Set exactly with ``economy.model = "v2"`` (DEC-41)."""
-    lines: LineRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
-    """Set exactly with ``economy.model = "v2"`` (DEC-41)."""
-    bunker: BunkerRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
-    """Only with ``economy.model = "v2"`` (DEC-41, item 12), and optional there (DEC-43, item
-    D1): without it ``BuildBunker`` gives ``FEATURE_DISABLED``."""
-    fort: FortRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
-    """Road fortifications (DEC-43, item D): only with ``economy.model = "v2"``, optional there;
-    without it ``FortifyRoad`` gives ``FEATURE_DISABLED``."""
-    stances: StanceRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
-    """Stances with local progress (DEC-44): only with ``economy.model = "v2"``, optional there;
-    without it ``SetStance`` gives ``FEATURE_DISABLED`` (DEC-41, item 1). Left out of the hash when
-    absent, so the hash of every ruleset without the section stays as it was."""
+    factory: FactoryRules
+    fort: FortRules
     map_tempo: MapTempoRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
     """Map tempo (DEC-46, #803): the economy periods scaled by the map size. ``Match`` plays
-    ``apply_map_tempo(rules, map)``, which has no section. Left out of the hash when absent, so
-    the hash of every ruleset without the section stays as it was."""
-
-    @property
-    def v2(self) -> bool:
-        """The economy of DEC-41 (``economy.model = "v2"``)."""
-        return self.economy.model is EconomyModel.V2
+    ``apply_map_tempo(rules, map)``, which has no section. Left out of the hash when absent."""
 
     @property
     def factories_follow(self) -> bool:
         """Every factory follows the stance of its owner (DEC-47, ``stances.factories_follow``)."""
-        return self.stances is not None and self.stances.factories_follow
-
-    @property
-    def flow(self) -> bool:
-        """The automatic supply flow of DEC-43 (``supply.model = "flow"``, economy v2 only)."""
-        return self.supply.model is SupplyModel.FLOW
-
-    def factory_rules(self) -> FactoryRules:
-        """``factory`` of a v2 ruleset; an error under v1."""
-        if self.factory is None:
-            raise ValueError("factory rules exist only with economy.model = 'v2'")
-        return self.factory
-
-    def line_rules(self) -> LineRules:
-        """``lines`` of a v2 ruleset; an error under v1."""
-        if self.lines is None:
-            raise ValueError("line rules exist only with supply.model = 'lines' under v2")
-        return self.lines
-
-    def bunker_rules(self) -> BunkerRules:
-        """``bunker`` of a v2 ruleset; an error under v1."""
-        if self.bunker is None:
-            raise ValueError("bunker rules exist only with a [bunker] section under v2")
-        return self.bunker
+        return self.stances.factories_follow
 
 
 def _scaled(period: int, pct: int) -> int:
@@ -653,34 +467,24 @@ def _scaled_table(table: StanceTable, pct: int) -> StanceTable:
 def apply_map_tempo(rules: Ruleset, mapdef: MapDef) -> Ruleset:
     """The rules a match on ``mapdef`` plays (DEC-46, #803): without ``[map_tempo]``
     ``rules`` itself; with it a copy without the section whose economy periods are scaled by
-    ``map_tempo.pct(len(mapdef.nodes))``: ``cp.period_ticks``, ``factory.capital_period_ticks``,
-    ``factory.built_period_ticks`` and both ``[stances]`` tables, each ``max(1, p * 100 // pct)``
-    (rounded down). Nothing else changes. Pure, integers only."""
+    ``map_tempo.pct(len(mapdef.nodes))``: ``factory.built_period_ticks`` (when set) and both
+    ``[stances]`` tables, each ``max(1, p * 100 // pct)`` (rounded down). Nothing else changes.
+    Pure, integers only."""
     tempo = rules.map_tempo
     if tempo is None:
         return rules
     pct = tempo.pct(len(mapdef.nodes))
     factory = rules.factory
-    if factory is not None:
+    if factory.built_period_ticks is not None:
         factory = dataclasses.replace(
-            factory,
-            capital_period_ticks=_scaled(factory.capital_period_ticks, pct),
-            built_period_ticks=_scaled(factory.built_period_ticks, pct),
+            factory, built_period_ticks=_scaled(factory.built_period_ticks, pct)
         )
-    stances = rules.stances
-    if stances is not None:
-        stances = dataclasses.replace(
-            stances,
-            cp_period_ticks=_scaled_table(stances.cp_period_ticks, pct),
-            capital_period_ticks=_scaled_table(stances.capital_period_ticks, pct),
-        )
-    return dataclasses.replace(
-        rules,
-        cp=dataclasses.replace(rules.cp, period_ticks=_scaled(rules.cp.period_ticks, pct)),
-        factory=factory,
-        stances=stances,
-        map_tempo=None,
+    stances = dataclasses.replace(
+        rules.stances,
+        cp_period_ticks=_scaled_table(rules.stances.cp_period_ticks, pct),
+        capital_period_ticks=_scaled_table(rules.stances.capital_period_ticks, pct),
     )
+    return dataclasses.replace(rules, factory=factory, stances=stances, map_tempo=None)
 
 
 def load_ruleset(path: str | Path) -> Ruleset:
@@ -706,10 +510,6 @@ def to_canonical(rules: Ruleset) -> dict[str, object]:
 
 
 def _plain(value: object) -> object:
-    if isinstance(value, LevelTable):
-        return {str(width): v for width, v in enumerate(value.values, start=2)}
-    if isinstance(value, FullLevelTable):
-        return {str(width): v for width, v in enumerate(value.values, start=1)}
     if isinstance(value, StrEnum):
         return value.value
     if isinstance(value, tuple):
@@ -748,10 +548,6 @@ def archive_ruleset(path: str | Path, archive_dir: str | Path) -> Path:
     return target
 
 
-_LEVEL_KEYS: Final = tuple(str(width) for width in range(2, MAX_LEVEL + 1))
-_ALL_LEVEL_KEYS: Final = tuple(str(width) for width in range(1, MAX_LEVEL + 1))
-
-
 def parse_ruleset(data: object) -> Ruleset:
     """Build a Ruleset from parsed TOML. Raises RulesetError naming the offending key."""
     root = _Table(
@@ -762,6 +558,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "match_ticks",
             "cp",
             "economy",
+            "stances",
             "orders",
             "terrain",
             "combat",
@@ -769,107 +566,34 @@ def parse_ruleset(data: object) -> Ruleset:
             "capacity",
             "starvation",
             "supply",
-            "road",
-            "build",
             "recruit",
             "victory",
             "city_upgrades",
             "warehouse",
             "vision",
             "factory",
-            "lines",
-            "bunker",
             "fort",
-            "stances",
             "map_tempo",
         ),
     )
-    economy = _parse_economy(
-        root.table(
-            "economy",
-            (
-                "charges_per_cp",
-                "start_stance",
-                "stance_to_charges_pct",
-                "model",
-                "start_stock_capital_only",
-            ),
-        )
+    stances = _parse_stances(
+        root.table("stances", ("cp_period_ticks", "capital_period_ticks", "factories_follow"))
     )
-    v2 = economy.model is EconomyModel.V2
-    supply_table = root.table(
-        "supply",
-        (
-            "dispatch_ticks",
-            "rear_min_default",
-            "rear_min_max",
-            "recharge_per_tick",
-            "base_speed_pct",
-            "fast_speed_pct",
-            "amount_by_level",
-            "front_markers",
-            "model",
-        ),
-    )
-    supply = _parse_supply(supply_table, v2)
-    flow = supply.model is SupplyModel.FLOW
-    if flow and root.has("lines"):
-        raise RulesetError("lines: not allowed with supply.model = 'flow' (DEC-43, item A12)")
-    lines = (
-        None
-        if flow
-        else _parse_lines(root.v2_table("lines", v2, ("auto_extend", "auto_extend_ticks")))
-    )
-    bunker = None
-    if v2 and root.has("bunker"):  # optional under v2 (DEC-43, item D1)
-        bunker = _parse_bunker(root.table("bunker", ("cost", "build_ticks", "shots")))
-    elif root.has("bunker"):
-        raise RulesetError("bunker: only with economy.model = 'v2'")
-    fort = None
-    if v2 and root.has("fort"):  # optional under v2 (DEC-43, item D)
-        fort = _parse_fort(
-            root.table("fort", ("cost", "build_ticks", "toll_units", "toll_charges"))
-        )
-    elif root.has("fort"):
-        raise RulesetError("fort: only with economy.model = 'v2'")
-    stances = None
-    if v2 and root.has("stances"):  # optional under v2 (DEC-44)
-        stances = _parse_stances(
-            root.table("stances", ("cp_period_ticks", "capital_period_ticks", "factories_follow"))
-        )
-    elif root.has("stances"):
-        raise RulesetError("stances: only with economy.model = 'v2'")
+    economy = root.table("economy", ("start_stance",))
     return Ruleset(
         tick_hz=root.integer("tick_hz", low=1),
         match_ticks=root.integer("match_ticks", low=1),
-        cp=_parse_cp(root.table("cp", ("start", "cap", "per_period", "period_ticks"))),
-        economy=economy,
-        orders=_parse_orders(
-            root.table(
-                "orders",
-                (
-                    "planned_delay_ticks",
-                    "planned_bonus_per_edge",
-                    "defense_ticks_per_bonus",
-                    "stance_cooldown_ticks",
-                    "cost",
-                    "plan_ticks_per_bonus",
-                ),
-            ),
-            v2,
+        cp=_parse_cp(root.table("cp", ("start", "cap", "per_period"))),
+        economy=EconomyRules(
+            start_stance=Stance(economy.choice("start_stance", tuple(s.value for s in Stance)))
         ),
+        stances=stances,
+        orders=_parse_orders(root.table("orders", ("plan_ticks_per_bonus", "cost"))),
         terrain=_parse_terrain(root.table("terrain", ("defense_mod", "speed_pct"))),
         combat=_parse_combat(
             root.table(
                 "combat",
-                (
-                    "round_ticks",
-                    "shots_per_round",
-                    "regroup_ticks",
-                    "engage_ticks",
-                    "terrain_burn",
-                    "retreat",
-                ),
+                ("round_ticks", "shots_per_round", "regroup_ticks", "engage_ticks", "retreat"),
             )
         ),
         capture=CaptureRules(
@@ -881,42 +605,23 @@ def parse_ruleset(data: object) -> Ruleset:
         starvation=_parse_starvation(
             root.table("starvation", ("grace_ticks", "period_ticks", "charges", "per_units"))
         ),
-        supply=supply,
-        road=_parse_road(root.table("road", ("speed_pct",))),
-        build=_parse_build(root.table("build", ("ticks_per_level",))),
+        supply=_parse_supply(
+            root.table("supply", ("dispatch_ticks", "recharge_per_tick", "speed_pct"))
+        ),
         recruit=_parse_recruit(
-            root.table("recruit", ("unit_ticks", "queue_max", "refund_started_pct", "location"))
+            root.table("recruit", ("unit_ticks", "queue_max", "refund_started_pct"))
         ),
         victory=_parse_victory(root.table("victory", ("vp_period_ticks", "capital_multiplier"))),
         city_upgrades=_parse_city_upgrades(
-            root.table(
-                "city_upgrades",
-                (
-                    "enabled",
-                    "barracks_ticks",
-                    "warehouse_ticks",
-                    "barracks_charges",
-                    "warehouse_charges",
-                ),
-            ),
-            v2,
+            root.table("city_upgrades", ("barracks_ticks", "barracks_charges"))
         ),
-        warehouse=_parse_warehouse(
-            root.table("warehouse", ("gain_per_level", "max_level", "start_by_kind", "province")),
-            v2,
-        ),
+        warehouse=_parse_warehouse(root.table("warehouse", ("start_by_kind", "province"))),
         vision=_parse_vision(root.table("vision", ("range_starts", "by_terrain"))),
         factory=_parse_factory(
-            root.v2_table(
-                "factory",
-                v2,
-                ("capital_period_ticks", "built_period_ticks", "cost", "build_ticks", "max"),
-            )
+            root.table("factory", ("built_period_ticks", "cost", "build_ticks", "max")),
+            stances.factories_follow,
         ),
-        lines=lines,
-        bunker=bunker,
-        fort=fort,
-        stances=stances,
+        fort=_parse_fort(root.table("fort", ("cost", "build_ticks", "toll_units", "toll_charges"))),
         map_tempo=_parse_map_tempo(
             root.table("map_tempo", ("ref_nodes", "min_pct", "max_pct"))
             if root.has("map_tempo")
@@ -942,29 +647,6 @@ def _parse_cp(t: "_Table") -> CpRules:
         start=t.integer("start", low=0, high=cap),
         cap=cap,
         per_period=t.integer("per_period", low=0),
-        period_ticks=t.integer("period_ticks", low=1),
-    )
-
-
-def _parse_economy(t: "_Table") -> EconomyRules:
-    pct = t.table("stance_to_charges_pct", tuple(s.value for s in Stance))
-    model = EconomyModel.V1
-    if t.has("model"):
-        model = EconomyModel(t.choice("model", tuple(m.value for m in EconomyModel)))
-    v2 = model is EconomyModel.V2
-    start_stock_capital_only = False
-    if t.has_v2("start_stock_capital_only", v2):
-        start_stock_capital_only = t.boolean("start_stock_capital_only")
-    return EconomyRules(
-        charges_per_cp=t.integer("charges_per_cp", low=0),
-        start_stance=Stance(t.choice("start_stance", tuple(s.value for s in Stance))),
-        stance_to_charges_pct=StanceTable(
-            economy=pct.integer("economy", low=0, high=100),
-            balance=pct.integer("balance", low=0, high=100),
-            war=pct.integer("war", low=0, high=100),
-        ),
-        model=model,
-        start_stock_capital_only=start_stock_capital_only,
     )
 
 
@@ -984,33 +666,19 @@ def _parse_stances(t: "_Table") -> StanceRules:
     )
 
 
-def _parse_factory(t: "_Table | None") -> FactoryRules | None:
-    if t is None:
-        return None
+def _parse_factory(t: "_Table", factories_follow: bool) -> FactoryRules:
+    built: int | None = None
+    if not factories_follow:
+        built = t.integer("built_period_ticks", low=1)
+    elif t.has("built_period_ticks"):
+        raise RulesetError(
+            "factory.built_period_ticks: not allowed with stances.factories_follow (DEC-47)"
+        )
     return FactoryRules(
-        capital_period_ticks=t.integer("capital_period_ticks", low=1),
-        built_period_ticks=t.integer("built_period_ticks", low=1),
         cost=t.integer("cost", low=0),
         build_ticks=t.integer("build_ticks", low=1),
         max=t.integer("max", low=1),
-    )
-
-
-def _parse_lines(t: "_Table | None") -> LineRules | None:
-    if t is None:
-        return None
-    auto_extend = t.boolean("auto_extend") if t.has("auto_extend") else False
-    reach = 0
-    if auto_extend or t.has("auto_extend_ticks"):  # required with the auto-extension on
-        reach = t.integer("auto_extend_ticks", low=1)
-    return LineRules(auto_extend=auto_extend, auto_extend_ticks=reach)
-
-
-def _parse_bunker(t: "_Table") -> BunkerRules:
-    return BunkerRules(
-        cost=t.integer("cost", low=0),
-        build_ticks=t.integer("build_ticks", low=1),
-        shots=t.integer("shots", low=0),
+        built_period_ticks=built,
     )
 
 
@@ -1023,17 +691,12 @@ def _parse_fort(t: "_Table") -> FortRules:
     )
 
 
-def _parse_orders(t: "_Table", v2: bool) -> OrderRules:
+def _parse_orders(t: "_Table") -> OrderRules:
     names = tuple(f.name for f in dataclasses.fields(OrderCosts))
     cost = t.table("cost", names)
-    plan = t.integer("plan_ticks_per_bonus", low=1) if t.has_v2("plan_ticks_per_bonus", v2) else 0
     return OrderRules(
-        planned_delay_ticks=t.integer("planned_delay_ticks", low=0),
-        planned_bonus_per_edge=t.integer("planned_bonus_per_edge", low=0),
-        defense_ticks_per_bonus=t.integer("defense_ticks_per_bonus", low=1),
-        stance_cooldown_ticks=t.integer("stance_cooldown_ticks", low=0),
+        plan_ticks_per_bonus=t.integer("plan_ticks_per_bonus", low=1),
         cost=OrderCosts(**{name: cost.integer(name, low=0) for name in names}),
-        plan_ticks_per_bonus=plan,
     )
 
 
@@ -1061,7 +724,6 @@ def _parse_combat(t: "_Table") -> CombatRules:
         shots_per_round=t.integer("shots_per_round", low=1),
         regroup_ticks=t.integer("regroup_ticks", low=0),
         engage_ticks=t.integer("engage_ticks", low=0),
-        terrain_burn=t.boolean("terrain_burn") if t.has("terrain_burn") else False,
         retreat=(
             Retreat(t.choice("retreat", tuple(r.value for r in Retreat)))
             if t.has("retreat")
@@ -1088,37 +750,12 @@ def _parse_starvation(t: "_Table") -> StarvationRules:
     )
 
 
-def _parse_supply(t: "_Table", v2: bool) -> SupplyRules:
-    model = SupplyModel.LINES
-    if t.has("model"):
-        model = SupplyModel(t.choice("model", tuple(m.value for m in SupplyModel)))
-        if model is SupplyModel.FLOW and not v2:
-            raise RulesetError("supply.model: 'flow' only with economy.model = 'v2' (DEC-43)")
-    speed = t.table("fast_speed_pct", _LEVEL_KEYS)
-    amount = t.table("amount_by_level", _ALL_LEVEL_KEYS)
-    rear_min_max = t.integer("rear_min_max", low=0)
+def _parse_supply(t: "_Table") -> SupplyRules:
     return SupplyRules(
         dispatch_ticks=t.integer("dispatch_ticks", low=1),
-        rear_min_default=t.integer("rear_min_default", low=0, high=rear_min_max),
-        rear_min_max=rear_min_max,
         recharge_per_tick=t.integer("recharge_per_tick", low=0),
-        base_speed_pct=t.integer("base_speed_pct", low=1),
-        fast_speed_pct=LevelTable(tuple(speed.integer(key, low=1) for key in _LEVEL_KEYS)),
-        amount_by_level=FullLevelTable(
-            tuple(amount.integer(key, low=1) for key in _ALL_LEVEL_KEYS)
-        ),
-        front_markers=t.integer("front_markers", low=0),
-        model=model,
+        speed_pct=t.integer("speed_pct", low=1),
     )
-
-
-def _parse_road(t: "_Table") -> RoadRules:
-    speed = t.table("speed_pct", _LEVEL_KEYS)
-    return RoadRules(speed_pct=LevelTable(tuple(speed.integer(key, low=1) for key in _LEVEL_KEYS)))
-
-
-def _parse_build(t: "_Table") -> BuildRules:
-    return BuildRules(ticks_per_level=t.integer("ticks_per_level", low=1))
 
 
 def _parse_recruit(t: "_Table") -> RecruitRules:
@@ -1126,36 +763,24 @@ def _parse_recruit(t: "_Table") -> RecruitRules:
         unit_ticks=t.integer("unit_ticks", low=1),
         queue_max=t.integer("queue_max", low=1),
         refund_started_pct=t.integer("refund_started_pct", low=0, high=100),
-        location=RecruitLocation(t.choice("location", tuple(loc.value for loc in RecruitLocation))),
     )
 
 
-def _parse_city_upgrades(t: "_Table", v2: bool) -> CityUpgradeRules:
-    barracks_charges = warehouse_charges = 0
-    if t.has_v2("barracks_charges", v2):
-        barracks_charges = t.integer("barracks_charges", low=0)
-    if t.has_v2("warehouse_charges", v2):
-        warehouse_charges = t.integer("warehouse_charges", low=0)
+def _parse_city_upgrades(t: "_Table") -> CityUpgradeRules:
     return CityUpgradeRules(
-        enabled=t.boolean("enabled"),
         barracks_ticks=t.integer("barracks_ticks", low=1),
-        warehouse_ticks=t.integer("warehouse_ticks", low=1),
-        barracks_charges=barracks_charges,
-        warehouse_charges=warehouse_charges,
+        barracks_charges=t.integer("barracks_charges", low=0),
     )
 
 
 _CITY_KINDS: Final = tuple(k.value for k in NodeKind if k is not NodeKind.PROVINCE)
 
 
-def _parse_warehouse(t: "_Table", v2: bool) -> WarehouseRules:
+def _parse_warehouse(t: "_Table") -> WarehouseRules:
     kinds = t.table("start_by_kind", _CITY_KINDS)
-    province = t.integer("province", low=0) if t.has_v2("province", v2) else 0
     return WarehouseRules(
-        gain_per_level=t.integer("gain_per_level", low=0),
-        max_level=t.integer("max_level", low=0),
         start_by_kind=CityKindTable(**{k: kinds.integer(k, low=0) for k in _CITY_KINDS}),
-        province=province,
+        province=t.integer("province", low=0),
     )
 
 
@@ -1207,20 +832,6 @@ class _Table:
 
     def has(self, key: str) -> bool:
         return key in self._data
-
-    def has_v2(self, key: str, v2: bool) -> bool:
-        """Whether the economy v2 key ``key`` (DEC-41) is given: it is required with
-        ``economy.model = "v2"`` and not allowed without it."""
-        if v2:
-            self._get(key)  # missing key: an error
-            return True
-        if key in self._data:
-            raise RulesetError(f"{self._path(key)}: only with economy.model = 'v2'")
-        return False
-
-    def v2_table(self, key: str, v2: bool, keys: tuple[str, ...]) -> "_Table | None":
-        """The economy v2 table ``key`` (DEC-41), see ``has_v2``; ``None`` without v2."""
-        return self.table(key, keys) if self.has_v2(key, v2) else None
 
     def _get(self, key: str) -> object:
         if key not in self._data:

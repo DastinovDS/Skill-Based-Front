@@ -1,10 +1,10 @@
 """The recruit queue of a city (DEC-25, #262; mechanics.md, section 3), numbers from ``Ruleset``.
 
-- ``Recruit(node)`` puts one unit into the queue of an own city (not a province, DEC-23) for
-  ``orders.cost.recruit``, charged when the unit is queued. Where: ``recruit.location``
-  (``any_city`` or ``capital``). At most ``recruit.queue_max`` units per city, the one in
-  production included (``QUEUE_FULL``); the owner's units standing in the city plus the queue must
-  stay below its capacity (``CITY_FULL``). The checks: ``commands.validate``.
+- ``Recruit(node)`` puts one unit into the queue of an own city (not a province, DEC-23) with a
+  barracks (DEC-26) for ``orders.cost.recruit``, charged when the unit is queued. At most
+  ``recruit.queue_max`` units per city, the one in production included (``QUEUE_FULL``); the owner's
+  units standing in the city plus the queue must stay below its capacity (``CITY_FULL``). The
+  checks: ``commands.validate``.
 - ``CancelRecruit(node)`` takes the **last** unit of the queue off. A unit not started yet returns
   its CP in full; the unit in production (the only one in the queue, with progress) returns
   ``orders.cost.recruit * recruit.refund_started_pct // 100`` (hundredths of CP, rounded down).
@@ -19,18 +19,18 @@
 - A ready unit appears when the owner's standing units in the city are fewer than its capacity;
   otherwise it waits with full progress (``recruit_waiting`` of the view) and appears in the first
   tick there is a place. It never appears during a fight in the city.
-- The unit appears discharged, as a new group in mode "Attack" (event ``recruited``); the
+- The unit appears discharged, as a new group (event ``recruited``); the
   ``orders`` system merges it into the group of the city in the same tick (DEC-20, A1). It takes
   a charge later, by the usual recharge from the city warehouse (``supply`` runs before
   ``recruit``, so its first recharge is in the next tick).
-- A cut-off city produces as usual (DEC-19, item 9). An owner change empties the queue without a
+- A city in a pocket produces as usual (DEC-19, item 9). An owner change empties the queue without a
   refund (``capacity.change_owner``, event ``recruit_queue_lost`` for the former owner).
 
 Nodes are walked player by player, each player's in ``node_key`` order, so the ids of the new
 groups of one player keep the mirror order (AGENTS.md, section 4.1, rule 6).
 """
 
-from gow_sim.ruleset import RecruitLocation, Ruleset
+from gow_sim.ruleset import Ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Mode, event
 from gow_sim.systems.capacity import city_capacity, standing_units
 
@@ -58,15 +58,6 @@ def recruit(state: GameState, rules: Ruleset) -> list[Event]:
             node.recruit_progress = 0
             events.append(_new_unit(state, player, nid))
     return events
-
-
-def recruit_allowed_here(state: GameState, rules: Ruleset, player: int, node: int) -> bool:
-    """``recruit.location`` allows ``player`` to recruit in ``node`` (ownership checked apart)."""
-    match rules.recruit.location:
-        case RecruitLocation.ANY_CITY:
-            return True
-        case RecruitLocation.CAPITAL:
-            return node == state.map.capital(player)
 
 
 def free_capacity(state: GameState, rules: Ruleset, player: int, node: int) -> int:

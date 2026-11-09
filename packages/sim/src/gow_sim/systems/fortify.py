@@ -1,4 +1,4 @@
-"""Road fortifications (DEC-43, item D, #707; code name ``road_fort``, the bunker is ``fort``).
+"""Road fortifications (DEC-43, item D, #707; code name ``road_fort``).
 
 mechanics.md, section 7, block DEC-43, item D:
 
@@ -60,9 +60,7 @@ def start_road_fort(
 ) -> list[Event]:
     """Apply a validated ``FortifyRoad(node, edge)``: the fortification works ``fort.build_ticks``
     later (item D4). The CP are charged by ``apply_commands``."""
-    fort = rules.fort
-    assert fort is not None  # validated: FEATURE_DISABLED without [fort]
-    state.nodes[node].road_forts[edge] = state.tick + fort.build_ticks
+    state.nodes[node].road_forts[edge] = state.tick + rules.fort.build_ticks
     return [
         event(
             state.tick,
@@ -71,7 +69,6 @@ def start_road_fort(
             node=node,
             edge=edge,
             kind="road_fort",
-            level=None,
         )
     ]
 
@@ -87,8 +84,6 @@ def tolls(
     ``on_toll(gid)`` is called after a group paid (``systems.combat`` caps the bonus it brings into
     a fight with it)."""
     fort = rules.fort
-    if fort is None:
-        return []
     tick = state.tick
     events: list[Event] = []
     sight: dict[int, Vision] = {}

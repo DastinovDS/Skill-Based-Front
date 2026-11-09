@@ -1,39 +1,32 @@
-"""Planned orders, "Defense" and public intents (SIM-10; mechanics.md, section 5, DEC-08; DEC-04).
+"""Planned orders and public intents (SIM-10; mechanics.md, section 5, DEC-08, DEC-41 item 10;
+DEC-04).
 
-DEC-08, numbers from ``Ruleset.orders``:
+Numbers from ``Ruleset.orders``:
 
-- A planned ``Move`` costs ``orders.cost.planned_move``; the group waits in its node
-  ``orders.planned_delay_ticks`` (``Order.depart_tick``), then leaves with a bonus of virtual
-  shots for its first fight: ``orders.planned_bonus_per_edge`` per edge of the path chosen at the
-  command, at most the charged units of the group in the tick it departs (DEC-29; the command
-  sets the uncapped bonus, ``movement`` caps it when the group leaves).
-- ``SetMode(DEFENSE)`` costs ``orders.cost.defense`` (again after leaving the mode). Its bonus
-  grows (DEC-30): the group counts the ticks it stands in the mode outside a fight
-  (``Group.ticks_in_defense``, +1 here at the end of every such tick), and brings
-  ``min(charged, ticks // orders.defense_ticks_per_bonus)`` into a fight it is in from the start;
-  it counts only for a node defender with a firing charge (DEC-07, rule 1). Joining a fight
-  resets the count, the mode stays and gathers anew after the fight. "Defense" holds while the
-  group stands; a move order drops it for free, with what it gathered.
+- A planned ``Move`` costs ``orders.cost.planned_move`` and names the requested bonus
+  ``Move.bonus >= 1``; the group waits in its node and gathers it (``gather_plans``): one real
+  charge of the node's warehouse per ``orders.plan_ticks_per_bonus`` ticks, at most its charged
+  units; then it leaves with that bonus of virtual shots for its first fight, at most the charged
+  units of the group in the tick it departs (DEC-29, ``movement`` caps it when the group leaves).
 - ``CancelOrder`` of any order costs ``orders.cost.cancel`` (0 since DEC-20): a planned order
-  during the delay, a move order on an edge (the group turns back), "Defense".
-- A planned order and "Defense" are public: an ``Intent`` with the owner, the kind, the node of
-  the group and the target, without the group id or size (DEC-04). The group keeps the link
-  (``Group.intent``); the intent names no group. Road builds are not public (DEC-16).
+  while it waits, a move order on an edge (the group turns back).
+- A planned order is public: an ``Intent`` with the owner, the kind, the node of the group and the
+  target, without the group id or size (DEC-04). The group keeps the link (``Group.intent``); the
+  intent names no group.
 
 Commands (SIM-04) set bonuses and intents when applied (``set_intent``, ``clear_bonus``).
-Around combat: the combat system gets ``active_bonuses(state, rules)`` and takes the bonus of a
-group that joins a fight off the group (it burns with the fight, DEC-24 F1; for "Defense" the
-count of ticks goes back to 0); the ``orders`` system at the end of the step (after ``build``)
-removes the bonuses and intents whose order or mode ended in a system: arrival, bounce, death,
-attrition, and counts the ticks of "Defense".
+Around combat: the combat system gets ``active_bonuses(state)`` and takes the bonus of a
+group that joins a fight off the group (it burns with the fight, DEC-24 F1); the ``orders``
+system at the end of the step (after ``build``) removes the bonuses and intents whose order ended
+in a system: arrival, bounce, death, attrition.
 
 Auto-merge (DEC-20, A), also at the end of the step, after the bonuses: an own group that
 finished its movement in an own node in this tick (arrived at its target, came back from a bounce
 or a cancel: ``group_arrived``) or appeared by a recruit (``recruited``) joins the target group of
 the node: the own group standing there with the smallest id, without an order (not waiting to
 depart) and not one of the groups that finished in this tick. Without a target the groups that
-finished there join the one with the smallest id. The target keeps its mode, "Defense" with its
-count of ticks, bonus and intent; the others lose theirs (DEC-30). Groups in transit, waiting
+finished there join the one with the smallest id. The target keeps its bonus and intent; the
+others lose theirs. Groups in transit, waiting
 groups and groups on edges never merge.
 The target group is chosen among one player's groups only, so the players stay symmetric.
 
@@ -41,8 +34,7 @@ Details that DEC-08 leaves open follow the defaults of #141, accepted by DEC-24 
 """
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Intent, IntentKind, Mode, Order, event
-from gow_sim.systems.combat import Bonus, BonusSource
+from gow_sim.state import AtNode, Event, GameState, Group, Intent, IntentKind, Order, event
 
 __all__ = [
     "absorb",
@@ -72,7 +64,7 @@ def set_intent(
 
 
 def clear_bonus(group: Group) -> None:
-    """The planned bonus ends, and with it a v2 plan that gathers it (DEC-41, item 10)."""
+    """The planned bonus ends, and with it a plan that gathers it (DEC-41, item 10)."""
     group.bonus = 0
     group.bonus_tick = 0
     group.plan = 0
@@ -91,7 +83,7 @@ def release_plan(group: Group, tick: int) -> None:
 
 
 def gather_plans(state: GameState, rules: Ruleset) -> list[Event]:
-    """Economy v2 (DEC-41, item 10): the waiting planned orders gather their bonus.
+    """DEC-41, item 10: the waiting planned orders gather their bonus.
 
     In group id order (one player's groups never compete with the other player's: a node holds
     the groups of its owner), a group with a plan (``Group.plan``, the requested bonus) that
@@ -105,8 +97,6 @@ def gather_plans(state: GameState, rules: Ruleset) -> list[Event]:
     (TODO(#651)). The group departs by itself in the next tick (``release_plan``) once its bonus
     reaches the request or, with a bonus, its charged units.
     """
-    if not rules.v2:
-        return []
     tick = state.tick
     per = rules.orders.plan_ticks_per_bonus
     events: list[Event] = []
@@ -136,7 +126,7 @@ def gather_plans(state: GameState, rules: Ruleset) -> list[Event]:
 def absorb(state: GameState, keep: Group, gid: int) -> None:
     """Move the units and charges of group ``gid`` into ``keep`` and remove it with its intent.
 
-    ``keep`` stays as it is otherwise: mode, "Defense", bonus, order and intent (DEC-20, A4, B2).
+    ``keep`` stays as it is otherwise: bonus, order and intent (DEC-20, A4, B2).
     """
     other = state.groups[gid]
     set_intent(state, other, None)
@@ -145,23 +135,15 @@ def absorb(state: GameState, keep: Group, gid: int) -> None:
     keep.charged += other.charged
 
 
-def active_bonuses(state: GameState, rules: Ruleset) -> dict[int, Bonus]:
-    """The bonuses the groups bring into a fight in this tick: the ``bonuses`` of ``combat``.
-
-    A planned order from its departure; "Defense" as gathered so far, at most the charged units
-    of the group now, in the tick the fight begins (DEC-30). A group in a fight has none: its
-    bonus entered the fight when it joined."""
-    result: dict[int, Bonus] = {}
+def active_bonuses(state: GameState) -> dict[int, int]:
+    """The bonuses the groups bring into a fight in this tick, in virtual shots: the ``bonuses``
+    of ``combat``. A planned order from its departure. A group in a fight has none: its bonus
+    entered the fight when it joined."""
+    result: dict[int, int] = {}
     for gid in sorted(state.groups):
         g = state.groups[gid]
-        if g.fight is not None:
-            continue
-        if g.mode is Mode.DEFENSE:
-            amount = rules.orders.defense_bonus(g.ticks_in_defense, g.charged)
-            if amount > 0:
-                result[gid] = Bonus(BonusSource.DEFENSE_MODE, amount)
-        elif g.bonus > 0 and state.tick >= g.bonus_tick:
-            result[gid] = Bonus(BonusSource.PLANNED_ORDER, g.bonus)
+        if g.fight is None and g.bonus > 0 and state.tick >= g.bonus_tick:
+            result[gid] = g.bonus
     return result
 
 
@@ -171,10 +153,9 @@ def orders(state: GameState, rules: Ruleset) -> list[Event]:
 
     The bonuses that entered a fight left their groups there (``systems.combat``, DEC-24 F1):
     they burn with the fight. A planned bonus not yet used ends with its order; an inactive one
-    (a planned order still waiting) is kept. A group standing in "Defense" in no fight counts one
-    more tick (DEC-30). Reads the ``group_arrived``, ``recruited`` and ``fight_group`` events of
-    the tick from ``state.events``. Emits ``groups_merged`` for every auto-merge. Under economy
-    v2 the waiting planned orders gather their bonus first (``gather_plans``).
+    (a planned order still waiting) is kept. Reads the ``group_arrived``, ``recruited`` and
+    ``fight_group`` events of the tick from ``state.events``. Emits ``groups_merged`` for every
+    auto-merge. The waiting planned orders gather their bonus first (``gather_plans``).
     """
     gathered = gather_plans(state, rules)
     live: dict[int, bool] = {}
@@ -182,10 +163,8 @@ def orders(state: GameState, rules: Ruleset) -> list[Event]:
         g = state.groups[gid]
         if g.bonus > 0 and g.order is None:
             clear_bonus(g)  # the planned bonus ends with the order (#141 default)
-        if g.mode is Mode.DEFENSE and g.fight is None and isinstance(g.location, AtNode):
-            g.ticks_in_defense += 1
         if g.intent is not None:
-            if _holds(state.intents[g.intent].kind, g):
+            if _holds(g):
                 live[g.intent] = True
             else:
                 set_intent(state, g, None)
@@ -255,10 +234,7 @@ def _auto_merge(state: GameState) -> list[Event]:
     return events
 
 
-def _holds(kind: IntentKind, g: Group) -> bool:
-    """The intent still describes the group (#141 item 5, kept by DEC-24 item L)."""
-    match kind:
-        case IntentKind.PLANNED_MOVE:
-            return g.order is not None and g.order.planned
-        case IntentKind.DEFENSE:
-            return g.mode is Mode.DEFENSE
+def _holds(g: Group) -> bool:
+    """The planned-order intent still describes the group (#141 item 5, kept by DEC-24 item
+    L)."""
+    return g.order is not None and g.order.planned

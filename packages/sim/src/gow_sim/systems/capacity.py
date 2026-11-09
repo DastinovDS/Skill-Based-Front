@@ -5,12 +5,10 @@ Capacity (DEC-22, item 1, replaces the road-dependent formula of SIM-07):
 - Capacity of a node: ``capacity.by_kind[kind]`` by the node kind of the map. It does not
   depend on roads, the owner or supply, so it is public and exact for every node; cutting a node
   off does not change it (the pressure of an encirclement is starvation, DEC-19).
-- The same number limits the units standing in the city and, without ``city_upgrades``,
-  separately its warehouse (DEC-22, item 1). With ``city_upgrades`` the warehouse has its own
-  capacity ``warehouse.start_by_kind[kind] + level * warehouse.gain_per_level`` (DEC-26, item 2;
-  ``warehouse_capacity``); provinces have no warehouse (DEC-23), under the economy v2 one of
+- The number limits the units standing in the node. The warehouse has its own fixed capacity
+  ``warehouse.start_by_kind[kind]`` (DEC-43, item C; ``warehouse_capacity``), a province one of
   ``warehouse.province`` (DEC-41, item 13).
-- Supplied territory of a player (the cut-off cities of DEC-19): the nodes
+- Supplied territory of a player (the pockets of DEC-43, item H): the nodes
   reachable from the own capital over own nodes; every edge between two own nodes is internal,
   so this is a BFS over internal edges.
 
@@ -25,28 +23,14 @@ Attrition (the ``capacity`` system; DEC-12, #118):
 - The victim: a discharged unit of the lowest-id group that has one; otherwise a charged unit of
   the group with the most units, ties by lowest id (as DEC-07, rule 7). An empty group is removed.
 
-Starvation in an encirclement (DEC-19; ``starvation`` after the attrition, in the same system):
-
-- A cut-off city: an own city (not a province) outside its owner's ``supplied_territory``.
-  ``Node.cut_since`` is the first tick of the current continuous cut; it is reset when the city is
-  supplied again or changes its owner (a city captured cut off counts from the capture tick).
-- On ticks ``cut_since + starvation.grace_ticks + k * starvation.period_ticks`` the garrison
-  spends ``starvation.charges * ceil(U / starvation.per_units)`` charges, ``U``: the owner's
-  units standing in the city: first from the warehouse, the rest one charge at a time from the
-  standing group with the most ``charged`` (ties: lower id). A shortfall is not carried over.
-  Units never die of it. Event ``starvation`` (player, node, from the warehouse, from the units).
-
 Every owner change goes through ``change_owner()``: the warehouse is emptied (no trophies,
-mechanics.md, section 9), road levels, the barracks and the warehouse level are kept (DEC-26,
-item 4), the recruit queue of the former owner is lost without a refund (DEC-25,
-item 10), the grace period starts. Under the economy v2 (DEC-41) the round robin of the node starts
-again and a bunker is destroyed (item 12), so are the road fortifications of the node (DEC-43,
-item D7); its factory and its lines are settled by
-``systems.supply`` in the same tick, a factory or bunker build is stopped by ``systems.build``.
+mechanics.md, section 9), the barracks is kept (DEC-26, item 4), the recruit queue of the former
+owner is lost without a refund (DEC-25, item 10), the grace period starts, the road
+fortifications of the node are destroyed (DEC-43, item D7); its factory is settled by
+``systems.flow`` in the same tick, a factory build is stopped by ``systems.build``.
 
-Under the economy v2 there is no starvation here (DEC-41, item 5). Under ``supply.model = "flow"``
-the factory-less pockets starve by the same consumption (``consume``) in ``systems.flow`` (DEC-43,
-item H4): every node of the pocket, provinces included.
+Starvation (the consumption of DEC-19, ``consume``): the factory-less pockets starve in
+``systems.flow`` (DEC-43, item H4), every node of the pocket, provinces included.
 """
 
 from collections.abc import Sequence
@@ -146,48 +130,25 @@ def city_capacity(state: GameState, rules: Ruleset, node: int) -> int:
 
 
 def warehouse_capacity(state: GameState, rules: Ruleset, node: int) -> int:
-    """Charges the warehouse of ``node`` holds: the node capacity without ``city_upgrades``
-    (DEC-22, item 1); with it ``start_by_kind[kind] + level * gain_per_level`` (DEC-26, item 2),
-    0 for a province. Under the economy v2 a province holds ``warehouse.province`` (DEC-41,
-    item 13: always 1 in ``mvp-3``)."""
-    kind = state.map.nodes[node].kind
-    if rules.v2 and kind is NodeKind.PROVINCE:
-        return rules.warehouse.province
-    if not rules.city_upgrades.enabled:
-        return rules.capacity.by_kind.of(kind)
+    """Charges the warehouse of ``node`` holds (DEC-43, item C): ``warehouse.start_by_kind`` of a
+    city, ``warehouse.province`` of a province (DEC-41, item 13)."""
+    return _warehouse_of(rules, state.map.nodes[node].kind)
+
+
+def _warehouse_of(rules: Ruleset, kind: NodeKind) -> int:
     w = rules.warehouse
-    if kind is NodeKind.PROVINCE:
-        return 0
-    return w.start_by_kind.of(kind) + state.nodes[node].warehouse_level * w.gain_per_level
+    return w.province if kind is NodeKind.PROVINCE else w.start_by_kind.of(kind)
 
 
 def warehouse_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
-    """``warehouse_capacity`` of every node, ``result[node_id]``. O(V), one pass without a call
-    per node (the supply steps read it every tick)."""
-    if not rules.city_upgrades.enabled and not rules.v2:
-        return node_capacities(state, rules)
-    w = rules.warehouse
-    upgrades = rules.city_upgrades.enabled
-    gain = w.gain_per_level
-    base = {
-        kind: (w.start_by_kind.of(kind) if upgrades else rules.capacity.by_kind.of(kind))
-        for kind in NodeKind
-    }
-    province = w.province if rules.v2 else base[NodeKind.PROVINCE]  # v1: 0 or the capacity
-    nodes = state.nodes
-    return tuple(
-        province
-        if nd.kind is NodeKind.PROVINCE
-        else base[nd.kind] + (nodes[nd.id].warehouse_level * gain if upgrades else 0)
-        for nd in state.map.nodes
-    )
+    """``warehouse_capacity`` of every node, ``result[node_id]``. O(V)."""
+    return tuple(_warehouse_of(rules, nd.kind) for nd in state.map.nodes)
 
 
 def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
-    """Give ``node`` to ``owner``: the warehouse is emptied, road widths stay, grace starts.
+    """Give ``node`` to ``owner``: the warehouse is emptied, grace starts.
 
-    The recruit queue and its progress are dropped (DEC-25, item 10); a front marker of the
-    former owner on the city falls back in ``systems.supply`` (DEC-28, item 2).
+    The recruit queue and its progress are dropped (DEC-25, item 10).
 
     Captures (movement SIM-05, combat SIM-09) call this; it emits ``warehouse_lost`` when
     charges were in the warehouse, ``recruit_queue_lost`` (for the former owner) when units
@@ -213,8 +174,6 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     n.recruit_progress = 0
     n.owner = owner
     n.warehouse = 0
-    n.rr = 0
-    n.fort = False  # DEC-41, item 12: a bunker is destroyed on capture, it does not pass
     # DEC-43, item D7: the road fortifications of the node (built or being built) are destroyed.
     events.extend(
         event(
@@ -262,17 +221,12 @@ def capacity(state: GameState, rules: Ruleset) -> list[Event]:
             continue
         node.over_ticks = 0
         events.append(_kill_one(state, node_id, groups))
-    if not rules.v2:  # no starvation in the economy v2 (DEC-41, item 5)
-        events.extend(starvation(state, rules, garrisons))
     return events
 
 
-def is_city_node(state: GameState, node: int) -> bool:
-    return state.map.nodes[node].kind is not NodeKind.PROVINCE
-
-
 def starve_in(state: GameState, rules: Ruleset, node: int) -> int | None:
-    """Ticks until the next consumption of a cut-off city (DEC-19, item 8); ``None`` if not cut.
+    """Ticks until the next consumption of a starving node (DEC-19, item 8; DEC-43, item H4);
+    ``None`` if it does not starve.
 
     Also ``None`` when that consumption would spend nothing (#253): no standing unit of the owner
     in the city, or an empty warehouse and no charged standing unit. The schedule itself
@@ -301,27 +255,6 @@ def starve_in(state: GameState, rules: Ruleset, node: int) -> int | None:
         return first - state.tick
     period = rules.starvation.period_ticks
     return period - (state.tick - first) % period
-
-
-def starvation(state: GameState, rules: Ruleset, garrisons: dict[int, list[Group]]) -> list[Event]:
-    """Update ``cut_since`` of every own city and let the cut-off garrisons starve (DEC-19)."""
-    events: list[Event] = []
-    supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
-    tick = state.tick
-    for node_id in sorted(state.nodes):
-        node = state.nodes[node_id]
-        owner = node.owner
-        if owner is None or not is_city_node(state, node_id) or supplied[owner][node_id]:
-            node.cut_since = None
-            continue
-        if node.cut_since is None:
-            node.cut_since = tick
-        if not is_starvation_tick(state, rules, node.cut_since):
-            continue
-        starved = consume(state, rules, node_id, garrisons.get(node_id, ()))
-        if starved is not None:
-            events.append(starved)
-    return events
 
 
 def consume(
