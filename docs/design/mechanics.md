@@ -1276,7 +1276,8 @@ replays and its behavior. `mvp-6` sets `"none"`. Variant V (`"volley"`) was not 
    `ruleset_public.combat.retreat`, so the client hides the retreat hints and the cancel in a fight (it computes
    nothing from it, AGENTS.md 7.1).
 8. Bots (DEC-24, item K): no withdrawal from a fight under `"none"` (the server would reject it); reinforcing stays.
-   The attack estimate before contact matters more (a separate bot wave).
+   The attack estimate before contact matters more: the smart bots count the reinforcements the defender can bring
+   within the fight and the enemy figures met on the road in (#881, `CampaignBot.support`).
 
 **Worked examples** (the DEC-32 table at `round_ticks = 20`, rows 21 and 22, the column N of #626; recomputed by hand
 from DEC-24 B4, E3, G1; `combat.json`, scenarios `21N` and `22N`; capture cost 0 as in the table):
@@ -1610,7 +1611,7 @@ The owner's decision of 2026-11-06, after playing `mvp-4-sup200` (#763, the capi
 6. **A capital that cannot produce.** The capital counter never stops: it keeps counting while the capital is lost or its factory is gone, and a quantum that fires then does nothing (no event, no charge, no debt). An own capital is never cut off: item H2 measures from it, so a held capital always produces. Taken back, the capital goes on with the counter as it stands. The rule is the same for both players and for every reason, and it is what the global clock did: a stopped factory lets its ticks go by. Item 7 keeps the rest.
 7. **Everything else is unchanged.** A full capital spills or burns (DEC-43, item A8), a factory cut off from the capital stops (item H2), the CP cap and `cp_burned` stay. Built factories are built, paid and captured as in DEC-41, item 2.
 8. **Fog.** The enemy's stance, its counters and its production stay hidden (`stance_changed` is an own event). The own counters are in `PlayerView.me` (`cp_ticks`, `capital_ticks`, `null` without the section), so the HUD draws the progress; the client only divides them by the period of `ruleset_public.stances`. `factory_period` of the own capital in the view follows the stance.
-9. **Bots.** No stance policy yet: they stay in Balance (`Bot.allowed`), a real policy goes to #689. The upper bound of the enemy CP counts the shortest CP period, since the enemy may be a human in War.
+9. **Bots.** The smart bots change the stance by a policy (#881, `gow_bots.bots.stance`; its numbers are tuned by #689); the plain bots stay in Balance (`Bot.allowed`). The upper bound of the enemy CP counts the shortest CP period, since the enemy may be a human in War.
 
 | # | Situation | Expected |
 |---|---|---|

@@ -524,7 +524,8 @@ It is a yardstick and the regression gate V6, not a server level (`LEVEL_BOTS` d
 tournament with `--bots "... smart_exploiter"`.
 
 **Economy v2** (`mvp-3`, DEC-41, #648; `gow_bots.bots.economy`). Under `economy.model = "v2"` every bot sends no v1-only
-command (stance, front markers, rear minimum, transfers, road upgrades, Defense: `Bot.allowed`) and the campaign and
+command (stance, front markers, rear minimum, transfers, road upgrades, Defense: `Bot.allowed`; under `[stances]` the
+smart bots send `SetStance` by their policy, #881) and the campaign and
 smart bots play the v2 economy instead: **lines** from the own factories (only a factory starts a line, DEC-42) to the
 nodes that want charges most (units without a charge, a building that owes charges, a front node with room, the hoard
 of `smart_hoarder`), at most four per factory (`LINES_PER_FACTORY`, a bot choice: DEC-42 has no limit), and a line from
