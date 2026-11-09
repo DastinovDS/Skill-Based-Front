@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Icon from '../hud/Icon.svelte';
   import { t, type MessageKey } from '../i18n/index.ts';
   import type { MapFile } from '../protocol.gen.ts';
@@ -6,6 +7,9 @@
   import LocaleSelect from './LocaleSelect.svelte';
   import PasswordFields from './PasswordFields.svelte';
   import ScreenFrame from './ScreenFrame.svelte';
+  import { reducedMotion } from '../render/motion.ts';
+  import { claimIntro } from './introScene.ts';
+  import { runIntro } from './introPlayer.ts';
 
   type Mode = 'guest' | 'login' | 'register';
 
@@ -21,9 +25,75 @@
     onlogin: (nick: string, password: string) => Promise<AccountFailure | null>;
     /** A new account: nick and password in one go (#374); why it failed, or null. */
     onregister: (nick: string, password: string) => Promise<AccountFailure | null>;
+    /**
+     * The first entry of the page (#826): the opening scene plays, once a browser session, unless
+     * motion is reduced. Read once, when the screen opens.
+     */
+    intro?: boolean;
+    /** The dev scene: the opening scene frozen at this moment (seconds). */
+    introAt?: number | null;
   }
 
-  let { invited, notice, map = null, onsubmit, onlogin, onregister }: Props = $props();
+  let {
+    invited,
+    notice,
+    map = null,
+    onsubmit,
+    onlogin,
+    onregister,
+    intro = false,
+    introAt = null,
+  }: Props = $props();
+
+  // The opening scene: decided once when the screen opens (the session mark is taken then).
+  const frozenAt = untrack(() => introAt);
+  let playing = $state(
+    untrack(
+      () =>
+        frozenAt !== null || (intro && claimIntro(() => window.sessionStorage, reducedMotion())),
+    ),
+  );
+  let root: HTMLDivElement | undefined = $state();
+  let title: HTMLHeadingElement | undefined = $state();
+  let grainCanvas: HTMLCanvasElement | undefined = $state();
+  let cover: HTMLDivElement | undefined = $state();
+  let skipButton: HTMLButtonElement | undefined = $state();
+
+  $effect(() => {
+    if (!playing) return undefined;
+    const screen = root;
+    const heading = title;
+    const canvas = grainCanvas;
+    const stage = cover;
+    if (screen === undefined || heading === undefined || canvas === undefined) return undefined;
+    if (stage === undefined) return undefined;
+    const pick = (selector: string): HTMLElement[] => [
+      ...screen.querySelectorAll<HTMLElement>(selector),
+    ];
+    return untrack(() =>
+      runIntro(
+        {
+          root: screen,
+          title: heading,
+          canvas,
+          cover: stage,
+          skip: skipButton ?? null,
+          // The nick with Play first, then Log in and Create account with the language.
+          steps: [pick('.gate > .invited, .gate > .field'), pick('.gate > .alt, .locale')],
+        },
+        {
+          at: frozenAt,
+          onend: () => {
+            playing = false;
+            const active = document.activeElement;
+            if (active === null || active === document.body) {
+              screen.querySelector<HTMLInputElement>('.gate input')?.focus();
+            }
+          },
+        },
+      ),
+    );
+  });
 
   /** The nick rule of the server (3 to 16 characters: letters, digits, _ and -), told inline. */
   const NICK_MIN = 3;
@@ -114,11 +184,17 @@
      Play beside it, the map dim behind. Logging in or creating an account opens a framed sheet of
      stone under the title. This is the still, final state; the opening scene is its own piece. -->
 <ScreenFrame {map} label={t('app.title')} entry>
-  <div class="welcome">
-    <h1 class="title">
-      <!-- The space before a word is in its text, for assistive technology; the interpunct shows. -->
-      {#each words as word, i (i)}{#if i > 0}<span class="sp"></span>{/if}<span class="w"
-          >{i > 0 ? ` ${word}` : word}</span
+  <div class="welcome" class:intro={playing} bind:this={root}>
+    {#if playing}
+      <!-- The opening scene: the dark stage over the map (it fades as the title rises). -->
+      <div class="cover" bind:this={cover} aria-hidden="true"></div>
+    {/if}
+    <h1 class="title" bind:this={title}>
+      <!-- The space before a word is in its text, for assistive technology; the interpunct shows.
+           The grain canvas draws the letters while they form; it holds no text. -->
+      {#if playing}<canvas class="grain" bind:this={grainCanvas} aria-hidden="true"
+        ></canvas>{/if}{#each words as word, i (i)}{#if i > 0}<span class="sp"></span>{/if}<span
+          class="w">{i > 0 ? ` ${word}` : word}</span
         >{/each}
     </h1>
     {#if mode === 'guest'}
@@ -247,6 +323,9 @@
       </form>
     {/if}
     <div class="locale"><LocaleSelect /></div>
+    {#if playing && frozenAt === null}
+      <button type="button" class="skip" bind:this={skipButton}>{t('welcome.introSkip')}</button>
+    {/if}
   </div>
 </ScreenFrame>
 
@@ -279,10 +358,12 @@
     position: absolute;
     left: 50%;
     top: 100%;
-    width: 180px;
-    margin: 4px 0 0 -90px;
+    /* --sp grows the rule and the interpunct in the opening scene; 1 is the still screen. */
+    width: calc(var(--sp, 1) * 180px);
+    margin: 4px 0 0 calc(var(--sp, 1) * -90px);
     border-top: 1.5px solid var(--ink);
     box-shadow: 0 -1px 0 rgb(0 0 0 / 85%);
+    opacity: calc(0.35 + 0.65 * var(--sp, 1));
   }
 
   .title .w {
@@ -304,6 +385,7 @@
     border-left: 0.07em solid transparent;
     border-right: 0.07em solid transparent;
     border-top: 0.12em solid var(--ink);
+    opacity: var(--sp, 1);
   }
 
   /* The nick and Play on one incised line. */
@@ -453,6 +535,71 @@
   .pw :global(.hint) {
     margin: -10px 0 0;
     font-size: 15px;
+  }
+
+  /* ---- The opening scene (#826, intro B Grain): its frames are set by introPlayer.ts. ---- */
+  .cover {
+    position: fixed;
+    inset: 0;
+    background: #0b0a08;
+    pointer-events: none;
+  }
+
+  .intro > :is(.title, .gate, .locale) {
+    position: relative;
+    z-index: 1;
+  }
+
+  .intro .title {
+    --sp: 0;
+
+    transform-origin: 50% 0;
+  }
+
+  /* While the letters form, the grain canvas draws them; the real title shows once they are solid. */
+  .intro .title:not(:global(.solid)) {
+    color: transparent;
+    text-shadow: none;
+  }
+
+  .grain {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+  }
+
+  .intro .gate > :global(*),
+  .intro .locale {
+    opacity: var(--q, 0);
+    transform: translateY(calc((1 - var(--q, 0)) * 10px));
+  }
+
+  .skip {
+    position: fixed;
+    right: 40px;
+    bottom: 32px;
+    padding: 6px 2px;
+    border: 0;
+    background: none;
+    color: var(--ink-dim);
+    font: 500 12px / 1.2 var(--font-display);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .skip:global(.shown) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .skip:hover,
+  .skip:focus-visible {
+    color: var(--ink);
   }
 
   @media (max-height: 719px) {

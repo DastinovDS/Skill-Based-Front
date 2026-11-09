@@ -528,6 +528,8 @@ for (const id of MENU_SCENES) {
     ).toBeVisible();
     // The self-hosted fonts (#841) swap in when loaded: take the frame in them, not the fallback.
     await page.evaluate('document.fonts.ready.then(() => true)');
+    // The opening scene draws its frozen frame once the fonts are in (#826).
+    if (id === 'welcome-intro') await expect(page.locator('[data-intro="frozen"]')).toHaveCount(1);
     const press = DOCK_CLICKS[id];
     if (press !== undefined) {
       await page.locator('.panel').getByRole('button', { name: press }).first().click();
@@ -615,6 +617,47 @@ for (const id of ['queue-search', 'queue-found', 'queue-confirmed'] as const) {
     await page.screenshot({ path: join(OUT, `screen-${id}-reduced.png`) });
   });
 }
+
+// The opening scene of the entry screen (#826, intro B Grain), frozen at moments of its timeline
+// (`/?menu=welcome-intro&t=<s>`): `screen-intro-<s>.png`, letters forming, the rule, the rise.
+for (const at of ['0.9', '1.6', '2.4', '3.4', '4.2', '4.8', '5.6']) {
+  test(`shot of the opening scene at ${at} s`, async ({ page }) => {
+    await page.goto(`/?menu=welcome-intro&t=${at}`);
+    await expect(page.locator('[data-intro="frozen"]')).toHaveCount(1);
+    await page.mouse.move(1000, 700);
+    await page.screenshot({ path: join(OUT, `screen-intro-${at}.png`) });
+  });
+}
+
+// The scene played live (`/?menu=welcome&intro`): it runs, a key skips it to the still screen with
+// the nick field focused, a reload in the same session does not play it again, reduced motion never.
+test('the opening scene plays, skips by a key and plays once a session', async ({ page }) => {
+  await page.goto('/?menu=welcome&intro');
+  await expect(page.locator('[data-intro="playing"]')).toHaveCount(1);
+  await page.waitForTimeout(2600);
+  await page.screenshot({ path: join(OUT, 'screen-intro-live.png') });
+  await page.keyboard.press('Shift');
+  await expect(page.locator('.welcome.intro')).toHaveCount(0);
+  await expect(page.getByLabel('Your nick')).toBeFocused();
+  await expect(page.locator('h1')).toHaveText('Fines Imperii');
+  await page.reload();
+  await expect(page.locator('.front svg.scene')).toBeVisible();
+  await expect(page.locator('.welcome.intro')).toHaveCount(0);
+});
+
+test('the opening scene plays to its end, and never under reduced motion', async ({ page }) => {
+  await page.goto('/?menu=welcome&intro');
+  await expect(page.locator('[data-intro="playing"]')).toHaveCount(1);
+  await expect(page.locator('.welcome.intro')).toHaveCount(0, { timeout: 9000 });
+  await page.mouse.move(1000, 700);
+  await page.screenshot({ path: join(OUT, 'screen-intro-end.png') });
+  const other = await page.context().browser()?.newPage({ reducedMotion: 'reduce' });
+  if (other === undefined) return;
+  await other.goto(page.url());
+  await expect(other.locator('.front svg.scene')).toBeVisible();
+  await expect(other.locator('.welcome.intro')).toHaveCount(0);
+  await other.close();
+});
 
 // The log-in and the new-account sheets of the entry screen (#845): `screen-welcome-login.png`,
 // `screen-welcome-register.png`, each with the grey-scale twin.

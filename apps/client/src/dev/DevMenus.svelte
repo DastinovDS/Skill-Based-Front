@@ -36,6 +36,8 @@
   setSeasonOverride(isSeason(season) ? season : null);
   const id = isMenuScene(requested) ? requested : 'menu-guest';
   const map = MENU_MAP;
+  // `welcome-intro&t=2.6`: the opening scene frozen at that moment; `welcome&intro` plays it (#826).
+  const introAt = Number(params.get('t') ?? '2.6');
   const nothing = (): void => undefined;
   const handlers = {
     oncreate: nothing,
@@ -73,9 +75,11 @@
     {...handlers}
   />
   <DevStyle part="overlay" />
-{:else if id === 'welcome' || id === 'welcome-notice' || id === 'welcome-invited'}
+{:else if id === 'welcome' || id === 'welcome-notice' || id === 'welcome-invited' || id === 'welcome-intro'}
   <WelcomeScreen
     {map}
+    introAt={id === 'welcome-intro' ? introAt : null}
+    intro={params.has('intro')}
     invited={id === 'welcome-invited'}
     notice={id === 'welcome-notice' ? 'error.api.unauthorized' : null}
     onsubmit={() => Promise.resolve()}

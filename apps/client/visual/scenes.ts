@@ -46,6 +46,7 @@ export const MENU_SCENES = [
   'welcome',
   'welcome-notice',
   'welcome-invited',
+  'welcome-intro',
   'menu-guest',
   'menu-calibration',
   'menu-ranked',

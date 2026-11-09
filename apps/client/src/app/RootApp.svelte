@@ -46,6 +46,13 @@
   });
   const guest = $derived(app.guest);
 
+  // The opening scene (#826) belongs to the first entry of the page only: never after a match, a
+  // log-out or any other screen (the session mark of introScene.ts covers reloads).
+  let firstEntry = $state(true);
+  $effect(() => {
+    if (screen.name !== 'boot' && screen.name !== 'welcome' && guest !== null) firstEntry = false;
+  });
+
   /** Where the tabs of the menu lead (#629, M5). */
   function tabsOf(): MenuTabActions {
     return {
@@ -112,6 +119,7 @@
     invited={app.pendingInvite !== null}
     notice={app.notice}
     map={app.backdrop}
+    intro={firstEntry}
     onsubmit={(nick: string) => app.register(nick)}
     onlogin={(nick: string, password: string) => app.login(nick, password)}
     onregister={(nick: string, password: string) => app.registerAccount(nick, password)}
