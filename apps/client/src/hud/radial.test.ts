@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { RulesetPublic } from '../protocol.gen.ts';
 import { DEV_RULES, DEV_RULES_STANCES } from './devFeed.ts';
 import {
   BIG_RING,
@@ -15,6 +16,13 @@ import {
   stanceRates,
 } from './radial.ts';
 
+/** The stance rules of `mvp-4-stances` with `factories_follow` set (DEC-47). */
+function withKey(factoriesFollow: boolean): RulesetPublic {
+  const { stances } = DEV_RULES_STANCES;
+  if (stances === null) throw new Error('no stances in the dev rules');
+  return { ...DEV_RULES_STANCES, stances: { ...stances, factories_follow: factoriesFollow } };
+}
+
 describe('stanceRates', () => {
   it('reads the periods of `stances` under economy v2 (DEC-44)', () => {
     // 600 ticks a minute: War 600 / 80 CP and 600 / 400 charges, Balance 6 and 3, Economy 3 and 6.
@@ -24,6 +32,27 @@ describe('stanceRates', () => {
       ['balance', 6, 3],
       ['war', 7.5, 1.5],
     ]);
+  });
+
+  it('multiplies the charges by the working factories under factories_follow (DEC-47)', () => {
+    const rules = withKey(true);
+    // The capital and two more: three times the capital's 6 / 3 / 1.5 a minute.
+    expect(
+      stanceRates(rules, 3).map((r) => [r.stance, r.cpPerMinCenti / 100, r.chargesPerMin]),
+    ).toEqual([
+      ['economy', 3, 18],
+      ['balance', 6, 9],
+      ['war', 7.5, 4.5],
+    ]);
+    // Only the capital works (or no count given): the capital's rate.
+    expect(stanceRates(rules, 1).map((r) => r.chargesPerMin)).toEqual([6, 3, 1.5]);
+    expect(stanceRates(rules).map((r) => r.chargesPerMin)).toEqual([6, 3, 1.5]);
+  });
+
+  it('ignores the factory count without the key (older rulesets, replays)', () => {
+    const off = withKey(false);
+    expect(stanceRates(off, 3).map((r) => r.chargesPerMin)).toEqual([6, 3, 1.5]);
+    expect(stanceRates(DEV_RULES, 3).map((r) => r.chargesPerMin)).toEqual([18, 12, 6]);
   });
 
   it('gives mvp-0 the table of the guide: 3/18, 6/12, 9/6', () => {

@@ -1298,9 +1298,14 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'set_stance', stance }, null);
   }
 
-  /** The numbers of the stance menu, from the ruleset of `welcome`. */
+  /** Every own factory follows the stance like the capital (`stances.factories_follow`, DEC-47). */
+  get factoriesFollow(): boolean {
+    return this.#o.rules.stances?.factories_follow === true;
+  }
+
+  /** The numbers of the stance menu, from the ruleset of `welcome` and the own working factories (DEC-47). */
   get stanceRates(): StanceRate[] {
-    return stanceRates(this.#o.rules);
+    return stanceRates(this.#o.rules, this.#o.hud.current?.workingFactories);
   }
 
   /** The menu opens only in a match, where a stance can be sent, and only with stances (DEC-41, DEC-44). */
