@@ -26,6 +26,7 @@
     "csp.ts",
     "playwright.config.ts",
     "playwright.shots.config.ts",
+    "playwright.perf.config.ts",
     "visual/*.ts"
   ]
 }
