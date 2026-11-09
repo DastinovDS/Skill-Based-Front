@@ -3,8 +3,8 @@
 A match goes through these states (``TRANSITIONS`` is the whole table):
 
 ``created``    an invite exists, or a bot match is being started; nobody is claimed yet.
-``waiting``    a guest joined; both players are claimed and have ``ready_timeout_s`` to be ready (from
-               the moment the map of the invite is made, #884: ``hold_ready_timer``).
+``waiting``    a guest joined; both players are claimed and have ``ready_timeout_s`` to be ready,
+               counted from when the map of the invite is made (#884: ``hold_ready_timer``).
 ``running``    the ``matches`` row exists (``status = running``) and the ``MatchRunner`` plays.
 ``finished``   the runner is over; the players are free again. Next: the result is written.
 ``saved``      winner, reason and duration are in the database (``status = saved``).
