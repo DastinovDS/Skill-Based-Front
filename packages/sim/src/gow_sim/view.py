@@ -301,8 +301,10 @@ class NodeView:
     joined by an edge to any own node (the DEC-31 rule): it is a built factory of the enemy.
     ``None`` under v1, for provinces, neutral nodes and the other cities of the enemy."""
     factory_period: int | None = None
-    """Own factory only: ticks per charge it makes (``factory.capital_period_ticks`` for the
-    own capital, ``factory.built_period_ticks`` for any other)."""
+    """Own factory only: ticks per charge it makes (``systems.economy.factory_period``:
+    ``factory.capital_period_ticks`` for the own capital, ``factory.built_period_ticks`` for any
+    other; under ``[stances]`` the capital period of the own stance for the capital, and with
+    ``stances.factories_follow`` (DEC-47) for every other factory too)."""
     factory_build: SiteBuildView | None = None
     """Own city only: the factory being built there (economy v2)."""
     fort: bool | None = None

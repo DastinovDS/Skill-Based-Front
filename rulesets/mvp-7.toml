@@ -1,18 +1,24 @@
 # Ruleset mvp-7: the main (played) ruleset since 2026-11-09 (owner decision after a playtest on narrows, #885). A copy
-# of mvp-6.toml with exactly two changes:
+# of mvp-6.toml with exactly three changes:
 # - the section [map_tempo] at the end (DEC-46, #803; mechanics.md, section 6, "Map tempo"): the economy periods of a
 #   match are scaled once by the node count N of its map, pct = isqrt(N * 10000 // 49) clamped to 50..150, each
 #   period p becomes max(1, p * 100 // pct). The values are those of mvp-4-stances-tempo.toml. Reason: on small
 #   maps there are too many charges by mid-game;
-# - factory.built_period_ticks = 150 (DEC-41, item 2; mvp-6: 100, mvp-5: 200): the mean of the two.
+# - factory.built_period_ticks = 150 (DEC-41, item 2; mvp-6: 100, mvp-5: 200): the mean of the two; it has no
+#   effect since the next change;
+# - stances.factories_follow = true (DEC-47, #888; owner decision 2026-11-09 after playtesting mvp-7: fewer
+#   resources feel right): every factory other than the own capital (built or captured, a captured capital too)
+#   follows its owner's stance exactly like the own capital, one charge per stances.capital_period_ticks, each
+#   factory on its own counter (0 when it starts working or is captured, carried over on a stance change).
 # mvp-6 stays as a historical ruleset.
-# Periods in ticks per pool map (War / Balance / Economy for the stance tables; built factory under any stance):
-#   map         nodes  pct  CP quantum per   own capital: 1 charge per  built factory
-#   narrows       29    76  105 / 131 / 263   526 / 263 / 131             197
-#   crossroads    49   100   80 / 100 / 200   400 / 200 / 100             150
-#   highway       49   100   80 / 100 / 200   400 / 200 / 100             150
-#   ridge         51   102   78 /  98 / 196   392 / 196 /  98             147
-# The generated maps of #771 (29..55 nodes) get pct 76..105 (built factory 197..142).
+# Periods in ticks per pool map (War / Balance / Economy; every factory, the own capital and the built or captured
+# ones alike, makes 1 charge per the same period of its owner's stance):
+#   map         nodes  pct  CP quantum per   any factory: 1 charge per
+#   narrows       29    76  105 / 131 / 263   526 / 263 / 131
+#   crossroads    49   100   80 / 100 / 200   400 / 200 / 100
+#   highway       49   100   80 / 100 / 200   400 / 200 / 100
+#   ridge         51   102   78 /  98 / 196   392 / 196 /  98
+# The generated maps of #771 (29..55 nodes) get pct 76..105 (a factory in Balance 263..190).
 #
 # Ruleset mvp-6: the main (played) ruleset on 2026-11-09 (owner decision, #626, #759), until mvp-7 replaced it
 # the same day (#885). A copy of mvp-5.toml
@@ -95,11 +101,15 @@ war = 40 # "War" (BAL-02 iteration 3, H1: mvp-1 25)
 
 [stances]
 # Stances of economy v2 with local progress (DEC-44, #772; mechanics.md, section 6). The stance sets the CP
-# income and the rate of the own capital only: built factories and a captured capital keep
-# factory.built_period_ticks on the global clock. Each player counts ticks since the last CP quantum and since
-# the last charge of the own capital; a counter that reaches the period of the stance fires its quantum and
-# restarts. A real stance change carries each counter over: counter * new_period // old_period, rounded
-# down (owner decision 2026-11-07, #792). No cooldown, the change is free.
+# income and the rate of the own capital, and with factories_follow (DEC-47) the rate of every other factory.
+# Each player counts ticks since the last CP quantum and since the last charge of the own capital, each other
+# factory its own ticks since its last charge; a counter that reaches the period of the stance fires its
+# quantum and restarts. A real stance change carries each counter over: counter * new_period // old_period,
+# rounded down (owner decision 2026-11-07, #792). No cooldown, the change is free.
+# DEC-47 (#888, owner decision 2026-11-09): every factory other than the own capital (built or captured, a
+# captured capital too) makes 1 charge per capital_period_ticks of its owner's stance, on its own counter that
+# starts at 0 when the factory starts working or is captured; factory.built_period_ticks has no effect.
+factories_follow = true
 
 [stances.cp_period_ticks]
 # Ticks per CP quantum (cp.per_period, 1 CP).
@@ -108,7 +118,7 @@ balance = 100 # 10 s: as cp.period_ticks of mvp-4-sup200
 war = 80 # 8 s
 
 [stances.capital_period_ticks]
-# Ticks per charge of the own capital.
+# Ticks per charge of the own capital and, with factories_follow, of every other factory.
 economy = 100 # 10 s
 balance = 200 # 20 s: as factory.capital_period_ticks of mvp-4-sup200
 war = 400 # 40 s
@@ -340,8 +350,10 @@ mountains = "range"
 # into its own warehouse once per period (ticks t > 0 divisible by the period). Under the flow (DEC-43,
 # item A8) a full factory (stock + own packets on the way >= its warehouse) spills the new charge to an
 # own neighbour with room, else it burns (charge_burned). The own capital is the main factory from the start.
-capital_period_ticks = 200 # playtest #763: the capital, 1 charge per 20 s (mvp-4 has 100)
-built_period_ticks = 150 # every other factory (built or captured, a captured capital too): 1 charge per 15 s (owner decision 2026-11-09, #885; mvp-6: 100, mvp-5: 200)
+# Under stances.factories_follow (DEC-47, #888) every factory follows the stance periods of
+# [stances.capital_period_ticks]; both periods below then have no effect (the parser still requires them).
+capital_period_ticks = 200 # no effect under [stances] (DEC-44); playtest #763: the capital, 1 charge per 20 s (mvp-4 has 100)
+built_period_ticks = 150 # no effect under stances.factories_follow (DEC-47, #888); was every other factory, 1 charge per 15 s (owner decision 2026-11-09, #885; mvp-6: 100, mvp-5: 200)
 cost = 4 # BuildFactory(node): 4 charges, the progressive payment of DEC-41, item 7 (the warehouse, then the own groups standing there)
 build_ticks = 100 # the factory works 10 s after the full payment
 max = 3 # factories of a player at most, the capital and the builds under way included

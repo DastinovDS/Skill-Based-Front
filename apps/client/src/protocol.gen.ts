@@ -786,6 +786,13 @@ export interface StancesPublic {
    * One charge of the own capital per this many ticks; ``View.me.capital_ticks`` counts them.
    */
   capital_period_ticks: StancePeriodsPublic;
+  /**
+   * DEC-47 (#888): every other own factory (built or captured) makes one charge per
+   * ``capital_period_ticks`` of the own stance as well, on its own counter, so a stance's charge
+   * rate is this period times the own factories; ``False``: they keep ``factory.built_period_ticks``
+   * whatever the stance.
+   */
+  factories_follow: boolean;
 }
 /**
  * Ticks per quantum under each stance (DEC-44).
@@ -966,7 +973,9 @@ export interface NodeView {
   factory: boolean | null;
   /**
    * Own factory only: ticks per charge it makes into its warehouse (the own capital
-   * ``factory.capital_period_ticks``, any other ``factory.built_period_ticks``).
+   * ``factory.capital_period_ticks``, any other ``factory.built_period_ticks``; under
+   * ``ruleset_public.stances`` the own capital the period of the own stance, and with
+   * ``stances.factories_follow`` (DEC-47) every other factory too).
    */
   factory_period: number | null;
   /**
@@ -1706,7 +1715,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 44;
+export const PROTOCOL_VERSION = 45;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

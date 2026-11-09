@@ -18,16 +18,18 @@ from gow_bots.bots import BOTS, SmartBot, bot_factory, choose_params
 from gow_bots.bots.assess import Army
 from gow_bots.bots.base import LATE_KEYS
 from gow_bots.bots.estimate import Phase
-from gow_bots.bots.stance import StanceInputs, StancePolicy, wanted_stance
+from gow_bots.bots.stance import StanceInputs, StancePolicy, factories_full, wanted_stance
 from gow_sim.commands import Command, PlayerCommand, Reject, SetStance
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
+from gow_sim.view import project
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MVP4 = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
 MVP6 = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
+MVP7 = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 PARAMS = {
     "stance_opening": 1,
     "stance_midgame": 1,
@@ -128,6 +130,27 @@ def test_a_full_capital_steps_toward_war() -> None:
     assert wanted_stance(MVP6, economy, inputs, insight=True) is Stance.BALANCE
     inputs = StanceInputs(Phase.MIDGAME, 300, _army(stock=2), False, Stance.ECONOMY, False)
     assert wanted_stance(MVP6, economy, inputs, insight=True) is Stance.ECONOMY
+
+
+@pytest.mark.parametrize(("name", "full"), [("mvp-6", True), ("mvp-7", False)])
+def test_a_full_capital_with_a_factory_that_has_room(
+    crossroads: MapDef, name: str, full: bool
+) -> None:
+    """Under ``stances.factories_follow`` (DEC-47, mvp-7) Economy speeds every own factory up, so
+    a full capital is not enough while another own factory has room; without the key (mvp-6) the
+    built factory keeps its period and the full capital alone decides."""
+    rules = MVP7 if name == "mvp-7" else MVP6
+    match = Match(crossroads, rules, KEY)
+    state = match.state
+    home = crossroads.capital(0)
+    state.nodes[home].warehouse = 6  # the capital's warehouse (DEC-43, item C1)
+    other = next(n for n in sorted(state.nodes) if n != home and state.nodes[n].owner == 0)
+    state.nodes[other].factory = 0
+    state.nodes[other].warehouse = 0
+    view = project(state, match.rules, 0, KEY)
+    assert factories_full(match.rules, view, home) is full
+    state.nodes[other].warehouse = view.nodes[other].warehouse_cap or 0
+    assert factories_full(match.rules, project(state, match.rules, 0, KEY), home)
 
 
 def test_the_steps_stay_in_the_three_stances() -> None:

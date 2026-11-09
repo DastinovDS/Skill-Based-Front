@@ -34,7 +34,13 @@ the period of the stance fires its quantum and restarts. A real stance change ca
 in proportion to the periods (``carry`` in ``set_stance``, applied by ``apply_commands``, so the
 tick of the change is the first one counted at the new rate; revised 2026-11-07, #792). The
 capital counter never stops: without an own capital, or with its factory gone, the quantum fires
-and does nothing. Built factories and a captured capital stay on the global clock above.
+and does nothing. Built factories and a captured capital stay on the global clock above, unless
+the ruleset has ``stances.factories_follow`` (DEC-47, #888): then every factory that is not its
+owner's capital counts its own ``Node.factory_ticks`` the same way, against the capital period of
+its owner's stance. The counter grows only while the node is a factory of its owner, starts at 0
+when the factory starts working (``systems.build``) or passes on a capture
+(``systems.lines.settle_factories``), keeps counting in a pocket (the quantum then does nothing,
+like the capital's), and a real stance change carries it over with the capital counter.
 
 Supply flow (DEC-43, item A8; ``supply.model = "flow"``): a factory is **full** when its stock
 plus the own packets on the way to it reach its warehouse. A full factory's new charge **spills**:
@@ -131,6 +137,11 @@ def _economy_v2(state: GameState, rules: Ruleset) -> list[Event]:
             continue
         if stances is not None and nid == state.map.capital(owner):
             due = capital_due[owner]  # the own capital: local progress (DEC-44)
+        elif stances is not None and stances.factories_follow:
+            node.factory_ticks += 1  # any other factory: its own local progress (DEC-47)
+            due = node.factory_ticks >= stances.capital_period_ticks.of(state.players[owner].stance)
+            if due:
+                node.factory_ticks = 0
         else:
             due = tick > 0 and tick % factory_period(state, rules, nid) == 0
         if not due:
@@ -180,14 +191,15 @@ def _produce_flow(state: GameState, rules: Ruleset, owner: int, nid: int) -> lis
 def factory_period(state: GameState, rules: Ruleset, node: int) -> int:
     """Ticks per charge of the factory in ``node`` (DEC-41, item 2): the own capital of its
     owner ``factory.capital_period_ticks`` (under ``[stances]`` the period of its owner's stance,
-    DEC-44), any other factory ``factory.built_period_ticks``."""
+    DEC-44), any other factory ``factory.built_period_ticks`` (under ``stances.factories_follow``
+    the capital period of its owner's stance as well, DEC-47)."""
     factory = rules.factory_rules()
     owner = state.nodes[node].owner
-    if owner is not None and node == state.map.capital(owner):
-        if rules.stances is not None:
-            return rules.stances.capital_period_ticks.of(state.players[owner].stance)
-        return factory.capital_period_ticks
-    return factory.built_period_ticks
+    stances = rules.stances
+    capital = owner is not None and node == state.map.capital(owner)
+    if owner is not None and stances is not None and (capital or stances.factories_follow):
+        return stances.capital_period_ticks.of(state.players[owner].stance)
+    return factory.capital_period_ticks if capital else factory.built_period_ticks
 
 
 def stance_cooldown_left(state: GameState, rules: Ruleset, player: int) -> int:
@@ -208,14 +220,22 @@ def carry(ticks: int, old_period: int, new_period: int) -> int:
 
 def set_stance(state: GameState, rules: Ruleset, player: int, stance: Stance) -> list[Event]:
     """Apply a validated stance change at the current tick (the cost is charged by SIM-04). Under
-    ``[stances]`` the local progress of DEC-44 carries over to the periods of the new stance;
+    ``[stances]`` the local progress of DEC-44 carries over to the periods of the new stance, and
+    under ``stances.factories_follow`` the counter of every other own factory too (DEC-47);
     without the section the counters are 0 and stay 0."""
     ps = state.players[player]
     stances = rules.stances
     if stances is not None:
         cp, capital = stances.cp_period_ticks, stances.capital_period_ticks
+        old, new = capital.of(ps.stance), capital.of(stance)
         ps.cp_ticks = carry(ps.cp_ticks, cp.of(ps.stance), cp.of(stance))
-        ps.capital_ticks = carry(ps.capital_ticks, capital.of(ps.stance), capital.of(stance))
+        ps.capital_ticks = carry(ps.capital_ticks, old, new)
+        if stances.factories_follow:
+            home = state.map.capital(player)
+            for nid in sorted(state.nodes):
+                node = state.nodes[nid]
+                if nid != home and node.owner == player and node.factory == player:
+                    node.factory_ticks = carry(node.factory_ticks, old, new)
     ps.stance = stance
     ps.stance_changed_tick = state.tick
     return [event(state.tick, "stance_changed", player=player, stance=stance.value)]

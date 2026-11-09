@@ -156,6 +156,11 @@ class StancesPublic(WireModel):
     """One CP quantum (``cp.per_period``) per this many ticks; ``View.me.cp_ticks`` counts them."""
     capital_period_ticks: StancePeriodsPublic
     """One charge of the own capital per this many ticks; ``View.me.capital_ticks`` counts them."""
+    factories_follow: bool
+    """DEC-47 (#888): every other own factory (built or captured) makes one charge per
+    ``capital_period_ticks`` of the own stance as well, on its own counter, so a stance's charge
+    rate is this period times the own factories; ``False``: they keep ``factory.built_period_ticks``
+    whatever the stance."""
 
 
 class OrdersPublic(WireModel):
@@ -456,5 +461,6 @@ class RulesetPublic(WireModel):
                 capital_period_ticks=StancePeriodsPublic.from_table(
                     rules.stances.capital_period_ticks
                 ),
+                factories_follow=rules.stances.factories_follow,
             ),
         )

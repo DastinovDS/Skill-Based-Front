@@ -2,7 +2,9 @@
 
 Under the section the stance sets two rates of the own economy and nothing else (DEC-44, items 1
 and 2): War gives the most CP and the slowest own capital, Economy the fewest CP and the fastest
-capital, Balance the middle. Built factories keep their period whatever the stance. A change is
+capital, Balance the middle. Built factories keep their period whatever the stance, unless the
+ruleset has ``stances.factories_follow`` (DEC-47, ``mvp-7``): then every own factory runs at the
+capital's rate of the stance, each on its own counter. A change is
 free and has no cooldown, and it carries both counters over in proportion, rounded down (item 4),
 so a change and a change back never gain and lose up to a tick: the policy changes at most once
 per ``stance_dwell`` ticks.
@@ -22,9 +24,10 @@ of the match (``estimate.phase``), all integer:
 4. **One step toward War** otherwise while the charges are plenty: the own city warehouses are at
    least ``stance_full`` percent full with fewer than ``stance_wait`` units waiting, or the own
    capital's warehouse is full (a full capital spills or burns its charge, DEC-43, item A8: a
-   faster capital adds nothing); or while the bot is *pressed* (the own capital in danger or an
-   enemy planned strike aimed at an own node, both public) with fewer than ``stance_cp_low`` CP in
-   hundredths (the answers are orders, recruits and fortifications: CP).
+   faster capital adds nothing; under DEC-47 every own factory must be full, since Economy
+   speeds all of them up, ``factories_full``); or while the bot is *pressed* (the own capital in
+   danger or an enemy planned strike aimed at an own node, both public) with fewer than
+   ``stance_cp_low`` CP in hundredths (the answers are orders, recruits and fortifications: CP).
 5. Without ``insight`` (``Tempo.insight``) only item 1: the bot does not read the position.
 
 The ``PARAMS`` keys start with ``stance_`` (``base.LATE_KEYS``), so ``choose_params`` draws them
@@ -38,8 +41,9 @@ from gow_bots.bots.assess import Army
 from gow_bots.bots.estimate import Phase
 from gow_sim.commands import SetStance
 from gow_sim.ruleset import Ruleset, Stance
+from gow_sim.view import NodeView, PlayerView
 
-__all__ = ["STANCES", "StanceInputs", "StancePolicy", "wanted_stance"]
+__all__ = ["STANCES", "StanceInputs", "StancePolicy", "factories_full", "wanted_stance"]
 
 STANCES: Final = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
 """From the most charges to the most CP (DEC-44, item 1); the stance parameters index it."""
@@ -64,7 +68,24 @@ class StanceInputs:
     now: Stance = Stance.BALANCE
     """The stance in force (``SelfView.stance``)."""
     capital_full: bool = False
-    """The own capital is held and its warehouse is full."""
+    """The own capital is held and its warehouse is full; under ``stances.factories_follow``
+    (DEC-47) every other own factory too (``factories_full``)."""
+
+
+def _full(node: NodeView) -> bool:
+    return 0 < (node.warehouse_cap or 0) <= (node.warehouse or 0)
+
+
+def factories_full(rules: Ruleset, view: PlayerView, home: int) -> bool:
+    """``StanceInputs.capital_full``: the own capital ``home`` is held and full, and under
+    ``stances.factories_follow`` (DEC-47) so is every other own factory: Economy speeds them all
+    up, so it adds nothing only when none of them has room."""
+    capital = view.nodes[home]
+    if capital.owner != view.player or not _full(capital):
+        return False
+    if not rules.factories_follow:
+        return True
+    return all(_full(n) for n in view.nodes if n.owner == view.player and n.factory)
 
 
 def wanted_stance(

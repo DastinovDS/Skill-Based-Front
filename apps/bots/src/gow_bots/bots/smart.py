@@ -232,7 +232,7 @@ from gow_bots.bots.logistics import (
     own_parts,
 )
 from gow_bots.bots.pockets import Pockets, heading, read_pockets
-from gow_bots.bots.stance import StanceInputs, StancePolicy, wanted_stance
+from gow_bots.bots.stance import StanceInputs, StancePolicy, factories_full, wanted_stance
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
 from gow_bots.bots.utility import (
     defender_pool,
@@ -1565,8 +1565,7 @@ class SmartBot(CampaignBot):
             return
         view = ctx.view
         pressed = self.danger or self.alarm or bool(self.strikes_at(view))
-        home = view.nodes[self.home]
-        full = home.owner == self.player and 0 < (home.warehouse_cap or 0) <= (home.warehouse or 0)
+        full = factories_full(self.rules, view, self.home)
         inputs = StanceInputs(self.phase, a.cp, a.own, pressed, view.me.stance, full)
         want = wanted_stance(self.rules, self.params, inputs, insight=self.tempo.insight)
         dwell = self.params["stance_dwell"]
