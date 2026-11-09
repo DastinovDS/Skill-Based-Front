@@ -9,6 +9,7 @@ import io
 import json
 import math
 import time
+from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -50,7 +51,6 @@ FILES = {
     for name in POOL
 }
 ALL_MAPS = [FILES[name] for name in POOL] + sorted(TEST_MAPS.glob("*.json"))
-BAKE_SECONDS = 10  # #344: baking one map takes at most 10 s (CPU time, a loaded machine is slower)
 LAND = frozenset(biome for biomes in TERRAIN_BIOMES.values() for biome in biomes)
 WITH_GEO = [name for name in POOL if geo.spec_path(FILES[name]).is_file()]  # DEC-36, #545
 LAND_ONLY = [name for name in POOL if name not in WITH_GEO]
@@ -253,13 +253,15 @@ def test_committed_vector_file_is_up_to_date(name: str) -> None:
     assert pairs(committed) == pairs(fresh)
 
 
-def test_render_stays_within_the_time_budget() -> None:
+def test_render_stays_within_the_time_budget(bake_budget: Callable[[], float]) -> None:
+    # #344: baking one map takes at most 10 s of CPU time on the reference machine (conftest.py).
     mapdef = _map(FILES["artery"])  # 1600 x 1000, the largest map of the pool
     started = time.process_time()
     pixels = render_background(mapdef)
     data = io.BytesIO()
     Image.fromarray(pixels, "RGB").save(data, "WEBP", quality=85, method=6)
-    assert time.process_time() - started < BAKE_SECONDS
+    seconds, budget = time.process_time() - started, bake_budget()
+    assert seconds < budget, (seconds, budget)
 
 
 def test_bake_refuses_a_file_over_the_budget(

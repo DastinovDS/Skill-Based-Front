@@ -6,7 +6,9 @@ fixed 10 s flaked there (10.17 s) though nothing regressed. The budget is theref
 much slower this machine runs a fixed numpy workload than the reference machine, measured in the
 same process right before and right after the bake (the slower of the two, so a burst of load
 during the bake is seen). The workload does not use `gow_maps`, so a slower bake still trips the
-budget on any machine; a faster machine keeps the full budget.
+budget on any machine; a faster machine keeps the full budget. On the reference machine the ridge
+bake takes about 4 s and the workload 0.25 s, so a bake about 2.5 times slower than now fails
+anywhere, as the fixed budget did on the reference machine.
 """
 
 import time
