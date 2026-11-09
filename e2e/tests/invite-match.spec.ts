@@ -115,13 +115,16 @@ test('two guests play a private match by invite to the end and watch the replay'
     await expect(canvas).toHaveAttribute('data-tick', '0', { timeout: 60_000 });
   }
 
-  // Playback: speed up, play, pause, seek.
+  // Playback: speed up, play, pause, seek. x4, not x16: at x16 the rest of the match plays out in
+  // 3.5 s, a click on a loaded runner can take longer, and a click on the button after the end
+  // is "Play" again, which restarts the replay (#476, #852). At x4 the end is 14 s away.
   const page = host.page;
   const canvas = page.locator('.game-canvas');
-  await page.getByRole('button', { name: '×16' }).click();
+  await page.getByRole('button', { name: '×4' }).click();
   await page.getByRole('button', { name: 'Play' }).click();
   await expect.poll(async () => host.tick()).toBeGreaterThan(40);
   await page.getByRole('button', { name: 'Pause' }).click();
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
   await page.getByLabel('Position in the match').fill('300');
   await expect(canvas).toHaveAttribute('data-tick', '300');
 

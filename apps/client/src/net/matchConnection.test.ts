@@ -556,6 +556,45 @@ describe('liveness watchdog and waking up (CLI-02, #417)', () => {
     expect(t.conn.status).toBe('reconnecting');
   });
 
+  it('keeps a link whose pongs queue behind its snapshots on a page that runs late (#852)', () => {
+    const t = setup();
+    const socket = ready(t);
+    // The page is seconds behind the server: snapshots keep coming in, the pongs are still queued.
+    for (let at = 1_000; at <= 6_000; at += 1_000) {
+      t.setClock(at - 500);
+      socket.reply(serverFixture('snapshot'));
+      t.setClock(at);
+      vi.advanceTimersByTime(1_000);
+      expect(t.conn.status).toBe('ready');
+    }
+    const pings = socket.sent.filter((m) => m.type === 'ping');
+    expect(pings.length).toBeGreaterThanOrEqual(5);
+    // The pongs come at last; nothing was closed.
+    pings.forEach((_, id) => {
+      socket.reply(pong(id));
+    });
+    expect(t.rtts).toHaveLength(pings.length);
+    expect(t.server.sockets).toHaveLength(1);
+    expect(t.resets()).toBe(0);
+  });
+
+  it('still takes two unanswered pings with no frame since for a dead link', () => {
+    const t = setup();
+    const socket = ready(t);
+    t.setClock(500);
+    socket.reply(serverFixture('snapshot'));
+    // Pings at 1000 and 2000, the snapshot came before both: the link is dead at 3000.
+    for (const at of [1_000, 2_000]) {
+      t.setClock(at);
+      vi.advanceTimersByTime(1_000);
+      expect(t.conn.status).toBe('ready');
+    }
+    t.setClock(3_000);
+    vi.advanceTimersByTime(1_000);
+    expect(t.conn.status).toBe('reconnecting');
+    expect(socket.readyState).toBe(3);
+  });
+
   it('keeps a link whose pings are answered', () => {
     const t = setup();
     const socket = ready(t);
