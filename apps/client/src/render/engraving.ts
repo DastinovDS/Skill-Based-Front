@@ -21,7 +21,7 @@
  * The colours are the Engraved tokens of the style foundation (`theme/tokens.ts`, #841), the same
  * own/enemy pair as the pieces of the map (#847).
  */
-import { BufferImageSource, Matrix, Texture } from 'pixi.js';
+import { BufferImageSource, type Graphics, Matrix, Texture } from 'pixi.js';
 import type { PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { ENGRAVED } from '../theme/tokens.ts';
@@ -158,6 +158,30 @@ export function hatchRows(height: number, width: number, fade: number): number[]
   return rows;
 }
 
+/** A colour and its alpha, as a fill takes them. */
+export interface Paint {
+  readonly color: number;
+  readonly alpha: number;
+}
+
+/**
+ * The premultiplied RGBA of every row of a painted hatch tile: the lines in `line` (at the cover of
+ * the row, `hatchRows`) over a flat `under`, as a fill of `under` and a fill of the white tile tinted
+ * `line` would blend one over the other. One textured fill then draws both (#854): under software
+ * WebGL every fill over the hidden land costs about as much as the next, whatever it samples.
+ */
+export function paintRows(rows: readonly number[], line: Paint, under: Paint): number[][] {
+  const channel = (color: number, shift: number): number => ((color >> shift) & 255) / 255;
+  return rows.map((cover) => {
+    const la = line.alpha * cover;
+    const ua = under.alpha * (1 - la);
+    const rgb = [16, 8, 0].map(
+      (shift) => channel(line.color, shift) * la + channel(under.color, shift) * ua,
+    );
+    return [...rgb, la + ua].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255));
+  });
+}
+
 /**
  * One hatch as a tiling texture with mipmaps: white lines on clear (the fill colours them), one
  * pitch high. `update` keeps the lines' screen width and the fade of the lines in between for the
@@ -173,7 +197,14 @@ export class HatchTile {
   private pitch = 1;
   private key = '';
 
-  constructor(private readonly spec: HatchSpec) {
+  /**
+   * `paint`: the colours baked into the tile (the lines over a flat ground, `paintRows`), so a fill
+   * draws it untinted; without it the lines are white on clear and the fill colours them.
+   */
+  constructor(
+    private readonly spec: HatchSpec,
+    private readonly paint?: { readonly line: Paint; readonly under: Paint },
+  ) {
     this.source = new BufferImageSource({
       resource: this.pixels,
       width: TILE_WIDTH,
@@ -197,10 +228,12 @@ export class HatchTile {
     if (key !== this.key) {
       this.key = key;
       const rows = hatchRows(TILE_HEIGHT, width, fade);
-      rows.forEach((alpha, r) => {
-        const v = Math.round(alpha * 255);
-        for (let c = 0; c < TILE_WIDTH; c++)
-          this.pixels.fill(v, (r * TILE_WIDTH + c) * 4, (r * TILE_WIDTH + c) * 4 + 4);
+      const texels =
+        this.paint === undefined
+          ? rows.map((alpha) => Array<number>(4).fill(Math.round(alpha * 255)))
+          : paintRows(rows, this.paint.line, this.paint.under);
+      texels.forEach((rgba, r) => {
+        for (let c = 0; c < TILE_WIDTH; c++) this.pixels.set(rgba, (r * TILE_WIDTH + c) * 4);
       });
       this.source.update();
     }
@@ -332,6 +365,49 @@ export function pointsAlong(
     carry = d - length;
   }
   return out;
+}
+
+/**
+ * Segments joined into runs where the end of one is the start of the next (in the given order), so a
+ * stroke with round caps draws one cap per run end instead of two per segment (#854). Each round cap
+ * of a hairline is a fan of about 16 triangles, and the borders of a geography map have thousands of
+ * short segments: drawn one by one they cost ten times the triangles of the runs, every frame, which
+ * software WebGL feels. A run stroked with round joins covers the same pixels as its segments with
+ * round caps (the joins are the caps' discs where two segments meet).
+ */
+export function segmentRuns(
+  segments: readonly { readonly a: Point; readonly b: Point }[],
+): Point[][] {
+  const runs: Point[][] = [];
+  let run: Point[] | null = null;
+  let last: Point | null = null;
+  for (const { a, b } of segments) {
+    if (
+      run === null ||
+      last === null ||
+      Math.abs(a.x - last.x) > 1e-6 ||
+      Math.abs(a.y - last.y) > 1e-6
+    ) {
+      run = [a];
+      runs.push(run);
+    }
+    run.push(b);
+    last = b;
+  }
+  return runs;
+}
+
+/** The runs of `segments` (`segmentRuns`) as paths of `g`, ready for one stroke with round joins. */
+export function traceRuns(
+  g: Graphics,
+  segments: readonly { readonly a: Point; readonly b: Point }[],
+): void {
+  for (const run of segmentRuns(segments)) {
+    const [first, ...rest] = run;
+    if (first === undefined) continue;
+    g.moveTo(first.x, first.y);
+    for (const p of rest) g.lineTo(p.x, p.y);
+  }
 }
 
 /** The edge of sight: the land borders between a hidden area and a seen one, at `inset` into the fog. */
