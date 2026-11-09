@@ -195,12 +195,12 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     ``BANK_TICKS`` unpaid. The benchmark ``smart_hoarder`` keeps neither (its ``STRIKE_BANK``).
 24. **The stance policy under** ``[stances]`` (#881, DEC-44; ``gow_bots.bots.stance``). The stance
     of the phase (``stance_opening``, ``stance_midgame``, ``stance_late``: 0 Economy, 1 Balance,
-    2 War), one step toward Economy while the CP are about to burn or units wait for charges the
-    warehouses do not have, one step toward War while the warehouses are full or the capital is
-    pressed with few CP; at most one change per ``stance_dwell`` ticks. The rusher (and the
-    exploiter) stay in War, the expander opens in War, the turtle digs in in Economy, the hoarder
-    hoards in Economy and strikes in War late; the others play Balance. Without ``insight`` only
-    the stance of the phase.
+    2 War), one step toward Economy while the next CP quantum would burn or units wait for
+    charges the warehouses do not have, one step toward War while the warehouses are full or the
+    capital is pressed with few CP; at most one change per ``stance_dwell`` ticks. The rusher
+    (and the exploiter) stay in War, the expander opens in War, the turtle digs in in Economy,
+    the hoarder hoards in Economy and strikes in War late; the others play Balance. Without
+    ``insight`` only the stance of the phase.
 25. **The attack estimate before contact** (#881, DEC-40; ``CampaignBot.support``, ``meets``).
     Under ``combat.retreat = "none"`` a lost fight cannot be left, so the shots an attack needs
     count the reinforcements the defender can bring while the fight lasts (``contact_pct``

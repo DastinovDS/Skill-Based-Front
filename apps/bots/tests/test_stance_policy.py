@@ -76,12 +76,12 @@ def test_the_stance_of_the_phase() -> None:
 @pytest.mark.parametrize(
     ("cp", "stance"),
     [
-        (500, Stance.ECONOMY),  # at the cap (MVP6: 5 CP): the next quantum burns
-        (400, Stance.ECONOMY),  # one quantum (1 CP) from it: the next quantum reaches the cap
-        (399, Stance.BALANCE),
+        (500, Stance.ECONOMY),  # at the cap (MVP6: 5 CP): the next quantum burns in full
+        (401, Stance.ECONOMY),  # the next quantum (1 CP) burns in part
+        (400, Stance.BALANCE),  # the next quantum reaches the cap and fits
     ],
 )
-def test_cp_about_to_burn_step_toward_economy(cp: int, stance: Stance) -> None:
+def test_cp_that_would_burn_step_toward_economy(cp: int, stance: Stance) -> None:
     assert MVP6.cp.cap == 500 and MVP6.cp.per_period == 100
     assert _want(cp=cp) is stance
 

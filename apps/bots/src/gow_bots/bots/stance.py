@@ -13,8 +13,8 @@ of the match (``estimate.phase``), all integer:
 1. **The stance of the phase** (``stance_opening``, ``stance_midgame``, ``stance_late``): an index
    of ``STANCES``, 0 Economy, 1 Balance, 2 War; the personality's character (the rusher leans War,
    the turtle and the hoarder lean Economy early).
-2. **One step toward Economy** while the CP are at the cap or one quantum from it (the next
-   quantum burns, DEC-02: more CP buy nothing, more charges do) or while ``stance_wait`` own
+2. **One step toward Economy** while the next CP quantum does not fit under the cap (it burns in
+   part or in full, DEC-02: more CP buy nothing there, more charges do) or while ``stance_wait`` own
    discharged units wait in own nodes and the own city warehouses are less than half full (the
    charges are short).
 3. **One step toward War** otherwise, while the own city warehouses are at least ``stance_full``
@@ -68,7 +68,7 @@ def wanted_stance(
     at = params[_PHASE_KEYS[inputs.phase]]
     if insight:
         own, cp = inputs.own, rules.cp
-        burn = inputs.cp >= cp.cap - cp.per_period
+        burn = inputs.cp + cp.per_period > cp.cap
         waiting = own.uncharged_standing >= params["stance_wait"]
         starving = waiting and 2 * own.warehouse < own.warehouse_cap
         plenty = (
