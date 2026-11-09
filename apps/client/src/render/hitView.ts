@@ -5,25 +5,17 @@ import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { arenaSides, fightPlace, placeKey, type FightPlace, type RoundFx } from './fightFx.ts';
 import {
-  ROUND_END_SHARE,
-  armed,
-  burstProgress,
-  contactParticle,
-  contactProgress,
-  fxSeed,
-  impactParticles,
-  impactsOf,
   inFirstRound,
   silentParticle,
   silentProgress,
   sinceShare,
-  windParticles,
-  windProgress,
   CAPTION_SHARE,
+  SILENT_SHARE,
   type Contacts,
 } from './fightImpact.ts';
+import { endShare, hitLandings, roundLayout } from './parryLayout.ts';
 import type { Emit } from './particles.ts';
-import { BG, FIGHT_FX_STRENGTH, PLATE_FILL, WARN, ownerColor } from './style.ts';
+import { BG, FIGHT_FX_STRENGTH, PLATE_FILL, WARN } from './style.ts';
 
 type FightData = RenderFrame['base']['view']['fights'][number];
 
@@ -37,6 +29,8 @@ const SIGN_SCALE = 1.3;
 const CAPTION_DROP = 31;
 const MAX_SIGNS = 16;
 const MAX_CAPTIONS = 8;
+/** The ring of a silent charge and its caption last this share of a round at most. */
+const silentEnd = Math.max(SILENT_SHARE, CAPTION_SHARE);
 
 /** A token that swells for a moment: where it stands and by how much. */
 export interface Punch {
@@ -49,10 +43,11 @@ interface Caption {
 }
 
 /**
- * What a fight does on the map besides its arena and its arrows (E3 "Expressive", ui-style 27, 29;
- * #351): the particles (the ring of a contact, the wind-up, hits, shots that cancel, silent charges)
- * go to the `ParticleLayer` through `emit`; here are also the amber sign of a silent charge on its
- * group and the word "silent" of the first round, pooled objects drawn only when their state changes.
+ * What a fight does on the map besides its arena and its shots (the Parry arcs of `ParryView`, #856):
+ * the token that was hit swells once as the shot lands, the amber sign of a silent charge stays on its
+ * group, a dim dashed ring marks it at each round (DEC-24, F2), and the word "silent" explains it in the
+ * first round. No glow and no light (the Engraved style, #829): the wind-up glow and the contact ring of
+ * #351 are gone. Pooled objects, drawn only when their state changes.
  *
  * Every effect is a function of the render tick and of fields the server sent (`fight_round`,
  * `FightView`): a paused scene shows a fight in the state of that tick. Nothing is decided here
@@ -64,7 +59,6 @@ export class HitView {
   private readonly signs: Graphics[] = [];
   private readonly captions: Caption[] = [];
   private readonly style: TextStyle;
-  private readonly colors: { own: number; enemy: number };
 
   constructor(
     parent: Container,
@@ -73,8 +67,6 @@ export class HitView {
     private resolution: number,
     private readonly radiusOf: (node: number) => number,
   ) {
-    const enemy: PlayerId = me === 0 ? 1 : 0;
-    this.colors = { own: ownerColor(me, me), enemy: ownerColor(me, enemy) };
     // The amber crossed disc of the chips of the arena, for the group on the map.
     this.signContext = new GraphicsContext()
       .circle(0, 0, 4.6)
@@ -122,14 +114,7 @@ export class HitView {
       live.set(placeKey(place), { fight, place });
       const contacts = contactsOf(place);
       const sides = arenaSides(fight, frame.groups, this.me);
-      // The ring of a contact, and the wind-up of the sides that can fire in the coming round.
-      const q = contactProgress(tick - fight.start_tick, roundTicks);
-      if (q !== null) contactParticle(emit, place.at, q, scale);
-      const wind = windProgress(fight.next_round_tick, tick, roundTicks);
       for (const side of ['own', 'enemy'] as const) {
-        if (wind !== null && armed(sides[side])) {
-          windParticles(emit, contacts[side], this.colors[side], wind, scale, strength);
-        }
         // The static sign of a silent charge: a charged unit that does not shoot (DEC-24, F2).
         if (sides[side].mute > 0 && sides[side].charged > 0 && signs < MAX_SIGNS) {
           const at = contacts[side];
@@ -140,31 +125,20 @@ export class HitView {
         }
       }
     }
-    // The rounds that are still playing: the hits, and the ring of a silent charge.
+    // The rounds that are still playing: the swell of a token hit, and the ring of a silent charge.
+    const round = Math.max(1, roundTicks);
     for (const fx of rounds) {
       const age = tick - fx.tick;
-      if (age < 0 || age > ROUND_END_SHARE * roundTicks) continue;
+      const layout = roundLayout(fx, this.me);
+      if (age < 0 || age > Math.max(endShare(layout), silentEnd) * round) continue;
       const contacts = contactsOf(fx.place);
-      const seed = fxSeed(fx);
-      for (const impact of impactsOf(fx, this.me)) {
-        const u = burstProgress(age, impact, roundTicks);
-        if (u === null) continue;
-        impactParticles(emit, impact, u, {
-          contacts,
-          colors: this.colors,
-          scale,
-          strength,
-          seed,
+      for (const hit of hitLandings(layout)) {
+        const p = sinceShare(age, hit.at, PUNCH_SHARE, roundTicks);
+        if (p === null) continue;
+        punches.push({
+          at: contacts[hit.side === 'own' ? 'enemy' : 'own'],
+          scale: 1 + PUNCH_AMPLITUDE * strength * Math.sin(Math.PI * p),
         });
-        if (impact.victim !== null) {
-          const p = sinceShare(age, impact.at, PUNCH_SHARE, roundTicks);
-          if (p !== null) {
-            punches.push({
-              at: contacts[impact.victim],
-              scale: 1 + PUNCH_AMPLITUDE * strength * Math.sin(Math.PI * p),
-            });
-          }
-        }
       }
       const entry = live.get(placeKey(fx.place));
       if (entry === undefined) continue;

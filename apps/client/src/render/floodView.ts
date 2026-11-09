@@ -9,7 +9,13 @@ import {
 } from 'pixi.js';
 import type { Point } from './camera.ts';
 import { REACH_SAMPLES, type FloodLook } from './captureLayout.ts';
-import { CAPTURE } from './style.ts';
+import { CAPTURE, CASING, INK } from './style.ts';
+
+/** A colour as the three floats of a GLSL `vec3`. */
+const glsl = (color: number): string =>
+  [16, 8, 0].map((shift) => (((color >> shift) & 255) / 255).toFixed(4)).join(', ');
+const CASING_RGB = glsl(CASING);
+const INK_RGB = glsl(INK);
 
 /**
  * The flood of a capture on the map (#819, "Fitted", ui-style 49): per captured area three meshes of
@@ -20,8 +26,8 @@ import { CAPTURE } from './style.ts';
  * - the glow (its area and its neighbours): the cached border glow before the capture and after it,
  *   mixed the same way, so the glow joins where the front reaches the border; the map's own glow is
  *   masked out there meanwhile (`MapView`);
- * - the rim: a soft band of the new owner's colour riding just inside the front (normal blend, a
- *   touch of light added), over the border lines.
+ * - the rim: the front engraved (#856): a hairline of the new owner's colour on a dark casing, and a
+ *   fainter ink line just behind it, over the border lines.
  *
  * No filter, nothing redrawn per frame: the outlines are triangulated once per capture and only a
  * few uniforms change. The meshes are made and freed with the capture.
@@ -96,12 +102,24 @@ void main() {
 const RIM = `${FIELD}
 uniform vec3 uRimColor;
 uniform float uRim;
+// The front, Engraved (#856; mockup \`drawFloodFront\`): a hairline of the new owner's colour on a dark
+// casing where the front stands (the middle of its soft edge), and a fainter ink line just behind it.
+// The widths are in screen pixels: \`fwidth\` of the field is how much it changes over one pixel.
+float rule(float fit, float at, float halfWidth) {
+  float px = abs(fit - at) / max(fwidth(fit), 1e-6);
+  return 1.0 - smoothstep(halfWidth - 0.5, halfWidth + 0.5, px);
+}
 void main() {
-  float u = (uPos - fitHere()) / uFeather;
-  float x = (u - ${CAPTURE.rim.centre.toFixed(3)}) / ${CAPTURE.rim.width.toFixed(3)};
-  float g = exp(-x * x) * uRim;
-  // mix toward the owner's colour by ${String(CAPTURE.rim.alpha)} g, plus ${String(CAPTURE.rim.add)} g of it added
-  finalColor = vec4(uRimColor * ${(CAPTURE.rim.alpha + CAPTURE.rim.add).toFixed(3)} * g, ${CAPTURE.rim.alpha.toFixed(3)} * g) * uColor.a;
+  float fit = fitHere();
+  float front = uPos - uFeather * 0.5;
+  float c = rule(fit, front, ${(CAPTURE.rim.line / 2).toFixed(3)}) * uRim;
+  float k = rule(fit, front, ${(CAPTURE.rim.line / 2 + CAPTURE.rim.casing).toFixed(3)}) * uRim;
+  float i = rule(fit, front - ${CAPTURE.rim.behind.toFixed(3)}, ${(CAPTURE.rim.ink / 2).toFixed(3)}) * uRim * ${CAPTURE.rim.inkAlpha.toFixed(3)};
+  vec4 casing = vec4(${CASING_RGB}, 1.0) * k * ${CAPTURE.rim.casingAlpha.toFixed(3)};
+  vec4 ink = vec4(${INK_RGB}, 1.0) * i;
+  vec4 colour = vec4(uRimColor, 1.0) * c;
+  vec4 under = ink + casing * (1.0 - ink.a);
+  finalColor = (colour + under * (1.0 - colour.a)) * uColor.a;
 }
 `;
 

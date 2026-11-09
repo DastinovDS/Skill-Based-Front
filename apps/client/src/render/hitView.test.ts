@@ -68,7 +68,7 @@ const round = (
   shots: [number, number],
   losses: [number, number] = [0, 0],
   virtual: [number, number] = [0, 0],
-): RoundFx => ({ kind: 'round', tick, place: place(), shots, virtual, losses });
+): RoundFx => ({ kind: 'round', tick, place: place(), shots, virtual, losses, burned: [0, 0] });
 
 function setup() {
   const parent = new Container();
@@ -112,14 +112,10 @@ describe('HitView', () => {
     view.destroy();
   });
 
-  it('draws the hit only from its landing: nothing before, a burst at it, nothing at the end', () => {
+  it('draws no particle for a hit: the Parry burst is drawn by ParryView, without light (#856)', () => {
     const { run, view } = setup();
     const fx = [round(150, [1, 0], [0, 1])];
-    // The tick of the round and just before the hit (0.3 of a round): the shot is in the air (#352).
-    expect(run(150, [], fx).out).toEqual([]);
-    expect(run(150 + 0.3 * ROUND - 0.5, [], fx).out).toEqual([]);
-    expect(run(150 + 0.3 * ROUND + 1, [], fx).out.length).toBeGreaterThan(6);
-    expect(run(150 + 0.8 * ROUND, [], fx).out).toEqual([]);
+    for (const tick of [150, 155, 160, 170]) expect(run(tick, [fightAt()], fx).out).toEqual([]);
     view.destroy();
   });
 
@@ -136,18 +132,11 @@ describe('HitView', () => {
     view.destroy();
   });
 
-  it('winds up for the sides that can fire, in the last 0.175 of the round', () => {
+  it('has no wind-up glow and no contact ring (no light in the Engraved style, #856)', () => {
     const { run, view } = setup();
-    const fight = fightAt({ next_round_tick: 160, mute: [0, 0], virtual_left: [0, 0] });
-    expect(run(160 - 0.175 * ROUND - 1, [fight], []).out.filter((p) => p.kind === 'glow')).toEqual(
-      [],
-    );
-    const wind = run(160 - 1, [fight], []).out.filter((p) => p.kind === 'glow');
-    // The own group has charges; the enemy has charged units too (3 units, 2 charged).
-    expect(wind).toHaveLength(2);
-    // A side with nothing to fire (no charges, no bonus) does not wind up.
-    const dry = fightAt({ next_round_tick: 160, enemy_charged: 0 });
-    expect(run(160 - 1, [dry], []).out.filter((p) => p.kind === 'glow')).toHaveLength(1);
+    const fresh = fightAt({ start_tick: 150, next_round_tick: 160 });
+    expect(run(151, [fresh], []).out).toEqual([]);
+    expect(run(159, [fresh], []).out).toEqual([]);
     view.destroy();
   });
 
@@ -176,16 +165,6 @@ describe('HitView', () => {
     const later = fightAt({ mute: [0, 1], start_tick: 100, next_round_tick: 190 });
     run(152, [later], [round(150, [0, 0])]);
     expect(visible(Text)).toEqual([]);
-    view.destroy();
-  });
-
-  it('rings the contact of a new fight', () => {
-    const { run, view } = setup();
-    const fresh = fightAt({ start_tick: 150, next_round_tick: 170 });
-    expect(run(151, [fresh], []).out.filter((p) => p.kind === 'ring')).toHaveLength(1);
-    expect(run(150 + 0.3 * ROUND, [fresh], []).out.filter((p) => p.kind === 'ring')).toHaveLength(
-      0,
-    );
     view.destroy();
   });
 

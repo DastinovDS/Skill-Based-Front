@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { FightPlace, RoundFx } from './fightFx.ts';
 import { placeKey } from './fightFx.ts';
-import { HIT_SHARE } from './fightImpact.ts';
-import { LEAVER_ALPHA, leaverAlpha, leaversOf, type PlaceMemory } from './leaverLayout.ts';
-import { TRACER_END_SHARE } from './shotLayout.ts';
+import {
+  LEAVER_ALPHA,
+  LEAVER_FADE,
+  leaverAlpha,
+  leaversOf,
+  type PlaceMemory,
+} from './leaverLayout.ts';
+import { landShare, roundLayout } from './parryLayout.ts';
 
 const ROUND = 20;
 const place: FightPlace = { node: 3, edge: null, at: { x: 100, y: 50 }, ring: 20 };
@@ -15,7 +20,11 @@ const round = (tick: number): RoundFx => ({
   losses: [0, 2],
   shots: [2, 1],
   virtual: [0, 0],
+  burned: [0, 0],
 });
+// The round: one pair and two hits by player 0 (Parry: the last hit lands after the pair and the first hit).
+const LAND = landShare(roundLayout(round(100), 0));
+const END = LAND + LEAVER_FADE;
 const memory: PlaceMemory = {
   points: { own: { x: 90, y: 50 }, enemy: { x: 110, y: 50 } },
   seen: { own: true, enemy: true },
@@ -23,14 +32,14 @@ const memory: PlaceMemory = {
 const never = (): boolean => false;
 
 describe('the ghost of a side that left a fight (#811)', () => {
-  it('holds until the last shot lands, then fades with the afterglow, then lets go', () => {
-    expect(leaverAlpha(-1, ROUND)).toBeNull();
-    expect(leaverAlpha(0, ROUND)).toBe(LEAVER_ALPHA);
-    expect(leaverAlpha(HIT_SHARE * ROUND - 0.01, ROUND)).toBe(LEAVER_ALPHA);
-    const mid = leaverAlpha((HIT_SHARE + (TRACER_END_SHARE - HIT_SHARE) / 2) * ROUND, ROUND);
+  it('holds until the last shot lands, then fades, then lets go', () => {
+    expect(leaverAlpha(-1, ROUND, LAND)).toBeNull();
+    expect(leaverAlpha(0, ROUND, LAND)).toBe(LEAVER_ALPHA);
+    expect(leaverAlpha(LAND * ROUND - 0.01, ROUND, LAND)).toBe(LEAVER_ALPHA);
+    const mid = leaverAlpha((LAND + LEAVER_FADE / 2) * ROUND, ROUND, LAND);
     expect(mid).toBeGreaterThan(0);
     expect(mid).toBeLessThan(LEAVER_ALPHA);
-    expect(leaverAlpha(TRACER_END_SHARE * ROUND, ROUND)).toBeNull();
+    expect(leaverAlpha(END * ROUND, ROUND, LAND)).toBeNull();
   });
 
   it('keeps a ghost where a side stood while the shots of its ended fight are in the air', () => {
@@ -40,7 +49,7 @@ describe('the ghost of a side that left a fight (#811)', () => {
   });
 
   it('has none once the shots are done, or while the fight is still in sight', () => {
-    const late = 100 + TRACER_END_SHARE * ROUND;
+    const late = 100 + END * ROUND;
     expect(leaversOf([round(100)], late, ROUND, new Set(), () => memory, never)).toEqual([]);
     expect(leaversOf([round(100)], 102, ROUND, new Set([key]), () => memory, never)).toEqual([]);
   });

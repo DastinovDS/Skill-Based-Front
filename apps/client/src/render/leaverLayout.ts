@@ -1,8 +1,8 @@
 /**
  * The ghost of a side that left a fight (#811). When a fight ends the token of a side can go at once
- * (it died, or it retreated), while the tracers of the last round are still flying towards it. Such a
- * tracer would end in empty space, so the place where the side stood keeps a faded helmet until the
- * shots have landed and their afterglow is over, then lets it go.
+ * (it died, or it retreated), while the shots of the last round are still flying towards it (the Parry
+ * arcs, #856). Such a shot would end in empty space, so the place where the side stood keeps a faded
+ * helmet until the shots have landed, then fades it out (0.6 s) and lets it go.
  *
  * Pure functions, no PixiJS and no DOM. Presentation only: the places are the remembered tokens of
  * the effects view and the times are shares of a round, nothing is decided here (AGENTS.md 7.1).
@@ -10,8 +10,11 @@
 import type { Point } from './camera.ts';
 import type { FightPlace, RoundFx } from './fightFx.ts';
 import { placeKey } from './fightFx.ts';
-import { HIT_SHARE, type Side } from './fightImpact.ts';
-import { AFTERGLOW_SHARE } from './shotLayout.ts';
+import type { Side } from './fightImpact.ts';
+import { landShare, roundLayout } from './parryLayout.ts';
+
+/** The ghost fades over this share of a round once the last shot has landed (0.6 s). */
+export const LEAVER_FADE = 0.3;
 
 /** How opaque the ghost is until the shots land: a faint helmet, never as solid as a token. */
 export const LEAVER_ALPHA = 0.6;
@@ -34,13 +37,13 @@ export interface Leaver {
 
 /**
  * The opacity of a ghost `age` ticks after the round (`null`: the shots are done, no ghost): full
- * until the last shot lands (`HIT_SHARE`), then it fades with the afterglow of the tracers.
+ * until the last shot lands (`land`, a share of a round), then it fades over `LEAVER_FADE`.
  */
-export function leaverAlpha(age: number, roundTicks: number): number | null {
+export function leaverAlpha(age: number, roundTicks: number, land: number): number | null {
   if (age < 0) return null;
   const share = age / Math.max(1, roundTicks);
-  if (share < HIT_SHARE) return LEAVER_ALPHA;
-  const fade = (share - HIT_SHARE) / AFTERGLOW_SHARE;
+  if (share < land) return LEAVER_ALPHA;
+  const fade = (share - land) / LEAVER_FADE;
   return fade < 1 ? LEAVER_ALPHA * (1 - fade) : null;
 }
 
@@ -61,7 +64,8 @@ export function leaversOf(
   for (const fx of rounds) {
     const key = placeKey(fx.place);
     if (live.has(key)) continue;
-    const alpha = leaverAlpha(tick - fx.tick, roundTicks);
+    // When the last shot lands does not depend on the side that looks (`landShare` adds both sides).
+    const alpha = leaverAlpha(tick - fx.tick, roundTicks, landShare(roundLayout(fx, 0)));
     const remembered = memory(key);
     if (alpha === null || remembered === undefined) continue;
     for (const side of ['own', 'enemy'] as const) {

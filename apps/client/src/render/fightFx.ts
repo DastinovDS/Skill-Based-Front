@@ -1,7 +1,7 @@
 /**
  * Timing and geometry of the fight animation (DEC-24, DEC-32; ui-style 9.9, 27, 29): the arena
  * over a fight going on (A1, "chips": a chip for every unit of a fight), who shot in the last round
- * (the shots themselves are the tracers of `shotLayout.ts`), the losses that pop up after a round and
+ * (the shots themselves are the etched arcs of `parryLayout.ts`), the losses that pop up after a round and
  * the way a fight ends.
  *
  * Pure functions, no PixiJS and no DOM. Nothing here decides what happened in a fight: places,
@@ -30,6 +30,17 @@ import { fightPoint } from './layout.ts';
  * time to the next round along its bottom edge.
  */
 export const PLATE = { halfWidth: 96, halfHeight: 36 } as const;
+/**
+ * The round bar of the arena (px from the middle of the plate, Engraved, #856): a ruled line from `x`,
+ * `width` long, at `y`; the part of the round passed is solid ink `height` high with a burin point at its head.
+ */
+export const ARENA_BAR = {
+  x: -PLATE.halfWidth + 12,
+  width: 2 * PLATE.halfWidth - 24,
+  y: PLATE.halfHeight - 10,
+  height: 3,
+  head: 2.6,
+} as const;
 /**
  * The chips of the arena (px): `side` the room a chip takes from the middle line, `pitch` the step
  * between chips and the width of a helmet chip (#784), close to the 20 px of a significant symbol (ui-style 22).
@@ -94,6 +105,8 @@ export interface RoundFx {
   /** Shots of the round by player, and the virtual (bonus) ones among them; zeros if the event lacks them. */
   readonly shots: readonly [number, number];
   readonly virtual: readonly [number, number];
+  /** Charges the terrain took from each player before the shots of the round (DEC-45); zeros if the event lacks them. */
+  readonly burned: readonly [number, number];
 }
 
 /** The end of a fight, from `fight_ended`. */
@@ -147,6 +160,7 @@ export function fightFx(
       losses,
       shots: [intField(data, 'shots_0') ?? 0, intField(data, 'shots_1') ?? 0],
       virtual: [intField(data, 'virtual_0') ?? 0, intField(data, 'virtual_1') ?? 0],
+      burned: [intField(data, 'burned_0') ?? 0, intField(data, 'burned_1') ?? 0],
     };
   }
   const winner = data['winner'];

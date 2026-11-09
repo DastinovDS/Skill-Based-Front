@@ -22,6 +22,7 @@ import { layoutFeeds, type FeedSlot, type FeedSpot } from './feedLayout.ts';
 import { numbersLook } from './effectsLayout.ts';
 import { easeOutCubic } from './tween.ts';
 import {
+  ARENA_BAR,
   CHIP,
   END_SHARE,
   PLATE,
@@ -47,10 +48,20 @@ import {
 } from './fightFx.ts';
 import { HIT_SHARE, NUMBER_SHARE, sinceShare, type Contacts } from './fightImpact.ts';
 import type { MapLayers } from './layers.ts';
-import { drawModeGlyph } from './shapes.ts';
 import type { Point } from './camera.ts';
 import { stackBadges, type BadgeMark } from './badgeLayout.ts';
-import { BADGE, BG, FEED, FIGHT_COLOR, GLYPH_COLOR, LOSS_FONT_SIZE, ownerColor } from './style.ts';
+import {
+  BADGE,
+  CASING,
+  CUT,
+  DARK_PLATE,
+  FEED,
+  INK,
+  LOSS_FONT_SIZE,
+  WARN,
+  ownerColor,
+} from './style.ts';
+import { pieceFamily, usePieceFont } from './pieceFont.ts';
 
 const MAX_ARENAS = 8;
 const MAX_POPS = 16;
@@ -63,9 +74,8 @@ const MINUS = '−';
 const POP_OFFSET = { x: 17, y: 18 } as const;
 /** The plate: the row of "+N" under the chips and the bar along the bottom (px from the middle). */
 const STRIP_Y = 16;
-const BAR_Y = PLATE.halfHeight - 9;
-const BAR_HEIGHT = 3;
-const BAR_WIDTH = 2 * PLATE.halfWidth - 24;
+/** The ink leader from the plate down to its place (mockup `leader`): a casing, an ink hairline, a lozenge foot. */
+const LEADER = { casing: 2.6, ink: 0.9, inkAlpha: 0.6, foot: 2.2, gap: 3 } as const;
 /** Where the "+N" and its small charged count sit on the strip (px from the middle line). */
 const MORE_X = PLATE.halfWidth - 38;
 const HIDDEN_CHARGED_X = PLATE.halfWidth - 22;
@@ -91,16 +101,13 @@ type FightData = RenderFrame['base']['view']['fights'][number];
 /** What an arena needs beyond its plate (px): its badges over the top row. */
 const LIVE_REACH = { top: 4, bottom: 4 } as const;
 
-/** An arena that moved this far (px) from its usual spot gets a dotted line to its place. */
-const TETHER_MIN = 8;
-
 type Side = 'own' | 'enemy';
 const SIDES: readonly Side[] = ['own', 'enemy'];
 
 /** The arena over a fight: the plate with its chips and their badges, the "+N" and the bar. */
 interface Arena {
   readonly view: Container;
-  /** A dotted line down to a fight on a road, and a cross there. */
+  /** The ink leader down to the place of the fight, and on a road the meeting mark there. */
   readonly tether: Graphics;
   readonly plate: BakedSprite;
   readonly chips: BakedSprite[];
@@ -112,8 +119,9 @@ interface Arena {
   readonly more: Readonly<Record<Side, Text>>;
   readonly moreDot: Readonly<Record<Side, Graphics>>;
   readonly moreCharged: Readonly<Record<Side, Text>>;
-  readonly track: Graphics;
+  /** The part of the round passed (solid ink over the baked ruled line) and its burin point. */
   readonly fill: Graphics;
+  readonly head: Graphics;
 }
 
 /** A number that pops up after a round. */
@@ -190,6 +198,7 @@ export class FightView {
   private readonly contexts: GraphicsContext[] = [];
   private readonly glyphs: Glyphs;
   private readonly barContext: GraphicsContext;
+  private readonly headContext: GraphicsContext;
   private readonly dotContext: Readonly<Record<Side, GraphicsContext>>;
   private readonly styles: {
     more: TextStyle;
@@ -223,47 +232,70 @@ export class FightView {
     /** The baked plate and chips, in screen px (`bake.ts`). */
     private readonly sprites: SpriteCache,
   ) {
-    const text = (fill: number, size: number, stroke = true): TextStyle =>
+    // EB Garamond numerals (#856), ink on a dark cut halo; the feed has no halo (it lies on its plate).
+    const text = (fill: number, size: number, stroke = true, weight = '600'): TextStyle =>
       new TextStyle({
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: pieceFamily(),
         fontSize: size,
-        fontWeight: '700',
+        fontWeight: weight as TextStyle['fontWeight'],
         fill,
-        ...(stroke ? { stroke: { color: BG, width: 3.5, join: 'round' as const } } : {}),
+        ...(stroke ? { stroke: { color: CUT, width: 3, join: 'round' as const } } : {}),
       });
     const enemy: PlayerId = me === 0 ? 1 : 0;
     this.styles = {
-      more: text(GLYPH_COLOR, 12),
-      small: text(GLYPH_COLOR, 10),
+      more: text(INK, 13),
+      small: text(INK, 11),
       own: text(ownerColor(me, me), LOSS_FONT_SIZE),
       enemy: text(ownerColor(me, enemy), LOSS_FONT_SIZE),
-      feed: text(GLYPH_COLOR, FEED.fontSize),
+      feed: text(INK, FEED.fontSize, false, '500'),
     };
+    usePieceFont(Object.values(this.styles));
+    // The verdict glyphs of the feed, engraved (#856; mockup `glyph`): ink lines, no fill.
+    const line = { width: FEED.glyphLine, color: INK, cap: 'round', join: 'round' } as const;
     this.glyphs = {
       captured: this.context((g) =>
         g
-          .rect(-4.5, -5.5, 1.8, 11)
-          .fill(GLYPH_COLOR)
-          .poly([-2.7, -5.5, 5, -2.5, -2.7, 0.5])
-          .fill(GLYPH_COLOR),
+          .moveTo(-3.5, 5.5)
+          .lineTo(-3.5, -5)
+          .moveTo(-3.5, -5)
+          .lineTo(4.5, -2.6)
+          .lineTo(-3.5, 0)
+          .stroke(line),
       ),
-      held: this.context((g) => drawModeGlyph(g, 'defense')),
+      held: this.context((g) =>
+        g
+          .moveTo(0, -5.5)
+          .lineTo(5, -3.5)
+          .bezierCurveTo(5, 1.5, 3, 4, 0, 5.8)
+          .bezierCurveTo(-3, 4, -5, 1.5, -5, -3.5)
+          .closePath()
+          .stroke(line),
+      ),
       bounced: this.context((g) =>
         g
-          .poly([-5.5, -3, -1, -6.5, -1, -4, 5.5, -4, 5.5, -2, -1, -2, -1, 0.5])
-          .fill(GLYPH_COLOR)
-          .poly([5.5, 3, 1, 6.5, 1, 4, -5.5, 4, -5.5, 2, 1, 2, 1, -0.5])
-          .fill(GLYPH_COLOR),
+          .moveTo(5, -3)
+          .lineTo(-4, -3)
+          .moveTo(-1.5, -5.5)
+          .lineTo(-4, -3)
+          .lineTo(-1.5, -0.5)
+          .moveTo(-5, 3)
+          .lineTo(4, 3)
+          .moveTo(1.5, 0.5)
+          .lineTo(4, 3)
+          .lineTo(1.5, 5.5)
+          .stroke(line),
       ),
     };
     this.barContext = this.context((g) =>
-      g.roundRect(0, 0, BAR_WIDTH, BAR_HEIGHT, BAR_HEIGHT / 2).fill(FIGHT_COLOR),
+      g.rect(0, -1, ARENA_BAR.width, ARENA_BAR.height).fill(INK),
+    );
+    const h = ARENA_BAR.head;
+    this.headContext = this.context((g) =>
+      g.poly([0, -h, h, 0, 0, h, -h, 0]).fill(INK).stroke({ width: 1, color: CASING }),
     );
     const colorOf = (side: Side): number => this.colorOf(side);
     const dot = (side: Side): GraphicsContext =>
-      this.context((g) =>
-        g.circle(0, 0, 2.6).fill(colorOf(side)).stroke({ width: 1, color: GLYPH_COLOR }),
-      );
+      this.context((g) => g.circle(0, 0, 2.6).fill(colorOf(side)).stroke({ width: 1, color: INK }));
     this.dotContext = { own: dot('own'), enemy: dot('enemy') };
     // Bottom to top: arenas, results, the loss numbers.
     this.layer.addChild(this.arenaLayer, this.endLayer, this.shotLayer, this.popLayer);
@@ -463,9 +495,8 @@ export class FightView {
       const more = pair(() => this.text(view, this.styles.more, 0.5));
       const moreDot = pair((side) => view.addChild(new Graphics(this.dotContext[side])));
       const moreCharged = pair(() => this.text(view, this.styles.small, { x: 0, y: 0.5 }));
-      const track = view.addChild(new Graphics(this.barContext));
-      track.alpha = 0.18;
       const fill = view.addChild(new Graphics(this.barContext));
+      const head = view.addChild(new Graphics(this.headContext));
       for (const g of Object.values(moreDot)) g.visible = false;
       arena = {
         view,
@@ -477,8 +508,8 @@ export class FightView {
         more,
         moreDot,
         moreCharged,
-        track,
         fill,
+        head,
       };
       this.arenas.push(arena);
     }
@@ -491,36 +522,71 @@ export class FightView {
     part.scale.set(k);
     part.alpha = 1;
     part.visible = true;
-    // A dotted line to the true place of a fight on a road (with a cross there), or of a fight in
-    // a city whose arena had to move off its usual spot.
+    // The ink leader (#856; mockup `leader`): from the foot of the plate down to the ring of the city,
+    // or to the meeting point of a fight on a road, where a lozenge of amber rules marks it.
     const g = arena.tether.clear();
     const road = place.node === null;
-    if (!road && spot.moved < TETHER_MIN) return;
     const dx = (place.at.x - spot.x) / k;
     const dy = (place.at.y - spot.y) / k;
     const dist = Math.hypot(dx, dy);
     if (dist === 0) return;
     const ux = dx / dist;
     const uy = dy / dist;
-    // From the edge of the plate to the cross, or to the ring of the city.
-    const out = Math.min(
+    // From the edge of the plate to the place, or to the ring of the city.
+    const from = Math.min(
       ux === 0 ? Infinity : PLATE.halfWidth / Math.abs(ux),
-      uy === 0 ? Infinity : (PLATE.halfHeight + 2) / Math.abs(uy),
+      uy === 0 ? Infinity : PLATE.halfHeight / Math.abs(uy),
     );
-    const from = out + 2;
-    const to = road ? dist - 5 : dist - place.ring / k - 4;
-    for (let d = from; d < to; d += 7) {
-      const end = Math.min(to, d + 3.5);
-      g.moveTo(ux * d, uy * d).lineTo(ux * end, uy * end);
-    }
-    g.stroke({ width: 1.5, color: FIGHT_COLOR, alpha: 0.8 });
+    const to = road ? dist - 6 : dist - place.ring / k - LEADER.gap;
+    if (to <= from) return;
+    const line = (): Graphics => g.moveTo(ux * from, uy * from).lineTo(ux * to, uy * to);
+    line().stroke({ width: LEADER.casing, color: CUT, alpha: 0.9 });
+    line().stroke({ width: LEADER.ink, color: INK, alpha: LEADER.inkAlpha });
     if (road) {
-      g.moveTo(dx - 4, dy - 4)
-        .lineTo(dx + 4, dy + 4)
-        .moveTo(dx + 4, dy - 4)
-        .lineTo(dx - 4, dy + 4)
-        .stroke({ width: 2, color: FIGHT_COLOR, cap: 'round' });
+      const r = 5;
+      const q = 2.6;
+      g.poly([
+        dx,
+        dy - r * Math.SQRT2,
+        dx + r * Math.SQRT2,
+        dy,
+        dx,
+        dy + r * Math.SQRT2,
+        dx - r * Math.SQRT2,
+        dy,
+      ])
+        .fill(DARK_PLATE)
+        .stroke({ width: 1, color: WARN });
+      g.poly([
+        dx,
+        dy - q * Math.SQRT2,
+        dx + q * Math.SQRT2,
+        dy,
+        dx,
+        dy + q * Math.SQRT2,
+        dx - q * Math.SQRT2,
+        dy,
+      ]).stroke({
+        width: 1,
+        color: WARN,
+      });
+      return;
     }
+    const f = LEADER.foot;
+    const fx = ux * to;
+    const fy = uy * to;
+    g.poly([
+      fx,
+      fy - f * Math.SQRT2,
+      fx + f * Math.SQRT2,
+      fy,
+      fx,
+      fy + f * Math.SQRT2,
+      fx - f * Math.SQRT2,
+      fy,
+    ])
+      .fill(INK)
+      .stroke({ width: 1, color: CUT });
   }
 
   /** Which chips pulse now: the ones that changed in the last round and the ones that joined. */
@@ -667,12 +733,14 @@ export class FightView {
       const burn = arena.burns[i];
       if (burn !== undefined) burn.visible = false;
     }
-    const x0 = -BAR_WIDTH / 2;
-    arena.track.position.set(x0, BAR_Y);
-    arena.track.visible = true;
-    arena.fill.position.set(x0, BAR_Y);
+    // The bar (#856; mockup `arenaV`): the part of the round passed in solid ink over the baked ruled
+    // line, with a burin point at its head.
+    const { x, y, width } = ARENA_BAR;
+    arena.fill.position.set(x, y + 0.5);
     arena.fill.scale.x = Math.max(0.0001, look.progress);
     arena.fill.visible = look.progress > 0;
+    arena.head.position.set(x + width * look.progress, y + 0.5);
+    arena.head.visible = true;
   }
 
   /**
@@ -732,7 +800,7 @@ export class FightView {
   private badgeSprite(arena: Arena, index: number): BakedSprite {
     let badge = arena.badges[index];
     if (badge === undefined) {
-      badge = arena.view.addChildAt(this.sprites.sprite(), arena.view.getChildIndex(arena.track));
+      badge = arena.view.addChildAt(this.sprites.sprite(), arena.view.getChildIndex(arena.fill));
       arena.badges.push(badge);
     }
     return badge;
@@ -743,7 +811,7 @@ export class FightView {
     if (burn === undefined) {
       burn = arena.view.addChildAt(
         this.sprites.sprite(selfShotSpec()),
-        arena.view.getChildIndex(arena.track),
+        arena.view.getChildIndex(arena.fill),
       );
       burn.label = 'self-shot';
       arena.burns.push(burn);

@@ -10,7 +10,7 @@ import {
   type PlaceState,
 } from './cityLayout.ts';
 import { hatchPolygons, innerWidth, type BuildMark, type CellState } from './progressLayout.ts';
-import { CHIP, PLATE, lighten, type ChipState } from './fightFx.ts';
+import { ARENA_BAR, CHIP, PLATE, lighten, type ChipState } from './fightFx.ts';
 import { dashSegments } from './layout.ts';
 import { circleBox, shadowBox, type Box } from './shading.ts';
 import {
@@ -19,7 +19,6 @@ import {
   BARRACKS_MARK,
   BG,
   DEFENSE_PIPS,
-  FIGHT_COLOR,
   FLOW_STARVE,
   GLYPH_COLOR,
   PAPER,
@@ -27,7 +26,6 @@ import {
   PLACE_FRAME,
   PLATE_FILL,
   PROGRESS,
-  RIM,
   SEGMENT_EMPTY,
   SHADOW,
   SUPPLY_LINE,
@@ -53,11 +51,9 @@ import {
 import { counterLayout, type DefensePips } from './defenseLayout.ts';
 import { hatchAcross } from './pieceShapes.ts';
 import {
-  dashLoop,
   helmet,
   helmetExtent,
   helmetLines,
-  scanLines,
   type Helmet,
   type HelmetKind,
 } from '../units/helmet.ts';
@@ -561,50 +557,70 @@ function beadsAlong(polygon: readonly Point[], n: number): Point[] {
 export const CHIP_HELMET_WIDTH = CHIP.pitch;
 
 /**
- * A helmet chip of the arena, facing right (the opponent's is flipped where it is placed): charged
- * (the dome in the owner's gradient, a light edge), discharged (the dark plate hatched in the light
- * tone, the edge in the owner's colour) or killed (a dashed faint dome); the strap on all of them.
+ * A helmet chip of the arena, facing right (the opponent's is flipped where it is placed), Engraved
+ * (#856; mockup `helmet` and `deadChip`): charged, the dome solid in the side's colour; discharged, the
+ * dome on the dark plate hatched in the side's colour; both on a dark casing with the strap (and the
+ * brim) and the dome's edge in ink. Killed: only the outline of the dome, stippled in ink.
  */
 export function helmetChipSpec(state: ChipState, enemy: boolean, color: number): BakeSpec {
   const kind: HelmetKind = enemy ? 'enemy' : 'own';
-  const h = helmet(kind, CHIP_HELMET_WIDTH);
+  const width = CHIP_HELMET_WIDTH;
+  const h = helmet(kind, width);
+  const lines = helmetLines(width);
+  const E = HELMET_ENGRAVED;
   const box = helmetBox(h);
-  const strap = 1.8;
-  const casing = 2.4;
   const dome = flat(h.dome);
+  const grow = E.casing / 2;
   return {
     key: `hel-chip:${state}:${kind}:${String(color)}`,
-    box: { x: box.x - 1, y: box.y - 1, width: box.width + 2, height: box.height + 2 },
+    box: {
+      x: box.x - grow,
+      y: box.y - grow,
+      width: box.width + 2 * grow,
+      height: box.height + 2 * grow,
+    },
     draw(into, tools) {
       const g = graphics(into);
-      const light = helmetLight(color);
       if (state === 'killed') {
-        for (const line of gear(h)) {
-          polyline(g, line).stroke({ width: strap, color, alpha: 0.6, cap: 'round' });
-        }
-        for (const piece of dashLoop(h.dome, 2.5, 2.5)) polyline(g, piece);
-        g.stroke({ width: 1.6, color, alpha: 0.6, cap: 'round' });
+        for (const p of beadsAlong(h.dome, CHIP_STIPPLE.count))
+          g.circle(p.x, p.y, CHIP_STIPPLE.radius);
+        g.fill({ color: INK, alpha: CHIP_STIPPLE.alpha });
         return;
       }
+      const lineWidth = (line: readonly Point[]): number =>
+        (line === h.strap ? lines.strap : lines.band) * E.gear;
       for (const line of gear(h)) {
-        polyline(g, line).stroke({ width: strap + casing, color: BG, cap: 'round', join: 'round' });
+        polyline(g, line).stroke({
+          width: lineWidth(line) + E.casing * 0.8,
+          color: CASING,
+          cap: 'round',
+          join: 'round',
+        });
       }
-      g.poly(dome).stroke({ width: casing, color: BG, join: 'round' });
-      for (const line of gear(h)) {
-        polyline(g, line).stroke({ width: strap, color: light, cap: 'round', join: 'round' });
-      }
+      g.poly(dome).stroke({ width: E.casing * 0.9, color: CASING, join: 'round' });
       if (state === 'charged') {
-        g.poly(dome).fill(tools.gradient(color));
-        g.poly(dome).stroke({ width: 1.4, color: GLYPH_COLOR, join: 'round' });
-        return;
+        g.poly(dome).fill(color);
+      } else {
+        g.poly(dome).fill(DARK_PLATE);
+        for (const [a, b] of hatchAcross(h.dome, -Math.PI / 4, helmetHatchPitch(width)))
+          g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+        g.stroke({ width: tools.hair(E.hatch.width), color });
       }
-      g.poly(dome).fill(PLATE_FILL);
-      for (const [from, to] of scanLines(h.dome, 3.5)) g.moveTo(from.x, from.y).lineTo(to.x, to.y);
-      g.stroke({ width: 1.2, color: lighten(color, REST_LIGHTEN), alpha: 0.85 });
-      g.poly(dome).stroke({ width: 1.6, color, join: 'round' });
+      for (const line of gear(h)) {
+        polyline(g, line).stroke({
+          width: tools.hair(lineWidth(line)),
+          color: INK,
+          cap: 'round',
+          join: 'round',
+        });
+      }
+      g.poly(dome).stroke({ width: tools.hair(E.edge), color: INK, join: 'round' });
     },
   };
 }
+
+/** The stippled outline of a dead chip (mockup `deadChip`): this many ink dots, this big, this faint. */
+const CHIP_STIPPLE = { count: 26, radius: 0.62, alpha: 0.55 } as const;
 
 /** The shield badge of "Defense": a dark disc with a ring in the owner's colour and the shield glyph. */
 export function shieldSpec(color: number, enemy: boolean): BakeSpec {
@@ -678,119 +694,147 @@ export function defenseCounterSpec(
 
 // --- The arena of a fight (AR1 chips, drawn in screen px) --------------------------------------------
 
-/** The plate of the arena: dark, outlined, a dashed line between the halves, a light rim at the top. */
+/**
+ * An engraved cartouche (#856; mockup `panel`): the dark plate, an ink rule round it, and unless `thin`
+ * a second, fainter rule inside and the four corners notched out. No shadow, no light.
+ */
+function cartouche(
+  g: Graphics,
+  body: Box,
+  look: {
+    readonly edge: number;
+    readonly edgeAlpha: number;
+    /** The inner rule: its inset, its alpha and the side of the corner notches; `null`: none. */
+    readonly inner: { readonly at: number; readonly alpha: number; readonly notch: number } | null;
+  },
+): void {
+  const { x, y, width: w, height: h } = body;
+  g.rect(x, y, w, h).fill({ color: DARK_PLATE, alpha: CARTOUCHE.fill });
+  g.rect(x + 0.5, y + 0.5, w - 1, h - 1).stroke({
+    width: look.edge,
+    color: INK,
+    alpha: look.edgeAlpha,
+    join: 'miter',
+  });
+  if (look.inner === null) return;
+  const i = look.inner.at;
+  g.rect(x + i, y + i, w - 2 * i, h - 2 * i).stroke({
+    width: CARTOUCHE.rule,
+    color: INK,
+    alpha: look.inner.alpha,
+    join: 'miter',
+  });
+  const n = look.inner.notch / 2;
+  for (const [cx, cy] of [
+    [x, y],
+    [x + w, y],
+    [x, y + h],
+    [x + w, y + h],
+  ] as const)
+    g.rect(cx - n, cy - n, 2 * n, 2 * n).fill(DARK_PLATE);
+}
+
+/** The weights of a cartouche (mockup `panel`, Engraved). */
+const CARTOUCHE = { fill: 0.93, rule: 0.8 } as const;
+
+/**
+ * The plate of the arena, Engraved (#856; mockup `arenaV`): a cartouche with a double rule and notched
+ * corners, a fine rule between the two halves, and the round bar's ruled line along the bottom with a
+ * tick at every quarter (the part of the round passed and its burin point are drawn over it by the view).
+ */
 export function arenaPlateSpec(): BakeSpec {
   const { halfWidth: hw, halfHeight: hh } = PLATE;
-  const body: Box = { x: -hw, y: -hh, width: 2 * hw, height: 2 * hh + 2 };
+  const body: Box = { x: -hw, y: -hh, width: 2 * hw, height: 2 * hh };
   return {
     key: 'arena-plate',
-    box: shadowBox(body, BAKE_MARGIN),
+    box: { x: body.x - 2, y: body.y - 2, width: body.width + 4, height: body.height + 4 },
     draw(into) {
-      shadow(into, (g) => g.roundRect(body.x, body.y, body.width, body.height, 12));
       const g = graphics(into);
-      g.roundRect(body.x, body.y, body.width, body.height, 12)
-        .fill({ color: PLATE_FILL, alpha: 0.96 })
-        .stroke({ width: 1.6, color: FIGHT_COLOR, alpha: 0.85 });
-      // The middle line between the halves.
-      for (const [from, to] of dashSegments({ x: 0, y: -hh + 5 }, { x: 0, y: hh - 12 }, 3, 3)) {
-        g.moveTo(from.x, from.y).lineTo(to.x, to.y);
+      cartouche(g, body, { edge: 1, edgeAlpha: 0.75, inner: { at: 3, alpha: 0.28, notch: 4 } });
+      g.moveTo(0.5, -hh + 9)
+        .lineTo(0.5, ARENA_BAR.y - 7)
+        .stroke({ width: 1, color: INK, alpha: 0.35 });
+      const { x, width, y } = ARENA_BAR;
+      g.moveTo(x, y + 0.5).lineTo(x + width, y + 0.5);
+      for (let j = 0; j <= 4; j++) {
+        const tx = Math.round(x + (width * j) / 4) + 0.5;
+        g.moveTo(tx, y - 2).lineTo(tx, y + 3);
       }
-      g.stroke({ width: 1, color: FIGHT_COLOR, alpha: 0.4 });
-      g.moveTo(-hw + 8, -hh + 1)
-        .lineTo(hw - 8, -hh + 1)
-        .stroke({ width: 1, color: 0xffffff, alpha: RIM.alpha * 0.5 });
+      g.stroke({ width: 1, color: INK, alpha: 0.5 });
     },
   };
 }
 
 /**
- * A row of the kill feed (#812): the plate of a side's losses beside a node, dark and outlined like the arena
- * plate, on its soft shadow with a light rim at the top. The winner's row has the thick light outline, the other a
- * thin muted one (the weight tells it, not the hue). The origin is the middle of the row.
+ * A row of the kill feed (#812), Engraved (#856; mockup `feedRowV`): a cartouche beside the node. The
+ * winner's row has the heavy ink rule, a second rule inside and the notched corners; the other row a
+ * thin faint rule (the weight tells it, not the hue). The origin is the middle of the row.
  */
 export function feedRowSpec(winner: boolean): BakeSpec {
-  const { halfWidth: hw, rowHeight: h, radius } = FEED;
+  const { halfWidth: hw, rowHeight: h } = FEED;
   const body: Box = { x: -hw, y: -h / 2, width: 2 * hw, height: h };
-  const line = winner ? FEED.winner : FEED.other;
   return {
     key: `feed-row:${winner ? 'win' : 'other'}`,
-    box: shadowBox(body, BAKE_MARGIN),
+    box: { x: body.x - 3, y: body.y - 3, width: body.width + 6, height: body.height + 6 },
     draw(into) {
-      shadow(into, (g) => g.roundRect(body.x, body.y, body.width, body.height, radius));
       const g = graphics(into);
-      g.roundRect(body.x, body.y, body.width, body.height, radius)
-        .fill({ color: PLATE_FILL, alpha: FEED.fillAlpha })
-        .stroke({
-          width: line.width,
-          color: line.color,
-          alpha: 'alpha' in line ? line.alpha : 0.95,
-        });
-      g.moveTo(body.x + 9, body.y + line.width + 0.5)
-        .lineTo(body.x + body.width - 9, body.y + line.width + 0.5)
-        .stroke({ width: 1, color: 0xffffff, alpha: RIM.alpha * 0.5 });
+      if (winner)
+        cartouche(g, body, { edge: 1.6, edgeAlpha: 1, inner: { at: 3.5, alpha: 1, notch: 5 } });
+      else cartouche(g, body, { edge: 1, edgeAlpha: 0.4, inner: null });
     },
   };
 }
 
-/** The squares of the head of a bonus shot (#812): `outer` is the larger and lighter, `inner` carries the middle one. */
+/** The squares of the head of a bonus shot (#812): `outer` is the larger, `inner` carries the middle one. */
 export type OctaPart = 'outer' | 'inner';
 
-/** The sides of the two squares of an octagram and the weights of its lines (world units at 100%). */
-export const OCTA_LOOK = { inner: 17, outer: 22, outline: 2.1, rim: 1.2, middle: 5.8 } as const;
+/**
+ * The octagram of a bonus shot, Engraved (#856; mockup `octagram`): the sides of its two squares and the
+ * weights of its lines, baked at twice the size it is drawn at (`OCTA_LOOK.bake`) so it stays crisp
+ * zoomed in. The inner square is `ETCH.octa` world units at 100 %, the outer 1.3 times that.
+ */
+export const OCTA_LOOK = {
+  bake: 2,
+  inner: 16,
+  outer: 20.8,
+  edge: 2.2,
+  rule: 1.4,
+  casing: 2,
+} as const;
 
 /**
- * One square of the octagram head of a bonus shot (#812, variant 7): the side's colour in the gradient of the
- * other baked shapes under a dark outline, a light rim and a soft highlight inside; the opponent's has the second,
- * dark contour inside (as the head of its real shot), the own one a light patch. The inner square carries the small
- * middle one (a light square on a dark rim; the opponent's: dark on a light rim). The outer square is the lighter tone
- * of the colour. The origin is the middle; both squares are drawn upright, the view turns them.
+ * One square of the octagram head of a bonus shot (#812; Engraved, #856): the outer square is the dark
+ * plate with an ink edge and an inner ink rule, the inner square is solid in the side's colour on a dark
+ * casing with a small middle square, ink for the own side and dark for the opponent's (the side reads
+ * without the hue). The origin is the middle; both squares are drawn upright, the view turns them.
  */
 export function octagramSpec(part: OctaPart, enemy: boolean, color: number): BakeSpec {
   const half = (part === 'outer' ? OCTA_LOOK.outer : OCTA_LOOK.inner) / 2;
-  const tone = part === 'outer' ? lighten(color, 0.45) : color;
   return {
     key: `octa:${part}:${enemy ? 'e' : 'o'}:${String(color)}`,
     box: circleBox(Math.ceil(half * Math.SQRT2) + 3),
-    draw(into, tools) {
+    draw(into) {
       const g = graphics(into);
-      // The dark outline first, then the body in the gradient of the side, the light rim on its edge.
-      g.rect(-half, -half, 2 * half, 2 * half).stroke({
-        width: OCTA_LOOK.outline * 2,
-        color: BG,
-        join: 'miter',
-      });
-      g.rect(-half, -half, 2 * half, 2 * half).fill(tools.gradient(tone));
-      g.rect(-half + 0.6, -half + 0.6, 2 * half - 1.2, 2 * half - 1.2).stroke({
-        width: OCTA_LOOK.rim,
-        color: lighten(tone, 0.6),
-        alpha: 0.9,
-        join: 'miter',
-      });
-      if (enemy) {
-        // The second, dark contour inside: the opponent's side reads without the hue.
-        g.rect(-half + 3.4, -half + 3.4, 2 * half - 6.8, 2 * half - 6.8).stroke({
-          width: 1.2,
-          color: BG,
-          alpha: 0.85,
+      if (part === 'outer') {
+        g.rect(-half, -half, 2 * half, 2 * half)
+          .fill(DARK_PLATE)
+          .stroke({ width: OCTA_LOOK.edge, color: INK, join: 'miter' });
+        const rule = half * 0.8;
+        g.rect(-rule, -rule, 2 * rule, 2 * rule).stroke({
+          width: OCTA_LOOK.rule,
+          color: INK,
           join: 'miter',
         });
-      } else {
-        g.rect(-half + 1.8, -half + 1.8, half * 0.85, half * 0.85).fill({
-          color: 0xffffff,
-          alpha: 0.28,
-        });
+        return;
       }
-      if (part === 'inner') {
-        const m = OCTA_LOOK.middle / 2;
-        g.rect(-m - 1, -m - 1, 2 * m + 2, 2 * m + 2).fill(enemy ? PAPER : BG);
-        g.rect(-m, -m, 2 * m, 2 * m).fill(enemy ? BG : PAPER);
-      }
+      g.rect(-half, -half, 2 * half, 2 * half)
+        .fill(color)
+        .stroke({ width: OCTA_LOOK.casing, color: CASING, join: 'miter' });
+      const m = half * 0.32;
+      g.rect(-m, -m, 2 * m, 2 * m).fill(enemy ? CASING : INK);
     },
   };
 }
-
-/** The tone of the discharged units and the hatching on their chips. */
-const REST_LIGHTEN = 0.6;
 
 // --- Progress marks above an own city (variant A "Cells", #439) --------------------------------------
 // The plate of a recruit queue or of a build is one baked sprite per look: the key holds the states of

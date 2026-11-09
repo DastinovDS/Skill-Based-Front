@@ -86,7 +86,7 @@ export interface Flood {
   readonly to: PlayerId | null;
   /** Where the city stands: the flood grows from it. */
   readonly at: Point;
-  /** Real time since the flood started, ms. */
+  /** Real time since the flood started, ms; below zero while it waits for the winner's walk (#856). */
   ms: number;
   /** The enemy took the node: the calmer look (no flash, the lights at half). */
   readonly calm: boolean;
@@ -597,9 +597,14 @@ export class MapView {
   /**
    * `owners[i]`: current owner of node `i` (`null`: nobody). With `animate` a node that changed hands
    * floods into the new owner's colour (#819, "Fitted", ui-style 49); the first call, the «Supply»
-   * tint and a call without `animate` are instant (and end the floods under way).
+   * tint and a call without `animate` are instant (and end the floods under way). `delays`: per node,
+   * how long (ms) its flood waits, so that it starts as the winner walks into the city (Walk in, #856).
    */
-  setOwners(owners: readonly Owner[], animate = false): void {
+  setOwners(
+    owners: readonly Owner[],
+    animate = false,
+    delays: ReadonlyMap<number, number> = new Map(),
+  ): void {
     const previous = this.owners;
     const changed =
       previous.length === owners.length
@@ -610,7 +615,7 @@ export class MapView {
     const flood = animate && !this.supplyMode && changed !== null;
     if (!flood) this.endFloods();
     this.lines = borderLines(this.cells, owners, this.mitred);
-    if (flood) this.startFloods(changed, previous);
+    if (flood) this.startFloods(changed, previous, delays);
     else this.drawGlow(owners);
     this.drawTerritory();
     this.drawBorderLines();
@@ -641,7 +646,11 @@ export class MapView {
    * texture before (unless floods are under way: theirs stays) and after the change; the map's own
    * glow is redrawn for the new owners and masked out where the floods draw it.
    */
-  private startFloods(changed: readonly number[], previous: readonly Owner[]): void {
+  private startFloods(
+    changed: readonly number[],
+    previous: readonly Owner[],
+    delays: ReadonlyMap<number, number>,
+  ): void {
     if (this.floods.size === 0) this.linesBefore = borderLines(this.cells, previous, this.mitred);
     const before = this.glowPair?.before ?? this.glowTexture();
     const reduced = reducedMotion();
@@ -655,10 +664,11 @@ export class MapView {
         from: previous[node] ?? null,
         to,
         at: at === undefined ? { x: 0, y: 0 } : { x: at.x, y: at.y },
-        ms: 0,
+        // A flood that waits for its walker starts below zero: its look stays the old one until then.
+        ms: -(delays.get(node) ?? 0),
         calm,
         reduced,
-        look: floodLook(0, calm, reduced),
+        look: floodLook(-(delays.get(node) ?? 0), calm, reduced),
       });
     }
     this.drawGlow(this.owners);

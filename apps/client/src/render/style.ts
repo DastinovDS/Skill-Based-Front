@@ -637,51 +637,63 @@ export const BUILD_TIME_FONT_SIZE = 10;
 export const NUMBERS_RISE = 12;
 /**
  * The capture of a node: "Fitted" (#819, round 2 of the mockup city-capture.html, the owner's choice of
- * 2026-11-08). The new owner's colour grows from the city in the shape of its own area and reaches the
- * whole border at once in `ms` (ease-out quad); `feather` is the soft edge of the front as a share of the
- * way from the city to the border. A soft rim in the owner's colour rides just inside the front (`rim`,
- * in shares of the feather: its centre and width); the border lines and the glow join where the front
- * reaches them, the roads of the city as the front runs out along them (`roads`), and what is left
- * outside the area switches in `clean` (ms). The city flips in `cityMs` with one `flash` (its reach in
- * radii of the city) and a `ring` of the owner's colour leaves it. An enemy capture is calmer: no flash,
- * the rim and the ring at `calm`. "Less motion": a cross-fade of `reducedMs`, no travel, no lights.
+ * 2026-11-08), in the Engraved look (#856, mockup `in-game-style-r5.html`, `drawFloodFront`). The new
+ * owner's border band is revealed from the city in the shape of its own area and reaches the whole border
+ * at once in `ms` (ease-out quad); `feather` is the soft edge of the front as a share of the way from the
+ * city to the border. There is no fill: since #842 the map has no territory tint, the band is the owner's
+ * mark (the owner's choice for the capture, #856). The front itself is engraved (`rim`): a `line` px
+ * hairline of the owner's colour on a dark casing `casing` px either side, and an ink line `ink` px wide
+ * `behind` it (field units) at `inkAlpha`, fading in and out over `in` and `out` of the flood. The roads
+ * of the city switch as the front runs out along them (`roads`), and what is left outside the area
+ * switches in `clean` (ms). The city flips in `cityMs`, and a `ring` of the owner's colour on a casing
+ * leaves it: `from` world units outside the capacity ring, growing `grow` more over `ms`. No flash: the
+ * Engraved style has no light (`flash.alpha` 0). An enemy capture is calmer: the rim and the ring at
+ * `calm`. "Less motion": a cross-fade of `reducedMs`, no travel, no ring.
  */
 export const CAPTURE = {
   ms: 1000,
-  feather: 0.18,
+  feather: 0.06,
   clean: { from: 860, to: 1120 },
   roads: { reach: 1.15, feather: 0.15 },
-  rim: { alpha: 0.42, add: 0.1, centre: 0.42, width: 0.38, in: 0.08, out: 0.78 },
+  rim: {
+    line: 1.2,
+    casing: 1,
+    casingAlpha: 0.8,
+    ink: 0.8,
+    inkAlpha: 0.6,
+    behind: 0.05,
+    in: 0.08,
+    out: 0.78,
+  },
   cityMs: 120,
-  flash: { alpha: 0.55, ms: 320, reach: 3.4 },
-  ring: { alpha: 0.38, ms: 500, from: 1.25, grow: 1.35 },
+  flash: { alpha: 0, ms: 320, reach: 3.4 },
+  ring: { alpha: 1, ms: 500, from: 4, grow: 34, casing: 3.2, line: 1.5 },
   calm: 0.5,
   reducedMs: 200,
 } as const;
 /**
  * How long the result screen waits after `match_end` when a capital was captured (#819): the render
- * delay of the snapshots (0.2 s), the flood (`CAPTURE.ms`) and 0.5 s on the settled frame.
+ * delay of the snapshots (0.2 s), the winner's walk to the ring once its last shots have landed (Walk
+ * in, #856: up to 1.3 s), the flood (`CAPTURE.ms`) and 0.5 s on the settled frame.
  */
-export const CAPITAL_RESULT_DELAY_MS = 1700;
+export const CAPITAL_RESULT_DELAY_MS = 3000;
 export const LOSS_FONT_SIZE = 13;
 /**
- * The kill feed of a finished fight (#812, variant 9 of the mockup fight-bonus-and-outcome.html): two rows
- * beside the node, own then the opponent's, each a chip and the losses of the whole fight; the winner's row is
- * outlined thick and carries the verdict glyph, the other has a thin grey outline (px at 100%).
+ * The kill feed of a finished fight (#812, variant 9 of the mockup fight-bonus-and-outcome.html; Engraved,
+ * #856, mockup `feedRowV`): two rows beside the node, own then the opponent's, each a cartouche with a chip
+ * and the losses of the whole fight in EB Garamond; the winner's row has the heavy double rule and the
+ * verdict glyph in ink, the other a thin faint rule (px at 100%).
  */
 export const FEED = {
   halfWidth: 59,
   rowHeight: 34,
   rowGap: 4,
-  radius: 9,
-  chipX: -37,
-  textX: 6,
-  glyphX: 41,
+  chipX: -39,
+  textX: -7,
+  glyphX: 39,
   glyphScale: 1.35,
+  glyphLine: 1.4 / 1.35,
   fontSize: 19,
-  fillAlpha: 0.94,
-  winner: { width: 2.4, color: PAPER },
-  other: { width: 1.4, color: 0x96a0ac, alpha: 0.55 },
   /** The feed slides in from this far (px), in this share of its life. */
   slide: 30,
   slideShare: 0.08,
