@@ -35,6 +35,9 @@
     banUntil?: number | null;
     /** The clock of the ban countdown; tests pass their own. */
     now?: () => number;
+    /** The own profile and the settings of the account chip (#871). */
+    onprofile?: () => void;
+    onsettings?: () => void;
     onpassword: () => void;
     onlogout: () => void;
     /** A match of this guest is running: the way back into it. */
@@ -58,6 +61,8 @@
     rating = null,
     banUntil = null,
     now = () => Date.now(),
+    onprofile,
+    onsettings,
     onpassword,
     onlogout,
     hasActiveMatch = false,
@@ -130,6 +135,8 @@
       {hasPassword}
       {calibration}
       {rating}
+      {onprofile}
+      {onsettings}
       {onpassword}
       {onlogout}
       bind:open={menuOpen}

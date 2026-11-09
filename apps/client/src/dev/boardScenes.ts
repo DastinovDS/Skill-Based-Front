@@ -28,6 +28,14 @@ export const BOARD_SCENE_IDS = [
   'replays-empty',
   'replays-loading',
   'replays-network',
+  'profile',
+  'profile-guest',
+  'profile-calibration',
+  'profile-empty',
+  'profile-loading',
+  'profile-nick',
+  'settings',
+  'settings-guest',
 ] as const;
 
 export type BoardSceneId = (typeof BOARD_SCENE_IDS)[number];
@@ -179,7 +187,8 @@ export interface BoardScene {
   readonly hasPassword: boolean;
   readonly calibration: { played: number; total: number } | null;
   readonly rating: number | null;
-  readonly mode: 'board' | 'history';
+  /** The tab or page: the leaderboard, the replays, the profile or the settings (#871). */
+  readonly mode: 'board' | 'history' | 'profile' | 'settings';
   readonly leaderboard: () => Promise<Leaderboard>;
   readonly profiles: Readonly<Record<number, () => Promise<PlayerProfile>>>;
 }
@@ -261,4 +270,22 @@ export const BOARD_SCENES: Readonly<Record<BoardSceneId, BoardScene>> = {
     mode: 'history',
     profiles: { [ME]: reject(new ApiError('network', 0)) },
   }),
+  profile: account(ranked(false), now(TOP), { mode: 'profile' }),
+  'profile-guest': account(ownGuest, now(TOP), { mode: 'profile' }),
+  'profile-calibration': account(ownCalibrating, now(TOP), { mode: 'profile' }),
+  'profile-empty': account(profile({ player_id: ME, nick: 'Ember' }), now(TOP), {
+    mode: 'profile',
+    calibration: { played: 0, total: 5 },
+    profiles: {
+      [ME]: now(profile({ player_id: ME, nick: 'Ember', calibration: { played: 0, total: 5 } })),
+    },
+  }),
+  'profile-loading': account(ranked(false), now(TOP), {
+    mode: 'profile',
+    profiles: { [ME]: never },
+  }),
+  // The nick dialog open over the profile (the shots press the link).
+  'profile-nick': account(ranked(false), now(TOP), { mode: 'profile' }),
+  settings: account(ranked(false), now(TOP), { mode: 'settings' }),
+  'settings-guest': account(ownGuest, now(TOP), { mode: 'settings' }),
 };

@@ -2,8 +2,7 @@
   import Icon from '../hud/Icon.svelte';
   import { t } from '../i18n/index.ts';
   import type { Calibration } from '../protocol.gen.ts';
-  import LapisButton from '../theme/LapisButton.svelte';
-  import StoneOverlay from '../theme/StoneOverlay.svelte';
+  import LogoutDialog from './LogoutDialog.svelte';
   import PlayerChip from './PlayerChip.svelte';
 
   interface Props {
@@ -12,6 +11,9 @@
     calibration: Calibration | null;
     /** The displayed rating of a ranked account (#78), null while unknown. */
     rating?: number | null;
+    /** The own profile and the settings (#871); absent: the menu has no such item. */
+    onprofile?: () => void;
+    onsettings?: () => void;
     onpassword: () => void;
     onlogout: () => void;
     /** Whether the account menu is open; the screen reads it to keep its own keys quiet. */
@@ -25,14 +27,15 @@
     hasPassword,
     calibration,
     rating = null,
+    onprofile,
+    onsettings,
     onpassword,
     onlogout,
     open = $bindable(false),
     inert = false,
   }: Props = $props();
 
-  // A guest without a password loses the account by logging out: a dialog on the stone asks once
-  // before that (Lapis, #845).
+  // A guest without a password loses the account by logging out: the dialog asks once before that.
   let confirmingLogout = $state(false);
 
   function close(): void {
@@ -79,6 +82,21 @@
   />
   {#if open && !confirmingLogout}
     <div class="pop rule-frame" id="account-menu" role="menu">
+      {#if onprofile !== undefined}
+        <button type="button" role="menuitem" onclick={onprofile}>
+          <Icon name="user" size={18} />
+          {t('profile.title')}
+        </button>
+      {/if}
+      {#if onsettings !== undefined}
+        <button type="button" role="menuitem" onclick={onsettings}>
+          <Icon name="settings" size={18} />
+          {t('settings.title')}
+        </button>
+      {/if}
+      {#if onprofile !== undefined || onsettings !== undefined}
+        <div class="sep" role="separator"></div>
+      {/if}
       <button type="button" role="menuitem" onclick={onpassword}>
         <Icon name="key" size={18} />
         {hasPassword ? t('menu.changePassword') : t('menu.setPassword')}
@@ -90,23 +108,13 @@
     </div>
   {/if}
   {#if confirmingLogout}
-    <StoneOverlay label={t('menu.logoutTitle')} role="alertdialog" onclose={stay}>
-      <p class="kicker">{t('account.eyebrow')}</p>
-      <h2 class="dlg-h">{t('menu.logoutTitle')}</h2>
-      <p class="dlg-p">{t('menu.logoutWarning')}</p>
-      <div class="dlg-acts">
-        <LapisButton
-          variant="primary"
-          onclick={() => {
-            confirmingLogout = false;
-            onpassword();
-          }}>{t('menu.setPassword')}</LapisButton
-        >
-      </div>
-      <div class="dlg-acts">
-        <LapisButton danger onclick={onlogout}>{t('menu.logoutConfirm')}</LapisButton>
-        <button type="button" class="lnk" onclick={stay}>{t('menu.logoutCancel')}</button>
-      </div>
-    </StoneOverlay>
+    <LogoutDialog
+      onpassword={() => {
+        confirmingLogout = false;
+        onpassword();
+      }}
+      {onlogout}
+      onstay={stay}
+    />
   {/if}
 </div>

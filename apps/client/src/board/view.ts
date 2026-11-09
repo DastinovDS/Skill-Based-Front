@@ -97,3 +97,57 @@ export function ownEntry(board: Leaderboard, ownId: number | null): LeaderboardE
 export function winShare(record: RecordTally, matches: number): number | null {
   return matches <= 0 ? null : Math.round((record.wins * 100) / matches);
 }
+
+/** "17–13–1": wins, losses, draws, as the leaderboard writes them. */
+export function recordText(record: RecordTally): string {
+  return `${String(record.wins)}–${String(record.losses)}–${String(record.draws)}`;
+}
+
+/** A number of the profile, or why there is none. */
+export type FactValue =
+  | { readonly kind: 'number'; readonly value: number }
+  /** In calibration the rating exists but is not shown (DEC-34). */
+  | { readonly kind: 'hidden' }
+  /** A guest has no rating at all. */
+  | { readonly kind: 'none' };
+
+/** The facts row of the own profile (#871): all of it from `GET /api/players/{id}`. */
+export interface ProfileFacts {
+  readonly rating: FactValue;
+  readonly rank: FactValue;
+  /**
+   * An account counts its ranked matches and their record; a guest plays no ranked match, so it
+   * shows all its matches and their record instead.
+   */
+  readonly matchesLabel: 'profile.fact.ranked' | 'profile.fact.matches';
+  readonly matches: number;
+  readonly record: RecordTally;
+  readonly status: PlayerStatus;
+}
+
+const NONE = { kind: 'none' } as const;
+const HIDDEN = { kind: 'hidden' } as const;
+
+export function profileFacts(profile: PlayerProfile): ProfileFacts {
+  const status = statusOf(profile);
+  if (status.kind === 'guest') {
+    const all = profile.record;
+    return {
+      rating: NONE,
+      rank: NONE,
+      matchesLabel: 'profile.fact.matches',
+      matches: all.wins + all.losses + all.draws,
+      record: all,
+      status,
+    };
+  }
+  const ranked = status.kind === 'ranked';
+  return {
+    rating: ranked ? { kind: 'number', value: status.rating } : HIDDEN,
+    rank: ranked ? (status.rank === null ? NONE : { kind: 'number', value: status.rank }) : HIDDEN,
+    matchesLabel: 'profile.fact.ranked',
+    matches: profile.rated_matches,
+    record: profile.rated_record,
+    status,
+  };
+}

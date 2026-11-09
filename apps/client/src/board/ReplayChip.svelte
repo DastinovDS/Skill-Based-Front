@@ -89,10 +89,9 @@
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .dots i {
-      animation: none;
-      opacity: 0.7;
-    }
+  /* The motion setting of the page (#871) decides, not the media query alone. */
+  :global(:root[data-motion='reduced']) .dots i {
+    animation: none;
+    opacity: 0.7;
   }
 </style>

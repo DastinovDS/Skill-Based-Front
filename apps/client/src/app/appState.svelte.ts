@@ -9,7 +9,7 @@ import { SvelteURLSearchParams } from 'svelte/reactivity';
 import { Api, ApiError, type ActiveMatch, type BotLevel } from '../api/http.ts';
 import { forgetGuest, loadGuest, saveGuest } from '../api/guestStore.ts';
 import type { MessageKey } from '../i18n/index.ts';
-import { loginFailure, passwordFailure, type AccountFailure } from './account.ts';
+import { loginFailure, nickFailure, passwordFailure, type AccountFailure } from './account.ts';
 import { apiErrorKey } from './apiErrors.ts';
 import { MapCache } from './mapCache.svelte.ts';
 import { MENU_MAP } from './menuMap.ts';
@@ -38,6 +38,12 @@ export type Screen =
     }
   /** Set or change the password of the account (#374). */
   | { readonly name: 'password' }
+  /**
+   * The own profile and the settings (#871), opened from the account chip: "Back" (Esc) returns
+   * to the screen they were opened from, none: the menu.
+   */
+  | { readonly name: 'profile'; readonly back?: Screen }
+  | { readonly name: 'settings'; readonly back?: Screen }
   /** The matchmaking queue (MM-01): searching, confirming, then the rated match. */
   | { readonly name: 'queue' }
   /** The waiting room of an invite (host and guest). */
@@ -223,6 +229,43 @@ export class AppState {
         return null;
       }
       return passwordFailure(error);
+    }
+  }
+
+  /**
+   * A new nick (`PUT /api/me/nick`, a few a day). Returns why it failed, or null; a lost session
+   * (401) goes to the menu with its notice like any other action.
+   */
+  async changeNick(nick: string): Promise<AccountFailure | null> {
+    const guest = this.#requireGuest();
+    try {
+      const me = await this.api.changeNick(guest.token, nick);
+      this.#remember({ ...guest, nick: me.nick });
+      return null;
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'unauthorized') {
+        this.#fail(error);
+        return null;
+      }
+      return nickFailure(error);
+    }
+  }
+
+  /** The own profile or the settings (#871), from the account chip of the current screen. */
+  openAccountPage(name: 'profile' | 'settings'): void {
+    const here = this.screen;
+    // Another account page is no place to come back to: keep where the first one was opened.
+    const back = here.name === 'profile' || here.name === 'settings' ? here.back : here;
+    this.go(back === undefined ? { name } : { name, back });
+  }
+
+  /** "Back" of the profile and the settings: the screen they were opened from, else the menu. */
+  closeAccountPage(): void {
+    const here = this.screen;
+    if ((here.name === 'profile' || here.name === 'settings') && here.back !== undefined) {
+      this.go(here.back);
+    } else {
+      this.menu();
     }
   }
 

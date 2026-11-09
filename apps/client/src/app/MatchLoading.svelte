@@ -120,10 +120,9 @@
     border-style: dashed;
   }
 
-  @media (prefers-reduced-motion: no-preference) {
-    .now:not(.stalled) .mark {
-      animation: loading-turn 2s linear infinite;
-    }
+  /* The motion setting of the page (#871) decides, not the media query alone. */
+  :global(:root:not([data-motion='reduced'])) .now:not(.stalled) .mark {
+    animation: loading-turn 2s linear infinite;
   }
 
   @keyframes loading-turn {

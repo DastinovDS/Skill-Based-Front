@@ -141,6 +141,8 @@
       hasPassword={dock.hasPassword}
       calibration={dock.calibration}
       rating={dock.rating ?? null}
+      onprofile={dock.onprofile}
+      onsettings={dock.onsettings}
       onpassword={dock.onpassword}
       onlogout={dock.onlogout}
       inert={locked}

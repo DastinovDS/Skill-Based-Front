@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { MatchEntry, PlayerProfile } from '../api/http.ts';
-import { botLabel, ownEntry, ratingOf, statusOf, visibleMatches } from './view.ts';
+import {
+  botLabel,
+  ownEntry,
+  profileFacts,
+  ratingOf,
+  recordText,
+  statusOf,
+  visibleMatches,
+} from './view.ts';
 
 const record = { wins: 0, losses: 0, draws: 0 };
 
@@ -112,5 +120,47 @@ describe('ownEntry', () => {
     expect(ownEntry(board, 6)?.rank).toBe(2);
     expect(ownEntry(board, 9)).toBeNull();
     expect(ownEntry(board, null)).toBeNull();
+  });
+});
+
+describe('the facts of the own profile (#871)', () => {
+  const ranked = { wins: 17, losses: 13, draws: 1 };
+  const all = { wins: 4, losses: 2, draws: 1 };
+
+  it('writes a record as the leaderboard does', () => {
+    expect(recordText(ranked)).toBe('17–13–1');
+  });
+
+  it('a ranked account: the rating, the rank, the ranked matches and their record', () => {
+    const facts = profileFacts(
+      profile({ rating: 1612, rank: 12, rated_matches: 31, rated_record: ranked, record: all }),
+    );
+    expect(facts.rating).toEqual({ kind: 'number', value: 1612 });
+    expect(facts.rank).toEqual({ kind: 'number', value: 12 });
+    expect(facts.matchesLabel).toBe('profile.fact.ranked');
+    expect(facts.matches).toBe(31);
+    expect(facts.record).toEqual(ranked);
+    expect(facts.status.kind).toBe('ranked');
+  });
+
+  it('in calibration the rating and the rank are hidden', () => {
+    const facts = profileFacts(
+      profile({ rating: null, rank: null, calibration: { played: 3, total: 5 }, rated_matches: 3 }),
+    );
+    expect(facts.rating).toEqual({ kind: 'hidden' });
+    expect(facts.rank).toEqual({ kind: 'hidden' });
+    expect(facts.matches).toBe(3);
+    expect(facts.status).toEqual({ kind: 'calibrating', played: 3, total: 5 });
+  });
+
+  it('a guest has no rating: all its matches and their record instead', () => {
+    const facts = profileFacts(
+      profile({ has_password: false, rating: null, rank: null, rated_matches: 0, record: all }),
+    );
+    expect(facts.rating).toEqual({ kind: 'none' });
+    expect(facts.rank).toEqual({ kind: 'none' });
+    expect(facts.matchesLabel).toBe('profile.fact.matches');
+    expect(facts.matches).toBe(7);
+    expect(facts.record).toEqual(all);
   });
 });

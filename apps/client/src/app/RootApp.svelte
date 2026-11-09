@@ -9,7 +9,10 @@
   import type { DockContext } from './dock.ts';
   import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
   import ReplaysScreen from '../board/ReplaysScreen.svelte';
-  import type { MenuTabActions } from './menuTabs.ts';
+  import type { AccountPages, MenuTabActions } from './menuTabs.ts';
+  import ProfileScreen from '../board/ProfileScreen.svelte';
+  import SettingsScreen from './SettingsScreen.svelte';
+  import { settings } from './settingsState.svelte.ts';
   import BootScreen from './BootScreen.svelte';
   import BotScreen from './BotScreen.svelte';
   import CreateScreen from './CreateScreen.svelte';
@@ -53,9 +56,20 @@
     if (screen.name !== 'boot' && screen.name !== 'welcome' && guest !== null) firstEntry = false;
   });
 
-  /** Where the tabs of the menu lead (#629, M5). */
-  function tabsOf(): MenuTabActions {
+  /** The pages of the account chip (#871): the profile and the settings. */
+  const pages: Required<AccountPages> = {
+    onprofile: () => {
+      app.openAccountPage('profile');
+    },
+    onsettings: () => {
+      app.openAccountPage('settings');
+    },
+  };
+
+  /** Where the tabs of the menu lead (#629, M5), and the pages of the account chip. */
+  function tabsOf(): MenuTabActions & AccountPages {
     return {
+      ...pages,
       onplay: () => {
         app.menu();
       },
@@ -102,6 +116,7 @@
       onmenu: () => {
         app.menu();
       },
+      ...pages,
       onpassword: () => {
         app.go({ name: 'password' });
       },
@@ -119,7 +134,7 @@
     invited={app.pendingInvite !== null}
     notice={app.notice}
     map={app.backdrop}
-    intro={firstEntry}
+    intro={firstEntry && settings.intro === 'session'}
     onsubmit={(nick: string) => app.register(nick)}
     onlogin={(nick: string, password: string) => app.login(nick, password)}
     onregister={(nick: string, password: string) => app.registerAccount(nick, password)}
@@ -159,6 +174,7 @@
       app.go({ name: 'howto' });
     }}
     hasPassword={guest.hasPassword}
+    {...pages}
     onpassword={() => {
       app.go({ name: 'password' });
     }}
@@ -263,6 +279,52 @@
     }}
     onlogout={() => {
       app.logout();
+    }}
+    {...tabsOf()}
+  />
+{:else if screen.name === 'profile'}
+  <ProfileScreen
+    api={app.api}
+    token={guest.token}
+    ownId={app.playerId}
+    nick={guest.nick}
+    hasPassword={guest.hasPassword}
+    calibration={app.calibration}
+    rating={app.rating}
+    map={app.backdrop}
+    onwatch={(matchId: string) => {
+      app.openReplay(matchId);
+    }}
+    onbot={() => {
+      app.go({ name: 'bot' });
+    }}
+    onnick={(nick: string) => app.changeNick(nick)}
+    onpassword={() => {
+      app.go({ name: 'password' });
+    }}
+    onlogout={() => {
+      app.logout();
+    }}
+    onback={() => {
+      app.closeAccountPage();
+    }}
+    {...tabsOf()}
+  />
+{:else if screen.name === 'settings'}
+  <SettingsScreen
+    nick={guest.nick}
+    hasPassword={guest.hasPassword}
+    calibration={app.calibration}
+    rating={app.rating}
+    map={app.backdrop}
+    onpassword={() => {
+      app.go({ name: 'password' });
+    }}
+    onlogout={() => {
+      app.logout();
+    }}
+    onback={() => {
+      app.closeAccountPage();
     }}
     {...tabsOf()}
   />

@@ -603,4 +603,67 @@ describe('AppState', () => {
       expect(app.screen).toEqual({ name: 'leaderboard', mode: 'history' });
     });
   });
+
+  describe('the profile and the settings (#871)', () => {
+    async function inMenu(api: Partial<Api> = {}) {
+      const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
+      const { app } = setup('', storage, {
+        me: () => Promise.resolve({ player_id: 4, nick: 'Old', has_password: false }),
+        activeMatch: () => Promise.resolve(null),
+        ...api,
+      });
+      await app.start();
+      return { app, storage };
+    }
+
+    it('opens from the current screen and goes back to it', async () => {
+      const { app } = await inMenu();
+      app.openBoard('board');
+      app.openAccountPage('profile');
+      expect(app.screen).toEqual({
+        name: 'profile',
+        back: { name: 'leaderboard', mode: 'board' },
+      });
+      // From the profile to the settings: "Back" still returns to the leaderboard.
+      app.openAccountPage('settings');
+      expect(app.screen).toEqual({
+        name: 'settings',
+        back: { name: 'leaderboard', mode: 'board' },
+      });
+      app.closeAccountPage();
+      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board' });
+      app.go({ name: 'settings' });
+      app.closeAccountPage();
+      expect(app.screen).toEqual({ name: 'menu' });
+    });
+
+    it('a replay opened from the profile comes back to it', async () => {
+      const { app } = await inMenu();
+      app.openAccountPage('profile');
+      app.openReplay('17');
+      app.closeReplay();
+      expect(app.screen).toEqual({ name: 'profile', back: { name: 'menu' } });
+    });
+
+    it('changes the nick and remembers it', async () => {
+      const changeNick = vi.fn(() =>
+        Promise.resolve({ player_id: 4, nick: 'Newer', has_password: false }),
+      );
+      const { app, storage } = await inMenu({ changeNick });
+      expect(await app.changeNick('Newer')).toBeNull();
+      expect(changeNick).toHaveBeenCalledWith('t', 'Newer');
+      expect(app.guest?.nick).toBe('Newer');
+      expect(storage.getItem(GUEST_STORAGE_KEY)).toContain('Newer');
+    });
+
+    it('a refused nick stays on the screen with its reason', async () => {
+      const { app } = await inMenu({
+        changeNick: () => Promise.reject(new ApiError('conflict', 409)),
+      });
+      app.openAccountPage('profile');
+      expect(await app.changeNick('Taken')).toEqual({ key: 'welcome.error.taken' });
+      expect(app.guest?.nick).toBe('Old');
+      expect(app.screen.name).toBe('profile');
+    });
+  });
 });

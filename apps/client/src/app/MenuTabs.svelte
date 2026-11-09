@@ -3,8 +3,8 @@
   import type { MenuTab, MenuTabActions } from './menuTabs.ts';
 
   interface Props extends MenuTabActions {
-    /** The tab that is open: underlined and bold, not only brighter. */
-    current: MenuTab;
+    /** The tab that is open: underlined and bold, not only brighter; none on the settings (#871). */
+    current: MenuTab | null;
     /**
      * The Play tab of the menu itself is no way anywhere (it is open); under it a Dock screen
      * (bot, friend, lobby) is, and the tab leads back to the menu.
