@@ -21,14 +21,23 @@ changes of ``mvp-0`` do not break it.
 """
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from gow_sim.commands import CancelOrder, Move, PlayerCommand, apply_commands
+from gow_sim.commands import (
+    CancelOrder,
+    Move,
+    Ok,
+    PlayerCommand,
+    Reject,
+    RejectCode,
+    apply_commands,
+)
 from gow_sim.maps import MapDef, parse_map
-from gow_sim.ruleset import load_ruleset
+from gow_sim.ruleset import Retreat, Ruleset, load_ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
     AtNode,
@@ -50,6 +59,8 @@ VECTORS = json.loads(
 )
 SCENARIOS = {s["id"]: s["expected"] for s in VECTORS["scenarios"]}
 RULES = load_ruleset(TESTS_DIR / "rulesets" / "dec07.toml")
+NO_RETREAT = replace(RULES, combat=replace(RULES.combat, retreat=Retreat.NONE))
+"""``combat.retreat = "none"`` (DEC-40, variant N, #626): rows 21N and 22N."""
 TRAVEL = 30
 
 
@@ -107,15 +118,23 @@ def add(
     return gid
 
 
-def step(state: GameState, commands: list[PlayerCommand] | None = None) -> list[Event]:
-    """One tick: the commands, then ``movement``, ``combat`` and ``orders``; returns its events."""
+def step(
+    state: GameState,
+    commands: list[PlayerCommand] | None = None,
+    rules: Ruleset = RULES,
+    outcomes: list[Ok | Reject] | None = None,
+) -> list[Event]:
+    """One tick: the commands, then ``movement``, ``combat`` and ``orders``; returns its events
+    (the outcomes of the commands go into ``outcomes``)."""
     state.tick += 1
     state.events = []
-    _, applied = apply_commands(state, RULES, commands or [])
+    results, applied = apply_commands(state, rules, commands or [])
+    if outcomes is not None:
+        outcomes += [r.outcome for r in results]
     state.events += applied
-    state.events += movement(state, RULES)
-    state.events += combat(state, RULES, active_bonuses(state, RULES))
-    state.events += orders(state, RULES)
+    state.events += movement(state, rules)
+    state.events += combat(state, rules, active_bonuses(state, rules))
+    state.events += orders(state, rules)
     return list(state.events)
 
 
@@ -443,6 +462,63 @@ def test_row22_the_attack_withdraws() -> None:
         exp["defense"]["charged"],
     )
     assert defender.bonus == 0  # "Defense" burned with the fight
+    assert state.nodes[1].owner == 1
+
+
+def test_row21_without_retreat_the_defender_cannot_leave() -> None:
+    """DEC-40, variant N (#626): the defender's ``Move`` is ``IN_FIGHT``, the fight goes on as
+    row 3."""
+    exp = SCENARIOS["21N"]
+    state = initial_state(line(["forest"] * 3, [0, 1, 1]), NO_RETREAT)
+    d = add(state, 1, 2, 2, AtNode(1))
+    atk = add(state, 0, 4, 4, before_arrival(state, 0, 0), order=Order((1,), False, 0))
+    step(state, rules=NO_RETREAT)
+    contact = state.tick
+    cp = state.players[1].cp
+    trace = {t["round"]: t["charged"] for t in exp["trace"]}
+    outcomes: list[Ok | Reject] = []
+    while not kinds(state.events, "fight_ended"):
+        due = state.tick + 1 == contact + exp["order_after"]
+        cmds = [PlayerCommand(1, 0, Move(d, 2))] if due else []
+        step(state, cmds, NO_RETREAT, outcomes)
+        if cmds:
+            assert outcomes == [Reject(RejectCode(exp["reject"]))]
+            assert cp - state.players[1].cp == exp["cost"]
+        k, rest = divmod(state.tick - contact, RULES.combat.round_ticks)
+        if rest == 0 and k in trace:
+            assert {"a": charged_of(state, 0), "b": charged_of(state, 1)} == trace[k]
+    assert state.tick == contact + exp["end_after"]
+    assert state.nodes[1].owner == 0
+    group = state.groups[atk]
+    assert (group.units, group.charged) == (exp["attack"]["units"], exp["attack"]["charged"])
+    assert units_of(state, 1) == exp["defense_units"]
+    assert d not in state.groups
+
+
+def test_row22_without_retreat_the_attack_cannot_leave() -> None:
+    """DEC-40, variant N (#626): the attack's ``CancelOrder`` is ``IN_FIGHT``, the fight goes on
+    as row 10 and the attack bounces at its end (G1, unchanged)."""
+    exp = SCENARIOS["22N"]
+    state = initial_state(line(["forest"] * 3, [0, 1, 1]), NO_RETREAT)
+    gathered = VECTORS["params"]["defense_bonus"] * RULES.orders.defense_ticks_per_bonus
+    d = add(state, 1, 2, 2, AtNode(1), mode=Mode.DEFENSE, ticks_in_defense=gathered)
+    atk = add(state, 0, 3, 3, before_arrival(state, 0, 0), order=Order((1,), False, 0))
+    step(state, rules=NO_RETREAT)
+    contact = state.tick
+    outcomes: list[Ok | Reject] = []
+    while not kinds(state.events, "fight_ended"):
+        due = state.tick + 1 == contact + exp["cancel_after"]
+        step(state, [PlayerCommand(0, 0, CancelOrder(atk))] if due else [], NO_RETREAT, outcomes)
+    assert outcomes == [Reject(RejectCode(exp["reject"]))]
+    assert state.tick == contact + exp["end_after"]
+    group = state.groups[atk]
+    assert (group.units, group.charged) == (exp["attack"]["units"], exp["attack"]["charged"])
+    assert isinstance(group.location, OnEdge) and group.location.back
+    defender = state.groups[d]
+    assert (defender.units, defender.charged) == (
+        exp["defense"]["units"],
+        exp["defense"]["charged"],
+    )
     assert state.nodes[1].owner == 1
 
 

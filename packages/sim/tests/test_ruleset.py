@@ -18,6 +18,7 @@ from gow_sim.canonical import canonical_json
 from gow_sim.maps import NodeKind, Terrain
 from gow_sim.ruleset import (
     RecruitLocation,
+    Retreat,
     Ruleset,
     RulesetError,
     Stance,
@@ -387,9 +388,51 @@ def test_archive_detects_a_tampered_file(tmp_path: Path) -> None:
 
 
 def test_mvp5_has_the_rules_of_mvp4_stances_and_no_map_tempo() -> None:
-    """mvp-5 is the main ruleset (#805): the rule values of mvp-4-stances (same hash, comments do
+    """mvp-5 was the main ruleset (#805): the rule values of mvp-4-stances (same hash, comments do
     not count), without the DEC-46 section ``[map_tempo]`` that only mvp-4-stances-tempo has."""
     mvp5 = RULESETS_DIR / "mvp-5.toml"
     stances = RULESETS_DIR / "mvp-4-stances.toml"
     assert ruleset_hash(load_ruleset(mvp5)) == ruleset_hash(load_ruleset(stances))
     assert "map_tempo" not in _raw(mvp5)
+
+
+MVP5 = RULESETS_DIR / "mvp-5.toml"
+MVP6 = RULESETS_DIR / "mvp-6.toml"
+
+
+def test_mvp6_is_mvp5_with_three_changes() -> None:
+    """mvp-6 is the main ruleset (owner decision 2026-11-09, #626, #759): mvp-5 with only the
+    capture cost 1 (DEC-38), the built factory period 100 (DEC-41, item 2) and no retreat
+    (DEC-40, variant N)."""
+    mvp5, mvp6 = _raw(MVP5), _raw(MVP6)
+    assert mvp6["capture"]["charge_cost"] == 1
+    assert mvp6["factory"]["built_period_ticks"] == 100
+    assert mvp6["combat"]["retreat"] == "none"
+    assert load_ruleset(MVP6).combat.retreat is Retreat.NONE
+    mvp6["capture"]["charge_cost"] = mvp5["capture"]["charge_cost"]
+    mvp6["factory"]["built_period_ticks"] = mvp5["factory"]["built_period_ticks"]
+    del mvp6["combat"]["retreat"]
+    assert mvp6 == mvp5
+    assert to_canonical(load_ruleset(MVP6)) == _raw(MVP6)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["mvp-0", "mvp-1", "mvp-2", "mvp-3", "mvp-4", "mvp-4-stances", "mvp-5", "test-short"],
+)
+def test_older_rulesets_keep_the_retreat(name: str) -> None:
+    """DEC-40: without the key ``combat.retreat`` is ``round`` (DEC-24, item E), and the key at
+    ``round`` does not change the hash, so the golden replays of the older rulesets stay valid."""
+    path = RULESETS_DIR / f"{name}.toml"
+    rules = load_ruleset(path)
+    assert rules.combat.retreat is Retreat.ROUND
+    data = _raw(path)
+    data["combat"]["retreat"] = "round"
+    assert ruleset_hash(parse_ruleset(data)) == ruleset_hash(rules)
+
+
+def test_an_unknown_retreat_value_names_the_key() -> None:
+    data = _raw()
+    data["combat"]["retreat"] = "volley"  # DEC-40 variant V was not chosen
+    with pytest.raises(RulesetError, match=r"combat\.retreat"):
+        parse_ruleset(data)

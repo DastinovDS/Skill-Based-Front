@@ -17,6 +17,7 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the range and the start value of the rear minimum (DEC-28, item 3), for the supply slider;
 - the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429);
 - the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help;
+- whether a group may leave a fight (DEC-40, ``combat.retreat``), for the retreat hints;
 - the economy model (DEC-41, ``economy.model``): ``v2`` hides the stance (without ``stances``,
   DEC-44), the front markers, the rear minimum, transfers, road upgrades and "Defense" of v1 and
   shows factories, lines, bunkers and the requested bonus of planned orders, with their numbers
@@ -38,6 +39,7 @@ from pydantic import Field
 from gow_protocol.base import Centi, NonNegInt, PosInt, SignedInt, WireModel
 from gow_sim.ruleset import (
     EconomyModel,
+    Retreat,
     Ruleset,
     Sight,
     SightTable,
@@ -93,6 +95,9 @@ class CombatPublic(WireModel):
     terrain_burn: bool
     """A negative ``terrain_defense_mod`` burns charges of the defender in the first round instead
     of silencing them in every round (DEC-45)."""
+    retreat: Retreat
+    """``round``: a group may leave a fight after the nearest round (DEC-24, item E); ``none``:
+    no retreat (DEC-40, variant N), the client hides the retreat hints and the cancel in a fight."""
 
 
 class CapturePublic(WireModel):
@@ -366,6 +371,7 @@ class RulesetPublic(WireModel):
                 shots_per_round=rules.combat.shots_per_round,
                 regroup_ticks=rules.combat.regroup_ticks,
                 terrain_burn=rules.combat.terrain_burn,
+                retreat=rules.combat.retreat,
             ),
             capture=CapturePublic(charge_cost=rules.capture.charge_cost),
             build=BuildPublic(ticks_per_level=rules.build.ticks_per_level),

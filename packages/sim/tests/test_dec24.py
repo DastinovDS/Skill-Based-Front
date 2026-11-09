@@ -8,6 +8,7 @@ player 1 with a 2/2 garrison, player 0's 3/3 arrives from node 0 in tick 1 (cont
 row 2 of the table: rounds at 21, 41, 61 with ``round_ticks = 20``, DEC-32).
 """
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,7 @@ from gow_sim.commands import (
     validate,
 )
 from gow_sim.maps import PLAYERS, MapDef, parse_map
-from gow_sim.ruleset import load_ruleset
+from gow_sim.ruleset import Retreat, Ruleset, load_ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
     AtNode,
@@ -52,6 +53,8 @@ from gow_sim.view import project
 
 TESTS_DIR = Path(__file__).resolve().parent
 RULES = load_ruleset(TESTS_DIR / "rulesets" / "dec07.toml")
+NO_RETREAT = replace(RULES, combat=replace(RULES.combat, retreat=Retreat.NONE))
+"""``combat.retreat = "none"`` (DEC-40, variant N, #626)."""
 KEY = bytes(range(32))
 
 
@@ -105,36 +108,37 @@ def _before_arrival(state: GameState, edge: int, from_node: int) -> OnEdge:
 
 
 class _Run:
-    def __init__(self, state: GameState) -> None:
+    def __init__(self, state: GameState, rules: Ruleset = RULES) -> None:
         self.state = state
+        self.rules = rules
         self.seq = 0
 
     def step(self, *cmds: tuple[int, Command]) -> list[Ok | Reject]:
-        state = self.state
+        state, rules = self.state, self.rules
         state.tick += 1
         batch: list[PlayerCommand] = []
         for player, cmd in cmds:
             batch.append(PlayerCommand(player, self.seq, cmd))
             self.seq += 1
-        results, events = apply_commands(state, RULES, batch)
+        results, events = apply_commands(state, rules, batch)
         state.events = events
-        state.events += movement(state, RULES)
-        state.events += combat(state, RULES, active_bonuses(state, RULES))
-        state.events += supply(state, RULES)
-        state.events += recruit(state, RULES)
-        state.events += orders(state, RULES)
+        state.events += movement(state, rules)
+        state.events += combat(state, rules, active_bonuses(state, rules))
+        state.events += supply(state, rules)
+        state.events += recruit(state, rules)
+        state.events += orders(state, rules)
         return [r.outcome for r in results]
 
     def kinds(self, kind: str) -> list[Event]:
         return [e for e in self.state.events if e.kind == kind]
 
 
-def _node_fight() -> tuple[_Run, int, int]:
+def _node_fight(rules: Ruleset = RULES) -> tuple[_Run, int, int]:
     """Row 2 in node 1: defender 2/2 (player 1), attacker 3/3 arrives in tick 1."""
-    state = initial_state(_line(), RULES)
+    state = initial_state(_line(), rules)
     d = _add(state, 1, 2, 2, AtNode(1))
     a = _add(state, 0, 3, 3, _before_arrival(state, 0, 0), order=Order((1,), False, 0))
-    run = _Run(state)
+    run = _Run(state, rules)
     run.step()
     assert run.kinds("fight_started")
     return run, d, a
@@ -209,6 +213,75 @@ def test_a_group_bouncing_into_a_fight_has_nothing_to_cancel() -> None:
     run.step()
     assert state.groups[lone].fight is not None
     assert validate(state, RULES, 0, CancelOrder(lone)) == Reject(RejectCode.NOTHING_TO_CANCEL)
+
+
+# No retreat (DEC-40, variant N, #626) --------------------------------------------------------------
+
+
+def test_without_retreat_a_node_fight_holds_both_sides() -> None:
+    """The defender's ``Move`` and the attacker's ``CancelOrder`` are ``IN_FIGHT``; what has
+    nothing to cancel keeps ``NOTHING_TO_CANCEL``; the rest is as under ``retreat = "round"``."""
+    run, d, a = _node_fight(NO_RETREAT)
+    state = run.state
+    in_fight = Reject(RejectCode.IN_FIGHT)
+    assert validate(state, NO_RETREAT, 1, Move(d, 2)) == in_fight
+    assert validate(state, NO_RETREAT, 0, CancelOrder(a)) == in_fight
+    assert validate(state, NO_RETREAT, 1, CancelOrder(d)) == Reject(RejectCode.NOTHING_TO_CANCEL)
+    assert validate(state, NO_RETREAT, 1, Move(d, 2, planned=True)) == in_fight
+    assert validate(state, NO_RETREAT, 1, Recruit(1)) == Ok(cost=100)
+    cp = (state.players[0].cp, state.players[1].cp)
+    assert run.step((1, Move(d, 2)), (0, CancelOrder(a))) == [in_fight, in_fight]
+    assert (state.players[0].cp, state.players[1].cp) == cp  # a rejection changes nothing
+    while not run.kinds("fight_ended"):
+        run.step()
+    # row 2: the defense keeps 1 discharged, the attack (3, discharged) bounces (G1)
+    assert state.groups[d].location == AtNode(1)
+    assert (state.groups[d].units, state.groups[d].charged) == (1, 0)
+    attack = state.groups[a]
+    assert (attack.units, attack.charged) == (3, 0)
+    assert isinstance(attack.location, OnEdge) and attack.location.back
+
+
+def test_without_retreat_an_edge_fight_holds_both_sides() -> None:
+    """A group on an edge with its order cannot cancel it in a fight (``IN_FIGHT``)."""
+    state = initial_state(_line(), NO_RETREAT)
+    x = _add(state, 0, 2, 2, OnEdge(0, 0, 466), order=Order((1,), False, 0))
+    y = _add(state, 1, 2, 2, OnEdge(0, 1, 466), order=Order((0,), False, 0))
+    run = _Run(state, NO_RETREAT)
+    run.step()
+    assert run.kinds("fight_started")
+    assert state.groups[x].fight is not None and state.groups[y].fight is not None
+    in_fight = Reject(RejectCode.IN_FIGHT)
+    assert run.step((0, CancelOrder(x)), (1, CancelOrder(y))) == [in_fight, in_fight]
+    assert validate(state, RULES, 0, CancelOrder(x)) == Ok(cost=0)  # "round": it may leave
+
+
+def test_without_retreat_a_waiting_planned_order_may_still_be_cancelled() -> None:
+    """E4 unchanged (#626, open question 4): the cancel of a waiting planned order keeps the
+    group in the fight, so it is not a retreat."""
+    state = initial_state(_line(), NO_RETREAT)
+    d = _add(state, 1, 2, 2, AtNode(1), order=Order((2,), True, 5), bonus=2, bonus_tick=5)
+    _add(state, 0, 3, 3, _before_arrival(state, 0, 0), order=Order((1,), False, 0))
+    run = _Run(state, NO_RETREAT)
+    run.step()
+    assert state.groups[d].fight is not None
+    assert run.step((1, CancelOrder(d))) == [Ok(cost=0)]
+    assert state.groups[d].order is None
+    assert state.groups[d].location == AtNode(1)
+    assert state.groups[d].fight is not None
+
+
+def test_without_retreat_a_returning_group_still_has_nothing_to_cancel() -> None:
+    state = initial_state(_line(), NO_RETREAT)
+    state.nodes[0].owner = 1
+    _add(state, 1, 3, 3, AtNode(0))
+    lone = _add(state, 0, 2, 1, OnEdge(0, 0, PROGRESS_SCALE // 30, back=True))
+    run = _Run(state, NO_RETREAT)
+    run.step()
+    assert state.groups[lone].fight is not None
+    assert validate(state, NO_RETREAT, 0, CancelOrder(lone)) == Reject(
+        RejectCode.NOTHING_TO_CANCEL
+    )
 
 
 # Movement around a fight (items B6, D1) -----------------------------------------------------------

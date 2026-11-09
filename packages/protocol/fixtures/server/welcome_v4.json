@@ -36,7 +36,8 @@
       "round_ticks": 20,
       "shots_per_round": 1,
       "regroup_ticks": 10,
-      "terrain_burn": false
+      "terrain_burn": false,
+      "retreat": "round"
     },
     "capture": {
       "charge_cost": 0

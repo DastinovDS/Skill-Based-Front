@@ -22,6 +22,8 @@ sets its leaf shift now and then (in range, out of range, unchanged) and fortifi
 foreign nodes (DEC-43, item D; with a wrong road and a second one on the same road now and
 then), and its line, bunker and warehouse commands are rejected. One game plays the map tempo of
 DEC-46 (``mvp-4-stances-tempo``) on the pool map ``narrows``, where the multiplier is 76, not 100.
+One game plays the main ruleset ``mvp-6`` (a capture costs a charge, faster built factories and
+no retreat from a fight, DEC-40).
 """
 
 import argparse
@@ -332,6 +334,7 @@ GAMES = (
     Game("web-mvp4", "web", "mvp-4"),
     Game("web-mvp4-stances", "web", "mvp-4-stances"),
     Game("narrows-mvp4-stances-tempo", "narrows", "mvp-4-stances-tempo", map_dir="maps"),
+    Game("web-mvp6", "web", "mvp-6"),
 )
 
 

@@ -59,6 +59,12 @@ export type ServerMsg =
   | LineRouteMsg;
 export type PlayerId = 0 | 1;
 /**
+ * ``combat.retreat`` (DEC-40, #626): ``round`` is the retreat of DEC-24, item E (a group
+ * leaves a fight after the nearest round); ``none`` is variant N: a group that entered a fight
+ * stays in it until the fight ends.
+ */
+export type Retreat = 'round' | 'none';
+/**
  * ``economy.model`` (DEC-41, #642): ``v1`` is the economy of stances, front markers and
  * donors; ``v2`` the economy of factories and drawn supply lines.
  */
@@ -537,6 +543,11 @@ export interface CombatPublic {
    * of silencing them in every round (DEC-45).
    */
   terrain_burn: boolean;
+  /**
+   * ``round``: a group may leave a fight after the nearest round (DEC-24, item E); ``none``:
+   * no retreat (DEC-40, variant N), the client hides the retreat hints and the cancel in a fight.
+   */
+  retreat: Retreat;
 }
 /**
  * ``terrain.defense_mod``: charges added to the node defender's pool; may be negative.
@@ -1695,7 +1706,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 43;
+export const PROTOCOL_VERSION = 44;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

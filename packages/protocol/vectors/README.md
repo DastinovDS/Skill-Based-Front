@@ -23,7 +23,7 @@ The top level:
 | `source` | where the rules and examples come from |
 | `params` | the rule numbers the examples are computed with: `terrain_defense_mod` (`mountains` / `forest` / `plains`), `defense_bonus`, `round_ticks`, `shots_per_round`, `regroup_ticks` (with DEC-32 `round_ticks = 20`). They match `rulesets/mvp-0.toml` (`terrain.defense_mod`, `combat.*`); a test checks this. `defense_bonus` (2, "Defense" (+2) in the table rows) is not a ruleset number: with DEC-30 it is the bonus accumulated by the start of the fight (`orders.defense_ticks_per_bonus` ticks per unit, at most the charged units of the group); the test gives the group that many ticks in "Defense". The plan bonus is not among them: with DEC-29 it depends on the path of the order and is set in each example (`bonus.amount`, +2 in the table rows) |
 | `vectors` | rows 1-16, `id` equals the table row number |
-| `scenarios` | rows 17-23: `id` (`17`, `17б`, `17в`, `18`, ...), `source_row` (the table row as is), `expected` (the numbers the row names; every row has its own keys, `test_combat.py` reads them) |
+| `scenarios` | rows 17-23: `id` (`17`, `17б`, `17в`, `18`, ...), `source_row` (the table row as is), `expected` (the numbers the row names; every row has its own keys, `test_combat.py` reads them); `21N` and `22N`: rows 21 and 22 under `combat.retreat = "none"` (DEC-40, variant N, #626: the retreat command is rejected with `reject`, the fight goes on as rows 3 and 10) |
 
 An example (`vectors[i]`). The sides are always called `a` and `b`: in a fight for a node `a` attacks, `b` defends.
 

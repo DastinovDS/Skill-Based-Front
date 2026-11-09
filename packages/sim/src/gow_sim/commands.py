@@ -53,7 +53,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from itertools import pairwise
 
-from gow_sim.ruleset import Ruleset, Stance
+from gow_sim.ruleset import Retreat, Ruleset, Stance
 from gow_sim.state import (
     PLAN_WAIT,
     AtNode,
@@ -590,8 +590,10 @@ def _check(
             group = _standing_group(state, player, gid, seen)
             if isinstance(group, Reject):
                 return group
-            if group.fight is not None and (planned or not _defends(state, group)):
-                return Reject(RejectCode.IN_FIGHT)  # DEC-24, E1 and E4
+            if group.fight is not None and (
+                planned or not _defends(state, group) or not _retreats(rules)
+            ):
+                return Reject(RejectCode.IN_FIGHT)  # DEC-24, E1 and E4; DEC-40 (no retreat)
             # DEC-41, item 10: a v2 planned order names its bonus, b >= 1; nothing else does.
             if bonus < 0 or (bonus >= 1) != (planned and rules.v2):
                 return Reject(RejectCode.INVALID_ARGUMENT)
@@ -683,7 +685,7 @@ def _check(
             if isinstance(group, Reject):
                 return group
             if group.fight is not None:
-                return _check_cancel_in_fight(state, group)
+                return _check_cancel_in_fight(state, rules, group)
             location = group.location
             if isinstance(location, OnEdge):
                 # A bouncing group lost its order in the fight (DEC-20, C4).
@@ -883,10 +885,20 @@ def _member(state: GameState, group: Group) -> FightMember:
     return state.fights[group.fight].members[group.id]
 
 
-def _check_cancel_in_fight(state: GameState, group: Group) -> tuple[int, ...] | Reject:
+def _retreats(rules: Ruleset) -> bool:
+    """A group may leave a fight (DEC-24, item E); ``combat.retreat = "none"``: it stays in the
+    fight until the fight ends (DEC-40, variant N)."""
+    return rules.combat.retreat is Retreat.ROUND
+
+
+def _check_cancel_in_fight(
+    state: GameState, rules: Ruleset, group: Group
+) -> tuple[int, ...] | Reject:
     """``CancelOrder`` of a group in a fight (DEC-24, E): the withdrawal of an attacker of a node
     or of a group on an edge; for a defender of a node, the cancel of its withdrawal ``Move`` or
-    of its waiting planned order. A returning group has no order (E2), "Defense" is a mode (E4)."""
+    of its waiting planned order. A returning group has no order (E2), "Defense" is a mode (E4).
+    Without retreat (DEC-40, variant N) the withdrawal is ``IN_FIGHT``; the cancel of a waiting
+    planned order of a defender stays (it keeps the group in the fight)."""
     member = _member(state, group)
     location = group.location
     if _defends(state, group):
@@ -900,10 +912,9 @@ def _check_cancel_in_fight(state: GameState, group: Group) -> tuple[int, ...] | 
     if isinstance(location, OnEdge):
         if location.back or group.order is None:
             return Reject(RejectCode.NOTHING_TO_CANCEL)
-        return ()
-    if member.edge is None:
+    elif member.edge is None:
         return Reject(RejectCode.NOTHING_TO_CANCEL)
-    return ()
+    return () if _retreats(rules) else Reject(RejectCode.IN_FIGHT)
 
 
 def _check_transfer(
