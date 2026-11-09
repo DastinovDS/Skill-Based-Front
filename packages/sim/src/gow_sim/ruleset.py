@@ -54,6 +54,15 @@ OPTIONAL: Final = {"optional": True}
 default it is left out of ``to_canonical`` too, so the hash of a v1 ruleset stays as it was."""
 
 
+class Retreat(StrEnum):
+    """``combat.retreat`` (DEC-40, #626): ``round`` is the retreat of DEC-24, item E (a group
+    leaves a fight after the nearest round); ``none`` is variant N: a group that entered a fight
+    stays in it until the fight ends."""
+
+    ROUND = "round"
+    NONE = "none"
+
+
 class RecruitLocation(StrEnum):
     """Where ``Recruit(node)`` is allowed (DEC-01)."""
 
@@ -263,6 +272,10 @@ class CombatRules:
     terrain_burn: bool = dataclasses.field(default=False, metadata=OPTIONAL)
     """A negative ``terrain.defense_mod`` burns the defender's charges in the first round instead
     of silencing them in every round (DEC-45). Left out of the hash when absent."""
+    retreat: Retreat = dataclasses.field(default=Retreat.ROUND, metadata=OPTIONAL)
+    """``none``: no retreat from a fight (DEC-40, variant N): the defender's ``Move`` and the
+    ``CancelOrder`` of an attacker or of a group on an edge in a fight are rejected with
+    ``IN_FIGHT``. Left out of the hash at ``round``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -835,7 +848,14 @@ def parse_ruleset(data: object) -> Ruleset:
         combat=_parse_combat(
             root.table(
                 "combat",
-                ("round_ticks", "shots_per_round", "regroup_ticks", "engage_ticks", "terrain_burn"),
+                (
+                    "round_ticks",
+                    "shots_per_round",
+                    "regroup_ticks",
+                    "engage_ticks",
+                    "terrain_burn",
+                    "retreat",
+                ),
             )
         ),
         capture=CaptureRules(
@@ -1027,6 +1047,11 @@ def _parse_combat(t: "_Table") -> CombatRules:
         regroup_ticks=t.integer("regroup_ticks", low=0),
         engage_ticks=t.integer("engage_ticks", low=0),
         terrain_burn=t.boolean("terrain_burn") if t.has("terrain_burn") else False,
+        retreat=(
+            Retreat(t.choice("retreat", tuple(r.value for r in Retreat)))
+            if t.has("retreat")
+            else Retreat.ROUND
+        ),
     )
 
 

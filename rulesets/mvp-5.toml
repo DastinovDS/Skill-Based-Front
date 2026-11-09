@@ -1,4 +1,4 @@
-# Ruleset mvp-5: the main (played) ruleset since 2026-11-07 (owner decision, #805). The rule values are exactly
+# Ruleset mvp-5: the main (played) ruleset from 2026-11-07 (owner decision, #805) to 2026-11-09, when mvp-6 replaced it (#626, #759); a historical ruleset since. The rule values are exactly
 # those of mvp-4-stances.toml (same ruleset_hash): economy v2 with the automatic supply flow (DEC-43), the
 # section [stances] with local progress and the proportional carry (DEC-44), combat.terrain_burn (DEC-45) and a
 # capital charge every 200 ticks. No [map_tempo] (DEC-46 stays only in mvp-4-stances-tempo.toml). mvp-4,

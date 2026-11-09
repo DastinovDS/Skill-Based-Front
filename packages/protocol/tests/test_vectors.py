@@ -122,7 +122,9 @@ def test_combat_header() -> None:
     assert _int(params["shots_per_round"]) > 0
     assert _int(params["regroup_ticks"]) >= 0
     scenarios = [_obj(s) for s in _list(data["scenarios"])]
-    assert [s["id"] for s in scenarios] == ["17", "17б", "17в", "18", "19", "20", "21", "22", "23"]  # noqa: RUF001
+    ids = [s["id"] for s in scenarios]
+    # 21N, 22N: rows 21 and 22 under combat.retreat = "none" (DEC-40, variant N, #626)
+    assert ids == ["17", "17б", "17в", "18", "19", "20", "21", "22", "21N", "22N", "23"]  # noqa: RUF001
     for scenario in scenarios:
         assert set(scenario) == {"id", "source_row", "expected"}
         assert isinstance(scenario["source_row"], str) and scenario["source_row"]

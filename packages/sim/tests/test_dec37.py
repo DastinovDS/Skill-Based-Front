@@ -22,7 +22,7 @@ from gow_sim.commands import (
     apply_commands,
 )
 from gow_sim.maps import MapDef, parse_map
-from gow_sim.ruleset import Ruleset, load_ruleset
+from gow_sim.ruleset import Retreat, Ruleset, load_ruleset
 from gow_sim.state import (
     AtNode,
     Event,
@@ -45,8 +45,8 @@ RULES = load_ruleset(TESTS_DIR / "rulesets" / "dec07.toml")
 KEY = bytes(range(32))
 
 
-def _rules(engage: int) -> Ruleset:
-    return replace(RULES, combat=replace(RULES.combat, engage_ticks=engage))
+def _rules(engage: int, retreat: Retreat = Retreat.ROUND) -> Ruleset:
+    return replace(RULES, combat=replace(RULES.combat, engage_ticks=engage, retreat=retreat))
 
 
 def _line() -> MapDef:
@@ -139,10 +139,11 @@ def _case(
     engage: int = 3,
     mirror: bool = False,
     toward: int = 2,
+    retreat: Retreat = Retreat.ROUND,
 ) -> _Case:
     """The DEC-37 setup; ``mirror``: the rot180 mirror (A of player 1 from node 3 into node 2 of
     player 0, D of player 0 toward node 1). Runs to the arrival tick ``t = 1 + lead``."""
-    rules = _rules(engage)
+    rules = _rules(engage, retreat)
     mapdef = _line()
     state = initial_state(mapdef, rules)
 
@@ -204,6 +205,23 @@ def test_rows_1_to_3_caught_shoot_one_round_and_go_on() -> None:
         assert state.groups[c.d].order == Order((2,), False, 1)
         run.step()
         assert state.groups[c.d].location == OnEdge(1, 1, after)
+
+
+def test_without_retreat_a_caught_group_still_leaves_after_one_round() -> None:
+    """DEC-40, variant N (#626, open question 3, default): a caught group of DEC-37 is exempt,
+    it shoots one round and goes on as rows 1 to 3; its ``CancelOrder`` stays
+    ``NOTHING_TO_CANCEL``."""
+    c = _case(1, retreat=Retreat.NONE)
+    run, state, t = c.run, c.run.state, c.t
+    assert state.groups[c.d].fight is not None
+    assert run.step((1, CancelOrder(c.d))) == [Reject(RejectCode.NOTHING_TO_CANCEL)]
+    run.until(t + 20)
+    assert [e.get("player") for e in run.kinds("node_captured")] == [0]
+    assert _counts(state, c.a) == (3, 2)
+    assert _counts(state, c.d) == (2, 1)
+    assert state.groups[c.d].fight is None
+    run.step()
+    assert state.groups[c.d].location == OnEdge(1, 1, 100)
 
 
 def test_row_4_left_four_ticks_ago_is_not_caught() -> None:

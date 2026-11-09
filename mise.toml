@@ -62,13 +62,13 @@ description = "All static checks: Python, client, e2e (no tests)"
 depends = ["check:py", "check:client", "check:e2e"]
 
 [tasks."check:py"]
-description = "ruff check and format, pyright, lint-imports, map validation (with the warehouse check of mvp-5)"
+description = "ruff check and format, pyright, lint-imports, map validation (with the warehouse check of mvp-6)"
 run = [
   "uv run ruff check --quiet .",
   "uv run ruff format --check --quiet .",
   "uv run pyright",
   "uv run lint-imports --no-logo",
-  "uv run gow-maps validate --ruleset rulesets/mvp-5.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json",
+  "uv run gow-maps validate --ruleset rulesets/mvp-6.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json",
 ]
 
 [tasks."check:client"]
@@ -247,8 +247,8 @@ description = "Validate the maps (alias of maps:validate)"
 depends = ["maps:validate"]
 
 [tasks."maps:validate"]
-description = "gow-maps validate maps/*.json, maps/fixtures/*.json, the menu map maps/menu/*.json and the generated maps maps/gen/*.json, with the start-stock check against the warehouses of rulesets/mvp-5.toml (DEC-26, item 5) and the check geography of the maps with src/<name>.geo.json (DEC-36)"
-run = "uv run gow-maps validate --ruleset rulesets/mvp-5.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json"
+description = "gow-maps validate maps/*.json, maps/fixtures/*.json, the menu map maps/menu/*.json and the generated maps maps/gen/*.json, with the start-stock check against the warehouses of rulesets/mvp-6.toml (DEC-26, item 5) and the check geography of the maps with src/<name>.geo.json (DEC-36)"
+run = "uv run gow-maps validate --ruleset rulesets/mvp-6.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json"
 
 [tasks."maps:preview"]
 description = "Draw maps/<name>.preview.png over its baked background, so after maps:bake (the pool, the menu map maps/menu/ and the generated maps maps/gen/)"
@@ -266,17 +266,17 @@ run = "uv run gow-maps mirror maps/src/{{usage.name}}.half.json -o maps/{{usage.
 [tasks."maps:generate"]
 description = "Make the map of a seed in maps/gen/ (arg: seed): a whole map with its geography, baked and validated, outside the pool (#771)"
 usage = 'arg "<seed>"'
-run = "uv run gow-maps generate --seed {{usage.seed}} --bake --ruleset rulesets/mvp-5.toml"
+run = "uv run gow-maps generate --seed {{usage.seed}} --bake --ruleset rulesets/mvp-6.toml"
 
 [tasks.tournament]
-description = "Bot tournament (defaults: the maps of the pool maps/*.json, not the fixtures, all bots, 100 seeds, 8 jobs, mvp-5; override after --)"
-run = "uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-5.toml"
+description = "Bot tournament (defaults: the maps of the pool maps/*.json, not the fixtures, all bots, 100 seeds, 8 jobs, mvp-6; override after --)"
+run = "uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-6.toml"
 
 [tasks."tournament:gh"]
 description = "Run a tournament on GitHub runners (workflow tournament.yml): dispatch, wait once, download tournament.jsonl and report.md into --dir. Prefer it to a local run above --seeds 3. Needs bash and an authenticated gh"
 usage = '''
 flag "--ref <ref>" default="develop" help="git ref to check out and dispatch from (must contain the workflow)"
-flag "--ruleset <path>" default="rulesets/mvp-5.toml" help="ruleset file"
+flag "--ruleset <path>" default="rulesets/mvp-6.toml" help="ruleset file"
 flag "--bots <bots>" default="all" help="bot names separated by spaces, or all"
 flag "--maps <glob>" default="maps/*.json" help="map files or a glob (the pool by default)"
 flag "--seeds <n>" default="100" help="seeds per map and pair, total over all shards"
@@ -287,8 +287,8 @@ flag "--dir <dir>" default=".tournament" help="folder for the downloaded artifac
 run = "TGH_REF='{{usage.ref}}' TGH_RULESET='{{usage.ruleset}}' TGH_BOTS='{{usage.bots}}' TGH_MAPS='{{usage.maps}}' TGH_SEEDS='{{usage.seeds}}' TGH_SHARDS='{{usage.shards}}' TGH_LABEL='{{usage.label}}' TGH_DIR='{{usage.dir}}' bash scripts/tournament_gh.sh"
 
 [tasks.search]
-description = "Parameter search of one bot by tournament (gow-bots search; maps of the pool, 8 jobs, mvp-5; --bot, --against, --keys and the rest after --)"
-run = "uv run gow-bots search --maps maps/*.json --jobs 8 --ruleset rulesets/mvp-5.toml"
+description = "Parameter search of one bot by tournament (gow-bots search; maps of the pool, 8 jobs, mvp-6; --bot, --against, --keys and the rest after --)"
+run = "uv run gow-bots search --maps maps/*.json --jobs 8 --ruleset rulesets/mvp-6.toml"
 
 [tasks.report]
 description = "Balance report from a tournament result (arg: file, default docs/balance/latest.jsonl)"
@@ -311,14 +311,14 @@ run = "uv run gow-bots stats"
 # ---------------------------------------------------------------------------------------------
 
 [tasks.stack]
-description = "OWNER ONLY, agents never run it: prod stack on :8080/:8443 (arg: ruleset, default mvp-5). POSIX shell"
-usage = 'arg "[ruleset]" default="mvp-5"'
+description = "OWNER ONLY, agents never run it: prod stack on :8080/:8443 (arg: ruleset, default mvp-6). POSIX shell"
+usage = 'arg "[ruleset]" default="mvp-6"'
 env = { SITE_ADDRESS = ":80", HTTP_PORT = "8080", HTTPS_PORT = "8443" }
 run = "GOW_RULESET_PATH=rulesets/{{usage.ruleset}}.toml docker compose up --build -d --wait"
 
 [tasks."stack:reset"]
 description = "OWNER ONLY, agents never run it: stack down, delete the gow-data volume, up again (arg: ruleset). POSIX shell"
-usage = 'arg "[ruleset]" default="mvp-5"'
+usage = 'arg "[ruleset]" default="mvp-6"'
 env = { SITE_ADDRESS = ":80", HTTP_PORT = "8080", HTTPS_PORT = "8443" }
 run = [
   "docker compose down",
@@ -327,8 +327,8 @@ run = [
 ]
 
 [tasks."stack:agent"]
-description = "Agents' own stack: project sbf-agent on http://localhost:18080 (arg: ruleset, default mvp-5). POSIX shell"
-usage = 'arg "[ruleset]" default="mvp-5"'
+description = "Agents' own stack: project sbf-agent on http://localhost:18080 (arg: ruleset, default mvp-6). POSIX shell"
+usage = 'arg "[ruleset]" default="mvp-6"'
 env = { SITE_ADDRESS = ":80", HTTP_PORT = "{{get_env(name='SBF_AGENT_HTTP_PORT', default='18080')}}", HTTPS_PORT = "{{get_env(name='SBF_AGENT_HTTPS_PORT', default='18443')}}" }
 run = "GOW_RULESET_PATH=rulesets/{{usage.ruleset}}.toml docker compose -p {{get_env(name='SBF_AGENT_PROJECT', default='sbf-agent')}} --progress quiet up --build -d --wait --wait-timeout 300"
 

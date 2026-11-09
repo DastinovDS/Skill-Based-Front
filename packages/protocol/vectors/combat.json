@@ -1447,6 +1447,54 @@
       }
     },
     {
+      "id": "21N",
+      "source_row": "Row 21 under combat.retreat = \"none\" (DEC-40, variant N, #626): the defender's Move in t+24 is rejected IN_FIGHT; as row 3: r1, r2 canc. (2 / 0); r3, r4 1 killed each; the defense destroyed, the node taken at t+80 by 4 discharged",
+      "expected": {
+        "order_after": 24,
+        "reject": "IN_FIGHT",
+        "trace": [
+          {
+            "round": 1,
+            "charged": {
+              "a": 3,
+              "b": 1
+            }
+          },
+          {
+            "round": 2,
+            "charged": {
+              "a": 2,
+              "b": 0
+            }
+          }
+        ],
+        "end_after": 80,
+        "attack": {
+          "units": 4,
+          "charged": 0
+        },
+        "defense_units": 0,
+        "cost": 0
+      }
+    },
+    {
+      "id": "22N",
+      "source_row": "Row 22 under combat.retreat = \"none\" (DEC-40, variant N, #626): the attack's CancelOrder in t+22 is rejected IN_FIGHT; as row 10: the attack loses 1 and bounces with 2 discharged at t+80, the defense 2 discharged",
+      "expected": {
+        "cancel_after": 22,
+        "reject": "IN_FIGHT",
+        "end_after": 80,
+        "attack": {
+          "units": 2,
+          "charged": 0
+        },
+        "defense": {
+          "units": 2,
+          "charged": 0
+        }
+      }
+    },
+    {
       "id": "23",
       "source_row": "A reinforcement on an edge. As row 11 (X 2 charged, Y 2 charged, the point from 18: point = 1134); X2 (1, 1 charged) set out 5 ticks later than X. In t+4 X2 at 566 (2 * 566 = 1132 < 1134), in t+5 at 600: joins (before r1 in t+20), stands at 600. r1 canc. (2 / 1); r2 canc. (1 / 0); r3 player 0 kills 1. The fight until t+60; shots 3 and 2: player 0 won; Y (1, discharged) bounces; X and X2 go on from t+70",
       "expected": {
