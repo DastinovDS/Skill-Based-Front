@@ -10,6 +10,7 @@ const summary = (id: string, background_url: string | null): MapSummary =>
     height: 100,
     background_url,
     generated: false,
+    per_match: false,
   }) satisfies MapSummary;
 
 describe('backgroundUrlOf', () => {

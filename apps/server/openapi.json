@@ -33,6 +33,7 @@
           "maps"
         ],
         "summary": "List Maps",
+        "description": "The pool, then the stored generated maps; never a per-match map (#884).",
         "operationId": "list_maps_api_maps_get",
         "responses": {
           "200": {
@@ -58,7 +59,7 @@
           "maps"
         ],
         "summary": "Get Map",
-        "description": "The map file as is (format: docs/design/map-format.md).",
+        "description": "The map file as is (format: docs/design/map-format.md).\n\nA per-match map (#884) is here once it is made; 404 while it is being made.",
         "operationId": "get_map_api_maps__map_id__get",
         "parameters": [
           {
@@ -93,6 +94,49 @@
         }
       }
     },
+    "/api/maps/{map_id}/summary": {
+      "get": {
+        "tags": [
+          "maps"
+        ],
+        "summary": "Get Summary",
+        "description": "What ``GET /api/maps`` says of a map, for every map served here, a per-match one too.",
+        "operationId": "get_summary_api_maps__map_id__summary_get",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/maps/{map_id}/background.webp": {
       "get": {
         "tags": [
@@ -100,6 +144,77 @@
         ],
         "summary": "Get Background",
         "operationId": "get_background_api_maps__map_id__background_webp_get",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maps/{map_id}/thumb.webp": {
+      "get": {
+        "tags": [
+          "maps"
+        ],
+        "summary": "Get Thumb",
+        "operationId": "get_thumb_api_maps__map_id__thumb_webp_get",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maps/{map_id}/geo.json": {
+      "get": {
+        "tags": [
+          "maps"
+        ],
+        "summary": "Get Geo",
+        "description": "The vector file of a map with a geography (format: map-format.md, DEC-36).",
+        "operationId": "get_geo_api_maps__map_id__geo_json_get",
         "parameters": [
           {
             "name": "map_id",
@@ -1017,6 +1132,22 @@
             ],
             "title": "Map Id"
           },
+          "map_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "pool",
+                  "generated"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map Source"
+          },
           "random_generated": {
             "type": "boolean",
             "title": "Random Generated",
@@ -1039,6 +1170,22 @@
               }
             ],
             "title": "Map Id"
+          },
+          "map_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "pool",
+                  "generated"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map Source"
           },
           "random_generated": {
             "type": "boolean",
@@ -1123,6 +1270,10 @@
             "type": "string",
             "title": "Map Id"
           },
+          "map_ready": {
+            "type": "boolean",
+            "title": "Map Ready"
+          },
           "host_nick": {
             "type": "string",
             "title": "Host Nick"
@@ -1168,6 +1319,7 @@
           "state",
           "public",
           "map_id",
+          "map_ready",
           "host_nick",
           "guest_nick",
           "you_ready",
@@ -1337,6 +1489,33 @@
           "generated": {
             "type": "boolean",
             "title": "Generated"
+          },
+          "thumb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb Url"
+          },
+          "geo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geo Url"
+          },
+          "per_match": {
+            "type": "boolean",
+            "title": "Per Match",
+            "default": false
           }
         },
         "type": "object",

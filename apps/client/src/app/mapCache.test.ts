@@ -10,6 +10,7 @@ const summary = (id: string): MapSummary => ({
   height: 10,
   background_url: null,
   generated: false,
+  per_match: false,
 });
 const file = (id: string): MapFile => ({ meta: { name: id } }) as MapFile;
 

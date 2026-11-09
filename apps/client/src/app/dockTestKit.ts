@@ -12,6 +12,7 @@ const summary = (id: string): MapSummary => ({
   height: 100,
   background_url: null,
   generated: id.startsWith('gen'),
+  per_match: false,
 });
 const file = (id: string): MapFile =>
   ({

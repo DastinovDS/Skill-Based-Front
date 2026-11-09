@@ -204,6 +204,7 @@ describe('the Dock screens', () => {
       state: 'open',
       public: false,
       map_id: 'crossroads',
+      map_ready: true,
       host_nick: 'Me',
       guest_nick: null,
       you_ready: false,

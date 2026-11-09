@@ -32,6 +32,7 @@
     height: m.meta.height,
     background_url: null,
     generated: m.meta.symmetry === 'none',
+    per_match: false,
   });
   const never = <T,>(): Promise<T> => new Promise<T>(() => undefined);
   const entry = (code: string, host_nick: string, map_id: string, age_s: number): LobbyEntry => ({
@@ -58,6 +59,7 @@
     state: 'open',
     public: false,
     map_id: 'crossroads',
+    map_ready: true,
     host_nick: 'Ember',
     guest_nick: null,
     you_ready: false,
