@@ -30,6 +30,7 @@ export const SCENES: readonly {
   { id: 'supply', tick: 2400, keys: ['Tab'] },
   { id: 'terrain', tick: 2400, keys: ['KeyT'] },
   { id: 'economy', tick: 2400 },
+  { id: 'build_pay', tick: 2400 },
   { id: 'economy_supply', tick: 2400, keys: ['Tab'] },
   { id: 'flow', tick: 2400 },
   { id: 'flow_supply', tick: 2400, keys: ['Tab'] },

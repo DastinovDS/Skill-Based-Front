@@ -333,6 +333,21 @@ export function crownSpec(
   };
 }
 
+/**
+ * One paid charge alone (#872): the lozenge that flies into a build, pops on the Crown arc and runs
+ * into the tower, at `k` of its warehouse size (the view scales the sprite down from there).
+ */
+export function chargeSpec(color: number, k: number): BakeSpec {
+  const h = (LOZENGE.casing * k * Math.SQRT2) / 2 + 1;
+  return {
+    key: `charge:${String(color)}:${String(k)}`,
+    box: { x: -h, y: -h, width: 2 * h, height: 2 * h },
+    draw(into, tools) {
+      drawLozenge(graphics(into), tools, { x: 0, y: 0 }, true, color, k);
+    },
+  };
+}
+
 /** The ring that opens from a tower just built (57k): an ink circle on a casing, faded by the view. */
 export function towerRingSpec(radius: number): BakeSpec {
   const reach = radius + CROWN.ring.casing;

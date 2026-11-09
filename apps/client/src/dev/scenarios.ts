@@ -23,7 +23,13 @@ import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 import { badgesSnapshot } from './badgesScene.ts';
 import { DEFENSE_VIEW, defenseSnapshot } from './defenseScene.ts';
-import { ECONOMY_VIEW, economySnapshot } from './economyScene.ts';
+import {
+  BUILD_PAY_VIEW,
+  ECONOMY_VIEW,
+  buildPayEvents,
+  buildPaySnapshot,
+  economySnapshot,
+} from './economyScene.ts';
 import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
 import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
@@ -745,6 +751,18 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     snapshot: economySnapshot(bundledMap('artery')),
     events: [],
     view: ECONOMY_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_V2,
+  },
+  {
+    // The payment of two builds in motion (#872), close up: Forkway's factory takes charges (one pops
+    // on the Crown arc, one flies from the warehouse, one from the group), Watchhouse's barracks is
+    // paid in full and its lozenges run into the tower.
+    id: 'build_pay',
+    map: 'artery',
+    snapshot: buildPaySnapshot(bundledMap('artery')),
+    events: buildPayEvents(),
+    view: BUILD_PAY_VIEW,
     cityUpgrades: true,
     rules: DEV_RULES_V2,
   },

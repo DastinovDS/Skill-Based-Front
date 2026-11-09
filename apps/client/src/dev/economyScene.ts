@@ -9,6 +9,7 @@
  * A picture for the eyes: the numbers only have to be plausible.
  */
 import type {
+  EventMsg,
   GroupView,
   IntentView,
   LineView,
@@ -153,4 +154,66 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
       lines: [...LINES],
     },
   };
+}
+
+/** The `build_pay` scene (#872): close on Forkway and Watchhouse, the payment of two builds in motion. */
+export const BUILD_PAY_VIEW = { x: 440, y: 300, width: 150, height: 250 } as const;
+
+/**
+ * The `build_pay` scene: the `economy` moment with Forkway's factory (4 charges) owing one, the
+ * second charge landed 150 ms ago (its pop), the third and fourth in the air (from the warehouse,
+ * nearly there; from the group standing in the city, just leaving its helmet); Watchhouse's barracks
+ * (3 charges) paid in full 0.6 s ago, its lozenges running into the tower.
+ */
+export function buildPaySnapshot(map: MapFile): SnapshotMsg {
+  const base = economySnapshot(map);
+  const nodes = base.view.nodes.map((node): NodeView => {
+    switch (node.id) {
+      case 4:
+        return {
+          ...node,
+          warehouse: 0,
+          factory_build: { done_tick: null, owed: 1 },
+          fort_build: null,
+        };
+      case 12:
+        return {
+          ...node,
+          has_barracks: false,
+          building: { kind: 'barracks', done_tick: T - 6 + 100, owed: 0 },
+        };
+      default:
+        return node;
+    }
+  });
+  // Forkway's group paid one charge; Watchhouse's gathering plan goes (its ribbon would hide the arc).
+  const groups = base.view.groups.map((g) => {
+    if (g.location.kind !== 'node') return g;
+    if (g.location.node === 4) return { ...g, charged: 1 };
+    return g.location.node === 12 ? { ...g, order: null } : g;
+  });
+  const intents = base.view.intents.filter((i) => i.origin !== 12);
+  return { ...base, view: { ...base.view, nodes, groups, intents } };
+}
+
+/** The `build_paid` events of `build_pay`, by their age in ticks at the tick of the snapshot. */
+export function buildPayEvents(): EventMsg[] {
+  const paid = (
+    age: number,
+    node: number,
+    kind: string,
+    warehouse: number,
+    units: number,
+    owed: number,
+  ): EventMsg => ({
+    type: 'event',
+    tick: T - age,
+    kind: 'build_paid',
+    data: { player: 0, node, kind, warehouse, units, owed },
+  });
+  return [
+    paid(6, 4, 'factory', 1, 0, 3),
+    paid(6, 12, 'barracks', 1, 0, 0),
+    paid(3, 4, 'factory', 1, 1, 1),
+  ];
 }
