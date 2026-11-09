@@ -7,8 +7,11 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests',
   // A full match is 60 s of game time plus the replay; the checks inside have their own timeouts.
-  timeout: 180_000,
-  expect: { timeout: 15_000 },
+  // The CI runner has 2 cores and renders WebGL in software: there a match screen takes 30 to 50 s
+  // to come up after a reload and the result screen over 15 s after `match_end` (#852), and the
+  // invite tests took up to 174 s of the old 180 s budget on green runs. The budgets cover that.
+  timeout: 300_000,
+  expect: { timeout: 30_000 },
   // One test = one match with its own two guests: tests do not share anything and may run in
   // parallel, but the CI runner is small and renders WebGL in software: one worker there.
   fullyParallel: true,
