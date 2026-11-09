@@ -1394,7 +1394,7 @@ the look of most frames or costs more than a day) **does not start with code.** 
 2. **An issue with a table of variants** (labels `area:design`, `type:decision`): for each variant, whether a DEC, protocol, simulation, client is needed;
    an estimate (S, M, L and days); the FPS price; the risk. A recommendation with reasons. 2-3 PNG frames of the mockup. The field "**Owner's decision: awaiting
    the owner's decision**"; the issue is not closed until the owner has chosen.
-3. **The owner's decision** is written into the issue; a game rule is formalized as a DEC in `mechanics.md` (section 7 of `orchestration.md`), a purely visual
+3. **The owner's decision** is written into the issue; a game rule is formalized as a DEC in `mechanics.md` (section 6 of `orchestration.md`), a purely visual
    decision: an entry **[accepted]** with a date in this guide.
 4. **Code** after the choice: separate implementation issues (the client after the server part, if there is one).
 
