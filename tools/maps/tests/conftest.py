@@ -23,7 +23,7 @@ REFERENCE_SECONDS = 0.25
 
 
 def reference_seconds() -> float:
-    """CPU time of a fixed numpy workload of the bake's kind (element-wise maths on a map raster)."""
+    """CPU time of a fixed numpy workload like the bake (element-wise maths on a map raster)."""
     started = time.process_time()
     a = np.linspace(0.0, 1.0, 1_600_000).reshape(1000, 1600)
     for _ in range(10):
