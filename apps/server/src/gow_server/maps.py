@@ -143,7 +143,8 @@ def choose_map(
     source: MapSource | None = None,
     default: MapSource = "pool",
 ) -> MapEntry | None:
-    """The map asked for by an unrated match (an invite or a bot match); ``None``: make a new map for it (#884).
+    """The map asked for by an unrated match (an invite or a bot match); ``None``: make a new map
+    for it (#884).
 
     ``map_id`` names a map of the catalog (a per-match map is never chosen again). Without it,
     ``source`` says where the map comes from, ``default`` when absent; ``random_generated`` is the

@@ -27,8 +27,9 @@ When the second one is ready the match starts (``MatchManager.create``) and ``GE
   ``lobby_stale_s`` is dropped (a closed tab). ``DELETE /api/matches/{code}`` removes an invite
   that has not started (the host leaves the waiting room). Creating an invite is rate limited per
   account (``invite_rate_limit`` per ``invite_rate_window_s``).
-- A new map (#884, ``gow_server.mapgen``): an invite without a map choice (by link or public, #889) gets a
-  map made for it; the work starts when the invite is created, so it is usually done before the guest arrives.
+- A new map (#884, ``gow_server.mapgen``): an invite without a map choice (by link or public,
+  #889) gets a map made for it; the work starts when the invite is created, so it is usually done
+  before the guest arrives.
   ``InviteOut.map_ready`` says whether it is; until then ``GET /api/maps/{map_id}`` is 404, the
   ready timer of a joined guest does not run, and the second ``ready`` waits for the map (at most
   ``GOW_MAPGEN_WAIT_S``) before the match starts. A map that fails gives way to a random pool map:

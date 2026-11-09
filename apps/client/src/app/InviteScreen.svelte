@@ -197,13 +197,16 @@
         opponentReady={invite.opponent_ready}
       />
       <p class="status" role="status">
-        {#if starting && drawing}<span class="busy" aria-hidden="true"><i></i><i></i><i></i></span
-          >{/if}{status}
+        {#if starting && drawing}
+          <span class="busy" aria-hidden="true"><i></i><i></i><i></i></span>
+        {/if}
+        {status}
       </p>
     {/if}
     {#if drawing && !starting}
-      <p class="status drawing">
-        <span class="busy" aria-hidden="true"><i></i><i></i><i></i></span>{t('wait.drawing')}
+      <p class="status drawing" role="status">
+        <span class="busy" aria-hidden="true"><i></i><i></i><i></i></span>
+        {t('wait.drawing')}
       </p>
     {/if}
   {/if}

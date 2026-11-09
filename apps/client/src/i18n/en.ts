@@ -282,7 +282,7 @@ export const en = {
   'bot.start': 'Start',
   'invite.title': 'Waiting room',
   'invite.map': 'Map: {map}',
-  'invite.mapDrawing': 'Map: new, being drawn',
+  'invite.mapDrawing': 'Map: new',
   'invite.drawingStart': 'The match starts as soon as the map is drawn.',
   'wait.drawing': 'Drawing the map...',
   'wait.line': 'A new map for this match. It takes a few seconds.',
