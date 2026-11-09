@@ -1,4 +1,4 @@
-"""Cancel discipline and CP banking of the smart bots under ``mvp-4`` (#687; ``SmartBot`` item 23).
+"""Cancel discipline and CP banking of the smart bots under ``mvp-5`` (#687; ``SmartBot`` item 23).
 
 Expected values come from the rules. A cancel refunds nothing (``orders.cost.cancel = 0``, DEC-20,
 C: the order's CP stay spent). A fight (DEC-07, rules 1 to 4): the defenders' pool ``Qd`` is their
@@ -33,7 +33,7 @@ from gow_sim.view import FightView, GroupView, OrderView, PlayerView, project
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 KEEP, CEDAR, DALE = 0, 3, 4
 NORTH_PASS, SOUTH_PASS = 17, 18
 SOUTH_DALE = 24
@@ -179,7 +179,7 @@ def test_a_recalled_target_waits_for_more_shots(name: str, player: int) -> None:
 @pytest.mark.parametrize("name", SMART)
 def test_a_recalled_target_takes_a_group_that_beats_what_was_seen(name: str, player: int) -> None:
     """The hold lets through a group whose 3 charges reach the shots the recall saw (and the
-    capture price, 0 under ``mvp-4``)."""
+    capture price, 0 under ``mvp-5``)."""
     view = _walk_view(player)
     bot = _bot(name, player)
     dest = _targets(bot, view, TICK)[0]
@@ -295,7 +295,7 @@ def test_a_decided_fortification_is_saved_for_then_paid(name: str, player: int) 
     for k in range(1, 4):
         cp += q - sum(bot.cost(c) for c in cmds)
         assert cp < RULES.cp.cap - q or bought
-        tick = TICK + k * RULES.cp.period_ticks
+        tick = TICK + k * RULES.stances.cp_period_ticks.balance
         cmds = bot.decide(_view(_threat(player, tick), player, cp), tick)
         bought = _forts(cmds)
         if bought:

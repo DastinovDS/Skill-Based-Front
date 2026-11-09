@@ -7,12 +7,14 @@ equilibrium and no transitive part.
 
 import math
 from dataclasses import dataclass
+from typing import get_args
 
 import pytest
 
 from gow_bots import validity
-from gow_bots.tournament import USAGE_KEYS, live_keys
+from gow_bots.tournament import USAGE_KEYS
 from gow_bots.validity import Tally, nash, pearson, spearman, split_level, transitive_split
+from gow_sim.commands import Command
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,17 +88,11 @@ def test_a_ladder_has_no_cycle_and_its_equilibrium_is_the_top() -> None:
     assert mix[0] > 0.98  # the mean of the played mixes keeps a trace of the first rounds
 
 
-def test_live_keys_hide_the_mechanics_of_the_other_economy() -> None:
-    flow = live_keys("v2", "flow")
-    assert "SetLeafShift" in flow and "FortifyRoad" in flow and "BuildFactory" in flow
-    for dead in ("SetStance", "SetFront", "SetRearMin", "Transfer", "UpgradeRoad", "DrawLine"):
-        assert dead not in flow
-    lines = live_keys("v2", "lines")
-    assert "DrawLine" in lines and "SetLeafShift" not in lines
-    v1 = live_keys("v1", "lines")
-    assert "SetFront" in v1 and "BuildFactory" not in v1 and "SetLeafShift" not in v1
-    assert live_keys(None, None) == USAGE_KEYS
-    assert "DrawLine" in live_keys("v2", None) and "SetLeafShift" in live_keys("v2", None)
+def test_usage_keys_are_the_commands_of_the_rules() -> None:
+    """#894: one key per command but ``Forfeit``, a planned ``Move`` apart; no removed one."""
+    names = {cls.__name__ for cls in get_args(Command.__value__)}
+    assert set(USAGE_KEYS) == names - {"Forfeit"} | {"MovePlanned"}
+    assert len(USAGE_KEYS) == len(set(USAGE_KEYS))
 
 
 def test_server_levels_are_the_levels_of_the_server() -> None:

@@ -152,7 +152,6 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
       arrive_tick: depart + ticks,
       path: [to],
       dest_tick: depart + ticks,
-      transfer: false,
     };
   };
   // Charges on the way, one per road at most: the leaf level is fed by the wave behind it.
@@ -172,8 +171,6 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
     mode: 'attack',
     location: { kind: 'node', node },
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   });
   return {
     ...base,
@@ -182,9 +179,6 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
       me: {
         cp: 320,
         stance: 'balance',
-        fronts: [null, null],
-        rear_min: 0,
-        auto_lines: null,
         leaf_shift: shift,
         leaf_shift_max: 2,
         next_dispatch_tick: T + 10,
@@ -197,7 +191,6 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
       groups: [garrison(4, 3, 3), garrison(7, 2, 0), garrison(10, 2, 2)],
       intents: [],
       fights: [],
-      lines: [],
     },
   };
 }

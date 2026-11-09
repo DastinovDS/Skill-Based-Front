@@ -27,7 +27,7 @@ apps/bots/           gow_bots      bots and the tournament harness
 apps/client/                       web client: TypeScript + Vite + Svelte 5 + PixiJS 8
 tools/maps/          gow_maps      offline map tools: validator, mirroring, previews
 maps/                              map pool of the server (JSON, previews); `maps/fixtures/`: MVP maps for tests
-rulesets/                          rulesets (*.toml) and the archive of played ones by hash
+rulesets/                          rulesets: mvp-7 (main), mvp-5, mvp-6, test-short (E2E); archive/: every played one by hash
 docs/design/                       mechanics, map format, archive of the old design
 docs/adr/                          architecture decisions
 docs/balance/                      balance reports
@@ -179,7 +179,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | the proxy (Caddy) whose `X-Forwarded-*` headers are trusted |
 | `GOW_MAPS_DIR` | `maps` | the map pool: `<id>.json` and an optional background `<id>.bg.webp` (not recursive: `maps/fixtures/` is not served) |
-| `GOW_RULESET_PATH` | `rulesets/mvp-0.toml` (in `compose.yaml` and the `app` image: `mvp-7`) | the ruleset of the matches the server runs |
+| `GOW_RULESET_PATH` | `rulesets/mvp-7.toml` (also in `compose.yaml` and the `app` image) | the ruleset of the matches the server runs |
 | `GOW_RULESETS_DIR`, `GOW_RULESETS_BUNDLED_DIR` | `rulesets/archive`, `rulesets/archive` | the archive of rulesets by hash: the server puts its own ruleset here on start (the directory must be writable; in the container `/data/rulesets` on the volume), the archive from the image is copied here if the directories differ. The server does not accept `test-short` when `GOW_ENV=prod` |
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | the SQLite database (WAL); the path is relative to the working directory |
 | `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | no more than N new guests from one IP per window in seconds |
@@ -278,7 +278,7 @@ deploy/smoke.sh                   # build, start and check the stack (the CI job
 deploy/check-caddy.sh             # only the headers, cache and routes of an already running stack
 docker compose logs -f app        # server logs (JSON lines)
 docker compose down               # stop; data stays in the volumes
-GOW_RULESET_PATH=rulesets/mvp-0.toml docker compose up -d   # the stack on another ruleset (mvp-7 by default)
+GOW_RULESET_PATH=rulesets/mvp-6.toml docker compose up -d   # the stack on another ruleset (mvp-7 by default)
 # a 60-second match (the ruleset test-short) for a manual check and E2E: docs/qa/manual-match.md
 docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait
 ```

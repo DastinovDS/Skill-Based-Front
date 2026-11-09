@@ -20,7 +20,7 @@ BATCH = sorted((ROOT / "maps" / "gen").glob("*.json"))
 @pytest.mark.parametrize("bot", ["smart_expander", "smart_exploiter"])
 def test_a_bot_plays_a_generated_map(bot: str) -> None:
     mapdef = load_map(BATCH[0])
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
     assert mapdef.meta.symmetry == "none"
     sides = [bot_factory(bot)(mapdef, rules, seed=1, player=p) for p in (0, 1)]
     result = run_headless(mapdef, rules, sides, max_ticks=600)

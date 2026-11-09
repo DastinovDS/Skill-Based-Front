@@ -67,60 +67,37 @@ def short_rules() -> Ruleset:
 
 @pytest.fixture(scope="module")
 def full_rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
 
 
 # The frames file --------------------------------------------------------------------------
 
 
-def test_frame_has_no_road_types(line3: MapDef, full_rules: Ruleset) -> None:
-    """Key ``r`` (DEC-22) is gone with the road types (DEC-26): only the levels in ``w``."""
+def test_frame_roads_are_all_level_1(line3: MapDef, full_rules: Ruleset) -> None:
+    """Key ``w`` keeps its slot with level 1 on every road (#894: no road upgrades); no ``r``
+    (road types, DEC-26), no ``e`` (road builds, DEC-28) and no ``b`` any more; a barracks build
+    (DEC-26) is not drawn."""
     state = initial_state(line3, full_rules)
-    state.edges[1].width = 2
+    state.nodes[0].build = Build(owner=0, since=0, kind=BuildKind.BARRACKS)
     frame = frame_of(state, full_rules)
-    assert frame["w"] == [1, 2] and "r" not in frame
-
-
-def test_frame_builds_are_road_builds_only(line3: MapDef, full_rules: Ruleset) -> None:
-    """Key ``e``: road builds by edge (DEC-28); a barracks or warehouse build (DEC-26) is not
-    drawn; no ``b`` (road builds by city) any more."""
-    state = initial_state(line3, full_rules)
-    state.nodes[0].build = Build(edge=None, owner=0, since=0, kind=BuildKind.BARRACKS)
-    assert "e" not in frame_of(state, full_rules)
-    state.edges[0].build = Build(edge=0, owner=0, since=0)
-    frame = frame_of(state, full_rules)
-    assert frame["e"] == [[0, 0, full_rules.build.ticks_per_level]] and "b" not in frame
+    assert frame["w"] == [1, 1]
+    assert not {"r", "e", "b"} & set(frame)
 
 
 def test_frame_nodes_carry_the_warehouse_places(full_rules: Ruleset) -> None:
-    """``n[i][3]``: the places of the warehouse as the live view's ``warehouse_cap`` (DEC-26, #556),
-    not the node capacity (which is bigger); ``null`` for a province. The expected numbers are the
-    ruleset's ``start_by_kind`` plus the level times ``gain_per_level``."""
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
-    assert rules.city_upgrades.enabled
+    """``n[i][3]``: the places of the warehouse as the live view's ``warehouse_cap`` (DEC-43,
+    item C, #556), not the node capacity (which is bigger); ``null`` for a province. The expected
+    numbers are the ruleset's ``start_by_kind``."""
     mapdef = load_map(ROOT / "maps" / "crossroads.json")
-    state = initial_state(mapdef, rules)
-    city = next(n for n in mapdef.nodes if n.kind.value == "city_medium")
-    state.nodes[city.id].warehouse_level = 1
-    frame = frame_of(state, rules)
+    state = initial_state(mapdef, full_rules)
+    frame = frame_of(state, full_rules)
     nodes = cast("list[list[Any]]", frame["n"])
     for node, row in zip(mapdef.nodes, nodes, strict=True):
         if node.kind.value == "province":
             assert row[3] is None
             continue
-        level = 1 if node.id == city.id else 0
-        expected = getattr(rules.warehouse.start_by_kind, node.kind.value) + (
-            level * rules.warehouse.gain_per_level
-        )
-        assert row[3] == expected
+        assert row[3] == getattr(full_rules.warehouse.start_by_kind, node.kind.value)
         assert row[1] <= row[3] < row[2]  # the stock fits, and it is less than the node capacity
-    # Without city development the warehouse follows the node capacity (DEC-22).
-    plain = frame_of(initial_state(mapdef, full_rules), full_rules)
-    assert all(
-        row[3] == row[2]
-        for node, row in zip(mapdef.nodes, cast("list[list[Any]]", plain["n"]), strict=True)
-        if node.kind.value != "province"
-    )
 
 
 def _fight(round_: FightRound | None) -> Fight:
@@ -205,9 +182,10 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
     figures on edges, the warehouses seen, the road builds seen."""
     mapdef = load_map(MAPS / "web.json")
     bots = [
-        # Seeds of a pair that plays the whole 15 minutes (with 2 s rounds, DEC-32).
-        BOTS["rusher"](mapdef, full_rules, seed=2, player=0),
-        BOTS["reactive"](mapdef, full_rules, seed=3, player=1),
+        # Seeds of a pair that plays the whole 15 minutes (with 2 s rounds, DEC-32; found again
+        # after the bots lost the removed rules, #894).
+        BOTS["rusher"](mapdef, full_rules, seed=7, player=0),
+        BOTS["reactive"](mapdef, full_rules, seed=8, player=1),
     ]
     log = tmp_path / "7.jsonl.gz"
     with ReplayWriter(log) as writer:
@@ -343,8 +321,10 @@ def _decoded(vision: dict[str, Any], tick: int) -> dict[str, Any]:
                     "units_range": units_range,
                 }
             )
-        edges.append({"width": width, "detail": detail, "halves": halves, "enemy_groups": enemy})
-    return {"nodes": nodes, "edges": edges, "builds": vision.get("b", [])}
+        assert width == 1  # the slot of the road level stays (#894)
+        edges.append({"detail": detail, "halves": halves, "enemy_groups": enemy})
+    assert "b" not in vision
+    return {"nodes": nodes, "edges": edges}
 
 
 def _expected(view: dict[str, Any]) -> dict[str, Any]:
@@ -354,10 +334,7 @@ def _expected(view: dict[str, Any]) -> dict[str, Any]:
             {"detail": n["detail"], "seen": n["seen"], "warehouse": n["warehouse"]}
             for n in view["nodes"]
         ],
-        "edges": [
-            {k: e[k] for k in ("width", "detail", "halves", "enemy_groups")} for e in view["edges"]
-        ],
-        "builds": [e["id"] for e in view["edges"] if e["build"] is not None],
+        "edges": [{k: e[k] for k in ("detail", "halves", "enemy_groups")} for e in view["edges"]],
     }
 
 
@@ -418,17 +395,15 @@ def test_frames_of_a_map_tempo_match_name_the_given_ruleset(
 ) -> None:
     """DEC-46: the match plays the scaled rules, but the frames header names the ruleset as
     given, the one the ``matches`` row and the replay header carry (``_header_agrees``)."""
-    source = tmp_path / "tempo.toml"
-    source.write_text(
-        (ROOT / "rulesets" / "test-short.toml").read_text()
-        + "\n[map_tempo]\nref_nodes = 49\nmin_pct = 50\nmax_pct = 150\n"
-    )
+    source = ROOT / "rulesets" / "test-short.toml"  # a 60-second mvp-7: it has [map_tempo]
     archive = tmp_path / "archive"
     archive.mkdir()
     archive_ruleset(source, archive)
     rules = load_ruleset(source)
+    assert rules.map_tempo is not None
     played = apply_map_tempo(rules, line3)
-    assert played.cp.period_ticks == 2 * rules.cp.period_ticks  # 3 nodes: pct clamped to 50
+    balance = rules.stances.cp_period_ticks.balance
+    assert played.stances.cp_period_ticks.balance == 2 * balance  # 3 nodes: pct clamped to 50
     log = tmp_path / "1.jsonl.gz"
     bots = [BOTS["random_legal"](line3, played, seed=s, player=s) for s in (0, 1)]
     record_headless(log, line3, rules, bots)

@@ -34,17 +34,15 @@ The owner beat the hard smart bots 4 of 4 on ``crossroads`` with one plan
 6. **The late game** (#663): in the last ``LATE_AWARDS`` VP awards without a lead on the VP
    forecast the strike no longer waits for the build-up at the stage.
 
-5. **Economy v2** (DEC-41, ``economy.model = "v2"``): the hoard (the centre, then the stage) is
-   the first target of a supply line, so its warehouse fills, and every group of the strike that
-   can gather a bonus from the warehouse it stands in goes planned with the shots the strike
-   still misses (DEC-41, item 10); no bunkers.
+5. **The plans** (DEC-41, item 10): every group of the strike that can gather a bonus from the
+   warehouse it stands in goes planned with the shots the strike still misses.
 
 Deterministic and mirror-invariant like every smart bot: the centre and the stage are chosen by
 the public map with ``node_key`` ties.
 """
 
 from collections.abc import Mapping
-from typing import ClassVar, Final, override
+from typing import ClassVar, override
 
 from gow_bots.bots.assess import Assessment
 from gow_bots.bots.base import ParamRange, node_of
@@ -55,25 +53,19 @@ from gow_bots.bots.tempo import DEFAULT_DIFFICULTY
 from gow_sim.commands import BuildBarracks, Command, Merge, Move, Split
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import GroupView, PlayerView, Stance
+from gow_sim.view import GroupView, PlayerView
 
 __all__ = ["SmartHoarder"]
-
-W_HOARD: Final = 10
-"""Economy v2: the weight of the hoard among the nodes that want charges (``line_extra``)."""
 
 
 class SmartHoarder(SmartBot):
     """The owner's staging strike (module docstring)."""
 
     name: ClassVar[str] = "smart_hoarder"
-    STANCE: ClassVar[Stance] = Stance.WAR
     STRIKE: ClassVar[bool] = True
     STRIKE_ONLY: ClassVar[bool] = True
     STRIKE_BANK: ClassVar[bool] = True
     STRIKE_MIN: ClassVar[int] = 1
-    BUNKERS: ClassVar[int] = 0
-    """Economy v2: the yardstick attacks, it does not dig in."""
     MID_RALLY: ClassVar[bool] = False
     """The capital's spare units march by the build-up (``_guard_split``), not by item 18."""
     ANSWERS: ClassVar[bool] = False
@@ -212,20 +204,8 @@ class SmartHoarder(SmartBot):
         return True
 
     @override
-    def line_extra(self, ctx: Ctx) -> dict[int, int]:
-        """Economy v2 (item 5): the hoard, the centre and then the stage, gets its line first:
-        its warehouse feeds the plans of the strike that goes from there."""
-        return {self.target(): W_HOARD}
-
-    @override
-    def wanted_stance(self, a: Assessment) -> Stance:
-        return self.STANCE
-
-    @override
     def wanted_barracks(self, view: PlayerView) -> int | None:
         """The centre, once held, without a barracks and without a build or a fight (item 2)."""
-        if not self.rules.city_upgrades.enabled:
-            return None
         n = view.nodes[self.centre]
         if n.owner != self.player or n.has_barracks or n.building is not None:
             return None
@@ -381,11 +361,10 @@ class SmartHoarder(SmartBot):
     def plan_strike(self, g: GroupView, missing: int, edges: int, bonus: int = 0) -> bool:
         """The human's choice, not the price utility (item 4): a group two or more edges away
         whose charged units take the whole bonus goes planned while the strike is short (the
-        owner planned 1-3 small groups from 1-3 edges in every winning strike). Under v2 every
-        group that can gather a bonus from its warehouse does (the hoard, item 5)."""
-        if self.rules.v2:
-            return bonus >= 1
-        return edges >= 2 and self.rules.orders.planned_bonus(edges, g.charged) >= 2
+        owner planned 1-3 small groups from 1-3 edges in every winning strike). Every group that
+        can gather a bonus from its warehouse does (the hoard, item 5)."""
+        del g, missing, edges
+        return bonus >= 1
 
     @override
     def strike_wanted(self, ctx: Ctx) -> bool:

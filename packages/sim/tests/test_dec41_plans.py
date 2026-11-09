@@ -1,5 +1,5 @@
-"""Economy v2, part 3 (DEC-41, #642; implementation #646): the planned order gathers its bonus,
-a capture costs a charge.
+"""The planned order gathers its bonus, a capture costs a charge (DEC-41, #642; implementation
+#646).
 
 Expected values come from mechanics.md, section 7, block "Economy v2 (DEC-41, #642)": item 10
 (the planned order costs as much as an ordinary one, ``orders.cost.planned_move =
@@ -14,8 +14,10 @@ implementation notes of #646 under that block.
 
 Map ``dec41`` (see ``test_dec41.py``): player 0 owns K = 0 (capital), A = 1 (large), B, C, D =
 2, 3, 4 (medium), E, F, G = 5, 6, 7 (small); M = 8 is a neutral province next to C; player 1
-owns 9..16 (its capital 16). Warehouse capacities of ``mvp-3``: medium 2, province 1. Only the
-capital produces, and no line is drawn, so the warehouse of B holds exactly what a test puts in.
+owns 9..16 (its capital 16). Warehouse capacities of ``mvp-6`` (DEC-43, item C): every city 3,
+province 1. ``RULES`` is ``mvp-6`` with a capture cost of 1 (item 11), no production and no
+dispatch of the supply flow (DEC-43), so the warehouse of B holds exactly what a test puts in
+(the units still recharge from it every tick).
 """
 
 from dataclasses import replace
@@ -34,26 +36,27 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import load_map
 from gow_sim.match import HEADLESS_MATCH_KEY, Match
-from gow_sim.ruleset import load_ruleset
+from gow_sim.ruleset import StanceTable, load_ruleset
 from gow_sim.state import PLAN_WAIT, AtNode, Event, Group, IntentKind, Mode, OnEdge
-from gow_sim.systems.combat import Bonus, BonusSource
 from gow_sim.systems.orders import active_bonuses
 from gow_sim.view import project
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-MVP3 = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
-# The tables of DEC-41 (mechanics.md) are written for the accepted starting values: CP every 50
-# ticks, factories 50 / 100, a capture costs 1. mvp-3 moved on (owner decision 2026-11-01, #659:
-# `balanced`), so these tests pin the DEC-41 numbers on top of it; test_dec41.py pins the file.
-assert MVP3.factory is not None
+MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+_MVP6 = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
+_NEVER = 10**6
+"""A period no test reaches: no production, no dispatch of the flow."""
 RULES = replace(
-    MVP3,
-    cp=replace(MVP3.cp, period_ticks=50),
-    factory=replace(MVP3.factory, capital_period_ticks=50, built_period_ticks=100),
-    capture=replace(MVP3.capture, charge_cost=1),
+    _MVP6,
+    stances=replace(
+        _MVP6.stances,
+        capital_period_ticks=StanceTable(economy=_NEVER, balance=_NEVER, war=_NEVER),
+    ),
+    factory=replace(_MVP6.factory, built_period_ticks=_NEVER),
+    supply=replace(_MVP6.supply, dispatch_ticks=_NEVER),
+    capture=replace(_MVP6.capture, charge_cost=1),
 )
-V1 = load_ruleset(ROOT / "rulesets" / "mvp-2.toml")
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 K, A, B, C, D, E, F, G, M = range(9)
 
@@ -109,8 +112,7 @@ def test_a_planned_order_costs_an_ordinary_move_and_starts_with_no_bonus() -> No
 
 
 def test_the_requested_bonus_is_checked() -> None:
-    """Item 10: a v2 planned order needs ``b >= 1``; an ordinary order and a v1 planned order
-    name none (v1 keeps the DEC-29 distance bonus)."""
+    """Item 10: a planned order needs ``b >= 1``; an ordinary order names none."""
     m = _match()
     g = _group(m, B, 3, 3)
     state = m.state
@@ -119,14 +121,12 @@ def test_the_requested_bonus_is_checked() -> None:
     assert validate(state, RULES, 0, Move(g.id, C, planned=True, bonus=-1)) == invalid
     assert validate(state, RULES, 0, Move(g.id, C, bonus=1)) == invalid
     assert isinstance(validate(state, RULES, 0, Move(g.id, C, planned=True, bonus=1)), Ok)
-    assert validate(state, V1, 0, Move(g.id, C, planned=True, bonus=1)) == invalid
 
 
-def test_release_plan_is_of_economy_v2_and_needs_a_gathering_plan() -> None:
+def test_release_plan_needs_a_gathering_plan() -> None:
     m = _match()
     g = _group(m, B, 3, 3)
     state = m.state
-    assert validate(state, V1, 0, ReleasePlan(g.id)) == Reject(RejectCode.FEATURE_DISABLED)
     assert validate(state, RULES, 0, ReleasePlan(g.id)) == Reject(RejectCode.NOTHING_TO_CANCEL)
     assert validate(state, RULES, 1, ReleasePlan(g.id)) == Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
     assert validate(state, RULES, 0, ReleasePlan(999)) == Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
@@ -201,12 +201,12 @@ def test_release_departs_at_once_with_the_bonus_gathered_free() -> None:
     g = _group(m, B, 3, 3)
     _to(m, 10, Move(g.id, C, planned=True, bonus=3))
     _to(m, 51)
-    assert g.bonus == 1 and active_bonuses(m.state, RULES) == {}
+    assert g.bonus == 1 and active_bonuses(m.state) == {}
     cp = m.state.players[0].cp
     _to(m, 52, ReleasePlan(g.id))
     assert isinstance(_outcome(m), Ok) and m.state.players[0].cp == cp
     assert isinstance(g.location, OnEdge) and (g.bonus, g.plan) == (1, 0)
-    assert active_bonuses(m.state, RULES) == {g.id: Bonus(BonusSource.PLANNED_ORDER, 1)}
+    assert active_bonuses(m.state) == {g.id: 1}
     assert m.state.nodes[B].warehouse == 1
     assert [i.kind for i in m.state.intents.values()] == [IntentKind.PLANNED_MOVE]
 
@@ -242,31 +242,16 @@ def test_a_province_gathers_too() -> None:
     assert isinstance(g.location, OnEdge) and g.bonus == 1
 
 
-def test_a_v1_planned_order_keeps_the_delay_and_the_distance_bonus() -> None:
-    """v1 unchanged: ``planned_delay_ticks = 30``, the DEC-29 bonus per edge (B -> C -> M: 2),
-    no charge taken."""
-    m = Match(MAP, V1, HEADLESS_MATCH_KEY)
-    m.state.nodes[B].warehouse = 2
-    g = _group(m, B, 3, 3)
-    events = _to(m, 10, Move(g.id, M, planned=True))
-    assert g.order is not None and g.order.depart_tick == 40
-    assert (g.bonus, g.plan) == (2, 0)
-    events += _to(m, 40)
-    assert _charged(events) == [] and m.state.nodes[B].warehouse == 2
-
-
 # Item 11: a capture spends one charge ----------------------------------------------------------
 
 
-def test_a_capture_spends_one_charge_and_destroys_the_bunker_and_takes_the_factory() -> None:
-    """Item 11 (DEC-38) with items 2, 12, 13: an own group 2/2 walks into the empty enemy city
-    9 (player 1's built factory, a bunker, 1 charge in its warehouse): the capture spends one
-    charge (2/1), the bunker is destroyed, the factory passes to the capturer (it has only its
-    capital), the warehouse is lost."""
+def test_a_capture_spends_one_charge_and_takes_the_factory() -> None:
+    """Item 11 (DEC-38) with items 2 and 13: an own group 2/2 walks into the empty enemy city 9
+    (player 1's built factory, 1 charge in its warehouse): the capture spends one charge (2/1),
+    the factory passes to the capturer (it has only its capital), the warehouse is lost."""
     m = _match()
     state = m.state
     state.nodes[14].owner = 0  # the group stands in an own node next to 9
-    state.nodes[9].fort = True
     state.nodes[9].factory = 1
     state.nodes[9].warehouse = 1
     g = _group(m, 14, 2, 2)
@@ -275,7 +260,6 @@ def test_a_capture_spends_one_charge_and_destroys_the_bunker_and_takes_the_facto
         events += m.step()
     assert state.nodes[9].owner == 0
     assert (g.units, g.charged) == (2, 1)
-    assert state.nodes[9].fort is False
     assert state.nodes[9].factory == 0
     assert any(e.kind == "warehouse_lost" and e.get("node") == 9 for e in events)
 
@@ -291,12 +275,12 @@ def test_a_group_without_a_charge_cannot_capture_and_bounces() -> None:
     assert [e.get("result") for e in events if e.kind == "capture_failed"] == ["bounce"]
 
 
-def test_a_free_capture_in_mvp3_takes_the_node_with_no_charge() -> None:
-    """Item 11 with the played ``mvp-3`` (`capture.charge_cost = 0`, owner decision 2026-11-01,
-    #659): the rule stays parametric, and `0` means a capture is free. A group 1/0 takes the empty
-    neutral province M, nothing bounces and no charge is spent."""
-    assert MVP3.capture.charge_cost == 0
-    m = Match(MAP, MVP3, HEADLESS_MATCH_KEY)
+def test_a_free_capture_in_mvp5_takes_the_node_with_no_charge() -> None:
+    """Item 11 with ``mvp-5`` (``capture.charge_cost = 0``, owner decision 2026-11-01, #659): the
+    rule stays parametric, and ``0`` means a capture is free. A group 1/0 takes the empty neutral
+    province M, nothing bounces and no charge is spent."""
+    assert MVP5.capture.charge_cost == 0
+    m = Match(MAP, MVP5, HEADLESS_MATCH_KEY)
     g = _group(m, C, 1, 0)
     events = _to(m, 1, Move(g.id, M))
     while m.state.nodes[M].owner is None and m.tick < 60:

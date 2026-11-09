@@ -1,34 +1,29 @@
-"""The bots and ``gow-bots stats`` under ``[stances]`` (DEC-44, #772).
+"""The bots under the stances (DEC-44, #772).
 
-The plain bots have no stance policy: they stay in Balance, the rates of ``mvp-4-sup200``; the
-smart bots have one since #881 (``test_stance_policy.py``).
-The bound of the enemy CP still has to hold, an enemy human may sit in War. ``stats`` reads the
-stance usage of a match from its replay.
+The plain bots have no stance policy: they stay in Balance; the smart bots have one since #881
+(``test_stance_policy.py``). The bound of the enemy CP still has to hold, an enemy human may sit
+in War. ``stats`` of the stance usage: ``test_stats.py``.
 """
 
 import dataclasses
-import re
 from pathlib import Path
 
 import pytest
 
 from gow_bots.bots import BOTS, SmartBot
 from gow_bots.bots.assess import EnemyCp
-from gow_bots.cli import main
-from gow_bots.tournament import live_keys
 from gow_sim.commands import Command, PlayerCommand, SetStance
 from gow_sim.maps import MapDef, load_map
-from gow_sim.match import SIM_VERSION, Match
+from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
-GOLDEN = ROOT / "packages" / "sim" / "tests" / "golden" / f"v{SIM_VERSION}"
 
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-4-stances.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 
 
 @pytest.fixture(scope="module")
@@ -82,45 +77,3 @@ def test_the_bound_holds_against_an_enemy_in_war(rules: Ruleset, crossroads: Map
         cmds = [PlayerCommand(1, 0, SetStance(Stance.WAR))] if tick == 1 else []
         match.step(cmds)
         assert bound.update(match.view(0)) >= match.state.players[1].cp
-
-
-def test_set_stance_is_a_live_key_only_with_the_section() -> None:
-    assert "SetStance" not in live_keys("v2", "flow")
-    assert "SetStance" in live_keys("v2", "flow", stances=True)
-    assert "SetFront" not in live_keys("v2", "flow", stances=True)
-    assert "SetStance" in live_keys("v1", None)
-
-
-def _table(capsys: pytest.CaptureFixture[str], replay: Path) -> dict[str, str]:
-    argv = [
-        "stats",
-        str(replay),
-        "--rulesets",
-        str(ROOT / "rulesets" / "archive"),
-        "--maps",
-        str(GOLDEN / "maps"),
-    ]
-    assert main(argv) == 0
-    lines = capsys.readouterr().out.splitlines()
-    return {re.split(r"\s{2,}", line)[0]: line for line in lines[1:]}
-
-
-def test_stats_show_the_stance_usage(capsys: pytest.CaptureFixture[str]) -> None:
-    """The golden game of ``mvp-4-stances``: ``MixBot`` changes the stance on a schedule."""
-    rows = _table(capsys, GOLDEN / "web-mvp4-stances.jsonl.gz")
-    for stance in ("economy", "balance", "war"):
-        assert f"share of time in {stance}" in rows
-        assert f"CP earned in {stance}" in rows
-        assert f"charges in {stance} (capital / built)" in rows
-    assert "stance switches" in rows
-    assert int(rows["stance switches"].split()[2]) > 0
-    assert "SetStance (accepted)" in rows
-    assert "charges from the capital" in rows and "charges from built factories" in rows
-
-
-def test_stats_of_v2_without_the_section_have_no_stance_rows(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    rows = _table(capsys, GOLDEN / "web-mvp4.jsonl.gz")
-    assert "stance switches" not in rows and "SetStance (accepted)" not in rows
-    assert "charges from the capital" in rows

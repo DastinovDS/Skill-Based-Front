@@ -364,7 +364,7 @@ function walkSnapshot(captured: boolean, pair = false): SnapshotMsg {
                 : {
                     tick: 400,
                     level: 'exact' as const,
-                    enemy_modes: ['defense' as const],
+                    enemy_modes: ['attack' as const],
                     enemy_units: 1,
                     enemy_charged: 0,
                     enemy_range: null,
@@ -552,7 +552,7 @@ function rangesSnapshot(): SnapshotMsg {
           ...edge,
           halves: [
             half('range', seen(0, 'range', ['attack'], { enemy_range: { low: 6, high: 10 } })),
-            half('fog', seen(120, 'presence', ['defense'])),
+            half('fog', seen(120, 'presence', ['attack'])),
           ],
           enemy_groups: [
             figure('r1', 350, false, 'range', { units_range: { low: 6, high: 10 } }),
@@ -640,8 +640,6 @@ function fogRoadSnapshot(): SnapshotMsg {
           // A quarter of the road short of the hidden city, in the veil of its cell.
           location: { kind: 'edge', edge: 1, from_node: 1, progress: 750 },
           order: null,
-          defense_bonus: null,
-          defense_cap: null,
         },
       ],
     },
@@ -1018,7 +1016,6 @@ export function frozenSource(scene: FixtureScene, at?: number, flood?: FloodPin)
   const snapshot = tick === undefined ? scene.snapshot : { ...scene.snapshot, tick };
   const frame: RenderFrame = interpolateFrame(snapshot, null, snapshot.tick);
   const rules = scene.rules ?? DEV_RULES;
-  const v2 = rules.economy.model === 'v2';
   const events =
     flood === undefined ? scene.events : [...scene.events, ...floodEvents(scene, flood)];
   return {
@@ -1028,25 +1025,23 @@ export function frozenSource(scene: FixtureScene, at?: number, flood?: FloodPin)
       ? {}
       : { floodFrom: floodOwners(scene.snapshot, flood), floodHoldMs: flood.ms }),
     // Economy v2: a plan has no delay, it gathers its bonus (DEC-41, item 10).
-    orderDelays: { planned: v2 ? 0 : rules.orders.planned_delay_ticks },
+    orderDelays: { planned: 0 }, // a plan gathers its bonus (DEC-41, item 10)
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
     recruitQueueMax: DEV_RULES.recruit.queue_max,
     provinceWarehouse: rules.city_upgrades.warehouse_province,
-    roadBuildTicks: DEV_RULES.build.ticks_per_level,
-    ...(rules.fort === null ? {} : { fortBuildTicks: rules.fort.build_ticks }),
+    roadBuildTicks: 0, // no road levels (#894)
+    fortBuildTicks: rules.fort.build_ticks,
     cityUpgrades:
       scene.cityUpgrades === true
         ? {
             barracks: DEV_RULES.city_upgrades.barracks_ticks,
-            warehouse: DEV_RULES.city_upgrades.warehouse_ticks,
-            warehouseMaxLevel: DEV_RULES.city_upgrades.warehouse_max_level,
-            warehouseGainPerLevel: DEV_RULES.city_upgrades.warehouse_gain_per_level,
+            warehouse: 0, // no warehouse levels (#894)
+            warehouseMaxLevel: 0,
+            warehouseGainPerLevel: 0,
             barracksCharges: rules.city_upgrades.barracks_charges,
-            ...(rules.factory === null
-              ? {}
-              : { factory: rules.factory.build_ticks, factoryCharges: rules.factory.cost }),
-            ...(rules.bunker === null ? {} : { fort: rules.bunker.build_ticks }),
+            factory: rules.factory.build_ticks,
+            factoryCharges: rules.factory.cost,
           }
         : null,
     capacityTicks: {

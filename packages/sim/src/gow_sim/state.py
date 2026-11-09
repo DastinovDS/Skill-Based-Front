@@ -10,12 +10,9 @@ Rules for this module (AGENTS.md, section 4):
 ``to_canonical()`` turns the state into plain JSON data with every collection as a list sorted by
 id, so the canonical JSON and ``state_hash()`` do not depend on dict insertion order or
 ``PYTHONHASHSEED``. The static map is embedded in the file format (``map_to_data``), so the
-canonical form alone restores the state: ``from_canonical(to_canonical(s)) == s``. The fields of
-the economy v2 (DEC-41: factories, lines, the round robin of a factory, bunkers, the charges a build
-still owes) and of the supply flow (DEC-43: the leaf shift, the field and the plan of a node, the
-road fortifications of item D) are
-written only when they differ from their defaults, so a v1 state and a state of the drawn lines
-have the canonical form and the hash they had before them.
+canonical form alone restores the state: ``from_canonical(to_canonical(s)) == s``. Some fields of
+the factories (DEC-41) and of the supply flow (DEC-43) are written only when they differ from their
+defaults.
 """
 
 from collections.abc import Callable
@@ -24,38 +21,35 @@ from enum import StrEnum
 from typing import Final, Protocol, cast
 
 from gow_sim.canonical import digest
-from gow_sim.maps import PLAYERS, ROAD_START_LEVEL, MapDef, NodeKind, map_to_data, parse_map
+from gow_sim.maps import PLAYERS, MapDef, NodeKind, map_to_data, parse_map
 from gow_sim.ruleset import Ruleset, Stance
 
 PROGRESS_SCALE: Final = 1000
 """Edge progress is stored in thousandths of the edge (DEC-07, rule 6)."""
 
 PLAN_WAIT: Final = 2**31 - 1
-"""``Order.depart_tick`` of a planned order that gathers its bonus under economy v2 (DEC-41,
-item 10): no departure tick is known until the requested bonus or the cap is reached, or the
+"""``Order.depart_tick`` of a planned order that gathers its bonus (DEC-41, item 10): no
+departure tick is known until the requested bonus or the cap is reached, or the
 player releases the group; then ``systems.orders`` (or ``ReleasePlan``) sets the real tick."""
 
 
 class Mode(StrEnum):
-    """Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16)."""
+    """Group mode (mechanics.md, section 3). "Defense" was removed with economy v1 (DEC-41,
+    item 5; #894): every group attacks."""
 
     ATTACK = "attack"
-    DEFENSE = "defense"
 
 
 class IntentKind(StrEnum):
-    """Publicly visible intent types (DEC-04, DEC-08)."""
+    """Publicly visible intent types (DEC-04, DEC-08): the planned order."""
 
     PLANNED_MOVE = "planned_move"
-    DEFENSE = "defense"
 
 
 class BuildKind(StrEnum):
-    """What a city builds (DEC-26, item 9): a road level, the barracks or a warehouse level."""
+    """What a city builds in its build slot (DEC-26, item 9): the barracks."""
 
-    ROAD = "road"
     BARRACKS = "barracks"
-    WAREHOUSE = "warehouse"
 
 
 class FlowIdle(StrEnum):
@@ -78,8 +72,8 @@ class Detail(StrEnum):
     """
 
     EXACT = "exact"
-    """Everything, with numbers: the sources of vision (own nodes and nodes where own groups
-    stand) and the neighbours a source sees exactly by the terrain table."""
+    """Everything, with numbers: the sources of vision (nodes where own groups stand, DEC-35)
+    and the neighbours a source sees exactly by the terrain table."""
     RANGE = "range"
     """The range of the enemy units (``vision.range_starts``) and their modes, no charged."""
     PRESENCE = "presence"
@@ -102,16 +96,12 @@ class OnEdge:
     ``progress`` is in thousandths of the edge, ``0..PROGRESS_SCALE``.
     ``back``: the group bounces (DEC-07, rules 4 and 6) and goes back to ``from_node``; its
     ``progress`` falls by the steps it grew, so the way back takes as long as the way there.
-    ``level``: the road level its speed uses (see the field).
     """
 
     edge: int
     from_node: int
     progress: int
     back: bool = False
-    level: int = 1
-    """The road level when the group entered the edge (DEC-28, item 7): its time is computed then
-    and does not change if the road is upgraded meanwhile."""
 
 
 type Location = AtNode | OnEdge
@@ -123,8 +113,8 @@ class Order:
 
     ``path``: the nodes still to reach, the next one first; the last one is the destination.
     ``planned``: a planned order (DEC-08). The group leaves its node not before ``depart_tick``:
-    the tick the order was applied, plus ``orders.planned_delay_ticks`` for a planned order; under
-    economy v2 a gathering planned order has ``PLAN_WAIT`` until it may depart (DEC-41, item 10).
+    the tick the order was applied; a gathering planned order has ``PLAN_WAIT`` until it may depart
+    (DEC-41, item 10).
     """
 
     path: tuple[int, ...]
@@ -145,24 +135,18 @@ class Group:
     order: Order | None = None
     """Current movement order; ``None`` when the group has none."""
     intent: int | None = None
-    """Id of the group's public ``Intent`` (SIM-10): planned order or "Defense". The link
-    lives only here, the intent itself names no group (DEC-04)."""
+    """Id of the group's public ``Intent`` (SIM-10): a planned order. The link lives only here,
+    the intent names no group (DEC-04)."""
     bonus: int = 0
-    """Virtual shots of a planned order the group brings into its next fight (DEC-08, DEC-29,
-    SIM-10); 0: none. "Defense" has its own counter, ``ticks_in_defense``."""
+    """Virtual shots of a planned order the group brings into its next fight (DEC-08, DEC-41
+    item 10, SIM-10); 0: none."""
     bonus_tick: int = 0
     """The tick from which ``bonus`` is active: the departure of the planned order."""
-    ticks_in_defense: int = 0
-    """Ticks the group has stood in "Defense" outside a fight (DEC-30): 0 when the mode is
-    switched on and when the group joins a fight, +1 at the end of every tick it stands in the
-    mode in no fight (``systems.orders``); always 0 outside the mode. The bonus is computed from
-    it when a fight begins (``OrderRules.defense_bonus``), so it is a count of ticks, not of
-    shots."""
     fight: int | None = None
     """Id of the ``Fight`` the group is in (DEC-24); ``None``: in no fight. A group in a fight
     does not move (DEC-24, item B6)."""
     plan: int = 0
-    """Economy v2 (DEC-41, item 10): the bonus the player requested for the planned order the
+    """DEC-41, item 10: the bonus the player requested for the planned order the
     group waits on and gathers (``bonus`` is what it has so far); 0: no gathering plan."""
     plan_tick: int = 0
     """The tick of the planned order or of the last charge it took (DEC-41, item 10): the next
@@ -239,31 +223,9 @@ class Fight:
     last_round: FightRound | None = None
 
 
-@dataclass(slots=True)
-class Line:
-    """A drawn supply line of a player (DEC-41, items 3 and 6; ``economy.model = "v2"``).
-
-    ``path``: the own nodes from the source to the target, the first and the last; the path the
-    player drew while it is intact, the rerouted one after a break. ``id``: per player, from
-    ``PlayerState.next_line`` (only the owner ever sees its lines, so the numbers tell the enemy
-    nothing).
-    """
-
-    id: int
-    path: tuple[int, ...]
-
-    @property
-    def source(self) -> int:
-        return self.path[0]
-
-    @property
-    def target(self) -> int:
-        return self.path[-1]
-
-
 @dataclass(frozen=True, slots=True)
 class FlowNode:
-    """The supply flow at an own node (DEC-43; ``supply.model = "flow"``), set by
+    """The supply flow at an own node (DEC-43), set by
     ``systems.flow`` in every tick (and by ``initial_state``) for every node of its owner.
 
     ``d``: the effective field (item A4, after the pull), ``None`` without a field (INF, item A2).
@@ -290,72 +252,47 @@ class PlayerState:
     cp: int
     """Command points in hundredths (100 = 1 CP)."""
     stance: Stance
-    charge_acc: int
-    """Stance share of the CP quantum waiting to become whole charges, in hundredths (DEC-02)."""
+    """The stance (DEC-44): the periods of the CP income and of the own capital."""
     vp: int
-    stance_changed_tick: int | None
-    """Tick of the last stance change; ``None``: never changed, so the first change is free of the
-    cooldown (DEC-09)."""
     forfeited: bool = False
     """The player gave up: a ``Forfeit`` command, also for a technical defeat (DEC-05)."""
-    fronts: tuple[int | None, ...] = ()
-    """The own city of each front marker (DEC-28, item 2; ``supply.front_markers`` of them, set by
-    ``initial_state``), ``None``: not placed. Never two markers on one city (example 8)."""
-    rear_min: int = 0
-    """Charges the own cities without a marker keep (DEC-28, item 3); ``initial_state`` sets
-    ``supply.rear_min_default``."""
-    lines: dict[int, Line] = field(default_factory=dict[int, Line])
-    """The supply lines of the player by id (DEC-41, item 3); empty under v1."""
-    next_line: int = 0
-    """The id of the next line the player draws."""
-    auto_lines: bool = False
-    """A city the player captures is joined to its lines by itself (DEC-41, auto-extension of
-    2026-10-31, #665; ``systems.lines``): ``lines.auto_extend`` at the start under v2, then the
-    player's ``SetAutoLines``. Always ``False`` under v1."""
     leaf_shift: int = 0
-    """The leaf shift in force (DEC-43, item B; ``supply.model = "flow"``): the level is the own
+    """The leaf shift in force (DEC-43, item B): the level is the own
     nodes ``leaf_shift`` roads behind the front; ``SetLeafShift`` sets it, the flow step clamps
     it to ``leaf_shift_max`` (item B3). Hidden from the enemy (item B5)."""
     leaf_shift_max: int = 0
     """``d0`` of the own capital stored by the last flow step: the largest ``SetLeafShift``."""
     cp_ticks: int = 0
-    """Ticks since the last CP quantum, under ``[stances]`` (DEC-44): the quantum fires when this
+    """Ticks since the last CP quantum (DEC-44): the quantum fires when this
     reaches the period of the stance; a stance change carries it over to the new period
     (``systems.economy.carry``, #792). Hidden from the enemy."""
     capital_ticks: int = 0
-    """Ticks since the last quantum of the own capital, under ``[stances]`` (DEC-44), the same
-    way. It keeps counting without an own capital, and the quantum then does nothing."""
+    """Ticks since the last quantum of the own capital (DEC-44), the same way. It keeps counting
+    without an own capital, and the quantum then does nothing."""
 
 
 @dataclass(frozen=True, slots=True)
 class Build:
-    """A build: a road level on an edge (``Edge.build``, DEC-28, item 7) or the build of a city
-    (``Node.build``, DEC-26, item 8: the barracks or a warehouse level, one at a time).
+    """The build in the build slot of a city (``Node.build``, DEC-26, item 8): the barracks.
 
-    ``kind``: a road level (``UpgradeRoad(edge)``, ``edge`` set), the barracks or a warehouse
-    level (``edge`` is ``None``). ``owner``: the player who started it; a road build holds while
-    ``edge`` is internal for them, the others while the city is theirs. ``since``: the tick the
-    build time started, the tick the command was applied unless it waits for its payment; the
-    build ends ``build.ticks_per_level`` (road), ``city_upgrades.barracks_ticks`` or
-    ``city_upgrades.warehouse_ticks`` ticks later. ``owed``: the charges still to pay under the
-    economy v2 (DEC-41, item 7, the progressive payment); while it is above 0 the build time has
-    not started. Always 0 under v1.
+    ``owner``: the player who started it; it holds while the city is theirs. ``since``: the tick
+    the build time started, the tick the command was applied unless it waits for its payment; the
+    build ends ``city_upgrades.barracks_ticks`` ticks later. ``owed``: the charges still to pay
+    (DEC-41, item 7, the progressive payment); while it is above 0 the build time has not started.
     """
 
-    edge: int | None
     owner: int
     since: int
-    kind: BuildKind = BuildKind.ROAD
+    kind: BuildKind = BuildKind.BARRACKS
     owed: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class FactoryBuild:
-    """A factory (DEC-41, item 2) or a bunker (item 12, ``Node.fort_build``) being built: by
-    ``owner``, the build time started at the tick ``since``; it holds while the node is theirs and
-    ends ``factory.build_ticks`` (``bunker.build_ticks``) later. ``owed``: the charges still to
-    pay (item 7, the progressive payment); while it is above 0 the build time has not started and
-    ``since`` is the tick of the command."""
+    """A factory being built (DEC-41, item 2): by ``owner``, the build time started at the tick
+    ``since``; it holds while the node is theirs and ends ``factory.build_ticks`` later.
+    ``owed``: the charges still to pay (item 7, the progressive payment); while it is above 0 the
+    build time has not started and ``since`` is the tick of the command."""
 
     owner: int
     since: int
@@ -381,21 +318,19 @@ class Node:
     """Ticks of production of the first unit of the queue, ``0..recruit.unit_ticks``; equal to
     ``unit_ticks``: the unit is ready and waits for a place (DEC-25, items 4 and 7)."""
     build: Build | None = None
-    """The barracks or warehouse build of this city (DEC-26); ``None``: no build. Roads are built
-    on the edge (``Edge.build``, DEC-28)."""
+    """The barracks build of this city (DEC-26); ``None``: no build."""
     has_barracks: bool = False
-    """The city may recruit (DEC-26): with ``city_upgrades`` the capital from the start and the
-    cities that built the barracks; without it every city. Kept on a capture."""
-    warehouse_level: int = 0
-    """Warehouse upgrades of the city, ``0..warehouse.max_level`` (DEC-26, item 2); kept on a
-    capture, used only with ``city_upgrades``."""
+    """The city may recruit (DEC-26): the capital from the start and the cities that built the
+    barracks. Kept on a capture."""
     cut_since: int | None = None
-    """First tick of the current continuous cut of an own city from the owner's capital
-    (DEC-19, item 2); ``None`` while supplied, for provinces and neutral nodes."""
+    """First tick of the current continuous cut of an own node of a factory-less pocket from the
+    owner's capital (DEC-43, item H4; DEC-19, item 2); ``None`` while supplied and for neutral
+    nodes."""
     factory: int | None = None
     """The player whose factory this city is (DEC-41, item 2); ``None``: no factory. It differs
-    from ``owner`` only between a capture and the ``supply`` system of the same tick, which passes
-    the factory to the capturer or destroys it."""
+    from ``owner`` only between a capture and the ``supply`` system of the same tick
+    (``systems.flow.settle_factories``), which passes the factory to the capturer or destroys
+    it."""
     factory_build: FactoryBuild | None = None
     """The factory being built here (DEC-41, item 2); ``None``: none."""
     factory_ticks: int = 0
@@ -404,34 +339,12 @@ class Node:
     working (its build ends, a capture passes it); the charge comes when it reaches the capital
     period of the owner's stance; a stance change carries it over (``systems.economy.carry``).
     Always 0 without the key. Hidden from the enemy."""
-    rr: int = 0
-    """The line of the factory's round robin that gets the next charge (DEC-41, item 3)."""
-    fort: bool = False
-    """The node has a bunker of its owner (DEC-41, item 12; code name ``fort``); destroyed when
-    the node is captured (``systems.capacity.change_owner``)."""
-    fort_build: FactoryBuild | None = None
-    """The bunker being built here (DEC-41, item 12); ``None``: none."""
     flow: FlowNode | None = None
-    """The supply flow of the owner here (DEC-43); ``None`` outside the flow and for nodes
-    without an owner."""
+    """The supply flow of the owner here (DEC-43); ``None`` for nodes without an owner."""
     road_forts: dict[int, int] = field(default_factory=dict[int, int])
     """The road fortifications of the owner here (DEC-43, item D; code name ``road_fort``): edge
     id (a road leaving the node) to the tick it works from (``ready``: the tick of the command plus
     ``fort.build_ticks``); before it, it is being built. Destroyed on capture (``change_owner``)."""
-
-
-@dataclass(slots=True)
-class Edge:
-    """Dynamic part of an edge; the static part is ``GameState.map.edges[id]``.
-
-    ``width``: the road level ``1..max_level`` (DEC-22; DEC-23, item 6: the map field is
-    ``max_level``, the state keeps the name ``width``). Roads have no type (DEC-26, item 7).
-    """
-
-    id: int
-    width: int
-    build: Build | None = None
-    """The road level being built on this edge (DEC-28, item 7); ``None``: no build."""
 
 
 @dataclass(slots=True)
@@ -440,10 +353,7 @@ class Packet:
 
     ``edge`` is the current edge of the path, travelled away from ``from_node`` during
     ``depart_tick .. arrive_tick``. ``route``: the edges of the path still to go after ``edge``,
-    the next one first; ``route_ticks``: their times, fixed at dispatch. ``transfer``: a one-off
-    ``Transfer`` (DEC-18, item 6), not the automatic dispatch. ``share``: charges of a transfer not
-    yet taken from the ``amount`` of its current edge (DEC-18, item 10, #253); 0 for the automatic
-    dispatch.
+    the next one first; ``route_ticks``: their times, fixed at dispatch.
     """
 
     id: int
@@ -455,16 +365,11 @@ class Packet:
     arrive_tick: int
     route: tuple[int, ...] = ()
     route_ticks: tuple[int, ...] = ()
-    transfer: bool = False
-    share: int = 0
 
 
 @dataclass(slots=True)
 class Intent:
-    """The public part of a planned order or a mode switch: no group id and no group size.
-
-    ``target`` is ``None`` for an intent without a destination (``DEFENSE``).
-    """
+    """The public part of a planned order: no group id and no group size."""
 
     id: int
     owner: int
@@ -479,7 +384,8 @@ class Sighting:
     """What a player sees, or last saw, of the enemy groups of a place: a node or a half of an
     edge (DEC-21, items 3 and 8; fog with «last seen» memory).
 
-    ``enemy_modes``: distinct modes of the enemy groups seen, sorted; empty means none seen.
+    ``enemy_modes``: distinct modes of the enemy groups seen, sorted; empty means none seen
+    (every group attacks, so it says whether enemies were there).
     ``enemy_units`` and ``enemy_charged``: totals, known only when ``level`` is ``EXACT``.
     ``enemy_range``: the range ``(low, high)`` of the total units (``high`` ``None``: open), only
     when ``level`` is ``RANGE`` and enemies are there (DEC-21, item 4).
@@ -499,15 +405,13 @@ class VisionMemory:
 
     ``nodes``: last sighting by node id. ``halves``: last sighting of the half of an edge by
     ``(edge, node)``, the node being the end the half belongs to; positions and directions are
-    not remembered (DEC-33, detail 8). ``widths``: the road level last seen by edge id (DEC-17).
-    ``spotted``: enemy group id to the tick it came into sight, for every enemy group in sight
-    now; it keys the opaque id of a figure, so a group gets a new one each time it comes out of
-    the fog (DEC-33, detail 5).
+    not remembered (DEC-33, detail 8). ``spotted``: enemy group id to the tick it came into sight,
+    for every enemy group in sight now; it keys the opaque id of a figure, so a group gets a new one
+    each time it comes out of the fog (DEC-33, detail 5).
     """
 
     nodes: dict[int, Sighting] = field(default_factory=dict[int, Sighting])
     halves: dict[tuple[int, int], Sighting] = field(default_factory=dict[tuple[int, int], Sighting])
-    widths: dict[int, int] = field(default_factory=dict[int, int])
     spotted: dict[int, int] = field(default_factory=dict[int, int])
 
 
@@ -539,7 +443,6 @@ class GameState:
     tick: int
     players: dict[int, PlayerState]
     nodes: dict[int, Node]
-    edges: dict[int, Edge]
     groups: dict[int, Group]
     packets: dict[int, Packet]
     intents: dict[int, Intent]
@@ -573,8 +476,9 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
     Groups get ids player by player, each player's in ``node_key(player, node)`` order, so the
     id order of a player's groups is the mirror of the other player's: tie-breaks by group id
     inside a player (DEC-07, rule 7) stay mirror-symmetric. The stance is
-    ``economy.start_stance`` (DEC-09). Barracks and the start stock follow
-    ``city_upgrades`` (DEC-26, item 5 and the barracks block of section 3).
+    ``economy.start_stance`` (DEC-09). Only the capital has a barracks (DEC-26) and keeps the start
+    stock of the map, cut to its warehouse (DEC-41, item 9); the own capital is the main factory
+    (DEC-41, item 2). The initial state carries the field and the plan of the flow (DEC-43).
     """
     state = GameState(
         map=mapdef,
@@ -584,12 +488,7 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
                 id=p,
                 cp=rules.cp.start,
                 stance=rules.economy.start_stance,
-                charge_acc=0,
                 vp=0,
-                stance_changed_tick=None,
-                rear_min=rules.supply.rear_min_default,
-                fronts=(None,) * rules.supply.front_markers,
-                auto_lines=rules.lines is not None and rules.lines.auto_extend,
             )
             for p in PLAYERS
         },
@@ -600,13 +499,11 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
                 warehouse=_start_stock(rules, n.start_stock, n.kind),
                 over_ticks=0,
                 captured_tick=None,
-                has_barracks=_starts_with_barracks(rules, n.kind),
-                # DEC-41, item 2: the own capital is the main factory from the start.
-                factory=n.capital_of if rules.v2 else None,
+                has_barracks=n.kind is NodeKind.CAPITAL,
+                factory=n.capital_of,
             )
             for n in mapdef.nodes
         },
-        edges={e.id: Edge(id=e.id, width=ROAD_START_LEVEL) for e in mapdef.edges},
         groups={},
         packets={},
         intents={},
@@ -631,40 +528,20 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
                 mode=Mode.ATTACK,
                 location=AtNode(node.id),
             )
-    if rules.flow:
-        # The initial state carries the field and the plan of the flow (DEC-43, item A8). A local
-        # import: the systems import this module.
-        from gow_sim.systems.flow import update_flow
+    # The field and the plan of the flow (DEC-43, item A8). A local import: the systems import
+    # this module.
+    from gow_sim.systems.flow import update_flow
 
-        update_flow(state, rules)
+    update_flow(state, rules)
     return state
 
 
-def start_warehouse_capacity(rules: Ruleset, kind: NodeKind) -> int:
-    """Warehouse capacity of a city of ``kind`` at level 0: ``warehouse.start_by_kind`` with
-    ``city_upgrades`` (DEC-26, item 2), the node capacity without it (DEC-22, item 1)."""
-    if rules.city_upgrades.enabled:
-        return rules.warehouse.start_by_kind.of(kind)
-    return rules.capacity.by_kind.of(kind)
-
-
 def _start_stock(rules: Ruleset, stock: int, kind: NodeKind) -> int:
-    """With ``city_upgrades`` the start stock of the map is cut to the warehouse capacity, the
-    excess is dropped without an event (DEC-26, item 5); without it the map's stock as it is.
-    With ``economy.start_stock_capital_only`` (DEC-41, item 9) only the capital keeps it."""
-    if rules.economy.start_stock_capital_only and kind is not NodeKind.CAPITAL:
+    """Only the capital keeps the start stock of the map (DEC-41, item 9), cut to its warehouse
+    capacity; the excess is dropped without an event (DEC-26, item 5)."""
+    if kind is not NodeKind.CAPITAL:
         return 0
-    if rules.city_upgrades.enabled:
-        return min(stock, start_warehouse_capacity(rules, kind))
-    return stock
-
-
-def _starts_with_barracks(rules: Ruleset, kind: NodeKind) -> bool:
-    """With ``city_upgrades`` only the capital recruits at the start (DEC-26, item 1 of the
-    barracks); without it every city does (DEC-01, DEC-25). Provinces never recruit."""
-    if kind is NodeKind.PROVINCE:
-        return False
-    return kind is NodeKind.CAPITAL or not rules.city_upgrades.enabled
+    return min(stock, rules.warehouse.start_by_kind.of(kind))
 
 
 # Canonical form ------------------------------------------------------------------------------
@@ -687,10 +564,6 @@ def to_canonical(state: GameState) -> dict[str, object]:
         "next_id": state.next_id,
         "players": [_player_data(state.players[p]) for p in sorted(state.players)],
         "nodes": [_node_data(state.nodes[n]) for n in sorted(state.nodes)],
-        "edges": [
-            {"id": e.id, "width": e.width, "build": _build_data(e.build)}
-            for e in _by_id(state.edges)
-        ],
         "groups": [_group_data(g) for g in _by_id(state.groups)],
         "packets": [_packet_data(p) for p in _by_id(state.packets)],
         "intents": [_intent_data(i) for i in _by_id(state.intents)],
@@ -711,25 +584,15 @@ def _player_data(p: PlayerState) -> dict[str, object]:
         "id": p.id,
         "cp": p.cp,
         "stance": p.stance.value,
-        "charge_acc": p.charge_acc,
         "vp": p.vp,
-        "stance_changed_tick": p.stance_changed_tick,
         "forfeited": p.forfeited,
-        "fronts": list(p.fronts),
-        "rear_min": p.rear_min,
-        **_v2_player_data(p),
+        **_flow_player_data(p),
     }
 
 
-def _v2_player_data(p: PlayerState) -> dict[str, object]:
-    """The economy v2 fields of a player, only when set (see the module docstring)."""
+def _flow_player_data(p: PlayerState) -> dict[str, object]:
+    """The flow and stance counters of a player, only when set (see the module docstring)."""
     data: dict[str, object] = {}
-    if p.lines:
-        data["lines"] = [{"id": k, "path": list(p.lines[k].path)} for k in sorted(p.lines)]
-    if p.next_line:
-        data["next_line"] = p.next_line
-    if p.auto_lines:
-        data["auto_lines"] = True
     if p.leaf_shift:
         data["leaf_shift"] = p.leaf_shift
     if p.leaf_shift_max:
@@ -753,13 +616,12 @@ def _node_data(n: Node) -> dict[str, object]:
         "cut_since": n.cut_since,
         "build": _build_data(n.build),
         "has_barracks": n.has_barracks,
-        "warehouse_level": n.warehouse_level,
-        **_v2_node_data(n),
+        **_factory_node_data(n),
     }
 
 
-def _v2_node_data(n: Node) -> dict[str, object]:
-    """The economy v2 fields of a node, only when set (see the module docstring)."""
+def _factory_node_data(n: Node) -> dict[str, object]:
+    """The factory and flow fields of a node, only when set (see the module docstring)."""
     data: dict[str, object] = {}
     if n.factory is not None:
         data["factory"] = n.factory
@@ -767,12 +629,6 @@ def _v2_node_data(n: Node) -> dict[str, object]:
         data["factory_build"] = _site_build_data(n.factory_build)
     if n.factory_ticks:
         data["factory_ticks"] = n.factory_ticks
-    if n.fort:
-        data["fort"] = True
-    if n.fort_build is not None:
-        data["fort_build"] = _site_build_data(n.fort_build)
-    if n.rr:
-        data["rr"] = n.rr
     if n.road_forts:
         data["road_forts"] = [{"edge": e, "ready": n.road_forts[e]} for e in sorted(n.road_forts)]
     if n.flow is not None:
@@ -791,13 +647,8 @@ def _v2_node_data(n: Node) -> dict[str, object]:
 def _build_data(b: Build | None) -> dict[str, object] | None:
     if b is None:
         return None
-    data: dict[str, object] = {
-        "edge": b.edge,
-        "owner": b.owner,
-        "since": b.since,
-        "kind": b.kind.value,
-    }
-    if b.owed:  # the economy v2 only (DEC-41, item 7): a v1 build keeps its canonical form
+    data: dict[str, object] = {"owner": b.owner, "since": b.since, "kind": b.kind.value}
+    if b.owed:
         data["owed"] = b.owed
     return data
 
@@ -813,14 +664,13 @@ def _location_data(loc: Location) -> dict[str, object]:
     match loc:
         case AtNode(node=node):
             return {"kind": "node", "node": node}
-        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back, level=level):
+        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back):
             return {
                 "kind": "edge",
                 "edge": edge,
                 "from_node": from_node,
                 "progress": progress,
                 "back": back,
-                "level": level,
             }
 
 
@@ -836,10 +686,9 @@ def _group_data(g: Group) -> dict[str, object]:
         "intent": g.intent,
         "bonus": g.bonus,
         "bonus_tick": g.bonus_tick,
-        "ticks_in_defense": g.ticks_in_defense,
         "fight": g.fight,
     }
-    if g.plan:  # economy v2 only (DEC-41, item 10): a v1 state keeps its canonical form
+    if g.plan:  # a gathering planned order (DEC-41, item 10)
         data["plan"] = g.plan
         data["plan_tick"] = g.plan_tick
     return data
@@ -884,7 +733,7 @@ def _round_data(r: FightRound) -> dict[str, object]:
         "spent": list(r.spent),
         "losses": list(r.losses),
     }
-    if any(r.burned):  # DEC-45 only: a round without a burn keeps its canonical form
+    if any(r.burned):  # DEC-45: the terrain burned charges in this round
         data["burned"] = list(r.burned)
     return data
 
@@ -904,8 +753,6 @@ def _packet_data(p: Packet) -> dict[str, object]:
         "arrive_tick": p.arrive_tick,
         "route": list(p.route),
         "route_ticks": list(p.route_ticks),
-        "transfer": p.transfer,
-        "share": p.share,
     }
 
 
@@ -927,7 +774,6 @@ def _memory_data(player: int, m: VisionMemory) -> dict[str, object]:
         "halves": [
             {"edge": e, "node": n, **_sighting_data(m.halves[e, n])} for e, n in sorted(m.halves)
         ],
-        "widths": [{"id": k, "width": m.widths[k]} for k in sorted(m.widths)],
         "spotted": [{"id": k, "tick": m.spotted[k]} for k in sorted(m.spotted)],
     }
 
@@ -954,7 +800,6 @@ def from_canonical(data: object) -> GameState:
             "next_id",
             "players",
             "nodes",
-            "edges",
             "groups",
             "packets",
             "intents",
@@ -972,7 +817,6 @@ def from_canonical(data: object) -> GameState:
         tick=_int(root["tick"], "state.tick", low=0),
         players=_collection(root["players"], "players", _parse_player),
         nodes=_collection(root["nodes"], "nodes", _parse_node),
-        edges=_collection(root["edges"], "edges", _parse_edge),
         groups=_collection(root["groups"], "groups", _parse_group),
         packets=_collection(root["packets"], "packets", _parse_packet),
         intents=_collection(root["intents"], "intents", _parse_intent),
@@ -1011,50 +855,22 @@ def _parse_player(data: object, where: str) -> PlayerState:
             "id",
             "cp",
             "stance",
-            "charge_acc",
             "vp",
-            "stance_changed_tick",
             "forfeited",
-            "fronts",
-            "rear_min",
         ),
         optional=(
-            "lines",
-            "next_line",
-            "auto_lines",
             "leaf_shift",
             "leaf_shift_max",
             "cp_ticks",
             "capital_ticks",
         ),
     )
-    fronts = _list(raw["fronts"], f"{where}.fronts")
-    lines: dict[int, Line] = {}
-    for i, item in enumerate(_list(raw.get("lines", []), f"{where}.lines")):
-        at = f"{where}.lines[{i}]"
-        row = _obj(item, at, ("id", "path"))
-        line_id = _int(row["id"], f"{at}.id", low=0)
-        if line_id in lines:
-            raise StateFormatError(f"{at}.id: duplicate id {line_id}")
-        path = _list(row["path"], f"{at}.path")
-        if len(path) < 2:
-            raise StateFormatError(f"{at}.path: a line joins at least two nodes")
-        lines[line_id] = Line(
-            line_id, tuple(_int(n, f"{at}.path[{j}]", low=0) for j, n in enumerate(path))
-        )
     return PlayerState(
         id=_int(raw["id"], f"{where}.id", low=0),
         cp=_int(raw["cp"], f"{where}.cp", low=0),
         stance=Stance(_choice(raw["stance"], f"{where}.stance", Stance)),
-        charge_acc=_int(raw["charge_acc"], f"{where}.charge_acc", low=0),
         vp=_int(raw["vp"], f"{where}.vp", low=0),
-        stance_changed_tick=_opt_int(raw["stance_changed_tick"], f"{where}.stance_changed_tick"),
         forfeited=_bool(raw["forfeited"], f"{where}.forfeited"),
-        fronts=tuple(_opt_int(f, f"{where}.fronts") for f in fronts),
-        rear_min=_int(raw["rear_min"], f"{where}.rear_min", low=0),
-        lines=lines,
-        next_line=_int(raw.get("next_line", 0), f"{where}.next_line", low=0),
-        auto_lines=_bool(raw.get("auto_lines", False), f"{where}.auto_lines"),
         leaf_shift=_int(raw.get("leaf_shift", 0), f"{where}.leaf_shift", low=0),
         leaf_shift_max=_int(raw.get("leaf_shift_max", 0), f"{where}.leaf_shift_max", low=0),
         cp_ticks=_int(raw.get("cp_ticks", 0), f"{where}.cp_ticks", low=0),
@@ -1077,15 +893,11 @@ def _parse_node(data: object, where: str) -> Node:
             "cut_since",
             "build",
             "has_barracks",
-            "warehouse_level",
         ),
         optional=(
             "factory",
             "factory_build",
             "factory_ticks",
-            "rr",
-            "fort",
-            "fort_build",
             "flow",
             "road_forts",
         ),
@@ -1101,13 +913,9 @@ def _parse_node(data: object, where: str) -> Node:
         build=None if raw["build"] is None else _parse_build(raw["build"], f"{where}.build"),
         cut_since=_opt_int(raw["cut_since"], f"{where}.cut_since"),
         has_barracks=_bool(raw["has_barracks"], f"{where}.has_barracks"),
-        warehouse_level=_int(raw["warehouse_level"], f"{where}.warehouse_level", low=0),
         factory=_opt_int(raw.get("factory"), f"{where}.factory"),
         factory_build=_parse_site_build(raw.get("factory_build"), f"{where}.factory_build"),
         factory_ticks=_int(raw.get("factory_ticks", 0), f"{where}.factory_ticks", low=0),
-        rr=_int(raw.get("rr", 0), f"{where}.rr", low=0),
-        fort=_bool(raw.get("fort", False), f"{where}.fort"),
-        fort_build=_parse_site_build(raw.get("fort_build"), f"{where}.fort_build"),
         flow=_parse_flow(raw.get("flow"), f"{where}.flow"),
         road_forts=_parse_road_forts(raw.get("road_forts", []), f"{where}.road_forts"),
     )
@@ -1151,22 +959,12 @@ def _parse_site_build(data: object, where: str) -> FactoryBuild | None:
 
 
 def _parse_build(data: object, where: str) -> Build:
-    raw = _obj(data, where, ("edge", "owner", "since", "kind"), optional=("owed",))
+    raw = _obj(data, where, ("owner", "since", "kind"), optional=("owed",))
     return Build(
-        edge=_opt_int(raw["edge"], f"{where}.edge"),
         owner=_int(raw["owner"], f"{where}.owner", low=0),
         since=_int(raw["since"], f"{where}.since", low=0),
         kind=BuildKind(_choice(raw["kind"], f"{where}.kind", BuildKind)),
         owed=_int(raw.get("owed", 0), f"{where}.owed", low=0),
-    )
-
-
-def _parse_edge(data: object, where: str) -> Edge:
-    raw = _obj(data, where, ("id", "width", "build"))
-    return Edge(
-        id=_int(raw["id"], f"{where}.id", low=0),
-        width=_int(raw["width"], f"{where}.width", low=1),
-        build=None if raw["build"] is None else _parse_build(raw["build"], f"{where}.build"),
     )
 
 
@@ -1180,13 +978,12 @@ def _parse_location(data: object, where: str) -> Location:
         raw = _obj(data, where, ("kind", "node"))
         return AtNode(node=_int(raw["node"], f"{where}.node", low=0))
     if kind == "edge":
-        raw = _obj(data, where, ("kind", "edge", "from_node", "progress", "back", "level"))
+        raw = _obj(data, where, ("kind", "edge", "from_node", "progress", "back"))
         return OnEdge(
             edge=_int(raw["edge"], f"{where}.edge", low=0),
             from_node=_int(raw["from_node"], f"{where}.from_node", low=0),
             progress=_int(raw["progress"], f"{where}.progress", low=0, high=PROGRESS_SCALE),
             back=_bool(raw["back"], f"{where}.back"),
-            level=_int(raw["level"], f"{where}.level", low=1),
         )
     raise StateFormatError(f"{where}.kind: expected 'node' or 'edge', got {kind!r}")
 
@@ -1206,7 +1003,6 @@ def _parse_group(data: object, where: str) -> Group:
             "intent",
             "bonus",
             "bonus_tick",
-            "ticks_in_defense",
             "fight",
         ),
         optional=("plan", "plan_tick"),
@@ -1223,7 +1019,6 @@ def _parse_group(data: object, where: str) -> Group:
         intent=_opt_int(raw["intent"], f"{where}.intent"),
         bonus=_int(raw["bonus"], f"{where}.bonus", low=0),
         bonus_tick=_int(raw["bonus_tick"], f"{where}.bonus_tick", low=0),
-        ticks_in_defense=_int(raw["ticks_in_defense"], f"{where}.ticks_in_defense", low=0),
         fight=_opt_int(raw["fight"], f"{where}.fight"),
         plan=_int(raw.get("plan", 0), f"{where}.plan", low=0),
         plan_tick=_int(raw.get("plan_tick", 0), f"{where}.plan_tick", low=0),
@@ -1343,8 +1138,6 @@ def _parse_packet(data: object, where: str) -> Packet:
             "arrive_tick",
             "route",
             "route_ticks",
-            "transfer",
-            "share",
         ),
     )
     route = _list(raw["route"], f"{where}.route")
@@ -1363,8 +1156,6 @@ def _parse_packet(data: object, where: str) -> Packet:
         route_ticks=tuple(
             _int(t, f"{where}.route_ticks[{i}]", low=1) for i, t in enumerate(route_ticks)
         ),
-        transfer=_bool(raw["transfer"], f"{where}.transfer"),
-        share=_int(raw["share"], f"{where}.share", low=0),
     )
 
 
@@ -1433,15 +1224,13 @@ def _parse_memory(raw: dict[str, object], at: str) -> VisionMemory:
         if half in memory.halves:
             raise StateFormatError(f"{where}: duplicate half {half}")
         memory.halves[half] = _parse_sighting(row, where)
-    for name, target in (("widths", memory.widths), ("spotted", memory.spotted)):
-        value = "width" if name == "widths" else "tick"
-        for i, item in enumerate(_list(raw[name], f"{at}.{name}")):
-            where = f"{at}.{name}[{i}]"
-            row = _obj(item, where, ("id", value))
-            key = _int(row["id"], f"{where}.id", low=0)
-            if key in target:
-                raise StateFormatError(f"{where}.id: duplicate id {key}")
-            target[key] = _int(row[value], f"{where}.{value}", low=0)
+    for i, item in enumerate(_list(raw["spotted"], f"{at}.spotted")):
+        where = f"{at}.spotted[{i}]"
+        row = _obj(item, where, ("id", "tick"))
+        key = _int(row["id"], f"{where}.id", low=0)
+        if key in memory.spotted:
+            raise StateFormatError(f"{where}.id: duplicate id {key}")
+        memory.spotted[key] = _int(row["tick"], f"{where}.tick", low=0)
     return memory
 
 
@@ -1449,7 +1238,7 @@ def _parse_vision_memory(data: object) -> dict[int, VisionMemory]:
     result: dict[int, VisionMemory] = {}
     for i, item in enumerate(_list(data, "vision_memory")):
         at = f"vision_memory[{i}]"
-        raw = _obj(item, at, ("player", "nodes", "halves", "widths", "spotted"))
+        raw = _obj(item, at, ("player", "nodes", "halves", "spotted"))
         player = _int(raw["player"], f"{at}.player", low=0)
         if player in result:
             raise StateFormatError(f"{at}.player: duplicate player {player}")

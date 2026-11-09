@@ -12,7 +12,6 @@ import type {
   EventMsg,
   GroupView,
   IntentView,
-  LineView,
   MapFile,
   NodeView,
   PacketView,
@@ -32,7 +31,10 @@ const id = (n: number) => (0x6000 + n).toString(16).padStart(16, '0');
  * Forkway. The road Watchpost-Forkway carries three lines (one bundle, "×3"), Stonegate-Watchpost
  * two. A click on a factory in the «Supply» mode shows its lines, on a target the lines into it
  * (#672). */
-const LINES: readonly LineView[] = [
+/** An own supply line: the drawn lines were removed (#894): stage 2 deletes this. */
+type LineView = { readonly id: number; readonly path: readonly number[] };
+
+export const LINES: readonly LineView[] = [
   { id: 1, path: [0, 3, 4] },
   { id: 2, path: [0, 1, 6] },
   { id: 3, path: [3, 4, 12] },
@@ -90,7 +92,7 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
   }));
   const groups: GroupView[] = base.view.groups.map((g) => {
     // No "Defense" under v2: the bunker replaces it.
-    const plain: GroupView = { ...g, mode: 'attack', defense_bonus: null, defense_cap: null };
+    const plain: GroupView = { ...g, mode: 'attack' };
     if (g.location.kind === 'node' && g.location.node === 12) {
       return {
         ...plain,
@@ -113,7 +115,7 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
   const intents: IntentView[] = [
     // The gathering plan is public at once (its size and its bonus are not).
     { id: id(1), owner: 0, kind: 'planned_move', origin: 12, target: 7, created_tick: T - 40 },
-    ...base.view.intents.filter((i) => i.kind === 'planned_move' && i.owner === 1),
+    ...base.view.intents.filter((i) => i.owner === 1),
   ];
   const packet = (edge: number, from: number, path: [number, ...number[]], p: number) => {
     const ticks = Math.round(((map.edges[edge]?.travel_ticks ?? 50) * 100) / 150);
@@ -127,7 +129,6 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
       arrive_tick: depart + ticks,
       path,
       dest_tick: depart + ticks * path.length,
-      transfer: false,
     } satisfies PacketView;
   };
   // A line carries one charge a dispatch (L1): single charges on the way.
@@ -143,7 +144,7 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
     ...base,
     view: {
       ...base.view,
-      me: { ...base.view.me, fronts: [null, null], auto_lines: true },
+      me: { ...base.view.me },
       nodes,
       edges,
       groups,
@@ -151,7 +152,6 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
       packets,
       // No fight: the build plates over Forkway are the subject here.
       fights: [],
-      lines: [...LINES],
     },
   };
 }
@@ -174,7 +174,6 @@ export function buildPaySnapshot(map: MapFile): SnapshotMsg {
           ...node,
           warehouse: 0,
           factory_build: { done_tick: null, owed: 1 },
-          fort_build: null,
         };
       case 12:
         return {

@@ -1,9 +1,8 @@
 """The bots read the burn of a plains defender (DEC-45, #778).
 
 Expected values come from the DEC-45 table (mechanics.md, section 4): the real shots of a defender
-about to be attacked are the ``charged - 1`` of DEC-24, item F2 under both rules, so a fresh target
-needs the same shots; in a fight past its first round the charges the view shows all shoot, and
-the charge is gone after the fight.
+about to be attacked are ``charged - 1``, so a fresh target needs those shots; in a fight past its
+first round the charges the view shows all shoot, and the charge is gone after the fight.
 """
 
 from dataclasses import replace
@@ -16,8 +15,7 @@ from gow_sim.ruleset import load_ruleset
 from gow_sim.view import FightView, PlayerView
 
 ROOT = Path(__file__).resolve().parents[3]
-PLAIN = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
-BURN = load_ruleset(ROOT / "rulesets" / "mvp-4-stances.toml")
+BURN = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 NODE = 7
 
 
@@ -50,20 +48,19 @@ def _view(*fights: FightView) -> PlayerView:
     return cast(PlayerView, _View(*fights))
 
 
-def test_a_fresh_target_needs_the_same_shots_under_both_rules() -> None:
+def test_a_fresh_target_needs_the_shots_of_its_real_charges() -> None:
     """Row 8: 2/2 on plains fires 1 real shot, so the node falls to 1 + 2 = 3 shots."""
-    assert PLAIN.terrain.defense_mod.plains == BURN.terrain.defense_mod.plains == -1
+    assert BURN.terrain.defense_mod.plains == -1
     assert shots_to_take(BURN, Terrain.PLAINS, 2, 2) == 3
-    assert shots_to_take(PLAIN, Terrain.PLAINS, 2, 2) == 3
 
 
 def test_past_the_first_round_every_charge_the_view_shows_shoots() -> None:
     """2 units, 1 charged left after the burn: 1 shot, the node falls to 1 + 2 = 3 shots; a fight
     with the burn still to come takes the charge off as before."""
-    assert defender_pool(BURN, Terrain.PLAINS, 1, 0) == 0
-    assert defender_pool(BURN, Terrain.PLAINS, 1, 0, burned=True) == 1
+    assert defender_pool(BURN, Terrain.PLAINS, 1) == 0
+    assert defender_pool(BURN, Terrain.PLAINS, 1, burned=True) == 1
     assert shots_to_take(BURN, Terrain.PLAINS, 2, 1, burned=True) == 3
-    assert defender_pool(BURN, Terrain.MOUNTAINS, 1, 0, burned=True) == 2  # a bonus is not a burn
+    assert defender_pool(BURN, Terrain.MOUNTAINS, 1, burned=True) == 2  # a bonus is not a burn
 
 
 def test_terrain_burned_reads_the_view() -> None:
@@ -72,12 +69,6 @@ def test_terrain_burned_reads_the_view() -> None:
     assert terrain_burned(BURN, _view(_fight(NODE, (0, 0))), NODE)
     assert not terrain_burned(BURN, _view(_fight(NODE + 1, (0, 0))), NODE)
     assert not terrain_burned(BURN, _view(_fight(None, (0, 0))), NODE)
-
-
-def test_the_flag_off_keeps_the_silence() -> None:
-    """Under ``mvp-4`` nothing reads the fights: the silent charge lasts to the end of the fight."""
-    assert not terrain_burned(PLAIN, _view(_fight(NODE, (0, 0))), NODE)
-    assert first_burn(PLAIN, Terrain.PLAINS, 2) == 0
 
 
 def test_the_burned_charge_is_gone_after_the_fight() -> None:

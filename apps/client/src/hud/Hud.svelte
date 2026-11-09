@@ -137,15 +137,16 @@
   $effect(() => {
     return orders.ui.onFeedback((feedback) => {
       if (feedback.kind === 'accepted') {
-        const { cmd, arriveTick } = feedback;
+        const { arriveTick } = feedback;
         const now = hud.current?.tick;
-        if (cmd.type === 'transfer' && arriveTick != null && now !== undefined) {
+        const transfer = null as { n: number; to_node: number } | null; // removed (#894): stage 2 deletes this
+        if (transfer !== null && arriveTick != null && now !== undefined) {
           hud.toasts.push({
             tone: 'mine',
             icon: 'road',
             text: tf('transfer.accepted', {
-              n: cmd.n,
-              node: hud.nodeName(cmd.to_node),
+              n: transfer.n,
+              node: hud.nodeName(transfer.to_node),
               seconds: Math.ceil(Math.max(0, arriveTick - now) / hud.context.rules.tick_hz),
             }),
           });
@@ -212,7 +213,7 @@
   <HelpOverlay
     open={chrome.helpOpen}
     captureCost={hud.context.rules.capture.charge_cost}
-    terrainBurn={hud.context.rules.combat.terrain_burn}
+    terrainBurn={true}
     v2={orders.v2}
     flow={orders.flow}
     fort={orders.hasFort}

@@ -1,6 +1,5 @@
-"""Automatic supply flow (DEC-43, #697; ``supply.model = "flow"``, economy v2 only).
+"""Automatic supply flow (DEC-43, #697): the ``supply`` step of ``match.SYSTEMS``.
 
-The ``supply`` step of a flow match (``match.SYSTEMS`` runs it instead of ``systems.lines``);
 mechanics.md, section 7, "Automatic supply flow, leaf shift, fixed warehouses, road
 fortifications (DEC-43)", items A and B. Numbers come from ``Ruleset.supply`` and
 ``Ruleset.factory``; nothing below reads the other player's state except the public owners.
@@ -29,8 +28,8 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
   one less, the smallest ``node_key`` first, until ``h == 0`` (the level end). A lifted node
   between gives only to its next nodes towards the armies, on room alone;
 - an **unpaid build** pulls exactly like such an army (item J, #729): a node with an own build
-  paid in charges that still owes some (``owed > 0``: the barracks, a warehouse level, a factory,
-  a bunker; ``Node.build``, ``Node.factory_build``, ``Node.fort_build``). Without a pulling army
+  paid in charges that still owes some (``owed > 0``: the barracks or a factory; ``Node.build``,
+  ``Node.factory_build``). Without a pulling army
   in it, a dispatch sends it at most its **want**, ``owed - stock - own packets on the way to
   it`` (the fill order still reads its warehouse room);
 - the **room** of an own node: ``max(0, cap - stock - own packets on the way to it)``, a snapshot
@@ -49,8 +48,11 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
 
 Order inside the step (item A13):
 
-1. **Captured factories** pass to the capturer or are destroyed (``lines.settle_factories``,
-   DEC-41 item 2).
+1. **Captured factories** pass to the capturer or are destroyed (``settle_factories``, DEC-41
+   item 2): a factory city whose owner changed in this tick passes to the capturer as a built
+   factory while the capturer has fewer than ``factory.max`` factories (its factories and its
+   factory builds under way), otherwise it is destroyed. Several captures of one player in one
+   tick go in ``node_key`` order of that player (4.1, rule 6).
 1b. **Starvation** of the factory-less pockets (item H4, ``starve_pockets``): the per-node timer
    ``Node.cut_since`` and the DEC-19 consumption (``capacity.consume``) on every node of such a
    pocket, provinces included.
@@ -83,7 +85,6 @@ from dataclasses import dataclass
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import AtNode, Event, FlowIdle, FlowNode, GameState, Group, Node, event
 from gow_sim.systems.capacity import consume, is_starvation_tick, warehouse_capacities
-from gow_sim.systems.lines import settle_factories
 from gow_sim.systems.supply import (
     edge_packet_ticks,
     garrisons_by_node,
@@ -94,9 +95,11 @@ from gow_sim.systems.supply import (
 )
 
 __all__ = [
+    "factory_count",
     "next_dispatch_tick",
     "send_one",
     "send_way",
+    "settle_factories",
     "spill_way",
     "starve_pockets",
     "supply_flow",
@@ -124,6 +127,36 @@ def supply_flow(state: GameState, rules: Ruleset) -> list[Event]:
         _store(state, field, capacities, incoming)
     _clear_neutral(state)
     return events
+
+
+def factory_count(state: GameState, player: int) -> int:
+    """Factories of ``player`` for ``factory.max`` (DEC-41, item 2): its factory cities and the
+    factory builds it has under way."""
+    count = 0
+    for node in state.nodes.values():  # a count: the order does not matter
+        if node.factory == player and node.owner == player:
+            count += 1
+        if node.factory_build is not None and node.factory_build.owner == player:
+            count += 1
+    return count
+
+
+def settle_factories(state: GameState, rules: Ruleset) -> None:
+    """Step 1: a factory captured in this tick passes to the capturer or is destroyed; either
+    way its own progress (``Node.factory_ticks``, DEC-47) starts again at 0."""
+    captured: dict[int, list[int]] = {}
+    for nid in sorted(state.nodes):
+        node = state.nodes[nid]
+        if node.factory is not None and node.factory != node.owner:
+            node.factory = None  # counted again below if it passes
+            node.factory_ticks = 0
+            if node.owner is not None:
+                captured.setdefault(node.owner, []).append(nid)
+    limit = rules.factory.max
+    for player in sorted(captured):
+        for nid in sorted(captured[player], key=lambda n: state.map.node_key(player, n)):
+            if factory_count(state, player) < limit:
+                state.nodes[nid].factory = player
 
 
 def update_flow(state: GameState, rules: Ruleset) -> None:
@@ -485,15 +518,12 @@ def _pull(
 
 def _owed(node: Node, player: int) -> int:
     """The charges the builds of ``player`` in ``node`` still owe (DEC-41, item 7): the barracks
-    or a warehouse level, a factory, a bunker. Road levels and road fortifications cost CP."""
+    and a factory. Road fortifications cost CP."""
     due = 0
     b = node.build
     if b is not None and b.owner == player:
         due += b.owed
     f = node.factory_build
-    if f is not None and f.owner == player:
-        due += f.owed
-    f = node.fort_build
     if f is not None and f.owner == player:
         due += f.owed
     return due
@@ -1041,7 +1071,7 @@ def send_way(
     """One charge of ``src`` leaves along ``roads`` to ``dst`` as one packet (item M8); the caller
     takes it from where it comes (the production of item A8)."""
     ticks = tuple(edge_packet_ticks(state, rules, eid) for eid in roads)
-    packet = send_packet(state, player, src, roads, ticks, 1, transfer=False)
+    packet = send_packet(state, player, src, roads, ticks, 1)
     return event(
         state.tick,
         "packet_sent",
@@ -1057,7 +1087,7 @@ def send_way(
 def send_one(state: GameState, player: int, src: int, dst: int, eid: int, ticks: int) -> Event:
     """One charge of ``src`` leaves along the road ``eid`` to ``dst`` as a packet (item A7); the
     caller takes it from where it comes (the warehouse, or the production of item A8)."""
-    packet = send_packet(state, player, src, (eid,), (ticks,), 1, transfer=False)
+    packet = send_packet(state, player, src, (eid,), (ticks,), 1)
     return event(
         state.tick,
         "packet_sent",

@@ -39,19 +39,19 @@ export function defenseSigns(source: DefenseSource, me: PlayerId): DefenseSign[]
     if (old === undefined || (old.pips === null && sign.pips !== null)) signs.set(key, sign);
   };
   for (const stack of stackGroups(source.groups, me)) {
-    if (!stack.modes.includes('defense')) continue;
+    if (!(stack.modes as string[]).includes('defense')) continue; // removed (#894): stage 2 deletes this
     add({ node: stack.node, owner: stack.owner, pips: stack.owner === me ? stack.defense : null });
   }
   const enemy: PlayerId = me === 0 ? 1 : 0;
   for (const node of source.nodes) {
     const { seen } = node;
     const shown = seen !== null && node.detail !== 'fog' && seen.level !== 'fog';
-    if (shown && seen.enemy_modes.includes('defense')) {
+    if (shown && (seen.enemy_modes as string[]).includes('defense')) {
       add({ node: node.id, owner: enemy, pips: null });
     }
   }
   for (const intent of source.intents) {
-    if (intent.kind !== 'defense') continue;
+    if ((intent.kind as string) !== 'defense') continue;
     add({ node: intent.origin, owner: intent.owner, pips: null });
   }
   return [...signs.values()].sort(

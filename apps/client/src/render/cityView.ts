@@ -710,7 +710,7 @@ export class CityView {
       const left = done === null ? total : Math.max(0, done - tick);
       return Math.min(100, Math.max(0, Math.round((100 * (total - left)) / total)));
     };
-    if (building !== null && building.kind === 'warehouse' && cityUpgrades !== null) {
+    if (building !== null && (building.kind as string) === 'warehouse' && cityUpgrades !== null) {
       buildKind = 'warehouse';
       buildPct = share(cityUpgrades.warehouse, building.done_tick);
     }
@@ -734,11 +734,12 @@ export class CityView {
           }
         : null;
     const sites: SiteBuild[] = [];
-    if (own && node.fort_build !== null) {
+    const fortBuild = null as { done_tick: number | null; owed: number } | null; // removed (#894): stage 2 deletes this
+    if (own && fortBuild !== null) {
       sites.push({
         kind: 'fort',
-        pct: share(cityUpgrades?.fort ?? 0, node.fort_build.done_tick),
-        owed: node.fort_build.owed,
+        pct: share(cityUpgrades?.fort ?? 0, fortBuild.done_tick),
+        owed: fortBuild.owed,
       });
     }
     // Free slots are shown where a unit can be queued: an own city (the view carries its queue), with
@@ -764,7 +765,7 @@ export class CityView {
       warehouseCap: provinceStock
         ? provinceWarehouse
         : (node.warehouse_cap ?? (cityUpgrades === null ? node.capacity : null)),
-      locked: lockedPlaces(node.warehouse_level, cityUpgrades),
+      locked: lockedPlaces(0, cityUpgrades), // no warehouse levels: removed (#894): stage 2 deletes this
       buildKind,
       buildPct,
       buildOwed: buildKind === null ? 0 : (building?.owed ?? 0),
@@ -776,7 +777,7 @@ export class CityView {
         },
         factory: { built: node.factory === true, build: factoryBuild },
       },
-      fort: node.fort === true,
+      fort: false, // no bunker: removed (#894): stage 2 deletes this
       sites,
     };
   }
@@ -1228,7 +1229,7 @@ export class CityView {
     const built =
       state.buildKind === null
         ? null
-        : buildMark(state.buildKind, state.buildPct / 100, state.buildOwed);
+        : buildMark(state.buildKind as PlateKind, state.buildPct / 100, state.buildOwed);
     const more = state.sites.map((site) =>
       buildMark(site.kind as PlateKind, site.pct / 100, site.owed),
     );

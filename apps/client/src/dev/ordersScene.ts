@@ -64,12 +64,10 @@ export function ordersSnapshot(map: MapFile): SnapshotMsg {
         plan: 0,
         next_charge_tick: null,
       },
-      defense_bonus: null,
-      defense_cap: null,
     });
   });
   const intents: IntentView[] = [
-    ...base.view.intents.filter((i) => i.kind === 'defense'),
+    ...base.view.intents.filter((i) => (i.kind as string) === 'defense'), // removed (#894): stage 2 deletes this
     ...PLANS.map((p, i) => ({
       id: id(100 + i),
       owner: p.owner,

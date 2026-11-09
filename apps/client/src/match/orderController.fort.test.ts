@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cityChoices } from '../hud/cityChoices.ts';
-import { DEV_RULES, DEV_RULES_FLOW, devSnapshot } from '../hud/devFeed.ts';
+import { DEV_RULES_FLOW, devSnapshot } from '../hud/devFeed.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { Command, MapFile, RulesetPublic, SnapshotMsg } from '../protocol.gen.ts';
@@ -65,15 +65,6 @@ function startPick(c: OrderController): void {
 }
 
 describe('the rules: mvp-4 has road fortifications, the others have none', () => {
-  it('reads the feature and the price from ruleset_public.fort', () => {
-    const { controller } = setup();
-    expect(controller.hasFort).toBe(true);
-    expect(controller.fortCost).toBe(150);
-    const off = setup(DEV_RULES);
-    expect(off.controller.hasFort).toBe(false);
-    expect(off.controller.fortCost).toBe(0);
-  });
-
   it('offers the sector in the menu of a city and of a province, only with the feature', () => {
     const on = { enabled: false, warehouse_max_level: 0 };
     expect(cityChoices(on, null, true, false, false, true)).toContain('fortify');
@@ -162,16 +153,12 @@ describe('Fortify road: the road pick', () => {
     expect(controller.isIdle()).toBe(false);
   });
 
-  it('B does the same as the sector, only for a selected own city, only with the feature', () => {
+  it('B does the same as the sector, only for a selected own city', () => {
     const { controller } = setup();
     expect(controller.key(down('KeyB'))).toBe(false);
     controller.click({ kind: 'node', id: home }, false);
     expect(controller.key(down('KeyB'))).toBe(true);
     expect(controller.overlay().fortPick?.node).toBe(home);
-    const off = setup(DEV_RULES);
-    off.controller.click({ kind: 'node', id: home }, false);
-    expect(off.controller.key(down('KeyB'))).toBe(false);
-    expect(off.controller.overlay().fortPick).toBeNull();
   });
 
   it('a click on the city itself cancels it too, and so does the Supply mode', () => {
@@ -228,12 +215,5 @@ describe('an own province under mvp-4 can fortify its roads (DEC-43, item D)', (
     expect(controller.cityMenu.current.open).toBe(true);
     controller.chooseCity('fortify');
     expect(controller.overlay().fortPick?.node).toBe(province);
-  });
-
-  it('is still only a destination under rules without road fortifications or a bunker', () => {
-    const { controller, hud } = setup(DEV_RULES, base, map);
-    controller.click({ kind: 'node', id: province }, false);
-    expect(hud.selection).toBeNull();
-    expect(controller.cityMenu.current.open).toBe(false);
   });
 });

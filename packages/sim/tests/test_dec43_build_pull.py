@@ -13,13 +13,14 @@ B-C, B-F, B-G, D-C, C-M, C-17, D-18; packet ticks 20 per 30-tick road, K-E 28, D
 system, as ``match.SYSTEMS`` does (``build`` runs after ``supply``).
 """
 
+import dataclasses
 from pathlib import Path
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from gow_sim.maps import load_map
-from gow_sim.ruleset import load_ruleset
+from gow_sim.ruleset import StanceTable, load_ruleset
 from gow_sim.state import (
     AtNode,
     Build,
@@ -37,7 +38,16 @@ from gow_sim.systems.supply import send_packet
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+_MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+_EVERY_100 = StanceTable(economy=100, balance=100, war=100)
+RULES = dataclasses.replace(
+    _MVP5,
+    stances=dataclasses.replace(
+        _MVP5.stances, cp_period_ticks=_EVERY_100, capital_period_ticks=_EVERY_100
+    ),
+)
+"""``mvp-5`` with the periods of ``mvp-4`` the tables of DEC-43 were written for: a CP quantum and a
+charge of the capital every 100 ticks under every stance (DEC-44)."""
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 K, A, B, C, D, E, F, G, M = range(9)
 NORTH, SOUTH = 17, 18
@@ -127,7 +137,7 @@ def _group(state: GameState, node: int, units: int, charged: int) -> Group:
 
 
 def _packet(state: GameState, src: int, dst: int, edge: int) -> None:
-    send_packet(state, 0, src, (edge,), (20,), 1, transfer=False)
+    send_packet(state, 0, src, (edge,), (20,), 1)
     assert state.map.edges[edge].other(src) == dst
 
 
@@ -195,7 +205,7 @@ def test_j3_a_paid_build_does_not_pull() -> None:
 
 def test_j3_a_barracks_owing_one_takes_one() -> None:
     state = _state({A: 3, B: 3, C: 3, D: 3})
-    state.nodes[F].build = Build(edge=None, owner=0, since=1, kind=BuildKind.BARRACKS, owed=1)
+    state.nodes[F].build = Build(owner=0, since=1, kind=BuildKind.BARRACKS, owed=1)
     update_flow(state, RULES)
     sends, events = _run(state, 30)
     assert sends == {10: [(B, F)]}  # at 20 its want is 1 - 0 - 1 = 0

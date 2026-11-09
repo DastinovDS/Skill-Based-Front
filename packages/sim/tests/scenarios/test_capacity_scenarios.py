@@ -15,10 +15,10 @@ from gow_sim.state import AtNode, Event, GameState, Group, Mode, OnEdge, initial
 from gow_sim.systems.capacity import capacity, change_owner, city_capacity, node_capacities
 
 TESTS_DIR = Path(__file__).resolve().parents[1]
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP7 = TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml"
 
 RULES: Ruleset = dataclasses.replace(
-    load_ruleset(MVP0),
+    load_ruleset(MVP7),
     capacity=CapacityRules(
         attrition_ticks=30,
         grace_ticks=50,

@@ -72,8 +72,6 @@ function withOwn(fights: WireFight[], units: number, charged: number, tick = 150
           mode: 'attack',
           location: { kind: 'node', node: city },
           order: null,
-          defense_bonus: null,
-          defense_cap: null,
         },
       ],
     },

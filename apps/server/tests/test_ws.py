@@ -29,11 +29,9 @@ from websockets.typing import Origin
 from gow_protocol.codec import decode_server, encode
 from gow_protocol.commands import (
     BuildFactoryCmd,
-    DrawLineCmd,
     ForfeitCmd,
     MoveCmd,
     ReleasePlanCmd,
-    RemoveLineCmd,
     SetStanceCmd,
 )
 from gow_protocol.messages import (
@@ -48,8 +46,6 @@ from gow_protocol.messages import (
     EndReason,
     ErrorMsg,
     HelloMsg,
-    LineRouteMsg,
-    LineRouteQueryMsg,
     MatchEndMsg,
     PausedMsg,
     PauseMsg,
@@ -73,7 +69,7 @@ from gow_server.settings import Settings
 from gow_server.ws import CLOSE_TRY_LATER
 from gow_sim.commands import Forfeit
 from gow_sim.replay import read_replay
-from gow_sim.ruleset import EconomyModel, Stance, load_ruleset
+from gow_sim.ruleset import Stance, load_ruleset
 
 ROOT: Final = Path(__file__).parents[3]
 DT: Final = 0.1
@@ -487,11 +483,10 @@ def test_welcome_snapshot_ack_ping_resync_and_seq_dedup(ws_settings: Settings) -
     run(ws_settings, scenario)
 
 
-def test_economy_v2_commands_over_the_websocket(ws_settings: Settings) -> None:
-    """DEC-41, item 14 (#647): a match on ``mvp-3`` over a real WebSocket. The welcome names the
-    economy model and its numbers; a line drawn from the capital (a factory from the start), a
-    factory build paid in charges, a planned order with a requested bonus that gathers and is
-    released, and a removed line are accepted and show in the snapshots. Map ``web``: player 0
+def test_factory_and_plan_commands_over_the_websocket(ws_settings: Settings) -> None:
+    """DEC-41 (#647): a match on ``mvp-6`` over a real WebSocket. The welcome carries the factory
+    and plan numbers; a factory build paid in charges and a planned order with a requested bonus
+    that gathers and is released are accepted and show in the snapshots. Map ``web``: player 0
     owns the capital 2 and the cities 0, 1, 3, 4, 7 (roads 2-1, 1-0, 2-3, 2-7); 6 is neutral."""
 
     async def scenario(live: Live) -> None:
@@ -500,17 +495,16 @@ def test_economy_v2_commands_over_the_websocket(ws_settings: Settings) -> None:
             welcome = await recv(ws)
             assert isinstance(welcome, WelcomeMsg)
             public = welcome.ruleset_public
-            assert public.economy.model is EconomyModel.V2
-            assert public.factory is not None and public.bunker is not None
-            assert public.bunker is not None and public.orders.plan_ticks_per_bonus == 30
+            assert public.factory.built_period_ticks == 100  # mvp-6
+            assert public.orders.plan_ticks_per_bonus == 30
             snap = await recv_until(ws, SnapshotMsg)
             capital = snap.view.nodes[2]
-            assert (capital.factory, capital.factory_period) == (True, 100)  # mvp-3, #659
+            # The own capital makes a charge per the capital period of Balance (DEC-44).
+            assert (capital.factory, capital.factory_period) == (True, 200)
             home = next(
                 g for g in snap.view.groups if g.location == AtNodeLoc(node=2) and g.charged
             )
             commands = [
-                DrawLineCmd(path=(2, 1, 0)),
                 BuildFactoryCmd(node=1),
                 MoveCmd(group=home.id, dest=6, planned=True, bonus=2),
             ]
@@ -520,39 +514,35 @@ def test_economy_v2_commands_over_the_websocket(ws_settings: Settings) -> None:
             await recv_until(ws, PongMsg)
             await live.ticks()
             acks = [await recv_until(ws, AckMsg) for _ in commands]
-            assert [(a.seq, a.reject_code) for a in acks] == [(1, None), (2, None), (3, None)]
+            assert [(a.seq, a.reject_code) for a in acks] == [(1, None), (2, None)]
             snap = await recv_until(ws, SnapshotMsg)
             while snap.tick < live.runner.match.tick:
                 snap = await recv_until(ws, SnapshotMsg)
-            assert [(line.id, line.path) for line in snap.view.lines] == [(0, (2, 1, 0))]
             assert snap.view.nodes[1].factory_build is not None
             order = next(g for g in snap.view.groups if g.id == home.id).order
             assert order is not None and (order.gathering, order.plan) == (True, 2)
 
-            await send(ws, CommandMsg(seq=4, cmd=ReleasePlanCmd(group=home.id)))
-            await send(ws, CommandMsg(seq=5, cmd=RemoveLineCmd(line=0)))
+            await send(ws, CommandMsg(seq=3, cmd=ReleasePlanCmd(group=home.id)))
             await send(ws, PingMsg(id=2))
             await recv_until(ws, PongMsg)
             await live.ticks()
-            acks = [await recv_until(ws, AckMsg) for _ in range(2)]
-            assert [(a.seq, a.reject_code) for a in acks] == [(4, None), (5, None)]
+            acks = [await recv_until(ws, AckMsg)]
+            assert [(a.seq, a.reject_code) for a in acks] == [(3, None)]
             snap = await recv_until(ws, SnapshotMsg)
             while snap.tick < live.runner.match.tick:
                 snap = await recv_until(ws, SnapshotMsg)
-            assert snap.view.lines == ()
             moving = next((g for g in snap.view.groups if g.id == home.id), None)
             assert moving is not None and moving.order is not None
             assert not moving.order.gathering
 
-            # The opponent sees the public intent, never a line or the factory build.
+            # The opponent sees the public intent, never the factory build.
             async with live.connect() as enemy:
                 await send(enemy, hello(live.tokens[1]))
                 assert isinstance(await recv(enemy), WelcomeMsg)
                 theirs = await recv_until(enemy, SnapshotMsg)
-                assert theirs.view.lines == ()
                 assert theirs.view.nodes[1].factory_build is None
 
-    run(ws_settings, scenario, map_id="web", ruleset="mvp-3")
+    run(ws_settings, scenario, map_id="web", ruleset="mvp-6")
 
 
 def test_reach_query_is_answered_by_the_server(ws_settings: Settings) -> None:
@@ -577,29 +567,6 @@ def test_reach_query_is_answered_by_the_server(ws_settings: Settings) -> None:
             assert (unknown.group, unknown.nodes, unknown.split) == ("999", (), ())
 
     run(ws_settings, scenario)
-
-
-def test_line_route_query_is_answered_by_the_server(ws_settings: Settings) -> None:
-    """#665: the server suggests the path of a line over own nodes; an enemy point gets none."""
-
-    async def scenario(live: Live) -> None:
-        async with live.connect() as ws:
-            await send(ws, hello(live.tokens[0]))
-            assert isinstance(await recv(ws), WelcomeMsg)
-            snap = await recv_until(ws, SnapshotMsg)
-            assert snap.view.me.auto_lines is True  # lines.auto_extend of mvp-3
-            own = [n.id for n in snap.view.nodes if n.owner == 0]
-            enemy = next(n.id for n in snap.view.nodes if n.owner == 1)
-            points = (own[0], own[-1])
-            await send(ws, LineRouteQueryMsg(points=points))
-            answer = await recv_until(ws, LineRouteMsg)
-            assert (answer.points, answer.tick) == (points, live.runner.match.tick)
-            assert (answer.path[0], answer.path[-1]) == points
-            assert set(answer.path) <= set(own)
-            await send(ws, LineRouteQueryMsg(points=(own[0], enemy)))
-            assert (await recv_until(ws, LineRouteMsg)).path == ()
-
-    run(ws_settings, scenario, map_id="web", ruleset="mvp-3")
 
 
 def test_bad_message_gets_error_and_connection_stays(ws_settings: Settings) -> None:
@@ -710,7 +677,7 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
             assert acks == list(range(1, ticks + 1))
             assert snapshots < ticks, "stale snapshots were skipped"
 
-    run(settings, scenario, map_id="web", ruleset="mvp-0", sndbuf=SMALL_BUFFER)
+    run(settings, scenario, map_id="web", ruleset="mvp-7", sndbuf=SMALL_BUFFER)
 
 
 def test_client_that_does_not_read_is_disconnected(
@@ -735,7 +702,7 @@ def test_client_that_does_not_read_is_disconnected(
             assert live.runner.match.tick == tick + 5, "the match goes on without the client"
 
     with caplog.at_level(logging.INFO, logger="gow_server.ws"):
-        run(settings, scenario, map_id="web", ruleset="mvp-0", sndbuf=SMALL_BUFFER)
+        run(settings, scenario, map_id="web", ruleset="mvp-7", sndbuf=SMALL_BUFFER)
     assert [r.__dict__["code"] for r in closed()] == [CLOSE_POLICY]
 
 
@@ -779,7 +746,7 @@ def test_reconnect_after_10_s_restores_the_view(policy_settings: Settings) -> No
         await a.close()
         await b.close()
 
-    run(policy_settings, scenario, ruleset="mvp-0")
+    run(policy_settings, scenario, ruleset="mvp-7")
 
 
 def test_reconnect_after_61_s_is_a_technical_defeat_in_the_command_log(
@@ -807,7 +774,7 @@ def test_reconnect_after_61_s_is_a_technical_defeat_in_the_command_log(
         )
         assert log.final
 
-    run(policy_settings, scenario, ruleset="mvp-0")
+    run(policy_settings, scenario, ruleset="mvp-7")
 
 
 def test_a_connection_that_replaces_another_does_not_start_a_window(
@@ -823,7 +790,7 @@ def test_a_connection_that_replaces_another_does_not_start_a_window(
         await a.close()
         await new.close()
 
-    run(policy_settings, scenario, ruleset="mvp-0")
+    run(policy_settings, scenario, ruleset="mvp-7")
 
 
 def test_pause_in_a_private_match(policy_settings: Settings) -> None:
@@ -856,7 +823,7 @@ def test_pause_in_a_private_match(policy_settings: Settings) -> None:
         await a.close()
         await b.close()
 
-    run(policy_settings, scenario, ruleset="mvp-0", private=True)
+    run(policy_settings, scenario, ruleset="mvp-7", private=True)
 
 
 def test_rated_match_refuses_a_pause(policy_settings: Settings) -> None:
@@ -868,4 +835,4 @@ def test_rated_match_refuses_a_pause(policy_settings: Settings) -> None:
         assert not live.runner.paused
         await a.close()
 
-    run(policy_settings, scenario, ruleset="mvp-0")
+    run(policy_settings, scenario, ruleset="mvp-7")

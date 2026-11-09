@@ -7,15 +7,7 @@ import type { EnemyGroup, GroupView, NodeView, PacketView, SnapshotMsg } from '.
 import { EntityView } from './entityView.ts';
 import { createLayers } from './layers.ts';
 import { edgeEnds, edgePoint, nodePoint } from './layout.ts';
-import {
-  CASING,
-  INK,
-  PACKET_ENGRAVED,
-  PACKET_SIDE,
-  PACKET_TRANSFER,
-  ROAD_TAPE,
-  YOU,
-} from './style.ts';
+import { CASING, INK, PACKET_ENGRAVED, PACKET_SIDE, YOU } from './style.ts';
 import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
@@ -74,8 +66,6 @@ describe('EntityView, enemies seen in a city', () => {
       mode: 'attack',
       location: { kind: 'node', node: nodeId },
       order: null,
-      defense_bonus: null,
-      defense_cap: null,
     };
     const layers = createLayers();
     const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
@@ -84,49 +74,6 @@ describe('EntityView, enemies seen in a city', () => {
     expect(token?.position.x).toBeGreaterThan((city?.x ?? 0) + 10);
     view.update(frameWith([], true));
     expect(token?.position.x).toBeCloseTo(city?.x ?? NaN);
-    view.destroy();
-  });
-});
-
-describe('EntityView, the icon of units in a city and "Defense" (DEC-30, #349)', () => {
-  const defender = (bonus: number | null, cap: number | null): GroupView => ({
-    id: 'd',
-    units: 3,
-    charged: 3,
-    mode: 'defense',
-    location: { kind: 'node', node: nodeId },
-    order: null,
-    defense_bonus: bonus,
-    defense_cap: cap,
-  });
-  const texts = (layers: ReturnType<typeof createLayers>): string[] => {
-    const found: string[] = [];
-    const visit = (item: Container): void => {
-      if (!item.visible) return;
-      if (item instanceof Text && item.text !== '') found.push(item.text);
-      for (const child of item.children) visit(child);
-    };
-    visit(layers.layer.groups);
-    return found;
-  };
-  const shields = (layers: ReturnType<typeof createLayers>): string[] => {
-    const found: string[] = [];
-    const visit = (item: Container): void => {
-      if (!item.visible) return;
-      const spec = (item as { spec?: { key: string } | null }).spec;
-      if (spec?.key.startsWith('shield:') === true) found.push(spec.key);
-      for (const child of item.children) visit(child);
-    };
-    visit(layers.layer.groups);
-    return found;
-  };
-
-  it('carries neither the shield nor "+N / M": the sign of the city is the column of `DefenseView`', () => {
-    const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-    view.update(frameWith([defender(1, 3)], false));
-    expect(shields(layers)).toEqual([]);
-    expect(texts(layers).filter((text) => text.startsWith('+'))).toEqual([]);
     view.destroy();
   });
 });
@@ -322,7 +269,8 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
       );
   }
 
-  function frameWithPacket(transfer: boolean) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+  function frameWithPacket(_transfer: boolean) {
     const packet: PacketView = {
       id: 'p1',
       edge: edge?.id ?? 0,
@@ -332,7 +280,6 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
       arrive_tick: 200,
       path: [edge?.b ?? 0],
       dest_tick: 200,
-      transfer,
     };
     const snapshot: SnapshotMsg = {
       ...base,
@@ -386,20 +333,6 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
     view.destroy();
   });
 
-  it('tells a transfer by a bigger square with a second outline apart from it', () => {
-    const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-    view.update(frameWithPacket(true));
-    const dot = packetView(layers).children[0] as Graphics;
-    const shapes = drawn(dot);
-    expect(shapes.map((s) => [s.action, s.type, s.width])).toEqual([
-      ['fill', 'rectangle', PACKET_TRANSFER.side],
-      ['stroke', 'rectangle', PACKET_TRANSFER.side],
-      ['stroke', 'rectangle', PACKET_TRANSFER.ring],
-    ]);
-    view.destroy();
-  });
-
   it('draws no circle for a packet, whoever it belongs to', () => {
     for (const transfer of [false, true]) {
       const layers = createLayers();
@@ -414,121 +347,6 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
       }
       view.destroy();
     }
-  });
-});
-
-describe('EntityView, the road build (R1, #345)', () => {
-  const edge = map.edges[0];
-  if (edge === undefined) throw new Error('no roads');
-
-  beforeEach(() => {
-    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
-      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
-    );
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  function frameWithBuild(width: number, doneTick: number | null, tick = 100) {
-    const edges = base.view.edges.map((e) =>
-      e.id === edge?.id ? { ...e, width, build: { done_tick: doneTick } } : e,
-    );
-    const snapshot: SnapshotMsg = { ...base, tick, view: { ...base.view, edges, groups: [] } };
-    return interpolateFrame(snapshot, null, tick);
-  }
-  const plates = (layers: ReturnType<typeof createLayers>): Container[] => {
-    const layer = layers.layer.intents.children.find((c) => c.label === 'builds');
-    return (layer?.children ?? []).filter((c) => c.visible);
-  };
-  const texts = (item: Container): string[] =>
-    item.children.filter((c): c is Text => c instanceof Text && c.visible).map((c) => c.text);
-  const tape = (layers: ReturnType<typeof createLayers>): Graphics =>
-    layers.layer.roads.children[0] as Graphics;
-  /** The polygons the tape fills, in order, with their colour, opacity and corner points. */
-  function filled(g: Graphics) {
-    const instructions = g.context.instructions as unknown as {
-      action: string;
-      data: {
-        style: { color: number; alpha: number };
-        path: { shapePath: { shapePrimitives: { shape: { points: number[] } }[] } };
-      };
-    }[];
-    return instructions
-      .filter((i) => i.action === 'fill')
-      .map((i) => ({
-        color: i.data.style.color,
-        alpha: i.data.style.alpha,
-        polygons: i.data.path.shapePath.shapePrimitives.map((p) => p.shape.points),
-      }));
-  }
-
-  it('draws the tape under the lanes: a dark band, the warning stripes, the part done on top', () => {
-    const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-    view.setBuildTicks(150);
-    // 75 of the 150 ticks are left: half is done.
-    view.update(frameWithBuild(1, 175));
-    const fills = filled(tape(layers));
-    expect(fills.map((f) => [f.color, f.alpha])).toEqual([
-      [ROAD_TAPE.base.color, ROAD_TAPE.base.alpha],
-      [ROAD_TAPE.stripeColor.color, ROAD_TAPE.stripeColor.alpha],
-      [ROAD_TAPE.done.color, ROAD_TAPE.done.alpha],
-    ]);
-    expect(fills[1]?.polygons.length).toBeGreaterThan(3);
-    const ends = edgeEnds(map, edge.id);
-    if (ends === undefined) throw new Error('no ends');
-    const length = Math.hypot(ends.b.x - ends.a.x, ends.b.y - ends.a.y);
-    const [done] = fills[2]?.polygons ?? [];
-    // The first side of the done polygon runs along the road: half its length.
-    expect(
-      Math.hypot((done?.[2] ?? 0) - (done?.[0] ?? 0), (done?.[3] ?? 0) - (done?.[1] ?? 0)),
-    ).toBeCloseTo(length / 2);
-    // The tape lies first in the layer of the roads: under the casings and the lanes.
-    expect(layers.layer.roads.children[0]).toBe(tape(layers));
-    view.destroy();
-  });
-
-  it('shows no part done for an enemy build (no `done_tick`), and none without the duration', () => {
-    const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-    view.setBuildTicks(150);
-    view.update(frameWithBuild(1, null));
-    expect(filled(tape(layers))).toHaveLength(2);
-    view.setBuildTicks(0);
-    view.update(frameWithBuild(1, 175, 101));
-    expect(filled(tape(layers))).toHaveLength(2);
-    view.destroy();
-  });
-
-  it('puts a plate with the change of level in the middle of the road, and the time left of an own build', () => {
-    const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-    view.setTickHz(10);
-    view.update(frameWithBuild(2, 175));
-    const [plate, ...rest] = plates(layers);
-    expect(rest).toEqual([]);
-    expect(texts(plate as Container).sort()).toEqual(['0:08', '2→3']);
-    const ends = edgeEnds(map, edge.id);
-    expect(plate?.x).toBeCloseTo(((ends?.a.x ?? 0) + (ends?.b.x ?? 0)) / 2);
-    expect(plate?.y).toBeCloseTo(((ends?.a.y ?? 0) + (ends?.b.y ?? 0)) / 2);
-    // An enemy build: the plate without a time.
-    view.update(frameWithBuild(1, null, 101));
-    expect(texts(plates(layers)[0] as Container)).toEqual(['1→2']);
-    view.destroy();
-  });
-
-  it('removes the plate when the build is over, and keeps it at least 20 px high on screen', () => {
-    const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-    view.update(frameWithBuild(1, 175));
-    view.setCameraScale(0.5);
-    // 16 world units high: 20 px needs a scale of at least 20 / (16 * 0.5).
-    expect(plates(layers)[0]?.scale.x).toBeGreaterThanOrEqual(20 / (16 * 0.5) - 1e-9);
-    view.update(interpolateFrame({ ...base, tick: 102 }, null, 102));
-    expect(plates(layers)).toEqual([]);
-    expect(filled(tape(layers))).toEqual([]);
-    view.destroy();
   });
 });
 
@@ -568,8 +386,6 @@ describe('EntityView, where the groups of a fight stand and the token pop (E3, #
       mode: 'attack',
       location: { kind: 'node', node: nodeId },
       order: null,
-      defense_bonus: null,
-      defense_cap: null,
     };
     const layers = createLayers();
     const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
@@ -595,8 +411,6 @@ describe('EntityView, tokens that come and go (#508)', () => {
     mode: 'attack',
     location: { kind: 'node', node: nodeId },
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   });
   const entries = (layers: ReturnType<typeof createLayers>): Container[] =>
     layers.layer.groups.children.find((c) => c.label === 'own-groups')?.children as Container[];
@@ -690,8 +504,6 @@ describe('EntityView, tokens at the same place of a road (#547)', () => {
     mode: 'attack',
     location: { kind: 'edge', edge: edge.id, from_node: from, progress },
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   });
 
   function frameWithGroups(groups: GroupView[], enemies: EnemyGroup[] = []) {

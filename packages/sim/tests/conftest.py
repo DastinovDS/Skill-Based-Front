@@ -3,7 +3,8 @@
 ``ExpandBot`` sees only its ``PlayerView`` (plus the public map and ruleset), like a real bot
 (AGENTS.md, section 8). It is a test driver for ``run_headless`` and the benchmarks, not a bot of
 ``gow_bots``: every idle group in "Attack" walks to the nearest node its player does not own,
-recruits are queued in the capital, and it never spends more CP than it has. Under the stack limit
+recruits are queued in the capital (it has a barracks from the start), and it never spends more
+CP than it has. Under the stack limit
 (DEC-20, D) a group bigger than the smallest node capacity of the map first splits off the rest,
 which stays for a later decision.
 """
@@ -21,7 +22,11 @@ from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.view import AtNode, Mode, PlayerView
 
 ROOT = Path(__file__).resolve().parents[3]
-MVP0 = ROOT / "rulesets" / "mvp-0.toml"
+RULESETS = ROOT / "rulesets"
+MVP5 = RULESETS / "mvp-5.toml"
+MVP6 = RULESETS / "mvp-6.toml"
+MVP7 = RULESETS / "mvp-7.toml"
+"""The main ruleset (#894: the rulesets before mvp-5 were removed)."""
 MVP_MAPS = ("artery", "web", "pass")
 
 
@@ -264,7 +269,8 @@ def make_fog_map() -> Callable[..., MapDef]:
 
 @pytest.fixture(scope="session")
 def mvp_rules() -> Ruleset:
-    return load_ruleset(MVP0)
+    """``mvp-7``, the main ruleset (its ``[map_tempo]`` applies only in ``Match``)."""
+    return load_ruleset(MVP7)
 
 
 @pytest.fixture(scope="session")

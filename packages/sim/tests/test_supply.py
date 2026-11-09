@@ -1,23 +1,23 @@
-"""Supply (SIM-08): packet time table, recharge, charge conservation, canonical form.
+"""Packets and recharge (SIM-08, ``systems.supply``): what the supply flow (DEC-43) and the spill
+of a full factory share.
 
-Expected values from mechanics.md, sections 7 and 8, SIM-01 (#17) and DEC-22 (#234), item 4
-with DEC-26 (#265), item 7: packet time ``travel_ticks * 100 // speed_pct`` with speed 100 on
-level 1, 150 / 200 on level 2 / 3 (no road types); recharge at most 1 charge per node and tick;
-details: DEC-14 default (#131).
+Expected values from mechanics.md, section 7, and DEC-41, item 8: a packet needs
+``travel_ticks * 100 // supply.speed_pct`` ticks per road (150 % in the kept rulesets, roads have
+no levels); recharge at most 1 charge per node and tick, the lowest group id first, not on edges,
+not for a foreign group (DEC-14 default, #131); a packet on a road that is no longer internal is
+lost, at the end of its path it fills the warehouse and the excess burns.
 
 The map ``line6``: ``0 (capital of 0) - 1 - 2 | 3 - 4 - 5 (capital of 1)``; 2 and 3 start
 neutral, ``_line6()`` gives them to 0 and 1. Every road ``e_i`` joins ``i`` and ``i + 1``,
-level 1, 30 ticks; plains; ``RULES`` gives capitals capacity 40 and the large cities 30, so
-capacity never limits these tests.
+30 ticks; plains.
 """
 
-import dataclasses
 from pathlib import Path
 
 import pytest
 
 from gow_sim.maps import load_map
-from gow_sim.ruleset import FullLevelTable, LevelTable, Ruleset, load_ruleset
+from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import (
     AtNode,
     Event,
@@ -30,32 +30,19 @@ from gow_sim.state import (
     state_hash,
     to_canonical,
 )
-from gow_sim.systems.capacity import change_owner
+from gow_sim.systems.capacity import change_owner, warehouse_capacities
+from gow_sim.systems.flow import supply_flow
 from gow_sim.systems.supply import (
-    all_packet_ticks,
-    fastest_ways_to,
+    garrisons_by_node,
+    move_packets,
+    packet_dest,
     packet_ticks,
-    supply,
-    supply_tree,
-    transfer_route,
-    way_from,
+    recharge,
+    send_packet,
 )
 
 TESTS_DIR = Path(__file__).resolve().parent
-_MVP0: Ruleset = load_ruleset(TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml")
-RULES: Ruleset = dataclasses.replace(
-    _MVP0,
-    capacity=dataclasses.replace(
-        _MVP0.capacity,
-        by_kind=dataclasses.replace(_MVP0.capacity.by_kind, capital=40, city_large=30),
-    ),
-    supply=dataclasses.replace(
-        _MVP0.supply,
-        base_speed_pct=100,
-        amount_by_level=FullLevelTable((1, 2, 3)),
-        fast_speed_pct=LevelTable((150, 200)),
-    ),
-)
+RULES: Ruleset = load_ruleset(TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml")
 
 
 def _line6() -> GameState:
@@ -72,26 +59,12 @@ def _group(state: GameState, owner: int, node: int, units: int, charged: int = 0
     return group
 
 
-@pytest.mark.parametrize(
-    ("level", "ticks"),
-    [
-        (1, 30),
-        (2, 20),  # 30 * 100 // 150
-        (3, 15),  # 30 * 100 // 200
-    ],
-)
-def test_packet_time_by_level(level: int, ticks: int) -> None:
-    assert packet_ticks(_line6().map, RULES, 0, level) == ticks
-
-
-def test_tree_is_the_own_territory_from_the_capital() -> None:
+def test_packet_time() -> None:
+    """DEC-41, item 8: 30 ticks at 150 % take 30 * 100 // 150 = 20 ticks."""
     state = _line6()
-    tree = supply_tree(state, RULES, 0)
-    assert tree.order == (0, 1, 2)
-    assert tree.parent[:3] == (None, 0, 1)
-    assert supply_tree(state, RULES, 1).order == (5, 4, 3)
-    change_owner(state, 0, 1)  # capital lost: no tree
-    assert supply_tree(state, RULES, 0).order == ()
+    assert state.map.edges[0].travel_ticks == 30
+    assert RULES.supply.speed_pct == 150
+    assert packet_ticks(state.map, RULES, 0) == 20
 
 
 def test_recharge_is_limited_per_node_lowest_group_first() -> None:
@@ -104,10 +77,54 @@ def test_recharge_is_limited_per_node_lowest_group_first() -> None:
     state.groups[gid] = Group(gid, 0, 3, 0, Mode.ATTACK, OnEdge(edge=0, from_node=0, progress=500))
     for tick in (1, 2, 3, 4):
         state.tick = tick
-        supply(state, RULES)
+        recharge(state, RULES, garrisons_by_node(state))
     # 1 charge per tick (supply.recharge_per_tick = 1): 4 ticks, 4 charges; group 1 first.
     assert (first.charged, second.charged, state.nodes[1].warehouse) == (3, 1, 1)
     assert enemy.charged == 0 and state.groups[gid].charged == 0  # not the owner; on an edge
+
+
+def test_a_packet_passes_own_nodes_and_lands_at_its_end() -> None:
+    state = _line6()
+    state.tick = 1
+    packet = send_packet(state, 0, 0, (0, 1), (20, 20), 2)
+    assert packet_dest(state, packet) == 2
+    capacities = warehouse_capacities(state, RULES)
+    landed: list[Event] = []
+    for tick in range(2, 42):
+        state.tick = tick
+        landed += move_packets(state, capacities)
+    # 20 ticks on e0 (leaves at 1, at node 1 in tick 21), on at once, 20 more on e1: tick 41.
+    assert [(e.tick, e.kind, e.get("node"), e.get("charges")) for e in landed] == [
+        (41, "packet_delivered", 2, 2)
+    ]
+    assert state.nodes[2].warehouse == 2
+    assert not state.packets
+
+
+def test_a_packet_on_a_lost_road_is_lost() -> None:
+    state = _line6()
+    state.tick = 1
+    send_packet(state, 0, 0, (0, 1), (20, 20), 1)
+    state.tick = 5
+    change_owner(state, 1, 1)
+    events = move_packets(state, warehouse_capacities(state, RULES))
+    assert [(e.kind, e.get("charges")) for e in events] == [("packet_lost", 1)]
+    assert not state.packets
+
+
+def test_a_full_warehouse_burns_the_excess() -> None:
+    state = _line6()
+    capacities = warehouse_capacities(state, RULES)
+    state.nodes[2].warehouse = capacities[2] - 1
+    state.tick = 1
+    send_packet(state, 0, 1, (1,), (20,), 3)
+    state.tick = 21
+    events = move_packets(state, capacities)
+    assert [(e.kind, e.get("charges")) for e in events] == [
+        ("packet_delivered", 1),
+        ("charges_overflow", 2),
+    ]
+    assert state.nodes[2].warehouse == capacities[2]
 
 
 def _charges(state: GameState) -> int:
@@ -119,69 +136,42 @@ def _charges(state: GameState) -> int:
 
 
 def _sunk(events: list[Event]) -> int:
-    sinks = ("packet_lost", "charges_overflow", "warehouse_lost")
-    return sum(int(e.get("charges") or 0) for e in events if e.kind in sinks)
+    sinks = ("packet_lost", "charges_overflow", "warehouse_lost", "starvation")
+    return sum(
+        int(e.get("charges") or 0)
+        if e.kind != "starvation"
+        else int(e.get("warehouse") or 0) + int(e.get("units") or 0)
+        for e in events
+        if e.kind in sinks
+    )
 
 
-def test_supply_conserves_charges_except_documented_sinks() -> None:
+def test_supply_flow_conserves_charges_except_documented_sinks() -> None:
     state = _line6()
-    state.nodes[0].warehouse = 30
-    state.nodes[5].warehouse = 30
-    _group(state, 0, 2, units=20)
-    _group(state, 1, 3, units=20)
-    state.players[0].fronts = (2, None)  # DEC-28: the garrison city fills up, a steady demand
-    state.players[1].fronts = (3, None)
+    state.nodes[0].warehouse = 6
+    state.nodes[5].warehouse = 6
+    _group(state, 0, 2, units=6)
+    _group(state, 1, 3, units=6)
     sent = 0
     for tick in range(1, 301):
         state.tick = tick
         before = _charges(state)
         events = change_owner(state, 1, 1) if tick == 150 else []  # cut the road to 2
-        events += supply(state, RULES)
+        events += supply_flow(state, RULES)
         sent += sum(e.kind == "packet_sent" for e in events)
         assert before - _charges(state) == _sunk(events), tick
-    assert sent > 10
+    assert sent > 5
 
 
-def test_canonical_roundtrip_with_packets_in_flight() -> None:
+@pytest.mark.parametrize("ticks", [15, 25])
+def test_canonical_roundtrip_with_packets_in_flight(ticks: int) -> None:
     state = _line6()
-    state.nodes[0].warehouse = 10
+    state.nodes[0].warehouse = 6
     _group(state, 0, 2, units=5)
-    for tick in range(1, 16):
+    for tick in range(1, ticks + 1):
         state.tick = tick
-        supply(state, RULES)
+        supply_flow(state, RULES)
     assert state.packets
     restored = from_canonical(to_canonical(state))
     assert restored == state
     assert state_hash(restored) == state_hash(state)
-
-
-# The ways of a dispatch: one Dijkstra per city with a deficit (#306) --------------------------
-
-
-@pytest.mark.parametrize("name", ["artery", "web", "pass"])
-def test_fastest_ways_to_equal_transfer_route(name: str) -> None:
-    """``fastest_ways_to``/``way_from`` give the way ``transfer_route`` gives (the fastest one,
-    ties by the lexicographically smaller ``node_key`` sequence from the start) for every pair of
-    own nodes, on random owners and road levels, for both players."""
-    mapdef = load_map(TESTS_DIR.parents[2] / "maps" / "fixtures" / f"{name}.json")
-    seed = 306
-
-    def draw(n: int) -> int:  # a fixed linear congruential sequence (no ``random`` here)
-        nonlocal seed
-        seed = (seed * 1103515245 + 12345) % 2**31
-        return seed // 65536 % n
-
-    for _ in range(20):
-        state = initial_state(mapdef, _MVP0)
-        for node in state.nodes.values():
-            node.owner = (0, 0, 1, 1, None)[draw(5)]
-        for road in state.edges.values():
-            road.width = 1 + draw(mapdef.edges[road.id].max_level)
-        ticks = all_packet_ticks(state, _MVP0)
-        for player in (0, 1):
-            own = [n for n in range(len(mapdef.nodes)) if state.nodes[n].owner == player]
-            for dst in own:
-                ways = fastest_ways_to(state, player, dst, ticks)
-                for src in own:
-                    expected = transfer_route(state, _MVP0, player, src, dst)
-                    assert way_from(state, player, ways, src, ticks) == expected, (src, dst)

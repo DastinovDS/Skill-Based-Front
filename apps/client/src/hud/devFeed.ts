@@ -105,7 +105,6 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       id: n.id,
       owner: n.start_owner,
       capacity: DEV_CAPACITY[n.kind],
-      build: null,
       attrition_in: null,
       grace_left: null,
       starve_in: null,
@@ -113,14 +112,11 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       recruit_progress: null,
       recruit_waiting: null,
       has_barracks: null,
-      warehouse_level: null,
       warehouse_cap: null,
       building: null,
       factory: null,
       factory_period: null,
       factory_build: null,
-      fort: null,
-      fort_build: null,
       front_dist: null,
       flow_down: null,
       flow_next: null,
@@ -136,7 +132,6 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         recruit_progress: city ? 0 : null,
         recruit_waiting: city ? false : null,
         has_barracks: city ? true : null,
-        warehouse_level: city ? 0 : null,
         warehouse_cap: city ? DEV_CAPACITY[n.kind] : null,
         detail: 'exact',
         warehouse: n.start_stock,
@@ -173,7 +168,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         seen: {
           tick,
           level: 'presence',
-          enemy_modes: ['defense'],
+          enemy_modes: ['attack'],
           enemy_units: null,
           enemy_charged: null,
           enemy_range: null,
@@ -192,11 +187,9 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       mode: 'attack',
       location: { kind: 'node', node: n.id },
       order: null,
-      defense_bonus: null,
-      defense_cap: null,
     }));
 
-  const regen = Math.floor((tick * rules.cp.per_period) / rules.cp.period_ticks);
+  const regen = Math.floor((tick * rules.cp.per_period) / rules.stances.cp_period_ticks.balance);
   return {
     type: 'snapshot',
     tick,
@@ -204,32 +197,25 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       me: {
         cp: Math.min(rules.cp.cap, regen),
         stance: 'balance',
-        fronts: [null, null],
-        rear_min: 1,
         // The supply flow (DEC-43) has no auto lines; the shift starts at the front (a stand-in:
         // the dev feed has no field, so the dev screen shows the control only).
-        auto_lines: rules.economy.model === 'v2' && rules.supply_model !== 'flow' ? true : null,
-        leaf_shift: rules.supply_model === 'flow' ? 0 : null,
-        leaf_shift_max: rules.supply_model === 'flow' ? 2 : null,
-        next_dispatch_tick: rules.supply_model === 'flow' ? (Math.floor(tick / 10) + 1) * 10 : null,
-        cp_ticks: rules.stances === null ? null : tick % rules.stances.cp_period_ticks.balance,
-        capital_ticks:
-          rules.stances === null ? null : tick % rules.stances.capital_period_ticks.balance,
+        leaf_shift: 0,
+        leaf_shift_max: 2,
+        next_dispatch_tick: (Math.floor(tick / 10) + 1) * 10,
+        cp_ticks: tick % rules.stances.cp_period_ticks.balance,
+        capital_ticks: tick % rules.stances.capital_period_ticks.balance,
       },
       vp: [Math.floor(tick / 100), Math.floor(tick / 150)],
       nodes,
       edges: map.edges.map((e) => ({
         id: e.id,
-        width: 1, // every road starts at level 1 (DEC-22)
         // A road is seen when one of its ends is (as in the real fog), hidden only between two hidden cities.
         detail: nodes[e.a]?.detail === 'fog' && nodes[e.b]?.detail === 'fog' ? 'fog' : 'presence',
-        upgrade_gain: null,
         // Each half as its city (DEC-21, item 5); the fake has no enemies on roads.
         halves: [
           { detail: nodes[e.a]?.detail ?? 'fog', seen: null },
           { detail: nodes[e.b]?.detail ?? 'fog', seen: null },
         ],
-        build: null,
         enemy_groups: [],
         forts: [],
       })),
@@ -237,7 +223,6 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       packets: [],
       intents: [],
       fights: devFights(map, tick),
-      lines: [],
     },
   };
 }

@@ -43,7 +43,7 @@ Definitions (all counts per player id, sides ``0`` and ``1``):
 - **Burned share** (#310): ``charges_produced`` is the sum of ``charges`` of the player's
   ``charges_produced`` events (all that the economy made, spill included), ``charges_burned`` the
   sum of ``charges`` of its ``charges_overflow`` events (what found no room in a warehouse); a
-  ``charge_burned`` of a full factory (economy v2, DEC-41) counts in both,
+  ``charge_burned`` of a full factory (DEC-41) counts in both,
   ``burned_permille = charges_burned * 1000 // charges_produced`` (per mille, rounded down;
   ``None`` without production). The other sinks (``packet_lost``, ``warehouse_lost``, starvation)
   are not burning and are not counted. Charges that never were produced (the start stock) never
@@ -55,35 +55,28 @@ state samplings; nothing is added to the simulation:
 
 - ``charges_start`` and ``charges_end`` are the charge stock (``charge_stock``) before tick 1 and
   after the last tick. Sources: ``charges_start`` + ``charges_produced``. Sinks: ``charges_burned``,
-  ``charges_fights`` (``spent_<p>`` and, under ``combat.terrain_burn``, ``burned_<p>`` of the
-  public ``fight_round`` events, DEC-45), ``charges_captures``
+  ``charges_fights`` (``spent_<p>`` and ``burned_<p>`` of the public ``fight_round`` events,
+  DEC-45), ``charges_captures``
   (``node_captured`` count times ``capture.charge_cost``, DEC-38), ``charges_packets_lost``
   (``packet_lost``), ``charges_warehouses_lost`` (``warehouse_lost``, its ``owner``),
   ``charges_starved`` (``starvation`` warehouse + units), ``charges_attrition`` (``attrition``
-  with a charged unit: one charge each), under economy v2 ``charges_built`` (``build_paid``
-  warehouse + units: the progressive payment of the barracks, a warehouse level, a factory and a
-  bunker, DEC-41 item 7) and ``charges_plans`` (``plan_charged``: one charge each, the bonus of a
-  waiting planned order, item 10), ``charges_tolls`` (``toll_paid``: the charges road
-  fortifications took, DEC-43 item D6), and ``charges_end``. ``charges_residual`` = sources - sinks
-  and must be 0: a value other than 0 means a charge appeared or vanished that no event explains
-  (a rule changed without this ledger).
+  with a charged unit: one charge each), ``charges_built`` (``build_paid`` warehouse + units:
+  the progressive payment of the barracks and a factory, DEC-41 item 7) and ``charges_plans``
+  (``plan_charged``: one charge each, the bonus of a waiting planned order, item 10),
+  ``charges_tolls`` (``toll_paid``: the charges road fortifications took, DEC-43 item D6), and
+  ``charges_end``. ``charges_residual`` = sources - sinks and must be 0: a value other than 0 means
+  a charge appeared or vanished that no event explains (a rule changed without this ledger).
 - Flow: ``charges_sent`` (``packet_sent``, the supply dispatch), ``charges_delivered`` (all
-  ``packet_delivered``, one-off transfers included), ``charges_delivered_front`` (of them into a
-  city with a front marker at the end of that tick), ``charges_transfers`` (``transfer_started``);
-  ``tolls_paid`` (the number of ``toll_paid`` of the player's groups) and ``forts_built`` (its
-  ``road_fort_built``), road fortifications (DEC-43, item D).
+  ``packet_delivered``); ``tolls_paid`` (the number of ``toll_paid`` of the player's groups) and
+  ``forts_built`` (its ``road_fort_built``), road fortifications (DEC-43, item D).
 - **Stock by place**, ``stock_by_place_minute``: the charges of a player split into the places of
-  ``PLACES`` (capital warehouse, warehouses of the cities with a front marker, other warehouses,
-  charged units standing in nodes, charged units on roads, packets), sampled at the end of every
+  ``PLACES`` (capital warehouse, the warehouses of the other own nodes, charged units standing
+  in nodes, charged units on roads, packets), sampled at the end of every
   ``PLACE_SAMPLE_TICKS``-th tick; the value of a minute is the mean of its samples in hundredths
   of a charge (rounded down; minute ``m``: ticks ``m * 60 * tick_hz < t <= (m + 1) * 60 *
   tick_hz``; ``None`` for a minute without a sample). The places sum to ``charge_stock``.
-- **Supply bottleneck**, counted in every tick: ``marker_ticks`` (the player owns its capital and
-  a city other than the capital with a front marker), ``front_empty_ticks`` (of them: a marker
-  city has an empty warehouse), ``front_empty_cap_has_ticks`` (of those: the capital warehouse is
-  not empty), ``cap_full_ticks`` (the player owns its capital and the warehouse is at capacity,
-  counted in all ticks). ``front_empty_permille`` and ``front_empty_cap_has_permille`` are the
-  first two over ``marker_ticks`` (per mille, rounded down; ``None`` without marker ticks).
+- **Full capital**, counted in every tick: ``cap_full_ticks`` (the player owns its capital and
+  the warehouse is at capacity).
 
 **CP and idle units** (#743, balance statistics, not game rules; ``docs/balance/README.md`` has
 the same text). Per player, from the ``cp_burned`` events and a sampling of the end-of-tick state;
@@ -109,9 +102,6 @@ nothing is added to the simulation:
 has the same text). From the events of the match and the command journal; nothing is added to the
 simulation:
 
-- ``economy_model`` and ``supply_model``: ``economy.model`` and ``supply.model`` of the ruleset
-  (``"v1"`` / ``"v2"``, ``"lines"`` / ``"flow"``), so a reader can hide the rows of the other
-  economy. Under ``v1`` the supply model has no meaning and is written as it is in the ruleset.
 - ``first_contact_tick`` (one value per match): the earlier of the first ``fight_started`` (in a
   node or on an edge) and the first capture of a node the other player owned; ``None`` when the
   players never met.
@@ -127,7 +117,7 @@ simulation:
   (hundredths, rounded down; ``None`` without a kill).
 - ``charges_built_lost``: the charges of ``build_paid`` of a building that never served or stopped
   serving the player: a build later stopped (``build_stopped`` of its node and kind) and a finished
-  building (``barracks_built``, ``warehouse_upgraded``, ``factory_built``, ``fort_built``) in a node
+  building (``barracks_built``, ``factory_built``) in a node
   the other player later captured. Every charge counts once (a part of ``charges_built``).
 - ``cp_cancelled`` (hundredths of CP): the price of the ``Move`` orders that an accepted
   ``CancelOrder`` of the same group cancelled; ``MatchRecorder`` keeps the price of the last
@@ -151,16 +141,13 @@ charge ledger; nothing is added to the simulation:
   down; ``None`` without a front). It weighs a minute with a wide front more, so it reads as
   "how hard is each front node pushed on".
 - **CP income** ``cp_income`` (hundredths of CP): the CP quanta the player's economy fired times
-  ``cp.per_period``, before the burning at the cap (``cp_burned``) and, under economy v1, before
-  the share of the stance that goes into charges. A quantum is read like ``cp_by_stance``: under
-  ``[stances]`` from ``cp_ticks`` (0 at the end of a tick exactly when it fired), otherwise on the
-  ticks divisible by ``cp.period_ticks`` of the rules the match plays (``Match.rules``, the map
-  tempo applied).
+  ``cp.per_period``, before the burning at the cap (``cp_burned``). A quantum is read like
+  ``cp_by_stance``: from ``cp_ticks`` (0 at the end of a tick exactly when it fired).
 
 Player statistics (#375), the actions of a player instead of the outcome: ``analyze_stats(log)``
 returns ``MatchStats``, one ``PlayerStats`` per side. They come from the command journal of the
 match (every command sent, accepted or rejected, with the price charged) and from existing events
-(``stance_changed``, ``transfer_started``, ``recruit_cancelled``); nothing is added to the
+(``stance_changed``, ``recruit_cancelled``); nothing is added to the
 simulation, so the state hash does not change. Definitions (the same text is in
 ``docs/balance/README.md``):
 
@@ -172,35 +159,29 @@ simulation, so the state hash does not change. Definitions (the same text is in
   changes and ``stance_share`` the share of ``ticks`` under each stance (``None`` for
   ``ticks = 0``).
 - **Earned by stance** (DEC-44, #772): ``cp_by_stance`` is the CP in hundredths a quantum really
-  added under each stance (the quantum minus its ``cp_burned``), filled only under ``[stances]``:
-  ``MatchRecorder`` reads a quantum from ``cp_ticks``, which is 0 at the end of a tick exactly when
-  the quantum fired. ``charges_by_stance`` is ``(stance, capital, built)``: the charges made under
-  each stance by the own capital and by every other factory (a captured capital too), and
-  ``charges_capital`` and ``charges_built`` their sums; they count the ``charges_produced`` and the
-  ``charge_burned`` events of a factory under economy v2, like ``MatchMetrics.charges_produced``.
+  added under each stance (the quantum minus its ``cp_burned``): ``MatchRecorder`` reads a quantum
+  from ``cp_ticks``, which is 0 at the end of a tick exactly when the quantum fired.
+  ``charges_by_stance`` is ``(stance, capital, built)``: the charges made under each stance by the
+  own capital and by every other factory (a captured capital too), and ``charges_capital`` and
+  ``charges_built`` their sums; they count the ``charges_produced`` and the ``charge_burned`` events
+  of a factory, like ``MatchMetrics.charges_produced``.
 - **Commands** (``commands``): all commands the player sent except ``Forfeit``; ``rejected`` is
   the part that was rejected (also in ``MatchMetrics.rejected``, which counts ``Forfeit`` too).
   **APM**: ``apm_avg = commands * 60 * tick_hz / ticks`` (``None`` for ``ticks = 0``);
   ``apm_by_minute[m]`` is the number of commands applied in minute ``m`` (ticks
   ``m * 60 * tick_hz < t <= (m + 1) * 60 * tick_hz``, like ``captures_by_minute``; the last
   minute may be shorter); ``apm_peak`` is its maximum.
-- **Supply actions**: accepted ``SetFront``, ``SetRearMin`` and ``Transfer`` as tick lists
-  (``front_ticks``, ``rear_min_ticks``, ``transfer_ticks``); ``transfer_charges`` is the sum of the
-  charges that ``transfer_started`` says were sent (a transfer is cut to the free room of the
-  target, so this may be less than the ``n`` of the command).
 - **Planned orders**: ``planned_share = planned / all`` accepted ``Move`` orders (``None``
   without orders); ``planned_attack_share`` and ``planned_siege_share`` are as in
   ``MatchMetrics``.
 - **CP spent** (``cp_by_category``, hundredths of CP): the price charged for every accepted
   command (``orders.cost`` of the ruleset), summed per category: ``move`` (``Move``),
-  ``planned_move`` (``Move`` with ``planned``), ``mode`` (``SetMode``), ``recruit``
-  (``Recruit`` minus the CP that ``CancelRecruit`` returned, ``cp`` of ``recruit_cancelled``),
-  ``road`` (``UpgradeRoad``), ``barracks``, ``warehouse``, ``transfer``, ``fort`` (``FortifyRoad``,
-  DEC-43 item D) and ``other`` (``Split``,
-  ``Merge``, ``CancelOrder``, ``SetStance``, ``SetFront``, ``SetRearMin``: free in the MVP
-  rulesets). ``cp_total`` is the sum, ``cp_refunded`` the returned part (already subtracted).
-  Rejected commands cost nothing; the real CP balance (regeneration, burning at the cap) is not
-  reconstructed.
+  ``planned_move`` (``Move`` with ``planned``), ``recruit`` (``Recruit`` minus the CP that
+  ``CancelRecruit`` returned, ``cp`` of ``recruit_cancelled``), ``barracks``, ``fort``
+  (``FortifyRoad``, DEC-43 item D) and ``other`` (``Split``, ``Merge``, ``CancelOrder``,
+  ``SetStance``: free in the rulesets). ``cp_total`` is the sum, ``cp_refunded`` the returned part
+  (already subtracted). Rejected commands cost nothing; the real CP balance (regeneration, burning
+  at the cap) is not reconstructed.
 
 **Result totals** (#824, the result screen; ``docs/design/ui-style.md`` 13.6 has the same text):
 ``ResultTally`` reads the events of every tick of a match (the server's match runner feeds it
@@ -243,7 +224,7 @@ from gow_sim.maps import PLAYERS, MapDef, NodeKind
 from gow_sim.match import Match
 from gow_sim.ruleset import Stance
 from gow_sim.state import AtNode, Event, GameState, OnEdge
-from gow_sim.systems.build import FACTORY_KIND, FORT_KIND
+from gow_sim.systems.build import FACTORY_KIND
 from gow_sim.systems.capacity import supplied_territory, warehouse_capacity
 
 __all__ = [
@@ -273,13 +254,13 @@ UNFINISHED: Final = "unfinished"
 
 PLACES: Final[tuple[str, ...]] = (
     "cap_wh",
-    "front_wh",
     "rear_wh",
     "units_node",
     "units_road",
     "packets",
 )
-"""Places of the charge stock, in output order (module docstring, stock by place)."""
+"""Places of the charge stock, in output order (module docstring, stock by place): ``rear_wh``
+is the warehouses of the own nodes other than the capital."""
 
 PLACE_SAMPLE_TICKS: Final = 10
 """The stock by place is sampled at the end of every tick that is a multiple of this (1 second)."""
@@ -287,25 +268,17 @@ PLACE_SAMPLE_TICKS: Final = 10
 CP_CATEGORIES: Final[tuple[str, ...]] = (
     "move",
     "planned_move",
-    "mode",
     "recruit",
-    "road",
     "barracks",
-    "warehouse",
-    "transfer",
     "fort",
     "other",
 )
 """Categories of ``PlayerStats.cp_by_category``, in output order (module docstring)."""
 
 _KIND_CATEGORY: Final = {
-    "SetMode": "mode",
     "Recruit": "recruit",
     "CancelRecruit": "recruit",
-    "UpgradeRoad": "road",
     "BuildBarracks": "barracks",
-    "UpgradeWarehouse": "warehouse",
-    "Transfer": "transfer",
     "FortifyRoad": "fort",
 }
 """``CommandRecord.kind`` to category; ``Move`` goes by ``planned``, the rest is ``other``."""
@@ -479,27 +452,18 @@ class MatchLog:
     place_samples: tuple[tuple[tuple[int, ...], ...], ...] = ((), ())
     """``charge_places`` by player id at the end of every ``PLACE_SAMPLE_TICKS``-th tick:
     entry ``i`` is tick ``(i + 1) * PLACE_SAMPLE_TICKS``."""
-    bottleneck: tuple[tuple[int, int, int, int], ...] = ((0, 0, 0, 0), (0, 0, 0, 0))
-    """By player id: ``marker_ticks``, ``front_empty_ticks``, ``front_empty_cap_has_ticks``,
-    ``cap_full_ticks`` (module docstring)."""
-    delivered_front: tuple[int, ...] = (0, 0)
-    """By player id: charges delivered into a city with a front marker."""
+    cap_full_ticks: tuple[int, ...] = (0, 0)
+    """By player id: ticks that ended with the own capital's warehouse full (module docstring)."""
     cp_cap_ticks: tuple[int, ...] = (0, 0)
     """By player id: ticks that ended with the CP at ``cp.cap`` (module docstring, #743)."""
     idle_discharged: tuple[tuple[int, int], ...] = ((0, 0), (0, 0))
     """By player id: ``(connected, pocket)`` idle discharged unit-ticks (module docstring)."""
     cp_cancelled: tuple[int, ...] = (0, 0)
     """By player id: CP in hundredths of the ``Move`` orders cancelled by ``CancelOrder`` (#690)."""
-    economy_model: str = "v1"
-    """``economy.model`` of the ruleset (#690)."""
-    supply_model: str = "lines"
-    """``supply.model`` of the ruleset (#690)."""
-    stances: bool = False
-    """The ruleset has ``[stances]`` (DEC-44)."""
     capitals: tuple[int, ...] = ()
     """The own capital by player id; empty in a hand-made log."""
     cp_by_stance: tuple[tuple[tuple[str, int], ...], ...] = ((), ())
-    """By player id: ``(stance, CP in hundredths)``, only under ``[stances]`` (module docstring)."""
+    """By player id: ``(stance, CP in hundredths)`` (module docstring)."""
     front_width_sum: tuple[int, ...] = (0, 0)
     """By player id: the sum of the front width samples (module docstring, front pressure)."""
     front_samples: tuple[int, ...] = (0, 0)
@@ -534,16 +498,11 @@ def charge_places(state: GameState) -> tuple[tuple[int, ...], ...]:
         owner = node.owner
         if owner is None:
             continue
-        if nid == state.map.capital(owner):
-            out[owner][0] += node.warehouse
-        elif nid in state.players[owner].fronts:
-            out[owner][1] += node.warehouse
-        else:
-            out[owner][2] += node.warehouse
+        out[owner][0 if nid == state.map.capital(owner) else 1] += node.warehouse
     for group in state.groups.values():
-        out[group.owner][4 if isinstance(group.location, OnEdge) else 3] += group.charged
+        out[group.owner][3 if isinstance(group.location, OnEdge) else 2] += group.charged
     for packet in state.packets.values():
-        out[packet.owner][5] += packet.charges
+        out[packet.owner][4] += packet.charges
     return tuple(tuple(out[p]) for p in PLAYERS)
 
 
@@ -572,8 +531,7 @@ class MatchRecorder:
         self._stock: dict[int, list[int]] = {p: [] for p in PLAYERS}
         self._places_start: tuple[tuple[int, ...], ...] = ()
         self._samples: dict[int, list[tuple[int, ...]]] = {p: [] for p in PLAYERS}
-        self._bottleneck = {p: [0, 0, 0, 0] for p in PLAYERS}
-        self._delivered_front = _zeros()
+        self._cap_full = _zeros()
         self._cap_ticks = _zeros()
         self._idle = {p: [0, 0] for p in PLAYERS}
         self._capitals: dict[int, int] = {}
@@ -636,19 +594,12 @@ class MatchRecorder:
                 node, player = e.get("node"), e.get("player")
                 assert isinstance(node, int) and isinstance(player, int)
                 self._owners[node] = player
-            elif e.kind == "packet_delivered":
-                node, player, charges = e.get("node"), e.get("player"), e.get("charges")
-                assert isinstance(node, int) and isinstance(player, int)
-                assert isinstance(charges, int)
-                if node in state.players[player].fronts:
-                    self._delivered_front[player] += charges
         self._events.extend(state.events)
         for p, charges in zip(PLAYERS, charge_stock(state), strict=True):
             self._stock[p].append(charges)
-        self._count_bottleneck(match)
+        self._count_cap_full(match)
         self._count_cp_and_idle(match)
-        if match.rules.stances is not None:
-            self._count_stance_cp(match)
+        self._count_stance_cp(match)
         self._garrisons = _garrisons(state)
         self._order_cost = {
             gid: cost
@@ -680,35 +631,16 @@ class MatchRecorder:
         """The CP quanta of this tick (module docstring, front pressure)."""
         rules, state = match.rules, match.state
         for p in PLAYERS:
-            if rules.stances is not None:
-                fired = state.players[p].cp_ticks == 0
-            else:
-                fired = state.tick % rules.cp.period_ticks == 0
-            if fired:
+            if state.players[p].cp_ticks == 0:  # the quantum fired in this tick (DEC-44)
                 self._cp_income[p] += rules.cp.per_period
 
-    def _count_bottleneck(self, match: Match) -> None:
+    def _count_cap_full(self, match: Match) -> None:
         state = match.state
         for p in PLAYERS:
             capital = self._capitals[p]
             cap = state.nodes[capital]
-            if cap.owner != p:
-                continue
-            counts = self._bottleneck[p]
-            if cap.warehouse >= warehouse_capacity(state, match.rules, capital):
-                counts[3] += 1
-            marked = [
-                n
-                for n in state.players[p].fronts
-                if n is not None and n != capital and state.nodes[n].owner == p
-            ]
-            if not marked:
-                continue
-            counts[0] += 1
-            if any(state.nodes[n].warehouse == 0 for n in marked):
-                counts[1] += 1
-                if cap.warehouse > 0:
-                    counts[2] += 1
+            if cap.owner == p and cap.warehouse >= warehouse_capacity(state, match.rules, capital):
+                self._cap_full[p] += 1
 
     def _count_stance_cp(self, match: Match) -> None:
         """The CP of this tick's quanta by stance (DEC-44): the economy adds 1 to ``cp_ticks``
@@ -767,16 +699,10 @@ class MatchRecorder:
             places_start=self._places_start,
             places_end=charge_places(match.state),
             place_samples=tuple(tuple(self._samples[p]) for p in PLAYERS),
-            bottleneck=tuple(
-                (b[0], b[1], b[2], b[3]) for b in (self._bottleneck[p] for p in PLAYERS)
-            ),
-            delivered_front=tuple(self._delivered_front[p] for p in PLAYERS),
+            cap_full_ticks=tuple(self._cap_full[p] for p in PLAYERS),
             cp_cap_ticks=tuple(self._cap_ticks[p] for p in PLAYERS),
             idle_discharged=tuple((self._idle[p][0], self._idle[p][1]) for p in PLAYERS),
             cp_cancelled=tuple(self._cancelled[p] for p in PLAYERS),
-            economy_model=match.rules.economy.model.value,
-            supply_model=match.rules.supply.model.value,
-            stances=match.rules.stances is not None,
             capitals=tuple(self._capitals[p] for p in PLAYERS),
             cp_by_stance=tuple(tuple(self._cp_earned[p].items()) for p in PLAYERS),
             front_width_sum=tuple(self._front_sum[p] for p in PLAYERS),
@@ -800,9 +726,9 @@ class ChargeFlow:
     starved: int
     attrition: int
     built: int
-    """Economy v2: the charges paid for buildings (``build_paid``, DEC-41 item 7)."""
+    """The charges paid for buildings (``build_paid``, DEC-41 item 7)."""
     plans: int
-    """Economy v2: the charges planned orders took for their bonus (``plan_charged``, item 10)."""
+    """The charges planned orders took for their bonus (``plan_charged``, item 10)."""
     tolls: int
     """The charges road fortifications took from the player's groups (``toll_paid``, DEC-43
     item D6)."""
@@ -812,20 +738,13 @@ class ChargeFlow:
     starved + attrition + built + plans + tolls) - end``; 0 in a consistent match."""
     sent: int
     delivered: int
-    delivered_front: int
-    transfers: int
     tolls_paid: int
     """Road fortification tolls the player's groups paid (``toll_paid`` events, DEC-43 item D)."""
     forts_built: int
     """Road fortifications of the player that started to work (``road_fort_built``)."""
     stock_by_place_minute: tuple[tuple[str, tuple[int | None, ...]], ...]
     """Per ``PLACES`` name the mean of each match minute in hundredths of a charge."""
-    marker_ticks: int
-    front_empty_ticks: int
-    front_empty_cap_has_ticks: int
     cap_full_ticks: int
-    front_empty_permille: int | None
-    front_empty_cap_has_permille: int | None
 
 
 _FLOW_FIELDS: Final[tuple[str, ...]] = (
@@ -843,13 +762,8 @@ _FLOW_FIELDS: Final[tuple[str, ...]] = (
     "residual",
     "sent",
     "delivered",
-    "delivered_front",
-    "transfers",
     "tolls_paid",
     "forts_built",
-    "marker_ticks",
-    "front_empty_ticks",
-    "front_empty_cap_has_ticks",
     "cap_full_ticks",
 )
 """Integer fields of ``ChargeFlow`` that ``MatchMetrics.to_json`` writes as ``charges_<name>`` or
@@ -909,10 +823,6 @@ class MatchMetrics:
     """Idle discharged unit-ticks in the capital's component (#743)."""
     idle_discharged_pocket: tuple[int, ...]
     """Idle discharged unit-ticks in pockets (#743)."""
-    economy_model: str = "v1"
-    """``economy.model`` of the ruleset (#690)."""
-    supply_model: str = "lines"
-    """``supply.model`` of the ruleset (#690)."""
     first_contact_tick: int | None = None
     """The first fight or capture of an enemy node (#690); ``None``: the players never met."""
     siege_fights: tuple[int, ...] = (0, 0)
@@ -950,8 +860,6 @@ class MatchMetrics:
         flow["stock_by_place_minute"] = [
             {name: list(values) for name, values in x.stock_by_place_minute} for x in self.flow
         ]
-        flow["front_empty_permille"] = [x.front_empty_permille for x in self.flow]
-        flow["front_empty_cap_has_permille"] = [x.front_empty_cap_has_permille for x in self.flow]
         return {
             "winner": self.winner,
             "reason": self.reason,
@@ -982,8 +890,6 @@ class MatchMetrics:
             "cp_cap_ticks": list(self.cp_cap_ticks),
             "idle_discharged_connected": list(self.idle_discharged_connected),
             "idle_discharged_pocket": list(self.idle_discharged_pocket),
-            "economy_model": self.economy_model,
-            "supply_model": self.supply_model,
             "first_contact_tick": self.first_contact_tick,
             "siege_fights": list(self.siege_fights),
             "siege_walk_ins": list(self.siege_walk_ins),
@@ -1122,8 +1028,6 @@ def analyze(log: MatchLog) -> MatchMetrics:
         cp_cap_ticks=log.cp_cap_ticks,
         idle_discharged_connected=tuple(log.idle_discharged[p][0] for p in PLAYERS),
         idle_discharged_pocket=tuple(log.idle_discharged[p][1] for p in PLAYERS),
-        economy_model=log.economy_model,
-        supply_model=log.supply_model,
         first_contact_tick=effort.contact,
         siege_fights=tuple(effort.fights[p] for p in PLAYERS),
         siege_walk_ins=tuple(walk_ins[p] for p in PLAYERS),
@@ -1156,17 +1060,15 @@ def analyze(log: MatchLog) -> MatchMetrics:
 
 
 def _opt_int(e: Event, key: str) -> int | None:
-    """The integer field ``key`` of ``e``; ``None`` when the event has no such field (a road build,
-    a hand-made log) or it is not an integer."""
+    """The integer field ``key`` of ``e``; ``None`` when the event has no such field (a hand-made
+    log) or it is not an integer."""
     value = next((v for k, v in e.data if k == key), None)
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 _COMPLETED: Final = {
     "barracks_built": "barracks",
-    "warehouse_upgraded": "warehouse",
     "factory_built": FACTORY_KIND,
-    "fort_built": FORT_KIND,
 }
 """The event of a finished city building -> the ``kind`` of its ``build_paid`` events."""
 
@@ -1273,7 +1175,6 @@ _EVENT_COUNTERS: Final[tuple[str, ...]] = (
     "forts_built",
     "sent",
     "delivered",
-    "transfers",
 )
 """Counters of ``_count_ledger`` (``captures`` is counted in ``analyze``)."""
 
@@ -1286,14 +1187,13 @@ def _count_ledger(e: Event, ledger: dict[str, dict[int, int]]) -> None:
                 spent = e.get(f"spent_{p}")
                 assert isinstance(spent, int)
                 ledger["fights"][p] += spent + (_opt_int(e, f"burned_{p}") or 0)
-        case "packet_lost" | "packet_sent" | "packet_delivered" | "transfer_started":
+        case "packet_lost" | "packet_sent" | "packet_delivered":
             player, charges = e.get("player"), e.get("charges")
             assert isinstance(player, int) and isinstance(charges, int)
             key = {
                 "packet_lost": "packets_lost",
                 "packet_sent": "sent",
                 "packet_delivered": "delivered",
-                "transfer_started": "transfers",
             }[e.kind]
             ledger[key][player] += charges
         case "warehouse_lost":
@@ -1364,7 +1264,6 @@ def _charge_flow(
         if taken[m]:
             for j, name in enumerate(PLACES):
                 by_place[name][m] = sums[m][j] * 100 // taken[m]
-    marker, empty, empty_cap, cap_full = log.bottleneck[player]
     return ChargeFlow(
         start=start,
         fights=counts["fights"],
@@ -1382,15 +1281,8 @@ def _charge_flow(
         residual=start + produced - sinks - end,
         sent=counts["sent"],
         delivered=counts["delivered"],
-        delivered_front=log.delivered_front[player],
-        transfers=counts["transfers"],
         stock_by_place_minute=tuple((name, tuple(v)) for name, v in by_place.items()),
-        marker_ticks=marker,
-        front_empty_ticks=empty,
-        front_empty_cap_has_ticks=empty_cap,
-        cap_full_ticks=cap_full,
-        front_empty_permille=empty * 1000 // marker if marker else None,
-        front_empty_cap_has_permille=empty_cap * 1000 // marker if marker else None,
+        cap_full_ticks=log.cap_full_ticks[player],
     )
 
 
@@ -1410,7 +1302,7 @@ class PlayerStats:
     stance_share: tuple[tuple[str, float | None], ...]
     """The share of the match under each stance, in ``Stance`` order."""
     cp_by_stance: tuple[tuple[str, int], ...]
-    """CP in hundredths earned under each stance, only under ``[stances]`` (DEC-44)."""
+    """CP in hundredths earned under each stance (DEC-44)."""
     charges_by_stance: tuple[tuple[str, int, int], ...]
     """``(stance, capital, built)``: charges made under each stance (module docstring)."""
     charges_capital: int
@@ -1424,12 +1316,6 @@ class PlayerStats:
     apm_avg: float | None
     apm_by_minute: tuple[int, ...]
     apm_peak: int
-    front_ticks: tuple[int, ...]
-    """Ticks of the accepted ``SetFront`` commands."""
-    rear_min_ticks: tuple[int, ...]
-    transfer_ticks: tuple[int, ...]
-    transfer_charges: int
-    """Charges sent by the accepted transfers."""
     orders: int
     """Accepted ``Move`` orders."""
     planned_orders: int
@@ -1457,12 +1343,6 @@ class PlayerStats:
             "apm_avg": self.apm_avg,
             "apm_by_minute": list(self.apm_by_minute),
             "apm_peak": self.apm_peak,
-            "supply": {
-                "set_front": list(self.front_ticks),
-                "set_rear_min": list(self.rear_min_ticks),
-                "transfer": list(self.transfer_ticks),
-                "transfer_charges": self.transfer_charges,
-            },
             "orders": self.orders,
             "planned_orders": self.planned_orders,
             "planned_share": self.planned_share,
@@ -1479,16 +1359,14 @@ class MatchStats:
     """``PlayerStats`` of both sides, indexed by player id."""
 
     players: tuple[PlayerStats, ...]
-    stances: bool = False
-    """The ruleset of the match has ``[stances]`` (DEC-44)."""
 
     def to_json(self) -> dict[str, object]:
-        return {"players": [p.to_json() for p in self.players], "stances": self.stances}
+        return {"players": [p.to_json() for p in self.players]}
 
 
 def analyze_stats(log: MatchLog) -> MatchStats:
     """The statistics of both players from the log (module docstring)."""
-    return MatchStats(tuple(_player_stats(log, p) for p in PLAYERS), log.stances)
+    return MatchStats(tuple(_player_stats(log, p) for p in PLAYERS))
 
 
 def _stance_line(log: MatchLog, player: int) -> tuple[tuple[tuple[int, str], ...], dict[str, int]]:
@@ -1530,7 +1408,6 @@ def _player_stats(log: MatchLog, player: int) -> PlayerStats:
     timeline, in_stance = _stance_line(log, player)
     by_minute = [0] * minutes
     sent = rejected = 0
-    ticks: dict[str, list[int]] = {"SetFront": [], "SetRearMin": [], "Transfer": []}
     spent: dict[str, int] = dict.fromkeys(CP_CATEGORIES, 0)
     for c in log.commands:
         if c.player != player or c.kind == Forfeit.__name__:
@@ -1540,24 +1417,16 @@ def _player_stats(log: MatchLog, player: int) -> PlayerStats:
         if not c.accepted:
             rejected += 1
             continue
-        if c.kind in ticks:
-            ticks[c.kind].append(c.tick)
         if c.kind == Move.__name__:
             spent["planned_move" if c.planned else "move"] += c.cost
         else:
             spent[_KIND_CATEGORY.get(c.kind, "other")] += c.cost
-    refunded = charges = 0
+    refunded = 0
     for e in log.events:
-        if e.kind not in ("recruit_cancelled", "transfer_started") or e.get("player") != player:
-            continue
-        if e.kind == "recruit_cancelled":
+        if e.kind == "recruit_cancelled" and e.get("player") == player:
             cp = e.get("cp")
             assert isinstance(cp, int)
             refunded += cp
-        elif e.kind == "transfer_started":
-            n = e.get("charges")
-            assert isinstance(n, int)
-            charges += n
     spent["recruit"] -= refunded
     orders = sum(1 for m in log.moves if m.player == player)
     planned = sum(1 for m in log.moves if m.player == player and m.planned)
@@ -1582,10 +1451,6 @@ def _player_stats(log: MatchLog, player: int) -> PlayerStats:
         apm_avg=round(sent * minute_ticks / log.ticks, 3) if log.ticks else None,
         apm_by_minute=tuple(by_minute),
         apm_peak=max(by_minute),
-        front_ticks=tuple(ticks["SetFront"]),
-        rear_min_ticks=tuple(ticks["SetRearMin"]),
-        transfer_ticks=tuple(ticks["Transfer"]),
-        transfer_charges=charges,
         orders=orders,
         planned_orders=planned,
         planned_share=round(planned / orders, 4) if orders else None,

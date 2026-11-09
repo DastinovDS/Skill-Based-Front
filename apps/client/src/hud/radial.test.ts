@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RulesetPublic } from '../protocol.gen.ts';
-import { DEV_RULES, DEV_RULES_STANCES } from './devFeed.ts';
+import { DEV_RULES_STANCES } from './devFeed.ts';
 import {
   BIG_RING,
   RADIAL,
@@ -19,7 +19,6 @@ import {
 /** The stance rules of `mvp-4-stances` with `factories_follow` set (DEC-47). */
 function withKey(factoriesFollow: boolean): RulesetPublic {
   const { stances } = DEV_RULES_STANCES;
-  if (stances === null) throw new Error('no stances in the dev rules');
   return { ...DEV_RULES_STANCES, stances: { ...stances, factories_follow: factoriesFollow } };
 }
 
@@ -47,33 +46,6 @@ describe('stanceRates', () => {
     // Only the capital works (or no count given): the capital's rate.
     expect(stanceRates(rules, 1).map((r) => r.chargesPerMin)).toEqual([6, 3, 1.5]);
     expect(stanceRates(rules).map((r) => r.chargesPerMin)).toEqual([6, 3, 1.5]);
-  });
-
-  it('ignores the factory count without the key (older rulesets, replays)', () => {
-    const off = withKey(false);
-    expect(stanceRates(off, 3).map((r) => r.chargesPerMin)).toEqual([6, 3, 1.5]);
-    expect(stanceRates(DEV_RULES, 3).map((r) => r.chargesPerMin)).toEqual([18, 12, 6]);
-  });
-
-  it('gives mvp-0 the table of the guide: 3/18, 6/12, 9/6', () => {
-    const rates = stanceRates(DEV_RULES);
-    expect(rates.map((r) => [r.stance, r.cpPerMinCenti / 100, r.chargesPerMin])).toEqual([
-      ['economy', 3, 18],
-      ['balance', 6, 12],
-      ['war', 9, 6],
-    ]);
-  });
-
-  it('follows the ruleset, not constants', () => {
-    const rules = {
-      ...DEV_RULES,
-      cp: { ...DEV_RULES.cp, per_period: 200 },
-      economy: { ...DEV_RULES.economy, charges_per_cp: 3 },
-    };
-    // 200 per 5 s: 2400 centi-CP a minute; war: 25% = 50 centi into charges, 150 stay.
-    const war = stanceRates(rules).find((r) => r.stance === 'war');
-    expect(war?.cpPerMinCenti).toBe(150 * 12);
-    expect(war?.chargesPerMin).toBe(Math.floor((50 * 3 * 12) / 100));
   });
 });
 

@@ -96,12 +96,12 @@ def test_map_is_built_from_its_half(name: str) -> None:
 
 @pytest.mark.parametrize("name", DEC27)
 def test_dec27_map_passes_the_size_check_and_the_warehouses(name: str) -> None:
-    # DEC-27, item 5: 45..55 nodes; DEC-26, item 5: no city starts above its warehouse (mvp-7).
+    # DEC-27, item 5: 45..55 nodes; DEC-26, item 5: no capital starts above its warehouse (mvp-7).
     rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-7.toml")
     assert validate_file(_file(name), SIZE, rules) == []
 
 
-@pytest.mark.parametrize("ruleset", ["mvp-2", "mvp-3", "mvp-4"])
+@pytest.mark.parametrize("ruleset", ["mvp-5", "mvp-6", "mvp-7"])
 def test_small_map_passes_the_warehouses(ruleset: str) -> None:
     # #664: narrows (29 nodes) is outside the 45..55 size range, so only the other checks run.
     rules = load_ruleset(MAPS.parent / "rulesets" / f"{ruleset}.toml")

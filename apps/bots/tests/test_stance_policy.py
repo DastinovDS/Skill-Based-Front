@@ -5,8 +5,7 @@ rate of the own capital (DEC-44, items 1 and 2): War the most CP and the fewest 
 Economy the reverse. At the CP cap the excess of a quantum burns (DEC-02), so more CP buy nothing
 there and the policy steps toward Economy; with the warehouses full the charges are not what is
 short and it steps toward War. A change carries both counters over rounded down (item 4), so the
-policy changes at most once per dwell. ``SetStance`` without the section gives
-``FEATURE_DISABLED`` (DEC-41, item 1), so a bot never sends it there.
+policy changes at most once per dwell.
 """
 
 from itertools import pairwise
@@ -27,7 +26,6 @@ from gow_sim.view import project
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
-MVP4 = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
 MVP6 = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
 MVP7 = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 PARAMS = {
@@ -234,8 +232,3 @@ def test_at_most_one_change_per_dwell(crossroads: MapDef, pair: tuple[str, str])
     for side in sent:
         ticks = [t for t, c in side if isinstance(c, SetStance)]
         assert all(b - a >= 200 for a, b in pairwise(ticks))
-
-
-def test_no_stance_command_without_the_section(crossroads: MapDef) -> None:
-    sent, _ = _play(crossroads, MVP4, ("smart_rusher", "smart_turtle"), 300)
-    assert not any(isinstance(c, SetStance) for side in sent for _, c in side)

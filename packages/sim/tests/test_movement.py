@@ -41,11 +41,12 @@ from gow_sim.state import (
 from gow_sim.systems.movement import find_path, movement, traversal_ticks
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP5 = TESTS_DIR.parents[2] / "rulesets" / "mvp-5.toml"
+"""mvp-5: a free capture (DEC-38 off), so the arrivals here capture with any charges."""
 
 
 def _rules() -> Ruleset:
-    base = load_ruleset(MVP0)
+    base = load_ruleset(MVP5)
     terrain = TerrainRules(
         defense_mod=base.terrain.defense_mod,
         speed_pct=TerrainTable(plains=125, forest=100, mountains=70),
@@ -170,20 +171,6 @@ def test_transit_never_stands_in_an_intermediate_node() -> None:
         assert not isinstance(state.groups[gid].location, AtNode), state.tick
         _step(state)
     assert state.groups[gid].location == AtNode(3)
-
-
-def test_planned_order_departs_after_the_delay() -> None:
-    mapdef = _line(["forest", "forest", "forest"], [0, 0, 1], [30, 30])
-    state = initial_state(mapdef, RULES)
-    gid = _group(state, 0, 0)
-    _step(state, [PlayerCommand(0, 1, Move(gid, 1, planned=True))])  # applied at tick 1
-    delay = RULES.orders.planned_delay_ticks  # DEC-08: 30 ticks
-    while state.tick < delay:
-        assert state.groups[gid].location == AtNode(0)
-        _step(state)
-    assert state.groups[gid].location == AtNode(0)  # tick 30: 30 ticks waited (1..30)
-    _step(state)  # tick 31 = 1 + delay: departs and makes the first step
-    assert state.groups[gid].location == OnEdge(0, 0, 1 * PROGRESS_SCALE // 30)
 
 
 def test_too_long_edge_is_an_error() -> None:
@@ -326,9 +313,9 @@ def test_on_edge_order_keeps_the_rest_of_the_path() -> None:
 
 @pytest.mark.parametrize("name", ["pass", "web", "artery"])
 def test_mvp_maps_fit_the_progress_scale(name: str) -> None:
-    """Every edge of the MVP maps, both ways, takes at most PROGRESS_SCALE ticks on mvp-0."""
+    """Every edge of the MVP maps, both ways, takes at most PROGRESS_SCALE ticks on mvp-5."""
     mapdef = load_map(TESTS_DIR.parents[2] / "maps" / "fixtures" / f"{name}.json")
-    rules = load_ruleset(MVP0)
+    rules = load_ruleset(MVP5)
     for e in mapdef.edges:
         for to_node in (e.a, e.b):
             assert 1 <= traversal_ticks(mapdef, rules, e.id, to_node) <= PROGRESS_SCALE

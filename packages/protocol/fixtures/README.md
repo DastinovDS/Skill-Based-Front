@@ -19,40 +19,43 @@ If you changed the schema: raise `PROTOCOL_VERSION` (`gow_protocol.messages`), f
 
 | Directory | What | Decoder |
 |---|---|---|
-| `client/` | client → server: `hello`, `command` (every command type: SIM-04 #20 and later, the economy v2 ones of DEC-41 #647 among them), `ping`, `resync`, `pause`, `resume`, `reach_query` (DEC-20), `line_route_query` (#665) | `gow_protocol.codec.decode_client` |
-| `server/` | server → client: `welcome`, `snapshot`, `ack`, `event`, `match_end`, `error`, `pong`, `paused`, `reach` (DEC-20), `line_route` (#665) | `gow_protocol.codec.decode_server` |
+| `client/` | client → server: `hello`, `command` (every command type: SIM-04 #20 and later, the economy v2 ones of DEC-41 #647 among them), `ping`, `resync`, `pause`, `resume`, `reach_query` (DEC-20) | `gow_protocol.codec.decode_client` |
+| `server/` | server → client: `welcome`, `snapshot`, `ack`, `event`, `match_end`, `error`, `pong`, `paused`, `reach` (DEC-20) | `gow_protocol.codec.decode_server` |
 
 ## Scenarios
 
+Since #894 every ruleset is economy v2 with the supply flow (DEC-43), the stances (DEC-44) and the road
+fortifications (DEC-43, item D): there is no economy v1, no drawn line, no bunker, no road or warehouse level and no
+"Defense". The fixtures were cut down to that by hand (the fields and the values of the removed rules dropped, every
+group, figure and memory in the mode `attack`); their other numbers are those of the time they were written.
+
 - `server/welcome.json`: player 0 on the map `diamond` (`packages/sim/tests/maps/diamond.json`),
-  `ruleset_public` with the numbers of `rulesets/mvp-0.toml` at the time of writing (the ruleset may move on,
+  `ruleset_public` with the numbers of `rulesets/mvp-7.toml` at the time of writing (the ruleset may move on,
   the fixture does not break because of it).
-- `server/welcome_v2.json`: the same with `ruleset_public` of `rulesets/mvp-3.toml` (economy v2, DEC-41, #647).
-- `server/welcome_v4.json`: the same with `ruleset_public` of `rulesets/mvp-4.toml` (the supply flow, DEC-43, #704:
-  `supply_model: "flow"`, no `bunker`; `fort` with the road fortification numbers of DEC-43, item D, #707).
-- `server/welcome_stances.json`: the same with `ruleset_public` of `rulesets/mvp-4-stances.toml` (the stances of economy v2, DEC-44, #772: `stances` with the
-  table, `orders.stance_cooldown_ticks` 0, `factories_follow` false: that ruleset has no DEC-47 key, #888); every other `welcome` has `stances: null`.
-- `server/snapshot_stances.json`: the view of player 0 on `dec41` under `mvp-4-stances`, tick 130, after `set_stance {economy}` at tick 41 (written by code, like
+- `server/welcome_v2.json`: the same with `ruleset_public` of `rulesets/mvp-5.toml` (`factories_follow` false: no DEC-47 key, #888).
+- `server/welcome_v4.json`: the same with `ruleset_public` of `rulesets/mvp-6.toml`.
+- `server/welcome_stances.json`: the same with `ruleset_public` of `rulesets/mvp-7.toml` (the stances of DEC-44, #772, with
+  `factories_follow` of DEC-47, #888).
+- `server/snapshot_stances.json`: the view of player 0 on `dec41` under `mvp-4-stances` (removed by #894), tick 130, after `set_stance {economy}` at tick 41 (written by code, like
   `snapshot_flow.json`): `me` has `stance` economy and the local progress `cp_ticks` 90, `capital_ticks` 90; every other fixture has them `null`.
-- `server/snapshot_flow.json`: the view of player 0 on `dec41` (`packages/sim/tests/maps/dec41.json`) under `mvp-4`, tick 5,
+- `server/snapshot_flow.json`: the view of player 0 on `dec41` (`packages/sim/tests/maps/dec41.json`) under `mvp-4` (removed by #894), tick 5,
   after `set_leaf_shift {shift: 1}` (written by code, from a real `project()`, like `snapshot_stances.json`): the own nodes carry the
   flow fields of DEC-43, item E (`front_dist`, `flow_down`, `flow_next`, `flow_idle`, `flow_pocket`), `me` the shift
-  (`leaf_shift` 1, `leaf_shift_max` 2, `next_dispatch_tick` 10); every other fixture has them `null` (the drawn lines). Every edge of every snapshot carries `forts` (DEC-43, item D8), empty in all of them. Every node carries `terrain_mark` (#791): the charged own garrison on plains of `snapshot_flow.json` and `snapshot_stances.json` has `-1`, the one on mountains of `snapshot.json` and `snapshot_fog.json` `1`, every other node `null`.
+  (`leaf_shift` 1, `leaf_shift_max` 2, `next_dispatch_tick` 10); every other fixture has them `null`. Every edge of every snapshot carries `forts` (DEC-43, item D8), empty in all of them. Every node carries `terrain_mark` (#791): the charged own garrison on plains of `snapshot_flow.json` and `snapshot_stances.json` has `-1`, the one on mountains of `snapshot.json` and `snapshot_fog.json` `1`, every other node `null`.
 - `server/snapshot.json`: the view of player 0 on `diamond`, tick 120. Nodes 0 and 1 are own (`exact`), nodes 2 and 3
-  are adjacent (`presence`, at the opponent's capital the modes `attack` and `defense` are visible without numbers),
+  are adjacent (`presence`, at the opponent's capital the mode `attack` is visible without numbers),
   edge 2 is in the fog with the memory from tick 60, an enemy group goes along edge 3 (only the mode).
-  Three own groups (one on an edge with an order), an own packet, two intents: own "Defense" and
-  the opponent's scheduled order 3 → 1.
+  Three own groups (one on an edge with an order), an own packet, one intent: the opponent's scheduled order 3 → 1.
 - `server/snapshot_fog.json`: the view of player 0 on `line3`, tick 300. The opponent's capital is in the fog with the memory
   from tick 90, edge 1 is in the fog and never seen (`seen: null`), city 1 was captured by the opponent.
 - `server/snapshot_clash.json`: the view of player 0 on `siege`, tick 400, a dense scene for checking the client rendering
   (CLI-04, #60): three groups in one city (one of 12 units), two groups on roads with orders, two packets,
-  the opponent with exact numbers in a neutral city, the opponent's presence with several modes,
-  the intents of both sides (scheduled orders, "Defense", construction), a city in the fog with memory.
+  the opponent with exact numbers in a neutral city, the opponent's presence,
+  the scheduled orders of both sides, a city in the fog with memory.
 - `server/ack_move.json`, `ack_ok.json`, `ack_reject.json`: an accepted `move` with a path, an accepted command
   without a path, the rejection `NOT_ENOUGH_CP`.
 - `server/event.json`: a `node_captured` event as `event_for_player` sends it, taken from a real match (the bots `rusher` against
-  `turtle` on `artery` with `mvp-0`, seed 7, tick 40, node 4 taken by player 0; #457). The set of events (`kind` and the `data` fields)
+  `turtle` on `artery` with `mvp-0` (a ruleset removed by #894), seed 7, tick 40, node 4 taken by player 0; #457). The set of events (`kind` and the `data` fields)
   is set by the simulation systems (SIM-06...SIM-13), the filtering by kind and field is done by `gow_protocol.convert`
   (`EVENT_FIELDS`); `test_event_fields.py` checks that the fixture only has declared fields.
 - `server/match_end.json` (a capital capture), `match_end_draw.json` (a draw on the timer), `match_end_double_defeat.json` (both lost in the same tick, a draw; PRO-03, #46), `match_end_rated.json` (a ranked match: `rating.before` and `rating.after`, the rating shown to the recipient; RAT-02, #75), `match_end_calibration.json` (a calibration match: the rating is hidden, `calibration` is the progress; DEC-34, #414), `match_end_unrated.json` (no gain for the winner after an early resign of the opponent, `unrated_reason`; DEC-34). Every `match_end` and the `welcome` also carry `rated`, `unrated_reason` and `calibration` (DEC-34).

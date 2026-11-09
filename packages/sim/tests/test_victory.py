@@ -5,7 +5,7 @@ each player gets the map ``vp`` of each of its cities, a capital counts x3; capt
 capital is an instant win; at the timer more VP wins, on equal VP more cities, else a draw.
 
 Map ``diamond`` (vp): capitals 0 and 3 are worth 1 each (x3 = 3), cities 1 and 2 are worth 2.
-The DEC-03 numbers are pinned in ``DEC03``, so balance changes of ``mvp-0.toml`` do not break these
+The DEC-03 numbers are pinned in ``DEC03``, so balance changes of ``mvp-5.toml`` do not break these
 rule tests. Tick convention: step ``t`` runs with ``state.tick == t``.
 """
 
@@ -20,10 +20,10 @@ from gow_sim.state import GameState, initial_state, state_hash
 from gow_sim.systems.victory import EndReason, Outcome, outcome, victory, vp_per_period
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP5 = TESTS_DIR.parents[2] / "rulesets" / "mvp-5.toml"
 
 DEC03: Ruleset = dataclasses.replace(
-    load_ruleset(MVP0),
+    load_ruleset(MVP5),
     match_ticks=7200,
     victory=VictoryRules(vp_period_ticks=300, capital_multiplier=3),
 )

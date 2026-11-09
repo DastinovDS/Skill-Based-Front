@@ -260,11 +260,9 @@ export class MatchConnection {
   }
 
   /** Ask for the suggested path of a supply line (#665); not queued, like `queryReach`. */
-  queryLineRoute(points: readonly number[]): void {
-    const [a, b, ...rest] = points;
-    if (a === undefined || b === undefined) return;
-    if (this.#status === 'ready')
-      this.#write({ type: 'line_route_query', points: [a, b, ...rest] });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+  queryLineRoute(_points: readonly number[]): void {
+    // The line route query was removed (#894): stage 2 deletes this.
   }
 
   /** Stop for good: no more reconnects. Unacknowledged commands are dropped. */

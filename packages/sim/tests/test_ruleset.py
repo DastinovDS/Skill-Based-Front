@@ -1,7 +1,8 @@
-"""Ruleset (SIM-01): mvp-0 values, strict loading, stable hash, archive.
+"""Ruleset (SIM-01): the values of the kept rulesets, strict loading, stable hash, archive.
 
-Expected values come from the SIM-01 (#17) table "Values and notes" and the DEC blocks of
-docs/design/mechanics.md, not from the loader output.
+Expected values come from the SIM-01 (#17) table "Values and notes", the DEC blocks of
+docs/design/mechanics.md and the owner decisions named in the ruleset files, not from the loader
+output. The kept rulesets (#894): mvp-5, mvp-6, mvp-7 (the main one) and test-short.
 """
 
 import copy
@@ -17,7 +18,6 @@ import pytest
 from gow_sim.canonical import canonical_json
 from gow_sim.maps import NodeKind, Terrain
 from gow_sim.ruleset import (
-    RecruitLocation,
     Retreat,
     Ruleset,
     RulesetError,
@@ -30,13 +30,14 @@ from gow_sim.ruleset import (
 )
 
 RULESETS_DIR = Path(__file__).resolve().parents[3] / "rulesets"
-MVP0 = RULESETS_DIR / "mvp-0.toml"
-MVP1 = RULESETS_DIR / "mvp-1.toml"
-MVP2 = RULESETS_DIR / "mvp-2.toml"
+MVP5 = RULESETS_DIR / "mvp-5.toml"
+MVP6 = RULESETS_DIR / "mvp-6.toml"
+MVP7 = RULESETS_DIR / "mvp-7.toml"
 TEST_SHORT = RULESETS_DIR / "test-short.toml"
+KEPT = (MVP5, MVP6, MVP7, TEST_SHORT)
 
 
-def _raw(path: Path = MVP0) -> dict[str, Any]:
+def _raw(path: Path = MVP7) -> dict[str, Any]:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
@@ -63,77 +64,65 @@ def _get(data: dict[str, Any], path: tuple[str, ...]) -> object:
 
 
 @pytest.fixture(scope="module")
-def mvp0() -> Ruleset:
-    return load_ruleset(MVP0)
+def mvp7() -> Ruleset:
+    return load_ruleset(MVP7)
 
 
-def test_mvp0_clock_and_cp(mvp0: Ruleset) -> None:
-    assert (mvp0.tick_hz, mvp0.match_ticks) == (10, 9000)  # 15 minutes (DEC-22)
-    cp = mvp0.cp
-    assert (cp.start, cp.cap, cp.per_period, cp.period_ticks) == (300, 500, 100, 50)
+def test_mvp7_clock_and_cp(mvp7: Ruleset) -> None:
+    assert (mvp7.tick_hz, mvp7.match_ticks) == (10, 9000)  # 15 minutes (DEC-22)
+    cp = mvp7.cp
+    assert (cp.start, cp.cap, cp.per_period) == (300, 500, 100)
+    assert mvp7.economy.start_stance is Stance.BALANCE  # DEC-09
 
 
-def test_mvp0_economy(mvp0: Ruleset) -> None:
-    economy = mvp0.economy
-    pct = economy.stance_to_charges_pct
-    assert (pct.of(Stance.ECONOMY), pct.of(Stance.BALANCE), pct.of(Stance.WAR)) == (75, 50, 25)
-    assert economy.charges_per_cp == 2
-    # No passive production of the capital (#253): no such keys.
-    assert not hasattr(economy, "passive_amount")
-    # DEC-09.
-    assert economy.start_stance is Stance.BALANCE
+def test_mvp7_stances(mvp7: Ruleset) -> None:
+    """DEC-44 (#772) with DEC-47 (#888): CP every 200 / 100 / 80 ticks, every factory a charge
+    every 100 / 200 / 400 ticks in Economy / Balance / War."""
+    st = mvp7.stances
+    order = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
+    assert [st.cp_period_ticks.of(s) for s in order] == [200, 100, 80]
+    assert [st.capital_period_ticks.of(s) for s in order] == [100, 200, 400]
+    assert st.factories_follow is True
+    assert mvp7.factories_follow is True
+    assert mvp7.factory.built_period_ticks is None
 
 
-def test_mvp0_order_costs(mvp0: Ruleset) -> None:
-    cost = mvp0.orders.cost
-    assert cost.move == 100
-    assert cost.planned_move == 200
-    assert cost.split == 0  # free since DEC-20
-    assert cost.merge == 0
-    assert cost.defense == 200
-    assert cost.build == 50  # UpgradeRoad(edge): 0,5 CP per level (DEC-28, item 7)
-    assert cost.attack == 0
-    assert cost.recruit == 100
-    assert cost.cancel == 0  # any order, free since DEC-20
-    assert cost.stance == 0
-    assert (cost.front, cost.rear_min) == (0, 0)  # markers and the rear minimum: free (DEC-28)
-    assert cost.transfer == 0  # Transfer is free (DEC-18, item 6)
+def test_mvp7_order_costs(mvp7: Ruleset) -> None:
+    cost = mvp7.orders.cost
+    assert (cost.move, cost.planned_move) == (100, 100)  # DEC-41, item 10
+    assert (cost.cancel, cost.split, cost.merge) == (0, 0, 0)  # free since DEC-20
+    assert cost.recruit == 100  # DEC-25
+    assert cost.stance == 0  # DEC-44: free
+    assert cost.barracks == 0  # paid in charges (DEC-41, item 7)
+    assert mvp7.orders.plan_ticks_per_bonus == 30  # DEC-41, item 10 (P1)
 
 
-def test_mvp0_starvation(mvp0: Ruleset) -> None:
-    """DEC-19: 1 charge per started 3 units every 10 s, after a 10 s grace."""
-    s = mvp0.starvation
+def test_mvp7_starvation_and_recruit(mvp7: Ruleset) -> None:
+    """DEC-19 consumption in the pockets of DEC-43, item H: 1 charge per started 3 units every
+    10 s after a 10 s grace; DEC-25: 3 s per unit, queue of 3, half refund."""
+    s = mvp7.starvation
     assert (s.grace_ticks, s.period_ticks, s.charges, s.per_units) == (100, 100, 1, 3)
-
-
-def test_mvp0_order_timing_and_bonuses(mvp0: Ruleset) -> None:
-    orders = mvp0.orders
-    assert orders.planned_delay_ticks == 30
-    assert (orders.planned_bonus_per_edge, orders.defense_ticks_per_bonus) == (1, 60)  # DEC-29, 30
-    assert orders.stance_cooldown_ticks == 100
-
-
-def test_mvp0_recruit(mvp0: Ruleset) -> None:
-    recruit = mvp0.recruit  # DEC-25
+    recruit = mvp7.recruit
     assert (recruit.unit_ticks, recruit.queue_max, recruit.refund_started_pct) == (30, 3, 50)
-    assert recruit.location is RecruitLocation.ANY_CITY
 
 
-def test_mvp0_terrain(mvp0: Ruleset) -> None:
-    mod = mvp0.terrain.defense_mod
+def test_mvp7_terrain_and_combat(mvp7: Ruleset) -> None:
+    mod = mvp7.terrain.defense_mod
     assert [mod.of(t) for t in (Terrain.MOUNTAINS, Terrain.FOREST, Terrain.PLAINS)] == [1, 0, -1]
-    speed = mvp0.terrain.speed_pct  # by zone (#253)
+    speed = mvp7.terrain.speed_pct  # by zone (#253)
     assert [speed.of(t) for t in (Terrain.PLAINS, Terrain.FOREST, Terrain.MOUNTAINS)] == [
         125,
         100,
         70,
     ]
+    c = mvp7.combat
+    assert (c.round_ticks, c.shots_per_round, c.regroup_ticks, c.engage_ticks) == (20, 1, 10, 3)
+    assert c.retreat is Retreat.NONE  # DEC-40, variant N
+    assert mvp7.capture.charge_cost == 1  # DEC-38, #759
 
 
-def test_mvp0_capacity_supply_build_victory(mvp0: Ruleset) -> None:
-    # DEC-22 (#234): capacity by node kind, road speed by level; DEC-26 (#265): no road types,
-    # amount 1 on every level, prices 1 / 2.
-    by_kind = mvp0.capacity.by_kind
+def test_mvp7_capacity_supply_warehouses_victory(mvp7: Ruleset) -> None:
+    by_kind = mvp7.capacity.by_kind
     kinds = (
         NodeKind.CAPITAL,
         NodeKind.CITY_LARGE,
@@ -141,70 +130,35 @@ def test_mvp0_capacity_supply_build_victory(mvp0: Ruleset) -> None:
         NodeKind.CITY_SMALL,
         NodeKind.PROVINCE,
     )
-    assert [by_kind.of(k) for k in kinds] == [10, 8, 6, 4, 3]
-    assert (mvp0.capacity.attrition_ticks, mvp0.capacity.grace_ticks) == (30, 50)
-    supply = mvp0.supply
-    assert (supply.dispatch_ticks, supply.recharge_per_tick) == (10, 1)
-    assert (supply.rear_min_default, supply.rear_min_max) == (1, 8)  # DEC-28, item 3
-    assert supply.base_speed_pct == 100
-    assert [supply.fast_speed_pct.of(level) for level in (2, 3)] == [150, 200]
-    assert [supply.amount_by_level.of(level) for level in (1, 2, 3)] == [1, 2, 3]  # DEC-28
-    assert supply.front_markers == 2  # DEC-28, item 2
-    assert [mvp0.road.speed_pct.of(level) for level in (2, 3)] == [115, 130]  # DEC-28, item 7
-    assert mvp0.build.ticks_per_level == 150
-    assert (mvp0.victory.vp_period_ticks, mvp0.victory.capital_multiplier) == (300, 3)
+    assert [by_kind.of(k) for k in kinds] == [10, 8, 6, 4, 3]  # DEC-22
+    assert (mvp7.capacity.attrition_ticks, mvp7.capacity.grace_ticks) == (30, 50)
+    supply = mvp7.supply
+    assert (supply.dispatch_ticks, supply.recharge_per_tick, supply.speed_pct) == (10, 1, 150)
+    w = mvp7.warehouse  # DEC-43, item C: fixed warehouses; DEC-41, item 13: a province holds 1
+    assert [w.start_by_kind.of(k) for k in kinds] == [6, 3, 3, 3, 0]
+    assert w.province == 1
+    cu = mvp7.city_upgrades  # DEC-26, DEC-41 item 7
+    assert (cu.barracks_ticks, cu.barracks_charges) == (100, 3)
+    f = mvp7.factory  # DEC-41, item 2
+    assert (f.cost, f.build_ticks, f.max) == (4, 100, 3)
+    fort = mvp7.fort  # DEC-43, item D
+    assert (fort.cost, fort.build_ticks, fort.toll_units, fort.toll_charges) == (150, 100, 3, 1)
+    assert (mvp7.victory.vp_period_ticks, mvp7.victory.capital_multiplier) == (300, 3)
 
 
-def test_city_upgrades_of_mvp0_and_mvp1(mvp0: Ruleset) -> None:
-    """DEC-26 (#265): the numbers of the barracks and the warehouse; mvp-1 is mvp-0 with the
-    flag on (item 1)."""
-    cu = mvp0.city_upgrades
-    assert (cu.enabled, cu.barracks_ticks, cu.warehouse_ticks) == (False, 100, 100)
-    w = mvp0.warehouse
-    assert (w.gain_per_level, w.max_level) == (1, 2)
-    kinds = (NodeKind.CAPITAL, NodeKind.CITY_LARGE, NodeKind.CITY_MEDIUM, NodeKind.CITY_SMALL)
-    assert [w.start_by_kind.of(k) for k in kinds] == [6, 2, 2, 1]
-    assert w.start_by_kind.of(NodeKind.PROVINCE) == 0  # no warehouse (DEC-23)
-    assert (mvp0.orders.cost.barracks, mvp0.orders.cost.warehouse) == (300, 200)
-    expected = _raw()
-    expected["city_upgrades"]["enabled"] = True
-    assert to_canonical(load_ruleset(MVP1)) == expected
+def test_mvp7_map_tempo(mvp7: Ruleset) -> None:
+    """DEC-46 (#803): the multiplier is 100 at 49 nodes, clamped to 50..150."""
+    tempo = mvp7.map_tempo
+    assert tempo is not None
+    assert (tempo.ref_nodes, tempo.min_pct, tempo.max_pct) == (49, 50, 150)
 
 
-def test_mvp2_is_mvp1_with_the_bal02_stance_shares() -> None:
-    """BAL-02 (#40): the played ruleset mvp-2 differs from mvp-1 only in the stance shares of the
-    charge regeneration (economy 75 -> 60, war 25 -> 40); the other numbers are the same."""
-    expected = _raw(MVP1)
-    shares = expected["economy"]["stance_to_charges_pct"]
-    assert (shares["economy"], shares["war"]) == (75, 25)
-    shares["economy"], shares["war"] = 60, 40
-    assert to_canonical(load_ruleset(MVP2)) == expected
-
-
-def test_enabled_must_be_a_boolean() -> None:
-    data = _raw()
-    data["city_upgrades"]["enabled"] = 1
-    with pytest.raises(RulesetError, match=r"^city_upgrades.enabled: expected true or false"):
-        parse_ruleset(data)
-
-
-def test_level_table_rejects_unknown_level(mvp0: Ruleset) -> None:
-    with pytest.raises(ValueError, match="level 4"):
-        mvp0.supply.fast_speed_pct.of(4)
-    with pytest.raises(ValueError, match="level 1"):
-        mvp0.road.speed_pct.of(1)
-    with pytest.raises(ValueError, match="level 0"):
-        mvp0.supply.amount_by_level.of(0)
-    with pytest.raises(ValueError, match="level 4"):
-        mvp0.supply.amount_by_level.of(4)
-
-
-def test_ruleset_is_frozen(mvp0: Ruleset) -> None:
+def test_ruleset_is_frozen(mvp7: Ruleset) -> None:
     with pytest.raises(AttributeError):
-        mvp0.tick_hz = 20  # pyright: ignore[reportAttributeAccessIssue]
+        mvp7.tick_hz = 20  # pyright: ignore[reportAttributeAccessIssue]
 
 
-def test_test_short_is_mvp0_with_a_60_second_match() -> None:
+def test_test_short_is_mvp7_with_a_60_second_match() -> None:
     short = load_ruleset(TEST_SHORT)
     assert short.match_ticks == 600  # 60 s at 10 ticks per second
     assert short.tick_hz == 10
@@ -213,11 +167,158 @@ def test_test_short_is_mvp0_with_a_60_second_match() -> None:
     assert to_canonical(short) == expected
 
 
-@pytest.mark.parametrize("path", [MVP0, MVP1, MVP2, TEST_SHORT], ids=lambda p: p.name)
+def test_mvp6_is_mvp5_with_three_changes() -> None:
+    """mvp-6 (owner decision 2026-11-09, #626, #759): mvp-5 with only the capture cost 1
+    (DEC-38), the built factory period 100 (DEC-41, item 2) and no retreat (DEC-40, variant N)."""
+    mvp5, mvp6 = _raw(MVP5), _raw(MVP6)
+    assert mvp5["capture"]["charge_cost"] == 0
+    assert mvp5["factory"]["built_period_ticks"] == 200
+    assert "retreat" not in mvp5["combat"]
+    assert load_ruleset(MVP5).combat.retreat is Retreat.ROUND
+    assert mvp6["capture"]["charge_cost"] == 1
+    assert mvp6["factory"]["built_period_ticks"] == 100
+    assert mvp6["combat"]["retreat"] == "none"
+    assert load_ruleset(MVP6).combat.retreat is Retreat.NONE
+    mvp6["capture"]["charge_cost"] = mvp5["capture"]["charge_cost"]
+    mvp6["factory"]["built_period_ticks"] = mvp5["factory"]["built_period_ticks"]
+    del mvp6["combat"]["retreat"]
+    assert mvp6 == mvp5
+
+
+def test_mvp7_is_mvp6_with_three_changes() -> None:
+    """mvp-7 (#885, #888): mvp-6 with the section ``[map_tempo]`` (DEC-46), with
+    ``stances.factories_follow`` (DEC-47) and so without ``factory.built_period_ticks``."""
+    mvp6, mvp7 = _raw(MVP6), _raw(MVP7)
+    assert "map_tempo" not in mvp6
+    assert "factories_follow" not in mvp6["stances"]
+    assert mvp7["stances"]["factories_follow"] is True
+    assert "built_period_ticks" not in mvp7["factory"]
+    del mvp7["map_tempo"]
+    del mvp7["stances"]["factories_follow"]
+    mvp7["factory"]["built_period_ticks"] = mvp6["factory"]["built_period_ticks"]
+    assert mvp7 == mvp6
+
+
+@pytest.mark.parametrize("path", KEPT, ids=lambda p: p.name)
 def test_canonical_form_is_the_toml_data(path: Path) -> None:
     rules = load_ruleset(path)
     assert to_canonical(rules) == _raw(path)
     assert parse_ruleset(to_canonical(rules)) == rules
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        "cp",
+        "economy",
+        "stances",
+        "orders",
+        "terrain",
+        "combat",
+        "capture",
+        "capacity",
+        "starvation",
+        "supply",
+        "recruit",
+        "victory",
+        "city_upgrades",
+        "warehouse",
+        "vision",
+        "factory",
+        "fort",
+    ],
+)
+def test_every_section_but_map_tempo_is_required(section: str) -> None:
+    data = _raw()
+    del data[section]
+    with pytest.raises(RulesetError, match=rf"^{section}: missing key"):
+        parse_ruleset(data)
+
+
+def test_map_tempo_is_optional() -> None:
+    data = _raw()
+    del data["map_tempo"]
+    rules = parse_ruleset(data)
+    assert rules.map_tempo is None
+    assert "map_tempo" not in to_canonical(rules)
+
+
+def test_retreat_is_optional_and_round_by_default() -> None:
+    """DEC-40: without the key ``combat.retreat`` is ``round`` (DEC-24, item E); the key at
+    ``round`` is the same rules, so the same hash."""
+    data = _raw()
+    del data["combat"]["retreat"]
+    rules = parse_ruleset(data)
+    assert rules.combat.retreat is Retreat.ROUND
+    data["combat"]["retreat"] = "round"
+    assert ruleset_hash(parse_ruleset(data)) == ruleset_hash(rules)
+
+
+def test_an_unknown_retreat_value_names_the_key() -> None:
+    data = _raw()
+    data["combat"]["retreat"] = "volley"  # DEC-40 variant V was not chosen
+    with pytest.raises(RulesetError, match=r"combat\.retreat"):
+        parse_ruleset(data)
+
+
+def test_built_period_is_required_without_factories_follow() -> None:
+    """DEC-47: without ``stances.factories_follow`` a built factory makes its charges by
+    ``factory.built_period_ticks``, so the key is required."""
+    data = _raw()
+    del data["stances"]["factories_follow"]
+    with pytest.raises(RulesetError, match=r"^factory\.built_period_ticks: missing key"):
+        parse_ruleset(data)
+    data["stances"]["factories_follow"] = False
+    with pytest.raises(RulesetError, match=r"^factory\.built_period_ticks: missing key"):
+        parse_ruleset(data)
+    data["factory"]["built_period_ticks"] = 150
+    assert parse_ruleset(data).factory.built_period_ticks == 150
+
+
+def test_built_period_is_refused_with_factories_follow() -> None:
+    """DEC-47: with ``stances.factories_follow`` every factory follows the stance, so a built
+    period would have no effect: the key is an error."""
+    data = _raw()
+    data["factory"]["built_period_ticks"] = 150
+    with pytest.raises(RulesetError, match=r"^factory\.built_period_ticks: not allowed"):
+        parse_ruleset(data)
+
+
+def test_factories_follow_is_left_out_of_the_hash_when_false() -> None:
+    data = _raw(MVP6)
+    rules = parse_ruleset(data)
+    data["stances"]["factories_follow"] = False
+    assert ruleset_hash(parse_ruleset(data)) == ruleset_hash(rules)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("economy", "model"),
+        ("supply", "model"),
+        ("supply", "rear_min_max"),
+        ("orders", "stance_cooldown_ticks"),
+        ("orders", "cost", "defense"),
+        ("cp", "period_ticks"),
+        ("combat", "terrain_burn"),
+        ("warehouse", "max_level"),
+    ],
+)
+def test_a_removed_key_is_unknown(path: tuple[str, ...]) -> None:
+    """The keys of the removed rulesets (#894) are not keys any more: a typo-like error."""
+    data = _raw()
+    _set(data, path, 1)
+    name = ".".join(path)
+    with pytest.raises(RulesetError, match=rf"^{name}: unknown key"):
+        parse_ruleset(data)
+
+
+@pytest.mark.parametrize("section", ["lines", "bunker", "road", "build"])
+def test_a_removed_section_is_unknown(section: str) -> None:
+    data = _raw()
+    data[section] = {}
+    with pytest.raises(RulesetError, match=rf"^{section}: unknown key"):
+        parse_ruleset(data)
 
 
 @pytest.mark.parametrize(
@@ -228,7 +329,7 @@ def test_canonical_form_is_the_toml_data(path: Path) -> None:
         (("orders", "cost"), "mvoe", "orders.cost.mvoe"),
         (("terrain", "defense_mod"), "hills", "terrain.defense_mod.hills"),
         (("capacity", "by_kind"), "town", "capacity.by_kind.town"),
-        (("supply", "fast_speed_pct"), "4", "supply.fast_speed_pct.4"),
+        (("stances", "cp_period_ticks"), "peace", "stances.cp_period_ticks.peace"),
         (("warehouse", "start_by_kind"), "province", "warehouse.start_by_kind.province"),
     ],
 )
@@ -245,14 +346,14 @@ def test_typo_in_key_names_the_key(path: tuple[str, ...], typo: str, name: str) 
 
 def test_missing_key_names_the_key() -> None:
     data = _raw()
-    del data["supply"]["rear_min_max"]
-    with pytest.raises(RulesetError, match=r"^supply\.rear_min_max: missing key"):
+    del data["supply"]["speed_pct"]
+    with pytest.raises(RulesetError, match=r"^supply\.speed_pct: missing key"):
         parse_ruleset(data)
 
 
 def test_file_errors_name_the_file(tmp_path: Path) -> None:
     bad = tmp_path / "bad.toml"
-    bad.write_text(MVP0.read_text(encoding="utf-8").replace("cap = 500", "cpa = 500"))
+    bad.write_text(MVP7.read_text(encoding="utf-8").replace("cap = 500", "cpa = 500"))
     with pytest.raises(RulesetError, match=r"bad\.toml: cp\.cpa: unknown key"):
         load_ruleset(bad)
     broken = tmp_path / "broken.toml"
@@ -267,21 +368,21 @@ def test_file_errors_name_the_file(tmp_path: Path) -> None:
         (("tick_hz",), 0, "tick_hz: 0 is out of range"),
         (("match_ticks",), 1.5, "match_ticks: expected an integer"),
         (("cp", "start"), 501, "cp.start: 501 is out of range"),  # above cp.cap
-        (("cp", "period_ticks"), 0, "cp.period_ticks: 0 is out of range"),
         (("cp", "cap"), True, "cp.cap: expected an integer"),
-        (("economy", "stance_to_charges_pct", "war"), 101, "war: 101 is out of range"),
         (("economy", "start_stance"), "panic", "economy.start_stance: expected one of"),
+        (("stances", "cp_period_ticks", "war"), 0, "cp_period_ticks.war: 0 is out of range"),
+        (("stances", "factories_follow"), 1, "stances.factories_follow: expected true or false"),
         (("orders", "cost", "move"), -1, "orders.cost.move: -1 is out of range"),
         (("orders", "cost", "split"), "100", "orders.cost.split: expected an integer"),
+        (("orders", "plan_ticks_per_bonus"), 0, "plan_ticks_per_bonus: 0 is out of range"),
         (("terrain", "speed_pct", "forest"), 0, "speed_pct.forest: 0 is out"),
         (("capacity", "by_kind", "city_small"), -5, "by_kind.city_small: -5 is out of range"),
-        (("supply", "fast_speed_pct", "2"), 0, "fast_speed_pct.2: 0 is out of range"),
-        (("supply", "amount_by_level", "1"), 0, r"supply\.amount_by_level\.1: 0 is out"),
-        (("supply", "front_markers"), -1, "supply.front_markers: -1 is out of range"),
-        (("build", "ticks_per_level"), 0, "build.ticks_per_level: 0 is out of range"),
-        (("road", "speed_pct", "2"), 0, r"road\.speed_pct\.2: 0 is out"),
-        (("recruit", "location"), "anywhere", "recruit.location: expected one of"),
+        (("supply", "speed_pct"), 0, r"supply\.speed_pct: 0 is out of range"),
+        (("recruit", "refund_started_pct"), 101, "refund_started_pct: 101 is out of range"),
         (("victory", "vp_period_ticks"), 0, "victory.vp_period_ticks: 0 is out of range"),
+        (("factory", "max"), 0, r"factory\.max: 0 is out of range"),
+        (("fort", "toll_units"), 0, r"fort\.toll_units: 0 is out of range"),
+        (("map_tempo", "max_pct"), 10, r"map_tempo\.max_pct: 10 is out of range"),  # < min_pct
         (("cp",), 5, "cp: expected a table"),
     ],
 )
@@ -293,34 +394,33 @@ def test_bad_values_are_rejected(path: tuple[str, ...], value: object, message: 
 
 
 def test_hash_ignores_comments_and_key_order(tmp_path: Path) -> None:
-    text = MVP0.read_text(encoding="utf-8")
+    text = MVP7.read_text(encoding="utf-8")
     stripped = "\n".join(line.split(" #")[0] for line in text.splitlines() if line[:1] != "#")
     other = tmp_path / "other.toml"
-    other.write_text(
-        stripped.replace("tick_hz = 10\nmatch_ticks = 7200", "match_ticks = 7200\ntick_hz = 10")
+    swapped = stripped.replace(
+        "tick_hz = 10\nmatch_ticks = 9000", "match_ticks = 9000\ntick_hz = 10"
     )
-    assert ruleset_hash(load_ruleset(other)) == ruleset_hash(load_ruleset(MVP0))
+    assert swapped != stripped
+    other.write_text(swapped)
+    assert ruleset_hash(load_ruleset(other)) == ruleset_hash(load_ruleset(MVP7))
 
 
 def test_hash_changes_when_any_value_changes() -> None:
-    base = _raw()
+    """Every value of mvp-6 is part of the hash. Its keys by hand: 2 root, cp 3, economy 1,
+    stances 6, orders 1 + 8 costs, terrain 6, combat 5, capture 1, capacity 2 + 5, starvation 4,
+    supply 3, recruit 3, victory 2, city_upgrades 2, warehouse 1 + 4, vision 1 + 9, factory 4,
+    fort 4: 77."""
+    base = _raw(MVP6)
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
-    # Keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2; DEC-24: +3; DEC-25: +2;
-    # DEC-26: +11 (2 costs, 3 city_upgrades, 6 warehouse) - 2 (supply.freight_amount); DEC-28:
-    # +4 (supply.rear_min_default, supply.rear_min_max, cost.front, cost.rear_min) - 2
-    # (supply.buffer, cost.priority); DEC-30: +1 (orders.defense_ticks_per_bonus) - 2
-    # (orders.defense_delay_ticks, orders.defense_bonus); DEC-21: +10 (vision.range_starts and
-    # the 9 cells of vision.by_terrain); DEC-37: +1 (combat.engage_ticks); DEC-38: +1
-    # (capture.charge_cost).
-    assert len(leaves) == 91
+    assert len(leaves) == 77
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)
         if isinstance(value, str):
             changed: object = {
                 "balance": "war",
-                "any_city": "capital",
+                "none": "round",
                 "exact": "range",
                 "range": "presence",
                 "presence": "exact",
@@ -328,18 +428,16 @@ def test_hash_changes_when_any_value_changes() -> None:
         elif isinstance(value, list):
             starts: list[int] = value  # pyright: ignore[reportUnknownVariableType]
             changed = [*starts, starts[-1] + 1]
-        elif isinstance(value, bool):
-            changed = not value
         else:
-            assert isinstance(value, int)
-            # +1 stays in range for every mvp-0 value (cp.start 300 < cp.cap, pct <= 99).
+            assert isinstance(value, int) and not isinstance(value, bool)
+            # +1 stays in range for every mvp-6 value (cp.start 300 < cp.cap, pct <= 99).
             changed = value + 1
         _set(data, path, changed)
         assert ruleset_hash(parse_ruleset(data)) != base_hash, path
 
 
 def test_hash_is_the_same_in_fresh_processes() -> None:
-    expected = ruleset_hash(load_ruleset(MVP0))
+    expected = ruleset_hash(load_ruleset(MVP7))
     script = (
         "import sys; from gow_sim.ruleset import load_ruleset, ruleset_hash; "
         "print(ruleset_hash(load_ruleset(sys.argv[1])))"
@@ -347,7 +445,7 @@ def test_hash_is_the_same_in_fresh_processes() -> None:
     for seed in ("0", "1", "4242"):
         env = {**os.environ, "PYTHONHASHSEED": seed}  # noqa: TID251 (fresh process with PYTHONHASHSEED)
         out = subprocess.run(
-            [sys.executable, "-c", script, str(MVP0)],
+            [sys.executable, "-c", script, str(MVP7)],
             env=env,
             capture_output=True,
             text=True,
@@ -356,22 +454,22 @@ def test_hash_is_the_same_in_fresh_processes() -> None:
         assert out.stdout.strip() == expected
 
 
-def test_hash_is_blake2b_of_canonical_json(mvp0: Ruleset) -> None:
+def test_hash_is_blake2b_of_canonical_json(mvp7: Ruleset) -> None:
     import hashlib
 
-    data = canonical_json(to_canonical(mvp0))
+    data = canonical_json(to_canonical(mvp7))
     assert b" " not in data  # compact separators
-    assert ruleset_hash(mvp0) == hashlib.blake2b(data, digest_size=16).hexdigest()
+    assert ruleset_hash(mvp7) == hashlib.blake2b(data, digest_size=16).hexdigest()
 
 
 def test_archive_stores_file_by_hash(tmp_path: Path) -> None:
     archive = tmp_path / "archive"
-    target = archive_ruleset(MVP0, archive)
-    rules_hash = ruleset_hash(load_ruleset(MVP0))
+    target = archive_ruleset(MVP7, archive)
+    rules_hash = ruleset_hash(load_ruleset(MVP7))
     assert target == archive / f"{rules_hash}.toml"
-    assert target.read_bytes() == MVP0.read_bytes()
+    assert target.read_bytes() == MVP7.read_bytes()
     # Archiving the same rules again is a no-op.
-    assert archive_ruleset(MVP0, archive) == target
+    assert archive_ruleset(MVP7, archive) == target
     assert sorted(p.name for p in archive.iterdir()) == [f"{rules_hash}.toml"]
     # Different rules get a different file.
     short = archive_ruleset(TEST_SHORT, archive)
@@ -381,58 +479,16 @@ def test_archive_stores_file_by_hash(tmp_path: Path) -> None:
 
 def test_archive_detects_a_tampered_file(tmp_path: Path) -> None:
     archive = tmp_path / "archive"
-    target = archive_ruleset(MVP0, archive)
+    target = archive_ruleset(MVP7, archive)
     target.write_text(TEST_SHORT.read_text(encoding="utf-8"))
     with pytest.raises(RulesetError, match="does not match its hash"):
-        archive_ruleset(MVP0, archive)
+        archive_ruleset(MVP7, archive)
 
 
-def test_mvp5_has_the_rules_of_mvp4_stances_and_no_map_tempo() -> None:
-    """mvp-5 was the main ruleset (#805): the rule values of mvp-4-stances (same hash, comments do
-    not count), without the DEC-46 section ``[map_tempo]`` that only mvp-4-stances-tempo has."""
-    mvp5 = RULESETS_DIR / "mvp-5.toml"
-    stances = RULESETS_DIR / "mvp-4-stances.toml"
-    assert ruleset_hash(load_ruleset(mvp5)) == ruleset_hash(load_ruleset(stances))
-    assert "map_tempo" not in _raw(mvp5)
-
-
-MVP5 = RULESETS_DIR / "mvp-5.toml"
-MVP6 = RULESETS_DIR / "mvp-6.toml"
-
-
-def test_mvp6_is_mvp5_with_three_changes() -> None:
-    """mvp-6 is the main ruleset (owner decision 2026-11-09, #626, #759): mvp-5 with only the
-    capture cost 1 (DEC-38), the built factory period 100 (DEC-41, item 2) and no retreat
-    (DEC-40, variant N)."""
-    mvp5, mvp6 = _raw(MVP5), _raw(MVP6)
-    assert mvp6["capture"]["charge_cost"] == 1
-    assert mvp6["factory"]["built_period_ticks"] == 100
-    assert mvp6["combat"]["retreat"] == "none"
-    assert load_ruleset(MVP6).combat.retreat is Retreat.NONE
-    mvp6["capture"]["charge_cost"] = mvp5["capture"]["charge_cost"]
-    mvp6["factory"]["built_period_ticks"] = mvp5["factory"]["built_period_ticks"]
-    del mvp6["combat"]["retreat"]
-    assert mvp6 == mvp5
-    assert to_canonical(load_ruleset(MVP6)) == _raw(MVP6)
-
-
-@pytest.mark.parametrize(
-    "name",
-    ["mvp-0", "mvp-1", "mvp-2", "mvp-3", "mvp-4", "mvp-4-stances", "mvp-5", "test-short"],
-)
-def test_older_rulesets_keep_the_retreat(name: str) -> None:
-    """DEC-40: without the key ``combat.retreat`` is ``round`` (DEC-24, item E), and the key at
-    ``round`` does not change the hash, so the golden replays of the older rulesets stay valid."""
-    path = RULESETS_DIR / f"{name}.toml"
-    rules = load_ruleset(path)
-    assert rules.combat.retreat is Retreat.ROUND
-    data = _raw(path)
-    data["combat"]["retreat"] = "round"
-    assert ruleset_hash(parse_ruleset(data)) == ruleset_hash(rules)
-
-
-def test_an_unknown_retreat_value_names_the_key() -> None:
-    data = _raw()
-    data["combat"]["retreat"] = "volley"  # DEC-40 variant V was not chosen
-    with pytest.raises(RulesetError, match=r"combat\.retreat"):
-        parse_ruleset(data)
+@pytest.mark.parametrize("path", KEPT, ids=lambda p: p.name)
+def test_every_kept_ruleset_is_archived(path: Path) -> None:
+    """Every ruleset a match may be played on has its file in ``rulesets/archive`` (AGENTS.md,
+    section 4.5), under the hash of its values."""
+    archived = RULESETS_DIR / "archive" / f"{ruleset_hash(load_ruleset(path))}.toml"
+    assert archived.exists()
+    assert ruleset_hash(load_ruleset(archived)) == ruleset_hash(load_ruleset(path))

@@ -4,13 +4,14 @@ The loader rejects malformed files (types, references, ranges, neutral garrisons
 checks what makes a map playable and fair: connectivity, planarity, symmetry of the rules (the
 graph and the attributes, not the picture: DEC-27, item 1), node names and border points
 (DEC-23, items 4, 5, 7), node degree, redundant approaches to valuable cities, neutral space,
-road lengths and, when switched on, the map size (DEC-27, item 5). Given a ruleset with
-``city_upgrades`` (DEC-26, item 5), also that no city starts with more charges than its
-warehouse holds (``warehouse``). A map with an authored geography (DEC-36, ``gow_maps.geo``) also
-gets the check ``geography``: areas of nodes share land only along a road, each area is one piece
-around its node, roads cross water only at a bridge, nodes keep clear of water, the vector file is
-baked for the map version. A generated map without a mirror (``meta.symmetry = "none"``, #771) gets
-the check ``fairness`` in place of ``symmetry`` and ``border``.
+road lengths and, when switched on, the map size (DEC-27, item 5). Given a ruleset, also that
+no capital starts with more charges than its warehouse holds (``warehouse``; DEC-26, item 5; only
+the capital keeps the start stock of the map, DEC-41, item 9). A map with an authored geography
+(DEC-36, ``gow_maps.geo``) also gets the check ``geography``: areas of nodes share land only along
+a road, each area is one piece around its node, roads cross water only at a bridge, nodes keep
+clear of water, the vector file is baked for the map version. A generated map without a mirror
+(``meta.symmetry = "none"``, #771) gets the check ``fairness`` in place of ``symmetry`` and
+``border``.
 """
 
 import json
@@ -224,7 +225,7 @@ def check_vector_file(path: Path, mapdef: MapDef) -> list[Issue]:
 
 
 def validate(mapdef: MapDef, config: ValidatorConfig, rules: Ruleset | None = None) -> list[Issue]:
-    """Every check; ``warehouse`` only with ``rules`` that have ``city_upgrades`` on.
+    """Every check; ``warehouse`` only with ``rules``.
 
     A map with ``meta.symmetry = "none"`` (#771) has no mirror to keep: instead of ``symmetry``
     and ``border`` it gets an identity ``mirror`` table and the check ``fairness``.
@@ -265,13 +266,11 @@ def check_fairness(mapdef: MapDef, config: ValidatorConfig) -> list[Issue]:
 
 
 def check_warehouse(mapdef: MapDef, rules: Ruleset) -> list[Issue]:
-    """DEC-26, item 5: ``start_stock`` of a city is at most ``warehouse.start_by_kind[kind]``.
+    """DEC-26, item 5: ``start_stock`` of a capital is at most ``warehouse.start_by_kind``.
 
-    Only for a ruleset with ``city_upgrades.enabled``: without it the warehouse holds the node
-    capacity (DEC-22, item 1). The simulation cuts a bigger stock at the start without an event.
+    Only the capital keeps the start stock of the map (DEC-41, item 9): the other cities start
+    empty, whatever the map says. The simulation cuts a bigger stock at the start without an event.
     """
-    if not rules.city_upgrades.enabled:
-        return []
     start = rules.warehouse.start_by_kind
     return [
         Issue(
@@ -280,7 +279,7 @@ def check_warehouse(mapdef: MapDef, rules: Ruleset) -> list[Issue]:
             f"its warehouse holds {start.of(n.kind)}",
         )
         for n in mapdef.nodes
-        if n.kind is not NodeKind.PROVINCE and n.start_stock > start.of(n.kind)
+        if n.kind is NodeKind.CAPITAL and n.start_stock > start.of(n.kind)
     ]
 
 

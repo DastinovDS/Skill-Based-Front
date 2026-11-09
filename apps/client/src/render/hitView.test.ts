@@ -54,8 +54,6 @@ function frameOf(tick: number, fights: WireFight[]) {
           mode: 'attack',
           location: { kind: 'node', node: city },
           order: null,
-          defense_bonus: null,
-          defense_cap: null,
         },
       ],
     },

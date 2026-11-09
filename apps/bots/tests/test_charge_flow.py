@@ -28,7 +28,7 @@ MATCHES = [
 def test_the_ledger_balances_on_a_full_match(
     map_name: str, bot0: str, bot1: str, seed: int, cost: int
 ) -> None:
-    base: Ruleset = load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
+    base: Ruleset = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
     rules = replace(base, capture=replace(base.capture, charge_cost=cost))
     mapdef = load_map(ROOT / "maps" / f"{map_name}.json")
     controllers = [
@@ -46,9 +46,7 @@ def test_the_ledger_balances_on_a_full_match(
         assert flow.end == log.stock[p][-1]
         assert sum(log.places_end[p]) == flow.end
         assert flow.start == sum(log.places_start[p])
-        assert flow.delivered_front <= flow.delivered
-        assert flow.front_empty_cap_has_ticks <= flow.front_empty_ticks <= flow.marker_ticks
-        assert flow.marker_ticks <= log.ticks
+        assert flow.cap_full_ticks <= log.ticks
     # The match is real: someone captured something, so the cost column is exercised.
     assert sum(metrics.captures) > 0
     if cost:

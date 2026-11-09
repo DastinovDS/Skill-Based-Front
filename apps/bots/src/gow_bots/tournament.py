@@ -37,23 +37,24 @@ from gow_sim.replay import REPLAY_SUFFIX, ReplayWriter
 from gow_sim.ruleset import apply_map_tempo, load_ruleset, ruleset_hash
 
 __all__ = [
-    "FLOW_ONLY_KEYS",
-    "LINES_ONLY_KEYS",
+    "READ_SCHEMAS",
     "SCHEMA_VERSION",
     "USAGE_KEYS",
-    "V1_ONLY_KEYS",
-    "V2_ONLY_KEYS",
     "MatchTask",
     "build_tasks",
-    "live_keys",
     "play_match",
     "play_tasks",
     "run_tournament",
     "usage",
 ]
 
-SCHEMA_VERSION: Final = 1
-"""``schema`` of every JSONL row; bumped when a field is removed or changes meaning."""
+SCHEMA_VERSION: Final = 2
+"""``schema`` of every JSONL row; bumped when a field is removed or changes meaning. 2 (#894): the
+fields of economy v1 and the drawn lines left the rows (``economy_model``, ``supply_model``, the
+front-marker ledger, the usage keys of the removed commands)."""
+READ_SCHEMAS: Final[tuple[int, ...]] = (1, 2)
+"""The schemas ``gow_bots.report`` reads: a row of schema 1 has the removed fields besides, which
+the report does not read."""
 
 USAGE_KEYS: Final[tuple[str, ...]] = (
     "Move",
@@ -61,65 +62,16 @@ USAGE_KEYS: Final[tuple[str, ...]] = (
     "CancelOrder",
     "Split",
     "Merge",
-    "SetMode",
     "SetStance",
     "Recruit",
     "CancelRecruit",
     "BuildBarracks",
-    "UpgradeWarehouse",
-    "UpgradeRoad",
-    "SetFront",
-    "SetRearMin",
-    "Transfer",
-    "DrawLine",
-    "RemoveLine",
     "BuildFactory",
-    "BuildBunker",
     "ReleasePlan",
     "SetLeafShift",
     "FortifyRoad",
 )
-"""The mechanics of ``usage``, in report order: every command but ``Forfeit`` (the last five are
-economy v2 only, DEC-41)."""
-
-V1_ONLY_KEYS: Final[tuple[str, ...]] = (
-    "SetStance",
-    "UpgradeRoad",
-    "SetFront",
-    "SetRearMin",
-    "Transfer",
-)
-"""``usage`` keys that economy v2 rejects (``FEATURE_DISABLED``, DEC-41 item 14): dead under v2."""
-V2_ONLY_KEYS: Final[tuple[str, ...]] = (
-    "DrawLine",
-    "RemoveLine",
-    "BuildFactory",
-    "BuildBunker",
-    "ReleasePlan",
-    "SetLeafShift",
-)
-"""``usage`` keys that economy v1 rejects (DEC-41 item 14)."""
-LINES_ONLY_KEYS: Final[tuple[str, ...]] = ("DrawLine", "RemoveLine")
-"""``usage`` keys that the supply flow rejects (DEC-43, item A12)."""
-FLOW_ONLY_KEYS: Final[tuple[str, ...]] = ("SetLeafShift",)
-"""``usage`` keys that only the supply flow accepts (DEC-43, item B2)."""
-
-
-def live_keys(economy: str | None, supply: str | None, stances: bool = False) -> tuple[str, ...]:
-    """The ``USAGE_KEYS`` a match of ``economy.model`` and ``supply.model`` can use, in order;
-    all keys when the economy is unknown (``None``: a row written before #690), both supply
-    models' keys when only the supply model is unknown. ``BuildBunker``,
-    ``FortifyRoad`` and ``UpgradeWarehouse`` depend on ruleset sections the row does not name,
-    so they stay. ``stances``: the ruleset has ``[stances]``, so v2 accepts ``SetStance``
-    (DEC-44)."""
-    if economy is None:
-        return USAGE_KEYS
-    dead: tuple[str, ...] = V2_ONLY_KEYS if economy == "v1" else V1_ONLY_KEYS
-    if economy != "v1" and supply is not None:
-        dead += LINES_ONLY_KEYS if supply == "flow" else FLOW_ONLY_KEYS
-    if stances:
-        dead = tuple(k for k in dead if k != "SetStance")
-    return tuple(k for k in USAGE_KEYS if k not in dead)
+"""The mechanics of ``usage``, in report order: every command but ``Forfeit``."""
 
 
 def usage(log: MatchLog) -> list[dict[str, int]]:

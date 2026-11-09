@@ -7,8 +7,9 @@ group G (2 units, 2 charged) is on e2 unless said otherwise; the enemy group is 
 charged, "Attack". The view is player 0's.
 
 DEC-35 (#477) superseded the "edge source" and the examples 1, 2, 3, 5, 6 and 10: a group on an
-edge is a source in the node of its half (``test_dec35.py`` has those cases). Examples 4, 7, 8 and
-9 stay; their sources are read by DEC-35: a scout of mine stands in M (so X is ``EXACT``, as the
+edge is a source in the node of its half (``test_dec35.py`` has those cases). Examples 4, 7 and 9
+stay (example 8, an enemy road build, went with the road upgrades, #894); their sources are read by
+DEC-35: a scout of mine stands in M (so X is ``EXACT``, as the
 setting of the table says), and G at ``pos`` 500 going from E to F is a source in F (the half of
 the node it heads to at the border point).
 """
@@ -22,7 +23,6 @@ from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import (
     AtNode,
-    Build,
     Detail,
     GameState,
     Group,
@@ -33,7 +33,7 @@ from gow_sim.state import (
     initial_state,
 )
 from gow_sim.systems.vision import is_visible, vision
-from gow_sim.view import BuildView, PlayerView, project
+from gow_sim.view import PlayerView, project
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
@@ -45,7 +45,7 @@ TICK = 10
 type MakeMap = Callable[..., MapDef]
 
 
-_RULES = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+_RULES = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 @pytest.fixture(scope="module")
@@ -110,36 +110,21 @@ def test_example_7_the_node_g_left_was_lost(make_fog_map: MakeMap, rules: Rulese
     assert [n.detail for n in view.nodes] == [E, E, E, E]  # E a source; X and F plains from it
 
 
-def test_example_8_an_enemy_build_on_the_edge(make_fog_map: MakeMap, rules: Ruleset) -> None:
-    state = _state(make_fog_map, owners={F_NODE: 1})  # e2 is an internal edge of the enemy
-    state.edges[E2].width = 2
-    state.vision_memory[0].widths[E2] = 1
-    state.edges[E2].build = Build(edge=E2, owner=1, since=0)
-    without = _view(state, rules).edges[E2]
-    assert (without.detail, without.width, without.build) == (F, 1, None)
-    _g(state)
-    edge = _view(state, rules).edges[E2]
-    assert (edge.detail, edge.width, edge.build) == (P, 2, BuildView(done_tick=None))
-
-
 def test_example_9_g_leaves_the_edge(make_fog_map: MakeMap, rules: Ruleset) -> None:
     """As 2 (an enemy group at ``pos`` 300 going to F), then G dies: the halves of e2 go back to
-    the fog and keep the last sighting; e2 keeps the last seen road level. With G a source in F,
+    the fog and keep the last sighting. With G a source in F,
     both halves were exact (DEC-35, detail 7: E is plains from plains)."""
     state = _state(make_fog_map)
-    state.edges[E2].width = 2
     g = _g(state)
     _group(state, 1, OnEdge(E2, E_NODE, 300))
     vision(state, rules)  # the memory of tick 10
-    assert state.vision_memory[0].widths[E2] == 2
     del state.groups[g.id]  # G is gone (it died)
     state.tick = 20
-    state.edges[E2].width = 3  # upgraded in the fog
     vision(state, rules)
     edge = _view(state, rules).edges[E2]
     assert [(h.detail, h.seen) for h in edge.halves] == [
         (F, Sighting(TICK, E, (Mode.ATTACK,), 4, 3)),
         (F, Sighting(TICK, E, (), 0, 0)),
     ]
-    assert (edge.detail, edge.width) == (F, 2)
+    assert edge.detail is F
     assert edge.enemy_groups == ()

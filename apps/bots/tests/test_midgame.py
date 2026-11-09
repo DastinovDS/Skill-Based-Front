@@ -71,26 +71,26 @@ def _fight(fid: int, node: int, attacker: int, losses: tuple[int, int]) -> Fight
 # Phase -----------------------------------------------------------------------------------------
 
 
-def test_phase_opening_midgame_late(maps: dict[str, MapDef], mvp1_rules: Ruleset) -> None:
+def test_phase_opening_midgame_late(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
     mapdef = maps["web"]
-    view = _start(mapdef, mvp1_rules)
+    view = _start(mapdef, mvp_rules)
     assert 100 * sum(n.owner is None for n in view.nodes) > OPEN_NEUTRAL_PCT * len(view.nodes)
-    assert phase(view, mvp1_rules, 6) is Phase.OPENING
+    assert phase(view, mvp_rules, 6) is Phase.OPENING
     settled = _owned(view, {n.id: 0 for n in view.nodes if n.owner is None})
-    assert phase(settled, mvp1_rules, 6) is Phase.MIDGAME
+    assert phase(settled, mvp_rules, 6) is Phase.MIDGAME
     # DEC-03: an award every vp_period_ticks, the last on the last tick: 6 left from 24 periods on.
-    period = mvp1_rules.victory.vp_period_ticks
-    late = dataclasses.replace(settled, tick=mvp1_rules.match_ticks - 6 * period)
-    assert awards_left(mvp1_rules, late.tick) == 6
-    assert phase(late, mvp1_rules, 6) is Phase.LATE
-    assert phase(dataclasses.replace(late, tick=late.tick - 1), mvp1_rules, 6) is Phase.MIDGAME
+    period = mvp_rules.victory.vp_period_ticks
+    late = dataclasses.replace(settled, tick=mvp_rules.match_ticks - 6 * period)
+    assert awards_left(mvp_rules, late.tick) == 6
+    assert phase(late, mvp_rules, 6) is Phase.LATE
+    assert phase(dataclasses.replace(late, tick=late.tick - 1), mvp_rules, 6) is Phase.MIDGAME
 
 
 # Enemy force -----------------------------------------------------------------------------------
 
 
 def test_enemy_force_starts_with_the_symmetric_start_units(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset
+    maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     mapdef = maps["web"]
     start = [0, 0]
@@ -99,15 +99,15 @@ def test_enemy_force_starts_with_the_symmetric_start_units(
             start[n.start_owner] += n.start_units
     assert start[0] == start[1]  # the map is mirrored
     force = EnemyForce(mapdef, 0)
-    view = _start(mapdef, mvp1_rules)
+    view = _start(mapdef, mvp_rules)
     assert force.update(view) == start[1]
 
 
 def test_enemy_force_counts_own_recruits_and_enemy_losses(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset
+    maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     mapdef = maps["web"]
-    view = _start(mapdef, mvp1_rules)
+    view = _start(mapdef, mvp_rules)
     force = EnemyForce(mapdef, 0)
     start = force.update(view)
     g = view.groups[0]
@@ -130,12 +130,10 @@ def test_enemy_force_counts_own_recruits_and_enemy_losses(
 # Strength by node, sectors, threats ------------------------------------------------------------
 
 
-def test_hidden_force_is_spread_by_the_weights(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset
-) -> None:
+def test_hidden_force_is_spread_by_the_weights(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
     mapdef = maps["web"]
-    bot = SmartTurtle(mapdef, mvp1_rules, seed=0, player=0)
-    view = _split(bot, _start(mapdef, mvp1_rules))
+    bot = SmartTurtle(mapdef, mvp_rules, seed=0, player=0)
+    view = _split(bot, _start(mapdef, mvp_rules))
     # Nothing seen: no sightings at all.
     blind = dataclasses.replace(
         view, nodes=tuple(dataclasses.replace(n, seen=None) for n in view.nodes), groups=()
@@ -168,10 +166,10 @@ def test_hidden_force_is_spread_by_the_weights(
             assert shots[n] == (total - 5) * weight[n] // rest
 
 
-def test_sectors_and_threats(maps: dict[str, MapDef], mvp1_rules: Ruleset) -> None:
+def test_sectors_and_threats(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
     mapdef = maps["web"]
-    bot = SmartTurtle(mapdef, mvp1_rules, seed=0, player=0)
-    view = _split(bot, _start(mapdef, mvp1_rules))
+    bot = SmartTurtle(mapdef, mvp_rules, seed=0, player=0)
+    view = _split(bot, _start(mapdef, mvp_rules))
     shots = [n.id + 1 if n.owner == 1 else 0 for n in view.nodes]
     found = sectors(view, bot.neighbors, shots)
     assert found
@@ -195,10 +193,10 @@ def test_sectors_and_threats(maps: dict[str, MapDef], mvp1_rules: Ruleset) -> No
 # The turtle (#663) -----------------------------------------------------------------------------
 
 
-def test_turtle_half_is_mirror_symmetric(maps: dict[str, MapDef], mvp1_rules: Ruleset) -> None:
+def test_turtle_half_is_mirror_symmetric(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
     for mapdef in maps.values():
-        a = SmartTurtle(mapdef, mvp1_rules, seed=0, player=0)
-        b = SmartTurtle(mapdef, mvp1_rules, seed=0, player=1)
+        a = SmartTurtle(mapdef, mvp_rules, seed=0, player=0)
+        b = SmartTurtle(mapdef, mvp_rules, seed=0, player=1)
         mirror = mapdef.mirror_nodes
         for n in range(len(mapdef.nodes)):
             assert a.half[n] == b.half[mirror[n]]
@@ -210,11 +208,11 @@ def _ctx(bot: SmartBot, view: PlayerView) -> Ctx:
 
 
 def test_turtle_claims_its_half_then_holds_or_pushes(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset
+    maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     mapdef = maps["web"]
-    start = _start(mapdef, mvp1_rules)
-    bot = SmartTurtle(mapdef, mvp1_rules, seed=0, player=0)
+    start = _start(mapdef, mvp_rules)
+    bot = SmartTurtle(mapdef, mvp_rules, seed=0, player=0)
     g = start.groups[0]
     poor = dataclasses.replace(start, me=dataclasses.replace(start.me, cp=0))
     bot.decide(poor, 0)
@@ -243,11 +241,11 @@ def test_turtle_claims_its_half_then_holds_or_pushes(
 
 
 def test_turtle_front_garrison_follows_the_threat(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset
+    maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     mapdef = maps["web"]
-    bot = SmartTurtle(mapdef, mvp1_rules, seed=0, player=0)
-    view = _split(bot, _start(mapdef, mvp1_rules))
+    bot = SmartTurtle(mapdef, mvp_rules, seed=0, player=0)
+    view = _split(bot, _start(mapdef, mvp_rules))
     lead = dataclasses.replace(view, tick=5, vp=(50, 0))
     bot.decide(lead, 5)
     hold = bot.params["hold_front"]
@@ -264,11 +262,11 @@ def test_turtle_front_garrison_follows_the_threat(
 
 
 def test_reactive_waits_for_the_enemy_to_commit_when_ahead(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset
+    maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     mapdef = maps["web"]
-    bot = SmartReactive(mapdef, mvp1_rules, seed=0, player=0)
-    view = _split(bot, _start(mapdef, mvp1_rules))
+    bot = SmartReactive(mapdef, mvp_rules, seed=0, player=0)
+    view = _split(bot, _start(mapdef, mvp_rules))
     g = view.groups[0]
     lead = dataclasses.replace(view, tick=5, vp=(50, 0))
     bot.decide(lead, 5)
@@ -293,7 +291,7 @@ def test_reactive_waits_for_the_enemy_to_commit_when_ahead(
     near = [m for m in bot.neighbors[own] if attacked.nodes[m].owner == 1]
     assert all(bot.mid_value(ctx, m) >= bot.params["w_exposed"] for m in near)
     # Behind on the forecast it attacks without waiting.
-    bot2 = SmartReactive(mapdef, mvp1_rules, seed=0, player=0)
+    bot2 = SmartReactive(mapdef, mvp_rules, seed=0, player=0)
     behind = dataclasses.replace(view, tick=5, vp=(0, 50))
     bot2.decide(behind, 5)
     ctx = _ctx(bot2, behind)

@@ -18,7 +18,6 @@ import type {
   NodeView,
   OrderView,
   PacketView,
-  Mode,
   RulesetPublic,
   Stance,
   SnapshotMsg,
@@ -98,7 +97,6 @@ export function devPackets(map: MapFile, nodes: readonly NodeView[], tick: numbe
       ...leg,
       path: far === null ? [first.b] : [first.b, far],
       dest_tick: depart + DEV_PACKET_TICKS * (far === null ? 1 : 2),
-      transfer: false,
     });
   }
   if (second !== undefined) {
@@ -110,7 +108,6 @@ export function devPackets(map: MapFile, nodes: readonly NodeView[], tick: numbe
       ...leg,
       path: [second.a],
       dest_tick: depart + DEV_PACKET_TICKS,
-      transfer: true,
     });
   }
   return packets;
@@ -127,28 +124,13 @@ export function createDevServer(
   let lastSeq = 0;
   let stance: Stance = 'balance';
   let socket: MockSocket | null = null;
-  const modes = new Map<string, Mode>();
   let timer: ReturnType<typeof setInterval> | undefined;
   const orders = new Map<string, OrderView>();
-  /** Road builds: edge -> the tick it grows; levels so far by edge. */
-  const builds = new Map<number, number>();
-  const widths = new Map<number, number>();
-  /** The front markers (DEC-28, item 2) and the rear minimum (item 3). */
-  const fronts: [number | null, number | null] = [null, null];
-  let rearMin = rules.supply.rear_min_default;
-  /** Economy v2: the auto-extension of the own lines (#665). */
-  let autoLines = rules.economy.model === 'v2' && rules.supply_model !== 'flow' ? true : null;
-  /** The supply flow (DEC-43): the own leaf shift, `null` under lines. */
-  let leafShift: number | null = rules.supply_model === 'flow' ? 0 : null;
+  /** The supply flow (DEC-43): the own leaf shift. */
+  let leafShift = 0;
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
-    for (const [edge, done] of builds) {
-      if (tick >= done) {
-        widths.set(edge, (widths.get(edge) ?? 0) + 1);
-        builds.delete(edge);
-      }
-    }
     const base = devSnapshot(map, rules, tick);
     return {
       ...base,
@@ -158,30 +140,14 @@ export function createDevServer(
           ...base.view.me,
           stance,
           cp: Math.max(0, base.view.me.cp - spent),
-          fronts: [...fronts],
-          rear_min: rearMin,
-          auto_lines: autoLines,
           leaf_shift: leafShift,
         },
         packets: devPackets(map, base.view.nodes, tick),
-        edges: base.view.edges.map((e) => {
-          const ends = map.edges[e.id];
-          const width = e.width + (widths.get(e.id) ?? 0);
-          const done = builds.get(e.id);
-          const build = done === undefined ? null : { done_tick: done };
-          const inner = (n: number | undefined) =>
-            n !== undefined && base.view.nodes[n]?.owner === DEV_PLAYER;
-          // The gain of a level (DEC-28, item 7): packet speed, unit speed, one more charge.
-          return inner(ends?.a) && inner(ends?.b) && width < (ends?.max_level ?? 0)
-            ? { ...e, width, build, upgrade_gain: { speed_pct: 50, unit_speed_pct: 15, amount: 1 } }
-            : { ...e, width, build };
-        }),
         groups: (options.motion === true
           ? devMotion(map, base.view.nodes, base.view.groups, tick)
           : base.view.groups
         ).map((g) => ({
           ...g,
-          mode: modes.get(g.id) ?? g.mode,
           order: orders.get(g.id) ?? null,
         })),
       },
@@ -222,21 +188,7 @@ export function createDevServer(
       orders.delete(cmd.group);
       return { code: null, path: null };
     }
-    if (cmd.type === 'transfer') {
-      // Stand-in (DEC-18): own cities, a path over the map, 30 ticks a road; free.
-      const own = (id: number) => current.view.nodes[id]?.owner === DEV_PLAYER;
-      if (!own(cmd.from_node) || !own(cmd.to_node)) return { code: 'NOT_OWNER', path: null };
-      if (cmd.from_node === cmd.to_node) return { code: 'INVALID_ARGUMENT', path: null };
-      const path = devPath(map, cmd.from_node, cmd.to_node);
-      if (path === null) return { code: 'NO_PATH', path: null };
-      return { code: null, path, arrive: tick + 1 + 30 * (path.length - 1) };
-    }
     return { code: judgeOther(cmd), path: null };
-  }
-
-  function place(marker: 0 | 1, node: number | null): null {
-    fronts[marker] = node;
-    return null;
   }
 
   /** The rest of the commands: stand-in checks good for seeing accepts and rejects in the UI. */
@@ -248,13 +200,6 @@ export function createDevServer(
     };
     const mine = (id: string) => current.view.groups.find((g) => g.id === id);
     switch (cmd.type) {
-      case 'set_mode': {
-        const group = mine(cmd.group);
-        if (group === undefined) return 'NOT_FOUND_OR_HIDDEN';
-        if ((modes.get(group.id) ?? group.mode) === cmd.mode) return 'NO_CHANGE';
-        modes.set(group.id, cmd.mode);
-        return null;
-      }
       case 'set_stance':
         if (stance === cmd.stance) return 'NO_CHANGE';
         stance = cmd.stance;
@@ -273,43 +218,10 @@ export function createDevServer(
         return cmd.groups.every((id) => mine(id) !== undefined)
           ? charge(rules.cost.merge)
           : 'NOT_FOUND_OR_HIDDEN';
-      case 'upgrade_road': {
-        // The checks of the real server in its order (DEC-28, item 7).
-        if (map.edges[cmd.edge] === undefined) return 'NOT_FOUND_OR_HIDDEN';
-        if (current.view.edges[cmd.edge]?.upgrade_gain == null) return 'NOT_INTERNAL';
-        if (builds.has(cmd.edge)) return 'EDGE_BUSY';
-        const code = charge(rules.cost.build);
-        if (code === null) builds.set(cmd.edge, tick + 1 + rules.build.ticks_per_level);
-        return code;
-      }
-      case 'set_front': {
-        // The checks of the real server in its order (DEC-28, item 2), without the CP: it is free.
-        if (cmd.marker !== 0 && cmd.marker !== 1) return 'INVALID_ARGUMENT';
-        if (cmd.node === null)
-          return fronts[cmd.marker] === null ? 'NO_CHANGE' : place(cmd.marker, null);
-        const node = current.view.nodes[cmd.node];
-        if (node === undefined) return 'NOT_FOUND_OR_HIDDEN';
-        if (node.owner !== DEV_PLAYER) return 'NOT_OWNER';
-        if (node.warehouse_cap === null) return 'NOT_CITY';
-        if (fronts[cmd.marker] === cmd.node) return 'NO_CHANGE';
-        if (fronts.includes(cmd.node)) return 'INVALID_ARGUMENT';
-        return place(cmd.marker, cmd.node);
-      }
-      case 'set_rear_min':
-        if (cmd.n < 0 || cmd.n > rules.supply.rear_min_max) return 'INVALID_ARGUMENT';
-        if (cmd.n === rearMin) return 'NO_CHANGE';
-        rearMin = cmd.n;
-        return null;
       case 'set_leaf_shift':
-        if (leafShift === null) return 'FEATURE_DISABLED';
         if (cmd.shift < 0 || cmd.shift > 2) return 'INVALID_ARGUMENT';
         if (cmd.shift === leafShift) return 'NO_CHANGE';
         leafShift = cmd.shift;
-        return null;
-      case 'set_auto_lines':
-        if (autoLines === null) return 'FEATURE_DISABLED';
-        if (cmd.on === autoLines) return 'NO_CHANGE';
-        autoLines = cmd.on;
         return null;
       case 'forfeit':
         setTimeout(() => {
@@ -395,13 +307,6 @@ export function createDevServer(
               })
             : [];
         this.reply({ type: 'reach', group: msg.group, tick, nodes, split: [] });
-      } else if (msg.type === 'line_route_query') {
-        this.reply({
-          type: 'line_route',
-          points: msg.points,
-          tick,
-          path: devLinePath(map, msg.points),
-        });
       }
     }
 

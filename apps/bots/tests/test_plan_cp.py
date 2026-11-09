@@ -2,9 +2,8 @@
 at a lesser city.
 
 Expected values come from the rules: a scheduled order costs ``orders.cost.planned_move`` and an
-ordinary one ``orders.cost.move`` (DEC-08), Defense switched on is a public intent, the level sets
-how late a shown strike is noticed (``Tempo.react_ticks``) and the Defense bonus grows by 1 per
-``orders.defense_ticks_per_bonus`` ticks (DEC-30).
+ordinary one ``orders.cost.move`` (DEC-08), a strike is a public intent, and the level sets how late
+a shown strike is noticed (``Tempo.react_ticks``); the answer is a reinforcement of the city.
 """
 
 import dataclasses
@@ -14,12 +13,13 @@ import pytest
 
 import gow_bots.bots.campaign as campaign
 from gow_bots.bots import ParamRange, SmartBot, SmartRusher, bot_factory
+from gow_bots.bots.base import node_of
 from gow_bots.bots.smart import PERSONALITIES
-from gow_sim.commands import Command, Move, SetMode
+from gow_sim.commands import Command, Move
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, load_ruleset
-from gow_sim.view import IntentKind, IntentView, Mode, PlayerView
+from gow_sim.view import GroupView, IntentKind, IntentView, PlayerView
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
@@ -28,7 +28,11 @@ START = 100
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-2.toml")
+    """``mvp-5`` with a planned order 1 CP dearer than an ordinary one (``mvp-5``: the same
+    price), so a plan the CP cannot pay leaves an ordinary order paid."""
+    base = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    cost = dataclasses.replace(base.orders.cost, planned_move=base.orders.cost.move + 100)
+    return dataclasses.replace(base, orders=dataclasses.replace(base.orders, cost=cost))
 
 
 @pytest.fixture(scope="module")
@@ -47,13 +51,21 @@ def _moves(cmds: list[Command]) -> list[Move]:
 
 @pytest.fixture
 def two_edges_are_planned(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The shared utility answers "planned" for a path of two edges or more, "ordinary" for
-    less: the start of the ``web`` map then has a planned attack on top and ordinary ones below."""
+    """Every attack two hops or more away is a planned one with a bonus of 1, a nearer one is
+    ordinary: the start of the ``web`` map then has a planned attack on top and ordinary ones
+    below."""
+    options = campaign.CampaignBot.options
 
-    def two_or_more(rules: Ruleset, own_charged: int, need: int, edges: int) -> bool:
-        return edges >= 2
+    def by_hops(
+        self: campaign.CampaignBot, ctx: campaign.Ctx, groups: list[GroupView]
+    ) -> list[campaign.Option]:
+        return [
+            dataclasses.replace(o, planned=far, bonus=1 if far else 0)
+            for o in options(self, ctx, groups)
+            for far in (self.hops[node_of(o.group)][o.dest] >= 2,)
+        ]
 
-    monkeypatch.setattr(campaign, "prefer_planned", two_or_more)
+    monkeypatch.setattr(campaign.CampaignBot, "options", by_hops)
 
 
 def _rusher(
@@ -163,16 +175,15 @@ def test_a_strike_at_a_lesser_city_is_answered_when_it_is_worth_it(
     target = _target(web, view)
     seen = dataclasses.replace(view, intents=(_strike(web, target),))
 
-    def modes(worth: int) -> list[SetMode]:
+    def answers(worth: int) -> list[Move]:
         bot = bot_factory("smart_rusher", {"worth_defense": ParamRange(worth, worth)})(
             web, rules, seed=0, player=0
         )
-        return [c for c in bot.decide(seen, START) if isinstance(c, SetMode)]
+        return [c for c in _moves(bot.decide(seen, START)) if c.dest == target]
 
-    assert modes(0) == []  # off: respond 1 answers the capital only
-    assert modes(web.nodes[target].vp + 1) == []  # the city is worth less than the threshold
-    answered = modes(web.nodes[target].vp)
-    assert [c.mode for c in answered] == [Mode.DEFENSE]
+    assert answers(0) == []  # off: respond 1 answers the capital only
+    assert answers(web.nodes[target].vp + 1) == []  # the city is worth less than the threshold
+    assert len(answers(web.nodes[target].vp)) == 1  # a reinforcement walks in
 
 
 def test_a_strike_at_a_lesser_city_is_noticed_after_the_reaction_delay(
@@ -189,7 +200,7 @@ def test_a_strike_at_a_lesser_city_is_noticed_after_the_reaction_delay(
         seen = dataclasses.replace(
             _view(web, rules, 800, tick), intents=(_strike(web, target, START),)
         )
-        answers[tick - START] = any(isinstance(c, SetMode) for c in bot.decide(seen, tick))
+        answers[tick - START] = any(c.dest == target for c in _moves(bot.decide(seen, tick)))
     # Shown at START, noticed `react` ticks later: the decisions at +0 and +10 are blind to it.
     assert answers == {0: False, 10: False, 20: True}
 

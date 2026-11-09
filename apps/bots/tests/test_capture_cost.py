@@ -47,7 +47,7 @@ ROWS = [
 
 @pytest.mark.parametrize(("row", "cost", "charged", "bonus", "units", "held", "taken"), ROWS)
 def test_takes_follows_the_dec38_table(
-    mvp1_rules: Ruleset,
+    mvp_rules: Ruleset,
     row: int,
     cost: int,
     charged: int,
@@ -56,7 +56,7 @@ def test_takes_follows_the_dec38_table(
     held: int,
     taken: bool,
 ) -> None:
-    rules = _cost(mvp1_rules, cost)
+    rules = _cost(mvp_rules, cost)
     need = shots_to_take(rules, Terrain.FOREST, units, held) if units else 0
     assert takes(rules, charged, bonus, need) is taken, f"DEC-38 row {row}"
 
@@ -107,10 +107,8 @@ def _play(name: str, map_name: str, rules: Ruleset, ticks: int) -> Counter[str]:
 
 @pytest.mark.parametrize("map_name", MAPS)
 @pytest.mark.parametrize("name", NAMES)
-def test_no_bot_sends_a_group_that_cannot_pay(
-    mvp1_rules: Ruleset, name: str, map_name: str
-) -> None:
-    seen = _play(name, map_name, _cost(mvp1_rules, 1), 3000)
+def test_no_bot_sends_a_group_that_cannot_pay(mvp_rules: Ruleset, name: str, map_name: str) -> None:
+    seen = _play(name, map_name, _cost(mvp_rules, 1), 3000)
     assert seen["foreign"] > 0, seen  # the bot does attack and claim
     assert seen["unpaid"] == 0, seen
     # A bounce now comes only from charges lost on the way, never from a loop of unpaid orders

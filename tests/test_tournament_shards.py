@@ -176,7 +176,7 @@ def test_real_tournament_one_run_equals_merged_planned_shards(tmp_path: Path) ->
         "uv", "run", "gow-bots", "tournament",
         "--bots", "random_legal", "rusher",
         "--jobs", "1",
-        "--ruleset", str(ROOT / "rulesets/mvp-1.toml"),
+        "--ruleset", str(ROOT / "rulesets/mvp-7.toml"),
     ]  # fmt: skip
     one = tmp_path / "one.jsonl"
     args = [*base, "--maps", *maps, "--seeds", "2", "--out", str(one)]

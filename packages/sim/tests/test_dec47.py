@@ -23,7 +23,6 @@ Map ``dec41`` (rot180): player 0 owns 0..7 (capital K = 0), player 1 the mirror,
 """
 
 import dataclasses
-import gzip
 from pathlib import Path
 
 import pytest
@@ -52,7 +51,7 @@ from gow_sim.state import (
 )
 from gow_sim.systems.build import build
 from gow_sim.systems.economy import economy, factory_period
-from gow_sim.systems.lines import settle_factories
+from gow_sim.systems.flow import settle_factories
 from gow_sim.view import project
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -114,31 +113,29 @@ def _charges(events: list[Event], node: int) -> list[int]:
 
 
 def test_mvp7_has_the_key_and_older_rulesets_do_not() -> None:
-    assert MVP7.stances is not None and MVP7.stances.factories_follow
+    assert MVP7.stances.factories_follow
     assert MVP7.factories_follow
-    for name in ("mvp-4-stances", "mvp-4-stances-tempo", "mvp-5", "mvp-6"):
+    for name in ("mvp-5", "mvp-6"):
         rules = load_ruleset(RULESETS / f"{name}.toml")
-        assert rules.stances is not None and not rules.factories_follow, name
+        assert not rules.factories_follow, name
 
 
-@pytest.mark.parametrize("name", ["mvp-4-stances", "mvp-4-stances-tempo", "mvp-5", "mvp-6"])
-def test_a_ruleset_without_the_key_keeps_its_archived_hash(name: str) -> None:
-    """``False`` is left out of the hash (``OPTIONAL``): the archive file of the hash exists."""
+@pytest.mark.parametrize("name", ["mvp-5", "mvp-6"])
+def test_a_ruleset_without_the_key_leaves_it_out_of_its_hash(name: str) -> None:
+    """``False`` is left out of the canonical form and so of the hash (``OPTIONAL``); the archive
+    of every kept ruleset is checked in ``test_ruleset.py``."""
     rules = load_ruleset(RULESETS / f"{name}.toml")
     stances = rules_canonical(rules)["stances"]
     assert isinstance(stances, dict) and "factories_follow" not in stances
-    assert (RULESETS / "archive" / f"{ruleset_hash(rules)}.toml").is_file()
 
 
-def test_the_key_round_trips_counts_in_the_hash_and_is_archived() -> None:
+def test_the_key_round_trips_and_counts_in_the_hash() -> None:
     data = rules_canonical(MVP7)
     assert parse_ruleset(data) == MVP7
-    assert MVP7.stances is not None
     off = dataclasses.replace(
         MVP7, stances=dataclasses.replace(MVP7.stances, factories_follow=False)
     )
     assert ruleset_hash(off) != ruleset_hash(MVP7)
-    assert (RULESETS / "archive" / f"{ruleset_hash(MVP7)}.toml").is_file()
 
 
 def test_the_key_must_be_a_boolean() -> None:
@@ -179,10 +176,12 @@ def test_a_factory_makes_the_capital_rate_of_its_owners_stance(
 
 
 def test_the_key_off_keeps_the_global_clock() -> None:
-    """The same ruleset with the key off: the built factory of 150 ticks, whatever the stance."""
-    assert RULES.stances is not None
+    """The same ruleset with the key off and a built factory of 150 ticks (the key it then needs):
+    the built factory on the global clock, whatever the stance."""
     off = dataclasses.replace(
-        RULES, stances=dataclasses.replace(RULES.stances, factories_follow=False)
+        RULES,
+        stances=dataclasses.replace(RULES.stances, factories_follow=False),
+        factory=dataclasses.replace(RULES.factory, built_period_ticks=150),
     )
     state = _state(off)
     state.nodes[A].factory = 0
@@ -408,12 +407,3 @@ def test_without_the_key_the_counters_stay_zero() -> None:
     for _ in range(450):
         match.step([])
     assert all(n.factory_ticks == 0 for n in state.nodes.values())
-
-
-@pytest.mark.parametrize("path", sorted((TESTS_DIR / "golden" / "v45").glob("*.gz")), ids=str)
-def test_the_golden_games_of_the_version_before_are_unchanged(path: Path) -> None:
-    """DEC-47 changed no ruleset without the key (no golden game of v45 plays ``mvp-7``): the same
-    commands and checkpoint hashes in v46, only ``sim_version`` of the header differs."""
-    before = gzip.decompress(path.read_bytes()).decode().split("\n")
-    after = gzip.decompress((TESTS_DIR / "golden" / "v46" / path.name).read_bytes()).decode()
-    assert after.split("\n")[1:] == before[1:]

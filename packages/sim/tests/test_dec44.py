@@ -1,4 +1,4 @@
-"""Stances of economy v2 with local progress (DEC-44, #772).
+"""Stances with local progress (DEC-44, #772).
 
 Expected values come from the table of DEC-44 (mechanics.md, section 6), worked out by hand:
 
@@ -16,12 +16,12 @@ counter shows ``c' + 1`` at the end of the tick and the next quantum comes at
 ``t + P_new - c' - 1``.
 
 Map ``dec41`` (rot180): player 0 owns K = 0 (capital) and A = 1, player 1 the mirror, ``16 - n``.
-``K`` starts with a warehouse of 6 under ``mvp-4``; the tests below empty it so that nothing spills.
+``K`` starts with a warehouse of 6 under ``mvp-5``; the tests below empty it so that nothing spills.
+The ruleset is ``mvp-5``: the table above and a built factory every 200 ticks on the global clock.
 """
 
-import gzip
 import tomllib
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -38,10 +38,9 @@ from gow_sim.commands import (
     SetStance,
     apply_commands,
 )
-from gow_sim.maps import MapDef, load_map
-from gow_sim.match import Controller, Match, run_headless
+from gow_sim.maps import load_map
+from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import (
-    Ruleset,
     RulesetError,
     Stance,
     StanceTable,
@@ -57,8 +56,7 @@ from gow_sim.view import PlayerView, project
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
 RULESETS = ROOT / "rulesets"
-RULES = load_ruleset(RULESETS / "mvp-4-stances.toml")
-SUP200 = load_ruleset(RULESETS / "mvp-4-sup200.toml")
+RULES = load_ruleset(RULESETS / "mvp-5.toml")
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 K, A = 0, 1
 ENEMY_K = 16
@@ -121,49 +119,20 @@ def _raw(name: str) -> dict[str, Any]:
     return tomllib.loads((RULESETS / f"{name}.toml").read_text(encoding="utf-8"))
 
 
-def test_the_ruleset_is_sup200_plus_the_section() -> None:
-    raw = _raw("mvp-4-stances")
-    section = raw.pop("stances")
-    assert raw["combat"].pop("terrain_burn") is True  # the other change of the file: DEC-45
-    assert raw == _raw("mvp-4-sup200")
-    assert section == {
-        "cp_period_ticks": {"war": 80, "balance": 100, "economy": 200},
-        "capital_period_ticks": {"war": 400, "balance": 200, "economy": 100},
-    }
-
-
-def test_balance_is_the_rate_of_sup200() -> None:
-    assert RULES.economy.start_stance is Stance.BALANCE
-    assert RULES.stances is not None and SUP200.factory is not None
-    assert RULES.stances.cp_period_ticks.balance == SUP200.cp.period_ticks
-    assert RULES.stances.capital_period_ticks.balance == SUP200.factory.capital_period_ticks
-
-
-@pytest.mark.parametrize(
-    "name", ["mvp-0", "mvp-1", "mvp-2", "mvp-3", "mvp-4", "test-short"], ids=str
-)
-def test_the_hash_of_a_ruleset_without_the_section_is_the_archived_one(name: str) -> None:
-    """The section is optional and left out of the hash: the archived hashes still resolve."""
-    rules = load_ruleset(RULESETS / f"{name}.toml")
-    assert rules.stances is None
-    assert "stances" not in rules_canonical(rules)
-    assert (RULESETS / "archive" / f"{ruleset_hash(rules)}.toml").is_file()
-
-
 def test_the_section_round_trips_and_counts_in_the_hash() -> None:
     assert parse_ruleset(rules_canonical(RULES)) == RULES
-    assert ruleset_hash(RULES) != ruleset_hash(SUP200)
-
-
-def test_the_section_is_only_for_v2() -> None:
-    raw = _raw("mvp-2")
-    raw["stances"] = _raw("mvp-4-stances")["stances"]
-    with pytest.raises(RulesetError, match=r"stances: only with economy\.model = 'v2'"):
-        parse_ruleset(raw)
+    other = replace(
+        RULES,
+        stances=replace(
+            RULES.stances,
+            cp_period_ticks=StanceTable(economy=200, balance=100, war=81),
+        ),
+    )
+    assert ruleset_hash(other) != ruleset_hash(RULES)
 
 
 def test_a_period_of_zero_is_an_error() -> None:
-    raw = _raw("mvp-4-stances")
+    raw = _raw("mvp-5")
     raw["stances"]["cp_period_ticks"]["war"] = 0
     with pytest.raises(RulesetError, match=r"stances\.cp_period_ticks\.war"):
         parse_ruleset(raw)
@@ -347,14 +316,14 @@ def test_a_tick_in_another_stance_counts_at_its_rate_and_no_more(a: Stance, b: S
 
 def test_a_command_for_the_current_stance_changes_nothing() -> None:
     """``NO_CHANGE``, like every stance command for the stance in force: the tick of the next
-    quantum stays, and so does the tick of the last real change."""
+    quantum stays."""
     state = _state()
     _run(state, 150)
     me = state.players[0]
-    assert (me.cp_ticks, me.capital_ticks, me.stance_changed_tick) == (50, 150, None)
+    assert (me.cp_ticks, me.capital_ticks) == (50, 150)
     outcome = _set(state, Stance.BALANCE)
     assert isinstance(outcome, Reject) and outcome.code is RejectCode.NO_CHANGE
-    assert (me.cp_ticks, me.capital_ticks, me.stance_changed_tick) == (50, 150, None)
+    assert (me.cp_ticks, me.capital_ticks) == (50, 150)
     assert _charges(_run(state, 200), K) == [200]
 
 
@@ -362,7 +331,6 @@ def test_no_cooldown_and_no_price() -> None:
     state = _state()
     state.tick = 5
     cp = state.players[0].cp
-    assert RULES.orders.stance_cooldown_ticks == 100  # the key stays and does nothing
     for stance in (Stance.WAR, Stance.ECONOMY, Stance.BALANCE, Stance.WAR):
         outcome = _set(state, stance)
         assert isinstance(outcome, Ok) and outcome.cost == 0
@@ -496,15 +464,6 @@ def test_the_counters_are_part_of_the_state() -> None:
     assert state_hash(other) != state_hash(state)
 
 
-def test_a_state_without_stances_has_no_counters_in_its_canonical_form() -> None:
-    """So the state hash of every ruleset without ``[stances]`` stays as it was."""
-    match = Match(MAP, SUP200, KEY)
-    for _ in range(150):
-        match.step([])
-    assert "cp_ticks" not in str(to_canonical(match.state))
-    assert "capital_ticks" not in str(to_canonical(match.state))
-
-
 def _views(state: GameState, player: int) -> tuple[int | None, int | None, Stance]:
     me = project(state, RULES, player, KEY).me
     return me.cp_ticks, me.capital_ticks, me.stance
@@ -527,80 +486,6 @@ def test_the_enemy_stance_and_counters_change_nothing_in_a_view() -> None:
     enemy.cp_ticks = 77
     enemy.capital_ticks = 333
     assert project(state, RULES, 0, KEY) == before
-
-
-def test_the_counters_are_absent_without_the_section() -> None:
-    state = initial_state(MAP, SUP200)
-    me = project(state, SUP200, 0, KEY).me
-    assert me.cp_ticks is None and me.capital_ticks is None
-
-
-# Flag off ---------------------------------------------------------------------------------------
-
-
-def test_set_stance_stays_disabled_without_the_section() -> None:
-    state = initial_state(MAP, SUP200)
-    cmd: Command = SetStance(Stance.WAR)
-    results, _ = apply_commands(state, SUP200, [PlayerCommand(0, 0, cmd)])
-    outcome = results[0].outcome
-    assert isinstance(outcome, Reject) and outcome.code is RejectCode.FEATURE_DISABLED
-    assert state.players[0].stance is Stance.BALANCE
-
-
-def test_without_the_section_the_counters_stay_zero() -> None:
-    match = Match(MAP, SUP200, KEY)
-    for _ in range(450):
-        match.step([])
-    for p in match.state.players.values():
-        assert (p.cp_ticks, p.capital_ticks) == (0, 0)
-
-
-@pytest.mark.parametrize("path", sorted((TESTS_DIR / "golden" / "v40").glob("*.gz")), ids=str)
-def test_the_golden_games_of_the_version_before_are_unchanged(path: Path) -> None:
-    """DEC-44 changed no ruleset without ``[stances]``: the same commands and the same checkpoint
-    hashes as the version before, tick by tick; only ``sim_version`` of the header differs."""
-    before = gzip.decompress(path.read_bytes()).decode().split("\n")
-    after = gzip.decompress((TESTS_DIR / "golden" / "v41" / path.name).read_bytes()).decode()
-    assert after.split("\n")[1:] == before[1:]
-
-
-@pytest.mark.parametrize(
-    "path",
-    sorted(p for p in (TESTS_DIR / "golden" / "v42").glob("*.gz") if "stances" not in p.name),
-    ids=str,
-)
-def test_the_carry_changed_no_golden_game_without_the_section(path: Path) -> None:
-    """The carry of #792 (SIM 43) acts only under ``[stances]``: the other golden games of v42
-    are the same line by line in v43, only ``sim_version`` of the header differs."""
-    before = gzip.decompress(path.read_bytes()).decode().split("\n")
-    after = gzip.decompress((TESTS_DIR / "golden" / "v43" / path.name).read_bytes()).decode()
-    assert after.split("\n")[1:] == before[1:]
-
-
-def test_a_match_in_balance_is_a_match_of_sup200(
-    expand_bot: Callable[[MapDef, Ruleset], Controller],
-) -> None:
-    """Both players stay in Balance: the same commands give the same events tick by tick (the
-    burn of DEC-45 is another rule of the file: off here)."""
-    bots = [expand_bot(MAP, SUP200), expand_bot(MAP, SUP200)]
-    stances = replace(RULES, combat=replace(RULES.combat, terrain_burn=False))
-    one, two = Match(MAP, SUP200, KEY), Match(MAP, stances, KEY)
-    seqs = [0, 0]
-    for tick in range(1300):
-        commands: list[PlayerCommand] = []
-        if tick % 5 == 0:
-            for p in (0, 1):
-                for cmd in bots[p].decide(one.view(p), tick):
-                    commands.append(PlayerCommand(p, seqs[p], one.resolve(p, cmd)))
-                    seqs[p] += 1
-        assert one.step(commands) == two.step(commands)
-        if one.finished:
-            break
-        assert (one.state.players[0].cp, one.state.players[1].cp) == (
-            two.state.players[0].cp,
-            two.state.players[1].cp,
-        )
-    assert one.tick == two.tick > 500
 
 
 # The statistics (#772) --------------------------------------------------------------------------
@@ -634,7 +519,6 @@ def test_the_statistics_by_stance() -> None:
     )
     log = recorder.log()
     stats = analyze_stats(log)
-    assert stats.stances is True
     p0, p1 = stats.players
     assert dict(p0.stance_ticks) == {"economy": 0, "balance": 145, "war": 455}
     assert p0.stance_switches == 1 and p1.stance_switches == 0

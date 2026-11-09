@@ -38,7 +38,7 @@ export function threatOfEvent(
 export function incomingNodes(snapshot: SnapshotMsg, me: PlayerId): number[] {
   const nodes = new Set<number>();
   for (const intent of snapshot.view.intents) {
-    if (intent.owner === me || intent.kind !== 'planned_move' || intent.target === null) continue;
+    if (intent.owner === me || intent.target === null) continue;
     if (snapshot.view.nodes[intent.target]?.owner === me) nodes.add(intent.target);
   }
   return [...nodes].sort((a, b) => a - b);

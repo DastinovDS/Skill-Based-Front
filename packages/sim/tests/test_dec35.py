@@ -5,7 +5,8 @@ test per item of "Details": the map M - X - E - F as in DEC-10, M (node 0) my ca
 the enemy capital, X (node 2) mine, F (node 3) neutral unless said otherwise; M, X, E plains, F
 forest; e0 = M-X (``a`` = M), e1 = X-E (``a`` = X), e2 = E-F (``a`` = E), border points 500. The
 enemy group is 4 units, 3 charged, "Attack"; my group G is 2 units, 2 charged. The view is
-player 0's.
+player 0's. Examples 11 and 13 and detail 5 (road levels and road builds) went with the road
+upgrades (#894); the road level parts of the other cases too.
 """
 
 from collections.abc import Callable
@@ -14,13 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from gow_sim.commands import Ok, Reject, RejectCode, UpgradeRoad, validate
 from gow_sim.maps import MapDef
 from gow_sim.match import SIM_VERSION
 from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import (
     AtNode,
-    Build,
     Detail,
     Fight,
     FightMember,
@@ -36,7 +35,7 @@ from gow_sim.state import (
     initial_state,
 )
 from gow_sim.systems.vision import compute_vision, is_visible, vision
-from gow_sim.view import BuildView, EnemyGroupView, PlayerView, project
+from gow_sim.view import EnemyGroupView, PlayerView, project
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
@@ -48,7 +47,7 @@ ATTACK = (Mode.ATTACK,)
 
 type MakeMap = Callable[..., MapDef]
 
-_RULES = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+_RULES = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 @pytest.fixture(scope="module")
@@ -167,14 +166,13 @@ def test_example_3_an_enemy_on_the_way_to_my_m_is_not_seen(
     make_fog_map: MakeMap, rules: Ruleset
 ) -> None:
     state = _state(make_fog_map)
-    state.edges[E0].width = 2
     enemy = _group(state, 1, OnEdge(E0, X_NODE, 300))  # pos 700, toward M (``a``)
     view = _view(state)
     edge = view.edges[E0]
     assert edge.enemy_groups == ()
     assert [h.detail for h in edge.halves] == [F, F]  # own nodes give no zone (detail 4)
     assert not is_visible(state, rules, 0, enemy)
-    assert (edge.detail, edge.width) == (F, 2)  # the road level of e0 is exact (detail 5)
+    assert edge.detail is F
     assert view.nodes[M_NODE].seen == _empty(P)
     enemy.location = AtNode(M_NODE)  # it arrives in M
     m = _view(state).nodes[M_NODE]
@@ -184,7 +182,6 @@ def test_example_3_an_enemy_on_the_way_to_my_m_is_not_seen(
 def test_example_4_g_on_e1_before_the_border(make_fog_map: MakeMap) -> None:
     state = _state(make_fog_map)
     state.nodes[E_NODE].warehouse = 9
-    state.edges[E1].width = 2
     _g(state, OnEdge(E1, X_NODE, 300))  # pos 300 from X toward E: the half of X
     _group(state, 1, AtNode(E_NODE))
     view = _view(state)
@@ -192,7 +189,7 @@ def test_example_4_g_on_e1_before_the_border(make_fog_map: MakeMap) -> None:
     assert _details(view) == [E, E, E, F]  # M and E plains from plains; F not a neighbour of X
     e = view.nodes[E_NODE]
     assert (e.seen, e.warehouse) == (Sighting(TICK, E, ATTACK, 4, 3), None)  # detail 2
-    assert (view.edges[E1].detail, view.edges[E1].width) == (P, 2)
+    assert view.edges[E1].detail is P
 
 
 def test_example_5_g_at_the_border_heading_to_e(make_fog_map: MakeMap) -> None:
@@ -266,30 +263,12 @@ def test_example_10_the_node_g_left_was_captured(make_fog_map: MakeMap) -> None:
     assert view.nodes[E_NODE].detail is R  # plains from forest
 
 
-def test_example_11_an_enemy_build_on_e2(make_fog_map: MakeMap) -> None:
-    state = _state(make_fog_map, owners={F_NODE: 1})  # e2 internal for the enemy
-    state.edges[E2].build = Build(edge=E2, owner=1, since=0)
-    assert _view(state).edges[E2].build is None  # in fog
-    _g(state, OnEdge(E1, X_NODE, 500))  # E a source
-    edge = _view(state).edges[E2]
-    assert (edge.detail, edge.build) == (P, BuildView(done_tick=None))
-
-
 def test_example_12_enemy_barracks_next_to_my_x(make_fog_map: MakeMap) -> None:
     state = _state(make_fog_map)
     state.nodes[E_NODE].has_barracks = True
     view = _view(state)
     assert view.nodes[E_NODE].detail is F
     assert view.nodes[E_NODE].has_barracks is True  # DEC-31: by ownership and the graph
-
-
-def test_example_13_upgrade_road_on_an_own_edge_in_fog(
-    make_fog_map: MakeMap, rules: Ruleset
-) -> None:
-    state = _state(make_fog_map)
-    state.players[0].cp = 500
-    assert _view(state).edges[E0].detail is F
-    assert isinstance(validate(state, rules, 0, UpgradeRoad(E0)), Ok)
 
 
 def test_example_14_a_scheduled_order_is_public(make_fog_map: MakeMap) -> None:
@@ -396,25 +375,6 @@ def test_detail_4_own_presence_gives_no_zone(make_fog_map: MakeMap, rules: Rules
     assert enemy.id not in state.vision_memory[0].spotted
 
 
-def test_detail_5_own_roads_and_builds(make_fog_map: MakeMap, rules: Ruleset) -> None:
-    """The own internal e0 in fog: its level and the own build on it are exact; the buffer e1
-    in fog: the last seen level (1 if never seen), ``UpgradeRoad`` hidden."""
-    state = _state(make_fog_map)
-    state.players[0].cp = 500
-    state.edges[E0].width = 2
-    state.edges[E0].build = Build(edge=E0, owner=0, since=0)
-    state.edges[E1].width = 3
-    view = _view(state)
-    e0, e1 = view.edges[E0], view.edges[E1]
-    assert (e0.detail, e0.width) == (F, 2)
-    assert e0.build == BuildView(done_tick=rules.build.ticks_per_level)
-    assert (e1.detail, e1.width) == (F, 1)
-    assert validate(state, rules, 0, UpgradeRoad(E1)) == Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
-    assert validate(state, rules, 0, UpgradeRoad(E2)) == Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
-    state.edges[E0].build = None
-    assert isinstance(validate(state, rules, 0, UpgradeRoad(E0)), Ok)
-
-
 @pytest.mark.parametrize(
     ("location", "source"),
     [
@@ -449,7 +409,6 @@ def test_detail_7_memory_when_g_leaves(make_fog_map: MakeMap, rules: Ruleset) ->
     """While G is on e2 its edge is out of the fog and its places are recorded; when G dies they
     fall to fog and keep the last sighting. Enemy packets stay hidden on G's edge."""
     state = _state(make_fog_map)
-    state.edges[E2].width = 2
     g = _g(state, OnEdge(E2, E_NODE, 300))  # E a source; F a range
     _group(state, 1, OnEdge(E2, E_NODE, 100))  # pos 100: the half of E
     pid = state.new_id()
@@ -458,19 +417,17 @@ def test_detail_7_memory_when_g_leaves(make_fog_map: MakeMap, rules: Ruleset) ->
     assert not is_visible(state, rules, 0, packet)
     vision(state, rules)
     memory = state.vision_memory[0]
-    assert memory.widths[E2] == 2
     assert memory.halves[E2, E_NODE] == Sighting(TICK, E, ATTACK, 4, 3)
     assert memory.halves[E2, F_NODE] == _empty(R)
     del state.groups[g.id]
     state.tick = 20
-    state.edges[E2].width = 3
     vision(state, rules)
     edge = _view(state).edges[E2]
     assert [(h.detail, h.seen) for h in edge.halves] == [
         (F, Sighting(TICK, E, ATTACK, 4, 3)),
         (F, _empty(R)),
     ]
-    assert (edge.detail, edge.width) == (F, 2)
+    assert edge.detail is F
 
 
 def test_detail_8_unchanged(make_fog_map: MakeMap) -> None:
@@ -495,9 +452,7 @@ def test_detail_9_symmetry(make_fog_map: MakeMap) -> None:
     _group(b, 0, AtNode(F_NODE))
     va, vb = _view(a, 0), _view(b, 1)
     assert [(n.detail, n.seen) for n in va.nodes] == [(n.detail, n.seen) for n in vb.nodes]
-    assert [(e.detail, e.width, e.halves) for e in va.edges] == [
-        (e.detail, e.width, e.halves) for e in vb.edges
-    ]
+    assert [(e.detail, e.halves) for e in va.edges] == [(e.detail, e.halves) for e in vb.edges]
 
 
 def test_detail_10_versions() -> None:

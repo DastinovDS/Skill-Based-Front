@@ -153,10 +153,4 @@ describe('stances of economy v2 (DEC-44)', () => {
     controller.chooseStance('balance');
     expect(sent).toEqual([]);
   });
-
-  it('without `stances` economy v2 has no menu', () => {
-    const { controller } = setup();
-    expect(controller.stances).toBe(false);
-    expect(controller.openRadial(true)).toBe(false);
-  });
 });

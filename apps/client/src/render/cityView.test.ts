@@ -1,8 +1,7 @@
 import type { Container } from 'pixi.js';
 import { setReducedMotion } from './motion.ts';
-import { buildMark } from './progressLayout.ts';
 import type { BakedSprite } from './bake.ts';
-import { buildMarkSpec, cityBodySpec, provinceBodySpec, stockColor } from './bakedShapes.ts';
+import { cityBodySpec, provinceBodySpec, stockColor } from './bakedShapes.ts';
 import { pipAlertSpec, towerBackSpec, warehouseMarksSpec } from './pieceShapes.ts';
 import { CanvasTextMetrics } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,8 +17,8 @@ const map = DEFAULT_MAP;
 const UPGRADES = {
   barracks: 100,
   warehouse: 100,
-  warehouseMaxLevel: DEV_RULES.city_upgrades.warehouse_max_level,
-  warehouseGainPerLevel: DEV_RULES.city_upgrades.warehouse_gain_per_level,
+  warehouseMaxLevel: 0, // no warehouse levels (#894)
+  warehouseGainPerLevel: 0,
 };
 
 /** The snapshot with `has_barracks` of node `id` replaced (the server decides it, DEC-31). */
@@ -98,36 +97,6 @@ describe('CityView: the warehouse places of an own city (C1, DEC-26)', () => {
   const snapshot = devSnapshot(map, DEV_RULES, 100);
   const own = snapshot.view.nodes.find((n) => n.owner === 0 && n.warehouse_cap !== null);
   const foreign = snapshot.view.nodes.find((n) => n.owner === 1 && n.warehouse !== null);
-
-  /** The snapshot with the warehouse of node `id` replaced. */
-  function withWarehouse(id: number, fields: Partial<NodeView>): SnapshotMsg {
-    const nodes = snapshot.view.nodes.map((n) => (n.id === id ? { ...n, ...fields } : n));
-    return { ...snapshot, view: { ...snapshot.view, nodes } };
-  }
-
-  const top = DEV_RULES.city_upgrades.warehouse_max_level;
-  const gain = DEV_RULES.city_upgrades.warehouse_gain_per_level;
-
-  it.each([...Array<number>(top + 1).keys()])(
-    'level %i: the places of the levels above it are dashed, after the filled ones and the frames',
-    (level) => {
-      if (own === undefined || own.warehouse_cap === null) throw new Error('no own city');
-      const cap = own.warehouse_cap + level * gain;
-      const layers = createLayers();
-      const view = new CityView(map, layers, 0, 1, testSprites());
-      view.update(
-        withWarehouse(own.id, { warehouse_level: level, warehouse_cap: cap, warehouse: 1 }),
-        null,
-        UPGRADES,
-      );
-      const bar = barOf(layers.layer.nodes, own.id);
-      expect(bar.visible).toBe(true);
-      expect(bar.spec?.key).toBe(
-        warehouseMarksSpec(cap, 1, stockColor('you'), (top - level) * gain).key,
-      );
-      view.destroy();
-    },
-  );
 
   it('draws no dashed place without city development: the warehouse is the capacity', () => {
     if (own === undefined) throw new Error('no own city');
@@ -580,83 +549,27 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.destroy();
   });
 
-  it('keeps the plate of a warehouse build (economy v1)', () => {
-    const { view, nodes } = make();
-    view.update(
-      withCity({ building: { kind: 'warehouse', done_tick: NOW + 50, owed: 0 } }),
-      rules.unitTicks,
-      UPGRADES,
-      rules.queueMax,
-    );
-    const build = sprite(nodes, own.id, 'build');
-    expect(build.visible).toBe(true);
-    expect(build.spec?.key).toBe(buildMarkSpec(buildMark('warehouse', 0.5)).key);
-    view.destroy();
-  });
-
-  it('draws no build plate without the city development, or for a road build', () => {
-    const { view, nodes } = make();
-    view.update(
-      withCity({ building: { kind: 'warehouse', done_tick: NOW + 20, owed: 0 } }),
-      rules.unitTicks,
-      null,
-      rules.queueMax,
-    );
-    expect(sprite(nodes, own.id, 'build').visible).toBe(false);
-    view.update(
-      withCity({ building: { kind: 'road', done_tick: NOW + 20, owed: 0 } }),
-      rules.unitTicks,
-      UPGRADES,
-      rules.queueMax,
-    );
-    expect(sprite(nodes, own.id, 'build').visible).toBe(false);
-    view.destroy();
-  });
-
-  it('clamps a build that is past its end or has not started', () => {
-    const { view, nodes } = make();
-    view.update(
-      withCity({ building: { kind: 'warehouse', done_tick: NOW - 5, owed: 0 } }),
-      rules.unitTicks,
-      UPGRADES,
-      rules.queueMax,
-    );
-    expect(sprite(nodes, own.id, 'build').spec?.key).toBe(
-      buildMarkSpec(buildMark('warehouse', 1)).key,
-    );
-    view.update(
-      withCity({ building: { kind: 'warehouse', done_tick: NOW + 500, owed: 0 } }),
-      rules.unitTicks,
-      UPGRADES,
-      rules.queueMax,
-    );
-    expect(sprite(nodes, own.id, 'build').spec?.key).toBe(
-      buildMarkSpec(buildMark('warehouse', 0)).key,
-    );
-    view.destroy();
-  });
-
-  it('hides the queue, the build and the alert in the Supply view (Canal keeps the towers) and brings them back', () => {
+  it('hides the queue and the alert in the Supply view (Canal keeps the towers) and brings them back', () => {
     const { view, nodes } = make();
     view.update(
       withCity({
         recruit_queue: 1,
         recruit_waiting: true,
         recruit_progress: rules.unitTicks,
-        building: { kind: 'warehouse', done_tick: NOW + 20, owed: 0 },
+        building: { kind: 'barracks', done_tick: NOW + 20, owed: 0 },
       }),
       rules.unitTicks,
       UPGRADES,
       rules.queueMax,
     );
-    const marks = ['recruits', 'build', 'progress-alert', 'tower-barracks'].map(
+    const marks = ['recruits', 'progress-alert', 'tower-barracks'].map(
       (l) => sprite(nodes, own.id, l) as Container,
     );
-    expect(marks.map((m) => m.visible)).toEqual([true, true, true, true]);
+    expect(marks.map((m) => m.visible)).toEqual([true, true, true]);
     view.setSupplyMode(true);
-    expect(marks.map((m) => m.visible)).toEqual([false, false, false, true]);
+    expect(marks.map((m) => m.visible)).toEqual([false, false, true]);
     view.setSupplyMode(false);
-    expect(marks.map((m) => m.visible)).toEqual([true, true, true, true]);
+    expect(marks.map((m) => m.visible)).toEqual([true, true, true]);
     view.destroy();
   });
 

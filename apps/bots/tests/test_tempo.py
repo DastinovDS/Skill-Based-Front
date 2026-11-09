@@ -1,5 +1,5 @@
 """#166, PR 3: human tempo and difficulty levels of the smart bots (``gow_bots.bots.tempo``),
-front marker hysteresis, ``bot_factory`` and the parameter search (``gow_bots.search``).
+``bot_factory`` and the parameter search (``gow_bots.search``).
 
 Expected values come from the definitions of the tempo (``apm`` commands per minute of
 ``60 * tick_hz`` ticks, at most ``burst`` saved up; a decision at most every ``think_ticks``; a
@@ -27,7 +27,7 @@ from gow_bots.bots import (
 from gow_bots.bots.tempo import Bucket, Perception
 from gow_bots.search import mutate, run_search, score_rows
 from gow_bots.tournament import MatchTask
-from gow_sim.commands import Command, PlayerCommand, SetFront
+from gow_sim.commands import Command, PlayerCommand
 from gow_sim.maps import MapDef
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, load_ruleset
@@ -58,7 +58,7 @@ def test_levels_slow_down_from_hard_to_easy() -> None:
 def test_the_lower_levels_cannot_pay_the_demand_of_a_match() -> None:
     # #749: under mvp-4 the smart bots send 118 to 136 commands in a 15-minute match (the field
     # run of #706): that demand binds the ``easy`` and ``normal`` buckets, not ``hard``'s.
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
     minutes = rules.match_ticks // (60 * rules.tick_hz)
     assert minutes == 15
     for level in ("easy", "normal"):
@@ -69,17 +69,17 @@ def test_the_lower_levels_cannot_pay_the_demand_of_a_match() -> None:
 
 
 def test_bot_factory_takes_a_level_and_parameters(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset
+    maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     mapdef = maps["web"]
-    plain = bot_factory("smart_rusher")(mapdef, mvp1_rules, seed=0, player=0)
+    plain = bot_factory("smart_rusher")(mapdef, mvp_rules, seed=0, player=0)
     assert isinstance(plain, SmartRusher) and plain.difficulty == "hard"
-    easy = bot_factory("smart_rusher@easy")(mapdef, mvp1_rules, seed=0, player=0)
+    easy = bot_factory("smart_rusher@easy")(mapdef, mvp_rules, seed=0, player=0)
     assert isinstance(easy, SmartRusher) and easy.tempo == DIFFICULTIES["easy"]
     # The level changes the tempo only: the drawn parameters are those of the name.
     assert easy.params == plain.params
     tuned = bot_factory("smart_rusher", {"guard": ParamRange(7, 7)})
-    bot = tuned(mapdef, mvp1_rules, seed=0, player=0)
+    bot = tuned(mapdef, mvp_rules, seed=0, player=0)
     assert isinstance(bot, SmartRusher) and bot.params["guard"] == 7
     assert SmartRusher.PARAMS["guard"] != ParamRange(7, 7)  # the class itself is untouched
     for bad in ("nope", "rusher@easy", "smart_rusher@expert"):
@@ -117,10 +117,10 @@ def _with_strike_and_figure(view: PlayerView, mapdef: MapDef, created: int) -> P
 
 
 def test_strikes_and_figures_are_noticed_react_ticks_after_they_are_shown(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset
+    maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     mapdef = maps["web"]
-    start = _start(mapdef, mvp1_rules)
+    start = _start(mapdef, mvp_rules)
     seen = Perception(react_ticks=15)
 
     def at(tick: int) -> PlayerView:
@@ -138,11 +138,11 @@ def test_strikes_and_figures_are_noticed_react_ticks_after_they_are_shown(
 
 
 def test_a_bot_thinks_at_most_every_think_ticks(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset
+    maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     mapdef = maps["web"]
-    view = _start(mapdef, mvp1_rules)
-    bot = SmartExpander(mapdef, mvp1_rules, seed=0, player=0, difficulty="normal")
+    view = _start(mapdef, mvp_rules)
+    bot = SmartExpander(mapdef, mvp_rules, seed=0, player=0, difficulty="normal")
     assert bot.decide(view, 0)  # the first decision: stance, markers, orders
     think = DIFFICULTIES["normal"].think_ticks
     assert bot.thought == 0
@@ -158,20 +158,20 @@ def test_a_bot_thinks_at_most_every_think_ticks(
 
 @pytest.mark.parametrize("level", list(DIFFICULTIES))
 def test_commands_a_minute_stay_within_the_bucket(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset, level: str
+    maps: dict[str, MapDef], mvp_rules: Ruleset, level: str
 ) -> None:
     # In any window of a minute a bot sends at most ``burst + apm`` commands (a full bucket and
     # a minute of refill), free commands included.
     mapdef = maps["artery"]
     tempo = DIFFICULTIES[level]
     bots = [
-        SmartRusher(mapdef, mvp1_rules, seed=3, player=0, difficulty=level),
-        SmartExpander(mapdef, mvp1_rules, seed=3, player=1, difficulty=level),
+        SmartRusher(mapdef, mvp_rules, seed=3, player=0, difficulty=level),
+        SmartExpander(mapdef, mvp_rules, seed=3, player=1, difficulty=level),
     ]
-    match = Match(mapdef, mvp1_rules, KEY)
+    match = Match(mapdef, mvp_rules, KEY)
     sent: list[list[int]] = [[], []]
     seq = 0
-    minute = 60 * mvp1_rules.tick_hz
+    minute = 60 * mvp_rules.tick_hz
     while match.tick < 3 * minute and not match.finished:
         cmds: list[PlayerCommand] = []
         if match.tick % 5 == 0:
@@ -186,58 +186,6 @@ def test_commands_a_minute_stay_within_the_bucket(
         for t in ticks:
             window = sum(1 for u in ticks if t <= u < t + minute)
             assert window <= tempo.burst + tempo.apm, (level, t, window)
-
-
-# Front marker hysteresis ----------------------------------------------------------------------
-
-
-def test_a_front_marker_holds_its_city_until_the_hold_ends(
-    maps: dict[str, MapDef], mvp1_rules: Ruleset, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from gow_bots.bots.smart import FRONT_HOLD
-
-    mapdef = maps["web"]
-    view = _start(mapdef, mvp1_rules)
-    own = [n.id for n in view.nodes if n.owner == 0]
-    a, b, c, d, e = own[:5]
-    bot = SmartRusher(mapdef, mvp1_rules, seed=0, player=0)
-    ranking = [a, b, c, d]
-
-    def front_cities(_view: PlayerView) -> list[int]:
-        return ranking
-
-    def supplied(_view: PlayerView) -> list[bool]:
-        return [True] * len(view.nodes)
-
-    monkeypatch.setattr(bot, "front_cities", front_cities)
-    monkeypatch.setattr(bot, "supplied", supplied)
-    assert bot.fronts(view) == [SetFront(0, a), SetFront(1, b)]
-    placed = dataclasses.replace(view, me=dataclasses.replace(view.me, fronts=(a, b)))
-    ranking = [c, d, e, a, b]  # a and b drop out of the wanted cities, still candidates
-    soon = dataclasses.replace(placed, tick=FRONT_HOLD - 5)
-    assert bot.fronts(soon) == []  # held
-    late = dataclasses.replace(placed, tick=FRONT_HOLD)
-    assert bot.fronts(late) == [SetFront(0, c), SetFront(1, d)]
-    # A marker within one rank of the wanted ones stays after the hold (here the hold of the
-    # moves above has ended too).
-    later = dataclasses.replace(placed, tick=2 * FRONT_HOLD)
-    ranking = [c, a, d, b]
-    assert bot.fronts(later) == [SetFront(1, c)]
-    # With no wanted city free, a marker stays on its own city.
-    ranking = [a]
-    assert bot.fronts(dataclasses.replace(placed, tick=4 * FRONT_HOLD)) == []
-    # A lost city gives its marker up at once, hold or not.
-    lost = list(placed.nodes)
-    lost[b] = dataclasses.replace(lost[b], owner=1)
-    ranking = [a, c]
-    bot.front_set = [None, 4 * FRONT_HOLD]
-    lost_view = dataclasses.replace(placed, tick=4 * FRONT_HOLD + 5, nodes=tuple(lost))
-
-    def owned(v: PlayerView) -> list[bool]:
-        return [n.owner == 0 for n in v.nodes]
-
-    monkeypatch.setattr(bot, "supplied", owned)
-    assert bot.fronts(lost_view) == [SetFront(1, c)]
 
 
 # The search -----------------------------------------------------------------------------------
@@ -362,7 +310,7 @@ def test_a_bot_between_decisions_glances_and_plays_the_same(maps: dict[str, MapD
     from gow_sim.match import Glancer, run_headless
 
     mapdef = maps["web"]
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 
     def bots() -> list[SmartBot]:
         return [

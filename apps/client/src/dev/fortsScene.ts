@@ -95,8 +95,6 @@ export function fortsSnapshot(map: MapFile): SnapshotMsg {
       plan: 0,
       next_charge_tick: null,
     },
-    defense_bonus: null,
-    defense_cap: null,
   };
   return {
     ...base,

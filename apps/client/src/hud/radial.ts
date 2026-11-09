@@ -175,27 +175,15 @@ export interface StanceRate {
  * factories that work, the capital included; the client counts them in the view).
  */
 export function stanceRates(rules: RulesetPublic, factories: number = 1): StanceRate[] {
-  const { cp, economy, stances, tick_hz } = rules;
+  const { cp, stances, tick_hz } = rules;
   const ticksPerMinute = 60 * tick_hz;
-  if (stances !== null) {
-    const count = stances.factories_follow ? Math.max(1, factories) : 1;
-    return SECTORS.map(({ stance }) => ({
-      stance,
-      cpPerMinCenti: Math.floor((cp.per_period * ticksPerMinute) / stances.cp_period_ticks[stance]),
-      chargesPerMin:
-        Math.floor((100 * ticksPerMinute * count) / stances.capital_period_ticks[stance]) / 100,
-    }));
-  }
-  return SECTORS.map(({ stance }) => {
-    const toCharges = Math.floor((cp.per_period * economy.stance_to_charges_pct[stance]) / 100);
-    return {
-      stance,
-      cpPerMinCenti: Math.floor(((cp.per_period - toCharges) * ticksPerMinute) / cp.period_ticks),
-      chargesPerMin: Math.floor(
-        (toCharges * economy.charges_per_cp * ticksPerMinute) / cp.period_ticks / 100,
-      ),
-    };
-  });
+  const count = stances.factories_follow ? Math.max(1, factories) : 1;
+  return SECTORS.map(({ stance }) => ({
+    stance,
+    cpPerMinCenti: Math.floor((cp.per_period * ticksPerMinute) / stances.cp_period_ticks[stance]),
+    chargesPerMin:
+      Math.floor((100 * ticksPerMinute * count) / stances.capital_period_ticks[stance]) / 100,
+  }));
 }
 
 /**

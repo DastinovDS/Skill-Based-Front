@@ -5,11 +5,8 @@ conversion is PRO-03 (#46). The shape follows DEC-04, DEC-21, DEC-33, DEC-10 and
 (mechanics.md, section 10)
 and the list of what a view must not contain (AGENTS.md, section 4.4):
 
-- public to everyone: ownership and capacity (DEC-22) of every node, road levels (DEC-17: last
-  seen in fog; own internal edges always exact, DEC-35, detail 5), VP of both players,
-  intents of planned orders and "Defense" (origin, target, kind; no group id, no size);
-- road builds of cities (DEC-16): own ones always, with ``done_tick``; an enemy one without
-  ``done_tick`` and only while its edge is not in fog (DEC-17, item 5);
+- public to everyone: ownership and capacity (DEC-22) of every node, VP of both players,
+  intents of planned orders (origin, target, kind; no group id, no size);
 - sources of vision, own groups only (DEC-35: a node where an own group stands, the node of the
   half of an edge an own group is in): the enemy totals; the warehouse of a foreign city only
   where an own group stands (DEC-35, detail 2);
@@ -18,7 +15,8 @@ and the list of what a view must not contain (AGENTS.md, section 4.4):
 - neighbours of sources by the terrain table (DEC-21, item 2) and the halves of edges by the
   level of their node (an own node without a source gives its halves none, DEC-35, detail 4):
   ``exact`` the enemy totals, ``range`` the range of the enemy units, ``presence`` whether enemy
-  groups are there; the modes on every level; never the warehouse;
+  groups are there (the modes on every level: every group attacks, so they mark the presence);
+  never the warehouse;
 - enemy groups on the halves of edges not in fog, each as a figure (``EdgeView.enemy_groups``,
   DEC-33): position, direction, mode and the numbers of its half's level, with an opaque id that
   is new each time the group comes out of the fog; a group in a fight is shown by the fight;
@@ -35,14 +33,11 @@ Deliberate choices of the wire format:
   ``range``), the same shape as the fog memory ``gow_sim.state.Sighting``; on edges the figures of
   ``EdgeView.enemy_groups``, whose ids are keyed by the sighting, not the group, so they cannot
   track a group through the fog. Enemy packets are never visible, on any edge (DEC-10, item 6).
-- Own-only data (``me``: CP, stance, front markers and rear minimum of DEC-28; ``upgrade_gain``
-  of own edges; orders of own groups) has no enemy counterpart in the view.
-- Economy v2 (DEC-41; ``ruleset_public.economy.model`` says which economy the match plays, so the
-  client hides the UI of the other one): ``lines`` are the **own** supply lines only, the enemy's
-  are never sent (item 3); the factory, its rate and the bunker of own nodes, their builds with
-  the charges still owed (item 7); the gathering plan of own planned orders (item 10); of the
-  enemy only a built factory and a built bunker of a node joined by an edge to an own node (the
-  DEC-31 rule). Under v1 these fields are ``null``, ``false`` or empty.
+- Own-only data (``me``: CP, stance, the leaf shift and the stance progress; orders of own
+  groups) has no enemy counterpart in the view.
+- Factories (DEC-41): the factory and its rate of own cities, their builds with the charges still
+  owed (item 7); the gathering plan of own planned orders (item 10); of the enemy only a built
+  factory of a city joined by an edge to an own node (the DEC-31 rule).
 """
 
 from typing import Annotated, Literal, Self
@@ -59,7 +54,6 @@ from gow_protocol.base import (
     PosInt,
     Progress,
     Tick,
-    Width,
     WireModel,
 )
 from gow_sim.ruleset import Stance
@@ -118,13 +112,6 @@ class Seen(WireModel):
         return self
 
 
-class EdgeBuild(WireModel):
-    """A road level being built on the edge (DEC-28, item 7)."""
-
-    done_tick: Tick | None
-    """The tick the level grows; only for an own build."""
-
-
 class RoadFort(WireModel):
     """A road fortification of the end ``node`` of the edge (DEC-43, item D; code name
     ``road_fort``): own ones always, an enemy one (built or being built) while the half of
@@ -146,16 +133,16 @@ class RoadFort(WireModel):
 
 
 class NodeBuilding(WireModel):
-    """The current build of an own city, of any kind (DEC-26, item 10)."""
+    """The current build of an own city (DEC-26, item 10)."""
 
     kind: BuildKind
-    """``barracks`` or ``warehouse`` (roads are built on edges, ``EdgeView.build``)."""
+    """``barracks``."""
     done_tick: Tick | None
-    """The tick it ends, if nothing interrupts it; ``None`` while ``owed`` is above 0 (economy
-    v2, DEC-41, item 7: the build time starts in the tick of the full payment)."""
+    """The tick it ends, if nothing interrupts it; ``None`` while ``owed`` is above 0 (DEC-41,
+    item 7: the build time starts in the tick of the full payment)."""
     owed: NonNegInt
-    """Economy v2: the charges the build still takes from the city's warehouse and the own
-    groups standing there (the progressive payment of DEC-41, item 7); always 0 under v1."""
+    """The charges the build still takes from the city's warehouse and the own groups standing
+    there (the progressive payment of DEC-41, item 7)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -165,7 +152,7 @@ class NodeBuilding(WireModel):
 
 
 class SiteBuild(WireModel):
-    """A factory (DEC-41, item 2) or a bunker (item 12) being built in an own node."""
+    """A factory being built in an own city (DEC-41, item 2)."""
 
     done_tick: Tick | None
     """The tick it is done, if nothing interrupts it; ``None`` while ``owed`` is above 0."""
@@ -198,8 +185,8 @@ class NodeView(WireModel):
     """Own node only: ticks the grace after a capture still lasts while the garrison exceeds the
     capacity. ``None`` for every other node."""
     starve_in: PosInt | None
-    """Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8). ``None``
-    for every other node."""
+    """Own node of a starving pocket only: ticks until its garrison next starves (DEC-19, item 8;
+    DEC-43, item H4). ``None`` for every other node."""
     recruit_queue: NonNegInt | None
     """Own city only: units in its recruit queue, the one in production included (DEC-25, item
     12). ``None`` for provinces, the enemy's and neutral nodes: the enemy's production is hidden."""
@@ -208,40 +195,28 @@ class NodeView(WireModel):
     recruit_waiting: bool | None
     """Own city only: the current unit is ready and waits for a place (DEC-25, item 7)."""
     has_barracks: bool | None
-    """Own city: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities with
-    the barracks, without it every city). A city of the enemy joined by an edge of the map to any
-    own node, at any ``detail`` (DEC-31): its barracks are built (``false`` while there are none
-    or they are being built; no memory). ``None`` for provinces, neutral nodes and the other
-    cities of the enemy (DEC-26, item 10)."""
-    warehouse_level: NonNegInt | None
-    """Own city only: warehouse upgrades (DEC-26, item 2; always 0 without ``city_upgrades``)."""
+    """Own city: it may recruit (DEC-26: the capital and the cities with the barracks). A city of
+    the enemy joined by an edge of the map to any own node, at any ``detail`` (DEC-31): its barracks
+    are built (``false`` while there are none or they are being built; no memory). ``None`` for
+    provinces, neutral nodes and the other cities of the enemy (DEC-26, item 10)."""
     warehouse_cap: NonNegInt | None
-    """Own city only: charges its warehouse holds (DEC-26, item 2; the node capacity without
-    ``city_upgrades``)."""
+    """Own city only: charges its warehouse holds (DEC-43, item C)."""
     building: NodeBuilding | None
-    """Own city only: its current build of any kind; ``None`` without one."""
+    """Own city only: its current build; ``None`` without one."""
     factory: bool | None
-    """Economy v2 (DEC-41, item 2): an own city is an own factory; a city of the enemy joined by
-    an edge of the map to any own node (the DEC-31 rule, no memory): it is a built factory of the
-    enemy. ``None`` under v1, for provinces, neutral nodes and the other cities of the enemy."""
+    """DEC-41, item 2: an own city is an own factory; a city of the enemy joined by an edge of the
+    map to any own node (the DEC-31 rule, no memory): it is a built factory of the enemy. ``None``
+    for provinces, neutral nodes and the other cities of the enemy."""
     factory_period: PosInt | None
-    """Own factory only: ticks per charge it makes into its warehouse (the own capital
-    ``factory.capital_period_ticks``, any other ``factory.built_period_ticks``; under
-    ``ruleset_public.stances`` the own capital the period of the own stance, and with
-    ``stances.factories_follow`` (DEC-47) every other factory too)."""
+    """Own factory only: ticks per charge it makes into its warehouse (the own capital the period
+    of the own stance, ``ruleset_public.stances``; any other ``factory.built_period_ticks``, with
+    ``stances.factories_follow`` (DEC-47) the period of the stance too)."""
     factory_build: SiteBuild | None
-    """Own city only: the factory being built there (economy v2)."""
-    fort: bool | None
-    """Economy v2 (DEC-41, item 12, the bunker; code name ``fort``): an own node, a city or a
-    province, has a bunker; a node of the enemy joined by an edge to any own node (the DEC-31
-    rule): it has a built bunker. ``None`` under v1, for neutral nodes and the other nodes of the
-    enemy."""
-    fort_build: SiteBuild | None
-    """Own node only: the bunker being built there (economy v2)."""
+    """Own city only: the factory being built there."""
     front_dist: NonNegInt | None
     """Supply flow (DEC-43, item E), own node only: the effective field ``d`` of the current
-    tick, the roads to the nearest leaf after the pull of a tired army; ``null`` without a field,
-    for every other node and under ``supply_model = "lines"``. The level is
+    tick, the roads to the nearest leaf after the pull of a tired army; ``null`` without a field
+    and for every other node. The level is
     ``front_dist == View.me.leaf_shift``, ahead of it ``front_dist < leaf_shift``."""
     flow_down: tuple[NodeId, ...] | None
     """Supply flow, own node only: its downhill neighbours (roads it gives to, room not
@@ -258,8 +233,8 @@ class NodeView(WireModel):
     capital (a pocket: its factories stop, without a factory it starves)."""
     terrain_mark: int | None
     """The terrain effect the defender of the node would get if attacked now (DEC-24, item F2;
-    #791): positive, the bonus shots of mountains; negative, the charges plains silence (under
-    ``combat.terrain_burn`` burn in the first round). Only for a node with an owner, no fight,
+    #791): positive, the bonus shots of mountains; negative, the charges plains burn in the first
+    round (DEC-45). Only for a node with an owner, no fight,
     a terrain effect and a charged group of the owner standing in it; for a node of the enemy only
     at ``exact``. ``null`` otherwise: an attacker, a discharged group, a road and a neutral node
     never carry it. The client draws it as is (AGENTS.md 7.1)."""
@@ -273,24 +248,21 @@ class NodeView(WireModel):
         recruit = (self.recruit_queue, self.recruit_progress, self.recruit_waiting)
         if any(v is not None for v in recruit) and (None in recruit or not own_data):
             raise ValueError("a recruit queue only for an own city, all three fields together")
-        city = (self.has_barracks, self.warehouse_level, self.warehouse_cap)
-        if any(v is not None for v in city[1:]) and (None in city or not own_data):
-            raise ValueError("barracks and warehouse only for an own city, all three together")
+        if self.warehouse_cap is not None and (self.has_barracks is None or not own_data):
+            raise ValueError("barracks and warehouse only for an own city, both together")
         if self.has_barracks is not None and self.owner is None:
             raise ValueError("barracks only for an own city or a city of the enemy (DEC-31)")
-        if self.building is not None and self.warehouse_level is None:
+        if self.building is not None and self.warehouse_cap is None:
             raise ValueError("a building only for an own city")
         if self.warehouse is not None and self.detail is not Detail.EXACT and not own_data:
             raise ValueError("a warehouse only for an own node or a node with an own group")
         _check_seen(self.detail, self.seen)
-        if (self.factory is not None or self.fort is not None) and self.owner is None:
-            raise ValueError("a factory or a bunker only for an own node or a node of the enemy")
+        if self.factory is not None and self.owner is None:
+            raise ValueError("a factory only for an own city or a city of the enemy")
         if self.factory_period is not None and not (self.factory and own_data):
             raise ValueError("a factory rate only for an own factory")
         if self.factory_build is not None and not (self.factory is False and own_data):
             raise ValueError("a factory build only for an own city without a factory")
-        if self.fort_build is not None and not (self.fort is False and own_data):
-            raise ValueError("a bunker build only for an own node without a bunker")
         if self.attrition_in is not None and self.grace_left is not None:
             raise ValueError("attrition_in and grace_left exclude each other")
         if (self.attrition_in is not None or self.grace_left is not None) and not own_data:
@@ -310,17 +282,6 @@ class NodeView(WireModel):
             if self.detail is Detail.FOG:
                 raise ValueError("no terrain mark in fog")
         return self
-
-
-class UpgradeGain(WireModel):
-    """What the next road level would give (DEC-28, item 7)."""
-
-    speed_pct: NonNegInt
-    """Packet speed gain in percentage points."""
-    unit_speed_pct: NonNegInt
-    """Unit speed gain in percentage points (``road.speed_pct``)."""
-    amount: NonNegInt
-    """Gain of charges per dispatch period (``supply.amount_by_level``)."""
 
 
 class HalfView(WireModel):
@@ -375,26 +336,17 @@ class EnemyGroup(WireModel):
 
 class EdgeView(WireModel):
     id: EdgeId
-    width: Width
-    """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is
-    ``fog``, and always on an own internal edge (DEC-35, detail 5); otherwise in fog the last seen
-    level, or 1 if never seen. Never above the true level."""
     detail: Detail
-    """The road level visibility (DEC-17): ``presence`` while an end is a source of vision (DEC-35;
+    """The edge visibility (DEC-17): ``presence`` while an end is a source of vision (DEC-35;
     the edge of an own group on it is one), else ``fog``. What is seen of enemies is in
     ``halves`` and ``enemy_groups``."""
-    upgrade_gain: UpgradeGain | None
-    """Only for own internal edges that can still be upgraded."""
     halves: tuple[HalfView, HalfView]
     """The half of the end ``a``, then the half of the end ``b`` (DEC-21, item 5)."""
-    build: EdgeBuild | None
-    """The road level being built here (DEC-28, item 7): an own build always, an enemy one only
-    while the edge is not in fog (DEC-17, item 5)."""
     enemy_groups: tuple[EnemyGroup, ...]
     """Enemy figures on the halves not in fog (DEC-33)."""
     forts: tuple[RoadFort, ...]
     """The road fortifications of its ends the player knows of (DEC-43, item D8), the end ``a``
-    first; empty without ``ruleset_public.fort``."""
+    first."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -439,13 +391,12 @@ class OrderView(WireModel):
     """Remaining nodes to ``dest``, ``dest`` included."""
     planned: bool
     bonus: NonNegInt
-    """A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
-    at most the charged units of the group). Before the departure a forecast by the charged units
-    now; the cap is taken in the departure tick. 0 for a normal order and once the bonus entered
-    a fight. Only own orders exist in a view (owner 2026-10-21, mockup #339). Economy v2 (DEC-41,
-    item 10): the bonus gathered so far."""
+    """A planned order: the bonus gathered so far (DEC-41, item 10), at most the charged units of
+    the group; the cap is taken again in the departure tick (DEC-29). 0 for a normal order and
+    once the bonus entered a fight. Only own orders exist in a view (owner 2026-10-21, mockup
+    #339)."""
     gathering: bool
-    """Economy v2: the planned order waits in its node and gathers its bonus, one real charge of
+    """The planned order waits in its node and gathers its bonus, one real charge of
     the node's warehouse per ``orders.plan_ticks_per_bonus`` ticks (``release_plan`` departs at
     once with what it has)."""
     plan: NonNegInt
@@ -473,23 +424,11 @@ class GroupView(WireModel):
     mode: Mode
     location: Location
     order: OrderView | None
-    defense_bonus: NonNegInt | None
-    """In Defense (DEC-30): the bonus the group would bring into a fight beginning now, what it
-    has gathered at most ``defense_cap``; ``None`` in another mode. Enemy groups never have it."""
-    defense_cap: NonNegInt | None
-    """In Defense: the cap of its bonus, the charged units of the group (DEC-30, item 2)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if self.charged > self.units:
             raise ValueError("charged must not exceed units")
-        defense = self.mode is Mode.DEFENSE
-        if (self.defense_bonus is not None, self.defense_cap is not None) != (defense, defense):
-            raise ValueError("defense_bonus and defense_cap are set exactly in Defense")
-        if self.defense_cap is not None and not (
-            self.defense_bonus is not None and self.defense_bonus <= self.defense_cap
-        ):
-            raise ValueError("defense_bonus must not exceed defense_cap")
         return self
 
 
@@ -499,7 +438,6 @@ class PacketView(WireModel):
     ``edge`` is the current road, travelled away from ``from_node`` during
     ``depart_tick..arrive_tick``; ``path``: the nodes still to reach, the end of ``edge`` first,
     the destination last; ``dest_tick``: the tick it reaches the destination if nothing stops it.
-    ``transfer``: a one-off transfer (DEC-18, item 6), not the automatic dispatch.
     """
 
     id: OpaqueId
@@ -510,7 +448,6 @@ class PacketView(WireModel):
     arrive_tick: Tick
     path: Annotated[tuple[NodeId, ...], Field(min_length=1)]
     dest_tick: Tick
-    transfer: bool
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -521,26 +458,16 @@ class PacketView(WireModel):
         return self
 
 
-class LineView(WireModel):
-    """An own supply line (economy v2, DEC-41, items 3 and 6). The enemy's are never sent."""
-
-    id: NonNegInt
-    """The per-player id of the line (``remove_line``, the ``line`` of ``line_cut`` and
-    ``line_rerouted``); only its owner ever sees it."""
-    path: Annotated[tuple[NodeId, ...], Field(min_length=2)]
-    """The own nodes from the source to the target: the drawn path while it is intact, the
-    server's reroute after a break (item 3)."""
-
-
 class IntentView(WireModel):
-    """Public part of a planned order or a mode switch: no group id and no group size."""
+    """Public part of a planned order: no group id and no group size."""
 
     id: OpaqueId
     owner: PlayerId
     kind: IntentKind
     origin: NodeId
     target: NodeId | None
-    """``None`` for an intent without a destination (``defense``)."""
+    """The target of the planned order (always set; nullable on the wire until the client
+    cleanup of #894)."""
     created_tick: Tick
 
 
@@ -576,9 +503,8 @@ class FightView(WireModel):
     round of both players, ``None`` before the first one. ``virtual_left``: the virtual shots
     (bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,
     item 3); it grows when a reinforcement with a bonus joins and drops after each round.
-    ``mute``: by player, the charged units in the fight that do not shoot in a round because of
-    the terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units;
-    under ``combat.terrain_burn`` the charges the first round will burn, 0 after it (DEC-45).
+    ``mute``: by player, the charged units in the fight the first round will burn because of the
+    terrain (plains, DEC-45), at most the side's charged units, 0 after it; they do not shoot.
     """
 
     id: OpaqueId
@@ -616,27 +542,20 @@ class SelfView(WireModel):
 
     cp: Centi
     stance: Stance
-    fronts: tuple[NodeId | None, ...]
-    """The own cities of the front markers (DEC-28, item 2; ``supply.front_markers`` of
-    ``ruleset_public``), ``null``: not placed. The enemy's markers are never in a view."""
-    rear_min: NonNegInt
-    """The own rear minimum (DEC-28, item 3); the enemy's is never in a view."""
-    auto_lines: bool | None
-    """Economy v2: the own lines extend to captured cities by themselves (``set_auto_lines``,
-    #665); ``null`` under v1 and the supply flow. The enemy's toggle is never in a view."""
     leaf_shift: NonNegInt | None
-    """Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``);
-    ``null`` under ``supply_model = "lines"``. The enemy's shift is never in a view."""
+    """Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``); always set
+    (nullable on the wire until the client cleanup of #894). The enemy's shift is never in a
+    view."""
     leaf_shift_max: NonNegInt | None
     """Supply flow: the largest shift now (the roads from the own capital to the front)."""
     next_dispatch_tick: Tick | None
     """Supply flow: the tick of the next dispatch."""
     cp_ticks: NonNegInt | None
-    """Stances of economy v2 (DEC-44): the ticks since the own last CP quantum, of
-    ``ruleset_public.stances.cp_period_ticks``; ``null`` without ``stances``. The enemy's
-    counters are never in a view."""
+    """Stances (DEC-44): the ticks since the own last CP quantum, of
+    ``ruleset_public.stances.cp_period_ticks``; always set. The enemy's counters are never in a
+    view."""
     capital_ticks: NonNegInt | None
-    """Stances of economy v2: the ticks since the last quantum of the own capital, of
+    """Stances: the ticks since the last quantum of the own capital, of
     ``ruleset_public.stances.capital_period_ticks``."""
 
     @model_validator(mode="after")
@@ -669,8 +588,6 @@ class View(WireModel):
     intents: tuple[IntentView, ...]
     fights: tuple[FightView, ...]
     """Fights going on (DEC-24): own groups fight in each."""
-    lines: tuple[LineView, ...]
-    """Economy v2: the own supply lines by id (DEC-41, item 3); empty under v1."""
 
     @field_validator("nodes", "edges")
     @classmethod
@@ -709,10 +626,6 @@ class View(WireModel):
             refs_nodes.append(intent.origin)
             if intent.target is not None:
                 refs_nodes.append(intent.target)
-        if len({line.id for line in self.lines}) != len(self.lines):
-            raise ValueError("ids of lines must be unique")
-        for line in self.lines:
-            refs_nodes.extend(line.path)
         own = {g.id for g in self.groups}
         for fight in self.fights:
             if fight.node is not None:

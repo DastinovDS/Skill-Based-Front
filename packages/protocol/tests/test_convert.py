@@ -48,7 +48,6 @@ from gow_protocol.messages import (
     MatchEndStats,
     SnapshotMsg,
 )
-from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import AtNodeLoc, OnEdgeLoc, View
 from gow_sim import commands as sim
 from gow_sim import view as sv
@@ -64,7 +63,7 @@ from gow_sim.systems.victory import Outcome
 from gow_sim.view import PlayerView, opaque_id, view_to_canonical
 
 ROOT = Path(__file__).resolve().parents[3]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
 MVP_MAPS = ("artery", "web", "pass")
 CLIENT_FIXTURES = ROOT / "packages" / "protocol" / "fixtures" / "client"
 KEY = b"pro-03 test match key, 32 bytes!"
@@ -81,7 +80,7 @@ DROPPED_LOCATION_KEYS = ("back",)
 
 
 class WireDriver:
-    """Plays from the wire ``View`` only: recruits, expands, splits, merges, defends, builds."""
+    """Plays from the wire ``View`` only: recruits, expands, splits, merges, plans."""
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, player: int) -> None:
         self.map, self.rules, self.player = mapdef, rules, player
@@ -104,14 +103,6 @@ class WireDriver:
         me, cost = self.player, self.rules.orders.cost
         cmds: list[wire.Command] = []
         capital = self.map.capital(me)
-        if (tick // 5) % 40 == 21 and view.me.cp >= cost.build:  # a road first (DEC-28: CP)
-            for g in view.groups:
-                if isinstance(g.location, AtNodeLoc):
-                    here = g.location.node
-                    gains = [e for e in self.map.incident[here] if view.edges[e].upgrade_gain]
-                    if gains:
-                        cmds.append(wire.UpgradeRoadCmd(edge=gains[0]))
-                        break
         if view.me.cp >= cost.recruit and view.nodes[capital].owner == me:
             cmds.append(wire.RecruitCmd(node=capital))
         if tick == 300:
@@ -127,20 +118,16 @@ class WireDriver:
             if phase == 7 and g.units >= 4:
                 cmds.append(wire.SplitCmd(group=g.id, n=g.units // 2))
                 continue
-            if phase == 13 and here == capital:
-                mode = Mode.DEFENSE if g.mode is Mode.ATTACK else Mode.ATTACK
-                cmds.append(wire.SetModeCmd(group=g.id, mode=mode))
-                continue
-            gains = [e for e in self.map.incident[here] if view.edges[e].upgrade_gain is not None]
-            if 21 <= phase <= 30 and gains:
-                continue  # the groups at upgradable roads wait (a road: above), armies gather
-            if g.mode is not Mode.ATTACK:
-                continue
+            if 21 <= phase <= 30 and here == capital:
+                continue  # the armies of the capital gather
             dist = self.hops[here]
             reachable = [n for n in foreign if n != here and dist[n] > 0]
             if reachable:
                 dest = min(reachable, key=lambda n: (dist[n], self.map.node_key(me, n)))
-                cmds.append(wire.MoveCmd(group=g.id, dest=dest, planned=phase % 4 == 1))
+                planned = phase % 4 == 1  # a planned order names its bonus (DEC-41, item 10)
+                cmds.append(
+                    wire.MoveCmd(group=g.id, dest=dest, planned=planned, bonus=1 if planned else 0)
+                )
         if (tick // 5) % 40 == 30:
             for ids in by_node.values():
                 if len(ids) >= 2:
@@ -245,12 +232,8 @@ def _check_events(match: Match, events: list[Event], player: int) -> list[EventM
 @pytest.mark.parametrize("name", MVP_MAPS)
 def test_match_through_the_wire(name: str) -> None:
     mapdef = load_map(ROOT / "maps" / "fixtures" / f"{name}.json")
-    # Roads for free here: the drivers spend every CP on recruits and moves, and the test wants
-    # every message kind, ``road_upgraded`` included (the price is DEC-28's, ``test_build.py``).
-    cost = dataclasses.replace(RULES.orders.cost, build=0)
-    rules = dataclasses.replace(RULES, orders=dataclasses.replace(RULES.orders, cost=cost))
-    match = Match(mapdef, rules, KEY)
-    drivers = [WireDriver(mapdef, rules, p) for p in PLAYERS]
+    match = Match(mapdef, RULES, KEY)
+    drivers = [WireDriver(mapdef, RULES, p) for p in PLAYERS]
     seqs = dict.fromkeys(PLAYERS, 0)
     kinds: set[str] = set()
     acks: dict[str, int] = {"path": 0, "reject": 0, "ok": 0}
@@ -286,10 +269,8 @@ def test_match_through_the_wire(name: str) -> None:
     # Every event kind the match produced is classified: nothing reaches a player by default.
     assert kinds <= PUBLIC_KINDS | PRIVATE_KINDS | FIGHT_KINDS | {"match_ended"}
     assert {"fight_started", "fight_round", "fight_ended", "fight_group"} <= kinds
-    assert {"recruited", "node_captured", "road_upgraded"} <= kinds
+    assert {"recruited", "node_captured", "packet_sent"} <= kinds
     assert all(acks.values())
-    # Upgraded roads went through the views.
-    assert any(e.width > 1 for e in snapshots[0].view.edges)
 
 
 class _FrameChecker:
@@ -316,8 +297,6 @@ def _features(view: View) -> set[str]:
         "planned": any(g.order is not None and g.order.planned for g in view.groups),
         "packets": bool(view.packets),
         "intent_target": any(i.target is not None for i in view.intents),
-        "intent_no_target": any(i.target is None for i in view.intents),
-        "upgrade_gain": any(e.upgrade_gain is not None for e in view.edges),
         "enemy_exact": any(p.seen is not None and p.seen.enemy_units for p in places),
         "enemy_presence": any(
             p.seen is not None and p.seen.enemy_modes and p.seen.enemy_units is None for p in places
@@ -325,27 +304,21 @@ def _features(view: View) -> set[str]:
         "enemy_range": any(p.seen is not None and p.seen.enemy_range for p in places),
         "enemy_figures": any(e.enemy_groups for e in view.edges),
         "fog_memory": any(p.detail is Detail.FOG and p.seen is not None for p in places),
-        "road_level": any(e.width > 1 for e in view.edges),
         "attrition_in": any(n.attrition_in is not None for n in view.nodes),
         "grace_left": any(n.grace_left is not None for n in view.nodes),
-        "fronts": any(f is not None for f in view.me.fronts),
-        "transfer": any(p.transfer and len(p.path) > 1 for p in view.packets),
         "starve_in": any(n.starve_in is not None for n in view.nodes),
         "recruit_queue": any(n.recruit_queue for n in view.nodes),
         "enemy_barracks": any(
-            n.has_barracks is not None and n.warehouse_level is None for n in view.nodes
+            n.has_barracks is not None and n.warehouse_cap is None for n in view.nodes
         ),
-        # Economy v2 (DEC-41, #647).
-        "lines": bool(view.lines),
+        # Factories and plans (DEC-41, #647).
         "factory_rate": any(n.factory_period is not None for n in view.nodes),
         "factory_owed": any(n.factory_build and n.factory_build.owed for n in view.nodes),
         "factory_build_done": any(
             n.factory_build and n.factory_build.done_tick is not None for n in view.nodes
         ),
-        "fort": any(n.fort and n.warehouse_level is not None for n in view.nodes),
-        "fort_owed": any(n.fort_build and n.fort_build.owed for n in view.nodes),
-        "enemy_fort": any(
-            n.fort and n.has_barracks is not None and n.warehouse_level is None for n in view.nodes
+        "enemy_factory": any(
+            n.factory and n.has_barracks is not None and n.warehouse_cap is None for n in view.nodes
         ),
         "building_owed": any(n.building and n.building.owed for n in view.nodes),
         "gathering": any(g.order is not None and g.order.gathering for g in view.groups),
@@ -365,7 +338,6 @@ def test_snapshot_frames_of_a_bot_match() -> None:
     assert checker.features >= {
         "on_edge",
         "packets",
-        "upgrade_gain",
         "enemy_presence",
         "enemy_range",
         "enemy_figures",
@@ -374,26 +346,25 @@ def test_snapshot_frames_of_a_bot_match() -> None:
 
 
 def test_snapshot_frame_of_rare_view_parts() -> None:
-    """Intents with and without a target (a planned move, ``defense``) and exact enemy numbers,
-    set up directly."""
+    """The intent of a planned move, its gathering plan and exact enemy numbers, set up
+    directly."""
     match = _started()
     own = match.view(0).groups[0]
     assert isinstance(own.location, sv.AtNode)
-    match.step([sim.PlayerCommand(0, 1, match.resolve(0, sim.SetMode(own.id, Mode.DEFENSE)))])
     state = match.state
     home = own.location.node
     walker = state.new_id()
     state.groups[walker] = Group(walker, 0, 1, 1, Mode.ATTACK, AtNode(home))
     near = state.map.edges[state.map.incident[home][0]].other(home)
-    state.players[0].cp = RULES.cp.cap  # the defense spent the start CP
-    planned = sim.Move(opaque_id(KEY, 0, walker), near, planned=True)
+    state.players[0].cp = RULES.cp.cap
+    planned = sim.Move(opaque_id(KEY, 0, walker), near, planned=True, bonus=1)
     match.step([sim.PlayerCommand(0, 2, match.resolve(0, planned))])
     assert isinstance(match.results[0].outcome, sim.Ok)
     gid = state.new_id()
     state.groups[gid] = Group(gid, 1, 3, 2, Mode.ATTACK, AtNode(own.location.node))
     checker = _FrameChecker()
     checker.record(match, ())
-    assert checker.features >= {"intent_no_target", "enemy_exact", "planned", "intent_target"}
+    assert checker.features >= {"enemy_exact", "planned", "intent_target", "gathering"}
 
 
 def test_snapshot_frame_of_an_overcrowded_own_city() -> None:
@@ -419,7 +390,7 @@ def test_snapshot_frame_of_an_overcrowded_own_city() -> None:
 
 def test_snapshot_frame_of_enemy_barracks_next_door() -> None:
     """DEC-31: an enemy city joined by an edge to an own node carries ``has_barracks`` alone
-    (the direct frame equals the validated one); the warehouse level and the build stay hidden."""
+    (the direct frame equals the validated one); the warehouse and the build stay hidden."""
     match = _started()
     state = match.state
     capital = state.map.capital(1)
@@ -429,31 +400,25 @@ def test_snapshot_frame_of_enemy_barracks_next_door() -> None:
     checker.record(match, ())
     assert checker.features >= {"enemy_barracks"}
     node = snapshot_msg(match.view(0)).view.nodes[capital]
-    assert (node.has_barracks, node.warehouse_level, node.warehouse_cap, node.building) == (
-        True,
-        None,
-        None,
-        None,
-    )
+    assert (node.has_barracks, node.warehouse_cap, node.building) == (True, None, None)
 
 
-V2_RULES = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
 DEC41_MAP = ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json"
 
 
-def test_economy_v2_through_the_wire() -> None:
-    """DEC-41, item 14 (#647): the v2 commands go through the wire and are accepted; the frames
-    of both players equal the validated ones and ``view_to_canonical`` at every tick, with the
-    own lines, factory and bunker builds owing charges, a gathering plan and an enemy bunker next
-    door; the events are those of their player only. Map ``dec41`` (``packages/sim/tests``):
-    player 0 owns K = 0, A = 1, B = 2, C = 3, ..., M = 8 is a neutral province next to the enemy
-    city 13; player 1 owns 9..16."""
+def test_factories_and_plans_through_the_wire() -> None:
+    """DEC-41 (#647): the factory, barracks and plan commands go through the wire and are
+    accepted; the frames of both players equal the validated ones and ``view_to_canonical`` at
+    every tick, with factory and barracks builds owing charges, a gathering plan and an enemy
+    factory next door; the events are those of their player only. Map ``dec41``
+    (``packages/sim/tests``): player 0 owns K = 0, A = 1, B = 2, C = 3, ..., M = 8 is a neutral
+    province next to the enemy city 13; player 1 owns 9..16."""
     mapdef = load_map(DEC41_MAP)
-    match = Match(mapdef, V2_RULES, KEY)
+    match = Match(mapdef, RULES, KEY)
     state = match.state
     state.nodes[8].owner = 0  # the own province M borders the enemy city 13 (DEC-31 rule)
-    state.nodes[13].fort = True
-    state.nodes[2].warehouse = 2  # B pays half of its factory at once, the line K-A-B the rest
+    state.nodes[13].factory = 1
+    state.nodes[2].warehouse = 2  # B pays half of its factory at once, the flow the rest
     start = next(g for g in match.view(0).groups if g.location == AtNode(0))
     seq: dict[int, int] = dict.fromkeys(PLAYERS, 0)
 
@@ -465,16 +430,12 @@ def test_economy_v2_through_the_wire() -> None:
 
     script: dict[int, list[tuple[int, wire.Command]]] = {
         1: [
-            (0, wire.DrawLineCmd(path=(0, 1, 2))),
             (0, wire.BuildFactoryCmd(node=2)),
-            (0, wire.BuildBunkerCmd(node=1)),
             (0, wire.BuildBarracksCmd(node=3)),
             (0, wire.MoveCmd(group=str(start.id), dest=3, planned=True, bonus=2)),
-            (1, wire.DrawLineCmd(path=(16, 15, 14))),
+            (1, wire.SetStanceCmd(stance=Stance.WAR)),
         ],
-        2: [(0, wire.DrawLineCmd(path=(0, 1, 2, 6))), (1, wire.DrawLineCmd(path=(16, 15, 14, 10)))],
         45: [(0, wire.ReleasePlanCmd(group=str(start.id)))],
-        120: [(0, wire.RemoveLineCmd(line=1))],
     }
     checker = _FrameChecker()
     checker.begin(match)
@@ -485,37 +446,24 @@ def test_economy_v2_through_the_wire() -> None:
             assert decode_server(encode(ack)) == ack
             assert ack.reject_code is None, (tick, result)
         for p in PLAYERS:
-            msg = _check_snapshot(match, p)
-            own = state.players[p].lines
-            assert [(line.id, line.path) for line in msg.view.lines] == [
-                (k, own[k].path) for k in sorted(own)
-            ]
+            _check_snapshot(match, p)
             _check_events(match, events, p)
         checker.record(match, ())
     assert checker.features >= {
-        "lines",
         "factory_rate",
         "factory_owed",
         "factory_build_done",
-        "fort_owed",
-        "enemy_fort",
+        "enemy_factory",
         "building_owed",
         "gathering",
     }
-    assert [line.path for line in match.view(0).lines] == [(0, 1, 2)]
-
-
-FLOW_RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
 
 
 def test_supply_flow_through_the_wire() -> None:
-    """DEC-43 (#704): ``set_leaf_shift`` goes through the wire; the line and bunker commands are
-    rejected with ``FEATURE_DISABLED``; the frames of both players carry the own flow fields of
-    item E, equal the validated ones and ``view_to_canonical`` at every tick, and never a flow
-    field of an enemy node; ``ruleset_public.supply_model`` is ``flow``."""
-    assert RulesetPublic.from_ruleset(FLOW_RULES).supply_model == "flow"
-    assert RulesetPublic.from_ruleset(V2_RULES).supply_model == "lines"
-    match = Match(load_map(DEC41_MAP), FLOW_RULES, KEY)
+    """DEC-43 (#704): ``set_leaf_shift`` goes through the wire; the frames of both players carry
+    the own flow fields of item E, equal the validated ones and ``view_to_canonical`` at every
+    tick, and never a flow field of an enemy node."""
+    match = Match(load_map(DEC41_MAP), RULES, KEY)
     seq: dict[int, int] = dict.fromkeys(PLAYERS, 0)
 
     def send(p: int, cmd: wire.Command) -> sim.PlayerCommand:
@@ -525,8 +473,7 @@ def test_supply_flow_through_the_wire() -> None:
         return sim.PlayerCommand(p, msg.seq, match.resolve(p, command_from_wire(msg.cmd)))
 
     script: dict[int, list[tuple[int, wire.Command]]] = {
-        1: [(0, wire.SetLeafShiftCmd(shift=1)), (1, wire.DrawLineCmd(path=(16, 15)))],
-        2: [(1, wire.BuildBunkerCmd(node=16)), (1, wire.UpgradeWarehouseCmd(node=15))],
+        1: [(0, wire.SetLeafShiftCmd(shift=1))],
         30: [(0, wire.SetLeafShiftCmd(shift=0)), (1, wire.SetLeafShiftCmd(shift=9))],
     }
     codes: list[str | None] = []
@@ -539,14 +486,7 @@ def test_supply_flow_through_the_wire() -> None:
             for n in view.nodes:
                 own = n.owner == p
                 assert (n.flow_next is not None) == own, (tick, p, n.id)
-    assert codes == [
-        None,
-        "FEATURE_DISABLED",
-        "FEATURE_DISABLED",
-        "FEATURE_DISABLED",
-        None,
-        "INVALID_ARGUMENT",
-    ]
+    assert codes == [None, None, "INVALID_ARGUMENT"]
     assert match.state.players[0].leaf_shift == 0
 
 
@@ -611,14 +551,15 @@ def test_fixture_commands_convert() -> None:
         "move_planned": sim.Move,
         "split": sim.Split,
         "merge": sim.Merge,
-        "set_mode": sim.SetMode,
         "set_stance": sim.SetStance,
-        "upgrade_road": sim.UpgradeRoad,
         "recruit": sim.Recruit,
+        "cancel_recruit": sim.CancelRecruit,
         "cancel_order": sim.CancelOrder,
-        "set_front": sim.SetFront,
-        "set_rear_min": sim.SetRearMin,
-        "transfer": sim.Transfer,
+        "build_barracks": sim.BuildBarracks,
+        "build_factory": sim.BuildFactory,
+        "fortify_road": sim.FortifyRoad,
+        "release_plan": sim.ReleasePlan,
+        "set_leaf_shift": sim.SetLeafShift,
         "forfeit": sim.Forfeit,
     }
     for name, kind in types.items():
@@ -634,19 +575,13 @@ def test_command_fields() -> None:
     assert command_from_wire(wire.MoveCmd(group="12", dest=3, planned=False)) == sim.Move(12, 3)
     assert command_from_wire(wire.SplitCmd(group="5", n=2)) == sim.Split(5, 2)
     assert command_from_wire(wire.MergeCmd(groups=("7", "9"))) == sim.Merge((7, 9))
-    assert command_from_wire(wire.SetModeCmd(group="1", mode=Mode.DEFENSE)) == sim.SetMode(
-        1, Mode.DEFENSE
-    )
-    assert command_from_wire(wire.UpgradeRoadCmd(edge=8)) == sim.UpgradeRoad(8)
     assert command_from_wire(wire.CancelOrderCmd(group="0")) == sim.CancelOrder(0)
     assert command_from_wire(wire.SetStanceCmd(stance=Stance.ECONOMY)) == sim.SetStance(
         Stance.ECONOMY
     )
     assert command_from_wire(wire.RecruitCmd(node=2)) == sim.Recruit(2)
-    assert command_from_wire(wire.SetFrontCmd(marker=1, node=3)) == sim.SetFront(1, 3)
-    assert command_from_wire(wire.SetFrontCmd(marker=0, node=None)) == sim.SetFront(0, None)
-    assert command_from_wire(wire.SetRearMinCmd(n=4)) == sim.SetRearMin(4)
-    assert command_from_wire(wire.TransferCmd(from_node=1, to_node=4, n=3)) == sim.Transfer(1, 4, 3)
+    assert command_from_wire(wire.FortifyRoadCmd(node=3, edge=8)) == sim.FortifyRoad(3, 8)
+    assert command_from_wire(wire.SetLeafShiftCmd(shift=2)) == sim.SetLeafShift(2)
     assert command_from_wire(wire.ForfeitCmd()) == sim.Forfeit()
 
 
@@ -738,74 +673,10 @@ def test_move_ack_carries_the_path() -> None:
     assert moved.order.dest == dest
 
 
-def test_supply_control_through_the_wire() -> None:
-    """DEC-18, DEC-28: a front marker, the rear minimum and a transfer by wire commands; the ack
-    carries the transfer's path and arrival tick, the frames carry the markers and the transfer
-    packet (byte-equal frames), the enemy gets neither the events nor the fields."""
-    match = _started()
-    view = snapshot_msg(match.view(0)).view
-    cities = [n.id for n in view.nodes if n.warehouse_level is not None]  # own cities
-    capital = match.state.map.capital(0)
-    far = max(
-        (c for c in cities if c != capital),
-        key=lambda c: len(find_path(match.state, RULES, 0, capital, c) or ()),
-    )
-    match.state.nodes[capital].warehouse = 5
-    cmds = [
-        command_from_wire(wire.SetFrontCmd(marker=1, node=far)),
-        command_from_wire(wire.SetRearMinCmd(n=2)),
-        command_from_wire(wire.TransferCmd(from_node=capital, to_node=far, n=3)),
-    ]
-    events = match.step([sim.PlayerCommand(0, i + 1, c) for i, c in enumerate(cmds)])
-    acks = [ack_msg(r) for r in match.results]
-    assert [a.reject_code for a in acks] == [None, None, None]
-    assert acks[0].path is None and acks[0].arrive_tick is None
-    path, arrive = acks[2].path, acks[2].arrive_tick
-    assert path is not None and (path[0], path[-1]) == (capital, far) and len(path) > 2
-    assert arrive is not None and arrive > match.tick
-    own = events_msgs(events, 0, KEY)
-    kinds = {"front_set", "rear_min_set", "transfer_started"}
-    assert {m.kind for m in own} >= kinds
-    assert not {m.kind for m in events_msgs(events, 1, KEY)} & kinds
-    checker = _FrameChecker()
-    checker.record(match, ())
-    assert checker.features >= {"fronts", "transfer"}
-    wire_view = snapshot_msg(match.view(0)).view
-    batches = sorted((p for p in wire_view.packets if p.transfer), key=lambda p: p.dest_tick)
-    assert {p.path[-1] for p in batches} == {far}
-    # #287: cut to the free room of ``far`` (the event has the actual amount), sent in batches.
-    n = next(e.get("charges") for e in events if e.kind == "transfer_started")
-    assert (batches[-1].dest_tick, sum(p.charges for p in batches)) == (arrive, n)
-    assert (wire_view.me.fronts[1], wire_view.me.rear_min) == (far, 2)
-    enemy = snapshot_msg(match.view(1)).view
-    assert (enemy.me.fronts, enemy.me.rear_min) == ((None, None), 1)  # its own, not player 0's
-    assert not any(p.transfer for p in enemy.packets)
-
-
-def test_starvation_countdown_through_the_wire() -> None:
-    """DEC-19: the countdown of an own cut-off city in byte-equal frames; the enemy gets neither
-    the field nor the event."""
-    match = _started()
-    state = match.state
-    city = next(
-        n for n in sorted(state.nodes) if state.nodes[n].owner == 0 and n != state.map.capital(0)
-    )
-    state.nodes[city].cut_since = match.tick
-    checker = _FrameChecker()
-    checker.record(match, ())
-    assert "starve_in" in checker.features
-    assert snapshot_msg(match.view(0)).view.nodes[city].starve_in is not None
-    assert snapshot_msg(match.view(1)).view.nodes[city].starve_in is None
-    starving = event(5, "starvation", player=0, node=city, warehouse=1, units=0)
-    assert event_for_player(starving, 0, KEY) is not None
-    assert event_for_player(starving, 1, KEY) is None
-
-
 def test_pocket_starvation_through_the_wire() -> None:
-    """DEC-43 item H4: a node of a factory-less pocket under ``mvp-4`` starves; the owner gets the
-    countdown and the ``starvation`` event, the enemy neither (the fog of DEC-19 item 8)."""
-    mvp4 = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
-    match = Match(load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json"), mvp4, KEY)
+    """DEC-43 item H4: a node of a factory-less pocket starves; the owner gets the countdown and
+    the ``starvation`` event, the enemy neither (the fog of DEC-19 item 8)."""
+    match = Match(load_map(DEC41_MAP), RULES, KEY)
     state = match.state
     cedar = 3
     change_owner(state, 1, 1)  # Ash: Birch, Cedar, Dale, Fern, Glen become a pocket

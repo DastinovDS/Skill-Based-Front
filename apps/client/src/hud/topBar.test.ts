@@ -26,9 +26,6 @@ describe('stanceProgress (DEC-44)', () => {
   const me = (stance: SelfView['stance'], cp: number | null, capital: number | null): SelfView => ({
     cp: 300,
     stance,
-    fronts: [null, null],
-    rear_min: 0,
-    auto_lines: null,
     leaf_shift: 0,
     leaf_shift_max: 2,
     next_dispatch_tick: 10,

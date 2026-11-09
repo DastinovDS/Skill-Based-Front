@@ -44,7 +44,8 @@ export function supplySnapshot(map: MapFile): SnapshotMsg {
     path: [number, ...number[]],
     charges: number,
     progress: number,
-    transfer: boolean,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+    _transfer: boolean, // no transfers: removed (#894): stage 2 deletes this
   ): PacketView => {
     const ticks = map.edges[edge]?.travel_ticks ?? 50;
     const depart = SUPPLY_TICK - Math.round(progress * ticks);
@@ -57,7 +58,6 @@ export function supplySnapshot(map: MapFile): SnapshotMsg {
       arrive_tick: depart + ticks,
       path,
       dest_tick: depart + ticks * path.length,
-      transfer,
     };
   };
   const packets: PacketView[] = [
@@ -77,7 +77,7 @@ export function supplySnapshot(map: MapFile): SnapshotMsg {
     ...base,
     view: {
       ...base.view,
-      me: { ...base.view.me, fronts: [3, 1] },
+      me: { ...base.view.me },
       nodes,
       edges,
       packets,

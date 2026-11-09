@@ -40,12 +40,10 @@ from gow_sim.analysis import MatchLog, MatchMetrics, MatchRecorder, analyze
 from gow_sim.canonical import digest
 from gow_sim.commands import (
     BuildBarracks,
-    BuildBunker,
     BuildFactory,
     CancelOrder,
     CancelRecruit,
     Command,
-    DrawLine,
     Forfeit,
     FortifyRoad,
     Merge,
@@ -53,17 +51,9 @@ from gow_sim.commands import (
     PlayerCommand,
     Recruit,
     ReleasePlan,
-    RemoveLine,
-    SetAutoLines,
-    SetFront,
     SetLeafShift,
-    SetMode,
-    SetRearMin,
     SetStance,
     Split,
-    Transfer,
-    UpgradeRoad,
-    UpgradeWarehouse,
 )
 from gow_sim.maps import GENERATED_SUBDIR, MapDef, MapFormatError, load_map, map_hash
 from gow_sim.match import (
@@ -76,7 +66,7 @@ from gow_sim.match import (
     run_headless,
 )
 from gow_sim.ruleset import Ruleset, RulesetError, Stance, load_ruleset, ruleset_hash
-from gow_sim.state import Mode, to_canonical
+from gow_sim.state import to_canonical
 
 __all__ = [
     "CHECKPOINT_EVERY",
@@ -156,7 +146,7 @@ def encode_command(cmd: Command) -> dict[str, object]:
     match cmd:
         case Move(group=g, dest=dest, planned=planned, bonus=bonus):
             data: dict[str, object] = {"type": "move", "group": g, "dest": dest, "planned": planned}
-            if bonus:  # DEC-41, item 10: v1 logs keep their form
+            if bonus:  # DEC-41, item 10: only a planned order has one
                 data["bonus"] = bonus
             return data
         case ReleasePlan(group=g):
@@ -165,40 +155,20 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "split", "group": g, "n": n}
         case Merge(groups=groups):
             return {"type": "merge", "groups": list(groups)}
-        case SetMode(group=g, mode=mode):
-            return {"type": "set_mode", "group": g, "mode": mode.value}
         case SetStance(stance=stance):
             return {"type": "set_stance", "stance": stance.value}
-        case UpgradeRoad(edge=edge):
-            return {"type": "upgrade_road", "edge": edge}
         case BuildBarracks(node=node):
             return {"type": "build_barracks", "node": node}
-        case UpgradeWarehouse(node=node):
-            return {"type": "upgrade_warehouse", "node": node}
         case Recruit(node=node):
             return {"type": "recruit", "node": node}
         case CancelRecruit(node=node):
             return {"type": "cancel_recruit", "node": node}
         case CancelOrder(group=g):
             return {"type": "cancel_order", "group": g}
-        case SetFront(marker=marker, node=node):
-            return {"type": "set_front", "marker": marker, "node": node}
-        case SetRearMin(n=n):
-            return {"type": "set_rear_min", "n": n}
-        case Transfer(src=src, dst=dst, n=n):
-            return {"type": "transfer", "from": src, "to": dst, "n": n}
         case BuildFactory(node=node):
             return {"type": "build_factory", "node": node}
-        case BuildBunker(node=node):
-            return {"type": "build_bunker", "node": node}
         case FortifyRoad(node=node, edge=edge):
             return {"type": "fortify_road", "node": node, "edge": edge}
-        case DrawLine(path=path):
-            return {"type": "draw_line", "path": list(path)}
-        case RemoveLine(line=line):
-            return {"type": "remove_line", "line": line}
-        case SetAutoLines(on=on):
-            return {"type": "set_auto_lines", "on": on}
         case SetLeafShift(shift=shift):
             return {"type": "set_leaf_shift", "shift": shift}
         case Forfeit():
@@ -226,45 +196,20 @@ def decode_command(data: object) -> Command:
                     raise ReplayError("merge: groups must be a list")
                 items: list[object] = groups  # pyright: ignore[reportUnknownVariableType]
                 return Merge(tuple(_int(g) for g in items))
-            case "set_mode":
-                return SetMode(_int(d["group"]), Mode(_str(d["mode"])))
             case "set_stance":
                 return SetStance(Stance(_str(d["stance"])))
-            case "upgrade_road":
-                return UpgradeRoad(_int(d["edge"]))
             case "build_barracks":
                 return BuildBarracks(_int(d["node"]))
-            case "upgrade_warehouse":
-                return UpgradeWarehouse(_int(d["node"]))
             case "recruit":
                 return Recruit(_int(d["node"]))
             case "cancel_recruit":
                 return CancelRecruit(_int(d["node"]))
             case "cancel_order":
                 return CancelOrder(_int(d["group"]))
-            case "set_front":
-                node = d["node"]
-                return SetFront(_int(d["marker"]), None if node is None else _int(node))
-            case "set_rear_min":
-                return SetRearMin(_int(d["n"]))
-            case "transfer":
-                return Transfer(_int(d["from"]), _int(d["to"]), _int(d["n"]))
             case "build_factory":
                 return BuildFactory(_int(d["node"]))
-            case "build_bunker":
-                return BuildBunker(_int(d["node"]))
             case "fortify_road":
                 return FortifyRoad(_int(d["node"]), _int(d["edge"]))
-            case "draw_line":
-                path = d["path"]
-                if not isinstance(path, list):
-                    raise ReplayError("draw_line: path must be a list")
-                nodes: list[object] = path  # pyright: ignore[reportUnknownVariableType]
-                return DrawLine(tuple(_int(n) for n in nodes))
-            case "remove_line":
-                return RemoveLine(_int(d["line"]))
-            case "set_auto_lines":
-                return SetAutoLines(_bool(d["on"]))
             case "set_leaf_shift":
                 return SetLeafShift(_int(d["shift"]))
             case "forfeit":

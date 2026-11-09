@@ -1,5 +1,0 @@
-{
-  "type": "command",
-  "seq": 13,
-  "cmd": { "type": "transfer", "from_node": 0, "to_node": 1, "n": 3 }
-}

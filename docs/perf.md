@@ -29,6 +29,10 @@ uv run pytest packages/sim/tests/test_benchmarks.py            # a time table an
 uv run pytest --benchmark-disable                             # one run without measurements and without checks
 ```
 
+> Since #894 (2026-11-09) only the rulesets `mvp-5`, `mvp-6`, `mvp-7` and `test-short` exist: the benchmarks of the
+> removed code (the v1 supply with donors and transfers, the drawn lines of `systems.lines`) were deleted or moved to
+> `mvp-7` with the tests; the rows below that name them, `mvp-0` or `mvp-4` record the measurements of their time.
+
 | Benchmark | What is measured | Budget |
 |---|---|---|
 | `test_bench_step` | `Match.step` without projections, a 40-node map (`grid40` from `conftest.py`) with 40 groups, both players under `ExpandBot`; the controllers and projections are in the untimed `setup` | on average ≤ 0.3 ms, p99 ≤ 1 ms |

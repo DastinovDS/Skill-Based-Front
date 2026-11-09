@@ -51,15 +51,6 @@ describe('UndoList', () => {
     expect(list.take(free)).toEqual({ kind: 'recruit', node: 3 });
   });
 
-  it('a mode change drops the orders of the group: a cancel would take back the mode', () => {
-    const list = new UndoList();
-    list.onAccepted(move('a'));
-    list.onAccepted(move('b'));
-    list.onAccepted({ type: 'set_mode', group: 'a', mode: 'defense' });
-    expect(list.take(free)).toEqual({ kind: 'order', group: 'b' });
-    expect(list.take(free)).toBeNull();
-  });
-
   it('is bounded: the oldest entry goes', () => {
     const list = new UndoList();
     for (let i = 0; i <= UNDO_MAX; i++) list.onAccepted(recruit(i));

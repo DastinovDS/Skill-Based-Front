@@ -23,12 +23,10 @@ import pytest
 
 from gow_sim.commands import (
     BuildBarracks,
-    BuildBunker,
     BuildFactory,
     CancelOrder,
     CancelRecruit,
     Command,
-    DrawLine,
     FortifyRoad,
     Merge,
     Move,
@@ -36,25 +34,17 @@ from gow_sim.commands import (
     PlayerCommand,
     Recruit,
     ReleasePlan,
-    RemoveLine,
-    SetAutoLines,
-    SetFront,
     SetLeafShift,
-    SetMode,
-    SetRearMin,
     SetStance,
     Split,
-    Transfer,
-    UpgradeRoad,
-    UpgradeWarehouse,
     map_group_ids,
 )
 from gow_sim.maps import load_map
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdge
+from gow_sim.state import AtNode, Event, GameState, Group, Location, OnEdge
 from gow_sim.systems.movement import find_path, traversal_ticks
-from gow_sim.systems.supply import is_city, transfer_route
+from gow_sim.systems.supply import is_city
 from gow_sim.systems.victory import EndReason, Outcome
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -75,14 +65,12 @@ TICKS = 600
 DECIDE_EVERY = 5
 
 
-@pytest.fixture(
-    scope="module", params=["mvp-0", "mvp-1", "mvp-3", "mvp-4", "mvp-4-stances", "mvp-7"]
-)
+@pytest.fixture(scope="module", params=["mvp-5", "mvp-6", "mvp-7"])
 def rules(request: pytest.FixtureRequest) -> Ruleset:
-    """mvp-0, mvp-1 (``city_upgrades`` on, DEC-26), mvp-3 (the economy v2, DEC-41), mvp-4 (the
-    supply flow, DEC-43), mvp-4-stances (the stances of DEC-44) and mvp-7 (the factories follow
-    the stance, DEC-47; map tempo, DEC-46) with 50 CP to start with: CP do not limit the
-    controller, every command is used."""
+    """The kept rulesets (#894): mvp-5 (the supply flow of DEC-43, the stances of DEC-44, the burn
+    of DEC-45), mvp-6 (a capture costs a charge, DEC-38; no retreat, DEC-40) and mvp-7 (the
+    factories follow the stance, DEC-47; map tempo, DEC-46) with 50 CP to start with: CP do not
+    limit the controller, every command is used."""
     name: str = request.param
     base = load_ruleset(ROOT / "rulesets" / f"{name}.toml")
     return dataclasses.replace(base, cp=dataclasses.replace(base.cp, start=5000, cap=5000))
@@ -97,16 +85,19 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
 
     cmds: list[Command] = []
     tick = state.tick
-    if rules.v2 and tick % 50 == 40:  # a gathering planned order departs now (#646)
+    if tick % 50 == 40:  # a gathering planned order departs now (#646)
         for g in sorted(state.groups.values(), key=lambda g: (key(_node_or_edge(g)), g.id)):
             if g.owner == player and g.plan:
                 cmds.append(ReleasePlan(g.id))
     if tick % 50 == 25 or tick % 70 == 10:
         for g in sorted(state.groups.values(), key=lambda g: (key(_node_or_edge(g)), g.id)):
-            if g.owner == player and g.order is not None and g.order.planned:
-                if isinstance(g.location, AtNode) and tick < g.order.depart_tick:
-                    cmds.append(CancelOrder(g.id))
-            elif g.owner == player and g.mode is Mode.DEFENSE:
+            if (
+                g.owner == player
+                and g.order is not None
+                and g.order.planned
+                and isinstance(g.location, AtNode)
+                and tick < g.order.depart_tick
+            ):
                 cmds.append(CancelOrder(g.id))
     if tick % 150 == 0:
         cmds.append(SetStance([Stance.WAR, Stance.ECONOMY, Stance.BALANCE][tick // 150 % 3]))
@@ -114,17 +105,6 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
         cmds.append(Recruit(mapdef.capital(player)))
     if tick % 100 == 50:  # a second unit queued and taken back (DEC-25)
         cmds.extend((Recruit(mapdef.capital(player)), CancelRecruit(mapdef.capital(player))))
-    if tick % 90 == 0:  # every own city's road to its lowest-key own neighbour is upgraded
-        for node in sorted(range(len(mapdef.nodes)), key=key):
-            internal = [
-                e
-                for e in mapdef.incident[node]
-                if state.nodes[mapdef.edges[e].other(node)].owner == player
-                and state.nodes[node].owner == player
-            ]
-            if internal:
-                edge = min(internal, key=lambda e: key(mapdef.edges[e].other(node)))
-                cmds.append(UpgradeRoad(edge))
     own_cities = sorted(
         (
             n
@@ -133,18 +113,9 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
         ),
         key=key,
     )
-    if tick % 60 == 0 and own_cities:  # move the front markers over the own cities (DEC-28)
-        k = tick // 60
-        cmds.append(SetFront(k % 2, own_cities[k % len(own_cities)]))
-        cmds.append(SetRearMin(k % 3))
-    if tick % 80 == 0 and len(own_cities) >= 2:  # ship 2 charges to the farthest own city
-        cmds.append(Transfer(own_cities[0], own_cities[-1], 2))
     if tick % 110 == 0 and own_cities:  # DEC-26: the barracks of the last own city
         cmds.append(BuildBarracks(own_cities[-1]))
-    if tick % 110 == 55 and own_cities:  # and a warehouse level of the first one
-        cmds.append(UpgradeWarehouse(own_cities[0]))
-    if rules.v2:
-        cmds.extend(_decide_v2(state, rules, player, own_cities))
+    cmds.extend(_decide_economy(state, player, own_cities))
     idle = sorted(
         (
             g
@@ -162,48 +133,25 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
             cmds.append(Merge(tuple(g.id for g in here)))
             continue
         for g in here:
-            if tick % 70 == 5:
-                cmds.append(SetMode(g.id, Mode.DEFENSE))
-            elif g.units >= 2 and tick % 30 == 0:
+            if g.units >= 2 and tick % 30 == 0:
                 cmds.append(Split(g.id, g.units // 2))
             else:
                 dest = _target(state, rules, player, node)
                 if dest is not None:
                     planned = tick % 20 == 0
-                    bonus = 1 + tick // 20 % 3 if planned and rules.v2 else 0
+                    bonus = 1 + tick // 20 % 3 if planned else 0
                     cmds.append(Move(g.id, dest, planned=planned, bonus=bonus))
     return cmds
 
 
-def _decide_v2(
-    state: GameState, rules: Ruleset, player: int, own_cities: list[int]
-) -> list[Command]:
-    """DEC-41, DEC-42: lines from the own factories, factories, removals."""
+def _decide_economy(state: GameState, player: int, own_cities: list[int]) -> list[Command]:
+    """DEC-41: factories; DEC-43: road fortifications and the leaf shift; DEC-44: the stances."""
     tick = state.tick
     cmds: list[Command] = []
-    if tick % 35 == 0 and len(own_cities) >= 2:
-        k = tick // 35
-        nodes = state.nodes
-        sources = sorted(
-            (n for n in nodes if nodes[n].owner == player and nodes[n].factory == player),
-            key=lambda n: state.map.node_key(player, n),
-        )
-        sources = sources or [state.map.capital(player)]
-        src = sources[k % len(sources)]
-        dst = own_cities[k % len(own_cities)]
-        route = transfer_route(state, rules, player, src, dst) if src != dst else None
-        if route is not None:
-            cmds.append(DrawLine(route.nodes))
     if tick % 45 == 0 and own_cities:
         cmds.append(BuildFactory(own_cities[tick // 45 % len(own_cities)]))
     own = sorted(n for n in state.nodes if state.nodes[n].owner == player)
-    if tick % 65 == 0 and own:  # a bunker, in a city or a province (#645)
-        cmds.append(BuildBunker(own[tick // 65 % len(own)]))
-    if tick % 95 == 0:
-        cmds.append(RemoveLine(tick // 95 % 3))
-    if tick % 130 == 0:  # the auto-extension off and on again (#665)
-        cmds.append(SetAutoLines(tick // 130 % 2 == 0))
-    if rules.fort is not None and tick % 10 == 5:  # DEC-43, item D: fortify the roads to the enemy
+    if tick % 10 == 5:  # DEC-43, item D: fortify the roads to the enemy
         front = [
             (node, e)
             for node in sorted(own, key=lambda n: state.map.node_key(player, n))
@@ -217,10 +165,10 @@ def _decide_v2(
             node = own[tick // 10 % len(own)]
             roads = state.map.incident[node]
             cmds.append(FortifyRoad(node, roads[tick // 20 % len(roads)]))
-    if rules.flow and tick % 40 == 20:  # DEC-43: the leaf shift up and down to its maximum
+    if tick % 40 == 20:  # DEC-43: the leaf shift up and down to its maximum
         ps = state.players[player]
         cmds.append(SetLeafShift(tick // 40 % (ps.leaf_shift_max + 1)))
-    if rules.stances is not None and tick % 70 == 0:  # DEC-44: every stance in turn, no cooldown
+    if tick % 70 == 0:  # DEC-44: every stance in turn, no cooldown
         cmds.append(SetStance(list(Stance)[tick // 70 % len(Stance)]))
     return cmds
 
@@ -264,28 +212,16 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
     match cmd:
         case Move(group=g, dest=dest, planned=planned, bonus=bonus):
             return Move(g, mirror_nodes[dest], planned, bonus)
-        case UpgradeRoad(edge=edge):
-            return UpgradeRoad(mirror_edges[edge])
         case Recruit(node=node):
             return Recruit(mirror_nodes[node])
         case CancelRecruit(node=node):
             return CancelRecruit(mirror_nodes[node])
         case BuildBarracks(node=node):
             return BuildBarracks(mirror_nodes[node])
-        case UpgradeWarehouse(node=node):
-            return UpgradeWarehouse(mirror_nodes[node])
-        case SetFront(marker=marker, node=node):
-            return SetFront(marker, None if node is None else mirror_nodes[node])
-        case Transfer(src=src, dst=dst, n=n):
-            return Transfer(mirror_nodes[src], mirror_nodes[dst], n)
         case BuildFactory(node=node):
             return BuildFactory(mirror_nodes[node])
-        case BuildBunker(node=node):
-            return BuildBunker(mirror_nodes[node])
         case FortifyRoad(node=node, edge=edge):
             return FortifyRoad(mirror_nodes[node], mirror_edges[edge])
-        case DrawLine(path=path):
-            return DrawLine(tuple(mirror_nodes[n] for n in path))
         case _:
             return cmd
 
@@ -294,13 +230,9 @@ def _mirror_location(state: GameState, loc: Location) -> Location:
     match loc:
         case AtNode(node=node):
             return AtNode(state.map.mirror_nodes[node])
-        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back, level=level):
+        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back):
             return OnEdge(
-                state.map.mirror_edges[edge],
-                state.map.mirror_nodes[from_node],
-                progress,
-                back,
-                level,
+                state.map.mirror_edges[edge], state.map.mirror_nodes[from_node], progress, back
             )
 
 
@@ -399,7 +331,6 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             b.recruit_queue,
             b.recruit_progress,
             b.has_barracks,
-            b.warehouse_level,
         ) == (
             a.warehouse,
             a.over_ticks,
@@ -408,14 +339,8 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.recruit_queue,
             a.recruit_progress,
             a.has_barracks,
-            a.warehouse_level,
         ), f"node {n}"
-        assert (b.factory, b.factory_ticks, b.rr, b.fort) == (
-            swap[a.factory],
-            a.factory_ticks,
-            a.rr,
-            a.fort,
-        ), f"v2 of {n}"
+        assert (b.factory, b.factory_ticks) == (swap[a.factory], a.factory_ticks), f"factory {n}"
         assert b.road_forts == {  # DEC-43, item D: the road fortifications, mirrored
             mapdef.mirror_edges[e]: ready for e, ready in a.road_forts.items()
         }, f"road fortifications of {n}"
@@ -425,49 +350,25 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             assert (fb.d, fb.k, fb.pocket, fb.idle) == (fa.d, fa.k, fa.pocket, fa.idle), n
             assert fb.down == tuple(mapdef.mirror_nodes[x] for x in fa.down), f"down of {n}"
             assert fb.next == tuple(mapdef.mirror_nodes[x] for x in fa.next), f"next of {n}"
-        for fa, fb in ((a.factory_build, b.factory_build), (a.fort_build, b.fort_build)):
-            assert (fb is None) == (fa is None), f"factory or bunker build of {n}"
-            if fa is not None and fb is not None:
-                assert (fb.owner, fb.since, fb.owed) == (swap[fa.owner], fa.since, fa.owed), (
-                    f"factory or bunker build of {n}"
-                )
+        fa, fb = a.factory_build, b.factory_build
+        assert (fb is None) == (fa is None), f"factory build of {n}"
+        if fa is not None and fb is not None:
+            assert (fb.owner, fb.since, fb.owed) == (swap[fa.owner], fa.since, fa.owed), (
+                f"factory build of {n}"
+            )
         ab, bb = a.build, b.build
         assert (bb is None) == (ab is None), f"build of {n}"
         if ab is not None and bb is not None:
-            assert (bb.edge, bb.owner, bb.since, bb.kind, bb.owed) == (
-                None if ab.edge is None else mapdef.mirror_edges[ab.edge],
+            assert (bb.owner, bb.since, bb.kind, bb.owed) == (
                 swap[ab.owner],
                 ab.since,
                 ab.kind,
                 ab.owed,
             ), f"build of {n}"
-    for e in range(len(mapdef.edges)):
-        road, mirrored = state.edges[e], state.edges[mapdef.mirror_edges[e]]
-        assert mirrored.width == road.width
-        assert (mirrored.build is None) == (road.build is None), f"build of edge {e}"
-        if road.build is not None and mirrored.build is not None:
-            assert (mirrored.build.owner, mirrored.build.since) == (
-                swap[road.build.owner],
-                road.build.since,
-            ), f"build of edge {e}"
     p0, p1 = state.players[0], state.players[1]
-    mirror = mapdef.mirror_nodes
-    assert p1.fronts == tuple(None if f is None else mirror[f] for f in p0.fronts), "fronts"
-    assert p1.rear_min == p0.rear_min
     assert (p1.leaf_shift, p1.leaf_shift_max) == (p0.leaf_shift, p0.leaf_shift_max), "shift"
     assert (p1.cp_ticks, p1.capital_ticks) == (p0.cp_ticks, p0.capital_ticks), "stance progress"
-    assert p1.next_line == p0.next_line
-    assert {k: tuple(mirror[n] for n in line.path) for k, line in p0.lines.items()} == {
-        k: line.path for k, line in p1.lines.items()
-    }, "lines"
-    assert (p0.cp, p0.stance, p0.charge_acc, p0.vp, p0.stance_changed_tick, p0.forfeited) == (
-        p1.cp,
-        p1.stance,
-        p1.charge_acc,
-        p1.vp,
-        p1.stance_changed_tick,
-        p1.forfeited,
-    )
+    assert (p0.cp, p0.stance, p0.vp, p0.forfeited) == (p1.cp, p1.stance, p1.vp, p1.forfeited)
     alive0 = sorted(g for g in state.groups if state.groups[g].owner == 0)
     alive1 = sorted(g for g in state.groups if state.groups[g].owner == 1)
     assert sorted(groups[g] for g in alive0) == alive1
@@ -484,14 +385,13 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             p.arrive_tick,
             p.route,
             p.route_ticks,
-            p.transfer,
         )
         for p in state.packets.values()
     ]
     me, mn = mapdef.mirror_edges, mapdef.mirror_nodes
     assert sorted(packets) == sorted(
-        (1 - o, me[e], mn[f], c, d, a, tuple(me[x] for x in r), rt, t)
-        for o, e, f, c, d, a, r, rt, t in packets
+        (1 - o, me[e], mn[f], c, d, a, tuple(me[x] for x in r), rt)
+        for o, e, f, c, d, a, r, rt in packets
     )
     intents = [
         (i.owner, i.kind, i.origin, i.target, i.created_tick) for i in state.intents.values()
@@ -503,7 +403,6 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     mem0, mem1 = state.vision_memory[0], state.vision_memory[1]
     assert {mapdef.mirror_nodes[n]: s for n, s in mem0.nodes.items()} == mem1.nodes
     assert {(me[e], mn[n]): s for (e, n), s in mem0.halves.items()} == mem1.halves
-    assert {me[e]: w for e, w in mem0.widths.items()} == mem1.widths
     pair = {g1: g0 for g0, g1 in groups.items()}  # a group of player 1 to its mirror
     assert {pair[g]: t for g, t in mem0.spotted.items()} == mem1.spotted
 
@@ -574,23 +473,12 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     assert {"Move", "Split", "Recruit", "CancelRecruit"} <= set(kinds)
     if rules.map_tempo is None:  # mvp-7 (DEC-46) on web: no order is waiting for its cancel
         assert "CancelOrder" in kinds
-    if rules.flow:  # DEC-43: no lines and no bunker, the flow and the shift are mirrored
-        assert {"SetLeafShift", "BuildFactory", "FortifyRoad"} <= set(kinds)
-        assert not {"DrawLine", "RemoveLine", "BuildBunker", "UpgradeWarehouse"} & set(kinds)
-        assert sent > 0, "the flow carried charges"
-        assert "SetMode" not in kinds
-        assert not {"SetFront", "SetRearMin", "Transfer", "UpgradeRoad"} & set(kinds)
-        assert ("SetStance" in kinds) == (rules.stances is not None)  # DEC-44
-    elif rules.v2:  # DEC-41: the v1 supply commands are disabled, the lines are mirrored
-        assert {"DrawLine", "RemoveLine", "BuildBunker", "BuildFactory"} <= set(kinds)
-        assert "SetMode" not in kinds  # "Defense" is removed (item 5, #645)
-        assert sent > 0, "the lines carried charges"
-        assert not {"SetStance", "SetFront", "SetRearMin", "Transfer", "UpgradeRoad"} & set(kinds)
-    else:
-        assert {"SetStance", "SetFront", "SetRearMin", "SetMode"} <= set(kinds)
-    if rules.city_upgrades.enabled:  # DEC-26: the city development is mirrored as well
-        assert "BuildBarracks" in kinds
-        assert ("UpgradeWarehouse" in kinds) == (rules.warehouse.max_level > 0)
+    # DEC-43: the flow, the shift and the road fortifications are mirrored; DEC-41: the factories;
+    # DEC-44: the stances; DEC-26: the barracks.
+    assert {"SetLeafShift", "BuildFactory", "FortifyRoad", "SetStance", "BuildBarracks"} <= set(
+        kinds
+    )
+    assert sent > 0, "the flow carried charges"
     assert moves_on_edges > 0
     # On choke the only way out is the central node 3; both players reach it at once and fight
     # there (DEC-07, rule 5; DEC-24) with equal sides, so both bounce and nothing is captured.

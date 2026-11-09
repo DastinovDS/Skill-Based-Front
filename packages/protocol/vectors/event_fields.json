@@ -36,16 +36,13 @@
       "fields": [
         "edge",
         "kind",
-        "level",
         "node",
-        "player",
-        "width"
+        "player"
       ],
       "ids": []
     },
     "build_stopped": {
       "fields": [
-        "edge",
         "kind",
         "node",
         "player",
@@ -179,29 +176,12 @@
       ],
       "ids": []
     },
-    "fort_built": {
-      "fields": [
-        "node",
-        "player"
-      ],
-      "ids": []
-    },
-    "front_set": {
-      "fields": [
-        "marker",
-        "node",
-        "player",
-        "reason"
-      ],
-      "ids": []
-    },
     "group_arrived": {
       "fields": [
         "back",
         "edge",
         "from_node",
         "group",
-        "level",
         "node",
         "planned",
         "player"
@@ -232,33 +212,6 @@
       "ids": [
         "group"
       ]
-    },
-    "line_auto": {
-      "fields": [
-        "from_node",
-        "line",
-        "player",
-        "to_node"
-      ],
-      "ids": []
-    },
-    "line_cut": {
-      "fields": [
-        "from_node",
-        "line",
-        "player",
-        "to_node"
-      ],
-      "ids": []
-    },
-    "line_rerouted": {
-      "fields": [
-        "from_node",
-        "line",
-        "player",
-        "to_node"
-      ],
-      "ids": []
     },
     "node_captured": {
       "fields": [
@@ -313,13 +266,6 @@
         "group"
       ]
     },
-    "rear_min_set": {
-      "fields": [
-        "n",
-        "player"
-      ],
-      "ids": []
-    },
     "recruit_cancelled": {
       "fields": [
         "cp",
@@ -363,14 +309,6 @@
       ],
       "ids": []
     },
-    "road_upgraded": {
-      "fields": [
-        "edge",
-        "player",
-        "width"
-      ],
-      "ids": []
-    },
     "stance_changed": {
       "fields": [
         "player",
@@ -408,19 +346,6 @@
       ],
       "ids": []
     },
-    "transfer_started": {
-      "fields": [
-        "arrive_tick",
-        "charges",
-        "from_node",
-        "packet",
-        "player",
-        "to_node"
-      ],
-      "ids": [
-        "packet"
-      ]
-    },
     "vp_awarded": {
       "fields": [
         "player",
@@ -433,14 +358,6 @@
         "charges",
         "node",
         "owner"
-      ],
-      "ids": []
-    },
-    "warehouse_upgraded": {
-      "fields": [
-        "level",
-        "node",
-        "player"
       ],
       "ids": []
     }

@@ -4,6 +4,8 @@
 
 Golden folders are frozen: a rule change needs a ``SIM_VERSION`` bump and a new ``v<N>`` folder,
 never regenerated files. New files may only go into the folder of the current ``SIM_VERSION``.
+Files of an older version may only be deleted, by an owner-approved cleanup (2026-11-09, #894):
+this code cannot check them any more; the review of the PR checks the approval.
 CI runs it on the merge commit of a PR, where ``HEAD^1`` is the base branch.
 """
 
@@ -22,6 +24,8 @@ def violations(changes: list[tuple[str, str]], sim_version: int) -> list[str]:
     for status, path in changes:
         if not path.startswith(f"{GOLDEN}v"):
             continue  # generate.py and other tooling may change
+        if status == "D" and not path.startswith(current):
+            continue  # an older version removed by an owner-approved cleanup (#894)
         if status != "A":
             bad.append(f"{status} {path}: golden files are frozen, bump SIM_VERSION instead")
         elif not path.startswith(current):

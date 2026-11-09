@@ -47,7 +47,7 @@ export function defenseSnapshot(map: MapFile): SnapshotMsg {
       next = { ...next, has_barracks: BARRACKS.includes(node.id) ? true : next.has_barracks };
     }
     if (node.id === SEEN_DEFENDING && node.seen !== null) {
-      next = { ...next, seen: { ...node.seen, enemy_modes: ['defense'] } };
+      next = { ...next, seen: { ...node.seen, enemy_modes: ['attack'] } }; // no «Defense»: removed (#894): stage 2 deletes this
     }
     return next;
   });
@@ -59,18 +59,18 @@ export function defenseSnapshot(map: MapFile): SnapshotMsg {
     id: id(500 + Number(node)),
     units: d.units,
     charged: d.charged,
-    mode: 'defense',
+    mode: 'attack',
     location: { kind: 'node', node: Number(node) },
     order: null,
     defense_bonus: d.bonus,
     defense_cap: d.cap,
   }));
   const intents: IntentView[] = [
-    ...base.view.intents.filter((i) => i.kind !== 'defense'),
+    ...base.view.intents,
     ...Object.keys(DEFENDERS).map((node) => ({
       id: id(600 + Number(node)),
       owner: 0 as const,
-      kind: 'defense' as const,
+      kind: 'planned_move' as const,
       origin: Number(node),
       target: null,
       created_tick: DEFENSE_TICK - 100,
@@ -78,7 +78,7 @@ export function defenseSnapshot(map: MapFile): SnapshotMsg {
     {
       id: id(699),
       owner: 1,
-      kind: 'defense',
+      kind: 'planned_move',
       origin: FOG_DEFENDING,
       target: null,
       created_tick: DEFENSE_TICK - 60,

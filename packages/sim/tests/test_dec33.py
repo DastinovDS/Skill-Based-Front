@@ -36,7 +36,7 @@ from gow_sim.state import (
 from gow_sim.systems import movement as movement_module
 from gow_sim.systems import vision as vision_module
 from gow_sim.systems.vision import vision
-from gow_sim.view import EdgeView, EnemyGroupView, PlayerView, opaque_id, project
+from gow_sim.view import EnemyGroupView, PlayerView, opaque_id, project
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
@@ -48,7 +48,7 @@ type MakeMap = Callable[..., MapDef]
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 def _state(mapdef: MapDef, rules: Ruleset, tick: int = 10) -> GameState:
@@ -59,7 +59,7 @@ def _state(mapdef: MapDef, rules: Ruleset, tick: int = 10) -> GameState:
     for n in range(len(mapdef.nodes)):
         if state.nodes[n].owner == 0:
             gid = state.new_id()
-            state.groups[gid] = Group(gid, 0, 1, 1, Mode.DEFENSE, AtNode(n))
+            state.groups[gid] = Group(gid, 0, 1, 1, Mode.ATTACK, AtNode(n))
     return state
 
 
@@ -118,17 +118,15 @@ def test_example_4_edge_between_two_visible_non_sources(
     make_fog_map: MakeMap, rules: Ruleset
 ) -> None:
     """M a source; E and F visible neighbours (forest, forest: ``RANGE``); the edge E-F has no
-    source; a group goes from E to F at 300 from E: a figure at 300 to F, «3-5»; the road level
-    of E-F is the last one seen (DEC-17)."""
+    source; a group goes from E to F at 300 from E: a figure at 300 to F, «3-5»; the edge E-F is
+    in fog (DEC-17)."""
     mapdef = make_fog_map("pff", [(M_NODE, E_NODE), (M_NODE, F_NODE), (E_NODE, F_NODE)])
     state = _state(mapdef, rules)
-    state.vision_memory[0].widths[2] = 2
-    state.edges[2].width = 3
     _group(state, 1, OnEdge(edge=2, from_node=E_NODE, progress=300))
     edge = _view(state, rules).edges[2]
     (figure,) = edge.enemy_groups
     assert _shown(figure) == (300, True, R, Mode.ATTACK, None, None, (3, 5))
-    assert (edge.detail, edge.width) == (F, 2)
+    assert edge.detail is F
 
 
 def _efm(make: MakeMap) -> MapDef:
@@ -143,7 +141,7 @@ def test_example_5_the_figure_vanishes_on_the_border(
     """A group goes from E into F: a figure in the half of E; on the border point it vanishes
     into the fog; none in the half of F, which shows the memory of F."""
     state = _state(_efm(make_fog_map), rules)
-    memory = Sighting(4, R, (Mode.DEFENSE,), None, None, (1, 2))
+    memory = Sighting(4, R, (Mode.ATTACK,), None, None, (1, 2))
     state.vision_memory[0].halves[1, F_NODE] = memory
     _group(state, 1, OnEdge(edge=1, from_node=E_NODE, progress=progress))
     edge = _view(state, rules).edges[1]
@@ -341,11 +339,10 @@ def test_detail_3_numbers_by_the_level_of_the_half(
     """Per group, not a sum: ``EXACT`` units and charged, ``RANGE`` the range of its units,
     ``PRESENCE`` no numbers; the mode on every level."""
     state = _state(_me(make_fog_map, e), rules)
-    g = _group(state, 1, _from_e(100))
-    g.mode = Mode.DEFENSE
+    _group(state, 1, _from_e(100))
     (figure,) = _figures(state, rules)
     assert (figure.detail, figure.units, figure.charged, figure.units_range) == data
-    assert figure.mode is Mode.DEFENSE
+    assert figure.mode is Mode.ATTACK
 
 
 def test_detail_4_groups_in_one_point_are_apart(make_fog_map: MakeMap, rules: Ruleset) -> None:
@@ -430,25 +427,11 @@ def test_detail_8_memory_has_no_positions(make_fog_map: MakeMap, rules: Ruleset)
     assert edge.enemy_groups == ()
 
 
-def test_detail_9_road_level_only_by_dec17(make_fog_map: MakeMap, rules: Ruleset) -> None:
-    """The figure moves at the speed of the true road level (the accepted rough leak), but the
-    road level shown and remembered changes only by DEC-17."""
-    mapdef = make_fog_map("pff", [(M_NODE, E_NODE), (M_NODE, F_NODE), (E_NODE, F_NODE)])
-    state = _state(mapdef, rules)
-    state.edges[2].width = 3
-    _group(state, 1, OnEdge(edge=2, from_node=E_NODE, progress=300, level=3))
-    vision(state, rules)
-    edge: EdgeView = _view(state, rules).edges[2]
-    assert len(edge.enemy_groups) == 1
-    assert edge.width == 1
-    assert 2 not in state.vision_memory[0].widths
-
-
 def test_detail_10_versions() -> None:
     """The memory of halves changes ``state_hash()``: ``SIM_VERSION`` 19 and later (the
     protocol side is checked in ``gow_protocol``); the ruleset has no DEC-33 numbers."""
     assert SIM_VERSION >= 19
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     assert {f.name for f in fields(rules.vision)} == {"range_starts", "by_terrain"}
 
 
@@ -463,7 +446,8 @@ class _Recorder:
 
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         if self.match is not None:
-            assert view == project(self.match.state, self.rules, self.player, KEY)
+            # The rules the match plays: the map tempo of mvp-7 applied (DEC-46).
+            assert view == project(self.match.state, self.match.rules, self.player, KEY)
         self.figures += sum(len(e.enemy_groups) for e in view.edges)
         return self.inner.decide(view, tick)
 

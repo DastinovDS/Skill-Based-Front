@@ -64,8 +64,7 @@ def bounce_back(
         e = failed(state, node, g, CaptureFailure.ENCIRCLED)
         del state.groups[g.id]
         return e
-    level = state.edges[edge].width  # a new start on the edge (DEC-28, item 7)
-    g.location = OnEdge(edge, from_node, PROGRESS_SCALE, back=True, level=level)
+    g.location = OnEdge(edge, from_node, PROGRESS_SCALE, back=True)
     g.order = None
     g.bonus = 0
     g.bonus_tick = 0

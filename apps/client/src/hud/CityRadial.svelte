@@ -29,7 +29,6 @@
   // DEC-26: with the city development the menu also builds the barracks and the warehouse.
   // A sector shows only its glyph and its price (the name is the accessible name); the reason a
   // sector is off is on the map and in the panel, never a line of text here.
-  const upgrades = $derived(orders.cityUpgrades);
   // A sector with nothing to do (no recruit without a barracks, the barracks is built, the
   // warehouse is at its top level) is not drawn; the others spread evenly around the ring.
   const v2 = $derived(orders.v2);
@@ -37,7 +36,7 @@
   // #762: no factory at the factory max, no "Fortify road" once every road of the node has its line.
   const choices = $derived(
     cityChoices(
-      upgrades,
+      { enabled: true, warehouse_max_level: 0 }, // removed (#894): stage 2 deletes this
       city,
       v2,
       province,

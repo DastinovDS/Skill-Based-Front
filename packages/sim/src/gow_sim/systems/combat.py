@@ -38,20 +38,15 @@ the side that made more shots wins (a side without groups loses), the loser boun
 stands, the winner goes on ``combat.regroup_ticks`` after the end (item G4). A bounce
 (``OnEdge.back``) goes back along the group's own steps; the order is dropped.
 
-Bonuses (item F): the active bonus of a group (``systems.orders.active_bonuses``) enters the
-virtual shots of its side when the group joins the fight and burns with the fight; "Defense" and
-the terrain of the node count only for a defender that has a charged unit at contact, and
-"Defense" only for groups standing there from the start. "Defense" brings what it has gathered,
-capped by the charged units of the group at contact; joining a fight resets its count (DEC-30).
-Mountains add virtual shots, plains silence real ones in every round (``terrain.defense_mod``);
-under ``combat.terrain_burn`` plains burn that many charges of the defender at the start of the
-first round instead, and nothing is silent after it (DEC-45).
-A bunker of the node (economy v2, DEC-41, item 12) adds ``bunker.shots`` virtual shots to the
-defender on the same condition as the terrain.
+Bonuses (item F): the active bonus of a planned order (``systems.orders.active_bonuses``)
+enters the virtual shots of its side when the group joins the fight and burns with the fight. The
+terrain of the node counts only for a defender that has a charged unit at contact: mountains add
+virtual shots, plains burn that many charges of the defender at the start of the first round
+(``terrain.defense_mod``, DEC-45); until then they do not shoot.
 
 Events: ``fight_started``, ``fight_round``, ``fight_ended`` (both players, every field: the
 shots of both sides with the virtual ones apart, the spent charges and the losses; DEC-24 items
-I1, I2 as revised with DEC-29; under ``combat.terrain_burn`` also the burned charges, DEC-45),
+I1, I2 as revised with DEC-29; also the burned charges, DEC-45),
 ``fight_group`` (the owner of the group: at the end of the fight and when the group withdraws),
 ``node_captured``. The latest round stays in ``Fight.last_round``
 for the view; the virtual shots still left (``Fight.virtual``) stay hidden.
@@ -59,7 +54,6 @@ for the view; the virtual shots still left (``Fight.virtual``) stay hidden.
 
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from enum import StrEnum
 
 from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset
@@ -82,8 +76,6 @@ from gow_sim.systems.fortify import Crossing, tolls
 from gow_sim.systems.movement import edge_between, leg
 
 __all__ = [
-    "Bonus",
-    "BonusSource",
     "Fighter",
     "RoundResult",
     "Side",
@@ -92,19 +84,6 @@ __all__ = [
     "combat",
     "play_round",
 ]
-
-
-class BonusSource(StrEnum):
-    PLANNED_ORDER = "planned_order"
-    DEFENSE_MODE = "defense_mode"
-
-
-@dataclass(frozen=True, slots=True)
-class Bonus:
-    """A bonus of a group for its next fight, in virtual shots (DEC-08, DEC-24 item F1)."""
-
-    source: BonusSource
-    amount: int
 
 
 # The round ---------------------------------------------------------------------------------------
@@ -123,8 +102,8 @@ class Fighter:
 class Side:
     """One side of a round; ``groups`` in ascending id order (ties by id inside a player).
 
-    ``virtual``: virtual shots left (bonuses, mountains); ``mute``: real charges silent in every
-    round (plains, DEC-24 item F2) or still to burn (DEC-45): they do not shoot either way.
+    ``virtual``: virtual shots left (bonuses, mountains); ``mute``: real charges still to burn
+    by the terrain at the start of the first round (plains, DEC-45): they do not shoot.
     """
 
     groups: list[Fighter]
@@ -199,8 +178,8 @@ def _take_charge(side: Side) -> None:
 
 
 def burn(sides: tuple[Side, Side]) -> tuple[int, int]:
-    """The start of the first round under ``combat.terrain_burn`` (DEC-45): the charges of
-    ``Side.mute`` are gone, as many as the side has, and nothing is silent any more. The shots of
+    """The start of the first round (DEC-45): the charges of ``Side.mute`` are gone, as many as
+    the side has, and nothing is silent any more. The shots of
     the round are counted after it. A side alone in the fight burns nothing: there is no round."""
     burned = [0, 0]
     for p in PLAYERS:
@@ -235,12 +214,10 @@ class _Arrival:
     from_node: int
     back: bool
     planned: bool
-    level: int
-    """The road level the group crossed the edge at (``OnEdge.level``, DEC-28, item 7)."""
 
 
 def combat(
-    state: GameState, rules: Ruleset, bonuses: Mapping[int, Bonus] | None = None
+    state: GameState, rules: Ruleset, bonuses: Mapping[int, int] | None = None
 ) -> list[Event]:
     """The combat system (see the module docstring).
 
@@ -267,12 +244,11 @@ def _arrivals(state: GameState) -> dict[int, _Arrival]:
             continue
         gid, node, edge = e.get("group"), e.get("node"), e.get("edge")
         from_node, back, planned = e.get("from_node"), e.get("back"), e.get("planned")
-        level = e.get("level")
         assert isinstance(gid, int) and isinstance(node, int)
         assert isinstance(edge, int) and isinstance(from_node, int)
-        assert isinstance(back, bool) and isinstance(planned, bool) and isinstance(level, int)
+        assert isinstance(back, bool) and isinstance(planned, bool)
         if gid in state.groups and state.groups[gid].location == AtNode(node):
-            result[gid] = _Arrival(node, edge, from_node, back, planned, level)
+            result[gid] = _Arrival(node, edge, from_node, back, planned)
     return result
 
 
@@ -310,7 +286,7 @@ def _edge_presence(
     loc = g.location
     if isinstance(loc, OnEdge):
         far = mapdef.edges[loc.edge].other(loc.from_node)
-        way = leg(mapdef, rules, loc.edge, far, loc.level)
+        way = leg(mapdef, rules, loc.edge, far)
         spent = way.spent(loc.progress)
         if loc.back:
             heading, progress = loc.from_node, PROGRESS_SCALE - loc.progress
@@ -322,9 +298,9 @@ def _edge_presence(
         return _presence(state, gid, loc.edge, heading, progress, loc.back, before)
     a = arrivals[gid]
     if a.back:  # one step of the bounce before home: from_node is the far end
-        before = PROGRESS_SCALE - leg(mapdef, rules, a.edge, a.from_node, a.level).progress(1)
+        before = PROGRESS_SCALE - leg(mapdef, rules, a.edge, a.from_node).progress(1)
     else:
-        way = leg(mapdef, rules, a.edge, a.node, a.level)
+        way = leg(mapdef, rules, a.edge, a.node)
         before = way.progress(way.ticks - 1)
     return _presence(state, gid, a.edge, a.node, PROGRESS_SCALE, a.back, before)
 
@@ -367,12 +343,12 @@ def _meet(x: _OnEdge, y: _OnEdge) -> bool:
 
 
 def _tolls(
-    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
+    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, int]
 ) -> list[Event]:
     """Step 0: the toll of road fortifications (DEC-43, item D6; ``systems.fortify``) on the moves
     of this tick, before any fight of the tick takes the groups: a group that pays brings a
     planned bonus of at most its charged units into a fight (DEC-29)."""
-    if rules.fort is None or not any(n.road_forts for n in state.nodes.values()):
+    if not any(n.road_forts for n in state.nodes.values()):
         return []
     by_edge = _on_edges(state, arrivals)
     crossings: dict[int, Crossing] = {}
@@ -384,8 +360,8 @@ def _tolls(
     def capped(gid: int) -> None:
         b = bonus.get(gid)
         charged = state.groups[gid].charged
-        if b is not None and b.source is BonusSource.PLANNED_ORDER and b.amount > charged:
-            bonus[gid] = Bonus(b.source, charged)
+        if b is not None and b > charged:
+            bonus[gid] = charged
 
     return tolls(state, rules, crossings, capped)
 
@@ -394,7 +370,7 @@ def _edge_meetings(
     state: GameState,
     rules: Ruleset,
     arrivals: dict[int, _Arrival],
-    bonus: dict[int, Bonus],
+    bonus: dict[int, int],
     busy: dict[int, int],
 ) -> list[Event]:
     """Item C2: new fights on edges without one; every meeting of an edge in a tick is one fight."""
@@ -419,7 +395,7 @@ def _edge_meetings(
 
 
 def _edge_joins(
-    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
+    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, int]
 ) -> None:
     """Item D2: a group whose position reached or passed the point of its edge's fight in this
     tick stops where it is and joins."""
@@ -448,7 +424,7 @@ def _join_edge(
     fight: Fight,
     x: _OnEdge,
     arrivals: dict[int, _Arrival],
-    bonus: dict[int, Bonus],
+    bonus: dict[int, int],
 ) -> None:
     """``x`` stops on the edge where it is and joins ``fight``; an arrival of this tick is put back
     on its edge (forward: at 1000 with its order to the node; back: at 0 of the way home)."""
@@ -456,18 +432,18 @@ def _join_edge(
     a = arrivals.pop(x.gid, None)
     if a is not None:
         if a.back:
-            g.location = OnEdge(a.edge, a.node, 0, back=True, level=a.level)
+            g.location = OnEdge(a.edge, a.node, 0, back=True)
         else:
-            g.location = OnEdge(a.edge, a.from_node, PROGRESS_SCALE, level=a.level)
+            g.location = OnEdge(a.edge, a.from_node, PROGRESS_SCALE)
             g.order = Order((a.node,), a.planned, state.tick)
-    _join(fight, g, FightMember(g.owner, g.units, g.charged), bonus, defense=False)
+    _join(fight, g, FightMember(g.owner, g.units, g.charged), bonus)
 
 
 # Nodes -----------------------------------------------------------------------------------------
 
 
 def _node_contacts(
-    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
+    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, int]
 ) -> list[Event]:
     """Items C1 and D1 (with the engagement zone of DEC-37), node by node in id order."""
     standing: dict[int, list[Group]] = {}
@@ -483,7 +459,7 @@ def _node_contacts(
         if node_id in fight_at:  # item D1: every group that finished here joins its side
             fight = state.fights[fight_at[node_id]]
             for g in here:
-                _join(fight, g, _node_member(g, arrivals), bonus, defense=False)
+                _join(fight, g, _node_member(g, arrivals), bonus)
             continue
         owners = {p: [g for g in here if g.owner == p] for p in PLAYERS}
         owner = state.nodes[node_id].owner
@@ -519,25 +495,19 @@ def _node_contacts(
         events.append(_started(state, fight))
         defender = None if attacker is None else 1 - attacker
         if defender is not None and sum(g.charged for g in owners[defender]) > 0:
-            # Item F2: the defender has a charged unit at contact, so terrain counts to the end.
+            # Item F2: the defender has a charged unit at contact, so terrain counts (DEC-45).
             mod = rules.terrain.defense_mod.of(state.map.nodes[node_id].terrain)
             _add_virtual(fight, defender, max(0, mod))
-            # DEC-41, item 12: the bunker, like the terrain; TODO(#651): node fights only.
-            if state.nodes[node_id].fort:
-                _add_virtual(fight, defender, rules.bunker_rules().shots)
             mute = [0, 0]
             mute[defender] = max(0, -mod)
             fight.mute = (mute[0], mute[1])
-            armed = True
-        else:
-            armed = False
         for g in here:
-            _join(fight, g, _node_member(g, arrivals), bonus, defense=armed and g.owner == defender)
+            _join(fight, g, _node_member(g, arrivals), bonus)
         if attacker is not None:  # DEC-37, item 3: caught groups leave after the nearest round
             for g in zone.get(node_id, []):
                 if g.owner == defender:
                     member = FightMember(g.owner, g.units, g.charged, leaving=True)
-                    _join(fight, g, member, bonus, defense=False)
+                    _join(fight, g, member, bonus)
     return events
 
 
@@ -556,7 +526,7 @@ def _engage_zones(state: GameState, rules: Ruleset) -> dict[int, list[Group]]:
         if g.fight is not None or not isinstance(loc, OnEdge) or loc.back:
             continue
         far = mapdef.edges[loc.edge].other(loc.from_node)
-        if leg(mapdef, rules, loc.edge, far, loc.level).spent(loc.progress) <= limit:
+        if leg(mapdef, rules, loc.edge, far).spent(loc.progress) <= limit:
             zones.setdefault(loc.from_node, []).append(g)
     return zones
 
@@ -613,23 +583,17 @@ def _new_fight(
     return fight
 
 
-def _join(
-    fight: Fight, g: Group, member: FightMember, bonus: dict[int, Bonus], *, defense: bool
-) -> None:
-    """``g`` joins ``fight`` with its active bonus (item F1): a planned bonus always counts,
-    "Defense" only when ``defense`` (a defender of the node from the start with a charged unit,
-    item F2). The active bonus leaves the group either way: it burns with this fight; "Defense"
-    starts gathering anew after the fight (DEC-30)."""
+def _join(fight: Fight, g: Group, member: FightMember, bonus: dict[int, int]) -> None:
+    """``g`` joins ``fight`` with the active bonus of its planned order (item F1); the bonus
+    leaves the group: it burns with this fight."""
     fight.members[g.id] = member
     g.fight = fight.id
-    g.ticks_in_defense = 0
     b = bonus.pop(g.id, None)
     if b is None:
         return
     g.bonus = 0
     g.bonus_tick = 0
-    if b.source is BonusSource.PLANNED_ORDER or defense:
-        _add_virtual(fight, g.owner, b.amount)
+    _add_virtual(fight, g.owner, b)
 
 
 def _add_virtual(fight: Fight, player: int, amount: int) -> None:
@@ -694,10 +658,8 @@ def _run(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
 
 def _round(state: GameState, rules: Ruleset, fight: Fight) -> Event:
     sides = _sides(state, fight)
-    burning = rules.combat.terrain_burn
-    burned = burn(sides) if burning else (0, 0)
-    if burning:
-        fight.mute = (0, 0)
+    burned = burn(sides)
+    fight.mute = (0, 0)
     result = play_round(sides, rules.combat.shots_per_round)
     for p in PLAYERS:
         for f in sides[p].groups:
@@ -711,7 +673,7 @@ def _round(state: GameState, rules: Ruleset, fight: Fight) -> Event:
     fight.last_round = FightRound(
         state.tick, result.shots, result.virtual, result.spent, result.losses, burned
     )
-    played = event(
+    return event(
         state.tick,
         "fight_round",
         fight=fight.id,
@@ -729,10 +691,6 @@ def _round(state: GameState, rules: Ruleset, fight: Fight) -> Event:
         burned_0=burned[0],
         burned_1=burned[1],
     )
-    if burning:
-        return played
-    # A ruleset without the key keeps the canonical form of its events (DEC-45).
-    return replace(played, data=tuple(kv for kv in played.data if not kv[0].startswith("burned")))
 
 
 def _withdraw(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
@@ -749,18 +707,17 @@ def _withdraw(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
         if _caught(fight, g):
             pass  # DEC-37, item 3: it goes on with its order from where it stands
         elif isinstance(loc, OnEdge):
-            g.location = OnEdge(loc.edge, loc.from_node, loc.progress, back=True, level=loc.level)
+            g.location = OnEdge(loc.edge, loc.from_node, loc.progress, back=True)
             g.order = None
         elif m.edge is not None and m.from_node is not None:  # an attacker of the node
-            level = state.edges[m.edge].width  # a new start on the edge (DEC-28, item 7)
-            g.location = OnEdge(m.edge, m.from_node, PROGRESS_SCALE, back=True, level=level)
+            g.location = OnEdge(m.edge, m.from_node, PROGRESS_SCALE, back=True)
             g.order = None
         else:  # a defender with its ``Move``
             node = loc.node
             nxt = g.order.path[0] if g.order is not None and g.order.path else None
             eid = None if nxt is None else edge_between(state.map, node, nxt)
             if eid is not None:
-                g.location = OnEdge(eid, node, 0, level=state.edges[eid].width)
+                g.location = OnEdge(eid, node, 0)
         del fight.members[gid]
         g.fight = None
         events.append(_group_event(state, gid, m, g, left=True))
@@ -832,8 +789,7 @@ def _end(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
                     continue
                 if m.edge is None or m.from_node is None:
                     raise ValueError(f"group {g.id} bounces from node {node} without a way back")
-                level = state.edges[m.edge].width  # a new start on the edge (DEC-28, item 7)
-                g.location = OnEdge(m.edge, m.from_node, PROGRESS_SCALE, back=True, level=level)
+                g.location = OnEdge(m.edge, m.from_node, PROGRESS_SCALE, back=True)
                 g.order = None
     fight.losses = (losses[0], losses[1])
     events = [

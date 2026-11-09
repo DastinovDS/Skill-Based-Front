@@ -1,13 +1,12 @@
 {
   "schema_version": 2,
-  "source": "docs/design/mechanics.md, section 4, \"The fight arena (DEC-32, #327)\": the worked examples at `round_ticks = 20` (the rules and rounds of \"Fight over time\", DEC-24, #261; the outcomes of DEC-07); examples 1-16 in vectors, 17-23 in scenarios",
+  "source": "docs/design/mechanics.md, section 4, \"The fight arena (DEC-32, #327)\": the worked examples at `round_ticks = 20` (the rules and rounds of \"Fight over time\", DEC-24, #261; the outcomes of DEC-07); examples 1-16 in vectors, 17-23 in scenarios; the rows of removed rules (\"Defense\": 10, 16, 22, 22N; the silencing plains: 8) are dropped (#894)",
   "params": {
     "terrain_defense_mod": {
       "mountains": 1,
       "forest": 0,
       "plains": -1
     },
-    "defense_bonus": 2,
     "round_ticks": 20,
     "shots_per_round": 1,
     "regroup_ticks": 10
@@ -572,87 +571,6 @@
       "note": "Rounds: terrain does not enter (item F2). r1, r2 1 killed each. Result: the defense has 1; bounce; `t+40`."
     },
     {
-      "id": 8,
-      "source_row": {
-        "attack": "2 charged",
-        "defense": "2 charged, plains",
-        "rounds": "one charge of the defense is silent. r1 canc. (1 / 1, silent); r2 the attack kills 1 discharged",
-        "result": "the defense has 1 charged; the attack (2, discharged) bounces; `t+40`"
-      },
-      "location": "node_attack",
-      "terrain": "plains",
-      "node_owner_before": "b",
-      "sides": {
-        "a": {
-          "role": "attacker",
-          "bonus": null,
-          "groups": [
-            {
-              "id": 1,
-              "units": 2,
-              "charged": 2,
-              "mode": "attack"
-            }
-          ]
-        },
-        "b": {
-          "role": "defender",
-          "bonus": null,
-          "groups": [
-            {
-              "id": 2,
-              "units": 2,
-              "charged": 2,
-              "mode": "attack"
-            }
-          ]
-        }
-      },
-      "expected": {
-        "fight": true,
-        "end_after": 40,
-        "rounds": 2,
-        "trace": [
-          {
-            "round": 1,
-            "charged": {
-              "a": 1,
-              "b": 1
-            }
-          }
-        ],
-        "shots": null,
-        "losses": {
-          "a": 0,
-          "b": 1
-        },
-        "groups": {
-          "a": [
-            {
-              "id": 1,
-              "units": 2,
-              "charged": 0
-            }
-          ],
-          "b": [
-            {
-              "id": 2,
-              "units": 1,
-              "charged": 1
-            }
-          ]
-        },
-        "bounce": {
-          "a": true,
-          "b": false
-        },
-        "node_owner_after": "b",
-        "continues_on_edge": null,
-        "goes_on_after": null
-      },
-      "note": "Rounds: one charge of the defense is silent. r1 canc. (1 / 1, silent); r2 the attack kills 1 discharged. Result: the defense has 1 charged; the attack (2, discharged) bounces; `t+40`."
-    },
-    {
       "id": 9,
       "source_row": {
         "attack": "2 charged + plan (+2)",
@@ -742,97 +660,6 @@
         "goes_on_after": null
       },
       "note": "Rounds: `V` of the attack 2. r1 canc. (the attack by the virtual one; 2 / 1); r2 canc. (the attack by the virtual one; 2 / 0); r3, r4 the attack kills 1 each. Result: the node is taken, the attack has 2 discharged; `t+80`."
-    },
-    {
-      "id": 10,
-      "source_row": {
-        "attack": "3 charged",
-        "defense": "2 charged + \"Defense\" (+2)",
-        "rounds": "`V` of the defense 2. r1, r2 canc. (the defense by the virtual ones; 1 / 2); r3 canc. (0 / 1); r4 the defense kills 1",
-        "result": "the attack (2, discharged) bounces; the defense has 2 discharged; `t+80`"
-      },
-      "location": "node_attack",
-      "terrain": "forest",
-      "node_owner_before": "b",
-      "sides": {
-        "a": {
-          "role": "attacker",
-          "bonus": null,
-          "groups": [
-            {
-              "id": 1,
-              "units": 3,
-              "charged": 3,
-              "mode": "attack"
-            }
-          ]
-        },
-        "b": {
-          "role": "defender",
-          "bonus": {
-            "source": "defense_mode",
-            "amount": 2
-          },
-          "groups": [
-            {
-              "id": 2,
-              "units": 2,
-              "charged": 2,
-              "mode": "defense"
-            }
-          ]
-        }
-      },
-      "expected": {
-        "fight": true,
-        "end_after": 80,
-        "rounds": 4,
-        "trace": [
-          {
-            "round": 2,
-            "charged": {
-              "a": 1,
-              "b": 2
-            }
-          },
-          {
-            "round": 3,
-            "charged": {
-              "a": 0,
-              "b": 1
-            }
-          }
-        ],
-        "shots": null,
-        "losses": {
-          "a": 1,
-          "b": 0
-        },
-        "groups": {
-          "a": [
-            {
-              "id": 1,
-              "units": 2,
-              "charged": 0
-            }
-          ],
-          "b": [
-            {
-              "id": 2,
-              "units": 2,
-              "charged": 0
-            }
-          ]
-        },
-        "bounce": {
-          "a": true,
-          "b": false
-        },
-        "node_owner_after": "b",
-        "continues_on_edge": null,
-        "goes_on_after": null
-      },
-      "note": "Rounds: `V` of the defense 2. r1, r2 canc. (the defense by the virtual ones; 1 / 2); r3 canc. (0 / 1); r4 the defense kills 1. Result: the attack (2, discharged) bounces; the defense has 2 discharged; `t+80`."
     },
     {
       "id": 11,
@@ -1218,82 +1045,6 @@
         "goes_on_after": null
       },
       "note": "Rounds: r1 1 killed by a virtual shot. Result: the node is taken, the attack has 3 charged; `t+20`."
-    },
-    {
-      "id": 16,
-      "source_row": {
-        "attack": "3 charged",
-        "defense": "2 discharged + \"Defense\" (+2)",
-        "rounds": "\"Defense\" does not enter (item F2). r1, r2 1 killed each",
-        "result": "the node is taken, the attack has 1 charged; `t+40`"
-      },
-      "location": "node_attack",
-      "terrain": "forest",
-      "node_owner_before": "b",
-      "sides": {
-        "a": {
-          "role": "attacker",
-          "bonus": null,
-          "groups": [
-            {
-              "id": 1,
-              "units": 3,
-              "charged": 3,
-              "mode": "attack"
-            }
-          ]
-        },
-        "b": {
-          "role": "defender",
-          "bonus": {
-            "source": "defense_mode",
-            "amount": 2
-          },
-          "groups": [
-            {
-              "id": 2,
-              "units": 2,
-              "charged": 0,
-              "mode": "defense"
-            }
-          ]
-        }
-      },
-      "expected": {
-        "fight": true,
-        "end_after": 40,
-        "rounds": 2,
-        "trace": [],
-        "shots": null,
-        "losses": {
-          "a": 0,
-          "b": 2
-        },
-        "groups": {
-          "a": [
-            {
-              "id": 1,
-              "units": 3,
-              "charged": 1
-            }
-          ],
-          "b": [
-            {
-              "id": 2,
-              "units": 0,
-              "charged": 0
-            }
-          ]
-        },
-        "bounce": {
-          "a": false,
-          "b": false
-        },
-        "node_owner_after": "a",
-        "continues_on_edge": null,
-        "goes_on_after": null
-      },
-      "note": "Rounds: \"Defense\" does not enter (item F2). r1, r2 1 killed each. Result: the node is taken, the attack has 1 charged; `t+40`."
     }
   ],
   "scenarios": [
@@ -1431,22 +1182,6 @@
       }
     },
     {
-      "id": "22",
-      "source_row": "The attack's retreat. As row 10; in t+22 (between r1 and r2) the attack gives CancelOrder. r1 canc. (2 / defense V 1); r2 canc. (1 / V 0, 2 charged); after r2 the attack goes back. The attack without losses: 3 units, 1 charged; the \"Defense\" bonus burned; the fight until t+40, the node stays with the defense",
-      "expected": {
-        "cancel_after": 22,
-        "end_after": 40,
-        "attack": {
-          "units": 3,
-          "charged": 1
-        },
-        "defense": {
-          "units": 2,
-          "charged": 2
-        }
-      }
-    },
-    {
       "id": "21N",
       "source_row": "Row 21 under combat.retreat = \"none\" (DEC-40, variant N, #626): the defender's Move in t+24 is rejected IN_FIGHT; as row 3: r1, r2 canc. (2 / 0); r3, r4 1 killed each; the defense destroyed, the node taken at t+80 by 4 discharged",
       "expected": {
@@ -1475,23 +1210,6 @@
         },
         "defense_units": 0,
         "cost": 0
-      }
-    },
-    {
-      "id": "22N",
-      "source_row": "Row 22 under combat.retreat = \"none\" (DEC-40, variant N, #626): the attack's CancelOrder in t+22 is rejected IN_FIGHT; as row 10: the attack loses 1 and bounces with 2 discharged at t+80, the defense 2 discharged",
-      "expected": {
-        "cancel_after": 22,
-        "reject": "IN_FIGHT",
-        "end_after": 80,
-        "attack": {
-          "units": 2,
-          "charged": 0
-        },
-        "defense": {
-          "units": 2,
-          "charged": 0
-        }
       }
     },
     {

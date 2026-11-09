@@ -2,9 +2,8 @@
 
 Supply flows from the capital through the connected territory (mechanics.md, sections 7 and 9),
 so taking a city cuts the roads through it: the cities behind it lose the connection (their
-warehouse is no longer refilled) and the upgraded roads into it stop carrying supply (DEC-22:
-roads change supply only). ``cut_value`` prices a city by that damage, from the public ownership
-of the nodes and the known road levels only, and the Strangler attacks the most damaging city it
+warehouse is no longer refilled). ``cut_value`` prices a city by that damage, from the public
+ownership of the nodes only, and the Strangler attacks the most damaging city it
 can take. A city taken that
 way is held (``hold`` units stay), the enemy cities that are already cut are besieged in waves:
 after a bounce the estimate of a cut city drops (``CampaignBot._starve``), so the next wave is
@@ -19,7 +18,7 @@ from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import CampaignBot, Ctx
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import GroupView, PlayerView, Stance
+from gow_sim.view import GroupView, PlayerView
 
 __all__ = ["StranglerBot"]
 
@@ -29,7 +28,6 @@ CUT_REFRESH_TICKS = 20
 
 class StranglerBot(CampaignBot):
     name: ClassVar[str] = "strangler"
-    STANCE: ClassVar[Stance] = Stance.BALANCE
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         "radius": ParamRange(2, 4),
         "margin": ParamRange(0, 1),
@@ -61,11 +59,7 @@ class StranglerBot(CampaignBot):
                     seen.add(other)
                     queue.append(other)
         lost = len(net) - 1 - len(seen)
-        roads = sum(
-            100 * view.edges[e].width
-            for e in self.incident[node]
-            if self.map.edges[e].other(node) in net
-        )
+        roads = sum(100 for e in self.incident[node] if self.map.edges[e].other(node) in net)
         return 100 * lost + roads // 4
 
     def values(self, view: PlayerView) -> dict[int, int]:

@@ -4,7 +4,7 @@ Expected values are worked out by hand from DEC-22 (#234), item 1: the capacity 
 ``capacity.by_kind[kind]`` (capital 10, large 8, medium 6, small 4, province 3) and does not depend
 on roads, the owner or supply. Attrition details: DEC-12.
 
-The map ``fork`` (rot180), every road level 1:
+The map ``fork`` (rot180):
 
     0 (capital of 0) -e0- 1 (small) -e2- 3 (small) -e4- 4 (small) ...
     0 -e1- 2 (small) -e3- 3
@@ -40,9 +40,9 @@ from gow_sim.systems.capacity import (
 )
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP7 = TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml"
 
-_BASE = load_ruleset(MVP0)
+_BASE = load_ruleset(MVP7)
 # DEC-22, item 1 (capacity by kind) and the SIM-07 starting values (attrition 30, grace 50).
 RULES: Ruleset = dataclasses.replace(
     _BASE,
@@ -111,18 +111,11 @@ def test_capacity_by_kind_with_neutral_and_owned_centre() -> None:
     assert node_capacities(_fork(), RULES) == FORK_CAPACITIES
 
 
-def test_roads_do_not_change_capacity() -> None:
-    state = _fork()
-    for eid in (2, 3):
-        state.edges[eid].width = 3
-    assert node_capacities(state, RULES) == FORK_CAPACITIES
-
-
 def test_cut_off_node_keeps_its_capacity() -> None:
     state = _fork()
     state.nodes[1].owner = 1
     state.nodes[2].owner = 1
-    # 3 is own but no longer connected to capital 0: no capacity drop (DEC-22, item 1; DEC-19).
+    # 3 is own but no longer connected to capital 0: no capacity drop (DEC-22, item 1).
     assert node_capacities(state, RULES) == FORK_CAPACITIES
 
 
@@ -148,16 +141,14 @@ def test_capacity_follows_the_ruleset_table(kind: str, expected: int) -> None:
 # Owner change --------------------------------------------------------------------------------
 
 
-def test_change_owner_empties_the_warehouse_and_keeps_roads() -> None:
+def test_change_owner_empties_the_warehouse() -> None:
     state = _fork()
     state.tick = 40
     state.nodes[3].warehouse = 4
     state.nodes[3].over_ticks = 12
-    state.edges[2].width = 3
     events = change_owner(state, 3, 1)
     node = state.nodes[3]
     assert (node.owner, node.warehouse, node.over_ticks, node.captured_tick) == (1, 0, 0, 40)
-    assert [e.width for e in state.edges.values()] == [1, 1, 3, 1, 1, 1, 1, 1, 1]
     assert [(e.kind, e.get("node"), e.get("owner"), e.get("charges")) for e in events] == [
         ("warehouse_lost", 3, 0, 4)
     ]

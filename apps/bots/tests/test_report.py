@@ -197,7 +197,9 @@ def test_cli_report_writes_the_charge_stock_section(tmp_path: Path) -> None:
 
 
 def _flow_rows() -> list[dict[str, Any]]:
-    """One match, rusher (side 0) against expander (side 1), worked by hand."""
+    """One match, rusher (side 0) against expander (side 1), worked by hand. A row of schema 1:
+    the fields of economy v1 (``charges_delivered_front``, the marker ticks, ``front_wh``) are
+    still in it and are not read since #894."""
     zeros = [0, 0]
     return [
         _row("alpha", 0, "rusher", "expander")
@@ -236,28 +238,28 @@ def test_report_prints_the_charge_flow_table(tmp_path: Path) -> None:
     text = render_report(load_rows(_write(tmp_path / "f.jsonl", _flow_rows())), "f.jsonl", "f")
     assert "## Charge flow (#588)" in text
     # rusher: start 10, produced 20, burned 4, fights 2, captures 3, packets lost 1, warehouses 0,
-    # starved 0, attrition 0, built 0, plans 0 (a file without the v2 sinks), end 20, residual 0,
-    # sent/delivered/to markers 8 / 6 / 2,
-    # marker city empty 100 of 500 = 20%, capital has charges 50 of 500 = 10%, capital full 25%.
+    # starved 0, attrition 0, built 0, plans 0 (a file without the v2 sinks), tolls n/a, end 20,
+    # residual 0, sent / delivered 8 / 6, capital full 250 of 1000 ticks = 25%.
     row = (
         "| **rusher** | 1 | 10.0 | 20.0 | 4.0 | 2.0 | 3.0 | 1.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 "
-        "| 20.0 | 0 "
-        "| 8.0 / 6.0 / 2.0 | 20% | 10% | 25% |"
+        "| n/a | 20.0 | 0 | 8.0 / 6.0 | 25% |"
     )
     assert row in text
     # Stock by place of the rusher: cap_wh minutes 2.00 and 4.00 -> 3.00; rear_wh 1.00 (the
     # minute without a sample is skipped); packets 0.50. The expander has no sample at all.
-    assert "| **rusher** | 1 | 3.00 | 0.00 | 1.00 | 0.00 | 0.00 | 0.50 |" in text
-    assert "| **expander** | 0 | n/a | n/a | n/a | n/a | n/a | n/a |" in text
+    assert "| **rusher** | 1 | 3.00 | 1.00 | 0.00 | 0.00 | 0.50 |" in text
+    assert "| **expander** | 0 | n/a | n/a | n/a | n/a | n/a |" in text
+    assert "front_wh" not in text and "marker city empty" not in text
+    assert "n/a (a file written before #690)" in text  # no first contact in the row
 
 
 def test_report_charge_flow_shows_the_v2_sinks(tmp_path: Path) -> None:
     # #646, #648: the economy v2 sinks are columns of the ledger when the row has them.
     rows = [_flow_rows()[0] | {"charges_built": [7, 0], "charges_plans": [3, 1]}]
     text = render_report(load_rows(_write(tmp_path / "f.jsonl", rows)), "f.jsonl", "f")
-    assert "| died with units | built | plans | end |" in text
-    assert "| 0.0 | 0.0 | 0.0 | 7.0 | 3.0 | 20.0 | 0 " in text
-    assert "| 2.0 | 0.0 | 1.0 | 0.0 | 1.0 | 12.0 | 0 " in text
+    assert "| died with units | built | plans | tolls | end |" in text
+    assert "| 0.0 | 0.0 | 0.0 | 7.0 | 3.0 | n/a | 20.0 | 0 " in text
+    assert "| 2.0 | 0.0 | 1.0 | 0.0 | 1.0 | n/a | 12.0 | 0 " in text
 
 
 def test_report_charge_flow_without_the_fields_is_na(tournament: Path) -> None:
@@ -444,10 +446,11 @@ def _v2_row(**extra: Any) -> dict[str, Any]:
     )
 
 
-def test_report_under_the_supply_flow_hides_the_v1_rows(tmp_path: Path) -> None:
+def test_report_of_a_flow_match_has_no_v1_rows(tmp_path: Path) -> None:
+    # ``economy_model`` and ``supply_model`` of a schema 1 row are not read since #894.
     rows = [_v2_row(economy_model="v2", supply_model="flow")]
     text = render_report(load_rows(_write(tmp_path / "f.jsonl", rows)), "f.jsonl", "f")
-    assert "- Economy: `v2`, supply `flow`.\n" in text
+    assert "- Economy:" not in text
     assert "alpha 321 (0 of 1 never met)" in text
     flow = _section(text, "Charge flow (#588)")
     assert "marker city empty" not in flow and "front_wh" not in flow
@@ -476,19 +479,12 @@ def test_report_under_the_supply_flow_hides_the_v1_rows(tmp_path: Path) -> None:
     # charges at the rusher's forts, starved 0
     assert "| **rusher** | 1 | 5.00 | 2.00 | 2.00 | 1.00 | 1.00 | 2.00 | 0.00 |" in supply
     usage = _section(text, "Mechanic usage (#166)")
-    assert "| SetLeafShift |" in usage and "| SetFront |" not in usage
-    assert "SetStance, UpgradeRoad, SetFront, SetRearMin, Transfer, DrawLine, RemoveLine" in usage
+    assert "| SetLeafShift |" in usage and "| SetStance |" in usage
+    for dead in ("SetFront", "SetRearMin", "Transfer", "UpgradeRoad", "DrawLine", "SetMode"):
+        assert dead not in usage
     bots = _section(text, "Metrics by bot")
     # fights 3 and walk-ins 1 per match; contested: 1 won of 2
     assert "| 3.00 / 1.00 | 0.50 (1/2) |" in bots
-
-
-def test_report_infers_the_economy_of_an_older_file(tmp_path: Path) -> None:
-    text = render_report(load_rows(_write(tmp_path / "o.jsonl", [_v2_row()])), "o.jsonl", "o")
-    assert "- Economy: `v2`, supply `flow` (inferred from the mechanics used" in text
-    old = render_report(load_rows(_write(tmp_path / "t.jsonl", _flow_rows())), "t.jsonl", "t")
-    assert "- Economy: `v1` (inferred" in old  # marker ticks: v1
-    assert "n/a (a file written before #690)" in old
 
 
 def test_report_prints_every_server_level_against_the_exploiter(tmp_path: Path) -> None:

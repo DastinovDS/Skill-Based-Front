@@ -37,7 +37,7 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("--seeds", type=int, default=100, help="seeds per map and pair (default 100)")
     t.add_argument("--seed-base", type=int, default=0, help="first seed (default 0)")
     t.add_argument("--jobs", type=int, default=None, help="worker processes (default: CPU count)")
-    t.add_argument("--ruleset", default="rulesets/mvp-0.toml")
+    t.add_argument("--ruleset", default="rulesets/mvp-7.toml")
     t.add_argument("--out", default=DEFAULT_OUT, help=f"result file (default {DEFAULT_OUT})")
     t.add_argument("--replays", default=None, help="folder to record a replay of every match")
     a = sub.add_parser("analyze", help="print the metrics and statistics of replay files as JSONL")

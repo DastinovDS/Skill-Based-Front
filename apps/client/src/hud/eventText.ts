@@ -57,22 +57,14 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'match_ended',
   'attrition',
   'build_started',
-  'road_upgraded',
   'build_stopped',
   'barracks_built',
-  'warehouse_upgraded',
   'packet_lost',
-  'transfer_started',
   'starvation',
   // A capture the group could not pay for (DEC-38): only its player gets it.
   'capture_failed',
-  // Economy v2 (DEC-41, #649): a factory or a bunker done, a supply line cut or rerouted.
+  // Economy v2 (DEC-41, #649): a factory done.
   'factory_built',
-  'fort_built',
-  'line_cut',
-  'line_rerouted',
-  // A line the auto-extension drew to a captured city (#665): the journal only, the capture has the toast.
-  'line_auto',
   // Road fortifications (DEC-43, item D; #707): a line starts to work or is lost with its city, and a
   // toll paid or taken (the map shows each as a beam, the feed keeps the count).
   'road_fort_built',
@@ -142,18 +134,12 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
         return tf('event.build_started.road_fort', { node: names(num(data.node)) });
       if (data.kind === 'barracks')
         return tf('event.build_started.barracks', { node: names(num(data.node)) });
-      if (data.kind === 'warehouse') {
-        return tf('event.build_started.warehouse', {
-          node: names(num(data.node)),
-          level: num(data.level),
-        });
-      }
-      // DEC-28, item 7: a road is paid with CP and built on the edge, no city builds it.
-      return tf('event.build_started', { edge: num(data.edge), width: num(data.width) });
+      // The road levels and the warehouse levels were removed (#894): every other build is the
+      // barracks of a city.
+      return tf('event.build_started.barracks', { node: names(num(data.node)) });
     case 'build_stopped':
-      return typeof data.edge === 'number'
-        ? tf('event.build_stopped', { edge: data.edge })
-        : tf('event.build_stopped.city', { node: names(num(data.node)) });
+      // No road builds since #894: a build stops only in a node.
+      return tf('event.build_stopped.city', { node: names(num(data.node)) });
     case 'barracks_built':
       return tf('event.barracks_built', { node: names(num(data.node)) });
     case 'warehouse_upgraded':

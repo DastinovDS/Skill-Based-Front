@@ -362,6 +362,7 @@ jobs:
           name: visual-diff-${{ matrix.shard }}
           path: apps/client/node_modules/.playwright
           if-no-files-found: ignore
+          include-hidden-files: true # the output folder is hidden: without it the diffs never upload
 
   # Docker images and the compose stack (OPS-01, #80): hadolint, then deploy/smoke.sh builds both
   # images, starts the stack and checks it through Caddy. Same skip rules as `py`.

@@ -12,7 +12,7 @@ the report relies on.
 uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-7.toml
 ```
 
-`mvp-7` is the played ruleset (owner decision 2026-11-09, #885: `mvp-6` with `[map_tempo]` on (DEC-46) and `factory.built_period_ticks = 150`; since the owner decision of the same day, #888, `stances.factories_follow = true`: every factory follows the stance like the capital, DEC-47); `mvp-6` before it (owner decision 2026-11-09, #626, #759: `mvp-5` with `capture.charge_cost = 1`, `factory.built_period_ticks = 100` and `combat.retreat = "none"`; `mvp-5` (= `mvp-4-stances`) before it, 2026-11-07, #805; `mvp-4`, 2026-11-04, #741); the tasks `tournament`, `search` and `tournament:gh` default to it. The older runs below (`mvp-2`, `mvp-3`) are history and are reproduced with `--ruleset rulesets/mvp-2.toml` and the like.
+`mvp-7` is the played ruleset (owner decision 2026-11-09, #885: `mvp-6` with `[map_tempo]` on (DEC-46); since the owner decision of the same day, #888, `stances.factories_follow = true`: every factory follows the stance like the capital, DEC-47); `mvp-6` before it (owner decision 2026-11-09, #626, #759: `mvp-5` with `capture.charge_cost = 1`, `factory.built_period_ticks = 100` and `combat.retreat = "none"`; `mvp-5` before it, 2026-11-07, #805; `mvp-4`, 2026-11-04, #741); the tasks `tournament`, `search` and `tournament:gh` default to it. The rulesets `mvp-0` to `mvp-4` and the code only they reached (economy v1, the drawn supply lines, the bunker, road and warehouse upgrades, Defense) were removed on 2026-11-09 (#894); the older runs below (`mvp-0` to `mvp-4`) are history: their files stay only in `rulesets/archive/` by hash, and the current simulation no longer plays them.
 
 | Key | Meaning |
 |---|---|
@@ -21,7 +21,7 @@ uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --
 | `--seeds N` | `N` seeds per map and pair: `seed-base .. seed-base + N - 1` |
 | `--seed-base` | the first seed, 0 by default |
 | `--jobs` | the number of processes, the number of cores by default |
-| `--ruleset` | the ruleset, `rulesets/mvp-0.toml` by default |
+| `--ruleset` | the ruleset, `rulesets/mvp-7.toml` by default |
 | `--out` | the result file, `docs/balance/latest.jsonl` by default |
 | `--replays DIR` | additionally write the replay of every match into `DIR` |
 
@@ -91,19 +91,19 @@ mise run stats path/to/match.jsonl.gz            # arguments after the task name
 uv run gow-bots stats a.jsonl.gz b.jsonl.gz --rulesets rulesets/archive --maps maps
 ```
 
-Stances of economy v2 (DEC-44, `mvp-4-stances`): the table of a match on such a ruleset adds, per player, the stance timeline,
+Stances (DEC-44, every ruleset): the table of a match adds, per player, the stance timeline,
 `stance switches`, `share of time in <stance>`, `CP earned in <stance>`, `charges in <stance> (capital / built)` and the row
-`SetStance (accepted)`. Every match under economy v2 has the rows `charges from the capital` and `charges from built factories`.
-The JSONL of `gow-bots analyze` has the same numbers under `stats` and the flag `stats.stances` (section "Player statistics").
+`SetStance (accepted)`. Every match has the rows `charges from the capital` and `charges from built factories`.
+The JSONL of `gow-bots analyze` has the same numbers under `stats` (section "Player statistics").
 
-## The line format (`schema` = 1)
+## The line format (`schema` = 2)
 
 One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are indexed by the player id
 (0 and 1, that is by the side). The value `null` in a list: there is no metric (division by zero).
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema` | int | the line format version; grows when a field is removed or changes meaning |
+| `schema` | int | the line format version; grows when a field is removed or changes meaning (2 since #894; the report reads 1 and 2) |
 | `map` | str | the map name (`meta.name`) |
 | `map_hash` | str | the map hash |
 | `ruleset_hash` | str | the ruleset hash |
@@ -136,17 +136,16 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `charges_burned` | [int, int] | charges burned: the sum of `charges` of the `charges_overflow` events (#310) |
 | `burned_permille` | [int or null, ...] | the share burned in per mille, `charges_burned * 1000 // charges_produced`; `null` without production (#310) |
 | `charges_start`, `charges_fights`, `charges_captures`, `charges_packets_lost`, `charges_warehouses_lost`, `charges_starved`, `charges_attrition`, `charges_end` | [int, int] | the charge ledger (#588, section "Charge ledger and flow"): the stock before tick 1, the charges spent in fights, on captures (DEC-38), lost in cut packets, lost with captured warehouses, starved, killed with units, and the stock after the last tick |
-| `charges_built`, `charges_plans` | [int, int] | economy v2 (DEC-41): the charges paid for buildings (`build_paid` warehouse + units, item 7) and taken by waiting planned orders for their bonus (`plan_charged`, one each, item 10); 0 under v1 (#646) |
-| `charges_tolls`, `tolls_paid`, `forts_built` | [int, int] | road fortifications (DEC-43, item D, #707): the charges the player's groups lost to tolls (`toll_paid`), the number of those tolls, the player's fortifications that started to work (`road_fort_built`); 0 without `[fort]` |
-| `charges_residual` | [int, int] | `charges_start + charges_produced` minus all sinks (`charges_burned`, the six above and the two v2 sinks) minus `charges_end`; 0 when every charge is explained by an event (#588) |
-| `charges_sent`, `charges_delivered`, `charges_delivered_front`, `charges_transfers` | [int, int] | the supply flow (#588): charges in dispatched packets, in all delivered packets (one-off transfers included), of them delivered into a city with a front marker, sent by transfers |
-| `stock_by_place_minute` | [{place: [int or null, ...]}, ...] | the stock by place and match minute in hundredths of a charge (#588); places `cap_wh`, `front_wh`, `rear_wh`, `units_node`, `units_road`, `packets`; `null`: no sample in that minute |
-| `marker_ticks`, `front_empty_ticks`, `front_empty_cap_has_ticks`, `cap_full_ticks` | [int, int] | the supply bottleneck in ticks (#588) |
-| `front_empty_permille`, `front_empty_cap_has_permille` | [int or null, ...] | the second and the third over `marker_ticks`, per mille, rounded down; `null` without marker ticks (#588) |
+| `charges_built`, `charges_plans` | [int, int] | the charges paid for buildings (`build_paid` warehouse + units, DEC-41, item 7) and taken by waiting planned orders for their bonus (`plan_charged`, one each, item 10) (#646) |
+| `charges_tolls`, `tolls_paid`, `forts_built` | [int, int] | road fortifications (DEC-43, item D, #707): the charges the player's groups lost to tolls (`toll_paid`), the number of those tolls, the player's fortifications that started to work (`road_fort_built`) |
+| `charges_residual` | [int, int] | `charges_start + charges_produced` minus all sinks (`charges_burned`, the six above, `charges_built`, `charges_plans` and `charges_tolls`) minus `charges_end`; 0 when every charge is explained by an event (#588) |
+| `charges_sent`, `charges_delivered` | [int, int] | the supply flow (#588): charges in dispatched packets and in delivered packets |
+| `stock_by_place_minute` | [{place: [int or null, ...]}, ...] | the stock by place and match minute in hundredths of a charge (#588); places `cap_wh`, `rear_wh`, `units_node`, `units_road`, `packets`; `null`: no sample in that minute |
+| `cap_full_ticks` | [int, int] | the ticks in which the player owns its capital and the capital's warehouse is full (#588) |
 | `cp_burned` | [int, int] | CP lost to the CP cap, in hundredths like `cp`: the sum of `cp` of the player's `cp_burned` events, the quantum that did not fit under `cp.cap` (and the rare overflow of a `CancelRecruit` refund). Divide by 100 for CP (#743, section "CP burned and idle discharged units") |
 | `cp_cap_ticks` | [int, int] | ticks `1..ticks` that ended with the player's CP at `cp.cap` (#743) |
 | `idle_discharged_connected`, `idle_discharged_pocket` | [int, int] | idle discharged unit-ticks (#743): units without a charge standing in an own node with an empty warehouse, in no fight and with no order, summed over ticks; the first in the component of the own capital, the second in a pocket (DEC-43, item H) |
-| `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name (`Move`, `CancelOrder`, `Split`, `Merge`, `SetMode`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `UpgradeWarehouse`, `UpgradeRoad`, `SetFront`, `SetRearMin`, `Transfer`, and the economy v2 commands `DrawLine`, `RemoveLine`, `BuildFactory`, `BuildBunker`, `ReleasePlan`, #648), a planned `Move` as `MovePlanned`; `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
+| `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name, the 13 keys of `gow_bots.tournament.USAGE_KEYS` (`Move`, `MovePlanned`: a planned `Move`, `CancelOrder`, `Split`, `Merge`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `BuildFactory`, `ReleasePlan`, `SetLeafShift`, `FortifyRoad`); `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
 
 The fields `stock_*`, `charges_*` and `burned_permille` were added in #310 without changing `schema`: nothing was removed and
 nothing changed meaning. Tournament files older than #310 do not contain them, the report shows "no data" for them.
@@ -155,10 +154,18 @@ nothing changed meaning. Tournament files older than #310 do not contain them, t
 meaning); the report shows the gate share as n/a for older files, next to the share over all attacks. The charge ledger, flow, stock by place and
 bottleneck fields (#588) were added the same way (only additions, `schema` stays 1); the report shows n/a for older files.
 `cp_burned`, `cp_cap_ticks`, `idle_discharged_connected` and `idle_discharged_pocket` (#743) are additions too, and so
-are the fields of #690 (section "Efficiency and contact"): `economy_model`, `supply_model`, `first_contact_tick`,
+are the fields of #690 (section "Efficiency and contact"): `first_contact_tick`,
 `siege_fights`, `siege_walk_ins`, `contested_sieges`, `contested_sieges_won`, `units_killed`, `charges_per_kill_centi`,
 `charges_built_lost`, `cp_cancelled`. The report reads every one of them as optional: a file without them shows n/a in
-their cells and the economy is inferred from the mechanics used.
+their cells.
+
+History (#894, 2026-11-09): `schema` 2 removed the fields of economy v1 and the drawn lines with the code that played
+them: `economy_model` and `supply_model` (#690), the front-marker part of the flow and of the bottleneck
+(`charges_delivered_front`, `charges_transfers`, `marker_ticks`, `front_empty_ticks`, `front_empty_cap_has_ticks`,
+`front_empty_permille`, `front_empty_cap_has_permille`, #588), the place `front_wh` (its warehouses count in `rear_wh`
+now), and the `usage` keys of the removed commands (`SetMode`, `UpgradeWarehouse`, `UpgradeRoad`, `SetFront`,
+`SetRearMin`, `Transfer`, `DrawLine`, `RemoveLine`, `BuildBunker`, `SetAutoLines`). A row of `schema` 1 is still read;
+the report ignores those fields in it.
 
 The metric definitions are set in `packages/sim/src/gow_sim/analysis.py` (the module docstring).
 A "scheduled" and an "attacking" order is not visible in the event log (`Move` leaves no event),
@@ -168,7 +175,7 @@ so `MatchRecorder` classifies an order at the moment it is applied.
 
 The metrics above describe the outcome and the fights; the player statistics describe **how a human or a bot played**.
 The source: the command log of the match (all the commands sent with the `validate` verdict and the price
-the simulation charged) and the events the simulation already writes (`stance_changed`, `transfer_started`,
+the simulation charged) and the events the simulation already writes (`stance_changed`,
 `recruit_cancelled`). There are no new events, `state_hash` does not change. The code: `gow_sim.analysis`
 (`analyze_stats`, `PlayerStats`), the module docstring is there too; the output: the key `stats` in the
 JSONL of `gow-bots analyze` and the table of `gow-bots stats`. The statistics are not part of the tournament lines
@@ -184,34 +191,33 @@ these are separate fields, the only thing they share is `MatchRecorder`/`MatchLo
 | `stance_ticks` | ticks in each stance; a stance set in tick `t` works from tick `t` (`apply_commands` goes before `economy`), the starting stance from tick 1; the sum equals `ticks` |
 | `stance_share` | `stance_ticks` as a share of `ticks`, 4 digits; `null` at `ticks = 0` |
 | `stance_switches` | accepted stance changes in the match |
-| `cp_by_stance` | CP in hundredths earned under each stance: the quantum minus what burned at the cap; only with `[stances]` (DEC-44), 0 otherwise. `MatchRecorder` reads a quantum from `cp_ticks`, which ends a tick at 0 only when the quantum fired |
+| `cp_by_stance` | CP in hundredths earned under each stance: the quantum minus what burned at the cap (DEC-44). `MatchRecorder` reads a quantum from `cp_ticks`, which ends a tick at 0 only when the quantum fired |
 | `charges_by_stance` | `{stance: [capital, built]}`: the charges made in each stance by the own capital and by every other factory (a captured capital too), `charges_produced` and `charge_burned` of a factory counted, like `charges_produced` of the metrics |
-| `charges_capital`, `charges_built` | the sums of `charges_by_stance` over the stances; together they equal `charges_produced` of the metrics under economy v2 |
+| `charges_capital`, `charges_built` | the sums of `charges_by_stance` over the stances; together they equal `charges_produced` of the metrics |
 | `commands` | all the commands the player sent, except `Forfeit`; `rejected` of them were rejected (`Forfeit` is counted in `MatchMetrics.rejected`) |
 | `apm_avg` | `commands * 60 * tick_hz / ticks`, 3 digits; `null` at `ticks = 0` |
 | `apm_by_minute`, `apm_peak` | commands by match minute (minute `m`: ticks `m*60*tick_hz < t <= (m+1)*60*tick_hz`, the last minute may be shorter) and the maximum of them |
-| `supply` | ticks of the accepted `SetFront` (`set_front`), `SetRearMin` (`set_rear_min`), `Transfer` (`transfer`); `transfer_charges`: the sum of charges from `transfer_started` (a shipment is cut by the free space of the target, so it can be less than the command's `n`) |
 | `orders`, `planned_orders` | accepted `Move` and of them the scheduled ones |
 | `planned_share` | `planned_orders / orders`, 4 digits; `null` without orders |
 | `planned_attack_share`, `planned_siege_share` | as in `MatchMetrics` (#590: the second one is the gate share) |
-| `cp_by_category` | CP spending in hundredths by accepted commands and the prices `orders.cost` of the ruleset: `move`, `planned_move`, `mode` (`SetMode`), `recruit` (recruiting minus the `CancelRecruit` refunds), `road` (`UpgradeRoad`), `barracks`, `warehouse`, `transfer`, `fort` (`FortifyRoad`, DEC-43 item D), `other` (`Split`, `Merge`, `CancelOrder`, `SetStance`, `SetFront`, `SetRearMin`: free in the MVP rulesets) |
+| `cp_by_category` | CP spending in hundredths by accepted commands and the prices `orders.cost` of the ruleset: `move`, `planned_move`, `recruit` (recruiting minus the `CancelRecruit` refunds), `barracks`, `fort` (`FortifyRoad`, DEC-43 item D), `other` (`Split`, `Merge`, `CancelOrder`, `SetStance` and the commands paid in charges or free: `BuildFactory`, `ReleasePlan`, `SetLeafShift`) |
 | `cp_refunded`, `cp_total` | the refund for cancelling a recruit (already subtracted from `recruit`) and the sum of the categories |
 
 A rejected command costs nothing. The real CP balance (regeneration, burning at the cap) is not
 reconstructed: these are spendings by commands. The decisions on the disputed points were made by default
 (a comment in #375): net spending with refunds, `Forfeit` outside APM, an offline tool without
-display in the game and without a server API.
+display in the game and without a server API. Until #894 the statistics also had `supply` (the ticks of `SetFront`,
+`SetRearMin` and `Transfer`, and `transfer_charges`), the flag `stances` and the CP categories `mode`, `road`,
+`warehouse` and `transfer`; they left with economy v1.
 
 `gow-bots analyze` also writes `usage` (the accepted commands per mechanic, as in a tournament row) and the fields of
-#690, so a human's mechanic usage is readable from a replay. The table of `gow-bots stats` follows the economy of the
-match (#690): its title line names the economy, the supply model and the first contact tick; under economy v2 it
-leaves out the rows of the v1 mechanics that v2 rejects (the stance timeline and ticks, `SetFront`, `SetRearMin`,
-`Transfer`, CP `road` and `transfer`, the front-marker columns and `mean stock front_wh`) and adds the v2 sinks
-(`charges into buildings`, `charges into buildings lost`, `charges into plans`, `charges to road tolls`), the tolls
-paid and taken and the road forts built; a row per mechanic the economy and the supply model accept
-(`<command> (accepted)`, `gow_bots.tournament.live_keys`: no `DrawLine` under the flow, no `SetLeafShift` under the
-lines); and for every economy the efficiency rows (enemy units killed, charges per kill, siege fights and walk-ins,
-contested sieges, CP of cancelled moves, CP burned, ticks at the CP cap, idle discharged units).
+#690, so a human's mechanic usage is readable from a replay. The table of `gow-bots stats` (#690) has a title line
+with the first contact tick; the stance rows; the sinks of buildings, plans and tolls (`charges into buildings`,
+`charges into buildings lost`, `charges into plans`, `charges to road tolls`), the tolls paid and taken and the road
+forts built; a row per key of `USAGE_KEYS` (`<command> (accepted)`); and the efficiency rows (enemy units killed,
+charges per kill, siege fights and walk-ins, contested sieges, CP of cancelled moves, CP burned, ticks at the CP cap,
+idle discharged units). Before #894 the table followed the economy of the match: its title named the economy and the
+supply model, and it hid the rows of the other economy (`gow_bots.tournament.live_keys`, removed with economy v1).
 
 ## Efficiency and contact (#690)
 
@@ -221,26 +227,26 @@ docstring "Efficiency and contact"). All values are integers.
 
 | Field | Meaning |
 |---|---|
-| `economy_model`, `supply_model` | `economy.model` and `supply.model` of the ruleset; a reader hides the rows of the other economy by them |
 | `first_contact_tick` | the earlier of the first `fight_started` (in a node or on an edge) and the first capture of a node the other player owned; `null` when the players never met (one value per match) |
 | `siege_fights`, `siege_walk_ins` | the two parts of `sieges`: fights for an enemy node with the player as attacker, and walks into an enemy node without defenders |
 | `contested_sieges`, `contested_sieges_won` | siege fights in which the defender spent a charge in a round (`spent_<defender>` of a `fight_round` above 0: a charged defender), and those of them that ended with the capture (`fight_ended` with `captured` and the attacker as winner) |
 | `units_killed` | the enemy units the player's shots killed (`losses` of the other player in every `fight_round`) |
 | `charges_per_kill_centi` | `charges_fights * 100 // units_killed`, hundredths rounded down; `null` without a kill |
-| `charges_built_lost` | the charges of `build_paid` of a build later stopped (`build_stopped` of its node and kind) and of a finished building (`barracks_built`, `warehouse_upgraded`, `factory_built`, `fort_built`) in a node the other player later captured; a part of `charges_built` |
+| `charges_built_lost` | the charges of `build_paid` of a build later stopped (`build_stopped` of its node and kind) and of a finished building (`barracks_built`, `factory_built`; until #894 also `warehouse_upgraded` and the bunker's `fort_built`) in a node the other player later captured; a part of `charges_built` |
 | `cp_cancelled` | CP in hundredths of the `Move` orders an accepted `CancelOrder` of the same group cancelled (the price of the group's last accepted `Move` while it still has an order at the end of a tick) |
 
 Reading: "siege success" (captures of enemy nodes over siege attempts) is 0.9 and more for every bot because most
 attempts are walk-ins; the contested sieges are the fights. `charges_built_lost` over `charges_built` is the share of the
 building charges that never paid back; the report splits the whole ledger by the outcome of the match (section "Charge
 sinks by outcome"). `first_contact_tick` measures the tempo of a map directly (the proposal of the map-economy notes of
-2026-11-05).
+2026-11-05). Until #894 the section also had `economy_model` and `supply_model` (the economy of the ruleset, by which
+a reader hid the rows of the other economy).
 
 ## Front pressure (#803, map tempo, DEC-46)
 
 Per-player metrics of how hard the front is pushed, for comparing maps of different sizes. Not game rules: nothing was
 added to the simulation (`gow_sim.analysis`, module docstring "Front pressure"). Sampled at the end of every 10th tick
-(`PLACE_SAMPLE_TICKS`, 1 s). The front pressure is the target of the map tempo (DEC-46, `rulesets/mvp-4-stances-tempo.toml`):
+(`PLACE_SAMPLE_TICKS`, 1 s). The front pressure is the target of the map tempo (DEC-46, on in `rulesets/mvp-7.toml`):
 about equal on every map size. To compare maps, pool it per map: all fight charges of the map over all its front
 node-minutes (the experiment of #803, `docs/balance/map-tempo-2026-11.md` on the branch `exp/803-map-tempo`).
 
@@ -313,29 +319,27 @@ charges_tolls + charges_end`, and
 `spent_<p>` of every `fight_round`, plus its `burned_<p>` under `combat.terrain_burn` (DEC-45); `charges_captures` is the number of `node_captured` times `capture.charge_cost`
 (DEC-38); `charges_packets_lost` is `packet_lost`; `charges_warehouses_lost` is `warehouse_lost` (its `owner`);
 `charges_starved` is `warehouse + units` of `starvation`; `charges_attrition` counts the `attrition` events that
-killed a charged unit; under economy v2 `charges_built` is `warehouse + units` of `build_paid` and `charges_plans` counts
+killed a charged unit; `charges_built` is `warehouse + units` of `build_paid` and `charges_plans` counts
 `plan_charged` (#646); `charges_tolls` is `charges` of `toll_paid` (DEC-43, item D6). `charges_start` and `charges_end` are the charge stock (section "Charge stock") before the first
 and after the last tick. A nonzero residual means a rule moved a charge that no event explains: extend the ledger.
 
 **Flow.** `charges_sent` is the sum of `packet_sent` (the supply dispatch); `charges_delivered` the sum of all
-`packet_delivered` (what the target warehouse accepted; transfers included); `charges_delivered_front` the part of it
-delivered into a city that has a front marker at the end of that tick; `charges_transfers` the sum of `transfer_started`.
+`packet_delivered` (what the target warehouse accepted). Until #894 the flow also counted the deliveries into a city with
+a front marker (`charges_delivered_front`) and the one-off transfers (`charges_transfers`).
 
 **Stock by place.** At the end of every 10th tick (`PLACE_SAMPLE_TICKS`, one second) the stock is split into the capital
-warehouse (`cap_wh`), the warehouses of the cities with a front marker (`front_wh`), all other warehouses
-(`rear_wh`), charged units standing in nodes (`units_node`), charged units on roads (`units_road`) and packets
+warehouse (`cap_wh`), all other warehouses (`rear_wh`; until #894 the cities with a front marker were apart,
+`front_wh`), charged units standing in nodes (`units_node`), charged units on roads (`units_road`) and packets
 (`packets`); the places sum to the charge stock. `stock_by_place_minute[p][place][m]` is the mean of the samples of
 minute `m` (ticks `m*60*tick_hz < t <= (m+1)*60*tick_hz`) in hundredths of a charge, rounded down.
 
-**Supply bottleneck**, counted in every tick: `marker_ticks` is the ticks in which the player owns its capital and a city
-other than the capital with a front marker; `front_empty_ticks` the part of them in which such a warehouse is empty;
-`front_empty_cap_has_ticks` the part of those in which the capital's warehouse is not empty (the supply, not the
-production, is the limit); `cap_full_ticks` the ticks in which the owned capital's warehouse is full (all ticks, not only
-marker ticks).
+**Full capital**, counted in every tick: `cap_full_ticks` is the ticks in which the owned capital's warehouse is full.
+Until #894 the bottleneck also counted the ticks with a front marker (`marker_ticks`), the part of them with an empty
+marker warehouse (`front_empty_ticks`) and the part of those with charges in the capital (`front_empty_cap_has_ticks`).
 
 Where to read it: the tournament rows (above); `gow-bots report`, section "Charge flow (#588)" (a table per bot with the
-means per player and match, the bottleneck shares summed over the group's ticks, and the mean stock by place);
-`gow-bots analyze` (the same keys) and `gow-bots stats` (rows `charges ...`, `ledger residual`, `marker city empty`,
+means per player and match, the share of the group's ticks with a full capital, and the mean stock by place);
+`gow-bots analyze` (the same keys) and `gow-bots stats` (rows `charges ...`, `ledger residual`, `capital full (ticks)`,
 `mean stock <place>` after the CP rows). Not included (needs a new event or a state sample at the start of a fight): the
 siege composition of charge-flow.md; the cost of the added counting is below 2% of a headless match.
 
@@ -374,8 +378,7 @@ uv run gow-bots report run.jsonl --out-dir /tmp/rep --name run
 ```
 
 The report (`gow_bots.report`, matplotlib only here) builds from a tournament file:
-the economy of the file (from `economy_model`, or inferred from the mechanics used in an older file) and the
-fair-field line (no bot played with an information grant: grants do not exist yet, #692), the data validity checks
+the fair-field line (no bot played with an information grant: grants do not exist yet, #692), the data validity checks
 (below), the bot competence checks (BOT-05, rewritten for the smart field: a personality's `@hard` bot stands in for the
 old bot of that name, plus the exploiter gate of #688), the level ladder, every server level against the exploiter
 (#688: the share with its Wilson interval and the capital lost and taken), the Bradley-Terry strength model, the matrix
@@ -384,8 +387,9 @@ metrics per bot (the share of scheduled attacks, the siege success, siege fights
 captures in the last 3 minutes), the charge ledger and its split by outcome, the supply flow (DEC-43: leaf shifts,
 road fortifications, tolls, starvation), CP and idle units, the mechanic usage, the strategy diversity (a dominant
 strategy, "rock-paper-scissors" cycles), the number of unique outcomes, the breakdown by map and the seeds of the file.
-Under economy v2 the v1-only columns (front markers, `front_wh`, the v1 commands in the usage table) are left out. The
-output depends only on the lines of the file (the bootstrap draws from a fixed seed). A report of the 16-bot field of
+Until #894 the report named the economy of the file and left out the columns of the other economy; since then it has
+no v1 column at all (front markers, `front_wh`, the commands of economy v1 and of the drawn lines).
+The output depends only on the lines of the file (the bootstrap draws from a fixed seed). A report of the 16-bot field of
 20 seeds (20480 rows) takes about 10 seconds.
 
 ## Data validity
@@ -494,13 +498,12 @@ demand; the owner played match 6 (`mvp-3`) at 8.5 commands a minute. The numbers
 Two behaviors of the smart bots that do not depend on the level (#618; module docstring of `gow_bots.bots.smart`,
 items 10 and 11): **a chosen plan gets its CP** (`wait_plan`: when the best attack is a scheduled order that the CP cannot
 pay yet, the bot keeps its price for that many ticks and spends nothing non-urgent meanwhile; not without `insight`) and **a strike at a lesser city is answered** (`worth_defense`: with `respond` 1
-the bot also switches to Defense
-and reinforces an own city of at least that many VP; the reaction delay of the level applies). `0` switches either off:
+the bot also reinforces an own city of at least that many VP; the reaction delay of the level applies). `0` switches either off:
 `bot_factory("smart_rusher", {"wait_plan": ParamRange(0, 0)})`.
 
 #624 adds (items 12-17 of the same docstring, `insight` levels only): a **converging strike** on the enemy capital
 (several groups within 3 edges, timed to arrive together, planned where the shared utility says so; on top of the
-single attacks, every personality but the bunker), **War while the warehouses are 9/10 full**, **one forward barracks
+single attacks, every personality but the bunker), **one forward barracks
 in the centre** (the large city between the capitals) and **the alarm on two enemy strikes at one node**. The worry about
 a build-up next to the capital and the withdrawal of thin province garrisons are implemented with a switch each
 (`SmartBot.WORRY`, `SmartBot.WITHDRAW`) and off: they measured worse ([log.md](log.md), #624).
@@ -523,7 +526,11 @@ enemy side are fortified before an enemy is seen, and a city facing an enemy nod
 It is a yardstick and the regression gate V6, not a server level (`LEVEL_BOTS` does not name it): put it in a
 tournament with `--bots "... smart_exploiter"`.
 
-**Economy v2** (`mvp-3`, DEC-41, #648; `gow_bots.bots.economy`). Under `economy.model = "v2"` every bot sends no v1-only
+> History (#894, 2026-11-09): this paragraph describes the bots of `mvp-3` and `mvp-4`. Economy v1, the drawn lines, the
+> bunker, warehouse levels and Defense were removed with those rulesets, and so were the bot code paths that played them;
+> the bots now play only the automatic supply flow of DEC-43 with factories, road fortifications and planned orders.
+
+**Economy v2** (`mvp-3`, DEC-41, #648; `gow_bots.bots.economy`). Under `economy.model = "v2"` every bot sent no v1-only
 command (stance, front markers, rear minimum, transfers, road upgrades, Defense: `Bot.allowed`; under `[stances]` the
 smart bots send `SetStance` by their policy, #881) and the campaign and
 smart bots play the v2 economy instead: **lines** from the own factories (only a factory starts a line, DEC-42) to the
@@ -551,11 +558,11 @@ node plus half of its enemy neighbours'): the least pressed sector is the *weak 
 
 | Personality | Opening | Midgame (the territory split) | Late game |
 |---|---|---|---|
-| `smart_turtle` (Bunker) | claims its natural half (nodes no farther from its capital than from the enemy one), one ring more while CP burn; Economy | ahead on the forecast: holds, every front node keeps a garrison sized to the enemy shots that can reach it, the spare army stands in the most threatened front city, bunkers (v2) and Defense (v1), lost nodes of the half retaken first; not ahead: a slow advance, one enemy node next to the territory at a time, the weakest sector first | the same; not ahead, all in |
+| `smart_turtle` (Bunker) | claims its natural half (nodes no farther from its capital than from the enemy one), one ring more while CP burn; Economy | ahead on the forecast: holds, every front node keeps a garrison sized to the enemy shots that can reach it, the spare army stands in the most threatened front city, road fortifications, lost nodes of the half retaken first; not ahead: a slow advance, one enemy node next to the territory at a time, the weakest sector first | the same; not ahead, all in |
 | `smart_expander` (Expander) | War, neutral cities weigh like enemy ones, a wide radius | pushes the weakest sector: the army rallies to the weak spot, targets score by how far below the mean pressure they are | ahead: secure margin; not ahead: all in |
 | `smart_rusher` (Rusher) | War, enemy cities near the enemy capital first, small guard | concentrated breakthroughs: no attack on a garrisoned enemy node with fewer than 3 charged units, the army rallies to the weak spot nearest the enemy capital, converging strikes on the capital | as midgame; not ahead: all in |
 | `smart_strangler` (Strangler) | Balance, cuts the enemy supply network | encircles: the most damaging cut first, every own neighbour of a target adds to it, cut-off cities are besieged | as midgame; not ahead: all in |
-| `smart_reactive` (Counter) | Balance, answers every visible strike, Defense on the front | counterattacks: ahead on the forecast it attacks enemy nodes only within 30 s after an enemy attack on its territory (the neighbours of the attacked node first, their garrisons left); not ahead, it attacks without waiting | as midgame; not ahead: all in |
+| `smart_reactive` (Counter) | Balance, answers every visible strike | counterattacks: ahead on the forecast it attacks enemy nodes only within 30 s after an enemy attack on its territory (the neighbours of the attacked node first, their garrisons left); not ahead, it attacks without waiting | as midgame; not ahead: all in |
 | `smart_hoarder` (benchmark) | War, claims in groups of 2+, the centre barracks | from tick 2400..3600 the build-up at the centre, then the stage next to the enemy capital, the converging strike | not ahead: the strike goes without waiting for the build-up |
 | `smart_exploiter` (benchmark) | the rusher's opening, the cuts of the enemy network | the capital drive of the big groups, raids on enemy pockets and full leaf warehouses, the strike whenever ready, the leaf shift at the front during a strike | as midgame; not ahead: all in |
 

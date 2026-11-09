@@ -26,7 +26,6 @@ from gow_sim import commands as sim
 from gow_sim.maps import PLAYERS, load_map
 from gow_sim.match import Match
 from gow_sim.ruleset import Stance, load_ruleset
-from gow_sim.state import Mode
 from gow_sim.view import opaque_id
 
 ROOT: Final = Path(__file__).resolve().parents[3]
@@ -38,7 +37,7 @@ NOT_FOUND: Final = sim.RejectCode.NOT_FOUND_OR_HIDDEN.value
 def _warm_match() -> Match:
     """A match after ``WARMUP_TICKS`` of bot play: groups of both players, on nodes and edges."""
     mapdef = load_map(ROOT / "maps" / "fixtures" / "artery.json")
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     match = Match(mapdef, rules, KEY)
     bots = [BOTS["rusher"](mapdef, rules, seed=3, player=p) for p in PLAYERS]
     seq = dict.fromkeys(PLAYERS, 0)
@@ -84,22 +83,27 @@ _random_ids = st.one_of(
 @st.composite
 def _command(draw: st.DrawFn, player: int) -> wire.Command:
     ids = st.one_of(st.sampled_from(OWN[player]), st.sampled_from(ENEMY[player]), _random_ids)
-    kinds = ("move", "split", "merge", "mode", "stance", "road", "recruit", "cancel")
+    kinds = ("move", "split", "merge", "release", "stance", "fort", "recruit", "cancel")
     kind = draw(st.sampled_from(kinds))
     match kind:
         case "move":
-            return wire.MoveCmd(group=draw(ids), dest=draw(_ints), planned=draw(st.booleans()))
+            return wire.MoveCmd(
+                group=draw(ids),
+                dest=draw(_ints),
+                planned=draw(st.booleans()),
+                bonus=draw(st.integers(0, 3)),
+            )
         case "split":
             return wire.SplitCmd(group=draw(ids), n=draw(_ints.filter(bool)))
         case "merge":
             groups = draw(st.lists(ids, min_size=2, max_size=wire.MAX_MERGE_GROUPS, unique=True))
             return wire.MergeCmd(groups=tuple(groups))
-        case "mode":
-            return wire.SetModeCmd(group=draw(ids), mode=draw(st.sampled_from(list(Mode))))
+        case "release":
+            return wire.ReleasePlanCmd(group=draw(ids))
         case "stance":
             return wire.SetStanceCmd(stance=draw(st.sampled_from(list(Stance))))
-        case "road":
-            return wire.UpgradeRoadCmd(edge=draw(_ints))
+        case "fort":
+            return wire.FortifyRoadCmd(node=draw(_ints), edge=draw(_ints))
         case "recruit":
             return wire.RecruitCmd(node=draw(_ints))
         case _:
@@ -123,7 +127,7 @@ def _ids_of(cmd: wire.Command) -> tuple[str, ...]:
         case (
             wire.MoveCmd(group=g)
             | wire.SplitCmd(group=g)
-            | wire.SetModeCmd(group=g)
+            | wire.ReleasePlanCmd(group=g)
             | wire.CancelOrderCmd(group=g)
         ):
             return (g,)

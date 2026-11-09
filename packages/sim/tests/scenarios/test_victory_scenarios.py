@@ -19,10 +19,10 @@ from gow_sim.systems.movement import movement
 from gow_sim.systems.victory import victory
 
 TESTS_DIR = Path(__file__).resolve().parents[1]
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP7 = TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml"
 
 RULES: Ruleset = dataclasses.replace(
-    load_ruleset(MVP0),
+    load_ruleset(MVP7),
     match_ticks=7200,
     victory=VictoryRules(vp_period_ticks=50, capital_multiplier=3),
 )

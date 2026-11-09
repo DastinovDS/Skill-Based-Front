@@ -13,8 +13,8 @@ Server -> client:
   through the validating models, is their specification: tests over real matches require the two
   frames to be equal byte for byte (``test_convert.py``), and the server outside ``prod``
   validates every frame it sends (``MatchRunner(validate_snapshots=True)``);
-- ``ack_msg``: ``CommandResult`` -> ``ack`` (``path`` and ``arrive_tick`` of an accepted ``Move``
-  or ``Transfer``, ``reject_code``);
+- ``ack_msg``: ``CommandResult`` -> ``ack`` (``path`` and ``arrive_tick`` of an accepted ``Move``,
+  ``reject_code``);
 - ``reach_msg``: ``gow_sim.view.Reach`` (``Match.reach``) -> ``reach`` (DEC-20, D5);
 - ``events_msgs``: the events of a tick -> the ``event`` messages one player may see (below);
 - ``match_end_msg``: ``Outcome`` -> ``match_end``.
@@ -35,10 +35,9 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
   DEC-29, DEC-45);
 - everything else only to the player of the event (``player``, for ``warehouse_lost`` ``owner``),
   enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the build
-  events ``build_started``, ``road_upgraded``, ``barracks_built``, ``warehouse_upgraded`` and
-  ``build_stopped`` only to the builder (DEC-17, item 6; DEC-26, item 9); ``front_set``,
-  ``rear_min_set`` (DEC-28) and ``transfer_started`` only to their player (DEC-18, item 8);
-  ``starvation`` only to the owner of the city (DEC-19, item 8); ``capture_failed`` only to the
+  events ``build_started``, ``build_paid``, ``barracks_built``, ``factory_built`` and
+  ``build_stopped`` only to the builder (DEC-17, item 6; DEC-26, item 9); ``starvation`` only to
+  the owner of the node (DEC-19, item 8; DEC-43, item H4); ``capture_failed`` only to the
   player whose group could not pay for a capture (DEC-38, item 10); the road fortifications
   (DEC-43, item D): ``road_fort_built`` and ``road_fort_destroyed`` to the owner, ``toll_paid``
   to the payer, ``toll_taken`` to the owner of the fortification (the simulation emits it only
@@ -64,7 +63,6 @@ from gow_protocol.messages import (
     Calibration,
     EndReason,
     EventMsg,
-    LineRouteMsg,
     MatchEndMsg,
     MatchEndStats,
     RatingChange,
@@ -76,7 +74,6 @@ from gow_protocol.messages import (
 )
 from gow_protocol.view import (
     AtNodeLoc,
-    EdgeBuild,
     EdgeView,
     EnemyGroup,
     FightRoundView,
@@ -84,7 +81,6 @@ from gow_protocol.view import (
     GroupView,
     HalfView,
     IntentView,
-    LineView,
     Location,
     NodeBuilding,
     NodeView,
@@ -96,7 +92,6 @@ from gow_protocol.view import (
     SelfView,
     SiteBuild,
     UnitsRange,
-    UpgradeGain,
     View,
 )
 from gow_sim import commands as sim
@@ -145,32 +140,23 @@ PRIVATE_KINDS: Final = frozenset(
         "cp_burned",
         "factory_built",
         "fight_group",
-        "fort_built",
-        "front_set",
         "group_arrived",
         "group_split",
         "groups_merged",
-        "line_auto",
-        "line_cut",
-        "line_rerouted",
         "packet_delivered",
         "packet_lost",
         "packet_sent",
         "plan_charged",
-        "rear_min_set",
         "recruit_cancelled",
         "recruit_queue_lost",
         "recruited",
         "road_fort_built",
         "road_fort_destroyed",
-        "road_upgraded",
         "stance_changed",
         "starvation",
         "toll_paid",
         "toll_taken",
-        "transfer_started",
         "warehouse_lost",
-        "warehouse_upgraded",
     }
 )
 """Events only their own player gets."""
@@ -182,15 +168,14 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "attrition": ("charged", "destroyed", "group", "node", "player"),
     "barracks_built": ("node", "player"),
     "build_paid": ("kind", "node", "owed", "player", "units", "warehouse"),
-    "build_started": ("edge", "kind", "level", "node", "player", "width"),
-    "build_stopped": ("edge", "kind", "node", "player", "reason"),
+    "build_started": ("edge", "kind", "node", "player"),
+    "build_stopped": ("kind", "node", "player", "reason"),
     "capture_failed": ("group", "node", "player", "result"),
     "charge_burned": ("charges", "node", "player"),
     "charges_overflow": ("charges", "node", "player"),
     "charges_produced": ("charges", "node", "player", "spill"),
     "cp_burned": ("cp", "player"),
     "factory_built": ("node", "player"),
-    "fort_built": ("node", "player"),
     "fight_ended": (
         "attacker",
         "captured",
@@ -236,42 +221,25 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     ),
     "fight_started": ("attacker", "edge", "fight", "node", "point"),
     "forfeit": ("player",),
-    "front_set": ("marker", "node", "player", "reason"),
-    "group_arrived": (
-        "back",
-        "edge",
-        "from_node",
-        "group",
-        "level",
-        "node",
-        "planned",
-        "player",
-    ),
+    "group_arrived": ("back", "edge", "from_node", "group", "node", "planned", "player"),
     "group_split": ("group", "new_group", "player", "units"),
     "groups_merged": ("group", "node", "player", "units"),
-    "line_auto": ("from_node", "line", "player", "to_node"),
-    "line_cut": ("from_node", "line", "player", "to_node"),
-    "line_rerouted": ("from_node", "line", "player", "to_node"),
     "node_captured": ("node", "player"),
     "packet_delivered": ("charges", "node", "packet", "player"),
     "packet_lost": ("charges", "edge", "packet", "player"),
     "packet_sent": ("charges", "edge", "from_node", "packet", "player", "to_node"),
     "plan_charged": ("bonus", "group", "node", "player"),
-    "rear_min_set": ("n", "player"),
     "recruit_cancelled": ("cp", "node", "player"),
     "recruit_queue_lost": ("node", "player", "units"),
     "recruited": ("group", "node", "player"),
     "road_fort_built": ("edge", "node", "player"),
     "road_fort_destroyed": ("built", "edge", "node", "player"),
-    "road_upgraded": ("edge", "player", "width"),
     "stance_changed": ("player", "stance"),
     "starvation": ("node", "player", "units", "warehouse"),
     "toll_paid": ("charges", "edge", "group", "node", "player"),
     "toll_taken": ("charges", "edge", "node", "player"),
-    "transfer_started": ("arrive_tick", "charges", "from_node", "packet", "player", "to_node"),
     "vp_awarded": ("player", "vp"),
     "warehouse_lost": ("charges", "node", "owner"),
-    "warehouse_upgraded": ("level", "node", "player"),
 }
 """The fields of each event kind the server sends to a player (ARC-02, #457), alphabetical.
 
@@ -298,7 +266,6 @@ EVENT_ID_FIELDS: Final[Mapping[str, frozenset[str]]] = {
     "plan_charged": frozenset({"group"}),
     "recruited": frozenset({"group"}),
     "toll_paid": frozenset({"group"}),
-    "transfer_started": frozenset({"packet"}),
 }
 """The fields of an event kind that hold an internal entity id (a subset of ``EVENT_FIELDS``).
 They go out as the receiving player's opaque ids (``view.opaque_id``); no other field is
@@ -334,9 +301,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
         me=SelfView(
             cp=view.me.cp,
             stance=view.me.stance,
-            fronts=view.me.fronts,
-            rear_min=view.me.rear_min,
-            auto_lines=view.me.auto_lines,
             leaf_shift=view.me.leaf_shift,
             leaf_shift_max=view.me.leaf_shift_max,
             next_dispatch_tick=view.me.next_dispatch_tick,
@@ -359,7 +323,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 recruit_progress=n.recruit_progress,
                 recruit_waiting=n.recruit_waiting,
                 has_barracks=n.has_barracks,
-                warehouse_level=n.warehouse_level,
                 warehouse_cap=n.warehouse_cap,
                 building=None
                 if n.building is None
@@ -369,8 +332,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 factory=n.factory,
                 factory_period=n.factory_period,
                 factory_build=_site(n.factory_build),
-                fort=n.fort,
-                fort_build=_site(n.fort_build),
                 front_dist=n.front_dist,
                 flow_down=n.flow_down,
                 flow_next=n.flow_next,
@@ -383,17 +344,8 @@ def view_to_wire(view: sv.PlayerView) -> View:
         edges=tuple(
             EdgeView(
                 id=e.id,
-                width=e.width,
                 detail=e.detail,
-                upgrade_gain=None
-                if e.upgrade_gain is None
-                else UpgradeGain(
-                    speed_pct=e.upgrade_gain.speed_pct,
-                    unit_speed_pct=e.upgrade_gain.unit_speed_pct,
-                    amount=e.upgrade_gain.amount,
-                ),
                 halves=(_half(e.halves[0]), _half(e.halves[1])),
-                build=None if e.build is None else EdgeBuild(done_tick=e.build.done_tick),
                 enemy_groups=tuple(
                     EnemyGroup(
                         id=opaque_to_wire(f.id),
@@ -432,8 +384,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
                     plan=g.order.plan,
                     next_charge_tick=g.order.next_charge_tick,
                 ),
-                defense_bonus=g.defense_bonus,
-                defense_cap=g.defense_cap,
             )
             for g in view.groups
         ),
@@ -447,7 +397,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 arrive_tick=p.arrive_tick,
                 path=p.path,
                 dest_tick=p.dest_tick,
-                transfer=p.transfer,
             )
             for p in view.packets
         ),
@@ -491,7 +440,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
             )
             for f in view.fights
         ),
-        lines=tuple(LineView(id=line.id, path=line.path) for line in view.lines),
     )
 
 
@@ -544,9 +492,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
         "me": {
             "cp": me.cp,
             "stance": me.stance,
-            "fronts": list(me.fronts),
-            "rear_min": me.rear_min,
-            "auto_lines": me.auto_lines,
             "leaf_shift": me.leaf_shift,
             "leaf_shift_max": me.leaf_shift_max,
             "next_dispatch_tick": me.next_dispatch_tick,
@@ -569,7 +514,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "recruit_progress": n.recruit_progress,
                 "recruit_waiting": n.recruit_waiting,
                 "has_barracks": n.has_barracks,
-                "warehouse_level": n.warehouse_level,
                 "warehouse_cap": n.warehouse_cap,
                 "building": None
                 if n.building is None
@@ -581,8 +525,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "factory": n.factory,
                 "factory_period": n.factory_period,
                 "factory_build": _site_data(n.factory_build),
-                "fort": n.fort,
-                "fort_build": _site_data(n.fort_build),
                 "front_dist": n.front_dist,
                 "flow_down": None if n.flow_down is None else list(n.flow_down),
                 "flow_next": None if n.flow_next is None else list(n.flow_next),
@@ -595,17 +537,8 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
         "edges": [
             {
                 "id": e.id,
-                "width": e.width,
                 "detail": e.detail,
-                "upgrade_gain": None
-                if e.upgrade_gain is None
-                else {
-                    "speed_pct": e.upgrade_gain.speed_pct,
-                    "unit_speed_pct": e.upgrade_gain.unit_speed_pct,
-                    "amount": e.upgrade_gain.amount,
-                },
                 "halves": [{"detail": h.detail, "seen": _seen_data(h.seen)} for h in e.halves],
-                "build": None if e.build is None else {"done_tick": e.build.done_tick},
                 "enemy_groups": [
                     {
                         "id": opaque_to_wire(f.id),
@@ -644,8 +577,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                     "plan": g.order.plan,
                     "next_charge_tick": g.order.next_charge_tick,
                 },
-                "defense_bonus": g.defense_bonus,
-                "defense_cap": g.defense_cap,
             }
             for g in view.groups
         ],
@@ -659,7 +590,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "arrive_tick": p.arrive_tick,
                 "path": p.path,
                 "dest_tick": p.dest_tick,
-                "transfer": p.transfer,
             }
             for p in view.packets
         ],
@@ -694,7 +624,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             }
             for f in view.fights
         ],
-        "lines": [{"id": line.id, "path": line.path} for line in view.lines],
     }
 
 
@@ -760,40 +689,20 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.Split(gid(g), n)
         case wire.MergeCmd(groups=groups):
             return sim.Merge(tuple(gid(g) for g in groups))
-        case wire.SetModeCmd(group=g, mode=mode):
-            return sim.SetMode(gid(g), mode)
         case wire.SetStanceCmd(stance=stance):
             return sim.SetStance(stance)
-        case wire.UpgradeRoadCmd(edge=edge):
-            return sim.UpgradeRoad(edge)
         case wire.BuildBarracksCmd(node=node):
             return sim.BuildBarracks(node)
-        case wire.UpgradeWarehouseCmd(node=node):
-            return sim.UpgradeWarehouse(node)
         case wire.RecruitCmd(node=node):
             return sim.Recruit(node)
         case wire.CancelRecruitCmd(node=node):
             return sim.CancelRecruit(node)
         case wire.CancelOrderCmd(group=g):
             return sim.CancelOrder(gid(g))
-        case wire.SetFrontCmd(marker=marker, node=node):
-            return sim.SetFront(marker, node)
-        case wire.SetRearMinCmd(n=n):
-            return sim.SetRearMin(n)
-        case wire.TransferCmd(from_node=src, to_node=dst, n=n):
-            return sim.Transfer(src, dst, n)
         case wire.BuildFactoryCmd(node=node):
             return sim.BuildFactory(node)
-        case wire.BuildBunkerCmd(node=node):
-            return sim.BuildBunker(node)
         case wire.FortifyRoadCmd(node=node, edge=edge):
             return sim.FortifyRoad(node, edge)
-        case wire.DrawLineCmd(path=path):
-            return sim.DrawLine(path)
-        case wire.RemoveLineCmd(line=line):
-            return sim.RemoveLine(line)
-        case wire.SetAutoLinesCmd(on=on):
-            return sim.SetAutoLines(on)
         case wire.SetLeafShiftCmd(shift=shift):
             return sim.SetLeafShift(shift)
         case wire.ReleasePlanCmd(group=g):
@@ -826,11 +735,6 @@ def reach_msg(group: str, tick: int, reach: sv.Reach | None) -> ReachMsg:
         nodes=tuple(ReachNode(node=n, ticks=t, path=p) for n, t, p in reach.nodes),
         split=tuple(ReachSplit(node=n, units=u) for n, u in reach.split),
     )
-
-
-def line_route_msg(points: tuple[int, ...], tick: int, path: tuple[int, ...]) -> LineRouteMsg:
-    """``line_route`` for the asked ``points`` after tick ``tick``; ``path`` ``()``: no way."""
-    return LineRouteMsg(points=points, tick=tick, path=path)
 
 
 # Events --------------------------------------------------------------------------------------

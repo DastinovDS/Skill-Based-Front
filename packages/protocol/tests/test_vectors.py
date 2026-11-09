@@ -16,14 +16,16 @@ from gow_protocol.convert import FIGHT_KINDS, PRIVATE_KINDS, PUBLIC_KINDS
 
 VECTORS_DIR = Path(__file__).resolve().parents[1] / "vectors"
 COMBAT_PATH = VECTORS_DIR / "combat.json"
-RULESET_PATH = Path(__file__).resolve().parents[3] / "rulesets" / "mvp-0.toml"
+RULESET_PATH = Path(__file__).resolve().parents[3] / "rulesets" / "mvp-7.toml"
 
 SIDES = ("a", "b")
 LOCATIONS = {"node_attack", "edge_meeting", "neutral_arrival", "empty_enemy_node"}
 TERRAINS = {"mountains", "forest", "plains"}
 ROLES = {"attacker", "defender", "symmetric"}
-BONUS_SOURCES = {"planned_order", "defense_mode"}
-MODES = {"attack", "defense", "build"}
+# "Defense" (DEC-30) and its rows were removed (#894): only the plan gives a bonus, every group
+# attacks.
+BONUS_SOURCES = {"planned_order"}
+MODES = {"attack"}
 OWNERS = {"a", "b", "neutral"}
 
 VECTOR_KEYS = {
@@ -108,7 +110,6 @@ def test_combat_header() -> None:
     params = _obj(data["params"])
     assert set(params) == {
         "terrain_defense_mod",
-        "defense_bonus",
         "round_ticks",
         "shots_per_round",
         "regroup_ticks",
@@ -117,36 +118,34 @@ def test_combat_header() -> None:
     assert set(terrain) == TERRAINS
     for mod in terrain.values():
         _int(mod)
-    _int(params["defense_bonus"])
     assert _int(params["round_ticks"]) > 0
     assert _int(params["shots_per_round"]) > 0
     assert _int(params["regroup_ticks"]) >= 0
     scenarios = [_obj(s) for s in _list(data["scenarios"])]
     ids = [s["id"] for s in scenarios]
-    # 21N, 22N: rows 21 and 22 under combat.retreat = "none" (DEC-40, variant N, #626)
-    assert ids == ["17", "17б", "17в", "18", "19", "20", "21", "22", "21N", "22N", "23"]  # noqa: RUF001
+    # 21N: row 21 under combat.retreat = "none" (DEC-40, variant N, #626); rows 22 and 22N are
+    # "Defense" (DEC-30), removed (#894)
+    assert ids == ["17", "17б", "17в", "18", "19", "20", "21", "21N", "23"]  # noqa: RUF001
     for scenario in scenarios:
         assert set(scenario) == {"id", "source_row", "expected"}
         assert isinstance(scenario["source_row"], str) and scenario["source_row"]
         _obj(scenario["expected"])
 
 
-def test_combat_params_match_mvp0_ruleset() -> None:
+def test_combat_params_match_the_main_ruleset() -> None:
     params = _obj(_load_combat()["params"])
     ruleset = _obj(tomllib.loads(RULESET_PATH.read_text(encoding="utf-8")))
-    orders = _obj(ruleset["orders"])
     assert params["terrain_defense_mod"] == _obj(ruleset["terrain"])["defense_mod"]
-    # "Defense" (+2) of the rows is a bonus gathered by the start of the fight (DEC-30), not a
-    # number of the ruleset; the ruleset has the pace of gathering.
-    assert _int(orders["defense_ticks_per_bonus"]) > 0
     combat = _obj(ruleset["combat"])
     for key in ("round_ticks", "shots_per_round", "regroup_ticks"):
         assert params[key] == combat[key]
 
 
-def test_combat_ids_are_1_to_16() -> None:
+def test_combat_ids_are_the_kept_rows_of_1_to_16() -> None:
+    """Rows 1-16 without those of removed rules (#894): 8 (the silencing plains, DEC-24, item F2)
+    and 10, 16 ("Defense", DEC-30)."""
     ids = [_int(v["id"]) for v in _combat_vectors()]
-    assert ids == list(range(1, 17))
+    assert ids == [i for i in range(1, 17) if i not in (8, 10, 16)]
 
 
 @pytest.mark.parametrize("vector", _combat_vectors(), ids=lambda v: f"example-{v['id']}")

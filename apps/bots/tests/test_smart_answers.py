@@ -40,7 +40,7 @@ TICK = 3000
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-2.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 
 
 @pytest.fixture(scope="module")
@@ -183,20 +183,6 @@ def test_the_benchmark_and_bots_without_insight_do_not_answer(
     for cls in PERSONALITIES:
         assert (cls is not SmartTurtle) == cls.STRIKE, cls.name
         assert cls.ANSWERS
-
-
-# Item 15: War while the charges burn -----------------------------------------------------------
-
-
-def test_the_charges_burn_at_nine_tenths_even_with_units_waiting(
-    crossroads: MapDef, rules: Ruleset
-) -> None:
-    bot = SmartStrangler(crossroads, rules, seed=0, player=0)
-    assert bot._burning(9, 10, 3)  # pyright: ignore[reportPrivateUsage]
-    assert not bot._burning(8, 10, 0)  # pyright: ignore[reportPrivateUsage]
-    blind = _blind(bot_factory("smart_strangler@easy")(crossroads, rules, seed=0, player=0))
-    assert not blind._burning(9, 10, 0)  # pyright: ignore[reportPrivateUsage]
-    assert blind._burning(10, 10, 0)  # pyright: ignore[reportPrivateUsage]
 
 
 # Item 16: the forward barracks in the centre ---------------------------------------------------

@@ -1,1 +1,5 @@
-{"type": "hello", "protocol_version": 45, "token": "fixture-token-not-a-secret_0123456789ABCDEF"}
+{
+  "type": "hello",
+  "protocol_version": 46,
+  "token": "fixture-token-not-a-secret_0123456789ABCDEF"
+}

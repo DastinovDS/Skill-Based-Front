@@ -26,11 +26,13 @@ def test_committed_file_is_up_to_date() -> None:
     assert committed == BUILT, f"combatExamples.gen.json is out of date. Run: {REGENERATE}"
 
 
-def test_the_page_still_describes_mvp_2() -> None:
-    """The played ruleset is `mvp-7` since 2026-11-09 (#885), but the page still describes
-    economy v1 (`mvp-2`) until a separate tutorial round replaces it; the screen says so in its
-    notice."""
-    assert BUILT["ruleset"] == "mvp-2"
+def test_the_examples_play_a_kept_ruleset() -> None:
+    """The played ruleset is `mvp-7` since 2026-11-09 (#885); the examples play `mvp-5`, a kept
+    ruleset with free captures like the DEC-24 table (#894). The page text still describes
+    economy v1 (its numbers frozen in `PAGE_V1`) until a tutorial round replaces it (#806); the
+    screen says so in its notice."""
+    assert BUILT["ruleset"] == "mvp-5"
+    assert BUILT["rules"]["stance_charges_pct"] == export_howto.PAGE_V1["stance_charges_pct"]
     mise = (ROOT / "mise.toml").read_text(encoding="utf-8")
     assert 'default="rulesets/mvp-7.toml"' in mise
 

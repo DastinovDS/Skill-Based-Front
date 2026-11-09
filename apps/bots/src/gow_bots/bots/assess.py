@@ -11,12 +11,12 @@ and the ruleset. Four parts:
   least ``VP_MARGIN`` (+1) above the other's: a tie on VP is decided by the cities and is not a
   lead to sit on.
 - **Threat to the own capital**: the enemy forces the view shows (figures on edges, DEC-33; enemy
-  groups sighted in nodes, fresh sightings in the Attack mode only; planned strikes, DEC-08; a
+  groups sighted in nodes, fresh sightings only; planned strikes, DEC-08; a
   fight in the capital, DEC-24) with the earliest tick each can reach the capital (``Travel``:
   a lower bound of the travel time). The forces that arrive within ``horizon`` ticks of the
   earliest one are summed; numbers hidden by the fog are guessed (``guess`` units, all
   charged). The capital is *in danger* when that sum reaches the shots that take the capital
-  from its garrison now (``shots_to_take``, with the own Defense bonus the view shows).
+  from its garrison now (``shots_to_take``).
   Only forces that can reach the capital with one order count (``route``): a path goes through
   the mover's own nodes and ends at the first foreign or neutral node (SIM-05,
   ``gow_sim.systems.movement.find_path``), so a force must stand on, or head into, a node from
@@ -27,7 +27,7 @@ and the ruleset. Four parts:
   share of a quantum (the stance with the fewest charges) every ``cp.period_ticks`` (under
   ``[stances]``, DEC-44, the shortest CP period of a stance), stops at
   ``cp.cap``, and loses the price of every payment the view shows at the tick it is paid: the
-  intents of planned orders and of Defense (public at their creation). Payments the view does not
+  intents of planned orders (public at their creation). Payments the view does not
   show (ordinary orders, recruits) are not subtracted, so the bound is never below the truth.
 - **Own state** (``Army``): units, charges and the uncharged units of the own groups, the
   warehouses of the own cities, the cities cut from the own capital.
@@ -43,7 +43,7 @@ from typing import Final
 from gow_bots.bots.utility import shots_to_take, terrain_burned
 from gow_sim.maps import MapDef, NodeKind, Terrain
 from gow_sim.ruleset import Ruleset, Stance
-from gow_sim.view import AtNode, Detail, EnemyGroupView, IntentKind, Mode, PlayerView, Sighting
+from gow_sim.view import AtNode, Detail, EnemyGroupView, PlayerView, Sighting
 
 __all__ = [
     "FRESH_TICKS",
@@ -66,17 +66,24 @@ FRESH_TICKS: Final = 50
 """An enemy sighting in a node older than this is not a force of the threat: it moved on."""
 
 
+TRAVEL_ROAD_PCT: Final = 130
+"""The road factor of the lower bounds of ``Travel``, in percent: the fastest road level of the
+rulesets the bots were tuned on (``road.speed_pct`` of level 3). Roads have no levels since #894,
+so the bounds are a margin below the true times; the number stays so the threat estimate of the
+smart bots plays as before."""
+
+
 class Travel:
     """Lower bounds of the travel ticks between all nodes of the map.
 
-    Every edge at the fastest terrain speed and the fastest road speed of the ruleset
+    Every edge at the fastest terrain speed and the road factor ``TRAVEL_ROAD_PCT``
     (``travel_ticks * 100 * 100 // (terrain * road)``, rounded down): no group is quicker, so an
     ETA from this table is the earliest possible one. Dijkstra from every node once per bot.
     """
 
     def __init__(self, mapdef: MapDef, rules: Ruleset) -> None:
         terrain = max(rules.terrain.speed_pct.of(t) for t in Terrain)
-        road = max(100, *rules.road.speed_pct.values)
+        road = TRAVEL_ROAD_PCT
         count = len(mapdef.nodes)
         adj: list[list[tuple[int, int]]] = [[] for _ in range(count)]
         for e in mapdef.edges:
@@ -109,20 +116,18 @@ class Travel:
         return tuple(best)
 
 
-def edge_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int, level: int = 1) -> int:
-    """Ticks a group takes along ``edge`` of road ``level`` into ``to_node``: the formula of
-    mechanics.md, section 4 ("Speed by terrain by zones", #253) with the road speed of DEC-28,
-    item 7. The border point splits the edge, each zone goes at the terrain speed of its node
-    times the road speed (``terrain_pct * road_pct // 100``), ``T = max(1, travel_ticks * 100 * d
-    // (1000 * pa * pb))`` with ``d = b * pb + (1000 - b) * pa`` (all non-negative, rounded down).
-    Public data only: the map, the ruleset and the road level the view shows."""
+def edge_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> int:
+    """Ticks a group takes along ``edge`` into ``to_node``: the formula of mechanics.md, section 4
+    ("Speed by terrain by zones", #253). The border point splits the edge, each zone goes at the
+    terrain speed of its node, ``T = max(1, travel_ticks * 100 * d // (1000 * pa * pb))`` with
+    ``d = b * pb + (1000 - b) * pa`` (all non-negative, rounded down). Public data only: the map
+    and the ruleset."""
     e = mapdef.edges[edge]
     from_node = e.other(to_node)
     b = e.border_permille if from_node == e.a else 1000 - e.border_permille
-    road = rules.road.speed_pct.of(level) if level >= 2 else 100
     speed = rules.terrain.speed_pct
-    pa = speed.of(mapdef.nodes[from_node].terrain) * road // 100
-    pb = speed.of(mapdef.nodes[to_node].terrain) * road // 100
+    pa = speed.of(mapdef.nodes[from_node].terrain)
+    pb = speed.of(mapdef.nodes[to_node].terrain)
     d = b * pb + (1000 - b) * pa
     return max(1, e.travel_ticks * 100 * d // (1000 * pa * pb))
 
@@ -192,18 +197,12 @@ class EnemyCp:
     def __init__(self, rules: Ruleset, enemy: int) -> None:
         self.rules = rules
         self.enemy = enemy
-        least = min(rules.economy.stance_to_charges_pct.of(s) for s in Stance)
-        per = rules.cp.per_period
-        self.gain = per if rules.v2 else per - per * least // 100
-        """The largest CP part of a regeneration quantum (the whole quantum under economy v2:
-        no stances, DEC-41, item 1)."""
-        stances = rules.stances
-        self.period = rules.cp.period_ticks
-        """The shortest period of the CP income: under ``[stances]`` the enemy may sit in the
-        stance of the most CP from the first tick on (DEC-44); a change carries the share of
-        the cycle and rounds down, so no schedule of changes beats this period."""
-        if stances is not None:
-            self.period = min(stances.cp_period_ticks.of(s) for s in Stance)
+        self.gain = rules.cp.per_period
+        """A regeneration quantum: all of it goes into CP (DEC-41, item 1)."""
+        self.period = min(rules.stances.cp_period_ticks.of(s) for s in Stance)
+        """The shortest period of the CP income: the enemy may sit in the stance of the most CP
+        from the first tick on (DEC-44); a change carries the share of the cycle and rounds down,
+        so no schedule of changes beats this period."""
         self.bound = rules.cp.start
         self.tick = 0
         self.paid: dict[int, bool] = {}
@@ -219,8 +218,7 @@ class EnemyCp:
             if i.owner != self.enemy or i.id in self.paid:
                 continue
             self.paid[i.id] = True
-            price = cost.planned_move if i.kind is IntentKind.PLANNED_MOVE else cost.defense
-            pays.append((i.created_tick, price))
+            pays.append((i.created_tick, cost.planned_move))  # every intent is a planned order
         pays.sort()
         period = self.period
         bound, at = self.bound, self.tick
@@ -342,20 +340,21 @@ class Assessor:
             seen = n.seen
             if n.id == cap or seen is None or not seen.enemy_modes or to_cap[n.id] < 0:
                 continue
-            if view.tick - seen.tick > FRESH_TICKS or Mode.ATTACK not in seen.enemy_modes:
-                continue  # an old sighting, or groups in Defense: a move would drop the bonus
+            if view.tick - seen.tick > FRESH_TICKS:
+                continue  # an old sighting
             eta = max(view.tick + order_wait, seen.tick + to_cap[n.id])
             garrison = n.owner == 1 - view.player  # standing in its own node, not attacking
             by_node[n.id] = (eta, _shots(seen, guess, low=garrison))
         for i in view.intents:
-            if i.owner == view.player or i.kind is not IntentKind.PLANNED_MOVE:
+            if i.owner == view.player:
                 continue
             if i.target is None or (i.target != cap and not self._passes(view, i.target)):
                 continue  # aimed elsewhere: its path ends at that node (SIM-05)
             way = to_cap[i.origin]
             if way < 0:
                 continue
-            eta = max(view.tick, i.created_tick + self.rules.orders.planned_delay_ticks + way)
+            # a plan departs once it has gathered one bonus at least (DEC-41, item 10)
+            eta = max(view.tick, i.created_tick + self.rules.orders.plan_ticks_per_bonus + way)
             known = by_node.get(i.origin)
             units = max(guess, known[1] if known is not None else 0)
             by_node[i.origin] = (min(eta, known[0]) if known is not None else eta, units)
@@ -371,16 +370,15 @@ class Assessor:
         for f in view.fights:
             if f.node == cap:
                 forces.append((view.tick, f.enemy_units))
-        own_units = own_charged = defense = 0
+        own_units = own_charged = 0
         for g in view.groups:
             loc = g.location
             if isinstance(loc, AtNode) and loc.node == cap:
                 own_units += g.units
                 own_charged += g.charged
-                defense += g.defense_bonus or 0
         terrain = self.map.nodes[cap].terrain
         burned = terrain_burned(self.rules, view, cap)
-        need = shots_to_take(self.rules, terrain, own_units, own_charged, defense, burned=burned)
+        need = shots_to_take(self.rules, terrain, own_units, own_charged, burned=burned)
         if not forces:
             return Threat(None, 0, need)
         eta = min(t for t, _ in forces)

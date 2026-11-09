@@ -25,9 +25,10 @@ CONTAINER_PATHS: Final = {
 }
 """Fixed by the image (``deploy/app.Dockerfile``): not for the operator to change."""
 
-PRODUCTION_DIFFERENCES: Final = {"env", "ruleset_path"}
+PRODUCTION_DIFFERENCES: Final = {"env"}
 """Where the production default intentionally is not the ``Settings`` default: the stack runs in
-``prod`` and plays the real ruleset (``forwarded_allow_ips`` is fixed to Caddy, not a default)."""
+``prod`` (``forwarded_allow_ips`` is fixed to Caddy, not a default). The ruleset is the same, the
+played ``mvp-7`` (#894)."""
 
 
 def compose_defaults() -> dict[str, str]:

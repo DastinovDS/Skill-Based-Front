@@ -33,7 +33,7 @@ from gow_sim.view import GroupView, PlayerView, project
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 K, A, B, C, D, E, F, G, M = range(9)
 PASSES = (17, 18)
 POCKET = (B, C, D, F, G)
@@ -270,7 +270,7 @@ def test_the_cut_scores_more_by_the_units_it_rejoins(player: int) -> None:
     assert scores[0] - scores[1] == W_RESCUE * 3
 
 
-def test_pockets_are_read_only_under_the_flow(mvp3_rules: Ruleset) -> None:
-    bot = SmartBot(MAP, mvp3_rules, seed=0, player=0)
-    view = project(initial_state(MAP, mvp3_rules), mvp3_rules, 0, KEY)
+def test_pockets_are_read_only_under_the_flow(mvp_rules: Ruleset) -> None:
+    bot = SmartBot(MAP, mvp_rules, seed=0, player=0)
+    view = project(initial_state(MAP, mvp_rules), mvp_rules, 0, KEY)
     assert bot.read_pockets(view, 0, bot.supplied(view)) is None

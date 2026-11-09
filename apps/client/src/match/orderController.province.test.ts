@@ -50,27 +50,6 @@ describe('a province is not selectable (#425)', () => {
     vi.useRealTimers();
   });
 
-  it('a click on a province gives no selection and no menu', () => {
-    const { hud, controller, menusOpen } = setup();
-    controller.click({ kind: 'node', id: province }, false);
-    expect(hud.selection).toBeNull();
-    expect(menusOpen()).toBe(false);
-  });
-
-  it('a click on a province drops an earlier selection', () => {
-    const { hud, controller } = setup();
-    controller.click({ kind: 'node', id: home }, false);
-    expect(hud.selection).toEqual({ kind: 'node', id: home });
-    controller.click({ kind: 'node', id: province }, false);
-    expect(hud.selection).toBeNull();
-  });
-
-  it('a click on the area (road side) of a province is no selection either', () => {
-    const { hud, controller } = setup();
-    controller.click({ kind: 'edge', id: 0, cell: province }, false);
-    expect(hud.selection).toBeNull();
-  });
-
   it('a click on a province with a group selected is a move order to it', () => {
     const { hud, controller, sent } = setup();
     controller.click({ kind: 'group', id: first.id }, false);
@@ -87,23 +66,5 @@ describe('a province is not selectable (#425)', () => {
     controller.click({ kind: 'node', id: home }, false);
     expect(hud.selection).toEqual({ kind: 'node', id: home });
     expect(controller.cityMenu.current.open).toBe(true);
-  });
-
-  it('in the Supply view a province opens no supply menu and is not selected', () => {
-    const { hud, controller } = setup();
-    controller.ui.patch({ supplyMode: true });
-    controller.click({ kind: 'node', id: province }, false);
-    expect(controller.supplyMenu.current.open).toBe(false);
-    expect(hud.selection).toBeNull();
-    // A city of the same view still opens it.
-    controller.click({ kind: 'node', id: home }, false);
-    expect(controller.supplyMenu.current.open).toBe(true);
-  });
-
-  it('in the road mode a province is not selected either', () => {
-    const { hud, controller } = setup();
-    controller.ui.patch({ roadMode: true });
-    controller.click({ kind: 'node', id: province }, false);
-    expect(hud.selection).toBeNull();
   });
 });

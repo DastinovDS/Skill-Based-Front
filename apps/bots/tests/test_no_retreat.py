@@ -22,7 +22,7 @@ from gow_sim.view import PlayerView, project
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
-MVP0 = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+MVP0 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 MVP6 = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
 
 

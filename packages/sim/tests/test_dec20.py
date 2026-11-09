@@ -6,8 +6,11 @@ values come from the decision, not from the code:
 - capacity by node kind (DEC-22): A (6, medium city), B (4, small city), C (8, large city),
   D and E (6), province P (3); A, B, D, E, P own, C neutral;
 - roads A-B, B-C (the fastest way A-C), A-D, D-E, E-C, A-P, P-C;
-- split, merge and cancel cost 0, a move 1 CP, a planned move 2 CP, "Defense" 2 CP; the planned
-  delay and the delay of the "Defense" bonus are 30 ticks, both bonuses +2 (DEC-08, DEC-20).
+- split, merge and cancel cost 0, a move 1 CP, a planned move 2 CP (DEC-08, DEC-20); a planned
+  order gathers its bonus, one charge of its node's warehouse per 30 ticks (DEC-41, item 10).
+
+Examples 1, 9 and 14 had a group in "Defense", which was removed with economy v1 (#894): example
+1 keeps the merge into the standing group, 9 the merge into the smallest id, 14 is gone.
 
 These numbers are pinned in ``RULES``. The map ``dec20`` is built below (rot180): K = 0 (capital
 of 0, joined to A), A = 1, B = 2, D = 3, E = 4, P = 5, C = 6 in the centre; the mirror half is
@@ -34,7 +37,6 @@ from gow_sim.commands import (
     Recruit,
     Reject,
     RejectCode,
-    SetMode,
     Split,
     apply_commands,
     validate,
@@ -51,37 +53,24 @@ from gow_sim.view import opaque_id
 from gow_sim.view import reach as view_reach
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP7 = TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml"
 
 
 def _rules() -> Ruleset:
-    base = load_ruleset(MVP0)
+    base = load_ruleset(MVP7)
     costs = OrderCosts(
         move=100,
         planned_move=200,
         cancel=0,
         split=0,
         merge=0,
-        attack=0,
-        defense=200,
-        build=0,
         recruit=100,
         stance=0,
-        front=0,
-        rear_min=0,
-        transfer=0,
-        barracks=300,
-        warehouse=200,
+        barracks=0,
     )
     return dataclasses.replace(
         base,
-        orders=dataclasses.replace(
-            base.orders,
-            planned_delay_ticks=30,
-            planned_bonus_per_edge=2,
-            defense_ticks_per_bonus=60,
-            cost=costs,
-        ),
+        orders=dataclasses.replace(base.orders, plan_ticks_per_bonus=30, cost=costs),
         capacity=dataclasses.replace(
             base.capacity,
             by_kind=KindTable(capital=10, city_large=8, city_medium=6, city_small=4, province=3),
@@ -203,7 +192,7 @@ class _Run:
         results, events = apply_commands(state, RULES, batch)
         state.events = events
         state.events += movement(state, RULES)
-        state.events += combat(state, RULES, active_bonuses(state, RULES))
+        state.events += combat(state, RULES, active_bonuses(state))
         state.events += capacity(state, RULES)
         state.events += recruit(state, RULES)
         state.events += orders(state, RULES)
@@ -238,24 +227,19 @@ def _validate_move(state: GameState, gid: int, dest: int) -> Ok | Reject:
 # A. Auto-merge ----------------------------------------------------------------------------------
 
 
-def test_dec20_example_1_arrival_joins_the_defending_group() -> None:
-    # G1 3/3 in "Defense" with a gathered +2 stands in A; G2 2/1 arrives from D (20 ticks).
+def test_dec20_example_1_arrival_joins_the_standing_group() -> None:
+    # G1 3/3 stands in A; G2 2/1 arrives from D (20 ticks).
     state = _state()
     g1 = _add(state, 3, 3, A)
     g2 = _add(state, 2, 1, D)
     run = _Run(state)
-    run.step(SetMode(g1, Mode.DEFENSE))  # tick 1: +1 per 60 ticks in the mode (DEC-30)
     run.until(114)
     run.step(Move(g2, A))  # tick 115: arrives at tick 134
     run.until(133)
     assert g2 in state.groups
     run.step()
     assert g2 not in state.groups
-    assert _counts(state, g1) == (5, 4, Mode.DEFENSE)
-    # The target keeps its count of "Defense" (DEC-30, merge): 134 ticks, +2.
-    assert state.groups[g1].ticks_in_defense == 134
-    assert active_bonuses(state, RULES)[g1].amount == 2
-    assert state.groups[g1].intent in state.intents
+    assert _counts(state, g1) == (5, 4, Mode.ATTACK)
     (merged,) = run.kinds("groups_merged", 134)
     assert (merged.get("player"), merged.get("group"), merged.get("units")) == (0, g1, 5)
 
@@ -265,7 +249,8 @@ def test_dec20_example_2_no_target_while_waiting_to_depart() -> None:
     g1 = _add(state, 2, 2, A)
     g2 = _add(state, 2, 1, D)
     run = _Run(state)
-    run.step(Move(g1, B, planned=True), Move(g2, A))  # tick 1: G1 departs at 31, G2 arrives 20
+    # tick 1: G1 waits to gather its bonus (A's warehouse is empty), G2 arrives at 20
+    run.step(Move(g1, B, planned=True, bonus=1), Move(g2, A))
     run.until(20)
     assert _counts(state, g1) == (2, 2, Mode.ATTACK)
     assert state.groups[g2].location == AtNode(A)
@@ -276,6 +261,7 @@ def test_dec20_example_2_no_target_while_waiting_to_depart() -> None:
 def test_dec20_example_3_recruit_joins_the_standing_group() -> None:
     state = _state()
     g1 = _add(state, 4, 4, A)
+    state.nodes[A].has_barracks = True  # setup: A recruits (DEC-26)
     run = _Run(state)
     (ok,) = run.step(Recruit(A))
     assert isinstance(ok, Ok)
@@ -367,20 +353,17 @@ def test_dec20_example_8_split_is_free_and_does_not_merge_back() -> None:
     assert (g1 in state.groups, new in state.groups) == (True, True)
 
 
-def test_dec20_example_9_merge_keeps_the_defense_of_the_smallest_id() -> None:
+def test_dec20_example_9_merge_into_the_smallest_id_is_free() -> None:
     state = _state()
     g1 = _add(state, 2, 2, A)
     g4 = _add(state, 1, 1, A)
     run = _Run(state)
-    run.step(SetMode(g1, Mode.DEFENSE))
-    run.until(121)  # 121 ticks in "Defense": +2 (DEC-30)
+    run.until(121)
     cp = state.players[0].cp
     assert run.step(Merge((g1, g4))) == [Ok(cost=0)]
     assert state.players[0].cp == cp
     assert g4 not in state.groups
-    assert _counts(state, g1) == (3, 3, Mode.DEFENSE)
-    assert state.groups[g1].ticks_in_defense == 122
-    assert active_bonuses(state, RULES)[g1].amount == 2
+    assert _counts(state, g1) == (3, 3, Mode.ATTACK)
 
 
 @pytest.mark.parametrize("moving_first", [True, False])
@@ -426,7 +409,7 @@ def test_dec20_example_11_cancel_during_the_delay() -> None:
     state = _state()
     g = _add(state, 2, 2, A)
     run = _Run(state)
-    run.step(Move(g, B, planned=True))
+    run.step(Move(g, B, planned=True, bonus=1))
     assert state.players[0].cp == 1000 - 200
     assert len(state.intents) == 1
     assert run.step(CancelOrder(g)) == [Ok(cost=0)]
@@ -460,23 +443,6 @@ def test_dec20_example_13_nothing_to_cancel_after_a_fight() -> None:
     location = state.groups[g].location
     assert isinstance(location, OnEdge) and location.back
     assert run.step(CancelOrder(g)) == [Reject(RejectCode.NOTHING_TO_CANCEL)]
-
-
-@pytest.mark.parametrize("cmd", ["cancel", "set_attack"])
-def test_dec20_example_14_cancel_defense(cmd: str) -> None:
-    state = _state()
-    g = _add(state, 2, 2, A)
-    run = _Run(state)
-    run.step(SetMode(g, Mode.DEFENSE))
-    run.until(121)
-    cp = state.players[0].cp
-    command = CancelOrder(g) if cmd == "cancel" else SetMode(g, Mode.ATTACK)
-    assert run.step(command) == [Ok(cost=0)]
-    assert state.players[0].cp == cp
-    assert _counts(state, g) == (2, 2, Mode.ATTACK)
-    group = state.groups[g]
-    assert (group.ticks_in_defense, group.intent, state.intents) == (0, None, {})
-    assert active_bonuses(state, RULES) == {}
 
 
 # D. Stack limit ---------------------------------------------------------------------------------
@@ -533,15 +499,14 @@ def test_dec20_example_21_cancel_home_was_taken_meanwhile() -> None:
 # Travel time and reachable nodes for the interface (DEC-20, D5; DEC-22, item 10) -------------
 
 
-@pytest.mark.parametrize("planned", [False, True])
-def test_arrive_tick_of_a_move_is_the_tick_of_the_arrival(planned: bool) -> None:
+def test_arrive_tick_of_a_move_is_the_tick_of_the_arrival() -> None:
     state = _state()
     g = _add(state, 3, 3, A)
     run = _Run(state)
     run.until(4)
-    (ok,) = run.step(Move(g, C, planned=planned))  # tick 5; A-B-C takes 40 ticks
+    (ok,) = run.step(Move(g, C))  # tick 5; A-B-C takes 40 ticks
     assert isinstance(ok, Ok)
-    arrive = 5 + (30 if planned else 0) + 40 - 1
+    arrive = 5 + 40 - 1
     assert ok.arrive_tick == arrive
     run.until(arrive)
     (arrived,) = run.kinds("group_arrived")

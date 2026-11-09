@@ -1,15 +1,14 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
 import type { GroupChoice as GroupBrief, GroupInfo, Selection } from '../hud/hudData.ts';
-import type {
-  Command,
-  LineRouteMsg,
-  MapFile,
-  Mode,
-  ReachMsg,
-  RulesetPublic,
-  Stance,
-} from '../protocol.gen.ts';
+import type { Command, MapFile, Mode, ReachMsg, RulesetPublic, Stance } from '../protocol.gen.ts';
+
+/** The answer to the removed `line_route_query` (#894); kept as a type until stage 2. */
+type LineRouteMsg = {
+  readonly points: readonly number[];
+  readonly tick: number;
+  readonly path: readonly number[];
+};
 import {
   type BonusMark,
   EMPTY_OVERLAY,
@@ -296,13 +295,14 @@ export class OrderController implements MapInteraction {
   }
 
   /** Price of switching a group to `mode`, hundredths of CP. */
-  modeCost(mode: Mode): number {
-    return mode === 'attack' ? this.#o.rules.cost.attack : this.#o.rules.cost.defense;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+  modeCost(_mode: Mode): number {
+    return 0; // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
-  /** Ticks for one point of the "Defense" bonus (`ruleset_public.orders.defense_ticks_per_bonus`, DEC-30). */
+  /** Ticks for one point of the "Defense" bonus (DEC-30). */
   get defenseTicksPerBonus(): number {
-    return this.#o.rules.orders.defense_ticks_per_bonus;
+    return 1; // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
   /** Price of a stance change, hundredths of CP. */
@@ -326,7 +326,7 @@ export class OrderController implements MapInteraction {
    * markers, rear minimum, transfers, road upgrades, "Defense") are off.
    */
   get v2(): boolean {
-    return this.#o.rules.economy.model === 'v2';
+    return true; // every ruleset plays economy v2 (#894)
   }
 
   /**
@@ -334,27 +334,27 @@ export class OrderController implements MapInteraction {
    * no lines, no auto lines, no transfers; the player has one lever, the shift.
    */
   get flow(): boolean {
-    return this.#o.rules.supply_model === 'flow';
+    return true; // every ruleset plays the supply flow (#894)
   }
 
-  /** The ruleset has stances: economy v1, or economy v2 with `ruleset_public.stances` (DEC-44). */
+  /** Every ruleset has the stances of DEC-44 (#894). */
   get stances(): boolean {
-    return !this.v2 || this.#o.rules.stances !== null;
+    return true;
   }
 
-  /** The ruleset has a bunker (`ruleset_public.bunker`); `mvp-4` has none (DEC-43, item D1). */
+  /** No ruleset has a bunker (#894). */
   get hasBunker(): boolean {
-    return this.#o.rules.bunker !== null;
+    return false;
   }
 
   /** The ruleset has road fortifications (`ruleset_public.fort`, DEC-43, item D); `null` hides the feature. */
   get hasFort(): boolean {
-    return this.#o.rules.fort !== null;
+    return true; // every ruleset has road fortifications (#894)
   }
 
   /** The price of one road fortification, hundredths of CP (`ruleset_public.fort.cost`); 0 without them. */
   get fortCost(): number {
-    return this.#o.rules.fort?.cost ?? 0;
+    return this.#o.rules.fort.cost;
   }
 
   /** The own leaf shift in force (`View.me.leaf_shift`); `null` under lines or before a snapshot. */
@@ -450,23 +450,23 @@ export class OrderController implements MapInteraction {
     readonly factory: number;
     readonly bunker: number;
   } {
-    const { city_upgrades: city, factory, bunker } = this.#o.rules;
+    const { city_upgrades: city, factory } = this.#o.rules;
     return {
       barracks: city.barracks_charges,
-      warehouse: city.warehouse_charges,
-      factory: factory?.cost ?? 0,
-      bunker: bunker?.cost ?? 0,
+      warehouse: 0, // no warehouse upgrades (#894)
+      factory: factory.cost,
+      bunker: 0, // no bunker (#894)
     };
   }
 
-  /** The bunker's virtual shots (`ruleset_public.bunker.shots`); 0 under v1. */
+  /** The bunker's virtual shots: no ruleset has a bunker (#894). */
   get bunkerShots(): number {
-    return this.#o.rules.bunker?.shots ?? 0;
+    return 0;
   }
 
   /** At most this many factories a player has, the capital included (`ruleset_public.factory.max`). */
   get factoryMax(): number {
-    return this.#o.rules.factory?.max ?? 0;
+    return this.#o.rules.factory.max;
   }
 
   /**
@@ -894,24 +894,20 @@ export class OrderController implements MapInteraction {
 
   /** `cancel_order` of this group would be sent: not a retreat from a fight under `"none"`. */
   canCancel(group: GroupInfo): boolean {
-    if (group.destination === null && group.mode !== 'defense') return false;
+    if (group.destination === null) return false;
     if (!this.isHeldInFight(group)) return true;
     return group.planned && group.node !== null;
   }
 
   /** Switch the mode of the selected group (attack / defense; under economy v2 there is no «Defense»). */
-  setMode(mode: Mode): void {
-    const group = this.#selectedGroup();
-    if (group === null || (mode === 'defense' && this.v2)) return;
-    this.groupMenu.close();
-    this.#sendCommand({ type: 'set_mode', group: group.id, mode }, null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+  setMode(_mode: Mode): void {
+    // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
-  /** D: «Defense» on, or back to «Attack» when the selected group already holds it. */
+  /** D: «Defense»: there is none (#894). */
   toggleDefense(): void {
-    const group = this.#selectedGroup();
-    if (group === null || this.v2) return;
-    this.setMode(group.mode === 'defense' ? 'attack' : 'defense');
+    // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
   /** Split `n` units off the selected group into a new group. */
@@ -1211,6 +1207,7 @@ export class OrderController implements MapInteraction {
     const node = this.recruitNode();
     this.closeCityMenu();
     if (node === null) return;
+    if (type === 'upgrade_warehouse' || type === 'build_bunker') return; // removed (#894)
     this.#sendCommand({ type, node }, null);
   }
 
@@ -1229,7 +1226,7 @@ export class OrderController implements MapInteraction {
     return {
       recruit: cost.recruit,
       barracks: cost.barracks,
-      warehouse: cost.warehouse,
+      warehouse: 0, // no warehouse upgrades (#894)
     };
   }
 
@@ -1279,19 +1276,19 @@ export class OrderController implements MapInteraction {
    * (`roadCost`, `roadBuildTicks`); whether the road may be built (CP, a build already going) is
    * the server's call, and a refusal is a toast like any other.
    */
-  upgradeRoad(edge: number): void {
-    if (this.#o.send === null) return;
-    this.#sendCommand({ type: 'upgrade_road', edge }, null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+  upgradeRoad(_edge: number): void {
+    // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
-  /** Price of one road level, hundredths of CP (`ruleset_public.cost.build`). */
+  /** Price of one road level: there are no road levels (#894). */
   get roadCost(): number {
-    return this.#o.rules.cost.build;
+    return 0;
   }
 
-  /** Ticks one road level takes to build (`ruleset_public.build.ticks_per_level`). */
+  /** Ticks one road level takes to build: there are no road levels (#894). */
   get roadBuildTicks(): number {
-    return this.#o.rules.build.ticks_per_level;
+    return 0;
   }
 
   setStance(stance: Stance): void {
@@ -1300,7 +1297,7 @@ export class OrderController implements MapInteraction {
 
   /** Every own factory follows the stance like the capital (`stances.factories_follow`, DEC-47). */
   get factoriesFollow(): boolean {
-    return this.#o.rules.stances?.factories_follow === true;
+    return this.#o.rules.stances.factories_follow;
   }
 
   /** The numbers of the stance menu, from the ruleset of `welcome` and the own working factories (DEC-47). */
@@ -1445,7 +1442,7 @@ export class OrderController implements MapInteraction {
       if (this.#isOwnFactory(node)) {
         this.ui.patch({ lineDraft: [node], linePath: null });
       }
-    } else this.#sendCommand({ type: 'remove_line', line }, null);
+    } // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
   /**
@@ -1503,11 +1500,11 @@ export class OrderController implements MapInteraction {
     const draft = this.ui.current.lineDraft;
     const path = this.ui.current.linePath;
     if (draft === null) return;
-    const [source, second, ...rest] = path ?? [];
+    const [source, second] = path ?? [];
     if (draft.length >= 2 && (source === undefined || second === undefined)) return; // no path yet
     this.ui.patch({ lineDraft: null, linePath: null });
     if (source === undefined || second === undefined) return;
-    this.#sendCommand({ type: 'draw_line', path: [source, second, ...rest] }, null);
+    // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
   /**
@@ -1535,7 +1532,7 @@ export class OrderController implements MapInteraction {
   /** Turns the auto-extension of the own lines on or off (`set_auto_lines`, free). */
   setAutoLines(on: boolean): void {
     if (this.autoLines === null || this.autoLines === on) return;
-    this.#sendCommand({ type: 'set_auto_lines', on }, null);
+    // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
   closeSupplyMenu(): void {
@@ -1562,17 +1559,17 @@ export class OrderController implements MapInteraction {
 
   /** The top of the rear minimum slider (`ruleset_public.supply.rear_min_max`). */
   get rearMinMax(): number {
-    return this.#o.rules.supply.rear_min_max;
+    return 0; // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
-  /** The number of front markers the player has (`ruleset_public.supply.front_markers`, DEC-28, item 2). */
+  /** The number of front markers the player has: none (#894). */
   get frontMarkers(): number {
-    return this.#o.rules.supply.front_markers;
+    return 0;
   }
 
-  /** The price of putting a front marker, hundredths of CP (`ruleset_public.cost.front`; 0 in DEC-28). */
+  /** The price of putting a front marker: there are none (#894). */
   get frontCost(): number {
-    return this.#o.rules.cost.front;
+    return 0;
   }
 
   /**
@@ -1584,18 +1581,15 @@ export class OrderController implements MapInteraction {
     const fronts = this.#o.hud.current?.fronts ?? [];
     if (!Number.isInteger(marker) || marker < 0 || marker >= this.frontMarkers) return;
     if (fronts.some((at, i) => i !== marker && at === node)) return;
-    this.#sendCommand(
-      { type: 'set_front', marker, node: (fronts[marker] ?? null) === node ? null : node },
-      null,
-    );
+    // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
   /** The global rear minimum (DEC-28, item 3): clamped to `0..supply.rear_min_max`, sent only on a change. */
   setRearMin(n: number): void {
     if (!Number.isFinite(n)) return;
-    const value = Math.min(this.#o.rules.supply.rear_min_max, Math.max(0, Math.round(n)));
+    const value = Math.min(this.rearMinMax, Math.max(0, Math.round(n)));
     if (value === this.#o.hud.current?.rearMin) return;
-    this.#sendCommand({ type: 'set_rear_min', n: value }, null);
+    // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
   /**
@@ -1608,7 +1602,7 @@ export class OrderController implements MapInteraction {
     const now = this.rearMin;
     if (now === null) return;
     const sent = this.#rearStep !== null && this.#rearStep.from === now ? this.#rearStep.to : now;
-    const to = Math.min(this.#o.rules.supply.rear_min_max, Math.max(0, sent + delta));
+    const to = Math.min(this.rearMinMax, Math.max(0, sent + delta));
     if (to === sent) return;
     this.#rearStep = { from: now, to };
     this.setRearMin(to);
@@ -1626,10 +1620,10 @@ export class OrderController implements MapInteraction {
 
   /** Sends the transfer of the dialog (the server checks the path and the warehouse). */
   confirmTransfer(): void {
-    const { open, from, to, n } = this.transfer.current;
+    const { open, n } = this.transfer.current;
     this.transfer.close();
     if (!open || n < 1) return;
-    this.#sendCommand({ type: 'transfer', from_node: from, to_node: to, n }, null);
+    // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
   closeTransfer(): void {
@@ -1814,8 +1808,7 @@ export class OrderController implements MapInteraction {
       case 'Digit1':
         return this.#modeKey('attack');
       case 'Digit2':
-        if (this.v2) return false;
-        return this.#modeKey('defense');
+        return false; // no «Defense» (#894)
       case 'KeyR':
         this.recruit();
         return true;
@@ -2287,7 +2280,7 @@ export class OrderController implements MapInteraction {
     if (ticks === undefined || path === undefined) return null;
     return {
       // Economy v2: a plan waits until its bonus is gathered, an unknown time: the travel time only.
-      ticks: this.planned && !this.v2 ? ticks + this.#o.rules.orders.planned_delay_ticks : ticks,
+      ticks,
       path,
     };
   }

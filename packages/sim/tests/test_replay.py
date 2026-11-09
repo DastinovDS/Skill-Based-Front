@@ -9,20 +9,21 @@ from pathlib import Path
 import pytest
 
 from gow_sim.commands import (
+    BuildBarracks,
     BuildFactory,
     CancelOrder,
+    CancelRecruit,
     Command,
-    DrawLine,
     Forfeit,
+    FortifyRoad,
     Merge,
     Move,
     PlayerCommand,
     Recruit,
-    RemoveLine,
-    SetMode,
+    ReleasePlan,
+    SetLeafShift,
     SetStance,
     Split,
-    UpgradeRoad,
 )
 from gow_sim.maps import load_map
 from gow_sim.match import HEADLESS_MATCH_KEY, SIM_VERSION, Match
@@ -38,7 +39,6 @@ from gow_sim.replay import (
     replay_run,
 )
 from gow_sim.ruleset import Stance, load_ruleset
-from gow_sim.state import Mode
 
 TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parents[2]
@@ -49,17 +49,18 @@ REPLAYS = sorted(GOLDEN.glob(f"*{REPLAY_SUFFIX}"))
 
 COMMANDS: list[Command] = [
     Move(1, 2),
-    Move(1, 2, planned=True),
+    Move(1, 2, planned=True, bonus=3),
+    ReleasePlan(1),
     Split(3, 2),
     Merge((4, 5, 6)),
-    SetMode(7, Mode.DEFENSE),
     SetStance(Stance.WAR),
-    UpgradeRoad(9),
+    BuildBarracks(2),
     Recruit(0),
+    CancelRecruit(0),
     CancelOrder(10),
     BuildFactory(3),
-    DrawLine((0, 1, 2)),
-    RemoveLine(4),
+    FortifyRoad(3, 4),
+    SetLeafShift(2),
     Forfeit(),
 ]
 
@@ -67,6 +68,15 @@ COMMANDS: list[Command] = [
 @pytest.mark.parametrize("cmd", COMMANDS, ids=lambda c: type(c).__name__)
 def test_command_round_trip(cmd: Command) -> None:
     assert decode_command(json.loads(json.dumps(encode_command(cmd)))) == cmd
+
+
+@pytest.mark.parametrize(
+    "kind", ["set_mode", "upgrade_road", "set_front", "transfer", "draw_line", "build_bunker"]
+)
+def test_a_removed_command_is_an_unknown_type(kind: str) -> None:
+    """The commands of the removed rulesets (#894) are not in the format any more."""
+    with pytest.raises(ReplayError, match="unknown type"):
+        decode_command({"type": kind})
 
 
 def test_golden_folder_of_current_version_exists() -> None:

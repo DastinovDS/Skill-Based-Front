@@ -11,13 +11,11 @@ about and the numbers (``PARAMS``) differ:
 - ``strike``: attack enemy nodes next to own territory when the force suffices;
 - ``reinforce``: fill the garrisons that are below their minimum from free groups or by recruiting;
 - ``strengthen``: spend CP that would otherwise burn on the cap on recruits at the front;
-- ``fortify``: Defense on the guards that face enemies;
-- ``build_roads``: one unthreatened own internal road a turn is upgraded for CP (DEC-28, item 7).
-- ``prioritize``: the two front markers go to own cities at the front (DEC-28).
+- ``prioritize``: a factory build (DEC-41, ``economy.factory_site``).
 
 Enemy strength (DEC-21). A view gives exact enemy numbers at ``EXACT`` detail (own nodes, nodes
 where own groups stand, neighbours seen exactly by terrain); ``RANGE`` gives the range of the
-units, ``PRESENCE`` only whether enemy groups are there and their modes. ``StrategyBot.estimate``
+units, ``PRESENCE`` only whether enemy groups are there. ``StrategyBot.estimate``
 therefore returns, for an enemy node:
 
 - ``(0, 0)`` when the node is observed now (not ``FOG``) and no enemy group is there: it falls
@@ -45,17 +43,17 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from gow_bots.bots.base import Bot, node_of
-from gow_bots.bots.economy import factory_site, line_commands, wants
-from gow_bots.bots.utility import prefer_planned, shots_to_take, takes, terrain_burned
-from gow_sim.commands import BuildFactory, Command, Move, Recruit, SetMode, SetStance, UpgradeRoad
+from gow_bots.bots.economy import factory_site
+from gow_bots.bots.utility import shots_to_take, takes, terrain_burned
+from gow_sim.commands import BuildFactory, Command, Move, Recruit
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import Detail, GroupView, Mode, PlayerView, Stance
+from gow_sim.view import Detail, GroupView, PlayerView
 
 __all__ = ["MEMORY_TICKS", "StrategyBot", "Turn"]
 
 FACTORIES: Final = 2
-"""Economy v2: factories built beside the capital (``economy.factory_site``)."""
+"""Factories built beside the capital (``economy.factory_site``)."""
 MEMORY_TICKS: Final = 600
 """How long an exact sighting of an enemy node stays a better guess than the capacity bound."""
 
@@ -97,9 +95,6 @@ class StrategyBot(Bot):
         self.capital = mapdef.capital(player)
         self.recruited: dict[int, int] = {}
         """Decision tick of the last recruit in each city: one unit per city and decision."""
-        self.stance_tick: int | None = None
-        self.lines_seen: dict[int, int] = {}
-        """Economy v2: own line id to the tick it was first seen (``economy.line_commands``)."""
         self.memory: dict[int, tuple[int, int, int]] = {}
         """Last exact sighting of the enemy per node: ``(units, charged, tick)``."""
         self.value: tuple[int, ...] = tuple(
@@ -206,8 +201,6 @@ class StrategyBot(Bot):
         A ``Move`` of a group too big for every path becomes the ``Split`` of the army that
         fits (``Bot.fitted``, DEC-20): the army goes in a later decision.
         """
-        if not self.allowed(cmd):
-            return False  # a command of the other economy model (DEC-41)
         fitted = self.fitted(turn.view, cmd)
         if fitted is None:
             return False
@@ -220,27 +213,11 @@ class StrategyBot(Bot):
         return True
 
     def prioritize(self, turn: Turn) -> None:
-        """Front markers on the front cities (DEC-28, ``Bot.fronts``); under economy v2 the lines
-        and the factories of ``gow_bots.bots.economy`` instead (DEC-41)."""
+        """A factory build of ``gow_bots.bots.economy`` (DEC-41)."""
         view = turn.view
-        if not self.rules.v2:
-            for cmd in self.fronts(view):
-                self.spend(turn, cmd)
-            return
-        for cmd in line_commands(self, view, wants(self, view, {}), self.lines_seen):
-            self.spend(turn, cmd)
         site = factory_site(self, view, FACTORIES)
         if site is not None:
             self.spend(turn, BuildFactory(site))
-
-    def set_stance(self, turn: Turn, stance: Stance) -> None:
-        last = self.stance_tick
-        if turn.view.me.stance is stance:
-            return
-        if last is not None and turn.tick - last < self.rules.orders.stance_cooldown_ticks:
-            return
-        if self.spend(turn, SetStance(stance)):
-            self.stance_tick = turn.tick
 
     def recruit(self, turn: Turn, node: int, keep: int = 0) -> bool:
         """Queue one unit in ``node`` if the rules allow it there now (``Bot.can_queue``)."""
@@ -260,13 +237,12 @@ class StrategyBot(Bot):
         """Send ``g`` to ``dest`` that needs ``need`` shots (``shots_to_take``) to be taken.
 
         A normal order when the charges of the group suffice with ``margin`` to spare; a planned
-        order (DEC-08) when the shared utility says that the bonus pays and makes them suffice.
+        order (DEC-08) when the bonus the group can gather makes them suffice (DEC-41, item 10).
         Either way the real charges must also pay the capture (DEC-38, ``takes``).
         """
         want = need + margin
         here = node_of(g)
-        edges = self.path_edges(turn.view, here, dest, g.units)
-        bonus = self.plan_bonus(turn.view, here, edges, g.charged)
+        bonus = self.plan_bonus(turn.view, here, g.charged)
         ask = max(1, want + self.rules.capture.charge_cost - g.charged)
         planned = self.order(g.id, dest, True, min(bonus, ask))
         plain = takes(self.rules, g.charged, 0, want)
@@ -274,7 +250,6 @@ class StrategyBot(Bot):
             need > 0
             and not plain
             and takes(self.rules, g.charged, bonus, want)
-            and (self.rules.v2 or prefer_planned(self.rules, g.charged, need, edges))
             and self.spend(turn, planned, keep)
         ) or (plain and self.spend(turn, Move(g.id, dest), keep))
         if sent:
@@ -368,9 +343,8 @@ class StrategyBot(Bot):
                 continue
             units, charged = self.estimate(turn, target, est_pct)
             terrain = self.map.nodes[target].terrain
-            defended = self.defended(turn.view, target)
             burned = terrain_burned(self.rules, turn.view, target)
-            need = shots_to_take(self.rules, terrain, units, charged, defended, burned=burned)
+            need = shots_to_take(self.rules, terrain, units, charged, burned=burned)
             comps = self._sources(turn, target)
             senders = sorted(
                 (g for g in turn.free() if turn.comp[node_of(g)] in comps),
@@ -406,58 +380,8 @@ class StrategyBot(Bot):
                 return
             self.recruit(turn, node, keep)
 
-    def fortify(self, turn: Turn) -> None:
-        """Defense on guards of threatened nodes not in it yet: the bonus grows with the time in
-        the mode and gathers anew after a fight without paying again (DEC-30), so the earlier the
-        better and once is enough."""
-        for g in turn.groups:
-            node = node_of(g)
-            if (
-                g.id in turn.guards
-                and g.id not in turn.busy
-                and turn.threatened[node]
-                and g.charged > 0
-                and g.mode is not Mode.DEFENSE
-                and self.spend(turn, SetMode(g.id, Mode.DEFENSE))
-            ):
-                turn.busy.add(g.id)
-
     def develop(self, turn: Turn, keep: int) -> None:
         """One city build of DEC-26 (``Bot.development``) with the CP above ``keep``."""
         cmd = self.development(turn.view, turn.budget - keep)
         if cmd is not None:
             self.spend(turn, cmd, keep)
-
-    def build_roads(self, turn: Turn, keep: int) -> None:
-        """One road at a time: while no own road is being built, the own internal road with the
-        best ``road_value`` whose ends are not threatened, paid with ``orders.cost.build`` CP
-        (DEC-28, item 7) while ``keep`` CP stay. One build at a time keeps the roads at about
-        0,5 CP per ``build.ticks_per_level``, so they do not starve the recruits and the city
-        builds. Ties go to the nearer road to the own capital (a level there speeds the packets
-        and the groups that leave it), then the smaller edge key: mirror-invariant."""
-        view = turn.view
-        if any(e.build is not None and e.upgrade_gain is not None for e in view.edges):
-            return  # an own road is being built (only own internal roads have a gain)
-        capital = self.map.capital(self.player)
-        hops = self.hops[capital]
-        best: tuple[int, int, int] | None = None
-        best_edge: int | None = None
-        for e, edef in enumerate(self.map.edges):
-            value = self.road_value(view, e)
-            if value is None or not self.can_upgrade(view, e):
-                continue
-            if turn.threatened[edef.a] or turn.threatened[edef.b]:
-                continue
-            rank = (-value, min(hops[edef.a], hops[edef.b]), self.edge_keys[e])
-            if best is None or rank < best:
-                best, best_edge = rank, e
-        if best_edge is not None:
-            self.spend(turn, UpgradeRoad(best_edge), keep)
-
-    def road_value(self, view: PlayerView, edge: int) -> int | None:
-        """What the next level of ``edge`` is worth (DEC-28, item 7): its packet and unit speed
-        points plus 100 per charge of throughput; ``None`` when it cannot grow."""
-        gain = view.edges[edge].upgrade_gain
-        if gain is None:
-            return None
-        return gain.speed_pct + gain.unit_speed_pct + 100 * gain.amount

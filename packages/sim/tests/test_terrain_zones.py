@@ -26,12 +26,12 @@ from gow_sim.systems.movement import border_permille, movement, traversal_ticks
 from gow_sim.view import opaque_id, reach
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP5 = TESTS_DIR.parents[2] / "rulesets" / "mvp-5.toml"
 KEY = b"terrain-zones-test-key-0123456789"
 
 
 def _rules() -> Ruleset:
-    base = load_ruleset(MVP0)
+    base = load_ruleset(MVP5)
     terrain = TerrainRules(
         defense_mod=base.terrain.defense_mod,
         speed_pct=TerrainTable(plains=125, forest=100, mountains=70),

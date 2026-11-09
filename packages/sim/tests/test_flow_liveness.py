@@ -1,5 +1,5 @@
-"""Liveness of the automatic supply flow and the supply contract (DEC-43, ``supply.model =
-"flow"``, #738, item M).
+"""Liveness of the automatic supply flow and the supply contract (DEC-43, #738, item M), on the
+flow of ``mvp-5`` (the supply numbers of the kept rulesets).
 
 Every playtest of ``mvp-4`` found a node the flow never fed while the rear held stock: the saddle
 (item K, match 11), the corridor through a leaf (item L, match 12), the ridge (#738, match 12),
@@ -74,7 +74,7 @@ from gow_sim.systems.supply import edge_packet_ticks, packet_dest
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 POOL = tuple(sorted(p.stem for p in (ROOT / "maps").glob("*.json")))
 
 LAYOUTS = ("rear", "random", "capital", "one")
@@ -366,7 +366,7 @@ def _hold(state: GameState, player: int) -> dict[int, bool]:
 
 def _owed(node: Node, player: int) -> int:
     due = 0
-    for b in (node.build, node.factory_build, node.fort_build):
+    for b in (node.build, node.factory_build):
         if b is not None and b.owner == player:
             due += b.owed
     return due
@@ -696,7 +696,7 @@ def _capital_distance(state: GameState, player: int, main: list[int]) -> dict[in
 def hop_dispatches(state: GameState) -> int:
     """The dispatches one road takes at most: wait for a dispatch, then the slowest packet."""
     dt = RULES.supply.dispatch_ticks
-    slowest = max(edge_packet_ticks(state, RULES, e) for e in state.edges)
+    slowest = max(edge_packet_ticks(state, RULES, e.id) for e in state.map.edges)
     return (slowest + dt - 1) // dt + 1
 
 

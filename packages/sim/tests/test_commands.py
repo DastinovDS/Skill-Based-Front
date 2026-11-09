@@ -3,8 +3,8 @@
 Expected values come from the rules, not from the code:
 
 - costs in hundredths of CP, DEC-08 (mechanics.md, section 5) and DEC-01 (section 3): move 1 CP,
-  planned move 2 CP, "Attack" free, "Defense" 2 CP, UpgradeRoad 1 CP, recruit 1 CP, stance change
-  free (DEC-02); the planned delay is 30 ticks (DEC-08). Cancel, split and merge are free since
+  planned move 2 CP, recruit 1 CP, stance change free (DEC-44); a planned order names its bonus
+  and gathers it, one charge per 30 ticks (DEC-41, item 10). Cancel, split and merge are free since
   DEC-20, but ``RULES`` below pins them at the former 1 CP: the keys stay so that balance can bring
   a price back, and the CP plumbing must still work. These numbers are pinned in ``RULES``;
 - AGENTS.md, section 4.3: one code ``NOT_FOUND_OR_HIDDEN`` for a missing and a hidden entity,
@@ -29,6 +29,7 @@ from gow_sim.commands import (
     CancelOrder,
     Command,
     Forfeit,
+    FortifyRoad,
     Merge,
     Move,
     Ok,
@@ -36,10 +37,9 @@ from gow_sim.commands import (
     Recruit,
     Reject,
     RejectCode,
-    SetMode,
+    ReleasePlan,
     SetStance,
     Split,
-    UpgradeRoad,
     apply_commands,
     map_group_ids,
     validate,
@@ -47,6 +47,7 @@ from gow_sim.commands import (
 from gow_sim.maps import load_map
 from gow_sim.ruleset import OrderCosts, Ruleset, Stance, load_ruleset
 from gow_sim.state import (
+    PLAN_WAIT,
     AtNode,
     GameState,
     Group,
@@ -59,32 +60,23 @@ from gow_sim.state import (
 from gow_sim.systems.movement import edge_between, traversal_ticks
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP7 = TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml"
 
 
 def _rules() -> Ruleset:
-    base = load_ruleset(MVP0)
+    base = load_ruleset(MVP7)
     costs = OrderCosts(
         move=100,
         planned_move=200,
         cancel=100,
         split=100,
         merge=100,
-        attack=0,
-        defense=200,
-        build=100,
         recruit=100,
         stance=0,
-        front=0,
-        rear_min=0,
-        transfer=0,
-        barracks=300,
-        warehouse=200,
+        barracks=0,
     )
-    orders = dataclasses.replace(
-        base.orders, planned_delay_ticks=30, stance_cooldown_ticks=100, cost=costs
-    )
-    # City 1 is small (capacity 4, DEC-22) and holds 3 units: room for one recruit (DEC-01).
+    orders = dataclasses.replace(base.orders, plan_ticks_per_bonus=30, cost=costs)
+    # City 1 is small (capacity 4, DEC-22) and holds 3 units: room for one recruit (DEC-25).
     capacity = dataclasses.replace(
         base.capacity, by_kind=dataclasses.replace(base.capacity.by_kind, city_small=4)
     )
@@ -122,6 +114,7 @@ def _state() -> tuple[GameState, Ids]:
     state = initial_state(load_map(TESTS_DIR / "maps" / "choke.json"), RULES)
     state.tick = TICK
     by_node = {g.location: g.id for g in state.groups.values()}  # start garrisons, one per node
+    state.nodes[1].has_barracks = True  # setup: city 1 recruits (DEC-26)
 
     def add(owner: int, units: int, charged: int, location: AtNode | OnEdge) -> int:
         gid = state.new_id()
@@ -180,10 +173,15 @@ class Row:
 
 ROWS = [
     Row("move", lambda _, g: Move(g, 3), lambda i: i.second, 100, path=(1, 3)),
-    Row("planned_move", lambda _, g: Move(g, 3, planned=True), lambda i: i.second, 200, (1, 3)),
+    Row(
+        "planned_move",
+        lambda _, g: Move(g, 3, planned=True, bonus=1),
+        lambda i: i.second,
+        200,
+        (1, 3),
+    ),
     Row("split", lambda _, g: Split(g, 1), lambda i: i.capital, 100),
     Row("merge", lambda i, g: Merge((i.extra, g)), lambda i: i.capital, 100),
-    Row("set_defense", lambda _, g: SetMode(g, Mode.DEFENSE), lambda i: i.capital, 200),
     Row("cancel", lambda _, g: CancelOrder(g), lambda i: i.waiting, 100),
 ]
 
@@ -217,7 +215,8 @@ def _arrive_tick(state: GameState, path: tuple[int, ...], delay: int) -> int | N
 @pytest.mark.parametrize("row", ROWS, ids=lambda r: r.name)
 def test_group_command_valid(row: Row) -> None:
     state, ids = _state()
-    delay = RULES.orders.planned_delay_ticks if row.name == "planned_move" else 0
+    # A planned order gathers its bonus of 1 first (DEC-41, item 10).
+    delay = RULES.orders.plan_ticks_per_bonus if row.name == "planned_move" else 0
     arrive = _arrive_tick(state, row.path, delay)
     _check(
         state, 0, row.make(ids, row.subject(ids)), Ok(row.cost, path=row.path, arrive_tick=arrive)
@@ -245,15 +244,13 @@ def test_group_command_rejects(row: Row, variant: str) -> None:
 
 def test_missing_and_hidden_give_the_same_reject() -> None:
     state, ids = _state()
-    hidden = validate(state, RULES, 0, SetMode(ids.enemy_hidden, Mode.DEFENSE))
-    missing = validate(state, RULES, 0, SetMode(MISSING, Mode.DEFENSE))
+    hidden = validate(state, RULES, 0, Split(ids.enemy_hidden, 1))
+    missing = validate(state, RULES, 0, Split(MISSING, 1))
     assert hidden == missing == Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
 
 
 _TARGETS: dict[str, tuple[Callable[[Ids], Command], RejectCode]] = {
     "move_dest": (lambda i: Move(i.second, 99), RejectCode.NOT_FOUND_OR_HIDDEN),
-    "upgrade_edge": (lambda _: UpgradeRoad(99), RejectCode.NOT_FOUND_OR_HIDDEN),
-    "upgrade_negative_edge": (lambda _: UpgradeRoad(-1), RejectCode.NOT_FOUND_OR_HIDDEN),
     "recruit_node": (lambda _: Recruit(99), RejectCode.NOT_FOUND_OR_HIDDEN),
     "recruit_enemy_node": (lambda _: Recruit(5), RejectCode.NOT_OWNER),
     "recruit_neutral": (lambda _: Recruit(3), RejectCode.NOT_OWNER),
@@ -284,10 +281,8 @@ def test_recruit_without_cp() -> None:
 
 
 def test_free_commands_need_no_cp() -> None:
-    state, ids = _state()
-    state.groups[ids.capital].mode = Mode.DEFENSE
+    state, _ = _state()
     state.players[0].cp = 0
-    _check(state, 0, SetMode(ids.capital, Mode.ATTACK), Ok(cost=0))
     _check(state, 0, SetStance(Stance.ECONOMY), Ok(cost=0))
     _check(state, 0, Forfeit(), Ok(cost=0))
 
@@ -301,7 +296,6 @@ def test_waiting_group_takes_only_cancel() -> None:
         Move(ids.waiting, 0),
         Split(ids.waiting, 1),
         Merge((ids.second, ids.waiting)),
-        SetMode(ids.waiting, Mode.DEFENSE),
     ):
         assert validate(state, RULES, 0, cmd) == Reject(RejectCode.GROUP_BUSY)
     assert validate(state, RULES, 0, CancelOrder(ids.waiting)) == Ok(cost=100)
@@ -326,16 +320,19 @@ def test_move_to_own_node_or_unreachable() -> None:
 
 def test_move_sets_the_order() -> None:
     state, ids = _state()
-    state.groups[ids.second].mode = Mode.DEFENSE
     apply_commands(
         state,
         RULES,
-        [PlayerCommand(0, 1, Move(ids.second, 3)), PlayerCommand(0, 2, Move(ids.capital, 1, True))],
+        [
+            PlayerCommand(0, 1, Move(ids.second, 3)),
+            PlayerCommand(0, 2, Move(ids.capital, 1, True, bonus=2)),
+        ],
     )
     second, capital = state.groups[ids.second], state.groups[ids.capital]
     assert second.order == Order(path=(3,), planned=False, depart_tick=TICK)
-    assert second.mode is Mode.ATTACK  # a move order drops "Defense" for free (DEC-08)
-    assert capital.order == Order(path=(1,), planned=True, depart_tick=TICK + 30)
+    # A planned order waits until it has gathered its bonus (DEC-41, item 10).
+    assert capital.order == Order(path=(1,), planned=True, depart_tick=PLAN_WAIT)
+    assert (capital.plan, capital.plan_tick, capital.bonus) == (2, TICK, 0)
     assert state.players[0].cp == 300 - 100 - 200
 
 
@@ -363,12 +360,10 @@ def test_split_size_must_leave_both_groups(n: int) -> None:
 
 def test_merge_keeps_the_smallest_id() -> None:
     state, ids = _state()
-    state.groups[ids.capital].mode = Mode.DEFENSE
     apply_commands(state, RULES, [PlayerCommand(0, 1, Merge((ids.extra, ids.capital)))])
     keep = state.groups[min(ids.capital, ids.extra)]
     assert max(ids.capital, ids.extra) not in state.groups
-    # The group with the smallest id keeps its mode (DEC-20, B2).
-    assert (keep.units, keep.charged, keep.mode, keep.order) == (5, 4, Mode.DEFENSE, None)
+    assert (keep.units, keep.charged, keep.mode, keep.order) == (5, 4, Mode.ATTACK, None)
 
 
 def test_merge_rejects() -> None:
@@ -381,32 +376,6 @@ def test_merge_rejects() -> None:
         assert validate(state, RULES, 0, Merge(gids)) == Reject(code)
 
 
-def test_set_mode_same_mode() -> None:
-    state, ids = _state()
-    assert validate(state, RULES, 0, SetMode(ids.capital, Mode.ATTACK)) == Reject(
-        RejectCode.NO_CHANGE
-    )
-    state.groups[ids.capital].mode = Mode.DEFENSE
-    # "Defense" while in it would only reset what it gathered (DEC-30): nothing to change.
-    assert validate(state, RULES, 0, SetMode(ids.capital, Mode.DEFENSE)) == Reject(
-        RejectCode.NO_CHANGE
-    )
-
-
-def test_upgrade_road_rules() -> None:
-    """``UpgradeRoad(edge)`` paid with CP (DEC-28, item 7); the full tables are in
-    ``test_build.py``, ``test_dec22.py`` and ``test_dec26.py``."""
-    state, _ = _state()
-    # e1 joins own 1 and neutral 3: a buffer edge (mechanics.md, section 8).
-    assert validate(state, RULES, 0, UpgradeRoad(1)) == Reject(RejectCode.NOT_INTERNAL)
-    state.edges[0].width = 3  # max_level of e0
-    assert validate(state, RULES, 0, UpgradeRoad(0)) == Reject(RejectCode.MAX_WIDTH)
-    state.edges[0].width = 1
-    state.nodes[0].warehouse = 0  # no charges are needed
-    _check(state, 0, UpgradeRoad(0), Ok(cost=100))  # orders.cost.build of these rules
-    assert validate(state, RULES, 0, UpgradeRoad(0)) == Reject(RejectCode.EDGE_BUSY)
-
-
 def test_recruit_queues_one_unit() -> None:
     """The unit appears later, from the recruit queue (DEC-25; ``test_recruit.py``)."""
     state, _ = _state()
@@ -416,16 +385,12 @@ def test_recruit_queues_one_unit() -> None:
     assert state.nodes[1].recruit_queue == 1
 
 
-def test_stance_change_and_cooldown() -> None:
+def test_stance_change_without_a_cooldown() -> None:
+    """DEC-44: a stance change is free and has no cooldown; the same stance is no change."""
     state, _ = _state()
     assert validate(state, RULES, 0, SetStance(Stance.BALANCE)) == Reject(RejectCode.NO_CHANGE)
     apply_commands(state, RULES, [PlayerCommand(0, 1, SetStance(Stance.WAR))])
     assert state.players[0].stance is Stance.WAR
-    state.tick = TICK + 99  # at most once per 100 ticks (DEC-02)
-    assert validate(state, RULES, 0, SetStance(Stance.ECONOMY)) == Reject(
-        RejectCode.STANCE_COOLDOWN
-    )
-    state.tick = TICK + 100
     assert validate(state, RULES, 0, SetStance(Stance.ECONOMY)) == Ok(cost=0)
 
 
@@ -447,8 +412,8 @@ def _mixed(ids: Ids) -> list[PlayerCommand]:
         PlayerCommand(0, 2, Move(ids.second, 3)),
         PlayerCommand(0, 3, Merge((ids.capital, ids.extra))),
         PlayerCommand(0, 4, Recruit(1)),  # 300 - 3 * 100: no CP left
-        PlayerCommand(0, 5, SetMode(ids.enemy_hidden, Mode.DEFENSE)),
-        PlayerCommand(1, 1, SetMode(ids.enemy_seen, Mode.DEFENSE)),
+        PlayerCommand(0, 5, Split(ids.enemy_hidden, 1)),
+        PlayerCommand(1, 1, Split(ids.enemy_seen, 1)),
         PlayerCommand(1, 2, Move(ids.enemy_hidden, 3)),
         PlayerCommand(1, 3, Split(ids.second, 1)),
         PlayerCommand(1, 4, SetStance(Stance.WAR)),
@@ -497,8 +462,8 @@ def test_players_do_not_affect_each_other() -> None:
     ]
     predicted = state.next_id
     p1 = [
-        PlayerCommand(1, 1, SetMode(max(ids.second, ids.extra), Mode.DEFENSE)),
-        PlayerCommand(1, 2, SetMode(predicted, Mode.DEFENSE)),
+        PlayerCommand(1, 1, Split(max(ids.second, ids.extra), 1)),
+        PlayerCommand(1, 2, Split(predicted, 1)),
         PlayerCommand(1, 3, Move(ids.enemy_seen, 1)),
     ]
     alone, _ = _state()
@@ -538,9 +503,9 @@ def test_map_group_ids() -> None:
 
     assert map_group_ids(Move(1, 5, True), f) == Move(101, 5, True)
     assert map_group_ids(Merge((1, 2)), f) == Merge((101, 102))
-    assert map_group_ids(UpgradeRoad(4), f) == UpgradeRoad(4)  # an edge, no group
+    assert map_group_ids(FortifyRoad(3, 4), f) == FortifyRoad(3, 4)  # a node and an edge
     assert map_group_ids(Split(1, 2), f) == Split(101, 2)
-    assert map_group_ids(SetMode(1, Mode.DEFENSE), f) == SetMode(101, Mode.DEFENSE)
+    assert map_group_ids(ReleasePlan(1), f) == ReleasePlan(101)
     assert map_group_ids(CancelOrder(7), f) == CancelOrder(107)
     assert map_group_ids(Recruit(3), f) == Recruit(3)
     assert map_group_ids(SetStance(Stance.WAR), f) == SetStance(Stance.WAR)

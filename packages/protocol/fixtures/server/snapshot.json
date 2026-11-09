@@ -5,16 +5,16 @@
     "me": {
       "cp": 250,
       "stance": "balance",
-      "fronts": [1, null],
-      "rear_min": 1,
-      "auto_lines": null,
       "leaf_shift": null,
       "leaf_shift_max": null,
       "next_dispatch_tick": null,
       "cp_ticks": null,
       "capital_ticks": null
     },
-    "vp": [12, 9],
+    "vp": [
+      12,
+      9
+    ],
     "nodes": [
       {
         "id": 0,
@@ -37,14 +37,11 @@
         "recruit_progress": 0,
         "recruit_waiting": false,
         "has_barracks": true,
-        "warehouse_level": 0,
         "warehouse_cap": 5,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -73,14 +70,11 @@
         "recruit_progress": 12,
         "recruit_waiting": false,
         "has_barracks": true,
-        "warehouse_level": 0,
         "warehouse_cap": 3,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -109,14 +103,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": null,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -133,7 +124,9 @@
         "seen": {
           "tick": 120,
           "level": "presence",
-          "enemy_modes": ["attack", "defense"],
+          "enemy_modes": [
+            "attack"
+          ],
           "enemy_units": null,
           "enemy_charged": null,
           "enemy_range": null
@@ -145,14 +138,11 @@
         "recruit_progress": null,
         "recruit_waiting": null,
         "has_barracks": true,
-        "warehouse_level": null,
         "warehouse_cap": null,
         "building": null,
         "factory": null,
         "factory_period": null,
         "factory_build": null,
-        "fort": null,
-        "fort_build": null,
         "front_dist": null,
         "flow_down": null,
         "flow_next": null,
@@ -164,13 +154,7 @@
     "edges": [
       {
         "id": 0,
-        "width": 1,
         "detail": "presence",
-        "upgrade_gain": {
-          "speed_pct": 50,
-          "unit_speed_pct": 15,
-          "amount": 1
-        },
         "halves": [
           {
             "detail": "exact",
@@ -195,15 +179,12 @@
             }
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 1,
-        "width": 1,
         "detail": "presence",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "exact",
@@ -228,15 +209,12 @@
             }
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 2,
-        "width": 1,
         "detail": "fog",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "presence",
@@ -261,22 +239,21 @@
             }
           }
         ],
-        "build": null,
         "enemy_groups": [],
         "forts": []
       },
       {
         "id": 3,
-        "width": 1,
         "detail": "presence",
-        "upgrade_gain": null,
         "halves": [
           {
             "detail": "presence",
             "seen": {
               "tick": 120,
               "level": "presence",
-              "enemy_modes": ["attack"],
+              "enemy_modes": [
+                "attack"
+              ],
               "enemy_units": null,
               "enemy_charged": null,
               "enemy_range": null
@@ -294,7 +271,6 @@
             }
           }
         ],
-        "build": null,
         "enemy_groups": [
           {
             "id": "930417",
@@ -315,14 +291,12 @@
         "id": "04be81d9c6a2f3e7",
         "units": 1,
         "charged": 1,
-        "mode": "defense",
+        "mode": "attack",
         "location": {
           "kind": "node",
           "node": 0
         },
-        "order": null,
-        "defense_bonus": 1,
-        "defense_cap": 1
+        "order": null
       },
       {
         "id": "5d0e7c3a9b1f2468",
@@ -333,9 +307,7 @@
           "kind": "node",
           "node": 1
         },
-        "order": null,
-        "defense_bonus": null,
-        "defense_cap": null
+        "order": null
       },
       {
         "id": "9f2c4a7e1b3d5f60",
@@ -350,15 +322,15 @@
         },
         "order": {
           "dest": 2,
-          "path": [2],
+          "path": [
+            2
+          ],
           "planned": false,
           "bonus": 0,
           "gathering": false,
           "plan": 0,
           "next_charge_tick": null
-        },
-        "defense_bonus": null,
-        "defense_cap": null
+        }
       }
     ],
     "packets": [
@@ -369,20 +341,13 @@
         "charges": 1,
         "depart_tick": 110,
         "arrive_tick": 152,
-        "path": [1],
-        "dest_tick": 152,
-        "transfer": false
+        "path": [
+          1
+        ],
+        "dest_tick": 152
       }
     ],
     "intents": [
-      {
-        "id": "e27b5c9014fa6d38",
-        "owner": 0,
-        "kind": "defense",
-        "origin": 0,
-        "target": null,
-        "created_tick": 100
-      },
       {
         "id": "3a6f18d2c0b7e945",
         "owner": 1,
@@ -392,7 +357,6 @@
         "created_tick": 115
       }
     ],
-    "fights": [],
-    "lines": []
+    "fights": []
   }
 }

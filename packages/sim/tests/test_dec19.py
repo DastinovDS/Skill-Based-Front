@@ -1,13 +1,16 @@
-"""Starvation in an encirclement (DEC-19, #231).
+"""Starvation in an encirclement (DEC-19, #231), as the factory-less pockets of DEC-43, item H4
+starve (mechanics.md, section 7).
 
-Table tests of exactly the 13 worked examples of DEC-19 (mechanics.md, section 7). Expected
-values come from the decision: city X (capacity 6) is cut off from tick 1000
-(``cut_since = 1000``); ``grace_ticks = 100``, ``period_ticks = 100``, ``charges = 1``,
-``per_units = 3``; the garrison stands in X.
+Table tests of the worked examples of DEC-19 (mechanics.md, section 7) that the consumption of
+DEC-43, item H4 keeps. Expected values come from the decision: city X (capacity 6) is cut off from
+tick 1000 (``cut_since = 1000``) into a pocket of its own without a factory; ``grace_ticks = 100``,
+``period_ticks = 100``, ``charges = 1``, ``per_units = 3``; the garrison stands in X. Example 8 (a
+province does not starve) is superseded by item H4: every node of such a pocket starves, provinces
+included (``test_dec43_pockets.py``).
 
-Map ``dec18`` (see ``test_dec18.py``): X is the medium city C = 3, joined to the capital K only
-through A = 1 (and to the neutral E = 6). Making A neutral cuts C off; that is setup, not a
-capture. The capacity system runs every tick (attrition, then starvation).
+Map ``dec18``: X is the medium city C = 3, joined to the capital K only through A = 1 (and to the
+neutral E = 6). Making A neutral cuts C off; that is setup, not a capture. The starvation step of
+the supply flow (``systems.flow.starve_pockets``) runs every tick, alone: no recharge, no packets.
 """
 
 import dataclasses
@@ -16,14 +19,16 @@ from pathlib import Path
 from gow_sim.maps import load_map
 from gow_sim.ruleset import KindTable, Ruleset, StarvationRules, load_ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Mode, OnEdge, initial_state
-from gow_sim.systems.capacity import capacity, change_owner, starve_in
+from gow_sim.systems.capacity import change_owner, starve_in
+from gow_sim.systems.flow import starve_pockets
+from gow_sim.systems.supply import garrisons_by_node
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
+MVP7 = TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml"
 
 
 def _rules() -> Ruleset:
-    base = load_ruleset(MVP0)
+    base = load_ruleset(MVP7)
     return dataclasses.replace(
         base,
         capacity=dataclasses.replace(
@@ -53,14 +58,19 @@ def _group(state: GameState, units: int, charged: int, node: int = X) -> Group:
     return group
 
 
+def _starve(state: GameState, rules: Ruleset = RULES) -> list[Event]:
+    """The starvation step of one tick (DEC-43, item H4)."""
+    return starve_pockets(state, rules, garrisons_by_node(state))
+
+
 def _run(state: GameState, until: int, rules: Ruleset = RULES) -> list[Event]:
-    """Run the capacity system on ticks ``state.tick + 1 .. until``; cut X at tick ``CUT``."""
+    """Run the starvation step on ticks ``state.tick + 1 .. until``; cut X at tick ``CUT``."""
     events: list[Event] = []
     while state.tick < until:
         state.tick += 1
         if state.tick == CUT:
             state.nodes[A].owner = None
-        events += capacity(state, rules)
+        events += _starve(state, rules)
     return events
 
 
@@ -92,7 +102,7 @@ def test_example_2_no_units_nothing_spent() -> None:
 
 
 def test_example_3_one_charge_per_started_three_units() -> None:
-    # The real rules: 5 units fit the capacity 6, so no attrition (#253 fixed the example).
+    # 5 units fit the capacity 6, so no attrition (#253 fixed the example).
     state = _state()
     state.tick = CUT - 1
     g = _group(state, 5, 5)
@@ -132,12 +142,12 @@ def test_example_6_restored_then_cut_again_restarts_the_count() -> None:
     events += _run(state, 1149)
     state.tick += 1  # tick 1150: the road is back
     state.nodes[A].owner = 0
-    events += capacity(state, RULES)
+    events += _starve(state)
     assert state.nodes[X].cut_since is None
     events += _run(state, 1179)
     state.tick += 1  # tick 1180: cut again
     state.nodes[A].owner = None
-    events += capacity(state, RULES)
+    events += _starve(state)
     assert state.nodes[X].cut_since == 1180
     events += _run(state, 1300)
     assert [t for t, _, _ in _starved(events)] == [1100, 1280]
@@ -154,28 +164,16 @@ def test_example_7_a_group_in_transit_does_not_count() -> None:
     assert (g.charged, transit.charged) == (2, 3)  # U = 3: one charge
 
 
-def test_example_8_a_province_does_not_starve() -> None:
-    state = _state()
-    state.nodes[P].owner = 0
-    state.tick = CUT - 1
-    g = _group(state, 3, 3, node=P)
-    state.nodes[K].owner = 1  # P (and every own node) cut off from the capital
-    events = _run(state, 1500)
-    assert g.charged == 3
-    assert state.nodes[P].cut_since is None
-    assert all(e.get("node") != P for e in events if e.kind == "starvation")
-
-
 def test_example_9_captured_cut_off_counts_from_the_capture() -> None:
     state = _state()
     state.nodes[A].owner = None
     state.nodes[X].owner = 1
     state.tick = 1999
-    capacity(state, RULES)
+    _starve(state)
     state.tick = 2000
-    change_owner(state, X, 0)  # the capture (movement or combat, before capacity)
+    change_owner(state, X, 0)  # the capture (movement or combat, before the supply step)
     g = _group(state, 3, 3)
-    capacity(state, RULES)
+    _starve(state)
     assert state.nodes[X].cut_since == 2000
     events = _run(state, 2100)
     assert _starved(events) == [(2100, 0, 1)] and g.charged == 2

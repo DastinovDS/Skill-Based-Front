@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cityChoices } from '../hud/cityChoices.ts';
 import { DEV_RULES_FLOW, devSnapshot } from '../hud/devFeed.ts';
-import { factoryCount } from '../hud/hudData.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { AckMsg, Command, GroupView, SnapshotMsg } from '../protocol.gen.ts';
@@ -29,8 +28,6 @@ function groupAt(node: number, units: number, charged: number, id = GROUP): Grou
     mode: 'attack',
     location: { kind: 'node', node },
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   };
 }
 
@@ -338,15 +335,6 @@ describe('factories and fortifications in the city menu (#762)', () => {
       },
     };
   }
-
-  it('counts the own factories with the builds under way, as the server does for factory.max', () => {
-    const snap = withFactories([home], [second]);
-    expect(factoryCount(RULES, snap.view.nodes, 0)).toEqual({ count: 2, max: 3 });
-    // An enemy factory is not counted; v1 rules have no counter.
-    const enemyToo = withFactories([home, enemy], [second]);
-    expect(factoryCount(RULES, enemyToo.view.nodes, 0)).toEqual({ count: 2, max: 3 });
-    expect(factoryCount({ ...RULES, factory: null }, snap.view.nodes, 0)).toBeNull();
-  });
 
   it('offers no factory at the factory max', () => {
     const notFull = setup(withFactories([home], [second])).controller;

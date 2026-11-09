@@ -2,7 +2,7 @@
 
 Expected values come from mechanics.md, section 7, block "Automatic supply flow, leaf shift, fixed
 warehouses, road fortifications (DEC-43, #697)": item E (the own-only fields, ``None`` for nodes
-that are not own and under ``supply.model = "lines"``), item B5 (the enemy sees nothing of the
+that are not own), item B5 (the enemy sees nothing of the
 shift, the field or the level) and the rows V1..V4 of its table. The map and the base of the table
 are those of ``test_dec43.py``.
 """
@@ -16,15 +16,23 @@ import pytest
 from gow_sim.commands import PlayerCommand, SetLeafShift
 from gow_sim.maps import load_map
 from gow_sim.match import HEADLESS_MATCH_KEY, Match
-from gow_sim.ruleset import load_ruleset
+from gow_sim.ruleset import StanceTable, load_ruleset
 from gow_sim.state import AtNode, FlowIdle, FlowNode, GameState, Group, Mode, initial_state
 from gow_sim.systems.flow import supply_flow, update_flow
 from gow_sim.view import NodeView, PlayerView, SelfView, project, view_to_canonical
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-4.toml")
-MVP3 = load_ruleset(ROOT / "rulesets" / "mvp-3.toml")
+_MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+_EVERY_100 = StanceTable(economy=100, balance=100, war=100)
+RULES = dataclasses.replace(
+    _MVP5,
+    stances=dataclasses.replace(
+        _MVP5.stances, cp_period_ticks=_EVERY_100, capital_period_ticks=_EVERY_100
+    ),
+)
+"""``mvp-5`` with the periods of ``mvp-4`` the tables of DEC-43 were written for: a CP quantum and a
+charge of the capital every 100 ticks under every stance (DEC-44)."""
 MAP = load_map(TESTS_DIR / "maps" / "dec41.json")
 KEY = HEADLESS_MATCH_KEY
 K, A, B, C, D, E, F, G, M = range(9)
@@ -170,19 +178,6 @@ def test_fog_a_shift_does_not_change_the_enemy_view_of_a_match() -> None:
         differs = differs or view_to_canonical(a.view(0)) != view_to_canonical(b.view(0))
     assert a.state.players[0].leaf_shift == 2 and b.state.players[0].leaf_shift == 0
     assert differs
-
-
-def test_the_fields_are_none_under_lines() -> None:
-    state = initial_state(MAP, MVP3)
-    view = project(state, MVP3, 0, KEY)
-    assert all(_flow(n) == (None,) * 5 for n in view.nodes)
-    assert all(getattr(view.me, name) is None for name in ME_FIELDS)
-    assert view.me.auto_lines is True
-
-
-def test_under_flow_no_lines_and_no_auto_lines() -> None:
-    view = _view(_state({}))
-    assert view.lines == () and view.me.auto_lines is None
 
 
 def test_the_view_fields_are_the_stored_flow() -> None:

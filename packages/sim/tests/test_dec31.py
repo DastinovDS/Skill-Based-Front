@@ -1,14 +1,14 @@
 """DEC-31 (#319): the barracks of an enemy city next to an own node are seen, example by example.
 
 Expected values are the table of worked examples of DEC-31 (mechanics.md, section 10) and its
-"Details": ruleset ``mvp-1`` (``city_upgrades.enabled = true``), the view is player 0's.
+"Details": ruleset ``mvp-7`` (the capital has its barracks, a city builds them), the view is
+player 0's.
 
 Map ``dec22``: K = 0 (capital of 0) - A = 1 - M = 2 - E = 5 - F = 6 - 7 (capital of 1), the
 province P = 3 at A and the province Q = 4 at F. Player 0 owns K, A and M, player 1 owns E, F and
 its capital; P and Q are neutral unless a test gives them away.
 """
 
-import dataclasses
 from pathlib import Path
 
 from gow_sim.commands import BuildBarracks, Command, PlayerCommand
@@ -19,14 +19,11 @@ from gow_sim.state import Build
 from gow_sim.view import BuildKind, NodeView
 
 TESTS_DIR = Path(__file__).resolve().parent
-MVP1 = load_ruleset(TESTS_DIR.parents[2] / "rulesets" / "mvp-1.toml")
-OFF = dataclasses.replace(
-    MVP1, city_upgrades=dataclasses.replace(MVP1.city_upgrades, enabled=False)
-)
+MVP7 = load_ruleset(TESTS_DIR.parents[2] / "rulesets" / "mvp-7.toml")
 K, A, M, P, Q, E, F, ENEMY_CAPITAL = 0, 1, 2, 3, 4, 5, 6, 7
 
 
-def _match(rules: Ruleset = MVP1) -> Match:
+def _match(rules: Ruleset = MVP7) -> Match:
     match = Match(load_map(TESTS_DIR / "maps" / "dec22.json"), rules, bytes(range(32)))
     state = match.state
     state.nodes[M].owner, state.nodes[E].owner = 0, 1
@@ -40,7 +37,7 @@ def _step(match: Match, player: int, *cmds: Command) -> None:
 def _hidden_city_fields(node: NodeView) -> tuple[object, ...]:
     """Fields of an enemy city that DEC-31 keeps hidden (DEC-25, item 12; DEC-26, item 10)."""
     return (
-        node.warehouse_level,
+        node.factory_build,
         node.warehouse_cap,
         node.building,
         node.recruit_queue,
@@ -60,7 +57,8 @@ def test_example_1_built_barracks_of_a_neighbour_are_seen() -> None:
 def test_example_2_a_barracks_build_shows_false_and_nothing_else() -> None:
     """Example 2, then the build ends: ``True`` from the tick the barracks stand (example 1)."""
     match = _match()
-    match.state.players[1].cp = MVP1.orders.cost.barracks
+    match.state.players[1].cp = MVP7.orders.cost.barracks
+    match.state.nodes[E].warehouse = MVP7.city_upgrades.barracks_charges  # paid at the command
     match.state.nodes[E].recruit_queue = 2  # the enemy's queue stays hidden as well
     assert match.view(0).nodes[E].has_barracks is False  # no barracks yet
     _step(match, 1, BuildBarracks(E))
@@ -107,22 +105,13 @@ def test_a_neutral_city_next_to_an_own_node_stays_unknown() -> None:
     assert match.view(0).nodes[M].has_barracks is None
 
 
-def test_without_city_upgrades_a_neighbour_shows_true() -> None:
-    """Details: with ``city_upgrades.enabled = false`` every city has the barracks (DEC-26,
-    item 1), so the enemy city next to an own node shows ``True``."""
-    match = _match(OFF)
-    view = match.view(0)
-    assert view.nodes[E].has_barracks is True
-    assert view.nodes[F].has_barracks is None
-
-
 def test_the_enemy_sees_the_mirror() -> None:
     """Both players by one rule: player 1 sees M's barracks the same way."""
     match = _match()
     state = match.state
     state.nodes[M].has_barracks = True
     state.nodes[A].has_barracks = True
-    state.nodes[A].build = Build(None, 0, 0, BuildKind.WAREHOUSE)
+    state.nodes[A].build = Build(0, 0, BuildKind.BARRACKS, owed=2)
     view = match.view(1)
     assert view.nodes[M].has_barracks is True
     assert view.nodes[A].has_barracks is None  # A is not next to a node of player 1

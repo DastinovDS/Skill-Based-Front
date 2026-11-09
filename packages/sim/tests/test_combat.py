@@ -2,7 +2,10 @@
 systems.
 
 Expected values come only from ``packages/protocol/vectors/combat.json`` (the DEC-24 tables of
-mechanics.md: rows 1-16 in ``vectors``, rows 17-23 in ``scenarios``), never from the code.
+mechanics.md: rows 1-16 in ``vectors``, rows 17-23 in ``scenarios``), never from the code. The rows
+of removed rules are skipped (#894): "Defense" (DEC-30; rows 10, 16, 22, 22N) and the plains that
+silence a charge in every round (DEC-24, item F2; row 8), which the burn of DEC-45 replaced
+(``test_dec45.py``).
 
 Rows 1-16 are played on a line ``home_0 - 1 - home_1`` (edges ``0: home_0-1`` and ``1: 1-home_1``,
 forest, 30 ticks per edge): side ``a`` of the row is player 0 or player 1 (both are run, so the
@@ -17,7 +20,7 @@ the contact, which is then tick ``t = 1``:
 
 Every tick runs the commands, ``movement``, ``combat`` with the active bonuses and ``orders``.
 Rules: the pinned ``tests/rulesets/dec07.toml`` (with its ``[combat]`` section), so balance
-changes of ``mvp-0`` do not break it.
+changes of the played rulesets do not break it.
 """
 
 import json
@@ -28,7 +31,6 @@ from typing import Any
 import pytest
 
 from gow_sim.commands import (
-    CancelOrder,
     Move,
     Ok,
     PlayerCommand,
@@ -62,6 +64,20 @@ RULES = load_ruleset(TESTS_DIR / "rulesets" / "dec07.toml")
 NO_RETREAT = replace(RULES, combat=replace(RULES.combat, retreat=Retreat.NONE))
 """``combat.retreat = "none"`` (DEC-40, variant N, #626): rows 21N and 22N."""
 TRAVEL = 30
+
+
+def _kept(vec: dict[str, Any]) -> bool:
+    """A row of a kept rule: no "Defense" (DEC-30) and no silencing plains (DEC-24, F2)."""
+    modes = {g["mode"] for s in vec["sides"].values() for g in s["groups"]}
+    bonuses = [s["bonus"] for s in vec["sides"].values() if s["bonus"] is not None]
+    return (
+        modes == {"attack"}
+        and vec["terrain"] != "plains"
+        and all(b["source"] == "planned_order" for b in bonuses)
+    )
+
+
+KEPT_VECTORS = [v for v in VECTORS["vectors"] if _kept(v)]
 
 
 def _node(i: int, terrain: str, owner: int | None) -> dict[str, Any]:
@@ -114,7 +130,7 @@ def add(
     state: GameState, owner: int, units: int, charged: int, loc: AtNode | OnEdge, **kw: Any
 ) -> int:
     gid = state.new_id()
-    state.groups[gid] = Group(gid, owner, units, charged, kw.pop("mode", Mode.ATTACK), loc, **kw)
+    state.groups[gid] = Group(gid, owner, units, charged, Mode.ATTACK, loc, **kw)
     return gid
 
 
@@ -133,7 +149,7 @@ def step(
         outcomes += [r.outcome for r in results]
     state.events += applied
     state.events += movement(state, rules)
-    state.events += combat(state, rules, active_bonuses(state, rules))
+    state.events += combat(state, rules, active_bonuses(state))
     state.events += orders(state, rules)
     return list(state.events)
 
@@ -177,16 +193,13 @@ def test_vector_params_are_the_pinned_ruleset() -> None:
         "forest": mod.forest,
         "plains": mod.plains,
     }
-    # "Defense" (+2) of the rows: the bonus gathered by the start of the fight (DEC-30), placed
-    # below as the ticks that gather it.
-    assert params["defense_bonus"] == 2
     assert params["round_ticks"] == RULES.combat.round_ticks
     assert params["shots_per_round"] == RULES.combat.shots_per_round
     assert params["regroup_ticks"] == RULES.combat.regroup_ticks
 
 
 @pytest.mark.parametrize("a", [0, 1], ids=["a=p0", "a=p1"])
-@pytest.mark.parametrize("vec", VECTORS["vectors"], ids=lambda v: f"row{v['id']}")
+@pytest.mark.parametrize("vec", KEPT_VECTORS, ids=lambda v: f"row{v['id']}")
 def test_dec24_row(vec: dict[str, Any], a: int) -> None:
     b = 1 - a
     player = {"a": a, "b": b}
@@ -215,12 +228,8 @@ def test_dec24_row(vec: dict[str, Any], a: int) -> None:
             bonus = spec["bonus"]
             if bonus is not None and bonus["source"] == "planned_order":
                 order = Order((1,), True, 0)
-            gid = add(state, p, g["units"], g["charged"], where, mode=Mode(g["mode"]), order=order)
-            if bonus is not None and bonus["source"] == "defense_mode":
-                # DEC-30: "Defense" (+N) is N bonuses gathered by the start of the fight.
-                ticks = bonus["amount"] * RULES.orders.defense_ticks_per_bonus
-                state.groups[gid].ticks_in_defense = ticks
-            elif bonus is not None:
+            gid = add(state, p, g["units"], g["charged"], where, order=order)
+            if bonus is not None:
                 state.groups[gid].bonus = bonus["amount"]
             ids[g["id"]] = gid
 
@@ -441,30 +450,6 @@ def test_row21_the_defender_withdraws() -> None:
     assert isinstance(state.groups[d].location, OnEdge)
 
 
-def test_row22_the_attack_withdraws() -> None:
-    exp = SCENARIOS["22"]
-    state = initial_state(line(["forest"] * 3, [0, 1, 1]), RULES)
-    gathered = VECTORS["params"]["defense_bonus"] * RULES.orders.defense_ticks_per_bonus
-    d = add(state, 1, 2, 2, AtNode(1), mode=Mode.DEFENSE, ticks_in_defense=gathered)
-    atk = add(state, 0, 3, 3, before_arrival(state, 0, 0), order=Order((1,), False, 0))
-    step(state)
-    contact = state.tick
-    while not kinds(state.events, "fight_ended"):
-        due = state.tick + 1 == contact + exp["cancel_after"]
-        step(state, [PlayerCommand(0, 0, CancelOrder(atk))] if due else [])
-    assert state.tick == contact + exp["end_after"]
-    group = state.groups[atk]
-    assert (group.units, group.charged) == (exp["attack"]["units"], exp["attack"]["charged"])
-    assert group.location == OnEdge(0, 0, PROGRESS_SCALE, back=True)
-    defender = state.groups[d]
-    assert (defender.units, defender.charged) == (
-        exp["defense"]["units"],
-        exp["defense"]["charged"],
-    )
-    assert defender.bonus == 0  # "Defense" burned with the fight
-    assert state.nodes[1].owner == 1
-
-
 def test_row21_without_retreat_the_defender_cannot_leave() -> None:
     """DEC-40, variant N (#626): the defender's ``Move`` is ``IN_FIGHT``, the fight goes on as
     row 3."""
@@ -493,33 +478,6 @@ def test_row21_without_retreat_the_defender_cannot_leave() -> None:
     assert (group.units, group.charged) == (exp["attack"]["units"], exp["attack"]["charged"])
     assert units_of(state, 1) == exp["defense_units"]
     assert d not in state.groups
-
-
-def test_row22_without_retreat_the_attack_cannot_leave() -> None:
-    """DEC-40, variant N (#626): the attack's ``CancelOrder`` is ``IN_FIGHT``, the fight goes on
-    as row 10 and the attack bounces at its end (G1, unchanged)."""
-    exp = SCENARIOS["22N"]
-    state = initial_state(line(["forest"] * 3, [0, 1, 1]), NO_RETREAT)
-    gathered = VECTORS["params"]["defense_bonus"] * RULES.orders.defense_ticks_per_bonus
-    d = add(state, 1, 2, 2, AtNode(1), mode=Mode.DEFENSE, ticks_in_defense=gathered)
-    atk = add(state, 0, 3, 3, before_arrival(state, 0, 0), order=Order((1,), False, 0))
-    step(state, rules=NO_RETREAT)
-    contact = state.tick
-    outcomes: list[Ok | Reject] = []
-    while not kinds(state.events, "fight_ended"):
-        due = state.tick + 1 == contact + exp["cancel_after"]
-        step(state, [PlayerCommand(0, 0, CancelOrder(atk))] if due else [], NO_RETREAT, outcomes)
-    assert outcomes == [Reject(RejectCode(exp["reject"]))]
-    assert state.tick == contact + exp["end_after"]
-    group = state.groups[atk]
-    assert (group.units, group.charged) == (exp["attack"]["units"], exp["attack"]["charged"])
-    assert isinstance(group.location, OnEdge) and group.location.back
-    defender = state.groups[d]
-    assert (defender.units, defender.charged) == (
-        exp["defense"]["units"],
-        exp["defense"]["charged"],
-    )
-    assert state.nodes[1].owner == 1
 
 
 def test_row23_a_reinforcement_on_the_edge() -> None:

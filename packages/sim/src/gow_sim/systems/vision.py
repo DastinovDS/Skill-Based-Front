@@ -21,18 +21,15 @@ DEC-21 with the sources of DEC-35 (mechanics.md, section 10):
   the half of the other end (``half_node``);
 - what a place shows of the enemy groups in it (``Sighting``): ``EXACT`` the total units and
   charged and the modes, ``RANGE`` the range of the total units (``vision.range_starts``) and the
-  modes, ``PRESENCE`` the modes only.
+  modes, ``PRESENCE`` the modes only (every group attacks, so the modes say whether enemies are
+  there).
 
-Road levels follow the edge level of DEC-17 (DEC-22, item 8; roads have no type, DEC-26): an edge
-is not in fog while at least one of its ends is a source (``Vision.edges``; the edge of an own
-group on it is one, its end in the group's half is a source, DEC-35, detail 7); then its level is
-shown exactly, else that of its last sighting (``VisionMemory.widths``) or level 1 if never seen
-(``known_roads``). The road level of an own internal edge is own data and always exact (DEC-35,
-detail 5). No roads are torn down, so a known level never exceeds the true one. The half of a
-visible node on an edge between two non-sources does not show the level (DEC-33, item 4).
+The edge level of DEC-17 (``Vision.edges``): an edge is not in fog while at least one of its ends
+is a source (the edge of an own group on it is one, its end in the group's half is a source,
+DEC-35, detail 7).
 
 Public to everyone regardless of level: geography, terrain, the map, ownership of all nodes, VP,
-intents of planned orders and "Defense". That part is the projection's job (SIM-14).
+intents of planned orders. That part is the projection's job (SIM-14).
 
 ``is_visible()`` is the single visibility check for command validation (SIM-04) and the
 projection (SIM-14). ``vision()`` is the last system of a tick and refreshes the fog memory.
@@ -41,7 +38,7 @@ projection (SIM-14). ``vision()`` is the last system of a tick and refreshes the
 from dataclasses import dataclass
 from typing import Final
 
-from gow_sim.maps import ROAD_START_LEVEL, MapDef
+from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
@@ -56,7 +53,6 @@ from gow_sim.state import (
     Packet,
     Sighting,
 )
-from gow_sim.systems.capacity import is_internal
 from gow_sim.systems.movement import border_permille
 
 _RANK: Final = {Detail.EXACT: 0, Detail.RANGE: 1, Detail.PRESENCE: 2, Detail.FOG: 3}
@@ -72,8 +68,8 @@ class Vision:
     least ``PRESENCE`` for an own node (DEC-35, detail 3). ``zones[node_id]``: the level by the
     sources and the terrain table (DEC-21, items 1 and 2), also the level of the node's halves of
     edges (``half``); an own node without a source gets none (DEC-35, detail 4).
-    ``edges[edge_id]``: the road level visibility of DEC-17: ``PRESENCE`` while at least one end
-    is a source, else ``FOG``. ``sources[node_id]``: the node is a source of vision.
+    ``edges[edge_id]``: the edge visibility of DEC-17: ``PRESENCE`` while at least one end is a
+    source, else ``FOG``. ``sources[node_id]``: the node is a source of vision.
     ``stands[node_id]``: an own group really stands in the node, so the warehouse of a foreign
     city there is seen (DEC-21, item 3; DEC-35, detail 2).
     """
@@ -164,30 +160,10 @@ def detail_level(state: GameState, rules: Ruleset, player: int, node: int) -> De
     return compute_vision(state, rules, player).nodes[node]
 
 
-def edge_detail_level(state: GameState, player: int, edge: int) -> Detail:
-    """The road level visibility of ``edge`` (DEC-17): ``PRESENCE`` or ``FOG``."""
-    source, _ = sources(state, player)
-    e = state.map.edges[edge]
-    return Detail.PRESENCE if source[e.a] or source[e.b] else Detail.FOG
-
-
-def own_internal(state: GameState, player: int, edge: int) -> bool:
-    """``edge`` is an own internal edge of ``player``: its road level and builds are own data,
-    always known to the owner (DEC-35, detail 5)."""
-    return is_internal(state, edge) and state.nodes[state.map.edges[edge].a].owner == player
-
-
 def visible_nodes(state: GameState, rules: Ruleset, player: int) -> tuple[int, ...]:
     """Ids of the nodes not in fog, ascending."""
     levels = compute_vision(state, rules, player).nodes
     return tuple(n for n, level in enumerate(levels) if level is not Detail.FOG)
-
-
-def visible_edges(state: GameState, player: int) -> tuple[int, ...]:
-    """Ids of the edges whose road level is not in fog (DEC-17), ascending."""
-    source, _ = sources(state, player)
-    levels = _edge_levels(state.map, source)
-    return tuple(e for e, level in enumerate(levels) if level is not Detail.FOG)
 
 
 # Positions on an edge --------------------------------------------------------------------------
@@ -261,14 +237,13 @@ def is_visible(
 @dataclass(frozen=True, slots=True)
 class Sight:
     """What one player sees at the end of a tick, as the vision system computed it (``observe``):
-    the levels, the sightings of now (``current_sightings``) and the known road levels
-    (``known_roads``). ``project()`` takes it in place of computing the same again; it is valid
-    only for the state it was computed on (``Match`` keeps it until the next step)."""
+    the levels and the sightings of now (``current_sightings``). ``project()`` takes it in place of
+    computing the same again; it is valid only for the state it was computed on (``Match`` keeps it
+    until the next step)."""
 
     levels: Vision
     nodes: dict[int, Sighting]
     halves: dict[tuple[int, int], Sighting]
-    roads: tuple[int, ...]
 
 
 def vision(state: GameState, rules: Ruleset) -> list[Event]:
@@ -281,28 +256,17 @@ def vision(state: GameState, rules: Ruleset) -> list[Event]:
 def observe(state: GameState, rules: Ruleset) -> dict[int, Sight]:
     """The work of the ``vision`` system; returns what each player sees, by player id.
 
-    Every node and half of an edge not in fog gets a fresh ``Sighting`` with the current tick,
-    every edge whose road level is not in fog or that is an own internal edge its current level
-    (DEC-17; DEC-35, detail 5); fogged ones keep their
-    last sighting. ``spotted`` keeps the enemy groups in sight with the tick each came into sight
-    (DEC-33, detail 5).
+    Every node and half of an edge not in fog gets a fresh ``Sighting`` with the current tick;
+    fogged ones keep their last sighting. ``spotted`` keeps the enemy groups in sight with the tick
+    each came into sight (DEC-33, detail 5).
     """
     sights: dict[int, Sight] = {}
-    owners = [state.nodes[n].owner for n in range(len(state.map.nodes))]  # ids are 0..n-1
     for player in sorted(state.players):
         levels = compute_vision(state, rules, player)
         nodes, halves = current_sightings(state, rules, player, levels)
         memory = state.vision_memory[player]
         memory.nodes.update(nodes)
         memory.halves.update(halves)
-        widths = memory.widths
-        for e, level in enumerate(levels.edges):
-            if level is not Detail.FOG:
-                widths[e] = state.edges[e].width
-            else:  # ``own_internal``: both ends are the player's
-                ends = state.map.edges[e]
-                if owners[ends.a] == player and owners[ends.b] == player:
-                    widths[e] = state.edges[e].width
         before = memory.spotted
         memory.spotted = {
             gid: before.get(gid, state.tick)
@@ -310,9 +274,7 @@ def observe(state: GameState, rules: Ruleset) -> dict[int, Sight]:
             if state.groups[gid].owner != player
             and is_visible(state, rules, player, state.groups[gid], levels)
         }
-        # ``known_roads`` of this state: every level the player knows exactly was just stored.
-        roads = tuple(widths.get(e, ROAD_START_LEVEL) for e in range(len(levels.edges)))
-        sights[player] = Sight(levels, nodes, halves, roads)
+        sights[player] = Sight(levels, nodes, halves)
     return sights
 
 
@@ -358,23 +320,6 @@ def current_sightings(
                     empty[level] if here is None else _sighting(rules, tick, level, here)
                 )
     return nodes, halves
-
-
-def known_roads(state: GameState, player: int, levels: Vision) -> tuple[int, ...]:
-    """Road levels as ``player`` knows them (DEC-17; DEC-22, item 8).
-
-    ``result[edge_id]``: exact for edges not in fog and for own internal edges (own data, DEC-35,
-    detail 5); for another fogged edge that of its last sighting, else level 1, where every road
-    starts (DEC-22). Never above the true level.
-    """
-    memory = state.vision_memory[player].widths
-    roads: list[int] = []
-    for e, level in enumerate(levels.edges):
-        if level is not Detail.FOG or own_internal(state, player, e):
-            roads.append(state.edges[e].width)
-        else:
-            roads.append(memory.get(e, ROAD_START_LEVEL))
-    return tuple(roads)
 
 
 def units_range(rules: Ruleset, units: int) -> tuple[int, int | None] | None:

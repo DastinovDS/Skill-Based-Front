@@ -15,8 +15,8 @@ const base = devSnapshot(map, DEV_RULES, 100);
 const UPGRADES = {
   barracks: 100,
   warehouse: 100,
-  warehouseMaxLevel: DEV_RULES.city_upgrades.warehouse_max_level,
-  warehouseGainPerLevel: DEV_RULES.city_upgrades.warehouse_gain_per_level,
+  warehouseMaxLevel: 0, // no warehouse levels (#894)
+  warehouseGainPerLevel: 0,
 };
 
 /** A deterministic stream of numbers (a test must not depend on `Math.random`). */
@@ -46,11 +46,9 @@ function varied(tick: number, next: (below: number) => number): SnapshotMsg {
         id: `g${String(i)}`,
         units,
         charged: next(units + 1),
-        mode: next(4) === 0 ? 'defense' : 'attack',
+        mode: 'attack',
         location: { kind: 'node', node: n.id },
         order: null,
-        defense_bonus: next(3),
-        defense_cap: 3,
       } satisfies GroupView;
     });
   return { ...base, tick, view: { ...base.view, nodes, groups } };
