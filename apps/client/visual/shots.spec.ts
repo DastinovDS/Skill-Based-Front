@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { DRAWN_MAP_VARIANCE, mapVariance } from './mapPixels.ts';
+import { DRAWN_MAP_VARIANCE, columnLuminance, mapVariance } from './mapPixels.ts';
 import { DOCK_CLICKS, MENU_SCENES, SCENES, STATUS_SCENES } from './scenes.ts';
 
 // `mise run shots [label]`: a PNG of every dev scene for the agent (or the owner) to look at, no
@@ -310,6 +310,44 @@ for (const name of ['select', 'hover'] as const) {
     }
     await page.waitForTimeout(600);
     await page.screenshot({ path: join(OUT, `plan-${name}.png`) });
+  });
+}
+
+// The tip over a group has its whole frame once the Burin reveal is over (#869: the mask of the cut
+// ended a tenth of the tag short of its left edge, so the left rule was never drawn), at a device
+// pixel ratio of 1 and 2: `tip-unit-1x.png`, `tip-unit-2x.png` (the tag and a 4 px margin). The left
+// rule must be about as bright as the right one in the middle of the sides.
+for (const dpr of [1, 2] as const) {
+  test.describe(`the tip at ${String(dpr)}x`, () => {
+    test.use({ deviceScaleFactor: dpr });
+    test(`shot of the unit tip with its whole frame (${String(dpr)}x)`, async ({ page }) => {
+      await page.goto('/?scene=economy&menus');
+      await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+      await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+      await page.mouse.move(556, 327);
+      await page.mouse.move(557, 328);
+      const plate = page.locator('[role="tooltip"] > .plate');
+      await expect(plate).toBeVisible();
+      await page.waitForTimeout(800);
+      const box = await plate.boundingBox();
+      if (box === null) throw new Error('no tip');
+      const m = 4;
+      const clip = {
+        x: box.x - m,
+        y: box.y - m,
+        width: box.width + 2 * m,
+        height: box.height + 2 * m,
+      };
+      await page.screenshot({ path: join(OUT, `tip-unit-${String(dpr)}x.png`), clip });
+      const columns = await columnLuminance(page, clip);
+      // The brightest column within a css px or two of each side of the tag.
+      const peak = (from: number, to: number): number =>
+        Math.max(...columns.slice(Math.floor(from * dpr), Math.ceil(to * dpr)));
+      const left = peak(m - 1, m + 2);
+      const right = peak(m + box.width - 2, m + box.width + 1);
+      expect(right).toBeGreaterThan(60);
+      expect(left).toBeGreaterThan(right * 0.7);
+    });
   });
 }
 

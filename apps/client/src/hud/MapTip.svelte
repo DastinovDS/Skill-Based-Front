@@ -162,11 +162,13 @@
   }
 
   .burin .plate {
-    /* The mask is twice the tag wide, its soft edge at its middle: from 100 % to -10 % the edge
-       runs from the tag's left to just past its right, in step with the points (0 to 110 %). */
-    mask-image: linear-gradient(90deg, #000 0 45%, transparent 55%);
-    mask-size: 200% 100%;
-    mask-position: -10% 0;
+    /* The mask is three times the tag wide, its soft edge (a fifth of the tag) at two thirds of it:
+       from 100 % to 45 % the edge runs from the tag's left to just past its right, in step with the
+       points (0 to 110 %), and at the end the opaque part covers the whole tag, its left rule too
+       (#869: a mask twice the tag wide stopped a tenth short of the left edge). */
+    mask-image: linear-gradient(90deg, #000 0 63.3%, transparent 70%);
+    mask-size: 300% 100%;
+    mask-position: 45% 0;
     mask-repeat: no-repeat;
     animation: burin-cut calc(var(--t-reveal-in) - var(--t-reveal-leader)) var(--ease-engrave)
       var(--t-reveal-leader) both;
@@ -225,7 +227,7 @@
       mask-position: 100% 0;
     }
     to {
-      mask-position: -10% 0;
+      mask-position: 45% 0;
     }
   }
 
