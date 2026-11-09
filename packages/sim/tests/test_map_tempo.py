@@ -265,14 +265,16 @@ MVP6 = ROOT / "rulesets" / "mvp-6.toml"
 MVP7 = ROOT / "rulesets" / "mvp-7.toml"
 
 
-def test_mvp7_is_mvp6_with_map_tempo_and_a_slower_built_factory() -> None:
+def test_mvp7_is_mvp6_with_map_tempo_a_slower_built_factory_and_factories_following() -> None:
     """mvp-7 (owner decision 2026-11-09, #885): mvp-6 plus ``[map_tempo]`` (the values of
-    mvp-4-stances-tempo) and ``factory.built_period_ticks = 150``, nothing else."""
+    mvp-4-stances-tempo) and ``factory.built_period_ticks = 150``; since the owner decision of
+    the same day (DEC-47, #888) also ``stances.factories_follow = true``; nothing else."""
     mvp6 = tomllib.loads(MVP6.read_text(encoding="utf-8"))
     mvp7 = tomllib.loads(MVP7.read_text(encoding="utf-8"))
     assert mvp7["map_tempo"] == {"ref_nodes": 49, "min_pct": 50, "max_pct": 150}
     assert mvp7["map_tempo"] == tomllib.loads(TEMPO.read_text(encoding="utf-8"))["map_tempo"]
     assert mvp7["factory"]["built_period_ticks"] == 150
+    assert mvp7["stances"].pop("factories_follow") is True
     del mvp7["map_tempo"]
     mvp7["factory"]["built_period_ticks"] = mvp6["factory"]["built_period_ticks"]
     assert mvp7 == mvp6

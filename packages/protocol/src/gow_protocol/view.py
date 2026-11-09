@@ -226,7 +226,9 @@ class NodeView(WireModel):
     enemy. ``None`` under v1, for provinces, neutral nodes and the other cities of the enemy."""
     factory_period: PosInt | None
     """Own factory only: ticks per charge it makes into its warehouse (the own capital
-    ``factory.capital_period_ticks``, any other ``factory.built_period_ticks``)."""
+    ``factory.capital_period_ticks``, any other ``factory.built_period_ticks``; under
+    ``ruleset_public.stances`` the own capital the period of the own stance, and with
+    ``stances.factories_follow`` (DEC-47) every other factory too)."""
     factory_build: SiteBuild | None
     """Own city only: the factory being built there (economy v2)."""
     fort: bool | None

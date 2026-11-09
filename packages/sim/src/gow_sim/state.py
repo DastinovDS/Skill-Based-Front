@@ -398,6 +398,12 @@ class Node:
     the factory to the capturer or destroys it."""
     factory_build: FactoryBuild | None = None
     """The factory being built here (DEC-41, item 2); ``None``: none."""
+    factory_ticks: int = 0
+    """Ticks since the last charge of this factory, under ``stances.factories_follow`` (DEC-47,
+    #888) and only for a factory that is not its owner's capital: 0 when the factory starts
+    working (its build ends, a capture passes it); the charge comes when it reaches the capital
+    period of the owner's stance; a stance change carries it over (``systems.economy.carry``).
+    Always 0 without the key. Hidden from the enemy."""
     rr: int = 0
     """The line of the factory's round robin that gets the next charge (DEC-41, item 3)."""
     fort: bool = False
@@ -759,6 +765,8 @@ def _v2_node_data(n: Node) -> dict[str, object]:
         data["factory"] = n.factory
     if n.factory_build is not None:
         data["factory_build"] = _site_build_data(n.factory_build)
+    if n.factory_ticks:
+        data["factory_ticks"] = n.factory_ticks
     if n.fort:
         data["fort"] = True
     if n.fort_build is not None:
@@ -1071,7 +1079,16 @@ def _parse_node(data: object, where: str) -> Node:
             "has_barracks",
             "warehouse_level",
         ),
-        optional=("factory", "factory_build", "rr", "fort", "fort_build", "flow", "road_forts"),
+        optional=(
+            "factory",
+            "factory_build",
+            "factory_ticks",
+            "rr",
+            "fort",
+            "fort_build",
+            "flow",
+            "road_forts",
+        ),
     )
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
@@ -1087,6 +1104,7 @@ def _parse_node(data: object, where: str) -> Node:
         warehouse_level=_int(raw["warehouse_level"], f"{where}.warehouse_level", low=0),
         factory=_opt_int(raw.get("factory"), f"{where}.factory"),
         factory_build=_parse_site_build(raw.get("factory_build"), f"{where}.factory_build"),
+        factory_ticks=_int(raw.get("factory_ticks", 0), f"{where}.factory_ticks", low=0),
         rr=_int(raw.get("rr", 0), f"{where}.rr", low=0),
         fort=_bool(raw.get("fort", False), f"{where}.fort"),
         fort_build=_parse_site_build(raw.get("fort_build"), f"{where}.fort_build"),

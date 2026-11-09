@@ -115,12 +115,14 @@ def factory_count(state: GameState, player: int) -> int:
 
 
 def settle_factories(state: GameState, rules: Ruleset) -> None:
-    """Item 2: a factory captured in this tick passes to the capturer or is destroyed."""
+    """Item 2: a factory captured in this tick passes to the capturer or is destroyed; either
+    way its own progress (``Node.factory_ticks``, DEC-47) starts again at 0."""
     captured: dict[int, list[int]] = {}
     for nid in sorted(state.nodes):
         node = state.nodes[nid]
         if node.factory is not None and node.factory != node.owner:
             node.factory = None  # counted again below if it passes
+            node.factory_ticks = 0
             if node.owner is not None:
                 captured.setdefault(node.owner, []).append(nid)
     limit = rules.factory_rules().max

@@ -276,6 +276,7 @@ def _site_builds(state: GameState, rules: Ruleset) -> list[Event]:
             )
             if done:
                 node.factory = b.owner
+                node.factory_ticks = 0  # its own progress starts now (DEC-47)
         b = node.fort_build
         if b is not None:
             node.fort_build, done = _site_build(state, nid, b, FORT_KIND, fort_ticks, events)

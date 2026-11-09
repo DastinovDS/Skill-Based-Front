@@ -408,12 +408,18 @@ class FactoryRules:
 class StanceRules:
     """Stances of economy v2 with local progress (DEC-44, section ``[stances]``; ``economy.model =
     "v2"`` only). The periods of the player's stance replace ``cp.period_ticks`` and
-    ``factory.capital_period_ticks``, counted from the player's own last quantum."""
+    ``factory.capital_period_ticks`` (with ``factories_follow``, DEC-47, also
+    ``factory.built_period_ticks``), counted from the player's own last quantum."""
 
     cp_period_ticks: StanceTable
     """Ticks per CP quantum (``cp.per_period``) under each stance."""
     capital_period_ticks: StanceTable
     """Ticks per charge of the own capital under each stance."""
+    factories_follow: bool = dataclasses.field(default=False, metadata=OPTIONAL)
+    """DEC-47 (#888): every other factory of the player (built or captured, a captured capital
+    too) makes its charges by ``capital_period_ticks`` of its owner's stance as well, each on its
+    own counter (``Node.factory_ticks``), and ``factory.built_period_ticks`` has no effect. Left
+    out of the hash when ``False``, so every ruleset without the key keeps its hash."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -603,6 +609,11 @@ class Ruleset:
         return self.economy.model is EconomyModel.V2
 
     @property
+    def factories_follow(self) -> bool:
+        """Every factory follows the stance of its owner (DEC-47, ``stances.factories_follow``)."""
+        return self.stances is not None and self.stances.factories_follow
+
+    @property
     def flow(self) -> bool:
         """The automatic supply flow of DEC-43 (``supply.model = "flow"``, economy v2 only)."""
         return self.supply.model is SupplyModel.FLOW
@@ -658,7 +669,8 @@ def apply_map_tempo(rules: Ruleset, mapdef: MapDef) -> Ruleset:
         )
     stances = rules.stances
     if stances is not None:
-        stances = StanceRules(
+        stances = dataclasses.replace(
+            stances,
             cp_period_ticks=_scaled_table(stances.cp_period_ticks, pct),
             capital_period_ticks=_scaled_table(stances.capital_period_ticks, pct),
         )
@@ -822,7 +834,9 @@ def parse_ruleset(data: object) -> Ruleset:
         raise RulesetError("fort: only with economy.model = 'v2'")
     stances = None
     if v2 and root.has("stances"):  # optional under v2 (DEC-44)
-        stances = _parse_stances(root.table("stances", ("cp_period_ticks", "capital_period_ticks")))
+        stances = _parse_stances(
+            root.table("stances", ("cp_period_ticks", "capital_period_ticks", "factories_follow"))
+        )
     elif root.has("stances"):
         raise RulesetError("stances: only with economy.model = 'v2'")
     return Ruleset(
@@ -966,6 +980,7 @@ def _parse_stances(t: "_Table") -> StanceRules:
     return StanceRules(
         cp_period_ticks=periods("cp_period_ticks"),
         capital_period_ticks=periods("capital_period_ticks"),
+        factories_follow=t.boolean("factories_follow") if t.has("factories_follow") else False,
     )
 
 

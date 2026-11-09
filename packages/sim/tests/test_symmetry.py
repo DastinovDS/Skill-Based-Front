@@ -75,11 +75,14 @@ TICKS = 600
 DECIDE_EVERY = 5
 
 
-@pytest.fixture(scope="module", params=["mvp-0", "mvp-1", "mvp-3", "mvp-4", "mvp-4-stances"])
+@pytest.fixture(
+    scope="module", params=["mvp-0", "mvp-1", "mvp-3", "mvp-4", "mvp-4-stances", "mvp-7"]
+)
 def rules(request: pytest.FixtureRequest) -> Ruleset:
     """mvp-0, mvp-1 (``city_upgrades`` on, DEC-26), mvp-3 (the economy v2, DEC-41), mvp-4 (the
-    supply flow, DEC-43) and mvp-4-stances (the stances of DEC-44) with 50 CP to start with: CP do
-    not limit the controller, every command is used."""
+    supply flow, DEC-43), mvp-4-stances (the stances of DEC-44) and mvp-7 (the factories follow
+    the stance, DEC-47; map tempo, DEC-46) with 50 CP to start with: CP do not limit the
+    controller, every command is used."""
     name: str = request.param
     base = load_ruleset(ROOT / "rulesets" / f"{name}.toml")
     return dataclasses.replace(base, cp=dataclasses.replace(base.cp, start=5000, cap=5000))
@@ -407,7 +410,12 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.has_barracks,
             a.warehouse_level,
         ), f"node {n}"
-        assert (b.factory, b.rr, b.fort) == (swap[a.factory], a.rr, a.fort), f"v2 of {n}"
+        assert (b.factory, b.factory_ticks, b.rr, b.fort) == (
+            swap[a.factory],
+            a.factory_ticks,
+            a.rr,
+            a.fort,
+        ), f"v2 of {n}"
         assert b.road_forts == {  # DEC-43, item D: the road fortifications, mirrored
             mapdef.mirror_edges[e]: ready for e, ready in a.road_forts.items()
         }, f"road fortifications of {n}"
@@ -563,7 +571,9 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         return
     # The run did something: commands were applied, groups moved and took nodes.
     assert applied > 20
-    assert {"Move", "Split", "Recruit", "CancelRecruit", "CancelOrder"} <= set(kinds)
+    assert {"Move", "Split", "Recruit", "CancelRecruit"} <= set(kinds)
+    if rules.map_tempo is None:  # mvp-7 (DEC-46) on web: no order is waiting for its cancel
+        assert "CancelOrder" in kinds
     if rules.flow:  # DEC-43: no lines and no bunker, the flow and the shift are mirrored
         assert {"SetLeafShift", "BuildFactory", "FortifyRoad"} <= set(kinds)
         assert not {"DrawLine", "RemoveLine", "BuildBunker", "UpgradeWarehouse"} & set(kinds)

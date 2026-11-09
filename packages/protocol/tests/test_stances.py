@@ -33,6 +33,18 @@ def test_ruleset_public_carries_the_table() -> None:
     assert (cp.war, cp.balance, cp.economy) == (80, 100, 200)
     assert (capital.war, capital.balance, capital.economy) == (400, 200, 100)
     assert public.orders.stance_cooldown_ticks == 0  # no cooldown under the section
+    assert public.stances.factories_follow is False  # no DEC-47 key in mvp-4-stances
+
+
+def test_ruleset_public_tells_that_factories_follow_the_stance() -> None:
+    """DEC-47 (#888): ``mvp-7`` has ``stances.factories_follow``, so the client can show the
+    charges of a stance as the capital period times the own factories; on ``narrows`` the periods
+    are those of map tempo (DEC-46: 200 * 100 // 76 = 263 in Balance)."""
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
+    match = Match(load_map(ROOT / "maps" / "narrows.json"), rules, KEY)
+    public = RulesetPublic.from_ruleset(match.rules)
+    assert public.stances is not None and public.stances.factories_follow is True
+    assert public.stances.capital_period_ticks.balance == 263
 
 
 def test_ruleset_public_without_the_section() -> None:

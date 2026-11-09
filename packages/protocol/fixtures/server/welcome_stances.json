@@ -129,7 +129,8 @@
         "economy": 100,
         "balance": 200,
         "war": 400
-      }
+      },
+      "factories_follow": false
     }
   },
   "map_id": "diamond",

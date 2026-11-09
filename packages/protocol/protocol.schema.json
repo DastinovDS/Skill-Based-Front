@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 44,
+    "PROTOCOL_VERSION": 45,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -2518,7 +2518,7 @@
               "type": "null"
             }
           ],
-          "description": "Own factory only: ticks per charge it makes into its warehouse (the own capital\n``factory.capital_period_ticks``, any other ``factory.built_period_ticks``)."
+          "description": "Own factory only: ticks per charge it makes into its warehouse (the own capital\n``factory.capital_period_ticks``, any other ``factory.built_period_ticks``; under\n``ruleset_public.stances`` the own capital the period of the own stance, and with\n``stances.factories_follow`` (DEC-47) every other factory too)."
         },
         "factory_build": {
           "anyOf": [
@@ -4013,11 +4013,16 @@
             }
           ],
           "description": "One charge of the own capital per this many ticks; ``View.me.capital_ticks`` counts them."
+        },
+        "factories_follow": {
+          "description": "DEC-47 (#888): every other own factory (built or captured) makes one charge per\n``capital_period_ticks`` of the own stance as well, on its own counter, so a stance's charge\nrate is this period times the own factories; ``False``: they keep ``factory.built_period_ticks``\nwhatever the stance.",
+          "type": "boolean"
         }
       },
       "required": [
         "cp_period_ticks",
-        "capital_period_ticks"
+        "capital_period_ticks",
+        "factories_follow"
       ],
       "title": "StancesPublic",
       "type": "object"
