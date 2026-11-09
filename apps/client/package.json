@@ -17,6 +17,7 @@
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
     "shots": "playwright test -c playwright.shots.config.ts",
+    "perf": "playwright test -c playwright.perf.config.ts",
     "check:i18n": "vitest run src/i18n",
     "build": "vite build",
     "preview": "vite preview",

@@ -10,7 +10,7 @@ import { MapView } from './mapView.ts';
 import { EntityKit } from './shapes.ts';
 import { TERRAIN_FILL } from './style.ts';
 import { testSprites } from './testSprites.ts';
-import { greyMatrix, greyed } from './veilView.ts';
+import { greyPixels, greyed } from './veilView.ts';
 
 // The Ruled veil (#829 round 3, topic n; #842): it covers only the areas the snapshot hides, keeps
 // the owner's band and borders of those areas over it, and draws the edge of sight between them
@@ -47,18 +47,30 @@ const strokes = (g: Container | undefined): number =>
   ((g as Graphics | undefined)?.context.instructions ?? []).filter((i) => i.action === 'stroke')
     .length;
 
-describe('greyed and greyMatrix', () => {
+describe('greyed and greyPixels', () => {
   it('take the share of the saturation out, keeping the luma', () => {
     expect(greyed(0x808080, 0.9)).toBe(0x808080);
     const red = greyed(0xff0000, 1);
     expect(red >> 16).toBe(red & 255);
     expect(greyed(0x336699, 0)).toBe(0x336699);
-    const m = greyMatrix(0.9);
-    expect(m).toHaveLength(20);
-    // Every row sums to one: a grey stays the same grey.
-    for (const row of [0, 1, 2]) {
-      expect((m[row * 5] ?? 0) + (m[row * 5 + 1] ?? 0) + (m[row * 5 + 2] ?? 0)).toBeCloseTo(1);
-    }
+  });
+
+  it('grey every pixel of a picture as greyed greys one colour, alpha kept', () => {
+    const colours = [0x336699, 0xc8a050, 0x808080, 0x0b0a08];
+    const data = new Uint8ClampedArray(
+      colours.flatMap((c) => [c >> 16, (c >> 8) & 255, c & 255, 200]),
+    );
+    greyPixels(data, 0.9);
+    colours.forEach((c, i) => {
+      const got =
+        ((data[i * 4] ?? 0) << 16) | ((data[i * 4 + 1] ?? 0) << 8) | (data[i * 4 + 2] ?? 0);
+      const want = greyed(c, 0.9);
+      // Within one level per channel (ties round to even in a clamped array).
+      for (const shift of [16, 8, 0]) {
+        expect(Math.abs(((got >> shift) & 255) - ((want >> shift) & 255))).toBeLessThanOrEqual(1);
+      }
+      expect(data[i * 4 + 3]).toBe(200);
+    });
   });
 });
 
@@ -89,13 +101,12 @@ describe('MapView, the Ruled veil over the hidden areas', () => {
     expect(ground()?.visible).toBe(false);
   });
 
-  it('veils the hidden areas only: a dark fill and one run of rules over them', () => {
+  it('veils the hidden areas only: one fill of the tile with the dark veil and the rules (#854)', () => {
     view.setHidden([1, 2]);
-    const [veil, rules] = fillsOf(part('fog-veil-rules'));
-    expect(veil).toMatchObject({ color: RULED_VEIL.veil.color, shapes: 2, textured: false });
-    expect(veil?.alpha).toBeCloseTo(RULED_VEIL.veil.alpha);
-    expect(rules).toMatchObject({ color: RULED_VEIL.rules.color, shapes: 2, textured: true });
-    expect(rules?.alpha).toBeCloseTo(RULED_VEIL.rules.alpha);
+    const fills = fillsOf(part('fog-veil-rules'));
+    expect(fills).toHaveLength(1);
+    // The tile carries the colours (`paintRows`): the fill draws it untinted.
+    expect(fills[0]).toMatchObject({ color: 0xffffff, alpha: 1, shapes: 2, textured: true });
   });
 
   it('greys the ground of the hidden areas (without a picture: the terrain colour greyed)', () => {

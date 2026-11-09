@@ -26,6 +26,7 @@ import {
   engravedOwnerColor,
   hairFloor,
   pointsAlong,
+  traceRuns,
   withInward,
   type BorderLineKind,
   type BorderLines,
@@ -269,7 +270,6 @@ export class MapView {
       layers.layer.fog,
       this.cells,
       this.mitred,
-      renderer,
       {
         band: (g, cells, alpha) => {
           this.fillBand(g, (strip) => cells.has(strip.cell), alpha);
@@ -792,12 +792,13 @@ export class MapView {
     if (borders.length === 0 || alpha <= 0) return;
     if (kind === 'cut') {
       const { width, alpha: cutAlpha } = BORDER_ENGRAVING.cut;
-      for (const { a, b } of borders) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      traceRuns(g, borders);
       g.stroke({
         width: this.hair(width),
         color: ENGRAVE.cut,
         alpha: cutAlpha * alpha,
         cap: 'round',
+        join: 'round',
       });
       return;
     }
@@ -814,8 +815,8 @@ export class MapView {
         continue;
       }
       const { width } = BORDER_ENGRAVING[kind];
-      for (const { a, b } of list) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-      g.stroke({ width: this.hair(width), color, alpha, cap: 'round' });
+      traceRuns(g, list);
+      g.stroke({ width: this.hair(width), color, alpha, cap: 'round', join: 'round' });
     }
   }
 

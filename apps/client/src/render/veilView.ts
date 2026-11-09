@@ -16,15 +16,7 @@
  * Everything is a plain Graphics, redrawn only when the hidden set, the owners, the zoom bucket or
  * the floor of a hairline changes: no filter, no mask, no per-frame work.
  */
-import {
-  ColorMatrixFilter,
-  Container,
-  Graphics,
-  Rectangle,
-  Sprite,
-  type Renderer,
-  type Texture,
-} from 'pixi.js';
+import { CanvasSource, Container, Graphics, Texture } from 'pixi.js';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import {
@@ -35,6 +27,7 @@ import {
   hairWidth,
   pointsAlong,
   sightEdge,
+  traceRuns,
   type HatchSpec,
 } from './engraving.ts';
 import { sameVeil } from './fogLayout.ts';
@@ -59,14 +52,21 @@ export function greyed(color: number, share: number): number {
   return (mix(r) << 16) | (mix(g) << 8) | mix(b);
 }
 
-/** The colour matrix that takes `share` of the saturation out (`ColorMatrixFilter`, 4 x 5). */
-export function greyMatrix(share: number): number[] {
-  const k = 1 - share;
-  const row = (i: number): number[] => {
-    const luma = [0.299, 0.587, 0.114];
-    return [0, 1, 2].map((j) => (luma[j] ?? 0) * share + (i === j ? k : 0));
-  };
-  return [...row(0), 0, 0, ...row(1), 0, 0, ...row(2), 0, 0, 0, 0, 0, 1, 0];
+/**
+ * Takes `share` of the saturation out of RGBA pixels in place, as `greyed` does to one colour
+ * (alpha kept): the grey ground of the veil from the baked picture.
+ */
+export function greyPixels(data: Uint8ClampedArray, share: number): void {
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i] ?? 0;
+    const g = data[i + 1] ?? 0;
+    const b = data[i + 2] ?? 0;
+    const y = 0.299 * r + 0.587 * g + 0.114 * b;
+    // Uint8ClampedArray rounds to the nearest on assignment, as `greyed` does.
+    data[i] = r + (y - r) * share;
+    data[i + 1] = g + (y - g) * share;
+    data[i + 2] = b + (y - b) * share;
+  }
 }
 
 export class VeilView {
@@ -94,10 +94,13 @@ export class VeilView {
     private readonly cells: readonly Point[][],
     /** The edges of the areas, with an inward normal on each (`withInward`). */
     private readonly edges: readonly CellEdge[],
-    private readonly renderer: Renderer,
     private readonly territory: VeilTerritory,
   ) {
-    this.rules = new HatchTile(RULED_VEIL.rules satisfies HatchSpec);
+    // The dark veil and the rules over it in one tile: one fill instead of two (#854).
+    this.rules = new HatchTile(RULED_VEIL.rules satisfies HatchSpec, {
+      line: { color: RULED_VEIL.rules.color, alpha: RULED_VEIL.rules.alpha },
+      under: RULED_VEIL.veil,
+    });
     this.rules.update(this.zoom, this.resolution);
     background.addChildAt(this.ground, groundAt);
     this.holder.addChild(this.veil, this.band, this.lines, this.edge);
@@ -159,26 +162,28 @@ export class VeilView {
     this.grey?.destroy(true);
   }
 
+  /**
+   * The grey copy of the picture, made on the CPU (#854): a colour matrix filter would compile a
+   * shader and run a world-sized pass on the GPU, which takes most of a second under software WebGL
+   * while the match screen comes up; the same matrix over the pixels takes a few milliseconds.
+   */
   private greyCopy(texture: Texture): Texture | null {
-    const renderer = this.renderer as Partial<Renderer>;
-    if (typeof renderer.generateTexture !== 'function') return null;
-    const filter = new ColorMatrixFilter();
-    // The picture is the size of the world: a filter cut to the canvas would leave the rest
-    // of the copy empty on a screen smaller than the map (#441).
-    filter.clipToViewport = false;
-    filter.matrix = greyMatrix(RULED_VEIL.grey) as ColorMatrixFilter['matrix'];
-    const sprite = new Sprite(texture);
-    sprite.width = this.map.meta.width;
-    sprite.height = this.map.meta.height;
-    sprite.filters = [filter];
-    const grey = renderer.generateTexture({
-      target: sprite,
-      frame: new Rectangle(0, 0, this.map.meta.width, this.map.meta.height),
-      resolution: 1,
+    const image = texture.source.resource as CanvasImageSource | null | undefined;
+    if (image === null || image === undefined || typeof document === 'undefined') return null;
+    const width = Math.max(1, Math.round(this.map.meta.width));
+    const height = Math.max(1, Math.round(this.map.meta.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (context === null) return null;
+    context.drawImage(image, 0, 0, width, height);
+    const pixels = context.getImageData(0, 0, width, height);
+    greyPixels(pixels.data, RULED_VEIL.grey);
+    context.putImageData(pixels, 0, 0);
+    return new Texture({
+      source: new CanvasSource({ resource: canvas, width, height, resolution: 1 }),
     });
-    sprite.destroy();
-    filter.destroy();
-    return grey;
   }
 
   private drawGround(): void {
@@ -205,16 +210,12 @@ export class VeilView {
       return cell === undefined || cell.length < 3 ? [] : [cell];
     });
     if (polygons.length === 0) return;
-    for (const cell of polygons) g.poly(cell);
-    g.fill(RULED_VEIL.veil);
-    const { rules } = RULED_VEIL;
+    // The tile carries the dark veil under the rules and their colours: drawn untinted.
     for (const cell of polygons) g.poly(cell);
     g.fill({
       texture: this.rules.texture,
       textureSpace: 'global',
-      matrix: this.rules.matrix(rules.angle),
-      color: rules.color,
-      alpha: rules.alpha,
+      matrix: this.rules.matrix(RULED_VEIL.rules.angle),
     });
   }
 
@@ -234,7 +235,7 @@ export class VeilView {
     const at = (inset: number) => sightEdge(this.cells, this.hiddenSet, this.edges, inset);
     const centre = at(0);
     if (centre.length === 0) return;
-    for (const { a, b } of centre) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    traceRuns(g, centre);
     g.stroke({ width: casing, color: ENGRAVE.casing, cap: 'round', join: 'round' });
     for (const side of [line.offset, -line.offset]) {
       for (const { a, b } of at(side)) g.moveTo(a.x, a.y).lineTo(b.x, b.y);

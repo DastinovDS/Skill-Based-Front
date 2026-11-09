@@ -8,7 +8,9 @@ import {
   hairWidth,
   hatchBucket,
   hatchRows,
+  paintRows,
   pointsAlong,
+  segmentRuns,
   sightEdge,
   withInward,
 } from './engraving.ts';
@@ -59,6 +61,37 @@ describe('hatchRows: one pitch of the hatch tile', () => {
     const rows = hatchRows(TILE_HEIGHT, 2.5, 0);
     expect(rows[0]).toBe(0);
     expect(rows.reduce((a, b) => a + b, 0)).toBeCloseTo(2.5);
+  });
+});
+
+describe('paintRows: the lines over a flat ground in one tile (#854)', () => {
+  // Blends the way the framebuffer does: `src + dst * (1 - srcAlpha)`, premultiplied.
+  const over = (src: number[], dst: number[]): number[] =>
+    src.map((v, i) => v + (dst[i] ?? 0) * (1 - (src[3] ?? 0)));
+  const flat = (color: number, alpha: number): number[] => [
+    (((color >> 16) & 255) / 255) * alpha,
+    (((color >> 8) & 255) / 255) * alpha,
+    ((color & 255) / 255) * alpha,
+    alpha,
+  ];
+
+  it('is the line fill blended over the ground fill, row by row', () => {
+    const line = { color: 0x050403, alpha: 0.5 };
+    const under = { color: 0x0b0a08, alpha: 0.3 };
+    const rows = [0, 0.25, 1];
+    const painted = paintRows(rows, line, under);
+    rows.forEach((cover, r) => {
+      const want = over(flat(line.color, line.alpha * cover), flat(under.color, under.alpha));
+      want.forEach((v, i) => {
+        expect(Math.abs((painted[r]?.[i] ?? -1) - v * 255)).toBeLessThanOrEqual(0.5);
+      });
+    });
+  });
+
+  it('is the ground alone where no line covers the row', () => {
+    expect(paintRows([0], { color: 0xffffff, alpha: 1 }, { color: 0xff0000, alpha: 0.5 })).toEqual([
+      [128, 0, 0, 128],
+    ]);
   });
 });
 
@@ -126,6 +159,28 @@ describe('pointsAlong', () => {
     const apart = [joined[0], { a: { x: 20, y: 0 }, b: { x: 26, y: 0 } }] as typeof joined;
     expect(pointsAlong(apart, 3, 1).map((p) => p.at.x)).toEqual([1, 4, 21, 24]);
     expect(pointsAlong(apart, 3, 1).map((p) => p.index)).toEqual([0, 0, 1, 1]);
+  });
+});
+
+describe('segmentRuns: segments joined end to start (one stroke cap per run, #854)', () => {
+  it('joins segments that continue each other and starts a new run after a gap', () => {
+    const p = (x: number, y: number): Point => ({ x, y });
+    const runs = segmentRuns([
+      { a: p(0, 0), b: p(4, 0) },
+      { a: p(4, 0), b: p(4, 3) },
+      { a: p(9, 9), b: p(10, 9) },
+      { a: p(10, 9), b: p(10, 10) },
+      { a: p(0, 0), b: p(1, 1) },
+    ]);
+    expect(runs).toEqual([
+      [p(0, 0), p(4, 0), p(4, 3)],
+      [p(9, 9), p(10, 9), p(10, 10)],
+      [p(0, 0), p(1, 1)],
+    ]);
+  });
+
+  it('has no run without segments', () => {
+    expect(segmentRuns([])).toEqual([]);
   });
 });
 
