@@ -62,9 +62,9 @@ describe('RadialMenu', () => {
     // The rates as signs (the CP mark, one lozenge, per minute); the words are the accessible name.
     const names = items.map((i) => i.getAttribute('aria-label'));
     expect(names).toEqual([
-      'Economy: 3 CP and 18 charges per minute',
-      'Balance: 6 CP and 12 charges per minute',
-      'War: 9 CP and 6 charges per minute',
+      'Economy: 3 CP and 6 charges per minute from all your factories',
+      'Balance: 6 CP and 3 charges per minute from all your factories',
+      'War: 7.5 CP and 1.5 charges per minute from all your factories',
     ]);
     expect(items.every((i) => i.querySelector('.cp-mark') !== null)).toBe(true);
     expect(items.every((i) => i.querySelector('.mark.fill') !== null)).toBe(true);

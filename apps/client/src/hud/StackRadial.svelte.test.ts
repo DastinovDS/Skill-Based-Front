@@ -19,7 +19,7 @@ const second: GroupView = {
   id: 'second-group',
   units: 2,
   charged: 1,
-  mode: 'defense',
+  mode: 'attack',
   order: null,
 };
 const crowded: SnapshotMsg = {
@@ -79,8 +79,6 @@ describe('the list of the groups standing in a city', () => {
     expect(text[0]).toContain(`charged ${String(first.charged)}`);
     expect(text[1]).toContain('Units 2');
     expect(text[1]).toContain('charged 1');
-    // "Defense" is told in words, not by colour.
-    expect(text[1]).toContain('Defense');
     expect(text[0]).toContain('1');
     expect(text[1]).toContain('2');
     // Every sector has the icon of a group, at least 20 px (#350).

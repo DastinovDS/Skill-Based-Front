@@ -125,7 +125,8 @@ describe('Hud', () => {
     flushSync();
     expect(target.querySelector('aside')).toBeNull();
     const bar = (target.querySelector('header')?.textContent ?? '').replace(/\s+/g, ' ');
-    // Tick 250 at 10 Hz of a 9000-tick match (DEC-22): 875 s = 14:35 left; CP is at the cap.
+    // Tick 250 at 10 Hz of a 9000-tick match (DEC-22): 875 s = 14:35 left; 2.5 CP (1 CP per
+    // 100 ticks in Balance).
     expect(bar).toContain('14:35');
     // No words where a sign says it (ui-style 53): the stance and the nicks are accessible names.
     expect(bar).not.toContain('Ember');
@@ -135,21 +136,21 @@ describe('Hud', () => {
     );
     // CP as one Double frame gauge: the numeral and a ruled scale.
     expect(target.querySelectorAll('.cp .gauge')).toHaveLength(1);
-    expect(target.querySelector('.cp .num')?.textContent.trim()).toBe('5');
+    expect(target.querySelector('.cp .num')?.textContent.trim()).toBe('2.5');
   });
 
   it('shows the CP as the Double frame: the bar while it grows, the frame drawn in at the cap (#860)', () => {
     setLocale('en');
     const { target, state } = render();
-    // Tick 30 at 100 per 50 ticks: 0.6 CP of 5, growing.
+    // Tick 30 at 1 CP per 100 ticks (Balance): 0.3 CP of 5, growing.
     state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 30));
     flushSync();
     const cp = (): Element | null => target.querySelector('.cp');
-    expect(cp()?.getAttribute('aria-label')).toBe('CP: 0.6 of 5');
+    expect(cp()?.getAttribute('aria-label')).toBe('CP: 0.3 of 5');
     expect(cp()?.querySelector('.gauge.full')).toBeNull();
     expect(Number(cp()?.querySelector('.bar')?.getAttribute('width'))).toBeGreaterThan(0);
-    // Tick 250 is at the cap: the frame is drawn in (a shape, not a colour; AGENTS.md 7.4).
-    state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 250));
+    // Tick 500 is at the cap: the frame is drawn in (a shape, not a colour; AGENTS.md 7.4).
+    state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 500));
     flushSync();
     expect(cp()?.getAttribute('aria-label')).toBe('CP: 5 of 5, at the cap');
     expect(cp()?.querySelector('.gauge.full')).not.toBeNull();

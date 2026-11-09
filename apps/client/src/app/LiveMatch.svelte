@@ -112,8 +112,6 @@
       }
     } else if (msg.type === 'reach') {
       orders?.onReach(msg);
-    } else if (msg.type === 'line_route') {
-      orders?.onLineRoute(msg);
     }
   }
 
@@ -137,44 +135,29 @@
           hud: state,
           tickHz: welcome.ruleset_public.tick_hz,
           // Economy v2 (DEC-41, item 10): a plan has no delay, it gathers its bonus instead.
-          orders:
-            welcome.ruleset_public.economy.model === 'v2'
-              ? { planned_delay_ticks: 0 }
-              : welcome.ruleset_public.orders,
+          orders: welcome.ruleset_public.orders,
           capacity: welcome.ruleset_public.capacity,
           roundTicks: welcome.ruleset_public.combat.round_ticks,
           recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
           recruitQueueMax: welcome.ruleset_public.recruit.queue_max,
           provinceWarehouse: welcome.ruleset_public.city_upgrades.warehouse_province,
-          roadBuildTicks: welcome.ruleset_public.build.ticks_per_level,
-          ...(welcome.ruleset_public.fort === null
-            ? {}
-            : { fortBuildTicks: welcome.ruleset_public.fort.build_ticks }),
+          roadBuildTicks: 0, // no road levels (#894)
+          fortBuildTicks: welcome.ruleset_public.fort.build_ticks,
           audio: new MatchAudio({
             me: welcome.player,
             play: (id) => {
               sound.play(id);
             },
           }),
-          cityUpgrades: welcome.ruleset_public.city_upgrades.enabled
-            ? {
-                barracks: welcome.ruleset_public.city_upgrades.barracks_ticks,
-                warehouse: welcome.ruleset_public.city_upgrades.warehouse_ticks,
-                warehouseMaxLevel: welcome.ruleset_public.city_upgrades.warehouse_max_level,
-                warehouseGainPerLevel:
-                  welcome.ruleset_public.city_upgrades.warehouse_gain_per_level,
-                barracksCharges: welcome.ruleset_public.city_upgrades.barracks_charges,
-                ...(welcome.ruleset_public.factory === null
-                  ? {}
-                  : {
-                      factory: welcome.ruleset_public.factory.build_ticks,
-                      factoryCharges: welcome.ruleset_public.factory.cost,
-                    }),
-                ...(welcome.ruleset_public.bunker === null
-                  ? {}
-                  : { fort: welcome.ruleset_public.bunker.build_ticks }),
-              }
-            : null,
+          cityUpgrades: {
+            barracks: welcome.ruleset_public.city_upgrades.barracks_ticks,
+            warehouse: 0, // no warehouse levels (#894)
+            warehouseMaxLevel: 0,
+            warehouseGainPerLevel: 0,
+            barracksCharges: welcome.ruleset_public.city_upgrades.barracks_charges,
+            factory: welcome.ruleset_public.factory.build_ticks,
+            factoryCharges: welcome.ruleset_public.factory.cost,
+          },
         };
       },
       onStatus: (next) => {

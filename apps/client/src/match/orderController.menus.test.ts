@@ -98,26 +98,6 @@ describe('one radial menu at a time', () => {
     controller.chooseStackGroup(first.id); // the same group again: its own menu
     expect(open()).toEqual(['group']);
   });
-
-  it('the supply menu and the stance menu push each other out', () => {
-    const { controller, open } = setup();
-    controller.key(down('Tab'));
-    controller.click(city, false);
-    expect(open()).toEqual(['supply']);
-    controller.key(down('KeyQ'));
-    expect(open()).toEqual(['stance']);
-    controller.click(city, false);
-    expect(open()).toEqual(['supply']);
-  });
-
-  it('a second supply menu replaces the first', () => {
-    const { controller, open } = setup();
-    controller.key(down('Tab'));
-    controller.click(city, false);
-    controller.click({ kind: 'node', id: away.id }, false);
-    expect(open()).toEqual(['supply']);
-    expect(controller.supplyMenu.current.node).toBe(away.id);
-  });
 });
 
 describe('Tab', () => {

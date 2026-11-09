@@ -17,7 +17,7 @@
   let { group, rules }: Props = $props();
 
   // Whole seconds for one point of the bonus: the rule says "+1 for every N s".
-  const seconds = $derived(Math.round(rules.orders.defense_ticks_per_bonus / rules.tick_hz));
+  const seconds = $derived(Math.round(rules.tick_hz / rules.tick_hz)); // no «Defense»: removed (#894): stage 2 deletes this
 </script>
 
 <!-- The charges of the group under the pointer. The same group while its id is: the numbers
@@ -35,7 +35,7 @@ in its city. The opponent's groups are not under this tip: they show their mode 
         <span class="rule"
           >{tf('defense.rule', {
             seconds,
-            cost: formatCentis(rules.cost.defense, getLocale()),
+            cost: formatCentis(0, getLocale()),
           })}</span
         >
       </p>

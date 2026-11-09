@@ -118,16 +118,7 @@ describe('eventText', () => {
     expect(eventText(event('attrition', { node: 4, player: 0 }), 0, names)).toBe(
       'Overcapacity at Elm: a unit was lost',
     );
-    expect(eventText(event('road_upgraded', { edge: 2, width: 3 }), 0, names)).toBe(
-      'Road 2 upgraded to level 3',
-    );
-    expect(
-      eventText(event('build_started', { kind: 'road', edge: 2, width: 2, player: 0 }), 0, names),
-    ).toBe('Road 2 is being upgraded to level 2');
-    expect(
-      eventText(event('build_stopped', { node: 4, edge: 2, reason: 'interrupted' }), 0, names),
-    ).toBe('The build of road 2 was interrupted');
-    // DEC-26: the barracks and the warehouse of a city.
+    // DEC-26: the barracks of a city.
     expect(
       eventText(event('build_started', { node: 4, kind: 'barracks', player: 0 }), 0, names),
     ).toBe('Elm builds its barracks');
@@ -136,9 +127,6 @@ describe('eventText', () => {
     );
     expect(eventText(event('barracks_built', { node: 4, player: 0 }), 0, names)).toBe(
       'Elm has its barracks: it recruits now',
-    );
-    expect(eventText(event('warehouse_upgraded', { node: 4, level: 2, player: 0 }), 0, names)).toBe(
-      'The warehouse of Elm is now level 2',
     );
     expect(eventText(event('packet_lost', { edge: 1, charges: 5 }), 0, names)).toBe(
       'Charges lost on road 1: 5',

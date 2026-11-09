@@ -30,8 +30,6 @@ function snapshot(charged: number): SnapshotMsg {
     mode: 'attack',
     location: { kind: 'node', node: home },
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   };
   return { ...base, view: { ...base.view, me: { ...base.view.me, cp: 1000 }, groups: [group] } };
 }

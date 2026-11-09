@@ -26,8 +26,6 @@ const group = (id: string, location: Location): GroupView => ({
   mode: 'attack',
   location,
   order: null,
-  defense_bonus: null,
-  defense_cap: null,
 });
 const packet = (id: string, depart_tick: number, arrive_tick: number): PacketView => ({
   id,
@@ -38,7 +36,6 @@ const packet = (id: string, depart_tick: number, arrive_tick: number): PacketVie
   arrive_tick,
   path: [1],
   dest_tick: arrive_tick,
-  transfer: false,
 });
 /** The PRO-01 snapshot fixture with another tick, groups and packets. */
 function snap(tick: number, groups: GroupView[] = [], packets: PacketView[] = []): SnapshotMsg {

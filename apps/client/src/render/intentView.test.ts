@@ -113,8 +113,6 @@ const group = (over: Partial<GroupView['order'] & object> = {}, planned = true):
     next_charge_tick: null,
     ...over,
   },
-  defense_bonus: null,
-  defense_cap: null,
 });
 
 describe('IntentView: the ribbons of scheduled orders (#851, Engraved)', () => {

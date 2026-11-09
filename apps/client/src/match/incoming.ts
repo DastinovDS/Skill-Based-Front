@@ -32,7 +32,7 @@ export function incomingAlerts(
 ): IncomingAlert[] {
   const per = new Map<number, { count: number; left: number | null }>();
   for (const intent of snapshot.view.intents) {
-    if (intent.owner === me || intent.kind !== 'planned_move' || intent.target === null) continue;
+    if (intent.owner === me || intent.target === null) continue;
     if (snapshot.view.nodes[intent.target]?.owner !== me) continue;
     const left = delayLeft(intent.created_tick, snapshot.tick, delayTicks);
     const entry = per.get(intent.target) ?? { count: 0, left: null };

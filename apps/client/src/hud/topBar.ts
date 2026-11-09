@@ -29,7 +29,7 @@ export interface StanceProgress {
  */
 export function stanceProgress(rules: RulesetPublic, me: SelfView): StanceProgress | null {
   const { stances, tick_hz } = rules;
-  if (stances === null || me.cp_ticks === null || me.capital_ticks === null) return null;
+  if (me.cp_ticks === null || me.capital_ticks === null) return null;
   const quantum = (ticks: number, period: number): QuantumProgress => ({
     share: Math.min(1, ticks / period),
     seconds: Math.ceil(Math.max(0, period - ticks) / tick_hz),

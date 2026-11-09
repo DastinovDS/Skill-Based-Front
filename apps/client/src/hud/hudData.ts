@@ -18,8 +18,14 @@ import type {
   SnapshotMsg,
   Stance,
   Terrain,
-  UpgradeGain,
 } from '../protocol.gen.ts';
+
+/** What a road level gave: there are no road levels since #894; kept as a type until stage 2. */
+export interface UpgradeGain {
+  readonly speed_pct: number;
+  readonly unit_speed_pct: number;
+  readonly amount: number;
+}
 
 import { stanceProgress, type StanceProgress } from './topBar.ts';
 
@@ -166,7 +172,6 @@ export function factoryCount(
   nodes: readonly NodeView[],
   me: PlayerId,
 ): FactoryCount | null {
-  if (rules.economy.model !== 'v2' || rules.factory === null) return null;
   let count = 0;
   for (const node of nodes) {
     if (node.owner !== me) continue;
@@ -322,10 +327,7 @@ function groupInfo(group: GroupView, nodes: readonly NodeView[], tick: number): 
     progress: group.location.kind === 'edge' ? group.location.progress : null,
     destination: group.order?.dest ?? null,
     planned: group.order?.planned ?? false,
-    defense:
-      group.defense_bonus !== null && group.defense_cap !== null
-        ? { bonus: group.defense_bonus, cap: group.defense_cap }
-        : null,
+    defense: null, // no «Defense» (#894)
     plannedBonus: group.order?.planned === true ? group.order.bonus : 0,
     gathering: gatheringOf(group, tick),
   };
@@ -394,7 +396,7 @@ function nodeInfo(
     graceLeft: node.grace_left,
     recruitQueue: node.recruit_queue,
     hasBarracks: node.has_barracks,
-    warehouseLevel: node.warehouse_level,
+    warehouseLevel: node.warehouse_cap === null ? null : 0, // no warehouse levels (#894)
     warehouseCap: node.warehouse_cap,
     building:
       node.building === null
@@ -409,8 +411,8 @@ function nodeInfo(
           },
     factory: node.factory,
     factoryBuild: siteInfo(node.factory_build, tick, ctx.rules.tick_hz),
-    fort: node.fort,
-    fortBuild: siteInfo(node.fort_build, tick, ctx.rules.tick_hz),
+    fort: null, // no bunker (#894)
+    fortBuild: null,
   };
 }
 
@@ -420,9 +422,9 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
     id: edge.id,
     a: file?.a ?? -1,
     b: file?.b ?? -1,
-    width: edge.width,
-    gain: edge.upgrade_gain,
-    building: edge.build !== null,
+    width: 1, // roads have no levels (#894)
+    gain: null,
+    building: false,
     fortNodes: edge.forts.map((fort) => fort.node),
   };
 }
@@ -449,7 +451,7 @@ function groupUnderPointer(
     id: `node:${String(target.node)}`,
     units: here.reduce((total, g) => total + g.units, 0),
     charged: here.reduce((total, g) => total + g.charged, 0),
-    mode: here.some((g) => g.mode === 'defense') ? 'defense' : 'attack',
+    mode: 'attack', // every group attacks (#894)
     node: target.node,
     capacity: nodeAt(view.nodes, target.node)?.capacity ?? null,
     progress: null,
@@ -465,17 +467,9 @@ function groupUnderPointer(
 }
 
 /** The bonus and the cap of the groups of a city in "Defense", summed as the server sent them. */
-function defenseOf(groups: readonly GroupView[]): DefenseInfo | null {
-  let bonus = 0;
-  let cap = 0;
-  let any = false;
-  for (const g of groups) {
-    if (g.defense_bonus === null || g.defense_cap === null) continue;
-    bonus += g.defense_bonus;
-    cap += g.defense_cap;
-    any = true;
-  }
-  return any ? { bonus, cap } : null;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+function defenseOf(_groups: readonly GroupView[]): DefenseInfo | null {
+  return null; // no «Defense» (#894): stage 2 deletes this
 }
 
 export function buildHudData(
@@ -507,14 +501,13 @@ export function buildHudData(
       value: view.me.cp,
       cap: rules.cp.cap,
       regenPerSecond:
-        (rules.cp.per_period * rules.tick_hz) /
-        (rules.stances?.cp_period_ticks[view.me.stance] ?? rules.cp.period_ticks),
+        (rules.cp.per_period * rules.tick_hz) / rules.stances.cp_period_ticks[view.me.stance],
     },
     stance: view.me.stance,
     stanceProgress: stanceProgress(rules, view.me),
-    fronts: view.me.fronts,
-    rearMin: view.me.rear_min,
-    autoLines: view.me.auto_lines,
+    fronts: [], // no front markers, rear minimum or lines (#894)
+    rearMin: 0,
+    autoLines: null,
     leafShift: view.me.leaf_shift,
     leafShiftMax: view.me.leaf_shift_max,
     factories: factoryCount(rules, view.nodes, me),
@@ -539,7 +532,7 @@ export function buildHudData(
       ...(n.factory === true && n.owner === me ? { factory: true } : {}),
     })),
     roads: view.edges.map((e) => roadInfo(ctx, e)),
-    lines: view.lines,
+    lines: [],
     events,
   };
 }

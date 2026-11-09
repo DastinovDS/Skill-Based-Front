@@ -60,17 +60,17 @@
           angle: angles[1] ?? 0,
           label: t('group.defense'),
           // The price, and the bonus the group has gathered (DEC-30; the server's numbers).
-          price: { cp: cp(orders.modeCost('defense')) },
+          price: { cp: cp(orders.modeCost('attack')) },
           aria: tf('price.label', {
             label: t('group.defense'),
-            price: tf('price.cp', { cost: cp(orders.modeCost('defense')) }),
+            price: tf('price.cp', { cost: cp(orders.modeCost('attack')) }),
           }),
           lines:
             group?.defense == null
               ? []
               : [tf('defense.bonus', { bonus: group.defense.bonus, cap: group.defense.cap })],
           key: 'D',
-          current: group?.mode === 'defense',
+          current: (group?.mode as string | undefined) === 'defense',
         },
     {
       id: 'cancel',

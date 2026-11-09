@@ -65,8 +65,6 @@ export function badgesSnapshot(map: MapFile): SnapshotMsg {
     mode: 'attack',
     location: { kind: 'node', node },
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   });
   const groups: GroupView[] = [
     ...base.view.groups.map((g) =>

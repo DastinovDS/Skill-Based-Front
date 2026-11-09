@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES_V2, devSnapshot } from '../hud/devFeed.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { Command, LineView, SnapshotMsg } from '../protocol.gen.ts';
+import type { Command, SnapshotMsg } from '../protocol.gen.ts';
+
+/** An own supply line: the drawn lines were removed (#894): stage 2 deletes this. */
+type LineView = { readonly id: number; readonly path: readonly number[] };
 import { OrderBook } from './orderBook.ts';
 import { OrderController, PLAN_BONUS } from './orderController.ts';
 
@@ -28,12 +31,13 @@ const enemy = base.view.nodes.find((n) => n.owner === 1);
 if (enemy === undefined) throw new Error('the dev snapshot has no enemy node');
 
 /** `factories`: the own nodes that are factories (DEC-42: only they start a line); `home` by default. */
-function setup(lines: LineView[] = [], factories: readonly number[] = [home]) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+function setup(_lines: LineView[] = [], factories: readonly number[] = [home]) {
   const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map });
   const nodes = base.view.nodes.map((n) =>
     n.owner === 0 ? { ...n, factory: factories.includes(n.id) } : n,
   );
-  const snapshot: SnapshotMsg = { ...base, view: { ...base.view, nodes, lines } };
+  const snapshot: SnapshotMsg = { ...base, view: { ...base.view, nodes } };
   hud.onSnapshot(snapshot);
   const sent: Command[] = [];
   const queries: number[][] = [];
@@ -60,20 +64,6 @@ describe('OrderController under economy v2 (DEC-41)', () => {
 
   it('knows the model from the rules', () => {
     expect(setup().controller.v2).toBe(true);
-  });
-
-  it('has no stance menu, road mode or «Defense»', () => {
-    const { controller, sent } = setup();
-    controller.click({ kind: 'group', id: group.id }, false);
-    expect(controller.key(down('KeyQ'))).toBe(false);
-    expect(controller.radial.current.open).toBe(false);
-    expect(controller.openRadial(true)).toBe(false);
-    expect(controller.key(down('KeyU'))).toBe(false);
-    expect(controller.roadMode).toBe(false);
-    expect(controller.key(down('KeyD'))).toBe(false);
-    expect(controller.key(down('Digit2'))).toBe(false);
-    controller.toggleDefense();
-    expect(sent).toEqual([]);
   });
 
   it('a Shift click with no wheel step asks for bonus 1; an ordinary order for none (#797)', () => {
@@ -113,170 +103,6 @@ describe('OrderController under economy v2 (DEC-41)', () => {
       { type: 'release_plan', group: group.id },
       { type: 'release_plan', group: group.id },
     ]);
-  });
-
-  it('the city menu builds a factory and a bunker', () => {
-    const { controller, sent } = setup();
-    controller.click({ kind: 'node', id: home }, false);
-    controller.chooseCity('factory');
-    controller.click({ kind: 'node', id: home }, false);
-    controller.chooseCity('bunker');
-    expect(sent).toEqual([
-      { type: 'build_factory', node: home },
-      { type: 'build_bunker', node: home },
-    ]);
-  });
-
-  it('focuses the «Supply» layer on the menu node, the hovered «remove» entry, the draft (#672)', () => {
-    const line: LineView = { id: 7, path: [home, next] };
-    const { controller } = setup([line]);
-    controller.key(down('Tab'));
-    expect(controller.overlay().supply?.lines).toEqual({ node: null, line: null });
-    controller.click({ kind: 'node', id: home }, false);
-    expect(controller.overlay().supply?.lines).toEqual({ node: home, line: null });
-    controller.supplyMenu.hover('line:7');
-    expect(controller.overlay().supply?.lines).toEqual({ node: home, line: 7 });
-    // The same focus is the same overlay: the layer is not redrawn for nothing.
-    expect(controller.overlay().supply).toBe(controller.overlay().supply);
-    controller.supplyMenu.hover('draw');
-    expect(controller.overlay().supply?.lines).toEqual({ node: home, line: null });
-    controller.key(down('Digit1'));
-    expect(controller.overlay().supply?.lines).toEqual({ node: home, line: null });
-    controller.key(down('Escape'));
-    controller.key(down('Escape'));
-    expect(controller.ui.current.lineDraft).toBeNull();
-    expect(controller.overlay().supply?.lines).toEqual({ node: null, line: null });
-  });
-
-  it('draws a supply line: the menu, a click on the target, the server path, Enter (#665)', () => {
-    const { controller, sent, queries } = setup();
-    controller.key(down('Tab'));
-    controller.click({ kind: 'node', id: home }, false);
-    expect(controller.supplyMenu.current).toMatchObject({ open: true, node: home, lines: [] });
-    controller.key(down('Digit1'));
-    expect(controller.ui.current.lineDraft).toEqual([home]);
-    expect(controller.overlay().supply).toMatchObject({ source: home, draft: [] });
-    expect(controller.overlay().supply?.targets).toContain(far);
-    // A node that is not own is not taken.
-    controller.click({ kind: 'node', id: enemy.id }, false);
-    expect(controller.ui.current.lineDraft).toEqual([home]);
-    controller.click({ kind: 'node', id: far }, false);
-    expect(controller.ui.current.lineDraft).toEqual([home, far]);
-    expect(queries).toEqual([[home, far]]);
-    // No path yet: nothing to draw, Enter waits.
-    controller.key(down('Enter'));
-    expect(sent).toEqual([]);
-    controller.onLineRoute({
-      type: 'line_route',
-      points: [home, far],
-      tick: 30,
-      path: [home, next, far],
-    });
-    expect(controller.overlay().supply).toMatchObject({ draft: [home, next, far], targets: [] });
-    controller.key(down('Enter'));
-    expect(controller.ui.current.lineDraft).toBeNull();
-    expect(sent).toEqual([{ type: 'draw_line', path: [home, next, far] }]);
-  });
-
-  it('a click routes the line through a node, again takes it off, Shift goes on to it', () => {
-    const { controller, queries } = setup();
-    controller.key(down('Tab'));
-    controller.click({ kind: 'node', id: home }, false);
-    controller.chooseLine('draw');
-    controller.click({ kind: 'node', id: far }, false);
-    controller.click({ kind: 'node', id: next }, false);
-    expect(controller.ui.current.lineDraft).toEqual([home, next, far]);
-    controller.click({ kind: 'node', id: next }, false);
-    expect(controller.ui.current.lineDraft).toEqual([home, far]);
-    controller.click({ kind: 'node', id: next }, true);
-    expect(controller.ui.current.lineDraft).toEqual([home, far, next]);
-    expect(queries).toEqual([
-      [home, far],
-      [home, next, far],
-      [home, far],
-      [home, far, next],
-    ]);
-    // An answer about other points than the current ones is dropped.
-    controller.onLineRoute({
-      type: 'line_route',
-      points: [home, far],
-      tick: 30,
-      path: [home, far],
-    });
-    expect(controller.ui.current.linePath).toBeNull();
-  });
-
-  it('a click on the target confirms; Backspace steps back; Esc drops the line', () => {
-    const { controller, sent } = setup();
-    controller.key(down('Tab'));
-    controller.click({ kind: 'node', id: home }, false);
-    controller.chooseLine('draw');
-    controller.click({ kind: 'node', id: far }, false);
-    controller.click({ kind: 'node', id: next }, false);
-    controller.key(down('Backspace'));
-    expect(controller.ui.current.lineDraft).toEqual([home, far]);
-    controller.key(down('Backspace'));
-    expect(controller.ui.current.lineDraft).toEqual([home]);
-    controller.key(down('Escape'));
-    expect(controller.ui.current.lineDraft).toBeNull();
-    expect(controller.supplyMode).toBe(true);
-    controller.click({ kind: 'node', id: home }, false);
-    controller.chooseLine('draw');
-    controller.click({ kind: 'node', id: next }, false);
-    controller.onLineRoute({
-      type: 'line_route',
-      points: [home, next],
-      tick: 30,
-      path: [home, next],
-    });
-    controller.click({ kind: 'node', id: next }, false);
-    expect(sent).toEqual([{ type: 'draw_line', path: [home, next] }]);
-  });
-
-  it('the auto-extension toggle sends set_auto_lines only for a change (#665)', () => {
-    const { controller, sent } = setup();
-    expect(controller.autoLines).toBe(true);
-    controller.setAutoLines(true);
-    controller.setAutoLines(false);
-    expect(sent).toEqual([{ type: 'set_auto_lines', on: false }]);
-  });
-
-  it('the supply menu of a hub factory lists its lines out, then in, and removes one by its key', () => {
-    const { controller, sent } = setup(
-      [
-        { id: 7, path: [home, next] },
-        { id: 8, path: [next, home] },
-      ],
-      [home, next],
-    );
-    controller.key(down('Tab'));
-    controller.click({ kind: 'node', id: home }, false);
-    expect(controller.supplyMenu.current).toMatchObject({
-      canDraw: true,
-      lines: [
-        { id: 7, dir: 'out', other: next },
-        { id: 8, dir: 'in', other: next },
-      ],
-    });
-    controller.key(down('Digit3'));
-    expect(sent).toEqual([{ type: 'remove_line', line: 8 }]);
-    expect(controller.supplyMenu.current.open).toBe(false);
-  });
-
-  it('a target that is no factory removes the line into it and draws none (DEC-42)', () => {
-    const { controller, sent } = setup([{ id: 7, path: [home, next] }]);
-    controller.key(down('Tab'));
-    controller.click({ kind: 'node', id: next }, false);
-    expect(controller.supplyMenu.current).toMatchObject({
-      open: true,
-      canDraw: false,
-      lines: [{ id: 7, dir: 'in', other: home }],
-    });
-    controller.chooseLine('draw');
-    expect(controller.ui.current.lineDraft).toBeNull();
-    controller.click({ kind: 'node', id: next }, false);
-    controller.key(down('Digit1'));
-    expect(sent).toEqual([{ type: 'remove_line', line: 7 }]);
   });
 
   it('a node that is no factory and no target has no supply menu', () => {

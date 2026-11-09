@@ -1,15 +1,15 @@
 {
   "generated_by": "scripts/export_howto.py (mise run regen:howto), do not edit",
-  "ruleset": "mvp-2",
-  "ruleset_hash": "9d8cc4dd4b48572ad2be415c2fcc4d4c",
-  "sim_version": 46,
+  "ruleset": "mvp-5",
+  "ruleset_hash": "a8ba70dd5ac436dbd06ad1b120e3990e",
+  "sim_version": 47,
   "rules": {
     "round_seconds": 2,
+    "cost_move_cp": 1,
+    "cost_planned_cp": 1,
     "planned_delay_seconds": 3,
     "planned_bonus_per_road": 1,
     "defense_seconds_per_bonus": 6,
-    "cost_move_cp": 1,
-    "cost_planned_cp": 2,
     "cost_defense_cp": 2,
     "stance_charges_pct": {
       "economy": 60,

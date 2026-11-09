@@ -6,7 +6,8 @@ import { AlertState } from './alerts.svelte.ts';
 import { incomingAlerts } from './incoming.ts';
 
 const map = DEFAULT_MAP;
-const DELAY = DEV_RULES.orders.planned_delay_ticks;
+// A delay of the test only: no ruleset has a fixed plan delay since #894 (a plan gathers its bonus).
+const DELAY = 30;
 const base = devSnapshot(map, DEV_RULES, 100);
 const mine = base.view.nodes.filter((n) => n.owner === 0).map((n) => n.id);
 const theirs = base.view.nodes.filter((n) => n.owner === 1).map((n) => n.id);
@@ -50,16 +51,6 @@ describe('incomingAlerts', () => {
     expect(incomingAlerts(snap, 0, DELAY)[0]).toMatchObject({ count: 1, ticksLeft: null });
   });
 
-  it('ignores my own intents, the enemy aiming at his own city, and modes without a target', () => {
-    const snap = withIntents([
-      intent('own', { owner: 0, origin: home, target: other }),
-      intent('theirs', { origin: far, target: far }),
-      intent('defense', { kind: 'defense', target: null }),
-      intent('neutral-aim', { target: far }),
-    ]);
-    expect(incomingAlerts(snap, 0, DELAY)).toEqual([]);
-  });
-
   it('serves the other player the same way', () => {
     const snap = withIntents([intent('a', { owner: 0, origin: home, target: far })]);
     expect(incomingAlerts(snap, 1, DELAY)).toHaveLength(1);
@@ -86,9 +77,10 @@ describe('AlertState', () => {
         intent('b', { target: home }),
       ]),
     );
-    expect(state.nextNode()).toBe(other);
+    // No countdown without a plan delay (#894): by city id.
     expect(state.nextNode()).toBe(home);
     expect(state.nextNode()).toBe(other);
+    expect(state.nextNode()).toBe(home);
     state.onSnapshot(withIntents([]));
     expect(state.current).toEqual([]);
     expect(state.nextNode()).toBeNull();

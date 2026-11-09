@@ -59,9 +59,6 @@ function view(shift: number, extra: Partial<View> = {}): View {
     me: {
       cp: 100,
       stance: 'balance',
-      fronts: [null, null],
-      rear_min: 0,
-      auto_lines: null,
       leaf_shift: shift,
       leaf_shift_max: 3,
       next_dispatch_tick: 20,
@@ -84,7 +81,6 @@ function view(shift: number, extra: Partial<View> = {}): View {
     packets: [],
     intents: [],
     fights: [],
-    lines: [],
     ...extra,
   };
 }
@@ -98,7 +94,6 @@ const packet = (edge: number, from: number, to: number): PacketView => ({
   arrive_tick: 30,
   path: [to],
   dest_tick: 30,
-  transfer: false,
 });
 
 describe('which nodes are the level, ahead of it, or a pocket (T1, DEC-43 item E)', () => {
@@ -176,8 +171,6 @@ describe('the node marks: starving', () => {
       mode: 'attack',
       location: { kind: 'node', node: 1 },
       order: null,
-      defense_bonus: null,
-      defense_cap: null,
     };
     const v = view(0, { groups: [tired] });
     expect(starvingNodes(v, 0)).toContain(1);

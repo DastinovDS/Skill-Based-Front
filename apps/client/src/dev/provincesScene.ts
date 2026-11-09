@@ -145,8 +145,6 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       mode: 'attack',
       location: { kind: 'node', node },
       order: null,
-      defense_bonus: null,
-      defense_cap: null,
     }) satisfies GroupView;
   // Own groups in an own province (2), in a city (6, 7) and in a province nobody owns (12).
   const groups: GroupView[] = [
@@ -163,9 +161,6 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       me: {
         cp: 380,
         stance: 'balance',
-        fronts: [7, null],
-        rear_min: 1,
-        auto_lines: null,
         leaf_shift: null,
         leaf_shift_max: null,
         next_dispatch_tick: null,
@@ -179,7 +174,6 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       packets: [],
       intents: [],
       fights: [],
-      lines: [],
     },
   };
 }

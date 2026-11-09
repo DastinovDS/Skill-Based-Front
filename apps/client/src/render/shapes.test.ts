@@ -4,7 +4,7 @@ import type { BakedSprite } from './bake.ts';
 import { TWEEN_MS } from './tween.ts';
 import { EntityKit, Token, helmetWidth } from './shapes.ts';
 import { helmet } from '../units/helmet.ts';
-import { ENEMY, UNIT_SIDES, YOU } from './style.ts';
+import { UNIT_SIDES, YOU } from './style.ts';
 import { testSprites } from './testSprites.ts';
 import { createLayers } from './layers.ts';
 
@@ -176,29 +176,6 @@ describe('Token, the helmet as baked sprites', () => {
     expect(key.endsWith(':i')).toBe(true);
     const h = helmet('own', helmetWidth(UNIT_SIDES[1], true));
     expect(token.bottom).toBeGreaterThan(h.domeBottom);
-  });
-
-  it('shows the shield of "Defense" as a sprite of its own, at the top left (#776)', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 3, charged: 3 } });
-    expect(parts().shield.visible).toBe(false);
-    token.set({ owner: 0, modes: ['defense'], counts: { units: 3, charged: 3 } });
-    const { shield } = parts();
-    expect(shield.visible).toBe(true);
-    expect(shield.spec?.key).toBe(`shield:${String(YOU)}:`);
-    expect(shield.position.x).toBeLessThan(0);
-    token.set({ owner: 1, modes: ['defense'], counts: { units: 3, charged: 3 } });
-    expect(parts().shield.spec?.key).toBe(`shield:${String(ENEMY)}:e`);
-    expect(parts().shield.position.x).toBeLessThan(0);
-  });
-
-  it("has no shield on the icon of the units in a city: the sign is the city's own (#349)", () => {
-    token.set({
-      owner: 0,
-      modes: ['defense'],
-      counts: { units: 3, charged: 3 },
-      inside: true,
-    });
-    expect(parts().shield.visible).toBe(false);
   });
 });
 

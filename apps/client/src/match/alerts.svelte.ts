@@ -30,7 +30,7 @@ export class AlertState {
 
   constructor(me: PlayerId, rules: Pick<RulesetPublic, 'tick_hz' | 'orders' | 'capacity'>) {
     this.#me = me;
-    this.#delayTicks = rules.orders.planned_delay_ticks;
+    this.#delayTicks = 0; // a plan gathers, it has no delay (#894)
     this.#attritionTicks = rules.capacity.attrition_ticks;
     this.tickHz = rules.tick_hz;
   }

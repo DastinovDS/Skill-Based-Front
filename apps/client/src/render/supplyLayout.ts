@@ -6,7 +6,10 @@
  * DEC-17): no warehouse, no packet, no marker of the opponent is in a view at all, and this layer
  * does not look for them.
  */
-import type { LineView, MapFile, PlayerId, View } from '../protocol.gen.ts';
+import type { MapFile, PlayerId, View } from '../protocol.gen.ts';
+
+/** An own supply line: the drawn lines were removed (#894): stage 2 deletes this. */
+type LineView = { readonly id: number; readonly path: readonly number[] };
 import type { Point } from './camera.ts';
 
 /**
@@ -169,14 +172,14 @@ export function supplyFlows(view: View, index: EdgeIndex): SupplyFlow[] {
       // The first leg is the road the packet is on now; the rest are the server's route.
       const edge = i === 1 ? packet.edge : index.get(pairKey(from, to));
       if (edge === undefined) continue;
-      const key = `${String(edge)}:${String(from)}:${packet.transfer ? 't' : 'a'}`;
+      const key = `${String(edge)}:${String(from)}:a`; // no transfers: removed (#894): stage 2 deletes this
       const prev = sums.get(key);
       sums.set(key, {
         edge,
         from,
         to,
         charges: (prev?.charges ?? 0) + packet.charges,
-        transfer: packet.transfer,
+        transfer: false,
       });
     }
   }
@@ -286,7 +289,7 @@ export function supplyScene(
   const pipes: SupplyPipe[] = [];
   const bulkheads: SupplyBulkhead[] = [];
   for (const edge of view.edges) {
-    const level = clampLevel(edge.width);
+    const level = clampLevel(1); // roads have no levels: removed (#894): stage 2 deletes this
     levels.set(edge.id, level);
     const ends = edges[edge.id];
     if (ends === undefined) continue;
@@ -299,12 +302,11 @@ export function supplyScene(
     .filter((node) => node.owner === me && node.factory === true)
     .map((node) => node.id);
   const markers: SupplyMarker[] = [];
-  view.me.fronts.forEach((node, marker) => {
-    if (node !== null) markers.push({ marker, node });
-  });
+  // No front markers: removed (#894): stage 2 deletes this
   // Economy v2: the lines the player drew are the flows (the background ones first, so the front
   // ones lie over them); the packets on them glide as dots.
-  const split = view.lines.length > 0 ? splitLines(view.lines, focus) : null;
+  const lines: readonly LineView[] = []; // no drawn lines: removed (#894): stage 2 deletes this
+  const split = lines.length > 0 ? splitLines(lines, focus) : null;
   return {
     pipes,
     bulkheads,

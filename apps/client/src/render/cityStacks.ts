@@ -76,7 +76,8 @@ export function stackGroups(groups: readonly RenderGroup[], me: PlayerId): CityS
     stack.charged += item.group.charged;
     if (!stack.modes.includes(item.group.mode)) stack.modes.push(item.group.mode);
     // Only the own groups carry the number; the opponent's stack never shows one, whatever the data.
-    const { defense_bonus: bonus, defense_cap: cap } = item.group;
+    const bonus = null as number | null; // no «Defense»: removed (#894): stage 2 deletes this
+    const cap = null as number | null;
     if (owner === me && bonus !== null && cap !== null) {
       stack.defense = {
         bonus: (stack.defense?.bonus ?? 0) + bonus,

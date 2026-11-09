@@ -11,8 +11,8 @@ import { buildHudData, type HudContext } from './hudData.ts';
 const RULES: RulesetPublic = {
   ...DEV_RULES,
   tick_hz: 10,
-  orders: { ...DEV_RULES.orders, defense_ticks_per_bonus: 60 },
-  cost: { ...DEV_RULES.cost, defense: 200 },
+  orders: { ...DEV_RULES.orders },
+  cost: { ...DEV_RULES.cost },
 };
 const ctx: HudContext = { me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map: DEFAULT_MAP };
 const base = devSnapshot(DEFAULT_MAP, RULES, 100);
@@ -25,8 +25,6 @@ const group = (patch: Partial<GroupView>): GroupView => ({
   mode: 'attack',
   location: { kind: 'node', node: city },
   order: null,
-  defense_bonus: null,
-  defense_cap: null,
   ...patch,
 });
 
@@ -60,30 +58,10 @@ describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)',
     vi.useRealTimers();
   });
 
-  it('tells the bonus an own group in Defense has gathered, and the rule of the mode', () => {
-    const text = tipOf([group({ mode: 'defense', defense_bonus: 2, defense_cap: 3 })]);
-    expect(text).toContain('Defense: bonus 2 of 3');
-    // 60 ticks at 10 a second is 6 s a point; 200 hundredths of CP is 2 CP.
-    expect(text).toContain('+1 for every 6 s in the mode');
-    expect(text).toContain('burns after a fight');
-    expect(text).toContain('costs 2 CP');
-  });
-
   it('says nothing of the bonus for a group not in Defense', () => {
     const text = tipOf([group({})]);
     expect(text).not.toContain('Defense');
     expect(text).not.toContain('bonus');
-  });
-
-  it('sums the bonus of the groups of a city when the pointer is on the icon of the city', () => {
-    const text = tipOf(
-      [
-        group({ id: 'a', mode: 'defense', defense_bonus: 2, defense_cap: 3 }),
-        group({ id: 'b', units: 2, charged: 1, mode: 'defense', defense_bonus: 1, defense_cap: 1 }),
-      ],
-      { node: city },
-    );
-    expect(text).toContain('Defense: bonus 3 of 4');
   });
 
   it('calls the bonus of a plan a forecast while the group stands in its city', () => {

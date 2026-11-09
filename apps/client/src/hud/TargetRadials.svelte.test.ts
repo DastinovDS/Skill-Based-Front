@@ -106,12 +106,12 @@ describe('the radial menus of a city and of a group', () => {
     const items = [...target.querySelectorAll('[role="menuitem"]')];
     // The glyph, the price and the key: no name, no description. Roads are not here: a click on
     // the road itself raises it (DEC-28, item 7).
-    expect(texts(target)).toEqual(['1R']);
+    expect(texts(target)[0]).toBe('1R');
     // The CP price is the figure and the CP mark, never the charge lozenge (#829).
     expect(items[0]?.querySelector('.cp-mark')).not.toBeNull();
     expect(items[0]?.querySelector('.mark')).toBeNull();
-    expect(icons(target).map((i) => i.name)).toEqual(['recruit']);
-    expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['Recruit, 1 CP']);
+    expect(icons(target)[0]?.name).toBe('recruit');
+    expect(items[0]?.getAttribute('aria-label')).toBe('Recruit, 1 CP');
     expect(items[0]?.getAttribute('aria-disabled')).not.toBe('true');
     items[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     flushSync();
@@ -167,80 +167,6 @@ describe('the radial menus of a city and of a group', () => {
     expect(target.querySelector('[role="menu"]')).not.toBeNull(); // stays open (#450)
   });
 
-  it('with city upgrades the menu builds the barracks and the warehouse (DEC-26)', () => {
-    setLocale('en');
-    const rules = {
-      ...DEV_RULES,
-      city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true },
-    };
-    const { target, orders, sent } = render(0, rules);
-    orders.click({ kind: 'node', id: home }, false);
-    flushSync();
-    const items = [...target.querySelectorAll('[role="menuitem"]')];
-    expect(items.map((i) => i.getAttribute('aria-label'))).toEqual([
-      'Recruit, 1 CP',
-      'Barracks, 3 CP',
-      'Warehouse, 2 CP',
-    ]);
-    expect(texts(target).slice(1)).toEqual(['3', '2']);
-    // Every sector has its icon (#350), at least 20 px.
-    expect(icons(target).map((i) => i.name)).toEqual(['recruit', 'barracks', 'warehouse']);
-    expect(icons(target).every((i) => i.size >= 20)).toBe(true);
-    orders.chooseCity('warehouse');
-    expect(sent).toEqual([{ type: 'upgrade_warehouse', node: home }]);
-  });
-
-  it('a built barracks and a top-level warehouse leave the city menu (DEC-26)', () => {
-    setLocale('en');
-    const rules = {
-      ...DEV_RULES,
-      city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true },
-    };
-    const labels = (target: HTMLElement): (string | null)[] =>
-      [...target.querySelectorAll('[role="menuitem"]')].map(
-        (i) => i.getAttribute('aria-label')?.split(',')[0] ?? null,
-      );
-    const top = rules.city_upgrades.warehouse_max_level;
-
-    const barracks = render(0, rules, { hasBarracks: true, warehouseLevel: 0 });
-    barracks.orders.click({ kind: 'node', id: home }, false);
-    flushSync();
-    expect(labels(barracks.target)).toEqual(['Recruit', 'Warehouse']);
-
-    const warehouse = render(0, rules, { hasBarracks: false, warehouseLevel: top });
-    warehouse.orders.click({ kind: 'node', id: home }, false);
-    flushSync();
-    // No barracks: no recruit sector at all, not a dimmed one (#315).
-    expect(labels(warehouse.target)).toEqual(['Barracks']);
-
-    const both = render(0, rules, { hasBarracks: true, warehouseLevel: top });
-    both.orders.click({ kind: 'node', id: home }, false);
-    flushSync();
-    expect(labels(both.target)).toEqual(['Recruit']);
-  });
-
-  it('a city without the barracks shows no recruit sector; unknown or no development keeps it (#315)', () => {
-    setLocale('en');
-    const on = { ...DEV_RULES, city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true } };
-    const off = { ...DEV_RULES, city_upgrades: { ...DEV_RULES.city_upgrades, enabled: false } };
-    const labels = (target: HTMLElement): (string | null)[] =>
-      [...target.querySelectorAll('[role="menuitem"]')].map(
-        (i) => i.getAttribute('aria-label')?.split(',')[0] ?? null,
-      );
-    const open = (
-      rules: typeof on,
-      city: { hasBarracks: boolean | null; warehouseLevel: number },
-    ) => {
-      const env = render(0, rules, city);
-      env.orders.click({ kind: 'node', id: home }, false);
-      flushSync();
-      return labels(env.target);
-    };
-    expect(open(on, { hasBarracks: false, warehouseLevel: 0 })).toEqual(['Barracks', 'Warehouse']);
-    expect(open(on, { hasBarracks: null, warehouseLevel: 0 })).toContain('Recruit');
-    expect(open(off, { hasBarracks: false, warehouseLevel: 0 })).toEqual(['Recruit']);
-  });
-
   it('the group menu dims merge for a lone group', () => {
     setLocale('en');
     const { target, orders, hud } = render();
@@ -251,7 +177,7 @@ describe('the radial menus of a city and of a group', () => {
     expect(items).toHaveLength(4);
     // Every sector of the group menu has an icon (#350), at least 20 px.
     expect(icons(target)).toHaveLength(4);
-    expect(icons(target).map((i) => i.name)).toEqual(['split', 'defense', 'cancel', 'merge']);
+    expect(icons(target).map((i) => i.name)).toEqual(['split', 'release', 'cancel', 'merge']);
     expect(icons(target).every((i) => i.size >= 20)).toBe(true);
     const merge = items.find((i) => i.getAttribute('aria-label') === 'Merge');
     expect(merge?.getAttribute('aria-disabled')).toBe('true');

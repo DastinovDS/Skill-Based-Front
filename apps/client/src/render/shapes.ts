@@ -6,7 +6,6 @@ import {
   helmetBackSpec,
   helmetFrontSpec,
   helmetLevelSpec,
-  shieldSpec,
 } from './bakedShapes.ts';
 import type { Mode, PlayerId } from '../protocol.gen.ts';
 import type { WarehouseBar } from './cityLayout.ts';
@@ -47,13 +46,10 @@ import {
 } from './style.ts';
 
 /** Glyph of a mode, drawn around (0, 0) in a box of about 10 x 10 units. */
-export function drawModeGlyph(g: GraphicsContext, mode: Mode): GraphicsContext {
-  switch (mode) {
-    case 'attack':
-      return g.poly([-5, 4.5, 0, -5.5, 5, 4.5]).fill(GLYPH_COLOR);
-    case 'defense':
-      return g.poly([-4.5, -5, 4.5, -5, 4.5, 1, 0, 5.5, -4.5, 1]).fill(GLYPH_COLOR);
-  }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+export function drawModeGlyph(g: GraphicsContext, _mode: Mode): GraphicsContext {
+  // Every group attacks (#894): one glyph.
+  return g.poly([-5, 4.5, 0, -5.5, 5, 4.5]).fill(GLYPH_COLOR);
 }
 
 /**
@@ -242,7 +238,7 @@ function specKey(spec: TokenSpec): string {
   const counts =
     spec.counts === null ? '-' : `${String(spec.counts.units)}/${String(spec.counts.charged)}`;
   const badges = (spec.badges ?? []).map((b) => `${b.dir}${String(b.count)}`).join(',');
-  return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}|${badges}`;
+  return `${String(spec.owner)}|A|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}|${badges}`;
 }
 
 /** Width of the helmet of a token of size step `side` (a city icon is a little smaller). */
@@ -476,12 +472,7 @@ export class Token {
     // The shield of "Defense" sits at the top left of a token on a road (the top right is kept for
     // the badges of #776). The icon of the units in a city has none: the city's own
     // column carries the one sign (L1, #349, `defenseView.ts`).
-    const defended = spec.modes.includes('defense') && !inside;
-    this.shield.visible = defended;
-    if (defended) {
-      this.shield.set(shieldSpec(color, owner !== this.kit.me));
-      this.shield.position.set(shape.corner.x, shape.corner.y);
-    }
+    this.shield.visible = false; // no «Defense»: removed (#894): stage 2 deletes this
 
     this.drawBadges(spec.badges ?? [], shape.badge);
 

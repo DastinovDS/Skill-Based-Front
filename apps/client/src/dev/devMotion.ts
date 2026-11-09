@@ -69,8 +69,6 @@ export function devMotion(
     mode: 'attack',
     location,
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   };
   return [...cycled, march];
 }

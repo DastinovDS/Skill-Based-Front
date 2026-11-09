@@ -396,7 +396,7 @@ export class MapScene {
       // The Ruled veil over the areas the snapshot hides (#842).
       this.view.setHidden(veilCities(frame.base.view.nodes));
       const edges = frame.base.view.edges;
-      this.view.setRoads(edges);
+      this.view.setRoads(edges.map((e) => ({ ...e, width: 1 }))); // roads have no levels (#894)
       this.levelCells = aheadNodes(frame.base.view, this.me);
       this.cities.update(
         frame.base,

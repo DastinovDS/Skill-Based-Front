@@ -1,15 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { LineView, MapFile, NodeView, PacketView, View } from '../protocol.gen.ts';
-import {
-  edgeIndex,
-  lanePoint,
-  lineFlows,
-  splitLines,
-  supplyFlows,
-  supplyScene,
-} from './supplyLayout.ts';
+import type { MapFile, NodeView, PacketView, View } from '../protocol.gen.ts';
+import { edgeIndex, lanePoint, lineFlows, supplyFlows, supplyScene } from './supplyLayout.ts';
 
 // A chain 0 - 1 - 2 of roads 0 (0-1) and 1 (1-2), plus a road 2 (1-3).
 const map = {
@@ -31,7 +24,6 @@ const packet = (over: Partial<PacketView>): PacketView => ({
   arrive_tick: 40,
   path: [1],
   dest_tick: 40,
-  transfer: false,
   ...over,
 });
 
@@ -39,9 +31,6 @@ const view = (over: Partial<View>): View => ({
   me: {
     cp: 100,
     stance: 'balance',
-    fronts: [null, null],
-    rear_min: 1,
-    auto_lines: null,
     leaf_shift: null,
     leaf_shift_max: null,
     next_dispatch_tick: null,
@@ -55,7 +44,6 @@ const view = (over: Partial<View>): View => ({
   packets: [],
   intents: [],
   fights: [],
-  lines: [],
   ...over,
 });
 
@@ -71,94 +59,6 @@ describe('supply lines (economy v2, DEC-41, item 3)', () => {
       { edge: 2, from: 1, to: 3, charges: 1, transfer: false, line: true },
     ]);
   });
-
-  it('the scene draws the lines, not the packets on them, once there are lines', () => {
-    const lines = [{ id: 1, path: [0, 1] as [number, number, ...number[]] }];
-    const packets = [packet({ path: [1, 2] })];
-    const flows = supplyScene(view({ lines, packets }), 0, index).flows;
-    expect(flows).toEqual([{ edge: 0, from: 0, to: 1, charges: 1, transfer: false, line: true }]);
-  });
-});
-
-describe('focus on the lines (#672)', () => {
-  const line = (id: number, ...path: number[]): LineView => ({ id, path }) as unknown as LineView;
-  // Two factories (DEC-42): 0 feeds 2 and 3 through 1; 1, a hub factory, feeds 3.
-  const a = line(1, 0, 1, 2);
-  const b = line(2, 0, 1, 3);
-  const c = line(3, 1, 3);
-  const lines = [a, b, c];
-  const ids = (list: readonly LineView[]) => list.map((l) => l.id);
-
-  it('nothing selected, nothing lit: every line in front, unmarked', () => {
-    const split = splitLines(lines, { node: null, line: null });
-    expect(ids(split.front)).toEqual([1, 2, 3]);
-    expect(split.back).toEqual([]);
-    expect(split.marked).toBe(false);
-    expect(split.lit).toBeNull();
-  });
-
-  it('a selected factory shows only its lines, marked', () => {
-    const split = splitLines(lines, { node: 0, line: null });
-    expect(ids(split.front)).toEqual([1, 2]);
-    expect(split.back).toEqual([]);
-    expect(split.marked).toBe(true);
-  });
-
-  it('a selected hub factory shows the lines that feed it and the ones that start there', () => {
-    expect(ids(splitLines([line(4, 0, 1), ...lines], { node: 1, line: null }).front)).toEqual([
-      4, 3,
-    ]);
-  });
-
-  it('a node only passed through, or one without lines, filters nothing', () => {
-    // Line 1 passes 1 but neither starts nor ends there; 2 is the target of line 1 only.
-    expect(ids(splitLines([a, b], { node: 1, line: null }).front)).toEqual([1, 2]);
-    const none = splitLines(lines, { node: 9, line: null });
-    expect(ids(none.front)).toEqual([1, 2, 3]);
-    expect(none.marked).toBe(false);
-  });
-
-  it('a lit line goes in front, the other shown lines to the background', () => {
-    const split = splitLines(lines, { node: 0, line: 2 });
-    expect(ids(split.front)).toEqual([2]);
-    expect(ids(split.back)).toEqual([1]);
-    expect(split.marked).toBe(true);
-    expect(split.lit).toBe(b);
-  });
-
-  it('an unknown lit line lights nothing', () => {
-    const split = splitLines(lines, { node: 0, line: 99 });
-    expect(ids(split.front)).toEqual([1, 2]);
-    expect(split.lit).toBeNull();
-  });
-
-  it('the scene draws the background legs first, faint, a shared road once, and names the target of the lit line', () => {
-    const scene = supplyScene(view({ lines }), 0, index, [], { node: 0, line: 2 });
-    // The road 0-1 carries the lit line 2 and the background line 1: one bundle, lit (#674).
-    expect(scene.flows).toEqual([
-      { edge: 1, from: 1, to: 2, charges: 1, transfer: false, line: true, dim: true },
-      { edge: 0, from: 0, to: 1, charges: 2, transfer: false, line: true, lit: 1 },
-      { edge: 2, from: 1, to: 3, charges: 1, transfer: false, line: true },
-    ]);
-    expect(scene.marked).toBe(true);
-    expect(scene.litTarget).toBe(3);
-  });
-
-  it('the lines of one factory on a road are one bundle with their number', () => {
-    const scene = supplyScene(view({ lines }), 0, index, [], { node: 0, line: null });
-    expect(scene.flows).toEqual([
-      { edge: 0, from: 0, to: 1, charges: 2, transfer: false, line: true },
-      { edge: 1, from: 1, to: 2, charges: 1, transfer: false, line: true },
-      { edge: 2, from: 1, to: 3, charges: 1, transfer: false, line: true },
-    ]);
-  });
-
-  it('the scene keeps the old picture without a focus', () => {
-    const scene = supplyScene(view({ lines }), 0, index);
-    expect(scene.flows.some((f) => f.dim === true)).toBe(false);
-    expect(scene.marked).toBe(false);
-    expect(scene.litTarget).toBeNull();
-  });
 });
 
 describe('supply flows (DEC-28, item 8)', () => {
@@ -167,23 +67,6 @@ describe('supply flows (DEC-28, item 8)', () => {
     expect(flows).toEqual([
       { edge: 0, from: 0, to: 1, charges: 2, transfer: false },
       { edge: 1, from: 1, to: 2, charges: 2, transfer: false },
-    ]);
-  });
-
-  it('adds up the packets of one road and direction, apart from transfers', () => {
-    const flows = supplyFlows(
-      view({
-        packets: [
-          packet({ id: 'a', charges: 1 }),
-          packet({ id: 'b', charges: 2 }),
-          packet({ id: 'c', charges: 4, transfer: true }),
-        ],
-      }),
-      index,
-    );
-    expect(flows).toEqual([
-      { edge: 0, from: 0, to: 1, charges: 3, transfer: false },
-      { edge: 0, from: 0, to: 1, charges: 4, transfer: true },
     ]);
   });
 
@@ -281,15 +164,6 @@ describe('what the layer draws (DEC-28, item 8)', () => {
     });
   });
 
-  it('puts the front markers on their cities and skips a marker that is not placed', () => {
-    const me = { ...base.me, fronts: [null, b.id] as [number | null, number | null] };
-    expect(scene({ me }).markers).toEqual([{ marker: 1, node: b.id }]);
-    expect(scene({ me: { ...base.me, fronts: [a.id, b.id] } }).markers).toEqual([
-      { marker: 0, node: a.id },
-      { marker: 1, node: b.id },
-    ]);
-  });
-
   it('shows an own cut-off city with its starvation timer', () => {
     const nodes = base.nodes.map((n) => (n.id === b.id ? { ...n, starve_in: 73 } : n));
     expect(scene({ nodes }).cut).toEqual([{ node: b.id, ticks: 73 }]);
@@ -331,19 +205,6 @@ describe('pipes (#429)', () => {
     supplyScene({ ...base, ...over }, 0, idx, DEFAULT_MAP.edges);
   const owner = (id: number) => base.nodes[id]?.owner;
 
-  it('a pipe for every road whose two ends are own cities, with the level of the view', () => {
-    const edges = base.edges.map((e) => ({ ...e, width: e.id % 3 === 0 ? 3 : 2 }));
-    const { pipes } = scene({ edges });
-    expect(pipes.length).toBeGreaterThan(0);
-    for (const pipe of pipes) {
-      expect(owner(pipe.a)).toBe(0);
-      expect(owner(pipe.b)).toBe(0);
-      expect(pipe.level).toBe(pipe.edge % 3 === 0 ? 3 : 2);
-    }
-    const own = DEFAULT_MAP.edges.filter((e) => owner(e.a) === 0 && owner(e.b) === 0);
-    expect(pipes.map((p) => p.edge).sort()).toEqual(own.map((e) => e.id).sort());
-  });
-
   it('a bulkhead for every road between an own city and a place that is not own, no pipe', () => {
     const { pipes, bulkheads } = scene();
     expect(bulkheads.length).toBeGreaterThan(0);
@@ -351,13 +212,6 @@ describe('pipes (#429)', () => {
       expect([owner(bulkhead.a), owner(bulkhead.b)].filter((o) => o === 0)).toHaveLength(1);
       expect(pipes.map((p) => p.edge)).not.toContain(bulkhead.edge);
     }
-  });
-
-  it('clamps a level the view gives out of 1..3 and keeps every road level for the flows', () => {
-    const edges = base.edges.map((e) => ({ ...e, width: 7 }));
-    const { levels } = scene({ edges });
-    expect(levels.size).toBe(base.edges.length);
-    expect([...levels.values()].every((l) => l === 3)).toBe(true);
   });
 
   it('no pipe and no bulkhead without the ends of the roads', () => {

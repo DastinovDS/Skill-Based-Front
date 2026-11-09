@@ -127,19 +127,11 @@ describe('queueMark: geometry', () => {
 });
 
 describe('buildMark: barracks and warehouse share one indicator', () => {
-  it('has the same plate for both kinds; only the kind differs', () => {
-    const barracks = buildMark('barracks', 0.5);
-    const warehouse = buildMark('warehouse', 0.5);
-    expect(barracks.kind).toBe('barracks');
-    expect(warehouse.kind).toBe('warehouse');
-    expect({ ...barracks, kind: '' }).toEqual({ ...warehouse, kind: '' });
-  });
-
   it('fills the wide cell by the share done, whole pixels', () => {
     const inner = innerWidth(PROGRESS.buildCell.width);
     expect(buildMark('barracks', 0).fill).toBe(0);
     expect(buildMark('barracks', 0.5).fill).toBe(inner / 2);
-    expect(buildMark('warehouse', 1).fill).toBe(inner);
+    expect(buildMark('barracks', 1).fill).toBe(inner);
   });
 
   it('has the wide cell and the badge inside the plate', () => {

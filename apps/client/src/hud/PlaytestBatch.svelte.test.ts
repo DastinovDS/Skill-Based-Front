@@ -6,7 +6,7 @@ import { OrderBook } from '../match/orderBook.ts';
 import { OrderController } from '../match/orderController.ts';
 import type { Command, GroupView, SnapshotMsg } from '../protocol.gen.ts';
 import { HudChrome } from './chrome.svelte.ts';
-import { DEV_RULES, DEV_RULES_FLOW, devSnapshot } from './devFeed.ts';
+import { DEV_RULES_FLOW, devSnapshot } from './devFeed.ts';
 import { HudState } from './hudState.svelte.ts';
 import SplitMenu from './SplitMenu.svelte';
 import TopBar from './TopBar.svelte';
@@ -28,8 +28,6 @@ function group(units: number, charged: number): GroupView {
     mode: 'attack',
     location: { kind: 'node', node: home },
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   };
 }
 
@@ -85,7 +83,7 @@ describe('the playtest batch in the HUD (#762)', () => {
     return target;
   }
 
-  it('shows own factories of the max next to the CP, under economy v2 only', () => {
+  it('shows own factories of the max next to the CP', () => {
     const { hud, orders } = setup(
       snapshot(
         1000,
@@ -97,17 +95,14 @@ describe('the playtest batch in the HUD (#762)', () => {
     const bar = show(TopBar, { data: hud.current, orders, chrome: new HudChrome() });
     const counter = bar.querySelector('.factories');
     expect(counter?.getAttribute('aria-label')).toBe(
-      `Factories: 2 of ${String(RULES.factory?.max)}`,
+      `Factories: 2 of ${String(RULES.factory.max)}`,
     );
     expect(counter?.classList.contains('full')).toBe(false);
     expect(counter?.querySelector('svg')).not.toBeNull();
-    const v1 = setup({ ...devSnapshot(DEFAULT_MAP, DEV_RULES, 30) }, DEV_RULES);
-    const bar1 = show(TopBar, { data: v1.hud.current, orders: v1.orders, chrome: new HudChrome() });
-    expect(bar1.querySelector('.factories')).toBeNull();
   });
 
   it('marks the factory counter at the max with its words and a dashed frame', () => {
-    const max = RULES.factory?.max ?? 3;
+    const max = RULES.factory.max;
     const { hud, orders } = setup(
       snapshot(
         1000,

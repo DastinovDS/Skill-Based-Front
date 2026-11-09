@@ -171,7 +171,7 @@ export class IntentView {
     this.bonusUsed = 0;
     const gathering = new Set<string>();
     for (const intent of intents) {
-      if (intent.kind !== 'planned_move' || intent.target === null) continue;
+      if (intent.target === null) continue;
       const progress =
         this.delays === null
           ? null

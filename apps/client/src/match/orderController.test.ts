@@ -14,7 +14,7 @@ import {
 
 const map = DEFAULT_MAP;
 // Roads are paid with CP (DEC-28, item 7): the ruleset gives the build time only.
-const RULES: RulesetPublic = { ...DEV_RULES, build: { ticks_per_level: 150 } };
+const RULES: RulesetPublic = { ...DEV_RULES };
 const snapshot = devSnapshot(map, RULES, 30);
 const group = snapshot.view.groups[0];
 if (group?.location.kind !== 'node') throw new Error('the dev snapshot has no group in a node');
@@ -79,7 +79,7 @@ describe('OrderController', () => {
     controller.click({ kind: 'node', id: other.id }, true);
     expect(sent).toEqual([
       { type: 'move', group: group.id, dest: enemy.id, planned: false, bonus: 0 },
-      { type: 'move', group: group.id, dest: other.id, planned: true, bonus: 0 },
+      { type: 'move', group: group.id, dest: other.id, planned: true, bonus: 1 },
     ]);
     // Shown at once as a ghost, the last order replacing the first.
     expect(book.ghosts().map((g) => [g.from, g.dest, g.planned])).toEqual([[home, other.id, true]]);
@@ -233,17 +233,12 @@ describe('OrderController', () => {
   it('sends the other commands as intents', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
-    controller.setMode('defense');
     controller.split(1);
-    controller.upgradeRoad(3);
     controller.recruit();
     controller.setStance('economy');
     controller.forfeit();
     expect(sent).toEqual([
-      { type: 'set_mode', group: group.id, mode: 'defense' },
       { type: 'split', group: group.id, n: 1 },
-      // A road for CP, no city in the command (DEC-28, item 7).
-      { type: 'upgrade_road', edge: 3 },
       { type: 'recruit', node: home },
       { type: 'set_stance', stance: 'economy' },
       { type: 'forfeit' },
@@ -285,7 +280,7 @@ describe('OrderController', () => {
     expect(controller.overlay().eta).toEqual({
       from: home,
       node: enemy.id,
-      ticks: 25 + DEV_RULES.orders.planned_delay_ticks,
+      ticks: 25, // a plan gathers its bonus, no fixed delay (#894)
       path: [home, other.id, enemy.id],
     });
     controller.key({ type: 'keyup', code: 'ShiftLeft', shiftKey: false });
@@ -538,243 +533,6 @@ describe('OrderController', () => {
     expect(controller.mergeCandidates()).toEqual([]);
   });
 
-  it('keys 1 and 2 set the mode, R recruits, 3 does nothing (no "build" mode since DEC-16)', () => {
-    const { controller, sent } = setup();
-    controller.click({ kind: 'group', id: group.id }, false);
-    for (const code of ['Digit1', 'Digit2', 'KeyR']) {
-      expect(controller.key({ type: 'keydown', code, shiftKey: false })).toBe(true);
-    }
-    expect(controller.key({ type: 'keydown', code: 'Digit3', shiftKey: false })).toBe(false);
-    expect(sent).toEqual([
-      { type: 'set_mode', group: group.id, mode: 'attack' },
-      { type: 'set_mode', group: group.id, mode: 'defense' },
-      { type: 'recruit', node: home },
-    ]);
-  });
-
-  describe('the road mode on U: a click on an own road raises it for CP (DEC-28, item 7; #315)', () => {
-    // Roads of the home city, and one road elsewhere; two of the home roads can be upgraded.
-    const homeRoads = map.edges.filter((e) => e.a === home || e.b === home).map((e) => e.id);
-    const away = map.edges.find((e) => e.a !== home && e.b !== home)?.id;
-    const [up1, up2] = homeRoads;
-    if (up1 === undefined || up2 === undefined || away === undefined) {
-      throw new Error('the map lacks roads around the home city');
-    }
-    // What a level gives (DEC-28, item 7): packet and unit speed, one more charge per period.
-    const gain = { speed_pct: 50, unit_speed_pct: 15, amount: 1 };
-    const build = { kind: 'road', width: 2, done_tick: 180 } as const;
-
-    /** `up1`, `up2` carry the upgrade hint of the server (own internal, below the top level). */
-    function withRoads(base: SnapshotMsg, building: readonly number[] = []) {
-      return {
-        ...base,
-        view: {
-          ...base.view,
-          edges: base.view.edges.map((e) =>
-            e.id === up1 || e.id === up2
-              ? { ...e, upgrade_gain: gain, build: building.includes(e.id) ? build : null }
-              : { ...e, upgrade_gain: null },
-          ),
-        },
-      };
-    }
-
-    /** The road mode is on unless `mode` is false. */
-    function roadSetup(building: readonly number[] = [], mode = true) {
-      const env = setup();
-      env.hud.onSnapshot(withRoads(snapshot, building));
-      if (mode) env.controller.key(down('KeyU'));
-      return env;
-    }
-
-    it('U turns the mode on and off; Esc leaves it before anything is deselected', () => {
-      const { controller, hud } = roadSetup([], false);
-      expect(controller.roadMode).toBe(false);
-      expect(controller.key(down('KeyU'))).toBe(true);
-      expect(controller.roadMode).toBe(true);
-      // A held key does not flicker it.
-      controller.key(down('KeyU', true));
-      expect(controller.roadMode).toBe(true);
-      controller.key(down('KeyU'));
-      expect(controller.roadMode).toBe(false);
-      controller.click({ kind: 'group', id: group.id }, false);
-      controller.key(down('KeyU'));
-      expect(controller.isIdle()).toBe(false);
-      controller.key(down('Escape'));
-      expect(controller.roadMode).toBe(false);
-      expect(hud.selection).toEqual({ kind: 'group', id: group.id });
-      controller.key(down('Escape'));
-      expect(hud.selection).toBeNull();
-    });
-
-    it('works on the ordinary map and in the «Supply» mode alike, and Tab keeps the mode', () => {
-      const { controller, sent } = roadSetup();
-      controller.click({ kind: 'edge', id: up1, cell: home }, false);
-      controller.key(down('Tab'));
-      expect(controller.roadMode).toBe(true);
-      controller.click({ kind: 'edge', id: up2, cell: home }, false);
-      expect(sent).toEqual([
-        { type: 'upgrade_road', edge: up1 },
-        { type: 'upgrade_road', edge: up2 },
-      ]);
-      expect(controller.supplyMenu.current.open).toBe(false);
-    });
-
-    it('without the mode a click on a road upgrades nothing: it is the area of its city', () => {
-      const { controller, sent, hud } = roadSetup([], false);
-      controller.click({ kind: 'edge', id: up2, cell: home }, false);
-      expect(sent).toEqual([]);
-      expect(hud.selection).toEqual({ kind: 'node', id: home });
-      controller.hover({ kind: 'edge', id: up2 });
-      expect(controller.ui.current.roadHover).toBeNull();
-      expect(controller.overlay().candidates).toEqual([]);
-      // Left again, the mode no longer upgrades either.
-      controller.key(down('KeyU'));
-      controller.key(down('KeyU'));
-      controller.click({ kind: 'edge', id: up2, cell: home }, false);
-      expect(sent).toEqual([]);
-    });
-
-    it('sends upgrade_road(edge) at once, with no city and no type, and stays in the mode', () => {
-      const { controller, sent, hud } = roadSetup();
-      controller.click({ kind: 'edge', id: up2 }, false);
-      expect(sent).toEqual([{ type: 'upgrade_road', edge: up2 }]);
-      // Nothing was selected by it, the mode goes on.
-      expect(hud.selection).toBeNull();
-      expect(controller.roadMode).toBe(true);
-      // Any own road the server offers is raised, not only the roads of one city.
-      controller.click({ kind: 'edge', id: up1, cell: home }, false);
-      expect(sent.at(-1)).toEqual({ type: 'upgrade_road', edge: up1 });
-    });
-
-    it('a road without the hint of the server (foreign, buffer, top level) sends nothing', () => {
-      const { controller, sent, hud } = roadSetup();
-      controller.click({ kind: 'edge', id: away, cell: other.id }, false);
-      expect(sent).toEqual([]);
-      // It is a click on the area of its city.
-      expect(hud.selection).toEqual({ kind: 'node', id: other.id });
-    });
-
-    it('a road with a build going is not raised again: the click is the area of its city', () => {
-      const { controller, sent } = roadSetup([up1]);
-      controller.click({ kind: 'edge', id: up1, cell: home }, false);
-      expect(sent).toEqual([]);
-      expect(controller.ui.current.roadHover).toBeNull();
-    });
-
-    it('every road a click would raise is lit in the mode, and none out of it', () => {
-      const { controller, hud } = roadSetup();
-      expect(controller.overlay().candidates).toEqual([up1, up2].sort((x, y) => x - y));
-      // The server stops offering one (a build started): it goes out.
-      hud.onSnapshot(withRoads(snapshot, [up1]));
-      expect(controller.overlay().candidates).toEqual([up2]);
-      controller.key(down('KeyU'));
-      expect(controller.overlay().candidates).toEqual([]);
-    });
-
-    it('the road under the pointer is described, only while a click would raise it', () => {
-      const { controller } = roadSetup();
-      controller.hover({ kind: 'edge', id: up2 });
-      expect(controller.ui.current.roadHover).toBe(up2);
-      controller.hover({ kind: 'edge', id: away });
-      expect(controller.ui.current.roadHover).toBeNull();
-      controller.hover({ kind: 'edge', id: up1 });
-      controller.hover(null);
-      expect(controller.ui.current.roadHover).toBeNull();
-    });
-
-    it('the description goes out when the server stops offering the road', () => {
-      const { controller, hud } = roadSetup();
-      controller.hover({ kind: 'edge', id: up1 });
-      controller.overlay();
-      expect(controller.ui.current.roadHover).toBe(up1);
-      hud.onSnapshot(withRoads(snapshot, [up1]));
-      controller.overlay();
-      expect(controller.ui.current.roadHover).toBeNull();
-    });
-
-    it('with a group selected the road has the click in the mode, and the order out of it', () => {
-      const { controller, sent } = roadSetup([], false);
-      controller.click({ kind: 'group', id: group.id }, false);
-      controller.key(down('KeyU'));
-      controller.click({ kind: 'edge', id: up2, cell: other.id }, false);
-      expect(sent).toEqual([{ type: 'upgrade_road', edge: up2 }]);
-      controller.key(down('KeyU'));
-      controller.click({ kind: 'edge', id: up2, cell: other.id }, false);
-      expect(sent).toEqual([
-        { type: 'upgrade_road', edge: up2 },
-        { type: 'move', group: group.id, dest: other.id, planned: false, bonus: 0 },
-      ]);
-    });
-
-    it('turning the mode on ends a transfer pick and closes the menus; the city stays selected', () => {
-      const { controller, hud } = roadSetup([], false);
-      controller.click({ kind: 'node', id: home }, false);
-      expect(controller.cityMenu.current.open).toBe(true);
-      controller.key(down('KeyU'));
-      expect(controller.cityMenu.current.open).toBe(false);
-      expect(hud.selection).toEqual({ kind: 'node', id: home });
-      controller.ui.patch({ transferFrom: home });
-      controller.key(down('KeyU'));
-      controller.key(down('KeyU'));
-      expect(controller.ui.current.transferFrom).toBeNull();
-    });
-
-    it('a transfer pick keeps the click while it lasts', () => {
-      const { controller, sent } = roadSetup();
-      controller.ui.patch({ transferFrom: home });
-      controller.click({ kind: 'edge', id: up2, cell: home }, false);
-      expect(sent).toEqual([]);
-    });
-
-    it('sends nothing without a match to send to', () => {
-      const env = setup(false);
-      env.hud.onSnapshot(withRoads(snapshot));
-      env.controller.key(down('KeyU'));
-      env.controller.hover({ kind: 'edge', id: up2 });
-      env.controller.click({ kind: 'edge', id: up2 }, false);
-      expect(env.controller.ui.current.roadHover).toBeNull();
-      expect(env.controller.overlay().candidates).toEqual([]);
-      expect(env.sent).toEqual([]);
-    });
-
-    it("the price and the build time are the ruleset numbers, not the controller's", () => {
-      const { controller } = roadSetup();
-      expect(controller.roadCost).toBe(RULES.cost.build);
-      expect(controller.roadBuildTicks).toBe(RULES.build.ticks_per_level);
-      const rules: RulesetPublic = {
-        ...RULES,
-        cost: { ...RULES.cost, build: 70 },
-        build: { ticks_per_level: 90 },
-      };
-      const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules, map });
-      const priced = new OrderController({
-        hud,
-        map,
-        rules,
-        book: new OrderBook(),
-        send: null,
-        now: () => 0,
-        alerts: hud.alerts,
-        focusNode: () => undefined,
-        queryReach: () => undefined,
-      });
-      expect(priced.roadCost).toBe(70);
-      expect(priced.roadBuildTicks).toBe(90);
-    });
-
-    it('a refusal of the server is shown as for any command', () => {
-      const { controller, book } = roadSetup();
-      controller.click({ kind: 'edge', id: up2 }, false);
-      book.onAck(ack(1, 'NOT_ENOUGH_CP'));
-      expect(controller.ui.current.notice).toMatchObject({
-        kind: 'rejected',
-        code: 'NOT_ENOUGH_CP',
-        cmd: { type: 'upgrade_road', edge: up2 },
-      });
-    });
-  });
-
   describe('the stance menu on Q', () => {
     const current = snapshot.view.me.stance;
     const target = current === 'war' ? 'economy' : 'war';
@@ -801,7 +559,7 @@ describe('OrderController', () => {
       expect(sent).toEqual([]);
     });
 
-    it('stays open after a tap and chooses by 1 / 2 / 3, not as modes', () => {
+    it('stays open after a tap and chooses by 1 / 2 / 3', () => {
       const { controller, sent, clock } = setup();
       controller.key(down('KeyQ'));
       clock.now = RADIAL.tapMs - 1;
@@ -810,10 +568,6 @@ describe('OrderController', () => {
       controller.key(down('Digit3'));
       expect(controller.radial.current.open).toBe(false);
       expect(sent).toEqual(current === 'war' ? [] : [{ type: 'set_stance', stance: 'war' }]);
-      // Closed again: 1 is the mode of the selected group.
-      controller.click({ kind: 'group', id: group.id }, false);
-      controller.key(down('Digit1'));
-      expect(sent.at(-1)).toMatchObject({ type: 'set_mode' });
     });
 
     it('closes on Esc or on a second Q, and does not resend the current stance', () => {
@@ -844,9 +598,9 @@ describe('OrderController', () => {
     it('serves the numbers of the ruleset of welcome', () => {
       const { controller } = setup();
       expect(controller.stanceRates.map((r) => [r.cpPerMinCenti / 100, r.chargesPerMin])).toEqual([
-        [3, 18],
-        [6, 12],
-        [9, 6],
+        [3, 6],
+        [6, 3],
+        [7.5, 1.5],
       ]);
     });
   });
@@ -932,16 +686,6 @@ describe('OrderController', () => {
       expect(controller.overlay().supply).toBeNull();
     });
 
-    it('a click on an own city opens its menu; a key with no sector chooses nothing', () => {
-      const { controller, sent } = setup();
-      controller.key(down('Tab'));
-      controller.click({ kind: 'node', id: city }, false);
-      expect(controller.supplyMenu.current).toMatchObject({ open: true, node: city });
-      controller.key(down('Digit4')); // no such sector: nothing is chosen, nothing is sent
-      expect(controller.supplyMenu.current.open).toBe(true);
-      expect(sent).toEqual([]);
-    });
-
     it('Esc closes the menu; an enemy node opens nothing', () => {
       const { controller, sent } = setup();
       controller.key(down('Tab'));
@@ -951,71 +695,6 @@ describe('OrderController', () => {
       controller.click({ kind: 'node', id: enemy.id }, false);
       expect(controller.supplyMenu.current.open).toBe(false);
       expect(sent).toEqual([]);
-    });
-
-    it('transfer: pick the source in the menu, click the destination, choose the amount', () => {
-      const { controller, sent } = setup();
-      controller.key(down('Tab'));
-      controller.click({ kind: 'node', id: city }, false);
-      controller.key(down('Digit3'));
-      expect(controller.ui.current.transferFrom).toBe(city);
-      const overlay = controller.overlay().supply;
-      expect(overlay?.source).toBe(city);
-      expect(overlay?.targets).toContain(target);
-      expect(overlay?.targets).not.toContain(city);
-      controller.click({ kind: 'node', id: target }, false);
-      expect(controller.ui.current.transferFrom).toBeNull();
-      const stock = snapshot.view.nodes[city]?.warehouse ?? 0;
-      const there = snapshot.view.nodes[target];
-      const room = (there?.warehouse_cap ?? 0) - (there?.warehouse ?? 0);
-      expect(controller.transfer.current).toMatchObject({
-        open: true,
-        from: city,
-        to: target,
-        max: Math.min(stock, room),
-      });
-      controller.setTransferAmount(1);
-      controller.confirmTransfer();
-      expect(controller.transfer.current.open).toBe(false);
-      expect(sent).toEqual(
-        stock > 0 ? [{ type: 'transfer', from_node: city, to_node: target, n: 1 }] : [],
-      );
-    });
-
-    it('the slider offers no more than the free room of the target warehouse', () => {
-      const { hud, controller } = setup();
-      const cap = snapshot.view.nodes.find((n) => n.id === target)?.warehouse_cap ?? 0;
-      const stock = snapshot.view.nodes.find((n) => n.id === city)?.warehouse ?? 0;
-      // The target holds all but 2 of its capacity (the source has more than 2 to give).
-      const filled = (held: number): SnapshotMsg => ({
-        ...snapshot,
-        view: {
-          ...snapshot.view,
-          nodes: snapshot.view.nodes.map((n) =>
-            n.id === target
-              ? { ...n, warehouse: held }
-              : n.id === city
-                ? { ...n, warehouse: 9 }
-                : n,
-          ),
-        },
-      });
-      expect(stock).toBeGreaterThanOrEqual(0);
-      hud.onSnapshot(filled(cap - 2));
-      controller.key(down('Tab'));
-      controller.click({ kind: 'node', id: city }, false);
-      controller.chooseSupply();
-      controller.click({ kind: 'node', id: target }, false);
-      expect(controller.transfer.current).toMatchObject({ open: true, max: 2, full: false });
-      // No room at all: nothing to send, the dialog says why.
-      controller.closeTransfer();
-      hud.onSnapshot(filled(cap));
-      controller.click({ kind: 'node', id: city }, false);
-      controller.chooseSupply();
-      controller.click({ kind: 'node', id: target }, false);
-      expect(controller.transfer.current).toMatchObject({ open: true, max: 0, full: true });
-      controller.confirmTransfer();
-      expect(controller.transfer.current.open).toBe(false);
     });
 
     it('the amount stays within 1..warehouse', () => {
@@ -1040,196 +719,6 @@ describe('OrderController', () => {
       expect(controller.ui.current.transferFrom).toBeNull();
       expect(controller.transfer.current.open).toBe(false);
       expect(sent).toEqual([]);
-    });
-
-    describe('front markers and the rear minimum (DEC-28, items 2 and 3)', () => {
-      const withFronts = (fronts: [number | null, number | null], rearMin = 1): SnapshotMsg => ({
-        ...snapshot,
-        view: { ...snapshot.view, me: { ...snapshot.view.me, fronts, rear_min: rearMin } },
-      });
-
-      it('key 1 of the menu puts marker 1 on the city, key 2 marker 2, and the menu closes', () => {
-        const { controller, sent } = setup();
-        controller.key(down('Tab'));
-        controller.click({ kind: 'node', id: city }, false);
-        controller.key(down('Digit1'));
-        expect(controller.supplyMenu.current.open).toBe(false);
-        controller.click({ kind: 'node', id: city }, false);
-        controller.key(down('Digit2'));
-        expect(sent).toEqual([
-          { type: 'set_front', marker: 0, node: city },
-          { type: 'set_front', marker: 1, node: city },
-        ]);
-      });
-
-      it('a click on a sector sends the same command as its key', () => {
-        const { controller, sent } = setup();
-        controller.key(down('Tab'));
-        controller.click({ kind: 'node', id: city }, false);
-        controller.chooseSupply('front1');
-        expect(sent).toEqual([{ type: 'set_front', marker: 1, node: city }]);
-      });
-
-      it('a marker standing elsewhere is moved to the city (free, no confirmation)', () => {
-        const { controller, hud, sent } = setup();
-        hud.onSnapshot(withFronts([target, null]));
-        controller.key(down('Tab'));
-        controller.click({ kind: 'node', id: city }, false);
-        controller.chooseSupply('front0');
-        expect(sent).toEqual([{ type: 'set_front', marker: 0, node: city }]);
-      });
-
-      it('the marker that stands on the city is taken off (node = null)', () => {
-        const { controller, hud, sent } = setup();
-        hud.onSnapshot(withFronts([city, null]));
-        controller.key(down('Tab'));
-        controller.click({ kind: 'node', id: city }, false);
-        expect(controller.supplyMenu.current.fronts).toEqual([city, null]);
-        controller.chooseSupply('front0');
-        expect(sent).toEqual([{ type: 'set_front', marker: 0, node: null }]);
-      });
-
-      it('a city that holds the other marker takes none: nothing is sent', () => {
-        const { controller, hud, sent } = setup();
-        hud.onSnapshot(withFronts([null, city]));
-        controller.key(down('Tab'));
-        controller.click({ kind: 'node', id: city }, false);
-        controller.key(down('Digit1'));
-        expect(sent).toEqual([]);
-      });
-
-      it('has as many markers as the ruleset says, and no key for a missing one', () => {
-        const rules: RulesetPublic = { ...RULES, supply: { ...RULES.supply, front_markers: 1 } };
-        const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules, map });
-        hud.onSnapshot(snapshot);
-        const sent: Command[] = [];
-        const controller = new OrderController({
-          hud,
-          map,
-          rules,
-          book: new OrderBook(),
-          send: (cmd) => sent.push(cmd),
-          now: () => 0,
-          alerts: hud.alerts,
-          focusNode: () => undefined,
-          queryReach: () => undefined,
-        });
-        expect(setup().controller.frontMarkers).toBe(RULES.supply.front_markers);
-        expect(controller.frontMarkers).toBe(1);
-        controller.key(down('Tab'));
-        controller.click({ kind: 'node', id: city }, false);
-        controller.key(down('Digit2'));
-        expect(controller.supplyMenu.current.open).toBe(true);
-        expect(sent).toEqual([]);
-        controller.toggleFront(1, city);
-        expect(sent).toEqual([]);
-        controller.key(down('Digit1'));
-        expect(sent).toEqual([{ type: 'set_front', marker: 0, node: city }]);
-      });
-
-      it('the price of a marker is the ruleset one', () => {
-        expect(setup().controller.frontCost).toBe(RULES.cost.front);
-      });
-
-      it('a refusal of the server is shown as for any command', () => {
-        const { controller, book } = setup();
-        controller.key(down('Tab'));
-        controller.click({ kind: 'node', id: city }, false);
-        controller.key(down('Digit1'));
-        book.onAck(ack(1, 'NOT_OWNER'));
-        expect(controller.ui.current.notice).toMatchObject({
-          kind: 'rejected',
-          code: 'NOT_OWNER',
-          cmd: { type: 'set_front' },
-        });
-      });
-
-      it('the rear minimum slider sends set_rear_min, within 0..rear_min_max, and only on a change', () => {
-        const { controller, hud, sent } = setup();
-        hud.onSnapshot(withFronts([null, null], 1));
-        expect(controller.rearMin).toBe(1);
-        expect(controller.rearMinMax).toBe(RULES.supply.rear_min_max);
-        controller.setRearMin(1);
-        expect(sent).toEqual([]);
-        controller.setRearMin(3);
-        controller.setRearMin(99);
-        controller.setRearMin(-4);
-        controller.setRearMin(Number.NaN);
-        expect(sent).toEqual([
-          { type: 'set_rear_min', n: 3 },
-          { type: 'set_rear_min', n: RULES.supply.rear_min_max },
-          { type: 'set_rear_min', n: 0 },
-        ]);
-      });
-
-      it('[ and ] lower and raise the rear minimum by one on the supply layer only', () => {
-        const { controller, hud, sent } = setup();
-        hud.onSnapshot(withFronts([null, null], 2));
-        // Off the layer the keys are not the supply's.
-        expect(controller.key(down('BracketRight'))).toBe(false);
-        expect(sent).toEqual([]);
-        controller.key(down('Tab'));
-        expect(controller.key(down('BracketRight'))).toBe(true);
-        expect(sent).toEqual([{ type: 'set_rear_min', n: 3 }]);
-        // The snapshot confirms it; the next press goes on from there.
-        hud.onSnapshot(withFronts([null, null], 3));
-        controller.key(down('BracketLeft'));
-        expect(sent.at(-1)).toEqual({ type: 'set_rear_min', n: 2 });
-        // A held key is one step, as for the other keys.
-        controller.key(down('BracketLeft', true));
-        expect(sent).toHaveLength(2);
-      });
-
-      it('two quick presses before the snapshot are two steps, not one sent twice', () => {
-        const { controller, hud, sent } = setup();
-        hud.onSnapshot(withFronts([null, null], 1));
-        controller.key(down('Tab'));
-        controller.key(down('BracketRight'));
-        controller.key(down('BracketRight'));
-        expect(sent).toEqual([
-          { type: 'set_rear_min', n: 2 },
-          { type: 'set_rear_min', n: 3 },
-        ]);
-      });
-
-      it('stops at the ends: never below 0 and never above rear_min_max, nothing sent there', () => {
-        const { controller, hud, sent } = setup();
-        hud.onSnapshot(withFronts([null, null], 0));
-        controller.key(down('Tab'));
-        controller.key(down('BracketLeft'));
-        expect(sent).toEqual([]);
-        hud.onSnapshot(withFronts([null, null], RULES.supply.rear_min_max));
-        controller.key(down('BracketRight'));
-        expect(sent).toEqual([]);
-      });
-
-      it('does nothing while the transfer dialog is open (its own keys)', () => {
-        const { controller, hud, sent } = setup();
-        hud.onSnapshot(withFronts([null, null], 1));
-        controller.key(down('Tab'));
-        controller.transfer.open(city, target, 2);
-        controller.key(down('BracketRight'));
-        expect(sent).toEqual([]);
-      });
-    });
-
-    it('reports the arrival tick of an accepted transfer from the ack', () => {
-      const { controller, book } = setup();
-      const seen: (number | null | undefined)[] = [];
-      controller.ui.onFeedback((f) => {
-        if (f.kind === 'accepted') seen.push(f.arriveTick);
-      });
-      controller.transfer.open(city, target, 3);
-      controller.confirmTransfer();
-      book.onAck({
-        type: 'ack',
-        seq: 1,
-        applied_tick: 31,
-        path: [city, target],
-        arrive_tick: 91,
-        reject_code: null,
-      });
-      expect(seen).toEqual([91]);
     });
   });
 });
@@ -1269,15 +758,6 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
     b.controller.closeCityMenu();
     expect(b.controller.cityMenu.current.open).toBe(false);
     expect(b.hud.selection).toBeNull();
-    // The barracks and the warehouse close the menu with the city; recruiting does not (#450).
-    for (const choice of ['barracks', 'warehouse'] as const) {
-      const c = setup();
-      c.controller.click({ kind: 'node', id: home }, false);
-      c.controller.chooseCity(choice);
-      expect(c.sent).toHaveLength(1);
-      expect(c.controller.cityMenu.current.open).toBe(false);
-      expect(c.hud.selection).toBeNull();
-    }
   });
 
   it('recruiting keeps the menu open and the city selected, so the next one needs no new click (#450)', () => {
@@ -1379,18 +859,9 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
     expect(controller.groupMenu.current.open).toBe(false);
     controller.click({ kind: 'group', id: group.id }, false); // cancelling let the group go
     controller.click({ kind: 'group', id: group.id }, false);
-    controller.chooseGroup('defense');
-    expect(sent.at(-1)).toEqual({ type: 'set_mode', group: group.id, mode: 'defense' });
     controller.chooseGroup('split');
     expect(controller.splitMenu.current.open).toBe(true);
     expect(controller.groupMenu.current.open).toBe(false);
-  });
-
-  it('D toggles the defense of the selected group', () => {
-    const { controller, sent } = setup();
-    controller.click({ kind: 'group', id: group.id }, false);
-    expect(controller.key(key('KeyD'))).toBe(true);
-    expect(sent).toEqual([{ type: 'set_mode', group: group.id, mode: 'defense' }]);
   });
 
   it('Esc deselects and closes the menus; the menu goes when the selection moves on', () => {

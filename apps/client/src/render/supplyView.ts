@@ -825,7 +825,7 @@ export class SupplyView {
       const from = fromIsA ? ends.a : ends.b;
       const to = fromIsA ? ends.b : ends.a;
       const at = lanePoint(from, to, Math.min(1, Math.max(0, progress / EDGE_PROGRESS)), 0);
-      if (this.canals.length > 0 && !packet.transfer) {
+      if (this.canals.length > 0) {
         // The Canal (#858): a square of the own colour on a dark casing, an ink outline, turned along the road.
         const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
         const dir = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
@@ -835,16 +835,10 @@ export class SupplyView {
         g.poly(turnedSquare(at, dir, outline)).stroke({ width: ink, color: INK, join: 'miter' });
         continue;
       }
-      if (packet.transfer) {
-        const side = SUPPLY_PACKET.transferSide;
-        g.roundRect(at.x - side / 2, at.y - side / 2, side, side, 2)
-          .fill(PAPER)
-          .stroke({ width: 1.5, color: BG });
-      } else {
-        g.circle(at.x, at.y, SUPPLY_PACKET.radius + SUPPLY_PACKET.perCharge * packet.charges)
-          .fill(PAPER)
-          .stroke({ width: SUPPLY_PACKET.outline, color: BG });
-      }
+      // No transfers (#894): every packet is the circle of the automatic dispatch.
+      g.circle(at.x, at.y, SUPPLY_PACKET.radius + SUPPLY_PACKET.perCharge * packet.charges)
+        .fill(PAPER)
+        .stroke({ width: SUPPLY_PACKET.outline, color: BG });
     }
   }
 }

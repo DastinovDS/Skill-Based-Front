@@ -944,7 +944,7 @@ function drawKindGlyph(g: Graphics, kind: BuildMark['kind'], cx: number, cy: num
     drawSiteGlyph(g, kind, cx, cy + 0.2, s / 5.2);
     return;
   }
-  if (kind === 'warehouse') {
+  if ((kind as string) === 'warehouse') {
     for (const [x, y] of [
       [-0.9, -0.1],
       [0.05, -0.1],

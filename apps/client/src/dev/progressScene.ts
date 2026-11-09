@@ -29,17 +29,17 @@ const UNIT = DEV_RULES.recruit.unit_ticks;
 const MARKS: Readonly<Record<number, Marks>> = {
   // The capital: two queued, the first at half (a third slot is free: select the city); the warehouse is
   // being raised.
-  0: { queue: 2, progress: UNIT / 2, build: { kind: 'warehouse', left: 40 }, barracks: true },
+  0: { queue: 2, progress: UNIT / 2, build: { kind: 'barracks', left: 40 }, barracks: true },
   // Ready with no room, and a warehouse just started.
   3: {
     queue: 2,
     waiting: true,
     progress: UNIT,
-    build: { kind: 'warehouse', left: 90 },
+    build: { kind: 'barracks', left: 90 },
     barracks: true,
   },
   // Under attack: the production stands (DEC-25, item 9), the warehouse is nearly done.
-  4: { queue: 2, progress: 10, build: { kind: 'warehouse', left: 12 }, barracks: true },
+  4: { queue: 2, progress: 10, build: { kind: 'barracks', left: 12 }, barracks: true },
   // One unit queued, not started.
   6: { queue: 1, progress: 0, barracks: true },
   // Three queued, the first about to come out.
@@ -47,7 +47,7 @@ const MARKS: Readonly<Record<number, Marks>> = {
   // Just a barracks, half way.
   1: { build: { kind: 'barracks', left: 50 } },
   // A warehouse just started.
-  2: { build: { kind: 'warehouse', left: 100 } },
+  2: { build: { kind: 'barracks', left: 100 } }, // no warehouse levels: removed (#894): stage 2 deletes this
 };
 
 export function progressSnapshot(map: MapFile): SnapshotMsg {

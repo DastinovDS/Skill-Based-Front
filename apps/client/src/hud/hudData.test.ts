@@ -31,7 +31,8 @@ describe('buildHudData: the numbers of the snapshot', () => {
     expect(data.cp).toEqual({
       value: 500,
       cap: DEV_RULES.cp.cap,
-      regenPerSecond: (DEV_RULES.cp.per_period * DEV_RULES.tick_hz) / DEV_RULES.cp.period_ticks,
+      regenPerSecond:
+        (DEV_RULES.cp.per_period * DEV_RULES.tick_hz) / DEV_RULES.stances.cp_period_ticks.war,
     });
     expect(data.stance).toBe('war');
     expect(data.vp).toEqual({ mine: 4, enemy: 6 });
@@ -80,7 +81,7 @@ describe('buildHudData: selection', () => {
       owner: 'enemy',
       capacity: 4, // DEC-22: public and exact, also in fog
       warehouse: null,
-      enemy: { modes: ['defense'], units: null, seenTick: 90, stale: true },
+      enemy: { modes: ['attack'], units: null, seenTick: 90, stale: true },
     });
   });
 
@@ -91,51 +92,12 @@ describe('buildHudData: selection', () => {
   });
 });
 
-describe('buildHudData: road upgrades for CP (DEC-28, item 7)', () => {
-  const gain = { speed_pct: 50, unit_speed_pct: 15, amount: 1 };
-  const snapshot: SnapshotMsg = {
-    ...fog,
-    view: {
-      ...fog.view,
-      edges: fog.view.edges.map((e) => (e.id === 0 ? { ...e, width: 2, upgrade_gain: gain } : e)),
-    },
-  };
-  const edge0 = map.edges[0];
-  if (edge0 === undefined) throw new Error('the map has no edge 0');
-
-  it('passes what the next level of a road gives, from the server', () => {
-    const data = buildHudData(ctx, snapshot, null, []);
-    expect(data.roads[0]).toEqual({
-      id: 0,
-      a: edge0.a,
-      b: edge0.b,
-      width: 2,
-      gain,
-      building: false,
-      fortNodes: [],
-    });
-    // No upgrade hint from the server: nothing to raise.
-    expect(data.roads[1]).toMatchObject({ gain: null });
-  });
-});
-
 describe('buildHudData: Defense and plan bonuses of own groups (DEC-30, DEC-29)', () => {
   const [own] = fog.view.groups;
   if (own === undefined) throw new Error('the fixture has a group');
   const withGroup = (patch: Partial<typeof own>): SnapshotMsg => ({
     ...fog,
     view: { ...fog.view, groups: [{ ...own, ...patch }] },
-  });
-
-  it('passes the gathered bonus and its cap of a group in Defense, as the server sent them', () => {
-    const snapshot = withGroup({ mode: 'defense', defense_bonus: 2, defense_cap: 3 });
-    const data = buildHudData(ctx, snapshot, { kind: 'group', id: own.id }, []);
-    expect(data.group?.defense).toEqual({ bonus: 2, cap: 3 });
-    // The same for the tip of the pointer.
-    expect(buildHudData(ctx, snapshot, null, [], own.id).hovered?.defense).toEqual({
-      bonus: 2,
-      cap: 3,
-    });
   });
 
   it('has no bonus for a group that is not in Defense', () => {
@@ -158,12 +120,5 @@ describe('buildHudData: Defense and plan bonuses of own groups (DEC-30, DEC-29)'
     expect(info({ order: order(true, 2) })?.plannedBonus).toBe(2);
     expect(info({ order: order(false, 0) })?.plannedBonus).toBe(0);
     expect(info({ order: null })?.plannedBonus).toBe(0);
-  });
-
-  it('gives the opponent in Defense as a mode only: no bonus number anywhere in what is known of it', () => {
-    const data = buildHudData(ctx, fog, { kind: 'node', id: 2 }, []);
-    expect(data.node?.enemy?.modes).toEqual(['defense']);
-    const keys = Object.keys(data.node?.enemy ?? {});
-    expect(keys.filter((key) => /defense|bonus|cap/i.test(key))).toEqual([]);
   });
 });

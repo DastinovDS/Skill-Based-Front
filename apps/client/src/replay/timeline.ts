@@ -19,7 +19,6 @@ import type {
   IntentView,
   Location,
   MapFile,
-  EdgeBuild,
   EdgeView,
   EnemyGroup,
   FightView,
@@ -79,13 +78,14 @@ function groupView(g: FrameGroup): GroupView {
             next_charge_tick: null,
           },
     // Replay frames carry no gathered Defense bonus (DEC-30); the viewer shows the mode only.
-    defense_bonus: null,
-    defense_cap: null,
   };
 }
 
 /** Intent kinds the viewer draws; older files may have others (the group build, before DEC-16). */
-const INTENT_KINDS: ReadonlySet<string> = new Set<IntentKind>(['planned_move', 'defense']);
+/** A road build of an older file (`e`, `b`): there are no road builds since #894. */
+type EdgeBuild = { readonly done_tick: number | null };
+
+const INTENT_KINDS: ReadonlySet<string> = new Set<IntentKind>(['planned_move']);
 
 function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
   // Road builds by edge: `e` since DEC-28, `b` (by the building city) in older files.
@@ -151,9 +151,6 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
       me: {
         cp: first[0],
         stance: first[2],
-        fronts: [null, null],
-        rear_min: 0,
-        auto_lines: null,
         leaf_shift: null,
         leaf_shift_max: null,
         next_dispatch_tick: null,
@@ -224,7 +221,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
             : null,
         };
       }),
-      lines: [], // economy v2 (DEC-41): not in the replay files
+      // economy v2 (DEC-41): not in the replay files
     },
   };
 }
@@ -269,7 +266,6 @@ function sideSnapshot(full: SnapshotMsg, frame: ReplayFrame, side: PlayerId): Sn
   if (vision === undefined) return full;
   const tick = frame.t;
   const owners = new Map(frame.g.map((g) => [String(g.id), g]));
-  const built = new Set(vision.b ?? []);
   const nodes = full.view.nodes.map((node, id): NodeView => {
     const [detail, sighting, warehouse] = vision.n[id] ?? ['fog'];
     return {
@@ -284,16 +280,11 @@ function sideSnapshot(full: SnapshotMsg, frame: ReplayFrame, side: PlayerId): Sn
   const edges = full.view.edges.map((edge, id): EdgeView => {
     const record = vision.e[id];
     if (record === undefined) return edge;
-    const [width, detail, a, b, figures] = record;
-    const build = edge.build;
-    const own = (frame.e ?? []).some(([e, owner]) => e === id && owner === side);
+    const [, detail, a, b, figures] = record;
     return {
       ...edge,
-      width,
       detail,
       halves: [half(a, tick), half(b, tick)],
-      // The file lists the builds the player saw; the end tick is known of an own one only.
-      build: built.has(id) ? { done_tick: own ? (build?.done_tick ?? null) : null } : null,
       enemy_groups: (figures ?? []).map(figure),
     };
   });

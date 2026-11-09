@@ -214,50 +214,6 @@ describe('buildTimeline', () => {
       expect(buildTimeline(file).snapshots[0]?.view.fights[0]?.shots).toEqual([3, 1]);
     });
   });
-
-  it('fills the road builds of the edges from the frame key "e" (DEC-28), none without it', () => {
-    const first = SAMPLE.frames[0];
-    if (first === undefined) throw new Error('the sample has no frames');
-    const [built] = buildTimeline({
-      ...SAMPLE,
-      frames: [{ ...first, e: [[1, 0, 150]] }],
-    }).snapshots;
-    expect(built?.view.edges[1]?.build).toEqual({ done_tick: 150 });
-    expect(built?.view.edges.filter((e) => e.build !== null)).toHaveLength(1);
-    expect(timeline.snapshots[0]?.view.edges.every((e) => e.build === null)).toBe(true);
-  });
-
-  it('reads the road builds of cities of older files (key "b", DEC-16) as builds of the edge', () => {
-    const first = SAMPLE.frames[0];
-    if (first === undefined) throw new Error('the sample has no frames');
-    const [built] = buildTimeline({
-      ...SAMPLE,
-      frames: [{ ...first, b: [[2, 1, 150]] }],
-    }).snapshots;
-    expect(built?.view.edges[1]?.build).toEqual({ done_tick: 150 });
-  });
-
-  it('reads a file from before DEC-16: a "build" group shows as attacking, its intent is dropped', () => {
-    const first = SAMPLE.frames[0];
-    const group = first?.g[0];
-    if (first === undefined || group === undefined) throw new Error('the sample has no group');
-    const legacy = parseReplay({
-      ...SAMPLE,
-      frames: [
-        {
-          ...first,
-          g: [{ ...group, m: 'build', b: 0 }],
-          i: [
-            [7, 0, 'build', 0, null],
-            [8, 1, 'defense', 3, null],
-          ],
-        },
-      ],
-    });
-    const view = buildTimeline(legacy).snapshots[0]?.view;
-    expect(view?.groups[0]?.mode).toBe('attack');
-    expect(view?.intents.map((i) => i.kind)).toEqual(['defense']);
-  });
 });
 
 describe('buildTimeline as one side (#600)', () => {
@@ -307,7 +263,6 @@ describe('buildTimeline as one side (#600)', () => {
       expect(view?.nodes.map((n) => n.detail)).toEqual(vision?.n.map((n) => n[0]));
       expect(view?.nodes.map((n) => n.warehouse)).toEqual(vision?.n.map((n) => n[2] ?? null));
       expect(view?.edges.map((e) => e.detail)).toEqual(vision?.e.map((e) => e[1]));
-      expect(view?.edges.map((e) => e.width)).toEqual(vision?.e.map((e) => e[0]));
       expect(view?.edges.map((e) => e.halves.map((h) => h.detail))).toEqual(
         vision?.e.map((e) => [e[2][0], e[3][0]]),
       );

@@ -224,7 +224,7 @@
       map,
       // With `?menus` the city development is on too: the city menu shows all three sectors.
       rules: menusOn
-        ? { ...sceneRules, city_upgrades: { ...sceneRules.city_upgrades, enabled: true } }
+        ? { ...sceneRules, city_upgrades: { ...sceneRules.city_upgrades } }
         : sceneRules,
       book,
       send: match === null ? (menusOn ? frozenSend(book) : null) : (cmd) => match.session.send(cmd),
@@ -236,7 +236,6 @@
         if (match === null && a !== undefined && b !== undefined) {
           // A frozen scene has no server: the stand-in answers at once.
           orders.onLineRoute({
-            type: 'line_route',
             points: [a, b, ...rest],
             tick: 0,
             path: devLinePath(map, points),

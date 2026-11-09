@@ -39,14 +39,7 @@ import { terrainBadges } from './badgeLayout.ts';
 import type { SpriteCache } from './bake.ts';
 import { EntityKit, Token } from './shapes.ts';
 import { FigureView } from './figureView.ts';
-import {
-  BUILD_PLATE,
-  BUILD_TIME_FONT_SIZE,
-  PACKET_TRANSFER,
-  ROAD_TAPE,
-  roadSpan,
-  UNIT_LABEL,
-} from './style.ts';
+import { BUILD_PLATE, BUILD_TIME_FONT_SIZE, ROAD_TAPE, roadSpan, UNIT_LABEL } from './style.ts';
 
 const ORIGIN: Point = { x: 0, y: 0 };
 
@@ -409,7 +402,7 @@ export class EntityView implements EnemyAnchors {
     g.clear();
     let used = 0;
     for (const road of edges) {
-      const build = road.build;
+      const build = null as { done_tick: number | null } | null; // no road builds: removed (#894): stage 2 deletes this
       const edge = this.map.edges[road.id];
       if (build === null || edge === undefined) continue;
       const from = nodePoint(this.map, edge.a);
@@ -420,7 +413,7 @@ export class EntityView implements EnemyAnchors {
       const geometry = buildGeometry(
         from,
         to,
-        roadSpan(road.width) + ROAD_TAPE.extra,
+        roadSpan(1) + ROAD_TAPE.extra,
         ROAD_TAPE.period,
         ROAD_TAPE.stripe,
         progress,
@@ -436,7 +429,7 @@ export class EntityView implements EnemyAnchors {
       const mark = this.buildMark(used++);
       mark.view.position.set(geometry.mid.x, geometry.mid.y);
       mark.view.visible = true;
-      const change = `${String(road.width)}\u2192${String(road.width + 1)}`;
+      const change = '1\u21922';
       if (mark.level.text !== change) mark.level.text = change;
       const time =
         build.done_tick === null ? '' : timeLeftLabel(build.done_tick - base.tick, this.tickHz);
@@ -799,7 +792,7 @@ export class EntityView implements EnemyAnchors {
       const view = this.packetLayer.addChild(new Container({ label: `packet-${packet.id}` }));
       const owner = item.owner ?? this.me;
       const dot = view.addChild(
-        new Graphics(packet.transfer ? this.kit.packetTransfer[owner] : this.kit.packet[owner]),
+        new Graphics(this.kit.packet[owner]), // no transfers: removed (#894): stage 2 deletes this
       );
       const label = view.addChild(
         new Text({
@@ -809,11 +802,11 @@ export class EntityView implements EnemyAnchors {
           resolution: this.labelResolution,
         }),
       );
-      label.position.set(packet.transfer ? PACKET_TRANSFER.ring / 2 + 3 : 8, 0);
+      label.position.set(8, 0);
       entry = {
         dot,
         label,
-        transfer: packet.transfer,
+        transfer: false,
         view,
         stamp: this.stamp,
         labels: () => [label],

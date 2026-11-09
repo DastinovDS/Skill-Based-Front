@@ -21,7 +21,7 @@ const second: GroupView = {
   id: 'second-group',
   units: 2,
   charged: 1,
-  mode: 'defense',
+  mode: 'attack',
   order: null,
 };
 const third: GroupView = { ...first, id: 'third-group', units: 1, charged: 0, order: null };
@@ -98,15 +98,12 @@ describe('the icon of own units in a city', () => {
     expect(controller.groupMenu.current).toMatchObject({ open: true, target: 'second-group' });
   });
 
-  it('digits choose a group from the open list (they are not the modes then)', () => {
+  it('digits choose a group from the open list', () => {
     const { hud, controller, sent } = setup();
     controller.click(stack, false);
     expect(controller.key(down('Digit3'))).toBe(true);
     expect(hud.selection).toEqual({ kind: 'group', id: 'third-group' });
     expect(sent).toEqual([]);
-    // With the list closed the digit is the mode key again.
-    expect(controller.key(down('Digit2'))).toBe(true);
-    expect(sent).toEqual([{ type: 'set_mode', group: 'third-group', mode: 'defense' }]);
   });
 
   it('the keys work with the picked group: merge sends every group of the city', () => {
@@ -151,7 +148,7 @@ describe('the icon of own units in a city', () => {
       group: first.id,
       dest: away.id,
       planned: true,
-      bonus: 0,
+      bonus: 1,
     });
   });
 

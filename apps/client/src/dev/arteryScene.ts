@@ -165,14 +165,12 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       mode: 'attack',
       location: { kind: 'node', node },
       order: null,
-      defense_bonus: null,
-      defense_cap: null,
       ...extra,
     }) satisfies GroupView;
   const groups: GroupView[] = [
     garrison(3, 4, 3),
     garrison(4, 3, 2),
-    garrison(6, 2, 2, { mode: 'defense', defense_bonus: 1, defense_cap: 2 }),
+    garrison(6, 2, 2),
     garrison(12, 1, 1),
     // Marching along the road 6-7 on a normal order.
     {
@@ -190,8 +188,6 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
         plan: 0,
         next_charge_tick: null,
       },
-      defense_bonus: null,
-      defense_cap: null,
     },
     // Waiting for a planned order to start: the bonus is a forecast by the charged units.
     garrison(9, 2, 2, {
@@ -213,7 +209,8 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
     to: number,
     charges: number,
     p: number,
-    transfer: boolean,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
+    _transfer: boolean, // no transfers: removed (#894): stage 2 deletes this
   ) => {
     const ticks = map.edges[edge]?.travel_ticks ?? 50;
     const depart = T - Math.round(p * ticks);
@@ -226,7 +223,6 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       arrive_tick: depart + ticks,
       path: [to],
       dest_tick: depart + ticks,
-      transfer,
     } satisfies PacketView;
   };
   const packets: PacketView[] = [
@@ -237,7 +233,6 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
 
   const intents: IntentView[] = [
     { id: id(300), owner: 0, kind: 'planned_move', origin: 9, target: 10, created_tick: T - 20 },
-    { id: id(301), owner: 0, kind: 'defense', origin: 6, target: null, created_tick: T - 80 },
     { id: id(302), owner: 1, kind: 'planned_move', origin: 5, target: 4, created_tick: T - 30 },
   ];
 
@@ -276,9 +271,6 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       me: {
         cp: 420,
         stance: 'balance',
-        fronts: [3, null],
-        rear_min: 1,
-        auto_lines: null,
         leaf_shift: null,
         leaf_shift_max: null,
         next_dispatch_tick: null,
@@ -292,7 +284,6 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       packets,
       intents,
       fights,
-      lines: [],
     },
   };
 }

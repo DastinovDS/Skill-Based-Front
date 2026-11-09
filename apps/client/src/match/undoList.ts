@@ -46,9 +46,6 @@ export class UndoList {
       case 'cancel_recruit':
         this.#dropNewest((e) => e.kind === 'recruit' && e.node === cmd.node);
         break;
-      case 'set_mode':
-        this.#entries = this.#entries.filter((e) => e.kind !== 'order' || e.group !== cmd.group);
-        break;
       default:
         break;
     }
