@@ -157,11 +157,11 @@ export function revealAt(look: FloodLook, fit: number): number {
 /** The field of the border lines: the new owner's line lies just inside the border, a neighbour's just outside. */
 export const BORDER_FIT = { inside: 0.98, outside: 1.02 } as const;
 
-/** The light at the city of a capture: one flash (not in a calm capture) and a ring of the owner's colour. */
+/** The light at the city of a capture: a flash (none in the Engraved look, #856) and a ring of the owner's colour. */
 export interface CityLight {
   /** Alpha of the flash; its reach is `CAPTURE.flash.reach` radii of the city. */
   readonly flash: number;
-  /** Alpha of the ring and its radius in radii of the city. */
+  /** Alpha of the ring, and how far it is outside the capacity ring (world units at 100 %). */
   readonly ring: number;
   readonly ringRadius: number;
 }

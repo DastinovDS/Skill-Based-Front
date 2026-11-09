@@ -36,6 +36,8 @@ import { levelNodes } from './flowLayout.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
+import type { EventMsg } from '../protocol.gen.ts';
+import { captureWalks, floodDelayMs, type Walk } from './walkLayout.ts';
 
 /** Failed frames in a row before the player is told (a transient error is only skipped). */
 export const FRAME_FAILURE_LIMIT = 3;
@@ -134,6 +136,10 @@ export class MapScene {
   private base: unknown = null;
   /** The tick of the snapshot drawn: a capture floods only when the picture runs on from it. */
   private baseTick: number | null = null;
+  /** The walks of the captures among the events (Walk in, #856), made again when the events change. */
+  private walks: readonly Walk[] = [];
+  private walkEvents: readonly EventMsg[] | null = null;
+  private walkEventCount = -1;
   private destroyed = false;
   private supplyOn = false;
   private readonly me: PlayerId;
@@ -267,6 +273,24 @@ export class MapScene {
     this.controller.setInsets(insets);
   }
 
+  /** The walks of the captures (#856), made again only when the list of events changed. */
+  private readWalks(events: readonly EventMsg[], tickHz: number): void {
+    if (events === this.walkEvents && events.length === this.walkEventCount) return;
+    this.walkEvents = events;
+    this.walkEventCount = events.length;
+    this.walks = captureWalks(events, this.map, this.me, this.source?.roundTicks ?? 20, tickHz);
+  }
+
+  /** Per node, how long its flood waits for the walker: the captures that ended in `(from, to]`. */
+  private captureDelays(from: number | null, to: number, tickHz: number): Map<number, number> {
+    const delays = new Map<number, number>();
+    for (const walk of this.walks) {
+      if (walk.end > to || (from !== null && walk.end <= from)) continue;
+      delays.set(walk.node, floodDelayMs(walk, tickHz));
+    }
+    return delays;
+  }
+
   destroy(): void {
     this.destroyed = true;
     this.app.renderer.off('resize', this.onResize);
@@ -341,12 +365,16 @@ export class MapScene {
     const selectedNode = overlay.selection?.kind === 'node' ? overlay.selection.id : null;
     this.view.setHover(hovered === selectedNode ? null : hovered);
     this.cities.pulse(performance.now());
+    const tickHzNow = this.source.tickHz ?? DEFAULT_TICK_HZ;
+    this.readWalks(this.source.events(), tickHzNow);
     const announce = frame.base !== this.base;
     if (announce) {
       // The first snapshot shows the map as it is; later changes of owners flood (#819), unless the
       // picture jumped (a replay scrubbed back or far ahead, a reconnect): then they are drawn at once.
       const first = this.base === null;
       const step = this.baseTick === null ? 0 : frame.base.tick - this.baseTick;
+      // A capture whose winner walks in floods (and flips its city) as the walker crosses the ring.
+      const delays = this.captureDelays(this.baseTick, frame.base.tick, tickHzNow);
       const flowing =
         step > 0 && step <= FLOOD_MAX_STEP_S * (this.source.tickHz ?? DEFAULT_TICK_HZ);
       this.base = frame.base;
@@ -359,7 +387,9 @@ export class MapScene {
       this.view.setOwners(
         frame.base.view.nodes.map((node) => node.owner),
         (!first && flowing) || before !== undefined,
+        delays,
       );
+      this.cities.setCaptureDelays(delays);
       // The Ruled veil over the areas the snapshot hides (#842).
       this.view.setHidden(veilCities(frame.base.view.nodes));
       const edges = frame.base.view.edges;
@@ -391,6 +421,8 @@ export class MapScene {
     const delays = this.source.orderDelays ?? null;
     this.intents.setDelays(delays);
     this.intents.setTickHz(tickHz);
+    this.entities.setWalks(this.walks);
+    this.effects.setWalks(this.walks);
     this.entities.update(frame);
     this.entities.advance(this.frameMs);
     this.view.advance(this.frameMs);

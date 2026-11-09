@@ -21,6 +21,17 @@ import {
 import { symbolScale, type Point } from './camera.ts';
 import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts';
 import { nodeMarkerPoint } from './fogLayout.ts';
+import { ringRadius } from './cityLayout.ts';
+import { reducedMotion } from './motion.ts';
+import {
+  WALK,
+  arrivalRoad,
+  gatePoint,
+  walkPoint,
+  walkShare,
+  walking,
+  type Walk,
+} from './walkLayout.ts';
 import { spreadApart, type SpreadItem } from './spread.ts';
 import { buildProgress } from './roadLayout.ts';
 import { knownOfSeen } from './rangeLabel.ts';
@@ -138,6 +149,16 @@ export class EntityView implements EnemyAnchors {
   private ownIcons: ReadonlySet<number> = new Set();
   /** Enemy city markers that swell now (a hit): put back to their size on the next call of `punch`. */
   private punched: Token[] = [];
+  /**
+   * Walk in (#856): the road each side was last seen walking into each node by (`node:owner`), the
+   * attacker of each node fight of the snapshot, the owners of the nodes, the walks of the captures
+   * and the render tick.
+   */
+  private readonly arrivals = new Map<string, number>();
+  private attackers = new Map<number, PlayerId | null>();
+  private owners: (PlayerId | null)[] = [];
+  private walks: readonly Walk[] = [];
+  private tick = 0;
 
   constructor(
     private readonly map: MapFile,
@@ -312,6 +333,11 @@ export class EntityView implements EnemyAnchors {
     return symbolScale(BUILD_PLATE.height, this.cameraScale);
   }
 
+  /** The walks of the captures (`captureWalks`): the winner walks from the gate into the city. */
+  setWalks(walks: readonly Walk[]): void {
+    this.walks = walks;
+  }
+
   update(frame: RenderFrame): void {
     this.updateFrame(frame);
     this.warm = true;
@@ -323,6 +349,8 @@ export class EntityView implements EnemyAnchors {
       this.applyBase(frame.base);
     }
     this.stamp++;
+    this.tick = frame.tick;
+    this.noteArrivals(frame);
     this.spots = this.updateGroups(frame.groups);
     this.placeEnemyNodes();
     this.figures.update(frame.enemies, frame.tick, this.tickHz, this.cameraScale, this.stamp);
@@ -357,6 +385,12 @@ export class EntityView implements EnemyAnchors {
 
   private applyBase(base: SnapshotMsg): void {
     const { nodes } = base.view;
+    this.owners = nodes.map((node) => node.owner);
+    this.attackers = new Map(
+      base.view.fights.flatMap((fight) =>
+        fight.node === null ? [] : [[fight.node, fight.attacker]],
+      ),
+    );
     this.marks = [];
     for (const node of nodes) {
       this.marks[node.id] = { owner: node.owner, mark: node.terrain_mark };
@@ -498,7 +532,10 @@ export class EntityView implements EnemyAnchors {
       const city = nodePoint(this.map, id);
       if (city === undefined) return;
       const marker = nodeMarkerPoint(this.map, id, token.side, this.radiusOf(id));
-      const at = iconPoint(city, marker, false, this.ownIcons.has(id));
+      const half = (token.side * symbolScale(token.side, this.cameraScale)) / 2;
+      const at =
+        this.standAt(id, this.enemy, half, city, marker) ??
+        iconPoint(city, marker, false, this.ownIcons.has(id));
       token.view.position.set(at.x, at.y);
     });
   }
@@ -516,7 +553,12 @@ export class EntityView implements EnemyAnchors {
     const edgeSpots = new Map<string, TokenSpot>();
     const icons: CityIcon[] = [];
     const stacks = stackGroups(groups, this.me);
-    const mine = new Set(stacks.filter((stack) => stack.owner === this.me).map((s) => s.node));
+    // An own icon holds the middle of its city unless it stands at a gate or walks in (#856).
+    const mine = new Set(
+      stacks
+        .filter((stack) => stack.owner === this.me && !this.offCentre(stack.node, this.me))
+        .map((s) => s.node),
+    );
     this.ownIcons = mine;
     for (const stack of stacks) {
       const entry = this.groupEntry(stackKey(stack.node, stack.owner), stack.owner);
@@ -534,11 +576,14 @@ export class EntityView implements EnemyAnchors {
         city === undefined
           ? undefined
           : nodeMarkerPoint(this.map, stack.node, entry.token.side, this.radiusOf(stack.node));
+      const scale = symbolScale(entry.token.side, this.cameraScale);
       const at =
-        city === undefined ? undefined : iconPoint(city, marker, own, mine.has(stack.node));
+        city === undefined
+          ? undefined
+          : (this.standAt(stack.node, stack.owner, (entry.token.side * scale) / 2, city, marker) ??
+            iconPoint(city, marker, own, mine.has(stack.node)));
       entry.view.visible = at !== undefined;
       if (at === undefined) continue;
-      const scale = symbolScale(entry.token.side, this.cameraScale);
       entry.view.scale.set(scale);
       entry.view.position.set(at.x, at.y);
       entry.token.setLabel(true);
@@ -609,6 +654,77 @@ export class EntityView implements EnemyAnchors {
     this.edgeSpots = edgeSpots;
     this.icons = icons;
     return spots;
+  }
+
+  // --- Walk in (#856) -----------------------------------------------------------------------
+
+  /** The road each side walks into each node by, as last seen: own groups and enemy figures on roads. */
+  private noteArrivals(frame: RenderFrame): void {
+    const into = (edge: number, towardB: boolean): number | undefined => {
+      const road = this.map.edges[edge];
+      return road === undefined ? undefined : towardB ? road.b : road.a;
+    };
+    for (const item of frame.groups) {
+      const location = item.location;
+      if (location.kind !== 'edge') continue;
+      const road = this.map.edges[location.edge];
+      const node = into(location.edge, road?.a === location.from_node);
+      if (node !== undefined)
+        this.arrivals.set(`${String(node)}:${String(item.owner ?? this.me)}`, location.edge);
+    }
+    for (const figure of frame.enemies) {
+      const node = into(figure.edge, figure.figure.toward_b);
+      if (node !== undefined)
+        this.arrivals.set(`${String(node)}:${String(this.enemy)}`, figure.edge);
+    }
+  }
+
+  /** The walk of a capture of `node` by `owner` under way (or waiting at the gate) now. */
+  private walkAt(node: number, owner: PlayerId): Walk | undefined {
+    return this.walks.find((w) => w.node === node && w.owner === owner && walking(w, this.tick));
+  }
+
+  /** Does the icon of `owner` stand off the middle of `node`: the attacker at its gate, or walking in? */
+  private offCentre(node: number, owner: PlayerId): boolean {
+    return this.attackers.get(node) === owner || this.walkAt(node, owner) !== undefined;
+  }
+
+  /**
+   * Where the icon of `owner` stands in `node` when it is not the usual place (#856): the attacker of a
+   * node fight at the gate of the road it came by, and the winner of a capture on its walk from that
+   * gate into the middle (`walkLayout.ts`); `null`: the usual place (`iconPoint`). `half`: half the
+   * token on screen, `marker`: the old side slot, the gate when no road is known.
+   */
+  private standAt(
+    node: number,
+    owner: PlayerId,
+    half: number,
+    city: Point,
+    marker: Point | undefined,
+  ): Point | null {
+    const walk = this.walkAt(node, owner);
+    if (this.attackers.get(node) !== owner && walk === undefined) return null;
+    const road = arrivalRoad(
+      this.map,
+      node,
+      owner,
+      this.arrivals.get(`${String(node)}:${String(owner)}`),
+      this.owners,
+    );
+    const gate =
+      (road === null
+        ? null
+        : gatePoint(this.map, node, road, ringRadius(this.radiusOf(node)), half)) ??
+      marker ??
+      city;
+    if (walk === undefined) return gate;
+    // With less motion the winner is in the city as the flood starts.
+    const q = reducedMotion()
+      ? this.tick >= walk.start + WALK.cross * walk.ticks
+        ? 1
+        : 0
+      : walkShare(walk, this.tick);
+    return walkPoint(gate, city, q);
   }
 
   /**

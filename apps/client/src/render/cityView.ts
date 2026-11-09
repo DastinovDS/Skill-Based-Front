@@ -255,7 +255,9 @@ export class CityView {
   /** Set after the first snapshot: a body that changes after it (a capture) cross-fades. */
   private warm = false;
   /** The bodies that were just replaced, fading out over the new ones (#508). */
-  private readonly fading: { sprite: BakedSprite; tween: EaseTween }[] = [];
+  private readonly fading: { sprite: BakedSprite; tween: EaseTween; hold: number }[] = [];
+  /** How long (ms) a captured city keeps its old body before it fades: the winner's walk (#856). */
+  private captureDelays: ReadonlyMap<number, number> = new Map();
   /** The towers whose build is running or whose done effect plays: stepped every frame. */
   private readonly moving = new Set<TowerSlot>();
   /** The recruits whose fill is still easing. */
@@ -395,6 +397,14 @@ export class CityView {
     const x = xs[Math.min(xs.length - 1, Math.max(0, index))];
     if (x === undefined) return null;
     return { x: at.x + x, y: at.y + lozengeRowY(this.radiusOf(id)) };
+  }
+
+  /**
+   * Per node, how long (ms) a capture in the next snapshot keeps the old body before it fades, so that
+   * the city flips with the flood as the winner walks in (Walk in, #856); set before `update`.
+   */
+  setCaptureDelays(delays: ReadonlyMap<number, number>): void {
+    this.captureDelays = delays;
   }
 
   /** The radii of all cities (kept in step with the snapshots; read by other views). */
@@ -753,7 +763,7 @@ export class CityView {
     city.addChildAt(ghost, city.getChildIndex(body) + 1);
     const tween = new EaseTween(1, BODY_FADE_MS);
     tween.setTarget(0);
-    this.fading.push({ sprite: ghost, tween });
+    this.fading.push({ sprite: ghost, tween, hold: this.captureDelays.get(id) ?? 0 });
   }
 
   /**
@@ -766,6 +776,11 @@ export class CityView {
       if (item === undefined) continue;
       if (item.sprite.destroyed) {
         this.fading.splice(i, 1);
+        continue;
+      }
+      // A capture waits for its winner to walk in (#856): the old body holds, then fades with the flood.
+      if (item.hold > 0) {
+        item.hold -= dtMs;
         continue;
       }
       item.sprite.alpha = item.tween.step(dtMs);

@@ -1100,3 +1100,32 @@ test('shot of the Engraved pieces close up', async ({ page }) => {
   await page.waitForTimeout(800);
   await page.locator('canvas').screenshot({ path: join(OUT, 'pieces-far.png') });
 });
+
+// Parry and Walk in (#856): the scenes `walk_fight` (a fight in a city: its attacker at the gate, the
+// plains burning a charge of the defender, then a bonus shot hitting) and `walk_capture` (the same round
+// ended the fight with the capture: the winner walks from the gate into the city once its shot has
+// landed), frozen at a run of render ticks (`?at=`). `parry-<tick>.png` and `walk-<tick>.png`, the map
+// alone; `parry-pair-<tick>.png`: the scene `walk_pair` (the round a pair that met: a bonus shot
+// against a real one).
+const MOMENTS = [
+  ...[400.5, 401.5, 402.5, 403.5, 404.5, 406].map((at) => ({
+    scene: 'walk_fight',
+    name: 'parry',
+    at,
+  })),
+  ...[402, 406.5, 408, 409.5, 411, 413].map((at) => ({ scene: 'walk_capture', name: 'walk', at })),
+  ...[401, 402, 403, 404.5, 406, 408].map((at) => ({ scene: 'walk_pair', name: 'parry-pair', at })),
+] as const;
+for (const shot of MOMENTS) {
+  test(`shot of ${shot.name} at tick ${String(shot.at)}`, async ({ page }) => {
+    await page.goto(`/?scene=${shot.scene}&at=${String(shot.at)}`);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(shot.at));
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.addStyleTag({ content: '.hud { display: none !important; }' });
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(400);
+    await page
+      .locator('canvas')
+      .screenshot({ path: join(OUT, `${shot.name}-${String(shot.at)}.png`) });
+  });
+}

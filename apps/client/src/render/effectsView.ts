@@ -8,7 +8,8 @@ import { HitView, type Punch } from './hitView.ts';
 import { ParticleLayer } from './particles.ts';
 import { cityLight } from './captureLayout.ts';
 import type { Flood } from './mapView.ts';
-import { ShotView } from './shotView.ts';
+import { ParryView } from './parryView.ts';
+import { floodDelayMs, type Walk } from './walkLayout.ts';
 import type { EnemyAnchors } from './entityView.ts';
 import type { Point } from './camera.ts';
 import {
@@ -31,14 +32,12 @@ import { nodePoint, type TokenSpot } from './layout.ts';
 import { ringRadius } from './cityLayout.ts';
 import { helmetWidth } from './shapes.ts';
 import { reducedMotion } from './motion.ts';
-import { BOUNCE_HOME, CAPTURE, CASING, PAPER, WARN, ownerColor } from './style.ts';
+import { BOUNCE_HOME, CAPTURE, CASING, INK, WARN, ownerColor } from './style.ts';
 
 /** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`, DEC-32). */
 const DEFAULT_ROUND_TICKS = 20;
 /** Flags of captures drawn at once. */
 const MAX_FLAGS = 4;
-/** The radius of the ring of the particle atlas, a share of its size (`particles.ts`: 26 of 64). */
-const RING_RADIUS_SHARE = 26 / 64;
 /** A token this close to the place of a fight (world units) is a group of that fight: the token of a city, a marker beside it, a figure on its road. */
 const CONTACT_REACH = 80;
 const near = (a: Point, b: Point): boolean => Math.hypot(a.x - b.x, a.y - b.y) <= CONTACT_REACH;
@@ -47,10 +46,10 @@ const MAX_REMEMBERED_PLACES = 64;
 
 /**
  * Effects of events on the map (ui-style 9.9, U8): the animation of fights (`FightView`: arena,
- * shots, losses, result), the amber chevrons running ahead of an own group bounced home (Chevrons
- * home, #851), and the light and the flag of a captured city (#819; its colour floods the area in
- * `MapView`). With "less motion" the shots and the light are left out, the chevrons stand and the
- * numbers do not rise. Events come from the server
+ * losses, result; `ParryView`: the shots, #856), the amber chevrons running ahead of an own group
+ * bounced home (Chevrons home, #851), and the ring and the flag of a captured city (#819; the new owner's
+ * band floods the area in `MapView`), Engraved: no glow, every coloured line on a dark casing. With
+ * "less motion" the shots and the ring are left out, the chevrons stand and the numbers do not rise. Events come from the server
  * (`fight_round`, `fight_ended`, `fight_group`, `node_captured`); nothing is guessed: the enemy's
  * bounces are not sent, so none is drawn.
  *
@@ -62,7 +61,13 @@ export class EffectsView {
   private readonly fightView: FightView;
   private readonly particles: ParticleLayer;
   private readonly hits: HitView;
-  private readonly shots: ShotView;
+  private readonly shots: ParryView;
+  /** The ring leaving a captured city (#819, Engraved #856). */
+  private readonly rings = new Graphics({ label: 'capture-rings' });
+  /** The walks of the captures (#856): the flag of a capture waits for its walker. */
+  private walks: readonly Walk[] = [];
+  private ringsDrawn = false;
+  private resolution = 1;
   /** Where the two sides of each fight stood the last time they were seen (the tokens): ended fights keep it. */
   private readonly contacts = new Map<string, PlaceMemory & { readonly contacts: Contacts }>();
   /** The faded helmets of sides that left a fight while its last shots are in the air (#811). */
@@ -93,26 +98,16 @@ export class EffectsView {
     /** The baked shapes drawn in screen px (the plate and chips of the arenas). */
     private readonly sprites: SpriteCache,
   ) {
-    this.layer.addChild(this.arrows, this.leaverLayer);
-    const flag = (owner: PlayerId): GraphicsContext =>
-      new GraphicsContext()
-        .moveTo(0, 14)
-        .lineTo(0, -6)
-        .stroke({ width: 2, color: PAPER, cap: 'round' })
-        .poly([0, -6, 14, -1, 0, 4])
-        .fill(ownerColor(me, owner))
-        .stroke({ width: 1.4, color: PAPER, join: 'round' });
-    this.flagContext = [flag(0), flag(1)];
+    this.layer.addChild(this.rings, this.arrows, this.leaverLayer);
+    this.flagContext = [flagContext(ownerColor(me, 0)), flagContext(ownerColor(me, 1))];
     layers.layer.effects.addChild(this.layer);
-    // The tails of the tracers (shot style 1) lie under the particles (their heads, glows and sparks), which lie
-    // under the arenas: a spark over a city does not hide the plate that floats above it.
-    this.shots = new ShotView(layers.layer.effects, me, sprites);
+    // The shots lie under the arenas: a shot over a city does not hide the plate that floats above it.
+    this.shots = new ParryView(layers.layer.effects, me, sprites);
     const enemy: PlayerId = me === 0 ? 1 : 0;
     this.particles = new ParticleLayer(layers.layer.effects, {
       own: ownerColor(me, me),
       enemy: ownerColor(me, enemy),
     });
-    this.shots.raiseHeads(layers.layer.effects);
     this.hits = new HitView(layers.layer.effects, map, me, labelResolution, radiusOf);
     this.fightView = new FightView(map, layers, me, labelResolution, radiusOf, sprites);
     this.fightView.setContacts((place) => this.contactsAt(place));
@@ -131,6 +126,7 @@ export class EffectsView {
 
   /** Text resolution for what is drawn at one unit a CSS px (the arenas of fights). */
   setScreenResolution(resolution: number): void {
+    if (resolution > 0) this.resolution = resolution;
     this.fightView.setScreenResolution(resolution);
     this.hits.setScreenResolution(resolution);
   }
@@ -163,21 +159,25 @@ export class EffectsView {
       scale,
     );
     this.shots.update(
-      (particle) => {
-        this.particles.put(particle);
-      },
       frame.tick,
       this.fightView.rounds(),
       roundTicks,
       (place) => this.contactsAt(place),
       scale,
+      1 / Math.max(1e-6, this.cameraScale * this.resolution),
+      reduced,
     );
     this.drawLeavers(frame.tick, roundTicks, live, spots, enemies);
-    this.captureLights(floods, scale);
     this.particles.end();
+    this.captureRings(floods, scale);
     this.drawFlags(frame.tick, tickHz, scale);
     this.drawBounces(frame, spots, tickHz, reduced);
     return punches;
+  }
+
+  /** The walks of the captures (`captureWalks`): a flag waits for its walker to reach the city. */
+  setWalks(walks: readonly Walk[]): void {
+    this.walks = walks;
   }
 
   /** How many particles the last frame drew (tests, the dev tools). */
@@ -326,49 +326,45 @@ export class EffectsView {
   // --- Capture: the light at the city and the flag over it (#819, ui-style 49) ------------------
 
   /**
-   * The light of a capture at its city: one flash (not when the enemy captured) and a ring of the new
-   * owner's colour leaving it. The colour itself floods the area in `MapView`; both run on the
-   * flood's own clock, so the flash starts with the flood.
+   * The ring that leaves a captured city (#819; Engraved, #856, mockup `captureRing`): a line of the
+   * new owner's colour on a dark casing, growing out from the ring of the city and fading; half as
+   * strong for the opponent's capture. It runs on the flood's own clock, so it starts with the flood.
    */
-  private captureLights(floods: readonly Flood[], scale: number): void {
+  private captureRings(floods: readonly Flood[], scale: number): void {
+    // Redrawn only while a ring leaves a city; an idle frame does not touch the Graphics.
+    if (floods.length === 0 && !this.ringsDrawn) return;
+    const g = this.rings.clear();
+    this.ringsDrawn = false;
     for (const flood of floods) {
       if (flood.to === null) continue;
       const light = cityLight(flood.ms, flood.calm, flood.reduced);
       if (light === null) continue;
-      const radius = this.radiusOf(flood.node) * scale;
-      if (light.flash > 0) {
-        this.particles.put({
-          kind: 'glow',
-          x: flood.at.x,
-          y: flood.at.y,
-          // The glow of the atlas reaches half its size.
-          size: 2 * CAPTURE.flash.reach * radius,
-          color: PAPER,
-          alpha: light.flash,
-          add: true,
+      const r = ringRadius(this.radiusOf(flood.node)) + light.ringRadius * scale;
+      g.circle(flood.at.x, flood.at.y, r)
+        .stroke({ width: CAPTURE.ring.casing * scale, color: CASING, alpha: light.ring })
+        .stroke({
+          width: CAPTURE.ring.line * scale,
+          color: ownerColor(this.me, flood.to),
+          alpha: light.ring,
         });
-      }
-      this.particles.put({
-        kind: 'ring',
-        x: flood.at.x,
-        y: flood.at.y,
-        size: (light.ringRadius * radius) / RING_RADIUS_SHARE,
-        color: ownerColor(this.me, flood.to),
-        alpha: light.ring,
-        add: true,
-      });
+      this.ringsDrawn = true;
     }
   }
 
   private drawFlags(tick: number, tickHz: number, scale: number): void {
     let used = 0;
     for (const capture of this.captures) {
-      const t = effectProgress(tick - capture.tick, FLAG_MS, tickHz);
+      // A captured city whose winner walks in gets its flag with the flood, as the walker crosses the ring.
+      const walk = this.walks.find((w) => w.node === capture.node && w.end === capture.tick);
+      const wait = walk === undefined ? 0 : (floodDelayMs(walk, tickHz) * tickHz) / 1000;
+      const t = effectProgress(tick - capture.tick - wait, FLAG_MS, tickHz);
       if (t === null || used >= MAX_FLAGS) continue;
       const flag = this.flag(used++);
-      const radius = this.radiusOf(capture.node);
+      // The foot of the pole just outside the ring, upper right (mockup `flagMark`, mirrored: the
+      // left of a city holds its towers).
+      const ring = ringRadius(this.radiusOf(capture.node));
       flag.context = this.flagContext[capture.player];
-      flag.position.set(capture.at.x + (radius + 6) * scale, capture.at.y - (radius + 14) * scale);
+      flag.position.set(capture.at.x + (ring + 4) * scale, capture.at.y - (ring - 4) * scale);
       flag.scale.set(scale);
       flag.alpha = flagLook(t).alpha;
       flag.visible = true;
@@ -455,4 +451,26 @@ export class EffectsView {
 
 function bounceKey(bounce: BounceInfo): string {
   return `${String(bounce.tick)}:${bounce.group}`;
+}
+
+/**
+ * The flag over a captured city, Engraved (#856; mockup `flagMark`): a pole in ink on a dark casing, the
+ * pennant on its casing hatched in the owner's colour (the owner's horizontal lines) with an ink edge.
+ * The origin is the foot of the pole.
+ */
+function flagContext(color: number): GraphicsContext {
+  const g = new GraphicsContext();
+  const pennant = [0, -16, 11, -12.5, 0, -9];
+  g.moveTo(0, 0).lineTo(0, -16).stroke({ width: 4, color: CASING, cap: 'round' });
+  g.poly(pennant).fill(CASING).stroke({ width: 4, color: CASING, join: 'round' });
+  // The hatch: horizontal lines of the owner's colour across the pennant, 1.8 apart.
+  for (let y = -15.2; y < -9.4; y += 1.8) {
+    // The pennant narrows from the pole (11 wide at -12.5) to its two tips.
+    const half = y < -12.5 ? (y + 16) / 3.5 : (-9 - y) / 3.5;
+    g.moveTo(0.8, y).lineTo(Math.max(0.8, 11 * half), y);
+  }
+  g.stroke({ width: 0.9, color });
+  g.poly(pennant).stroke({ width: 0.8, color: INK, join: 'round' });
+  g.moveTo(0, 0).lineTo(0, -16).stroke({ width: 1.5, color: INK, cap: 'round' });
+  return g;
 }

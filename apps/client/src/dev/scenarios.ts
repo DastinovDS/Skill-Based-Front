@@ -319,6 +319,149 @@ function fightsBurnSnapshot(): SnapshotMsg {
 }
 
 /**
+ * Walk in and Parry (#856) on the `siege` map: an own group (3 units) attacks the enemy city 2 from
+ * city 1 along road 1. `fight`: the fight going on at tick 400, its round just fired (the plains burned
+ * a charge of the enemy defender, then the own bonus shot hit): the own icon stands at the gate of road
+ * 1, the defender in the middle. `captured`: the same round ended the fight with the capture of the
+ * city; the own group walks from the gate into the middle once the shot has landed. The road is the
+ * fallback of a reload (the own neighbour), as a frozen scene has no frames before it. `pair`: the
+ * round of the fight is a pair that met (an own bonus shot against the defender's real one).
+ */
+function walkSnapshot(captured: boolean, pair = false): SnapshotMsg {
+  const base = fixture('snapshot_clash');
+  const [road] = base.view.fights;
+  if (road === undefined) throw new Error('the clash fixture lists a fight');
+  const group = {
+    id: 'a1b2c3d4e5f60718',
+    units: 3,
+    charged: 1,
+    mode: 'attack' as const,
+    location: { kind: 'node' as const, node: 2 },
+    order: null,
+    defense_bonus: null,
+    defense_cap: null,
+  };
+  return {
+    ...base,
+    tick: 400,
+    view: {
+      ...base.view,
+      nodes: base.view.nodes.map((node) =>
+        node.id !== 2
+          ? node
+          : {
+              ...node,
+              owner: captured ? 0 : 1,
+              detail: 'exact' as const,
+              seen: captured
+                ? null
+                : {
+                    tick: 400,
+                    level: 'exact' as const,
+                    enemy_modes: ['defense' as const],
+                    enemy_units: 1,
+                    enemy_charged: 0,
+                    enemy_range: null,
+                  },
+            },
+      ),
+      groups: [
+        ...base.view.groups.filter((g) => g.location.kind !== 'node' || g.location.node !== 2),
+        group,
+      ],
+      fights: captured
+        ? []
+        : [
+            {
+              ...road,
+              id: 'dev-walk-fight',
+              node: 2,
+              edge: null,
+              point: null,
+              attacker: 0,
+              groups: [group.id],
+              enemy_units: 1,
+              enemy_charged: 0,
+              losses: [0, 1],
+              virtual_left: [0, 0],
+              mute: [0, 0],
+              start_tick: 380,
+              next_round_tick: 420,
+              last_round: pair
+                ? {
+                    tick: 400,
+                    shots: [1, 1],
+                    virtual: [1, 0],
+                    spent: [0, 1],
+                    losses: [0, 0],
+                    burned: [0, 0],
+                  }
+                : {
+                    tick: 400,
+                    shots: [1, 0],
+                    virtual: [1, 0],
+                    spent: [0, 0],
+                    losses: [0, 1],
+                    burned: [0, 1],
+                  },
+            },
+          ],
+    },
+  };
+}
+
+/** The events of the walk scenes: the round at tick 400 and, with the capture, its end and the capture. */
+function walkEvents(captured: boolean, pair = false): EventMsg[] {
+  const at = { node: 2, edge: null, point: null };
+  const events: EventMsg[] = [
+    {
+      type: 'event',
+      tick: 400,
+      kind: 'fight_round',
+      data: {
+        fight: 'dev-walk-fight',
+        ...at,
+        shots_0: 1,
+        shots_1: pair ? 1 : 0,
+        virtual_0: 1,
+        virtual_1: 0,
+        spent_0: 0,
+        spent_1: pair ? 1 : 0,
+        losses_0: 0,
+        losses_1: pair ? 0 : 1,
+        burned_0: 0,
+        burned_1: pair ? 0 : 1,
+      },
+    },
+  ];
+  if (!captured) return events;
+  events.push(
+    {
+      type: 'event',
+      tick: 400,
+      kind: 'fight_ended',
+      data: {
+        fight: 'dev-walk-fight',
+        ...at,
+        attacker: 0,
+        start: 380,
+        winner: 0,
+        captured: true,
+        shots_0: 2,
+        shots_1: 0,
+        losses_0: 0,
+        losses_1: 2,
+      },
+    },
+    { type: 'event', tick: 400, kind: 'node_captured', data: { node: 2, player: 0 } },
+  );
+  return events;
+}
+
+/** The part of `siege` round city 2 the walk scenes look at (world units). */
+const WALK_VIEW = { x: 400, y: 40, width: 280, height: 190 };
+
+/**
  * What DEC-21 and DEC-33 show about enemies (#359), on the `diamond` map at tick 600: a city seen
  * as a range («21+»), figures on road halves seen exactly, as a range and as presence, and the
  * memory of cities and halves in fog (a range, exact numbers, presence) with their ages. The
@@ -749,6 +892,28 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     map: 'siege',
     snapshot: fightsBurnSnapshot(),
     events: fightRoundEvents(fightsBurnSnapshot()),
+  },
+  // Walk in and Parry (#856): a fight in city 2 with its attacker at the gate, and its capture.
+  {
+    id: 'walk_fight',
+    map: 'siege',
+    snapshot: walkSnapshot(false),
+    events: walkEvents(false),
+    view: WALK_VIEW,
+  },
+  {
+    id: 'walk_pair',
+    map: 'siege',
+    snapshot: walkSnapshot(false, true),
+    events: walkEvents(false, true),
+    view: WALK_VIEW,
+  },
+  {
+    id: 'walk_capture',
+    map: 'siege',
+    snapshot: walkSnapshot(true),
+    events: walkEvents(true),
+    view: WALK_VIEW,
   },
   {
     id: 'snapshot_clash',
