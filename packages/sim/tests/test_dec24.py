@@ -215,7 +215,7 @@ def test_a_group_bouncing_into_a_fight_has_nothing_to_cancel() -> None:
     assert validate(state, RULES, 0, CancelOrder(lone)) == Reject(RejectCode.NOTHING_TO_CANCEL)
 
 
-# No retreat (DEC-40, variant N, #626) --------------------------------------------------------------
+# No retreat (DEC-40, variant N, #626) ------------------------------------------------------------
 
 
 def test_without_retreat_a_node_fight_holds_both_sides() -> None:
@@ -279,9 +279,7 @@ def test_without_retreat_a_returning_group_still_has_nothing_to_cancel() -> None
     run = _Run(state, NO_RETREAT)
     run.step()
     assert state.groups[lone].fight is not None
-    assert validate(state, NO_RETREAT, 0, CancelOrder(lone)) == Reject(
-        RejectCode.NOTHING_TO_CANCEL
-    )
+    assert validate(state, NO_RETREAT, 0, CancelOrder(lone)) == Reject(RejectCode.NOTHING_TO_CANCEL)
 
 
 # Movement around a fight (items B6, D1) -----------------------------------------------------------

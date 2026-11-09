@@ -90,7 +90,7 @@ def test_bots_send_no_withdrawal_under_mvp6(crossroads: MapDef, name: str) -> No
         BOTS[name](crossroads, MVP6, seed=3, player=0),
         BOTS["smart_rusher"](crossroads, MVP6, seed=3, player=1),
     ]
-    assert not any(b.retreat for b in bots)
+    assert MVP6.combat.retreat is Retreat.NONE
     seq = 0
     fights = 0
     rejected = 0
