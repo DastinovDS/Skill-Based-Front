@@ -101,8 +101,8 @@
     <div class="plate">
       {@render children()}
     </div>
-    <span class="point top" aria-hidden="true"></span>
-    <span class="point bottom" aria-hidden="true"></span>
+    <span class="point upper" aria-hidden="true"></span>
+    <span class="point lower" aria-hidden="true"></span>
   </div>
 {/if}
 
@@ -190,11 +190,11 @@
       var(--t-reveal-leader) both;
   }
 
-  .point.top {
+  .point.upper {
     top: -3px;
   }
 
-  .point.bottom {
+  .point.lower {
     bottom: -3px;
   }
 
