@@ -2,39 +2,28 @@
   import { onDestroy, onMount, tick, untrack } from 'svelte';
   import type { Api, MatchEntry, PlayerProfile } from '../api/http.ts';
   import type { AccountFailure } from '../app/account.ts';
-  import AccountChip from '../app/AccountChip.svelte';
   import ColourPicker from '../app/ColourPicker.svelte';
-  import MenuTabs from '../app/MenuTabs.svelte';
-  import type { AccountPages, MenuTabActions } from '../app/menuTabs.ts';
+  import LogoutDialog from '../app/LogoutDialog.svelte';
   import NickDialog from '../app/NickDialog.svelte';
   import UnitMark from '../app/UnitMark.svelte';
   import Icon from '../hud/Icon.svelte';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
-  import type { Calibration, MapFile, PlayerColour } from '../protocol.gen.ts';
+  import type { MapFile, PlayerColour } from '../protocol.gen.ts';
   import LapisButton from '../theme/LapisButton.svelte';
   import { colourVar } from '../theme/tokens.ts';
-  import { failed, type Load } from './boardState.svelte.ts';
+  import { failed, type Load } from './load.ts';
   import ReplayChip from './ReplayChip.svelte';
   import SheetFrame from './SheetFrame.svelte';
   import { lengthText } from './time.ts';
-  import {
-    botLabel,
-    profileFacts,
-    ratingOf,
-    recordText,
-    visibleMatches,
-    type FactValue,
-  } from './view.ts';
+  import { botLevel, levelCells, profileFacts, recordText } from './view.ts';
 
-  interface Props extends MenuTabActions, AccountPages {
+  interface Props {
     api: Pick<Api, 'player' | 'me'>;
     token: string;
     /** The own player id, if the app knows it (otherwise the screen asks the server). */
     ownId: number | null;
     nick: string;
     hasPassword: boolean;
-    calibration: Calibration | null;
-    rating: number | null;
     map: MapFile | null;
     onwatch: (matchId: string) => void;
     /** The empty list offers a match against a bot. */
@@ -45,8 +34,13 @@
     colour?: PlayerColour | null;
     /** A new colour (`PUT /api/me/colour`); the answer is why it failed, or null. Without it no picker. */
     oncolour?: (colour: PlayerColour) => Promise<MessageKey | null>;
-    onpassword: () => void;
+    /** The two quiet links of the header (#919): the settings and the way out. */
+    onsettings: () => void;
     onlogout: () => void;
+    /** The guest's log-out warning offers to set a password first. */
+    onpassword: () => void;
+    /** The "?" of the bar: How to play. */
+    onhelp: () => void;
     /** Esc: back to the screen the profile was opened from. */
     onback: () => void;
   }
@@ -57,23 +51,17 @@
     ownId,
     nick,
     hasPassword,
-    calibration,
-    rating,
     map,
     onwatch,
     onbot,
     onnick,
     colour = null,
     oncolour,
-    onpassword,
-    onlogout,
-    onback,
-    onplay,
-    onreplays,
-    onboard,
-    onhowto,
-    onprofile,
     onsettings,
+    onlogout,
+    onpassword,
+    onhelp,
+    onback,
   }: Props = $props();
 
   const stop = new AbortController();
@@ -98,21 +86,27 @@
   });
 
   const facts = $derived(own.status === 'ready' ? profileFacts(own.value) : null);
-  const matches = $derived(own.status === 'ready' ? visibleMatches(own.value, true) : []);
+  const matches = $derived(own.status === 'ready' ? own.value.matches : []);
 
-  let accountOpen = $state(false);
   let nickOpen = $state(false);
+  let confirmingLogout = $state(false);
   let saved = $state(false);
   let changeLink: HTMLButtonElement | undefined = $state();
 
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-    // The account menu and the nick dialog keep their own keys while they are open.
-    if (accountOpen || nickOpen) return;
+    // The nick dialog and the log-out warning keep their own keys while they are open.
+    if (nickOpen || confirmingLogout) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       onback();
     }
+  }
+
+  /** A guest without a password loses the account by logging out: the warning asks first. */
+  function logout(): void {
+    if (hasPassword) onlogout();
+    else confirmingLogout = true;
   }
 
   const RESULTS = {
@@ -121,49 +115,30 @@
     draw: { key: 'history.draw', shape: 'd' },
   } as const satisfies Record<MatchEntry['result'], { key: MessageKey; shape: string }>;
 
-  const KINDS = {
-    rated: 'history.kind.rated',
-    calibration: 'history.kind.calibration',
-    unrated: 'history.kind.unrated',
-    casual: 'history.kind.casual',
-    bot: 'history.kind.bot',
-  } as const satisfies Record<MatchEntry['kind'], MessageKey>;
-
-  /** A number, or the word for a hidden (calibration) or missing (guest) one. */
-  function factText(fact: FactValue): string {
-    if (fact.kind === 'number') return String(fact.value);
-    return t(fact.kind === 'hidden' ? 'profile.value.hidden' : 'profile.value.none');
+  /** The opponent of a row: the nick, or "Normal bot" (the level as lozenges beside it). */
+  function opponentOf(match: MatchEntry): string {
+    if (!match.opponent.bot) return match.opponent.nick;
+    const level = botLevel(match.opponent.nick);
+    return level === null
+      ? match.opponent.nick
+      : tf('bot.seat', { level: t(`bot.level.${level}`) });
   }
-
-  const opponentOf = (match: MatchEntry): string =>
-    match.opponent.bot ? botLabel(match.opponent.nick, t) : match.opponent.nick;
 </script>
 
 <svelte:window {onkeydown} />
 
-<SheetFrame {map} label={t('profile.title')}>
-  {#snippet tabs()}
-    <MenuTabs current="board" {onplay} {onreplays} {onboard} {onhowto} />
-  {/snippet}
-  {#snippet corner()}
-    <AccountChip
-      {nick}
-      {hasPassword}
-      {calibration}
-      {rating}
-      {onprofile}
-      {onsettings}
-      {onpassword}
-      {onlogout}
-      bind:open={accountOpen}
-    />
-  {/snippet}
-
-  <!-- The own profile (#871, Lapis round 2 `profile`): the player, the facts, the matches. -->
+<SheetFrame
+  {map}
+  label={t('profile.title')}
+  player={{ nick, guest: !hasPassword, onprofile: () => undefined, here: true }}
+  {onhelp}
+>
+  <!-- The own profile (#919, III Plinth: the sheet on the blurred stone): the player with the two
+       quiet links, the colour and the facts, then the matches with Watch (the replays live here). -->
   <div class="profile">
-    <div class="sheethead">
+    <div class="prof-h">
       <span class="mark" style:--own={colour === null ? undefined : colourVar(colour)}>
-        <UnitMark side="own" size={46} />
+        <UnitMark side="own" size={56} />
       </span>
       <div class="name">
         <p class="kicker">{t('profile.kicker')}</p>
@@ -172,24 +147,49 @@
       <button
         bind:this={changeLink}
         type="button"
-        class="lnk"
+        class="lnk change"
         onclick={() => {
           saved = false;
           nickOpen = true;
         }}>{t('profile.nick.change')}</button
       >
       {#if saved}<p class="sr" role="status">{t('profile.nick.saved')}</p>{/if}
+      <div class="tools">
+        <button type="button" class="lnk" onclick={onsettings}>{t('settings.title')}</button>
+        <button type="button" class="lnk" onclick={logout}>{t('menu.logout')}</button>
+      </div>
     </div>
 
-    {#if oncolour !== undefined}
-      <div class="colour">
-        <ColourPicker value={colour} onchange={oncolour} />
-      </div>
-    {/if}
+    <div class="prow">
+      {#if oncolour !== undefined}
+        <div class="colour">
+          <ColourPicker value={colour} onchange={oncolour} />
+        </div>
+      {/if}
+      {#if facts !== null}
+        <dl class="facts">
+          <div>
+            <dt>{t('profile.fact.matches')}</dt>
+            <dd>{facts.matches}</dd>
+          </div>
+          <div>
+            <dt>{t('profile.fact.record')}</dt>
+            <dd
+              aria-label={tf('profile.fact.recordAria', {
+                wins: facts.record.wins,
+                losses: facts.record.losses,
+                draws: facts.record.draws,
+              })}
+            >
+              {recordText(facts.record)}
+            </dd>
+          </div>
+        </dl>
+      {/if}
+    </div>
 
     {#if own.status === 'loading'}
       <p class="sr" role="status">{t('profile.loading')}</p>
-      <div class="skel facts-skel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
       <div class="skel rows-skel" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     {:else if own.status === 'failed'}
       <div class="empty">
@@ -209,68 +209,7 @@
         </p>
         <LapisButton onclick={load}>{t('board.retry')}</LapisButton>
       </div>
-    {:else if facts !== null}
-      <dl class="facts">
-        <div>
-          <dt>{t('profile.fact.rating')}</dt>
-          <dd class={facts.rating.kind === 'number' ? 'num' : 'word'}>{factText(facts.rating)}</dd>
-        </div>
-        <div>
-          <dt>{t('profile.fact.rank')}</dt>
-          <dd class={facts.rank.kind === 'number' ? 'num' : 'word'}>{factText(facts.rank)}</dd>
-        </div>
-        <div>
-          <dt>{t(facts.matchesLabel)}</dt>
-          <dd class="num">{facts.matches}</dd>
-        </div>
-        <div>
-          <dt>{t('profile.fact.record')}</dt>
-          <dd
-            class="num"
-            aria-label={tf('profile.fact.recordAria', {
-              wins: facts.record.wins,
-              losses: facts.record.losses,
-              draws: facts.record.draws,
-            })}
-          >
-            {recordText(facts.record)}
-          </dd>
-        </div>
-        <div>
-          <dt>{t('profile.fact.calibration')}</dt>
-          {#if facts.status.kind === 'ranked'}
-            <dd class="word on">{t('profile.calibration.done')}</dd>
-          {:else if facts.status.kind === 'calibrating'}
-            {@const status = facts.status}
-            <dd class="word on">
-              <span
-                class="cells"
-                role="img"
-                aria-label={tf('menu.calibrationAria', {
-                  played: status.played,
-                  total: status.total,
-                })}
-              >
-                {#each Array.from({ length: status.total }, (_, i) => i) as i (i)}
-                  <i class:on={i < status.played}></i>
-                {/each}
-              </span>
-              <span aria-hidden="true"
-                >{tf('profile.calibration.progress', {
-                  played: status.played,
-                  total: status.total,
-                })}</span
-              >
-            </dd>
-          {:else}
-            <dd class="word">
-              <button type="button" class="lnk" onclick={onpassword}>{t('menu.setPassword')}</button
-              >
-            </dd>
-          {/if}
-        </div>
-      </dl>
-
+    {:else}
       <h3 class="sec">{t('profile.matches')}</h3>
       {#if matches.length === 0}
         <div class="empty">
@@ -281,52 +220,44 @@
         <table class="hist">
           <thead>
             <tr>
-              <th>{t('profile.col.result')}</th>
+              <th class="c-res">{t('profile.col.result')}</th>
               <th>{t('profile.col.opponent')}</th>
               <th>{t('profile.col.map')}</th>
-              <th>{t('profile.col.kind')}</th>
-              <th class="r">{t('profile.col.rating')}</th>
-              <th class="r">{t('profile.col.length')}</th>
-              <th>{t('profile.col.replay')}</th>
+              <th class="r c-len">{t('profile.col.length')}</th>
+              <th class="c-rp">{t('profile.col.replay')}</th>
             </tr>
           </thead>
           <tbody>
             {#each matches as match (match.match_id)}
               {@const result = RESULTS[match.result]}
-              {@const change = ratingOf(match)}
               {@const opponent = opponentOf(match)}
+              {@const level = match.opponent.bot ? botLevel(match.opponent.nick) : null}
               <tr>
                 <td class="res {result.shape}">
-                  <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
+                  <svg viewBox="0 0 11 10" width="11" height="10" aria-hidden="true">
                     {#if result.shape === 'w'}<path
-                        d="M7 1.5 13 12.5H1z"
-                      />{:else if result.shape === 'l'}<path d="M7 12.5 1 1.5h12z" />{:else}<rect
-                        x="2"
-                        y="5"
-                        width="10"
-                        height="4"
+                        d="M5.5 .5 10.5 9.5H.5Z"
+                      />{:else if result.shape === 'l'}<path d="M5.5 9.5 10.5 .5H.5Z" />{:else}<rect
+                        x="1"
+                        y="4"
+                        width="9"
+                        height="2.2"
                       />{/if}
                   </svg>{t(result.key)}
                 </td>
                 <td class="opp">
-                  {#if match.opponent.bot}<Icon name="bot" size={15} />{/if}<span>{opponent}</span>
+                  {#if level !== null}
+                    {@const cells = levelCells(level)}
+                    <span
+                      class="botmark"
+                      role="img"
+                      aria-label={tf('bot.difficultyAria', { level: cells, total: 4 })}
+                    >
+                      {#each [1, 2, 3, 4] as i (i)}<i class:on={i <= cells}></i>{/each}
+                    </span>
+                  {/if}<span>{opponent}</span>
                 </td>
                 <td>{match.map_id}</td>
-                <td>{t(KINDS[match.kind])}</td>
-                <td class="r num">
-                  {#if change.kind === 'change'}
-                    <span
-                      aria-label={tf('history.rating.range', {
-                        before: change.before,
-                        after: change.after,
-                      })}>{change.delta}</span
-                    >
-                  {:else if change.kind === 'hidden'}
-                    <span class="dim" title={t('history.rating.hiddenTitle')}
-                      >{t('history.rating.hidden')}</span
-                    >
-                  {/if}
-                </td>
                 <td class="r num">{lengthText(match.ticks) ?? ''}</td>
                 <td class="rp">
                   <ReplayChip
@@ -361,23 +292,37 @@
         }}
       />
     {/if}
+    {#if confirmingLogout}
+      <LogoutDialog
+        onpassword={() => {
+          confirmingLogout = false;
+          onpassword();
+        }}
+        {onlogout}
+        onstay={() => {
+          confirmingLogout = false;
+        }}
+      />
+    {/if}
   {/snippet}
 </SheetFrame>
 
 <style>
   .profile {
-    max-width: 1024px;
+    max-width: 1240px;
+    margin: 0 auto;
   }
 
-  /* The player: the helmet, the label and the nick in a row (the mockup's `.profile .sheethead`). */
-  .sheethead {
+  /* The player: the helmet, the label and the nick, "Change the nick", and on the right the two
+     quiet links (the mockup's `.prof-h`). */
+  .prof-h {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 20px;
+    gap: 6px 22px;
   }
 
-  .sheethead p {
+  .prof-h p {
     margin: 0;
   }
 
@@ -385,25 +330,47 @@
     display: inline-flex;
   }
 
-  .colour {
-    margin: 22px 0 30px;
+  .name {
+    display: grid;
+    gap: 4px;
   }
 
-  .sheethead .lnk {
+  .name h2 {
+    margin: 0;
+    font: 400 44px / 1 var(--font-display);
+    letter-spacing: 0.1em;
+  }
+
+  .change {
     align-self: flex-end;
-    margin-bottom: 4px;
-    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .tools {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    margin-left: auto;
+  }
+
+  /* The colour and the facts on one line, their feet aligned. */
+  .prow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 18px 80px;
+    margin-top: 24px;
   }
 
   .facts {
     display: flex;
-    flex-wrap: wrap;
-    gap: 18px 64px;
+    gap: 56px;
     margin: 0;
   }
 
   .facts div {
-    min-width: 0;
+    display: grid;
+    gap: 4px;
   }
 
   .facts dt,
@@ -416,60 +383,25 @@
   }
 
   .facts dd {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 44px;
-    margin: 2px 0 0;
+    margin: 0;
     font-size: 30px;
-    line-height: 1.2;
+    line-height: 1;
+    font-variant-numeric: lining-nums tabular-nums;
   }
 
-  .facts dd.word {
-    color: var(--ink-dim);
-    font-size: 22px;
-    font-style: italic;
-  }
-
-  .facts dd.word.on {
-    color: var(--ink);
-  }
-
-  .facts dd .lnk {
-    font-size: 20px;
-  }
-
-  /* The calibration cells, as the leaderboard draws them: filled for a match played. */
-  .cells {
-    display: inline-flex;
-    gap: 3px;
-  }
-
-  .cells i {
-    display: block;
-    width: 9px;
-    height: 14px;
-    border: 1px solid var(--ink-dim);
-  }
-
-  .cells i.on {
-    border-color: var(--ink);
-    background: var(--ink);
-  }
-
-  /* A section label with its incised rule running to the right edge. */
+  /* A section label with its doubled rule running to the right edge. */
   .sec {
     display: flex;
     align-items: center;
     gap: 18px;
-    margin: 34px 0 14px;
+    margin: 24px 0 12px;
   }
 
   .sec::after {
     content: '';
     flex: 1;
-    border-top: 1px solid var(--cut);
-    box-shadow: 0 1px 0 var(--line);
+    height: 5px;
+    background: var(--rule-dbl);
   }
 
   table {
@@ -477,46 +409,52 @@
     border-collapse: collapse;
   }
 
-  th,
-  td {
-    padding: 5px 14px 5px 0;
-    border-bottom: 1px solid rgb(61 55 45 / 45%);
+  th {
+    padding: 0 0 10px;
     text-align: left;
+    border-bottom: 1px solid var(--cut);
+    box-shadow: 0 1px 0 var(--line);
+    font-size: 11px;
+  }
+
+  td {
+    height: 46px;
+    padding: 0;
+    border-bottom: 1px solid rgb(61 55 45 / 70%);
+    font-size: 18px;
     white-space: nowrap;
   }
 
-  th {
-    padding: 0 14px 12px 0;
-    border-bottom: 1px solid var(--cut);
-    box-shadow: 0 1px 0 var(--line);
+  .c-res {
+    width: 150px;
   }
 
-  td {
-    font-size: 17px;
+  .c-len {
+    width: 110px;
+  }
+
+  .c-rp {
+    width: 120px;
   }
 
   .r {
     text-align: right;
+    padding-right: 18px;
   }
 
   .num {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .dim {
-    color: var(--ink-dim);
-    font-style: italic;
+    font-variant-numeric: lining-nums tabular-nums;
   }
 
   .res {
-    font: 500 13px / 1.3 var(--font-display);
-    letter-spacing: 0.16em;
+    font: 500 12px / 1 var(--font-display);
+    letter-spacing: 0.2em;
     text-transform: uppercase;
   }
 
   .res svg {
-    margin-right: 8px;
-    vertical-align: -1px;
+    margin-right: 9px;
+    vertical-align: 0;
     fill: currentColor;
   }
 
@@ -529,24 +467,33 @@
   }
 
   .res.d {
-    color: var(--ink);
+    color: var(--ink-soft);
   }
 
   .opp {
-    max-width: 220px;
+    max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .opp :global(svg) {
-    display: inline-block;
-    margin-right: 6px;
-    vertical-align: -2px;
-    color: var(--ink-dim);
+  /* The bot's level: four lozenges, filled up to it (a shape, not a colour). */
+  .botmark {
+    display: inline-flex;
+    gap: 2px;
+    margin-right: 8px;
+    vertical-align: 1px;
   }
 
-  .rp {
-    padding-right: 0;
+  .botmark i {
+    display: block;
+    width: 6px;
+    height: 6px;
+    border: 1px solid var(--ink-dim);
+    transform: rotate(45deg);
+  }
+
+  .botmark i.on {
+    background: var(--ink-dim);
   }
 
   .rp :global(.st) {
@@ -562,16 +509,6 @@
     );
   }
 
-  .facts-skel {
-    display: flex;
-    gap: 64px;
-  }
-
-  .facts-skel i {
-    width: 120px;
-    height: 64px;
-  }
-
   .rows-skel {
     margin-top: 62px;
   }
@@ -579,14 +516,5 @@
   .rows-skel i {
     height: 34px;
     border-bottom: 1px solid rgb(61 55 45 / 45%);
-  }
-
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
   }
 </style>

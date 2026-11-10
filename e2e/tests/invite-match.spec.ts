@@ -88,7 +88,8 @@ test('two guests play a private match by invite to the end and watch the replay'
   browser,
   baseURL,
 }) => {
-  const { host, guest, map } = await startInviteMatch(browser, baseURL ?? '');
+  // The orders below need a known pool map: the invite is made on ridge through the API.
+  const { host, guest, map } = await startInviteMatch(browser, baseURL ?? '', 'ridge');
   // The sides are the server's decision: each player orders their own half.
   expect(new Set([await host.side(), await guest.side()])).toEqual(new Set([0, 1]));
 

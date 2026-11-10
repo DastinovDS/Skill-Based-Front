@@ -43,6 +43,7 @@ describe('legal content', () => {
       'sbf.hints.matches',
       'sbf.introSeen',
       'sbf.locale',
+      'sbf.newHereOff',
       'sbf.settings',
       'sbf.sound',
     ]);

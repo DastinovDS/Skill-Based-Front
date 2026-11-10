@@ -9,62 +9,29 @@
     /** The pool map drawn behind the rail; `null` keeps the plain dark page. */
     map: MapFile | null;
     phase?: BackdropPhase;
-    /** The opponent of a found pair: written on the map. */
-    opponent?: string | null;
-    /** Seconds in the queue: the scout of the search walks by it (#474). */
-    waited?: number;
     /** The name of the rail for assistive technology. */
     label: string;
-    /** The tabs of the menu at the top (#629, M5). */
-    tabs?: Snippet;
-    /** The top right corner: the player chip. */
-    corner?: Snippet;
     /**
      * The entry screen (#629, N5 "Title"): no top line, the content stands in the middle over the
      * blurred map.
      */
     entry?: boolean;
-    /** The content stands in the middle under the bar (the queue). */
-    center?: boolean;
     /** The content takes the width of the page under the bar (the result). */
     wide?: boolean;
     children: Snippet;
-    /** The "Dock" panel beside the rail (#473): the rail keeps the menu, the mode opens here. */
-    panel?: Snippet;
-    /** The name of the panel for assistive technology. */
-    panelLabel?: string;
   }
 
-  let {
-    map,
-    phase = 'idle',
-    opponent = null,
-    waited = 0,
-    label,
-    tabs,
-    corner,
-    entry = false,
-    center = false,
-    wide = false,
-    children,
-    panel,
-    panelLabel = '',
-  }: Props = $props();
+  let { map, phase = 'idle', label, entry = false, wide = false, children }: Props = $props();
 </script>
 
-<!-- One frame for the screens before a match (#471; Lapis, #845): the map behind, the bar with the
-     brand, the tabs and the player on top, the rail of text on the left (or in the middle). -->
-<main class="front" class:docked={panel !== undefined} class:entry class:center class:wide>
-  <MenuBackdrop {map} {phase} {opponent} {waited} {entry} />
+<!-- The frame of the entry, the boot, the result and the replay's loading (#471; Lapis, #845): the
+     map behind, the bar with the brand on top, the rail of text on the left. The main screen has its
+     own frame (`PlayScreen`, #919), the pages theirs (`board/SheetFrame`). -->
+<main class="front" class:entry class:wide>
+  <MenuBackdrop {map} {phase} {entry} />
   <div class="shade"></div>
-  {#if !entry}<FrontTop {tabs} {corner} />{/if}
+  {#if !entry}<FrontTop />{/if}
   <section class="rail" aria-label={label}>
     {@render children()}
   </section>
-  {#if panel !== undefined}
-    <!-- The frame is drawn round the panel; the content scrolls inside it. -->
-    <section class="panel rule-frame" aria-label={panelLabel}>
-      <div class="pscroll">{@render panel()}</div>
-    </section>
-  {/if}
 </main>

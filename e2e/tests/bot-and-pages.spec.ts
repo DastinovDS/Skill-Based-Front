@@ -5,9 +5,10 @@ import { Player } from '../support/player.ts';
 test('a match against a bot starts and ends with a forfeit', async ({ browser, baseURL }) => {
   const player = await Player.create(browser, baseURL ?? '', nick('solo'));
   await player.enter();
-  await player.page.getByRole('button', { name: 'Play a bot' }).click();
-  await player.page.getByRole('radio', { name: 'Easy' }).click();
-  await player.page.getByRole('button', { name: 'Start' }).click();
+  // The way "Play a bot" on the plinth opens the level and map drawer at once (#919).
+  await player.page.getByRole('radio', { name: 'Play a bot' }).click();
+  await player.page.getByRole('radio', { name: /Easy/ }).click();
+  await player.page.getByRole('button', { name: 'Start', exact: true }).click();
   await player.expectPlaying();
 
   await player.forfeit();
@@ -16,39 +17,29 @@ test('a match against a bot starts and ends with a forfeit', async ({ browser, b
   await player.close();
 });
 
-test('a bot match on a generated map names the map on the result screen', async ({
+test('the bot map picker: New map first, Random map and the pool, no stored generated maps', async ({
   browser,
   baseURL,
 }) => {
-  const player = await Player.create(browser, baseURL ?? '', nick('gen'));
+  const player = await Player.create(browser, baseURL ?? '', nick('pick'));
   await player.enter();
-  await player.page.getByRole('button', { name: 'Play a bot' }).click();
-  await expect(player.page.getByText('Generated, unrated')).toBeVisible();
-  await player.page.getByRole('radio', { name: /^gen1-17/ }).click();
-  await player.page.getByRole('button', { name: 'Start' }).click();
-  await player.expectPlaying();
-
-  await player.forfeit();
-  await expect(player.page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
-  await expect(player.page.getByText('Match result · gen1-17')).toBeVisible();
-  await player.close();
-});
-
-test('the public lobby offers a new map first, then the pool and the generated maps', async ({
-  browser,
-  baseURL,
-}) => {
-  // The public lobby is unrated like an invite by link (#889): the same choices.
-  const player = await Player.create(browser, baseURL ?? '', nick('pub'));
-  await player.enter();
-  await player.page.getByRole('button', { name: 'Open matches' }).click();
-  await player.page.getByRole('button', { name: 'Create an open match' }).first().click();
+  await player.page.getByRole('radio', { name: 'Play a bot' }).click();
   await expect(player.page.getByRole('radio', { name: 'New map' })).toHaveAttribute(
     'aria-checked',
     'true',
   );
+  await expect(player.page.getByRole('radio', { name: 'Random map' })).toBeVisible();
   await expect(player.page.getByRole('radio', { name: /^ridge/ })).toBeVisible();
-  await expect(player.page.getByText('Generated, unrated')).toBeVisible();
+  await expect(player.page.getByRole('radio', { name: /^gen1-/ })).toHaveCount(0);
+  await expect(player.page.getByText(/unrated/i)).toHaveCount(0);
+
+  // A pool map: the result screen names it.
+  await player.page.getByRole('radio', { name: /^ridge/ }).click();
+  await player.page.getByRole('button', { name: 'Start', exact: true }).click();
+  await player.expectPlaying();
+  await player.forfeit();
+  await expect(player.page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
+  await expect(player.page.getByText('Match result · ridge')).toBeVisible();
   await player.close();
 });
 

@@ -45,9 +45,6 @@
     event.preventDefault();
     order[next]?.focus();
   }
-
-  /** Key labels are the keys themselves, not translations. */
-  const ESC = 'Esc';
 </script>
 
 {#if open}
@@ -75,10 +72,23 @@
       <p class="dlg-lead" id="exit-text">{t('exit.text')}</p>
     {/if}
     {#snippet actions()}
-      <button type="button" class="dlg-btn pri" bind:this={stay} onclick={onstay}>
-        {t('exit.stay')}<kbd class="dlg-k" aria-hidden="true">{ESC}</kbd>
+      <!-- Esc still keeps playing (Hud); the key is not printed on the button (#919). -->
+      <button
+        type="button"
+        class="dlg-btn pri"
+        aria-keyshortcuts="Escape"
+        bind:this={stay}
+        onclick={onstay}
+      >
+        {t('exit.stay')}
       </button>
-      <button type="button" class="dlg-btn leave danger" bind:this={confirm} onclick={onforfeit}>
+      <!-- Danger A (#919): minium rules, the enemy hatch inks in on hover; the icon and words. -->
+      <button
+        type="button"
+        class="dlg-btn leave danger lapis-danger"
+        bind:this={confirm}
+        onclick={onforfeit}
+      >
         <Icon name="logout" size={18} />{t('exit.confirm')}
       </button>
     {/snippet}

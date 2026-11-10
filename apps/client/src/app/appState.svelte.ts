@@ -6,7 +6,7 @@
  * without a DOM.
  */
 import { SvelteURLSearchParams } from 'svelte/reactivity';
-import { Api, ApiError, type ActiveMatch, type BotLevel } from '../api/http.ts';
+import { Api, ApiError, NEW_MAP, type ActiveMatch, type BotLevel } from '../api/http.ts';
 import { forgetGuest, loadGuest, saveGuest } from '../api/guestStore.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import { loginFailure, nickFailure, passwordFailure, type AccountFailure } from './account.ts';
@@ -15,34 +15,25 @@ import { BOT_START_TIMEOUT_MS } from './waiting.ts';
 import { MapCache } from './mapCache.svelte.ts';
 import { MENU_MAP } from './menuMap.ts';
 import type { MatchSummary } from './matchSummary.ts';
-import type { Calibration, MapFile, MatchEndMsg, PlayerColour, PlayerId } from '../protocol.gen.ts';
+import type { MapFile, MatchEndMsg, PlayerColour, PlayerId } from '../protocol.gen.ts';
+import type { Way } from './play.ts';
 
 export type Screen =
   /** Checking the saved guest. */
   | { readonly name: 'boot' }
   | { readonly name: 'welcome' }
-  | { readonly name: 'menu' }
-  /** Pick the map of a private or public match, then create it. */
-  | { readonly name: 'create'; readonly public: boolean }
-  /** The public lobby: open matches of other players (LOB-01). */
-  | { readonly name: 'lobby' }
-  /** Play a bot; `start`: start at once at this level on a new map (the bot offer of the queue). */
-  | { readonly name: 'bot'; readonly start?: BotLevel }
-  /** The "How to play" page (CLI-13, #72). */
-  | { readonly name: 'howto' }
   /**
-   * The Leaderboard tab (`board`, LB-01, #78) or the Replays tab (`history`): the own matches as
-   * cards (#629). "Back" from a replay returns here.
+   * The main screen (#919, III Plinth) with the way chosen on its plinth (none: Find a match).
+   * `start`: Play a bot starts at once at this level on a new map (the bot offer of the queue).
    */
-  | {
-      readonly name: 'leaderboard';
-      readonly mode: 'board' | 'history';
-    }
+  | { readonly name: 'menu'; readonly way?: Way; readonly start?: BotLevel }
+  /** The "How to play" page (CLI-13, #72), from the "?" of the bar. */
+  | { readonly name: 'howto'; readonly back?: Screen }
   /** Set or change the password of the account (#374). */
-  | { readonly name: 'password' }
+  | { readonly name: 'password'; readonly back?: Screen }
   /**
-   * The own profile and the settings (#871), opened from the account chip: "Back" (Esc) returns
-   * to the screen they were opened from, none: the menu.
+   * The own profile (opened by the nick in the bar, #919) and the settings (from the profile,
+   * #871): "Back" (Esc) returns to the screen they were opened from, none: the menu.
    */
   | { readonly name: 'profile'; readonly back?: Screen }
   | { readonly name: 'settings'; readonly back?: Screen }
@@ -98,14 +89,15 @@ export class AppState {
   notice = $state.raw<MessageKey | null>(null);
   /** The running match of the guest, known from the server: the menu offers to return to it. */
   activeMatch = $state.raw<ActiveMatch | null>(null);
-  /** Calibration progress of the account (DEC-34): null for a guest and once it is over. */
-  calibration = $state.raw<Calibration | null>(null);
   /** The own player id, known from `/api/me` once the menu has opened. */
   playerId = $state.raw<number | null>(null);
   /** The colour the player asks for in matches (DEC-49), from `/api/me`; null while unknown. */
   colour = $state.raw<PlayerColour | null>(null);
-  /** The displayed rating of a ranked account (#78) for the corner chip; null while unknown. */
-  rating = $state.raw<number | null>(null);
+  /**
+   * A nick was just entered on the entry screen (a new guest or a new account): the main screen
+   * may offer "New here?" once (#919, `play.ts`), then it is cleared.
+   */
+  entered = $state(false);
   /** The matchmaking queue is locked until this time (ms since the epoch), or null (DEC-34). */
   queueBanUntil = $state.raw<number | null>(null);
   /** The map drawn behind the start screens: the menu map, bundled at build time (#474). */
@@ -143,7 +135,6 @@ export class AppState {
         const me = await this.api.me(saved.token);
         this.guest = { token: saved.token, nick: me.nick, hasPassword: me.has_password };
         this.colour = me.colour;
-        this.calibration = me.calibration ?? null;
         this.playerId = me.player_id;
         saveGuest(this.#storage, this.guest);
       } catch (error) {
@@ -167,6 +158,7 @@ export class AppState {
       const created = await this.api.createGuest(nick);
       this.guest = { token: created.token, nick, hasPassword: false };
       saveGuest(this.#storage, this.guest);
+      this.entered = true;
     } catch (error) {
       this.notice = apiErrorKey(error);
       return;
@@ -195,6 +187,7 @@ export class AppState {
       this.notice = 'error.account.registerNoPassword';
     }
     this.#remember({ token, nick, hasPassword });
+    this.entered = true;
     await this.#proceed();
     return null;
   }
@@ -289,6 +282,17 @@ export class AppState {
   /** The own profile or the settings (#871), from the account chip of the current screen. */
   openAccountPage(name: 'profile' | 'settings'): void {
     const here = this.screen;
+    if (here.name === name) return;
+    // The settings open from the profile (#919) and go back to it; the profile from the settings
+    // is the one they came from.
+    if (name === 'settings' && here.name === 'profile') {
+      this.go({ name, back: here });
+      return;
+    }
+    if (name === 'profile' && here.name === 'settings' && here.back?.name === 'profile') {
+      this.go(here.back);
+      return;
+    }
     // Another account page is no place to come back to: keep where the first one was opened.
     const back = here.name === 'profile' || here.name === 'settings' ? here.back : here;
     this.go(back === undefined ? { name } : { name, back });
@@ -296,9 +300,33 @@ export class AppState {
 
   /** "Back" of the profile and the settings: the screen they were opened from, else the menu. */
   closeAccountPage(): void {
+    this.closePage();
+  }
+
+  /** How to play (the "?" of the bar) or the password page, over the screen they open from. */
+  openPage(name: 'howto' | 'password'): void {
     const here = this.screen;
-    if ((here.name === 'profile' || here.name === 'settings') && here.back !== undefined) {
-      this.go(here.back);
+    if (here.name === name) return;
+    this.go({ name, back: here });
+  }
+
+  /** "Back" of a page (profile, settings, how to play, password): where it was opened, else the menu. */
+  closePage(): void {
+    const here = this.screen;
+    if (
+      (here.name === 'profile' ||
+        here.name === 'settings' ||
+        here.name === 'howto' ||
+        here.name === 'password') &&
+      here.back !== undefined
+    ) {
+      const back = here.back;
+      // A bot start of the queue's offer is not repeated by coming back.
+      this.go(
+        back.name === 'menu'
+          ? { name: 'menu', ...(back.way === undefined ? {} : { way: back.way }) }
+          : back,
+      );
     } else {
       this.menu();
     }
@@ -330,9 +358,8 @@ export class AppState {
   }
 
   /**
-   * The calibration and the rating of the account, asked again whenever the menu opens (a match
-   * changes them). The rating is the displayed one of `GET /api/players/{id}` (#78); a guest and
-   * a calibrating account have none.
+   * The own id and colour, asked again whenever the menu opens. No rating is shown outside a
+   * match at the MVP (#919): the account's rating and calibration are not asked for.
    */
   async refreshProfile(): Promise<void> {
     const guest = this.guest;
@@ -341,20 +368,10 @@ export class AppState {
     try {
       me = await this.api.me(guest.token);
     } catch {
-      return; // Best effort, like the running match: the chip keeps what it showed.
+      return; // Best effort, like the running match: the screen keeps what it showed.
     }
     this.playerId = me.player_id;
     this.colour = me.colour;
-    this.calibration = me.calibration ?? null;
-    if (!me.has_password || this.calibration !== null) {
-      this.rating = null;
-      return;
-    }
-    try {
-      this.rating = (await this.api.player(me.player_id, guest.token)).rating;
-    } catch {
-      // The chip says "Ranked" without the number until the next time.
-    }
   }
 
   /** The queue refused us for repeated resigns (DEC-34): the menu counts the time down. */
@@ -367,31 +384,34 @@ export class AppState {
     this.go({ name: 'match', matchId: match.match_id, mapId: match.map_id });
   }
 
-  /** The Leaderboard tab or the Replays tab (#629). */
-  openBoard(mode: 'board' | 'history' = 'board'): void {
-    this.go({ name: 'leaderboard', mode });
-  }
-
   go(screen: Screen): void {
     this.notice = null;
     this.screen = screen;
   }
 
-  /** Back to the menu (or to the nick form without a guest), optionally with a message. */
-  menu(notice: MessageKey | null = null): void {
-    this.screen = { name: this.guest === null ? 'welcome' : 'menu' };
+  /**
+   * Back to the menu (or to the nick form without a guest), optionally with a message, with a
+   * way of the plinth chosen (none: Find a match).
+   */
+  menu(notice: MessageKey | null = null, way?: Way): void {
+    this.screen =
+      this.guest === null
+        ? { name: 'welcome' }
+        : way === undefined
+          ? { name: 'menu' }
+          : { name: 'menu', way };
     this.notice = notice;
   }
 
   /**
-   * Creates an invite and opens its waiting room. A failure stays on the screen that asked (the
-   * choices are kept, #473): the answer is the line to show, or null on success. A lost session
+   * Creates an invite (a map made for it, #884) and opens its waiting room. A failure stays on
+   * the screen that asked: the answer is the line to show, or null on success. A lost session
    * (401) is not shown there: it starts over from the menu with the notice.
    */
-  async createInvite(pick: string, isPublic = false): Promise<MessageKey | null> {
+  async createInvite(pick: string = NEW_MAP): Promise<MessageKey | null> {
     const guest = this.#requireGuest();
     try {
-      const invite = await this.api.createInvite(guest.token, pick, isPublic);
+      const invite = await this.api.createInvite(guest.token, pick);
       this.go({ name: 'invite', code: invite.code });
       return null;
     } catch (error) {
@@ -448,10 +468,8 @@ export class AppState {
   forget(): void {
     forgetGuest(this.#storage);
     this.guest = null;
-    this.calibration = null;
     this.playerId = null;
     this.colour = null;
-    this.rating = null;
     this.queueBanUntil = null;
   }
 

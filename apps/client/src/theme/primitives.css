@@ -3,15 +3,16 @@
  * put them on its own elements; the Svelte components of src/theme/ (RuleFrame, StoneOverlay,
  * LapisButton, SectionLabel) are thin wrappers over them. Geometry and colours follow the decided
  * mockups: docs/design/mockups/out-of-game-style-r2.html (Lapis) and -r3.html, edges II "Double
- * rule" (ui-style 56). Pure CSS: 1 px gradient rules and one small SVG lozenge, no filter, no glow.
+ * rule" (ui-style 56) with the Stepped corner of #919 (out-of-game-rework-r2.html). Pure CSS: 1 px
+ * gradient rules and four small SVG corners, no filter, no glow.
  * The tokens are in app.css (:root).
  */
 
-/* ---- The Double rule frame -------------------------------------------------------------------
-   Two incised rules and a lozenge where they turn (the frame of the CP gauge in the match, ui-style
-   54a). The outer rule is a dark cut over a lit lip at the element's edge, the inner one a faint
-   lit rule `--frame-gap` inside it; the lozenges sit on the corners. Drawn by a ::before laid over
-   the element, so it needs no wrapper and takes no room. */
+/* ---- The Double rule frame, Stepped corner (#919, corner 1) ----------------------------------
+   Two incised rules that step in twice where they turn (a ziggurat notch) with a lozenge in the
+   notch. The outer rule is a dark cut over a lit lip at the element's edge, the inner one a faint
+   lit rule 4 px inside it; the straight runs stop where the 26 px corners take over. Drawn by a
+   ::before laid over the element, so it needs no wrapper and takes no room. */
 .rule-frame {
   position: relative;
 }
@@ -22,27 +23,27 @@
   inset: -4px;
   pointer-events: none;
   background:
-    url('./frame-lozenge.svg') left top / 10px 10px no-repeat,
-    url('./frame-lozenge.svg') right top / 10px 10px no-repeat,
-    url('./frame-lozenge.svg') right bottom / 10px 10px no-repeat,
-    url('./frame-lozenge.svg') left bottom / 10px 10px no-repeat,
-    /* the cut, at the element's edge */ linear-gradient(var(--cut), var(--cut)) 4px 4px /
-      calc(100% - 8px) 1px no-repeat,
-    linear-gradient(var(--cut), var(--cut)) 4px calc(100% - 4px) / calc(100% - 8px) 1px no-repeat,
-    linear-gradient(var(--cut), var(--cut)) 4px 4px / 1px calc(100% - 8px) no-repeat,
-    linear-gradient(var(--cut), var(--cut)) calc(100% - 4px) 4px / 1px calc(100% - 8px) no-repeat,
-    /* its lit lip, one pixel in */ linear-gradient(var(--lit), var(--lit)) 5px 5px /
-      calc(100% - 10px) 1px no-repeat,
-    linear-gradient(var(--lit), var(--lit)) 5px calc(100% - 5px) / calc(100% - 10px) 1px no-repeat,
-    linear-gradient(var(--lit), var(--lit)) 5px 5px / 1px calc(100% - 10px) no-repeat,
-    linear-gradient(var(--lit), var(--lit)) calc(100% - 5px) 5px / 1px calc(100% - 10px) no-repeat,
-    /* the inner rule */ linear-gradient(var(--lit-faint), var(--lit-faint)) 9px 9px /
-      calc(100% - 18px) 1px no-repeat,
-    linear-gradient(var(--lit-faint), var(--lit-faint)) 9px calc(100% - 9px) / calc(100% - 18px) 1px
-      no-repeat,
-    linear-gradient(var(--lit-faint), var(--lit-faint)) 9px 9px / 1px calc(100% - 18px) no-repeat,
-    linear-gradient(var(--lit-faint), var(--lit-faint)) calc(100% - 9px) 9px / 1px calc(100% - 18px)
-      no-repeat;
+    url('./frame-step-tl.svg') left top / 26px 26px no-repeat,
+    url('./frame-step-tr.svg') right top / 26px 26px no-repeat,
+    url('./frame-step-br.svg') right bottom / 26px 26px no-repeat,
+    url('./frame-step-bl.svg') left bottom / 26px 26px no-repeat,
+    /* the cut, at the element's edge */ linear-gradient(var(--cut), var(--cut)) 26px 4px /
+      calc(100% - 52px) 1px no-repeat,
+    linear-gradient(var(--cut), var(--cut)) 26px calc(100% - 4px) / calc(100% - 52px) 1px no-repeat,
+    linear-gradient(var(--cut), var(--cut)) 4px 26px / 1px calc(100% - 52px) no-repeat,
+    linear-gradient(var(--cut), var(--cut)) calc(100% - 4px) 26px / 1px calc(100% - 52px) no-repeat,
+    /* its lit lip, one pixel in */ linear-gradient(var(--lit), var(--lit)) 26px 5px /
+      calc(100% - 52px) 1px no-repeat,
+    linear-gradient(var(--lit), var(--lit)) 26px calc(100% - 5px) / calc(100% - 52px) 1px no-repeat,
+    linear-gradient(var(--lit), var(--lit)) 5px 26px / 1px calc(100% - 52px) no-repeat,
+    linear-gradient(var(--lit), var(--lit)) calc(100% - 5px) 26px / 1px calc(100% - 52px) no-repeat,
+    /* the inner rule */ linear-gradient(var(--lit-faint), var(--lit-faint)) 26px 9px /
+      calc(100% - 52px) 1px no-repeat,
+    linear-gradient(var(--lit-faint), var(--lit-faint)) 26px calc(100% - 9px) / calc(100% - 52px)
+      1px no-repeat,
+    linear-gradient(var(--lit-faint), var(--lit-faint)) 9px 26px / 1px calc(100% - 52px) no-repeat,
+    linear-gradient(var(--lit-faint), var(--lit-faint)) calc(100% - 9px) 26px / 1px
+      calc(100% - 52px) no-repeat;
 }
 
 /* A doubled rule between rows and under a section label: the cut, its lip, a faint rule 4 px down. */
@@ -218,14 +219,66 @@
       calc(100% - 6px) no-repeat;
 }
 
-/* A destructive secondary action keeps its own outline (the opponent red, plus the words). */
-.lapis-btn.secondary.danger {
-  border-color: currentColor;
-  color: var(--enemy);
+/* A destructive action, danger A of #919 (the forfeit, the guest's log-out): two rules in the
+   opponent's minium, the enemy's diagonal hatch inks in from the left on hover with a burin edge.
+   The icon and the words say what it does, never the colour alone. */
+.lapis-btn.danger,
+.lapis-danger {
+  overflow: hidden;
+  isolation: isolate;
+  color: #ee9a84;
 }
 
-.lapis-btn.secondary.danger::before {
-  display: none;
+.lapis-btn.secondary.danger::before,
+.lapis-danger::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--enemy-lapis), var(--enemy-lapis)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--enemy-lapis), var(--enemy-lapis)) 0 100% / 100% 1px no-repeat,
+    linear-gradient(var(--enemy-lapis), var(--enemy-lapis)) 0 0 / 1px 100% no-repeat,
+    linear-gradient(var(--enemy-lapis), var(--enemy-lapis)) 100% 0 / 1px 100% no-repeat,
+    linear-gradient(rgb(224 115 90 / 42%), rgb(224 115 90 / 42%)) 4px 4px / calc(100% - 8px) 1px
+      no-repeat,
+    linear-gradient(rgb(224 115 90 / 42%), rgb(224 115 90 / 42%)) 4px calc(100% - 4px) /
+      calc(100% - 8px) 1px no-repeat,
+    linear-gradient(rgb(224 115 90 / 42%), rgb(224 115 90 / 42%)) 4px 4px / 1px calc(100% - 8px)
+      no-repeat,
+    linear-gradient(rgb(224 115 90 / 42%), rgb(224 115 90 / 42%)) calc(100% - 4px) 4px / 1px
+      calc(100% - 8px) no-repeat;
+}
+
+.lapis-btn.danger::after,
+.lapis-danger::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(#f2b3a2, #f2b3a2) right / 2px 100% no-repeat,
+    repeating-linear-gradient(45deg, rgb(229 120 94 / 34%) 0 1.2px, transparent 1.2px 4.4px);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.55s var(--ease-engrave);
+}
+
+.lapis-btn.danger:hover:not(:disabled),
+.lapis-danger:hover:not(:disabled) {
+  color: #ffd2c5;
+}
+
+.lapis-btn.danger:hover:not(:disabled)::after,
+.lapis-danger:hover:not(:disabled)::after,
+.lapis-danger:focus-visible::after,
+.lapis-btn.danger:focus-visible::after {
+  clip-path: inset(0);
+}
+
+:root[data-motion='reduced'] .lapis-btn.danger::after,
+:root[data-motion='reduced'] .lapis-danger::after {
+  transition: none;
 }
 
 .lapis-btn.sm {

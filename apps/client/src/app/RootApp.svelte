@@ -6,33 +6,34 @@
   import ReplayScreen from '../replay/ReplayScreen.svelte';
   import CrashGuard from './CrashGuard.svelte';
   import { AppState, type Guest } from './appState.svelte.ts';
-  import type { DockContext } from './dock.ts';
-  import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
-  import ReplaysScreen from '../board/ReplaysScreen.svelte';
-  import type { AccountPages, MenuTabActions } from './menuTabs.ts';
   import ProfileScreen from '../board/ProfileScreen.svelte';
   import SettingsScreen from './SettingsScreen.svelte';
   import { settings } from './settingsState.svelte.ts';
   import BootScreen from './BootScreen.svelte';
-  import BotScreen from './BotScreen.svelte';
-  import CreateScreen from './CreateScreen.svelte';
-  import LobbyScreen from './LobbyScreen.svelte';
-  import InviteScreen from './InviteScreen.svelte';
   import MatchScreen from './MatchScreen.svelte';
-  import MenuScreen from './MenuScreen.svelte';
   import PasswordScreen from './PasswordScreen.svelte';
   import HowToScreen from './HowToScreen.svelte';
-  import QueueScreen from './QueueScreen.svelte';
   import type { MatchSummary } from './matchSummary.ts';
+  import PlayScreen from './PlayScreen.svelte';
+  import {
+    dismissNewHere,
+    NEW_HERE_ENABLED,
+    newHereDismissed,
+    showNewHere,
+    type PlayContext,
+    type Way,
+  } from './play.ts';
   import ResultScreen from './ResultScreen.svelte';
   import WelcomeScreen from './WelcomeScreen.svelte';
 
   interface Props {
     /** Tests pass their own state (fake API and storage). */
     app?: AppState;
+    /** The browser storage of "New here?"; tests pass their own. */
+    storage?: () => Storage;
   }
 
-  let { app = new AppState() }: Props = $props();
+  let { app = new AppState(), storage = () => window.localStorage }: Props = $props();
 
   onMount(() => {
     void app.start();
@@ -56,72 +57,77 @@
     if (screen.name !== 'boot' && screen.name !== 'welcome' && guest !== null) firstEntry = false;
   });
 
-  /** The pages of the account chip (#871): the profile and the settings. */
-  const pages: Required<AccountPages> = {
-    onprofile: () => {
-      app.openAccountPage('profile');
-    },
-    onsettings: () => {
-      app.openAccountPage('settings');
-    },
-  };
+  // The main-screen motion (#919, item 8) plays when the main screen comes in from the entry, a
+  // match, the result or a replay; coming back from a page over the map (the profile, the settings,
+  // How to play, the password) it is already there.
+  const PAGES: ReadonlySet<string> = new Set(['profile', 'settings', 'howto', 'password']);
+  const PLAY: ReadonlySet<string> = new Set(['menu', 'queue', 'invite']);
+  let entrance = $state(true);
+  $effect(() => {
+    const name = screen.name;
+    // Once the main screen is up, its motion has played: a way chosen, a search stopped or a
+    // waiting room left does not raise the plinth again.
+    entrance = PLAY.has(name) ? false : !PAGES.has(name);
+  });
 
-  /** Where the tabs of the menu lead (#629, M5), and the pages of the account chip. */
-  function tabsOf(): MenuTabActions & AccountPages {
-    return {
-      ...pages,
-      onplay: () => {
-        app.menu();
-      },
-      onreplays: () => {
-        app.openBoard('history');
-      },
-      onboard: () => {
-        app.openBoard('board');
-      },
-      onhowto: () => {
-        app.go({ name: 'howto' });
-      },
-    };
+  /** "New here?" after a nick was entered (#919, item 6), off until #806 (`NEW_HERE_ENABLED`). */
+  const newHere = $derived(
+    screen.name === 'menu' &&
+      showNewHere({
+        enabled: NEW_HERE_ENABLED,
+        entered: app.entered,
+        dismissed: newHereDismissed(storage),
+      }),
+  );
+
+  function closeNewHere(learn: boolean, never: boolean): void {
+    app.entered = false;
+    if (never) dismissNewHere(storage);
+    // The tutorial round (#806) is not there yet: the page of the rules stands in for it.
+    if (learn) app.openPage('howto');
   }
 
-  /** What the lobby, invite and bot screens (the Dock, #473) need besides their own data. */
-  function dockOf(who: Guest): DockContext {
+  /** What the main screen (#919, III Plinth) needs from the app. */
+  function playOf(who: Guest): PlayContext {
     return {
+      api: app.api,
+      token: who.token,
       nick: who.nick,
       hasPassword: who.hasPassword,
-      calibration: app.calibration,
-      rating: app.rating,
-      banUntil: app.queueBanUntil,
       map: app.backdrop,
       maps: app.maps,
-      onbot: () => {
-        app.go({ name: 'bot' });
+      banUntil: app.queueBanUntil,
+      hasActiveMatch: app.activeMatch !== null,
+      onresume: () => {
+        const running = app.activeMatch;
+        if (running !== null) app.resumeMatch(running);
       },
-      oncreate: () => {
-        app.go({ name: 'create', public: false });
+      onway: (way: Way) => {
+        app.go({ name: 'menu', way });
       },
-      onlobby: () => {
-        app.go({ name: 'lobby' });
+      onsearch: () => {
+        app.go({ name: 'queue' });
       },
-      onreplays: () => {
-        app.openBoard('history');
+      onbot: (level: BotLevel, pick: string) => app.playBot(level, pick),
+      oninvite: () => app.createInvite(),
+      onstart: (matchId: string, mapId: string) => {
+        app.go({ name: 'match', matchId, mapId });
       },
-      onboard: () => {
-        app.openBoard('board');
+      onofferbot: () => {
+        // The plinth shows the wait for the new map and a failure (#889).
+        app.go({ name: 'menu', way: 'bot', start: 'normal' });
       },
-      onhowto: () => {
-        app.go({ name: 'howto' });
+      onbanned: (seconds: number) => {
+        app.banQueue(seconds);
       },
-      onmenu: () => {
-        app.menu();
+      onleave: (notice: MessageKey | null, way: Way) => {
+        app.menu(notice, way);
       },
-      ...pages,
-      onpassword: () => {
-        app.go({ name: 'password' });
+      onhelp: () => {
+        app.openPage('howto');
       },
-      onlogout: () => {
-        app.logout();
+      onprofile: () => {
+        app.openAccountPage('profile');
       },
     };
   }
@@ -139,154 +145,26 @@
     onlogin={(nick: string, password: string) => app.login(nick, password)}
     onregister={(nick: string, password: string) => app.registerAccount(nick, password)}
   />
-{:else if screen.name === 'menu'}
-  <MenuScreen
-    nick={guest.nick}
+{:else if screen.name === 'menu' || screen.name === 'queue' || screen.name === 'invite'}
+  <PlayScreen
+    ctx={playOf(guest)}
+    view={screen}
     notice={app.notice}
-    map={app.backdrop}
-    calibration={app.calibration}
-    rating={app.rating}
-    banUntil={app.queueBanUntil}
-    hasActiveMatch={app.activeMatch !== null}
-    onresume={() => {
-      const running = app.activeMatch;
-      if (running !== null) app.resumeMatch(running);
-    }}
-    oncreate={() => {
-      app.go({ name: 'create', public: false });
-    }}
-    onqueue={() => {
-      app.go({ name: 'queue' });
-    }}
-    onlobby={() => {
-      app.go({ name: 'lobby' });
-    }}
-    onreplays={() => {
-      app.openBoard('history');
-    }}
-    onboard={() => {
-      app.openBoard('board');
-    }}
-    onbot={() => {
-      app.go({ name: 'bot' });
-    }}
-    onhowto={() => {
-      app.go({ name: 'howto' });
-    }}
-    hasPassword={guest.hasPassword}
-    {...pages}
-    onpassword={() => {
-      app.go({ name: 'password' });
-    }}
-    onlogout={() => {
-      app.logout();
-    }}
-  />
-{:else if screen.name === 'create'}
-  <CreateScreen
-    dock={dockOf(guest)}
-    isPublic={screen.public}
-    oncreate={(pick: string) => app.createInvite(pick, screen.public)}
-    onback={() => {
-      if (screen.public) app.go({ name: 'lobby' });
-      else app.menu();
-    }}
-  />
-{:else if screen.name === 'lobby'}
-  <LobbyScreen
-    api={app.api}
-    token={guest.token}
-    dock={dockOf(guest)}
-    colour={app.colour}
-    oncolour={(colour: PlayerColour) => app.changeColour(colour)}
-    oncreate={() => {
-      app.go({ name: 'create', public: true });
-    }}
-    onjoined={(code: string) => {
-      app.go({ name: 'invite', code });
-    }}
-    onback={() => {
-      app.menu();
-    }}
-  />
-{:else if screen.name === 'queue'}
-  <QueueScreen
-    api={app.api}
-    token={guest.token}
-    map={app.backdrop}
-    nick={guest.nick}
-    onstart={(matchId: string, mapId: string) => {
-      app.go({ name: 'match', matchId, mapId });
-    }}
-    onbot={() => {
-      // The bot screen shows the wait for the new map and a failure (#889).
-      app.go({ name: 'bot', start: 'normal' });
-    }}
-    onbanned={(seconds: number) => {
-      app.banQueue(seconds);
-    }}
-    onleave={(notice: MessageKey | null) => {
-      app.menu(notice);
-    }}
-  />
-{:else if screen.name === 'bot'}
-  <BotScreen
-    dock={dockOf(guest)}
-    start={screen.start}
-    onstart={(level: BotLevel, pick: string) => app.playBot(level, pick)}
-    onback={() => {
-      app.menu();
-    }}
+    {entrance}
+    {newHere}
+    onnewhere={closeNewHere}
   />
 {:else if screen.name === 'howto'}
   <HowToScreen
-    dock={dockOf(guest)}
+    nick={guest.nick}
+    hasPassword={guest.hasPassword}
+    map={app.backdrop}
+    onprofile={() => {
+      app.openAccountPage('profile');
+    }}
     onback={() => {
-      app.menu();
+      app.closePage();
     }}
-  />
-{:else if screen.name === 'leaderboard' && screen.mode === 'history'}
-  <ReplaysScreen
-    api={app.api}
-    token={guest.token}
-    ownId={app.playerId}
-    nick={guest.nick}
-    hasPassword={guest.hasPassword}
-    calibration={app.calibration}
-    rating={app.rating}
-    map={app.backdrop}
-    maps={app.maps}
-    onwatch={(matchId: string) => {
-      app.openReplay(matchId);
-    }}
-    onbot={() => {
-      app.go({ name: 'bot' });
-    }}
-    onpassword={() => {
-      app.go({ name: 'password' });
-    }}
-    onlogout={() => {
-      app.logout();
-    }}
-    {...tabsOf()}
-  />
-{:else if screen.name === 'leaderboard'}
-  <LeaderboardScreen
-    api={app.api}
-    token={guest.token}
-    ownId={app.playerId}
-    nick={guest.nick}
-    hasPassword={guest.hasPassword}
-    calibration={app.calibration}
-    rating={app.rating}
-    map={app.backdrop}
-    onpassword={() => {
-      app.go({ name: 'password' });
-    }}
-    onlogout={() => {
-      app.logout();
-    }}
-    {...tabsOf()}
   />
 {:else if screen.name === 'profile'}
   <ProfileScreen
@@ -295,38 +173,45 @@
     ownId={app.playerId}
     nick={guest.nick}
     hasPassword={guest.hasPassword}
-    calibration={app.calibration}
-    rating={app.rating}
     map={app.backdrop}
     onwatch={(matchId: string) => {
       app.openReplay(matchId);
     }}
     onbot={() => {
-      app.go({ name: 'bot' });
+      app.go({ name: 'menu', way: 'bot' });
     }}
     onnick={(nick: string) => app.changeNick(nick)}
     colour={app.colour}
     oncolour={(colour: PlayerColour) => app.changeColour(colour)}
+    onsettings={() => {
+      app.openAccountPage('settings');
+    }}
     onpassword={() => {
-      app.go({ name: 'password' });
+      app.openPage('password');
     }}
     onlogout={() => {
       app.logout();
     }}
+    onhelp={() => {
+      app.openPage('howto');
+    }}
     onback={() => {
       app.closeAccountPage();
     }}
-    {...tabsOf()}
   />
 {:else if screen.name === 'settings'}
   <SettingsScreen
     nick={guest.nick}
     hasPassword={guest.hasPassword}
-    calibration={app.calibration}
-    rating={app.rating}
     map={app.backdrop}
+    onprofile={() => {
+      app.openAccountPage('profile');
+    }}
+    onhowto={() => {
+      app.openPage('howto');
+    }}
     onpassword={() => {
-      app.go({ name: 'password' });
+      app.openPage('password');
     }}
     onlogout={() => {
       app.logout();
@@ -334,33 +219,23 @@
     onback={() => {
       app.closeAccountPage();
     }}
-    {...tabsOf()}
   />
 {:else if screen.name === 'password'}
   <PasswordScreen
-    dock={dockOf(guest)}
+    nick={guest.nick}
     hasPassword={guest.hasPassword}
+    map={app.backdrop}
     onsubmit={(password: string, oldPassword: string) => app.setPassword(password, oldPassword)}
+    onprofile={() => {
+      app.openAccountPage('profile');
+    }}
+    onhowto={() => {
+      app.openPage('howto');
+    }}
     onback={() => {
-      app.menu();
+      app.closePage();
     }}
   />
-{:else if screen.name === 'invite'}
-  {#key screen.code}
-    <InviteScreen
-      api={app.api}
-      token={guest.token}
-      nick={guest.nick}
-      code={screen.code}
-      dock={dockOf(guest)}
-      onstart={(matchId: string, mapId: string) => {
-        app.go({ name: 'match', matchId, mapId });
-      }}
-      onleave={(notice: MessageKey | null) => {
-        app.menu(notice);
-      }}
-    />
-  {/key}
 {:else if screen.name === 'match'}
   {#key screen.matchId}
     <CrashGuard

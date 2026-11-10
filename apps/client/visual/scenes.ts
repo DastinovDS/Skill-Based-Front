@@ -46,7 +46,7 @@ export const SCENES: readonly {
 
 /**
  * The screens before a match (`/?menu=<id>`, src/dev/menuScenes.ts, #471): shot by `mise run shots`
- * as `menu-<id>.png` (and in grey scale); they have no reference screenshots.
+ * as `screen-<id>.png` (and in grey scale); they have no reference screenshots.
  */
 export const MENU_SCENES = [
   'welcome',
@@ -54,48 +54,34 @@ export const MENU_SCENES = [
   'welcome-invited',
   'welcome-intro',
   'menu-guest',
-  'menu-calibration',
-  'menu-ranked',
+  'menu-account',
   'menu-resume',
   'menu-banned',
   'menu-error',
+  'menu-bot',
+  'menu-friend',
+  'menu-newhere',
   'queue-search',
   'queue-long',
   'queue-found',
   'queue-confirmed',
-  'lobby-list',
-  'lobby-many',
-  'lobby-loading',
-  'lobby-empty',
-  'lobby-joining',
-  'lobby-taken',
-  'lobby-network',
-  'lobby-guest',
-  'lobby-banned',
-  'create-private',
-  'create-public',
-  'create-nomaps',
-  'create-error',
+  'queue-drawing',
+  'bot-starting',
+  'bot-random',
+  'bot-error',
+  'bot-timeout',
+  'invite-creating',
   'invite-link',
-  'invite-public',
+  'invite-waiting',
   'invite-joined',
   'invite-opp-ready',
   'invite-you-ready',
   'invite-starting',
-  'invite-drawing',
   'invite-drawing-start',
-  'invite-banned',
-  'bot-choose',
-  'bot-rated',
-  'bot-starting',
-  'bot-error',
-  'bot-timeout',
   'password-set',
   'password-change',
   'howto',
   'result-guest',
-  'result-calibration',
-  'result-limit',
   'result-defeat',
   'result-draw',
   'result-forfeit',
@@ -108,24 +94,11 @@ export const MENU_SCENES = [
   'match-loading-frame',
   'match-error-map',
   'crash',
-  'board-guest',
-  'board-calibration',
-  'board-ranked',
-  'board-far',
-  'board-empty',
-  'board-loading',
-  'board-network',
-  'board-limited',
-  'replays',
-  'replays-guest',
-  'replays-empty',
-  'replays-loading',
-  'replays-network',
   'profile',
   'profile-guest',
-  'profile-calibration',
   'profile-empty',
   'profile-loading',
+  'profile-network',
   'profile-nick',
   'settings',
   'settings-guest',
@@ -134,16 +107,15 @@ export const MENU_SCENES = [
 ] as const;
 
 /**
- * The Dock scenes (#473) that need a click to reach their state: the name of the button to press
- * (a join that waits or fails, a create that fails, a start that waits or fails).
+ * The main-screen scenes (#919) that need clicks to reach their state: the names of the buttons
+ * to press in order (a start that waits or fails, a random map, a link being made).
  */
-export const DOCK_CLICKS: Readonly<Record<string, string>> = {
-  'lobby-joining': 'Join',
-  'lobby-taken': 'Join',
-  'create-error': 'Create the match',
-  'bot-starting': 'Start',
-  'bot-error': 'Start',
-  'bot-timeout': 'Start',
+export const DOCK_CLICKS: Readonly<Record<string, readonly string[]>> = {
+  'bot-starting': ['Start'],
+  'bot-random': ['Random map', 'Start'],
+  'bot-error': ['Start'],
+  'bot-timeout': ['Start'],
+  'invite-creating': ['Get the link'],
 };
 
 /**

@@ -19,9 +19,9 @@ test('an account: register, then a login on a second device logs the first one o
   await expect(first.page.getByRole('button', { name })).toBeVisible();
 
   // Log out here, log in again with the nick in another spelling (same account).
-  // The account chip in the corner opens the account menu (#471).
+  // The nick in the bar opens the profile; Log out is a quiet link of its header (#919).
   await first.page.getByRole('button', { name }).click();
-  await first.page.getByRole('menuitem', { name: 'Log out' }).click();
+  await first.page.getByRole('button', { name: 'Log out', exact: true }).click();
   await first.page.getByRole('button', { name: 'Log in', exact: true }).click();
   await first.page.getByLabel('Your nick').fill(name.toUpperCase());
   await first.page.getByLabel('Password', { exact: true }).fill(password);

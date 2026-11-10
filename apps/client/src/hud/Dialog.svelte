@@ -30,10 +30,11 @@
   }: Props = $props();
 </script>
 
-<!-- The frame of the match dialogs (#597): a panel on a scrim, an eyebrow over the title. -->
+<!-- The frame of the match dialogs (#597): a stone panel in the Double rule frame with the Stepped
+     corner (#919) on the dimmed match, an eyebrow over the title. -->
 <div class="dlg-backdrop">
   <div
-    class="dlg"
+    class="dlg rule-frame"
     {role}
     aria-modal="true"
     aria-labelledby="{id}-title"

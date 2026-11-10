@@ -134,4 +134,9 @@
     stroke: var(--ink);
     stroke-width: 4;
   }
+  /* An empty seat outside the match (#919): the dashed dome in the dim ink. */
+  .engraved.dashed .gear,
+  .engraved.dashed .edge {
+    stroke: var(--ink-dim);
+  }
 </style>

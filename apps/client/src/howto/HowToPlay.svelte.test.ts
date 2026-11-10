@@ -1,7 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import HowToScreen from '../app/HowToScreen.svelte';
-import { makeDock } from '../app/dockTestKit.ts';
 import { setLocale, translate } from '../i18n/index.ts';
 import { HOWTO } from './data.ts';
 import HowToPlay from './HowToPlay.svelte';
@@ -60,14 +59,17 @@ describe('the How to play page (CLI-13, #72)', () => {
     });
   });
 
-  it('the screen opens in the Dock frame with its tab marked, and Back leaves', () => {
+  it('the screen opens as a sheet with the "?" of the bar marked, and Esc leaves', () => {
     const onback = vi.fn();
-    const { dock } = makeDock();
-    component = mount(HowToScreen, { target: document.body, props: { dock, onback } });
+
+    component = mount(HowToScreen, {
+      target: document.body,
+      props: { nick: 'Me', hasPassword: false, map: null, onprofile: vi.fn(), onback },
+    });
     flushSync();
-    expect(document.body.querySelector('.tabs [aria-current="page"]')?.textContent).toContain(
-      translate('en', 'help.howTo'),
-    );
+    expect(
+      document.body.querySelector('.qm[aria-current="page"]')?.getAttribute('aria-label'),
+    ).toBe(translate('en', 'help.howTo'));
     expect(document.body.textContent).toContain(translate('en', 'menu.tagline'));
     expect(document.body.textContent).toContain(translate('en', 'howto.copyright'));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));

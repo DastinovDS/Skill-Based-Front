@@ -261,8 +261,8 @@ describe('AppState', () => {
     expect(app.screen).toEqual({ name: 'match', matchId: 'm1', mapId: 'pass' });
   });
 
-  it('creates a public match and goes to its waiting room', async () => {
-    const createInvite = vi.fn(() => Promise.resolve({ ...invite('pub'), public: true }));
+  it('Get the link asks for an invite on a map made for it (#919) and opens its waiting room', async () => {
+    const createInvite = vi.fn(() => Promise.resolve(invite('new')));
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
     const { app } = setup('', storage, {
       me: () =>
@@ -270,9 +270,9 @@ describe('AppState', () => {
       createInvite,
     });
     await app.start();
-    await app.createInvite('pass', true);
-    expect(createInvite).toHaveBeenCalledWith('t', 'pass', true);
-    expect(app.screen).toEqual({ name: 'invite', code: 'pub' });
+    await app.createInvite();
+    expect(createInvite).toHaveBeenCalledWith('t', NEW_MAP);
+    expect(app.screen).toEqual({ name: 'invite', code: 'new' });
   });
 
   it('keeps a failed create or bot start on its screen and answers the line to show (#473)', async () => {
@@ -283,12 +283,12 @@ describe('AppState', () => {
       createBotMatch: () => Promise.reject(new ApiError('network', 0)),
     });
     await app.start();
-    app.go({ name: 'create', public: false });
+    app.go({ name: 'menu', way: 'friend' });
     expect(await app.createInvite(RANDOM_POOL)).toBe('error.api.unavailable');
-    expect(app.screen).toEqual({ name: 'create', public: false });
-    app.go({ name: 'bot' });
+    expect(app.screen).toEqual({ name: 'menu', way: 'friend' });
+    app.go({ name: 'menu', way: 'bot' });
     expect(await app.playBot('easy', NEW_MAP)).toBe('error.api.network');
-    expect(app.screen).toEqual({ name: 'bot' });
+    expect(app.screen).toEqual({ name: 'menu', way: 'bot' });
     expect(app.notice).toBeNull();
   });
 
@@ -311,9 +311,9 @@ describe('AppState', () => {
       20,
     );
     await app.start();
-    app.go({ name: 'bot' });
+    app.go({ name: 'menu', way: 'bot' });
     expect(await app.playBot('easy', NEW_MAP)).toBe('error.bot.slow');
-    expect(app.screen).toEqual({ name: 'bot' });
+    expect(app.screen).toEqual({ name: 'menu', way: 'bot' });
   });
 
   it('starts over from the menu when the session is lost during a create (401)', async () => {
@@ -559,49 +559,28 @@ describe('AppState', () => {
       expect(app.guest).toEqual({ token: 't', nick: 'Me', hasPassword: true });
     });
   });
-  describe('the start menu (#471, DEC-34)', () => {
+  describe('the main screen (#919)', () => {
     const saved = () =>
       memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me","hasPassword":true}' });
-    const meWith = (calibration: { played: number; total: number } | null) => () =>
-      Promise.resolve({
-        player_id: 1,
-        nick: 'Me',
-        has_password: true,
-        calibration,
-        colour: 'lapis' as const,
-      });
+    const me = () =>
+      Promise.resolve({ player_id: 7, nick: 'Me', has_password: true, colour: 'lapis' as const });
 
-    it('keeps the calibration of /api/me and asks for it again when the menu opens', async () => {
-      let played = 2;
+    it('learns the own id and colour when the menu opens, and asks for no rating', async () => {
+      const player = vi.fn(() => Promise.resolve({ player_id: 7 } as PlayerProfile));
       const { app } = setup('', saved(), {
-        me: () => meWith({ played, total: 5 })(),
+        me,
         activeMatch: () => Promise.resolve(null),
+        player,
       });
       await app.start();
-      expect(app.calibration).toEqual({ played: 2, total: 5 });
-      played = 3;
       await app.refreshProfile();
-      expect(app.calibration).toEqual({ played: 3, total: 5 });
+      expect(app.playerId).toBe(7);
+      expect(app.colour).toBe('lapis');
+      expect(player).not.toHaveBeenCalled();
     });
 
-    it('a failed refresh keeps what the chip showed', async () => {
-      let fail = false;
-      const { app } = setup('', saved(), {
-        me: () =>
-          fail ? Promise.reject(new ApiError('network', 0)) : meWith({ played: 1, total: 5 })(),
-        activeMatch: () => Promise.resolve(null),
-      });
-      await app.start();
-      fail = true;
-      await app.refreshProfile();
-      expect(app.calibration).toEqual({ played: 1, total: 5 });
-    });
-
-    it('counts the queue ban from now, and a logout forgets it with the calibration', async () => {
-      const { app } = setup('', saved(), {
-        me: meWith({ played: 1, total: 5 }),
-        activeMatch: () => Promise.resolve(null),
-      });
+    it('counts the queue ban from now, and a logout forgets it', async () => {
+      const { app } = setup('', saved(), { me, activeMatch: () => Promise.resolve(null) });
       await app.start();
       const before = Date.now();
       app.banQueue(287);
@@ -609,7 +588,46 @@ describe('AppState', () => {
       expect(app.queueBanUntil).toBeLessThanOrEqual(Date.now() + 287_000);
       app.logout();
       expect(app.queueBanUntil).toBeNull();
-      expect(app.calibration).toBeNull();
+      expect(app.playerId).toBeNull();
+    });
+
+    it('goes back to the plinth with the way of the place it left', async () => {
+      const { app } = setup('', saved(), { me, activeMatch: () => Promise.resolve(null) });
+      await app.start();
+      app.menu('error.invite.expired', 'friend');
+      expect(app.screen).toEqual({ name: 'menu', way: 'friend' });
+      expect(app.notice).toBe('error.invite.expired');
+      app.menu();
+      expect(app.screen).toEqual({ name: 'menu' });
+    });
+
+    it('marks a nick just entered, for "New here?", and not a login', async () => {
+      const fresh = setup('', memory(), {
+        createGuest: () => Promise.resolve({ token: 'n' } as never),
+        activeMatch: () => Promise.resolve(null),
+      });
+      await fresh.app.start();
+      expect(fresh.app.entered).toBe(false);
+      await fresh.app.register('Newbie');
+      expect(fresh.app.entered).toBe(true);
+    });
+
+    it('How to play and the password open over the screen and go back to it', async () => {
+      const { app } = setup('', saved(), { me, activeMatch: () => Promise.resolve(null) });
+      await app.start();
+      app.go({ name: 'menu', way: 'bot', start: 'normal' });
+      app.openPage('howto');
+      expect(app.screen).toEqual({
+        name: 'howto',
+        back: { name: 'menu', way: 'bot', start: 'normal' },
+      });
+      // Coming back does not start the bot offer again.
+      app.closePage();
+      expect(app.screen).toEqual({ name: 'menu', way: 'bot' });
+      app.openAccountPage('settings');
+      app.openPage('password');
+      app.closePage();
+      expect(app.screen.name).toBe('settings');
     });
 
     it('draws the bundled menu map behind the screens without a request (#474)', async () => {
@@ -621,93 +639,8 @@ describe('AppState', () => {
       expect(maps).not.toHaveBeenCalled();
     });
   });
-  describe('the leaderboard and the rating of the chip (#78)', () => {
-    const saved = () =>
-      memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me","hasPassword":true}' });
-    const profile = (rating: number | null) => () =>
-      Promise.resolve({ player_id: 7, rating } as PlayerProfile);
 
-    it('learns the own id and the displayed rating when the menu opens', async () => {
-      const player = vi.fn(profile(1480));
-      const { app } = setup('', saved(), {
-        me: () =>
-          Promise.resolve({ player_id: 7, nick: 'Me', has_password: true, colour: 'lapis' }),
-        activeMatch: () => Promise.resolve(null),
-        player,
-      });
-      await app.start();
-      expect(app.playerId).toBe(7);
-      await app.refreshProfile();
-      expect(app.rating).toBe(1480);
-      expect(player).toHaveBeenCalledWith(7, 't');
-    });
-
-    it('asks for no rating of a guest or of a calibrating account', async () => {
-      const player = vi.fn(profile(1480));
-      const guest = setup('', saved(), {
-        me: () =>
-          Promise.resolve({ player_id: 7, nick: 'Me', has_password: false, colour: 'lapis' }),
-        activeMatch: () => Promise.resolve(null),
-        player,
-      });
-      await guest.app.start();
-      await guest.app.refreshProfile();
-      const calibrating = setup('', saved(), {
-        me: () =>
-          Promise.resolve({
-            player_id: 7,
-            nick: 'Me',
-            has_password: true,
-            calibration: { played: 1, total: 5 },
-            colour: 'lapis',
-          }),
-        activeMatch: () => Promise.resolve(null),
-        player,
-      });
-      await calibrating.app.start();
-      await calibrating.app.refreshProfile();
-      expect(player).not.toHaveBeenCalled();
-      expect(guest.app.rating).toBeNull();
-      expect(calibrating.app.rating).toBeNull();
-    });
-
-    it('keeps the rating when its request fails, and a logout forgets it', async () => {
-      let fail = false;
-      const { app } = setup('', saved(), {
-        me: () =>
-          Promise.resolve({ player_id: 7, nick: 'Me', has_password: true, colour: 'lapis' }),
-        activeMatch: () => Promise.resolve(null),
-        player: () => (fail ? Promise.reject(new ApiError('network', 0)) : profile(1480)()),
-      });
-      await app.start();
-      await app.refreshProfile();
-      fail = true;
-      await app.refreshProfile();
-      expect(app.rating).toBe(1480);
-      app.logout();
-      expect(app.rating).toBeNull();
-      expect(app.playerId).toBeNull();
-    });
-
-    it('opens the Leaderboard or the Replays tab, and "Back" from a replay returns there', async () => {
-      const { app } = setup('', saved(), {
-        me: () =>
-          Promise.resolve({ player_id: 7, nick: 'Me', has_password: true, colour: 'lapis' }),
-        activeMatch: () => Promise.resolve(null),
-      });
-      await app.start();
-      app.openBoard();
-      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board' });
-      app.openBoard('history');
-      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'history' });
-      app.openReplay('55');
-      expect(app.screen).toMatchObject({ name: 'replay', matchId: '55' });
-      app.closeReplay();
-      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'history' });
-    });
-  });
-
-  describe('the profile and the settings (#871)', () => {
+  describe('the profile and the settings (#871, #919)', () => {
     async function inMenu(api: Partial<Api> = {}) {
       const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
       const { app } = setup('', storage, {
@@ -720,22 +653,20 @@ describe('AppState', () => {
       return { app, storage };
     }
 
-    it('opens from the current screen and goes back to it', async () => {
+    it('opens from the current screen; the settings open from the profile and go back to it', async () => {
       const { app } = await inMenu();
-      app.openBoard('board');
+      app.go({ name: 'menu', way: 'friend' });
       app.openAccountPage('profile');
-      expect(app.screen).toEqual({
-        name: 'profile',
-        back: { name: 'leaderboard', mode: 'board' },
-      });
-      // From the profile to the settings: "Back" still returns to the leaderboard.
+      expect(app.screen).toEqual({ name: 'profile', back: { name: 'menu', way: 'friend' } });
       app.openAccountPage('settings');
       expect(app.screen).toEqual({
         name: 'settings',
-        back: { name: 'leaderboard', mode: 'board' },
+        back: { name: 'profile', back: { name: 'menu', way: 'friend' } },
       });
       app.closeAccountPage();
-      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board' });
+      expect(app.screen).toEqual({ name: 'profile', back: { name: 'menu', way: 'friend' } });
+      app.closeAccountPage();
+      expect(app.screen).toEqual({ name: 'menu', way: 'friend' });
       app.go({ name: 'settings' });
       app.closeAccountPage();
       expect(app.screen).toEqual({ name: 'menu' });

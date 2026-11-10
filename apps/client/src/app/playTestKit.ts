@@ -1,9 +1,9 @@
-/** Shared by the tests of the Dock screens (#473): a context with fake maps and recorded exits. */
+/** Shared by the tests of the main screen (#919): a context with fake maps and recorded actions. */
 import { vi } from 'vitest';
 import type { Api, MapSummary } from '../api/http.ts';
 import type { MapFile } from '../protocol.gen.ts';
-import type { DockContext } from './dock.ts';
 import { MapCache } from './mapCache.svelte.ts';
+import type { PlayContext } from './play.ts';
 
 const summary = (id: string): MapSummary => ({
   id,
@@ -28,27 +28,31 @@ export function fakeMapApi(ids: readonly string[] = ['crossroads', 'ridge']): Pa
   };
 }
 
-export function makeDock(over: Partial<DockContext> = {}, api: Partial<Api> = fakeMapApi()) {
+export function makePlay(over: Partial<PlayContext> = {}, api: Partial<Api> = fakeMapApi()) {
   const calls = {
-    onbot: vi.fn(),
-    oncreate: vi.fn(),
-    onlobby: vi.fn(),
-    onreplays: vi.fn(),
-    onboard: vi.fn(),
-    onhowto: vi.fn(),
-    onmenu: vi.fn(),
-    onpassword: vi.fn(),
-    onlogout: vi.fn(),
+    onresume: vi.fn(),
+    onway: vi.fn(),
+    onsearch: vi.fn(),
+    onbot: vi.fn<PlayContext['onbot']>(() => new Promise(() => undefined)),
+    oninvite: vi.fn<PlayContext['oninvite']>(() => new Promise(() => undefined)),
+    onstart: vi.fn(),
+    onofferbot: vi.fn(),
+    onbanned: vi.fn(),
+    onleave: vi.fn(),
+    onhelp: vi.fn(),
+    onprofile: vi.fn(),
   };
-  const dock: DockContext = {
+  const ctx: PlayContext = {
+    api: api as Api,
+    token: 't',
     nick: 'Me',
-    hasPassword: true,
-    calibration: null,
-    banUntil: null,
+    hasPassword: false,
     map: null,
     maps: new MapCache(api as Api),
+    banUntil: null,
+    hasActiveMatch: false,
     ...calls,
     ...over,
   };
-  return { dock, calls };
+  return { ctx, calls };
 }

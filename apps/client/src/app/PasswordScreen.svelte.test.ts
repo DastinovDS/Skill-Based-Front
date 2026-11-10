@@ -2,7 +2,6 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLocale, translate, type MessageKey } from '../i18n/index.ts';
 import type { AccountFailure } from './account.ts';
-import { makeDock } from './dockTestKit.ts';
 import PasswordScreen from './PasswordScreen.svelte';
 
 describe('PasswordScreen (#374)', () => {
@@ -27,7 +26,7 @@ describe('PasswordScreen (#374)', () => {
     const onsubmit = vi.fn(() => Promise.resolve(result));
     component = mount(PasswordScreen, {
       target: document.body,
-      props: { dock: makeDock({ hasPassword }).dock, hasPassword, onsubmit, onback },
+      props: { nick: 'Me', hasPassword, onsubmit, onback },
     });
     flushSync();
     return onsubmit;
@@ -113,14 +112,13 @@ describe('PasswordScreen (#374)', () => {
     );
   });
 
-  it('stays in the frame of the menu: the rail with no row marked, no match chips', () => {
+  it('is a page of the sheet (#919): a framed panel, no rating anywhere', () => {
     render(true);
-    expect(document.querySelector('main.front')).not.toBeNull();
-    expect(document.querySelector('.rail [aria-current]')).toBeNull();
-    expect(document.querySelector('.panel .tags')).toBeNull();
-    expect(document.querySelector('.panel .kicker')?.textContent).toBe(
+    expect(document.querySelector('main.front.sheet')).not.toBeNull();
+    expect(document.querySelector('.pw.rule-frame .kicker')?.textContent).toBe(
       translate('en', 'account.eyebrow'),
     );
+    expect(document.body.textContent).not.toMatch(/rated|rating|calibration/i);
   });
 
   it('focuses the first field; Esc goes back, also from a field', () => {
