@@ -102,6 +102,7 @@ from gow_sim.systems.flow import next_dispatch_tick
 from gow_sim.systems.movement import reachable, reachable_paths
 from gow_sim.systems.recruit import recruit_waiting
 from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
+from gow_sim.systems.victory import vp_per_period
 from gow_sim.systems.vision import (
     Sight,
     Vision,
@@ -481,6 +482,11 @@ class PlayerView:
     me: SelfView
     vp: tuple[int, ...]
     """VP of both players, by player id; public (DEC-04)."""
+    vp_gain: tuple[int, ...]
+    """VP each player gets at the next credit if the ownership stays as it is now, by player id
+    (``systems.victory.vp_per_period``: the map ``vp`` of its cities, a capital times
+    ``victory.capital_multiplier``; mechanics.md, section 11, #934). Public like ``vp`` and the
+    ownership it follows from (DEC-04)."""
     nodes: tuple[NodeView, ...]
     """Every node of the map, ``nodes[i].id == i``."""
     edges: tuple[EdgeView, ...]
@@ -927,6 +933,7 @@ def project(
             capital_ticks=me.capital_ticks,
         ),
         vp=tuple(state.players[p].vp for p in PLAYERS),
+        vp_gain=tuple(vp_per_period(state, rules, p) for p in PLAYERS),
         nodes=tuple(nodes),
         edges=tuple(edges),
         # Sorted by opaque id: the order says nothing about creation order or internal ids.
@@ -1048,6 +1055,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
             "capital_ticks": view.me.capital_ticks,
         },
         "vp": list(view.vp),
+        "vp_gain": list(view.vp_gain),
         "nodes": [
             {
                 "id": n.id,
