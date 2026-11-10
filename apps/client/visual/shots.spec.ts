@@ -1129,7 +1129,8 @@ for (const shot of UNDO_SHOTS) {
 // - `hover-target`: a group selected, the pointer on the area of an enemy city (the target is lit);
 // - `split-tip`, `split-menu`: `?split=2,1` answers the `reach` with node 2 and the size 1 that fits; the
 //   tip says a click splits, the click opens the split menu at that size ("Split and send");
-// - `plan-shift`: scene `economy` (economy v2), a group selected, Shift held over a target: the plan bar stands out;
+// - `plan-shift`: scene `economy` (economy v2), a group selected, `E` held over a target (Shift until DEC-48;
+//   the name stays): the plan bar stands out;
 //   `?reach=7,140,6` answers the `reach` with Bluff by Wood Hollow, so the ghost of the planned order and
 //   the bonus counter over Bluff show (#793), and one wheel notch raises the bonus;
 // - `cp-hover`, `cp-cut`: `?cp=50` (less than a move) and `?reject=NOT_ENOUGH_CP`: the CP badge is marked
@@ -1189,7 +1190,7 @@ for (const name of UX_SHOTS) {
       case 'plan-shift':
         await page.mouse.click(332, 518);
         await page.waitForTimeout(300);
-        await page.keyboard.down('Shift');
+        await page.keyboard.down('KeyE');
         await page.mouse.move(485, 160);
         await page.mouse.move(486, 161);
         await page.mouse.wheel(0, -100);
@@ -1210,7 +1211,7 @@ for (const name of UX_SHOTS) {
     await page.screenshot({ path: join(OUT, `ux-${name}.png`) });
     await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
     await page.screenshot({ path: join(OUT, `ux-${name}-gray.png`) });
-    if (name === 'plan-shift') await page.keyboard.up('Shift');
+    if (name === 'plan-shift') await page.keyboard.up('KeyE');
   });
 }
 

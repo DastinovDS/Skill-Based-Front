@@ -217,7 +217,7 @@ export class Player {
   async clickNode(
     map: MapFile,
     nodeId: number,
-    modifiers: ('Shift' | 'Control')[] = [],
+    modifiers: ('Shift' | 'Control' | 'KeyE')[] = [],
   ): Promise<void> {
     const node = map.nodes[nodeId];
     if (node === undefined) throw new Error(`no node ${String(nodeId)}`);
@@ -229,7 +229,8 @@ export class Player {
 
   /**
    * The order "move the group standing in `from` to `to`": group, then destination. `planned`: the
-   * second click holds Shift (a planned order, dearer and shown to the enemy as an intent).
+   * second click holds `E` (a planned order, dearer and shown to the enemy as an intent; DEC-48,
+   * item K2: Shift selects several groups, and while it is held no order is given, #928).
    */
   async moveGroup(map: MapFile, from: number, to: number, planned = false): Promise<void> {
     // Start from nothing selected (an order lets the group go, but the pick may be left over): a
@@ -241,7 +242,7 @@ export class Player {
     await expect(this.page.locator('.hud')).toHaveAttribute('data-selection', 'none');
     await this.clickNode(map, from);
     await expect(this.page.locator('.hud')).toHaveAttribute('data-selection', /^group:/);
-    await this.clickNode(map, to, planned ? ['Shift'] : []);
+    await this.clickNode(map, to, planned ? ['KeyE'] : []);
   }
 
   /** "Exit" of the top bar, then the confirmation of the dialog: a forfeit. */

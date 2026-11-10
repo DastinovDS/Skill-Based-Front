@@ -72,7 +72,7 @@ async function giveOrders(player: Player, map: MapFile): Promise<void> {
   await player.moveGroup(map, capital.id, first);
   await expect.poll(() => player.accepted('move')).toBe(1);
 
-  // 2. A planned move (Shift+click): it gathers its bonus in the node, shown to the enemy as an intent.
+  // 2. A planned move (E held + click): it gathers its bonus in the node, shown to the enemy as an intent.
   await player.moveGroup(map, second, target, true);
   await expect.poll(() => player.accepted('move')).toBe(2);
 
