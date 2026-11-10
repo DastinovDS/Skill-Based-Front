@@ -50,6 +50,11 @@ export type Retreat = 'round' | 'none';
  */
 export type Sight = 'exact' | 'range' | 'presence';
 /**
+ * The colour a player chooses: the set Engraved six (DEC-49, item 1). The values and the
+ * allowed pairs are in ``gow_server.colours``; the client keeps the same values in its palette.
+ */
+export type PlayerColour = 'lapis' | 'minium' | 'glacier' | 'shell' | 'violet' | 'madder';
+/**
  * Why a match did not change your rating (DEC-34, #414).
  */
 export type UnratedReason =
@@ -316,6 +321,15 @@ export interface WelcomeMsg {
    * @maxItems 2
    */
   nicks: [string, string];
+  /**
+   * Colours of the two players by player id, resolved once at the start of the match by the
+   * clash rule (DEC-49, item 2): the same in every ``welcome`` of the match and in its replay.
+   * Public, like the nicks: the opponent's colour is not a fog leak.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  colours: [PlayerColour, PlayerColour];
   /**
    * Whether this match is expected to change your rating (DEC-34, #414); a calibration match
    * does, silently. A rated match can still end unrated for its winner (an early resign of the
@@ -1465,7 +1479,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 48;
+export const PROTOCOL_VERSION = 49;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

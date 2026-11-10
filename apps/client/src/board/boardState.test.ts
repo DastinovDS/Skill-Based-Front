@@ -24,7 +24,9 @@ const board: Leaderboard = { entries: [], total: 0, min_rated_matches: 5 };
 function fakeApi() {
   return {
     leaderboard: vi.fn<Api['leaderboard']>(() => Promise.resolve(board)),
-    me: vi.fn<Api['me']>(() => Promise.resolve({ player_id: 7, nick: 'Me', has_password: true })),
+    me: vi.fn<Api['me']>(() =>
+      Promise.resolve({ player_id: 7, nick: 'Me', has_password: true, colour: 'lapis' }),
+    ),
     player: vi.fn<Api['player']>((id) => Promise.resolve(profile(id, `P${String(id)}`))),
   };
 }

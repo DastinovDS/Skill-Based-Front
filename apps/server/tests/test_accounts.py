@@ -153,6 +153,7 @@ def test_guest_sets_a_password_and_logs_in_on_another_device(
         "nick": "Alice",
         "has_password": False,
         "calibration": None,
+        "colour": "lapis",
     }
     sessions = cast("sessionmaker[Session]", api.app.state.sessions)  # type: ignore[attr-defined]
     with sessions() as session:
@@ -176,6 +177,7 @@ def test_guest_sets_a_password_and_logs_in_on_another_device(
         "nick": "Alice",
         "has_password": True,
         "calibration": {"played": 0, "total": 5},
+        "colour": "lapis",
     }
 
     # Another device (a new client, no localStorage): nick in any case and the password.
@@ -192,6 +194,7 @@ def test_guest_sets_a_password_and_logs_in_on_another_device(
         "nick": "Alice",
         "has_password": True,
         "calibration": {"played": 0, "total": 5},
+        "colour": "lapis",
     }
     with sessions() as session:  # the same player: the rating is still there
         rating = session.get(Rating, player_id)

@@ -38,7 +38,9 @@ from typing import Any, Final
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from gow_protocol.messages import PlayerColour
 from gow_server.clock import Clock
+from gow_server.colours import colour_of, resolve_sides
 from gow_server.ladder import (
     LadderRules,
     RatingMode,
@@ -55,7 +57,7 @@ from gow_server.matches import (
     MatchRunner,
     ServerFullError,
 )
-from gow_server.models import Match, MatchPlayer, utcnow
+from gow_server.models import Match, MatchPlayer, Player, utcnow
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.ruleset import Ruleset, archive_ruleset, ruleset_hash
 
@@ -246,6 +248,7 @@ class MatchLifecycle:
         rated: bool = False,
         bot: BotSeat | None = None,
         bot_name: str | None = None,
+        keeper: int | None = None,
     ) -> MatchRunner:
         """``created`` or ``waiting`` ``-> running``: insert the row, then start the runner.
 
@@ -257,6 +260,10 @@ class MatchLifecycle:
         accounts changes a rating (DEC-34), so the stored match is flagged rated only if at least
         one of them does. Against a bot the flag is ignored (DEC-06), and so it is on a map without
         a mirror (DEC-27, item 8: a generated map stays outside ranked).
+
+        ``keeper``: the account that keeps its colour on a clash (DEC-49, item 2): the host of an
+        invite, the earlier entry of the queue; ``None``: the human of a bot match, or side 0.
+        The colours are resolved here, once, and stored with the sides of the match.
         """
         if record.dead:
             raise IllegalTransitionError(f"{record.state.value} -> running")
@@ -273,8 +280,15 @@ class MatchLifecycle:
             and mapdef.meta.symmetry != "none"  # DEC-27, item 8
         )
         try:
-            pk, plan = await asyncio.to_thread(
-                self._insert, map_id, ruleset_hash(rules), rated, players, bot_name, rules.tick_hz
+            pk, plan, colours = await asyncio.to_thread(
+                self._insert,
+                map_id,
+                ruleset_hash(rules),
+                rated,
+                players,
+                bot_name,
+                rules.tick_hz,
+                keeper,
             )
         except BaseException:
             record.deadline = deadline
@@ -290,6 +304,7 @@ class MatchLifecycle:
                 private=private,
                 bot=bot,
                 rating_plan=plan,
+                colours=colours,
             )
         except BaseException as exc:
             record.deadline = deadline
@@ -344,10 +359,13 @@ class MatchLifecycle:
         players: tuple[int, int],
         bot: str | None,
         tick_hz: int,
-    ) -> tuple[int, RatingPlan | None]:
-        """Insert the match; for a queue match also decide its rating rules (DEC-34)."""
+        keeper: int | None,
+    ) -> tuple[int, RatingPlan | None, tuple[PlayerColour, PlayerColour]]:
+        """Insert the match; for a queue match also decide its rating rules (DEC-34); resolve the
+        colours of the sides (DEC-49)."""
         with self._sessions.begin() as session:
             now = self.clock.wall()
+            colours = _colours_of(session, players, keeper)
             plan = (
                 plan_queue_match(session, (players[0], players[1]), self.ladder, tick_hz, now)
                 if rated
@@ -376,9 +394,10 @@ class MatchLifecycle:
                         bot=bot if is_bot else None,
                         rating_mode=mode.value,
                         unrated_reason=None if reason is None else reason.value,
+                        colour=colours[side].value,
                     )
                 )
-            return match.id, plan
+            return match.id, plan, colours
 
     def _write_result(self, pk: int, result: _Result) -> None:
         with self._sessions.begin() as session:
@@ -426,6 +445,25 @@ class MatchLifecycle:
 
     def _write_aborted(self, pk: int, reason: str) -> None:
         self._write_result(pk, _Result(STATUS_ABORTED, reason, 0, None, False))
+
+
+def _colours_of(
+    session: Session, players: tuple[int, int], keeper: int | None
+) -> tuple[PlayerColour, PlayerColour]:
+    """The colours of the sides by player id (DEC-49, item 2): the stored wish of each account,
+    a bot has none; the side of ``keeper`` (or side 0) keeps its wish."""
+    wanted = {
+        account: colour_of(colour)
+        for account, colour in session.execute(
+            select(Player.id, Player.colour).where(Player.id.in_(players))
+        )
+    }
+    wishes = (
+        None if players[0] == BOT_ACCOUNT else wanted.get(players[0], colour_of(None)),
+        None if players[1] == BOT_ACCOUNT else wanted.get(players[1], colour_of(None)),
+    )
+    side = players.index(keeper) if keeper in players else 0
+    return resolve_sides(wishes, side)
 
 
 def _result_of(runner: MatchRunner, failure: str | None) -> _Result:

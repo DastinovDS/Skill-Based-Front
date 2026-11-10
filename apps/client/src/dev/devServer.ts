@@ -245,6 +245,7 @@ export function createDevServer(
           map_id: map.meta.name,
           last_seq: lastSeq,
           nicks: ['Ember', 'Bot'],
+          colours: ['lapis', 'minium'],
           rated: false,
           unrated_reason: 'casual',
           calibration: null,

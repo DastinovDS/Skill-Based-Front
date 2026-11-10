@@ -50,6 +50,10 @@ class Player(Base):
     """The matchmaking queue refuses the player until then: repeated resigns in rated matches
     (DEC-34, #414). Set when a result is written, so the length is that of the resign that
     caused it; a later resign never shortens it."""
+    colour: Mapped[str] = mapped_column(String(16), default="lapis", server_default="lapis")
+    """The colour the player asks for in a match (DEC-49): a ``gow_protocol.messages.PlayerColour``
+    value, checked by ``PUT /api/me/colour``. The match may give another one on a clash
+    (``gow_server.colours``)."""
 
 
 class Rating(Base):
@@ -126,3 +130,6 @@ class MatchPlayer(Base):
     unrated_reason: Mapped[str | None] = mapped_column(String(32))
     """``gow_protocol.messages.UnratedReason`` value when ``rating_mode`` is ``none`` in a queue
     match; ``None`` otherwise (and in matches that are not from the queue)."""
+    colour: Mapped[str | None] = mapped_column(String(16))
+    """The colour this side played in, resolved at the start (DEC-49, item 2): a
+    ``PlayerColour`` value, also for a bot. ``None`` for a match from before #906."""

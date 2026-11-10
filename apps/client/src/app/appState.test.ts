@@ -88,7 +88,8 @@ describe('AppState', () => {
   it('goes straight to the menu with a saved guest, and checks it with the server', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Old', has_password: false }),
+      me: () =>
+        Promise.resolve({ player_id: 1, nick: 'Old', has_password: false, colour: 'lapis' }),
     });
     await app.start();
     expect(app.screen.name).toBe('menu');
@@ -108,7 +109,8 @@ describe('AppState', () => {
   it('opens your own invite link as the waiting room instead of failing the join', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Host"}' });
     const { app } = setup('?m=abc', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Host', has_password: false }),
+      me: () =>
+        Promise.resolve({ player_id: 1, nick: 'Host', has_password: false, colour: 'lapis' }),
       joinInvite: () => Promise.reject(new ApiError('conflict', 409)),
       invite: () => Promise.resolve(invite('abc')),
     });
@@ -119,7 +121,7 @@ describe('AppState', () => {
   it('falls back to the menu with a message when the invite is full or gone', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
     const full = setup('?m=abc', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false, colour: 'lapis' }),
       joinInvite: () => Promise.reject(new ApiError('conflict', 409)),
       invite: () => Promise.reject(new ApiError('not_found', 404)),
     });
@@ -127,7 +129,7 @@ describe('AppState', () => {
     expect(full.app.screen.name).toBe('menu');
     expect(full.app.notice).toBe('error.invite.full');
     const gone = setup('?m=abc', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false, colour: 'lapis' }),
       joinInvite: () => Promise.reject(new ApiError('not_found', 404)),
     });
     await gone.app.start();
@@ -140,7 +142,7 @@ describe('AppState', () => {
     const joinInvite = vi.fn(() => Promise.resolve(invite('abc')));
     const activeMatch = vi.fn(() => Promise.resolve({ match_id: '42', map_id: 'pass' }));
     const { app } = setup('?m=abc', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false, colour: 'lapis' }),
       activeMatch,
       joinInvite,
     });
@@ -153,7 +155,8 @@ describe('AppState', () => {
 
   it('opens the menu when there is no running match or the question fails', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
-    const me = () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false });
+    const me = () =>
+      Promise.resolve({ player_id: 1, nick: 'Me', has_password: false, colour: 'lapis' as const });
     const none = setup('', storage, { me, activeMatch: () => Promise.resolve(null) });
     await none.app.start();
     expect(none.app.screen.name).toBe('menu');
@@ -174,7 +177,7 @@ describe('AppState', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue(running);
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false, colour: 'lapis' }),
       activeMatch,
     });
     await app.start();
@@ -191,7 +194,7 @@ describe('AppState', () => {
       Promise.resolve({ match_id: 'm1', map_id: 'pass', level: 'hard' as const, player: 0 }),
     );
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false, colour: 'lapis' }),
       createInvite: () => Promise.resolve(invite('xyz')),
       createBotMatch,
     });
@@ -207,7 +210,8 @@ describe('AppState', () => {
     const createInvite = vi.fn(() => Promise.resolve({ ...invite('pub'), public: true }));
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Old', has_password: false }),
+      me: () =>
+        Promise.resolve({ player_id: 1, nick: 'Old', has_password: false, colour: 'lapis' }),
       createInvite,
     });
     await app.start();
@@ -219,7 +223,7 @@ describe('AppState', () => {
   it('keeps a failed create or bot start on its screen and answers the line to show (#473)', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false, colour: 'lapis' }),
       createInvite: () => Promise.reject(new ApiError('unavailable', 503)),
       createBotMatch: () => Promise.reject(new ApiError('network', 0)),
     });
@@ -239,7 +243,8 @@ describe('AppState', () => {
       '',
       storage,
       {
-        me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+        me: () =>
+          Promise.resolve({ player_id: 1, nick: 'Me', has_password: false, colour: 'lapis' }),
         // Like fetch: the request ends only when its signal is aborted.
         createBotMatch: (_token, _level, _pick, signal) =>
           new Promise((_resolve, reject) => {
@@ -259,7 +264,7 @@ describe('AppState', () => {
   it('starts over from the menu when the session is lost during a create (401)', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false, colour: 'lapis' }),
       createInvite: () => Promise.reject(new ApiError('unauthorized', 401)),
     });
     await app.start();
@@ -299,7 +304,7 @@ describe('AppState', () => {
 
   describe('accounts (#374)', () => {
     const me = (nick: string, hasPassword: boolean) => () =>
-      Promise.resolve({ player_id: 1, nick, has_password: hasPassword });
+      Promise.resolve({ player_id: 1, nick, has_password: hasPassword, colour: 'lapis' as const });
     const saved = (storage: Storage): unknown =>
       JSON.parse(storage.getItem(GUEST_STORAGE_KEY) ?? 'null');
 
@@ -503,7 +508,13 @@ describe('AppState', () => {
     const saved = () =>
       memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me","hasPassword":true}' });
     const meWith = (calibration: { played: number; total: number } | null) => () =>
-      Promise.resolve({ player_id: 1, nick: 'Me', has_password: true, calibration });
+      Promise.resolve({
+        player_id: 1,
+        nick: 'Me',
+        has_password: true,
+        calibration,
+        colour: 'lapis' as const,
+      });
 
     it('keeps the calibration of /api/me and asks for it again when the menu opens', async () => {
       let played = 2;
@@ -564,7 +575,8 @@ describe('AppState', () => {
     it('learns the own id and the displayed rating when the menu opens', async () => {
       const player = vi.fn(profile(1480));
       const { app } = setup('', saved(), {
-        me: () => Promise.resolve({ player_id: 7, nick: 'Me', has_password: true }),
+        me: () =>
+          Promise.resolve({ player_id: 7, nick: 'Me', has_password: true, colour: 'lapis' }),
         activeMatch: () => Promise.resolve(null),
         player,
       });
@@ -578,7 +590,8 @@ describe('AppState', () => {
     it('asks for no rating of a guest or of a calibrating account', async () => {
       const player = vi.fn(profile(1480));
       const guest = setup('', saved(), {
-        me: () => Promise.resolve({ player_id: 7, nick: 'Me', has_password: false }),
+        me: () =>
+          Promise.resolve({ player_id: 7, nick: 'Me', has_password: false, colour: 'lapis' }),
         activeMatch: () => Promise.resolve(null),
         player,
       });
@@ -591,6 +604,7 @@ describe('AppState', () => {
             nick: 'Me',
             has_password: true,
             calibration: { played: 1, total: 5 },
+            colour: 'lapis',
           }),
         activeMatch: () => Promise.resolve(null),
         player,
@@ -605,7 +619,8 @@ describe('AppState', () => {
     it('keeps the rating when its request fails, and a logout forgets it', async () => {
       let fail = false;
       const { app } = setup('', saved(), {
-        me: () => Promise.resolve({ player_id: 7, nick: 'Me', has_password: true }),
+        me: () =>
+          Promise.resolve({ player_id: 7, nick: 'Me', has_password: true, colour: 'lapis' }),
         activeMatch: () => Promise.resolve(null),
         player: () => (fail ? Promise.reject(new ApiError('network', 0)) : profile(1480)()),
       });
@@ -621,7 +636,8 @@ describe('AppState', () => {
 
     it('opens the Leaderboard or the Replays tab, and "Back" from a replay returns there', async () => {
       const { app } = setup('', saved(), {
-        me: () => Promise.resolve({ player_id: 7, nick: 'Me', has_password: true }),
+        me: () =>
+          Promise.resolve({ player_id: 7, nick: 'Me', has_password: true, colour: 'lapis' }),
         activeMatch: () => Promise.resolve(null),
       });
       await app.start();
@@ -640,7 +656,8 @@ describe('AppState', () => {
     async function inMenu(api: Partial<Api> = {}) {
       const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
       const { app } = setup('', storage, {
-        me: () => Promise.resolve({ player_id: 4, nick: 'Old', has_password: false }),
+        me: () =>
+          Promise.resolve({ player_id: 4, nick: 'Old', has_password: false, colour: 'lapis' }),
         activeMatch: () => Promise.resolve(null),
         ...api,
       });
@@ -679,7 +696,12 @@ describe('AppState', () => {
 
     it('changes the nick and remembers it', async () => {
       const changeNick = vi.fn(() =>
-        Promise.resolve({ player_id: 4, nick: 'Newer', has_password: false }),
+        Promise.resolve({
+          player_id: 4,
+          nick: 'Newer',
+          has_password: false,
+          colour: 'lapis' as const,
+        }),
       );
       const { app, storage } = await inMenu({ changeNick });
       expect(await app.changeNick('Newer')).toBeNull();

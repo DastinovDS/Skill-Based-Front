@@ -42,6 +42,7 @@ def test_create_guest_and_authenticate(client: TestClient, settings: Settings) -
         "nick": "Alice",
         "has_password": False,
         "calibration": None,
+        "colour": "lapis",
     }
 
     # Only the SHA-256 of the token is stored.

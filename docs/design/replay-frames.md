@@ -59,7 +59,7 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
   "format": 2, "sim_version": 1, "ruleset_hash": "...", "map_id": "artery", "map_hash": "...",
   "tick_hz": 10, "frame_every": 5, "ticks": 9000,
   "outcome": {"winner": 0, "reason": "vp"}, "vp": [31, 24], "state_hash": "...",
-  "nicks": ["Ember", "Bot (normal)"],
+  "nicks": ["Ember", "Bot (normal)"], "colours": ["shell", "violet"],
   "rules": {"unit_ticks": 30, "queue_max": 3, "barracks_ticks": 100, "barracks_charges": 3,
             "factory_ticks": 100, "factory_charges": 4, "fort_ticks": 100},
   "map": { ...map format, docs/design/map-format.md... },
@@ -78,6 +78,14 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
   the `match_players` rows before the build; no key when the match has no row with both sides
   (files from before #598, a match without a database row). The nicks are not a secret: both
   players see them in `welcome` (`ui-style.md` section 15).
+- `colours` (optional, DEC-49, #906): the colours of the sides by player id, as the match was
+  played: `PlayerColour` ids of the set Engraved six (`lapis`, `minium`, `glacier`, `shell`,
+  `violet`, `madder`; the values are in DEC-49 and `gow_server.colours`), resolved once at the
+  start by the clash rule and stored in `match_players.colour`, so the replay shows the same
+  colours as the `welcome` of the match did (a bot side too). `ReplayService` reads them with the
+  nicks; no key when a side has no stored colour (a match from before #906) or the match has no
+  row with both sides: the viewer then draws the sides as before (own and enemy). An optional key,
+  so the `format` stays `2`. Not a secret: both players see them in `welcome`.
 - `rules` (format 2, #905): the rule numbers the viewer draws the buildings with, from the rules the
   match played (`gow_server.frames.viewer_rules`; map tempo applied): `unit_ticks` and `queue_max` of
   the recruit queue (DEC-25), `barracks_ticks` and `barracks_charges` (DEC-26), `factory_ticks` and
