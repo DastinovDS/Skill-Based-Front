@@ -286,7 +286,7 @@ def test_ruleset_public_has_the_stance_table_and_the_plan_pace_of_mvp_7() -> Non
     and of the gathering of a planned order (DEC-41, item 10)."""
     public = RulesetPublic.from_ruleset(load_ruleset(RULESET_PATH))
     assert public.stances.model_dump() == {
-        "cp_period_ticks": {"economy": 200, "balance": 100, "war": 80},
+        "cp_period_ticks": {"economy": 100, "balance": 50, "war": 40},
         "capital_period_ticks": {"economy": 100, "balance": 200, "war": 400},
         "factories_follow": True,
     }

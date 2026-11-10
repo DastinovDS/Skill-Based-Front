@@ -1,5 +1,5 @@
 # Ruleset mvp-7: the main (played) ruleset since 2026-11-09 (owner decision after a playtest on narrows, #885). A copy
-# of mvp-6.toml with exactly three changes:
+# of mvp-6.toml with exactly four changes:
 # - the section [map_tempo] at the end (DEC-46, #803; mechanics.md, section 6, "Map tempo"): the economy periods of a
 #   match are scaled once by the node count N of its map, pct = isqrt(N * 10000 // 49) clamped to 50..150, each
 #   period p becomes max(1, p * 100 // pct). Reason: on small maps there are too many charges by mid-game;
@@ -7,14 +7,18 @@
 # - stances.factories_follow = true (DEC-47, #888; owner decision 2026-11-09 after playtesting mvp-7: fewer
 #   resources feel right): every factory other than the own capital (built or captured, a captured capital too)
 #   follows its owner's stance exactly like the own capital, one charge per stances.capital_period_ticks, each
-#   factory on its own counter (0 when it starts working or is captured, carried over on a stance change).
+#   factory on its own counter (0 when it starts working or is captured, carried over on a stance change);
+# - CP accrue in 0.5 CP quanta at the same rate (owner decision 2026-11-10, #900), edited in place: cp.per_period
+#   100 -> 50 and every period of [stances.cp_period_ticks] halved (economy 200 -> 100, balance 100 -> 50, war 80 ->
+#   40), so a player with 0.5 CP no longer waits for a whole quantum to pay a 1 CP order. The capital and factory
+#   periods, the CP cap and every price are unchanged.
 # Periods in ticks per pool map (War / Balance / Economy; every factory, the own capital and the built or captured
 # ones alike, makes 1 charge per the same period of its owner's stance):
-#   map         nodes  pct  CP quantum per   any factory: 1 charge per
-#   narrows       29    76  105 / 131 / 263   526 / 263 / 131
-#   crossroads    49   100   80 / 100 / 200   400 / 200 / 100
-#   highway       49   100   80 / 100 / 200   400 / 200 / 100
-#   ridge         51   102   78 /  98 / 196   392 / 196 /  98
+#   map         nodes  pct  0.5 CP quantum per  any factory: 1 charge per
+#   narrows       29    76   52 /  65 / 131     526 / 263 / 131
+#   crossroads    49   100   40 /  50 / 100     400 / 200 / 100
+#   highway       49   100   40 /  50 / 100     400 / 200 / 100
+#   ridge         51   102   39 /  49 /  98     392 / 196 /  98
 # The generated maps of #771 (29..55 nodes) get pct 76..105 (a factory in Balance 263..190).
 #
 # The kept rulesets (#894, 2026-11-09): mvp-5, mvp-6, mvp-7 and test-short (a 60-second mvp-7 for the E2E). The
@@ -45,7 +49,7 @@ match_ticks = 9000 # a 15-minute match (DEC-22, #234): 30 VP awards
 # The period of the quantum is set by the stance ([stances.cp_period_ticks], DEC-44).
 start = 300 # starting stock: 3 CP (SIM-01, #17)
 cap = 500 # ceiling: 5 CP; at the ceiling the excess CP burns off (DEC-02)
-per_period = 100 # regeneration quantum: 1 CP
+per_period = 50 # regeneration quantum: 0.5 CP (owner 2026-11-10, #900; mvp-6: 100)
 
 [economy]
 # Stance of both players at the start of the match: economy | balance | war.
@@ -66,10 +70,11 @@ start_stance = "balance"
 factories_follow = true
 
 [stances.cp_period_ticks]
-# Ticks per CP quantum (cp.per_period, 1 CP).
-economy = 200 # 20 s
-balance = 100 # 10 s
-war = 80 # 8 s
+# Ticks per CP quantum (cp.per_period, 0.5 CP): half of the mvp-6 periods, so the CP per minute stay the same
+# (owner 2026-11-10, #900).
+economy = 100 # 10 s
+balance = 50 # 5 s
+war = 40 # 4 s
 
 [stances.capital_period_ticks]
 # Ticks per charge of the own capital and, with factories_follow, of every other factory.

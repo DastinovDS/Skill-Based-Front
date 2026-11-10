@@ -4,6 +4,7 @@
   import {
     burinEdge,
     priceBracket,
+    quantumEnd,
     running,
     shownValue,
     slivers,
@@ -16,6 +17,8 @@
     cap: number;
     /** The way to the next CP quantum, 0..1 (DEC-44 progress); `null`: not known, not drawn. */
     next: number | null;
+    /** The size of one quantum, hundredths (`cp.per_period`): the ruled part is `next` of it. */
+    quantum: number;
     /** The CP do not pay for the hovered move, or a move was just refused for them (#762). */
     short: boolean;
     /** The CP price of the hovered move, hundredths; `null`: nothing hovered. */
@@ -24,7 +27,7 @@
     text: string;
   }
 
-  let { value, cap, next, short, price, text }: Props = $props();
+  let { value, cap, next, quantum: step, short, price, text }: Props = $props();
 
   // The Double frame (ui-style 54a, 55a, 57a) in CSS px: a scale of `W` px from 0 to the cap, a
   // bar over it, the next quantum ruled in, a needle under the value. Nothing runs past the scale.
@@ -84,7 +87,7 @@
   function paint(now: number): boolean {
     changes = running(changes, now);
     const shown = shownValue(cp, n, changes, now);
-    const end = next === null || full ? null : Math.min(n, cp + Math.max(0, next));
+    const end = next === null || full ? null : quantumEnd(cp, n, next, step);
     bar?.setAttribute('width', String(Math.max(0, unit * shown)));
     if (quantum !== undefined) {
       const from = Math.max(shown, cp);

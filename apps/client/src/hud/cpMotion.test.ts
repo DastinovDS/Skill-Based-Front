@@ -3,6 +3,7 @@ import { DURATION } from '../theme/tokens.ts';
 import {
   burinEdge,
   priceBracket,
+  quantumEnd,
   running,
   shownValue,
   slivers,
@@ -66,5 +67,18 @@ describe('priceBracket', () => {
   it('spans the CP an order takes, or from the value to the price when short', () => {
     expect(priceBracket(3, 1)).toEqual({ from: 2, to: 3, short: false });
     expect(priceBracket(0.5, 1)).toEqual({ from: 0.5, to: 1, short: true });
+  });
+});
+
+describe('quantumEnd', () => {
+  it('rules in `next` of one quantum: half a CP under mvp-7 (#900), a whole one before', () => {
+    expect(quantumEnd(2, 5, 0.5, 50)).toBeCloseTo(2.25);
+    expect(quantumEnd(2, 5, 1, 50)).toBeCloseTo(2.5);
+    expect(quantumEnd(2, 5, 0.5, 100)).toBeCloseTo(2.5);
+  });
+
+  it('stops at the scale and ignores a negative progress', () => {
+    expect(quantumEnd(4.8, 5, 1, 100)).toBe(5);
+    expect(quantumEnd(2, 5, -1, 50)).toBe(2);
   });
 });

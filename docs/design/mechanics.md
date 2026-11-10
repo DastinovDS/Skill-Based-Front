@@ -1789,6 +1789,8 @@ The key clarification from the discussion: the problem is not that CP are both a
 
 ### Economy model and CP stance (DEC-02, #8) **[accepted]**
 
+> **CP quantum in `mvp-7` [accepted] (owner decision 2026-11-10, #900):** CP are credited in 0.5 CP quanta at the same rate: `cp.per_period = 50` and every `stances.cp_period_ticks` halved (economy 100, balance 50, war 40, before map tempo), so a player with 0.5 CP does not wait for a whole quantum to pay a 1 CP order. Cap, prices and the capital and factory periods are unchanged.
+
 > **Partly removed from the code 2026-11-09 (#894); history only:** the stance share of the CP quantum, `economy.charges_per_cp`, the charge accumulator, the stance cooldown, `cp.period_ticks` and `economy.model`; the CP quantum, the cap and the burn stay, the period comes from the stance (DEC-44).
 
 > **[superseded by DEC-41 under `economy.model = "v2"`]**: stances, the charge share of CP regeneration, `charges_per_cp`, the starting stance (DEC-09) and the stance cooldown; in v2 all CP goes to CP and charges come from factories. The text below is kept and is in force for `economy.model = "v1"`. The block DEC-44 below brings stances back to v2 under the section `[stances]`, with other rates and no cooldown.
@@ -1842,6 +1844,8 @@ The owner's decision of 2026-11-06, after playing `mvp-4-sup200` (#763, the capi
    | War | 80 ticks | 400 ticks |
    | Balance | 100 ticks | 200 ticks |
    | Economy | 200 ticks | 100 ticks |
+
+   **`mvp-7` (owner decision 2026-11-10, #900): the quantum is 0.5 CP (`cp.per_period = 50`) and the CP periods are halved, War 40, Balance 50, Economy 100 ticks: the same CP per minute, credited twice as often. The counters, the carry rule and the capital periods are unchanged; after map tempo (DEC-46) a period is `p * 100 // pct` of the halved value (narrows: 52 / 65 / 131).** The table shows the earlier 1 CP quantum.
 
    Balance equals `mvp-4-sup200`. Under the section `cp.period_ticks`, `factory.capital_period_ticks` and `orders.stance_cooldown_ticks` have no effect; `economy.stance_to_charges_pct` and `economy.charges_per_cp` stay without effect, as in DEC-41, item 1.
 2. **What a stance acts on.** The CP income and the player's own capital, nothing else. Built factories and a captured capital (for the capturer) keep `factory.built_period_ticks` on the global clock (ticks `t > 0` divisible by it): they are independent of stances, of both players'. **[revised by DEC-47 under `stances.factories_follow`, `mvp-7`, owner decision 2026-11-09, #888]**: with the key every factory follows its owner's stance like the own capital, each on its own counter (the block "Factories follow the stance" below).
@@ -1953,12 +1957,12 @@ The owner's decision of 2026-11-09, after playtesting `mvp-7` (fewer resources f
 
 Periods in `mvp-7` (ticks; War / Balance / Economy; every factory, the own capital and the built or captured ones alike):
 
-| Map | Nodes | `pct` | CP: 1 quantum per | Any factory: 1 charge per |
+| Map | Nodes | `pct` | CP: 0.5 CP quantum per (#900) | Any factory: 1 charge per |
 |---|---|---|---|---|
-| `narrows` | 29 | 76 | 105 / 131 / 263 | 526 / 263 / 131 |
-| `crossroads` | 49 | 100 | 80 / 100 / 200 | 400 / 200 / 100 |
-| `highway` | 49 | 100 | 80 / 100 / 200 | 400 / 200 / 100 |
-| `ridge` | 51 | 102 | 78 / 98 / 196 | 392 / 196 / 98 |
+| `narrows` | 29 | 76 | 52 / 65 / 131 | 526 / 263 / 131 |
+| `crossroads` | 49 | 100 | 40 / 50 / 100 | 400 / 200 / 100 |
+| `highway` | 49 | 100 | 40 / 50 / 100 | 400 / 200 / 100 |
+| `ridge` | 51 | 102 | 39 / 49 / 98 | 392 / 196 / 98 |
 
 | # | Situation (49 nodes unless named) | Expected |
 |---|---|---|

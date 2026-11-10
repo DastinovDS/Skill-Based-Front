@@ -190,8 +190,9 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
 }
 
 /**
- * The `stances` scene (DEC-44, #772): the same moment under the stances rules, in War, 60 ticks into
- * the next CP (of 80) and 100 into the next charge of the capital (of 400).
+ * The `stances` scene (DEC-44, #772): the same moment under the stances rules, in War, 30 ticks into
+ * the next CP quantum (of 40: half a CP, as `mvp-7`, #900) and 100 into the next charge of the capital
+ * (of 400).
  */
 export function stancesSnapshot(map: MapFile): SnapshotMsg {
   const base = flowSnapshot(map, 0);
@@ -199,7 +200,7 @@ export function stancesSnapshot(map: MapFile): SnapshotMsg {
     ...base,
     view: {
       ...base.view,
-      me: { ...base.view.me, stance: 'war', cp_ticks: 60, capital_ticks: 100 },
+      me: { ...base.view.me, stance: 'war', cp_ticks: 30, capital_ticks: 100 },
     },
   };
 }

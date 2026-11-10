@@ -68,6 +68,7 @@
           value={data.cp.value}
           cap={data.cp.cap}
           next={next?.cp.share ?? null}
+          quantum={data.cp.quantum}
           {short}
           {price}
           text={formatCentis(data.cp.value, locale)}
@@ -97,6 +98,7 @@
         title={next === null
           ? undefined
           : tf(orders.factoriesFollow ? 'bar.nextTipAll' : 'bar.nextTip', {
+              amount: formatCentis(data.cp.quantum, locale),
               cp: next.cp.seconds,
               capital: next.capital.seconds,
             })}

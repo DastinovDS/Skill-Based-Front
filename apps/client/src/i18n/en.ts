@@ -422,9 +422,9 @@ export const en = {
   'bar.cpLabelShort': 'CP: {value} of {cap}, not enough for this move',
   'bar.cpShortHint': 'Not enough CP for this move',
   'bar.nextTip':
-    'Next CP in {cp} s, next charge of the capital in {capital} s. A change of stance keeps the progress of both',
+    'Next {amount} CP in {cp} s, next charge of the capital in {capital} s. A change of stance keeps the progress of both',
   'bar.nextTipAll':
-    'Next CP in {cp} s, next charge of the capital in {capital} s. Your other factories run at the same pace on their own progress. A change of stance keeps the progress of all',
+    'Next {amount} CP in {cp} s, next charge of the capital in {capital} s. Your other factories run at the same pace on their own progress. A change of stance keeps the progress of all',
   'bar.factories': 'Factories: own, builds included, of the most you may have',
   'bar.factoriesFull': 'Factories: at the most you may have, no more can be built',
   'bar.factoriesLabel': 'Factories: {count} of {max}',

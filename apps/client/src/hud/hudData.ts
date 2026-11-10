@@ -44,6 +44,8 @@ export interface CpInfo {
   readonly cap: number;
   /** Hundredths of CP per second at the ruleset's regeneration. */
   readonly regenPerSecond: number;
+  /** One quantum of `cp.per_period`, hundredths (`mvp-7`: 50, half a CP): the "next" ruling spans it. */
+  readonly quantum: number;
 }
 
 export interface GroupInfo {
@@ -441,6 +443,7 @@ export function buildHudData(
       cap: rules.cp.cap,
       regenPerSecond:
         (rules.cp.per_period * rules.tick_hz) / rules.stances.cp_period_ticks[view.me.stance],
+      quantum: rules.cp.per_period,
     },
     stance: view.me.stance,
     stanceProgress: stanceProgress(rules, view.me),

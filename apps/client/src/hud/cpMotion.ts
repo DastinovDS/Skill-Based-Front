@@ -52,6 +52,14 @@ export function shownValue(
 }
 
 /** A spent length dropping away under the bar: from `lo` to `hi` (CP), sunk by `drop` (0..1). */
+/**
+ * The end of the ruled "next quantum" part of the gauge, in CP: the value plus `next` (0..1) of
+ * one quantum (`step` hundredths, `cp.per_period`: 50 under `mvp-7`), at most the scale `n`.
+ */
+export function quantumEnd(cp: number, n: number, next: number, step: number): number {
+  return Math.min(n, cp + (Math.max(0, next) * step) / 100);
+}
+
 export interface Sliver {
   readonly lo: number;
   readonly hi: number;
