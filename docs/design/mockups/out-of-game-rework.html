@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Out-of-game rework, round 1 (#919)</title>
+<!--
+  Mockup round 1 of #919: five structures of the screens outside a match, in the decided Lapis set
+  (ui-style 51, 56, 58, 59, 67) with the Double rule edges and the Spare captions. The explanations,
+  the table of variants and the open questions are in issue #919, not on this page.
+  Self-contained: the fonts are the client's own (SIL OFL, assets/out-of-game-style/fonts/), the
+  pictures are frames of the real client (assets/out-of-game-rework/). No network.
+  State in the address: #d=<1..5>&s=<screen>&c=<corner 0..3>&cmp=<dirs>&rm=<0|1>&g=<0|1>&fd=<a|b>
+-->
+<style>
+@font-face{font-family:Cinzel;src:url(assets/out-of-game-style/fonts/cinzel.woff2) format('woff2');font-weight:400 900;font-display:block}
+@font-face{font-family:'EB Garamond';src:url(assets/out-of-game-style/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-display:block}
+@font-face{font-family:'EB Garamond';src:url(assets/out-of-game-style/fonts/ebgaramond-italic.woff2) format('woff2');font-weight:400 800;font-style:italic;font-display:block}
+@property --g{syntax:'<number>';inherits:true;initial-value:1}
+
+:root{
+  --stone-bg:#16130f;--stone-panel:#1d1a15;--stone-raised:#221e18;--stone-tex:url(assets/out-of-game-rework/stone.webp);
+  --ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;--rule:#7d7363;--rule-faint:rgb(125 115 99 / 60%);
+  --line:#3d372d;--cut:#050403;--lit:rgb(214 200 172 / 30%);--lit-faint:rgb(214 200 172 / 15%);--frame-lozenge:#8f8573;
+  --own:#86a6ea;--enemy:#e5785e;--enemy-lapis:#e0735a;--neutral:#b3a88f;--plate:#0e0c09;--casing:#060504;
+  --vp:#cfab62;--warn:#e6ab42;--glacier:#a6e0e8;--minium:#e5785e;--shell:#f4b4a4;--violet:#966fd6;--madder:#c8587e;
+  --font-display:'Cinzel','Times New Roman',serif;--font-text:'EB Garamond',Georgia,'Times New Roman',serif;
+  --ease-engrave:cubic-bezier(.37,0,.63,1);--ease-settle:cubic-bezier(.33,1,.68,1);--ease-travel:cubic-bezier(.65,0,.35,1);
+  --rule-dbl:linear-gradient(var(--cut),var(--cut)) 0 0/100% 1px no-repeat,linear-gradient(var(--line),var(--line)) 0 1px/100% 1px no-repeat,linear-gradient(var(--lit-faint),var(--lit-faint)) 0 4px/100% 1px no-repeat;
+  --frame-quiet:linear-gradient(var(--rule),var(--rule)) 0 0/100% 1px no-repeat,linear-gradient(var(--rule),var(--rule)) 0 100%/100% 1px no-repeat,linear-gradient(var(--rule),var(--rule)) 0 0/1px 100% no-repeat,linear-gradient(var(--rule),var(--rule)) 100% 0/1px 100% no-repeat,linear-gradient(var(--rule-faint),var(--rule-faint)) 3px 3px/calc(100% - 6px) 1px no-repeat,linear-gradient(var(--rule-faint),var(--rule-faint)) 3px calc(100% - 3px)/calc(100% - 6px) 1px no-repeat,linear-gradient(var(--rule-faint),var(--rule-faint)) 3px 3px/1px calc(100% - 6px) no-repeat,linear-gradient(var(--rule-faint),var(--rule-faint)) calc(100% - 3px) 3px/1px calc(100% - 6px) no-repeat;
+  --frame-chosen:linear-gradient(var(--ink),var(--ink)) 0 0/100% 1px no-repeat,linear-gradient(var(--ink),var(--ink)) 0 100%/100% 1px no-repeat,linear-gradient(var(--ink),var(--ink)) 0 0/1px 100% no-repeat,linear-gradient(var(--ink),var(--ink)) 100% 0/1px 100% no-repeat,linear-gradient(rgb(236 228 209/35%),rgb(236 228 209/35%)) 3px 3px/calc(100% - 6px) 1px no-repeat,linear-gradient(rgb(236 228 209/35%),rgb(236 228 209/35%)) 3px calc(100% - 3px)/calc(100% - 6px) 1px no-repeat,linear-gradient(rgb(236 228 209/35%),rgb(236 228 209/35%)) 3px 3px/1px calc(100% - 6px) no-repeat,linear-gradient(rgb(236 228 209/35%),rgb(236 228 209/35%)) calc(100% - 3px) 3px/1px calc(100% - 6px) no-repeat;
+  color-scheme:dark
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0c0b09;color:var(--ink);font-family:var(--font-text);-webkit-font-smoothing:antialiased;font-variant-numeric:lining-nums tabular-nums}
+body{display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;color:inherit}
+
+/* ===== The page chrome: switches only ===================================================== */
+.bar{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:9px 16px 8px;background:#0a0908;border-bottom:1px solid #2a251e;box-shadow:0 1px 0 #050403}
+.bar .grp{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.bar .lab{font:500 10px/1 var(--font-display);letter-spacing:.24em;text-transform:uppercase;color:#8d836f;margin-right:4px}
+.bar .ch{height:28px;padding:0 10px;border:0;background:var(--frame-quiet);background-color:transparent;color:var(--ink-dim);font:500 11px/1 var(--font-display);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;white-space:nowrap}
+.bar .ch:hover{color:var(--ink)}
+.bar .ch[aria-pressed=true]{background:var(--frame-chosen);background-color:rgb(236 228 209/7%);color:var(--ink)}
+.bar .ch:disabled{opacity:.3;cursor:default}
+.bar .ch .n{font-family:var(--font-display);margin-right:6px;color:var(--ink-dim)}
+.bar .sep{width:1px;height:22px;background:#2a251e}
+.view{flex:1;min-height:0;position:relative;display:grid;place-items:center;padding:14px}
+.grid{display:grid;gap:14px;justify-content:center;align-content:center}
+.cell{position:relative}
+.cell .cap{position:absolute;left:0;top:-1px;transform:translateY(-100%);padding-bottom:4px;font:500 10.5px/1 var(--font-display);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim)}
+.holder{position:relative;overflow:hidden;box-shadow:0 0 0 1px #2a251e,0 18px 40px rgb(0 0 0/50%)}
+.gray .holder{filter:grayscale(1)}
+.time{flex:none;display:flex;align-items:center;gap:10px;padding:8px 16px 10px;background:#0a0908;border-top:1px solid #2a251e}
+.time .ch{height:28px;min-width:34px;padding:0 9px;border:0;background:var(--frame-quiet);color:var(--ink-dim);font:500 11px/1 var(--font-display);letter-spacing:.12em;cursor:pointer}
+.time .ch[aria-pressed=true]{background:var(--frame-chosen);color:var(--ink)}
+.time input[type=range]{flex:1;accent-color:#cfc4ab;height:4px}
+.time .t{width:64px;text-align:right;font:400 15px/1 var(--font-text);color:var(--ink-dim)}
+.time.off{opacity:.35;pointer-events:none}
+
+/* ===== The stage: one screen of the game, 1280 x 800 ===================================== */
+.st{position:absolute;left:0;top:0;width:1280px;height:800px;overflow:hidden;transform-origin:0 0;background:var(--stone-tex) var(--stone-bg);color:var(--ink);font-size:18px;line-height:1.45;isolation:isolate}
+.st .bgimg{position:absolute;left:0;top:0;width:1280px;height:772px;object-fit:cover;opacity:.75}
+.st .bgimg.match{height:800px;opacity:1}
+.st .shade{position:absolute;inset:0 0 28px;pointer-events:none;background:linear-gradient(90deg,var(--stone-bg) 0%,rgb(22 19 15/94%) 46%,rgb(22 19 15/30%) 74%,rgb(22 19 15/62%) 100%)}
+.st .shade.centre{background:radial-gradient(ellipse 58% 74% at 50% 56%,rgb(22 19 15/90%) 0%,rgb(22 19 15/72%) 62%,rgb(22 19 15/84%) 100%)}
+.st .shade.hero{background:linear-gradient(180deg,rgb(22 19 15/55%) 0,rgb(22 19 15/8%) 22%,rgb(22 19 15/14%) 52%,rgb(22 19 15/92%) 80%,var(--stone-bg) 100%)}
+.st .shade.even{background:rgb(22 19 15/86%)}
+.st .legal{position:absolute;left:0;right:0;bottom:0;height:28px;display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:0 16px;background:#0f0d0a;font-size:12.5px;color:var(--ink-dim)}
+.st .legal span{text-decoration:underline;text-underline-offset:2px}
+
+/* The top bar: brand, the How to play "?", the player (opens the profile) */
+.st .top{position:absolute;inset:0 0 auto;z-index:8;height:72px;display:flex;align-items:center;gap:18px;padding:0 64px;border-bottom:1px solid var(--cut);box-shadow:0 1px 0 var(--line);background:rgb(22 19 15/82%)}
+.st .top::after{content:'';position:absolute;left:0;right:0;bottom:-5px;height:1px;background:var(--lit-faint)}
+.st .brand{margin:0;font:400 17px/1 var(--font-display);letter-spacing:.34em;white-space:nowrap}
+.st .tr{margin-left:auto;display:flex;align-items:center;gap:22px}
+.st .qm{position:relative;width:36px;height:36px;display:grid;place-items:center;border:0;padding:0;background:var(--frame-quiet);color:var(--ink-soft);font:500 16px/1 var(--font-display);cursor:pointer}
+.st .qm:hover{color:var(--ink);background:var(--frame-chosen)}
+.st .who{position:relative;display:flex;align-items:baseline;gap:10px;padding:6px 0;border:0;background:none;color:var(--ink);cursor:pointer}
+.st .who .nk{font:500 13px/1.2 var(--font-display);letter-spacing:.16em}
+.st .who .gs{font-size:17px;font-style:italic;color:var(--ink-dim)}
+.st .who::after{content:'';position:absolute;left:0;right:0;bottom:1px;height:1px;background:var(--ink);transform:scaleX(0);transform-origin:left;transition:transform .32s var(--ease-settle)}
+.st .who:hover::after{transform:scaleX(1)}
+.st .who.on::before{content:'';position:absolute;left:50%;bottom:-13px;margin-left:-4px;border:4px solid transparent;border-top:6px solid var(--ink);border-bottom:0}
+
+/* Labels and text */
+.st .lab{margin:0;font:500 11.5px/1.3 var(--font-display);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim)}
+.st h2{margin:0;font:400 32px/1.1 var(--font-display);letter-spacing:.1em}
+.st h3{margin:0;font:400 22px/1.15 var(--font-display);letter-spacing:.12em}
+.st .sub{margin:0;color:var(--ink-dim);font-style:italic;font-size:18px}
+.st .dl{margin:0;color:var(--ink-soft);font-size:18px}
+
+/* ===== The Double rule frame with the corner of the switch (item 12) ===================== */
+.df{position:relative}
+.df>.dfr{position:absolute;inset:-4px;z-index:3;pointer-events:none;--cz:10px;--cso:4px;--csi:9px;--r3:transparent;
+  background:
+   linear-gradient(var(--cut),var(--cut)) var(--cso) 4px/calc(100% - 2*var(--cso)) 1px no-repeat,
+   linear-gradient(var(--cut),var(--cut)) var(--cso) calc(100% - 4px)/calc(100% - 2*var(--cso)) 1px no-repeat,
+   linear-gradient(var(--cut),var(--cut)) 4px var(--cso)/1px calc(100% - 2*var(--cso)) no-repeat,
+   linear-gradient(var(--cut),var(--cut)) calc(100% - 4px) var(--cso)/1px calc(100% - 2*var(--cso)) no-repeat,
+   linear-gradient(var(--lit),var(--lit)) var(--cso) 5px/calc(100% - 2*var(--cso)) 1px no-repeat,
+   linear-gradient(var(--lit),var(--lit)) var(--cso) calc(100% - 5px)/calc(100% - 2*var(--cso)) 1px no-repeat,
+   linear-gradient(var(--lit),var(--lit)) 5px var(--cso)/1px calc(100% - 2*var(--cso)) no-repeat,
+   linear-gradient(var(--lit),var(--lit)) calc(100% - 5px) var(--cso)/1px calc(100% - 2*var(--cso)) no-repeat,
+   linear-gradient(var(--lit-faint),var(--lit-faint)) var(--csi) 9px/calc(100% - 2*var(--csi)) 1px no-repeat,
+   linear-gradient(var(--lit-faint),var(--lit-faint)) var(--csi) calc(100% - 9px)/calc(100% - 2*var(--csi)) 1px no-repeat,
+   linear-gradient(var(--lit-faint),var(--lit-faint)) 9px var(--csi)/1px calc(100% - 2*var(--csi)) no-repeat,
+   linear-gradient(var(--lit-faint),var(--lit-faint)) calc(100% - 9px) var(--csi)/1px calc(100% - 2*var(--csi)) no-repeat,
+   linear-gradient(var(--r3),var(--r3)) var(--csi) 13px/calc(100% - 2*var(--csi)) 1px no-repeat,
+   linear-gradient(var(--r3),var(--r3)) var(--csi) calc(100% - 13px)/calc(100% - 2*var(--csi)) 1px no-repeat,
+   linear-gradient(var(--r3),var(--r3)) 13px var(--csi)/1px calc(100% - 2*var(--csi)) no-repeat,
+   linear-gradient(var(--r3),var(--r3)) calc(100% - 13px) var(--csi)/1px calc(100% - 2*var(--csi)) no-repeat}
+.df>.dfr>i{position:absolute;width:var(--cz);height:var(--cz);background:var(--corner) 0 0/100% 100% no-repeat;transition:transform .36s var(--ease-settle)}
+.df>.dfr>i:nth-child(1){left:0;top:0}
+.df>.dfr>i:nth-child(2){right:0;top:0;transform:scaleX(-1)}
+.df>.dfr>i:nth-child(3){right:0;bottom:0;transform:scale(-1,-1)}
+.df>.dfr>i:nth-child(4){left:0;bottom:0;transform:scaleY(-1)}
+/* 0 Lozenge: the current Double rule */
+.st[data-c="0"] .dfr{--cz:10px;--cso:4px;--csi:9px;--corner:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M5 1 9 5 5 9 1 5Z' fill='%238f8573' stroke='%23050403'/%3E%3C/svg%3E")}
+/* 1 Stepped: both rules step in twice, a lozenge in the notch */
+.st[data-c="1"] .dfr{--cz:26px;--cso:26px;--csi:26px;--corner:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26' fill='none'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='rgb(214,200,172)' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='rgb(214,200,172)' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/svg%3E")}
+/* 2 Fan: square corner, a quarter sunburst inside it */
+.st[data-c="2"] .dfr{--cz:34px;--cso:34px;--csi:34px;--corner:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34' fill='none'%3E%3Cpath d='M34 4.5H4.5V34' stroke='%23050403'/%3E%3Cpath d='M34 5.5H5.5V34' stroke='rgb(214,200,172)' stroke-opacity='.3'/%3E%3Cpath d='M34 9.5H9.5V34' stroke='rgb(214,200,172)' stroke-opacity='.15'/%3E%3Cpath d='M23.5 9.5A14 14 0 0 1 9.5 23.5' stroke='%237d7363' stroke-width='.9'/%3E%3Cg stroke='rgb(214,200,172)' stroke-opacity='.32' stroke-width='.8'%3E%3Cpath d='M13.8 10.9 22.8 13.8'/%3E%3Cpath d='M13.1 12.2 20.8 17.7'/%3E%3Cpath d='M12.2 13.1 17.7 20.8'/%3E%3Cpath d='M10.9 13.8 13.8 22.8'/%3E%3C/g%3E%3Cpath d='M9.5 9.5H14A4.5 4.5 0 0 1 9.5 14Z' fill='%238f8573' stroke='%23050403' stroke-width='.8'/%3E%3C/svg%3E")}
+/* 3 Tied: three rules, the outer two cross and run on, a lozenge at the tie */
+.st[data-c="3"] .dfr{--cz:22px;--cso:22px;--csi:22px;--r3:rgb(214 200 172/12%);--corner:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none'%3E%3Cpath d='M22 4.5H0M4.5 22V0' stroke='%23050403'/%3E%3Cpath d='M22 5.5H1.5M5.5 22V1.5' stroke='rgb(214,200,172)' stroke-opacity='.3'/%3E%3Cpath d='M22 9.5H2M9.5 22V2' stroke='rgb(214,200,172)' stroke-opacity='.22'/%3E%3Cpath d='M22 13.5H13.5V22' stroke='rgb(214,200,172)' stroke-opacity='.12'/%3E%3Cpath d='M9.5 5.6 13.4 9.5 9.5 13.4 5.6 9.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/svg%3E")}
+.df.lift:hover>.dfr>i:nth-child(1),.df.hov>.dfr>i:nth-child(1){transform:translate(-2px,-2px)}
+.df.lift:hover>.dfr>i:nth-child(2),.df.hov>.dfr>i:nth-child(2){transform:scaleX(-1) translate(-2px,-2px)}
+.df.lift:hover>.dfr>i:nth-child(3),.df.hov>.dfr>i:nth-child(3){transform:scale(-1,-1) translate(-2px,-2px)}
+.df.lift:hover>.dfr>i:nth-child(4),.df.hov>.dfr>i:nth-child(4){transform:scaleY(-1) translate(-2px,-2px)}
+.stone{background:var(--stone-tex) rgb(27 24 19/78%)}
+.stone.solid{background:var(--stone-tex) var(--stone-panel)}
+
+/* ===== Buttons ============================================================================= */
+.bp{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:12px;height:50px;padding:0 28px;border:0;background:var(--ink);color:var(--stone-bg);font:500 14px/1 var(--font-display);letter-spacing:.22em;text-transform:uppercase;white-space:nowrap;cursor:pointer;box-shadow:inset 0 0 0 4px var(--ink),inset 0 0 0 5px var(--stone-bg);transition:background-color .2s,box-shadow .2s}
+.bp:hover{background:#fff8e9;box-shadow:inset 0 0 0 4px #fff8e9,inset 0 0 0 5px var(--stone-bg)}
+.bp.lg{height:96px;width:430px;justify-content:flex-start;gap:22px;padding:0 30px;font-size:32px;letter-spacing:.24em}
+.bp.lg.mid{font-size:26px;letter-spacing:.2em}
+.bp.dis{opacity:.45;cursor:default}
+.bs{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:10px;height:46px;padding:0 22px;border:0;background:var(--frame-quiet);color:var(--ink);font:500 13px/1 var(--font-display);letter-spacing:.2em;text-transform:uppercase;white-space:nowrap;cursor:pointer;transition:color .2s}
+.bs:hover{background:linear-gradient(var(--ink-soft),var(--ink-soft)) 0 0/100% 1px no-repeat,linear-gradient(var(--ink-soft),var(--ink-soft)) 0 100%/100% 1px no-repeat,linear-gradient(var(--ink-soft),var(--ink-soft)) 0 0/1px 100% no-repeat,linear-gradient(var(--ink-soft),var(--ink-soft)) 100% 0/1px 100% no-repeat,linear-gradient(var(--rule-faint),var(--rule-faint)) 3px 3px/calc(100% - 6px) 1px no-repeat,linear-gradient(var(--rule-faint),var(--rule-faint)) 3px calc(100% - 3px)/calc(100% - 6px) 1px no-repeat,linear-gradient(var(--rule-faint),var(--rule-faint)) 3px 3px/1px calc(100% - 6px) no-repeat,linear-gradient(var(--rule-faint),var(--rule-faint)) calc(100% - 3px) 3px/1px calc(100% - 6px) no-repeat}
+.bs.sm{height:34px;padding:0 14px;font-size:11px}
+.lnk{padding:4px 2px;border:0;background:none;color:var(--ink);font-size:18px;font-style:italic;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;cursor:pointer}
+/* The forfeit danger: A ruled in minium, the enemy hatch inks in on hover; B the solid minium tablet */
+.bd{position:relative;flex:none;display:inline-flex;align-items:center;gap:12px;height:50px;padding:0 24px;border:0;background:none;color:#ee9a84;font:500 13px/1 var(--font-display);letter-spacing:.2em;text-transform:uppercase;cursor:pointer;white-space:nowrap;overflow:hidden}
+.bd::before{content:'';position:absolute;inset:0;pointer-events:none;background:
+  linear-gradient(var(--enemy-lapis),var(--enemy-lapis)) 0 0/100% 1px no-repeat,linear-gradient(var(--enemy-lapis),var(--enemy-lapis)) 0 100%/100% 1px no-repeat,linear-gradient(var(--enemy-lapis),var(--enemy-lapis)) 0 0/1px 100% no-repeat,linear-gradient(var(--enemy-lapis),var(--enemy-lapis)) 100% 0/1px 100% no-repeat,
+  linear-gradient(rgb(224 115 90/42%),rgb(224 115 90/42%)) 4px 4px/calc(100% - 8px) 1px no-repeat,linear-gradient(rgb(224 115 90/42%),rgb(224 115 90/42%)) 4px calc(100% - 4px)/calc(100% - 8px) 1px no-repeat,linear-gradient(rgb(224 115 90/42%),rgb(224 115 90/42%)) 4px 4px/1px calc(100% - 8px) no-repeat,linear-gradient(rgb(224 115 90/42%),rgb(224 115 90/42%)) calc(100% - 4px) 4px/1px calc(100% - 8px) no-repeat}
+.bd .hx{position:absolute;inset:5px;z-index:-1;background:repeating-linear-gradient(45deg,rgb(229 120 94/34%) 0 1.2px,transparent 1.2px 4.4px);clip-path:inset(0 100% 0 0);transition:clip-path .55s var(--ease-engrave)}
+.bd .hx::after{content:'';position:absolute;top:0;bottom:0;right:0;width:2px;background:#f2b3a2}
+.bd:hover .hx,.bd.hov .hx{clip-path:inset(0 0 0 0)}
+.bd:hover,.bd.hov{color:#ffd2c5}
+.bd svg{flex:none}
+.bd.b{background:var(--enemy-lapis);color:var(--stone-bg);box-shadow:inset 0 0 0 4px var(--enemy-lapis),inset 0 0 0 5px var(--stone-bg)}
+.bd.b::before,.bd.b .hx{display:none}
+.bd.b:hover{background:#ec8a72;box-shadow:inset 0 0 0 4px #ec8a72,inset 0 0 0 5px var(--stone-bg)}
+.st :focus-visible,.fr{outline:2px solid var(--ink);outline-offset:4px}
+
+/* Waiting: three dots (still under reduced motion) */
+.busy{display:inline-flex;gap:4px;vertical-align:middle;margin-right:10px}
+.busy i{display:block;width:5px;height:5px;background:currentColor;animation:busy 1.2s infinite ease-in-out}
+.busy i:nth-child(2){animation-delay:.15s}.busy i:nth-child(3){animation-delay:.3s}
+@keyframes busy{0%,60%,100%{opacity:.25}30%{opacity:1}}
+
+/* Helmets (units/helmet.ts, Engraved): ink edge and strap on the dark casing, the charge solid */
+.hm{flex:none;overflow:visible}
+.hm .ca{fill:none;stroke:var(--casing);stroke-width:11;stroke-linecap:round;stroke-linejoin:round}
+.hm .ge{fill:none;stroke:var(--ink);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.hm .pl{fill:var(--plate)}
+.hm .ed{fill:none;stroke:var(--ink);stroke-width:4;stroke-linejoin:round}
+.hm.dash .ed{stroke:var(--ink-dim);stroke-dasharray:10 8}
+.hm.dash .ge{stroke:var(--ink-dim)}
+.hm.dash .pl,.hm.dash .ca{opacity:.5}
+
+/* Bot levels and map tiles (dock.css) */
+.levels{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:14px}
+.level{position:relative;display:grid;justify-items:start;row-gap:2px;padding:10px 10px 8px;border:0;background:var(--rule-dbl);color:var(--ink-dim);text-align:left;cursor:pointer;transition:color .2s}
+.level:hover{color:var(--ink)}
+.level.on{background:rgb(236 228 209/6%);color:var(--ink)}
+.level.on::before,.tile.on::before{content:'';position:absolute;inset:-1px;pointer-events:none;background:var(--frame-chosen)}
+.level .lv{font:500 15px/1.3 var(--font-display);letter-spacing:.14em;text-transform:uppercase}
+.level .ls{font-size:18px;font-style:italic}
+.pips{display:inline-flex;gap:3px;margin:0 0 6px 2px}
+.pips i{display:block;width:9px;height:9px;border:1px solid currentColor;transform:rotate(45deg)}
+.pips i.on{background:currentColor}
+.tiles{display:flex;flex-wrap:wrap;gap:10px}
+.tile{position:relative;display:grid;justify-items:start;gap:7px;padding:7px 7px 8px;border:0;background:none;color:var(--ink);cursor:pointer;text-align:left}
+.tile .tl{font:500 11.5px/1.2 var(--font-display);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
+.tile:not(.on) .tl{color:var(--ink-soft)}
+.thumb{display:block;width:104px;height:64px;overflow:hidden;background:#0f0d0a;box-shadow:inset 0 1px 0 var(--cut),0 1px 0 var(--line)}
+.thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.thumb.rnd{display:grid;place-items:center;color:var(--ink-dim);font:400 30px/1 var(--font-text)}
+.thumb .sk{width:86%;height:86%;fill:none;stroke:var(--ink-soft);stroke-width:1.3;stroke-dasharray:3 2.4}
+.thumb .sk circle{fill:var(--plate);stroke-dasharray:none}
+.compact .tiles{display:grid;grid-template-columns:repeat(3,max-content);gap:6px 14px}
+.compact .thumb{width:112px;height:69px}
+.compact .levels{column-gap:10px}
+.draw.still .bu{display:none}
+
+/* The versus line, the seats */
+.vs{display:flex;align-items:center;gap:14px;font:500 22px/1.2 var(--font-display);letter-spacing:.12em}
+.vs .x{font:italic 400 18px var(--font-text);letter-spacing:0;color:var(--ink-dim)}
+.seats{display:flex;align-items:center;gap:28px}
+.seat{display:flex;align-items:center;gap:14px}
+.seat .sn{display:grid}
+.seat .sn b{font:500 20px/1.15 var(--font-display);letter-spacing:.12em;font-weight:500}
+.seat .sn span{font:500 11px/1.3 var(--font-display);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim)}
+.seat .sn span.ok{color:var(--ink)}
+.seat .sn span.ok::before{content:'';display:inline-block;width:7px;height:7px;margin:0 7px 1px 0;background:var(--ink);transform:rotate(45deg)}
+.linkrow{display:flex;align-items:center;gap:22px;padding:6px 0 10px;border-bottom:1px solid var(--cut);box-shadow:0 1px 0 var(--line)}
+.linkrow .u{flex:1;font-size:20px;letter-spacing:.01em;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clock{margin:0;font:400 132px/1 var(--font-text);letter-spacing:.02em}
+.clock.md{font-size:96px}.clock.sm{font-size:58px}
+
+/* Drawing the map: the burin draws the roads of a new map, the places set as it reaches them */
+.draw{display:block;overflow:visible}
+.draw .rc{fill:none;stroke:var(--casing);stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+.draw .ri{fill:none;stroke:#ccc0a6;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.draw .nd{fill:var(--plate);stroke:#ccc0a6;stroke-width:1.3;transform-box:fill-box;transform-origin:center}
+.draw .cap{transform-box:fill-box;transform-origin:center}
+.draw .bu{fill:var(--ink);stroke:var(--casing);stroke-width:1}
+
+/* Profile: facts, colour, matches */
+.facts{display:flex;gap:56px}
+.fact{display:grid;gap:4px}
+.fact b{font:400 30px/1 var(--font-text);font-weight:400}
+.colours{display:flex;gap:8px}
+.cl{position:relative;display:grid;justify-items:center;gap:4px;width:70px;padding:8px 0 6px;border:0;background:none;box-shadow:inset 0 0 0 1px var(--line);cursor:pointer}
+.cl.on{box-shadow:none}
+.cl.on::before{content:'';position:absolute;inset:0;background:var(--frame-chosen)}
+.cl span{font:500 10px/1 var(--font-display);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim)}
+.cl.on span{color:var(--ink)}
+.mt{width:100%;border-collapse:collapse}
+.mt th{padding:0 0 10px;text-align:left;font:500 11px/1.3 var(--font-display);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim);border-bottom:1px solid var(--cut);box-shadow:0 1px 0 var(--line)}
+.mt td{height:46px;padding:0;border-bottom:1px solid rgb(61 55 45/70%);font-size:18px}
+.mt td.r,.mt th.r{text-align:right;padding-right:18px}
+.res{display:inline-flex;align-items:center;gap:9px;font:500 12px/1 var(--font-display);letter-spacing:.2em;text-transform:uppercase}
+.res svg{flex:none}
+.res.w{color:var(--own)}.res.l{color:var(--enemy)}.res.d{color:var(--ink-soft)}
+.mt .ex{font-style:italic;color:var(--ink-dim)}
+.opp{display:inline-flex;align-items:center;gap:8px}
+.botmark{display:inline-flex;gap:2px}
+.botmark i{display:block;width:6px;height:6px;border:1px solid var(--ink-dim);transform:rotate(45deg)}
+.botmark i.on{background:var(--ink-dim)}
+
+/* Dialogs on the blurred stone */
+.ov{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:var(--stone-tex) rgb(22 19 15/72%);backdrop-filter:blur(9px) saturate(.55)}
+.ov.match{background:rgb(10 9 7/58%);backdrop-filter:none}
+.win{position:relative;width:580px;padding:40px 46px 38px;background:var(--stone-tex) var(--stone-panel);box-shadow:0 30px 60px rgb(0 0 0/50%)}
+.win .acts{display:flex;align-items:center;gap:18px;margin-top:28px}
+.win p.tx{margin:12px 0 0;font-size:19px;line-height:1.45;color:var(--ink-soft)}
+.chk{display:flex;align-items:center;gap:12px;margin-top:22px;font-size:17px;color:var(--ink-soft);cursor:pointer}
+.chk i{position:relative;width:18px;height:18px;flex:none;background:var(--frame-quiet)}
+.chk.on i{background:var(--ink)}
+.chk.on i::after{content:'';position:absolute;left:5px;top:2px;width:5px;height:10px;border:solid var(--stone-bg);border-width:0 2px 2px 0;transform:rotate(45deg)}
+
+/* The ink-in reveal: a soft-edged mask (the Burin reveal of the map tips, ui-style 63) */
+.ink{-webkit-mask-image:linear-gradient(90deg,#000 44%,transparent 56%);mask-image:linear-gradient(90deg,#000 44%,transparent 56%);-webkit-mask-size:250% 100%;mask-size:250% 100%;-webkit-mask-position:0 0;mask-position:0 0;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+.demo{opacity:0;pointer-events:none}
+.st.rm *{animation:none!important;transition:none!important}
+.st.rm .draw .bu,.st.rm .top .burin{display:none}
+
+/* ===== I Herald: one Play, three cards ===================================================== */
+.d1 .rail{position:absolute;left:128px;top:150px;z-index:5}
+.d1 .bp.lg .tr8{position:absolute;inset:8px;pointer-events:none;overflow:visible}
+.d1 .bp.lg .tr8 rect{fill:none;stroke:var(--stone-bg);stroke-width:1;opacity:0;transition:opacity .25s}
+.d1 .bp.lg:hover .tr8 rect,.d1 .bp.lg.on .tr8 rect{opacity:.55}
+.d1 .cards{position:absolute;left:128px;top:300px;display:flex;gap:26px;z-index:5}
+.card{width:248px;height:318px;display:grid;grid-template-rows:auto 1fr auto;justify-items:center;padding:26px 18px 30px;border:0;color:var(--ink);cursor:pointer;transition:transform .3s var(--ease-settle)}
+.card .rn{justify-self:start;font:400 20px/1 var(--font-display);letter-spacing:.04em;color:var(--ink-dim)}
+.card .em{align-self:center;display:flex;align-items:center;gap:12px}
+.card .ct{font:500 18px/1.2 var(--font-display);letter-spacing:.14em;text-transform:uppercase}
+.card .glow{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgb(236 228 209/7%),transparent 60%);opacity:0;transition:opacity .3s}
+.card:hover{transform:translateY(-4px)}
+.card:hover .glow{opacity:1}
+.d1 .pnl{position:absolute;left:128px;top:112px;width:928px;min-height:420px;padding:40px 46px 44px;z-index:5}
+.d1 .pnl .head{display:flex;align-items:baseline;justify-content:space-between}
+.d1 .center{position:absolute;inset:72px 24px 28px;display:grid;place-items:center;z-index:5}
+.lead{display:grid;justify-items:center;gap:14px;text-align:center}
+.lead .acts{display:flex;gap:16px;align-items:center;justify-content:center;margin-top:14px}
+
+/* ===== II Triptych: three tablets, the chosen one widens ================================== */
+.d2 .tri{position:absolute;left:0;right:0;top:104px;bottom:56px;display:flex;align-items:center;justify-content:center;gap:28px;z-index:5}
+.tab{position:relative;flex:none;width:300px;height:440px;display:grid;grid-template-rows:auto 1fr auto;justify-items:center;padding:30px 22px 34px;border:0;color:var(--ink);cursor:pointer;transition:transform .32s var(--ease-settle)}
+.tab.mid{width:336px;height:500px;padding-bottom:22px}
+.tab .rn{font:400 22px/1 var(--font-display);color:var(--ink-dim)}
+.tab .em{align-self:center;display:flex;align-items:center;gap:14px}
+.tab .ct{font:500 20px/1.2 var(--font-display);letter-spacing:.14em;text-transform:uppercase}
+.tab .plate{width:100%;height:76px;display:grid;place-items:center;background:var(--ink);color:var(--stone-bg);font:500 18px/1 var(--font-display);letter-spacing:.2em;text-transform:uppercase;box-shadow:inset 0 0 0 4px var(--ink),inset 0 0 0 5px var(--stone-bg)}
+.tab.lift:hover{transform:translateY(-6px)}
+.tab.wide{width:860px;height:580px;display:block;justify-items:normal;padding:40px 46px;cursor:default}
+.tab.wide.q{width:740px}
+.tab .fold{position:absolute;left:50%;bottom:30px;margin-left:-7px;writing-mode:vertical-rl;transform:rotate(180deg);font:500 13px/1 var(--font-display);letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim);white-space:nowrap}
+.spine{position:relative;flex:none;width:74px;height:580px;display:flex;flex-direction:column;align-items:center;gap:18px;padding:26px 0;border:0;color:var(--ink-dim);cursor:pointer}
+.spine .rn{font:400 18px/1 var(--font-display)}
+.spine .sv{writing-mode:vertical-rl;transform:rotate(180deg);font:500 13px/1 var(--font-display);letter-spacing:.24em;text-transform:uppercase;margin-top:auto}
+.spine:hover{color:var(--ink)}
+.drawer{position:absolute;top:72px;right:0;bottom:28px;width:560px;z-index:12;padding:44px 46px;box-shadow:-30px 0 60px rgb(0 0 0/45%)}
+.dim{position:absolute;inset:72px 0 28px;z-index:11;background:rgb(14 12 9/62%)}
+
+/* ===== III Plinth: the map is the hero; a mode and one Start at the foot ================= */
+.d3 .plinth{position:absolute;left:64px;right:64px;bottom:52px;height:150px;z-index:6;display:flex;align-items:center;gap:40px;padding:0 34px 0 40px}
+.segs{position:relative;display:flex;gap:6px}
+.seg{position:relative;width:236px;height:92px;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:14px;padding:0 14px;border:0;background:none;color:var(--ink-dim);text-align:left;cursor:pointer;transition:color .25s}
+.seg .sl{font:500 13.5px/1.25 var(--font-display);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
+.seg:hover{color:var(--ink-soft)}
+.seg.on{color:var(--ink)}
+.seg .hm{opacity:.55;transition:opacity .25s}.seg.on .hm{opacity:1}
+.segs .mk{position:absolute;left:0;top:-14px;width:236px;height:12px;pointer-events:none;transition:transform .5s var(--ease-travel)}
+.segs .mk::before{content:'';position:absolute;left:0;right:0;top:5px;height:1px;background:linear-gradient(90deg,transparent,var(--ink) 30%,var(--ink) 70%,transparent)}
+.segs .mk::after{content:'';position:absolute;left:50%;top:1px;width:8px;height:8px;margin-left:-4px;background:var(--ink);box-shadow:0 0 0 1.5px var(--casing);transform:rotate(45deg)}
+.segs .mk.ghost::after{background:none;border:1px solid var(--ink-soft)}
+.segs .mk.ghost::before{opacity:.35}
+.d3 .start{margin-left:auto;display:flex;align-items:center;gap:26px}
+.roll{position:relative;display:inline-block;height:1.2em;overflow:hidden;vertical-align:middle}
+.roll span{display:block;line-height:1.2em}
+.opts{display:flex;align-items:center;gap:10px;margin-top:2px}
+.opt{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 12px;border:0;background:var(--frame-quiet);color:var(--ink-soft);font:500 11px/1 var(--font-display);letter-spacing:.16em;text-transform:uppercase;cursor:pointer}
+.opt svg{opacity:.7}
+.d3 .drw{position:absolute;left:64px;right:64px;bottom:216px;z-index:6;padding:30px 40px 30px}
+.d3 .mode{display:grid;gap:6px}
+
+/* ===== IV Dossier: the player at the left, Play at the right ============================== */
+.d4 .dos{position:absolute;left:64px;top:104px;width:436px;bottom:52px;z-index:6;padding:34px 36px}
+.d4 .dos.full{width:auto;right:64px}
+.d4 .dos .me{display:flex;align-items:center;gap:18px}
+.d4 .dos .me .nm{font:400 30px/1.05 var(--font-display);letter-spacing:.1em}
+.d4 .right{position:absolute;left:560px;right:64px;top:104px;bottom:52px;z-index:6}
+.mini{list-style:none;margin:0;padding:0}
+.mini li{position:relative;display:grid;grid-template-columns:96px 1fr auto;align-items:center;height:54px;background:var(--rule-dbl)}
+.mini li .o{font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini li .o small{display:block;font-size:14px;font-style:italic;color:var(--ink-dim);line-height:1.1}
+.mini li .rl{position:absolute;left:0;right:0;top:0;height:5px;background:var(--rule-dbl);transform-origin:left}
+.rows{list-style:none;margin:44px 0 0;padding:0;width:540px;counter-reset:m}
+.rows li{position:relative;background:var(--rule-dbl);counter-increment:m}
+.rows .row{position:relative;display:grid;grid-template-columns:76px 1fr;align-items:baseline;width:100%;padding:22px 0 21px;border:0;background:none;color:var(--ink);font:500 19px/1.2 var(--font-display);letter-spacing:.12em;text-align:left;cursor:pointer}
+.rows .row::before{content:counter(m,upper-roman);font:400 26px/1 var(--font-display);color:var(--ink-dim)}
+.rows .row .tx{display:inline-block;transition:transform .35s var(--ease-settle)}
+.rows .row .ld{position:absolute;left:34px;top:50%;width:34px;height:7px;margin-top:-1px;transform:scaleX(0);transform-origin:left;transition:transform .35s var(--ease-settle)}
+.rows .row .ld::before{content:'';position:absolute;left:0;right:5px;top:3px;height:1px;background:var(--ink)}
+.rows .row .ld::after{content:'';position:absolute;right:0;top:0;width:6px;height:6px;background:var(--ink);transform:rotate(45deg)}
+.rows .row:hover .tx,.rows .row.hov .tx{transform:translateX(10px)}
+.rows .row:hover .ld,.rows .row.hov .ld{transform:scaleX(1)}
+
+/* ===== V Signal: Play searches at once; the search lives in the bar ======================= */
+.d5 .rail{position:absolute;left:128px;top:150px;z-index:5}
+.d5 .two{display:flex;gap:16px;margin-top:22px;width:430px}
+.d5 .two .bs{flex:1;height:58px;font-size:13.5px;overflow:hidden}
+.d5 .two .bs .tr{position:absolute;inset:3px;pointer-events:none;overflow:visible}
+.d5 .two .bs .tr rect{fill:none;stroke:var(--ink);stroke-width:1;stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .55s var(--ease-engrave)}
+.d5 .two .bs:hover .tr rect,.d5 .two .bs.hov .tr rect{stroke-dashoffset:0}
+.sig{position:absolute;left:50%;top:0;height:72px;transform:translateX(-50%);display:flex;align-items:center;gap:16px;z-index:9}
+.sig .tm{font:400 30px/1 var(--font-text)}
+.top .burin{position:absolute;left:0;bottom:-5px;width:180px;height:1px;background:linear-gradient(90deg,transparent,var(--ink));animation:sweep 3.2s var(--ease-engrave) infinite}
+.top .burin::after{content:'';position:absolute;right:-3px;top:-3px;width:6px;height:6px;background:var(--ink);transform:rotate(45deg)}
+@keyframes sweep{0%{transform:translateX(-200px)}100%{transform:translateX(1300px)}}
+.d5 .win.wide{width:860px}
+.d5 .bs.wait{width:430px;height:96px;justify-content:flex-start;gap:22px;padding:0 30px;font-size:22px;letter-spacing:.2em;color:var(--ink-soft);cursor:default}
+
+/* The sheet: the profile on the blurred stone */
+.sheet{position:absolute;inset:72px 0 28px;z-index:7;background:var(--stone-tex) rgb(22 19 15/80%);backdrop-filter:blur(9px) saturate(.55);padding:40px 128px 0;overflow:hidden}
+.prof-h{display:flex;align-items:center;gap:22px}
+.prof-h .nm{font:400 44px/1 var(--font-display);letter-spacing:.1em}
+.prof-h .tools{margin-left:auto;display:flex;gap:22px;align-items:center}
+.sec{display:flex;align-items:center;gap:18px;margin:26px 0 12px}
+.sec::after{content:'';flex:1;height:5px;background:var(--rule-dbl)}
+
+.empty{position:absolute;inset:0;display:grid;place-items:center;background:var(--stone-tex) var(--stone-bg)}
+.empty p{font:500 13px/1 var(--font-display);letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="hatchE" width="4.4" height="4.4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.4" height="4.4" fill="#e5785e"/></pattern>
+  </defs>
+</svg>
+<div class="bar" id="bar"></div>
+<div class="view" id="view"></div>
+<div class="time" id="time">
+  <button class="ch" id="tPlay" aria-label="Play">&#9654;</button>
+  <button class="ch" id="tPause" aria-label="Pause">&#10074;&#10074;</button>
+  <button class="ch" id="tAgain" aria-label="From the start">&#8634;</button>
+  <input type="range" id="tScrub" min="0" max="1000" value="0" aria-label="Time">
+  <span class="t" id="tNow">0.0 s</span>
+  <button class="ch" id="tSlow" aria-pressed="false" aria-label="Slow motion">&#188;&#215;</button>
+</div>
+<script>
+'use strict';
+const A = 'assets/out-of-game-rework/';
+const IMG = {menu: A + 'bg-menu.webp', found: A + 'bg-found.webp', match: A + 'match.webp',
+  thumb: {crossroads: A + 'thumb-crossroads.webp', highway: A + 'thumb-highway.webp', narrows: A + 'thumb-narrows.webp', ridge: A + 'thumb-ridge.webp'}};
+
+/* ---------------------------------------------------------------- helmets (units/helmet.ts) */
+const HP = {
+  own: {dome: 'M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z',
+    band: 'M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60', strap: 'M46 80 L54 96', vb: [1, 6, 101, 96], top: 12, bot: 70},
+  enemy: {dome: 'M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z',
+    band: null, strap: 'M38 75 L58 91 L64 68', vb: [2, 7, 102.2, 90], top: 13, bot: 77},
+};
+let uidN = 0;
+const uid = () => 'u' + (++uidN);
+/** An Engraved helmet: kind own (Rim, faces right) or enemy (Cut, faces left); tone the charge. */
+function helmet(kind, size, o = {}) {
+  const p = HP[kind], id = uid(), share = o.share ?? 1, tone = o.tone ?? (kind === 'own' ? 'var(--own)' : 'var(--enemy)');
+  const [x, y, w, h] = p.vb;
+  const flip = kind === 'enemy' ? ` transform="translate(${2 * x + w} 0) scale(-1 1)"` : '';
+  const ly = p.bot - share * (p.bot - p.top);
+  const fill = o.dashed || share <= 0 ? '' :
+    `<clipPath id="${id}"><path d="${p.dome}"/></clipPath><g clip-path="url(#${id})"><rect class="hf" x="0" y="${ly}" width="110" height="${p.bot - ly + 2}" fill="${o.hatch ? 'url(#hatchE)' : tone}"/></g>`;
+  return `<svg class="hm${o.dashed ? ' dash' : ''}${o.cls ? ' ' + o.cls : ''}" width="${size}" height="${(size * h / w).toFixed(1)}" viewBox="${x} ${y} ${w} ${h}" aria-hidden="true"><g${flip}>` +
+    `<path class="ca" d="${p.strap}"/>${p.band ? `<path class="ca" d="${p.band}"/>` : ''}<path class="ca" d="${p.dome}"/>` +
+    `<path class="ge" d="${p.strap}"/>${p.band ? `<path class="ge" d="${p.band}"/>` : ''}<path class="pl" d="${p.dome}"/>${fill}<path class="ed" d="${p.dome}"/></g></svg>`;
+}
+const lozenge = (s, fill = 'var(--vp)') => `<svg width="${s}" height="${s}" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 .8 9.2 5 5 9.2 .8 5Z" fill="${fill}" stroke="#060504" stroke-width="1.2"/></svg>`;
+const pips = (n) => `<span class="pips">${[1, 2, 3, 4].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>`;
+const ICON = {
+  out: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>',
+  down: '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>',
+  copy: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="9" y="9" width="12" height="12"/><path d="M5 15H3V3h12v2"/></svg>',
+};
+
+/* ---------------------------------------------------------------- emblems of the three ways */
+const emb = {
+  bot: (s = 1) => `<span class="em" style="flex-direction:column;gap:${12 * s}px">${helmet('enemy', 74 * s)}<span class="pips" style="transform:scale(${1.15 * s})">${'<i class="on"></i>'.repeat(2)}<i></i><i></i></span></span>`,
+  match: (s = 1) => `<span class="em">${helmet('own', 62 * s)}${lozenge(13 * s)}${helmet('enemy', 62 * s)}</span>`,
+  friend: (s = 1) => `<span class="em">${helmet('own', 62 * s)}<svg width="${26 * s}" height="${10 * s}" viewBox="0 0 26 10" aria-hidden="true"><path d="M1 5h24" stroke="var(--ink-dim)" stroke-width="1.2" stroke-dasharray="3 3"/></svg>${helmet('enemy', 62 * s, {dashed: true})}</span>`,
+};
+
+/* ---------------------------------------------------------------- shared pieces */
+const DFR = '<span class="dfr" aria-hidden="true"><i></i><i></i><i></i><i></i></span>';
+const frame = (cls, inner, tag = 'div', attrs = '') => `<${tag} class="df ${cls}" ${attrs}>${inner}${DFR}</${tag}>`;
+const bg = (img = 'menu', shade = '') => `<img class="bgimg ${img}" src="${IMG[img]}" alt="">${shade === null ? '' : `<div class="shade ${shade}"></div>`}`;
+const legal = '<div class="legal"><span>Impressum</span><span>Privacy policy</span></div>';
+function topBar(o = {}) {
+  return `<header class="top">${o.burin ? '<i class="burin" aria-hidden="true"></i>' : ''}<p class="brand">Fines Imperii</p>${o.mid ?? ''}
+  <div class="tr"><button class="qm" aria-label="How to play">?</button>
+  <button class="who${o.on ? ' on' : ''}" aria-label="Ember, guest: open the profile"><span class="nk">EMBER</span><span class="gs">Guest</span></button></div></header>`;
+}
+const busy = '<span class="busy" aria-hidden="true"><i></i><i></i><i></i></span>';
+const LEVELS = [['Easy', 'Bunker'], ['Normal', 'Counter'], ['Hard', 'Strangler'], ['Expert', 'Expander']];
+const levels = (sel = 1) => `<div class="levels" role="radiogroup" aria-label="Bot level">${LEVELS.map(([lv, ls], i) =>
+  `<button class="level${i === sel ? ' on' : ''}" role="radio" aria-checked="${i === sel}">${pips(i + 1)}<span class="lv">${lv}</span><span class="ls">${ls}</span></button>`).join('')}</div>`;
+const SKETCH = '<svg class="sk" viewBox="0 0 96 58"><path d="M16 38 32 17 52 29 73 13 83 37 60 46 36 47 16 38M32 17 36 47M52 29 60 46"/><circle cx="16" cy="38" r="2.6"/><circle cx="32" cy="17" r="2.6"/><circle cx="52" cy="29" r="3.4"/><circle cx="73" cy="13" r="2.6"/><circle cx="83" cy="37" r="2.6"/><circle cx="60" cy="46" r="2.6"/><circle cx="36" cy="47" r="2.6"/></svg>';
+function tiles(sel = 0) {
+  const t = [['New map', `<span class="thumb rnd">${SKETCH}</span>`], ['Random map', '<span class="thumb rnd">?</span>'],
+    ...['crossroads', 'highway', 'narrows', 'ridge'].map(m => [m, `<span class="thumb"><img src="${IMG.thumb[m]}" alt=""></span>`])];
+  return `<div class="tiles" role="radiogroup" aria-label="Map">${t.map(([n, th], i) =>
+    `<button class="tile${i === sel ? ' on' : ''}" role="radio" aria-checked="${i === sel}">${th}<span class="tl">${n}</span></button>`).join('')}</div>`;
+}
+function botSetup() {
+  return `<p class="lab" style="margin:26px 0 10px">Level</p>${levels(1)}<p class="lab" style="margin:22px 0 8px">Map</p>${tiles(0)}`;
+}
+const versus = (b = 'Normal bot', o = {}) => `<div class="vs">${helmet('own', o.s ?? 40)}<span>Ember</span><span class="x">against</span><span>${b}</span>${helmet('enemy', o.s ?? 40, o.hollow ? {dashed: true} : {})}</div>`;
+function seats(state) {
+  const opp = state === 'wait' ? `<div class="seat">${helmet('enemy', 46, {dashed: true})}<div class="sn"><b>Waiting</b><span>${busy}Opponent</span></div></div>`
+    : `<div class="seat">${helmet('enemy', 46)}<div class="sn"><b>Vega</b><span class="ok">Ready</span></div></div>`;
+  const me = `<div class="seat">${helmet('own', 46)}<div class="sn"><b>Ember</b><span>You</span></div></div>`;
+  return `<div class="seats">${me}<span class="sub" style="font-size:18px">against</span>${opp}</div>`;
+}
+const linkRow = () => `<p class="lab" style="margin:0 0 6px">Invite link</p><div class="linkrow"><span class="u">finesimperii.com/?m=k3x9-q7ab-02ff</span><button class="bs sm">${ICON.copy}Copy the link</button></div>`;
+
+/* The new map being drawn: one trail through the roads, the places set as the burin reaches them. */
+const DRAW_NODES = [[14, 70], [44, 40], [40, 98], [80, 66], [104, 30], [118, 96], [150, 58], [168, 22], [176, 100], [206, 66]];
+const DRAW_TRAIL = [0, 1, 3, 2, 0, 2, 5, 3, 4, 1, 4, 7, 6, 3, 6, 5, 8, 6, 9, 8, 9, 7];
+function drawing(w = 220) {
+  const d = 'M' + DRAW_TRAIL.map(i => DRAW_NODES[i].join(' ')).join(' L');
+  const nodes = DRAW_NODES.map(([x, y], i) => i === 0 || i === 9
+    ? `<g class="cap" data-n="${i}"><circle cx="${x}" cy="${y}" r="7" fill="var(--casing)"/><circle cx="${x}" cy="${y}" r="5.4" fill="${i === 0 ? 'var(--own)' : 'var(--enemy)'}" stroke="#ccc0a6" stroke-width="1"/></g>`
+    : `<circle class="nd" data-n="${i}" cx="${x}" cy="${y}" r="${[3, 6].includes(i) ? 4 : 3}"/>`).join('');
+  return `<svg class="draw" width="${w}" height="${w * 124 / 220}" viewBox="0 0 220 124" aria-hidden="true"><path class="rc" pathLength="1" d="${d}"/><path class="ri" pathLength="1" d="${d}"/>${nodes}<path class="bu" d="M0 -4 4 0 0 4 -4 0Z" style="offset-path:path('${d}');offset-rotate:0deg"/></svg>`;
+}
+function animateDrawing(root, list) {
+  for (const svg of root.querySelectorAll('svg.draw:not(.still)')) {
+    const P = 3600, ri = svg.querySelector('.ri'), bu = svg.querySelector('.bu');
+    const pts = DRAW_TRAIL.map(i => DRAW_NODES[i]);
+    let acc = [0];
+    for (let i = 1; i < pts.length; i++) acc.push(acc[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const L = acc[acc.length - 1], D = 0.78;
+    const it = {duration: P, iterations: Infinity, easing: 'linear'};
+    for (const el of [ri, svg.querySelector('.rc')]) list.push(el.animate([{strokeDasharray: '1 1', strokeDashoffset: 1, opacity: 1}, {strokeDashoffset: 0, offset: D, opacity: 1}, {strokeDashoffset: 0, opacity: 1, offset: .9}, {strokeDashoffset: 0, opacity: 0, strokeDasharray: '1 1'}], it));
+    list.push(bu.animate([{offsetDistance: '0%', opacity: 1}, {offsetDistance: '100%', offset: D, opacity: 1}, {offsetDistance: '100%', opacity: 0, offset: .86}, {offsetDistance: '100%', opacity: 0}], it));
+    for (const el of svg.querySelectorAll('[data-n]')) {
+      const n = +el.dataset.n, k = DRAW_TRAIL.indexOf(n), f = Math.min(D, (acc[k] / L) * D);
+      const kf = [{transform: 'scale(0)', offset: 0}];
+      if (f > 0) kf.push({transform: 'scale(0)', offset: f});
+      kf.push({transform: 'scale(1.35)', offset: Math.min(.95, f + .03)}, {transform: 'scale(1)', offset: Math.min(.96, f + .07), opacity: 1}, {transform: 'scale(1)', opacity: 1, offset: .9}, {transform: 'scale(1)', opacity: 0, offset: 1});
+      list.push(el.animate(kf, it));
+    }
+  }
+}
+const drawingBlock = (w = 220) => `<div style="display:grid;justify-items:center;gap:18px">${drawing(w)}<p class="sub" role="status">${busy}Drawing the map…</p></div>`;
+
+function matchRows(n = 6) {
+  const R = [['w', 'Win', 'Vega', null, 'Crossroads', '12:04', 1], ['l', 'Loss', 'Bot', 2, 'Ridge', '8:41', 1], ['d', 'Draw', 'Bot', 3, 'Highway', '15:00', 0],
+    ['w', 'Win', 'Mira', null, 'New map', '10:27', 1], ['l', 'Loss', 'Bot', 4, 'Narrows', '6:52', 1], ['w', 'Win', 'Tomas', null, 'Highway', '13:15', 1], ['w', 'Win', 'Bot', 1, 'New map', '9:10', 1]];
+  return R.slice(0, n);
+}
+const resMark = (k) => k === 'w' ? '<svg width="11" height="10" viewBox="0 0 11 10"><path d="M5.5 .5 10.5 9.5H.5Z" fill="currentColor"/></svg>'
+  : k === 'l' ? '<svg width="11" height="10" viewBox="0 0 11 10"><path d="M5.5 9.5 10.5 .5H.5Z" fill="currentColor"/></svg>'
+    : '<svg width="11" height="10" viewBox="0 0 11 10"><path d="M1 5h9" stroke="currentColor" stroke-width="2.2"/></svg>';
+const botmark = (n) => `<span class="botmark" role="img" aria-label="Bot, level ${n} of 4">${[1, 2, 3, 4].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>`;
+const oppCell = (name, lvl) => lvl ? `<span class="opp">${botmark(lvl)}<span>${LEVELS[lvl - 1][0]} bot</span></span>` : name;
+function matchTable(n = 6) {
+  return `<table class="mt"><thead><tr><th style="width:150px">Result</th><th>Opponent</th><th>Map</th><th class="r" style="width:110px">Length</th><th style="width:120px">Replay</th></tr></thead><tbody>` +
+    matchRows(n).map(([k, r, o, l, m, len, ok]) => `<tr><td><span class="res ${k}">${resMark(k)}${r}</span></td><td>${oppCell(o, l)}</td><td>${m}</td><td class="r">${len}</td><td>${ok ? '<button class="bs sm">Watch</button>' : '<span class="ex">Expired</span>'}</td></tr>`).join('') + '</tbody></table>';
+}
+const COLOURS = [['Lapis', '#86a6ea'], ['Minium', '#e5785e'], ['Glacier', '#a6e0e8'], ['Shell', '#f4b4a4'], ['Violet', '#966fd6'], ['Madder', '#c8587e']];
+const colours = (sel = 0) => `<div class="colours" role="radiogroup" aria-label="Colour">${COLOURS.map(([n, c], i) =>
+  `<button class="cl${i === sel ? ' on' : ''}" role="radio" aria-checked="${i === sel}">${helmet('own', 30, {tone: c})}<span>${n}</span></button>`).join('')}</div>`;
+const facts = () => `<div class="facts"><div class="fact"><span class="lab">Matches</span><b>21</b></div><div class="fact"><span class="lab">W–L–D</span><b>12–8–1</b></div></div>`;
+function profileFull() {
+  return `<div class="prof-h">${helmet('own', 64)}<div style="display:grid;gap:4px"><span class="lab">Player</span><span class="nm">EMBER</span></div>
+    <button class="lnk" style="align-self:flex-end;margin-bottom:6px">Change the nick</button>
+    <div class="tools"><button class="lnk">Settings</button><button class="lnk">Log out</button></div></div>
+    <div style="display:flex;gap:80px;align-items:flex-end;margin-top:24px"><div><p class="lab" style="margin-bottom:8px">Colour</p>${colours(0)}</div>${facts()}</div>
+    <div class="sec"><span class="lab">Matches</span></div>${matchTable(6)}`;
+}
+const sheetProfile = () => `<section class="sheet" aria-label="Profile">${profileFull()}</section>`;
+
+function newHere() {
+  return `<div class="ov"><div class="df win" role="dialog" aria-modal="true" aria-labelledby="nh">
+    <div style="display:flex;justify-content:center;margin:-8px 0 20px">${drawing(200).replace('class="draw"', 'class="draw still"')}</div>
+    <h3 id="nh" style="font-size:28px">New here?</h3>
+    <p class="tx">A short practice round against a bot shows you the basics.</p>
+    <div class="acts"><button class="bp">Learn how to play</button><button class="bs">Not now</button></div>
+    <label class="chk"><i aria-hidden="true"></i>Don’t show this again</label>${DFR}</div></div>`;
+}
+function forfeit(v) {
+  return `${bg('match', null)}<div class="ov match"><div class="df win" role="alertdialog" aria-modal="true" aria-labelledby="ff">
+    <p class="lab">Forfeit</p><h3 id="ff" style="font-size:28px;margin-top:6px">Leave the match?</h3>
+    <p class="tx">This is a forfeit: the match ends with your defeat.</p>
+    <div class="acts"><button class="bp">Keep playing</button><button class="bd ${v}"><span class="hx" aria-hidden="true"></span>${ICON.out}Forfeit and leave</button></div>${DFR}</div></div>`;
+}
+
+/* ================================================================ the five directions */
+const SCREENS = [
+  ['main', 'Main'], ['choose', 'Choose'], ['bot', 'Bot setup'], ['botwait', 'Bot: drawing'], ['queue', 'Searching'], ['found', 'Opponent found'],
+  ['invdraw', 'Invite: drawing'], ['invite', 'Invite: link'], ['invready', 'Invite: joined'], ['profile', 'Profile'], ['newhere', 'New here'], ['forfeit', 'Forfeit']];
+
+const DIRS = {
+  /* I Herald: Play opens three cards; each way is its own panel; the profile a sheet */
+  1: {name: 'Herald', screens: ['main', 'choose', 'bot', 'botwait', 'queue', 'found', 'invdraw', 'invite', 'invready', 'profile', 'newhere', 'forfeit'],
+    render(s) {
+      const play = (on) => `<button class="bp lg${on ? ' on' : ''}" data-k="play"><svg class="tr8" width="414" height="80" aria-hidden="true"><rect x=".5" y=".5" width="413" height="79" pathLength="1"/></svg>${helmet('own', 44, {cls: 'ph'})}<span class="ink" data-k="playw">Play</span></button>`;
+      const cards = (cls = '') => `<div class="cards ${cls}" data-k="cards">${[['I', 'Play a bot', emb.bot()], ['II', 'Find a match', emb.match()], ['III', 'Invite a friend', emb.friend()]].map(([n, t, e], i) =>
+        frame('card stone', `<span class="glow"></span><span class="rn">${n}</span>${e}<span class="ct">${t}</span>`, 'button', `data-k="card${i}"`)).join('')}</div>`;
+      const panel = (title, inner) => `${bg('menu')}${topBar()}${frame('pnl stone', `<div class="head"><h2>${title}</h2></div>${inner}`)}`;
+      switch (s) {
+        case 'main': return `${bg('menu')}${topBar()}<div class="rail">${play(false)}</div>${cards('demo')}`;
+        case 'choose': return `${bg('menu')}${topBar()}<div class="rail">${play(true)}</div>${cards()}`;
+        case 'bot': return panel('Play a bot', `${botSetup()}<div style="display:flex;gap:22px;align-items:center;margin-top:30px"><button class="bp">Start</button><button class="lnk">Back</button></div>`);
+        case 'botwait': return panel('Play a bot', `<div style="margin-top:34px">${versus()}</div><div style="margin-top:60px">${drawingBlock(260)}</div>`);
+        case 'queue': return `${bg('menu')}${topBar()}<div class="center"><div class="lead"><p class="lab">Finding an opponent</p><p class="clock">0:14</p><p class="sub">${busy}Searching</p><div class="acts"><button class="bs">Stop</button></div><button class="lnk" style="margin-top:6px">Play a bot instead</button></div></div>`;
+        case 'found': return `${bg('found')}${topBar()}<div class="center"><div class="lead"><p class="lab">Opponent found</p>${versus('Vega', {s: 46})}<p class="sub">Confirm within 11 s</p><div class="acts"><button class="bp">Play</button><button class="bs">Decline</button></div></div></div>`;
+        case 'invdraw': return panel('Invite a friend', `<div style="margin-top:46px">${drawingBlock(240)}</div><div style="margin-top:56px">${seats('wait')}</div>`);
+        case 'invite': return panel('Invite a friend', `<div style="margin-top:34px">${linkRow()}</div><div style="margin-top:44px">${seats('wait')}</div><div style="display:flex;gap:22px;align-items:center;margin-top:44px"><button class="bs">Leave</button><span class="sub" style="font-size:17px">The invite expires in 30 min.</span></div>`);
+        case 'invready': return panel('Invite a friend', `<p class="dl" style="margin-top:14px">Vega joined.</p><div style="margin-top:40px">${seats('ready')}</div><div style="display:flex;gap:22px;align-items:center;margin-top:52px"><button class="bp">Ready</button><button class="bs">Leave</button></div>`);
+        case 'profile': return `${bg('menu')}${topBar({on: true})}${sheetProfile()}`;
+        case 'newhere': return this.render('main') + newHere();
+      }
+    },
+    demo(root, tl) {
+      const q = (k) => root.querySelector(`[data-k="${k}"]`);
+      const play = q('play'), rect = play.querySelector('.tr8 rect'), word = q('playw'), helm = play.querySelector('.hf'), cards = q('cards');
+      tl.add(play, [{transform: 'translateY(14px)', opacity: 0}, {transform: 'none', opacity: 1}], 0, 800, 'settle');
+      tl.add(helm, [{transform: 'translateY(60px)'}, {transform: 'none'}], 500, 900, 'engrave');
+      tl.add(word, [{maskPosition: '100% 0', webkitMaskPosition: '100% 0'}, {maskPosition: '0 0', webkitMaskPosition: '0 0'}], 600, 750, 'engrave');
+      // hover: the second inner rule is drawn round the tablet by the burin
+      tl.add(rect, [{opacity: .55, strokeDasharray: '1 1', strokeDashoffset: 1}, {opacity: .55, strokeDashoffset: 0, offset: .45}, {opacity: .55, strokeDashoffset: 0, offset: .85}, {opacity: 0, strokeDashoffset: 0}], 1800, 1700, 'linear');
+      tl.add(play, [{backgroundColor: '#ece4d1'}, {backgroundColor: '#fff8e9', offset: .2}, {backgroundColor: '#fff8e9', offset: .8}, {backgroundColor: '#ece4d1'}], 1800, 1700, 'linear');
+      // press: the tablet keeps its rule, the three cards rise from it one by one
+      tl.add(play, [{transform: 'none'}, {transform: 'translateY(2px)', offset: .3}, {transform: 'none'}], 3700, 300, 'settle');
+      tl.add(rect, [{opacity: .55, strokeDashoffset: 0, strokeDasharray: '1 1'}, {opacity: .55, strokeDashoffset: 0, strokeDasharray: '1 1'}], 3800, 3000, 'linear');
+      tl.add(cards, [{opacity: 1, pointerEvents: 'auto'}, {opacity: 1}], 3800, 3000, 'linear');
+      [...cards.children].forEach((c, i) => {
+        tl.add(c, [{transform: 'translateY(-130px) scale(.92)', opacity: 0}, {transform: 'none', opacity: 1}], 3850 + i * 120, 620, 'settle');
+        tl.add(c.querySelector('.dfr'), [{opacity: 0}, {opacity: 1}], 4150 + i * 120, 500, 'engrave');
+        tl.add(c.querySelector('.ct'), [{opacity: 0, letterSpacing: '.3em'}, {opacity: 1, letterSpacing: '.14em'}], 4250 + i * 120, 520, 'settle');
+      });
+      const c1 = cards.children[1];
+      tl.add(c1, [{transform: 'none'}, {transform: 'translateY(-6px)', offset: .3}, {transform: 'translateY(-6px)', offset: .8}, {transform: 'none'}], 5200, 1100, 'settle');
+      tl.add(c1.querySelector('.glow'), [{opacity: 0}, {opacity: 1, offset: .3}, {opacity: 1, offset: .8}, {opacity: 0}], 5200, 1100, 'linear');
+      tl.add(c1, [{outline: '2px solid transparent', outlineOffset: '6px'}, {outline: '2px solid #ece4d1', outlineOffset: '8px', offset: .3}, {outline: '2px solid #ece4d1', outlineOffset: '8px', offset: .8}, {outline: '2px solid transparent', outlineOffset: '8px'}], 5200, 1100, 'linear');
+      tl.add(cards, [{opacity: 1}, {opacity: 0}], 6800, 400, 'engrave');
+      return 7300;
+    }},
+
+  /* II Triptych: three tablets on the main screen; the chosen one opens in place, the others fold */
+  2: {name: 'Triptych', screens: ['main', 'bot', 'botwait', 'queue', 'found', 'invdraw', 'invite', 'invready', 'profile', 'newhere', 'forfeit'],
+    render(s) {
+      const tab = (i, cls = '') => {
+        const T = [['I', 'Play a bot', emb.bot(1.15)], ['II', 'Find a match', emb.match(1.15)], ['III', 'Invite a friend', emb.friend(1.15)]][i];
+        const fold = `<span class="fold demo" aria-hidden="true">${T[1]}</span>`;
+        if (i === 1) return frame(`tab mid lift stone ${cls}`, `<span class="rn">${T[0]}</span>${T[2]}<span class="plate" data-k="plate"><span class="ink" data-k="w1">Find a match</span></span>${fold}`, 'button', `data-k="t1"`);
+        return frame(`tab lift stone ${cls}`, `<span class="rn">${T[0]}</span>${T[2]}<span class="ct ink" data-k="w${i}">${T[1]}</span>${fold}`, 'button', `data-k="t${i}"`);
+      };
+      const spine = (i) => frame('spine stone', `<span class="rn">${['I', 'II', 'III'][i]}</span>${[helmet('enemy', 30), `${helmet('own', 26)}${helmet('enemy', 26)}`, helmet('enemy', 30, {dashed: true})][i]}<span class="sv">${['Play a bot', 'Find a match', 'Invite a friend'][i]}</span>`, 'button');
+      const wide = (inner, cls = '') => frame(`tab wide stone ${cls}`, inner);
+      const tri = (inner, shade = 'centre') => `${bg('menu', shade)}${topBar()}<div class="tri">${inner}</div>`;
+      switch (s) {
+        case 'main': return tri(tab(0) + tab(1) + tab(2));
+        case 'bot': return tri(wide(`<h2>Play a bot</h2>${botSetup()}<div style="display:flex;gap:22px;align-items:center;margin-top:30px"><button class="bp">Start</button><button class="lnk">Back</button></div>`) + spine(1) + spine(2), 'even');
+        case 'botwait': return tri(wide(`<h2>Play a bot</h2><div style="margin-top:34px">${versus()}</div><div style="margin-top:70px">${drawingBlock(260)}</div>`) + spine(1) + spine(2), 'even');
+        case 'queue': return tri(spine(0) + wide(`<div class="lead" style="height:100%;align-content:center"><p class="lab">Finding an opponent</p><p class="clock">0:14</p><p class="sub">${busy}Searching</p><div class="acts"><button class="bs">Stop</button></div></div>`, 'q') + spine(2), 'even');
+        case 'found': return `${bg('found', 'centre')}${topBar()}<div class="tri">${spine(0)}${wide(`<div class="lead" style="height:100%;align-content:center"><p class="lab">Opponent found</p>${versus('Vega', {s: 46})}<p class="sub">Confirm within 11 s</p><div class="acts"><button class="bp">Play</button><button class="bs">Decline</button></div></div>`, 'q')}${spine(2)}</div>`;
+        case 'invdraw': return tri(spine(0) + spine(1) + wide(`<h2>Invite a friend</h2><div style="margin-top:56px">${drawingBlock(240)}</div><div style="margin-top:60px">${seats('wait')}</div>`), 'even');
+        case 'invite': return tri(spine(0) + spine(1) + wide(`<h2>Invite a friend</h2><div style="margin-top:40px">${linkRow()}</div><div style="margin-top:48px">${seats('wait')}</div><div style="display:flex;gap:22px;align-items:center;margin-top:52px"><button class="bs">Leave</button><span class="sub" style="font-size:17px">The invite expires in 30 min.</span></div>`), 'even');
+        case 'invready': return tri(spine(0) + spine(1) + wide(`<h2>Invite a friend</h2><p class="dl" style="margin-top:14px">Vega joined.</p><div style="margin-top:44px">${seats('ready')}</div><div style="display:flex;gap:22px;align-items:center;margin-top:56px"><button class="bp">Ready</button><button class="bs">Leave</button></div>`), 'even');
+        case 'profile': return `${this.render('main').replace(topBar(), topBar({on: true}))}<div class="dim"></div>${frame('drawer stone solid', `<div style="display:flex;align-items:center;gap:18px">${helmet('own', 56)}<div style="display:grid;gap:3px"><span class="lab">Player</span><span style="font:400 32px/1 var(--font-display);letter-spacing:.1em">EMBER</span></div></div>
+          <div style="display:flex;gap:22px;margin-top:10px"><button class="lnk">Change the nick</button><button class="lnk">Settings</button><button class="lnk">Log out</button></div>
+          <p class="lab" style="margin:24px 0 8px">Colour</p>${colours(0).replace(/width:70px/g, '')}<div style="margin-top:22px">${facts()}</div>
+          <div class="sec"><span class="lab">Matches</span></div><ul class="mini">${matchRows(5).map(([k, r, o, l, m, len, ok]) => `<li><span class="res ${k}">${resMark(k)}${r}</span><span class="o">${oppCell(o, l)}<small>${m} · ${len}</small></span>${ok ? '<button class="bs sm">Watch</button>' : '<span class="ex sub" style="font-size:16px">Expired</span>'}</li>`).join('')}</ul>`)}`;
+        case 'newhere': return this.render('main') + newHere();
+      }
+    },
+    demo(root, tl) {
+      const q = (k) => root.querySelector(`[data-k="${k}"]`);
+      const t = [q('t0'), q('t1'), q('t2')];
+      t.forEach((el, i) => {
+        tl.add(el, [{transform: 'translateY(40px)', opacity: 0}, {transform: 'none', opacity: 1}], i * 140, 900, 'settle');
+        tl.add(el.querySelector('.dfr'), [{opacity: 0, clipPath: 'inset(0 0 100% 0)'}, {opacity: 1, clipPath: 'inset(0 0 0 0)'}], 300 + i * 140, 900, 'engrave');
+        tl.add(el.querySelector('.em'), [{opacity: 0, transform: 'scale(.94)'}, {opacity: 1, transform: 'none'}], 550 + i * 140, 700, 'settle');
+        tl.add(q('w' + i), [{maskPosition: '100% 0', webkitMaskPosition: '100% 0'}, {maskPosition: '0 0', webkitMaskPosition: '0 0'}], 800 + i * 140, 700, 'engrave');
+      });
+      // hover the left tablet: it lifts and its corners step out
+      tl.add(t[0], [{transform: 'none'}, {transform: 'translateY(-6px)', offset: .3}, {transform: 'translateY(-6px)', offset: .8}, {transform: 'none'}], 2100, 1200, 'settle');
+      const cs = t[0].querySelectorAll('.dfr>i'), base = ['', 'scaleX(-1) ', 'scale(-1,-1) ', 'scaleY(-1) '];
+      cs.forEach((c, i) => tl.add(c, [{transform: base[i] + 'translate(0,0)'}, {transform: base[i] + 'translate(-3px,-3px)', offset: .3}, {transform: base[i] + 'translate(-3px,-3px)', offset: .8}, {transform: base[i] + 'translate(0,0)'}], 2100, 1200, 'settle'));
+      // focus the middle tablet by the keyboard
+      tl.add(t[1], [{outline: '2px solid transparent', outlineOffset: '4px'}, {outline: '2px solid #ece4d1', outlineOffset: '8px', offset: .25}, {outline: '2px solid #ece4d1', outlineOffset: '8px', offset: .8}, {outline: '2px solid transparent', outlineOffset: '8px'}], 3400, 1000, 'linear');
+      // choose the right tablet: it opens, the other two fold to their spines
+      tl.add(t[2], [{width: '300px', height: '440px'}, {width: '600px', height: '540px', offset: .35}, {width: '600px', height: '540px', offset: .85}, {width: '300px', height: '440px'}], 4600, 2600, 'travel');
+      [t[0], t[1]].forEach((el) => {
+        tl.add(el, [{width: el.offsetWidth + 'px'}, {width: '74px', offset: .35}, {width: '74px', offset: .85}, {width: el.offsetWidth + 'px'}], 4600, 2600, 'travel');
+        tl.add(el.querySelector('.em'), [{opacity: 1}, {opacity: 0, offset: .2}, {opacity: 0, offset: .9}, {opacity: 1}], 4600, 2600, 'linear');
+        tl.add(el.querySelector('.ink'), [{opacity: 1}, {opacity: 0, offset: .15}, {opacity: 0, offset: .9}, {opacity: 1}], 4600, 2600, 'linear');
+        tl.add(el.querySelector('.rn'), [{opacity: 1}, {opacity: 0, offset: .15}, {opacity: 0, offset: .9}, {opacity: 1}], 4600, 2600, 'linear');
+        const plate = el.querySelector('.plate');
+        if (plate) tl.add(plate, [{opacity: 1, transform: 'none'}, {opacity: 0, transform: 'scaleX(.3)', offset: .15}, {opacity: 0, transform: 'scaleX(.3)', offset: .9}, {opacity: 1, transform: 'none'}], 4600, 2600, 'engrave');
+        tl.add(el.querySelector('.fold'), [{opacity: 0}, {opacity: 0, offset: .25}, {opacity: 1, offset: .4}, {opacity: 1, offset: .82}, {opacity: 0, offset: .88}, {opacity: 0}], 4600, 2600, 'linear');
+      });
+      return 7400;
+    }},
+
+  /* III Plinth: the map is the picture; a mode and one Start at its foot; options rise as a drawer */
+  3: {name: 'Plinth', screens: ['main', 'choose', 'bot', 'botwait', 'queue', 'found', 'invdraw', 'invite', 'invready', 'profile', 'newhere', 'forfeit'],
+    render(s) {
+      const segs = (on) => `<div class="mode"><div class="segs" role="radiogroup" aria-label="Way to play" data-k="segs"><span class="mk" data-k="mk" style="transform:translateX(${on * 242}px)"></span><span class="mk ghost demo" data-k="gh"></span>${[['Find a match', `${helmet('own', 22)}${helmet('enemy', 22)}`], ['Play a bot', helmet('enemy', 30)], ['Invite a friend', helmet('enemy', 30, {dashed: true})]].map(([t, e], i) =>
+        `<button class="seg${i === on ? ' on' : ''}" role="radio" aria-checked="${i === on}" data-k="sg${i}"><span style="display:flex;gap:2px">${e}</span><span class="sl ink" data-k="sl${i}">${t}</span></button>`).join('')}</div></div>`;
+      const opts = (on) => on === 1 ? `<div class="opts" data-k="opts"><button class="opt">Normal ${ICON.down}</button><button class="opt">New map ${ICON.down}</button></div>` : '<div class="opts" data-k="opts" style="height:30px"></div>';
+      const startW = ['Search', 'Start', 'Get the link'];
+      const start = (on) => `<div class="start"><button class="bp lg" style="width:330px;height:88px;justify-content:center;font-size:26px" data-k="go"><span class="roll"><span data-k="r0">${startW[on]}</span><span data-k="r1" class="demo" style="position:absolute;left:0;right:0;opacity:1">Start</span></span></button></div>`;
+      const plinth = (inner) => frame('plinth stone solid', inner);
+      const base = (img = 'menu') => `${bg(img, 'hero')}${topBar()}`;
+      const std = (on) => plinth(`<div>${segs(on)}</div>${start(on)}`);
+      const drw = (inner) => frame('drw stone solid', inner);
+      switch (s) {
+        case 'main': return base() + std(0);
+        case 'choose': return base() + std(1);
+        case 'bot': return base() + drw(`<div style="display:grid;grid-template-columns:1fr auto;gap:56px;align-items:start"><div><p class="lab" style="margin-bottom:10px">Level</p>${levels(1).replace('class="levels"', 'class="levels" style="grid-template-columns:repeat(2,minmax(0,1fr));row-gap:16px"')}</div><div class="compact"><p class="lab" style="margin-bottom:8px">Map</p>${tiles(0)}</div></div>`) + std(1);
+        case 'botwait': return base() + plinth(`<div style="display:flex;align-items:center;gap:30px">${drawing(150)}<div style="display:grid;gap:8px"><p class="sub">${busy}Drawing the map…</p>${versus('Normal bot', {s: 32}).replace('class="vs"', 'class="vs" style="font-size:17px"')}</div></div><div class="start" style="opacity:.45">${'<button class="bp lg dis" style="width:330px;height:88px;justify-content:center;font-size:26px">Start</button>'}</div>`);
+        case 'queue': return base() + plinth(`<div style="display:flex;align-items:center;gap:30px"><p class="clock sm">0:14</p><div style="display:grid;gap:4px"><p class="lab">Finding an opponent</p><p class="sub">${busy}Searching</p></div></div><div class="start"><button class="lnk">Play a bot instead</button><button class="bs" style="height:58px;padding:0 34px">Stop</button></div>`);
+        case 'found': return base('found') + plinth(`<div style="display:grid;gap:6px"><p class="lab">Opponent found</p>${versus('Vega', {s: 40})}</div><div class="start"><span class="sub">Confirm within 11 s</span><button class="bs" style="height:58px">Decline</button><button class="bp lg" style="width:220px;height:88px;justify-content:center;font-size:26px">Play</button></div>`);
+        case 'invdraw': return base() + drw(`<div style="display:flex;align-items:center;gap:80px"><div style="width:300px">${drawingBlock(200)}</div><div>${seats('wait')}</div></div>`) + plinth(`<div>${segs(2)}</div><div class="start"><button class="bs" style="height:58px;padding:0 34px">Leave</button></div>`);
+        case 'invite': return base() + drw(`<div style="display:grid;grid-template-columns:1fr auto;gap:60px;align-items:end">${'<div>' + linkRow() + '</div>'}${seats('wait')}</div>`) + plinth(`<div>${segs(2)}</div><div class="start"><span class="sub" style="font-size:17px">The invite expires in 30 min.</span><button class="bs" style="height:58px;padding:0 34px">Leave</button></div>`);
+        case 'invready': return base() + drw(`<div style="display:flex;align-items:center;justify-content:space-between"><p class="dl">Vega joined.</p>${seats('ready')}</div>`) + plinth(`<div>${segs(2)}</div><div class="start"><button class="bs" style="height:58px;padding:0 30px">Leave</button><button class="bp lg" style="width:260px;height:88px;justify-content:center;font-size:26px">Ready</button></div>`);
+        case 'profile': return `${bg('menu')}${topBar({on: true})}${sheetProfile()}`;
+        case 'newhere': return this.render('main') + newHere();
+      }
+    },
+    demo(root, tl) {
+      const q = (k) => root.querySelector(`[data-k="${k}"]`);
+      const pl = root.querySelector('.plinth'), mk = q('mk'), gh = q('gh'), go = q('go'), r0 = q('r0'), r1 = q('r1');
+      tl.add(pl, [{transform: 'translateY(190px)'}, {transform: 'none'}], 0, 900, 'settle');
+      [0, 1, 2].forEach(i => tl.add(q('sl' + i), [{maskPosition: '100% 0', webkitMaskPosition: '100% 0'}, {maskPosition: '0 0', webkitMaskPosition: '0 0'}], 500 + i * 150, 650, 'engrave'));
+      tl.add(mk, [{opacity: 0, transform: 'translateX(0) translateY(-8px)'}, {opacity: 1, transform: 'translateX(0)'}], 900, 450, 'settle');
+      tl.add(go, [{clipPath: 'inset(0 100% 0 0)'}, {clipPath: 'inset(0 0 0 0)'}], 700, 800, 'engrave');
+      // hover Play a bot: a hollow marker over it
+      tl.add(gh, [{opacity: 0, transform: 'translateX(242px) translateY(-6px)'}, {opacity: 1, transform: 'translateX(242px)', offset: .3}, {opacity: 1, transform: 'translateX(242px)', offset: .8}, {opacity: 0, transform: 'translateX(242px)'}], 2000, 900, 'settle');
+      tl.add(q('sg1'), [{color: '#ada38f'}, {color: '#cfc4ab', offset: .3}, {color: '#cfc4ab'}], 2000, 900, 'linear');
+      // choose it: the marker travels, the Start word rolls to the new verb
+      tl.add(mk, [{transform: 'translateX(0)'}, {transform: 'translateX(242px)', offset: .22}, {transform: 'translateX(242px)', offset: .82}, {transform: 'translateX(0)'}], 3000, 3600, 'travel');
+      tl.add(q('sg1'), [{color: '#ada38f'}, {color: '#ece4d1', offset: .1}, {color: '#ece4d1', offset: .85}, {color: '#ada38f'}], 3000, 3600, 'linear');
+      tl.add(q('sg0'), [{color: '#ece4d1'}, {color: '#ada38f', offset: .1}, {color: '#ada38f', offset: .85}, {color: '#ece4d1'}], 3000, 3600, 'linear');
+      tl.add(r0, [{transform: 'none', opacity: 1}, {transform: 'translateY(-100%)', opacity: 0, offset: .12}, {transform: 'translateY(-100%)', opacity: 0, offset: .84}, {transform: 'none', opacity: 1}], 3050, 3600, 'travel');
+      tl.add(r1, [{transform: 'translateY(100%)', opacity: 0}, {transform: 'translateY(-100%)', opacity: 1, offset: .14}, {transform: 'translateY(-100%)', opacity: 1, offset: .82}, {transform: 'translateY(100%)', opacity: 0}], 3050, 3600, 'travel');
+      return 7000;
+    }},
+
+  /* IV Dossier: the player and the last matches stay at the left; Play and every way at the right */
+  4: {name: 'Dossier', screens: ['main', 'bot', 'botwait', 'queue', 'found', 'invdraw', 'invite', 'invready', 'profile', 'newhere', 'forfeit'],
+    render(s) {
+      const dos = (full = false) => frame(`dos stone${full ? ' full solid' : ''}`, full ? profileFull() : `<div class="me">${helmet('own', 58)}<div style="display:grid;gap:3px"><span class="nm ink" data-k="nm">EMBER</span><span class="sub" style="font-size:17px">Guest</span></div></div>
+        <div style="display:flex;gap:18px;margin-top:8px"><button class="lnk" style="font-size:16px">Change the nick</button></div>
+        <div style="margin-top:22px" data-k="facts">${facts()}</div>
+        <div class="sec" style="margin-top:24px"><span class="lab">Last matches</span></div>
+        <ul class="mini" data-k="mini">${matchRows(4).map(([k, r, o, l, m, len, ok]) => `<li><i class="rl"></i><span class="res ${k}">${resMark(k)}${r}</span><span class="o">${oppCell(o, l)}<small>${m} · ${len}</small></span>${ok ? '<button class="bs sm">Watch</button>' : '<span class="sub" style="font-size:16px">Expired</span>'}</li>`).join('')}</ul>
+        <button class="lnk" style="margin-top:14px;font-size:17px">All matches</button>`);
+      const base = (img = 'menu', on = false) => `${bg(img)}${topBar({on})}`;
+      const right = (inner, st = '') => `<div class="right" style="${st}">${inner}</div>`;
+      const panel = (title, inner) => right(frame('stone', `<div style="padding:34px 38px;height:100%"><h2>${title}</h2>${inner}</div>`, 'div', 'style="height:100%"'));
+      switch (s) {
+        case 'main': return base() + dos() + right(`<div style="padding:46px 0 0 30px"><button class="bp lg mid" data-k="play">${helmet('own', 40)}<span class="ink" data-k="pw">Find a match</span></button>
+          <ol class="rows" data-k="rows">${['Play a bot', 'Invite a friend'].map((t, i) => `<li data-k="li${i}"><button class="row" data-k="row${i}"><span class="ld"></span><span class="tx ink" data-k="rt${i}">${t}</span></button></li>`).join('')}</ol></div>`);
+        case 'bot': return base() + dos() + panel('Play a bot', `<div class="compact">${botSetup()}</div><div style="display:flex;gap:22px;align-items:center;margin-top:28px"><button class="bp">Start</button><button class="lnk">Back</button></div>`);
+        case 'botwait': return base() + dos() + panel('Play a bot', `<div style="margin-top:34px">${versus()}</div><div style="margin-top:70px">${drawingBlock(240)}</div>`);
+        case 'queue': return base() + dos() + right(`<div class="lead" style="height:100%;align-content:center"><p class="lab">Finding an opponent</p><p class="clock">0:14</p><p class="sub">${busy}Searching</p><div class="acts"><button class="bs">Stop</button></div><button class="lnk" style="margin-top:6px">Play a bot instead</button></div>`);
+        case 'found': return base('found') + dos() + right(`<div class="lead" style="height:100%;align-content:center"><p class="lab">Opponent found</p>${versus('Vega', {s: 46})}<p class="sub">Confirm within 11 s</p><div class="acts"><button class="bp">Play</button><button class="bs">Decline</button></div></div>`);
+        case 'invdraw': return base() + dos() + panel('Invite a friend', `<div style="margin-top:56px">${drawingBlock(230)}</div><div style="margin-top:60px">${seats('wait')}</div>`);
+        case 'invite': return base() + dos() + panel('Invite a friend', `<div style="margin-top:40px">${linkRow()}</div><div style="margin-top:48px">${seats('wait')}</div><div style="display:flex;gap:22px;align-items:center;margin-top:52px"><button class="bs">Leave</button><span class="sub" style="font-size:17px">The invite expires in 30 min.</span></div>`);
+        case 'invready': return base() + dos() + panel('Invite a friend', `<p class="dl" style="margin-top:14px">Vega joined.</p><div style="margin-top:44px">${seats('ready')}</div><div style="display:flex;gap:22px;align-items:center;margin-top:56px"><button class="bp">Ready</button><button class="bs">Leave</button></div>`);
+        case 'profile': return `${bg('menu', 'even')}${topBar({on: true})}${dos(true)}`;
+        case 'newhere': return this.render('main') + newHere();
+      }
+    },
+    demo(root, tl) {
+      const q = (k) => root.querySelector(`[data-k="${k}"]`);
+      const dosEl = root.querySelector('.dos');
+      tl.add(dosEl.querySelector('.dfr'), [{opacity: 0}, {opacity: 1}], 0, 700, 'engrave');
+      tl.add(dosEl.querySelector('.me'), [{opacity: 0, transform: 'translateY(8px)'}, {opacity: 1, transform: 'none'}], 150, 600, 'settle');
+      tl.add(q('nm'), [{maskPosition: '100% 0', webkitMaskPosition: '100% 0'}, {maskPosition: '0 0', webkitMaskPosition: '0 0'}], 250, 700, 'engrave');
+      q('facts').querySelectorAll('b').forEach((b, i) => tl.add(b, [{transform: 'translateY(10px)', opacity: 0, clipPath: 'inset(0 0 100% 0)'}, {transform: 'none', opacity: 1, clipPath: 'inset(0 0 0 0)'}], 500 + i * 120, 500, 'settle'));
+      q('mini').querySelectorAll('li').forEach((li, i) => {
+        tl.add(li.querySelector('.rl'), [{transform: 'scaleX(0)'}, {transform: 'scaleX(1)'}], 700 + i * 110, 500, 'engrave');
+        [...li.children].slice(1).forEach(c => tl.add(c, [{opacity: 0}, {opacity: 1}], 950 + i * 110, 400, 'linear'));
+      });
+      tl.add(q('play'), [{clipPath: 'inset(0 100% 0 0)'}, {clipPath: 'inset(0 0 0 0)'}], 600, 800, 'engrave');
+      tl.add(q('pw'), [{maskPosition: '100% 0', webkitMaskPosition: '100% 0'}, {maskPosition: '0 0', webkitMaskPosition: '0 0'}], 1100, 700, 'engrave');
+      [0, 1].forEach(i => {
+        tl.add(q('li' + i), [{backgroundSize: '0% 1px,0% 1px,0% 1px'}, {backgroundSize: '100% 1px,100% 1px,100% 1px'}], 1200 + i * 150, 600, 'engrave');
+        tl.add(q('rt' + i), [{maskPosition: '100% 0', webkitMaskPosition: '100% 0'}, {maskPosition: '0 0', webkitMaskPosition: '0 0'}], 1450 + i * 150, 650, 'engrave');
+      });
+      // hover Play a bot: the leader is ruled from the numeral, the words step aside
+      const r0 = q('row0');
+      tl.add(r0.querySelector('.ld'), [{transform: 'scaleX(0)'}, {transform: 'scaleX(1)', offset: .3}, {transform: 'scaleX(1)', offset: .8}, {transform: 'scaleX(0)'}], 2600, 1400, 'settle');
+      tl.add(q('rt0'), [{transform: 'none'}, {transform: 'translateX(10px)', offset: .3}, {transform: 'translateX(10px)', offset: .8}, {transform: 'none'}], 2600, 1400, 'settle');
+      // keyboard focus Invite a friend
+      tl.add(q('row1'), [{outline: '2px solid transparent', outlineOffset: '2px'}, {outline: '2px solid #ece4d1', outlineOffset: '6px', offset: .25}, {outline: '2px solid #ece4d1', outlineOffset: '6px', offset: .8}, {outline: '2px solid transparent', outlineOffset: '6px'}], 4200, 1100, 'linear');
+      tl.add(q('row1').querySelector('.ld'), [{transform: 'scaleX(0)'}, {transform: 'scaleX(1)', offset: .3}, {transform: 'scaleX(1)', offset: .8}, {transform: 'scaleX(0)'}], 4200, 1100, 'settle');
+      tl.add(q('rt1'), [{transform: 'none'}, {transform: 'translateX(10px)', offset: .3}, {transform: 'translateX(10px)', offset: .8}, {transform: 'none'}], 4200, 1100, 'settle');
+      // a match row of the dossier: its Watch takes the ivory frame
+      const w = q('mini').querySelector('li .bs');
+      const off = {color: '#ece4d1', boxShadow: 'inset 0 0 0 0 rgba(236,228,209,0)'}, on = {color: '#16130f', boxShadow: 'inset 0 0 0 40px #ece4d1'};
+      tl.add(w, [off, {...on, offset: .3}, {...on, offset: .8}, off], 5500, 1100, 'engrave');
+      return 7000;
+    }},
+
+  /* V Signal: Play searches at once and the search moves into the bar; the bot and the invite are dialogs */
+  5: {name: 'Signal', screens: ['main', 'bot', 'botwait', 'queue', 'found', 'invdraw', 'invite', 'invready', 'profile', 'newhere', 'forfeit'],
+    render(s) {
+      const rail = (searching = false) => `<div class="rail">${searching ? `<button class="bs wait" data-k="play" aria-disabled="true">${helmet('own', 40, {share: .4})}<span>${busy}Searching</span></button>` : `<button class="bp lg mid" data-k="play">${helmet('own', 40)}<span class="ink" data-k="pw">Find a match</span></button>`}
+        <div class="two">${['Play a bot', 'Invite a friend'].map((t, i) => `<button class="bs" data-k="b${i}"><svg class="tr" width="100%" height="52" preserveAspectRatio="none" aria-hidden="true"><rect x=".5" y=".5" width="99%" height="51" pathLength="1" vector-effect="non-scaling-stroke"/></svg><span class="ink" data-k="bw${i}">${t}</span></button>`).join('')}</div></div>`;
+      const sig = `<div class="sig" data-k="sig">${helmet('own', 26)}<span class="lab">Searching</span><span class="tm">0:14</span><button class="bs sm">Stop</button></div>`;
+      const base = (o = {}) => `${bg(o.img ?? 'menu')}${topBar({mid: o.sig ? sig : '', burin: o.sig, on: o.on})}`;
+      const dlg = (inner, wide = true) => `<div class="ov">${frame(`win${wide ? ' wide' : ''}`, inner, 'div', 'role="dialog" aria-modal="true"')}</div>`;
+      switch (s) {
+        case 'main': return base() + rail() + `<div class="demo" data-k="dsig" style="position:absolute;inset:0 0 auto;height:72px;z-index:9">${sig}</div><i class="demo" data-k="spark" style="position:absolute;left:340px;top:150px;width:7px;height:7px;background:#ece4d1;transform:rotate(45deg);z-index:10;offset-path:path('M0 0 C 0 -46 130 -74 300 -74');offset-rotate:0deg"></i>`;
+        case 'queue': return base({sig: true}) + rail(true);
+        case 'found': return base({img: 'found'}) + rail(true) + dlg(`<div class="lead" style="padding:10px 0"><p class="lab">Opponent found</p>${versus('Vega', {s: 46})}<p class="sub">Confirm within 11 s</p><div class="acts"><button class="bp">Play</button><button class="bs">Decline</button></div></div>`, false);
+        case 'bot': return base() + rail() + dlg(`<h2>Play a bot</h2>${botSetup()}<div style="display:flex;gap:22px;align-items:center;margin-top:30px"><button class="bp">Start</button><button class="lnk">Back</button></div>`);
+        case 'botwait': return base() + rail() + dlg(`<h2>Play a bot</h2><div style="margin-top:30px">${versus()}</div><div style="margin:56px 0 18px">${drawingBlock(240)}</div>`);
+        case 'invdraw': return base() + rail() + dlg(`<h2>Invite a friend</h2><div style="margin-top:46px">${drawingBlock(220)}</div><div style="margin-top:46px">${seats('wait')}</div>`);
+        case 'invite': return base() + rail() + dlg(`<h2>Invite a friend</h2><div style="margin-top:34px">${linkRow()}</div><div style="margin-top:40px">${seats('wait')}</div><div style="display:flex;gap:22px;align-items:center;margin-top:44px"><button class="bs">Leave</button><span class="sub" style="font-size:17px">The invite expires in 30 min.</span></div>`);
+        case 'invready': return base() + rail() + dlg(`<h2>Invite a friend</h2><p class="dl" style="margin-top:14px">Vega joined.</p><div style="margin-top:40px">${seats('ready')}</div><div style="display:flex;gap:22px;align-items:center;margin-top:48px"><button class="bp">Ready</button><button class="bs">Leave</button></div>`);
+        case 'profile': return `${base({on: true})}${sheetProfile()}`;
+        case 'newhere': return this.render('main') + newHere();
+      }
+    },
+    demo(root, tl) {
+      const q = (k) => root.querySelector(`[data-k="${k}"]`);
+      const play = q('play');
+      tl.add(play, [{clipPath: 'inset(0 100% 0 0)'}, {clipPath: 'inset(0 0 0 0)'}], 0, 850, 'engrave');
+      tl.add(play.querySelector('.hf'), [{transform: 'translateY(60px)'}, {transform: 'none'}], 350, 800, 'engrave');
+      tl.add(q('pw'), [{maskPosition: '100% 0', webkitMaskPosition: '100% 0'}, {maskPosition: '0 0', webkitMaskPosition: '0 0'}], 500, 750, 'engrave');
+      [0, 1].forEach(i => {
+        tl.add(q('b' + i), [{opacity: 0, transform: 'translateY(8px)'}, {opacity: 1, transform: 'none'}], 800 + i * 140, 600, 'settle');
+        tl.add(q('bw' + i), [{maskPosition: '100% 0', webkitMaskPosition: '100% 0'}, {maskPosition: '0 0', webkitMaskPosition: '0 0'}], 1000 + i * 140, 650, 'engrave');
+      });
+      // hover Play a bot: the burin runs the inner rule round it
+      const rr = q('b0').querySelector('rect');
+      tl.add(rr, [{strokeDashoffset: 1}, {strokeDashoffset: 0, offset: .45}, {strokeDashoffset: 0, offset: .8}, {strokeDashoffset: 1}], 2000, 1400, 'engrave');
+      // press Find a match: a spark leaves the tablet for the bar, the search sets there, the tablet waits
+      const sp = q('spark'), ds = q('dsig');
+      tl.add(play, [{transform: 'none'}, {transform: 'translateY(2px)', offset: .4}, {transform: 'none'}], 3600, 300, 'settle');
+      tl.add(sp, [{opacity: 1, offsetDistance: '0%'}, {opacity: 1, offsetDistance: '100%', offset: .9}, {opacity: 0, offsetDistance: '100%'}], 3800, 1000, 'travel');
+      tl.add(ds, [{opacity: 0}, {opacity: 1, offset: .2}, {opacity: 1, offset: .9}, {opacity: 0}], 4500, 2400, 'linear');
+      tl.add(ds.querySelector('.sig'), [{clipPath: 'inset(0 50% 0 50%)'}, {clipPath: 'inset(0 0 0 0)', offset: .25}, {clipPath: 'inset(0 0 0 0)'}], 4500, 2400, 'engrave');
+      tl.add(play, [{opacity: 1}, {opacity: .45, offset: .1}, {opacity: .45, offset: .85}, {opacity: 1}], 4300, 2600, 'linear');
+      tl.add(play.querySelector('.hf'), [{transform: 'none'}, {transform: 'translateY(35px)', offset: .15}, {transform: 'translateY(35px)', offset: .85}, {transform: 'none'}], 4300, 2600, 'engrave');
+      return 7200;
+    }},
+};
+
+/* ================================================================ timeline (time controls) */
+const EASE = {settle: 'cubic-bezier(.33,1,.68,1)', engrave: 'cubic-bezier(.37,0,.63,1)', travel: 'cubic-bezier(.65,0,.35,1)', linear: 'linear'};
+function makeTl(reduced) {
+  const list = [];
+  return {list, add(el, kf, delay, dur, ease) {
+    if (!el) return;
+    if (reduced) return;
+    // an entrance holds its first frame while it waits; a later move (hover, focus, choice) does not
+    list.push(el.animate(kf, {delay, duration: dur, easing: EASE[ease] || ease, fill: delay < 1800 ? 'backwards' : 'none'}));
+  }};
+}
+
+/* ================================================================ state and page */
+const S = {d: 5, s: 'main', c: 1, cmp: [], rm: 0, g: 0, fd: 'a'};
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.has('d')) S.d = Math.min(5, Math.max(1, +h.get('d') || 5));
+  if (h.has('s') && SCREENS.some(([k]) => k === h.get('s'))) S.s = h.get('s');
+  if (h.has('c')) S.c = Math.min(3, Math.max(0, +h.get('c') || 0));
+  S.cmp = h.has('cmp') ? h.get('cmp').split(',').map(Number).filter(n => n >= 1 && n <= 5).slice(0, 4) : [];
+  S.rm = h.get('rm') === '1' ? 1 : 0; S.g = h.get('g') === '1' ? 1 : 0; S.fd = h.get('fd') === 'b' ? 'b' : 'a';
+}
+function writeHash() {
+  const p = new URLSearchParams({d: S.d, s: S.s, c: S.c});
+  if (S.cmp.length > 1) p.set('cmp', S.cmp.join(','));
+  if (S.rm) p.set('rm', 1); if (S.g) p.set('g', 1); if (S.fd === 'b') p.set('fd', 'b');
+  history.replaceState(null, '', '#' + p.toString());
+}
+const NUM = ['', 'I', 'II', 'III', 'IV', 'V'];
+const CORNERS = ['Lozenge', 'Stepped', 'Fan', 'Tied'];
+function chip(label, pressed, on, attrs = '') { return `<button class="ch" aria-pressed="${pressed}" ${attrs} data-on="${on}">${label}</button>`; }
+function renderBar() {
+  const comparing = S.cmp.length > 1;
+  const dirs = [1, 2, 3, 4, 5].map(n => chip(`<span class="n">${NUM[n]}</span>${DIRS[n].name}`, comparing ? S.cmp.includes(n) : S.d === n, `d:${n}`)).join('');
+  const scr = SCREENS.map(([k, l]) => {
+    const has = comparing ? S.cmp.some(n => DIRS[n].screens.includes(k)) : DIRS[S.d].screens.includes(k);
+    return chip(l, S.s === k, `s:${k}`, has ? '' : 'disabled');
+  }).join('');
+  const cor = CORNERS.map((n, i) => chip(`<span class="n">${i}</span>${n}`, S.c === i, `c:${i}`)).join('');
+  bar.innerHTML = `<div class="grp"><span class="lab">Direction</span>${dirs}</div><div class="grp">${chip('Compare', comparing, 'cmp')}</div><span class="sep"></span>
+    <div class="grp"><span class="lab">Corner</span>${cor}</div><span class="sep"></span>
+    <div class="grp">${chip('Reduced motion', !!S.rm, 'rm')}${chip('Grey', !!S.g, 'g')}${S.s === 'forfeit' ? chip('Danger A', S.fd === 'a', 'fd:a') + chip('Danger B', S.fd === 'b', 'fd:b') : ''}</div>
+    <div class="grp" style="flex-basis:100%"><span class="lab">Screen</span>${scr}</div>`;
+}
+bar.addEventListener('click', (e) => {
+  const b = e.target.closest('.ch'); if (!b || b.disabled) return;
+  const [k, v] = b.dataset.on.split(':');
+  if (k === 'd') {
+    const n = +v;
+    if (S.cmp.length > 1) { S.cmp = S.cmp.includes(n) ? S.cmp.filter(x => x !== n) : [...S.cmp, n].slice(-4); if (S.cmp.length < 2) { S.d = S.cmp[0] ?? n; S.cmp = []; } }
+    else S.d = n;
+  } else if (k === 'cmp') S.cmp = S.cmp.length > 1 ? [] : (S.d === 5 ? [5, 2] : [S.d, 5]).sort();
+  else if (k === 's') S.s = v; else if (k === 'c') S.c = +v; else if (k === 'rm') S.rm ^= 1; else if (k === 'g') S.g ^= 1; else if (k === 'fd') S.fd = v;
+  writeHash(); render();
+});
+
+let anims = [], T = 1, raf = 0, slow = false, hasDemo = false, master = null;
+const clk = document.createElement('i'); clk.style.display = 'none'; document.body.append(clk);
+function screenHtml(n, s) {
+  if (s === 'forfeit') return forfeit(S.fd);
+  if (!DIRS[n].screens.includes(s)) return `<div class="empty"><p>No such step in ${NUM[n]} ${DIRS[n].name}</p></div>`;
+  return `<div class="d${n}" style="position:absolute;inset:0">${DIRS[n].render(s)}${legal}</div>`;
+}
+function render() {
+  renderBar();
+  view.className = 'view' + (S.g ? ' gray' : '');
+  const list = S.cmp.length > 1 ? S.cmp : [S.d];
+  const W = view.clientWidth - 28, H = view.clientHeight - 28;
+  const cols = list.length === 1 ? 1 : 2, rows = Math.ceil(list.length / cols), capH = list.length > 1 ? 18 : 0;
+  const k = Math.min((W - (cols - 1) * 14) / cols / 1280, (H - (rows - 1) * 14 - rows * capH) / rows / 800);
+  view.innerHTML = `<div class="grid" style="grid-template-columns:repeat(${cols},${1280 * k}px);row-gap:${14 + capH}px">${list.map(n =>
+    `<div class="cell">${list.length > 1 ? `<span class="cap">${NUM[n]} ${DIRS[n].name}</span>` : ''}<div class="holder" style="width:${1280 * k}px;height:${800 * k}px"><div class="st${S.rm ? ' rm' : ''}" data-c="${S.c}" data-dir="${n}" style="transform:scale(${k})">${screenHtml(n, S.s)}</div></div></div>`).join('')}</div>`;
+  startTimeline(list);
+}
+/* One clock for the page: the scripted moves of the main screen (entrance, hover, focus, choice) and
+   the loops of the waiting states; play, pause, scrub and slow motion act on all of them at once. */
+function startTimeline(list) {
+  cancelAnimationFrame(raf);
+  anims.forEach(a => a.cancel());
+  anims = []; hasDemo = false; T = 3600;
+  const stages = [...view.querySelectorAll('.st')];
+  let end = 0;
+  stages.forEach((st, i) => {
+    const n = list[i];
+    if (S.s === 'main' && !S.rm && DIRS[n].screens.includes('main')) {
+      const tl = makeTl(false);
+      end = Math.max(end, DIRS[n].demo(st, tl));
+      anims.push(...tl.list); hasDemo = true;
+    }
+    if (!S.rm) animateDrawing(st, anims);
+  });
+  if (hasDemo) T = end;
+  for (const st of stages) for (const a of st.getAnimations({subtree: true})) if (!anims.includes(a)) anims.push(a);
+  time.classList.toggle('off', !!S.rm || anims.length === 0);
+  master = clk.animate([{opacity: 0}, {opacity: 1}], {duration: T, iterations: hasDemo ? 1 : Infinity, fill: 'forwards'});
+  anims.push(master);
+  play(true);
+}
+function play(fromStart) {
+  if (fromStart || (hasDemo && master.currentTime >= T)) anims.forEach(a => { a.currentTime = 0; });
+  anims.forEach(a => { a.playbackRate = slow ? .25 : 1; a.play(); });
+  tick();
+}
+function pause() { anims.forEach(a => a.pause()); show(); }
+function scrub(t) { anims.forEach(a => { a.pause(); a.currentTime = t; }); show(); }
+function show() {
+  const t = master ? (master.currentTime || 0) : 0, u = hasDemo ? Math.min(t, T) : t % T;
+  tScrub.value = Math.round(u / T * 1000); tNow.textContent = (u / 1000).toFixed(1) + ' s';
+}
+function tick() {
+  cancelAnimationFrame(raf); show();
+  if (master && master.playState === 'running') raf = requestAnimationFrame(tick);
+}
+tPlay.onclick = () => play(false);
+tPause.onclick = pause;
+tAgain.onclick = () => play(true);
+tScrub.oninput = () => scrub(+tScrub.value / 1000 * T);
+tSlow.onclick = () => { slow = !slow; tSlow.setAttribute('aria-pressed', slow); anims.forEach(a => { a.playbackRate = slow ? .25 : 1; }); };
+addEventListener('hashchange', () => { readHash(); render(); });
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 120); });
+readHash();
+document.fonts.ready.then(render);
+</script>
+</body>
+</html>
