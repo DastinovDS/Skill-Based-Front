@@ -176,18 +176,13 @@ describe('ResultScreen', () => {
       unrated_reason: reason,
     });
 
-    it.each([
-      ['casual', 'Only matches from the queue'],
-      ['guest', 'You played as a guest'],
-      ['opponent_guest', 'Your opponent played as a guest'],
-      ['opponent_calibrating', 'still in calibration'],
-      ['opponent_limit', 'too often'],
-      ['opponent_early_resign', 'gave up early'],
-    ] as const)('says it for %s', (reason, words) => {
-      const text = render(0, unrated(reason));
-      expect(text).toContain(words);
-      expect(text).toContain(translate('en', `result.unrated.${reason}`));
-    });
+    it.each(['casual', 'guest', 'opponent_guest', 'opponent_limit'] as const)(
+      'says nothing of the rating for an unrated match (%s, #919: no rating at the MVP)',
+      (reason) => {
+        const text = render(0, unrated(reason));
+        expect(text).not.toMatch(/rating|ranked|unrated|calibration/i);
+      },
+    );
 
     it('says nothing of the sort about a rated match', () => {
       const text = render(0, { ...end(0, { before: 800, after: 830 }), rated: true });

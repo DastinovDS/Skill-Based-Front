@@ -2,8 +2,8 @@
   import type { Snippet } from 'svelte';
   import FrontTop from '../app/FrontTop.svelte';
   import MenuBackdrop from '../app/MenuBackdrop.svelte';
+  import type { TopPlayer } from '../app/play.ts';
   import type { MapFile } from '../protocol.gen.ts';
-  import '../app/dock.css';
   import './sheet.css';
 
   interface Props {
@@ -11,23 +11,25 @@
     map: MapFile | null;
     /** The name of the sheet for assistive technology. */
     label: string;
-    tabs: Snippet;
-    /** The top right corner: the player chip. */
-    corner?: Snippet;
+    /** The player in the bar (the nick opens the profile) and the "?" of How to play (#919). */
+    player: TopPlayer;
+    onhelp: () => void;
+    /** This sheet is How to play: the "?" is marked. */
+    helpHere?: boolean;
     /** A dialog of the sheet (the nick change, the log-out warning): over the bar too. */
     overlay?: Snippet;
     children: Snippet;
   }
 
-  let { map, label, tabs, corner, overlay, children }: Props = $props();
+  let { map, label, player, onhelp, helpHere = false, overlay, children }: Props = $props();
 </script>
 
-<!-- The frame of the Replays and Leaderboard tabs (#629; Lapis, #845), the profile and the settings
-     (#871): the bar on top, one wide sheet under it on the blurred stone over the map, no rail. -->
+<!-- The frame of the pages (#919): the profile, the settings, How to play and the password. The bar
+     on top, one wide sheet under it on the blurred stone over the map (ui-style 51). -->
 <main class="front sheet">
   <MenuBackdrop {map} phase="idle" />
   <div class="shade"></div>
-  <FrontTop {tabs} {corner} />
+  <FrontTop {player} {onhelp} {helpHere} />
   <section class="body" aria-label={label}>
     {@render children()}
   </section>

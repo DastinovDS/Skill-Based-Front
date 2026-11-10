@@ -86,19 +86,36 @@ export class Player {
     await this.page.getByRole('button', { name: /^(Play|Join)$/ }).click();
   }
 
-  /** The host: menu, private match on `mapId`, returns the invite link. */
-  async createInvite(mapId: string): Promise<string> {
-    await this.page.getByRole('button', { name: 'Invite a friend' }).click();
-    await this.page.getByRole('radio', { name: new RegExp(`^${mapId}`) }).click();
-    await this.page.getByRole('button', { name: 'Create the match' }).click();
+  /**
+   * The host: the way "Invite a friend" on the plinth (#919), then "Get the link" (a map is made
+   * for the match); returns the invite link, which shows as soon as the server made the invite.
+   */
+  async createInvite(): Promise<string> {
+    await this.page.getByRole('radio', { name: 'Invite a friend' }).click();
+    await this.page.getByRole('button', { name: 'Get the link', exact: true }).click();
     const link = this.page.getByLabel('Invite link');
     await expect(link).toHaveValue(/\/\?m=[\w-]+$/);
     return await link.inputValue();
   }
 
+  /** The map of an invite, as the server says it (`GET /api/matches/{code}` with the own token). */
+  async inviteMap(code: string): Promise<string> {
+    const token = await this.page.evaluate(() => {
+      const saved = window.localStorage.getItem('sbf.guest');
+      return saved === null ? '' : (JSON.parse(saved) as { token: string }).token;
+    });
+    const response = await this.page.request.get(`/api/matches/${encodeURIComponent(code)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(response.ok()).toBe(true);
+    return ((await response.json()) as { map_id: string }).map_id;
+  }
+
+  /** A friend has joined: "Ready" on the plinth (#919). */
   async pressReady(): Promise<void> {
-    await expect(this.page.getByRole('heading', { name: / joined$/ })).toBeVisible();
-    await this.page.getByRole('button', { name: 'Ready' }).click();
+    const ready = this.page.getByRole('button', { name: 'Ready', exact: true });
+    await expect(ready).toBeEnabled({ timeout: 30_000 });
+    await ready.click();
   }
 
   /** The match screen is up and snapshots arrive (the canvas carries the last tick). */

@@ -11,12 +11,9 @@
     translate,
     type Locale,
   } from '../i18n/index.ts';
-  import type { Calibration, MapFile } from '../protocol.gen.ts';
+  import type { MapFile } from '../protocol.gen.ts';
   import LapisButton from '../theme/LapisButton.svelte';
-  import AccountChip from './AccountChip.svelte';
   import LogoutDialog from './LogoutDialog.svelte';
-  import MenuTabs from './MenuTabs.svelte';
-  import type { AccountPages, MenuTabActions } from './menuTabs.ts';
   import Segments from './Segments.svelte';
   import {
     INTRO_CHOICES,
@@ -29,12 +26,13 @@
   import { settings as pageSettings, type SettingsState } from './settingsState.svelte.ts';
   import { SETTINGS_KEYS } from './settingsKeys.ts';
 
-  interface Props extends MenuTabActions, AccountPages {
+  interface Props {
     nick: string;
     hasPassword: boolean;
-    calibration: Calibration | null;
-    rating: number | null;
     map: MapFile | null;
+    /** The bar: the nick opens the profile, the "?" How to play (#919). */
+    onprofile: () => void;
+    onhowto: () => void;
     /** The display settings and the sound of the page; tests pass their own. */
     settings?: SettingsState;
     sound?: SoundState;
@@ -47,29 +45,22 @@
   let {
     nick,
     hasPassword,
-    calibration,
-    rating,
     map,
     settings = pageSettings,
     sound = pageSound,
     onpassword,
     onlogout,
     onback,
-    onplay,
-    onreplays,
-    onboard,
     onhowto,
     onprofile,
-    onsettings,
   }: Props = $props();
 
-  let accountOpen = $state(false);
   let confirmingLogout = $state(false);
 
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-    // The account menu and the log-out dialog keep their own keys while they are open.
-    if (accountOpen || confirmingLogout) return;
+    // The log-out dialog keeps its own keys while it is open.
+    if (confirmingLogout) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       onback();
@@ -99,24 +90,12 @@
 
 <svelte:window {onkeydown} />
 
-<SheetFrame {map} label={t('settings.title')}>
-  {#snippet tabs()}
-    <MenuTabs current={null} {onplay} {onreplays} {onboard} {onhowto} />
-  {/snippet}
-  {#snippet corner()}
-    <AccountChip
-      {nick}
-      {hasPassword}
-      {calibration}
-      {rating}
-      {onprofile}
-      {onsettings}
-      {onpassword}
-      {onlogout}
-      bind:open={accountOpen}
-    />
-  {/snippet}
-
+<SheetFrame
+  {map}
+  label={t('settings.title')}
+  player={{ nick, guest: !hasPassword, onprofile }}
+  onhelp={onhowto}
+>
   <!-- The settings of this browser (#871, Lapis round 2 `settings`): display and language, sound
        and the account, then the keys, the way to the rules and the licences. -->
   <div class="settings">

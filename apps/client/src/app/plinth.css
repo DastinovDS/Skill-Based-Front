@@ -1,0 +1,598 @@
+/* ===== The main screen, direction III Plinth (#919, #925) =====
+   docs/design/mockups/out-of-game-rework-r2.html: the menu map fills the screen, the bar on top,
+   and at the foot a stone plinth in the Double rule frame with the Stepped corner: the three ways
+   and the options line on the left (or what is happening: the drawing, the search, the versus
+   line), the one main button on the right. Play a bot raises a drawer above it. One size of every
+   piece per window size (1280 x 720, 1440 x 900, 1920 x 1080; the plinth caps at 1520 px and
+   centres), set by a container query on the screen itself, so the interface scale (`zoom`) counts.
+   Used by PlayScreen; the bar, labels and buttons are app/front.css and theme/primitives.css. */
+
+.front.play {
+  container: play / size;
+}
+
+/* The map is the picture: a shade at the top under the bar and a deeper one at the foot. */
+.front.play .shade {
+  background: linear-gradient(
+    180deg,
+    rgb(22 19 15 / 55%) 0,
+    rgb(22 19 15 / 8%) 20%,
+    rgb(22 19 15 / 14%) 48%,
+    rgb(22 19 15 / 90%) 78%,
+    var(--stone-bg) 100%
+  );
+}
+
+/* ---- The foot: the drawer (Play a bot), a notice, the plinth -------------------------------- */
+
+/* The sizes (the mockup's 1280 x 720): the side gutter, the plinth's foot (from the window's
+   bottom, the legal line included) and height, a way, the main button, the drawing sketch. */
+.front.play .foot {
+  --gx: 48px;
+  --pb: 40px;
+  --ph: 136px;
+  --segw: 204px;
+  --segh: 74px;
+  --goh: 76px;
+  --gow: 300px;
+  --gof: 23px;
+  --grw: 120px;
+
+  position: absolute;
+  left: var(--gx);
+  right: var(--gx);
+  bottom: calc(var(--pb) - var(--legal-footer-h));
+  z-index: 6;
+  max-width: 1520px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+@container play (min-width: 1440px) and (min-height: 850px) {
+  .front.play .foot {
+    --gx: 64px;
+    --pb: 52px;
+    --ph: 150px;
+    --segw: 232px;
+    --segh: 84px;
+    --goh: 84px;
+    --gow: 330px;
+    --gof: 25px;
+    --grw: 140px;
+  }
+}
+
+@container play (min-width: 1900px) and (min-height: 1030px) {
+  .front.play .foot {
+    --gx: 96px;
+    --pb: 64px;
+    --ph: 160px;
+    --segw: 248px;
+    --segh: 88px;
+    --goh: 88px;
+    --gow: 344px;
+    --gof: 26px;
+    --grw: 150px;
+  }
+}
+
+/* A window under 1280 wide (1024 x 640, or a big interface scale): tighter pieces. */
+@container play (max-width: 1240px) {
+  .front.play .foot {
+    --gx: 24px;
+    --pb: 36px;
+    --ph: 128px;
+    --segw: 168px;
+    --segh: 70px;
+    --goh: 68px;
+    --gow: 236px;
+    --gof: 20px;
+    --grw: 100px;
+  }
+}
+
+/* ---- The plinth ------------------------------------------------------------------------------ */
+
+.front.play .plinth {
+  box-sizing: border-box;
+  height: var(--ph);
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 0 30px 0 36px;
+}
+
+.front.play .plinth .end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex: none;
+}
+
+.front.play .plinth .end.link {
+  gap: 18px;
+}
+
+.front.play .plinth .two {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.front.play .plinth .stat {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  min-width: 0;
+}
+
+.front.play .plinth .draw {
+  width: var(--grw);
+  height: auto;
+}
+
+.front.play .plinth .sub {
+  margin: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.front.play .plinth .clock {
+  margin: 0;
+  font-size: 58px;
+}
+
+.front.play .plinth .note {
+  font-size: 16px;
+  font-style: italic;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+/* A tall secondary button: Stop, Decline, Leave. */
+.front.play .lapis-btn.tall {
+  height: 58px;
+  padding: 0 30px;
+}
+
+/* ---- The three ways and the marker ------------------------------------------------------------ */
+
+.front.play .mode {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.front.play .segs {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  padding-top: 14px;
+}
+
+.front.play .seg {
+  position: relative;
+  width: var(--segw);
+  height: var(--segh);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  transition: color 0.25s;
+}
+
+.front.play .seg:hover:not(:disabled) {
+  color: var(--ink-soft);
+}
+
+.front.play .seg[aria-checked='true'] {
+  color: var(--ink);
+}
+
+.front.play .seg:disabled {
+  cursor: default;
+}
+
+.front.play .seg .icons {
+  display: flex;
+  gap: 2px;
+  opacity: 0.55;
+  transition: opacity 0.25s;
+}
+
+.front.play .seg[aria-checked='true'] .icons {
+  opacity: 1;
+}
+
+.front.play .seg .sl {
+  font: 500 13.5px / 1.25 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The ink-in reveal of a way's name (a soft-edged mask, the Burin reveal of ui-style 63): at rest
+   the solid part of the mask covers the whole word. */
+.front.play .seg .ink {
+  mask-image: linear-gradient(90deg, #000 44%, transparent 56%);
+  mask-size: 250% 100%;
+  mask-position: 0 0;
+  mask-repeat: no-repeat;
+}
+
+/* The marker: a lozenge on a rule that fades at both ends, over the chosen way; a hollow one over
+   the hovered way. It travels to a new choice. */
+.front.play .segs .mk {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--segw);
+  height: 12px;
+  pointer-events: none;
+  transform: translateX(calc((var(--segw) + 6px) * var(--at)));
+  transition: transform 0.5s var(--ease-travel);
+}
+
+.front.play .segs .mk::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ink) 30%, var(--ink) 70%, transparent);
+}
+
+.front.play .segs .mk::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  box-sizing: border-box;
+  background: var(--ink);
+  box-shadow: 0 0 0 1.5px var(--casing);
+  transform: rotate(45deg);
+}
+
+.front.play .segs .mk.ghost {
+  opacity: 0;
+  transform: translateX(calc((var(--segw) + 6px) * var(--hover))) translateY(-6px);
+  transition:
+    opacity 0.25s,
+    transform 0.3s var(--ease-settle);
+}
+
+.front.play .segs .mk.ghost.on {
+  opacity: 1;
+  transform: translateX(calc((var(--segw) + 6px) * var(--hover)));
+}
+
+.front.play .segs .mk.ghost::after {
+  background: none;
+  border: 1px solid var(--ink-soft);
+}
+
+.front.play .segs .mk.ghost::before {
+  opacity: 0.35;
+}
+
+/* The options line under the ways: the pause rule, the queue lock, a running match. */
+.front.play .optl {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding-left: 14px;
+}
+
+.front.play .prule {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-style: italic;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.front.play .prule svg {
+  flex: none;
+}
+
+/* The queue lock (DEC-34): the lock and the time left, amber, the words carry it. */
+.front.play .prule.ban {
+  color: var(--warn);
+}
+
+/* ---- The invite link in the place of the main button (variant C) ---------------------------- */
+
+.front.play .lucol {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.front.play .lkhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.front.play .lu {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.front.play .lu .fld {
+  box-sizing: border-box;
+  flex: 0 1 calc(var(--gow) - 2px);
+  min-width: 140px;
+  height: var(--goh);
+  padding: 0 16px 0 18px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: var(--frame-quiet);
+  background-color: rgb(5 4 3 / 55%);
+  color: var(--ink);
+  font: 400 17px / 1 var(--font-text);
+  text-overflow: ellipsis;
+}
+
+.front.play .lu .fld:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.front.play .lu .go.copy {
+  flex: none;
+  height: var(--goh);
+  padding: 0 28px;
+  font-size: calc(var(--gof) * 0.72);
+  letter-spacing: 0.2em;
+}
+
+/* ---- A notice above the plinth (a failure, a dropped search) --------------------------------- */
+
+.front.play .alert {
+  align-self: flex-start;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 14px 24px;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.front.play .alert svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--warn);
+}
+
+/* ---- The bot drawer: the level and the map -------------------------------------------------- */
+
+.front.play .drw {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px 56px;
+  padding: 24px 36px 26px;
+  max-height: calc(100cqh - 72px - 24px - var(--ph) - var(--pb));
+  overflow: auto;
+}
+
+.front.play .drw .label {
+  margin-bottom: 10px;
+}
+
+.front.play .levels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 420px;
+  max-width: 100%;
+}
+
+.front.play .level {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  row-gap: 2px;
+  padding: 9px 10px 7px;
+  border: 0;
+  background: var(--rule-dbl);
+  color: var(--ink-dim);
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.front.play .level:hover {
+  color: var(--ink);
+}
+
+.front.play .level[aria-checked='true'] {
+  background: rgb(236 228 209 / 6%);
+  color: var(--ink);
+}
+
+.front.play .level[aria-checked='true']::before,
+.front.play .tile[aria-checked='true']::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background: var(--frame-chosen);
+}
+
+.front.play .level .lv {
+  font: 500 15px / 1.3 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.front.play .level .ls {
+  font-size: 18px;
+  font-style: italic;
+}
+
+/* The difficulty: four small lozenges, filled up to the level (a shape, not a colour). */
+.front.play .pips {
+  display: inline-flex;
+  gap: 3px;
+  margin: 0 0 6px 2px;
+}
+
+.front.play .pips i {
+  display: block;
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.front.play .pips i.on {
+  background: currentColor;
+}
+
+.front.play .tiles {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: 6px 12px;
+}
+
+.front.play .tile {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 6px 6px 7px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.front.play .tile .tl {
+  font: 500 11.5px / 1.2 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.front.play .tile:not([aria-checked='true']) .tl {
+  color: var(--ink-soft);
+}
+
+.front.play .thumb {
+  display: block;
+  flex: none;
+  width: 108px;
+  height: 66px;
+  overflow: hidden;
+  background: #0f0d0a;
+  box-shadow:
+    inset 0 1px 0 var(--cut),
+    0 1px 0 var(--line);
+}
+
+.front.play .thumb svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.front.play .thumb.rnd {
+  display: grid;
+  place-items: center;
+  color: var(--ink-dim);
+  font: 400 30px / 1 var(--font-text);
+}
+
+/* A short window: the drawer's tiles shrink. */
+@container play (max-height: 700px) {
+  .front.play .thumb {
+    width: 88px;
+    height: 54px;
+  }
+
+  .front.play .level .ls {
+    font-size: 16px;
+  }
+}
+
+/* ---- A narrow window (a phone, or a big scale on a small screen): the plinth flows ----------- */
+@container play (max-width: 899px) {
+  .front.play .foot {
+    --segw: auto;
+    --gow: 100%;
+
+    bottom: 12px;
+    max-height: calc(100cqh - 84px);
+    overflow: auto;
+  }
+
+  .front.play .plinth {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 22px 24px;
+    gap: 16px;
+  }
+
+  .front.play .plinth .end {
+    flex-wrap: wrap;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .front.play .segs {
+    flex-wrap: wrap;
+  }
+
+  .front.play .seg {
+    flex: 1 1 140px;
+  }
+
+  .front.play .segs .mk {
+    display: none;
+  }
+
+  .front.play .seg[aria-checked='true'] {
+    background: var(--frame-chosen);
+  }
+
+  .front.play .drw {
+    flex-wrap: wrap;
+    max-height: none;
+  }
+
+  .front.play .tiles {
+    grid-template-columns: repeat(auto-fill, minmax(110px, max-content));
+  }
+}
+
+/* Reduced motion (the setting of the page, #871): every move is its end state. */
+:root[data-motion='reduced'] .front.play .segs .mk,
+:root[data-motion='reduced'] .front.play .seg,
+:root[data-motion='reduced'] .front.play .seg .icons {
+  transition: none;
+}

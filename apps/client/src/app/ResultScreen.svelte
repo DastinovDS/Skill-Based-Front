@@ -202,13 +202,8 @@
         >
       </div>
     {/if}
-    <!-- DEC-34: a match that did not change the rating says why (the reason of this match). -->
-    {#if !end.rated && end.unrated_reason !== null}
-      <p class="rate unrated" role="status">
-        <span class="chip">{t('result.notRanked')}</span>
-        <span class="range">{t(`result.unrated.${end.unrated_reason}`)}</span>
-      </p>
-    {/if}
+    <!-- No rating at the MVP (#919): an unrated match says nothing about the rating. The rating
+         and the calibration above show only if the server sends them (off, GOW_RATING_ENABLED). -->
 
     <div class="acts">
       <LapisButton variant="primary" aria-keyshortcuts="Enter" onclick={onreplay}
@@ -377,10 +372,6 @@
   .range {
     color: var(--ink-dim);
     font-style: italic;
-  }
-
-  .unrated {
-    align-items: center;
   }
 
   .acts {

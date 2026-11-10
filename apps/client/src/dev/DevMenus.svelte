@@ -1,37 +1,26 @@
 <script lang="ts">
-  import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
-  import ReplaysScreen from '../board/ReplaysScreen.svelte';
   import ProfileScreen from '../board/ProfileScreen.svelte';
   import SettingsScreen from '../app/SettingsScreen.svelte';
-  import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
-  import MenuScreen from '../app/MenuScreen.svelte';
   import { Api } from '../api/http.ts';
   import CrashGuard from '../app/CrashGuard.svelte';
+  import HowToScreen from '../app/HowToScreen.svelte';
   import MatchLoading from '../app/MatchLoading.svelte';
   import MatchScreen from '../app/MatchScreen.svelte';
+  import PasswordScreen from '../app/PasswordScreen.svelte';
   import DevBoom from './DevBoom.svelte';
-  import DevDock from './DevDock.svelte';
+  import DevPlay from './DevPlay.svelte';
   import DevStyle from './DevStyle.svelte';
   import ResultScreen from '../app/ResultScreen.svelte';
   import type { MatchSummary } from '../app/matchSummary.ts';
   import type { PlayerColour } from '../protocol.gen.ts';
-  import QueueView from '../app/QueueView.svelte';
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
   import ExitDialog from '../hud/ExitDialog.svelte';
   import BootScreen from '../app/BootScreen.svelte';
   import { MENU_MAP } from '../app/menuMap.ts';
   import { freezeBackdrop } from '../app/menuCaptures.ts';
   import { isSeason, setSeasonOverride } from '../app/menuSeason.ts';
-  import { BOARD_NOW, BOARD_SCENES, isBoardScene, ME, sceneApi } from './boardScenes.ts';
-  import {
-    BAN_SECONDS,
-    CALIBRATION,
-    QUEUE_SCENES,
-    RESULT_SCENES,
-    RESULT_SUMMARY,
-    isDockScene,
-    isMenuScene,
-  } from './menuScenes.ts';
+  import { BOARD_SCENES, isBoardScene, ME, sceneApi } from './boardScenes.ts';
+  import { RESULT_SCENES, RESULT_SUMMARY, isMenuScene, isPlayScene } from './menuScenes.ts';
 
   // `?menu=<id>`: one screen before a match with fixed data (see menuScenes.ts).
   const params = new URLSearchParams(window.location.search);
@@ -47,41 +36,12 @@
   // `welcome-intro&t=2.6`: the opening scene frozen at that moment; `welcome&intro` plays it (#826).
   const introAt = Number(params.get('t') ?? '2.6');
   const nothing = (): void => undefined;
-  const handlers = {
-    oncreate: nothing,
-    onqueue: nothing,
-    onlobby: nothing,
-    onreplays: nothing,
-    onboard: nothing,
-    onhowto: nothing,
-    onbot: nothing,
-    onpassword: nothing,
-    onlogout: nothing,
-    onprofile: nothing,
-    onsettings: nothing,
-  };
   // The joining scenes: the real MatchScreen on a fetch that never answers (the map stage) or fails.
   const waiting = new Api(() => new Promise<Response>(() => undefined));
   const broken = new Api(() => Promise.reject(new TypeError('offline')));
   const board = isBoardScene(id) ? BOARD_SCENES[id] : null;
-  const tabs = {
-    onplay: nothing,
-    onreplays: nothing,
-    onboard: nothing,
-    onhowto: nothing,
-    onprofile: nothing,
-    onsettings: nothing,
-  };
-  // The pool maps of the replay cards, from the bundle: the scenes ask no server.
-  const bundled = (mapId: string) => BUNDLED_MAPS.find((m) => m.meta.name === mapId) ?? null;
-  const maps = {
-    get: bundled,
-    ensure: (mapId: string) => Promise.resolve(bundled(mapId)),
-    thumb: () => null,
-  };
-  const queue = QUEUE_SCENES[id];
   // The colour picker of the profile (DEC-49): a choice is kept at once, nothing is asked of a server.
-  let colour = $state<PlayerColour>('shell');
+  let colour = $state<PlayerColour>('lapis');
   const pickColour = (next: PlayerColour): Promise<null> => {
     colour = next;
     return Promise.resolve(null);
@@ -95,15 +55,7 @@
 {#if id === 'style'}
   <DevStyle part="sheet" />
 {:else if id === 'style-overlay'}
-  <MenuScreen
-    {map}
-    nick="Ember"
-    notice={null}
-    hasPassword
-    calibration={null}
-    rating={1480}
-    {...handlers}
-  />
+  <DevPlay id="menu-account" {map} />
   <DevStyle part="overlay" />
 {:else if id === 'welcome' || id === 'welcome-notice' || id === 'welcome-invited' || id === 'welcome-intro'}
   <WelcomeScreen
@@ -116,8 +68,18 @@
     onlogin={() => Promise.resolve(null)}
     onregister={() => Promise.resolve(null)}
   />
-{:else if isDockScene(id)}
-  <DevDock {id} {map} />
+{:else if isPlayScene(id)}
+  <DevPlay {id} {map} />
+{:else if id === 'howto'}
+  <HowToScreen nick="Ember" hasPassword={false} {map} onprofile={nothing} onback={nothing} />
+{:else if id === 'password-set' || id === 'password-change'}
+  <PasswordScreen
+    nick="Ember"
+    hasPassword={id === 'password-change'}
+    {map}
+    onsubmit={() => Promise.resolve(null)}
+    onback={nothing}
+  />
 {:else if board !== null && board.mode === 'profile'}
   <ProfileScreen
     api={sceneApi(board)}
@@ -125,8 +87,6 @@
     ownId={ME}
     nick="Ember"
     hasPassword={board.hasPassword}
-    calibration={board.calibration}
-    rating={board.rating}
     {map}
     onwatch={nothing}
     onbot={nothing}
@@ -136,54 +96,22 @@
       )}
     {colour}
     oncolour={pickColour}
+    onsettings={nothing}
     onpassword={nothing}
     onlogout={nothing}
+    onhelp={nothing}
     onback={nothing}
-    {...tabs}
   />
-{:else if board !== null && board.mode === 'settings'}
+{:else if board !== null}
   <SettingsScreen
     nick="Ember"
     hasPassword={board.hasPassword}
-    calibration={board.calibration}
-    rating={board.rating}
     {map}
+    onprofile={nothing}
+    onhowto={nothing}
     onpassword={nothing}
     onlogout={nothing}
     onback={nothing}
-    {...tabs}
-  />
-{:else if board !== null && board.mode === 'history'}
-  <ReplaysScreen
-    api={sceneApi(board)}
-    token="dev"
-    ownId={ME}
-    nick="Ember"
-    hasPassword={board.hasPassword}
-    calibration={board.calibration}
-    rating={board.rating}
-    {map}
-    {maps}
-    now={() => BOARD_NOW}
-    onwatch={nothing}
-    onbot={nothing}
-    onpassword={nothing}
-    onlogout={nothing}
-    {...tabs}
-  />
-{:else if board !== null}
-  <LeaderboardScreen
-    api={sceneApi(board)}
-    token="dev"
-    ownId={ME}
-    nick="Ember"
-    hasPassword={board.hasPassword}
-    calibration={board.calibration}
-    rating={board.rating}
-    {map}
-    onpassword={nothing}
-    onlogout={nothing}
-    {...tabs}
   />
 {:else if result !== undefined}
   <ResultScreen
@@ -221,59 +149,10 @@
   <CrashGuard onexit={nothing} onreload={nothing}><DevBoom /></CrashGuard>
 {:else if id === 'boot'}
   <BootScreen {map} delay={0} />
-{:else if id === 'exit-rated'}
+{:else}
   <div class="stage">
     <ExitDialog open rated banSeconds={300} onforfeit={nothing} onstay={nothing} />
   </div>
-{:else if queue !== undefined}
-  <QueueView
-    {map}
-    status={queue}
-    nick="Ember"
-    failure={null}
-    busy={false}
-    {...{ onconfirm: nothing, onleave: nothing, onbot: nothing }}
-  />
-{:else if id === 'menu-resume'}
-  <MenuScreen
-    {map}
-    nick="Ember"
-    notice={null}
-    hasPassword
-    calibration={CALIBRATION}
-    hasActiveMatch
-    {...handlers}
-  />
-{:else if id === 'menu-banned'}
-  <MenuScreen
-    {map}
-    nick="Ember"
-    notice={null}
-    hasPassword
-    calibration={CALIBRATION}
-    banUntil={BAN_SECONDS * 1000}
-    now={() => 0}
-    {...handlers}
-  />
-{:else if id === 'menu-error'}
-  <MenuScreen
-    {map}
-    nick="Ember"
-    notice="error.api.network"
-    hasPassword
-    calibration={null}
-    {...handlers}
-  />
-{:else}
-  <MenuScreen
-    {map}
-    nick="Ember"
-    notice={null}
-    hasPassword={id !== 'menu-guest'}
-    calibration={id === 'menu-calibration' ? CALIBRATION : null}
-    rating={id === 'menu-ranked' ? 1480 : null}
-    {...handlers}
-  />
 {/if}
 
 <style>

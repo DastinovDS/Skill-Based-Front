@@ -598,7 +598,11 @@ for (const id of MENU_SCENES) {
     if (id === 'welcome-intro') await expect(page.locator('[data-intro="frozen"]')).toHaveCount(1);
     const press = DOCK_CLICKS[id];
     if (press !== undefined) {
-      await page.locator('.panel').getByRole('button', { name: press }).first().click();
+      for (const name of press)
+        await page
+          .getByRole(name === 'Random map' ? 'radio' : 'button', { name, exact: true })
+          .first()
+          .click();
     }
     await page.mouse.move(1000, 700);
     await page.screenshot({ path: join(OUT, `screen-${id}.png`) });
@@ -636,7 +640,7 @@ test('shot of the status bar failed at phone width', async ({ page }) => {
 for (const outcome of ['saved', 'mismatch'] as const) {
   test(`shot of the password screen (${outcome})`, async ({ page }) => {
     await page.goto('/?menu=password-change');
-    await expect(page.locator('.front .panel')).toBeVisible();
+    await expect(page.locator('.front .pw')).toBeVisible();
     await page.getByLabel('Current password').fill('old-password-123');
     await page.getByLabel('New password').fill('new-password-456');
     await page
@@ -763,16 +767,12 @@ for (const [name, link] of [
   });
 }
 
-// The account menu (`screen-account-menu.png`), then the log-out dialog of a guest without a
-// password on the blurred stone (#845, `screen-account-logout.png` and grey).
-test('shot of the account menu and the log-out dialog', async ({ page }) => {
-  await page.goto('/?menu=menu-guest');
+// The log-out dialog of a guest without a password on the blurred stone, from the quiet link of
+// the profile (#919; `screen-account-logout.png` and grey), with the danger button hovered.
+test('shot of the log-out dialog', async ({ page }) => {
+  await page.goto('/?menu=profile-guest');
   await page.evaluate('document.fonts.ready.then(() => true)');
-  await page.locator('button.who').click();
-  await expect(page.getByRole('menu')).toBeVisible();
-  await page.mouse.move(600, 700);
-  await page.screenshot({ path: join(OUT, 'screen-account-menu.png') });
-  await page.getByRole('menuitem', { name: 'Log out' }).click();
+  await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
   await page.mouse.move(1000, 700);
   await page.screenshot({ path: join(OUT, 'screen-account-logout.png') });
@@ -804,16 +804,58 @@ test('shot of the nick dialog and of the interface scale', async ({ page }) => {
   await page.getByRole('radio', { name: '100%' }).click();
 });
 
+// The main screen at the three sizes of the mockup (#919): nothing may leave the plinth or its
+// frame, `screen-<id>-<w>x<h>.png`.
+for (const size of [
+  { width: 1280, height: 720 },
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
+]) {
+  for (const id of [
+    'menu-friend',
+    'bot-starting',
+    'queue-search',
+    'invite-link',
+    'invite-you-ready',
+    'profile',
+  ] as const) {
+    test(`shot of the plinth ${id} at ${String(size.width)}x${String(size.height)}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await page.goto(`/?menu=${id}`);
+      await expect(page.locator('.front .backdrop[data-map="ready"]')).toBeVisible();
+      await page.evaluate('document.fonts.ready.then(() => true)');
+      for (const name of DOCK_CLICKS[id] ?? []) {
+        await page.getByRole('button', { name, exact: true }).first().click();
+      }
+      await page.mouse.move(5, 5);
+      await page.screenshot({
+        path: join(OUT, `screen-${id}-${String(size.width)}x${String(size.height)}.png`),
+      });
+    });
+  }
+}
+
+// The forfeit dialog with the danger button hovered: the hatch has inked in (#919, danger A).
+test('shot of the forfeit dialog with the danger button hovered', async ({ page }) => {
+  await page.goto('/?menu=exit-rated');
+  await page.evaluate('document.fonts.ready.then(() => true)');
+  await page.getByRole('button', { name: 'Forfeit and leave' }).hover();
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: join(OUT, 'screen-exit-hover.png') });
+});
+
 for (const size of [
   { width: 1024, height: 640 },
   { width: 800, height: 500 },
   { width: 1920, height: 1080 },
 ]) {
   for (const id of [
-    'menu-calibration',
+    'menu-guest',
     'queue-found',
-    'lobby-list',
-    'bot-choose',
+    'queue-drawing',
+    'menu-bot',
     'invite-joined',
   ] as const) {
     test(`shot of the screen ${id} at ${String(size.width)}x${String(size.height)}`, async ({

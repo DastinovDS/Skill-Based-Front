@@ -4,9 +4,6 @@ import { expect } from '@playwright/test';
 import type { MapFile } from '../../apps/client/src/protocol.gen.ts';
 import { Player } from './player.ts';
 
-/** The map the invite tests play on: a map of the server pool (`maps/*.json`, DEC-27). */
-export const MAP_ID = 'ridge';
-
 /** A nick that no other test (or an earlier run against the same stack) used: 3 to 16 characters. */
 export function nick(prefix: string): string {
   return `${prefix}_${randomBytes(4).toString('hex')}`.slice(0, 16);
@@ -27,14 +24,18 @@ export async function startInviteMatch(browser: Browser, baseURL: string): Promi
   const guest = await Player.create(browser, baseURL, nick('guest'));
 
   await host.enter();
-  const link = await host.createInvite(MAP_ID);
+  const link = await host.createInvite();
 
   // The invite link opens on the nick form ("You were invited"), then the waiting room.
   await guest.enter(link);
+  const code = new URL(link).searchParams.get('m') ?? '';
   await Promise.all([host.pressReady(), guest.pressReady()]);
   await Promise.all([host.expectPlaying(), guest.expectPlaying()]);
+  // The map is made for the invite (#884, #919): its id is final once the match runs (a pool map
+  // takes the place of one that could not be made).
+  const mapId = await host.inviteMap(code);
 
-  const response = await host.page.request.get(`/api/maps/${MAP_ID}`);
+  const response = await host.page.request.get(`/api/maps/${encodeURIComponent(mapId)}`);
   expect(response.ok()).toBe(true);
   return { host, guest, map: (await response.json()) as MapFile };
 }

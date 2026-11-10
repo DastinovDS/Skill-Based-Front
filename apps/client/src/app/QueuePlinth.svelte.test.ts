@@ -2,7 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api, ApiError, type QueueStatus } from '../api/http.ts';
 import { setLocale, translate } from '../i18n/index.ts';
-import QueueScreen from './QueueScreen.svelte';
+import QueuePlinth from './QueuePlinth.svelte';
 
 const searching = (over: Partial<QueueStatus> = {}): QueueStatus => ({
   state: 'searching',
@@ -17,7 +17,7 @@ const searching = (over: Partial<QueueStatus> = {}): QueueStatus => ({
 const found = (over: Partial<QueueStatus> = {}): QueueStatus =>
   searching({ state: 'found', opponent_nick: 'bob', confirm_in_s: 14.2, ...over });
 
-describe('QueueScreen', () => {
+describe('QueuePlinth: the search on the plinth (#919)', () => {
   let component: Record<string, unknown> | undefined;
   beforeEach(() => {
     vi.useFakeTimers();
@@ -44,11 +44,13 @@ describe('QueueScreen', () => {
       onbanned?: (seconds: number) => void;
     } = {},
   ): void {
-    component = mount(QueueScreen, {
+    component = mount(QueuePlinth, {
       target: document.body,
       props: {
         api: api as Api,
         token: 't',
+        nick: 'Me',
+        onbackdrop: vi.fn(),
         onstart: handlers.onstart ?? vi.fn(),
         onbot: handlers.onbot ?? vi.fn(),
         onleave: handlers.onleave ?? vi.fn(),
@@ -144,6 +146,16 @@ describe('QueueScreen', () => {
     await settle();
     expect(confirmQueue).toHaveBeenCalledWith('t');
     expect(onstart).toHaveBeenCalledWith('7', 'pass');
+  });
+
+  it('says the map is being drawn once both confirmed and the match is not there yet (#926)', async () => {
+    render({
+      joinQueue: () =>
+        Promise.resolve(found({ you_confirmed: true, opponent_confirmed: true, confirm_in_s: 0 })),
+    });
+    await settle();
+    expect(document.body.textContent).toContain(translate('en', 'wait.drawing'));
+    expect(document.body.textContent).not.toContain('Waiting for bob');
   });
 
   it('goes back to the menu when dropped from the queue', async () => {
