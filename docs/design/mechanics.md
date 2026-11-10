@@ -4065,6 +4065,10 @@ Proposal (each item is a default for the owner to confirm or change):
    language of details thinning at an edge), faint flow streaks on rivers (removed by the owner on 2026-10-30, #585:
    they read as rendering artifacts), wooden bridges. The owner border line
    runs along a coast where the territory ends at water, and not along a river between two areas of one owner.
+   Where the border leaves the water (a river ends between two areas of the owner and a third, the far bank of a
+   river changes hands, a pond at a junction, a river runs off the map), the line goes on as one line without a gap,
+   jump or stub: round the end of the water along the owner's own bank when that is short, else straight across
+   the water to where the land border goes on (owner 2026-11-10, #928; a presentation rule, no game rule).
 7. **What does not change.** The graph, the roads and their levels, `travel_ticks`, `border_permille`, capacities,
    supply, vision (DEC-21, DEC-35), fights, the ruleset, `PlayerView`, the protocol, `SIM_VERSION`,
    `PROTOCOL_VERSION`, the map file `maps/<id>.json` and its loader (water is not a field of the map file). The

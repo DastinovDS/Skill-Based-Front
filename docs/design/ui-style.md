@@ -2101,6 +2101,20 @@ the water (shallows), never darker on the land, and the client (step 2, #544) dr
 land areas. Reeds stay sparse and muted so they never line up into a dark edge. The open questions of #537 take
 the DEC-36 defaults (long rivers with bridges, about 20 percent water, fixtures without water, before the release).
 
+**One line where the border leaves the water (owner 2026-11-10, #928).** The owner border runs along the own bank of
+water where the territory ends there, and not along a river between two areas of one owner (DEC-36, item 6). Where
+the two meet, the line used to stop at the bank and start again on the land border with water between: a gap with a
+stub on each side, a dark blob of water at the tip of a river. Now the territory border reads as one continuous line
+(`ownerLines` in `render/regionLayout.ts`): every loose end of an owner's line by water is joined to another one of
+the same owner that left the same water, round the end of the water along the owner's own bank when that is short
+(a river's tip, a pond at a junction), else straight across the water (a far bank that changes hands, a river mouth)
+or, where a corner of another owner's land reaches into that line, along its bank on the water side; an end whose
+water runs off the map goes on to the frame. A short piece of the line along water left with two loose ends (a bank
+that looked across at another owner while the owner's own banks close it round) is dropped, and a straight join that
+would turn back along the bank it starts from cuts that bank back first, so there is no spike. All four engraved lines
+(cut, rule, the own second rule, the enemy beads) take the same joins at their insets; the Border band still stops at
+water.
+
 ---
 
 ## 40. Supply mode panel, order travel time, city menu icons (#627)
