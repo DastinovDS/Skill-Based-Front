@@ -55,7 +55,9 @@ from gow_sim.maps import MapDef, Terrain
 
 STEP = 4  # world units per sampled cell (prototype MapGenerator.STEP)
 SNOW_MOISTURE = 0.7  # mountain cells this moist are snow (prototype: cold and moist is snow)
-WARP = 40.0  # world units: how far the borders between node areas wander
+# World units: how far the borders between node areas wander. 24 since #919, item 11 (it was 40):
+# with the slower fade of ``gow_maps.geo.WARP_FADE`` the warp no longer folds (no hooks).
+WARP = 24.0
 
 WEBP_QUALITY = 85
 MAX_WEBP_BYTES = 500_000  # #344: every background file is at most 0.5 MB

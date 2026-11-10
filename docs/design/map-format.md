@@ -123,7 +123,8 @@ The computed geometry (`maps/geo/<id>.json`), written by the baker (compact JSON
 
 **The baker** (`gow-maps bake`, still numpy and Pillow; for a map with `maps/src/<id>.geo.json`): computes the label
 grid of item 2 of DEC-36 (nearest site: a node with its road halves plus 18 units, or a water cell; the warp of
-`_Noise.warp` fading near roads; a water cell never comes closer than 34 units to a road nor 60 to a node), cuts a
+`_Noise.warp` (amplitude `bake.WARP`, 24 units) fading near roads (`geo.WARP_FADE`: none within 6 units of a road, full
+from 140; a water cell never comes closer than 34 units to a road nor 60 to a node), cuts a
 stream on every border of two node areas without a road (half width 4.5 units, up to 9 next to water), turns the land
 contacts left over into stream cells, routes the long rivers along area borders (Dijkstra over the cells near a
 border and at least 40 units from every node), turns land pieces cut off from their node into the water around them,
@@ -137,6 +138,16 @@ geography on `ridge`: about 1 s for the geography, 4 to 6 s for the picture). `t
 a committed vector file with a fresh bake by its structure (the head, the bridges, the pairs of regions with a shared
 border), not byte by byte: the labels come from floating-point noise, and a cell at a tie may flip between numpy
 builds; the picture with the tolerance of today.
+
+**Calmer borders (#919, item 11, the owner's option B of 2026-11-10).** The warp was 40 units fading over 6 to 70
+units from a road: the steep fade bent every border into an S next to a road (a radius of 15 to 20 units), and the warped
+grid folded (the Jacobian of `(x, y) + fade * warp` at or below 0) in 0.13 to 0.8% of the cells of the maps with a
+geography, which drew hooks on the borders (smallest Jacobian -0.12 to -0.45). Now 24 units fading over 6 to 140: no fold
+on any committed map (smallest Jacobian 0.27 to 0.48). One global change, no map field; `WARP` also warps the biome
+areas of the maps without a geography (the fixtures). Every committed map was rebaked (backgrounds, thumbnails, vector
+files, previews) and passes `maps:validate`. `GENERATOR_VERSION` stays 1: `generate(seed)` never reads the warp (its map
+and authored geography of a seed are the same), the warp only moves the baked borders and so may change which seed passes
+the check `geography` after the bake; the stored `maps/gen/` maps all still pass.
 
 **The validator:** a new check `geography`, on for a map that has `maps/src/<id>.geo.json` (the fixtures and the
 current pool without one are not checked):
