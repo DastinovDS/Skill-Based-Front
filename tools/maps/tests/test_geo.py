@@ -142,6 +142,51 @@ class _StubMap:
         self.nodes = nodes
 
 
+# ---- water wide enough to draw (#928, item 3) --------------------------------------------------
+def test_a_cut_one_cell_wide_becomes_three_except_next_to_a_road_or_a_node() -> None:
+    r = geo.RIVER
+    labels = np.array([[0, 0, 0, r, 1, 1, 1]] * 4, dtype=np.int32)
+    keep = np.zeros(labels.shape, np.bool_)
+    keep[3, 2] = True  # next to a road: stays land
+    out = geo.widen_thin_water(labels, keep)
+    assert out[:3].tolist() == [[0, 0, r, r, r, 1, 1]] * 3
+    assert out[3].tolist() == [0, 0, 0, r, r, 1, 1]
+    # Three cells across is wide enough: nothing more is taken.
+    assert (geo.widen_thin_water(out[:3], keep[:3]) == out[:3]).all()
+    assert not geo.thin_water(out[:3]).any()
+
+
+def test_rivers_and_streams_are_three_cells_wide_away_from_roads_and_nodes(
+    tmp_path: Path, config: ValidatorConfig
+) -> None:
+    for path in (_diamond(tmp_path, SEA_AND_RIVER), RIDGE):
+        mapdef, g = _computed(path)
+        thin = np.argwhere(geo.thin_water(g.labels))
+        far: list[tuple[int, int]] = []
+        for r, c in thin:
+            x, y = c * STEP + STEP / 2, r * STEP + STEP / 2
+            node = min(math.hypot(x - n.x, y - n.y) for n in mapdef.nodes)
+            road = min(
+                _seg_distance((x, y), mapdef.nodes[e.a], mapdef.nodes[e.b]) for e in mapdef.edges
+            )
+            # A cell within reach of a kept cell may stay thin (one widening, a cell diagonal).
+            near = STEP * 2 * math.sqrt(2)
+            if road >= geo.WIDEN_CLEAR[0] + near and node >= geo.WIDEN_CLEAR[1] + near:
+                far.append((int(r), int(c)))
+        # Elsewhere only a lone tooth of a staircase bank may count as thin (the opening of a
+        # cross misses it), never a run of cells: no water narrower than three cells is left.
+        for r, c in far:
+            assert not {(r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)} & set(far), (r, c)
+        assert len(far) * 200 <= int((g.labels == geo.RIVER).sum())
+        assert check_geography(mapdef, g, config) == []
+
+
+def _seg_distance(p: tuple[float, float], a: Any, b: Any) -> float:
+    dx, dy = b.x - a.x, b.y - a.y
+    t = max(0.0, min(1.0, ((p[0] - a.x) * dx + (p[1] - a.y) * dy) / (dx * dx + dy * dy)))
+    return math.hypot(p[0] - a.x - t * dx, p[1] - a.y - t * dy)
+
+
 # ---- long rivers and bridges (item 4) ----------------------------------------------------------
 def test_example_6_a_long_river_passes_a_road_at_its_border_point_a_bridge(
     tmp_path: Path, config: ValidatorConfig

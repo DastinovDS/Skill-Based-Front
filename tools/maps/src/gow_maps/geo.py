@@ -13,6 +13,10 @@ world units per cell), the label of every cell (``compute``):
   (item 3); land contacts that are left are turned into stream cells;
 * long rivers run along area borders from a spring to the water (item 4); where one passes a road
   it does so at the border point of the road: a bridge (a picture, no rule);
+* water narrower than ``WIDE_WATER`` cells (a stream next to its spring, a long river near its
+  spring, a cut of a land contact) is widened into the land beside it, off the roads and the
+  nodes: thinner water blurs into a faint smudge in the picture while the vector file still has
+  two banks there, and the owner borders along it look cut (#928, item 3);
 * a land piece cut off from its node becomes the water around it (no slivers, no exclaves).
 
 From the labels: the vector file ``maps/geo/<id>.json`` (``vector_file``: shared border chains,
@@ -66,6 +70,12 @@ RIVER_BAND = 2.2 * STEP  # a long river may run on cells this close to an area b
 RIVER_NODE_GAP = 40.0  # a long river keeps this far from every node
 CONTACT_PASSES = 6  # passes that turn left-over land contacts into stream cells
 CHAIN_EPS = 3.0  # Ramer-Douglas-Peucker tolerance of the vector chains
+# Water is at least this many cells across (#928, item 3): a cut one or two cells wide comes out of
+# the blur of ``render`` (``EDGE_ROUND``) as a faint smudge, while the client draws the owner
+# borders along its two banks, so the border looked cut along it. Three cells (12 world units)
+# keep full water at the middle, a clear band of about 12 px.
+WIDE_WATER = 3
+WIDEN_CLEAR = (6.0, 30.0)  # the widening keeps off a road and a node this far (world units)
 BRIDGE_REACH = 24.0  # a road may cross water this close to a bridge of its own (validator)
 
 WaterKind = Literal["sea", "lake"]
@@ -265,6 +275,51 @@ def components(mask: Mask) -> tuple[Labels, int]:
 def is_water(labels: Labels) -> Mask:
     """Cells of water cells, rivers and streams."""
     return labels >= RIVER
+
+
+def _erode(mask: Mask) -> Mask:
+    """Cells of ``mask`` whose four neighbours are in it too (outside the grid counts as in)."""
+    out = mask.copy()
+    out[1:] &= mask[:-1]
+    out[:-1] &= mask[1:]
+    out[:, 1:] &= mask[:, :-1]
+    out[:, :-1] &= mask[:, 1:]
+    return out
+
+
+def _dilate(mask: Mask) -> Mask:
+    """``mask`` and the four neighbours of its cells."""
+    out = mask.copy()
+    out[1:] |= mask[:-1]
+    out[:-1] |= mask[1:]
+    out[:, 1:] |= mask[:, :-1]
+    out[:, :-1] |= mask[:, 1:]
+    return out
+
+
+def thin_water(labels: Labels) -> Mask:
+    """River and stream cells in a part of the water narrower than ``WIDE_WATER`` cells: not
+    covered by the opening of the water (``WIDE_WATER // 2`` erosions, as many dilations)."""
+    water = is_water(labels)
+    wide = water
+    for _ in range(WIDE_WATER // 2):
+        wide = _erode(wide)
+    for _ in range(WIDE_WATER // 2):
+        wide = _dilate(wide)
+    return (labels == RIVER) & ~wide
+
+
+def widen_thin_water(labels: Labels, keep: Mask) -> Labels:
+    """The land next to thin water (``thin_water``) turned into stream cells, except the cells of
+    ``keep`` (next to a road or a node): once, so a cut one cell wide becomes three. Land only
+    becomes water, so no new land contact appears; an area cut in two is mended by
+    ``fill_islands`` after it."""
+    thin = thin_water(labels)
+    grow = thin
+    for _ in range(WIDE_WATER // 2):
+        grow = _dilate(grow)
+    grow &= (labels < RIVER) & ~keep
+    return np.where(grow, RIVER, labels).astype(np.int32)
 
 
 def road_pairs(mapdef: MapDef) -> set[tuple[int, int]]:
@@ -504,6 +559,7 @@ def compute(mapdef: MapDef, spec: GeoSpec, seed: int | None = None) -> Geography
         if not bad.any():
             break
         labels = np.where(bad, RIVER, labels).astype(np.int32)
+    labels = widen_thin_water(labels, (droad < WIDEN_CLEAR[0]) | (dnode < WIDEN_CLEAR[1]))
     fill_islands(labels, mapdef)
 
     bridges: list[Bridge] = []

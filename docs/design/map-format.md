@@ -149,6 +149,18 @@ files, previews) and passes `maps:validate`. `GENERATOR_VERSION` stays 1: `gener
 and authored geography of a seed are the same), the warp only moves the baked borders and so may change which seed passes
 the check `geography` after the bake; the stored `maps/gen/` maps all still pass.
 
+**Water at least three cells wide (#928, item 3).** A stream next to its spring (half width 4.5 units), a long river at
+its spring (half width 3.5 on the generated maps) and a cut of a left-over land contact came out one or two cells wide:
+the blur that rounds the water off (`geo.EDGE_ROUND`) left a faint smudge of it in the picture, while the vector file
+still had two banks there, so the client drew the owner borders along both banks with no clear water between them and
+the border looked cut. 7 to 38% of the river and stream cells of the committed maps were in such parts. Now, after the
+contact cuts and before the cut-off land pieces are mended, every river or stream cell outside the opening of the water
+by `geo.WIDE_WATER` (3) cells takes the land next to it, one cell to each side, except within 6 units of a road (it
+stays land, and so the land contact of a road pair) or 30 of a node (`geo.WIDEN_CLEAR`); land only becomes water, so no
+new land contact appears. Afterwards under 1% of those cells stay thinner (next to a road or a node). Every committed map
+with a geography was rebaked; `GENERATOR_VERSION` stays 1 for the reason above (the widening is in the bake, not in
+`generate(seed)`).
+
 **The validator:** a new check `geography`, on for a map that has `maps/src/<id>.geo.json` (the fixtures and the
 current pool without one are not checked):
 
