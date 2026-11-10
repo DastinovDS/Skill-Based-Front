@@ -73,6 +73,11 @@
     if (import.meta.env.DEV && id === 'dev-fog') {
       return parseReplay((await import('./siege-fog.frames.json')).default);
     }
+    // `?replay=dev-buildings`: a recording with factories, barracks, builds, queues, fortifications
+    // and rally points (#905), format 2 with the header `rules`.
+    if (import.meta.env.DEV && id === 'dev-buildings') {
+      return parseReplay((await import('./siege-buildings.frames.json')).default);
+    }
     // `?replay=dev-preparing`: the server keeps answering 202, the wait never ends (#593).
     if (import.meta.env.DEV && id === 'dev-preparing') {
       onPreparing();

@@ -9,9 +9,9 @@ show the match "as player 1" or "as player 2" without computing vision (`AGENTS.
 every frame also carries **the buildings** of both players (the keys `c` and `d`, section
 "Buildings"), and `v` the enemy buildings each player's view showed.
 
-Code: `gow_server.frames` (`build_frames`, `FORMAT`). The format version: the field `format` (now `1`;
-`2` once the viewer of #905 reads the buildings, section "Format change"); the client must reject a
-file with an unknown `format`.
+Code: `gow_server.frames` (`build_frames`, `FORMAT`). The format version: the field `format` (now `2`,
+since the viewer of #905 reads the buildings, section "Format change"); the client reads `1` and `2`
+and must reject a file with any other `format`.
 
 ## Where it comes from
 
@@ -56,10 +56,12 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
 
 ```json
 {
-  "format": 1, "sim_version": 1, "ruleset_hash": "...", "map_id": "artery", "map_hash": "...",
+  "format": 2, "sim_version": 1, "ruleset_hash": "...", "map_id": "artery", "map_hash": "...",
   "tick_hz": 10, "frame_every": 5, "ticks": 9000,
   "outcome": {"winner": 0, "reason": "vp"}, "vp": [31, 24], "state_hash": "...",
   "nicks": ["Ember", "Bot (normal)"],
+  "rules": {"unit_ticks": 30, "queue_max": 3, "barracks_ticks": 100, "barracks_charges": 3,
+            "factory_ticks": 100, "factory_charges": 4, "fort_ticks": 100},
   "map": { ...map format, docs/design/map-format.md... },
   "frames": [ {"t": 0, ...}, {"t": 5, ...}, ... ],
   "events": [ [1, "recruit", {"node": 3, "owner": 0}], ... ]
@@ -76,6 +78,12 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
   the `match_players` rows before the build; no key when the match has no row with both sides
   (files from before #598, a match without a database row). The nicks are not a secret: both
   players see them in `welcome` (`ui-style.md` section 15).
+- `rules` (format 2, #905): the rule numbers the viewer draws the buildings with, from the rules the
+  match played (`gow_server.frames.viewer_rules`; map tempo applied): `unit_ticks` and `queue_max` of
+  the recruit queue (DEC-25), `barracks_ticks` and `barracks_charges` (DEC-26), `factory_ticks` and
+  `factory_charges` (DEC-41), `fort_ticks` (DEC-43, item D). The viewer fills the time bars of the
+  builds and of the queue with them and decides nothing else by them (`AGENTS.md` 7.1). Files
+  without the key (format 1) are drawn without time bars.
 - `map`: the whole map (the same format as `maps/*.json`), the static graph for rendering. The file is
   self-contained: editing `maps/` does not affect it (`map_hash` is for reference). The map in the file is in the format
   that was current at the time of recording: files from before #366 have no `name` and `border_permille` (they had
@@ -268,9 +276,27 @@ every frame has a sound one; a file without it (the samples `siege.frames.json` 
 predate #598) shows a side as the full map, the toggle unavailable. In a dev build `/?replay=dev-fog` plays
 `siege-fog.frames.json`, a recording with `v` and `nicks`.
 
-The buildings (`c` and `d`, #905) are not drawn yet: the viewer ignores the keys until the client part
-of #905, which draws them with the live looks (section "Buildings" says what a side sees) and raises
-`format` (section "Format change"). The three samples predate #905 and have no buildings.
+The buildings (`c` and `d`, #905) are drawn with the live looks, `timeline.ts` turning them into the
+`NodeView` and `EdgeView` fields the live renderer already draws (no new look, no game rule in the
+client). In the **full view** of both players: a factory (the tower on the city ring) and a barracks
+(its tower) of either owner; a factory build and a barracks build (`[done_tick, owed]`: the plan with
+its lozenges while `owed` is above 0, then the time filling the Crown arc, by `rules.*_ticks`); the
+recruit queue as the small helmets after the barracks tower with the progress of the current unit
+(`rules.unit_ticks`); the rally point of a city as the muster ring (DEC-48, E3) in the colour of the
+city's owner, with the chevron on the city ring; a road fortification at the border point of the
+road, an own wall a battlement and an enemy one a palisade, a build growing from its gate by
+`rules.fort_ticks`. In **"View as" a side with the Fog toggle on**: its own buildings as above
+(`c` and `d` by the owner in `n[i][0]`), and of the enemy only `v[side].c` (a built factory and
+barracks of a city joined to an own node, as the two towers) and `v[side].d` (a wall, built or being
+built, without a growing build); never an enemy build, queue or rally point, and an enemy city that
+`v[side].c` does not list shows no tower at all (unknown, not "without"). A file without `c` and `d`
+(format 1 from before #905, the samples `dev`, `dev-fights` and `dev-fog`) shows no buildings. In a
+dev build `/?replay=dev-buildings` plays `siege-buildings.frames.json`: smart_rusher against
+smart_expander on `siege` under `mvp-7` (1000 ticks, player 1 forfeits), format 2 with the header
+`rules`, with the capitals, factory and barracks builds with charges still owed (the sample's
+economy is too slow to finish one), recruit queues, built and growing fortifications and rally
+points, recorded with `build_frames` and the scripted builder of
+`apps/server/tests/test_frames_buildings.py`; it has `v` and `nicks`, so every "View as" works on it.
 
 Loading: `loadReplayWhenReady` (`loadReplay.ts`) repeats the request while the server answers `202`
 (pauses of 2 s, 3 s, 4.5 s, then 5 s; no longer than 5 minutes, then the error "The replay is taking too long to prepare"), and
@@ -294,14 +320,15 @@ Any incompatible edit: a new `format`, and the server can write only the current
 disk stay; the viewer client supports the versions that occur in `data/replays/`.
 
 **Format 2 (#905, the buildings).** The keys `c` and `d` (of a frame and of `v`) are a compatible
-addition, and the server writes them since the server part of #905 still with `format` 1: the viewer
-of today accepts only `format` 1 (`REPLAY_FORMAT` in `replayFile.ts`) and would refuse every new
-replay until its own part lands. The client part of #905 raises it in one change on both sides:
-`FORMAT = 2` in `gow_server.frames` and a viewer that reads `format` 1 and 2. Then:
+addition, and the server wrote them under `format` 1 from the server part of #905 until the client
+part: the viewer of that time accepted only `format` 1 and would have refused every new replay. The
+client part raised it in one change on both sides: `FORMAT = 2` in `gow_server.frames`, the header
+key `rules` (the numbers of the time bars, an addition of the client part) and a viewer that reads
+`format` 1 and 2 (`READABLE_FORMATS` in `replayFile.ts`). Then:
 
 - a `format` 2 file always carries the buildings (the capitals are factories with a barracks, so `c`
   is in every frame), and the viewer draws them;
-- a `format` 1 file plays as before: the viewer reads no buildings from it and draws none, whether it
-  is from before #905 (no `c` or `d` anywhere) or from between the two parts of #905 (it has them;
-  showing them is allowed, they follow the same rules, but not required);
+- a `format` 1 file plays as before: from before #905 (no `c` or `d` anywhere) it shows no buildings;
+  one written between the two parts of #905 has the keys and the viewer draws them by the same rules
+  (without the header `rules` the barracks have no time bars and the queue no helmets' progress);
 - old files are never rewritten (out of scope of #905).

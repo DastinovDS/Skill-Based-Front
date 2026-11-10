@@ -9,8 +9,8 @@
  */
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
 import type { EventMsg, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
-import type { RenderSource } from '../render/source.ts';
-import { hasVision, type ReplayFile } from './replayFile.ts';
+import type { CityDevelopment, RenderSource } from '../render/source.ts';
+import { hasBuildings, hasVision, type ReplayFile } from './replayFile.ts';
 import { buildTimeline, type Timeline } from './timeline.ts';
 
 /** Playback speeds of the controls. */
@@ -25,6 +25,16 @@ export class ReplayPlayer implements RenderSource {
   /** The last tick of the match. */
   readonly duration: number;
   readonly outcome: ReplayFile['outcome'];
+  /**
+   * The rule numbers of the buildings (#905): the time bars and prices of the builds, the recruit
+   * queue and the fortification, from the file header. A file without buildings has none of them,
+   * so it is drawn as before; a file with buildings but no header (written between the two parts
+   * of #905) draws the barracks without time bars.
+   */
+  readonly recruitTicks?: number;
+  readonly recruitQueueMax?: number;
+  readonly cityUpgrades?: CityDevelopment;
+  readonly fortBuildTicks?: number;
   readonly #file: ReplayFile;
   /** The full reveal, then the fog of player 0 and of player 1 once asked for (#600). */
   readonly #timelines = new Map<PlayerId | null, Timeline>();
@@ -43,6 +53,24 @@ export class ReplayPlayer implements RenderSource {
     this.duration = file.frames.at(-1)?.t ?? 0;
     this.outcome = file.outcome;
     this.#file = file;
+    if (hasBuildings(file)) {
+      const rules = file.rules;
+      this.cityUpgrades = {
+        barracks: rules?.barracks_ticks ?? 0,
+        ...(rules === undefined
+          ? {}
+          : {
+              factory: rules.factory_ticks,
+              barracksCharges: rules.barracks_charges,
+              factoryCharges: rules.factory_charges,
+            }),
+      };
+      if (rules !== undefined) {
+        this.recruitTicks = rules.unit_ticks;
+        this.recruitQueueMax = rules.queue_max;
+        this.fortBuildTicks = rules.fort_ticks;
+      }
+    }
     this.#timeline = buildTimeline(file);
     this.#timelines.set(null, this.#timeline);
     this.#now = now;
