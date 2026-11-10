@@ -14,7 +14,8 @@ Terms, per player ``p`` and over **internal roads** (both ends ``p``'s):
   leaves (item A2); every own node has one;
 - the **leaf level** ``k`` of a component: the player's shift (``PlayerState.leaf_shift``) for the
   component of the own capital, 0 for every other one (item A10); the shift is clamped first,
-  ``k := min(k, d0(capital))``, and stays clamped (item B3);
+  ``k := min(k, d0(capital))``, and stays clamped (item B3); always 0 under
+  ``supply.leaf_shift = false`` (DEC-50);
 - a **pocket** is an own component that does not contain the own capital (item H1); its
   factories stop (``systems.economy``, item H2) and, without an own factory, its nodes starve
   (item H4);
@@ -120,7 +121,7 @@ def supply_flow(state: GameState, rules: Ruleset) -> list[Event]:
     dispatch = tick > 0 and tick % rules.supply.dispatch_ticks == 0
     for pid in sorted(state.players):
         incoming = _incoming(state, pid)
-        field = _field(state, pid)
+        field = _field(state, rules, pid)
         if dispatch:
             sends = _run(state, field, capacities, incoming)
             events.extend(_send(state, rules, pid, sends, incoming))
@@ -164,7 +165,7 @@ def update_flow(state: GameState, rules: Ruleset) -> None:
     initial state carries the field this way (item A8)."""
     capacities = warehouse_capacities(state, rules)
     for pid in sorted(state.players):
-        _store(state, _field(state, pid), capacities, _incoming(state, pid))
+        _store(state, _field(state, rules, pid), capacities, _incoming(state, pid))
     _clear_neutral(state)
 
 
@@ -308,9 +309,9 @@ _MEMO: tuple[str, str] = ("flow.field.0", "flow.field.1")
 """``GameState.memo`` keys of the field memo, by player id."""
 
 
-def _field(state: GameState, player: int) -> _Field:
+def _field(state: GameState, rules: Ruleset, player: int) -> _Field:
     """Items A1 to A4 (as revised by #724) and B3 for ``player``; stores the clamped shift and its
-    maximum.
+    maximum. Under ``supply.leaf_shift = false`` (DEC-50) the shift is 0.
 
     A pure function of the owners of the nodes, the leaf shift, the own standing groups that hold
     and the charges the own builds owe; the last field of the player is kept with these inputs in
@@ -319,6 +320,8 @@ def _field(state: GameState, player: int) -> _Field:
     nodes = state.nodes
     owners = [nodes[nid].owner for nid in range(len(state.map.incident))]  # ids are 0..n-1
     ps = state.players[player]
+    if not rules.supply.leaf_shift:
+        ps.leaf_shift = 0  # DEC-50: no lever; ``SetLeafShift`` is rejected, so already 0
     memo = state.memo.get(_MEMO[player])
     if (
         not isinstance(memo, _FieldMemo)

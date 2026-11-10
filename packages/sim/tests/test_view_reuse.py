@@ -67,7 +67,7 @@ class _Compare:
             for p in PLAYERS:
                 kept, fresh = copy.deepcopy(state), copy.deepcopy(state)
                 fresh.memo.clear()
-                assert flow._field(kept, p) == flow._field(fresh, p), (state.tick, p)  # pyright: ignore[reportPrivateUsage]
+                assert flow._field(kept, rules, p) == flow._field(fresh, rules, p), (state.tick, p)  # pyright: ignore[reportPrivateUsage]
                 assert kept.players[p] == fresh.players[p]  # the clamp of the shift (item B3)
                 self.fields += 1
 

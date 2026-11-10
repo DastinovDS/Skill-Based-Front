@@ -186,13 +186,17 @@ def test_mvp6_is_mvp5_with_three_changes() -> None:
     assert mvp6 == mvp5
 
 
-def test_mvp7_is_mvp6_with_five_changes() -> None:
+def test_mvp7_is_mvp6_with_six_changes() -> None:
     """mvp-7 (#885, #888): mvp-6 with the section ``[map_tempo]`` (DEC-46), with
     ``stances.factories_follow`` (DEC-47) and so without ``factory.built_period_ticks``,
     (#900, owner decision 2026-11-10) CP in 0.5 CP quanta: ``cp.per_period`` 50 and every
     ``stances.cp_period_ticks`` halved, i.e. the same CP per tick, and (DEC-48, item J, #896) the
-    section ``[group_order]`` (16 groups, rally 50%) with the recruit rally point at 0.5 CP."""
+    section ``[group_order]`` (16 groups, rally 50%) with the recruit rally point at 0.5 CP, and
+    (DEC-50, #929) no leaf shift lever: ``supply.leaf_shift = false``."""
     mvp6, mvp7 = _raw(MVP6), _raw(MVP7)
+    assert "leaf_shift" not in mvp6["supply"]
+    assert mvp7["supply"]["leaf_shift"] is False
+    del mvp7["supply"]["leaf_shift"]
     assert "group_order" not in mvp6
     assert "rally_point" not in mvp6["recruit"]
     assert mvp7["group_order"] == {"max_groups": 16, "rally_pct": 50}

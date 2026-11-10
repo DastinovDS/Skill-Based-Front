@@ -16,9 +16,10 @@ and factories paid in charges, the leaf shift in range and out of it, road forti
 wrong road and a second one on the same road now and then, unknown ids, group orders (attacks,
 planned ones, rallies) and the recruit rally point of DEC-48), so the replays go through every
 command path and many rejections (a group order and a rally point are rejected outside
-``mvp-7``). The games cover the kept rulesets (#894):
-``mvp-5``, ``mvp-6``, ``mvp-7`` (map tempo on the pool map ``narrows``, where the multiplier is 76,
-and every factory follows the stance of its owner, DEC-47) and ``test-short`` with a forfeit.
+``mvp-7``, the leaf shift in ``mvp-7`` and ``test-short``, DEC-50). The games cover the kept
+rulesets (#894): ``mvp-5``, ``mvp-6``, ``mvp-7`` (map tempo on the pool map ``narrows``, where the
+multiplier is 76, and every factory follows the stance of its owner, DEC-47) and ``test-short``
+with a forfeit.
 """
 
 import argparse
@@ -126,7 +127,7 @@ class MixBot:
             cmds.append(CancelRecruit(self.map.capital(view.player)))
         if k % 37 == 0:  # often rejected: the barracks is there or being built
             cmds.extend(self._develop(view, k))
-        if k % 7 == 3:  # DEC-43: 0..3, beyond the maximum now and then
+        if k % 7 == 3:  # DEC-43: 0..3, beyond the maximum now and then (DEC-50: rejected)
             cmds.append(SetLeafShift(k // 7 % 4))
         if k % 11 == 5:  # DEC-43, item D: first, before the CP go; at times a reject
             cmds = self._fortify(view, k) + cmds

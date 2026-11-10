@@ -323,6 +323,7 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
     }
     assert public.combat.retreat == rules.combat.retreat
     assert public.supply_dispatch_ticks == rules.supply.dispatch_ticks
+    assert public.supply_leaf_shift is rules.supply.leaf_shift
     assert public.city_upgrades.model_dump() == {
         "barracks_ticks": rules.city_upgrades.barracks_ticks,
         "barracks_charges": rules.city_upgrades.barracks_charges,
@@ -394,3 +395,13 @@ def test_serialization_schema_requires_type_for_narrowing() -> None:
             properties = definition.get("properties")
             if isinstance(properties, dict) and "type" in properties:
                 assert "type" in cast(list[str], definition["required"]), name
+
+
+@pytest.mark.parametrize(
+    ("name", "lever"), [("mvp-7", False), ("test-short", False), ("mvp-6", True)]
+)
+def test_ruleset_public_tells_whether_the_leaf_shift_lever_exists(name: str, lever: bool) -> None:
+    """DEC-50 (#929): ``supply_leaf_shift`` is ``supply.leaf_shift``, so the client hides the lever
+    of DEC-43 item B in ``mvp-7`` and ``test-short``."""
+    rules = load_ruleset(RULESET_PATH.parent / f"{name}.toml")
+    assert RulesetPublic.from_ruleset(rules).supply_leaf_shift is lever

@@ -109,7 +109,8 @@ class FortifyRoadCmd(WireModel):
 class SetLeafShiftCmd(WireModel):
     """The own leaf shift (DEC-43, item B2): the level of the supply flow moves ``shift`` roads
     back from the front, ``0..View.me.leaf_shift_max``; the range is checked by the simulation
-    (``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public."""
+    (``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public. Without
+    ``ruleset_public.supply_leaf_shift`` (DEC-50) always ``INVALID_ARGUMENT``: the shift stays 0."""
 
     type: Literal["set_leaf_shift"] = "set_leaf_shift"
     shift: NonNegInt

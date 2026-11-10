@@ -203,7 +203,8 @@ export interface FortifyRoadCmd {
 /**
  * The own leaf shift (DEC-43, item B2): the level of the supply flow moves ``shift`` roads
  * back from the front, ``0..View.me.leaf_shift_max``; the range is checked by the simulation
- * (``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public.
+ * (``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public. Without
+ * ``ruleset_public.supply_leaf_shift`` (DEC-50) always ``INVALID_ARGUMENT``: the shift stays 0.
  */
 export interface SetLeafShiftCmd {
   type: 'set_leaf_shift';
@@ -378,6 +379,12 @@ export interface RulesetPublic {
    * snapshot (#705).
    */
   supply_dispatch_ticks: number;
+  /**
+   * ``supply.leaf_shift``: the player may move the level of the flow back with
+   * ``set_leaf_shift`` (DEC-43, item B). ``False`` (DEC-50): no lever, the shift stays 0 and the
+   * command gives ``INVALID_ARGUMENT``; the client hides the lever.
+   */
+  supply_leaf_shift: boolean;
   stances: StancesPublic;
   /**
    * DEC-48: the group order, ``None`` when the ruleset has none.
@@ -672,8 +679,8 @@ export interface SelfView {
   stance: Stance;
   /**
    * Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``); always set
-   * (nullable on the wire until the client cleanup of #894). The enemy's shift is never in a
-   * view.
+   * (nullable on the wire until the client cleanup of #894); always 0 without
+   * ``ruleset_public.supply_leaf_shift`` (DEC-50). The enemy's shift is never in a view.
    */
   leaf_shift: number | null;
   /**
@@ -1479,7 +1486,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 49;
+export const PROTOCOL_VERSION = 50;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

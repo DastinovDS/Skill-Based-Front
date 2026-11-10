@@ -1,5 +1,5 @@
 # Ruleset mvp-7: the main (played) ruleset since 2026-11-09 (owner decision after a playtest on narrows, #885). A copy
-# of mvp-6.toml with exactly five changes:
+# of mvp-6.toml with exactly six changes:
 # - the section [map_tempo] at the end (DEC-46, #803; mechanics.md, section 6, "Map tempo"): the economy periods of a
 #   match are scaled once by the node count N of its map, pct = isqrt(N * 10000 // 49) clamped to 50..150, each
 #   period p becomes max(1, p * 100 // pct). Reason: on small maps there are too many charges by mid-game;
@@ -14,6 +14,8 @@
 #   periods, the CP cap and every price are unchanged;
 # - the group order and the recruit rally point (DEC-48, #896; owner decision 2026-11-10): the section [group_order]
 #   at the end (GroupMove, ReleasePlan disabled) and recruit.rally_point = true with recruit.rally_cost = 50.
+# - no leaf shift lever (DEC-50, #929; owner decision 2026-11-10, #928 item 8), edited in place: supply.leaf_shift =
+#   false, the level of the supply flow stays at the front leaves and SetLeafShift is rejected (INVALID_ARGUMENT).
 # Periods in ticks per pool map (War / Balance / Economy; every factory, the own capital and the built or captured
 # ones alike, makes 1 charge per the same period of its owner's stance):
 #   map         nodes  pct  0.5 CP quantum per  any factory: 1 charge per
@@ -167,11 +169,13 @@ per_units = 3 # ... per each started 3 units
 # The automatic supply flow towards the front (DEC-43; mechanics.md, section 7). Every dispatch_ticks each own
 # node behind the level (its distance in roads to the nearest leaf above the leaf shift) sends one charge per
 # road to its downhill neighbours with room, then evens out level roads; a full factory spills its new charge to
-# a neighbour. The leaf shift (SetLeafShift, free, hidden) moves the level back towards the capital.
+# a neighbour. There is no leaf shift lever (DEC-50, #929; owner decision 2026-11-10, #928 item 8): the level stays
+# at the front leaves and SetLeafShift is rejected with INVALID_ARGUMENT (mvp-5 and mvp-6 keep the lever).
 # A packet needs travel_ticks * 100 // speed_pct ticks per road (rounded down, at least 1).
 dispatch_ticks = 10 # period of computing and dispatching packets
 recharge_per_tick = 1 # recharging standing units from the warehouse: at most 1 charge per tick
 speed_pct = 150 # DEC-41, item 8: every packet travels at 150%
+leaf_shift = false # DEC-50: no SetLeafShift, the shift is always 0 (absent: true, the lever of DEC-43 item B)
 
 [recruit]
 # Recruit queue (DEC-25, #262; mechanics.md, section 3). Recruit(node) puts one unit into the

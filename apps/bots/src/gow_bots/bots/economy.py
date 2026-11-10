@@ -25,7 +25,8 @@ ruleset, and every tie goes through ``Bot.key`` (mirror-invariant):
   local matches of three ``hard`` personalities). A tired army ahead of the level still pulls its
   charges (items I6, I7), so the shift only stops the refill of the leaf warehouses. Hysteresis
   (G-L of the ``mvp-4`` bot audit): the shift stays ``SHIFT_HOLD_TICKS`` after a change
-  (``LeafShift``), it does not flap with every sighting.
+  (``LeafShift``), it does not flap with every sighting. Not under ``supply.leaf_shift = false``
+  (DEC-50, ``mvp-7``): the ruleset has no lever and ``Bot.allowed`` drops the command.
 - **Road fortifications** (``fort_site``, DEC-43 item D) are the CP sink: while the CP are near
   the cap, an own node fortifies the road to an enemy neighbour where an enemy is in sight; an
   attack whose road into the target is fortified pays the toll from its real charges first

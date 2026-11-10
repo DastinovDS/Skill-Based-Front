@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 49,
+    "PROTOCOL_VERSION": 50,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -3126,6 +3126,10 @@
           "minimum": 1,
           "type": "integer"
         },
+        "supply_leaf_shift": {
+          "description": "``supply.leaf_shift``: the player may move the level of the flow back with\n``set_leaf_shift`` (DEC-43, item B). ``False`` (DEC-50): no lever, the shift stays 0 and the\ncommand gives ``INVALID_ARGUMENT``; the client hides the lever.",
+          "type": "boolean"
+        },
         "stances": {
           "$ref": "#/$defs/StancesPublic"
         },
@@ -3156,6 +3160,7 @@
         "factory",
         "fort",
         "supply_dispatch_ticks",
+        "supply_leaf_shift",
         "stances",
         "group_order"
       ],
@@ -3250,7 +3255,7 @@
               "type": "null"
             }
           ],
-          "description": "Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``); always set\n(nullable on the wire until the client cleanup of #894). The enemy's shift is never in a\nview."
+          "description": "Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``); always set\n(nullable on the wire until the client cleanup of #894); always 0 without\n``ruleset_public.supply_leaf_shift`` (DEC-50). The enemy's shift is never in a view."
         },
         "leaf_shift_max": {
           "anyOf": [
@@ -3364,7 +3369,7 @@
     },
     "SetLeafShiftCmd": {
       "additionalProperties": false,
-      "description": "The own leaf shift (DEC-43, item B2): the level of the supply flow moves ``shift`` roads\nback from the front, ``0..View.me.leaf_shift_max``; the range is checked by the simulation\n(``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public.",
+      "description": "The own leaf shift (DEC-43, item B2): the level of the supply flow moves ``shift`` roads\nback from the front, ``0..View.me.leaf_shift_max``; the range is checked by the simulation\n(``INVALID_ARGUMENT``), the same value gives ``NO_CHANGE``. Free, not public. Without\n``ruleset_public.supply_leaf_shift`` (DEC-50) always ``INVALID_ARGUMENT``: the shift stays 0.",
       "properties": {
         "type": {
           "const": "set_leaf_shift",

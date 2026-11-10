@@ -237,6 +237,9 @@ class SupplyRules:
     recharge_per_tick: int
     speed_pct: int
     """Packet speed on every road (DEC-41, item 8)."""
+    leaf_shift: bool = dataclasses.field(default=True, metadata=OPTIONAL)
+    """DEC-43, item B: the player may move the level back with ``SetLeafShift``. ``False``
+    (DEC-50): the shift stays 0 and the command is rejected. Left out of the hash at ``True``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -635,7 +638,7 @@ def parse_ruleset(data: object) -> Ruleset:
             root.table("starvation", ("grace_ticks", "period_ticks", "charges", "per_units"))
         ),
         supply=_parse_supply(
-            root.table("supply", ("dispatch_ticks", "recharge_per_tick", "speed_pct"))
+            root.table("supply", ("dispatch_ticks", "recharge_per_tick", "speed_pct", "leaf_shift"))
         ),
         recruit=_parse_recruit(
             root.table(
@@ -802,6 +805,7 @@ def _parse_supply(t: "_Table") -> SupplyRules:
         dispatch_ticks=t.integer("dispatch_ticks", low=1),
         recharge_per_tick=t.integer("recharge_per_tick", low=0),
         speed_pct=t.integer("speed_pct", low=1),
+        leaf_shift=t.boolean("leaf_shift") if t.has("leaf_shift") else True,
     )
 
 

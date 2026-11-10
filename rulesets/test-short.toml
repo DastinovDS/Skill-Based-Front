@@ -145,11 +145,13 @@ per_units = 3 # ... per each started 3 units
 # The automatic supply flow towards the front (DEC-43; mechanics.md, section 7). Every dispatch_ticks each own
 # node behind the level (its distance in roads to the nearest leaf above the leaf shift) sends one charge per
 # road to its downhill neighbours with room, then evens out level roads; a full factory spills its new charge to
-# a neighbour. The leaf shift (SetLeafShift, free, hidden) moves the level back towards the capital.
+# a neighbour. There is no leaf shift lever (DEC-50, #929; owner decision 2026-11-10, #928 item 8): the level stays
+# at the front leaves and SetLeafShift is rejected with INVALID_ARGUMENT (mvp-5 and mvp-6 keep the lever).
 # A packet needs travel_ticks * 100 // speed_pct ticks per road (rounded down, at least 1).
 dispatch_ticks = 10 # period of computing and dispatching packets
 recharge_per_tick = 1 # recharging standing units from the warehouse: at most 1 charge per tick
 speed_pct = 150 # DEC-41, item 8: every packet travels at 150%
+leaf_shift = false # DEC-50: no SetLeafShift, the shift is always 0 (absent: true, the lever of DEC-43 item B)
 
 [recruit]
 # Recruit queue (DEC-25, #262; mechanics.md, section 3). Recruit(node) puts one unit into the

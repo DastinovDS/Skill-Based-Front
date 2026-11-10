@@ -563,8 +563,8 @@ class SelfView(WireModel):
     stance: Stance
     leaf_shift: NonNegInt | None
     """Supply flow (DEC-43, item B): the own leaf shift in force (``set_leaf_shift``); always set
-    (nullable on the wire until the client cleanup of #894). The enemy's shift is never in a
-    view."""
+    (nullable on the wire until the client cleanup of #894); always 0 without
+    ``ruleset_public.supply_leaf_shift`` (DEC-50). The enemy's shift is never in a view."""
     leaf_shift_max: NonNegInt | None
     """Supply flow: the largest shift now (the roads from the own capital to the front)."""
     next_dispatch_tick: Tick | None
