@@ -150,6 +150,16 @@ body {
   overflow: hidden;
 }
 
+/* Scroll bars (#928): only where a short window really needs one, and then a thin bar in the
+   stone's colours (a dim ink thumb on no track) instead of the system's grey one. */
+:root {
+  scrollbar-color: rgb(173 163 143 / 45%) transparent;
+}
+
+* {
+  scrollbar-width: thin;
+}
+
 /* Menu-like screens (welcome, menu, waiting room, result): a card in the middle of the page. */
 .screen {
   position: fixed;

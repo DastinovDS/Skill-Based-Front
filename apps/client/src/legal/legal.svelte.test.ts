@@ -39,8 +39,6 @@ describe('legal content', () => {
     }
     expect([...used].sort()).toEqual([
       'sbf.guest',
-      'sbf.hints.last',
-      'sbf.hints.matches',
       'sbf.introSeen',
       'sbf.locale',
       'sbf.newHereOff',

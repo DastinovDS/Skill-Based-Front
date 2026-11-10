@@ -456,4 +456,19 @@
   .small .lnk {
     font-size: 17px;
   }
+
+  /* A short window (1280 x 720): the sections close up so the page needs no scroll bar (#928). */
+  @media (max-height: 760px) {
+    .sec {
+      margin: 20px 0 8px;
+    }
+
+    .set {
+      padding: 8px 0;
+    }
+
+    .acts {
+      margin-top: 14px;
+    }
+  }
 </style>

@@ -32,7 +32,6 @@ describe('Hud', () => {
   function render(
     options: {
       oninsets?: (insets: Insets) => void;
-      hints?: boolean;
       dev?: boolean;
       rendererFailed?: boolean;
       onreload?: () => void;
@@ -65,7 +64,6 @@ describe('Hud', () => {
         hud: state,
         orders,
         chrome,
-        hints: options.hints ?? false,
         oninsets: options.oninsets,
         dev:
           options.dev === true
@@ -281,11 +279,11 @@ describe('Hud', () => {
     expect(target.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it('shows the key hints only when asked to', () => {
+  it('has no key bar: the keys are in the help (owner 2026-11-10, #928)', () => {
     setLocale('en');
-    expect(render({ hints: false }).target.querySelector('[aria-label="Key hints"]')).toBeNull();
-    document.body.innerHTML = '';
-    expect(render({ hints: true }).target.querySelector('[aria-label="Key hints"]')).not.toBeNull();
+    const { target } = render();
+    expect(target.querySelector('kbd')).toBeNull();
+    expect(target.querySelector('[aria-label="Key hints"]')).toBeNull();
   });
 
   it('turns the timer amber in the last minute and adds one toast', () => {

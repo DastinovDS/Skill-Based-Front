@@ -31,6 +31,28 @@ function setup() {
 }
 
 describe('OverlayView', () => {
+  it('draws no ring round a hovered city, only round a selected one (#928)', () => {
+    const { layers, view, none } = setup();
+    const state = (over: Partial<OverlayState>): OverlayState => ({
+      selection: null,
+      ghosts: [],
+      preview: null,
+      beacon: null,
+      supply: false,
+      terrain: false,
+      reach: [],
+      split: [],
+      eta: null,
+      ...over,
+    });
+    // Owner 2026-11-10: the light on the area and the arrows say where a click goes.
+    view.update(state({ hover: { node: a.id, group: null } }), none);
+    expect(layers.layer.intents.getLocalBounds().width).toBe(0);
+    view.update(state({ selection: { kind: 'node', id: a.id } }), none);
+    expect(layers.layer.intents.getLocalBounds().width).toBeGreaterThan(0);
+    view.destroy();
+  });
+
   it('draws a sent order as a ghost until the snapshot shows it (#851)', () => {
     const { layers, view, none } = setup();
     const via = map.nodes[1];

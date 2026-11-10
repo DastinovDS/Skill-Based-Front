@@ -24,6 +24,18 @@
   }
 }
 
+/* A short window (1280 x 720): less room above and below, so a page that fits needs no scroll bar (#928). */
+@media (max-height: 760px) {
+  .front.sheet .body {
+    padding-top: 22px;
+    padding-bottom: 18px;
+  }
+
+  .front.sheet .sheethead {
+    margin-bottom: 12px;
+  }
+}
+
 .front.sheet .sheethead {
   margin-bottom: 20px;
 }

@@ -2,7 +2,6 @@
   import { MatchAudio } from '../audio/matchAudio.ts';
   import { sound } from '../audio/soundState.svelte.ts';
   import { HudChrome } from '../hud/chrome.svelte.ts';
-  import { hintsVisible, registerMatch } from '../hud/hints.ts';
   import Hud from '../hud/Hud.svelte';
   import { routeKey } from '../hud/hudKeys.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
@@ -87,8 +86,6 @@
   let insets: Insets = $state.raw(NO_INSETS);
   let pauseLeft = $state(0);
   const chrome = new HudChrome();
-  // The key hints show in the first matches only; a match counts once, also after a reload.
-  const hints = $derived(hintsVisible(registerMatch(matchId)));
 
   // The result screen after a capital capture waits for its flood (#819).
   let endTimer: ReturnType<typeof setTimeout> | undefined;
@@ -311,7 +308,6 @@
       {chrome}
       {rated}
       {forfeitBanS}
-      {hints}
       onpause={pauseState.available && status === 'ready' && paused === null
         ? () => {
             session?.pause();

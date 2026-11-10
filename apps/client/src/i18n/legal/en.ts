@@ -66,11 +66,10 @@ export const en = {
       {
         heading: 'Data in your browser',
         body: [
-          'The game saves up to seven entries in the localStorage of your browser and one entry in its sessionStorage. No cookies are set. Clearing the site data of this page in your browser removes all of them.',
+          'The game saves up to five entries in the localStorage of your browser and one entry in its sessionStorage. No cookies are set. Clearing the site data of this page in your browser removes all of them.',
         ],
         items: [
           'sbf.guest: your nickname, your token and whether your account has a password, so that you stay the same player on your next visit. "Log out" in the menu removes it. Without a password the player cannot be reached again from this browser; with a password you can log in again from any browser.',
-          'sbf.hints.matches and sbf.hints.last: how many matches you played, to hide the key hints after the third (and the last match counted).',
           'sbf.sound: whether you muted the sound and the volume you chose, saved when you change either.',
           'sbf.settings: the interface scale, the motion and the opening scene you chose in the settings, saved when you change one.',
           'sbf.newHereOff: that you ticked "Don’t show this again" in the "New here?" dialog after entering a nickname, so that it does not ask again.',

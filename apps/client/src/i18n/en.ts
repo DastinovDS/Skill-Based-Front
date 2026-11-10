@@ -536,10 +536,6 @@ export const en = {
   'help.key.escape': 'drop the selection, twice: leave the match',
   'help.camera': 'Right button: move the map. Wheel: zoom at the pointer.',
   'help.capture': 'Taking a place costs charges of the group: {n}. Without them it turns back.',
-  'hints.title': 'Key hints',
-  'hints.stance': 'stance',
-  'hints.recruit': 'recruit',
-  'hints.help': 'help',
   'menu.dev': 'For development',
   // The leaderboard and the player profile (#78, variant S "Split").
   'board.retry': 'Try again',
@@ -659,9 +655,7 @@ export const en = {
   'help.key.planWheel':
     'over a target: the ghost of the planned order and its bonus, +1 at first; each notch of the wheel adds or takes one, up to the charged units',
   'help.key.release': 'the gathering plan of the group sets off now',
-  'hints.plan': 'planned order',
   // DEC-48: the group order and the recruit rally point.
-  'hints.select': 'select several',
   'help.key.selectSeveral': 'add a group to the selection, or take it out',
   'help.key.selectBox': 'a box: the groups inside it join the selection',
   'help.key.groupOrder':
@@ -681,5 +675,4 @@ export const en = {
   'help.key.leafShift': 'move the supply level back from the front / forward',
   'help.economyFlow':
     'Factories make charges, and supply rolls by itself towards the front, one charge per road each dispatch. You steer one thing: the supply level. Buildings are paid in charges of the node and of the units standing there.',
-  'hints.supply': 'supply',
 };
