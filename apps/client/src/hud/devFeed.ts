@@ -217,6 +217,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         capital_ticks: tick % rules.stances.capital_period_ticks.balance,
       },
       vp: [Math.floor(tick / 100), Math.floor(tick / 150)],
+      vp_gain: [3, 2],
       nodes,
       edges: map.edges.map((e) => ({
         id: e.id,

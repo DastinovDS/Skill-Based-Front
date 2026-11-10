@@ -97,7 +97,10 @@
       },
       "factories_follow": false
     },
-    "group_order": null
+    "group_order": null,
+    "victory": {
+      "vp_period_ticks": 300
+    }
   },
   "map_id": "diamond",
   "last_seq": 0,

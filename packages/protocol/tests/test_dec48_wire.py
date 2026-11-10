@@ -3,7 +3,8 @@
 Expected values come from mechanics.md, section 5, DEC-48: item B6 (the ``ack`` carries the kind,
 the cost, the common arrival and one member per group of the list, a dropped one with its code;
 a command without a valid member keeps its members, one rejected for its CP has none, owner
-decision (7)), item I3 (``rally_point_cleared`` and ``rally_walk_no_cp`` reach their owner only)
+decision (7)), item I3 (``rally_point_cleared``, ``rally_walk_no_cp`` and ``rally_walk_paid``,
+#934, reach their owner only)
 and item I4 (``ruleset_public`` carries ``group_order`` and the rally point keys); item B4 as
 amended by the owner 2026-11-10 (#913): a member split by the server says how many of its units go.
 """
@@ -94,16 +95,27 @@ def test_no_valid_member_keeps_the_members_and_cp_short_has_none() -> None:
 
 
 def test_the_rally_events_reach_their_owner_only() -> None:
-    """Item I3: own-only events; the recruit of ``rally_walk_no_cp`` is the owner's opaque id."""
+    """Item I3: own-only events; the recruit of ``rally_walk_no_cp`` and of ``rally_walk_paid``
+    (#934) is the owner's opaque id."""
     cleared = event(150, "rally_point_cleared", player=0, node=0, target=1)
     no_cp = event(130, "rally_walk_no_cp", player=0, group=12, node=0, target=1)
-    for raw in (cleared, no_cp):
+    paid = event(130, "rally_walk_paid", player=0, group=12, node=0, target=1, cost=50)
+    for raw in (cleared, no_cp, paid):
         assert event_for_player(raw, 1, KEY) is None
     msg = event_for_player(cleared, 0, KEY)
     assert msg is not None and msg.data == {"player": 0, "node": 0, "target": 1}
     msg = event_for_player(no_cp, 0, KEY)
     assert msg is not None
     assert msg.data == {"player": 0, "group": str(opaque_id(KEY, 0, 12)), "node": 0, "target": 1}
+    msg = event_for_player(paid, 0, KEY)
+    assert msg is not None and msg.kind == "rally_walk_paid"
+    assert msg.data == {
+        "player": 0,
+        "group": str(opaque_id(KEY, 0, 12)),
+        "node": 0,
+        "target": 1,
+        "cost": 50,
+    }
 
 
 def test_ruleset_public_has_the_group_order_in_mvp7_only() -> None:

@@ -748,6 +748,22 @@ def test_rp1_a_recruit_walks_to_the_point_and_pays_when_it_leaves() -> None:
     assert _at(unit) == R
 
 
+def test_rp1_the_paid_walk_is_an_event_at_the_departure() -> None:
+    """#934 (#930, owner answer (2)): the walk of RP1 pays 50 hundredths at tick 130, when the
+    recruit leaves H; ``rally_walk_paid`` says so in that tick and in no other (the complement of
+    ``rally_walk_no_cp``, row RP8)."""
+    m, _ = _rally(1)
+    events = _to(m, 129)
+    (gid,) = _new(events)
+    assert not [e for e in events if e.kind == "rally_walk_paid"]  # appears at 129, pays at 130
+    events = _to(m, 130)
+    paid = [(e.tick, dict(e.data)) for e in events if e.kind == "rally_walk_paid"]
+    assert paid == [(130, {"player": 0, "group": gid, "node": H, "target": R, "cost": 50})]
+    assert _cp(m) == 350
+    later = _to(m, 169)
+    assert not [e for e in later if e.kind == "rally_walk_paid"]
+
+
 def test_rp2_each_recruit_walks_alone() -> None:
     m, _ = _rally(3)
     assert _cp(m) == 200
@@ -843,6 +859,7 @@ def test_rp8_without_the_cp_the_recruit_gets_no_order_and_merges() -> None:
     alerts = [dict(e.data) for e in events if e.kind == "rally_walk_no_cp"]
     assert len(alerts) == 1
     assert (alerts[0]["player"], alerts[0]["node"], alerts[0]["target"]) == (0, H, R)
+    assert not [e for e in events if e.kind == "rally_walk_paid"]  # nothing charged (#934)
     assert alerts[0]["group"] not in m.state.groups  # merged with the garrison
     assert (g["g5"].units, g["g5"].charged, _cp(m)) == (6, 5, 20)
     assert m.state.nodes[H].rally_point == R
@@ -853,12 +870,15 @@ def test_rp9_no_queue_of_waiting_recruits() -> None:
     _to(m, 129)
     m.state.players[0].cp = 50
     alerts: list[int] = []
+    paid: list[int] = []
     for tick in range(130, 231):
         events = _to(m, tick)
         alerts += [e.tick for e in events if e.kind == "rally_walk_no_cp"]
+        paid += [e.tick for e in events if e.kind == "rally_walk_paid"]
         if tick == 130:
             assert _cp(m) == 0
     assert alerts == [160, 190]
+    assert paid == [130]  # only the walker that paid (#934)
     assert g["g5"].units == 7 and _cp(m) == 0
 
 

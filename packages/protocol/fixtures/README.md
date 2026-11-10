@@ -31,7 +31,7 @@ group, figure and memory in the mode `attack`); their other numbers are those of
 
 - `server/welcome.json`: player 0 on the map `diamond` (`packages/sim/tests/maps/diamond.json`),
   `ruleset_public` with the numbers of `rulesets/mvp-7.toml` at the time of writing (the ruleset may move on,
-  the fixture does not break because of it); `supply_leaf_shift` false since DEC-50 (#929).
+  the fixture does not break because of it); `supply_leaf_shift` false since DEC-50 (#929). Every `welcome` carries `ruleset_public.victory.vp_period_ticks` 300 (#934).
 - `server/welcome_v2.json`: the same with `ruleset_public` of `rulesets/mvp-5.toml` (`factories_follow` false: no DEC-47 key, #888).
 - `server/welcome_v4.json`: the same with `ruleset_public` of `rulesets/mvp-6.toml`.
 - `server/welcome_stances.json`: the same with `ruleset_public` of `rulesets/mvp-7.toml` (the stances of DEC-44, #772, with
@@ -41,7 +41,7 @@ group, figure and memory in the mode `attack`); their other numbers are those of
 - `server/snapshot_flow.json`: the view of player 0 on `dec41` (`packages/sim/tests/maps/dec41.json`) under `mvp-4` (removed by #894), tick 5,
   after `set_leaf_shift {shift: 1}` (written by code, from a real `project()`, like `snapshot_stances.json`): the own nodes carry the
   flow fields of DEC-43, item E (`front_dist`, `flow_down`, `flow_next`, `flow_idle`, `flow_pocket`), `me` the shift
-  (`leaf_shift` 1, `leaf_shift_max` 2, `next_dispatch_tick` 10); every other fixture has them `null`. Every edge of every snapshot carries `forts` (DEC-43, item D8), empty in all of them. Every node carries `terrain_mark` (#791): the charged own garrison on plains of `snapshot_flow.json` and `snapshot_stances.json` has `-1`, the one on mountains of `snapshot.json` and `snapshot_fog.json` `1`, every other node `null`.
+  (`leaf_shift` 1, `leaf_shift_max` 2, `next_dispatch_tick` 10); every other fixture has them `null`. Every edge of every snapshot carries `forts` (DEC-43, item D8), empty in all of them. Every node carries `terrain_mark` (#791): the charged own garrison on plains of `snapshot_flow.json` and `snapshot_stances.json` has `-1`, the one on mountains of `snapshot.json` and `snapshot_fog.json` `1`, every other node `null`. Every view carries `vp_gain` (#934): the gains the node owners of the fixture give on its map (DEC-03, the capital x3), added by hand.
 - `server/snapshot.json`: the view of player 0 on `diamond`, tick 120. Nodes 0 and 1 are own (`exact`), nodes 2 and 3
   are adjacent (`presence`, at the opponent's capital the mode `attack` is visible without numbers),
   edge 2 is in the fog with the memory from tick 60, an enemy group goes along edge 3 (only the mode).

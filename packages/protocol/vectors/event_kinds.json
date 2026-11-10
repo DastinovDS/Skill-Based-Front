@@ -28,6 +28,7 @@
     "plan_charged",
     "rally_point_cleared",
     "rally_walk_no_cp",
+    "rally_walk_paid",
     "recruit_cancelled",
     "recruit_queue_lost",
     "recruited",

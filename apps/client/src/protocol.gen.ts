@@ -390,6 +390,7 @@ export interface RulesetPublic {
    * DEC-48: the group order, ``None`` when the ruleset has none.
    */
   group_order: GroupOrderPublic | null;
+  victory: VictoryPublic;
 }
 /**
  * CP: ``per_period`` hundredths per quantum, up to ``cap``; the period of the quantum is
@@ -625,6 +626,20 @@ export interface GroupOrderPublic {
   rally_pct: number;
 }
 /**
+ * The VP credit (``victory`` of the ruleset, DEC-03, mechanics.md section 11).
+ */
+export interface VictoryPublic {
+  /**
+   * ``victory.vp_period_ticks``: VP are credited on every tick ``t > 0`` with
+   * ``t % vp_period_ticks == 0`` up to ``match_ticks`` (the first credit on the tick
+   * ``vp_period_ticks``; every kept ruleset's ``match_ticks`` is a multiple of it, so the last
+   * credit falls on the last tick). A snapshot of tick ``t`` already holds the credit of ``t``
+   * in ``View.vp``, so the next credit is ``vp_period_ticks - t % vp_period_ticks`` ticks away
+   * (``vp_period_ticks`` right after a credit, never 0), with ``View.vp_gain`` its amounts.
+   */
+  vp_period_ticks: number;
+}
+/**
  * Calibration progress of an account: the first matches of a rated account do not show its
  * rating (DEC-34, #414).
  */
@@ -655,6 +670,17 @@ export interface View {
    * @maxItems 2
    */
   vp: [number, number];
+  /**
+   * VP each player gets at the next credit if the ownership stays as it is now, by player id
+   * (the map ``vp`` of its cities, a capital times ``victory.capital_multiplier``; mechanics.md,
+   * section 11, #934); public like ``vp`` (DEC-04). The next credit is on the tick
+   * ``tick - tick % P + P`` with ``P = ruleset_public.victory.vp_period_ticks``; the
+   * ``vp_awarded`` events of that tick carry what was really credited.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  vp_gain: [number, number];
   /**
    * Every node of the map, ``nodes[i].id == i``.
    */
@@ -1486,7 +1512,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 50;
+export const PROTOCOL_VERSION = 51;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

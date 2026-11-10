@@ -40,6 +40,9 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'charge_burned',
   'build_paid',
   'plan_charged',
+  // DEC-48, H3 (#930, #934): a recruit paid its walk to the rally point; the CP gauge shows the
+  // spend, a feed line for every recruit would be bookkeeping.
+  'rally_walk_paid',
 ]);
 
 /** Kinds with a line in the feed. */

@@ -33,7 +33,8 @@ the end of the path (the destination, or a node that is no longer own) is an ``A
 A planned order's bonus is capped by the group's charged units when it departs (DEC-29).
 
 The recruit walk to a rally point (DEC-48, item H3, as changed by the owner on 2026-11-10,
-``pay_walks``): a recruit that may leave pays ``recruit.rally_cost`` of its player's CP first; with
+``pay_walks``): a recruit that may leave pays ``recruit.rally_cost`` of its player's CP first
+(``rally_walk_paid`` to its owner, #934, presentation only); with
 fewer CP it gets no order (``rally_walk_no_cp`` to its owner) and stays in its city, where the
 ``orders`` system merges it like a recruit (DEC-20, A1). It never waits for CP.
 """
@@ -269,8 +270,9 @@ def movement(state: GameState, rules: Ruleset) -> list[Event]:
 
 def pay_walks(state: GameState, rules: Ruleset) -> list[Event]:
     """DEC-48, item H3: every recruit walking to a rally point that leaves its city in this tick
-    (standing, in no fight, its departure tick reached) pays ``recruit.rally_cost``, or loses its
-    order when its player has fewer CP. In group id order; a player pays only for its own groups,
+    (standing, in no fight, its departure tick reached) pays ``recruit.rally_cost``
+    (``rally_walk_paid``), or loses its order when its player has fewer CP
+    (``rally_walk_no_cp``). In group id order; a player pays only for its own groups,
     so the players do not depend on each other."""
     cost = rules.recruit.rally_cost
     events: list[Event] = []
@@ -288,11 +290,22 @@ def pay_walks(state: GameState, rules: Ruleset) -> list[Event]:
             continue
         g.walk = False
         player = state.players[g.owner]
+        target = order.path[-1] if order.path else None
         if player.cp >= cost:
             player.cp -= cost
+            events.append(
+                event(
+                    state.tick,
+                    "rally_walk_paid",
+                    player=g.owner,
+                    group=gid,
+                    node=location.node,
+                    target=target,
+                    cost=cost,
+                )
+            )
             continue
         g.order = None  # it stays in its city and merges (``systems.orders``)
-        target = order.path[-1] if order.path else None
         events.append(
             event(
                 state.tick,

@@ -43,7 +43,8 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
   (DEC-43, item D): ``road_fort_built`` and ``road_fort_destroyed`` to the owner, ``toll_paid``
   to the payer, ``toll_taken`` to the owner of the fortification (the simulation emits it only
   when the owner sees the half of the fortified node, so it is private by ``player`` too); the
-  rally point (DEC-48, item I3): ``rally_point_cleared`` and ``rally_walk_no_cp`` to the owner;
+  rally point (DEC-48, item I3): ``rally_point_cleared``, ``rally_walk_no_cp`` and
+  ``rally_walk_paid`` (#934) to the owner;
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
 Entity ids in event data (``group``, ``new_group``, ``packet``, ``fight``) become opaque ids of
@@ -153,6 +154,7 @@ PRIVATE_KINDS: Final = frozenset(
         "plan_charged",
         "rally_point_cleared",
         "rally_walk_no_cp",
+        "rally_walk_paid",
         "recruit_cancelled",
         "recruit_queue_lost",
         "recruited",
@@ -237,6 +239,7 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "plan_charged": ("bonus", "group", "node", "player"),
     "rally_point_cleared": ("node", "player", "target"),
     "rally_walk_no_cp": ("group", "node", "player", "target"),
+    "rally_walk_paid": ("cost", "group", "node", "player", "target"),
     "recruit_cancelled": ("cp", "node", "player"),
     "recruit_queue_lost": ("node", "player", "units"),
     "recruited": ("group", "node", "player"),
@@ -273,6 +276,7 @@ EVENT_ID_FIELDS: Final[Mapping[str, frozenset[str]]] = {
     "packet_sent": frozenset({"packet"}),
     "plan_charged": frozenset({"group"}),
     "rally_walk_no_cp": frozenset({"group"}),
+    "rally_walk_paid": frozenset({"group"}),
     "recruited": frozenset({"group"}),
     "toll_paid": frozenset({"group"}),
 }
@@ -305,7 +309,7 @@ def snapshot_msg(view: sv.PlayerView) -> SnapshotMsg:
 
 
 def view_to_wire(view: sv.PlayerView) -> View:
-    vp = view.vp
+    vp, gain = view.vp, view.vp_gain
     return View(
         me=SelfView(
             cp=view.me.cp,
@@ -317,6 +321,7 @@ def view_to_wire(view: sv.PlayerView) -> View:
             capital_ticks=view.me.capital_ticks,
         ),
         vp=(vp[0], vp[1]),
+        vp_gain=(gain[0], gain[1]),
         nodes=tuple(
             NodeView(
                 id=n.id,
@@ -514,6 +519,7 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             "capital_ticks": me.capital_ticks,
         },
         "vp": view.vp[:2],
+        "vp_gain": view.vp_gain[:2],
         "nodes": [
             {
                 "id": n.id,

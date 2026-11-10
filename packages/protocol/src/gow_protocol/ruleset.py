@@ -19,6 +19,8 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the period of the supply dispatch (DEC-43, ``supply_dispatch_ticks``) and whether the leaf
   shift lever exists (``supply_leaf_shift``, DEC-50: the client hides the lever without it);
 - the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429);
+- the VP credit period (DEC-03, ``victory.vp_period_ticks``), for the countdown rail of the score
+  (#930, #934; the gains are ``View.vp_gain``);
 - the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help;
 - the group order (DEC-48, ``group_order``, ``None`` without it) and the recruit rally point
   (``recruit.rally_point`` and its walk price): the client hides what the ruleset does not have
@@ -232,6 +234,18 @@ class VisionPublic(WireModel):
     by_terrain: VisionTablePublic
 
 
+class VictoryPublic(WireModel):
+    """The VP credit (``victory`` of the ruleset, DEC-03, mechanics.md section 11)."""
+
+    vp_period_ticks: PosInt
+    """``victory.vp_period_ticks``: VP are credited on every tick ``t > 0`` with
+    ``t % vp_period_ticks == 0`` up to ``match_ticks`` (the first credit on the tick
+    ``vp_period_ticks``; every kept ruleset's ``match_ticks`` is a multiple of it, so the last
+    credit falls on the last tick). A snapshot of tick ``t`` already holds the credit of ``t``
+    in ``View.vp``, so the next credit is ``vp_period_ticks - t % vp_period_ticks`` ticks away
+    (``vp_period_ticks`` right after a credit, never 0), with ``View.vp_gain`` its amounts."""
+
+
 class RulesetPublic(WireModel):
     tick_hz: PosInt
     match_ticks: PosInt
@@ -257,6 +271,7 @@ class RulesetPublic(WireModel):
     stances: StancesPublic
     group_order: GroupOrderPublic | None
     """DEC-48: the group order, ``None`` when the ruleset has none."""
+    victory: VictoryPublic
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -339,4 +354,5 @@ class RulesetPublic(WireModel):
                 max_groups=rules.group_order.max_groups,
                 rally_pct=rules.group_order.rally_pct,
             ),
+            victory=VictoryPublic(vp_period_ticks=rules.victory.vp_period_ticks),
         )

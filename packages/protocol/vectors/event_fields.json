@@ -285,6 +285,18 @@
         "group"
       ]
     },
+    "rally_walk_paid": {
+      "fields": [
+        "cost",
+        "group",
+        "node",
+        "player",
+        "target"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
     "recruit_cancelled": {
       "fields": [
         "cp",
