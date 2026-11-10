@@ -13,6 +13,8 @@
   import DevDock from './DevDock.svelte';
   import DevStyle from './DevStyle.svelte';
   import ResultScreen from '../app/ResultScreen.svelte';
+  import type { MatchSummary } from '../app/matchSummary.ts';
+  import type { PlayerColour } from '../protocol.gen.ts';
   import QueueView from '../app/QueueView.svelte';
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
   import ExitDialog from '../hud/ExitDialog.svelte';
@@ -78,6 +80,15 @@
     thumb: () => null,
   };
   const queue = QUEUE_SCENES[id];
+  // The colour picker of the profile (DEC-49): a choice is kept at once, nothing is asked of a server.
+  let colour = $state<PlayerColour>('shell');
+  const pickColour = (next: PlayerColour): Promise<null> => {
+    colour = next;
+    return Promise.resolve(null);
+  };
+  // `result-rated` is in the players' colours (DEC-49): the own Shell against the opponent's Violet.
+  const resultSummary: MatchSummary =
+    id === 'result-rated' ? { ...RESULT_SUMMARY, colours: ['shell', 'violet'] } : RESULT_SUMMARY;
   const result = RESULT_SCENES[id];
 </script>
 
@@ -123,6 +134,8 @@
       Promise.resolve(
         nick.toLowerCase() === 'vega' ? { key: 'welcome.error.taken' as const } : null,
       )}
+    {colour}
+    oncolour={pickColour}
     onpassword={nothing}
     onlogout={nothing}
     onback={nothing}
@@ -176,7 +189,7 @@
   <ResultScreen
     me={0}
     end={result}
-    summary={RESULT_SUMMARY}
+    summary={resultSummary}
     {map}
     mapId="gen1-17"
     onreplay={nothing}

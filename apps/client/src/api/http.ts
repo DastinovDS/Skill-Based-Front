@@ -192,6 +192,14 @@ export class Api {
     return this.#request('PUT', '/api/me/nick', token, { nick });
   }
 
+  /**
+   * Set the colour the player asks for in the next matches (DEC-49): one of the set, `invalid`
+   * (422) otherwise. A running match keeps the colours it started with.
+   */
+  changeColour(token: string, colour: Schemas['PlayerColour']): Promise<Schemas['Me']> {
+    return this.#request('PUT', '/api/me/colour', token, { colour });
+  }
+
   /** The running match of the guest (after a page reload or in another tab), `null` if none. */
   activeMatch(token: string): Promise<ActiveMatch | null> {
     return this.#request('GET', '/api/me/active-match', token);

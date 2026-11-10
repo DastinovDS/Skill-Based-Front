@@ -34,6 +34,8 @@ import {
   UNIT_LABEL,
   UNIT_SIDES,
   ownerColor,
+  sideColours,
+  type PlayerColours,
 } from './style.ts';
 
 /**
@@ -62,6 +64,8 @@ export class EntityKit {
      * hover outlines; `null` (tests, views without badges): with the token itself.
      */
     readonly badgeLayer: RenderLayer | null = null,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    readonly colours: PlayerColours = sideColours(me),
   ) {
     this.sprites = sprites;
     const square = (g: GraphicsContext, side: number): GraphicsContext =>
@@ -69,7 +73,7 @@ export class EntityKit {
     const packet = (owner: PlayerId): GraphicsContext =>
       this.context((g) => {
         square(g, PACKET_ENGRAVED.casing).fill(CASING);
-        square(g, PACKET_SIDE).fill(ownerColor(me, owner));
+        square(g, PACKET_SIDE).fill(ownerColor(colours, owner));
         // The opponent's packet has a dark centre: the side is not told by the hue alone.
         if (owner !== me) square(g, PACKET_SIDE * 0.4).fill(CASING);
         return square(g, PACKET_ENGRAVED.outline).stroke({
@@ -376,7 +380,7 @@ export class Token {
     this.side = side;
     const range = spec.range ?? null;
     this.counted = counts !== null || range !== null;
-    const color = ownerColor(this.kit.me, owner);
+    const color = ownerColor(this.kit.colours, owner);
     const inside = spec.inside === true;
     // A token with unknown numbers and a memory (ghost) are dashed.
     const dashed = counts === null || spec.ghost === true;

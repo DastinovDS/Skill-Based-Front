@@ -9,7 +9,7 @@
   import PasswordScreen from '../app/PasswordScreen.svelte';
   import { MapCache } from '../app/mapCache.svelte.ts';
   import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
-  import type { MapFile } from '../protocol.gen.ts';
+  import type { MapFile, PlayerColour } from '../protocol.gen.ts';
   import { BAN_SECONDS, CALIBRATION } from './menuScenes.ts';
 
   interface Props {
@@ -18,6 +18,13 @@
   }
 
   let { id, map }: Props = $props();
+
+  // The colour picker of the lobby (DEC-49): a choice is kept at once, no server is asked.
+  let colour = $state<PlayerColour>('lapis');
+  const pickColour = (next: PlayerColour): Promise<null> => {
+    colour = next;
+    return Promise.resolve(null);
+  };
 
   // The Dock screens (#473) with a fake server: fixed lists and invites, nothing is asked of a
   // network. The scenes that need a click to reach their state (joining, a failed create) are
@@ -161,7 +168,16 @@
 </script>
 
 {#if id.startsWith('lobby-')}
-  <LobbyScreen {api} token="dev" {dock} oncreate={nothing} onjoined={nothing} onback={nothing} />
+  <LobbyScreen
+    {api}
+    token="dev"
+    {dock}
+    {colour}
+    oncolour={pickColour}
+    oncreate={nothing}
+    onjoined={nothing}
+    onback={nothing}
+  />
 {:else if id === 'create-private' || id === 'create-public' || id === 'create-nomaps' || id === 'create-error'}
   <CreateScreen
     {dock}

@@ -5,7 +5,16 @@
  * JSON. `parseReplay` checks the `format` field and the shape the viewer dereferences; a file with
  * an unknown format is refused, never half-read.
  */
-import type { Detail, EndReason, MapFile, Mode, PlayerId, Stance } from '../protocol.gen.ts';
+import type {
+  Detail,
+  EndReason,
+  MapFile,
+  Mode,
+  PlayerColour,
+  PlayerId,
+  Stance,
+} from '../protocol.gen.ts';
+import { PLAYER_COLOURS } from '../theme/tokens.ts';
 
 /** The frames format the server writes now (2, #905: the buildings and the header `rules`). */
 export const REPLAY_FORMAT = 2;
@@ -238,6 +247,12 @@ export interface ReplayFile {
    * key). Older files have none: the viewer says "Player 1" and "Player 2".
    */
   nicks?: [string, string];
+  /**
+   * The colours of the two players by player id (DEC-49, #906, optional header key), as the match
+   * had them. Older files have none: the viewer draws today's look (the watched side Lapis, the
+   * other Minium).
+   */
+  colours?: [PlayerColour, PlayerColour];
   /** The rule numbers of the buildings (format 2); absent in older files. */
   rules?: ReplayRules;
   map: MapFile;
@@ -402,6 +417,19 @@ function readNicks(raw: unknown): [string, string] | null {
   return isNick(first) && isNick(second) ? [first, second] : null;
 }
 
+const isColour = (v: unknown): v is PlayerColour =>
+  typeof v === 'string' && Object.hasOwn(PLAYER_COLOURS, v);
+
+/** The colours of the header (DEC-49): both known colours by player id, else none. */
+export function readColours(raw: unknown): [PlayerColour, PlayerColour] | null {
+  const [first, second]: unknown[] = Array.isArray(raw)
+    ? (raw as unknown[])
+    : isObj(raw)
+      ? [raw['0'], raw['1']]
+      : [];
+  return isColour(first) && isColour(second) ? [first, second] : null;
+}
+
 /** The parsed JSON as a `ReplayFile`; throws `ReplayError`. */
 export function parseReplay(raw: unknown): ReplayFile {
   if (!isObj(raw)) throw new ReplayError('invalid');
@@ -448,6 +476,10 @@ export function parseReplay(raw: unknown): ReplayFile {
   const nicks = readNicks(raw.nicks);
   if (nicks === null) delete file.nicks;
   else file.nicks = nicks;
+  // The colours (DEC-49): the same, and a colour this version does not know drops the key.
+  const colours = readColours(raw.colours);
+  if (colours === null) delete file.colours;
+  else file.colours = colours;
   // The optional per-player key (#598): kept only when every frame has a sound one, so a side is
   // either shown whole with its fog or not at all. A damaged key is dropped, never an error.
   const nodes = file.map.nodes.length;

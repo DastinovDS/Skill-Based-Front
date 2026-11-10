@@ -39,6 +39,7 @@ import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
 import type { EventMsg } from '../protocol.gen.ts';
+import { playerColours, type ColourIds } from './style.ts';
 import { captureWalks, floodDelayMs, type Walk } from './walkLayout.ts';
 
 /** Failed frames in a row before the player is told (a transient error is only skipped). */
@@ -73,6 +74,11 @@ export interface SceneOptions {
   source?: RenderSource | null;
   /** The viewing player: own groups and packets are this player's. Default 0. */
   player?: PlayerId;
+  /**
+   * The colour ids of the players by player id (DEC-49: `welcome.colours`, a replay header);
+   * without them today's look (the viewer Lapis, the opponent Minium).
+   */
+  colours?: ColourIds | null;
   /**
    * URL of the baked background (`maps/<id>.bg.webp`); without it flat terrain colours with the
    * terrain stamps (a map with a background has no stamps). Loaded through `Assets`, which caches
@@ -168,23 +174,37 @@ export class MapScene {
     this.layers = createLayers();
     const me = options.player ?? 0;
     this.me = me;
+    const colours = playerColours(me, options.colours);
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
     const hasBackground = options.backgroundUrl !== undefined && options.backgroundUrl !== null;
     const shapes = options.sprites ?? createSceneSprites(app.renderer);
     this.ownedSprites = options.sprites === undefined ? shapes : null;
     this.sprites = shapes.world;
     this.screenSprites = shapes.screen;
-    this.view = new MapView(map, this.layers, me, app.renderer, hasBackground, options.geo ?? null);
-    this.cities = new CityView(map, this.layers, me, 1, this.sprites);
+    this.view = new MapView(
+      map,
+      this.layers,
+      me,
+      app.renderer,
+      hasBackground,
+      options.geo ?? null,
+      colours,
+    );
+    this.cities = new CityView(map, this.layers, me, 1, this.sprites, colours);
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
     this.names = new NameView(map, this.layers, radiusOf, 1);
-    this.entities = new EntityView(map, this.layers, me, 1, radiusOf, this.sprites);
-    this.intents = new IntentView(map, this.layers, me, radiusOf);
+    this.entities = new EntityView(map, this.layers, me, 1, radiusOf, this.sprites, colours);
+    this.intents = new IntentView(map, this.layers, me, radiusOf, colours);
     this.intents.setWarehouseSlots((node, index) => this.cities.warehouseSlot(node, index));
-    this.forts = new FortView(map, this.layers, me, () => this.view.territoryEdges);
-    this.effects = new EffectsView(map, this.layers, me, 1, radiusOf, this.screenSprites);
-    this.tolls = new TollView(this.layers.layer.tolls, map, me, 1, (node, edge) =>
-      this.forts.lineAt(node, edge),
+    this.forts = new FortView(map, this.layers, me, () => this.view.territoryEdges, colours);
+    this.effects = new EffectsView(map, this.layers, me, 1, radiusOf, this.screenSprites, colours);
+    this.tolls = new TollView(
+      this.layers.layer.tolls,
+      map,
+      me,
+      1,
+      (node, edge) => this.forts.lineAt(node, edge),
+      colours,
     );
     this.fog = new FogView(
       map,
@@ -195,13 +215,13 @@ export class MapScene {
       this.source?.tickHz ?? DEFAULT_TICK_HZ,
       radiusOf,
     );
-    this.overlay = new OverlayView(map, this.layers, me, radiusOf);
-    this.groupOrders = new GroupOrderView(map, this.layers, me, radiusOf, this.sprites);
-    this.undo = new UndoView(map, this.layers, radiusOf);
-    this.supply = new SupplyView(map, this.layers, me, radiusOf, this.sprites);
+    this.overlay = new OverlayView(map, this.layers, me, radiusOf, colours[me]);
+    this.groupOrders = new GroupOrderView(map, this.layers, me, radiusOf, this.sprites, colours);
+    this.undo = new UndoView(map, this.layers, radiusOf, colours[me]);
+    this.supply = new SupplyView(map, this.layers, me, radiusOf, this.sprites, colours);
     this.flow = new FlowView(map, this.layers, me, radiusOf, this.sprites);
     this.sight = new SightView(map, this.layers, me, radiusOf);
-    this.alerts = new AlertView(map, this.layers, me, radiusOf);
+    this.alerts = new AlertView(map, this.layers, me, radiusOf, colours);
     this.controller = new CameraController(
       app.canvas,
       this.layers.world,

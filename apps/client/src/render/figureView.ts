@@ -17,7 +17,7 @@ import { reducedMotion } from './motion.ts';
 import { knownOfFigure } from './rangeLabel.ts';
 import { spreadApart, type SpreadItem } from './spread.ts';
 import { Token, type EntityKit } from './shapes.ts';
-import { BG, ENEMY, PAPER, PLATE_FILL } from './style.ts';
+import { BG, PAPER, PLATE_FILL } from './style.ts';
 
 /** How far out the pointer head stands, clear of the brim of the helmet (world units, #775). */
 const HELMET_HEAD_PUSH = 9;
@@ -222,6 +222,11 @@ export class FigureView {
     };
   }
 
+  /** The opponent's colour (DEC-49): the figures are always the opponent's. */
+  private get color(): number {
+    return this.kit.colours[this.enemy];
+  }
+
   private drawHead(g: Graphics, dir: Point): void {
     // The head stands out of the helmet, clear of the brim (#775).
     const push = HELMET_HEAD_PUSH;
@@ -231,7 +236,7 @@ export class FigureView {
       .poly(points)
       .stroke({ width: 4, color: BG, join: 'round' })
       .poly(points)
-      .fill(ENEMY)
+      .fill(this.color)
       .stroke({ width: 1.6, color: PAPER, join: 'round' });
   }
 
@@ -245,7 +250,7 @@ export class FigureView {
       .clear()
       .roundRect(-width / 2, -height / 2, width, height, 4)
       .fill({ color: PLATE_FILL, alpha: 0.95 })
-      .stroke({ width: 1.4, color: ENEMY });
+      .stroke({ width: 1.4, color: this.color });
   }
 
   /** The ring and the tick of the figures that came out of the fog in the last 2 s, on their border points. */
@@ -275,7 +280,7 @@ export class FigureView {
       if (marks.ring !== null) {
         g.circle(at.x, at.y, marks.ring.radius).stroke({
           width: 2.4,
-          color: ENEMY,
+          color: this.color,
           alpha: marks.ring.alpha,
         });
       }
@@ -284,7 +289,7 @@ export class FigureView {
         const ny = dir.x * tickHalf;
         g.moveTo(at.x - nx, at.y - ny)
           .lineTo(at.x + nx, at.y + ny)
-          .stroke({ width: 3.4, color: ENEMY, alpha: marks.tick.alpha, cap: 'round' });
+          .stroke({ width: 3.4, color: this.color, alpha: marks.tick.alpha, cap: 'round' });
         // A small chevron beside the tick, into the visible half.
         const cx = at.x + inward.x * 6;
         const cy = at.y + inward.y * 6;

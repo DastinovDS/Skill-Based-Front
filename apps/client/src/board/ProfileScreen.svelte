@@ -3,14 +3,16 @@
   import type { Api, MatchEntry, PlayerProfile } from '../api/http.ts';
   import type { AccountFailure } from '../app/account.ts';
   import AccountChip from '../app/AccountChip.svelte';
+  import ColourPicker from '../app/ColourPicker.svelte';
   import MenuTabs from '../app/MenuTabs.svelte';
   import type { AccountPages, MenuTabActions } from '../app/menuTabs.ts';
   import NickDialog from '../app/NickDialog.svelte';
   import UnitMark from '../app/UnitMark.svelte';
   import Icon from '../hud/Icon.svelte';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
-  import type { Calibration, MapFile } from '../protocol.gen.ts';
+  import type { Calibration, MapFile, PlayerColour } from '../protocol.gen.ts';
   import LapisButton from '../theme/LapisButton.svelte';
+  import { colourVar } from '../theme/tokens.ts';
   import { failed, type Load } from './boardState.svelte.ts';
   import ReplayChip from './ReplayChip.svelte';
   import SheetFrame from './SheetFrame.svelte';
@@ -39,6 +41,10 @@
     onbot: () => void;
     /** A new nick (`PUT /api/me/nick`); the answer is why it failed, or null. */
     onnick: (nick: string) => Promise<AccountFailure | null>;
+    /** The colour asked for in matches (DEC-49); null while unknown. */
+    colour?: PlayerColour | null;
+    /** A new colour (`PUT /api/me/colour`); the answer is why it failed, or null. Without it no picker. */
+    oncolour?: (colour: PlayerColour) => Promise<MessageKey | null>;
     onpassword: () => void;
     onlogout: () => void;
     /** Esc: back to the screen the profile was opened from. */
@@ -57,6 +63,8 @@
     onwatch,
     onbot,
     onnick,
+    colour = null,
+    oncolour,
     onpassword,
     onlogout,
     onback,
@@ -154,7 +162,9 @@
   <!-- The own profile (#871, Lapis round 2 `profile`): the player, the facts, the matches. -->
   <div class="profile">
     <div class="sheethead">
-      <UnitMark side="own" size={46} />
+      <span class="mark" style:--own={colour === null ? undefined : colourVar(colour)}>
+        <UnitMark side="own" size={46} />
+      </span>
       <div class="name">
         <p class="kicker">{t('profile.kicker')}</p>
         <h2>{nick}</h2>
@@ -170,6 +180,12 @@
       >
       {#if saved}<p class="sr" role="status">{t('profile.nick.saved')}</p>{/if}
     </div>
+
+    {#if oncolour !== undefined}
+      <div class="colour">
+        <ColourPicker value={colour} onchange={oncolour} />
+      </div>
+    {/if}
 
     {#if own.status === 'loading'}
       <p class="sr" role="status">{t('profile.loading')}</p>
@@ -363,6 +379,14 @@
 
   .sheethead p {
     margin: 0;
+  }
+
+  .mark {
+    display: inline-flex;
+  }
+
+  .colour {
+    margin: 22px 0 30px;
   }
 
   .sheethead .lnk {

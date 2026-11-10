@@ -46,6 +46,24 @@ test('shot of the replay viewer', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'replay.png') });
 });
 
+// The replay in the players' colours (DEC-49): `replay-colours.png` both sides, `-p2.png` through the
+// eyes of player 2 (the shapes change sides, the colours stay with the players).
+test('shot of the replay viewer in the players colours', async ({ page }) => {
+  await page.goto('/?replay=dev-colours');
+  const canvas = page.locator('.game-canvas');
+  await expect(canvas).toHaveAttribute('data-tick', '0');
+  await page.getByLabel('Position in the match').fill('300');
+  await expect(canvas).toHaveAttribute('data-tick', '300');
+  await page.screenshot({ path: join(OUT, 'replay-colours.png') });
+  await page
+    .getByRole('group', { name: 'View as' })
+    .getByRole('button', { name: 'Player 2' })
+    .click();
+  await expect(canvas).toHaveAttribute('data-tick', '300');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(OUT, 'replay-colours-p2.png') });
+});
+
 // The buildings in the replay (#905): `replay-buildings.png` the full view of both players,
 // `replay-buildings-<side>.png` through the eyes of each side with the fog on (only what that side
 // saw of the enemy's buildings), at tick 900 of the dev sample, and `-early` at tick 300.

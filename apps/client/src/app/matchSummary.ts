@@ -1,3 +1,5 @@
+import type { PlayerColour } from '../protocol.gen.ts';
+
 /**
  * What the client knows about its own side at the end of a match, for the result screen (#596):
  * the nicks of the welcome. The numbers of the screen are the server's totals in `match_end.stats`
@@ -5,4 +7,6 @@
  */
 export interface MatchSummary {
   readonly nicks: { readonly mine: string; readonly enemy: string };
+  /** The colours of the two players by player id (DEC-49, `welcome.colours`); absent: today's look. */
+  readonly colours?: readonly [PlayerColour, PlayerColour];
 }

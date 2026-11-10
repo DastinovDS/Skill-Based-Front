@@ -32,7 +32,6 @@ import {
   CAPITAL_RADIUS,
   CASED,
   DARK_PLATE,
-  ENEMY,
   GHOST_CP,
   HELMET_FRAME,
   ORDER_GHOST_ALPHA,
@@ -250,11 +249,13 @@ export class OverlayView {
   constructor(
     private readonly map: MapFile,
     layers: MapLayers,
-    // The viewing player: the own colour is blue whoever that is (6).
+    // The viewing player: the selection, the previews and the ghosts are theirs.
     _me: PlayerId,
     /** Radius of a city now (`CityView.radiusOf`); the class radius of the city kind by default. */
     private readonly radiusOf: (node: number) => number = (node) =>
       map.nodes[node]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS,
+    /** The viewer's colour (DEC-49); Lapis by default. */
+    private readonly own: number = YOU,
   ) {
     this.etaText = new Text({
       text: '',
@@ -519,7 +520,7 @@ export class OverlayView {
       const points = this.routePoints([from, preview.to]);
       if (points.length < 2) continue;
       drawCasedArrow(g, points, {
-        color: YOU,
+        color: this.own,
         ghost: true,
         alpha: ORDER_GHOST_ALPHA,
         seconds: reduced ? 0 : now / 1000,
@@ -548,12 +549,12 @@ export class OverlayView {
     g.poly(poly).stroke({ width: E.casing, color: CASING, join: 'round' });
     g.poly(poly).fill({ color: DARK_PLATE, alpha: E.plateAlpha });
     // A wash of the own colour under the hatch: the preview reads as an own planned ribbon (D2).
-    g.poly(poly).fill({ color: YOU, alpha: 0.28 });
+    g.poly(poly).fill({ color: this.own, alpha: 0.28 });
     g.poly(poly).fill({
       texture: this.ownHatch.texture,
       textureSpace: 'global',
       matrix: this.ownHatch.matrix(E.own.angle),
-      color: YOU,
+      color: this.own,
       alpha: E.own.alpha,
     });
     g.poly(poly).stroke({ width: Math.max(E.outline, this.hair()), color: INK, join: 'round' });
@@ -673,7 +674,7 @@ export class OverlayView {
     g.clear();
     g.roundRect(left, -M.height / 2, width, M.height, M.height / 2)
       .fill({ color: BG, alpha: M.fillAlpha })
-      .stroke({ width: M.rim.width, color: YOU, alpha: M.rim.alpha });
+      .stroke({ width: M.rim.width, color: this.own, alpha: M.rim.alpha });
     // The chevron of a bonus, as on the plan banner, the pill of a planned order and the badges.
     const cx = left + M.padding + d;
     drawBonusChevron(g, cx, 0, M.chevron);
@@ -700,7 +701,7 @@ export class OverlayView {
     const points = slicePath(this.pathPoints, 0, pathLength(this.pathPoints) * grow);
     g.clear();
     drawCasedArrow(g, points, {
-      color: YOU,
+      color: this.own,
       ghost: true,
       seconds: reduced ? 0 : now / 1000,
       hair: this.hair(),
@@ -875,7 +876,7 @@ export class OverlayView {
     const points = this.routePoints(route).map((p) => ({ x: p.x + look.dx, y: p.y }));
     if (points.length < 2) return;
     drawCasedArrow(g, points, {
-      color: cut ? ENEMY : YOU,
+      color: cut ? GHOST_CP.color : this.own,
       ghost: !cut,
       alpha: look.alpha,
       seconds: reduced || status === 'rejected' ? null : now / 1000,
@@ -911,7 +912,7 @@ export class OverlayView {
     if (shape === null) return;
     const poly = shape.ribbon.outline.flatMap((p) => [p.x, p.y]);
     const G = RIBBON_ENGRAVED.ghost;
-    g.poly(poly).fill({ color: YOU, alpha: G.fill * alpha });
+    g.poly(poly).fill({ color: this.own, alpha: G.fill * alpha });
     g.poly(poly).stroke({ width: G.casing, color: CASING, alpha, join: 'round' });
     g.poly(poly).stroke({ width: Math.max(G.ink, this.hair()), color: INK, alpha, join: 'round' });
   }

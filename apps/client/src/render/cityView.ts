@@ -6,7 +6,6 @@ import {
   CAPITAL_RADIUS,
   CAPTURE,
   CROWN,
-  ENEMY,
   NODE_RADIUS,
   PROVINCE,
   RECRUIT_PIPS,
@@ -14,7 +13,10 @@ import {
   VP,
   VP_LOZENGE,
   YOU,
+  otherPlayer,
+  sideColours,
   sideOf,
+  type PlayerColours,
 } from './style.ts';
 import { reducedMotion } from './motion.ts';
 import { EaseTween } from './tween.ts';
@@ -261,6 +263,8 @@ export class CityView {
     private readonly me: PlayerId,
     labelResolution: number,
     private readonly sprites: SpriteCache,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     this.vpStyle = new TextStyle({
       fontFamily: pieceFamily(),
@@ -648,6 +652,11 @@ export class CityView {
     return owner === null ? 'neutral' : sideOf(this.me, owner);
   }
 
+  /** The colour of a city of `owner` (DEC-49); nobody's has no colour of a player. */
+  private colorOf(owner: PlayerId | null): number | undefined {
+    return owner === null ? undefined : this.colours[owner];
+  }
+
   /** The body of city `id`. */
   private drawBody(id: number, state: CityState): void {
     const node = this.map.nodes[id];
@@ -656,12 +665,13 @@ export class CityView {
     const kind = this.kindOf(state.owner);
     const spec =
       node.kind === 'province'
-        ? provinceBodySpec(kind, state.occupied)
+        ? provinceBodySpec(kind, state.occupied, this.colorOf(state.owner))
         : cityBodySpec(
             kind,
             this.radii[id] ?? NODE_RADIUS,
             node.capital_of !== null,
             state.occupied,
+            this.colorOf(state.owner),
           );
     const old = body.spec;
     // A capture cross-fades the colour; units coming or going swap the plate at once.
@@ -780,7 +790,11 @@ export class CityView {
     const barOn = ringOn && warehouse !== null;
     bar.set(
       barOn
-        ? warehouseMarksSpec(state.warehouseCap ?? warehouse, warehouse, stockColor(kind))
+        ? warehouseMarksSpec(
+            state.warehouseCap ?? warehouse,
+            warehouse,
+            stockColor(kind, this.colorOf(state.owner)),
+          )
         : null,
     );
     if (barOn) bar.position.set(0, lozengeRowY(radius));
@@ -804,7 +818,7 @@ export class CityView {
     const radius = this.radii[id] ?? NODE_RADIUS;
     const kind = this.kindOf(state.owner);
     const enemy = kind === 'enemy';
-    const color = enemy ? ENEMY : YOU;
+    const color = this.colours[enemy ? otherPlayer(this.me) : this.me];
     for (const tower of TOWER_KINDS) {
       const slot = slots[tower];
       const { built, build } = state.towers[tower];
@@ -1030,9 +1044,10 @@ export class CityView {
       pip.root.rotation = at.angle + Math.PI / 2;
       pip.root.scale.set(scale);
       const free = j >= count;
-      pip.back.set(helmetBackSpec('own', width, YOU, free ? 'dashed' : 'solid', false));
-      pip.front.set(helmetFrontSpec('own', width, YOU, free ? 'dashed' : 'solid'));
-      pip.level.set(free ? null : helmetLevelSpec('own', width, YOU));
+      const own = this.colours[this.me];
+      pip.back.set(helmetBackSpec('own', width, own, free ? 'dashed' : 'solid', false));
+      pip.front.set(helmetFrontSpec('own', width, own, free ? 'dashed' : 'solid'));
+      pip.level.set(free ? null : helmetLevelSpec('own', width, own));
       const unitTicks = state.unitTicks ?? 0;
       const share =
         free || j > 0

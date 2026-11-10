@@ -8,7 +8,7 @@
   import type { MapInteraction } from './interaction.ts';
   import { createSceneSprites, MapScene, type SceneSprites } from './mapScene.ts';
   import type { RenderSource } from './source.ts';
-  import { CANVAS_BACKGROUND } from './style.ts';
+  import { CANVAS_BACKGROUND, type ColourIds } from './style.ts';
 
   interface Props {
     map: MapFile;
@@ -18,6 +18,8 @@
     interaction?: MapInteraction | null;
     /** The viewing player (own groups and packets). Default 0. */
     player?: PlayerId;
+    /** The colours of the players by id (DEC-49); without them today's look (own Lapis, enemy Minium). */
+    colours?: ColourIds | null;
     /** URL of the baked background (WebP) of the map, if it has one. */
     backgroundUrl?: string | null;
     /** The vector file of the map (DEC-36), if it has one: the areas of the territory. */
@@ -35,6 +37,7 @@
     source = null,
     interaction = null,
     player = 0,
+    colours = null,
     backgroundUrl = null,
     geo = null,
     viewRect = null,
@@ -83,7 +86,7 @@
     scene?.setInsets(next);
   }
 
-  function show(next: MapFile, viewing: PlayerId): void {
+  function show(next: MapFile, viewing: PlayerId, sides: ColourIds | null): void {
     const current = app;
     if (current === null) {
       return;
@@ -100,6 +103,7 @@
           source,
           interaction,
           player: viewing,
+          colours: sides,
           backgroundUrl,
           geo,
           onbackground: (state: 'loaded' | 'failed') => {
@@ -121,10 +125,14 @@
     heldBackground = backgroundUrl;
   }
 
-  // Rebuild the scene when the map or the viewing player changes (the replay viewer switches the
-  // blue side, #599); the first build happens once init() resolves.
+  // The colours by value: a reconnect hands an equal pair again, which must not rebuild the scene.
+  const colourKey = $derived(colours === null ? '' : colours.join(','));
+
+  // Rebuild the scene when the map, the viewing player or the colours change (the replay viewer
+  // switches the side, #599); the first build happens once init() resolves.
   $effect(() => {
-    show(map, player);
+    // The key is the dependency; the pair itself is taken untracked.
+    show(map, player, colourKey === '' ? null : untrack(() => colours));
   });
 
   $effect(() => {
@@ -172,7 +180,7 @@
         }
         app = pending;
         sprites = createSceneSprites(pending.renderer);
-        show(map, player);
+        show(map, player, colours);
         if (typeof window.matchMedia === 'function') {
           watchDpr();
         }

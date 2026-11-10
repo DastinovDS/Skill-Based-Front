@@ -65,6 +65,11 @@
     if (import.meta.env.DEV && id === 'dev') {
       return parseReplay((await import('./siege.frames.json')).default);
     }
+    // `?replay=dev-colours`: the same sample with the header `colours` (DEC-49): Shell and Violet.
+    if (import.meta.env.DEV && id === 'dev-colours') {
+      const sample = (await import('./siege.frames.json')).default;
+      return parseReplay({ ...sample, colours: ['shell', 'violet'] });
+    }
     // `?replay=dev-fights`: a recording with fights (rounds, kills) for the fight arena (#323).
     if (import.meta.env.DEV && id === 'dev-fights') {
       return parseReplay((await import('./siege-fights.frames.json')).default);

@@ -19,7 +19,7 @@ import type { MapLayers } from './layers.ts';
 import { reducedMotion } from './motion.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import type { CellEdge } from './regionLayout.ts';
-import { CASING, CUT, INK, ownerColor } from './style.ts';
+import { CASING, CUT, INK, ownerColor, sideColours, type PlayerColours } from './style.ts';
 import {
   WALL,
   buildSpan,
@@ -187,6 +187,8 @@ export class FortView {
     layers: MapLayers,
     private readonly me: PlayerId,
     private readonly edges: () => readonly CellEdge[],
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     layers.layer.forts.addChild(this.root);
     usePieceFont([this.style]);
@@ -457,7 +459,7 @@ export class FortView {
   }
 
   private colorOf(owner: PlayerId): number {
-    return ownerColor(this.me, owner);
+    return ownerColor(this.colours, owner);
   }
 
   /** A hairline of `width` at 100 %, never under one device pixel. */

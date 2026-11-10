@@ -8,7 +8,7 @@ import { ringRadius } from './cityLayout.ts';
 import type { MapLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
 import { reducedMotion } from './motion.ts';
-import { BG, NEUTRAL_STROKE, PAPER, WARN, YOU } from './style.ts';
+import { BG, NEUTRAL_STROKE, PAPER, WARN, sideColours, type PlayerColours } from './style.ts';
 import type { MapFile } from '../protocol.gen.ts';
 
 const MAX_WARNINGS = 12;
@@ -55,6 +55,8 @@ export class AlertView {
     layers: MapLayers,
     private readonly me: PlayerId,
     private readonly radiusOf: (node: number) => number,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     this.style = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
@@ -124,7 +126,7 @@ export class AlertView {
     if (node === null || at === undefined) return;
     const base = this.radiusOf(node) + BEACON.gap;
     const radius = base * (1 + BEACON.grow * beaconPulse(nowMs, reducedMotion()));
-    g.circle(at.x, at.y, radius).stroke({ width: BEACON.width, color: YOU });
+    g.circle(at.x, at.y, radius).stroke({ width: BEACON.width, color: this.colours[this.me] });
     g.circle(at.x, at.y, radius + BEACON.width + 1).stroke({
       width: BEACON.outerWidth,
       color: PAPER,

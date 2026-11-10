@@ -52,6 +52,14 @@
   --own-lapis: #7d9ce2;
   --enemy-lapis: #e0735a;
 
+  /* The colours a player can choose (DEC-49, the set Engraved six; `PLAYER_COLOURS` of tokens.ts). */
+  --colour-lapis: #86a6ea;
+  --colour-minium: #e5785e;
+  --colour-glacier: #a6e0e8;
+  --colour-shell: #f4b4a4;
+  --colour-violet: #966fd6;
+  --colour-madder: #c8587e;
+
   /* Engraved: line and hatching on a dark plate, every coloured mark on a dark casing (52 to 57). */
   --plate: #0e0c09;
   --casing: #060504;
@@ -123,6 +131,16 @@
   background: var(--stone-tex) var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+}
+
+/* A match or a replay in the players' colours (DEC-49): the element sets `--own` and `--enemy` to
+   the two players' `--colour-<id>`; the names made of them are made again here, since a custom
+   property that reads another one is resolved where it is declared (`:root`). */
+.player-sides {
+  --you: var(--own);
+  --ok: var(--own);
+  --hatch-own: repeating-linear-gradient(0deg, var(--own) 0 1px, transparent 1px 3px);
+  --hatch-enemy: repeating-linear-gradient(45deg, var(--enemy) 0 1.2px, transparent 1.2px 3.4px);
 }
 
 html,

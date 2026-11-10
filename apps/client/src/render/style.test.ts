@@ -14,9 +14,13 @@ import {
   VP,
   WARN,
   YOU,
+  otherPlayer,
   ownerColor,
+  playerColours,
+  sideColours,
   sideOf,
 } from './style.ts';
+import { PLAYER_COLOURS } from '../theme/tokens.ts';
 
 // The pieces of the map take the Engraved pair of the tokens (#847, part 2 of #829, ui-style 57),
 // the same as the interface (`src/theme/tokens.test.ts`); the dark and white of the parts not
@@ -49,12 +53,39 @@ describe('the map palette (Engraved, ui-style 57)', () => {
   });
 });
 
-describe('sides', () => {
-  it('shows the viewing player as blue and the opponent as red, whoever that is', () => {
-    expect(ownerColor(0, 0)).toBe(YOU);
-    expect(ownerColor(0, 1)).toBe(ENEMY);
-    expect(ownerColor(1, 1)).toBe(YOU);
-    expect(ownerColor(1, 0)).toBe(ENEMY);
+describe('sides and colours (DEC-49)', () => {
+  it('without colours shows the viewing player in Lapis and the opponent in Minium, whoever that is', () => {
+    expect(ownerColor(sideColours(0), 0)).toBe(YOU);
+    expect(ownerColor(sideColours(0), 1)).toBe(ENEMY);
+    expect(ownerColor(sideColours(1), 1)).toBe(YOU);
+    expect(ownerColor(sideColours(1), 0)).toBe(ENEMY);
+    expect(playerColours(1, null)).toEqual(sideColours(1));
+    expect(playerColours(0, undefined)).toEqual([YOU, ENEMY]);
     expect(sideOf(1, 0)).toBe('enemy');
+  });
+
+  it('draws each player in their own colour by player id, the same for both viewers', () => {
+    // Shell against Violet: the colour follows the player id, not the side of the viewer.
+    for (const me of [0, 1] as const) {
+      const colours = playerColours(me, ['shell', 'violet']);
+      expect(hex(ownerColor(colours, 0))).toBe('#f4b4a4');
+      expect(hex(ownerColor(colours, 1))).toBe('#966fd6');
+    }
+    expect(playerColours(0, ['minium', 'lapis'])).toEqual([ENEMY, YOU]);
+    expect(otherPlayer(0)).toBe(1);
+    expect(otherPlayer(1)).toBe(0);
+  });
+
+  it('keeps the six colours of the set Engraved six', () => {
+    expect(
+      Object.fromEntries(Object.entries(PLAYER_COLOURS).map(([id, c]) => [id, hex(c)])),
+    ).toEqual({
+      lapis: '#86a6ea',
+      minium: '#e5785e',
+      glacier: '#a6e0e8',
+      shell: '#f4b4a4',
+      violet: '#966fd6',
+      madder: '#c8587e',
+    });
   });
 });

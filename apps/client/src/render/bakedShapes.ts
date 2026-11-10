@@ -71,18 +71,21 @@ function circlePoints(radius: number, n = 48): Point[] {
  * owner's colour (own blue, the enemy red with two ink rings inside, so the side reads without the
  * hue; a neutral one hatched in its grey), an ink ring outside it and a faint cut inside an owned one.
  * `occupied`: units stand there, the disc is the dark plate the helmet stands on. The capital star
- * (dark, an ink edge) shows on an empty capital.
+ * (dark, an ink edge) shows on an empty capital. `color`: the owner's colour (DEC-49), today's pair
+ * by default.
  */
 export function cityBodySpec(
   kind: CityKind,
   radius: number,
   capital: boolean,
   occupied = false,
+  color: number = kindColor(kind),
 ): BakeSpec {
   const E = CITY_ENGRAVED;
   const reach = radius + E.cut.grow;
+  const tint = kind === 'neutral' ? '' : String(color);
   return {
-    key: `city:${kind}:${String(radius)}:${capital ? 'c' : ''}:${occupied ? 'o' : ''}`,
+    key: `city:${kind}:${tint}:${String(radius)}:${capital ? 'c' : ''}:${occupied ? 'o' : ''}`,
     box: circleBox(reach + 1),
     draw(into, tools) {
       const g = graphics(into);
@@ -95,7 +98,7 @@ export function cityBodySpec(
           g.moveTo(a.x, a.y).lineTo(b.x, b.y);
         g.stroke({ width: tools.hair(width), color: NEUTRAL_STROKE, alpha });
       } else {
-        g.circle(0, 0, radius).fill(kind === 'you' ? YOU : ENEMY);
+        g.circle(0, 0, radius).fill(color);
       }
       g.circle(0, 0, radius + E.rim.grow).stroke({
         width: tools.hair(E.rim.width),
@@ -126,13 +129,18 @@ export function cityBodySpec(
  * A province (DEC-23; Engraved, #847, mockup `provinceAt`): a dark disc, the owner's dot with an ink
  * ring, the opponent's with a second ink ring outside (the side without the hue); nobody's a thin
  * grey ring with a dot. `occupied`: units stand there, only the dark disc under the helmet. The
- * capacity ring is the city ring (`cityRingSpec`).
+ * capacity ring is the city ring (`cityRingSpec`). `color`: the owner's colour (DEC-49).
  */
-export function provinceBodySpec(kind: CityKind, occupied = false): BakeSpec {
+export function provinceBodySpec(
+  kind: CityKind,
+  occupied = false,
+  color: number = kindColor(kind),
+): BakeSpec {
   const P = PROVINCE_ENGRAVED;
   const reach = P.enemy.radius + P.enemy.width;
+  const tint = kind === 'neutral' ? '' : String(color);
   return {
-    key: `province:${kind}:${occupied ? 'o' : ''}`,
+    key: `province:${kind}:${tint}:${occupied ? 'o' : ''}`,
     box: circleBox(reach + 1),
     draw(into, tools) {
       const g = graphics(into);
@@ -146,7 +154,7 @@ export function provinceBodySpec(kind: CityKind, occupied = false): BakeSpec {
         g.circle(0, 0, P.neutral.dot).fill(NEUTRAL_STROKE);
         return;
       }
-      g.circle(0, 0, P.dot).fill(kind === 'you' ? YOU : ENEMY);
+      g.circle(0, 0, P.dot).fill(color);
       g.circle(0, 0, P.rim.radius).stroke({ width: tools.hair(P.rim.width), color: INK });
       if (kind === 'enemy') {
         g.circle(0, 0, P.enemy.radius).stroke({ width: tools.hair(P.enemy.width), color: INK });
@@ -215,9 +223,14 @@ export function cityRingSpec(radius: number, capacity: number, garrison: number)
   };
 }
 
-/** The colour of the warehouse stock of a city kind. */
-export function stockColor(kind: CityKind): number {
+/** Today's colour of a city kind (the viewer Lapis, the opponent Minium): the look without colours. */
+function kindColor(kind: CityKind): number {
   return kind === 'you' ? YOU : kind === 'enemy' ? ENEMY : NEUTRAL_STROKE;
+}
+
+/** The colour of the warehouse stock of a city kind: the owner's `color` (DEC-49), grey for nobody. */
+export function stockColor(kind: CityKind, color: number = kindColor(kind)): number {
+  return kind === 'neutral' ? NEUTRAL_STROKE : color;
 }
 
 /**

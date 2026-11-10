@@ -317,7 +317,7 @@ Not doing: IM17.
 Engraved tokens (`--bg` is `var(--stone-bg)`, `--you` is `var(--own)` and so on). The table stays the palette
 of the map (`render/style.ts`) until the map's Engraved piece (#829).
 
-**Player colours (DEC-49, #906):** the set of colours a player can choose is Engraved six (Lapis `#86a6ea`, Minium `#e5785e`, Glacier `#a6e0e8`, Shell `#f4b4a4`, Violet `#966fd6`, Madder `#c8587e`), [accepted] (owner, 2026-11-10); `--you` and `--enemy` below stay the defaults (Lapis and Minium) until the implementation lands. Rules and proposed defaults: `docs/design/mechanics.md`, DEC-49.
+**Player colours (DEC-49, #906):** the set of colours a player can choose is Engraved six (Lapis `#86a6ea`, Minium `#e5785e`, Glacier `#a6e0e8`, Shell `#f4b4a4`, Violet `#966fd6`, Madder `#c8587e`), [accepted] (owner, 2026-11-10); implemented (#906): the hex values are `PLAYER_COLOURS` of `theme/tokens.ts` and `--colour-<id>` of `app.css`; a match, a replay and the result card set `--own` and `--enemy` to the two players' colours (the class `player-sides` derives `--you`, `--ok` and the hatches from them), the map takes the colour of the owner's player id; Lapis and Minium stay the look without colours (an old replay, the screens outside a match). The rule "red means only the opponent" is retired; the cut-off arrow of a refused order (`GHOST_CP`) keeps Minium as an alarm, told by its cross. Rules and proposed defaults: `docs/design/mechanics.md`, DEC-49.
 
 The values below are the only source of colors: the CSS variables `:root` (`app.css`) and the constants of
 `style.ts`. There is one dark theme.

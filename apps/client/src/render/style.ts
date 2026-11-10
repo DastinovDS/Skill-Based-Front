@@ -1,5 +1,5 @@
-import type { PlayerId, Terrain } from '../protocol.gen.ts';
-import { DURATION, ENGRAVED } from '../theme/tokens.ts';
+import type { PlayerColour, PlayerId, Terrain } from '../protocol.gen.ts';
+import { DURATION, ENGRAVED, PLAYER_COLOURS } from '../theme/tokens.ts';
 import { SOFT } from './softness.ts';
 
 // Visual constants of the map. Sizes are in world units (docs/design/map-format.md): cities are
@@ -7,8 +7,10 @@ import { SOFT } from './softness.ts';
 // the map. State is never shown by colour alone (AGENTS.md §7.4): see the comments below.
 
 // --- Palette (docs/design/ui-style.md, section 6): the only place with map colours ---------------
-// The pieces of the map (helmets, cities, marks) take the Engraved pair of `theme/tokens.ts` (#847,
-// part 2 of #829), so the map, its pieces and the interface share one own blue and one enemy red.
+// The pieces of the map (helmets, cities, marks) take the colour of their owner's player id
+// (`PlayerColours`, DEC-49, #906): each player in the colour they chose (`PLAYER_COLOURS` of
+// `theme/tokens.ts`). `YOU` and `ENEMY` are today's pair (the viewer Lapis, the opponent Minium),
+// the look of a match or replay without colours (`sideColours`).
 // `BG` and `PAPER` stay the old dark and white of the parts not restyled yet (roads, arrows, plates).
 
 export const BG = 0x0d1117;
@@ -73,7 +75,10 @@ export const BACKDROP_DIM = { color: BG, alpha: 0.18 } as const;
 export const CELL_BORDER = { width: 1, color: BG, alpha: 0.5 } as const;
 export const MAP_BORDER = { width: 2, color: 0x484f58 } as const;
 
-// --- Sides: the viewing player is always blue, the opponent always red -----------------------------
+// --- Sides and colours: each player in their colour (DEC-49) -------------------------------------
+// The side (own or the opponent's) is told by shape (the helmet's facing, the hatch direction, the
+// enemy city's inner rings), never by the colour alone (AGENTS.md 7.4): the colour belongs to the
+// player id, the shape to the viewer.
 export type Side = 'you' | 'enemy';
 
 /** Which side `owner` is for the player `me`. */
@@ -81,9 +86,30 @@ export function sideOf(me: PlayerId, owner: PlayerId): Side {
   return owner === me ? 'you' : 'enemy';
 }
 
-/** Colour of `owner` as seen by `me`: own blue, opponent red (red means only "opponent"). */
-export function ownerColor(me: PlayerId, owner: PlayerId): number {
-  return sideOf(me, owner) === 'you' ? YOU : ENEMY;
+/** The colours of the two players by player id (0xRRGGBB): `[player 0, player 1]`. */
+export type PlayerColours = readonly [number, number];
+
+/** The colour ids of the two players by player id, as `welcome.colours` and a replay header give them. */
+export type ColourIds = readonly [PlayerColour, PlayerColour];
+
+/** Today's look, for a match or replay without colours: the viewer `me` Lapis, the opponent Minium. */
+export function sideColours(me: PlayerId): PlayerColours {
+  return me === 0 ? [YOU, ENEMY] : [ENEMY, YOU];
+}
+
+/** The colours of the players by id; without ids (an old replay), today's look for `me`. */
+export function playerColours(me: PlayerId, ids: ColourIds | null | undefined): PlayerColours {
+  return ids == null ? sideColours(me) : [PLAYER_COLOURS[ids[0]], PLAYER_COLOURS[ids[1]]];
+}
+
+/** The colour of `owner`'s pieces. */
+export function ownerColor(colours: PlayerColours, owner: PlayerId): number {
+  return colours[owner];
+}
+
+/** The other player. */
+export function otherPlayer(player: PlayerId): PlayerId {
+  return player === 0 ? 1 : 0;
 }
 
 // Territory: the Border band and the engraved border lines of `engraving.ts` (#842); the flat tint
