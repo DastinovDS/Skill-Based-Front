@@ -208,6 +208,8 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
         capital_ticks: null,
       },
       vp: [first[1], second[1]],
+      // The frames carry no VP gains (#934): the replay shows none.
+      vp_gain: [0, 0],
       nodes,
       edges: frame.w.map((_, id) => ({
         id,

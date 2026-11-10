@@ -66,6 +66,7 @@ function view(shift: number, extra: Partial<View> = {}): View {
       capital_ticks: null,
     },
     vp: [0, 0],
+    vp_gain: [0, 0],
     nodes: [
       node(0, { dist: 3, down: [1], stock: 6, cap: 6 }),
       node(1, { dist: 2, down: [2, 5] }),

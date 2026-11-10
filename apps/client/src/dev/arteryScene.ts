@@ -260,6 +260,7 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
         capital_ticks: null,
       },
       vp: [9, 17],
+      vp_gain: [5, 7],
       nodes,
       edges,
       groups,

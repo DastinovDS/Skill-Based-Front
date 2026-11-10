@@ -160,6 +160,7 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
         capital_ticks: null,
       },
       vp: [6, 7],
+      vp_gain: [3, 4],
       nodes,
       edges,
       groups,

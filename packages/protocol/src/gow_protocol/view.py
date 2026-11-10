@@ -598,6 +598,12 @@ class View(WireModel):
     me: SelfView
     vp: tuple[NonNegInt, NonNegInt]
     """VP of both players, by player id; public (DEC-04)."""
+    vp_gain: tuple[NonNegInt, NonNegInt]
+    """VP each player gets at the next credit if the ownership stays as it is now, by player id
+    (the map ``vp`` of its cities, a capital times ``victory.capital_multiplier``; mechanics.md,
+    section 11, #934); public like ``vp`` (DEC-04). The next credit is on the tick
+    ``tick - tick % P + P`` with ``P = ruleset_public.victory.vp_period_ticks``; the
+    ``vp_awarded`` events of that tick carry what was really credited."""
     nodes: tuple[NodeView, ...]
     """Every node of the map, ``nodes[i].id == i``."""
     edges: tuple[EdgeView, ...]
