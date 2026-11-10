@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 47
+PROTOCOL_VERSION: Final = 48
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -229,8 +229,9 @@ class OrderKind(StrEnum):
 
 class AckMember(WireModel):
     """One group of a ``group_move``, in the order of its ``groups`` (DEC-48, item B6): accepted
-    with its path, or dropped with its ``reject_code`` (``STACK_LIMIT``: the client offers the
-    split of #762 for it)."""
+    with its path, or dropped with its ``reject_code``. A group too big for every path is split
+    by the server and its part goes (item B4, #913): ``split_units`` of ``group_units``; it is
+    ``STACK_LIMIT`` only when not even one unit has a path."""
 
     path: Annotated[tuple[NodeId, ...], Field(min_length=2)] | None
     """The nodes from the group's node to ``dest``; ``None`` for a dropped group."""
@@ -244,11 +245,24 @@ class AckMember(WireModel):
     """A planned member: its part of the requested bonus (item F2); 0 otherwise."""
     reject_code: Code | None
     """Why the group was dropped; ``None`` for an accepted one."""
+    split_units: PosInt | None = None
+    """The group was too big for every path (item B4, #913): the units of the part that split
+    off and goes (the largest size with a path, as ``reach.split``); the rest stays as the
+    group, without an order. ``None``: the whole group goes, or it was dropped."""
+    group_units: PosInt | None = None
+    """With ``split_units``: the units of the group at the command (the client shows "N of M
+    go"); ``None`` otherwise."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if (self.path is None) == (self.reject_code is None):
             raise ValueError("a member has a path or a reject code")
+        if (self.split_units is None) != (self.group_units is None):
+            raise ValueError("split_units and group_units come together")
+        if self.split_units is not None and (
+            self.path is None or self.group_units is None or self.split_units >= self.group_units
+        ):
+            raise ValueError("a split member goes with a part smaller than its group")
         if self.path is None and (self.depart_tick, self.arrive_tick, self.bonus) != (
             None,
             None,

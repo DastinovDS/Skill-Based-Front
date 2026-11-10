@@ -1185,8 +1185,9 @@ export interface AckMsg {
 }
 /**
  * One group of a ``group_move``, in the order of its ``groups`` (DEC-48, item B6): accepted
- * with its path, or dropped with its ``reject_code`` (``STACK_LIMIT``: the client offers the
- * split of #762 for it).
+ * with its path, or dropped with its ``reject_code``. A group too big for every path is split
+ * by the server and its part goes (item B4, #913): ``split_units`` of ``group_units``; it is
+ * ``STACK_LIMIT`` only when not even one unit has a path.
  */
 export interface AckMember {
   /**
@@ -1211,6 +1212,17 @@ export interface AckMember {
    * Why the group was dropped; ``None`` for an accepted one.
    */
   reject_code: string | null;
+  /**
+   * The group was too big for every path (item B4, #913): the units of the part that split
+   * off and goes (the largest size with a path, as ``reach.split``); the rest stays as the
+   * group, without an order. ``None``: the whole group goes, or it was dropped.
+   */
+  split_units: number | null;
+  /**
+   * With ``split_units``: the units of the group at the command (the client shows "N of M
+   * go"); ``None`` otherwise.
+   */
+  group_units: number | null;
 }
 /**
  * A simulation event visible to the player (``gow_sim.state.Event``; PRO-03 filters them).
@@ -1453,7 +1465,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 47;
+export const PROTOCOL_VERSION = 48;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

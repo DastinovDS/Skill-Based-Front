@@ -4,7 +4,8 @@ Expected values come from mechanics.md, section 5, "Group order: rally to an own
 synchronized arrival (DEC-48, #896)": the rule items A to M and the worked examples (tables S, R,
 P and RP), with the owner's changes of 2026-11-10 recorded there (a recruit without the CP for its
 walk gets no order and merges, rows RP8 and RP9; a command of a feature the ruleset does not have
-is ``INVALID_ARGUMENT``).
+is ``INVALID_ARGUMENT``; a member too big for every path is split automatically and its part goes,
+owner decision (9), #913: rows S5, S6, S14, S15, R8, P10).
 
 Map ``dec48`` (the map of the worked examples and its rot180 mirror; every node forest, so an edge
 takes exactly its ``travel_ticks``): player 0 owns the capital H (capacity 10), the city_large R
@@ -59,7 +60,7 @@ from gow_sim.ruleset import (
 from gow_sim.state import PLAN_WAIT, AtNode, Event, GameState, Group, Mode, OnEdge, Order
 from gow_sim.systems.capacity import change_owner
 from gow_sim.systems.orders import plan_parts
-from gow_sim.view import project
+from gow_sim.view import opaque_id, project, reach
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
@@ -85,6 +86,7 @@ _SPEC: dict[str, tuple[int, int, int]] = {
     "g4": (R, 4, 4),
     "g5": (H, 5, 5),
     "g6": (H, 1, 0),
+    "g8": (H, 7, 5),
 }
 
 
@@ -241,28 +243,59 @@ def test_s4_a_group_on_an_edge_is_dropped_and_keeps_its_order() -> None:
     assert g["g7"].order == order and g["g7"].group_order is None
 
 
-def test_s5_a_member_too_big_for_every_path_is_dropped() -> None:
+def _part(m: Match, events: list[Event], of: Group) -> Group:
+    """The group split off ``of`` by a group order (the event ``group_split``)."""
+    split = [e for e in events if e.kind == "group_split" and e.get("group") == of.id]
+    assert len(split) == 1, split
+    new = split[0].get("new_group")
+    assert isinstance(new, int)
+    return m.state.groups[new]
+
+
+def test_s5_a_member_too_big_for_every_path_is_split_and_its_part_goes() -> None:
     m, g = _start("g5", "g3")
-    _to(m, 100, GroupMove(_ids(g, "g5", "g3"), N))
+    events = _to(m, 100, GroupMove(_ids(g, "g5", "g3"), N))
     ok = _ok(m)
-    assert ok.members[0].reject is RejectCode.STACK_LIMIT
-    assert (ok.cost, ok.members[1].depart_tick, ok.members[1].arrive_tick) == (100, 100, 119)
-    _to(m, 119)
-    assert _at(g["g3"]) == N and m.state.nodes[N].owner == 0
+    g5 = g["g5"]
+    assert ok.members[0] == Member(
+        g5.id, (H, R, C, N), 100, 179, split_units=3, group_units=5
+    )  # T 80, A = 100 + 80 - 1
+    assert (ok.members[1].depart_tick, ok.members[1].arrive_tick) == (160, 179)
+    assert (ok.kind, ok.arrive_tick, ok.cost, _cp(m)) == (OrderKind.ATTACK, 179, 200, 300)
+    part = _part(m, events, g5)
+    assert (part.units, part.charged, _at(part)) == (3, 3, None)  # departed at 100
+    assert (g5.units, g5.charged, _at(g5), g5.order, g5.group_order) == (2, 2, H, None, None)
+    assert part.group_order == g["g3"].group_order is not None
+    _to(m, 178)
+    assert _at(part) is None and _at(g["g3"]) is None  # both on their way
+    _to(m, 179)
+    assert m.state.nodes[N].owner == 0  # taken by both (DEC-38)
+    here = [x for x in m.state.groups.values() if x.owner == 0 and x.location == AtNode(N)]
+    assert sum(x.units for x in here) == 5  # above the capacity 3 (DEC-12 follows)
+
+
+def test_s5_the_part_is_the_size_of_the_split_offer() -> None:
+    """The part that goes is the size ``reach`` offers for the split of #762."""
+    m, g = _start("g5")
+    key = HEADLESS_MATCH_KEY
+    seen = reach(m.state, m.rules, 0, opaque_id(key, 0, g["g5"].id), key)
+    assert seen is not None and dict(seen.split)[N] == 3
+    ok = validate(m.state, m.rules, 0, GroupMove(_ids(g, "g5"), N))
+    assert isinstance(ok, Ok) and ok.members[0].split_units == 3
 
 
 def test_s6_no_valid_member_rejects_the_command_with_the_first_code() -> None:
-    m, g = _start("g5", "g7")
-    _to(m, 100, GroupMove(_ids(g, "g5", "g7"), N))
+    m, g = _start("g7", "g6")
+    _to(m, 100, GroupMove(_ids(g, "g7", "g6"), H))
     outcome = _outcome(m)
     assert outcome == Reject(
-        RejectCode.STACK_LIMIT,
+        RejectCode.GROUP_ON_EDGE,
         (
-            Member(g["g5"].id, reject=RejectCode.STACK_LIMIT),
             Member(g["g7"].id, reject=RejectCode.GROUP_ON_EDGE),
+            Member(g["g6"].id, reject=RejectCode.INVALID_ARGUMENT),
         ),
     )
-    assert _cp(m) == 500 and g["g5"].order is None and not m.state.group_orders
+    assert _cp(m) == 500 and g["g6"].order is None and not m.state.group_orders
 
 
 def test_s7_cp_are_all_or_nothing() -> None:
@@ -380,6 +413,52 @@ def test_s13_an_empty_target_is_taken_for_one_charge_in_all() -> None:
     assert (sum(x.units for x in here), sum(x.charged for x in here)) == (7, 6)
 
 
+def test_s14_the_part_takes_the_charged_units_first_and_arrives_with_the_others() -> None:
+    m, g = _start("g8", "g1")
+    z = _group(m, E, 3, 3, owner=1)
+    events = _to(m, 100, GroupMove(_ids(g, "g8", "g1"), E))
+    ok = _ok(m)
+    g8 = g["g8"]
+    assert ok.members[0] == Member(g8.id, (H, R, A, E), 100, 209, split_units=6, group_units=7)
+    assert (ok.members[1].depart_tick, ok.members[1].arrive_tick) == (170, 209)
+    assert (ok.arrive_tick, ok.cost, _cp(m)) == (209, 200, 300)
+    part = _part(m, events, g8)
+    assert (part.units, part.charged) == (6, 5)
+    assert (g8.units, g8.charged, _at(g8), g8.order) == (1, 0, H, None)
+    _to(m, 169)
+    loc = part.location
+    assert isinstance(loc, OnEdge) and loc.from_node == A  # in transit through A
+    assert _at(g["g1"]) == A and g["g1"].id in m.state.groups  # waiting, no merge
+    _to(m, 208)
+    assert part.fight is None and g["g1"].fight is None
+    _to(m, 209)
+    fight = m.state.fights[part.fight or -1]
+    assert sorted(fight.members) == sorted((part.id, g["g1"].id, z.id))
+
+
+def test_s15_a_command_rejected_as_a_whole_splits_nothing() -> None:
+    m, g = _start("g5", cp=50)
+    events = _to(m, 100, GroupMove(_ids(g, "g5"), N))
+    assert _outcome(m) == Reject(RejectCode.NOT_ENOUGH_CP)
+    g5 = g["g5"]
+    assert (g5.units, g5.charged, g5.order, _cp(m)) == (5, 5, None, 50)
+    assert not [e for e in events if e.kind == "group_split"]
+    assert [x.id for x in m.state.groups.values() if x.owner == 0] == [g5.id]
+
+
+def test_b4_no_part_fits_the_member_stays_stack_limit() -> None:
+    """Item B4: only when not even one unit has a path (a node of capacity 0, no ruleset has
+    one) is the member dropped with ``STACK_LIMIT``."""
+    kinds = RULES.capacity.by_kind
+    rules = replace(RULES, capacity=replace(RULES.capacity, by_kind=replace(kinds, province=0)))
+    m, g = _start("g5", "g1", rules=rules)
+    _to(m, 100, GroupMove(_ids(g, "g5", "g1"), N))
+    outcome = _outcome(m)
+    assert isinstance(outcome, Reject) and outcome.code is RejectCode.STACK_LIMIT
+    assert [mm.reject for mm in outcome.members] == [RejectCode.STACK_LIMIT] * 2
+    assert g["g5"].units == 5
+
+
 # Rally -----------------------------------------------------------------------------------------
 
 
@@ -448,6 +527,22 @@ def test_r6_a_planned_rally_is_invalid() -> None:
 @pytest.mark.parametrize(("n", "cp"), [(1, 1), (2, 1), (3, 2), (4, 2), (5, 3), (6, 3)])
 def test_r7_the_rally_price(n: int, cp: int) -> None:
     assert rally_price(RULES, n) == cp * 100
+
+
+def test_r8_a_split_part_rallies_along_the_fastest_path_of_its_size() -> None:
+    m, g = _start("g8")
+    events = _to(m, 100, GroupMove(_ids(g, "g8"), B))
+    ok = _ok(m)
+    g8 = g["g8"]
+    assert (ok.kind, ok.cost, _cp(m), ok.arrive_tick) == (OrderKind.RALLY, 100, 400, 171)
+    assert ok.members[0] == Member(g8.id, (H, B), 100, 171, split_units=4, group_units=7)
+    part = _part(m, events, g8)
+    assert (part.units, part.charged) == (4, 4)
+    assert (g8.units, g8.charged, _at(g8), g8.order) == (3, 1, H, None)
+    _to(m, 170)
+    assert _at(part) is None
+    _to(m, 171)
+    assert _at(part) == B and (part.units, part.charged) == (4, 4)
 
 
 # Synchronized planned attack ------------------------------------------------------------------
@@ -569,6 +664,22 @@ def test_p8_a_member_that_never_gets_its_charge_holds_the_order_until_cancelled(
     assert [_departs(g)[0], _departs(g)[2]] == [300, 310]
     assert m.state.group_orders[g["g1"].group_order or -1].arrive_tick == 339
     assert g["g1"].bonus + g["g3"].bonus == 3
+
+
+def test_p10_the_cap_of_a_split_member_is_its_part() -> None:
+    m, g = _start("g8", "g1")
+    g8 = g["g8"]
+    g8.charged = 7
+    events = _to(m, 100, GroupMove(_ids(g, "g8", "g1"), E, planned=True, bonus=10))
+    ok = _ok(m)
+    assert [mm.bonus for mm in ok.members] == [6, 3]
+    assert [mm.split_units for mm in ok.members] == [6, 0]
+    assert (ok.cost, _cp(m)) == (200, 300)
+    part = _part(m, events, g8)
+    assert (part.units, part.charged, part.plan) == (6, 6, 6)
+    assert (g8.units, g8.charged, g8.order, g8.intent) == (1, 1, None, None)
+    enemy = project(m.state, m.rules, 1, HEADLESS_MATCH_KEY)
+    assert sorted((i.origin, i.target) for i in enemy.intents) == [(H, E), (A, E)]
 
 
 def test_p9_a_single_plan_departs_by_itself_and_its_release_is_invalid() -> None:

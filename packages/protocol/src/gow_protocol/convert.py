@@ -771,6 +771,8 @@ def _ack_member(m: sim.Member) -> AckMember:
         arrive_tick=m.arrive_tick,
         bonus=m.bonus,
         reject_code=None if m.reject is None else m.reject.value,
+        split_units=m.split_units or None,
+        group_units=m.group_units or None,
     )
 
 
