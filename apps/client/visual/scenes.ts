@@ -31,6 +31,7 @@ export const SCENES: readonly {
   { id: 'group_select', tick: 2400 },
   { id: 'group_plan', tick: 2400 },
   { id: 'group_order', tick: 2400 },
+  { id: 'rally_due', tick: 2580 },
   { id: 'terrain', tick: 2400, keys: ['KeyT'] },
   { id: 'economy', tick: 2400 },
   { id: 'build_pay', tick: 2400 },

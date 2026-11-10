@@ -143,6 +143,9 @@
           roundTicks: welcome.ruleset_public.combat.round_ticks,
           recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
           recruitQueueMax: welcome.ruleset_public.recruit.queue_max,
+          rallyCost: welcome.ruleset_public.recruit.rally_point
+            ? welcome.ruleset_public.recruit.rally_cost
+            : 0,
           provinceWarehouse: welcome.ruleset_public.city_upgrades.warehouse_province,
           fortBuildTicks: welcome.ruleset_public.fort.build_ticks,
           audio: new MatchAudio({

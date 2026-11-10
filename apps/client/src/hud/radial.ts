@@ -68,6 +68,11 @@ export interface RadialItem {
 export interface RadialPrice {
   /** CP as the page writes them ("1.5"), drawn with the CP mark. */
   readonly cp?: string;
+  /**
+   * CP each unit pays later as it walks to the rally point of the city (#930, W8: "1 + 0.5"), as
+   * the page writes them; drawn after a rule, a walk arrow and a plus, with the CP mark.
+   */
+  readonly walk?: string;
   /** Charges it costs, one lozenge each; `have` of them filled (the warehouse holds them). */
   readonly charges?: number;
   readonly have?: number;

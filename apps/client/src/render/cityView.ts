@@ -1,11 +1,12 @@
 import { Container, Text, TextStyle } from 'pixi.js';
 import type { EventMsg, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { CityDevelopment } from './source.ts';
-import { cityRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
+import { cityRadius, ringRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
 import {
   CAPITAL_RADIUS,
   CAPTURE,
   CROWN,
+  GROUP_ORDER,
   NODE_RADIUS,
   PROVINCE,
   RECRUIT_PIPS,
@@ -21,6 +22,8 @@ import {
 import { reducedMotion } from './motion.ts';
 import { EaseTween } from './tween.ts';
 import { beaconPulse } from './alertLayout.ts';
+import { cityDues, rallyDues } from '../hud/rallyDue.ts';
+import { stayMarks, type StayMark } from './rallyStay.ts';
 import { alertAlpha } from './progressLayout.ts';
 import {
   buildProgress,
@@ -50,6 +53,8 @@ import {
 import {
   chargeSpec,
   crownSpec,
+  cpMarkGlyph,
+  cpMarkSpec,
   pipAlertSpec,
   towerBackSpec,
   towerFillSpec,
@@ -108,6 +113,11 @@ interface CityState {
   readonly warehouseCap: number | null;
   /** The towers on the ring: the barracks (DEC-26) and the factory (DEC-41, item 2). */
   readonly towers: Readonly<Record<TowerKind, TowerState>>;
+  /**
+   * #930, W4: the queued recruits that will walk to the rally point, by slot: `true` where the CP
+   * now do not pay the walk. Empty without a rally point.
+   */
+  readonly walks: readonly boolean[];
 }
 
 function towerKey(t: TowerState): string {
@@ -131,6 +141,7 @@ function stateKey(s: CityState): string {
     s.warehouseCap,
     towerKey(s.towers.barracks),
     towerKey(s.towers.factory),
+    s.walks.map((short) => (short ? 'x' : 'w')).join(''),
   ]
     .map(String)
     .join('|');
@@ -182,7 +193,22 @@ interface PipSlot {
   readonly front: BakedSprite;
   /** The shown share of the unit in production: eases toward the snapshot's. */
   readonly fill: EaseTween;
+  /** #930, W4: the CP mark of its walk, upright beyond it: dimmed, inked in from the foot. */
+  readonly mark: Container;
+  readonly markBack: BakedSprite;
+  readonly markFill: BakedSprite;
 }
+
+/** The CP mark of a walk on the ring (#930, W4): its size and how far beyond its recruit, world units. */
+const WALK_MARK = { size: 13, out: 15, dim: 0.42 } as const;
+/**
+ * The crossed CP mark at the gate of a city whose recruit stays home (#930): just beyond the tip of
+ * the rally chevron on the ring (`GROUP_ORDER.muster.chevron`), towards the point.
+ */
+const STAY_MARK = {
+  size: 11,
+  out: GROUP_ORDER.muster.chevron.gap + GROUP_ORDER.muster.chevron.length + 8,
+} as const;
 
 /** How long the fill of a recruit takes to follow a new snapshot, ms (one snapshot apart). */
 const PIP_EASE_MS = 120;
@@ -218,6 +244,8 @@ export class CityView {
   private readonly towers: Record<TowerKind, TowerSlot>[];
   private readonly pips: PipSlot[][];
   private readonly pipLayers: Container[];
+  /** #930: the crossed CP mark at the gate of each city, for a recruit that stays home. */
+  private readonly stayMarks: (BakedSprite | null)[];
   private readonly badges: (Container | null)[];
   private readonly vpLabels: Text[] = [];
   private readonly keys: string[];
@@ -291,6 +319,7 @@ export class CityView {
     this.towers = [];
     this.pips = [];
     this.pipLayers = [];
+    this.stayMarks = [];
     this.badges = [];
     for (const node of map.nodes) {
       const city = new Container({ x: node.x, y: node.y, label: `node-${String(node.id)}` });
@@ -309,6 +338,13 @@ export class CityView {
       ring.label = 'progress-alert';
       ring.visible = false;
       this.alerts.push(ring);
+      if (node.kind === 'province') this.stayMarks.push(null);
+      else {
+        const stay = city.addChild(sprites.sprite(cpMarkSpec('crossed', STAY_MARK.size)));
+        stay.label = 'rally-stay';
+        stay.visible = false;
+        this.stayMarks.push(stay);
+      }
       // A province carries no VP (DEC-23).
       if (node.vp > 0 && node.kind !== 'province') {
         const badge = city.addChild(new Container());
@@ -415,6 +451,7 @@ export class CityView {
         queueMax: 0,
         warehouseCap: null,
         towers: { barracks: none, factory: none },
+        walks: [],
       });
     });
   }
@@ -430,6 +467,8 @@ export class CityView {
     cityUpgrades: CityDevelopment | null = null,
     queueMax: number | null = null,
     provinceWarehouse = 0,
+    /** `recruit.rally_cost`, hundredths (#930); 0: no walk marks. */
+    rallyCost = 0,
   ): void {
     const garrison = new Map<number, number>();
     const occupied = new Set<number>();
@@ -461,6 +500,11 @@ export class CityView {
     }
     if (this.tick < base.tick - 1) this.tick = base.tick;
     this.baseTick = base.tick;
+    // #930, W4: the walks the CP will pay, the nearest first, as the CP gauge earmarks them.
+    const dues =
+      unitTicks === null
+        ? []
+        : rallyDues(base.view.nodes, this.me, base.view.me.cp, unitTicks, rallyCost);
     for (const node of base.view.nodes) {
       this.set(
         node.id,
@@ -472,6 +516,7 @@ export class CityView {
             occupied: occupied.has(node.id),
           },
           { unitTicks, cityUpgrades, queueMax, provinceWarehouse },
+          cityDues(dues, node.id).map((d) => d.short),
         ),
       );
     }
@@ -568,6 +613,7 @@ export class CityView {
       queueMax: number | null;
       provinceWarehouse: number;
     },
+    walks: readonly boolean[] = [],
   ): CityState {
     const { unitTicks, cityUpgrades, provinceWarehouse } = rules;
     // DEC-41, item 13: an own province has a warehouse of `provinceWarehouse` places (0: none). Any
@@ -627,6 +673,7 @@ export class CityView {
         },
         factory: { built: node.factory === true, build: factoryBuild },
       },
+      walks,
     };
   }
 
@@ -732,6 +779,7 @@ export class CityView {
       }
       pip.fill.step(dtMs);
       showPipFill(pip);
+      showMarkFill(pip);
       if (!pip.fill.active) this.easing.delete(pip);
     }
   }
@@ -1044,7 +1092,24 @@ export class CityView {
       else pip.fill.setTarget(share);
       showPipFill(pip);
       if (pip.fill.active) this.easing.add(pip);
+      // #930, W4: the CP mark of its walk beyond the recruit, upright; red with a down chevron
+      // when the CP now do not pay it.
+      const walk = free ? undefined : state.walks[j];
+      pip.mark.visible = walk !== undefined;
+      if (walk !== undefined) {
+        const d = Math.hypot(at.x, at.y);
+        const k = (d + WALK_MARK.out * scale) / d;
+        pip.mark.position.set(at.x * k, at.y * k);
+        pip.mark.scale.set(scale);
+        pip.markBack.set(cpMarkSpec(walk ? 'down' : 'ink', WALK_MARK.size, WALK_MARK.dim));
+        pip.markFill.set(walk ? null : cpMarkSpec('ink', WALK_MARK.size));
+        showMarkFill(pip);
+      }
     });
+    for (let j = slots; j < pips.length; j++) {
+      const pip = pips[j];
+      if (pip !== undefined) pip.mark.visible = false;
+    }
     const ring = count > 0 && (state.waiting || state.paused) ? recruitPip(radius, 0) : null;
     alert.set(ring === null ? null : pipAlertSpec(8));
     if (ring !== null) {
@@ -1062,13 +1127,72 @@ export class CityView {
     const level = root.addChild(this.sprites.sprite());
     const front = root.addChild(this.sprites.sprite());
     level.visible = false;
-    return { root, back, level, front, fill: new EaseTween(0, PIP_EASE_MS) };
+    const mark = layer.addChild(new Container({ label: 'walk-mark' }));
+    const markBack = mark.addChild(this.sprites.sprite());
+    const markFill = mark.addChild(this.sprites.sprite());
+    mark.visible = false;
+    return {
+      root,
+      back,
+      level,
+      front,
+      fill: new EaseTween(0, PIP_EASE_MS),
+      mark,
+      markBack,
+      markFill,
+    };
+  }
+
+  /**
+   * Every frame (#930): the own `rally_walk_no_cp` among `events` show the crossed CP mark at the
+   * gate of their city, towards its rally point, for a moment by the render tick.
+   */
+  setStays(events: readonly EventMsg[], tickHz: number): void {
+    const marks: readonly StayMark[] = stayMarks(
+      events,
+      this.me,
+      this.tick,
+      tickHz,
+      reducedMotion(),
+    );
+    this.stayMarks.forEach((sprite, id) => {
+      if (sprite === null) return;
+      const mark = marks.find((m) => m.node === id);
+      sprite.visible = mark !== undefined;
+      if (mark === undefined) return;
+      const node = this.map.nodes[id];
+      const target = mark.target === null ? undefined : this.map.nodes[mark.target];
+      let ux = 0;
+      let uy = -1;
+      if (node !== undefined && target !== undefined) {
+        const dx = target.x - node.x;
+        const dy = target.y - node.y;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          ux = dx / len;
+          uy = dy / len;
+        }
+      }
+      const r = ringRadius(this.radii[id] ?? NODE_RADIUS) + STAY_MARK.out;
+      sprite.position.set(ux * r, uy * r);
+      sprite.alpha = mark.alpha;
+    });
   }
 }
 
 /** The part of a body's key that names its owner and look, without the plate of units standing there. */
 function ownerPart(key: string): string {
   return key.replace(/:o$/, ':');
+}
+
+/** Inks a walk's CP mark in from its foot as its recruit is made (#930, W4). */
+function showMarkFill(pip: PipSlot): void {
+  const shown = pip.fill.value;
+  pip.markFill.visible = shown > 0 && pip.markFill.spec !== null;
+  if (shown <= 0) return;
+  const g = cpMarkGlyph(WALK_MARK.size);
+  const half = WALK_MARK.size / 2 + 1;
+  pip.markFill.cropBottom(half - g.bottom + 1 + shown * (g.bottom - g.top));
 }
 
 /** Puts a recruit's shown fill on its level sprite: the bottom of the dome up to the level. */

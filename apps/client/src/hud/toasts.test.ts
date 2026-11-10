@@ -15,17 +15,18 @@ describe('toastOf', () => {
     setLocale(initial);
   });
 
-  it('makes toasts of fights, captures, unpaid captures, attrition, a lost recruit queue, the rally point alerts only', () => {
+  it('makes toasts of fights, captures, unpaid captures, attrition, a lost recruit queue, the lost rally point only', () => {
     expect([...TOAST_EVENT_KINDS].sort()).toEqual([
       'attrition',
       'capture_failed',
       'fight_ended',
       'node_captured',
       'rally_point_cleared',
-      'rally_walk_no_cp',
       'recruit_queue_lost',
     ]);
     for (const kind of [
+      // #930 (W10): a recruit that stays home hangs a strip from the bar, not a toast.
+      'rally_walk_no_cp',
       'vp_awarded',
       'recruited',
       'stance_changed',

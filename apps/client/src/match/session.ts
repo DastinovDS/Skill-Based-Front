@@ -48,6 +48,8 @@ export interface MatchContext {
   recruitTicks?: number;
   /** `ruleset_public.recruit.queue_max`: the free slots a selected city shows (DEC-25). */
   recruitQueueMax?: number;
+  /** `ruleset_public.recruit.rally_cost` with `rally_point`: the walk marks on the ring (#930). */
+  rallyCost?: number;
   /** `ruleset_public.city_upgrades.warehouse_province`: the places of an own province warehouse (DEC-41, item 13). */
   provinceWarehouse?: number;
   /** `ruleset_public.city_upgrades` (DEC-26): the city build mark. */
@@ -91,6 +93,7 @@ export class MatchSession implements RenderSource {
   roundTicks: number | undefined;
   recruitTicks: number | undefined;
   recruitQueueMax: number | undefined;
+  rallyCost: number | undefined;
   provinceWarehouse: number | undefined;
   cityUpgrades: CityDevelopment | null | undefined;
   fortBuildTicks: number | undefined;
@@ -155,6 +158,7 @@ export class MatchSession implements RenderSource {
     this.roundTicks = context.roundTicks;
     this.recruitTicks = context.recruitTicks;
     this.recruitQueueMax = context.recruitQueueMax;
+    this.rallyCost = context.rallyCost;
     this.provinceWarehouse = context.provinceWarehouse;
     this.cityUpgrades = context.cityUpgrades;
     this.fortBuildTicks = context.fortBuildTicks;

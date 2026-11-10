@@ -130,7 +130,9 @@ describe('Hud', () => {
     expect(bar).not.toContain('Ember');
     expect(target.querySelector('[aria-label^="Stance: Balance"]')).not.toBeNull();
     expect(target.querySelector('[aria-label^="VP score"]')?.getAttribute('aria-label')).toBe(
-      'VP score: Ember 2, Guest 1',
+      // #930, P1: the next credit from the ruleset period (300 ticks: 50 ticks, 5 s, from 250) and
+      // the gains of both sides (`View.vp_gain`).
+      'VP score: Ember 2, Guest 1. Next credit in 5 s: Ember +3, Guest +2',
     );
     // CP as one Double frame gauge: the numeral and a ruled scale.
     expect(target.querySelectorAll('.cp .gauge')).toHaveLength(1);

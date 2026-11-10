@@ -13,6 +13,7 @@
   import { parseUndo, pinUndo } from './undoPin.ts';
   import { pinGroup } from './groupPin.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource, parseFlood } from './scenarios.ts';
+  import { rallyPlay } from './groupScene.ts';
   import { OrderBook } from '../match/orderBook.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
@@ -68,6 +69,9 @@
   // `?capture=<node>` turns on the price of a capture (`capture.charge_cost = 1`, DEC-38) and adds a
   // `capture_failed` event at that node to a fixture scene: its toast and the capture tip on a target
   // the player does not own (#580) can be looked at.
+  // `?play=rally` on the scene `rally_due` (#930): on the window event `dev-play` a walk is paid,
+  // then a VP credit comes, for the HUD (the map stays frozen).
+  const playRally = params.get('play') === 'rally';
   const capturePinned =
     params.has('capture') && Number.isInteger(Number(params.get('capture')))
       ? Number(params.get('capture'))
@@ -190,7 +194,27 @@
         // A frozen scene has no render clock: its toasts show at once.
         hud.onRender(Number.POSITIVE_INFINITY);
       });
+      if (playRally && scene.id === 'rally_due') {
+        // The steps start on the window event `dev-play`, so a screenshot script times its frames.
+        const timers: ReturnType<typeof setTimeout>[] = [];
+        const play = (): void => {
+          for (const step of rallyPlay(map)) {
+            timers.push(
+              setTimeout(() => {
+                for (const event of step.events) hud.onEvent(event);
+                hud.onSnapshot(step.snapshot);
+              }, step.atMs),
+            );
+          }
+        };
+        window.addEventListener('dev-play', play);
+        return () => {
+          window.removeEventListener('dev-play', play);
+          for (const timer of timers) clearTimeout(timer);
+        };
+      }
     }
+    return undefined;
   });
 
   // `?reject=<code>` (with `menus`) makes a fixture scene refuse every command with that code at

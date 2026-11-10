@@ -216,6 +216,22 @@
     return { tx: left + digits, mx: left + digits + 3, px: left + digits + 3 + 13 + 3 };
   }
 
+  /** The row "1 [CP] | -> +0.5 [CP]" of a recruit that will walk (#930, W8), centred on `x`. */
+  function walkRow(
+    cp: string,
+    walk: string,
+    x: number,
+  ): { tx: number; mx: number; rule: number; ax: number; wx: number; wm: number } {
+    const digits = cp.length * 7.6;
+    const walkDigits = (walk.length + 1) * 6.8;
+    const width = digits + 3 + 13 + 5 + 1 + 4 + 8 + 2 + walkDigits + 2 + 12;
+    const left = x - width / 2;
+    const rule = left + digits + 3 + 13 + 5;
+    const ax = rule + 5;
+    const wx = ax + 10;
+    return { tx: left + digits, mx: left + digits + 3, rule, ax, wx, wm: wx + walkDigits + 2 };
+  }
+
   // The hovered sector's name in the hub over the ring (Cut and ring, ui-style 54g).
   const hubName = $derived(items.find((item) => item.id === hover)?.label ?? null);
   const perMinute = $derived(t('radial.perMinute'));
@@ -301,7 +317,19 @@
             {@const p = item.price}
             {@const per = p.perMinute === true ? perMinute : ''}
             {@const top = spot.y + row.dy - 5 - row.h / 2}
-            {#if p.cp !== undefined}
+            {#if p.cp !== undefined && p.walk !== undefined}
+              <!-- #930, W8: the price now, then what each recruit pays as it walks to the point. -->
+              {@const w = walkRow(p.cp, p.walk, spot.x)}
+              <text x={w.tx} y={top + 14} class="figure end">{p.cp}</text>
+              <g transform="translate({w.mx} {top + 3})"><CpMark size={13} /></g>
+              <path class="walk-rule" d="M{w.rule} {top + 2}V{top + 17}" />
+              <path
+                class="walk-arrow"
+                d="M{w.ax} {top + 9.5}h6M{w.ax + 3.4} {top + 6.9}l2.6 2.6l-2.6 2.6"
+              />
+              <text x={w.wx} y={top + 14} class="walk-figure">+{p.walk}</text>
+              <g transform="translate({w.wm} {top + 4})"><CpMark size={12} /></g>
+            {:else if p.cp !== undefined}
               {@const f = figureRow(p.cp, spot.x, per)}
               <text x={f.tx} y={top + 14} class="figure end">{p.cp}</text>
               <g transform="translate({f.mx} {top + 3})"><CpMark size={13} /></g>
@@ -521,6 +549,24 @@
 
   .figure.end {
     text-anchor: end;
+  }
+
+  .walk-rule {
+    stroke: var(--ink);
+    stroke-opacity: 0.4;
+    stroke-width: 1;
+  }
+
+  .walk-arrow {
+    fill: none;
+    stroke: var(--own);
+    stroke-width: 1.5;
+  }
+
+  .walk-figure {
+    fill: var(--neutral);
+    font: 500 15px var(--font-text);
+    text-anchor: start;
   }
 
   .per {

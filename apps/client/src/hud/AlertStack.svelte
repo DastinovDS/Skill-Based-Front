@@ -3,6 +3,7 @@
   import type { AlertState } from '../match/alerts.svelte.ts';
   import type { OverflowAlert } from '../match/overflow.ts';
   import BarGlyph from '../theme/BarGlyph.svelte';
+  import CpMark from '../theme/CpMark.svelte';
   import HelmetIcon from '../units/HelmetIcon.svelte';
   import { alertRows, alertRowText } from './alertRows.ts';
   import { formatSeconds } from './format.ts';
@@ -28,8 +29,27 @@
 
 <!-- The alerts hang as strips under the top bar (Leader, ui-style 54q): a sign, the place and the
      numbers, no sentence; the sentence is the strip's accessible name. `Space` takes the camera there. -->
-{#if rows.length > 0}
+{#if rows.length > 0 || alerts.stays.length > 0}
   <ul class="alerts" aria-label={t('alert.title')}>
+    <!-- #930 (W10): a recruit stays home, its walk not paid: the city, the crossed CP mark and the
+         recruit, discharged (a hollow helmet). -->
+    {#each alerts.stays as stay (stay.seq)}
+      <li
+        class="strip stay"
+        role="alert"
+        aria-label={tf('alert.stay', {
+          node: names(stay.node),
+          target: names(stay.target ?? stay.node),
+        })}
+      >
+        <WarnSign />
+        <span class="place" aria-hidden="true">{names(stay.node)}</span>
+        <span class="inc" aria-hidden="true">
+          <span class="crossed"><CpMark size={15} /></span>
+          <HelmetIcon side="own" size={18} share={0} engraved />
+        </span>
+      </li>
+    {/each}
     {#each rows as row (row.kind)}
       <li class="strip {row.kind}" aria-label={alertRowText(row, alerts.tickHz, names)}>
         <WarnSign />
@@ -104,6 +124,24 @@
   .inc :global(.bar-glyph) {
     margin-left: 6px;
     color: var(--ink-dim);
+  }
+
+  /* The CP mark of the walk not paid, cut by a red stroke on a casing (shape, not only colour). */
+  .crossed {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .crossed::after {
+    content: '';
+    position: absolute;
+    left: -2px;
+    right: -2px;
+    top: 50%;
+    height: 1.6px;
+    background: var(--badge-down);
+    box-shadow: 0 0 0 1px var(--casing);
+    transform: rotate(-40deg);
   }
 
   .more {
