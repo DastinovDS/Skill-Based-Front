@@ -317,6 +317,8 @@ Not doing: IM17.
 Engraved tokens (`--bg` is `var(--stone-bg)`, `--you` is `var(--own)` and so on). The table stays the palette
 of the map (`render/style.ts`) until the map's Engraved piece (#829).
 
+**Player colours (DEC-49, #906):** the set of colours a player can choose is Engraved six (Lapis `#86a6ea`, Minium `#e5785e`, Glacier `#a6e0e8`, Shell `#f4b4a4`, Violet `#966fd6`, Madder `#c8587e`), [accepted] (owner, 2026-11-10); `--you` and `--enemy` below stay the defaults (Lapis and Minium) until the implementation lands. Rules and proposed defaults: `docs/design/mechanics.md`, DEC-49.
+
 The values below are the only source of colors: the CSS variables `:root` (`app.css`) and the constants of
 `style.ts`. There is one dark theme.
 
