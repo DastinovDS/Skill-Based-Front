@@ -8,6 +8,7 @@
   import type { MatchSummary } from './matchSummary.ts';
   import ScreenFrame from './ScreenFrame.svelte';
   import UnitMark from './UnitMark.svelte';
+  import { colourVar } from '../theme/tokens.ts';
 
   interface Props {
     me: PlayerId;
@@ -57,6 +58,9 @@
       nick: enemyNick,
     }),
   );
+
+  // Each side in its player's colour when the match told them (DEC-49), else today's pair.
+  const colours = $derived(summary?.colours ?? null);
 
   const mineVp = $derived(end.vp[me]);
   const enemyVp = $derived(end.vp[me === 0 ? 1 : 0]);
@@ -115,7 +119,12 @@
 <ScreenFrame {map} label={t('result.title')} wide>
   <!-- The result (Lapis, #845): the verdict in big cut capitals with the helmets of the outcome,
        the reason, the score as a tug, the server's totals, the rating; the replay first. -->
-  <div class="res">
+  <div
+    class="res"
+    class:player-sides={colours !== null}
+    style:--own={colours === null ? undefined : colourVar(colours[me])}
+    style:--enemy={colours === null ? undefined : colourVar(colours[me === 0 ? 1 : 0])}
+  >
     <p class="kicker">
       {mapId === null ? t('result.title') : `${t('result.title')} · ${mapId}`}
     </p>
@@ -216,6 +225,14 @@
   /* The result stands on the stone of the play screens, left, under the bar (Lapis, #845). */
   .res {
     padding-bottom: 32px;
+    /* The two sides: today's Lapis pair, or the players' colours of the match (DEC-49). */
+    --mine: var(--own-lapis);
+    --theirs: var(--enemy-lapis);
+  }
+
+  .res.player-sides {
+    --mine: var(--own);
+    --theirs: var(--enemy);
   }
 
   .verdict {
@@ -254,19 +271,21 @@
     margin-top: 34px;
   }
 
+  /* The nicks are in ink, the points in the players' colours (DEC-49, item 5). */
   .nm {
     min-width: 0;
     overflow-wrap: anywhere;
     font: 500 15px / 1.2 var(--font-display);
     letter-spacing: 0.14em;
+    color: var(--ink);
   }
 
-  .mine {
-    color: var(--own-lapis);
+  .vp.mine {
+    color: var(--mine);
   }
 
-  .enemy {
-    color: var(--enemy-lapis);
+  .vp.enemy {
+    color: var(--theirs);
   }
 
   .vp {
@@ -281,12 +300,12 @@
 
   .tug-mine {
     flex: 0 0 auto;
-    background: var(--own-lapis);
+    background: var(--mine);
   }
 
   .tug-enemy {
     flex: 1 1 0;
-    background: var(--enemy-lapis);
+    background: var(--theirs);
   }
 
   .stats {
@@ -352,7 +371,7 @@
   }
 
   .delta.up {
-    color: var(--own-lapis);
+    color: var(--mine);
   }
 
   .range {

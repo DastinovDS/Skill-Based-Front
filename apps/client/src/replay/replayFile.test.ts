@@ -26,6 +26,22 @@ describe('parseReplay', () => {
     }
   });
 
+  it('reads the optional colours of DEC-49 by player id; an old or odd file has none', () => {
+    const raw = (): object => ({ ...(SAMPLE_RAW as object) });
+    expect(SAMPLE.colours).toBeUndefined();
+    expect(parseReplay({ ...raw(), colours: ['shell', 'violet'] }).colours).toEqual([
+      'shell',
+      'violet',
+    ]);
+    expect(parseReplay({ ...raw(), colours: { '0': 'lapis', '1': 'madder' } }).colours).toEqual([
+      'lapis',
+      'madder',
+    ]);
+    for (const odd of [['shell'], ['shell', 'gold'], ['toString', 'lapis'], 'shell', null]) {
+      expect(parseReplay({ ...raw(), colours: odd }).colours).toBeUndefined();
+    }
+  });
+
   it('refuses an unknown format', () => {
     const next = { ...(SAMPLE_RAW as object), format: 3 };
     expect(() => parseReplay(next)).toThrow(expect.objectContaining({ code: 'format' }));

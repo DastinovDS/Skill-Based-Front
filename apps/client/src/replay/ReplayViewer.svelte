@@ -13,6 +13,7 @@
   import { hasVision, type ReplayFile } from './replayFile.ts';
   import ReplayTimeline from './ReplayTimeline.svelte';
   import SideMark from './SideMark.svelte';
+  import { colourVar } from '../theme/tokens.ts';
   import { blueSide, otherSide, type ReplayView } from './viewAs.ts';
 
   interface Props {
@@ -56,7 +57,8 @@
     sync();
   });
 
-  // The side the viewer watches as is drawn blue and stands on the left (ui-style 6, "Replay").
+  // The side the viewer watches as stands on the left and has the own shapes (ui-style 6, "Replay");
+  // each side is in its player's colour when the file has them (DEC-49), else blue and red.
   let view = $state<ReplayView>(untrack(() => initialView));
   const blue = $derived(blueSide(view));
 
@@ -125,12 +127,19 @@
 
 <svelte:window {onkeydown} />
 
-<main class="viewer" style:--bar-h="{barHeight}px">
+<main
+  class="viewer"
+  class:player-sides={file.colours !== undefined}
+  style:--bar-h="{barHeight}px"
+  style:--own={file.colours === undefined ? undefined : colourVar(file.colours[blue])}
+  style:--enemy={file.colours === undefined ? undefined : colourVar(file.colours[red])}
+>
   <GameCanvas
     bind:this={canvas}
     map={file.map}
     source={player}
     player={blue}
+    colours={file.colours ?? null}
     {backgroundUrl}
     {geo}
     onerror={(error: unknown) => {
@@ -414,9 +423,10 @@
     white-space: nowrap;
   }
 
+  /* The pressed choices and Play are in ink, not in a player's colour (DEC-49, item 5). */
   .seg button[aria-pressed='true'] {
-    border-color: var(--you);
-    background: var(--you);
+    border-color: var(--ink);
+    background: var(--ink);
     color: var(--bg);
     font-weight: 700;
   }
@@ -424,8 +434,8 @@
   /* The fog toggle: pressed is filled and bold like the choices; unavailable is dimmed and dashed,
      so the three states read without the hue. */
   .fog[aria-pressed='true'] {
-    border-color: var(--you);
-    background: var(--you);
+    border-color: var(--ink);
+    background: var(--ink);
     color: var(--bg);
     font-weight: 700;
   }
@@ -502,14 +512,15 @@
     min-width: 112px;
     min-height: 40px;
     padding: 0 14px;
-    border-color: var(--you);
-    background: var(--you);
+    border-color: var(--ink);
+    background: var(--ink);
     color: var(--bg);
     font-weight: 700;
   }
 
   .play:hover {
-    border-color: var(--paper);
+    border-color: var(--ink-soft);
+    background: var(--ink-soft);
   }
 
   .time {

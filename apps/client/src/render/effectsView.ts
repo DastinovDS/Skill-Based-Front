@@ -32,7 +32,16 @@ import { nodePoint, type TokenSpot } from './layout.ts';
 import { ringRadius } from './cityLayout.ts';
 import { helmetWidth } from './shapes.ts';
 import { reducedMotion } from './motion.ts';
-import { BOUNCE_HOME, CAPTURE, CASING, INK, WARN, ownerColor } from './style.ts';
+import {
+  BOUNCE_HOME,
+  CAPTURE,
+  CASING,
+  INK,
+  WARN,
+  ownerColor,
+  sideColours,
+  type PlayerColours,
+} from './style.ts';
 
 /** Ticks between rounds when the source does not say (DEC-32). */
 const DEFAULT_ROUND_TICKS = 20;
@@ -97,19 +106,24 @@ export class EffectsView {
     private readonly radiusOf: (node: number) => number,
     /** The baked shapes drawn in screen px (the plate and chips of the arenas). */
     private readonly sprites: SpriteCache,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     this.layer.addChild(this.rings, this.arrows, this.leaverLayer);
-    this.flagContext = [flagContext(ownerColor(me, 0)), flagContext(ownerColor(me, 1))];
+    this.flagContext = [
+      flagContext(ownerColor(this.colours, 0)),
+      flagContext(ownerColor(this.colours, 1)),
+    ];
     layers.layer.effects.addChild(this.layer);
     // The shots lie under the arenas: a shot over a city does not hide the plate that floats above it.
-    this.shots = new ParryView(layers.layer.effects, me, sprites);
+    this.shots = new ParryView(layers.layer.effects, me, sprites, colours);
     const enemy: PlayerId = me === 0 ? 1 : 0;
     this.particles = new ParticleLayer(layers.layer.effects, {
-      own: ownerColor(me, me),
-      enemy: ownerColor(me, enemy),
+      own: ownerColor(this.colours, me),
+      enemy: ownerColor(this.colours, enemy),
     });
     this.hits = new HitView(layers.layer.effects, map, me, labelResolution, radiusOf);
-    this.fightView = new FightView(map, layers, me, labelResolution, radiusOf, sprites);
+    this.fightView = new FightView(map, layers, me, labelResolution, radiusOf, sprites, colours);
     this.fightView.setContacts((place) => this.contactsAt(place));
   }
 
@@ -278,7 +292,11 @@ export class EffectsView {
       }
       const own = ghost.side === 'own';
       sprite.set(
-        helmetChipSpec('charged', !own, ownerColor(this.me, own ? this.me : this.me === 0 ? 1 : 0)),
+        helmetChipSpec(
+          'charged',
+          !own,
+          ownerColor(this.colours, own ? this.me : this.me === 0 ? 1 : 0),
+        ),
       );
       sprite.position.set(ghost.at.x, ghost.at.y);
       sprite.scale.set(own ? k : -k, k);
@@ -344,7 +362,7 @@ export class EffectsView {
         .stroke({ width: CAPTURE.ring.casing * scale, color: CASING, alpha: light.ring })
         .stroke({
           width: CAPTURE.ring.line * scale,
-          color: ownerColor(this.me, flood.to),
+          color: ownerColor(this.colours, flood.to),
           alpha: light.ring,
         });
       this.ringsDrawn = true;

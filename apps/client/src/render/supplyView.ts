@@ -31,7 +31,16 @@ import type { MapLayers } from './layers.ts';
 import { reducedMotion } from './motion.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import { circleHatch } from './pipeLayout.ts';
-import { BG, CASING, CUT, ENEMY, FLOW_LAYER, INK, SUPPLY_PRESENCE, YOU } from './style.ts';
+import {
+  BG,
+  CASING,
+  CUT,
+  FLOW_LAYER,
+  INK,
+  SUPPLY_PRESENCE,
+  sideColours,
+  type PlayerColours,
+} from './style.ts';
 import { edgeIndex, lanePoint, presenceOf, type EdgeIndex } from './supplyLayout.ts';
 
 /** A plate on the map (a label of the supply view): dark, a thin ivory rule inside. */
@@ -95,6 +104,8 @@ export class SupplyView {
     private readonly me: PlayerId,
     private readonly radiusOf: (node: number) => number,
     private readonly sprites: SpriteCache,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     this.index = edgeIndex(map);
     this.style = new TextStyle({
@@ -207,10 +218,10 @@ export class SupplyView {
       const helm = helmet('enemy', side * HELMET_SCALE);
       const place = (p: Point): Point => ({ x: at.x - p.x, y: at.y + p.y });
       helm.strap.map(place).forEach((p, i) => (i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y)));
-      g.stroke({ width, color: ENEMY, cap: 'round', join: 'round' });
+      g.stroke({ width, color: this.colours[this.me === 0 ? 1 : 0], cap: 'round', join: 'round' });
       g.poly(helm.dome.map(place).flatMap((p) => [p.x, p.y]))
         .fill({ color: BG, alpha: 0.9 })
-        .stroke({ width, color: ENEMY, join: 'round' });
+        .stroke({ width, color: this.colours[this.me === 0 ? 1 : 0], join: 'round' });
     }
   }
 
@@ -240,7 +251,7 @@ export class SupplyView {
     for (const canal of canals) {
       if (!canal.busy) for (const pair of canalHachures(canal.span, 0)) line(pair);
     }
-    g.stroke({ width: CANAL.hachure, color: YOU, alpha: CANAL.idleAlpha });
+    g.stroke({ width: CANAL.hachure, color: this.colours[this.me], alpha: CANAL.idleAlpha });
     for (const { span } of canals) for (const rail of canalRails(span)) line(rail);
     g.stroke({ width: CANAL.rail, color: INK });
     for (const { span } of canals) {
@@ -287,7 +298,7 @@ export class SupplyView {
       if (city === undefined) continue;
       const r = ringRadius(this.radiusOf(node)) + look.gap;
       g.circle(city.x, city.y, r).stroke({ width: look.casing, color: CASING });
-      g.circle(city.x, city.y, r).stroke({ width: look.width, color: YOU });
+      g.circle(city.x, city.y, r).stroke({ width: look.width, color: this.colours[this.me] });
       g.circle(city.x, city.y, ringRadius(this.radiusOf(node)) + look.inkGap).stroke({
         width: look.ink,
         color: INK,
@@ -340,7 +351,7 @@ export class SupplyView {
     for (const { span } of busy) {
       for (const [p, q] of canalHachures(span, phase)) g.moveTo(p.x, p.y).lineTo(q.x, q.y);
     }
-    g.stroke({ width: CANAL.hachure, color: YOU });
+    g.stroke({ width: CANAL.hachure, color: this.colours[this.me] });
   }
 
   /** Every frame: the own packets on the canals: a square of the own colour on a dark casing, turned along the road. */
@@ -360,7 +371,7 @@ export class SupplyView {
       const dir = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
       const { casing, fill, outline, ink } = CANAL.packet;
       g.poly(turnedSquare(at, dir, casing)).fill(CASING);
-      g.poly(turnedSquare(at, dir, fill)).fill(YOU);
+      g.poly(turnedSquare(at, dir, fill)).fill(this.colours[this.me]);
       g.poly(turnedSquare(at, dir, outline)).stroke({ width: ink, color: INK, join: 'miter' });
     }
   }

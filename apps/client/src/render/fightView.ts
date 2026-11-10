@@ -60,6 +60,8 @@ import {
   LOSS_FONT_SIZE,
   WARN,
   ownerColor,
+  sideColours,
+  type PlayerColours,
 } from './style.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 
@@ -233,6 +235,8 @@ export class FightView {
     private readonly radiusOf: (node: number) => number,
     /** The baked plate and chips, in screen px (`bake.ts`). */
     private readonly sprites: SpriteCache,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     // EB Garamond numerals (#856), ink on a dark cut halo; the feed has no halo (it lies on its plate).
     const text = (fill: number, size: number, stroke = true, weight = '600'): TextStyle =>
@@ -247,8 +251,8 @@ export class FightView {
     this.styles = {
       more: text(INK, 13),
       small: text(INK, 11),
-      own: text(ownerColor(me, me), LOSS_FONT_SIZE),
-      enemy: text(ownerColor(me, enemy), LOSS_FONT_SIZE),
+      own: text(ownerColor(this.colours, me), LOSS_FONT_SIZE),
+      enemy: text(ownerColor(this.colours, enemy), LOSS_FONT_SIZE),
       feed: text(INK, FEED.fontSize, false, '500'),
     };
     usePieceFont(Object.values(this.styles));
@@ -306,7 +310,7 @@ export class FightView {
 
   /** The colour of a side of the arena: own blue, the opponent red. */
   private colorOf(side: Side): number {
-    return ownerColor(this.me, side === 'own' ? this.me : this.me === 0 ? 1 : 0);
+    return ownerColor(this.colours, side === 'own' ? this.me : this.me === 0 ? 1 : 0);
   }
 
   private context(draw: (g: GraphicsContext) => GraphicsContext): GraphicsContext {

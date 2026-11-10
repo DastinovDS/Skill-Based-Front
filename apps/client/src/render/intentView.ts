@@ -33,6 +33,8 @@ import {
   ownerColor,
   RIBBON_ENGRAVED,
   WARN,
+  sideColours,
+  type PlayerColours,
 } from './style.ts';
 import { easeTravel } from '../theme/tokens.ts';
 
@@ -111,6 +113,8 @@ export class IntentView {
     layers: MapLayers,
     private readonly me: PlayerId,
     private readonly radiusOf: (node: number) => number,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     // Order arrows go under the tokens of the groups they belong to; ribbons of intents on top.
     layers.layer.groups.addChildAt(this.lines, 0);
@@ -248,7 +252,7 @@ export class IntentView {
     );
     if (shape === null) return null;
     const { axis, ribbon, bend, body } = shape;
-    const color = ownerColor(this.me, intent.owner);
+    const color = ownerColor(this.colours, intent.owner);
     // DEC-41, item 10: an own plan that gathers its bonus fills as the bonus grows (the server's
     // `bonus` of the requested `plan`), eased step by step.
     const order = item?.group.order;
@@ -388,7 +392,7 @@ export class IntentView {
   ): void {
     const A = RIBBON_ENGRAVED.attack;
     const g = this.rings;
-    const color = warn ? WARN : ownerColor(this.me, this.me === 0 ? 1 : 0);
+    const color = warn ? WARN : ownerColor(this.colours, this.me === 0 ? 1 : 0);
     const r = ring + FINE_RING.r2;
     const a0 = toward - A.span;
     const a1 = toward + A.span;
@@ -455,7 +459,7 @@ export class IntentView {
       const o = E.charge.outer / Math.SQRT2;
       const i = E.charge.inner / Math.SQRT2;
       g.poly([x, y - o, x + o, y, x, y + o, x - o, y]).fill(CASING);
-      g.poly([x, y - i, x + i, y, x, y + i, x - i, y]).fill(ownerColor(this.me, this.me));
+      g.poly([x, y - i, x + i, y, x, y + i, x - i, y]).fill(ownerColor(this.colours, this.me));
     }
     this.tailOf.clear();
   }
@@ -546,7 +550,7 @@ export class IntentView {
       const order = group.order;
       const unit = points.get(group.id);
       if (order === null || order.planned || unit === undefined) continue;
-      const color = ownerColor(this.me, owner ?? this.me);
+      const color = ownerColor(this.colours, owner ?? this.me);
       const start = location.kind === 'node' ? location.node : location.from_node;
       const tracked = trackOrder(this.chains.get(group.id) ?? null, order.path, start);
       this.chains.set(group.id, tracked.chain);

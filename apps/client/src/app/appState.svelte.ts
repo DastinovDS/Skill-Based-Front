@@ -15,7 +15,7 @@ import { BOT_START_TIMEOUT_MS } from './waiting.ts';
 import { MapCache } from './mapCache.svelte.ts';
 import { MENU_MAP } from './menuMap.ts';
 import type { MatchSummary } from './matchSummary.ts';
-import type { Calibration, MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
+import type { Calibration, MapFile, MatchEndMsg, PlayerColour, PlayerId } from '../protocol.gen.ts';
 
 export type Screen =
   /** Checking the saved guest. */
@@ -102,6 +102,8 @@ export class AppState {
   calibration = $state.raw<Calibration | null>(null);
   /** The own player id, known from `/api/me` once the menu has opened. */
   playerId = $state.raw<number | null>(null);
+  /** The colour the player asks for in matches (DEC-49), from `/api/me`; null while unknown. */
+  colour = $state.raw<PlayerColour | null>(null);
   /** The displayed rating of a ranked account (#78) for the corner chip; null while unknown. */
   rating = $state.raw<number | null>(null);
   /** The matchmaking queue is locked until this time (ms since the epoch), or null (DEC-34). */
@@ -116,6 +118,8 @@ export class AppState {
   readonly #location: Pick<Location, 'search' | 'pathname' | 'hash'>;
   readonly #replaceUrl: (url: string) => void;
   readonly #botTimeoutMs: number;
+  /** The number of the latest colour choice (`changeColour`). */
+  #colourSeq = 0;
 
   constructor(opts: AppStateOptions = {}) {
     this.api = opts.api ?? new Api();
@@ -138,6 +142,7 @@ export class AppState {
       try {
         const me = await this.api.me(saved.token);
         this.guest = { token: saved.token, nick: me.nick, hasPassword: me.has_password };
+        this.colour = me.colour;
         this.calibration = me.calibration ?? null;
         this.playerId = me.player_id;
         saveGuest(this.#storage, this.guest);
@@ -257,6 +262,30 @@ export class AppState {
     }
   }
 
+  /**
+   * The colour for the next matches (`PUT /api/me/colour`, DEC-49). Returns why it failed, or
+   * null; a lost session (401) goes to the menu with its notice like any other action.
+   */
+  async changeColour(colour: PlayerColour): Promise<MessageKey | null> {
+    const guest = this.#requireGuest();
+    // Shown at once; only the answer to the latest choice settles it (the arrow keys choose fast).
+    const before = this.colour;
+    const seq = ++this.#colourSeq;
+    this.colour = colour;
+    try {
+      const me = await this.api.changeColour(guest.token, colour);
+      if (seq === this.#colourSeq) this.colour = me.colour;
+      return null;
+    } catch (error) {
+      if (seq === this.#colourSeq) this.colour = before;
+      if (error instanceof ApiError && error.code === 'unauthorized') {
+        this.#fail(error);
+        return null;
+      }
+      return apiErrorKey(error);
+    }
+  }
+
   /** The own profile or the settings (#871), from the account chip of the current screen. */
   openAccountPage(name: 'profile' | 'settings'): void {
     const here = this.screen;
@@ -315,6 +344,7 @@ export class AppState {
       return; // Best effort, like the running match: the chip keeps what it showed.
     }
     this.playerId = me.player_id;
+    this.colour = me.colour;
     this.calibration = me.calibration ?? null;
     if (!me.has_password || this.calibration !== null) {
       this.rating = null;
@@ -420,6 +450,7 @@ export class AppState {
     this.guest = null;
     this.calibration = null;
     this.playerId = null;
+    this.colour = null;
     this.rating = null;
     this.queueBanUntil = null;
   }

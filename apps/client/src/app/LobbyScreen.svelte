@@ -4,9 +4,11 @@
   import { formatClock } from '../hud/format.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import { apiErrorKey } from './appState.svelte.ts';
+  import ColourPicker from './ColourPicker.svelte';
   import DockFrame from './DockFrame.svelte';
   import type { DockContext } from './dock.ts';
   import { startPolling } from './poll.ts';
+  import type { PlayerColour } from '../protocol.gen.ts';
 
   interface Props {
     api: Api;
@@ -19,9 +21,23 @@
     onback: () => void;
     /** How often the list is asked again, ms. */
     pollMs?: number;
+    /** The colour asked for in matches (DEC-49); null while unknown. */
+    colour?: PlayerColour | null;
+    /** A new colour (`PUT /api/me/colour`); the answer is why it failed, or null. Without it no picker. */
+    oncolour?: (colour: PlayerColour) => Promise<MessageKey | null>;
   }
 
-  let { api, token, dock, oncreate, onjoined, onback, pollMs = 2000 }: Props = $props();
+  let {
+    api,
+    token,
+    dock,
+    oncreate,
+    onjoined,
+    onback,
+    pollMs = 2000,
+    colour = null,
+    oncolour,
+  }: Props = $props();
 
   // Keyboard keys are not words of a language: they are labelled the same in every locale.
   const KEY_CREATE = 'C';
@@ -177,6 +193,12 @@
       {/each}
     </ul>
   {/if}
+  {#if oncolour !== undefined}
+    <!-- The colour for the match about to be joined or created (DEC-49). -->
+    <div class="colour">
+      <ColourPicker value={colour} onchange={oncolour} compact />
+    </div>
+  {/if}
   {#snippet actions()}
     {#if entries !== null && entries.length === 0}
       <LapisButton variant="primary" onclick={oncreate}>{t('lobby.create')}</LapisButton>
@@ -190,3 +212,9 @@
     </button>
   {/snippet}
 </DockFrame>
+
+<style>
+  .colour {
+    margin-top: 18px;
+  }
+</style>

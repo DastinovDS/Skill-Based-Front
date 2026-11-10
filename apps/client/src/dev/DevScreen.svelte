@@ -21,6 +21,8 @@
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
+  import { otherPlayer } from '../render/style.ts';
+  import { colourVar } from '../theme/tokens.ts';
 
   // Dev screen: a bundled map with the camera and a scene (a protocol fixture frozen at its tick,
   // or a live match against the dev server). The lobby replaces it.
@@ -115,6 +117,8 @@
 
   const map = $derived(BUNDLED_MAPS.find((m) => m.meta.name === mapName) ?? DEFAULT_MAP);
   const fixture = $derived(fixtureScene(sceneId));
+  // A scene may give the players their colours (DEC-49): the map, the HUD and the arena follow.
+  const colours = $derived(fixture?.colours ?? null);
   // A scene may play other rules (#649): the HUD and the menus follow them.
   const sceneRules = $derived(fixture?.rules ?? rules);
 
@@ -308,12 +312,19 @@
   }}
 />
 
-<main class="app">
+<main
+  class="app"
+  class:player-sides={colours !== null}
+  style:--own={colours === null ? undefined : colourVar(colours[DEV_PLAYER])}
+  style:--enemy={colours === null ? undefined : colourVar(colours[otherPlayer(DEV_PLAYER)])}
+>
   <GameCanvas
     bind:this={canvas}
     {map}
     {source}
     {interaction}
+    player={DEV_PLAYER}
+    {colours}
     backgroundUrl={backgroundUrl(map.meta.name)}
     geo={bundledGeo(map)}
     viewRect={fixture?.view ?? null}

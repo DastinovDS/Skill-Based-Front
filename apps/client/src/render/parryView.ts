@@ -22,7 +22,7 @@ import {
   type ParryMark,
   type Side,
 } from './parryLayout.ts';
-import { CASING, INK, WARN, ownerColor } from './style.ts';
+import { CASING, INK, WARN, ownerColor, sideColours, type PlayerColours } from './style.ts';
 
 /** Rounds drawn at once at most (two sides of each of the eight arenas of `FightView`). */
 const MAX_ROUNDS = 8;
@@ -72,9 +72,11 @@ export class ParryView {
     parent: Container,
     private readonly me: PlayerId,
     private readonly sprites: SpriteCache,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     const enemy: PlayerId = me === 0 ? 1 : 0;
-    this.colors = { own: ownerColor(me, me), enemy: ownerColor(me, enemy) };
+    this.colors = { own: ownerColor(this.colours, me), enemy: ownerColor(this.colours, enemy) };
     this.layer.addChild(this.lines, this.headLayer);
     parent.addChild(this.layer);
   }

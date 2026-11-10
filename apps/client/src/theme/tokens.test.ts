@@ -6,7 +6,10 @@ import {
   FONT,
   LAPIS,
   LINE,
+  PLAYER_COLOURS,
+  PLAYER_COLOUR_IDS,
   RADIUS,
+  colourVar,
   easeEngrave,
   easeSettle,
   easeTravel,
@@ -59,6 +62,15 @@ describe('the colour tokens (Lapis and Engraved)', () => {
     ['badge-down', ENGRAVED.down],
   ])('--%s in app.css equals the TS token', (name, value) => {
     expect(token(name).toLowerCase()).toBe(hex(value));
+  });
+
+  it("keeps the player colours of DEC-49 in app.css, today's pair first", () => {
+    for (const id of PLAYER_COLOUR_IDS) {
+      expect(token(`colour-${id}`).toLowerCase()).toBe(hex(PLAYER_COLOURS[id]));
+      expect(colourVar(id)).toBe(`var(--colour-${id})`);
+    }
+    expect(PLAYER_COLOUR_IDS.slice(0, 2)).toEqual(['lapis', 'minium']);
+    expect([PLAYER_COLOURS.lapis, PLAYER_COLOURS.minium]).toEqual([ENGRAVED.own, ENGRAVED.enemy]);
   });
 
   it('keeps one ink for both styles', () => {

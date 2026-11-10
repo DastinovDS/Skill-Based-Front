@@ -36,7 +36,7 @@ import { terrainBadges } from './badgeLayout.ts';
 import type { SpriteCache } from './bake.ts';
 import { EntityKit, Token } from './shapes.ts';
 import { FigureView } from './figureView.ts';
-import { UNIT_LABEL } from './style.ts';
+import { UNIT_LABEL, sideColours, type PlayerColours } from './style.ts';
 
 const ORIGIN: Point = { x: 0, y: 0 };
 
@@ -139,8 +139,10 @@ export class EntityView implements EnemyAnchors {
     private readonly radiusOf: (node: number) => number,
     /** The baked shapes of the tokens (`bake.ts`). */
     sprites: SpriteCache,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    colours: PlayerColours = sideColours(me),
   ) {
-    this.kit = new EntityKit(me, sprites, layers.badges);
+    this.kit = new EntityKit(me, sprites, layers.badges, colours);
     this.enemy = other(me);
     this.enemyNodes = map.nodes.map(() => null);
     this.figures = new FigureView(

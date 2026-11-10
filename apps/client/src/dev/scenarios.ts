@@ -26,6 +26,7 @@ import type {
   SnapshotMsg,
 } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
+import type { ColourIds } from '../render/style.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 import { badgesSnapshot } from './badgesScene.ts';
 import {
@@ -690,6 +691,8 @@ export interface FixtureScene {
   rules?: RulesetPublic;
   /** The selection, the pointer and the keys the scene holds (the group order, DEC-48). */
   pins?: ScenePins;
+  /** The colours of the players by id (DEC-49); without them today's look (own Lapis, enemy Minium). */
+  colours?: ColourIds;
 }
 
 export const FIXTURE_SCENES: readonly FixtureScene[] = [
@@ -892,6 +895,17 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     rules: DEV_RULES_FLOW,
   },
   {
+    // The real map in the players' colours (DEC-49): the own Glacier against the opponent's Madder,
+    // the territory, the roads, the pieces and the fight of both.
+    id: 'artery_colours',
+    map: 'artery',
+    snapshot: arterySnapshot(bundledMap('artery')),
+    events: [round(ARTERY_TICK - 12, { node: 4 }, 2, 0, 1)],
+    view: ARTERY_VIEW,
+    cityUpgrades: true,
+    colours: ['glacier', 'madder'],
+  },
+  {
     // A pool map (DEC-27) with its provinces: pale dots, no warehouse, no VP (#348).
     id: 'provinces',
     map: 'crossroads',
@@ -918,6 +932,14 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     map: 'siege',
     snapshot: fightsSnapshot(),
     events: fightRoundEvents(fightsSnapshot()),
+  },
+  // The fights in the players' colours (DEC-49): the own Shell against the opponent's Violet.
+  {
+    id: 'fights_colours',
+    map: 'siege',
+    snapshot: fightsSnapshot(),
+    events: fightRoundEvents(fightsSnapshot()),
+    colours: ['shell', 'violet'],
   },
   // The same four fights with their shots in the air (tracers, #352).
   {

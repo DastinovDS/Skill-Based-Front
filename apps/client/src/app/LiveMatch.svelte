@@ -25,6 +25,8 @@
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
+  import type { ColourIds } from '../render/style.ts';
+  import { colourVar } from '../theme/tokens.ts';
   import type { MatchSummary } from './matchSummary.ts';
   import MatchLoading from './MatchLoading.svelte';
   import MatchStatus from './MatchStatus.svelte';
@@ -62,6 +64,8 @@
   let hud = $state.raw<HudState | null>(null);
   let rules = $state.raw<RulesetPublic | null>(null);
   let me = $state<PlayerId>(0);
+  // Both players' colours by player id (DEC-49), from `welcome` (the same again on a reconnect).
+  let colours = $state.raw<ColourIds | null>(null);
   // A forfeit counts toward the queue ban (DEC-34: a ranked or calibration match, also when only the
   // opponent is rated): leaving it warns about the queue lock.
   let rated = $state(false);
@@ -99,7 +103,8 @@
       pauseLeft = msg.ends_in_s ?? 0;
     } else if (msg.type === 'match_end') {
       // The capture of a capital is seen before the result screen (#819); other ends go at once.
-      const summary = hud?.summary() ?? null;
+      const nicks = hud?.summary() ?? null;
+      const summary = nicks === null || colours === null ? nicks : { ...nicks, colours };
       const player = me;
       const wait = resultDelayMs(msg);
       if (wait <= 0) onend(player, msg, summary);
@@ -127,6 +132,7 @@
           map,
         });
         me = welcome.player;
+        colours = welcome.colours;
         rated = forfeitCountsTowardBan(welcome);
         forfeitBanS = welcome.forfeit_ban_s;
         rules = welcome.ruleset_public;
@@ -276,7 +282,12 @@
   }}
 />
 
-<main class="match">
+<main
+  class="match"
+  class:player-sides={colours !== null}
+  style:--own={colours === null ? undefined : colourVar(colours[me])}
+  style:--enemy={colours === null ? undefined : colourVar(colours[me === 0 ? 1 : 0])}
+>
   {#if hud !== null && orders !== null}
     <GameCanvas
       bind:this={canvas}
@@ -284,6 +295,7 @@
       source={session}
       interaction={orders}
       player={me}
+      {colours}
       {backgroundUrl}
       {geo}
       onerror={(error: unknown) => {

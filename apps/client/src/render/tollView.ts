@@ -8,7 +8,15 @@ import type { Punch } from './hitView.ts';
 import type { TokenSpot } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
-import { BADGE_DOWN, CASING, CUT, INK, ownerColor } from './style.ts';
+import {
+  BADGE_DOWN,
+  CASING,
+  CUT,
+  INK,
+  ownerColor,
+  sideColours,
+  type PlayerColours,
+} from './style.ts';
 import {
   STRIKE,
   TOLL_HIT,
@@ -77,9 +85,11 @@ export class TollView {
     private resolution: number,
     /** Where the toll of the wall of `node` on `edge` leaves it (`FortView.lineAt`). */
     private readonly lineAt: (node: number, edge: number) => LineMark | undefined,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    colours: PlayerColours = sideColours(me),
   ) {
     const enemy: PlayerId = me === 0 ? 1 : 0;
-    this.colors = { own: ownerColor(me, me), enemy: ownerColor(me, enemy) };
+    this.colors = { own: ownerColor(colours, me), enemy: ownerColor(colours, enemy) };
     this.style = new TextStyle({
       fontFamily: pieceFamily(),
       fontSize: 12.5,

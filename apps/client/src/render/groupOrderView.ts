@@ -19,7 +19,16 @@ import type { OverlayState } from './interaction.ts';
 import type { MapLayers } from './layers.ts';
 import { nodePoint, type TokenSpot } from './layout.ts';
 import { helmetWidth } from './shapes.ts';
-import { BG, CASING, DARK_PLATE, GROUP_ORDER, INK, ownerColor, YOU } from './style.ts';
+import {
+  BG,
+  CASING,
+  DARK_PLATE,
+  GROUP_ORDER,
+  INK,
+  ownerColor,
+  sideColours,
+  type PlayerColours,
+} from './style.ts';
 
 /** Whole seconds as the travel time reads them ("5 s", #432). */
 const seconds = (n: number): string => `${String(n)} ${t('unit.s')}`;
@@ -74,6 +83,8 @@ export class GroupOrderView {
     private readonly me: PlayerId,
     private readonly radiusOf: (node: number) => number,
     private readonly sprites: SpriteCache,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     this.root.addChild(this.marks, this.labels);
     layers.layer.intents.addChild(this.root);
@@ -186,7 +197,7 @@ export class GroupOrderView {
     const n = seal.lozenges.length;
     seal.lozenges.forEach((filled, j) => {
       const x = at.x + (j - (n - 1) / 2) * A.lozengeGap * s;
-      this.lozenge(g, { x, y: cy + A.lozengeY * s }, A.lozenge * s, filled, YOU);
+      this.lozenge(g, { x, y: cy + A.lozengeY * s }, A.lozenge * s, filled, this.colours[this.me]);
     });
     if (seal.seconds !== null) {
       const text = this.text(seconds(seal.seconds), s, 1);
@@ -271,7 +282,7 @@ export class GroupOrderView {
       // A live view carries only the own rally points; the full view of a replay both players',
       // the enemy's in its colour (#905).
       if (node.owner === null || node.rally_point === null) continue;
-      const color = ownerColor(this.me, node.owner);
+      const color = ownerColor(this.colours, node.owner);
       points.set(node.rally_point, color);
       this.chevron(g, node.id, node.rally_point, 1, color);
     }
@@ -286,7 +297,13 @@ export class GroupOrderView {
     }
   }
 
-  private muster(g: Graphics, node: number, s: number, alpha: number, color: number = YOU): void {
+  private muster(
+    g: Graphics,
+    node: number,
+    s: number,
+    alpha: number,
+    color: number = this.colours[this.me],
+  ): void {
     const at = nodePoint(this.map, node);
     if (at === undefined) return;
     const M = GROUP_ORDER.muster;
@@ -347,7 +364,7 @@ export class GroupOrderView {
     city: number,
     point: number,
     alpha: number,
-    color: number = YOU,
+    color: number = this.colours[this.me],
   ): void {
     const from = nodePoint(this.map, city);
     const to = nodePoint(this.map, point);
@@ -414,9 +431,14 @@ export class GroupOrderView {
     g.poly(top).fill(DARK_PLATE);
     g.poly(bottom).fill(DARK_PLATE);
     const sh = Math.min(1, Math.max(0, share));
-    if (sh > 0) g.poly([...P(-5 * sh, -7 * sh), ...P(5 * sh, -7 * sh), ...P(0, 0)]).fill(YOU);
+    if (sh > 0)
+      g.poly([...P(-5 * sh, -7 * sh), ...P(5 * sh, -7 * sh), ...P(0, 0)]).fill(
+        this.colours[this.me],
+      );
     if (sh < 1)
-      g.poly([...P(-5 * sh, 7 * sh), ...P(5 * sh, 7 * sh), ...P(5, 7), ...P(-5, 7)]).fill(YOU);
+      g.poly([...P(-5 * sh, 7 * sh), ...P(5 * sh, 7 * sh), ...P(5, 7), ...P(-5, 7)]).fill(
+        this.colours[this.me],
+      );
     g.poly(top).stroke({ width: 1.2 * k, color: INK, join: 'round' });
     g.poly(bottom).stroke({ width: 1.2 * k, color: INK, join: 'round' });
     g.moveTo(...P(-6.5, -7.6))

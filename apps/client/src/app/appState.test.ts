@@ -8,7 +8,7 @@ import {
   type PlayerProfile,
 } from '../api/http.ts';
 import { GUEST_STORAGE_KEY } from '../api/guestStore.ts';
-import type { MatchEndMsg } from '../protocol.gen.ts';
+import type { MatchEndMsg, PlayerColour } from '../protocol.gen.ts';
 import { AppState } from './appState.svelte.ts';
 
 const invite = (code: string): Invite => ({
@@ -94,6 +94,61 @@ describe('AppState', () => {
     await app.start();
     expect(app.screen.name).toBe('menu');
     expect(app.guest?.nick).toBe('Old');
+  });
+
+  it('knows the colour of the player from the server and saves a new one (DEC-49)', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
+    const changeColour = vi.fn((_token: string, colour: string) =>
+      Promise.resolve({ player_id: 1, nick: 'Old', has_password: false, colour }),
+    );
+    const { app } = setup('', storage, {
+      me: () =>
+        Promise.resolve({ player_id: 1, nick: 'Old', has_password: false, colour: 'glacier' }),
+      changeColour: changeColour as Api['changeColour'],
+    });
+    await app.start();
+    expect(app.colour).toBe('glacier');
+    const pending = app.changeColour('violet');
+    // Shown at once, before the server answers.
+    expect(app.colour).toBe('violet');
+    expect(await pending).toBeNull();
+    expect(changeColour).toHaveBeenCalledWith('t', 'violet');
+    expect(app.colour).toBe('violet');
+  });
+
+  it('puts the colour back and says why when the server refuses it', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
+    const { app } = setup('', storage, {
+      me: () =>
+        Promise.resolve({ player_id: 1, nick: 'Old', has_password: false, colour: 'shell' }),
+      changeColour: () => Promise.reject(new ApiError('invalid', 422)),
+    });
+    await app.start();
+    expect(await app.changeColour('madder')).toBe('error.api.invalid');
+    expect(app.colour).toBe('shell');
+  });
+
+  it('settles on the answer to the latest of two quick choices', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
+    const answers: ((colour: string) => void)[] = [];
+    const { app } = setup('', storage, {
+      me: () =>
+        Promise.resolve({ player_id: 1, nick: 'Old', has_password: false, colour: 'lapis' }),
+      changeColour: (_token: string, colour: PlayerColour) =>
+        new Promise((resolve) => {
+          answers.push(() => {
+            resolve({ player_id: 1, nick: 'Old', has_password: false, colour });
+          });
+        }),
+    });
+    await app.start();
+    const first = app.changeColour('minium');
+    const second = app.changeColour('glacier');
+    answers[1]?.('glacier');
+    await second;
+    answers[0]?.('minium');
+    await first;
+    expect(app.colour).toBe('glacier');
   });
 
   it('forgets a guest the server does not know', async () => {

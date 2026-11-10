@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import type { BotLevel } from '../api/http.ts';
   import type { MessageKey } from '../i18n/index.ts';
-  import type { MatchEndMsg, PlayerId } from '../protocol.gen.ts';
+  import type { MatchEndMsg, PlayerColour, PlayerId } from '../protocol.gen.ts';
   import ReplayScreen from '../replay/ReplayScreen.svelte';
   import CrashGuard from './CrashGuard.svelte';
   import { AppState, type Guest } from './appState.svelte.ts';
@@ -197,6 +197,8 @@
     api={app.api}
     token={guest.token}
     dock={dockOf(guest)}
+    colour={app.colour}
+    oncolour={(colour: PlayerColour) => app.changeColour(colour)}
     oncreate={() => {
       app.go({ name: 'create', public: true });
     }}
@@ -303,6 +305,8 @@
       app.go({ name: 'bot' });
     }}
     onnick={(nick: string) => app.changeNick(nick)}
+    colour={app.colour}
+    oncolour={(colour: PlayerColour) => app.changeColour(colour)}
     onpassword={() => {
       app.go({ name: 'password' });
     }}

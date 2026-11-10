@@ -661,6 +661,16 @@ export const en = {
   'profile.nick.label': 'New nick',
   'profile.nick.hint': '3 to 16 characters: letters, digits, _ and -',
   'profile.nick.saved': 'The nick is changed.',
+  'colour.label': 'Colour',
+  'colour.hint':
+    'Your colour in matches. If your opponent has it too, the one who joined later gets another.',
+  'colour.saved': 'Colour saved: {colour}.',
+  'colour.lapis': 'Lapis',
+  'colour.minium': 'Minium',
+  'colour.glacier': 'Glacier',
+  'colour.shell': 'Shell',
+  'colour.violet': 'Violet',
+  'colour.madder': 'Madder',
   'error.account.nickLimited': 'Too many nick changes. Try again later.',
   'error.account.nickLimitedHours': 'Too many nick changes. Try again in {hours} h.',
   /** The settings of this browser (#871). */

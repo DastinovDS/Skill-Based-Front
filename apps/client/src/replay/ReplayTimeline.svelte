@@ -96,11 +96,12 @@
     transform: translateY(-4px);
   }
 
+  /* The progress is in ink, not in a player's colour (DEC-49, item 5). */
   .fill {
     position: absolute;
     inset: 0 auto 0 0;
     border-radius: 3px;
-    background: var(--you);
+    background: var(--ink);
   }
 
   .dot {

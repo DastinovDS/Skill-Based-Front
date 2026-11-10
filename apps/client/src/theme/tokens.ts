@@ -8,6 +8,31 @@
  * `in-game-style-r5.html`. Dark only: there is no light theme (ui-style 22, 50).
  */
 
+import type { PlayerColour } from '../protocol.gen.ts';
+
+/**
+ * The colours a player can choose (DEC-49, #906, the set Engraved six), as 0xRRGGBB, in the order
+ * of the picker. Lapis and Minium are today's pair (`ENGRAVED.own`, `ENGRAVED.enemy`), so a player
+ * who never chose sees the game as before. CSS `--colour-<id>`. The names are i18n keys
+ * (`colour.<id>`); the server keeps the same ids (`gow_server.colours`).
+ */
+export const PLAYER_COLOURS: Readonly<Record<PlayerColour, number>> = {
+  lapis: 0x86a6ea,
+  minium: 0xe5785e,
+  glacier: 0xa6e0e8,
+  shell: 0xf4b4a4,
+  violet: 0x966fd6,
+  madder: 0xc8587e,
+};
+
+/** The ids of the set in the order of the picker. */
+export const PLAYER_COLOUR_IDS = Object.keys(PLAYER_COLOURS) as readonly PlayerColour[];
+
+/** The CSS of a player colour: its custom property of `app.css` (`--colour-<id>`). */
+export function colourVar(id: PlayerColour): string {
+  return `var(--colour-${id})`;
+}
+
 /** Lapis: black stone, ivory ink, incised rules (ui-style 50, 51, 56). Colours as 0xRRGGBB. */
 export const LAPIS = {
   /** The page: black stone. CSS `--stone-bg` (and the old `--bg`). */
@@ -42,10 +67,13 @@ export const ENGRAVED = {
   /** The dark casing round every coloured mark. CSS `--casing`. */
   casing: 0x060504,
   ink: 0xece4d1,
-  /** The own side. CSS `--own` (the old `--you`). */
-  own: 0x86a6ea,
-  /** The opponent: red means only the opponent. CSS `--enemy`. */
-  enemy: 0xe5785e,
+  /**
+   * The own side when no colours are known (Lapis; an old replay, a screen outside a match). CSS
+   * `--own` (the old `--you`); a match sets it to the player's colour (DEC-49).
+   */
+  own: PLAYER_COLOURS.lapis,
+  /** The opponent when no colours are known (Minium). CSS `--enemy`; a match sets it (DEC-49). */
+  enemy: PLAYER_COLOURS.minium,
   /** Neutral places and dim marks. CSS `--neutral`. */
   neutral: 0xb3a88f,
   /** The fill of a neutral place. CSS `--neutral-fill`. */

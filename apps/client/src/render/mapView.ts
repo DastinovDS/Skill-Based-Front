@@ -23,7 +23,6 @@ import {
   HatchTile,
   bandStrips,
   borderLines,
-  engravedOwnerColor,
   hairFloor,
   pointsAlong,
   traceRuns,
@@ -69,6 +68,8 @@ import {
   TERRAIN_FILL,
   WATER_FLAT,
   ownerColor,
+  sideColours,
+  type PlayerColours,
 } from './style.ts';
 import { patternMarks } from './patternLayout.ts';
 import { TerrainView } from './terrainView.ts';
@@ -244,6 +245,8 @@ export class MapView {
     bakedBackground = false,
     /** The vector file of the map (DEC-36), if it has one that fits this version of the map. */
     geo: GeoFile | null = null,
+    /** The colours of the players by id (DEC-49); today's look by default. */
+    private readonly colours: PlayerColours = sideColours(me),
   ) {
     const bounds = { width: map.meta.width, height: map.meta.height };
     const territory = territoryOf(map, geo);
@@ -512,7 +515,7 @@ export class MapView {
     if (strength <= 0) return;
     const from = this.levelFrom ?? this.level;
     const to = this.level;
-    const color = ownerColor(this.me, this.me);
+    const color = ownerColor(this.colours, this.me);
     for (const cell of new Set([...from, ...to])) {
       const polygon = this.cells[cell];
       const k = levelShare(cell, from, to, share);
@@ -651,13 +654,16 @@ export class MapView {
         const polygon = this.cells[c];
         return polygon === undefined ? [] : [polygon];
       });
-      const color = flood.to === null ? null : ownerColor(this.me, flood.to);
+      const color = flood.to === null ? null : ownerColor(this.colours, flood.to);
       this.floodView.add(node, {
         centre: flood.at,
         cell,
         glowCells: this.glowPair === null ? [] : glowCells,
         reach: radialReach(cell, flood.at),
-        from: premultiplied(flood.from === null ? null : ownerColor(this.me, flood.from), alpha),
+        from: premultiplied(
+          flood.from === null ? null : ownerColor(this.colours, flood.from),
+          alpha,
+        ),
         to: premultiplied(color, alpha),
         color: color ?? PAPER,
       });
@@ -791,7 +797,7 @@ export class MapView {
       if ((kind === 'rule2' && !own) || (kind === 'beads' && own)) continue;
       const list = borders.filter((border) => border.owner === owner);
       if (list.length === 0) continue;
-      const color = engravedOwnerColor(this.me, owner);
+      const color = ownerColor(this.colours, owner);
       if (kind === 'beads') {
         const { step, radius } = BORDER_ENGRAVING.beads;
         for (const { at } of pointsAlong(list, step)) g.circle(at.x, at.y, radius);
@@ -878,7 +884,7 @@ export class MapView {
         texture: this.bandTile.texture,
         textureSpace: 'global',
         matrix: this.bandTile.matrix(bandAngle(this.me, owner)),
-        color: engravedOwnerColor(this.me, owner),
+        color: ownerColor(this.colours, owner),
         alpha: BORDER_BAND.alpha * alpha,
       });
       drawn = true;
@@ -1057,9 +1063,9 @@ export class MapView {
     if (context === undefined) {
       const fill =
         style === 'own0'
-          ? { color: ownerColor(this.me, 0), alpha: ROAD_OWN.bandAlpha }
+          ? { color: ownerColor(this.colours, 0), alpha: ROAD_OWN.bandAlpha }
           : style === 'own1'
-            ? { color: ownerColor(this.me, 1), alpha: ROAD_OWN.bandAlpha }
+            ? { color: ownerColor(this.colours, 1), alpha: ROAD_OWN.bandAlpha }
             : {
                 color: BG,
                 alpha: style === 'fog' ? ROAD_FOG.casingAlpha : ROAD_BUFFER.casingAlpha,

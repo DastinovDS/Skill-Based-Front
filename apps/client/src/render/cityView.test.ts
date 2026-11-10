@@ -10,7 +10,8 @@ import { BUNDLED_MAPS, DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { MapFile, NodeView, SnapshotMsg } from '../protocol.gen.ts';
 import { CityView } from './cityView.ts';
 import { createLayers } from './layers.ts';
-import { ENEMY, PROVINCE, YOU } from './style.ts';
+import { ENEMY, PROVINCE, YOU, playerColours } from './style.ts';
+import { PLAYER_COLOURS } from '../theme/tokens.ts';
 import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
@@ -70,6 +71,51 @@ describe('CityView: the barracks of an enemy city next door (DEC-31)', () => {
     view.update(withBarracks(snapshot, enemy.id, null), null, UPGRADES);
     expect(barracksMark(nodes, enemy.id)).toBeNull();
     view.destroy();
+  });
+});
+
+describe('CityView in the players colours (DEC-49)', () => {
+  beforeEach(() => {
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('fills each city and tower with the colour of its owner by player id; the shape tells the side', () => {
+    const snapshot = devSnapshot(map, DEV_RULES, 100);
+    const own = snapshot.view.nodes.find((n) => n.owner === 0 && n.has_barracks === true);
+    const enemy = map.nodes.find((n) => n.start_owner === 1 && n.kind !== 'province');
+    if (own === undefined || enemy === undefined) throw new Error('the map has no such cities');
+    const layers = createLayers();
+    // Player 0 chose Shell, player 1 Violet: the viewer is player 0.
+    const colours = playerColours(0, ['shell', 'violet']);
+    const view = new CityView(map, layers, 0, 1, testSprites(), colours);
+    view.update(withBarracks(snapshot, enemy.id, true), null, UPGRADES);
+    const nodes = layers.layer.nodes;
+    expect(bodyOf(nodes, own.id).spec?.key).toMatch(
+      new RegExp(`^city:you:${String(PLAYER_COLOURS.shell)}:`),
+    );
+    expect(bodyOf(nodes, enemy.id).spec?.key).toMatch(
+      new RegExp(`^city:enemy:${String(PLAYER_COLOURS.violet)}:`),
+    );
+    expect(barracksMark(nodes, own.id)).toBe(
+      towerBackSpec('barracks', 'built', PLAYER_COLOURS.shell, false).key,
+    );
+    expect(barracksMark(nodes, enemy.id)).toBe(
+      towerBackSpec('barracks', 'built', PLAYER_COLOURS.violet, true).key,
+    );
+    view.destroy();
+  });
+
+  it('bakes one look per colour: the same city of another colour is another sprite', () => {
+    const a = cityBodySpec('you', 14, false, false, PLAYER_COLOURS.glacier).key;
+    const b = cityBodySpec('you', 14, false, false, PLAYER_COLOURS.madder).key;
+    expect(a).not.toBe(b);
+    // Without a colour, today's look (the viewer Lapis, the opponent Minium).
+    expect(cityBodySpec('you', 14, false).key).toBe(cityBodySpec('you', 14, false, false, YOU).key);
+    expect(provinceBodySpec('enemy').key).toBe(provinceBodySpec('enemy', false, ENEMY).key);
+    expect(stockColor('neutral', PLAYER_COLOURS.shell)).not.toBe(PLAYER_COLOURS.shell);
   });
 });
 

@@ -20,13 +20,7 @@ import { knownOfSeen } from './rangeLabel.ts';
 import { symbolScale } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { Token, type EntityKit } from './shapes.ts';
-import {
-  GHOST_AGE_FONT_SIZE,
-  GHOST_AGE_STROKE,
-  GLYPH_COLOR,
-  GHOST_HIDE_S,
-  ENEMY,
-} from './style.ts';
+import { GHOST_AGE_FONT_SIZE, GHOST_AGE_STROKE, GLYPH_COLOR, GHOST_HIDE_S } from './style.ts';
 
 /** Where a snapshot says an enemy was last seen in a place that is hidden now. */
 type Memory = NodeView['seen'];
@@ -200,7 +194,7 @@ export class FogView {
       )) {
         g.moveTo(from.x, from.y).lineTo(to.x, to.y);
       }
-      g.stroke({ width: 3, color: ENEMY, alpha, cap: 'round' });
+      g.stroke({ width: 3, color: this.kit.colours[this.enemy], alpha, cap: 'round' });
     }
   }
 

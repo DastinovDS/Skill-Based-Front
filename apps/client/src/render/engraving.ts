@@ -22,7 +22,6 @@
  * own/enemy pair as the pieces of the map (#847).
  */
 import { BufferImageSource, type Graphics, Matrix, Texture } from 'pixi.js';
-import type { PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { ENGRAVED } from '../theme/tokens.ts';
 import { centroid, territoryBorders, type Border, type CellEdge } from './regionLayout.ts';
@@ -39,11 +38,6 @@ export const ENGRAVE = {
   /** The colour of a cut into the stone. */
   cut: 0x050403,
 } as const;
-
-/** The Engraved colour of `owner` as seen by `me`: own blue, the opponent red. */
-export function engravedOwnerColor(me: PlayerId, owner: PlayerId): number {
-  return owner === me ? ENGRAVE.own : ENGRAVE.enemy;
-}
 
 /** A hatch: `pitch` world units at zoom 1 (css px), lines `width` css px wide (at least 1 device px). */
 export interface HatchSpec {
