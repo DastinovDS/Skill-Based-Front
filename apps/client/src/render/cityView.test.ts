@@ -16,9 +16,6 @@ import { testSprites } from './testSprites.ts';
 const map = DEFAULT_MAP;
 const UPGRADES = {
   barracks: 100,
-  warehouse: 100,
-  warehouseMaxLevel: 0, // no warehouse levels (#894)
-  warehouseGainPerLevel: 0,
 };
 
 /** The snapshot with `has_barracks` of node `id` replaced (the server decides it, DEC-31). */

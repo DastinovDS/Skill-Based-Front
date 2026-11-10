@@ -280,7 +280,7 @@ describe('OrderController', () => {
     expect(controller.overlay().eta).toEqual({
       from: home,
       node: enemy.id,
-      ticks: 25, // a plan gathers its bonus, no fixed delay (#894)
+      ticks: 25, // a plan gathers its bonus, no fixed delay
       path: [home, other.id, enemy.id],
     });
     controller.key({ type: 'keyup', code: 'ShiftLeft', shiftKey: false });

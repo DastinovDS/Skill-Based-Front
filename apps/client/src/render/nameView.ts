@@ -89,7 +89,7 @@ export class NameView {
 
   /**
    * A new snapshot may change the size of a city (its capacity class): the captions follow.
-   * `withBar`: the provinces that show a warehouse bar (own ones under economy v2); their caption
+   * `withBar`: the provinces that show a warehouse bar (own ones); their caption
    * sits under it.
    */
   refresh(withBar: ReadonlySet<number> = NO_BARS): void {

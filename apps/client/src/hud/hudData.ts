@@ -110,7 +110,7 @@ export interface NodeInfo {
   readonly building: BuildingInfo | null;
   /**
    * Economy v2 (DEC-41, item 2): an own city is a factory; an enemy city next to an own node: a built
-   * factory (DEC-31). `null` elsewhere and under v1.
+   * factory (DEC-31). `null` elsewhere.
    */
   readonly factory: boolean | null;
   /** Own node: the factory being built there (economy v2); `null` without one. */
@@ -122,7 +122,7 @@ export interface BuildingInfo {
   readonly kind: BuildKind;
   /** `null` while the build still waits for its payment in charges (economy v2, DEC-41, item 7). */
   readonly secondsLeft: number | null;
-  /** Economy v2: charges the build still takes (the progressive payment); 0 under v1. */
+  /** Economy v2: charges the build still takes (the progressive payment). */
   readonly owed: number;
 }
 
@@ -141,7 +141,7 @@ export interface FactoryCount {
 
 /**
  * The own factories for `factory.max` (DEC-41, item 2): the own factory cities and the factory
- * builds under way, read from the own view (`NodeView.factory`, `factory_build`); `null` under v1.
+ * builds under way, read from the own view (`NodeView.factory`, `factory_build`).
  */
 export function factoryCount(
   rules: RulesetPublic,
@@ -240,7 +240,7 @@ export interface HudData {
   readonly leafShiftMax: number | null;
   /**
    * Economy v2 (DEC-41, item 2): the own factories, the builds under way counted as the server
-   * counts them for `factory.max`, and that max; `null` under v1 or without factories (#762).
+   * counts them for `factory.max`, and that max; `null` without factories (#762).
    */
   readonly factories: FactoryCount | null;
   /** The own factories that work now, builds under way not counted (DEC-47, #891). */

@@ -1,5 +1,5 @@
 /**
- * The `flow` scenes of the dev screen (DEC-43, #705): the artery moment under the rules of `mvp-4`
+ * The `flow` scenes of the dev screen (DEC-43, #705): the artery moment under the flow rules
  * (`DEV_RULES_FLOW`): the automatic supply flow with the leaf shift. Two fronts (the enemy at Archway
  * in the east, neutral ground at Bluff in the north and Oakgrove in the south), the capital and a
  * second factory, a pocket (West Shoulder, cut off with no factory), and the leaf shift at the front
@@ -190,7 +190,7 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
 }
 
 /**
- * The `stances` scene (DEC-44, #772): the same moment under `mvp-4-stances`, in War, 60 ticks into
+ * The `stances` scene (DEC-44, #772): the same moment under the stances rules, in War, 60 ticks into
  * the next CP (of 80) and 100 into the next charge of the capital (of 400).
  */
 export function stancesSnapshot(map: MapFile): SnapshotMsg {

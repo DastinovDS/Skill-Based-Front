@@ -179,10 +179,6 @@ export const RING_MAX_SEGMENTS = 10;
 export const BAR_SEGMENT = { width: 5, height: 4, pitch: 6, pad: 1 } as const;
 export const BAR_GAP = 9;
 /**
- * A warehouse place that is only room (a frame), inside the same 5 x 4 cell as a charge (C1, ui-style 9.4).
- */
-export const PLACE_FRAME = { width: 1, color: SEGMENT_EMPTY } as const;
-/**
  * A province (DEC-23, PB "Pale dot", #431, ui-style 35): a small solid dot of `dot` radius in a pale
  * tint of the owner (`lighten` of the owner's colour, no dark plate, so no centre that reads as a
  * target), a thin darker outline (`outline.darken`) and a dark casing; the capacity ring of 3
@@ -343,7 +339,7 @@ export const RING_ENGRAVED = {
  * A charge (Lozenges, 57u): a square turned 45 degrees on its own casing (`casing` across), filled in
  * the side's colour (`fill`) or hollow (the dark plate with an ink square `hollow` across). The
  * warehouse is a row of them `pitch` apart, set in threes past four (`groupGap`), its middle `drop`
- * under the capacity ring. A warehouse level not built yet (economy v1, DEC-26) is a faint hollow one.
+ * under the capacity ring.
  */
 export const LOZENGE = {
   casing: 8.2,
@@ -513,8 +509,6 @@ export const GHOST_AGE_STROKE = { color: BG, width: 3, join: 'round' } as const;
 // --- Selection and orders (CLI-06, #62) --------------------------------------------------------
 // The selection is a white outline on a dark one, so it reads on any terrain and any owner.
 
-/** The selection is white (6): a double outline, the inner one dark. */
-export const SELECT_COLOR = PAPER;
 /** The selection ring of a city sits outside its capacity ring and warning ring. */
 export const SELECT_RING_GAP = 18;
 /**

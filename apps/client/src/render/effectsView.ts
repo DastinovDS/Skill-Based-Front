@@ -34,7 +34,7 @@ import { helmetWidth } from './shapes.ts';
 import { reducedMotion } from './motion.ts';
 import { BOUNCE_HOME, CAPTURE, CASING, INK, WARN, ownerColor } from './style.ts';
 
-/** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`, DEC-32). */
+/** Ticks between rounds when the source does not say (DEC-32). */
 const DEFAULT_ROUND_TICKS = 20;
 /** Flags of captures drawn at once. */
 const MAX_FLAGS = 4;

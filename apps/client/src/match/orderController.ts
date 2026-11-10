@@ -663,7 +663,7 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Shift + wheel (#793): with an own group in a node selected under economy v2 (the plan banner
+   * Shift + wheel (#793): with an own group in a node selected (the plan banner
    * shows), one notch steps the bonus a planned order to the target under the pointer asks for; it
    * starts at 1 for every new hover (#797). `false` otherwise: the wheel zooms the map.
    */

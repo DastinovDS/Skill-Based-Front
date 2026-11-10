@@ -1,6 +1,6 @@
 /**
- * The `forts` scenes of the dev screen (DEC-43, item D; #707): the artery moment under the rules of
- * `mvp-4` (`DEV_RULES_FLOW`) with road fortifications in every state the map shows: an own line
+ * The `forts` scenes of the dev screen (DEC-43, item D; #707): the artery moment under the flow
+ * rules (`DEV_RULES_FLOW`) with road fortifications in every state the map shows: an own line
  * built (road 4-5, the border with Archway) with the enemy's line on the other side of the same
  * border (seen), an own line being built (55%, road 12-7), an own line with a neutral city across
  * (road 10-11), an enemy line being built (known to exist, no progress; road 5-15), and a toll in the
@@ -27,7 +27,7 @@ export const FORTS_VIEW = FLOW_VIEW;
 
 const T = FORTS_TICK;
 
-/** `ruleset_public.fort.build_ticks` of `mvp-4`: the progress of the own build below. */
+/** `ruleset_public.fort.build_ticks` of the dev rules: the progress of the own build below. */
 const BUILD_TICKS = 100;
 
 const fort = (node: number, owner: 0 | 1, built: boolean, doneTick: number | null): RoadFort => ({

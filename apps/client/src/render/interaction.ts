@@ -129,7 +129,7 @@ export interface OverlayState {
 }
 
 /**
- * The bonus a planned order to `node` would ask for (economy v2, DEC-41, item 10; #793), drawn over
+ * The bonus a planned order to `node` would ask for (DEC-41, item 10; #793), drawn over
  * the target while Shift is held: the value of the banner, its cap, and the gathering time it implies.
  */
 export interface BonusMark {

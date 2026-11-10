@@ -114,7 +114,7 @@
 
   const map = $derived(BUNDLED_MAPS.find((m) => m.meta.name === mapName) ?? DEFAULT_MAP);
   const fixture = $derived(fixtureScene(sceneId));
-  // A scene may play other rules (economy v2, #649): the HUD and the menus follow them.
+  // A scene may play other rules (#649): the HUD and the menus follow them.
   const sceneRules = $derived(fixture?.rules ?? rules);
 
   // The HUD numbers for the map on screen.
@@ -218,10 +218,7 @@
     return new OrderController({
       hud,
       map,
-      // With `?menus` the city development is on too: the city menu shows all three sectors.
-      rules: menusOn
-        ? { ...sceneRules, city_upgrades: { ...sceneRules.city_upgrades } }
-        : sceneRules,
+      rules: sceneRules,
       book,
       send: match === null ? (menusOn ? frozenSend(book) : null) : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,

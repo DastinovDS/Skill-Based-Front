@@ -41,7 +41,7 @@ import { captureWalks, floodDelayMs, type Walk } from './walkLayout.ts';
 /** Failed frames in a row before the player is told (a transient error is only skipped). */
 export const FRAME_FAILURE_LIMIT = 3;
 
-/** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
+/** Ticks per second when the source does not say. */
 const DEFAULT_TICK_HZ = 10;
 /** Frame time assumed when the ticker gives none (60 FPS), ms. */
 const DEFAULT_FRAME_MS = 1000 / 60;
@@ -397,7 +397,7 @@ export class MapScene {
         this.source.recruitQueueMax ?? null,
         this.source.provinceWarehouse ?? 0,
       );
-      // An own province shows its warehouse under economy v2 (DEC-41, item 13): its caption goes under it.
+      // An own province shows its warehouse (DEC-41, item 13): its caption goes under it.
       const places = this.source.provinceWarehouse ?? 0;
       this.names.refresh(
         new Set(

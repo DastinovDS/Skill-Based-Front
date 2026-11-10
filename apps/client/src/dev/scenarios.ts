@@ -659,7 +659,7 @@ export interface FixtureScene {
   view?: { x: number; y: number; width: number; height: number };
   /** The city development of DEC-26 is on (the barracks marks are drawn); off when absent. */
   cityUpgrades?: boolean;
-  /** The rules of the scene, for the HUD and the menus; `DEV_RULES` (economy v1) when absent. */
+  /** The rules of the scene, for the HUD and the menus; `DEV_RULES` when absent. */
   rules?: RulesetPublic;
 }
 
@@ -672,7 +672,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     // The last round of the fight in the city 4 (its shots in the air), 12 ticks ago.
     events: [round(ARTERY_TICK - 12, { node: 4 }, 2, 0, 1)],
     view: ARTERY_VIEW,
-    // As in `mvp-1`: the own capital and the enemy city 5 next door show the barracks (DEC-31).
+    // The own capital and the enemy city 5 next door show the barracks (DEC-31).
     cityUpgrades: true,
   },
   {
@@ -721,7 +721,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     cityUpgrades: true,
   },
   {
-    // Economy v2 (DEC-41, #649): factories, bunkers, builds that wait for charges, a gathering plan.
+    // DEC-41, #649: factories, builds that wait for charges, a gathering plan.
     id: 'economy',
     map: 'artery',
     snapshot: economySnapshot(bundledMap('artery')),
@@ -743,7 +743,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     rules: DEV_RULES_V2,
   },
   {
-    // The supply flow (DEC-43, #705) under the rules of `mvp-4`, the shift at the front: the battle mode
+    // The supply flow (DEC-43, #705), the shift at the front: the battle mode
     // (alerts only: the starving marks; no level fill, no chevrons, #728).
     id: 'flow',
     map: 'artery',
@@ -776,7 +776,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     rules: DEV_RULES_FLOW,
   },
   {
-    // Stances of economy v2 (DEC-44, #772) under the rules of `mvp-4-stances`: the map of `flow`, the
+    // Stances (DEC-44, #772): the map of `flow`, the
     // stance chip and the two progress bars in the top bar.
     id: 'stances',
     map: 'artery',
@@ -787,7 +787,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     rules: DEV_RULES_STANCES,
   },
   {
-    // Road fortifications (DEC-43, item D; #707) under the rules of `mvp-4`: an own line built with the
+    // Road fortifications (DEC-43, item D; #707): an own line built with the
     // enemy's on the other side of the same border, one being built (55%), one with a neutral city
     // across, an enemy line being built (known to exist only).
     id: 'forts',

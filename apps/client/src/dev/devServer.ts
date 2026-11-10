@@ -61,8 +61,8 @@ export function devPath(map: MapFile, from: number, to: number): [number, ...num
 const DEV_PACKET_TICKS = 60;
 
 /**
- * Demo packets for the «Supply» layer (not rules): a charge pair on the first own road, a transfer
- * the other way on the second, and, where an own road continues from the end of the first, a
+ * Demo packets for the «Supply» layer (not rules): a charge pair on the first own road, a single
+ * charge the other way on the second, and, where an own road continues from the end of the first, a
  * packet that goes on over it. They restart every `DEV_PACKET_TICKS`.
  */
 export function devPackets(map: MapFile, nodes: readonly NodeView[], tick: number): PacketView[] {

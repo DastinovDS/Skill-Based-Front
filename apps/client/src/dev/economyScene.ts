@@ -69,7 +69,7 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
         },
       };
     }
-    // The planned order of the artery moment is a v1 one: it goes.
+    // The planned order of the artery moment is not a gathering plan: it goes.
     return g.order?.planned === true ? { ...plain, order: null } : plain;
   });
   const intents: IntentView[] = [

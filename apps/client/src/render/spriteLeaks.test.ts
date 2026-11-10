@@ -14,9 +14,6 @@ const map = DEFAULT_MAP;
 const base = devSnapshot(map, DEV_RULES, 100);
 const UPGRADES = {
   barracks: 100,
-  warehouse: 100,
-  warehouseMaxLevel: 0, // no warehouse levels (#894)
-  warehouseGainPerLevel: 0,
 };
 
 /** A deterministic stream of numbers (a test must not depend on `Math.random`). */

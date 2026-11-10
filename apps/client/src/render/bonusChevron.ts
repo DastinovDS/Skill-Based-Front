@@ -1,8 +1,7 @@
 /**
  * The sign of a bonus inside a plate drawn with `Graphics` (#797): the green chevron up of the
  * advantage badge (#791, ui-style 45) on its dark outline, where a pill already redraws itself only
- * when its text changes (the plan pill of a planned order, the Shift counter over a target, the
- * counter of "Defense"). A hollow one is a point still asked for: a light contour, dark inside, so
+ * when its text changes (the plan pill of a planned order, the Shift counter over a target). A hollow one is a point still asked for: a light contour, dark inside, so
  * the two differ by shape, not by colour alone (AGENTS.md 7.4).
  */
 import type { Graphics } from 'pixi.js';
