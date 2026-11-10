@@ -8,6 +8,7 @@ import {
   territoryBorders,
 } from './regionLayout.ts';
 import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
+import { withInward } from './engraving.ts';
 import { voronoiCells } from './voronoi.ts';
 
 const square = [
@@ -79,6 +80,32 @@ describe('territoryBorders', () => {
   it('draws nothing inside one area and nothing for a neutral cell', () => {
     expect(territoryBorders(cells, [0, 0], 1)).toEqual([]);
     expect(territoryBorders(cells, [null, 1], 1).every((b) => b.owner === 1)).toBe(true);
+  });
+
+  it('runs on unbroken where two areas of one owner meet a third (#919, item 10)', () => {
+    // Areas 0 and 1 (owner 0) on the west, area 2 (owner 1) on the east: the line of owner 0
+    // goes along 0|2 and then 1|2. Each area's own corner shift also counts the 0|1 edge, which
+    // has no line: the two ends went apart to either side of it, a gap with an offset.
+    const three = voronoiCells(
+      [
+        { x: 25, y: 25 },
+        { x: 25, y: 75 },
+        { x: 75, y: 50 },
+      ],
+      { width: 100, height: 100 },
+    );
+    const edges = withInward(three, cellEdges(three));
+    for (const inset of [2.4, 4.6]) {
+      const own = territoryBorders(three, [0, 0, 1], inset, edges).filter((b) => b.owner === 0);
+      expect(own).toHaveLength(2);
+      const ends = own.flatMap(({ a, b }) => [a, b]);
+      const loose = ends.filter(
+        (p) => ends.filter((q) => Math.hypot(q.x - p.x, q.y - p.y) < 1e-6).length === 1,
+      );
+      // Only the two ends at the frame of the map are loose.
+      expect(loose).toHaveLength(2);
+      for (const p of loose) expect(Math.min(p.y, 100 - p.y)).toBeCloseTo(inset, 6);
+    }
   });
 
   it('finds the neighbour of an edge', () => {
