@@ -215,8 +215,9 @@ def _arrive_tick(state: GameState, path: tuple[int, ...], delay: int) -> int | N
 @pytest.mark.parametrize("row", ROWS, ids=lambda r: r.name)
 def test_group_command_valid(row: Row) -> None:
     state, ids = _state()
-    # A planned order gathers its bonus of 1 first (DEC-41, item 10).
-    delay = RULES.orders.plan_ticks_per_bonus if row.name == "planned_move" else 0
+    # A planned order gathers its bonus of 1 first (DEC-41, item 10) and departs in the tick after
+    # the charge (``gather_plans``; the forecast was one tick early before #896).
+    delay = RULES.orders.plan_ticks_per_bonus + 1 if row.name == "planned_move" else 0
     arrive = _arrive_tick(state, row.path, delay)
     _check(
         state, 0, row.make(ids, row.subject(ids)), Ok(row.cost, path=row.path, arrive_tick=arrive)

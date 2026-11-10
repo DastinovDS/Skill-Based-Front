@@ -31,6 +31,11 @@ between ticks a group in transit is never ``AtNode`` (capacity counts only stand
 DEC-12). A path of edges of ``T1`` and ``T2`` ticks thus takes ``T1 + T2`` ticks. Only reaching
 the end of the path (the destination, or a node that is no longer own) is an ``Arrival``.
 A planned order's bonus is capped by the group's charged units when it departs (DEC-29).
+
+The recruit walk to a rally point (DEC-48, item H3, as changed by the owner on 2026-11-10,
+``pay_walks``): a recruit that may leave pays ``recruit.rally_cost`` of its player's CP first; with
+fewer CP it gets no order (``rally_walk_no_cp`` to its owner) and stays in its city, where the
+``orders`` system merges it like a recruit (DEC-20, A1). It never waits for CP.
 """
 
 import heapq
@@ -243,8 +248,9 @@ def movement(state: GameState, rules: Ruleset) -> list[Event]:
     ``node_captured`` for every captured empty neutral node and ``capture_failed`` for every group
     that could not pay for one (DEC-38).
     """
+    paid = pay_walks(state, rules)
     arrivals = advance(state, rules)
-    events = [
+    events = paid + [
         event(
             state.tick,
             "group_arrived",
@@ -259,6 +265,45 @@ def movement(state: GameState, rules: Ruleset) -> list[Event]:
         for a in arrivals
     ]
     return events + settle_arrivals(state, rules, arrivals)
+
+
+def pay_walks(state: GameState, rules: Ruleset) -> list[Event]:
+    """DEC-48, item H3: every recruit walking to a rally point that leaves its city in this tick
+    (standing, in no fight, its departure tick reached) pays ``recruit.rally_cost``, or loses its
+    order when its player has fewer CP. In group id order; a player pays only for its own groups,
+    so the players do not depend on each other."""
+    cost = rules.recruit.rally_cost
+    events: list[Event] = []
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        order = g.order
+        location = g.location
+        if (
+            not g.walk
+            or order is None
+            or g.fight is not None
+            or not isinstance(location, AtNode)
+            or state.tick < order.depart_tick
+        ):
+            continue
+        g.walk = False
+        player = state.players[g.owner]
+        if player.cp >= cost:
+            player.cp -= cost
+            continue
+        g.order = None  # it stays in its city and merges (``systems.orders``)
+        target = order.path[-1] if order.path else None
+        events.append(
+            event(
+                state.tick,
+                "rally_walk_no_cp",
+                player=g.owner,
+                group=gid,
+                node=location.node,
+                target=target,
+            )
+        )
+    return events
 
 
 def advance(state: GameState, rules: Ruleset) -> list[Arrival]:

@@ -206,6 +206,9 @@
           path: null,
           arrive_tick: null,
           reject_code: rejectPinned,
+          kind: null,
+          cost: null,
+          members: null,
         });
       });
       return seq;

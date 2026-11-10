@@ -164,6 +164,10 @@ def test_test_short_is_mvp7_with_a_60_second_match() -> None:
     assert short.tick_hz == 10
     expected = _raw()
     expected["match_ticks"] = 600
+    # DEC-48, item J: the group order and the recruit rally point are on in mvp-7 only.
+    del expected["group_order"]
+    del expected["recruit"]["rally_point"]
+    del expected["recruit"]["rally_cost"]
     assert to_canonical(short) == expected
 
 
@@ -185,12 +189,20 @@ def test_mvp6_is_mvp5_with_three_changes() -> None:
     assert mvp6 == mvp5
 
 
-def test_mvp7_is_mvp6_with_four_changes() -> None:
+def test_mvp7_is_mvp6_with_five_changes() -> None:
     """mvp-7 (#885, #888): mvp-6 with the section ``[map_tempo]`` (DEC-46), with
-    ``stances.factories_follow`` (DEC-47) and so without ``factory.built_period_ticks``, and
+    ``stances.factories_follow`` (DEC-47) and so without ``factory.built_period_ticks``,
     (#900, owner decision 2026-11-10) CP in 0.5 CP quanta: ``cp.per_period`` 50 and every
-    ``stances.cp_period_ticks`` halved, i.e. the same CP per tick."""
+    ``stances.cp_period_ticks`` halved, i.e. the same CP per tick, and (DEC-48, item J, #896) the
+    section ``[group_order]`` (16 groups, rally 50%) with the recruit rally point at 0.5 CP."""
     mvp6, mvp7 = _raw(MVP6), _raw(MVP7)
+    assert "group_order" not in mvp6
+    assert "rally_point" not in mvp6["recruit"]
+    assert mvp7["group_order"] == {"max_groups": 16, "rally_pct": 50}
+    assert (mvp7["recruit"]["rally_point"], mvp7["recruit"]["rally_cost"]) == (True, 50)
+    del mvp7["group_order"]
+    del mvp7["recruit"]["rally_point"]
+    del mvp7["recruit"]["rally_cost"]
     assert "map_tempo" not in mvp6
     assert "factories_follow" not in mvp6["stances"]
     assert mvp7["stances"]["factories_follow"] is True

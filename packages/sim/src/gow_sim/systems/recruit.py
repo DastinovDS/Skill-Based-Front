@@ -26,13 +26,20 @@
 - A city in a pocket produces as usual (DEC-19, item 9). An owner change empties the queue without a
   refund (``capacity.change_owner``, event ``recruit_queue_lost`` for the former owner).
 
+- The rally point (DEC-48, item H; ``recruit.rally_point``): a unit that appears in a city with a
+  point gets an ordinary order to it along its fastest own path (the path of a ``Move``; one unit
+  fits every node) with the departure in the next tick, so it does not merge in the city; it pays
+  ``recruit.rally_cost`` when it leaves (``movement.pay_walks``), or with fewer CP gets no order and
+  merges. Without an own path to the point the unit merges as before and the point stays.
+
 Nodes are walked player by player, each player's in ``node_key`` order, so the ids of the new
 groups of one player keep the mirror order (AGENTS.md, section 4.1, rule 6).
 """
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Mode, event
+from gow_sim.state import AtNode, Event, GameState, Group, Mode, Order, event
 from gow_sim.systems.capacity import city_capacity, standing_units
+from gow_sim.systems.movement import find_path
 
 
 def recruit(state: GameState, rules: Ruleset) -> list[Event]:
@@ -56,7 +63,7 @@ def recruit(state: GameState, rules: Ruleset) -> list[Event]:
                 continue  # ready, waits for a place (DEC-25, item 7)
             node.recruit_queue -= 1
             node.recruit_progress = 0
-            events.append(_new_unit(state, player, nid))
+            events.append(_new_unit(state, rules, player, nid))
     return events
 
 
@@ -109,7 +116,14 @@ def cancel_unit(state: GameState, rules: Ruleset, player: int, node: int) -> lis
     return events
 
 
-def _new_unit(state: GameState, player: int, node: int) -> Event:
+def _new_unit(state: GameState, rules: Ruleset, player: int, node: int) -> Event:
     gid = state.new_id()
-    state.groups[gid] = Group(gid, player, 1, 0, Mode.ATTACK, AtNode(node))  # discharged
+    group = Group(gid, player, 1, 0, Mode.ATTACK, AtNode(node))  # discharged
+    state.groups[gid] = group
+    point = state.nodes[node].rally_point if rules.recruit.rally_point else None
+    if point is not None:
+        path = find_path(state, rules, player, node, point, size=1)
+        if path is not None:  # DEC-48, item H4; none: it merges (item H5)
+            group.order = Order(path[1:], planned=False, depart_tick=state.tick + 1)
+            group.walk = True
     return event(state.tick, "recruited", player=player, node=node, group=gid)

@@ -31,19 +31,46 @@ groups and groups on edges never merge.
 The target group is chosen among one player's groups only, so the players stay symmetric.
 
 Details that DEC-08 leaves open follow the defaults of #141, accepted by DEC-24 (item L).
+
+Group orders (DEC-48): the members of one ``GroupMove`` link to a ``GroupOrder``
+(``Group.group_order``). ``plan_parts`` splits the requested bonus of a planned one (item F2),
+``schedule`` times a synchronized arrival (items C2, F4). A planned member that is ready (its part
+gathered, or its charged units with a bonus) stops gathering (``Group.plan`` 0) and waits without a
+departure tick; ``settle_group_orders`` unlinks the members whose order ended, drops the orders
+without a member and fixes the departures of a planned order once its last member is ready: at the
+end of the tick of the gathering (the slowest member departs in the next tick), or at once when the
+cancel of the last member not ready is applied (item F4). A recruit that got no order for want of
+CP (``rally_walk_no_cp``, DEC-48 item H3 as changed by the owner on 2026-11-10) merges like a
+recruit.
 """
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Intent, IntentKind, Order, event
+from gow_sim.state import (
+    PLAN_WAIT,
+    AtNode,
+    Event,
+    GameState,
+    Group,
+    GroupOrder,
+    Intent,
+    IntentKind,
+    Order,
+    event,
+)
+from gow_sim.systems.movement import path_ticks
 
 __all__ = [
     "absorb",
     "active_bonuses",
     "clear_bonus",
     "gather_plans",
+    "member_ticks",
     "orders",
+    "plan_parts",
     "release_plan",
+    "schedule",
     "set_intent",
+    "settle_group_orders",
 ]
 
 
@@ -96,6 +123,8 @@ def gather_plans(state: GameState, rules: Ruleset) -> list[Event]:
     warehouse pauses the plan with no timeout: the due charge is taken in the tick stock comes
     (TODO(#651)). The group departs by itself in the next tick (``release_plan``) once its bonus
     reaches the request or, with a bonus, its charged units.
+    A member of a group order (DEC-48, item F4) does not depart by itself: once ready it stops
+    gathering and waits (``settle_group_orders`` fixes the departures).
     """
     tick = state.tick
     per = rules.orders.plan_ticks_per_bonus
@@ -119,8 +148,92 @@ def gather_plans(state: GameState, rules: Ruleset) -> list[Event]:
                 event(tick, "plan_charged", player=g.owner, group=gid, node=nid, bonus=g.bonus)
             )
         if g.bonus >= g.plan or 0 < g.charged <= g.bonus:
-            release_plan(g, tick + 1)
+            if g.group_order is None:
+                release_plan(g, tick + 1)
+            else:  # ready: it waits for the others (DEC-48, item F4)
+                g.plan = 0
+                g.plan_tick = 0
     return events
+
+
+def plan_parts(charged: list[int], bonus: int) -> list[int]:
+    """DEC-48, item F2: the requested total ``bonus`` split over the members with ``charged``
+    units, in the order of the command list. ``B = min(bonus, sum)``; ``L`` the smallest number
+    with ``sum(min(c, L)) >= B``; each part ``min(c, L - 1)``, then +1 to the members with
+    ``c >= L`` in list order until the parts add up to ``B``."""
+    total = min(max(bonus, 0), sum(charged))
+    if total == 0:
+        return [0 for _ in charged]
+    level = 1
+    while sum(min(c, level) for c in charged) < total:
+        level += 1
+    parts = [min(c, level - 1) for c in charged]
+    rest = total - sum(parts)
+    for i, c in enumerate(charged):
+        if rest == 0:
+            break
+        if c >= level:
+            parts[i] += 1
+            rest -= 1
+    return parts
+
+
+def schedule(start: int, ticks: list[int]) -> tuple[int, list[int]]:
+    """DEC-48, items C2 and F4: the common arrival ``A = start + max(T) - 1`` of members whose
+    paths take ``ticks`` when the slowest departs at ``start``, and each departure
+    ``A - T + 1`` (the first step is made in the tick of the departure)."""
+    arrive = start + max(ticks) - 1
+    return arrive, [arrive - t + 1 for t in ticks]
+
+
+def member_ticks(state: GameState, rules: Ruleset, group: Group) -> int:
+    """Ticks of the remaining path of a member standing in its node (the path fixed at the
+    command, item C7)."""
+    location = group.location
+    order = group.order
+    assert isinstance(location, AtNode) and order is not None
+    return path_ticks(state, rules, (location.node, *order.path))
+
+
+def settle_group_orders(
+    state: GameState, rules: Ruleset, start: int, only: int | None = None
+) -> None:
+    """Unlink the members whose order ended, drop the group orders without a member, and fix the
+    departures of a planned order whose members are all ready (DEC-48, item F4): the slowest
+    departs at ``start``. ``only``: settle that group order alone (a command of its owner)."""
+    members: dict[int, list[Group]] = {}
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        oid = g.group_order
+        if oid is None or (only is not None and oid != only):
+            continue
+        if g.order is None or oid not in state.group_orders:
+            g.group_order = None
+            continue
+        members.setdefault(oid, []).append(g)
+    for oid in sorted(state.group_orders):
+        if only is not None and oid != only:
+            continue
+        joint = state.group_orders[oid]
+        live = members.get(oid)
+        if not live:
+            del state.group_orders[oid]
+        elif joint.planned and joint.arrive_tick is None and all(g.plan == 0 for g in live):
+            _fix_departures(state, rules, joint, live, start)
+
+
+def _fix_departures(
+    state: GameState, rules: Ruleset, joint: GroupOrder, live: list[Group], start: int
+) -> None:
+    """The departures of the ready members of a planned group order (item F4); each bonus is
+    active from its departure (item F6)."""
+    arrive, departs = schedule(start, [member_ticks(state, rules, g) for g in live])
+    joint.arrive_tick = arrive
+    for g, depart in zip(live, departs, strict=True):
+        order = g.order
+        assert order is not None and order.depart_tick == PLAN_WAIT
+        g.order = Order(order.path, order.planned, depart)
+        g.bonus_tick = depart
 
 
 def absorb(state: GameState, keep: Group, gid: int) -> None:
@@ -158,9 +271,12 @@ def orders(state: GameState, rules: Ruleset) -> list[Event]:
     auto-merge. The waiting planned orders gather their bonus first (``gather_plans``).
     """
     gathered = gather_plans(state, rules)
+    settle_group_orders(state, rules, state.tick + 1)
     live: dict[int, bool] = {}
     for gid in sorted(state.groups):
         g = state.groups[gid]
+        if g.order is None:
+            g.walk = False  # a recruit walk ends with its order (DEC-48, item H3)
         if g.bonus > 0 and g.order is None:
             clear_bonus(g)  # the planned bonus ends with the order (#141 default)
         if g.intent is not None:
@@ -185,7 +301,7 @@ def _auto_merge(state: GameState) -> list[Event]:
     for e in state.events:
         if e.tick != tick:
             continue
-        if e.kind in ("group_arrived", "recruited") or (
+        if e.kind in ("group_arrived", "recruited", "rally_walk_no_cp") or (
             e.kind == "fight_group" and e.get("arrived") is True and e.get("left") is False
         ):
             gid = e.get("group")

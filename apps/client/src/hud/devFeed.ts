@@ -122,6 +122,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       flow_idle: null,
       flow_pocket: null,
       terrain_mark: null,
+      rally_point: null,
     };
     if (mine.has(n.id)) {
       const city = n.kind !== 'province';

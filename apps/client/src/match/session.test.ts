@@ -129,6 +129,9 @@ describe('MatchSession', () => {
       path: null,
       arrive_tick: null,
       reject_code: null,
+      kind: null,
+      cost: null,
+      members: null,
     });
     expect(played).toEqual(['orderOk']);
     for (let tick = 30; tick <= 60; tick += 1) {
@@ -206,6 +209,9 @@ describe('MatchSession', () => {
       path: [0, 1],
       arrive_tick: 51,
       reject_code: 'NO_PATH',
+      kind: null,
+      cost: null,
+      members: null,
     });
     expect(results).toEqual(['rejected']);
     expect(session.orders.ghosts().map((g) => g.status)).toEqual(['rejected']);
@@ -293,6 +299,9 @@ describe('MatchSession', () => {
       path: [0, 1],
       arrive_tick: 51,
       reject_code: null,
+      kind: null,
+      cost: null,
+      members: null,
     });
     socket.reply(snapshot(21));
 

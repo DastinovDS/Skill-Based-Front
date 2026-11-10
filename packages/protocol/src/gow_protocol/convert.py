@@ -4,8 +4,9 @@ Server -> client:
 
 - ``snapshot_msg``: ``PlayerView`` (``gow_sim.view.project()``) -> ``snapshot``. Opaque ids are
   63-bit integers in the simulation and decimal strings on the wire. Some fields of the view stay
-  on the server, the client does not need them: ``order.depart_tick`` and ``location.back`` (a
-  bouncing group's ``progress`` falls, so interpolation works without it). Enemy figures
+  on the server, the client does not need them: ``location.back`` (a bouncing group's
+  ``progress`` falls, so interpolation works without it). ``order.depart_tick`` goes out since
+  DEC-48 (the waiting countdown of a member of a group order). Enemy figures
   (``EdgeView.enemy_groups``, DEC-33) get wire ids like own entities; a range of units is an
   object ``{low, high}``;
 - ``snapshot_frame``: the same ``snapshot`` encoded straight from the ``PlayerView``, without the
@@ -14,7 +15,7 @@ Server -> client:
   frames to be equal byte for byte (``test_convert.py``), and the server outside ``prod``
   validates every frame it sends (``MatchRunner(validate_snapshots=True)``);
 - ``ack_msg``: ``CommandResult`` -> ``ack`` (``path`` and ``arrive_tick`` of an accepted ``Move``,
-  ``reject_code``);
+  ``reject_code``; the ``kind``, ``cost``, ``arrive_tick`` and ``members`` of a ``GroupMove``);
 - ``reach_msg``: ``gow_sim.view.Reach`` (``Match.reach``) -> ``reach`` (DEC-20, D5);
 - ``events_msgs``: the events of a tick -> the ``event`` messages one player may see (below);
 - ``match_end_msg``: ``Outcome`` -> ``match_end``.
@@ -41,7 +42,8 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
   player whose group could not pay for a capture (DEC-38, item 10); the road fortifications
   (DEC-43, item D): ``road_fort_built`` and ``road_fort_destroyed`` to the owner, ``toll_paid``
   to the payer, ``toll_taken`` to the owner of the fortification (the simulation emits it only
-  when the owner sees the half of the fortified node, so it is private by ``player`` too);
+  when the owner sees the half of the fortified node, so it is private by ``player`` too); the
+  rally point (DEC-48, item I3): ``rally_point_cleared`` and ``rally_walk_no_cp`` to the owner;
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
 Entity ids in event data (``group``, ``new_group``, ``packet``, ``fight``) become opaque ids of
@@ -59,12 +61,14 @@ from typing import Final
 from gow_protocol import commands as wire
 from gow_protocol.codec import SnapshotFrame, encode_snapshot
 from gow_protocol.messages import (
+    AckMember,
     AckMsg,
     Calibration,
     EndReason,
     EventMsg,
     MatchEndMsg,
     MatchEndStats,
+    OrderKind,
     RatingChange,
     ReachMsg,
     ReachNode,
@@ -147,6 +151,8 @@ PRIVATE_KINDS: Final = frozenset(
         "packet_lost",
         "packet_sent",
         "plan_charged",
+        "rally_point_cleared",
+        "rally_walk_no_cp",
         "recruit_cancelled",
         "recruit_queue_lost",
         "recruited",
@@ -229,6 +235,8 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "packet_lost": ("charges", "edge", "packet", "player"),
     "packet_sent": ("charges", "edge", "from_node", "packet", "player", "to_node"),
     "plan_charged": ("bonus", "group", "node", "player"),
+    "rally_point_cleared": ("node", "player", "target"),
+    "rally_walk_no_cp": ("group", "node", "player", "target"),
     "recruit_cancelled": ("cp", "node", "player"),
     "recruit_queue_lost": ("node", "player", "units"),
     "recruited": ("group", "node", "player"),
@@ -264,6 +272,7 @@ EVENT_ID_FIELDS: Final[Mapping[str, frozenset[str]]] = {
     "packet_lost": frozenset({"packet"}),
     "packet_sent": frozenset({"packet"}),
     "plan_charged": frozenset({"group"}),
+    "rally_walk_no_cp": frozenset({"group"}),
     "recruited": frozenset({"group"}),
     "toll_paid": frozenset({"group"}),
 }
@@ -338,6 +347,7 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 flow_idle=n.flow_idle,
                 flow_pocket=n.flow_pocket,
                 terrain_mark=n.terrain_mark,
+                rally_point=n.rally_point,
             )
             for n in view.nodes
         ),
@@ -383,6 +393,11 @@ def view_to_wire(view: sv.PlayerView) -> View:
                     gathering=g.order.gathering,
                     plan=g.order.plan,
                     next_charge_tick=g.order.next_charge_tick,
+                    depart_tick=g.order.depart_tick,
+                    group_order=None
+                    if g.order.group_order is None
+                    else opaque_to_wire(g.order.group_order),
+                    arrive_tick=g.order.arrive_tick,
                 ),
             )
             for g in view.groups
@@ -531,6 +546,7 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "flow_idle": n.flow_idle,
                 "flow_pocket": n.flow_pocket,
                 "terrain_mark": n.terrain_mark,
+                "rally_point": n.rally_point,
             }
             for n in view.nodes
         ],
@@ -576,6 +592,11 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                     "gathering": g.order.gathering,
                     "plan": g.order.plan,
                     "next_charge_tick": g.order.next_charge_tick,
+                    "depart_tick": g.order.depart_tick,
+                    "group_order": None
+                    if g.order.group_order is None
+                    else opaque_to_wire(g.order.group_order),
+                    "arrive_tick": g.order.arrive_tick,
                 },
             }
             for g in view.groups
@@ -707,6 +728,10 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.SetLeafShift(shift)
         case wire.ReleasePlanCmd(group=g):
             return sim.ReleasePlan(gid(g))
+        case wire.GroupMoveCmd(groups=groups, dest=dest, planned=planned, bonus=bonus):
+            return sim.GroupMove(tuple(gid(g) for g in groups), dest, planned, bonus)
+        case wire.SetRallyPointCmd(node=node, target=target):
+            return sim.SetRallyPoint(node, target)
         case wire.ForfeitCmd():
             return sim.Forfeit()
 
@@ -714,15 +739,39 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
 def ack_msg(result: sim.CommandResult) -> AckMsg:
     """``ack`` of a command result; ``result.seq`` is the client's ``seq``."""
     match result.outcome:
-        case sim.Ok(path=path, arrive_tick=arrive_tick):
+        case sim.Ok(path=path, arrive_tick=arrive_tick, kind=kind, members=members, cost=cost):
+            if kind is not None:  # a group order (DEC-48, item B6)
+                return AckMsg(
+                    seq=result.seq,
+                    applied_tick=result.tick,
+                    arrive_tick=arrive_tick,
+                    kind=OrderKind(kind.value),
+                    cost=cost,
+                    members=tuple(_ack_member(m) for m in members),
+                )
             return AckMsg(
                 seq=result.seq,
                 applied_tick=result.tick,
                 path=path or None,
                 arrive_tick=arrive_tick,
             )
-        case sim.Reject(code=code):
-            return AckMsg(seq=result.seq, applied_tick=result.tick, reject_code=code.value)
+        case sim.Reject(code=code, members=members):
+            return AckMsg(
+                seq=result.seq,
+                applied_tick=result.tick,
+                reject_code=code.value,
+                members=tuple(_ack_member(m) for m in members) if members else None,
+            )
+
+
+def _ack_member(m: sim.Member) -> AckMember:
+    return AckMember(
+        path=m.path or None,
+        depart_tick=m.depart_tick,
+        arrive_tick=m.arrive_tick,
+        bonus=m.bonus,
+        reject_code=None if m.reject is None else m.reject.value,
+    )
 
 
 def reach_msg(group: str, tick: int, reach: sv.Reach | None) -> ReachMsg:

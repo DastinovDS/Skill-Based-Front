@@ -32,6 +32,25 @@ item 10) and gathers it in ``systems.orders``; ``ReleasePlan`` sends it at once.
 Supply flow (DEC-43): ``SetLeafShift`` sets the player's leaf shift (item B2; free, not public,
 no event). Road fortifications (DEC-43, item D): ``FortifyRoad(node, edge)`` for ``fort.cost``
 CP (``systems.fortify``; not public). None of these commands is public.
+
+The group order (DEC-48, section ``[group_order]``): ``GroupMove(groups, dest, planned, bonus)``
+checks each member like a ``Move`` of that group to ``dest`` and accepts the valid ones (partial
+acceptance, per-member codes in ``Ok.members``); the whole command is rejected when the section is
+off, the list or the bonus is malformed, a rally is planned, ``dest`` does not exist, no member is
+valid (the first member's code, with the members) or the CP of the accepted members are short
+(``NOT_ENOUGH_CP``, all or nothing). An own ``dest`` is a rally (every member departs at once, the
+price ``group_order.rally_pct`` of a move per member rounded up to a whole CP), any other an attack
+whose members arrive in one tick (a member waits in its node until its departure, ``GROUP_BUSY``
+for any command but ``CancelOrder``), a planned one splitting the requested bonus over the members
+(``systems.orders``). Under the section ``ReleasePlan`` is disabled. A command of a feature the
+ruleset does not have (``GroupMove`` without the section, ``ReleasePlan`` with it,
+``SetRallyPoint`` without ``recruit.rally_point``) is ``INVALID_ARGUMENT``: the client hides those
+controls by ``ruleset_public``. ``SetRallyPoint(node, target)`` (DEC-48, item H) sets or clears
+the rally point of an own city, free.
+
+The ``arrive_tick`` of a planned ``Move`` is the arrival once the requested bonus is gathered: the
+group departs in the tick after its last charge (``systems.orders.gather_plans``), so
+``tick + bonus * plan_ticks_per_bonus + 1 + T - 1`` (#896 found the forecast one tick early).
 """
 
 from collections.abc import Callable, Iterable
@@ -47,6 +66,7 @@ from gow_sim.state import (
     FightMember,
     GameState,
     Group,
+    GroupOrder,
     IntentKind,
     Mode,
     OnEdge,
@@ -58,7 +78,15 @@ from gow_sim.systems.economy import set_stance
 from gow_sim.systems.flow import factory_count
 from gow_sim.systems.fortify import start_road_fort
 from gow_sim.systems.movement import find_path, path_ticks
-from gow_sim.systems.orders import absorb, clear_bonus, release_plan, set_intent
+from gow_sim.systems.orders import (
+    absorb,
+    clear_bonus,
+    plan_parts,
+    release_plan,
+    schedule,
+    set_intent,
+    settle_group_orders,
+)
 from gow_sim.systems.recruit import cancel_unit, free_capacity, queue_unit
 from gow_sim.systems.supply import is_city
 from gow_sim.systems.vision import compute_vision, is_visible
@@ -72,21 +100,26 @@ __all__ = [
     "CommandResult",
     "Forfeit",
     "FortifyRoad",
+    "GroupMove",
+    "Member",
     "Merge",
     "Move",
     "Ok",
+    "OrderKind",
     "PlayerCommand",
     "Recruit",
     "Reject",
     "RejectCode",
     "ReleasePlan",
     "SetLeafShift",
+    "SetRallyPoint",
     "SetStance",
     "Split",
     "Stance",
     "apply_commands",
     "command_cost",
     "map_group_ids",
+    "rally_price",
     "validate",
 ]
 
@@ -189,6 +222,28 @@ class ReleasePlan:
 
 
 @dataclass(frozen=True, slots=True)
+class GroupMove:
+    """DEC-48: one order for the own groups ``groups`` (1 to ``group_order.max_groups``, distinct,
+    the order of the list decides the bonus split) to ``dest``: a rally to an own node, an attack
+    with a synchronized arrival to any other. ``planned`` and ``bonus`` as in ``Move``; ``bonus``
+    is the requested total of a planned attack."""
+
+    groups: tuple[int, ...]
+    dest: int
+    planned: bool = False
+    bonus: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class SetRallyPoint:
+    """DEC-48, item H: the new units of the own city ``node`` walk to the own node ``target``;
+    ``None`` clears the point. Free."""
+
+    node: int
+    target: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class Forfeit:
     pass
 
@@ -206,6 +261,8 @@ type Command = (
     | FortifyRoad
     | SetLeafShift
     | ReleasePlan
+    | GroupMove
+    | SetRallyPoint
     | Forfeit
 )
 
@@ -223,8 +280,11 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             return Merge(tuple(f(g) for g in groups))
         case CancelOrder(group=g):
             return CancelOrder(f(g))
+        case GroupMove(groups=groups, dest=dest, planned=planned, bonus=bonus):
+            return GroupMove(tuple(f(g) for g in groups), dest, planned, bonus)
         case (
             SetStance()
+            | SetRallyPoint()
             | BuildBarracks()
             | Recruit()
             | CancelRecruit()
@@ -282,6 +342,27 @@ class RejectCode(StrEnum):
     normal ``Move``, everyone else by ``CancelOrder``."""
 
 
+class OrderKind(StrEnum):
+    """What a ``GroupMove`` is, decided by the owner of its target when applied (DEC-48, B2)."""
+
+    RALLY = "rally"
+    ATTACK = "attack"
+
+
+@dataclass(frozen=True, slots=True)
+class Member:
+    """One group of a ``GroupMove`` in the order of the list (DEC-48, item B6): its path, its
+    departure and arrival (``None`` for a planned member until the departures are fixed) and its
+    part of the bonus (item F2), or the code that dropped it."""
+
+    group: int
+    path: tuple[int, ...] = ()
+    depart_tick: int | None = None
+    arrive_tick: int | None = None
+    bonus: int = 0
+    reject: RejectCode | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class Ok:
     cost: int
@@ -290,12 +371,20 @@ class Ok:
     """For ``Move``: the nodes ``(start, ..., dest)``, returned to the client in ``ack``."""
     arrive_tick: int | None = None
     """For ``Move``: the tick the group reaches ``dest`` if the command is applied at
-    ``state.tick`` and nothing stops it (DEC-22, item 10: the client shows the travel time)."""
+    ``state.tick`` and nothing stops it (DEC-22, item 10: the client shows the travel time).
+    For ``GroupMove``: the common arrival (a rally: the latest arrival of a member), ``None`` for
+    a planned attack (its departures are fixed later, DEC-48, item F4)."""
+    kind: OrderKind | None = None
+    """For ``GroupMove``: a rally or an attack (DEC-48, item B2)."""
+    members: tuple[Member, ...] = ()
+    """For ``GroupMove``: every group of the list, in its order (DEC-48, item B6)."""
 
 
 @dataclass(frozen=True, slots=True)
 class Reject:
     code: RejectCode
+    members: tuple[Member, ...] = ()
+    """For a ``GroupMove`` without a valid member: the code of each group (DEC-48, item B3)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -347,6 +436,12 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return rules.fort.cost  # flat (DEC-43, item D2)
         case ReleasePlan():
             return 0  # free (DEC-41, item 10)
+        case GroupMove(groups=groups, planned=planned):
+            # every group of the list accepted as an attack: the upper bound of the price (a rally
+            # needs the owner of ``dest`` and costs less; DEC-48, items A2 and B5)
+            return len(groups) * (cost.planned_move if planned else cost.move)
+        case SetRallyPoint():
+            return 0  # free (DEC-48, item H3)
         case Forfeit():
             return 0
 
@@ -372,6 +467,8 @@ def _visible_enemy_groups(state: GameState, rules: Ruleset, player: int) -> dict
 def _validate(
     state: GameState, rules: Ruleset, player: int, cmd: Command, seen: dict[int, bool]
 ) -> Ok | Reject:
+    if isinstance(cmd, GroupMove):
+        return _validate_group_move(state, rules, player, cmd, seen)
     checked = _check(state, rules, player, cmd, seen)
     if isinstance(checked, Reject):
         return checked
@@ -380,10 +477,107 @@ def _validate(
         return Reject(RejectCode.NOT_ENOUGH_CP)
     if isinstance(cmd, Move):
         # The first step is made in the tick of the order (or of the departure): tick + T - 1.
-        delay = cmd.bonus * rules.orders.plan_ticks_per_bonus  # the gathering, if planned
+        # A plan departs in the tick after its last charge (``gather_plans``): + 1.
+        delay = cmd.bonus * rules.orders.plan_ticks_per_bonus + 1 if cmd.planned else 0
         arrive = state.tick + delay + path_ticks(state, rules, checked) - 1
         return Ok(cost=cost, path=checked, arrive_tick=arrive)
     return Ok(cost=cost, path=checked)
+
+
+def rally_price(rules: Ruleset, n: int) -> int:
+    """DEC-48, item A2: a rally of ``n`` groups costs ``rally_pct`` of a move per group, the total
+    rounded up to a whole CP (in hundredths; ``//`` on non-negative numbers)."""
+    go = rules.group_order
+    assert go is not None
+    return (n * rules.orders.cost.move * go.rally_pct + 9999) // 10000 * 100
+
+
+def _validate_group_move(
+    state: GameState, rules: Ruleset, player: int, cmd: GroupMove, seen: dict[int, bool]
+) -> Ok | Reject:
+    """DEC-48, items B3 to B6, C2, E1, F1 and F2: the checks in this order, then the price and the
+    schedule of the accepted members."""
+    go = rules.group_order
+    gids = cmd.groups
+    invalid = Reject(RejectCode.INVALID_ARGUMENT)
+    if go is None:
+        return invalid  # the ruleset has no group order (item J)
+    if not 1 <= len(gids) <= go.max_groups or len(dict.fromkeys(gids)) != len(gids):
+        return invalid
+    if cmd.bonus < 0 or (cmd.bonus >= 1) != cmd.planned:
+        return invalid
+    dest = cmd.dest
+    if not 0 <= dest < len(state.map.nodes):
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    rally = state.nodes[dest].owner == player
+    if rally and cmd.planned:
+        return invalid  # item G1
+    checked = [(gid, _check_member(state, rules, player, gid, dest, seen)) for gid in gids]
+    accepted: list[tuple[int, tuple[int, ...]]] = []
+    for gid, path in checked:
+        if not isinstance(path, Reject):
+            accepted.append((gid, path))
+    if not accepted:
+        first = checked[0][1]
+        assert isinstance(first, Reject)
+        dropped: list[Member] = []
+        for gid, path in checked:
+            assert isinstance(path, Reject)
+            dropped.append(Member(gid, reject=path.code))
+        return Reject(first.code, tuple(dropped))
+    n = len(accepted)
+    cost = rules.orders.cost
+    if rally:
+        price = rally_price(rules, n)
+    else:
+        price = n * (cost.planned_move if cmd.planned else cost.move)
+    if price > state.players[player].cp:
+        return Reject(RejectCode.NOT_ENOUGH_CP)
+    tick = state.tick
+    ticks = [path_ticks(state, rules, path) for _, path in accepted]
+    plan: dict[int, Member] = {}
+    arrive: int | None
+    if cmd.planned:  # item F: the departures are fixed once the parts are gathered
+        parts = plan_parts([state.groups[gid].charged for gid, _ in accepted], cmd.bonus)
+        arrive = None
+        for (gid, path), part in zip(accepted, parts, strict=True):
+            plan[gid] = Member(gid, path, bonus=part)
+    elif rally:  # item E1: every member departs at once
+        arrive = tick + max(ticks) - 1
+        for (gid, path), t in zip(accepted, ticks, strict=True):
+            plan[gid] = Member(gid, path, tick, tick + t - 1)
+    else:  # item C2: one arrival
+        arrive, departs = schedule(tick, ticks)
+        for (gid, path), depart in zip(accepted, departs, strict=True):
+            plan[gid] = Member(gid, path, depart, arrive)
+    members = tuple(
+        Member(gid, reject=path.code) if isinstance(path, Reject) else plan[gid]
+        for gid, path in checked
+    )
+    kind = OrderKind.RALLY if rally else OrderKind.ATTACK
+    return Ok(cost=price, arrive_tick=arrive, kind=kind, members=members)
+
+
+def _check_member(
+    state: GameState, rules: Ruleset, player: int, gid: int, dest: int, seen: dict[int, bool]
+) -> tuple[int, ...] | Reject:
+    """A member of a ``GroupMove``, checked like a ``Move`` of that group (DEC-48, item B4): a
+    standing own group without an order, in no fight under any ``combat.retreat``, not already in
+    ``dest``, with a path that holds it (no automatic split)."""
+    group = _standing_group(state, player, gid, seen)
+    if isinstance(group, Reject):
+        return group
+    if group.fight is not None:
+        return Reject(RejectCode.IN_FIGHT)
+    start = _node_of(group)
+    if dest == start:
+        return Reject(RejectCode.INVALID_ARGUMENT)
+    path = find_path(state, rules, player, start, dest, size=group.units)
+    if path is not None:
+        return path
+    if find_path(state, rules, player, start, dest) is not None:
+        return Reject(RejectCode.STACK_LIMIT)
+    return Reject(RejectCode.NO_PATH)
 
 
 def _check(
@@ -496,6 +690,8 @@ def _check(
                 return Reject(RejectCode.INVALID_ARGUMENT)
             return Reject(RejectCode.NO_CHANGE) if shift == ps.leaf_shift else ()
         case ReleasePlan(group=gid):
+            if rules.group_order is not None:
+                return Reject(RejectCode.INVALID_ARGUMENT)  # DEC-48, item A7: no release
             group = _own_group(state, player, gid, seen)
             if isinstance(group, Reject):
                 return group
@@ -506,8 +702,41 @@ def _check(
             if group.fight is not None:
                 return Reject(RejectCode.IN_FIGHT)  # it may cancel the plan (DEC-24, E)
             return ()
+        case SetRallyPoint(node=node, target=target):
+            return _check_rally_point(state, rules, player, node, target)
+        case GroupMove():
+            raise AssertionError("checked by _validate_group_move")
         case Forfeit():
             return Reject(RejectCode.NO_CHANGE) if state.players[player].forfeited else ()
+
+
+def _check_rally_point(
+    state: GameState, rules: Ruleset, player: int, node: int, target: int | None
+) -> tuple[int, ...] | Reject:
+    """The checks of ``SetRallyPoint`` in the order of DEC-48, item H2. Only own nodes are read,
+    so nothing hidden leaks; no path is needed (the point is persistent)."""
+    if not rules.recruit.rally_point:
+        return Reject(RejectCode.INVALID_ARGUMENT)  # the ruleset has no rally point (item H1)
+    nodes = state.nodes
+    if not 0 <= node < len(state.map.nodes):
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    city = nodes[node]
+    if city.owner != player:
+        return Reject(RejectCode.NOT_OWNER)
+    if not is_city(state.map, node):
+        return Reject(RejectCode.NOT_CITY)
+    if not city.has_barracks:
+        return Reject(RejectCode.NO_BARRACKS)
+    if target is not None:
+        if not 0 <= target < len(state.map.nodes):
+            return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+        if nodes[target].owner != player:
+            return Reject(RejectCode.NOT_OWNER)
+        if target == node:
+            return Reject(RejectCode.INVALID_ARGUMENT)
+    if city.rally_point == target:
+        return Reject(RejectCode.NO_CHANGE)
+    return ()
 
 
 def _check_factory(
@@ -639,8 +868,10 @@ def _set_leaving(state: GameState, group: Group, *, leaving: bool) -> None:
 
 
 def _waits_to_depart(state: GameState, group: Group) -> bool:
+    """The group waits in its node for a later departure: a gathering plan (DEC-41, item 10) or
+    a member of a group order (DEC-48, item B8)."""
     order = group.order
-    return order is not None and order.planned and state.tick < order.depart_tick
+    return order is not None and state.tick < order.depart_tick
 
 
 def _node_of(group: Group) -> int:
@@ -692,6 +923,8 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             group.plan_tick = tick if planned else 0
             if group.fight is not None:  # a defender withdraws after the next round (DEC-24)
                 _set_leaving(state, group, leaving=True)
+            group.group_order = None  # it leaves a group order it departs with now (DEC-48)
+            group.walk = False
             if planned:  # public intent now, the bonus from the departure on (DEC-08)
                 # The bonus is gathered from 0 (DEC-41, item 10: no distance bonus,
                 # ``systems.orders``); ``movement`` caps it by the charged units at departure.
@@ -727,6 +960,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
         case CancelOrder(group=gid):
             group = state.groups[gid]
             location = group.location
+            joint = group.group_order
             if group.fight is not None:
                 # DEC-24, E: a defender's withdrawal or waiting order is cancelled, it stays in
                 # the fight; anyone else withdraws after the next round.
@@ -735,16 +969,22 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                     _set_leaving(state, group, leaving=False)
                 else:
                     _set_leaving(state, group, leaving=True)
-                clear_bonus(group)
-                set_intent(state, group, None)
-                return []
-            if isinstance(location, OnEdge):
-                # Back to the start of this edge, as long as the way travelled (DEC-20, C2): the
-                # mechanics of a bounce, without spending charges.
-                group.location = OnEdge(location.edge, location.from_node, location.progress, True)
-            group.order = None  # an order on an edge or a planned order still waiting (validated)
+            else:
+                if isinstance(location, OnEdge):
+                    # Back to the start of this edge, as long as the way travelled (DEC-20, C2):
+                    # the mechanics of a bounce, without spending charges.
+                    group.location = OnEdge(
+                        location.edge, location.from_node, location.progress, True
+                    )
+                group.order = None  # an order on an edge or a waiting order (validated)
             clear_bonus(group)
             set_intent(state, group, None)
+            if joint is not None and group.order is None:
+                # DEC-48, items B7 and F8: the member leaves its group order, no refund; the
+                # others keep their schedule, or depart now if it was the last one not ready.
+                group.group_order = None
+                group.walk = False
+                settle_group_orders(state, rules, tick, only=joint)
             return []
         case SetStance(stance=stance):
             return set_stance(state, rules, player, stance)
@@ -758,6 +998,43 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
         case ReleasePlan(group=gid):
             release_plan(state.groups[gid], tick)  # it departs in this tick (movement)
             return []
+        case GroupMove(dest=dest, planned=planned):
+            return _apply_group_move(state, rules, player, dest, planned, ok)
+        case SetRallyPoint(node=node, target=target):
+            state.nodes[node].rally_point = target  # free, no event (DEC-48, item H3)
+            return []
         case Forfeit():
             state.players[player].forfeited = True
             return [event(tick, "forfeit", player=player)]
+
+
+def _apply_group_move(
+    state: GameState, rules: Ruleset, player: int, dest: int, planned: bool, ok: Ok
+) -> list[Event]:
+    """Apply a validated ``GroupMove`` (DEC-48): one ``GroupOrder`` and an order per accepted
+    member. A planned member gathers its part from 0 with its own public intent (item F7); with
+    every part 0 the departures are fixed at once (item F4)."""
+    tick = state.tick
+    oid = state.new_id()
+    rally = ok.kind is OrderKind.RALLY
+    state.group_orders[oid] = GroupOrder(oid, player, rally, planned, ok.arrive_tick)
+    for m in ok.members:
+        if m.reject is not None:
+            continue
+        group = state.groups[m.group]
+        depart = PLAN_WAIT if m.depart_tick is None else m.depart_tick
+        group.order = Order(path=m.path[1:], planned=planned, depart_tick=depart)
+        group.group_order = oid
+        group.walk = False
+        if planned:
+            group.plan = m.bonus
+            group.plan_tick = tick
+            group.bonus = 0
+            group.bonus_tick = PLAN_WAIT
+            set_intent(state, group, IntentKind.PLANNED_MOVE, dest)
+        else:
+            clear_bonus(group)
+            set_intent(state, group, None)
+    if planned:
+        settle_group_orders(state, rules, tick, only=oid)
+    return []

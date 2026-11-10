@@ -66,6 +66,9 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
           gathering: true,
           plan: 3,
           next_charge_tick: T + 12,
+          depart_tick: null,
+          group_order: null,
+          arrive_tick: null,
         },
       };
     }

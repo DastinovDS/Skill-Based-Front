@@ -14,16 +14,92 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 46,
+    "PROTOCOL_VERSION": 47,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
     "CLOSE_POLICY": 1008
   },
   "$defs": {
+    "AckMember": {
+      "additionalProperties": false,
+      "description": "One group of a ``group_move``, in the order of its ``groups`` (DEC-48, item B6): accepted\nwith its path, or dropped with its ``reject_code`` (``STACK_LIMIT``: the client offers the\nsplit of #762 for it).",
+      "properties": {
+        "path": {
+          "anyOf": [
+            {
+              "items": {
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The nodes from the group's node to ``dest``; ``None`` for a dropped group."
+        },
+        "depart_tick": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The tick it leaves its node (a member of an attack waits there until then); ``None`` for a\nplanned member (fixed once every part is gathered: ``OrderView.depart_tick``) and a dropped\none."
+        },
+        "arrive_tick": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The tick it reaches ``dest`` if nothing stops it; ``None`` like ``depart_tick``."
+        },
+        "bonus": {
+          "description": "A planned member: its part of the requested bonus (item F2); 0 otherwise.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reject_code": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why the group was dropped; ``None`` for an accepted one."
+        }
+      },
+      "required": [
+        "path",
+        "depart_tick",
+        "arrive_tick",
+        "bonus",
+        "reject_code"
+      ],
+      "title": "AckMember",
+      "type": "object"
+    },
     "AckMsg": {
       "additionalProperties": false,
-      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client\ndraws it and never computes it); ``None`` otherwise.\n``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` if nothing\nstops it (the gathering of a planned order included; DEC-22, item 10); ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20).",
+      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client\ndraws it and never computes it); ``None`` otherwise.\n``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` if nothing\nstops it (the gathering of a planned order included; DEC-22, item 10); for an accepted\n``group_move`` the common arrival (a rally: the latest arrival of a member; ``None`` for a\nplanned attack until its departures are fixed, ``OrderView.arrive_tick``); ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20). A ``group_move`` without enough CP\nfor its accepted groups is ``NOT_ENOUGH_CP`` as a whole (no group goes, nothing waits for CP;\nDEC-48, item B5): the client shows it as an alert.\n``kind``, ``cost``: an accepted ``group_move`` only (DEC-48, item B6): a rally or an attack\nand the CP charged, in hundredths.\n``members``: a ``group_move`` only, one per group in the order of its ``groups``: accepted or\ndropped; also on a ``group_move`` rejected because no group was valid (``reject_code`` is then\nthe first group's code). ``None`` for every other command and for a ``group_move`` rejected as\na whole for another reason.",
       "properties": {
         "type": {
           "const": "ack",
@@ -81,6 +157,44 @@
             }
           ],
           "default": null
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrderKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "members": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/AckMember"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -89,7 +203,10 @@
         "applied_tick",
         "path",
         "arrive_tick",
-        "reject_code"
+        "reject_code",
+        "kind",
+        "cost",
+        "members"
       ],
       "title": "AckMsg",
       "type": "object"
@@ -392,11 +509,13 @@
           "cancel_recruit": "#/$defs/CancelRecruitCmd",
           "forfeit": "#/$defs/ForfeitCmd",
           "fortify_road": "#/$defs/FortifyRoadCmd",
+          "group_move": "#/$defs/GroupMoveCmd",
           "merge": "#/$defs/MergeCmd",
           "move": "#/$defs/MoveCmd",
           "recruit": "#/$defs/RecruitCmd",
           "release_plan": "#/$defs/ReleasePlanCmd",
           "set_leaf_shift": "#/$defs/SetLeafShiftCmd",
+          "set_rally_point": "#/$defs/SetRallyPointCmd",
           "set_stance": "#/$defs/SetStanceCmd",
           "split": "#/$defs/SplitCmd"
         },
@@ -438,6 +557,12 @@
         },
         {
           "$ref": "#/$defs/ReleasePlanCmd"
+        },
+        {
+          "$ref": "#/$defs/GroupMoveCmd"
+        },
+        {
+          "$ref": "#/$defs/SetRallyPointCmd"
         },
         {
           "$ref": "#/$defs/ForfeitCmd"
@@ -1150,6 +1275,75 @@
         "edge"
       ],
       "title": "FortifyRoadCmd",
+      "type": "object"
+    },
+    "GroupMoveCmd": {
+      "additionalProperties": false,
+      "description": "DEC-48: one order for several own groups to ``dest``. An own ``dest`` is a rally (every\ngroup departs at once and merges there, ``ruleset_public.group_order.rally_pct`` of a move per\ngroup, rounded up to a whole CP), any other an attack whose groups arrive in one tick. Each\ngroup is checked like a ``move`` of it (partial acceptance: ``ack.members``). The order of\n``groups`` decides the split of a planned bonus (the first ones take the remainder).\n``INVALID_ARGUMENT`` without ``ruleset_public.group_order``, for more groups than its\n``max_groups`` and for a planned rally.",
+      "properties": {
+        "type": {
+          "const": "group_move",
+          "default": "group_move",
+          "type": "string"
+        },
+        "groups": {
+          "items": {
+            "pattern": "^[A-Za-z0-9_-]{1,32}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array"
+        },
+        "dest": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "planned": {
+          "description": "A planned attack: each group gathers its part of ``bonus`` in its node (DEC-48, item F).",
+          "type": "boolean"
+        },
+        "bonus": {
+          "default": 0,
+          "description": "A planned order only: the requested total bonus, at least 1; 0 otherwise.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "groups",
+        "dest",
+        "planned",
+        "bonus"
+      ],
+      "title": "GroupMoveCmd",
+      "type": "object"
+    },
+    "GroupOrderPublic": {
+      "additionalProperties": false,
+      "description": "The group order (DEC-48, ``[group_order]`` of the ruleset): ``group_move`` works and\n``release_plan`` is disabled.",
+      "properties": {
+        "max_groups": {
+          "description": "Groups in one ``group_move`` at most.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "rally_pct": {
+          "description": "A rally of ``n`` groups costs ``ceil(n * cost.move * rally_pct / 100 / 100)`` whole CP;\nan attack ``cost.move`` per group (``cost.planned_move`` planned).",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_groups",
+        "rally_pct"
+      ],
+      "title": "GroupOrderPublic",
       "type": "object"
     },
     "GroupView": {
@@ -2139,6 +2333,20 @@
             }
           ],
           "description": "The terrain effect the defender of the node would get if attacked now (DEC-24, item F2;\n#791): positive, the bonus shots of mountains; negative, the charges plains burn in the first\nround (DEC-45). Only for a node with an owner, no fight,\na terrain effect and a charged group of the owner standing in it; for a node of the enemy only\nat ``exact``. ``null`` otherwise: an attacker, a discharged group, a road and a neutral node\nnever carry it. The client draws it as is (AGENTS.md 7.1)."
+        },
+        "rally_point": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DEC-48, item I2: own city only, the own node its new units walk to; ``None`` without one\nand for every other node."
         }
       },
       "required": [
@@ -2165,7 +2373,8 @@
         "flow_next",
         "flow_idle",
         "flow_pocket",
-        "terrain_mark"
+        "terrain_mark",
+        "rally_point"
       ],
       "title": "NodeView",
       "type": "object"
@@ -2203,6 +2412,15 @@
       ],
       "title": "OnEdgeLoc",
       "type": "object"
+    },
+    "OrderKind": {
+      "description": "What a ``group_move`` is (DEC-48, item B2): decided by the owner of its target when it is\napplied.",
+      "enum": [
+        "rally",
+        "attack"
+      ],
+      "title": "OrderKind",
+      "type": "string"
     },
     "OrderView": {
       "additionalProperties": false,
@@ -2254,6 +2472,47 @@
             }
           ],
           "description": "While ``gathering``: the tick the next charge is due (an empty warehouse or a fight in the\nnode delays it). ``None`` otherwise."
+        },
+        "depart_tick": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The group leaves its node not before this tick (DEC-48: a member of a synchronized attack\nwaits in its node until then, item C2); a past tick once it left. ``None`` while a planned\norder gathers and for a ready member of a planned group order until the departures are fixed\n(item F4)."
+        },
+        "group_order": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DEC-48, item I1: shared by the members of one group order; ``None`` for a single order."
+        },
+        "arrive_tick": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DEC-48, item I1: the common arrival of the group order (a rally: the latest arrival of a\nmember) once known; ``None`` while a planned group order gathers and for a single order."
         }
       },
       "required": [
@@ -2263,7 +2522,10 @@
         "bonus",
         "gathering",
         "plan",
-        "next_charge_tick"
+        "next_charge_tick",
+        "depart_tick",
+        "group_order",
+        "arrive_tick"
       ],
       "title": "OrderView",
       "type": "object"
@@ -2646,12 +2908,24 @@
           "maximum": 100,
           "minimum": 0,
           "type": "integer"
+        },
+        "rally_point": {
+          "description": "DEC-48, item H: a city may send its new units to a rally point (``set_rally_point``).",
+          "type": "boolean"
+        },
+        "rally_cost": {
+          "description": "Hundredths of CP a recruit pays when it leaves for the rally point (with fewer CP it stays\nin its city, event ``rally_walk_no_cp``); 0 without ``rally_point``.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "unit_ticks",
         "queue_max",
-        "refund_started_pct"
+        "refund_started_pct",
+        "rally_point",
+        "rally_cost"
       ],
       "title": "RecruitPublic",
       "type": "object"
@@ -2811,6 +3085,17 @@
         },
         "stances": {
           "$ref": "#/$defs/StancesPublic"
+        },
+        "group_order": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroupOrderPublic"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "DEC-48: the group order, ``None`` when the ruleset has none."
         }
       },
       "required": [
@@ -2828,7 +3113,8 @@
         "factory",
         "fort",
         "supply_dispatch_ticks",
-        "stances"
+        "stances",
+        "group_order"
       ],
       "title": "RulesetPublic",
       "type": "object"
@@ -3053,6 +3339,41 @@
         "shift"
       ],
       "title": "SetLeafShiftCmd",
+      "type": "object"
+    },
+    "SetRallyPointCmd": {
+      "additionalProperties": false,
+      "description": "DEC-48, item H: the new units of the own city ``node`` walk to the own node ``target``\n(each pays ``ruleset_public.recruit.rally_cost`` when it leaves); ``null`` clears the point.\nSetting and clearing are free. ``INVALID_ARGUMENT`` without\n``ruleset_public.recruit.rally_point``.",
+      "properties": {
+        "type": {
+          "const": "set_rally_point",
+          "default": "set_rally_point",
+          "type": "string"
+        },
+        "node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "node",
+        "target"
+      ],
+      "title": "SetRallyPointCmd",
       "type": "object"
     },
     "SetStanceCmd": {

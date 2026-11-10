@@ -118,6 +118,7 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       flow_idle: null,
       flow_pocket: null,
       terrain_mark: null,
+      rally_point: null,
     };
   });
 
@@ -170,6 +171,9 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
         gathering: false,
         plan: 0,
         next_charge_tick: null,
+        depart_tick: null,
+        group_order: null,
+        arrive_tick: null,
       },
     },
     // Waiting for a planned order to start: the bonus is a forecast by the charged units.
@@ -182,6 +186,9 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
         gathering: false,
         plan: 0,
         next_charge_tick: null,
+        depart_tick: null,
+        group_order: null,
+        arrive_tick: null,
       },
     }),
   ];

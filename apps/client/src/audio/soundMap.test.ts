@@ -40,6 +40,9 @@ describe('cuesOf', () => {
       path: null,
       arrive_tick: null,
       reject_code,
+      kind: null,
+      cost: null,
+      members: null,
     });
     expect(cuesOf(ack(null), 0)).toEqual([{ id: 'orderOk', tick: null }]);
     expect(cuesOf(ack('NOT_ENOUGH_CP'), 0)).toEqual([]);

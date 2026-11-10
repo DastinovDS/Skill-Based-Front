@@ -266,6 +266,25 @@
         "group"
       ]
     },
+    "rally_point_cleared": {
+      "fields": [
+        "node",
+        "player",
+        "target"
+      ],
+      "ids": []
+    },
+    "rally_walk_no_cp": {
+      "fields": [
+        "group",
+        "node",
+        "player",
+        "target"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
     "recruit_cancelled": {
       "fields": [
         "cp",

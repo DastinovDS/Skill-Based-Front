@@ -281,6 +281,9 @@ class NodeView:
     it; for a node of the enemy only where the view shows the enemy's charges (``EXACT``). ``None``
     otherwise: an attacker, a discharged group, an edge, a neutral node never carry it. It shows
     nothing new: the terrain is public, the owner and the charges are in the view."""
+    rally_point: int | None = None
+    """DEC-48, item I2: own city only, the own node its new units walk to (``SetRallyPoint``);
+    ``None`` without one and for every other node."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,7 +363,9 @@ class OrderView:
     depart_tick: int | None
     """Not before this tick the group leaves its node; ``None`` while a planned order gathers
     its bonus (``gathering``, DEC-41, item 10): no departure tick is known until the request or
-    the cap is reached or the plan is released."""
+    the cap is reached or the plan is released; also ``None`` for a ready member of a planned
+    group order until the departures are fixed (DEC-48, item F4). A member of a synchronized
+    attack waits in its node until this tick (item C2)."""
     bonus: int = 0
     """A planned order: the bonus gathered so far (DEC-41, item 10), at most the charged units,
     ``min(Group.bonus, charged now)``: the cap is taken again by the charged units in the
@@ -375,6 +380,12 @@ class OrderView:
     next_charge_tick: int | None = None
     """While ``gathering``: the tick the next charge is due; it is taken in that tick or, with
     an empty warehouse or a fight in the node, in the first tick after it that allows it."""
+    group_order: int | None = None
+    """DEC-48, item I1: an opaque id shared by the members of one group order; ``None`` for a
+    single order. Own orders only."""
+    arrive_tick: int | None = None
+    """DEC-48, item I1: the common arrival of the group order (a rally: the latest arrival of a
+    member) once known, ``None`` while a planned order gathers and for a single order."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -711,20 +722,25 @@ def _terrain_mark(
     return mod if mod > 0 else -min(-mod, charged)
 
 
-def _order_view(rules: Ruleset, g: Group) -> OrderView | None:
+def _order_view(
+    state: GameState, rules: Ruleset, g: Group, opaque: Callable[[int, int], int]
+) -> OrderView | None:
     order = g.order
     if order is None or not order.path:
         return None
     gathering = order.planned and g.plan > 0 and order.depart_tick == PLAN_WAIT
+    joint = None if g.group_order is None else state.group_orders.get(g.group_order)
     return OrderView(
         dest=order.path[-1],
         path=order.path,
         planned=order.planned,
-        depart_tick=None if gathering else order.depart_tick,
+        depart_tick=None if order.depart_tick == PLAN_WAIT else order.depart_tick,
         bonus=min(g.bonus, g.charged) if order.planned else 0,
         gathering=gathering,
         plan=g.plan if gathering else 0,
         next_charge_tick=g.plan_tick + rules.orders.plan_ticks_per_bonus if gathering else None,
+        group_order=None if joint is None else opaque(g.owner, joint.id),
+        arrive_tick=None if joint is None else joint.arrive_tick,
     )
 
 
@@ -786,6 +802,7 @@ def project(
                 flow_idle=flow.idle if flow is not None else None,
                 flow_pocket=flow.pocket if flow is not None else None,
                 terrain_mark=_terrain_mark(state, rules, player, n, level, standing, fight_nodes),
+                rally_point=node.rally_point if own_city else None,
             )
         )
 
@@ -830,7 +847,7 @@ def project(
                 charged=g.charged,
                 mode=g.mode,
                 location=g.location,
-                order=_order_view(rules, g),
+                order=_order_view(state, rules, g, opaque),
             )
         )
 
@@ -1063,6 +1080,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "flow_idle": None if n.flow_idle is None else n.flow_idle.value,
                 "flow_pocket": n.flow_pocket,
                 "terrain_mark": n.terrain_mark,
+                "rally_point": n.rally_point,
             }
             for n in view.nodes
         ],
@@ -1111,6 +1129,8 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                     "gathering": g.order.gathering,
                     "plan": g.order.plan,
                     "next_charge_tick": g.order.next_charge_tick,
+                    "group_order": g.order.group_order,
+                    "arrive_tick": g.order.arrive_tick,
                 },
             }
             for g in view.groups

@@ -70,6 +70,8 @@ USAGE_KEYS: Final[tuple[str, ...]] = (
     "ReleasePlan",
     "SetLeafShift",
     "FortifyRoad",
+    "GroupMove",
+    "SetRallyPoint",
 )
 """The mechanics of ``usage``, in report order: every command but ``Forfeit``."""
 

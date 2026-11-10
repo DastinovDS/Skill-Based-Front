@@ -6,8 +6,9 @@ their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``SetStance(stance)``, ``Recruit(node)``, ``CancelOrder(group)``, ``Forfeit()``; DEC-25:
 ``CancelRecruit(node)``; DEC-26: ``BuildBarracks(node)``; DEC-41: ``BuildFactory(node)``,
 ``ReleasePlan(group)``; the supply flow (DEC-43): ``SetLeafShift(shift)``; road fortifications
-(DEC-43, item D): ``FortifyRoad(node, edge)``. The conversion to simulation commands is PRO-03
-(#46).
+(DEC-43, item D): ``FortifyRoad(node, edge)``; the group order and the recruit rally point
+(DEC-48): ``GroupMove(groups, dest, planned, bonus)``, ``SetRallyPoint(node, target)``. The
+conversion to simulation commands is PRO-03 (#46).
 
 The schema checks only the shape. Ownership, visibility, reachability and CP are checked by the
 simulation's ``validate()``, which answers with one ``reject_code`` in ``ack`` and uses the same
@@ -19,7 +20,7 @@ from typing import Annotated, Final, Literal
 from pydantic import Field, field_validator
 
 from gow_protocol.base import EdgeId, NodeId, NonNegInt, OpaqueId, PosInt, WireModel
-from gow_sim.ruleset import Stance
+from gow_sim.ruleset import MAX_GROUP_ORDER, Stance
 
 MAX_MERGE_GROUPS: Final = 16
 """Wire limit on ``merge.groups`` against oversized messages; not a game rule."""
@@ -122,6 +123,42 @@ class ReleasePlanCmd(WireModel):
     group: OpaqueId
 
 
+class GroupMoveCmd(WireModel):
+    """DEC-48: one order for several own groups to ``dest``. An own ``dest`` is a rally (every
+    group departs at once and merges there, ``ruleset_public.group_order.rally_pct`` of a move per
+    group, rounded up to a whole CP), any other an attack whose groups arrive in one tick. Each
+    group is checked like a ``move`` of it (partial acceptance: ``ack.members``). The order of
+    ``groups`` decides the split of a planned bonus (the first ones take the remainder).
+    ``INVALID_ARGUMENT`` without ``ruleset_public.group_order``, for more groups than its
+    ``max_groups`` and for a planned rally."""
+
+    type: Literal["group_move"] = "group_move"
+    groups: Annotated[tuple[OpaqueId, ...], Field(min_length=1, max_length=MAX_GROUP_ORDER)]
+    dest: NodeId
+    planned: bool
+    """A planned attack: each group gathers its part of ``bonus`` in its node (DEC-48, item F)."""
+    bonus: NonNegInt = 0
+    """A planned order only: the requested total bonus, at least 1; 0 otherwise."""
+
+    @field_validator("groups")
+    @classmethod
+    def _distinct(cls, groups: tuple[str, ...]) -> tuple[str, ...]:
+        if len(set(groups)) != len(groups):
+            raise ValueError("groups must be distinct")
+        return groups
+
+
+class SetRallyPointCmd(WireModel):
+    """DEC-48, item H: the new units of the own city ``node`` walk to the own node ``target``
+    (each pays ``ruleset_public.recruit.rally_cost`` when it leaves); ``null`` clears the point.
+    Setting and clearing are free. ``INVALID_ARGUMENT`` without
+    ``ruleset_public.recruit.rally_point``."""
+
+    type: Literal["set_rally_point"] = "set_rally_point"
+    node: NodeId
+    target: NodeId | None
+
+
 class ForfeitCmd(WireModel):
     type: Literal["forfeit"] = "forfeit"
 
@@ -139,6 +176,8 @@ type Command = Annotated[
     | FortifyRoadCmd
     | SetLeafShiftCmd
     | ReleasePlanCmd
+    | GroupMoveCmd
+    | SetRallyPointCmd
     | ForfeitCmd,
     Field(discriminator="type"),
 ]

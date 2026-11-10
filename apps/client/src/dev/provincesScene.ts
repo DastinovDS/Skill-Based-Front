@@ -110,6 +110,7 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       flow_idle: null,
       flow_pocket: null,
       terrain_mark: null,
+      rally_point: null,
     };
   });
 

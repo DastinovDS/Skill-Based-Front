@@ -28,6 +28,9 @@ const onRoad = (id: string): GroupView => ({
     gathering: false,
     plan: 0,
     next_charge_tick: null,
+    depart_tick: null,
+    group_order: null,
+    arrive_tick: null,
   },
 });
 const withGroups = (groups: GroupView[], fights: FightView[] = []): SnapshotMsg => ({
@@ -37,7 +40,14 @@ const withGroups = (groups: GroupView[], fights: FightView[] = []): SnapshotMsg 
 const fightOf = (group: string): FightView =>
   ({ id: 'f', node: home, edge: null, point: null, groups: [group] }) as unknown as FightView;
 
-const ANSWER = { applied_tick: 31, path: null, arrive_tick: null } as const;
+const ANSWER = {
+  applied_tick: 31,
+  path: null,
+  arrive_tick: null,
+  kind: null,
+  cost: null,
+  members: null,
+} as const;
 
 function setup() {
   const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map });

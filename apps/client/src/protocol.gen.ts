@@ -19,6 +19,8 @@ export type Command =
   | FortifyRoadCmd
   | SetLeafShiftCmd
   | ReleasePlanCmd
+  | GroupMoveCmd
+  | SetRallyPointCmd
   | ForfeitCmd;
 /**
  * The stance of a player (DEC-44): the rate of the CP income and of the own capital (with
@@ -81,6 +83,11 @@ export type Location = AtNodeLoc | OnEdgeLoc;
  * Publicly visible intent types (DEC-04, DEC-08): the planned order.
  */
 export type IntentKind = 'planned_move';
+/**
+ * What a ``group_move`` is (DEC-48, item B2): decided by the owner of its target when it is
+ * applied.
+ */
+export type OrderKind = 'rally' | 'attack';
 /**
  * How the match ended (DEC-03, DEC-05).
  */
@@ -205,6 +212,43 @@ export interface ReleasePlanCmd {
   type: 'release_plan';
   group: string;
 }
+/**
+ * DEC-48: one order for several own groups to ``dest``. An own ``dest`` is a rally (every
+ * group departs at once and merges there, ``ruleset_public.group_order.rally_pct`` of a move per
+ * group, rounded up to a whole CP), any other an attack whose groups arrive in one tick. Each
+ * group is checked like a ``move`` of it (partial acceptance: ``ack.members``). The order of
+ * ``groups`` decides the split of a planned bonus (the first ones take the remainder).
+ * ``INVALID_ARGUMENT`` without ``ruleset_public.group_order``, for more groups than its
+ * ``max_groups`` and for a planned rally.
+ */
+export interface GroupMoveCmd {
+  type: 'group_move';
+  /**
+   * @minItems 1
+   * @maxItems 16
+   */
+  groups: [string, ...string[]];
+  dest: number;
+  /**
+   * A planned attack: each group gathers its part of ``bonus`` in its node (DEC-48, item F).
+   */
+  planned: boolean;
+  /**
+   * A planned order only: the requested total bonus, at least 1; 0 otherwise.
+   */
+  bonus: number;
+}
+/**
+ * DEC-48, item H: the new units of the own city ``node`` walk to the own node ``target``
+ * (each pays ``ruleset_public.recruit.rally_cost`` when it leaves); ``null`` clears the point.
+ * Setting and clearing are free. ``INVALID_ARGUMENT`` without
+ * ``ruleset_public.recruit.rally_point``.
+ */
+export interface SetRallyPointCmd {
+  type: 'set_rally_point';
+  node: number;
+  target: number | null;
+}
 export interface ForfeitCmd {
   type: 'forfeit';
 }
@@ -321,6 +365,10 @@ export interface RulesetPublic {
    */
   supply_dispatch_ticks: number;
   stances: StancesPublic;
+  /**
+   * DEC-48: the group order, ``None`` when the ruleset has none.
+   */
+  group_order: GroupOrderPublic | null;
 }
 /**
  * CP: ``per_period`` hundredths per quantum, up to ``cap``; the period of the quantum is
@@ -419,6 +467,15 @@ export interface RecruitPublic {
    * yet returns all of it.
    */
   refund_started_pct: number;
+  /**
+   * DEC-48, item H: a city may send its new units to a rally point (``set_rally_point``).
+   */
+  rally_point: boolean;
+  /**
+   * Hundredths of CP a recruit pays when it leaves for the rally point (with fewer CP it stays
+   * in its city, event ``rally_walk_no_cp``); 0 without ``rally_point``.
+   */
+  rally_cost: number;
 }
 /**
  * The barracks (DEC-26; ``city_upgrades`` of the ruleset) and the warehouse of a province.
@@ -530,6 +587,21 @@ export interface StancePeriodsPublic {
   economy: number;
   balance: number;
   war: number;
+}
+/**
+ * The group order (DEC-48, ``[group_order]`` of the ruleset): ``group_move`` works and
+ * ``release_plan`` is disabled.
+ */
+export interface GroupOrderPublic {
+  /**
+   * Groups in one ``group_move`` at most.
+   */
+  max_groups: number;
+  /**
+   * A rally of ``n`` groups costs ``ceil(n * cost.move * rally_pct / 100 / 100)`` whole CP;
+   * an attack ``cost.move`` per group (``cost.planned_move`` planned).
+   */
+  rally_pct: number;
 }
 /**
  * Calibration progress of an account: the first matches of a rated account do not show its
@@ -724,6 +796,11 @@ export interface NodeView {
    * never carry it. The client draws it as is (AGENTS.md 7.1).
    */
   terrain_mark: number | null;
+  /**
+   * DEC-48, item I2: own city only, the own node its new units walk to; ``None`` without one
+   * and for every other node.
+   */
+  rally_point: number | null;
 }
 /**
  * What the player sees, or last saw, of one node or half of an edge
@@ -937,6 +1014,22 @@ export interface OrderView {
    * node delays it). ``None`` otherwise.
    */
   next_charge_tick: number | null;
+  /**
+   * The group leaves its node not before this tick (DEC-48: a member of a synchronized attack
+   * waits in its node until then, item C2); a past tick once it left. ``None`` while a planned
+   * order gathers and for a ready member of a planned group order until the departures are fixed
+   * (item F4).
+   */
+  depart_tick: number | null;
+  /**
+   * DEC-48, item I1: shared by the members of one group order; ``None`` for a single order.
+   */
+  group_order: string | null;
+  /**
+   * DEC-48, item I1: the common arrival of the group order (a rally: the latest arrival of a
+   * member) once known; ``None`` while a planned group order gathers and for a single order.
+   */
+  arrive_tick: number | null;
 }
 /**
  * Own charges on the way along a path of roads (mechanics.md, section 7; DEC-18, item 5).
@@ -1065,9 +1158,19 @@ export interface FightRoundView {
  * ``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client
  * draws it and never computes it); ``None`` otherwise.
  * ``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` if nothing
- * stops it (the gathering of a planned order included; DEC-22, item 10); ``None`` otherwise.
+ * stops it (the gathering of a planned order included; DEC-22, item 10); for an accepted
+ * ``group_move`` the common arrival (a rally: the latest arrival of a member; ``None`` for a
+ * planned attack until its departures are fixed, ``OrderView.arrive_tick``); ``None`` otherwise.
  * ``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,
- * ``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20).
+ * ``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20). A ``group_move`` without enough CP
+ * for its accepted groups is ``NOT_ENOUGH_CP`` as a whole (no group goes, nothing waits for CP;
+ * DEC-48, item B5): the client shows it as an alert.
+ * ``kind``, ``cost``: an accepted ``group_move`` only (DEC-48, item B6): a rally or an attack
+ * and the CP charged, in hundredths.
+ * ``members``: a ``group_move`` only, one per group in the order of its ``groups``: accepted or
+ * dropped; also on a ``group_move`` rejected because no group was valid (``reject_code`` is then
+ * the first group's code). ``None`` for every other command and for a ``group_move`` rejected as
+ * a whole for another reason.
  */
 export interface AckMsg {
   type: 'ack';
@@ -1075,6 +1178,38 @@ export interface AckMsg {
   applied_tick: number;
   path: [number, ...number[]] | null;
   arrive_tick: number | null;
+  reject_code: string | null;
+  kind: OrderKind | null;
+  cost: number | null;
+  members: AckMember[] | null;
+}
+/**
+ * One group of a ``group_move``, in the order of its ``groups`` (DEC-48, item B6): accepted
+ * with its path, or dropped with its ``reject_code`` (``STACK_LIMIT``: the client offers the
+ * split of #762 for it).
+ */
+export interface AckMember {
+  /**
+   * The nodes from the group's node to ``dest``; ``None`` for a dropped group.
+   */
+  path: [number, number, ...number[]] | null;
+  /**
+   * The tick it leaves its node (a member of an attack waits there until then); ``None`` for a
+   * planned member (fixed once every part is gathered: ``OrderView.depart_tick``) and a dropped
+   * one.
+   */
+  depart_tick: number | null;
+  /**
+   * The tick it reaches ``dest`` if nothing stops it; ``None`` like ``depart_tick``.
+   */
+  arrive_tick: number | null;
+  /**
+   * A planned member: its part of the requested bonus (item F2); 0 otherwise.
+   */
+  bonus: number;
+  /**
+   * Why the group was dropped; ``None`` for an accepted one.
+   */
   reject_code: string | null;
 }
 /**
@@ -1318,7 +1453,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 46;
+export const PROTOCOL_VERSION = 47;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

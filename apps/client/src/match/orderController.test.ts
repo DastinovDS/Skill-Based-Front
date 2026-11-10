@@ -50,7 +50,17 @@ const down = (code: string, repeat = false) =>
 const up = (code: string) => ({ type: 'keyup', code, shiftKey: false }) as const;
 
 const ack = (seq: number, reject_code: string | null = null) =>
-  ({ type: 'ack', seq, applied_tick: 31, path: null, arrive_tick: null, reject_code }) as const;
+  ({
+    type: 'ack',
+    seq,
+    applied_tick: 31,
+    path: null,
+    arrive_tick: null,
+    reject_code,
+    kind: null,
+    cost: null,
+    members: null,
+  }) as const;
 
 describe('OrderController', () => {
   beforeEach(() => {
@@ -522,6 +532,9 @@ describe('OrderController', () => {
         gathering: false,
         plan: 0,
         next_charge_tick: null,
+        depart_tick: null,
+        group_order: null,
+        arrive_tick: null,
       },
     } satisfies typeof group;
     hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, groups: [group, twin, waiting] } });

@@ -46,12 +46,14 @@ from gow_sim.commands import (
     Command,
     Forfeit,
     FortifyRoad,
+    GroupMove,
     Merge,
     Move,
     PlayerCommand,
     Recruit,
     ReleasePlan,
     SetLeafShift,
+    SetRallyPoint,
     SetStance,
     Split,
 )
@@ -171,6 +173,13 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "fortify_road", "node": node, "edge": edge}
         case SetLeafShift(shift=shift):
             return {"type": "set_leaf_shift", "shift": shift}
+        case GroupMove(groups=groups, dest=dest, planned=planned, bonus=bonus):
+            data = {"type": "group_move", "groups": list(groups), "dest": dest, "planned": planned}
+            if bonus:  # only a planned order has one
+                data["bonus"] = bonus
+            return data
+        case SetRallyPoint(node=node, target=target):
+            return {"type": "set_rally_point", "node": node, "target": target}
         case Forfeit():
             return {"type": "forfeit"}
 
@@ -192,10 +201,7 @@ def decode_command(data: object) -> Command:
                 return Split(_int(d["group"]), _int(d["n"]))
             case "merge":
                 groups = d["groups"]
-                if not isinstance(groups, list):
-                    raise ReplayError("merge: groups must be a list")
-                items: list[object] = groups  # pyright: ignore[reportUnknownVariableType]
-                return Merge(tuple(_int(g) for g in items))
+                return Merge(_ints(groups, "merge: groups"))
             case "set_stance":
                 return SetStance(Stance(_str(d["stance"])))
             case "build_barracks":
@@ -212,6 +218,17 @@ def decode_command(data: object) -> Command:
                 return FortifyRoad(_int(d["node"]), _int(d["edge"]))
             case "set_leaf_shift":
                 return SetLeafShift(_int(d["shift"]))
+            case "group_move":
+                bonus = _int(d["bonus"]) if "bonus" in d else 0
+                return GroupMove(
+                    _ints(d["groups"], "group_move: groups"),
+                    _int(d["dest"]),
+                    _bool(d["planned"]),
+                    bonus,
+                )
+            case "set_rally_point":
+                target = d["target"]
+                return SetRallyPoint(_int(d["node"]), None if target is None else _int(target))
             case "forfeit":
                 return Forfeit()
             case _:
@@ -220,6 +237,13 @@ def decode_command(data: object) -> Command:
         raise ReplayError(f"command {kind}: missing field {exc}") from exc
     except ValueError as exc:  # a bad enum value; ReplayError is a ValueError too
         raise ReplayError(f"command {kind}: {exc}") from exc
+
+
+def _ints(value: object, where: str) -> tuple[int, ...]:
+    if not isinstance(value, list):
+        raise ReplayError(f"{where} must be a list")
+    items: list[object] = value  # pyright: ignore[reportUnknownVariableType]
+    return tuple(_int(g) for g in items)
 
 
 def _int(value: object) -> int:
