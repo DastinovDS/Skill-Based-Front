@@ -227,6 +227,86 @@ function cornerShifts(edges: readonly CellEdge[]): Map<string, Point> {
   return shifts;
 }
 
+/** The owner whose border line runs along `edge`, or `null` if no line does. */
+function borderOwner(edge: CellEdge, owners: readonly (number | null)[]): number | null {
+  const owner = owners[edge.cell] ?? null;
+  if (owner === null) return null;
+  // The border of the map is not a border; a coast is (DEC-36, item 6), and so is a river bank
+  // unless the area across the river has the same owner.
+  if (edge.neighbour === null && edge.water !== true) return null;
+  if (edge.neighbour !== null && owners[edge.neighbour] === owner) return null;
+  return owner;
+}
+
+/** The ends of the edges at each corner, per `edges` array (`2 * edge + 0` is `a`, `+ 1` is `b`). */
+const mateCache = new WeakMap<readonly CellEdge[], readonly (readonly number[])[]>();
+
+/**
+ * For every end of every edge, the ends of all edges (its own included) within `SNAP` of it: the
+ * corners of two areas are matched by distance, like `cellEdges`, since Voronoi corners differ in
+ * the last bits. Cached per `edges` array; a 1-unit grid keeps it linear.
+ */
+function cornerMates(edges: readonly CellEdge[]): readonly (readonly number[])[] {
+  const cached = mateCache.get(edges);
+  if (cached !== undefined) return cached;
+  const point = (end: number): Point => {
+    const edge = edges[end >> 1] as CellEdge;
+    return end % 2 === 0 ? edge.a : edge.b;
+  };
+  const grid = new Map<string, number[]>();
+  const cellKey = (x: number, y: number): string => `${String(x)},${String(y)}`;
+  for (let end = 0; end < edges.length * 2; end++) {
+    const p = point(end);
+    const key = cellKey(Math.floor(p.x), Math.floor(p.y));
+    const list = grid.get(key);
+    if (list === undefined) grid.set(key, [end]);
+    else list.push(end);
+  }
+  const mates: number[][] = [];
+  for (let end = 0; end < edges.length * 2; end++) {
+    const p = point(end);
+    const near: number[] = [];
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const other of grid.get(cellKey(Math.floor(p.x) + dx, Math.floor(p.y) + dy)) ?? []) {
+          const q = point(other);
+          if (Math.hypot(q.x - p.x, q.y - p.y) <= SNAP) near.push(other);
+        }
+      }
+    }
+    mates.push(near);
+  }
+  mateCache.set(edges, mates);
+  return mates;
+}
+
+/**
+ * Where the line of one owner passes from one of its areas into the next (two areas of the owner
+ * and the land or the water of another meet at a corner), the direction both ends move in: the
+ * bisector of the two drawn edges' inward normals. An area's own corner shift (`cornerShifts`)
+ * also counts the edge between the two areas, which is not drawn, so the two ends went apart to
+ * either side of it and the line broke there with a gap and an offset (#919, item 10). Only a
+ * corner with exactly two drawn ends of one owner, from two different areas; any other keeps the
+ * shift of its area (a pinch of four ends, the loose end of a line).
+ */
+function ownerJoin(
+  edges: readonly CellEdge[],
+  drawn: readonly (number | null)[],
+  mates: readonly (readonly number[])[],
+  end: number,
+): Point | null {
+  const owner = drawn[end >> 1] ?? null;
+  if (owner === null) return null;
+  const here = (mates[end] ?? []).filter((m) => drawn[m >> 1] === owner);
+  if (here.length !== 2) return null;
+  const [first, second] = here.map((m) => edges[m >> 1]) as [CellEdge, CellEdge];
+  if (first.cell === second.cell || first.inward === undefined || second.inward === undefined)
+    return null;
+  const sum = { x: first.inward.x + second.inward.x, y: first.inward.y + second.inward.y };
+  const length = Math.hypot(sum.x, sum.y);
+  return length < 1e-9 ? null : { x: sum.x / length, y: sum.y / length };
+}
+
 /**
  * Border of the areas of owners: for every edge of an owned cell whose neighbour belongs to
  * somebody else (or nobody), a segment of the owner, moved `inset` into its own cell so that two
@@ -240,20 +320,21 @@ export function territoryBorders(
 ): Border[] {
   const borders: Border[] = [];
   const shifts = edges.some((e) => e.inward !== undefined) ? cornerShifts(edges) : null;
-  for (const edge of edges) {
-    const owner = owners[edge.cell] ?? null;
-    if (owner === null) continue;
-    // The border of the map is not a border; a coast is (DEC-36, item 6), and so is a river bank
-    // unless the area across the river has the same owner.
-    if (edge.neighbour === null && edge.water !== true) continue;
-    if (edge.neighbour !== null && owners[edge.neighbour] === owner) continue;
+  const drawn = edges.map((edge) => borderOwner(edge, owners));
+  const mates = shifts !== null && inset !== 0 ? cornerMates(edges) : null;
+  edges.forEach((edge, index) => {
+    const owner = drawn[index] ?? null;
+    if (owner === null) return;
     const cell = cells[edge.cell];
-    if (cell === undefined) continue;
+    if (cell === undefined) return;
     if (edge.inward !== undefined && shifts !== null) {
       // A miter at each end: the bisector there, as far as keeps the edge `inset` away.
       const { inward: n } = edge;
-      const at = (p: Point): Point => {
-        const bisector = shifts.get(`${String(edge.cell)}|${String(p.x)},${String(p.y)}`) ?? n;
+      const at = (p: Point, end: number): Point => {
+        const bisector =
+          (mates === null ? null : ownerJoin(edges, drawn, mates, end)) ??
+          shifts.get(`${String(edge.cell)}|${String(p.x)},${String(p.y)}`) ??
+          n;
         const cos = bisector.x * n.x + bisector.y * n.y;
         const reach = inset / Math.max(cos, 1 / MITER_LIMIT);
         return { x: p.x + bisector.x * reach, y: p.y + bisector.y * reach };
@@ -263,10 +344,10 @@ export function territoryBorders(
         cell: edge.cell,
         neighbour: edge.neighbour,
         ...(edge.water === true ? { water: true } : {}),
-        a: at(edge.a),
-        b: at(edge.b),
+        a: at(edge.a, 2 * index),
+        b: at(edge.b, 2 * index + 1),
       });
-      continue;
+      return;
     }
     const d = inward(edge.a, edge.b, centroid(cell), inset);
     borders.push({
@@ -277,7 +358,7 @@ export function territoryBorders(
       a: { x: edge.a.x + d.x, y: edge.a.y + d.y },
       b: { x: edge.b.x + d.x, y: edge.b.y + d.y },
     });
-  }
+  });
   return borders;
 }
 
