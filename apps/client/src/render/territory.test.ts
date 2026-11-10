@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GEO_FILE, GEO_MAP } from './geoFixture.ts';
 import { territoryBorders } from './regionLayout.ts';
+import { BORDER_LINE_KINDS, borderLines, withInward } from './engraving.ts';
 import { usableGeo } from '../map/geography.ts';
 import type { MapFile } from '../protocol.gen.ts';
 import {
@@ -243,16 +244,20 @@ describe('steadyBank (#585)', () => {
   });
 });
 
-describe('the maps with a geography, pool and generated (#585, #771)', () => {
+describe('the maps with a geography, pool, menu and generated (#585, #771, #928)', () => {
   const maps = import.meta.glob<MapFile>(
-    ['../../../../maps/*.json', '../../../../maps/gen/*.json'],
+    ['../../../../maps/*.json', '../../../../maps/menu/*.json', '../../../../maps/gen/*.json'],
     {
       eager: true,
       import: 'default',
     },
   );
   const geos = import.meta.glob<unknown>(
-    ['../../../../maps/geo/*.json', '../../../../maps/gen/geo/*.json'],
+    [
+      '../../../../maps/geo/*.json',
+      '../../../../maps/menu/geo/*.json',
+      '../../../../maps/gen/geo/*.json',
+    ],
     {
       eager: true,
       import: 'default',
@@ -288,6 +293,37 @@ describe('the maps with a geography, pool and generated (#585, #771)', () => {
       for (const e of land) expect(all.has(key(e.neighbour ?? -1, e.b, e.a))).toBe(true);
     });
 
+    it(`${name}: the owner line leaves no loose end by water, whoever owns what (#928)`, () => {
+      const cells = t?.cells ?? [];
+      const edges = withInward(cells, t?.edges ?? []);
+      const { width, height } = map.meta;
+      const onFrame = (p: { x: number; y: number }) =>
+        Math.min(p.x, p.y, width - p.x, height - p.y) < 8;
+      // The start of a match, then owners drawn by a fixed sequence (a third nobody's).
+      let seed = 928;
+      const next = (): number => {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return seed / 2147483648;
+      };
+      const patterns = [
+        map.nodes.map((node) => node.start_owner ?? null),
+        ...Array.from({ length: 6 }, () =>
+          map.nodes.map(() => {
+            const r = next();
+            return r < 0.4 ? 0 : r < 0.8 ? 1 : null;
+          }),
+        ),
+      ];
+      for (const owners of patterns) {
+        const lines = borderLines(cells, owners, edges);
+        for (const kind of BORDER_LINE_KINDS) {
+          for (const owner of [0, 1]) {
+            expect(looseEnds(lines[kind], owner).filter((p) => !onFrame(p))).toEqual([]);
+          }
+        }
+      }
+    });
+
     it(`${name}: no point lies in two areas`, () => {
       const cells = t?.cells ?? [];
       for (let y = 2; y < map.meta.height; y += 12) {
@@ -298,6 +334,99 @@ describe('the maps with a geography, pool and generated (#585, #771)', () => {
       }
     });
   }
+});
+
+/** The ends of `owner`'s segments that no other segment of the owner shares (an odd count there). */
+function looseEnds(
+  borders: readonly { owner: number; a: { x: number; y: number }; b: { x: number; y: number } }[],
+  owner: number,
+): { x: number; y: number }[] {
+  const ends = new Map<string, { x: number; y: number; n: number }>();
+  for (const { a, b } of borders.filter((border) => border.owner === owner)) {
+    for (const p of [a, b]) {
+      const key = `${p.x.toFixed(4)},${p.y.toFixed(4)}`;
+      const end = ends.get(key) ?? { x: p.x, y: p.y, n: 0 };
+      end.n += 1;
+      ends.set(key, end);
+    }
+  }
+  return [...ends.values()].filter((end) => end.n % 2 === 1);
+}
+
+describe('the owner line where it leaves the water (#928)', () => {
+  // Area 0 above a river (y 40..50, from the left frame to x = 120, where it ends); below it
+  // area 2 (x < 80) and area 1 (x > 80); right of the river's end areas 0 and 1 touch (y = 45).
+  //
+  //     0 .................................................. 200   y = 0
+  //     area 0
+  //     ~~~~~~~~~~~~~ river ~~~~~~~~~~~~~~~~~~~~ 120 |              y = 40..50
+  //     area 2          80 | area 1          ........ area 1        y = 50..100
+  const map = {
+    meta: { name: 'riverend', version: 1, symmetry: 'rot180', width: 200, height: 100 },
+    nodes: [
+      { id: 0, name: 'North', x: 100, y: 20, terrain: 'plains' },
+      { id: 1, name: 'South', x: 150, y: 75, terrain: 'plains' },
+      { id: 2, name: 'West', x: 40, y: 75, terrain: 'plains' },
+    ],
+    edges: [],
+  } as unknown as typeof GEO_MAP;
+  const geo = {
+    map: 'riverend',
+    version: 1,
+    chains: [
+      { l: -1, r: 0, pts: [0, 40, 0, 0, 200, 0, 200, 45] },
+      { l: -1, r: 1, pts: [200, 45, 200, 100, 80, 100] },
+      { l: -1, r: 2, pts: [80, 100, 0, 100, 0, 50] },
+      { l: -1, r: 'river', pts: [0, 50, 0, 40] },
+      { l: 0, r: 'river', pts: [0, 40, 120, 40, 120, 45] },
+      { l: 0, r: 1, pts: [120, 45, 200, 45] },
+      { l: 1, r: 'river', pts: [120, 45, 120, 50, 80, 50] },
+      { l: 1, r: 2, pts: [80, 50, 80, 100] },
+      { l: 2, r: 'river', pts: [80, 50, 0, 50] },
+    ],
+  };
+  const t = geoTerritory(map, geo);
+  const onFrame = (p: { x: number; y: number }) => Math.min(p.x, p.y, 200 - p.x, 100 - p.y) < 6;
+
+  it('is one line from the bank on to the land border, across the river where it leaves it', () => {
+    expect(t).not.toBeNull();
+    for (const inset of [0, 2.4, 4.6, 5]) {
+      const borders = territoryBorders(t?.cells ?? [], [0, 0, 1], inset, t?.edges);
+      // Only the ends at the frame of the map are loose: the line of the owner of areas 0 and 1
+      // runs along the bank of area 0 (across from area 2), crosses the river at x = 80 and goes
+      // down the land border of areas 1 and 2. Before #928 it stopped at both banks.
+      for (const owner of [0, 1]) {
+        const loose = looseEnds(borders, owner);
+        expect(loose.every(onFrame)).toBe(true);
+        expect(loose).toHaveLength(2);
+      }
+      const across = borders.filter(
+        (b) => b.owner === 0 && Math.min(b.a.y, b.b.y) < 42 && Math.max(b.a.y, b.b.y) > 48,
+      );
+      expect(across.length).toBeGreaterThan(0);
+      for (const b of across) expect(Math.abs((b.a.x + b.b.x) / 2 - 80)).toBeLessThan(10);
+    }
+  });
+
+  it('still does not run along the river between two areas of one owner', () => {
+    const borders = territoryBorders(t?.cells ?? [], [0, 0, 1], 2.4, t?.edges);
+    // Areas 0 and 1 face each other across the river for x 80..120: no line there.
+    const along = borders.filter(
+      (b) => b.owner === 0 && Math.min(b.a.x, b.b.x) > 90 && Math.max(b.a.x, b.b.x) < 118,
+    );
+    expect(along).toEqual([]);
+  });
+
+  it('is one line the other way round too', () => {
+    // Areas 0 and 2 are the owner's, area 1 is not: the line runs along the land border of areas
+    // 0 and 1, along the bank of area 0 (across from area 1) to x = 80, across the river and down
+    // the land border of areas 1 and 2.
+    const borders = territoryBorders(t?.cells ?? [], [0, 1, 0], 2.4, t?.edges);
+    for (const owner of [0, 1]) {
+      const loose = looseEnds(borders, owner);
+      expect(loose.every(onFrame)).toBe(true);
+    }
+  });
 });
 
 describe('a stream cut into one area (#585)', () => {
