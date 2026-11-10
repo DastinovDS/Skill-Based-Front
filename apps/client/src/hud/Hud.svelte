@@ -127,6 +127,15 @@
   $effect(() => {
     return orders.ui.onFeedback((feedback) => {
       if (feedback.kind === 'accepted') return;
+      if (feedback.kind === 'split') {
+        // DEC-48, item B4 (#913): the server split a group too big for the road; its part went.
+        hud.toasts.push({
+          tone: 'neutral',
+          icon: 'info',
+          text: tf('orders.split', { units: feedback.units, of: feedback.of }),
+        });
+        return;
+      }
       const command = t(`cmd.${feedback.cmd.type}`);
       const reason = (code: string): string =>
         t(rejectMessageKey(code, feedback.cmd.type, hud.context.rules.combat.retreat));

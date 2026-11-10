@@ -4,14 +4,20 @@ Expected values come from mechanics.md, section 5, DEC-48: item B6 (the ``ack`` 
 the cost, the common arrival and one member per group of the list, a dropped one with its code;
 a command without a valid member keeps its members, one rejected for its CP has none, owner
 decision (7)), item I3 (``rally_point_cleared`` and ``rally_walk_no_cp`` reach their owner only)
-and item I4 (``ruleset_public`` carries ``group_order`` and the rally point keys).
+and item I4 (``ruleset_public`` carries ``group_order`` and the rally point keys); item B4 as
+amended by the owner 2026-11-10 (#913): a member split by the server says how many of its units go.
 """
 
+import json
 from pathlib import Path
+from typing import Any
+
+import pytest
+from pydantic import ValidationError
 
 from gow_protocol.codec import decode_server, encode
 from gow_protocol.convert import ack_msg, event_for_player
-from gow_protocol.messages import AckMsg, OrderKind
+from gow_protocol.messages import AckMember, AckMsg, OrderKind
 from gow_protocol.ruleset import GroupOrderPublic, RulesetPublic
 from gow_sim import commands as sim
 from gow_sim.ruleset import load_ruleset
@@ -111,3 +117,43 @@ def test_ruleset_public_has_the_group_order_in_mvp7_only() -> None:
         other = RulesetPublic.from_ruleset(load_ruleset(RULESETS / f"{name}.toml"))
         assert other.group_order is None
         assert (other.recruit.rally_point, other.recruit.rally_cost) == (False, 0)
+
+
+def test_a_split_member_says_how_many_of_its_units_go() -> None:
+    """Row S5 (owner decision (9), #913): g5 (5 units) is split, its part of 3 goes along
+    H-R-C-N (``d`` 100, arrival 179); g3 departs at 160; 2 CP. The member says 3 of 5."""
+    ok = sim.Ok(
+        cost=200,
+        arrive_tick=179,
+        kind=sim.OrderKind.ATTACK,
+        members=(
+            sim.Member(5, (0, 1, 4, 5), 100, 179, split_units=3, group_units=5),
+            sim.Member(3, (4, 5), 160, 179),
+        ),
+    )
+    ack = _ack(ok)
+    assert ack.members is not None
+    assert [(m.split_units, m.group_units) for m in ack.members] == [(3, 5), (None, None)]
+    assert ack.members[0].path == (0, 1, 4, 5)
+
+
+def test_a_split_member_is_well_formed() -> None:
+    """``split_units`` and ``group_units`` come together, with a path, the part smaller."""
+    base: dict[str, Any] = {
+        "path": [0, 1],
+        "depart_tick": 100,
+        "arrive_tick": 139,
+        "bonus": 0,
+        "reject_code": None,
+    }
+    AckMember.model_validate_json(json.dumps({**base, "split_units": 3, "group_units": 5}))
+    dropped = {"path": None, "depart_tick": None, "arrive_tick": None, "reject_code": "NO_PATH"}
+    bad: list[dict[str, Any]] = [
+        {**base, "split_units": 3},
+        {**base, "group_units": 5},
+        {**base, "split_units": 5, "group_units": 5},
+        {**base, **dropped, "split_units": 3, "group_units": 5},
+    ]
+    for raw in bad:
+        with pytest.raises(ValidationError):
+            AckMember.model_validate_json(json.dumps(raw))

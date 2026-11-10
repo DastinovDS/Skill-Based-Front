@@ -254,6 +254,21 @@ describe('Hud', () => {
     expect(target.querySelector('.toast.warn')?.textContent).toContain(text);
   });
 
+  it('tells how many of a group the server split went with a group order (#913)', () => {
+    setLocale('en');
+    const { target, orders } = render();
+    const cmd: Command = {
+      type: 'group_move',
+      groups: ['a', 'b'],
+      dest: 3,
+      planned: false,
+      bonus: 0,
+    };
+    orders.ui.emit({ kind: 'split', units: 3, of: 5, cmd });
+    flushSync();
+    expect(target.querySelector('.toast.neutral')?.textContent).toContain('3 of 5 go');
+  });
+
   it('opens the help overlay from the button and closes it with its own button', () => {
     setLocale('en');
     const { target, chrome } = render();

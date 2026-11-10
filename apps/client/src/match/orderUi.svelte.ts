@@ -37,6 +37,17 @@ export type OrderFeedback =
       readonly code: string;
       readonly count: number;
       readonly cmd: Command;
+    }
+  /**
+   * A group of a group order was too big for every road to the target (DEC-48, item B4, #913): the
+   * server split it, `units` of its `of` went with the order and the rest stayed
+   * (`ack.members[i].split_units`, `group_units`): one feedback per such group.
+   */
+  | {
+      readonly kind: 'split';
+      readonly units: number;
+      readonly of: number;
+      readonly cmd: Command;
     };
 
 export interface OrderUiData {

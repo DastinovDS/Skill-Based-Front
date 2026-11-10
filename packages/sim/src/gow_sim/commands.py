@@ -38,8 +38,12 @@ checks each member like a ``Move`` of that group to ``dest`` and accepts the val
 acceptance, per-member codes in ``Ok.members``); the whole command is rejected when the section is
 off, the list or the bonus is malformed, a rally is planned, ``dest`` does not exist, no member is
 valid (the first member's code, with the members) or the CP of the accepted members are short
-(``NOT_ENOUGH_CP``, all or nothing). An own ``dest`` is a rally (every member departs at once, the
-price ``group_order.rally_pct`` of a move per member rounded up to a whole CP), any other an attack
+(``NOT_ENOUGH_CP``, all or nothing). A member too big for every path to ``dest`` is split
+automatically (owner, 2026-11-10, #913): the largest part that has a path (the size ``reach``
+offers, #762) splits off as a new group, charged units first, and goes as the member; the rest
+stays as the group; only when not even one unit fits is it ``STACK_LIMIT``. An own ``dest`` is a
+rally (every member departs at once, the price ``group_order.rally_pct`` of a move per member
+rounded up to a whole CP), any other an attack
 whose members arrive in one tick (a member waits in its node until its departure, ``GROUP_BUSY``
 for any command but ``CancelOrder``), a planned one splitting the requested bonus over the members
 (``systems.orders``). Under the section ``ReleasePlan`` is disabled. A command of a feature the
@@ -74,6 +78,7 @@ from gow_sim.state import (
     event,
 )
 from gow_sim.systems.build import start_barracks, start_factory
+from gow_sim.systems.capacity import node_capacities
 from gow_sim.systems.economy import set_stance
 from gow_sim.systems.flow import factory_count
 from gow_sim.systems.fortify import start_road_fort
@@ -361,6 +366,12 @@ class Member:
     arrive_tick: int | None = None
     bonus: int = 0
     reject: RejectCode | None = None
+    split_units: int = 0
+    """The group was too big for every path (owner, 2026-11-10, #913): the units of the part
+    that splits off and goes as the member, the rest staying as the group; 0: the whole group
+    goes."""
+    group_units: int = 0
+    """With ``split_units``: the units of the group at the command; 0 otherwise."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -514,16 +525,18 @@ def _validate_group_move(
         return invalid  # item G1
     checked = [(gid, _check_member(state, rules, player, gid, dest, seen)) for gid in gids]
     accepted: list[tuple[int, tuple[int, ...]]] = []
-    for gid, path in checked:
-        if not isinstance(path, Reject):
-            accepted.append((gid, path))
+    goes: dict[int, int] = {}  # the units each accepted member sends (a part when split)
+    for gid, found in checked:
+        if not isinstance(found, Reject):
+            accepted.append((gid, found[0]))
+            goes[gid] = found[1]
     if not accepted:
         first = checked[0][1]
         assert isinstance(first, Reject)
         dropped: list[Member] = []
-        for gid, path in checked:
-            assert isinstance(path, Reject)
-            dropped.append(Member(gid, reject=path.code))
+        for gid, found in checked:
+            assert isinstance(found, Reject)
+            dropped.append(Member(gid, reject=found.code))
         return Reject(first.code, tuple(dropped))
     n = len(accepted)
     cost = rules.orders.cost
@@ -538,7 +551,9 @@ def _validate_group_move(
     plan: dict[int, Member] = {}
     arrive: int | None
     if cmd.planned:  # item F: the departures are fixed once the parts are gathered
-        parts = plan_parts([state.groups[gid].charged for gid, _ in accepted], cmd.bonus)
+        # The cap of a split member is the charged units of its part (they go first, DEC-20 B1).
+        caps = [min(goes[gid], state.groups[gid].charged) for gid, _ in accepted]
+        parts = plan_parts(caps, cmd.bonus)
         arrive = None
         for (gid, path), part in zip(accepted, parts, strict=True):
             plan[gid] = Member(gid, path, bonus=part)
@@ -550,20 +565,28 @@ def _validate_group_move(
         arrive, departs = schedule(tick, ticks)
         for (gid, path), depart in zip(accepted, departs, strict=True):
             plan[gid] = Member(gid, path, depart, arrive)
-    members = tuple(
-        Member(gid, reject=path.code) if isinstance(path, Reject) else plan[gid]
-        for gid, path in checked
-    )
+    members: list[Member] = []
+    for gid, found in checked:
+        if isinstance(found, Reject):
+            members.append(Member(gid, reject=found.code))
+            continue
+        units = state.groups[gid].units
+        member = plan[gid]
+        if goes[gid] < units:
+            member = replace(member, split_units=goes[gid], group_units=units)
+        members.append(member)
     kind = OrderKind.RALLY if rally else OrderKind.ATTACK
-    return Ok(cost=price, arrive_tick=arrive, kind=kind, members=members)
+    return Ok(cost=price, arrive_tick=arrive, kind=kind, members=tuple(members))
 
 
 def _check_member(
     state: GameState, rules: Ruleset, player: int, gid: int, dest: int, seen: dict[int, bool]
-) -> tuple[int, ...] | Reject:
+) -> tuple[tuple[int, ...], int] | Reject:
     """A member of a ``GroupMove``, checked like a ``Move`` of that group (DEC-48, item B4): a
     standing own group without an order, in no fight under any ``combat.retreat``, not already in
-    ``dest``, with a path that holds it (no automatic split)."""
+    ``dest``. Returns its path and the units that go: the whole group when a path holds it, else
+    the largest part a path holds (split automatically, owner 2026-11-10, #913) with that part's
+    fastest path; ``STACK_LIMIT`` only when not even one unit has a path."""
     group = _standing_group(state, player, gid, seen)
     if isinstance(group, Reject):
         return group
@@ -574,10 +597,27 @@ def _check_member(
         return Reject(RejectCode.INVALID_ARGUMENT)
     path = find_path(state, rules, player, start, dest, size=group.units)
     if path is not None:
-        return path
-    if find_path(state, rules, player, start, dest) is not None:
-        return Reject(RejectCode.STACK_LIMIT)
-    return Reject(RejectCode.NO_PATH)
+        return path, group.units
+    if find_path(state, rules, player, start, dest) is None:
+        return Reject(RejectCode.NO_PATH)
+    part = part_that_fits(state, rules, player, start, dest, group.units)
+    return Reject(RejectCode.STACK_LIMIT) if part is None else part
+
+
+def part_that_fits(
+    state: GameState, rules: Ruleset, player: int, start: int, dest: int, units: int
+) -> tuple[tuple[int, ...], int] | None:
+    """The fastest path from ``start`` to ``dest`` of the largest group below ``units`` that has
+    one under the stack limit (DEC-20, D), with that size; ``None``: not even one unit. A size
+    passes a node exactly when the node's capacity is not less than it, so the largest such size
+    is one of the node capacities: only those are tried, largest first (the size of
+    ``view.Reach.split``, #762)."""
+    caps = sorted(dict.fromkeys(c for c in node_capacities(state, rules) if 0 < c < units))
+    for size in reversed(caps):
+        path = find_path(state, rules, player, start, dest, size=size)
+        if path is not None:
+            return path, size
+    return None
 
 
 def _check(
@@ -936,13 +976,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                 set_intent(state, group, None)
             return []
         case Split(group=gid, n=n):
-            group = state.groups[gid]
-            charged = min(n, group.charged)  # charged units go first (#117)
-            group.units -= n
-            group.charged -= charged
-            new = state.new_id()
-            state.groups[new] = Group(new, player, n, charged, Mode.ATTACK, group.location)
-            return [event(tick, "group_split", player=player, group=gid, new_group=new, units=n)]
+            return [_split(state, player, gid, n)[1]]
         case Merge(groups=gids):
             # The smallest id keeps its bonus and intent (DEC-20, B2).
             keep = state.groups[min(gids)]
@@ -1008,20 +1042,40 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             return [event(tick, "forfeit", player=player)]
 
 
+def _split(state: GameState, player: int, gid: int, n: int) -> tuple[Group, Event]:
+    """Split ``n`` units off the group ``gid`` into a new group in its place, the charged units
+    first (DEC-20, B1; #117); the new group and the event ``group_split``."""
+    group = state.groups[gid]
+    charged = min(n, group.charged)
+    group.units -= n
+    group.charged -= charged
+    new = state.new_id()
+    part = Group(new, player, n, charged, Mode.ATTACK, group.location)
+    state.groups[new] = part
+    return part, event(state.tick, "group_split", player=player, group=gid, new_group=new, units=n)
+
+
 def _apply_group_move(
     state: GameState, rules: Ruleset, player: int, dest: int, planned: bool, ok: Ok
 ) -> list[Event]:
     """Apply a validated ``GroupMove`` (DEC-48): one ``GroupOrder`` and an order per accepted
-    member. A planned member gathers its part from 0 with its own public intent (item F7); with
-    every part 0 the departures are fixed at once (item F4)."""
+    member. A member too big for every path first splits its part off (``split_units``, #913):
+    the part is the member, the rest stays as the group without an order. A planned member
+    gathers its part from 0 with its own public intent (item F7); with every part 0 the
+    departures are fixed at once (item F4)."""
     tick = state.tick
     oid = state.new_id()
     rally = ok.kind is OrderKind.RALLY
     state.group_orders[oid] = GroupOrder(oid, player, rally, planned, ok.arrive_tick)
+    events: list[Event] = []
     for m in ok.members:
         if m.reject is not None:
             continue
-        group = state.groups[m.group]
+        if m.split_units:
+            group, split = _split(state, player, m.group, m.split_units)
+            events.append(split)
+        else:
+            group = state.groups[m.group]
         depart = PLAN_WAIT if m.depart_tick is None else m.depart_tick
         group.order = Order(path=m.path[1:], planned=planned, depart_tick=depart)
         group.group_order = oid
@@ -1037,4 +1091,4 @@ def _apply_group_move(
             set_intent(state, group, None)
     if planned:
         settle_group_orders(state, rules, tick, only=oid)
-    return []
+    return events
