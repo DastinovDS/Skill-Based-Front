@@ -61,7 +61,7 @@ export function devPath(map: MapFile, from: number, to: number): [number, ...num
 const DEV_PACKET_TICKS = 60;
 
 /**
- * Demo packets for the «Supply» layer (not rules): a charge pair on the first own road, a single
+ * Demo packets for the dev screen (not rules): a charge pair on the first own road, a single
  * charge the other way on the second, and, where an own road continues from the end of the first, a
  * packet that goes on over it. They restart every `DEV_PACKET_TICKS`.
  */
@@ -112,8 +112,6 @@ export function createDevServer(
   let socket: MockSocket | null = null;
   let timer: ReturnType<typeof setInterval> | undefined;
   const orders = new Map<string, OrderView>();
-  /** The supply flow (DEC-43): the own leaf shift. */
-  let leafShift = 0;
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
@@ -126,7 +124,6 @@ export function createDevServer(
           ...base.view.me,
           stance,
           cp: Math.max(0, base.view.me.cp - spent),
-          leaf_shift: leafShift,
         },
         packets: devPackets(map, base.view.nodes, tick),
         groups: (options.motion === true
@@ -207,11 +204,6 @@ export function createDevServer(
         return cmd.groups.every((id) => mine(id) !== undefined)
           ? charge(rules.cost.merge)
           : 'NOT_FOUND_OR_HIDDEN';
-      case 'set_leaf_shift':
-        if (cmd.shift < 0 || cmd.shift > 2) return 'INVALID_ARGUMENT';
-        if (cmd.shift === leafShift) return 'NO_CHANGE';
-        leafShift = cmd.shift;
-        return null;
       case 'forfeit':
         setTimeout(() => {
           socket?.reply({

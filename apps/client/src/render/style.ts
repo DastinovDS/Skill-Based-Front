@@ -112,8 +112,7 @@ export function otherPlayer(player: PlayerId): PlayerId {
   return player === 0 ? 1 : 0;
 }
 
-// Territory: the Border band and the engraved border lines of `engraving.ts` (#842); the flat tint
-// is only the «Supply» mode's (`SUPPLY_TERRITORY_ALPHA`).
+// Territory: the Border band and the engraved border lines of `engraving.ts` (#842); no flat tint.
 
 // --- Shading BL1-1 "Restrained" (ui-style 26.3, #347) ------------------------------------------------
 // Objects (cities, group helmets, badges, arena plates and chips) are baked into textures once
@@ -798,33 +797,12 @@ export const GHOST_CP = {
   crossWidth: 3.5,
 } as const;
 
-// --- The «Supply» layer (DEC-28, item 8) ---------------------------------------------------------
-// A flat, minimal picture: the territory is a stronger flat tint than on the normal map, and only
-// what supply is about is drawn on top (the canals of the flow, DEC-43).
+// --- The starving mark of the supply flow (the «Supply» layer was removed, DEC-50, #928) ------
 
-/**
- * The «Supply» view, "Canal" (#858; #829 rounds 3 to 5, ui-style 54f): the map keeps its picture; the
- * own land is darkened (`shade`), the own nodes ahead of the level are crosshatched in the own colour
- * (`ahead`: two hatches at +-45 degrees), and a change of the level fades over `fadeMs` (instant under
- * "less motion").
- */
-export const CANAL_LAND = {
-  shade: 0x0e0c09,
-  shadeAlpha: 0.35,
-  ahead: { pitch: 3.4, width: 0.7, alpha: 0.55 },
-  fadeMs: 600,
-} as const;
 /** The starving mark of a node under the flow: a triangle `half` wide each side and `height` high. */
 export const FLOW_STARVE = { half: 8, height: 14 } as const;
 /** The battle mode of the flow (the normal map): the starving mark off the lower right rim. */
 export const FLOW_BATTLE = { starveAngle: 45, starveGap: 9 } as const;
-/** The «Supply» layer under the flow (Canal, #858): the pocket hatch and its plate. */
-export const FLOW_LAYER = {
-  pocketHatch: { period: 5, width: 1.6, alpha: 0.5, grow: 3 },
-  plate: { height: 16, padX: 6, radius: 5, lift: 18 },
-} as const;
-/** The mark of the enemy presence: a hollow enemy helmet `side` times `HELMET_SCALE` wide, no number. */
-export const SUPPLY_PRESENCE = { side: 12, width: 2.2, angle: 45, gap: 9 } as const;
 
 // --- Orders on the map in the Engraved style (#851, part 3 of #829) ------------------------------
 // Sources: docs/design/mockups/in-game-style-r5.html, Combined view (`burinArrow` B2, `bounceHome`

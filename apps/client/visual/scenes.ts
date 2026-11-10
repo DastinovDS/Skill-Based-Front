@@ -4,7 +4,7 @@
 export const SCENES: readonly {
   readonly id: string;
   readonly tick: number;
-  /** Keys the player presses before the frame is taken (`supply`: Tab opens the «Supply» view). */
+  /** Keys the player presses before the frame is taken (`terrain`: `T` opens the terrain mode). */
   readonly keys?: readonly string[];
 }[] = [
   { id: 'snapshot', tick: 120 },
@@ -35,11 +35,8 @@ export const SCENES: readonly {
   { id: 'economy', tick: 2400 },
   { id: 'build_pay', tick: 2400 },
   { id: 'flow', tick: 2400 },
-  { id: 'flow_supply', tick: 2400, keys: ['Tab'] },
-  { id: 'flow_shift', tick: 2400, keys: ['Tab'] },
   { id: 'stances', tick: 2400 },
   { id: 'forts', tick: 2400 },
-  { id: 'forts_supply', tick: 2400, keys: ['Tab'] },
   { id: 'forts_toll', tick: 2400 },
   { id: 'forts_geo', tick: 1200 },
 ];

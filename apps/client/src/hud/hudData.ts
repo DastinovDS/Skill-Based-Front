@@ -239,9 +239,6 @@ export interface HudData {
   readonly stance: Stance;
   /** Stances of economy v2 (DEC-44): the way to the next quanta; `null` without them. */
   readonly stanceProgress: StanceProgress | null;
-  /** Supply flow (DEC-43): the own leaf shift in force and its largest value. */
-  readonly leafShift: number | null;
-  readonly leafShiftMax: number | null;
   /**
    * Economy v2 (DEC-41, item 2): the own factories, the builds under way counted as the server
    * counts them for `factory.max`, and that max; `null` without factories (#762).
@@ -450,8 +447,6 @@ export function buildHudData(
     },
     stance: view.me.stance,
     stanceProgress: stanceProgress(rules, view.me),
-    leafShift: view.me.leaf_shift,
-    leafShiftMax: view.me.leaf_shift_max,
     factories: factoryCount(rules, view.nodes, me),
     workingFactories: workingFactoryCount(view.nodes, me),
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },

@@ -60,8 +60,7 @@ interface Tag {
  * The toll of road fortifications on the map (#707), Engraved (#858): per toll the strike from the gate
  * of the wall to the group (three hairlines: an ivory core between two in the colour of the wall's
  * owner), the engraved hit on the group (seven cuts and an ink ring, the token swells), and the tag
- * "-N" over it, a down chevron before the number. All in the layer `tolls`, which the «Supply» mode
- * does not hide. One `Graphics` holds the strikes and hits and is drawn only while a toll plays; the
+ * "-N" over it, a down chevron before the number. All in the layer `tolls`. One `Graphics` holds the strikes and hits and is drawn only while a toll plays; the
  * tags are pooled. Every effect is a function of the render tick, so a paused scene shows a toll in the
  * state of its tick. With "less motion" only the tag stays, still. `destroy()` frees the pool.
  */

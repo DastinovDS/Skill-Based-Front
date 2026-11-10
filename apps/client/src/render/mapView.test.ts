@@ -7,7 +7,7 @@ import { createLayers, type MapLayers } from './layers.ts';
 import { voronoiTerritory } from './territory.ts';
 import { polygonArea } from './voronoi.ts';
 import { MapView } from './mapView.ts';
-import { BG, CANAL_LAND, ROAD_BUFFER, ROAD_FOG, ROAD_OWN, YOU, ENEMY } from './style.ts';
+import { BG, ROAD_BUFFER, ROAD_FOG, ROAD_OWN, YOU, ENEMY } from './style.ts';
 import { BORDER_BAND, BORDER_ENGRAVING, ENGRAVE, hairFloor } from './engraving.ts';
 import { SOFT } from './softness.ts';
 
@@ -164,24 +164,6 @@ describe('MapView, the roads of R1', () => {
     view.destroy();
   });
 
-  it('keeps an own road under the Canal of the «Supply» mode (#858)', () => {
-    view.setOwners(owners(0, 0));
-    view.setRoads(map.edges.map(() => ({})));
-    view.setSupplyMode(true);
-    expect(parts().lanes[0]?.visible).toBe(true);
-    expect(parts().casings[0]?.visible).toBe(true);
-  });
-
-  it('keeps a buffer road and an enemy road as they are in the «Supply» mode', () => {
-    view.setSupplyMode(true);
-    view.setOwners(owners(0, 1));
-    view.setRoads(map.edges.map(() => ({})));
-    expect(parts().casings[0]?.visible).toBe(true);
-    view.setOwners(owners(1, 1));
-    expect(parts().casings[0]?.visible).toBe(true);
-    expect(parts().lanes[0]?.visible).toBe(true);
-  });
-
   it('gives an own road a solid lane on a band of its owner, and an enemy one the band of the enemy', () => {
     view.setOwners(owners(0, 0));
     view.setRoads(map.edges.map(() => ({})));
@@ -333,28 +315,6 @@ describe('MapView, the Border band along the borders of the territories (#842)',
     expect(layer[layer.length - 1]).toBeInstanceOf(Graphics);
   });
 
-  it('leaves the inside of the land clear: no tint on the normal map, the own land darkened in «Supply»', () => {
-    const half = halves();
-    view.setOwners(half);
-    const tint = (): TextureFill[] =>
-      textureFillsOf(
-        layers.layer.territory.children.find((c) => c.label === 'territory') as Graphics,
-      );
-    expect(tint()).toEqual([]);
-    view.setSupplyMode(true);
-    // One fill of every own area, in the dark of the Canal (#858); the enemy's land is left alone.
-    expect(tint()).toEqual([
-      {
-        color: CANAL_LAND.shade,
-        alpha: CANAL_LAND.shadeAlpha,
-        shapes: half.filter((o) => o === 0).length,
-        textured: false,
-      },
-    ]);
-    view.setSupplyMode(false);
-    expect(tint()).toEqual([]);
-  });
-
   it('is redrawn when an owner changes and not for the same owners', () => {
     view.setOwners(halves());
     const g = band()?.children[0] as Graphics;
@@ -378,14 +338,10 @@ describe('MapView, the Border band along the borders of the territories (#842)',
     expect(redraw).toHaveBeenCalledTimes(1);
   });
 
-  it('is not shown without a border between owners, and stays in the «Supply» mode (Canal)', () => {
+  it('is not shown without a border between owners', () => {
     view.setOwners(map.nodes.map(() => 0));
     expect(band()?.visible).toBe(false);
     view.setOwners(halves());
-    expect(band()?.visible).toBe(true);
-    view.setSupplyMode(true);
-    expect(band()?.visible).toBe(true);
-    view.setSupplyMode(false);
     expect(band()?.visible).toBe(true);
   });
 
@@ -442,34 +398,7 @@ describe('MapView, a capture floods the area of the node (#819)', () => {
     view.destroy();
   });
 
-  /** The fills of the territory tint by colour (the «Supply» tint): the alphas drawn for each. */
-  const fills = (): Map<number, number[]> => {
-    const g = layers.layer.territory.children.find((c) => c.label === 'territory') as
-      Graphics | undefined;
-    const instructions = (g?.context.instructions ?? []) as unknown as {
-      action: string;
-      data: { style: { color: number; alpha: number } };
-    }[];
-    const byColor = new Map<number, number[]>();
-    for (const i of instructions) {
-      if (i.action !== 'fill') continue;
-      byColor.set(i.data.style.color, [
-        ...(byColor.get(i.data.style.color) ?? []),
-        i.data.style.alpha,
-      ]);
-    }
-    return byColor;
-  };
   const all = (n: 0 | 1 | null): (0 | 1 | null)[] => map.nodes.map(() => n);
-
-  it('shows the first owners and the ones of a call that does not animate at once', () => {
-    // The normal map has no tint (#842): the «Supply» mode darkens the own land (Canal, #858).
-    view.setSupplyMode(true);
-    view.setOwners(all(0));
-    expect(fills().get(CANAL_LAND.shade)).toHaveLength(1);
-    view.setOwners(all(1));
-    expect(fills().get(CANAL_LAND.shade)).toBeUndefined();
-  });
 
   const floods = (): number =>
     layers.layer.territory.children.find((c) => c.label === 'flood-fill')?.children.length ?? 0;
@@ -477,9 +406,7 @@ describe('MapView, a capture floods the area of the node (#819)', () => {
   it('floods a captured area: the flood draws it until it lands, then the map does (#819)', () => {
     view.setOwners(all(0));
     view.setOwners(all(1), true);
-    // The areas under way are the floods' (fill, band and rim meshes); the normal map has no tint.
-    expect(fills().get(YOU)).toBeUndefined();
-    expect(fills().get(ENEMY)).toBeUndefined();
+    // The areas under way are the floods' (fill, band and rim meshes).
     expect(floods()).toBe(map.nodes.length);
     expect(view.captures).toHaveLength(map.nodes.length);
     // The enemy took them: the calmer look.
@@ -513,15 +440,13 @@ describe('MapView, a capture floods the area of the node (#819)', () => {
     expect(floods()).toBe(map.nodes.length);
   });
 
-  it('ends the floods at once on a call that does not animate, and in the «Supply» mode', () => {
+  it('ends the floods at once on a call that does not animate', () => {
     view.setOwners(all(0));
     view.setOwners(all(1), true);
     view.setOwners(all(1));
     expect(floods()).toBe(0);
     view.setOwners(all(0), true);
     expect(floods()).toBe(map.nodes.length);
-    view.setSupplyMode(true);
-    expect(floods()).toBe(0);
   });
 
   it('holds the floods at an age for the dev scenes', () => {
@@ -567,21 +492,6 @@ describe('MapView, the terrain mode (#429)', () => {
     expect(visibleBackground()).toBe(before);
     expect(layers.layer.territory.visible).toBe(true);
     expect(layers.layer.roads.visible).toBe(true);
-  });
-
-  it('keeps the band of the territory in the terrain mode, unlike «Supply»', () => {
-    view.setOwners(map.nodes.map((_, i) => (i % 2 === 0 ? 0 : 1)));
-    const band = bandOf(layers);
-    expect(band?.visible).toBe(true);
-    view.setTerrainMode(true);
-    expect(band?.visible).toBe(true);
-  });
-
-  it('a flat ground stays flat when «Supply» is switched off while the terrain mode is on', () => {
-    view.setTerrainMode(true);
-    view.setSupplyMode(true);
-    view.setSupplyMode(false);
-    expect(ground()?.visible).toBe(true);
   });
 });
 

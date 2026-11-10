@@ -1,83 +1,17 @@
 /**
- * What the supply flow looks like (DEC-43, item E; the look: `docs/design/ui-style.md`, section 42),
- * as plain data from one snapshot. Pure functions, no PixiJS.
+ * What the supply flow looks like on the normal map (DEC-43, item E; `docs/design/ui-style.md`,
+ * section 42), as plain data from one snapshot. Pure functions, no PixiJS. The «Supply» layer and
+ * the leaf shift were removed (DEC-50, #928); only the starving marks stay.
  *
  * The client computes no part of the dispatch rule (`AGENTS.md`, 7.1): every number here is a field
- * the server sends for the own nodes (`front_dist`, `flow_down`, `flow_pocket`, `me.leaf_shift`) or
- * an own packet. What this module does is only picking: which nodes are the level, where the
- * chevrons of the «Supply» layer go, which nodes are starving.
+ * the server sends for the own nodes (`front_dist`, `me.leaf_shift`) or an own packet. What this
+ * module does is only picking which nodes are starving.
  */
 import type { PlayerId, View } from '../protocol.gen.ts';
-import type { EdgeIndex } from './supplyLayout.ts';
 
 /** The view carries the fields of the supply flow (`me.leaf_shift` is set, DEC-43). */
 export function flowOn(view: View): boolean {
   return typeof view.me.leaf_shift === 'number';
-}
-
-/** A road the charges roll down: from `from` to its downhill neighbour `to`. */
-export interface FlowRoad {
-  readonly edge: number;
-  readonly from: number;
-  readonly to: number;
-}
-
-const pairKey = (a: number, b: number): string =>
-  `${String(Math.min(a, b))}:${String(Math.max(a, b))}`;
-
-/** `edge id` of the road between two nodes (the map's own index, shared with the supply layer). */
-export function edgeBetween(index: EdgeIndex, a: number, b: number): number | undefined {
-  return index.get(pairKey(a, b));
-}
-
-/**
- * The own nodes that make the leaf level (T1): `front_dist == leaf_shift`, the nodes a tired army
- * pulled to the level included (the server has already put them there). Empty without a flow.
- */
-export function levelNodes(view: View, me: PlayerId): number[] {
-  const shift = view.me.leaf_shift;
-  if (shift === null) return [];
-  return view.nodes
-    .filter((n) => n.owner === me && n.front_dist === shift)
-    .map((n) => n.id)
-    .sort((a, b) => a - b);
-}
-
-/** The own nodes ahead of the level (`front_dist < leaf_shift`): they neither get nor give. */
-export function aheadNodes(view: View, me: PlayerId): number[] {
-  const shift = view.me.leaf_shift;
-  if (shift === null) return [];
-  return view.nodes
-    .filter((n) => n.owner === me && n.front_dist !== null && n.front_dist < shift)
-    .map((n) => n.id);
-}
-
-/** The own nodes whose component has no own factory (`flow_pocket`). */
-export function pocketNodes(view: View, me: PlayerId): number[] {
-  return view.nodes.filter((n) => n.owner === me && n.flow_pocket === true).map((n) => n.id);
-}
-
-/** Every downhill road of the own nodes (`flow_down`), by node then neighbour. */
-export function downhillRoads(view: View, me: PlayerId, index: EdgeIndex): FlowRoad[] {
-  const roads: FlowRoad[] = [];
-  for (const node of view.nodes) {
-    if (node.owner !== me || node.flow_down === null) continue;
-    for (const to of node.flow_down) {
-      const edge = edgeBetween(index, node.id, to);
-      if (edge !== undefined) roads.push({ edge, from: node.id, to });
-    }
-  }
-  return roads;
-}
-
-/** `road key` of a road in one direction, for matching the roads with the packets on them. */
-export const roadKey = (edge: number, from: number): string => `${String(edge)}:${String(from)}`;
-
-/** The roads an own packet is on now, by `roadKey` (the first leg of the packet is its road). */
-export function packetRoads(view: View): Set<string> {
-  const keys = new Set<string>();
-  for (const packet of view.packets) keys.add(roadKey(packet.edge, packet.from_node));
-  return keys;
 }
 
 /**
@@ -106,9 +40,4 @@ export function starvingNodes(view: View, me: PlayerId): number[] {
       return n.front_dist === shift && !incoming.has(n.id);
     })
     .map((n) => n.id);
-}
-
-/** `leaf_shift` as the words of the control: "front" at 0, "−n" otherwise (a real minus sign). */
-export function shiftLabel(shift: number, front: string): string {
-  return shift <= 0 ? front : `−${String(shift)}`;
 }

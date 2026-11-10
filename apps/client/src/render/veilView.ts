@@ -133,7 +133,7 @@ export class VeilView {
     this.drawGround();
   }
 
-  /** The grey ground is hidden with the picture (the «Supply» and terrain modes). */
+  /** The grey ground is hidden with the picture (the terrain mode). */
   setGroundVisible(on: boolean): void {
     this.groundShown = on;
     this.ground.visible = on && this.hidden.length > 0;

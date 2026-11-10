@@ -16,8 +16,8 @@ describe('layer order', () => {
     expect(at('intents')).toBeGreaterThan(at('groups'));
   });
 
-  it('keeps the «Supply» layer above everything', () => {
-    expect(at('supply')).toBe(LAYER_ORDER.length - 1);
+  it('keeps the tolls above the effects', () => {
+    expect(at('tolls')).toBe(LAYER_ORDER.length - 1);
     expect(at('effects')).toBeGreaterThan(at('intents'));
   });
 

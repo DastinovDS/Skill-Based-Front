@@ -46,8 +46,7 @@
 
   /**
    * The keys: a label (the key itself, not a translation) and the dictionary key of its effect.
-   * The supply layer shows where charges go, `-` and `=` move the level (DEC-43). The planned order
-   * is on `E` (DEC-48, item K2); Shift selects several groups under the group order (item K1).
+   * The planned order is on `E` (DEC-48, item K2); Shift selects several groups under the group order (item K1).
    */
   type KeyRow = readonly [string, MessageKey];
   const keys = $derived<readonly KeyRow[]>([
@@ -69,8 +68,6 @@
     ['S', 'help.key.split'],
     ['G', 'help.key.merge'],
     ['Q', 'help.key.stance'],
-    ['Tab / F2', 'help.key.supply'],
-    ['- / =', 'help.key.leafShift'],
     ['Space', 'help.key.alert'],
     ['H', 'help.key.fit'],
     ['M', 'help.key.mute'],

@@ -11,8 +11,7 @@ import { FLOW_BATTLE } from './style.ts';
 /**
  * The supply flow on the normal map, the "battle mode" (DEC-43, ui-style 42): alerts only, the
  * starving mark on each node that is starving or about to. Nothing else of the supply is drawn here
- * (no level fill, no chevrons, no hover marks): the «Supply» layer draws the full picture itself
- * (`SupplyView`), this view is hidden then. The marks are baked sprites in one small pool, redrawn
+ * (no level fill, no chevrons, no hover marks; the «Supply» layer was removed, DEC-50, #928). The marks are baked sprites in one small pool, redrawn
  * only when the snapshot changes.
  */
 export class FlowView {
@@ -32,9 +31,8 @@ export class FlowView {
     layers.layer.intents.addChild(this.markRoot);
   }
 
-  /** `active`: the normal map (not the «Supply» layer) is on screen. */
-  update(base: SnapshotMsg | null, active: boolean): void {
-    const show = active && base !== null && flowOn(base.view);
+  update(base: SnapshotMsg | null): void {
+    const show = base !== null && flowOn(base.view);
     if (show !== this.on) {
       this.on = show;
       this.markRoot.visible = show;

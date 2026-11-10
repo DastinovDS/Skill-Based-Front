@@ -18,12 +18,11 @@ describe('UndoList', () => {
     expect(list.take(free)).toBeNull();
   });
 
-  it('remembers only what X can undo: no split, merge, stance, leaf shift or build', () => {
+  it('remembers only what X can undo: no split, merge, stance or build', () => {
     const list = new UndoList();
     list.onAccepted({ type: 'split', group: 'a', n: 1 });
     list.onAccepted({ type: 'merge', groups: ['a', 'b'] });
     list.onAccepted({ type: 'set_stance', stance: 'war' });
-    list.onAccepted({ type: 'set_leaf_shift', shift: 1 });
     list.onAccepted({ type: 'build_factory', node: 1 });
     list.onAccepted({ type: 'build_barracks', node: 1 });
     list.onAccepted({ type: 'fortify_road', node: 1, edge: 2 });

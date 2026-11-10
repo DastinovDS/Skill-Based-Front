@@ -1,9 +1,9 @@
 /**
  * The `flow` scenes of the dev screen (DEC-43, #705): the artery moment under the flow rules
- * (`DEV_RULES_FLOW`): the automatic supply flow with the leaf shift. Two fronts (the enemy at Archway
+ * (`DEV_RULES_FLOW`): the automatic supply flow. Two fronts (the enemy at Archway
  * in the east, neutral ground at Bluff in the north and Oakgrove in the south), the capital and a
- * second factory, a pocket (West Shoulder, cut off with no factory), and the leaf shift at the front
- * (`flowSnapshot(map, 0)`) or one road back (`flowSnapshot(map, 1)`).
+ * second factory, a pocket (West Shoulder, cut off with no factory), and the level at the front
+ * (`flowSnapshot(map)`).
  *
  * The fields of DEC-43 item E are written out here by hand, from the map's roads, as the server
  * would send them for these stocks; this file is a picture for the eyes, not a copy of the rule:
@@ -54,9 +54,6 @@ const DOWN0: Readonly<Record<number, readonly number[]>> = {
   12: [4, 7],
   13: [4, 10],
 };
-/** And at the shift 1: only what lies above the level (the capital and its two corners). */
-const DOWN1: Readonly<Record<number, readonly number[]>> = { 0: [3, 6, 9], 1: [6], 2: [9] };
-
 interface Variant {
   readonly stock: Readonly<Record<number, number>>;
   /** The receivers of the next dispatch (`flow_next`); a node not listed sends nothing. */
@@ -64,39 +61,19 @@ interface Variant {
   readonly idle: Readonly<Record<number, FlowIdle>>;
 }
 
-const VARIANTS: readonly Variant[] = [
-  {
-    // The level is the front: the leaves keep, everything behind rolls towards them.
-    stock: { 0: 6, 1: 2, 2: 1, 3: 3, 4: 1, 6: 2, 7: 0, 9: 3, 10: 0, 12: 1, 13: 2, 14: 0 },
-    next: { 0: [6], 1: [6], 3: [4], 6: [7], 12: [7], 13: [4, 10] },
-    idle: { 2: 'full', 4: 'leaf', 7: 'leaf', 9: 'full', 10: 'leaf', 14: 'leaf' },
-  },
-  {
-    // One road back: the level is the ring of cities behind the leaves, the leaves are frozen.
-    stock: { 0: 6, 1: 2, 2: 1, 3: 3, 4: 2, 6: 0, 7: 1, 9: 3, 10: 1, 12: 1, 13: 3, 14: 0 },
-    next: { 0: [6], 1: [6] },
-    idle: {
-      2: 'full',
-      3: 'leaf',
-      4: 'ahead',
-      6: 'leaf',
-      7: 'ahead',
-      9: 'leaf',
-      10: 'ahead',
-      12: 'leaf',
-      13: 'leaf',
-      14: 'leaf',
-    },
-  },
-];
+/** The level is the front: the leaves keep, everything behind rolls towards them. */
+const VARIANT: Variant = {
+  stock: { 0: 6, 1: 2, 2: 1, 3: 3, 4: 1, 6: 2, 7: 0, 9: 3, 10: 0, 12: 1, 13: 2, 14: 0 },
+  next: { 0: [6], 1: [6], 3: [4], 6: [7], 12: [7], 13: [4, 10] },
+  idle: { 2: 'full', 4: 'leaf', 7: 'leaf', 9: 'full', 10: 'leaf', 14: 'leaf' },
+};
 
 const id = (n: number) => (0x7000 + n).toString(16).padStart(16, '0');
 
-export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
+export function flowSnapshot(map: MapFile): SnapshotMsg {
   const base = arterySnapshot(map);
-  const variant = VARIANTS[shift] ?? VARIANTS[0];
-  if (variant === undefined) throw new Error('no flow variant');
-  const down = shift === 0 ? DOWN0 : DOWN1;
+  const variant = VARIANT;
+  const down = DOWN0;
   const exact = {
     tick: T,
     level: 'exact' as const,
@@ -149,15 +126,12 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
     };
   };
   // Charges on the way, one per road at most: the leaf level is fed by the wave behind it.
-  const packets: PacketView[] =
-    shift === 0
-      ? [
-          packet(1, 3, 4, 0.55),
-          packet(12, 9, 10, 0.4),
-          packet(8, 0, 6, 0.3),
-          packet(15, 12, 7, 0.7),
-        ]
-      : [packet(8, 0, 6, 0.4), packet(4, 0, 1, 0.6)];
+  const packets: PacketView[] = [
+    packet(1, 3, 4, 0.55),
+    packet(12, 9, 10, 0.4),
+    packet(8, 0, 6, 0.3),
+    packet(15, 12, 7, 0.7),
+  ];
   const garrison = (node: number, units: number, charged: number): GroupView => ({
     id: id(100 + node),
     units,
@@ -173,7 +147,7 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
       me: {
         cp: 320,
         stance: 'balance',
-        leaf_shift: shift,
+        leaf_shift: 0,
         leaf_shift_max: 2,
         next_dispatch_tick: T + 10,
         cp_ticks: null,
@@ -195,7 +169,7 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
  * (of 400).
  */
 export function stancesSnapshot(map: MapFile): SnapshotMsg {
-  const base = flowSnapshot(map, 0);
+  const base = flowSnapshot(map);
   return {
     ...base,
     view: {

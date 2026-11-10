@@ -25,7 +25,7 @@ for (const scene of SCENES) {
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(scene.tick));
     // The baked background loads on its own: the map is not ready before it.
     await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
-    // The keys of the scene (the «Supply» view), then the pointer away from the map.
+    // The keys of the scene, then the pointer away from the map.
     for (const key of scene.keys ?? []) await page.keyboard.press(key);
     await page.mouse.move(5, 5);
     await page.waitForTimeout(scene.keys === undefined ? 0 : 300);
@@ -419,23 +419,6 @@ for (const dpr of [1, 2] as const) {
     });
   });
 }
-
-// The supply flow (DEC-43, #705, #728), the frozen scene `flow_supply` on the «Supply» layer (Tab): the
-// pointer on the capital shows nothing of its own (the countdown ring, the downstream chain and the
-// click-to-pin were removed, #728): `flow-hover-capital.png` and grey.
-test('shot of the Supply layer with the pointer on a city (flow-hover-capital)', async ({
-  page,
-}) => {
-  await page.goto('/?scene=flow_supply&menus');
-  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
-  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
-  await page.keyboard.press('Tab');
-  await page.mouse.move(118, 518);
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: join(OUT, 'flow-hover-capital.png') });
-  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
-  await page.screenshot({ path: join(OUT, 'flow-hover-capital-gray.png') });
-});
 
 // Stances of economy v2 (DEC-44, #772), the frozen scene `stances` under the rules of `mvp-4-stances`:
 // `menu-stances.png` and its `-gray` twin, the `Q` menu with the rates and the note on the carried progress.
@@ -1010,28 +993,6 @@ test('shot of the progress cells in grey scale at 60% scale', async ({ page }) =
   await page.locator('canvas').screenshot({ path: join(OUT, 'progress-gray-60.png') });
 });
 
-// The «Supply» view with the canals (#858) in grey scale, at full size and at 60% of the map scale: the canals, the
-// level rings, the starving signs and the pocket (hatching) must read without the hue.
-// `supply-gray.png` and `supply-gray-60.png`, the map alone.
-for (const [name, size] of [
-  ['supply-gray', { width: 1280, height: 800 }],
-  ['supply-gray-60', { width: 768, height: 480 }],
-] as const) {
-  test(`shot of the supply view in grey scale (${name})`, async ({ page }) => {
-    await page.setViewportSize(size);
-    await page.goto('/?scene=flow_supply&menus');
-    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
-    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
-    await page.keyboard.press('Tab');
-    await page.mouse.move(5, 5);
-    await page.waitForTimeout(500);
-    await page.addStyleTag({
-      content: '.hud { display: none !important; } canvas { filter: grayscale(1); }',
-    });
-    await page.locator('canvas').screenshot({ path: join(OUT, `${name}.png`) });
-  });
-}
-
 // The enemy figures of the roads (EF2 "Pointer", #354) in grey scale at 60% of the map scale: the direction (the head),
 // the level (the plate, the dashes) and the half memory with its dashed tick must read without the hue.
 // `figures-gray-60.png`, the map alone.
@@ -1228,8 +1189,7 @@ test('shot of the capture_failed toast', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'capture-toast-gray.png') });
 });
 
-// The match dialogs (#597). `help.png` (key ?) and `exit.png` (the Exit button), each with a `-gray` twin, and
-// `supply-hud-gray.png` (the Supply view banner in grey scale).
+// The match dialogs (#597). `help.png` (key ?) and `exit.png` (the Exit button), each with a `-gray` twin.
 async function openScene(page: import('@playwright/test').Page, scene: string): Promise<void> {
   await page.goto(`/?scene=${scene}&menus`);
   await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
@@ -1284,17 +1244,6 @@ test('shot of the forfeit dialog in the match', async ({ page }) => {
   await page.getByRole('button', { name: 'Exit' }).click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
   await shootBoth(page, 'exit');
-});
-
-test('shot of the supply banner in grey scale', async ({ page }) => {
-  await page.goto('/?scene=flow_supply&menus');
-  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
-  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
-  await page.keyboard.press('Tab');
-  await page.mouse.move(1000, 700);
-  await page.waitForTimeout(400);
-  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
-  await page.screenshot({ path: join(OUT, 'supply-hud-gray.png') });
 });
 
 // The selection and the hover outline beside a badge (#797): Watchpost's group (plains, chevrons

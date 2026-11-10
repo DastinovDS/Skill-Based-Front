@@ -132,9 +132,6 @@ export interface KeyInput {
  * recruit, stance, forfeit. Each goes out as an intent and comes back as `accepted` or `rejected`
  * in `ui.current.notice`.
  *
- * The «Supply» map mode (DEC-43) is toggled by Tab (or F2): the map layer of the supply flow, with
- * the leaf shift control (`-` and `=` step it). A click in it opens no menu and selects nothing.
- *
  * Groups (DEC-20): a selected group standing in a node asks the server where it can go
  * (`reach_query`); the answer rings the nodes it reaches and, dashed, those it reaches only after a
  * split (the stack limit), and the hovered target shows its travel time as one small number on the
@@ -161,9 +158,8 @@ export interface KeyInput {
  * Keys: Esc deselects, X cancels the order of
  * the selected group, R recruits in the selected city, Q the stance menu (hold and release over a
  * sector, or tap and click; 1 / 2 / 3 choose while it is open), S the split menu, G merge, F lets a
- * gathering plan go, B fortifies a road, Space the camera to the next alert, Tab or F2 the «Supply»
- * mode (it also lets a selected city go), T the terrain mode (patterns and sight signs; not
- * together with «Supply»).
+ * gathering plan go, B fortifies a road, Space the camera to the next alert, T the terrain mode
+ * (patterns and sight signs).
  * At most one radial menu is open: whoever opens one closes the others (`#closeMenus`).
  */
 export class OrderController implements MapInteraction {
@@ -204,8 +200,6 @@ export class OrderController implements MapInteraction {
    */
   #bonusPick: { readonly group: string; readonly node: number; readonly value: number } | null =
     null;
-  /** The last step of the leaf shift by key: where it started and where it was sent to (`stepLeafShift`). */
-  #shiftStep: { readonly from: number; readonly to: number } | null = null;
   #noticeId = 0;
   #noticeTimer: ReturnType<typeof setTimeout> | undefined;
   #overlay: OverlayState = EMPTY_OVERLAY;
@@ -337,33 +331,6 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.fort.cost;
   }
 
-  /** The own leaf shift in force (`View.me.leaf_shift`); `null` before a snapshot. */
-  get leafShift(): number | null {
-    return this.#o.hud.current?.leafShift ?? null;
-  }
-
-  /** The largest shift now (`View.me.leaf_shift_max`); `null` like `leafShift`. */
-  get leafShiftMax(): number | null {
-    return this.#o.hud.current?.leafShiftMax ?? null;
-  }
-
-  /**
-   * One step of the leaf shift (`set_leaf_shift`, free): `delta` +1 raises the shift (the level
-   * moves one road back from the front, the control's `−`), -1 lowers it (the control's `+`). Kept within `0..leaf_shift_max` as the server's own
-   * numbers; presses before the snapshot that confirms one add up from the step already sent.
-   */
-  stepLeafShift(delta: number): void {
-    const now = this.leafShift;
-    const max = this.leafShiftMax;
-    if (now === null || max === null) return;
-    const sent =
-      this.#shiftStep !== null && this.#shiftStep.from === now ? this.#shiftStep.to : now;
-    const to = Math.min(max, Math.max(0, sent + delta));
-    if (to === sent) return;
-    this.#shiftStep = { from: now, to };
-    this.#sendCommand({ type: 'set_leaf_shift', shift: to }, null);
-  }
-
   /**
    * The bonus a planned order to the target under the pointer asks for: what the wheel
    * chose in this E hover (#797), `PLAN_BONUS.min` until it turns, no more than the charged
@@ -492,7 +459,6 @@ export class OrderController implements MapInteraction {
     this.#syncFort();
     const fortPick = this.#fortPick();
     const beacon = this.#o.hud.beacon;
-    const supply = this.ui.current.supplyMode;
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
     const splitNodes = reach === null ? [] : [...reach.split.keys()];
     const eta = this.#eta(reach, preview);
@@ -518,7 +484,6 @@ export class OrderController implements MapInteraction {
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
       undo !== this.#overlayUndo ||
-      supply !== this.#overlay.supply ||
       this.ui.current.terrainMode !== this.#overlay.terrain ||
       this.ui.current.rallyFrom !== (this.#overlay.rallyFrom ?? null)
     ) {
@@ -540,7 +505,6 @@ export class OrderController implements MapInteraction {
               }
             : null,
         beacon,
-        supply,
         terrain: this.ui.current.terrainMode,
         reach: reachNodes,
         split: splitNodes,
@@ -631,8 +595,8 @@ export class OrderController implements MapInteraction {
     const hit = this.#hover;
     const ui = this.ui.current;
     if (hit === null || this.#o.send === null) return null;
-    // The «Supply» layer takes no click, and the road pick of a fortification has its own.
-    if (ui.fortFrom !== null || ui.supplyMode) return null;
+    // The road pick of a fortification has its own.
+    if (ui.fortFrom !== null) return null;
     // The rally point pick (DEC-48, item K7): any other node is a point.
     if (ui.rallyFrom !== null) {
       const node = this.#cityOf(hit);
@@ -709,7 +673,6 @@ export class OrderController implements MapInteraction {
       this.#rallyClick(picked);
       return;
     }
-    if (this.#supplyClick(picked)) return;
     if (picked === null) {
       this.deselect();
       return;
@@ -886,7 +849,6 @@ export class OrderController implements MapInteraction {
     return (
       this.#o.send !== null &&
       (this.#selectedGroup()?.node != null || this.#picks.length > 0) &&
-      !ui.supplyMode &&
       !ui.terrainMode &&
       ui.fortFrom === null &&
       ui.rallyFrom === null
@@ -901,7 +863,7 @@ export class OrderController implements MapInteraction {
    * here (no group order in the rules, or the hit is no own group): the click goes on as a plain one.
    */
   #shiftClick(hit: PickHit): boolean {
-    if (this.groupOrder === null || this.ui.current.supplyMode) return false;
+    if (this.groupOrder === null) return false;
     const ids = hit.kind === 'group' ? [hit.id] : hit.kind === 'stack' ? hit.ids : [];
     const own = ids.filter((id) => this.#isOwnGroup(id));
     if (own.length === 0) return false;
@@ -919,7 +881,7 @@ export class OrderController implements MapInteraction {
    * given (the scene finds them left to right). Nothing without the group order in the rules.
    */
   selectBox(ids: readonly string[]): void {
-    if (this.groupOrder === null || this.ui.current.supplyMode) return;
+    if (this.groupOrder === null) return;
     const own = ids.filter((id) => this.#isOwnGroup(id));
     if (own.length === 0) return;
     const base = this.#selection();
@@ -1439,23 +1401,6 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'forfeit' }, null);
   }
 
-  // --- The «Supply» map mode (DEC-18) ----------------------------------------------------------
-
-  get supplyMode(): boolean {
-    return this.ui.current.supplyMode;
-  }
-
-  /**
-   * Tab / F2: the «Supply» map mode on or off. Either way every open menu closes and a selected
-   * city is let go (its menu goes with it); a selected group stays.
-   */
-  toggleSupplyMode(): void {
-    const on = !this.ui.current.supplyMode;
-    this.#closeMenus();
-    if (this.#o.hud.selection?.kind === 'node') this.#o.hud.select(null);
-    this.ui.patch({ supplyMode: on, ...(on ? { terrainMode: false } : {}) });
-  }
-
   // --- The terrain map mode (#429) ---------------------------------------------------------------
 
   get terrainMode(): boolean {
@@ -1463,14 +1408,12 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * `T`: the terrain map mode on or off. It only changes the picture, so nothing else closes; it
-   * does not go with the «Supply» mode (turning one on turns the other off).
+   * `T`: the terrain map mode on or off. It only changes the picture, so nothing else closes.
    */
   toggleTerrainMode(): void {
     const on = !this.ui.current.terrainMode;
     if (on) {
       this.#closeMenus();
-      if (this.ui.current.supplyMode) this.ui.patch({ supplyMode: false });
     }
     this.ui.patch({ terrainMode: on });
   }
@@ -1493,27 +1436,11 @@ export class OrderController implements MapInteraction {
     if (!this.#eHeld) this.#wheelSteps.reset();
     if (input.code === 'KeyE') return true;
     if (input.type !== 'keydown') return this.#keyUp(input);
-    if (input.code === 'Tab' || input.code === 'F2') {
-      if (input.repeat !== true) this.toggleSupplyMode();
-      return true;
-    }
     if (input.code === 'KeyT') {
       if (input.repeat !== true) this.toggleTerrainMode();
       return true;
     }
     if (input.code === 'KeyQ') return this.#qDown(input);
-    if (this.leafShift !== null) {
-      // The leaf shift (DEC-43): `-` moves the level one road back from the front (the control
-      // reads "−1", "−2"), `=` / `+` moves it forward again.
-      if (input.code === 'Minus' || input.code === 'NumpadSubtract') {
-        if (input.repeat !== true) this.stepLeafShift(1);
-        return true;
-      }
-      if (input.code === 'Equal' || input.code === 'NumpadAdd') {
-        if (input.repeat !== true) this.stepLeafShift(-1);
-        return true;
-      }
-    }
     if (input.code === 'Escape' && this.ui.current.fortFrom !== null) {
       // The road pick of a fortification: Esc drops it.
       this.cancelFortify();
@@ -1576,8 +1503,8 @@ export class OrderController implements MapInteraction {
         return true;
       case 'KeyX':
         // Nothing selected on the ordinary map: the last action goes, step by step (#764). A held
-        // key does not repeat it, and the «Supply» layer shows no groups for the cue to mark.
-        if (this.isIdle() && !this.ui.current.supplyMode) {
+        // key does not repeat it.
+        if (this.isIdle()) {
           if (input.repeat !== true) this.#undoPress();
           return true;
         }
@@ -1703,17 +1630,6 @@ export class OrderController implements MapInteraction {
           : null);
       if (at !== stack.target || this.stackGroups().length < 2) this.stackMenu.close();
     }
-  }
-
-  /**
-   * A click in the «Supply» mode. The layer is not the ordinary map (ui-style.md, section 19): a
-   * click on anything is a click on nothing, never a selection or a city or group menu (#678). A
-   * click on empty ground still drops the selection. Returns false for an ordinary click.
-   */
-  #supplyClick(hit: PickHit | null): boolean {
-    if (!this.ui.current.supplyMode || hit === null) return false;
-    this.#closeMenus();
-    return true;
   }
 
   /** The city a hit belongs to: itself, its area, or the icon of own units standing in it. */
@@ -1954,7 +1870,7 @@ export class OrderController implements MapInteraction {
     if (this.#picks.length > 0) {
       const ui = this.ui.current;
       const hit = this.#hover;
-      if (this.#o.send === null || ui.supplyMode || ui.rallyFrom !== null) return null;
+      if (this.#o.send === null || ui.rallyFrom !== null) return null;
       if (hit?.kind === 'group' && hit.node === undefined) return null;
       return this.#hoverCity();
     }

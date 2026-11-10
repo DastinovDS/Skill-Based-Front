@@ -65,8 +65,6 @@ export interface OrderUiData {
    */
   readonly fortFrom: number | null;
   readonly fortHover: number | null;
-  /** The «Supply» map mode is on (Tab or F2, DEC-18). */
-  readonly supplyMode: boolean;
   /** The terrain map mode is on (`T`, #429): patterns for the ground, a sight sign on the places you see. */
   readonly terrainMode: boolean;
   /**
@@ -109,7 +107,6 @@ export class OrderUiState {
     splitHover: null,
     fortFrom: null,
     fortHover: null,
-    supplyMode: false,
     terrainMode: false,
     planning: false,
     cpShort: false,

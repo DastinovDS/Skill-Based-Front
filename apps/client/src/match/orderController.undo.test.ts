@@ -227,18 +227,6 @@ describe('X with nothing selected (#764)', () => {
     expect(sent.at(-1)).toEqual(cancel('g2'));
   });
 
-  it('not while a menu, a pick or the Supply layer is up', () => {
-    const { sent, accepted, press, controller } = setup();
-    accepted(move('g2'));
-    controller.key({ type: 'keydown', code: 'Tab', shiftKey: false });
-    expect(controller.ui.current.supplyMode).toBe(true);
-    press();
-    expect(sent).toHaveLength(1);
-    controller.key({ type: 'keydown', code: 'Tab', shiftKey: false });
-    press();
-    expect(sent.at(-1)).toEqual(cancel('g2'));
-  });
-
   it('starts empty after a reconnect and at the end of a match', () => {
     const { book, sent, accepted, press } = setup();
     accepted(move('g2'));

@@ -227,7 +227,6 @@ export class CityView {
   private selected: number | null = null;
   private readonly radii: number[];
   private readonly vpStyle: TextStyle;
-  private supplyMode = false;
   /** The scale of the towers and the recruits now (`towerScale`). */
   private towerZoom: number = TOWER.minScale;
   /** The render tick of the frame (fractional): the build time fills by it. */
@@ -501,23 +500,6 @@ export class CityView {
       const ring = this.alerts[id];
       if (ring !== undefined) ring.alpha = alpha;
     }
-  }
-
-  /**
-   * The «Supply» map mode (DEC-28, item 8), "Canal" (#858): the city keeps its ring, its warehouse
-   * lozenges and its towers; the recruit queue, the alert rings and the build arcs go (the layer
-   * draws what the supply is about).
-   */
-  setSupplyMode(on: boolean): void {
-    if (on === this.supplyMode) return;
-    this.supplyMode = on;
-    for (const layer of this.pipLayers) layer.visible = !on;
-    this.alerts.forEach((ring, id) => {
-      ring.visible = !on && this.alerting.has(id);
-    });
-    this.states.forEach((state, id) => {
-      if (state !== null) this.placeTowers(id, state);
-    });
   }
 
   /** The camera scale (CSS px per world unit): the towers keep their screen size. */
@@ -897,7 +879,7 @@ export class CityView {
     slot.head.position.set(0, bottom - shown * height);
     slot.crown.set(crownSpec(r, kind, progress, slot.color, this.towerZoom));
     slot.crown.alpha = 1;
-    slot.crown.visible = !this.supplyMode;
+    slot.crown.visible = true;
     this.showLoose(slot, show, progress.cost);
     return payments !== undefined;
   }
@@ -925,7 +907,7 @@ export class CityView {
         }
       }
     }
-    loose.visible = marks.length > 0 && !this.supplyMode;
+    loose.visible = marks.length > 0;
     if (marks.length === 0) return;
     const baked = this.bakedK();
     const spec = chargeSpec(slot.color, baked);
@@ -1005,10 +987,10 @@ export class CityView {
     const done = slot.done;
     if (done === null) return;
     const q = done.step(dtMs);
-    slot.crown.visible = !this.supplyMode && q * CROWN.ring.ms < CROWN.fadeMs;
+    slot.crown.visible = q * CROWN.ring.ms < CROWN.fadeMs;
     slot.crown.alpha = Math.max(0, 1 - (q * CROWN.ring.ms) / CROWN.fadeMs);
     const { from, grow } = CROWN.ring;
-    slot.ring.visible = !this.supplyMode && q < 1;
+    slot.ring.visible = q < 1;
     slot.ring.scale.set(((from + grow * q) / 10) * (this.towerZoom / TOWER.minScale));
     slot.ring.alpha = 1 - q;
     if (!done.active) {
@@ -1069,7 +1051,7 @@ export class CityView {
       alert.position.set(ring.x, ring.y);
       alert.scale.set(scale);
     }
-    alert.visible = ring !== null && !this.supplyMode;
+    alert.visible = ring !== null;
     if (ring === null) this.alerting.delete(id);
     else this.alerting.add(id);
   }

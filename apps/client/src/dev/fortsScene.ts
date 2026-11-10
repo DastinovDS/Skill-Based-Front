@@ -66,7 +66,7 @@ const figure = (id: string, pos: number): EnemyGroup => ({
 });
 
 export function fortsSnapshot(map: MapFile): SnapshotMsg {
-  const base = flowSnapshot(map, 0);
+  const base = flowSnapshot(map);
   const nodes: NodeView[] = base.view.nodes.map((node) =>
     // The city 8 is the enemy's here: an enemy group comes out of it towards the line of 7.
     node.id === 8 ? { ...node, owner: 1, detail: 'presence' } : node,

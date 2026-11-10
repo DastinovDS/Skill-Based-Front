@@ -19,7 +19,6 @@
   import SplitMenu from './SplitMenu.svelte';
   import StackRadial from './StackRadial.svelte';
   import StartBanner from './StartBanner.svelte';
-  import SupplyBanner from './SupplyBanner.svelte';
   import ToastStack from './ToastStack.svelte';
   import GroupTip from './GroupTip.svelte';
   import TerrainBanner from './TerrainBanner.svelte';
@@ -163,7 +162,6 @@
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
   <RadialMenu {orders} stance={data?.stance ?? null} />
-  <SupplyBanner {orders} />
   <SplitMenu {orders} {anchors} names={hud.nodeName} />
   <CityRadial
     {orders}
