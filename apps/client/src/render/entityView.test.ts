@@ -269,8 +269,7 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
       );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
-  function frameWithPacket(_transfer: boolean) {
+  function frameWithPacket() {
     const packet: PacketView = {
       id: 'p1',
       edge: edge?.id ?? 0,
@@ -297,7 +296,7 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
   it('draws a packet as an engraved square of its owner: a casing, the colour, an ink outline (#858)', () => {
     const layers = createLayers();
     const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-    view.update(frameWithPacket(false));
+    view.update(frameWithPacket());
     const [dot] = packetView(layers).children as Graphics[];
     expect(dot).toBeDefined();
     const square = drawn(dot as Graphics);
@@ -320,10 +319,10 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
     const ends = edgeEnds(map, edge.id);
     if (ends === undefined) throw new Error('no ends');
     const angle = Math.atan2(ends.b.y - ends.a.y, ends.b.x - ends.a.x);
-    view.update(frameWithPacket(false));
+    view.update(frameWithPacket());
     const dot = (): Graphics => packetView(layers).children[0] as Graphics;
     expect(dot().rotation).toBeCloseTo(angle);
-    const back = frameWithPacket(false);
+    const back = frameWithPacket();
     const packet = back.packets[0];
     if (packet === undefined) throw new Error('no packet');
     packet.packet = { ...packet.packet, from_node: edge.b };
@@ -333,20 +332,18 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
     view.destroy();
   });
 
-  it('draws no circle for a packet, whoever it belongs to', () => {
-    for (const transfer of [false, true]) {
-      const layers = createLayers();
-      const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-      view.update(frameWithPacket(transfer));
-      const graphics = packetView(layers).children.filter(
-        (c): c is Graphics => c instanceof Graphics,
-      );
-      expect(graphics).toHaveLength(1);
-      for (const g of graphics) {
-        expect(drawn(g).filter((s) => s.type === 'circle')).toEqual([]);
-      }
-      view.destroy();
+  it('draws no circle for a packet', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
+    view.update(frameWithPacket());
+    const graphics = packetView(layers).children.filter(
+      (c): c is Graphics => c instanceof Graphics,
+    );
+    expect(graphics).toHaveLength(1);
+    for (const g of graphics) {
+      expect(drawn(g).filter((s) => s.type === 'circle')).toEqual([]);
     }
+    view.destroy();
   });
 });
 

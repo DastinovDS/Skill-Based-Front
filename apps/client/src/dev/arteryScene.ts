@@ -3,8 +3,8 @@
  * baked background, as in the style mockups (`docs/design/mockups/map-style-2.html`, the fragment
  * of nodes 3-16). The test maps of the other scenes have no background, so the background, the
  * shading, the fog and the roads of the map style are seen only here. Own and enemy cities and
- * groups, the border of the territory, the fog with a remembered ghost, roads of levels 1-3, a road
- * being built, a fight in a city and planned orders. Made here from the map file, not a fixture of
+ * groups, the border of the territory, the fog with a remembered ghost, a fight in a city and
+ * planned orders. Made here from the map file, not a fixture of
  * the protocol: it is a picture for the eyes, the numbers only have to be plausible.
  */
 import { DEV_CAPACITY } from '../hud/devFeed.ts';
@@ -32,7 +32,7 @@ const OWN = [0, 1, 2, 3, 4, 6, 9, 12, 13];
 const ENEMY = [5, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30];
 /** Own cities with a group standing in them: the neighbours of these are seen as presence. */
 const STATIONED = [3, 4, 6, 9, 12];
-/** Warehouse stock of the own cities (the capacity of its level where not listed). */
+/** Warehouse stock of the own cities (the capacity where not listed). */
 const STOCK: Readonly<Record<number, number>> = {
   0: 6,
   1: 2,
@@ -44,10 +44,6 @@ const STOCK: Readonly<Record<number, number>> = {
   12: 1,
   13: 1,
 };
-/** Warehouse level of the own cities (0 where not listed): all three levels appear. */
-const WAREHOUSE_LEVEL: Readonly<Record<number, number>> = { 0: 1, 3: 1, 4: 2, 9: 2 };
-/** What the player knows of the road levels (`edge.width`); the others are level 1. */
-const LEVEL: Readonly<Record<number, number>> = { 1: 3, 14: 2, 6: 2, 2: 2, 3: 2 };
 /** Fog memory, ticks ago: a city or road not listed here and out of sight was never seen. */
 const SEEN_NODE: Readonly<Record<number, number>> = { 15: 210, 14: 950, 8: 1500, 11: 2000 };
 const SEEN_EDGE: Readonly<Record<number, number>> = { 3: 210, 18: 950, 11: 1500 };
@@ -88,8 +84,7 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
     const mine = OWN.includes(n.id);
     // A warehouse is an own city's (DEC-26): a province has none, its `warehouse` is 0.
     const city = mine && n.kind !== 'province';
-    const level = WAREHOUSE_LEVEL[n.id] ?? 0;
-    const cap = warehouseCapOf(n.kind, level);
+    const cap = warehouseCapOf(n.kind);
     const detail: Detail = isExact(n.id) ? 'exact' : nextToExact(n.id) ? 'presence' : 'fog';
     const ago = SEEN_NODE[n.id];
     const memory =
@@ -112,14 +107,11 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       recruit_progress: city ? 0 : null,
       recruit_waiting: city ? false : null,
       has_barracks: n.kind === 'province' ? null : barracks(n.id),
-      warehouse_level: city ? level : null,
       warehouse_cap: city ? cap : null,
       building: null,
       factory: null,
       factory_period: null,
       factory_build: null,
-      fort: null,
-      fort_build: null,
       front_dist: null,
       flow_down: null,
       flow_next: null,
@@ -137,21 +129,12 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
 
   const edges: EdgeView[] = map.edges.map((e) => {
     const sight = isExact(e.a) || isExact(e.b);
-    const bothOwn = OWN.includes(e.a) && OWN.includes(e.b);
-    const width = LEVEL[e.id] ?? 1;
     const ago = SEEN_EDGE[e.id];
     return {
       id: e.id,
-      width,
       detail: sight ? 'presence' : 'fog',
-      upgrade_gain:
-        sight && bothOwn && width < e.max_level
-          ? { speed_pct: 50, unit_speed_pct: 15, amount: 1 }
-          : null,
       // Each half as its city (DEC-21, item 5); a hidden half keeps the memory of the road.
       halves: [half(e.a, ago), half(e.b, ago)],
-      // The road 4-13 is being built: 12 s to go (DEC-28, item 7).
-      build: e.id === 16 ? { done_tick: T + 120 } : null,
       enemy_groups: [],
       forts: [],
     };
@@ -203,15 +186,7 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
     }),
   ];
 
-  const packet = (
-    edge: number,
-    from: number,
-    to: number,
-    charges: number,
-    p: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
-    _transfer: boolean, // no transfers: removed (#894): stage 2 deletes this
-  ) => {
+  const packet = (edge: number, from: number, to: number, charges: number, p: number) => {
     const ticks = map.edges[edge]?.travel_ticks ?? 50;
     const depart = T - Math.round(p * ticks);
     return {
@@ -226,9 +201,9 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
     } satisfies PacketView;
   };
   const packets: PacketView[] = [
-    packet(1, 3, 4, 2, 0.64, false),
-    packet(1, 3, 4, 3, 0.77, true),
-    packet(14, 4, 12, 1, 0.5, false),
+    packet(1, 3, 4, 2, 0.64),
+    packet(1, 3, 4, 3, 0.77),
+    packet(14, 4, 12, 1, 0.5),
   ];
 
   const intents: IntentView[] = [

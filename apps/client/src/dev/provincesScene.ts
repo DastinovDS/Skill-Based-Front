@@ -30,10 +30,8 @@ export const PROVINCES_VIEW = { x: 100, y: 140, width: 1000, height: 640 } as co
 const ENEMY = [10, 11, 15, 19, 20, 16];
 /** Own groups stand here: the only sources, seen exactly; their neighbours as presence. */
 const STATIONED = [2, 6, 7, 12];
-/** Warehouse of the own cities at the level of `LEVEL` (the capacity of the level where not listed). */
+/** Warehouse stock of the own cities (the capacity where not listed). */
 const STOCK: Readonly<Record<number, number>> = { 0: 5, 1: 1, 4: 3, 6: 0, 7: 2, 8: 1 };
-/** Warehouse level of the own cities: 0, 1 and 2 (the top level) all appear. */
-const LEVEL: Readonly<Record<number, number>> = { 0: 1, 1: 0, 4: 2, 6: 1, 7: 2, 8: 0 };
 /** An enemy group stands in this own province without an own group: seen as presence (DEC-35). */
 const INTRUDED = 3;
 /** Memory of a node in the fog, ticks ago. */
@@ -78,8 +76,7 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
           ? null
           : seen('presence', ago, enemy ? ['attack'] : [])
         : seen(detail, 0, detail === 'presence' && (enemy || n.id === INTRUDED) ? ['attack'] : []);
-    const level = LEVEL[n.id] ?? 0;
-    const cap = warehouseCapOf(n.kind, level);
+    const cap = warehouseCapOf(n.kind);
     return {
       id: n.id,
       owner: owner(n.id),
@@ -102,14 +99,11 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       recruit_progress: mine && city ? 0 : null,
       recruit_waiting: mine && city ? false : null,
       has_barracks: mine && city ? n.kind === 'capital' : null,
-      warehouse_level: mine && city ? level : null,
       warehouse_cap: mine && city ? cap : null,
       building: null,
       factory: null,
       factory_period: null,
       factory_build: null,
-      fort: null,
-      fort_build: null,
       front_dist: null,
       flow_down: null,
       flow_next: null,
@@ -127,11 +121,8 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
     };
     return {
       id: e.id,
-      width: 1,
       detail: sight ? 'presence' : 'fog',
-      upgrade_gain: null,
       halves: [half(e.a), half(e.b)],
-      build: null,
       enemy_groups: [],
       forts: [],
     };

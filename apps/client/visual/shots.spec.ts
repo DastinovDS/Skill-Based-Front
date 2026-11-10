@@ -191,7 +191,6 @@ const MENUS = [
   { name: 'stance', open: 'Q key' },
   { name: 'city', open: 'click on the ring of the city' },
   { name: 'group', open: 'two clicks on the group' },
-  { name: 'supply', open: 'Tab, then a click on the city' },
 ] as const;
 
 for (const menu of MENUS) {
@@ -212,10 +211,6 @@ for (const menu of MENUS) {
         await page.mouse.click(335, 430);
         await page.waitForTimeout(300);
         await page.mouse.click(335, 430);
-        break;
-      case 'supply':
-        await page.keyboard.press('Tab');
-        await page.mouse.click(335, 360);
         break;
     }
     // Away from the menu, so that no sector is lit by the pointer; the menu grows in 140 ms.
@@ -244,16 +239,13 @@ for (const retreat of ['none', 'round'] as const) {
   });
 }
 
-// Economy v2 (DEC-41, #649), the frozen scene `economy` under the rules of `mvp-3`: the menu of an own
-// city with the factory and the bunker priced in charges (Ford), the menu of a group whose plan gathers
-// (Watchhouse: the release and the plan bar), the plan bar with the requested bonus (a group in
-// Watchpost), the supply menu of a target city (Tab, Forkway: remove the line into it, its factory named)
-// and a supply line being drawn (Tab, Stonegate, 1, Forkway: the path is suggested, #665; the banner
-// shows the auto lines toggle). `v2-<name>.png` and grey.
-const V2_SHOTS = ['city', 'group', 'plan', 'supply', 'line'] as const;
+// DEC-41, #649, the frozen scene `economy`: the menu of an own city with the factory priced in
+// charges (Ford), the menu of a group whose plan gathers (Watchhouse: the release and the plan bar)
+// and the plan bar with the requested bonus (a group in Watchpost). `v2-<name>.png` and grey.
+const V2_SHOTS = ['city', 'group', 'plan'] as const;
 
 for (const name of V2_SHOTS) {
-  test(`shot of the economy v2 controls (${name})`, async ({ page }) => {
+  test(`shot of the economy controls (${name})`, async ({ page }) => {
     await page.goto('/?scene=economy&menus');
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
     await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
@@ -269,20 +261,9 @@ for (const name of V2_SHOTS) {
       case 'plan':
         await page.mouse.click(332, 518);
         break;
-      case 'supply':
-        await page.keyboard.press('Tab');
-        await page.mouse.click(533, 518);
-        break;
-      case 'line':
-        // #665: the source, 1, the target: the suggested path is drawn (the stand-in of the dev screen).
-        await page.keyboard.press('Tab');
-        await page.mouse.click(118, 518);
-        await page.keyboard.press('Digit1');
-        await page.mouse.click(533, 518);
-        break;
     }
     await page.mouse.move(1000, 700);
-    if (name === 'city' || name === 'group' || name === 'supply') {
+    if (name === 'city' || name === 'group') {
       await expect(page.locator('[role="menu"]')).toBeVisible();
     }
     await page.waitForTimeout(500);
@@ -364,48 +345,6 @@ for (const dpr of [1, 2] as const) {
       expect(right).toBeGreaterThan(60);
       expect(left).toBeGreaterThan(right * 0.7);
     });
-  });
-}
-
-// The focus on the supply lines (#672), the frozen scene `economy` on the «Supply» layer (Tab): the
-// supply menu of the capital Stonegate shows its lines alone (`lines-source`), of the hub factory
-// Watchpost its two lines and the one that feeds it (`lines-factory`), of the target Forkway the line
-// into it (`lines-target`); the pointer on «remove line → Forkway» lights that line, the others go
-// faint (`lines-hover`), on «remove line ← Stonegate» of Watchpost's menu the feed (`lines-hover-in`,
-// DEC-42, #674). `lines-<state>.png` and grey; `economy_supply.png` is every line, unfocused.
-const LINE_SHOTS = [
-  { name: 'source', at: [118, 518], hover: null },
-  { name: 'factory', at: [331, 518], hover: null },
-  { name: 'target', at: [533, 518], hover: null },
-  { name: 'hover', at: [118, 518], hover: '→ Forkway' },
-  { name: 'hover-in', at: [331, 518], hover: '← Stonegate' },
-] as const;
-
-for (const shot of LINE_SHOTS) {
-  test(`shot of the focus on the supply lines (${shot.name})`, async ({ page }) => {
-    await page.goto('/?scene=economy&menus');
-    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
-    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
-    await page.keyboard.press('Tab');
-    await page.mouse.click(shot.at[0], shot.at[1]);
-    await expect(page.locator('[role="menu"]')).toBeVisible();
-    await page.waitForTimeout(300);
-    if (shot.hover === null) await page.mouse.move(1000, 700);
-    else {
-      const sector = page.locator('[role="menuitem"]', { hasText: shot.hover });
-      // The menu grows out of its middle (its box is small at first) and places itself on an
-      // animation frame (rare in a headless page): measure and move again until the sector is lit.
-      await expect(async () => {
-        const box = await sector.locator('text', { hasText: shot.hover }).boundingBox();
-        if (box === null) throw new Error(`no sector ${shot.hover}`);
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 2 });
-        await expect(sector).toHaveClass(/hover/, { timeout: 500 });
-      }).toPass();
-    }
-    await page.waitForTimeout(300);
-    await page.screenshot({ path: join(OUT, `lines-${shot.name}.png`) });
-    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
-    await page.screenshot({ path: join(OUT, `lines-${shot.name}-gray.png`) });
   });
 }
 
@@ -547,23 +486,6 @@ test('shot of the travel time of an order, less motion (artery-bend)', async ({ 
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.locator('canvas').screenshot({ path: join(OUT, 'eta-artery-bend-still-gray.png') });
 });
-
-// The road mode (key U, #469): the dashed band on the roads a click would raise, on the normal map
-// and in the «Supply» view (Tab). `road-mode-normal.png` and `road-mode-supply.png`, the map alone;
-// `?menus` lets the frozen scene take the mode (orders go nowhere).
-for (const view of ['normal', 'supply'] as const) {
-  test(`shot of the road mode (${view})`, async ({ page }) => {
-    await page.goto('/?scene=snapshot&menus');
-    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
-    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
-    if (view === 'supply') await page.keyboard.press('Tab');
-    await page.keyboard.press('KeyU');
-    await page.mouse.move(5, 5);
-    await page.waitForTimeout(300);
-    await page.addStyleTag({ content: '.hud { display: none !important; }' });
-    await page.locator('canvas').screenshot({ path: join(OUT, `road-mode-${view}.png`) });
-  });
-}
 
 // A click on an enemy city (#535): it is not selected and not lit. The frozen scene `snapshot`, the click on
 // the enemy city n3, the pointer moved away. `enemy-click.png`, the map alone; compare it with an own city
@@ -863,8 +785,8 @@ test('shot of the progress cells in grey scale at 60% scale', async ({ page }) =
   await page.locator('canvas').screenshot({ path: join(OUT, 'progress-gray-60.png') });
 });
 
-// The «Supply» view with the pipes (#429) in grey scale, at full size and at 60% of the map scale: the level (the bore),
-// the flow (the fill, the dashes, the valve cap) and the cut-off city (hatching, dashed ring) must read without the hue.
+// The «Supply» view with the canals (#858) in grey scale, at full size and at 60% of the map scale: the canals, the
+// level rings, the starving signs and the pocket (hatching) must read without the hue.
 // `supply-gray.png` and `supply-gray-60.png`, the map alone.
 for (const [name, size] of [
   ['supply-gray', { width: 1280, height: 800 }],
@@ -872,7 +794,7 @@ for (const [name, size] of [
 ] as const) {
   test(`shot of the supply view in grey scale (${name})`, async ({ page }) => {
     await page.setViewportSize(size);
-    await page.goto('/?scene=supply&menus');
+    await page.goto('/?scene=flow_supply&menus');
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
     await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
     await page.keyboard.press('Tab');
@@ -1065,8 +987,7 @@ test('shot of the capture rule tip and the capture_failed toast', async ({ page 
   await page.screenshot({ path: join(OUT, 'capture-tip-gray.png') });
 });
 
-// The match dialogs (#597). `help.png` (key ?), `exit.png` (the Exit button) and
-// `transfer.png` (the Supply view, a city, "Transfer", an own destination city), each with a `-gray` twin, and
+// The match dialogs (#597). `help.png` (key ?) and `exit.png` (the Exit button), each with a `-gray` twin, and
 // `supply-hud-gray.png` (the Supply view banner in grey scale).
 async function openScene(page: import('@playwright/test').Page, scene: string): Promise<void> {
   await page.goto(`/?scene=${scene}&menus`);
@@ -1124,23 +1045,8 @@ test('shot of the forfeit dialog in the match', async ({ page }) => {
   await shootBoth(page, 'exit');
 });
 
-test('shot of the transfer dialog', async ({ page }) => {
-  await page.goto('/?scene=supply&menus');
-  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
-  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
-  await page.keyboard.press('Tab');
-  await page.waitForTimeout(300);
-  await page.mouse.click(118, 520);
-  await expect(page.locator('[role="menu"]')).toBeVisible();
-  await page.keyboard.press('Digit3');
-  await page.waitForTimeout(200);
-  await page.mouse.click(533, 519);
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await shootBoth(page, 'transfer');
-});
-
 test('shot of the supply banner in grey scale', async ({ page }) => {
-  await page.goto('/?scene=supply&menus');
+  await page.goto('/?scene=flow_supply&menus');
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
   await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
   await page.keyboard.press('Tab');

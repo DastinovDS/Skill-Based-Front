@@ -29,7 +29,6 @@
       label: tf('stack.units', { units: group.units }),
       lines: [
         tf('stack.charged', { charged: group.charged }),
-        ...((group.mode as string) === 'defense' ? [t('group.defense')] : []),
         ...(group.planned ? [t('stack.planned')] : []),
       ],
       // Digits choose a group from the keyboard (the first nine).

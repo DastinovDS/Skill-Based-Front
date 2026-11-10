@@ -122,7 +122,6 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
       seen: exact,
       warehouse: variant.stock[node.id] ?? 0,
       warehouse_cap: cap,
-      warehouse_level: 0,
       has_barracks: node.id === 0,
       factory: FACTORIES.includes(node.id),
       factory_period: FACTORIES.includes(node.id) ? (node.id === 0 ? 100 : 200) : null,
@@ -134,12 +133,7 @@ export function flowSnapshot(map: MapFile, shift: 0 | 1 = 0): SnapshotMsg {
       terrain_mark: null,
     };
   });
-  const edges: EdgeView[] = base.view.edges.map((edge) => ({
-    ...edge,
-    width: 1,
-    build: null,
-    upgrade_gain: null,
-  }));
+  const edges: EdgeView[] = base.view.edges;
   const packet = (edge: number, from: number, to: number, p: number): PacketView => {
     const ticks = Math.round(((map.edges[edge]?.travel_ticks ?? 50) * 100) / 150);
     const depart = T - Math.round(p * ticks);

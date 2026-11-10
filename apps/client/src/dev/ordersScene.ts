@@ -67,7 +67,6 @@ export function ordersSnapshot(map: MapFile): SnapshotMsg {
     });
   });
   const intents: IntentView[] = [
-    ...base.view.intents.filter((i) => (i.kind as string) === 'defense'), // removed (#894): stage 2 deletes this
     ...PLANS.map((p, i) => ({
       id: id(100 + i),
       owner: p.owner,

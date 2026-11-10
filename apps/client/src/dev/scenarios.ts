@@ -342,8 +342,6 @@ function walkSnapshot(captured: boolean, pair = false): SnapshotMsg {
     mode: 'attack' as const,
     location: { kind: 'node' as const, node: 2 },
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   };
   return {
     ...base,
