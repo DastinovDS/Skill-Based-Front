@@ -520,7 +520,7 @@ group alone too, 2 shots above the estimate, scheduled orders where they can gat
 pockets** (an enemy node cut from the enemy capital over enemy nodes, public ownership: a score bonus, and the estimate
 of its garrison loses what the starvation of DEC-43 item H took since the cut), **raids on full leaf warehouses** (an
 enemy node held 300 ticks counts with a full warehouse, every charge scores), the cut of enemy nodes (`w_cut`), the
-**leaf shift at the front while a strike is under way**, and the capital defense and threat fortifications of item 22.
+**leaf shift at the front while a strike is under way** (no lever in `mvp-7`, DEC-50: no bot sends `SetLeafShift` there), and the capital defense and threat fortifications of item 22.
 The parameter `anti_rush` (0 by default) switches on an anti-rush opening: the capital keeps 3 units, its roads from the
 enemy side are fortified before an enemy is seen, and a city facing an enemy node fortifies the road from it at once.
 It is a yardstick and the regression gate V6, not a server level (`LEVEL_BOTS` does not name it): put it in a
