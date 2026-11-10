@@ -165,6 +165,11 @@ class Settings(BaseSettings):
     """Maps being made or waiting for a worker at once; past it a new match plays a pool map."""
     mapgen_wait_s: float = Field(default=60.0, gt=0)
     """The longest a match waits for its new map; then it plays a pool map."""
+    queue_maps: Literal["pool", "generated"] = "pool"
+    """Where a queue match takes its map (#924): ``pool``, a random map of the pool; ``generated``,
+    a map made for it like an invite's (``gow_server.mapgen``, from the moment the pair is found),
+    a pool map when it cannot be made in time or ``mapgen_enabled`` is off. A generated map is
+    never rated (DEC-27, item 8). For test sessions on generated maps."""
     queue_window_base: float = 100.0
     queue_window_per_s: float = 5.0
     queue_window_max: float = 400.0
@@ -178,6 +183,12 @@ class Settings(BaseSettings):
     """After this long in the queue the player is offered an unrated match against a bot."""
     queue_stale_s: float = 15.0
     """A player whose client did not poll the queue this long (a closed tab) leaves it."""
+    rating_enabled: bool = False
+    """The rating (RAT-02, DEC-34, #924). Off (the default, owner 2026-11-10: no rating at MVP):
+    every match is unrated, the queue included; no rating, calibration or queue ban is written,
+    the queue pairs first come, first served, ``/api/me`` and the profiles show no rating or
+    calibration and the leaderboard is empty. On: queue matches are rated by the rules below.
+    Pauses do not depend on it: they follow the kind of match (DEC-05)."""
     calibration_matches: int = Field(default=5, ge=1)
     """Calibration matches of a password account before its rating is shown and it counts for
     opponents (DEC-34, item 2)."""

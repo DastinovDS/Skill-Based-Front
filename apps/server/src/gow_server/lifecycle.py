@@ -154,12 +154,15 @@ class MatchLifecycle:
         *,
         ready_timeout_s: float = DEFAULT_READY_TIMEOUT_S,
         ladder: LadderRules | None = None,
+        rating_enabled: bool = True,
     ) -> None:
+        """``rating_enabled`` off (``GOW_RATING_ENABLED``, #924): ``start`` rates no match."""
         self.manager = manager
         self.clock = clock
         self.ready_timeout_s = ready_timeout_s
         self.ladder = ladder or LadderRules()
         """The numbers of DEC-34 (calibration, early resign, queue ban, per-opponent limit)."""
+        self.rating_enabled: Final = rating_enabled
         self._sessions = sessions
         self._claims: dict[int, MatchRecord] = {}
         self._pending: set[MatchRecord] = set()
@@ -259,7 +262,8 @@ class MatchLifecycle:
         ``rated`` marks a queue match: ``gow_server.ladder`` decides at the start who of the two
         accounts changes a rating (DEC-34), so the stored match is flagged rated only if at least
         one of them does. Against a bot the flag is ignored (DEC-06), and so it is on a map without
-        a mirror (DEC-27, item 8: a generated map stays outside ranked).
+        a mirror (DEC-27, item 8: a generated map stays outside ranked), and while the rating is
+        off (``rating_enabled``, #924): no rating plan, no rating change, no queue ban.
 
         ``keeper``: the account that keeps its colour on a clash (DEC-49, item 2): the host of an
         invite, the earlier entry of the queue; ``None``: the human of a bot match, or side 0.
@@ -275,6 +279,7 @@ class MatchLifecycle:
         deadline, record.deadline = record.deadline, None  # not swept while the row is written
         rated = (
             rated
+            and self.rating_enabled  # #924: off, every match is unrated
             and bot is None
             and BOT_ACCOUNT not in players  # DEC-06: two humans only
             and mapdef.meta.symmetry != "none"  # DEC-27, item 8

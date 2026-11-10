@@ -70,6 +70,17 @@ sudo cp deploy/systemd/gow-backup.* /etc/systemd/system/ && sudo systemctl enabl
 Secrets and settings live only in `~/skill-based-front/.env` on the server (`.gitignore` excludes `.env*`,
 `.dockerignore` keeps them out of the image). There are no secrets now: guest tokens are created by the server, certificates by Caddy.
 
+Every `GOW_*` setting of the README table reaches the server through `compose.yaml` (`${GOW_X:-default}`), so it is set
+in `.env` or in the environment of `docker compose` (locally: `GOW_RATING_ENABLED=true mise run stack`). Two start flags
+of the out-of-game rework (#919, #924):
+
+- `GOW_RATING_ENABLED` (`false`): no rating at MVP, every match is unrated, the queue included; no rating, calibration or
+  queue ban is written, the leaderboard is empty. `true` rates the queue as before (DEC-34). Pauses do not change: the
+  queue has none, bot and invite matches one per player.
+- `GOW_QUEUE_MAPS` (`pool`): where a queue match takes its map. `generated`: a map made for each found pair (the
+  per-match maps of section 4, `GOW_MAPGEN_*`), a pool map when it cannot be made in time; such a match is never rated.
+  For test sessions on generated maps only.
+
 ## 3. A regular deploy and rollback
 
 ```sh
@@ -120,7 +131,8 @@ then `deploy/restore.sh <the predeploy backup of this deploy>`.
   set: result and rating are kept, and `GET /api/replays/{id}` answers `410` with `"reason": "expired"` (the viewer says
   "no longer available"). Each pass logs `replay cleanup` with the counts of files, bytes, matches and archived logs.
   Disk use of the volume: `docker compose exec app du -sh /data/replays`.
-- **Per-match maps** (#884). A private invite or a bot match without a map choice plays a map the server makes for it
+- **Per-match maps** (#884). A private invite or a bot match without a map choice, and a queue match with
+  `GOW_QUEUE_MAPS=generated` (#924), plays a map the server makes for it
   (`docs/design/map-format.md`, "A new map for every match"). The maps live in `/data/replays/maps/` (on the data
   volume, next to the replays; `<id>.json`, the background, thumbnail, preview, `src/` and `geo/`, about 0.5 MB a map)
   and go with the replays: the same cleanup pass removes a map once its match is over and has no replay file left, a

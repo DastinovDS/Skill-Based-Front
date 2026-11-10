@@ -92,6 +92,8 @@ services:
       GOW_INVITE_RATE_LIMIT: ${GOW_INVITE_RATE_LIMIT:-10}
       GOW_INVITE_RATE_WINDOW_S: ${GOW_INVITE_RATE_WINDOW_S:-60}
       # Matchmaking queue (MM-01): the rating window, the pass period, confirmation, bot offer.
+      # Where a queue match takes its map (#924): pool, or generated (a map made for each pair).
+      GOW_QUEUE_MAPS: ${GOW_QUEUE_MAPS:-pool}
       GOW_QUEUE_WINDOW_BASE: ${GOW_QUEUE_WINDOW_BASE:-100}
       GOW_QUEUE_WINDOW_PER_S: ${GOW_QUEUE_WINDOW_PER_S:-5}
       GOW_QUEUE_WINDOW_MAX: ${GOW_QUEUE_WINDOW_MAX:-400}
@@ -100,6 +102,9 @@ services:
       GOW_QUEUE_BOT_OFFER_S: ${GOW_QUEUE_BOT_OFFER_S:-60}
       GOW_QUEUE_STALE_S: ${GOW_QUEUE_STALE_S:-15}
       GOW_BOT_BUDGET_S: ${GOW_BOT_BUDGET_S:-0.001}
+      # The rating (#924): off by default (no rating at MVP, every match unrated); true rates the
+      # queue as before. Set it when starting the stack: GOW_RATING_ENABLED=true mise run stack.
+      GOW_RATING_ENABLED: ${GOW_RATING_ENABLED:-false}
       # Rating-farming protection (DEC-34, #414, mechanics.md section 19): calibration, the
       # early-resign threshold, the queue ban of repeated resigns, the per-opponent limit.
       GOW_CALIBRATION_MATCHES: ${GOW_CALIBRATION_MATCHES:-5}

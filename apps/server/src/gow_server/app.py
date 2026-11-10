@@ -98,6 +98,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
                 opponent_limit=settings.opponent_limit,
                 opponent_limit_window_s=settings.opponent_limit_window_s,
             ),
+            rating_enabled=settings.rating_enabled,
         )
         app.state.ruleset = load_ruleset(settings.ruleset_path)
         await asyncio.to_thread(
@@ -136,6 +137,8 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             confirm_s=settings.queue_confirm_s,
             bot_offer_s=settings.queue_bot_offer_s,
             stale_s=settings.queue_stale_s,
+            maker=app.state.mapmaker,
+            generated_maps=settings.queue_maps == "generated",
         )
         monitor = asyncio.create_task(
             alerts.monitor(app.state.matches, settings.monitor_interval_s), name="monitor"
