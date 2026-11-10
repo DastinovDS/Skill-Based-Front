@@ -104,6 +104,10 @@
     "Ember",
     "Guest"
   ],
+  "colours": [
+    "lapis",
+    "minium"
+  ],
   "rated": false,
   "unrated_reason": "casual",
   "calibration": null,

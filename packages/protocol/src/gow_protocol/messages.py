@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 48
+PROTOCOL_VERSION: Final = 49
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -124,6 +124,18 @@ type ClientMsg = Annotated[
 Nick = Annotated[str, StringConstraints(min_length=1, max_length=16)]
 
 
+class PlayerColour(StrEnum):
+    """The colour a player chooses: the set Engraved six (DEC-49, item 1). The values and the
+    allowed pairs are in ``gow_server.colours``; the client keeps the same values in its palette."""
+
+    LAPIS = "lapis"
+    MINIUM = "minium"
+    GLACIER = "glacier"
+    SHELL = "shell"
+    VIOLET = "violet"
+    MADDER = "madder"
+
+
 class UnratedReason(StrEnum):
     """Why a match did not change your rating (DEC-34, #414)."""
 
@@ -174,6 +186,10 @@ class WelcomeMsg(WireModel):
     nicks: tuple[Nick, Nick]
     """Nicks of the two players by player id (ui-style U3); the bot of a bot match is ``Bot``.
     Not secret (visible in the waiting room and the queue), so not part of the ``PlayerView``."""
+    colours: tuple[PlayerColour, PlayerColour]
+    """Colours of the two players by player id, resolved once at the start of the match by the
+    clash rule (DEC-49, item 2): the same in every ``welcome`` of the match and in its replay.
+    Public, like the nicks: the opponent's colour is not a fog leak."""
     rated: bool = False
     """Whether this match is expected to change your rating (DEC-34, #414); a calibration match
     does, silently. A rated match can still end unrated for its winner (an early resign of the

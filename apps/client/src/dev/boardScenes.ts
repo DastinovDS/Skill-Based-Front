@@ -197,7 +197,13 @@ export interface BoardScene {
 export function sceneApi(scene: BoardScene): Pick<Api, 'leaderboard' | 'player' | 'me'> {
   return {
     leaderboard: scene.leaderboard,
-    me: () => Promise.resolve({ player_id: ME, nick: 'Ember', has_password: scene.hasPassword }),
+    me: () =>
+      Promise.resolve({
+        player_id: ME,
+        nick: 'Ember',
+        has_password: scene.hasPassword,
+        colour: 'lapis',
+      }),
     player: (id) => (scene.profiles[id] ?? reject<PlayerProfile>(new ApiError('not_found', 404)))(),
   };
 }

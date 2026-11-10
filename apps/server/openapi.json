@@ -481,6 +481,53 @@
         ]
       }
     },
+    "/api/me/colour": {
+      "put": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Change Colour",
+        "description": "Set the colour the player asks for in the next matches (DEC-49). A running match keeps\nthe colours it started with.",
+        "operationId": "change_colour_api_me_colour_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ColourChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/replays/{match_id}": {
       "get": {
         "tags": [
@@ -1108,6 +1155,19 @@
         "title": "Calibration",
         "description": "Calibration progress of an account: the first matches of a rated account do not show its\nrating (DEC-34, #414)."
       },
+      "ColourChange": {
+        "properties": {
+          "colour": {
+            "$ref": "#/components/schemas/PlayerColour"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "colour"
+        ],
+        "title": "ColourChange"
+      },
       "CreateBotMatch": {
         "properties": {
           "level": {
@@ -1662,13 +1722,17 @@
                 "type": "null"
               }
             ]
+          },
+          "colour": {
+            "$ref": "#/components/schemas/PlayerColour"
           }
         },
         "type": "object",
         "required": [
           "player_id",
           "nick",
-          "has_password"
+          "has_password",
+          "colour"
         ],
         "title": "Me"
       },
@@ -1742,6 +1806,19 @@
         ],
         "title": "PasswordSet",
         "description": "A new password; ``old_password`` is required when the account already has one."
+      },
+      "PlayerColour": {
+        "type": "string",
+        "enum": [
+          "lapis",
+          "minium",
+          "glacier",
+          "shell",
+          "violet",
+          "madder"
+        ],
+        "title": "PlayerColour",
+        "description": "The colour a player chooses: the set Engraved six (DEC-49, item 1). The values and the\nallowed pairs are in ``gow_server.colours``; the client keeps the same values in its palette."
       },
       "PlayerProfile": {
         "properties": {

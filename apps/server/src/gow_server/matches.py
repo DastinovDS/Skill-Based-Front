@@ -62,9 +62,10 @@ from gow_protocol.convert import (
     reach_msg,
     snapshot_frame,
 )
-from gow_protocol.messages import PausedMsg, ReachMsg, ServerMsg
+from gow_protocol.messages import PausedMsg, PlayerColour, ReachMsg, ServerMsg
 from gow_server.alerts import Alerter
 from gow_server.clock import Clock
+from gow_server.colours import DEFAULT_PAIR
 from gow_server.ladder import (
     CASUAL_NOTICE,
     Notice,
@@ -219,6 +220,7 @@ class MatchRunner:
         rating_plan: RatingPlan | None = None,
         validate_snapshots: bool = False,
         connect_timeout_s: float | None = None,
+        colours: tuple[PlayerColour, PlayerColour] = DEFAULT_PAIR,
     ) -> None:
         self.match_id: Final = match_id
         self.map_id: Final = map_id
@@ -241,6 +243,9 @@ class MatchRunner:
         """Tick lag in seconds: how late each step started after it was due (AGENTS.md, 12)."""
         self.metrics = metrics or ServerMetrics()
         """Process-wide counters and histograms; ``MatchManager.start`` replaces the default."""
+        self.colours: Final = colours
+        """The colours of the players by player id, resolved at the start (DEC-49, item 2); every
+        ``welcome`` of the match sends them."""
         self.rating_plan: Final = rating_plan
         """The rating rules of a queue match, fixed at its start (RAT-02, DEC-34); ``None``: a match
         that is not from the queue, which never changes a rating (DEC-06)."""
@@ -766,6 +771,7 @@ class MatchManager:
         private: bool = False,
         bot: BotSeat | None = None,
         rating_plan: RatingPlan | None = None,
+        colours: tuple[PlayerColour, PlayerColour] = DEFAULT_PAIR,
     ) -> MatchRunner:
         """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining and
         ``ServerFullError`` at the caps (``check_capacity``, #412).
@@ -775,7 +781,8 @@ class MatchManager:
         invite and bot matches, where each player may pause once (DEC-05); queue matches are rated.
         ``bot``: the slot a bot plays (SRV-06); that entry of ``players`` is ``BOT_ACCOUNT``.
         ``rating_plan``: the rating rules of a queue match (RAT-02, DEC-34), for ``welcome`` and
-        ``match_end``.
+        ``match_end``. ``colours``: the colours of the players by player id (DEC-49), resolved
+        by ``MatchLifecycle.start``.
         """
         if self.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
@@ -798,6 +805,7 @@ class MatchManager:
             rating_plan=rating_plan,
             validate_snapshots=self._validate_snapshots,
             connect_timeout_s=self._bot_connect_timeout_s if bot is not None else None,
+            colours=colours,
         )
         self.start(runner)
         return runner

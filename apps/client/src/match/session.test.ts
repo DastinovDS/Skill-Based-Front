@@ -16,6 +16,7 @@ const welcome: ServerMsg = {
   map_id: map.meta.name,
   last_seq: 0,
   nicks: ['Ember', 'Bot'],
+  colours: ['lapis', 'minium'],
   rated: false,
   unrated_reason: 'casual',
   calibration: null,

@@ -263,6 +263,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/me/colour': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change Colour
+     * @description Set the colour the player asks for in the next matches (DEC-49). A running match keeps
+     *     the colours it started with.
+     */
+    put: operations['change_colour_api_me_colour_put'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/replays/{match_id}': {
     parameters: {
       query?: never;
@@ -546,6 +567,10 @@ export interface components {
        */
       total: number;
     };
+    /** ColourChange */
+    ColourChange: {
+      colour: components['schemas']['PlayerColour'];
+    };
     /** CreateBotMatch */
     CreateBotMatch: {
       /**
@@ -733,6 +758,7 @@ export interface components {
       /** Has Password */
       has_password: boolean;
       calibration?: components['schemas']['Calibration'] | null;
+      colour: components['schemas']['PlayerColour'];
     };
     /** NickChange */
     NickChange: {
@@ -758,6 +784,13 @@ export interface components {
       /** Old Password */
       old_password?: string | null;
     };
+    /**
+     * PlayerColour
+     * @description The colour a player chooses: the set Engraved six (DEC-49, item 1). The values and the
+     *     allowed pairs are in ``gow_server.colours``; the client keeps the same values in its palette.
+     * @enum {string}
+     */
+    PlayerColour: 'lapis' | 'minium' | 'glacier' | 'shell' | 'violet' | 'madder';
     /** PlayerProfile */
     PlayerProfile: {
       /** Player Id */
@@ -1267,6 +1300,39 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['NickChange'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Me'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  change_colour_api_me_colour_put: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ColourChange'];
       };
     };
     responses: {

@@ -23,8 +23,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from gow_protocol.messages import Calibration
+from gow_protocol.messages import Calibration, PlayerColour
 from gow_server.abuse import Limits, enforce
+from gow_server.colours import colour_of
 from gow_server.db import DbSession
 from gow_server.lifecycle import MatchLifecycle, MatchState
 from gow_server.models import Player
@@ -69,6 +70,9 @@ class Me(BaseModel):
     calibration: Calibration | None = None
     """Calibration progress of a password account (DEC-34, #414): its rating is hidden until
     ``played`` reaches ``total``. ``None`` for a guest and once calibration is over."""
+    colour: PlayerColour
+    """The colour the player asks for in a match (DEC-49); a clash may give another one, which
+    ``welcome`` tells (``gow_server.colours``)."""
 
 
 LONGEST_INPUT = 1024
@@ -102,6 +106,13 @@ class ActiveMatch(BaseModel):
 
     match_id: str
     map_id: str
+
+
+class ColourChange(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    colour: PlayerColour
+    """One of the set Engraved six (DEC-49, item 1); anything else is a 422."""
 
 
 class NickChange(BaseModel):
@@ -320,6 +331,7 @@ def _me(request: Request, player: Player, session: Session) -> Me:
         nick=player.nick,
         has_password=player.password_hash is not None,
         calibration=calibration,
+        colour=colour_of(player.colour),
     )
 
 
@@ -364,6 +376,17 @@ def change_nick(
     except IntegrityError:
         session.rollback()
         raise _nick_taken() from None
+    return _me(request, player, session)
+
+
+@router.put("/me/colour")
+def change_colour(
+    body: ColourChange, request: Request, player: CurrentPlayer, session: DbSession
+) -> Me:
+    """Set the colour the player asks for in the next matches (DEC-49). A running match keeps
+    the colours it started with."""
+    player.colour = body.colour.value
+    session.commit()
     return _me(request, player, session)
 
 

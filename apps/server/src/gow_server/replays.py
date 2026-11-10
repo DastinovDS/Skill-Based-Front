@@ -47,6 +47,7 @@ import shutil
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -150,6 +151,15 @@ _LEGACY_LEVEL_BOTS: Final = {
 _BOT_LEVELS: Final = {**_LEGACY_LEVEL_BOTS, **{bot: level for level, bot in LEVEL_BOTS.items()}}
 
 
+@dataclass(frozen=True, slots=True)
+class _Sides:
+    """What the header of the frames file says about the sides, by player id."""
+
+    nicks: tuple[str, str]
+    colours: tuple[str, str] | None
+    """``PlayerColour`` values (DEC-49); ``None``: a match from before #906."""
+
+
 def bot_nick(bot: str | None) -> str:
     """Nick of a bot side in the frames file (#598): ``Bot`` and its difficulty level, as
     ``Bot (easy)``; a bot that is no level (an older or a test match) is plain ``Bot``."""
@@ -236,10 +246,12 @@ class ReplayService:
         loop = asyncio.get_running_loop()
         out = self.replays_dir / self.frames_name(match_id)
         try:
-            nicks = await asyncio.to_thread(self._nicks, match_id)
-        except Exception:  # the replay is still worth having without the nicks
+            sides = await asyncio.to_thread(self._sides, match_id)
+        except Exception:  # the replay is still worth having without the nicks and colours
             log.exception("replay nicks unavailable", extra={"match_id": match_id})
-            nicks = None
+            sides = None
+        nicks = None if sides is None else sides.nicks
+        colours = None if sides is None else sides.colours
         try:
             result = await loop.run_in_executor(
                 self._get_pool(),
@@ -249,6 +261,7 @@ class ReplayService:
                 self.rulesets_dir,
                 self.maps_dir,
                 nicks,
+                colours,
             )
         except BrokenProcessPool:
             self._pool = None  # a new pool on the next match
@@ -464,23 +477,33 @@ class ReplayService:
             )
         return self._pool
 
-    def _nicks(self, match_id: str) -> tuple[str, str] | None:
-        """Nicks of the two sides from the ``match_players`` rows (blocking), by player id: the
-        account's nick, a bot as ``bot_nick``. ``None`` without both rows."""
+    def _sides(self, match_id: str) -> _Sides | None:
+        """Nicks and colours of the two sides from the ``match_players`` rows (blocking), by
+        player id: the account's nick, a bot as ``bot_nick``; the colours the match was played in
+        (DEC-49), ``None`` for a match from before #906. ``None`` without both rows."""
         if not match_id.isdecimal():
             return None
         with self._sessions() as session:
             rows = session.execute(
-                select(MatchPlayer.side, MatchPlayer.player_id, Player.nick, MatchPlayer.bot)
+                select(
+                    MatchPlayer.side,
+                    MatchPlayer.player_id,
+                    Player.nick,
+                    MatchPlayer.bot,
+                    MatchPlayer.colour,
+                )
                 .outerjoin(Player, Player.id == MatchPlayer.player_id)
                 .where(MatchPlayer.match_id == int(match_id))
             ).all()
         by_side = {
-            side: bot_nick(bot) if account is None else nick for side, account, nick, bot in rows
+            side: (bot_nick(bot) if account is None else nick, colour)
+            for side, account, nick, bot, colour in rows
         }
         if sorted(by_side) != [0, 1]:
             return None
-        return by_side[0], by_side[1]
+        (nick0, colour0), (nick1, colour1) = by_side[0], by_side[1]
+        colours = None if colour0 is None or colour1 is None else (colour0, colour1)
+        return _Sides((nick0, nick1), colours)
 
     def _save_path(self, match_id: str) -> bool:
         """Store ``replay_path`` in the ``matches`` row (blocking); ``False``: there is no row."""

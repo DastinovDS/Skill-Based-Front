@@ -131,6 +131,10 @@ def test_scripted_client_plays_a_full_match_against_a_bot(bot_settings: Settings
                 assert isinstance(welcome, WelcomeMsg) and welcome.player == info["player"]
                 assert welcome.nicks[welcome.player] == "solo"
                 assert welcome.nicks[1 - welcome.player] == "Bot"  # the bot slot
+                # DEC-49: the human keeps their colour (Lapis: never chosen), the bot the farthest.
+                assert welcome.colours[welcome.player] == "lapis"
+                assert welcome.colours[1 - welcome.player] == "minium"
+                assert runner.colours == welcome.colours
                 await ws.send(encode(CommandMsg(seq=1, cmd=SetStanceCmd(stance=Stance.WAR))))
                 await asyncio.sleep(0.05)
                 acks: list[AckMsg] = []

@@ -448,6 +448,7 @@ async def ready_match(
                 rules,
                 (sides[0], sides[1]),
                 private=not invite.public,
+                keeper=invite.host,  # the host keeps their colour on a clash (DEC-49, item 2)
             )
         except ManagerDrainingError:
             invite.ready.discard(player.id)  # the caller retries

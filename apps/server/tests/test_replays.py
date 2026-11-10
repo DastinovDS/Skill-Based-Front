@@ -522,6 +522,7 @@ def test_live_match_is_logged_and_turned_into_frames(
     with sessions() as session:
         assert session.get(Match, 5).replay_path == "5.frames.json.gz"  # pyright: ignore[reportOptionalMemberAccess]
     assert "nicks" not in doc  # the row has no sides
+    assert "colours" not in doc
 
 
 def test_frames_header_has_the_nicks_of_the_sides(
@@ -531,13 +532,16 @@ def test_frames_header_has_the_nicks_of_the_sides(
     line3: MapDef,
     short_rules: Ruleset,
 ) -> None:
-    """``nicks`` (#598): by player id from the ``match_players`` rows, a bot by its level."""
+    """``nicks`` (#598): by player id from the ``match_players`` rows, a bot by its level;
+    ``colours`` (DEC-49): the colours the sides played in, not the profile's colour now."""
     with sessions.begin() as session:
-        session.add(Player(id=101, nick="Ember", nick_key="ember", token_hash=b"t" * 32))
+        session.add(
+            Player(id=101, nick="Ember", nick_key="ember", token_hash=b"t" * 32, colour="shell")
+        )
         session.add(Match(id=6, map_id="line3", ruleset_hash="x", rated=False))
         session.flush()
-        session.add(MatchPlayer(match_id=6, side=0, bot="turtle"))
-        session.add(MatchPlayer(match_id=6, side=1, player_id=101))
+        session.add(MatchPlayer(match_id=6, side=0, bot="turtle", colour="minium"))
+        session.add(MatchPlayer(match_id=6, side=1, player_id=101, colour="lapis"))
 
     async def scenario() -> ReplayService:
         clock = ManualClock()
@@ -552,6 +556,38 @@ def test_frames_header_has_the_nicks_of_the_sides(
     service = asyncio.run(scenario())
     doc = json.loads(gzip.decompress((service.replays_dir / "6.frames.json.gz").read_bytes()))
     assert doc["nicks"] == ["Bot (easy)", "Ember"]
+    assert doc["colours"] == ["minium", "lapis"]
+
+
+def test_frames_header_has_no_colours_for_a_match_from_before_906(
+    tmp_path: Path,
+    maps_dir: Path,
+    sessions: sessionmaker[Session],
+    line3: MapDef,
+    short_rules: Ruleset,
+) -> None:
+    """Sides without a stored colour (rows from before #906): the nicks, no ``colours`` key."""
+    with sessions.begin() as session:
+        session.add(Player(id=101, nick="Ember", nick_key="ember", token_hash=b"t" * 32))
+        session.add(Match(id=7, map_id="line3", ruleset_hash="x", rated=False))
+        session.flush()
+        session.add(MatchPlayer(match_id=7, side=0, bot="turtle"))
+        session.add(MatchPlayer(match_id=7, side=1, player_id=101))
+
+    async def scenario() -> ReplayService:
+        clock = ManualClock()
+        service = _service(tmp_path, maps_dir, sessions)
+        manager = MatchManager(clock, replays=service)
+        runner = manager.create("line3", line3, short_rules, (0, 101), match_id="7")
+        await _settle()
+        await _play(manager, runner, clock, stances=False)
+        await service.aclose()
+        return service
+
+    service = asyncio.run(scenario())
+    doc = json.loads(gzip.decompress((service.replays_dir / "7.frames.json.gz").read_bytes()))
+    assert doc["nicks"] == ["Bot (easy)", "Ember"]
+    assert "colours" not in doc
 
 
 def test_bot_nick_names_the_level() -> None:
@@ -841,6 +877,7 @@ def test_replay_file_without_vision_and_nicks_is_served_as_it_is(
     for frame in doc["frames"]:
         del frame["v"]
     doc.pop("nicks", None)
+    doc.pop("colours", None)  # nor ``colours`` (DEC-49, #906)
     path.write_bytes(gzip.compress(json.dumps(doc).encode()))
     _add_match(api, 9, True, (a, b), path.name)
 
@@ -848,6 +885,7 @@ def test_replay_file_without_vision_and_nicks_is_served_as_it_is(
     assert response.status_code == 200
     served = response.json()
     assert "nicks" not in served and all("v" not in f for f in served["frames"])
+    assert "colours" not in served
 
 
 def test_replay_file_without_buildings_is_served_as_it_is(

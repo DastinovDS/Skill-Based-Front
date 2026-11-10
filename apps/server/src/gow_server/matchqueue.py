@@ -445,6 +445,8 @@ async def confirm_match(
         sides = [e.account for e in proposal.entries]
         if secrets.randbelow(2):
             sides.reverse()
+        # The one who entered the queue earlier keeps their colour on a clash (DEC-49, item 2).
+        earlier = min(proposal.entries, key=lambda e: e.joined_at)
         try:
             runner = await queue.lifecycle.start(
                 proposal.record,
@@ -454,6 +456,7 @@ async def confirm_match(
                 (sides[0], sides[1]),
                 private=False,
                 rated=True,
+                keeper=earlier.account,
             )
         except ManagerDrainingError:
             queue.cancel(proposal, "server_draining")

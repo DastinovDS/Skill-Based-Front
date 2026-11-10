@@ -255,6 +255,7 @@ async def _serve(
             map_id=runner.map_id,
             last_seq=runner.last_seq(player),
             nicks=nicks,
+            colours=runner.colours,
             rated=notice.rated,
             unrated_reason=notice.unrated_reason,
             calibration=notice.calibration,

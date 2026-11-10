@@ -391,11 +391,14 @@ def build_frames(
     rulesets_dir: str | Path = DEFAULT_RULESETS_DIR,
     maps_dir: str | Path = DEFAULT_MAPS_DIR,
     nicks: Sequence[str] | None = None,
+    colours: Sequence[str] | None = None,
 ) -> FramesResult:
     """Re-simulate the command log, check its hashes and write the frames file ``out_path``.
 
     ``nicks``: the nicks of the players by player id as the match had them, written to the
     header (#598); ``None``: no ``nicks`` key (a match without a database row).
+    ``colours``: the colours of the players by player id the match was played in (DEC-49,
+    ``PlayerColour`` values); ``None``: no ``colours`` key (no row, or a match from before #906).
 
     One pass: the hashes are compared at every checkpoint of the log while the frames are
     recorded. A top-level function with plain arguments, so a ``ProcessPoolExecutor`` can run it
@@ -431,6 +434,8 @@ def build_frames(
     }
     if nicks is not None:
         document["nicks"] = list(nicks)
+    if colours is not None:
+        document["colours"] = list(colours)
     document["rules"] = viewer_rules(match.rules)
     document |= {
         "map": map_to_data(state.map),
