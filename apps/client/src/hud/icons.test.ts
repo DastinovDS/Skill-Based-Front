@@ -13,6 +13,8 @@ const NAMES = [
   'factory',
   'fortify',
   'release',
+  'rally',
+  'rallyOff',
 ] as const;
 
 const signature = (shapes: readonly IconShape[]): string => JSON.stringify(shapes);

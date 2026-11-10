@@ -142,7 +142,8 @@ describe('the icon of own units in a city', () => {
     ]);
     expect(hud.selection).toBeNull();
     controller.click({ kind: 'group', id: first.id, node: home }, false);
-    controller.click({ kind: 'stack', node: away.id, ids: ['x', 'y'] }, true);
+    controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
+    controller.click({ kind: 'stack', node: away.id, ids: ['x', 'y'] }, false);
     expect(sent[1]).toEqual({
       type: 'move',
       group: first.id,

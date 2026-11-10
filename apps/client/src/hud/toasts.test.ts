@@ -15,12 +15,14 @@ describe('toastOf', () => {
     setLocale(initial);
   });
 
-  it('makes toasts of fights, captures, unpaid captures, attrition, a lost recruit queue only', () => {
+  it('makes toasts of fights, captures, unpaid captures, attrition, a lost recruit queue, the rally point alerts only', () => {
     expect([...TOAST_EVENT_KINDS].sort()).toEqual([
       'attrition',
       'capture_failed',
       'fight_ended',
       'node_captured',
+      'rally_point_cleared',
+      'rally_walk_no_cp',
       'recruit_queue_lost',
     ]);
     for (const kind of [

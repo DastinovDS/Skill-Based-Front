@@ -24,10 +24,14 @@ export function cityChoices(
   province = false,
   factoriesFull = false,
   canFortify = true,
+  rallyPoint = false,
 ): CityChoice[] {
   if (province) return canFortify ? ['fortify'] : [];
   const choices: CityChoice[] = [];
   if (city?.hasBarracks !== false) choices.push('recruit');
+  // The recruit rally point (DEC-48, item K7): with `recruit.rally_point`, where a unit can be
+  // recruited (a city known to lack the barracks has no recruits to send).
+  if (rallyPoint && city?.hasBarracks !== false) choices.push('rally');
   if (city?.hasBarracks !== true) choices.push('barracks');
   if (city?.factory !== true && !factoriesFull) choices.push('factory');
   // Fortify a road: one line per road of the node, so the sector is there while a road has none.

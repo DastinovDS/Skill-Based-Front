@@ -40,9 +40,6 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'charge_burned',
   'build_paid',
   'plan_charged',
-  // DEC-48: the rally point alerts; the client part of #896 gives them a line and a toast.
-  'rally_point_cleared',
-  'rally_walk_no_cp',
 ]);
 
 /** Kinds with a line in the feed. */
@@ -71,6 +68,10 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'road_fort_destroyed',
   'toll_paid',
   'toll_taken',
+  // DEC-48, item I3: the rally point of a city is lost with its node, a recruit stays home for want
+  // of the CP of its walk (own only).
+  'rally_point_cleared',
+  'rally_walk_no_cp',
 ]);
 
 /** Does the feed show this kind? An unknown kind is not shown (never a raw kind name). */
@@ -162,6 +163,16 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
           : 'event.capture_failed.bounce',
         { node: names(num(data.node)) },
       );
+    case 'rally_point_cleared':
+      return tf('event.rally_point_cleared', {
+        node: names(num(data.node)),
+        target: names(num(data.target)),
+      });
+    case 'rally_walk_no_cp':
+      return tf('event.rally_walk_no_cp', {
+        node: names(num(data.node)),
+        target: names(num(data.target)),
+      });
     default:
       return '';
   }

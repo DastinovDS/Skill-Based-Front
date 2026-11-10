@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { t, tf } from '../i18n/index.ts';
+  import type { MessageKey } from '../i18n/messages.ts';
   import { sound } from '../audio/soundState.svelte.ts';
   import './dialog.css';
   import HowToPlay from '../howto/HowToPlay.svelte';
@@ -13,9 +14,16 @@
     onclose: () => void;
     /** `ruleset_public.capture.charge_cost` (DEC-38): with more than 0 the help tells the price of a capture. */
     captureCost?: number;
+    /**
+     * `ruleset_public.group_order` is set (DEC-48): the rows of the selection of several groups and
+     * of the group order, no row of the release (items A7, K6).
+     */
+    groupOrder?: boolean;
+    /** `ruleset_public.recruit.rally_point` (DEC-48, item H): the row of `P`. */
+    rallyPoint?: boolean;
   }
 
-  let { open, onclose, captureCost = 0 }: Props = $props();
+  let { open, onclose, captureCost = 0, groupOrder = false, rallyPoint = false }: Props = $props();
 
   let close: HTMLButtonElement | undefined = $state();
   /** The rules page replaces the keys inside the sheet; the match runs on under it (nothing pauses). */
@@ -38,15 +46,24 @@
 
   /**
    * The keys: a label (the key itself, not a translation) and the dictionary key of its effect.
-   * The supply layer shows where charges go, `-` and `=` move the level (DEC-43).
+   * The supply layer shows where charges go, `-` and `=` move the level (DEC-43). The planned order
+   * is on `E` (DEC-48, item K2); Shift selects several groups under the group order (item K1).
    */
-  const keys = [
-    ['LMB', 'help.key.select'],
-    ['Shift + LMB', 'help.key.planned'],
-    ['Shift + wheel', 'help.key.planWheel'],
-    ['F', 'help.key.release'],
+  type KeyRow = readonly [string, MessageKey];
+  const keys = $derived<readonly KeyRow[]>([
+    ['LMB', groupOrder ? 'help.key.groupOrder' : 'help.key.select'],
+    ...(groupOrder
+      ? ([
+          ['Shift + LMB', 'help.key.selectSeveral'],
+          ['Shift + drag', 'help.key.selectBox'],
+        ] as const)
+      : []),
+    ['E + LMB', 'help.key.planned'],
+    ['E + wheel', 'help.key.planWheel'],
+    ...(groupOrder ? [] : ([['F', 'help.key.release']] as const)),
     ['X', 'help.key.cancel'],
     ['R', 'help.key.recruit'],
+    ...(rallyPoint ? ([['P', 'help.key.rally']] as const) : []),
     ['B', 'help.key.fortify'],
     ['T', 'help.key.terrain'],
     ['S', 'help.key.split'],
@@ -59,7 +76,7 @@
     ['M', 'help.key.mute'],
     ['?', 'help.key.help'],
     ['Esc', 'help.key.escape'],
-  ] as const;
+  ]);
 </script>
 
 {#if open}

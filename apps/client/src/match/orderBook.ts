@@ -1,4 +1,4 @@
-import type { AckMsg, Command, EventMsg } from '../protocol.gen.ts';
+import type { AckMember, AckMsg, Command, EventMsg } from '../protocol.gen.ts';
 import type { GhostArrow } from '../render/interaction.ts';
 import { ghostRejectMs } from '../render/intentLayout.ts';
 import { UndoList } from './undoList.ts';
@@ -12,20 +12,29 @@ export interface GhostOrder extends GhostArrow {
 }
 
 export type CommandResult =
-  | { readonly kind: 'accepted'; readonly seq: number; readonly cmd: Command }
+  | {
+      readonly kind: 'accepted';
+      readonly seq: number;
+      readonly cmd: Command;
+      /** A `group_move` (DEC-48, item B6): each group accepted or dropped with its code. */
+      readonly members?: readonly AckMember[] | null;
+    }
   | {
       readonly kind: 'rejected';
       readonly seq: number;
       readonly cmd: Command;
       /** `reject_code` of the `ack`. */
       readonly code: string;
+      /** A `group_move` none of whose groups was valid: each group's code. */
+      readonly members?: readonly AckMember[] | null;
     }
   /** The connection dropped between the command and its `ack`; the snapshots show the outcome. */
   | { readonly kind: 'lost'; readonly seq: number; readonly cmd: Command };
 
 interface Pending {
   readonly cmd: Command;
-  readonly ghost: GhostOrder | null;
+  /** One ghost for a move, one per group of a `group_move` (DEC-48) that stood in a node. */
+  readonly ghosts: readonly GhostOrder[];
 }
 
 /**
@@ -54,8 +63,8 @@ export class OrderBook {
   readonly #splits = new Map<string, number>();
 
   readonly #pending = new Map<number, Pending>();
-  /** Accepted moves waiting for the snapshot of their tick: seq -> `applied_tick`. */
-  readonly #accepted = new Map<number, { ghost: GhostOrder; tick: number }>();
+  /** Accepted moves waiting for the snapshot of their tick: seq -> their ghosts and `applied_tick`. */
+  readonly #accepted = new Map<number, { ghosts: readonly GhostOrder[]; tick: number }>();
   #ghosts: readonly GhostOrder[] = [];
 
   /** `now`: milliseconds, for the fade of a rejected ghost (a test passes its own clock). */
@@ -90,44 +99,79 @@ export class OrderBook {
     cmd: Command,
     from: number | null = null,
     route: readonly number[] | null = null,
+    members: readonly (number | null)[] = [],
   ): void {
-    let ghost: GhostOrder | null = null;
+    const ghosts: GhostOrder[] = [];
+    const ghostOf = (group: string, at: number, dest: number, planned: boolean): GhostOrder => ({
+      seq,
+      group,
+      from: at,
+      dest,
+      planned,
+      path: null,
+      status: 'pending',
+      rejectedAt: null,
+      rejectCode: null,
+    });
     if (cmd.type === 'move' && from !== null) {
-      ghost = {
-        seq,
-        group: cmd.group,
-        from,
-        dest: cmd.dest,
-        planned: cmd.planned,
-        path: route !== null && route[0] === from && route.at(-1) === cmd.dest ? route : null,
-        status: 'pending',
-        rejectedAt: null,
-        rejectCode: null,
-      };
+      const path = route !== null && route[0] === from && route.at(-1) === cmd.dest ? route : null;
+      ghosts.push({ ...ghostOf(cmd.group, from, cmd.dest, cmd.planned), path });
     }
-    this.#pending.set(seq, { cmd, ghost });
+    // A group order (DEC-48): a ghost per group standing in a node (`members`, in the order of its
+    // `groups`, `null` for one on a road), a straight line until the `ack` brings its path.
+    if (cmd.type === 'group_move') {
+      cmd.groups.forEach((group, i) => {
+        const at = members[i] ?? null;
+        if (at !== null && at !== cmd.dest) ghosts.push(ghostOf(group, at, cmd.dest, cmd.planned));
+      });
+    }
+    this.#pending.set(seq, { cmd, ghosts });
     if (cmd.type === 'split') this.#splits.set(cmd.group, (this.#splits.get(cmd.group) ?? 0) + 1);
     // A newer order for the same group replaces the ghost of the older one.
-    if (ghost !== null) this.#setGhosts([...this.#without(ghost.group), ghost]);
+    if (ghosts.length > 0) {
+      let kept = this.#ghosts;
+      for (const ghost of ghosts) kept = this.#without(ghost.group, kept);
+      this.#setGhosts([...kept, ...ghosts]);
+    }
   }
 
   onAck(ack: AckMsg): void {
     const pending = this.#pending.get(ack.seq);
     if (pending === undefined) return;
     this.#pending.delete(ack.seq);
+    const { cmd } = pending;
+    const members = ack.members;
+    // Only a group order carries the answers of its groups (DEC-48, item B6).
+    const answers = cmd.type === 'group_move' ? { members } : {};
+    // A group of a `group_move` (DEC-48, item B6): its answer in `members`, by its place in `groups`.
+    const memberOf = (group: string): AckMember | undefined =>
+      cmd.type === 'group_move' ? members?.[cmd.groups.indexOf(group)] : undefined;
     if (ack.reject_code !== null) {
-      this.#forgetSplit(pending.cmd);
-      this.#reject(pending.ghost, ack.reject_code);
-      this.onResult?.({ kind: 'rejected', seq: ack.seq, cmd: pending.cmd, code: ack.reject_code });
+      const code = ack.reject_code;
+      this.#forgetSplit(cmd);
+      for (const ghost of pending.ghosts) {
+        this.#reject(ghost, memberOf(ghost.group)?.reject_code ?? code);
+      }
+      this.onResult?.({ kind: 'rejected', seq: ack.seq, cmd, code, ...answers });
       return;
     }
-    const ghost = pending.ghost;
-    if (ghost !== null && this.#ghosts.includes(ghost)) {
-      const confirmed: GhostOrder = { ...ghost, path: ack.path, status: 'accepted' };
-      this.#accepted.set(ack.seq, { ghost: confirmed, tick: ack.applied_tick });
-      this.#setGhosts(this.#ghosts.map((g) => (g === ghost ? confirmed : g)));
+    const confirmed: GhostOrder[] = [];
+    for (const ghost of pending.ghosts) {
+      if (!this.#ghosts.includes(ghost)) continue;
+      const member = memberOf(ghost.group);
+      if (member?.reject_code != null) {
+        this.#reject(ghost, member.reject_code);
+        continue;
+      }
+      const path = cmd.type === 'group_move' ? (member?.path ?? null) : ack.path;
+      const done: GhostOrder = { ...ghost, path, status: 'accepted' };
+      confirmed.push(done);
+      this.#setGhosts(this.#ghosts.map((g) => (g === ghost ? done : g)));
     }
-    this.onResult?.({ kind: 'accepted', seq: ack.seq, cmd: pending.cmd });
+    if (confirmed.length > 0) {
+      this.#accepted.set(ack.seq, { ghosts: confirmed, tick: ack.applied_tick });
+    }
+    this.onResult?.({ kind: 'accepted', seq: ack.seq, cmd, ...answers });
   }
 
   /** After a reconnect the server had the command but its `ack` was lost (`onAckLost`). */
@@ -136,7 +180,8 @@ export class OrderBook {
     if (pending === undefined) return;
     this.#pending.delete(seq);
     this.#forgetSplit(pending.cmd);
-    this.#drop(pending.ghost);
+    const lost = pending.ghosts;
+    if (lost.length > 0) this.#setGhosts(this.#ghosts.filter((g) => !lost.includes(g)));
     this.onResult?.({ kind: 'lost', seq, cmd: pending.cmd });
   }
 
@@ -156,10 +201,10 @@ export class OrderBook {
   onRendered(tick: number): void {
     if (this.#accepted.size === 0) return;
     const done: GhostOrder[] = [];
-    for (const [seq, { ghost, tick: applied }] of this.#accepted) {
+    for (const [seq, { ghosts, tick: applied }] of this.#accepted) {
       if (tick >= applied) {
         this.#accepted.delete(seq);
-        done.push(ghost);
+        done.push(...ghosts);
       }
     }
     if (done.length > 0) this.#setGhosts(this.#ghosts.filter((g) => !done.includes(g)));
@@ -183,17 +228,23 @@ export class OrderBook {
     return true;
   }
 
-  #without(group: string): GhostOrder[] {
-    return this.#ghosts.filter((g) => {
+  /** `ghosts` without those of `group`; an accepted one of them is no longer waited for. */
+  #without(group: string, ghosts: readonly GhostOrder[]): readonly GhostOrder[] {
+    return ghosts.filter((g) => {
       if (g.group !== group) return true;
-      this.#accepted.delete(g.seq);
+      const accepted = this.#accepted.get(g.seq);
+      if (accepted !== undefined) {
+        const rest = accepted.ghosts.filter((a) => a.group !== group);
+        if (rest.length === 0) this.#accepted.delete(g.seq);
+        else this.#accepted.set(g.seq, { ...accepted, ghosts: rest });
+      }
       return false;
     });
   }
 
   /** The ghost stays on the map, marked rejected: the view shakes it and lets it fade. */
-  #reject(ghost: GhostOrder | null, code: string): void {
-    if (ghost === null || !this.#ghosts.includes(ghost)) return;
+  #reject(ghost: GhostOrder, code: string): void {
+    if (!this.#ghosts.includes(ghost)) return;
     const rejected: GhostOrder = {
       ...ghost,
       status: 'rejected',
@@ -201,10 +252,6 @@ export class OrderBook {
       rejectCode: code,
     };
     this.#setGhosts(this.#ghosts.map((g) => (g === ghost ? rejected : g)));
-  }
-
-  #drop(ghost: GhostOrder | null): void {
-    if (ghost !== null) this.#setGhosts(this.#ghosts.filter((g) => g !== ghost));
   }
 
   #setGhosts(next: readonly GhostOrder[]): void {

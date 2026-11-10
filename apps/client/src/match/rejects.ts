@@ -37,6 +37,9 @@ export const REJECT_MESSAGES_BY_COMMAND = {
   'ALREADY_BUILT:fortify_road': 'reject.ALREADY_BUILT.fort',
   'NOT_CITY:build_factory': 'reject.NOT_CITY.factory',
   'INVALID_ARGUMENT:move': 'reject.INVALID_ARGUMENT.move',
+  // DEC-48, item B4: the one group of a group order the client can send that is not valid stands
+  // in the target already (a planned rally and a too long list are never sent).
+  'INVALID_ARGUMENT:group_move': 'reject.INVALID_ARGUMENT.groupMove',
   'NOTHING_TO_CANCEL:release_plan': 'reject.NOTHING_TO_CANCEL.plan',
   'IN_FIGHT:release_plan': 'reject.IN_FIGHT.plan',
 } as const satisfies Record<string, MessageKey>;

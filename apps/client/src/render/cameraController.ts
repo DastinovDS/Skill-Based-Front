@@ -50,6 +50,12 @@ export interface PointerHandlers {
   onhover?: (at: Point | null) => void;
   /** A wheel event, before the zoom; `true`: it was used for something else, no zoom (#793). */
   onwheel?: (input: WheelInput) => boolean;
+  /**
+   * A left drag begun with Shift held draws a selection box (DEC-48, item K1): `from` where it
+   * began, `to` the pointer now (CSS px in the canvas), `done` once the button is up; `null`: the
+   * box was cancelled (the pointer lost). Without it a left drag does nothing.
+   */
+  onbox?: (box: { readonly from: Point; readonly to: Point } | null, done: boolean) => void;
 }
 
 interface Press {
@@ -58,6 +64,8 @@ interface Press {
   readonly start: Point;
   last: Point;
   dragging: boolean;
+  /** A left press begun with Shift held: its drag is a selection box (`onbox`). */
+  readonly box: boolean;
 }
 
 /**
@@ -264,6 +272,7 @@ export class CameraController {
       start: at,
       last: at,
       dragging: false,
+      box: event.button === PRIMARY_BUTTON && event.shiftKey && this.handlers.onbox !== undefined,
     };
   };
 
@@ -291,6 +300,8 @@ export class CameraController {
     }
     if (press.button !== PRIMARY_BUTTON) {
       this.move(panBy(this.camera, at.x - press.last.x, at.y - press.last.y, this.limits));
+    } else if (press.box) {
+      this.handlers.onbox?.({ from: press.start, to: at }, false);
     }
     press.last = at;
   };
@@ -302,6 +313,11 @@ export class CameraController {
       // Only a finished primary press that never became a drag is a click.
       if (event.type === 'pointerup' && event.button === PRIMARY_BUTTON && !press.dragging) {
         this.handlers.onclick?.(this.local(event), event.shiftKey);
+      }
+      // A Shift drag ends its box: selected on a release, dropped when the pointer was lost.
+      if (press.box && press.dragging) {
+        const done = event.type === 'pointerup';
+        this.handlers.onbox?.(done ? { from: press.start, to: this.local(event) } : null, done);
       }
     }
   };

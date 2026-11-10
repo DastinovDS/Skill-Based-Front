@@ -126,6 +126,41 @@ export interface OverlayState {
   readonly undo?: readonly UndoMark[];
   /** The bonus counter over the target of a planned order (#793); `null`: none. */
   readonly bonus?: BonusMark | null;
+  /**
+   * The own groups selected together (DEC-48, item K1), in the order of the selection: each gets
+   * the selection frame and a seal with its place (A1, A2). Empty: no such selection.
+   */
+  readonly picks?: readonly string[];
+  /** A selection box to draw (world units); the scene draws the one being dragged itself. */
+  readonly box?: WorldRect | null;
+  /** The group order a click would give the selected groups now (DEC-48); `null`: none. */
+  readonly group?: GroupPreview | null;
+  /** The own city whose rally point is being picked (DEC-48, item K7); `null`: no pick. */
+  readonly rallyFrom?: number | null;
+}
+
+/** A rectangle of the map in world units: the Shift+drag selection box (DEC-48, item K1). */
+export interface WorldRect {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
+/**
+ * The group order a click on `to` would give (DEC-48, item K4): a preview line from each member's
+ * node (no path: the server gives it with the `ack`), one seal over the target (B1) with the price
+ * of `ruleset_public` beside it; with `E` held (`planned`) a hatched planned ribbon each (D2).
+ */
+export interface GroupPreview {
+  /** The node each member stands in (a member on a road has no line). */
+  readonly from: readonly number[];
+  readonly to: number;
+  readonly planned: boolean;
+  /** As the owner of the target reads now (the server decides at application, item B2). */
+  readonly kind: 'rally' | 'attack';
+  /** The price as the number of the CP mark ("2"). */
+  readonly price: string;
 }
 
 /**
@@ -164,6 +199,10 @@ export const EMPTY_OVERLAY: OverlayState = {
   hover: null,
   undo: [],
   bonus: null,
+  picks: [],
+  box: null,
+  group: null,
+  rallyFrom: null,
 };
 
 export interface MapInteraction {
@@ -178,6 +217,11 @@ export interface MapInteraction {
    * does not zoom); absent or `false`: the wheel zooms.
    */
   wheel?(input: WheelInput): boolean;
+  /**
+   * The groups inside a finished Shift+drag box (DEC-48, item K1), own and the opponent's alike in
+   * the order the scene found them (left to right); absent: the map draws no box.
+   */
+  selectBox?(ids: readonly string[]): void;
 }
 
 /** The parts of a `WheelEvent` the map input needs (#793). */

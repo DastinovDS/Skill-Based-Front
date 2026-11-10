@@ -39,6 +39,7 @@
       province,
       orders.factoriesFull,
       menu.target === null || orders.fortifiable(menu.target),
+      orders.rallyPoints,
     ),
   );
   const count = $derived(choices.length);
@@ -123,6 +124,26 @@
             // The road is picked next: the sector is dimmed by the CP only (a fight does not stop it).
             disabled: poor(orders.fortCost),
           };
+        case 'rally':
+          // DEC-48, item K7: the node is picked next; a city with a point clears it here instead.
+          // The price beside it is what each walking recruit pays when it leaves (item H3).
+          return city?.rallyPoint != null
+            ? {
+                id: 'rally',
+                icon: 'rallyOff',
+                label: t('city.rallyClear'),
+                aria: t('city.rallyClear'),
+                key: 'P',
+                compact: true,
+              }
+            : {
+                id: 'rally',
+                icon: 'rally',
+                label: t('city.rally'),
+                ...priced(t('city.rally'), orders.rallyCost, 0),
+                key: 'P',
+                compact: true,
+              };
       }
     };
     return choices.map((choice, i) => ({ ...sector(choice), angle: angles[i] ?? 0 }));

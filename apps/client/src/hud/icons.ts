@@ -226,6 +226,15 @@ export const MENU_ICONS = {
     path('M8.8 10.6h6.4'),
   ],
   release: [path('M4.5 5v14'), path('M8.5 12h11'), path('M15 7.5l4.5 4.5-4.5 4.5')],
+  // The recruit rally point (DEC-48, item K7; the mockup's pennant): a flag on a staff over a
+  // muster ring; cleared, the same struck through.
+  rally: [path('M8 20.5V3.5'), path('M8 4.5l10 3.8L8 12.1z'), path('M4 20.5h8')],
+  rallyOff: [
+    path('M8 20.5V3.5'),
+    path('M8 4.5l10 3.8L8 12.1z'),
+    path('M4 20.5h8'),
+    path('M4 4l16 16'),
+  ],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 /**

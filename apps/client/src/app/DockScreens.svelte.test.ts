@@ -439,19 +439,17 @@ describe('the Dock screens', () => {
     };
 
     it.each([
-      ['a guest', { hasPassword: false, calibration: null }, 'dock.unrated.guest'],
-      [
-        'a calibrating account',
-        { calibration: { played: 2, total: 5 } },
-        'dock.unrated.calibration',
-      ],
-      ['a rated account', { calibration: null }, 'dock.unrated.rated'],
+      ['a guest', { hasPassword: false, calibration: null }],
+      ['a calibrating account', { calibration: { played: 2, total: 5 } }],
+      ['a rated account', { calibration: null }],
     ] as const)(
       'says every match here is unrated by its chip, with no caption, for %s (#845)',
-      async (_who, over, key) => {
+      async (_who, over) => {
         mountBot(over);
         await settle();
-        expect(document.body.textContent).not.toContain(en(key));
+        // The captions the chip replaced (their dictionary entries are gone, #896).
+        expect(document.body.textContent).not.toContain('Unrated, like every match');
+        expect(document.body.textContent).not.toContain('Unrated: ');
         expect(document.body.querySelector('.panel .tags')?.textContent).toContain(
           en('dock.chip.unrated'),
         );
