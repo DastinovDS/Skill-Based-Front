@@ -415,6 +415,7 @@ export class MapScene {
         this.source.cityUpgrades ?? null,
         this.source.recruitQueueMax ?? null,
         this.source.provinceWarehouse ?? 0,
+        this.source.rallyCost ?? 0,
       );
       // An own province shows its warehouse (DEC-41, item 13): its caption goes under it.
       const places = this.source.provinceWarehouse ?? 0;
@@ -452,6 +453,8 @@ export class MapScene {
       }
       return null;
     });
+    // A recruit that stays home for want of CP crosses the CP mark at its city's gate (#930).
+    this.cities.setStays(this.source.events(), tickHz);
     this.cities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
     const punches = this.effects.update(

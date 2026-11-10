@@ -39,3 +39,34 @@ export function stanceProgress(rules: RulesetPublic, me: SelfView): StanceProgre
     capital: quantum(me.capital_ticks, stances.capital_period_ticks[me.stance]),
   };
 }
+
+/** The way to the next VP credit (#930, P1 "Ruled rail"; mechanics.md, section 11). */
+export interface VpCountdown {
+  /** Ticks until the next credit: `period - tick % period`, never 0. */
+  readonly ticks: number;
+  /** How much of the period has passed, 0..1 (0 right after a credit). */
+  readonly share: number;
+  /** Which period this is (`tick / period` rounded down): it changes at every credit. */
+  readonly round: number;
+}
+
+/**
+ * The rule the server documents (`ruleset_public.victory.vp_period_ticks`, #934): a credit falls on
+ * every tick `t > 0` with `t % period == 0`, and a snapshot of tick `t` already includes the credit
+ * of `t`, so the next one is `period - t % period` ticks away. `null` without a period.
+ */
+export function vpCountdown(tick: number, period: number): VpCountdown | null {
+  if (period <= 0) return null;
+  const into = ((tick % period) + period) % period;
+  return { ticks: period - into, share: into / period, round: Math.floor(tick / period) };
+}
+
+/**
+ * The ticks of the rail: one every 5 s of the period (`period` ticks at `tickHz`), at least the two
+ * ends; the shares 0..1 where they stand.
+ */
+export function railTicks(period: number, tickHz: number): number[] {
+  const seconds = tickHz > 0 ? period / tickHz : 0;
+  const n = Math.max(1, Math.round(seconds / 5));
+  return Array.from({ length: n + 1 }, (_, j) => j / n);
+}

@@ -15,7 +15,10 @@ import {
   type HoverTarget,
   type HudEvent,
   type Selection,
+  type VpCredit,
+  type WalkPaid,
 } from './hudData.ts';
+import type { PendingWalk } from './rallyDue.ts';
 import { isLogged } from './eventText.ts';
 import { AlertState } from '../match/alerts.svelte.ts';
 import { ThreatLog } from '../match/threats.ts';
@@ -30,6 +33,9 @@ export const EVENT_LIMIT = 30;
 
 /** The start banner and the ring around the capital last this long, ms (U4). */
 export const START_MS = 3000;
+
+/** The charged walks kept for the gauge's flights (a new `seq` starts one). */
+const PAID_KEEP = 4;
 
 /** A snapshot at or before this tick (seconds of match time) is the start of a match, not a rejoin. */
 const FRESH_SECONDS = 3;
@@ -70,6 +76,11 @@ export class HudState {
   #bannerTimer: ReturnType<typeof setTimeout> | undefined;
   #started = false;
   #lastMinuteSeen = false;
+  /** Own recruits made in a city with a rally point, not gone yet, by group id (#930). */
+  #pending: (PendingWalk & { readonly group: string })[] = [];
+  #paid: WalkPaid[] = [];
+  #credit: VpCredit | null = null;
+  #extraSeq = 0;
 
   constructor(ctx: HudContext) {
     this.#ctx = ctx;
@@ -103,6 +114,7 @@ export class HudState {
   /** A new snapshot: the HUD numbers are recomputed here and only here. */
   onSnapshot(snapshot: SnapshotMsg): void {
     this.#snapshot = snapshot;
+    this.#keepPending(snapshot);
     this.alerts.onSnapshot(snapshot);
     this.threats.onSnapshot(snapshot);
     this.#startOnce(snapshot);
@@ -129,6 +141,7 @@ export class HudState {
       data: event.data,
     };
     this.threats.onEvent(event, (node) => this.#snapshot?.view.nodes[node]?.owner);
+    this.#rallyAndCredit(event);
     const toast = toastOf(entry, this.#ctx.me, this.nodeName);
     if (toast !== null) this.toasts.later(event.tick, toast);
     if (!isLogged(event.kind)) return; // bookkeeping kinds would push the real news out
@@ -171,11 +184,69 @@ export class HudState {
     this.current = null;
     this.alerts.reset();
     this.toasts.clear();
+    this.#pending = [];
   }
 
   destroy(): void {
     clearTimeout(this.#bannerTimer);
     this.toasts.clear();
+    this.alerts.clearStays();
+  }
+
+  /**
+   * The events of the rally walks and the VP credit (#930): a recruit made where a rally point is
+   * set waits to leave (the gauge keeps its earmark), a charged walk flies its CP mark into the
+   * gauge, a walk without CP hangs its strip, and the `vp_awarded` of one tick are one credit.
+   */
+  #rallyAndCredit(event: EventMsg): void {
+    const me = this.#ctx.me;
+    const { data } = event;
+    const group = typeof data.group === 'string' ? data.group : null;
+    const node = typeof data.node === 'number' ? data.node : null;
+    const target = typeof data.target === 'number' ? data.target : null;
+    switch (event.kind) {
+      case 'recruited':
+        if (data.player !== me || group === null || node === null) return;
+        if (this.#snapshot?.view.nodes[node]?.rally_point == null) return;
+        this.#pending = [...this.#pending.filter((p) => p.group !== group), { group, node }];
+        return;
+      case 'rally_walk_paid':
+        if (data.player !== me || node === null) return;
+        if (group !== null) this.#pending = this.#pending.filter((p) => p.group !== group);
+        this.#extraSeq += 1;
+        this.#paid = [...this.#paid, { seq: this.#extraSeq, node, target }].slice(-PAID_KEEP);
+        return;
+      case 'rally_walk_no_cp':
+        if (data.player !== me || node === null) return;
+        if (group !== null) this.#pending = this.#pending.filter((p) => p.group !== group);
+        this.alerts.onStay(node, target);
+        return;
+      case 'vp_awarded': {
+        const vp = typeof data.vp === 'number' ? data.vp : 0;
+        const mine = data.player === me;
+        const same = this.#credit !== null && this.#credit.tick === event.tick;
+        if (!same) this.#extraSeq += 1;
+        const base: VpCredit =
+          same && this.#credit !== null
+            ? this.#credit
+            : { seq: this.#extraSeq, tick: event.tick, mine: 0, enemy: 0 };
+        this.#credit = mine
+          ? { ...base, mine: base.mine + vp }
+          : { ...base, enemy: base.enemy + vp };
+        return;
+      }
+      default:
+    }
+  }
+
+  /** A recruit waiting to leave stays one while it stands in its city with its order. */
+  #keepPending(snapshot: SnapshotMsg): void {
+    this.#pending = this.#pending.filter((walk) => {
+      const group = snapshot.view.groups.find((g) => g.id === walk.group);
+      return (
+        group?.location.kind === 'node' && group.location.node === walk.node && group.order !== null
+      );
+    });
   }
 
   /** The first snapshot of a fresh match opens the start banner for three seconds (U4). */
@@ -214,6 +285,7 @@ export class HudState {
       this.#selection,
       this.#events,
       this.#hovered,
+      { pending: this.#pending, paid: this.#paid, credit: this.#credit },
     );
   }
 }

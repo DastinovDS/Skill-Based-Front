@@ -9,7 +9,8 @@ import {
   type BuildProgress,
   type TowerKind,
 } from './pieceLayout.ts';
-import { CASING, CROWN, DARK_PLATE, INK, LOZENGE, TOWER, WARN } from './style.ts';
+import { BADGE_DOWN, CASING, CROWN, DARK_PLATE, INK, LOZENGE, TOWER, WARN } from './style.ts';
+import { CP_MARK } from '../theme/cpMark.ts';
 import { scanLines } from '../units/helmet.ts';
 
 // The baked shapes of the Engraved pieces of a city (#847, part 2 of #829): the warehouse lozenges,
@@ -374,6 +375,71 @@ export function pipAlertSpec(radius: number): BakeSpec {
         g.moveTo(radius * Math.cos(a), radius * Math.sin(a)).arc(0, 0, radius, a, a + Math.PI / n);
       }
       g.stroke({ width: 1.4, color: WARN, cap: 'butt' });
+    },
+  };
+}
+
+/**
+ * The CP mark on the ring (#930, W4): `ink` the mark of a queued recruit's walk (dimmed by
+ * `alpha`), `down` the same in red with a down chevron (the CP now do not pay it), `crossed` the
+ * mark cut by a red stroke (a walk not paid, at the gate). `size` world units square, centred.
+ */
+export type CpMarkLook = 'ink' | 'down' | 'crossed';
+
+/** The vertical extent of the mark's glyph in its box, for the fill of a recruit being made. */
+export function cpMarkGlyph(size: number): { readonly top: number; readonly bottom: number } {
+  const k = size / CP_MARK.box.width;
+  return { top: (0 - CP_MARK.box.y) * k - size / 2, bottom: (15.5 - CP_MARK.box.y) * k - size / 2 };
+}
+
+export function cpMarkSpec(look: CpMarkLook, size: number, alpha = 1): BakeSpec {
+  const { box, shapes, casing, ink } = CP_MARK;
+  const k = size / box.width;
+  const h = size / 2;
+  // The chevron of a shortfall stands after the mark, up and to the right.
+  const right = look === 'down' ? h + 0.8 * h : h + 1;
+  return {
+    key: `cp-mark:${look}:${String(size)}:${String(alpha)}`,
+    box: { x: -h - 1, y: -h - 1, width: h + 1 + right, height: 2 * h + 2 },
+    draw(into) {
+      const g = graphics(into);
+      g.alpha = alpha;
+      const place = (shape: readonly number[]): number[] =>
+        shape.map((v, i) => (i % 2 === 0 ? (v - box.x) * k - h : (v - box.y) * k - h));
+      for (const shape of shapes) {
+        g.poly(place(shape)).stroke({
+          width: casing.width * k,
+          color: casing.color,
+          join: 'miter',
+        });
+      }
+      for (const shape of shapes) g.poly(place(shape)).fill(look === 'down' ? BADGE_DOWN : ink);
+      if (look === 'down') {
+        const c = graphics(into);
+        const x = h * 1.15;
+        const y = -h * 0.55;
+        const w = h * 0.45;
+        for (const [tone, width] of [
+          [CASING, 3],
+          [BADGE_DOWN, 1.4],
+        ] as const) {
+          c.moveTo(x - w, y - w / 2)
+            .lineTo(x, y + w / 2)
+            .lineTo(x + w, y - w / 2)
+            .stroke({ width, color: tone, join: 'miter' });
+        }
+      }
+      if (look === 'crossed') {
+        const c = graphics(into);
+        for (const [tone, width] of [
+          [CASING, 3.2],
+          [BADGE_DOWN, 1.5],
+        ] as const) {
+          c.moveTo(-h * 0.62, h * 0.55)
+            .lineTo(h * 0.62, -h * 0.55)
+            .stroke({ width, color: tone, cap: 'butt' });
+        }
+      }
     },
   };
 }

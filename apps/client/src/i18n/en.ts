@@ -372,6 +372,7 @@ export const en = {
   'alert.incomingMany': 'They are coming for several cities ({count}). Nearest, {node}: {when}',
   'alert.overflow': '{node} is overcrowded: {units} of {capacity}. {when}',
   'alert.overflowMany': 'Overcrowded cities: {count}. Nearest, {node}: {when}',
+  'alert.stay': 'A recruit stays in {node}: no CP for the walk to {target}',
   'alert.overflowIn': 'a unit is lost in {seconds} s',
   'alert.overflowGrace': 'grace {seconds} s',
   'bar.cpLabel': 'CP: {value} of {cap}',
@@ -379,6 +380,12 @@ export const en = {
   'bar.cpMax': 'MAX',
   'bar.cpMaxHint': 'CP are at the cap: new ones are lost',
   'bar.cpLabelShort': 'CP: {value} of {cap}, not enough for this move',
+  'bar.cpLabelDue':
+    'CP: {value} of {cap}. Rally walks due: {count}, {cost} CP each, the next in {seconds} s',
+  'bar.cpLabelDueShort':
+    'CP: {value} of {cap}. Rally walk due in {seconds} s: not enough CP, the recruit will stay in {node}',
+  'bar.scoreLabelNext':
+    'VP score: {mine} {mineVp}, {enemy} {enemyVp}. Next credit in {seconds} s: {mine} +{mineGain}, {enemy} +{enemyGain}',
   'bar.cpShortHint': 'Not enough CP for this move',
   'bar.nextTip':
     'Next {amount} CP in {cp} s, next charge of the capital in {capital} s. A change of stance keeps the progress of both',
@@ -397,6 +404,7 @@ export const en = {
   'unit.s': 's',
   'city.title': 'City {node}',
   'city.recruit': 'Recruit',
+  'city.recruitWalk': 'Recruit, {cost} CP, then {walk} CP when it walks to the rally point',
   'city.cost': '{cost} CP',
   'city.barracks': 'Barracks',
   'city.close': 'Close the city menu',

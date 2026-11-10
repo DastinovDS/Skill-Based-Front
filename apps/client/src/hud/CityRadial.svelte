@@ -81,6 +81,18 @@
         aria: tf('price.label', { label, price: words }),
       };
     };
+    // #930, W8: a city with a rally point prices a recruit as now plus its walk ("1 + 0.5").
+    const recruitPrice = (): Pick<RadialItem, 'price' | 'aria'> => {
+      const base = priced(t('city.recruit'), costs.recruit, 0);
+      if (city?.rallyPoint == null || orders.rallyCost <= 0 || base.price?.cp === undefined) {
+        return base;
+      }
+      const walk = cp(orders.rallyCost);
+      return {
+        price: { ...base.price, walk },
+        aria: tf('city.recruitWalk', { cost: base.price.cp, walk }),
+      };
+    };
     const sector = (choice: CityChoice): Omit<RadialItem, 'angle'> => {
       switch (choice) {
         case 'recruit':
@@ -88,7 +100,7 @@
             id: 'recruit',
             icon: 'recruit',
             label: t('city.recruit'),
-            ...priced(t('city.recruit'), costs.recruit, 0),
+            ...recruitPrice(),
             key: 'R',
             compact: true,
             disabled: poor(costs.recruit) || queued >= orders.recruitQueueMax,

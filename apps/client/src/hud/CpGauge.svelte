@@ -1,8 +1,13 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { NO_ANCHORS, type MapAnchors } from '../render/anchors.ts';
   import { reducedMotion } from '../render/motion.ts';
+  import CpMark from '../theme/CpMark.svelte';
+  import { DURATION, easeEngrave } from '../theme/tokens.ts';
+  import HelmetIcon from '../units/HelmetIcon.svelte';
   import {
     burinEdge,
+    earmarks,
     priceBracket,
     quantumEnd,
     running,
@@ -10,6 +15,9 @@
     slivers,
     type CpChange,
   } from './cpMotion.ts';
+  import type { WalkPaid } from './hudData.ts';
+  import type { DueWalk } from './rallyDue.ts';
+  import { flightPoint, gatePoint } from './walkFlight.ts';
 
   interface Props {
     /** Own CP and the cap, hundredths (the snapshot's). */
@@ -25,9 +33,31 @@
     price: number | null;
     /** The numeral as the page writes it. */
     text: string;
+    /**
+     * The walks to rally points the CP will pay, the nearest first (#930, W10): each earmarks
+     * `walkCost` hundredths of the bar, the nearest with a fuse.
+     */
+    dues?: readonly DueWalk[];
+    walkCost?: number;
+    /** The charged walks: a new one flies its CP mark from the city's gate into the gauge. */
+    paid?: readonly WalkPaid[];
+    /** Where the cities are on screen (the flight leaves from the gate of its city). */
+    anchors?: MapAnchors;
   }
 
-  let { value, cap, next, quantum: step, short, price, text }: Props = $props();
+  let {
+    value,
+    cap,
+    next,
+    quantum: step,
+    short,
+    price,
+    text,
+    dues = [],
+    walkCost = 0,
+    paid = [],
+    anchors = NO_ANCHORS,
+  }: Props = $props();
 
   // The Double frame (ui-style 54a, 55a, 57a) in CSS px: a scale of `W` px from 0 to the cap, a
   // bar over it, the next quantum ruled in, a needle under the value. Nothing runs past the scale.
@@ -37,6 +67,15 @@
   const HEIGHT = 42;
   /** At most this many spent slivers sink at once (a pool of elements, moved per frame). */
   const SLIVER_SLOTS = [0, 1, 2, 3];
+  /** The earmarks of the walks due (#930): a pool, moved per frame with the bar. */
+  const EAR_SLOTS = Array.from({ length: 12 }, (_, i) => i);
+  /** At most this many CP marks fly into the gauge at once. */
+  const FLIGHT_SLOTS = [0, 1, 2];
+  /** The earmark: the bar's height; the helmet over it; the fuse on its top rule. */
+  const EAR_TOP = BASE - 8;
+  const EAR_H = 6;
+  const HELM_W = 13;
+  const FUSE_Y = EAR_TOP - 2.2;
 
   const cp = $derived(value / 100);
   const n = $derived(Math.max(1, cap / 100));
@@ -71,6 +110,18 @@
   let needle: SVGPathElement | undefined = $state();
   let edge: SVGRectElement | undefined = $state();
   let sliverEls: SVGGElement[] = $state([]);
+  let earEls: SVGGElement[] = $state([]);
+  let flightEls: SVGGElement[] = $state([]);
+  let svgEl: SVGSVGElement | undefined = $state();
+  let fuseCasing: SVGPathElement | undefined = $state();
+  let fuseInk: SVGPathElement | undefined = $state();
+  let fuseHead: SVGGElement | undefined = $state();
+  let dueChevron: SVGPathElement | undefined = $state();
+  let dueChevronCasing: SVGPathElement | undefined = $state();
+
+  /** The CP marks in the air: when each left and where from (client px). */
+  let flights: { readonly at: number; readonly from: { x: number; y: number } }[] = [];
+  let lastPaid: number | null = null;
 
   let changes: CpChange[] = [];
   let last: number | null = null;
@@ -122,7 +173,91 @@
         r?.setAttribute('width', String(Math.max(0, unit * (s.hi - s.lo))));
       }
     });
-    return changes.length > 0;
+    paintEarmarks(shown);
+    flights = flights.filter((f) => now - f.at < DURATION.cpSpend + 50);
+    paintFlights(now);
+    return changes.length > 0 || flights.length > 0;
+  }
+
+  /** W1/W2 (#930): the earmarks of the walks due, the fuse of the nearest, the shortfall chevron. */
+  function paintEarmarks(shown: number): void {
+    const marks = walkCost > 0 ? earmarks(shown, n, dues, walkCost / 100) : [];
+    earEls.forEach((el, i) => {
+      const m = marks[i];
+      if (m === undefined) {
+        el.setAttribute('visibility', 'hidden');
+        return;
+      }
+      el.setAttribute('visibility', 'visible');
+      el.classList.toggle('short', m.short);
+      const xa = X + unit * m.lo;
+      const xb = X + unit * m.hi;
+      for (const r of el.querySelectorAll('rect')) {
+        r.setAttribute('x', String(xa));
+        r.setAttribute('width', String(Math.max(0, xb - xa)));
+      }
+      el.querySelector('.ear-helm')?.setAttribute(
+        'transform',
+        `translate(${String((xa + xb) / 2 - HELM_W / 2)} ${String(EAR_TOP - 16)})`,
+      );
+    });
+    const first = marks[0];
+    const due = dues[0];
+    const fuse = first !== undefined && due !== undefined;
+    for (const el of [fuseCasing, fuseInk])
+      el?.setAttribute('visibility', fuse ? 'visible' : 'hidden');
+    if (!fuse) {
+      fuseHead?.setAttribute('visibility', 'hidden');
+    } else {
+      const xa = X + unit * first.lo;
+      const xb = X + unit * first.hi;
+      const burn = due.running ? Math.min(1, Math.max(0, due.share)) : 0;
+      const xf = xb + (xa - xb) * burn;
+      fuseCasing?.setAttribute('d', `M${String(xa)} ${String(FUSE_Y)}H${String(xb)}`);
+      fuseInk?.setAttribute('d', `M${String(xa)} ${String(FUSE_Y)}H${String(xf)}`);
+      fuseInk?.classList.toggle('short', first.short);
+      fuseHead?.setAttribute('visibility', due.running && burn < 1 ? 'visible' : 'hidden');
+      fuseHead?.setAttribute('transform', `translate(${String(xf)} ${String(FUSE_Y)})`);
+      fuseHead?.classList.toggle('short', first.short);
+    }
+    const lack = marks.findLast((m) => m.short);
+    for (const el of [dueChevronCasing, dueChevron]) {
+      el?.setAttribute('visibility', lack === undefined ? 'hidden' : 'visible');
+      if (lack !== undefined) {
+        el?.setAttribute(
+          'transform',
+          `translate(${String(X + unit * lack.hi + 7)} ${String(BASE - 5)})`,
+        );
+      }
+    }
+  }
+
+  /** The CP marks flying from the gate of their city into the gauge (#930, W10). */
+  function paintFlights(now: number): void {
+    const box = flights.length > 0 ? svgEl?.getBoundingClientRect() : undefined;
+    flightEls.forEach((el, i) => {
+      const f = flights[i];
+      if (f === undefined || box === undefined) {
+        el.setAttribute('visibility', 'hidden');
+        return;
+      }
+      const p = flightPoint(
+        {
+          from: { x: f.from.x - box.left, y: f.from.y - box.top },
+          to: { x: X + unit * (cp + walkCost / 200), y: EAR_TOP - 10 },
+        },
+        now - f.at,
+        DURATION.cpSpend,
+        easeEngrave,
+      );
+      el.setAttribute('visibility', 'visible');
+      el.setAttribute('opacity', String(p.alpha));
+      el.querySelector('.flight-mark')?.setAttribute(
+        'transform',
+        `translate(${String(p.x - 7.5)} ${String(p.y - 7.5)})`,
+      );
+      el.querySelector('.flight-trail')?.setAttribute('d', p.trail);
+    });
   }
 
   function loop(now: number): void {
@@ -149,6 +284,29 @@
     if (paint(now) && frame === 0) frame = requestAnimationFrame(loop);
   });
 
+  // A new charged walk (`rally_walk_paid`) flies its CP mark from the gate of its city, the way
+  // to its rally point, into the gauge (#930, W10). The first data seen starts none.
+  $effect(() => {
+    const list = paid;
+    const now = performance.now();
+    const newest = list.reduce((top, p) => Math.max(top, p.seq), 0);
+    const seen = untrack(() => lastPaid);
+    lastPaid = Math.max(seen ?? 0, newest);
+    if (seen === null || reducedMotion()) return;
+    let started = false;
+    for (const walk of list) {
+      if (walk.seq <= seen) continue;
+      const city = anchors.node(walk.node);
+      if (city === null) continue;
+      const toward = walk.target === null ? null : anchors.node(walk.target);
+      flights = [...flights, { at: now, from: gatePoint(city, toward) }].slice(
+        -FLIGHT_SLOTS.length,
+      );
+      started = true;
+    }
+    if (started && frame === 0) frame = requestAnimationFrame(loop);
+  });
+
   $effect(() => {
     return () => {
       if (frame !== 0) cancelAnimationFrame(frame);
@@ -170,6 +328,7 @@
     width={W + X * 2 + 14}
     height={HEIGHT}
     aria-hidden="true"
+    bind:this={svgEl}
   >
     <defs>
       <!-- The next quantum, ruled in upright; the spent sliver, hatched at 45 degrees. -->
@@ -212,6 +371,38 @@
       bind:this={notch}
     />
     <rect class="edge" y={BASE - 9} width="1.6" height="8" opacity="0" bind:this={edge} />
+    <!-- #930 (W1, W2): the walks due earmarked at the top of the bar, the spend hatch, a recruit
+         over each; past the value an empty red frame; the fuse of the nearest on its top rule. -->
+    {#each EAR_SLOTS as i (i)}
+      <g class="earmark" visibility="hidden" bind:this={earEls[i]}>
+        <rect class="ear-plate" y={EAR_TOP} height={EAR_H} />
+        <rect class="ear-hatch" y={EAR_TOP} height={EAR_H} fill="url(#cp-spent)" />
+        <rect class="ear-rule" y={EAR_TOP + 0.4} height={EAR_H - 0.8} />
+        <rect class="ear-lack-casing" y={EAR_TOP + 0.6} height={EAR_H - 1.2} />
+        <rect class="ear-lack" y={EAR_TOP + 0.6} height={EAR_H - 1.2} />
+        <g class="ear-helm"><HelmetIcon side="own" size={HELM_W} share={0} engraved /></g>
+      </g>
+    {/each}
+    <path class="fuse-casing" visibility="hidden" bind:this={fuseCasing} />
+    <path class="fuse-ink" visibility="hidden" bind:this={fuseInk} />
+    <g class="fuse-head" visibility="hidden" bind:this={fuseHead}>
+      <rect
+        class="fuse-head-casing"
+        x="-3.2"
+        y="-3.2"
+        width="6.4"
+        height="6.4"
+        transform="rotate(45)"
+      />
+      <rect class="fuse-head-ink" x="-2" y="-2" width="4" height="4" transform="rotate(45)" />
+    </g>
+    <path
+      class="due-chevron-casing"
+      d="M-4 -2l4 4l4 -4"
+      visibility="hidden"
+      bind:this={dueChevronCasing}
+    />
+    <path class="due-chevron" d="M-4 -2l4 4l4 -4" visibility="hidden" bind:this={dueChevron} />
     <!-- At the cap: the engraved double frame, drawn in from its serifs (CSS). -->
     <g class="frame">
       <path class="frame-casing" pathLength="1" d={outerTop} />
@@ -249,6 +440,13 @@
         <path class="chevron" d="M{xb + 4} {yb - 4}l4 4l4 -4" />
       {/if}
     {/if}
+    <!-- #930 (W10): the CP mark of a charged walk in the air, a burin trail behind it. -->
+    {#each FLIGHT_SLOTS as i (i)}
+      <g class="flight" visibility="hidden" bind:this={flightEls[i]}>
+        <path class="flight-trail" />
+        <g class="flight-mark"><CpMark size={15} /></g>
+      </g>
+    {/each}
   </svg>
 </span>
 
@@ -472,6 +670,102 @@
     fill: none;
     stroke-width: 1.6;
     stroke-linejoin: miter;
+  }
+
+  /* #930: an earmark is the spent hatch at 45 degrees cut by an ink rule; a shortfall the empty
+     frame in red on a casing, with a down chevron after it (shape, not only colour). */
+  .ear-plate {
+    fill: var(--plate);
+  }
+
+  .ear-rule {
+    fill: none;
+    stroke: var(--ink);
+    stroke-opacity: 0.85;
+    stroke-width: 0.8;
+  }
+
+  .ear-lack-casing,
+  .ear-lack {
+    fill: none;
+    visibility: hidden;
+  }
+
+  .ear-lack-casing {
+    stroke: var(--casing);
+    stroke-width: 2.6;
+  }
+
+  .ear-lack {
+    stroke: var(--badge-down);
+    stroke-width: 1.1;
+  }
+
+  .earmark:global(.short) .ear-plate,
+  .earmark:global(.short) .ear-hatch,
+  .earmark:global(.short) .ear-rule {
+    visibility: hidden;
+  }
+
+  .earmark:global(.short) .ear-lack-casing,
+  .earmark:global(.short) .ear-lack {
+    visibility: inherit;
+  }
+
+  .earmark:global(.short) .ear-helm {
+    opacity: 0.85;
+  }
+
+  .fuse-casing {
+    fill: none;
+    stroke: var(--casing);
+    stroke-width: 3;
+  }
+
+  .fuse-ink {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 1.3;
+  }
+
+  .fuse-ink:global(.short) {
+    stroke: var(--badge-down);
+  }
+
+  .fuse-head-casing {
+    fill: var(--casing);
+  }
+
+  .fuse-head-ink {
+    fill: var(--ink);
+  }
+
+  .fuse-head:global(.short) .fuse-head-ink {
+    fill: var(--badge-down);
+  }
+
+  .due-chevron-casing,
+  .due-chevron {
+    fill: none;
+    stroke-linejoin: miter;
+  }
+
+  .due-chevron-casing {
+    stroke: var(--casing);
+    stroke-width: 3.4;
+  }
+
+  .due-chevron {
+    stroke: var(--badge-down);
+    stroke-width: 1.6;
+  }
+
+  .flight-trail {
+    fill: none;
+    stroke: var(--ink);
+    stroke-opacity: 0.5;
+    stroke-width: 1;
+    stroke-dasharray: 1.5 3;
   }
 
   /* The motion setting of the page (#871) decides, not the media query alone. */

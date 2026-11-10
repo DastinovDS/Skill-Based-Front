@@ -50,6 +50,12 @@ export interface RenderSource {
    */
   readonly recruitQueueMax?: number;
   /**
+   * What a recruit pays as it walks to the rally point of its city, hundredths
+   * (`ruleset_public.recruit.rally_cost`, DEC-48, item H3): the CP mark of each queued walk on the
+   * ring (#930, W4). Without it (or 0) no walk marks.
+   */
+  readonly rallyCost?: number;
+  /**
    * Places of the warehouse of an own province (`ruleset_public.city_upgrades.warehouse_province`,
    * DEC-41, item 13); 0 or absent: a province shows no stock.
    */

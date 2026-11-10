@@ -42,6 +42,8 @@ import {
   GROUP_SELECT_PINS,
   GROUP_VIEW,
   groupOrderSnapshot,
+  RALLY_STAY,
+  rallyDueSnapshot,
   groupSelectSnapshot,
   type ScenePins,
 } from './groupScene.ts';
@@ -777,6 +779,17 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     rules: DEV_RULES_GROUP,
   },
   {
+    // #930: walks to the rally point due (the earmarks, the fuse, the marks on the ring, the walks
+    // the CP do not pay), a recruit that stayed home for want of CP, and the ruled VP rail.
+    id: 'rally_due',
+    map: 'artery',
+    snapshot: rallyDueSnapshot(bundledMap('artery')),
+    events: [RALLY_STAY],
+    view: GROUP_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_GROUP,
+  },
+  {
     // The artery moment for the terrain map mode (T, `keys` in visual/scenes.ts): patterns and sight signs (#429).
     id: 'terrain',
     map: 'artery',
@@ -1049,6 +1062,7 @@ export function frozenSource(scene: FixtureScene, at?: number, flood?: FloodPin)
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
     recruitQueueMax: DEV_RULES.recruit.queue_max,
+    rallyCost: rules.recruit.rally_point ? rules.recruit.rally_cost : 0,
     provinceWarehouse: rules.city_upgrades.warehouse_province,
     fortBuildTicks: rules.fort.build_ticks,
     cityUpgrades:

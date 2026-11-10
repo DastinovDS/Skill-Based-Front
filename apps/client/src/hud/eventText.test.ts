@@ -97,7 +97,7 @@ describe('eventText', () => {
     });
   });
 
-  it('tells the alerts of the recruit rally point (DEC-48, item I3), as warning toasts', () => {
+  it('tells the alerts of the recruit rally point (DEC-48, item I3); a lost point is a toast', () => {
     setLocale('en');
     const cleared = event('rally_point_cleared', { player: 0, node: 1, target: 2 });
     const noCp = event('rally_walk_no_cp', { player: 0, node: 1, target: 2, group: 'g' });
@@ -107,7 +107,9 @@ describe('eventText', () => {
     expect(eventText(noCp, 0, names)).toBe(
       'A recruit of Birch stays home: no CP for the walk to Cedar',
     );
-    expect(toastOf(noCp, 0, names)).toMatchObject({ tone: 'warn', icon: 'alert' });
+    expect(toastOf(cleared, 0, names)).toMatchObject({ tone: 'warn', icon: 'alert' });
+    // #930, W10: a recruit that stays home hangs a strip from the bar instead of a toast.
+    expect(toastOf(noCp, 0, names)).toBeNull();
   });
 
   it('does not show an unknown kind (never a raw kind name)', () => {

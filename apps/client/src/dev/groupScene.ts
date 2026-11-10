@@ -11,7 +11,7 @@
  *
  * Made from `arterySnapshot`: a picture for the eyes, the numbers only have to be plausible.
  */
-import type { GroupView, MapFile, OrderView, SnapshotMsg } from '../protocol.gen.ts';
+import type { EventMsg, GroupView, MapFile, OrderView, SnapshotMsg } from '../protocol.gen.ts';
 import type { WorldRect } from '../render/interaction.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 
@@ -112,3 +112,105 @@ export function groupOrderSnapshot(map: MapFile): SnapshotMsg {
   );
   return { ...base, view: { ...base.view, groups, nodes, intents: [], fights: [] } };
 }
+
+/** The tick of the rally scene: 18 s into a 30 s VP period (#930, P1). */
+export const RALLY_TICK = GROUP_TICK + 180;
+
+/**
+ * #930 (W10 "Plan, due, pay" and P1 "Ruled rail"): Stonegate (the capital) has three recruits queued
+ * and Ford one, both sending them to Watchhouse; with 1.25 CP the two nearest walks are paid and the
+ * two after them are not (the empty red earmarks). Ford's last recruit just stayed home for want of
+ * CP (`rally_walk_no_cp`: the strip and the crossed mark at its gate). 18 s into the VP period.
+ */
+export function rallyDueSnapshot(map: MapFile): SnapshotMsg {
+  const base = arterySnapshot(map);
+  const nodes = base.view.nodes.map((n) =>
+    n.id === 0
+      ? { ...n, rally_point: 12, recruit_queue: 3, recruit_progress: 22 }
+      : n.id === 13
+        ? { ...n, has_barracks: true, rally_point: 12, recruit_queue: 1, recruit_progress: 6 }
+        : n,
+  );
+  return {
+    ...base,
+    tick: RALLY_TICK,
+    view: {
+      ...base.view,
+      me: { ...base.view.me, cp: 125 },
+      nodes,
+      vp_gain: [5, 7],
+      intents: [],
+      fights: [],
+    },
+  };
+}
+
+/** One step of the played rally scene: what the HUD gets `atMs` after the scene opens. */
+export interface RallyPlayStep {
+  readonly atMs: number;
+  readonly events: readonly EventMsg[];
+  readonly snapshot: SnapshotMsg;
+}
+
+/**
+ * `?play=rally` on the rally scene (#930), for the HUD alone (the map stays frozen): Stonegate's
+ * first recruit leaves and pays its walk (the CP mark flies into the gauge), then the VP credit of
+ * tick 2700 rolls the totals and the gains slide into them.
+ */
+export function rallyPlay(map: MapFile): RallyPlayStep[] {
+  const base = rallyDueSnapshot(map);
+  const paid: SnapshotMsg = {
+    ...base,
+    tick: RALLY_TICK + 9,
+    view: {
+      ...base.view,
+      me: { ...base.view.me, cp: 75 },
+      nodes: base.view.nodes.map((n) =>
+        n.id === 0 ? { ...n, recruit_queue: 2, recruit_progress: 0 } : n,
+      ),
+    },
+  };
+  const credit = 2700;
+  const credited: SnapshotMsg = {
+    ...paid,
+    tick: credit,
+    view: { ...paid.view, vp: [base.view.vp[0] + 5, base.view.vp[1] + 7] },
+  };
+  const ev = (tick: number, kind: string, data: EventMsg['data']): EventMsg => ({
+    type: 'event',
+    tick,
+    kind,
+    data,
+  });
+  return [
+    {
+      atMs: 0,
+      events: [
+        ev(paid.tick, 'rally_walk_paid', {
+          player: 0,
+          group: 'dev-walker',
+          node: 0,
+          target: 12,
+          cost: 50,
+        }),
+      ],
+      snapshot: paid,
+    },
+    {
+      atMs: 2000,
+      events: [
+        ev(credit, 'vp_awarded', { player: 0, vp: 5 }),
+        ev(credit, 'vp_awarded', { player: 1, vp: 7 }),
+      ],
+      snapshot: credited,
+    },
+  ];
+}
+
+/** The recruit of Ford that just stayed home in the rally scene (#930). */
+export const RALLY_STAY: EventMsg = {
+  type: 'event',
+  tick: RALLY_TICK,
+  kind: 'rally_walk_no_cp',
+  data: { player: 0, group: 'dev-stay', node: 13, target: 12 },
+};

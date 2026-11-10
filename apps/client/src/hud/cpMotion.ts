@@ -89,6 +89,47 @@ export function burinEdge(changes: readonly CpChange[], now: number): number {
   return 0;
 }
 
+/** The earmark of one walk due on the scale (#930, W1/W2), in CP. */
+export interface Earmark {
+  readonly lo: number;
+  readonly hi: number;
+  /** Past the value: the CP now do not pay it (an empty red frame). */
+  readonly short: boolean;
+}
+
+/**
+ * The earmarks of the walks due (`dues`, the nearest first), each `cost` CP wide: those the CP pay
+ * are the top of the shown bar, one under the other from `shown` down; those they do not lie past
+ * it, one after the other. Kept on the scale `0..n`; one that would lie wholly past it is left out.
+ */
+export function earmarks(
+  shown: number,
+  n: number,
+  dues: readonly { readonly short: boolean }[],
+  cost: number,
+): Earmark[] {
+  const out: Earmark[] = [];
+  let hi = shown;
+  let over = shown;
+  for (const due of dues) {
+    let lo: number;
+    let top: number;
+    if (due.short) {
+      lo = over;
+      top = over + cost;
+      over = top;
+    } else {
+      top = hi;
+      lo = hi - cost;
+      hi = lo;
+    }
+    const a = Math.max(0, lo);
+    const b = Math.min(n, top);
+    if (b > a + 1e-9) out.push({ lo: a, hi: b, short: due.short });
+  }
+  return out;
+}
+
 /**
  * The price of a hovered order as a bracket under the scale (ui-style 53a): over the CP it would
  * take, or, when the CP do not pay for it (`short`), from the value to the price.

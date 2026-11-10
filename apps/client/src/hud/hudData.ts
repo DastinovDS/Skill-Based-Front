@@ -20,7 +20,8 @@ import type {
   Terrain,
 } from '../protocol.gen.ts';
 
-import { stanceProgress, type StanceProgress } from './topBar.ts';
+import { rallyDues, type DueWalk, type PendingWalk } from './rallyDue.ts';
+import { stanceProgress, vpCountdown, type StanceProgress, type VpCountdown } from './topBar.ts';
 
 /** What the player picked to look at: one own group or one node. */
 export type Selection =
@@ -228,6 +229,59 @@ export interface RoadInfo {
   readonly fortNodes: readonly number[];
 }
 
+/** A walk to a rally point the server charged (`rally_walk_paid`, own only, #934). */
+export interface WalkPaid {
+  /** Order of arrival: a new one starts the flight of its CP mark into the gauge. */
+  readonly seq: number;
+  /** The city it left and its rally point. */
+  readonly node: number;
+  readonly target: number | null;
+}
+
+/** The rally walks of the CP gauge (#930, W10). */
+export interface RallyInfo {
+  /** The price of one walk, hundredths (`recruit.rally_cost`); 0 without rally points. */
+  readonly cost: number;
+  /** The walks due, the nearest first. */
+  readonly dues: readonly DueWalk[];
+  /** The latest charged walks, oldest first. */
+  readonly paid: readonly WalkPaid[];
+  /** Whole seconds to the nearest walk (at least 1); `null` without one. */
+  readonly nextSeconds: number | null;
+}
+
+/** A VP credit as its `vp_awarded` events carried it (#930, P1: the roll). */
+export interface VpCredit {
+  /** Order of arrival: a new one rolls the totals. */
+  readonly seq: number;
+  readonly tick: number;
+  readonly mine: number;
+  readonly enemy: number;
+}
+
+/** What the server says of the next VP credit (#930, P1, #934). */
+export interface VpNext {
+  /** The way to it, from the ruleset period; `null` without one. */
+  readonly countdown: VpCountdown | null;
+  /** The period in ticks (`victory.vp_period_ticks`) and the ticks per second. */
+  readonly period: number;
+  readonly tickHz: number;
+  /** What each side gets at it with the cities held now (`View.vp_gain`). */
+  readonly gain: { readonly mine: number; readonly enemy: number };
+  /** The latest credit, `null` before the first. */
+  readonly credit: VpCredit | null;
+}
+
+/** What the HUD keeps from the events between snapshots (`HudState`). */
+export interface HudExtras {
+  /** Own recruits made in a city with a rally point and not gone yet. */
+  readonly pending: readonly PendingWalk[];
+  readonly paid: readonly WalkPaid[];
+  readonly credit: VpCredit | null;
+}
+
+export const NO_EXTRAS: HudExtras = { pending: [], paid: [], credit: null };
+
 export interface HudData {
   readonly tick: number;
   readonly me: PlayerId;
@@ -247,6 +301,10 @@ export interface HudData {
   /** The own factories that work now, builds under way not counted (DEC-47, #891). */
   readonly workingFactories: number;
   readonly vp: { readonly mine: number; readonly enemy: number };
+  /** The next VP credit: when, how much (#930, P1). */
+  readonly vpNext: VpNext;
+  /** The walks to rally points the CP will pay (#930, W10). */
+  readonly rally: RallyInfo;
   /** Whole seconds until the timer ends the match. */
   readonly secondsLeft: number;
   readonly group: GroupInfo | null;
@@ -413,6 +471,31 @@ function groupUnderPointer(
   };
 }
 
+function rallyInfo(
+  rules: RulesetPublic,
+  view: SnapshotMsg['view'],
+  me: PlayerId,
+  extras: HudExtras,
+): RallyInfo {
+  const cost = rules.recruit.rally_point ? rules.recruit.rally_cost : 0;
+  const dues = rallyDues(
+    view.nodes,
+    me,
+    view.me.cp,
+    rules.recruit.unit_ticks,
+    cost,
+    extras.pending,
+  );
+  const first = dues[0];
+  return {
+    cost,
+    dues,
+    paid: extras.paid,
+    nextSeconds:
+      first === undefined ? null : Math.max(1, Math.ceil(first.ticks / Math.max(1, rules.tick_hz))),
+  };
+}
+
 export function buildHudData(
   ctx: HudContext,
   snapshot: SnapshotMsg,
@@ -420,6 +503,7 @@ export function buildHudData(
   events: readonly HudEvent[],
   /** The group (or the groups of a city) under the pointer. */
   hovered: HoverTarget = null,
+  extras: HudExtras = NO_EXTRAS,
 ): HudData {
   const { view, tick } = snapshot;
   const { rules, me } = ctx;
@@ -450,6 +534,14 @@ export function buildHudData(
     factories: factoryCount(rules, view.nodes, me),
     workingFactories: workingFactoryCount(view.nodes, me),
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },
+    vpNext: {
+      countdown: vpCountdown(tick, rules.victory.vp_period_ticks),
+      period: rules.victory.vp_period_ticks,
+      tickHz: rules.tick_hz,
+      gain: { mine: view.vp_gain[me], enemy: view.vp_gain[me === 0 ? 1 : 0] },
+      credit: extras.credit,
+    },
+    rally: rallyInfo(rules, view, me, extras),
     secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
     group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes, tick),
     node: selectedNode === undefined ? null : nodeInfo(ctx, selectedNode, view.groups, tick),

@@ -30,9 +30,9 @@ export const TOAST_EVENT_KINDS: ReadonlySet<string> = new Set([
   'attrition',
   'recruit_queue_lost',
   'capture_failed',
-  // DEC-48, item I3: the alerts of the recruit rally point.
+  // DEC-48, item I3: the alerts of the recruit rally point. A recruit that stays home for want of
+  // CP hangs a strip from the bar instead (#930, W10: `AlertStack`).
   'rally_point_cleared',
-  'rally_walk_no_cp',
 ]);
 
 /** The toast of `event` for player `me`, or `null` if the event goes to the journal only. */
