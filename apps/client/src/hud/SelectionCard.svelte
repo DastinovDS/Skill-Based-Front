@@ -57,6 +57,7 @@
     bottom: 12px;
     left: 12px;
     z-index: 4;
+    width: max-content;
     max-width: calc(100% - 24px);
     padding: 6px 10px 5px;
     box-sizing: border-box;

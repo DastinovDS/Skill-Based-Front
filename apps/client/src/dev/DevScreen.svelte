@@ -11,6 +11,7 @@
   import { createDevMatch } from './devMatch.ts';
   import { parseEta, pinEta } from './etaPin.ts';
   import { parseUndo, pinUndo } from './undoPin.ts';
+  import { pinGroup } from './groupPin.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource, parseFlood } from './scenarios.ts';
   import { OrderBook } from '../match/orderBook.ts';
   import { forwardKey } from '../match/keyEvents.ts';
@@ -223,7 +224,13 @@
       map,
       rules: sceneRules,
       book,
-      send: match === null ? (menusOn ? frozenSend(book) : null) : (cmd) => match.session.send(cmd),
+      // A scene that pins a selection (DEC-48) orders like a player too: the preview needs a sender.
+      send:
+        match === null
+          ? menusOn || fixture?.pins !== undefined
+            ? frozenSend(book)
+            : null
+          : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,
       focusNode: (node) => canvas?.focusNode(node),
       queryReach: (group) => {
@@ -254,8 +261,12 @@
   });
 
   const etaInteraction = $derived(etaPinned === null ? orders : pinEta(orders, etaPinned));
-  const interaction = $derived(
+  const undoInteraction = $derived(
     undoPinned === null ? etaInteraction : pinUndo(etaInteraction, undoPinned),
+  );
+  // The `group_*` scenes hold their selection, `E` and the pointer (DEC-48, #896).
+  const interaction = $derived(
+    fixture?.pins === undefined ? undoInteraction : pinGroup(orders, fixture.pins),
   );
 
   function handleKey(event: KeyboardEvent): void {

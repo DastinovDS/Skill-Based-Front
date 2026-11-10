@@ -595,7 +595,9 @@ export class OrderController implements MapInteraction {
       node: target,
       bonus,
       max: this.planBonusMax,
-      ticks: per > 0 ? bonus * per : null,
+      // Several groups gather their parts in parallel (DEC-48, item F2): the server's split, so no
+      // time is told before the click.
+      ticks: per > 0 && this.#picks.length === 0 ? bonus * per : null,
     };
   }
 

@@ -122,8 +122,9 @@ export class GroupOrderView {
     for (const id of this.totals.keys()) if (!live.has(id)) this.totals.delete(id);
     for (const id of this.sealSince.keys()) if (!live.has(id)) this.sealSince.delete(id);
     // B1 before the click: the seal of the order the pointer would give, with its price.
+    // A planned one (E held, D2) has the bonus counter over the target in the seal's place.
     const preview = overlay.group ?? null;
-    if (preview !== null) {
+    if (preview !== null && !preview.planned) {
       const count = overlay.picks?.length ?? preview.from.length;
       this.drawSeal(g, preview.to, s, {
         lozenges: Array.from({ length: count }, () => false),

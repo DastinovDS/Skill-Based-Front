@@ -4,7 +4,13 @@
  * its map, frozen at the tick of the snapshot. The Playwright test (`visual/`) takes its reference
  * screenshots from them. The live `demo` scene is the dev server's match (CLI-06, #62).
  */
-import { DEV_RULES, DEV_RULES_FLOW, DEV_RULES_STANCES, DEV_RULES_V2 } from '../hud/devFeed.ts';
+import {
+  DEV_RULES,
+  DEV_RULES_FLOW,
+  DEV_RULES_GROUP,
+  DEV_RULES_STANCES,
+  DEV_RULES_V2,
+} from '../hud/devFeed.ts';
 import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
 import type {
@@ -30,6 +36,14 @@ import {
   economySnapshot,
 } from './economyScene.ts';
 import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
+import {
+  GROUP_PLAN_PINS,
+  GROUP_SELECT_PINS,
+  GROUP_VIEW,
+  groupOrderSnapshot,
+  groupSelectSnapshot,
+  type ScenePins,
+} from './groupScene.ts';
 import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
@@ -674,6 +688,8 @@ export interface FixtureScene {
   cityUpgrades?: boolean;
   /** The rules of the scene, for the HUD and the menus; `DEV_RULES` when absent. */
   rules?: RulesetPublic;
+  /** The selection, the pointer and the keys the scene holds (the group order, DEC-48). */
+  pins?: ScenePins;
 }
 
 export const FIXTURE_SCENES: readonly FixtureScene[] = [
@@ -723,6 +739,39 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     events: [],
     view: ORDERS_VIEW,
     cityUpgrades: true,
+  },
+  {
+    // DEC-48 (#896): three groups selected together, a box being dragged, the order to Archway
+    // previewed with its seal and price (A1, A2, A3, B1).
+    id: 'group_select',
+    map: 'artery',
+    snapshot: groupSelectSnapshot(bundledMap('artery')),
+    events: [],
+    view: GROUP_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_GROUP,
+    pins: GROUP_SELECT_PINS,
+  },
+  {
+    // DEC-48: the same with E held, a hatched planned ribbon for each group (D2).
+    id: 'group_plan',
+    map: 'artery',
+    snapshot: groupSelectSnapshot(bundledMap('artery')),
+    events: [],
+    view: GROUP_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_GROUP,
+    pins: GROUP_PLAN_PINS,
+  },
+  {
+    // DEC-48: a timed attack on Archway, two members waiting (C3), the seal (B1); Ford's rally point (E3).
+    id: 'group_order',
+    map: 'artery',
+    snapshot: groupOrderSnapshot(bundledMap('artery')),
+    events: [],
+    view: GROUP_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_GROUP,
   },
   {
     // The artery moment for the terrain map mode (T, `keys` in visual/scenes.ts): patterns and sight signs (#429).

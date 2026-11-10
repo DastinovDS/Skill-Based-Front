@@ -547,6 +547,8 @@ export class OverlayView {
     const E = RIBBON_ENGRAVED;
     g.poly(poly).stroke({ width: E.casing, color: CASING, join: 'round' });
     g.poly(poly).fill({ color: DARK_PLATE, alpha: E.plateAlpha });
+    // A wash of the own colour under the hatch: the preview reads as an own planned ribbon (D2).
+    g.poly(poly).fill({ color: YOU, alpha: 0.28 });
     g.poly(poly).fill({
       texture: this.ownHatch.texture,
       textureSpace: 'global',
