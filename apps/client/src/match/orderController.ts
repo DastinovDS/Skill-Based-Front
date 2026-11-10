@@ -1,12 +1,21 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
 import type { GroupChoice as GroupBrief, GroupInfo, Selection } from '../hud/hudData.ts';
-import type { Command, MapFile, ReachMsg, RulesetPublic, Stance } from '../protocol.gen.ts';
+import type {
+  AckMember,
+  Command,
+  GroupOrderPublic,
+  MapFile,
+  ReachMsg,
+  RulesetPublic,
+  Stance,
+} from '../protocol.gen.ts';
 
 import {
   type BonusMark,
   EMPTY_OVERLAY,
   type FortPick,
+  type GroupPreview,
   type HoverMark,
   type MapInteraction,
   type OverlayState,
@@ -26,8 +35,12 @@ import { RadialState } from './radialState.svelte.ts';
 import { chargedOfSplit, SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
 
-/** A sector of the menu of a city (`fortify`: a road fortification, DEC-43, item D, which then asks for the road). */
-export type CityChoice = 'recruit' | 'barracks' | 'factory' | 'fortify';
+/**
+ * A sector of the menu of a city (`fortify`: a road fortification, DEC-43, item D, which then asks
+ * for the road; `rally`: the recruit rally point, DEC-48, item K7, which then asks for the node, or
+ * clears the point the city has).
+ */
+export type CityChoice = 'recruit' | 'barracks' | 'factory' | 'fortify' | 'rally';
 
 /** A sector of the menu of a group (`release`: a gathering plan departs now). */
 export type GroupChoice = 'split' | 'merge' | 'cancel' | 'release';
@@ -40,6 +53,18 @@ export const NOTICE_MS = 6000;
 
 /** The protocol's ceiling for one `merge` (`MergeCmd.groups`). */
 const MAX_MERGE = 16;
+
+/** No groups selected together: one array, so the overlay and the HUD see no change. */
+const NO_PICKS: readonly string[] = [];
+
+/**
+ * The price of a rally of `n` groups (DEC-48, item A2), hundredths of CP: `rally_pct` of a move per
+ * group, rounded up to a whole CP. The arithmetic of `ruleset_public` the DEC names for the price
+ * shown before the click; the server charges its own.
+ */
+export function rallyPrice(n: number, move: number, rallyPct: number): number {
+  return Math.ceil((n * move * rallyPct) / 10000) * 100;
+}
 
 /**
  * A selected group asks the server again where it can go after this many ticks (ownership on the
@@ -91,9 +116,17 @@ export interface KeyInput {
 
 /**
  * Mouse and keyboard ordering on the map (CLI-06, #62). A click picks an own group or a node;
- * with a group selected, a click on a node orders it there (Shift or the switch: a planned order);
- * the order shows as a ghost arrow until the server answers. The controller only sends intents:
- * whether they are allowed, the path and the price charged are the server's call.
+ * with a group selected, a click on a node orders it there (`E` held or the switch: a planned
+ * order, DEC-48, item K2); the order shows as a ghost arrow until the server answers. The
+ * controller only sends intents: whether they are allowed, the path and the price charged are the
+ * server's call.
+ *
+ * The group order (DEC-48, item K, under `ruleset_public.group_order`): Shift+click adds an own
+ * group to the selection or takes it out, Shift+drag a box adds the own groups inside it; with two
+ * or more selected a click on a node sends one `group_move` (an own node: a rally, any other: an
+ * arrival together), the per-group answers of its `ack` come back as toasts (a group too big for
+ * the road gets the split offer of #762). The recruit rally point (item K7): the city menu or `P`,
+ * then a click on the node.
  *
  * The other commands (CLI-07, #63) are methods the panel and the keys call: modes, split, merge,
  * recruit, stance, forfeit. Each goes out as an intent and comes back as `accepted` or `rejected`
@@ -111,7 +144,8 @@ export interface KeyInput {
  *
  * UI round 2: there is no selection card. A click on an own city opens its radial menu (recruit
  * `R`, the barracks, the factory, a road fortification) centred on the city circle; a second click on an own group (the first selects
- * it) opens a small radial menu on the group (split `S`, merge `G`, cancel `X`, release `F`). The
+ * it) opens a small radial menu on the group (split `S`, merge `G`, cancel `X`, release `F`; no
+ * release under the group order, DEC-48, item K6). The
  * menus only front the keys: a key does the same without the menu. Recruiting (R) and cancelling
  * a recruit (X) keep the city menu open, to queue several units in a row. A click on the same object
  * again, any click elsewhere and Esc close the menu (a click on another node still orders the
@@ -146,14 +180,27 @@ export class OrderController implements MapInteraction {
   readonly stackMenu = new TargetMenuState<number, string>();
 
   readonly #o: OrderControllerOptions;
-  #shift = false;
+  /**
+   * `E` (`KeyE`) is held: a click gives a planned order (DEC-48, item K2). Its `keyup`, a lost
+   * focus (`blur`, the `keyup` with an empty code) and any keyboard event without it held let it go.
+   */
+  #eHeld = false;
+  /** The groups selected together (DEC-48, item K1): two or more, in the order of the selection. */
+  #picks: readonly string[] = NO_PICKS;
+  /**
+   * A group dropped from a group order with `STACK_LIMIT` (DEC-48, item B4): it is selected alone,
+   * and once the server's `reach` says how many of it get to `dest` the split menu of #762 opens.
+   */
+  #splitOffer: { readonly group: string; readonly dest: number; readonly planned: boolean } | null =
+    null;
   #hover: PickHit | null = null;
-  /** Shift + wheel: notches and trackpad pixels turned into steps of the plan bonus (#793). */
+  /** E + wheel: notches and trackpad pixels turned into steps of the plan bonus (#793). */
   readonly #wheelSteps = new WheelSteps();
   /**
-   * The bonus the wheel chose for one Shift hover (#797): the selected group, the target under the
-   * pointer and the value. Shift up, another target or another group drops it, so every new
-   * hover starts at `PLAN_BONUS.min` (there is no remembered value); `null`: none chosen.
+   * The bonus the wheel chose for one E hover (#797): the selection (a group id, or the ids of the
+   * groups selected together), the target under the pointer and the value. E up, another target or
+   * another selection drops it, so every new hover starts at `PLAN_BONUS.min` (there is no
+   * remembered value); `null`: none chosen.
    */
   #bonusPick: { readonly group: string; readonly node: number; readonly value: number } | null =
     null;
@@ -176,7 +223,7 @@ export class OrderController implements MapInteraction {
   #follow: { readonly from: string; readonly to: string; readonly tick: number } | null = null;
   /**
    * The order a split menu opened by a click at a `reach.split` target gives its part (#762): the
-   * kind of order as it was at the click (Shift may be up by the time the split is confirmed).
+   * kind of order as it was at the click (E may be up by the time the split is confirmed).
    */
   #sendPlan: { readonly group: string; readonly planned: boolean; readonly bonus: number } | null =
     null;
@@ -215,9 +262,34 @@ export class OrderController implements MapInteraction {
     this.#o.book.onSplit = null;
   }
 
-  /** Planned order: the switch, or Shift held. */
+  /** Planned order: the switch, or `E` held (DEC-48, item K2). */
   get planned(): boolean {
-    return this.ui.current.planned || this.#shift;
+    return this.ui.current.planned || this.#eHeld;
+  }
+
+  /** The group order of the rules (DEC-48, `ruleset_public.group_order`); `null`: not in them. */
+  get groupOrder(): GroupOrderPublic | null {
+    return this.#o.rules.group_order;
+  }
+
+  /** The recruit rally point is in the rules (DEC-48, item H, `ruleset_public.recruit.rally_point`). */
+  get rallyPoints(): boolean {
+    return this.#o.rules.recruit.rally_point;
+  }
+
+  /** What a recruit pays when it leaves for the rally point, hundredths of CP (`recruit.rally_cost`). */
+  get rallyCost(): number {
+    return this.#o.rules.recruit.rally_cost;
+  }
+
+  /** `ReleasePlan` is a control of these rules: not under the group order (DEC-48, items A7, K6). */
+  get canRelease(): boolean {
+    return this.groupOrder === null;
+  }
+
+  /** The groups selected together (DEC-48, item K1), in their order; empty without such a selection. */
+  get picks(): readonly string[] {
+    return this.#picks;
   }
 
   /** Price of cancelling a planned order, hundredths of CP (ruleset of `welcome`). */
@@ -251,10 +323,10 @@ export class OrderController implements MapInteraction {
   }
 
   setPlanned(planned: boolean): void {
-    this.ui.patch({ planned, planning: planned || this.#shift });
+    this.ui.patch({ planned, planning: planned || this.#eHeld });
   }
 
-  /** Mirrors "a planned order is being made" (the switch or Shift) to `ui.current.planning`. */
+  /** Mirrors "a planned order is being made" (the switch or E) to `ui.current.planning`. */
   #syncPlanning(): void {
     const planning = this.planned;
     if (planning !== this.ui.current.planning) this.ui.patch({ planning });
@@ -294,24 +366,41 @@ export class OrderController implements MapInteraction {
 
   /**
    * The bonus a planned order to the target under the pointer asks for: what the wheel
-   * chose in this Shift hover (#797), `PLAN_BONUS.min` until it turns, no more than the charged
+   * chose in this E hover (#797), `PLAN_BONUS.min` until it turns, no more than the charged
    * units of the selected group allow (`planBonusMax`).
    */
   get planBonus(): number {
     return this.#bonusFor(this.#previewTarget());
   }
 
-  /** The top of the bonus now: `PLAN_BONUS.max`, capped by the selected group's charged units. */
+  /**
+   * The top of the bonus now: `PLAN_BONUS.max`, capped by the selected group's charged units; for
+   * groups selected together the sum of their charged units (DEC-48, item F1: the server caps it
+   * at the sum of the accepted ones).
+   */
   get planBonusMax(): number {
+    if (this.#picks.length > 0) {
+      const groups = this.#o.hud.current?.groups ?? [];
+      const charged = groups
+        .filter((g) => this.#picks.includes(g.id))
+        .reduce((sum, g) => sum + g.charged, 0);
+      return Math.max(PLAN_BONUS.min, charged);
+    }
     return planBonusCap(this.#selectedGroup()?.charged ?? null);
   }
 
-  /** The bonus of a planned order of the selected group to `node`: the wheel's pick there, else 1. */
+  /** What the bonus of the wheel belongs to: the selected group, or the groups selected together. */
+  #selectionKey(): string | null {
+    if (this.#picks.length > 0) return this.#picks.join(',');
+    return this.#selectedGroup()?.id ?? null;
+  }
+
+  /** The bonus of a planned order of the selection to `node`: the wheel's pick there, else 1. */
   #bonusFor(node: number | null): number {
     const pick = this.#bonusPick;
-    const group = this.#selectedGroup();
+    const key = this.#selectionKey();
     const value =
-      pick !== null && group !== null && pick.group === group.id && pick.node === node
+      pick !== null && key !== null && pick.group === key && pick.node === node
         ? pick.value
         : PLAN_BONUS.min;
     return Math.min(value, this.planBonusMax);
@@ -322,23 +411,23 @@ export class OrderController implements MapInteraction {
    * `PLAN_BONUS` and the cap (#793). Nothing without a target: the bonus belongs to its hover.
    */
   #stepPlanBonus(delta: number): void {
-    const group = this.#selectedGroup();
+    const key = this.#selectionKey();
     const node = this.#previewTarget();
-    if (group === null || node === null) return;
+    if (key === null || node === null) return;
     const value = Math.min(
       this.planBonusMax,
       Math.max(PLAN_BONUS.min, this.#bonusFor(node) + delta),
     );
-    this.#bonusPick = { group: group.id, node, value };
+    this.#bonusPick = { group: key, node, value };
   }
 
-  /** Drops the wheel's pick once its hover is over: Shift up, another target, another group (#797). */
+  /** Drops the wheel's pick once its hover is over: E up, another target, another selection (#797). */
   #syncBonusPick(): void {
     const pick = this.#bonusPick;
     if (pick === null) return;
     if (
-      !this.#shift ||
-      pick.group !== this.#selectedGroup()?.id ||
+      !this.#eHeld ||
+      pick.group !== this.#selectionKey() ||
       pick.node !== this.#previewTarget()
     ) {
       this.#bonusPick = null;
@@ -379,6 +468,8 @@ export class OrderController implements MapInteraction {
 
   overlay(): OverlayState {
     this.#followSplit();
+    this.#syncPicks();
+    this.#syncRally();
     this.#syncReach();
     this.#syncTargetMenus();
     const reach = this.#reach();
@@ -400,14 +491,24 @@ export class OrderController implements MapInteraction {
     this.#syncBonusPick();
     const hover = this.#hoverMarkNow();
     const undo = this.#undoMarksNow();
-    const bonus = this.#bonusMark(from, eta === null ? null : preview);
-    const key = `${bonus === null ? '-' : `${String(bonus.bonus)}/${String(bonus.max)}`}|${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}`;
+    const group = this.#groupPreview(preview);
+    const bonus =
+      group === null
+        ? this.#bonusMark(from, eta === null ? null : preview)
+        : this.#bonusMark(preview, group.planned ? preview : null);
+    const picks = this.#picks;
+    const groupKey =
+      group === null
+        ? '-'
+        : `${group.from.join(',')}>${String(group.to)}:${group.kind}:${String(group.planned)}:${group.price}`;
+    const key = `${bonus === null ? '-' : `${String(bonus.bonus)}/${String(bonus.max)}`}|${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}|${picks.join(',')}|${groupKey}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
       undo !== this.#overlayUndo ||
       supply !== this.#overlay.supply ||
-      this.ui.current.terrainMode !== this.#overlay.terrain
+      this.ui.current.terrainMode !== this.#overlay.terrain ||
+      this.ui.current.rallyFrom !== (this.#overlay.rallyFrom ?? null)
     ) {
       this.#overlayKey = key;
       this.#overlayGhosts = ghosts;
@@ -438,13 +539,50 @@ export class OrderController implements MapInteraction {
         hover,
         undo,
         bonus,
+        picks,
+        box: null,
+        group,
+        rallyFrom: this.ui.current.rallyFrom,
       };
     }
     return this.#overlay;
   }
 
   /**
-   * The bonus counter over the target of a planned order (#793): a planned order (Shift
+   * The group order a click on `target` would give the groups selected together (DEC-48, item
+   * K4): rally to an own node (by the owner on screen; the server decides at application, item
+   * B2), an arrival together anywhere else, planned with `E` held (never a planned rally, item G1);
+   * the price is the `ruleset_public` arithmetic of item A2. `null` without such a selection.
+   */
+  #groupPreview(target: number | null): GroupPreview | null {
+    if (this.#picks.length === 0 || target === null) return null;
+    const groups = this.#o.hud.current?.groups ?? [];
+    const from = this.#picks
+      .map((id) => groups.find((g) => g.id === id)?.node ?? null)
+      .filter((node): node is number => node !== null && node !== target);
+    const kind = this.#isOwnNode(target) ? 'rally' : 'attack';
+    return {
+      from,
+      to: target,
+      planned: kind === 'attack' && this.planned,
+      kind,
+      price: formatCentis(this.#groupPrice(target), getLocale()),
+    };
+  }
+
+  /** The price of the group order to `target` now, hundredths of CP (`ruleset_public`, item A2). */
+  #groupPrice(target: number): number {
+    const n = this.#picks.length;
+    const { cost } = this.#o.rules;
+    const rally = this.groupOrder;
+    if (this.#isOwnNode(target) && rally !== null) {
+      return rallyPrice(n, cost.move, rally.rally_pct);
+    }
+    return n * (this.planned ? cost.planned_move : cost.move);
+  }
+
+  /**
+   * The bonus counter over the target of a planned order (#793): a planned order (E
    * or the switch), the target reachable (`reach`). The value is `planBonus`, 1 until the wheel turns; the
    * gathering time is display arithmetic from `ruleset_public` (one point per
    * `orders.plan_ticks_per_bonus` while the warehouse has charges, DEC-41, item 10).
@@ -457,7 +595,9 @@ export class OrderController implements MapInteraction {
       node: target,
       bonus,
       max: this.planBonusMax,
-      ticks: per > 0 ? bonus * per : null,
+      // Several groups gather their parts in parallel (DEC-48, item F2): the server's split, so no
+      // time is told before the click.
+      ticks: per > 0 && this.#picks.length === 0 ? bonus * per : null,
     };
   }
 
@@ -480,6 +620,17 @@ export class OrderController implements MapInteraction {
     if (hit === null || this.#o.send === null) return null;
     // The «Supply» layer takes no click, and the road pick of a fortification has its own.
     if (ui.fortFrom !== null || ui.supplyMode) return null;
+    // The rally point pick (DEC-48, item K7): any other node is a point.
+    if (ui.rallyFrom !== null) {
+      const node = this.#cityOf(hit);
+      return node === null || node === ui.rallyFrom ? null : { node, group: null };
+    }
+    // Groups selected together: a click on a place orders them there, one on a road picks it.
+    if (this.#picks.length > 0) {
+      if (hit.kind === 'group' && hit.node === undefined) return { node: null, group: hit.id };
+      const node = this.#cityOf(hit);
+      return node === null ? null : { node, group: null };
+    }
     const group = this.#selectedGroup();
     if (
       hit.kind === 'group' &&
@@ -495,8 +646,13 @@ export class OrderController implements MapInteraction {
     return this.#isUnselectable(node) ? null : { node, group: null };
   }
 
-  /** The CP price of the move a click would give now (`ruleset_public.cost`), hundredths. */
+  /**
+   * The CP price of the move a click would give now (`ruleset_public.cost`), hundredths; of the
+   * group order to the hovered target for groups selected together (DEC-48, item A2).
+   */
   #movePrice(): number {
+    const target = this.#previewTarget();
+    if (this.#picks.length > 0 && target !== null) return this.#groupPrice(target);
     const cost = this.#o.rules.cost;
     return this.planned ? cost.planned_move : cost.move;
   }
@@ -516,12 +672,20 @@ export class OrderController implements MapInteraction {
       this.ui.patch({ cpShort: short, cpPrice: price });
   }
 
+  /**
+   * A click on the map; `shift`: Shift was held, which adds the own group under the pointer to the
+   * selection or takes it out (DEC-48, item K1; under `ruleset_public.group_order` only).
+   */
   click(picked: PickHit | null, shift: boolean): void {
-    this.#shift = shift;
     this.#syncPlanning();
     // The road pick of "Fortify road" takes the click first: a road gets the line, anything else cancels.
     if (this.ui.current.fortFrom !== null) {
       this.#fortClick(picked);
+      return;
+    }
+    // The rally point pick (DEC-48, item K7): a node gets the point, anything else cancels.
+    if (this.ui.current.rallyFrom !== null) {
+      this.#rallyClick(picked);
       return;
     }
     if (this.#supplyClick(picked)) return;
@@ -529,11 +693,21 @@ export class OrderController implements MapInteraction {
       this.deselect();
       return;
     }
+    if (shift && this.#shiftClick(picked)) return;
     let hit: PickHit = picked;
     if (hit.kind === 'edge') {
       // A road is a click on the area of the city it lies in.
       if (hit.cell === undefined) return;
       hit = { kind: 'node', id: hit.cell };
+    }
+    if (this.#picks.length > 0) {
+      // Groups selected together: a place gets the group order, a group on a road is picked alone.
+      const node = hit.kind === 'group' && hit.node === undefined ? null : this.#cityOf(hit);
+      if (node !== null) {
+        this.#sendGroupOrder(node);
+        return;
+      }
+      this.#setPicks([]);
     }
     const group = this.#selectedGroup();
     // A group in a fight cannot leave it under `combat.retreat = "none"` (DEC-40): a click on a
@@ -663,15 +837,15 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Shift + wheel (#793): with an own group in a node selected (the plan banner
-   * shows), one notch steps the bonus a planned order to the target under the pointer asks for; it
-   * starts at 1 for every new hover (#797). `false` otherwise: the wheel zooms the map.
+   * E + wheel (#793, DEC-48, item K2): with an own group in a node selected, or groups selected
+   * together, one notch steps the bonus a planned order to the target under the pointer asks for
+   * (for several groups the requested total, item F1); it starts at 1 for every new hover (#797).
+   * `false` otherwise: the wheel zooms the map.
    */
   wheel(input: WheelInput): boolean {
-    this.#shift = input.shiftKey;
     this.#syncPlanning();
     this.#syncBonusPick();
-    if (!input.shiftKey || !this.#planBonusShown()) {
+    if (!this.#eHeld || !this.#planBonusShown()) {
       this.#wheelSteps.reset();
       return false;
     }
@@ -680,16 +854,108 @@ export class OrderController implements MapInteraction {
     return true;
   }
 
-  /** The plan banner is up: an own group in a node selected, the normal map. */
+  /** A planned order can be given: an own group in a node or groups selected together, the normal map. */
   #planBonusShown(): boolean {
     const ui = this.ui.current;
     return (
       this.#o.send !== null &&
-      this.#selectedGroup()?.node != null &&
+      (this.#selectedGroup()?.node != null || this.#picks.length > 0) &&
       !ui.supplyMode &&
       !ui.terrainMode &&
-      ui.fortFrom === null
+      ui.fortFrom === null &&
+      ui.rallyFrom === null
     );
+  }
+
+  // --- The group order (DEC-48, item K) ------------------------------------------------------------
+
+  /**
+   * Shift+click (item K1): the own group under the pointer (the groups of a city's one icon, all of
+   * them) joins the selection, or leaves it when it is in it already. `false`: Shift does nothing
+   * here (no group order in the rules, or the hit is no own group): the click goes on as a plain one.
+   */
+  #shiftClick(hit: PickHit): boolean {
+    if (this.groupOrder === null || this.ui.current.supplyMode) return false;
+    const ids = hit.kind === 'group' ? [hit.id] : hit.kind === 'stack' ? hit.ids : [];
+    const own = ids.filter((id) => this.#isOwnGroup(id));
+    if (own.length === 0) return false;
+    const base = this.#selection();
+    const next = own.every((id) => base.includes(id))
+      ? base.filter((id) => !own.includes(id))
+      : [...base, ...own.filter((id) => !base.includes(id))];
+    this.#setPicks(next);
+    this.#hover = hit;
+    return true;
+  }
+
+  /**
+   * The groups inside a Shift+drag box (item K1): the own ones join the selection, in the order
+   * given (the scene finds them left to right). Nothing without the group order in the rules.
+   */
+  selectBox(ids: readonly string[]): void {
+    if (this.groupOrder === null || this.ui.current.supplyMode) return;
+    const own = ids.filter((id) => this.#isOwnGroup(id));
+    if (own.length === 0) return;
+    const base = this.#selection();
+    this.#setPicks([...base, ...own.filter((id) => !base.includes(id))]);
+  }
+
+  /** The own groups selected now, in order: those selected together, or the one selected group. */
+  #selection(): readonly string[] {
+    if (this.#picks.length > 0) return this.#picks;
+    const selection = this.#o.hud.selection;
+    return selection?.kind === 'group' && this.#isOwnGroup(selection.id) ? [selection.id] : [];
+  }
+
+  /**
+   * The selection becomes `ids` (at most `group_order.max_groups`): two or more are selected
+   * together (the HUD selection is let go), one is the ordinary selection, none clears it.
+   */
+  #setPicks(ids: readonly string[]): void {
+    const max = this.groupOrder?.max_groups ?? MAX_MERGE;
+    const next = ids.slice(0, max);
+    this.#closeMenus();
+    this.#bonusPick = null;
+    this.#picks = next.length >= 2 ? next : NO_PICKS;
+    const single = next.length === 1 ? next[0] : undefined;
+    const selection = this.#o.hud.selection;
+    if (single !== undefined) this.#o.hud.select({ kind: 'group', id: single });
+    else if (selection !== null) this.#o.hud.select(null);
+    if (this.ui.current.picks !== this.#picks) this.ui.patch({ picks: this.#picks });
+  }
+
+  /** Groups selected together that are gone (merged, dead) leave the selection; cheap, every frame. */
+  #syncPicks(): void {
+    if (this.#picks.length === 0) return;
+    const live = this.#picks.filter((id) => this.#isOwnGroup(id));
+    if (live.length !== this.#picks.length) this.#setPicks(live);
+  }
+
+  /** `id` is an own group of the snapshot on screen. */
+  #isOwnGroup(id: string): boolean {
+    return this.#o.hud.current?.groups.some((g) => g.id === id) ?? false;
+  }
+
+  /**
+   * One `group_move` of the groups selected together to `dest` (items B1, K5): planned with `E`
+   * held unless the target is own (no planned rally, item G1), the requested total bonus of the
+   * wheel. Each group standing in a node shows a ghost until the `ack` says what went.
+   */
+  #sendGroupOrder(dest: number): void {
+    const [first, ...rest] = this.#picks;
+    if (first === undefined || this.#o.send === null) return;
+    const planned = this.planned && !this.#isOwnNode(dest);
+    const bonus = planned ? this.#bonusFor(dest) : 0;
+    const groups = this.#o.hud.current?.groups ?? [];
+    const from = this.#picks.map((id) => groups.find((g) => g.id === id)?.node ?? null);
+    this.#closeTargetMenus();
+    this.#sendCommand(
+      { type: 'group_move', groups: [first, ...rest], dest, planned, bonus },
+      null,
+      null,
+      from,
+    );
+    this.deselect();
   }
 
   hover(hit: PickHit | null): void {
@@ -708,7 +974,9 @@ export class OrderController implements MapInteraction {
   isIdle(): boolean {
     return (
       this.#o.hud.selection === null &&
+      this.#picks.length === 0 &&
       this.ui.current.fortFrom === null &&
+      this.ui.current.rallyFrom === null &&
       !this.cityMenu.current.open &&
       !this.groupMenu.current.open &&
       !this.stackMenu.current.open &&
@@ -723,6 +991,10 @@ export class OrderController implements MapInteraction {
     this.#closeMenus();
     this.#o.hud.select(null);
     this.#bonusPick = null;
+    if (this.#picks.length > 0) {
+      this.#picks = NO_PICKS;
+      this.ui.patch({ picks: NO_PICKS });
+    }
   }
 
   /**
@@ -731,6 +1003,10 @@ export class OrderController implements MapInteraction {
    * is anything to cancel is the server's call (`NOTHING_TO_CANCEL`).
    */
   cancelSelected(): void {
+    if (this.#picks.length > 0) {
+      this.#cancelPicks();
+      return;
+    }
     const group = this.#selectedGroup();
     if (group === null) return;
     this.groupMenu.close();
@@ -738,6 +1014,22 @@ export class OrderController implements MapInteraction {
     if (this.isHeldInFight(group) && !this.canCancel(group)) return;
     this.#sendCommand({ type: 'cancel_order', group: group.id }, null);
     if (this.#o.send !== null) this.deselect();
+  }
+
+  /**
+   * `X` with groups selected together: one `cancel_order` for each of them that has an order (a
+   * whole group order is cancelled this way, DEC-48, item B7; they apply in one tick), not for a
+   * group a fight holds under `combat.retreat = "none"` unless its plan waits (DEC-40).
+   */
+  #cancelPicks(): void {
+    for (const id of this.#picks) {
+      const view = this.#o.hud.ownGroup(id);
+      if (view?.order == null) continue;
+      const waits = view.order.planned && view.location.kind === 'node';
+      if (this.noRetreat && this.#o.hud.inFight(id) && !waits) continue;
+      this.#sendCommand({ type: 'cancel_order', group: id }, null);
+    }
+    this.deselect();
   }
 
   /**
@@ -834,6 +1126,19 @@ export class OrderController implements MapInteraction {
       split: new Map(msg.split.map((s) => [s.node, s.units])),
     };
     this.ui.patch({ reach: info });
+    // A group dropped from a group order for its size (DEC-48, item B4): the split of #762 opens
+    // with the size the server says gets to the target, its part goes there on confirm.
+    const offer = this.#splitOffer;
+    if (offer?.group !== msg.group) return;
+    this.#splitOffer = null;
+    const group = this.#selectedGroup();
+    const fit = info.split.get(offer.dest) ?? 0;
+    if (group === null || group.id !== offer.group || group.node === null || fit < 1) return;
+    this.#closeMenus();
+    if (this.splitMenu.open(group.id, group.units, group.charged, { n: fit, dest: offer.dest })) {
+      const bonus = offer.planned ? PLAN_BONUS.min : 0;
+      this.#sendPlan = { group: group.id, planned: offer.planned, bonus };
+    }
   }
 
   /**
@@ -932,6 +1237,9 @@ export class OrderController implements MapInteraction {
       case 'fortify':
         this.startFortify();
         return;
+      case 'rally':
+        this.startRally();
+        return;
     }
   }
 
@@ -1025,7 +1333,8 @@ export class OrderController implements MapInteraction {
    */
   releasePlan(): void {
     const group = this.#selectedGroup();
-    if (group === null) return;
+    // Under the group order there is no release (DEC-48, item A7): the server would refuse it.
+    if (group === null || !this.canRelease) return;
     this.groupMenu.close();
     this.#sendCommand({ type: 'release_plan', group: group.id }, null);
   }
@@ -1160,10 +1469,15 @@ export class OrderController implements MapInteraction {
 
   /** Returns true if the key was used (the caller then prevents the browser default). */
   key(input: KeyInput): boolean {
-    this.#shift = input.shiftKey;
+    // `E` held is a planned order (DEC-48, item K2); its keyup or a lost focus (`code` empty) lets
+    // it go, so a later click never becomes a planned order by accident.
+    if (input.code === 'KeyE' || (input.type === 'keyup' && input.code === '')) {
+      this.#eHeld = input.type === 'keydown';
+    }
     this.#syncPlanning();
     this.#syncBonusPick();
-    if (!input.shiftKey) this.#wheelSteps.reset();
+    if (!this.#eHeld) this.#wheelSteps.reset();
+    if (input.code === 'KeyE') return true;
     if (input.type !== 'keydown') return this.#keyUp(input);
     if (input.code === 'Tab' || input.code === 'F2') {
       if (input.repeat !== true) this.toggleSupplyMode();
@@ -1189,6 +1503,11 @@ export class OrderController implements MapInteraction {
     if (input.code === 'Escape' && this.ui.current.fortFrom !== null) {
       // The road pick of a fortification: Esc drops it.
       this.cancelFortify();
+      return true;
+    }
+    if (input.code === 'Escape' && this.ui.current.rallyFrom !== null) {
+      // The rally point pick (DEC-48, item K7): Esc drops it.
+      this.cancelRally();
       return true;
     }
     if (this.splitMenu.current.open) {
@@ -1254,8 +1573,14 @@ export class OrderController implements MapInteraction {
         } else this.cancelSelected();
         return true;
       case 'KeyF':
-        // The gathering plan of the selected group departs now.
+        // The gathering plan of the selected group departs now; no release under the group order.
+        if (!this.canRelease) return false;
         this.releasePlan();
+        return true;
+      case 'KeyP':
+        // The recruit rally point of the selected own city (DEC-48, item K7): set it, or clear it.
+        if (!this.rallyPoints || this.selectedOwnCity() === null) return false;
+        if (input.repeat !== true) this.startRally();
         return true;
       case 'KeyR':
         this.recruit();
@@ -1292,6 +1617,7 @@ export class OrderController implements MapInteraction {
    */
   #closeMenus(): void {
     this.cancelFortify();
+    this.cancelRally();
     this.closeRadial();
     this.splitMenu.close();
     this.#closeTargetMenus();
@@ -1441,12 +1767,13 @@ export class OrderController implements MapInteraction {
     cmd: Command,
     from: number | null,
     route: readonly number[] | null = null,
+    members: readonly (number | null)[] = [],
   ): number | null {
     const send = this.#o.send;
     if (send === null) return null;
     this.#clearNotice();
     const seq = send(cmd);
-    this.#o.book.track(seq, cmd, from, route);
+    this.#o.book.track(seq, cmd, from, route, members);
     return seq;
   }
 
@@ -1600,6 +1927,15 @@ export class OrderController implements MapInteraction {
 
   /** The node a click would send the selected group to, if it would. */
   #previewTarget(): number | null {
+    // Groups selected together (DEC-48): any place under the pointer is a target (a group on a
+    // road is a pick, not a place).
+    if (this.#picks.length > 0) {
+      const ui = this.ui.current;
+      const hit = this.#hover;
+      if (this.#o.send === null || ui.supplyMode || ui.rallyFrom !== null) return null;
+      if (hit?.kind === 'group' && hit.node === undefined) return null;
+      return this.#hoverCity();
+    }
     const group = this.#selectedGroup();
     if (group === null || group.node === null || this.#o.send === null) return null;
     const city = this.#hoverCity();
@@ -1624,9 +1960,15 @@ export class OrderController implements MapInteraction {
     ) {
       this.#pendingSend = null;
     }
-    if (result.kind === 'rejected' && cmd.type === 'move' && result.code === 'NOT_ENOUGH_CP') {
+    const moving = cmd.type === 'move' || cmd.type === 'group_move';
+    // A group order short of CP is refused as a whole and nothing waits (DEC-48, owner decision
+    // (7)): the CP badge is marked like a move's, the ghosts cross out, the toast tells it.
+    if (result.kind === 'rejected' && moving && result.code === 'NOT_ENOUGH_CP') {
       this.#cpFlashUntil = this.#now() + CP_SHORT_FLASH_MS;
-      if (!this.ui.current.cpShort) this.ui.patch({ cpShort: true, cpPrice: this.#movePrice() });
+      const price = cmd.type === 'group_move' ? this.#commandPrice(cmd) : this.#movePrice();
+      if (!this.ui.current.cpShort || this.ui.current.cpPrice !== price) {
+        this.ui.patch({ cpShort: true, cpPrice: price });
+      }
     }
     this.ui.emit(
       result.kind === 'rejected'
@@ -1635,8 +1977,11 @@ export class OrderController implements MapInteraction {
           ? { kind: 'accepted', cmd: result.cmd }
           : { kind: result.kind, cmd: result.cmd },
     );
+    if (result.kind === 'accepted' && cmd.type === 'group_move') {
+      this.#dropped(cmd, result.members ?? []);
+    }
     // A move shows itself on the map (ghost, then the order line): no message for its success.
-    if (result.kind === 'accepted' && result.cmd.type === 'move') return;
+    if (result.kind === 'accepted' && moving) return;
     this.#noticeId += 1;
     const id = this.#noticeId;
     this.ui.patch({
@@ -1654,5 +1999,79 @@ export class OrderController implements MapInteraction {
   #clearNotice(): void {
     clearTimeout(this.#noticeTimer);
     if (this.ui.current.notice !== null) this.ui.patch({ notice: null });
+  }
+
+  /**
+   * The groups an accepted group order dropped (DEC-48, item B3, `ack.members`): a toast per code
+   * with the count. The first one too big for the road (`STACK_LIMIT`) gets the split offer of #762
+   * (item B4): it is selected alone, and the server's `reach` for it opens the split menu.
+   */
+  #dropped(cmd: Command & { type: 'group_move' }, members: readonly AckMember[]): void {
+    const counts = new Map<string, number>();
+    let tooBig: string | null = null;
+    for (const [i, member] of members.entries()) {
+      const code = member.reject_code;
+      if (code === null) continue;
+      counts.set(code, (counts.get(code) ?? 0) + 1);
+      if (code === 'STACK_LIMIT') tooBig ??= cmd.groups[i] ?? null;
+    }
+    for (const [code, count] of counts) this.ui.emit({ kind: 'dropped', code, count, cmd });
+    if (tooBig === null || this.#o.send === null) return;
+    // The player may have selected something else meanwhile: the offer waits for no one.
+    if (this.#o.hud.selection !== null || this.#picks.length > 0) return;
+    this.#splitOffer = { group: tooBig, dest: cmd.dest, planned: cmd.planned };
+    this.#o.hud.select({ kind: 'group', id: tooBig });
+  }
+
+  /** The price of a sent group order (`ruleset_public`, item A2), for the CP badge of a refusal. */
+  #commandPrice(cmd: Command & { type: 'group_move' }): number {
+    const { cost } = this.#o.rules;
+    const n = cmd.groups.length;
+    const rally = this.groupOrder;
+    if (this.#isOwnNode(cmd.dest) && rally !== null) {
+      return rallyPrice(n, cost.move, rally.rally_pct);
+    }
+    return n * (cmd.planned ? cost.planned_move : cost.move);
+  }
+
+  // --- The recruit rally point (DEC-48, items H, K7) -------------------------------------------------
+
+  /**
+   * "Rally point" of the selected own city (the menu sector or `P`): a city with a point clears it
+   * (free, item H3); one without it asks for the node next (`ui.current.rallyFrom`): a click on a
+   * node sends `set_rally_point`, Esc or a click on nothing cancels. The server checks the rest.
+   */
+  startRally(): void {
+    const node = this.selectedOwnCity();
+    if (node === null || this.#isProvince(node) || !this.rallyPoints || this.#o.send === null) {
+      return;
+    }
+    const point = this.#o.hud.current?.node?.rallyPoint ?? null;
+    this.closeCityMenu();
+    if (point !== null) {
+      this.#sendCommand({ type: 'set_rally_point', node, target: null }, null);
+      return;
+    }
+    this.ui.patch({ rallyFrom: node });
+  }
+
+  /** Leaves the rally point pick without sending anything. */
+  cancelRally(): void {
+    if (this.ui.current.rallyFrom !== null) this.ui.patch({ rallyFrom: null });
+  }
+
+  #rallyClick(hit: PickHit | null): void {
+    const from = this.ui.current.rallyFrom;
+    this.cancelRally();
+    if (from === null || hit === null || this.#o.send === null) return;
+    const node = hit.kind === 'edge' ? (hit.cell ?? null) : this.#cityOf(hit);
+    if (node === null || node === from) return;
+    this.#sendCommand({ type: 'set_rally_point', node: from, target: node }, null);
+  }
+
+  /** The pick ends itself when the city is no longer the player's. */
+  #syncRally(): void {
+    const node = this.ui.current.rallyFrom;
+    if (node !== null && !this.#isOwnNode(node)) this.cancelRally();
   }
 }

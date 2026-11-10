@@ -81,12 +81,13 @@ describe('OrderController', () => {
     expect(hud.selection).toEqual({ kind: 'node', id: other.id });
   });
 
-  it('orders the selected group to a clicked node: normal, then planned by Shift', () => {
+  it('orders the selected group to a clicked node: normal, then planned with E held', () => {
     const { controller, sent, book } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
     controller.click({ kind: 'group', id: group.id }, false); // the order let the group go
-    controller.click({ kind: 'node', id: other.id }, true);
+    controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
+    controller.click({ kind: 'node', id: other.id }, false);
     expect(sent).toEqual([
       { type: 'move', group: group.id, dest: enemy.id, planned: false, bonus: 0 },
       { type: 'move', group: group.id, dest: other.id, planned: true, bonus: 1 },
@@ -115,7 +116,7 @@ describe('OrderController', () => {
     expect(controller.ui.current.planned).toBe(false);
   });
 
-  it('key P does nothing: Shift+click is the way to a planned order (#213)', () => {
+  it('key P with a group selected does nothing: E+click is the way to a planned order (#213)', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     expect(controller.key({ type: 'keydown', code: 'KeyP', shiftKey: false })).toBe(false);
@@ -164,7 +165,7 @@ describe('OrderController', () => {
       planned: false,
       path: [home, enemy.id],
     });
-    controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
+    controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
     expect(controller.overlay().preview).toEqual({
       from: home,
       to: enemy.id,
@@ -285,15 +286,15 @@ describe('OrderController', () => {
       path: [home, other.id, enemy.id],
     });
     expect(controller.overlay().preview?.path).toEqual([home, other.id, enemy.id]);
-    // Shift (a planned order): the delay before the group sets off comes on top.
-    controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
+    // E (a planned order): the delay before the group sets off comes on top.
+    controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
     expect(controller.overlay().eta).toEqual({
       from: home,
       node: enemy.id,
       ticks: 25, // a plan gathers its bonus, no fixed delay
       path: [home, other.id, enemy.id],
     });
-    controller.key({ type: 'keyup', code: 'ShiftLeft', shiftKey: false });
+    controller.key({ type: 'keyup', code: 'KeyE', shiftKey: false });
     expect(controller.overlay().eta?.ticks).toBe(25);
     // A node the group must split for has no number (its ring is dashed).
     controller.hover({ kind: 'node', id: other.id });

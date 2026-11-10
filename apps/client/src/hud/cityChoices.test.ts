@@ -38,5 +38,13 @@ describe('cityChoices (DEC-26, DEC-41): what the menu of an own city offers', ()
   it('an own province offers only the road fortification, or nothing at all', () => {
     expect(cityChoices(null, true)).toEqual(['fortify']);
     expect(cityChoices(null, true, false, false)).toEqual([]);
+    expect(cityChoices(null, true, false, true, true)).toEqual(['fortify']);
+  });
+
+  it('the rally point (DEC-48, item K7): with the rule, where a unit can be recruited', () => {
+    const city = { hasBarracks: true, factory: true };
+    expect(cityChoices(city, false, false, true, true)).toEqual(['recruit', 'rally', 'fortify']);
+    expect(cityChoices(city)).toEqual(['recruit', 'fortify']);
+    expect(cityChoices({ hasBarracks: false }, false, false, true, true)).not.toContain('rally');
   });
 });

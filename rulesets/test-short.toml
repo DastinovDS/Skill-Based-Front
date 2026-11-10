@@ -161,6 +161,12 @@ speed_pct = 150 # DEC-41, item 8: every packet travels at 150%
 unit_ticks = 30 # 3 s per unit
 queue_max = 3 # units in a city's queue, including the current one; otherwise QUEUE_FULL is rejected
 refund_started_pct = 50 # refund for a cancelled unit in production: half
+# DEC-48, item H (#896): SetRallyPoint(node, target) sends the new units of an own city with a barracks to the own
+# node target, each alone along its fastest own path (setting and clearing the point are free). A unit pays
+# rally_cost when it leaves the city, in the tick after it appears; with fewer CP it gets no order and merges with
+# the city's group (event rally_walk_no_cp to its owner). A captured point is cleared (rally_point_cleared).
+rally_point = true
+rally_cost = 50 # 0.5 CP per walking unit, hundredths (0..orders.cost.move)
 
 [victory]
 # Victory condition (DEC-03, #9; mechanics.md, section 11).
@@ -247,3 +253,14 @@ toll_charges = 1
 ref_nodes = 49 # crossroads and highway: pct = 100, the numbers above
 min_pct = 50 # a tiny map at most doubles the periods
 max_pct = 150 # a huge map shortens them by at most a third
+
+[group_order]
+# The group order (DEC-48, #896; mechanics.md, section 5), as in mvp-7. GroupMove(groups, dest, planned, bonus)
+# gives one order to 1..max_groups own standing groups. An own target: a rally, every member departs at once and
+# merges there, the price ceil(n * orders.cost.move * rally_pct / 100) rounded up to a whole CP. Any other target:
+# an attack, the members arrive in one tick (each waits in its node until its departure), the move price per
+# member; a planned one splits the requested bonus over the members, each gathers its part, the departures are
+# fixed once the last is ready. Members are checked one by one (partial acceptance); CP are all or nothing.
+# ReleasePlan is disabled.
+max_groups = 16 # members of one order at most (the protocol bound)
+rally_pct = 50 # a rally costs half a move per group, rounded up to a whole CP: 3 groups 2 CP

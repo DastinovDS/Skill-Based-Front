@@ -59,14 +59,14 @@ function ack(seq: number, reject: string | null = null): AckMsg {
   };
 }
 
-/** Shift held over `node` and the wheel turned up `notches` notches, a pause apart (#793, #797). */
+/** E held over `node` and the wheel turned up `notches` notches, a pause apart (#793, #797). */
 function wheelOver(
   controller: OrderController,
   clock: { now: number },
   node: number,
   notches: number,
 ): void {
-  controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
+  controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
   controller.hover({ kind: 'node', id: node });
   for (let i = 0; i < notches; i++) {
     clock.now += 200;
@@ -201,7 +201,7 @@ describe('a click at a place too small for the group splits and sends (#762)', (
     // 6 units, 2 charged: a part of 3 takes both charged ones (the charged go first, DEC-20, B1).
     const { controller, sent, book, clock } = selected(snapshot({ units: 6, charged: 2 }));
     wheelOver(controller, clock, enemy, 2);
-    controller.click({ kind: 'node', id: enemy }, true);
+    controller.click({ kind: 'node', id: enemy }, false);
     controller.confirmSplit();
     book.onEvent({
       type: 'event',
@@ -305,16 +305,16 @@ describe('the bonus of a planned order (#762)', () => {
     controller.click({ kind: 'group', id: GROUP }, false);
     wheelOver(controller, clock, enemy, 6);
     expect(controller.planBonus).toBe(4);
-    controller.click({ kind: 'node', id: enemy }, true);
+    controller.click({ kind: 'node', id: enemy }, false);
     expect(sent).toEqual([{ type: 'move', group: GROUP, dest: enemy, planned: true, bonus: 4 }]);
   });
 
-  it('says when a planned order is being made: Shift held or the switch on', () => {
+  it('says when a planned order is being made: E held or the switch on', () => {
     const { controller } = setup();
     expect(controller.ui.current.planning).toBe(false);
-    controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
+    controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
     expect(controller.ui.current.planning).toBe(true);
-    controller.key({ type: 'keyup', code: 'ShiftLeft', shiftKey: false });
+    controller.key({ type: 'keyup', code: 'KeyE', shiftKey: false });
     expect(controller.ui.current.planning).toBe(false);
     controller.setPlanned(true);
     expect(controller.ui.current.planning).toBe(true);

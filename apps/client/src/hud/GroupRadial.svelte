@@ -19,7 +19,8 @@
 
   const menu = $derived(orders.groupMenu.current);
 
-  const angles = spreadAngles(4);
+  // Under the group order there is no release (DEC-48, items A7, K6): three sectors, not four.
+  const angles = $derived(spreadAngles(orders.canRelease ? 4 : 3));
   const held = $derived(group !== null && orders.isHeldInFight(group) && !orders.canCancel(group));
   // The sector that lets a gathering plan go (DEC-41, item 10).
   const release = $derived<RadialItem>({
@@ -47,11 +48,11 @@
       key: 'S',
       disabled: group === null || group.node === null || group.units < 2,
     },
-    release,
+    ...(orders.canRelease ? [release] : []),
     {
       id: 'cancel',
       icon: 'cancel',
-      angle: angles[2] ?? 90,
+      angle: angles[orders.canRelease ? 2 : 1] ?? 90,
       label: t('group.cancel'),
       key: 'X',
       // Under `combat.retreat = "none"` a group in a fight cannot leave (DEC-40): say why.
@@ -61,7 +62,7 @@
     {
       id: 'merge',
       icon: 'merge',
-      angle: angles[3] ?? 180,
+      angle: angles[orders.canRelease ? 3 : 2] ?? 180,
       label: t('group.merge'),
       key: 'G',
       disabled: mergeable < 2,

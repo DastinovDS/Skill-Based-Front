@@ -46,11 +46,13 @@ describe('OrderController: planned orders and the «Supply» layer (DEC-41)', ()
     vi.useRealTimers();
   });
 
-  it('a Shift click with no wheel step asks for bonus 1; an ordinary order for none (#797)', () => {
+  it('an E click with no wheel step asks for bonus 1; an ordinary order for none (#797)', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     expect(controller.planBonus).toBe(PLAN_BONUS.min);
-    controller.click({ kind: 'node', id: enemy.id }, true);
+    controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    controller.key({ type: 'keyup', code: 'KeyE', shiftKey: false });
     controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
     expect(sent).toEqual([
@@ -68,7 +70,8 @@ describe('OrderController: planned orders and the «Supply» layer (DEC-41)', ()
     expect(controller.key({ type: 'keydown', code: 'BracketRight', shiftKey: true })).toBe(false);
     expect(controller.key(down('BracketLeft'))).toBe(false);
     expect(controller.planBonus).toBe(PLAN_BONUS.min);
-    controller.click({ kind: 'node', id: enemy.id }, true);
+    controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
+    controller.click({ kind: 'node', id: enemy.id }, false);
     expect(sent).toEqual([
       { type: 'move', group: group.id, dest: enemy.id, planned: true, bonus: 1 },
     ]);

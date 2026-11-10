@@ -101,11 +101,13 @@ def test_the_rally_events_reach_their_owner_only() -> None:
 
 
 def test_ruleset_public_has_the_group_order_in_mvp7_only() -> None:
-    """Item I4 and item J: on in ``mvp-7``, off in every other kept ruleset."""
-    mvp7 = RulesetPublic.from_ruleset(load_ruleset(RULESETS / "mvp-7.toml"))
-    assert mvp7.group_order == GroupOrderPublic(max_groups=16, rally_pct=50)
-    assert (mvp7.recruit.rally_point, mvp7.recruit.rally_cost) == (True, 50)
-    for name in ("mvp-5", "mvp-6", "test-short"):
+    """Item I4 and item J: on in ``mvp-7`` and its 60-second copy ``test-short`` (#896), off in
+    every other kept ruleset."""
+    for name in ("mvp-7", "test-short"):
+        on = RulesetPublic.from_ruleset(load_ruleset(RULESETS / f"{name}.toml"))
+        assert on.group_order == GroupOrderPublic(max_groups=16, rally_pct=50)
+        assert (on.recruit.rally_point, on.recruit.rally_cost) == (True, 50)
+    for name in ("mvp-5", "mvp-6"):
         other = RulesetPublic.from_ruleset(load_ruleset(RULESETS / f"{name}.toml"))
         assert other.group_order is None
         assert (other.recruit.rally_point, other.recruit.rally_cost) == (False, 0)

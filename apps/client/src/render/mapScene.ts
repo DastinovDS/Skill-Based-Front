@@ -22,7 +22,10 @@ import {
   type MapInteraction,
   type PickHit,
   type WheelInput,
+  type WorldRect,
 } from './interaction.ts';
+import { insideRect } from './groupOrderLayout.ts';
+import { GroupOrderView } from './groupOrderView.ts';
 import { OverlayView } from './overlayView.ts';
 import { UndoView } from './undoView.ts';
 import { nodePoint } from './layout.ts';
@@ -114,6 +117,10 @@ export class MapScene {
   private readonly effects: EffectsView;
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
+  /** The group order and the rally points on the map (DEC-48): the seal, the waits, the muster rings. */
+  private readonly groupOrders: GroupOrderView;
+  /** The Shift+drag selection box being dragged (world units); `null`: none (DEC-48, item K1). */
+  private box: WorldRect | null = null;
   private readonly undo: UndoView;
   private readonly supply: SupplyView;
   private readonly flow: FlowView;
@@ -189,6 +196,7 @@ export class MapScene {
       radiusOf,
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
+    this.groupOrders = new GroupOrderView(map, this.layers, me, radiusOf);
     this.undo = new UndoView(map, this.layers, radiusOf);
     this.supply = new SupplyView(map, this.layers, me, radiusOf, this.sprites);
     this.flow = new FlowView(map, this.layers, me, radiusOf, this.sprites);
@@ -206,6 +214,7 @@ export class MapScene {
       onclick: this.onClick,
       onhover: this.onHover,
       onwheel: this.onWheel,
+      onbox: this.onBox,
     });
     app.stage.addChild(this.layers.world);
     app.renderer.on('resize', this.onResize);
@@ -297,6 +306,7 @@ export class MapScene {
     this.intents.destroy();
     this.entities.destroy();
     this.overlay.destroy();
+    this.groupOrders.destroy();
     this.undo.destroy();
     this.supply.destroy();
     this.flow.destroy();
@@ -456,7 +466,9 @@ export class MapScene {
     this.entities.punch([...punches, ...tollPunches]);
     this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
+    this.overlay.setBox(this.box ?? overlay.box ?? null);
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
+    this.groupOrders.update(frame, overlay, this.entities.groupPoints(), tickHz);
     this.undo.update(
       overlay.undo ?? [],
       (id) => this.entities.groupPoints().get(id),
@@ -526,7 +538,42 @@ export class MapScene {
     this.interaction?.click(this.hitAt(at), shift);
   };
 
-  /** The wheel goes to the match input first (Shift + wheel: the plan bonus, #793), else it zooms. */
+  /**
+   * A Shift+drag box (DEC-48, item K1): drawn while it is dragged; on release the groups whose
+   * token stands inside it go to the match input, left to right (it keeps the own ones). Only a
+   * match input that selects groups (`selectBox`) gets a box at all.
+   */
+  private readonly onBox = (
+    box: { readonly from: Point; readonly to: Point } | null,
+    done: boolean,
+  ): void => {
+    const interaction = this.interaction;
+    if (box === null || interaction?.selectBox === undefined) {
+      this.box = null;
+      return;
+    }
+    const a = this.toWorld(box.from);
+    const b = this.toWorld(box.to);
+    const rect: WorldRect = { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+    this.box = done ? null : rect;
+    if (!done) return;
+    const inside = [...this.entities.groupPoints()]
+      .filter(([, spot]) => spot.enemy !== true && insideRect(rect, spot))
+      .sort(([, p], [, q]) => p.x - q.x || p.y - q.y)
+      .map(([id]) => id);
+    interaction.selectBox(inside);
+  };
+
+  /** A point of the canvas (CSS px) in world units. */
+  private toWorld(at: Point): Point {
+    const world = this.layers.world;
+    return {
+      x: (at.x - world.position.x) / world.scale.x,
+      y: (at.y - world.position.y) / world.scale.y,
+    };
+  }
+
+  /** The wheel goes to the match input first (E + wheel: the plan bonus, #793), else it zooms. */
   private readonly onWheel = (input: WheelInput): boolean =>
     this.interaction?.wheel?.(input) ?? false;
 
@@ -565,6 +612,8 @@ export class MapScene {
     this.cities.setLabelResolution(resolution);
     this.overlay.setLabelResolution(resolution);
     this.overlay.setCameraScale(camera.scale);
+    this.groupOrders.setLabelResolution(resolution);
+    this.groupOrders.setCameraScale(camera.scale);
     // The order arrows, ribbons and cues of #851: hairlines keep one device pixel.
     this.overlay.setDeviceResolution(this.app.renderer.resolution);
     this.intents.setDeviceResolution(this.app.renderer.resolution);

@@ -1,11 +1,15 @@
 <script lang="ts">
   import { t } from '../i18n/index.ts';
 
-  /** `[key, dictionary key of what it does]`: the keys themselves are not translated. */
+  /**
+   * `[key, dictionary key of what it does]`: the keys themselves are not translated. DEC-48, item
+   * K1: Shift selects several groups, the planned order is on `E` (item K2).
+   */
   const HINTS = [
     ['Q', 'hints.stance'],
     ['Tab', 'hints.supply'],
-    ['Shift', 'hints.plan'],
+    ['Shift', 'hints.select'],
+    ['E', 'hints.plan'],
     ['R', 'hints.recruit'],
     ['?', 'hints.help'],
   ] as const;

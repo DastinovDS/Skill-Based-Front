@@ -16,6 +16,7 @@
   import type { HudState } from './hudState.svelte.ts';
   import KeyHints from './KeyHints.svelte';
   import RadialMenu from './RadialMenu.svelte';
+  import SelectionCard from './SelectionCard.svelte';
   import SplitMenu from './SplitMenu.svelte';
   import StackRadial from './StackRadial.svelte';
   import StartBanner from './StartBanner.svelte';
@@ -128,22 +129,18 @@
     return orders.ui.onFeedback((feedback) => {
       if (feedback.kind === 'accepted') return;
       const command = t(`cmd.${feedback.cmd.type}`);
+      const reason = (code: string): string =>
+        t(rejectMessageKey(code, feedback.cmd.type, hud.context.rules.combat.retreat));
       hud.toasts.push({
         tone: 'warn',
         icon: 'alert',
         text:
           feedback.kind === 'lost'
             ? t('orders.lost')
-            : tf('orders.rejected', {
-                command,
-                reason: t(
-                  rejectMessageKey(
-                    feedback.code,
-                    feedback.cmd.type,
-                    hud.context.rules.combat.retreat,
-                  ),
-                ),
-              }),
+            : feedback.kind === 'dropped'
+              ? // DEC-48, item B3: the groups a group order went without, by their code.
+                tf('orders.dropped', { count: feedback.count, reason: reason(feedback.code) })
+              : tf('orders.rejected', { command, reason: reason(feedback.code) }),
       });
     });
   });
@@ -175,6 +172,7 @@
     city={data?.node ?? null}
   />
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
+  <SelectionCard {orders} groups={data?.groups ?? []} />
   <StackRadial {orders} {anchors} names={hud.nodeName} />
   <GroupTip group={data?.hovered ?? null} />
   <TerrainBanner {orders} />
@@ -183,6 +181,8 @@
   <HelpOverlay
     open={chrome.helpOpen}
     captureCost={hud.context.rules.capture.charge_cost}
+    groupOrder={hud.context.rules.group_order !== null}
+    rallyPoint={hud.context.rules.recruit.rally_point}
     onclose={() => {
       chrome.helpOpen = false;
     }}

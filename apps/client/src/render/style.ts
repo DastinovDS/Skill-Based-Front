@@ -511,6 +511,51 @@ export const GHOST_AGE_STROKE = { color: BG, width: 3, join: 'round' } as const;
 
 /** The selection ring of a city sits outside its capacity ring and warning ring. */
 export const SELECT_RING_GAP = 18;
+
+// The group order and the recruit rally point (DEC-48, #896; mockup `group-order.html`): the look the
+// owner chose (item K8): A1 frames and box, A2 numbered seals, B1 one hourglass seal, C3 the
+// hourglass beside a waiting helmet, D2 hatched ribbons while E is held, E3 the muster ring. Sizes in
+// world units; the seals, the discs and their text keep their size on screen (`badgeScale`), the
+// rings and the box are drawn round the map.
+export const GROUP_ORDER = {
+  /** A2: the lozenge seal at the top left of a selected helmet with its place in the selection. */
+  seal: { half: 7, casing: 1.6, ink: 1, fontSize: 12, dx: -0.56, dy: -0.44 },
+  /** A1: the box: a faint paper ground, a dark band, an ink hairline either side, lozenge corners. */
+  box: { fill: 0.06, band: 6.2, bandAlpha: 0.85, ink: 1, inner: 0.55, offset: 1.6, corner: 5 },
+  /**
+   * B1: the hourglass seal over the target: a disc `lift` above the ring on a leader, the seconds to
+   * the arrival on its left, a lozenge per member under it (filled: on the way; a rally: merged), the
+   * price on its right before the click.
+   */
+  arrival: {
+    disc: 17,
+    lift: 40,
+    hourglass: 20,
+    lozenge: 6.4,
+    lozengeGap: 12,
+    lozengeY: 27,
+    textGap: 27,
+    fontSize: 15,
+    price: { height: 22, padding: 8, gap: 5, fontSize: 14, mark: 13, offset: 30 },
+  },
+  /** C3: the hourglass disc beside a waiting helmet, the seconds after it. */
+  wait: { disc: 13, hourglass: 16, gap: 8, textGap: 18, fontSize: 14 },
+  /** The disc of B1 and C3 (the travel time's, #627): a casing, a dark plate, a paper rim. */
+  disc: { casing: 1.6, fillAlpha: 0.94, rim: 1, rimAlpha: 0.75 },
+  /** E3: the muster ring round the point, four arcs; a disc with the recruit helmet on top. */
+  muster: {
+    gap: 13,
+    arcs: 4,
+    arc: 1.0,
+    casing: 5.4,
+    width: 2.6,
+    disc: 13,
+    helmet: 17,
+    chevron: { gap: 12, length: 14, width: 7 },
+    /** The ring a rally point pick shows at the node under the pointer. */
+    pickAlpha: 0.55,
+  },
+} as const;
 /**
  * Nodes the selected group can go to (DEC-20): a thin solid ring (own colour); nodes it can
  * reach only after a split: a dashed warning ring. Solid against dashed, not only colour.
@@ -540,7 +585,7 @@ export const ETA_MARK = {
   badgeClear: 14,
 } as const;
 /**
- * The bonus counter over the target of a planned order while Shift is held (#793): a dark pill with
+ * The bonus counter over the target of a planned order while E is held (#793, DEC-48): a dark pill with
  * an own-coloured rim just above the target city's ring; the green chevron of a bonus (#797,
  * the badge's), the bonus as text ("+3") and the gathering time it implies. Sized in world units and
  * scaled like the travel time (`badgeScale`). Shape and text carry it, never colour alone.

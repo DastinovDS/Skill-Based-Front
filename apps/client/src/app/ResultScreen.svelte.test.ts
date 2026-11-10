@@ -202,7 +202,7 @@ describe('ResultScreen', () => {
         calibration: { played: 3, total: 5 },
       });
       expect(text).toContain('Calibration 3/5');
-      expect(text).not.toContain(translate('en', 'result.calibrationHidden'));
+      expect(text).not.toContain('Your rating shows once calibration is over.');
       expect(text).not.toContain('from ');
     });
 
@@ -214,7 +214,7 @@ describe('ResultScreen', () => {
       });
       expect(text).toContain('Calibration 5/5');
       expect(text).toContain('+60');
-      expect(text).not.toContain(translate('en', 'result.calibrationHidden'));
+      expect(text).not.toContain('Your rating shows once calibration is over.');
     });
   });
 });

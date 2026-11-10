@@ -27,10 +27,20 @@ export type OrderNotice =
 export type OrderFeedback =
   | { readonly kind: 'accepted'; readonly cmd: Command }
   | { readonly kind: 'rejected'; readonly code: string; readonly cmd: Command }
-  | { readonly kind: 'lost'; readonly cmd: Command };
+  | { readonly kind: 'lost'; readonly cmd: Command }
+  /**
+   * A group order went (DEC-48, item B3), but `count` of its groups were dropped with `code`
+   * (`ack.members`): one feedback per code.
+   */
+  | {
+      readonly kind: 'dropped';
+      readonly code: string;
+      readonly count: number;
+      readonly cmd: Command;
+    };
 
 export interface OrderUiData {
-  /** The "planned order" switch (Shift+click also makes one order planned). */
+  /** The "planned order" switch (E held + click also makes one order planned, DEC-48, item K2). */
   readonly planned: boolean;
   /**
    * The node the pointer rests on as a target of the selected group that the server says the group is
@@ -55,7 +65,7 @@ export interface OrderUiData {
   /** The terrain map mode is on (`T`, #429): patterns for the ground, a sight sign on the places you see. */
   readonly terrainMode: boolean;
   /**
-   * A planned order is being made now: the switch is on or Shift is held (the plan bar shows its
+   * A planned order is being made now: the switch is on or E is held (the plan bar shows its
    * bonus stepper prominently then, #762).
    */
   readonly planning: boolean;
@@ -74,6 +84,14 @@ export interface OrderUiData {
   readonly notice: OrderNotice | null;
   /** The answer to the last `reach_query` for the selected group; `null`: none yet. */
   readonly reach: ReachInfo | null;
+  /**
+   * The groups selected together (DEC-48, item K1: Shift+click, Shift+drag), in the order of the
+   * selection (it decides the remainder of a planned bonus): two or more, else empty (a single
+   * selected group is the ordinary selection).
+   */
+  readonly picks: readonly string[];
+  /** The rally point pick (DEC-48, item K7): the own city whose point is being set; `null`: none. */
+  readonly rallyFrom: number | null;
 }
 
 /**
@@ -94,6 +112,8 @@ export class OrderUiState {
     cpPrice: null,
     notice: null,
     reach: null,
+    picks: [],
+    rallyFrom: null,
   });
 
   #listeners: readonly ((feedback: OrderFeedback) => void)[] = [];

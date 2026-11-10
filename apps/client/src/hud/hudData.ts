@@ -117,6 +117,8 @@ export interface NodeInfo {
   readonly factory: boolean | null;
   /** Own node: the factory being built there (economy v2); `null` without one. */
   readonly factoryBuild: SiteInfo | null;
+  /** Own city: the node its new units walk to (DEC-48, item H, `NodeView.rally_point`); `null` without one. */
+  readonly rallyPoint: number | null;
 }
 
 /** The current build of an own city (`NodeView.building`, DEC-26). */
@@ -364,6 +366,7 @@ function nodeInfo(
           },
     factory: node.factory,
     factoryBuild: siteInfo(node.factory_build, tick, ctx.rules.tick_hz),
+    rallyPoint: node.rally_point,
   };
 }
 

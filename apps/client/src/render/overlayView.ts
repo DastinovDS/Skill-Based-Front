@@ -6,10 +6,16 @@ import { chevronHalfWidth, drawBonusChevron } from './bonusChevron.ts';
 import { etaPlace, secondsRight } from './etaLayout.ts';
 import hourglassUrl from './glyphs/hourglass.png';
 import type { Point } from './camera.ts';
-import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
+import {
+  EMPTY_OVERLAY,
+  type GhostArrow,
+  type OverlayState,
+  type WorldRect,
+} from './interaction.ts';
+import { normRect } from './groupOrderLayout.ts';
 import { CP_REJECT, ghostLook, ribbonShape, tailStart } from './intentLayout.ts';
 import { drawCasedArrow, pathLength, pointAlong, slicePath, trimPath } from './casedArrow.ts';
-import { hairFloor } from './engraving.ts';
+import { HatchTile, hairFloor } from './engraving.ts';
 import { easeSettle } from '../theme/tokens.ts';
 import { reducedMotion } from './motion.ts';
 import type { MapLayers } from './layers.ts';
@@ -19,6 +25,7 @@ import { nodePoint, type TokenSpot } from './layout.ts';
 import { ringRadius } from './cityLayout.ts';
 import {
   BONUS_MARK,
+  GROUP_ORDER,
   ETA_FONT_SIZE,
   ETA_MARK,
   BG,
@@ -213,6 +220,33 @@ export class OverlayView {
   });
   private tickHz = 10;
   private cameraScale = 1;
+  /**
+   * The groups selected together (DEC-48, item K8, A1 and A2): a frame round each and a lozenge seal
+   * with its place in the selection; one entry per place, kept for the next selection.
+   */
+  private readonly picks: {
+    readonly frame: Graphics;
+    readonly seal: Container;
+    readonly plate: Graphics;
+    readonly text: Text;
+    key: string;
+  }[] = [];
+  private readonly pickLayer = new Container({ label: 'group-picks' });
+  private readonly sealStyle = new TextStyle({
+    fontFamily: 'system-ui, sans-serif',
+    fontSize: GROUP_ORDER.seal.fontSize,
+    fontWeight: '600',
+    fill: INK,
+  });
+  /** The Shift+drag box (A1): a dark band with an ink hairline either side and lozenge corners. */
+  private readonly boxShape = new Graphics({ label: 'select-box' });
+  private box: WorldRect | null = null;
+  private boxDrawn = false;
+  /** The preview of a group order (DEC-48, item K4): a line, or with E held a ribbon (D2), a member. */
+  private readonly groupLines = new Graphics({ label: 'group-preview' });
+  private groupDrawn = false;
+  /** The hatch of a planned ribbon in the preview of a group order with E held (D2). */
+  private readonly ownHatch = new HatchTile(RIBBON_ENGRAVED.own);
   constructor(
     private readonly map: MapFile,
     layers: MapLayers,
@@ -267,11 +301,14 @@ export class OverlayView {
     layers.layer.intents.addChild(
       this.lines,
       this.path,
+      this.groupLines,
       this.ring,
       this.hoverFrame,
       this.frame,
+      this.pickLayer,
       this.eta,
       this.bonus,
+      this.boxShape,
       // Last: a rejected order's ghost lies over everything of the overlay.
       this.ghosts,
     );
@@ -305,10 +342,15 @@ export class OverlayView {
       this.frame.position.set(at.x, at.y);
       this.frame.scale.set(at.scale);
     }
+    this.placePicks(next.picks ?? [], groupSpot);
+    this.drawBox();
+    if (next.group != null || this.groupDrawn) this.drawGroupPreview(next, now);
     // The group under the pointer gets a light outline, unless it is the selected one.
     const hovered = next.hover?.group ?? null;
     const spot =
-      hovered === null || (selected?.kind === 'group' && selected.id === hovered)
+      hovered === null ||
+      (selected?.kind === 'group' && selected.id === hovered) ||
+      next.picks?.includes(hovered) === true
         ? undefined
         : groupSpot(hovered);
     this.hoverFrame.visible = spot !== undefined;
@@ -321,8 +363,203 @@ export class OverlayView {
   }
 
   setLabelResolution(resolution: number): void {
-    for (const text of [this.etaText, this.bonusText, this.bonusTime]) {
+    const texts = [this.etaText, this.bonusText, this.bonusTime, ...this.picks.map((p) => p.text)];
+    for (const text of texts) {
       if (text.resolution !== resolution) text.resolution = resolution;
+    }
+    this.labelResolution = resolution;
+  }
+
+  private labelResolution = 1;
+
+  /** The selection box being dragged, world units (DEC-48, item K1); `null`: none. */
+  setBox(box: WorldRect | null): void {
+    this.box = box;
+  }
+
+  /**
+   * The groups selected together (A1 and A2): today's selection frame round each and, at the top
+   * left of its helmet, a lozenge seal with its place in the selection (the order decides the
+   * remainder of a planned bonus, DEC-48, item F2). They follow their tokens every frame.
+   */
+  private placePicks(
+    ids: readonly string[],
+    groupSpot: (id: string) => TokenSpot | undefined,
+  ): void {
+    ids.forEach((id, i) => {
+      const pick = this.pick(i);
+      const at = groupSpot(id);
+      pick.frame.visible = at !== undefined;
+      pick.seal.visible = at !== undefined;
+      if (at === undefined) return;
+      const key = frameKey(at);
+      if (pick.key !== key) {
+        this.drawFrameInto(pick.frame, at);
+        pick.key = key;
+      }
+      pick.frame.position.set(at.x, at.y);
+      pick.frame.scale.set(at.scale);
+      const w = helmetWidth(at.side, at.inside === true) * at.scale;
+      const S = GROUP_ORDER.seal;
+      pick.seal.position.set(at.x + w * S.dx, at.y + w * S.dy);
+      pick.seal.scale.set(at.scale);
+      const label = String(i + 1);
+      if (pick.text.text !== label) pick.text.text = label;
+    });
+    for (let i = ids.length; i < this.picks.length; i++) {
+      const pick = this.picks[i];
+      if (pick === undefined) continue;
+      pick.frame.visible = false;
+      pick.seal.visible = false;
+    }
+  }
+
+  /** The frame and the seal of the place `i` of the selection, made the first time it is needed. */
+  private pick(i: number): (typeof this.picks)[number] {
+    const known = this.picks[i];
+    if (known !== undefined) return known;
+    const S = GROUP_ORDER.seal;
+    const plate = new Graphics();
+    const h = S.half * Math.SQRT2;
+    const lozenge = (r: number): number[] => [0, -r, r, 0, 0, r, -r, 0];
+    plate.poly(lozenge(h + S.casing)).fill(CASING);
+    plate.poly(lozenge(h)).fill(DARK_PLATE);
+    plate.poly(lozenge(h - 1.2)).stroke({ width: S.ink, color: INK, join: 'miter' });
+    const text = new Text({
+      text: '',
+      style: this.sealStyle,
+      anchor: 0.5,
+      resolution: this.labelResolution,
+    });
+    const seal = new Container({ label: 'group-seal' });
+    seal.addChild(plate, text);
+    const frame = new Graphics({ label: 'group-frame' });
+    this.pickLayer.addChild(frame, seal);
+    const made = { frame, seal, plate, text, key: '' };
+    this.picks[i] = made;
+    return made;
+  }
+
+  /**
+   * The Shift+drag box (A1): a faint paper ground, a dark band, an ink hairline outside and a
+   * fainter one inside, a lozenge at each corner. Kept in world units, the line widths in screen px.
+   */
+  private drawBox(): void {
+    const g = this.boxShape;
+    const box = this.box;
+    if (box === null) {
+      if (this.boxDrawn) g.clear();
+      this.boxDrawn = false;
+      return;
+    }
+    const { x, y, width, height } = normRect(box);
+    const k = 1 / Math.max(this.cameraScale, 1e-6);
+    const B = GROUP_ORDER.box;
+    g.clear();
+    this.boxDrawn = true;
+    if (width < 2 * k || height < 2 * k) return;
+    g.rect(x, y, width, height).fill({ color: INK, alpha: B.fill });
+    g.rect(x, y, width, height).stroke({
+      width: B.band * k,
+      color: CASING,
+      alpha: B.bandAlpha,
+      join: 'miter',
+    });
+    const o = B.offset * k;
+    g.rect(x - o, y - o, width + 2 * o, height + 2 * o).stroke({
+      width: B.ink * k,
+      color: INK,
+      join: 'miter',
+    });
+    g.rect(x + o, y + o, width - 2 * o, height - 2 * o).stroke({
+      width: B.ink * k * 0.8,
+      color: INK,
+      alpha: B.inner,
+      join: 'miter',
+    });
+    const r = (B.corner * Math.SQRT2 * k) / 2;
+    for (const [cx, cy] of [
+      [x, y],
+      [x + width, y],
+      [x, y + height],
+      [x + width, y + height],
+    ] as const) {
+      g.poly([
+        cx,
+        cy - r - 1.1 * k,
+        cx + r + 1.1 * k,
+        cy,
+        cx,
+        cy + r + 1.1 * k,
+        cx - r - 1.1 * k,
+        cy,
+      ]).fill(CASING);
+      g.poly([cx, cy - r, cx + r, cy, cx, cy + r, cx - r, cy]).fill(INK);
+    }
+  }
+
+  /**
+   * The order a click would give the groups selected together (DEC-48, item K4): from the ring of
+   * each member's city to the target, the hollow Cased arrow of a move (no route: the server gives
+   * it with the `ack`); with `E` held (D2) a hatched planned ribbon each, the map itself says
+   * "planned". The seal over the target is `GroupOrderView`'s.
+   */
+  private drawGroupPreview(state: OverlayState, now: number): void {
+    const g = this.groupLines;
+    g.clear();
+    const preview = state.group ?? null;
+    this.groupDrawn = preview !== null;
+    if (preview === null) return;
+    const reduced = reducedMotion();
+    for (const from of preview.from) {
+      if (preview.planned) {
+        this.drawPlanRibbon(g, from, preview.to);
+        continue;
+      }
+      const points = this.routePoints([from, preview.to]);
+      if (points.length < 2) continue;
+      drawCasedArrow(g, points, {
+        color: YOU,
+        ghost: true,
+        alpha: ORDER_GHOST_ALPHA,
+        seconds: reduced ? 0 : now / 1000,
+        hair: this.hair(),
+        zoom: this.cameraScale,
+      });
+    }
+  }
+
+  /** A planned ribbon of the preview (D2): the ghost ribbon with the own hatch, the tail dot. */
+  private drawPlanRibbon(g: Graphics, from: number, dest: number): void {
+    const origin = nodePoint(this.map, from);
+    const target = nodePoint(this.map, dest);
+    if (origin === undefined || target === undefined) return;
+    const shape = ribbonShape(
+      origin,
+      target,
+      [],
+      tailStart(origin, target, this.radius(from)),
+      ringRadius(this.radius(dest)) + CASED.endGap,
+      this.cameraScale,
+    );
+    if (shape === null) return;
+    const poly = shape.ribbon.outline.flatMap((p) => [p.x, p.y]);
+    const E = RIBBON_ENGRAVED;
+    g.poly(poly).stroke({ width: E.casing, color: CASING, join: 'round' });
+    g.poly(poly).fill({ color: DARK_PLATE, alpha: E.plateAlpha });
+    // A wash of the own colour under the hatch: the preview reads as an own planned ribbon (D2).
+    g.poly(poly).fill({ color: YOU, alpha: 0.28 });
+    g.poly(poly).fill({
+      texture: this.ownHatch.texture,
+      textureSpace: 'global',
+      matrix: this.ownHatch.matrix(E.own.angle),
+      color: YOU,
+      alpha: E.own.alpha,
+    });
+    g.poly(poly).stroke({ width: Math.max(E.outline, this.hair()), color: INK, join: 'round' });
+    const start = shape.axis[0];
+    if (start !== undefined) {
+      g.circle(start.x, start.y, E.tail.own).fill(CASING).stroke({ width: E.tail.ink, color: INK });
     }
   }
 
@@ -334,11 +571,13 @@ export class OverlayView {
   /** Camera scale (CSS px per world unit): the number keeps its size on screen. */
   setCameraScale(scale: number): void {
     this.cameraScale = scale;
+    this.ownHatch.update(scale, this.deviceResolution);
   }
 
   /** The device pixel ratio: the hairlines of the arrows keep one device pixel. */
   setDeviceResolution(resolution: number): void {
     this.deviceResolution = resolution;
+    this.ownHatch.update(this.cameraScale, resolution);
   }
 
   /** One device pixel in world units now. */
@@ -503,6 +742,11 @@ export class OverlayView {
     this.ring.destroy();
     this.hoverFrame.destroy();
     this.frame.destroy();
+    this.pickLayer.destroy({ children: true });
+    this.sealStyle.destroy();
+    this.boxShape.destroy();
+    this.groupLines.destroy();
+    this.ownHatch.destroy();
   }
 
   /**
@@ -545,7 +789,12 @@ export class OverlayView {
    * whole helmet, strap included (#784).
    */
   private drawFrame(at: TokenSpot, key: string): void {
-    const g = this.frame;
+    this.drawFrameInto(this.frame, at);
+    this.frameKey = key;
+  }
+
+  /** The selection frame of `at` into `g` (the selected group's, or one of the groups selected together). */
+  private drawFrameInto(g: Graphics, at: TokenSpot): void {
     g.clear();
     // Engraved (#847): a dark casing with two ink hairlines along it, round the whole helmet.
     const S = HELMET_SELECT;
@@ -562,7 +811,6 @@ export class OverlayView {
         join: 'round',
       });
     }
-    this.frameKey = key;
   }
 
   /** The hover outline: the selection frame's shape, closer, thinner and faint (#762). */

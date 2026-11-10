@@ -97,6 +97,19 @@ describe('eventText', () => {
     });
   });
 
+  it('tells the alerts of the recruit rally point (DEC-48, item I3), as warning toasts', () => {
+    setLocale('en');
+    const cleared = event('rally_point_cleared', { player: 0, node: 1, target: 2 });
+    const noCp = event('rally_walk_no_cp', { player: 0, node: 1, target: 2, group: 'g' });
+    expect(isLogged('rally_point_cleared')).toBe(true);
+    expect(isLogged('rally_walk_no_cp')).toBe(true);
+    expect(eventText(cleared, 0, names)).toBe('The rally point of Birch is gone: Cedar is lost');
+    expect(eventText(noCp, 0, names)).toBe(
+      'A recruit of Birch stays home: no CP for the walk to Cedar',
+    );
+    expect(toastOf(noCp, 0, names)).toMatchObject({ tone: 'warn', icon: 'alert' });
+  });
+
   it('does not show an unknown kind (never a raw kind name)', () => {
     expect(isLogged('weather')).toBe(false);
     expect(eventText(event('weather', {}), 0, names)).toBe('');
