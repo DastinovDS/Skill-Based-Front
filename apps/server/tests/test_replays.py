@@ -76,12 +76,13 @@ def full_rules() -> Ruleset:
 def test_frame_roads_are_all_level_1(line3: MapDef, full_rules: Ruleset) -> None:
     """Key ``w`` keeps its slot with level 1 on every road (#894: no road upgrades); no ``r``
     (road types, DEC-26), no ``e`` (road builds, DEC-28) and no ``b`` any more; a barracks build
-    (DEC-26) is not drawn."""
+    (DEC-26) is a building of its city in ``c`` since #905 (``test_frames_buildings.py``)."""
     state = initial_state(line3, full_rules)
     state.nodes[0].build = Build(owner=0, since=0, kind=BuildKind.BARRACKS)
     frame = frame_of(state, full_rules)
     assert frame["w"] == [1, 1]
     assert not {"r", "e", "b"} & set(frame)
+    assert "c" in frame
 
 
 def test_frame_nodes_carry_the_warehouse_places(full_rules: Ruleset) -> None:
@@ -847,6 +848,32 @@ def test_replay_file_without_vision_and_nicks_is_served_as_it_is(
     assert response.status_code == 200
     served = response.json()
     assert "nicks" not in served and all("v" not in f for f in served["frames"])
+
+
+def test_replay_file_without_buildings_is_served_as_it_is(
+    api: Api, line3: MapDef, short_rules: Ruleset
+) -> None:
+    """A file written before #905 has no ``c`` and ``d`` in its frames nor in their ``v``: still
+    served as is (the server reads only the header; the viewer tells it by the missing keys and
+    shows no buildings)."""
+    a, _ = _guest(api, "Alice")
+    b, _ = _guest(api, "Bobby")
+    path = _frames_file(api, "13.frames.json.gz", line3, short_rules)
+    doc = json.loads(gzip.decompress(path.read_bytes()))
+    assert all("c" in f for f in doc["frames"])  # the capitals are factories with a barracks
+    doc["format"] = 1  # what the server wrote before #905, whatever ``FORMAT`` is now
+    for frame in doc["frames"]:
+        frame.pop("c")
+        frame.pop("d", None)
+        for vision in frame["v"]:
+            vision.pop("c", None)
+            vision.pop("d", None)
+    path.write_bytes(gzip.compress(json.dumps(doc).encode()))
+    _add_match(api, 13, True, (a, b), path.name)
+
+    response = api.client.get("/api/replays/13")
+    assert response.status_code == 200
+    assert response.json() == doc
 
 
 def test_unrated_replay_is_for_the_participants(

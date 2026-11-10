@@ -5,10 +5,13 @@ The frames file (SRV-07, #54): the full match state twice a second plus all even
 or the ruleset changes. The file shows **the real state of both players without the fog of war**:
 the server serves it only after the match. Since #598 every frame also carries **what each player saw**
 (the key `v`, section "Vision"): the fog part of `project()` for that player and tick, so the viewer can
-show the match "as player 1" or "as player 2" without computing vision (`AGENTS.md` 7.1).
+show the match "as player 1" or "as player 2" without computing vision (`AGENTS.md` 7.1). Since #905
+every frame also carries **the buildings** of both players (the keys `c` and `d`, section
+"Buildings"), and `v` the enemy buildings each player's view showed.
 
-Code: `gow_server.frames` (`build_frames`, `FORMAT`). The format version: the field `format` (now `1`);
-the client must reject a file with an unknown `format`.
+Code: `gow_server.frames` (`build_frames`, `FORMAT`). The format version: the field `format` (now `1`;
+`2` once the viewer of #905 reads the buildings, section "Format change"); the client must reject a
+file with an unknown `format`.
 
 ## Where it comes from
 
@@ -100,6 +103,8 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
 | `e` | road construction (DEC-28, `sim_version` 15 to 46), by edge id; no key while nothing is being built; the server does not write it since `sim_version` 47 (#894), older files still carry it | `[edge, owner, done_tick]`: edge, player, the tick of the level upgrade |
 | `r` | ~~road type by edge id (DEC-22)~~ **[superseded by DEC-26, #265]**: the server does not write the key (there is no road type); it exists only in files of `sim_version` 5..11, the client reads it and does not use it; `FORMAT` stays 1 | `none`, `fast` or `freight` |
 | `v` | what each player saw (#598), `[player 0, player 1]`; no key in files from before #598 | a vision object per player, section "Vision" |
+| `c` | the buildings of the cities (#905), in node order, only the cities with any; no key while there are none (and in files from before #905) | a city record, section "Buildings" |
+| `d` | the road fortifications (DEC-43, item D; #905), by edge id, the end `a` first; no key while there are none (and in files from before #905) | `[edge, node, built, ready]`, section "Buildings" |
 | `f` | fights in progress (DEC-24), by `id`; no key while there are no fights (and in files from before DEC-24, `sim_version` up to 10) | `[id, node, edge, point, attacker, start, next_round, [group, ...], [shots, losses, virtual_left, last_round]]`: `node` or `edge` (the other is `null`); `point` on an edge: the doubled meeting point in thousandths from end `a` (0..2000, a mark at the fraction `point / 2000`), in a node `null`; `attacker` in a node, otherwise `null`; the start tick and the tick of the next round; the ids of the fight's groups of both players. The ninth element (round data, #323) exists only in files written after #323 (a fight record of eight elements is an older file: the arena is empty). It holds pairs `[player 0, player 1]`: `shots` and `losses` (fight totals so far, `FightView.shots` and `losses`) and `virtual_left` (virtual shots left, `FightView.virtual_left`, DEC-32); `last_round` is `null` before the first round, otherwise `[tick, shots, virtual, spent, losses]` with a pair per player (`FightView.last_round`, same numbers as the `fight_round` event). The silent charges (`FightView.mute`) are not in the frames: the replay client builds them as zeros |
 
 A group: `{"id", "o": owner, "u": units, "c": charged, "m": mode, ...}`, plus
@@ -114,6 +119,51 @@ the viewer accepts old files and shows such a group in the mode `attack`.
 
 `mode`: `attack`, `defense`. Nodes and edges go in the order of the map ids (`n[i]` is node `i`).
 Keys that are not in the table (for example, the fog memory `vision_memory`) do not get into the file.
+
+## Buildings
+
+The full view of both players (#905), as the simulation holds it. A record leaves out its trailing
+`null` elements, like the records of `v`.
+
+A city record of `c`: `[node, factory, factory_build, barracks, build, recruit, rally]`, written for a
+city that has any of them (a city without one has no record: no factory and no barracks, nothing
+being built, an empty queue, no rally point; provinces never have one):
+
+- `factory`: the player whose factory the city is (DEC-41, item 2; the capitals from the start), or
+  `null`. In a frame it is always the city's owner (a captured factory passes to the capturer in the
+  tick of the capture).
+- `factory_build`: the factory being built there, `[done_tick, owed]`, or `null`: `owed` the charges
+  it still has to take (the progressive payment, DEC-41, item 7), `done_tick` the tick it starts to
+  work, `null` while `owed` is above 0 (the build time starts with the full payment). As
+  `NodeView.factory_build` of the owner's live view.
+- `barracks`: 0/1, the city may recruit (DEC-26; the capitals from the start; kept on a capture).
+- `build`: the barracks being built (DEC-26), `[done_tick, owed]` as above, or `null`
+  (`NodeView.building` of the owner; the kind is always the barracks).
+- `recruit`: the recruit queue (DEC-25), `[queue, progress, waiting]` while it is not empty, else
+  `null`: `queue` the units in it, the one in production included; `progress` the ticks of the
+  current unit (`0..recruit.unit_ticks`); `waiting` 0/1, the unit is ready and waits for a place
+  (`NodeView.recruit_waiting`, so the viewer compares nothing).
+- `rally`: the rally point of the city (DEC-48, item H), an own node of its owner, or `null`.
+
+A road fortification of `d`: `[edge, node, built, ready]`: `node` the end of the road it guards (it
+belongs to the owner of `node`; a capture destroys it), `built` 0/1 (it takes its toll), `ready` the
+tick it works from (the tick of the command plus `fort.build_ticks`), written also after it is built.
+
+What each side saw of them (the keys `c` and `d` of `v`, section "Vision"), so that "View as" a side
+never shows a building that side's live `PlayerView` did not:
+
+| Building | Own (from `c` and `d` by owner) | Enemy (only from `v[side]`) |
+|---|---|---|
+| factory, barracks | always | built or not, only of an enemy city joined by an edge of the map to an own node (DEC-31; DEC-41, item 2), by the current owners, no memory |
+| factory build, barracks build | always, with `done_tick` and `owed` | never (DEC-26, item 10; DEC-41) |
+| recruit queue | always | never (DEC-25, item 12) |
+| rally point | always | never (DEC-48, item I2) |
+| road fortification | always, with `ready` while it is being built | built or being built, while the half of its node on the road is not in fog for the side; no `ready`, no memory (DEC-43, item D8) |
+
+The own part of a side's view equals what its live view showed because a player's own buildings are
+all of them; the viewer picks the records of the cities and nodes that side owns in the frame
+(`n[i][0]`). The test `apps/server/tests/test_frames_buildings.py` holds both parts against `project()`
+in every frame of a recorded match.
 
 ## Vision
 
@@ -133,6 +183,8 @@ strings of `Detail`: `exact`, `range`, `presence`, `fog`.
 | `n` | nodes by id (`n[i]` is node `i`), as `NodeView` | `[detail, seen, warehouse]`: `detail` the zone level (`NodeView.detail`); `seen` the sighting (below, `NodeView.seen`): this tick's unless `detail` is `fog`, for `fog` the last one remembered or `null`; `warehouse` the charges of the warehouse as the player saw them (`NodeView.warehouse`: own nodes and foreign nodes where an own group stands, DEC-35; otherwise `null`) |
 | `e` | edges by id, as `EdgeView` | `[width, detail, half_a, half_b, figures]`: `width` the road level the player knew (always 1 since `sim_version` 47, #894; before it `EdgeView.width`: in fog the last one seen, or 1); `detail` the road visibility (`presence` or `fog`); `half_a`, `half_b` the halves of the ends `a` and `b` as `[detail, seen]` (`HalfView`; `seen` as for a node: in `fog` the remembered one, without positions); `figures` (no element while there are none) the enemy figures on the edge (`EdgeView.enemy_groups`, DEC-33), sorted by id |
 | `b` | the edges whose road build the player saw (`sim_version` 15 to 46; not written since #894): an own build always, an enemy one only while the edge is not in fog, DEC-17 item 5; no key while there are none | `[edge, ...]`; the tick of an own build is in the frame's `e`, an enemy build has none (`BuildView.done_tick` `null`) |
+| `c` | the enemy cities whose buildings the view showed (#905; DEC-31): an enemy city joined by an edge of the map to an own node; no key while there are none (and in files from before #905) | `[node, factory, barracks]`: `NodeView.factory` and `has_barracks` as 0/1 (a built factory, a built barracks; 0 also while one is being built) |
+| `d` | the enemy road fortifications the view showed (#905; DEC-43, item D8): while the half of its node on the road is not in fog; by edge, the end `a` first; no key while there are none (and in files from before #905) | `[edge, node, built]`: `RoadFortView` of `EdgeView.forts`, without a tick |
 
 A sighting (`Sighting`): `[level, modes, units, charged, range, tick]`, `level` its zone level,
 `modes` the distinct modes of the enemy groups seen (empty: none seen), `units` and `charged` the enemy
@@ -149,8 +201,9 @@ figure: the fight shows it (`f`).
 What a side sees and is not in `v`, because the frame has it already, for both players alike or by
 owner: its own groups and packets (`g` and `k` by owner; enemy packets are never seen, DEC-10 item 6),
 its CP and stance (`p`), ownership, capacities and VP (public), intents (`i`, public) and fights (`f`:
-both players are in each). Left out as in the full view: the countdowns, the recruit queue and the
-barracks of own cities, the Defense and planned bonuses.
+both players are in each), its own buildings (`c` and `d` of the frame by owner, section "Buildings";
+the enemy's builds, recruit queues and rally points are never seen). Left out as in the full view: the
+countdowns (attrition, starvation), the factory rates, the supply flow, the planned bonuses.
 
 ## Size
 
@@ -174,8 +227,26 @@ The trailing `null` elements and the sighting tick of a place not in fog are lef
 in full the same files are 495 to 740 KB. The build takes longer by the two projections per frame (in
 the same worker, a full match about 10 to 15 s on the owner's laptop under load).
 
+The buildings (#905, the keys `c` and `d` of the frames and of `v`) add 2 to 4 % (gzip) to a full
+match. Measured on `sim_version` 47 (2026-11-10), full 15-minute matches (9000 ticks, 1801 frames),
+the same file without and with the keys; the first row is the reference match above (the 47 KB of
+before #598 is about 217 KB now, with `v`):
+
+| Match | Without | With `c`, `d` | JSON with |
+|---|---|---|---|
+| `web`, `mvp-6`, rusher (seed 7) and reactive (seed 8) | 217.0 KB | 224.4 KB | 22.1 MB |
+| `web`, `mvp-7`, smart_turtle and smart_hoarder | 215.2 KB | 221.7 KB | 20.0 MB |
+| `artery`, `mvp-7`, smart_expander and smart_strangler | 184.0 KB | 188.0 KB | 17.2 MB |
+| `crossroads`, `mvp-7`, smart_rusher and smart_turtle | 295.1 KB | 301.6 KB | 28.6 MB |
+
+Worst case (`apps/server/tests/test_frames_buildings.py`): on `crossroads` (49 nodes, 27 cities,
+92 roads) every city a factory with a barracks, a factory build, a barracks build, a full queue and a
+rally point, a fortification on both ends of every road, in all 1801 frames with counters that change
+every frame: `c` and `d` alone 678 KB (gzip), the frames without `v` with them 730 KB. With a real
+match of about 300 KB the file stays well inside 2 MB.
+
 Deltas are not needed; if the format grows (more nodes, more groups), the size tests in
-`apps/server/tests/test_replays.py` show it before a release.
+`apps/server/tests/test_replays.py` and `test_frames_buildings.py` show it before a release.
 
 ## Viewing in the client
 
@@ -197,6 +268,10 @@ every frame has a sound one; a file without it (the samples `siege.frames.json` 
 predate #598) shows a side as the full map, the toggle unavailable. In a dev build `/?replay=dev-fog` plays
 `siege-fog.frames.json`, a recording with `v` and `nicks`.
 
+The buildings (`c` and `d`, #905) are not drawn yet: the viewer ignores the keys until the client part
+of #905, which draws them with the live looks (section "Buildings" says what a side sees) and raises
+`format` (section "Format change"). The three samples predate #905 and have no buildings.
+
 Loading: `loadReplayWhenReady` (`loadReplay.ts`) repeats the request while the server answers `202`
 (pauses of 2 s, 3 s, 4.5 s, then 5 s; no longer than 5 minutes, then the error "The replay is taking too long to prepare"), and
 `ReplayScreen` shows the "Preparing the replay..." window. `404`, `410`, `401`/`403` stop
@@ -217,3 +292,16 @@ offers no per-side view and shows "Player 1", "Player 2".
 
 Any incompatible edit: a new `format`, and the server can write only the current one. Old files on
 disk stay; the viewer client supports the versions that occur in `data/replays/`.
+
+**Format 2 (#905, the buildings).** The keys `c` and `d` (of a frame and of `v`) are a compatible
+addition, and the server writes them since the server part of #905 still with `format` 1: the viewer
+of today accepts only `format` 1 (`REPLAY_FORMAT` in `replayFile.ts`) and would refuse every new
+replay until its own part lands. The client part of #905 raises it in one change on both sides:
+`FORMAT = 2` in `gow_server.frames` and a viewer that reads `format` 1 and 2. Then:
+
+- a `format` 2 file always carries the buildings (the capitals are factories with a barracks, so `c`
+  is in every frame), and the viewer draws them;
+- a `format` 1 file plays as before: the viewer reads no buildings from it and draws none, whether it
+  is from before #905 (no `c` or `d` anywhere) or from between the two parts of #905 (it has them;
+  showing them is allowed, they follow the same rules, but not required);
+- old files are never rewritten (out of scope of #905).

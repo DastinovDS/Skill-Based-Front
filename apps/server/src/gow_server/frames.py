@@ -11,6 +11,11 @@ about live views). Replays are published only after the match. Next to it every 
 what each player saw (``v``, #598): the vision part of ``gow_sim.view.project()`` for that player
 and tick, so the viewer can show one side's fog of war without computing vision itself
 (AGENTS.md, section 7.1).
+
+The buildings (#905): every city's factory, factory build, barracks, barracks build, recruit queue
+and rally point (``c``) and every road fortification (``d``) in the full view, and under ``v`` the
+enemy buildings each player's view showed (DEC-31, DEC-43 item D8); the player's own buildings are
+those of the full view by owner.
 """
 
 import gzip
@@ -26,8 +31,21 @@ from gow_sim.maps import PLAYERS, map_hash, map_to_data
 from gow_sim.match import SIM_VERSION, Match
 from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, replay_run
 from gow_sim.ruleset import Ruleset, ruleset_hash
-from gow_sim.state import AtNode, Detail, Fight, FightRound, GameState, Group, OnEdge, Sighting
+from gow_sim.state import (
+    AtNode,
+    Build,
+    Detail,
+    FactoryBuild,
+    Fight,
+    FightRound,
+    GameState,
+    Group,
+    OnEdge,
+    Sighting,
+)
+from gow_sim.systems.build import done_tick
 from gow_sim.systems.capacity import node_capacities, warehouse_capacity
+from gow_sim.systems.recruit import recruit_waiting
 from gow_sim.systems.supply import is_city
 from gow_sim.view import EnemyGroupView, HalfView, PlayerView
 
@@ -43,12 +61,15 @@ __all__ = [
 ]
 
 FORMAT: Final = 1
-"""Version of the frames file format; the viewer checks it."""
+"""Version of the frames file format; the viewer checks it. The buildings of #905 (``c`` and
+``d`` of a frame and of ``v``) are a compatible addition written under 1 for now: the viewer of
+today refuses any other ``format``, so the client part of #905 raises this to 2 together with a
+viewer that reads both (``docs/design/replay-frames.md``, "Format change")."""
 
 ROAD_LEVEL: Final = 1
 """The road level written where the format has one (``w`` of a frame, the first element of an
 edge in ``v``): roads have no levels since the road upgrades were removed (#894), every road is
-level 1. The format keeps the slot, so ``FORMAT`` stays 1."""
+level 1. The format keeps the slot."""
 
 FRAMES_PER_SECOND: Final = 2
 """Full-state frames per second of the match (the issue: "2 times per second")."""
@@ -106,6 +127,69 @@ def _fight(f: Fight) -> list[object]:
     ]
 
 
+def _paid_build(done: int, owed: int) -> list[object]:
+    """A build as ``[done_tick, owed]``: the tick it ends, ``null`` while it still owes charges
+    (DEC-41, item 7: the build time starts with the full payment), as the live view has it."""
+    return [None if owed > 0 else done, owed]
+
+
+def _factory_build(b: FactoryBuild | None, rules: Ruleset) -> list[object] | None:
+    return None if b is None else _paid_build(b.since + rules.factory.build_ticks, b.owed)
+
+
+def _barracks_build(b: Build | None, rules: Ruleset) -> list[object] | None:
+    return None if b is None else _paid_build(done_tick(rules, b), b.owed)
+
+
+def _cities(state: GameState, rules: Ruleset) -> list[list[object]]:
+    """The buildings of every city (#905), in node order, only the cities with any: ``[node,
+    factory, factory_build, barracks, build, recruit, rally]``, trailing ``null`` left out.
+
+    ``factory`` the player whose factory it is (DEC-41, item 2) or ``null``; ``factory_build``
+    and ``build`` (the barracks, DEC-26) ``[done_tick, owed]`` or ``null``; ``barracks`` 0/1
+    (``Node.has_barracks``); ``recruit`` ``[queue, progress, waiting]`` while the queue is not
+    empty (DEC-25), else ``null``; ``rally`` the rally point (DEC-48, item H) or ``null``.
+    """
+    out: list[list[object]] = []
+    for n in sorted(state.nodes):
+        node = state.nodes[n]
+        if not is_city(state.map, n):
+            continue
+        recruit = (
+            [node.recruit_queue, node.recruit_progress, int(recruit_waiting(state, rules, n))]
+            if node.recruit_queue > 0
+            else None
+        )
+        record = _trimmed(
+            [
+                n,
+                node.factory,
+                _factory_build(node.factory_build, rules),
+                int(node.has_barracks),
+                _barracks_build(node.build, rules),
+                recruit,
+                node.rally_point,
+            ]
+        )
+        if record != [n, None, None, 0]:  # a city without any of them is left out
+            out.append(record)
+    return out
+
+
+def _road_forts(state: GameState) -> list[list[int]]:
+    """Every road fortification (DEC-43, item D; #905): ``[edge, node, built, ready]`` by edge,
+    the end ``a`` first (as ``EdgeView.forts``): ``node`` the end it guards (its owner owns it),
+    ``built`` 0/1 (it takes its toll), ``ready`` the tick it works from."""
+    out: list[list[int]] = []
+    for e, edef in enumerate(state.map.edges):
+        for n in (edef.a, edef.b):
+            node = state.nodes[n]
+            ready = node.road_forts.get(e)
+            if ready is not None and node.owner is not None:
+                out.append([e, n, int(state.tick >= ready), ready])
+    return out
+
+
 def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
     """The full state at ``state.tick`` as one frame (``docs/design/replay-frames.md``)."""
     capacities = node_capacities(state, rules)
@@ -142,6 +226,13 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
     fights = [_fight(state.fights[i]) for i in sorted(state.fights)]
     if fights:  # DEC-24, only while a fight goes on: older files without the key stay valid
         frame["f"] = fights
+    # The buildings (#905): no key while there are none (a file from before has none at all).
+    cities = _cities(state, rules)
+    if cities:
+        frame["c"] = cities
+    forts = _road_forts(state)
+    if forts:
+        frame["d"] = forts
     return frame
 
 
@@ -215,7 +306,27 @@ def vision_of(view: PlayerView) -> dict[str, object]:
         ],
     }
     # No ``b`` (the road builds the player saw) since #894: older files still carry it.
+    # The enemy buildings the view showed (#905); the own ones the viewer takes from the full
+    # ``c`` and ``d`` by owner, the enemy's builds, queues and rally points it never shows.
+    cities = [
+        [n.id, _bit(n.factory), _bit(n.has_barracks)]
+        for n in view.nodes
+        if n.owner is not None
+        and n.owner != view.player
+        and (n.factory is not None or n.has_barracks is not None)
+    ]
+    if cities:
+        out["c"] = cities
+    forts = [
+        [e.id, f.node, int(f.built)] for e in view.edges for f in e.forts if f.owner != view.player
+    ]
+    if forts:
+        out["d"] = forts
     return out
+
+
+def _bit(value: bool | None) -> int | None:
+    return None if value is None else int(value)
 
 
 class FramesRecorder:
