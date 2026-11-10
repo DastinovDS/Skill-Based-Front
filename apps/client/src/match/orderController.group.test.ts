@@ -77,14 +77,99 @@ function setup(rules: RulesetPublic = RULES, snap: SnapshotMsg = snapshot()) {
   return { hud, book, sent, feedback, queried, controller };
 }
 
-/** Selects g1, g2 and g3 together, in that order. */
+const shiftDown = { type: 'keydown', code: 'ShiftLeft', shiftKey: true } as const;
+const shiftUp = { type: 'keyup', code: 'ShiftLeft', shiftKey: false } as const;
+
+/** Selects g1, g2 and g3 together, in that order, and lets Shift go. */
 function pickAll(controller: OrderController): void {
   controller.click({ kind: 'group', id: 'g1', node: a }, false);
+  controller.key(shiftDown);
   controller.click({ kind: 'group', id: 'g2', node: b }, true);
   controller.click({ kind: 'group', id: 'g3', node: c }, true);
+  controller.key(shiftUp);
 }
 
 const eDown = { type: 'keydown', code: 'KeyE', shiftKey: false } as const;
+
+// #928, item 6 (owner 2026-11-10): while Shift is held groups are being picked, so no order is
+// shown or given; once it is released the order to the node under the pointer shows from every
+// selected group.
+describe('Shift held is the selection, the order shows after it (#928)', () => {
+  it('no path, no group order and no lit place while Shift is held', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: 'g1', node: a }, false);
+    controller.key(shiftDown);
+    controller.click({ kind: 'group', id: 'g2', node: b }, true);
+    controller.hover({ kind: 'node', id: enemy });
+    let overlay = controller.overlay();
+    expect(overlay.group).toBeNull();
+    expect(overlay.preview).toBeNull();
+    expect(overlay.eta).toBeNull();
+    expect(overlay.hover).toBeNull();
+    expect(controller.ui.current.cpPrice).toBeNull();
+    // An own group under the pointer is lit: a Shift+click picks it.
+    controller.hover({ kind: 'group', id: 'g3', node: c });
+    expect(controller.overlay().hover).toEqual({ node: null, group: 'g3' });
+    controller.click({ kind: 'group', id: 'g3', node: c }, true);
+    // A Shift+click on a place gives no order.
+    controller.hover({ kind: 'node', id: enemy });
+    controller.click({ kind: 'node', id: enemy }, true);
+    expect(sent).toEqual([]);
+    expect(controller.picks).toEqual(['g1', 'g2', 'g3']);
+    // Shift up: the order to the node under the pointer, a line from every selected group.
+    controller.key(shiftUp);
+    overlay = controller.overlay();
+    expect(overlay.group).toMatchObject({ kind: 'attack', to: enemy, from: [a, b, c] });
+    expect(overlay.hover).toEqual({ node: enemy, group: null });
+  });
+
+  it('the path of a single selected group goes while Shift is held, and comes back', () => {
+    const { controller } = setup();
+    controller.click({ kind: 'group', id: 'g1', node: a }, false);
+    controller.overlay();
+    controller.onReach({
+      type: 'reach',
+      group: 'g1',
+      tick: 30,
+      nodes: [{ node: enemy, ticks: 40, path: [a, enemy] }],
+      split: [],
+    });
+    controller.hover({ kind: 'node', id: enemy });
+    expect(controller.overlay().eta?.path).toEqual([a, enemy]);
+    controller.key(shiftDown);
+    expect(controller.overlay().eta).toBeNull();
+    expect(controller.overlay().preview).toBeNull();
+    controller.key(shiftUp);
+    expect(controller.overlay().eta?.path).toEqual([a, enemy]);
+  });
+
+  it('a lost focus lets Shift go', () => {
+    const { controller } = setup();
+    controller.click({ kind: 'group', id: 'g1', node: a }, false);
+    controller.key(shiftDown);
+    controller.click({ kind: 'group', id: 'g2', node: b }, true);
+    controller.hover({ kind: 'node', id: enemy });
+    expect(controller.overlay().group).toBeNull();
+    controller.key({ type: 'keyup', code: '', shiftKey: false });
+    expect(controller.overlay().group).toMatchObject({ to: enemy, from: [a, b] });
+  });
+
+  it('without the group order in the rules Shift hides nothing', () => {
+    const { controller } = setup(DEV_RULES);
+    controller.click({ kind: 'group', id: 'g1', node: a }, false);
+    controller.overlay();
+    controller.onReach({
+      type: 'reach',
+      group: 'g1',
+      tick: 30,
+      nodes: [{ node: enemy, ticks: 40, path: [a, enemy] }],
+      split: [],
+    });
+    controller.hover({ kind: 'node', id: enemy });
+    controller.key(shiftDown);
+    expect(controller.overlay().eta?.path).toEqual([a, enemy]);
+  });
+});
 
 describe('the selection of several groups (DEC-48, item K1)', () => {
   it('Shift+click adds a group and takes it out again; one left is the ordinary selection', () => {

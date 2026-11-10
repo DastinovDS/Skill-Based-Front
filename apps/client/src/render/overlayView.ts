@@ -67,11 +67,6 @@ export function framePolygon(at: TokenSpot, offset: number): number[] {
 // --- Fine rings (ui-style 55p; mockup `highlight4`, H3) -----------------------------------------------
 // One weight system round the capacity ring `R`: a 1 px ink line on a 2.6 px casing at R + 5, 8, 11.
 
-function ring(g: Graphics, at: Point, r: number, width: number, color: number, alpha = 1): void {
-  g.circle(at.x, at.y, r).stroke({ width: width + FINE_RING.casing, color: CASING, alpha });
-  g.circle(at.x, at.y, r).stroke({ width, color, alpha });
-}
-
 /** Selected: two ink rings over a dark band, four lozenges on the outer one. */
 export function drawSelectRings(g: Graphics, at: Point, R: number): void {
   const F = FINE_RING;
@@ -97,11 +92,6 @@ export function drawSelectRings(g: Graphics, at: Point, R: number): void {
     lozenge(cx, cy, F.select.lozenge);
     g.fill(INK);
   }
-}
-
-/** Hovered: one ink ring. */
-export function drawHoverRing(g: Graphics, at: Point, R: number): void {
-  ring(g, at, R + FINE_RING.r1 + 1, FINE_RING.hover.width, INK, FINE_RING.hover.alpha);
 }
 
 /** A reachable target: a ring of ink ticks, every fourth longer. */
@@ -758,15 +748,9 @@ export class OverlayView {
     const g = this.ring;
     g.clear();
     this.drawReach(g, state);
+    // A hovered city gets no ring of its own (owner 2026-11-10, #928): the light on its area
+    // (`setHover`, #762) and the arrow of the order a click would give say enough.
     const selected = state.selection;
-    const hovered = state.hover?.group == null ? (state.hover?.node ?? null) : null;
-    // A hovered target keeps its target mark alone: the hover ring would lie over it.
-    const target =
-      hovered !== null && (state.reach.includes(hovered) || state.split.includes(hovered));
-    if (hovered !== null && !target && !(selected?.kind === 'node' && selected.id === hovered)) {
-      const at = nodePoint(this.map, hovered);
-      if (at !== undefined) drawHoverRing(g, at, ringRadius(this.radiusOf(hovered)));
-    }
     if (selected?.kind !== 'node') return;
     const at = nodePoint(this.map, selected.id);
     if (at === undefined) return;
@@ -829,8 +813,9 @@ export class OverlayView {
     const g = this.lines;
     g.clear();
     // The path on hover (54i) is the shadow of the order a click would make, ordinary or planned
-    // (#793): the server's route to the hovered target (`ReachNode.path`), drawn by `drawPath`.
-    const route = state.eta?.path ?? [];
+    // (#793): the server's route to the hovered target (`ReachNode.path`), drawn by `drawPath`; to a
+    // target only the part that fits reaches, the straight line of the preview (#928).
+    const route = state.eta?.path ?? state.preview?.path ?? [];
     const key = route.join('>');
     if (key !== this.pathKey) {
       this.pathKey = key;

@@ -14,7 +14,6 @@
   import GroupRadial from './GroupRadial.svelte';
   import HelpOverlay from './HelpOverlay.svelte';
   import type { HudState } from './hudState.svelte.ts';
-  import KeyHints from './KeyHints.svelte';
   import RadialMenu from './RadialMenu.svelte';
   import SelectionCard from './SelectionCard.svelte';
   import SplitMenu from './SplitMenu.svelte';
@@ -45,8 +44,6 @@
     rated?: boolean;
     /** Queue lock in seconds a forfeit would bring now (DEC-34); shown in the ranked forfeit dialog. */
     forfeitBanS?: number;
-    /** Show the key-hint bar (the first matches only). */
-    hints?: boolean;
     /** Where cities and groups are on screen: the radial menus of a city and a group sit on them. */
     anchors?: MapAnchors;
     /** The pause of a private match; without it (none left, or a rated match) the button is not shown. */
@@ -64,7 +61,6 @@
     chrome,
     rated = false,
     forfeitBanS = 0,
-    hints = false,
     anchors = NO_ANCHORS,
     onpause,
     oninsets,
@@ -166,9 +162,6 @@
   <AlertStack alerts={hud.alerts} names={hud.nodeName} />
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
-  {#if hints}
-    <KeyHints />
-  {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} />
   <SupplyBanner {orders} />
   <SplitMenu {orders} {anchors} names={hud.nodeName} />

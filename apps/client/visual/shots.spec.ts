@@ -813,6 +813,7 @@ for (const size of [
 ]) {
   for (const id of [
     'menu-friend',
+    'menu-bot',
     'bot-starting',
     'queue-search',
     'invite-link',
@@ -837,8 +838,9 @@ for (const size of [
   }
 }
 
-// Checked by geometry, not by eye (#919, round 2 item 2): at the three sizes every piece of the
-// plinth and the drawer stays 8 px or more inside its frame, and every place of the drawing sketch
+// Checked by geometry, not by eye (#919, round 2 item 2): at the three sizes of the mockup and two
+// laptops' full screens (#928) every piece of the plinth and the drawer stays 8 px or more inside
+// its frame, no box shows a scroll bar (`NO_SCROLL`), and every place of the drawing sketch
 // sits on its node (round 1 had them 13 px off). Run in the page (plain JS: no DOM types here); the
 // answer is the list of the pieces out of place. An invisible piece (the hollow marker away from a
 // hover) is not on the plinth.
@@ -869,11 +871,33 @@ const PLINTH_GEOMETRY = `(() => {
   return bad;
 })()`;
 
-for (const size of [
+// No scroll bar where nothing needs scrolling (#928): the page itself and every box that would
+// scroll (`overflow` auto or scroll) holds its content. The answer is the list of the boxes that
+// overflow (a frame drawn 4 px outside a scrolling box made the bot drawer scroll by 4 px).
+const NO_SCROLL = `(() => {
+  const bad = [];
+  const page = document.scrollingElement;
+  if (page.scrollWidth > page.clientWidth || page.scrollHeight > page.clientHeight) bad.push('page');
+  for (const el of document.querySelectorAll('*')) {
+    const style = getComputedStyle(el);
+    const scrolls = (v) => v === 'auto' || v === 'scroll';
+    const x = scrolls(style.overflowX) && el.scrollWidth > el.clientWidth;
+    const y = scrolls(style.overflowY) && el.scrollHeight > el.clientHeight;
+    if (x || y) bad.push(el.tagName + '.' + (el.getAttribute('class') || '') + (x ? ' x' : '') + (y ? ' y' : ''));
+  }
+  return bad;
+})()`;
+
+/** The window sizes the out-of-game screens are checked at: the mockup's three and two laptops' full screens. */
+const SCREEN_SIZES = [
   { width: 1280, height: 720 },
   { width: 1440, height: 900 },
   { width: 1920, height: 1080 },
-]) {
+  { width: 1512, height: 982 },
+  { width: 1728, height: 1117 },
+] as const;
+
+for (const size of SCREEN_SIZES) {
   for (const id of [
     'menu-guest',
     'menu-bot',
@@ -895,6 +919,31 @@ for (const size of [
       }
       await expect(page.locator('.plinth')).toBeVisible();
       expect(await page.evaluate<string[]>(PLINTH_GEOMETRY)).toEqual([]);
+      expect(await page.evaluate<string[]>(NO_SCROLL)).toEqual([]);
+    });
+  }
+}
+
+// The other screens before and after a match fit the same windows without a scroll bar (#928). Not
+// here: Profile (its match list grows with the matches: at 1280x720 it may scroll, a thin bar) and
+// How to play (a long page that scrolls at every size).
+for (const size of SCREEN_SIZES) {
+  for (const id of [
+    'welcome',
+    'settings',
+    'settings-guest',
+    'result-defeat',
+    'result-rated',
+    'password-set',
+  ] as const) {
+    test(`the screen ${id} needs no scroll bar at ${String(size.width)}x${String(size.height)}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await page.goto(`/?menu=${id}`);
+      await page.evaluate('document.fonts.ready.then(() => true)');
+      await page.waitForTimeout(300);
+      expect(await page.evaluate<string[]>(NO_SCROLL)).toEqual([]);
     });
   }
 }
@@ -1032,6 +1081,27 @@ test('shot of the split hint on a target the group is too big for', async ({ pag
   await page.screenshot({ path: join(OUT, 'split-hint-gray.png') });
 });
 
+// The same target with `E` held and the wheel turned twice (#928, item 2): the planned order of the
+// part that fits shows its line (straight: the server gives the part's route with the ack) and its
+// bonus, `split-plan.png`.
+test('shot of a planned order to a target the group is too big for', async ({ page }) => {
+  // Node 2 is reached by a part of 1 unit (`?split=<node>,<units>`).
+  await page.goto('/?scene=snapshot&split=2,1&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(465, 415);
+  await page.waitForTimeout(400);
+  await page.mouse.move(640, 598);
+  await page.mouse.move(641, 599);
+  await page.keyboard.down('KeyE');
+  await page.mouse.wheel(0, -100);
+  await page.waitForTimeout(250);
+  await page.mouse.wheel(0, -100);
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: join(OUT, 'split-plan.png') });
+  await page.keyboard.up('KeyE');
+});
+
 // The cue of `X` with nothing selected (#764), pinned by `?undo` to a frozen scene (it has no server
 // to accept an undo), `undo-<name>.png` and grey: `move` (the order of a group on a road: the arrow
 // runs back into the group), `recruit` (a city), `empty` (nothing to undo: the sign at the pointer).
@@ -1059,7 +1129,8 @@ for (const shot of UNDO_SHOTS) {
 // - `hover-target`: a group selected, the pointer on the area of an enemy city (the target is lit);
 // - `split-tip`, `split-menu`: `?split=2,1` answers the `reach` with node 2 and the size 1 that fits; the
 //   tip says a click splits, the click opens the split menu at that size ("Split and send");
-// - `plan-shift`: scene `economy` (economy v2), a group selected, Shift held over a target: the plan bar stands out;
+// - `plan-shift`: scene `economy` (economy v2), a group selected, `E` held over a target (Shift until DEC-48;
+//   the name stays): the plan bar stands out;
 //   `?reach=7,140,6` answers the `reach` with Bluff by Wood Hollow, so the ghost of the planned order and
 //   the bonus counter over Bluff show (#793), and one wheel notch raises the bonus;
 // - `cp-hover`, `cp-cut`: `?cp=50` (less than a move) and `?reject=NOT_ENOUGH_CP`: the CP badge is marked
@@ -1119,7 +1190,7 @@ for (const name of UX_SHOTS) {
       case 'plan-shift':
         await page.mouse.click(332, 518);
         await page.waitForTimeout(300);
-        await page.keyboard.down('Shift');
+        await page.keyboard.down('KeyE');
         await page.mouse.move(485, 160);
         await page.mouse.move(486, 161);
         await page.mouse.wheel(0, -100);
@@ -1140,7 +1211,7 @@ for (const name of UX_SHOTS) {
     await page.screenshot({ path: join(OUT, `ux-${name}.png`) });
     await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
     await page.screenshot({ path: join(OUT, `ux-${name}-gray.png`) });
-    if (name === 'plan-shift') await page.keyboard.up('Shift');
+    if (name === 'plan-shift') await page.keyboard.up('KeyE');
   });
 }
 

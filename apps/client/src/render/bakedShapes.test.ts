@@ -1,15 +1,25 @@
 import { Container, Graphics } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import type { BakeSpec } from './bake.ts';
-import { cityBodySpec, feedRowSpec, octagramSpec, provinceBodySpec } from './bakedShapes.ts';
+import {
+  cityBodySpec,
+  cityRingSpec,
+  feedRowSpec,
+  octagramSpec,
+  provinceBodySpec,
+  vpBadgeSpec,
+} from './bakedShapes.ts';
 import { warehouseMarksSpec } from './pieceShapes.ts';
 import {
   CASING,
   CITY_ENGRAVED,
   DARK_PLATE,
   ENEMY,
+  INK,
   PROVINCE,
   PROVINCE_ENGRAVED,
+  RING_ENGRAVED,
+  VP_LOZENGE,
   YOU,
 } from './style.ts';
 
@@ -115,6 +125,48 @@ describe('cityBodySpec: the Engraved city (#847)', () => {
 
   it('keys the plate of units standing there apart from the empty city', () => {
     expect(cityBodySpec('you', 14, true).key).not.toBe(cityBodySpec('you', 14, true, true).key);
+  });
+});
+
+// #928, item 9 (owner 2026-11-10): the empty places of the capacity ring blended with the dark city
+// plate and the ground; the VP number was too small.
+describe('cityRingSpec: an empty place reads on the dark plate (#928)', () => {
+  interface Stroke {
+    readonly color: number;
+    readonly alpha: number;
+    readonly width: number;
+  }
+  const strokes = (spec: BakeSpec): Stroke[] =>
+    (drawn(spec) as unknown as { action: string; data: { style: Stroke } }[])
+      .filter((i) => i.action === 'stroke')
+      .map((i) => i.data.style);
+  const R = RING_ENGRAVED.room;
+  const hairlines = (spec: BakeSpec): number =>
+    strokes(spec).filter((s) => s.color === INK && s.width === R.width).length;
+
+  it('is a hollow cell: a faint ink wash between two hairlines, closed at its ends', () => {
+    const ring = strokes(cityRingSpec(17, 4, 1));
+    expect(ring).toContainEqual(
+      expect.objectContaining({ color: INK, alpha: R.wash, width: 2 * R.offset }),
+    );
+    // Two hairlines along the place and one stroke of the ticks that close it.
+    expect(hairlines(cityRingSpec(17, 4, 1))).toBe(3);
+    // A full ring has no room: no ticks.
+    expect(hairlines(cityRingSpec(17, 4, 4))).toBe(2);
+  });
+
+  it('keeps the wash faint, so a place with a unit (solid ink) still reads apart', () => {
+    expect(R.wash).toBeGreaterThan(0);
+    expect(R.wash).toBeLessThanOrEqual(0.4);
+    expect(2 * R.offset).toBeLessThan(RING_ENGRAVED.filled + 0.01);
+  });
+});
+
+describe('vpBadgeSpec: the gilt VP lozenge (#847, #928)', () => {
+  it('is large enough to read its number at the normal zoom', () => {
+    expect(VP_LOZENGE.font).toBeGreaterThanOrEqual(14);
+    expect(VP_LOZENGE.side).toBeGreaterThanOrEqual(18);
+    expect(vpBadgeSpec().box.width).toBeGreaterThan(VP_LOZENGE.side * Math.SQRT2);
   });
 });
 

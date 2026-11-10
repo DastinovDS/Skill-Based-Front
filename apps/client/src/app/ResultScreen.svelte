@@ -388,6 +388,29 @@
     }
   }
 
+  /* A short window (1280 x 720): the page closes up so it needs no scroll bar (#928). */
+  @media (max-height: 760px) {
+    .verdict {
+      font-size: 80px;
+    }
+
+    .score {
+      margin-top: 24px;
+    }
+
+    .stats {
+      margin-top: 20px;
+    }
+
+    .rate {
+      margin-top: 18px;
+    }
+
+    .acts {
+      margin-top: 24px;
+    }
+  }
+
   @media (max-width: 899px), (max-height: 560px) {
     .verdict {
       gap: 16px;

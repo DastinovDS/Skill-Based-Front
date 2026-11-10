@@ -89,7 +89,8 @@ is off until #806), the search `queue-search`, `queue-long` (the bot offer), `qu
 the bot `bot-starting`, `bot-random`, `bot-error`, `bot-timeout` and the invite `invite-creating` (the test presses the buttons of `DOCK_CLICKS`), `invite-link` (the link while
 the map is drawn), `invite-waiting`, `invite-joined`, `invite-opp-ready`, `invite-you-ready`, `invite-starting`, `invite-drawing-start`. The plinth is also shot at the three sizes
 of the mockup (`screen-<id>-1280x720.png`, `-1440x900`, `-1920x1080`), and the tests "the plinth of <id> holds its pieces" check by geometry that every piece stays 8 px inside the
-plinth and the drawer and that every place of the drawing sketch sits on its node.
+plinth and the drawer and that every place of the drawing sketch sits on its node, at those three sizes and at two laptops' full screens (1512x982, 1728x1117),
+and that no box shows a scroll bar where nothing needs scrolling (#928).
 
 The match connection states (#602): `mise run shots` takes `status-<state>.png` (and the same in grey scale, `status-<state>-gray.png`) of the real status bar over the frozen scene `overflow` (two alerts at the top, so the shot shows the bar stands clear of them) with `/?scene=overflow&status=<state>` (`src/dev/statusScenes.ts`): `reconnecting`, `failed`, `gone`, `version` (close 4001), `replaced` (close 4009), `paused-you`, `paused-enemy`, `pause-denied`, `renderer` (the map could not be drawn); `status-failed-390x700.png` is the same bar on a phone. The joining stages and failures are menu scenes: `match-loading-map` (the real `MatchScreen` on a fetch that never answers), `match-loading-connect`, `match-loading-frame`, `match-error-map` (the real `MatchScreen` on a failing fetch) and `crash` (the real `CrashGuard` over a screen that throws). No `visual` references.
 

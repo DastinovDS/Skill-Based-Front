@@ -390,11 +390,20 @@
 .front.play .drw {
   box-sizing: border-box;
   display: flex;
+  flex-direction: column;
+  max-height: calc(100cqh - 72px - 24px - var(--ph) - var(--pb));
+}
+
+/* The drawer's content scrolls inside its frame, and only when the window is too short for it:
+   the frame (`.rule-frame::before`, 4 px outside the drawer) is no part of a scrolled area (#928). */
+.front.play .dbody {
+  box-sizing: border-box;
+  min-height: 0;
+  display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px 56px;
   padding: 24px 36px 26px;
-  max-height: calc(100cqh - 72px - 24px - var(--ph) - var(--pb));
   overflow: auto;
 }
 
@@ -581,8 +590,11 @@
   }
 
   .front.play .drw {
-    flex-wrap: wrap;
     max-height: none;
+  }
+
+  .front.play .dbody {
+    flex-wrap: wrap;
   }
 
   .front.play .tiles {

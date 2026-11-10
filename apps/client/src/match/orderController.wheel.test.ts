@@ -34,7 +34,7 @@ function snapshot(charged: number): SnapshotMsg {
   return { ...base, view: { ...base.view, me: { ...base.view.me, cp: 1000 }, groups: [group] } };
 }
 
-function setup(charged = 9) {
+function setup(charged = 9, split: { node: number; units: number }[] = []) {
   const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map: DEFAULT_MAP });
   hud.onSnapshot(snapshot(charged));
   const sent: Command[] = [];
@@ -56,7 +56,7 @@ function setup(charged = 9) {
     group: GROUP,
     tick: 30,
     nodes: [{ node: enemy, ticks: 40, path: [home, enemy] }],
-    split: [],
+    split,
   });
   return { controller, sent, clock };
 }
@@ -217,5 +217,56 @@ describe('the plan bonus by E, hover and wheel (#793, #797)', () => {
     controller.deselect();
     controller.key(eDown);
     expect(controller.wheel(roll(-100))).toBe(false);
+  });
+});
+
+// #928, item 2: a group too big for the path to a target (`reach.split`): a click splits the part
+// that fits off and sends it (#762), so the planned order shows its line and its bonus like any other.
+describe('a planned order to a target only a smaller group reaches (#928)', () => {
+  it('shows the line and the bonus counter, capped at the units of the part that goes', () => {
+    const { controller, clock } = setup(9, [{ node: far, units: 4 }]);
+    controller.key(eDown);
+    controller.hover({ kind: 'node', id: far });
+    const overlay = controller.overlay();
+    // The server gives the part's route only with the `ack`: a straight line until then.
+    expect(overlay.preview).toEqual({ from: home, to: far, planned: true, path: [home, far] });
+    expect(overlay.eta).toBeNull();
+    expect(overlay.bonus).toEqual({
+      node: far,
+      bonus: 1,
+      max: 4,
+      ticks: RULES.orders.plan_ticks_per_bonus,
+    });
+    // The wheel steps it up to the part's units, not the group's.
+    turn(controller, clock, 6);
+    expect(controller.overlay().bonus?.bonus).toBe(4);
+    // An ordinary order shows the line too, without the counter.
+    controller.key(eUp);
+    expect(controller.overlay().preview).toEqual({
+      from: home,
+      to: far,
+      planned: false,
+      path: [home, far],
+    });
+    expect(controller.overlay().bonus).toBeNull();
+  });
+
+  it('the click opens the split offer with the size that fits; the part asks for the bonus', () => {
+    const { controller, clock, sent } = setup(9, [{ node: far, units: 4 }]);
+    controller.key(eDown);
+    controller.hover({ kind: 'node', id: far });
+    controller.overlay();
+    turn(controller, clock, 2);
+    controller.click({ kind: 'node', id: far }, false);
+    expect(sent).toEqual([]);
+    expect(controller.splitMenu.current).toMatchObject({ open: true, n: 4 });
+  });
+
+  it('no line and no counter where not even one unit gets there', () => {
+    const { controller } = setup(9, [{ node: far, units: 0 }]);
+    controller.key(eDown);
+    controller.hover({ kind: 'node', id: far });
+    expect(controller.overlay().preview).toBeNull();
+    expect(controller.overlay().bonus).toBeNull();
   });
 });

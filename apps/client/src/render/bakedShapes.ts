@@ -183,8 +183,10 @@ function strokeArcs(
 
 /**
  * The capacity ring (Engraved, #847; mockup `ringAt`): every place on a dark cut; a place with a unit
- * of the viewer a solid ink arc, room two ink hairlines either side of the ring (filled against
- * hollow, never the colour alone). Above `RING_MAX_SEGMENTS` one arc with a dark notch every fifth.
+ * of the viewer a solid ink arc, room a hollow cell: a faint ink wash between two ink hairlines
+ * either side of the ring, closed at its ends (filled against hollow, never the colour alone; the
+ * wash and the closed ends keep an empty place readable on the dark city plate and on any ground,
+ * #928). Above `RING_MAX_SEGMENTS` one arc with a dark notch every fifth.
  */
 export function cityRingSpec(radius: number, capacity: number, garrison: number): BakeSpec {
   const r = ringRadius(radius);
@@ -204,12 +206,22 @@ export function cityRingSpec(radius: number, capacity: number, garrison: number)
         { width: R.filled, color: INK },
       );
       const room = ring.arcs.filter((arc) => !arc.filled);
+      const o = R.room.offset;
+      strokeArcs(g, r, room, { width: 2 * o, color: INK, alpha: R.room.wash });
       for (const side of [-1, 1]) {
-        strokeArcs(g, r + side * R.room.offset, room, {
+        strokeArcs(g, r + side * o, room, {
           width: tools.hair(R.room.width),
           color: INK,
         });
       }
+      for (const arc of room) {
+        for (const angle of [arc.from, arc.to]) {
+          const c = Math.cos(angle);
+          const s = Math.sin(angle);
+          g.moveTo((r - o) * c, (r - o) * s).lineTo((r + o) * c, (r + o) * s);
+        }
+      }
+      if (room.length > 0) g.stroke({ width: tools.hair(R.room.width), color: INK, cap: 'butt' });
       for (const angle of ring.notches) {
         const inner = r - R.cut / 2;
         const outer = r + R.cut / 2;

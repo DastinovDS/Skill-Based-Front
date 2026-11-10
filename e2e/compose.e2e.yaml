@@ -6,7 +6,9 @@
 # (AGENTS.md, section 5.4), so GOW_ENV is `e2e`. The guest limit is high, so a test does not hit
 # the rate limit. The reconnect window and the pause are long: a slow runner must not lose a match
 # by disconnect during a page reload, or see a pause run out under a test (#484). The map pool is
-# the real one (`maps/*.json`, DEC-27), the invite tests play `ridge`.
+# the real one (`maps/*.json`, DEC-27). Only the full invite match makes its invite on `ridge`
+# (through the API); the other invite tests take the plinth's Get the link, whose map the server
+# makes for the invite (#884, #919). The bot match picks `ridge` in the bot drawer.
 services:
   app:
     environment:

@@ -185,6 +185,12 @@ export class OrderController implements MapInteraction {
    * focus (`blur`, the `keyup` with an empty code) and any keyboard event without it held let it go.
    */
   #eHeld = false;
+  /**
+   * Shift is held, as the last keyboard event or click told (a lost focus lets it go). Under the
+   * group order it is the selection mode (DEC-48, item K1): no order is shown or given while it
+   * is held, only after it is released (owner 2026-11-10, #928).
+   */
+  #shiftHeld = false;
   /** The groups selected together (DEC-48, item K1): two or more, in the order of the selection. */
   #picks: readonly string[] = NO_PICKS;
   #hover: PickHit | null = null;
@@ -397,7 +403,19 @@ export class OrderController implements MapInteraction {
       pick !== null && key !== null && pick.group === key && pick.node === node
         ? pick.value
         : PLAN_BONUS.min;
-    return Math.min(value, this.planBonusMax);
+    return Math.min(value, this.#bonusMaxAt(node));
+  }
+
+  /**
+   * The top of the bonus over `node`: `planBonusMax`, and over a target only a smaller group
+   * reaches no more than the units of the part that goes (`reach.split`, the server's number,
+   * #928): the part asks for its bonus alone.
+   */
+  #bonusMaxAt(node: number | null): number {
+    const max = this.planBonusMax;
+    if (node === null || this.#picks.length > 0) return max;
+    const fit = this.#reach()?.split.get(node) ?? 0;
+    return fit >= 1 ? Math.max(PLAN_BONUS.min, Math.min(max, fit)) : max;
   }
 
   /**
@@ -409,7 +427,7 @@ export class OrderController implements MapInteraction {
     const node = this.#previewTarget();
     if (key === null || node === null) return;
     const value = Math.min(
-      this.planBonusMax,
+      this.#bonusMaxAt(node),
       Math.max(PLAN_BONUS.min, this.#bonusFor(node) + delta),
     );
     this.#bonusPick = { group: key, node, value };
@@ -478,6 +496,7 @@ export class OrderController implements MapInteraction {
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
     const splitNodes = reach === null ? [] : [...reach.split.keys()];
     const eta = this.#eta(reach, preview);
+    const route = eta?.path ?? this.#splitRoute(reach, from, preview);
     this.#syncSplitHover(reach, preview);
     this.#syncCpShort(preview);
     this.#syncPlanning();
@@ -487,14 +506,14 @@ export class OrderController implements MapInteraction {
     const group = this.#groupPreview(preview);
     const bonus =
       group === null
-        ? this.#bonusMark(from, eta === null ? null : preview)
+        ? this.#bonusMark(from, route === null ? null : preview)
         : this.#bonusMark(preview, group.planned ? preview : null);
     const picks = this.#picks;
     const groupKey =
       group === null
         ? '-'
         : `${group.from.join(',')}>${String(group.to)}:${group.kind}:${String(group.planned)}:${group.price}`;
-    const key = `${bonus === null ? '-' : `${String(bonus.bonus)}/${String(bonus.max)}`}|${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}|${picks.join(',')}|${groupKey}`;
+    const key = `${bonus === null ? '-' : `${String(bonus.bonus)}/${String(bonus.max)}`}|${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${route?.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}|${picks.join(',')}|${groupKey}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
@@ -509,14 +528,15 @@ export class OrderController implements MapInteraction {
       this.#overlay = {
         selection,
         ghosts,
-        // The ghost of the order goes only where the server's `reach` says it gets (#793).
+        // The ghost of the order goes only where the server's `reach` says it gets (#793), or
+        // where it says the part that fits gets (`reach.split`, #928).
         preview:
-          from !== null && preview !== null && eta !== null
+          from !== null && preview !== null && route !== null
             ? {
                 from,
                 to: preview,
                 planned: this.planned,
-                path: eta.path,
+                path: route,
               }
             : null,
         beacon,
@@ -587,7 +607,7 @@ export class OrderController implements MapInteraction {
     return {
       node: target,
       bonus,
-      max: this.planBonusMax,
+      max: this.#bonusMaxAt(target),
       // Several groups gather their parts in parallel (DEC-48, item F2): the server's split, so no
       // time is told before the click.
       ticks: per > 0 && this.#picks.length === 0 ? bonus * per : null,
@@ -617,6 +637,13 @@ export class OrderController implements MapInteraction {
     if (ui.rallyFrom !== null) {
       const node = this.#cityOf(hit);
       return node === null || node === ui.rallyFrom ? null : { node, group: null };
+    }
+    // Shift held (#928): only an own group (or the icon of a city's own groups) is lit, the one
+    // a Shift+click picks; a place is no target then.
+    if (this.#selecting()) {
+      if (hit.kind === 'group' && this.#isOwnGroup(hit.id)) return { node: null, group: hit.id };
+      if (hit.kind === 'stack') return { node: hit.node, group: null };
+      return null;
     }
     // Groups selected together: a click on a place orders them there, one on a road picks it.
     if (this.#picks.length > 0) {
@@ -670,6 +697,7 @@ export class OrderController implements MapInteraction {
    * selection or takes it out (DEC-48, item K1; under `ruleset_public.group_order` only).
    */
   click(picked: PickHit | null, shift: boolean): void {
+    this.#shiftHeld = shift;
     this.#syncPlanning();
     // The road pick of "Fortify road" takes the click first: a road gets the line, anything else cancels.
     if (this.ui.current.fortFrom !== null) {
@@ -687,6 +715,11 @@ export class OrderController implements MapInteraction {
       return;
     }
     if (shift && this.#shiftClick(picked)) return;
+    // Shift held is the selection (#928): a place or a foreign group is no order then, the map
+    // shows none until Shift is released.
+    if (this.#selecting() && (this.#picks.length > 0 || this.#selectedGroup()?.node != null)) {
+      return;
+    }
     let hit: PickHit = picked;
     if (hit.kind === 'edge') {
       // A road is a click on the area of the city it lies in.
@@ -1449,6 +1482,7 @@ export class OrderController implements MapInteraction {
 
   /** Returns true if the key was used (the caller then prevents the browser default). */
   key(input: KeyInput): boolean {
+    this.#shiftHeld = input.shiftKey;
     // `E` held is a planned order (DEC-48, item K2); its keyup or a lost focus (`code` empty) lets
     // it go, so a later click never becomes a planned order by accident.
     if (input.code === 'KeyE' || (input.type === 'keyup' && input.code === '')) {
@@ -1889,8 +1923,32 @@ export class OrderController implements MapInteraction {
     };
   }
 
+  /**
+   * The line to a target only a smaller group reaches (`reach.split` with at least one unit, the
+   * server's number): a click there splits the part that fits off and sends it (#762), so the map
+   * shows that order as it shows any other, a planned one with its bonus too (#928). The server
+   * gives no route for the part before the order (`ReachSplit` has none): the line goes straight
+   * from the group's node to the target, as the ghost of an order without a known route does.
+   * `null`: not such a target.
+   */
+  #splitRoute(
+    reach: ReachInfo | null,
+    from: number | null,
+    target: number | null,
+  ): readonly number[] | null {
+    if (reach === null || from === null || target === null || this.#picks.length > 0) return null;
+    return (reach.split.get(target) ?? 0) >= 1 ? [from, target] : null;
+  }
+
+  /** Shift held under the group order: groups are being picked, no order shows (#928). */
+  #selecting(): boolean {
+    return this.#shiftHeld && this.groupOrder !== null;
+  }
+
   /** The node a click would send the selected group to, if it would. */
   #previewTarget(): number | null {
+    // Shift held: groups are being picked (DEC-48, item K1); the order shows once it is up (#928).
+    if (this.#selecting()) return null;
     // Groups selected together (DEC-48): any place under the pointer is a target (a group on a
     // road is a pick, not a place).
     if (this.#picks.length > 0) {

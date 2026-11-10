@@ -273,8 +273,11 @@ export const BARRACKS_MARK = {
   enemy: { innerRadius: 5.6, ringWidth: 1, ringAlpha: 0.85, house: 0.78 },
 } as const;
 
-/** The middle of the gilt VP lozenge lies this far outside the capacity ring's centre line (#847). */
-export const VP_BADGE_LIFT = 1;
+/**
+ * The middle of the gilt VP lozenge lies this far outside the capacity ring's centre line (#847;
+ * further out since the lozenge grew, #928, so it covers less of the ring and the helmet).
+ */
+export const VP_BADGE_LIFT = 4.5;
 
 // --- Units on the map (9.5): helmets (#784) ----------------------------------------------------------
 // A group is a helmet (`units/helmet.ts`): own Rim facing right, the opponent's Cut facing left. Its
@@ -352,13 +355,14 @@ export const PROVINCE_ENGRAVED = {
 } as const;
 /**
  * The capacity ring (`ringAt`): every place on a dark cut `cut` wide; a place with a unit of the
- * viewer a solid ink arc `filled` wide, room two ink hairlines `offset` either side of the ring.
+ * viewer a solid ink arc `filled` wide, room a hollow cell: ink hairlines `width` wide `offset`
+ * either side of the ring, closed at the ends, over an ink `wash` (#928: readable on the dark plate).
  */
 export const RING_ENGRAVED = {
   cut: 6,
   cutAlpha: 0.8,
   filled: 3.4,
-  room: { width: 0.8, offset: 1.5 },
+  room: { width: 0.9, offset: 1.6, wash: 0.3 },
   notch: 1.3,
 } as const;
 /**
@@ -378,7 +382,7 @@ export const LOZENGE = {
   drop: 8.5,
 } as const;
 /** The VP badge (`vpBadge`): a gilt lozenge, a dark square `side` across with two gilt squares. */
-export const VP_LOZENGE = { side: 14, outer: 13, inner: 9.2, width: 1, font: 11 } as const;
+export const VP_LOZENGE = { side: 18.5, outer: 17.2, inner: 12.4, width: 1.1, font: 14.5 } as const;
 /**
  * The helmet (`helmet`, engraved): a dark casing (`casing`, thicker by `inside` in a city) under the
  * dome and the strap, the dome on the dark plate, hatched in the side's colour above the charge and
@@ -480,8 +484,8 @@ export const RECRUIT_PIPS = { width: 9, first: 0.38, step: 0.27, steps: 12 } as 
 /**
  * Fine rings (55p): every city highlight on one weight system, a 1 px ink line on a 2.6 px casing at
  * `R + 5`, `R + 8` and `R + 11` from the capacity ring `R`. Selected: two rings over a dark band and
- * four lozenges; hovered: one ring; a reachable target: a ring of `ticks` ticks; one reachable only
- * after a split: a dashed amber ring.
+ * four lozenges; a reachable target: a ring of `ticks` ticks; one reachable only after a split: a
+ * dashed amber ring. A hovered city has no ring (owner 2026-11-10, #928).
  */
 export const FINE_RING = {
   r1: 5,
@@ -490,7 +494,6 @@ export const FINE_RING = {
   ink: 1,
   casing: 2.6,
   select: { band: 3.6, outer: 1.4, lozenge: 3.4, lozengeCasing: 1.1 },
-  hover: { width: 1.2, alpha: 0.85 },
   target: { ticks: 16, short: 2.6, long: 4.6, every: 4, casing: 2.4 },
   split: { dash: 4, gap: 3, width: 1.3 },
 } as const;
