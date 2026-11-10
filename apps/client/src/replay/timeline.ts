@@ -26,14 +26,18 @@ import type {
   NodeView,
   PacketView,
   PlayerId,
+  RoadFort,
   Seen,
   SnapshotMsg,
 } from '../protocol.gen.ts';
 import type {
+  FrameCity,
   FrameFigure,
   FrameGroup,
   FrameHalf,
+  FrameSeenCity,
   FrameSighting,
+  FrameVision,
   ReplayFile,
   ReplayFrame,
 } from './replayFile.ts';
@@ -86,7 +90,69 @@ function groupView(g: FrameGroup): GroupView {
 /** Intent kinds the viewer draws; older files may have others (the group build, before DEC-16). */
 const INTENT_KINDS: ReadonlySet<string> = new Set<IntentKind>(['planned_move']);
 
+/**
+ * The building fields of a node in the full view (#905), from the city record of the frame:
+ * everything of both players. A frame without the key `c` (a file from before #905) has no
+ * buildings: all `null`, as the viewer showed it before.
+ */
+function buildings(
+  map: MapFile,
+  frame: ReplayFrame,
+  cities: ReadonlyMap<number, FrameCity>,
+  id: number,
+): Pick<
+  NodeView,
+  | 'has_barracks'
+  | 'building'
+  | 'factory'
+  | 'factory_build'
+  | 'recruit_queue'
+  | 'recruit_progress'
+  | 'recruit_waiting'
+  | 'rally_point'
+> {
+  const none = {
+    has_barracks: null,
+    building: null,
+    factory: null,
+    factory_build: null,
+    recruit_queue: null,
+    recruit_progress: null,
+    recruit_waiting: null,
+    rally_point: null,
+  };
+  // A province has no factory, barracks or queue (DEC-23).
+  if (frame.c === undefined || map.nodes[id]?.kind === 'province') return none;
+  const city = cities.get(id);
+  const factoryBuild = city?.[2];
+  const build = city?.[4];
+  const queue = city?.[5];
+  return {
+    has_barracks: city?.[3] === 1,
+    building: build ? { kind: 'barracks', done_tick: build[0], owed: build[1] } : null,
+    factory: city?.[1] != null,
+    factory_build: factoryBuild ? { done_tick: factoryBuild[0], owed: factoryBuild[1] } : null,
+    recruit_queue: queue ? queue[0] : null,
+    recruit_progress: queue ? queue[1] : null,
+    recruit_waiting: queue ? queue[2] === 1 : null,
+    rally_point: city?.[6] ?? null,
+  };
+}
+
+/** The road fortifications of an edge in the full view (#905), the end `a` first. */
+function fortsOfEdge(map: MapFile, frame: ReplayFrame, id: number): RoadFort[] {
+  const a = map.edges[id]?.a;
+  const out: RoadFort[] = [];
+  for (const [edge, node, built, ready] of frame.d ?? []) {
+    const owner = frame.n[node]?.[0];
+    if (edge !== id || owner === undefined || owner === null) continue;
+    out.push({ node, owner, built: built === 1, done_tick: built === 1 ? null : ready });
+  }
+  return out.sort((x, y) => Number(y.node === a) - Number(x.node === a));
+}
+
 function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
+  const cities = new Map<number, FrameCity>((frame.c ?? []).map((city) => [city[0], city]));
   const nodes: NodeView[] = frame.n.map(([owner, warehouse, capacity, warehouseCap], id) => ({
     id,
     owner,
@@ -97,24 +163,18 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     attrition_in: null, // not in the replay files: the viewer shows no countdown
     grace_left: null,
     starve_in: null, // not in the replay files (DEC-19)
-    recruit_queue: null, // not in the replay files (DEC-25)
-    recruit_progress: null,
-    recruit_waiting: null,
-    has_barracks: null, // not in the replay files (DEC-26)
     // The places of the warehouse (#556): without them the bar would show the node capacity.
     warehouse_cap: warehouseCap ?? null,
-    building: null,
-    // Economy v2 (DEC-41): not in the replay files.
-    factory: null,
+    // The buildings, queues and rally points (#905): from the frame keys `c`, none in older files.
+    ...buildings(map, frame, cities, id),
+    // Economy v2 (DEC-41): the factory rate and the supply flow are not in the replay files.
     factory_period: null,
-    factory_build: null,
     front_dist: null,
     flow_down: null,
     flow_next: null,
     flow_idle: null,
     flow_pocket: null,
     terrain_mark: null,
-    rally_point: null,
   }));
   const packets: PacketView[] = frame.k.map(
     ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => {
@@ -158,7 +218,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
           { detail: 'presence', seen: null },
         ],
         enemy_groups: [],
-        forts: [],
+        forts: fortsOfEdge(map, frame, id),
       })),
       groups: frame.g.map(groupView),
       packets,
@@ -245,18 +305,74 @@ function figure([id, pos, toward, detail, mode, units, charged, range]: FrameFig
 }
 
 /**
+ * An enemy city as the side saw it (#905, DEC-31): a built factory and barracks, nothing else. A
+ * city not in `v[side].c` is unknown (`null`), not "without".
+ */
+function enemyBuildings(
+  seen: FrameSeenCity | undefined,
+): Pick<
+  NodeView,
+  | 'has_barracks'
+  | 'building'
+  | 'factory'
+  | 'factory_build'
+  | 'recruit_queue'
+  | 'recruit_progress'
+  | 'recruit_waiting'
+  | 'rally_point'
+> {
+  return {
+    has_barracks: seen === undefined ? null : seen[2] === 1,
+    building: null,
+    factory: seen === undefined ? null : seen[1] === 1,
+    factory_build: null,
+    recruit_queue: null,
+    recruit_progress: null,
+    recruit_waiting: null,
+    rally_point: null,
+  };
+}
+
+/**
+ * The fortifications of an edge in `side`'s view (#905): its own (the full view's, by the owner of
+ * the node, with their ready tick) and the enemy ones in `v[side].d`; the end `a` first.
+ */
+function sideForts(map: MapFile, edge: EdgeView, vision: FrameVision, side: PlayerId): RoadFort[] {
+  const own = edge.forts.filter((fort) => fort.owner === side);
+  const enemy = (vision.d ?? [])
+    .filter(([id]) => id === edge.id)
+    .map(([, node, built]): RoadFort => ({
+      node,
+      owner: side === 0 ? 1 : 0,
+      built: built === 1,
+      done_tick: null,
+    }));
+  const a = map.edges[edge.id]?.a;
+  return [...own, ...enemy].sort((x, y) => Number(y.node === a) - Number(x.node === a));
+}
+
+/**
  * The snapshot `side` had at this frame (#600), cut from the full one: the fog part from `v[side]`
  * as it is, the own groups, packets and fight members by owner. Without `v` the full snapshot.
  */
-function sideSnapshot(full: SnapshotMsg, frame: ReplayFrame, side: PlayerId): SnapshotMsg {
+function sideSnapshot(
+  map: MapFile,
+  full: SnapshotMsg,
+  frame: ReplayFrame,
+  side: PlayerId,
+): SnapshotMsg {
   const vision = frame.v?.[side];
   if (vision === undefined) return full;
   const tick = frame.t;
   const owners = new Map(frame.g.map((g) => [String(g.id), g]));
+  const seenCities = new Map<number, FrameSeenCity>((vision.c ?? []).map((c) => [c[0], c]));
   const nodes = full.view.nodes.map((node, id): NodeView => {
     const [detail, sighting, warehouse] = vision.n[id] ?? ['fog'];
     return {
       ...node,
+      // An own city keeps all its buildings (the full view by owner); of an enemy one only what the
+      // side saw (`v[side].c`, DEC-31): never its builds, queue or rally point (#905).
+      ...(node.owner === side ? {} : enemyBuildings(seenCities.get(id))),
       detail,
       seen: seen(sighting, tick),
       warehouse: warehouse ?? null,
@@ -265,14 +381,17 @@ function sideSnapshot(full: SnapshotMsg, frame: ReplayFrame, side: PlayerId): Sn
     };
   });
   const edges = full.view.edges.map((edge, id): EdgeView => {
+    // Own fortifications with their ready tick; the enemy's the side saw (`v[side].d`), no tick.
+    const forts = sideForts(map, edge, vision, side);
     const record = vision.e[id];
-    if (record === undefined) return edge;
+    if (record === undefined) return { ...edge, forts };
     const [, detail, a, b, figures] = record;
     return {
       ...edge,
       detail,
       halves: [half(a, tick), half(b, tick)],
       enemy_groups: (figures ?? []).map(figure),
+      forts,
     };
   });
   return {
@@ -314,7 +433,7 @@ export function buildTimeline(file: ReplayFile, side: PlayerId | null = null): T
   return {
     snapshots: file.frames.map((frame) => {
       const full = snapshot(file.map, frame);
-      return side === null ? full : sideSnapshot(full, frame, side);
+      return side === null ? full : sideSnapshot(file.map, full, frame, side);
     }),
     groupOwners,
     packetOwners,

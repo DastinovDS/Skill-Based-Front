@@ -7,8 +7,15 @@
  */
 import type { Detail, EndReason, MapFile, Mode, PlayerId, Stance } from '../protocol.gen.ts';
 
-/** The only frames format this viewer reads. */
-export const REPLAY_FORMAT = 1;
+/** The frames format the server writes now (2, #905: the buildings and the header `rules`). */
+export const REPLAY_FORMAT = 2;
+
+/**
+ * The formats this viewer reads. A format 1 file has no buildings unless it was written between
+ * the two parts of #905 (then it has the keys `c` and `d`, and they are drawn); a file with any
+ * other `format` is refused.
+ */
+export const READABLE_FORMATS: readonly number[] = [1, 2];
 
 /** Why a file cannot be shown. `format`: a version this viewer does not know; `invalid`: not a replay. */
 export class ReplayError extends Error {
@@ -34,6 +41,33 @@ export type FrameIntent = [number, PlayerId, string, number, number | null];
 export type FrameBuild = [number, number, number];
 /** `[edge, owner, done_tick]`: a road build on an edge (DEC-28, item 7). */
 export type FrameEdgeBuild = [number, PlayerId, number];
+
+/** `[done_tick, owed]` of a build (`done_tick` `null` while `owed` is above 0, DEC-41, item 7). */
+export type FrameBuildSite = [number | null, number];
+
+/**
+ * The buildings of a city (#905): `[node, factory, factory_build, barracks, build, recruit, rally]`,
+ * trailing `null`s left out. `factory`: the owner of its factory; `barracks` 0/1; `recruit`:
+ * `[queue, progress, waiting]`; `rally`: the node its new units walk to.
+ */
+export type FrameCity = [
+  number,
+  (PlayerId | null)?,
+  (FrameBuildSite | null)?,
+  number?,
+  (FrameBuildSite | null)?,
+  ([number, number, number] | null)?,
+  (number | null)?,
+];
+
+/** A road fortification `[edge, node, built, ready]` (#905): of the owner of `node`. */
+export type FrameFort = [number, number, number, number];
+
+/** An enemy city a side saw (#905, DEC-31): `[node, factory, barracks]`, 0/1 each. */
+export type FrameSeenCity = [number, number, number];
+
+/** An enemy fortification a side saw (#905, DEC-43, item D8): `[edge, node, built]`. */
+export type FrameSeenFort = [number, number, number];
 
 export interface FrameGroup {
   id: number;
@@ -79,6 +113,10 @@ export interface ReplayFrame {
    * frame of the file has a sound one.
    */
   v?: [FrameVision, FrameVision];
+  /** The buildings of both players (#905), only the cities with any; absent in older files. */
+  c?: FrameCity[];
+  /** The road fortifications of both players (#905); absent while there are none. */
+  d?: FrameFort[];
 }
 
 /** `low..high` of the enemy units; `high` `null`: open (`UnitsRange`). */
@@ -127,6 +165,10 @@ export interface FrameVision {
   e: FrameVisionEdge[];
   /** Edges whose road build the player saw; absent while there are none. */
   b?: number[];
+  /** The enemy cities whose buildings the player saw (#905, DEC-31); absent while there are none. */
+  c?: FrameSeenCity[];
+  /** The enemy fortifications the player saw (#905, DEC-43, item D8); absent while there are none. */
+  d?: FrameSeenFort[];
 }
 
 /** A pair `[player 0, player 1]`. */
@@ -167,8 +209,23 @@ export type FrameFight =
 /** `[tick, kind, data]`; `data` is the flat object of the simulation event. */
 export type FileEvent = [number, string, Record<string, boolean | number | string | null>];
 
+/**
+ * The rule numbers the viewer draws the buildings with (header `rules`, #905): ticks and prices of
+ * the builds and the recruit queue, as the match played them. Files before it have none: the time
+ * bars are then left out.
+ */
+export interface ReplayRules {
+  unit_ticks: number;
+  queue_max: number;
+  barracks_ticks: number;
+  barracks_charges: number;
+  factory_ticks: number;
+  factory_charges: number;
+  fort_ticks: number;
+}
+
 export interface ReplayFile {
-  format: typeof REPLAY_FORMAT;
+  format: number;
   map_id: string;
   tick_hz: number;
   frame_every: number;
@@ -181,6 +238,8 @@ export interface ReplayFile {
    * key). Older files have none: the viewer says "Player 1" and "Player 2".
    */
   nicks?: [string, string];
+  /** The rule numbers of the buildings (format 2); absent in older files. */
+  rules?: ReplayRules;
   map: MapFile;
   /** Ascending by `t`; the first is tick 0. */
   frames: ReplayFrame[];
@@ -239,6 +298,38 @@ const isFigure = (v: unknown): boolean =>
   isIntOrNull(v[6]) &&
   isRange(v[7]);
 
+const isSite = (v: unknown): boolean =>
+  v === undefined ||
+  v === null ||
+  (Array.isArray(v) && v.length === 2 && (v[0] === null || isInt(v[0])) && isInt(v[1]));
+const isQueue = (v: unknown): boolean =>
+  v === undefined || v === null || (Array.isArray(v) && v.length === 3 && v.every(isInt));
+const isCity = (v: unknown, nodes: number): boolean =>
+  Array.isArray(v) &&
+  isInt(v[0]) &&
+  v[0] >= 0 &&
+  v[0] < nodes &&
+  isIntOrNull(v[1]) &&
+  isSite(v[2]) &&
+  isIntOrNull(v[3]) &&
+  isSite(v[4]) &&
+  isQueue(v[5]) &&
+  isIntOrNull(v[6]);
+const isFort = (v: unknown, nodes: number, edges: number, length: number): boolean =>
+  Array.isArray(v) &&
+  v.length === length &&
+  v.every(isInt) &&
+  (v[0] as number) >= 0 &&
+  (v[0] as number) < edges &&
+  (v[1] as number) >= 0 &&
+  (v[1] as number) < nodes;
+const isSeenCity = (v: unknown, nodes: number): boolean =>
+  Array.isArray(v) &&
+  v.length === 3 &&
+  v.every(isInt) &&
+  (v[0] as number) >= 0 &&
+  (v[0] as number) < nodes;
+
 /** Whether `v` is the per-player key of a frame (#598) for a map of `nodes` nodes and `edges` edges. */
 function isVision(v: unknown, nodes: number, edges: number): v is [FrameVision, FrameVision] {
   return (
@@ -263,7 +354,11 @@ function isVision(v: unknown, nodes: number, edges: number): v is [FrameVision, 
             isHalf(e[3]) &&
             (e[4] === undefined || (Array.isArray(e[4]) && e[4].every(isFigure))),
         ) &&
-        (side.b === undefined || (Array.isArray(side.b) && side.b.every(isInt))),
+        (side.b === undefined || (Array.isArray(side.b) && side.b.every(isInt))) &&
+        (side.c === undefined ||
+          (Array.isArray(side.c) && side.c.every((c) => isSeenCity(c, nodes)))) &&
+        (side.d === undefined ||
+          (Array.isArray(side.d) && side.d.every((d) => isFort(d, nodes, edges, 3)))),
     )
   );
 }
@@ -275,6 +370,26 @@ function isVision(v: unknown, nodes: number, edges: number): v is [FrameVision, 
 export function hasVision(file: ReplayFile): boolean {
   return file.frames.every((frame) => frame.v !== undefined);
 }
+
+/**
+ * Whether the file has buildings (#905): a format 2 file always does (the capitals are factories),
+ * a format 1 one only when it was written between the two parts of #905.
+ */
+export function hasBuildings(file: ReplayFile): boolean {
+  return file.frames.some((frame) => frame.c !== undefined);
+}
+
+const RULE_KEYS: readonly (keyof ReplayRules)[] = [
+  'unit_ticks',
+  'queue_max',
+  'barracks_ticks',
+  'barracks_charges',
+  'factory_ticks',
+  'factory_charges',
+  'fort_ticks',
+];
+const isRules = (v: unknown): v is ReplayRules =>
+  isObj(v) && RULE_KEYS.every((key) => isInt(v[key]) && v[key] >= 0);
 
 const isNick = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 
@@ -290,7 +405,9 @@ function readNicks(raw: unknown): [string, string] | null {
 /** The parsed JSON as a `ReplayFile`; throws `ReplayError`. */
 export function parseReplay(raw: unknown): ReplayFile {
   if (!isObj(raw)) throw new ReplayError('invalid');
-  if (raw.format !== REPLAY_FORMAT) throw new ReplayError('format');
+  if (typeof raw.format !== 'number' || !READABLE_FORMATS.includes(raw.format)) {
+    throw new ReplayError('format');
+  }
   const { frames, events, outcome } = raw;
   const map = raw.map as { nodes?: unknown; edges?: unknown } | null;
   const sound =
@@ -338,5 +455,21 @@ export function parseReplay(raw: unknown): ReplayFile {
   if (!file.frames.every((frame) => isVision(frame.v, nodes, edges))) {
     for (const frame of file.frames) delete frame.v;
   }
+  // The buildings (#905): kept only when every frame's keys are sound, else none are drawn (a
+  // damaged key is dropped, never an error). A file without the keys has no buildings.
+  const sane = file.frames.every(
+    (frame) =>
+      (frame.c === undefined ||
+        (Array.isArray(frame.c) && frame.c.every((city) => isCity(city, nodes)))) &&
+      (frame.d === undefined ||
+        (Array.isArray(frame.d) && frame.d.every((fort) => isFort(fort, nodes, edges, 4)))),
+  );
+  if (!sane) {
+    for (const frame of file.frames) {
+      delete frame.c;
+      delete frame.d;
+    }
+  }
+  if (!isRules(raw.rules)) delete file.rules;
   return file;
 }

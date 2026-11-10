@@ -18,7 +18,7 @@ import type { OverlayState } from './interaction.ts';
 import type { MapLayers } from './layers.ts';
 import { nodePoint, type TokenSpot } from './layout.ts';
 import { helmetWidth } from './shapes.ts';
-import { BG, CASING, DARK_PLATE, GROUP_ORDER, INK, YOU } from './style.ts';
+import { BG, CASING, DARK_PLATE, GROUP_ORDER, INK, ownerColor, YOU } from './style.ts';
 
 /** Whole seconds as the travel time reads them ("5 s", #432). */
 const seconds = (n: number): string => `${String(n)} ${t('unit.s')}`;
@@ -256,13 +256,16 @@ export class GroupOrderView {
   /** The muster ring at each rally point of an own city, the chevron on the city ring towards it. */
   private drawMusters(g: Graphics, frame: RenderFrame, overlay: OverlayState, s: number): void {
     const view = frame.base.view;
-    const points = new Set<number>();
+    const points = new Map<number, number>();
     for (const node of view.nodes) {
-      if (node.owner !== this.me || node.rally_point === null) continue;
-      points.add(node.rally_point);
-      this.chevron(g, node.id, node.rally_point, 1);
+      // A live view carries only the own rally points; the full view of a replay both players',
+      // the enemy's in its colour (#905).
+      if (node.owner === null || node.rally_point === null) continue;
+      const color = ownerColor(this.me, node.owner);
+      points.set(node.rally_point, color);
+      this.chevron(g, node.id, node.rally_point, 1, color);
     }
-    for (const point of points) this.muster(g, point, s, 1);
+    for (const [point, color] of points) this.muster(g, point, s, 1, color);
     // The pick of a point (item K7): the ring faint at the node under the pointer.
     const from = overlay.rallyFrom ?? null;
     const hover = overlay.hover?.node ?? null;
@@ -273,7 +276,7 @@ export class GroupOrderView {
     }
   }
 
-  private muster(g: Graphics, node: number, s: number, alpha: number): void {
+  private muster(g: Graphics, node: number, s: number, alpha: number, color: number = YOU): void {
     const at = nodePoint(this.map, node);
     if (at === undefined) return;
     const M = GROUP_ORDER.muster;
@@ -285,7 +288,7 @@ export class GroupOrderView {
           .moveTo(at.x + r * Math.cos(a0), at.y + r * Math.sin(a0))
           .arc(at.x, at.y, r, a0, a0 + M.arc);
       arc().stroke({ width: M.casing, color: CASING, alpha, cap: 'butt' });
-      arc().stroke({ width: M.width, color: YOU, alpha, cap: 'butt' });
+      arc().stroke({ width: M.width, color, alpha, cap: 'butt' });
     }
     // The recruit helmet on a disc on top of the ring, a plus beside it: new units come here.
     const top = { x: at.x, y: at.y - r };
@@ -294,7 +297,7 @@ export class GroupOrderView {
     const outline = helmetOutline('own', M.helmet, 0);
     const poly = outline.map((v, i) => (i % 2 === 0 ? top.x + v * s : top.y + (v + 0.5) * s));
     g.poly(poly)
-      .fill({ color: YOU, alpha })
+      .fill({ color, alpha })
       .stroke({ width: 0.8 * s, color: INK, alpha });
     const px = top.x + M.disc * s * 0.8;
     const py = top.y - M.disc * s * 0.7;
@@ -312,7 +315,13 @@ export class GroupOrderView {
   }
 
   /** The cut chevron on the ring of `city`, pointing at `point` (the way its new units leave). */
-  private chevron(g: Graphics, city: number, point: number, alpha: number): void {
+  private chevron(
+    g: Graphics,
+    city: number,
+    point: number,
+    alpha: number,
+    color: number = YOU,
+  ): void {
     const from = nodePoint(this.map, city);
     const to = nodePoint(this.map, point);
     if (from === undefined || to === undefined) return;
@@ -337,7 +346,7 @@ export class GroupOrderView {
     ];
     g.poly(poly)
       .stroke({ width: 3, color: CASING, alpha, join: 'miter' })
-      .fill({ color: YOU, alpha })
+      .fill({ color, alpha })
       .stroke({ width: 1, color: INK, alpha, join: 'miter' });
   }
 

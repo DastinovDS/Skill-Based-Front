@@ -1,6 +1,7 @@
 import { parseReplay, type ReplayFile } from './replayFile.ts';
 import raw from './siege.frames.json';
 import rawFights from './siege-fights.frames.json';
+import rawBuildings from './siege-buildings.frames.json';
 import rawFog from './siege-fog.frames.json';
 
 /**
@@ -25,3 +26,12 @@ export const SAMPLE_FIGHTS: ReplayFile = parseReplay(rawFights);
  * are the files without the key.
  */
 export const SAMPLE_FOG: ReplayFile = parseReplay(rawFog);
+
+/**
+ * A recording with the buildings (the frame keys `c` and `d` of #905, format 2, the header `rules`):
+ * factories and barracks (the capitals and builds with charges still owed), a recruit queue, road
+ * fortifications built and being built, rally points; smart_rusher against smart_expander on `siege`
+ * under `mvp-7`, 1000 ticks, player 1 wins by forfeit. Recorded by `gow_server.frames.build_frames`.
+ * Also the dev sample `?replay=dev-buildings`.
+ */
+export const SAMPLE_BUILDINGS: ReplayFile = parseReplay(rawBuildings);

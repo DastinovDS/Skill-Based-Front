@@ -11,6 +11,7 @@ side's own buildings come from the full view by owner (``docs/design/replay-fram
 
 import gzip
 import json
+import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Final, cast
@@ -358,3 +359,29 @@ def test_frames_of_many_buildings_stay_in_the_size_budget(rules: Ruleset) -> Non
     assert min(sizes) == len(cities)
     data = json.dumps(frames, separators=(",", ":")).encode()
     assert len(gzip.compress(data)) <= FRAMES_BUDGET
+
+
+def test_header_has_the_rule_numbers_the_viewer_draws_builds_with(tmp_path: Path) -> None:
+    """``rules`` (#905): the times and prices of the builds and the recruit queue, from the ruleset
+    file (map tempo scales only the economy periods, so these are the file's numbers)."""
+    siege_map = load_map(SIEGE)
+    path = ROOT / "rulesets" / "mvp-7.toml"
+    ruleset, toml = load_ruleset(path), tomllib.loads(path.read_text())
+    bots = [
+        BOTS["smart_rusher"](siege_map, ruleset, seed=1, player=0),
+        _Builder(BOTS["smart_expander"](siege_map, ruleset, seed=2, player=1), siege_map, 50),
+    ]
+    log = tmp_path / "2.jsonl.gz"
+    with ReplayWriter(log) as writer:
+        run_headless(siege_map, ruleset, bots, observer=writer)
+    result = build_frames(log, tmp_path / "2.frames.json.gz", RULESETS, SIEGE.parent)
+    doc = json.loads(gzip.decompress(result.path.read_bytes()))
+    assert doc["rules"] == {
+        "unit_ticks": toml["recruit"]["unit_ticks"],
+        "queue_max": toml["recruit"]["queue_max"],
+        "barracks_ticks": toml["city_upgrades"]["barracks_ticks"],
+        "barracks_charges": toml["city_upgrades"]["barracks_charges"],
+        "factory_ticks": toml["factory"]["build_ticks"],
+        "factory_charges": toml["factory"]["cost"],
+        "fort_ticks": toml["fort"]["build_ticks"],
+    }

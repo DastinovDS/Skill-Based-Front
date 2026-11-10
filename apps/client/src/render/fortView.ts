@@ -493,7 +493,9 @@ export class FortView {
   private building(g: Graphics, p: Placed, kind: Masonry, color: number): void {
     const { run, depth, gate, spec } = p;
     const s = this.s;
-    const done = spec.owner === this.me ? spec.doneTick : null;
+    // The tick comes only with an own build in a live view; the full view of a replay has it for
+    // both players (#905). A view without it draws the wall as far as it is known.
+    const done = spec.doneTick;
     const known = done !== null;
     const share = done === null ? 0 : buildProgress(done, this.tick, this.buildTicks);
     const span = buildSpan(run.len, gate, share);

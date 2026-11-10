@@ -27,7 +27,7 @@ describe('parseReplay', () => {
   });
 
   it('refuses an unknown format', () => {
-    const next = { ...(SAMPLE_RAW as object), format: 2 };
+    const next = { ...(SAMPLE_RAW as object), format: 3 };
     expect(() => parseReplay(next)).toThrow(expect.objectContaining({ code: 'format' }));
   });
 

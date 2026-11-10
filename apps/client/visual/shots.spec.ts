@@ -46,6 +46,36 @@ test('shot of the replay viewer', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'replay.png') });
 });
 
+// The buildings in the replay (#905): `replay-buildings.png` the full view of both players,
+// `replay-buildings-<side>.png` through the eyes of each side with the fog on (only what that side
+// saw of the enemy's buildings), at tick 900 of the dev sample, and `-early` at tick 300.
+test('shot of the replay viewer with buildings', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto('/?replay=dev-buildings');
+  const canvas = page.locator('.game-canvas');
+  await expect(canvas).toHaveAttribute('data-tick', '0');
+  const seek = async (tick: number): Promise<void> => {
+    await page.getByLabel('Position in the match').fill(String(tick));
+    await expect(canvas).toHaveAttribute('data-tick', String(tick));
+    await page.waitForTimeout(400);
+  };
+  const view = page.getByRole('group', { name: 'View as' });
+  await seek(300);
+  await page.screenshot({ path: join(OUT, 'replay-buildings-early.png') });
+  await seek(900);
+  await page.screenshot({ path: join(OUT, 'replay-buildings.png') });
+  for (const [nick, file] of [
+    ['Ember', 'ember'],
+    ['Bot (normal)', 'bot'],
+  ] as const) {
+    await view.getByRole('button', { name: nick, exact: true }).click();
+    const fog = view.getByRole('button', { name: 'Fog' });
+    if ((await fog.getAttribute('aria-pressed')) !== 'true') await fog.click();
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: join(OUT, `replay-buildings-${file}.png`) });
+  }
+});
+
 // The states of the replay screen before a file is there (#593): `replay-preparing.png` (the server
 // still builds the frames) and `replay-unavailable.png` (410).
 // `replay-loading.png` and `replay-network.png` (with "Try again") came with #599.

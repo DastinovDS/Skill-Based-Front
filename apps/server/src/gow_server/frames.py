@@ -60,11 +60,10 @@ __all__ = [
     "vision_of",
 ]
 
-FORMAT: Final = 1
-"""Version of the frames file format; the viewer checks it. The buildings of #905 (``c`` and
-``d`` of a frame and of ``v``) are a compatible addition written under 1 for now: the viewer of
-today refuses any other ``format``, so the client part of #905 raises this to 2 together with a
-viewer that reads both (``docs/design/replay-frames.md``, "Format change")."""
+FORMAT: Final = 2
+"""Version of the frames file format; the viewer checks it. 2 (#905): the buildings (``c`` and
+``d`` of a frame and of ``v``) and the header ``rules``. A viewer reads 1 and 2; files of 1 are
+never rewritten (``docs/design/replay-frames.md``, "Format change")."""
 
 ROAD_LEVEL: Final = 1
 """The road level written where the format has one (``w`` of a frame, the first element of an
@@ -371,6 +370,21 @@ class FramesResult:
     reason: str
 
 
+def viewer_rules(rules: Ruleset) -> dict[str, int]:
+    """The rule numbers the viewer draws buildings with (#905): the time bars of the builds and of
+    the recruit queue, their prices. ``rules`` are the rules the match played (map tempo
+    applied), so the bars fill at the real pace."""
+    return {
+        "unit_ticks": rules.recruit.unit_ticks,
+        "queue_max": rules.recruit.queue_max,
+        "barracks_ticks": rules.city_upgrades.barracks_ticks,
+        "barracks_charges": rules.city_upgrades.barracks_charges,
+        "factory_ticks": rules.factory.build_ticks,
+        "factory_charges": rules.factory.cost,
+        "fort_ticks": rules.fort.build_ticks,
+    }
+
+
 def build_frames(
     log_path: str | Path,
     out_path: str | Path,
@@ -417,6 +431,7 @@ def build_frames(
     }
     if nicks is not None:
         document["nicks"] = list(nicks)
+    document["rules"] = viewer_rules(match.rules)
     document |= {
         "map": map_to_data(state.map),
         "frames": recorder.frames,

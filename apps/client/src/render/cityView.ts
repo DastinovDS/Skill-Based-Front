@@ -590,8 +590,10 @@ export class CityView {
     const provinceStock = province && node.owner === this.me && provinceWarehouse > 0;
     const building = node.building;
     const own = node.owner === this.me;
+    // The builds are drawn wherever the snapshot carries them: a live view carries only the own
+    // ones (AGENTS.md 4.4), the full view of a replay those of both players (#905).
     const barracksBuild: TowerBuild | null =
-      own && building?.kind === 'barracks' && cityUpgrades !== null
+      building?.kind === 'barracks' && cityUpgrades !== null
         ? {
             owed: building.owed,
             price: cityUpgrades.barracksCharges ?? null,
@@ -600,7 +602,7 @@ export class CityView {
           }
         : null;
     const factoryBuild: TowerBuild | null =
-      own && node.factory_build !== null
+      node.factory_build !== null
         ? {
             owed: node.factory_build.owed,
             price: cityUpgrades?.factoryCharges ?? null,
