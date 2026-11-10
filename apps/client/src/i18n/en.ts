@@ -88,7 +88,6 @@ export const en = {
   'split.goes': 'New group',
   'split.chargedN': '{n} charged',
   'split.tip': 'Too big to go to {place}: split the group first',
-  'capture.tip': 'Taking {place} costs charges: {n}. Without them the group turns back',
   'split.confirm': 'Split',
   'split.confirmSend': 'Split and send',
   'split.sendTo': 'To {place}: at most {n} fit the way',

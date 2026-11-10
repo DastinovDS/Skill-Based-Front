@@ -49,12 +49,6 @@ export interface OrderUiData {
    */
   readonly splitHover: number | null;
   /**
-   * The node the pointer rests on as a target of the selected group that the player does not own,
-   * while a capture costs charges (`ruleset_public.capture.charge_cost > 0`, DEC-38): the tip tells
-   * the rule. It says nothing about whether this group can pay (AGENTS.md 7.1). `null`: none.
-   */
-  readonly captureHover: number | null;
-  /**
    * The road pick of "Fortify road" (DEC-43, item D): the own node whose road is being picked, and the
    * road under the pointer; `null`: not picking.
    */
@@ -102,7 +96,6 @@ export class OrderUiState {
   current = $state.raw<OrderUiData>({
     planned: false,
     splitHover: null,
-    captureHover: null,
     fortFrom: null,
     fortHover: null,
     supplyMode: false,
