@@ -538,9 +538,9 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         assert "CancelOrder" in kinds
     # DEC-43: the flow, the shift and the road fortifications are mirrored; DEC-41: the factories;
     # DEC-44: the stances; DEC-26: the barracks.
-    assert {"SetLeafShift", "BuildFactory", "FortifyRoad", "SetStance", "BuildBarracks"} <= set(
-        kinds
-    )
+    assert {"BuildFactory", "FortifyRoad", "SetStance", "BuildBarracks"} <= set(kinds)
+    if rules.supply.leaf_shift:  # DEC-50: no lever in mvp-7, every SetLeafShift is rejected
+        assert "SetLeafShift" in kinds
     if rules.group_order is not None:  # DEC-48: the group orders and the rally point, mirrored
         assert "SetRallyPoint" in kinds
         if path.stem != "web":  # on web the CP are gone whenever two groups stand idle

@@ -83,6 +83,7 @@
       "toll_charges": 1
     },
     "supply_dispatch_ticks": 10,
+    "supply_leaf_shift": true,
     "stances": {
       "cp_period_ticks": {
         "economy": 200,

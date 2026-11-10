@@ -16,7 +16,8 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the barracks (DEC-26), its price in charges and duration, and the warehouse of a province
   (DEC-41, item 13), for the city menu;
 - the factories (DEC-41, item 2) and the road fortifications (DEC-43, item D);
-- the period of the supply dispatch (DEC-43, ``supply_dispatch_ticks``);
+- the period of the supply dispatch (DEC-43, ``supply_dispatch_ticks``) and whether the leaf
+  shift lever exists (``supply_leaf_shift``, DEC-50: the client hides the lever without it);
 - the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429);
 - the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help;
 - the group order (DEC-48, ``group_order``, ``None`` without it) and the recruit rally point
@@ -249,6 +250,10 @@ class RulesetPublic(WireModel):
     """``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it
     (DEC-43, item A6), so the countdown to ``View.me.next_dispatch_tick`` is exact from the first
     snapshot (#705)."""
+    supply_leaf_shift: bool
+    """``supply.leaf_shift``: the player may move the level of the flow back with
+    ``set_leaf_shift`` (DEC-43, item B). ``False`` (DEC-50): no lever, the shift stays 0 and the
+    command gives ``INVALID_ARGUMENT``; the client hides the lever."""
     stances: StancesPublic
     group_order: GroupOrderPublic | None
     """DEC-48: the group order, ``None`` when the ruleset has none."""
@@ -320,6 +325,7 @@ class RulesetPublic(WireModel):
                 toll_charges=rules.fort.toll_charges,
             ),
             supply_dispatch_ticks=rules.supply.dispatch_ticks,
+            supply_leaf_shift=rules.supply.leaf_shift,
             stances=StancesPublic(
                 cp_period_ticks=StancePeriodsPublic.from_table(rules.stances.cp_period_ticks),
                 capital_period_ticks=StancePeriodsPublic.from_table(

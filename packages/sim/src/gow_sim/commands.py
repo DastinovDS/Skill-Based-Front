@@ -30,8 +30,9 @@ The buildings (DEC-26, DEC-41, items 2 and 7): ``BuildBarracks`` and ``BuildFact
 new periods (#792). A planned ``Move`` names its requested bonus (``Move.bonus >= 1``, DEC-41,
 item 10) and gathers it in ``systems.orders``; ``ReleasePlan`` sends it at once.
 Supply flow (DEC-43): ``SetLeafShift`` sets the player's leaf shift (item B2; free, not public,
-no event). Road fortifications (DEC-43, item D): ``FortifyRoad(node, edge)`` for ``fort.cost``
-CP (``systems.fortify``; not public). None of these commands is public.
+no event); not under ``supply.leaf_shift = false`` (DEC-50). Road fortifications (DEC-43, item
+D): ``FortifyRoad(node, edge)`` for ``fort.cost`` CP (``systems.fortify``; not public). None of
+these commands is public.
 
 The group order (DEC-48, section ``[group_order]``): ``GroupMove(groups, dest, planned, bonus)``
 checks each member like a ``Move`` of that group to ``dest`` and accepts the valid ones (partial
@@ -48,7 +49,8 @@ whose members arrive in one tick (a member waits in its node until its departure
 for any command but ``CancelOrder``), a planned one splitting the requested bonus over the members
 (``systems.orders``). Under the section ``ReleasePlan`` is disabled. A command of a feature the
 ruleset does not have (``GroupMove`` without the section, ``ReleasePlan`` with it,
-``SetRallyPoint`` without ``recruit.rally_point``) is ``INVALID_ARGUMENT``: the client hides those
+``SetRallyPoint`` without ``recruit.rally_point``, ``SetLeafShift`` under
+``supply.leaf_shift = false``, DEC-50) is ``INVALID_ARGUMENT``: the client hides those
 controls by ``ruleset_public``. ``SetRallyPoint(node, target)`` (DEC-48, item H) sets or clears
 the rally point of an own city, free.
 
@@ -213,7 +215,8 @@ class FortifyRoad:
 @dataclass(frozen=True, slots=True)
 class SetLeafShift:
     """Set the own leaf shift (DEC-43, item B2): the level moves ``shift`` roads back from the
-    front, ``0..leaf_shift_max``. Free, not public."""
+    front, ``0..leaf_shift_max``. Free, not public. ``INVALID_ARGUMENT`` under
+    ``supply.leaf_shift = false`` (DEC-50): the shift stays 0."""
 
     shift: int
 
@@ -725,6 +728,8 @@ def _check(
         case FortifyRoad(node=node, edge=edge):
             return _check_road_fort(state, player, node, edge)
         case SetLeafShift(shift=shift):
+            if not rules.supply.leaf_shift:
+                return Reject(RejectCode.INVALID_ARGUMENT)  # DEC-50: no lever, the shift stays 0
             ps = state.players[player]
             if not 0 <= shift <= ps.leaf_shift_max:  # stored by the last flow step (item B2)
                 return Reject(RejectCode.INVALID_ARGUMENT)

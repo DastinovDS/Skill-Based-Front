@@ -2,7 +2,8 @@
 
 Under the supply flow every bot sends only commands the ruleset knows (no ``FEATURE_DISABLED``),
 and the campaign bots use the leaf shift by the heuristic of
-``gow_bots.bots.economy.leaf_shift_command``.
+``gow_bots.bots.economy.leaf_shift_command``; without the lever (``supply.leaf_shift = false``,
+DEC-50, ``mvp-7``) no bot sends ``SetLeafShift``.
 """
 
 from collections import Counter
@@ -132,3 +133,21 @@ def test_leaf_shift_goes_back_when_a_leaf_faces_a_stronger_enemy(
     attack = OrderView(dest=enemy, path=(enemy,), planned=False, depart_tick=view.tick)
     attacking = replace(view, groups=(replace(group, order=attack),))
     assert leaf_shift_command(bot, attacking, LeafShift()) is None  # in force: 0
+
+
+# No lever (DEC-50, #929) -----------------------------------------------------------------------
+
+
+def test_the_bots_drop_set_leaf_shift_without_the_lever(rules: Ruleset, crossroads: MapDef) -> None:
+    """``Bot.allowed`` (DEC-50, item 5): ``SetLeafShift`` only while the ruleset has the lever."""
+    mvp7 = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
+    assert not SmartRusher(crossroads, mvp7, seed=1, player=0).allowed(SetLeafShift(1))
+    assert SmartRusher(crossroads, rules, seed=1, player=0).allowed(SetLeafShift(1))
+
+
+@pytest.mark.parametrize("name", [*SMART, "smart_exploiter"])
+def test_no_bot_sends_a_leaf_shift_in_mvp7(crossroads: MapDef, name: str) -> None:
+    mvp7 = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
+    sent, rejects = _play(crossroads, mvp7, (name, "smart_exploiter"), 1500)
+    assert not any(isinstance(c, SetLeafShift) for _, c in sent)
+    assert rejects["INVALID_ARGUMENT"] == 0, rejects

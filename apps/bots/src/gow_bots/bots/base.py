@@ -38,6 +38,7 @@ from gow_sim.commands import (
     CancelOrder,
     Command,
     Move,
+    SetLeafShift,
     SetStance,
     Split,
     command_cost,
@@ -483,9 +484,12 @@ class Bot:
 
     def allowed(self, cmd: Command) -> bool:
         """Whether the bot sends ``cmd`` at all: ``SetStance`` (DEC-44) only with
-        ``STANCE_POLICY``; every other command."""
+        ``STANCE_POLICY``; ``SetLeafShift`` only while the ruleset has the lever
+        (``supply.leaf_shift``, DEC-50); every other command."""
         if isinstance(cmd, SetStance):
             return self.STANCE_POLICY  # #881
+        if isinstance(cmd, SetLeafShift):
+            return self.rules.supply.leaf_shift  # DEC-50: rejected without the lever
         return True
 
     def plan_bonus(self, view: PlayerView, node: int, charged: int) -> int:

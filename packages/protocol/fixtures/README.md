@@ -31,7 +31,7 @@ group, figure and memory in the mode `attack`); their other numbers are those of
 
 - `server/welcome.json`: player 0 on the map `diamond` (`packages/sim/tests/maps/diamond.json`),
   `ruleset_public` with the numbers of `rulesets/mvp-7.toml` at the time of writing (the ruleset may move on,
-  the fixture does not break because of it).
+  the fixture does not break because of it); `supply_leaf_shift` false since DEC-50 (#929).
 - `server/welcome_v2.json`: the same with `ruleset_public` of `rulesets/mvp-5.toml` (`factories_follow` false: no DEC-47 key, #888).
 - `server/welcome_v4.json`: the same with `ruleset_public` of `rulesets/mvp-6.toml`.
 - `server/welcome_stances.json`: the same with `ruleset_public` of `rulesets/mvp-7.toml` (the stances of DEC-44, #772, with
