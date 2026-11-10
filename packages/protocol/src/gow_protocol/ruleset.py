@@ -18,7 +18,10 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the factories (DEC-41, item 2) and the road fortifications (DEC-43, item D);
 - the period of the supply dispatch (DEC-43, ``supply_dispatch_ticks``);
 - the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429);
-- the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help.
+- the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help;
+- the group order (DEC-48, ``group_order``, ``None`` without it) and the recruit rally point
+  (``recruit.rally_point`` and its walk price): the client hides what the ruleset does not have
+  (and the release of a plan when ``group_order`` is set, item A7) and shows the prices.
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -143,6 +146,22 @@ class RecruitPublic(WireModel):
     refund_started_pct: Percent
     """Share of ``cost.recruit`` a cancel returns for the unit in production; a unit not started
     yet returns all of it."""
+    rally_point: bool
+    """DEC-48, item H: a city may send its new units to a rally point (``set_rally_point``)."""
+    rally_cost: Centi
+    """Hundredths of CP a recruit pays when it leaves for the rally point (with fewer CP it stays
+    in its city, event ``rally_walk_no_cp``); 0 without ``rally_point``."""
+
+
+class GroupOrderPublic(WireModel):
+    """The group order (DEC-48, ``[group_order]`` of the ruleset): ``group_move`` works and
+    ``release_plan`` is disabled."""
+
+    max_groups: PosInt
+    """Groups in one ``group_move`` at most."""
+    rally_pct: Percent
+    """A rally of ``n`` groups costs ``ceil(n * cost.move * rally_pct / 100 / 100)`` whole CP;
+    an attack ``cost.move`` per group (``cost.planned_move`` planned)."""
 
 
 class CityUpgradesPublic(WireModel):
@@ -231,6 +250,8 @@ class RulesetPublic(WireModel):
     (DEC-43, item A6), so the countdown to ``View.me.next_dispatch_tick`` is exact from the first
     snapshot (#705)."""
     stances: StancesPublic
+    group_order: GroupOrderPublic | None
+    """DEC-48: the group order, ``None`` when the ruleset has none."""
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -271,6 +292,8 @@ class RulesetPublic(WireModel):
                 unit_ticks=rules.recruit.unit_ticks,
                 queue_max=rules.recruit.queue_max,
                 refund_started_pct=rules.recruit.refund_started_pct,
+                rally_point=rules.recruit.rally_point,
+                rally_cost=rules.recruit.rally_cost,
             ),
             city_upgrades=CityUpgradesPublic(
                 barracks_ticks=rules.city_upgrades.barracks_ticks,
@@ -303,5 +326,11 @@ class RulesetPublic(WireModel):
                     rules.stances.capital_period_ticks
                 ),
                 factories_follow=rules.stances.factories_follow,
+            ),
+            group_order=None
+            if rules.group_order is None
+            else GroupOrderPublic(
+                max_groups=rules.group_order.max_groups,
+                rally_pct=rules.group_order.rally_pct,
             ),
         )

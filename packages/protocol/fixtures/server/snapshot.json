@@ -47,7 +47,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": 1
+        "terrain_mark": 1,
+        "rally_point": null
       },
       {
         "id": 1,
@@ -80,7 +81,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 2,
@@ -113,7 +115,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 3,
@@ -148,7 +151,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       }
     ],
     "edges": [
@@ -329,7 +333,10 @@
           "bonus": 0,
           "gathering": false,
           "plan": 0,
-          "next_charge_tick": null
+          "next_charge_tick": null,
+          "depart_tick": null,
+          "group_order": null,
+          "arrive_tick": null
         }
       }
     ],

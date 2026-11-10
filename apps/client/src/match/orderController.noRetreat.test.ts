@@ -37,6 +37,9 @@ const orderOf = (planned: boolean): NonNullable<GroupView['order']> => ({
   gathering: false,
   plan: 0,
   next_charge_tick: null,
+  depart_tick: null,
+  group_order: null,
+  arrive_tick: null,
 });
 const group = (order: GroupView['order']): GroupView => ({ ...first, id: GROUP, order });
 const snapshotOf = (groups: GroupView[], fighting: boolean): SnapshotMsg => ({

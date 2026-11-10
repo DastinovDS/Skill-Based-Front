@@ -26,6 +26,8 @@
     "packet_lost",
     "packet_sent",
     "plan_charged",
+    "rally_point_cleared",
+    "rally_walk_no_cp",
     "recruit_cancelled",
     "recruit_queue_lost",
     "recruited",

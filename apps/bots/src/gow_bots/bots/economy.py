@@ -13,7 +13,8 @@ ruleset, and every tie goes through ``Bot.key`` (mirror-invariant):
 - **Plans** (``Bot.plan_bonus``, ``release_commands``): a planned order requests at most the
   stock of its node's warehouse and the charged units of the group (DEC-41, item 10); a plan that
   gathered for its requested time plus ``RELEASE_SLACK`` ticks departs with what it has
-  (``ReleasePlan``), one without any bonus is cancelled.
+  (``ReleasePlan``), one without any bonus is cancelled. Under the group order (DEC-48, item L:
+  ``[group_order]`` disables ``ReleasePlan``) such a plan is cancelled whatever it gathered.
 - **Leaf shift** (``leaf_shift_command``, DEC-43 item G), the one lever of the flow: the level
   goes one road back (``SetLeafShift(1)``) so new charges stop short of a node the bot may lose (a
   captured warehouse is lost, DEC-43 item C), while an own leaf faces a visibly stronger enemy and
@@ -152,9 +153,11 @@ def fort_site(bot: Bot, view: PlayerView, budget: int) -> tuple[int, int] | None
 
 def release_commands(bot: Bot, view: PlayerView, since: dict[int, int], tick: int) -> list[Command]:
     """``ReleasePlan`` for a gathering plan that waited its time (module docstring), a cancel
-    for one that gathered nothing; ``since``: own group id to the tick its gathering was first
-    seen, kept up to date here."""
+    for one that gathered nothing, or for any such plan under ``[group_order]`` (DEC-48, item L:
+    no release there); ``since``: own group id to the tick its gathering was first seen, kept up
+    to date here."""
     per = bot.rules.orders.plan_ticks_per_bonus
+    release = bot.rules.group_order is None
     live: dict[int, bool] = {}
     cmds: list[Command] = []
     for g in view.groups:
@@ -165,7 +168,7 @@ def release_commands(bot: Bot, view: PlayerView, since: dict[int, int], tick: in
         start = since.setdefault(g.id, tick)
         if tick - start < order.plan * per + RELEASE_SLACK:
             continue
-        cmds.append(ReleasePlan(g.id) if order.bonus >= 1 else CancelOrder(g.id))
+        cmds.append(ReleasePlan(g.id) if release and order.bonus >= 1 else CancelOrder(g.id))
     for gid in sorted(since):
         if gid not in live:
             del since[gid]

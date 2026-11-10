@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 46
+PROTOCOL_VERSION: Final = 47
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -219,6 +219,47 @@ class SnapshotMsg(WireModel):
         return self
 
 
+class OrderKind(StrEnum):
+    """What a ``group_move`` is (DEC-48, item B2): decided by the owner of its target when it is
+    applied."""
+
+    RALLY = "rally"
+    ATTACK = "attack"
+
+
+class AckMember(WireModel):
+    """One group of a ``group_move``, in the order of its ``groups`` (DEC-48, item B6): accepted
+    with its path, or dropped with its ``reject_code`` (``STACK_LIMIT``: the client offers the
+    split of #762 for it)."""
+
+    path: Annotated[tuple[NodeId, ...], Field(min_length=2)] | None
+    """The nodes from the group's node to ``dest``; ``None`` for a dropped group."""
+    depart_tick: Tick | None
+    """The tick it leaves its node (a member of an attack waits there until then); ``None`` for a
+    planned member (fixed once every part is gathered: ``OrderView.depart_tick``) and a dropped
+    one."""
+    arrive_tick: Tick | None
+    """The tick it reaches ``dest`` if nothing stops it; ``None`` like ``depart_tick``."""
+    bonus: NonNegInt
+    """A planned member: its part of the requested bonus (item F2); 0 otherwise."""
+    reject_code: Code | None
+    """Why the group was dropped; ``None`` for an accepted one."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if (self.path is None) == (self.reject_code is None):
+            raise ValueError("a member has a path or a reject code")
+        if self.path is None and (self.depart_tick, self.arrive_tick, self.bonus) != (
+            None,
+            None,
+            0,
+        ):
+            raise ValueError("a dropped member has no schedule")
+        if (self.depart_tick is None) != (self.arrive_tick is None):
+            raise ValueError("depart_tick and arrive_tick come together")
+        return self
+
+
 class AckMsg(WireModel):
     """Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.
 
@@ -226,9 +267,19 @@ class AckMsg(WireModel):
     ``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client
     draws it and never computes it); ``None`` otherwise.
     ``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` if nothing
-    stops it (the gathering of a planned order included; DEC-22, item 10); ``None`` otherwise.
+    stops it (the gathering of a planned order included; DEC-22, item 10); for an accepted
+    ``group_move`` the common arrival (a rally: the latest arrival of a member; ``None`` for a
+    planned attack until its departures are fixed, ``OrderView.arrive_tick``); ``None`` otherwise.
     ``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,
-    ``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20).
+    ``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20). A ``group_move`` without enough CP
+    for its accepted groups is ``NOT_ENOUGH_CP`` as a whole (no group goes, nothing waits for CP;
+    DEC-48, item B5): the client shows it as an alert.
+    ``kind``, ``cost``: an accepted ``group_move`` only (DEC-48, item B6): a rally or an attack
+    and the CP charged, in hundredths.
+    ``members``: a ``group_move`` only, one per group in the order of its ``groups``: accepted or
+    dropped; also on a ``group_move`` rejected because no group was valid (``reject_code`` is then
+    the first group's code). ``None`` for every other command and for a ``group_move`` rejected as
+    a whole for another reason.
     """
 
     type: Literal["ack"] = "ack"
@@ -237,13 +288,22 @@ class AckMsg(WireModel):
     path: Annotated[tuple[NodeId, ...], Field(min_length=1)] | None = None
     arrive_tick: Tick | None = None
     reject_code: Code | None = None
+    kind: OrderKind | None = None
+    cost: NonNegInt | None = None
+    members: tuple[AckMember, ...] | None = None
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if self.path is not None and self.reject_code is not None:
             raise ValueError("a rejected command has no path")
-        if self.arrive_tick is not None and self.path is None:
-            raise ValueError("an arrival tick comes with a path")
+        if self.arrive_tick is not None and self.path is None and self.kind is None:
+            raise ValueError("an arrival tick comes with a path or a group order")
+        if (self.kind is None) != (self.cost is None):
+            raise ValueError("kind and cost come together")
+        if self.kind is not None and (self.reject_code is not None or not self.members):
+            raise ValueError("an accepted group order has its members")
+        if self.kind is not None and self.path is not None:
+            raise ValueError("a group order has no path of its own")
         return self
 
 

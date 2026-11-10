@@ -28,6 +28,7 @@ from gow_sim.commands import (
     CancelRecruit,
     Command,
     FortifyRoad,
+    GroupMove,
     Merge,
     Move,
     Ok,
@@ -35,6 +36,7 @@ from gow_sim.commands import (
     Recruit,
     ReleasePlan,
     SetLeafShift,
+    SetRallyPoint,
     SetStance,
     Split,
     map_group_ids,
@@ -116,6 +118,8 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
     if tick % 110 == 0 and own_cities:  # DEC-26: the barracks of the last own city
         cmds.append(BuildBarracks(own_cities[-1]))
     cmds.extend(_decide_economy(state, player, own_cities))
+    if rules.group_order is not None:  # DEC-48 (mvp-7): group orders and the rally point, first
+        cmds[:0] = _decide_group(state, rules, player, own_cities)
     idle = sorted(
         (
             g
@@ -173,6 +177,47 @@ def _decide_economy(state: GameState, player: int, own_cities: list[int]) -> lis
     return cmds
 
 
+def _decide_group(
+    state: GameState, rules: Ruleset, player: int, own_cities: list[int]
+) -> list[Command]:
+    """DEC-48: the idle groups (by ``node_key``, then id) attack the target of the first one
+    together, planned now and then, or rally at the node of the last one; the capital's rally
+    point is set to the last own city and cleared in turn."""
+    tick = state.tick
+    mapdef = state.map
+
+    def key(node: int) -> int:
+        return mapdef.node_key(player, node)
+
+    cmds: list[Command] = []
+    capital = mapdef.capital(player)
+    if tick % 60 == 30 and state.nodes[capital].owner == player:
+        cities = [c for c in own_cities if c != capital]
+        point = cities[-1] if cities and tick // 60 % 2 == 0 else None
+        cmds.append(SetRallyPoint(capital, point))
+    idle = sorted(
+        (
+            g
+            for g in state.groups.values()
+            if g.owner == player and isinstance(g.location, AtNode) and g.order is None
+        ),
+        key=lambda g: (key(_node(g)), g.id),
+    )[:4]
+    if len(idle) < 2:
+        return cmds
+    gids = tuple(g.id for g in idle)
+    if tick % 20 != 15:
+        return cmds
+    if tick // 20 % 3 == 2 and _node(idle[-1]) != _node(idle[0]):  # a rally
+        cmds.append(GroupMove(gids, _node(idle[-1])))
+        return cmds
+    dest = _target(state, rules, player, _node(idle[0]))
+    if dest is not None:
+        planned = tick // 20 % 3 == 1
+        cmds.append(GroupMove(gids, dest, planned, 3 if planned else 0))
+    return cmds
+
+
 def _node_or_edge(g: Group) -> int:
     return g.location.node if isinstance(g.location, AtNode) else g.location.from_node
 
@@ -222,6 +267,12 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
             return BuildFactory(mirror_nodes[node])
         case FortifyRoad(node=node, edge=edge):
             return FortifyRoad(mirror_nodes[node], mirror_edges[edge])
+        case GroupMove(groups=gids, dest=dest, planned=planned, bonus=bonus):
+            return GroupMove(gids, mirror_nodes[dest], planned, bonus)
+        case SetRallyPoint(node=node, target=target):
+            return SetRallyPoint(
+                mirror_nodes[node], None if target is None else mirror_nodes[target]
+            )
         case _:
             return cmd
 
@@ -249,10 +300,19 @@ def _mirrored(state: GameState, g: Group) -> tuple[object, ...]:
         if order is None
         else (tuple(mn[n] for n in order.path), order.planned, order.depart_tick),
         (g.bonus, g.bonus_tick, g.intent is None, g.fight is None, g.plan, g.plan_tick),
+        _joint(state, g),
     )
 
 
-def _plain(g: Group) -> tuple[object, ...]:
+def _joint(state: GameState, g: Group) -> tuple[object, ...] | None:
+    """DEC-48: the group order of ``g`` (without its id) and the unpaid recruit walk."""
+    if g.group_order is None:
+        return (g.walk,)
+    o = state.group_orders[g.group_order]
+    return (g.walk, o.rally, o.planned, o.arrive_tick)
+
+
+def _plain(g: Group, state: GameState) -> tuple[object, ...]:
     order = g.order
     return (
         g.units,
@@ -261,6 +321,7 @@ def _plain(g: Group) -> tuple[object, ...]:
         g.location,
         None if order is None else (order.path, order.planned, order.depart_tick),
         (g.bonus, g.bonus_tick, g.intent is None, g.fight is None, g.plan, g.plan_tick),
+        _joint(state, g),
     )
 
 
@@ -341,6 +402,8 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.has_barracks,
         ), f"node {n}"
         assert (b.factory, b.factory_ticks) == (swap[a.factory], a.factory_ticks), f"factory {n}"
+        point = None if a.rally_point is None else mapdef.mirror_nodes[a.rally_point]
+        assert b.rally_point == point, f"rally point of {n}"  # DEC-48, item H
         assert b.road_forts == {  # DEC-43, item D: the road fortifications, mirrored
             mapdef.mirror_edges[e]: ready for e, ready in a.road_forts.items()
         }, f"road fortifications of {n}"
@@ -374,7 +437,7 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     assert sorted(groups[g] for g in alive0) == alive1
     assert [groups[g] for g in alive0] == alive1, "the pairing keeps the id order"
     for g0 in alive0:
-        assert _plain(state.groups[g0]) == _mirrored(state, state.groups[groups[g0]]), g0
+        assert _plain(state.groups[g0], state) == _mirrored(state, state.groups[groups[g0]]), g0
     packets = [
         (
             p.owner,
@@ -478,6 +541,10 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     assert {"SetLeafShift", "BuildFactory", "FortifyRoad", "SetStance", "BuildBarracks"} <= set(
         kinds
     )
+    if rules.group_order is not None:  # DEC-48: the group orders and the rally point, mirrored
+        assert "SetRallyPoint" in kinds
+        if path.stem != "web":  # on web the CP are gone whenever two groups stand idle
+            assert "GroupMove" in kinds
     assert sent > 0, "the flow carried charges"
     assert moves_on_edges > 0
     # On choke the only way out is the central node 3; both players reach it at once and fight

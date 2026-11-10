@@ -13,8 +13,10 @@ The drivers are ``ExpandBot`` of ``conftest.py`` plus ``MixBot``, which adds eve
 type on a fixed schedule (planned moves with a requested bonus and their early release, splits,
 merges, stances, cancellations while waiting and on an edge, recruit cancellations, the barracks
 and factories paid in charges, the leaf shift in range and out of it, road fortifications with a
-wrong road and a second one on the same road now and then, unknown ids), so the replays go
-through every command path and many rejections. The games cover the kept rulesets (#894):
+wrong road and a second one on the same road now and then, unknown ids, group orders (attacks,
+planned ones, rallies) and the recruit rally point of DEC-48), so the replays go through every
+command path and many rejections (a group order and a rally point are rejected outside
+``mvp-7``). The games cover the kept rulesets (#894):
 ``mvp-5``, ``mvp-6``, ``mvp-7`` (map tempo on the pool map ``narrows``, where the multiplier is 76,
 and every factory follows the stance of its owner, DEC-47) and ``test-short`` with a forfeit.
 """
@@ -36,10 +38,12 @@ from gow_sim.commands import (
     Command,
     Forfeit,
     FortifyRoad,
+    GroupMove,
     Merge,
     Move,
     ReleasePlan,
     SetLeafShift,
+    SetRallyPoint,
     SetStance,
     Split,
 )
@@ -129,7 +133,44 @@ class MixBot:
         cmds.extend(self._economy(view, k))
         if k % 2 == 0 and view.me.cp >= self.plan_cost:  # first, before the CP go (#646)
             cmds = self._plan(view, 1 + k // 2 % 3) + cmds
+        if k % 9 == 4:  # DEC-48: a group order first, before the CP go
+            cmds = self._group(view, k) + cmds
+        if k % 25 == 3:  # DEC-48, item H: the rally point of the capital, set and cleared
+            cmds.append(self._rally_point(view, k))
         return cmds
+
+    def _group(self, view: PlayerView, k: int) -> list[Command]:
+        """DEC-48: the idle groups (up to 3, by id) attack the nearest foreign node of the first,
+        planned every other time, or rally at the node of the last one every third time."""
+        idle = [g for g in view.groups if isinstance(g.location, AtNode) and g.order is None][:3]
+        if len(idle) < 2:
+            return []
+        gids = tuple(g.id for g in idle)
+        last = idle[-1].location
+        assert isinstance(last, AtNode)
+        if k // 9 % 3 == 2:
+            return [GroupMove(gids, last.node)]
+        first = idle[0].location
+        assert isinstance(first, AtNode)
+        foreign = [n.id for n in view.nodes if n.owner != view.player]
+        if not foreign:
+            return []
+        hops = self._hops(first.node)
+        dest = min(foreign, key=lambda n: (hops.get(n, len(hops)), n))
+        planned = k // 9 % 3 == 1
+        return [GroupMove(gids, dest, planned, 2 if planned else 0)]
+
+    def _rally_point(self, view: PlayerView, k: int) -> Command:
+        """DEC-48, item H: the capital sends its recruits to the first other own city, then
+        clears the point."""
+        capital = self.map.capital(view.player)
+        cities = [
+            n.id
+            for n in view.nodes
+            if n.owner == view.player and n.has_barracks is not None and n.id != capital
+        ]
+        target = cities[0] if cities and k // 25 % 2 == 0 else None
+        return SetRallyPoint(capital, target)
 
     def _economy(self, view: PlayerView, k: int) -> list[Command]:
         """DEC-41: a factory now and then (paid in charges, #645; often ``FACTORY_LIMIT`` or

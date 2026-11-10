@@ -63,6 +63,9 @@ export function ordersSnapshot(map: MapFile): SnapshotMsg {
         gathering: false,
         plan: 0,
         next_charge_tick: null,
+        depart_tick: null,
+        group_order: null,
+        arrive_tick: null,
       },
     });
   });

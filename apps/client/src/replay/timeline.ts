@@ -76,6 +76,9 @@ function groupView(g: FrameGroup): GroupView {
             gathering: false,
             plan: 0,
             next_charge_tick: null,
+            depart_tick: null,
+            group_order: null,
+            arrive_tick: null,
           },
   };
 }
@@ -111,6 +114,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     flow_idle: null,
     flow_pocket: null,
     terrain_mark: null,
+    rally_point: null,
   }));
   const packets: PacketView[] = frame.k.map(
     ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => {

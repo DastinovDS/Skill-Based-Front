@@ -246,6 +246,9 @@ describe('Hud', () => {
       path: null,
       arrive_tick: null,
       reject_code: 'NOT_ENOUGH_CP',
+      kind: null,
+      cost: null,
+      members: null,
     });
     flushSync();
     expect(target.querySelector('.toast.warn')?.textContent).toContain(text);

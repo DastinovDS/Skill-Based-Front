@@ -250,6 +250,13 @@ class RecruitRules:
     refund_started_pct: int
     """Share of ``orders.cost.recruit`` returned for a cancelled unit in production, in percent
     (DEC-25, item 3); a unit not started yet is returned in full."""
+    rally_point: bool = dataclasses.field(default=False, metadata=OPTIONAL)
+    """DEC-48, item H: a city may send its new units to a rally point (``SetRallyPoint``). Left
+    out of the hash at ``False``."""
+    rally_cost: int = dataclasses.field(default=0, metadata=OPTIONAL)
+    """DEC-48, item H3: hundredths of CP a recruit pays when it leaves for the rally point,
+    ``0..orders.cost.move``; given exactly when ``rally_point`` is on (0 and left out of the hash
+    otherwise)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,6 +330,23 @@ class MapTempoRules:
         ``min_pct..max_pct``."""
         raw = isqrt(nodes * 10000 // self.ref_nodes)  # non-negative: rounded down
         return max(self.min_pct, min(self.max_pct, raw))
+
+
+MAX_GROUP_ORDER: Final = 16
+"""The largest ``group_order.max_groups``: the protocol bound of a ``GroupMove`` list (DEC-48,
+item J)."""
+
+
+@dataclass(frozen=True, slots=True)
+class GroupOrderRules:
+    """The group order (DEC-48, section ``[group_order]``): one ``GroupMove`` for several own
+    groups, a rally to an own node or an attack with a synchronized arrival."""
+
+    max_groups: int
+    """Groups in one ``GroupMove`` at most, ``1..MAX_GROUP_ORDER``."""
+    rally_pct: int
+    """The price of a rally per group in percent of ``orders.cost.move``, the total rounded up to
+    a whole CP (item A2)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -444,6 +468,9 @@ class Ruleset:
     map_tempo: MapTempoRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
     """Map tempo (DEC-46, #803): the economy periods scaled by the map size. ``Match`` plays
     ``apply_map_tempo(rules, map)``, which has no section. Left out of the hash when absent."""
+    group_order: GroupOrderRules | None = dataclasses.field(default=None, metadata=OPTIONAL)
+    """The group order (DEC-48): ``GroupMove`` works and ``ReleasePlan`` is disabled. Left out of
+    the hash when absent."""
 
     @property
     def factories_follow(self) -> bool:
@@ -574,12 +601,14 @@ def parse_ruleset(data: object) -> Ruleset:
             "factory",
             "fort",
             "map_tempo",
+            "group_order",
         ),
     )
     stances = _parse_stances(
         root.table("stances", ("cp_period_ticks", "capital_period_ticks", "factories_follow"))
     )
     economy = root.table("economy", ("start_stance",))
+    orders = _parse_orders(root.table("orders", ("plan_ticks_per_bonus", "cost")))
     return Ruleset(
         tick_hz=root.integer("tick_hz", low=1),
         match_ticks=root.integer("match_ticks", low=1),
@@ -588,7 +617,7 @@ def parse_ruleset(data: object) -> Ruleset:
             start_stance=Stance(economy.choice("start_stance", tuple(s.value for s in Stance)))
         ),
         stances=stances,
-        orders=_parse_orders(root.table("orders", ("plan_ticks_per_bonus", "cost"))),
+        orders=orders,
         terrain=_parse_terrain(root.table("terrain", ("defense_mod", "speed_pct"))),
         combat=_parse_combat(
             root.table(
@@ -609,7 +638,11 @@ def parse_ruleset(data: object) -> Ruleset:
             root.table("supply", ("dispatch_ticks", "recharge_per_tick", "speed_pct"))
         ),
         recruit=_parse_recruit(
-            root.table("recruit", ("unit_ticks", "queue_max", "refund_started_pct"))
+            root.table(
+                "recruit",
+                ("unit_ticks", "queue_max", "refund_started_pct", "rally_point", "rally_cost"),
+            ),
+            orders.cost.move,
         ),
         victory=_parse_victory(root.table("victory", ("vp_period_ticks", "capital_multiplier"))),
         city_upgrades=_parse_city_upgrades(
@@ -627,6 +660,20 @@ def parse_ruleset(data: object) -> Ruleset:
             if root.has("map_tempo")
             else None
         ),
+        group_order=_parse_group_order(
+            root.table("group_order", ("max_groups", "rally_pct"))
+            if root.has("group_order")
+            else None
+        ),
+    )
+
+
+def _parse_group_order(t: "_Table | None") -> GroupOrderRules | None:
+    if t is None:
+        return None
+    return GroupOrderRules(
+        max_groups=t.integer("max_groups", low=1, high=MAX_GROUP_ORDER),
+        rally_pct=t.integer("rally_pct", low=0, high=100),
     )
 
 
@@ -758,11 +805,19 @@ def _parse_supply(t: "_Table") -> SupplyRules:
     )
 
 
-def _parse_recruit(t: "_Table") -> RecruitRules:
+def _parse_recruit(t: "_Table", move_cost: int) -> RecruitRules:
+    rally = t.boolean("rally_point") if t.has("rally_point") else False
+    cost = 0
+    if rally:
+        cost = t.integer("rally_cost", low=0, high=move_cost)
+    elif t.has("rally_cost"):
+        raise RulesetError("recruit.rally_cost: only with recruit.rally_point = true (DEC-48)")
     return RecruitRules(
         unit_ticks=t.integer("unit_ticks", low=1),
         queue_max=t.integer("queue_max", low=1),
         refund_started_pct=t.integer("refund_started_pct", low=0, high=100),
+        rally_point=rally,
+        rally_cost=cost,
     )
 
 

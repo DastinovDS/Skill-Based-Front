@@ -165,6 +165,9 @@ export function createDevServer(
         gathering: false,
         plan: 0,
         next_charge_tick: null,
+        depart_tick: null,
+        group_order: null,
+        arrive_tick: null,
       });
       return { code: null, path };
     }
@@ -270,6 +273,9 @@ export function createDevServer(
             arrive_tick:
               arrive ?? (path === null ? null : tick + DEV_EDGE_TICKS * (path.length - 1)),
             reject_code: code,
+            kind: null,
+            cost: null,
+            members: null,
           });
         }, DEV_ACK_MS);
         timeouts.add(handle);

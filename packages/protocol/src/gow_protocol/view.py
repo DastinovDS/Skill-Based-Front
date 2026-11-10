@@ -238,6 +238,9 @@ class NodeView(WireModel):
     a terrain effect and a charged group of the owner standing in it; for a node of the enemy only
     at ``exact``. ``null`` otherwise: an attacker, a discharged group, a road and a neutral node
     never carry it. The client draws it as is (AGENTS.md 7.1)."""
+    rally_point: NodeId | None = None
+    """DEC-48, item I2: own city only, the own node its new units walk to; ``None`` without one
+    and for every other node."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -259,6 +262,8 @@ class NodeView(WireModel):
         _check_seen(self.detail, self.seen)
         if self.factory is not None and self.owner is None:
             raise ValueError("a factory only for an own city or a city of the enemy")
+        if self.rally_point is not None and self.warehouse_cap is None:
+            raise ValueError("a rally point only for an own city")
         if self.factory_period is not None and not (self.factory and own_data):
             raise ValueError("a factory rate only for an own factory")
         if self.factory_build is not None and not (self.factory is False and own_data):
@@ -405,9 +410,23 @@ class OrderView(WireModel):
     next_charge_tick: Tick | None
     """While ``gathering``: the tick the next charge is due (an empty warehouse or a fight in the
     node delays it). ``None`` otherwise."""
+    depart_tick: Tick | None = None
+    """The group leaves its node not before this tick (DEC-48: a member of a synchronized attack
+    waits in its node until then, item C2); a past tick once it left. ``None`` while a planned
+    order gathers and for a ready member of a planned group order until the departures are fixed
+    (item F4)."""
+    group_order: OpaqueId | None = None
+    """DEC-48, item I1: shared by the members of one group order; ``None`` for a single order."""
+    arrive_tick: Tick | None = None
+    """DEC-48, item I1: the common arrival of the group order (a rally: the latest arrival of a
+    member) once known; ``None`` while a planned group order gathers and for a single order."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
+        if self.arrive_tick is not None and self.group_order is None:
+            raise ValueError("an arrival tick only for a group order")
+        if self.gathering and self.depart_tick is not None:
+            raise ValueError("a gathering order has no departure tick")
         if self.gathering != (self.next_charge_tick is not None):
             raise ValueError("next_charge_tick is given exactly while gathering")
         if self.gathering != (self.plan > 0) or (self.gathering and not self.planned):

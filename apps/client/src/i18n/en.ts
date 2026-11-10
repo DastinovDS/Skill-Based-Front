@@ -72,6 +72,8 @@ export const en = {
   'cmd.fortify_road': 'fortify road',
   'cmd.release_plan': 'release planned order',
   'cmd.set_leaf_shift': 'move the supply level',
+  'cmd.group_move': 'group order',
+  'cmd.set_rally_point': 'rally point',
   'orders.rejected': 'Rejected ({command}): {reason}',
   'orders.splitUnits': 'Units to split off',
   'split.title': 'Split the group',

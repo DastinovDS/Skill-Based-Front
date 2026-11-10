@@ -53,6 +53,9 @@ function ack(seq: number, reject: string | null = null): AckMsg {
     path: null,
     arrive_tick: null,
     reject_code: reject,
+    kind: null,
+    cost: null,
+    members: null,
   };
 }
 

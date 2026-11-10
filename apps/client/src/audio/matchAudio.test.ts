@@ -50,6 +50,9 @@ describe('MatchAudio', () => {
       path: null,
       arrive_tick: null,
       reject_code: null,
+      kind: null,
+      cost: null,
+      members: null,
     });
     expect(played).toEqual(['orderOk']);
   });
@@ -86,6 +89,9 @@ describe('MatchAudio', () => {
       path: null,
       arrive_tick: null,
       reject_code: null,
+      kind: null,
+      cost: null,
+      members: null,
     });
     expect(played).toEqual([]);
   });

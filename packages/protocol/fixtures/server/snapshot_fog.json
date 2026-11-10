@@ -47,7 +47,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": 1
+        "terrain_mark": 1,
+        "rally_point": null
       },
       {
         "id": 1,
@@ -82,7 +83,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 2,
@@ -117,7 +119,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       }
     ],
     "edges": [

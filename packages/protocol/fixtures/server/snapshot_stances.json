@@ -47,7 +47,8 @@
         "flow_next": [],
         "flow_idle": "empty",
         "flow_pocket": false,
-        "terrain_mark": -1
+        "terrain_mark": -1,
+        "rally_point": null
       },
       {
         "id": 1,
@@ -80,7 +81,8 @@
         "flow_next": [],
         "flow_idle": "empty",
         "flow_pocket": false,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 2,
@@ -113,7 +115,8 @@
         "flow_next": [],
         "flow_idle": "empty",
         "flow_pocket": false,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 3,
@@ -146,7 +149,8 @@
         "flow_next": [],
         "flow_idle": "leaf",
         "flow_pocket": false,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 4,
@@ -179,7 +183,8 @@
         "flow_next": [],
         "flow_idle": "empty",
         "flow_pocket": false,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 5,
@@ -212,7 +217,8 @@
         "flow_next": [],
         "flow_idle": "empty",
         "flow_pocket": false,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 6,
@@ -245,7 +251,8 @@
         "flow_next": [],
         "flow_idle": "leaf",
         "flow_pocket": false,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 7,
@@ -278,7 +285,8 @@
         "flow_next": [],
         "flow_idle": "leaf",
         "flow_pocket": false,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 8,
@@ -304,7 +312,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 9,
@@ -330,7 +339,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 10,
@@ -356,7 +366,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 11,
@@ -382,7 +393,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 12,
@@ -408,7 +420,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 13,
@@ -434,7 +447,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 14,
@@ -460,7 +474,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 15,
@@ -486,7 +501,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 16,
@@ -512,7 +528,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 17,
@@ -538,7 +555,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 18,
@@ -564,7 +582,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 19,
@@ -590,7 +609,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       },
       {
         "id": 20,
@@ -616,7 +636,8 @@
         "flow_next": null,
         "flow_idle": null,
         "flow_pocket": null,
-        "terrain_mark": null
+        "terrain_mark": null,
+        "rally_point": null
       }
     ],
     "edges": [

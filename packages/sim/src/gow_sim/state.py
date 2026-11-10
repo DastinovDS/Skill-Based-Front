@@ -11,8 +11,8 @@ Rules for this module (AGENTS.md, section 4):
 id, so the canonical JSON and ``state_hash()`` do not depend on dict insertion order or
 ``PYTHONHASHSEED``. The static map is embedded in the file format (``map_to_data``), so the
 canonical form alone restores the state: ``from_canonical(to_canonical(s)) == s``. Some fields of
-the factories (DEC-41) and of the supply flow (DEC-43) are written only when they differ from their
-defaults.
+the factories (DEC-41), of the supply flow (DEC-43) and of the group order and the rally point
+(DEC-48) are written only when they differ from their defaults.
 """
 
 from collections.abc import Callable
@@ -151,6 +151,30 @@ class Group:
     plan_tick: int = 0
     """The tick of the planned order or of the last charge it took (DEC-41, item 10): the next
     charge is due ``orders.plan_ticks_per_bonus`` ticks later; 0 without a gathering plan."""
+    group_order: int | None = None
+    """DEC-48: the id of the ``GroupOrder`` whose member the group is while its order lasts;
+    ``None`` for a single order or none."""
+    walk: bool = False
+    """DEC-48, item H3: a recruit walking to the rally point of its city that has not paid
+    ``recruit.rally_cost`` yet; it pays when it leaves the city (``systems.movement``)."""
+
+
+@dataclass(slots=True)
+class GroupOrder:
+    """One ``GroupMove`` of ``owner`` (DEC-48) while a member still holds its order; the members
+    are the groups whose ``Group.group_order`` is this id.
+
+    ``rally``: a rally to an own node (every member departs at once); else an attack with a
+    synchronized arrival. ``planned``: the members gather their parts of the bonus (item F).
+    ``arrive_tick``: the common arrival (a rally: the latest arrival of a member), ``None`` while
+    a planned order gathers (its departures are fixed once the last member is ready, item F4).
+    Own data only: no field reaches the enemy (item I1)."""
+
+    id: int
+    owner: int
+    rally: bool
+    planned: bool
+    arrive_tick: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,6 +369,9 @@ class Node:
     """The road fortifications of the owner here (DEC-43, item D; code name ``road_fort``): edge
     id (a road leaving the node) to the tick it works from (``ready``: the tick of the command plus
     ``fort.build_ticks``); before it, it is being built. Destroyed on capture (``change_owner``)."""
+    rally_point: int | None = None
+    """DEC-48, item H: the own node the new units of this own city walk to; ``None``: none. Lost
+    when the city or the point changes owner (``change_owner``)."""
 
 
 @dataclass(slots=True)
@@ -454,6 +481,8 @@ class GameState:
     """Events of the current tick."""
     fights: dict[int, Fight] = field(default_factory=dict[int, Fight])
     """Fights going on (DEC-24), by id."""
+    group_orders: dict[int, GroupOrder] = field(default_factory=dict[int, GroupOrder])
+    """Group orders with a member still holding its order (DEC-48), by id."""
     memo: dict[str, object] = field(default_factory=dict[str, object], compare=False, repr=False)
     """Caches of pure functions of the state, each kept with its full inputs and used only while
     they are equal (the flow field, ``systems.flow._field``). Not part of the state:
@@ -572,6 +601,25 @@ def to_canonical(state: GameState) -> dict[str, object]:
             _memory_data(p, state.vision_memory[p]) for p in sorted(state.vision_memory)
         ],
         "events": [{"tick": e.tick, "kind": e.kind, "data": dict(e.data)} for e in state.events],
+        **_group_orders_data(state),
+    }
+
+
+def _group_orders_data(state: GameState) -> dict[str, object]:
+    """The group orders of DEC-48, only when there are any (see the module docstring)."""
+    if not state.group_orders:
+        return {}
+    return {
+        "group_orders": [
+            {
+                "id": o.id,
+                "owner": o.owner,
+                "rally": o.rally,
+                "planned": o.planned,
+                "arrive_tick": o.arrive_tick,
+            }
+            for o in _by_id(state.group_orders)
+        ]
     }
 
 
@@ -631,6 +679,8 @@ def _factory_node_data(n: Node) -> dict[str, object]:
         data["factory_ticks"] = n.factory_ticks
     if n.road_forts:
         data["road_forts"] = [{"edge": e, "ready": n.road_forts[e]} for e in sorted(n.road_forts)]
+    if n.rally_point is not None:
+        data["rally_point"] = n.rally_point
     if n.flow is not None:
         f = n.flow
         data["flow"] = {
@@ -691,6 +741,10 @@ def _group_data(g: Group) -> dict[str, object]:
     if g.plan:  # a gathering planned order (DEC-41, item 10)
         data["plan"] = g.plan
         data["plan_tick"] = g.plan_tick
+    if g.group_order is not None:  # a member of a group order (DEC-48)
+        data["group_order"] = g.group_order
+    if g.walk:  # an unpaid recruit walk (DEC-48, item H3)
+        data["walk"] = True
     return data
 
 
@@ -807,6 +861,7 @@ def from_canonical(data: object) -> GameState:
             "vision_memory",
             "events",
         ),
+        optional=("group_orders",),
     )
     try:
         mapdef = parse_map(root["map"])
@@ -827,6 +882,18 @@ def from_canonical(data: object) -> GameState:
             _parse_event(raw, f"events[{i}]")
             for i, raw in enumerate(_list(root["events"], "events"))
         ],
+        group_orders=_collection(root.get("group_orders", []), "group_orders", _parse_group_order),
+    )
+
+
+def _parse_group_order(data: object, where: str) -> GroupOrder:
+    raw = _obj(data, where, ("id", "owner", "rally", "planned", "arrive_tick"))
+    return GroupOrder(
+        id=_int(raw["id"], f"{where}.id", low=0),
+        owner=_int(raw["owner"], f"{where}.owner", low=0),
+        rally=_bool(raw["rally"], f"{where}.rally"),
+        planned=_bool(raw["planned"], f"{where}.planned"),
+        arrive_tick=_opt_int(raw["arrive_tick"], f"{where}.arrive_tick"),
     )
 
 
@@ -900,6 +967,7 @@ def _parse_node(data: object, where: str) -> Node:
             "factory_ticks",
             "flow",
             "road_forts",
+            "rally_point",
         ),
     )
     return Node(
@@ -918,6 +986,7 @@ def _parse_node(data: object, where: str) -> Node:
         factory_ticks=_int(raw.get("factory_ticks", 0), f"{where}.factory_ticks", low=0),
         flow=_parse_flow(raw.get("flow"), f"{where}.flow"),
         road_forts=_parse_road_forts(raw.get("road_forts", []), f"{where}.road_forts"),
+        rally_point=_opt_int(raw.get("rally_point"), f"{where}.rally_point"),
     )
 
 
@@ -1005,7 +1074,7 @@ def _parse_group(data: object, where: str) -> Group:
             "bonus_tick",
             "fight",
         ),
-        optional=("plan", "plan_tick"),
+        optional=("plan", "plan_tick", "group_order", "walk"),
     )
     units = _int(raw["units"], f"{where}.units", low=0)
     return Group(
@@ -1022,6 +1091,8 @@ def _parse_group(data: object, where: str) -> Group:
         fight=_opt_int(raw["fight"], f"{where}.fight"),
         plan=_int(raw.get("plan", 0), f"{where}.plan", low=0),
         plan_tick=_int(raw.get("plan_tick", 0), f"{where}.plan_tick", low=0),
+        group_order=_opt_int(raw.get("group_order"), f"{where}.group_order"),
+        walk=_bool(raw.get("walk", False), f"{where}.walk"),
     )
 
 

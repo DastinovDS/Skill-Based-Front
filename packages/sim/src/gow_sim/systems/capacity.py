@@ -153,7 +153,9 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     Captures (movement SIM-05, combat SIM-09) call this; it emits ``warehouse_lost`` when
     charges were in the warehouse, ``recruit_queue_lost`` (for the former owner) when units
     were queued and ``road_fort_destroyed`` (for the former owner) for every road fortification of
-    the node (DEC-43, item D7). A call with the current owner changes nothing.
+    the node (DEC-43, item D7). The rally point of the node is lost with its queue (DEC-48, item
+    H7), and every city of the former owner whose rally point is the node loses it with
+    ``rally_point_cleared`` (item H6). A call with the current owner changes nothing.
     """
     n = state.nodes[node]
     if n.owner == owner:
@@ -188,6 +190,15 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
         if old is not None
     )
     n.road_forts = {}
+    n.rally_point = None
+    if old is not None:  # DEC-48, item H6: a point that became foreign is cleared
+        for city in sorted(state.nodes):
+            other = state.nodes[city]
+            if other.rally_point == node and other.owner == old:
+                other.rally_point = None
+                events.append(
+                    event(state.tick, "rally_point_cleared", player=old, node=city, target=node)
+                )
     n.cut_since = None
     n.over_ticks = 0
     n.captured_tick = state.tick

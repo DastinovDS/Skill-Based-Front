@@ -19,6 +19,9 @@ const ack = (seq: number, extra: Partial<AckMsg> = {}): AckMsg => ({
   path: null,
   arrive_tick: null,
   reject_code: null,
+  kind: null,
+  cost: null,
+  members: null,
   ...extra,
 });
 
