@@ -71,16 +71,16 @@ def mvp7() -> Ruleset:
 def test_mvp7_clock_and_cp(mvp7: Ruleset) -> None:
     assert (mvp7.tick_hz, mvp7.match_ticks) == (10, 9000)  # 15 minutes (DEC-22)
     cp = mvp7.cp
-    assert (cp.start, cp.cap, cp.per_period) == (300, 500, 100)
+    assert (cp.start, cp.cap, cp.per_period) == (300, 500, 50)  # 0.5 CP quanta (#900)
     assert mvp7.economy.start_stance is Stance.BALANCE  # DEC-09
 
 
 def test_mvp7_stances(mvp7: Ruleset) -> None:
-    """DEC-44 (#772) with DEC-47 (#888): CP every 200 / 100 / 80 ticks, every factory a charge
-    every 100 / 200 / 400 ticks in Economy / Balance / War."""
+    """DEC-44 (#772) with DEC-47 (#888) and #900: a 0.5 CP quantum every 100 / 50 / 40 ticks,
+    every factory a charge every 100 / 200 / 400 ticks in Economy / Balance / War."""
     st = mvp7.stances
     order = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
-    assert [st.cp_period_ticks.of(s) for s in order] == [200, 100, 80]
+    assert [st.cp_period_ticks.of(s) for s in order] == [100, 50, 40]
     assert [st.capital_period_ticks.of(s) for s in order] == [100, 200, 400]
     assert st.factories_follow is True
     assert mvp7.factories_follow is True
@@ -185,14 +185,21 @@ def test_mvp6_is_mvp5_with_three_changes() -> None:
     assert mvp6 == mvp5
 
 
-def test_mvp7_is_mvp6_with_three_changes() -> None:
+def test_mvp7_is_mvp6_with_four_changes() -> None:
     """mvp-7 (#885, #888): mvp-6 with the section ``[map_tempo]`` (DEC-46), with
-    ``stances.factories_follow`` (DEC-47) and so without ``factory.built_period_ticks``."""
+    ``stances.factories_follow`` (DEC-47) and so without ``factory.built_period_ticks``, and
+    (#900, owner decision 2026-11-10) CP in 0.5 CP quanta: ``cp.per_period`` 50 and every
+    ``stances.cp_period_ticks`` halved, i.e. the same CP per tick."""
     mvp6, mvp7 = _raw(MVP6), _raw(MVP7)
     assert "map_tempo" not in mvp6
     assert "factories_follow" not in mvp6["stances"]
     assert mvp7["stances"]["factories_follow"] is True
     assert "built_period_ticks" not in mvp7["factory"]
+    assert mvp7["cp"]["per_period"] * 2 == mvp6["cp"]["per_period"]
+    for stance, period in mvp6["stances"]["cp_period_ticks"].items():
+        assert mvp7["stances"]["cp_period_ticks"][stance] * 2 == period
+    mvp7["cp"]["per_period"] = mvp6["cp"]["per_period"]
+    mvp7["stances"]["cp_period_ticks"] = mvp6["stances"]["cp_period_ticks"]
     del mvp7["map_tempo"]
     del mvp7["stances"]["factories_follow"]
     mvp7["factory"]["built_period_ticks"] = mvp6["factory"]["built_period_ticks"]

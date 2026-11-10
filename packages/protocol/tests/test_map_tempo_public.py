@@ -17,13 +17,14 @@ def test_ruleset_public_of_a_match_on_narrows_carries_the_scaled_periods() -> No
     rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     match = Match(load_map(ROOT / "maps" / "narrows.json"), rules, HEADLESS_MATCH_KEY)
     public = RulesetPublic.from_ruleset(match.rules)
-    # narrows has 29 nodes: pct 76; expected by hand from DEC-46 (131 = 100 * 100 // 76, ...).
-    assert public.stances.cp_period_ticks.balance == 131
+    # narrows has 29 nodes: pct 76; expected by hand from DEC-46 (0.5 CP quanta, #900:
+    # Balance 50 * 100 // 76 = 65; war capital 526).
+    assert public.stances.cp_period_ticks.balance == 65
     assert public.stances.capital_period_ticks.war == 526
     assert public.factory.built_period_ticks is None  # DEC-47: every factory follows the stance
     # The given ruleset is unscaled: this is what the wire must not carry.
     given = RulesetPublic.from_ruleset(match.source_rules)
-    assert given.stances.cp_period_ticks.balance == 100
+    assert given.stances.cp_period_ticks.balance == 50
     assert given.stances.capital_period_ticks.war == 400
 
 

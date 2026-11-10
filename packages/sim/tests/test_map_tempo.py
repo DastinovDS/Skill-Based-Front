@@ -97,15 +97,15 @@ def test_the_section_is_left_out_of_the_hash_when_absent() -> None:
 
 
 def test_narrows_sqrt_scales_every_economy_period_and_nothing_else() -> None:
-    # narrows: 29 nodes, sqrt pct 76. Periods p * 100 // 76: 100 -> 131, 200 -> 263,
-    # 80 -> 105, 400 -> 526.
+    # narrows: 29 nodes, sqrt pct 76. Periods p * 100 // 76: CP (0.5 CP quanta, #900) 100 -> 131,
+    # 50 -> 65, 40 -> 52; capital 200 -> 263, 100 -> 131, 400 -> 526.
     rules = load_ruleset(TEMPO)
     mapdef = load_map(ROOT / "maps" / "narrows.json")
     assert len(mapdef.nodes) == 29
     played = apply_map_tempo(rules, mapdef)
     assert played.map_tempo is None
     cp, capital = played.stances.cp_period_ticks, played.stances.capital_period_ticks
-    assert (cp.economy, cp.balance, cp.war) == (263, 131, 105)
+    assert (cp.economy, cp.balance, cp.war) == (131, 65, 52)
     assert (capital.economy, capital.balance, capital.war) == (131, 263, 526)
     assert played.factory.built_period_ticks is None  # DEC-47: every factory follows the stance
     # The rest is the ruleset as given: only the stance periods and [map_tempo] differ.
@@ -125,12 +125,13 @@ def test_the_built_period_scales_too() -> None:
 @pytest.mark.parametrize(
     ("path", "nodes", "cp", "capital"),
     [
-        # pct 102 (51 nodes): 100 * 100 // 102 = 98, 200 * 100 // 102 = 196
-        ("ridge.json", 51, 98, 196),
-        # pct 104 (54 nodes): 10000 // 104 = 96, 20000 // 104 = 192
-        ("gen/gen1-58.json", 54, 96, 192),
-        # pct 88 (38 nodes): 10000 // 88 = 113, 20000 // 88 = 227
-        ("gen/gen1-25.json", 38, 113, 227),
+        # Balance CP period 50 (0.5 CP quanta, #900) and capital period 200, both * 100 // pct.
+        # pct 102 (51 nodes): 5000 // 102 = 49, 20000 // 102 = 196
+        ("ridge.json", 51, 49, 196),
+        # pct 104 (54 nodes): 5000 // 104 = 48, 20000 // 104 = 192
+        ("gen/gen1-58.json", 54, 48, 192),
+        # pct 88 (38 nodes): 5000 // 88 = 56, 20000 // 88 = 227
+        ("gen/gen1-25.json", 38, 56, 227),
     ],
 )
 def test_balance_periods_of_other_maps(path: str, nodes: int, cp: int, capital: int) -> None:
@@ -268,11 +269,12 @@ MVP7 = ROOT / "rulesets" / "mvp-7.toml"
     ("name", "pct", "cp", "capital"),
     [
         # Expected values by hand (issue #885, mechanics.md DEC-46): pct, then p * 100 // pct.
-        # cp: War / Balance / Economy of 80 / 100 / 200; capital: of 400 / 200 / 100.
-        ("narrows", 76, (105, 131, 263), (526, 263, 131)),
-        ("crossroads", 100, (80, 100, 200), (400, 200, 100)),
-        ("highway", 100, (80, 100, 200), (400, 200, 100)),
-        ("ridge", 102, (78, 98, 196), (392, 196, 98)),
+        # cp (0.5 CP quanta, #900): War / Balance / Economy of 40 / 50 / 100;
+        # capital: of 400 / 200 / 100.
+        ("narrows", 76, (52, 65, 131), (526, 263, 131)),
+        ("crossroads", 100, (40, 50, 100), (400, 200, 100)),
+        ("highway", 100, (40, 50, 100), (400, 200, 100)),
+        ("ridge", 102, (39, 49, 98), (392, 196, 98)),
     ],
 )
 def test_mvp7_periods_on_the_pool_maps(

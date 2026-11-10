@@ -43,6 +43,19 @@ import {
 } from './fortsScene.ts';
 import { terrainSnapshot } from './terrainScene.ts';
 
+/**
+ * The stances fixture with CP in 0.5 CP quanta as in `mvp-7` (#900): `per_period` 50 and the CP
+ * periods halved (economy 100, balance 50, war 40), the rest as the fixture.
+ */
+const STANCES_HALF_CP = {
+  ...DEV_RULES_STANCES,
+  cp: { ...DEV_RULES_STANCES.cp, per_period: 50 },
+  stances: {
+    ...DEV_RULES_STANCES.stances,
+    cp_period_ticks: { economy: 100, balance: 50, war: 40 },
+  },
+};
+
 const files = import.meta.glob<SnapshotMsg>(
   '../../../../packages/protocol/fixtures/server/snapshot*.json',
   { eager: true, import: 'default' },
@@ -784,7 +797,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     events: [],
     view: FLOW_VIEW,
     cityUpgrades: true,
-    rules: DEV_RULES_STANCES,
+    rules: STANCES_HALF_CP,
   },
   {
     // Road fortifications (DEC-43, item D; #707): an own line built with the

@@ -29,7 +29,7 @@ match_ticks = 600 # a 60-second match: 2 VP awards
 # The period of the quantum is set by the stance ([stances.cp_period_ticks], DEC-44).
 start = 300 # starting stock: 3 CP (SIM-01, #17)
 cap = 500 # ceiling: 5 CP; at the ceiling the excess CP burns off (DEC-02)
-per_period = 100 # regeneration quantum: 1 CP
+per_period = 50 # regeneration quantum: 0.5 CP (owner 2026-11-10, #900; mvp-6: 100)
 
 [economy]
 # Stance of both players at the start of the match: economy | balance | war.
@@ -50,10 +50,11 @@ start_stance = "balance"
 factories_follow = true
 
 [stances.cp_period_ticks]
-# Ticks per CP quantum (cp.per_period, 1 CP).
-economy = 200 # 20 s
-balance = 100 # 10 s
-war = 80 # 8 s
+# Ticks per CP quantum (cp.per_period, 0.5 CP): half of the mvp-6 periods, so the CP per minute stay the same
+# (owner 2026-11-10, #900).
+economy = 100 # 10 s
+balance = 50 # 5 s
+war = 40 # 4 s
 
 [stances.capital_period_ticks]
 # Ticks per charge of the own capital and, with factories_follow, of every other factory.

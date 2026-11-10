@@ -33,6 +33,7 @@ describe('buildHudData: the numbers of the snapshot', () => {
       cap: DEV_RULES.cp.cap,
       regenPerSecond:
         (DEV_RULES.cp.per_period * DEV_RULES.tick_hz) / DEV_RULES.stances.cp_period_ticks.war,
+      quantum: DEV_RULES.cp.per_period,
     });
     expect(data.stance).toBe('war');
     expect(data.vp).toEqual({ mine: 4, enemy: 6 });

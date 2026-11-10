@@ -1,0 +1,249 @@
+# Ruleset test-short: only for the E2E tests (QA-02, #81) and the dev environment; the server refuses it with
+# GOW_ENV=prod. A copy of mvp-7.toml with a 60-second match (match_ticks = 600), so a whole match fits into a test.
+#
+# The kept rulesets (#894, 2026-11-09): mvp-5, mvp-6, mvp-7 and test-short (a 60-second mvp-7 for the E2E). The
+# older rulesets mvp-0 to mvp-4 and the code only they reached (economy v1, the drawn supply lines, the bunker,
+# warehouse and road upgrades, "Defense") were removed; their files stay in rulesets/archive/ as history.
+#
+# Every kept ruleset plays economy v2 (DEC-41) with the automatic supply flow (DEC-43), the stances of DEC-44, the
+# road fortifications of DEC-43 item D, fixed warehouses (DEC-43 item C) and the terrain burn of DEC-45.
+#
+# Source of the rules: docs/design/mechanics.md (DEC decisions, section 21).
+# Loader: gow_sim.ruleset.load_ruleset(). An unknown or missing key, a fractional number
+# and a value out of range: a load error naming the key. The ruleset hash (ruleset_hash) is computed
+# from the values, not the text: comments and the order of keys do not affect it.
+#
+# Units (AGENTS.md, section 4.1):
+# - all durations: an integer number of ticks, 10 ticks = 1 second;
+# - CP: in hundredths (100 = 1 CP);
+# - integers only, no float.
+#
+# Numbers change only through this file and balancing (BAL-02, #40), not in the code of the systems.
+
+# Clock and match length (DEC-03, #9; DEC-22, #234; mechanics.md, sections 1 and 11).
+tick_hz = 10 # ticks per second
+match_ticks = 600 # a 60-second match: 2 VP awards
+
+[cp]
+# Command points (DEC-02, #8; mechanics.md, sections 6 and 14). Flat regeneration, does not grow with territory.
+# The period of the quantum is set by the stance ([stances.cp_period_ticks], DEC-44).
+start = 300 # starting stock: 3 CP (SIM-01, #17)
+cap = 500 # ceiling: 5 CP; at the ceiling the excess CP burns off (DEC-02)
+per_period = 50 # regeneration quantum: 0.5 CP (owner 2026-11-10, #900; mvp-6: 100)
+
+[economy]
+# Stance of both players at the start of the match: economy | balance | war.
+# DEC-09 (owner, 2026-10-28): both players start in "balance". Only the capital keeps the start stock of the map,
+# the other cities start empty (DEC-41, item 9).
+start_stance = "balance"
+
+[stances]
+# Stances with local progress (DEC-44, #772; mechanics.md, section 6). The stance sets the CP income and the rate
+# of the own capital, and with factories_follow (DEC-47) the rate of every other factory.
+# Each player counts ticks since the last CP quantum and since the last charge of the own capital, each other
+# factory its own ticks since its last charge; a counter that reaches the period of the stance fires its
+# quantum and restarts. A real stance change carries each counter over: counter * new_period // old_period,
+# rounded down (owner decision 2026-11-07, #792). No cooldown, the change is free.
+# DEC-47 (#888, owner decision 2026-11-09): every factory other than the own capital (built or captured, a
+# captured capital too) makes 1 charge per capital_period_ticks of its owner's stance, on its own counter that
+# starts at 0 when the factory starts working or is captured; there is no factory.built_period_ticks.
+factories_follow = true
+
+[stances.cp_period_ticks]
+# Ticks per CP quantum (cp.per_period, 0.5 CP): half of the mvp-6 periods, so the CP per minute stay the same
+# (owner 2026-11-10, #900).
+economy = 100 # 10 s
+balance = 50 # 5 s
+war = 40 # 4 s
+
+[stances.capital_period_ticks]
+# Ticks per charge of the own capital and, with factories_follow, of every other factory.
+economy = 100 # 10 s
+balance = 200 # 20 s
+war = 400 # 40 s
+
+[orders]
+# Planned orders (DEC-08, #12; DEC-41, item 10; mechanics.md, section 5). A planned order names the requested
+# bonus b >= 1 and waits in its node; once per plan_ticks_per_bonus ticks it takes 1 real charge from the
+# warehouse of the node (after the recharge of the units) and the bonus grows by 1, at most the group's charged
+# units; it departs by itself at b or at that cap, or at once by ReleasePlan. The intent is visible to everyone.
+# How bonuses enter the fight pool: DEC-07, rule 1 (mechanics.md, section 4).
+plan_ticks_per_bonus = 30 # 3 s per bonus (P1)
+
+[orders.cost]
+# Cost of commands in hundredths of CP (100 = 1 CP). SIM-01 (#17), DEC-08 (#12).
+move = 100 # an ordinary move order
+planned_move = 100 # DEC-41, item 10: a planned order costs as much as an ordinary one
+cancel = 0 # CancelOrder: cancelling any order is free, on an edge it is a turn-around (DEC-20)
+split = 0 # splitting a group is free (DEC-20)
+merge = 0 # merging groups is free, groups also merge on their own (DEC-20)
+recruit = 100 # Recruit(node): 1 CP per unit in the queue, when queued (DEC-25, #262; mechanics.md, section 3)
+stance = 0 # changing the stance is free (DEC-44)
+barracks = 0 # BuildBarracks(node): no CP, paid in charges (city_upgrades.barracks_charges, DEC-41, item 7)
+
+[terrain.defense_mod]
+# Terrain modifier of the node defender's pool, in charges (DEC-07, #11, rule 1; mechanics.md, section 4).
+# Applies only to the node's defender and only if it has at least one firing charge;
+# in a fight on an edge and on simultaneous arrival at a neutral node there is no terrain effect.
+# A negative value burns that many charges of the defender at the start of the first round (DEC-45).
+mountains = 1
+forest = 0
+plains = -1
+
+[terrain.speed_pct]
+# Movement speed in a node's zone by its terrain, in percent (mechanics.md, section 4, "Speed by
+# terrain by zones", #253). An edge is split by the border point: the part near node A moves at the speed
+# of A's terrain, the part near node B at the speed of B's terrain. An edge in a single terrain p takes
+# travel_ticks * 100 // p ticks (rounded down).
+plains = 125 # faster
+forest = 100 # normal
+mountains = 70 # slower
+
+[combat]
+# A fight over time (DEC-24, #261; pace DEC-32, #327; mechanics.md, section 4). A fight starts at the tick
+# of contact t and runs in rounds at ticks t + k * round_ticks (k = 1, 2, ...): in a round each side
+# makes min(stock, shots_per_round) shots, virtual ones first (bonuses, mountains). The winner
+# of a fight on an edge continues its order regroup_ticks after the fight ends (regrouping).
+round_ticks = 20 # a round: 2 s (DEC-32)
+shots_per_round = 1 # shots of a side per round
+regroup_ticks = 10 # regrouping of the winner on an edge: 1 s
+engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is caught into the fight
+retreat = "none" # DEC-40, variant N (#626): no retreat from a fight; "round": leave after the nearest round (DEC-24, item E)
+
+[capture]
+# Capture costs a charge (DEC-38, #578; mechanics.md, section 4). A capture of a node (neutral or enemy, a city,
+# a province or a capital, also at the end of a fight) spends charge_cost real charges of the capturing player's
+# groups in the node; with fewer the groups bounce, a returning group dies (DEC-24, G3). Virtual charges never pay.
+charge_cost = 1 # a capture spends 1 real charge (owner decision 2026-11-09, #759; mvp-5: 0, #659)
+
+[capacity]
+# Node capacity (DEC-22, #234; mechanics.md, section 8): limits the number of units standing in a node.
+# Fixed by the node kind from the map (capacity.by_kind), independent of roads, owner and supply.
+attrition_ticks = 30 # a garrison over capacity loses one unit on the 30th consecutive tick above it, then the count restarts (DEC-12)
+grace_ticks = 50 # grace period of attrition after a city is captured
+
+[capacity.by_kind]
+# Capacity by the node `kind` from the map (DEC-22, item 1; DEC-23, item 1).
+capital = 10 # capital
+city_large = 8 # large city
+city_medium = 6 # medium city
+city_small = 4 # small city
+province = 3 # province (a node without a city, DEC-23)
+
+[starvation]
+# Starvation in a pocket (DEC-43, item H, #719; the consumption of DEC-19, #231; mechanics.md, section 7).
+# A pocket: an own component (over own nodes) without the own capital. Every node of a pocket without an
+# own factory, provinces included, starves: at the ticks cut_since + grace_ticks + k * period_ticks it loses
+# charges * ceil(U / per_units) charges, U: the owner's units standing in the node. The warehouse first,
+# then the units' charges. Units do not die. Neutral nodes do not starve.
+grace_ticks = 100 # grace period after being cut off: 10 s
+period_ticks = 100 # consumption once per 10 s
+charges = 1 # charges ...
+per_units = 3 # ... per each started 3 units
+
+[supply]
+# The automatic supply flow towards the front (DEC-43; mechanics.md, section 7). Every dispatch_ticks each own
+# node behind the level (its distance in roads to the nearest leaf above the leaf shift) sends one charge per
+# road to its downhill neighbours with room, then evens out level roads; a full factory spills its new charge to
+# a neighbour. The leaf shift (SetLeafShift, free, hidden) moves the level back towards the capital.
+# A packet needs travel_ticks * 100 // speed_pct ticks per road (rounded down, at least 1).
+dispatch_ticks = 10 # period of computing and dispatching packets
+recharge_per_tick = 1 # recharging standing units from the warehouse: at most 1 charge per tick
+speed_pct = 150 # DEC-41, item 8: every packet travels at 150%
+
+[recruit]
+# Recruit queue (DEC-25, #262; mechanics.md, section 3). Recruit(node) puts one unit into the
+# queue of an own city with a barracks, CP (orders.cost.recruit) are charged when queued. A city makes one
+# unit at a time: unit_ticks ticks of progress while there is no fight in the city (DEC-24). A finished unit appears
+# discharged as a new group and merges with the city's group (DEC-20); it takes a charge by the usual
+# recharge from the warehouse. CancelRecruit(node) removes the last unit of the queue: an unstarted one
+# refunds CP in full, a unit in production: refund_started_pct percent (rounded down).
+unit_ticks = 30 # 3 s per unit
+queue_max = 3 # units in a city's queue, including the current one; otherwise QUEUE_FULL is rejected
+refund_started_pct = 50 # refund for a cancelled unit in production: half
+
+[victory]
+# Victory condition (DEC-03, #9; mechanics.md, section 11).
+# VP are awarded once per vp_period_ticks for each city of one's own: the `vp` value from the map,
+# multiplied by capital_multiplier for the capital.
+# Rules without numbers (set by DEC-03, no flags): capturing the enemy capital is an instant win;
+# on the timer the one with more VP wins; on a tie, the one with more cities; otherwise a draw.
+vp_period_ticks = 300 # once per 30 seconds; owner's decision 2026-10-07 (#211): fewer numbers in the interface
+capital_multiplier = 3
+
+[city_upgrades]
+# The barracks (DEC-26, #265; mechanics.md, sections 3 and 8): the capital and the cities with a barracks
+# recruit (NO_BARRACKS); a barracks takes the construction slot of the city (CITY_BUSY).
+barracks_ticks = 100 # BuildBarracks: the barracks appears 10 s after the full payment
+barracks_charges = 3 # DEC-41, item 7: the barracks costs 3 charges (progressive payment; the 10 s run after the full payment)
+
+[warehouse]
+# Fixed warehouses (DEC-43, item C): every city 3, the capital 6, a province 1.
+# The warehouse at the start: min(the map's start_stock, the warehouse capacity), the excess is discarded.
+province = 1 # DEC-41, item 13: a province has a warehouse of 1, always
+
+[warehouse.start_by_kind]
+# Warehouse capacity by city kind.
+capital = 6 # DEC-43, item C1: fixed warehouses, the capital 6
+city_large = 3 # every city 3
+city_medium = 3
+city_small = 3
+
+[vision]
+# Vision by terrain (DEC-21, #233; mechanics.md, section 10). A vision source: a node where one's own group
+# stands; in it everything is exact. A node adjacent to a source gets a level by the pair
+# "source terrain -> target terrain" (by_terrain), the best of several sources:
+# exact (numbers) is better than range (a range of the unit total, no charges) is better than presence (an enemy
+# is there, no numbers). A node adjacent to no source: fog with memory.
+# A half of an edge (up to the border point) is visible by the level of its node; enemy groups in it are visible with
+# position and direction (DEC-33, #296).
+# Lower bounds of the unit ranges: 1..2, 3..5, 6..10, 11..20, 21+ (the first must be 1).
+range_starts = [1, 3, 6, 11, 21]
+
+[vision.by_terrain.plains]
+# The source is on plains.
+plains = "exact"
+forest = "range"
+mountains = "presence"
+
+[vision.by_terrain.forest]
+# The source is in a forest: a forest is always a range, never exact.
+plains = "range"
+forest = "range"
+mountains = "presence"
+
+[vision.by_terrain.mountains]
+# The source is in mountains: mountains see plains exactly.
+plains = "exact"
+forest = "range"
+mountains = "range"
+
+[factory]
+# Supply factories (DEC-41, item 2; mechanics.md, section 7). A factory city makes one charge into its own
+# warehouse at the period of its owner's stance (DEC-44, DEC-47). Under the flow (DEC-43, item A8) a full factory
+# (stock + own packets on the way >= its warehouse) spills the new charge to an own neighbour with room, else it
+# burns (charge_burned). The own capital is the main factory from the start.
+cost = 4 # BuildFactory(node): 4 charges, the progressive payment of DEC-41, item 7 (the warehouse, then the own groups standing there)
+build_ticks = 100 # the factory works 10 s after the full payment
+max = 3 # factories of a player at most, the capital and the builds under way included
+
+[fort]
+# Road fortifications (DEC-43, item D, #707; mechanics.md, section 7). FortifyRoad(node, edge): an own city
+# or province fortifies a road leaving it, one per (node, road), internal roads included, no global limit.
+# The line point is the border point of the road (border_permille). An enemy group crossing it towards the
+# node loses toll_charges charges per started toll_units units (its charged units become discharged, never
+# below 0); own groups and enemies moving away pass free; a capture of the node destroys its fortifications.
+cost = 150 # 1.5 CP, flat, paid when the command is applied
+build_ticks = 100 # works 10 s after the command
+toll_units = 3 # 1 charge per started 3 units: ceil(units / 3)
+toll_charges = 1
+
+[map_tempo]
+# Map tempo (DEC-46, #803; mechanics.md, section 6, "Map tempo"). Once per match, from the node count N of the map
+# (cities, provinces, capitals): pct = isqrt(N * 10000 // ref_nodes), rounded down, then clamped to
+# min_pct..max_pct. Every period p of factory.built_period_ticks (when the ruleset has it) and both [stances] tables
+# becomes max(1, p * 100 // pct), rounded down. Nothing else scales (VP, starvation, build times, combat,
+# movement, supply dispatch, recruit times, costs, warehouses, the CP cap and quantum).
+ref_nodes = 49 # crossroads and highway: pct = 100, the numbers above
+min_pct = 50 # a tiny map at most doubles the periods
+max_pct = 150 # a huge map shortens them by at most a third
