@@ -79,6 +79,7 @@ export const en = {
   'orders.rejected': 'Rejected ({command}): {reason}',
   'reject.INVALID_ARGUMENT.groupMove': 'The group stands at the target already',
   'orders.dropped': 'The group order went without {count} of its groups: {reason}',
+  'orders.split': '{units} of {of} go: the group is too big for the road, the rest stays',
   'picks.title': 'Selected groups',
   'picks.count': '{count} groups selected',
   'picks.group': 'Group {place}: {units} units, {charged} charged',

@@ -187,12 +187,6 @@ export class OrderController implements MapInteraction {
   #eHeld = false;
   /** The groups selected together (DEC-48, item K1): two or more, in the order of the selection. */
   #picks: readonly string[] = NO_PICKS;
-  /**
-   * A group dropped from a group order with `STACK_LIMIT` (DEC-48, item B4): it is selected alone,
-   * and once the server's `reach` says how many of it get to `dest` the split menu of #762 opens.
-   */
-  #splitOffer: { readonly group: string; readonly dest: number; readonly planned: boolean } | null =
-    null;
   #hover: PickHit | null = null;
   /** E + wheel: notches and trackpad pixels turned into steps of the plan bonus (#793). */
   readonly #wheelSteps = new WheelSteps();
@@ -1126,19 +1120,6 @@ export class OrderController implements MapInteraction {
       split: new Map(msg.split.map((s) => [s.node, s.units])),
     };
     this.ui.patch({ reach: info });
-    // A group dropped from a group order for its size (DEC-48, item B4): the split of #762 opens
-    // with the size the server says gets to the target, its part goes there on confirm.
-    const offer = this.#splitOffer;
-    if (offer?.group !== msg.group) return;
-    this.#splitOffer = null;
-    const group = this.#selectedGroup();
-    const fit = info.split.get(offer.dest) ?? 0;
-    if (group === null || group.id !== offer.group || group.node === null || fit < 1) return;
-    this.#closeMenus();
-    if (this.splitMenu.open(group.id, group.units, group.charged, { n: fit, dest: offer.dest })) {
-      const bonus = offer.planned ? PLAN_BONUS.min : 0;
-      this.#sendPlan = { group: group.id, planned: offer.planned, bonus };
-    }
   }
 
   /**
@@ -2003,24 +1984,19 @@ export class OrderController implements MapInteraction {
 
   /**
    * The groups an accepted group order dropped (DEC-48, item B3, `ack.members`): a toast per code
-   * with the count. The first one too big for the road (`STACK_LIMIT`) gets the split offer of #762
-   * (item B4): it is selected alone, and the server's `reach` for it opens the split menu.
+   * with the count. A group too big for the road is split by the server and its part goes with the
+   * order (item B4, #913): a notice "N of M go" from `split_units` and `group_units`, and no split
+   * offer of #762 (that stays for a single `move`); `STACK_LIMIT` now means no part reaches it.
    */
   #dropped(cmd: Command & { type: 'group_move' }, members: readonly AckMember[]): void {
     const counts = new Map<string, number>();
-    let tooBig: string | null = null;
-    for (const [i, member] of members.entries()) {
+    for (const member of members) {
       const code = member.reject_code;
-      if (code === null) continue;
-      counts.set(code, (counts.get(code) ?? 0) + 1);
-      if (code === 'STACK_LIMIT') tooBig ??= cmd.groups[i] ?? null;
+      if (code !== null) counts.set(code, (counts.get(code) ?? 0) + 1);
+      const { split_units: units, group_units: of } = member;
+      if (units !== null && of !== null) this.ui.emit({ kind: 'split', units, of, cmd });
     }
     for (const [code, count] of counts) this.ui.emit({ kind: 'dropped', code, count, cmd });
-    if (tooBig === null || this.#o.send === null) return;
-    // The player may have selected something else meanwhile: the offer waits for no one.
-    if (this.#o.hud.selection !== null || this.#picks.length > 0) return;
-    this.#splitOffer = { group: tooBig, dest: cmd.dest, planned: cmd.planned };
-    this.#o.hud.select({ kind: 'group', id: tooBig });
   }
 
   /** The price of a sent group order (`ruleset_public`, item A2), for the CP badge of a refusal. */

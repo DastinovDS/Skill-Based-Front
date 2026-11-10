@@ -250,6 +250,8 @@ describe('the answer to a group order (DEC-48, items B3 to B6)', () => {
     arrive_tick: reject_code === null ? 60 : null,
     bonus: 0,
     reject_code,
+    split_units: null,
+    group_units: null,
   });
 
   it('short of CP: refused as a whole, the CP badge marked with the price of the order', () => {
@@ -273,8 +275,8 @@ describe('the answer to a group order (DEC-48, items B3 to B6)', () => {
     expect(book.ghosts().every((g) => g.status === 'rejected')).toBe(true);
   });
 
-  it('dropped groups: a feedback per code; the one too big gets the split offer of #762', () => {
-    const { controller, book, feedback, hud, queried } = setup();
+  it('dropped groups: a feedback per code; no split offer of #762 (#913)', () => {
+    const { controller, book, feedback, hud } = setup();
     pickAll(controller);
     controller.click({ kind: 'node', id: enemy }, false);
     book.onAck({
@@ -298,22 +300,39 @@ describe('the answer to a group order (DEC-48, items B3 to B6)', () => {
       ['g2', 'accepted'],
       ['g3', 'rejected'],
     ]);
-    expect(hud.selection).toEqual({ kind: 'group', id: 'g1' });
-    controller.overlay();
-    expect(queried).toContain('g1');
-    controller.onReach({
-      type: 'reach',
-      group: 'g1',
-      tick: 31,
-      nodes: [],
-      split: [{ node: enemy, units: 2 }],
+    // A member still `STACK_LIMIT` has no part that reaches the target (DEC-48, item B4): it is not
+    // selected for a split.
+    expect(hud.selection).toBeNull();
+    expect(controller.splitMenu.current.open).toBe(false);
+    expect(feedback.some((f) => f.kind === 'split')).toBe(false);
+  });
+
+  it('a group the server split: "N of M go", its part is a member, no split offer (#913)', () => {
+    const { controller, book, feedback, hud } = setup();
+    pickAll(controller);
+    controller.click({ kind: 'node', id: enemy }, false);
+    book.onAck({
+      type: 'ack',
+      seq: 1,
+      applied_tick: 31,
+      path: null,
+      arrive_tick: 60,
+      reject_code: null,
+      kind: 'attack',
+      cost: 300,
+      members: [{ ...member(null), split_units: 3, group_units: 5 }, member(null), member(null)],
     });
-    expect(controller.splitMenu.current).toMatchObject({
-      open: true,
-      group: 'g1',
-      n: 2,
-      dest: enemy,
-    });
+    expect(feedback.filter((f) => f.kind === 'split')).toEqual([
+      expect.objectContaining({ kind: 'split', units: 3, of: 5 }),
+    ]);
+    expect(feedback.some((f) => f.kind === 'dropped')).toBe(false);
+    expect(book.ghosts().map((g) => [g.group, g.status])).toEqual([
+      ['g1', 'accepted'],
+      ['g2', 'accepted'],
+      ['g3', 'accepted'],
+    ]);
+    expect(hud.selection).toBeNull();
+    expect(controller.splitMenu.current.open).toBe(false);
   });
 });
 
