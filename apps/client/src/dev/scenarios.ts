@@ -764,7 +764,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     pins: GROUP_PLAN_PINS,
   },
   {
-    // DEC-48: a timed attack on Archway, two members waiting (C3), the seal (B1); Ford's rally point (E3).
+    // DEC-48: a timed attack on Archway, two members waiting (C3), the seal (B1); Stonegate's rally point (E3).
     id: 'group_order',
     map: 'artery',
     snapshot: groupOrderSnapshot(bundledMap('artery')),

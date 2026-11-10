@@ -230,10 +230,11 @@ export const MENU_ICONS = {
   // muster ring; cleared, the same struck through.
   rally: [path('M8 20.5V3.5'), path('M8 4.5l10 3.8L8 12.1z'), path('M4 20.5h8')],
   rallyOff: [
-    path('M8 20.5V3.5'),
-    path('M8 4.5l10 3.8L8 12.1z'),
-    path('M4 20.5h8'),
-    path('M4 4l16 16'),
+    path('M7 20.5V3.5'),
+    path('M7 4.5l9 3.4-9 3.4z'),
+    path('M3.5 20.5h7'),
+    path('M14.5 14.5l6 6'),
+    path('M20.5 14.5l-6 6'),
   ],
 } as const satisfies Record<string, readonly IconShape[]>;
 

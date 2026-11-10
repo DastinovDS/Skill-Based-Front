@@ -91,7 +91,7 @@ const member = (path: [number, ...number[]], depart: number): OrderView => ({
 
 /**
  * A synchronized attack on Archway: Watchpost's group waits 2 s, Wood Hollow's (the farthest) has
- * left, Watchhouse's waits 4 s; Ford sends its recruits to Watchhouse (its rally point).
+ * left, Watchhouse's waits 4 s; Stonegate sends its recruits to Watchhouse (its rally point).
  */
 export function groupOrderSnapshot(map: MapFile): SnapshotMsg {
   const base = arterySnapshot(map);
@@ -106,6 +106,9 @@ export function groupOrderSnapshot(map: MapFile): SnapshotMsg {
     },
     garrison(4, 3, 2),
   ];
-  const nodes = base.view.nodes.map((n) => (n.id === 13 ? { ...n, rally_point: 12 } : n));
+  // Stonegate (the capital) sends its recruits to Watchhouse; Ford has a barracks and no point.
+  const nodes = base.view.nodes.map((n) =>
+    n.id === 0 ? { ...n, rally_point: 12 } : n.id === 13 ? { ...n, has_barracks: true } : n,
+  );
   return { ...base, view: { ...base.view, groups, nodes, intents: [], fights: [] } };
 }

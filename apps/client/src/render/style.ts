@@ -549,9 +549,9 @@ export const GROUP_ORDER = {
     arc: 1.0,
     casing: 5.4,
     width: 2.6,
-    disc: 10,
-    helmet: 13,
-    chevron: { gap: 10, length: 10, width: 6 },
+    disc: 13,
+    helmet: 17,
+    chevron: { gap: 12, length: 14, width: 7 },
     /** The ring a rally point pick shows at the node under the pointer. */
     pickAlpha: 0.55,
   },

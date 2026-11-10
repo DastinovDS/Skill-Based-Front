@@ -223,6 +223,30 @@ for (const menu of MENUS) {
   });
 }
 
+// The recruit rally point (DEC-48, item K7, #896): on the scene `group_order` the menu of Ford
+// offers "Rally point" with the walk price, the pick shows the faint muster ring on Forkway; Stonegate,
+// which has its point, offers "Clear rally point".
+test('shot of the rally point menu, its pick and its clearing', async ({ page }) => {
+  await page.goto('/?scene=group_order&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(557, 707);
+  await page.mouse.move(1000, 700);
+  await expect(page.locator('[role="menu"]')).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'menu-rally.png') });
+  await page.keyboard.press('KeyP');
+  await page.mouse.move(533, 519);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(OUT, 'rally-pick.png') });
+  await page.keyboard.press('Escape');
+  await page.mouse.click(120, 519);
+  await page.mouse.move(1000, 700);
+  await expect(page.locator('[role="menu"]')).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'menu-rally-clear.png') });
+});
+
 // No retreat from a fight (DEC-40, #880): the group menu of an own group in a fight, under
 // `combat.retreat = "none"` (the Cancel sector is off and says why) and under `"round"` (as before).
 for (const retreat of ['none', 'round'] as const) {

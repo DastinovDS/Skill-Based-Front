@@ -354,7 +354,8 @@ export class GroupOrderView {
       g.circle(at.x, at.y, rim).stroke({ width: D.rim * k, color: INK, alpha: D.rimAlpha * alpha });
       return;
     }
-    const n = 16;
+    // Before the click: a dashed rim, half dash half gap, a little bolder than the solid one.
+    const n = 10;
     for (let i = 0; i < n; i++) {
       const a0 = (i / n) * Math.PI * 2;
       g.moveTo(at.x + rim * Math.cos(a0), at.y + rim * Math.sin(a0)).arc(
@@ -362,10 +363,10 @@ export class GroupOrderView {
         at.y,
         rim,
         a0,
-        a0 + (Math.PI * 2) / n / 1.8,
+        a0 + Math.PI / n,
       );
     }
-    g.stroke({ width: D.rim * k, color: INK, alpha: D.rimAlpha * alpha });
+    g.stroke({ width: 1.6 * D.rim * k, color: INK, alpha });
   }
 
   /** An engraved hourglass `size` tall: two triangles, the sand in the own colour (`share` on top). */
