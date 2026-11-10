@@ -5,7 +5,7 @@
  *
  * Pure functions, no PixiJS. Numbers come from the snapshot; nothing is inferred.
  */
-import type { Mode, PlayerId } from '../protocol.gen.ts';
+import type { PlayerId } from '../protocol.gen.ts';
 import type { RenderGroup } from '../net/interpolate.ts';
 import type { Point } from './camera.ts';
 import type { TokenSpot } from './layout.ts';
@@ -18,20 +18,6 @@ export interface CityStack {
   readonly ids: readonly string[];
   readonly units: number;
   readonly charged: number;
-  /** Distinct modes of the groups ("Defense" shows as the shield of the icon). */
-  readonly modes: readonly Mode[];
-  /**
-   * The Defense bonus the own groups in "Defense" hold and its cap (DEC-30), the server's numbers
-   * summed over the groups; `null` for the opponent's stack (it shows the mode only, DEC-30,
-   * item 5) and when no group of the stack has the numbers.
-   */
-  readonly defense: DefenseBonus | null;
-}
-
-/** The gathered "Defense" bonus and its cap. */
-export interface DefenseBonus {
-  readonly bonus: number;
-  readonly cap: number;
 }
 
 /** A drawn city icon: the stack and where its helmet is (hit testing, anchors). */
@@ -57,8 +43,6 @@ export function stackGroups(groups: readonly RenderGroup[], me: PlayerId): CityS
       ids: string[];
       units: number;
       charged: number;
-      modes: Mode[];
-      defense: DefenseBonus | null;
     }
   >();
   for (const item of groups) {
@@ -68,22 +52,12 @@ export function stackGroups(groups: readonly RenderGroup[], me: PlayerId): CityS
     const key = stackKey(node, owner);
     let stack = stacks.get(key);
     if (stack === undefined) {
-      stack = { node, owner, ids: [], units: 0, charged: 0, modes: [], defense: null };
+      stack = { node, owner, ids: [], units: 0, charged: 0 };
       stacks.set(key, stack);
     }
     stack.ids.push(item.group.id);
     stack.units += item.group.units;
     stack.charged += item.group.charged;
-    if (!stack.modes.includes(item.group.mode)) stack.modes.push(item.group.mode);
-    // Only the own groups carry the number; the opponent's stack never shows one, whatever the data.
-    const bonus = null as number | null; // no «Defense»: removed (#894): stage 2 deletes this
-    const cap = null as number | null;
-    if (owner === me && bonus !== null && cap !== null) {
-      stack.defense = {
-        bonus: (stack.defense?.bonus ?? 0) + bonus,
-        cap: (stack.defense?.cap ?? 0) + cap,
-      };
-    }
   }
   return [...stacks.values()];
 }

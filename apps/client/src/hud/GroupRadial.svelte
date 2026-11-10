@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { getLocale, t, tf } from '../i18n/index.ts';
+  import { t, tf } from '../i18n/index.ts';
   import type { GroupChoice, OrderController } from '../match/orderController.ts';
   import type { MapAnchors } from '../render/anchors.ts';
   import type { GroupInfo } from './hudData.ts';
-  import { formatCentis } from './format.ts';
   import Radial from './Radial.svelte';
   import { GROUP_RING, spreadAngles, type RadialItem } from './radial.ts';
 
@@ -19,14 +18,10 @@
   let { orders, anchors, group, mergeable }: Props = $props();
 
   const menu = $derived(orders.groupMenu.current);
-  const cp = (centis: number): string => formatCentis(centis, getLocale());
-  // The rule of "Defense" in the caption under the ring (DEC-30): its numbers are the ruleset's.
-  const defenseSeconds = $derived(Math.round(orders.defenseTicksPerBonus / orders.tickHz));
 
   const angles = spreadAngles(4);
   const held = $derived(group !== null && orders.isHeldInFight(group) && !orders.canCancel(group));
-  // Economy v2 (DEC-41): no «Defense» (the bunker replaces it); its sector lets a gathering plan go.
-  const v2 = $derived(orders.v2);
+  // The sector that lets a gathering plan go (DEC-41, item 10).
   const release = $derived<RadialItem>({
     id: 'release',
     icon: 'release',
@@ -52,26 +47,7 @@
       key: 'S',
       disabled: group === null || group.node === null || group.units < 2,
     },
-    v2
-      ? release
-      : {
-          id: 'defense',
-          icon: 'defense',
-          angle: angles[1] ?? 0,
-          label: t('group.defense'),
-          // The price, and the bonus the group has gathered (DEC-30; the server's numbers).
-          price: { cp: cp(orders.modeCost('attack')) },
-          aria: tf('price.label', {
-            label: t('group.defense'),
-            price: tf('price.cp', { cost: cp(orders.modeCost('attack')) }),
-          }),
-          lines:
-            group?.defense == null
-              ? []
-              : [tf('defense.bonus', { bonus: group.defense.bonus, cap: group.defense.cap })],
-          key: 'D',
-          current: (group?.mode as string | undefined) === 'defense',
-        },
+    release,
     {
       id: 'cancel',
       icon: 'cancel',
@@ -93,7 +69,7 @@
   ]);
 </script>
 
-<!-- A click on an own group (UI round 2): a small menu on its icon. S, D, X and G do the same. -->
+<!-- A click on an own group (UI round 2): a small menu on its icon. S, F, X and G do the same. -->
 {#if menu.open && menu.target !== null}
   {@const target = menu.target}
   <Radial
@@ -113,11 +89,5 @@
       orders.groupMenu.close();
     }}
     closeLabel={t('group.close')}
-    captions={v2
-      ? []
-      : [
-          { text: tf('defense.radialRule', { seconds: defenseSeconds }), dim: true },
-          { text: t('defense.radialBurn'), dim: true },
-        ]}
   />
 {/if}

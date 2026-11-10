@@ -5,7 +5,7 @@ import type { RenderFrame } from '../net/interpolate.ts';
  * What the renderer draws, asked every frame. The match controller (CLI-06) serves it from a
  * `SnapshotBuffer` and the event stream; the dev screen serves fixtures.
  */
-/** Delays of planned orders and of "Defense" in ticks (`ruleset_public.orders`). */
+/** Delays of planned orders in ticks (`ruleset_public.orders`). */
 export interface OrderDelays {
   readonly planned: number;
 }
@@ -17,26 +17,15 @@ export interface CapacityTicks {
 }
 
 /**
- * `ruleset_public.city_upgrades` when the city development of DEC-26 is on: the durations of the
- * city builds in ticks and the warehouse levels (the places of a warehouse not built yet are drawn
- * dashed, C1).
+ * `ruleset_public.city_upgrades` and `factory`: the durations of the city builds in ticks and the
+ * charges they cost (the lozenges of the Crown arc of a build, #847). Without the charges a build
+ * shows only the charges it still owes.
  */
 export interface CityDevelopment {
   readonly barracks: number;
-  readonly warehouse: number;
-  /** `warehouse_max_level`: the top level of a warehouse. */
-  readonly warehouseMaxLevel: number;
-  /** `warehouse_gain_per_level`: places (charges) one level adds. */
-  readonly warehouseGainPerLevel: number;
-  /** Economy v2 (DEC-41): ticks from the full payment to a factory (`factory.build_ticks`). */
+  /** Ticks from the full payment to a factory (`factory.build_ticks`, DEC-41). */
   readonly factory?: number;
-  /** Economy v2: ticks from the full payment to a bunker (`bunker.build_ticks`). */
-  readonly fort?: number;
-  /**
-   * Economy v2 (DEC-41, item 7): the charges the barracks costs (`city_upgrades.barracks_charges`)
-   * and a factory (`factory.cost`): the lozenges of the Crown arc of a build (#847). Without them a
-   * build shows only the charges it still owes.
-   */
+  /** The charges the barracks costs (`city_upgrades.barracks_charges`) and a factory (`factory.cost`). */
   readonly barracksCharges?: number;
   readonly factoryCharges?: number;
 }
@@ -62,20 +51,15 @@ export interface RenderSource {
   readonly recruitQueueMax?: number;
   /**
    * Places of the warehouse of an own province (`ruleset_public.city_upgrades.warehouse_province`,
-   * economy v2, DEC-41, item 13); 0 or absent under v1: a province shows no stock.
+   * DEC-41, item 13); 0 or absent: a province shows no stock.
    */
   readonly provinceWarehouse?: number;
   /**
-   * The city development of DEC-26 when the rules have it (`ruleset_public.city_upgrades`): the
-   * durations of the barracks and warehouse builds for the build mark over an own city, and the
-   * warehouse bar of a foreign city shows only its charges (its capacity is hidden).
+   * The city development of DEC-26 (`ruleset_public.city_upgrades`): the durations of the barracks
+   * and factory builds for the build mark over an own city. Dev scenes without it draw cities
+   * without the build marks and the barracks tower.
    */
   readonly cityUpgrades?: CityDevelopment | null;
-  /**
-   * Ticks one road level takes to build (`ruleset_public.build.ticks_per_level`): the part done of
-   * the tape of an own build. Without it the tape shows no part done.
-   */
-  readonly roadBuildTicks?: number;
   /**
    * Ticks a road fortification takes to build (`ruleset_public.fort.build_ticks`, DEC-43, item D):
    * the part done of the line of an own build. Without it an own build shows no part done.

@@ -73,7 +73,7 @@
           text={formatCentis(data.cp.value, locale)}
         />
       </div>
-      <!-- Economy v2 (DEC-41, item 2; #762): own factories, builds under way counted, of the max. -->
+      <!-- DEC-41, item 2; #762: own factories, builds under way counted, of the max. -->
       {#if factories !== null}
         <span
           class="factories"
@@ -89,32 +89,29 @@
           <span class="num">{factories.count}/{factories.max}</span>
         </span>
       {/if}
-      <!-- Economy v2 has no stances (DEC-41, item 1) unless the ruleset brings them back (DEC-44):
-           the stance as its icon, the capital's next charge as a small upright cell, and the key. -->
-      {#if orders.stances}
-        <button
-          type="button"
-          class="chip"
-          aria-label={tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
-          title={next === null
-            ? undefined
-            : tf(orders.factoriesFollow ? 'bar.nextTipAll' : 'bar.nextTip', {
-                cp: next.cp.seconds,
-                capital: next.capital.seconds,
-              })}
-          onclick={() => {
-            orders.openRadial(true);
-          }}
-        >
-          <Icon name={STANCE_ICONS[data.stance]} size={20} cut />
-          {#if next !== null}
-            <span class="capital" aria-hidden="true">
-              <i style:height="{next.capital.share * 100}%"></i>
-            </span>
-          {/if}
-          <kbd>{STANCE_KEY}</kbd>
-        </button>
-      {/if}
+      <!-- The stance (DEC-44) as its icon, the capital's next charge as a small upright cell, and the key. -->
+      <button
+        type="button"
+        class="chip"
+        aria-label={tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
+        title={next === null
+          ? undefined
+          : tf(orders.factoriesFollow ? 'bar.nextTipAll' : 'bar.nextTip', {
+              cp: next.cp.seconds,
+              capital: next.capital.seconds,
+            })}
+        onclick={() => {
+          orders.openRadial(true);
+        }}
+      >
+        <Icon name={STANCE_ICONS[data.stance]} size={20} cut />
+        {#if next !== null}
+          <span class="capital" aria-hidden="true">
+            <i style:height="{next.capital.share * 100}%"></i>
+          </span>
+        {/if}
+        <kbd>{STANCE_KEY}</kbd>
+      </button>
     {/if}
   </div>
 

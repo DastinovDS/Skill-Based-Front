@@ -5,15 +5,12 @@
  * nothing.
  */
 
-import type { LineFocus } from './supplyLayout.ts';
-
 /**
  * What is under the pointer: an own group (by id), the icon of several own groups standing in a
  * city (`stack`), a node, or a road (by id).
  *
  * `group.node`: the group is the only one in that city and the hit is its icon there. `edge.cell`:
- * the city whose area (Voronoi cell) holds the point; a click on a road that is not raised by it
- * (DEC-28, item 7) is a click on that city.
+ * the city whose area (Voronoi cell) holds the point; a click on a road is a click on that city.
  */
 export type PickHit =
   | { readonly kind: 'group'; readonly id: string; readonly node?: number }
@@ -85,26 +82,6 @@ export interface MovePreview {
 }
 
 /**
- * The «Supply» map mode (DEC-18, item 7; Tab or F2): priorities of the own cities, own packets
- * with their paths and transfers. `source`: the city a transfer starts from while the player
- * picks its destination; `targets`: the own cities a click would pick then.
- */
-export interface SupplyOverlay {
-  readonly source: number | null;
-  readonly targets: readonly number[];
-  /**
-   * Economy v2 (DEC-41, item 6): the path of the supply line being drawn, from its source (empty
-   * while none is); `targets` are then the own nodes a click adds to it.
-   */
-  readonly draft: readonly number[];
-  /**
-   * Economy v2 (#672): the node whose own lines alone are shown (selected) and the line lit by the
-   * menu entry under the pointer; absent: every line, none lit.
-   */
-  readonly lines?: LineFocus;
-}
-
-/**
  * The road pick of "Fortify road" (DEC-43, item D; #707; P1 "Ghosts"): the own node whose road is
  * being picked, the roads a click would fortify (a faint ghost of the line lies on each), and the one
  * under the pointer (brighter, with the price).
@@ -123,12 +100,10 @@ export interface OverlayState {
   readonly selection: SelectionHit | null;
   readonly ghosts: readonly GhostArrow[];
   readonly preview: MovePreview | null;
-  /** The own road under the pointer that a click would raise (DEC-28, item 7): lit up. */
-  readonly candidates: readonly number[];
   /** The city ringed in the first seconds of a match ("your capital is here"); `null`: none. */
   readonly beacon: number | null;
-  /** The «Supply» map mode; `null`: the normal map. */
-  readonly supply: SupplyOverlay | null;
+  /** The «Supply» map mode is on (Tab or F2, DEC-43); `false`: the normal map. */
+  readonly supply: boolean;
   /** The terrain map mode (#429): patterns for the ground and a sight sign on the places you see. */
   readonly terrain: boolean;
   /**
@@ -179,9 +154,8 @@ export const EMPTY_OVERLAY: OverlayState = {
   selection: null,
   ghosts: [],
   preview: null,
-  candidates: [],
   beacon: null,
-  supply: null,
+  supply: false,
   terrain: false,
   reach: [],
   split: [],

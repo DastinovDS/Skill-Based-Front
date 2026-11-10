@@ -25,22 +25,13 @@ export type OrderNotice =
  * a short tone for `accepted`, another for `rejected`). A move that was accepted is reported too.
  */
 export type OrderFeedback =
-  | {
-      readonly kind: 'accepted';
-      readonly cmd: Command;
-      /** When an accepted transfer arrives (`ack.arrive_tick`, DEC-18); `null` otherwise. */
-      readonly arriveTick?: number | null;
-    }
+  | { readonly kind: 'accepted'; readonly cmd: Command }
   | { readonly kind: 'rejected'; readonly code: string; readonly cmd: Command }
   | { readonly kind: 'lost'; readonly cmd: Command };
 
 export interface OrderUiData {
   /** The "planned order" switch (Shift+click also makes one order planned). */
   readonly planned: boolean;
-  /** The road mode is on (`U`): own roads that can be raised are lit and a click on one raises it. */
-  readonly roadMode: boolean;
-  /** The own road under the pointer that a click would raise (DEC-28, item 7); `null`: none. */
-  readonly roadHover: number | null;
   /**
    * The node the pointer rests on as a target of the selected group that the server says the group is
    * too big for (`reach.split`, STACK_LIMIT, DEC-20): the hint "split the group" shows for it before any
@@ -63,20 +54,6 @@ export interface OrderUiData {
   readonly supplyMode: boolean;
   /** The terrain map mode is on (`T`, #429): patterns for the ground, a sight sign on the places you see. */
   readonly terrainMode: boolean;
-  /** Transfer pick: the own city the charges leave; a click on another own city picks `to`. */
-  readonly transferFrom: number | null;
-  /**
-   * Economy v2 (DEC-41, item 6; #665): the points of a supply line being drawn in the «Supply» mode:
-   * its source, the nodes it is routed through, its target (the last one, once clicked). `null`: no
-   * line is being drawn.
-   */
-  readonly lineDraft: readonly number[] | null;
-  /**
-   * The path the server suggests through `lineDraft` (`line_route`, #665): drawn as the preview and
-   * sent by `draw_line` when the player confirms it. `null`: no target yet or the answer is on its
-   * way; empty: the server found no own path through those points.
-   */
-  readonly linePath: readonly number[] | null;
   /**
    * A planned order is being made now: the switch is on or Shift is held (the plan bar shows its
    * bonus stepper prominently then, #762).
@@ -106,17 +83,12 @@ export interface OrderUiData {
 export class OrderUiState {
   current = $state.raw<OrderUiData>({
     planned: false,
-    roadMode: false,
-    roadHover: null,
     splitHover: null,
     captureHover: null,
     fortFrom: null,
     fortHover: null,
     supplyMode: false,
     terrainMode: false,
-    transferFrom: null,
-    lineDraft: null,
-    linePath: null,
     planning: false,
     cpShort: false,
     cpPrice: null,

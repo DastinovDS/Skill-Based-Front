@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ringRadius } from './cityLayout.ts';
 import {
   alertAlpha,
   alertSpot,
-  buildMark,
   fillPixels,
   hatchPolygons,
   innerWidth,
-  markTops,
   queueMark,
   type QueueInput,
 } from './progressLayout.ts';
@@ -123,54 +120,6 @@ describe('queueMark: geometry', () => {
     const mark = queueMark(input());
     if (mark === null) throw new Error('no mark');
     expect(alertSpot(mark, 0)).toBeNull();
-  });
-});
-
-describe('buildMark: barracks and warehouse share one indicator', () => {
-  it('fills the wide cell by the share done, whole pixels', () => {
-    const inner = innerWidth(PROGRESS.buildCell.width);
-    expect(buildMark('barracks', 0).fill).toBe(0);
-    expect(buildMark('barracks', 0.5).fill).toBe(inner / 2);
-    expect(buildMark('barracks', 1).fill).toBe(inner);
-  });
-
-  it('has the wide cell and the badge inside the plate', () => {
-    const mark = buildMark('barracks', 0.3);
-    expect(mark.cellX).toBeGreaterThan(PROGRESS.badge.cx + PROGRESS.badge.radius);
-    expect(mark.cellX + PROGRESS.buildCell.width + PROGRESS.pad).toBeCloseTo(mark.width);
-  });
-});
-
-describe('markTops', () => {
-  const radius = 17;
-  const queue = queueMark(input());
-  const build = buildMark('barracks', 0.4);
-
-  it('puts the queue plate just above the capacity ring', () => {
-    const tops = markTops(radius, queue, null);
-    if (queue === null || tops.queue === null) throw new Error('no queue');
-    expect(tops.queue + queue.height).toBeLessThan(-ringRadius(radius));
-    expect(tops.build).toBeNull();
-  });
-
-  it('stacks the build plate above the queue plate, a gap apart', () => {
-    const tops = markTops(radius, queue, build);
-    if (queue === null || tops.queue === null || tops.build === null) throw new Error('no tops');
-    expect(tops.build + build.height + PROGRESS.gap).toBeCloseTo(tops.queue);
-  });
-
-  it('puts a lone build plate where the queue plate would be', () => {
-    const alone = markTops(radius, null, build);
-    const queued = markTops(radius, queue, null);
-    if (queue === null || alone.build === null || queued.queue === null) throw new Error('no tops');
-    expect(alone.build + build.height).toBeCloseTo(queued.queue + queue.height);
-    expect(alone.queue).toBeNull();
-  });
-
-  it('rises with the size of the city', () => {
-    const small = markTops(11, queue, null).queue ?? 0;
-    const large = markTops(20, queue, null).queue ?? 0;
-    expect(large).toBeLessThan(small);
   });
 });
 

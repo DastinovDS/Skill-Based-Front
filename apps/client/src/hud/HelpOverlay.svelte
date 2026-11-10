@@ -1,7 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { t, tf } from '../i18n/index.ts';
-  import type { MessageKey } from '../i18n/messages.ts';
   import { sound } from '../audio/soundState.svelte.ts';
   import './dialog.css';
   import HowToPlay from '../howto/HowToPlay.svelte';
@@ -14,28 +13,9 @@
     onclose: () => void;
     /** `ruleset_public.capture.charge_cost` (DEC-38): with more than 0 the help tells the price of a capture. */
     captureCost?: number;
-    /** Plains burn a charge in the first round instead of silencing one (DEC-45). */
-    terrainBurn?: boolean;
-    /** Economy v2 (DEC-41): the keys of the v1 economy are gone, those of lines and plans come. */
-    v2?: boolean;
-    /** The automatic supply flow (DEC-43): no lines, the supply level keys instead. */
-    flow?: boolean;
-    /** Road fortifications (DEC-43, item D): `B` fortifies a road of the selected city. */
-    fort?: boolean;
-    /** Economy v2 with stances (DEC-44): `Q` is back. */
-    stances?: boolean;
   }
 
-  let {
-    open,
-    onclose,
-    captureCost = 0,
-    terrainBurn = false,
-    v2 = false,
-    flow = false,
-    fort = false,
-    stances = false,
-  }: Props = $props();
+  let { open, onclose, captureCost = 0 }: Props = $props();
 
   let close: HTMLButtonElement | undefined = $state();
   /** The rules page replaces the keys inside the sheet; the match runs on under it (nothing pauses). */
@@ -56,59 +36,23 @@
     if (open) void tick().then(() => close?.focus());
   });
 
-  /** The keys: a label (the key itself, not a translation) and the dictionary key of its effect. */
-  const KEYS = [
+  /**
+   * The keys: a label (the key itself, not a translation) and the dictionary key of its effect.
+   * The supply layer shows where charges go, `-` and `=` move the level (DEC-43).
+   */
+  const keys = [
     ['LMB', 'help.key.select'],
     ['Shift + LMB', 'help.key.planned'],
-    ['1 / 2', 'help.key.mode'],
+    ['Shift + wheel', 'help.key.planWheel'],
+    ['F', 'help.key.release'],
     ['X', 'help.key.cancel'],
-    ['D', 'help.key.defense'],
     ['R', 'help.key.recruit'],
-    ['U', 'help.key.road'],
+    ['B', 'help.key.fortify'],
     ['T', 'help.key.terrain'],
     ['S', 'help.key.split'],
     ['G', 'help.key.merge'],
     ['Q', 'help.key.stance'],
     ['Tab / F2', 'help.key.supply'],
-    ['[ / ]', 'help.key.rearMin'],
-    ['Space', 'help.key.alert'],
-    ['H', 'help.key.fit'],
-    ['M', 'help.key.mute'],
-    ['?', 'help.key.help'],
-    ['Esc', 'help.key.escape'],
-  ] as const;
-
-  /** Economy v2 (DEC-41): no Defense, road levels, stances, markers or transfers; lines and plans. */
-  const KEYS_V2 = [
-    ['LMB', 'help.key.select'],
-    ['Shift + LMB', 'help.key.plannedV2'],
-    ['Shift + wheel', 'help.key.planWheel'],
-    ['F', 'help.key.release'],
-    ['X', 'help.key.cancel'],
-    ['R', 'help.key.recruit'],
-    ['T', 'help.key.terrain'],
-    ['S', 'help.key.split'],
-    ['G', 'help.key.merge'],
-    ['Tab / F2', 'help.key.supplyV2'],
-    ['Space', 'help.key.alert'],
-    ['H', 'help.key.fit'],
-    ['M', 'help.key.mute'],
-    ['?', 'help.key.help'],
-    ['Esc', 'help.key.escape'],
-  ] as const;
-
-  /** The automatic supply flow (DEC-43): the layer shows where charges go, `-` and `=` move the level. */
-  const KEYS_FLOW = [
-    ['LMB', 'help.key.select'],
-    ['Shift + LMB', 'help.key.plannedV2'],
-    ['Shift + wheel', 'help.key.planWheel'],
-    ['F', 'help.key.release'],
-    ['X', 'help.key.cancel'],
-    ['R', 'help.key.recruit'],
-    ['T', 'help.key.terrain'],
-    ['S', 'help.key.split'],
-    ['G', 'help.key.merge'],
-    ['Tab / F2', 'help.key.supplyFlow'],
     ['- / =', 'help.key.leafShift'],
     ['Space', 'help.key.alert'],
     ['H', 'help.key.fit'],
@@ -116,27 +60,6 @@
     ['?', 'help.key.help'],
     ['Esc', 'help.key.escape'],
   ] as const;
-
-  type KeyRow = readonly [string, MessageKey];
-
-  const economyKeys = $derived.by((): readonly KeyRow[] => {
-    if (!flow) return v2 ? KEYS_V2 : KEYS;
-    // `B` goes after `R`, the other key of the menu of a city.
-    return fort
-      ? KEYS_FLOW.flatMap((row): (readonly [string, MessageKey])[] =>
-          row[0] === 'R' ? [row, ['B', 'help.key.fortify']] : [row],
-        )
-      : KEYS_FLOW;
-  });
-
-  // `Q` goes after `G`, as in the keys of economy v1.
-  const keys = $derived(
-    v2 && stances
-      ? economyKeys.flatMap((row): KeyRow[] =>
-          row[0] === 'G' ? [row, ['Q', 'help.key.stance']] : [row],
-        )
-      : economyKeys,
-  );
 </script>
 
 {#if open}
@@ -224,7 +147,7 @@
                   <path d="M8 9l6 5 6-5" class="badge-out" />
                   <path d="M8 9l6 5 6-5" class="badge-down" />
                 </svg>
-                {t(terrainBurn ? 'help.legend.badgeDownBurn' : 'help.legend.badgeDown')}
+                {t('help.legend.badgeDown')}
               </li>
               <li>
                 <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
@@ -259,9 +182,7 @@
             {#if captureCost > 0}
               <p class="note">{tf('help.capture', { n: captureCost })}</p>
             {/if}
-            {#if v2}
-              <p class="note">{t(flow ? 'help.economyFlow' : 'help.economyV2')}</p>
-            {/if}
+            <p class="note">{t('help.economyFlow')}</p>
             <div class="volume">
               <span>{t('help.volume')}</span>
               <Slider

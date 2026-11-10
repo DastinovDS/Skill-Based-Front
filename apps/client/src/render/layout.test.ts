@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   arrowGeometry,
-  buildGeometry,
   countLabel,
   dashSegments,
   edgePoint,
@@ -10,7 +9,6 @@ import {
   unitSide,
   roadPosition,
   sideways,
-  timeLeftLabel,
 } from './layout.ts';
 
 const A = { x: 0, y: 0 };
@@ -96,47 +94,5 @@ describe('arrows of intents', () => {
       [15, 25],
     ]);
     expect(dashSegments(A, A, 10, 5)).toEqual([]);
-  });
-});
-
-describe('the tape of a road being built (R1, #345)', () => {
-  it('lays a band of the width over the whole road, centred on it, and the done part from the start', () => {
-    const geometry = buildGeometry(A, B, 12, 10, 5, 0.25);
-    expect(geometry?.band).toEqual([
-      { x: 0, y: -6 },
-      { x: 100, y: -6 },
-      { x: 100, y: 6 },
-      { x: 0, y: 6 },
-    ]);
-    expect(geometry?.done?.map((p) => p.x)).toEqual([0, 25, 25, 0]);
-    expect(geometry?.mid).toEqual({ x: 50, y: 0 });
-  });
-
-  it('draws nothing done for a build that has just begun, and all of it when it is over', () => {
-    expect(buildGeometry(A, B, 12, 10, 5, 0)?.done).toBeNull();
-    expect(buildGeometry(A, B, 12, 10, 5, 1)?.done?.map((p) => p.x)).toEqual([0, 100, 100, 0]);
-    // A progress outside 0..1 is cut, not drawn past the road.
-    expect(buildGeometry(A, B, 12, 10, 5, 7)?.done?.map((p) => p.x)).toEqual([0, 100, 100, 0]);
-  });
-
-  it('puts the stripes in the world frame of the road, whatever its direction', () => {
-    const up = buildGeometry(A, { x: 0, y: 100 }, 12, 10, 5, 0);
-    expect(up?.mid).toEqual({ x: 0, y: 50 });
-    const xs = up?.stripes.flat().map((p) => p.x) ?? [];
-    // Across a road along +y the width runs along x (the band is 12 wide, centred on x = 0).
-    expect(Math.min(...xs)).toBeGreaterThanOrEqual(-6);
-    expect(Math.max(...xs)).toBeLessThanOrEqual(6);
-  });
-
-  it('has no tape for a road without length', () => {
-    expect(buildGeometry(A, A, 12, 10, 5, 0.5)).toBeNull();
-  });
-
-  it('shows the time left as m:ss, rounded up', () => {
-    expect(timeLeftLabel(150, 10)).toBe('0:15');
-    expect(timeLeftLabel(1, 10)).toBe('0:01');
-    expect(timeLeftLabel(0, 10)).toBe('0:00');
-    expect(timeLeftLabel(-5, 10)).toBe('0:00');
-    expect(timeLeftLabel(905, 10)).toBe('1:31');
   });
 });

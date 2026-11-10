@@ -1,8 +1,7 @@
 import { Container, Text, TextStyle } from 'pixi.js';
 import type { EventMsg, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { CityDevelopment } from './source.ts';
-import { cityRadius, lockedPlaces, vpBadgeAt, showsBarracks } from './cityLayout.ts';
-import { columnKinds, columnSlots, markScale } from './defenseLayout.ts';
+import { cityRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
 import {
   CAPITAL_RADIUS,
   CAPTURE,
@@ -20,7 +19,7 @@ import {
 import { reducedMotion } from './motion.ts';
 import { EaseTween } from './tween.ts';
 import { beaconPulse } from './alertLayout.ts';
-import { alertAlpha, buildMark, markTops, type PlateKind } from './progressLayout.ts';
+import { alertAlpha } from './progressLayout.ts';
 import {
   buildProgress,
   crownArc,
@@ -36,14 +35,12 @@ import type { MapLayers } from './layers.ts';
 import type { Point } from './camera.ts';
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import {
-  buildMarkSpec,
   cityBodySpec,
   cityRingSpec,
   helmetBackSpec,
   helmetFrontSpec,
   helmetLevelSpec,
   provinceBodySpec,
-  siteMarkSpec,
   stockColor,
   vpBadgeSpec,
   type CityKind,
@@ -67,7 +64,7 @@ import { PaymentLog, payShow, type Payment, type PayShow } from './buildPay.ts';
 
 /** A build of a tower (barracks, factory) in an own city, as the snapshot gives it. */
 interface TowerBuild {
-  /** Charges still to pay (DEC-41, item 7; 0 under economy v1). */
+  /** Charges still to pay (DEC-41, item 7). */
   readonly owed: number;
   /** The charges it costs in all (`ruleset_public`); `null`: not known. */
   readonly price: number | null;
@@ -107,26 +104,8 @@ interface CityState {
   readonly queueMax: number;
   /** Places of the warehouse: the warehouse capacity (DEC-26), or the charges only. */
   readonly warehouseCap: number | null;
-  /** Own city: faint places of the warehouse levels not built yet (DEC-26, C1); 0 for the rest. */
-  readonly locked: number;
-  /** Own city: a warehouse build (economy v1, DEC-26) and the share done, in percent; `null`: none. */
-  readonly buildKind: 'warehouse' | null;
-  readonly buildPct: number;
-  /** Economy v2 (DEC-41, item 7): charges the warehouse build still waits for. */
-  readonly buildOwed: number;
   /** The towers on the ring: the barracks (DEC-26) and the factory (DEC-41, item 2). */
   readonly towers: Readonly<Record<TowerKind, TowerState>>;
-  /** Economy v2: a bunker, own or an enemy's next door: the bunker badge in the column. */
-  readonly fort: boolean;
-  /** Economy v2: an own bunker being built, its share done in percent and what it owes. */
-  readonly sites: readonly SiteBuild[];
-}
-
-/** A bunker being built in an own node (economy v2, DEC-41, item 12). */
-interface SiteBuild {
-  readonly kind: 'fort';
-  readonly pct: number;
-  readonly owed: number;
 }
 
 function towerKey(t: TowerState): string {
@@ -148,14 +127,8 @@ function stateKey(s: CityState): string {
     s.paused,
     s.queueMax,
     s.warehouseCap,
-    s.locked,
-    s.buildKind,
-    s.buildPct,
-    s.buildOwed,
     towerKey(s.towers.barracks),
     towerKey(s.towers.factory),
-    s.fort,
-    s.sites.map((site) => `${site.kind}:${String(site.pct)}:${String(site.owed)}`).join(','),
   ]
     .map(String)
     .join('|');
@@ -224,7 +197,6 @@ const PIP_EASE_MS = 120;
  * (55k Pips) and the gilt VP lozenge. The capacity is public and exact (DEC-22).
  *
  * A province (`kind = province`, DEC-23) is a small dot instead of a body, with the capacity ring.
- * A warehouse build (economy v1) and a bunker build keep their plates above the city (#439).
  *
  * Every shape is a baked sprite (`bakedShapes.ts`, `pieceShapes.ts`, `SpriteCache`), one texture per
  * look with a bounded key; the fill of a tower and of a recruit is a crop of one baked fill, so it
@@ -238,14 +210,9 @@ export class CityView {
   private readonly bodies: BakedSprite[];
   private readonly rings: BakedSprite[];
   private readonly bars: BakedSprite[];
-  private readonly builds: BakedSprite[];
   private readonly alerts: BakedSprite[];
   /** The cities whose alert ring is on now (it pulses every frame). */
   private readonly alerting = new Set<number>();
-  /** Economy v2: the bunker badge of each city, in the column on its left. */
-  private readonly forts: BakedSprite[];
-  /** Economy v2: the plate of a bunker build, over the city build plate. */
-  private readonly siteBuilds: BakedSprite[][];
   private readonly towers: Record<TowerKind, TowerSlot>[];
   private readonly pips: PipSlot[][];
   private readonly pipLayers: Container[];
@@ -259,14 +226,10 @@ export class CityView {
   private readonly radii: number[];
   private readonly vpStyle: TextStyle;
   private supplyMode = false;
-  /** Camera scale: the bunker mark never gets smaller than 16 px on screen (#349). */
-  private cameraScale = 1;
   /** The scale of the towers and the recruits now (`towerScale`). */
   private towerZoom: number = TOWER.minScale;
   /** The render tick of the frame (fractional): the build time fills by it. */
   private tick = 0;
-  /** The signs of "Defense" each city carries (the column of the bunker is shared with them). */
-  private readonly defenses = new Map<number, number>();
   /** Set after the first snapshot: a body that changes after it (a capture) cross-fades. */
   private warm = false;
   /** The bodies that were just replaced, fading out over the new ones (#508). */
@@ -321,10 +284,7 @@ export class CityView {
     this.bodies = [];
     this.rings = [];
     this.bars = [];
-    this.builds = [];
     this.alerts = [];
-    this.forts = [];
-    this.siteBuilds = [];
     this.towers = [];
     this.pips = [];
     this.pipLayers = [];
@@ -342,23 +302,10 @@ export class CityView {
       const pipLayer = city.addChild(new Container({ label: 'recruits' }));
       this.pipLayers.push(pipLayer);
       this.pips.push([]);
-      const build = city.addChild(sprites.sprite());
-      build.label = 'build';
-      this.builds.push(build);
       const ring = city.addChild(sprites.sprite());
       ring.label = 'progress-alert';
       ring.visible = false;
       this.alerts.push(ring);
-      const fort = city.addChild(sprites.sprite());
-      fort.label = 'fort';
-      fort.visible = false;
-      this.forts.push(fort);
-      const sites = [city.addChild(sprites.sprite())];
-      for (const site of sites) {
-        site.label = 'site-build';
-        site.visible = false;
-      }
-      this.siteBuilds.push(sites);
       // A province carries no VP (DEC-23).
       if (node.vp > 0 && node.kind !== 'province') {
         const badge = city.addChild(new Container());
@@ -428,7 +375,7 @@ export class CityView {
     const at = this.map.nodes[id];
     if (state === null || state === undefined || at === undefined) return null;
     if (state.capacity === null || state.warehouse === null) return null;
-    const xs = lozengeRow((state.warehouseCap ?? state.warehouse) + state.locked);
+    const xs = lozengeRow(state.warehouseCap ?? state.warehouse);
     const x = xs[Math.min(xs.length - 1, Math.max(0, index))];
     if (x === undefined) return null;
     return { x: at.x + x, y: at.y + lozengeRowY(this.radiusOf(id)) };
@@ -464,13 +411,7 @@ export class CityView {
         paused: false,
         queueMax: 0,
         warehouseCap: null,
-        locked: 0,
-        buildKind: null,
-        buildPct: 0,
-        buildOwed: 0,
         towers: { barracks: none, factory: none },
-        fort: false,
-        sites: [],
       });
     });
   }
@@ -528,7 +469,6 @@ export class CityView {
             occupied: occupied.has(node.id),
           },
           { unitTicks, cityUpgrades, queueMax, provinceWarehouse },
-          base.tick,
         ),
       );
     }
@@ -561,15 +501,12 @@ export class CityView {
 
   /**
    * The «Supply» map mode (DEC-28, item 8), "Canal" (#858): the city keeps its ring, its warehouse
-   * lozenges, its towers and its bunker; the recruit queue, the alert rings, the build plates and the
-   * build arcs go (the layer draws what the supply is about).
+   * lozenges and its towers; the recruit queue, the alert rings and the build arcs go (the layer
+   * draws what the supply is about).
    */
   setSupplyMode(on: boolean): void {
     if (on === this.supplyMode) return;
     this.supplyMode = on;
-    for (const marks of [this.builds, ...this.siteBuilds]) {
-      for (const mark of marks) mark.visible = !on && mark.spec !== null;
-    }
     for (const layer of this.pipLayers) layer.visible = !on;
     this.alerts.forEach((ring, id) => {
       ring.visible = !on && this.alerting.has(id);
@@ -579,12 +516,9 @@ export class CityView {
     });
   }
 
-  /** The camera scale (CSS px per world unit): the towers and the bunker mark keep their screen size. */
+  /** The camera scale (CSS px per world unit): the towers keep their screen size. */
   setCameraScale(scale: number): void {
     const zoom = towerScale(scale);
-    const marks = markScale(scale) !== markScale(this.cameraScale);
-    this.cameraScale = scale;
-    if (marks) this.placeAllColumns();
     if (zoom === this.towerZoom) return;
     this.towerZoom = zoom;
     this.states.forEach((state, id) => {
@@ -625,52 +559,6 @@ export class CityView {
     }
   }
 
-  /**
-   * How many signs of "Defense" stand in the column of each city (`defenseSigns`): the bunker mark
-   * is the top of the same column, so it moves up when a sign comes under it.
-   */
-  setDefenseCounts(counts: ReadonlyMap<number, number>): void {
-    let same = counts.size === this.defenses.size;
-    if (same) {
-      for (const [id, n] of counts) {
-        if (this.defenses.get(id) !== n) {
-          same = false;
-          break;
-        }
-      }
-    }
-    if (same) return;
-    this.defenses.clear();
-    for (const [id, n] of counts) this.defenses.set(id, n);
-    this.placeAllColumns();
-  }
-
-  /**
-   * Whether the column on the left of city `id` starts with a mark (the bunker): the signs of
-   * "Defense" go under it. The barracks is a tower on the ring since #847, not in the column.
-   */
-  hasBarracks(id: number): boolean {
-    return this.states[id]?.fort === true;
-  }
-
-  private placeAllColumns(): void {
-    this.states.forEach((state, id) => {
-      if (state?.fort === true) this.placeColumn(id, state, this.radii[id] ?? NODE_RADIUS);
-    });
-  }
-
-  /** The bunker mark of the left column of a city (economy v2), over the signs of "Defense". */
-  private placeColumn(id: number, state: CityState, radius: number): void {
-    const scale = markScale(this.cameraScale);
-    const kinds = columnKinds(false, this.defenses.get(id) ?? 0, state.fort ? ['fort'] : []);
-    const fort = this.forts[id];
-    for (const slot of columnSlots(radius, kinds, scale)) {
-      if (slot.kind !== 'fort' || fort === undefined) continue;
-      fort.position.set(slot.x, slot.y);
-      fort.scale.set(scale);
-    }
-  }
-
   setLabelResolution(resolution: number): void {
     for (const text of this.vpLabels) {
       if (text.resolution !== resolution) text.resolution = resolution;
@@ -694,26 +582,13 @@ export class CityView {
       queueMax: number | null;
       provinceWarehouse: number;
     },
-    tick: number,
   ): CityState {
     const { unitTicks, cityUpgrades, provinceWarehouse } = rules;
-    // Economy v2 (DEC-41, item 13): an own province has a warehouse of `provinceWarehouse` places
-    // (0 under v1: none). Any other province shows no stock.
+    // DEC-41, item 13: an own province has a warehouse of `provinceWarehouse` places (0: none). Any
+    // other province shows no stock.
     const province = this.map.nodes[node.id]?.kind === 'province';
     const provinceStock = province && node.owner === this.me && provinceWarehouse > 0;
     const building = node.building;
-    let buildKind: 'warehouse' | null = null;
-    let buildPct = 0;
-    // A build that still owes charges (economy v2, DEC-41, item 7) has not started its time.
-    const share = (total: number, done: number | null): number => {
-      if (total <= 0) return 0;
-      const left = done === null ? total : Math.max(0, done - tick);
-      return Math.min(100, Math.max(0, Math.round((100 * (total - left)) / total)));
-    };
-    if (building !== null && (building.kind as string) === 'warehouse' && cityUpgrades !== null) {
-      buildKind = 'warehouse';
-      buildPct = share(cityUpgrades.warehouse, building.done_tick);
-    }
     const own = node.owner === this.me;
     const barracksBuild: TowerBuild | null =
       own && building?.kind === 'barracks' && cityUpgrades !== null
@@ -733,15 +608,6 @@ export class CityView {
             total: cityUpgrades?.factory ?? 0,
           }
         : null;
-    const sites: SiteBuild[] = [];
-    const fortBuild = null as { done_tick: number | null; owed: number } | null; // removed (#894): stage 2 deletes this
-    if (own && fortBuild !== null) {
-      sites.push({
-        kind: 'fort',
-        pct: share(cityUpgrades?.fort ?? 0, fortBuild.done_tick),
-        owed: fortBuild.owed,
-      });
-    }
     // Free slots are shown where a unit can be queued: an own city (the view carries its queue), with
     // the barracks when the city development is on (DEC-26, the same test as the city menu).
     const recruits =
@@ -760,15 +626,11 @@ export class CityView {
       waiting: node.recruit_waiting === true,
       paused: city.fighting,
       queueMax: recruits ? (rules.queueMax ?? 0) : 0,
-      // DEC-26: an own city knows its warehouse capacity; a foreign one shows only its charges
-      // when the warehouse is apart from the capacity, else the capacity (DEC-22).
+      // An own city knows its warehouse capacity (the capacity of the node, DEC-22); a foreign one
+      // shows only its charges.
       warehouseCap: provinceStock
         ? provinceWarehouse
         : (node.warehouse_cap ?? (cityUpgrades === null ? node.capacity : null)),
-      locked: lockedPlaces(0, cityUpgrades), // no warehouse levels: removed (#894): stage 2 deletes this
-      buildKind,
-      buildPct,
-      buildOwed: buildKind === null ? 0 : (building?.owed ?? 0),
       towers: {
         // The server sends these only where they may be seen (DEC-31: an enemy's next to an own node).
         barracks: {
@@ -777,8 +639,6 @@ export class CityView {
         },
         factory: { built: node.factory === true, build: factoryBuild },
       },
-      fort: false, // no bunker: removed (#894): stage 2 deletes this
-      sites,
     };
   }
 
@@ -891,8 +751,7 @@ export class CityView {
     const node = this.map.nodes[id];
     const ring = this.rings[id];
     const bar = this.bars[id];
-    const fort = this.forts[id];
-    if (node === undefined || ring === undefined || bar === undefined || fort === undefined) return;
+    if (node === undefined || ring === undefined || bar === undefined) return;
 
     const capital = node.capital_of !== null;
     const province = node.kind === 'province';
@@ -907,31 +766,19 @@ export class CityView {
     const kind = this.kindOf(state.owner);
     this.drawBody(id, state);
 
-    this.drawPlates(id, state, radius);
     this.drawRecruits(id, state, selected);
     this.placeTowers(id, state);
-
-    // Economy v2 (DEC-41): the bunker in the column on the left, the rim the owner's colour.
-    const rim = kind === 'enemy' ? ENEMY : YOU;
-    fort.set(state.fort ? siteMarkSpec('fort', rim) : null);
-    fort.visible = state.fort;
-    this.placeColumn(id, state, radius);
 
     const { capacity, warehouse } = state;
     const ringOn = capacity !== null;
     ring.set(ringOn ? cityRingSpec(radius, capacity, kind === 'you' ? state.garrison : 0) : null);
     ring.visible = ringOn;
-    // A province has a warehouse only under economy v2 and only its owner sees it (DEC-41, item 13):
+    // A province has a warehouse only its owner sees (DEC-41, item 13):
     // `stateOf` leaves `warehouse` null for every other province, so nothing is drawn there.
     const barOn = ringOn && warehouse !== null;
     bar.set(
       barOn
-        ? warehouseMarksSpec(
-            state.warehouseCap ?? warehouse,
-            warehouse,
-            stockColor(kind),
-            state.locked,
-          )
+        ? warehouseMarksSpec(state.warehouseCap ?? warehouse, warehouse, stockColor(kind))
         : null,
     );
     if (barOn) bar.position.set(0, lozengeRowY(radius));
@@ -1217,34 +1064,6 @@ export class CityView {
     const front = root.addChild(this.sprites.sprite());
     level.visible = false;
     return { root, back, level, front, fill: new EaseTween(0, PIP_EASE_MS) };
-  }
-
-  /**
-   * The plates kept from #439 above an own city: a warehouse build (economy v1, DEC-26) and a bunker
-   * build (economy v2). The barracks and the factory are towers on the ring.
-   */
-  private drawPlates(id: number, state: CityState, radius: number): void {
-    const build = this.builds[id];
-    if (build === undefined) return;
-    const built =
-      state.buildKind === null
-        ? null
-        : buildMark(state.buildKind as PlateKind, state.buildPct / 100, state.buildOwed);
-    const more = state.sites.map((site) =>
-      buildMark(site.kind as PlateKind, site.pct / 100, site.owed),
-    );
-    const tops = markTops(radius, null, built, more);
-    const siteSprites = this.siteBuilds[id] ?? [];
-    siteSprites.forEach((sprite, i) => {
-      const mark = more[i];
-      const top = tops.more[i];
-      sprite.set(mark === undefined ? null : buildMarkSpec(mark));
-      if (mark !== undefined && top !== undefined) sprite.position.set(0, top);
-      sprite.visible = mark !== undefined && !this.supplyMode;
-    });
-    build.set(built === null ? null : buildMarkSpec(built));
-    if (built !== null && tops.build !== null) build.position.set(0, tops.build);
-    build.visible = built !== null && !this.supplyMode;
   }
 }
 

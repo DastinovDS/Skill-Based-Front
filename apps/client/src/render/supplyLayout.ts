@@ -1,152 +1,16 @@
 /**
- * What the «Supply» map layer draws (DEC-28, item 8), as plain data from one snapshot. Pure
- * functions, no PixiJS; the client computes nothing about supply: it reads the own packets (their
- * `path` is the server's), the own warehouses, the front markers and the starvation timers the
- * view carries. The enemy shows only as territory (the map view) and as presence here (DEC-04,
- * DEC-17): no warehouse, no packet, no marker of the opponent is in a view at all, and this layer
- * does not look for them.
+ * What the «Supply» map layer draws (DEC-43), as plain data from one snapshot. Pure functions, no
+ * PixiJS; the client computes nothing about supply: it reads the own packets (their `path` is the
+ * server's) and the flow fields the view carries (`flowLayout.ts`). The enemy shows only as
+ * territory (the map view) and as presence here (DEC-04, DEC-17): no warehouse, no packet of the
+ * opponent is in a view at all, and this layer does not look for them.
  */
-import type { MapFile, PlayerId, View } from '../protocol.gen.ts';
-
-/** An own supply line: the drawn lines were removed (#894): stage 2 deletes this. */
-type LineView = { readonly id: number; readonly path: readonly number[] };
+import type { MapFile, View } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
-
-/**
- * Charges moving along one road in one direction: the sum over the own packets whose remaining
- * route (the road they are on, then the server's `path`) uses it. Flows to one city may come by
- * different roads (the automatics goes round a busy road); each road has an arrow of its own.
- */
-export interface SupplyFlow {
-  readonly edge: number;
-  readonly from: number;
-  readonly to: number;
-  readonly charges: number;
-  /** A one-off transfer (DEC-18, item 6), drawn dashed; the automatics is solid. */
-  readonly transfer: boolean;
-  /**
-   * Economy v2 (DEC-41, item 3): a leg of the own supply lines drawn by the player, not packets;
-   * `charges` is then the number of lines that use the leg.
-   */
-  readonly line?: boolean;
-  /**
-   * A leg of the own lines left in the background (#672): another line is lit (the pointer rests on
-   * the menu entry that removes it), so this one is drawn faint, without its number.
-   */
-  readonly dim?: boolean;
-  /**
-   * Economy v2 (#674): the lines of the bundle that are in front, when the bundle also carries
-   * background ones (`charges` counts them all): the leg is drawn once, lit, with the number.
-   */
-  readonly lit?: number;
-}
-
-/** The warehouse of an own city: charges held and the capacity of the warehouse. */
-export interface SupplyStock {
-  readonly node: number;
-  readonly stock: number;
-  readonly cap: number;
-}
-
-/** A front marker (`marker` 0 or 1) standing in an own city. */
-export interface SupplyMarker {
-  readonly marker: number;
-  readonly node: number;
-}
-
-/** An own city cut off from the capital: ticks until its garrison next starves (DEC-19). */
-export interface SupplyCut {
-  readonly node: number;
-  readonly ticks: number;
-}
 
 /** Where the enemy is known to be present now (no numbers: the view gives none here). */
 export type SupplyPresence =
   { readonly kind: 'node'; readonly id: number } | { readonly kind: 'edge'; readonly id: number };
-
-/** An own road with both ends in own cities: the supply runs there, drawn as a pipe of its level (#429). */
-export interface SupplyPipe {
-  readonly edge: number;
-  readonly a: number;
-  readonly b: number;
-  /** The road level 1..3 (the wire `width`, DEC-22); the bore of the pipe. */
-  readonly level: number;
-}
-
-/** A road between an own city and a place that is not own: supply stops at its border point. */
-export interface SupplyBulkhead {
-  readonly edge: number;
-  readonly a: number;
-  readonly b: number;
-}
-
-export interface SupplyScene {
-  readonly pipes: readonly SupplyPipe[];
-  readonly bulkheads: readonly SupplyBulkhead[];
-  /** The level of every road the view knows, by road id (a flow on a road without a pipe uses it). */
-  readonly levels: ReadonlyMap<number, number>;
-  readonly flows: readonly SupplyFlow[];
-  readonly stocks: readonly SupplyStock[];
-  readonly markers: readonly SupplyMarker[];
-  readonly cut: readonly SupplyCut[];
-  readonly presence: readonly SupplyPresence[];
-  /** Economy v2: the own factories (DEC-41, item 2), marked on the layer since the city marks hide. */
-  readonly factories: readonly number[];
-  /**
-   * Economy v2 (#672): the lines in front are the ones the player looks at (of the selected node,
-   * or the one lit): their legs carry direction chevrons. False while every line shows as usual.
-   */
-  readonly marked: boolean;
-  /** The target of the lit line (its end gets a ring); `null`: no line is lit. */
-  readonly litTarget: number | null;
-}
-
-/**
- * What the player looks at on the «Supply» layer under economy v2 (#672): `node` an own node that
- * is selected (its supply menu is open, a line is being drawn from it), `line` the line whose entry
- * of the menu the pointer rests on (the entry removes it). `null` for either: nothing.
- */
-export interface LineFocus {
-  readonly node: number | null;
-  readonly line: number | null;
-}
-
-export const NO_LINE_FOCUS: LineFocus = { node: null, line: null };
-
-/** The own lines split for the picture: `front` drawn as usual, `back` faint, the rest hidden. */
-export interface LineSplit {
-  readonly front: readonly LineView[];
-  readonly back: readonly LineView[];
-  /** The front lines are the ones looked at: they get the direction chevrons. */
-  readonly marked: boolean;
-  /** The lit line, if one is. */
-  readonly lit: LineView | null;
-}
-
-/** A line starts at `node` (its factory) or ends there (its target; a hub factory may be both). */
-const touches = (line: LineView, node: number): boolean =>
-  line.path[0] === node || line.path[line.path.length - 1] === node;
-
-/**
- * Which own lines the layer shows and how (#672, DEC-42). A selected factory shows the lines that
- * start there (and, a hub, the ones that bring it charges); a selected target the lines into it
- * (a node without lines filters nothing: every line shows, unmarked). A lit
- * line goes in front of the shown ones, the others of them go to the background. The paths are
- * the server's (`View.lines`); nothing about supply is computed here.
- */
-export function splitLines(lines: readonly LineView[], focus: LineFocus): LineSplit {
-  const own = focus.node === null ? [] : lines.filter((line) => touches(line, focus.node ?? -1));
-  const shown = own.length > 0 ? own : lines;
-  const lit =
-    focus.line === null
-      ? undefined
-      : (shown.find((line) => line.id === focus.line) ??
-        lines.find((line) => line.id === focus.line));
-  if (lit !== undefined) {
-    return { front: [lit], back: shown.filter((line) => line !== lit), marked: true, lit };
-  }
-  return { front: shown, back: [], marked: own.length > 0, lit: null };
-}
 
 /** `edge id` of the road between two nodes, by the ends of the map's edges. */
 export type EdgeIndex = ReadonlyMap<string, number>;
@@ -160,119 +24,14 @@ export function edgeIndex(map: MapFile): EdgeIndex {
   return index;
 }
 
-/** Own packets as flows: charges per road and direction, in a stable order (road, from, transfer). */
-export function supplyFlows(view: View, index: EdgeIndex): SupplyFlow[] {
-  const sums = new Map<string, SupplyFlow>();
-  for (const packet of view.packets) {
-    const nodes = [packet.from_node, ...packet.path];
-    for (let i = 1; i < nodes.length; i++) {
-      const from = nodes[i - 1];
-      const to = nodes[i];
-      if (from === undefined || to === undefined) continue;
-      // The first leg is the road the packet is on now; the rest are the server's route.
-      const edge = i === 1 ? packet.edge : index.get(pairKey(from, to));
-      if (edge === undefined) continue;
-      const key = `${String(edge)}:${String(from)}:a`; // no transfers: removed (#894): stage 2 deletes this
-      const prev = sums.get(key);
-      sums.set(key, {
-        edge,
-        from,
-        to,
-        charges: (prev?.charges ?? 0) + packet.charges,
-        transfer: false,
-      });
-    }
-  }
-  return [...sums.values()].sort(
-    (a, b) =>
-      a.edge - b.edge || a.from - b.from || Number(a.transfer) - Number(b.transfer) || a.to - b.to,
-  );
-}
-
 /**
- * Economy v2 (DEC-41, item 3): the own supply lines as flows, one per road and direction they use,
- * `charges` the number of lines on it (lines never merge, but they share a road). The path is the
- * server's (`LineView.path`: the drawn one, or the reroute after a break).
+ * The places where the enemy is seen now: a node or a road half seen (not in fog), with an enemy in
+ * it. A fogged place keeps an older sighting (a ghost of the normal map), which this layer does not
+ * draw.
  */
-export function lineBundles(
-  front: readonly LineView[],
-  back: readonly LineView[],
-  index: EdgeIndex,
-): SupplyFlow[] {
-  // One bundle per road and direction (#674): the lines of a factory share roads, and a leg that
-  // carries both looked-at and background lines is drawn once, lit, not twice on top of itself.
-  const lit = new Map<string, number>();
-  for (const flow of lineFlows(front, index))
-    lit.set(`${String(flow.edge)}:${String(flow.from)}`, flow.charges);
-  const all = lineFlows([...back, ...front], index);
-  return all
-    .map((flow): SupplyFlow => {
-      const n = lit.get(`${String(flow.edge)}:${String(flow.from)}`) ?? 0;
-      if (n === 0) return back.length > 0 ? { ...flow, dim: true } : flow;
-      return n === flow.charges ? flow : { ...flow, lit: n };
-    })
-    .sort(
-      (a, b) =>
-        Number(b.dim === true) - Number(a.dim === true) || a.edge - b.edge || a.from - b.from,
-    );
-}
-
-/** The flows of `lines` per road and direction, `charges` the lines on it (see `lineBundles`). */
-export function lineFlows(lines: readonly LineView[], index: EdgeIndex, dim = false): SupplyFlow[] {
-  const sums = new Map<string, SupplyFlow>();
-  for (const line of lines) {
-    for (let i = 1; i < line.path.length; i++) {
-      const from = line.path[i - 1];
-      const to = line.path[i];
-      if (from === undefined || to === undefined) continue;
-      const edge = index.get(pairKey(from, to));
-      if (edge === undefined) continue;
-      const key = `${String(edge)}:${String(from)}`;
-      const prev = sums.get(key);
-      sums.set(key, {
-        edge,
-        from,
-        to,
-        charges: (prev?.charges ?? 0) + 1,
-        transfer: false,
-        line: true,
-        ...(dim ? { dim: true } : {}),
-      });
-    }
-  }
-  return [...sums.values()].sort((a, b) => a.edge - b.edge || a.from - b.from);
-}
-
-const clampLevel = (width: number): number => Math.min(3, Math.max(1, Math.round(width)));
-
-/**
- * Everything the layer shows of the snapshot `view` for the player `me`. `edges`: the ends of the
- * roads of the map by road id (the view has the level of a road, not its ends).
- */
-export function supplyScene(
-  view: View,
-  me: PlayerId,
-  index: EdgeIndex,
-  edges: readonly { readonly a: number; readonly b: number }[] = [],
-  focus: LineFocus = NO_LINE_FOCUS,
-  provinceWarehouse = 0,
-): SupplyScene {
-  const stocks: SupplyStock[] = [];
-  const cut: SupplyCut[] = [];
+export function presenceOf(view: View): SupplyPresence[] {
   const presence: SupplyPresence[] = [];
   for (const node of view.nodes) {
-    if (node.owner === me) {
-      // An own city has a warehouse to show (`warehouse_cap`). An own province has one only under
-      // economy v2 (DEC-41, item 13): the view leaves its `warehouse_cap` null, the capacity is
-      // `ruleset_public.city_upgrades.warehouse_province` (0 under v1: none).
-      const cap = node.warehouse_cap ?? (provinceWarehouse > 0 ? provinceWarehouse : null);
-      if (node.warehouse !== null && cap !== null) {
-        stocks.push({ node: node.id, stock: node.warehouse, cap });
-      }
-      if (node.starve_in !== null) cut.push({ node: node.id, ticks: node.starve_in });
-    }
-    // Presence is told for a place seen now; a fogged place keeps an older sighting (a ghost of
-    // the normal map), which this layer does not draw.
     if (node.detail !== 'fog' && node.seen !== null && node.seen.enemy_modes.length > 0) {
       presence.push({ kind: 'node', id: node.id });
     }
@@ -285,41 +44,7 @@ export function supplyScene(
       presence.push({ kind: 'edge', id: edge.id });
     }
   }
-  const levels = new Map<number, number>();
-  const pipes: SupplyPipe[] = [];
-  const bulkheads: SupplyBulkhead[] = [];
-  for (const edge of view.edges) {
-    const level = clampLevel(1); // roads have no levels: removed (#894): stage 2 deletes this
-    levels.set(edge.id, level);
-    const ends = edges[edge.id];
-    if (ends === undefined) continue;
-    const a = view.nodes[ends.a]?.owner;
-    const b = view.nodes[ends.b]?.owner;
-    if (a === me && b === me) pipes.push({ edge: edge.id, a: ends.a, b: ends.b, level });
-    else if (a === me || b === me) bulkheads.push({ edge: edge.id, a: ends.a, b: ends.b });
-  }
-  const factories = view.nodes
-    .filter((node) => node.owner === me && node.factory === true)
-    .map((node) => node.id);
-  const markers: SupplyMarker[] = [];
-  // No front markers: removed (#894): stage 2 deletes this
-  // Economy v2: the lines the player drew are the flows (the background ones first, so the front
-  // ones lie over them); the packets on them glide as dots.
-  const lines: readonly LineView[] = []; // no drawn lines: removed (#894): stage 2 deletes this
-  const split = lines.length > 0 ? splitLines(lines, focus) : null;
-  return {
-    pipes,
-    bulkheads,
-    levels,
-    flows: split === null ? supplyFlows(view, index) : lineBundles(split.front, split.back, index),
-    stocks,
-    markers,
-    cut,
-    presence,
-    factories,
-    marked: split?.marked ?? false,
-    litTarget: split?.lit?.path[split.lit.path.length - 1] ?? null,
-  };
+  return presence;
 }
 
 // --- Lanes ------------------------------------------------------------------------------

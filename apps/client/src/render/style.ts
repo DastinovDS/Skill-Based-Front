@@ -133,12 +133,12 @@ export const STAMP_ROAD_CLEARANCE = 12;
 /** The snow cap of a mountain stamp. */
 export const SNOW_ALPHA = 0.45;
 
-// --- Roads, level 1..3 = the number of lanes (ui-style 26, R1 "Lanes", #345) ---------------------
-// The level reads without colour: one, two or three parallel lanes. An own (internal) road has
-// solid light lanes on a band of the owner's colour; a buffer road (the ends have different
+// --- Roads: a lane (ui-style 26, R1 "Lanes", #345) -----------------------------------------------
+// A road reads without colour. An own (internal) road has
+// a solid light lane on a band of the owner's colour; a buffer road (the ends have different
 // owners, or one of them none) has dashed grey lanes on a dark casing and no band; a half in fog
-// has dotted lanes. Nothing here is animated.
-export const ROAD_LANE = { width: 2, gap: 1.7 } as const;
+// has a dotted lane. Nothing here is animated.
+export const ROAD_LANE = { width: 2 } as const;
 /** The lanes and the band under them of a road between two cities of one owner. */
 export const ROAD_OWN = {
   lane: 0xe6edf3,
@@ -164,15 +164,6 @@ export const ROAD_FOG = {
   casingAlpha: 0.3,
   casing: 3,
 } as const;
-/** Width of the lanes of a road of `level` (1..3): `n` lanes and the gaps between them. */
-export function roadLanesWidth(level: number): number {
-  const lanes = Math.max(1, Math.round(level));
-  return lanes * ROAD_LANE.width + (lanes - 1) * ROAD_LANE.gap;
-}
-/** The outer width of the casing or band of an own road of `level`: the tape of a road is laid over it. */
-export function roadSpan(level: number): number {
-  return roadLanesWidth(level) + ROAD_OWN.casing;
-}
 // --- Cities (9.4) -------------------------------------------------------------------------------
 /** Radius when the capacity is not known (a map without a snapshot). */
 export const NODE_RADIUS = 14;
@@ -186,14 +177,11 @@ export const RING_MAX_SEGMENTS = 10;
 
 /** The warehouse bar under the ring: one 5 x 4 segment per unit of capacity (6 apart). */
 export const BAR_SEGMENT = { width: 5, height: 4, pitch: 6, pad: 1 } as const;
-export const BAR_BASE = { color: BG, radius: 2 } as const;
 export const BAR_GAP = 9;
 /**
- * A warehouse place that is only room (a frame) or a level not built yet (dashed), inside the same
- * 5 x 4 cell as a charge (C1, ui-style 9.4): a charge is filled, the other two are told by the outline.
+ * A warehouse place that is only room (a frame), inside the same 5 x 4 cell as a charge (C1, ui-style 9.4).
  */
 export const PLACE_FRAME = { width: 1, color: SEGMENT_EMPTY } as const;
-export const PLACE_DASHED = { width: 0.9, color: PAPER, alpha: 0.5, dash: 1.4, gap: 1.4 } as const;
 /**
  * A province (DEC-23, PB "Pale dot", #431, ui-style 35): a small solid dot of `dot` radius in a pale
  * tint of the owner (`lighten` of the owner's colour, no dark plate, so no centre that reads as a
@@ -270,8 +258,7 @@ export const VP_BADGE_LIFT = 1;
 // A group is a helmet (`units/helmet.ts`): own Rim facing right, the opponent's Cut facing left. Its
 // size steps with the number of units; the share of charged units fills the dome from the bottom
 // (`charged / units` of its height), so the charge reads as a level. An opponent without numbers
-// and a memory are dashed with "?". The mode "Defense" is a shield disc at the top left corner
-// ("Attack" is not drawn); the top right carries the badges.
+// and a memory are dashed with "?"; the top right carries the badges.
 
 export const PLATE_FILL = 0x161b22;
 export const GLYPH_COLOR = PAPER;
@@ -294,7 +281,6 @@ export const UNIT_QUESTION_FONT_SIZE = 15;
 export const UNIT_MIN_SIDE_PX = 20;
 export const UNIT_MIN_HIT_PX = 28;
 export const UNIT_LABEL = { fill: PLATE_FILL, alpha: 0.92, padX: 4, height: 13, gap: 3 } as const;
-export const SHIELD_BADGE_SCALE = 0.9;
 /**
  * The chevron badges (#791, ui-style 32): `size` is the side of a mark in world units on the map
  * (in px in the arena, `chipSize`); on screen a map mark is at least `minPx` (the exception to the
@@ -315,36 +301,6 @@ export const BADGE = {
   font: 1.05,
   minFont: 9,
 } as const;
-/**
- * The counter of "Defense" (DEC-30, #349, D1 "Diamond pips"; chevrons since #797): a capsule of bonus
- * chevrons beside the shield badge, a green one for each bonus gathered and a hollow one for room up to the cap. Above
- * `maxPips` places the row turns into the form of the arena stock, "filled x2, hollow x6", with the
- * numbers as text of `fontSize`. `gap`: the capsule starts this far from the middle of the badge.
- */
-export const DEFENSE_PIPS = {
-  maxPips: 6,
-  radius: 4,
-  /** Half the size of the chevrons of the numbers form. */
-  smallRadius: 3.4,
-  pitch: 8.6,
-  /** The first chevron's centre from the capsule's near end. */
-  inset: 6.8,
-  /** The capsule is wider than the row of chevrons by this much. */
-  padding: 5,
-  height: 15,
-  gap: 8,
-  rim: 1.2,
-  plateAlpha: 0.96,
-  fontSize: 10,
-  /** Width of one character of the numbers, for the width of the capsule. */
-  charWidth: 6,
-} as const;
-/**
- * The marks of a city on its left (L1 "Left column", #349): the barracks over the "Defense" signs,
- * one column outside the capacity ring, `step` apart, never smaller than `iconPx` on screen.
- */
-export const CITY_COLUMN = { step: 19, clear: 1.5, iconPx: 16, badgeRadius: 9 } as const;
-
 // --- The Engraved pieces (#847, part 2 of #829; ui-style 52 III to 57) ------------------------------
 // Line and hatching on the dark plate, every coloured mark on a dark casing, no shadow and no glow;
 // a charge is solid against hatched or hollow, so the state reads in grey. World units at 100 %.
@@ -395,7 +351,6 @@ export const LOZENGE = {
   hollow: 4.7,
   line: 0.9,
   lineAlpha: 0.92,
-  lockedAlpha: 0.45,
   pitch: 8.8,
   groupGap: 3.5,
   drop: 8.5,
@@ -530,13 +485,11 @@ export const HELMET_SELECT = {
 
 /**
  * A packet of the automatic supply, Engraved (#858; mockup `packet`): a square of the owner's colour
- * on a dark casing (`casing` wide), an ivory outline at `outline`, turned along its road; a one-off
- * transfer is a bigger square with a double outline. An opponent one (a replay shows both) has a
+ * on a dark casing (`casing` wide), an ivory outline at `outline`, turned along its road. An opponent one (a replay shows both) has a
  * dark centre.
  */
 export const PACKET_SIDE = 6;
 export const PACKET_ENGRAVED = { casing: 9.2, outline: 8, ink: 0.8 } as const;
-export const PACKET_TRANSFER = { side: 11, ring: 15, ringWidth: 1.2, outline: 1.6 } as const;
 /** Inside this distance past a city rim a packet shrinks and fades into the city icon. */
 export const PACKET_FADE_MARGIN = 8;
 export const PACKET_MIN_SCALE = 0.3;
@@ -587,7 +540,8 @@ export const ETA_MARK = {
   /** The seconds start this far from the centre of the disc (past its rim). */
   textOffset: 22,
   /** The disc stands this far off the road (past the half width of the widest road). */
-  roadGap: 5,
+  /** The disc keeps this far from the axis of the road (half the width of a road with its casing, and a margin). */
+  roadGap: 11.5,
   /** A city on the way is cleared by this much more than its ring: its VP badge sits above it. */
   badgeClear: 14,
 } as const;
@@ -610,40 +564,8 @@ export const BONUS_MARK = {
   /** The pill's lower edge stands this far above the reach ring of the city. */
   lift: 2,
 } as const;
-export const SELECT_WIDTH = 3;
 /** An order sent and not yet seen in a snapshot: dashed, see-through. */
 export const ORDER_GHOST_ALPHA = 0.85;
-/**
- * Road pick (key U, DEC-16): the roads a click would upgrade carry a dashed band.
- */
-export const PICK_BAND = { extra: 6, dash: 10, gap: 7, alpha: 0.85 } as const;
-
-// --- Road builds (DEC-16, DEC-28 item 7; R1, #345) ----------------------------------------------
-// A road being built carries a hazard tape under its lanes: stripes of the warning colour on a
-// dark band, the part that is done is a solid band over it. A plate with the level change ("1 to 2")
-// sits in the middle of the road; an own build also shows the time left under the plate, `m:ss`.
-
-export const ROAD_TAPE = {
-  /** The tape is this much wider than the casing of the road. */
-  extra: 5,
-  /** One warning stripe and the dark gap after it, along the road. */
-  period: 11,
-  stripe: 5.5,
-  base: { color: BG, alpha: 0.8 },
-  stripeColor: { color: WARN, alpha: 0.9 },
-  done: { color: WARN, alpha: 0.55 },
-} as const;
-export const BUILD_PLATE = {
-  width: 34,
-  height: 16,
-  radius: 8,
-  stroke: { width: 1.5, color: WARN },
-  fontSize: 11,
-  /** The time left, under the plate. */
-  timeGap: 12,
-} as const;
-export const BUILD_TIME_FONT_SIZE = 10;
-
 // --- Fight, bounce, capture (9.9) ----------------------------------------------------------------
 /** The loss numbers rise this many world units while they stay (`fightFx.ts`: how long). */
 export const NUMBERS_RISE = 12;
@@ -809,9 +731,8 @@ export const GHOST_CP = {
 } as const;
 
 // --- The «Supply» layer (DEC-28, item 8) ---------------------------------------------------------
-// A flat, minimal picture: the territory is a stronger flat tint than on the normal map, an own
-// road is a pipe whose bore is its level (#429), and only what supply is about is drawn on top.
-// Opposite flows on one road use opposite halves of the pipe.
+// A flat, minimal picture: the territory is a stronger flat tint than on the normal map, and only
+// what supply is about is drawn on top (the canals of the flow, DEC-43).
 
 /**
  * The «Supply» view, "Canal" (#858; #829 rounds 3 to 5, ui-style 54f): the map keeps its picture; the
@@ -834,78 +755,6 @@ export const FLOW_LAYER = {
   pocketHatch: { period: 5, width: 1.6, alpha: 0.5, grow: 3 },
   plate: { height: 16, padX: 6, radius: 5, lift: 18 },
 } as const;
-/**
- * The pipes of the «Supply» layer (#429, variant B "Pipes"): the level of an own road is the bore of
- * its pipe (three widths, never a hue); a pipe with a flow is filled and its dashes run in the
- * direction of the flow (`speed`, units a second), a valve cap marks the destination and the volume
- * is a number lying along the pipe (`labelLift` above it). `inset` keeps the pipe off the city.
- */
-export const SUPPLY_PIPE = {
-  bore: [7, 10, 13],
-  /** The wall of the pipe on each side of its inside. */
-  wall: 1.5,
-  /** The dark casing round the wall, per side. */
-  casing: 1.7,
-  casingAlpha: 0.9,
-  wallColor: 0x566982,
-  idleColor: 0x18202c,
-  activeColor: 0x1d4e91,
-  fillAlpha: 0.55,
-  dash: 4,
-  gap: 8,
-  speed: 22,
-  inset: 2,
-  /** A flow shorter than this (between the city rims) gets no valve and no number. */
-  minFlow: 16,
-  valve: { outer: { length: 8, minWidth: 8 }, inner: { length: 5.5, minWidth: 5 } },
-  labelLift: 5.5,
-  labelFont: 11,
-  /** Where several numbers share a pipe they sit this far apart along it. */
-  labelGap: 22,
-} as const;
-/** A packet on its pipe: a circle growing with its charges; a transfer is a square (a shape, not a hue). */
-export const SUPPLY_PACKET = {
-  radius: 3.2,
-  perCharge: 0.5,
-  transferSide: 10,
-  outline: 1.3,
-} as const;
-/** The front marker: a ring round the city and a badge with its number above it. */
-export const SUPPLY_MARKER = {
-  ring: 8,
-  ringWidth: 3,
-  badge: { radius: 8, lift: 14 },
-  font: 11,
-} as const;
-/** A cut-off city (DEC-19): hatched, a dashed ring and the time to the next starvation. */
-/** Economy v2 (DEC-41, item 6): the stroke of the supply line being drawn. */
-export const SUPPLY_DRAFT = { width: 4 } as const;
-/**
- * Economy v2 (#672): the own lines the player looks at (of the selected node, or the one whose
- * «remove» entry the pointer rests on) and the rest. A background line keeps `dimAlpha` of its
- * opacity; a looked-at leg carries chevrons pointing from the source to the target (a shape, not a
- * hue: they read in grey and with "less motion", when the dashes stand still), one per `every`
- * units of the leg; the end of the lit line gets a ring `ring` off the rim of the city.
- */
-export const SUPPLY_LINE = {
-  dimAlpha: 0.35,
-  chevron: { half: 4.6, depth: 4, width: 2.4, casing: 1.7, every: 34 },
-  ring: 7,
-} as const;
-export const SUPPLY_CUT = {
-  gap: 9,
-  width: 2.6,
-  dash: 3,
-  gapDash: 4,
-  hatchPeriod: 5,
-  hatchWidth: 1.6,
-  hatchAlpha: 0.55,
-  pill: 11,
-} as const;
-/** The number plate (the badge of the time of a cut-off city). */
-export const SUPPLY_FLOW_LABEL = { fontSize: 11, padX: 4, height: 14, radius: 4 } as const;
-/** A bulkhead on a buffer road at its border point: supply stops there. */
-export const SUPPLY_BULKHEAD = { half: 5, width: 1.5, casing: 3.4, color: 0xaab2bd } as const;
 /** The mark of the enemy presence: a hollow enemy helmet `side` times `HELMET_SCALE` wide, no number. */
 export const SUPPLY_PRESENCE = { side: 12, width: 2.2, angle: 45, gap: 9 } as const;
 

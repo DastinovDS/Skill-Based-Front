@@ -64,16 +64,12 @@ function startPick(c: OrderController): void {
   c.chooseCity('fortify');
 }
 
-describe('the rules: mvp-4 has road fortifications, the others have none', () => {
-  it('offers the sector in the menu of a city and of a province, only with the feature', () => {
-    const on = { enabled: false, warehouse_max_level: 0 };
-    expect(cityChoices(on, null, true, false, false, true)).toContain('fortify');
-    expect(cityChoices(on, null, true, false, false, false)).not.toContain('fortify');
-    // A province has no bunker in mvp-4, but its menu holds this one.
-    expect(cityChoices(on, null, true, true, false, true)).toEqual(['fortify']);
-    expect(cityChoices(on, null, true, true, false, false)).toEqual([]);
-    // Without economy v2 nothing changes.
-    expect(cityChoices(on, null, false, false, false, true)).not.toContain('fortify');
+describe('road fortifications: the menu of a city and of a province', () => {
+  it('offers the sector in the menu of a city and of a province while a road has no line', () => {
+    expect(cityChoices(null, false, false, true)).toContain('fortify');
+    expect(cityChoices(null, false, false, false)).not.toContain('fortify');
+    expect(cityChoices(null, true, false, true)).toEqual(['fortify']);
+    expect(cityChoices(null, true, false, false)).toEqual([]);
   });
 });
 

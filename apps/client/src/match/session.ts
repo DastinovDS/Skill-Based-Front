@@ -50,10 +50,8 @@ export interface MatchContext {
   recruitQueueMax?: number;
   /** `ruleset_public.city_upgrades.warehouse_province`: the places of an own province warehouse (DEC-41, item 13). */
   provinceWarehouse?: number;
-  /** `ruleset_public.city_upgrades` when enabled (DEC-26): the city build mark. */
+  /** `ruleset_public.city_upgrades` (DEC-26): the city build mark. */
   cityUpgrades?: CityDevelopment | null;
-  /** `ruleset_public.build.ticks_per_level`: the part done of the tape of an own road build (DEC-28). */
-  roadBuildTicks?: number;
   /** `ruleset_public.fort.build_ticks`: the part done of an own road fortification (DEC-43, item D). */
   fortBuildTicks?: number;
   /** The sounds of the match (#71); absent: silent (tests, the replay). */
@@ -88,14 +86,13 @@ export interface MatchSessionOptions {
 export class MatchSession implements RenderSource {
   readonly orders = new OrderBook();
   tickHz = DEFAULT_TICK_HZ;
-  /** Delays of planned orders and "Defense": the countdown on the arrows. */
+  /** Delays of planned orders: the countdown on the arrows. */
   orderDelays: OrderDelays | undefined;
   roundTicks: number | undefined;
   recruitTicks: number | undefined;
   recruitQueueMax: number | undefined;
   provinceWarehouse: number | undefined;
   cityUpgrades: CityDevelopment | null | undefined;
-  roadBuildTicks: number | undefined;
   fortBuildTicks: number | undefined;
   /** The overcrowding numbers: the pill beside an overcrowded city. */
   capacityTicks: CapacityTicks | undefined;
@@ -160,7 +157,6 @@ export class MatchSession implements RenderSource {
     this.recruitQueueMax = context.recruitQueueMax;
     this.provinceWarehouse = context.provinceWarehouse;
     this.cityUpgrades = context.cityUpgrades;
-    this.roadBuildTicks = context.roadBuildTicks;
     this.fortBuildTicks = context.fortBuildTicks;
     this.capacityTicks =
       context.capacity === undefined
@@ -208,11 +204,6 @@ export class MatchSession implements RenderSource {
   /** Ask where an own group can go (DEC-20); the `reach` answer goes to `onServerMessage`. */
   queryReach(group: string): void {
     this.#connection.queryReach(group);
-  }
-
-  /** Ask for the suggested path of a supply line (#665); the `line_route` answer goes to `onServerMessage`. */
-  queryLineRoute(points: readonly number[]): void {
-    this.#connection.queryLineRoute(points);
   }
 
   /** Queue a command; returns its `seq`. */

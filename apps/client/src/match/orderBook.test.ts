@@ -56,7 +56,7 @@ describe('OrderBook', () => {
     expect(book.ghosts()[0]?.path).toEqual([2, 3, 5]);
     // The ack makes the ghost solid.
     expect(book.ghosts()[0]?.status).toBe('accepted');
-    expect(results).toEqual([{ kind: 'accepted', seq: 1, arriveTick: null, cmd: move('g', 5) }]);
+    expect(results).toEqual([{ kind: 'accepted', seq: 1, cmd: move('g', 5) }]);
 
     book.onRendered(11);
     expect(book.ghosts()).toHaveLength(1);

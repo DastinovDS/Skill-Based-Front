@@ -50,8 +50,6 @@
     interactive?: boolean;
     /** Keep the whole ring inside the window (menus at the pointer or the middle). */
     clamp?: boolean;
-    /** Lines under the ring (a number of the ruleset, a hint). */
-    captions?: readonly { readonly text: string; readonly dim?: boolean }[];
     /** Content of the hole (a slider), HTML. */
     centre?: Snippet;
     /** Radius of the plain disc when there are no sectors. */
@@ -73,7 +71,6 @@
     modal = false,
     interactive = true,
     clamp = true,
-    captions = [],
     centre,
     disc = 0,
     half: halfAngle,
@@ -82,12 +79,10 @@
   const outer = $derived(items.length === 0 ? disc : ring.outer);
   const half = $derived(halfAngle ?? halfFor(items.length));
   const small = $derived(ring.outer - ring.inner < 100);
-  const WIDE = 250;
-  const CAPTION_LINE = 18;
-  // The picture: the ring plus the lines under it; the middle of the ring is the origin.
+  // The picture: the ring; the middle of the ring is the origin.
   const pad = 6;
-  const halfW = $derived(captions.length > 0 ? Math.max(WIDE, outer + pad) : outer + pad);
-  const height = $derived(outer * 2 + pad * 2 + captions.length * CAPTION_LINE + 4);
+  const halfW = $derived(outer + pad);
+  const height = $derived(outer * 2 + pad * 2 + 4);
 
   let root: HTMLElement | undefined = $state();
   // The middle of the menu now; plain data, the frame loop moves the box through the CSSOM.
@@ -112,7 +107,7 @@
       x = Math.min(Math.max(x, halfW), Math.max(halfW, window.innerWidth - halfW));
       y = Math.min(
         Math.max(y, outer + pad),
-        Math.max(outer + pad, window.innerHeight - outer - pad - captions.length * CAPTION_LINE),
+        Math.max(outer + pad, window.innerHeight - outer - pad),
       );
     }
     middle = { x, y };
@@ -233,7 +228,7 @@
   <button type="button" class="backdrop" tabindex="-1" aria-label={closeLabel} onclick={onbackdrop}
   ></button>
 {/if}
-<!-- The box grows out of the middle of the ring (it also holds the captions under it). -->
+<!-- The box grows out of the middle of the ring. -->
 <div
   class="radial"
   class:small
@@ -341,11 +336,6 @@
       <circle class="frame" r={ring.outer + 4} />
       <circle class="frame hole" r={ring.inner - 3} />
     {/if}
-    {#each captions as caption, i (i)}
-      <text class="caption" class:dim={caption.dim === true} y={outer + 22 + i * CAPTION_LINE}>
-        {caption.text}
-      </text>
-    {/each}
   </svg>
   {#if hubName !== null && items.length > 0}
     <!-- The name of the sector under the pointer, in cut capitals over the ring. -->
@@ -585,17 +575,5 @@
     letter-spacing: 0.16em;
     text-transform: uppercase;
     white-space: nowrap;
-  }
-
-  .caption {
-    fill: var(--ink-soft);
-    font: italic 500 14px var(--font-text);
-    paint-order: stroke;
-    stroke: var(--plate);
-    stroke-width: 3px;
-  }
-
-  .caption.dim {
-    fill: var(--ink-dim);
   }
 </style>

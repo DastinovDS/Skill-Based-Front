@@ -22,7 +22,6 @@ import type {
 import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 import { badgesSnapshot } from './badgesScene.ts';
-import { DEFENSE_VIEW, defenseSnapshot } from './defenseScene.ts';
 import {
   BUILD_PAY_VIEW,
   ECONOMY_VIEW,
@@ -34,7 +33,6 @@ import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
 import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
-import { supplySnapshot } from './supplyScene.ts';
 import { FLOW_VIEW, flowSnapshot, stancesSnapshot } from './flowScene.ts';
 import {
   FORTS_GEO_VIEW,
@@ -716,24 +714,6 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     cityUpgrades: true,
   },
   {
-    // The artery moment for the «Supply» view (Tab, `keys` in visual/scenes.ts): pipes of all levels, flows, markers, a cut-off city (#429).
-    id: 'supply',
-    map: 'artery',
-    snapshot: supplySnapshot(bundledMap('artery')),
-    events: [],
-    view: ARTERY_VIEW,
-    cityUpgrades: true,
-  },
-  {
-    // The artery moment with the sign of "Defense" in every state of the counter (#349).
-    id: 'defense',
-    map: 'artery',
-    snapshot: defenseSnapshot(bundledMap('artery')),
-    events: [],
-    view: DEFENSE_VIEW,
-    cityUpgrades: true,
-  },
-  {
     // The artery moment for the terrain map mode (T, `keys` in visual/scenes.ts): patterns and sight signs (#429).
     id: 'terrain',
     map: 'artery',
@@ -761,16 +741,6 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     snapshot: buildPaySnapshot(bundledMap('artery')),
     events: buildPayEvents(),
     view: BUILD_PAY_VIEW,
-    cityUpgrades: true,
-    rules: DEV_RULES_V2,
-  },
-  {
-    // The same moment on the «Supply» layer (Tab, `keys` in visual/scenes.ts): the drawn supply lines.
-    id: 'economy_supply',
-    map: 'artery',
-    snapshot: economySnapshot(bundledMap('artery')),
-    events: [],
-    view: ECONOMY_VIEW,
     cityUpgrades: true,
     rules: DEV_RULES_V2,
   },
@@ -1024,21 +994,17 @@ export function frozenSource(scene: FixtureScene, at?: number, flood?: FloodPin)
     ...(flood === undefined
       ? {}
       : { floodFrom: floodOwners(scene.snapshot, flood), floodHoldMs: flood.ms }),
-    // Economy v2: a plan has no delay, it gathers its bonus (DEC-41, item 10).
-    orderDelays: { planned: 0 }, // a plan gathers its bonus (DEC-41, item 10)
+    // A plan has no delay, it gathers its bonus (DEC-41, item 10).
+    orderDelays: { planned: 0 },
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
     recruitQueueMax: DEV_RULES.recruit.queue_max,
     provinceWarehouse: rules.city_upgrades.warehouse_province,
-    roadBuildTicks: 0, // no road levels (#894)
     fortBuildTicks: rules.fort.build_ticks,
     cityUpgrades:
       scene.cityUpgrades === true
         ? {
             barracks: DEV_RULES.city_upgrades.barracks_ticks,
-            warehouse: 0, // no warehouse levels (#894)
-            warehouseMaxLevel: 0,
-            warehouseGainPerLevel: 0,
             barracksCharges: rules.city_upgrades.barracks_charges,
             factory: rules.factory.build_ticks,
             factoryCharges: rules.factory.cost,

@@ -1,4 +1,4 @@
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics, Text } from 'pixi.js';
 import {
   EDGE_LENGTH,
   type RenderFrame,
@@ -8,14 +8,12 @@ import {
 import type { MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { MapLayers } from './layers.ts';
 import {
-  buildGeometry,
   edgeEnds,
   edgePoint,
   nodePoint,
   roadPosition,
   sideways,
   packetFade,
-  timeLeftLabel,
   type TokenSpot,
 } from './layout.ts';
 import { symbolScale, type Point } from './camera.ts';
@@ -33,13 +31,12 @@ import {
   type Walk,
 } from './walkLayout.ts';
 import { spreadApart, type SpreadItem } from './spread.ts';
-import { buildProgress } from './roadLayout.ts';
 import { knownOfSeen } from './rangeLabel.ts';
 import { terrainBadges } from './badgeLayout.ts';
 import type { SpriteCache } from './bake.ts';
 import { EntityKit, Token } from './shapes.ts';
 import { FigureView } from './figureView.ts';
-import { BUILD_PLATE, BUILD_TIME_FONT_SIZE, ROAD_TAPE, roadSpan, UNIT_LABEL } from './style.ts';
+import { UNIT_LABEL } from './style.ts';
 
 const ORIGIN: Point = { x: 0, y: 0 };
 
@@ -73,16 +70,8 @@ export interface EnemyAnchors {
 interface PacketEntry extends Labelled {
   dot: Graphics;
   label: Text;
-  transfer: boolean;
   stamp: number;
   view: Container;
-}
-
-/** The plate with the level change on a road being built, with the time left for an own build. */
-interface BuildMark {
-  view: Container;
-  level: Text;
-  time: Text;
 }
 
 /**
@@ -90,8 +79,7 @@ interface BuildMark {
  * 9.6): warehouse bars, own groups as helmets (no trail: the arrow of their order is the intent view's), own packets gliding
  * along roads into and out of the city icons, what is known about enemies (a marker per city or
  * road, with numbers only where the snapshot has them), intents of both players as arrows, road
- * builds (DEC-28, item 7: a hazard tape under the lanes of the road with the part done, a plate
- * "1 to 2" in its middle, the time left for an own build). Fight, bounce and capture effects are `EffectsView`.
+ * Fight, bounce and capture effects are `EffectsView`.
  *
  * Two kinds of input. `update(frame)` runs every frame: moving things (groups, packets, order
  * lines). Things that change only with a snapshot (bars, enemy markers, intent
@@ -111,16 +99,9 @@ export class EntityView implements EnemyAnchors {
   private readonly markLayer = new Container({ label: 'figure-marks' });
   private readonly packetLayer = new Container({ label: 'packets' });
   private readonly groupLayer = new Container({ label: 'own-groups' });
-  private readonly buildTape = new Graphics();
-  private readonly buildLayer = new Container({ label: 'builds' });
-  private readonly buildMarks: BuildMark[] = [];
-  private readonly timeStyle: TextStyle;
-  private readonly levelStyle: TextStyle;
   /** Set after the first frame: what appears later fades in. */
   private warm = false;
   private tickHz = 10;
-  /** Ticks a road level takes to build (`ruleset_public.build.ticks_per_level`): the part done. */
-  private buildTicks = 0;
   private cameraScale = 1;
   private readonly groups = new Map<string, GroupEntry>();
   private readonly packets = new Map<string, PacketEntry>();
@@ -171,28 +152,12 @@ export class EntityView implements EnemyAnchors {
       labelResolution,
     );
 
-    this.timeStyle = new TextStyle({
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: BUILD_TIME_FONT_SIZE,
-      fontWeight: '700',
-      fill: 0xf0f6fc,
-      stroke: { color: 0x0d1117, width: 3, join: 'round' },
-    });
-    this.levelStyle = new TextStyle({
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: BUILD_PLATE.fontSize,
-      fontWeight: '700',
-      fill: 0xf0f6fc,
-    });
-    // The tape of a road build lies under the lanes: first in the layer of the roads.
-    layers.layer.roads.addChildAt(this.buildTape, 0);
     layers.layer.groups.addChild(
       this.enemyLayer,
       this.markLayer,
       this.packetLayer,
       this.groupLayer,
     );
-    layers.layer.intents.addChild(this.buildLayer);
   }
 
   setLabelResolution(resolution: number): void {
@@ -203,24 +168,14 @@ export class EntityView implements EnemyAnchors {
     for (const entry of [...this.groups.values(), ...this.packets.values()]) {
       texts.push(...entry.labels());
     }
-    for (const mark of this.buildMarks) texts.push(mark.level, mark.time);
     for (const text of texts) {
       if (text.resolution !== resolution) text.resolution = resolution;
     }
   }
 
-  /** Ticks a road level takes to build (`ruleset_public.build.ticks_per_level`); 0: unknown, no part done. */
-  setBuildTicks(ticks: number): void {
-    if (ticks === this.buildTicks) return;
-    this.buildTicks = ticks;
-    if (this.base !== null) this.drawBuilds(this.base);
-  }
-
-  /** Ticks per second (`ruleset_public.tick_hz`), for the time left of own road builds. */
+  /** Ticks per second (`ruleset_public.tick_hz`), for the fading of the enemy figures. */
   setTickHz(tickHz: number): void {
-    if (tickHz === this.tickHz) return;
     this.tickHz = tickHz;
-    if (this.base !== null) this.drawBuilds(this.base);
   }
 
   /** Drawn centre, side and symbol scale of the own group tokens by id (hit testing, selection). */
@@ -236,11 +191,6 @@ export class EntityView implements EnemyAnchors {
   /** The icons of the own units standing in cities: hit testing and the anchors of menus. */
   cityIcons(): readonly CityIcon[] {
     return this.icons;
-  }
-
-  /** The «Supply» map mode hides the road builds drawn on the road layer (DEC-28, item 8). */
-  setSupplyMode(on: boolean): void {
-    this.buildTape.visible = !on;
   }
 
   nodePoint(node: number): Point | undefined {
@@ -300,7 +250,6 @@ export class EntityView implements EnemyAnchors {
     if (scale === this.cameraScale) return;
     this.cameraScale = scale;
     for (const token of this.enemyTokens()) this.scaleEnemy(token);
-    for (const mark of this.buildMarks) mark.view.scale.set(this.plateScale());
   }
 
   /** An enemy token at its size on screen; its badges keep their own floor (ui-style 32). */
@@ -315,11 +264,6 @@ export class EntityView implements EnemyAnchors {
     const known = this.marks[node];
     if (known === undefined || known.owner !== owner) return [];
     return terrainBadges(known.mark);
-  }
-
-  /** The plate of a build keeps the minimum size of a symbol on screen (ui-style 22). */
-  private plateScale(): number {
-    return symbolScale(BUILD_PLATE.height, this.cameraScale);
   }
 
   /** The walks of the captures (`captureWalks`): the winner walks from the gate into the city. */
@@ -354,20 +298,11 @@ export class EntityView implements EnemyAnchors {
   destroy(): void {
     // Containers and their children first: they reference the shared contexts, which Graphics
     // leaves alone. The two Graphics below own their contexts and are destroyed without options.
-    this.buildTape.destroy();
     this.figures.destroy();
-    for (const container of [
-      this.buildLayer,
-      this.enemyLayer,
-      this.markLayer,
-      this.packetLayer,
-      this.groupLayer,
-    ]) {
+    for (const container of [this.enemyLayer, this.markLayer, this.packetLayer, this.groupLayer]) {
       container.destroy({ children: true });
     }
     this.kit.destroy();
-    this.timeStyle.destroy();
-    this.levelStyle.destroy();
   }
 
   // --- Snapshot-driven part -----------------------------------------------------------------
@@ -387,88 +322,6 @@ export class EntityView implements EnemyAnchors {
     nodes.forEach((node) => {
       this.setEnemyNode(node);
     });
-    this.drawBuilds(base);
-  }
-
-  /**
-   * Road builds (DEC-28, item 7: on the edge, paid with CP): a hazard tape along the whole road
-   * (stripes on a dark band, a solid band over the part that is done) under its lanes, and a plate
-   * "level to level+1" in the middle of the road. An own build (the server sends its `done_tick`)
-   * also shows the time left and the part done; an enemy one in sight only the tape.
-   */
-  private drawBuilds(base: SnapshotMsg): void {
-    const { edges } = base.view;
-    const g = this.buildTape;
-    g.clear();
-    let used = 0;
-    for (const road of edges) {
-      const build = null as { done_tick: number | null } | null; // no road builds: removed (#894): stage 2 deletes this
-      const edge = this.map.edges[road.id];
-      if (build === null || edge === undefined) continue;
-      const from = nodePoint(this.map, edge.a);
-      const to = nodePoint(this.map, edge.b);
-      if (from === undefined || to === undefined) continue;
-      const progress =
-        build.done_tick === null ? 0 : buildProgress(build.done_tick, base.tick, this.buildTicks);
-      const geometry = buildGeometry(
-        from,
-        to,
-        roadSpan(1) + ROAD_TAPE.extra,
-        ROAD_TAPE.period,
-        ROAD_TAPE.stripe,
-        progress,
-      );
-      if (geometry === null) continue;
-      g.poly(geometry.band.flatMap((p) => [p.x, p.y])).fill(ROAD_TAPE.base);
-      for (const stripe of geometry.stripes) g.poly(stripe.flatMap((p) => [p.x, p.y]));
-      g.fill(ROAD_TAPE.stripeColor);
-      if (geometry.done !== null) {
-        g.poly(geometry.done.flatMap((p) => [p.x, p.y])).fill(ROAD_TAPE.done);
-      }
-
-      const mark = this.buildMark(used++);
-      mark.view.position.set(geometry.mid.x, geometry.mid.y);
-      mark.view.visible = true;
-      const change = '1\u21922';
-      if (mark.level.text !== change) mark.level.text = change;
-      const time =
-        build.done_tick === null ? '' : timeLeftLabel(build.done_tick - base.tick, this.tickHz);
-      mark.time.visible = time !== '';
-      if (mark.time.text !== time) mark.time.text = time;
-    }
-    for (let i = used; i < this.buildMarks.length; i++) {
-      const mark = this.buildMarks[i];
-      if (mark !== undefined) mark.view.visible = false;
-    }
-  }
-
-  private buildMark(index: number): BuildMark {
-    let mark = this.buildMarks[index];
-    if (mark === undefined) {
-      const view = this.buildLayer.addChild(new Container({ label: 'build' }));
-      view.scale.set(this.plateScale());
-      view.addChild(new Graphics(this.kit.buildPlate));
-      const level = view.addChild(
-        new Text({
-          text: '',
-          style: this.levelStyle,
-          anchor: 0.5,
-          resolution: this.labelResolution,
-        }),
-      );
-      const time = view.addChild(
-        new Text({
-          text: '',
-          style: this.timeStyle,
-          anchor: { x: 0.5, y: 0 },
-          resolution: this.labelResolution,
-        }),
-      );
-      time.position.set(0, BUILD_PLATE.height / 2 + BUILD_PLATE.timeGap - 4);
-      mark = { view, level, time };
-      this.buildMarks.push(mark);
-    }
-    return mark;
   }
 
   /** The token for what the player knows about enemies in a place; `null`: nothing to show. */
@@ -491,7 +344,7 @@ export class EntityView implements EnemyAnchors {
     // Seen again after a gap (or for the first time): fade in; the very first frame is as it is.
     if ((current === null || !current.view.visible) && this.warm) token.enter();
     const { counts, range } = knownOfSeen(seen);
-    token.set({ owner: this.enemy, modes: seen.enemy_modes, counts, range, inside, badges });
+    token.set({ owner: this.enemy, counts, range, inside, badges });
     token.setLabel(true);
     this.scaleEnemy(token);
     token.view.visible = true;
@@ -554,7 +407,6 @@ export class EntityView implements EnemyAnchors {
       entry.stamp = this.stamp;
       entry.token.set({
         owner: stack.owner,
-        modes: stack.modes,
         counts: { units: stack.units, charged: stack.charged },
         inside: true,
         badges: this.badgesAt(stack.node, stack.owner),
@@ -598,7 +450,6 @@ export class EntityView implements EnemyAnchors {
       entry.stamp = this.stamp;
       entry.token.set({
         owner,
-        modes: [item.group.mode],
         counts: { units: item.group.units, charged: item.group.charged },
       });
       const { location } = item;
@@ -791,9 +642,7 @@ export class EntityView implements EnemyAnchors {
     if (entry === undefined) {
       const view = this.packetLayer.addChild(new Container({ label: `packet-${packet.id}` }));
       const owner = item.owner ?? this.me;
-      const dot = view.addChild(
-        new Graphics(this.kit.packet[owner]), // no transfers: removed (#894): stage 2 deletes this
-      );
+      const dot = view.addChild(new Graphics(this.kit.packet[owner]));
       const label = view.addChild(
         new Text({
           text: '',
@@ -806,7 +655,6 @@ export class EntityView implements EnemyAnchors {
       entry = {
         dot,
         label,
-        transfer: false,
         view,
         stamp: this.stamp,
         labels: () => [label],

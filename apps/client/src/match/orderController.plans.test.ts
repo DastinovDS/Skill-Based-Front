@@ -4,35 +4,21 @@ import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { Command, SnapshotMsg } from '../protocol.gen.ts';
 
-/** An own supply line: the drawn lines were removed (#894): stage 2 deletes this. */
-type LineView = { readonly id: number; readonly path: readonly number[] };
 import { OrderBook } from './orderBook.ts';
 import { OrderController, PLAN_BONUS } from './orderController.ts';
 
-// Economy v2 (DEC-41, #649): the controls of factories, bunkers, supply lines and a gathering plan;
-// the v1 controls (stance, road mode, "Defense", markers, transfers) are off.
+// DEC-41, #649: the controls of a gathering plan, and the «Supply» layer that takes no click.
 const map = DEFAULT_MAP;
 const RULES = DEV_RULES_V2;
 const base = devSnapshot(map, RULES, 30);
 const group = base.view.groups[0];
 if (group?.location.kind !== 'node') throw new Error('the dev snapshot has no group in a node');
 const home = group.location.node;
-const own = new Set(base.view.nodes.filter((n) => n.owner === 0).map((n) => n.id));
-// An own road out of `home`: the first step of a line drawn from it.
-const road = map.edges.find(
-  (e) => (e.a === home && own.has(e.b)) || (e.b === home && own.has(e.a)),
-);
-if (road === undefined) throw new Error('the dev snapshot has no own road out of the home node');
-const next = road.a === home ? road.b : road.a;
-// Another own node: the target of a line whose path the server suggests.
-const far = [...own].find((n) => n !== home && n !== next);
-if (far === undefined) throw new Error('the dev snapshot has three own nodes at least');
 const enemy = base.view.nodes.find((n) => n.owner === 1);
 if (enemy === undefined) throw new Error('the dev snapshot has no enemy node');
 
-/** `factories`: the own nodes that are factories (DEC-42: only they start a line); `home` by default. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
-function setup(_lines: LineView[] = [], factories: readonly number[] = [home]) {
+/** `factories`: the own nodes that are factories; `home` by default. */
+function setup(factories: readonly number[] = [home]) {
   const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map });
   const nodes = base.view.nodes.map((n) =>
     n.owner === 0 ? { ...n, factory: factories.includes(n.id) } : n,
@@ -40,30 +26,24 @@ function setup(_lines: LineView[] = [], factories: readonly number[] = [home]) {
   const snapshot: SnapshotMsg = { ...base, view: { ...base.view, nodes } };
   hud.onSnapshot(snapshot);
   const sent: Command[] = [];
-  const queries: number[][] = [];
   const controller = new OrderController({
     hud,
     map,
     rules: RULES,
     book: new OrderBook(),
     send: (cmd) => sent.push(cmd),
-    queryLineRoute: (points) => queries.push([...points]),
   });
-  return { hud, sent, controller, queries };
+  return { hud, sent, controller };
 }
 
 const down = (code: string) => ({ type: 'keydown', code, shiftKey: false }) as const;
 
-describe('OrderController under economy v2 (DEC-41)', () => {
+describe('OrderController: planned orders and the «Supply» layer (DEC-41)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  it('knows the model from the rules', () => {
-    expect(setup().controller.v2).toBe(true);
   });
 
   it('a Shift click with no wheel step asks for bonus 1; an ordinary order for none (#797)', () => {
@@ -105,15 +85,8 @@ describe('OrderController under economy v2 (DEC-41)', () => {
     ]);
   });
 
-  it('a node that is no factory and no target has no supply menu', () => {
-    const { controller } = setup([], []);
-    controller.key(down('Tab'));
-    controller.click({ kind: 'node', id: home }, false);
-    expect(controller.supplyMenu.current.open).toBe(false);
-  });
-
   it('in the «Supply» mode a click never selects or opens a city, group or stack menu (#678)', () => {
-    const { controller, hud } = setup([], []);
+    const { controller, hud } = setup([]);
     controller.key(down('Tab'));
     expect(controller.supplyMode).toBe(true);
     const hits = [

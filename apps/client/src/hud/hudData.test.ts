@@ -92,17 +92,12 @@ describe('buildHudData: selection', () => {
   });
 });
 
-describe('buildHudData: Defense and plan bonuses of own groups (DEC-30, DEC-29)', () => {
+describe('buildHudData: plan bonuses of own groups (DEC-29)', () => {
   const [own] = fog.view.groups;
   if (own === undefined) throw new Error('the fixture has a group');
   const withGroup = (patch: Partial<typeof own>): SnapshotMsg => ({
     ...fog,
     view: { ...fog.view, groups: [{ ...own, ...patch }] },
-  });
-
-  it('has no bonus for a group that is not in Defense', () => {
-    const data = buildHudData(ctx, withGroup({}), { kind: 'group', id: own.id }, []);
-    expect(data.group?.defense).toBeNull();
   });
 
   it('passes the bonus of a planned order, and 0 for an ordinary order or none', () => {

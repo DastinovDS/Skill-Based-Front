@@ -73,8 +73,6 @@ describe('pickAt, units in a city and the area of a city', () => {
     ids,
     units: ids.length,
     charged: 0,
-    modes: ['attack'],
-    defense: null,
     spot: spot(at.x, at.y, 24),
   });
 

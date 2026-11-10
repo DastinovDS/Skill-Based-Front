@@ -9,8 +9,6 @@
  * `recruit_progress`, `recruit_waiting`, `building`) and `ruleset_public` (`recruit.unit_ticks`,
  * `recruit.queue_max`, `city_upgrades`); nothing about the rules is decided here (AGENTS.md 7.1).
  */
-import type { BuildKind } from '../protocol.gen.ts';
-import { ringRadius } from './cityLayout.ts';
 import { PROGRESS } from './style.ts';
 
 /** What a queue cell shows. `ready`: the unit is made and waits for a place (DEC-25, item 7). */
@@ -99,84 +97,9 @@ export function queueMark(input: QueueInput): QueueMark | null {
   return { ...plate, cells, alert };
 }
 
-/** What a plate builds: a city build (DEC-26) or, under economy v2, a factory or a bunker (DEC-41). */
-export type PlateKind = Exclude<BuildKind, 'road'> | 'factory' | 'fort';
-
-export interface BuildMark {
-  readonly width: number;
-  readonly height: number;
-  readonly kind: PlateKind;
-  /** Width of the growing part inside the cell, whole pixels. */
-  readonly fill: number;
-  /** Left edge of the wide cell from the left of the plate. */
-  readonly cellX: number;
-  /**
-   * Economy v2 (DEC-41, item 7): charges the build still waits for, at most `PROGRESS.owedDots`
-   * shown (one hollow dot each, the cell dashed); 0: paid, the cell fills with the time.
-   */
-  readonly owed: number;
-}
-
-/**
- * The build plate: the badge of the kind (house = barracks, stacked squares = warehouse) and one
- * wide cell filled by `share` (0..1, the part done: from `building.done_tick` and the duration in
- * `ruleset_public.city_upgrades`).
- */
-export function buildMark(kind: PlateKind, share: number, owed = 0): BuildMark {
-  const { cx, radius } = PROGRESS.badge;
-  const cellX = cx + radius + 4;
-  const { width: cw, height: ch } = PROGRESS.buildCell;
-  const width = cellX + cw + PROGRESS.pad;
-  return {
-    width,
-    height: ch + 2 * PROGRESS.pad,
-    kind,
-    fill: owed > 0 ? 0 : fillPixels(share, innerWidth(cw)),
-    cellX,
-    owed: Math.min(PROGRESS.owedDots, Math.max(0, Math.floor(owed))),
-  };
-}
-
 /** Opacity of a pulsing alert ring: `pulse` is 0..1 (`beaconPulse`); with "less motion" it holds still, fully visible. */
 export function alertAlpha(pulse: number, reduced: boolean): number {
   return reduced ? 1 : PROGRESS.alert.low + (1 - PROGRESS.alert.low) * pulse;
-}
-
-/** Where the plates sit: the top edge of each, from the city centre (`null` for the one not shown). */
-export interface MarkTops {
-  readonly queue: number | null;
-  readonly build: number | null;
-  /** Economy v2: the plates of the factory and bunker builds over the first build plate, in order. */
-  readonly more: readonly number[];
-}
-
-/**
- * The queue plate rests just above the capacity ring; the build plate goes above it, or in its place
- * when the city has no queue plate; further build plates (economy v2: a factory, a bunker) stack above.
- */
-export function markTops(
-  radius: number,
-  queue: QueueMark | null,
-  build: BuildMark | null,
-  more: readonly BuildMark[] = [],
-): MarkTops {
-  const bottom = -(ringRadius(radius) + PROGRESS.ringGap);
-  let top = bottom;
-  let queueTop: number | null = null;
-  if (queue !== null) {
-    top -= queue.height;
-    queueTop = top;
-    top -= PROGRESS.gap;
-  }
-  const buildTop = build === null ? null : (queue === null ? bottom : top) - build.height;
-  let next = buildTop === null ? (queue === null ? bottom : top) : buildTop - PROGRESS.gap;
-  const tops: number[] = [];
-  for (const mark of more) {
-    next -= mark.height;
-    tops.push(next);
-    next -= PROGRESS.gap;
-  }
-  return { queue: queueTop, build: buildTop, more: tops };
 }
 
 /**

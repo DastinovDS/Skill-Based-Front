@@ -72,7 +72,7 @@ class Ghost {
       return;
     }
     const { counts, range } = knownOfSeen(memory);
-    this.token.set({ owner: enemy, modes: memory.enemy_modes, counts, range, ghost: true });
+    this.token.set({ owner: enemy, counts, range, ghost: true });
     this.token.setLabel(true);
     this.setScale(symbolScale(this.token.side, cameraScale));
     this.view.alpha = alpha;

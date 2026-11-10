@@ -6,8 +6,7 @@
  */
 import type { Point } from './camera.ts';
 import type { GhostStatus } from './interaction.ts';
-import { vpBadgeAt } from './cityLayout.ts';
-import { barracksAt } from './defenseLayout.ts';
+import { ringRadius, vpBadgeAt } from './cityLayout.ts';
 import { clipToConvex } from './regionLayout.ts';
 import {
   GHOST_CP,
@@ -16,7 +15,16 @@ import {
   GHOST_SHAKE_MS,
   RIBBON,
   RIBBON_ENGRAVED,
+  RING_SEGMENT,
 } from './style.ts';
+
+/**
+ * The middle of the barracks mark on the left of a city at scale 1, just outside the capacity ring:
+ * what the tail of an order keeps clear of (`tailStart`).
+ */
+export function barracksAt(radius: number): { x: number; y: number } {
+  return { x: -(ringRadius(radius) + RING_SEGMENT.base / 2 + 1.5 + 8), y: 0 };
+}
 
 function dist(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y);

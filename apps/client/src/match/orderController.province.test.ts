@@ -37,8 +37,7 @@ function setup(snapshot: SnapshotMsg = base) {
   const menusOpen = (): boolean =>
     controller.cityMenu.current.open ||
     controller.groupMenu.current.open ||
-    controller.stackMenu.current.open ||
-    controller.supplyMenu.current.open;
+    controller.stackMenu.current.open;
   return { hud, controller, sent, menusOpen };
 }
 

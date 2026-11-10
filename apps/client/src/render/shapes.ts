@@ -2,13 +2,11 @@ import { Container, Graphics, GraphicsContext, Text, TextStyle, type RenderLayer
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import {
   chevronBadgeSpec,
-  drawPlaceOutline,
   helmetBackSpec,
   helmetFrontSpec,
   helmetLevelSpec,
 } from './bakedShapes.ts';
-import type { Mode, PlayerId } from '../protocol.gen.ts';
-import type { WarehouseBar } from './cityLayout.ts';
+import type { PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { reducedMotion } from './motion.ts';
 import { EaseTween } from './tween.ts';
@@ -24,11 +22,7 @@ import { badgeFloor, stackBadges, type BadgeMark } from './badgeLayout.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import {
   BADGE,
-  BAR_BASE,
   HELMET_INSIDE,
-  BAR_SEGMENT,
-  BG,
-  BUILD_PLATE,
   CASING,
   COUNT_FONT_SIZE,
   CUT,
@@ -37,49 +31,10 @@ import {
   GLYPH_COLOR,
   PACKET_ENGRAVED,
   PACKET_SIDE,
-  PACKET_TRANSFER,
-  PAPER,
-  SHIELD_BADGE_SCALE,
   UNIT_LABEL,
   UNIT_SIDES,
   ownerColor,
 } from './style.ts';
-
-/** Glyph of a mode, drawn around (0, 0) in a box of about 10 x 10 units. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
-export function drawModeGlyph(g: GraphicsContext, _mode: Mode): GraphicsContext {
-  // Every group attacks (#894): one glyph.
-  return g.poly([-5, 4.5, 0, -5.5, 5, 4.5]).fill(GLYPH_COLOR);
-}
-
-/**
- * The warehouse bar of a city (`warehouseSegments`): a dark base with a small square per unit of
- * capacity, `color` for a charge held, a frame for room, a dashed outline for a level not built
- * yet (C1). The same places as the baked bar of the map (`warehouseBarSpec`), so the stock looks the same in both. `x` is the middle of the bar, `top` its top edge.
- */
-export function drawWarehouseBar(
-  g: Graphics,
-  bar: WarehouseBar,
-  x: number,
-  top: number,
-  color: number,
-): void {
-  if (bar.segments.length === 0) return;
-  g.roundRect(
-    x - bar.width / 2 - 1,
-    top - 1,
-    bar.width + 2,
-    BAR_SEGMENT.height + 4,
-    BAR_BASE.radius,
-  ).fill(BAR_BASE.color);
-  for (const segment of bar.segments) {
-    if (segment.state === 'filled') {
-      g.rect(x + segment.x, top + 1, BAR_SEGMENT.width, BAR_SEGMENT.height).fill(color);
-    } else {
-      drawPlaceOutline(g, x + segment.x, top + 1, segment.state);
-    }
-  }
-}
 
 /**
  * Shapes shared by every token, packet and mark. Like `MapView`, identical shapes share one
@@ -88,14 +43,10 @@ export function drawWarehouseBar(
  */
 export class EntityKit {
   readonly contexts: GraphicsContext[] = [];
-  /** The baked sprites of the tokens (`bakedShapes.ts`): helmets, shields. */
+  /** The baked sprites of the tokens (`bakedShapes.ts`): helmets. */
   readonly sprites: SpriteCache;
   /** A packet of the automatic supply: an engraved square (#858), turned along its road by the view. */
   readonly packet: Readonly<Record<PlayerId, GraphicsContext>>;
-  /** A one-off transfer: a bigger square with a double outline. */
-  readonly packetTransfer: Readonly<Record<PlayerId, GraphicsContext>>;
-  /** The plate with the level change on a road being built. */
-  readonly buildPlate: GraphicsContext;
   readonly textStyle: TextStyle;
   /** The number inside a helmet: dark stroke, so it reads on the fill and the plate. */
   readonly insideStyle: TextStyle;
@@ -127,29 +78,7 @@ export class EntityKit {
           join: 'miter',
         });
       });
-    const transfer = (owner: PlayerId): GraphicsContext =>
-      this.context((g) => {
-        const color = ownerColor(me, owner);
-        const { side, ring, ringWidth, outline } = PACKET_TRANSFER;
-        square(g, side).fill(color).stroke({ width: outline, color: PAPER });
-        if (owner !== me) square(g, side * 0.4).fill(BG);
-        // The second outline, apart from the square: a transfer is told from a packet by its shape.
-        return square(g, ring).stroke({ width: ringWidth, color });
-      });
     this.packet = { 0: packet(0), 1: packet(1) };
-    this.packetTransfer = { 0: transfer(0), 1: transfer(1) };
-    this.buildPlate = this.context((g) =>
-      g
-        .roundRect(
-          -BUILD_PLATE.width / 2,
-          -BUILD_PLATE.height / 2,
-          BUILD_PLATE.width,
-          BUILD_PLATE.height,
-          BUILD_PLATE.radius,
-        )
-        .fill(BG)
-        .stroke(BUILD_PLATE.stroke),
-    );
     this.textStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
       fontSize: COUNT_FONT_SIZE,
@@ -206,11 +135,10 @@ export class EntityKit {
 /**
  * What a token shows. `counts: null`: numbers are unknown (an enemy seen without numbers).
  * `ghost`: a memory of a hidden place, dashed like an unknown one. `inside`: the icon of the units
- * in a city (a little smaller, with a thicker casing, no shield).
+ * in a city (a little smaller, with a thicker casing).
  */
 export interface TokenSpec {
   owner: PlayerId;
-  modes: readonly Mode[];
   counts: { units: number; charged: number } | null;
   /**
    * The range of the units where only that is known («3-5», DEC-21, item 4), already written out
@@ -254,8 +182,7 @@ export function helmetKind(me: PlayerId, owner: PlayerId): HelmetKind {
 /**
  * A unit helmet (9.5, #784, variant Full of #775): own Rim facing right, the opponent's Cut facing
  * left (the body is flipped), the strap everywhere, the charge as a level in the dome with a smooth
- * edge (no dividers), dashed with "?" without numbers and for a ghost, a shield disc for "Defense"
- * at the top left, the badges at the top right, and one number (all the units) in the middle of the
+ * edge (no dividers), dashed with "?" without numbers and for a ghost, the badges at the top right, and one number (all the units) in the middle of the
  * dome. The children are created once; `set` only swaps sprites and visibility, and does nothing
  * when the spec is unchanged.
  */
@@ -272,7 +199,6 @@ export class Token {
   /** The shown height share of the fill: eases toward the one the snapshot gives (#508). */
   private readonly fill = new EaseTween(0);
   private readonly outline: BakedSprite;
-  private readonly shield: BakedSprite;
   /** The badges at the top right corner (#791), in a layer that keeps them `BADGE.minPx` on screen. */
   private readonly badgeLayer = new Container({ label: 'badges', visible: false });
   private readonly badges: BakedSprite[] = [];
@@ -299,14 +225,11 @@ export class Token {
     resolution: number,
   ) {
     // The shapes are baked sprites (U1, #347): the back (shadow, casing, strap, plate), the charge
-    // fill (a crop of the full dome), the light edge of the dome, the shield badge.
+    // fill (a crop of the full dome), the light edge of the dome.
     this.back = kit.sprites.sprite();
     this.level = kit.sprites.sprite();
     this.level.visible = false;
     this.outline = kit.sprites.sprite();
-    this.shield = kit.sprites.sprite();
-    this.shield.scale.set(SHIELD_BADGE_SCALE);
-    this.shield.visible = false;
     this.question = new Text({
       text: '?',
       style: kit.questionStyle,
@@ -317,7 +240,7 @@ export class Token {
     this.count = new Text({ text: '', style: kit.textStyle, anchor: 0.5, resolution });
     this.label.addChild(this.pill, this.count);
     this.body.addChild(this.back, this.level, this.outline);
-    this.view.addChild(this.body, this.question, this.shield, this.label, this.badgeLayer);
+    this.view.addChild(this.body, this.question, this.label, this.badgeLayer);
     // The token stays the parent of its badges (transform, fade, visibility); the render layer
     // only draws them above the outlines of the overlay (#797).
     kit.badgeLayer?.attach(this.badgeLayer);
@@ -469,11 +392,6 @@ export class Token {
     this.showFill();
     if (this.fill.active) this.kit.startEasing(this);
 
-    // The shield of "Defense" sits at the top left of a token on a road (the top right is kept for
-    // the badges of #776). The icon of the units in a city has none: the city's own
-    // column carries the one sign (L1, #349, `defenseView.ts`).
-    this.shield.visible = false; // no «Defense»: removed (#894): stage 2 deletes this
-
     this.drawBadges(spec.badges ?? [], shape.badge);
 
     const text = counts !== null ? countLabel(counts.units) : range;
@@ -528,7 +446,7 @@ export class Token {
    * The helmet (#784, variant Full of #775): own Rim facing right, the opponent's Cut facing left
    * (the body is flipped), the strap everywhere, the charge as a level in the dome with a smooth
    * edge (no dividers), the number of units in the middle of the dome. Returns where the number and
-   * the shield go.
+   * the badges go.
    */
   private drawHelmet(
     spec: TokenSpec,

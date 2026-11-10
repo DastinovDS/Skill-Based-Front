@@ -1,34 +1,12 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { BakeSpec } from './bake.ts';
-import {
-  BUNKER_GLYPH,
-  BUNKER_SLIT,
-  FACTORY_GLYPH,
-  capacityRing,
-  ringRadius,
-  type Arc,
-  type PlaceState,
-} from './cityLayout.ts';
-import { hatchPolygons, innerWidth, type BuildMark, type CellState } from './progressLayout.ts';
+import { capacityRing, ringRadius, type Arc } from './cityLayout.ts';
 import { ARENA_BAR, CHIP, PLATE, lighten, type ChipState } from './fightFx.ts';
-import { dashSegments } from './layout.ts';
 import { circleBox, shadowBox, type Box } from './shading.ts';
 import {
   BAKE_MARGIN,
-  BAR_SEGMENT,
-  BARRACKS_MARK,
   BG,
-  DEFENSE_PIPS,
   FLOW_STARVE,
-  GLYPH_COLOR,
-  PAPER,
-  PLACE_DASHED,
-  PLACE_FRAME,
-  PLATE_FILL,
-  PROGRESS,
-  SEGMENT_EMPTY,
-  SHADOW,
-  SUPPLY_LINE,
   ENEMY,
   FEED,
   YOU,
@@ -48,7 +26,6 @@ import {
   VP,
   VP_LOZENGE,
 } from './style.ts';
-import { counterLayout, type DefensePips } from './defenseLayout.ts';
 import { hatchAcross } from './pieceShapes.ts';
 import {
   helmet,
@@ -66,32 +43,12 @@ import {
   chevronStrokes,
   type BadgeDir,
 } from './badgeLayout.ts';
-import { drawBonusChevron } from './bonusChevron.ts';
 
 // The baked shapes of the map (BL1-1 "Restrained", ui-style 26.3, #347). Each function returns the
 // `BakeSpec` of one look: the key says which, `draw` puts the shape into a scratch container (see
 // `bake.ts`). Everything is drawn around the origin of the sprite; the box leaves room for the shadow.
 
 const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
-
-/**
- * The soft shadow of a shape: its outline `base` px wider, drawn as a few stacked layers (the widest
- * faintest) `SHADOW.dy` below. `trace` adds the path of the shape to the Graphics it is given.
- */
-function shadow(into: Container, trace: (g: Graphics) => void, base = 0): void {
-  for (const { grow, alpha } of SHADOW.layers) {
-    const g = new Graphics();
-    g.y = SHADOW.dy;
-    trace(g);
-    g.fill({ color: 0x000000, alpha });
-    const width = 2 * (base + grow);
-    if (width > 0) {
-      trace(g);
-      g.stroke({ width, color: 0x000000, alpha, join: 'round' });
-    }
-    into.addChild(g);
-  }
-}
 
 const graphics = (into: Container): Graphics => into.addChild(new Graphics());
 
@@ -264,39 +221,6 @@ export function stockColor(kind: CityKind): number {
 }
 
 /**
- * The outline of a warehouse place that holds no charge, in the 5 x 4 cell at (`x`, `y`): a frame
- * for room, a dashed outline for a level not built yet (C1). Drawn inside the cell, so the cell
- * keeps its size whatever the state.
- */
-export function drawPlaceOutline(
-  g: Graphics,
-  x: number,
-  y: number,
-  state: Exclude<PlaceState, 'filled'>,
-): void {
-  const { width, height } = BAR_SEGMENT;
-  if (state === 'frame') {
-    const w = PLACE_FRAME.width;
-    g.rect(x + w / 2, y + w / 2, width - w, height - w).stroke(PLACE_FRAME);
-    return;
-  }
-  const { width: w, color, alpha, dash, gap } = PLACE_DASHED;
-  const [x0, y0, x1, y1] = [x + w / 2, y + w / 2, x + width - w / 2, y + height - w / 2];
-  const corners: Point[] = [
-    { x: x0, y: y0 },
-    { x: x1, y: y0 },
-    { x: x1, y: y1 },
-    { x: x0, y: y1 },
-  ];
-  corners.forEach((from, i) => {
-    const to = corners[(i + 1) % corners.length];
-    if (to === undefined) return;
-    for (const [a, b] of dashSegments(from, to, dash, gap)) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-  });
-  g.stroke({ width: w, color, alpha });
-}
-
-/**
  * The VP badge (Engraved, #847; mockup `vpBadge`): a gilt lozenge, a dark square turned 45 degrees
  * with two gilt squares inside its edge (the number is a Text over it, gilt too).
  */
@@ -317,53 +241,6 @@ export function vpBadgeSpec(): BakeSpec {
       lozenge(g, V.inner).stroke({ width: tools.hair(V.width), color: VP, join: 'miter' });
     },
   };
-}
-
-/**
- * Economy v2 (DEC-41): the factory (item 2) and bunker (item 12) badges, in the language of the
- * barracks badge: a dark disc, the rim in the owner's colour, the glyph in paper (a saw-tooth
- * factory, a low dome with a slit). The opponent's has the light inner ring and a smaller glyph,
- * so the side reads without the hue.
- */
-export function siteMarkSpec(kind: 'factory' | 'fort', rim: number): BakeSpec {
-  const radius = BARRACKS_MARK.radius;
-  const enemy = rim === ENEMY;
-  return {
-    key: `${kind}:${String(rim)}`,
-    box: shadowBox(circleBox(radius + 1), BAKE_MARGIN),
-    draw(into) {
-      shadow(into, (g) => g.circle(0, 0, radius));
-      const g = graphics(into);
-      g.circle(0, 0, radius)
-        .fill(BARRACKS_MARK.fill)
-        .stroke({ ...BARRACKS_MARK.stroke, color: rim });
-      const k = enemy ? BARRACKS_MARK.enemy.house : 1;
-      if (enemy) {
-        g.circle(0, 0, BARRACKS_MARK.enemy.innerRadius).stroke({
-          width: BARRACKS_MARK.enemy.ringWidth,
-          color: PAPER,
-          alpha: BARRACKS_MARK.enemy.ringAlpha,
-        });
-      }
-      drawSiteGlyph(g, kind, 0, 0, k);
-    },
-  };
-}
-
-/** The factory or bunker glyph at (`cx`, `cy`), scaled by `k` (1: the badge of a mark). */
-function drawSiteGlyph(
-  g: Graphics,
-  kind: 'factory' | 'fort',
-  cx: number,
-  cy: number,
-  k: number,
-): void {
-  const shape = kind === 'factory' ? FACTORY_GLYPH : BUNKER_GLYPH;
-  g.poly(shape.flatMap(([x, y]) => [cx + x * k, cy + y * k])).fill(PAPER);
-  if (kind === 'fort') {
-    const { x, y, width, height } = BUNKER_SLIT;
-    g.rect(cx + x * k, cy + y * k, width * k, height * k).fill(BG);
-  }
 }
 
 // --- Helmets (#784, variant Full of #775) ------------------------------------------------------------
@@ -622,76 +499,6 @@ export function helmetChipSpec(state: ChipState, enemy: boolean, color: number):
 /** The stippled outline of a dead chip (mockup `deadChip`): this many ink dots, this big, this faint. */
 const CHIP_STIPPLE = { count: 26, radius: 0.62, alpha: 0.55 } as const;
 
-/** The shield badge of "Defense": a dark disc with a ring in the owner's colour and the shield glyph. */
-export function shieldSpec(color: number, enemy: boolean): BakeSpec {
-  return {
-    key: `shield:${String(color)}:${enemy ? 'e' : ''}`,
-    box: circleBox(9 + 2),
-    draw(into, tools) {
-      // Engraved (#847, mockup `siteSign`): a dark disc on a casing, two fine rings in the side's
-      // colour, the opponent's an ink ring inside them, the ink shield.
-      const g = graphics(into);
-      g.circle(0, 0, 10).fill(CASING);
-      g.circle(0, 0, 9).fill(DARK_PLATE);
-      g.circle(0, 0, 8.6).stroke({ width: tools.hair(0.9), color });
-      g.circle(0, 0, 6.8).stroke({ width: tools.hair(0.9), color });
-      if (enemy) g.circle(0, 0, 5.2).stroke({ width: tools.hair(0.8), color: INK });
-      g.poly([-3.8, -4.2, 3.8, -4.2, 3.8, 0.8, 0, 4.6, -3.8, 0.8]).fill(INK);
-    },
-  };
-}
-
-/**
- * The counter of "Defense" (D1 "Diamond pips", #349; chevrons since #797): the shield badge at the
- * origin and, for an own group with places, a capsule of chevrons to its left (the side of the
- * city's column): green for a bonus gathered, hollow for room. Above `DEFENSE_PIPS.maxPips` places only the two chevrons are
- * baked: the numbers are text laid over them (`counterLayout`). The opponent has the badge alone
- * (`pips: null`): its bonus is never public (DEC-30, item 5; AGENTS.md 4.4).
- */
-export function defenseCounterSpec(
-  color: number,
-  enemy: boolean,
-  pips: DefensePips | null,
-): BakeSpec {
-  const layout = pips === null || enemy ? null : counterLayout(pips);
-  if (layout === null) return shieldSpec(color, enemy);
-  const { gap, height, rim, plateAlpha } = DEFENSE_PIPS;
-  const left = -gap - layout.width;
-  const box: Box = { x: left - 1, y: -height / 2 - 1, width: 9 + 2 - left + 1, height: height + 2 };
-  const badge = circleBox(9 + 2);
-  const union: Box = {
-    x: Math.min(box.x, badge.x),
-    y: Math.min(box.y, badge.y),
-    width: Math.max(box.x + box.width, badge.x + badge.width) - Math.min(box.x, badge.x),
-    height: Math.max(box.y + box.height, badge.y + badge.height) - Math.min(box.y, badge.y),
-  };
-  const key =
-    layout.numbers.length === 0
-      ? layout.pips.map((p) => (p.filled ? 'f' : 'h')).join('')
-      : `n${String(layout.width)}`;
-  return {
-    key: `defense:${String(color)}:${key}`,
-    box: shadowBox(union, BAKE_MARGIN),
-    draw(into) {
-      const capsule = (g: Graphics): void => {
-        g.roundRect(left, -height / 2, layout.width, height, height / 2);
-      };
-      shadow(into, capsule);
-      shadow(into, (g) => g.circle(0, 0, 9));
-      const g = graphics(into);
-      capsule(g);
-      g.fill({ color: PLATE_FILL, alpha: plateAlpha }).stroke({ width: rim, color });
-      // The bonus as chevrons (#797, the badge's chevron up): green for a point gathered, hollow
-      // (a light contour, dark inside) for room, as wide as the pitch allows.
-      for (const pip of layout.pips) {
-        drawBonusChevron(g, left + pip.x, 0.5, pip.radius * 1.75, !pip.filled);
-      }
-      g.circle(0, 0, 9).fill(PLATE_FILL).stroke({ width: 2.5, color });
-      g.poly([-4.5, -5, 4.5, -5, 4.5, 1, 0, 5.5, -4.5, 1]).fill(GLYPH_COLOR);
-    },
-  };
-}
-
 // --- The arena of a fight (AR1 chips, drawn in screen px) --------------------------------------------
 
 /**
@@ -832,190 +639,6 @@ export function octagramSpec(part: OctaPart, enemy: boolean, color: number): Bak
         .stroke({ width: OCTA_LOOK.casing, color: CASING, join: 'miter' });
       const m = half * 0.32;
       g.rect(-m, -m, 2 * m, 2 * m).fill(enemy ? CASING : INK);
-    },
-  };
-}
-
-// --- Progress marks above an own city (variant A "Cells", #439) --------------------------------------
-// The plate of a recruit queue or of a build is one baked sprite per look: the key holds the states of
-// the cells and the whole-pixel width of the growing part, so a unit in production costs one texture per
-// pixel of progress (at most `innerWidth` of them), shared by every city. The origin of a plate is the
-// middle of its top edge. The dashed ring that asks for a look is a sprite of its own (it pulses).
-
-/** A rectangle outline made of dashes (PixiJS has no dashed stroke). */
-function dashedRect(
-  g: Graphics,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  dash: number,
-  gap: number,
-): void {
-  const corners: Point[] = [
-    { x, y },
-    { x: x + width, y },
-    { x: x + width, y: y + height },
-    { x, y: y + height },
-  ];
-  corners.forEach((from, i) => {
-    const to = corners[(i + 1) % corners.length];
-    if (to === undefined) return;
-    for (const [a, b] of dashSegments(from, to, dash, gap)) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-  });
-}
-
-/** The dark plate behind a mark: contrast on any terrain. `x` is its left edge from the sprite origin. */
-function progressPlate(into: Container, x: number, width: number, height: number): void {
-  const { radius, alpha, rim } = PROGRESS.plate;
-  const g = graphics(into);
-  g.roundRect(x, 0, width, height, radius).fill({ color: BG, alpha });
-  g.roundRect(x + 0.5, 0.5, width - 1, height - 1, radius - 0.5).stroke({
-    width: 1,
-    color: 0xffffff,
-    alpha: rim,
-  });
-}
-
-/**
- * One cell of the shared grammar: `slot` a dashed frame, `queued` a frame with a dot, `active` a
- * hatch of `fill` pixels ending in a head line, `ready` solid.
- */
-function drawCell(
-  g: Graphics,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  state: CellState,
-  fill: number,
-  tone: number,
-): void {
-  const { frame, dot, slot } = PROGRESS;
-  const half = frame.width / 2;
-  if (state === 'slot') {
-    dashedRect(
-      g,
-      x + half,
-      y + half,
-      width - frame.width,
-      height - frame.width,
-      slot.dash,
-      slot.gap,
-    );
-    g.stroke({ width: frame.width, color: SEGMENT_EMPTY });
-    return;
-  }
-  const radius = Math.min(2.5, height / 3);
-  g.roundRect(x + half, y + half, width - frame.width, height - frame.width, radius)
-    .fill(state === 'ready' ? tone : BG)
-    .stroke({ width: frame.width, color: tone });
-  if (state === 'queued') {
-    g.circle(x + width / 2, y + height / 2, Math.max(dot.min, height * dot.share)).fill(tone);
-  } else if (state === 'active' && fill > 0) {
-    const ox = x + frame.inset;
-    const oy = y + frame.inset;
-    const inner = height - 2 * frame.inset;
-    for (const poly of hatchPolygons(fill, inner)) {
-      g.poly(poly.map((v, i) => v + (i % 2 === 0 ? ox : oy))).fill(tone);
-    }
-    if (fill < innerWidth(width)) g.rect(ox + fill - 1, oy, frame.head, inner).fill(PAPER);
-  }
-}
-
-/** The little house of the barracks badge, in units of the glyph size around its middle. */
-const HOUSE: readonly (readonly [number, number])[] = [
-  [-1, -0.05],
-  [0, -0.95],
-  [1, -0.05],
-  [0.68, -0.05],
-  [0.68, 0.85],
-  [-0.68, 0.85],
-  [-0.68, -0.05],
-];
-
-/**
- * The glyph of a build kind in its badge: a little house (barracks), stacked squares (warehouse),
- * a factory or a bunker (economy v2, the glyphs of their marks, smaller).
- */
-function drawKindGlyph(g: Graphics, kind: BuildMark['kind'], cx: number, cy: number): void {
-  const s = PROGRESS.badge.glyph;
-  if (kind === 'factory' || kind === 'fort') {
-    drawSiteGlyph(g, kind, cx, cy + 0.2, s / 5.2);
-    return;
-  }
-  if ((kind as string) === 'warehouse') {
-    for (const [x, y] of [
-      [-0.9, -0.1],
-      [0.05, -0.1],
-      [-0.425, -1],
-    ] as const) {
-      g.rect(cx + x * s, cy + 0.5 + y * s, 0.85 * s, 0.85 * s).fill(PAPER);
-    }
-    return;
-  }
-  g.poly(HOUSE.flatMap(([x, y]) => [cx + x * s, cy + 0.5 + y * s])).fill(PAPER);
-}
-
-/** The plate of a barracks or warehouse build (DEC-26): the badge of its kind and one wide cell. */
-export function buildMarkSpec(mark: BuildMark): BakeSpec {
-  const { width, height } = mark;
-  return {
-    key: `build:${mark.kind}:${String(mark.fill)}:${String(mark.owed)}`,
-    box: { x: -width / 2 - 1, y: -1, width: width + 2, height: height + 2 },
-    draw(into) {
-      progressPlate(into, -width / 2, width, height);
-      const g = graphics(into);
-      const { cx, radius, rim } = PROGRESS.badge;
-      const left = -width / 2;
-      const cy = height / 2;
-      g.circle(left + cx, cy, radius)
-        .fill(BG)
-        .stroke({ width: rim, color: PAPER });
-      drawKindGlyph(g, mark.kind, left + cx, cy);
-      const { width: cw, height: ch } = PROGRESS.buildCell;
-      if (mark.owed > 0) {
-        // Economy v2 (DEC-41, item 7): the time has not started, the build waits for charges: a
-        // dashed cell with a hollow dot per charge still owed (an empty dot is a missing charge).
-        drawCell(g, left + mark.cellX, PROGRESS.pad, cw, ch, 'slot', 0, YOU);
-        const { radius, width: stroke, pitch } = PROGRESS.owed;
-        const x0 = left + mark.cellX + cw / 2 - ((mark.owed - 1) * pitch) / 2;
-        for (let i = 0; i < mark.owed; i++) {
-          g.circle(x0 + i * pitch, PROGRESS.pad + ch / 2, radius).stroke({
-            width: stroke,
-            color: PAPER,
-          });
-        }
-        return;
-      }
-      drawCell(g, left + mark.cellX, PROGRESS.pad, cw, ch, 'active', mark.fill, YOU);
-    },
-  };
-}
-
-// --- Supply lines --------------------------------------------------------------------------------
-
-/**
- * The direction chevron of a supply line looked at (#672): a light «>» on a dark casing, pointing
- * along +x (the sprite is turned to the leg); the same texture for every leg.
- */
-export function lineChevronSpec(): BakeSpec {
-  const { half, depth, width, casing } = SUPPLY_LINE.chevron;
-  const reach = Math.max(half, depth / 2) + width / 2 + casing;
-  return {
-    key: 'line-chevron',
-    box: shadowBox(circleBox(reach), BAKE_MARGIN),
-    draw(into) {
-      const g = graphics(into);
-      const trace = (): void => {
-        g.moveTo(-depth / 2, -half)
-          .lineTo(depth / 2, 0)
-          .lineTo(-depth / 2, half);
-      };
-      trace();
-      g.stroke({ width: width + 2 * casing, color: BG, alpha: 0.92, join: 'round', cap: 'round' });
-      trace();
-      g.stroke({ width, color: PAPER, join: 'round', cap: 'round' });
     },
   };
 }

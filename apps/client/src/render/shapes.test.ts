@@ -20,10 +20,9 @@ describe('Token, the helmet as baked sprites', () => {
     level: BakedSprite;
     outline: BakedSprite;
     question: Text;
-    shield: BakedSprite;
     label: Container;
   } => {
-    const [body, question, shield, label] = token.view.children;
+    const [body, question, label] = token.view.children;
     const [back, level, outline] = (body?.children ?? []) as BakedSprite[];
     if (body === undefined || back === undefined || level === undefined || outline === undefined) {
       throw new Error('a token is made of sprites');
@@ -34,7 +33,6 @@ describe('Token, the helmet as baked sprites', () => {
       level,
       outline,
       question: question as Text,
-      shield: shield as BakedSprite,
       label: label as Container,
     };
   };
@@ -59,7 +57,7 @@ describe('Token, the helmet as baked sprites', () => {
   });
 
   it('fills the dome from the bottom by the share of charged units: a crop of one baked fill', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 1 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 1 } });
     const { level } = parts();
     const width = String(helmetWidth(UNIT_SIDES[1], false));
     expect(level.visible).toBe(true);
@@ -67,20 +65,20 @@ describe('Token, the helmet as baked sprites', () => {
     expect(level.scale.x).toBe(1);
     // The height reads the share (#508): 1 of 4 is a quarter of the dome.
     expect(shown()).toBeCloseTo(0.25);
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 3 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 3 } });
     kit.advance(TWEEN_MS);
     expect(level.spec?.key).toBe(`hel-level:own:${width}:${String(YOU)}`);
     expect(shown()).toBeCloseTo(0.75);
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 0 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 0 } });
     kit.advance(TWEEN_MS);
     expect(level.visible).toBe(false);
   });
 
   it('eases the fill to a new level without a new texture (#508)', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 4 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 4 } });
     const baked = kit.sprites.baked;
     expect(shown()).toBeCloseTo(1);
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 1 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 1 } });
     // Nothing has moved yet: the drain starts from what was shown.
     expect(shown()).toBeCloseTo(1);
     kit.advance(TWEEN_MS / 4);
@@ -95,29 +93,29 @@ describe('Token, the helmet as baked sprites', () => {
   });
 
   it('retargets mid-flight from the shown value and fills up too', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 0 } });
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 4 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 0 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 4 } });
     kit.advance(100);
     const now = shown();
     expect(now).toBeGreaterThan(0);
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 2 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 2 } });
     expect(shown()).toBeCloseTo(now);
     kit.advance(TWEEN_MS);
     expect(shown()).toBeCloseTo(0.5);
   });
 
   it('shows a new token, an unknown one and a ghost at once, with no easing', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 3 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 3 } });
     expect(shown()).toBeCloseTo(0.75);
-    token.set({ owner: 0, modes: ['attack'], counts: null });
+    token.set({ owner: 0, counts: null });
     expect(parts().level.visible).toBe(false);
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 2 }, ghost: true });
+    token.set({ owner: 0, counts: { units: 4, charged: 2 }, ghost: true });
     expect(shown()).toBeCloseTo(0.5);
   });
 
   it('drops a token whose view is gone from the easing set', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 4 } });
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 1 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 4 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 1 } });
     token.view.destroy({ children: true });
     expect(() => {
       kit.advance(50);
@@ -126,30 +124,30 @@ describe('Token, the helmet as baked sprites', () => {
   });
 
   it('has no dividers: the fill edge is smooth, the body is three sprites', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 2 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 2 } });
     expect(parts().body.children).toHaveLength(3);
   });
 
   it('tells the owner by the shape and the facing: own Rim to the right, the opponent Cut to the left', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 1 } });
+    token.set({ owner: 0, counts: { units: 4, charged: 1 } });
     expect(parts().body.scale.x).toBe(1);
     expect(parts().back.spec?.key).toContain('hel-back:own:');
-    token.set({ owner: 1, modes: ['attack'], counts: { units: 4, charged: 1 } });
+    token.set({ owner: 1, counts: { units: 4, charged: 1 } });
     expect(parts().body.scale.x).toBe(-1);
     expect(parts().back.spec?.key).toContain('hel-back:enemy:');
     expect(parts().outline.spec?.key).toContain(':solid');
-    token.set({ owner: 1, modes: ['attack'], counts: null });
+    token.set({ owner: 1, counts: null });
     expect(parts().outline.spec?.key).toContain(':dashed');
     expect(parts().question.visible).toBe(true);
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 4, charged: 1 }, ghost: true });
+    token.set({ owner: 0, counts: { units: 4, charged: 1 }, ghost: true });
     expect(parts().outline.spec?.key).toContain(':dashed');
   });
 
   it('takes the size of the helmet from the number of units, and the casing only inside a city', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 2, charged: 1 } });
+    token.set({ owner: 0, counts: { units: 2, charged: 1 } });
     expect(parts().back.spec?.key).toContain(`:${String(helmetWidth(UNIT_SIDES[0], false))}:`);
     expect(parts().back.spec?.key.endsWith(':')).toBe(true);
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 20, charged: 1 }, inside: true });
+    token.set({ owner: 0, counts: { units: 20, charged: 1 }, inside: true });
     expect(parts().back.spec?.key).toContain(`:${String(helmetWidth(UNIT_SIDES[3], true))}:`);
     expect(parts().back.spec?.key.endsWith(':i')).toBe(true);
     expect(token.side).toBe(UNIT_SIDES[3]);
@@ -157,7 +155,7 @@ describe('Token, the helmet as baked sprites', () => {
 
   it('puts the one number, all the units, in the middle of the dome, on a road and in a city', () => {
     for (const inside of [false, true]) {
-      token.set({ owner: 0, modes: ['attack'], counts: { units: 5, charged: 3 }, inside });
+      token.set({ owner: 0, counts: { units: 5, charged: 3 }, inside });
       token.setLabel(true);
       const { label } = parts();
       const count = label.children[1] as Text;
@@ -170,7 +168,7 @@ describe('Token, the helmet as baked sprites', () => {
   });
 
   it('keeps the strap in a city: the icon in a city is the same helmet, a little smaller, with a casing', () => {
-    token.set({ owner: 0, modes: ['attack'], counts: { units: 5, charged: 3 }, inside: true });
+    token.set({ owner: 0, counts: { units: 5, charged: 3 }, inside: true });
     const key = parts().back.spec?.key ?? '';
     expect(key).toContain(`:${String(helmetWidth(UNIT_SIDES[1], true))}:`);
     expect(key.endsWith(':i')).toBe(true);
@@ -194,7 +192,6 @@ describe('Token, the badges over the outlines (#797)', () => {
     layers.layer.groups.addChild(token.view);
     token.set({
       owner: 0,
-      modes: ['attack'],
       counts: { units: 3, charged: 3 },
       inside: true,
       badges: [{ dir: 'down', count: 1 }],

@@ -134,14 +134,13 @@
         return {
           hud: state,
           tickHz: welcome.ruleset_public.tick_hz,
-          // Economy v2 (DEC-41, item 10): a plan has no delay, it gathers its bonus instead.
+          // A plan has no delay, it gathers its bonus instead (DEC-41, item 10).
           orders: welcome.ruleset_public.orders,
           capacity: welcome.ruleset_public.capacity,
           roundTicks: welcome.ruleset_public.combat.round_ticks,
           recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
           recruitQueueMax: welcome.ruleset_public.recruit.queue_max,
           provinceWarehouse: welcome.ruleset_public.city_upgrades.warehouse_province,
-          roadBuildTicks: 0, // no road levels (#894)
           fortBuildTicks: welcome.ruleset_public.fort.build_ticks,
           audio: new MatchAudio({
             me: welcome.player,
@@ -151,9 +150,6 @@
           }),
           cityUpgrades: {
             barracks: welcome.ruleset_public.city_upgrades.barracks_ticks,
-            warehouse: 0, // no warehouse levels (#894)
-            warehouseMaxLevel: 0,
-            warehouseGainPerLevel: 0,
             barracksCharges: welcome.ruleset_public.city_upgrades.barracks_charges,
             factory: welcome.ruleset_public.factory.build_ticks,
             factoryCharges: welcome.ruleset_public.factory.cost,
@@ -209,9 +205,6 @@
       focusNode: (node) => canvas?.focusNode(node),
       queryReach: (group) => {
         live.queryReach(group);
-      },
-      queryLineRoute: (points) => {
-        live.queryLineRoute(points);
       },
     });
   });

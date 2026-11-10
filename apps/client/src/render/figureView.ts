@@ -142,7 +142,7 @@ export class FigureView {
       entry.stamp = stamp;
       const { token } = entry;
       const { counts, range } = knownOfFigure(figure);
-      token.set({ owner: this.enemy, modes: [figure.mode], counts, range, inside: false });
+      token.set({ owner: this.enemy, counts, range, inside: false });
       token.setLabel(false);
       const scale = symbolScale(token.side, cameraScale);
       entry.view.scale.set(scale);

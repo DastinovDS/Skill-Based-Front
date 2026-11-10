@@ -15,8 +15,6 @@ import {
   WARN,
   YOU,
   ownerColor,
-  roadLanesWidth,
-  roadSpan,
   sideOf,
 } from './style.ts';
 
@@ -58,16 +56,5 @@ describe('sides', () => {
     expect(ownerColor(1, 1)).toBe(YOU);
     expect(ownerColor(1, 0)).toBe(ENEMY);
     expect(sideOf(1, 0)).toBe('enemy');
-  });
-});
-
-describe('the lanes of a road (R1, #345)', () => {
-  it('is 2 per lane and 1.7 between lanes, so level 1..3 is one, two or three lanes', () => {
-    expect([1, 2, 3].map(roadLanesWidth)).toEqual([2, 5.7, 9.4]);
-  });
-
-  it('adds the casing of an own road to the width of its lanes', () => {
-    expect(roadSpan(1)).toBeCloseTo(5.6);
-    expect(roadSpan(3)).toBeCloseTo(13);
   });
 });

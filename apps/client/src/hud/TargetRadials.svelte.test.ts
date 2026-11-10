@@ -37,7 +37,7 @@ describe('the radial menus of a city and of a group', () => {
   function render(
     queue: number | null = 0,
     rules = DEV_RULES,
-    built: Pick<NodeInfo, 'hasBarracks' | 'warehouseLevel'> | null = null,
+    built: Pick<NodeInfo, 'hasBarracks'> | null = null,
   ) {
     const hud = new HudState({
       me: 0,
