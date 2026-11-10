@@ -50,7 +50,11 @@ OUTSIDE = -1  # outside the map (only in the vector file)
 
 # ---- shape (world units) -----------------------------------------------------------------------
 ROAD_BIAS = 18.0  # a road half is a little "farther" than the node point: areas do not hug roads
-WARP_FADE = (6.0, 70.0)  # the border warp is 0 on a road and full this far from it
+# The border warp is 0 on a road and full this far from it. #919, item 11: (6, 70) with the
+# amplitude 40 bent every border into an S next to a road (a radius of 15 to 20 units) and
+# folded the warped grid in 0.13 to 0.8% of the cells (a hook); (6, 140) with the amplitude 24
+# folds nowhere (the smallest Jacobian of the warp is 0.27 to 0.48 on the committed maps).
+WARP_FADE = (6.0, 140.0)
 SHORE = 34.0  # a water cell never comes closer than this to a road
 NODE_CLEARANCE = 60.0  # nor to a node (the validator's water_clearance, map-format.md)
 COAST_WOBBLE = 26.0  # amplitude of the coast noise of a water cell
