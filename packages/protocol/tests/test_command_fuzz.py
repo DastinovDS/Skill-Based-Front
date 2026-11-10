@@ -25,7 +25,7 @@ from gow_protocol.messages import CommandMsg
 from gow_sim import commands as sim
 from gow_sim.maps import PLAYERS, load_map
 from gow_sim.match import Match
-from gow_sim.ruleset import Stance, load_ruleset
+from gow_sim.ruleset import MAX_GROUP_ORDER, Stance, load_ruleset
 from gow_sim.view import opaque_id
 
 ROOT: Final = Path(__file__).resolve().parents[3]
@@ -83,7 +83,18 @@ _random_ids = st.one_of(
 @st.composite
 def _command(draw: st.DrawFn, player: int) -> wire.Command:
     ids = st.one_of(st.sampled_from(OWN[player]), st.sampled_from(ENEMY[player]), _random_ids)
-    kinds = ("move", "split", "merge", "release", "stance", "fort", "recruit", "cancel")
+    kinds = (
+        "move",
+        "split",
+        "merge",
+        "release",
+        "stance",
+        "fort",
+        "recruit",
+        "cancel",
+        "group",
+        "rally",
+    )
     kind = draw(st.sampled_from(kinds))
     match kind:
         case "move":
@@ -106,6 +117,16 @@ def _command(draw: st.DrawFn, player: int) -> wire.Command:
             return wire.FortifyRoadCmd(node=draw(_ints), edge=draw(_ints))
         case "recruit":
             return wire.RecruitCmd(node=draw(_ints))
+        case "group":  # DEC-48
+            groups = draw(st.lists(ids, min_size=1, max_size=MAX_GROUP_ORDER, unique=True))
+            return wire.GroupMoveCmd(
+                groups=tuple(groups),
+                dest=draw(_ints),
+                planned=draw(st.booleans()),
+                bonus=draw(st.integers(0, 9)),
+            )
+        case "rally":  # DEC-48, item H
+            return wire.SetRallyPointCmd(node=draw(_ints), target=draw(st.one_of(st.none(), _ints)))
         case _:
             return wire.CancelOrderCmd(group=draw(ids))
 
@@ -122,7 +143,7 @@ def _batch(draw: st.DrawFn) -> list[tuple[int, wire.Command]]:
 
 def _ids_of(cmd: wire.Command) -> tuple[str, ...]:
     match cmd:
-        case wire.MergeCmd(groups=groups):
+        case wire.MergeCmd(groups=groups) | wire.GroupMoveCmd(groups=groups):
             return groups
         case (
             wire.MoveCmd(group=g)
@@ -154,5 +175,7 @@ def test_any_valid_wire_command_is_acked_and_never_crashes(
         assert decode_server(encode(ack)) == ack
         player, cmd = batch[result.seq - 1]
         foreign = [i for i in _ids_of(cmd) if i not in OWN[player]]
-        if foreign and not isinstance(cmd, wire.MergeCmd):
+        # Under mvp-7 a release is INVALID_ARGUMENT before any id is looked at (DEC-48, A7).
+        partial = wire.MergeCmd | wire.ReleasePlanCmd | wire.GroupMoveCmd
+        if foreign and not isinstance(cmd, partial):
             assert ack.reject_code == NOT_FOUND  # unknown and enemy ids look the same

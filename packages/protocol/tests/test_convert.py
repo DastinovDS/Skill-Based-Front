@@ -72,7 +72,7 @@ BOT_TICKS = 1200
 REGRESSION = 1.5
 
 NOT_FOUND = sim.RejectCode.NOT_FOUND_OR_HIDDEN.value
-DROPPED_ORDER_KEYS = ("depart_tick",)
+DROPPED_ORDER_KEYS: tuple[str, ...] = ()  # depart_tick goes out since DEC-48 (#896)
 DROPPED_LOCATION_KEYS = ("back",)
 
 
@@ -151,6 +151,8 @@ def _expected_wire_view(view: PlayerView) -> dict[str, Any]:
         if group["order"] is not None:
             for name in DROPPED_ORDER_KEYS:
                 del group["order"][name]
+            if group["order"]["group_order"] is not None:
+                group["order"]["group_order"] = str(group["order"]["group_order"])
         for name in DROPPED_LOCATION_KEYS:
             group["location"].pop(name, None)
 
@@ -560,6 +562,8 @@ def test_fixture_commands_convert() -> None:
         "fortify_road": sim.FortifyRoad,
         "release_plan": sim.ReleasePlan,
         "set_leaf_shift": sim.SetLeafShift,
+        "group_move": sim.GroupMove,
+        "set_rally_point": sim.SetRallyPoint,
         "forfeit": sim.Forfeit,
     }
     for name, kind in types.items():

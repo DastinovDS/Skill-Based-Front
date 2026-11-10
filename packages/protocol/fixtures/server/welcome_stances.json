@@ -42,7 +42,9 @@
     "recruit": {
       "unit_ticks": 30,
       "queue_max": 3,
-      "refund_started_pct": 50
+      "refund_started_pct": 50,
+      "rally_point": false,
+      "rally_cost": 0
     },
     "city_upgrades": {
       "barracks_ticks": 100,
@@ -93,7 +95,8 @@
         "war": 400
       },
       "factories_follow": true
-    }
+    },
+    "group_order": null
   },
   "map_id": "diamond",
   "last_seq": 0,

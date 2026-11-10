@@ -10,7 +10,9 @@ Map ``dec48`` (the map of the worked examples and its rot180 mirror; every node 
 takes exactly its ``travel_ticks``): player 0 owns the capital H (capacity 10), the city_large R
 (8), the city_medium A (6), the city_small B (4) and the province C (3); E is a city_medium of
 player 1, N a neutral province. Edges: H-R 40, R-A 30, R-B 50, R-C 20, A-E 40, B-E 60, C-E 30,
-C-N 20. The mirror half (ids 7 to 13) and the edge E-E' only make the map whole. ``RULES`` is
+C-N 20. What the examples do not use only makes the map pass the validator (``gow-maps
+validate``): the neutral centre M (id 7) with the roads E-M and N-M, the road H-B and the mirror
+half (ids 8 to 14); none of them is on a path of a row. ``RULES`` is
 ``mvp-7`` (item J: both features on) without CP income, production or supply dispatch, so the CP
 and the warehouses hold exactly what a test puts in ("regeneration ignored" in the tables).
 

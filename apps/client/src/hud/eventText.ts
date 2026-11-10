@@ -40,6 +40,9 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'charge_burned',
   'build_paid',
   'plan_charged',
+  // DEC-48: the rally point alerts; the client part of #896 gives them a line and a toast.
+  'rally_point_cleared',
+  'rally_walk_no_cp',
 ]);
 
 /** Kinds with a line in the feed. */
