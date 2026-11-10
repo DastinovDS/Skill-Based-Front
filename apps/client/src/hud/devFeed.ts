@@ -76,6 +76,17 @@ export const DEV_RULES_STANCES: RulesetPublic = (() => {
   return welcome.ruleset_public;
 })();
 
+/**
+ * The group order and the recruit rally point (DEC-48, #896) on, as `rulesets/mvp-7.toml` has them
+ * (`[group_order]` 16 groups, rally 50%; a walk 0.5 CP): the stance rules with both added, for the
+ * tests and the `group_*` scenes (no welcome fixture carries them).
+ */
+export const DEV_RULES_GROUP: RulesetPublic = {
+  ...DEV_RULES_STANCES,
+  group_order: { max_groups: 16, rally_pct: 50 },
+  recruit: { ...DEV_RULES_STANCES.recruit, rally_point: true, rally_cost: 50 },
+};
+
 /** How many enemy nodes are shown in full, then how many only as presence (the rest is fog). */
 const SEEN_EXACT = 1;
 const SEEN_PRESENCE = 2;

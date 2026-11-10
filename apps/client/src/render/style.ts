@@ -585,7 +585,7 @@ export const ETA_MARK = {
   badgeClear: 14,
 } as const;
 /**
- * The bonus counter over the target of a planned order while Shift is held (#793): a dark pill with
+ * The bonus counter over the target of a planned order while E is held (#793, DEC-48): a dark pill with
  * an own-coloured rim just above the target city's ring; the green chevron of a bonus (#797,
  * the badge's), the bonus as text ("+3") and the gathering time it implies. Sized in world units and
  * scaled like the travel time (`badgeScale`). Shape and text carry it, never colour alone.

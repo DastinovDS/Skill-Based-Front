@@ -1,5 +1,5 @@
 /**
- * Turns wheel events into whole steps of a counter (the planned order bonus under Shift, #793):
+ * Turns wheel events into whole steps of a counter (the planned order bonus under E, #793; Shift until DEC-48):
  * one notch of a mouse wheel is one step, the many small deltas of a trackpad swipe add up to a
  * step per `WHEEL_STEP_PX` of travel, so a swipe does not jump to the end of the range.
  *
@@ -53,7 +53,7 @@ export class WheelSteps {
     return delta < 0 ? 1 : -1;
   }
 
-  /** Forgets the gathered pixels (Shift went up: the next gesture starts afresh). */
+  /** Forgets the gathered pixels (E went up: the next gesture starts afresh). */
   reset(): void {
     this.#gathered = 0;
     this.#lastAt = null;

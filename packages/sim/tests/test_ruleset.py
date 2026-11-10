@@ -164,10 +164,7 @@ def test_test_short_is_mvp7_with_a_60_second_match() -> None:
     assert short.tick_hz == 10
     expected = _raw()
     expected["match_ticks"] = 600
-    # DEC-48, item J: the group order and the recruit rally point are on in mvp-7 only.
-    del expected["group_order"]
-    del expected["recruit"]["rally_point"]
-    del expected["recruit"]["rally_cost"]
+    # DEC-48, item J: the group order and the recruit rally point are on as in mvp-7 (#896).
     assert to_canonical(short) == expected
 
 

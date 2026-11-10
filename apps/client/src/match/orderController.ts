@@ -582,7 +582,7 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * The bonus counter over the target of a planned order (#793): a planned order (Shift
+   * The bonus counter over the target of a planned order (#793): a planned order (E
    * or the switch), the target reachable (`reach`). The value is `planBonus`, 1 until the wheel turns; the
    * gathering time is display arithmetic from `ruleset_public` (one point per
    * `orders.plan_ticks_per_bonus` while the warehouse has charges, DEC-41, item 10).
@@ -1925,6 +1925,15 @@ export class OrderController implements MapInteraction {
 
   /** The node a click would send the selected group to, if it would. */
   #previewTarget(): number | null {
+    // Groups selected together (DEC-48): any place under the pointer is a target (a group on a
+    // road is a pick, not a place).
+    if (this.#picks.length > 0) {
+      const ui = this.ui.current;
+      const hit = this.#hover;
+      if (this.#o.send === null || ui.supplyMode || ui.rallyFrom !== null) return null;
+      if (hit?.kind === 'group' && hit.node === undefined) return null;
+      return this.#hoverCity();
+    }
     const group = this.#selectedGroup();
     if (group === null || group.node === null || this.#o.send === null) return null;
     const city = this.#hoverCity();
