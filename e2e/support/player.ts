@@ -98,14 +98,38 @@ export class Player {
     return await link.inputValue();
   }
 
-  /** The map of an invite, as the server says it (`GET /api/matches/{code}` with the own token). */
-  async inviteMap(code: string): Promise<string> {
-    const token = await this.page.evaluate(() => {
+  /**
+   * The host on a named pool map: the client offers no map choice for an invite (#919, a map is
+   * made for it), so the invite is made through the API and the host opens its own link, which
+   * leads into the waiting room like any invite. For the tests whose orders need a known map.
+   */
+  async createInviteOn(mapId: string): Promise<string> {
+    // The nick form answers before the token is stored: wait for the main screen.
+    await expect(this.page.getByRole('radio', { name: 'Invite a friend' })).toBeVisible();
+    const response = await this.page.request.post('/api/matches', {
+      headers: { Authorization: `Bearer ${await this.token()}` },
+      data: { map_id: mapId },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    const code = ((await response.json()) as { code: string }).code;
+    await this.page.goto(`/?m=${encodeURIComponent(code)}`);
+    const link = this.page.getByLabel('Invite link');
+    await expect(link).toHaveValue(/\/\?m=[\w-]+$/);
+    return await link.inputValue();
+  }
+
+  /** The token this browser keeps for the player (`sbf.guest`). */
+  async token(): Promise<string> {
+    return await this.page.evaluate(() => {
       const saved = window.localStorage.getItem('sbf.guest');
       return saved === null ? '' : (JSON.parse(saved) as { token: string }).token;
     });
+  }
+
+  /** The map of an invite, as the server says it (`GET /api/matches/{code}` with the own token). */
+  async inviteMap(code: string): Promise<string> {
     const response = await this.page.request.get(`/api/matches/${encodeURIComponent(code)}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${await this.token()}` },
     });
     expect(response.ok()).toBe(true);
     return ((await response.json()) as { map_id: string }).map_id;

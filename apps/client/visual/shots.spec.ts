@@ -837,6 +837,68 @@ for (const size of [
   }
 }
 
+// Checked by geometry, not by eye (#919, round 2 item 2): at the three sizes every piece of the
+// plinth and the drawer stays 8 px or more inside its frame, and every place of the drawing sketch
+// sits on its node (round 1 had them 13 px off). Run in the page (plain JS: no DOM types here); the
+// answer is the list of the pieces out of place. An invisible piece (the hollow marker away from a
+// hover) is not on the plinth.
+const PLINTH_GEOMETRY = `(() => {
+  const bad = [];
+  for (const frame of document.querySelectorAll('.plinth, .drw')) {
+    const box = frame.getBoundingClientRect();
+    for (const el of frame.querySelectorAll('button, input, p, span, svg, label')) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0 || getComputedStyle(el).opacity === '0') continue;
+      if (r.left < box.left + 8 || r.right > box.right - 8 || r.top < box.top + 8 || r.bottom > box.bottom - 8) {
+        bad.push(el.tagName + '.' + (el.getAttribute('class') || '') + ' ' + el.textContent.trim());
+      }
+    }
+  }
+  for (const place of document.querySelectorAll('svg.draw [data-n]')) {
+    const circle = place.matches('circle') ? place : place.querySelector('circle');
+    const svg = place.ownerSVGElement;
+    if (circle === null || svg === null) continue;
+    const r = circle.getBoundingClientRect();
+    const s = svg.getBoundingClientRect();
+    const k = s.width / 220;
+    const cx = s.left + Number(circle.getAttribute('cx')) * k;
+    const cy = s.top + Number(circle.getAttribute('cy')) * k;
+    const off = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy);
+    if (off > 0.5) bad.push('node ' + place.dataset.n + ' off by ' + off.toFixed(1) + ' px');
+  }
+  return bad;
+})()`;
+
+for (const size of [
+  { width: 1280, height: 720 },
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
+]) {
+  for (const id of [
+    'menu-guest',
+    'menu-bot',
+    'bot-starting',
+    'queue-long',
+    'queue-found',
+    'invite-link',
+    'invite-joined',
+    'invite-drawing-start',
+  ] as const) {
+    test(`the plinth of ${id} holds its pieces at ${String(size.width)}x${String(size.height)}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await page.goto(`/?menu=${id}`);
+      await page.evaluate('document.fonts.ready.then(() => true)');
+      for (const name of DOCK_CLICKS[id] ?? []) {
+        await page.getByRole('button', { name, exact: true }).first().click();
+      }
+      await expect(page.locator('.plinth')).toBeVisible();
+      expect(await page.evaluate<string[]>(PLINTH_GEOMETRY)).toEqual([]);
+    });
+  }
+}
+
 // The forfeit dialog with the danger button hovered: the hatch has inked in (#919, danger A).
 test('shot of the forfeit dialog with the danger button hovered', async ({ page }) => {
   await page.goto('/?menu=exit-rated');

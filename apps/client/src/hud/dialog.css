@@ -1,7 +1,7 @@
 /*
- * The look of the match dialogs (#597): the forfeit dialog and the transfer dialog share this frame,
- * the help sheet shares its buttons. It is the language of the Dock panels (app/dock.css): a
- * `--surface` panel on a scrim, an eyebrow over a big title, a blue main action with a key chip,
+ * The look of the match dialogs (#597): the forfeit dialog has this frame (the Double rule with the
+ * Stepped corner of #919), the help sheet shares its buttons: a stone
+ * panel on the dimmed match, an eyebrow over a big title, an ivory main action, danger A to leave,
  * quiet secondary actions, an amber line with an icon for a warning (red means only the enemy).
  * Loaded by Dialog.svelte; the classes are global and prefixed `dlg-`.
  */

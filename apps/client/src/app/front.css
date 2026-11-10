@@ -2,8 +2,8 @@
    docs/design/mockups/out-of-game-style-r2.html (Lapis, layout of round 2) with round 3's edges II
    "Double rule" and the Spare captions (out-of-game-style-r3.html, ui-style 51 and 56). Black stone,
    cut capitals (Cinzel), ivory ink, incised rules; the sides are lapis and minium. The top bar
-   carries the brand, the tabs and the player; the main screen is Play and the numbered ways to play.
-   Used by ScreenFrame (the frame of every screen before a match), DockFrame (dock.css) and
+   carries the brand, the "?" of How to play and the player (#919, III Plinth: no tabs).
+   Used by ScreenFrame (the entry, the boot, the result), PlayScreen (app/plinth.css) and
    SheetFrame (board/sheet.css). The tokens and the primitives are app.css and theme/primitives.css. */
 
 .front {
