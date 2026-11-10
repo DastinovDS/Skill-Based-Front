@@ -25,7 +25,6 @@
   import GroupTip from './GroupTip.svelte';
   import TerrainBanner from './TerrainBanner.svelte';
   import SplitTip from './SplitTip.svelte';
-  import CaptureTip from './CaptureTip.svelte';
   import StatusBar from '../app/StatusBar.svelte';
   import StatusButton from '../app/StatusButton.svelte';
   import TopBar from './TopBar.svelte';
@@ -177,7 +176,6 @@
   <GroupTip group={data?.hovered ?? null} />
   <TerrainBanner {orders} />
   <SplitTip {orders} names={hud.nodeName} />
-  <CaptureTip {orders} names={hud.nodeName} cost={hud.context.rules.capture.charge_cost} />
   <HelpOverlay
     open={chrome.helpOpen}
     captureCost={hud.context.rules.capture.charge_cost}

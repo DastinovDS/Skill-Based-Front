@@ -196,7 +196,7 @@ export class MapScene {
       radiusOf,
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
-    this.groupOrders = new GroupOrderView(map, this.layers, me, radiusOf);
+    this.groupOrders = new GroupOrderView(map, this.layers, me, radiusOf, this.sprites);
     this.undo = new UndoView(map, this.layers, radiusOf);
     this.supply = new SupplyView(map, this.layers, me, radiusOf, this.sprites);
     this.flow = new FlowView(map, this.layers, me, radiusOf, this.sprites);

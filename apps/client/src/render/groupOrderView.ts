@@ -3,8 +3,9 @@ import { t } from '../i18n/index.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { CP_MARK } from '../theme/cpMark.ts';
-import { helmetOutline } from '../units/helmet.ts';
 import { badgeScale } from './alertLayout.ts';
+import type { BakedSprite, SpriteCache } from './bake.ts';
+import { helmetBackSpec, helmetFrontSpec } from './bakedShapes.ts';
 import type { Point } from './camera.ts';
 import { ringRadius } from './cityLayout.ts';
 import {
@@ -57,6 +58,9 @@ export class GroupOrderView {
   private readonly totals = new Map<string, number>();
   /** The tick each waiting member was first seen waiting: where its sand starts. */
   private readonly since = new Map<string, number>();
+  /** The baked helmets on the discs of the muster rings (a pool, one per ring shown this frame). */
+  private readonly helmets: { root: Container; back: BakedSprite; front: BakedSprite }[] = [];
+  private helmetsUsed = 0;
   private cameraScale = 1;
   private resolution = 1;
 
@@ -69,6 +73,7 @@ export class GroupOrderView {
     /** The viewing player: own cities have rally points, own orders have seals. */
     private readonly me: PlayerId,
     private readonly radiusOf: (node: number) => number,
+    private readonly sprites: SpriteCache,
   ) {
     this.root.addChild(this.marks, this.labels);
     layers.layer.intents.addChild(this.root);
@@ -97,6 +102,7 @@ export class GroupOrderView {
     const g = this.marks;
     g.clear();
     this.textsUsed = 0;
+    this.helmetsUsed = 0;
     const s = badgeScale(this.cameraScale);
     const view = frame.base.view;
     const own = (node: number): boolean => view.nodes[node]?.owner === this.me;
@@ -137,6 +143,10 @@ export class GroupOrderView {
     for (let i = this.textsUsed; i < this.texts.length; i++) {
       const text = this.texts[i];
       if (text !== undefined) text.visible = false;
+    }
+    for (let i = this.helmetsUsed; i < this.helmets.length; i++) {
+      const mark = this.helmets[i];
+      if (mark !== undefined) mark.root.visible = false;
     }
   }
 
@@ -293,12 +303,9 @@ export class GroupOrderView {
     // The recruit helmet on a disc on top of the ring, a plus beside it: new units come here.
     const top = { x: at.x, y: at.y - r };
     this.disc(g, top, M.disc * s, false, alpha);
-    // One outline of a fixed width (the outlines are cached by width), scaled here.
-    const outline = helmetOutline('own', M.helmet, 0);
-    const poly = outline.map((v, i) => (i % 2 === 0 ? top.x + v * s : top.y + (v + 0.5) * s));
-    g.poly(poly)
-      .fill({ color, alpha })
-      .stroke({ width: 0.8 * s, color: INK, alpha });
+    // The same baked helmet the groups and the recruit queue draw (an empty one: the new unit has no
+    // charge), on the disc, in the owner's colour.
+    this.helmetAt(top, s, alpha, color);
     const px = top.x + M.disc * s * 0.8;
     const py = top.y - M.disc * s * 0.7;
     const d = 2.6 * s;
@@ -312,6 +319,26 @@ export class GroupOrderView {
         .lineTo(px, py + d);
       g.stroke({ width, color, alpha, cap: 'square' });
     }
+  }
+
+  /** The own helmet `GROUP_ORDER.muster.helmet` wide, centred on `at`, from the baked sprites. */
+  private helmetAt(at: Point, s: number, alpha: number, color: number): void {
+    const width = GROUP_ORDER.muster.helmet;
+    let mark = this.helmets[this.helmetsUsed];
+    if (mark === undefined) {
+      const root = this.root.addChild(new Container({ label: 'muster-helmet' }));
+      const back = root.addChild(this.sprites.sprite());
+      const front = root.addChild(this.sprites.sprite());
+      mark = { root, back, front };
+      this.helmets.push(mark);
+    }
+    this.helmetsUsed++;
+    mark.back.set(helmetBackSpec('own', width, color, 'solid', false));
+    mark.front.set(helmetFrontSpec('own', width, color, 'solid'));
+    mark.root.visible = true;
+    mark.root.alpha = alpha;
+    mark.root.position.set(at.x, at.y);
+    mark.root.scale.set(s);
   }
 
   /** The cut chevron on the ring of `city`, pointing at `point` (the way its new units leave). */

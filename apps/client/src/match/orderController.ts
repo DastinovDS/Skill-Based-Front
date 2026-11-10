@@ -485,7 +485,6 @@ export class OrderController implements MapInteraction {
     const splitNodes = reach === null ? [] : [...reach.split.keys()];
     const eta = this.#eta(reach, preview);
     this.#syncSplitHover(reach, preview);
-    this.#syncCaptureHover(preview);
     this.#syncCpShort(preview);
     this.#syncPlanning();
     this.#syncBonusPick();
@@ -1886,22 +1885,6 @@ export class OrderController implements MapInteraction {
   #syncSplitHover(reach: ReachInfo | null, preview: number | null): void {
     const node = reach !== null && preview !== null && reach.split.has(preview) ? preview : null;
     if (node !== this.ui.current.splitHover) this.ui.patch({ splitHover: node });
-  }
-
-  /**
-   * The hovered target the player does not own (public ownership) while a capture costs charges
-   * (DEC-38), mirrored to `ui.current.captureHover` for the rule tip. Not while the split hint shows
-   * there. The rule only: whether the group can pay is not worked out here (AGENTS.md 7.1).
-   */
-  #syncCaptureHover(preview: number | null): void {
-    const node =
-      preview !== null &&
-      this.#o.rules.capture.charge_cost > 0 &&
-      preview !== this.ui.current.splitHover &&
-      !this.#isOwnNode(preview)
-        ? preview
-        : null;
-    if (node !== this.ui.current.captureHover) this.ui.patch({ captureHover: node });
   }
 
   /**
