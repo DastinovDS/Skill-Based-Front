@@ -157,13 +157,10 @@ describe('Fortify road: the road pick', () => {
     expect(controller.overlay().fortPick?.node).toBe(home);
   });
 
-  it('a click on the city itself cancels it too, and so does the Supply mode', () => {
+  it('a click on the city itself cancels it too', () => {
     const { controller } = setup();
     startPick(controller);
     controller.click({ kind: 'node', id: home }, false);
-    expect(controller.overlay().fortPick).toBeNull();
-    startPick(controller);
-    controller.key(down('Tab'));
     expect(controller.overlay().fortPick).toBeNull();
   });
 

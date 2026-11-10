@@ -12,7 +12,6 @@ import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { borderPermille } from './fogLayout.ts';
 import { reducedMotion } from './motion.ts';
-import { levelShare } from './levelLayout.ts';
 import { type Border, type CellEdge } from './regionLayout.ts';
 import {
   AREA_LINE,
@@ -32,7 +31,6 @@ import {
   type Strip,
 } from './engraving.ts';
 import { VeilView, bandAngle } from './veilView.ts';
-import { easeOutCubic } from './tween.ts';
 import {
   BORDER_FIT,
   floodLook,
@@ -55,7 +53,6 @@ import {
 import {
   BACKDROP_DIM,
   BG,
-  CANAL_LAND,
   CELL_BORDER,
   HOVER_AREA,
   MAP_BORDER,
@@ -159,7 +156,6 @@ export class MapView {
   private readonly stampParent: Container;
   private readonly mapFrame: Graphics;
   private backdrop: Sprite | null = null;
-  private supplyMode = false;
   /** The ground of the terrain mode (patterns), made on first use. */
   private ground: Graphics | null = null;
   private terrainMode = false;
@@ -192,20 +188,9 @@ export class MapView {
   /** Where the floods draw the glow themselves: the map's own glow is masked out there. */
   private readonly glowHole = new Graphics({ label: 'flood-glow-hole' });
   private readonly cellLines: Graphics;
-  private readonly territory: Graphics;
-  /** The supply view (Canal, #858): the own nodes ahead of the level, crosshatched. */
-  private readonly levelFill: Graphics;
-  /** The crosshatch of the nodes ahead of the level, in zoom buckets. */
-  private readonly aheadTile = new HatchTile(CANAL_LAND.ahead);
   /** The area under the pointer that a click would pick or aim at (#762): one cell, redrawn on a change. */
   private readonly hoverFill: Graphics;
   private hoverCell: number | null = null;
-  private level: ReadonlySet<number> = new Set();
-  private levelFrom: ReadonlySet<number> | null = null;
-  private levelElapsed = 0;
-  /** 0: no crosshatch (the normal map), 1: full (the «Supply» mode). */
-  private levelStrength = 0;
-  private levelSet = false;
   /** The engraved lines of the owners' borders, over the band. */
   private readonly borderLines: Graphics;
   /**
@@ -279,7 +264,6 @@ export class MapView {
       },
     );
     this.bandTile.update(this.zoom, this.resolution);
-    this.aheadTile.update(this.zoom, this.resolution);
     this.dim = background.addChild(
       new Graphics().rect(0, 0, bounds.width, bounds.height).fill(BACKDROP_DIM),
     );
@@ -291,11 +275,9 @@ export class MapView {
     // the engraved border of the owners, under the roads.
     this.cellLines = layers.layer.territory.addChild(new Graphics({ label: 'area-lines' }));
     this.drawCellLines();
-    this.territory = layers.layer.territory.addChild(new Graphics({ label: 'territory' }));
     // The floods of captures (#819): the fill over the tint, the glow over the map's glow, the rim
     // over the border lines.
     const floodFill = layers.layer.territory.addChild(new Container({ label: 'flood-fill' }));
-    this.levelFill = layers.layer.territory.addChild(new Graphics({ label: 'level-fill' }));
     this.hoverFill = layers.layer.territory.addChild(new Graphics({ label: 'hover-area' }));
     this.buildGlow(layers.layer.territory, bounds);
     const floodGlow = layers.layer.territory.addChild(new Container({ label: 'flood-glow' }));
@@ -394,9 +376,6 @@ export class MapView {
       this.drawGlow(this.owners, true);
       this.veil.bandChanged();
     }
-    if (this.aheadTile.update(zoom, resolution) && this.levelSet) {
-      this.drawLevel(this.levelShareNow());
-    }
     if (floorChanged) {
       this.drawBorderLines();
       this.drawCellLines();
@@ -429,19 +408,9 @@ export class MapView {
   }
 
   /**
-   * The «Supply» mode (DEC-28, item 8), "Canal" (#858): the map keeps its picture and its band, the own
-   * land is darkened and the nodes ahead of the level are crosshatched (`setLevel`).
-   */
-  setSupplyMode(on: boolean): void {
-    if (on === this.supplyMode) return;
-    this.supplyMode = on;
-    this.setOwners(this.owners);
-  }
-
-  /**
    * The terrain mode (#429, "Patterns"): the baked background, the stamps and the dimming give
    * way to a flat colour per area with a pattern per terrain. The territory, borders, roads and
-   * the fog stay as they are. Not together with the «Supply» mode (the scene turns one off).
+   * the fog stay as they are.
    */
   setTerrainMode(on: boolean): void {
     if (on === this.terrainMode) return;
@@ -482,58 +451,6 @@ export class MapView {
   }
 
   /**
-   * The supply view's crosshatch (Canal, #858): `cells` are the own nodes ahead of the leaf level
-   * (an empty list or `strength` 0 draws nothing), `strength` is 1 in the «Supply» mode and 0 on the
-   * normal map. A new set fades in and out over `CANAL_LAND.fadeMs`; the first one and "less motion"
-   * are instant. Called every frame: the same input costs nothing.
-   */
-  setLevel(cells: readonly number[], strength: number): void {
-    const next = new Set(cells);
-    const same = next.size === this.level.size && cells.every((cell) => this.level.has(cell));
-    if (same && strength === this.levelStrength && this.levelSet) return;
-    if (!same) {
-      // The old target (or the fade in progress) becomes the start of the new fade.
-      const instant = !this.levelSet || reducedMotion() || strength === 0;
-      this.levelFrom = instant ? null : this.level;
-      this.levelElapsed = 0;
-      this.level = next;
-    }
-    this.levelStrength = strength;
-    this.levelSet = true;
-    this.drawLevel(this.levelFrom === null ? 1 : 0);
-  }
-
-  private levelShareNow(): number {
-    return this.levelFrom === null
-      ? 1
-      : easeOutCubic(Math.min(1, this.levelElapsed / CANAL_LAND.fadeMs));
-  }
-
-  private drawLevel(share: number): void {
-    const fill = this.levelFill.clear();
-    const strength = this.levelStrength;
-    if (strength <= 0) return;
-    const from = this.levelFrom ?? this.level;
-    const to = this.level;
-    const color = ownerColor(this.colours, this.me);
-    for (const cell of new Set([...from, ...to])) {
-      const polygon = this.cells[cell];
-      const k = levelShare(cell, from, to, share);
-      if (polygon === undefined || k <= 0) continue;
-      // Two hatches across each other: the node neither gets nor gives (it is ahead of the level).
-      for (const angle of [45, -45]) {
-        fill.poly(polygon).fill({
-          texture: this.aheadTile.texture,
-          textureSpace: 'global',
-          matrix: this.aheadTile.matrix(angle),
-          color,
-          alpha: CANAL_LAND.ahead.alpha * strength * k,
-        });
-      }
-    }
-  }
-
-  /**
    * Lights the area of node `cell` lightly (#762): what a click there would pick or aim at; `null`
    * lights nothing. Called every frame: the same cell costs nothing, a new one redraws one polygon.
    */
@@ -559,8 +476,8 @@ export class MapView {
 
   /**
    * `owners[i]`: current owner of node `i` (`null`: nobody). With `animate` a node that changed hands
-   * floods into the new owner's colour (#819, "Fitted", ui-style 49); the first call, the «Supply»
-   * tint and a call without `animate` are instant (and end the floods under way). `delays`: per node,
+   * floods into the new owner's colour (#819, "Fitted", ui-style 49); the first call
+   * and a call without `animate` are instant (and end the floods under way). `delays`: per node,
    * how long (ms) its flood waits, so that it starts as the winner walks into the city (Walk in, #856).
    */
   setOwners(
@@ -575,15 +492,13 @@ export class MapView {
         : null;
     if (animate && changed !== null && changed.length === 0) return;
     this.owners = owners;
-    const flood = animate && !this.supplyMode && changed !== null;
+    const flood = animate && changed !== null;
     if (!flood) this.endFloods();
     this.lines = borderLines(this.cells, owners, this.mitred);
     if (flood) this.startFloods(changed, previous, delays);
     else this.drawGlow(owners);
-    this.drawTerritory();
     this.drawBorderLines();
     this.veil.ownersChanged();
-    if (this.levelSet) this.drawLevel(this.levelShareNow());
     // A road between two cities of one owner looks different from a buffer road.
     this.roads.forEach((_, i) => {
       this.drawRoad(i);
@@ -718,20 +633,6 @@ export class MapView {
     return 0;
   }
 
-  /** The «Supply» mode darkens the own land (Canal, #858); an area under a flood is drawn by its flood. */
-  private drawTerritory(): void {
-    const g = this.territory;
-    g.clear();
-    if (!this.supplyMode) return;
-    const own = this.owners.flatMap((owner, i) => {
-      const cell = this.cells[i];
-      return cell === undefined || owner !== this.me || this.floods.has(i) ? [] : [cell];
-    });
-    if (own.length === 0) return;
-    for (const cell of own) g.poly(cell);
-    g.fill({ color: CANAL_LAND.shade, alpha: CANAL_LAND.shadeAlpha });
-  }
-
   /**
    * The engraved border of the areas (#842): every line kind of `BORDER_ENGRAVING`. While floods
    * run, a line that a capture adds joins as the front reaches it (just inside the area, or just
@@ -818,7 +719,6 @@ export class MapView {
 
   /** Runs the floods of captures by `dtMs` of real time; once per frame (a no-op when none is under way). */
   advance(dtMs: number): void {
-    this.advanceLevel(dtMs);
     if (this.floods.size === 0) return;
     const done: number[] = [];
     for (const flood of this.floods.values()) {
@@ -835,7 +735,6 @@ export class MapView {
       this.afterFloods();
       // The claims of the glow change with the set of floods.
       if (this.floods.size > 0) this.buildFloods();
-      this.drawTerritory();
     }
     this.drawBorderLines();
     this.roads.forEach((road, i) => {
@@ -850,17 +749,6 @@ export class MapView {
     const edge = this.map.edges[i];
     if (edge === undefined || this.floods.size === 0) return undefined;
     return this.floods.get(edge.a) ?? this.floods.get(edge.b);
-  }
-
-  /** The fade of the supply level by `dtMs` of real time (a no-op when none is under way). */
-  private advanceLevel(dtMs: number): void {
-    if (this.levelFrom === null) return;
-    this.levelElapsed += Math.max(0, dtMs);
-    const t = Math.min(1, this.levelElapsed / CANAL_LAND.fadeMs);
-    if (t >= 1) {
-      this.levelFrom = null;
-      this.drawLevel(1);
-    } else this.drawLevel(easeOutCubic(t));
   }
 
   private buildGlow(parent: Container, bounds: { width: number; height: number }): void {
@@ -893,8 +781,7 @@ export class MapView {
   }
 
   /**
-   * Redraws the band when the owners changed (or `force`: a new zoom bucket of its hatch); the
-   * «Supply» mode has none.
+   * Redraws the band when the owners changed (or `force`: a new zoom bucket of its hatch).
    */
   private drawGlow(owners: readonly Owner[], force = false): void {
     const key = owners.map((owner) => String(owner)).join('');
@@ -1100,14 +987,11 @@ export class MapView {
     this.casingLayer.destroy({ children: true });
     this.laneLayer.destroy({ children: true });
     this.cellLines.destroy();
-    this.territory.destroy();
-    this.levelFill.destroy();
     this.hoverFill.destroy();
     this.borderLines.destroy();
     this.glow.destroy({ children: true });
     this.veil.destroy();
     this.bandTile.destroy();
-    this.aheadTile.destroy();
     this.stamps?.destroy();
     this.backdrop?.destroy();
     this.terrainFill.destroy();

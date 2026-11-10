@@ -102,8 +102,6 @@ export interface OverlayState {
   readonly preview: MovePreview | null;
   /** The city ringed in the first seconds of a match ("your capital is here"); `null`: none. */
   readonly beacon: number | null;
-  /** The «Supply» map mode is on (Tab or F2, DEC-43); `false`: the normal map. */
-  readonly supply: boolean;
   /** The terrain map mode (#429): patterns for the ground and a sight sign on the places you see. */
   readonly terrain: boolean;
   /**
@@ -190,7 +188,6 @@ export const EMPTY_OVERLAY: OverlayState = {
   ghosts: [],
   preview: null,
   beacon: null,
-  supply: false,
   terrain: false,
   reach: [],
   split: [],

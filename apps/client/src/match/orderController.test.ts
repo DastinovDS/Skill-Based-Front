@@ -658,50 +658,12 @@ describe('OrderController', () => {
       expect(controller.overlay().terrain).toBe(false);
     });
 
-    it('is not together with the «Supply» mode: one turns the other off', () => {
-      const { controller } = setup();
-      controller.key(down('Tab'));
-      controller.key(down('KeyT'));
-      expect(controller.supplyMode).toBe(false);
-      expect(controller.terrainMode).toBe(true);
-      controller.key(down('Tab'));
-      expect(controller.supplyMode).toBe(true);
-      expect(controller.terrainMode).toBe(false);
-    });
-
     it('gives the vision table of the rules as it is, for the legend', () => {
       const { controller } = setup();
       const table = controller.visionTable;
       // DEC-21, item 2: forest is always a range, mountains see plains exactly.
       expect(table.forest).toEqual({ plains: 'range', forest: 'range', mountains: 'presence' });
       expect(table.mountains.plains).toBe('exact');
-    });
-  });
-
-  describe('supply map mode (DEC-18)', () => {
-    const city = home;
-
-    it('Tab and F2 toggle the mode; the overlay carries it', () => {
-      const { controller } = setup();
-      expect(controller.overlay().supply).toBe(false);
-      expect(controller.key(down('Tab'))).toBe(true);
-      expect(controller.supplyMode).toBe(true);
-      expect(controller.overlay().supply).toBe(true);
-      expect(controller.key(down('Tab', true))).toBe(true); // a held key does not flip it back
-      expect(controller.supplyMode).toBe(true);
-      controller.key(down('F2'));
-      expect(controller.supplyMode).toBe(false);
-      expect(controller.overlay().supply).toBe(false);
-    });
-
-    it('takes no click: an own city opens no menu, an enemy node is not selected', () => {
-      const { controller, sent, hud } = setup();
-      controller.key(down('Tab'));
-      controller.click({ kind: 'node', id: city }, false);
-      expect(controller.cityMenu.current.open).toBe(false);
-      controller.click({ kind: 'node', id: enemy.id }, false);
-      expect(hud.selection).toBeNull();
-      expect(sent).toEqual([]);
     });
   });
 });

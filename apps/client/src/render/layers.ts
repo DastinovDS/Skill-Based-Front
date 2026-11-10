@@ -6,8 +6,8 @@ import { Container, RenderLayer } from 'pixi.js';
  * must not dim, and neither must the own group that marches along a road into a hidden city
  * (DEC-10: it sees its own edge, which lies in the veil of the hidden end). That is safe: the
  * server sends an enemy figure only where it is seen, and the memory ghosts of the fog are drawn in
- * the fog layer itself. `tolls` (the toll of a road fortification, #707) is not hidden by the «Supply»
- * mode, so it has a layer of its own above the effects. `supply` is above everything.
+ * the fog layer itself. `tolls` (the toll of a road fortification, #707) has a layer of its own above the
+ * effects, above everything.
  *
  * `badges` (#797) holds no children of its own: it is a `RenderLayer` that draws the advantage and
  * disadvantage badges of the unit tokens (#791) over the selection and hover outlines of `intents`,
@@ -25,7 +25,6 @@ export const LAYER_ORDER = [
   'badges',
   'effects',
   'tolls',
-  'supply',
 ] as const;
 
 export type LayerName = (typeof LAYER_ORDER)[number];
@@ -33,8 +32,7 @@ export type LayerName = (typeof LAYER_ORDER)[number];
 /**
  * The world container (moved and scaled by the camera) with one child container per layer.
  * Layers stay empty until their issue fills them: groups and intents (CLI-04, #60), fog (CLI-05,
- * #61), effects. `supply` is the «Supply» map mode (DEC-28, item 8): while it is on, the groups,
- * intents, fog and effects layers are hidden and this one draws.
+ * #61), effects.
  */
 export interface MapLayers {
   readonly world: Container;

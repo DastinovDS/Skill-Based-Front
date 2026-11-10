@@ -585,30 +585,6 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.destroy();
   });
 
-  it('hides the queue and the alert in the Supply view (Canal keeps the towers) and brings them back', () => {
-    const { view, nodes } = make();
-    view.update(
-      withCity({
-        recruit_queue: 1,
-        recruit_waiting: true,
-        recruit_progress: rules.unitTicks,
-        building: { kind: 'barracks', done_tick: NOW + 20, owed: 0 },
-      }),
-      rules.unitTicks,
-      UPGRADES,
-      rules.queueMax,
-    );
-    const marks = ['recruits', 'progress-alert', 'tower-barracks'].map(
-      (l) => sprite(nodes, own.id, l) as Container,
-    );
-    expect(marks.map((m) => m.visible)).toEqual([true, true, true]);
-    view.setSupplyMode(true);
-    expect(marks.map((m) => m.visible)).toEqual([false, false, true]);
-    view.setSupplyMode(false);
-    expect(marks.map((m) => m.visible)).toEqual([true, true, true]);
-    view.destroy();
-  });
-
   it('pulses the ring, and holds it steady with "less motion"', () => {
     const { view, nodes } = make();
     view.update(

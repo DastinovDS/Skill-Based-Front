@@ -73,13 +73,6 @@ describe('an enemy city is not selected (#535)', () => {
     expect(hud.selection).toBeNull();
   });
 
-  it('in the Supply view an enemy city is not selected', () => {
-    const { hud, controller } = setup();
-    controller.ui.patch({ supplyMode: true });
-    controller.click({ kind: 'node', id: enemy.id }, false);
-    expect(hud.selection).toBeNull();
-  });
-
   it('a click on the icon of own units standing in an enemy city does not select the city', () => {
     const { hud, controller } = setup();
     controller.click({ kind: 'stack', node: enemy.id, ids: [first.id, 'other'] }, false);

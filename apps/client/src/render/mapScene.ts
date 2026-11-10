@@ -32,9 +32,7 @@ import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
 import { SightView } from './sightView.ts';
-import { SupplyView } from './supplyView.ts';
 import { FlowView } from './flowView.ts';
-import { aheadNodes } from './flowLayout.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
@@ -128,14 +126,11 @@ export class MapScene {
   /** The Shift+drag selection box being dragged (world units); `null`: none (DEC-48, item K1). */
   private box: WorldRect | null = null;
   private readonly undo: UndoView;
-  private readonly supply: SupplyView;
   private readonly flow: FlowView;
   /** The road fortifications (DEC-43, item D; #707). */
   private readonly forts: FortView;
-  /** The toll of the lines (K6): its own layer, shown in the «Supply» mode too. */
+  /** The toll of the lines (K6): its own layer. */
   private readonly tolls: TollView;
-  /** The own nodes ahead of the supply level of the snapshot on screen (crosshatched in the «Supply» view). */
-  private levelCells: readonly number[] = [];
   private readonly sight: SightView;
   private readonly alerts: AlertView;
   private interaction: MapInteraction | null;
@@ -152,7 +147,6 @@ export class MapScene {
   private walkEvents: readonly EventMsg[] | null = null;
   private walkEventCount = -1;
   private destroyed = false;
-  private supplyOn = false;
   private readonly me: PlayerId;
   private terrainOn = false;
   private readonly onsnapshot: ((tick: number) => void) | undefined;
@@ -218,7 +212,6 @@ export class MapScene {
     this.overlay = new OverlayView(map, this.layers, me, radiusOf, colours[me]);
     this.groupOrders = new GroupOrderView(map, this.layers, me, radiusOf, this.sprites, colours);
     this.undo = new UndoView(map, this.layers, radiusOf, colours[me]);
-    this.supply = new SupplyView(map, this.layers, me, radiusOf, this.sprites, colours);
     this.flow = new FlowView(map, this.layers, me, radiusOf, this.sprites);
     this.sight = new SightView(map, this.layers, me, radiusOf);
     this.alerts = new AlertView(map, this.layers, me, radiusOf, colours);
@@ -328,7 +321,6 @@ export class MapScene {
     this.overlay.destroy();
     this.groupOrders.destroy();
     this.undo.destroy();
-    this.supply.destroy();
     this.flow.destroy();
     this.forts.destroy();
     this.tolls.destroy();
@@ -378,9 +370,7 @@ export class MapScene {
     this.screenSprites.endFrame();
     const frame = this.source?.frame();
     if (frame === undefined || frame === null || this.source === null) return;
-    // Asked once per frame and first: the «Supply» mode swaps the picture before anything draws.
     const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
-    this.setSupplyMode(overlay.supply);
     this.setTerrainMode(overlay.terrain);
     // The selected city shows the free slots of its queue; the rings that ask for a look pulse.
     this.cities.setSelected(overlay.selection?.kind === 'node' ? overlay.selection.id : null);
@@ -419,7 +409,6 @@ export class MapScene {
       // The Ruled veil over the areas the snapshot hides (#842).
       this.view.setHidden(veilCities(frame.base.view.nodes));
       this.view.setRoads(frame.base.view.edges);
-      this.levelCells = aheadNodes(frame.base.view, this.me);
       this.cities.update(
         frame.base,
         this.source.recruitTicks ?? null,
@@ -495,13 +484,9 @@ export class MapScene {
       this.pointerOnMap(),
       Math.max(1, 1 / this.layers.world.scale.x),
     );
-    this.supply.setTickHz(tickHz);
-    this.supply.update(frame, overlay.supply);
-    // The supply flow (DEC-43): the crosshatch ahead of the level in the «Supply» mode only (Canal,
-    // #858); the normal map shows the starving marks and nothing else of it (ui-style 42).
-    this.view.setLevel(this.levelCells, overlay.supply ? 1 : 0);
-    this.flow.update(frame.base, !overlay.supply);
-    // The road fortifications, on both maps; the road pick adds a ghost of the line on every road it reaches.
+    // The starving marks of the supply flow (ui-style 42): alerts only.
+    this.flow.update(frame.base);
+    // The road fortifications; the road pick adds a ghost of the line on every road it reaches.
     this.forts.setBuildTicks(this.source.fortBuildTicks ?? 0);
     this.forts.update(frame.base.view, frame.tick, overlay.fortPick ?? null);
     this.forts.advance(this.frameMs);
@@ -509,20 +494,6 @@ export class MapScene {
     this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
-
-  /**
-   * The «Supply» map mode (DEC-28, item 8), "Canal" (#858): the map keeps its picture and its fog; the
-   * groups, the intents and the effects are hidden (`SupplyView` draws on the `supply` layer), the own
-   * land is darkened and the cities lose the queue and alert marks.
-   */
-  private setSupplyMode(on: boolean): void {
-    this.view.setSupplyMode(on);
-    if (on === this.supplyOn) return;
-    this.supplyOn = on;
-    this.cities.setSupplyMode(on);
-    const { groups, intents, effects } = this.layers.layer;
-    for (const layer of [groups, intents, effects]) layer.visible = !on;
-  }
 
   /**
    * The terrain map mode (#429): the ground becomes flat colours with a pattern per terrain and a
@@ -640,7 +611,6 @@ export class MapScene {
     this.undo.setCamera(camera.scale, this.app.renderer.resolution);
     this.entities.setLabelResolution(resolution);
     this.alerts.setLabelResolution(resolution);
-    this.supply.setLabelResolution(resolution);
     this.forts.setLabelResolution(resolution);
     this.forts.setCameraScale(camera.scale);
     this.forts.setDeviceResolution(this.app.renderer.resolution);

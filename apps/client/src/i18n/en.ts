@@ -524,7 +524,6 @@ export const en = {
   'help.key.split': 'split the group',
   'help.key.merge': 'merge the groups in the node',
   'help.key.stance': 'CP stance',
-  'help.key.supply': 'supply map mode: point at a city to see where it sends next',
   'help.key.alert': 'camera to the alert',
   'help.key.fit': 'fit the map',
   'help.key.mute': 'sound on or off',
@@ -628,7 +627,6 @@ export const en = {
   'legal.licenses.libraries.link': 'third-party licences',
   'starve.pill': 'starving in {seconds} s',
   'event.starvation': 'Starvation in cut-off {node}: warehouse −{warehouse}, units −{units}',
-  'supply.banner': 'Supply',
   // DEC-41, #649: factories, a plan that gathers.
   'reject.ALREADY_BUILT.factory': 'The city is a factory already, or one is being built',
   'reject.ALREADY_BUILT.fort': 'This road has your line at this end already',
@@ -664,15 +662,7 @@ export const en = {
     'the rally point of the selected city: its new units walk there by themselves; again: clear it',
   'city.rally': 'Rally point',
   'city.rallyClear': 'Clear rally point',
-  // The automatic supply flow (DEC-43): one lever, the leaf shift.
-  'supply.shift': 'Supply level',
-  'supply.shiftTip':
-    'The level is where supply stops: cities there keep what they get and even out with each other; those ahead of it are frozen, but an army short of charges still gets supplied. − moves it one road back from the front, + forward (keys - and =)',
-  'supply.shiftBack': 'Move the supply level one road back from the front',
-  'supply.shiftForward': 'Move the supply level one road forward',
-  'flow.noSource': 'No source',
   'help.key.fortify': 'fortify a road of the selected city or province, then pick the road',
-  'help.key.leafShift': 'move the supply level back from the front / forward',
   'help.economyFlow':
-    'Factories make charges, and supply rolls by itself towards the front, one charge per road each dispatch. You steer one thing: the supply level. Buildings are paid in charges of the node and of the units standing there.',
+    'Factories make charges, and supply rolls by itself towards the front, one charge per road each dispatch. Buildings are paid in charges of the node and of the units standing there.',
 };

@@ -16,7 +16,7 @@
   // order decides the remainder of a planned bonus, item F2), one helmet each with its units.
   const picked = $derived.by(() => {
     const ui = orders.ui.current;
-    if (ui.supplyMode || ui.terrainMode) return [];
+    if (ui.terrainMode) return [];
     return ui.picks
       .map((id) => groups.find((g) => g.id === id))
       .filter((g): g is GroupChoice => g !== undefined);

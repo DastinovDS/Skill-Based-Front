@@ -7,7 +7,7 @@ import type { Command, SnapshotMsg } from '../protocol.gen.ts';
 import { OrderBook } from './orderBook.ts';
 import { OrderController, PLAN_BONUS } from './orderController.ts';
 
-// DEC-41, #649: the controls of a gathering plan, and the «Supply» layer that takes no click.
+// DEC-41, #649: the controls of a gathering plan.
 const map = DEFAULT_MAP;
 const RULES = DEV_RULES_V2;
 const base = devSnapshot(map, RULES, 30);
@@ -38,7 +38,7 @@ function setup(factories: readonly number[] = [home]) {
 
 const down = (code: string) => ({ type: 'keydown', code, shiftKey: false }) as const;
 
-describe('OrderController: planned orders and the «Supply» layer (DEC-41)', () => {
+describe('OrderController: planned orders (DEC-41)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -86,30 +86,5 @@ describe('OrderController: planned orders and the «Supply» layer (DEC-41)', ()
       { type: 'release_plan', group: group.id },
       { type: 'release_plan', group: group.id },
     ]);
-  });
-
-  it('in the «Supply» mode a click never selects or opens a city, group or stack menu (#678)', () => {
-    const { controller, hud } = setup([]);
-    controller.key(down('Tab'));
-    expect(controller.supplyMode).toBe(true);
-    const hits = [
-      { kind: 'node', id: home },
-      { kind: 'node', id: enemy.id },
-      { kind: 'edge', id: 0, cell: home },
-      { kind: 'group', id: group.id, node: home },
-      { kind: 'stack', node: home, ids: [group.id] },
-    ] as const;
-    for (const hit of hits) {
-      controller.click(hit, false);
-      controller.click(hit, false);
-      expect(hud.selection).toBeNull();
-      expect(controller.cityMenu.current.open).toBe(false);
-      expect(controller.groupMenu.current.open).toBe(false);
-      expect(controller.stackMenu.current.open).toBe(false);
-    }
-    // Out of the mode the same click selects the city and opens its menu again.
-    controller.key(down('Tab'));
-    controller.click({ kind: 'node', id: home }, false);
-    expect(controller.cityMenu.current.open).toBe(true);
   });
 });

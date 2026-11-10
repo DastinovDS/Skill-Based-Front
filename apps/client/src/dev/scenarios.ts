@@ -812,29 +812,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     // (alerts only: the starving marks; no level fill, no chevrons, #728).
     id: 'flow',
     map: 'artery',
-    snapshot: flowSnapshot(bundledMap('artery'), 0),
-    events: [],
-    view: FLOW_VIEW,
-    cityUpgrades: true,
-    rules: DEV_RULES_FLOW,
-  },
-  {
-    // The same moment on the «Supply» layer (Tab): chevrons, dots, the level fill, the warehouse
-    // squares, the pocket West Shoulder, the pinch marks. The pointer on a node adds nothing (#728).
-    id: 'flow_supply',
-    map: 'artery',
-    snapshot: flowSnapshot(bundledMap('artery'), 0),
-    events: [],
-    view: FLOW_VIEW,
-    cityUpgrades: true,
-    rules: DEV_RULES_FLOW,
-  },
-  {
-    // The leaf shift one road back (`−1`): the level is the ring behind the leaves, the leaves are
-    // frozen (the hatched discs), on the «Supply» layer.
-    id: 'flow_shift',
-    map: 'artery',
-    snapshot: flowSnapshot(bundledMap('artery'), 1),
+    snapshot: flowSnapshot(bundledMap('artery')),
     events: [],
     view: FLOW_VIEW,
     cityUpgrades: true,
@@ -856,16 +834,6 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     // enemy's on the other side of the same border, one being built (55%), one with a neutral city
     // across, an enemy line being built (known to exist only).
     id: 'forts',
-    map: 'artery',
-    snapshot: fortsSnapshot(bundledMap('artery')),
-    events: [],
-    view: FORTS_VIEW,
-    cityUpgrades: true,
-    rules: DEV_RULES_FLOW,
-  },
-  {
-    // The same on the «Supply» layer (Tab): the lines are drawn there too.
-    id: 'forts_supply',
     map: 'artery',
     snapshot: fortsSnapshot(bundledMap('artery')),
     events: [],
