@@ -16,9 +16,6 @@ import { testSprites } from './testSprites.ts';
 const map = DEFAULT_MAP;
 const UPGRADES = {
   barracks: 100,
-  warehouse: 100,
-  warehouseMaxLevel: 0, // no warehouse levels (#894)
-  warehouseGainPerLevel: 0,
 };
 
 /** The snapshot with `has_barracks` of node `id` replaced (the server decides it, DEC-31). */
@@ -105,24 +102,20 @@ describe('CityView: the warehouse places of an own city (C1, DEC-26)', () => {
     view.update(snapshot, null, null);
     const bar = barOf(layers.layer.nodes, own.id);
     expect(bar.spec?.key).toBe(
-      warehouseMarksSpec(
-        own.warehouse_cap ?? own.capacity,
-        own.warehouse ?? 0,
-        stockColor('you'),
-        0,
-      ).key,
+      warehouseMarksSpec(own.warehouse_cap ?? own.capacity, own.warehouse ?? 0, stockColor('you'))
+        .key,
     );
     view.destroy();
   });
 
-  it('shows a foreign city only the charges (no frame, no dashed place): its warehouse level is hidden', () => {
+  it('shows a foreign city only the charges (no frame): its capacity is hidden', () => {
     if (foreign === undefined || foreign.warehouse === null) throw new Error('no foreign city');
     const layers = createLayers();
     const view = new CityView(map, layers, 0, 1, testSprites());
     view.update(snapshot, null, UPGRADES);
     const bar = barOf(layers.layer.nodes, foreign.id);
     expect(bar.spec?.key).toBe(
-      warehouseMarksSpec(foreign.warehouse, foreign.warehouse, stockColor('enemy'), 0).key,
+      warehouseMarksSpec(foreign.warehouse, foreign.warehouse, stockColor('enemy')).key,
     );
     view.destroy();
   });
@@ -212,9 +205,8 @@ describe('CityView: a province is a pale dot (PB, #431, DEC-23)', () => {
     view.update(snapshot, null, UPGRADES);
     const container = city(layers.layer.nodes, ownProvince.id);
     // body, ring, warehouse, the crown, the paid lozenges, tower and ring of the barracks and of the
-    // factory, the recruits, the build plate, the alert ring, the bunker badge and the plate of its
-    // build: no VP badge after them.
-    expect(container.children).toHaveLength(16);
+    // factory, the recruits, the alert ring: no VP badge after them.
+    expect(container.children).toHaveLength(13);
     expect(barracksMark(layers.layer.nodes, ownProvince.id)).toBeNull();
     view.destroy();
   });
@@ -417,8 +409,6 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.advance(16);
     expect((root.children[0] as BakedSprite).spec?.key).toContain(':rising:');
     expect((root.children[1] as BakedSprite).visible).toBe(true);
-    // No plate above the city for a barracks build any more.
-    expect(sprite(nodes, own.id, 'build').visible).toBe(false);
     view.destroy();
   });
 
@@ -691,10 +681,10 @@ describe('CityView: the warehouse of an own province under economy v2 (DEC-41, i
     view.update(holding(ownProvince.id, 1), null, UPGRADES, null, 1);
     const bar = barOf(layers.layer.nodes, ownProvince.id);
     expect(bar.visible).toBe(true);
-    expect(bar.spec?.key).toBe(warehouseMarksSpec(1, 1, stockColor('you'), 0).key);
+    expect(bar.spec?.key).toBe(warehouseMarksSpec(1, 1, stockColor('you')).key);
     view.update(holding(ownProvince.id, 0), null, UPGRADES, null, 1);
     expect(barOf(layers.layer.nodes, ownProvince.id).spec?.key).toBe(
-      warehouseMarksSpec(1, 0, stockColor('you'), 0).key,
+      warehouseMarksSpec(1, 0, stockColor('you')).key,
     );
     view.destroy();
   });

@@ -10,7 +10,7 @@
 import type { PlayerId, View } from '../protocol.gen.ts';
 import type { EdgeIndex } from './supplyLayout.ts';
 
-/** The supply is the automatic flow (`ruleset_public.supply_model = "flow"`), seen in the view. */
+/** The view carries the fields of the supply flow (`me.leaf_shift` is set, DEC-43). */
 export function flowOn(view: View): boolean {
   return typeof view.me.leaf_shift === 'number';
 }

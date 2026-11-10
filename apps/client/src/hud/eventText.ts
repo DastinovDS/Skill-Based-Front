@@ -32,14 +32,11 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'packet_delivered',
   // A cancel of a recruit is the player's own act: the CP bar shows the refund (DEC-25).
   'recruit_cancelled',
-  // Front markers and the rear minimum (DEC-28) are the player's own settings; their UI: #293.
-  'front_set',
-  'rear_min_set',
   // The score is in the top bar already (ui-style U2): a VP line would repeat it every few seconds.
   'vp_awarded',
-  // Economy v2 (DEC-41): a full factory warehouse burns a charge (the gauge shows it full), every
-  // payment of a building (the build plate shows what is owed) and every charge a gathering plan
-  // takes (the plan shows its bonus) are bookkeeping, every few seconds.
+  // DEC-41: a full factory warehouse burns a charge (the gauge shows it full), every payment of a
+  // building (the Crown arc shows what is owed) and every charge a gathering plan takes (the plan
+  // shows its bonus) are bookkeeping, every few seconds.
   'charge_burned',
   'build_paid',
   'plan_charged',
@@ -63,7 +60,7 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'starvation',
   // A capture the group could not pay for (DEC-38): only its player gets it.
   'capture_failed',
-  // Economy v2 (DEC-41, #649): a factory done.
+  // DEC-41, #649: a factory done.
   'factory_built',
   // Road fortifications (DEC-43, item D; #707): a line starts to work or is lost with its city, and a
   // toll paid or taken (the map shows each as a beam, the feed keeps the count).
@@ -122,31 +119,17 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
       return t('event.match_ended');
     case 'attrition':
       return tf('event.attrition', { node: names(num(data.node)) });
-    case 'road_upgraded':
-      return tf('event.road_upgraded', { edge: num(data.edge), width: num(data.width) });
     case 'build_started':
-      // DEC-26: a city builds a road level, the barracks or a warehouse level; DEC-41: a factory or a bunker.
+      // DEC-26: a city builds the barracks; DEC-41: a factory; DEC-43: a road fortification.
       if (data.kind === 'factory')
         return tf('event.build_started.factory', { node: names(num(data.node)) });
-      if (data.kind === 'fort')
-        return tf('event.build_started.bunker', { node: names(num(data.node)) });
       if (data.kind === 'road_fort')
         return tf('event.build_started.road_fort', { node: names(num(data.node)) });
-      if (data.kind === 'barracks')
-        return tf('event.build_started.barracks', { node: names(num(data.node)) });
-      // The road levels and the warehouse levels were removed (#894): every other build is the
-      // barracks of a city.
       return tf('event.build_started.barracks', { node: names(num(data.node)) });
     case 'build_stopped':
-      // No road builds since #894: a build stops only in a node.
       return tf('event.build_stopped.city', { node: names(num(data.node)) });
     case 'barracks_built':
       return tf('event.barracks_built', { node: names(num(data.node)) });
-    case 'warehouse_upgraded':
-      return tf('event.warehouse_upgraded', {
-        node: names(num(data.node)),
-        level: num(data.level),
-      });
     case 'packet_lost':
       return tf('event.packet_lost', { edge: num(data.edge), charges: num(data.charges) });
     case 'starvation':
@@ -155,31 +138,8 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
         warehouse: num(data.warehouse),
         units: num(data.units),
       });
-    case 'transfer_started':
-      return tf('event.transfer_started', {
-        charges: num(data.charges),
-        from: names(num(data.from_node)),
-        to: names(num(data.to_node)),
-      });
     case 'factory_built':
       return tf('event.factory_built', { node: names(num(data.node)) });
-    case 'fort_built':
-      return tf('event.fort_built', { node: names(num(data.node)) });
-    case 'line_cut':
-      return tf('event.line_cut', {
-        from: names(num(data.from_node)),
-        to: names(num(data.to_node)),
-      });
-    case 'line_rerouted':
-      return tf('event.line_rerouted', {
-        from: names(num(data.from_node)),
-        to: names(num(data.to_node)),
-      });
-    case 'line_auto':
-      return tf('event.line_auto', {
-        from: names(num(data.from_node)),
-        to: names(num(data.to_node)),
-      });
     case 'road_fort_built':
       return tf('event.road_fort_built', { node: names(num(data.node)), edge: num(data.edge) });
     case 'road_fort_destroyed':

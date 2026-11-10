@@ -35,7 +35,7 @@ function tipOf(groups: GroupView[], hover: string | { node: number } = 'g'): str
   const canvas = document.body.appendChild(document.createElement('div'));
   canvas.className = 'game-canvas';
   const target = document.body.appendChild(document.createElement('div'));
-  mounted.push(mount(GroupTip, { target, props: { group: hovered, rules: RULES } }));
+  mounted.push(mount(GroupTip, { target, props: { group: hovered } }));
   flushSync();
   canvas.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, buttons: 0 }));
   vi.advanceTimersByTime(400);
@@ -46,7 +46,7 @@ function tipOf(groups: GroupView[], hover: string | { node: number } = 'g'): str
 
 let mounted: Record<string, unknown>[] = [];
 
-describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)', () => {
+describe('GroupTip: the bonus of a plan (DEC-29)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     setLocale('en');
@@ -58,9 +58,8 @@ describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)',
     vi.useRealTimers();
   });
 
-  it('says nothing of the bonus for a group not in Defense', () => {
+  it('says nothing of the bonus for a group without a plan', () => {
     const text = tipOf([group({})]);
-    expect(text).not.toContain('Defense');
     expect(text).not.toContain('bonus');
   });
 

@@ -55,29 +55,22 @@ export function drawLozenge(
 
 /**
  * The warehouse under a city (Lozenges, 57u): one mark per place, `stock` of them filled in
- * `color`, the rest hollow, then `locked` faint hollow ones for the levels not built yet (DEC-26).
- * No bar and no number. The sprite's origin is the middle of the row.
+ * `color`, the rest hollow. No bar and no number. The sprite's origin is the middle of the row.
  */
-export function warehouseMarksSpec(
-  capacity: number,
-  stock: number,
-  color: number,
-  locked = 0,
-): BakeSpec {
+export function warehouseMarksSpec(capacity: number, stock: number, color: number): BakeSpec {
   const cap = Math.max(0, Math.floor(capacity));
-  const total = cap + Math.max(0, Math.floor(locked));
   const filled = Math.min(cap, Math.max(0, Math.floor(stock)));
-  const xs = lozengeRow(total);
+  const xs = lozengeRow(cap);
   const h = (LOZENGE.casing * Math.SQRT2) / 2;
   const left = (xs[0] ?? 0) - h;
   const right = (xs[xs.length - 1] ?? 0) + h;
   return {
-    key: `lozenges:${String(cap)}:${String(filled)}:${String(total - cap)}:${String(color)}`,
+    key: `lozenges:${String(cap)}:${String(filled)}:${String(color)}`,
     box: { x: left - 1, y: -h - 1, width: right - left + 2, height: 2 * h + 2 },
     draw(into, tools) {
       const g = graphics(into);
       xs.forEach((x, j) => {
-        drawLozenge(g, tools, { x, y: 0 }, j < filled, color, 1, j < cap ? 1 : LOZENGE.lockedAlpha);
+        drawLozenge(g, tools, { x, y: 0 }, j < filled, color);
       });
     },
   };

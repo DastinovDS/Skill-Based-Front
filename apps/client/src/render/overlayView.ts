@@ -15,7 +15,7 @@ import { reducedMotion } from './motion.ts';
 import type { MapLayers } from './layers.ts';
 import { helmetWidth } from './shapes.ts';
 import { helmetOutline } from '../units/helmet.ts';
-import { dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
+import { nodePoint, type TokenSpot } from './layout.ts';
 import { ringRadius } from './cityLayout.ts';
 import {
   BONUS_MARK,
@@ -33,12 +33,9 @@ import {
   PATH_SHADOW,
   REFUSED,
   RIBBON_ENGRAVED,
-  PICK_BAND,
   PAPER,
   YOU,
   REACH_RING,
-  roadSpan,
-  SELECT_COLOR,
   WARN,
   CASING,
   FINE_RING,
@@ -145,17 +142,6 @@ export function drawSplitRing(g: Graphics, at: Point, R: number): void {
   }
 }
 
-/** The stretch of the road `a`-`b` between the city rims (radius `ra` at `a`, `rb` at `b`); `null`: none. */
-function rimSpan(a: Point, b: Point, ra: number, rb: number): [Point, Point] | null {
-  const length = Math.hypot(b.x - a.x, b.y - a.y);
-  if (length <= ra + rb) return null;
-  const at = (d: number): Point => ({
-    x: a.x + ((b.x - a.x) * d) / length,
-    y: a.y + ((b.y - a.y) * d) / length,
-  });
-  return [at(ra), at(length - rb)];
-}
-
 /**
  * The player's own input on the map (CLI-06, #62): the selection outline, dashed ghost arrows of
  * orders not yet in a snapshot, and the dotted preview of where a click would send the group.
@@ -170,14 +156,6 @@ export class OverlayView {
   /** The look the hover outline is drawn for (`frameKey`; empty: not drawn yet). */
   private hoverKey = '';
   private readonly lines = new Graphics({ label: 'order-lines' });
-  /**
-   * The dashed band of the road mode: a Graphics of its own because it has to show in the «Supply»
-   * view, which hides the `intents` layer (#469): there it lies on the `roads` layer (under the
-   * supply flows), on the normal map at the bottom of `intents`, where it always was.
-   */
-  private readonly band = new Graphics({ label: 'road-band' });
-  private bandLayer: Container;
-  private readonly layers: MapLayers;
   /** Ghost arrows of sent orders: redrawn every frame while one shakes and fades. */
   private readonly ghosts = new Graphics();
   private overlay: OverlayState = EMPTY_OVERLAY;
@@ -286,10 +264,7 @@ export class OverlayView {
         console.warn('hourglass glyph failed to load', error);
       },
     );
-    this.layers = layers;
-    this.bandLayer = layers.layer.intents;
     layers.layer.intents.addChild(
-      this.band,
       this.lines,
       this.path,
       this.ring,
@@ -313,7 +288,6 @@ export class OverlayView {
     const changed = next !== this.overlay;
     if (changed) {
       this.overlay = next;
-      this.placeBand(next.supply !== null);
       this.drawLines(next);
       this.drawRing(next);
     }
@@ -398,7 +372,7 @@ export class OverlayView {
         end: this.radiusOf(mark.node) + REACH_RING.gap,
       },
       { width: 2 * M.radius * scale, height: 2 * M.radius * scale },
-      (roadSpan(3) / 2 + M.roadGap) * scale,
+      M.roadGap * scale,
       // The cities on the way: the disc stays clear of them.
       mark.path.map((id) => this.radiusOf(id) + REACH_RING.gap + M.badgeClear),
     );
@@ -524,7 +498,6 @@ export class OverlayView {
     this.bonusTimeStyle.destroy();
     this.path.destroy();
     this.etaStyle.destroy();
-    this.band.destroy();
     this.lines.destroy();
     this.ghosts.destroy();
     this.ring.destroy();
@@ -604,8 +577,6 @@ export class OverlayView {
   }
 
   private drawLines(state: OverlayState): void {
-    this.band.clear();
-    this.drawCandidates(this.band, state.candidates);
     const g = this.lines;
     g.clear();
     // The path on hover (54i) is the shadow of the order a click would make, ordinary or planned
@@ -617,39 +588,6 @@ export class OverlayView {
       this.pathPoints = this.routePoints(route);
       this.pathSince = Number.NaN;
     }
-  }
-
-  /** The band is drawn on the layer that is visible in the current view (see `band`). */
-  private placeBand(supply: boolean): void {
-    const layer = supply ? this.layers.layer.roads : this.layers.layer.intents;
-    if (layer === this.bandLayer) return;
-    this.bandLayer = layer;
-    // Bottom of the `intents`, as before; the top of the `roads`: over the lanes, under the cities.
-    if (supply) layer.addChild(this.band);
-    else layer.addChildAt(this.band, 0);
-  }
-
-  /** Road pick: a dashed band along each road a click would upgrade. */
-  private drawCandidates(g: Graphics, candidates: readonly number[]): void {
-    if (candidates.length === 0) return;
-    for (const id of candidates) {
-      const ends = edgeEnds(this.map, id);
-      const edge = this.map.edges[id];
-      if (ends === undefined || edge === undefined) continue;
-      // From rim to rim: the band stays off the city bodies.
-      const span = rimSpan(ends.a, ends.b, this.radius(edge.a) + 2, this.radius(edge.b) + 2);
-      if (span === null) continue;
-      for (const [p, q] of dashSegments(span[0], span[1], PICK_BAND.dash, PICK_BAND.gap)) {
-        g.moveTo(p.x, p.y).lineTo(q.x, q.y);
-      }
-    }
-    // One stroke for all: the band is as wide as the widest road plus a margin.
-    g.stroke({
-      width: roadSpan(3) + PICK_BAND.extra,
-      color: SELECT_COLOR,
-      alpha: PICK_BAND.alpha,
-      cap: 'butt',
-    });
   }
 
   private radius(node: number): number {

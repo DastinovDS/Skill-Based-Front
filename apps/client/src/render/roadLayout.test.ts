@@ -1,27 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildProgress,
-  dashRuns,
-  laneDashes,
-  laneOffsets,
-  roadKind,
-  roadSegments,
-  roadStyle,
-  tapeStripes,
-} from './roadLayout.ts';
-
-describe('the lanes of a road: the level is the number of lanes', () => {
-  it('centres one, two or three lanes on the axis, 3.7 apart', () => {
-    expect(laneOffsets(1)).toEqual([0]);
-    expect(laneOffsets(2).map((y) => +y.toFixed(2))).toEqual([-1.85, 1.85]);
-    expect(laneOffsets(3).map((y) => +y.toFixed(2))).toEqual([-3.7, 0, 3.7]);
-  });
-
-  it('never has fewer than one lane, and rounds a level that is not whole', () => {
-    expect(laneOffsets(0)).toEqual([0]);
-    expect(laneOffsets(2.4)).toHaveLength(2);
-  });
-});
+import { dashRuns, laneDashes, roadKind, roadSegments, roadStyle } from './roadLayout.ts';
 
 describe('the kind and the style of a road', () => {
   it('is internal only when both ends belong to one player', () => {
@@ -82,66 +60,25 @@ describe('dashes', () => {
   });
 });
 
-describe('the part of a build that is done', () => {
-  it('grows from 0 to 1 over the ticks a level takes', () => {
-    expect(buildProgress(150, 0, 150)).toBe(0);
-    expect(buildProgress(150, 75, 150)).toBe(0.5);
-    expect(buildProgress(150, 150, 150)).toBe(1);
-  });
-
-  it('stays within 0..1, and is 0 where the duration is not known', () => {
-    expect(buildProgress(150, 200, 150)).toBe(1);
-    expect(buildProgress(400, 0, 150)).toBe(0);
-    expect(buildProgress(150, 75, 0)).toBe(0);
-  });
-});
-
-describe('the stripes of the tape', () => {
-  it('cuts the stripes to the road: nothing before its start or past its end, none empty', () => {
-    const stripes = tapeStripes(60, 12, 11, 5.5);
-    expect(stripes.length).toBeGreaterThan(4);
-    for (const polygon of stripes) {
-      expect(polygon.length).toBeGreaterThanOrEqual(3);
-      for (const p of polygon) {
-        expect(p.x).toBeGreaterThanOrEqual(0);
-        expect(p.x).toBeLessThanOrEqual(60);
-        expect(Math.abs(p.y)).toBeLessThanOrEqual(6);
-      }
-    }
-  });
-
-  it('leans at 45 degrees: a stripe moves along by its height across the road', () => {
-    const [first] = tapeStripes(200, 12, 40, 5);
-    // The stripe that starts at x = 0 at the top edge reaches x = 12 at the bottom edge.
-    const xs = (first ?? []).map((p) => +p.x.toFixed(2));
-    expect(Math.max(...xs)).toBeGreaterThan(Math.min(...xs));
-  });
-
-  it('draws nothing for a road without length or width', () => {
-    expect(tapeStripes(0, 12, 11, 5)).toEqual([]);
-    expect(tapeStripes(50, 0, 11, 5)).toEqual([]);
-  });
-});
-
-describe('the dashes of the lanes of a stretch of road', () => {
+describe('the dashes of the lane of a stretch of road', () => {
   const origin = { x: 10, y: 20 };
 
-  it('cuts every lane into dashes and puts them on the line of the road', () => {
-    const quads = laneDashes(origin, 0, 25, 2, 10, 5, 2);
-    // Two lanes of two dashes each (0-10 and 15-25 along the road).
-    expect(quads).toHaveLength(4);
+  it('cuts the lane into dashes and puts them on the line of the road', () => {
+    const quads = laneDashes(origin, 0, 25, 10, 5, 2);
+    // Two dashes (0-10 and 15-25 along the road).
+    expect(quads).toHaveLength(2);
     const first = quads[0] ?? [];
-    expect(first.map((p) => [p.x, +p.y.toFixed(2)])).toEqual([
-      [10, 20 - 1.85 - 1],
-      [20, 20 - 1.85 - 1],
-      [20, 20 - 1.85 + 1],
-      [10, 20 - 1.85 + 1],
+    expect(first.map((p) => [p.x, p.y])).toEqual([
+      [10, 19],
+      [20, 19],
+      [20, 21],
+      [10, 21],
     ]);
   });
 
   it('follows the angle of the road, across it and along it', () => {
-    // A road running down the page (+y): the lanes lie on the sides of it (x), the dashes along y.
-    const [quad] = laneDashes(origin, Math.PI / 2, 10, 1, 4, 2, 2);
+    // A road running down the page (+y): the lane lies on the sides of it (x), the dashes along y.
+    const [quad] = laneDashes(origin, Math.PI / 2, 10, 4, 2, 2);
     expect(quad?.map((p) => [+p.x.toFixed(2), +p.y.toFixed(2)])).toEqual([
       [11, 20],
       [11, 24],
@@ -151,6 +88,6 @@ describe('the dashes of the lanes of a stretch of road', () => {
   });
 
   it('has no dash for a stretch without length', () => {
-    expect(laneDashes(origin, 0, 0, 3, 10, 5, 2)).toEqual([]);
+    expect(laneDashes(origin, 0, 0, 10, 5, 2)).toEqual([]);
   });
 });

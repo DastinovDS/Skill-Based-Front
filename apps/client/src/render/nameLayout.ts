@@ -43,7 +43,7 @@ export function captionVisible(kind: CaptionKind, scale: number): boolean {
  * Where the top of the caption is below the centre of the place, world units: under the warehouse
  * bar of a city (the bar is there whether it is filled in or not, so the caption does not jump
  * when a city comes into sight) and under the ring of a province, or under its warehouse bar when
- * it shows one (`bar`: an own province under economy v2, DEC-41, item 13).
+ * it shows one (`bar`: an own province, DEC-41, item 13).
  */
 export function captionTop(kind: CaptionKind, radius: number, bar = false): number {
   if (kind === 'province') {

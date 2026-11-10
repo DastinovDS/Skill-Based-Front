@@ -1,12 +1,8 @@
 /**
- * The `economy` scenes of the dev screen (economy v2, DEC-41, #649): the artery moment under the
- * rules of `mvp-3` (`DEV_RULES_V2`). On the map: the own capital and a built factory, a factory build
- * that still waits for two charges and a bunker build that runs, a bunker on an own city, a factory
- * and a bunker of the enemy next to an own city (DEC-31), a barracks build that owes a charge, and a
- * planned order that gathers its bonus (+1 of 3). On the «Supply» layer (`economy_supply`, Tab): the
- * own supply lines the player drew, all from factories (DEC-42): the capital feeds the second
- * factory (a hub), three lines share one road as a bundle ("×3"), with charges gliding on them. No stances, front markers, rear minimum, road levels or "Defense".
- * A picture for the eyes: the numbers only have to be plausible.
+ * The `economy` scenes of the dev screen (DEC-41, #649): the artery moment. On the map: the own
+ * capital and a built factory, a factory build that still waits for two charges, a factory of the
+ * enemy next to an own city (DEC-31), a barracks build that owes a charge, and a planned order that
+ * gathers its bonus (+1 of 3). A picture for the eyes: the numbers only have to be plausible.
  */
 import type {
   EventMsg,
@@ -25,23 +21,6 @@ export const ECONOMY_VIEW = ARTERY_VIEW;
 const T = ECONOMY_TICK;
 const id = (n: number) => (0x6000 + n).toString(16).padStart(16, '0');
 
-/** The own supply lines (`View.lines`) of two factories (DEC-42: only a factory starts a line): the
- * capital feeds Forkway through Watchpost, Wood Hollow through Firwood, and the factory Watchpost
- * itself (a hub: it gives out what that line brings); Watchpost feeds Watchhouse and Ford through
- * Forkway. The road Watchpost-Forkway carries three lines (one bundle, "×3"), Stonegate-Watchpost
- * two. A click on a factory in the «Supply» mode shows its lines, on a target the lines into it
- * (#672). */
-/** An own supply line: the drawn lines were removed (#894): stage 2 deletes this. */
-type LineView = { readonly id: number; readonly path: readonly number[] };
-
-export const LINES: readonly LineView[] = [
-  { id: 1, path: [0, 3, 4] },
-  { id: 2, path: [0, 1, 6] },
-  { id: 3, path: [3, 4, 12] },
-  { id: 4, path: [0, 3] },
-  { id: 5, path: [3, 4, 13] },
-];
-
 export function economySnapshot(map: MapFile): SnapshotMsg {
   const base = arterySnapshot(map);
   const nodes: NodeView[] = base.view.nodes.map((node) => {
@@ -50,48 +29,29 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
       // The capital is the main factory (DEC-41, item 2).
       case 0:
         return { ...v2, factory: true, factory_period: 50 };
-      // A built factory with a bunker.
+      // A built factory.
       case 3:
-        return { ...v2, factory: true, factory_period: 100, fort: true };
-      // A factory build that waits for two charges, and a bunker build that runs.
+        return { ...v2, factory: true, factory_period: 100 };
+      // A factory build that waits for two charges.
       case 4:
-        return {
-          ...v2,
-          factory: false,
-          factory_build: { done_tick: null, owed: 2 },
-          fort: false,
-          fort_build: { done_tick: T + 40, owed: 0 },
-        };
+        return { ...v2, factory: false, factory_build: { done_tick: null, owed: 2 } };
       // A barracks build that still owes a charge (the progressive payment, item 7).
       case 6:
         return {
           ...v2,
           factory: false,
-          fort: false,
           has_barracks: false,
           building: { kind: 'barracks', done_tick: null, owed: 1 },
         };
-      // A bunker on an own city.
-      case 12:
-        return { ...v2, factory: false, fort: true };
-      // The enemy city next door: its built factory and bunker are seen (DEC-31).
+      // The enemy city next door: its built factory is seen (DEC-31).
       case 5:
-        return { ...v2, factory: true, fort: true };
+        return { ...v2, factory: true };
       default:
-        return node.owner === 0 && node.warehouse_cap !== null
-          ? { ...v2, factory: false, fort: false }
-          : v2;
+        return node.owner === 0 && node.warehouse_cap !== null ? { ...v2, factory: false } : v2;
     }
   });
-  // Roads have no levels under v2 (item 8): every road is level 1 and none is being built.
-  const edges = base.view.edges.map((edge) => ({
-    ...edge,
-    width: 1,
-    upgrade_gain: null,
-    build: null,
-  }));
+  const edges = base.view.edges;
   const groups: GroupView[] = base.view.groups.map((g) => {
-    // No "Defense" under v2: the bunker replaces it.
     const plain: GroupView = { ...g, mode: 'attack' };
     if (g.location.kind === 'node' && g.location.node === 12) {
       return {
@@ -109,7 +69,7 @@ export function economySnapshot(map: MapFile): SnapshotMsg {
         },
       };
     }
-    // The planned order of the artery moment is a v1 one: it goes.
+    // The planned order of the artery moment is not a gathering plan: it goes.
     return g.order?.planned === true ? { ...plain, order: null } : plain;
   });
   const intents: IntentView[] = [

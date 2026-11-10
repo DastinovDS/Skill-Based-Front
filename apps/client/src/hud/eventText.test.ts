@@ -27,24 +27,13 @@ describe('eventText', () => {
     expect(eventText(event('node_captured', captured), 1, names)).toBe('The enemy captured Cedar');
   });
 
-  it('tells the supply lines and the builds of economy v2 by the names of their places (#649)', () => {
+  it('tells the builds by the names of their places (#649)', () => {
     setLocale('en');
-    const line = { player: 0, line: 3, from_node: 0, to_node: 2 };
-    expect(eventText(event('line_cut', line), 0, names)).toBe(
-      'Supply line Alder → Cedar is cut: draw it again',
-    );
-    expect(eventText(event('line_rerouted', line), 0, names)).toBe(
-      'Supply line Alder → Cedar goes another way',
-    );
-    expect(eventText(event('line_auto', line), 0, names)).toBe(
-      'Supply line Alder → Cedar drawn by itself',
-    );
     expect(eventText(event('factory_built', { player: 0, node: 1 }), 0, names)).toBe(
       'Birch is a factory now: it makes charges',
     );
-    const started = { player: 0, node: 4, kind: 'fort', level: null, edge: null, width: null };
-    expect(eventText(event('build_started', started), 0, names)).toBe('Elm builds a bunker');
-    expect(toastOf(event('line_cut', line), 0, names)?.tone).toBe('warn');
+    const started = { player: 0, node: 4, kind: 'factory' };
+    expect(eventText(event('build_started', started), 0, names)).toBe('Elm builds a factory');
   });
 
   it('tells road fortifications (DEC-43, item D): a line done, lost with its city, a toll paid or taken (#707)', () => {
@@ -173,7 +162,7 @@ describe('event kinds of the server', () => {
       setLocale(locale);
       for (const kind of LOGGED_EVENT_KINDS) {
         // Enough fields for every text; the values do not matter, the line must exist.
-        const data = { node: 1, edge: 1, player: 0, vp: 1, stance: 'war', width: 2, charges: 3 };
+        const data = { node: 1, edge: 1, player: 0, vp: 1, stance: 'war', charges: 3 };
         const text = eventText(event(kind, data), 0, names);
         expect(text, `${locale} ${kind}`).not.toBe('');
         expect(text, `${locale} ${kind}`).not.toMatch(/[a-z]+_[a-z]+/); // no raw `snake_case` kind
@@ -185,13 +174,13 @@ describe('event kinds of the server', () => {
 describe('the fields the feed and the toasts read (ARC-02)', () => {
   // `match_ended` has a line but is no `event` message: the result comes as `match_end`.
   const kinds = [...LOGGED_EVENT_KINDS].filter((kind) => kind !== 'match_ended');
-  // The branches of the texts: a city or a road, a barracks, a warehouse or a road to build.
+  // The branches of the texts: a city or a road, a barracks or a factory to build.
   const variants = [
     {},
     { edge: null },
     { node: null },
     { kind: 'barracks' },
-    { kind: 'warehouse' },
+    { kind: 'factory' },
     { stance: 'war' },
     { built: false },
   ];

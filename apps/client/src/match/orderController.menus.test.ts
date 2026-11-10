@@ -38,7 +38,6 @@ function setup(snapshot: SnapshotMsg = base) {
     (
       [
         ['stance', controller.radial.current.open],
-        ['supply', controller.supplyMenu.current.open],
         ['split', controller.splitMenu.current.open],
         ['city', controller.cityMenu.current.open],
         ['group', controller.groupMenu.current.open],

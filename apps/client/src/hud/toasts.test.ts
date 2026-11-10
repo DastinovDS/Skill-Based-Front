@@ -15,13 +15,11 @@ describe('toastOf', () => {
     setLocale(initial);
   });
 
-  it('makes toasts of fights, captures, unpaid captures, attrition, a lost recruit queue and a cut or rerouted supply line only', () => {
+  it('makes toasts of fights, captures, unpaid captures, attrition, a lost recruit queue only', () => {
     expect([...TOAST_EVENT_KINDS].sort()).toEqual([
       'attrition',
       'capture_failed',
       'fight_ended',
-      'line_cut',
-      'line_rerouted',
       'node_captured',
       'recruit_queue_lost',
     ]);
@@ -31,7 +29,6 @@ describe('toastOf', () => {
       'stance_changed',
       'warehouse_lost',
       'build_started',
-      'road_upgraded',
       'packet_lost',
       'charges_produced',
     ]) {

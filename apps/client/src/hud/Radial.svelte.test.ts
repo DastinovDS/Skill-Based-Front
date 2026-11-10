@@ -58,14 +58,14 @@ describe('Radial', () => {
 
   it('draws the icon of a sector over its name, at the size of the ring, and none without one', () => {
     const withIcons: RadialItem[] = [
-      { id: 'a', angle: angles[0] ?? 270, label: 'Alpha', icon: 'defense' },
+      { id: 'a', angle: angles[0] ?? 270, label: 'Alpha', icon: 'cancel' },
       { id: 'b', angle: angles[1] ?? 30, label: 'Beta' },
     ];
     // The big ring (the stance menu) draws 30 px, a narrow one 24 px: never under 20.
     const big = render({ items: withIcons });
     const bigIcons = big.target.querySelectorAll('.sector .glyph');
     expect(bigIcons).toHaveLength(1);
-    expect(bigIcons[0]?.getAttribute('data-icon')).toBe('defense');
+    expect(bigIcons[0]?.getAttribute('data-icon')).toBe('cancel');
     expect(bigIcons[0]?.querySelector('svg')?.getAttribute('width')).toBe('30');
     void unmount(mounted as Record<string, unknown>);
     mounted = undefined;

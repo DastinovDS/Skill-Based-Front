@@ -20,13 +20,6 @@ import type {
   Terrain,
 } from '../protocol.gen.ts';
 
-/** What a road level gave: there are no road levels since #894; kept as a type until stage 2. */
-export interface UpgradeGain {
-  readonly speed_pct: number;
-  readonly unit_speed_pct: number;
-  readonly amount: number;
-}
-
 import { stanceProgress, type StanceProgress } from './topBar.ts';
 
 /** What the player picked to look at: one own group or one node. */
@@ -67,12 +60,6 @@ export interface GroupInfo {
   readonly destination: number | null;
   readonly planned: boolean;
   /**
-   * An own group in "Defense": the bonus it has gathered and its cap, the server's numbers
-   * (DEC-30); `null` in another mode and in a file without them. The opponent's groups are not
-   * `GroupInfo`s at all: they show their mode only.
-   */
-  readonly defense: DefenseInfo | null;
-  /**
    * The bonus of the planned order of the group, the server's number (`OrderView.bonus`, DEC-29):
    * a forecast while the group stands in its city, 0 without a planned order.
    */
@@ -91,12 +78,6 @@ export interface GatheringInfo {
   readonly plan: number;
   /** Ticks until the next charge is due (`next_charge_tick`); `null`: not known. */
   readonly nextIn: number | null;
-}
-
-/** The gathered "Defense" bonus of a group (or of the groups of a city) and its cap. */
-export interface DefenseInfo {
-  readonly bonus: number;
-  readonly cap: number;
 }
 
 export type Ownership = 'mine' | 'enemy' | 'neutral';
@@ -123,22 +104,17 @@ export interface NodeInfo {
   readonly recruitQueue: number | null;
   /** Own city: it may recruit (DEC-26: the barracks with `city_upgrades`); `null` for the rest. */
   readonly hasBarracks: boolean | null;
-  /** Own city: warehouse level and the charges it holds (DEC-26); `null` for the rest. */
-  readonly warehouseLevel: number | null;
+  /** Own city: the charges its warehouse holds at most (the capacity of the node); `null` for the rest. */
   readonly warehouseCap: number | null;
   /** Own city: its current build of any kind and the whole seconds left; `null` without one. */
   readonly building: BuildingInfo | null;
   /**
    * Economy v2 (DEC-41, item 2): an own city is a factory; an enemy city next to an own node: a built
-   * factory (DEC-31). `null` elsewhere and under v1.
+   * factory (DEC-31). `null` elsewhere.
    */
   readonly factory: boolean | null;
   /** Own node: the factory being built there (economy v2); `null` without one. */
   readonly factoryBuild: SiteInfo | null;
-  /** Economy v2 (DEC-41, item 12): the node has a bunker (own, or an enemy one next to an own node). */
-  readonly fort: boolean | null;
-  /** Own node: the bunker being built there (economy v2); `null` without one. */
-  readonly fortBuild: SiteInfo | null;
 }
 
 /** The current build of an own city (`NodeView.building`, DEC-26). */
@@ -146,11 +122,11 @@ export interface BuildingInfo {
   readonly kind: BuildKind;
   /** `null` while the build still waits for its payment in charges (economy v2, DEC-41, item 7). */
   readonly secondsLeft: number | null;
-  /** Economy v2: charges the build still takes (the progressive payment); 0 under v1. */
+  /** Economy v2: charges the build still takes (the progressive payment). */
   readonly owed: number;
 }
 
-/** A factory or a bunker being built (economy v2, `NodeView.factory_build`, `fort_build`). */
+/** A factory being built (`NodeView.factory_build`). */
 export interface SiteInfo {
   /** `null` while charges are still owed: the build time starts at the full payment. */
   readonly secondsLeft: number | null;
@@ -165,7 +141,7 @@ export interface FactoryCount {
 
 /**
  * The own factories for `factory.max` (DEC-41, item 2): the own factory cities and the factory
- * builds under way, read from the own view (`NodeView.factory`, `factory_build`); `null` under v1.
+ * builds under way, read from the own view (`NodeView.factory`, `factory_build`).
  */
 export function factoryCount(
   rules: RulesetPublic,
@@ -192,12 +168,6 @@ export function workingFactoryCount(nodes: readonly NodeView[], me: PlayerId): n
     if (node.owner === me && node.factory === true) count += 1;
   }
   return count;
-}
-
-/** An own supply line (economy v2, `View.lines`): the server's path from the source to the target. */
-export interface LineInfo {
-  readonly id: number;
-  readonly path: readonly number[];
 }
 
 export interface EnemyInfo {
@@ -237,25 +207,16 @@ export interface NodeChoice {
   readonly warehouse: number | null;
   /** Warehouse capacity of an own city (DEC-26); `null` where the view does not give it. */
   readonly warehouseCap: number | null;
-  /** Economy v2: an own factory, the only node a supply line starts at (DEC-42). */
+  /** An own factory. */
   readonly factory?: boolean;
 }
 
-/** A road and what its next level would give, from `EdgeView.upgrade_gain` (the server's numbers). */
+/** A road: its ends and the ends that have a fortification. */
 export interface RoadInfo {
   readonly id: number;
   /** The two end nodes (from the map). */
   readonly a: number;
   readonly b: number;
-  /** Current level (1..3, DEC-22; the wire calls it `width`). */
-  readonly width: number;
-  /**
-   * What the next level adds (packet and unit speed, charges per period: DEC-28, item 7); `null`:
-   * it cannot be upgraded. The price is `cost.build` CP per level.
-   */
-  readonly gain: UpgradeGain | null;
-  /** A level is being built on it now (`EdgeView.build`): it cannot be raised until it is done. */
-  readonly building: boolean;
   /**
    * The ends of this road that have a fortification (`EdgeView.forts`, DEC-43, item D) the player
    * knows of: own ones always, an enemy one while the server shows it.
@@ -274,18 +235,12 @@ export interface HudData {
   readonly stance: Stance;
   /** Stances of economy v2 (DEC-44): the way to the next quanta; `null` without them. */
   readonly stanceProgress: StanceProgress | null;
-  /** The own front markers: the city of each, `null`: not placed (DEC-28, item 2). */
-  readonly fronts: readonly (number | null)[];
-  /** The own rear minimum of charges in the cities without a marker (DEC-28, item 3). */
-  readonly rearMin: number;
-  /** Economy v2: the own lines extend to captured cities by themselves (#665); `null` under v1. */
-  readonly autoLines: boolean | null;
-  /** Supply flow (DEC-43): the own leaf shift in force and its largest value; `null` under lines. */
+  /** Supply flow (DEC-43): the own leaf shift in force and its largest value. */
   readonly leafShift: number | null;
   readonly leafShiftMax: number | null;
   /**
    * Economy v2 (DEC-41, item 2): the own factories, the builds under way counted as the server
-   * counts them for `factory.max`, and that max; `null` under v1 or without factories (#762).
+   * counts them for `factory.max`, and that max; `null` without factories (#762).
    */
   readonly factories: FactoryCount | null;
   /** The own factories that work now, builds under way not counted (DEC-47, #891). */
@@ -298,8 +253,6 @@ export interface HudData {
   readonly groups: readonly GroupChoice[];
   readonly nodes: readonly NodeChoice[];
   readonly roads: readonly RoadInfo[];
-  /** Economy v2: the own supply lines by id (empty under v1). */
-  readonly lines: readonly LineInfo[];
   /** Newest first. */
   readonly events: readonly HudEvent[];
 }
@@ -327,7 +280,6 @@ function groupInfo(group: GroupView, nodes: readonly NodeView[], tick: number): 
     progress: group.location.kind === 'edge' ? group.location.progress : null,
     destination: group.order?.dest ?? null,
     planned: group.order?.planned ?? false,
-    defense: null, // no «Defense» (#894)
     plannedBonus: group.order?.planned === true ? group.order.bonus : 0,
     gathering: gatheringOf(group, tick),
   };
@@ -396,7 +348,6 @@ function nodeInfo(
     graceLeft: node.grace_left,
     recruitQueue: node.recruit_queue,
     hasBarracks: node.has_barracks,
-    warehouseLevel: node.warehouse_cap === null ? null : 0, // no warehouse levels (#894)
     warehouseCap: node.warehouse_cap,
     building:
       node.building === null
@@ -411,8 +362,6 @@ function nodeInfo(
           },
     factory: node.factory,
     factoryBuild: siteInfo(node.factory_build, tick, ctx.rules.tick_hz),
-    fort: null, // no bunker (#894)
-    fortBuild: null,
   };
 }
 
@@ -422,9 +371,6 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
     id: edge.id,
     a: file?.a ?? -1,
     b: file?.b ?? -1,
-    width: 1, // roads have no levels (#894)
-    gain: null,
-    building: false,
     fortNodes: edge.forts.map((fort) => fort.node),
   };
 }
@@ -451,25 +397,18 @@ function groupUnderPointer(
     id: `node:${String(target.node)}`,
     units: here.reduce((total, g) => total + g.units, 0),
     charged: here.reduce((total, g) => total + g.charged, 0),
-    mode: 'attack', // every group attacks (#894)
+    mode: 'attack',
     node: target.node,
     capacity: nodeAt(view.nodes, target.node)?.capacity ?? null,
     progress: null,
     destination: null,
     planned: false,
-    defense: defenseOf(here),
     plannedBonus: here.reduce(
       (total, g) => total + (g.order?.planned === true ? g.order.bonus : 0),
       0,
     ),
     gathering: null,
   };
-}
-
-/** The bonus and the cap of the groups of a city in "Defense", summed as the server sent them. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
-function defenseOf(_groups: readonly GroupView[]): DefenseInfo | null {
-  return null; // no «Defense» (#894): stage 2 deletes this
 }
 
 export function buildHudData(
@@ -505,9 +444,6 @@ export function buildHudData(
     },
     stance: view.me.stance,
     stanceProgress: stanceProgress(rules, view.me),
-    fronts: [], // no front markers, rear minimum or lines (#894)
-    rearMin: 0,
-    autoLines: null,
     leafShift: view.me.leaf_shift,
     leafShiftMax: view.me.leaf_shift_max,
     factories: factoryCount(rules, view.nodes, me),
@@ -532,7 +468,6 @@ export function buildHudData(
       ...(n.factory === true && n.owner === me ? { factory: true } : {}),
     })),
     roads: view.edges.map((e) => roadInfo(ctx, e)),
-    lines: [],
     events,
   };
 }

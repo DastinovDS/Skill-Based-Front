@@ -48,7 +48,6 @@ import {
 import { FloodView, premultiplied, type GlowPair } from './floodView.ts';
 import {
   laneDashes,
-  laneOffsets,
   roadKind,
   roadSegments,
   type RoadSegment,
@@ -70,7 +69,6 @@ import {
   TERRAIN_FILL,
   WATER_FLAT,
   ownerColor,
-  roadLanesWidth,
 } from './style.ts';
 import { patternMarks } from './patternLayout.ts';
 import { TerrainView } from './terrainView.ts';
@@ -107,22 +105,20 @@ interface Road {
   readonly lanes: Graphics[];
   /** A capture runs out along it: its dashes are drawn by `floodDashes`, every frame. */
   flooding: boolean;
-  /** The stretches drawn now and the level: what the dashes layer draws of this road. */
+  /** The stretches drawn now: what the dashes layer draws of this road. */
   stretches: readonly RoadSegment[];
-  level: number;
   readonly a: Point;
   readonly length: number;
   readonly angle: number;
-  /** What is drawn now (level, kind, halves in fog): a new look that gives the same key changes nothing. */
+  /** What is drawn now (kind, halves in fog): a new look that gives the same key changes nothing. */
   key: string;
 }
 
 /**
- * A road as a snapshot shows it: its level (the wire `width`, lanes: DEC-22; roads have no type,
- * DEC-26) and, when the view has them, its halves (`detail` 'fog': dotted). `EdgeView` fits.
+ * A road as a snapshot shows it: when the view has them, its halves (`detail` 'fog': dotted).
+ * `EdgeView` fits.
  */
 export interface RoadLook {
-  readonly width: number;
   readonly halves?: readonly { readonly detail: Detail }[];
 }
 
@@ -131,12 +127,11 @@ export interface RoadLook {
  * stamps, the territory of the owners with its border line, and the roads. Cities are `CityView`.
  *
  * Owners and roads come from the map start fields now and from snapshots later (CLI-04, #60)
- * through `setOwners` and `setRoads`. A road reads without colour (R1 "Lanes", #345): its level
- * is the number of parallel lanes (an upgrade only speeds the supply up, DEC-26, item 7), a road
- * between two cities of one owner has solid lanes on a band of the owner's colour, a buffer road
- * dashed lanes without the band, and a half in fog dotted lanes. Redrawn only when the level, an
+ * through `setOwners` and `setRoads`. A road reads without colour (R1 "Lanes", #345): a road
+ * between two cities of one owner has a solid lane on a band of the owner's colour, a buffer road
+ * a dashed lane without the band, and a half in fog a dotted lane. Redrawn only when an
  * owner or a half in fog changes, not every frame. Identical shapes share one GraphicsContext (a
- * unit rectangle, the lanes of a level, the dashes of a given length); `destroy()` releases every
+ * unit rectangle, the lane, the dashes of a given length); `destroy()` releases every
  * object and context created here.
  */
 export class MapView {
@@ -164,8 +159,6 @@ export class MapView {
   private readonly mapFrame: Graphics;
   private backdrop: Sprite | null = null;
   private supplyMode = false;
-  /** The own roads are the pipes of `SupplyView` in the «Supply» mode (the economies before the flow). */
-  private supplyPipes = false;
   /** The ground of the terrain mode (patterns), made on first use. */
   private ground: Graphics | null = null;
   private terrainMode = false;
@@ -325,7 +318,6 @@ export class MapView {
         lanes: [],
         flooding: false,
         stretches: [],
-        level: 1,
         a: origin,
         length,
         angle,
@@ -339,8 +331,7 @@ export class MapView {
     // The dashes of the roads a capture runs out along, over the lanes of every road.
     this.floodDashes = this.laneLayer.addChild(new Graphics({ label: 'flood-dashes' }));
     this.setOwners(map.nodes.map((node) => node.start_owner));
-    // Every road starts at level 1 (DEC-22): the map has no starting level.
-    this.setRoads(map.edges.map(() => ({ width: 1 })));
+    this.setRoads(map.edges.map(() => ({})));
   }
 
   /** One more band and lanes for a stretch of `road`, hidden until a stretch is placed on it. */
@@ -436,19 +427,12 @@ export class MapView {
 
   /**
    * The «Supply» mode (DEC-28, item 8), "Canal" (#858): the map keeps its picture and its band, the own
-   * land is darkened and the nodes ahead of the level are crosshatched (`setLevel`). `pipes`: the own
-   * roads are the pipes of `SupplyView` (the economies before the flow), so their lanes are hidden.
+   * land is darkened and the nodes ahead of the level are crosshatched (`setLevel`).
    */
-  setSupplyMode(on: boolean, pipes = false): void {
-    if (on === this.supplyMode && pipes === this.supplyPipes) return;
+  setSupplyMode(on: boolean): void {
+    if (on === this.supplyMode) return;
     this.supplyMode = on;
-    this.supplyPipes = pipes;
     this.setOwners(this.owners);
-    // The roads of the own side turn into pipes (and back): `drawRoad` sees the new mode by its key.
-    this.roads.forEach((_, i) => {
-      this.drawRoad(i);
-    });
-    this.flushDashes();
   }
 
   /**
@@ -923,8 +907,7 @@ export class MapView {
   }
 
   /**
-   * `roads[i]`: the current level of edge `i` (1..3, DEC-22) and its halves in fog. A road whose
-   * look did not change is not redrawn.
+   * `roads[i]`: the halves of edge `i` in fog. A road whose look did not change is not redrawn.
    */
   setRoads(roads: readonly RoadLook[]): void {
     roads.forEach((look, i) => {
@@ -935,7 +918,7 @@ export class MapView {
   }
 
   /**
-   * The look of road `i` from its level, the owners of its ends and its halves in fog. While a
+   * The look of road `i` from the owners of its ends and its halves in fog. While a
    * capture floods one of its ends, the new look runs out along it from that end (#819).
    */
   private drawRoad(i: number): void {
@@ -943,7 +926,6 @@ export class MapView {
     const look = this.looks[i];
     const edge = this.map.edges[i];
     if (road === undefined || look === undefined || edge === undefined) return;
-    const level = Math.min(3, Math.max(1, Math.round(look.width)));
     const kind = roadKind(this.owners[edge.a] ?? null, this.owners[edge.b] ?? null);
     // The own territory is never under the veil (DEC-35, the owner's decision of 2026-10-29): the
     // half of an own end is drawn as seen even when its `detail` is `fog`.
@@ -951,11 +933,6 @@ export class MapView {
       look.halves?.[0]?.detail === 'fog' && this.owners[edge.a] !== this.me,
       look.halves?.[1]?.detail === 'fog' && this.owners[edge.b] !== this.me,
     ];
-    // In the «Supply» mode before the flow an own road with both halves in sight is a pipe of
-    // `SupplyView` (#429): its lanes and band are hidden here, the other roads keep their look. The
-    // Canal of the flow (#858) lies over the roads, which keep their look.
-    const piped =
-      this.supplyMode && this.supplyPipes && kind.kind === 'internal' && kind.owner === this.me;
     const flood = this.floodAt(i);
     const split = borderPermille(this.map, i) / 1000;
     const kindKey = (k: ReturnType<typeof roadKind>): string =>
@@ -970,7 +947,7 @@ export class MapView {
       segments = roadParts(roadSegments(before, fog, split), segments, cut, edge.a === flood.node);
       floodKey = `|flood:${kindKey(before)}:${cut.toFixed(4)}`;
     }
-    const key = `${String(level)}|${kindKey(kind)}|${fog[0] ? 'f' : 's'}${fog[1] ? 'f' : 's'}${piped ? '|pipe' : ''}${floodKey}`;
+    const key = `${kindKey(kind)}|${fog[0] ? 'f' : 's'}${fog[1] ? 'f' : 's'}${floodKey}`;
     if (key === road.key) return;
     road.key = key;
     const flooding = flood !== undefined;
@@ -981,15 +958,14 @@ export class MapView {
     }
     road.flooding = flooding;
     road.stretches = segments;
-    road.level = level;
     while (road.casings.length < segments.length) this.addStretchSlot(road);
     road.casings.forEach((casing, slot) => {
       const segment = segments[slot];
       const lanes = road.lanes[slot];
       if (lanes === undefined) return;
-      casing.visible = segment !== undefined && !piped;
-      lanes.visible = segment !== undefined && !isDashed(segment.style) && !piped;
-      if (segment !== undefined) this.placeSegment(road, segment, level, casing, lanes);
+      casing.visible = segment !== undefined;
+      lanes.visible = segment !== undefined && !isDashed(segment.style);
+      if (segment !== undefined) this.placeSegment(road, segment, casing, lanes);
     });
   }
 
@@ -1008,7 +984,6 @@ export class MapView {
         origin,
         road.angle,
         (stretch.to - stretch.from) * road.length,
-        road.level,
         spec.dash,
         spec.gap,
         ROAD_LANE.width,
@@ -1050,13 +1025,7 @@ export class MapView {
   }
 
   /** Put the band and the lanes of one stretch of a road where it belongs. */
-  private placeSegment(
-    road: Road,
-    segment: RoadSegment,
-    level: number,
-    casing: Graphics,
-    lanes: Graphics,
-  ): void {
+  private placeSegment(road: Road, segment: RoadSegment, casing: Graphics, lanes: Graphics): void {
     const length = (segment.to - segment.from) * road.length;
     const start = {
       x: road.a.x + Math.cos(road.angle) * segment.from * road.length,
@@ -1064,12 +1033,12 @@ export class MapView {
     };
     casing.position.set(start.x, start.y);
     lanes.position.set(start.x, start.y);
-    // The band: a unit rectangle scaled to the stretch and to the width of the lanes plus the casing.
+    // The band: a unit rectangle scaled to the stretch and to the width of the lane plus the casing.
     casing.context = this.casingContext(segment.style);
-    casing.scale.set(length, roadLanesWidth(level) + this.casingExtra(segment.style));
+    casing.scale.set(length, ROAD_LANE.width + this.casingExtra(segment.style));
     if (!isDashed(segment.style)) {
-      // Solid lanes of a level are drawn once over a unit length.
-      lanes.context = this.solidLanes(level);
+      // The solid lane is drawn once over a unit length.
+      lanes.context = this.solidLane();
       lanes.scale.set(length, 1);
     }
   }
@@ -1101,18 +1070,16 @@ export class MapView {
     return context;
   }
 
-  /** The solid lanes of `level` along x from 0 to 1 (scaled to the length of the stretch). */
-  private solidLanes(level: number): GraphicsContext {
-    const key = `solid:${String(level)}`;
-    let context = this.laneContexts.get(key);
+  /** The solid lane along x from 0 to 1 (scaled to the length of the stretch). */
+  private solidLane(): GraphicsContext {
+    let context = this.laneContexts.get('solid');
     if (context === undefined) {
-      context = this.context((g) => {
-        for (const offset of laneOffsets(level)) {
-          g.rect(0, offset - ROAD_LANE.width / 2, 1, ROAD_LANE.width);
-        }
-        return g.fill({ color: ROAD_OWN.lane, alpha: ROAD_OWN.laneAlpha });
-      });
-      this.laneContexts.set(key, context);
+      context = this.context((g) =>
+        g
+          .rect(0, -ROAD_LANE.width / 2, 1, ROAD_LANE.width)
+          .fill({ color: ROAD_OWN.lane, alpha: ROAD_OWN.laneAlpha }),
+      );
+      this.laneContexts.set('solid', context);
     }
     return context;
   }

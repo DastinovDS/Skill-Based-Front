@@ -7,7 +7,6 @@
  */
 import type { MapFile } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
-import { tapeStripes } from './roadLayout.ts';
 import { PACKET_FADE_MARGIN, PACKET_MIN_SCALE, UNIT_SIDES, UNIT_SIDE_UNKNOWN } from './style.ts';
 
 /** A full edge in thousandths of progress, as on the wire (`OnEdgeLoc.progress`). */
@@ -181,65 +180,6 @@ export function dashSegments(from: Point, to: Point, dash: number, gap: number):
     ]);
   }
   return segments;
-}
-
-// --- Road builds (DEC-16, DEC-28 item 7; R1, #345) ---------------------------------------------
-
-export interface BuildGeometry {
-  /** The band of the tape over the whole road: four corners. */
-  band: Point[];
-  /** The warning stripes cut to the road, each a polygon. */
-  stripes: Point[][];
-  /** The part that is done: four corners from the start of the road; `null` while nothing is. */
-  done: Point[] | null;
-  /** The middle of the road: where the plate with the level change sits. */
-  mid: Point;
-}
-
-/**
- * The tape of a road being built from `from` to `to`: a band `width` wide along the whole road,
- * warning stripes `stripe` long every `period`, and the done part (`progress` of the length from
- * `from`). `null` for a road without length. World units.
- */
-export function buildGeometry(
-  from: Point,
-  to: Point,
-  width: number,
-  period: number,
-  stripe: number,
-  progress: number,
-): BuildGeometry | null {
-  const length = Math.hypot(to.x - from.x, to.y - from.y);
-  if (length <= 0) return null;
-  const ux = (to.x - from.x) / length;
-  const uy = (to.y - from.y) / length;
-  // Along the road and across it (the right-hand normal of (ux, uy) in a y-down plane is (-uy, ux)).
-  const at = (x: number, y: number): Point => ({
-    x: from.x + ux * x - uy * y,
-    y: from.y + uy * x + ux * y,
-  });
-  const half = width / 2;
-  const rect = (x0: number, x1: number): Point[] => [
-    at(x0, -half),
-    at(x1, -half),
-    at(x1, half),
-    at(x0, half),
-  ];
-  const share = Math.min(1, Math.max(0, progress));
-  return {
-    band: rect(0, length),
-    stripes: tapeStripes(length, width, period, stripe).map((polygon) =>
-      polygon.map((p) => at(p.x, p.y)),
-    ),
-    done: share > 0 ? rect(0, length * share) : null,
-    mid: at(length / 2, 0),
-  };
-}
-
-/** Time left until `ticksLeft` ticks pass, as `m:ss`, rounded up (language-neutral). */
-export function timeLeftLabel(ticksLeft: number, tickHz: number): string {
-  const seconds = tickHz > 0 ? Math.max(0, Math.ceil(ticksLeft / tickHz)) : 0;
-  return `${String(Math.floor(seconds / 60))}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
 // --- Fight marks -------------------------------------------------------------------------------

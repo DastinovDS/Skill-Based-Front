@@ -1,14 +1,8 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
 import type { GroupChoice as GroupBrief, GroupInfo, Selection } from '../hud/hudData.ts';
-import type { Command, MapFile, Mode, ReachMsg, RulesetPublic, Stance } from '../protocol.gen.ts';
+import type { Command, MapFile, ReachMsg, RulesetPublic, Stance } from '../protocol.gen.ts';
 
-/** The answer to the removed `line_route_query` (#894); kept as a type until stage 2. */
-type LineRouteMsg = {
-  readonly points: readonly number[];
-  readonly tick: number;
-  readonly path: readonly number[];
-};
 import {
   type BonusMark,
   EMPTY_OVERLAY,
@@ -17,25 +11,13 @@ import {
   type MapInteraction,
   type OverlayState,
   type PickHit,
-  type SupplyOverlay,
   type UndoMark,
   type WheelInput,
 } from '../render/interaction.ts';
 import { WheelSteps } from './wheelSteps.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
 import { undoCommand, type UndoEntry } from './undoList.ts';
-import { NO_LINE_FOCUS, type LineFocus } from '../render/supplyLayout.ts';
-import {
-  frontOf,
-  lineOf,
-  type LineChoice,
-  RADIAL,
-  SECTORS,
-  stanceRates,
-  SUPPLY_SECTORS,
-  type StanceRate,
-  type SupplyChoice,
-} from '../hud/radial.ts';
+import { RADIAL, SECTORS, stanceRates, type StanceRate } from '../hud/radial.ts';
 import { getLocale, tf } from '../i18n/index.ts';
 import { formatCentis } from '../hud/format.ts';
 import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
@@ -43,18 +25,14 @@ import { GHOST_CP, UNDO_CUE } from '../render/style.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { chargedOfSplit, SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
-import { SupplyMenuState, TransferState, type MenuLine } from './supplyState.svelte.ts';
 
-/**
- * A sector of the menu of a city (`factory` and `bunker`: economy v2, DEC-41; `fortify`: a road
- * fortification, DEC-43, item D, which then asks for the road).
- */
-export type CityChoice = 'recruit' | 'barracks' | 'warehouse' | 'factory' | 'bunker' | 'fortify';
+/** A sector of the menu of a city (`fortify`: a road fortification, DEC-43, item D, which then asks for the road). */
+export type CityChoice = 'recruit' | 'barracks' | 'factory' | 'fortify';
 
-/** A sector of the menu of a group (`release`: economy v2, a gathering plan departs now). */
-export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense' | 'release';
+/** A sector of the menu of a group (`release`: a gathering plan departs now). */
+export type GroupChoice = 'split' | 'merge' | 'cancel' | 'release';
 
-/** The requested bonus of a planned order under economy v2: the wheel's range (the server caps it too). */
+/** The requested bonus of a planned order: the wheel's range (the server caps it too). */
 export const PLAN_BONUS = { min: 1, max: 9 } as const;
 
 /** How long an answer stays in the panel, ms. */
@@ -100,8 +78,6 @@ export interface OrderControllerOptions {
   focusNode?: (node: number) => void;
   /** Sends `reach_query` for a group (DEC-20); the answer comes back through `onReach`. */
   queryReach?: (group: string) => void;
-  /** Sends `line_route_query` for the points of a line (#665); the answer comes back through `onLineRoute`. */
-  queryLineRoute?: (points: readonly number[]) => void;
 }
 
 /** The parts of a keyboard event the controller needs (`code`: layout-independent key). */
@@ -123,26 +99,8 @@ export interface KeyInput {
  * recruit, stance, forfeit. Each goes out as an intent and comes back as `accepted` or `rejected`
  * in `ui.current.notice`.
  *
- * Road upgrades are paid with CP (DEC-28, item 7; #311) and have a mode of their own (#315): `U`
- * turns the road mode on or off (so do `Esc` and a second `U`), on the ordinary map and in the
- * «Supply» mode alike. In it every own road that the server offers an upgrade for
- * (`EdgeView.upgrade_gain`) with no build going is lit, and a click on one sends
- * `upgrade_road(edge)` at once, no city involved; under the pointer such a road is described
- * (`ui.current.roadHover`: the gain, the price and the time from `ruleset_public`). Out of the
- * mode a click on a road is a click on the area of its city (an order of a selected group, a
- * selection), never an upgrade. In the mode the road has the click even with a group selected,
- * but not while a transfer picks its target. A refusal (CP, a build already going) is a toast.
- *
- * The «Supply» map mode (DEC-18, item 7; the map layer: DEC-28, item 8) is toggled by Tab (or F2).
- * In it a click on an own city opens its supply menu (a radial menu under the pointer: front
- * marker 1 (key 1) and 2 (key 2), a transfer from the city (key 3); a click or the key chooses,
- * Esc or a click outside closes it). A marker sector puts the marker on the city, moving it for
- * free from wherever it stood, or takes it off when it already stands there (`set_front`, DEC-28,
- * item 2). The rear minimum is `setRearMin` (the slider of the banner, `set_rear_min`, item 3).
- * "Transfer" starts the transfer pick: the own cities a click would pick are ringed; a click on
- * one opens the amount dialog, which sends `transfer`. A click anywhere else, or Esc, ends the
- * pick. The path and the arrival of a transfer come from the server (`ack`); the client computes
- * neither.
+ * The «Supply» map mode (DEC-43) is toggled by Tab (or F2): the map layer of the supply flow, with
+ * the leaf shift control (`-` and `=` step it). A click in it opens no menu and selects nothing.
  *
  * Groups (DEC-20): a selected group standing in a node asks the server where it can go
  * (`reach_query`); the answer rings the nodes it reaches and, dashed, those it reaches only after a
@@ -152,8 +110,8 @@ export interface KeyInput {
  * X cancels any order of the selected group (on a road it turns back, free).
  *
  * UI round 2: there is no selection card. A click on an own city opens its radial menu (recruit
- * `R`, with DEC-26 the barracks and the warehouse) centred on the city circle; a second click on an own group (the first selects
- * it) opens a small radial menu on the group (split `S`, merge `G`, cancel `X`, defense `D`). The
+ * `R`, the barracks, the factory, a road fortification) centred on the city circle; a second click on an own group (the first selects
+ * it) opens a small radial menu on the group (split `S`, merge `G`, cancel `X`, release `F`). The
  * menus only front the keys: a key does the same without the menu. Recruiting (R) and cancelling
  * a recruit (X) keep the city menu open, to queue several units in a row. A click on the same object
  * again, any click elsewhere and Esc close the menu (a click on another node still orders the
@@ -167,26 +125,22 @@ export interface KeyInput {
  * (`overlay().undo`), never in a toast.
  *
  * Keys: Esc deselects, X cancels the order of
- * the selected group, 1 / 2 set the mode (attack / defense), D toggles defense, R recruits in the
- * selected city, Q the stance menu (hold and release over a sector, or
- * tap and click; 1 / 2 / 3 choose while it is open), S the split menu, G merge, Space the camera
- * to the next alert, Tab or F2 the «Supply» mode (it also lets a selected city go with its menu),
- * U the road mode, T the terrain mode (patterns and sight signs; not together with «Supply»).
+ * the selected group, R recruits in the selected city, Q the stance menu (hold and release over a
+ * sector, or tap and click; 1 / 2 / 3 choose while it is open), S the split menu, G merge, F lets a
+ * gathering plan go, B fortifies a road, Space the camera to the next alert, Tab or F2 the «Supply»
+ * mode (it also lets a selected city go), T the terrain mode (patterns and sight signs; not
+ * together with «Supply»).
  * At most one radial menu is open: whoever opens one closes the others (`#closeMenus`).
  */
 export class OrderController implements MapInteraction {
   readonly ui = new OrderUiState();
   /** The stance menu on Q (ui-style 11). */
   readonly radial = new RadialState();
-  /** The supply menu of an own city in the «Supply» map mode (DEC-18). */
-  readonly supplyMenu = new SupplyMenuState();
-  /** The amount dialog of a transfer (DEC-18). */
-  readonly transfer = new TransferState();
   /** The split menu on S (DEC-20). */
   readonly splitMenu = new SplitState();
-  /** The radial menu of the selected own city: recruit, roads (UI round 2). */
+  /** The radial menu of the selected own city: recruit, build, fortify a road (UI round 2). */
   readonly cityMenu = new TargetMenuState<number, CityChoice>();
-  /** The small radial menu of the selected own group: split, merge, cancel, defense. */
+  /** The small radial menu of the selected own group: split, merge, cancel, release. */
   readonly groupMenu = new TargetMenuState<string, GroupChoice>();
   /** The list of the own groups standing in one city (the click on their one icon): a group each. */
   readonly stackMenu = new TargetMenuState<number, string>();
@@ -203,16 +157,13 @@ export class OrderController implements MapInteraction {
    */
   #bonusPick: { readonly group: string; readonly node: number; readonly value: number } | null =
     null;
-  /** The last step of the rear minimum by key: where it started and where it was sent to. */
-  #rearStep: { readonly from: number; readonly to: number } | null = null;
-  /** The same for the leaf shift (`stepLeafShift`). */
+  /** The last step of the leaf shift by key: where it started and where it was sent to (`stepLeafShift`). */
   #shiftStep: { readonly from: number; readonly to: number } | null = null;
   #noticeId = 0;
   #noticeTimer: ReturnType<typeof setTimeout> | undefined;
   #overlay: OverlayState = EMPTY_OVERLAY;
   #overlayKey = '';
   #overlayGhosts: OverlayState['ghosts'] = [];
-  #supplyOverlay: SupplyOverlay | null = null;
   /** When Q went down (ms) while the menu is held open; `null`: Q is up. */
   #qDownAt: number | null = null;
   /** The group, node and size the last `reach_query` was sent for, and the tick it was sent. */
@@ -294,17 +245,6 @@ export class OrderController implements MapInteraction {
     return this.#o.hud.current?.cp.value ?? null;
   }
 
-  /** Price of switching a group to `mode`, hundredths of CP. */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
-  modeCost(_mode: Mode): number {
-    return 0; // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  /** Ticks for one point of the "Defense" bonus (DEC-30). */
-  get defenseTicksPerBonus(): number {
-    return 1; // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
   /** Price of a stance change, hundredths of CP. */
   get stanceCost(): number {
     return this.#o.rules.cost.stance;
@@ -320,44 +260,12 @@ export class OrderController implements MapInteraction {
     if (planning !== this.ui.current.planning) this.ui.patch({ planning });
   }
 
-  /**
-   * The rules play economy v2 (DEC-41, `ruleset_public.economy.model`): factories, drawn supply
-   * lines, the bunker and a planned order that gathers its bonus. The v1 controls (stance, front
-   * markers, rear minimum, transfers, road upgrades, "Defense") are off.
-   */
-  get v2(): boolean {
-    return true; // every ruleset plays economy v2 (#894)
-  }
-
-  /**
-   * The supply is the automatic flow with the leaf shift (DEC-43, `ruleset_public.supply_model`):
-   * no lines, no auto lines, no transfers; the player has one lever, the shift.
-   */
-  get flow(): boolean {
-    return true; // every ruleset plays the supply flow (#894)
-  }
-
-  /** Every ruleset has the stances of DEC-44 (#894). */
-  get stances(): boolean {
-    return true;
-  }
-
-  /** No ruleset has a bunker (#894). */
-  get hasBunker(): boolean {
-    return false;
-  }
-
-  /** The ruleset has road fortifications (`ruleset_public.fort`, DEC-43, item D); `null` hides the feature. */
-  get hasFort(): boolean {
-    return true; // every ruleset has road fortifications (#894)
-  }
-
-  /** The price of one road fortification, hundredths of CP (`ruleset_public.fort.cost`); 0 without them. */
+  /** The price of one road fortification, hundredths of CP (`ruleset_public.fort.cost`). */
   get fortCost(): number {
     return this.#o.rules.fort.cost;
   }
 
-  /** The own leaf shift in force (`View.me.leaf_shift`); `null` under lines or before a snapshot. */
+  /** The own leaf shift in force (`View.me.leaf_shift`); `null` before a snapshot. */
   get leafShift(): number | null {
     return this.#o.hud.current?.leafShift ?? null;
   }
@@ -370,13 +278,12 @@ export class OrderController implements MapInteraction {
   /**
    * One step of the leaf shift (`set_leaf_shift`, free): `delta` +1 raises the shift (the level
    * moves one road back from the front, the control's `−`), -1 lowers it (the control's `+`). Kept within `0..leaf_shift_max` as the server's own
-   * numbers; presses before the snapshot that confirms one add up from the step already sent, like
-   * the rear minimum.
+   * numbers; presses before the snapshot that confirms one add up from the step already sent.
    */
   stepLeafShift(delta: number): void {
     const now = this.leafShift;
     const max = this.leafShiftMax;
-    if (!this.flow || now === null || max === null) return;
+    if (now === null || max === null) return;
     const sent =
       this.#shiftStep !== null && this.#shiftStep.from === now ? this.#shiftStep.to : now;
     const to = Math.min(max, Math.max(0, sent + delta));
@@ -386,7 +293,7 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * The bonus a planned order to the target under the pointer asks for (economy v2): what the wheel
+   * The bonus a planned order to the target under the pointer asks for: what the wheel
    * chose in this Shift hover (#797), `PLAN_BONUS.min` until it turns, no more than the charged
    * units of the selected group allow (`planBonusMax`).
    */
@@ -443,25 +350,10 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.orders.plan_ticks_per_bonus;
   }
 
-  /** Costs and numbers of the economy v2 buildings, in charges (`ruleset_public`, DEC-41, item 7). */
-  get chargeCosts(): {
-    readonly barracks: number;
-    readonly warehouse: number;
-    readonly factory: number;
-    readonly bunker: number;
-  } {
+  /** Costs of the buildings, in charges (`ruleset_public`, DEC-41, item 7). */
+  get chargeCosts(): { readonly barracks: number; readonly factory: number } {
     const { city_upgrades: city, factory } = this.#o.rules;
-    return {
-      barracks: city.barracks_charges,
-      warehouse: 0, // no warehouse upgrades (#894)
-      factory: factory.cost,
-      bunker: 0, // no bunker (#894)
-    };
-  }
-
-  /** The bunker's virtual shots: no ruleset has a bunker (#894). */
-  get bunkerShots(): number {
-    return 0;
+    return { barracks: city.barracks_charges, factory: factory.cost };
   }
 
   /** At most this many factories a player has, the capital included (`ruleset_public.factory.max`). */
@@ -487,7 +379,6 @@ export class OrderController implements MapInteraction {
 
   overlay(): OverlayState {
     this.#followSplit();
-    this.#syncRoadHover();
     this.#syncReach();
     this.#syncTargetMenus();
     const reach = this.#reach();
@@ -495,11 +386,10 @@ export class OrderController implements MapInteraction {
     const ghosts = this.#o.book.ghosts();
     const preview = this.#previewTarget();
     const from = this.#selectedGroup()?.node ?? null;
-    const candidates = this.#candidates();
     this.#syncFort();
     const fortPick = this.#fortPick();
     const beacon = this.#o.hud.beacon;
-    const supply = this.#supplyOverlayNow();
+    const supply = this.ui.current.supplyMode;
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
     const splitNodes = reach === null ? [] : [...reach.split.keys()];
     const eta = this.#eta(reach, preview);
@@ -511,7 +401,7 @@ export class OrderController implements MapInteraction {
     const hover = this.#hoverMarkNow();
     const undo = this.#undoMarksNow();
     const bonus = this.#bonusMark(from, eta === null ? null : preview);
-    const key = `${bonus === null ? '-' : `${String(bonus.bonus)}/${String(bonus.max)}`}|${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}`;
+    const key = `${bonus === null ? '-' : `${String(bonus.bonus)}/${String(bonus.max)}`}|${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
@@ -535,7 +425,6 @@ export class OrderController implements MapInteraction {
                 path: eta.path,
               }
             : null,
-        candidates,
         beacon,
         supply,
         terrain: this.ui.current.terrainMode,
@@ -555,13 +444,13 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * The bonus counter over the target of a planned order (#793): economy v2, a planned order (Shift
+   * The bonus counter over the target of a planned order (#793): a planned order (Shift
    * or the switch), the target reachable (`reach`). The value is `planBonus`, 1 until the wheel turns; the
    * gathering time is display arithmetic from `ruleset_public` (one point per
    * `orders.plan_ticks_per_bonus` while the warehouse has charges, DEC-41, item 10).
    */
   #bonusMark(from: number | null, target: number | null): BonusMark | null {
-    if (!this.v2 || !this.planned || from === null || target === null) return null;
+    if (!this.planned || from === null || target === null) return null;
     const bonus = this.planBonus;
     const per = this.planTicksPerBonus;
     return {
@@ -576,7 +465,7 @@ export class OrderController implements MapInteraction {
    * What a click under the pointer would pick or aim at, lit lightly on the map (#762): the area of
    * a city or province (a selection, a menu, the target of the selected group), or an own group.
    * The same reading of the hit as `click`; `null` where a click does nothing, and while a pick of
-   * its own runs (a road to fortify or raise, a line, a transfer). The same object while unchanged.
+   * its own runs (a road to fortify). The same object while unchanged.
    */
   #hoverMarkNow(): HoverMark | null {
     const mark = this.#hoverTarget();
@@ -589,14 +478,8 @@ export class OrderController implements MapInteraction {
     const hit = this.#hover;
     const ui = this.ui.current;
     if (hit === null || this.#o.send === null) return null;
-    if (ui.fortFrom !== null || ui.roadMode || ui.lineDraft !== null || ui.transferFrom !== null) {
-      return null;
-    }
-    if (ui.supplyMode) {
-      // The «Supply» layer: a click opens the supply menu of an own node, nothing else.
-      const node = this.#cityOf(hit);
-      return node !== null && this.#isOwnNode(node) ? { node, group: null } : null;
-    }
+    // The «Supply» layer takes no click, and the road pick of a fortification has its own.
+    if (ui.fortFrom !== null || ui.supplyMode) return null;
     const group = this.#selectedGroup();
     if (
       hit.kind === 'group' &&
@@ -641,14 +524,6 @@ export class OrderController implements MapInteraction {
       this.#fortClick(picked);
       return;
     }
-    // In the road mode a click on an own road that can be raised raises it, on the ordinary map and
-    // in the «Supply» mode alike (DEC-28, item 7; #315). Out of the mode a road is its city's area.
-    const road = this.#roadTarget(picked);
-    if (road !== null) {
-      this.#closeMenus();
-      this.upgradeRoad(road);
-      return;
-    }
     if (this.#supplyClick(picked)) return;
     if (picked === null) {
       this.deselect();
@@ -656,7 +531,7 @@ export class OrderController implements MapInteraction {
     }
     let hit: PickHit = picked;
     if (hit.kind === 'edge') {
-      // A road that is not raised by this click is a click on the area of the city it lies in.
+      // A road is a click on the area of the city it lies in.
       if (hit.cell === undefined) return;
       hit = { kind: 'node', id: hit.cell };
     }
@@ -682,9 +557,9 @@ export class OrderController implements MapInteraction {
       this.#o.send !== null &&
       group.node !== hit.id
     ) {
-      // Economy v2: a planned order asks for its bonus (DEC-41, item 10), the wheel's pick over
-      // this target or 1 (#797); otherwise 0.
-      const bonus = this.planned && this.v2 ? this.#bonusFor(hit.id) : 0;
+      // A planned order asks for its bonus (DEC-41, item 10), the wheel's pick over this target or
+      // 1 (#797); otherwise 0.
+      const bonus = this.planned ? this.#bonusFor(hit.id) : 0;
       this.#bonusPick = null;
       // The server says only a smaller group gets there (`reach.split`, the stack limit, DEC-20):
       // the split menu opens with the size that fits, and its part goes there on confirm (#762).
@@ -776,7 +651,7 @@ export class OrderController implements MapInteraction {
 
   /**
    * A sector of the list menu: the group is selected; a group that already is selected opens its
-   * own menu (split, merge, cancel, defense), so a stacked group has a menu too.
+   * own menu (split, merge, cancel, release), so a stacked group has a menu too.
    */
   chooseStackGroup(id: string): void {
     this.#closeMenus();
@@ -788,7 +663,7 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Shift + wheel (#793): with an own group in a node selected under economy v2 (the plan banner
+   * Shift + wheel (#793): with an own group in a node selected (the plan banner
    * shows), one notch steps the bonus a planned order to the target under the pointer asks for; it
    * starts at 1 for every new hover (#797). `false` otherwise: the wheel zooms the map.
    */
@@ -805,25 +680,21 @@ export class OrderController implements MapInteraction {
     return true;
   }
 
-  /** The plan banner is up: economy v2, an own group in a node selected, the normal map. */
+  /** The plan banner is up: an own group in a node selected, the normal map. */
   #planBonusShown(): boolean {
     const ui = this.ui.current;
     return (
-      this.v2 &&
       this.#o.send !== null &&
       this.#selectedGroup()?.node != null &&
       !ui.supplyMode &&
       !ui.terrainMode &&
-      ui.fortFrom === null &&
-      ui.lineDraft === null &&
-      ui.transferFrom === null
+      ui.fortFrom === null
     );
   }
 
   hover(hit: PickHit | null): void {
     this.#hover = hit;
     this.#syncBonusPick();
-    this.#syncRoadHover();
     this.#syncFortHover();
     this.#o.hud.hoverGroup(
       hit?.kind === 'group' ? hit.id : hit?.kind === 'stack' ? { node: hit.node } : null,
@@ -837,17 +708,12 @@ export class OrderController implements MapInteraction {
   isIdle(): boolean {
     return (
       this.#o.hud.selection === null &&
-      !this.ui.current.roadMode &&
       this.ui.current.fortFrom === null &&
-      this.ui.current.transferFrom === null &&
-      this.ui.current.lineDraft === null &&
       !this.cityMenu.current.open &&
       !this.groupMenu.current.open &&
       !this.stackMenu.current.open &&
       !this.radial.current.open &&
-      !this.supplyMenu.current.open &&
-      !this.splitMenu.current.open &&
-      !this.transfer.current.open
+      !this.splitMenu.current.open
     );
   }
 
@@ -860,8 +726,8 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Cancel the order of the selected group: a planned order while it waits, a move on a road
-   * (the group turns back to the start of that road), or «Defense» (DEC-20). Free; whether there
+   * Cancel the order of the selected group: a planned order while it waits, or a move on a road
+   * (the group turns back to the start of that road, DEC-20). Free; whether there
    * is anything to cancel is the server's call (`NOTHING_TO_CANCEL`).
    */
   cancelSelected(): void {
@@ -897,17 +763,6 @@ export class OrderController implements MapInteraction {
     if (group.destination === null) return false;
     if (!this.isHeldInFight(group)) return true;
     return group.planned && group.node !== null;
-  }
-
-  /** Switch the mode of the selected group (attack / defense; under economy v2 there is no «Defense»). */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
-  setMode(_mode: Mode): void {
-    // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  /** D: «Defense»: there is none (#894). */
-  toggleDefense(): void {
-    // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
   }
 
   /** Split `n` units off the selected group into a new group. */
@@ -1051,7 +906,7 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Closes the menu of a city (a key, a click outside, the barracks or the warehouse) and lets the
+   * Closes the menu of a city (a key, a click outside, a building) and lets the
    * city go with it, so its selection highlight does not stay on after the menu (#426). Recruiting
    * and cancelling a recruit do not close it (#450).
    */
@@ -1071,14 +926,8 @@ export class OrderController implements MapInteraction {
       case 'barracks':
         this.cityBuild('build_barracks');
         return;
-      case 'warehouse':
-        this.cityBuild('upgrade_warehouse');
-        return;
       case 'factory':
         this.cityBuild('build_factory');
-        return;
-      case 'bunker':
-        this.cityBuild('build_bunker');
         return;
       case 'fortify':
         this.startFortify();
@@ -1094,11 +943,11 @@ export class OrderController implements MapInteraction {
    */
   startFortify(): void {
     const node = this.recruitNode();
-    if (node === null || !this.hasFort || this.#o.send === null) return;
+    if (node === null || this.#o.send === null) return;
     // Every road of the node has a line already (built or being built): there is nothing to pick.
     if (!this.fortifiable(node)) return;
     this.closeCityMenu();
-    this.ui.patch({ fortFrom: node, fortHover: null, roadMode: false });
+    this.ui.patch({ fortFrom: node, fortHover: null });
   }
 
   /** Leaves the road pick of a fortification without sending anything. */
@@ -1164,9 +1013,6 @@ export class OrderController implements MapInteraction {
       case 'cancel':
         this.cancelSelected();
         return;
-      case 'defense':
-        this.toggleDefense();
-        return;
       case 'release':
         this.releasePlan();
         return;
@@ -1174,12 +1020,12 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Economy v2 (DEC-41, item 10): the selected group with a gathering plan departs now with the
+   * The selected group with a gathering plan departs now (DEC-41, item 10) with the
    * bonus gathered so far (`release_plan`, free). Whether it has one is the server's call.
    */
   releasePlan(): void {
     const group = this.#selectedGroup();
-    if (group === null || !this.v2) return;
+    if (group === null) return;
     this.groupMenu.close();
     this.#sendCommand({ type: 'release_plan', group: group.id }, null);
   }
@@ -1202,32 +1048,23 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'recruit', node }, null);
   }
 
-  /** The barracks, a warehouse level, a factory or a bunker of the selected own node (DEC-26, DEC-41). */
-  cityBuild(type: 'build_barracks' | 'upgrade_warehouse' | 'build_factory' | 'build_bunker'): void {
+  /** The barracks or a factory of the selected own node (DEC-26, DEC-41). */
+  cityBuild(type: 'build_barracks' | 'build_factory'): void {
     const node = this.recruitNode();
     this.closeCityMenu();
     if (node === null) return;
-    if (type === 'upgrade_warehouse' || type === 'build_bunker') return; // removed (#894)
     this.#sendCommand({ type, node }, null);
   }
 
-  /** The city development of DEC-26 is in these rules (`ruleset_public.city_upgrades`). */
+  /** The city development is in these rules (`ruleset_public.city_upgrades`). */
   get cityUpgrades(): RulesetPublic['city_upgrades'] {
     return this.#o.rules.city_upgrades;
   }
 
-  /** Prices of a unit, the barracks and a warehouse level, hundredths of CP. */
-  get cityCosts(): {
-    readonly recruit: number;
-    readonly barracks: number;
-    readonly warehouse: number;
-  } {
+  /** Prices of a unit and the barracks, hundredths of CP. */
+  get cityCosts(): { readonly recruit: number; readonly barracks: number } {
     const { cost } = this.#o.rules;
-    return {
-      recruit: cost.recruit,
-      barracks: cost.barracks,
-      warehouse: 0, // no warehouse upgrades (#894)
-    };
+    return { recruit: cost.recruit, barracks: cost.barracks };
   }
 
   /** Take the last unit off the recruit queue of the selected city (DEC-25); free. Keeps the menu open like `recruit`. */
@@ -1241,54 +1078,6 @@ export class OrderController implements MapInteraction {
   selectedOwnCity(): number | null {
     const node = this.#o.hud.current?.node ?? null;
     return node?.owner === 'mine' ? node.id : null;
-  }
-
-  /** Own roads the server offers an upgrade for that have no build going now (the latest snapshot). */
-  upgradableRoads(): number[] {
-    return (this.#o.hud.current?.roads ?? [])
-      .filter((road) => road.gain !== null && !road.building)
-      .map((road) => road.id);
-  }
-
-  get roadMode(): boolean {
-    return this.ui.current.roadMode;
-  }
-
-  /**
-   * `U`: the road mode on or off (#315). Turning it on closes every open menu and the amount
-   * dialog and ends a transfer pick (a road click must not be taken for its target); the
-   * selection stays.
-   */
-  toggleRoadMode(): void {
-    // Economy v2 has no road levels (DEC-41, item 8): there is no road mode.
-    if (this.v2 && !this.ui.current.roadMode) return;
-    const on = !this.ui.current.roadMode;
-    if (on) {
-      this.#closeMenus();
-      this.transfer.close();
-    }
-    this.ui.patch(on ? { roadMode: true, transferFrom: null } : { roadMode: false });
-  }
-
-  /**
-   * Raise the own road `edge` by one level (DEC-28, item 7): `upgrade_road(edge)`, paid with CP at
-   * once, no city involved. The price and the build time come from `ruleset_public`
-   * (`roadCost`, `roadBuildTicks`); whether the road may be built (CP, a build already going) is
-   * the server's call, and a refusal is a toast like any other.
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stub of a removed rule (#894)
-  upgradeRoad(_edge: number): void {
-    // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  /** Price of one road level: there are no road levels (#894). */
-  get roadCost(): number {
-    return 0;
-  }
-
-  /** Ticks one road level takes to build: there are no road levels (#894). */
-  get roadBuildTicks(): number {
-    return 0;
   }
 
   setStance(stance: Stance): void {
@@ -1305,9 +1094,9 @@ export class OrderController implements MapInteraction {
     return stanceRates(this.#o.rules, this.#o.hud.current?.workingFactories);
   }
 
-  /** The menu opens only in a match, where a stance can be sent, and only with stances (DEC-41, DEC-44). */
+  /** The menu opens only in a match, where a stance can be sent (DEC-44). */
   openRadial(sticky: boolean): boolean {
-    if (this.#o.send === null || !this.stances) return false;
+    if (this.#o.send === null) return false;
     this.#closeMenus();
     this.radial.open(sticky);
     return true;
@@ -1335,22 +1124,14 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Tab / F2: the «Supply» map mode on or off. Either way every open menu and the
-   * amount dialog close and a selected city is let go (its menu goes with it); a selected group
-   * stays.
+   * Tab / F2: the «Supply» map mode on or off. Either way every open menu closes and a selected
+   * city is let go (its menu goes with it); a selected group stays.
    */
   toggleSupplyMode(): void {
     const on = !this.ui.current.supplyMode;
     this.#closeMenus();
-    this.transfer.close();
     if (this.#o.hud.selection?.kind === 'node') this.#o.hud.select(null);
-    this.ui.patch({
-      supplyMode: on,
-      transferFrom: null,
-      lineDraft: null,
-      linePath: null,
-      ...(on ? { terrainMode: false } : {}),
-    });
+    this.ui.patch({ supplyMode: on, ...(on ? { terrainMode: false } : {}) });
   }
 
   // --- The terrain map mode (#429) ---------------------------------------------------------------
@@ -1367,10 +1148,7 @@ export class OrderController implements MapInteraction {
     const on = !this.ui.current.terrainMode;
     if (on) {
       this.#closeMenus();
-      this.transfer.close();
-      if (this.ui.current.supplyMode) {
-        this.ui.patch({ supplyMode: false, transferFrom: null, lineDraft: null, linePath: null });
-      }
+      if (this.ui.current.supplyMode) this.ui.patch({ supplyMode: false });
     }
     this.ui.patch({ terrainMode: on });
   }
@@ -1378,256 +1156,6 @@ export class OrderController implements MapInteraction {
   /** The vision table of the rules (`ruleset_public.vision`, DEC-21, item 2): shown, never computed with. */
   get visionTable(): RulesetPublic['vision']['by_terrain'] {
     return this.#o.rules.vision.by_terrain;
-  }
-
-  /**
-   * Opens the supply menu of the own city `node` (a click on it in the «Supply» mode). Under
-   * economy v2 (DEC-42) an own factory draws a line and removes the lines that start there; any
-   * own node removes the lines that end there (the factory named). A node that is no factory and
-   * no line target has no menu.
-   */
-  openSupplyMenu(node: number): boolean {
-    if (this.#o.send === null) return false;
-    // The flow has no lines and no transfers: a city has no supply menu.
-    if (this.flow) return false;
-    if (this.v2) {
-      const own = this.#o.hud.current?.nodes.find((n) => n.id === node);
-      if (own?.owner !== 'mine') return false;
-      const factory = own.factory === true;
-      const lines: MenuLine[] = [];
-      for (const line of this.ownLines()) {
-        const end = line.path[line.path.length - 1] ?? node;
-        if (factory && line.path[0] === node) lines.push({ id: line.id, dir: 'out', other: end });
-      }
-      for (const line of this.ownLines()) {
-        const start = line.path[0] ?? node;
-        if (line.path[line.path.length - 1] === node) {
-          lines.push({ id: line.id, dir: 'in', other: start });
-        }
-      }
-      if (!factory && lines.length === 0) return false;
-      this.#closeMenus();
-      this.supplyMenu.open(node, own.warehouse, [], lines, factory);
-      return true;
-    }
-    const city = this.#ownCity(node);
-    if (city === null) return false;
-    this.#closeMenus();
-    this.supplyMenu.open(node, city.warehouse, this.#o.hud.current?.fronts ?? []);
-    return true;
-  }
-
-  /** The own node `node` is an own factory in the latest snapshot (economy v2). */
-  #isOwnFactory(node: number): boolean {
-    const own = this.#o.hud.current?.nodes.find((n) => n.id === node);
-    return own?.owner === 'mine' && own.factory === true;
-  }
-
-  /** The own supply lines of the latest snapshot (economy v2; empty under v1). */
-  ownLines(): readonly { readonly id: number; readonly path: readonly number[] }[] {
-    return this.#o.hud.current?.lines ?? [];
-  }
-
-  /**
-   * A sector of the supply menu under economy v2: `draw` starts drawing a line from the city (the
-   * pick of its path), `line:<id>` removes that line (`remove_line`, free).
-   */
-  chooseLine(choice: LineChoice): void {
-    const { open, node } = this.supplyMenu.current;
-    this.supplyMenu.close();
-    if (!open) return;
-    const line = lineOf(choice);
-    if (line === null) {
-      // Only a factory starts a line (DEC-42): the server checks it, the menu offers it only there.
-      if (this.#isOwnFactory(node)) {
-        this.ui.patch({ lineDraft: [node], linePath: null });
-      }
-    } // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  /**
-   * The own nodes a click puts on the line being drawn: every own node of the latest snapshot that
-   * is not a point of the line yet. Only what the snapshot says; the path through the points is the
-   * server's (`line_route`), and whether the line is allowed (a factory source, a cycle) is
-   * decided when it is sent.
-   */
-  lineTargets(): number[] {
-    const draft = this.ui.current.lineDraft;
-    if (draft === null) return [];
-    return (this.#o.hud.current?.nodes ?? [])
-      .filter((n) => n.owner === 'mine' && !draft.includes(n.id))
-      .map((n) => n.id)
-      .sort((a, b) => a - b);
-  }
-
-  /**
-   * A click on an own node while a line is drawn (#665). Without a target the node becomes the
-   * target; with one, a click routes the line through the node (Shift: the line goes on to it, the
-   * old target is passed through). A click on a node the line is routed through takes it off again.
-   * The server suggests the path through the points (`line_route_query`).
-   */
-  addLinePoint(node: number, extend = false): void {
-    const draft = this.ui.current.lineDraft;
-    if (draft === null || node === draft[0]) return;
-    const at = draft.indexOf(node);
-    if (at > 0 && at < draft.length - 1) {
-      this.#setLinePoints(draft.filter((n) => n !== node));
-      return;
-    }
-    if (at > 0) return; // the target itself: confirming is `finishLine`
-    if (draft.length < 2 || extend) this.#setLinePoints([...draft, node]);
-    else this.#setLinePoints([...draft.slice(0, -1), node, ...draft.slice(-1)]);
-  }
-
-  #setLinePoints(points: readonly number[]): void {
-    this.ui.patch({ lineDraft: points, linePath: null });
-    if (points.length >= 2) this.#o.queryLineRoute?.(points);
-  }
-
-  /**
-   * The server's answer to `line_route_query` (#665). Kept only while it is about the points being
-   * drawn: an answer for points changed since is dropped.
-   */
-  onLineRoute(msg: LineRouteMsg): void {
-    const draft = this.ui.current.lineDraft;
-    if (draft === null || draft.length !== msg.points.length) return;
-    if (draft.some((n, i) => n !== msg.points[i])) return;
-    this.ui.patch({ linePath: msg.path });
-  }
-
-  /** Sends the suggested path of the line (`draw_line`) once the server has one, and ends the drawing. */
-  finishLine(): void {
-    const draft = this.ui.current.lineDraft;
-    const path = this.ui.current.linePath;
-    if (draft === null) return;
-    const [source, second] = path ?? [];
-    if (draft.length >= 2 && (source === undefined || second === undefined)) return; // no path yet
-    this.ui.patch({ lineDraft: null, linePath: null });
-    if (source === undefined || second === undefined) return;
-    // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  /**
-   * Backspace: takes the last node the line is routed through off it; without one the target; with
-   * only the source left, ends the drawing.
-   */
-  undoLineStep(): void {
-    const draft = this.ui.current.lineDraft;
-    if (draft === null) return;
-    if (draft.length > 2) this.#setLinePoints([...draft.slice(0, -2), ...draft.slice(-1)]);
-    else if (draft.length === 2) this.#setLinePoints(draft.slice(0, 1));
-    else this.ui.patch({ lineDraft: null, linePath: null });
-  }
-
-  /** Ends the drawing of a line without sending it. */
-  cancelLine(): void {
-    if (this.ui.current.lineDraft !== null) this.ui.patch({ lineDraft: null, linePath: null });
-  }
-
-  /** Economy v2: whether the own lines extend to captured cities by themselves (#665); `null` under v1. */
-  get autoLines(): boolean | null {
-    return this.#o.hud.current?.autoLines ?? null;
-  }
-
-  /** Turns the auto-extension of the own lines on or off (`set_auto_lines`, free). */
-  setAutoLines(on: boolean): void {
-    if (this.autoLines === null || this.autoLines === on) return;
-    // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  closeSupplyMenu(): void {
-    this.supplyMenu.close();
-  }
-
-  /**
-   * A sector of the supply menu: a marker sector puts that front marker on the city or takes it
-   * off (DEC-28, item 2), "transfer" starts the transfer pick (DEC-18, item 6).
-   */
-  chooseSupply(choice: SupplyChoice = 'transfer'): void {
-    const { open, node } = this.supplyMenu.current;
-    this.supplyMenu.close();
-    if (!open) return;
-    const marker = frontOf(choice);
-    if (marker === null) this.ui.patch({ transferFrom: node });
-    else this.toggleFront(marker, node);
-  }
-
-  /** The own rear minimum now, from the latest snapshot; `null`: not known yet (DEC-28, item 3). */
-  get rearMin(): number | null {
-    return this.#o.hud.current?.rearMin ?? null;
-  }
-
-  /** The top of the rear minimum slider (`ruleset_public.supply.rear_min_max`). */
-  get rearMinMax(): number {
-    return 0; // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  /** The number of front markers the player has: none (#894). */
-  get frontMarkers(): number {
-    return 0;
-  }
-
-  /** The price of putting a front marker: there are none (#894). */
-  get frontCost(): number {
-    return 0;
-  }
-
-  /**
-   * Front marker `marker` on the own city `node`, wherever it stood (moving it is free); off the
-   * map (`node = null`) when it already stands there. A city holds one marker at most, so a city
-   * with the other marker sends nothing. Whether the city is ours is the server's call.
-   */
-  toggleFront(marker: number, node: number): void {
-    const fronts = this.#o.hud.current?.fronts ?? [];
-    if (!Number.isInteger(marker) || marker < 0 || marker >= this.frontMarkers) return;
-    if (fronts.some((at, i) => i !== marker && at === node)) return;
-    // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  /** The global rear minimum (DEC-28, item 3): clamped to `0..supply.rear_min_max`, sent only on a change. */
-  setRearMin(n: number): void {
-    if (!Number.isFinite(n)) return;
-    const value = Math.min(this.rearMinMax, Math.max(0, Math.round(n)));
-    if (value === this.#o.hud.current?.rearMin) return;
-    // // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  /**
-   * One step of the rear minimum up (`delta` 1) or down (-1) from where it stands (`[` and `]` on
-   * the «Supply» layer), kept within `0..supply.rear_min_max`. The snapshot that confirms a step
-   * comes a moment later: presses before it add up from the step already sent, not from the old
-   * value, so two quick presses are two steps.
-   */
-  stepRearMin(delta: number): void {
-    const now = this.rearMin;
-    if (now === null) return;
-    const sent = this.#rearStep !== null && this.#rearStep.from === now ? this.#rearStep.to : now;
-    const to = Math.min(this.rearMinMax, Math.max(0, sent + delta));
-    if (to === sent) return;
-    this.#rearStep = { from: now, to };
-    this.setRearMin(to);
-  }
-
-  /** Ends the transfer pick without a transfer. */
-  cancelTransferPick(): void {
-    if (this.ui.current.transferFrom !== null) this.ui.patch({ transferFrom: null });
-  }
-
-  /** The amount chosen in the transfer dialog. */
-  setTransferAmount(n: number): void {
-    this.transfer.set(n);
-  }
-
-  /** Sends the transfer of the dialog (the server checks the path and the warehouse). */
-  confirmTransfer(): void {
-    const { open, n } = this.transfer.current;
-    this.transfer.close();
-    if (!open || n < 1) return;
-    // Removed with economy v1 and the drawn lines (#894); the client cleanup (stage 2) deletes this.
-  }
-
-  closeTransfer(): void {
-    this.transfer.close();
   }
 
   /** Returns true if the key was used (the caller then prevents the browser default). */
@@ -1641,16 +1169,12 @@ export class OrderController implements MapInteraction {
       if (input.repeat !== true) this.toggleSupplyMode();
       return true;
     }
-    if (input.code === 'KeyU' && !this.v2) {
-      if (input.repeat !== true) this.toggleRoadMode();
-      return true;
-    }
     if (input.code === 'KeyT') {
       if (input.repeat !== true) this.toggleTerrainMode();
       return true;
     }
-    if (input.code === 'KeyQ' && this.stances) return this.#qDown(input);
-    if (this.flow && this.leafShift !== null) {
+    if (input.code === 'KeyQ') return this.#qDown(input);
+    if (this.leafShift !== null) {
       // The leaf shift (DEC-43): `-` moves the level one road back from the front (the control
       // reads "−1", "−2"), `=` / `+` moves it forward again.
       if (input.code === 'Minus' || input.code === 'NumpadSubtract') {
@@ -1666,21 +1190,6 @@ export class OrderController implements MapInteraction {
       // The road pick of a fortification: Esc drops it.
       this.cancelFortify();
       return true;
-    }
-    if (this.ui.current.lineDraft !== null) {
-      // Drawing a line: Enter sends it, Backspace takes the last node off, Esc drops it.
-      switch (input.code) {
-        case 'Enter':
-        case 'NumpadEnter':
-          this.finishLine();
-          return true;
-        case 'Backspace':
-          this.undoLineStep();
-          return true;
-        case 'Escape':
-          this.cancelLine();
-          return true;
-      }
     }
     if (this.splitMenu.current.open) {
       // The split menu: arrows change the amount, Enter splits, S (the key that opened it) or Esc
@@ -1706,48 +1215,6 @@ export class OrderController implements MapInteraction {
           return false;
       }
     }
-    if (this.transfer.current.open) {
-      // The amount dialog: Esc closes it (Enter and the slider are the dialog's own).
-      if (input.code === 'Escape') {
-        this.closeTransfer();
-        return true;
-      }
-    }
-    if (this.supplyMenu.current.open && this.v2) {
-      // The supply menu of economy v2: at a factory 1 draws a line; the next digits remove the
-      // lines listed, in their order; Esc closes it.
-      const number = /^Digit([1-9])$/.exec(input.code)?.[1];
-      if (number !== undefined) {
-        const { canDraw, lines } = this.supplyMenu.current;
-        const index = Number(number) - 1 - (canDraw ? 1 : 0);
-        const line = lines[index];
-        if (index === -1) this.chooseLine('draw');
-        else if (line !== undefined) this.chooseLine(`line:${String(line.id)}` as LineChoice);
-        return true;
-      }
-      if (input.code === 'Escape') {
-        this.closeSupplyMenu();
-        return true;
-      }
-    }
-    if (this.supplyMenu.current.open) {
-      // The supply menu: 1, 2, 3 choose (not the modes), Esc closes it.
-      const sector = SUPPLY_SECTORS.find((s) => `Digit${s.key}` === input.code);
-      if (sector !== undefined) {
-        // A marker the player does not have (a ruleset with one) is no sector: the key is dead.
-        const marker = frontOf(sector.choice);
-        if (marker === null || marker < this.frontMarkers) this.chooseSupply(sector.choice);
-        return true;
-      }
-      if (input.code === 'Escape') {
-        this.closeSupplyMenu();
-        return true;
-      }
-    }
-    if (input.code === 'Escape' && this.ui.current.transferFrom !== null) {
-      this.cancelTransferPick();
-      return true;
-    }
     if (this.stackMenu.current.open) {
       // The list of groups: 1..9 choose the group (not the modes), Esc closes it.
       const number = /^Digit([1-9])$/.exec(input.code)?.[1];
@@ -1769,20 +1236,10 @@ export class OrderController implements MapInteraction {
         return true;
       }
     }
-    if (
-      (input.code === 'BracketLeft' || input.code === 'BracketRight') &&
-      this.ui.current.supplyMode &&
-      !this.transfer.current.open
-    ) {
-      // On the «Supply» layer `[` and `]` lower and raise the rear minimum, one step a press.
-      if (input.repeat !== true) this.stepRearMin(input.code === 'BracketRight' ? 1 : -1);
-      return true;
-    }
     switch (input.code) {
       case 'Escape':
-        // The menus above took their own Esc; the road mode is left before anything is dropped.
-        if (this.ui.current.roadMode) this.ui.patch({ roadMode: false });
-        else this.deselect();
+        // The menus above took their own Esc.
+        this.deselect();
         return true;
       case 'KeyX':
         // Nothing selected on the ordinary map: the last action goes, step by step (#764). A held
@@ -1796,25 +1253,16 @@ export class OrderController implements MapInteraction {
           if (this.selectedOwnCity() !== null) this.cancelRecruit();
         } else this.cancelSelected();
         return true;
-      case 'KeyD':
-        if (this.v2) return false;
-        this.toggleDefense();
-        return true;
       case 'KeyF':
-        // Economy v2: the gathering plan of the selected group departs now.
-        if (!this.v2) return false;
+        // The gathering plan of the selected group departs now.
         this.releasePlan();
         return true;
-      case 'Digit1':
-        return this.#modeKey('attack');
-      case 'Digit2':
-        return false; // no «Defense» (#894)
       case 'KeyR':
         this.recruit();
         return true;
       case 'KeyB':
         // "Fortify road" of the selected own city or province (DEC-43, item D): the road is picked next.
-        if (!this.hasFort || this.selectedOwnCity() === null) return false;
+        if (this.selectedOwnCity() === null) return false;
         this.startFortify();
         return true;
       case 'KeyS':
@@ -1839,13 +1287,12 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Closes every radial menu (stance, supply, split, city, group, stack list): at most one is open
+   * Closes every radial menu (stance, split, city, group, stack list): at most one is open
    * at a time, so whoever opens one calls this first.
    */
   #closeMenus(): void {
     this.cancelFortify();
     this.closeRadial();
-    this.supplyMenu.close();
     this.splitMenu.close();
     this.#closeTargetMenus();
   }
@@ -1867,17 +1314,10 @@ export class OrderController implements MapInteraction {
 
   /**
    * A province or an enemy city: it is only a destination, so it gets no selection and no highlight.
-   * Under economy v2 an own province is selected and has a menu: it can build a bunker (DEC-41, item 12).
+   * An own province is selected and has a menu: it can fortify a road (DEC-43, item D).
    */
   #isUnselectable(id: number): boolean {
-    if (
-      this.v2 &&
-      (this.hasBunker || this.hasFort) &&
-      this.#isProvince(id) &&
-      this.#isOwnNode(id)
-    ) {
-      return false;
-    }
+    if (this.#isProvince(id) && this.#isOwnNode(id)) return false;
     return this.#isProvince(id) || this.#isEnemyNode(id);
   }
 
@@ -1925,56 +1365,14 @@ export class OrderController implements MapInteraction {
     }
   }
 
-  /** An own city of the snapshot (warehouse and its capacity: only own cities have one), or `null`. */
-  #ownCity(node: number): {
-    warehouse: number | null;
-    warehouseCap: number | null;
-  } | null {
-    const choice = this.#o.hud.current?.nodes.find((n) => n.id === node);
-    return choice?.owner === 'mine' && choice.warehouseCap !== null && !this.#isProvince(node)
-      ? choice
-      : null;
-  }
-
   /**
-   * A click in the «Supply» mode: picks the destination of a transfer, or opens the supply menu
-   * of an own city. Returns false when the click is an ordinary one (selection, orders).
+   * A click in the «Supply» mode. The layer is not the ordinary map (ui-style.md, section 19): a
+   * click on anything is a click on nothing, never a selection or a city or group menu (#678). A
+   * click on empty ground still drops the selection. Returns false for an ordinary click.
    */
   #supplyClick(hit: PickHit | null): boolean {
-    if (!this.ui.current.supplyMode) return false;
-    const from = this.ui.current.transferFrom;
-    const node = hit === null ? null : this.#cityOf(hit);
-    const draft = this.ui.current.lineDraft;
-    if (draft !== null) {
-      // Drawing a line (#665): the target again confirms the suggested path, another own node is
-      // added to the points (`addLinePoint`); a click anywhere else changes nothing.
-      if (node === null) return true;
-      if (draft.length > 1 && node === draft[draft.length - 1]) this.finishLine();
-      else if (draft.includes(node) || this.lineTargets().includes(node)) {
-        this.addLinePoint(node, this.#shift);
-      }
-      return true;
-    }
-    if (from !== null) {
-      this.cancelTransferPick();
-      if (node !== null && node !== from && this.#ownCity(node) !== null) {
-        const target = this.#ownCity(node);
-        // Display arithmetic only (the server clamps too): no more than the source holds and
-        // than the free room of the target warehouse (capacity minus stock; unknown: no limit).
-        const stock = this.#ownCity(from)?.warehouse ?? 0;
-        const room =
-          target?.warehouseCap == null
-            ? null
-            : Math.max(0, target.warehouseCap - (target.warehouse ?? 0));
-        this.transfer.open(from, node, room === null ? stock : Math.min(stock, room), room === 0);
-      }
-      return true;
-    }
-    // The layer is not the ordinary map (ui-style.md, section 19): a click that opens no supply menu
-    // (an enemy node, a node with nothing to show, a unit icon) is a click on nothing, never a
-    // selection or a city or group menu (#678). A click on empty ground still drops the selection.
-    if (hit === null) return false;
-    if (node === null || !this.openSupplyMenu(node)) this.#closeMenus();
+    if (!this.ui.current.supplyMode || hit === null) return false;
+    this.#closeMenus();
     return true;
   }
 
@@ -1990,60 +1388,6 @@ export class OrderController implements MapInteraction {
       case 'edge':
         return hit.cell ?? null;
     }
-  }
-
-  /** The supply part of the overlay; the same object while nothing changed. */
-  #supplyOverlayNow(): SupplyOverlay | null {
-    if (!this.ui.current.supplyMode) {
-      this.#supplyOverlay = null;
-      return null;
-    }
-    const draft = this.ui.current.lineDraft;
-    const source = draft?.[0] ?? this.ui.current.transferFrom;
-    const targets =
-      draft !== null
-        ? draft.length < 2
-          ? this.lineTargets() // rung only while the target is picked: later any own node routes
-          : []
-        : source === null
-          ? []
-          : (this.#o.hud.current?.nodes ?? [])
-              .filter((n) => n.owner === 'mine' && n.warehouseCap !== null && n.id !== source)
-              .map((n) => n.id);
-    const path = draft === null ? [] : (this.ui.current.linePath ?? []);
-    const lines = this.#lineFocus();
-    const prev = this.#supplyOverlay;
-    if (
-      prev?.source !== source ||
-      prev.targets.length !== targets.length ||
-      prev.targets.some((t, i) => t !== targets[i]) ||
-      prev.draft.length !== path.length ||
-      prev.draft.some((n, i) => n !== path[i]) ||
-      prev.lines?.node !== lines.node ||
-      prev.lines.line !== lines.line
-    ) {
-      this.#supplyOverlay = { source, targets, draft: path, lines };
-    }
-    return this.#supplyOverlay;
-  }
-
-  /**
-   * Economy v2 (#672): what the «Supply» layer focuses its lines on. The node: the one whose supply
-   * menu is open, else the source of the line being drawn, else the selected node; the line: the
-   * one whose «remove» sector the pointer rests on. Which lines that shows is `splitLines`.
-   */
-  #lineFocus(): LineFocus {
-    if (!this.v2) return NO_LINE_FOCUS;
-    const menu = this.supplyMenu.current;
-    if (menu.open) {
-      const hover = menu.hover;
-      const line = hover?.startsWith('line:') === true ? lineOf(hover as LineChoice) : null;
-      return { node: menu.node, line };
-    }
-    const draft = this.ui.current.lineDraft?.[0];
-    if (draft !== undefined) return { node: draft, line: null };
-    const selection = this.#o.hud.selection;
-    return { node: selection?.kind === 'node' ? selection.id : null, line: null };
   }
 
   /** `Space`: the camera goes to the city the next alert is about; taken only if there is one. */
@@ -2089,11 +1433,6 @@ export class OrderController implements MapInteraction {
     } else {
       this.chooseStance(hover);
     }
-    return true;
-  }
-
-  #modeKey(mode: Mode): boolean {
-    this.setMode(mode);
     return true;
   }
 
@@ -2213,27 +1552,6 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * The road a click on `hit` raises now: in the road mode, an own road the server offers an
-   * upgrade for (`EdgeView.upgrade_gain`: own internal, below the top level) with no build going
-   * on it. While a transfer picks its target a road is only the area of its city. `null`: the
-   * click does something else.
-   */
-  #roadTarget(hit: PickHit | null): number | null {
-    if (hit?.kind !== 'edge' || this.#o.send === null) return null;
-    if (!this.ui.current.roadMode || this.ui.current.transferFrom !== null) return null;
-    const road = this.#o.hud.current?.roads[hit.id];
-    return road !== undefined && road.id === hit.id && road.gain !== null && !road.building
-      ? road.id
-      : null;
-  }
-
-  /** The road under the pointer that a click would raise, mirrored to `ui.current.roadHover`. */
-  #syncRoadHover(): void {
-    const road = this.#roadTarget(this.#hover);
-    if (road !== this.ui.current.roadHover) this.ui.patch({ roadHover: road });
-  }
-
-  /**
    * The hovered target the server's `reach` answer lists under `split` (the selected group is bigger
    * than a node on the way, DEC-20), mirrored to `ui.current.splitHover` for the hint. Only what the
    * server sent: nothing about the stack limit is worked out here (AGENTS.md 7.1).
@@ -2259,11 +1577,6 @@ export class OrderController implements MapInteraction {
     if (node !== this.ui.current.captureHover) this.ui.patch({ captureHover: node });
   }
 
-  /** In the road mode, every own road a click would raise now: lit up (dashed band) on the map. */
-  #candidates(): number[] {
-    return this.ui.current.roadMode && this.#o.send !== null ? this.upgradableRoads() : [];
-  }
-
   /**
    * The time to the hovered node for the one small number there: the server's travel time of the
    * whole path (`reach`), and for a planned order the delay before the group sets off, from
@@ -2279,7 +1592,7 @@ export class OrderController implements MapInteraction {
     const path = reach.routes.get(preview);
     if (ticks === undefined || path === undefined) return null;
     return {
-      // Economy v2: a plan waits until its bonus is gathered, an unknown time: the travel time only.
+      // A plan waits until its bonus is gathered, an unknown time: the travel time only.
       ticks,
       path,
     };
@@ -2319,7 +1632,7 @@ export class OrderController implements MapInteraction {
       result.kind === 'rejected'
         ? { kind: 'rejected', code: result.code, cmd: result.cmd }
         : result.kind === 'accepted'
-          ? { kind: 'accepted', cmd: result.cmd, arriveTick: result.arriveTick ?? null }
+          ? { kind: 'accepted', cmd: result.cmd }
           : { kind: result.kind, cmd: result.cmd },
     );
     // A move shows itself on the map (ghost, then the order line): no message for its success.

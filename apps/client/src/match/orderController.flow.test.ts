@@ -45,10 +45,8 @@ const down = (code: string, repeat = false) =>
   ({ type: 'keydown', code, shiftKey: false, repeat }) as const;
 
 describe('the leaf shift control (DEC-43, item B)', () => {
-  it('knows the flow from the rules and the shift from the snapshot', () => {
+  it('knows the shift from the snapshot', () => {
     const { controller } = setup(1, 3);
-    expect(controller.flow).toBe(true);
-    expect(controller.v2).toBe(true);
     expect(controller.leafShift).toBe(1);
     expect(controller.leafShiftMax).toBe(3);
   });
@@ -105,22 +103,14 @@ describe('the leaf shift control (DEC-43, item B)', () => {
   });
 });
 
-describe('the lines UI is gone under the flow', () => {
-  it('a click on an own city in the Supply mode opens no supply menu and draws no line', () => {
-    const { controller, sent } = setup();
+describe('the Supply layer takes no click (DEC-43)', () => {
+  it('a click on an own city in the Supply mode opens no menu and sends nothing', () => {
+    const { controller, sent, hud } = setup();
     controller.key(down('Tab'));
     controller.click({ kind: 'node', id: home }, false);
-    expect(controller.supplyMenu.current.open).toBe(false);
-    expect(controller.ui.current.lineDraft).toBeNull();
-    expect(controller.openSupplyMenu(home)).toBe(false);
+    expect(controller.cityMenu.current.open).toBe(false);
+    expect(hud.selection).toBeNull();
     expect(sent).toEqual([]);
-    // No auto-lines toggle: the view has no value for it.
-    expect(controller.autoLines).toBeNull();
-  });
-
-  it('the bunker is not in the rules, so no city or province offers one', () => {
-    const { controller } = setup();
-    expect(controller.hasBunker).toBe(false);
   });
 });
 
@@ -141,7 +131,6 @@ describe('stances of economy v2 (DEC-44)', () => {
 
   it('Q opens the menu and a sector sends the stance', () => {
     const { controller, sent } = stances();
-    expect(controller.stances).toBe(true);
     expect(controller.openRadial(true)).toBe(true);
     controller.chooseStance('war');
     expect(sent).toEqual([{ type: 'set_stance', stance: 'war' }]);

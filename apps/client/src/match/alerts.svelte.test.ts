@@ -77,7 +77,7 @@ describe('AlertState', () => {
         intent('b', { target: home }),
       ]),
     );
-    // No countdown without a plan delay (#894): by city id.
+    // No countdown without a plan delay: by city id.
     expect(state.nextNode()).toBe(home);
     expect(state.nextNode()).toBe(other);
     expect(state.nextNode()).toBe(home);

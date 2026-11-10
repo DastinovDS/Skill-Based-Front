@@ -1,12 +1,11 @@
 /**
- * The warehouse numbers of an own city in the dev scenes, as the real view gives them (DEC-26,
- * `rulesets/mvp-1.toml`: `warehouse.start_by_kind` plus a level of `gain_per_level` each): the
- * dev feed's own fake gives every city the capacity of its node, which would draw a capital with
- * ten places and two dashed ones. A picture for the eyes, not game logic.
+ * The warehouse numbers of an own city in the dev scenes: the dev feed's own fake gives every city
+ * the capacity of its node, which would draw a capital with ten places. A picture for the eyes, not
+ * game logic.
  */
 import type { NodeKind } from '../protocol.gen.ts';
 
-/** `warehouse.start_by_kind` of `mvp-1`: charges a city holds at warehouse level 0. */
+/** Charges a city holds at the start by its kind (the warehouse capacity of the scene). */
 const START: Readonly<Record<NodeKind, number>> = {
   capital: 6,
   city_large: 2,
@@ -15,7 +14,7 @@ const START: Readonly<Record<NodeKind, number>> = {
   province: 0,
 };
 
-/** Warehouse capacity of an own city of `kind` at `level` (`warehouse_cap` of the view). */
-export function warehouseCapOf(kind: NodeKind, level: number): number {
-  return START[kind] + level * 0; // no warehouse levels (#894)
+/** Warehouse capacity of an own city of `kind` (`warehouse_cap` of the view). */
+export function warehouseCapOf(kind: NodeKind): number {
+  return START[kind];
 }

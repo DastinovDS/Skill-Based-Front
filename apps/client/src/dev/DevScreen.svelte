@@ -9,7 +9,6 @@
   import { HudState } from '../hud/hudState.svelte.ts';
   import { STATUS_INPUTS, isStatusScene } from './statusScenes.ts';
   import { createDevMatch } from './devMatch.ts';
-  import { devLinePath } from './devServer.ts';
   import { parseEta, pinEta } from './etaPin.ts';
   import { parseUndo, pinUndo } from './undoPin.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource, parseFlood } from './scenarios.ts';
@@ -115,7 +114,7 @@
 
   const map = $derived(BUNDLED_MAPS.find((m) => m.meta.name === mapName) ?? DEFAULT_MAP);
   const fixture = $derived(fixtureScene(sceneId));
-  // A scene may play other rules (economy v2, #649): the HUD and the menus follow them.
+  // A scene may play other rules (#649): the HUD and the menus follow them.
   const sceneRules = $derived(fixture?.rules ?? rules);
 
   // The HUD numbers for the map on screen.
@@ -136,9 +135,6 @@
             orders.onReach(msg);
           },
           motionOn,
-          (msg) => {
-            orders.onLineRoute(msg);
-          },
         )
       : null,
   );
@@ -222,26 +218,11 @@
     return new OrderController({
       hud,
       map,
-      // With `?menus` the city development is on too: the city menu shows all three sectors.
-      rules: menusOn
-        ? { ...sceneRules, city_upgrades: { ...sceneRules.city_upgrades } }
-        : sceneRules,
+      rules: sceneRules,
       book,
       send: match === null ? (menusOn ? frozenSend(book) : null) : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,
       focusNode: (node) => canvas?.focusNode(node),
-      queryLineRoute: (points) => {
-        match?.session.queryLineRoute(points);
-        const [a, b, ...rest] = points;
-        if (match === null && a !== undefined && b !== undefined) {
-          // A frozen scene has no server: the stand-in answers at once.
-          orders.onLineRoute({
-            points: [a, b, ...rest],
-            tick: 0,
-            path: devLinePath(map, points),
-          });
-        }
-      },
       queryReach: (group) => {
         match?.session.queryReach(group);
         const from = hud.current?.group?.node ?? null;

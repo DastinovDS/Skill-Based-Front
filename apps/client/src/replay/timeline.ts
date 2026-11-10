@@ -77,26 +77,17 @@ function groupView(g: FrameGroup): GroupView {
             plan: 0,
             next_charge_tick: null,
           },
-    // Replay frames carry no gathered Defense bonus (DEC-30); the viewer shows the mode only.
   };
 }
 
 /** Intent kinds the viewer draws; older files may have others (the group build, before DEC-16). */
-/** A road build of an older file (`e`, `b`): there are no road builds since #894. */
-type EdgeBuild = { readonly done_tick: number | null };
-
 const INTENT_KINDS: ReadonlySet<string> = new Set<IntentKind>(['planned_move']);
 
 function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
-  // Road builds by edge: `e` since DEC-28, `b` (by the building city) in older files.
-  const builds = new Map<number, EdgeBuild>();
-  for (const [, edge, done_tick] of frame.b ?? []) builds.set(edge, { done_tick });
-  for (const [edge, , done_tick] of frame.e ?? []) builds.set(edge, { done_tick });
   const nodes: NodeView[] = frame.n.map(([owner, warehouse, capacity, warehouseCap], id) => ({
     id,
     owner,
     capacity,
-    capacity_stale: false, // replay frames are the true state (DEC-17)
     detail: 'exact',
     warehouse,
     seen: null,
@@ -107,7 +98,6 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     recruit_progress: null,
     recruit_waiting: null,
     has_barracks: null, // not in the replay files (DEC-26)
-    warehouse_level: null,
     // The places of the warehouse (#556): without them the bar would show the node capacity.
     warehouse_cap: warehouseCap ?? null,
     building: null,
@@ -115,8 +105,6 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     factory: null,
     factory_period: null,
     factory_build: null,
-    fort: null,
-    fort_build: null,
     front_dist: null,
     flow_down: null,
     flow_next: null,
@@ -138,7 +126,6 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
         arrive_tick,
         path: [end],
         dest_tick: arrive_tick,
-        transfer: false,
       };
     },
   );
@@ -147,7 +134,6 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     type: 'snapshot',
     tick: frame.t,
     view: {
-      // Front markers and the rear minimum are not in the replay files (DEC-28).
       me: {
         cp: first[0],
         stance: first[2],
@@ -159,17 +145,14 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
       },
       vp: [first[1], second[1]],
       nodes,
-      edges: frame.w.map((width, id) => ({
+      edges: frame.w.map((_, id) => ({
         id,
-        width,
         detail: 'presence',
-        upgrade_gain: null,
         // Both sides' groups are drawn as groups: nothing is seen as an enemy here.
         halves: [
           { detail: 'presence', seen: null },
           { detail: 'presence', seen: null },
         ],
-        build: builds.get(id) ?? null,
         enemy_groups: [],
         forts: [],
       })),

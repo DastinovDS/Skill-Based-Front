@@ -1,31 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { ICONS, MENU_ICONS, RASTER_ICONS, rasterOf, shapesOf, type IconShape } from './icons.ts';
 
-/** The drawn icons of the radial menus (set I1, #350): group, stance, supply, and the list of the groups of a city. */
+/** The drawn icons of the radial menus (set I1, #350): group, stance, and the list of the groups of a city. */
 const NAMES = [
   'split',
-  'defense',
   'cancel',
   'merge',
   'stanceEconomy',
   'stanceBalance',
   'stanceWar',
-  'transfer',
-  'front1',
-  'front2',
   'stackHelmet',
   'factory',
-  'bunker',
   'fortify',
-  'lineDraw',
-  'lineRemove',
   'release',
 ] as const;
 
 const signature = (shapes: readonly IconShape[]): string => JSON.stringify(shapes);
 
 describe('the icons of the radial menus (I1)', () => {
-  it('are the 10 of the mockup, the group of the city list and the economy v2 ones, each with shapes', () => {
+  it('are the ones of the mockup, the group of the city list and the economy ones, each with shapes', () => {
     expect(Object.keys(MENU_ICONS).sort()).toEqual([...NAMES].sort());
     for (const name of NAMES) expect(MENU_ICONS[name].length).toBeGreaterThan(0);
   });
@@ -57,13 +50,6 @@ describe('the icons of the radial menus (I1)', () => {
     }
   });
 
-  it('tell the two markers apart by their digit', () => {
-    const digits = (name: 'front1' | 'front2'): string[] =>
-      MENU_ICONS[name].flatMap((shape) => (shape.tag === 'text' ? [shape.content] : []));
-    expect(digits('front1')).toEqual(['1']);
-    expect(digits('front2')).toEqual(['2']);
-  });
-
   it('are found by name together with the Lucide ones', () => {
     expect(shapesOf('split')).toBe(MENU_ICONS.split);
     expect(shapesOf('check')).toBe(ICONS.check);
@@ -72,12 +58,12 @@ describe('the icons of the radial menus (I1)', () => {
 });
 
 describe('the city menu icons (R5 "Chevrons", #627)', () => {
-  it('are the three raster files of recruit, barracks and warehouse, with no drawn shapes', () => {
-    expect(Object.keys(RASTER_ICONS).sort()).toEqual(['barracks', 'recruit', 'warehouse']);
-    for (const name of ['recruit', 'barracks', 'warehouse'] as const) {
+  it('are the two raster files of recruit and barracks, with no drawn shapes', () => {
+    expect(Object.keys(RASTER_ICONS).sort()).toEqual(['barracks', 'recruit']);
+    for (const name of ['recruit', 'barracks'] as const) {
       expect(rasterOf(name)).toMatch(/\.png$|^data:image\/png/);
       expect(shapesOf(name)).toEqual([]);
     }
-    expect(new Set(Object.values(RASTER_ICONS)).size).toBe(3);
+    expect(new Set(Object.values(RASTER_ICONS)).size).toBe(2);
   });
 });

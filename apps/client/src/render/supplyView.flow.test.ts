@@ -77,10 +77,8 @@ describe('SupplyView under the flow', () => {
   function draw(base: SnapshotMsg, tick = base.tick) {
     const layers = createLayers();
     const view = new SupplyView(map as NonNullable<typeof map>, layers, 0, () => 14, testSprites());
-    view.setProvinceWarehouse(1);
-    const supply = { source: null, targets: [], draft: [] };
-    view.update(interpolateFrame(base, null, tick), supply);
-    return { layers, view, supply, ...parts(layers) };
+    view.update(interpolateFrame(base, null, tick), true);
+    return { layers, view, ...parts(layers) };
   }
 
   it('lays a canal on every downhill road: a casing, two ink rails, a V at the receiving ring (#858)', () => {
@@ -121,7 +119,7 @@ describe('SupplyView under the flow', () => {
   it('rings the nodes of the level: the own colour on a casing, an ink ring outside', () => {
     const { layers, view } = draw(snapshot);
     const [root] = layers.layer.supply.children as Container[];
-    const plates = root?.children[1] as Graphics;
+    const plates = root?.children[0] as Graphics;
     const level = snapshot.view.nodes.filter(
       (n) => n.owner === 0 && n.front_dist === snapshot.view.me.leaf_shift,
     );

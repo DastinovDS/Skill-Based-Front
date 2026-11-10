@@ -280,7 +280,7 @@ describe('OrderController', () => {
     expect(controller.overlay().eta).toEqual({
       from: home,
       node: enemy.id,
-      ticks: 25, // a plan gathers its bonus, no fixed delay (#894)
+      ticks: 25, // a plan gathers its bonus, no fixed delay
       path: [home, other.id, enemy.id],
     });
     controller.key({ type: 'keyup', code: 'ShiftLeft', shiftKey: false });
@@ -666,58 +666,27 @@ describe('OrderController', () => {
 
   describe('supply map mode (DEC-18)', () => {
     const city = home;
-    const target = other.id;
 
     it('Tab and F2 toggle the mode; the overlay carries it', () => {
       const { controller } = setup();
-      expect(controller.overlay().supply).toBeNull();
+      expect(controller.overlay().supply).toBe(false);
       expect(controller.key(down('Tab'))).toBe(true);
       expect(controller.supplyMode).toBe(true);
-      expect(controller.overlay().supply).toEqual({
-        source: null,
-        targets: [],
-        draft: [],
-        lines: { node: null, line: null },
-      });
+      expect(controller.overlay().supply).toBe(true);
       expect(controller.key(down('Tab', true))).toBe(true); // a held key does not flip it back
       expect(controller.supplyMode).toBe(true);
       controller.key(down('F2'));
       expect(controller.supplyMode).toBe(false);
-      expect(controller.overlay().supply).toBeNull();
+      expect(controller.overlay().supply).toBe(false);
     });
 
-    it('Esc closes the menu; an enemy node opens nothing', () => {
-      const { controller, sent } = setup();
+    it('takes no click: an own city opens no menu, an enemy node is not selected', () => {
+      const { controller, sent, hud } = setup();
       controller.key(down('Tab'));
       controller.click({ kind: 'node', id: city }, false);
-      controller.key(down('Escape'));
-      expect(controller.supplyMenu.current.open).toBe(false);
+      expect(controller.cityMenu.current.open).toBe(false);
       controller.click({ kind: 'node', id: enemy.id }, false);
-      expect(controller.supplyMenu.current.open).toBe(false);
-      expect(sent).toEqual([]);
-    });
-
-    it('the amount stays within 1..warehouse', () => {
-      const { controller } = setup();
-      controller.transfer.open(city, target, 4);
-      controller.setTransferAmount(99);
-      expect(controller.transfer.current.n).toBe(4);
-      controller.setTransferAmount(0);
-      expect(controller.transfer.current.n).toBe(1);
-    });
-
-    it('Esc or a click elsewhere ends the transfer pick without a command', () => {
-      const { controller, sent } = setup();
-      controller.key(down('Tab'));
-      controller.click({ kind: 'node', id: city }, false);
-      controller.chooseSupply();
-      controller.key(down('Escape'));
-      expect(controller.ui.current.transferFrom).toBeNull();
-      controller.click({ kind: 'node', id: city }, false);
-      controller.chooseSupply();
-      controller.click({ kind: 'node', id: enemy.id }, false);
-      expect(controller.ui.current.transferFrom).toBeNull();
-      expect(controller.transfer.current.open).toBe(false);
+      expect(hud.selection).toBeNull();
       expect(sent).toEqual([]);
     });
   });

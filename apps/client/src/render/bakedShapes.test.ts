@@ -135,16 +135,11 @@ describe('warehouseMarksSpec: the warehouse as lozenges (57u)', () => {
     expect(fills(spec, CASING)).toBe(6);
   });
 
-  it('adds faint hollow places for the levels not built yet (economy v1)', () => {
-    expect(fills(warehouseMarksSpec(3, 1, YOU, 2), CASING)).toBe(5);
-  });
-
   it('has a key per look, so a texture is shared only by warehouses that look the same', () => {
-    const key = (cap: number, stock: number, locked: number) =>
-      warehouseMarksSpec(cap, stock, YOU, locked).key;
-    expect(key(4, 1, 2)).not.toBe(key(4, 1, 0));
-    expect(key(4, 1, 2)).not.toBe(key(4, 2, 2));
-    expect(key(4, 1, 2)).toBe(key(4, 1, 2));
+    const key = (cap: number, stock: number) => warehouseMarksSpec(cap, stock, YOU).key;
+    expect(key(4, 1)).not.toBe(key(5, 1));
+    expect(key(4, 1)).not.toBe(key(4, 2));
+    expect(key(4, 1)).toBe(key(4, 1));
     expect(warehouseMarksSpec(4, 1, YOU).key).not.toBe(warehouseMarksSpec(4, 1, ENEMY).key);
   });
 });

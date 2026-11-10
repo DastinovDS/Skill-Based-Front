@@ -115,15 +115,13 @@ describe('the leaf shift control', () => {
     expect(target.querySelector('.supply')).toBeNull();
   });
 
-  it('has no line hint, no auto lines toggle and no rear minimum stepper', () => {
+  it('has only the key and the leaf shift stepper', () => {
     setLocale('en');
     const { target, orders } = render();
     orders.toggleSupplyMode();
     flushSync();
-    const text = target.querySelector('.supply')?.textContent ?? '';
-    expect(text).not.toContain('supply line');
-    expect(text).not.toContain('Auto lines');
-    expect(target.querySelector('button[aria-label="Lower rear minimum"]')).toBeNull();
-    expect(target.querySelector('button[aria-pressed]')).toBeNull();
+    const banner = target.querySelector('.supply');
+    expect(banner?.querySelector('kbd')?.textContent).toBe('Tab');
+    expect(banner?.querySelectorAll('button')).toHaveLength(2);
   });
 });

@@ -1,100 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import { cityChoices } from './cityChoices.ts';
 
-const on = { enabled: true, warehouse_max_level: 2 };
-
-describe('cityChoices (DEC-26): what the menu of an own city offers', () => {
-  it('without the city development: recruit only (roads are raised by a click on them, DEC-28)', () => {
-    expect(
-      cityChoices({ ...on, enabled: false }, { hasBarracks: false, warehouseLevel: 0 }),
-    ).toEqual(['recruit']);
-  });
-
+describe('cityChoices (DEC-26, DEC-41): what the menu of an own city offers', () => {
   it('a city without the barracks has no recruit sector at all: it offers the builds', () => {
-    expect(cityChoices(on, { hasBarracks: false, warehouseLevel: 0 })).toEqual([
+    expect(cityChoices({ hasBarracks: false }, false, false, false)).toEqual([
       'barracks',
-      'warehouse',
+      'factory',
     ]);
-    expect(cityChoices(on, { hasBarracks: false, warehouseLevel: 2 })).toEqual(['barracks']);
-  });
-
-  it('without the city development every city recruits, whatever the barracks flag says', () => {
-    const off = { ...on, enabled: false };
-    expect(cityChoices(off, { hasBarracks: false, warehouseLevel: 0 })).toEqual(['recruit']);
-    expect(cityChoices(off, null)).toEqual(['recruit']);
   });
 
   it('the barracks is gone from the menu once it is built', () => {
-    expect(cityChoices(on, { hasBarracks: true, warehouseLevel: 1 })).toEqual([
-      'recruit',
-      'warehouse',
-    ]);
+    expect(cityChoices({ hasBarracks: true }, false, false, false)).toEqual(['recruit', 'factory']);
   });
 
-  it('the warehouse is gone at its top level', () => {
-    expect(cityChoices(on, { hasBarracks: null, warehouseLevel: 2 })).toEqual([
+  it('the factory is gone once the city is one, and while the own factories are at their max', () => {
+    expect(cityChoices({ hasBarracks: true, factory: true }, false, false, false)).toEqual([
       'recruit',
-      'barracks',
     ]);
-  });
-
-  it('both gone: recruit only', () => {
-    expect(cityChoices(on, { hasBarracks: true, warehouseLevel: 2 })).toEqual(['recruit']);
+    expect(cityChoices({ hasBarracks: true, factory: false }, false, true, false)).toEqual([
+      'recruit',
+    ]);
   });
 
   it('an unknown state keeps the sectors (the server decides)', () => {
-    expect(cityChoices(on, null)).toEqual(['recruit', 'barracks', 'warehouse']);
-    expect(cityChoices(on, { hasBarracks: null, warehouseLevel: null })).toEqual([
+    expect(cityChoices(null, false, false, false)).toEqual(['recruit', 'barracks', 'factory']);
+    expect(cityChoices({ hasBarracks: null, factory: null }, false, false, false)).toEqual([
       'recruit',
       'barracks',
-      'warehouse',
-    ]);
-  });
-
-  it('economy v2 (DEC-41): a city also builds a factory and a bunker until it has them', () => {
-    expect(cityChoices(on, { hasBarracks: true, warehouseLevel: 2 }, true)).toEqual([
-      'recruit',
       'factory',
-      'bunker',
-    ]);
-    expect(
-      cityChoices(on, { hasBarracks: true, warehouseLevel: 2, factory: true, fort: true }, true),
-    ).toEqual(['recruit']);
-  });
-
-  it('economy v2: an own province offers only the bunker', () => {
-    expect(cityChoices(on, null, true, true)).toEqual(['bunker']);
-  });
-
-  it('economy v1 has no factory or bunker sector', () => {
-    expect(
-      cityChoices(on, { hasBarracks: true, warehouseLevel: 2, factory: false }, false),
-    ).toEqual(['recruit']);
-  });
-});
-
-describe('cityChoices under the supply flow (DEC-43): no bunker in the rules', () => {
-  it('a city offers no bunker sector, a province has no menu at all', () => {
-    const v2 = { enabled: true, warehouse_max_level: 0 };
-    expect(
-      cityChoices(v2, { hasBarracks: true, warehouseLevel: 0, factory: false }, true, false, false),
-    ).toEqual(['recruit', 'factory']);
-    expect(cityChoices(v2, null, true, true, false)).toEqual([]);
-  });
-
-  it('with a bunker in the rules (mvp-3) nothing changes', () => {
-    const v2 = { enabled: true, warehouse_max_level: 2 };
-    expect(cityChoices(v2, null, true, true)).toEqual(['bunker']);
-    expect(cityChoices(v2, { hasBarracks: true, warehouseLevel: 2, factory: true }, true)).toEqual([
-      'recruit',
-      'bunker',
     ]);
   });
 
-  it('the warehouse sector is not offered when its top level is 0 (mvp-4)', () => {
-    const v2 = { enabled: true, warehouse_max_level: 0 };
-    expect(
-      cityChoices(v2, { hasBarracks: false, warehouseLevel: 0 }, true, false, false),
-    ).not.toContain('warehouse');
+  it('a city fortifies a road while one has no line (DEC-43, item D)', () => {
+    expect(cityChoices({ hasBarracks: true, factory: true })).toEqual(['recruit', 'fortify']);
+  });
+
+  it('an own province offers only the road fortification, or nothing at all', () => {
+    expect(cityChoices(null, true)).toEqual(['fortify']);
+    expect(cityChoices(null, true, false, false)).toEqual([]);
   });
 });

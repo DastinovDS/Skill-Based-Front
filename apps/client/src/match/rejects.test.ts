@@ -29,10 +29,10 @@ describe('reject messages', () => {
     }
   });
 
-  it('tell a code for the command it answers where the general text would mislead (economy v2)', () => {
+  it('tell a code for the command it answers where the general text would mislead ', () => {
     expect(rejectMessageKey('ALREADY_BUILT', 'build_factory')).toBe('reject.ALREADY_BUILT.factory');
     expect(rejectMessageKey('ALREADY_BUILT', 'build_barracks')).toBe('reject.ALREADY_BUILT');
-    expect(rejectMessageKey('NOT_CITY', 'draw_line')).toBe('reject.NOT_CITY.line');
+    expect(rejectMessageKey('NOT_CITY', 'build_factory')).toBe('reject.NOT_CITY.factory');
     for (const key of Object.values(REJECT_MESSAGES_BY_COMMAND)) {
       expect(en[key].length).toBeGreaterThan(0);
     }

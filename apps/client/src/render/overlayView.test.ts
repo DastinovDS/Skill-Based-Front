@@ -13,7 +13,6 @@ import {
   HELMET_FRAME,
   REACH_RING,
   UNIT_SIDES,
-  roadSpan,
 } from './style.ts';
 import { createLayers } from './layers.ts';
 import { OverlayView, framePolygon } from './overlayView.ts';
@@ -40,9 +39,8 @@ describe('OverlayView', () => {
       selection: null,
       ghosts,
       preview: null,
-      candidates: [],
       beacon: null,
-      supply: null,
+      supply: false,
       terrain: false,
       reach: [],
       split: [],
@@ -74,9 +72,8 @@ describe('OverlayView', () => {
       selection: null,
       ghosts: [],
       preview: null,
-      candidates: [],
       beacon: null,
-      supply: null,
+      supply: false,
       terrain: false,
       reach: [],
       split: [],
@@ -103,9 +100,8 @@ describe('OverlayView', () => {
       selection: { kind: 'group', id: 'g' },
       ghosts: [],
       preview: null,
-      candidates: [],
       beacon: null,
-      supply: null,
+      supply: false,
       terrain: false,
       reach: [],
       split: [],
@@ -125,9 +121,8 @@ describe('OverlayView', () => {
       selection: null,
       ghosts: [{ from: a.id, dest: b.id, planned: false, path: null, ...extra }],
       preview: null,
-      candidates: [],
       beacon: null,
-      supply: null,
+      supply: false,
       terrain: false,
       reach: [],
       split: [],
@@ -211,9 +206,8 @@ describe('OverlayView, the travel time and the route of an order (#432, #448)', 
     selection: null,
     ghosts: [],
     preview: null,
-    candidates: [],
     beacon: null,
-    supply: null,
+    supply: false,
     terrain: false,
     reach: [],
     split: [],
@@ -269,7 +263,7 @@ describe('OverlayView, the travel time and the route of an order (#432, #448)', 
     if (edge === undefined) throw new Error('a map without roads');
     const spot = spotOf(edge.a, edge.b);
     expect(spot.along).toBeCloseTo((spot.rimFrom + spot.length - spot.rimTo) / 2);
-    expect(spot.off).toBeGreaterThanOrEqual((roadSpan(3) / 2 + ETA_MARK.roadGap) * badgeScale(1));
+    expect(spot.off).toBeGreaterThanOrEqual(ETA_MARK.roadGap * badgeScale(1));
   });
 
   it('on a route of two roads: in the middle of the whole route, on the longer road', () => {
@@ -382,54 +376,6 @@ describe('OverlayView, the travel time and the route of an order (#432, #448)', 
     view.update(state({ from: a.id, node: b.id, ticks: 25, path: [a.id, b.id] }), none);
     view.update(state(null), none);
     expect(label(layers)?.visible).toBe(false);
-    view.destroy();
-  });
-});
-
-describe('OverlayView, the dashed band of the road mode (#469)', () => {
-  const state = (supply: OverlayState['supply']): OverlayState => ({
-    selection: null,
-    ghosts: [],
-    preview: null,
-    candidates: [0, 1],
-    beacon: null,
-    supply,
-    terrain: false,
-    reach: [],
-    split: [],
-    eta: null,
-  });
-  const band = (layers: ReturnType<typeof setup>['layers'], where: 'intents' | 'roads') =>
-    layers.layer[where].children.find((c) => c.label === 'road-band');
-
-  it('lies at the bottom of the intents layer on the normal map', () => {
-    const { layers, view, none } = setup();
-    view.update(state(null), none);
-    expect(layers.layer.intents.children[0]?.label).toBe('road-band');
-    expect(band(layers, 'intents')?.getLocalBounds().width).toBeGreaterThan(0);
-    expect(band(layers, 'roads')).toBeUndefined();
-    view.destroy();
-  });
-
-  it('moves to the roads layer in the «Supply» view, which hides the intents, and back', () => {
-    const { layers, view, none } = setup();
-    view.update(state({ source: null, targets: [], draft: [] }), none);
-    // The intents layer is hidden in this view, so what is visible is the roads layer.
-    expect(band(layers, 'intents')).toBeUndefined();
-    const drawn = band(layers, 'roads');
-    expect(drawn?.getLocalBounds().width).toBeGreaterThan(0);
-    expect(layers.layer.roads.children.at(-1)).toBe(drawn);
-
-    view.update(state(null), none);
-    expect(band(layers, 'roads')).toBeUndefined();
-    expect(layers.layer.intents.children[0]).toBe(drawn);
-    view.destroy();
-  });
-
-  it('is empty without candidates in both views', () => {
-    const { layers, view, none } = setup();
-    view.update({ ...state({ source: null, targets: [], draft: [] }), candidates: [] }, none);
-    expect(band(layers, 'roads')?.getLocalBounds().width).toBe(0);
     view.destroy();
   });
 });

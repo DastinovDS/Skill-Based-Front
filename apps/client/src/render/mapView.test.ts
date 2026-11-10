@@ -11,8 +11,8 @@ import { BG, CANAL_LAND, ROAD_BUFFER, ROAD_FOG, ROAD_OWN, YOU, ENEMY } from './s
 import { BORDER_BAND, BORDER_ENGRAVING, ENGRAVE, hairFloor } from './engraving.ts';
 import { SOFT } from './softness.ts';
 
-// The roads read without colour (R1, #345): the level is the number of lanes, an own road has solid
-// lanes on a band of its owner's colour, a buffer road dashed lanes, and a half in fog dotted ones.
+// The roads read without colour (R1, #345): an own road has a solid
+// lane on a band of its owner's colour, a buffer road dashed lanes, and a half in fog dotted ones.
 
 const map = DEFAULT_MAP;
 const edge = map.edges[0];
@@ -164,31 +164,10 @@ describe('MapView, the roads of R1', () => {
     view.destroy();
   });
 
-  it('draws one, two or three lanes for level 1, 2 and 3', () => {
-    view.setOwners(owners(0, 0));
-    for (const level of [1, 2, 3]) {
-      view.setRoads(map.edges.map((e) => ({ width: e.id === edge.id ? level : 1 })));
-      expect(laneRects(parts().lanes[0] as Graphics)).toHaveLength(level);
-    }
-  });
-
   it('keeps an own road under the Canal of the «Supply» mode (#858)', () => {
     view.setOwners(owners(0, 0));
-    view.setRoads(map.edges.map(() => ({ width: 2 })));
+    view.setRoads(map.edges.map(() => ({})));
     view.setSupplyMode(true);
-    expect(parts().lanes[0]?.visible).toBe(true);
-    expect(parts().casings[0]?.visible).toBe(true);
-  });
-
-  it('hides the lanes and the band of an own road in the «Supply» mode with pipes (#429)', () => {
-    view.setOwners(owners(0, 0));
-    view.setRoads(map.edges.map(() => ({ width: 2 })));
-    expect(parts().lanes[0]?.visible).toBe(true);
-    expect(parts().casings[0]?.visible).toBe(true);
-    view.setSupplyMode(true, true);
-    expect(parts().lanes.map((l) => l.visible)).toEqual([false, false]);
-    expect(parts().casings.map((c) => c.visible)).toEqual([false, false]);
-    view.setSupplyMode(false);
     expect(parts().lanes[0]?.visible).toBe(true);
     expect(parts().casings[0]?.visible).toBe(true);
   });
@@ -196,28 +175,20 @@ describe('MapView, the roads of R1', () => {
   it('keeps a buffer road and an enemy road as they are in the «Supply» mode', () => {
     view.setSupplyMode(true);
     view.setOwners(owners(0, 1));
-    view.setRoads(map.edges.map(() => ({ width: 2 })));
+    view.setRoads(map.edges.map(() => ({})));
     expect(parts().casings[0]?.visible).toBe(true);
     view.setOwners(owners(1, 1));
     expect(parts().casings[0]?.visible).toBe(true);
     expect(parts().lanes[0]?.visible).toBe(true);
   });
 
-  it('puts the lanes of a level across the road, not along it', () => {
+  it('gives an own road a solid lane on a band of its owner, and an enemy one the band of the enemy', () => {
     view.setOwners(owners(0, 0));
-    view.setRoads(map.edges.map((e) => ({ width: e.id === edge.id ? 3 : 1 })));
-    const rects = laneRects(parts().lanes[0] as Graphics);
-    expect(rects.map((r) => +(r.y + r.height / 2).toFixed(2))).toEqual([-3.7, 0, 3.7]);
-    expect(new Set(rects.map((r) => r.height))).toEqual(new Set([2]));
-  });
-
-  it('gives an own road solid lanes on a band of its owner, and an enemy one the band of the enemy', () => {
-    view.setOwners(owners(0, 0));
-    view.setRoads(map.edges.map(() => ({ width: 2 })));
+    view.setRoads(map.edges.map(() => ({})));
     const own = parts();
     const solid = laneRects(own.lanes[0] as Graphics);
-    // Solid: each lane is one rectangle over the unit length (the view scales it to the road).
-    expect(solid.map((r) => r.width)).toEqual([1, 1]);
+    // Solid: the lane is one rectangle over the unit length (the view scales it to the road).
+    expect(solid.map((r) => r.width)).toEqual([1]);
     expect(fillsOf(own.casings[0] as Graphics)[0]).toMatchObject({
       color: YOU,
       alpha: ROAD_OWN.bandAlpha,
@@ -227,8 +198,8 @@ describe('MapView, the roads of R1', () => {
     expect(fillsOf(parts().casings[0] as Graphics)[0]?.color).toBe(ENEMY);
   });
 
-  it('gives a buffer road dashed lanes and a dark casing, without the band of an owner', () => {
-    view.setRoads(map.edges.map(() => ({ width: 2 })));
+  it('gives a buffer road a dashed lane and a dark casing, without the band of an owner', () => {
+    view.setRoads(map.edges.map(() => ({})));
     for (const pair of [owners(0, 1), owners(0, null), owners(null, null)]) {
       view.setOwners(pair);
       const { casings, lanes } = parts();
@@ -238,8 +209,8 @@ describe('MapView, the roads of R1', () => {
       expect(dashes.length).toBeGreaterThan(4);
       expect(dashes[0]?.color).toBe(ROAD_BUFFER.lane);
       expect(dashLength(dashes[0] as Quad)).toBeCloseTo(ROAD_BUFFER.dash);
-      // Two lanes, the level 2 (3.7 apart across the road, the width of a lane to each side).
-      expect([...new Set(dashes.map(laneAt))].sort((p, q) => p - q)).toEqual([-2.85, 0.85]);
+      // One lane, centred on the road (the width of a lane to each side).
+      expect([...new Set(dashes.map(laneAt))]).toEqual([-1]);
       expect(fillsOf(casings[0] as Graphics)[0]).toMatchObject({
         color: BG,
         alpha: ROAD_BUFFER.casingAlpha,
@@ -248,7 +219,7 @@ describe('MapView, the roads of R1', () => {
   });
 
   it('turns a road into a buffer road when an end changes hands, and back', () => {
-    view.setRoads(map.edges.map(() => ({ width: 1 })));
+    view.setRoads(map.edges.map(() => ({})));
     view.setOwners(owners(0, 0));
     expect(laneRects(parts().lanes[0] as Graphics)).toHaveLength(1);
     expect(dashesOfRoad0()).toEqual([]);
@@ -261,7 +232,7 @@ describe('MapView, the roads of R1', () => {
 
   it('dots the lanes of a foreign road in fog', () => {
     view.setOwners(owners(1, 1));
-    view.setRoads(map.edges.map(() => ({ width: 2, halves: halves('fog', 'fog') })));
+    view.setRoads(map.edges.map(() => ({ halves: halves('fog', 'fog') })));
     const { casings, lanes } = parts();
     // Both halves alike: one stretch over the whole road, the second one is not drawn.
     expect(lanes.map((l) => l.visible)).toEqual([false, false]);
@@ -277,7 +248,7 @@ describe('MapView, the roads of R1', () => {
 
   it('draws only the half in fog dotted: two stretches that meet at the border point', () => {
     view.setOwners(owners(1, 1));
-    view.setRoads(map.edges.map(() => ({ width: 1, halves: halves('exact', 'fog') })));
+    view.setRoads(map.edges.map(() => ({ halves: halves('exact', 'fog') })));
     const { casings, lanes } = parts();
     // The half in sight has its solid lane, the half in fog the dots and no solid lane.
     expect(lanes.map((l) => l.visible)).toEqual([true, false]);
@@ -298,23 +269,23 @@ describe('MapView, the roads of R1', () => {
 
   it('never dots the own territory: an own half in fog is drawn as seen (DEC-35)', () => {
     view.setOwners(owners(0, 0));
-    view.setRoads(map.edges.map(() => ({ width: 2, halves: halves('fog', 'fog') })));
+    view.setRoads(map.edges.map(() => ({ halves: halves('fog', 'fog') })));
     expect(parts().lanes.map((l) => l.visible)).toEqual([true, false]);
     expect(dashesOfRoad0()).toHaveLength(0);
   });
 
   it('does not redraw a road whose look did not change', () => {
     view.setOwners(owners(0, 0));
-    view.setRoads(map.edges.map(() => ({ width: 2 })));
+    view.setRoads(map.edges.map(() => ({})));
     const before = (parts().lanes[0] as Graphics).context;
-    view.setRoads(map.edges.map(() => ({ width: 2 })));
+    view.setRoads(map.edges.map(() => ({})));
     view.setOwners(owners(0, 0));
     expect((parts().lanes[0] as Graphics).context).toBe(before);
     // Nor the dashes of the buffer roads: they are drawn again only when one of them changes.
     const layer = layers.layer.roads.children.find((c) => c.label === 'road-lanes');
     const dashes = layer?.children[0] as Graphics;
     const redraw = vi.spyOn(dashes, 'clear');
-    view.setRoads(map.edges.map(() => ({ width: 2 })));
+    view.setRoads(map.edges.map(() => ({})));
     view.setOwners(owners(0, 0));
     expect(redraw).not.toHaveBeenCalled();
     view.setOwners(owners(0, 1));

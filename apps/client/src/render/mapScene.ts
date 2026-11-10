@@ -13,8 +13,6 @@ import { FogView } from './fogView.ts';
 import { veilCities } from './fogLayout.ts';
 import { FortView } from './fortView.ts';
 import { TollView } from './tollView.ts';
-import { DefenseView } from './defenseView.ts';
-import { defenseSigns, signCounts } from './defenseSigns.ts';
 import { IntentView } from './intentView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
@@ -33,7 +31,7 @@ import type { RenderSource } from './source.ts';
 import { SightView } from './sightView.ts';
 import { SupplyView } from './supplyView.ts';
 import { FlowView } from './flowView.ts';
-import { aheadNodes, flowOn } from './flowLayout.ts';
+import { aheadNodes } from './flowLayout.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
@@ -43,7 +41,7 @@ import { captureWalks, floodDelayMs, type Walk } from './walkLayout.ts';
 /** Failed frames in a row before the player is told (a transient error is only skipped). */
 export const FRAME_FAILURE_LIMIT = 3;
 
-/** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
+/** Ticks per second when the source does not say. */
 const DEFAULT_TICK_HZ = 10;
 /** Frame time assumed when the ticker gives none (60 FPS), ms. */
 const DEFAULT_FRAME_MS = 1000 / 60;
@@ -113,7 +111,6 @@ export class MapScene {
   private readonly names: NameView;
   private readonly entities: EntityView;
   private readonly intents: IntentView;
-  private readonly defense: DefenseView;
   private readonly effects: EffectsView;
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
@@ -177,9 +174,6 @@ export class MapScene {
     this.entities = new EntityView(map, this.layers, me, 1, radiusOf, this.sprites);
     this.intents = new IntentView(map, this.layers, me, radiusOf);
     this.intents.setWarehouseSlots((node, index) => this.cities.warehouseSlot(node, index));
-    this.defense = new DefenseView(map, this.layers, me, this.sprites, radiusOf, (node) =>
-      this.cities.hasBarracks(node),
-    );
     this.forts = new FortView(map, this.layers, me, () => this.view.territoryEdges);
     this.effects = new EffectsView(map, this.layers, me, 1, radiusOf, this.screenSprites);
     this.tolls = new TollView(this.layers.layer.tolls, map, me, 1, (node, edge) =>
@@ -300,7 +294,6 @@ export class MapScene {
     this.fog.destroy();
     this.alerts.destroy();
     this.effects.destroy();
-    this.defense.destroy();
     this.intents.destroy();
     this.entities.destroy();
     this.overlay.destroy();
@@ -357,7 +350,7 @@ export class MapScene {
     if (frame === undefined || frame === null || this.source === null) return;
     // Asked once per frame and first: the «Supply» mode swaps the picture before anything draws.
     const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
-    this.setSupplyMode(overlay.supply !== null, !flowOn(frame.base.view));
+    this.setSupplyMode(overlay.supply);
     this.setTerrainMode(overlay.terrain);
     // The selected city shows the free slots of its queue; the rings that ask for a look pulse.
     this.cities.setSelected(overlay.selection?.kind === 'node' ? overlay.selection.id : null);
@@ -395,8 +388,7 @@ export class MapScene {
       this.forts.setCaptureDelays(delays);
       // The Ruled veil over the areas the snapshot hides (#842).
       this.view.setHidden(veilCities(frame.base.view.nodes));
-      const edges = frame.base.view.edges;
-      this.view.setRoads(edges.map((e) => ({ ...e, width: 1 }))); // roads have no levels (#894)
+      this.view.setRoads(frame.base.view.edges);
       this.levelCells = aheadNodes(frame.base.view, this.me);
       this.cities.update(
         frame.base,
@@ -405,7 +397,7 @@ export class MapScene {
         this.source.recruitQueueMax ?? null,
         this.source.provinceWarehouse ?? 0,
       );
-      // An own province shows its warehouse under economy v2 (DEC-41, item 13): its caption goes under it.
+      // An own province shows its warehouse (DEC-41, item 13): its caption goes under it.
       const places = this.source.provinceWarehouse ?? 0;
       this.names.refresh(
         new Set(
@@ -419,7 +411,6 @@ export class MapScene {
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);
-    this.entities.setBuildTicks(this.source.roadBuildTicks ?? 0);
     this.overlay.setTickHz(tickHz);
     const delays = this.source.orderDelays ?? null;
     this.intents.setDelays(delays);
@@ -444,13 +435,6 @@ export class MapScene {
     });
     this.cities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
-    // The sign of "Defense" and the barracks mark share one column on the left of a city (#349).
-    const signs = defenseSigns(
-      { nodes: frame.base.view.nodes, intents: frame.base.view.intents, groups: frame.groups },
-      this.me,
-    );
-    this.cities.setDefenseCounts(signCounts(signs));
-    this.defense.update(signs);
     const punches = this.effects.update(
       frame,
       this.source.events(),
@@ -480,12 +464,11 @@ export class MapScene {
       Math.max(1, 1 / this.layers.world.scale.x),
     );
     this.supply.setTickHz(tickHz);
-    this.supply.setProvinceWarehouse(this.source.provinceWarehouse ?? 0);
     this.supply.update(frame, overlay.supply);
     // The supply flow (DEC-43): the crosshatch ahead of the level in the «Supply» mode only (Canal,
     // #858); the normal map shows the starving marks and nothing else of it (ui-style 42).
-    this.view.setLevel(this.levelCells, overlay.supply === null ? 0 : 1);
-    this.flow.update(frame.base, overlay.supply === null);
+    this.view.setLevel(this.levelCells, overlay.supply ? 1 : 0);
+    this.flow.update(frame.base, !overlay.supply);
     // The road fortifications, on both maps; the road pick adds a ghost of the line on every road it reaches.
     this.forts.setBuildTicks(this.source.fortBuildTicks ?? 0);
     this.forts.update(frame.base.view, frame.tick, overlay.fortPick ?? null);
@@ -498,15 +481,13 @@ export class MapScene {
   /**
    * The «Supply» map mode (DEC-28, item 8), "Canal" (#858): the map keeps its picture and its fog; the
    * groups, the intents and the effects are hidden (`SupplyView` draws on the `supply` layer), the own
-   * land is darkened and the cities lose the queue and alert marks. `pipes`: an economy before the
-   * flow, whose own roads are pipes.
+   * land is darkened and the cities lose the queue and alert marks.
    */
-  private setSupplyMode(on: boolean, pipes: boolean): void {
-    this.view.setSupplyMode(on, on && pipes);
+  private setSupplyMode(on: boolean): void {
+    this.view.setSupplyMode(on);
     if (on === this.supplyOn) return;
     this.supplyOn = on;
     this.cities.setSupplyMode(on);
-    this.entities.setSupplyMode(on);
     const { groups, intents, effects } = this.layers.layer;
     for (const layer of [groups, intents, effects]) layer.visible = !on;
   }
@@ -582,7 +563,6 @@ export class MapScene {
     this.view.setCamera(camera.scale, this.app.renderer.resolution);
     this.sprites.setResolution(resolution);
     this.cities.setLabelResolution(resolution);
-    this.defense.setLabelResolution(resolution);
     this.overlay.setLabelResolution(resolution);
     this.overlay.setCameraScale(camera.scale);
     // The order arrows, ribbons and cues of #851: hairlines keep one device pixel.
@@ -615,7 +595,6 @@ export class MapScene {
     });
     this.entities.setCameraScale(camera.scale);
     this.intents.setCameraScale(camera.scale);
-    this.defense.setCameraScale(camera.scale);
     this.cities.setCameraScale(camera.scale);
     this.alerts.setCameraScale(camera.scale);
     this.fog.setCameraScale(camera.scale);

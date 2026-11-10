@@ -20,15 +20,11 @@
   import StackRadial from './StackRadial.svelte';
   import StartBanner from './StartBanner.svelte';
   import SupplyBanner from './SupplyBanner.svelte';
-  import SupplyMenu from './SupplyMenu.svelte';
-  import TransferDialog from './TransferDialog.svelte';
   import ToastStack from './ToastStack.svelte';
   import GroupTip from './GroupTip.svelte';
-  import RoadBanner from './RoadBanner.svelte';
   import TerrainBanner from './TerrainBanner.svelte';
   import SplitTip from './SplitTip.svelte';
   import CaptureTip from './CaptureTip.svelte';
-  import RoadTip from './RoadTip.svelte';
   import StatusBar from '../app/StatusBar.svelte';
   import StatusButton from '../app/StatusButton.svelte';
   import TopBar from './TopBar.svelte';
@@ -89,11 +85,6 @@
         ? `node:${String(data.node.id)}`
         : 'none',
   );
-  // The own road a click would raise, under the pointer (DEC-28, item 7).
-  const roadHover = $derived.by(() => {
-    const id = orders.ui.current.roadHover;
-    return id === null ? null : (data?.roads[id] ?? null);
-  });
   const mergeable = $derived(data === null ? 0 : orders.mergeCandidates().length);
 
   // "Fit map" keeps the map out of the top bar: measure it, its height depends on the zoom of the
@@ -132,27 +123,10 @@
     };
   });
 
-  // A refused command is a toast (U6); the accepted ones show on the map, except a transfer: its
-  // arrival is the server's answer (DEC-18), told in a toast.
+  // A refused command is a toast (U6); the accepted ones show on the map.
   $effect(() => {
     return orders.ui.onFeedback((feedback) => {
-      if (feedback.kind === 'accepted') {
-        const { arriveTick } = feedback;
-        const now = hud.current?.tick;
-        const transfer = null as { n: number; to_node: number } | null; // removed (#894): stage 2 deletes this
-        if (transfer !== null && arriveTick != null && now !== undefined) {
-          hud.toasts.push({
-            tone: 'mine',
-            icon: 'road',
-            text: tf('transfer.accepted', {
-              n: transfer.n,
-              node: hud.nodeName(transfer.to_node),
-              seconds: Math.ceil(Math.max(0, arriveTick - now) / hud.context.rules.tick_hz),
-            }),
-          });
-        }
-        return;
-      }
+      if (feedback.kind === 'accepted') return;
       const command = t(`cmd.${feedback.cmd.type}`);
       hud.toasts.push({
         tone: 'warn',
@@ -188,12 +162,10 @@
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
   {#if hints}
-    <KeyHints v2={orders.v2} flow={orders.flow} stances={orders.stances} />
+    <KeyHints />
   {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} />
-  <SupplyBanner {orders} names={hud.nodeName} />
-  <SupplyMenu {orders} names={hud.nodeName} />
-  <TransferDialog {orders} names={hud.nodeName} />
+  <SupplyBanner {orders} />
   <SplitMenu {orders} {anchors} names={hud.nodeName} />
   <CityRadial
     {orders}
@@ -204,20 +176,13 @@
   />
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
   <StackRadial {orders} {anchors} names={hud.nodeName} />
-  <GroupTip group={data?.hovered ?? null} rules={hud.context.rules} />
-  <RoadBanner {orders} />
+  <GroupTip group={data?.hovered ?? null} />
   <TerrainBanner {orders} />
-  <RoadTip {orders} road={roadHover} />
   <SplitTip {orders} names={hud.nodeName} />
   <CaptureTip {orders} names={hud.nodeName} cost={hud.context.rules.capture.charge_cost} />
   <HelpOverlay
     open={chrome.helpOpen}
     captureCost={hud.context.rules.capture.charge_cost}
-    terrainBurn={true}
-    v2={orders.v2}
-    flow={orders.flow}
-    fort={orders.hasFort}
-    stances={orders.stances}
     onclose={() => {
       chrome.helpOpen = false;
     }}

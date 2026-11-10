@@ -343,9 +343,8 @@ describe('factories and fortifications in the city menu (#762)', () => {
     if (third === undefined) throw new Error('three own cities needed');
     const full = setup(withFactories([home, third.id], [second])).controller;
     expect(full.factoriesFull).toBe(true);
-    const plain = { enabled: false, warehouse_max_level: 0 };
-    expect(cityChoices(plain, null, true, false, false, true, false)).toContain('factory');
-    expect(cityChoices(plain, null, true, false, false, true, true)).not.toContain('factory');
+    expect(cityChoices(null, false, false)).toContain('factory');
+    expect(cityChoices(null, false, true)).not.toContain('factory');
   });
 
   it('offers no "Fortify road" in a node whose every road has its line, built or being built', () => {
@@ -370,11 +369,8 @@ describe('factories and fortifications in the city menu (#762)', () => {
     controller.click({ kind: 'node', id: home }, false);
     controller.startFortify();
     expect(controller.ui.current.fortFrom).toBeNull();
-    const plain = { enabled: false, warehouse_max_level: 0 };
-    expect(cityChoices(plain, null, true, false, false, true, false, false)).not.toContain(
-      'fortify',
-    );
+    expect(cityChoices(null, false, false, false)).not.toContain('fortify');
     // A province with nothing left to do has an empty menu (nothing is drawn).
-    expect(cityChoices(plain, null, true, true, false, true, false, false)).toEqual([]);
+    expect(cityChoices(null, true, false, false)).toEqual([]);
   });
 });

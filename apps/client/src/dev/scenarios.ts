@@ -22,7 +22,6 @@ import type {
 import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 import { badgesSnapshot } from './badgesScene.ts';
-import { DEFENSE_VIEW, defenseSnapshot } from './defenseScene.ts';
 import {
   BUILD_PAY_VIEW,
   ECONOMY_VIEW,
@@ -34,7 +33,6 @@ import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
 import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
-import { supplySnapshot } from './supplyScene.ts';
 import { FLOW_VIEW, flowSnapshot, stancesSnapshot } from './flowScene.ts';
 import {
   FORTS_GEO_VIEW,
@@ -344,8 +342,6 @@ function walkSnapshot(captured: boolean, pair = false): SnapshotMsg {
     mode: 'attack' as const,
     location: { kind: 'node' as const, node: 2 },
     order: null,
-    defense_bonus: null,
-    defense_cap: null,
   };
   return {
     ...base,
@@ -663,7 +659,7 @@ export interface FixtureScene {
   view?: { x: number; y: number; width: number; height: number };
   /** The city development of DEC-26 is on (the barracks marks are drawn); off when absent. */
   cityUpgrades?: boolean;
-  /** The rules of the scene, for the HUD and the menus; `DEV_RULES` (economy v1) when absent. */
+  /** The rules of the scene, for the HUD and the menus; `DEV_RULES` when absent. */
   rules?: RulesetPublic;
 }
 
@@ -676,7 +672,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     // The last round of the fight in the city 4 (its shots in the air), 12 ticks ago.
     events: [round(ARTERY_TICK - 12, { node: 4 }, 2, 0, 1)],
     view: ARTERY_VIEW,
-    // As in `mvp-1`: the own capital and the enemy city 5 next door show the barracks (DEC-31).
+    // The own capital and the enemy city 5 next door show the barracks (DEC-31).
     cityUpgrades: true,
   },
   {
@@ -716,24 +712,6 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     cityUpgrades: true,
   },
   {
-    // The artery moment for the «Supply» view (Tab, `keys` in visual/scenes.ts): pipes of all levels, flows, markers, a cut-off city (#429).
-    id: 'supply',
-    map: 'artery',
-    snapshot: supplySnapshot(bundledMap('artery')),
-    events: [],
-    view: ARTERY_VIEW,
-    cityUpgrades: true,
-  },
-  {
-    // The artery moment with the sign of "Defense" in every state of the counter (#349).
-    id: 'defense',
-    map: 'artery',
-    snapshot: defenseSnapshot(bundledMap('artery')),
-    events: [],
-    view: DEFENSE_VIEW,
-    cityUpgrades: true,
-  },
-  {
     // The artery moment for the terrain map mode (T, `keys` in visual/scenes.ts): patterns and sight signs (#429).
     id: 'terrain',
     map: 'artery',
@@ -743,7 +721,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     cityUpgrades: true,
   },
   {
-    // Economy v2 (DEC-41, #649): factories, bunkers, builds that wait for charges, a gathering plan.
+    // DEC-41, #649: factories, builds that wait for charges, a gathering plan.
     id: 'economy',
     map: 'artery',
     snapshot: economySnapshot(bundledMap('artery')),
@@ -765,17 +743,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     rules: DEV_RULES_V2,
   },
   {
-    // The same moment on the «Supply» layer (Tab, `keys` in visual/scenes.ts): the drawn supply lines.
-    id: 'economy_supply',
-    map: 'artery',
-    snapshot: economySnapshot(bundledMap('artery')),
-    events: [],
-    view: ECONOMY_VIEW,
-    cityUpgrades: true,
-    rules: DEV_RULES_V2,
-  },
-  {
-    // The supply flow (DEC-43, #705) under the rules of `mvp-4`, the shift at the front: the battle mode
+    // The supply flow (DEC-43, #705), the shift at the front: the battle mode
     // (alerts only: the starving marks; no level fill, no chevrons, #728).
     id: 'flow',
     map: 'artery',
@@ -808,7 +776,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     rules: DEV_RULES_FLOW,
   },
   {
-    // Stances of economy v2 (DEC-44, #772) under the rules of `mvp-4-stances`: the map of `flow`, the
+    // Stances (DEC-44, #772): the map of `flow`, the
     // stance chip and the two progress bars in the top bar.
     id: 'stances',
     map: 'artery',
@@ -819,7 +787,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     rules: DEV_RULES_STANCES,
   },
   {
-    // Road fortifications (DEC-43, item D; #707) under the rules of `mvp-4`: an own line built with the
+    // Road fortifications (DEC-43, item D; #707): an own line built with the
     // enemy's on the other side of the same border, one being built (55%), one with a neutral city
     // across, an enemy line being built (known to exist only).
     id: 'forts',
@@ -1024,21 +992,17 @@ export function frozenSource(scene: FixtureScene, at?: number, flood?: FloodPin)
     ...(flood === undefined
       ? {}
       : { floodFrom: floodOwners(scene.snapshot, flood), floodHoldMs: flood.ms }),
-    // Economy v2: a plan has no delay, it gathers its bonus (DEC-41, item 10).
-    orderDelays: { planned: 0 }, // a plan gathers its bonus (DEC-41, item 10)
+    // A plan has no delay, it gathers its bonus (DEC-41, item 10).
+    orderDelays: { planned: 0 },
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
     recruitQueueMax: DEV_RULES.recruit.queue_max,
     provinceWarehouse: rules.city_upgrades.warehouse_province,
-    roadBuildTicks: 0, // no road levels (#894)
     fortBuildTicks: rules.fort.build_ticks,
     cityUpgrades:
       scene.cityUpgrades === true
         ? {
             barracks: DEV_RULES.city_upgrades.barracks_ticks,
-            warehouse: 0, // no warehouse levels (#894)
-            warehouseMaxLevel: 0,
-            warehouseGainPerLevel: 0,
             barracksCharges: rules.city_upgrades.barracks_charges,
             factory: rules.factory.build_ticks,
             factoryCharges: rules.factory.cost,

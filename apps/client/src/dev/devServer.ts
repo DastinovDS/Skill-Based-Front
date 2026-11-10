@@ -57,26 +57,12 @@ export function devPath(map: MapFile, from: number, to: number): [number, ...num
   return path as [number, ...number[]];
 }
 
-/**
- * Stand-in for `line_route` (#665) on the dev screen: the legs between the points by `devPath`, put
- * together. The real server takes the fastest own path; this only has to look plausible.
- */
-export function devLinePath(map: MapFile, points: readonly number[]): number[] {
-  const path: number[] = points.slice(0, 1);
-  for (let i = 1; i < points.length; i++) {
-    const leg = devPath(map, points[i - 1] as number, points[i] as number);
-    if (leg === null) return [];
-    path.push(...leg.slice(1));
-  }
-  return path;
-}
-
 /** Ticks a demo packet needs for one road of the dev screen. */
 const DEV_PACKET_TICKS = 60;
 
 /**
- * Demo packets for the «Supply» layer (not rules): a charge pair on the first own road, a transfer
- * the other way on the second, and, where an own road continues from the end of the first, a
+ * Demo packets for the «Supply» layer (not rules): a charge pair on the first own road, a single
+ * charge the other way on the second, and, where an own road continues from the end of the first, a
  * packet that goes on over it. They restart every `DEV_PACKET_TICKS`.
  */
 export function devPackets(map: MapFile, nodes: readonly NodeView[], tick: number): PacketView[] {

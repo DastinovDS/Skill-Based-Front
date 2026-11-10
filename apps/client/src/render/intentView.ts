@@ -186,7 +186,6 @@ export class IntentView {
         nodes[intent.target]?.owner,
       );
       if (id !== null) gathering.add(id);
-      // The sign of "Defense" is the city's own (`DefenseView`, #349).
     }
     for (const id of this.fills.keys()) if (!gathering.has(id)) this.fills.delete(id);
     this.drawFlights(clock, reduced);
@@ -250,8 +249,8 @@ export class IntentView {
     if (shape === null) return null;
     const { axis, ribbon, bend, body } = shape;
     const color = ownerColor(this.me, intent.owner);
-    // Economy v2 (DEC-41, item 10): an own plan that gathers its bonus fills as the bonus grows
-    // (the server's `bonus` of the requested `plan`), eased step by step; economy v1 by its delay.
+    // DEC-41, item 10: an own plan that gathers its bonus fills as the bonus grows (the server's
+    // `bonus` of the requested `plan`), eased step by step.
     const order = item?.group.order;
     const gatheringOn = own && order?.gathering === true && item !== undefined;
     let fill: number | null = progress;
@@ -482,7 +481,7 @@ export class IntentView {
 
   /**
    * The pill beside an own planned ribbon at `spot` (world units, from `bonusSpot`), drawn at one
-   * unit a screen px on a thin Engraved panel. A gathering plan (economy v2, `plan` its asked bonus)
+   * unit a screen px on a thin Engraved panel. A gathering plan (`plan` its asked bonus)
    * shows a chevron slot per asked bonus, solid when gathered (Eased steps with slots, 54e); else
    * the chevron and "+N", N the server's bonus (DEC-29).
    */

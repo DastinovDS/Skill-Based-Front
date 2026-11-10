@@ -47,7 +47,7 @@ export const DEV_RULES: RulesetPublic = (() => {
   return welcome.ruleset_public;
 })();
 
-/** The ruleset of `mvp-3` (economy v2, DEC-41): the `welcome_v2` fixture of #647. */
+/** The `welcome_v2` fixture of #647 (DEC-41): the factories and the plan that gathers. */
 export const DEV_RULES_V2: RulesetPublic = (() => {
   const welcome = Object.values(welcomeV2Files)[0];
   if (welcome === undefined) {
@@ -57,8 +57,7 @@ export const DEV_RULES_V2: RulesetPublic = (() => {
 })();
 
 /**
- * The rules of `mvp-4` (DEC-43): economy v2 with the automatic supply flow (`welcome_v4.json`), for the
- * `flow` scenes.
+ * The rules with the automatic supply flow (DEC-43, `welcome_v4.json`), for the `flow` scenes.
  */
 export const DEV_RULES_FLOW: RulesetPublic = (() => {
   const welcome = Object.values(welcomeV4Files)[0];
@@ -68,7 +67,7 @@ export const DEV_RULES_FLOW: RulesetPublic = (() => {
   return welcome.ruleset_public;
 })();
 
-/** The rules of `mvp-4-stances` (DEC-44): `mvp-4-sup200` with stances, for the `stances` scene. */
+/** The rules with stances (DEC-44), for the `stances` scene. */
 export const DEV_RULES_STANCES: RulesetPublic = (() => {
   const welcome = Object.values(welcomeStancesFiles)[0];
   if (welcome === undefined) {
@@ -83,7 +82,7 @@ const SEEN_PRESENCE = 2;
 
 /** The snapshot of dev tick `tick` for `map` (player 0 sees its own nodes; the first enemy nodes are shown in full or as presence). */
 /**
- * Capacities of the dev feed by node kind: the `mvp-0` numbers of DEC-22, only for this offline
+ * Capacities of the dev feed by node kind: the numbers of DEC-22, only for this offline
  * fake (a real snapshot carries the server's capacity of every node).
  */
 export const DEV_CAPACITY: Record<NodeKind, number> = {

@@ -15,7 +15,7 @@
     anchors: MapAnchors;
     /** Units in the recruit queue of the city (DEC-25, from the snapshot); `null`: unknown. */
     queue: number | null;
-    /** The selected city (barracks, warehouse and its build of any kind, DEC-26); `null`: none. */
+    /** The selected city (barracks, factory and its build, DEC-26); `null`: none. */
     city?: NodeInfo | null;
     /** The name of a place by its id. */
     names: NodeNamer;
@@ -26,22 +26,17 @@
   const menu = $derived(orders.cityMenu.current);
   const cp = (centis: number): string => formatCentis(centis, getLocale());
 
-  // DEC-26: with the city development the menu also builds the barracks and the warehouse.
+  // DEC-26, DEC-41: the menu also builds the barracks and a factory, and fortifies a road.
   // A sector shows only its glyph and its price (the name is the accessible name); the reason a
   // sector is off is on the map and in the panel, never a line of text here.
-  // A sector with nothing to do (no recruit without a barracks, the barracks is built, the
-  // warehouse is at its top level) is not drawn; the others spread evenly around the ring.
-  const v2 = $derived(orders.v2);
+  // A sector with nothing to do (no recruit without a barracks, the barracks is built, the city is
+  // a factory) is not drawn; the others spread evenly around the ring.
   const province = $derived(menu.target !== null && orders.isProvince(menu.target));
   // #762: no factory at the factory max, no "Fortify road" once every road of the node has its line.
   const choices = $derived(
     cityChoices(
-      { enabled: true, warehouse_max_level: 0 }, // removed (#894): stage 2 deletes this
       city,
-      v2,
       province,
-      orders.hasBunker,
-      orders.hasFort,
       orders.factoriesFull,
       menu.target === null || orders.fortifiable(menu.target),
     ),
@@ -54,7 +49,7 @@
     // Own CP now; `null` (not known yet): nothing is dimmed for it.
     const funds = orders.cpNow;
     const poor = (centis: number): boolean => funds !== null && funds < centis;
-    // A build of the city (the barracks or the warehouse) holds the other back.
+    // A build of the city (the barracks) holds the other back.
     const busy = city?.building != null;
     // The price as signs (ui-style 57u, #829): CP as the number and the CP mark, charges as one
     // lozenge each, filled for those the warehouse holds and hollow for those the groups standing
@@ -67,7 +62,7 @@
       n: number,
     ): Pick<RadialItem, 'price' | 'aria'> => {
       const cpPart = centis > 0 ? cp(centis) : null;
-      const chargePart = v2 && n > 0 ? n : null;
+      const chargePart = n > 0 ? n : null;
       if (cpPart === null && chargePart === null) return { aria: label };
       const words =
         cpPart !== null && chargePart !== null
@@ -107,15 +102,6 @@
             // Only a city known to lack it builds it (a built one has no sector at all).
             disabled: city?.hasBarracks !== false || busy || poor(costs.barracks),
           };
-        case 'warehouse':
-          return {
-            id: 'warehouse',
-            icon: 'warehouse',
-            label: t('city.warehouse'),
-            ...priced(t('city.warehouse'), costs.warehouse, charges.warehouse),
-            compact: true,
-            disabled: busy || poor(costs.warehouse),
-          };
         case 'factory':
           return {
             id: 'factory',
@@ -136,17 +122,6 @@
             compact: true,
             // The road is picked next: the sector is dimmed by the CP only (a fight does not stop it).
             disabled: poor(orders.fortCost),
-          };
-        case 'bunker':
-          return {
-            id: 'bunker',
-            icon: 'bunker',
-            label: t('city.bunker'),
-            ...priced(t('city.bunker'), 0, charges.bunker),
-            compact: true,
-            // A province keeps its sector once the bunker stands: it is shown as built.
-            ...(city?.fort === true ? { current: true } : {}),
-            disabled: city?.fort === true || city?.fortBuild != null,
           };
       }
     };

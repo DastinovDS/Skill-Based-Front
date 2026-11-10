@@ -5,14 +5,7 @@
  * Pure functions, no PixiJS and no DOM. Capacity, garrison and warehouse come from the snapshot;
  * nothing is inferred here.
  */
-import {
-  BAR_GAP,
-  BAR_SEGMENT,
-  RING_GAP,
-  RING_MAX_SEGMENTS,
-  RING_SEGMENT,
-  VP_BADGE_LIFT,
-} from './style.ts';
+import { BAR_GAP, RING_GAP, RING_MAX_SEGMENTS, RING_SEGMENT, VP_BADGE_LIFT } from './style.ts';
 
 /**
  * City radius by capacity class: up to 2, 3-4, 5-6, 7 and more. A province is a small ring of its
@@ -77,59 +70,6 @@ export function capacityRing(capacity: number, garrison: number): Ring {
   return { solid: false, arcs, notches: [] };
 }
 
-/**
- * What a warehouse place shows (ui-style 9.4, C1): `filled` holds a charge, `frame` is room for one,
- * `dashed` is a place of a level that is not built yet (the shape tells it, not the colour).
- */
-export type PlaceState = 'filled' | 'frame' | 'dashed';
-
-export interface BarSegment {
-  /** Left edge from the middle of the bar. */
-  readonly x: number;
-  readonly state: PlaceState;
-  /** Holds a charge (`state === 'filled'`). */
-  readonly filled: boolean;
-}
-
-export interface WarehouseBar {
-  readonly width: number;
-  readonly segments: BarSegment[];
-}
-
-/**
- * Warehouse bar: a place per unit of warehouse capacity, `warehouse` of them filled (the rest a
- * frame), then `locked` dashed places for the levels not built yet (always the last ones).
- */
-export function warehouseSegments(warehouse: number, capacity: number, locked = 0): WarehouseBar {
-  const cap = Math.max(0, Math.floor(capacity));
-  const filled = Math.min(cap, Math.max(0, Math.floor(warehouse)));
-  const total = cap + Math.max(0, Math.floor(locked));
-  const { pitch, pad } = BAR_SEGMENT;
-  const width = total * pitch + 2 * pad - (pitch - BAR_SEGMENT.width);
-  const segments: BarSegment[] = [];
-  for (let i = 0; i < total; i++) {
-    const state: PlaceState = i < filled ? 'filled' : i < cap ? 'frame' : 'dashed';
-    segments.push({ x: -width / 2 + pad + i * pitch, state, filled: state === 'filled' });
-  }
-  return { width, segments };
-}
-
-/** What `ruleset_public.city_upgrades` says of the warehouse levels (DEC-26). */
-export interface WarehouseLevels {
-  readonly warehouseMaxLevel: number;
-  readonly warehouseGainPerLevel: number;
-}
-
-/**
- * Dashed places of an own city: the levels above its `level` up to the top one, `gain` places each
- * (`warehouse_level` of the view, the two numbers of the ruleset). 0 for a city whose level the view
- * does not give (a foreign one) and without city development.
- */
-export function lockedPlaces(level: number | null, levels: WarehouseLevels | null): number {
-  if (level === null || levels === null) return 0;
-  return Math.max(0, levels.warehouseMaxLevel - Math.max(0, level)) * levels.warehouseGainPerLevel;
-}
-
 /** Where the warehouse bar sits: its top edge, from the city centre. */
 export function barTop(radius: number): number {
   return ringRadius(radius) + BAR_GAP;
@@ -155,39 +95,6 @@ export const BARRACKS_HOUSE: readonly (readonly [number, number])[] = [
   [-3.5, -0.5],
   [-4.5, -0.5],
 ];
-
-/**
- * Economy v2 (DEC-41, item 2): the factory glyph of its badge, relative to the middle of the mark: a
- * saw-tooth roof of two teeth and a tower on the right (the shape tells it, not the colour).
- */
-export const FACTORY_GLYPH: readonly (readonly [number, number])[] = [
-  [-4.6, 4],
-  [-4.6, -0.8],
-  [-1.9, 1],
-  [-1.9, -0.8],
-  [0.8, 1],
-  [0.8, -4.6],
-  [3.8, -4.6],
-  [3.8, 4],
-];
-
-/**
- * Economy v2 (DEC-41, item 12): the bunker glyph, a low dome on a base, relative to the middle of
- * the mark; the firing slit is cut into it (`BUNKER_SLIT`).
- */
-export const BUNKER_GLYPH: readonly (readonly [number, number])[] = (() => {
-  const points: [number, number][] = [];
-  const r = 4.7;
-  for (let i = 0; i <= 10; i++) {
-    const a = Math.PI + (Math.PI * i) / 10;
-    points.push([r * Math.cos(a), 2.2 + r * Math.sin(a)]);
-  }
-  points.push([4.7, 4], [-4.7, 4]);
-  return points;
-})();
-
-/** The firing slit of the bunker glyph: x, y, width, height from the middle of the mark. */
-export const BUNKER_SLIT = { x: -2.6, y: -0.3, width: 5.2, height: 1.3 } as const;
 
 /**
  * Where the VP badge sits: the gilt lozenge on the capacity ring at its upper right (the angle of

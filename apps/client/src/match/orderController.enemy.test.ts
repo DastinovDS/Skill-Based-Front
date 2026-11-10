@@ -30,8 +30,7 @@ function setup() {
   const menusOpen = (): boolean =>
     controller.cityMenu.current.open ||
     controller.groupMenu.current.open ||
-    controller.stackMenu.current.open ||
-    controller.supplyMenu.current.open;
+    controller.stackMenu.current.open;
   return { hud, controller, sent, menusOpen };
 }
 
@@ -74,12 +73,9 @@ describe('an enemy city is not selected (#535)', () => {
     expect(hud.selection).toBeNull();
   });
 
-  it('in the Supply view and in the road mode an enemy city is not selected', () => {
+  it('in the Supply view an enemy city is not selected', () => {
     const { hud, controller } = setup();
     controller.ui.patch({ supplyMode: true });
-    controller.click({ kind: 'node', id: enemy.id }, false);
-    expect(hud.selection).toBeNull();
-    controller.ui.patch({ supplyMode: false, roadMode: true });
     controller.click({ kind: 'node', id: enemy.id }, false);
     expect(hud.selection).toBeNull();
   });

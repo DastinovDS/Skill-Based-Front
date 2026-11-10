@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  barracksAt,
   dashAlong,
   delayLeft,
   delayProgress,
@@ -21,7 +22,6 @@ import {
   tailStart,
 } from './intentLayout.ts';
 import { vpBadgeAt } from './cityLayout.ts';
-import { barracksAt } from './defenseLayout.ts';
 import { GHOST_CP, GHOST_REJECT_MS, GHOST_SHAKE_MS, RIBBON } from './style.ts';
 
 const A = { x: 0, y: 0 };
