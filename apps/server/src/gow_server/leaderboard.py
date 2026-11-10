@@ -4,7 +4,9 @@ Both are public reads: no token is needed, only a per-IP rate limit (``Limits.pu
 Who is shown follows DEC-34 (mechanics.md, section 19): the leaderboard and the rating of a profile
 exist only for a password account that finished calibration, is not blocked, and has the displayed
 rating ``r - 2 * RD`` (rounded to an integer, like ``match_end.rating``). A guest or an account in
-calibration has a profile without a rating (``calibration`` says how far it is).
+calibration has a profile without a rating (``calibration`` says how far it is). With the rating
+off (``GOW_RATING_ENABLED``, #924) the leaderboard is empty and no profile has a rating, a rank or
+a calibration.
 
 The profile lists the last matches of any kind. The rating change of a history row follows the
 rule of ``match_end``: hidden for calibration matches, shown from the match that completes the
@@ -208,6 +210,8 @@ def get_leaderboard(request: Request, session: DbSession) -> Leaderboard:
     """
     _enforce_read_limit(request)
     settings: Settings = request.app.state.settings
+    if not settings.rating_enabled:  # #924: no rating, nobody is ranked
+        return Leaderboard(entries=[], total=0, min_rated_matches=settings.calibration_matches)
     eligible = _eligible(settings.calibration_matches)
     rows = session.execute(
         select(Player.id, Player.nick, _display_score, Rating.rated_matches)
@@ -276,7 +280,8 @@ def get_player(
     rating: int | None = None
     rank: int | None = None
     calibration: Calibration | None = None
-    if has_password and rating_row is not None and rated_matches >= total:
+    ranked = has_password and settings.rating_enabled  # #924: off, no rating, rank, calibration
+    if ranked and rating_row is not None and rated_matches >= total:
         score = rating_row.rating - 2.0 * rating_row.rd
         rating = round(score)
         better = session.execute(
@@ -289,7 +294,7 @@ def get_player(
             )
         ).scalar_one()
         rank = better + 1
-    elif has_password:
+    elif ranked:
         calibration = Calibration(played=rated_matches, total=total)
     record, rated_record = _records(session, [player_id])[player_id]
     viewer = _viewer_id(session, credentials)

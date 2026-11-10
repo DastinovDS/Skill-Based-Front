@@ -322,7 +322,7 @@ def client_ip(request: Request) -> str:
 def _me(request: Request, player: Player, session: Session) -> Me:
     settings: Settings = request.app.state.settings
     calibration = None
-    if player.password_hash is not None:
+    if settings.rating_enabled and player.password_hash is not None:  # #924: off, no calibration
         played = played_of(session, player.id)
         if played < settings.calibration_matches:
             calibration = Calibration(played=played, total=settings.calibration_matches)

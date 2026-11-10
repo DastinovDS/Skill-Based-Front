@@ -185,6 +185,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | no more than N new guests from one IP per window in seconds |
 | `GOW_MATCH_CREATE_RATE_LIMIT`, `GOW_MATCH_CREATE_RATE_WINDOW_S` | `10`, `600` | MOD-01: no more than N created matches (invites and bot matches together) per player per window |
 | `GOW_QUEUE_RATE_LIMIT`, `GOW_QUEUE_RATE_WINDOW_S` | `20`, `60` | MOD-01: no more than N entries into the matchmaking queue (`POST /api/queue`) per player per window |
+| `GOW_QUEUE_MAPS` | `pool` | #924: where a queue match takes its map: `pool` (a random pool map) or `generated` (a map made for each found pair, like an invite's; a pool map when it cannot be made in time or `GOW_MAPGEN_ENABLED=false`; never rated). For test sessions on generated maps |
 | `GOW_QUEUE_WINDOW_BASE`, `GOW_QUEUE_WINDOW_PER_S`, `GOW_QUEUE_WINDOW_MAX` | `100`, `5`, `400` | MM-01: the matchmaking rating window `base + k·wait` (seconds) with a cap (mechanics.md, section 19) |
 | `GOW_QUEUE_PASS_S`, `GOW_QUEUE_CONFIRM_S` | `1`, `15` | MM-01: no more than one matchmaking pass per N seconds; the time to confirm a found pair |
 | `GOW_QUEUE_BOT_OFFER_S`, `GOW_QUEUE_STALE_S` | `60`, `15` | MM-01: after how many seconds of waiting to offer a bot; a player whose client is silent for that many seconds leaves the queue |
@@ -198,6 +199,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_SCRYPT_CONCURRENCY` | `3` | #413: at most this many scrypt runs at once (about 32 MiB each); a login or password change over it gets `503` with `Retry-After` at once |
 | `GOW_NICK_BLOCKLIST_FILE` | empty | MOD-01: a file of additional forbidden words for nicks (one word per line, `#` is a comment); in the container `/data/nick-blocklist.txt` |
 | `GOW_MAX_REQUEST_BODY_BYTES` | `32768` | SRV-01: the largest HTTP request body in bytes; more gets `413` before any parsing (by `Content-Length` and by counting a streamed body). Caddy adds its own 64 KB cap on `/api/*` |
+| `GOW_RATING_ENABLED` | `false` | #924: the rating. `false` (no rating at MVP): every match is unrated, the queue included; no rating, calibration or queue ban is written, the queue pairs first come, first served, `/api/me` and the profiles show no rating or calibration, the leaderboard is empty. `true`: the queue is rated (DEC-34, the settings below). Pauses do not depend on it (the queue has none, bot and invite matches one per player) |
 | `GOW_CALIBRATION_MATCHES` | `5` | DEC-34, #414: rating-changing matches of a password account before its rating is shown and it counts for opponents (calibration) |
 | `GOW_EARLY_RESIGN_S` | `180` | DEC-34: a surrender or disconnect before this match time (seconds) gives the winner no rating change |
 | `GOW_RESIGN_WINDOW_S`, `GOW_RESIGN_BAN_SECOND_S`, `GOW_RESIGN_BAN_THIRD_S`, `GOW_RESIGN_BAN_LATER_S` | `86400`, `300`, `1800`, `7200` | DEC-34: repeated resigns in rated matches within the window ban the player from the queue: the 2nd for `SECOND` seconds, the 3rd for `THIRD`, the 4th and later for `LATER` (the 1st: no ban) |

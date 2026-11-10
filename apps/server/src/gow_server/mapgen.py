@@ -2,7 +2,8 @@
 
 The owner's decision of 2026-11-09: a private invite and a bot match without a map choice play a
 map made for them at their start; the queue and rated play stay on the pool. The public lobby is
-unrated too and plays a new map by default since #889.
+unrated too and plays a new map by default since #889. With ``GOW_QUEUE_MAPS=generated`` (#924) a
+queue match gets one too, requested when its pair is found (``gow_server.matchqueue``).
 
 ``MapMaker.request`` reserves a map id (``live-`` and 12 hex digits, ``maps.MATCH_MAP_PREFIX``)
 and starts the work at once; the match starts only when ``MapMaker.settle`` has the map. The work

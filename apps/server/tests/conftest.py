@@ -35,6 +35,13 @@ def _no_new_maps(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GOW_MAPGEN_ENABLED", "false")
 
 
+@pytest.fixture(autouse=True)
+def _rating_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tests of the rating (DEC-34) run with it on; the server default is off (#924). A test
+    of the default asks for ``rating_enabled=False`` (``test_rating_flags.py``)."""
+    monkeypatch.setenv("GOW_RATING_ENABLED", "true")
+
+
 @pytest.fixture
 def maps_dir(tmp_path: Path) -> Path:
     directory = tmp_path / "maps"

@@ -3,7 +3,10 @@
 Flow: ``POST /api/queue`` puts the player into the queue; the client polls ``GET /api/queue``
 (every second). A pass pairs players at most once per ``pass_s``; a pair has ``confirm_s`` to
 confirm (``POST /api/queue/confirm``). When both confirmed, the match starts on a random map of
-the pool and ``GET /api/queue`` tells both the ``match_id`` for ``/ws/match/{match_id}``.
+the pool and ``GET /api/queue`` tells both the ``match_id`` for ``/ws/match/{match_id}``. With
+``GOW_QUEUE_MAPS=generated`` (#924) a map is made for the pair from the moment it is found
+(``gow_server.mapgen``); the second confirmation waits for it (at most ``GOW_MAPGEN_WAIT_S``),
+and a pool map takes its place when it cannot be made.
 ``DELETE /api/queue`` leaves the queue (or declines a found pair).
 
 Rules (mechanics.md, section 19, "Matchmaking queue"):
@@ -18,7 +21,9 @@ Rules (mechanics.md, section 19, "Matchmaking queue"):
   who confirmed returns to its front (with the waiting time kept). Declining (leaving) does the
   same at once for the other player.
 - After ``bot_offer_s`` of waiting the status offers a match against a bot (unrated, SRV-06).
-- The match is rated (DEC-06) and not private: no pauses (DEC-05).
+- The match is rated (DEC-06) while ``GOW_RATING_ENABLED`` is on, and never private: no pauses
+  (DEC-05), whatever the flag. With the rating off (the default, #924) the players are paired
+  first come, first served (every rating counts as the initial one) and no queue ban is read.
 - Who plays which side is random (``secrets``), like in an invite: no bias by queue order.
 
 The queue claims its players like a match (SRV-09, ``MatchLifecycle.claim``): a player in the
@@ -43,9 +48,10 @@ from gow_server.clock import Clock
 from gow_server.identity import CurrentPlayer
 from gow_server.ladder import ban_seconds_left
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchRecord
-from gow_server.maps import MapCatalog
+from gow_server.mapgen import MapMaker, PendingMap
+from gow_server.maps import MapCatalog, MapEntry
 from gow_server.matches import ManagerDrainingError, ServerFullError
-from gow_server.rating import rating_of
+from gow_server.rating import INITIAL_RATING, rating_of
 from gow_sim.ruleset import Ruleset
 
 log = logging.getLogger("gow_server.queue")
@@ -79,6 +85,8 @@ class Proposal:
     confirmed: set[int] = field(default_factory=set[int])
     starting: bool = False
     """Both confirmed: the row is being written and the match started."""
+    pending: PendingMap | None = None
+    """The map being made for this pair (``GOW_QUEUE_MAPS=generated``, #924)."""
 
     def other(self, account: int) -> Entry:
         a, b = self.entries
@@ -110,7 +118,11 @@ class MatchQueue:
         confirm_s: float = 15.0,
         bot_offer_s: float = 60.0,
         stale_s: float = 15.0,
+        maker: MapMaker | None = None,
+        generated_maps: bool = False,
     ) -> None:
+        """``generated_maps`` (``GOW_QUEUE_MAPS=generated``, #924): ``maker`` makes the map of
+        every found pair; otherwise a pair plays a pool map."""
         self.clock = clock
         self.lifecycle = lifecycle
         self.window_base = window_base
@@ -120,6 +132,7 @@ class MatchQueue:
         self.confirm_s = confirm_s
         self.bot_offer_s = bot_offer_s
         self.stale_s = stale_s
+        self.maker = maker if generated_maps else None
         self._order: list[Entry] = []
         """Searching players, front first."""
         self._proposals: dict[int, Proposal] = {}
@@ -199,6 +212,21 @@ class MatchQueue:
         for entry in proposal.entries:
             self._proposals.pop(entry.account, None)
             self._started[entry.account] = Started(match_id, map_id, until)
+
+    async def map_for(self, proposal: Proposal, catalog: MapCatalog) -> MapEntry | None:
+        """The map of a confirmed pair: the one made for it, else a random pool map; ``None``
+        when the pool is empty. Before waiting for a made map the server must take the match
+        (``ManagerDrainingError``, ``ServerFullError``), like a bot match does."""
+        if proposal.pending is not None and self.maker is not None:
+            manager = self.lifecycle.manager
+            if manager.draining:
+                raise ManagerDrainingError("the server is draining for a deploy")
+            manager.check_capacity(False)
+            made = await self.maker.settle(proposal.pending)
+            if made is not None:
+                return made
+        pool = catalog.pool()
+        return secrets.choice(pool) if pool else None
 
     def cancel(self, proposal: Proposal, reason: str) -> None:
         """The match of a confirmed pair could not start (a deploy): both leave the queue."""
@@ -303,6 +331,8 @@ class MatchQueue:
         record = self.lifecycle.open_record()
         self.lifecycle.claim(record, (a.account, b.account))
         proposal = Proposal((a, b), now + self.confirm_s, record)
+        if self.maker is not None:  # #924: made while the pair confirms; None: off or full
+            proposal.pending = self.maker.request()
         for entry, other in ((a, b), (b, a)):
             self._proposals[entry.account] = proposal
             self._last_opponent[entry.account] = other.account
@@ -312,6 +342,8 @@ class MatchQueue:
     def _dissolve(self, proposal: Proposal, *, keep: tuple[int, ...], reason: str) -> None:
         """Drop a proposal; the players in ``keep`` return to the front of the queue."""
         self.lifecycle.abort(proposal.record, reason)
+        if proposal.pending is not None and self.maker is not None:
+            self.maker.discard(proposal.pending)  # nobody plays it
         front: list[Entry] = []
         for entry in proposal.entries:
             self._proposals.pop(entry.account, None)
@@ -362,6 +394,10 @@ class QueueBanned(BaseModel):
     detail: QueueBan
 
 
+class _NoMapsError(Exception):
+    """The pool is empty: no map for a confirmed pair."""
+
+
 def _not_in_queue() -> HTTPException:
     return HTTPException(status.HTTP_404_NOT_FOUND, detail="not in the queue")
 
@@ -381,7 +417,8 @@ async def join_queue(
     resigns (DEC-34); 429 with only ``Retry-After`` when the entry rate limit is hit.
     """
     response.headers["Cache-Control"] = "no-store"
-    left = ban_seconds_left(player, queue.clock.wall())
+    rating_enabled = queue.lifecycle.rating_enabled
+    left = ban_seconds_left(player, queue.clock.wall()) if rating_enabled else 0
     if left > 0:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
@@ -396,7 +433,11 @@ async def join_queue(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="server is restarting")
     if queue.lifecycle.active_of(player.id) is not None and queue.status(player.id) is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="you already have an active match")
-    rating = await asyncio.to_thread(_read_rating, request.app.state.sessions, player.id)
+    rating = (
+        await asyncio.to_thread(_read_rating, request.app.state.sessions, player.id)
+        if rating_enabled
+        else INITIAL_RATING  # #924: no rating, so one window for all: first come, first served
+    )
     try:
         queue.join(player.id, player.nick, rating)
     except AlreadyActiveError:
@@ -429,6 +470,9 @@ async def confirm_match(
     request: Request, response: Response, player: CurrentPlayer, queue: Queue
 ) -> QueueStatus:
     """Confirm the found pair; the second confirmation starts the rated match."""
+    # The docstring is the OpenAPI text: it stays as it was (#924, no API change). The match is
+    # rated only with GOW_RATING_ENABLED; with GOW_QUEUE_MAPS=generated the second confirmation
+    # waits for the map of the pair.
     response.headers["Cache-Control"] = "no-store"
     try:
         proposal = queue.confirm(player.id)
@@ -437,17 +481,15 @@ async def confirm_match(
     if proposal is not None:
         catalog: MapCatalog = request.app.state.maps
         rules: Ruleset = request.app.state.ruleset
-        pool = catalog.pool()
-        if not pool:
-            queue.cancel(proposal, "no_maps")
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="no maps")
-        entry = secrets.choice(pool)
         sides = [e.account for e in proposal.entries]
         if secrets.randbelow(2):
             sides.reverse()
         # The one who entered the queue earlier keeps their colour on a clash (DEC-49, item 2).
         earlier = min(proposal.entries, key=lambda e: e.joined_at)
         try:
+            entry = await queue.map_for(proposal, catalog)
+            if entry is None:
+                raise _NoMapsError
             runner = await queue.lifecycle.start(
                 proposal.record,
                 entry.id,
@@ -458,6 +500,9 @@ async def confirm_match(
                 rated=True,
                 keeper=earlier.account,
             )
+        except _NoMapsError:
+            queue.cancel(proposal, "no_maps")
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="no maps") from None
         except ManagerDrainingError:
             queue.cancel(proposal, "server_draining")
             raise HTTPException(

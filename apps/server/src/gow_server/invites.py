@@ -21,7 +21,8 @@ When the second one is ready the match starts (``MatchManager.create``) and ``GE
   as above). A public match is not ``private``: no pauses (DEC-05 allows them only between
   friends; against a stranger a pause is a way to stall) and, like every invite match, no rating.
   A public match is unrated like an invite by link, so it plays a new map by default too and may
-  name a stored generated map (#889, the owner's decision of 2026-11-09); only the queue is rated.
+  name a stored generated map (#889, the owner's decision of 2026-11-09); only the queue is rated,
+  and only with ``GOW_RATING_ENABLED`` (#924).
   A public entry lives only while its host is there: the host's ``GET /api/matches/{code}``
   (the waiting room polls it) is a heartbeat, and an entry whose host was silent for
   ``lobby_stale_s`` is dropped (a closed tab). ``DELETE /api/matches/{code}`` removes an invite
