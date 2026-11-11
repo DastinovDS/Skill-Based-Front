@@ -65,7 +65,7 @@ full loss, not a round under fire. With ``CONTACT`` there the demand also counts
   (DEC-33). A reinforcement must be cancelled and killed too (its charges and units); the
   strongest counts in full, half of each of the others (rounded down), ``contact_pct`` percent of
   the sum (rounded down);
-- the enemy figures on the road the group enters the target by (``ways_in``) heading out of it,
+- the enemy figures on the road the group enters the target by (``ways``) heading out of it,
   toward the group: a meeting on the edge (DEC-24, item C2) cancels their charges first
   (``meets``).
 
@@ -80,7 +80,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import ClassVar, override
 
-from gow_bots.bots.assess import edge_ticks
 from gow_bots.bots.base import Bot, ParamRange, node_of
 from gow_bots.bots.economy import (
     LeafShift,
@@ -423,7 +422,7 @@ class CampaignBot(Bot):
             numbers = self.sighted(view, tick, other)
             if numbers is None or numbers[1] <= 0:
                 continue
-            if edge_ticks(self.map, rules, eid, dest) >= window:
+            if self.times.ticks(eid, dest) >= window:
                 continue  # it arrives after the last round
             forces.append(numbers[0] + numbers[1])
         if not forces:
@@ -442,7 +441,7 @@ class CampaignBot(Bot):
 
     def meets(self, view: PlayerView, here: int, dest: int, units: int) -> int:
         """``CONTACT``: the charges of the enemy figures a group of ``units`` from ``here`` meets
-        on the road it enters ``dest`` by (``ways_in``), heading out of ``dest`` toward it (module
+        on the road it enters ``dest`` by (``ways``), heading out of ``dest`` toward it (module
         docstring); 0 without retreat on, or without such a figure."""
         if not self.contact():
             return 0
@@ -452,9 +451,10 @@ class CampaignBot(Bot):
             for f in view.edges[eid].enemy_groups
         ):
             return 0  # the usual case: no path search
-        road = self.ways_in(view, here, units).get(dest)
-        if road is None:
+        way = self.ways(view, here, units).get(dest)
+        if way is None or dest == here:
             return 0
+        road = way.edge
         edge = self.map.edges[road]
         return sum(
             figure_numbers(f)[1]

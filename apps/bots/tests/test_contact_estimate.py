@@ -24,8 +24,8 @@ from pathlib import Path
 import pytest
 
 from gow_bots.bots import bot_factory
-from gow_bots.bots.assess import edge_ticks
 from gow_bots.bots.campaign import CampaignBot, Ctx
+from gow_bots.bots.travel import edge_ticks
 from gow_sim.maps import MapDef, parse_map
 from gow_sim.ruleset import Retreat, Ruleset, load_ruleset
 from gow_sim.state import AtNode, Group, Mode, Sighting, initial_state

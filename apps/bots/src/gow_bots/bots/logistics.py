@@ -6,9 +6,9 @@ view; DEC-35: only own groups see):
 - ``arrivals``: the shown enemy forces heading into each own node and the earliest tick each can
   be there. An enemy figure on an edge (DEC-33) heading to an own node ends its path there (a path
   ends at the first foreign node, SIM-05), so it attacks that node; its arrival is estimated from
-  the part of the edge left at the speed of the zone of that node (its terrain, mechanics.md,
-  section 4). A planned strike (DEC-08) arrives after it gathered one bonus at least (DEC-41,
-  item 10) and the way (``Travel``, a lower bound).
+  the part of the edge left through its two terrain zones (mechanics.md, section 4,
+  ``travel.ticks_left``). A planned strike (DEC-08) arrives after it gathered one bonus at least
+  (DEC-41, item 10) and the way (``Travel``, a lower bound).
 - ``garrison_need``: the shots that take an own node from its garrison now.
 
 No randomness, no ``set`` iteration (AGENTS.md, section 4.1 holds for the bots too).
@@ -17,6 +17,7 @@ No randomness, no ``set`` iteration (AGENTS.md, section 4.1 holds for the bots t
 from dataclasses import dataclass
 
 from gow_bots.bots.assess import Travel
+from gow_bots.bots.travel import ticks_left
 from gow_bots.bots.utility import shots_to_take, terrain_burned
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
@@ -38,15 +39,14 @@ class Arrival:
 def figure_ticks(
     view: PlayerView, mapdef: MapDef, rules: Ruleset, edge: int, f: EnemyGroupView
 ) -> int:
-    """Ticks figure ``f`` on ``edge`` still needs to reach the end it heads to: the part of the
-    edge left (``pos`` in thousandths from ``a``) at the speed of that end's terrain,
-    ``travel_ticks * 100 // speed`` scaled by the part (rounded down). ``view`` is not read."""
+    """Ticks figure ``f`` on ``edge`` still needs to reach the end it heads to: the time of the
+    edge from its position (``pos`` in thousandths from ``a``) through both terrain zones
+    (``travel.ticks_left``). ``view`` is not read."""
     del view
     e = mapdef.edges[edge]
     node = e.b if f.toward_b else e.a
-    left = 1000 - f.pos if f.toward_b else f.pos
-    speed = max(1, rules.terrain.speed_pct.of(mapdef.nodes[node].terrain))
-    return e.travel_ticks * 100 * left // (speed * 1000)
+    gone = f.pos if f.toward_b else 1000 - f.pos
+    return ticks_left(mapdef, rules, edge, node, gone)
 
 
 def _units(f: EnemyGroupView, guess: int) -> int:

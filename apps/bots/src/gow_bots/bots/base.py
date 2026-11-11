@@ -25,14 +25,13 @@ groups by the ``node_key`` of their node first, never by opaque id alone. On a s
 two sides of the same bot with the same parameters take mirrored decisions.
 """
 
-import heapq
 import random
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import ClassVar, Final, Protocol
 
-from gow_bots.bots.assess import edge_ticks
+from gow_bots.bots.travel import Times, Way, ways
 from gow_sim.commands import (
     BuildBarracks,
     CancelOrder,
@@ -44,7 +43,7 @@ from gow_sim.commands import (
     command_cost,
 )
 from gow_sim.maps import MapDef
-from gow_sim.ruleset import Retreat, Ruleset
+from gow_sim.ruleset import Retreat, Ruleset, apply_map_tempo
 from gow_sim.view import (
     AtNode,
     BuildKind,
@@ -132,7 +131,11 @@ class Bot:
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> None:
         self.map = mapdef
-        self.rules = rules
+        self.rules = apply_map_tempo(rules, mapdef)
+        """The rules the match plays (``Match.rules``): ``[map_tempo]`` scales the economy periods
+        by the map (DEC-46, #803); a caller that hands the source ruleset gets them too
+        (``apply_map_tempo`` of rules without the section returns them unchanged, #994)."""
+        rules = self.rules
         self.player = player
         self.seed = seed
         self.params = choose_params(self.name, seed, player, self.PARAMS)
@@ -155,18 +158,19 @@ class Bot:
         """Edges touching every node, in edge key order."""
         self.hops: tuple[tuple[int, ...], ...] = tuple(self._bfs(n) for n in range(count))
         """``hops[a][b]``: road hops between two nodes on the whole map (-1: unreachable)."""
-        self._reach_tick = -1
+        self.times = Times(mapdef, rules)
+        """The travel ticks of every road in both directions (``travel.edge_ticks``)."""
+        self._ways_tick = -1
+        self._ways: dict[tuple[int, int], dict[int, Way]] = {}
+        """By ``(start, size)``: the ``travel.ways`` of this decision (``_ways_tick``)."""
         self._reach: dict[tuple[int, int, int], list[int]] = {}
-        """By ``(start, radius, size)``: the destinations of ``reachable`` in ``node_key`` order."""
+        """By ``(start, radius, size)``: the destinations of ``reachable`` in ``node_key`` order,
+        for the decision of ``_ways_tick``."""
         self._left: dict[int, int] = {}
         """Own group id to the tick it was ordered out of a fight: no second withdrawal."""
         self.retreat = rules.combat.retreat is Retreat.ROUND
         """A group may leave a fight (DEC-24, item E); not under ``combat.retreat = "none"``
         (DEC-40, variant N)."""
-        self._ways_tick = -1
-        self._ways: dict[tuple[int, int], dict[int, int]] = {}
-        """By ``(start, size)``: the road each node is entered by on the fastest path (``ways_in``),
-        for the decision of ``_ways_tick``."""
 
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         raise NotImplementedError
@@ -192,8 +196,21 @@ class Bot:
         if view.player != self.player:
             raise ValueError(f"bot of player {self.player} got the view of player {view.player}")
 
+    def ways(self, view: PlayerView, start: int, size: int = 0) -> dict[int, Way]:
+        """``travel.ways`` of a group of ``size`` units standing in ``start``: by node, the ticks,
+        the path and the last road of the path a ``Move`` there takes, ``start`` included.
+        Once per decision for each ``(start, size)``."""
+        if self._ways_tick != view.tick:
+            self._ways_tick, self._ways, self._reach = view.tick, {}, {}
+        found = self._ways.get((start, size))
+        if found is None:
+            found = ways(view, self.times, self.keys, start, size)
+            self._ways[(start, size)] = found
+        return found
+
     def reachable(self, view: PlayerView, start: int, radius: int, size: int = 0) -> list[int]:
-        """Nodes a group standing in ``start`` can be sent to, at most ``radius`` hops away.
+        """Nodes a group standing in ``start`` can be sent to whose path (``ways``) has at most
+        ``radius`` roads.
 
         A path goes through own nodes only and ends at the first foreign or neutral node
         (``find_path`` of the simulation, SIM-05), so the destinations are the own nodes
@@ -202,38 +219,20 @@ class Bot:
         are neither passed nor reached (the stack limit, DEC-20, D); ``0``: no limit. In
         ``node_key`` order.
         """
-        if self._reach_tick != view.tick:
-            self._reach_tick, self._reach = view.tick, {}
+        found = self.ways(view, start, size)
         cached = self._reach.get((start, radius, size))
         if cached is not None:
             return cached
-        me = view.player
-        nodes = view.nodes
-        fights = self.fight_nodes(view)
-        dist = {start: 0}
-        queue = deque([start])
-        while queue:
-            node = queue.popleft()
-            if dist[node] >= radius or (
-                node != start and (nodes[node].owner != me or node in fights)
-            ):
-                continue  # a path ends at a foreign node or at one with a fight (DEC-24, D1)
-            for other in self.neighbors[node]:
-                if other not in dist and nodes[other].capacity >= size:
-                    dist[other] = dist[node] + 1
-                    queue.append(other)
-        del dist[start]
-        found = sorted(dist, key=self.key)
-        self._reach[(start, radius, size)] = found
-        return found
+        near = sorted((n for n, w in found.items() if 0 < w.hops <= radius), key=self.key)
+        self._reach[(start, radius, size)] = near
+        return near
 
     def fit(self, view: PlayerView, start: int, dest: int, units: int) -> int:
         """The biggest group of at most ``units`` that can be sent from ``start`` to ``dest``
         under the stack limit (DEC-20, D); ``0``: no path at all."""
-        far = len(self.map.nodes)
         sizes = sorted({units, *(n.capacity for n in view.nodes if n.capacity < units)})
         for size in reversed(sizes):
-            if size >= 1 and dest in self.reachable(view, start, far, size):
+            if size >= 1 and dest != start and dest in self.ways(view, start, size):
                 return size
         return 0
 
@@ -326,7 +325,7 @@ class Bot:
                     (e for e in self.incident[here] if self._other_end(e, here) == node), None
                 )
 
-                if edge is None or tick + self.map.edges[edge].travel_ticks >= end:
+                if edge is None or tick + self.times.ticks(edge, node) >= end:
                     continue
                 cmd = Move(g.id, node)
                 if self.cost(cmd) <= budget:
@@ -543,7 +542,7 @@ class Bot:
     def toll_from(self, view: PlayerView, here: int, dest: int, units: int, charged: int) -> int:
         """The toll a group of ``units``, ``charged`` standing in ``here`` pays on its way into
         ``dest`` (DEC-43, item D6): the road it enters ``dest`` by is the last one of the fastest
-        path a ``Move`` gets (``ways_in``), so the fortification of that road alone decides;
+        path a ``Move`` gets (``ways``), so the fortification of that road alone decides;
         ``toll_for`` when no path is found. Only built enemy fortifications the view shows."""
         if charged <= 0 or view.nodes[dest].owner != 1 - view.player:
             return 0
@@ -551,47 +550,10 @@ class Bot:
             f.node == dest and f.built for e in self.map.incident[dest] for f in view.edges[e].forts
         ):
             return 0  # no fortification in sight: no path search
-        edge = self.ways_in(view, here, units).get(dest)
-        if edge is None:
+        way = self.ways(view, here, units).get(dest)
+        if way is None or dest == here:
             return self.toll_for(view, dest, units, charged)
-        return self.toll_on(view, edge, dest, units, charged)
-
-    def ways_in(self, view: PlayerView, start: int, size: int) -> dict[int, int]:
-        """By node, the road the fastest path of a group of ``size`` from ``start`` enters it by:
-        the search of a ``Move`` (``gow_sim.systems.movement.find_path``) on what the view
-        shows: only ``start`` and own nodes without a fight are expanded, every node but
-        ``start`` holds ``size`` (DEC-20, D), the road times of ``assess.edge_ticks``, ties by the
-        ``node_key`` sequence of the path. Once per decision."""
-        if self._ways_tick != view.tick:
-            self._ways_tick, self._ways = view.tick, {}
-        cached = self._ways.get((start, size))
-        if cached is not None:
-            return cached
-        me, nodes = view.player, view.nodes
-        fights = self.fight_nodes(view)
-        best: dict[int, tuple[int, tuple[int, ...]]] = {start: (0, (self.key(start),))}
-        via: dict[int, int] = {}
-        done: dict[int, bool] = {}
-        heap: list[tuple[int, tuple[int, ...], int]] = [(0, (self.key(start),), start)]
-        while heap:
-            ticks, keys, node = heapq.heappop(heap)
-            if node in done:
-                continue
-            done[node] = True
-            if node != start and (nodes[node].owner != me or node in fights):
-                continue  # a path ends at the first foreign node or at a fight
-            for eid in self.map.incident[node]:
-                nxt = self.map.edges[eid].other(node)
-                if nxt in done or (size > 0 and nodes[nxt].capacity < size):
-                    continue
-                t = ticks + edge_ticks(self.map, self.rules, eid, nxt)
-                cand = (t, (*keys, self.key(nxt)))
-                if nxt not in best or cand < best[nxt]:
-                    best[nxt] = cand
-                    via[nxt] = eid
-                    heapq.heappush(heap, (t, cand[1], nxt))
-        self._ways[(start, size)] = via
-        return via
+        return self.toll_on(view, way.edge, dest, units, charged)
 
     def toll_on(self, view: PlayerView, edge: int, dest: int, units: int, charged: int) -> int:
         """The toll a group of ``units``, ``charged`` pays crossing into ``dest`` over ``edge``: a
