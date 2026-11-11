@@ -276,3 +276,15 @@ def mvp_rules() -> Ruleset:
 @pytest.fixture(scope="session")
 def expand_bot() -> Callable[[MapDef, Ruleset], Controller]:
     return ExpandBot
+
+
+# ``grid40_map`` and ``grid55_map`` are taken by name (``request.getfixturevalue``, the ``grid_map``
+# fixture of ``test_benchmarks.py``).
+@pytest.fixture(scope="session")
+def grid40_map() -> MapDef:
+    return grid40()
+
+
+@pytest.fixture(scope="session")
+def grid55_map() -> MapDef:
+    return grid55()
