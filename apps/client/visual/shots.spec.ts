@@ -1468,14 +1468,11 @@ test('shot of the node pieces close up with the selection cues', async ({ page }
       await page.waitForTimeout(150);
     }
   };
-  const shoot = async (
-    name: string,
-    clip?: { x: number; y: number; width: number; height: number },
-  ) => {
+  const shoot = async (name: string) => {
     await page.waitForTimeout(500);
-    await page.locator('canvas').screenshot({ path: join(OUT, `corner-${name}.png`), clip });
+    await page.locator('canvas').screenshot({ path: join(OUT, `corner-${name}.png`) });
     await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
-    await page.locator('canvas').screenshot({ path: join(OUT, `corner-${name}-gray.png`), clip });
+    await page.locator('canvas').screenshot({ path: join(OUT, `corner-${name}-gray.png`) });
     await page.addStyleTag({ content: 'html { filter: none; }' });
   };
   await zoom(350, 400, 4);
@@ -1490,12 +1487,11 @@ test('shot of the node pieces close up with the selection cues', async ({ page }
   await page.keyboard.press('Escape');
   await zoom(145, 362, 3);
   await page.mouse.move(5, 5);
-  const close = { x: 0, y: 150, width: 420, height: 420 };
   await page.mouse.move(146, 363);
-  await shoot('close-hover', close);
+  await shoot('close-hover');
   await page.mouse.click(146, 363);
   await page.mouse.move(5, 5);
-  await shoot('close-select', close);
+  await shoot('close-select');
 });
 
 test('shot of the groups selected together close up', async ({ page }) => {
