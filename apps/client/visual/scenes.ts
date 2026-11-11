@@ -25,6 +25,8 @@ export const SCENES: readonly {
   { id: 'artery_colours', tick: 2400 },
   { id: 'badges', tick: 2400 },
   { id: 'provinces', tick: 1200 },
+  { id: 'shoulder', tick: 2400 },
+  { id: 'shoulder_far', tick: 2400 },
   { id: 'progress', tick: 2400 },
   { id: 'figures', tick: 2400 },
   { id: 'orders', tick: 2400 },

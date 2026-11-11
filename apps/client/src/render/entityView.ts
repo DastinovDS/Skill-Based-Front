@@ -14,12 +14,13 @@ import {
   roadPosition,
   sideways,
   packetFade,
+  type Diamond,
   type TokenSpot,
 } from './layout.ts';
 import { symbolScale, type Point } from './camera.ts';
 import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts';
 import { nodeMarkerPoint } from './fogLayout.ts';
-import { fitReach, ringRadius } from './cityLayout.ts';
+import { fitReach, ringRadius, vpBadgeAt } from './cityLayout.ts';
 import { reducedMotion } from './motion.ts';
 import {
   WALK,
@@ -36,14 +37,15 @@ import { terrainBadges } from './badgeLayout.ts';
 import type { SpriteCache } from './bake.ts';
 import { EntityKit, Token } from './shapes.ts';
 import { FigureView } from './figureView.ts';
-import { UNIT_LABEL, sideColours, type PlayerColours } from './style.ts';
+import { UNIT_LABEL, VP_LOZENGE, sideColours, type PlayerColours } from './style.ts';
 
 /**
- * A badge column outside the capacity ring: its middle this far past the ring's radius, and this
- * far under the middle of the city (the VP lozenge keeps the upper right of the ring).
+ * The terrain badges on the helmet's shoulder stay in the circle `fitReach` + this: the helmet's
+ * reach is a unit inside the dark cut of the capacity ring (which is 6 wide, the cells 3.4 wide on
+ * its middle line), so the badge's dark outline may sink 1.2 into the cut and still stops 0.5 short
+ * of the first cell (C2 of #954, #956).
  */
-const BADGE_GAP = 13;
-const BADGE_DROP = 3;
+const BADGE_BOUND_PAST_FIT = 2.2;
 
 const ORIGIN: Point = { x: 0, y: 0 };
 
@@ -382,14 +384,34 @@ export class EntityView implements EnemyAnchors {
   }
 
   /**
-   * Where the badges of a unit icon standing in the middle of node `id` go: just outside the
-   * capacity ring on its right, under the VP lozenge, in the icon's own units (#940). `null`: the
-   * icon is not in the middle (it stands beside the ring or at a gate), the helmet's corner.
+   * The VP lozenge of node `id` as a diamond in the units of an icon standing at `at` at `scale`
+   * (#956): the corner tick of the icon's selection stops at its edge instead of lying across the
+   * number in it. A province and a city without VP have none.
    */
-  private badgeHomeAt(id: number, at: Point, city: Point, scale: number): Point | null {
-    if (Math.abs(at.x - city.x) > 0.01 || Math.abs(at.y - city.y) > 0.01) return null;
+  private lozengeUnder(id: number, at: Point, city: Point, scale: number): Diamond[] {
+    const node = this.map.nodes[id];
+    if (node === undefined || node.vp <= 0 || node.kind === 'province') return [];
+    const v = vpBadgeAt(this.radiusOf(id));
     const k = scale > 0 ? scale : 1;
-    return { x: (ringRadius(this.radiusOf(id)) + BADGE_GAP) / k, y: BADGE_DROP / k };
+    return [
+      {
+        x: (city.x + v.x - at.x) / k,
+        y: (city.y + v.y - at.y) / k,
+        h: (VP_LOZENGE.side * Math.SQRT2) / 2 / k,
+      },
+    ];
+  }
+
+  /**
+   * How far the badges of a unit icon standing in the middle of node `id` may reach (C2 of #954):
+   * the inner edge of the capacity ring, in the icon's own units. The helmet is fitted to the same
+   * reach in them, so the badge on its shoulder stays as far in at every zoom (a far zoom grows the
+   * helmet and the badge together). `null`: the icon is not in the middle (it stands beside the ring
+   * or at a gate), the helmet's corner.
+   */
+  private badgeBoundAt(id: number, at: Point, city: Point): number | null {
+    if (Math.abs(at.x - city.x) > 0.01 || Math.abs(at.y - city.y) > 0.01) return null;
+    return this.fitOf(id) + BADGE_BOUND_PAST_FIT;
   }
 
   /**
@@ -418,7 +440,7 @@ export class EntityView implements EnemyAnchors {
         this.standAt(id, this.enemy, half, city, marker) ??
         iconPoint(city, marker, false, this.ownIcons.has(id));
       token.view.position.set(at.x, at.y);
-      token.setBadgeAnchor(this.badgeHomeAt(id, at, city, token.view.scale.x));
+      token.setBadgeShoulder(this.badgeBoundAt(id, at, city));
     });
   }
 
@@ -468,8 +490,8 @@ export class EntityView implements EnemyAnchors {
       if (at === undefined) continue;
       entry.view.scale.set(scale);
       entry.view.position.set(at.x, at.y);
-      entry.token.setBadgeAnchor(
-        city === undefined ? null : this.badgeHomeAt(stack.node, at, city, scale),
+      entry.token.setBadgeShoulder(
+        city === undefined ? null : this.badgeBoundAt(stack.node, at, city),
       );
       entry.token.setLabel(true);
       entry.token.setBadgeFloor(this.cameraScale * scale);
@@ -481,6 +503,7 @@ export class EntityView implements EnemyAnchors {
         scale,
         enemy: !own,
         inside: true,
+        under: city === undefined ? [] : this.lozengeUnder(stack.node, at, city, scale),
       };
       for (const id of stack.ids) spots.set(id, spot);
       if (own) icons.push({ ...stack, spot });

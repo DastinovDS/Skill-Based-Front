@@ -37,6 +37,7 @@ import {
   economySnapshot,
 } from './economyScene.ts';
 import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
+import { SHOULDER_PINS, shoulderSnapshot } from './shoulderScene.ts';
 import {
   GROUP_PLAN_PINS,
   GROUP_SELECT_PINS,
@@ -717,6 +718,28 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     events: [],
     view: ARTERY_VIEW,
     cityUpgrades: true,
+  },
+  {
+    // The chevrons on the helmet's shoulder (#956, C2 of #954) with a group of 4+ in small cities:
+    // the VP lozenge, the corner ticks of the selected groups and the number of units beside them.
+    id: 'shoulder',
+    map: 'artery',
+    snapshot: shoulderSnapshot(bundledMap('artery')),
+    events: [],
+    view: ARTERY_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_GROUP,
+    pins: SHOULDER_PINS,
+  },
+  {
+    // The same moment on the whole map: the far zoom, where a token keeps its minimum size.
+    id: 'shoulder_far',
+    map: 'artery',
+    snapshot: shoulderSnapshot(bundledMap('artery')),
+    events: [],
+    cityUpgrades: true,
+    rules: DEV_RULES_GROUP,
+    pins: SHOULDER_PINS,
   },
   {
     // The artery moment with enemy figures on roads in every level, and half memory (#354).

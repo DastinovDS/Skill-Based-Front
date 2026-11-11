@@ -319,6 +319,8 @@ export const BADGE = {
   size: 11,
   chipSize: 9,
   minPx: 8,
+  /** The height a chevron on the helmet's shoulder (C2, #956) is asked for on screen at a far zoom. */
+  shoulderPx: 6.5,
   maxStrokes: 3,
   maxCount: 9,
   /** The stroke of a chevron, a share of the size; the dark outline is this much wider (units). */

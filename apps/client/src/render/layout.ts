@@ -95,6 +95,16 @@ export interface TokenSpot extends Point {
   readonly enemy?: boolean;
   /** The icon of the units standing in a city (its helmet is a little smaller). */
   readonly inside?: boolean;
+  /**
+   * Gilt diamonds of the map that lie over the cues of this token (the VP lozenge of its city, #956),
+   * round the token's centre in its own units: a corner tick stops at their edge, so they read whole.
+   */
+  readonly under?: readonly Diamond[];
+}
+
+/** A diamond (a square standing on its corner) of half-diagonal `h` round `(x, y)`. */
+export interface Diamond extends Point {
+  readonly h: number;
 }
 
 /**

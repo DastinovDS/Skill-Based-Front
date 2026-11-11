@@ -13,11 +13,22 @@ import { EaseTween } from './tween.ts';
 import { chargeLevel, countLabel, unitSide } from './layout.ts';
 import { helmet, helmetExtent, type Helmet, type HelmetKind } from '../units/helmet.ts';
 import { helmetFit, helmetWidth } from './helmetFit.ts';
-import { badgeFloor, stackBadges, type BadgeMark } from './badgeLayout.ts';
+import {
+  badgeFloor,
+  badgesBox,
+  shoulderBadge,
+  shoulderWant,
+  stackBadges,
+  type BadgeMark,
+  type Box,
+  type KeepClear,
+} from './badgeLayout.ts';
+import { tickCorners } from './cornerTicks.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import {
   BADGE,
   CASING,
+  CORNER_TICKS,
   COUNT_FONT_SIZE,
   CUT,
   HELMET_ENGRAVED,
@@ -178,6 +189,45 @@ export function helmetKind(me: PlayerId, owner: PlayerId): HelmetKind {
 }
 
 /**
+ * What a badge on the helmet's shoulder keeps clear of (C2, #956), in the token's units: the number
+ * of units (or the "?") at the middle of the dome, and the upper-right corner tick of the selection
+ * (B6, casing included), reserved whether or not the group is selected so the badge never jumps.
+ */
+export function keepClear(
+  spec: Pick<TokenSpec, 'counts' | 'range'>,
+  middle: Point,
+  kind: HelmetKind,
+  width: number,
+): KeepClear {
+  let number: Box | null = null;
+  const { counts } = spec;
+  if (counts !== null || (spec.range ?? null) === null) {
+    // EB Garamond digits at `HELMET_ENGRAVED.font` on their halo; the "?" is a size bigger.
+    const font = counts === null ? HELMET_ENGRAVED.question : HELMET_ENGRAVED.font;
+    const chars = counts === null ? 1 : countLabel(counts.units).length;
+    const halfW = (chars * font * 0.5 + 2) / 2;
+    const halfH = (font * (counts === null ? 0.7 : 0.62) + 2) / 2;
+    number = {
+      x0: middle.x - halfW,
+      y0: middle.y - halfH,
+      x1: middle.x + halfW,
+      y1: middle.y + halfH,
+    };
+  }
+  const ticks: Box[] = [];
+  const corner = tickCorners({ width, enemy: kind === 'enemy' })[1];
+  if (corner !== undefined) {
+    const c = CORNER_TICKS.casing.width / 2;
+    const arm = CORNER_TICKS.arm;
+    ticks.push(
+      { x0: corner.x - arm - c, y0: corner.y - c, x1: corner.x + c, y1: corner.y + c },
+      { x0: corner.x - c, y0: corner.y - c, x1: corner.x + c, y1: corner.y + arm + c },
+    );
+  }
+  return { number, ticks };
+}
+
+/**
  * A unit helmet (9.5, #784, variant Full of #775): own Rim facing right, the opponent's Cut facing
  * left (the body is flipped), the strap everywhere, the charge as a level in the dome with a smooth
  * edge (no dividers), dashed with "?" without numbers and for a ghost, the badges at the top right, and one number (all the units) in the middle of the
@@ -201,12 +251,21 @@ export class Token {
   private readonly badgeLayer = new Container({ label: 'badges', visible: false });
   private readonly badges: BakedSprite[] = [];
   /**
-   * Where the badges stand instead of the helmet's corner (`setBadgeAnchor`, #940); `null`: at the
-   * corner. A unit icon centred in a city puts them outside the capacity ring.
+   * The radius of the circle the badges stand in, on the helmet's upper-right shoulder
+   * (`setBadgeShoulder`, C2, #956); `null`: at the helmet's corner. A unit icon centred in a node
+   * puts them inside the capacity ring, so neither the helmet nor its badges hide the cells.
    */
-  private badgeHome: Point | null = null;
-  /** The top right corner of the helmet drawn now: where the badges stand without a `badgeHome`. */
+  private shoulderBound: number | null = null;
+  /** The top right corner of the helmet drawn now: where the badges stand without a shoulder. */
   private cornerAt: Point = { x: 0, y: 0 };
+  /** The box of the badges drawn now round their layer's origin; `null`: none. */
+  private badgesAt: Box | null = null;
+  /** Counts what the shoulder place depends on besides the bound and the zoom: the badges, the helmet. */
+  private badgeSerial = 0;
+  private shoulderKey = '';
+  private shoulder: { at: Point; scale: number } = { at: { x: 0, y: 0 }, scale: 1 };
+  /** What a badge on the shoulder keeps clear of: the number of units, the corner tick of a selection. */
+  private avoid: KeepClear = { number: null, ticks: [] };
   /** Screen px per unit of the token (`setBadgeFloor`); 0: unknown, no floor. */
   private pxPerUnit = 0;
   private readonly question: Text;
@@ -260,7 +319,30 @@ export class Token {
   setBadgeFloor(pxPerUnit: number): void {
     if (pxPerUnit === this.pxPerUnit) return;
     this.pxPerUnit = pxPerUnit;
-    this.badgeLayer.scale.set(badgeFloor(pxPerUnit));
+    this.placeBadges();
+  }
+
+  /**
+   * Puts the badge layer where it stands: on the shoulder inside the ring (clear of the number and
+   * of the tick, at the share of its size that fits, and the share a far zoom asks for) or at the
+   * helmet's corner, grown to its minimum size on screen.
+   */
+  private placeBadges(): void {
+    const box = this.badgesAt;
+    if (this.shoulderBound === null || box === null) {
+      this.badgeLayer.position.set(this.cornerAt.x, this.cornerAt.y);
+      this.badgeLayer.scale.set(badgeFloor(this.pxPerUnit));
+      return;
+    }
+    const want = shoulderWant(this.pxPerUnit);
+    const key = `${String(this.shoulderBound)}:${String(want)}:${String(this.badgeSerial)}`;
+    if (key !== this.shoulderKey) {
+      this.shoulderKey = key;
+      this.shoulder = shoulderBadge(box, this.shoulderBound, this.avoid, want);
+    }
+    const put = this.shoulder;
+    this.badgeLayer.position.set(put.at.x, put.at.y);
+    this.badgeLayer.scale.set(put.scale);
   }
 
   /** The keys of the badges drawn now, top to bottom (a test reads them). */
@@ -339,14 +421,15 @@ export class Token {
   }
 
   /**
-   * Moves the badges to `home` (in the token's own units), or back to the corner of the helmet
-   * (`null`). A unit icon in the middle of a city puts them outside the capacity ring, so neither
-   * the helmet nor its badges hide the cells (#940).
+   * Moves the badges onto the helmet's upper-right shoulder inside a circle of radius `bound` (in
+   * the token's own units: the inner edge of the capacity ring), or back to the corner of the helmet
+   * (`null`). A unit icon in the middle of a node keeps them inside the ring, so neither the helmet
+   * nor its badges hide the cells (#940, C2 of #954).
    */
-  setBadgeAnchor(home: Point | null): void {
-    if (home?.x === this.badgeHome?.x && home?.y === this.badgeHome?.y) return;
-    this.badgeHome = home;
-    this.badgeLayer.position.set(home?.x ?? this.cornerAt.x, home?.y ?? this.cornerAt.y);
+  setBadgeShoulder(bound: number | null): void {
+    if (bound === this.shoulderBound) return;
+    this.shoulderBound = bound;
+    this.placeBadges();
   }
 
   /**
@@ -442,7 +525,9 @@ export class Token {
   private drawBadges(marks: readonly BadgeMark[], at: Point): void {
     this.badgeLayer.visible = marks.length > 0;
     this.cornerAt = at;
-    this.badgeLayer.position.set(this.badgeHome?.x ?? at.x, this.badgeHome?.y ?? at.y);
+    this.badgesAt = badgesBox(marks);
+    this.badgeSerial++;
+    this.placeBadges();
     const places = stackBadges({ x: 0, y: 0 }, marks, BADGE.size);
     marks.forEach((mark, i) => {
       let sprite = this.badges[i];
@@ -492,6 +577,8 @@ export class Token {
     const middle = { x: h.middle.x * facing, y: h.middle.y };
     this.question.visible = counts === null && (spec.range ?? null) === null;
     this.question.position.set(middle.x, middle.y);
+    this.avoid = keepClear(spec, middle, kind, width);
+    this.badgeSerial++;
     // The top left corner on screen, whichever way the helmet faces.
     const left = facing === 1 ? reach.left : -reach.right;
     // The top right corner on screen, kept free of the dome for the badges (#776).
