@@ -3,6 +3,7 @@ import {
   clipBelow,
   dashLoop,
   helmet,
+  helmetCacheSize,
   inside,
   samplePath,
   scanLines,
@@ -87,5 +88,16 @@ describe('dashLoop and scanLines', () => {
       expect(a.x).toBeCloseTo(0, 6);
       expect(b.x).toBeCloseTo(10, 6);
     }
+  });
+});
+
+describe('the helmet memo', () => {
+  it('stays bounded when every call asks for a new width', () => {
+    for (let i = 0; i < 1000; i++) helmet('own', 20 + i * 0.013);
+    expect(helmetCacheSize()).toBeLessThanOrEqual(64);
+  });
+
+  it('returns the same helmet for the same width', () => {
+    expect(helmet('enemy', 31.5)).toBe(helmet('enemy', 31.5));
   });
 });

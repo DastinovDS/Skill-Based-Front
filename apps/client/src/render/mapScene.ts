@@ -30,7 +30,7 @@ import { OverlayView } from './overlayView.ts';
 import { UndoView } from './undoView.ts';
 import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
-import type { RenderSource } from './source.ts';
+import { DEFAULT_ROUND_TICKS, type RenderSource } from './source.ts';
 import { SightView } from './sightView.ts';
 import { FlowView } from './flowView.ts';
 import type { Anchor } from './anchors.ts';
@@ -295,7 +295,13 @@ export class MapScene {
     if (events === this.walkEvents && events.length === this.walkEventCount) return;
     this.walkEvents = events;
     this.walkEventCount = events.length;
-    this.walks = captureWalks(events, this.map, this.me, this.source?.roundTicks ?? 20, tickHz);
+    this.walks = captureWalks(
+      events,
+      this.map,
+      this.me,
+      this.source?.roundTicks ?? DEFAULT_ROUND_TICKS,
+      tickHz,
+    );
   }
 
   /** Per node, how long its flood waits for the walker: the captures that ended in `(from, to]`. */

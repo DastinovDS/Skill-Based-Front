@@ -5,6 +5,12 @@ import type { RenderFrame } from '../net/interpolate.ts';
  * What the renderer draws, asked every frame. The match controller (CLI-06) serves it from a
  * `SnapshotBuffer` and the event stream; the dev screen serves fixtures.
  */
+/**
+ * Ticks between the rounds of a fight when the source does not say (DEC-32): the value of every
+ * ruleset (`combat.round_ticks = 20`). The replay frames carry no ruleset, so a replay uses it.
+ */
+export const DEFAULT_ROUND_TICKS = 20;
+
 /** Delays of planned orders in ticks (`ruleset_public.orders`). */
 export interface OrderDelays {
   readonly planned: number;
@@ -37,7 +43,10 @@ export interface RenderSource {
   readonly orderDelays?: OrderDelays;
   /** Ticks per second (`ruleset_public.tick_hz`), for the age of fog memories. Default 10. */
   readonly tickHz?: number;
-  /** Ticks between the rounds of a fight (`ruleset_public.combat.round_ticks`). Default 10. */
+  /**
+   * Ticks between the rounds of a fight (`ruleset_public.combat.round_ticks`). Default
+   * `DEFAULT_ROUND_TICKS`; the replay frames do not carry the ruleset, so a replay uses the default.
+   */
   readonly roundTicks?: number;
   /**
    * Ticks of production of one recruit (`ruleset_public.recruit.unit_ticks`, DEC-25): the full

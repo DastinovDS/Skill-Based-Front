@@ -47,9 +47,10 @@
       pool.push({ group, path, head });
     }
 
-    function frame(now: number): void {
+    /** Draws one frame; `true` while there is something to point at (the loop goes on). */
+    function frame(now: number): boolean {
       const box = root?.getBoundingClientRect();
-      if (box === undefined) return;
+      if (box === undefined) return false;
       const view = { left: box.left, top: box.top + top, right: box.right, bottom: box.bottom };
       const middle = centreOf(view);
       const radius = arcRadius(view);
@@ -81,15 +82,21 @@
         shape.group.setAttribute('visibility', 'visible');
       }
       for (let i = used; i < pool.length; i++) pool[i]?.group.setAttribute('visibility', 'hidden');
+      return worst.length > 0;
     }
 
+    // The loop runs only while there is a threat to point at; a new threat wakes it up.
     let handle = 0;
     const loop = (now: number): void => {
-      frame(now);
-      handle = requestAnimationFrame(loop);
+      handle = frame(now) ? requestAnimationFrame(loop) : 0;
     };
-    handle = requestAnimationFrame(loop);
+    const wake = (): void => {
+      if (handle === 0) handle = requestAnimationFrame(loop);
+    };
+    wake();
+    const stopListening = threats.listen(wake);
     return () => {
+      stopListening();
       cancelAnimationFrame(handle);
       for (const { group } of pool) group.remove();
     };
