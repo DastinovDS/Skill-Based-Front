@@ -202,8 +202,9 @@ What it shows:
    tempo allows 40); the likely cause is the gap of table B (the CP fill up while their groups walk and fight; not
    measured per event).
 3. **The charges are in surplus, not short.** The capital is full 23 to 48% of the match from 80 nodes, 5.5 to 16%
-   of the charges burn (80, 100, 120 nodes: 5.5, 16.0, 9.5%); more factories or bigger warehouses would only store more of what goes unused. The surplus
-   is the CP side (units recruited) not keeping up with the charge side; for a human it would be the same CP limit.
+   of the charges burn (80, 100, 120 nodes: 5.5, 16.0, 9.5%); more factories or bigger warehouses would only store
+   more of what goes unused. The surplus is the CP side (units recruited) not keeping up with the charge side; for a
+   human it would be the same CP limit.
 4. **The army does not grow with the map, the land does.** From 49 to 120 nodes the own nodes double (22 to 43), the
    units grow by a quarter (18 to 23) and the groups not at all (about 11, 10 standing). The extra CP of the tempo go
    into more moves of the same groups (moves 75% of the useful commands at 49 nodes, 84% at 120) and into a fuller
