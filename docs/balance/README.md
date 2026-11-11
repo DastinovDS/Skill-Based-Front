@@ -43,6 +43,7 @@ mise run tournament:gh --ref feature/123-x --ruleset rulesets/mvp-7.toml --bots 
 | `--shards` | parallel runner jobs, 10 by default, at most 20, never more than maps x seeds (a 5-seed run on the 4 pool maps fills 20 runners) |
 | `--label` | a name for the run title and the artifact |
 | `--dir` | where the artifact lands (`.tournament/`, outside git) |
+| `--replays` | `true`: the shards also write the replay of every match (artifacts `replays-<shard>`, kept 7 days) and the task downloads them into `<dir>/replays-<run id>/`, for `gow-bots stats`, `gow-bots analyze` or `scripts/apm_ceiling.py replays` (#965); `false` by default, the result file is the same either way |
 
 The task dispatches the run, waits with a single `gh run watch --exit-status` and downloads the artifact
 `tournament-<label>-<run id>/` with `tournament.jsonl` and `report.md` (and the charts of the report).
