@@ -19,7 +19,7 @@ import {
 import { symbolScale, type Point } from './camera.ts';
 import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts';
 import { nodeMarkerPoint } from './fogLayout.ts';
-import { ringRadius } from './cityLayout.ts';
+import { fitReach, ringRadius } from './cityLayout.ts';
 import { reducedMotion } from './motion.ts';
 import {
   WALK,
@@ -36,7 +36,7 @@ import { terrainBadges } from './badgeLayout.ts';
 import type { SpriteCache } from './bake.ts';
 import { EntityKit, Token } from './shapes.ts';
 import { FigureView } from './figureView.ts';
-import { RING_ENGRAVED, UNIT_LABEL, sideColours, type PlayerColours } from './style.ts';
+import { UNIT_LABEL, sideColours, type PlayerColours } from './style.ts';
 
 /**
  * A badge column outside the capacity ring: its middle this far past the ring's radius, and this
@@ -382,11 +382,6 @@ export class EntityView implements EnemyAnchors {
   }
 
   /**
-   * How far the helmet of a unit icon in node `id` may reach from its middle (#940): to the inner
-   * edge of the capacity ring (the dark cut is `RING_ENGRAVED.cut` wide, centred on it), less a hair,
-   * so the cells of the ring stay uncovered. Unknown (no ring yet): no limit.
-   */
-  /**
    * Where the badges of a unit icon standing in the middle of node `id` go: just outside the
    * capacity ring on its right, under the VP lozenge, in the icon's own units (#940). `null`: the
    * icon is not in the middle (it stands beside the ring or at a gate), the helmet's corner.
@@ -397,8 +392,14 @@ export class EntityView implements EnemyAnchors {
     return { x: (ringRadius(this.radiusOf(id)) + BADGE_GAP) / k, y: BADGE_DROP / k };
   }
 
+  /**
+   * How far the helmet of a unit icon in node `id` may reach from its middle (#940): to the inner
+   * edge of the capacity ring (the dark cut is `RING_ENGRAVED.cut` wide, centred on it), less a hair,
+   * so the cells of the ring stay uncovered. A province's ring stands 20 out (A6, #949), room for
+   * about the full helmet of a small group.
+   */
   private fitOf(id: number): number {
-    return ringRadius(this.radiusOf(id)) - RING_ENGRAVED.cut / 2 - 1;
+    return fitReach(this.radiusOf(id));
   }
 
   /**
@@ -476,6 +477,7 @@ export class EntityView implements EnemyAnchors {
         x: at.x,
         y: at.y,
         side: entry.token.side,
+        width: entry.token.width,
         scale,
         enemy: !own,
         inside: true,
@@ -527,6 +529,7 @@ export class EntityView implements EnemyAnchors {
         x: at.x,
         y: at.y,
         side: entry.token.side,
+        width: entry.token.width,
         scale,
         enemy: entry.owner !== this.me,
       };

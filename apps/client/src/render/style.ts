@@ -212,8 +212,11 @@ export const BAR_GAP = 9;
  * see-through grey dot with a dashed outline. No gradient, no rim, no star, no warehouse, no VP.
  */
 export const PROVINCE = {
-  /** The radius the capacity ring and the label are laid out by. */
-  radius: 9,
+  /**
+   * The radius the capacity ring and the label are laid out by (A6 "Larger province", #949: 9 until
+   * then): the ring stands 20 out, so a small group's helmet keeps about its size over the cells.
+   */
+  radius: 13,
   dot: 6.5,
   casing: { inset: 1.6, width: 2, alpha: 0.55 },
   /** How far the owner's colour is moved to white; nobody's is paler still and see-through. */
@@ -497,14 +500,19 @@ export const FINE_RING = {
   split: { dash: 4, gap: 3, width: 1.3 },
 } as const;
 /**
- * The outline round a selected helmet (Engraved): a dark casing `casing` wide with two ink hairlines
- * `offset` either side of it; a hovered one a single fainter hairline on a thinner casing.
+ * The corner ticks of a selected group (B6, #949; mockup `node-piece.html`): four ivory L-shaped
+ * ticks `arm` long at the corners of the box round the helmet as drawn (`gap` clear of it, casing
+ * and strap included), inside the plate, on a dark casing `casing` wide; a hovered group gets two
+ * (top left and bottom right), a little fainter. They come in over `ms`, growing in from `grow`
+ * outside (not under "less motion").
  */
-export const HELMET_SELECT = {
-  casing: 4,
-  ink: 0.9,
-  offset: 1.2,
-  hover: { casing: 2.6, ink: 1, alpha: 0.8 },
+export const CORNER_TICKS = {
+  gap: 1.6,
+  arm: 4.6,
+  casing: { width: 3.2, alpha: 0.95 },
+  ink: { width: 1.3, select: 1, hover: 0.85 },
+  grow: 3,
+  ms: 180,
 } as const;
 
 /**
@@ -760,18 +768,6 @@ export const GHOST_SHAKE_AMPLITUDE = 3;
  * `REWIND` below holds its look); at most `max` cues at once.
  */
 export const UNDO_CUE = { ms: 1200, max: 4 } as const;
-
-/**
- * The light outline of the own group under the pointer (#762): the selection frame's line, a
- * little closer (`HELMET_FRAME.hover`) and faint, so the hover never reads as a selection.
- */
-export const HOVER_FRAME = { width: 2, alpha: 0.75, haloAlpha: 0.5 } as const;
-
-/**
- * The outlines round a helmet (#784): this far (world units) outside the drawing of the helmet,
- * strap and brim included; the dark casing reaches 3.2 out, so both keep a gap from it.
- */
-export const HELMET_FRAME = { select: 7.5, hover: 6 } as const;
 
 /**
  * The area of the city or province under the pointer (#762): a faint paper wash over the cell

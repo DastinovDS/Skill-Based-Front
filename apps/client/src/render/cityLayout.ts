@@ -5,7 +5,14 @@
  * Pure functions, no PixiJS and no DOM. Capacity, garrison and warehouse come from the snapshot;
  * nothing is inferred here.
  */
-import { BAR_GAP, RING_GAP, RING_MAX_SEGMENTS, RING_SEGMENT, VP_BADGE_LIFT } from './style.ts';
+import {
+  BAR_GAP,
+  RING_ENGRAVED,
+  RING_GAP,
+  RING_MAX_SEGMENTS,
+  RING_SEGMENT,
+  VP_BADGE_LIFT,
+} from './style.ts';
 
 /**
  * City radius by capacity class: up to 2, 3-4, 5-6, 7 and more. A province is a small ring of its
@@ -21,6 +28,15 @@ export function cityRadius(capacity: number): number {
 /** Radius of the capacity ring. */
 export function ringRadius(radius: number): number {
   return radius + RING_GAP;
+}
+
+/**
+ * How far the helmet of a unit icon may reach from its middle in a node of body `radius` (#940): to
+ * the inner edge of the capacity ring (the dark cut is `RING_ENGRAVED.cut` wide, centred on it),
+ * less a hair, so the cells of the ring stay uncovered.
+ */
+export function fitReach(radius: number): number {
+  return ringRadius(radius) - RING_ENGRAVED.cut / 2 - 1;
 }
 
 const START = -Math.PI / 2;
