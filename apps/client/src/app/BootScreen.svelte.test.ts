@@ -29,11 +29,11 @@ describe('BootScreen (#601)', () => {
     expect(status?.textContent.trim()).toBe(translate('en', 'common.loading'));
   });
 
-  it('is the frame of the menu, with no control to press', () => {
+  it('is the frame of the menu, with no control to press but the brand (it does nothing here)', () => {
     component = mount(BootScreen, { target: document.body, props: { delay: 0 } });
     flushSync();
     expect(document.querySelector('main.front')).not.toBeNull();
-    expect(document.querySelector('button, input, a')).toBeNull();
+    expect(document.querySelector('button:not(.home), input, a')).toBeNull();
     expect(document.querySelector('[role=status]')?.textContent.trim()).toBe(
       translate('en', 'common.loading'),
     );
