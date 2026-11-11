@@ -931,6 +931,108 @@ for (const size of SCREEN_SIZES) {
   }
 }
 
+// Profile (#940, owner 2026-11-11): the page itself never scrolls at the five sizes, with the long
+// history too; where the sheet is a fixed frame (not a short or narrow window) the match list scrolls
+// in its own box under its header, the sheet does not. `PAGE_SCROLL` answers the boxes that scroll
+// when they should not.
+const PAGE_SCROLL = `(() => {
+  const bad = [];
+  const page = document.scrollingElement;
+  if (page.scrollWidth > page.clientWidth || page.scrollHeight > page.clientHeight) bad.push('page');
+  const body = document.querySelector('.front.sheet .body');
+  if (body !== null && body.scrollHeight > body.clientHeight) bad.push('sheet body');
+  return bad;
+})()`;
+for (const size of SCREEN_SIZES) {
+  for (const id of ['profile', 'profile-long'] as const) {
+    test(`the profile page ${id} does not scroll at ${String(size.width)}x${String(size.height)}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await page.goto(`/?menu=${id}`);
+      await page.evaluate('document.fonts.ready.then(() => true)');
+      await expect(page.locator('table.hist')).toBeVisible();
+      expect(await page.evaluate<string[]>(PAGE_SCROLL)).toEqual([]);
+      if (id === 'profile-long') {
+        // The list is the box that scrolls, and its last row is reachable.
+        expect(
+          await page.evaluate<boolean>(
+            `(() => { const el = document.querySelector('.histbox'); return el.scrollHeight > el.clientHeight; })()`,
+          ),
+        ).toBe(true);
+        await page.evaluate(
+          `(() => { const el = document.querySelector('.histbox'); el.scrollTop = el.scrollHeight; })()`,
+        );
+        await page.screenshot({
+          path: join(
+            OUT,
+            `screen-profile-long-${String(size.width)}x${String(size.height)}-scrolled.png`,
+          ),
+        });
+      }
+    });
+  }
+}
+
+// The gilt lozenge at the end of the VP rail never touches the opponent's total (#940, owner
+// 2026-11-11), nor the own side's total or its gain: measured at the sizes the bar supports, with
+// one, two and three digits and a wide gain, on both sides. The lozenge is turned 45 degrees, so
+// its bounding box is the cautious one.
+const VP_GEOMETRY = `((digits, gain) => {
+  const rail = document.querySelector('.rail-loz');
+  if (rail === null) return ['no rail'];
+  const bad = [];
+  for (const sel of ['.mine-vp', '.enemy-vp']) {
+    const el = document.querySelector(sel);
+    el.textContent = digits;
+  }
+  for (const el of document.querySelectorAll('.gain:not(.slide)')) el.textContent = gain;
+  const loz = rail.getBoundingClientRect();
+  const apart = (a, b) =>
+    a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+  for (const sel of ['.mine-vp', '.enemy-vp', '.gain.enemy', '.gain.mine']) {
+    for (const el of document.querySelectorAll(sel)) {
+      const box = el.getBoundingClientRect();
+      if (box.width > 0 && !apart(loz, box)) bad.push(sel + ' ' + digits + ' ' + gain);
+    }
+  }
+  // The enemy total itself must also stay clear of the tug (the rail's right end).
+  const enemy = document.querySelector('.enemy-vp').getBoundingClientRect();
+  const tug = document.querySelector('.tugbox').getBoundingClientRect();
+  if (enemy.left < tug.right) bad.push('enemy total inside the tug box');
+  return bad;
+})`;
+for (const size of [
+  { width: 960, height: 600 },
+  { width: 1280, height: 720 },
+  { width: 1920, height: 1080 },
+]) {
+  for (const [digits, gain] of [
+    ['9', '+1'],
+    ['23', '+14'],
+    ['188', '+288'],
+  ] as const) {
+    test(`the VP lozenge clears the totals at ${String(size.width)}x${String(size.height)} with ${digits} and ${gain}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await page.goto('/?scene=rally_due');
+      await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2580');
+      await expect(page.locator('.rail-loz')).toBeVisible();
+      const bad = await page.evaluate<string[]>(
+        `${VP_GEOMETRY}(${JSON.stringify(digits)}, ${JSON.stringify(gain)})`,
+      );
+      if (digits === '188') {
+        await page.mouse.move(5, 300);
+        await page
+          .locator('header.bar')
+          .screenshot({ path: join(OUT, `vp-rail-wide-${String(size.width)}.png`) });
+      }
+      expect(bad).toEqual([]);
+    });
+  }
+}
+
 // The forfeit dialog with the danger button hovered: the hatch has inked in (#919, danger A).
 test('shot of the forfeit dialog with the danger button hovered', async ({ page }) => {
   await page.goto('/?menu=exit-rated');
@@ -1042,9 +1144,9 @@ test('shot of the split hint on a target the group is too big for', async ({ pag
   await page.screenshot({ path: join(OUT, 'split-hint-gray.png') });
 });
 
-// The same target with `E` held and the wheel turned twice (#928, item 2): the planned order of the
-// part that fits shows its line (straight: the server gives the part's route with the ack) and its
-// bonus, `split-plan.png`.
+// The same target with `E` held (#940, owner 2026-11-11; #928 item 2 drew a line and a bonus here):
+// a planned order is not given there, so no line, no bonus counter, no split offer: the dashed ring
+// and the tip "too big for a planned order", `split-plan.png`.
 test('shot of a planned order to a target the group is too big for', async ({ page }) => {
   // Node 2 is reached by a part of 1 unit (`?split=<node>,<units>`).
   await page.goto('/?scene=snapshot&split=2,1&menus');

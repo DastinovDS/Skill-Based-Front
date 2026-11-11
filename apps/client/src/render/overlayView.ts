@@ -1,5 +1,5 @@
 import { Assets, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
-import { t, tf } from '../i18n/index.ts';
+import { t } from '../i18n/index.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { badgeScale } from './alertLayout.ts';
 import { chevronHalfWidth, drawBonusChevron } from './bonusChevron.ts';
@@ -192,19 +192,12 @@ export class OverlayView {
   private readonly bonus = new Container({ label: 'plan-bonus', visible: false });
   private readonly bonusPill = new Graphics();
   private readonly bonusText: Text;
-  private readonly bonusTime: Text;
-  /** The texts the pill was drawn for (empty: not drawn yet). */
+  /** The text the pill was drawn for (empty: not drawn yet). */
   private bonusKey = '';
   private readonly bonusStyle = new TextStyle({
     fontFamily: 'system-ui, sans-serif',
     fontSize: BONUS_MARK.fontSize,
     fontWeight: '700',
-    fill: PAPER,
-  });
-  private readonly bonusTimeStyle = new TextStyle({
-    fontFamily: 'system-ui, sans-serif',
-    fontSize: BONUS_MARK.timeFontSize,
-    fontWeight: '600',
     fill: PAPER,
   });
   private tickHz = 10;
@@ -264,14 +257,7 @@ export class OverlayView {
       anchor: { x: 0, y: 0.5 },
       resolution: 1,
     });
-    this.bonusTime = new Text({
-      text: '',
-      style: this.bonusTimeStyle,
-      anchor: { x: 0, y: 0.5 },
-      resolution: 1,
-    });
-    this.bonusTime.alpha = 0.75;
-    this.bonus.addChild(this.bonusPill, this.bonusText, this.bonusTime);
+    this.bonus.addChild(this.bonusPill, this.bonusText);
     this.etaGlyph.anchor.set(0.5);
     this.etaGlyph.visible = false;
     this.eta.addChild(this.etaDisc, this.etaGlyph, this.etaText);
@@ -354,7 +340,7 @@ export class OverlayView {
   }
 
   setLabelResolution(resolution: number): void {
-    const texts = [this.etaText, this.bonusText, this.bonusTime, ...this.picks.map((p) => p.text)];
+    const texts = [this.etaText, this.bonusText, ...this.picks.map((p) => p.text)];
     for (const text of texts) {
       if (text.resolution !== resolution) text.resolution = resolution;
     }
@@ -620,9 +606,10 @@ export class OverlayView {
   }
 
   /**
-   * The bonus counter over the target (#793): "^ +3  gathers 6 s" (the green chevron of a bonus,
-   * #797) in a pill just above the city's
-   * ring, as big on screen at any zoom. The pill is drawn again only when its text changes.
+   * The bonus counter over the target (#793): "^ +3" (the green chevron of a bonus, #797) in a pill
+   * just above the city's ring, as big on screen at any zoom, with no gathering time (owner
+   * 2026-11-11, #940: the fill of the order says it). The pill is drawn again only when its text
+   * changes.
    */
   private placeBonus(state: OverlayState): void {
     const mark = state.bonus ?? null;
@@ -632,12 +619,7 @@ export class OverlayView {
       return;
     }
     const value = `+${String(mark.bonus)}`;
-    const time =
-      mark.ticks === null || this.tickHz <= 0
-        ? ''
-        : tf('plan.gatherIn', { seconds: Math.ceil(mark.ticks / this.tickHz) });
-    const key = `${value}|${time}`;
-    if (key !== this.bonusKey) this.drawBonus(value, time, key);
+    if (value !== this.bonusKey) this.drawBonus(value);
     const M = BONUS_MARK;
     const scale = badgeScale(this.cameraScale);
     // The ring is in world units, the pill and its lift keep their size on screen.
@@ -647,18 +629,11 @@ export class OverlayView {
     this.bonus.visible = true;
   }
 
-  private drawBonus(value: string, time: string, key: string): void {
+  private drawBonus(value: string): void {
     const M = BONUS_MARK;
     this.bonusText.text = value;
-    this.bonusTime.text = time;
-    this.bonusTime.visible = time !== '';
     const d = chevronHalfWidth(M.chevron);
-    const width =
-      M.padding * 2 +
-      2 * d +
-      M.gap +
-      this.bonusText.width +
-      (time === '' ? 0 : M.gap + this.bonusTime.width);
+    const width = M.padding * 2 + 2 * d + M.gap + this.bonusText.width;
     const left = -width / 2;
     const g = this.bonusPill;
     g.clear();
@@ -669,8 +644,7 @@ export class OverlayView {
     const cx = left + M.padding + d;
     drawBonusChevron(g, cx, 0, M.chevron);
     this.bonusText.position.set(cx + d + M.gap, 0);
-    this.bonusTime.position.set(cx + d + M.gap + this.bonusText.width + M.gap, 1);
-    this.bonusKey = key;
+    this.bonusKey = value;
   }
 
   /**
@@ -725,7 +699,6 @@ export class OverlayView {
     this.eta.destroy({ children: true });
     this.bonus.destroy({ children: true });
     this.bonusStyle.destroy();
-    this.bonusTimeStyle.destroy();
     this.path.destroy();
     this.etaStyle.destroy();
     this.lines.destroy();

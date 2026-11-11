@@ -17,6 +17,9 @@
   // The size that fits there (the server's, #762): a click opens the split menu with it.
   const fit = $derived(node === null ? 0 : orders.splitFit(node));
 
+  // A planned order (E) is not given there at all (#940): the tip says it is closed, no click offer.
+  const closed = $derived(orders.ui.current.splitClosed);
+
   /** The key that opens the split menu (a key label, not a translation). */
   const KEY = 'S';
 </script>
@@ -26,7 +29,10 @@
   {#if node !== null}
     <div class="split" data-node={node}>
       <Icon name="split" size={18} />
-      {#if fit > 0}
+      {#if closed}
+        <span>{tf('split.tipPlanned', { place: names(node) })}</span>
+        <kbd class="k">{KEY}</kbd>
+      {:else if fit > 0}
         <span>{tf('split.tipClick', { place: names(node), n: fit })}</span>
       {:else}
         <span>{tf('split.tip', { place: names(node) })}</span>

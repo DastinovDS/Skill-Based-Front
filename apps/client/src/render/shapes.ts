@@ -152,6 +152,11 @@ export interface TokenSpec {
   ghost?: boolean;
   inside?: boolean;
   /**
+   * How far the helmet of a unit icon in a city may reach from its middle, world units (#940): the
+   * inner edge of the capacity ring, so the helmet never covers the cells. `undefined`: no limit.
+   */
+  fit?: number;
+  /**
    * The advantage and disadvantage badges at the top right corner (#791): on the map only the
    * terrain mark of a node's defender, which the server computes (`NodeView.terrain_mark`).
    */
@@ -170,12 +175,30 @@ function specKey(spec: TokenSpec): string {
   const counts =
     spec.counts === null ? '-' : `${String(spec.counts.units)}/${String(spec.counts.charged)}`;
   const badges = (spec.badges ?? []).map((b) => `${b.dir}${String(b.count)}`).join(',');
-  return `${String(spec.owner)}|A|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}|${badges}`;
+  return `${String(spec.owner)}|A|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}${spec.fit === undefined ? '' : `f${String(spec.fit)}`}|${spec.range ?? ''}|${badges}`;
 }
 
 /** Width of the helmet of a token of size step `side` (a city icon is a little smaller). */
 export function helmetWidth(side: number, inside: boolean): number {
   return Math.round(side * HELMET_SCALE * (inside ? HELMET_INSIDE : 1) * 100) / 100;
+}
+
+/**
+ * The width of the helmet `kind` of width `width`, or a smaller one whose drawing (casing and strap
+ * included) reaches no further than `reach` from its middle: a unit icon stays inside the capacity
+ * ring (#940). Rounded down to a quarter unit so the baked keys stay few.
+ */
+export function helmetFit(kind: HelmetKind, width: number, reach: number): number {
+  let w = width;
+  // The casing and the strap do not scale with the width, so the first guess can still be a little
+  // too wide: a few steps settle it.
+  for (let step = 0; step < 6 && w > 4; step++) {
+    const e = helmetExtent(helmet(kind, w));
+    const span = Math.max(e.right, -e.left, e.bottom, -e.top);
+    if (span <= reach) break;
+    w = Math.min(w - 0.25, Math.floor(((w * reach) / span) * 4) / 4);
+  }
+  return w;
 }
 
 /** The helmet a token of `owner` shows: the viewer's faces right, the opponent's left. */
@@ -206,6 +229,13 @@ export class Token {
   /** The badges at the top right corner (#791), in a layer that keeps them `BADGE.minPx` on screen. */
   private readonly badgeLayer = new Container({ label: 'badges', visible: false });
   private readonly badges: BakedSprite[] = [];
+  /**
+   * Where the badges stand instead of the helmet's corner (`setBadgeAnchor`, #940); `null`: at the
+   * corner. A unit icon centred in a city puts them outside the capacity ring.
+   */
+  private badgeHome: Point | null = null;
+  /** The top right corner of the helmet drawn now: where the badges stand without a `badgeHome`. */
+  private cornerAt: Point = { x: 0, y: 0 };
   /** Screen px per unit of the token (`setBadgeFloor`); 0: unknown, no floor. */
   private pxPerUnit = 0;
   private readonly question: Text;
@@ -336,6 +366,17 @@ export class Token {
   }
 
   /**
+   * Moves the badges to `home` (in the token's own units), or back to the corner of the helmet
+   * (`null`). A unit icon in the middle of a city puts them outside the capacity ring, so neither
+   * the helmet nor its badges hide the cells (#940).
+   */
+  setBadgeAnchor(home: Point | null): void {
+    if (home?.x === this.badgeHome?.x && home?.y === this.badgeHome?.y) return;
+    this.badgeHome = home;
+    this.badgeLayer.position.set(home?.x ?? this.cornerAt.x, home?.y ?? this.cornerAt.y);
+  }
+
+  /**
    * Puts the shown fill height on the sprite, hidden when empty: the bottom of the baked dome up to
    * the level (a crop of its frame, #784).
    */
@@ -427,7 +468,8 @@ export class Token {
    */
   private drawBadges(marks: readonly BadgeMark[], at: Point): void {
     this.badgeLayer.visible = marks.length > 0;
-    this.badgeLayer.position.set(at.x, at.y);
+    this.cornerAt = at;
+    this.badgeLayer.position.set(this.badgeHome?.x ?? at.x, this.badgeHome?.y ?? at.y);
     const places = stackBadges({ x: 0, y: 0 }, marks, BADGE.size);
     marks.forEach((mark, i) => {
       let sprite = this.badges[i];
@@ -460,7 +502,8 @@ export class Token {
     dashed: boolean,
   ): { number: Point; corner: Point; badge: Point } {
     const kind = helmetKind(this.kit.me, spec.owner);
-    const width = helmetWidth(side, inside);
+    const full = helmetWidth(side, inside);
+    const width = spec.fit === undefined ? full : helmetFit(kind, full, spec.fit);
     const h = helmet(kind, width);
     this.shape = h;
     const facing = kind === 'own' ? 1 : -1;

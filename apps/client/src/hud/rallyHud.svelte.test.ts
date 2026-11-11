@@ -5,6 +5,7 @@ import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import type { EventMsg, GroupView, MapFile, SnapshotMsg } from '../protocol.gen.ts';
 import { DEV_RULES_GROUP } from './devFeed.ts';
 import { HudState } from './hudState.svelte.ts';
+import { TOAST_HOLD_MS } from './toastState.svelte.ts';
 
 const map = BUNDLED_MAPS.find((m) => m.meta.name === 'artery') as MapFile;
 
@@ -93,9 +94,24 @@ describe('HudState: the rally walks (#930, W10)', () => {
     };
     hud.onSnapshot(scene(RALLY_TICK + 1, 75, [gone]));
     expect(hud.current?.rally.dues).toHaveLength(4);
+    // The gauge spent with the snapshot; the flight waits until the map shows the recruit leave.
+    expect(hud.current?.rally.paid).toEqual([]);
+    hud.onRender(RALLY_TICK + 0.5);
+    expect(hud.current?.rally.paid).toEqual([]);
+    hud.onRender(RALLY_TICK + 1);
     expect(hud.current?.rally.paid).toEqual([{ seq: 1, node: 13, target: 12 }]);
     // 0.75 CP pay one of the four walks still due.
     expect(hud.current?.rally.dues.map((d) => d.short)).toEqual([false, true, true, true]);
+  });
+
+  it('starts the flight anyway when the render clock stops short of the tick', () => {
+    vi.useFakeTimers();
+    const hud = newState();
+    hud.onSnapshot(scene(RALLY_TICK, 125, [walker]));
+    hud.onEvent(event(RALLY_TICK + 1, 'rally_walk_paid', { player: 0, node: 13, target: 12 }));
+    expect(hud.current?.rally.paid).toEqual([]);
+    vi.advanceTimersByTime(TOAST_HOLD_MS);
+    expect(hud.current?.rally.paid).toEqual([{ seq: 1, node: 13, target: 12 }]);
   });
 
   it('hangs the strip of a walk without CP (`rally_walk_no_cp`) for 3.5 s, no flight', () => {

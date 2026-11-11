@@ -102,13 +102,13 @@ describe('OverlayView', () => {
     const counter = layers.layer.intents.children.find((c) => c.label === 'plan-bonus');
     view.update(state(null), none);
     expect(counter?.visible).toBe(false);
-    view.update(state({ node: b.id, bonus: 3, max: 5, ticks: 90 }), none);
+    view.update(state({ node: b.id, bonus: 3, max: 5 }), none);
     expect(counter?.visible).toBe(true);
-    // Above the target city, as text (never colour alone): "+3" and 90 ticks of gathering = 9 s.
+    // Above the target city, as text (never colour alone): "+3", no gathering time.
     expect(counter?.position.x).toBe(b.x);
     expect(counter?.position.y).toBeLessThan(b.y);
     const texts = (counter?.children ?? []).flatMap((c) => ('text' in c ? [String(c.text)] : []));
-    expect(texts).toEqual(['+3', 'gathers 9 s']);
+    expect(texts).toEqual(['+3']);
     view.destroy();
     vi.restoreAllMocks();
   });

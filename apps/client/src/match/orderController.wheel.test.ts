@@ -78,20 +78,15 @@ function turn(controller: OrderController, clock: { now: number }, n: number): b
 }
 
 describe('the plan bonus by E, hover and wheel (#793, #797)', () => {
-  it('E over a reachable target: the ghost and the counter at +1 with its time', () => {
+  it('E over a reachable target: the ghost and the counter at +1', () => {
     const { controller } = setup();
     controller.hover({ kind: 'node', id: enemy });
     expect(controller.overlay().bonus).toBeNull();
     controller.key(eDown);
     const overlay = controller.overlay();
     expect(overlay.preview).toEqual({ from: home, to: enemy, planned: true, path: [home, enemy] });
-    // A new hover starts at 1 (#797), the cap, one `plan_ticks_per_bonus` per point (DEC-41, item 10).
-    expect(overlay.bonus).toEqual({
-      node: enemy,
-      bonus: 1,
-      max: PLAN_BONUS.max,
-      ticks: RULES.orders.plan_ticks_per_bonus,
-    });
+    // A new hover starts at 1 (#797), the cap; no gathering time is told (#940).
+    expect(overlay.bonus).toEqual({ node: enemy, bonus: 1, max: PLAN_BONUS.max });
     // E up: an ordinary order, no counter.
     controller.key(eUp);
     expect(controller.overlay().bonus).toBeNull();
@@ -220,53 +215,66 @@ describe('the plan bonus by E, hover and wheel (#793, #797)', () => {
   });
 });
 
-// #928, item 2: a group too big for the path to a target (`reach.split`): a click splits the part
-// that fits off and sends it (#762), so the planned order shows its line and its bonus like any other.
-describe('a planned order to a target only a smaller group reaches (#928)', () => {
-  it('shows the line and the bonus counter, capped at the units of the part that goes', () => {
-    const { controller, clock } = setup(9, [{ node: far, units: 4 }]);
+// #940 (owner 2026-11-11, replacing #928 item 2): a planned order is not given to a target the
+// selected single group is too big for (`reach.split`): no line, no counter, no split offer, the
+// target is closed to it. An ordinary order keeps the split offer of #762.
+describe('a planned order to a target the group is too big for (#940)', () => {
+  it('shows no line and no bonus counter, and marks the target closed', () => {
+    const { controller } = setup(9, [{ node: far, units: 4 }]);
     controller.key(eDown);
     controller.hover({ kind: 'node', id: far });
     const overlay = controller.overlay();
-    // The server gives the part's route only with the `ack`: a straight line until then.
-    expect(overlay.preview).toEqual({ from: home, to: far, planned: true, path: [home, far] });
+    expect(overlay.preview).toBeNull();
     expect(overlay.eta).toBeNull();
-    expect(overlay.bonus).toEqual({
-      node: far,
-      bonus: 1,
-      max: 4,
-      ticks: RULES.orders.plan_ticks_per_bonus,
-    });
-    // The wheel steps it up to the part's units, not the group's.
-    turn(controller, clock, 6);
-    expect(controller.overlay().bonus?.bonus).toBe(4);
-    // An ordinary order shows the line too, without the counter.
-    controller.key(eUp);
-    expect(controller.overlay().preview).toEqual({
-      from: home,
-      to: far,
-      planned: false,
-      path: [home, far],
-    });
-    expect(controller.overlay().bonus).toBeNull();
+    expect(overlay.bonus).toBeNull();
+    // The server's list still shows the target as one that needs a split (the closed ring).
+    expect(overlay.split).toContain(far);
+    expect(controller.ui.current).toMatchObject({ splitHover: far, splitClosed: true });
+    // The target is not lit as one a click would order.
+    expect(overlay.hover).toBeNull();
   });
 
-  it('the click opens the split offer with the size that fits; the part asks for the bonus', () => {
-    const { controller, clock, sent } = setup(9, [{ node: far, units: 4 }]);
-    controller.key(eDown);
+  it('an ordinary order keeps its line and the split offer (#762)', () => {
+    const { controller, sent } = setup(9, [{ node: far, units: 4 }]);
     controller.hover({ kind: 'node', id: far });
-    controller.overlay();
-    turn(controller, clock, 2);
+    const overlay = controller.overlay();
+    expect(overlay.preview).toEqual({ from: home, to: far, planned: false, path: [home, far] });
+    expect(overlay.bonus).toBeNull();
+    expect(controller.ui.current).toMatchObject({ splitHover: far, splitClosed: false });
     controller.click({ kind: 'node', id: far }, false);
     expect(sent).toEqual([]);
     expect(controller.splitMenu.current).toMatchObject({ open: true, n: 4 });
   });
 
-  it('no line and no counter where not even one unit gets there', () => {
-    const { controller } = setup(9, [{ node: far, units: 0 }]);
+  it('E up and down toggles the closed mark and the line', () => {
+    const { controller } = setup(9, [{ node: far, units: 4 }]);
+    controller.hover({ kind: 'node', id: far });
+    controller.key(eDown);
+    controller.overlay();
+    expect(controller.ui.current.splitClosed).toBe(true);
+    controller.key(eUp);
+    expect(controller.overlay().preview).not.toBeNull();
+    expect(controller.ui.current.splitClosed).toBe(false);
+  });
+
+  it('the click sends nothing and opens no split offer; the stack limit is told', () => {
+    const { controller, sent } = setup(9, [{ node: far, units: 4 }]);
+    controller.key(eDown);
+    controller.hover({ kind: 'node', id: far });
+    controller.overlay();
+    controller.click({ kind: 'node', id: far }, false);
+    expect(sent).toEqual([]);
+    expect(controller.splitMenu.current.open).toBe(false);
+    expect(controller.ui.current.notice).toMatchObject({ kind: 'rejected', code: 'STACK_LIMIT' });
+  });
+
+  it('closes the target even where not one unit gets there', () => {
+    const { controller, sent } = setup(9, [{ node: far, units: 0 }]);
     controller.key(eDown);
     controller.hover({ kind: 'node', id: far });
     expect(controller.overlay().preview).toBeNull();
     expect(controller.overlay().bonus).toBeNull();
+    controller.click({ kind: 'node', id: far }, false);
+    expect(sent).toEqual([]);
   });
 });

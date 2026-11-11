@@ -2,8 +2,8 @@ import { CanvasTextMetrics, type Container, type Text } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BakedSprite } from './bake.ts';
 import { TWEEN_MS } from './tween.ts';
-import { EntityKit, Token, helmetWidth } from './shapes.ts';
-import { helmet } from '../units/helmet.ts';
+import { EntityKit, Token, helmetFit, helmetWidth } from './shapes.ts';
+import { helmet, helmetExtent } from '../units/helmet.ts';
 import { UNIT_SIDES, YOU } from './style.ts';
 import { testSprites } from './testSprites.ts';
 import { createLayers } from './layers.ts';
@@ -174,6 +174,25 @@ describe('Token, the helmet as baked sprites', () => {
     expect(key.endsWith(':i')).toBe(true);
     const h = helmet('own', helmetWidth(UNIT_SIDES[1], true));
     expect(token.bottom).toBeGreaterThan(h.domeBottom);
+  });
+});
+
+describe('helmetFit: a unit icon stays inside the capacity ring (#940)', () => {
+  const span = (width: number): number => {
+    const e = helmetExtent(helmet('own', width));
+    return Math.max(e.right, -e.left, e.bottom, -e.top);
+  };
+
+  it('keeps a helmet that already fits', () => {
+    expect(helmetFit('own', 20, 40)).toBe(20);
+  });
+
+  it('shrinks a helmet that reaches past the limit until it fits', () => {
+    const width = helmetFit('own', 29.6, 12);
+    expect(width).toBeLessThan(29.6);
+    expect(span(width)).toBeLessThanOrEqual(12.2);
+    // The opponent's helmet is the mirror image: the same size, to a quarter unit.
+    expect(helmetFit('enemy', 29.6, 12)).toBeCloseTo(width, 0);
   });
 });
 

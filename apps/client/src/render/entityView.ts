@@ -36,7 +36,14 @@ import { terrainBadges } from './badgeLayout.ts';
 import type { SpriteCache } from './bake.ts';
 import { EntityKit, Token } from './shapes.ts';
 import { FigureView } from './figureView.ts';
-import { UNIT_LABEL, sideColours, type PlayerColours } from './style.ts';
+import { RING_ENGRAVED, UNIT_LABEL, sideColours, type PlayerColours } from './style.ts';
+
+/**
+ * A badge column outside the capacity ring: its middle this far past the ring's radius, and this
+ * far under the middle of the city (the VP lozenge keeps the upper right of the ring).
+ */
+const BADGE_GAP = 13;
+const BADGE_DROP = 3;
 
 const ORIGIN: Point = { x: 0, y: 0 };
 
@@ -334,6 +341,7 @@ export class EntityView implements EnemyAnchors {
     parent: Container,
     inside: boolean,
     badges: ReturnType<typeof terrainBadges> = [],
+    node: number | null = null,
   ): Token | null {
     const shown =
       seen !== null && detail !== 'fog' && seen.level !== 'fog' && seen.enemy_modes.length > 0;
@@ -346,7 +354,14 @@ export class EntityView implements EnemyAnchors {
     // Seen again after a gap (or for the first time): fade in; the very first frame is as it is.
     if ((current === null || !current.view.visible) && this.warm) token.enter();
     const { counts, range } = knownOfSeen(seen);
-    token.set({ owner: this.enemy, counts, range, inside, badges });
+    token.set({
+      owner: this.enemy,
+      counts,
+      range,
+      inside,
+      fit: inside && node !== null ? this.fitOf(node) : undefined,
+      badges,
+    });
     token.setLabel(true);
     this.scaleEnemy(token);
     token.view.visible = true;
@@ -362,7 +377,28 @@ export class EntityView implements EnemyAnchors {
       this.enemyLayer,
       true,
       this.badgesAt(node.id, this.enemy),
+      node.id,
     );
+  }
+
+  /**
+   * How far the helmet of a unit icon in node `id` may reach from its middle (#940): to the inner
+   * edge of the capacity ring (the dark cut is `RING_ENGRAVED.cut` wide, centred on it), less a hair,
+   * so the cells of the ring stay uncovered. Unknown (no ring yet): no limit.
+   */
+  /**
+   * Where the badges of a unit icon standing in the middle of node `id` go: just outside the
+   * capacity ring on its right, under the VP lozenge, in the icon's own units (#940). `null`: the
+   * icon is not in the middle (it stands beside the ring or at a gate), the helmet's corner.
+   */
+  private badgeHomeAt(id: number, at: Point, city: Point, scale: number): Point | null {
+    if (Math.abs(at.x - city.x) > 0.01 || Math.abs(at.y - city.y) > 0.01) return null;
+    const k = scale > 0 ? scale : 1;
+    return { x: (ringRadius(this.radiusOf(id)) + BADGE_GAP) / k, y: BADGE_DROP / k };
+  }
+
+  private fitOf(id: number): number {
+    return ringRadius(this.radiusOf(id)) - RING_ENGRAVED.cut / 2 - 1;
   }
 
   /**
@@ -381,6 +417,7 @@ export class EntityView implements EnemyAnchors {
         this.standAt(id, this.enemy, half, city, marker) ??
         iconPoint(city, marker, false, this.ownIcons.has(id));
       token.view.position.set(at.x, at.y);
+      token.setBadgeAnchor(this.badgeHomeAt(id, at, city, token.view.scale.x));
     });
   }
 
@@ -411,6 +448,7 @@ export class EntityView implements EnemyAnchors {
         owner: stack.owner,
         counts: { units: stack.units, charged: stack.charged },
         inside: true,
+        fit: this.fitOf(stack.node),
         badges: this.badgesAt(stack.node, stack.owner),
       });
       const city = nodePoint(this.map, stack.node);
@@ -429,6 +467,9 @@ export class EntityView implements EnemyAnchors {
       if (at === undefined) continue;
       entry.view.scale.set(scale);
       entry.view.position.set(at.x, at.y);
+      entry.token.setBadgeAnchor(
+        city === undefined ? null : this.badgeHomeAt(stack.node, at, city, scale),
+      );
       entry.token.setLabel(true);
       entry.token.setBadgeFloor(this.cameraScale * scale);
       const spot: TokenSpot = {

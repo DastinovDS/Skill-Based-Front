@@ -163,15 +163,13 @@ export interface GroupPreview {
 
 /**
  * The bonus a planned order to `node` would ask for (DEC-41, item 10; #793), drawn over
- * the target while Shift is held: the value of the banner, its cap, and the gathering time it implies.
+ * the target while Shift is held: the value of the banner and its cap.
  */
 export interface BonusMark {
   readonly node: number;
   readonly bonus: number;
   /** The largest bonus now (`PLAN_BONUS.max`, capped by the group's charged units). */
   readonly max: number;
-  /** Ticks to gather it while the warehouse has charges; `null`: not known. */
-  readonly ticks: number | null;
 }
 
 export interface EtaMark {

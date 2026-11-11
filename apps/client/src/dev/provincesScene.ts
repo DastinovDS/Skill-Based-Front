@@ -34,6 +34,8 @@ const STATIONED = [2, 6, 7, 12];
 const STOCK: Readonly<Record<number, number>> = { 0: 5, 1: 1, 4: 3, 6: 0, 7: 2, 8: 1 };
 /** An enemy group stands in this own province without an own group: seen as presence (DEC-35). */
 const INTRUDED = 3;
+/** Terrain marks of some own places (`NodeView.terrain_mark`): up, down, up (#940). */
+const TERRAIN_MARKS: Readonly<Record<number, number>> = { 2: 1, 6: -2, 12: 1 };
 /** Memory of a node in the fog, ticks ago. */
 const SEEN_NODE: Readonly<Record<number, number>> = { 19: 400, 20: 900 };
 
@@ -109,7 +111,9 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       flow_next: null,
       flow_idle: null,
       flow_pocket: null,
-      terrain_mark: null,
+      // The own provinces and cities with a group stand on terrain with a mark: the badges stand
+      // outside the capacity ring, the helmet inside it (#940).
+      terrain_mark: TERRAIN_MARKS[n.id] ?? null,
       rally_point: null,
     };
   });
