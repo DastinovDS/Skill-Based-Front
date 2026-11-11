@@ -93,6 +93,8 @@ export interface TokenSpot extends Point {
   readonly enemy?: boolean;
   /** The icon of the units standing in a city (its helmet is a little smaller). */
   readonly inside?: boolean;
+  /** The width of the helmet drawn (a unit icon in a city is fitted inside its ring, #940). */
+  readonly width?: number;
 }
 
 /**

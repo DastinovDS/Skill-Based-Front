@@ -234,6 +234,8 @@ export class Token {
    * corner. A unit icon centred in a city puts them outside the capacity ring.
    */
   private badgeHome: Point | null = null;
+  /** The width of the helmet drawn now (`TokenSpot.width`). */
+  width = 0;
   /** The top right corner of the helmet drawn now: where the badges stand without a `badgeHome`. */
   private cornerAt: Point = { x: 0, y: 0 };
   /** Screen px per unit of the token (`setBadgeFloor`); 0: unknown, no floor. */
@@ -504,6 +506,7 @@ export class Token {
     const kind = helmetKind(this.kit.me, spec.owner);
     const full = helmetWidth(side, inside);
     const width = spec.fit === undefined ? full : helmetFit(kind, full, spec.fit);
+    this.width = width;
     const h = helmet(kind, width);
     this.shape = h;
     const facing = kind === 'own' ? 1 : -1;

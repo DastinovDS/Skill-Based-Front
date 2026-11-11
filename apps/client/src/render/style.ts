@@ -497,13 +497,22 @@ export const FINE_RING = {
   split: { dash: 4, gap: 3, width: 1.3 },
 } as const;
 /**
- * The outline round a selected helmet (Engraved): a dark casing `casing` wide with two ink hairlines
- * `offset` either side of it; a hovered one a single fainter hairline on a thinner casing.
+ * The outline round a selected helmet (Engraved): a dark casing `casing` wide with two ivory lines
+ * `ink` wide `offset` either side of it, and a dark `halo` `haloWidth` wide under the lot, so the
+ * lines read on a dark plate (the ivory) and on a pale ground such as snow (the halo and the casing)
+ * alike (#940, owner 2026-11-11); a hovered one a single fainter hairline on a thinner casing.
  */
 export const HELMET_SELECT = {
-  casing: 4,
-  ink: 0.9,
-  offset: 1.2,
+  casing: 5,
+  ink: 1.7,
+  offset: 1.9,
+  haloWidth: 10.5,
+  haloAlpha: 0.55,
+  /**
+   * The frame of a unit icon in a city lies on its dark plate and must not cover the cells of the
+   * capacity ring just outside the helmet: no halo, hugging the helmet (`offset` from it).
+   */
+  inside: { offset: 2, casing: 3, ink: 1.5, inkOffset: 1.3 },
   hover: { casing: 2.6, ink: 1, alpha: 0.8 },
 } as const;
 

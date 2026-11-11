@@ -479,6 +479,7 @@ export class EntityView implements EnemyAnchors {
         scale,
         enemy: !own,
         inside: true,
+        width: entry.token.width,
       };
       for (const id of stack.ids) spots.set(id, spot);
       if (own) icons.push({ ...stack, spot });

@@ -60,7 +60,7 @@ function frameKey(at: TokenSpot): string {
  */
 export function framePolygon(at: TokenSpot, offset: number): number[] {
   const kind = at.enemy === true ? 'enemy' : 'own';
-  const outline = helmetOutline(kind, helmetWidth(at.side, at.inside === true), offset);
+  const outline = helmetOutline(kind, at.width ?? helmetWidth(at.side, at.inside === true), offset);
   return kind === 'own' ? outline : outline.map((v, i) => (i % 2 === 0 ? -v : v));
 }
 
@@ -376,7 +376,7 @@ export class OverlayView {
       }
       pick.frame.position.set(at.x, at.y);
       pick.frame.scale.set(at.scale);
-      const w = helmetWidth(at.side, at.inside === true) * at.scale;
+      const w = (at.width ?? helmetWidth(at.side, at.inside === true)) * at.scale;
       const S = GROUP_ORDER.seal;
       pick.seal.position.set(at.x + w * S.dx, at.y + w * S.dy);
       pick.seal.scale.set(at.scale);
@@ -756,6 +756,32 @@ export class OverlayView {
     g.clear();
     // Engraved (#847): a dark casing with two ink hairlines along it, round the whole helmet.
     const S = HELMET_SELECT;
+    if (at.inside === true) {
+      // On the dark plate of a city: ivory lines on a dark casing, hugging the helmet so the
+      // capacity cells just outside stay clear (#940).
+      const I = S.inside;
+      g.poly(framePolygon(at, I.offset)).stroke({
+        width: I.casing,
+        color: CASING,
+        alpha: 0.9,
+        join: 'round',
+      });
+      for (const offset of [-I.inkOffset, I.inkOffset]) {
+        g.poly(framePolygon(at, I.offset + offset)).stroke({
+          width: I.ink,
+          color: INK,
+          join: 'round',
+        });
+      }
+      return;
+    }
+    // A dark halo first: the ivory lines keep their edge on snow and on a light ground.
+    g.poly(framePolygon(at, HELMET_FRAME.select)).stroke({
+      width: S.haloWidth,
+      color: CASING,
+      alpha: S.haloAlpha,
+      join: 'round',
+    });
     g.poly(framePolygon(at, HELMET_FRAME.select)).stroke({
       width: S.casing,
       color: CASING,
