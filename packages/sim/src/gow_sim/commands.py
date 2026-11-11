@@ -39,10 +39,12 @@ checks each member like a ``Move`` of that group to ``dest`` and accepts the val
 acceptance, per-member codes in ``Ok.members``); the whole command is rejected when the section is
 off, the list or the bonus is malformed, a rally is planned, ``dest`` does not exist, no member is
 valid (the first member's code, with the members) or the CP of the accepted members are short
-(``NOT_ENOUGH_CP``, all or nothing). A member too big for every path to ``dest`` is split
-automatically (owner, 2026-11-10, #913): the largest part that has a path (the size ``reach``
-offers, #762) splits off as a new group, charged units first, and goes as the member; the rest
-stays as the group; only when not even one unit fits is it ``STACK_LIMIT``. An own ``dest`` is a
+(``NOT_ENOUGH_CP``, all or nothing). A member of an ordinary order too big for every path to
+``dest`` is split automatically (owner, 2026-11-10, #913): the largest part that has a path (the
+size ``reach`` offers, #762) splits off as a new group, charged units first, and goes as the
+member; the rest stays as the group; only when not even one unit fits is it ``STACK_LIMIT``. A
+planned order splits nothing: such a member is ``STACK_LIMIT`` (owner, 2026-11-11, #941). An own
+``dest`` is a
 rally (every member departs at once, the price ``group_order.rally_pct`` of a move per member
 rounded up to a whole CP), any other an attack
 whose members arrive in one tick (a member waits in its node until its departure, ``GROUP_BUSY``
@@ -370,9 +372,9 @@ class Member:
     bonus: int = 0
     reject: RejectCode | None = None
     split_units: int = 0
-    """The group was too big for every path (owner, 2026-11-10, #913): the units of the part
-    that splits off and goes as the member, the rest staying as the group; 0: the whole group
-    goes."""
+    """The group of an ordinary order was too big for every path (owner, 2026-11-10, #913): the
+    units of the part that splits off and goes as the member, the rest staying as the group; 0:
+    the whole group goes (always for a planned order, #941)."""
     group_units: int = 0
     """With ``split_units``: the units of the group at the command; 0 otherwise."""
 
@@ -526,7 +528,9 @@ def _validate_group_move(
     rally = state.nodes[dest].owner == player
     if rally and cmd.planned:
         return invalid  # item G1
-    checked = [(gid, _check_member(state, rules, player, gid, dest, seen)) for gid in gids]
+    checked = [
+        (gid, _check_member(state, rules, player, gid, dest, cmd.planned, seen)) for gid in gids
+    ]
     accepted: list[tuple[int, tuple[int, ...]]] = []
     goes: dict[int, int] = {}  # the units each accepted member sends (a part when split)
     for gid, found in checked:
@@ -554,8 +558,7 @@ def _validate_group_move(
     plan: dict[int, Member] = {}
     arrive: int | None
     if cmd.planned:  # item F: the departures are fixed once the parts are gathered
-        # The cap of a split member is the charged units of its part (they go first, DEC-20 B1).
-        caps = [min(goes[gid], state.groups[gid].charged) for gid, _ in accepted]
+        caps = [state.groups[gid].charged for gid, _ in accepted]  # no member is split (#941)
         parts = plan_parts(caps, cmd.bonus)
         arrive = None
         for (gid, path), part in zip(accepted, parts, strict=True):
@@ -583,13 +586,21 @@ def _validate_group_move(
 
 
 def _check_member(
-    state: GameState, rules: Ruleset, player: int, gid: int, dest: int, seen: dict[int, bool]
+    state: GameState,
+    rules: Ruleset,
+    player: int,
+    gid: int,
+    dest: int,
+    planned: bool,
+    seen: dict[int, bool],
 ) -> tuple[tuple[int, ...], int] | Reject:
     """A member of a ``GroupMove``, checked like a ``Move`` of that group (DEC-48, item B4): a
     standing own group without an order, in no fight under any ``combat.retreat``, not already in
-    ``dest``. Returns its path and the units that go: the whole group when a path holds it, else
-    the largest part a path holds (split automatically, owner 2026-11-10, #913) with that part's
-    fastest path; ``STACK_LIMIT`` only when not even one unit has a path."""
+    ``dest``. Returns its path and the units that go: the whole group when a path holds it; else,
+    in an ordinary order, the largest part a path holds (split automatically, owner 2026-11-10,
+    #913) with that part's fastest path, ``STACK_LIMIT`` only when not even one unit has a path;
+    a planned member is never split, it is ``STACK_LIMIT`` as a planned ``Move`` (owner
+    2026-11-11, #941)."""
     group = _standing_group(state, player, gid, seen)
     if isinstance(group, Reject):
         return group
@@ -603,6 +614,8 @@ def _check_member(
         return path, group.units
     if find_path(state, rules, player, start, dest) is None:
         return Reject(RejectCode.NO_PATH)
+    if planned:
+        return Reject(RejectCode.STACK_LIMIT)  # DEC-20, D2; DEC-48, owner decision (10)
     part = part_that_fits(state, rules, player, start, dest, group.units)
     return Reject(RejectCode.STACK_LIMIT) if part is None else part
 
@@ -1064,8 +1077,9 @@ def _apply_group_move(
     state: GameState, rules: Ruleset, player: int, dest: int, planned: bool, ok: Ok
 ) -> list[Event]:
     """Apply a validated ``GroupMove`` (DEC-48): one ``GroupOrder`` and an order per accepted
-    member. A member too big for every path first splits its part off (``split_units``, #913):
-    the part is the member, the rest stays as the group without an order. A planned member
+    member. A member of an ordinary order too big for every path first splits its part off
+    (``split_units``, #913): the part is the member, the rest stays as the group without an
+    order (a planned order has no such member, #941). A planned member
     gathers its part from 0 with its own public intent (item F7); with every part 0 the
     departures are fixed at once (item F4)."""
     tick = state.tick

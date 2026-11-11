@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 51
+PROTOCOL_VERSION: Final = 52
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -245,9 +245,10 @@ class OrderKind(StrEnum):
 
 class AckMember(WireModel):
     """One group of a ``group_move``, in the order of its ``groups`` (DEC-48, item B6): accepted
-    with its path, or dropped with its ``reject_code``. A group too big for every path is split
-    by the server and its part goes (item B4, #913): ``split_units`` of ``group_units``; it is
-    ``STACK_LIMIT`` only when not even one unit has a path."""
+    with its path, or dropped with its ``reject_code``. A group too big for every path in an
+    ordinary order is split by the server and its part goes (item B4, #913): ``split_units`` of
+    ``group_units``; it is ``STACK_LIMIT`` only when not even one unit has a path. A planned
+    order splits nothing: such a member is ``STACK_LIMIT`` (owner decision (10), #941)."""
 
     path: Annotated[tuple[NodeId, ...], Field(min_length=2)] | None
     """The nodes from the group's node to ``dest``; ``None`` for a dropped group."""
@@ -262,9 +263,10 @@ class AckMember(WireModel):
     reject_code: Code | None
     """Why the group was dropped; ``None`` for an accepted one."""
     split_units: PosInt | None = None
-    """The group was too big for every path (item B4, #913): the units of the part that split
-    off and goes (the largest size with a path, as ``reach.split``); the rest stays as the
-    group, without an order. ``None``: the whole group goes, or it was dropped."""
+    """The group of an ordinary order was too big for every path (item B4, #913): the units of
+    the part that split off and goes (the largest size with a path, as ``reach.split``); the rest
+    stays as the group, without an order. ``None``: the whole group goes, or it was dropped (a
+    planned member is never split, #941)."""
     group_units: PosInt | None = None
     """With ``split_units``: the units of the group at the command (the client shows "N of M
     go"); ``None`` otherwise."""
