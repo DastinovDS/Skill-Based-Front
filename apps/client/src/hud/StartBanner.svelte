@@ -1,13 +1,16 @@
 <script lang="ts">
   import { t, tf } from '../i18n/index.ts';
+  import type { PlayerColour } from '../protocol.gen.ts';
   import type { HudData } from './hudData.ts';
 
   interface Props {
     data: HudData | null;
     visible: boolean;
+    /** The player's colour in this match (DEC-49), named in the title; Lapis while unknown. */
+    colour?: PlayerColour | null;
   }
 
-  let { data, visible }: Props = $props();
+  let { data, visible, colour = null }: Props = $props();
 </script>
 
 <!-- The first three seconds of a match (ui-style U4); the map rings the own capital meanwhile. -->
@@ -16,7 +19,7 @@
     <svg class="mark" viewBox="0 0 16 14" width="24" height="21" aria-hidden="true">
       <path d="M1.5 1.5h13L8 12.5z" />
     </svg>
-    <p class="title">{t('start.title')}</p>
+    <p class="title">{tf('start.title', { colour: t(`colour.${colour ?? 'lapis'}`) })}</p>
     <p class="sub">{tf('start.capital', { nick: data.nicks.enemy })}</p>
   </div>
 {/if}

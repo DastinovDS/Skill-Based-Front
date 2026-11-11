@@ -311,6 +311,7 @@
       {chrome}
       {rated}
       {forfeitBanS}
+      colour={colours?.[me] ?? null}
       onpause={pauseState.available && status === 'ready' && paused === null
         ? () => {
             session?.pause();

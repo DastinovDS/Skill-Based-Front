@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONTRAST_COLOUR,
   DURATION,
   EASE,
   ENGRAVED,
@@ -9,6 +10,7 @@ import {
   PLAYER_COLOURS,
   PLAYER_COLOUR_IDS,
   RADIUS,
+  applyPlayerColour,
   colourVar,
   easeEngrave,
   easeSettle,
@@ -159,5 +161,28 @@ describe('the fonts', () => {
   it('keep their SIL OFL licences beside them', () => {
     expect(files).toContain('./fonts/Cinzel-OFL.txt');
     expect(files).toContain('./fonts/EBGaramond-OFL.txt');
+  });
+});
+
+describe('the colours outside a match (DEC-49)', () => {
+  it('give an illustrative opponent a colour that is never the player own', () => {
+    for (const id of PLAYER_COLOUR_IDS) expect(CONTRAST_COLOUR[id]).not.toBe(id);
+  });
+
+  it('set and undo the page root pair', () => {
+    const undo = applyPlayerColour('shell');
+    const style = document.documentElement.style;
+    expect(style.getPropertyValue('--own')).toBe('var(--colour-shell)');
+    expect(style.getPropertyValue('--enemy')).toBe(`var(--colour-${CONTRAST_COLOUR.shell})`);
+    undo();
+    expect(style.getPropertyValue('--own')).toBe('');
+  });
+
+  it('fall back to Lapis against Minium while the colour is unknown', () => {
+    const undo = applyPlayerColour(null);
+    const style = document.documentElement.style;
+    expect(style.getPropertyValue('--own')).toBe('var(--colour-lapis)');
+    expect(style.getPropertyValue('--enemy')).toBe('var(--colour-minium)');
+    undo();
   });
 });

@@ -14,6 +14,7 @@
   import ResultScreen from '../app/ResultScreen.svelte';
   import type { MatchSummary } from '../app/matchSummary.ts';
   import type { PlayerColour } from '../protocol.gen.ts';
+  import { PLAYER_COLOUR_IDS, applyPlayerColour } from '../theme/tokens.ts';
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
   import ExitDialog from '../hud/ExitDialog.svelte';
   import BootScreen from '../app/BootScreen.svelte';
@@ -46,7 +47,10 @@
   const pages = id === 'howto' || id.startsWith('settings') || id.startsWith('password');
   setContext(HOME_KEY, () => (board !== null || pages ? nothing : null));
   // The colour picker of the profile (DEC-49): a choice is kept at once, nothing is asked of a server.
-  let colour = $state<PlayerColour>('lapis');
+  // `&colour=shell`: the player's chosen colour outside a match, for the shots.
+  const asked = params.get('colour');
+  let colour = $state<PlayerColour>(PLAYER_COLOUR_IDS.find((known) => known === asked) ?? 'lapis');
+  $effect(() => applyPlayerColour(colour));
   const pickColour = (next: PlayerColour): Promise<null> => {
     colour = next;
     return Promise.resolve(null);

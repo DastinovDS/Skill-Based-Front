@@ -220,7 +220,7 @@
 }
 
 /* A destructive action, danger A of #919 (the forfeit, the guest's log-out): two rules in the
-   opponent's minium, the enemy's diagonal hatch inks in from the left on hover with a burin edge.
+   opponent's minium, the enemy's diagonal hatch inks in from the left on hover; at full fill only the hatching stays (no edge line).
    The icon and the words say what it does, never the colour alone. */
 .lapis-btn.danger,
 .lapis-danger {
@@ -257,9 +257,11 @@
   inset: 5px;
   z-index: -1;
   pointer-events: none;
-  background:
-    linear-gradient(#f2b3a2, #f2b3a2) right / 2px 100% no-repeat,
-    repeating-linear-gradient(45deg, rgb(229 120 94 / 34%) 0 1.2px, transparent 1.2px 4.4px);
+  background: repeating-linear-gradient(
+    45deg,
+    rgb(229 120 94 / 34%) 0 1.2px,
+    transparent 1.2px 4.4px
+  );
   clip-path: inset(0 100% 0 0);
   transition: clip-path 0.55s var(--ease-engrave);
 }

@@ -28,6 +28,36 @@ export const PLAYER_COLOURS: Readonly<Record<PlayerColour, number>> = {
 /** The ids of the set in the order of the picker. */
 export const PLAYER_COLOUR_IDS = Object.keys(PLAYER_COLOURS) as readonly PlayerColour[];
 
+/**
+ * The colour an illustrative opponent wears outside a match (the versus line, a menu picture): never
+ * the player's own, and far from it in lightness or hue. Lapis and Minium keep today's pair; the
+ * real opponent colour is only known once a match pairs (`welcome.colours`, DEC-49).
+ */
+export const CONTRAST_COLOUR: Readonly<Record<PlayerColour, PlayerColour>> = {
+  lapis: 'minium',
+  minium: 'lapis',
+  glacier: 'madder',
+  shell: 'violet',
+  violet: 'shell',
+  madder: 'glacier',
+};
+
+/**
+ * Outside a match: sets `--own` to the player's chosen colour and `--enemy` to the contrasting one on
+ * the page root (DEC-49), so every helmet and mark that stands for the viewer wears the choice. A
+ * match, a replay and the result card set their own pair below the root. Returns the undo.
+ */
+export function applyPlayerColour(colour: PlayerColour | null): () => void {
+  const own = colour ?? 'lapis';
+  const style = document.documentElement.style;
+  style.setProperty('--own', colourVar(own));
+  style.setProperty('--enemy', colourVar(CONTRAST_COLOUR[own]));
+  return () => {
+    style.removeProperty('--own');
+    style.removeProperty('--enemy');
+  };
+}
+
 /** The CSS of a player colour: its custom property of `app.css` (`--colour-<id>`). */
 export function colourVar(id: PlayerColour): string {
   return `var(--colour-${id})`;

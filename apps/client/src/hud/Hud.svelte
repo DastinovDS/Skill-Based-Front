@@ -23,6 +23,7 @@
   import GroupTip from './GroupTip.svelte';
   import TerrainBanner from './TerrainBanner.svelte';
   import SplitTip from './SplitTip.svelte';
+  import type { PlayerColour } from '../protocol.gen.ts';
   import StatusBar from '../app/StatusBar.svelte';
   import StatusButton from '../app/StatusButton.svelte';
   import TopBar from './TopBar.svelte';
@@ -43,6 +44,8 @@
     rated?: boolean;
     /** Queue lock in seconds a forfeit would bring now (DEC-34); shown in the ranked forfeit dialog. */
     forfeitBanS?: number;
+    /** The player's colour in this match (DEC-49): the start banner names it. */
+    colour?: PlayerColour | null;
     /** Where cities and groups are on screen: the radial menus of a city and a group sit on them. */
     anchors?: MapAnchors;
     /** The pause of a private match; without it (none left, or a rated match) the button is not shown. */
@@ -60,6 +63,7 @@
     chrome,
     rated = false,
     forfeitBanS = 0,
+    colour = null,
     anchors = NO_ANCHORS,
     onpause,
     oninsets,
@@ -168,7 +172,7 @@
   <EdgeAlerts threats={hud.threats} {anchors} top={topInset} />
   <AlertStack alerts={hud.alerts} names={hud.nodeName} />
   <ToastStack toasts={hud.toasts} />
-  <StartBanner {data} visible={hud.banner} />
+  <StartBanner {data} visible={hud.banner} {colour} />
   <RadialMenu {orders} stance={data?.stance ?? null} />
   <SplitMenu {orders} {anchors} names={hud.nodeName} />
   <CityRadial
