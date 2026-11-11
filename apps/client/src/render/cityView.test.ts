@@ -73,6 +73,34 @@ describe('CityView: the barracks of an enemy city next door (DEC-31)', () => {
     expect(barracksMark(nodes, enemy.id)).toBeNull();
     view.destroy();
   });
+
+  it('inks the icon in when the view turns it on, with no ring, ticks or toast (#972); not for an unknown to a known', () => {
+    setReducedMotion(false);
+    const snapshot = devSnapshot(map, DEV_RULES, 100);
+    const enemy = map.nodes.find((n) => n.start_owner === 1 && n.kind !== 'province');
+    if (enemy === undefined) throw new Error('the map has no such city');
+    const layers = createLayers();
+    const view = new CityView(map, layers, 0, 1, testSprites());
+    const nodes = layers.layer.nodes;
+    const container = city(nodes, enemy.id);
+    const root = container.children.find((c) => c.label === 'building-barracks') as Container;
+    const ticks = container.children.find((c) => c.label === 'building-ticks-barracks');
+    // Not adjacent (`null`) to built: it just appears.
+    view.update(withBarracks(snapshot, enemy.id, null), null, UPGRADES);
+    view.update(withBarracks(snapshot, enemy.id, true), null, UPGRADES);
+    expect(root.alpha).toBe(1);
+    // Known to have none (`false`), then built: a quiet ink-in.
+    view.update(withBarracks(snapshot, enemy.id, false), null, UPGRADES);
+    view.update(withBarracks(snapshot, enemy.id, true), null, UPGRADES);
+    expect(root.alpha).toBe(0);
+    view.advance(200);
+    expect(root.alpha).toBeGreaterThan(0);
+    expect(root.alpha).toBeLessThan(1);
+    view.advance(400);
+    expect(root.alpha).toBe(1);
+    expect(ticks?.visible).toBe(false);
+    view.destroy();
+  });
 });
 
 describe('CityView in the players colours (DEC-49)', () => {
@@ -253,7 +281,7 @@ describe('CityView: a province is a pale dot (PB, #431, DEC-23)', () => {
     const container = city(layers.layer.nodes, ownProvince.id);
     // body, ring, warehouse, then per building (the barracks, the factory): the owed row, the icon, the
     // paying lozenges and the done ring; the recruits, the alert ring: no VP badge after them.
-    expect(container.children).toHaveLength(13);
+    expect(container.children).toHaveLength(15);
     expect(barracksMark(layers.layer.nodes, ownProvince.id)).toBeNull();
     view.destroy();
   });
@@ -493,6 +521,65 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       ':built:',
     );
     view.destroy();
+  });
+
+  describe('the finish of a build (#972, V12)', () => {
+    const finish = (): {
+      view: CityView;
+      ticks: Container | undefined;
+      root: Container;
+      grown: number;
+    } => {
+      const { view, nodes } = make();
+      const upgrades = { ...UPGRADES, barracksCharges: 3 };
+      view.update(
+        withCity({
+          has_barracks: false,
+          building: { kind: 'barracks', done_tick: NOW + 5, owed: 0 },
+        }),
+        rules.unitTicks,
+        upgrades,
+        rules.queueMax,
+      );
+      const root = tower(nodes, own.id, 'barracks');
+      const grown = root.scale.x;
+      view.update(withCity({ has_barracks: true, building: null }), rules.unitTicks, upgrades);
+      const ticks = city(nodes, own.id).children.find((c) => c.label === 'building-ticks-barracks');
+      return { view, ticks, root, grown };
+    };
+
+    it('draws the icon 1.25 times larger while it is built, back to its size when done', () => {
+      setReducedMotion(false);
+      const { view, root, grown } = finish();
+      expect(grown / root.scale.x).toBeCloseTo(1.25, 5);
+      view.destroy();
+    });
+
+    it('stands four corner ticks round the new icon for 3 s, then takes them away', () => {
+      setReducedMotion(false);
+      const { view, ticks } = finish();
+      expect(ticks?.visible).toBe(true);
+      view.advance(2900);
+      expect(ticks?.visible).toBe(true);
+      view.advance(600);
+      expect(ticks?.visible).toBe(false);
+      view.destroy();
+    });
+
+    it('keeps the ticks under less motion, still (and no ring)', () => {
+      setReducedMotion(true);
+      const { view, ticks, root } = finish();
+      expect(ticks?.visible).toBe(true);
+      expect(root.parent?.children.find((c) => c.label === 'building-ring-barracks')?.visible).toBe(
+        false,
+      );
+      view.advance(2900);
+      expect(ticks?.visible).toBe(true);
+      view.advance(600);
+      expect(ticks?.visible).toBe(false);
+      setReducedMotion(false);
+      view.destroy();
+    });
   });
 
   it('flies a paid charge into the row, pops it, then runs the lozenges into the icon (#872)', () => {

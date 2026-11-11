@@ -187,10 +187,17 @@ export interface OwedRow {
 
 /**
  * The owed charges of a build of `cost` charges (the menu's price row): a row just outside the icon
- * at `item` along its direction `angle` from the city centre, laid across it and centred.
+ * at `item` along its direction `angle` from the city centre, laid across it and centred. `boost`
+ * scales the lozenges (the build in motion draws them a little larger, #972).
  */
-export function owedRow(item: Point, angle: number, size: number, cost: number): OwedRow {
-  const k = lozengeScale(size);
+export function owedRow(
+  item: Point,
+  angle: number,
+  size: number,
+  cost: number,
+  boost = 1,
+): OwedRow {
+  const k = lozengeScale(size) * boost;
   const out = iconHalf(size) + BUILDING.row.gap + LOZENGE.casing * k * BUILDING.row.rim;
   const middle = { x: item.x + Math.cos(angle) * out, y: item.y + Math.sin(angle) * out };
   const across = { x: -Math.sin(angle), y: Math.cos(angle) };

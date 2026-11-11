@@ -40,10 +40,13 @@ export function tickCornersFor(look: TickLook, corners: readonly TickCorner[]): 
 }
 
 /** The three points of the L of a corner, `grow` further out along its diagonal. */
-export function tickPoints(corner: TickCorner, grow: number): [number, number][] {
+export function tickPoints(
+  corner: TickCorner,
+  grow: number,
+  arm: number = CORNER_TICKS.arm,
+): [number, number][] {
   const ox = -corner.sx * grow;
   const oy = -corner.sy * grow;
-  const arm = CORNER_TICKS.arm;
   return [
     [corner.x + ox + corner.sx * arm, corner.y + oy],
     [corner.x + ox, corner.y + oy],

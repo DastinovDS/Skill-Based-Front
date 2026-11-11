@@ -447,6 +447,29 @@ export const BUILD_PAY = {
   done: { ms: 600, from: 0.42, grow: 10, casing: 3, width: 1 },
 } as const;
 /**
+ * The build in motion, one size up (#972, V12 "Toast", ui-style 75): while a barracks or a factory is
+ * built the icon is `size` times larger (it grows outward from its seat, the inner edge stays) and the
+ * owed lozenges `lozenge` times; the opponent's view turning a building on inks the icon in over
+ * `inkInMs` (a quiet finish, no toast for the opponent).
+ */
+export const BUILD_BOOST = { size: 1.25, lozenge: 1.1, inkInMs: 400 } as const;
+/**
+ * The corner ticks round a building just finished (#972, V12, the B6 ticks of #949): four ivory L
+ * ticks for `holdMs`, fading over `fadeMs`, `gap` clear of the icon's drawn extent, growing in from
+ * `grow` outside over `growMs` (not under "less motion"). The arm, the gap, the growth and the
+ * widths are for the 16-unit icon and scale with a larger one at the far zoom.
+ */
+export const BUILD_TICKS = {
+  holdMs: 3000,
+  fadeMs: 300,
+  gap: 2,
+  grow: 3,
+  growMs: 180,
+  arm: { min: 3.4, share: 0.24 },
+  casing: { width: 3.4, alpha: 0.95 },
+  ink: { width: 1.3 },
+} as const;
+/**
  * The recruit queue (55k Pips): a small helmet `width` wide per unit beyond the barracks (`BUILDING.queue`);
  * the unit in production fills from the bottom (`steps` baked levels), a queued one is hatched, a
  * free slot of the selected city beaded.
