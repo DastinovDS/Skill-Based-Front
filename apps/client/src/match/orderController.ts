@@ -1956,9 +1956,12 @@ export class OrderController implements MapInteraction {
 
   /**
    * The groups an accepted group order dropped (DEC-48, item B3, `ack.members`): a toast per code
-   * with the count. A group too big for the road is split by the server and its part goes with the
-   * order (item B4, #913): a notice "N of M go" from `split_units` and `group_units`, and no split
-   * offer of #762 (that stays for a single `move`); `STACK_LIMIT` now means no part reaches it.
+   * with the count. A group too big for the road is split by the server in an ordinary order and
+   * its part goes with it (item B4, #913): a notice "N of M go" from `split_units` and
+   * `group_units`, and no split offer of #762 (that stays for a single ordinary `move`). A planned
+   * order is not split (decision (10), #940): its oversized member comes back with `STACK_LIMIT`
+   * and null split fields, so it gets the toast of its code (worded for a planned order) and no
+   * "N of M go".
    */
   #dropped(cmd: Command & { type: 'group_move' }, members: readonly AckMember[]): void {
     const counts = new Map<string, number>();

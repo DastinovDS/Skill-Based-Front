@@ -133,7 +133,15 @@
       }
       const command = t(`cmd.${feedback.cmd.type}`);
       const reason = (code: string): string =>
-        t(rejectMessageKey(code, feedback.cmd.type, hud.context.rules.combat.retreat));
+        t(
+          rejectMessageKey(
+            code,
+            feedback.cmd.type,
+            hud.context.rules.combat.retreat,
+            (feedback.cmd.type === 'move' || feedback.cmd.type === 'group_move') &&
+              feedback.cmd.planned,
+          ),
+        );
       hud.toasts.push({
         tone: 'warn',
         icon: 'alert',

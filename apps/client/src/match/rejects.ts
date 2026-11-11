@@ -49,7 +49,14 @@ export const REJECT_MESSAGES_BY_COMMAND = {
  * reads differently there; a code this client does not know gets a generic one. Under
  * `combat.retreat = "none"` (DEC-40) `IN_FIGHT` is not "the group can only withdraw": nobody can.
  */
-export function rejectMessageKey(code: string, command?: string, retreat?: Retreat): MessageKey {
+export function rejectMessageKey(
+  code: string,
+  command?: string,
+  retreat?: Retreat,
+  planned = false,
+): MessageKey {
+  // A planned order is not split (DEC-48, decision (10), #940): the target is closed to it.
+  if (planned && code === 'STACK_LIMIT') return 'reject.STACK_LIMIT.planned';
   if (retreat === 'none' && code === 'IN_FIGHT' && command !== 'release_plan') {
     return 'reject.IN_FIGHT.stays';
   }

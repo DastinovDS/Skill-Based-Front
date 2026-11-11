@@ -59,6 +59,8 @@ export const en = {
   'reject.QUEUE_FULL': 'The recruit queue of the city is full',
   'reject.IN_FIGHT': 'In a fight: the group can only withdraw',
   'reject.STACK_LIMIT': 'The group is bigger than a node on the way: split it (S)',
+  'reject.STACK_LIMIT.planned':
+    'Too big for a planned order: it is closed to it. Split the group first (S) or send an ordinary order',
   'reject.NOT_ADJACENT': 'That road does not leave this node',
   'reject.FACTORY_LIMIT': 'You have the most factories allowed',
   'cmd.move': 'move',
