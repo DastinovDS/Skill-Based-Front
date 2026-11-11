@@ -64,6 +64,9 @@
     params.has('reach') && reachParts.length >= 2 && reachParts.every(Number.isInteger)
       ? { node: reachParts[0] ?? 0, ticks: reachParts[1] ?? 0, via: reachParts.slice(2) }
       : null;
+  // `?banner` keeps the intro banner of a match up on a frozen scene (#968): the scenes are past
+  // the first three seconds, so the banner and the ring round the capital would never show.
+  const bannerPinned = params.has('banner');
   const cpParam = Number(params.get('cp'));
   const cpPinned = params.has('cp') && Number.isInteger(cpParam) ? Math.max(0, cpParam) : null;
   // `?capture=<node>` turns on the price of a capture (`capture.charge_cost = 1`, DEC-38) and adds a
@@ -193,6 +196,7 @@
         }
         // A frozen scene has no render clock: its toasts show at once.
         hud.onRender(Number.POSITIVE_INFINITY);
+        if (bannerPinned) hud.banner = true;
       });
       if (playRally && scene.id === 'rally_due') {
         // The steps start on the window event `dev-play`, so a screenshot script times its frames.
