@@ -5,7 +5,6 @@
  * notice of a map that could not be drawn. The list is shared with `visual/scenes.ts`;
  * `sceneList.test.ts` keeps the two in step.
  */
-import type { MessageKey } from '../i18n/index.ts';
 import type { StatusInput } from '../app/matchStatus.ts';
 
 export const STATUS_SCENE_IDS = [
@@ -16,7 +15,6 @@ export const STATUS_SCENE_IDS = [
   'replaced',
   'paused-you',
   'paused-enemy',
-  'pause-denied',
   'renderer',
 ] as const;
 
@@ -30,11 +28,8 @@ const READY: StatusInput = {
   status: 'ready',
   paused: null,
   me: 0,
-  notice: null,
   pauseLeft: 0,
 };
-
-const DENIED: MessageKey = 'match.error.pauseDenied';
 
 /** The inputs of `statusView` for a scene; `renderer` has no bar of its own (the HUD shows it). */
 export const STATUS_INPUTS: Readonly<Record<StatusSceneId, StatusInput>> = {
@@ -53,6 +48,5 @@ export const STATUS_INPUTS: Readonly<Record<StatusSceneId, StatusInput>> = {
     paused: { type: 'paused', paused: true, by: 1, ends_in_s: 42 },
     pauseLeft: 42,
   },
-  'pause-denied': { ...READY, notice: DENIED },
   renderer: READY,
 };

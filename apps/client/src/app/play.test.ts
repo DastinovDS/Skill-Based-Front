@@ -3,14 +3,10 @@ import { NEW_MAP, RANDOM_POOL, type Invite, type MapSummary } from '../api/http.
 import {
   DRAW_NODES,
   DRAW_TRAIL,
-  dismissNewHere,
   drawTimes,
   inviteView,
-  NEW_HERE_ENABLED,
-  newHereDismissed,
   pickedTile,
   pickerTiles,
-  showNewHere,
   stepWay,
   WAY_PAUSE,
   WAY_VERB,
@@ -26,17 +22,6 @@ const map = (id: string, over: Partial<MapSummary> = {}): MapSummary => ({
   per_match: false,
   ...over,
 });
-
-function memory(): () => Storage {
-  const data = new Map<string, string>();
-  const store = {
-    getItem: (k: string) => data.get(k) ?? null,
-    setItem: (k: string, v: string) => {
-      data.set(k, v);
-    },
-  } as unknown as Storage;
-  return () => store;
-}
 
 describe('the ways of the plinth (#919)', () => {
   it('says per way what the main button does (r2 "Per way")', () => {
@@ -117,33 +102,6 @@ describe('the stages of an invite on the plinth', () => {
   it('starts once both are ready', () => {
     const both = invite({ guest_nick: 'Vega', you_ready: true, opponent_ready: true });
     expect(inviteView(both, 'Me').stage).toBe('starting');
-  });
-});
-
-describe('"New here?" (#919, item 6)', () => {
-  it('is switched off until the tutorial round (#806)', () => {
-    expect(NEW_HERE_ENABLED).toBe(false);
-  });
-
-  it('shows once right after a nick was entered, unless turned off for good', () => {
-    expect(showNewHere({ enabled: true, entered: true, dismissed: false })).toBe(true);
-    expect(showNewHere({ enabled: true, entered: false, dismissed: false })).toBe(false);
-    expect(showNewHere({ enabled: true, entered: true, dismissed: true })).toBe(false);
-    expect(showNewHere({ enabled: false, entered: true, dismissed: false })).toBe(false);
-  });
-
-  it('remembers "Don\'t show this again" in the browser, and survives a broken storage', () => {
-    const storage = memory();
-    expect(newHereDismissed(storage)).toBe(false);
-    dismissNewHere(storage);
-    expect(newHereDismissed(storage)).toBe(true);
-    const broken = (): Storage => {
-      throw new Error('blocked');
-    };
-    expect(newHereDismissed(broken)).toBe(false);
-    expect(() => {
-      dismissNewHere(broken);
-    }).not.toThrow();
   });
 });
 

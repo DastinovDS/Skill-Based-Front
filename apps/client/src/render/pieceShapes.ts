@@ -356,10 +356,10 @@ export function pipAlertSpec(radius: number): BakeSpec {
 
 /**
  * The CP mark on the ring (#930, W4): `ink` the mark of a queued recruit's walk (dimmed by
- * `alpha`), `down` the same in red with a down chevron (the CP now do not pay it), `crossed` the
- * mark cut by a red stroke (a walk not paid, at the gate). `size` world units square, centred.
+ * `alpha`), `down` the same in red with a down chevron (the CP now do not pay it). `size` world
+ * units square, centred. A walk not paid is told by the strip under the bar (#930, C3), not here (#765).
  */
-export type CpMarkLook = 'ink' | 'down' | 'crossed';
+export type CpMarkLook = 'ink' | 'down';
 
 /** The vertical extent of the mark's glyph in its box, for the fill of a recruit being made. */
 export function cpMarkGlyph(size: number): { readonly top: number; readonly bottom: number } {
@@ -402,17 +402,6 @@ export function cpMarkSpec(look: CpMarkLook, size: number, alpha = 1): BakeSpec 
             .lineTo(x, y + w / 2)
             .lineTo(x + w, y - w / 2)
             .stroke({ width, color: tone, join: 'miter' });
-        }
-      }
-      if (look === 'crossed') {
-        const c = graphics(into);
-        for (const [tone, width] of [
-          [CASING, 3.2],
-          [BADGE_DOWN, 1.5],
-        ] as const) {
-          c.moveTo(-h * 0.62, h * 0.55)
-            .lineTo(h * 0.62, -h * 0.55)
-            .stroke({ width, color: tone, cap: 'butt' });
         }
       }
     },

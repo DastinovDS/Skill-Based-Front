@@ -4,6 +4,7 @@
  * `RenderSource` and forwards pointer events to `click` and `hover`. The scene draws, it decides
  * nothing.
  */
+import type { CapacityPulse } from './capacityPulse.ts';
 
 /**
  * What is under the pointer: an own group (by id), the icon of several own groups standing in a
@@ -135,6 +136,8 @@ export interface OverlayState {
   readonly group?: GroupPreview | null;
   /** The own city whose rally point is being picked (DEC-48, item K7); `null`: no pick. */
   readonly rallyFrom?: number | null;
+  /** The newest recruit refused for want of room (#765, B21): its city's ring pulses; `null`: none. */
+  readonly cityFull?: CapacityPulse | null;
 }
 
 /** A rectangle of the map in world units: the Shift+drag selection box (DEC-48, item K1). */
@@ -198,6 +201,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   box: null,
   group: null,
   rallyFrom: null,
+  cityFull: null,
 };
 
 export interface MapInteraction {

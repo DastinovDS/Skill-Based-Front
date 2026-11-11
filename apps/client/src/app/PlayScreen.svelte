@@ -5,7 +5,6 @@
   import IdlePlinth from './IdlePlinth.svelte';
   import InvitePlinth from './InvitePlinth.svelte';
   import MenuBackdrop from './MenuBackdrop.svelte';
-  import NewHereDialog from './NewHereDialog.svelte';
   import type { BackdropState, PlayContext, PlayState } from './play.ts';
   import './plinth.css';
   import QueuePlinth from './QueuePlinth.svelte';
@@ -17,22 +16,11 @@
     notice?: MessageKey | null;
     /** The main-screen motion plays on this entry (not when coming back from a page). */
     entrance?: boolean;
-    /** "New here?" shows (#919, item 6; `showNewHere` of play.ts decides). */
-    newHere?: boolean;
-    onnewhere?: (learn: boolean, never: boolean) => void;
     /** A fixed queue status and no server (the dev scenes). */
     queueFixed?: QueueStatus | null;
   }
 
-  let {
-    ctx,
-    view,
-    notice = null,
-    entrance = false,
-    newHere = false,
-    onnewhere = () => undefined,
-    queueFixed = null,
-  }: Props = $props();
+  let { ctx, view, notice = null, entrance = false, queueFixed = null }: Props = $props();
 
   let backdrop = $state<BackdropState>({ phase: 'idle', opponent: null, waited: 0 });
   const setBackdrop = (next: BackdropState): void => {
@@ -106,7 +94,4 @@
       {/key}
     {/if}
   </section>
-  {#if newHere}
-    <NewHereDialog onclose={onnewhere} />
-  {/if}
 </main>

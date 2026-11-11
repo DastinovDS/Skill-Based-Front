@@ -47,7 +47,9 @@
       angle: angles[0] ?? 270,
       label: t('group.split'),
       key: keyBindings.label('split'),
-      disabled: group === null || group.node === null || group.units < 2,
+      // A group on a road (#765, B9) or waiting to depart (B10) cannot split: the item dims and the
+      // cancel stays the one lit choice of its order.
+      disabled: group === null || group.node === null || group.units < 2 || orders.isWaiting(group),
     },
     ...(orders.canRelease ? [release] : []),
     {

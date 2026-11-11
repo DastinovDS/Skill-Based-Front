@@ -17,25 +17,16 @@
   import HowToScreen from './HowToScreen.svelte';
   import type { MatchSummary } from './matchSummary.ts';
   import PlayScreen from './PlayScreen.svelte';
-  import {
-    dismissNewHere,
-    NEW_HERE_ENABLED,
-    newHereDismissed,
-    showNewHere,
-    type PlayContext,
-    type Way,
-  } from './play.ts';
+  import type { PlayContext, Way } from './play.ts';
   import ResultScreen from './ResultScreen.svelte';
   import WelcomeScreen from './WelcomeScreen.svelte';
 
   interface Props {
     /** Tests pass their own state (fake API and storage). */
     app?: AppState;
-    /** The browser storage of "New here?"; tests pass their own. */
-    storage?: () => Storage;
   }
 
-  let { app = new AppState(), storage = () => window.localStorage }: Props = $props();
+  let { app = new AppState() }: Props = $props();
 
   onMount(() => {
     void app.start();
@@ -94,23 +85,6 @@
     // waiting room left does not raise the plinth again.
     entrance = PLAY.has(name) ? false : !PAGES.has(name);
   });
-
-  /** "New here?" after a nick was entered (#919, item 6), off until #806 (`NEW_HERE_ENABLED`). */
-  const newHere = $derived(
-    screen.name === 'menu' &&
-      showNewHere({
-        enabled: NEW_HERE_ENABLED,
-        entered: app.entered,
-        dismissed: newHereDismissed(storage),
-      }),
-  );
-
-  function closeNewHere(learn: boolean, never: boolean): void {
-    app.entered = false;
-    if (never) dismissNewHere(storage);
-    // The tutorial round (#806) is not there yet: the page of the rules stands in for it.
-    if (learn) app.openPage('howto');
-  }
 
   /** What the main screen (#919, III Plinth) needs from the app. */
   function playOf(who: Guest): PlayContext {
@@ -171,14 +145,7 @@
     onregister={(nick: string, password: string) => app.registerAccount(nick, password)}
   />
 {:else if screen.name === 'menu' || screen.name === 'queue' || screen.name === 'invite'}
-  <PlayScreen
-    ctx={playOf(guest)}
-    view={screen}
-    notice={app.notice}
-    {entrance}
-    {newHere}
-    onnewhere={closeNewHere}
-  />
+  <PlayScreen ctx={playOf(guest)} view={screen} notice={app.notice} {entrance} />
 {:else if screen.name === 'howto'}
   <HowToScreen
     nick={guest.nick}

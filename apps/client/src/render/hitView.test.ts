@@ -70,7 +70,7 @@ const round = (
 
 function setup() {
   const parent = new Container();
-  const view = new HitView(parent, map, 0, 1, radiusOf);
+  const view = new HitView(parent, map, 0, radiusOf);
   const contacts = contactPoints(map, place(), {});
   const run = (tick: number, fights: WireFight[], rounds: RoundFx[]) => {
     const out: ParticleSpec[] = [];
@@ -154,15 +154,12 @@ describe('HitView', () => {
     view.destroy();
   });
 
-  it('says "silent" in the first round only', () => {
+  it('writes no word "silent": the sign and the ring tell it (#765, F3)', () => {
     const { run, visible, view } = setup();
     const quiet = fightAt({ mute: [0, 1], start_tick: 130, next_round_tick: 170 });
     run(152, [quiet], [round(150, [0, 0])]);
-    expect(visible(Text).map((t) => t.text)).toEqual(['silent']);
-    // A later round: the sign explains itself already.
-    const later = fightAt({ mute: [0, 1], start_tick: 100, next_round_tick: 190 });
-    run(152, [later], [round(150, [0, 0])]);
     expect(visible(Text)).toEqual([]);
+    expect(visible(Graphics).filter((g) => g.label === 'silent-sign')).toHaveLength(1);
     view.destroy();
   });
 

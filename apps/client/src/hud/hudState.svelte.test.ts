@@ -2,8 +2,8 @@ import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { SnapshotMsg } from '../protocol.gen.ts';
-import { DEV_RULES, devEvent, devSnapshot } from './devFeed.ts';
-import { EVENT_LIMIT, HudState, LAST_MINUTE_S, START_MS } from './hudState.svelte.ts';
+import { DEV_RULES, devSnapshot } from './devFeed.ts';
+import { HudState, LAST_MINUTE_S, START_MS } from './hudState.svelte.ts';
 import { TOAST_HOLD_MS } from './toastState.svelte.ts';
 
 const map = DEFAULT_MAP;
@@ -16,6 +16,8 @@ function snapshot(tick: number): SnapshotMsg {
   return devSnapshot(map, DEV_RULES, tick);
 }
 
+/** A capture the group could not pay for (DEC-38): a warning toast. */
+const CAPTURE_FAILED = { node: 0, player: 0, group: 'g', result: 'bounce' };
 describe('HudState', () => {
   it('is empty until the first snapshot and after a reset', () => {
     const hud = newState();
@@ -54,36 +56,6 @@ describe('HudState', () => {
     expect(hud.current).toBe(current);
     expect(seen.length - before).toBe(10);
     stop();
-  });
-
-  it('holds events back until the next snapshot', () => {
-    const hud = newState();
-    hud.onSnapshot(snapshot(1));
-    const event = devEvent(map, 30);
-    if (event === null) throw new Error('no event at tick 30');
-    hud.onEvent(event);
-    expect(hud.current?.events).toEqual([]);
-    hud.onSnapshot(snapshot(2));
-    expect(hud.current?.events.map((e) => e.kind)).toEqual([event.kind]);
-  });
-
-  it('keeps bookkeeping kinds out of the feed so they do not push the news out (#184)', () => {
-    const hud = newState();
-    hud.onEvent({ type: 'event', tick: 1, kind: 'charges_produced', data: { node: 0 } });
-    hud.onEvent({ type: 'event', tick: 2, kind: 'attrition', data: { node: 0, player: 0 } });
-    hud.onSnapshot(snapshot(3));
-    expect(hud.current?.events.map((e) => e.kind)).toEqual(['attrition']);
-  });
-
-  it('keeps the newest events first and drops the oldest over the limit', () => {
-    const hud = newState();
-    for (let i = 0; i < EVENT_LIMIT + 5; i += 1) {
-      hud.onEvent({ type: 'event', tick: i, kind: 'fight_ended', data: { node: 0 } });
-    }
-    hud.onSnapshot(snapshot(1));
-    const events = hud.current?.events ?? [];
-    expect(events).toHaveLength(EVENT_LIMIT);
-    expect(events[0]?.tick).toBe(EVENT_LIMIT + 4);
   });
 
   it('recomputes on a selection change, from the last snapshot', () => {
@@ -156,29 +128,26 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
     expect(hud.current?.hovered).toBeNull();
   });
 
-  it('turns fights, captures and attrition into toasts, and VP awards into nothing', () => {
+  it('turns an enemy capture and an unpaid capture into toasts, the rest into nothing (#765)', () => {
     const hud = newState();
     hud.onSnapshot(snapshot(2));
     hud.onEvent({ type: 'event', tick: 5, kind: 'vp_awarded', data: { player: 0, vp: 1 } });
     hud.onEvent({ type: 'event', tick: 6, kind: 'recruited', data: { node: 0, player: 0 } });
+    hud.onEvent({ type: 'event', tick: 6, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onEvent({ type: 'event', tick: 6, kind: 'node_captured', data: { node: 2, player: 0 } });
+    hud.onEvent({ type: 'event', tick: 6, kind: 'fight_ended', data: { node: 2 } });
+    hud.onRender(6);
     expect(hud.toasts.current).toEqual([]);
     hud.onEvent({ type: 'event', tick: 7, kind: 'node_captured', data: { node: 1, player: 1 } });
-    hud.onEvent({ type: 'event', tick: 8, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onEvent({ type: 'event', tick: 8, kind: 'capture_failed', data: CAPTURE_FAILED });
     hud.onRender(8);
     expect(hud.toasts.current.map((t) => t.tone)).toEqual(['warn', 'enemy']);
-    hud.onSnapshot(snapshot(3));
-    // The journal keeps what the toasts leave out, but not the VP awards.
-    expect(hud.current?.events.map((e) => e.kind)).toEqual([
-      'attrition',
-      'node_captured',
-      'recruited',
-    ]);
   });
 
   it('shows the toast of an event only when the map has drawn its tick (#561)', () => {
     const hud = newState();
     hud.onSnapshot(snapshot(10));
-    hud.onEvent({ type: 'event', tick: 9, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onEvent({ type: 'event', tick: 9, kind: 'capture_failed', data: CAPTURE_FAILED });
     hud.onEvent({ type: 'event', tick: 10, kind: 'node_captured', data: { node: 1, player: 1 } });
     // The snapshot is here, the map is two ticks behind it.
     hud.onRender(8);
@@ -195,7 +164,7 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
   it('shows a held toast anyway when the map never reaches its tick (pause, end of the match)', () => {
     const hud = newState();
     hud.onSnapshot(snapshot(10));
-    hud.onEvent({ type: 'event', tick: 10, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onEvent({ type: 'event', tick: 10, kind: 'capture_failed', data: CAPTURE_FAILED });
     hud.onRender(8);
     expect(hud.toasts.current).toEqual([]);
     vi.advanceTimersByTime(TOAST_HOLD_MS);
@@ -218,9 +187,9 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
   it('drops the toasts and the timers on a reset and on destroy', () => {
     const hud = newState();
     hud.onSnapshot(snapshot(2));
-    hud.onEvent({ type: 'event', tick: 8, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onEvent({ type: 'event', tick: 8, kind: 'capture_failed', data: CAPTURE_FAILED });
     hud.onRender(8);
-    hud.onEvent({ type: 'event', tick: 9, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onEvent({ type: 'event', tick: 9, kind: 'capture_failed', data: CAPTURE_FAILED });
     hud.reset();
     expect(hud.toasts.current).toEqual([]);
     hud.destroy();

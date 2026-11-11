@@ -28,8 +28,6 @@ export const HIT_SHARE = 0.3;
 export const NUMBER_SHARE = 0.5;
 /** The dim ring of a silent charge: from the tick, this share of a round (0.9 s). */
 export const SILENT_SHARE = 0.45;
-/** The caption "silent" of the first round stays this share of a round. */
-export const CAPTION_SHARE = 0.45;
 
 /** Progress 0..1 of a share-long effect that starts `from` (a share of a round) after the tick `age` ticks ago. */
 export function sinceShare(
@@ -44,11 +42,6 @@ export function sinceShare(
 /** Progress of the dim ring of a silent charge (DEC-24, F2), from the tick of a round. */
 export function silentProgress(age: number, roundTicks: number): number | null {
   return roundEffect(age, SILENT_SHARE, roundTicks);
-}
-
-/** Is `tick` in the first round of a fight that started at `startTick` (the caption "silent" is for it)? */
-export function inFirstRound(startTick: number, tick: number, roundTicks: number): boolean {
-  return tick - startTick <= Math.max(1, roundTicks);
 }
 
 // --- Where on the map ---------------------------------------------------------------------------------

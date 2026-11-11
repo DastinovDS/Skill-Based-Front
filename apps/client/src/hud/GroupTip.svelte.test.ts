@@ -31,7 +31,7 @@ const group = (patch: Partial<GroupView>): GroupView => ({
 /** What the tip says about the group `g` of a snapshot, after the pointer rests on it. */
 function tipOf(groups: GroupView[], hover: string | { node: number } = 'g'): string | null {
   const snapshot = { ...base, view: { ...base.view, groups } };
-  const hovered = buildHudData(ctx, snapshot, null, [], hover).hovered;
+  const hovered = buildHudData(ctx, snapshot, null, hover).hovered;
   const canvas = document.body.appendChild(document.createElement('div'));
   canvas.className = 'game-canvas';
   const target = document.body.appendChild(document.createElement('div'));

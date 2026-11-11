@@ -120,7 +120,7 @@ export const RALLY_TICK = GROUP_TICK + 180;
  * #930 (W10 "Plan, due, pay" and P1 "Ruled rail"): Stonegate (the capital) has three recruits queued
  * and Ford one, both sending them to Watchhouse; with 1.25 CP the two nearest walks are paid and the
  * two after them are not (the empty red earmarks). Ford's last recruit just stayed home for want of
- * CP (`rally_walk_no_cp`: the strip and the crossed mark at its gate). 18 s into the VP period.
+ * CP (`rally_walk_no_cp`: the strip under the bar). 18 s into the VP period.
  */
 export function rallyDueSnapshot(map: MapFile): SnapshotMsg {
   const base = arterySnapshot(map);

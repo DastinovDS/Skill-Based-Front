@@ -54,34 +54,6 @@
   color: var(--ink-soft);
 }
 
-/* A warning line: the icon and the words say it, the amber is only extra. */
-.dlg-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 14px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.dlg-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 16px;
-  line-height: 1.35;
-  color: var(--ink);
-}
-
-.dlg-line svg {
-  margin-top: 1px;
-  color: var(--text-dim);
-}
-
-.dlg-line.warn svg {
-  color: var(--warn);
-}
-
 .dlg-acts {
   display: flex;
   flex-wrap: wrap;

@@ -12,7 +12,6 @@ import type {
 } from '../protocol.gen.ts';
 import { OrderBook } from './orderBook.ts';
 import { OrderController } from './orderController.ts';
-import { rejectMessageKey } from './rejects.ts';
 
 // No retreat from a fight (DEC-40, #626): under `combat.retreat = "none"` a group in a fight gets
 // no move and no cancel from the client; under `"round"` (older rulesets) everything stays.
@@ -99,17 +98,5 @@ describe.each(['none', 'round'] as const)('a group in a fight, combat.retreat = 
     controller.click({ kind: 'group', id: GROUP }, false);
     controller.key({ type: 'keydown', code: 'KeyX', shiftKey: false });
     expect(sent).toEqual([{ type: 'cancel_order', group: GROUP }]);
-  });
-});
-
-describe('the IN_FIGHT message', () => {
-  it('says nobody can leave under none, and keeps the old text under round', () => {
-    expect(rejectMessageKey('IN_FIGHT', 'move', 'none')).toBe('reject.IN_FIGHT.stays');
-    expect(rejectMessageKey('IN_FIGHT', 'cancel_order', 'none')).toBe('reject.IN_FIGHT.stays');
-    expect(rejectMessageKey('IN_FIGHT', 'move', 'round')).toBe('reject.IN_FIGHT');
-    expect(rejectMessageKey('IN_FIGHT', 'move')).toBe('reject.IN_FIGHT');
-    // The plan can still be cancelled in a fight (DEC-40, item 4): its own text stays.
-    expect(rejectMessageKey('IN_FIGHT', 'release_plan', 'none')).toBe('reject.IN_FIGHT.plan');
-    expect(rejectMessageKey('NO_PATH', 'move', 'none')).toBe('reject.NO_PATH');
   });
 });

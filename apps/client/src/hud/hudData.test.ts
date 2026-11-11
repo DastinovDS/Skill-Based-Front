@@ -25,7 +25,7 @@ const map: MapFile = {
 const ctx: HudContext = { me: 0, nicks: ['Ember', 'Bot'], rules: DEV_RULES, map };
 
 describe('buildHudData: the numbers of the snapshot', () => {
-  const data = buildHudData(ctx, fog, null, []);
+  const data = buildHudData(ctx, fog, null);
 
   it('takes CP, stance and VP from the view, from my side', () => {
     expect(data.cp).toEqual({
@@ -44,7 +44,7 @@ describe('buildHudData: the numbers of the snapshot', () => {
   });
 
   it('counts VP from the other side for player 1', () => {
-    expect(buildHudData({ ...ctx, me: 1 }, fog, null, []).vp).toEqual({ mine: 6, enemy: 4 });
+    expect(buildHudData({ ...ctx, me: 1 }, fog, null).vp).toEqual({ mine: 6, enemy: 4 });
   });
 
   it('lists the groups and nodes to pick from', () => {
@@ -57,7 +57,7 @@ describe('buildHudData: the numbers of the snapshot', () => {
 
 describe('buildHudData: selection', () => {
   it('shows a group with its node capacity', () => {
-    const data = buildHudData(ctx, fog, { kind: 'group', id: '71ad4e0c9b2f6358' }, []);
+    const data = buildHudData(ctx, fog, { kind: 'group', id: '71ad4e0c9b2f6358' });
     expect(data.group).toMatchObject({
       units: 3,
       charged: 2,
@@ -70,14 +70,14 @@ describe('buildHudData: selection', () => {
   });
 
   it('shows a node with warehouse and enemy sighting', () => {
-    const own = buildHudData(ctx, fog, { kind: 'node', id: 0 }, []);
+    const own = buildHudData(ctx, fog, { kind: 'node', id: 0 });
     expect(own.group).toBeNull();
     expect(own.node).toMatchObject({
       owner: 'mine',
       capacity: 4,
       warehouse: 4,
     });
-    const enemy = buildHudData(ctx, fog, { kind: 'node', id: 2 }, []);
+    const enemy = buildHudData(ctx, fog, { kind: 'node', id: 2 });
     expect(enemy.node).toMatchObject({
       owner: 'enemy',
       capacity: 4, // DEC-22: public and exact, also in fog
@@ -87,7 +87,7 @@ describe('buildHudData: selection', () => {
   });
 
   it('shows nothing for a group that is gone', () => {
-    const data = buildHudData(ctx, fog, { kind: 'group', id: 'gone' }, []);
+    const data = buildHudData(ctx, fog, { kind: 'group', id: 'gone' });
     expect(data.group).toBeNull();
     expect(data.node).toBeNull();
   });
@@ -115,7 +115,7 @@ describe('buildHudData: plan bonuses of own groups (DEC-29)', () => {
       arrive_tick: null,
     });
     const info = (patch: Partial<typeof own>) =>
-      buildHudData(ctx, withGroup(patch), { kind: 'group', id: own.id }, []).group;
+      buildHudData(ctx, withGroup(patch), { kind: 'group', id: own.id }).group;
     expect(info({ order: order(true, 2) })?.plannedBonus).toBe(2);
     expect(info({ order: order(false, 0) })?.plannedBonus).toBe(0);
     expect(info({ order: null })?.plannedBonus).toBe(0);

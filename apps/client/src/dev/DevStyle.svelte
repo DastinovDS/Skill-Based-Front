@@ -70,7 +70,6 @@
           <p class="text">{tf('result.stat.outOf', { n: 4, total: 7 })}</p>
         </RuleFrame>
 
-        <SectionLabel>{t('bar.cpMax')}</SectionLabel>
         <div class="marks" role="img" aria-label={tf('bar.cpLabel', { value: '3', cap: '5' })}>
           {#each MARK_SIZES as size (size)}
             <span class="pair">

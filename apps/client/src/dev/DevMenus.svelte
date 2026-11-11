@@ -160,7 +160,7 @@
   <BootScreen {map} delay={0} />
 {:else}
   <div class="stage">
-    <ExitDialog open rated banSeconds={300} onforfeit={nothing} onstay={nothing} />
+    <ExitDialog open onforfeit={nothing} onstay={nothing} />
   </div>
 {/if}
 

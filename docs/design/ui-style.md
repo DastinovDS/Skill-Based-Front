@@ -566,7 +566,7 @@ triangle, the valve caps of the «Supply» view.
 | A scheduled order (own) | a wide ribbon, a **solid** outline | both |
 | The enemy's scheduled order (ODb, #519) | the same ribbon with a **double outline** (two thin lines) and a dashed ring round the target (below); the IN3 thin arrow and crosshair (#353) are gone | both |
 | Sent, awaiting confirmation | nothing is drawn (round 4: the flickering ghost and the dashed straight line to the target were removed; the order is shown by the snapshot) | the own player |
-| Server rejection | the ghost shakes for 200 ms and fades, a toast with the reason (IM6) | the own player |
+| Server rejection | the ghost shakes for 200 ms and fades; no toast since #765 (a refusal for CP flashes the CP gauge, a recruit with no room pulses the capacity ring, an unknown code alone keeps a toast) | the own player |
 
 The ribbon arrow (HOI4, Mini Motorways):
 
@@ -701,7 +701,7 @@ drawn **only from server data**: the view field `fights` and the events `fight_r
 - **A bounce** of the attacker: a short arrow back along the edge in the attacker's color with dashes, 1 s.
 - **City capture** ("Fitted", the owner's choice of 2026-11-08, #819, section 49): the new owner's colour floods the area from the city in the shape of the area and
   reaches the whole border at once in 1.0 s; the border lines, the glow and the roads join as the front reaches them; one flash at the city and a ring of the owner's colour
-  (the enemy's captures: no flash, the lights at half); a flag of the new owner above the city for 1.6 s (it fades during the last 1.0 s); a toast "City 7 captured".
+  (the enemy's captures: no flash, the lights at half); a flag of the new owner above the city for 1.6 s (it fades during the last 1.0 s); a toast "The enemy captured City 7" for the enemy's capture only (#765: the own capture has none).
 - **Fight effects on the map FX3 "Expressive", the strength "Stronger"** (the owner's decision of 2026-10-21, sections 27.3 and 29.4; #351):
   on top of the arena, under the plates, in the `effects` layer, above the haze where the fight is visible. Everything is computed from the view fields and events
   (`fight_round`: shots, virtual, losses; `FightView`: charged, the ◇ stock, silent, `next_round_tick`), the client does not compute the outcome. The times are in fractions of the round `combat.round_ticks` (a round of 2 s: a wind-up of 0.35 s before the tick, a hit of 0.6 s after it, 0.3 s for oncoming
@@ -709,7 +709,7 @@ drawn **only from server data**: the view field `fights` and the events `fight_r
   They differ by shape (the gray scale): a real shot: a solid ring and square sparks ■; a bonus one: a dashed ring and
   hollow diamonds ◇ (the flash is paler); a kill: shards ▽ in the color of the side that lost and "−N"; cancellation (both sides shot): a ✕ in the
   middle between the groups, rays of the colors of both sides, nobody is hit; a silent charge: an amber crossed circle on the group
-  (while `mute > 0`), a dim amber dashed ring on the round tick without a flash and the word "silent" in the first round; before the
+  (while `mute > 0`), a dim amber dashed ring on the round tick without a flash (the word "silent" went with #765); before the
   round (the wind-up) a glowing ring contracts on the group of the side that can shoot (it has a charge that is not silent, or a stock of
   ◇); contact (the start of a fight): a white ring of 0.6 s. The token that was hit "pops" in scale (1 → 1.35 → 1, 0.25 s).
   The strength is one constant `FIGHT_FX_STRENGTH` (1.6): the number of sparks and shards, the size of the flash and the ring, the length of the rays; the fallback
@@ -771,7 +771,12 @@ a title with a figure, a line of key numbers, action buttons with a price and a 
 ### 10.4 Toasts, alerts, key hints
 
 - **Toasts** at the top right: up to 3, fade after 6 s, a frame on the left in the color of the meaning (own, enemy,
-  `--warn`, neutral) and an icon. A VP award is not shown as a toast (IM2).
+  `--warn`, neutral) and an icon. A VP award is not shown as a toast (IM2). Since the owner's marks on the pop-up
+  catalogue (#765, `docs/qa/popup-catalogue.html`) the toasts are only: the enemy's capture, a capture that could not be
+  paid (bounce, encircled), a barracks or a factory finished (#972), the last minute, the groups a group order went
+  without and the split the server made of one (DEC-48, B3, B4), and a refusal code the client does not know. A refused
+  or lost command, an own capture, a fight, attrition, a lost recruit queue or rally point have no toast; a refusal is
+  written to the console (`[client] command refused: ...`).
 - **The alert stack** at the center under the top bar: overcrowding (section 12) and "they are coming for your
   city" (IM7); one line per type with a number, `Space` leads the camera to the nearest one.
 - **The key line** at the bottom right: `Q` stance, `U` upgrade a road (the road mode, #315), `R` recruit, `?` help; it hides
@@ -826,7 +831,7 @@ The display, in order of escalation (Mini Metro):
    the grace the arc is gray and "grace 3s".
 3. A line in the alert stack: "City 7 is overcrowded: 6 of 4. A unit is lost in 2.4 s", `Space` leads
    the camera; with several cities one line with a number.
-4. The `attrition` event gives a toast "Overcapacity at node 7: a unit was lost" and a sound (IM9).
+4. The `attrition` event gives a sound (IM9); its toast went with #765 (the strip and the ring count down to it).
 
 The client does not compute the overcrowding and the countdown (AGENTS.md, 7.1): the numbers come from the server (section 15).
 

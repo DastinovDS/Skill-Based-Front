@@ -1,14 +1,13 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { EventMsg, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { CityDevelopment } from './source.ts';
-import { cityRadius, ringRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
+import { cityRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
 import {
   BUILD_BOOST,
   BUILD_PAY,
   BUILDING,
   CAPITAL_RADIUS,
   CAPTURE,
-  GROUP_ORDER,
   NODE_RADIUS,
   PROVINCE,
   RECRUIT_PIPS,
@@ -21,10 +20,10 @@ import {
   type PlayerColours,
 } from './style.ts';
 import { reducedMotion } from './motion.ts';
+import { capacityPulse, type CapacityPulse } from './capacityPulse.ts';
 import { EaseTween } from './tween.ts';
 import { beaconPulse } from './alertLayout.ts';
 import { cityDues, rallyDues } from '../hud/rallyDue.ts';
-import { stayMarks, type StayMark } from './rallyStay.ts';
 import { alertAlpha } from './progressLayout.ts';
 import { buildProgress, lozengeRow, lozengeRowY, type BuildProgress } from './pieceLayout.ts';
 import {
@@ -226,14 +225,6 @@ interface PipSlot {
 
 /** The CP mark of a walk on the ring (#930, W4): its size and how far beyond its recruit, world units. */
 const WALK_MARK = { size: 13, out: 15, dim: 0.42 } as const;
-/**
- * The crossed CP mark at the gate of a city whose recruit stays home (#930): just beyond the tip of
- * the rally chevron on the ring (`GROUP_ORDER.muster.chevron`), towards the point.
- */
-const STAY_MARK = {
-  size: 11,
-  out: GROUP_ORDER.muster.chevron.gap + GROUP_ORDER.muster.chevron.length + 8,
-} as const;
 
 /** How long the fill of a recruit takes to follow a new snapshot, ms (one snapshot apart). */
 const PIP_EASE_MS = 120;
@@ -263,6 +254,8 @@ export class CityView {
   private readonly cities: Container[];
   private readonly bodies: BakedSprite[];
   private readonly rings: BakedSprite[];
+  /** The city whose capacity ring pulses now (`pulseFull`), `null`: none. */
+  private fullRing: number | null = null;
   private readonly bars: BakedSprite[];
   private readonly alerts: BakedSprite[];
   /** The cities whose alert ring is on now (it pulses every frame). */
@@ -272,8 +265,6 @@ export class CityView {
   private readonly roads: readonly (readonly number[])[];
   private readonly pips: PipSlot[][];
   private readonly pipLayers: Container[];
-  /** #930: the crossed CP mark at the gate of each city, for a recruit that stays home. */
-  private readonly stayMarks: (BakedSprite | null)[];
   private readonly badges: (Container | null)[];
   private readonly vpLabels: Text[] = [];
   private readonly keys: string[];
@@ -349,7 +340,6 @@ export class CityView {
     this.roads = roadAngles(map);
     this.pips = [];
     this.pipLayers = [];
-    this.stayMarks = [];
     this.badges = [];
     for (const node of map.nodes) {
       const city = new Container({ x: node.x, y: node.y, label: `node-${String(node.id)}` });
@@ -368,13 +358,6 @@ export class CityView {
       ring.label = 'progress-alert';
       ring.visible = false;
       this.alerts.push(ring);
-      if (node.kind === 'province') this.stayMarks.push(null);
-      else {
-        const stay = city.addChild(sprites.sprite(cpMarkSpec('crossed', STAY_MARK.size)));
-        stay.label = 'rally-stay';
-        stay.visible = false;
-        this.stayMarks.push(stay);
-      }
       // A province carries no VP (DEC-23).
       if (node.vp > 0 && node.kind !== 'province') {
         const badge = city.addChild(new Container());
@@ -573,6 +556,26 @@ export class CityView {
       const state = id === null ? undefined : this.states[id];
       if (id !== null && state !== undefined && state !== null) this.set(id, state);
     }
+  }
+
+  /**
+   * Every frame: the capacity ring of the city a recruit was refused for want of room swells (#765,
+   * B21); `pulse` is the newest refusal, `null`: none.
+   */
+  pulseFull(pulse: CapacityPulse | null, nowMs: number): void {
+    const look = pulse === null ? null : capacityPulse(nowMs - pulse.at, reducedMotion());
+    const id = look === null || pulse === null ? null : pulse.node;
+    if (this.fullRing !== null && this.fullRing !== id) {
+      const before = this.rings[this.fullRing];
+      before?.scale.set(1);
+      if (before !== undefined) before.alpha = 1;
+    }
+    this.fullRing = id;
+    if (id === null || look === null) return;
+    const ring = this.rings[id];
+    if (ring === undefined) return;
+    ring.scale.set(look.scale);
+    ring.alpha = look.alpha;
   }
 
   /** Every frame: the dashed rings that ask for a look pulse (steady with "less motion"). */
@@ -1303,42 +1306,6 @@ export class CityView {
       markBack,
       markFill,
     };
-  }
-
-  /**
-   * Every frame (#930): the own `rally_walk_no_cp` among `events` show the crossed CP mark at the
-   * gate of their city, towards its rally point, for a moment by the render tick.
-   */
-  setStays(events: readonly EventMsg[], tickHz: number): void {
-    const marks: readonly StayMark[] = stayMarks(
-      events,
-      this.me,
-      this.tick,
-      tickHz,
-      reducedMotion(),
-    );
-    this.stayMarks.forEach((sprite, id) => {
-      if (sprite === null) return;
-      const mark = marks.find((m) => m.node === id);
-      sprite.visible = mark !== undefined;
-      if (mark === undefined) return;
-      const node = this.map.nodes[id];
-      const target = mark.target === null ? undefined : this.map.nodes[mark.target];
-      let ux = 0;
-      let uy = -1;
-      if (node !== undefined && target !== undefined) {
-        const dx = target.x - node.x;
-        const dy = target.y - node.y;
-        const len = Math.hypot(dx, dy);
-        if (len > 0) {
-          ux = dx / len;
-          uy = dy / len;
-        }
-      }
-      const r = ringRadius(this.radii[id] ?? NODE_RADIUS) + STAY_MARK.out;
-      sprite.position.set(ux * r, uy * r);
-      sprite.alpha = mark.alpha;
-    });
   }
 }
 

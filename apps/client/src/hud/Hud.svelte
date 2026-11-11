@@ -2,7 +2,7 @@
   import { t, tf } from '../i18n/index.ts';
   import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import type { OrderController } from '../match/orderController.ts';
-  import { rejectMessageKey } from '../match/rejects.ts';
+  import { droppedReasonKey, refusalLine, refusalToast } from '../match/rejects.ts';
   import { NO_ANCHORS, type MapAnchors } from '../render/anchors.ts';
   import type { Insets } from '../render/camera.ts';
   import type { HudChrome } from './chrome.svelte.ts';
@@ -41,10 +41,6 @@
     orders: OrderController;
     /** Which overlay is open (help, exit dialog). */
     chrome: HudChrome;
-    /** A ranked match (DEC-34): leaving it warns about the queue lock. */
-    rated?: boolean;
-    /** Queue lock in seconds a forfeit would bring now (DEC-34); shown in the ranked forfeit dialog. */
-    forfeitBanS?: number;
     /** The player's colour in this match (DEC-49): the start banner names it. */
     colour?: PlayerColour | null;
     /** Where cities and groups are on screen: the radial menus of a city and a group sit on them. */
@@ -62,8 +58,6 @@
     hud,
     orders,
     chrome,
-    rated = false,
-    forfeitBanS = 0,
     colour = null,
     anchors = NO_ANCHORS,
     onpause,
@@ -123,7 +117,9 @@
     };
   });
 
-  // A refused command is a toast (U6); the accepted ones show on the map.
+  // The answers to commands (#765): a split the server made (B4) and a group order that went
+  // without some groups (B3) are toasts. A refused or lost command is not: the map answers it, the
+  // console keeps a line, and only a code this client does not know is told (B5).
   $effect(() => {
     return orders.ui.onFeedback((feedback) => {
       if (feedback.kind === 'accepted') return;
@@ -136,30 +132,22 @@
         });
         return;
       }
-      const command = t(`cmd.${feedback.cmd.type}`);
-      // A reason that names a key ("cancel it (X)") names its current binding (#966).
-      const reason = (code: string): string =>
-        tf(
-          rejectMessageKey(
-            code,
-            feedback.cmd.type,
-            hud.context.rules.combat.retreat,
-            (feedback.cmd.type === 'move' || feedback.cmd.type === 'group_move') &&
-              feedback.cmd.planned,
-          ),
-          keyBindings.names(),
-        );
-      hud.toasts.push({
-        tone: 'warn',
-        icon: 'alert',
-        text:
-          feedback.kind === 'lost'
-            ? t('orders.lost')
-            : feedback.kind === 'dropped'
-              ? // DEC-48, item B3: the groups a group order went without, by their code.
-                tf('orders.dropped', { count: feedback.count, reason: reason(feedback.code) })
-              : tf('orders.rejected', { command, reason: reason(feedback.code) }),
-      });
+      if (feedback.kind === 'dropped') {
+        // DEC-48, item B3: the groups a group order went without, by their code. A reason that
+        // names a key ("cancel it (X)") names its current binding (#966).
+        const planned = feedback.cmd.type === 'group_move' && feedback.cmd.planned;
+        const reason = tf(droppedReasonKey(feedback.code, planned), keyBindings.names());
+        hud.toasts.push({
+          tone: 'warn',
+          icon: 'alert',
+          text: tf('orders.dropped', { count: feedback.count, reason }),
+        });
+        return;
+      }
+      const line = refusalLine(feedback);
+      if (line !== null) console.warn(line);
+      const toast = refusalToast(feedback);
+      if (toast !== null) hud.toasts.push({ tone: 'warn', icon: 'alert', text: t(toast) });
     });
   });
 </script>
@@ -202,8 +190,6 @@
   />
   <ExitDialog
     open={chrome.exitOpen}
-    {rated}
-    banSeconds={forfeitBanS}
     onforfeit={() => {
       chrome.exitOpen = false;
       orders.forfeit();

@@ -42,7 +42,6 @@ describe('legal content', () => {
       'sbf.introSeen',
       'sbf.keys',
       'sbf.locale',
-      'sbf.newHereOff',
       'sbf.settings',
       'sbf.sound',
     ]);

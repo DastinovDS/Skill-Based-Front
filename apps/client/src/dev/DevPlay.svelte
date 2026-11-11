@@ -145,6 +145,5 @@
   ctx={scene.ctx}
   {view}
   notice={id === 'menu-error' ? 'error.api.network' : null}
-  newHere={id === 'menu-newhere'}
   queueFixed={QUEUE_SCENES[id] ?? null}
 />

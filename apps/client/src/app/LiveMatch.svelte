@@ -20,7 +20,6 @@
     RulesetPublic,
     ServerMsg,
   } from '../protocol.gen.ts';
-  import { forfeitCountsTowardBan } from '../match/forfeitBan.ts';
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
@@ -65,10 +64,6 @@
   let me = $state<PlayerId>(0);
   // Both players' colours by player id (DEC-49), from `welcome` (the same again on a reconnect).
   let colours = $state.raw<ColourIds | null>(null);
-  // A forfeit counts toward the queue ban (DEC-34: a ranked or calibration match, also when only the
-  // opponent is rated): leaving it warns about the queue lock.
-  let rated = $state(false);
-  let forfeitBanS = $state(0);
   let session = $state.raw<MatchSession | null>(null);
   let status = $state<ConnectionStatus>('connecting');
   let paused = $state.raw<PausedMsg | null>(null);
@@ -130,8 +125,6 @@
         });
         me = welcome.player;
         colours = welcome.colours;
-        rated = forfeitCountsTowardBan(welcome);
-        forfeitBanS = welcome.forfeit_ban_s;
         rules = welcome.ruleset_public;
         hud = state;
         return {
@@ -231,7 +224,6 @@
 
   function handleKey(event: KeyboardEvent): void {
     if (event.type === 'keydown') {
-      pauseState.dismiss();
       // The bar's own keys first (`Enter` the main action, `Esc` out of a dead match); `Enter` on a
       // focused button presses that button.
       const action = statusKeyAction(bar, event.key);
@@ -261,7 +253,7 @@
     }
   }
 
-  const bar = $derived(statusView({ status, paused, me, notice: pauseState.notice, pauseLeft }));
+  const bar = $derived(statusView({ status, paused, me, pauseLeft }));
   // Joining: before `welcome` the socket is still opening; after it the first snapshot is awaited.
   // Once drawn it stays drawn: a reconnect empties the HUD data for a moment, the map stays.
   let drawn = $state(false);
@@ -272,9 +264,6 @@
 </script>
 
 <svelte:window
-  onpointerdown={() => {
-    pauseState.dismiss();
-  }}
   onkeydown={handleKey}
   onkeyup={handleKey}
   onblur={() => {
@@ -309,8 +298,6 @@
       {hud}
       {orders}
       {chrome}
-      {rated}
-      {forfeitBanS}
       colour={colours?.[me] ?? null}
       onpause={pauseState.available && status === 'ready' && paused === null
         ? () => {
