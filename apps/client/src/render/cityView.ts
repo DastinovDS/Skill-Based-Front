@@ -1,8 +1,9 @@
-import { Container, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { EventMsg, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { CityDevelopment } from './source.ts';
 import { cityRadius, ringRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
 import {
+  BUILD_BOOST,
   BUILD_PAY,
   BUILDING,
   CAPITAL_RADIUS,
@@ -28,6 +29,7 @@ import { alertAlpha } from './progressLayout.ts';
 import { buildProgress, lozengeRow, lozengeRowY, type BuildProgress } from './pieceLayout.ts';
 import {
   BUILDING_KINDS,
+  iconHalf,
   iconSize,
   layoutBuildings,
   owedRow,
@@ -70,6 +72,7 @@ import {
 import { helmet } from '../units/helmet.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import { PaymentLog, payShow, type Payment, type PayShow } from './buildPay.ts';
+import { buildTicksShow, drawBuildTicks } from './buildTicks.ts';
 
 /** A build of a building (barracks, factory) in an own city, as the snapshot gives it. */
 interface BuildingBuild {
@@ -87,6 +90,11 @@ interface BuildingBuild {
 interface BuildingState {
   readonly built: boolean;
   readonly build: BuildingBuild | null;
+  /**
+   * The view says whether the city has it (`false`/`true`), not `null` ("not adjacent", DEC-31):
+   * only a building known to be off turns on with a quiet ink-in (#972).
+   */
+  readonly known: boolean;
 }
 
 /** What a city looks like; the city is redrawn only when this changes. */
@@ -124,7 +132,7 @@ interface CityState {
 
 function buildingKey(t: BuildingState): string {
   const b = t.build;
-  return `${t.built ? 'B' : ''}${b === null ? '' : `${String(b.owed)}/${String(b.price)}/${String(b.doneTick)}/${String(b.total)}`}`;
+  return `${t.built ? 'B' : ''}${t.known ? 'k' : ''}${b === null ? '' : `${String(b.owed)}/${String(b.price)}/${String(b.doneTick)}/${String(b.total)}`}`;
 }
 
 function stateKey(s: CityState): string {
@@ -181,6 +189,14 @@ interface BuildingSlot {
   builtKey: string | null;
   /** The fade of the ring once the build is done (`null`: none). */
   done: EaseTween | null;
+  /** The corner ticks round a building just finished (#972), and ms since the finish (`null`: none). */
+  readonly ticks: Graphics;
+  tickMs: number | null;
+  tickKey: string;
+  /** The quiet ink-in of an enemy building the view just turned on (#972; `null`: none). */
+  ink: EaseTween | null;
+  /** The owner of the city when the view last said it has no such building (`null`: not so). */
+  off: PlayerId | null;
   /** The payment in motion now and the cost it was laid out for (`null`: none). */
   pay: { show: PayShow; cost: number } | null;
 }
@@ -192,7 +208,7 @@ interface BuildingSlot {
 const PAY_HORIZON_MS = 4000;
 
 /** The size a row lozenge, a flying or a popping charge is baked at: the largest it is drawn. */
-const CHARGE_BAKED = BUILDING.lozenge.max * (1 + BUILD_PAY.pop);
+const CHARGE_BAKED = BUILDING.lozenge.max * BUILD_BOOST.lozenge * (1 + BUILD_PAY.pop);
 
 /** A recruit of the queue: a small helmet in the column beyond the barracks icon. */
 interface PipSlot {
@@ -393,6 +409,7 @@ export class CityView {
     const ring = city.addChild(this.sprites.sprite(doneRingSpec(10)));
     ring.label = `building-ring-${kind}`;
     ring.visible = false;
+    const ticks = city.addChild(new Graphics({ label: `building-ticks-${kind}`, visible: false }));
     return {
       kind,
       node,
@@ -412,6 +429,11 @@ export class CityView {
       color: YOU,
       builtKey: null,
       done: null,
+      ticks,
+      tickMs: null,
+      tickKey: '',
+      ink: null,
+      off: null,
       pay: null,
     };
   }
@@ -451,7 +473,7 @@ export class CityView {
 
   /** Owners before the first snapshot (the map's start owners); capacity is not known yet. */
   setOwners(owners: readonly (PlayerId | null)[]): void {
-    const none: BuildingState = { built: false, build: null };
+    const none: BuildingState = { built: false, build: null, known: false };
     owners.forEach((owner, id) => {
       this.set(id, {
         owner,
@@ -688,8 +710,13 @@ export class CityView {
         barracks: {
           built: showsBarracks(node.has_barracks, cityUpgrades !== null),
           build: barracksBuild,
+          known: node.has_barracks !== null && cityUpgrades !== null,
         },
-        factory: { built: node.factory === true, build: factoryBuild },
+        factory: {
+          built: node.factory === true,
+          build: factoryBuild,
+          known: node.factory !== null,
+        },
       },
       walks,
     };
@@ -777,6 +804,8 @@ export class CityView {
         this.moving.delete(slot);
         continue;
       }
+      this.stepTicks(slot, dtMs);
+      this.stepInk(slot, dtMs);
       if (slot.done !== null) {
         this.stepDone(slot, dtMs);
       } else if (slot.build !== null) {
@@ -785,7 +814,7 @@ export class CityView {
         if (!paying && (slot.build.doneTick === null || slot.build.owed > 0)) {
           this.moving.delete(slot);
         }
-      } else {
+      } else if (!this.lingers(slot)) {
         this.moving.delete(slot);
       }
     }
@@ -889,7 +918,7 @@ export class CityView {
     const color = this.colours[enemy ? otherPlayer(this.me) : this.me];
     for (const kind of BUILDING_KINDS) {
       const slot = slots[kind];
-      const { built, build } = state.buildings[kind];
+      const { built, build, known } = state.buildings[kind];
       const at = layout.items[kind];
       const wasBuilding = slot.build !== null;
       const shown = at !== undefined && (built || build !== null);
@@ -902,14 +931,23 @@ export class CityView {
         slot.builtKey = null;
         slot.owed = null;
         slot.ring.visible = false;
+        this.stopLingering(slot);
+        // The view says there is none (not "unknown"): when it turns on, the icon inks in (#972).
+        slot.off = known && state.owner !== null ? state.owner : null;
         this.moving.delete(slot);
         continue;
       }
-      slot.seat = at;
-      slot.size = layout.size;
       slot.angle = layout.angles[kind] ?? 0;
-      slot.root.position.set(at.x, at.y);
-      slot.root.scale.set(layout.size / BUILDING.box);
+      // A build in motion is one size up (#972): the icon grows outward from the seat it keeps once built.
+      const grown = build === null ? 1 : BUILD_BOOST.size;
+      const push = iconHalf(layout.size) * (grown - 1);
+      slot.seat = {
+        x: at.x + Math.cos(slot.angle) * push,
+        y: at.y + Math.sin(slot.angle) * push,
+      };
+      slot.size = layout.size * grown;
+      slot.root.position.set(slot.seat.x, slot.seat.y);
+      slot.root.scale.set(slot.size / BUILDING.box);
       slot.color = color;
       if (build === null) {
         slot.build = null;
@@ -923,20 +961,36 @@ export class CityView {
         slot.front.set(iconFrontSpec(kind, 'built'));
         slot.fill.visible = false;
         slot.head.visible = false;
-        // A build that ends here: a ring opens from the icon (57k).
-        if (wasBuilding && this.warm && !reducedMotion()) {
-          slot.done = new EaseTween(0, BUILD_PAY.done.ms);
-          slot.done.setTarget(1);
-          slot.ring.position.set(at.x, at.y);
+        // A build that ends here: a ring opens from the icon (57k) and four corner ticks stand
+        // round it for 3 s (#972, V12); under "less motion" the ticks stand still and there is no ring.
+        if (wasBuilding && this.warm) {
+          slot.tickMs = 0;
+          slot.tickKey = '';
+          slot.ink = null;
+          slot.root.alpha = 1;
           this.moving.add(slot);
-          this.stepDone(slot, 0);
-        } else if (slot.done === null) {
-          this.moving.delete(slot);
+          this.stepTicks(slot, 0);
+          if (!reducedMotion()) {
+            slot.done = new EaseTween(0, BUILD_PAY.done.ms);
+            slot.done.setTarget(1);
+            slot.ring.position.set(at.x, at.y);
+            this.stepDone(slot, 0);
+          }
+        } else if (enemy && slot.off === state.owner && this.warm && !reducedMotion()) {
+          // The view turned an enemy building on (DEC-31): a quiet ink-in, nothing else (#972).
+          slot.ink = new EaseTween(0, BUILD_BOOST.inkInMs);
+          slot.ink.setTarget(1);
+          slot.root.alpha = 0;
+          this.moving.add(slot);
         }
+        slot.off = null;
+        if (!this.lingers(slot)) this.moving.delete(slot);
         continue;
       }
       slot.builtKey = null;
       slot.done = null;
+      slot.off = null;
+      this.stopLingering(slot);
       slot.ring.visible = false;
       slot.build = build;
       this.showBuild(slot, build);
@@ -991,7 +1045,7 @@ export class CityView {
     if (shown > 0) slot.fill.cropBottom(shown * height);
     slot.head.visible = shown > 0 && shown < 1;
     slot.head.position.set(0, bottom - shown * height);
-    slot.owed = owedRow(slot.seat, slot.angle, slot.size, progress.cost);
+    slot.owed = owedRow(slot.seat, slot.angle, slot.size, progress.cost, BUILD_BOOST.lozenge);
     this.showRow(slot, progress, show);
     return payments !== undefined;
   }
@@ -1109,7 +1163,48 @@ export class CityView {
     if (!done.active) {
       slot.done = null;
       slot.ring.visible = false;
-      this.moving.delete(slot);
+      if (!this.lingers(slot)) this.moving.delete(slot);
+    }
+  }
+
+  /** Something of the finish still moves: the corner ticks or the ink-in. */
+  private lingers(slot: BuildingSlot): boolean {
+    return slot.tickMs !== null || slot.ink !== null || slot.done !== null;
+  }
+
+  private stopLingering(slot: BuildingSlot): void {
+    slot.tickMs = null;
+    slot.ink = null;
+    slot.root.alpha = 1;
+    slot.ticks.visible = false;
+  }
+
+  /** The corner ticks of a building just finished (#972), `dtMs` further on; redrawn only when they change. */
+  private stepTicks(slot: BuildingSlot, dtMs: number): void {
+    if (slot.tickMs === null) return;
+    slot.tickMs += dtMs;
+    const show = buildTicksShow(slot.tickMs, reducedMotion());
+    if (show === null) {
+      slot.tickMs = null;
+      slot.ticks.visible = false;
+      return;
+    }
+    slot.ticks.visible = true;
+    slot.ticks.position.set(slot.seat.x, slot.seat.y);
+    const key = `${slot.size.toFixed(2)}:${show.alpha.toFixed(3)}:${show.grow.toFixed(3)}`;
+    if (key === slot.tickKey) return;
+    slot.tickKey = key;
+    drawBuildTicks(slot.ticks, slot.size, show);
+  }
+
+  /** The quiet ink-in of an enemy building the view turned on (#972), `dtMs` further on. */
+  private stepInk(slot: BuildingSlot, dtMs: number): void {
+    const ink = slot.ink;
+    if (ink === null) return;
+    slot.root.alpha = ink.step(dtMs);
+    if (!ink.active) {
+      slot.ink = null;
+      slot.root.alpha = 1;
     }
   }
 

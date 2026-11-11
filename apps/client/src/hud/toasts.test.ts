@@ -18,7 +18,9 @@ describe('toastOf', () => {
   it('makes toasts of fights, captures, unpaid captures, attrition, a lost recruit queue, the lost rally point only', () => {
     expect([...TOAST_EVENT_KINDS].sort()).toEqual([
       'attrition',
+      'barracks_built',
       'capture_failed',
+      'factory_built',
       'fight_ended',
       'node_captured',
       'rally_point_cleared',
@@ -44,6 +46,24 @@ describe('toastOf', () => {
     expect(
       toastOf(event('recruit_queue_lost', { node: 4, player: 0, units: 2 }), 0, names),
     ).toMatchObject({ tone: 'warn', text: 'Recruit queue lost at Place4: 2 units' });
+  });
+
+  it('tells the builder of a finished barracks or factory with the building icon (#972)', () => {
+    setLocale('en');
+    expect(toastOf(event('barracks_built', { node: 4, player: 0 }), 0, names)).toEqual({
+      tone: 'mine',
+      icon: 'barracks',
+      cut: true,
+      text: 'Place4 has its barracks: it recruits now',
+    });
+    expect(toastOf(event('factory_built', { node: 4, player: 0 }), 0, names)).toEqual({
+      tone: 'mine',
+      icon: 'factory',
+      cut: true,
+      text: 'Place4 is a factory now: it makes charges',
+    });
+    // The other player's event is no news here.
+    expect(toastOf(event('factory_built', { node: 4, player: 1 }), 0, names)).toBeNull();
   });
 
   it('colours a capture by who took the city, and a loss in the colour of the enemy', () => {

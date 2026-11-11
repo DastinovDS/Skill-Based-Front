@@ -14,7 +14,7 @@
 <ul class="toasts" role="status" aria-live="polite" aria-label={t('toast.title')}>
   {#each toasts.current as toast (toast.id)}
     <li class="toast {toast.tone}">
-      <Icon name={toast.icon} size={16} />
+      <Icon name={toast.icon} size={toast.cut === true ? 20 : 16} cut={toast.cut === true} />
       <span class="text">{toast.text}</span>
       <button
         type="button"

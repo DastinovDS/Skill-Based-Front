@@ -94,6 +94,35 @@ test('shot of the replay viewer with buildings', async ({ page }) => {
   }
 });
 
+// The finish of a build in the replay (#972, V12): both barracks of the dev sample are done at tick
+// 169 (the replay shows the builds of both players). A seek from tick 160 to 170 is a build that ends
+// between two frames: the ring and the four corner ticks round the new icons. `build-done.png` the
+// moment after, `build-done-far.png` zoomed out, `build-done-late.png` 3.5 s on (the ticks are gone).
+test('shot of a barracks just finished in the replay', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto('/?replay=dev-buildings');
+  const canvas = page.locator('.game-canvas');
+  await expect(canvas).toHaveAttribute('data-tick', '0');
+  const seek = async (tick: number): Promise<void> => {
+    await page.getByLabel('Position in the match').fill(String(tick));
+    await expect(canvas).toHaveAttribute('data-tick', String(tick));
+  };
+  await seek(160);
+  await page.waitForTimeout(600);
+  await seek(170);
+  await page.waitForTimeout(350);
+  await page.screenshot({ path: join(OUT, 'build-done.png') });
+  await page.mouse.move(640, 420);
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, 250);
+    await page.waitForTimeout(120);
+  }
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: join(OUT, 'build-done-far.png') });
+  await page.waitForTimeout(3600);
+  await page.screenshot({ path: join(OUT, 'build-done-late.png') });
+});
+
 // The states of the replay screen before a file is there (#593): `replay-preparing.png` (the server
 // still builds the frames) and `replay-unavailable.png` (410).
 // `replay-loading.png` and `replay-network.png` (with "Try again") came with #599.
