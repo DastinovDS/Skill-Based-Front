@@ -14,7 +14,7 @@ import {
   vpSeat,
   type BuildingKind,
 } from './buildingLayout.ts';
-import { cityRadius, ringRadius } from './cityLayout.ts';
+import { cityRadius, fitReach, ringRadius } from './cityLayout.ts';
 import { captionTop } from './nameLayout.ts';
 import { lozengeRow, lozengeRowY } from './pieceLayout.ts';
 import { BUILDING, RECRUIT_PIPS, RING_ENGRAVED, VP_LOZENGE } from './style.ts';
@@ -140,6 +140,11 @@ function clashes(
     }
     // The capacity cells: the ring's dark cut ends `cut / 2` past its radius.
     if (Math.hypot(it.x, it.y) - r < ring + RING_ENGRAVED.cut / 2) out.push({ what: 'ring', kind });
+    // The C2 chevrons stand on the helmet's shoulder inside the ring: their box lies in the circle of
+    // `fitReach + 2.2` round the helmet (`BADGE_BOUND_PAST_FIT` of `entityView.ts`), and so do the
+    // B6 ticks; an icon past the ring never reaches it.
+    if (Math.hypot(it.x, it.y) - r < fitReach(city.radius) + 2.2)
+      out.push({ what: 'chevrons', kind });
     if (pips.some((p) => Math.hypot(it.x - p.x, it.y - p.y) < r + pip)) {
       // The queue stands beyond the barracks; the factory's icon only meets it if the layout is wrong.
       out.push({ what: 'queue', kind });
