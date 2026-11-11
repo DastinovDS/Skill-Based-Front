@@ -10,7 +10,7 @@ import {
   sightOf,
   type MotionClock,
 } from './menuMotion.ts';
-import { layoutScene, type BackdropPhase } from './menuScene.ts';
+import { PIECES_PX, layoutScene, menuCityRadius, type BackdropPhase } from './menuScene.ts';
 import { storyOf, type Story } from './menuStory.ts';
 
 /** The calls a frame makes on a 2D canvas, with the numbers they take. */
@@ -243,5 +243,25 @@ describe('helpers', () => {
     expect(along(path, 5)).toMatchObject({ x: 5, y: 0 });
     expect(along(path, 15)).toMatchObject({ x: 10, y: 5 });
     expect(along(path, 99)).toMatchObject({ x: 10, y: 10 });
+  });
+});
+
+describe('a unit stands in its node as in the match (#945)', () => {
+  it('puts the gathering group in the middle of its city, on the dark plate, fully inside it', () => {
+    const city = story.frontCity;
+    const radius = menuCityRadius(city.kind) * Math.min(scene.scale, PIECES_PX);
+    const drawn = frame('banned', 1);
+    // The plate disc is drawn on the city's centre, as wide as the city.
+    const disc = drawn.calls.find(
+      (c) =>
+        c.name === 'arc' && c.args[0] === city.x && c.args[1] === city.y && c.args[2] === radius,
+    );
+    expect(disc).toBeDefined();
+    // Every outline point of the helmet (the only thing drawn with moveTo) lies inside the city.
+    const points = drawn.calls.filter((c) => c.name === 'moveTo');
+    expect(points.length).toBeGreaterThan(0);
+    for (const p of points) {
+      expect(Math.hypot((p.args[0] ?? 0) - city.x, (p.args[1] ?? 0) - city.y)).toBeLessThan(radius);
+    }
   });
 });

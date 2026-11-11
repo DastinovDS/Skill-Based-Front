@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { reducedMotion } from '../render/motion.ts';
   import { DRAW_NODES, DRAW_TRAIL, drawTimes } from './play.ts';
 
@@ -8,9 +7,14 @@
     width: number;
     /** The finished sketch, no burin (the map is there, or a dialog shows it as a picture). */
     still?: boolean;
+    /**
+     * The finished sketch waits for somebody (the invite's friend): the empty seat's capital breathes
+     * slowly, the one quiet motion of the wait (#945). Only with `still`; the drawing has its own.
+     */
+    waiting?: boolean;
   }
 
-  let { width, still = false }: Props = $props();
+  let { width, still = false, waiting = false }: Props = $props();
 
   /** One loop of the drawing, ms: the burin draws for 78 % of it, the sketch holds, then fades. */
   const LOOP_MS = 3600;
@@ -27,7 +31,9 @@
   // The burin runs along the trail, the roads ink in behind it and every place sets (a small
   // overshoot) when the burin first reaches it; each place grows round its own node
   // (`transform-box: view-box`, the origin at the node), so a dot never leaves its node.
-  onMount(() => {
+  // `still` can turn on while the sketch is up (the map came): the effect then cancels the loop and
+  // the finished sketch, the plain drawing without any animation, stays (#945).
+  $effect(() => {
     // No Web Animations (a test DOM): the sketch stands still.
     if (still || svg === undefined || typeof svg.animate !== 'function' || reducedMotion()) {
       return undefined;
@@ -90,6 +96,7 @@
   bind:this={svg}
   class="draw"
   class:still
+  class:waiting={still && waiting}
   {width}
   height={Math.round((width * 124) / 220)}
   viewBox="0 0 220 124"
@@ -171,6 +178,34 @@
 
   .enemy .dot {
     fill: var(--enemy);
+  }
+
+  /* The wait for a friend (#945): the empty seat's capital breathes, slowly, in step with the
+     dashed helmet of the versus line (VersusLine, the same 3.2 s). The motion setting of the page
+     decides (#871). */
+  .waiting .capn.enemy .dot {
+    animation: seat-wait 3.2s ease-in-out infinite;
+  }
+
+  @keyframes seat-wait {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .waiting .capn.enemy .dot {
+      animation: none;
+    }
+  }
+
+  :global(:root[data-motion='reduced']) .waiting .capn.enemy .dot {
+    animation: none;
   }
 
   .bu {

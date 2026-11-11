@@ -36,10 +36,10 @@ describe('MenuBackdrop (#471, #474)', () => {
     expect(has('canvas.map')).toBe(false);
   });
 
-  it('draws the map, the fog, the motion and the capitals as layers of their own', () => {
+  it('draws the map, the fog, the capitals and the motion over them as layers of their own', () => {
     render('idle');
     const layers = [...document.querySelectorAll('.backdrop > .layer')].map((e) => e.classList[0]);
-    expect(layers).toEqual(['map', 'fog', 'motion', 'capitals']);
+    expect(layers).toEqual(['map', 'fog', 'capitals', 'motion']);
   });
 
   it('idle: a question mark where the enemy capital is, no hole in the fog', () => {

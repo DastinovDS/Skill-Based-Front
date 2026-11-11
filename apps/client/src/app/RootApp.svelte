@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, setContext } from 'svelte';
   import type { BotLevel } from '../api/http.ts';
   import type { MessageKey } from '../i18n/index.ts';
   import type { MatchEndMsg, PlayerColour, PlayerId } from '../protocol.gen.ts';
   import ReplayScreen from '../replay/ReplayScreen.svelte';
   import CrashGuard from './CrashGuard.svelte';
   import { AppState, type Guest } from './appState.svelte.ts';
+  import { HOME_KEY, type HomeGetter } from './home.ts';
   import ProfileScreen from '../board/ProfileScreen.svelte';
   import SettingsScreen from './SettingsScreen.svelte';
   import { settings } from './settingsState.svelte.ts';
@@ -40,6 +41,24 @@
   });
 
   const screen = $derived(app.screen);
+
+  // The brand of the bar goes back to the main screen from the pages, the result and the replay
+  // (#945); on the main screen, the boot and the entry it does nothing, and a match has no bar.
+  const HOME_FROM: ReadonlySet<string> = new Set([
+    'profile',
+    'settings',
+    'howto',
+    'password',
+    'result',
+    'replay',
+  ]);
+  const home: HomeGetter = () =>
+    HOME_FROM.has(app.screen.name) && app.guest !== null
+      ? () => {
+          app.menu();
+        }
+      : null;
+  setContext(HOME_KEY, home);
 
   // The menu offers a way back into a running match (a failed "return" or a match left by hand).
   $effect(() => {

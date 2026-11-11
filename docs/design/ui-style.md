@@ -2695,3 +2695,14 @@ The owner's choice of 2026-11-10 from mockup round 1 of #930 (`mockups/in-match-
 - **The gilt lozenge of the VP rail** keeps clear of the opponent's total: the tug box carries 10 px more on its right.
 - **Profile at 1280 x 720:** the match list scrolls inside its own box under a sticky header; the page does not scroll.
 - **The capacity cells stay readable under a group.** The helmet of a unit icon standing in a node is kept inside the inner edge of the capacity ring (`helmetFit`, `TokenSpec.fit`: a province's helmet is the smallest, a big stack in a small city is smaller than its size step), and its terrain badges stand just outside the ring on its right, under the VP lozenge (`Token.setBadgeAnchor`), for an icon in the middle of its node; an icon beside the ring or at a gate keeps its badges at the helmet's corner. The dev scenes `provinces` (terrain marks on Flank, Freehold and Fork) and `badges` show it.
+
+## 71. Out-of-game polish: standing units, quiet fights, the wait, the brand home (#945, #940) **[implemented]**
+
+Owner feedback of 2026-11-11, client only.
+
+- **Units stand in their node** (`app/menuMotion.ts`, `stand`, `occupied`): a group gathering, a garrison, a recruit and a walker that arrived stand in the middle of the node on the match's occupied plate (`cityBodySpec` and `provinceBodySpec` with `occupied`: the cut, the dark plate, the ink rim; a province only the dark disc), the helmet at most 1.6 plate radii wide so it is fully inside (a province narrows it as it walks in). The motion canvas now lies over the capitals, so a recruit hides the star as in the match. The old offsets are gone, and with them the 15 px jump of a drill or a recruit at the door.
+- **Quiet fights on the entry**: the opening scene's pools let `FOG_LIGHT` (0.5) of the map's light through and draw the groups at `FOG_PIECES` (0.5) (`introBattles.ts`); the entry's loop is veiled in the fog's dark (`veilInFog`, `ENTRY_FOG`).
+- **The invite wait** (`DrawingGraph`, `VersusLine`): the drawing loop runs only while `InviteOut.map_ready` is false (the effect cancels it when `still` turns on); then the finished sketch stays and the empty seat's capital and the dashed helmet breathe slowly (3.2 s, off under reduced motion).
+- **No resize on a way change** (`GoTablet`): the old and the new word share one grid cell, so the box is the wider of the two from the first frame.
+- **Smoothness**: the motion paints up to 60 times a second (was 30), and the land of every owner state of the capture loop is worked out in idle tasks right after the first paint, so no frame pays for it.
+- **The brand is the way home** (`app/FrontTop.svelte`, `app/home.ts`): on the pages, the result and the replay the title in the bar is a button (name `top.home`) that goes to the main screen; on the main screen, the boot, the entry and while the bar is locked it is text.

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { setContext } from 'svelte';
   import ProfileScreen from '../board/ProfileScreen.svelte';
   import SettingsScreen from '../app/SettingsScreen.svelte';
   import { Api } from '../api/http.ts';
@@ -16,6 +17,7 @@
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
   import ExitDialog from '../hud/ExitDialog.svelte';
   import BootScreen from '../app/BootScreen.svelte';
+  import { HOME_KEY } from '../app/home.ts';
   import { MENU_MAP } from '../app/menuMap.ts';
   import { freezeBackdrop } from '../app/menuCaptures.ts';
   import { isSeason, setSeasonOverride } from '../app/menuSeason.ts';
@@ -40,6 +42,9 @@
   const waiting = new Api(() => new Promise<Response>(() => undefined));
   const broken = new Api(() => Promise.reject(new TypeError('offline')));
   const board = isBoardScene(id) ? BOARD_SCENES[id] : null;
+  // The brand of the bar goes home from the pages, as in the app (RootApp, #945).
+  const pages = id === 'howto' || id.startsWith('settings') || id.startsWith('password');
+  setContext(HOME_KEY, () => (board !== null || pages ? nothing : null));
   // The colour picker of the profile (DEC-49): a choice is kept at once, nothing is asked of a server.
   let colour = $state<PlayerColour>('lapis');
   const pickColour = (next: PlayerColour): Promise<null> => {

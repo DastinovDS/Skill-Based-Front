@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { getContext } from 'svelte';
   import { t } from '../i18n/index.ts';
+  import { HOME_KEY, type HomeGetter } from './home.ts';
   import type { TopPlayer } from './play.ts';
 
   interface Props {
@@ -14,12 +16,24 @@
   }
 
   let { player, onhelp, helpHere = false, locked = false }: Props = $props();
+
+  // The brand is the way back to the main screen where the app allows leaving for it (#945).
+  const homeOf = getContext<HomeGetter | undefined>(HOME_KEY);
+  const home = $derived(locked ? null : (homeOf?.() ?? null));
 </script>
 
 <!-- The top bar of the screens before a match (#919, III Plinth): the brand in cut capitals, then
      on the right the "?" of How to play and the player, over an incised double rule. No tabs. -->
 <header class="top">
-  <h1 class="mark">{t('app.title')}</h1>
+  <h1 class="mark">
+    {#if home !== null}
+      <button type="button" class="home" aria-label={t('top.home')} onclick={home}
+        >{t('app.title')}</button
+      >
+    {:else}
+      {t('app.title')}
+    {/if}
+  </h1>
   {#if player !== undefined || onhelp !== undefined}
     <div class="corner">
       {#if onhelp !== undefined}
