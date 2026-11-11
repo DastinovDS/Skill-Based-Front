@@ -409,13 +409,10 @@ describe('the answer to a group order (DEC-48, items B3 to B6)', () => {
       members: [member('STACK_LIMIT'), member(null), member(null)],
     });
     // The toast of its code, for a planned command (worded for a planned order); no "N of M go".
-    expect(feedback.filter((f) => f.kind === 'dropped')).toEqual([
-      expect.objectContaining({
-        code: 'STACK_LIMIT',
-        count: 1,
-        cmd: expect.objectContaining({ planned: true }),
-      }),
-    ]);
+    const dropped = feedback.filter((f) => f.kind === 'dropped');
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatchObject({ code: 'STACK_LIMIT', count: 1 });
+    expect(dropped[0]?.cmd).toMatchObject({ type: 'group_move', planned: true });
     expect(feedback.some((f) => f.kind === 'split')).toBe(false);
     expect(controller.splitMenu.current.open).toBe(false);
   });

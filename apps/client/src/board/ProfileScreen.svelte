@@ -217,7 +217,9 @@
           <LapisButton variant="primary" onclick={onbot}>{t('menu.bot')}</LapisButton>
         </div>
       {:else}
-        <div class="histbox">
+        <!-- A scrolling box takes the focus, so the keys can scroll it (WCAG 2.1.1). -->
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <div class="histbox" role="region" aria-label={t('profile.matches')} tabindex="0">
           <table class="hist">
             <thead>
               <tr>
