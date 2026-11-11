@@ -134,7 +134,7 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `stock_mean_centi` | [int or null, ...] | the mean of the total charge stock in hundredths of a charge (#310, section "Charge stock and burned share"); `null` without samples |
 | `stock_peak` | [int, int] | the peak of the total charge stock (#310) |
 | `charges_produced` | [int, int] | charges produced: the sum of `charges` of the `charges_produced` events (#310) |
-| `charges_burned` | [int, int] | charges burned: the sum of `charges` of the `charges_overflow` events (#310) |
+| `charges_burned` | [int, int] | charges burned: the sum of `charges` of the `charges_overflow` events, plus the `charge_burned` of a full factory (DEC-41), which counts in `charges_produced` too (#310) |
 | `burned_permille` | [int or null, ...] | the share burned in per mille, `charges_burned * 1000 // charges_produced`; `null` without production (#310) |
 | `charges_start`, `charges_fights`, `charges_captures`, `charges_packets_lost`, `charges_warehouses_lost`, `charges_starved`, `charges_attrition`, `charges_end` | [int, int] | the charge ledger (#588, section "Charge ledger and flow"): the stock before tick 1, the charges spent in fights, on captures (DEC-38), lost in cut packets, lost with captured warehouses, starved, killed with units, and the stock after the last tick |
 | `charges_built`, `charges_plans` | [int, int] | the charges paid for buildings (`build_paid` warehouse + units, DEC-41, item 7) and taken by waiting planned orders for their bonus (`plan_charged`, one each, item 10) (#646) |
@@ -146,7 +146,7 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `cp_burned` | [int, int] | CP lost to the CP cap, in hundredths like `cp`: the sum of `cp` of the player's `cp_burned` events, the quantum that did not fit under `cp.cap` (and the rare overflow of a `CancelRecruit` refund). Divide by 100 for CP (#743, section "CP burned and idle discharged units") |
 | `cp_cap_ticks` | [int, int] | ticks `1..ticks` that ended with the player's CP at `cp.cap` (#743) |
 | `idle_discharged_connected`, `idle_discharged_pocket` | [int, int] | idle discharged unit-ticks (#743): units without a charge standing in an own node with an empty warehouse, in no fight and with no order, summed over ticks; the first in the component of the own capital, the second in a pocket (DEC-43, item H) |
-| `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name, the 13 keys of `gow_bots.tournament.USAGE_KEYS` (`Move`, `MovePlanned`: a planned `Move`, `CancelOrder`, `Split`, `Merge`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `BuildFactory`, `ReleasePlan`, `SetLeafShift`, `FortifyRoad`); `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
+| `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name, the 15 keys of `gow_bots.tournament.USAGE_KEYS` (`Move`, `MovePlanned`: a planned `Move`, `CancelOrder`, `Split`, `Merge`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `BuildFactory`, `ReleasePlan`, `SetLeafShift`, `FortifyRoad`, `GroupMove`, `SetRallyPoint`); `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
 
 The fields `stock_*`, `charges_*` and `burned_permille` were added in #310 without changing `schema`: nothing was removed and
 nothing changed meaning. Tournament files older than #310 do not contain them, the report shows "no data" for them.
@@ -201,7 +201,7 @@ these are separate fields, the only thing they share is `MatchRecorder`/`MatchLo
 | `orders`, `planned_orders` | accepted `Move` and of them the scheduled ones |
 | `planned_share` | `planned_orders / orders`, 4 digits; `null` without orders |
 | `planned_attack_share`, `planned_siege_share` | as in `MatchMetrics` (#590: the second one is the gate share) |
-| `cp_by_category` | CP spending in hundredths by accepted commands and the prices `orders.cost` of the ruleset: `move`, `planned_move`, `recruit` (recruiting minus the `CancelRecruit` refunds), `barracks`, `fort` (`FortifyRoad`, DEC-43 item D), `other` (`Split`, `Merge`, `CancelOrder`, `SetStance` and the commands paid in charges or free: `BuildFactory`, `ReleasePlan`, `SetLeafShift`) |
+| `cp_by_category` | CP spending in hundredths by accepted commands and the prices `orders.cost` of the ruleset: `move`, `planned_move`, `recruit` (recruiting minus the `CancelRecruit` refunds), `barracks`, `fort` (`FortifyRoad`, DEC-43 item D), `other` (`Split`, `Merge`, `CancelOrder`, `SetStance`, `GroupMove`, `SetRallyPoint` and the commands paid in charges or free: `BuildFactory`, `ReleasePlan`, `SetLeafShift`) |
 | `cp_refunded`, `cp_total` | the refund for cancelling a recruit (already subtracted from `recruit`) and the sum of the categories |
 
 A rejected command costs nothing. The real CP balance (regeneration, burning at the cap) is not
@@ -291,10 +291,10 @@ over nodes, packets and groups: about 8 microseconds per tick on a loaded develo
 | `stock_peak` | `max(stock(t))` over the samples; 0 without samples |
 | `stock_mean_centi` | `sum(stock(t)) * 100 // n`, `n` the number of samples; in hundredths of a charge (`375` is 3.75 charges); `null` when `n = 0` |
 | `charges_produced` | sum of `charges` of the player's `charges_produced` events: everything the economy made, the spill that does not fit into the capital included |
-| `charges_burned` | sum of `charges` of the player's `charges_overflow` events: charges that found no room in a warehouse (the spill of the capital, or the end of a packet's path) |
+| `charges_burned` | sum of `charges` of the player's `charges_overflow` events: charges that found no room in a warehouse (the spill of the capital, or the end of a packet's path); a `charge_burned` of a full factory (DEC-41) counts here and in `charges_produced` |
 | `burned_permille` | `charges_burned * 1000 // charges_produced`, per mille; `null` when nothing was produced |
 
-Only `charges_overflow` is burning. Charges that disappear in other ways (`packet_lost` on a road
+Only `charges_overflow` and a full factory's `charge_burned` are burning. Charges that disappear in other ways (`packet_lost` on a road
 that stopped being internal, `warehouse_lost` on a capture, starvation, use in a fight) are not
 counted as burned, and the start stock of the map is never produced, so it never burns. The
 burned share is therefore between 0 and 1000 per mille.
@@ -457,7 +457,7 @@ the side skew of a map; a claim about one pair (a ladder step, the exploiter gat
 
 The BAL-02 confirming run (#40) is committed: `latest.md` and `latest-*.png` from 30000 matches of `mvp-2` (the 10
 strategic bots, the 3 pool maps, 100 seeds, GitHub runners); `latest.jsonl` holds seeds 0..9 of that run (the full
-file is 76 MB, reproducible with `mise run tournament:gh --ruleset rulesets/mvp-2.toml --seeds 100`). The BAL-01 run
+file is 76 MB, no longer reproducible: `mvp-2` was removed with its code in #894). The BAL-01 run
 (#39, `mvp-0`) is in the git history of these files. The verdict by the gate criteria and the iterations: [log.md](log.md).
 
 ## Parameter search

@@ -73,5 +73,5 @@ The token in `client/hello.json` is fake.
   string ids of the player (`[A-Za-z0-9_-]{1,32}`), there are no sequential simulation ids on the wire.
 - The view (`snapshot.view`) has only own groups and packets. About the opponent only what
   DEC-04 (#10) allows is known: the `seen` summary of a node or an edge (modes; sums of units and charges only
-  at `exact`), the public ownership, capacity, road widths, VP and intents (without the group id and size).
+  at `exact`), the public ownership, capacity, VP and intents (without the group id and size).
 - `nodes[i].id == i` and `edges[i].id == i`: the view always has all the nodes and edges of the map.

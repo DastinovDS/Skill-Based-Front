@@ -110,8 +110,8 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
 |---|---|---|
 | `t` | tick | integer |
 | `p` | players by id (0, 1) | `[cp, vp, stance, forfeited]`: CP in hundredths, `stance` a string, `forfeited` 0/1 |
-| `n` | nodes by id | `[owner, warehouse, capacity, warehouse_cap]`: `owner` 0, 1 or `null`; `warehouse` charges in the warehouse; `capacity` the current capacity of the city for units (the client does not compute rules); `warehouse_cap` the places of the warehouse (DEC-26: `start_by_kind` plus the level, as `NodeView.warehouse_cap` of the live view; without `city_upgrades` the node capacity), `null` for a province. The fourth element was added in #556 (before it the viewer drew the node capacity as the warehouse, larger than the real one with `city_upgrades`); a record of three elements is an older file, the viewer then knows no places |
-| `w` | road level by id (the name "width" stayed from the map format, DEC-22: 1..3); always 1 since `sim_version` 47 (#894: the road upgrades were removed), the slot stays so `FORMAT` stays 1 | integer |
+| `n` | nodes by id | `[owner, warehouse, capacity, warehouse_cap]`: `owner` 0, 1 or `null`; `warehouse` charges in the warehouse; `capacity` the current capacity of the city for units (the client does not compute rules); `warehouse_cap` the places of the warehouse (`warehouse.start_by_kind` of its kind, DEC-43 item C, as `NodeView.warehouse_cap` of the live view; until #894 plus the warehouse level of DEC-26), `null` for a province. The fourth element was added in #556 (before it the viewer drew the node capacity as the warehouse, larger than the real one with `city_upgrades`); a record of three elements is an older file, the viewer then knows no places |
+| `w` | road level by id (the name "width" stayed from the map format, DEC-22: 1..3); always 1 since `sim_version` 47 (#894: the road upgrades were removed), the slot stays (no format change for it) | integer |
 | `g` | groups, in ascending `id` | a group object (below) |
 | `k` | charge packets, by `id` | `[id, owner, edge, from_node, charges, depart_tick, arrive_tick]` |
 | `i` | public intents, by `id` | `[id, owner, kind, origin, target]`, `target` may be `null` |
@@ -133,7 +133,7 @@ A group: `{"id", "o": owner, "u": units, "c": charged, "m": mode, ...}`, plus
 Before DEC-16 (`sim_version` 2) a group had the key `"b": edge` (the group builds a road) and the mode `build`;
 the viewer accepts old files and shows such a group in the mode `attack`.
 
-`mode`: `attack`, `defense`. Nodes and edges go in the order of the map ids (`n[i]` is node `i`).
+`mode`: `attack` (`defense` only in files from before #894). Nodes and edges go in the order of the map ids (`n[i]` is node `i`).
 Keys that are not in the table (for example, the fog memory `vision_memory`) do not get into the file.
 
 ## Buildings
@@ -274,8 +274,8 @@ Deltas are not needed; if the format grows (more nodes, more groups), the size t
 
 "View as" a side with the Fog toggle on (#600): `buildTimeline(file, side)` builds the snapshot that player had
 from `v[side]` and nothing else decides it: node `detail`, `seen` (a remembered sighting keeps its `tick`, one in
-sight gets the frame's `t`) and `warehouse`; edge `width`, `detail`, both halves and the figures as
-`enemy_groups`; `build` for the edges in `b` (the end tick only of an own build, from `e`). By owner, as in a live
+sight gets the frame's `t`) and `warehouse`; edge `detail`, both halves and the figures as `enemy_groups`, the road
+fortifications from `v[side].d` (the ready tick of the own ones only). By owner, as in a live
 view: the own groups (`g`) and packets (`k`), the own CP and stance (`p`), the warehouse places of own cities only,
 and in a fight the own groups plus the enemy totals of its members. Intents and events stay as in the file (public,
 and the effects draw only for what is on the map). The renderer is the live one (the same `SnapshotMsg` path), so

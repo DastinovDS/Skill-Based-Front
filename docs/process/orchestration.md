@@ -60,7 +60,7 @@ Brief rules:
 - **Early push.** The agent pushes WIP early and often, so a limit cut-off erases nothing.
 - **A note in the PR.** On every WIP push the agent updates the block "done / left / next step" in the PR description. A new agent continues from this note.
 - **Idle agent.** Do not resume an agent that has been idle for more than an hour: launch a new one with the note from the PR.
-- **Reading.** Briefs name the exact sections to read; do not read `mechanics.md` in full (about 2000 lines).
+- **Reading.** Briefs name the exact sections to read; do not read `mechanics.md` in full (about 5000 lines).
 - **Tests.** Expected values come from `mechanics.md` and the DEC tables (`AGENTS.md`, section 0, item 4).
 - **The report** ends with the blocks `QUESTIONS:` and `RISKS:` (they may be empty). For tasks that need a human (a manual check, the owner's verdict) a block `MANUAL:` is added.
 - If a brief has several issues, the agent does them strictly one after another, each in its own PR.

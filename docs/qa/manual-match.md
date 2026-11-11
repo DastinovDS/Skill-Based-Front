@@ -25,7 +25,7 @@ curl -s localhost:8080/api/health          # {"status":"ok"}
 ```
 
 - `e2e/compose.e2e.yaml`: `GOW_ENV=e2e`, ruleset `test-short` (a 60-second match), the reconnect window
-  and the pause 10 seconds each. To run the production ruleset (section 4) add a third file with
+  120 s and pauses of up to 300 s. To run the production ruleset (section 4) add a third file with
   `GOW_RULESET_PATH: /app/rulesets/mvp-7.toml` in `services.app.environment`.
 - The second player: another browser, a private window or another origin (`http://bob.localhost:8080`). Two tabs
   of one origin share the guest in `localStorage` (`sbf.guest`), it is one and the same player.

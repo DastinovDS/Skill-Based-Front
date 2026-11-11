@@ -298,10 +298,12 @@ All limits live in the memory of one process (a server restart zeroes the counte
 |---|---|---|---|
 | Creating guests | client IP | 10 per hour | `POST /api/guest` (ID-01) |
 | Creating matches (invites and bot matches together) | player | 10 per 10 minutes | `POST /api/matches`, `POST /api/bot-matches` |
+| Creating invites (private and public) | player | 10 per minute (`GOW_INVITE_RATE_LIMIT`, `GOW_INVITE_RATE_WINDOW_S`) | `POST /api/matches` |
 | Public reads without a token | client IP | 60 per minute (`GOW_PUBLIC_READ_RATE_LIMIT`) | `GET /api/leaderboard`, `GET /api/players/{id}` (LB-01, #78) |
 | Changing the nick | player | 3 per day | `PUT /api/me/nick` |
 | Login by nick and password | client IP | 20 per 10 minutes | `POST /api/login` (#374) |
-| Login by nick and password | `nick_key` | 10 per 10 minutes | `POST /api/login`: guessing the password of one account from different IPs |
+| Login by nick and password | `nick_key` and client IP | 10 per 10 minutes | `POST /api/login`: guessing the password of one account from one address (the key includes the address, #492, so nobody else uses up the owner's budget) |
+| Login by nick and password | `nick_key`, all addresses | 200 per 10 minutes (`GOW_LOGIN_NICK_TOTAL_RATE_LIMIT`) | `POST /api/login`: guessing from many addresses; reaching it raises the alert `login_nick_flood` |
 | Setting and changing the password | player | 5 per hour | `POST /api/account/password` |
 | Joining the matchmaking queue | player | 20 per minute | `POST /api/queue` (MM-01) |
 | Commands in a match | connection | 20/s, burst 60 | WebSocket, flooding leads to a disconnect (SRV-03) |
@@ -311,8 +313,8 @@ All limits live in the memory of one process (a server restart zeroes the counte
 | Running matches | server | 30 (`GOW_MAX_MATCHES`: the budget of AGENTS.md section 12 for one core), of them against a bot 10 (`GOW_MAX_BOT_MATCHES`, 0 turns bot matches off) | `503` with `Retry-After` on `POST /api/bot-matches`, the second `ready` of an invite and the second `confirm` of the queue; the player stays free (#412) |
 | Per-match maps being made | server | 4 (`GOW_MAPGEN_MAX_PENDING`), one worker (`GOW_MAPGEN_WORKERS`) | past it a private invite or a bot match plays a random pool map at once; the creation of a match is limited as above (#884) |
 | Bot match without a WebSocket | match | 15 s (`GOW_BOT_CONNECT_TIMEOUT_S`) | the match is dropped as never started: no replay, saved `aborted` / `never_started`, the player is free again (#412) |
-| Repeated resigns in rated matches | player | 2nd in 24 hours: 5 minutes out of the queue; 3rd: 30 minutes; 4th and later: 2 hours (the 1st: none) | `POST /api/queue`: `429` with `Retry-After` and a `QueueBan` body (DEC-34, #414; `GOW_RESIGN_*`) |
-| Rated matches between the same two accounts | pair of accounts | 3 per 24 hours, then unrated | the matchmaking queue still pairs them, the match is unrated (DEC-34; `GOW_OPPONENT_LIMIT*`) |
+| Repeated resigns in rated matches (only with `GOW_RATING_ENABLED=true`) | player | 2nd in 24 hours: 5 minutes out of the queue; 3rd: 30 minutes; 4th and later: 2 hours (the 1st: none) | `POST /api/queue`: `429` with `Retry-After` and a `QueueBan` body (DEC-34, #414; `GOW_RESIGN_*`) |
+| Rated matches between the same two accounts (only with `GOW_RATING_ENABLED=true`) | pair of accounts | 3 per 24 hours, then unrated | the matchmaking queue still pairs them, the match is unrated (DEC-34; `GOW_OPPONENT_LIMIT*`) |
 | HTTP request body | request | 32 KiB (`GOW_MAX_REQUEST_BODY_BYTES`) | `413` before any parsing, in the server (by `Content-Length` and by counting a streamed body) and, at 64 KB, in Caddy on `/api/*` (SRV-01, #411) |
 
 **The per-IP limit works only with the real client address.** The server takes the address from `request.client`, and uvicorn
