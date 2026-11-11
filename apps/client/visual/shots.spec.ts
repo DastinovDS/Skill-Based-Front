@@ -1514,3 +1514,22 @@ test('shot of the groups selected together close up', async ({ page }) => {
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.locator('canvas').screenshot({ path: join(OUT, 'corner-multi-gray.png') });
 });
+
+// A unit standing in a province on the menu picture (#949: it keeps the share of its width the match
+// gives a small group there), three times magnified: `screen-province-<s>.png`, a crop of the capture
+// loop of the main menu at seconds of its clock (a unit stands in the province Summermoor's neighbour,
+// first alone, then with the next capture's group on the way).
+test.describe('the menu picture close up', () => {
+  test.use({ deviceScaleFactor: 3 });
+  for (const at of ['19.6', '21.4']) {
+    test(`shot of a unit in a province on the menu picture at ${at} s`, async ({ page }) => {
+      await page.goto(`/?menu=menu-guest&bt=${at}`);
+      await expect(page.locator('.front .backdrop[data-map="ready"]')).toBeVisible();
+      await page.mouse.move(1000, 700);
+      await page.screenshot({
+        path: join(OUT, `screen-province-${at}.png`),
+        clip: { x: 800, y: 500, width: 160, height: 110 },
+      });
+    });
+  }
+});
