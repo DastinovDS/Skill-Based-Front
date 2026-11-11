@@ -87,6 +87,8 @@ export function unitSide(units: number | null): number {
 /** Where a group token is drawn: its centre, its side and the scale of the symbol on screen. */
 export interface TokenSpot extends Point {
   readonly side: number;
+  /** The width of the helmet as drawn (`Token.width`): fitted into the ring or not, so cues hug it. */
+  readonly width: number;
   /** `symbolScale` now: 1, or more when the zoom would make the token smaller than 20 px. */
   readonly scale: number;
   /** The opponent's token (a replay shows both sides): its helmet is another shape, facing left. */

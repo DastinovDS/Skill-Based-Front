@@ -3,20 +3,11 @@ import {
   clipBelow,
   dashLoop,
   helmet,
-  helmetExtent,
-  helmetOutline,
   inside,
   samplePath,
   scanLines,
   type Point,
 } from './helmet.ts';
-
-const pairs = (flat: readonly number[]): Point[] => {
-  const points: Point[] = [];
-  for (let i = 0; i + 1 < flat.length; i += 2)
-    points.push({ x: flat[i] ?? 0, y: flat[i + 1] ?? 0 });
-  return points;
-};
 
 describe('samplePath', () => {
   it('follows lines and curves to their ends', () => {
@@ -52,24 +43,6 @@ describe('helmet', () => {
     expect(helmet('own', 40).band).not.toBeNull();
     expect(helmet('enemy', 40).band).toBeNull();
     expect(helmet('own', 40).dome).not.toEqual(helmet('enemy', 40).dome);
-  });
-});
-
-describe('helmetOutline', () => {
-  it('is one closed line round the whole silhouette, strap included', () => {
-    for (const kind of ['own', 'enemy'] as const) {
-      const h = helmet(kind, 40);
-      const outline = pairs(helmetOutline(kind, 40, 6));
-      expect(outline.length).toBeGreaterThan(40);
-      // Every point of the dome and of the strap is inside the outline.
-      for (const p of [...h.dome, ...h.strap]) expect(inside(p, outline)).toBe(true);
-      // And the outline keeps clear of the drawing: no point of it is nearer than the offset less a step.
-      const extent = helmetExtent(h);
-      const xs = outline.map((p) => p.x);
-      const ys = outline.map((p) => p.y);
-      expect(Math.max(...ys)).toBeGreaterThan(extent.bottom);
-      expect(Math.min(...xs)).toBeLessThan(extent.left);
-    }
   });
 });
 

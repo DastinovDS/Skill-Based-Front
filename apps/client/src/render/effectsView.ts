@@ -30,7 +30,6 @@ import { FightView } from './fightView.ts';
 import type { MapLayers } from './layers.ts';
 import { nodePoint, type TokenSpot } from './layout.ts';
 import { ringRadius } from './cityLayout.ts';
-import { helmetWidth } from './shapes.ts';
 import { reducedMotion } from './motion.ts';
 import {
   BOUNCE_HOME,
@@ -451,7 +450,7 @@ export class EffectsView {
         x: centre.x - ((centre.x - spot.x) / far) * rim,
         y: centre.y - ((centre.y - spot.y) / far) * rim,
       };
-      const width = helmetWidth(spot.side, false) * spot.scale;
+      const width = spot.width * spot.scale;
       for (const chevron of homeChevrons(spot, end, width, seconds, ageMs, spot.scale)) {
         if (chevron.alpha <= 0) continue;
         g.poly(homeChevronShape(chevron, spot.scale))

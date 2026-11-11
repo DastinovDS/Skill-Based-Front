@@ -17,6 +17,7 @@
 import { ringRadius } from '../render/cityLayout.ts';
 import { CAPTURE, CITY_ENGRAVED, CUT, DARK_PLATE, PROVINCE_ENGRAVED } from '../render/style.ts';
 import { WALK, walkPoint } from '../render/walkLayout.ts';
+import { provinceHelmetShare } from '../render/helmetFit.ts';
 import { clipBelow, helmet } from '../units/helmet.ts';
 import {
   CAPTURE_TIMES,
@@ -347,8 +348,13 @@ function occupied(c: CanvasRenderingContext2D, k: Palette, n: Stand, alpha: numb
   c.restore();
 }
 
-/** The width of a helmet that fits into the plate of `n`. */
-const fitWidth = (n: Stand): number => Math.min(UNIT_W, n.r * FIT);
+/**
+ * The width of a helmet standing in `n`: a city's plate holds it whole; a province keeps the share
+ * of its width the match gives a small group there (A6 "Larger province", #949), the helmet
+ * overhanging the small plate as it does on the map.
+ */
+const fitWidth = (n: Stand): number =>
+  n.city ? Math.min(UNIT_W, n.r * FIT) : UNIT_W * provinceHelmetShare();
 
 /**
  * A unit walking at `p`: 18 px wide, charged (`share` of it). No number over it: the backgrounds

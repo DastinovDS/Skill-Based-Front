@@ -10,14 +10,15 @@ import {
   ENEMY,
   ETA_MARK,
   GHOST_REJECT_MS,
-  HELMET_FRAME,
+  GROUP_ORDER,
   REACH_RING,
   UNIT_SIDES,
 } from './style.ts';
 import { createLayers } from './layers.ts';
-import { OverlayView, framePolygon } from './overlayView.ts';
-import { helmetWidth } from './shapes.ts';
-import { helmet, inside, type Point } from '../units/helmet.ts';
+import { OverlayView } from './overlayView.ts';
+import { tickCorners, tickCornersFor, tickProgress } from './cornerTicks.ts';
+import { helmetWidth } from './helmetFit.ts';
+import { helmet } from '../units/helmet.ts';
 
 const map = DEFAULT_MAP;
 const [a, b] = [map.nodes[0], map.nodes[5]];
@@ -126,7 +127,7 @@ describe('OverlayView', () => {
       eta: null,
     };
     const frame = layers.layer.intents.children.find((c) => c.label === 'select-frame');
-    view.update(state, () => ({ x: 50, y: 60, side: 30, scale: 1 }));
+    view.update(state, () => ({ x: 50, y: 60, side: 30, width: 40, scale: 1 }));
     expect(frame?.visible).toBe(true);
     expect(frame?.position.x).toBe(50);
     view.update(state, () => undefined);
@@ -396,24 +397,96 @@ describe('OverlayView, the travel time and the route of an order (#432, #448)', 
   });
 });
 
-describe('the selection and hover outline of a helmet (#784)', () => {
-  const pairs = (flat: readonly number[]): Point[] => {
-    const out: Point[] = [];
-    for (let i = 0; i + 1 < flat.length; i += 2) out.push({ x: flat[i] ?? 0, y: flat[i + 1] ?? 0 });
-    return out;
-  };
+describe('the corner ticks of a selected or hovered group (B6, #949)', () => {
+  const spot = (width: number, enemy = false): TokenSpot => ({
+    x: 50,
+    y: 60,
+    side: UNIT_SIDES[0],
+    width,
+    scale: 1,
+    enemy,
+    inside: true,
+  });
+  const state = (over: Partial<OverlayState>): OverlayState => ({
+    selection: null,
+    ghosts: [],
+    preview: null,
+    beacon: null,
+    terrain: false,
+    reach: [],
+    split: [],
+    eta: null,
+    ...over,
+  });
 
-  it('goes round the whole helmet, strap included, and flips with the opponent', () => {
+  it('draws the ticks of the selected group, and two for a hovered one', () => {
+    const { layers, view } = setup();
+    const full = helmetWidth(UNIT_SIDES[0], true);
+    const at = (id: string): TokenSpot | undefined =>
+      id === 'g' || id === 'h' ? spot(full) : undefined;
+    const select = layers.layer.intents.children.find((c) => c.label === 'select-frame');
+    const hover = layers.layer.intents.children.find((c) => c.label === 'hover-frame');
+    view.update(state({ selection: { kind: 'group', id: 'g' } }), at, 0);
+    view.update(state({ selection: { kind: 'group', id: 'g' } }), at, 1000);
+    expect(select?.visible).toBe(true);
+    expect(hover?.visible).toBe(false);
+    view.update(state({ hover: { node: null, group: 'h' } }), at, 1000);
+    expect(select?.visible).toBe(false);
+    expect(hover?.visible).toBe(true);
+    view.destroy();
+  });
+
+  it('puts the seal of a pick on the helmet as drawn, not on its full size', () => {
+    const { layers, view } = setup();
+    const full = helmetWidth(UNIT_SIDES[0], true);
+    const fitted = 27.25;
+    view.update(state({ picks: ['g'] }), () => spot(fitted), 1000);
+    const seal = layers.layer.intents
+      .getChildByLabel('group-picks')
+      ?.children.find((c) => c.label === 'group-seal');
+    expect(seal?.position.x).toBeCloseTo(50 + fitted * GROUP_ORDER.seal.dx);
+    expect(seal?.position.x).not.toBeCloseTo(50 + full * GROUP_ORDER.seal.dx);
+    view.destroy();
+  });
+});
+
+describe('tickCorners', () => {
+  const corners = (width: number, enemy: boolean) => tickCorners({ width, enemy });
+
+  it('goes round the whole helmet as drawn, strap included, and flips with the opponent', () => {
     const side = UNIT_SIDES[1];
     for (const enemy of [false, true]) {
-      const h = helmet(enemy ? 'enemy' : 'own', helmetWidth(side, false));
+      const width = helmetWidth(side, true);
+      const h = helmet(enemy ? 'enemy' : 'own', width);
       const flip = enemy ? -1 : 1;
-      for (const offset of [HELMET_FRAME.select, HELMET_FRAME.hover]) {
-        const outline = pairs(framePolygon({ x: 0, y: 0, side, scale: 1, enemy }, offset));
-        for (const p of [...h.dome, ...h.strap]) {
-          expect(inside({ x: flip * p.x, y: p.y }, outline)).toBe(true);
-        }
+      const [tl, , br] = corners(width, enemy);
+      if (tl === undefined || br === undefined) throw new Error('no corners');
+      for (const p of [...h.dome, ...h.strap]) {
+        const x = flip * p.x;
+        expect(x).toBeGreaterThan(tl.x);
+        expect(x).toBeLessThan(br.x);
+        expect(p.y).toBeGreaterThan(tl.y);
+        expect(p.y).toBeLessThan(br.y);
       }
     }
+  });
+
+  it('hugs the fitted width: a smaller helmet has a smaller box', () => {
+    const full = helmetWidth(UNIT_SIDES[0], true);
+    const [bigTl] = corners(full, false);
+    const [smallTl] = corners(full * 0.6, false);
+    expect(Math.abs(smallTl?.x ?? 0)).toBeLessThan(Math.abs(bigTl?.x ?? 0));
+  });
+
+  it('shows all four corners selected and the top left and bottom right hovered', () => {
+    const all = corners(30, false);
+    expect(tickCornersFor('select', all)).toHaveLength(4);
+    expect(tickCornersFor('hover', all)).toEqual([all[0], all[2]]);
+  });
+
+  it('comes in over its time, and at once under less motion', () => {
+    expect(tickProgress(0, false)).toBe(0);
+    expect(tickProgress(1000, false)).toBe(1);
+    expect(tickProgress(0, true)).toBe(1);
   });
 });

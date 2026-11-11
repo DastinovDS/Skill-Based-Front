@@ -19,8 +19,7 @@ import { HatchTile, hairFloor } from './engraving.ts';
 import { easeSettle } from '../theme/tokens.ts';
 import { reducedMotion } from './motion.ts';
 import type { MapLayers } from './layers.ts';
-import { helmetWidth } from './shapes.ts';
-import { helmetOutline } from '../units/helmet.ts';
+import { CornerTicks } from './cornerTicks.ts';
 import { nodePoint, type TokenSpot } from './layout.ts';
 import { ringRadius } from './cityLayout.ts';
 import {
@@ -33,7 +32,6 @@ import {
   CASED,
   DARK_PLATE,
   GHOST_CP,
-  HELMET_FRAME,
   ORDER_GHOST_ALPHA,
   NODE_RADIUS,
   PATH_SHADOW,
@@ -45,24 +43,8 @@ import {
   WARN,
   CASING,
   FINE_RING,
-  HELMET_SELECT,
   INK,
 } from './style.ts';
-
-/** What a selection or hover outline is drawn for: the size and the kind of token. */
-function frameKey(at: TokenSpot): string {
-  return `${String(at.side)}:${at.enemy === true ? 'e' : 'o'}:${at.inside === true ? 'i' : ''}`;
-}
-
-/**
- * The outline round a token, flat, around its centre (world units, unscaled): the line `offset`
- * outside the whole helmet, strap included, flipped for the opponent's (#784).
- */
-export function framePolygon(at: TokenSpot, offset: number): number[] {
-  const kind = at.enemy === true ? 'enemy' : 'own';
-  const outline = helmetOutline(kind, helmetWidth(at.side, at.inside === true), offset);
-  return kind === 'own' ? outline : outline.map((v, i) => (i % 2 === 0 ? -v : v));
-}
 
 // --- Fine rings (ui-style 55p; mockup `highlight4`, H3) -----------------------------------------------
 // One weight system round the capacity ring `R`: a 1 px ink line on a 2.6 px casing at R + 5, 8, 11.
@@ -146,17 +128,14 @@ export function drawSplitRing(g: Graphics, at: Point, R: number): void {
  */
 export class OverlayView {
   private readonly ring = new Graphics();
-  private readonly frame = new Graphics({ label: 'select-frame' });
-  /** The light outline of the own group under the pointer (#762): what a click would pick. */
-  private readonly hoverFrame = new Graphics({ label: 'hover-frame' });
-  /** The look the hover outline is drawn for (`frameKey`; empty: not drawn yet). */
-  private hoverKey = '';
+  /** The four corner ticks of the selected group (B6, #949). */
+  private readonly frame = new CornerTicks('select-frame');
+  /** The two ticks of the own group under the pointer (#762): what a click would pick. */
+  private readonly hoverFrame = new CornerTicks('hover-frame');
   private readonly lines = new Graphics({ label: 'order-lines' });
   /** Ghost arrows of sent orders: redrawn every frame while one shakes and fades. */
   private readonly ghosts = new Graphics();
   private overlay: OverlayState = EMPTY_OVERLAY;
-  /** The look the selection frame is drawn for (`frameKey`; empty: not drawn yet). */
-  private frameKey = '';
   /**
    * The time to the hovered reachable node (E4 "Hourglass", #627): a disc with the hourglass glyph
    * beside the road, the seconds on its far side; no window. The disc is drawn once, only the
@@ -207,11 +186,10 @@ export class OverlayView {
    * with its place in the selection; one entry per place, kept for the next selection.
    */
   private readonly picks: {
-    readonly frame: Graphics;
+    readonly frame: CornerTicks;
     readonly seal: Container;
     readonly plate: Graphics;
     readonly text: Text;
-    key: string;
   }[] = [];
   private readonly pickLayer = new Container({ label: 'group-picks' });
   private readonly sealStyle = new TextStyle({
@@ -280,8 +258,8 @@ export class OverlayView {
       this.path,
       this.groupLines,
       this.ring,
-      this.hoverFrame,
-      this.frame,
+      this.hoverFrame.view,
+      this.frame.view,
       this.pickLayer,
       this.eta,
       this.bonus,
@@ -289,8 +267,6 @@ export class OverlayView {
       // Last: a rejected order's ghost lies over everything of the overlay.
       this.ghosts,
     );
-    this.frame.visible = false;
-    this.hoverFrame.visible = false;
   }
 
   /** `groupSpot`: the drawn centre, side and symbol scale of an own group's token. */
@@ -312,14 +288,8 @@ export class OverlayView {
     if (next.ghosts.length > 0 || this.ghostsDrawn) this.drawGhosts(next, now);
     const selected = next.selection;
     const at = selected?.kind === 'group' ? groupSpot(selected.id) : undefined;
-    this.frame.visible = at !== undefined;
-    if (at !== undefined) {
-      const key = frameKey(at);
-      if (this.frameKey !== key) this.drawFrame(at, key);
-      this.frame.position.set(at.x, at.y);
-      this.frame.scale.set(at.scale);
-    }
-    this.placePicks(next.picks ?? [], groupSpot);
+    this.frame.update(selected?.kind === 'group' ? selected.id : '', at, 'select', now);
+    this.placePicks(next.picks ?? [], groupSpot, now);
     this.drawBox();
     if (next.group != null || this.groupDrawn) this.drawGroupPreview(next, now);
     // The group under the pointer gets a light outline, unless it is the selected one.
@@ -330,13 +300,7 @@ export class OverlayView {
       next.picks?.includes(hovered) === true
         ? undefined
         : groupSpot(hovered);
-    this.hoverFrame.visible = spot !== undefined;
-    if (spot !== undefined) {
-      const key = frameKey(spot);
-      if (this.hoverKey !== key) this.drawHoverFrame(spot, key);
-      this.hoverFrame.position.set(spot.x, spot.y);
-      this.hoverFrame.scale.set(spot.scale);
-    }
+    this.hoverFrame.update(hovered ?? '', spot, 'hover', now);
   }
 
   setLabelResolution(resolution: number): void {
@@ -355,28 +319,23 @@ export class OverlayView {
   }
 
   /**
-   * The groups selected together (A1 and A2): today's selection frame round each and, at the top
-   * left of its helmet, a lozenge seal with its place in the selection (the order decides the
+   * The groups selected together (A1 and A2): the selection's corner ticks round each and, at the
+   * top left of its helmet as drawn, a lozenge seal with its place in the selection (the order decides the
    * remainder of a planned bonus, DEC-48, item F2). They follow their tokens every frame.
    */
   private placePicks(
     ids: readonly string[],
     groupSpot: (id: string) => TokenSpot | undefined,
+    now: number,
   ): void {
     ids.forEach((id, i) => {
       const pick = this.pick(i);
       const at = groupSpot(id);
-      pick.frame.visible = at !== undefined;
+      pick.frame.update(id, at, 'select', now);
       pick.seal.visible = at !== undefined;
       if (at === undefined) return;
-      const key = frameKey(at);
-      if (pick.key !== key) {
-        this.drawFrameInto(pick.frame, at);
-        pick.key = key;
-      }
-      pick.frame.position.set(at.x, at.y);
-      pick.frame.scale.set(at.scale);
-      const w = helmetWidth(at.side, at.inside === true) * at.scale;
+      // The seal sits on the helmet as drawn (fitted into a ring or not), not on its full size.
+      const w = at.width * at.scale;
       const S = GROUP_ORDER.seal;
       pick.seal.position.set(at.x + w * S.dx, at.y + w * S.dy);
       pick.seal.scale.set(at.scale);
@@ -386,7 +345,7 @@ export class OverlayView {
     for (let i = ids.length; i < this.picks.length; i++) {
       const pick = this.picks[i];
       if (pick === undefined) continue;
-      pick.frame.visible = false;
+      pick.frame.update('', undefined, 'select', now);
       pick.seal.visible = false;
     }
   }
@@ -410,9 +369,9 @@ export class OverlayView {
     });
     const seal = new Container({ label: 'group-seal' });
     seal.addChild(plate, text);
-    const frame = new Graphics({ label: 'group-frame' });
-    this.pickLayer.addChild(frame, seal);
-    const made = { frame, seal, plate, text, key: '' };
+    const frame = new CornerTicks('group-frame');
+    this.pickLayer.addChild(frame.view, seal);
+    const made = { frame, seal, plate, text };
     this.picks[i] = made;
     return made;
   }
@@ -740,46 +699,6 @@ export class OverlayView {
       const at = nodePoint(this.map, id);
       if (at !== undefined) drawSplitRing(g, at, ringRadius(this.radiusOf(id)));
     }
-  }
-
-  /**
-   * The selection: a white `--paper` outline on a dark halo (9.5) round the token: a line round the
-   * whole helmet, strap included (#784).
-   */
-  private drawFrame(at: TokenSpot, key: string): void {
-    this.drawFrameInto(this.frame, at);
-    this.frameKey = key;
-  }
-
-  /** The selection frame of `at` into `g` (the selected group's, or one of the groups selected together). */
-  private drawFrameInto(g: Graphics, at: TokenSpot): void {
-    g.clear();
-    // Engraved (#847): a dark casing with two ink hairlines along it, round the whole helmet.
-    const S = HELMET_SELECT;
-    g.poly(framePolygon(at, HELMET_FRAME.select)).stroke({
-      width: S.casing,
-      color: CASING,
-      alpha: 0.9,
-      join: 'round',
-    });
-    for (const offset of [-S.offset, S.offset]) {
-      g.poly(framePolygon(at, HELMET_FRAME.select + offset)).stroke({
-        width: S.ink,
-        color: INK,
-        join: 'round',
-      });
-    }
-  }
-
-  /** The hover outline: the selection frame's shape, closer, thinner and faint (#762). */
-  private drawHoverFrame(at: TokenSpot, key: string): void {
-    const g = this.hoverFrame;
-    g.clear();
-    const poly = framePolygon(at, HELMET_FRAME.hover);
-    const H = HELMET_SELECT.hover;
-    g.poly(poly).stroke({ width: H.casing, color: CASING, alpha: H.alpha, join: 'round' });
-    g.poly(poly).stroke({ width: H.ink, color: INK, alpha: H.alpha, join: 'round' });
-    this.hoverKey = key;
   }
 
   private drawLines(state: OverlayState): void {

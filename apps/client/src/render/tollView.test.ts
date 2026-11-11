@@ -26,7 +26,7 @@ const taken: EventMsg = {
   kind: 'toll_taken',
   data: { player: 0, node: edge.a, edge: edge.id, charges: 1 },
 };
-const spots = new Map<string, TokenSpot>([['g1', { x: 60, y: 20, side: 30, scale: 1 }]]);
+const spots = new Map<string, TokenSpot>([['g1', { x: 60, y: 20, side: 30, width: 40, scale: 1 }]]);
 const enemies: EnemyAnchors = {
   nodePoint: () => undefined,
   nearestOnEdge: () => ({ x: 80, y: 40 }),

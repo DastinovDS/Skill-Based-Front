@@ -13,7 +13,13 @@ const node = map.nodes[1] ?? map.nodes[0];
 if (node === undefined) throw new Error('the default map has no nodes');
 const at = { x: node.x, y: node.y };
 const NONE = new Map<string, TokenSpot>();
-const spot = (x: number, y: number, side = 24, scale = 1): TokenSpot => ({ x, y, side, scale });
+const spot = (x: number, y: number, side = 24, scale = 1): TokenSpot => ({
+  x,
+  y,
+  side,
+  width: side * 1.34,
+  scale,
+});
 
 describe('pickAt, size of the click area of a group', () => {
   // Away from the city circle, so only the token can be hit.

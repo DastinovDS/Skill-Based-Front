@@ -11,18 +11,12 @@ import type { Point } from './camera.ts';
 import { reducedMotion } from './motion.ts';
 import { EaseTween } from './tween.ts';
 import { chargeLevel, countLabel, unitSide } from './layout.ts';
-import {
-  HELMET_SCALE,
-  helmet,
-  helmetExtent,
-  type Helmet,
-  type HelmetKind,
-} from '../units/helmet.ts';
+import { helmet, helmetExtent, type Helmet, type HelmetKind } from '../units/helmet.ts';
+import { helmetFit, helmetWidth } from './helmetFit.ts';
 import { badgeFloor, stackBadges, type BadgeMark } from './badgeLayout.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import {
   BADGE,
-  HELMET_INSIDE,
   CASING,
   COUNT_FONT_SIZE,
   CUT,
@@ -178,29 +172,6 @@ function specKey(spec: TokenSpec): string {
   return `${String(spec.owner)}|A|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}${spec.fit === undefined ? '' : `f${String(spec.fit)}`}|${spec.range ?? ''}|${badges}`;
 }
 
-/** Width of the helmet of a token of size step `side` (a city icon is a little smaller). */
-export function helmetWidth(side: number, inside: boolean): number {
-  return Math.round(side * HELMET_SCALE * (inside ? HELMET_INSIDE : 1) * 100) / 100;
-}
-
-/**
- * The width of the helmet `kind` of width `width`, or a smaller one whose drawing (casing and strap
- * included) reaches no further than `reach` from its middle: a unit icon stays inside the capacity
- * ring (#940). Rounded down to a quarter unit so the baked keys stay few.
- */
-export function helmetFit(kind: HelmetKind, width: number, reach: number): number {
-  let w = width;
-  // The casing and the strap do not scale with the width, so the first guess can still be a little
-  // too wide: a few steps settle it.
-  for (let step = 0; step < 6 && w > 4; step++) {
-    const e = helmetExtent(helmet(kind, w));
-    const span = Math.max(e.right, -e.left, e.bottom, -e.top);
-    if (span <= reach) break;
-    w = Math.min(w - 0.25, Math.floor(((w * reach) / span) * 4) / 4);
-  }
-  return w;
-}
-
 /** The helmet a token of `owner` shows: the viewer's faces right, the opponent's left. */
 export function helmetKind(me: PlayerId, owner: PlayerId): HelmetKind {
   return owner === me ? 'own' : 'enemy';
@@ -247,6 +218,8 @@ export class Token {
   private labelWanted = false;
   /** The size step of the token now (`unitSide`), world units. */
   side: number = UNIT_SIDES[1];
+  /** The width of the helmet as drawn now, fitted into a ring or not (`helmetFit`), world units. */
+  width: number = helmetWidth(UNIT_SIDES[1], false);
   /** 0 (not there) to 1: a token that comes or goes fades and swells in or out (#508). */
   private readonly presence = new EaseTween(1, PRESENCE_MS);
   /** A short swell when the number of units changes (a merge, a split, a loss). */
@@ -504,6 +477,7 @@ export class Token {
     const kind = helmetKind(this.kit.me, spec.owner);
     const full = helmetWidth(side, inside);
     const width = spec.fit === undefined ? full : helmetFit(kind, full, spec.fit);
+    this.width = width;
     const h = helmet(kind, width);
     this.shape = h;
     const facing = kind === 'own' ? 1 : -1;

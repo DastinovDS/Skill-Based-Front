@@ -1449,3 +1449,83 @@ for (const shot of MOMENTS) {
       .screenshot({ path: join(OUT, `${shot.name}-${String(shot.at)}.png`) });
   });
 }
+
+// The node pieces with a group close up (#949: A6 larger provinces, B6 corner ticks): the scene
+// `provinces` zoomed in on Freehold (a city) and Flank (a province), the map alone, in grey scale
+// too (`-gray`): `corner-idle.png`, `corner-hover.png` (the pointer on Flank's group),
+// `corner-select.png` (Freehold's group selected), `corner-close-hover.png`, `corner-close-select.png`
+// three notches of zoom more on Flank; and `corner-multi.png`: the scene `group_select` zoomed in, three
+// groups selected together with their numbered seals.
+test('shot of the node pieces close up with the selection cues', async ({ page }) => {
+  await page.goto('/?scene=provinces&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '1200');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.addStyleTag({ content: '.hud { display: none !important; }' });
+  const zoom = async (x: number, y: number, notches: number): Promise<void> => {
+    await page.mouse.move(x, y);
+    for (let i = 0; i < notches; i++) {
+      await page.mouse.wheel(0, -112);
+      await page.waitForTimeout(150);
+    }
+  };
+  const shoot = async (name: string) => {
+    await page.waitForTimeout(500);
+    await page.locator('canvas').screenshot({ path: join(OUT, `corner-${name}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.locator('canvas').screenshot({ path: join(OUT, `corner-${name}-gray.png`) });
+    await page.addStyleTag({ content: 'html { filter: none; }' });
+  };
+  await zoom(350, 400, 4);
+  await page.mouse.move(5, 5);
+  await shoot('idle');
+  await page.mouse.move(145, 362);
+  await page.mouse.move(146, 363);
+  await shoot('hover');
+  await page.mouse.click(533, 108);
+  await page.mouse.move(5, 5);
+  await shoot('select');
+  await page.keyboard.press('Escape');
+  await zoom(145, 362, 3);
+  await page.mouse.move(5, 5);
+  await page.mouse.move(146, 363);
+  await shoot('close-hover');
+  await page.mouse.click(146, 363);
+  await page.mouse.move(5, 5);
+  await shoot('close-select');
+});
+
+test('shot of the groups selected together close up', async ({ page }) => {
+  await page.goto('/?scene=group_select&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.addStyleTag({ content: '.hud { display: none !important; }' });
+  await page.mouse.move(420, 300);
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, -112);
+    await page.waitForTimeout(150);
+  }
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(900);
+  await page.locator('canvas').screenshot({ path: join(OUT, 'corner-multi.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.locator('canvas').screenshot({ path: join(OUT, 'corner-multi-gray.png') });
+});
+
+// A unit standing in a province on the menu picture (#949: it keeps the share of its width the match
+// gives a small group there), three times magnified: `screen-province-<s>.png`, a crop of the capture
+// loop of the main menu at seconds of its clock (a unit stands in the province Summermoor's neighbour,
+// first alone, then with the next capture's group on the way).
+test.describe('the menu picture close up', () => {
+  test.use({ deviceScaleFactor: 3 });
+  for (const at of ['19.6', '21.4']) {
+    test(`shot of a unit in a province on the menu picture at ${at} s`, async ({ page }) => {
+      await page.goto(`/?menu=menu-guest&bt=${at}`);
+      await expect(page.locator('.front .backdrop[data-map="ready"]')).toBeVisible();
+      await page.mouse.move(1000, 700);
+      await page.screenshot({
+        path: join(OUT, `screen-province-${at}.png`),
+        clip: { x: 800, y: 500, width: 160, height: 110 },
+      });
+    });
+  }
+});

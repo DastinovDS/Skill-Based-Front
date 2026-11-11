@@ -17,7 +17,6 @@ import { nodePoint, type TokenSpot } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import { CASED, CASING, FINE_RING, INK, REWIND, YOU } from './style.ts';
 import { nothingLook, rewindLook, rewindRing } from './undoLayout.ts';
-import { helmetWidth } from './shapes.ts';
 
 /**
  * The cue of `X` on the map (#764) in the Engraved style, Rewind fixed (#851, ui-style 54b): the
@@ -86,7 +85,7 @@ export class UndoView {
       // The ring hugs the helmet of a group (the mockup's `w * 0.62 + 5`), or the Fine ring of a city.
       const radius =
         spot !== undefined
-          ? helmetWidth(spot.side, spot.inside === true) * spot.scale * 0.62 + REWIND.ring.gap
+          ? spot.width * spot.scale * 0.62 + REWIND.ring.gap
           : ringRadius(this.radiusOf(mark.node ?? 0)) + FINE_RING.r1;
       if (look.arrowAlpha > 0) this.drawArrow(mark, at, spot, look.arrow, look.arrowAlpha, hair);
       if (look.ringAlpha > 0) this.drawRing(at, radius, look.ring, look.ringAlpha, hair);
@@ -114,8 +113,7 @@ export class UndoView {
     const dest = ahead.at(-1);
     const nodes = ahead.map((id) => nodePoint(this.map, id));
     if (dest === undefined || nodes.some((p) => p === undefined)) return;
-    const lead =
-      spot === undefined ? 0 : helmetWidth(spot.side, spot.inside === true) * spot.scale * 0.45;
+    const lead = spot === undefined ? 0 : spot.width * spot.scale * 0.45;
     const whole = trimPath(
       [at, ...(nodes as Point[])],
       lead,

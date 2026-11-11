@@ -18,7 +18,6 @@ import {
 import type { OverlayState } from './interaction.ts';
 import type { MapLayers } from './layers.ts';
 import { nodePoint, type TokenSpot } from './layout.ts';
-import { helmetWidth } from './shapes.ts';
 import {
   BG,
   CASING,
@@ -255,7 +254,7 @@ export class GroupOrderView {
       const from = nodePoint(this.map, group.location.node);
       const next = nodePoint(this.map, group.order?.path[0] ?? group.location.node);
       const side = from !== undefined && next !== undefined && next.x > from.x ? -1 : 1;
-      const w = helmetWidth(spot.side, spot.inside === true) * spot.scale;
+      const w = spot.width * spot.scale;
       const at = {
         x: spot.x + side * (w * 0.62 + (W.disc + W.gap) * s),
         y: spot.y - w * 0.5 - W.disc * s * 0.4,
