@@ -126,7 +126,7 @@ docker run --rm -v "$PWD":/src:ro -v "$PWD/apps/client/visual":/out mcr.microsof
   && CI=1 pnpm exec playwright test --update-snapshots; cp -r visual/scenes.spec.ts-snapshots/. /out/scenes.spec.ts-snapshots/'
 ```
 
-CI runs them as a separate job `visual` (not part of the required `py`, `web`, `docker`).
+CI runs them as a separate job `visual` (not part of the required `py`, `web`, `docker`) inside the very same image `mcr.microsoft.com/playwright:v1.63.0-noble` (job-level `container:`), so Chromium and its libraries are there and no `apt` runs (the Ubuntu mirror was down for hours on 2026-11-11, #962). The tag in `.github/workflows/ci.yml` must equal the Playwright version of the lockfiles; `mise run check:client` fails when they differ, so a Playwright upgrade changes the image tag, the command above and the Linux references together.
 A failed comparison puts the actual frames and the difference into the artifact `visual-diff`.
 
 ## Replay viewer (CLI-10, #66)
