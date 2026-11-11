@@ -1232,9 +1232,10 @@ export interface AckMsg {
 }
 /**
  * One group of a ``group_move``, in the order of its ``groups`` (DEC-48, item B6): accepted
- * with its path, or dropped with its ``reject_code``. A group too big for every path is split
- * by the server and its part goes (item B4, #913): ``split_units`` of ``group_units``; it is
- * ``STACK_LIMIT`` only when not even one unit has a path.
+ * with its path, or dropped with its ``reject_code``. A group too big for every path in an
+ * ordinary order is split by the server and its part goes (item B4, #913): ``split_units`` of
+ * ``group_units``; it is ``STACK_LIMIT`` only when not even one unit has a path. A planned
+ * order splits nothing: such a member is ``STACK_LIMIT`` (owner decision (10), #941).
  */
 export interface AckMember {
   /**
@@ -1260,9 +1261,10 @@ export interface AckMember {
    */
   reject_code: string | null;
   /**
-   * The group was too big for every path (item B4, #913): the units of the part that split
-   * off and goes (the largest size with a path, as ``reach.split``); the rest stays as the
-   * group, without an order. ``None``: the whole group goes, or it was dropped.
+   * The group of an ordinary order was too big for every path (item B4, #913): the units of
+   * the part that split off and goes (the largest size with a path, as ``reach.split``); the rest
+   * stays as the group, without an order. ``None``: the whole group goes, or it was dropped (a
+   * planned member is never split, #941).
    */
   split_units: number | null;
   /**
@@ -1512,7 +1514,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 51;
+export const PROTOCOL_VERSION = 52;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

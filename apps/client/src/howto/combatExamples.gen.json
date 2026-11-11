@@ -2,7 +2,7 @@
   "generated_by": "scripts/export_howto.py (mise run regen:howto), do not edit",
   "ruleset": "mvp-5",
   "ruleset_hash": "a8ba70dd5ac436dbd06ad1b120e3990e",
-  "sim_version": 51,
+  "sim_version": 52,
   "rules": {
     "round_seconds": 2,
     "cost_move_cp": 1,

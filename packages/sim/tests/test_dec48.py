@@ -4,8 +4,10 @@ Expected values come from mechanics.md, section 5, "Group order: rally to an own
 synchronized arrival (DEC-48, #896)": the rule items A to M and the worked examples (tables S, R,
 P and RP), with the owner's changes of 2026-11-10 recorded there (a recruit without the CP for its
 walk gets no order and merges, rows RP8 and RP9; a command of a feature the ruleset does not have
-is ``INVALID_ARGUMENT``; a member too big for every path is split automatically and its part goes,
-owner decision (9), #913: rows S5, S6, S14, S15, R8, P10).
+is ``INVALID_ARGUMENT``; a member of an ordinary order too big for every path is split
+automatically and its part goes, owner decision (9), #913: rows S5, S6, S14, S15, R8; a planned
+order splits nothing, such a member is ``STACK_LIMIT``, owner decision (10), #941: rows P10,
+P11).
 
 Map ``dec48`` (the map of the worked examples and its rot180 mirror; every node forest, so an edge
 takes exactly its ``travel_ticks``): player 0 owns the capital H (capacity 10), the city_large R
@@ -666,20 +668,39 @@ def test_p8_a_member_that_never_gets_its_charge_holds_the_order_until_cancelled(
     assert g["g1"].bonus + g["g3"].bonus == 3
 
 
-def test_p10_the_cap_of_a_split_member_is_its_part() -> None:
+def test_p10_a_planned_order_does_not_split_an_oversized_member() -> None:
+    """Owner decision (10), #941: the oversized member is ``STACK_LIMIT``, the rest go."""
     m, g = _start("g8", "g1")
-    g8 = g["g8"]
+    g8, g1 = g["g8"], g["g1"]
     g8.charged = 7
     events = _to(m, 100, GroupMove(_ids(g, "g8", "g1"), E, planned=True, bonus=10))
     ok = _ok(m)
-    assert [mm.bonus for mm in ok.members] == [6, 3]
-    assert [mm.split_units for mm in ok.members] == [6, 0]
-    assert (ok.cost, _cp(m)) == (200, 300)
-    part = _part(m, events, g8)
-    assert (part.units, part.charged, part.plan) == (6, 6, 6)
-    assert (g8.units, g8.charged, g8.order, g8.intent) == (1, 1, None, None)
+    assert ok.members[0] == Member(g8.id, reject=RejectCode.STACK_LIMIT)
+    assert (ok.members[1].bonus, ok.members[1].split_units) == (3, 0)  # cap 3: the request 3
+    assert (ok.kind, ok.cost, _cp(m)) == (OrderKind.ATTACK, 100, 400)
+    assert not [e for e in events if e.kind == "group_split"]
+    assert (g8.units, g8.charged, _at(g8), g8.order, g8.intent) == (7, 7, H, None, None)
+    assert (g1.plan, g1.order is not None, g1.group_order is not None) == (3, True, True)
+    assert [x.id for x in m.state.groups.values() if x.owner == 0] == [g8.id, g1.id]
     enemy = project(m.state, m.rules, 1, HEADLESS_MATCH_KEY)
-    assert sorted((i.origin, i.target) for i in enemy.intents) == [(H, E), (A, E)]
+    assert [(i.origin, i.target) for i in enemy.intents] == [(A, E)]
+
+
+def test_p11_a_planned_order_of_only_oversized_members_is_rejected_whole() -> None:
+    m, g = _start("g8")
+    g8 = g["g8"]
+    g8.charged = 7
+    events = _to(m, 100, GroupMove(_ids(g, "g8"), E, planned=True, bonus=2))
+    assert _outcome(m) == Reject(
+        RejectCode.STACK_LIMIT, (Member(g8.id, reject=RejectCode.STACK_LIMIT),)
+    )
+    assert not [e for e in events if e.kind == "group_split"]
+    assert (g8.units, g8.charged, g8.order, g8.intent, _cp(m)) == (7, 7, None, None, 500)
+    assert not m.state.group_orders
+    assert not project(m.state, m.rules, 1, HEADLESS_MATCH_KEY).intents
+    # The same command without ``planned`` splits g8 (row S14).
+    ordinary = validate(m.state, m.rules, 0, GroupMove(_ids(g, "g8"), E))
+    assert isinstance(ordinary, Ok) and ordinary.members[0].split_units == 6
 
 
 def test_p9_a_single_plan_departs_by_itself_and_its_release_is_invalid() -> None:

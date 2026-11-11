@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 51,
+    "PROTOCOL_VERSION": 52,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -23,7 +23,7 @@
   "$defs": {
     "AckMember": {
       "additionalProperties": false,
-      "description": "One group of a ``group_move``, in the order of its ``groups`` (DEC-48, item B6): accepted\nwith its path, or dropped with its ``reject_code``. A group too big for every path is split\nby the server and its part goes (item B4, #913): ``split_units`` of ``group_units``; it is\n``STACK_LIMIT`` only when not even one unit has a path.",
+      "description": "One group of a ``group_move``, in the order of its ``groups`` (DEC-48, item B6): accepted\nwith its path, or dropped with its ``reject_code``. A group too big for every path in an\nordinary order is split by the server and its part goes (item B4, #913): ``split_units`` of\n``group_units``; it is ``STACK_LIMIT`` only when not even one unit has a path. A planned\norder splits nothing: such a member is ``STACK_LIMIT`` (owner decision (10), #941).",
       "properties": {
         "path": {
           "anyOf": [
@@ -98,7 +98,7 @@
             }
           ],
           "default": null,
-          "description": "The group was too big for every path (item B4, #913): the units of the part that split\noff and goes (the largest size with a path, as ``reach.split``); the rest stays as the\ngroup, without an order. ``None``: the whole group goes, or it was dropped."
+          "description": "The group of an ordinary order was too big for every path (item B4, #913): the units of\nthe part that split off and goes (the largest size with a path, as ``reach.split``); the rest\nstays as the group, without an order. ``None``: the whole group goes, or it was dropped (a\nplanned member is never split, #941)."
         },
         "group_units": {
           "anyOf": [
