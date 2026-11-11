@@ -40,6 +40,7 @@ import {
   badgeCount,
   badgeFont,
   badgeLabel,
+  badgeLabelWidth,
   chevronStrokes,
   type BadgeDir,
 } from './badgeLayout.ts';
@@ -752,8 +753,7 @@ function badgeTextStyle(size: number, color: number): TextStyle {
 export function chevronBadgeSpec(dir: BadgeDir, count: number, size: number): BakeSpec {
   const n = badgeCount(count);
   const label = badgeLabel(n);
-  const font = badgeFont(size);
-  const labelWidth = label.length * font * 0.62;
+  const labelWidth = badgeLabelWidth(size, n);
   const color = dir === 'up' ? BADGE_UP : BADGE_DOWN;
   return {
     key: `badge:${dir}:${String(n)}:${String(size)}`,

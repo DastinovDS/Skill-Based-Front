@@ -3,13 +3,21 @@ import {
   badgeCount,
   badgeFloor,
   badgeLabel,
+  badgesBox,
   chevronCount,
   chevronStrokes,
+  SHOULDER,
+  shoulderBadge,
+  shoulderWant,
   stackBadges,
   terrainBadges,
 } from './badgeLayout.ts';
 import { chevronBadgeSpec } from './bakedShapes.ts';
-import { BADGE } from './style.ts';
+import { BADGE, PROVINCE } from './style.ts';
+import { fitReach } from './cityLayout.ts';
+import { keepClear } from './shapes.ts';
+import { helmet } from '../units/helmet.ts';
+import { helmetFit, helmetWidth } from './helmetFit.ts';
 
 describe('chevron badges (#791)', () => {
   it('counts by strokes up to three, then one chevron and a number, "9+" above nine', () => {
@@ -59,5 +67,75 @@ describe('chevron badges (#791)', () => {
     expect(at[1]?.y).toBeGreaterThan(-10);
     expect(BADGE.size * 0.4 * badgeFloor(0.4)).toBeCloseTo(BADGE.minPx);
     expect(badgeFloor(2)).toBe(1);
+  });
+});
+
+describe('chevrons on the helmet shoulder (C2 of #954, #956)', () => {
+  /** The bound the map gives a token in a node of body `radius` (entityView.ts, `fitReach` + 2.2). */
+  const BOUND_PAST_FIT = 2.2;
+  const radii = [PROVINCE.radius, 11, 14, 17, 20];
+
+  function place(radius: number, units: number, count: number, px: number) {
+    const bound = fitReach(radius) + BOUND_PAST_FIT;
+    const width = helmetFit('own', helmetWidth(36, true), fitReach(radius));
+    const keep = keepClear(
+      { counts: { units, charged: 1 }, range: null },
+      helmet('own', width).middle,
+      'own',
+      width,
+    );
+    const box = badgesBox([{ dir: 'up', count }]);
+    if (box === null) throw new Error('a mark has a box');
+    const put = shoulderBadge(box, bound, keep, shoulderWant(px));
+    const mine = {
+      x0: put.at.x + box.x0 * put.scale,
+      y0: put.at.y + box.y0 * put.scale,
+      x1: put.at.x + box.x1 * put.scale,
+      y1: put.at.y + box.y1 * put.scale,
+    };
+    return { put, mine, bound, keep };
+  }
+
+  it('stays inside the ring and clear of the number on every node size, count and zoom', () => {
+    for (const radius of radii) {
+      for (const units of [1, 9, 12]) {
+        for (const count of [1, 3, 5, 9]) {
+          for (const px of [0.4, 0.6, 1, 2]) {
+            const { put, mine, bound, keep } = place(radius, units, count, px);
+            for (const x of [mine.x0, mine.x1]) {
+              for (const y of [mine.y0, mine.y1]) {
+                // A count of 3 strokes or a number may take back up to 3.5 of the ring on the smallest nodes.
+                expect(Math.hypot(x, y)).toBeLessThanOrEqual(bound + (count >= 3 ? 3.5 : 0) + 0.01);
+              }
+            }
+            // The number (the first box) is never covered.
+            const { number } = keep;
+            expect(number).not.toBeNull();
+            if (number === null) continue;
+            const apart =
+              mine.x1 <= number.x0 ||
+              mine.x0 >= number.x1 ||
+              mine.y1 <= number.y0 ||
+              mine.y0 >= number.y1;
+            const label = `${String(radius)} u${String(units)} n${String(count)} px${String(px)}`;
+            expect(apart, label).toBe(true);
+            expect(put.scale).toBeGreaterThanOrEqual(SHOULDER.min);
+            expect(put.scale).toBeLessThanOrEqual(SHOULDER.max);
+          }
+        }
+      }
+    }
+  });
+
+  it('keeps about 0.78 of the size where the ring leaves room, and shrinks on the smallest nodes', () => {
+    expect(place(20, 1, 1, 1).put.scale).toBeGreaterThanOrEqual(0.7);
+    expect(place(PROVINCE.radius, 12, 5, 1).put.scale).toBeLessThan(SHOULDER.scale);
+  });
+
+  it('asks for more size at a far zoom, up to a cap, and the normal share at the normal one', () => {
+    expect(shoulderWant(2)).toBe(SHOULDER.scale);
+    expect(shoulderWant(0.6)).toBeGreaterThan(SHOULDER.scale);
+    expect(shoulderWant(0.01)).toBe(SHOULDER.max);
+    expect(shoulderWant(0)).toBe(SHOULDER.scale);
   });
 });

@@ -1,7 +1,7 @@
 import { Graphics } from 'pixi.js';
 import { ENGRAVED, easeSettle } from '../theme/tokens.ts';
 import { helmet, helmetExtent } from '../units/helmet.ts';
-import type { TokenSpot } from './layout.ts';
+import type { Diamond, TokenSpot } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import { CASING, CORNER_TICKS } from './style.ts';
 
@@ -53,6 +53,89 @@ export function tickPoints(corner: TickCorner, grow: number): [number, number][]
 
 export type TickLook = 'select' | 'hover';
 
+type Pair = [number, number];
+
+/**
+ * The part of the segment `a` to `b` outside the diamond `d` grown by `reach` (a distance across,
+ * not along the axes): up to two pieces (the start and the end), as parameters 0..1. The diamond is
+ * four half planes, so the clip is the intersection of four intervals (Cyrus-Beck).
+ */
+export function outsideDiamond(a: Pair, b: Pair, d: Diamond, reach: number): [number, number][] {
+  const limit = d.h + reach * Math.SQRT2;
+  let t0 = 0;
+  let t1 = 1;
+  for (const [sx, sy] of [
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+  ] as const) {
+    // g(t) = g0 + g1 t <= 0 inside this half plane.
+    const g0 = sx * (a[0] - d.x) + sy * (a[1] - d.y) - limit;
+    const g1 = sx * (b[0] - a[0]) + sy * (b[1] - a[1]);
+    if (g1 === 0) {
+      if (g0 > 0) return [[0, 1]];
+      continue;
+    }
+    const t = -g0 / g1;
+    if (g1 > 0) t1 = Math.min(t1, t);
+    else t0 = Math.max(t0, t);
+  }
+  if (t0 >= t1) return [[0, 1]];
+  const pieces: [number, number][] = [];
+  if (t0 > 0) pieces.push([0, t0]);
+  if (t1 < 1) pieces.push([t1, 1]);
+  return pieces;
+}
+
+/**
+ * The strokes of the tick `corner` (`grow` further out) with the diamonds of `under` taken out: an
+ * L with nothing over it is one path, an L cut by a diamond is the pieces that stay. `reach` is how
+ * far from a diamond's edge a stroke ends (the cap of the dark casing then just touches it).
+ */
+export function tickPaths(
+  corner: TickCorner,
+  grow: number,
+  under: readonly Diamond[],
+  reach: number,
+): Pair[][] {
+  const [a, b, c] = tickPoints(corner, grow);
+  if (a === undefined || b === undefined || c === undefined) return [];
+  if (under.length === 0) return [[a, b, c]];
+  // Each arm as a list of kept pieces along it, from the corner out.
+  const arm = (from: Pair, to: Pair): [number, number][] => {
+    let kept: [number, number][] = [[0, 1]];
+    for (const d of under) {
+      kept = kept.flatMap(([k0, k1]) =>
+        outsideDiamond(at(from, to, k0), at(from, to, k1), d, reach).map(
+          ([p, q]): [number, number] => [k0 + p * (k1 - k0), k0 + q * (k1 - k0)],
+        ),
+      );
+    }
+    return kept;
+  };
+  const one = arm(b, a);
+  const two = arm(b, c);
+  const paths: Pair[][] = [];
+  const first = one[0];
+  const second = two[0];
+  const joined = first?.[0] === 0 && second?.[0] === 0;
+  if (joined) {
+    paths.push([at(b, a, first[1]), b, at(b, c, second[1])]);
+  }
+  one.forEach(([p, q], i) => {
+    if (!(joined && i === 0)) paths.push([at(b, a, p), at(b, a, q)]);
+  });
+  two.forEach(([p, q], i) => {
+    if (!(joined && i === 0)) paths.push([at(b, c, p), at(b, c, q)]);
+  });
+  return paths;
+}
+
+function at(from: Pair, to: Pair, t: number): Pair {
+  return [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t];
+}
+
 /** How far in a cue is `ageMs` after it appeared: 0 (not yet) to 1; at once under "less motion". */
 export function tickProgress(ageMs: number, reduced: boolean): number {
   if (reduced) return 1;
@@ -90,7 +173,10 @@ export class CornerTicks {
     g.position.set(spot.x, spot.y);
     g.scale.set(spot.scale);
     const k = tickProgress(now - this.since, reducedMotion());
-    const key = `${look}:${spot.enemy === true ? 'e' : 'o'}:${String(spot.width)}:${k.toFixed(3)}`;
+    const under = (spot.under ?? []).map(
+      (d) => `${d.x.toFixed(1)},${d.y.toFixed(1)},${d.h.toFixed(1)}`,
+    );
+    const key = `${look}:${spot.enemy === true ? 'e' : 'o'}:${String(spot.width)}:${k.toFixed(3)}:${under.join(';')}`;
     if (key === this.key) return;
     this.key = key;
     this.draw(spot, look, k);
@@ -104,11 +190,18 @@ export class CornerTicks {
     const grow = (1 - easeSettle(k)) * T.grow;
     const shown = tickCornersFor(look, tickCorners(spot));
     const alpha = look === 'select' ? T.ink.select : T.ink.hover;
+    const under = spot.under ?? [];
     for (const pass of ['casing', 'ink'] as const) {
+      // A gilt diamond over the cue (the VP lozenge): the casing's square cap just touches its edge,
+      // the ink stops a hair short of the end of the casing.
+      const reach = T.casing.width / 2 + (pass === 'casing' ? 0.1 : 0.9);
       for (const corner of shown) {
-        const [a, b, c] = tickPoints(corner, grow);
-        if (a === undefined || b === undefined || c === undefined) continue;
-        g.moveTo(a[0], a[1]).lineTo(b[0], b[1]).lineTo(c[0], c[1]);
+        for (const path of tickPaths(corner, grow, under, reach)) {
+          path.forEach(([x, y], i) => {
+            if (i === 0) g.moveTo(x, y);
+            else g.lineTo(x, y);
+          });
+        }
       }
       if (pass === 'casing') {
         g.stroke({
