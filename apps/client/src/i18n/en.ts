@@ -450,7 +450,8 @@ export const en = {
   'help.close': 'Close the help',
   'help.legend': 'On the map',
   'help.legend.mineHelmet': 'Your group: a helmet in your colour facing right, with a brim',
-  'help.legend.enemyHelmet': 'Enemy group: a helmet in the enemy's colour facing left, cut at the ear',
+  'help.legend.enemyHelmet':
+    'Enemy group: a helmet in the opponent colour facing left, cut at the ear',
   'help.legend.chargeHelmet': 'Fill from the bottom: how many units are charged',
   'help.legend.order': 'Thin arrow: an ordinary order',
   'help.legend.planned':
