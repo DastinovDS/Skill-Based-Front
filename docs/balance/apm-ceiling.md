@@ -226,10 +226,11 @@ Per bot:
 What it shows:
 
 1. **The bots spend every CP.** A player burns 0.6 CP a match at the cap on average and ends 1.3% of the ticks at
-   the cap (`cp_burned`, `cp_cap_ticks` of the tournament rows). The CP they spend, 5.75 a minute, is the income of
-   their stance mix (27% Economy, 50% Balance, 23% War of the match time: about 5.7 a minute on 51 to 54 nodes) plus
-   the 3 CP of the start. So their 5.9 useful commands a minute are the CP term of their stances: the ceiling of
-   section 3 holds them, and they reach it.
+   the cap (`cp_burned`, `cp_cap_ticks` of the tournament rows). They spend 5.75 CP a minute by commands; the income
+   of their stance mix (27% Economy, 50% Balance, 23% War of the match time) is about 5.7 a minute on 51 to 54 nodes,
+   5.9 with the 3 CP of the start, so they spend about 97% of it.
+   Their 5.9 useful commands a minute are the CP term of their stances plus a few buildings: the ceiling of section 3
+   holds them, and they reach it.
 2. **The windows touch the analytic ceiling.** The best useful 10 s window is 6 commands (36 a minute) and the best
    60 s window 13: exactly the War ceilings of section 3 on 51 to 54 nodes (`apm_10s` 36, `apm_60s` 13); no player row
    exceeds them. The p95 of a player is 5 in 10 s (the cap spent at once) and 12 to 13 in 60 s.
