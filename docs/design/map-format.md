@@ -173,8 +173,8 @@ or lake in it) of at most `geo.POCKET_CELLS` (60) cells, about a stream 60 units
   each of `geo.POCKET_TRIES` (24) cells of the pocket as that point (every area's distance less its distance there).
   A try counts only if it fills the pocket whole and leaves every area one piece.
 - A pocket of at most `geo.POND_SMALL` (40) cells that cannot be filled (five areas round it with roads only between
-  neighbours: no four of them can meet at a point) is widened round itself into a pond of `geo.POND_CELLS` (100) cells,
-  at most `geo.POND_REACH` (40 units) out, keeping `geo.POND_CLEAR` (16 units) off a road and 50 off a node. Land only
+  neighbours: no four of them can meet at a point) is widened round itself into a pond of `geo.POND_CELLS` (160) cells,
+  at most `geo.POND_REACH` (60 units) out, keeping `geo.POND_CLEAR` (16 units) off a road and 50 off a node. Land only
   becomes water, so no land contact appears.
 - A bigger pocket is a piece of a stream that reads as one and stays.
 

@@ -4088,7 +4088,7 @@ Proposal (each item is a default for the owner to confirm or change):
    for the offline maps and the per-match maps of `gow_server.mapgen`) fills a pocket of streams only (no sea or
    lake in it) of at most 60 cells of 4 x 4 units (a stream piece of about 60 units) with land where item 3
    allows it (four areas without roads across meet at a point); one of at most 40 cells that cannot be filled
-   (five areas round it with roads only between neighbours) is widened into a pond of 100 cells. A presentation
+   (five areas round it with roads only between neighbours) is widened into a pond of 160 cells. A presentation
    rule, no game rule: the map files, their hashes and the replays do not change (item 7).
 7. **What does not change.** The graph, the roads and their levels, `travel_ticks`, `border_permille`, capacities,
    supply, vision (DEC-21, DEC-35), fights, the ruleset, `PlayerView`, the protocol, `SIM_VERSION`,
