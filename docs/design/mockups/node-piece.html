@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Node piece, round 1</title>
+<!-- Node piece, round 1 (broad, #949): the owner's feedback of 2026-11-11 (#940) on the group helmet standing in a city or a
+     province. Topic A: a helmet of (about) its size before #943 with the capacity cells of the ring still readable.
+     Topic B: the selection told by cues inside the piece, never by an outer outline alone. A0 and B0 are the client
+     today (#943 merged), A1 the look before #943. The two topics combine: every cell is one A with one B.
+     Drawn with the client's own numbers: the helmet outlines of units/helmet.ts, HELMET_ENGRAVED, RING_ENGRAVED,
+     CITY_ENGRAVED, PROVINCE_ENGRAVED, LOZENGE, VP_LOZENGE, TOWER, HELMET_SELECT, HELMET_FRAME, GROUP_ORDER.seal, BADGE
+     and FLOW_STARVE of render/style.ts, helmetFit and the badge home of #943. The grounds are crops of the baked
+     Intaglio backgrounds of maps/gen (1 pixel = 1 world unit), the fog the Ruled veil. Self-contained, no network:
+     EB Garamond (SIL OFL) and the ground crops are in assets/node-piece/. State in the address (#a=...&b=...). -->
+<style>
+@font-face{font-family:'EB Garamond';src:url(assets/node-piece/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-style:normal;font-display:block}
+:root{
+  --stone:#16130f;--panel:#1d1a15;--raised:#221e18;--ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;
+  --rule:#7d7363;--line:#3d372d;--cut:#050403;--lozenge:#8f8573;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--stone);color:var(--ink);font:14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;background:linear-gradient(var(--stone) 88%,rgba(22,19,15,0));padding:10px 16px 12px}
+h1{font:600 20px/1 'EB Garamond',Georgia,serif;letter-spacing:.04em;margin:0 14px 0 0;color:var(--ink)}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:8px}
+.bar:first-child{margin-top:0}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.lab{font:600 12px/1 'EB Garamond',Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-right:4px}
+button.chip{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 9px 5px 9px;font:500 13px/1 system-ui,sans-serif;cursor:pointer;position:relative;border-radius:0}
+button.chip:hover{border-color:var(--rule);color:var(--ink)}
+button.chip[aria-pressed="true"]{background:var(--ink);color:#16130f;border-color:var(--ink);font-weight:650}
+button.chip[aria-pressed="true"]::after{content:"";position:absolute;left:50%;bottom:-6px;width:6px;height:6px;margin-left:-3px;background:var(--ink);transform:rotate(45deg);border:1px solid var(--stone)}
+button.chip .k{opacity:.7;margin-right:5px;font-weight:700}
+button.chip:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.sep{width:1px;height:22px;background:var(--line)}
+input[type=range]{accent-color:#ece4d1;width:110px;vertical-align:middle}
+.val{font:600 13px/1 'EB Garamond',Georgia,serif;color:var(--ink);min-width:2.4em;display:inline-block}
+.topic{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.topic .name{font:600 15px/1 'EB Garamond',Georgia,serif;color:var(--ink);margin-right:8px;min-width:150px}
+main{padding:4px 16px 24px}
+#cells{display:grid;gap:14px;grid-template-columns:1fr}
+#cells.n2,#cells.n3,#cells.n4{grid-template-columns:1fr 1fr}
+.cell{background:#0e0c09;border:1px solid var(--line);position:relative}
+.cell::before{content:"";position:absolute;inset:3px;border:1px solid rgba(236,228,209,.08);pointer-events:none}
+.cell h2{margin:0;padding:8px 12px 6px;font:600 15px/1.1 'EB Garamond',Georgia,serif;letter-spacing:.03em;display:flex;gap:14px;align-items:baseline;border-bottom:1px solid var(--line)}
+.cell h2 .b{color:var(--ink-dim);font-weight:500}
+.cell canvas{display:block;width:100%}
+.gray canvas{filter:grayscale(1)}
+#time{display:flex;align-items:center;gap:8px}
+#time input{width:200px}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Node piece</h1>
+    <div class="group"><span class="lab">Compare</span>
+      <button class="chip" data-cmp="a">A size</button><button class="chip" data-cmp="b">B selection</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group"><span class="lab">Ground</span>
+      <button class="chip" data-ground="plains">Plains</button><button class="chip" data-ground="forest">Forest</button><button class="chip" data-ground="snow">Snow</button><button class="chip" data-ground="fog">Fog</button>
+    </div>
+    <div class="group"><span class="lab">Plate</span>
+      <button class="chip" data-plate="mixed">Mixed</button><button class="chip" data-plate="city">City</button><button class="chip" data-plate="capital">Capital</button><button class="chip" data-plate="province">Province</button>
+    </div>
+    <div class="group"><span class="lab">Colour</span>
+      <button class="chip" data-col="lapis">Lapis</button><button class="chip" data-col="glacier">Glacier</button><button class="chip" data-col="shell">Shell</button><button class="chip" data-col="violet">Violet</button>
+    </div>
+  </div>
+  <div class="bar">
+    <div class="group"><span class="lab">Units</span> <input id="units" aria-label="Units in each group" type="range" min="1" max="9" step="1"><span class="val" id="unitsV"></span></div>
+    <div class="group"><span class="lab">Charged</span><input id="charged" aria-label="Charged units" type="range" min="0" max="9" step="1"><span class="val" id="chargedV"></span></div>
+    <div class="group"><span class="lab">Badges</span>
+      <button class="chip" data-badge="c">Chevron</button><button class="chip" data-badge="w">Warning</button><button class="chip" data-badge="r">Rally</button><button class="chip" data-badge="v">VP</button>
+    </div>
+    <div class="group"><span class="lab">Zoom</span><input id="zoom" aria-label="Zoom" type="range" min="100" max="420" step="5"><span class="val" id="zoomV"></span></div>
+    <div class="group">
+      <button class="chip" id="gray">Grey</button><button class="chip" id="still">Reduced motion</button>
+    </div>
+    <div id="time"><button class="chip" id="play">Play</button><input id="scrub" aria-label="Time" type="range" min="0" max="3000" step="10"></div>
+  </div>
+  <div class="bar"><div class="topic" id="topicA"><span class="name">A · helmet and cells</span></div></div>
+  <div class="bar"><div class="topic" id="topicB"><span class="name">B · selection inside</span></div></div>
+</header>
+<main><div id="cells"></div></main>
+<script>
+'use strict';
+// =============================================================================================
+// The client's numbers (apps/client/src/render/style.ts, theme/tokens.ts, units/helmet.ts).
+// =============================================================================================
+const C = {
+  casing: '#060504', plate: '#0e0c09', cut: '#050403', ink: '#ccc0a6', ivory: '#ece4d1', paper: '#f0f6fc',
+  bg: '#0d1117', neutral: '#b3a88f', vp: '#cfab62', warn: '#e6ab42', up: '#8cc79a', down: '#ec6654',
+};
+const COLOURS = { lapis: '#86a6ea', minium: '#e5785e', glacier: '#a6e0e8', shell: '#f4b4a4', violet: '#966fd6', madder: '#c8587e' };
+const HELMET_PATHS = {
+  own: {
+    dome: 'M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z',
+    band: 'M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60',
+    strap: 'M46 80 L54 96',
+  },
+  enemy: {
+    dome: 'M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z',
+    band: null,
+    strap: 'M38 75 L58 91 L64 68',
+  },
+};
+const HELMET_SCALE = 1.34, HELMET_INSIDE = 0.92;
+const UNIT_SIDES = [24, 30, 36, 42];
+const HE = { casing: 6, inside: 1.6, gear: 0.55, edge: 1.25, hatchW: 0.9, font: 12.5 };
+const CITY_E = { cutGrow: 3.2, cutAlpha: 0.85, rimGrow: 1.6, rimW: 1.1, innerInset: 1.2, innerW: 0.8, innerA: 0.6, enemyInsets: [4.4, 6.4], enemyW: 0.9, star: [0.6, 0.27, 1.2] };
+const PROV_E = { plate: 8, dot: 6.4, rimR: 7.6, rimW: 0.9, enemyR: 10, enemyW: 0.8 };
+const RING = { gap: 7, cut: 6, cutAlpha: 0.8, filled: 3.4, roomW: 0.9, roomOff: 1.6, wash: 0.3, segGap: 0.16 };
+const LOZ = { casing: 8.2, fill: 5.8, hollow: 4.7, line: 0.9, lineA: 0.92, pitch: 8.8, groupGap: 3.5, drop: 8.5 };
+const VPL = { side: 18.5, outer: 17.2, inner: 12.4, w: 1.1, font: 14.5, lift: 4.5 };
+const SELECT = { casing: 4, ink: 0.9, offset: 1.2, hover: { casing: 2.6, ink: 1, alpha: 0.8 }, frame: 7.5, hoverFrame: 6 };
+const SEAL = { half: 7, casing: 1.6, ink: 1, font: 12, dx: -0.56, dy: -0.44 };
+const BADGE = { size: 11, stroke: 0.3, outline: 2.6 };
+const STARVE = { half: 8, height: 14, angle: 45, gap: 9 };
+const BADGE_GAP = 13, BADGE_DROP = 3;
+const TOWER = {
+  barracks: [[-4.6, -5.2], [4.6, -5.2], [4.6, 4], [-4.6, 4]],
+  factory: [[-5.4, 4], [-5.4, -1.6], [-1.6, -5.2], [-1.6, -1.6], [2.2, -5.2], [2.2, -1.6], [5.4, -1.6], [5.4, 4]],
+  out: 4, scale: 1.5, casing: 3.2, line: 1, pitch: 1.7, hw: 0.8,
+};
+const RALLY = { gap: 12, length: 14, width: 7 };
+// Capacity by kind (rulesets/mvp-7.toml) and the body radius (cityLayout.cityRadius; a province 9).
+const PLATES = {
+  province: { cap: 3, r: 9, wh: 1, stock: 1, vp: 0 },
+  city: { cap: 6, r: 17, wh: 3, stock: 2, vp: 1 },
+  capital: { cap: 10, r: 20, wh: 6, stock: 4, vp: 2 },
+};
+
+// =============================================================================================
+// Helmet geometry: a port of units/helmet.ts (sampling, centring, extent, helmetFit, helmetOutline).
+// =============================================================================================
+function samplePath(d, steps = 10) {
+  const t = d.match(/[MLCQZ]|-?\d*\.?\d+/g) || [];
+  const pts = []; let i = 0, cmd = '', at = { x: 0, y: 0 };
+  const num = () => Number(t[i++]);
+  while (i < t.length) {
+    const tok = t[i];
+    if (/[MLCQZ]/.test(tok)) { cmd = tok; i++; if (cmd === 'Z') continue; }
+    if (cmd === 'M' || cmd === 'L') { at = { x: num(), y: num() }; pts.push(at); }
+    else if (cmd === 'C') {
+      const c1 = { x: num(), y: num() }, c2 = { x: num(), y: num() }, e = { x: num(), y: num() };
+      for (let k = 1; k <= steps; k++) {
+        const s = k / steps, u = 1 - s;
+        pts.push({ x: u*u*u*at.x + 3*u*u*s*c1.x + 3*u*s*s*c2.x + s*s*s*e.x, y: u*u*u*at.y + 3*u*u*s*c1.y + 3*u*s*s*c2.y + s*s*s*e.y });
+      }
+      at = e;
+    } else if (cmd === 'Q') {
+      const c = { x: num(), y: num() }, e = { x: num(), y: num() };
+      for (let k = 1; k <= steps; k++) {
+        const s = k / steps, u = 1 - s;
+        pts.push({ x: u*u*at.x + 2*u*s*c.x + s*s*e.x, y: u*u*at.y + 2*u*s*c.y + s*s*e.y });
+      }
+      at = e;
+    } else i++;
+  }
+  return pts;
+}
+function boundsOf(ps) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of ps) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
+function centroid(ps) {
+  let a = 0, cx = 0, cy = 0;
+  ps.forEach((p, i) => { const q = ps[(i + 1) % ps.length]; const cr = p.x*q.y - q.x*p.y; a += cr; cx += (p.x + q.x)*cr; cy += (p.y + q.y)*cr; });
+  return { x: cx / (3*a), y: cy / (3*a) };
+}
+const RAW = {};
+for (const k of ['own', 'enemy']) {
+  const P = HELMET_PATHS[k];
+  RAW[k] = { dome: samplePath(P.dome), band: P.band ? samplePath(P.band) : null, strap: samplePath(P.strap) };
+  const b = boundsOf([...RAW[k].dome, ...(RAW[k].band || []), ...RAW[k].strap]);
+  RAW[k].c = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+}
+const HELMETS = new Map();
+function helmet(kind, width) {
+  const key = kind + ':' + width;
+  if (HELMETS.has(key)) return HELMETS.get(key);
+  const R = RAW[kind], s = width / 100;
+  const place = (p) => ({ x: (p.x - R.c.x) * s, y: (p.y - R.c.y) * s });
+  const dome = R.dome.map(place), band = R.band ? R.band.map(place) : null, strap = R.strap.map(place);
+  const db = boundsOf(dome), mid = centroid(dome);
+  const h = { kind, width, dome, band, strap, bounds: boundsOf([...dome, ...(band || []), ...strap]), domeTop: db.y, domeBottom: db.y + db.height, domeBounds: db,
+    middle: { x: mid.x, y: mid.y + width * 0.02 } };
+  HELMETS.set(key, h);
+  return h;
+}
+function helmetLines(width) { const s = width / 100; return { strap: Math.max(6.4*s, 2.1), band: Math.max(5.6*s, 2.2), casing: 6.4, edge: 2.1 }; }
+function helmetExtent(h) {
+  const L = helmetLines(h.width); const pad = Math.max(L.casing, L.strap + L.casing) / 2;
+  return { top: h.bounds.y - pad, bottom: h.bounds.y + h.bounds.height + pad, left: h.bounds.x - pad, right: h.bounds.x + h.bounds.width + pad };
+}
+function helmetWidth(side, inside) { return Math.round(side * HELMET_SCALE * (inside ? HELMET_INSIDE : 1) * 100) / 100; }
+function helmetFit(kind, width, reach) {
+  let w = width;
+  for (let step = 0; step < 6 && w > 4; step++) {
+    const e = helmetExtent(helmet(kind, w));
+    const span = Math.max(e.right, -e.left, e.bottom, -e.top);
+    if (span <= reach) break;
+    w = Math.min(w - 0.25, Math.floor(((w * reach) / span) * 4) / 4);
+  }
+  return w;
+}
+function helmetReach(kind, width) { const e = helmetExtent(helmet(kind, width)); return Math.max(e.right, -e.left, e.bottom, -e.top); }
+function unitSide(units) { return units <= 3 ? UNIT_SIDES[0] : units <= 7 ? UNIT_SIDES[1] : units <= 15 ? UNIT_SIDES[2] : UNIT_SIDES[3]; }
+function segDist(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, l = dx*dx + dy*dy;
+  const t = l === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x)*dx + (p.y - a.y)*dy) / l));
+  return Math.hypot(p.x - (a.x + t*dx), p.y - (a.y + t*dy));
+}
+function lineDist(p, line, closed) {
+  let best = Infinity; const n = line.length;
+  for (let i = 0; i < (closed ? n : n - 1); i++) best = Math.min(best, segDist(p, line[i], line[(i + 1) % n]));
+  return best;
+}
+function insidePoly(p, poly) {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x)*(p.y - a.y)) / (b.y - a.y) + a.x) hit = !hit;
+  }
+  return hit;
+}
+const SEGMENTS = [[], [[3,2]], [[2,1]], [[3,1]], [[1,0]], [[1,0],[3,2]], [[2,0]], [[3,0]], [[0,3]], [[0,2]], [[0,3],[2,1]], [[0,1]], [[1,3]], [[1,2]], [[2,3]], []];
+function marchingLoop(field, b, margin, step) {
+  const x0 = b.x - margin, y0 = b.y - margin;
+  const nx = Math.ceil((b.width + 2*margin) / step) + 1, ny = Math.ceil((b.height + 2*margin) / step) + 1;
+  const v = new Float64Array(nx*ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) v[j*nx + i] = field({ x: x0 + i*step, y: y0 + j*step });
+  const at = (i, j) => v[j*nx + i];
+  const pt = new Map();
+  const cross = (i0, j0, i1, j1) => {
+    const key = i0 + ',' + j0 + ',' + i1 + ',' + j1;
+    if (!pt.has(key)) { const a = at(i0, j0), c = at(i1, j1); const t = a === c ? 0.5 : a / (a - c); pt.set(key, { x: x0 + (i0 + (i1 - i0)*t)*step, y: y0 + (j0 + (j1 - j0)*t)*step }); }
+    return key;
+  };
+  const next = new Map();
+  for (let j = 0; j + 1 < ny; j++) for (let i = 0; i + 1 < nx; i++) {
+    const e = [cross(i, j, i + 1, j), cross(i + 1, j, i + 1, j + 1), cross(i, j + 1, i + 1, j + 1), cross(i, j, i, j + 1)];
+    const code = (at(i, j) < 0 ? 8 : 0) | (at(i + 1, j) < 0 ? 4 : 0) | (at(i + 1, j + 1) < 0 ? 2 : 0) | (at(i, j + 1) < 0 ? 1 : 0);
+    for (const [a, c] of SEGMENTS[code]) next.set(e[a], e[c]);
+  }
+  let best = []; const seen = new Set();
+  for (const start of next.keys()) {
+    if (seen.has(start)) continue;
+    const loop = []; let k = start;
+    while (k !== undefined && !seen.has(k)) { seen.add(k); loop.push(k); k = next.get(k); }
+    if (loop.length > best.length) best = loop;
+  }
+  return best.map((k) => pt.get(k));
+}
+const OUTLINES = new Map();
+/** The client's selection line: `offset` outside the whole silhouette (helmetOutline). */
+function helmetOutline(kind, width, offset) {
+  const key = kind + ':' + width + ':' + offset;
+  if (OUTLINES.has(key)) return OUTLINES.get(key);
+  const h = helmet(kind, width), L = helmetLines(width);
+  const field = (p) => Math.min(insidePoly(p, h.dome) ? 0 : lineDist(p, h.dome, true), lineDist(p, h.strap, false) - L.strap/2,
+    h.band ? lineDist(p, h.band, false) - L.band/2 : Infinity) - offset;
+  const loop = marchingLoop(field, h.bounds, offset + 4, width / 60);
+  OUTLINES.set(key, loop);
+  return loop;
+}
+/** A contour `inset` inside the dome (signed distance), for the inner cues. */
+function domeInset(kind, width, inset) {
+  const key = 'in:' + kind + ':' + width + ':' + inset;
+  if (OUTLINES.has(key)) return OUTLINES.get(key);
+  const h = helmet(kind, width);
+  const field = (p) => { const d = lineDist(p, h.dome, true); return (insidePoly(p, h.dome) ? -d : d) + inset; };
+  const loop = marchingLoop(field, h.domeBounds, 2, width / 70);
+  OUTLINES.set(key, loop);
+  return loop;
+}
+
+// =============================================================================================
+// Drawing helpers (world units; the canvas transform carries the zoom).
+// =============================================================================================
+function poly(ctx, ps, closed = true) {
+  ctx.beginPath();
+  ps.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+  if (closed) ctx.closePath();
+}
+// GA: the alpha of the piece being drawn (a token fades in as a whole, Token.enter()).
+let GA = 1;
+function stroke(ctx, w, color, alpha = 1, cap = 'round', join = 'round') {
+  ctx.lineWidth = w; ctx.strokeStyle = color; ctx.globalAlpha = alpha*GA; ctx.lineCap = cap; ctx.lineJoin = join; ctx.stroke(); ctx.globalAlpha = GA;
+}
+function fill(ctx, color, alpha = 1) { ctx.fillStyle = color; ctx.globalAlpha = alpha*GA; ctx.fill(); ctx.globalAlpha = GA; }
+function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, Math.PI*2); }
+function hex(c) { return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]; }
+function rgb(a) { return '#' + a.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join(''); }
+function lighten(c, k) { return rgb(hex(c).map((v) => v + (255 - v)*k)); }
+function darken(c, k) { return rgb(hex(c).map((v) => v*(1 - k))); }
+/** Parallel lines at `angle` across the clip region (call inside a clip). */
+function hatchLines(ctx, b, angle, pitch) {
+  const cx = b.x + b.width/2, cy = b.y + b.height/2, R = Math.hypot(b.width, b.height)/2 + pitch;
+  const ux = Math.cos(angle), uy = Math.sin(angle), nx = -uy, ny = ux;
+  ctx.beginPath();
+  for (let d = -R; d <= R; d += pitch) { ctx.moveTo(cx + nx*d - ux*R, cy + ny*d - uy*R); ctx.lineTo(cx + nx*d + ux*R, cy + ny*d + uy*R); }
+}
+const ease = { out: (t) => 1 - Math.pow(1 - t, 3), back: (t) => { const c1 = 1.7, c3 = c1 + 1; return 1 + c3*Math.pow(t - 1, 3) + c1*Math.pow(t - 1, 2); }, inOut: (t) => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2 };
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
+
+// =============================================================================================
+// Grounds: the baked Intaglio crops, tiled mirrored; the fog is the Ruled veil over a grey copy.
+// =============================================================================================
+const GROUND_FILES = { plains: 'assets/node-piece/ground-plains.webp', forest: 'assets/node-piece/ground-forest.webp', snow: 'assets/node-piece/ground-snow.webp' };
+const GROUND_URLS = {};
+const tiles = {};
+function loadImg(src) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; }); }
+function mirrorTile(img, grey) {
+  const w = img.width, h = img.height, c = document.createElement('canvas');
+  c.width = 2*w; c.height = 2*h;
+  const g = c.getContext('2d');
+  for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    g.save(); g.translate(sx < 0 ? 2*w : 0, sy < 0 ? 2*h : 0); g.scale(sx, sy); g.drawImage(img, 0, 0); g.restore();
+  }
+  if (!grey) return c;
+  // The grey copy of the Ruled veil (RULED_VEIL.grey 0.9) by a filter: a file:// image cannot be read back.
+  const q = document.createElement('canvas'); q.width = c.width; q.height = c.height;
+  const qg = q.getContext('2d'); qg.filter = 'grayscale(90%)'; qg.drawImage(c, 0, 0);
+  return q;
+}
+function drawGround(ctx, ground, box) {
+  const t = tiles[ground === 'fog' ? 'fog' : ground];
+  if (t) {
+    const pat = ctx.createPattern(t, 'repeat');
+    ctx.fillStyle = pat; ctx.fillRect(box.x, box.y, box.w, box.h);
+  } else { ctx.fillStyle = '#3a4630'; ctx.fillRect(box.x, box.y, box.w, box.h); }
+  if (ground === 'fog') {
+    ctx.fillStyle = 'rgba(11,10,8,0.3)'; ctx.fillRect(box.x, box.y, box.w, box.h);
+    // The rules keep their pitch on screen (the client's HatchTile buckets): 3.4 css px, 1 px wide.
+    const z = S.zoom / 100, pitch = 3.4 / z;
+    ctx.beginPath();
+    for (let y = Math.floor(box.y / pitch)*pitch; y < box.y + box.h; y += pitch) { ctx.moveTo(box.x, y); ctx.lineTo(box.x + box.w, y); }
+    stroke(ctx, 1 / z, C.cut, 0.5*0.66, 'butt');
+  }
+}
+
+// =============================================================================================
+// The scene: two rows of three nodes. Row 1: idle, hover, selected. Row 2: Shift-selected 1 and 2,
+// and an opponent's group. Mixed plates: provinces and cities side by side.
+// =============================================================================================
+const DX = 86, DY = 96;
+const SLOTS = [
+  { col: 0, row: 0, side: 'own', state: 'idle', mixed: 'province' },
+  { col: 1, row: 0, side: 'own', state: 'hover', mixed: 'city' },
+  { col: 2, row: 0, side: 'own', state: 'sel', mixed: 'province' },
+  { col: 0, row: 1, side: 'own', state: 'multi', seal: 1, mixed: 'city' },
+  { col: 1, row: 1, side: 'own', state: 'multi', seal: 2, mixed: 'province' },
+  { col: 2, row: 1, side: 'enemy', state: 'idle', mixed: 'capital' },
+];
+const ROADS = [[0, 1], [1, 2], [3, 4], [4, 5], [0, 3], [1, 4], [2, 5]];
+// The moments of the story (ms): the groups come in, the pointer, a click, Shift+clicks.
+const T = { enter: 300, enterMs: 220, ringMs: 320, hover: 1000, sel: 1500, seal1: 1900, seal2: 2250, selMs: 180, end: 3000 };
+
+// =============================================================================================
+// Topic A: where the helmet stands and how the capacity reads.
+// =============================================================================================
+const A_VARIANTS = [
+  { id: 'A0', name: 'Today, #943', fit: 'ring', badges: 'out' },
+  { id: 'A1', name: 'Before #943', fit: 'none', badges: 'corner' },
+  { id: 'A2', name: 'Ring steps out', fit: 'none', badges: 'out', ring: 'step' },
+  { id: 'A3', name: 'Bezel', fit: 'none', badges: 'out', ring: 'bezel' },
+  { id: 'A4', name: 'Cells under', fit: 'none', badges: 'out', ring: 'pips' },
+  { id: 'A5', name: 'Count tab', fit: 'none', badges: 'out', ring: 'tab' },
+  { id: 'A6', name: 'Larger province', fit: 'ring', badges: 'out', ring: 'big' },
+  { id: 'A7', name: 'Horseshoe', fit: 'none', badges: 'corner', ring: 'shoe' },
+];
+// =============================================================================================
+// Topic B: the selection by cues inside the piece. Each has a hover look of its own.
+// =============================================================================================
+const B_VARIANTS = [
+  { id: 'B0', name: 'Today: outline' },
+  { id: 'B1', name: 'Ivory edge' },
+  { id: 'B2', name: 'Inner rule' },
+  { id: 'B3', name: 'Cross-hatch' },
+  { id: 'B4', name: 'Lit tablet' },
+  { id: 'B5', name: 'Inner pulse' },
+  { id: 'B6', name: 'Corner ticks' },
+  { id: 'B7', name: 'Ivory plate' },
+  { id: 'B8', name: 'Lift' },
+];
+
+// =============================================================================================
+// State (also in the address).
+// =============================================================================================
+const S = { a: ['A0', 'A1', 'A2', 'A6'], b: ['B0'], cmp: 'a', ground: 'plains', plate: 'mixed', col: 'lapis', units: 2, charged: 1,
+  badges: { c: true, w: false, r: false, v: true }, zoom: 260, gray: false, still: false, t: T.end, playing: false };
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  const list = (k, all) => (q.get(k) || '').split(',').filter((v) => all.some((x) => x.id === v));
+  const a = list('a', A_VARIANTS), b = list('b', B_VARIANTS);
+  if (q.get('cmp') === 'a' || q.get('cmp') === 'b') S.cmp = q.get('cmp');
+  if (a.length) S.a = a.slice(0, S.cmp === 'a' ? 4 : 1);
+  if (b.length) S.b = b.slice(0, S.cmp === 'b' ? 4 : 1);
+  if (S.cmp === 'a') S.b = S.b.slice(0, 1); else S.a = S.a.slice(0, 1);
+  if (['plains', 'forest', 'snow', 'fog'].includes(q.get('g'))) S.ground = q.get('g');
+  if (['mixed', 'city', 'capital', 'province'].includes(q.get('p'))) S.plate = q.get('p');
+  if (COLOURS[q.get('col')]) S.col = q.get('col');
+  const n = Number(q.get('n')); if (n >= 1 && n <= 9) S.units = n;
+  const c = Number(q.get('c')); if (q.has('c') && c >= 0 && c <= 9) S.charged = c;
+  if (q.has('bd')) { const bd = q.get('bd'); for (const k of 'cwrv') S.badges[k] = bd.includes(k); }
+  const z = Number(q.get('z')); if (z >= 100 && z <= 420) S.zoom = z;
+  S.gray = q.get('gr') === '1'; S.still = q.get('rm') === '1';
+  const t = Number(q.get('t')); if (q.has('t') && t >= 0 && t <= T.end) S.t = t;
+}
+function writeHash() {
+  const bd = Object.keys(S.badges).filter((k) => S.badges[k]).join('');
+  const h = `a=${S.a.join(',')}&b=${S.b.join(',')}&cmp=${S.cmp}&g=${S.ground}&p=${S.plate}&col=${S.col}&n=${S.units}&c=${S.charged}&bd=${bd}&z=${S.zoom}&gr=${S.gray ? 1 : 0}&rm=${S.still ? 1 : 0}${S.t < T.end ? '&t=' + Math.round(S.t) : ''}`;
+  history.replaceState(null, '', '#' + h);
+}
+
+// =============================================================================================
+// One piece: a node, its ring, its group, its badges and the selection cue.
+// =============================================================================================
+function plateOf(slot) { return S.plate === 'mixed' ? slot.mixed : S.plate; }
+function colourOf(side) {
+  const own = COLOURS[S.col];
+  if (side === 'own') return own;
+  return S.col === 'minium' ? COLOURS.lapis : COLOURS.minium;
+}
+/** The piece's layout for an A variant: the helmet width and place, the ring, where badges go. */
+function layout(av, slot, p, units, k) {
+  const kind = slot.side;
+  const side = unitSide(units);
+  const full = helmetWidth(side, true);
+  const reachFull = helmetReach(kind, full);
+  let r = p.r;
+  if (av.ring === 'big' && plateOf(slot) === 'province') r = 13;
+  let ringR = r + RING.gap;
+  let width = full;
+  if (av.fit === 'ring') width = helmetFit(kind, full, ringR - RING.cut/2 - 1);
+  const L = { kind, side, full, width, r, ringR, ringBase: ringR, reachFull, at: { x: 0, y: 0 }, cellArc: null, bezel: null, pips: null, tab: false, lozDrop: 0 };
+  if (av.ring === 'step') {
+    const want = Math.max(ringR, reachFull + RING.cut/2 + 1.5);
+    L.ringR = ringR + (want - ringR) * k;
+  } else if (av.ring === 'bezel') {
+    const plateR = reachFull + 1.2, bandR = plateR + 4.4;
+    const toR = Math.max(ringR, bandR);
+    L.bezel = { k, plateR: r + (plateR - r) * k, bandR: ringR + (toR - ringR) * k };
+    L.ringR = L.bezel.bandR;
+  } else if (av.ring === 'pips') { L.pips = k; L.lozDrop = (Math.max(0, reachFull + 2.5 - ringR - 3.5) + 12) * k; }
+  else if (av.ring === 'tab') { L.tab = true; L.lozDrop = Math.max(0, reachFull + 2 - ringR) + 9; }
+  else if (av.ring === 'shoe') {
+    const e = helmetExtent(helmet(kind, full));
+    const open = 170 * Math.PI / 180 * k;
+    L.cellArc = { from: -Math.PI/2 + open/2, to: -Math.PI/2 + 2*Math.PI - open/2 };
+    L.at = { x: 0, y: (1.5 - e.bottom) * k };
+  }
+  return L;
+}
+
+function drawRoads(ctx, nodes) {
+  for (const [i, j] of ROADS) {
+    const a = nodes[i], b = nodes[j];
+    const buffer = SLOTS[i].side !== SLOTS[j].side;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    if (buffer) {
+      stroke(ctx, 3.6 + 2, C.casing, 0.4, 'butt');
+      ctx.setLineDash([7, 5]); stroke(ctx, 2, '#aab2bd', 0.95*0.74, 'butt'); ctx.setLineDash([]);
+    } else {
+      stroke(ctx, 7.4, C.casing, 0.55, 'butt');
+      stroke(ctx, 5.6, COLOURS[S.col], 0.62*0.74, 'butt');
+      stroke(ctx, 2, '#e6edf3', 0.95*0.74, 'butt');
+    }
+  }
+  // Roads leaving the scene.
+  const stubs = [[0, -1, 0], [2, 1, 0], [3, -1, 0], [0, 0, -1], [2, 0, -1]];
+  for (const [i, dx, dy] of stubs) {
+    const a = nodes[i];
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(a.x + dx*120 + (dy ? 30 : 0), a.y + dy*120 + (dx ? 18 : 0));
+    stroke(ctx, 7.4, C.casing, 0.55, 'butt'); stroke(ctx, 5.6, COLOURS[S.col], 0.62*0.74, 'butt'); stroke(ctx, 2, '#e6edf3', 0.95*0.74, 'butt');
+  }
+}
+
+function drawBody(ctx, plate, r, kind, color, occupied, capital) {
+  if (plate === 'province') {
+    circle(ctx, 0, 0, PROV_E.plate); fill(ctx, C.plate);
+    if (occupied) return;
+    circle(ctx, 0, 0, PROV_E.dot); fill(ctx, color);
+    circle(ctx, 0, 0, PROV_E.rimR); stroke(ctx, PROV_E.rimW, C.ink);
+    if (kind === 'enemy') { circle(ctx, 0, 0, PROV_E.enemyR); stroke(ctx, PROV_E.enemyW, C.ink); }
+    return;
+  }
+  circle(ctx, 0, 0, r + CITY_E.cutGrow); fill(ctx, C.cut, CITY_E.cutAlpha);
+  circle(ctx, 0, 0, r); fill(ctx, occupied ? C.plate : color);
+  circle(ctx, 0, 0, r + CITY_E.rimGrow); stroke(ctx, CITY_E.rimW, C.ink);
+  circle(ctx, 0, 0, r - CITY_E.innerInset); stroke(ctx, CITY_E.innerW, C.cut, CITY_E.innerA);
+  if (kind === 'enemy') for (const ins of CITY_E.enemyInsets) { circle(ctx, 0, 0, r - ins); stroke(ctx, CITY_E.enemyW, C.ink); }
+  if (capital && !occupied) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI/2 + i*Math.PI/5, rr = i % 2 ? r*CITY_E.star[1] : r*CITY_E.star[0]; ctx.lineTo(rr*Math.cos(a), rr*Math.sin(a)); }
+    ctx.closePath(); fill(ctx, C.plate); stroke(ctx, CITY_E.star[2], C.ink, 1, 'butt', 'miter');
+  }
+}
+
+function ringArcs(cap, filled, from = -Math.PI/2, to = -Math.PI/2 + Math.PI*2) {
+  const span = to - from, arcs = [];
+  const gap = RING.segGap * (span / (Math.PI*2));
+  for (let i = 0; i < cap; i++) arcs.push({ from: from + span*i/cap + gap/2, to: from + span*(i + 1)/cap - gap/2, filled: i < filled });
+  return arcs;
+}
+function strokeArcs(ctx, r, arcs, w, color, alpha = 1) {
+  ctx.beginPath();
+  for (const a of arcs) { ctx.moveTo(r*Math.cos(a.from), r*Math.sin(a.from)); ctx.arc(0, 0, r, a.from, a.to); }
+  stroke(ctx, w, color, alpha, 'butt');
+}
+/** The capacity ring (cityRingSpec): a dark cut; a unit a solid ink arc; room a hollow cell. */
+function drawRing(ctx, r, arcs, scale = 1) {
+  const o = RING.roomOff * scale;
+  strokeArcs(ctx, r, arcs, RING.cut * scale, C.cut, RING.cutAlpha);
+  strokeArcs(ctx, r, arcs.filter((a) => a.filled), RING.filled * scale, C.ink);
+  const room = arcs.filter((a) => !a.filled);
+  strokeArcs(ctx, r, room, 2*o, C.ink, RING.wash);
+  for (const s of [-1, 1]) strokeArcs(ctx, r + s*o, room, RING.roomW, C.ink);
+  ctx.beginPath();
+  for (const a of room) for (const ang of [a.from, a.to]) { const c = Math.cos(ang), s = Math.sin(ang); ctx.moveTo((r - o)*c, (r - o)*s); ctx.lineTo((r + o)*c, (r + o)*s); }
+  if (room.length) stroke(ctx, RING.roomW, C.ink, 1, 'butt');
+}
+/** A3 Bezel: a medallion plate and a broad band of cells, cut apart by dark notches. */
+function drawBezel(ctx, L, cap, filled) {
+  const B = L.bezel, w = 4 + 1.2*B.k;
+  circle(ctx, 0, 0, B.bandR + w/2 + 1.6); fill(ctx, C.cut, 0.85);
+  circle(ctx, 0, 0, B.plateR); fill(ctx, C.plate);
+  circle(ctx, 0, 0, B.bandR + w/2 + 1.2); stroke(ctx, 0.9, C.ink, 0.9);
+  circle(ctx, 0, 0, B.bandR - w/2 - 1.1); stroke(ctx, 0.7, C.ink, 0.45);
+  const arcs = ringArcs(cap, filled).map((a) => ({ ...a, from: a.from + 0.02, to: a.to - 0.02 }));
+  strokeArcs(ctx, B.bandR, arcs.filter((a) => a.filled), w, C.ink);
+  const room = arcs.filter((a) => !a.filled);
+  strokeArcs(ctx, B.bandR, room, w, C.ink, 0.22);
+  for (const s of [-1, 1]) strokeArcs(ctx, B.bandR + s*(w/2 - 0.45), room, 0.9, C.ink);
+  ctx.beginPath();
+  for (const a of room) for (const ang of [a.from, a.to]) { const c = Math.cos(ang), s = Math.sin(ang); ctx.moveTo((B.bandR - w/2 + .45)*c, (B.bandR - w/2 + .45)*s); ctx.lineTo((B.bandR + w/2 - .45)*c, (B.bandR + w/2 - .45)*s); }
+  if (room.length) stroke(ctx, 0.9, C.ink, 1, 'butt');
+}
+/** A4: the cells as upright bars on a dark strip under the node. */
+function drawPips(ctx, L, cap, filled) {
+  const k = L.pips; if (k <= 0) return;
+  const w = 3.4, h = 7.5, pitch = 5.4, n = cap, width = n*pitch - (pitch - w);
+  const y = Math.max(L.ringBase + 3.5, L.reachFull + 2.5) + h/2;
+  GA = k;
+  ctx.beginPath(); ctx.rect(-width/2 - 3, y - h/2 - 2.6, width + 6, h + 5.2); fill(ctx, C.cut, 0.85);
+  ctx.beginPath(); ctx.rect(-width/2 - 2.2, y - h/2 - 1.8, width + 4.4, h + 3.6); stroke(ctx, 0.8, C.ink, 0.55, 'butt', 'miter');
+  for (let i = 0; i < n; i++) {
+    const x = -width/2 + i*pitch;
+    ctx.beginPath(); ctx.rect(x, y - h/2, w, h);
+    if (i < filled) fill(ctx, C.ink);
+    else { fill(ctx, C.ink, 0.28); ctx.beginPath(); ctx.rect(x + .45, y - h/2 + .45, w - .9, h - .9); stroke(ctx, 0.9, C.ink, 1, 'butt', 'miter'); }
+  }
+  GA = 1; ctx.globalAlpha = 1;
+}
+/** A5: a notched tab on the bottom of the ring with units / capacity. */
+function drawTab(ctx, L, units, cap) {
+  const w = 25, h = 12.5, y = Math.max(L.ringR + 1.5, L.reachFull + h/2 + 0.5);
+  ctx.beginPath(); ctx.rect(-w/2 - 1.6, y - h/2 - 1.6, w + 3.2, h + 3.2); fill(ctx, C.casing);
+  ctx.beginPath(); ctx.rect(-w/2, y - h/2, w, h); fill(ctx, C.plate);
+  ctx.beginPath(); ctx.rect(-w/2 + 1.2, y - h/2 + 1.2, w - 2.4, h - 2.4); stroke(ctx, 0.9, C.ink, 0.9, 'butt', 'miter');
+  for (const [cx, cy] of [[-w/2, y - h/2], [w/2, y - h/2], [-w/2, y + h/2], [w/2, y + h/2]]) { ctx.beginPath(); ctx.rect(cx - 1.4, cy - 1.4, 2.8, 2.8); fill(ctx, C.casing); }
+  ctx.font = `600 10.5px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = C.ink; ctx.fillText(String(units), -5.2, y + 0.6);
+  ctx.fillStyle = C.ink; ctx.globalAlpha = 0.7; ctx.fillText(String(cap), 5.6, y + 0.6); ctx.globalAlpha = GA;
+  ctx.beginPath(); ctx.moveTo(1.8, y - 4); ctx.lineTo(-1.4, y + 4.6); stroke(ctx, 0.9, C.ink, 0.8, 'butt');
+}
+/** The warehouse row of lozenges (LOZENGE) under the ring. */
+function drawLozenges(ctx, y, n, stock, color) {
+  const xs = [];
+  for (let i = 0; i < n; i++) xs.push(i*LOZ.pitch + (n > 4 ? Math.floor(i/3)*LOZ.groupGap : 0));
+  const mid = (xs[0] + xs[xs.length - 1]) / 2;
+  const lz = (cx, s) => { const h = s*Math.SQRT2/2; ctx.beginPath(); ctx.moveTo(cx, y - h); ctx.lineTo(cx + h, y); ctx.lineTo(cx, y + h); ctx.lineTo(cx - h, y); ctx.closePath(); };
+  xs.forEach((x0, i) => {
+    const x = x0 - mid;
+    lz(x, LOZ.casing); fill(ctx, C.casing);
+    if (i < stock) { lz(x, LOZ.fill); fill(ctx, color); }
+    else { lz(x, LOZ.casing - 1.6); fill(ctx, C.plate); lz(x, LOZ.hollow); stroke(ctx, LOZ.line, C.ink, LOZ.lineA, 'butt', 'miter'); }
+  });
+}
+function drawVp(ctx, at, n) {
+  const lz = (s) => { const h = s*Math.SQRT2/2; ctx.beginPath(); ctx.moveTo(at.x, at.y - h); ctx.lineTo(at.x + h, at.y); ctx.lineTo(at.x, at.y + h); ctx.lineTo(at.x - h, at.y); ctx.closePath(); };
+  lz(VPL.side); fill(ctx, C.plate);
+  lz(VPL.outer); stroke(ctx, VPL.w, C.vp, 1, 'butt', 'miter');
+  lz(VPL.inner); stroke(ctx, VPL.w, C.vp, 1, 'butt', 'miter');
+  ctx.font = `600 ${VPL.font}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = C.vp; ctx.fillText(String(n), at.x, at.y + 1);
+}
+function drawTower(ctx, kind, at, color, enemy) {
+  ctx.save(); ctx.translate(at.x, at.y); ctx.scale(TOWER.scale, TOWER.scale);
+  const pts = TOWER[kind].map(([x, y]) => ({ x, y }));
+  poly(ctx, pts); stroke(ctx, TOWER.casing, C.casing, 1, 'butt', 'miter'); fill(ctx, C.plate);
+  ctx.save(); poly(ctx, pts); ctx.clip(); hatchLines(ctx, { x: -6, y: -6, width: 12, height: 12 }, enemy ? -Math.PI/4 : 0, TOWER.pitch); stroke(ctx, TOWER.hw, color, 1, 'butt'); ctx.restore();
+  poly(ctx, pts); stroke(ctx, TOWER.line / TOWER.scale * 1.2, C.ink, 1, 'butt', 'miter');
+  if (kind === 'barracks') { ctx.beginPath(); ctx.rect(-1.4, 1.2, 2.8, 2.8); fill(ctx, C.casing); }
+  ctx.restore();
+}
+function drawChevron(ctx, at, dir) {
+  const s = BADGE.size, y = dir === 'up' ? 1 : -1;
+  const pts = [{ x: -s*.56, y: y*s*.26 }, { x: 0, y: -y*s*.26 }, { x: s*.56, y: y*s*.26 }].map((p) => ({ x: p.x + at.x, y: p.y + at.y }));
+  poly(ctx, pts, false); stroke(ctx, s*BADGE.stroke + BADGE.outline, C.cut);
+  poly(ctx, pts, false); stroke(ctx, s*BADGE.stroke, dir === 'up' ? C.up : C.down);
+}
+function drawStarve(ctx, at) {
+  const { half, height } = STARVE;
+  ctx.beginPath(); ctx.moveTo(at.x, at.y - height/2); ctx.lineTo(at.x + half, at.y + height/2); ctx.lineTo(at.x - half, at.y + height/2); ctx.closePath();
+  fill(ctx, C.warn); stroke(ctx, 1.6, C.bg);
+  ctx.beginPath(); ctx.roundRect(at.x - 1, at.y - height/2 + 5.5, 2, 5, 1); fill(ctx, C.bg);
+  circle(ctx, at.x, at.y + height/2 - 3.4, 1.25); fill(ctx, C.bg);
+}
+function drawRally(ctx, ringR, angle, color) {
+  const ux = Math.cos(angle), uy = Math.sin(angle), base = ringR + RALLY.gap;
+  const tip = { x: ux*(base + RALLY.length), y: uy*(base + RALLY.length) }, back = { x: ux*base, y: uy*base }, hw = RALLY.width;
+  const pts = [tip, { x: back.x - uy*hw, y: back.y + ux*hw }, { x: back.x + ux*3, y: back.y + uy*3 }, { x: back.x + uy*hw, y: back.y - ux*hw }];
+  poly(ctx, pts); stroke(ctx, 3, C.casing, 1, 'butt', 'miter'); fill(ctx, color); poly(ctx, pts); stroke(ctx, 1, C.ink, 1, 'butt', 'miter');
+}
+function drawCursor(ctx, at) {
+  ctx.save(); ctx.translate(at.x, at.y); ctx.scale(0.55, 0.55);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 17); ctx.lineTo(4.2, 13); ctx.lineTo(7.4, 20); ctx.lineTo(10.2, 18.8); ctx.lineTo(7.1, 12); ctx.lineTo(12.5, 12); ctx.closePath();
+  stroke(ctx, 3, '#000', 0.9); fill(ctx, '#fff');
+  ctx.restore();
+}
+
+/**
+ * The helmet (helmetBackSpec, helmetLevelSpec, helmetFrontSpec) with the inner cue of a B variant.
+ * `cue`: { state: 'none'|'hover'|'sel', k: 0..1 eased }.
+ */
+function drawHelmet(ctx, g, bv, cue, now) {
+  const h = helmet(g.kind, g.width), L = helmetLines(g.width), facing = g.kind === 'own' ? 1 : -1;
+  const casing = HE.casing + HE.inside;
+  const sel = cue.state === 'sel' ? cue.k : 0, hov = cue.state === 'hover' ? cue.k : 0, on = Math.max(sel, hov);
+  const lift = bv === 'B8' ? 1 + 0.12*ease.back(sel) + 0.05*hov : 1;
+  ctx.save(); ctx.translate(g.x, g.y); ctx.scale(facing*lift, lift);
+  const gear = h.band ? [h.strap, h.band] : [h.strap];
+  const gw = (line) => (line === h.strap ? L.strap : L.band) * HE.gear;
+  const gearBright = (bv === 'B1' || bv === 'B8') ? sel : 0;
+  const casingGrow = bv === 'B8' ? 0.5*sel : 0;
+  // The back: casing, plate, hatch.
+  for (const line of gear) { poly(ctx, line, false); stroke(ctx, gw(line) + casing*0.8 + casingGrow, C.casing); }
+  poly(ctx, h.dome); stroke(ctx, casing*0.9 + casingGrow, C.casing);
+  poly(ctx, h.dome); fill(ctx, C.plate);
+  const pitch = Math.min(3, Math.max(1.4, g.width*0.075));
+  const top = h.domeBottom - g.level*(h.domeBottom - h.domeTop);
+  ctx.save(); poly(ctx, h.dome); ctx.clip();
+  hatchLines(ctx, h.domeBounds, -Math.PI/4, pitch); stroke(ctx, HE.hatchW, g.color, 1, 'butt');
+  // The charge from the bottom.
+  ctx.beginPath(); ctx.rect(h.domeBounds.x - 2, top, h.domeBounds.width + 4, h.domeBottom - top + 2); fill(ctx, g.color);
+  if (bv === 'B3' && on > 0) {
+    hatchLines(ctx, h.domeBounds, Math.PI/4, sel > 0 ? 2.5 : 4.2); stroke(ctx, 0.75, C.ivory, 0.95*on, 'butt');
+  }
+  if (bv === 'B2' && on > 0) {
+    const inner = domeInset(g.kind, g.width, Math.max(2.2, g.width*0.085));
+    if (sel > 0) { poly(ctx, inner); stroke(ctx, 2.6, C.casing, 0.85*sel); poly(ctx, inner); stroke(ctx, 1.15, C.ivory, sel); }
+    else { poly(ctx, inner); ctx.setLineDash([1.3, 1.5]); stroke(ctx, 1.1, C.ivory, 0.9*hov, 'butt'); ctx.setLineDash([]); }
+  }
+  if (bv === 'B5' && on > 0) {
+    const c = h.middle;
+    const ring = (s, a, w) => { ctx.save(); ctx.translate(c.x, c.y); ctx.scale(s, s); ctx.translate(-c.x, -c.y); poly(ctx, h.dome); ctx.restore(); stroke(ctx, w, C.ivory, a); };
+    if (sel > 0) {
+      if (S.still) ring(0.68, 0.85*sel, 1.1);
+      else for (const ph of [0, 0.5]) { const t = ((now / 1800) + ph) % 1; const e = ease.out(t); ring(1 - 0.55*e, (1 - t)*0.95*sel, 1.4 - 0.6*t); }
+    }
+  }
+  ctx.restore();
+  // The gear in ink (bright for B1 and B8 when selected).
+  for (const line of gear) {
+    poly(ctx, line, false);
+    stroke(ctx, gw(line) * (1 + 0.25*gearBright), gearBright > 0 ? C.ivory : C.ink);
+  }
+  // The edge of the dome.
+  if ((bv === 'B1' || bv === 'B5' || bv === 'B8') && hov > 0) {
+    poly(ctx, h.dome); stroke(ctx, HE.edge, C.ink);
+    poly(ctx, h.dome); ctx.setLineDash([2.2, 1.8]); stroke(ctx, HE.edge + 0.5, C.ivory, 0.95*hov, 'butt'); ctx.setLineDash([]);
+  } else if (bv === 'B1' && on > 0) {
+    // An ivory edge with a dark hairline just inside it: ivory between two darks reads on any fill.
+    const w = HE.edge + 0.85*sel;
+    ctx.save(); poly(ctx, h.dome); ctx.clip(); poly(ctx, h.dome); stroke(ctx, w + 2.2, C.casing, 0.8*sel); ctx.restore();
+    poly(ctx, h.dome); stroke(ctx, w, C.ivory, 1);
+  } else if (bv === 'B5' && sel > 0) {
+    poly(ctx, h.dome); stroke(ctx, HE.edge + 0.5*sel, C.ivory, 1);
+  } else { poly(ctx, h.dome); stroke(ctx, HE.edge, C.ink); }
+  ctx.restore();
+  // The number (not mirrored), on a tablet for B4.
+  const mx = g.x + h.middle.x*facing*lift, my = g.y + h.middle.y*lift;
+  ctx.font = `600 ${HE.font*lift}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const label = String(g.units);
+  if (bv === 'B4' && on > 0) {
+    const w = 11.5 + 4*(label.length - 1), hh = 13.5, x = mx - w/2, y = my - hh/2 + 0.4;
+    const notch = (inset) => { ctx.beginPath(); const n = 2; ctx.moveTo(x + n + inset, y + inset); ctx.lineTo(x + w - n - inset, y + inset); ctx.lineTo(x + w - inset, y + n + inset); ctx.lineTo(x + w - inset, y + hh - n - inset); ctx.lineTo(x + w - n - inset, y + hh - inset); ctx.lineTo(x + n + inset, y + hh - inset); ctx.lineTo(x + inset, y + hh - n - inset); ctx.lineTo(x + inset, y + n + inset); ctx.closePath(); };
+    notch(-1.3); fill(ctx, C.casing);
+    if (sel > 0) {
+      notch(0); fill(ctx, C.ivory, sel);
+      ctx.fillStyle = C.plate; ctx.globalAlpha = GA; ctx.fillText(label, mx, my + 0.6);
+      return;
+    }
+    notch(0); fill(ctx, C.plate); notch(0.6); stroke(ctx, 1, C.ivory, 0.95*hov, 'butt', 'miter');
+  }
+  ctx.lineWidth = 3; ctx.strokeStyle = C.cut; ctx.lineJoin = 'round'; ctx.strokeText(label, mx, my + 0.6);
+  ctx.fillStyle = C.ink; ctx.fillText(label, mx, my + 0.6);
+}
+
+/** Cues around the helmet but inside the piece (B6 ticks), and today's outline (B0). */
+function drawOverlay(ctx, g, bv, cue) {
+  const sel = cue.state === 'sel' ? cue.k : 0, hov = cue.state === 'hover' ? cue.k : 0;
+  const facing = g.kind === 'own' ? 1 : -1;
+  if (bv === 'B0' && (sel > 0 || hov > 0)) {
+    // The client's frame is the outline of the helmet at its full size (helmetWidth), not the fitted one.
+    const fw = helmetWidth(g.side, true);
+    ctx.save(); ctx.translate(g.x, g.y); ctx.scale(facing, 1);
+    if (sel > 0) {
+      poly(ctx, helmetOutline(g.kind, fw, SELECT.frame)); stroke(ctx, SELECT.casing, C.casing, 0.9*sel);
+      for (const o of [-SELECT.offset, SELECT.offset]) { poly(ctx, helmetOutline(g.kind, fw, SELECT.frame + o)); stroke(ctx, SELECT.ink, C.ink, sel); }
+    } else {
+      const H = SELECT.hover; const loop = helmetOutline(g.kind, fw, SELECT.hoverFrame);
+      poly(ctx, loop); stroke(ctx, H.casing, C.casing, H.alpha*hov); poly(ctx, loop); stroke(ctx, H.ink, C.ink, H.alpha*hov);
+    }
+    ctx.restore();
+  }
+  if (bv === 'B6' && (sel > 0 || hov > 0)) {
+    const e = helmetExtent(helmet(g.kind, g.width)), gap = 1.6;
+    const x0 = g.x + (facing === 1 ? e.left : -e.right) - gap, x1 = g.x + (facing === 1 ? e.right : -e.left) + gap;
+    const y0 = g.y + e.top - gap, y1 = g.y + e.bottom + gap, arm = 4.6;
+    const corners = [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]];
+    const which = sel > 0 ? [0, 1, 2, 3] : [0, 2];
+    const k = sel > 0 ? sel : hov;
+    const grow = (1 - ease.out(k)) * 3;
+    for (const i of which) {
+      const [cx, cy, sx, sy] = corners[i]; const ox = -sx*grow, oy = -sy*grow;
+      ctx.beginPath(); ctx.moveTo(cx + ox + sx*arm, cy + oy); ctx.lineTo(cx + ox, cy + oy); ctx.lineTo(cx + ox, cy + oy + sy*arm);
+      stroke(ctx, 3.2, C.casing, 0.95*k, 'square', 'miter');
+      ctx.beginPath(); ctx.moveTo(cx + ox + sx*arm, cy + oy); ctx.lineTo(cx + ox, cy + oy); ctx.lineTo(cx + ox, cy + oy + sy*arm);
+      stroke(ctx, 1.3, C.ivory, (sel > 0 ? 1 : 0.85)*k, 'butt', 'miter');
+    }
+  }
+}
+function drawSeal(ctx, g, n, k) {
+  const w = helmetWidth(g.side, true);
+  const x = g.x + w*SEAL.dx, y = g.y + w*SEAL.dy, h = SEAL.half*Math.SQRT2;
+  const lz = (r) => { ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); };
+  GA = k;
+  lz(h + SEAL.casing); fill(ctx, C.casing); lz(h); fill(ctx, C.plate); lz(h - 1.2); stroke(ctx, SEAL.ink, C.ink, 1, 'butt', 'miter');
+  ctx.font = `600 ${SEAL.font}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = C.ink; ctx.fillText(String(n), x, y + 0.5);
+  GA = 1; ctx.globalAlpha = 1;
+}
+
+function cueOf(slot, t) {
+  const k = (at) => (S.still ? (t >= at ? 1 : 0) : ease.out(clamp01((t - at) / T.selMs)));
+  if (slot.state === 'hover') return { state: 'hover', k: k(T.hover) };
+  if (slot.state === 'sel') return { state: t >= T.hover && t < T.sel ? 'hover' : 'sel', k: t < T.sel ? k(T.hover) : k(T.sel) };
+  if (slot.state === 'multi') { const at = slot.seal === 1 ? T.seal1 : T.seal2; return { state: 'sel', k: k(at) }; }
+  return { state: 'none', k: 0 };
+}
+
+function drawPiece(ctx, slot, at, av, bv, t, now) {
+  const plate = plateOf(slot), P = PLATES[plate];
+  const kind = slot.side, color = colourOf(kind);
+  const units = Math.min(S.units, P.cap), charged = Math.min(units, Math.round(S.charged * units / Math.max(1, S.units)));
+  const enter = S.still ? (t >= T.enter ? 1 : 0) : ease.out(clamp01((t - T.enter) / T.enterMs));
+  const ringK = S.still ? (t >= T.enter ? 1 : 0) : ease.inOut(clamp01((t - T.enter) / T.ringMs));
+  const occupied = t >= T.enter;
+  const L = layout(av, slot, P, units, occupied ? ringK : 0);
+  const cue = cueOf(slot, t);
+  // B8 lifts the piece; B7 lays an ivory plate under it.
+  const g = { kind, color, units, side: L.side, width: L.width, level: units ? charged / units : 0, x: at.x + L.at.x, y: at.y + L.at.y };
+  ctx.save(); ctx.translate(at.x, at.y);
+  if (L.bezel && occupied) drawBezel(ctx, L, P.cap, kind === 'own' ? units : 0);
+  else drawBody(ctx, plate, L.r, kind, color, occupied, plate === 'capital');
+  if (L.cellArc && occupied && plate === 'province') { /* the dot shows: the helmet stands on the ring */ }
+  const garrison = kind === 'own' && occupied ? units : 0;
+  const arcs = L.cellArc ? ringArcs(P.cap, garrison, L.cellArc.from, L.cellArc.to) : ringArcs(P.cap, garrison);
+  const pipsOnly = L.pips !== null && L.pips > 0;
+  if (!L.bezel || !occupied) {
+    if (pipsOnly) { GA = 1 - 0.8*L.pips; drawRing(ctx, L.ringR, arcs); GA = 1; ctx.globalAlpha = 1; circle(ctx, 0, 0, L.ringR); stroke(ctx, 0.8, C.ink, 0.35*L.pips); }
+    else drawRing(ctx, L.ringR, arcs);
+  }
+  if (plate === 'capital') { for (const [kd, ang] of [['barracks', Math.PI*1.25], ['factory', Math.PI*0.95]]) drawTower(ctx, kd, { x: (L.ringR + TOWER.out)*Math.cos(ang), y: (L.ringR + TOWER.out)*Math.sin(ang) }, color, kind === 'enemy'); }
+  if (S.badges.v && P.vp) { const d = L.ringR + VPL.lift; drawVp(ctx, { x: d*Math.cos(-Math.PI/4), y: d*Math.sin(-Math.PI/4) }, P.vp); }
+  if (S.badges.r && kind === 'own') drawRally(ctx, L.ringR, Math.PI*0.62, color);
+  drawLozenges(ctx, L.ringR + LOZ.drop + L.lozDrop, P.wh, P.stock, color);
+  if (L.pips !== null) drawPips(ctx, L, P.cap, garrison);
+  // B7: the ivory plate under the helmet, inside the ring.
+  if (bv === 'B7' && cue.state !== 'none' && cue.k > 0 && occupied) {
+    const R = (L.bezel ? L.bezel.plateR : L.ringR - RING.cut/2 - 0.6);
+    const sel = cue.state === 'sel' ? cue.k : 0, hov = cue.state === 'hover' ? cue.k : 0;
+    ctx.save(); ctx.translate(L.at.x, L.at.y);
+    if (L.cellArc) { /* the helmet stands off the plate: the plate under the dome */ }
+    circle(ctx, 0, 0, R); fill(ctx, C.ivory, sel > 0 ? 0.9*sel : 0.16*hov);
+    circle(ctx, 0, 0, R - 0.6); stroke(ctx, 1, sel > 0 ? C.casing : C.ivory, sel > 0 ? 0.8*sel : 0.85*hov);
+    if (hov > 0 && sel === 0) { circle(ctx, 0, 0, R - 2.2); ctx.setLineDash([1.2, 1.8]); stroke(ctx, 0.9, C.ivory, 0.8*hov, 'butt'); ctx.setLineDash([]); }
+    ctx.restore();
+  }
+  ctx.restore();
+  if (occupied) {
+    ctx.save(); GA = enter; ctx.globalAlpha = GA;
+    drawHelmet(ctx, g, bv, cue, now);
+    GA = 1; ctx.restore(); ctx.globalAlpha = 1;
+  }
+  ctx.save(); ctx.translate(at.x, at.y);
+  if (L.tab && occupied) drawTab(ctx, L, kind === 'own' ? units : 0, P.cap);
+  ctx.restore();
+  if (occupied) {
+    drawOverlay(ctx, g, bv, cue);
+    // Badges: at the helmet's corner (before #943) or outside the ring on its right (#943).
+    const marks = [];
+    if (S.badges.c) marks.push(S.ground === 'snow' || S.ground === 'forest' ? 'up' : 'down');
+    if (marks.length) {
+      let bx, by;
+      if (av.badges === 'corner') {
+        const e = helmetExtent(helmet(kind, L.width)); const facing = kind === 'own' ? 1 : -1;
+        bx = g.x + (facing === 1 ? e.right : -e.left) - 2; by = g.y + e.top + 9;
+      } else { bx = at.x + L.ringR + BADGE_GAP; by = at.y + BADGE_DROP; }
+      drawChevron(ctx, { x: bx, y: by }, marks[0]);
+    }
+    if (S.badges.w) { const r = (L.bezel ? L.ringR - RING.gap : L.r) + STARVE.gap, a = STARVE.angle*Math.PI/180; drawStarve(ctx, { x: at.x + r*Math.cos(a) + (L.bezel ? 3 : 0), y: at.y + r*Math.sin(a) + (L.bezel ? 3 : 0) }); }
+    if (slot.state === 'multi' && cue.k > 0) drawSeal(ctx, g, slot.seal, cue.k);
+    if (slot.state === 'hover' || slot.state === 'sel') {
+      const ck = S.still ? 1 : ease.out(clamp01((t - (T.hover - 300)) / 300));
+      if (t >= T.hover - 300) {
+        const e = helmetExtent(helmet(kind, L.width));
+        const target = { x: g.x + 3, y: g.y + e.bottom*0.2 };
+        const from = { x: target.x + 30, y: target.y + 26 };
+        const show = slot.state === 'hover' || t < T.sel + 260;
+        if (show) drawCursor(ctx, { x: from.x + (target.x - from.x)*ck, y: from.y + (target.y - from.y)*ck });
+      }
+    }
+  }
+}
+
+// =============================================================================================
+// Cells.
+// =============================================================================================
+const cellsEl = document.getElementById('cells');
+let cells = [];
+function buildCells() {
+  cellsEl.innerHTML = '';
+  const pairs = S.cmp === 'a' ? S.a.map((a) => [a, S.b[0]]) : S.b.map((b) => [S.a[0], b]);
+  cellsEl.className = 'n' + pairs.length;
+  cells = pairs.map(([a, b]) => {
+    const div = document.createElement('div'); div.className = 'cell';
+    const av = A_VARIANTS.find((v) => v.id === a), bv = B_VARIANTS.find((v) => v.id === b);
+    const h2 = document.createElement('h2');
+    const sa = document.createElement('span'); sa.textContent = `${av.id} ${av.name}`;
+    const sb = document.createElement('span'); sb.className = 'b'; sb.textContent = `${bv.id} ${bv.name}`;
+    h2.append(sa, sb);
+    const cv = document.createElement('canvas');
+    cv.setAttribute('role', 'img');
+    cv.setAttribute('aria-label', `${av.id} ${av.name} with ${bv.id} ${bv.name}: an idle, a hovered and a selected group in the top row; two Shift-selected groups and an opponent's group in the bottom row`);
+    div.append(h2, cv); cellsEl.append(div);
+    return { av, bv: bv.id, cv };
+  });
+  sizeCells();
+}
+function sizeCells() {
+  const dpr = window.devicePixelRatio || 1;
+  for (const c of cells) {
+    const w = c.cv.clientWidth || 600, h = Math.round(w * (cells.length === 1 ? 0.56 : 0.74));
+    c.cv.style.height = h + 'px';
+    c.cv.width = Math.round(w*dpr); c.cv.height = Math.round(h*dpr);
+    c.w = w; c.h = h; c.dpr = dpr;
+  }
+}
+function render(now) {
+  const z = S.zoom / 100;
+  for (const c of cells) {
+    const ctx = c.cv.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.cv.width, c.cv.height);
+    const sx = c.dpr*z;
+    // The scene's middle at the canvas middle.
+    const cx = DX, cy = DY/2;
+    ctx.setTransform(sx, 0, 0, sx, c.cv.width/2 - cx*sx, c.cv.height/2 - cy*sx);
+    const box = { x: cx - c.w/(2*z) - 2, y: cy - c.h/(2*z) - 2, w: c.w/z + 4, h: c.h/z + 4 };
+    drawGround(ctx, S.ground, box);
+    const nodes = SLOTS.map((s) => ({ x: s.col*DX, y: s.row*DY }));
+    drawRoads(ctx, nodes);
+    SLOTS.forEach((s, i) => drawPiece(ctx, s, nodes[i], c.av, c.bv, S.t, now));
+  }
+}
+
+// =============================================================================================
+// Controls.
+// =============================================================================================
+function chip(parent, id, label, onClick) {
+  const b = document.createElement('button'); b.className = 'chip'; b.dataset.v = id;
+  const k = document.createElement('span'); k.className = 'k'; k.textContent = id;
+  b.append(k, document.createTextNode(label));
+  b.addEventListener('click', onClick); parent.append(b); return b;
+}
+function pick(list, id, multi) {
+  if (!multi) return [id];
+  const i = list.indexOf(id);
+  if (i >= 0) return list.length > 1 ? list.filter((x) => x !== id) : list;
+  return list.length >= 4 ? [...list.slice(1), id] : [...list, id];
+}
+const aEl = document.getElementById('topicA'), bEl = document.getElementById('topicB');
+const aChips = A_VARIANTS.map((v) => chip(aEl, v.id, v.name, () => { S.a = pick(S.a, v.id, S.cmp === 'a'); refresh(true); }));
+const bChips = B_VARIANTS.map((v) => chip(bEl, v.id, v.name, () => { S.b = pick(S.b, v.id, S.cmp === 'b'); refresh(true); }));
+document.querySelectorAll('[data-cmp]').forEach((b) => b.addEventListener('click', () => {
+  S.cmp = b.dataset.cmp;
+  if (S.cmp === 'a') S.b = S.b.slice(0, 1); else S.a = S.a.slice(0, 1);
+  refresh(true);
+}));
+const bind = (sel, key) => document.querySelectorAll(sel).forEach((b) => b.addEventListener('click', () => { S[key] = b.dataset[key]; refresh(false); }));
+bind('[data-ground]', 'ground'); bind('[data-plate]', 'plate'); bind('[data-col]', 'col');
+document.querySelectorAll('[data-badge]').forEach((b) => b.addEventListener('click', () => { S.badges[b.dataset.badge] = !S.badges[b.dataset.badge]; refresh(false); }));
+const units = document.getElementById('units'), charged = document.getElementById('charged'), zoom = document.getElementById('zoom'), scrub = document.getElementById('scrub');
+units.addEventListener('input', () => { S.units = Number(units.value); S.charged = Math.min(S.charged, S.units); refresh(false); });
+charged.addEventListener('input', () => { S.charged = Math.min(Number(charged.value), S.units); refresh(false); });
+zoom.addEventListener('input', () => { S.zoom = Number(zoom.value); refresh(false); });
+document.getElementById('gray').addEventListener('click', () => { S.gray = !S.gray; refresh(false); });
+document.getElementById('still').addEventListener('click', () => { S.still = !S.still; refresh(false); });
+const playBtn = document.getElementById('play');
+let playFrom = 0, playAt = 0;
+playBtn.addEventListener('click', () => {
+  if (S.playing) { S.playing = false; }
+  else { S.playing = true; if (S.t >= T.end) S.t = 0; playFrom = S.t; playAt = performance.now(); }
+  refresh(false);
+});
+scrub.addEventListener('input', () => { S.playing = false; S.t = Number(scrub.value); refresh(false); });
+scrub.addEventListener('change', () => writeHash());
+function refresh(rebuild) {
+  const press = (els, on) => els.forEach((e) => e.setAttribute('aria-pressed', String(on(e))));
+  press(aChips, (e) => S.a.includes(e.dataset.v)); press(bChips, (e) => S.b.includes(e.dataset.v));
+  press([...document.querySelectorAll('[data-cmp]')], (e) => e.dataset.cmp === S.cmp);
+  press([...document.querySelectorAll('[data-ground]')], (e) => e.dataset.ground === S.ground);
+  press([...document.querySelectorAll('[data-plate]')], (e) => e.dataset.plate === S.plate);
+  press([...document.querySelectorAll('[data-col]')], (e) => e.dataset.col === S.col);
+  press([...document.querySelectorAll('[data-badge]')], (e) => S.badges[e.dataset.badge]);
+  press([document.getElementById('gray')], () => S.gray); press([document.getElementById('still')], () => S.still);
+  playBtn.textContent = S.playing ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(S.playing));
+  units.value = S.units; charged.max = S.units; charged.value = S.charged; zoom.value = S.zoom; scrub.value = S.t; scrub.max = T.end;
+  document.getElementById('unitsV').textContent = String(S.units);
+  document.getElementById('chargedV').textContent = String(S.charged);
+  document.getElementById('zoomV').textContent = S.zoom + '%';
+  document.body.classList.toggle('gray', S.gray);
+  writeHash();
+  if (rebuild) buildCells();
+}
+function frame(now) {
+  if (S.playing) {
+    S.t = Math.min(T.end, playFrom + (now - playAt));
+    scrub.value = S.t;
+    if (S.t >= T.end) { S.playing = false; refresh(false); }
+  }
+  render(now);
+  requestAnimationFrame(frame);
+}
+window.addEventListener('resize', () => sizeCells());
+readHash();
+refresh(true);
+(async () => {
+  await Promise.all(Object.entries(GROUND_FILES).map(async ([k, f]) => {
+    try { const img = await loadImg(GROUND_URLS[k] || f); tiles[k] = mirrorTile(img, false); if (k === 'plains') tiles.fog = mirrorTile(img, true); } catch (e) { /* the flat ground stays */ }
+  }));
+  try { await document.fonts.load("600 12px 'EB Garamond'"); } catch (e) { /* the serif fallback */ }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
