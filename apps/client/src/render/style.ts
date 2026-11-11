@@ -507,10 +507,10 @@ export const FINE_RING = {
  * outside (not under "less motion").
  */
 export const CORNER_TICKS = {
-  gap: 1.6,
-  arm: 4.6,
-  casing: { width: 3.2, alpha: 0.95 },
-  ink: { width: 1.3, select: 1, hover: 0.85 },
+  gap: 2,
+  arm: 6.2,
+  casing: { width: 4.4, alpha: 0.95 },
+  ink: { width: 1.7, select: 1, hover: 0.85 },
   grow: 3,
   ms: 180,
 } as const;
