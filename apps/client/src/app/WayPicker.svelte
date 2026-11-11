@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { t } from '../i18n/index.ts';
-  import HelmetIcon from '../units/HelmetIcon.svelte';
   import { stepWay, WAY_LABEL, WAYS, type Way } from './play.ts';
+  import WaySign from './WaySign.svelte';
 
   interface Props {
     way: Way;
@@ -41,7 +41,7 @@
 
 <!-- The three ways (#919, III Plinth): a radio group; the chosen one is ink with the marker (a
      lozenge on a rule) over it, the others dim, so the choice is shape and brightness, never colour
-     alone. The marker travels to a new choice; the hovered way gets a hollow marker. -->
+     alone: the signs (an hourglass, a cog, a chain link, #968) are ink only. The marker travels to a new choice; the hovered way gets a hollow marker. -->
 <div class="mode">
   <!-- svelte-ignore a11y_interactive_supports_focus -->
   <div
@@ -75,14 +75,7 @@
         }}
       >
         <span class="icons" aria-hidden="true">
-          {#if id === 'match'}
-            <HelmetIcon side="own" size={22} engraved />
-            <HelmetIcon side="enemy" size={22} engraved />
-          {:else if id === 'bot'}
-            <HelmetIcon side="enemy" size={30} engraved />
-          {:else}
-            <HelmetIcon side="enemy" size={30} engraved dashed />
-          {/if}
+          <WaySign way={id} />
         </span>
         <span class="sl ink">{t(WAY_LABEL[id])}</span>
       </button>

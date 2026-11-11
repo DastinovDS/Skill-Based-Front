@@ -32,4 +32,14 @@ describe('StartBanner: the first seconds of a match (U4, DEC-49)', () => {
   it('names Lapis while the colour is not known', () => {
     expect(title(null)).toBe('You are Lapis. Your capital is here');
   });
+
+  it('sets the capital star in ink in a rule with two lozenges, not a coloured triangle (#968)', () => {
+    title('lapis');
+    const mark = document.body.querySelector('.banner .mark');
+    expect(mark).not.toBeNull();
+    expect(mark?.querySelectorAll('.star')).toHaveLength(1);
+    expect(mark?.querySelectorAll('.loz')).toHaveLength(1);
+    expect(mark?.querySelector('rect[mask]')).not.toBeNull();
+    expect(mark?.getAttribute('aria-hidden')).toBe('true');
+  });
 });

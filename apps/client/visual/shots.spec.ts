@@ -1634,3 +1634,48 @@ test.describe('the menu picture close up', () => {
     });
   }
 });
+
+// The plain signs of the three ways (#968, ui-style 74, D): the way picker with each way chosen in
+// turn and the pointer over a way that is not chosen (the hollow marker), cropped to the picker:
+// `ways-<chosen>.png`, `ways-<chosen>-hover-<hovered>.png` and its grey scale `-gray.png`.
+for (const [chosen, hovered] of [
+  ['match', 'friend'],
+  ['bot', 'match'],
+  ['friend', 'bot'],
+] as const) {
+  test(`shot of the way picker (${chosen} chosen, ${hovered} hovered)`, async ({ page }) => {
+    await page.goto('/?menu=menu-guest');
+    await expect(page.locator('.front .backdrop[data-map="ready"]').first()).toBeVisible();
+    await page.evaluate('document.fonts.ready.then(() => true)');
+    const names = { match: 'Find a match', bot: 'Play a bot', friend: 'Invite a friend' };
+    const seat = (way: keyof typeof names) =>
+      page.getByRole('radio', { name: names[way], exact: true });
+    await seat(chosen).click();
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(700);
+    const picker = page.locator('.front.play .mode');
+    await picker.screenshot({ path: join(OUT, `ways-${chosen}.png`) });
+    await seat(hovered).hover();
+    await page.waitForTimeout(700);
+    await picker.screenshot({ path: join(OUT, `ways-${chosen}-hover-${hovered}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await picker.screenshot({ path: join(OUT, `ways-${chosen}-hover-${hovered}-gray.png`) });
+  });
+}
+
+// The intro banner of a match with the Star rule (#968, ui-style 74, D): the frozen scene
+// `snapshot` with `?banner` keeps it up (in a match it is gone after three seconds): `banner.png`
+// is the whole screen, `banner-crop.png` the banner alone, `banner-gray.png` the grey scale.
+test('shot of the intro banner of a match', async ({ page }) => {
+  await page.goto('/?scene=snapshot&banner');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.evaluate('document.fonts.ready.then(() => true)');
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(600);
+  await expect(page.locator('.banner')).toBeVisible();
+  await page.screenshot({ path: join(OUT, 'banner.png') });
+  await page.locator('.banner').screenshot({ path: join(OUT, 'banner-crop.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'banner-gray.png') });
+});
