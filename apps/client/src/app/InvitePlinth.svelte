@@ -178,13 +178,13 @@
     </div>
   {:else if view.stage === 'link' || view.stage === 'waiting'}
     <div class="stat">
-      <DrawingGraph width={drawWidth} still={!view.drawing} />
+      <DrawingGraph width={drawWidth} still={!view.drawing} waiting={!view.drawing} />
       <div class="two">
         <p class="sub" role="status">
           <span class="busy" aria-hidden="true"><i></i><i></i><i></i></span>
           {view.drawing ? t('wait.drawing') : t('invite.waiting')}
         </p>
-        <VersusLine you={nick} opponent={null} />
+        <VersusLine you={nick} opponent={null} waiting={!view.drawing} />
       </div>
     </div>
     <div class="end link">

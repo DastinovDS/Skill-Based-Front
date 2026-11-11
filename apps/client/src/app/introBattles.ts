@@ -3,8 +3,9 @@
  * first 2.75 s): on the dark stage, at staggered, irregular moments, a soft pool of light opens
  * over a road at the edges of the menu map; two small groups stand in it and three shots fly, then
  * the light fades from its edge to its centre. The pools are holes in the dark stage over the menu
- * map behind it (the map is lit to its full strength while they are up); the groups and the shots
- * are the match's Engraved pieces (`menuMotion.ts`). A pure function of the time, like the scene.
+ * map behind it (the map is lit dimly, as through fog, while they are up: `FOG_LIGHT`); the groups
+ * and the shots are the match's Engraved pieces (`menuMotion.ts`). A pure function of the time,
+ * like the scene.
  *
  * Timings, places and sizes are the mockup's `TL.battles` (hand-set, deterministic); its artboard
  * is 1280 px wide with the menu map laid over it as `layoutEntry` lays it, so a size scales with
@@ -96,6 +97,13 @@ export const BATTLES: readonly Battle[] = [
 
 /** A shot flies this long. */
 const SHOT_DUR = 0.17;
+/**
+ * The fights are a quiet background, not the show (owner, #945): they are seen as through the fog
+ * of the match. The pool lets this share of the map's light through, and the groups and their shots
+ * are drawn at this share of their strength.
+ */
+export const FOG_LIGHT = 0.5;
+export const FOG_PIECES = 0.5;
 /** The scale of the menu map on the mockup's artboard: its sizes are in px at this scale. */
 const MOCKUP_SCALE = 1.6;
 
@@ -284,14 +292,14 @@ export function drawStage(
       [0.92, 0.09],
       [1, 0],
     ] as const) {
-      g.addColorStop(at, `rgba(0, 0, 0, ${String(light.a * share)})`);
+      g.addColorStop(at, `rgba(0, 0, 0, ${String(light.a * share * FOG_LIGHT)})`);
     }
     c.fillStyle = g;
     c.fillRect(-r, -r, r * 2, r * 2);
     c.restore();
   }
   c.globalCompositeOperation = 'source-over';
-  for (const { b, place, a } of lit) fight(c, k, place, b, t, a, size);
+  for (const { b, place, a } of lit) fight(c, k, place, b, t, a * FOG_PIECES, size);
   c.restore();
   return lit.length > 0;
 }

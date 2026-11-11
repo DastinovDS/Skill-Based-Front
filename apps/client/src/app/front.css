@@ -125,6 +125,23 @@
   color: var(--ink);
 }
 
+.front .mark .home {
+  margin: 0;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+.front .mark .home:hover {
+  border-bottom-color: var(--ink-soft);
+}
+
 .front .corner {
   position: relative;
   display: flex;

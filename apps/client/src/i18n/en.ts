@@ -4,6 +4,7 @@
 // `LOCALES` (`locale.ts`) and in `DICTIONARIES` (`index.ts`).
 export const en = {
   'app.title': 'Fines Imperii',
+  'top.home': 'Fines Imperii, main screen',
   'hud.map': 'Map',
   'hud.scene': 'Scene',
   'hud.fps': 'FPS',

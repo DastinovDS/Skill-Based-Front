@@ -15,7 +15,7 @@
  * - queue locked: the supply stands, dimmed.
  */
 import { ringRadius } from '../render/cityLayout.ts';
-import { CAPTURE } from '../render/style.ts';
+import { CAPTURE, CITY_ENGRAVED, CUT, DARK_PLATE, PROVINCE_ENGRAVED } from '../render/style.ts';
 import { WALK, walkPoint } from '../render/walkLayout.ts';
 import { clipBelow, helmet } from '../units/helmet.ts';
 import {
@@ -279,9 +279,81 @@ export function drawHelmet(
   c.restore();
 }
 
+/** The width of a helmet on the backdrop, px. */
+const UNIT_W = 18;
+/** A helmet standing in a node is at most this many radii of the node's plate wide (fully inside). */
+const FIT = 1.6;
+/** A walker gets down to the size of the node it walks into over this many px. */
+const FIT_FROM = 14;
+
+/** A node a unit can stand in: where, the radius of its plate and the scale of its pieces (px). */
+interface Stand extends Point {
+  readonly r: number;
+  readonly ps: number;
+  readonly city: boolean;
+}
+
+const STANDS = new WeakMap<Scene, readonly Stand[]>();
+/** The nodes of the scene being drawn (set at the start of a frame: `drawMotion`). */
+let stands: readonly Stand[] = [];
+
+function standsOf(scene: Scene): readonly Stand[] {
+  const known = STANDS.get(scene);
+  if (known !== undefined) return known;
+  // Px a world unit of a piece on the screen, as the map layer draws the nodes.
+  const ps = Math.min(scene.scale, PIECES_PX);
+  const made = scene.nodes.map((n) => ({
+    x: n.x,
+    y: n.y,
+    ps,
+    city: n.city,
+    // The disc of a city, the dark plate of a province: what the match draws a unit on.
+    r: (n.city ? menuCityRadius(n.kind) : PROVINCE_ENGRAVED.plate) * ps,
+  }));
+  STANDS.set(scene, made);
+  return made;
+}
+
+const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
+
 /**
- * A unit 18 px wide, charged (`share` of it). No number over it: the backgrounds count nothing
- * (owner, #866).
+ * The look of a node with a unit in it, as the match draws it (`cityBodySpec` and `provinceBodySpec`
+ * with `occupied`, #847): the dark plate the helmet stands on instead of the owner's colour (and the
+ * capital's star), on the cut and inside the ink rim of a city; a province is only the dark disc.
+ */
+function occupied(c: CanvasRenderingContext2D, k: Palette, n: Stand, alpha: number): void {
+  if (alpha <= 0) return;
+  c.save();
+  c.globalAlpha *= alpha;
+  if (n.city) {
+    c.globalAlpha *= CITY_ENGRAVED.cut.alpha;
+    c.fillStyle = hex(CUT);
+    c.beginPath();
+    c.arc(n.x, n.y, n.r + CITY_ENGRAVED.cut.grow * n.ps, 0, Math.PI * 2);
+    c.fill();
+    c.globalAlpha = alpha;
+  }
+  c.fillStyle = hex(DARK_PLATE);
+  c.beginPath();
+  c.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+  c.fill();
+  if (n.city) {
+    c.strokeStyle = k.paper;
+    c.lineWidth = CITY_ENGRAVED.rim.width * n.ps;
+    c.beginPath();
+    c.arc(n.x, n.y, n.r + CITY_ENGRAVED.rim.grow * n.ps, 0, Math.PI * 2);
+    c.stroke();
+  }
+  c.restore();
+}
+
+/** The width of a helmet that fits into the plate of `n`. */
+const fitWidth = (n: Stand): number => Math.min(UNIT_W, n.r * FIT);
+
+/**
+ * A unit walking at `p`: 18 px wide, charged (`share` of it). No number over it: the backgrounds
+ * count nothing (owner, #866). Near a node too small for it (a province) it narrows to fit as it
+ * walks in, so it does not jump in size at the door.
  */
 function unit(
   c: CanvasRenderingContext2D,
@@ -291,7 +363,36 @@ function unit(
   alpha = 1,
   share = 1,
 ): void {
-  drawHelmet(c, k, p, side, { alpha, share });
+  let width = UNIT_W;
+  for (const n of stands) {
+    const fit = fitWidth(n);
+    if (fit >= UNIT_W) continue;
+    const near = Math.hypot(n.x - p.x, n.y - p.y) / FIT_FROM;
+    if (near < 1) width = Math.min(width, fit + (UNIT_W - fit) * near);
+  }
+  drawHelmet(c, k, p, side, { alpha, share, width });
+}
+
+/**
+ * A unit standing in the node at `p` (a walker that arrived, a garrison, a recruit, a group
+ * gathering): in the middle of the node, fully inside it, on the occupied plate, as the match
+ * draws a group in a city. `p` is not a node: it is a walker.
+ */
+function stand(
+  c: CanvasRenderingContext2D,
+  k: Palette,
+  p: Point,
+  side: 0 | 1,
+  alpha = 1,
+  share = 1,
+): void {
+  const node = stands.find((n) => Math.hypot(n.x - p.x, n.y - p.y) < 1);
+  if (node === undefined) {
+    unit(c, k, p, side, alpha, share);
+    return;
+  }
+  occupied(c, k, node, alpha);
+  drawHelmet(c, k, node, side, { alpha, share, width: fitWidth(node) });
 }
 
 /**
@@ -362,7 +463,7 @@ function drills(
       const d = s * speed;
       if (d <= length) unit(c, k, along([from, to], d), 0, clamp(s / 0.4, 0, 1));
       else if (s - length / speed < 0.8) {
-        unit(c, k, { x: to.x + 10, y: to.y - 12 }, 0, 1 - (s - length / speed) / 0.8);
+        stand(c, k, to, 0, 1 - (s - length / speed) / 0.8);
       }
     }
   }
@@ -376,13 +477,12 @@ function drills(
   const length = lengthOf(route);
   if (s < 1.2) {
     fineRing(c, k, capital, 18 + 8 * ease(s / 1.2), k.you, 1 - s / 1.2);
-    unit(c, k, { x: capital.x + 14, y: capital.y - 16 }, 0, clamp(s / 0.3, 0, 1));
+    stand(c, k, capital, 0, clamp(s / 0.3, 0, 1));
   } else {
     const d = (s - 1.2) * speed;
     const end = route[route.length - 1] as Point;
     if (d <= length) unit(c, k, along(route, d), 0);
-    else if (d <= length + 18)
-      unit(c, k, { x: end.x + 10, y: end.y - 12 }, 0, 1 - (d - length) / 18);
+    else if (d <= length + 18) stand(c, k, end, 0, 1 - (d - length) / 18);
   }
 }
 
@@ -762,6 +862,7 @@ export function drawCaptures(
   reduced: boolean,
 ): void {
   if (reduced) return;
+  stands = standsOf(scene);
   // Px a world unit of a piece on the screen.
   const ps = Math.min(scene.scale, PIECES_PX);
   const fogged = (p: Point): number =>
@@ -785,7 +886,7 @@ export function drawCaptures(
     const gate = off(Math.min(length / 2, ring + 9 + WALK.gap * ps));
     const start = off(Math.max(length / 2, length - fromRing - 9));
     if (look.guard !== null) {
-      unit(c, k, node, defender, look.guard.alpha * seen(defender, node), look.guard.share);
+      stand(c, k, node, defender, look.guard.alpha * seen(defender, node), look.guard.share);
     }
     if (look.approach !== null) {
       const p = walkPoint(start, gate, look.approach.share);
@@ -793,7 +894,9 @@ export function drawCaptures(
     }
     if (look.walk !== null) {
       const p = walkPoint(gate, node, look.walk.share);
-      unit(c, k, p, attacker, look.walk.alpha * seen(attacker, p));
+      // Arrived in the city: it stands there (and on the plate), as the match shows it.
+      if (look.walk.share >= 1) stand(c, k, p, attacker, look.walk.alpha * seen(attacker, p));
+      else unit(c, k, p, attacker, look.walk.alpha * seen(attacker, p));
     }
     // The shots: a glance in the first round, the winner's shot landing in the second.
     c.save();
@@ -890,6 +993,21 @@ export function sightOf(scene: Scene, story: Story, clock: MotionClock): Sight |
   return { x: p.x, y: p.y, r: base + (need - base) * u, waiting: false, walked: d };
 }
 
+/**
+ * The motion under fog (#945): the entry screen's fights and captures are a quiet background, so what
+ * is drawn so far is veiled in the dark of the match's fog (only the drawn pixels: `source-atop`).
+ */
+export const ENTRY_FOG = 0.42;
+
+export function veilInFog(c: CanvasRenderingContext2D, k: Palette, scene: Scene): void {
+  c.save();
+  c.globalCompositeOperation = 'source-atop';
+  c.globalAlpha = ENTRY_FOG;
+  c.fillStyle = k.bg;
+  c.fillRect(0, 0, scene.width, scene.height);
+  c.restore();
+}
+
 /** Draws one frame of the motion into `c` (CSS px, the caller sets the device pixel transform). */
 export function drawMotion(
   c: CanvasRenderingContext2D,
@@ -901,9 +1019,10 @@ export function drawMotion(
 ): void {
   const { phase, t, g, reduced } = clock;
   const scale = scene.scale;
+  stands = standsOf(scene);
   // The group gathering at the front city (no count over it: #866).
   const stack = (): void => {
-    unit(c, k, { x: story.frontCity.x + 12, y: story.frontCity.y - 14 }, 0);
+    stand(c, k, story.frontCity, 0);
   };
 
   if (phase === 'banned') {

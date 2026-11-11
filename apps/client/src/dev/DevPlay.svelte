@@ -3,7 +3,7 @@
   import type { MessageKey } from '../i18n/index.ts';
   import { MapCache } from '../app/mapCache.svelte.ts';
   import PlayScreen from '../app/PlayScreen.svelte';
-  import type { PlayContext, PlayState } from '../app/play.ts';
+  import type { PlayContext, PlayState, Way } from '../app/play.ts';
   import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
   import type { MapFile } from '../protocol.gen.ts';
   import { BAN_SECONDS, QUEUE_SCENES } from './menuScenes.ts';
@@ -14,6 +14,13 @@
   }
 
   let { id, map }: Props = $props();
+
+  // The way chosen on the plinth (the buttons of the ways work in a scene), over the scene's own.
+  let chosen = $state<Way | null>(null);
+  // `?ready=<s>` on `invite-link`: the map is drawn after that many seconds, as the server tells
+  // it on a poll (the drawing sketch must stop then, #945).
+  const readyAfter = Number(new URLSearchParams(window.location.search).get('ready') ?? NaN);
+  const startedAt = Date.now();
 
   // The main screen (#919) with a fake server: fixed lists and invites, nothing is asked of a
   // network. The scenes that need a click to reach their state (a start, a link being made) are
@@ -76,7 +83,12 @@
           ? Promise.reject(new ApiError('not_found', 404))
           : Promise.resolve(found);
       },
-      invite: () => Promise.resolve(INVITES[sceneId] ?? invite({})),
+      invite: () =>
+        Promise.resolve(
+          sceneId === 'invite-link' && Number.isFinite(readyAfter)
+            ? invite({ map_ready: Date.now() - startedAt >= readyAfter * 1000 })
+            : (INVITES[sceneId] ?? invite({})),
+        ),
       readyInvite: () => never<Invite>(),
       cancelInvite: () => Promise.resolve(),
       leaveQueue: () => Promise.resolve(),
@@ -93,7 +105,9 @@
       now: () => 0,
       hasActiveMatch: sceneId === 'menu-resume',
       onresume: nothing,
-      onway: nothing,
+      onway: (way: Way) => {
+        chosen = way;
+      },
       onsearch: nothing,
       onbot: () =>
         sceneId === 'bot-error'
@@ -122,11 +136,14 @@
   }
 
   const scene = $derived(build(id, map));
+  const view = $derived<PlayState>(
+    chosen !== null && scene.state.name === 'menu' ? { ...scene.state, way: chosen } : scene.state,
+  );
 </script>
 
 <PlayScreen
   ctx={scene.ctx}
-  view={scene.state}
+  {view}
   notice={id === 'menu-error' ? 'error.api.network' : null}
   newHere={id === 'menu-newhere'}
   queueFixed={QUEUE_SCENES[id] ?? null}

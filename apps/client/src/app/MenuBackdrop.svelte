@@ -16,6 +16,7 @@
     STILL_AT,
     drawMotion,
     sightOf,
+    veilInFog,
     type MotionClock,
     readPalette,
     type Sight,
@@ -59,8 +60,12 @@
 
   let { map, phase = 'idle', opponent = null, waited = 0, entry = false }: Props = $props();
 
-  /** The motion is drawn 30 times a second; the hole of the scout's sight in the fog 10 times. */
-  const FRAME_MS = 1000 / 30;
+  /**
+   * The motion is drawn at most 60 times a second (every frame of a 60 Hz display, 60 of a 120 Hz
+   * one; it was 30, which stepped visibly on a fast display, #945); the hole of the scout's sight in
+   * the fog 10 times.
+   */
+  const FRAME_MS = 1000 / 60;
   const SIGHT_MS = 100;
   /** The entry screen's clock runs slower than the main menu's (#866: muted behind the title). */
   const ENTRY_PACE = 0.7;
@@ -295,6 +300,8 @@
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, laid.width, laid.height);
       drawMotion(context, colours, laid, places, clock, script);
+      // The entry's picture is a quiet background: its pieces are seen through the fog (#945).
+      if (entry) veilInFog(context, colours, laid);
     };
     const place = (clock: MotionClock): void => {
       const found = sightOf(laid, places, clock);
@@ -315,6 +322,22 @@
     // A locked queue is a still picture (the supply stands), so is a frozen dev scene: no loop.
     const still = first.reduced || current === 'banned' || frozen !== null;
     if (still || typeof requestAnimationFrame !== 'function') return undefined;
+
+    // The land of every owner state of the loop is worked out now, one a task, so that no frame of
+    // the loop pays for one when a capture first floods (about 5 ms each, #945).
+    const warming: number[] = [];
+    if (script !== null) {
+      const states: Record<string, Owners> = {};
+      for (let at = 0; at < script.period; at += 0.25) {
+        const owners = ownersAt(base, script, at);
+        states[owners.join(',')] = owners;
+      }
+      let delay = 120;
+      for (const owners of Object.values(states)) {
+        warming.push(window.setTimeout(() => paint.land(owners), delay));
+        delay += 60;
+      }
+    }
 
     let handle = 0;
     let lastFrame = 0;
@@ -340,6 +363,7 @@
     handle = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(handle);
+      for (const timer of warming) window.clearTimeout(timer);
     };
   });
 
@@ -359,7 +383,7 @@
 <!-- Four layers, each its own: the map (the baked ground, the territory, the roads, the cities and
      their names) is one canvas drawn once, and again only round a capture while it floods (#866);
      the fog repaints only when the hole of the scout's sight moves (10 times a second at most); the
-     motion is one canvas; the capitals stand on top. The map is the match's (#839): the Intaglio
+     capitals stand over them; the motion is one canvas on top. The map is the match's (#839): the Intaglio
      ground of the menu map, the territory as the Border band, roads and cities engraved. -->
 <div
   class={`backdrop ${season}`}
@@ -488,8 +512,6 @@
       </svg>
     {/if}
 
-    <canvas class="motion layer" bind:this={canvas}></canvas>
-
     <svg
       class="capitals layer"
       viewBox={`0 0 ${String(scene.width)} ${String(scene.height)}`}
@@ -562,6 +584,10 @@
         {/if}
       {/if}
     </svg>
+
+    <!-- The motion is over the capitals: a unit stands in the middle of its city on the dark plate
+         (a recruit in the capital hides its star), as the match draws it (#945). -->
+    <canvas class="motion layer" bind:this={canvas}></canvas>
   {/if}
 </div>
 

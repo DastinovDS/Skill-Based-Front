@@ -73,25 +73,22 @@
     width: calc(var(--gow) * 0.66);
   }
 
+  /* The old and the new word stand in one grid cell, so the box is as wide as the wider of them
+     from the first frame: a longer word is never cut to the old word's width and then grows to fit
+     (#945). Both are centred, so the word does not shift when the box settles to the new one. */
   .roll {
     position: relative;
-    display: inline-block;
+    display: inline-grid;
+    justify-items: center;
     height: 1.2em;
     overflow: hidden;
     vertical-align: middle;
   }
 
   .roll span {
-    display: block;
+    grid-area: 1 / 1;
     line-height: 1.2em;
     white-space: nowrap;
-  }
-
-  .r1 {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
   }
 
   .rolling .r0 {
@@ -111,11 +108,12 @@
 
   @keyframes roll-in {
     from {
+      transform: translateY(100%);
       opacity: 0;
     }
 
     to {
-      transform: translate(-50%, -100%);
+      transform: translateY(0);
       opacity: 1;
     }
   }

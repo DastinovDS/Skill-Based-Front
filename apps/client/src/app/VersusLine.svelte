@@ -11,9 +11,18 @@
     /** "Ready" after a seat: a lozenge and the word, never colour alone. */
     youReady?: boolean;
     opponentReady?: boolean;
+    /** The empty seat waits for somebody: its helmet breathes, slowly (#945). */
+    waiting?: boolean;
   }
 
-  let { you, opponent, size = 32, youReady = false, opponentReady = false }: Props = $props();
+  let {
+    you,
+    opponent,
+    size = 32,
+    youReady = false,
+    opponentReady = false,
+    waiting = false,
+  }: Props = $props();
 </script>
 
 <!-- The versus line of the plinth (#919): the own helmet and nick, "against", the opponent and
@@ -25,7 +34,9 @@
   <span class="x">{t('versus.against')}</span>
   {#if opponent === null}
     <span class="x">{t('invite.aFriend')}</span>
-    <HelmetIcon side="enemy" {size} engraved dashed />
+    <span class="seat" class:waiting>
+      <HelmetIcon side="enemy" {size} engraved dashed />
+    </span>
   {:else}
     <span class="nm">{opponent}</span>
     <HelmetIcon side="enemy" {size} engraved />
@@ -58,6 +69,36 @@
 
   .vs :global(svg) {
     flex: none;
+  }
+
+  .seat {
+    display: inline-flex;
+  }
+
+  /* The wait for a friend: the dashed helmet breathes (3.2 s, as the sketch's enemy capital). */
+  .seat.waiting {
+    animation: seat-wait 3.2s ease-in-out infinite;
+  }
+
+  @keyframes seat-wait {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .seat.waiting {
+      animation: none;
+    }
+  }
+
+  :global(:root[data-motion='reduced']) .seat.waiting {
+    animation: none;
   }
 
   /* Ready: a filled lozenge and the word in cut capitals. */
