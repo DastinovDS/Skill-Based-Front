@@ -34,11 +34,6 @@ def edge_packet_ticks(state: GameState, rules: Ruleset, edge: int) -> int:
     return packet_ticks(state.map, rules, edge)
 
 
-def all_packet_ticks(state: GameState, rules: Ruleset) -> tuple[int, ...]:
-    """``packet_ticks`` of every road, by edge id."""
-    return tuple(packet_ticks(state.map, rules, e.id) for e in state.map.edges)
-
-
 def is_city(mapdef: MapDef, node: int) -> bool:
     """A node with a city; a province (DEC-23) is not one."""
     return mapdef.nodes[node].kind is not NodeKind.PROVINCE

@@ -534,15 +534,6 @@ def encode_thumb(pixels: Image8) -> bytes:
     return buf.getvalue()
 
 
-def write_thumb(background: str | Path) -> Path:
-    """Write the thumbnail of a baked background file next to it; returns its path."""
-    with Image.open(background) as image:
-        pixels: Image8 = np.asarray(image.convert("RGB"), dtype=np.uint8)
-    out = thumb_path(background)
-    out.write_bytes(encode_thumb(pixels))
-    return out
-
-
 def bake_background(
     mapdef: MapDef, out: str | Path, seed: int | None = None, soft: Softness | None = None
 ) -> None:
