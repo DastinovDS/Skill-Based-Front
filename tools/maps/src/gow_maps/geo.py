@@ -17,7 +17,10 @@ world units per cell), the label of every cell (``compute``):
   spring, a cut of a land contact) is widened into the land beside it, off the roads and the
   nodes: thinner water blurs into a faint smudge in the picture while the vector file still has
   two banks there, and the owner borders along it look cut (#928, item 3);
-* a land piece cut off from its node becomes the water around it (no slivers, no exclaves).
+* a land piece cut off from its node becomes the water around it (no slivers, no exclaves);
+* no small pocket of water (#944): the owner line outlines every water body, so a pond at a
+  junction or a short piece of a stream is filled with land where item 3 allows, else widened
+  into a pond (``fill_pockets``).
 
 From the labels: the vector file ``maps/geo/<id>.json`` (``vector_file``: shared border chains,
 water kinds, river and stream lines, bridges) and the Intaglio water over the Intaglio ground
@@ -34,7 +37,7 @@ import heapq
 import itertools
 import json
 import math
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -77,6 +80,20 @@ CHAIN_EPS = 3.0  # Ramer-Douglas-Peucker tolerance of the vector chains
 WIDE_WATER = 3
 WIDEN_CLEAR = (6.0, 30.0)  # the widening keeps off a road and a node this far (world units)
 BRIDGE_REACH = 24.0  # a road may cross water this close to a bridge of its own (validator)
+# No small pocket of water (``fill_pockets``, #944): the owner line outlines every water body, and
+# a pocket of streams only (no sea or lake in it) of at most ``POCKET_CELLS`` cells (16 world units
+# square each; about a stream 60 units long) read as a bubble. It is filled with land where it can
+# be, the land ``POCKET_REACH`` cells around it given anew to make room, trying ``POCKET_TRIES``
+# cells as the point where four areas meet. One of at most ``POND_SMALL`` cells that cannot be is
+# widened into a pond of ``POND_CELLS`` cells at most ``POND_REACH`` round it, keeping
+# ``POND_CLEAR`` off a road and a node; a bigger one is a piece of a stream that reads as one.
+POCKET_CELLS = 60
+POCKET_REACH = 3
+POCKET_TRIES = 24
+POND_SMALL = 40
+POND_CELLS = 160
+POND_REACH = 60.0
+POND_CLEAR = (16.0, 50.0)
 
 WaterKind = Literal["sea", "lake"]
 Labels = NDArray[np.int32]
@@ -495,11 +512,17 @@ def compute(mapdef: MapDef, spec: GeoSpec, seed: int | None = None) -> Geography
         best = np.where(b1, d, best)
         lab = np.where(b1, label, lab).astype(np.int32)
 
+    def site_distance(node: int, win: tuple[slice, slice]) -> Floats:
+        """The distance of the cells of ``win`` to the site of ``node`` (item 2)."""
+        px, py = wx[win], wy[win]
+        d = np.hypot(px - pos[node][0], py - pos[node][1])
+        for a, p in halves[node]:
+            d = np.minimum(d, _seg_dist(px, py, a, p) + ROAD_BIAS)
+        return d
+
+    everywhere = (slice(None), slice(None))
     for n in nodes:
-        d = np.hypot(wx - pos[n.id][0], wy - pos[n.id][1])
-        for a, p in halves[n.id]:
-            d = np.minimum(d, _seg_dist(wx, wy, a, p) + ROAD_BIAS)
-        push(n.id, d)
+        push(n.id, site_distance(n.id, everywhere))
     for k, cell in enumerate(spec.water):
         d = np.hypot(wx - cell.x, wy - cell.y) - cell.r + coast * _smoothstep(*COAST_FADE, droad)
         d = np.where((droad < SHORE) | (dnode < NODE_CLEARANCE), 1e8, d)
@@ -559,7 +582,11 @@ def compute(mapdef: MapDef, spec: GeoSpec, seed: int | None = None) -> Geography
         if not bad.any():
             break
         labels = np.where(bad, RIVER, labels).astype(np.int32)
-    labels = widen_thin_water(labels, (droad < WIDEN_CLEAR[0]) | (dnode < WIDEN_CLEAR[1]))
+    keep = (droad < WIDEN_CLEAR[0]) | (dnode < WIDEN_CLEAR[1])
+    labels = widen_thin_water(labels, keep)
+    fill_islands(labels, mapdef)
+    pond_room = (droad >= POND_CLEAR[0]) & (dnode >= POND_CLEAR[1])
+    labels = fill_pockets(labels, table, keep, pond_room, site_distance)
     fill_islands(labels, mapdef)
 
     bridges: list[Bridge] = []
@@ -574,7 +601,17 @@ def compute(mapdef: MapDef, spec: GeoSpec, seed: int | None = None) -> Geography
                 bridges.append(Bridge(e.id, round(bx, 1), round(by, 1)))
                 break
 
-    streams = _stream_lines(lab, stream_hw, pairs)
+    # A stream whose pocket was filled with land (``fill_pockets``) has no water left under it.
+    water = is_water(labels)
+    rows, cols = water.shape
+    streams = tuple(
+        line
+        for line in _stream_lines(lab, stream_hw, pairs)
+        if any(
+            water[min(int(py // STEP), rows - 1), min(int(px // STEP), cols - 1)]
+            for px, py in line.pts
+        )
+    )
     return Geography(
         labels, tuple(w.kind for w in spec.water), streams, tuple(rivers), tuple(bridges)
     )
@@ -642,6 +679,163 @@ def fill_islands(labels: Labels, mapdef: MapDef) -> None:
             around = labels[ring & ~piece]
             water = around[around >= WATER_BASE]
             labels[piece] = int(np.bincount(water).argmax()) if len(water) else RIVER
+
+
+def _window(mask: Mask, margin: int) -> tuple[slice, slice]:
+    """The bounding box of ``mask`` grown by ``margin`` cells, clipped to the grid."""
+    ys, xs = np.nonzero(mask)
+    h, w = mask.shape
+    return (
+        slice(max(0, int(ys.min()) - margin), min(h, int(ys.max()) + margin + 1)),
+        slice(max(0, int(xs.min()) - margin), min(w, int(xs.max()) + margin + 1)),
+    )
+
+
+def _regrow(lab: Labels, region: Mask, table: Mask, dist: dict[int, Floats]) -> Labels | None:
+    """``lab`` with the cells of ``region`` given to the areas around it, or ``None``.
+
+    The areas grow into the region from its edge, the cell nearest to an area's site first
+    (``dist``), and a cell takes an area only next to a cell of it and only if no land neighbour
+    of another area lacks a road to it (``table``): no land contact without a road appears. A
+    region that is not filled whole gives ``None``."""
+    h, w = lab.shape
+    out = np.where(region, -2, lab).astype(np.int32)
+    n = table.shape[0] - 1
+    heap: list[tuple[float, int, int, int]] = []
+
+    def offer(y: int, x: int) -> None:
+        for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+            if 0 <= yy < h and 0 <= xx < w and out[yy, xx] == -2:
+                area = int(out[y, x])
+                heapq.heappush(heap, (float(dist[area][yy, xx]), yy, xx, area))
+
+    for y, x in zip(
+        *np.nonzero(_dilate(region) & ~region & (out >= 0) & (out < RIVER)), strict=True
+    ):
+        offer(int(y), int(x))
+    while heap:
+        _, y, x, area = heapq.heappop(heap)
+        if out[y, x] != -2:
+            continue
+        fits = True
+        for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+            if 0 <= yy < h and 0 <= xx < w:
+                other = int(out[yy, xx])
+                if 0 <= other < RIVER and other != area and not table[min(area, n), min(other, n)]:
+                    fits = False
+                    break
+        if fits:
+            out[y, x] = area
+            offer(y, x)
+    return None if (out == -2).any() else out
+
+
+def pockets(labels: Labels, most: int) -> list[Mask]:
+    """The pockets of water: the water bodies of streams only (no sea or lake in one) of at most
+    ``most`` cells, in the order of their first cell."""
+    comp, count = components(is_water(labels))
+    out: list[Mask] = []
+    for k in range(count):
+        pocket = comp == k
+        if int(pocket.sum()) <= most and not (labels[pocket] >= WATER_BASE).any():
+            out.append(pocket)
+    return out
+
+
+def fill_pockets(
+    labels: Labels,
+    table: Mask,
+    keep: Mask,
+    pond_room: Mask,
+    site_distance: Callable[[int, tuple[slice, slice]], Floats],
+) -> Labels:
+    """No small pocket of water (owner 2026-11-11, #944): the owner line runs along every bank
+    (DEC-36, item 6 as revised on 2026-11-11), so a pond at a junction or a short piece of a
+    stream would be a small outlined bubble. Water reads as a lake or a river, or is not there.
+
+    * A pocket (``pockets``) of at most ``POCKET_CELLS`` cells is filled with land where item 3
+      allows (``_fill_pocket``).
+    * One of at most ``POND_SMALL`` cells that cannot be (five areas around it with roads only
+      between neighbours: no way to meet at a point) is widened into a pond of ``POND_CELLS``
+      cells over the land of ``pond_room`` (off the roads and the nodes); land only becomes water,
+      so no land contact appears. An area cut in two is mended by ``fill_islands`` after it."""
+    for pocket in pockets(labels, POCKET_CELLS):
+        if not (labels[pocket] == RIVER).all():  # filled or widened over by an earlier one
+            continue
+        filled = _fill_pocket(labels, pocket, table, keep, site_distance)
+        if filled is not None:
+            labels = filled
+        elif int(pocket.sum()) <= POND_SMALL:
+            labels = _pond(labels, pocket, pond_room)
+    return labels
+
+
+def _fill_pocket(
+    labels: Labels,
+    pocket: Mask,
+    table: Mask,
+    keep: Mask,
+    site_distance: Callable[[int, tuple[slice, slice]], Floats],
+) -> Labels | None:
+    """``labels`` with ``pocket`` filled with land, or ``None`` if it cannot be.
+
+    The pocket and the land within ``POCKET_REACH`` cells of it (off ``keep``: roads and nodes)
+    are given anew to the areas around (``_regrow``). The two banks of a stream have no road, nor
+    have the two areas at its ends, so the four may meet only at a point (a diagonal of cells is no
+    contact). First the areas as they are; then each cell of the pocket as that point, the most
+    even one first: every area's distance less its distance there, so all four reach it. A try
+    counts only if it fills the pocket whole and leaves every area one piece."""
+    win = _window(pocket, POCKET_REACH + 2)
+    land = labels[win] < RIVER
+    near = pocket[win]
+    for _ in range(POCKET_REACH):
+        near = _dilate(near)
+    region = pocket[win] | (near & land & ~keep[win])
+    lab = labels[win]
+    around = _dilate(region) & ~region & (lab >= 0) & (lab < RIVER)
+    areas = sorted({int(a) for a in lab[around].tolist()})
+    if not areas:
+        return None
+    dist = {a: site_distance(a, win) for a in areas}
+    pinch = _pinch_order(pocket[win], dist)
+    tries = [{a: 0.0 for a in areas}] + [
+        {a: -float(d[y, x]) for a, d in dist.items()} for y, x in pinch[:POCKET_TRIES]
+    ]
+    for weights in tries:
+        out = _regrow(lab, region, table, {a: d + weights[a] for a, d in dist.items()})
+        if out is None:
+            continue
+        trial = labels.copy()
+        trial[win] = out
+        if all(components(trial == a)[1] == 1 for a in areas):
+            return trial
+    return None
+
+
+def _pond(labels: Labels, pocket: Mask, room: Mask) -> Labels:
+    """``pocket`` widened round itself over the land of ``room`` until it has ``POND_CELLS``
+    cells or no more room (``POND_REACH`` world units at most)."""
+    win = _window(pocket, int(POND_REACH // STEP) + 1)
+    lab = labels[win]
+    away = distance_to(pocket[win])
+    grow = (lab < RIVER) & room[win]
+    pond = pocket[win]
+    for reach in np.arange(STEP, POND_REACH + STEP, STEP):
+        pond = pocket[win] | (grow & (away <= reach))
+        if int(pond.sum()) >= POND_CELLS:
+            break
+    out = labels.copy()
+    out[win] = np.where(pond, RIVER, lab)
+    return out
+
+
+def _pinch_order(pocket: Mask, dist: dict[int, Floats]) -> list[tuple[int, int]]:
+    """The cells of ``pocket``, the one where the four nearest areas are the most evenly far
+    first (the spread of their distances; ties in row order)."""
+    stack = np.sort(np.stack(list(dist.values())), axis=0)
+    spread = stack[min(3, len(stack) - 1)] - stack[0]
+    cells = [(int(y), int(x)) for y, x in zip(*np.nonzero(pocket), strict=True)]
+    return sorted(cells, key=lambda c: (float(spread[c]), c))
 
 
 # ---- vectors -----------------------------------------------------------------------------------

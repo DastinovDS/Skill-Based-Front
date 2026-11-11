@@ -80,11 +80,64 @@ def _messages(issues: list[Any]) -> list[str]:
 
 # ---- areas (item 2) and the adjacency rule (item 3) --------------------------------------------
 def test_example_1_and_3_areas_touch_only_along_roads(tmp_path: Path) -> None:
-    # Rows 1 and 3: the road pairs share land; 0-3 and 1-2 (no road) are cut apart by a stream.
-    _, g = _computed(_diamond(tmp_path, {"water": []}))
-    assert set(geo.land_contacts(g.labels)) == {(0, 1), (0, 2), (1, 3), (2, 3)}
+    # Rows 1 and 3: the road pairs share land (3-2 none: the river passes it at a bridge, row 6);
+    # 0-3 and 1-2 (no road) are cut apart by a stream that runs into the sea.
+    _, g = _computed(_diamond(tmp_path, SEA_AND_RIVER))
+    assert set(geo.land_contacts(g.labels)) == {(0, 1), (0, 2), (1, 3)}
     assert len(g.streams) >= 1
     assert (g.labels == geo.RIVER).any()
+
+
+def test_a_small_pocket_where_four_areas_meet_is_land_they_meet_at_a_point(
+    tmp_path: Path,
+) -> None:
+    # #944: without other water the stream of the middle of the diamond is a small pocket (the
+    # owner line would outline it as a bubble). Neither 0-3 nor 1-2 has a road, so the four areas
+    # meet at one point: a diagonal of cells is no contact (item 3 holds).
+    _, g = _computed(_diamond(tmp_path, {"water": []}))
+    assert set(geo.land_contacts(g.labels)) == {(0, 1), (0, 2), (1, 3), (2, 3)}
+    assert not geo.is_water(g.labels).any()
+    assert g.streams == ()
+    labels = g.labels
+    blocks = np.stack([labels[:-1, :-1], labels[:-1, 1:], labels[1:, :-1], labels[1:, 1:]])
+    assert (np.sort(blocks, axis=0) == np.arange(4)[:, None, None]).all(axis=0).sum() == 1
+    for node in range(4):
+        assert geo.components(labels == node)[1] == 1
+
+
+def test_a_pocket_five_areas_cannot_close_on_becomes_a_pond() -> None:
+    # #944: five areas round a pocket with roads only between neighbours: no four of them can meet
+    # at a point, so the pocket stays water and is widened into a pond of POND_CELLS cells. Land
+    # only becomes water: no new land contact.
+    size = 41
+    y, x = np.mgrid[0:size, 0:size].astype(np.float64)
+    angle = np.arctan2(y - 20, x - 20) % (2 * math.pi)
+    labels = (angle // (2 * math.pi / 5)).astype(np.int32)
+    centres = [
+        (
+            20 + 15 * math.cos((k + 0.5) * 2 * math.pi / 5),
+            20 + 15 * math.sin((k + 0.5) * 2 * math.pi / 5),
+        )
+        for k in range(5)
+    ]
+    table = np.zeros((6, 6), np.bool_)
+    for k in range(5):
+        table[k, (k + 1) % 5] = table[(k + 1) % 5, k] = True
+    labels[np.hypot(x - 20, y - 20) <= 2.5] = geo.RIVER
+    assert all(table[a, b] for a, b in geo.land_contacts(labels))
+    assert 0 < int((labels == geo.RIVER).sum()) <= geo.POND_SMALL
+
+    def site_distance(node: int, win: tuple[slice, slice]) -> Any:
+        cx, cy = centres[node]
+        return np.hypot(x[win] - cx, y[win] - cy)
+
+    nothing = np.zeros(labels.shape, np.bool_)
+    out = geo.fill_pockets(labels, table, nothing, ~nothing, site_distance)
+    assert int((out == geo.RIVER).sum()) >= geo.POND_CELLS
+    assert all(table[a, b] for a, b in geo.land_contacts(out))
+    # Without room to widen (every cell off the pond's land), it stays as it was.
+    kept = geo.fill_pockets(labels, table, nothing, nothing, site_distance)
+    assert (kept == labels).all()
 
 
 def test_a_road_runs_through_its_own_two_areas_and_the_border_is_at_its_border_point(
@@ -502,3 +555,20 @@ def test_no_dark_halo_on_land_and_the_water_is_engraved_dark_stone(
     shore = geo.distance_to(~water)
     near_shore = contrast[lake & (shore > 4) & (shore <= 16)].mean()
     assert near_shore > contrast[lake & (shore > 48)].mean() * 1.5
+
+
+# ---- no small pocket of water on a committed map (#944) ----------------------------------------
+GEOGRAPHIES = sorted(
+    path
+    for folder in (ROOT / "maps", ROOT / "maps" / "menu", ROOT / "maps" / "gen")
+    for path in folder.glob("*.json")
+    if geo.spec_path(path).is_file()
+)
+
+
+@pytest.mark.parametrize("path", GEOGRAPHIES, ids=lambda p: p.stem)
+def test_committed_map_has_no_small_pocket_of_water(path: Path) -> None:
+    # The owner line outlines every water body (DEC-36, item 6 as revised on 2026-11-11): water
+    # of streams only below POND_SMALL cells would be a bubble.
+    _, g = _computed(path)
+    assert [int(p.sum()) for p in geo.pockets(g.labels, geo.POND_SMALL)] == []
