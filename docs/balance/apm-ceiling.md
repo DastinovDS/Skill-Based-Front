@@ -88,7 +88,7 @@ window W seconds  = (cp.cap + ceil((W * hz - 1) / P_cp) * q) // c   paid command
 ```
 
 The window formula starts at the cap: the commands are applied in ticks `t..t+W*hz-1` and the CP were at the cap after
-tick `t-1`. Commands go before the economy in a tick (`gow_sim.match.SYSTEMS`), so a quantum that fires in the last
+tick `t-1`. Commands go before the economy in a tick (`Match.step`: `apply_commands`, then `SYSTEMS`), so a quantum that fires in the last
 tick of the window cannot be spent in it: at most `ceil((W*hz - 1) / P_cp)` quanta count.
 
 **Why every stance gives the same total.** The stances trade CP for charges at one rate: War to Balance gives up
