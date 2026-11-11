@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t, tf } from '../i18n/index.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import UnitMark from '../app/UnitMark.svelte';
   import type { OrderController } from '../match/orderController.ts';
   import { chargedOfSplit } from '../match/splitState.svelte.ts';
@@ -44,8 +45,8 @@
   const share = (group: { units: number; charged: number }): number =>
     group.units > 0 ? group.charged / group.units : 0;
 
-  /** Key labels are the keys themselves, not translations. */
-  const SPLIT_KEY = 'S';
+  /** Key labels are the keys themselves, not translations; the split key follows its binding (#966). */
+  const SPLIT_KEY = $derived(keyBindings.label('split'));
   const ESC = 'Esc';
 </script>
 

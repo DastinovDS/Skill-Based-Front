@@ -8,6 +8,8 @@
   import Icon from './Icon.svelte';
   import Slider from './Slider.svelte';
   import HelmetIcon from '../units/HelmetIcon.svelte';
+  import type { KeyAction } from '../app/keyBindings.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
 
   interface Props {
     open: boolean;
@@ -47,8 +49,11 @@
   /**
    * The keys: a label (the key itself, not a translation) and the dictionary key of its effect.
    * The planned order is on `E` (DEC-48, item K2); Shift selects several groups under the group order (item K1).
+   * The rebindable keys show their current binding (#966); Shift, the mouse, `?` and Esc are fixed.
    */
   type KeyRow = readonly [string, MessageKey];
+  const key = (action: KeyAction): string => keyBindings.label(action);
+  const names = $derived(keyBindings.names());
   const keys = $derived<readonly KeyRow[]>([
     ['LMB', groupOrder ? 'help.key.groupOrder' : 'help.key.select'],
     ...(groupOrder
@@ -57,20 +62,20 @@
           ['Shift + drag', 'help.key.selectBox'],
         ] as const)
       : []),
-    ['E + LMB', 'help.key.planned'],
-    ['E + wheel', 'help.key.planWheel'],
-    ...(groupOrder ? [] : ([['F', 'help.key.release']] as const)),
-    ['X', 'help.key.cancel'],
-    ['R', 'help.key.recruit'],
-    ...(rallyPoint ? ([['P', 'help.key.rally']] as const) : []),
-    ['B', 'help.key.fortify'],
-    ['T', 'help.key.terrain'],
-    ['S', 'help.key.split'],
-    ['G', 'help.key.merge'],
-    ['Q', 'help.key.stance'],
-    ['Space', 'help.key.alert'],
-    ['H', 'help.key.fit'],
-    ['M', 'help.key.mute'],
+    [`${key('planned')} + LMB`, 'help.key.planned'],
+    [`${key('planned')} + wheel`, 'help.key.planWheel'],
+    ...(groupOrder ? [] : ([[key('release'), 'help.key.release']] as const)),
+    [key('cancel'), 'help.key.cancel'],
+    [key('recruit'), 'help.key.recruit'],
+    ...(rallyPoint ? ([[key('rally'), 'help.key.rally']] as const) : []),
+    [key('fortify'), 'help.key.fortify'],
+    [key('terrain'), 'help.key.terrain'],
+    [key('split'), 'help.key.split'],
+    [key('merge'), 'help.key.merge'],
+    [key('stance'), 'help.key.stance'],
+    [key('alert'), 'help.key.alert'],
+    [key('fit'), 'help.key.fit'],
+    [key('mute'), 'help.key.mute'],
     ['?', 'help.key.help'],
     ['Esc', 'help.key.escape'],
   ]);
@@ -189,7 +194,7 @@
             <dl class="keys">
               {#each keys as [label, text] (text)}
                 <dt><kbd>{label}</kbd></dt>
-                <dd>{t(text)}</dd>
+                <dd>{tf(text, names)}</dd>
               {/each}
             </dl>
             <p class="note">{t('help.camera')}</p>

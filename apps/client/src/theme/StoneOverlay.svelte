@@ -12,10 +12,19 @@
     role?: 'dialog' | 'alertdialog';
     /** Escape closes it; without a handler the overlay ignores the key. */
     onclose?: () => void;
+    /** A window wider than a dialog of a few lines (the keys of Settings, #966). */
+    wide?: boolean;
     children: Snippet;
   }
 
-  let { label, kind = 'window', role = 'dialog', onclose, children }: Props = $props();
+  let {
+    label,
+    kind = 'window',
+    role = 'dialog',
+    onclose,
+    wide = false,
+    children,
+  }: Props = $props();
 
   let panel: HTMLElement | undefined = $state();
 
@@ -40,6 +49,7 @@
     <div
       bind:this={panel}
       class="stone-window rule-frame"
+      class:wide
       {role}
       aria-modal="true"
       aria-label={label}
@@ -55,6 +65,10 @@
 </div>
 
 <style>
+  .stone-window.wide {
+    width: min(880px, 100%);
+  }
+
   .stone-sheet {
     box-sizing: border-box;
     width: min(1024px, 100%);

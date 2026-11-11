@@ -40,6 +40,7 @@ describe('legal content', () => {
     expect([...used].sort()).toEqual([
       'sbf.guest',
       'sbf.introSeen',
+      'sbf.keys',
       'sbf.locale',
       'sbf.newHereOff',
       'sbf.settings',

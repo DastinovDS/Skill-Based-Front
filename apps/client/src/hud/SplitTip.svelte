@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tf } from '../i18n/index.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import type { OrderController } from '../match/orderController.ts';
   import Icon from './Icon.svelte';
   import MapTip from './MapTip.svelte';
@@ -20,8 +21,8 @@
   // A planned order (E) is not given there at all (#940): the tip says it is closed, no click offer.
   const closed = $derived(orders.ui.current.splitClosed);
 
-  /** The key that opens the split menu (a key label, not a translation). */
-  const KEY = 'S';
+  /** The key that opens the split menu (a key label, not a translation; its binding, #966). */
+  const KEY = $derived(keyBindings.label('split'));
 </script>
 
 <!-- The stack limit before the order is sent (#468): the shape (the split icon, the key) and the words carry it. -->

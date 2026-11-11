@@ -3,6 +3,7 @@
   import { sound } from '../audio/soundState.svelte.ts';
   import HelmetIcon from '../units/HelmetIcon.svelte';
   import { getLocale, t, tf } from '../i18n/index.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { HudChrome } from './chrome.svelte.ts';
   import CpGauge from './CpGauge.svelte';
@@ -40,9 +41,6 @@
     anchors = NO_ANCHORS,
     names = (node: number) => String(node),
   }: Props = $props();
-
-  /** The key itself is not translated. */
-  const STANCE_KEY = 'Q';
 
   const STANCE_ICONS: Record<'economy' | 'balance' | 'war', IconName> = {
     economy: 'economy',
@@ -183,7 +181,10 @@
       <button
         type="button"
         class="chip"
-        aria-label={tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
+        aria-label={tf('orders.stanceOpen', {
+          stance: t(`stance.${data.stance}`),
+          stanceKey: keyBindings.label('stance'),
+        })}
         title={next === null
           ? undefined
           : tf(orders.factoriesFollow ? 'bar.nextTipAll' : 'bar.nextTip', {
@@ -201,7 +202,7 @@
             <i style:height="{next.capital.share * 100}%"></i>
           </span>
         {/if}
-        <kbd>{STANCE_KEY}</kbd>
+        <kbd>{keyBindings.label('stance')}</kbd>
       </button>
     {/if}
   </div>
@@ -290,6 +291,7 @@
       aria-pressed={sound.muted}
       title={tf('bar.soundTip', {
         tip: sound.muted ? t('bar.soundOff') : t('bar.soundOn'),
+        muteKey: keyBindings.label('mute'),
       })}
       onclick={() => {
         sound.toggleMute();

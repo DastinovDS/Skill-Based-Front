@@ -1,8 +1,11 @@
 /**
  * The keys of the HUD itself (ui-style 10 and 11): `?` help, `H` (or `Home`) fit the map, `M` sound on or off, the
  * double `Esc` that opens the exit dialog, and `Esc` that closes an overlay. The keys of the
- * orders (`match/keyEvents.ts`) come after these.
+ * orders (`match/keyEvents.ts`) come after these. `H` and `M` are the defaults of their bindings
+ * (#966); `?`, `F1`, `Home` and `Esc` are fixed.
  */
+import type { KeyMap } from '../app/keyBindings.ts';
+import { keyBindings } from '../app/keyBindingsState.svelte.ts';
 import { DOUBLE_ESC_MS, type HudChrome } from './chrome.svelte.ts';
 
 /** The parts of a keyboard event the HUD needs. */
@@ -36,6 +39,7 @@ export function hudKey(
   input: HudKeyInput,
   actions: HudKeyActions,
   now: number,
+  keys: KeyMap = keyBindings.keys,
 ): HudKeyResult {
   if (input.type !== 'keydown') return chrome.modal ? 'blocked' : 'pass';
   if (input.code === 'Escape') {
@@ -62,19 +66,16 @@ export function hudKey(
     if (input.repeat !== true) chrome.helpOpen = !chrome.helpOpen;
     return 'handled';
   }
-  if (input.code === 'KeyM' && actions.mute !== undefined) {
+  if (input.code === keys.mute && actions.mute !== undefined) {
     if (input.repeat !== true) actions.mute();
     return 'handled';
   }
   if (chrome.modal) return 'blocked';
-  switch (input.code) {
-    case 'Home':
-    case 'KeyH':
-      actions.fit();
-      return 'handled';
-    default:
-      return 'pass';
+  if (input.code === 'Home' || input.code === keys.fit) {
+    actions.fit();
+    return 'handled';
   }
+  return 'pass';
 }
 
 const TEXT_INPUTS = new Set(['INPUT', 'SELECT', 'TEXTAREA']);

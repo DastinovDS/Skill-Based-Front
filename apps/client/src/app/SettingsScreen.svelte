@@ -13,6 +13,8 @@
   } from '../i18n/index.ts';
   import type { MapFile } from '../protocol.gen.ts';
   import LapisButton from '../theme/LapisButton.svelte';
+  import KeysDialog from './KeysDialog.svelte';
+  import { keyBindings as pageBindings, type KeyBindingsState } from './keyBindingsState.svelte.ts';
   import LogoutDialog from './LogoutDialog.svelte';
   import Segments from './Segments.svelte';
   import {
@@ -36,6 +38,8 @@
     /** The display settings and the sound of the page; tests pass their own. */
     settings?: SettingsState;
     sound?: SoundState;
+    /** The key bindings of the page (#966); tests pass their own. */
+    bindings?: KeyBindingsState;
     onpassword: () => void;
     onlogout: () => void;
     /** Esc: back to the screen the settings were opened from. */
@@ -48,6 +52,7 @@
     map,
     settings = pageSettings,
     sound = pageSound,
+    bindings = pageBindings,
     onpassword,
     onlogout,
     onback,
@@ -56,11 +61,15 @@
   }: Props = $props();
 
   let confirmingLogout = $state(false);
+  /** The keys dialog is open (#966). */
+  let editingKeys = $state(false);
+  /** Holds the button that opens the keys dialog: the focus goes back to it on close. */
+  let keysActs: HTMLDivElement | undefined = $state();
 
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-    // The log-out dialog keeps its own keys while it is open.
-    if (confirmingLogout) return;
+    // The log-out and the keys dialogs keep their own keys while they are open.
+    if (confirmingLogout || editingKeys) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       onback();
@@ -161,13 +170,20 @@
         <section class="grp" aria-labelledby="set-keys">
           <h3 class="sec" id="set-keys">{t('settings.keys')}</h3>
           <dl class="keys">
-            {#each SETTINGS_KEYS as [key, what] (key)}
+            {#each SETTINGS_KEYS as [key, what] (what)}
               <div>
-                <dt><kbd>{key}</kbd></dt>
+                <dt><kbd>{typeof key === 'string' ? key : bindings.label(key.action)}</kbd></dt>
                 <dd>{t(what)}</dd>
               </div>
             {/each}
           </dl>
+          <div class="acts keys-acts" bind:this={keysActs}>
+            <LapisButton
+              onclick={() => {
+                editingKeys = true;
+              }}>{t('settings.keys.change')}</LapisButton
+            >
+          </div>
         </section>
       </div>
 
@@ -248,6 +264,16 @@
   </div>
 
   {#snippet overlay()}
+    {#if editingKeys}
+      <KeysDialog
+        {bindings}
+        onclose={() => {
+          editingKeys = false;
+          // The focus goes back to the button that opened the dialog.
+          keysActs?.querySelector('button')?.focus();
+        }}
+      />
+    {/if}
     {#if confirmingLogout}
       <LogoutDialog
         onpassword={() => {

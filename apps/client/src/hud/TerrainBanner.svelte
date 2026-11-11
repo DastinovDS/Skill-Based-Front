@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { t } from '../i18n/index.ts';
+  import { t, tf } from '../i18n/index.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import type { OrderController } from '../match/orderController.ts';
 
   interface Props {
@@ -19,8 +20,8 @@
 <!-- The terrain map mode on `T` (#429): says it is on, and the vision table of the rules as its legend. -->
 {#if ui.terrainMode}
   <section class="legend" aria-live="polite">
-    <strong>{t('terrain.banner')}</strong>
-    <span>{t('terrain.hint')}</span>
+    <strong>{tf('terrain.banner', { terrainKey: keyBindings.label('terrain') })}</strong>
+    <span>{tf('terrain.hint', { terrainKey: keyBindings.label('terrain') })}</span>
     <table>
       <caption>{t('terrain.legend')}</caption>
       <thead>

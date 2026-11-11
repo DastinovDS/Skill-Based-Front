@@ -34,6 +34,8 @@ import { GHOST_CP, UNDO_CUE } from '../render/style.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { chargedOfSplit, SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
+import { actionOf, type KeyAction, type KeyMap } from '../app/keyBindings.ts';
+import { keyBindings } from '../app/keyBindingsState.svelte.ts';
 
 /**
  * A sector of the menu of a city (`fortify`: a road fortification, DEC-43, item D, which then asks
@@ -103,6 +105,8 @@ export interface OrderControllerOptions {
   focusNode?: (node: number) => void;
   /** Sends `reach_query` for a group (DEC-20); the answer comes back through `onReach`. */
   queryReach?: (group: string) => void;
+  /** The key of each rebindable action (#966); the page's bindings when absent (a test passes its own). */
+  keys?: () => KeyMap;
 }
 
 /** The parts of a keyboard event the controller needs (`code`: layout-independent key). */
@@ -1407,24 +1411,34 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.vision.by_terrain;
   }
 
-  /** Returns true if the key was used (the caller then prevents the browser default). */
+  /** The key of each rebindable action (#966): the page's bindings unless the options give others. */
+  get keys(): KeyMap {
+    return this.#o.keys?.() ?? keyBindings.keys;
+  }
+
+  /**
+   * Returns true if the key was used (the caller then prevents the browser default). The actions
+   * are found by the bindings (#966, `E`, `X`, `Q` ... by default); Esc, Enter, the arrows and the
+   * digits of the menus are fixed.
+   */
   key(input: KeyInput): boolean {
+    const action: KeyAction | null = actionOf(this.keys, input.code);
     this.#shiftHeld = input.shiftKey;
-    // `E` held is a planned order (DEC-48, item K2); its keyup or a lost focus (`code` empty) lets
-    // it go, so a later click never becomes a planned order by accident.
-    if (input.code === 'KeyE' || (input.type === 'keyup' && input.code === '')) {
+    // The planned order key held (`E`, DEC-48, item K2); its keyup or a lost focus (`code` empty)
+    // lets it go, so a later click never becomes a planned order by accident.
+    if (action === 'planned' || (input.type === 'keyup' && input.code === '')) {
       this.#eHeld = input.type === 'keydown';
     }
     this.#syncPlanning();
     this.#syncBonusPick();
     if (!this.#eHeld) this.#wheelSteps.reset();
-    if (input.code === 'KeyE') return true;
-    if (input.type !== 'keydown') return this.#keyUp(input);
-    if (input.code === 'KeyT') {
+    if (action === 'planned') return true;
+    if (input.type !== 'keydown') return this.#keyUp(input, action);
+    if (action === 'terrain') {
       if (input.repeat !== true) this.toggleTerrainMode();
       return true;
     }
-    if (input.code === 'KeyQ') return this.#qDown(input);
+    if (action === 'stance') return this.#qDown(input);
     if (input.code === 'Escape' && this.ui.current.fortFrom !== null) {
       // The road pick of a fortification: Esc drops it.
       this.cancelFortify();
@@ -1438,6 +1452,10 @@ export class OrderController implements MapInteraction {
     if (this.splitMenu.current.open) {
       // The split menu: arrows change the amount, Enter splits, S (the key that opened it) or Esc
       // close it; the other keys stay with the menu so a stray key does not order the group.
+      if (action === 'split') {
+        this.closeSplit();
+        return true;
+      }
       switch (input.code) {
         case 'ArrowLeft':
         case 'ArrowDown':
@@ -1451,7 +1469,6 @@ export class OrderController implements MapInteraction {
         case 'NumpadEnter':
           this.confirmSplit();
           return true;
-        case 'KeyS':
         case 'Escape':
           this.closeSplit();
           return true;
@@ -1480,12 +1497,13 @@ export class OrderController implements MapInteraction {
         return true;
       }
     }
-    switch (input.code) {
-      case 'Escape':
-        // The menus above took their own Esc.
-        this.deselect();
-        return true;
-      case 'KeyX':
+    if (input.code === 'Escape') {
+      // The menus above took their own Esc.
+      this.deselect();
+      return true;
+    }
+    switch (action) {
+      case 'cancel':
         // Nothing selected on the ordinary map: the last action goes, step by step (#764). A held
         // key does not repeat it.
         if (this.isIdle()) {
@@ -1497,31 +1515,31 @@ export class OrderController implements MapInteraction {
           if (this.selectedOwnCity() !== null) this.cancelRecruit();
         } else this.cancelSelected();
         return true;
-      case 'KeyF':
+      case 'release':
         // The gathering plan of the selected group departs now; no release under the group order.
         if (!this.canRelease) return false;
         this.releasePlan();
         return true;
-      case 'KeyP':
+      case 'rally':
         // The recruit rally point of the selected own city (DEC-48, item K7): set it, or clear it.
         if (!this.rallyPoints || this.selectedOwnCity() === null) return false;
         if (input.repeat !== true) this.startRally();
         return true;
-      case 'KeyR':
+      case 'recruit':
         this.recruit();
         return true;
-      case 'KeyB':
+      case 'fortify':
         // "Fortify road" of the selected own city or province (DEC-43, item D): the road is picked next.
         if (this.selectedOwnCity() === null) return false;
         this.startFortify();
         return true;
-      case 'KeyS':
+      case 'split':
         this.toggleSplit();
         return true;
-      case 'KeyG':
+      case 'merge':
         this.merge();
         return true;
-      case 'Space':
+      case 'alert':
         return this.#jumpToAlert();
       default:
         return false;
@@ -1657,12 +1675,12 @@ export class OrderController implements MapInteraction {
    * Q up: a short press leaves the menu open for a click or 1 / 2 / 3; after a hold the sector
    * under the pointer is chosen, and the dead zone cancels. A lost focus cancels a hold.
    */
-  #keyUp(input: KeyInput): boolean {
+  #keyUp(input: KeyInput, action: KeyAction | null): boolean {
     if (input.code === '' && this.#qDownAt !== null) {
       this.closeRadial();
       return false;
     }
-    if (input.code !== 'KeyQ' || this.#qDownAt === null) return false;
+    if (action !== 'stance' || this.#qDownAt === null) return false;
     const held = this.#now() - this.#qDownAt;
     this.#qDownAt = null;
     const { hover } = this.radial.current;

@@ -2,6 +2,7 @@
   import BonusChevron from '../hud/BonusChevron.svelte';
   import HelmetIcon from '../units/HelmetIcon.svelte';
   import { t, tf } from '../i18n/index.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import PicCity from './PicCity.svelte';
   import UnitCell from './UnitCell.svelte';
   import { HOWTO, type Count, type Example, type HowToData } from './data.ts';
@@ -197,6 +198,7 @@
         planned: rules.cost_planned_cp,
         delay: rules.planned_delay_seconds,
         bonus: rules.planned_bonus_per_road,
+        plannedKey: keyBindings.label('planned'),
       })}
     </p>
     <p>

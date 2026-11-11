@@ -15,7 +15,8 @@ export function pinGroup(base: OrderController, pins: ScenePins): MapInteraction
   const hold = (): void => {
     // The selection needs the snapshot of the scene (its own groups): it is taken once there is one.
     if (pins.picks !== undefined && base.picks.length === 0) base.selectBox(pins.picks);
-    if (pins.eHeld === true) base.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
+    if (pins.eHeld === true)
+      base.key({ type: 'keydown', code: base.keys.planned, shiftKey: false });
     if (hit !== null) base.hover(hit);
   };
   return {
