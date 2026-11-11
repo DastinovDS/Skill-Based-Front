@@ -126,7 +126,7 @@ export const BUILD_PAY_VIEW = { x: 440, y: 300, width: 150, height: 250 } as con
  * The `build_pay` scene: the `economy` moment with Forkway's factory (4 charges) owing one, the
  * second charge landed 150 ms ago (its pop), the third and fourth in the air (from the warehouse,
  * nearly there; from the group standing in the city, just leaving its helmet); Watchhouse's barracks
- * (3 charges) paid in full 0.6 s ago, its lozenges running into the tower.
+ * (3 charges) paid in full 0.6 s ago, its lozenges running into the icon.
  */
 export function buildPaySnapshot(map: MapFile): SnapshotMsg {
   const base = economySnapshot(map);

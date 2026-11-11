@@ -18,7 +18,7 @@ export interface CapacityTicks {
 
 /**
  * `ruleset_public.city_upgrades` and `factory`: the durations of the city builds in ticks and the
- * charges they cost (the lozenges of the Crown arc of a build, #847). Without the charges a build
+ * charges they cost (the row of owed lozenges beside a build, #847, #954). Without the charges a build
  * shows only the charges it still owes.
  */
 export interface CityDevelopment {
@@ -63,7 +63,7 @@ export interface RenderSource {
   /**
    * The city development of DEC-26 (`ruleset_public.city_upgrades`): the durations of the barracks
    * and factory builds for the build mark over an own city. Dev scenes without it draw cities
-   * without the build marks and the barracks tower.
+   * without the build marks and the barracks icon.
    */
   readonly cityUpgrades?: CityDevelopment | null;
   /**

@@ -3,14 +3,14 @@ import type { EventMsg, MapFile, NodeView, PlayerId, SnapshotMsg } from '../prot
 import type { CityDevelopment } from './source.ts';
 import { cityRadius, ringRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
 import {
+  BUILD_PAY,
+  BUILDING,
   CAPITAL_RADIUS,
   CAPTURE,
-  CROWN,
   GROUP_ORDER,
   NODE_RADIUS,
   PROVINCE,
   RECRUIT_PIPS,
-  TOWER,
   VP,
   VP_LOZENGE,
   YOU,
@@ -25,17 +25,19 @@ import { beaconPulse } from './alertLayout.ts';
 import { cityDues, rallyDues } from '../hud/rallyDue.ts';
 import { stayMarks, type StayMark } from './rallyStay.ts';
 import { alertAlpha } from './progressLayout.ts';
+import { buildProgress, lozengeRow, lozengeRowY, type BuildProgress } from './pieceLayout.ts';
 import {
-  buildProgress,
-  crownArc,
-  lozengeRow,
-  lozengeRowY,
-  recruitPip,
-  towerPoint,
-  towerRotation,
-  towerScale,
-  type TowerKind,
-} from './pieceLayout.ts';
+  BUILDING_KINDS,
+  iconSize,
+  layoutBuildings,
+  owedRow,
+  pipScale,
+  queueSeats,
+  roadAngles,
+  type BuildingKind,
+  type BuildingLayout,
+  type OwedRow,
+} from './buildingLayout.ts';
 import type { MapLayers } from './layers.ts';
 import type { Point } from './camera.ts';
 import type { BakedSprite, SpriteCache } from './bake.ts';
@@ -52,25 +54,25 @@ import {
 } from './bakedShapes.ts';
 import {
   chargeSpec,
-  crownSpec,
   cpMarkGlyph,
   cpMarkSpec,
+  doneRingSpec,
+  iconBackSpec,
+  iconFillSpec,
+  iconFrontSpec,
+  iconHeadSpec,
+  iconSpan,
+  owedSpec,
   pipAlertSpec,
-  towerBackSpec,
-  towerFillSpec,
-  towerFrontSpec,
-  towerHeadSpec,
-  towerRingSpec,
-  towerSpan,
   warehouseMarksSpec,
-  type TowerLook,
+  type IconLook,
 } from './pieceShapes.ts';
 import { helmet } from '../units/helmet.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import { PaymentLog, payShow, type Payment, type PayShow } from './buildPay.ts';
 
-/** A build of a tower (barracks, factory) in an own city, as the snapshot gives it. */
-interface TowerBuild {
+/** A build of a building (barracks, factory) in an own city, as the snapshot gives it. */
+interface BuildingBuild {
   /** Charges still to pay (DEC-41, item 7). */
   readonly owed: number;
   /** The charges it costs in all (`ruleset_public`); `null`: not known. */
@@ -81,10 +83,10 @@ interface TowerBuild {
   readonly total: number;
 }
 
-/** What a tower on the ring of a city shows. */
-interface TowerState {
+/** What a building of a city shows. */
+interface BuildingState {
   readonly built: boolean;
-  readonly build: TowerBuild | null;
+  readonly build: BuildingBuild | null;
 }
 
 /** What a city looks like; the city is redrawn only when this changes. */
@@ -111,8 +113,8 @@ interface CityState {
   readonly queueMax: number;
   /** Places of the warehouse: the warehouse capacity (DEC-26), or the charges only. */
   readonly warehouseCap: number | null;
-  /** The towers on the ring: the barracks (DEC-26) and the factory (DEC-41, item 2). */
-  readonly towers: Readonly<Record<TowerKind, TowerState>>;
+  /** The barracks (DEC-26) and the factory (DEC-41, item 2). */
+  readonly buildings: Readonly<Record<BuildingKind, BuildingState>>;
   /**
    * #930, W4: the queued recruits that will walk to the rally point, by slot: `true` where the CP
    * now do not pay the walk. Empty without a rally point.
@@ -120,7 +122,7 @@ interface CityState {
   readonly walks: readonly boolean[];
 }
 
-function towerKey(t: TowerState): string {
+function buildingKey(t: BuildingState): string {
   const b = t.build;
   return `${t.built ? 'B' : ''}${b === null ? '' : `${String(b.owed)}/${String(b.price)}/${String(b.doneTick)}/${String(b.total)}`}`;
 }
@@ -139,42 +141,46 @@ function stateKey(s: CityState): string {
     s.paused,
     s.queueMax,
     s.warehouseCap,
-    towerKey(s.towers.barracks),
-    towerKey(s.towers.factory),
+    buildingKey(s.buildings.barracks),
+    buildingKey(s.buildings.factory),
     s.walks.map((short) => (short ? 'x' : 'w')).join(''),
   ]
     .map(String)
     .join('|');
 }
 
-const TOWER_KINDS: readonly TowerKind[] = ['barracks', 'factory'];
-
-/** The sprites of one tower on the ring of a city, and its build. */
-interface TowerSlot {
-  readonly kind: TowerKind;
+/** The sprites of one building (barracks, factory) of a city, and its build. */
+interface BuildingSlot {
+  readonly kind: BuildingKind;
   /** The node of its city. */
   readonly node: number;
-  /** The radius of its city now. */
-  radius: number;
-  /** At the tower's place on the ring, turned with its top away from the city, scaled by `towerScale`. */
+  /** At the icon's seat, scaled to its size: the menu's art in its 26-unit box. */
   readonly root: Container;
   readonly back: BakedSprite;
   /** The fill of a build's time, shown from the bottom by a crop. */
   readonly fill: BakedSprite;
-  /** The ink head line of the fill. */
+  /** The ivory head line of the fill. */
   readonly head: BakedSprite;
   readonly front: BakedSprite;
-  /** The Crown arc of a build, round the city centre. */
-  readonly crown: BakedSprite;
-  /** The ring that opens from a tower just built. */
+  /** The ring that opens from an icon just built. */
   readonly ring: BakedSprite;
-  /** The build under way (`null`: none), its colour and side. */
-  build: TowerBuild | null;
-  color: number;
-  /** The fade of the arc and the opening of the ring once the build is done (`null`: none). */
-  done: EaseTween | null;
-  /** The lozenges of a payment that pop on the arc or run into the tower (#872), under the tower. */
+  /** The owed charges of a build, one lozenge each, beside the icon (hollow owed, solid paid). */
+  readonly row: Container;
+  /** The lozenges of a payment that run into the icon (#872), over the row. */
   readonly loose: Container;
+  /** Where the icon stands now (from the city centre), its size and its direction from the centre. */
+  seat: Point;
+  size: number;
+  angle: number;
+  /** The row of the build now (`null`: none). */
+  owed: OwedRow | null;
+  /** The build under way (`null`: none), its colour and side. */
+  build: BuildingBuild | null;
+  color: number;
+  /** The owner's look the icon was built with (`null`: not built), to cross-fade a capture. */
+  builtKey: string | null;
+  /** The fade of the ring once the build is done (`null`: none). */
+  done: EaseTween | null;
   /** The payment in motion now and the cost it was laid out for (`null`: none). */
   pay: { show: PayShow; cost: number } | null;
 }
@@ -185,7 +191,10 @@ interface TowerSlot {
  */
 const PAY_HORIZON_MS = 4000;
 
-/** A recruit of the queue: a small helmet on the ring after the barracks tower. */
+/** The size a row lozenge, a flying or a popping charge is baked at: the largest it is drawn. */
+const CHARGE_BAKED = BUILDING.lozenge.max * (1 + BUILD_PAY.pop);
+
+/** A recruit of the queue: a small helmet in the column beyond the barracks icon. */
 interface PipSlot {
   readonly root: Container;
   readonly back: BakedSprite;
@@ -218,16 +227,17 @@ const PIP_EASE_MS = 120;
  * follows the capacity class (the disc of the owner's colour on a dark cut, an ink ring, the
  * enemy's two inner rings, a neutral one hatched; the dark plate when units stand there), the
  * capital star, the capacity ring (a solid ink arc per own unit standing there, two hairlines per
- * free place), the warehouse as a row of lozenges under the ring (57u), the towers of the barracks
- * and the factory on the ring (Cut and ring towers, 53g; own, and an enemy's next to an own node,
- * DEC-31), a build in progress as the Crown arc (57k: the owed charges as lozenges, then the build
- * time filling the arc and the tower), the recruit queue as small helmets after the barracks tower
- * (55k Pips) and the gilt VP lozenge. The capacity is public and exact (DEC-22).
+ * free place), the warehouse as a row of lozenges under the ring (57u), the barracks and the
+ * factory as the city menu's own icons outside the ring, in the widest free angle between the roads
+ * (#954, P2 "Free side"; own, and an enemy's next to an own node, DEC-31), a build in progress as a
+ * plan with a row of owed charges beside it (57k), then the icon filling with the build time, the
+ * recruit queue as small helmets beyond the barracks (55k Pips) and the gilt VP lozenge. The
+ * capacity is public and exact (DEC-22).
  *
  * A province (`kind = province`, DEC-23) is a small dot instead of a body, with the capacity ring.
  *
  * Every shape is a baked sprite (`bakedShapes.ts`, `pieceShapes.ts`, `SpriteCache`), one texture per
- * look with a bounded key; the fill of a tower and of a recruit is a crop of one baked fill, so it
+ * look with a bounded key; the fill of a building icon and of a recruit is a crop of one baked fill, so it
  * rises continuously without new textures. `destroy()` releases every object.
  */
 /** How long a replaced city body takes to fade out, ms: the city flips at the start of a capture (#819). */
@@ -241,7 +251,9 @@ export class CityView {
   private readonly alerts: BakedSprite[];
   /** The cities whose alert ring is on now (it pulses every frame). */
   private readonly alerting = new Set<number>();
-  private readonly towers: Record<TowerKind, TowerSlot>[];
+  private readonly buildings: Record<BuildingKind, BuildingSlot>[];
+  /** The angles at which the roads leave each city: the buildings stand between them. */
+  private readonly roads: readonly (readonly number[])[];
   private readonly pips: PipSlot[][];
   private readonly pipLayers: Container[];
   /** #930: the crossed CP mark at the gate of each city, for a recruit that stays home. */
@@ -255,24 +267,25 @@ export class CityView {
   private selected: number | null = null;
   private readonly radii: number[];
   private readonly vpStyle: TextStyle;
-  /** The scale of the towers and the recruits now (`towerScale`). */
-  private towerZoom: number = TOWER.minScale;
+  /** The size of the building icons now (`iconSize`) and the scale of the recruits (`pipScale`). */
+  private iconSz = iconSize(1);
+  private pipK = pipScale(1);
   /** The render tick of the frame (fractional): the build time fills by it. */
   private tick = 0;
   /** Set after the first snapshot: a body that changes after it (a capture) cross-fades. */
   private warm = false;
   /** The bodies that were just replaced, fading out over the new ones (#508). */
-  private readonly fading: { sprite: BakedSprite; tween: EaseTween; hold: number }[] = [];
+  private readonly fading: { sprite: Container; tween: EaseTween; hold: number }[] = [];
   /** How long (ms) a captured city keeps its old body before it fades: the winner's walk (#856). */
   private captureDelays: ReadonlyMap<number, number> = new Map();
-  /** The towers whose build is running or whose done effect plays: stepped every frame. */
-  private readonly moving = new Set<TowerSlot>();
+  /** The buildings whose build is running or whose done effect plays: stepped every frame. */
+  private readonly moving = new Set<BuildingSlot>();
   /** The recruits whose fill is still easing. */
   private readonly easing = new Set<PipSlot>();
   /** The own `build_paid` of the events (#872). */
   private readonly payLog: PaymentLog;
-  /** The tower builds with a payment in motion this frame, and its payments. */
-  private readonly paying = new Map<TowerSlot, Payment[]>();
+  /** The builds with a payment in motion this frame, and its payments. */
+  private readonly paying = new Map<BuildingSlot, Payment[]>();
   /** The charges flying into a build, over the groups (the effects layer), a pool of sprites. */
   private readonly flightLayer = new Container({ label: 'build-pay' });
   private readonly flightSprites: BakedSprite[] = [];
@@ -316,7 +329,8 @@ export class CityView {
     this.rings = [];
     this.bars = [];
     this.alerts = [];
-    this.towers = [];
+    this.buildings = [];
+    this.roads = roadAngles(map);
     this.pips = [];
     this.pipLayers = [];
     this.stayMarks = [];
@@ -328,9 +342,9 @@ export class CityView {
       const bar = city.addChild(sprites.sprite());
       bar.label = 'warehouse';
       this.bars.push(bar);
-      const slots = {} as Record<TowerKind, TowerSlot>;
-      for (const kind of TOWER_KINDS) slots[kind] = this.towerSlot(city, kind, node.id);
-      this.towers.push(slots);
+      const slots = {} as Record<BuildingKind, BuildingSlot>;
+      for (const kind of BUILDING_KINDS) slots[kind] = this.buildingSlot(city, kind, node.id);
+      this.buildings.push(slots);
       const pipLayer = city.addChild(new Container({ label: 'recruits' }));
       this.pipLayers.push(pipLayer);
       this.pips.push([]);
@@ -366,36 +380,38 @@ export class CityView {
     this.setOwners(map.nodes.map((node) => node.start_owner));
   }
 
-  private towerSlot(city: Container, kind: TowerKind, node: number): TowerSlot {
-    const crown = city.addChild(this.sprites.sprite());
-    crown.label = `crown-${kind}`;
-    crown.visible = false;
-    const loose = city.addChild(new Container({ label: `pay-${kind}`, visible: false }));
-    const root = city.addChild(new Container({ label: `tower-${kind}`, visible: false }));
+  private buildingSlot(city: Container, kind: BuildingKind, node: number): BuildingSlot {
+    const row = city.addChild(new Container({ label: `owed-${kind}`, visible: false }));
+    const root = city.addChild(new Container({ label: `building-${kind}`, visible: false }));
     const back = root.addChild(this.sprites.sprite());
     const fill = root.addChild(this.sprites.sprite());
-    const head = root.addChild(this.sprites.sprite(towerHeadSpec(kind)));
+    const head = root.addChild(this.sprites.sprite(iconHeadSpec(kind)));
     const front = root.addChild(this.sprites.sprite());
     fill.visible = false;
     head.visible = false;
-    const ring = city.addChild(this.sprites.sprite(towerRingSpec(10)));
-    ring.label = `tower-ring-${kind}`;
+    const loose = city.addChild(new Container({ label: `pay-${kind}`, visible: false }));
+    const ring = city.addChild(this.sprites.sprite(doneRingSpec(10)));
+    ring.label = `building-ring-${kind}`;
     ring.visible = false;
     return {
       kind,
       node,
-      radius: NODE_RADIUS,
       root,
       back,
       fill,
       head,
       front,
-      crown,
       ring,
+      row,
+      loose,
+      seat: { x: 0, y: 0 },
+      size: BUILDING.world,
+      angle: 0,
+      owed: null,
       build: null,
       color: YOU,
+      builtKey: null,
       done: null,
-      loose,
       pay: null,
     };
   }
@@ -435,7 +451,7 @@ export class CityView {
 
   /** Owners before the first snapshot (the map's start owners); capacity is not known yet. */
   setOwners(owners: readonly (PlayerId | null)[]): void {
-    const none: TowerState = { built: false, build: null };
+    const none: BuildingState = { built: false, build: null };
     owners.forEach((owner, id) => {
       this.set(id, {
         owner,
@@ -450,7 +466,7 @@ export class CityView {
         paused: false,
         queueMax: 0,
         warehouseCap: null,
-        towers: { barracks: none, factory: none },
+        buildings: { barracks: none, factory: none },
         walks: [],
       });
     });
@@ -547,14 +563,16 @@ export class CityView {
     }
   }
 
-  /** The camera scale (CSS px per world unit): the towers keep their screen size. */
+  /** The camera scale (CSS px per world unit): the icons and the recruits keep their screen size. */
   setCameraScale(scale: number): void {
-    const zoom = towerScale(scale);
-    if (zoom === this.towerZoom) return;
-    this.towerZoom = zoom;
+    const size = iconSize(scale);
+    const pips = pipScale(scale);
+    if (size === this.iconSz && pips === this.pipK) return;
+    this.iconSz = size;
+    this.pipK = pips;
     this.states.forEach((state, id) => {
       if (state !== null) {
-        this.placeTowers(id, state);
+        this.placeBuildings(id, state);
         this.drawRecruits(id, state, this.selected === id);
       }
     });
@@ -567,7 +585,7 @@ export class CityView {
 
   /**
    * Every frame, after `setTick` (#872): the own `build_paid` among `events` move the builds they
-   * paid (the charges fly in, pop, run into the tower) by their age at the render tick; `groupAt`:
+   * paid (the charges fly in, pop, run into the icon) by their age at the render tick; `groupAt`:
    * where the own group standing in a node is drawn. Nothing moves with "less motion".
    */
   setPayments(
@@ -581,7 +599,7 @@ export class CityView {
     this.paying.clear();
     if (reducedMotion()) return;
     for (const payment of this.payLog.recent(this.tick, tickHz, PAY_HORIZON_MS)) {
-      const slot = this.towers[payment.node]?.[payment.kind];
+      const slot = this.buildings[payment.node]?.[payment.kind];
       if (slot === undefined || slot.build === null) continue;
       const list = this.paying.get(slot);
       if (list === undefined) this.paying.set(slot, [payment]);
@@ -624,7 +642,7 @@ export class CityView {
     const own = node.owner === this.me;
     // The builds are drawn wherever the snapshot carries them: a live view carries only the own
     // ones (AGENTS.md 4.4), the full view of a replay those of both players (#905).
-    const barracksBuild: TowerBuild | null =
+    const barracksBuild: BuildingBuild | null =
       building?.kind === 'barracks' && cityUpgrades !== null
         ? {
             owed: building.owed,
@@ -633,7 +651,7 @@ export class CityView {
             total: cityUpgrades.barracks,
           }
         : null;
-    const factoryBuild: TowerBuild | null =
+    const factoryBuild: BuildingBuild | null =
       node.factory_build !== null
         ? {
             owed: node.factory_build.owed,
@@ -665,7 +683,7 @@ export class CityView {
       warehouseCap: provinceStock
         ? provinceWarehouse
         : (node.warehouse_cap ?? (cityUpgrades === null ? node.capacity : null)),
-      towers: {
+      buildings: {
         // The server sends these only where they may be seen (DEC-31: an enemy's next to an own node).
         barracks: {
           built: showsBarracks(node.has_barracks, cityUpgrades !== null),
@@ -732,7 +750,7 @@ export class CityView {
   }
 
   /**
-   * Once per frame, by `dtMs` of real time: fades the replaced bodies out, fills the towers whose
+   * Once per frame, by `dtMs` of real time: fades the replaced bodies out, fills the icons whose
    * build runs by the render tick, plays the end of a build and eases the recruits' fill.
    */
   advance(dtMs: number): void {
@@ -750,7 +768,7 @@ export class CityView {
       }
       item.sprite.alpha = item.tween.step(dtMs);
       if (!item.tween.active) {
-        item.sprite.destroy();
+        item.sprite.destroy({ children: true });
         this.fading.splice(i, 1);
       }
     }
@@ -809,7 +827,7 @@ export class CityView {
     this.drawBody(id, state);
 
     this.drawRecruits(id, state, selected);
-    this.placeTowers(id, state);
+    this.placeBuildings(id, state);
 
     const { capacity, warehouse } = state;
     const ringOn = capacity !== null;
@@ -838,46 +856,76 @@ export class CityView {
     }
   }
 
+  /** The buildings the snapshot gives a city: built, or being built (nobody's city has any). */
+  private kindsOf(state: CityState): BuildingKind[] {
+    if (state.owner === null) return [];
+    return BUILDING_KINDS.filter((kind) => {
+      const b = state.buildings[kind];
+      return b.built || b.build !== null;
+    });
+  }
+
+  /** Where the buildings and the recruit queue of city `id` stand now (#954, P2 "Free side"). */
+  private layoutOf(id: number, state: CityState): BuildingLayout {
+    return layoutBuildings({
+      radius: this.radii[id] ?? NODE_RADIUS,
+      roads: this.roads[id] ?? [],
+      vp: (this.badges[id] ?? null) !== null,
+      kinds: this.kindsOf(state),
+      size: this.iconSz,
+    });
+  }
+
   /**
-   * The towers of a city on its ring: the barracks and the factory, built (the owner's hatch) or
-   * being built (a plan while charges are owed, then filling with the build time under the Crown arc).
+   * The buildings of a city: the barracks and the factory as the menu's icons outside the ring,
+   * built (the owner's rules) or being built (a plan while charges are owed, then filling with the
+   * build time). A captured city's icons cross-fade to the new owner with its body.
    */
-  private placeTowers(id: number, state: CityState): void {
-    const slots = this.towers[id];
+  private placeBuildings(id: number, state: CityState): void {
+    const slots = this.buildings[id];
     if (slots === undefined) return;
-    const radius = this.radii[id] ?? NODE_RADIUS;
-    const kind = this.kindOf(state.owner);
-    const enemy = kind === 'enemy';
+    const layout = this.layoutOf(id, state);
+    const enemy = this.kindOf(state.owner) === 'enemy';
     const color = this.colours[enemy ? otherPlayer(this.me) : this.me];
-    for (const tower of TOWER_KINDS) {
-      const slot = slots[tower];
-      const { built, build } = state.towers[tower];
+    for (const kind of BUILDING_KINDS) {
+      const slot = slots[kind];
+      const { built, build } = state.buildings[kind];
+      const at = layout.items[kind];
       const wasBuilding = slot.build !== null;
-      const shown = (built || build !== null) && kind !== 'neutral';
+      const shown = at !== undefined && (built || build !== null);
       slot.root.visible = shown;
-      slot.crown.visible = false;
+      slot.row.visible = false;
+      slot.loose.visible = false;
       if (!shown) {
         slot.build = null;
         slot.done = null;
+        slot.builtKey = null;
+        slot.owed = null;
         slot.ring.visible = false;
         this.moving.delete(slot);
         continue;
       }
-      const at = towerPoint(radius, tower);
+      slot.seat = at;
+      slot.size = layout.size;
+      slot.angle = layout.angles[kind] ?? 0;
       slot.root.position.set(at.x, at.y);
-      slot.root.rotation = towerRotation(tower);
-      slot.root.scale.set(this.towerZoom);
+      slot.root.scale.set(layout.size / BUILDING.box);
       slot.color = color;
-      slot.radius = radius;
       if (build === null) {
         slot.build = null;
-        slot.back.set(towerBackSpec(tower, 'built', color, enemy));
-        slot.front.set(towerFrontSpec(tower, 'built'));
+        slot.owed = null;
+        const key = `${String(color)}:${enemy ? 'e' : 'o'}`;
+        if (slot.builtKey !== null && slot.builtKey !== key && this.warm && !reducedMotion()) {
+          this.ghostIcon(id, slot);
+        }
+        slot.builtKey = key;
+        slot.back.set(iconBackSpec(kind, 'built', color, enemy));
+        slot.front.set(iconFrontSpec(kind, 'built'));
         slot.fill.visible = false;
         slot.head.visible = false;
-        // A build that ends here: the arc fades and a ring opens from the tower (57k).
-        if (wasBuilding && this.warm && !reducedMotion() && slot.crown.spec !== null) {
-          slot.done = new EaseTween(0, CROWN.ring.ms);
+        // A build that ends here: a ring opens from the icon (57k).
+        if (wasBuilding && this.warm && !reducedMotion()) {
+          slot.done = new EaseTween(0, BUILD_PAY.done.ms);
           slot.done.setTarget(1);
           slot.ring.position.set(at.x, at.y);
           this.moving.add(slot);
@@ -887,6 +935,7 @@ export class CityView {
         }
         continue;
       }
+      slot.builtKey = null;
       slot.done = null;
       slot.ring.visible = false;
       slot.build = build;
@@ -896,13 +945,30 @@ export class CityView {
     }
   }
 
+  /** The old look of an icon whose city changed hands stays over the new one, then fades with the body. */
+  private ghostIcon(id: number, slot: BuildingSlot): void {
+    const city = this.cities[id];
+    const back = slot.back.spec;
+    const front = slot.front.spec;
+    if (city === undefined || back === null || front === null) return;
+    const ghost = new Container({ label: `building-ghost-${slot.kind}` });
+    ghost.position.copyFrom(slot.root.position);
+    ghost.scale.copyFrom(slot.root.scale);
+    ghost.addChild(this.sprites.sprite(back));
+    ghost.addChild(this.sprites.sprite(front));
+    city.addChildAt(ghost, city.getChildIndex(slot.root) + 1);
+    const tween = new EaseTween(1, BODY_FADE_MS);
+    tween.setTarget(0);
+    this.fading.push({ sprite: ghost, tween, hold: this.captureDelays.get(id) ?? 0 });
+  }
+
   /**
-   * A tower being built at the render tick: the plan or the fill, and its Crown arc; while a payment
-   * moves (#872), the charges still in the air stay owed on the arc, the landed ones pop and, paid in
-   * full, run into the tower. Returns whether a payment moves.
+   * A building being built at the render tick: the plan or the fill, and the row of owed charges
+   * beside it; while a payment moves (#872), the charges still in the air stay owed on the row, the
+   * landed ones pop and, paid in full, run into the icon. Returns whether a payment moves.
    */
-  private showBuild(slot: TowerSlot, build: TowerBuild): boolean {
-    const { kind, radius: r } = slot;
+  private showBuild(slot: BuildingSlot, build: BuildingBuild): boolean {
+    const { kind } = slot;
     const told = buildProgress(build.owed, build.price, build.doneTick, build.total, this.tick);
     const payments = this.paying.get(slot);
     const show =
@@ -914,51 +980,59 @@ export class CityView {
       show === null || show.hidden === 0
         ? told
         : { cost: told.cost, paid: Math.max(0, told.paid - show.hidden), time: 0, running: false };
-    const look: TowerLook = progress.running ? 'rising' : 'plan';
-    slot.back.set(towerBackSpec(kind, look, slot.color, false));
-    slot.front.set(towerFrontSpec(kind, look));
-    const { top, bottom } = towerSpan(kind);
+    const look: IconLook = progress.running ? 'rising' : 'plan';
+    slot.back.set(iconBackSpec(kind, look, slot.color, false));
+    slot.front.set(iconFrontSpec(kind, look));
+    const { top, bottom } = iconSpan(kind);
     const height = bottom - top;
-    slot.fill.set(towerFillSpec(kind, slot.color));
+    slot.fill.set(iconFillSpec(kind, slot.color));
     const shown = progress.running ? progress.time : 0;
     slot.fill.visible = shown > 0;
     if (shown > 0) slot.fill.cropBottom(shown * height);
     slot.head.visible = shown > 0 && shown < 1;
     slot.head.position.set(0, bottom - shown * height);
-    slot.crown.set(crownSpec(r, kind, progress, slot.color, this.towerZoom));
-    slot.crown.alpha = 1;
-    slot.crown.visible = true;
-    this.showLoose(slot, show, progress.cost);
+    slot.owed = owedRow(slot.seat, slot.angle, slot.size, progress.cost);
+    this.showRow(slot, progress, show);
     return payments !== undefined;
   }
 
-  /** The lozenges of a payment that pop on the arc as they land, then run into the tower (#872). */
-  private showLoose(slot: TowerSlot, show: PayShow | null, cost: number): void {
-    const { loose } = slot;
+  /**
+   * The row of owed charges by the icon (the menu's price row): hollow while owed, solid when paid,
+   * a landed one popping (#872); once the time runs the row is gone and, in the moment the build is
+   * paid in full, the lozenges run into the icon.
+   */
+  private showRow(slot: BuildingSlot, progress: BuildProgress, show: PayShow | null): void {
+    const { row, loose, owed } = slot;
+    const spots = owed?.slots ?? [];
+    const rowOn = owed !== null && !progress.running && spots.length > 0;
+    row.visible = rowOn;
+    if (rowOn) {
+      while (row.children.length < spots.length) row.addChild(this.sprites.sprite());
+      row.children.forEach((child, j) => {
+        const sprite = child as BakedSprite;
+        const at = spots[j];
+        sprite.visible = at !== undefined;
+        if (at === undefined) return;
+        sprite.set(owedSpec(j < progress.paid, slot.color, CHARGE_BAKED));
+        sprite.position.set(at.x, at.y);
+        sprite.scale.set((owed.k * (show?.pops.get(j) ?? 1)) / CHARGE_BAKED);
+      });
+    }
     const marks: { at: Point; scale: number }[] = [];
-    if (show !== null && (show.pops.size > 0 || show.run !== null)) {
-      const crown = crownArc(slot.radius, slot.kind, cost, this.towerZoom);
-      const tower = towerPoint(slot.radius, slot.kind);
-      const k = (CROWN.lozenge * this.towerZoom) / TOWER.minScale;
-      const run = show.run;
-      if (run !== null) {
-        run.forEach((q, j) => {
-          const p = crown.lozenges[j];
-          if (p === undefined || q >= 1) return;
-          const at = { x: p.x + (tower.x - p.x) * q, y: p.y + (tower.y - p.y) * q };
-          marks.push({ at, scale: k * (1 - CROWN.run.shrink * q) * (show.pops.get(j) ?? 1) });
+    const run = show?.run ?? null;
+    if (owed !== null && run !== null) {
+      run.forEach((q, j) => {
+        const p = spots[j];
+        if (p === undefined || q >= 1) return;
+        marks.push({
+          at: { x: p.x + (slot.seat.x - p.x) * q, y: p.y + (slot.seat.y - p.y) * q },
+          scale: owed.k * (1 - BUILD_PAY.run.shrink * q),
         });
-      } else {
-        for (const [j, pop] of show.pops) {
-          const p = crown.lozenges[j];
-          if (p !== undefined) marks.push({ at: p, scale: k * pop });
-        }
-      }
+      });
     }
     loose.visible = marks.length > 0;
     if (marks.length === 0) return;
-    const baked = this.bakedK();
-    const spec = chargeSpec(slot.color, baked);
+    const spec = chargeSpec(slot.color, CHARGE_BAKED);
     while (loose.children.length < marks.length) loose.addChild(this.sprites.sprite());
     loose.children.forEach((child, i) => {
       const sprite = child as BakedSprite;
@@ -967,32 +1041,25 @@ export class CityView {
       if (mark === undefined) return;
       sprite.set(spec);
       sprite.position.set(mark.at.x, mark.at.y);
-      sprite.scale.set(mark.scale / baked);
+      sprite.scale.set(mark.scale / CHARGE_BAKED);
     });
-  }
-
-  /** The size a flying or popping charge is baked at: the largest it is drawn (a pop on the arc). */
-  private bakedK(): number {
-    const k = (CROWN.lozenge * this.towerZoom) / TOWER.minScale;
-    return Math.max(1, k) * (1 + CROWN.pay.pop);
   }
 
   /**
    * The charges in the air (#872): each from its place in the warehouse row, or from the own group
-   * standing in the city, to its lozenge on the Crown arc, along an arc up (the plan ribbon's flight
-   * language, #851), going from the warehouse size to the arc's.
+   * standing in the city, to its lozenge on the row by the icon, along an arc up (the plan ribbon's
+   * flight language, #851), going from the warehouse size to the row's.
    */
   private drawFlights(): void {
     let used = 0;
     const live = new Set<string>();
-    const lift = (CROWN.pay.lift * this.towerZoom) / TOWER.minScale;
-    const baked = this.bakedK();
-    const k = (CROWN.lozenge * this.towerZoom) / TOWER.minScale;
     for (const slot of this.paying.keys()) {
       const pay = slot.pay;
+      const owed = slot.owed;
       const city = this.map.nodes[slot.node];
-      if (pay === null || city === undefined || pay.show.flights.length === 0) continue;
-      const crown = crownArc(slot.radius, slot.kind, pay.cost, this.towerZoom);
+      if (pay === null || owed === null || city === undefined || pay.show.flights.length === 0) {
+        continue;
+      }
       for (const flight of pay.show.flights) {
         const key = `${String(flight.payment.tick)}:${String(slot.node)}:${slot.kind}:${String(flight.k)}`;
         live.add(key);
@@ -1006,20 +1073,20 @@ export class CityView {
           from = { x: at.x, y: at.y };
           this.flightFrom.set(key, from);
         }
-        const p = crown.lozenges[flight.j];
+        const p = owed.slots[flight.j];
         if (p === undefined) continue;
         const q = flight.q;
         const x = from.x + (city.x + p.x - from.x) * q;
-        const y = from.y + (city.y + p.y - from.y) * q - Math.sin(q * Math.PI) * lift;
+        const y = from.y + (city.y + p.y - from.y) * q - Math.sin(q * Math.PI) * BUILD_PAY.lift;
         let sprite = this.flightSprites[used];
         if (sprite === undefined) {
           sprite = this.flightLayer.addChild(this.sprites.sprite());
           this.flightSprites.push(sprite);
         }
         used++;
-        sprite.set(chargeSpec(slot.color, baked));
+        sprite.set(chargeSpec(slot.color, CHARGE_BAKED));
         sprite.position.set(x, y);
-        sprite.scale.set((1 + (k - 1) * q) / baked);
+        sprite.scale.set((1 + (owed.k - 1) * q) / CHARGE_BAKED);
         sprite.visible = true;
       }
     }
@@ -1030,28 +1097,25 @@ export class CityView {
     for (const key of this.flightFrom.keys()) if (!live.has(key)) this.flightFrom.delete(key);
   }
 
-  /** The end of a build: the arc fades (`CROWN.fadeMs`) and a ring opens from the tower. */
-  private stepDone(slot: TowerSlot, dtMs: number): void {
+  /** The end of a build: a ring opens from the icon (`BUILD_PAY.done`) and fades. */
+  private stepDone(slot: BuildingSlot, dtMs: number): void {
     const done = slot.done;
     if (done === null) return;
     const q = done.step(dtMs);
-    slot.crown.visible = q * CROWN.ring.ms < CROWN.fadeMs;
-    slot.crown.alpha = Math.max(0, 1 - (q * CROWN.ring.ms) / CROWN.fadeMs);
-    const { from, grow } = CROWN.ring;
+    const { from, grow } = BUILD_PAY.done;
     slot.ring.visible = q < 1;
-    slot.ring.scale.set(((from + grow * q) / 10) * (this.towerZoom / TOWER.minScale));
+    slot.ring.scale.set((from * slot.size + grow * q) / 10);
     slot.ring.alpha = 1 - q;
     if (!done.active) {
       slot.done = null;
-      slot.crown.visible = false;
       slot.ring.visible = false;
       this.moving.delete(slot);
     }
   }
 
   /**
-   * The recruit queue of an own city (55k Pips): a small helmet per unit on the ring after the
-   * barracks tower, the first filling with its production, the others hatched; the selected city's
+   * The recruit queue of an own city (55k Pips): a small helmet per unit in a column beyond the
+   * barracks (#954), the first filling with its production, the others hatched; the selected city's
    * free slots beaded. A unit ready with no room, or the production stopped by a fight, gets the
    * dashed amber ring that pulses. All from the snapshot and the rules.
    */
@@ -1060,18 +1124,21 @@ export class CityView {
     const pips = this.pips[id];
     const alert = this.alerts[id];
     if (layer === undefined || pips === undefined || alert === undefined) return;
-    const radius = this.radii[id] ?? NODE_RADIUS;
     const count = state.unitTicks === null ? 0 : Math.max(0, state.queue ?? 0);
     const slots = state.unitTicks === null ? 0 : Math.max(count, selected ? state.queueMax : 0);
     const width = RECRUIT_PIPS.width;
-    const scale = this.towerZoom / TOWER.minScale;
+    const scale = this.pipK;
+    const seats = queueSeats(
+      this.layoutOf(id, state),
+      state.unitTicks === null ? 0 : Math.max(count, state.queueMax),
+      scale,
+    );
     while (pips.length < slots) pips.push(this.pipSlot(layer));
     pips.forEach((pip, j) => {
       pip.root.visible = j < slots;
       if (j >= slots) return;
-      const at = recruitPip(radius, j);
+      const at = seats[j] ?? { x: 0, y: 0 };
       pip.root.position.set(at.x, at.y);
-      pip.root.rotation = at.angle + Math.PI / 2;
       pip.root.scale.set(scale);
       const free = j >= count;
       const own = this.colours[this.me];
@@ -1110,7 +1177,7 @@ export class CityView {
       const pip = pips[j];
       if (pip !== undefined) pip.mark.visible = false;
     }
-    const ring = count > 0 && (state.waiting || state.paused) ? recruitPip(radius, 0) : null;
+    const ring = count > 0 && (state.waiting || state.paused) ? (seats[0] ?? null) : null;
     alert.set(ring === null ? null : pipAlertSpec(8));
     if (ring !== null) {
       alert.position.set(ring.x, ring.y);

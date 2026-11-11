@@ -1,22 +1,29 @@
 import { Container, Graphics } from 'pixi.js';
 import type { BakeSpec, BakeTools } from './bake.ts';
 import type { Point } from './camera.ts';
+import type { BuildingKind } from './buildingLayout.ts';
+import { cornerBounds, parseCut, solidCorners } from './cutPath.ts';
+import { lozengeRow } from './pieceLayout.ts';
 import {
-  crownArc,
-  lozengeRow,
-  quantize,
-  towerOutline,
-  type BuildProgress,
-  type TowerKind,
-} from './pieceLayout.ts';
-import { BADGE_DOWN, CASING, CROWN, DARK_PLATE, INK, LOZENGE, TOWER, WARN } from './style.ts';
+  BADGE_DOWN,
+  BUILD_PAY,
+  BUILDING,
+  CASING,
+  DARK_PLATE,
+  INK,
+  LOZENGE,
+  WARN,
+} from './style.ts';
 import { CP_MARK } from '../theme/cpMark.ts';
+import { CUT_ICONS, CUT_SOLIDS } from '../theme/cutIcons.ts';
+import { ENGRAVED } from '../theme/tokens.ts';
 import { scanLines } from '../units/helmet.ts';
 
 // The baked shapes of the Engraved pieces of a city (#847, part 2 of #829): the warehouse lozenges,
-// the towers on the ring, the Crown arc of a build and the alert ring of a recruit. Each returns the
-// `BakeSpec` of one look (a bounded key, `bake.ts`); no shadow, no gradient: line and hatching on
-// the dark plate, every coloured mark on a dark casing. Mockup: in-game-style-r5.html.
+// the barracks and factory icons (#954), the charges of a build and the alert ring of a recruit. Each
+// returns the `BakeSpec` of one look (a bounded key, `bake.ts`); no shadow, no gradient: line and
+// hatching on the dark plate, every coloured mark on a dark casing. Mockups: in-game-style-r5.html,
+// city-buildings-r2.html.
 
 const graphics = (into: Container): Graphics => into.addChild(new Graphics());
 
@@ -77,7 +84,7 @@ export function warehouseMarksSpec(capacity: number, stock: number, color: numbe
   };
 }
 
-// --- Towers on the ring ------------------------------------------------------------------------------
+// --- The barracks and the factory (#954) ----------------------------------------------------------------
 
 /** Lines at `angle` (radians on screen) `pitch` apart across a closed outline: an owner's hatch. */
 export function hatchAcross(
@@ -93,243 +100,199 @@ export function hatchAcross(
   return scanLines(turned, pitch).map(([a, b]) => [back(a), back(b)]);
 }
 
-const points = (outline: readonly (readonly [number, number])[]): Point[] =>
-  outline.map(([x, y]) => ({ x, y }));
-const flat = (outline: readonly (readonly [number, number])[]): number[] =>
-  outline.flatMap(([x, y]) => [x, y]);
+/**
+ * The chords of a closed outline at the heights `ys`: where a horizontal line across it is inside
+ * (the rules of an icon's solid).
+ */
+export function chordsAt(polygon: readonly Point[], ys: readonly number[]): [Point, Point][] {
+  const out: [Point, Point][] = [];
+  for (const y of ys) {
+    const xs: number[] = [];
+    polygon.forEach((p, i) => {
+      const q = polygon[(i + 1) % polygon.length] ?? p;
+      if (p.y > y !== q.y > y) xs.push(p.x + ((y - p.y) * (q.x - p.x)) / (q.y - p.y));
+    });
+    xs.sort((m, n) => m - n);
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const from = xs[k];
+      const to = xs[k + 1];
+      if (from !== undefined && to !== undefined)
+        out.push([
+          { x: from, y },
+          { x: to, y },
+        ]);
+    }
+  }
+  return out;
+}
 
-function towerBox(kind: TowerKind): { x: number; y: number; width: number; height: number } {
-  const ps = towerOutline(kind);
-  const xs = ps.map(([x]) => x);
-  const ys = ps.map(([, y]) => y);
-  const pad = TOWER.casing;
-  const x0 = Math.min(...xs) - pad;
-  const y0 = Math.min(...ys) - pad;
-  return {
-    x: x0,
-    y: y0,
-    width: Math.max(...xs) + pad - x0,
-    height: Math.max(...ys) + pad - y0,
-  };
+/** The icon's 26-unit box with room for its casing and the flag of the barracks, round its origin. */
+const ICON_REACH = 16;
+const ICON_BOX = { x: -ICON_REACH, y: -ICON_REACH, width: 2 * ICON_REACH, height: 2 * ICON_REACH };
+
+const solidOf = (kind: BuildingKind): Point[] => solidCorners(CUT_SOLIDS[kind] ?? '');
+
+/** The top and the bottom of an icon's solid (its fill rises from the bottom). */
+export function iconSpan(kind: BuildingKind): { top: number; bottom: number } {
+  const b = cornerBounds(solidOf(kind));
+  return { top: b.y, bottom: b.y + b.height };
 }
 
 /**
- * What the back of a tower shows: `built` the owner's hatch (own horizontal, the enemy's 45
- * degrees), `plan` the light plan of a build that still owes charges, `rising` the dark ground a
- * build's fill rises over.
+ * What the back of an icon shows: `built` the owner's rules on the dark ground (own horizontal, the
+ * enemy's at 45 degrees), `plan` the half-dark ground of a build that still owes charges, `rising`
+ * the dark ground a build's fill rises over.
  */
-export type TowerLook = 'built' | 'plan' | 'rising';
+export type IconLook = 'built' | 'plan' | 'rising';
+
+const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
+
+/** Strokes the "Cut" outline of an icon (`CUT_ICONS`): every subpath, closed or open. */
+function strokeOutline(
+  g: Graphics,
+  kind: BuildingKind,
+  width: number,
+  color: number,
+  alpha = 1,
+): void {
+  for (const { points, closed } of parseCut(CUT_ICONS[kind])) {
+    points.forEach((p, i) => (i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y)));
+    if (closed) g.closePath();
+  }
+  g.stroke({ width, color, alpha, cap: 'square', join: 'miter' });
+}
 
 /**
- * The back of a tower in its own frame (its top is -y): the casing and the ground, the hatch of a
- * built one in the owner's `color` (`enemy`: at 45 degrees).
+ * The back of an icon (the menu's art, `theme/cutIcons.ts`, on a 26-unit box centred on its origin):
+ * the dark ground of the solid and, built, its rules in the owner's `color` (`enemy`: at 45 degrees).
  */
-export function towerBackSpec(
-  kind: TowerKind,
-  look: TowerLook,
+export function iconBackSpec(
+  kind: BuildingKind,
+  look: IconLook,
   color: number,
   enemy: boolean,
 ): BakeSpec {
-  const outline = towerOutline(kind);
+  const solid = solidOf(kind);
   return {
-    key: `tower-back:${kind}:${look}:${String(color)}:${enemy ? 'e' : 'o'}`,
-    box: towerBox(kind),
+    key: `icon-back:${kind}:${look}:${String(color)}:${enemy ? 'e' : 'o'}`,
+    box: ICON_BOX,
     draw(into, tools) {
       const g = graphics(into);
-      const plan = look === 'plan';
-      g.poly(flat(outline)).stroke({
-        width: TOWER.casing,
-        color: CASING,
-        alpha: plan ? TOWER.plan.casingAlpha : 1,
-        join: 'miter',
+      g.poly(flat(solid)).fill({
+        color: DARK_PLATE,
+        alpha: look === 'plan' ? BUILDING.plan.plateAlpha : 1,
       });
-      g.poly(flat(outline)).fill({ color: DARK_PLATE, alpha: plan ? TOWER.plan.groundAlpha : 1 });
       if (look !== 'built') return;
-      for (const [a, b] of hatchAcross(
-        points(outline),
-        enemy ? -Math.PI / 4 : 0,
-        TOWER.hatch.pitch,
-      ))
-        g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-      g.stroke({ width: tools.hair(TOWER.hatch.width), color });
-    },
-  };
-}
-
-/** The top and the bottom of a tower's block (its fill rises from the bottom). */
-export function towerSpan(kind: TowerKind): { top: number; bottom: number } {
-  const ys = towerOutline(kind).map(([, y]) => y);
-  return { top: Math.min(...ys), bottom: Math.max(...ys) };
-}
-
-/**
- * The fill of a tower with its build time: the whole block in the side's `color` with faint bed
- * joints, shown from the bottom by a crop (`BakedSprite.cropBottom`), so it rises continuously.
- */
-export function towerFillSpec(kind: TowerKind, color: number): BakeSpec {
-  const outline = towerOutline(kind);
-  const { top, bottom } = towerSpan(kind);
-  const box = towerBox(kind);
-  return {
-    key: `tower-fill:${kind}:${String(color)}`,
-    box: { x: box.x, y: top, width: box.width, height: bottom - top },
-    draw(into, tools) {
-      const g = graphics(into);
-      g.poly(flat(outline)).fill(color);
-      for (let y = bottom - TOWER.joint.every; y > top + 0.5; y -= TOWER.joint.every) {
-        // A joint across the block at `y`: clipped to the outline by its crossings.
-        const xs: number[] = [];
-        outline.forEach(([x0, y0], i) => {
-          const [x1, y1] = outline[(i + 1) % outline.length] ?? [x0, y0];
-          if (y0 > y !== y1 > y) xs.push(x0 + ((y - y0) * (x1 - x0)) / (y1 - y0));
-        });
-        xs.sort((m, n) => m - n);
-        for (let k = 0; k + 1 < xs.length; k += 2) {
-          const from = xs[k];
-          const to = xs[k + 1];
-          if (from !== undefined && to !== undefined) g.moveTo(from, y).lineTo(to, y);
-        }
-      }
-      g.stroke({ width: tools.hair(TOWER.joint.width), color: CASING, alpha: TOWER.joint.alpha });
-    },
-  };
-}
-
-/**
- * The front of a tower: its ink outline (dotted while it is only a plan), the dark gate of a built
- * barracks.
- */
-export function towerFrontSpec(kind: TowerKind, look: TowerLook): BakeSpec {
-  const outline = towerOutline(kind);
-  return {
-    key: `tower-front:${kind}:${look}`,
-    box: towerBox(kind),
-    draw(into, tools) {
-      const g = graphics(into);
-      const line = tools.hair(TOWER.line);
-      if (look === 'plan') {
-        const { dot, gap } = TOWER.plan;
-        outline.forEach(([x0, y0], i) => {
-          const [x1, y1] = outline[(i + 1) % outline.length] ?? [x0, y0];
-          const length = Math.hypot(x1 - x0, y1 - y0);
-          for (let d = 0; d < length; d += dot + gap) {
-            const e = Math.min(length, d + dot);
-            g.moveTo(x0 + ((x1 - x0) * d) / length, y0 + ((y1 - y0) * d) / length).lineTo(
-              x0 + ((x1 - x0) * e) / length,
-              y0 + ((y1 - y0) * e) / length,
-            );
-          }
-        });
-        g.stroke({ width: line, color: INK, alpha: TOWER.plan.lineAlpha });
+      const { rule, ruleW } = BUILDING;
+      if (enemy) {
+        for (const [a, b] of hatchAcross(solid, -Math.PI / 4, rule))
+          g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+        g.stroke({ width: tools.hair(ruleW), color });
         return;
       }
-      g.poly(flat(outline)).stroke({ width: line, color: INK, join: 'miter' });
-      if (kind === 'barracks' && look === 'built') {
-        const { x, y, side } = TOWER.gate;
-        g.rect(x, y, side, side).fill(CASING);
-      }
+      const bounds = cornerBounds(solid);
+      const ys: number[] = [];
+      for (
+        let y = Math.floor(bounds.y / rule) * rule + ruleW / 2;
+        y < bounds.y + bounds.height;
+        y += rule
+      )
+        ys.push(y);
+      for (const [a, b] of chordsAt(solid, ys)) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      g.stroke({ width: ruleW, color });
     },
   };
-}
-
-/** The ink head line of a tower's fill: a line across the block (placed at the level of the fill). */
-export function towerHeadSpec(kind: TowerKind): BakeSpec {
-  const box = towerBox(kind);
-  const inner = { x: box.x + TOWER.casing, width: box.width - 2 * TOWER.casing };
-  return {
-    key: `tower-head:${kind}`,
-    box: { x: inner.x - 0.5, y: -1, width: inner.width + 1, height: 2 },
-    draw(into) {
-      graphics(into).rect(inner.x, -0.5, inner.width, 1).fill(INK);
-    },
-  };
-}
-
-// --- The Crown arc ---------------------------------------------------------------------------------
-
-/** The share of the arc a build's time has filled, baked in `CROWN.steps` steps. */
-export function crownShare(progress: BuildProgress): number {
-  return progress.running ? quantize(progress.time, CROWN.steps) : 0;
 }
 
 /**
- * The Crown arc of a build (57k) round the city centre: the casing, a faint ink line, two ink
- * serifs; while charges are owed, the lozenges on it (hollow owed, solid paid); once paid, the time
- * fills the arc in the side's `color` behind a small ink burin point. `scale`: the tower's scale
- * (`towerScale`), which sets the radius and the size of the lozenges.
+ * The fill of an icon with its build time: the whole solid in the side's `color` with faint bed
+ * joints (one per rule), shown from the bottom by a crop (`BakedSprite.cropBottom`), so it rises
+ * continuously.
  */
-export function crownSpec(
-  radius: number,
-  kind: TowerKind,
-  progress: BuildProgress,
-  color: number,
-  scale: number,
-): BakeSpec {
-  const crown = crownArc(radius, kind, progress.cost, scale);
-  const share = crownShare(progress);
-  const k = (CROWN.lozenge * scale) / TOWER.minScale;
-  const owed = !progress.running;
-  const reach = crown.radius + CROWN.serif.half + LOZENGE.casing * k;
+export function iconFillSpec(kind: BuildingKind, color: number): BakeSpec {
+  const solid = solidOf(kind);
+  const { top, bottom } = iconSpan(kind);
+  const bounds = cornerBounds(solid);
   return {
-    key: `crown:${String(radius)}:${kind}:${String(progress.cost)}:${String(owed ? progress.paid : -1)}:${String(share)}:${String(color)}:${String(scale)}`,
-    box: { x: -reach, y: -reach, width: 2 * reach, height: 2 * reach },
+    key: `icon-fill:${kind}:${String(color)}`,
+    box: { x: bounds.x - 1, y: top, width: bounds.width + 2, height: bottom - top },
     draw(into, tools) {
       const g = graphics(into);
-      const { radius: r, from, span } = crown;
-      const arc = (a0: number, a1: number): Graphics =>
-        g.moveTo(r * Math.cos(a0), r * Math.sin(a0)).arc(0, 0, r, a0, a1);
-      arc(from - 0.03, from + span + 0.03).stroke({
-        width: CROWN.width + CROWN.casing,
+      g.poly(flat(solid)).fill(color);
+      const ys: number[] = [];
+      for (let y = bottom - BUILDING.rule; y > top + 0.4; y -= BUILDING.rule) ys.push(y);
+      const joints = graphics(into);
+      for (const [a, b] of chordsAt(solid, ys)) joints.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      joints.stroke({
+        width: tools.hair(BUILDING.joint.width),
         color: CASING,
-        cap: 'butt',
+        alpha: BUILDING.joint.alpha,
       });
-      arc(from, from + span).stroke({
-        width: tools.hair(CROWN.line.width),
-        color: INK,
-        alpha: CROWN.line.alpha,
-        cap: 'butt',
-      });
-      for (const a of [from, from + span]) {
-        const { half, casing, width } = CROWN.serif;
-        const c = Math.cos(a);
-        const s = Math.sin(a);
-        g.moveTo((r - half) * c, (r - half) * s).lineTo((r + half) * c, (r + half) * s);
-        g.stroke({ width: casing, color: CASING });
-        g.moveTo((r - half) * c, (r - half) * s).lineTo((r + half) * c, (r + half) * s);
-        g.stroke({ width: tools.hair(width), color: INK });
-      }
-      if (share > 0) {
-        const a1 = from + span * share;
-        arc(from, a1).stroke({ width: CROWN.width, color, cap: 'butt' });
-        if (share < 1) {
-          const head = { x: r * Math.cos(a1), y: r * Math.sin(a1) };
-          const turn = (side: number): number[] => {
-            const h = (side * Math.SQRT2) / 2;
-            const c = Math.cos(a1 + Math.PI / 4);
-            const s = Math.sin(a1 + Math.PI / 4);
-            return [
-              [0, -h],
-              [h, 0],
-              [0, h],
-              [-h, 0],
-            ].flatMap(([x = 0, y = 0]) => [head.x + x * c - y * s, head.y + x * s + y * c]);
-          };
-          g.poly(turn(CROWN.burin.casing)).fill(CASING);
-          g.poly(turn(CROWN.burin.ink)).fill(INK);
-        }
-      }
-      if (owed) {
-        crown.lozenges.forEach((p, j) => {
-          drawLozenge(g, tools, p, j < progress.paid, color, k);
-        });
-      }
+    },
+  };
+}
+
+/** The ivory head line of an icon's fill: a line across the solid (placed at the level of the fill). */
+export function iconHeadSpec(kind: BuildingKind): BakeSpec {
+  const bounds = cornerBounds(solidOf(kind));
+  const x0 = bounds.x;
+  const x1 = bounds.x + bounds.width;
+  return {
+    key: `icon-head:${kind}`,
+    box: { x: x0 - 1, y: -1.5, width: x1 - x0 + 2, height: 3 },
+    draw(into, tools) {
+      graphics(into)
+        .moveTo(x0 - 0.5, 0)
+        .lineTo(x1 + 0.5, 0)
+        .stroke({ width: tools.hair(BUILDING.head.width), color: ENGRAVED.ink, cap: 'butt' });
     },
   };
 }
 
 /**
- * One paid charge alone (#872): the lozenge that flies into a build, pops on the Crown arc and runs
- * into the tower, at `k` of its warehouse size (the view scales the sprite down from there).
+ * The front of an icon: the dark casing and the ink line over it, square ends (as `CutIcon.svelte`
+ * draws them); a build that still owes charges is a plan, its outline dotted on a lighter casing.
+ */
+export function iconFrontSpec(kind: BuildingKind, look: IconLook): BakeSpec {
+  return {
+    key: `icon-front:${kind}:${look}`,
+    box: ICON_BOX,
+    draw(into, tools) {
+      const g = graphics(into);
+      if (look === 'plan') {
+        strokeOutline(g, kind, BUILDING.casing, CASING, BUILDING.plan.casingAlpha);
+        const { dash, line, lineAlpha } = BUILDING.plan;
+        const dotted = graphics(into);
+        for (const { points, closed } of parseCut(CUT_ICONS[kind])) {
+          const first = points[0];
+          const loop = closed && first !== undefined ? [...points, first] : points;
+          for (let i = 0; i + 1 < loop.length; i++) {
+            const a = loop[i];
+            const b = loop[i + 1];
+            if (a === undefined || b === undefined) continue;
+            const length = Math.hypot(b.x - a.x, b.y - a.y);
+            for (let d = 0; d < length; d += 2 * dash) {
+              const e = Math.min(length, d + dash);
+              dotted
+                .moveTo(a.x + ((b.x - a.x) * d) / length, a.y + ((b.y - a.y) * d) / length)
+                .lineTo(a.x + ((b.x - a.x) * e) / length, a.y + ((b.y - a.y) * e) / length);
+            }
+          }
+        }
+        dotted.stroke({ width: tools.hair(line), color: INK, alpha: lineAlpha, cap: 'butt' });
+        return;
+      }
+      strokeOutline(g, kind, BUILDING.casing, CASING, BUILDING.casingAlpha);
+      strokeOutline(g, kind, tools.hair(BUILDING.ink), INK);
+    },
+  };
+}
+
+// --- The charges of a build ----------------------------------------------------------------------------
+
+/**
+ * One paid charge alone (#872): the lozenge that flies into a build, pops on the row by the icon and
+ * runs into it, at `k` of its warehouse size (the view scales the sprite down from there).
  */
 export function chargeSpec(color: number, k: number): BakeSpec {
   const h = (LOZENGE.casing * k * Math.SQRT2) / 2 + 1;
@@ -342,16 +305,28 @@ export function chargeSpec(color: number, k: number): BakeSpec {
   };
 }
 
-/** The ring that opens from a tower just built (57k): an ink circle on a casing, faded by the view. */
-export function towerRingSpec(radius: number): BakeSpec {
-  const reach = radius + CROWN.ring.casing;
+/** One owed charge (hollow) or paid one (solid) of a build's row, at `k` of its warehouse size. */
+export function owedSpec(on: boolean, color: number, k: number): BakeSpec {
+  const h = (LOZENGE.casing * k * Math.SQRT2) / 2 + 1;
   return {
-    key: `tower-ring:${String(radius)}`,
+    key: `owed:${on ? 'paid' : 'owed'}:${String(color)}:${String(k)}`,
+    box: { x: -h, y: -h, width: 2 * h, height: 2 * h },
+    draw(into, tools) {
+      drawLozenge(graphics(into), tools, { x: 0, y: 0 }, on, color, k);
+    },
+  };
+}
+
+/** The ring that opens from an icon just built (57k): an ink circle on a casing, faded by the view. */
+export function doneRingSpec(radius: number): BakeSpec {
+  const reach = radius + BUILD_PAY.done.casing;
+  return {
+    key: `done-ring:${String(radius)}`,
     box: { x: -reach, y: -reach, width: 2 * reach, height: 2 * reach },
     draw(into, tools) {
       const g = graphics(into);
-      g.circle(0, 0, radius).stroke({ width: CROWN.ring.casing, color: CASING });
-      g.circle(0, 0, radius).stroke({ width: tools.hair(CROWN.ring.width), color: INK });
+      g.circle(0, 0, radius).stroke({ width: BUILD_PAY.done.casing, color: CASING });
+      g.circle(0, 0, radius).stroke({ width: tools.hair(BUILD_PAY.done.width), color: INK });
     },
   };
 }

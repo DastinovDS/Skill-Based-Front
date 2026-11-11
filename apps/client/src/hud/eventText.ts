@@ -35,7 +35,7 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   // The score is in the top bar already (ui-style U2): a VP line would repeat it every few seconds.
   'vp_awarded',
   // DEC-41: a full factory warehouse burns a charge (the gauge shows it full), every payment of a
-  // building (the Crown arc shows what is owed) and every charge a gathering plan takes (the plan
+  // building (the row of owed charges by its icon shows what is owed) and every charge a gathering plan takes (the plan
   // shows its bonus) are bookkeeping, every few seconds.
   'charge_burned',
   'build_paid',

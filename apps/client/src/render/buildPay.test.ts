@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { EventMsg } from '../protocol.gen.ts';
 import { PaymentLog, payShow, paymentOf, paymentSpan, type Payment } from './buildPay.ts';
-import { CROWN } from './style.ts';
+import { BUILD_PAY } from './style.ts';
 
 const HZ = 10;
-const { pay, run } = CROWN;
+const { run, ...pay } = BUILD_PAY;
 
 function paid(tick: number, data: EventMsg['data']): EventMsg {
   return { type: 'event', tick, kind: 'build_paid', data };
@@ -23,7 +23,7 @@ const payment = (p: Partial<Payment>): Payment => ({
 /** The render tick `ms` after tick 100. */
 const at = (ms: number): number => 100 + (ms * HZ) / 1000;
 
-describe('paymentOf: the build_paid events of an own tower build', () => {
+describe('paymentOf: the build_paid events of an own build', () => {
   it('reads the charges taken and what is still owed', () => {
     const event = paid(7, {
       player: 0,
@@ -53,7 +53,7 @@ describe('paymentOf: the build_paid events of an own tower build', () => {
   });
 });
 
-describe('payShow: the flights, the pops and the run into the tower', () => {
+describe('payShow: the flights, the pops and the run into the icon', () => {
   it('flies one charge per payment and keeps its lozenge owed until it lands', () => {
     // A factory of 4: one paid before, this one takes the second (index 1).
     const p = payment({ owed: 2 });
@@ -79,7 +79,7 @@ describe('payShow: the flights, the pops and the run into the tower', () => {
     expect(show.hidden).toBe(3);
   });
 
-  it('runs the lozenges into the tower after the last one of the full payment lands', () => {
+  it('runs the lozenges into the icon after the last one of the full payment lands', () => {
     const p = payment({ warehouse: 1, units: 1, owed: 0 });
     const landed = pay.flightMs + pay.staggerMs;
     expect(payShow([p], 4, at(landed - 1), 100, HZ).run).toBeNull();

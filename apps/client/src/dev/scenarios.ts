@@ -833,8 +833,8 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
   },
   {
     // The payment of two builds in motion (#872), close up: Forkway's factory takes charges (one pops
-    // on the Crown arc, one flies from the warehouse, one from the group), Watchhouse's barracks is
-    // paid in full and its lozenges run into the tower.
+    // on its row of owed charges, one flies from the warehouse, one from the group), Watchhouse's barracks is
+    // paid in full and its lozenges run into the icon.
     id: 'build_pay',
     map: 'artery',
     snapshot: buildPaySnapshot(bundledMap('artery')),
