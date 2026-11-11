@@ -405,7 +405,9 @@ describe('the owner line where the far bank changes hands (#928, #944)', () => {
         expect(loose.every(onFrame)).toBe(true);
       }
       // No segment crosses the river (y 40..50).
-      const across = borders.filter((b) => Math.min(b.a.y, b.b.y) < 39 && Math.max(b.a.y, b.b.y) > 51);
+      const across = borders.filter(
+        (b) => Math.min(b.a.y, b.b.y) < 39 && Math.max(b.a.y, b.b.y) > 51,
+      );
       expect(across).toEqual([]);
     }
   });
