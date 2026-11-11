@@ -78,7 +78,7 @@ export function badgeBox(
 }
 
 /** The height of a badge without its outline: the step between two stacked badges. */
-export function badgeHeight(size: number, count: number): number {
+function badgeHeight(size: number, count: number): number {
   const n = chevronCount(count);
   return size * (0.72 + 0.46 * (n - 1));
 }

@@ -73,7 +73,7 @@ export class FlowView {
 }
 
 /** Where the starving mark of a node sits: off its lower right rim. */
-export function starvePoint(city: Point, radius: number): Point {
+function starvePoint(city: Point, radius: number): Point {
   const rad = (FLOW_BATTLE.starveAngle * Math.PI) / 180;
   const r = radius + FLOW_BATTLE.starveGap;
   return { x: city.x + r * Math.cos(rad), y: city.y + r * Math.sin(rad) };

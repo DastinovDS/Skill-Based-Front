@@ -27,7 +27,7 @@ export const LAYER_ORDER = [
   'tolls',
 ] as const;
 
-export type LayerName = (typeof LAYER_ORDER)[number];
+type LayerName = (typeof LAYER_ORDER)[number];
 
 /**
  * The world container (moved and scaled by the camera) with one child container per layer.

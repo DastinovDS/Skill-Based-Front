@@ -103,9 +103,6 @@
   --t-reveal-reduced: 100ms;
   --t-capture-walk: 600ms;
   --t-build-run: 350ms;
-  --t-build-done: 500ms;
-  --t-plan-step: 900ms;
-  --t-intro: 7000ms;
 
   /* The older names (ui-style 6), now on the new values: the screens not yet restyled use them. */
   --bg: var(--stone-bg);
@@ -117,11 +114,6 @@
   --text-dim: var(--ink-dim);
   --paper: var(--ink);
   --you: var(--own);
-  --ok: var(--own);
-  /* The terrain colours of the old map (the terrain banner, the menu picture). */
-  --terrain-plains: #3a4630;
-  --terrain-forest: #25392b;
-  --terrain-mountains: #4a453e;
   /* A strip at the bottom of every game screen for the legal links (LegalFooter): the screens end
      above it, so the links never cover the controls, the score or the map (#185). */
   --legal-footer-h: 28px;
@@ -138,7 +130,6 @@
    property that reads another one is resolved where it is declared (`:root`). */
 .player-sides {
   --you: var(--own);
-  --ok: var(--own);
   --hatch-own: repeating-linear-gradient(0deg, var(--own) 0 1px, transparent 1px 3px);
   --hatch-enemy: repeating-linear-gradient(45deg, var(--enemy) 0 1.2px, transparent 1.2px 3.4px);
 }

@@ -41,7 +41,7 @@ import { playerColours, type ColourIds } from './style.ts';
 import { captureWalks, floodDelayMs, type Walk } from './walkLayout.ts';
 
 /** Failed frames in a row before the player is told (a transient error is only skipped). */
-export const FRAME_FAILURE_LIMIT = 3;
+const FRAME_FAILURE_LIMIT = 3;
 
 /** Ticks per second when the source does not say. */
 const DEFAULT_TICK_HZ = 10;

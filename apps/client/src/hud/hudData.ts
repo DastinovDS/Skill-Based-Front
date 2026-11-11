@@ -39,7 +39,7 @@ export interface HudContext {
   readonly map: MapFile;
 }
 
-export interface CpInfo {
+interface CpInfo {
   /** Hundredths of CP, as in the protocol. */
   readonly value: number;
   readonly cap: number;
@@ -75,7 +75,7 @@ export interface GroupInfo {
 }
 
 /** A gathering planned order (economy v2): the bonus so far, the one asked for, the next charge. */
-export interface GatheringInfo {
+interface GatheringInfo {
   readonly bonus: number;
   /** The requested bonus (`OrderView.plan`). */
   readonly plan: number;
@@ -83,7 +83,7 @@ export interface GatheringInfo {
   readonly nextIn: number | null;
 }
 
-export type Ownership = 'mine' | 'enemy' | 'neutral';
+type Ownership = 'mine' | 'enemy' | 'neutral';
 
 export interface NodeInfo {
   readonly id: number;
@@ -123,7 +123,7 @@ export interface NodeInfo {
 }
 
 /** The current build of an own city (`NodeView.building`, DEC-26). */
-export interface BuildingInfo {
+interface BuildingInfo {
   readonly kind: BuildKind;
   /** `null` while the build still waits for its payment in charges (economy v2, DEC-41, item 7). */
   readonly secondsLeft: number | null;
@@ -132,14 +132,14 @@ export interface BuildingInfo {
 }
 
 /** A factory being built (`NodeView.factory_build`). */
-export interface SiteInfo {
+interface SiteInfo {
   /** `null` while charges are still owed: the build time starts at the full payment. */
   readonly secondsLeft: number | null;
   readonly owed: number;
 }
 
 /** Own factories against `ruleset_public.factory.max` (#762). */
-export interface FactoryCount {
+interface FactoryCount {
   readonly count: number;
   readonly max: number;
 }
@@ -148,7 +148,7 @@ export interface FactoryCount {
  * The own factories for `factory.max` (DEC-41, item 2): the own factory cities and the factory
  * builds under way, read from the own view (`NodeView.factory`, `factory_build`).
  */
-export function factoryCount(
+function factoryCount(
   rules: RulesetPublic,
   nodes: readonly NodeView[],
   me: PlayerId,
@@ -167,7 +167,7 @@ export function factoryCount(
  * and the built or captured ones, not the builds under way. The view shows them, the client only
  * counts.
  */
-export function workingFactoryCount(nodes: readonly NodeView[], me: PlayerId): number {
+function workingFactoryCount(nodes: readonly NodeView[], me: PlayerId): number {
   let count = 0;
   for (const node of nodes) {
     if (node.owner === me && node.factory === true) count += 1;
@@ -175,7 +175,7 @@ export function workingFactoryCount(nodes: readonly NodeView[], me: PlayerId): n
   return count;
 }
 
-export interface EnemyInfo {
+interface EnemyInfo {
   readonly modes: readonly Mode[];
   /** Totals, `null` unless seen exactly. */
   readonly units: number | null;
@@ -205,7 +205,7 @@ export interface GroupChoice {
   readonly planned: boolean;
 }
 
-export interface NodeChoice {
+interface NodeChoice {
   readonly id: number;
   readonly owner: Ownership;
   /** Warehouse charges where the view has them (own nodes and nodes seen exactly). */
@@ -217,7 +217,7 @@ export interface NodeChoice {
 }
 
 /** A road: its ends and the ends that have a fortification. */
-export interface RoadInfo {
+interface RoadInfo {
   readonly id: number;
   /** The two end nodes (from the map). */
   readonly a: number;
@@ -239,7 +239,7 @@ export interface WalkPaid {
 }
 
 /** The rally walks of the CP gauge (#930, W10). */
-export interface RallyInfo {
+interface RallyInfo {
   /** The price of one walk, hundredths (`recruit.rally_cost`); 0 without rally points. */
   readonly cost: number;
   /** The walks due, the nearest first. */
@@ -260,7 +260,7 @@ export interface VpCredit {
 }
 
 /** What the server says of the next VP credit (#930, P1, #934). */
-export interface VpNext {
+interface VpNext {
   /** The way to it, from the ruleset period; `null` without one. */
   readonly countdown: VpCountdown | null;
   /** The period in ticks (`victory.vp_period_ticks`) and the ticks per second. */
@@ -280,7 +280,7 @@ export interface HudExtras {
   readonly credit: VpCredit | null;
 }
 
-export const NO_EXTRAS: HudExtras = { pending: [], paid: [], credit: null };
+const NO_EXTRAS: HudExtras = { pending: [], paid: [], credit: null };
 
 export interface HudData {
   readonly tick: number;

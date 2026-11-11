@@ -140,7 +140,7 @@ export function hatchBucket(pitch: number, zoom: number): HatchBucket {
 
 /** Texels of a hatch tile across its lines (one pitch) and along them. */
 export const TILE_HEIGHT = 16;
-export const TILE_WIDTH = 4;
+const TILE_WIDTH = 4;
 
 /** The cover (0..1) of row `[r, r + 1)` by a line of `width` texels centred at `centre`. */
 function cover(r: number, centre: number, width: number): number {

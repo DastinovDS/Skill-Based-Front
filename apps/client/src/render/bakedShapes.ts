@@ -294,13 +294,8 @@ function helmetBox(h: Helmet): Box {
   return { x: e.left, y: e.top, width: e.right - e.left, height: e.bottom - e.top };
 }
 
-/** The light tone of the owner's colour: the strap, the brim and the edge of the dome. */
-export function helmetLight(color: number): number {
-  return lighten(color, 0.5);
-}
-
 /** The pitch of the hatch of a helmet `width` wide: finer on a small one, never under 1.4 units. */
-export function helmetHatchPitch(width: number): number {
+function helmetHatchPitch(width: number): number {
   return Math.min(HELMET_ENGRAVED.hatch.pitch, Math.max(1.4, width * 0.075));
 }
 
@@ -369,7 +364,7 @@ export function helmetBackSpec(
 }
 
 /** The box of the charge fill: the dome and a margin; its bottom is the bottom of the dome plus 1. */
-export function helmetLevelBox(h: Helmet): Box {
+function helmetLevelBox(h: Helmet): Box {
   const top = h.domeTop - 1;
   return {
     x: h.bounds.x - 1,

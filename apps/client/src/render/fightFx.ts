@@ -192,7 +192,7 @@ export function fightResult(end: EndFx): FightResult {
 /** The end of a fight stays this share of a round (3 s at 20 ticks and 10 Hz). */
 export const END_SHARE = 1.5;
 /** A chip that changed pulses once over this share of a round. */
-export const PULSE_SHARE = 0.45;
+const PULSE_SHARE = 0.45;
 /** The self-shot of a chip whose charge the terrain burned (DEC-45, #791) lasts this share of a round. */
 export const SELF_SHOT_SHARE = 0.6;
 
@@ -423,7 +423,7 @@ export function lighten(color: number, amount: number): number {
 // --- Who shot in the last round ------------------------------------------------------------------
 
 /** The shots one side made in a round: real ones, and the virtual (bonus, terrain) ones. */
-export interface SideShots {
+interface SideShots {
   readonly real: number;
   readonly virtual: number;
 }

@@ -15,7 +15,7 @@ export interface ReachInfo {
 }
 
 /** The answer to the last command, for the panel. */
-export type OrderNotice =
+type OrderNotice =
   | { readonly id: number; readonly kind: 'accepted'; readonly cmd: Command }
   | { readonly id: number; readonly kind: 'rejected'; readonly code: string; readonly cmd: Command }
   | { readonly id: number; readonly kind: 'lost'; readonly cmd: Command };

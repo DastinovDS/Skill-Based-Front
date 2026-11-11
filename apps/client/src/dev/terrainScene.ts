@@ -6,9 +6,7 @@
  * the eyes; which place is seen how is just plausible, the server decides it (DEC-21).
  */
 import type { MapFile, NodeView, SnapshotMsg } from '../protocol.gen.ts';
-import { ARTERY_TICK, arterySnapshot } from './arteryScene.ts';
-
-export const TERRAIN_TICK = ARTERY_TICK;
+import { arterySnapshot } from './arteryScene.ts';
 
 export function terrainSnapshot(map: MapFile): SnapshotMsg {
   const base = arterySnapshot(map);

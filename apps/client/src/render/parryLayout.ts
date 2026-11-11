@@ -89,7 +89,7 @@ export function roundLayout(fx: RoundFx, me: PlayerId): RoundLayout {
 }
 
 /** When the shots leave: after the burn, if a charge was burned. */
-export function shotsLead(layout: RoundLayout): number {
+function shotsLead(layout: RoundLayout): number {
   return layout.burned.own + layout.burned.enemy > 0 ? PARRY.burnLead : 0;
 }
 

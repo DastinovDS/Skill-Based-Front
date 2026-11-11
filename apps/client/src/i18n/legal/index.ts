@@ -3,6 +3,6 @@ import { en } from './en.ts';
 import type { LegalContent } from './types.ts';
 
 export { hasPlaceholders } from './types.ts';
-export type { LegalContent, LegalDocument, LegalPageId, LegalSection } from './types.ts';
+export type { LegalContent, LegalPageId } from './types.ts';
 
 export const LEGAL_CONTENT: Readonly<Record<Locale, LegalContent>> = { en };

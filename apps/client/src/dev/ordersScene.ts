@@ -7,9 +7,8 @@
  * from `arterySnapshot`, a picture for the eyes: the numbers only have to be plausible.
  */
 import type { GroupView, IntentView, MapFile, SnapshotMsg } from '../protocol.gen.ts';
-import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
+import { ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 
-export const ORDERS_TICK = ARTERY_TICK;
 export const ORDERS_VIEW = ARTERY_VIEW;
 
 /** The delay of a planned order in the dev rules (`DEV_RULES.orders.planned_delay_ticks`). */

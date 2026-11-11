@@ -5,7 +5,7 @@
  */
 import { ApiError } from '../api/http.ts';
 
-export type FailureKind =
+type FailureKind =
   /** The request did not reach the server. */
   | 'network'
   /** 429: the per-IP limit of public reads; `retryAfterS` says when to try again. */

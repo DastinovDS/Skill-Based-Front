@@ -41,7 +41,7 @@ export function paymentOf(event: EventMsg, me: PlayerId): Payment | null {
 }
 
 /** Milliseconds from `payment` to the render `tick` at `tickHz` (negative before it). */
-export function paymentMs(payment: Payment, tick: number, tickHz: number): number {
+function paymentMs(payment: Payment, tick: number, tickHz: number): number {
   return tickHz > 0 ? ((tick - payment.tick) * 1000) / tickHz : Number.POSITIVE_INFINITY;
 }
 
@@ -55,7 +55,7 @@ export function paymentSpan(payment: Payment, cost: number): number {
 }
 
 /** A charge in the air: `k` of its payment, from the warehouse or the group, to lozenge `j`. */
-export interface PayFlight {
+interface PayFlight {
   readonly payment: Payment;
   readonly k: number;
   readonly from: 'warehouse' | 'group';

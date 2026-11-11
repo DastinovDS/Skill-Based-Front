@@ -107,15 +107,15 @@ export interface MatchConnectionOptions {
 }
 
 /** Failed attempts in a row before giving up: with the backoff this is about the 60 s window of DEC-05. */
-export const MAX_ATTEMPTS = 8;
+const MAX_ATTEMPTS = 8;
 /** A 4004 right after the start of a match may be a race: two more tries, then the match is gone. */
-export const NO_MATCH_RETRIES = 2;
+const NO_MATCH_RETRIES = 2;
 /** Below the server's burst of 60 messages per connection, with room for `hello` and the pings. */
-export const MAX_PENDING_COMMANDS = 50;
+const MAX_PENDING_COMMANDS = 50;
 
 /** Snapshots come at 10 Hz: this much silence while ready is not a slow link, it is a dead one. */
-export const DEAD_AFTER_MS = 3_000;
-export const WATCHDOG_MS = 1_000;
+const DEAD_AFTER_MS = 3_000;
+const WATCHDOG_MS = 1_000;
 /** The watchdog that runs this many periods late was not running: the page was stalled. */
 const STALL_FACTOR = 2.5;
 /** What the browser reports for a link that went away without a close handshake. */

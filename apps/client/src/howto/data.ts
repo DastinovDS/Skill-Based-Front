@@ -11,12 +11,12 @@ export interface Count {
   readonly charged: number;
 }
 
-export interface Pair<T> {
+interface Pair<T> {
   readonly a: T;
   readonly b: T;
 }
 
-export interface Round {
+interface Round {
   readonly round: number;
   readonly after_ticks: number;
   readonly after_seconds: number;
@@ -25,7 +25,7 @@ export interface Round {
   readonly bonus_left: Pair<number>;
 }
 
-export type ExampleId = 'equal' | 'surplus' | 'defenseless' | 'planned';
+type ExampleId = 'equal' | 'surplus' | 'defenseless' | 'planned';
 
 export interface Example {
   readonly id: ExampleId;
@@ -40,7 +40,7 @@ export interface Example {
   };
 }
 
-export interface HowToRules {
+interface HowToRules {
   readonly round_seconds: number;
   readonly planned_delay_seconds: number;
   readonly planned_bonus_per_road: number;

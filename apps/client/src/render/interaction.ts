@@ -19,7 +19,7 @@ export type PickHit =
   | { readonly kind: 'edge'; readonly id: number; readonly cell?: number };
 
 /** What can be selected: a group or a node (a road is only hovered, and clicked to raise it). */
-export type SelectionHit =
+type SelectionHit =
   { readonly kind: 'group'; readonly id: string } | { readonly kind: 'node'; readonly id: number };
 
 /** The life of a ghost: sent (dashed), accepted by the server (solid), rejected (shakes and fades). */
@@ -73,7 +73,7 @@ export interface HoverMark {
 }
 
 /** Where a click would send the selected group. */
-export interface MovePreview {
+interface MovePreview {
   readonly from: number;
   readonly to: number;
   readonly planned: boolean;

@@ -73,15 +73,14 @@ export function letterTimes(n: number): readonly (readonly [number, number])[] {
   return times;
 }
 
-export const clamp = (v: number, lo = 0, hi = 1): number => Math.max(lo, Math.min(hi, v));
+const clamp = (v: number, lo = 0, hi = 1): number => Math.max(lo, Math.min(hi, v));
 /** Cubic out. */
-export const easeOut = (p: number): number => 1 - (1 - p) ** 3;
+const easeOut = (p: number): number => 1 - (1 - p) ** 3;
 /** Cubic in and out. */
-export const easeInOut = (p: number): number =>
-  p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2;
+const easeInOut = (p: number): number => (p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2);
 
 /** Progress 0..1 of each letter at t. */
-export function letterProgress(times: readonly (readonly [number, number])[], t: number): number[] {
+function letterProgress(times: readonly (readonly [number, number])[], t: number): number[] {
   return times.map(([start, length]) => clamp((t - INTRO.title - start) / length));
 }
 
@@ -91,7 +90,7 @@ export function emergeEnd(times: readonly (readonly [number, number])[]): number
 }
 
 /** How many entries of the form come in one after another (the nick field, then the links). */
-export const MENU_STEPS = 2;
+const MENU_STEPS = 2;
 
 /** The length of the whole scene. */
 export const INTRO_END = Math.max(

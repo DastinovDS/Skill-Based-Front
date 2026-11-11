@@ -74,7 +74,7 @@ export async function loadReplay(
 }
 
 /** The first pause between asks, the longest one and how long to wait in all (#259). */
-export const POLL_FIRST_MS = 2000;
+const POLL_FIRST_MS = 2000;
 export const POLL_MAX_MS = 5000;
 export const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 

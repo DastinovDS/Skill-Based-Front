@@ -4,7 +4,7 @@
  * notice while any is left (`hasPlaceholders`). A lawyer must review the texts before publishing
  * (docs/ops/legal.md).
  */
-export interface LegalSection {
+interface LegalSection {
   readonly heading: string;
   /** Paragraphs of text. */
   readonly body: readonly string[];
@@ -25,7 +25,7 @@ export interface LegalContent {
 export type LegalPageId = keyof LegalContent;
 
 /** A placeholder the operator has to fill in, e.g. `<OPERATOR_NAME>`. */
-export const PLACEHOLDER = /<[A-Z][A-Z0-9_]*>/;
+const PLACEHOLDER = /<[A-Z][A-Z0-9_]*>/;
 
 export function hasPlaceholders(document: LegalDocument): boolean {
   return document.sections.some((section) =>

@@ -12,9 +12,9 @@
 import { PROGRESS } from './style.ts';
 
 /** What a queue cell shows. `ready`: the unit is made and waits for a place (DEC-25, item 7). */
-export type CellState = 'slot' | 'queued' | 'active' | 'ready';
+type CellState = 'slot' | 'queued' | 'active' | 'ready';
 
-export interface QueueCell {
+interface QueueCell {
   /** Left edge from the middle of the plate. */
   readonly x: number;
   readonly state: CellState;

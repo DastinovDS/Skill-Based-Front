@@ -22,7 +22,7 @@ import { ARTERY_TICK } from './arteryScene.ts';
 import { FLOW_VIEW, flowSnapshot } from './flowScene.ts';
 import { PROVINCES_TICK, PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 
-export const FORTS_TICK = ARTERY_TICK;
+const FORTS_TICK = ARTERY_TICK;
 export const FORTS_VIEW = FLOW_VIEW;
 
 const T = FORTS_TICK;
@@ -52,7 +52,7 @@ const FORTS: Readonly<Record<number, readonly RoadFort[]>> = {
 };
 
 /** The own group that pays at the line of Archway, and the enemy group that pays at the line of 7. */
-export const FORTS_PAYER = '00000000000f0001';
+const FORTS_PAYER = '00000000000f0001';
 
 const figure = (id: string, pos: number): EnemyGroup => ({
   id,
@@ -123,8 +123,6 @@ export function fortsEvents(age: number): EventMsg[] {
   ];
 }
 
-/** The `forts_geo` scene: the same on the pool map `crossroads`, whose areas come from a geography (curved borders). */
-export const FORTS_GEO_TICK = PROVINCES_TICK;
 export const FORTS_GEO_VIEW = PROVINCES_VIEW;
 
 const GEO_FORTS: Readonly<Record<number, readonly RoadFort[]>> = {

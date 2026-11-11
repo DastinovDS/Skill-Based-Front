@@ -17,7 +17,7 @@ export function passwordLengthOk(password: string): boolean {
 }
 
 /** The nick rule of the server (`gow_server.nicks`): 3 to 16 characters, letters, digits, _ and -. */
-export const NICK_MIN = 3;
+const NICK_MIN = 3;
 export const NICK_MAX = 16;
 const NICK_CHARS = /^[\p{L}\p{N}_-]*$/u;
 

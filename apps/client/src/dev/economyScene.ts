@@ -15,7 +15,7 @@ import type {
 } from '../protocol.gen.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 
-export const ECONOMY_TICK = ARTERY_TICK;
+const ECONOMY_TICK = ARTERY_TICK;
 export const ECONOMY_VIEW = ARTERY_VIEW;
 
 const T = ECONOMY_TICK;

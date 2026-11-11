@@ -19,13 +19,13 @@ export type Owner = PlayerId | null;
 
 const TAU = Math.PI * 2;
 
-export const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 /** Where `t` is between `a` and `b`, 0..1. */
-export const phase = (t: number, a: number, b: number): number => clamp01((t - a) / (b - a));
+const phase = (t: number, a: number, b: number): number => clamp01((t - a) / (b - a));
 /** Smoothstep of a value in 0..1. */
-export const smooth = (t: number): number => t * t * (3 - 2 * t);
+const smooth = (t: number): number => t * t * (3 - 2 * t);
 /** Ease-out quad: the front starts fast and lands softly. */
-export const easeOutQuad = (t: number): number => t * (2 - t);
+const easeOutQuad = (t: number): number => t * (2 - t);
 
 /** Rays of the reach table: the shader reads it as 64 `vec4`. */
 export const REACH_SAMPLES = 256;

@@ -15,7 +15,7 @@ import type { EventMsg, GroupView, MapFile, OrderView, SnapshotMsg } from '../pr
 import type { WorldRect } from '../render/interaction.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 
-export const GROUP_TICK = ARTERY_TICK;
+const GROUP_TICK = ARTERY_TICK;
 export const GROUP_VIEW = ARTERY_VIEW;
 
 const id = (n: number) => (0x6000 + n).toString(16).padStart(16, '0');

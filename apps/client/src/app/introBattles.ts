@@ -102,8 +102,8 @@ const SHOT_DUR = 0.17;
  * of the match. The pool lets this share of the map's light through, and the groups and their shots
  * are drawn at this share of their strength.
  */
-export const FOG_LIGHT = 0.5;
-export const FOG_PIECES = 0.5;
+const FOG_LIGHT = 0.5;
+const FOG_PIECES = 0.5;
 /** The scale of the menu map on the mockup's artboard: its sizes are in px at this scale. */
 const MOCKUP_SCALE = 1.6;
 

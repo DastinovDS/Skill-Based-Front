@@ -10,7 +10,7 @@ import type { Point } from './camera.ts';
 import { PACKET_FADE_MARGIN, PACKET_MIN_SCALE, UNIT_SIDES, UNIT_SIDE_UNKNOWN } from './style.ts';
 
 /** A full edge in thousandths of progress, as on the wire (`OnEdgeLoc.progress`). */
-export const EDGE_PROGRESS = 1000;
+const EDGE_PROGRESS = 1000;
 
 export function nodePoint(map: MapFile, id: number): Point | undefined {
   const node = map.nodes[id];

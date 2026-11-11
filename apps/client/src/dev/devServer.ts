@@ -65,7 +65,7 @@ const DEV_PACKET_TICKS = 60;
  * charge the other way on the second, and, where an own road continues from the end of the first, a
  * packet that goes on over it. They restart every `DEV_PACKET_TICKS`.
  */
-export function devPackets(map: MapFile, nodes: readonly NodeView[], tick: number): PacketView[] {
+function devPackets(map: MapFile, nodes: readonly NodeView[], tick: number): PacketView[] {
   const own = (id: number): boolean => nodes[id]?.owner === DEV_PLAYER;
   const roads = map.edges.filter((e) => own(e.a) && own(e.b));
   const depart = tick - (tick % DEV_PACKET_TICKS);

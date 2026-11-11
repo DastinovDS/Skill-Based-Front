@@ -9,14 +9,14 @@ import { formatSeconds } from './format.ts';
 import type { NodeNamer } from './nodeName.ts';
 
 /** Overcrowded cities: the one whose unit dies first, and how many there are. */
-export interface OverflowRow {
+interface OverflowRow {
   readonly kind: 'overflow';
   readonly cities: number;
   readonly first: OverflowAlert;
 }
 
 /** Cities that enemy planned orders aim at: the one they leave for first, and the counts. */
-export interface IncomingRow {
+interface IncomingRow {
   readonly kind: 'incoming';
   readonly cities: number;
   /** Orders in all. */

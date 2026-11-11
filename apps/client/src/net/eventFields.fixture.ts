@@ -13,10 +13,6 @@ const KINDS = (raw as { kinds: Record<string, { fields: string[]; ids: string[] 
 
 type Data = EventMsg['data'];
 
-export function eventKinds(): string[] {
-  return Object.keys(KINDS);
-}
-
 export function declaredFields(kind: string): ReadonlySet<string> {
   const entry = KINDS[kind];
   expect(entry, `${kind} is not an event kind of the server`).toBeDefined();

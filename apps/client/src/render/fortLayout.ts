@@ -13,7 +13,7 @@ import type { Point } from './camera.ts';
 import type { CellEdge } from './regionLayout.ts';
 
 /** Where a run is cut short (degrees). */
-export const FORT = {
+const FORT = {
   /** The border run is trimmed where it turns by more than this (degrees)... */
   trim: 38,
   /** ...or has turned by more than this in all since the crossing (a corner rounded into a gentle curve). */

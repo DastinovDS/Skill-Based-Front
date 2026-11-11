@@ -7,7 +7,7 @@
  * title changes more slowly, but the first change is immediate.
  */
 
-export const FLASH_PERIOD_MS = 1_000;
+const FLASH_PERIOD_MS = 1_000;
 
 /** Starts the flash of `message`; returns the function that stops it and restores the title. */
 export function flashTitle(

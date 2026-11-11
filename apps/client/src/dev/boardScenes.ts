@@ -30,7 +30,7 @@ export function isBoardScene(id: string | null): id is BoardSceneId {
 }
 
 /** The clock of the scenes. */
-export const BOARD_NOW = Date.parse('2026-10-29T12:00:00Z');
+const BOARD_NOW = Date.parse('2026-10-29T12:00:00Z');
 
 const ago = (minutes: number): string => new Date(BOARD_NOW - minutes * 60_000).toISOString();
 const rec = (wins: number, losses: number, draws: number): RecordTally => ({

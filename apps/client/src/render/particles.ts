@@ -31,19 +31,13 @@ import { HELMET_PATHS } from '../units/helmet.ts';
  * opponent; baked in colour, tint white. The head of a bonus shot (#812, "Octagram") is not a particle:
  * it is two baked sprites (`octagramSpec`, `ShotView`).
  */
-export type HeadKind = 'headOwn' | 'headEnemy';
-export type ParticleKind =
-  'dot' | 'square' | 'helmet' | 'ring' | 'dashRing' | 'cross' | 'glow' | HeadKind;
+type HeadKind = 'headOwn' | 'headEnemy';
+type ParticleKind = 'dot' | 'square' | 'helmet' | 'ring' | 'dashRing' | 'cross' | 'glow' | HeadKind;
 
 /** The colours of the two sides, for the heads of the shots. */
 export interface SideColors {
   readonly own: number;
   readonly enemy: number;
-}
-
-/** The head of a real shot of a side: a square in its colour. */
-export function headKind(side: 'own' | 'enemy'): HeadKind {
-  return side === 'own' ? 'headOwn' : 'headEnemy';
 }
 
 /** A particle of a frame: `size` is the width of its shape in world units, `aspect` stretches the height. */
@@ -292,7 +286,7 @@ function bakeAtlas(colors: SideColors): {
 // --- The pooled layer ---------------------------------------------------------------------------------
 
 /** Particles a container holds at most; the surplus of a frame is dropped (3 fights need about 100). */
-export const PARTICLE_CAPACITY = 256;
+const PARTICLE_CAPACITY = 256;
 
 interface Pool {
   readonly container: ParticleContainer;

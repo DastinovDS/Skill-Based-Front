@@ -56,7 +56,7 @@ function polygonPath(points: readonly Point[]): string {
     : `M${points.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join('L')}Z`;
 }
 
-export interface SideLand {
+interface SideLand {
   /** The areas of the side, for a clip of its band. */
   readonly cells: string;
   /** Its land borders (not along water), stroked twice the band deep and clipped to the areas. */

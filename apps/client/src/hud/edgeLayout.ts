@@ -18,10 +18,10 @@ export interface Rect {
 }
 
 /** Angular width of an arc, degrees. */
-export const ARC_SPAN = 34;
+const ARC_SPAN = 34;
 
 /** A city this close to the edge (or beyond) still counts as in view when its centre is inside. */
-export const IN_VIEW_MARGIN = 6;
+const IN_VIEW_MARGIN = 6;
 
 export function centreOf(view: Rect): Point {
   return { x: (view.left + view.right) / 2, y: (view.top + view.bottom) / 2 };

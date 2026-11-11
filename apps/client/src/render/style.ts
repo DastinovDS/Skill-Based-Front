@@ -28,9 +28,6 @@ export const VP = ENGRAVED.vp;
  */
 export const BADGE_UP = ENGRAVED.up;
 export const BADGE_DOWN = ENGRAVED.down;
-/** Empty segment of a capacity ring and of a warehouse bar. */
-export const SEGMENT_EMPTY = ENGRAVED.segmentEmpty;
-export const SEGMENT_EMPTY_BAR = 0x3b4450;
 
 /**
  * The Engraved material of the pieces (ui-style 52 III to 57): ivory `INK` lines on a dark `CASING`
@@ -135,8 +132,6 @@ export const SHADOW = {
     { grow: 0, alpha: 0.28 },
   ],
 } as const;
-/** The light rim of an owned object, at its upper left (not on a neutral city). */
-export const RIM = { alpha: 0.3, width: 1.4 } as const;
 /** The room a baked sprite keeps around its shape for the shadow (world units). */
 export const BAKE_MARGIN = 4;
 
@@ -290,7 +285,6 @@ export const UNIT_SIDE_UNKNOWN = 30;
  * capacity ring (the mockup of #775 took 8% off too).
  */
 export const HELMET_INSIDE = 0.92;
-export const UNIT_QUESTION_FONT_SIZE = 15;
 /** On screen a unit's size step is at least this wide, and a click hits at least this wide (CSS px). */
 export const UNIT_MIN_SIDE_PX = 20;
 export const UNIT_MIN_HIT_PX = 28;
@@ -518,9 +512,6 @@ export const PACKET_ENGRAVED = { casing: 9.2, outline: 8, ink: 0.8 } as const;
 export const PACKET_FADE_MARGIN = 8;
 export const PACKET_MIN_SCALE = 0.3;
 
-/** Red means only "opponent" (6), so a fight mark is paper white. */
-export const FIGHT_COLOR = PAPER;
-
 // --- Fog of war (CLI-05, #61) -------------------------------------------------------------------
 // A hidden area is the Ruled veil of `engraving.ts` (#842). What is not known of a place is carried
 // by the dotted half of a road (`ROAD_FOG`, a road never seen too), the memory ghosts and the tick at
@@ -536,9 +527,6 @@ export const GHOST_AGE_STROKE = { color: BG, width: 3, join: 'round' } as const;
 
 // --- Selection and orders (CLI-06, #62) --------------------------------------------------------
 // The selection is a white outline on a dark one, so it reads on any terrain and any owner.
-
-/** The selection ring of a city sits outside its capacity ring and warning ring. */
-export const SELECT_RING_GAP = 18;
 
 // The group order and the recruit rally point (DEC-48, #896; mockup `group-order.html`): the look the
 // owner chose (item K8): A1 frames and box, A2 numbered seals, B1 one hourglass seal, C3 the
@@ -709,8 +697,6 @@ export const FEED = {
 export const FIGHT_FX_STRENGTH = 1.6;
 /** Distance between the two groups of a fight when their tokens do not tell it (world units, as it stands now). */
 export const FIGHT_GAP = 46;
-/** The hot white of a flash, of sparks and of the contact ring. */
-export const FLASH_COLOR = 0xffffff;
 
 // --- Planned orders: the geometry of the ribbon (#431, #519; Engraved #851) --------------------------
 // A planned order is a ribbon from the start city to the target, the same shape for both sides: the

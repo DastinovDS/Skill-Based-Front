@@ -65,7 +65,7 @@ export interface RadialItem {
 }
 
 /** A price in a radial sector (or a rate of the stance menu), as signs. */
-export interface RadialPrice {
+interface RadialPrice {
   /** CP as the page writes them ("1.5"), drawn with the CP mark. */
   readonly cp?: string;
   /**

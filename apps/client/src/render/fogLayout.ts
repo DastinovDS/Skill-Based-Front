@@ -10,7 +10,7 @@ import { edgeEnds, edgePoint, nodePoint, sideways } from './layout.ts';
 import { GHOST_ALPHA, GHOST_FADE_START_S, GHOST_HIDE_S, RING_GAP } from './style.ts';
 
 /** Enemy markers on an edge sit this far from the road, to the left of the a → b way. */
-export const EDGE_MARKER_OFFSET = -24;
+const EDGE_MARKER_OFFSET = -24;
 
 /**
  * Centre of the enemy marker (or the memory ghost) of a city: to the right of it, in the lower

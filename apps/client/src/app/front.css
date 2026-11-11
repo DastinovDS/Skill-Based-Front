@@ -336,8 +336,7 @@
 }
 
 /* A quiet link in the words of the page ("To the menu", "Stay", "Back"). */
-.front .lnk,
-.front .linkbtn {
+.front .lnk {
   padding: 4px 2px;
   border: 0;
   background: none;
@@ -350,8 +349,7 @@
   cursor: pointer;
 }
 
-.front .lnk:hover,
-.front .linkbtn:hover {
+.front .lnk:hover {
   color: #fff8e9;
 }
 
@@ -661,12 +659,6 @@
 
 .front .versus .name {
   overflow-wrap: anywhere;
-}
-
-.front .versus .vs-x {
-  font: italic 400 18px var(--font-text);
-  letter-spacing: 0;
-  color: var(--ink-dim);
 }
 
 /* ---- The entry screen: the title, the nick, the log-in sheet -------------------------------- */
