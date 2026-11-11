@@ -3,6 +3,7 @@
   import type { BotLevel } from '../api/http.ts';
   import type { MessageKey } from '../i18n/index.ts';
   import type { MatchEndMsg, PlayerColour, PlayerId } from '../protocol.gen.ts';
+  import { applyPlayerColour } from '../theme/tokens.ts';
   import ReplayScreen from '../replay/ReplayScreen.svelte';
   import CrashGuard from './CrashGuard.svelte';
   import { AppState, type Guest } from './appState.svelte.ts';
@@ -39,6 +40,11 @@
   onMount(() => {
     void app.start();
   });
+
+  // Outside a match every helmet that stands for the player wears the colour they chose (DEC-49),
+  // an illustrative opponent a contrasting one. A match, a replay and the result card set their own
+  // `--own` and `--enemy` below this, from the colours the match used.
+  $effect(() => applyPlayerColour(app.colour));
 
   const screen = $derived(app.screen);
 

@@ -430,7 +430,7 @@ export const en = {
   'range.open': '{low}+',
   'order.bonus': 'Plan bonus +{n}',
   'order.bonusForecast': 'Plan bonus +{n}: a forecast, the number is settled at the departure',
-  'start.title': 'You are blue. Your capital is here',
+  'start.title': 'You are {colour}. Your capital is here',
   'start.capital': 'Opponent: {nick}',
   'exit.title': 'Leave the match?',
   'exit.text': 'This is a forfeit: the match ends with your defeat.',
@@ -449,8 +449,8 @@ export const en = {
   'help.title': 'Help',
   'help.close': 'Close the help',
   'help.legend': 'On the map',
-  'help.legend.mineHelmet': 'Your group: a blue helmet facing right, with a brim',
-  'help.legend.enemyHelmet': 'Enemy group: a red helmet facing left, cut at the ear',
+  'help.legend.mineHelmet': 'Your group: a helmet in your colour facing right, with a brim',
+  'help.legend.enemyHelmet': 'Enemy group: a helmet in the enemy's colour facing left, cut at the ear',
   'help.legend.chargeHelmet': 'Fill from the bottom: how many units are charged',
   'help.legend.order': 'Thin arrow: an ordinary order',
   'help.legend.planned':
@@ -484,7 +484,7 @@ export const en = {
   'howto.fight.bounce':
     'An attack that does not win the place turns back, discharged. Equal charges mean a bounce.',
   'howto.fight.legend':
-    'Blue attacks, red defends. Filled: charged. Empty: no charge. Dashed: fallen. A green chevron is a bonus shot.',
+    'The attacker is on the left, the defender on the right. Filled: charged. Empty: no charge. Dashed: fallen. A green chevron is a bonus shot.',
   'howto.col.attack': 'You attack',
   'howto.col.defense': 'They defend',
   'howto.ex.equal.title': 'Equal charges',

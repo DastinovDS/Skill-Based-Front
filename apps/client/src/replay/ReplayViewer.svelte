@@ -129,10 +129,10 @@
 
 <main
   class="viewer"
-  class:player-sides={file.colours !== undefined}
+  class:player-sides={true}
   style:--bar-h="{barHeight}px"
-  style:--own={file.colours === undefined ? undefined : colourVar(file.colours[blue])}
-  style:--enemy={file.colours === undefined ? undefined : colourVar(file.colours[red])}
+  style:--own={colourVar(file.colours?.[blue] ?? 'lapis')}
+  style:--enemy={colourVar(file.colours?.[red] ?? 'minium')}
 >
   <GameCanvas
     bind:this={canvas}

@@ -371,6 +371,7 @@
     {hud}
     {orders}
     {chrome}
+    colour={colours?.[DEV_PLAYER] ?? null}
     onreload={() => undefined}
     oninsets={(next: Insets) => {
       insets = next;
