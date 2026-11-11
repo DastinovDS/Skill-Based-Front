@@ -334,7 +334,7 @@ const virtualLeft = (rounds: readonly DevRound[], count: number): [number, numbe
 };
 
 /** The fights of the demo going on at `tick`, as the view of a player lists them. */
-export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['fights'] {
+function devFights(map: MapFile, tick: number): SnapshotMsg['view']['fights'] {
   const phase = tick % FIGHT_CYCLE;
   if (phase < FIGHT_START || phase >= FIGHT_END) return [];
   const cycle = Math.floor(tick / FIGHT_CYCLE);

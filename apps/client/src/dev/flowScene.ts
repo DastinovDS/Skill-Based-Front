@@ -20,7 +20,7 @@ import type {
 } from '../protocol.gen.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 
-export const FLOW_TICK = ARTERY_TICK;
+const FLOW_TICK = ARTERY_TICK;
 export const FLOW_VIEW = ARTERY_VIEW;
 
 const T = FLOW_TICK;

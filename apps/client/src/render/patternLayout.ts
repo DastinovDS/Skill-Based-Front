@@ -19,7 +19,7 @@ export interface PatternMarks {
 }
 
 export const DOT_STEP = 12;
-export const FIR_STEP = 16;
+const FIR_STEP = 16;
 export const HATCH_STEP = 9;
 /** A dot keeps this far from the edge of its cell, a fir this far (the chevron is wider). */
 export const DOT_MARGIN = 3;

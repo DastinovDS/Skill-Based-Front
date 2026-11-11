@@ -40,7 +40,7 @@ export interface SceneNode extends Point {
   readonly world: Point;
 }
 
-export interface SceneEdge {
+interface SceneEdge {
   readonly a: SceneNode;
   readonly b: SceneNode;
   /** Both ends are the viewer's: an own road (the rest are buffer roads, or dotted in the fog). */

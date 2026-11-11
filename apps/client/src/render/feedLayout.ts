@@ -27,7 +27,7 @@ export interface FeedSpot {
 }
 
 /** The size of the block of two rows (px, from its middle). */
-export const FEED_BLOCK = {
+const FEED_BLOCK = {
   halfWidth: FEED.halfWidth,
   halfHeight: FEED.rowHeight + FEED.rowGap / 2,
 } as const;

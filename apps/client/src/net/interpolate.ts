@@ -97,7 +97,7 @@ export function packetProgress(packet: PacketView, tick: number): number {
  * gone (arrived, or went into the fog) or whose `id` changed stays where it was in `a` and the
  * line is not drawn through the gap. No extrapolation either.
  */
-export function interpolateEnemy(
+function interpolateEnemy(
   a: RenderEnemy,
   next: ReadonlyMap<string, RenderEnemy>,
   alpha: number,

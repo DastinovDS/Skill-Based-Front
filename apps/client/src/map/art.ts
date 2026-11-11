@@ -75,7 +75,7 @@ export async function loadMatchMap(
 }
 
 /** The id prefix the server reserves for the maps it makes for one match (#884). */
-export const MATCH_MAP_PREFIX = 'live-';
+const MATCH_MAP_PREFIX = 'live-';
 
 export function isMatchMap(mapId: string): boolean {
   return mapId.startsWith(MATCH_MAP_PREFIX);

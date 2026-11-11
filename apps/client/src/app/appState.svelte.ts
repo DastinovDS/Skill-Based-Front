@@ -78,8 +78,6 @@ export interface AppStateOptions {
   botTimeoutMs?: number;
 }
 
-export { apiErrorKey };
-
 export class AppState {
   screen = $state.raw<Screen>({ name: 'boot' });
   guest = $state.raw<Guest | null>(null);

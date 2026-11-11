@@ -119,18 +119,6 @@ export const ENGRAVED = {
   down: 0xec6654,
 } as const;
 
-/**
- * The owner hatch (ui-style 52 III, 53): own lines are horizontal, the enemy's at 45 degrees
- * (top left to bottom right on screen), so the owner reads without colour. Pitch and width in CSS
- * px at 100 % zoom; a fine inner hatch keeps a pitch of at least `minPitch` (ui-style 53, "Line
- * weights under zoom"). CSS `--hatch-own`, `--hatch-enemy`.
- */
-export const HATCH = {
-  own: { angle: 0, pitch: 3, width: 1 },
-  enemy: { angle: 45, pitch: 3.4, width: 1.2 },
-  minPitch: 3,
-} as const;
-
 /** Line weights in CSS px (ui-style 53 to 55): a stroke is never thinner than one device pixel. */
 export const LINE = {
   /** An ink hairline. CSS `--line-hair`. */
@@ -150,9 +138,8 @@ export const RADIUS = 0;
 /**
  * Durations in milliseconds of the decided rounds. CSS `--t-<name>` (kebab case of the key).
  * `cp*`: the CP gauge (ui-style 57a); `reveal*`: the Burin reveal of the hover cards (ui-style 57r,
- * slowed to about 550 ms by the owner); `captureWalk`: Walk in (54j); `buildRun` and `buildDone`:
- * the build of a city's icon (57k, 73); `planStep`: one asked bonus of a scheduled order easing full
- * (53e); `intro`: the opening scene (56).
+ * slowed to about 550 ms by the owner); `captureWalk`: Walk in (54j); `buildRun`:
+ * the build of a city's icon (57k, 73).
  */
 export const DURATION = {
   cpSpend: 700,
@@ -168,9 +155,6 @@ export const DURATION = {
   revealReduced: 100,
   captureWalk: 600,
   buildRun: 350,
-  buildDone: 500,
-  planStep: 900,
-  intro: 7000,
 } as const;
 
 /** Cubic Bézier easing curves (the CSS `cubic-bezier()` arguments). CSS `--ease-<name>`. */

@@ -16,15 +16,12 @@ import type {
 } from '../protocol.gen.ts';
 import { PLAYER_COLOURS } from '../theme/tokens.ts';
 
-/** The frames format the server writes now (2, #905: the buildings and the header `rules`). */
-export const REPLAY_FORMAT = 2;
-
 /**
  * The formats this viewer reads. A format 1 file has no buildings unless it was written between
  * the two parts of #905 (then it has the keys `c` and `d`, and they are drawn); a file with any
  * other `format` is refused.
  */
-export const READABLE_FORMATS: readonly number[] = [1, 2];
+const READABLE_FORMATS: readonly number[] = [1, 2];
 
 /** Why a file cannot be shown. `format`: a version this viewer does not know; `invalid`: not a replay. */
 export class ReplayError extends Error {
@@ -35,24 +32,24 @@ export class ReplayError extends Error {
 }
 
 /** `[cp, vp, stance, forfeited]` of one player; CP in hundredths. */
-export type FramePlayer = [number, number, Stance, number];
+type FramePlayer = [number, number, Stance, number];
 /**
  * `[owner, warehouse, capacity]` of one node, plus the places of its warehouse (`null` in a province):
  * the fourth element is missing in files from before #556, which then show the node capacity.
  */
-export type FrameNode =
+type FrameNode =
   [PlayerId | null, number, number] | [PlayerId | null, number, number, number | null];
 /** `[id, owner, edge, from_node, charges, depart_tick, arrive_tick]`. */
-export type FramePacket = [number, PlayerId, number, number, number, number, number];
+type FramePacket = [number, PlayerId, number, number, number, number, number];
 /** `[id, owner, kind, origin, target]`. */
-export type FrameIntent = [number, PlayerId, string, number, number | null];
+type FrameIntent = [number, PlayerId, string, number, number | null];
 /** `[node, edge, done_tick]`: a road build of a city, only in files from before DEC-28 (DEC-16). */
-export type FrameBuild = [number, number, number];
+type FrameBuild = [number, number, number];
 /** `[edge, owner, done_tick]`: a road build on an edge (DEC-28, item 7). */
-export type FrameEdgeBuild = [number, PlayerId, number];
+type FrameEdgeBuild = [number, PlayerId, number];
 
 /** `[done_tick, owed]` of a build (`done_tick` `null` while `owed` is above 0, DEC-41, item 7). */
-export type FrameBuildSite = [number | null, number];
+type FrameBuildSite = [number | null, number];
 
 /**
  * The buildings of a city (#905): `[node, factory, factory_build, barracks, build, recruit, rally]`,
@@ -70,13 +67,13 @@ export type FrameCity = [
 ];
 
 /** A road fortification `[edge, node, built, ready]` (#905): of the owner of `node`. */
-export type FrameFort = [number, number, number, number];
+type FrameFort = [number, number, number, number];
 
 /** An enemy city a side saw (#905, DEC-31): `[node, factory, barracks]`, 0/1 each. */
 export type FrameSeenCity = [number, number, number];
 
 /** An enemy fortification a side saw (#905, DEC-43, item D8): `[edge, node, built]`. */
-export type FrameSeenFort = [number, number, number];
+type FrameSeenFort = [number, number, number];
 
 export interface FrameGroup {
   id: number;
@@ -129,7 +126,7 @@ export interface ReplayFrame {
 }
 
 /** `low..high` of the enemy units; `high` `null`: open (`UnitsRange`). */
-export type FrameRange = [number, number | null];
+type FrameRange = [number, number | null];
 
 /**
  * A sighting `[level, modes, units, charged, range, tick]` (`Seen`), trailing `null`s left out;
@@ -145,7 +142,7 @@ export type FrameSighting = [
 ];
 
 /** `[detail, seen, warehouse]` of a node as the player saw it (`NodeView`), trailing `null`s left out. */
-export type FrameVisionNode = [Detail, (FrameSighting | null)?, (number | null)?];
+type FrameVisionNode = [Detail, (FrameSighting | null)?, (number | null)?];
 
 /** `[detail, seen]` of a half of an edge (`HalfView`). */
 export type FrameHalf = [Detail, (FrameSighting | null)?];
@@ -166,7 +163,7 @@ export type FrameFigure = [
 ];
 
 /** `[width, detail, half_a, half_b, figures]` of an edge as the player saw it (`EdgeView`). */
-export type FrameVisionEdge = [number, Detail, FrameHalf, FrameHalf, FrameFigure[]?];
+type FrameVisionEdge = [number, Detail, FrameHalf, FrameHalf, FrameFigure[]?];
 
 /** The fog part of one player's `PlayerView` at the frame's tick (#598). */
 export interface FrameVision {
@@ -181,14 +178,14 @@ export interface FrameVision {
 }
 
 /** A pair `[player 0, player 1]`. */
-export type PlayerPair = [number, number];
+type PlayerPair = [number, number];
 
 /**
  * The round data of a fight (#323), the ninth element of its record: `shots` and `losses` (the
  * totals of the fight so far), `virtual_left` (the bonus shots left, DEC-32) and `last_round`:
  * `null` before the first round, else `[tick, shots, virtual, spent, losses]`.
  */
-export type FrameFightRounds = [
+type FrameFightRounds = [
   PlayerPair,
   PlayerPair,
   PlayerPair,
@@ -201,7 +198,7 @@ export type FrameFightRounds = [
  * nine elements has the round data (#323) at the end; one of eight is from an older file (the
  * arena stays empty).
  */
-export type FrameFight =
+type FrameFight =
   | [number, number | null, number | null, number | null, PlayerId | null, number, number, number[]]
   | [
       number,
@@ -216,14 +213,14 @@ export type FrameFight =
     ];
 
 /** `[tick, kind, data]`; `data` is the flat object of the simulation event. */
-export type FileEvent = [number, string, Record<string, boolean | number | string | null>];
+type FileEvent = [number, string, Record<string, boolean | number | string | null>];
 
 /**
  * The rule numbers the viewer draws the buildings with (header `rules`, #905): ticks and prices of
  * the builds and the recruit queue, as the match played them. Files before it have none: the time
  * bars are then left out.
  */
-export interface ReplayRules {
+interface ReplayRules {
   unit_ticks: number;
   queue_max: number;
   barracks_ticks: number;
@@ -421,7 +418,7 @@ const isColour = (v: unknown): v is PlayerColour =>
   typeof v === 'string' && Object.hasOwn(PLAYER_COLOURS, v);
 
 /** The colours of the header (DEC-49): both known colours by player id, else none. */
-export function readColours(raw: unknown): [PlayerColour, PlayerColour] | null {
+function readColours(raw: unknown): [PlayerColour, PlayerColour] | null {
   const [first, second]: unknown[] = Array.isArray(raw)
     ? (raw as unknown[])
     : isObj(raw)

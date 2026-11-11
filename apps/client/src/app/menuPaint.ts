@@ -74,7 +74,7 @@ export function readColours(element: Element): MapColours {
  * The lanes of a road (#839, the match's at level 1): light lanes on a band or dashed on a casing,
  * softened as the match's (`SOFT.line`, #865).
  */
-export const ROAD_LOOK = {
+const ROAD_LOOK = {
   own: {
     casing: 3.6,
     casingAlpha: 0.62 * SOFT.line,
@@ -105,10 +105,10 @@ export const ROAD_LOOK = {
   },
 } as const;
 
-export type RoadKind = keyof typeof ROAD_LOOK;
+type RoadKind = keyof typeof ROAD_LOOK;
 
 /** How a road between `a` and `b` is drawn with `owners`: own, the opponent's, a buffer, in the fog. */
-export function roadKind(a: SceneNode, b: SceneNode, owners: Owners, scene: Scene): RoadKind {
+function roadKind(a: SceneNode, b: SceneNode, owners: Owners, scene: Scene): RoadKind {
   const hidden = scene.fog && a.x > scene.fadeStart && b.x > scene.fadeStart;
   const oa = owners[a.id] ?? null;
   const ob = owners[b.id] ?? null;

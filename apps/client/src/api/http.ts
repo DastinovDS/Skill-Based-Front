@@ -22,7 +22,7 @@ export type MapSummary = Schemas['MapSummary'];
 export const NEW_MAP = '?new';
 export const RANDOM_POOL = '?pool';
 export const RANDOM_GENERATED = '?generated';
-export type MapSource = NonNullable<Schemas['CreateMatch']['map_source']>;
+type MapSource = NonNullable<Schemas['CreateMatch']['map_source']>;
 
 const SOURCES: Readonly<Record<string, MapSource>> = {
   [NEW_MAP]: 'new',
@@ -36,10 +36,8 @@ function mapChoice(pick: string): { map_id?: string; map_source?: MapSource } {
   return source === undefined ? { map_id: pick } : { map_source: source };
 }
 export type Leaderboard = Schemas['Leaderboard'];
-export type LeaderboardEntry = Schemas['LeaderboardEntry'];
 export type PlayerProfile = Schemas['PlayerProfile'];
 export type MatchEntry = Schemas['MatchEntry'];
-export type MatchKind = Schemas['MatchKind'];
 export type ReplayLinkState = Schemas['ReplayLinkState'];
 export type RecordTally = Schemas['Record'];
 export type BotLevel = Schemas['CreateBotMatch']['level'];

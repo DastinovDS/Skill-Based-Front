@@ -254,11 +254,6 @@ export function helmetExtent(h: Helmet): {
   };
 }
 
-/** `points` mirrored about the vertical axis through the origin (a helmet that faces left). */
-export function mirrored(points: readonly Point[], facing: 1 | -1): Point[] {
-  return facing === 1 ? [...points] : points.map((p) => ({ x: -p.x, y: p.y }));
-}
-
 // --- Geometry helpers -------------------------------------------------------------------------------
 
 /** Even-odd test: is `p` inside the closed outline? */

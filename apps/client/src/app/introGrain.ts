@@ -14,7 +14,7 @@ const PAD = 6;
 const SOFT = 0.16;
 
 /** A small deterministic random (mulberry32): the grain is the same on every load. */
-export function rng(seed: number): () => number {
+function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -26,13 +26,7 @@ export function rng(seed: number): () => number {
 }
 
 /** A smooth fractal noise of `w` x `h` cells of 1 px, tiling in x, normalised to 0..1. */
-export function fbm(
-  w: number,
-  h: number,
-  cell: number,
-  octaves: number,
-  seed: number,
-): Float32Array {
+function fbm(w: number, h: number, cell: number, octaves: number, seed: number): Float32Array {
   const out = new Float32Array(w * h);
   let amp = 1;
   let size = cell;
@@ -75,7 +69,7 @@ export function fbm(
 }
 
 /** One letter of the title: its character and its box, in CSS px from the title's top left. */
-export interface Glyph {
+interface Glyph {
   readonly char: string;
   readonly left: number;
   readonly top: number;
@@ -86,7 +80,7 @@ export interface Glyph {
  * The letters of the title as laid out (spaces skipped), measured with a range per character, so
  * the title keeps its own markup and kerning. `title` must not be transformed while measured.
  */
-export function measureGlyphs(title: HTMLElement): Glyph[] {
+function measureGlyphs(title: HTMLElement): Glyph[] {
   const box = title.getBoundingClientRect();
   const glyphs: Glyph[] = [];
   const walker = document.createTreeWalker(title, NodeFilter.SHOW_TEXT);

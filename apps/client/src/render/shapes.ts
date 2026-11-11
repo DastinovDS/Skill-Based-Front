@@ -184,7 +184,7 @@ function specKey(spec: TokenSpec): string {
 }
 
 /** The helmet a token of `owner` shows: the viewer's faces right, the opponent's left. */
-export function helmetKind(me: PlayerId, owner: PlayerId): HelmetKind {
+function helmetKind(me: PlayerId, owner: PlayerId): HelmetKind {
   return owner === me ? 'own' : 'enemy';
 }
 

@@ -17,7 +17,7 @@ const lozenge = (x: number, y: number, r: number): string =>
   `L${x.toFixed(2)} ${(y + r).toFixed(2)}L${(x - r).toFixed(2)} ${y.toFixed(2)}Z`;
 
 /** Half the width of one mark at `scale` (its casing's half diagonal). */
-export const markHalf = (scale = 1): number => (LOZENGE.casing / Math.SQRT2) * scale;
+const markHalf = (scale = 1): number => (LOZENGE.casing / Math.SQRT2) * scale;
 
 /**
  * `count` marks in a row centred on (`cx`, `cy`), set in threes past four, `filled` of them

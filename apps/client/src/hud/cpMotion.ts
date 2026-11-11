@@ -19,7 +19,7 @@ export interface CpChange {
 }
 
 /** How long a change eases in: a spend retracts the bar, an income sets it solid (ms). */
-export const changeMs = (change: CpChange): number =>
+const changeMs = (change: CpChange): number =>
   change.delta < 0 ? DURATION.cpSpend : DURATION.cpIncome;
 
 /** How long a change stays on the list: the spent sliver outlasts the retracting bar. */

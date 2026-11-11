@@ -248,7 +248,7 @@ export const RASTER_ICONS = {
   barracks: barracksPng,
 } as const satisfies Record<string, string>;
 
-export type RasterIconName = keyof typeof RASTER_ICONS;
+type RasterIconName = keyof typeof RASTER_ICONS;
 
 export type MenuIconName = keyof typeof MENU_ICONS | RasterIconName;
 

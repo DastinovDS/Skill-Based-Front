@@ -50,7 +50,7 @@ import {
 // One weight system round the capacity ring `R`: a 1 px ink line on a 2.6 px casing at R + 5, 8, 11.
 
 /** Selected: two ink rings over a dark band, four lozenges on the outer one. */
-export function drawSelectRings(g: Graphics, at: Point, R: number): void {
+function drawSelectRings(g: Graphics, at: Point, R: number): void {
   const F = FINE_RING;
   const r1 = R + F.r1;
   const r2 = R + F.r2;
@@ -77,7 +77,7 @@ export function drawSelectRings(g: Graphics, at: Point, R: number): void {
 }
 
 /** A reachable target: a ring of ink ticks, every fourth longer. */
-export function drawTargetTicks(g: Graphics, at: Point, R: number): void {
+function drawTargetTicks(g: Graphics, at: Point, R: number): void {
   const T = FINE_RING.target;
   const r1 = R + FINE_RING.r1;
   const ticks = (pass: 'casing' | 'ink'): void => {
@@ -101,7 +101,7 @@ export function drawTargetTicks(g: Graphics, at: Point, R: number): void {
 }
 
 /** A target the group reaches only after a split (DEC-20): a dashed amber ring on a casing. */
-export function drawSplitRing(g: Graphics, at: Point, R: number): void {
+function drawSplitRing(g: Graphics, at: Point, R: number): void {
   const S = FINE_RING.split;
   const r = R + FINE_RING.r1 + 1;
   const n = Math.max(8, Math.round((2 * Math.PI * r) / (S.dash + S.gap)));

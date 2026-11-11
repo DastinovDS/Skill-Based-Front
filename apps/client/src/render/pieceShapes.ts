@@ -38,7 +38,7 @@ function lozengePath(g: Graphics, x: number, y: number, side: number): Graphics 
  * with an ink square (`on` false: room, owed); `alpha` dims a place that is not there yet. `k`
  * scales the mark.
  */
-export function drawLozenge(
+function drawLozenge(
   g: Graphics,
   tools: BakeTools,
   at: Point,

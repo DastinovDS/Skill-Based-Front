@@ -11,7 +11,7 @@ export function vpShare(mine: number, enemy: number): number {
 }
 
 /** The way to one quantum of a stance (DEC-44). */
-export interface QuantumProgress {
+interface QuantumProgress {
   /** How much of the period has passed, 0..1. */
   readonly share: number;
   /** Whole seconds until the quantum, rounded up. */

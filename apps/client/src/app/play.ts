@@ -149,7 +149,7 @@ export function pickedTile(pick: string, tiles: readonly PickerTile[]): string {
  * `joined`: both seats are taken, Ready is the main thing; `starting`: both are ready, the match
  * starts once the map is there.
  */
-export type InviteStage = 'loading' | 'link' | 'waiting' | 'joined' | 'starting';
+type InviteStage = 'loading' | 'link' | 'waiting' | 'joined' | 'starting';
 
 export interface InviteView {
   readonly stage: InviteStage;
@@ -194,7 +194,7 @@ export function inviteView(invite: Invite | null, nick: string): InviteView {
 export const NEW_HERE_ENABLED = false;
 
 /** The browser remembers "Don't show this again" under this key. */
-export const NEW_HERE_KEY = 'sbf.newHereOff';
+const NEW_HERE_KEY = 'sbf.newHereOff';
 
 /** The dialog shows once, right after a nick was entered, unless it was turned off for good. */
 export function showNewHere(o: {

@@ -2,7 +2,7 @@
  * The last place of the pointer on the page, for a menu that opens under it. One listener for the
  * whole page, installed on first use; the menus read it once when they open.
  */
-export interface PointerAt {
+interface PointerAt {
   readonly x: number;
   readonly y: number;
   /** A pointer event was seen at all; before that the menus open in the middle of the window. */

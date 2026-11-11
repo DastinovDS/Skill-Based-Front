@@ -14,7 +14,7 @@ import { BOARD_SCENE_IDS } from './boardScenes.ts';
  * that needs a click to reach its state (a start that waits or fails, a link being made) is
  * clicked by `visual/shots.spec.ts`; the table `DOCK_CLICKS` of `visual/scenes.ts` says which.
  */
-export const PLAY_SCENE_IDS = [
+const PLAY_SCENE_IDS = [
   'menu-guest',
   'menu-account',
   'menu-resume',

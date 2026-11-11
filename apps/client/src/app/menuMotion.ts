@@ -859,7 +859,7 @@ function glance(c: CanvasRenderingContext2D, k: Palette, a: Point, b: Point, u: 
  * opponent's pieces fade into the fog like everything of theirs; its capture is half as strong
  * (`calm`, as the match draws an enemy capture).
  */
-export function drawCaptures(
+function drawCaptures(
   c: CanvasRenderingContext2D,
   k: Palette,
   scene: Scene,
@@ -1003,7 +1003,7 @@ export function sightOf(scene: Scene, story: Story, clock: MotionClock): Sight |
  * The motion under fog (#945): the entry screen's fights and captures are a quiet background, so what
  * is drawn so far is veiled in the dark of the match's fog (only the drawn pixels: `source-atop`).
  */
-export const ENTRY_FOG = 0.42;
+const ENTRY_FOG = 0.42;
 
 export function veilInFog(c: CanvasRenderingContext2D, k: Palette, scene: Scene): void {
   c.save();

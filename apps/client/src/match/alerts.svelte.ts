@@ -11,8 +11,6 @@ import type { PlayerId, RulesetPublic, SnapshotMsg } from '../protocol.gen.ts';
 import { incomingAlerts, type IncomingAlert } from './incoming.ts';
 import { overflowAlerts, type OverflowAlert } from './overflow.ts';
 
-export type Alert = IncomingAlert | OverflowAlert;
-
 /** A recruit that stayed home for want of the CP of its walk (`rally_walk_no_cp`, #930). */
 export interface StayAlert {
   /** Order of arrival: keys the strip. */

@@ -18,7 +18,7 @@ import { WALK } from '../render/walkLayout.ts';
 import { DURATION, easeTravel } from '../theme/tokens.ts';
 
 /** `by` takes `node`; its group walks in from the neighbour `from`, which `by` holds then. */
-export interface Capture {
+interface Capture {
   readonly node: number;
   readonly from: number;
   readonly by: 0 | 1;
@@ -56,7 +56,7 @@ const FIGHT_START = CAPTURE_TIMES.approach;
 export const LAST_SHOT = FIGHT_START + CAPTURE_TIMES.round + CAPTURE_TIMES.shot[1];
 /** The winner leaves the gate. */
 export const WALK_START = LAST_SHOT + WALK.after;
-export const WALK_LENGTH = DURATION.captureWalk / 1000;
+const WALK_LENGTH = DURATION.captureWalk / 1000;
 /** The flood starts and the node changes hands (the winner crosses the ring). */
 export const FLIP = WALK_START + WALK.cross * WALK_LENGTH;
 /** The whole capture, from setting out to the last trace of it. */

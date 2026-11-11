@@ -11,7 +11,7 @@ import { CAPITAL_RADIUS, NODE_RADIUS } from './style.ts';
 export const NODE_HIT_SLACK = 8;
 
 /** A road is hit this close to its centre line (world units). */
-export const EDGE_HIT = 9;
+const EDGE_HIT = 9;
 
 /** Distance from `p` to the segment `a`-`b`. */
 export function segmentDistance(p: Point, a: Point, b: Point): number {
@@ -44,10 +44,10 @@ export interface PickScene {
 }
 
 /** The ghost of a fortification is hit this close to its line, in screen px. */
-export const FORT_HIT_PX = 16;
+const FORT_HIT_PX = 16;
 
 /** The road of the pick whose ghost is nearest to `world`, within `FORT_HIT_PX` of the screen. */
-export function fortAt(forts: PickScene['forts'], world: Point, scale: number): number | null {
+function fortAt(forts: PickScene['forts'], world: Point, scale: number): number | null {
   let best: number | null = null;
   let bestDistance = FORT_HIT_PX / Math.max(scale, 0.01);
   for (const fort of forts ?? []) {

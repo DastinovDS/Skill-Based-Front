@@ -11,7 +11,7 @@ import type { AnyIconName } from './icons.ts';
 import type { NodeNamer } from './nodeName.ts';
 
 /** The colour of the left edge: own, the opponent, a warning, neutral (the icon says it as well). */
-export type ToastTone = 'mine' | 'enemy' | 'warn' | 'neutral';
+type ToastTone = 'mine' | 'enemy' | 'warn' | 'neutral';
 
 export interface ToastBody {
   readonly tone: ToastTone;

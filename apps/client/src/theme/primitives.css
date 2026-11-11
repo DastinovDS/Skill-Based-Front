@@ -46,17 +46,6 @@
       calc(100% - 52px) no-repeat;
 }
 
-/* A doubled rule between rows and under a section label: the cut, its lip, a faint rule 4 px down. */
-.rule-double {
-  height: 5px;
-  border: 0;
-  margin: 0;
-  background:
-    linear-gradient(var(--cut), var(--cut)) 0 0 / 100% 1px no-repeat,
-    linear-gradient(var(--line), var(--line)) 0 1px / 100% 1px no-repeat,
-    linear-gradient(var(--lit-faint), var(--lit-faint)) 0 4px / 100% 1px no-repeat;
-}
-
 /* ---- Stone ----------------------------------------------------------------------------------- */
 
 /* A panel of cut stone: the texture over the panel colour. */
