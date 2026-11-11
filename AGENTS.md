@@ -52,6 +52,8 @@ rulesets/                          rulesets: mvp-7 (main), mvp-5, mvp-6, test-sh
 docs/design/                       mechanics.md, map format, archive
 docs/adr/  docs/balance/  docs/qa/ decisions, balance reports, checklists
 deploy/                            Dockerfiles, Caddyfile, deployment scripts (compose.yaml is in the root)
+scripts/                           helpers of the mise tasks and CI (shards, golden freeze, schema and API export, shots, tournaments)
+tests/                             pytest of `scripts/` and of the tooling
 ```
 
 **Boundaries** (checked by `lint-imports` and the ruff rule TID251):
@@ -86,7 +88,7 @@ List the tasks with `mise tasks`; a task's arguments with `mise run <task> --hel
 
 A new or changed project command is edited in `mise.toml` and in this table in the same PR. If a task from the table
 does not work, that is a bug: fix it. CI installs the tools with `jdx/mise-action` and calls the same tasks (`check:py`, `check:shards`, `test:py`
-(in shards by path), `test:perf`, `golden:check HEAD^1`, `check:client`, `test:client`, `build`, `regen:protocol`, `regen:api`, `test:visual` (in shards), `e2e:up`),
+(in shards by path), `test:perf`, `test:slow`, `golden:check HEAD^1`, `check:client`, `test:client`, `build`, `regen:protocol`, `regen:api`, `test:visual` (in shards), `check:e2e`, `e2e:up`),
 so a task that passes locally is what CI runs; the tasks `check`, `test`, `test:perf`, `golden:check` repeat what the
 Python jobs (the required check `py`) and the job `web` run. A tool version is edited only in `mise.toml`, never in `.github/workflows/ci.yml`; the one exception is the tag of the Playwright image the job `visual` runs in (`mcr.microsoft.com/playwright:v<version>-noble`, so no `apt` on the runner, #962): it must equal the Playwright version of the lockfiles, and `check:client` fails when it does not.
 
@@ -158,7 +160,7 @@ Python jobs (the required check `py`) and the job `web` run. A tool version is e
 | `maps:mirror` | build `maps/<name>.json` from the half `maps/src/<name>.half.json` (argument: name) | MAP-03 |
 | `maps:preview` | draw the preview `maps/<name>.preview.png` over the map's baked background, so after `maps:bake` (the pool, the menu map `maps/menu/` and the generated maps `maps/gen/`) | MAP-04, #474, #771, #839 |
 | `maps:bake` | bake the background `maps/<name>.bg.webp` and its thumbnail `<name>.thumb.webp` for the map cards (#839) (the pool, the fixtures `maps/fixtures/`, the menu map `maps/menu/` and the generated maps `maps/gen/`): numpy and Pillow, the Intaglio look (#842), WebP up to 0.5 MB; a map with an authored geography `maps/src/<name>.geo.json` also gets water and `maps/geo/<name>.json` (DEC-36) (after any map edit) | MAP-05, #344, #474, #537, #842 |
-| `tournament` | bot tournament (by default all maps and bots, 100 seeds, 8 processes, `mvp-7`; anything else after `--`, for example `-- --seeds 20`) | BOT-04 |
+| `tournament` | bot tournament (by default the pool maps `maps/*.json` and all bots, 100 seeds, 8 processes, `mvp-7`; anything else after `--`, for example `-- --seeds 20`) | BOT-04 |
 | `tournament:gh` | **for agents:** the tournament on GitHub runners (`.github/workflows/tournament.yml`, manual dispatch): the (map, seed) cells are sharded over parallel jobs, balanced by map size (`scripts/tournament_shards.py plan`, #786: up to `--shards` and at most maps x seeds jobs; bot pairs are not split), the shards are merged (`scripts/tournament_shards.py merge`) into a file byte-identical to a local run, `gow-bots report` runs on it; the task dispatches, waits with one `gh run watch`, downloads `tournament.jsonl` and `report.md` into `--dir` (`.tournament/`). Options `--ref --ruleset --bots --maps --seeds --shards --label --dir --replays` (`mise run tournament:gh --help`; `--replays true` also downloads the replay of every match, #965). **Agents run tournaments only through it**; a local `tournament` of at most 3 seeds only when GitHub is unavailable (section 8, `docs/balance/README.md`). Needs bash and an authenticated `gh` | #582, #786, #965 |
 | `search` | parameter search of one bot by tournament (`gow-bots search`, a hill climb over its `PARAMS` ranges, standard library): the pool maps, 8 processes, `mvp-7`; `--bot`, `--against`, `--keys` and the rest after `--` (`docs/balance/README.md`). Few seeds: confirm the result with `tournament` | #166 |
 | `report` | balance report (argument: file, `docs/balance/latest.jsonl` by default) | BOT-05 |
@@ -382,7 +384,7 @@ async def run(self) -> None:
 
 ### 7.1 There is no game logic in the client
 
-- The client draws snapshots and sends intents. It does not decide who wins a fight, whether a packet arrived, or whether the capacity is enough. The path and the arrival tick of an order come in the `ack`, the reachable nodes and the travel time to them in the `reach` response to `reach_query` (DEC-20), with the size that fits each node behind the stack limit (#762), the suggested path of a supply line in the `line_route` response to `line_route_query` (#665): the client does not compute them.
+- The client draws snapshots and sends intents. It does not decide who wins a fight, whether a packet arrived, or whether the capacity is enough. The path and the arrival tick of an order come in the `ack`, the reachable nodes and the travel time to them in the `reach` response to `reach_query` (DEC-20), with the size that fits each node behind the stack limit (#762): the client does not compute them.
 - No exceptions: the client computes neither the outcome of a fight nor an "estimate" of a fight. The fight estimate in the HUD was removed by the owner (#252); the test vectors `packages/protocol/vectors/combat.json` remain only for the simulation (SIM-09).
 
 ### 7.2 PixiJS and Svelte
@@ -390,7 +392,7 @@ async def run(self) -> None:
 - PixiJS draws only the map in a single `<canvas>`; **the entire interface is HTML/CSS in Svelte** on top. Do not draw buttons and windows in PixiJS.
 - PixiJS objects live **outside Svelte reactivity**. The snapshot buffer and interpolation are plain TypeScript.
 - The HUD is a class in `.svelte.ts` with a field `current = $state.raw(...)` that is replaced once per snapshot (10 Hz), not every frame. Exporting a reassignable `$state` directly from a module is not possible: Svelte does not compile it.
-- Container layers: background → territory → roads → forts → nodes → fog → groups → intents → effects → tolls (→ supply) (the groups and the intents are drawn over the fog veil: an own group on a road into the fog must not be dimmed, #419).
+- Container layers (`apps/client/src/render/layers.ts`): background → territory → roads → forts → nodes → fog → groups → intents → badges → effects → tolls (the groups and the intents are drawn over the fog veil: an own group on a road into the fog must not be dimmed, #419).
 - Destroy everything you create: `obj.destroy({ children: true })`, created textures, `app.destroy()` on unmount. An asynchronous `app.init()` can finish after unmount: check a flag.
 - Map objects with a gradient, a shadow or a rim (cities, group helmets, badges, arena plate and chips) are baked sprites from `SpriteCache` (`apps/client/src/render/bake.ts`, what is baked: `bakedShapes.ts`): one texture per look (a bounded key), never a filter on every object; the cache lives as long as the `Application` (`createSceneSprites`), a view only lets go of its sprites. A blur is allowed only on one cached layer (`cacheAsTexture`), redrawn when its input changes (the fog veil, the territory glow).
 - CSP: the target policy lives in `apps/client/csp.ts` (Caddy generates the header from it when the image is built, `deploy/caddy.Dockerfile`). `import 'pixi.js/unsafe-eval'` instead of allowing `unsafe-eval`; textures are loaded without workers (`Assets.setPreferences({ preferWorkers: false })`, `worker-src 'none'`); `style-src 'self'` without `unsafe-inline`, so Svelte markup has no static `style="..."` attributes (styles from JS through the CSSOM and `style:` directives are allowed).
@@ -425,7 +427,7 @@ Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). I
 - A tournament plays each match in a worker process (reused from match to match, no module state survives a match, #787), both sides for each pair; the JSONL result is reproducible.
 - Under `[stances]` (DEC-44) the smart bots change the stance by a policy (`gow_bots.bots.stance`, #881: the stance of the match phase by personality, a step toward Economy while CP burn or units wait for charges, toward War while the warehouses are full, at most one change per `stance_dwell` ticks; the numbers are `PARAMS`, tuned by #689); the plain bots stay in the start stance, Balance (`Bot.allowed`).
 - Under `combat.retreat = "none"` (DEC-40) the smart bots count, before an attack, the reinforcements the defender can bring while the fight lasts and the enemy figures met on the road in (`CampaignBot.support`, `meets`, #881); under `"round"` the estimate is unchanged.
-- Under `combat.retreat = "none"` (DEC-40, `mvp-6`) the bots send no withdrawal from a fight (`Bot.fight_commands`); they still reinforce.
+- Under `combat.retreat = "none"` (DEC-40: `mvp-6`, `mvp-7`, `test-short`) the bots send no withdrawal from a fight (`Bot.fight_commands`); they still reinforce.
 - Agents' tournaments run only on `mvp-7`, the played ruleset of `stack` and `compose.yaml` (owner decision 2026-11-09, #885: `mvp-6` with map tempo, DEC-46, and every factory following the stance of its owner, DEC-47, #888). `mvp-6` (played on 2026-11-09 only, #626, #759) is `mvp-5` with a capture that costs a charge (DEC-38), built factories twice as fast (DEC-41, item 2) and no retreat from a fight (DEC-40); `mvp-5` (played from 2026-11-07, #805) is economy v2 with the automatic supply flow (DEC-43), the stances of DEC-44 and the terrain burn of DEC-45. `mvp-5` and `mvp-6` stay as historical and test rulesets (unit tests, golden replays), we do not run tournaments on them; `mvp-0` to `mvp-4` were removed with their code (owner decision 2026-11-09, #894), their files stay only in `rulesets/archive/`. After a rules change no tournament gates the merge: the required CI is the gate (golden replays, determinism and property tests, `py-slow` catch crashes). While the owner is still iterating the mechanics through playtests, tournaments are skipped. Once the owner declares the mechanics settled: one batched smoke `mise run tournament:gh --seeds 3` (crashes and gross imbalance), then the field run of 16 bots x 20 seeds (`tournament:gh`) for the ruleset numbers. Tournaments run on GitHub runners (`tournament:gh`), not on the owner's laptop; a local `mise run tournament -- --seeds 3` (at most 3 seeds) only when GitHub is unavailable (owner decision 2026-11-03). A full tournament (default seeds) only before a release playtest (BAL-02).
 
 ---
@@ -548,11 +550,11 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | tick | `tick` | a simulation step, 10 per second |
 | ruleset | `Ruleset` | all numbers and flags of the rules, `rulesets/*.toml` |
 | city / node | `Node` | a vertex of the graph; a node is a city with a warehouse or a province (DEC-23) |
-| province | `kind = province` | a node without a city: no warehouse, capacity 3, no VP, position only (DEC-23) |
+| province | `kind = province` | a node without a city: a warehouse of 1 (`warehouse.province`, DEC-41 item 13), capacity 3, no VP, no barracks, no factory (DEC-23) |
 | road / edge | `MapDef.edges` | a link between nodes; roads have no levels and no upgrades (#894; the map field `max_level` is read by no rule) |
 | border point | `border_permille` | a point on an edge in thousandths from the end `a`; splits the edge into halves for vision (DEC-21, DEC-23) |
 | internal edge | `is_internal` | both ends belong to one owner; only along it does supply go |
-| buffer edge | `is_buffer` | the ends belong to different owners, or one is neutral |
+| buffer edge | (no code name: not `is_internal`) | the ends belong to different owners, or one is neutral |
 | group | `Group` | units of one player in one place: `units`, `charged` |
 | charge | `charged` | a charged unit; each charge is one "shot" |
 | warehouse | `warehouse` | a node's stock of charges; its capacity is fixed by the kind (`warehouse.start_by_kind`: city 3, capital 6; a province `warehouse.province` = 1; DEC-43, item C) |
@@ -566,7 +568,7 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | leaf shift | `PlayerState.leaf_shift`, `SetLeafShift` | the one lever of the supply flow: the level (the nodes that keep what they get) moves this many roads back from the front, `0..d0(capital)`; free, hidden from the enemy (DEC-43, item B); not in `mvp-7` and `test-short`: under `supply.leaf_shift = false` (DEC-50, #929) the shift is always 0 and `SetLeafShift` gives `INVALID_ARGUMENT` |
 | bounce | `bounce` | an attacker without a win returns to the source node discharged |
 | scheduled order | `planned=True` | visible to everyone as an intent, gives a one-off bonus: the price of a move, the requested bonus `Move.bonus` is gathered in the node, one warehouse charge per `orders.plan_ticks_per_bonus` ticks, departs at the request, at the cap or by `ReleasePlan` (DEC-41, item 10) |
-| fight | `Fight` | a fight over time (DEC-24): a node or an edge with a meeting point `point`, rounds every `combat.round_ticks`, reinforcements and retreat (no retreat under `combat.retreat = "none"`, DEC-40, `mvp-6`); visible to both (`PlayerView.fights`) |
+| fight | `Fight` | a fight over time (DEC-24): a node or an edge with a meeting point `point`, rounds every `combat.round_ticks`, reinforcements and retreat (no retreat under `combat.retreat = "none"`, DEC-40: `mvp-6`, `mvp-7`, `test-short`); visible to both (`PlayerView.fights`) |
 | terrain burn | `Fight.mute`, `burned_0`, `burned_1` | a negative terrain takes that many charges of the defender at the start of the first round of a fight (DEC-45; it replaced the silencing of DEC-24, item F2) |
 | map tempo | `[map_tempo]`, `apply_map_tempo`, `Match.rules`, `Match.source_rules` | under the section (DEC-46, on in the main ruleset `mvp-7`, #885) the economy periods of a match (both stance tables and `factory.built_period_ticks`) are scaled once by the node count `N` of its map: `pct = isqrt(N * 10000 // ref_nodes)` clamped to `min_pct..max_pct`, each period `p * 100 // pct`; `Match.rules` are the scaled rules the match plays, `Match.source_rules` the given ones (their hash is in the replay header) |
 | intent | `Intent` | the part of a scheduled order visible to everyone: from where, to where, the kind, without the size and group id |

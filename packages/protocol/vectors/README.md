@@ -35,8 +35,8 @@ An example (`vectors[i]`). The sides are always called `a` and `b`: in a fight f
 | `terrain` | the terrain of the node: `mountains`, `forest`, `plains`; `null` if the terrain does not take part by the rules (an edge, a neutral node) |
 | `node_owner_before` | the owner of the node before the fight: `a`, `b`, `neutral`; `null` for an edge |
 | `sides.<a\|b>.role` | `attacker`, `defender` or `symmetric` (a fight without a defender: an edge and a neutral node) |
-| `sides.<a\|b>.bonus` | `null` or `{source, amount}`, where `source` is `planned_order` (a scheduled order) or `defense_mode` (the "Defense" mode, already active). Whether it works is decided by the rules (item F) |
-| `sides.<a\|b>.groups` | the groups of the side: `id` (unique within the vector), `units`, `charged`, `mode` (`attack`, `defense`) |
+| `sides.<a\|b>.bonus` | `null` or `{source, amount}`, where `source` is `planned_order` (a scheduled order; `defense_mode`, the "Defense" mode, was removed with its rows in #894). Whether it works is decided by the rules (item F) |
+| `sides.<a\|b>.groups` | the groups of the side: `id` (unique within the vector), `units`, `charged`, `mode` (`attack`) |
 | `expected.fight` | whether a fight starts (`false`: an empty enemy node is taken at once) |
 | `expected.end_after` | the tick the fight ends minus the contact tick `t` ("`t+N`" of the table; `0` without a fight) |
 | `expected.rounds` | how many rounds were played (`end_after / round_ticks`) |
@@ -50,7 +50,7 @@ An example (`vectors[i]`). The sides are always called `a` and `b`: in a fight f
 | `expected.goes_on_after` | the winner's first step on the edge after regrouping, in ticks from `t` (row 12), otherwise `null` |
 | `note` | the rounds and the result of the row as text |
 
-The invariants the test checks: the `id`s are unique and run 1...16; for every group `0 ≤ charged ≤ units`;
+The invariants the test checks: the `id`s are unique and run 1...16 without 8, 10 and 16 (rows of rules removed in #894); for every group `0 ≤ charged ≤ units`;
 `expected.groups` contains exactly the groups of the input; the losses of a side equal the difference of the sum of `units` before and after
 the fight; charges do not appear from nowhere; the duration is a multiple of a round.
 

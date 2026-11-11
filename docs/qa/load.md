@@ -49,7 +49,7 @@ it also finds the server process. It needs three limits of the production defaul
 | `GOW_WS_UNAUTH_PER_IP` | 10 | no change | the harness opens 4 sockets at a time, so it also checks this cap |
 
 ```sh
-cd /srv/skill-based-front            # the checkout used by deploy/deploy.sh
+cd ~/skill-based-front              # the checkout used by deploy/deploy.sh
 # 1. Lift the guest limit for the run (restart the app: no matches are running, otherwise drain first)
 echo 'GOW_GUEST_RATE_LIMIT=100' >> .env
 docker compose up -d app
@@ -73,7 +73,7 @@ Notes for reading the result:
   and the lag is pessimistic; with two or more the server, a single thread, keeps its own core. To take the harness off the server's
   machine, run it from another host against the public URL with `--no-server-metrics --base-url https://<DOMAIN>`: only the client-side
   gaps (and a verdict on them) remain, the tick lag is then read from `/internal/metrics` by hand before and after.
-- The run leaves 2N guests (`ld...` nicks), N finished unrated matches and their replays (expired by `GOW_REPLAY_RETENTION_DAYS`) in the
+- The run leaves 2N guests (`ld...` nicks), N finished unrated matches and their replays (each guest has one match, so `GOW_REPLAY_KEEP_PER_PLAYER` keeps them all) in the
   database of the stack: do it before the launch, or on a stack with a throwaway volume (`docker compose -p <other> ...`).
 - Scripted clients move groups every 2.5 s and never build, recruit or schedule orders: the simulation part of the load is lighter than
   with humans, the wire part (frames to 60 sockets) is the real one. A busier script is a follow-up if the first result is close to the budget.

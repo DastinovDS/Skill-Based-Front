@@ -56,8 +56,8 @@ mise run setup              # uv sync --locked and pnpm install (client, e2e)
 
 **Windows:** `winget install jdx.mise` (or `scoop install mise`), then the same `mise trust`, `mise install`,
 `mise run setup` in PowerShell. Almost all tasks are plain calls of `uv`, `pnpm` and `docker` without bash. The exceptions:
-`stack`, `stack:reset`, `stack:agent` (they put the ruleset into the environment with `VAR=value command`, which needs a
-POSIX shell) and `smoke` (it runs `deploy/smoke.sh`, which needs bash): run them from Git Bash. The rest has not been
+`stack`, `stack:reset`, `stack:agent`, `load:agent`, `shots` and `perf` (they need a POSIX shell: a `VAR=value command`
+or a shell script) and `smoke`, `shots:publish`, `tournament:gh` and `share` (they run bash scripts): run them from Git Bash. The rest has not been
 tested on Windows (no machine); if something does not work, open an issue. There is no need to activate mise in the shell profile:
 `mise run <task>` puts the right versions in place itself (for an ordinary terminal activation is handy: `mise activate`).
 
@@ -120,7 +120,7 @@ and manually (`workflow_dispatch`).
 |---|---|
 | `py` | green only when all its parallel jobs are green (it fails on a failed or cancelled one, and is skipped only when they are skipped by `changes`): `py-check` runs `check:py` (`ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `gow-maps validate`) and `check:shards`; `py-test (<shard>)` runs `test:py` (`pytest -n auto -m "not perf and not slow"`, pytest-xdist, `HYPOTHESIS_PROFILE=ci`) on one shard of the tests; `py-perf` runs `test:perf` (`pytest -m perf`, sequentially and alone on its runner, performance budgets); `py-golden` runs `golden:check HEAD^1` (replays re-simulate and stay frozen against the base) |
 | `web` | `mise run setup:client` and `setup:py`, the steps `protocol-drift` and `api-drift` (`regen:protocol` and `regen:api`: regenerate the protocol schema with `protocol.gen.ts` and the server OpenAPI with `api.gen.ts`, fail if they differ from the committed ones), `check:client` (lint, check), `test:client`, `build` |
-| `docker` | `hadolint` for `deploy/*.Dockerfile`, then `deploy/smoke.sh`: build the images, `docker compose up`, checks through Caddy |
+| `docker` | `hadolint` for `deploy/*.Dockerfile`, then `deploy/smoke.sh` (build the images, `docker compose up`, checks through Caddy) and `deploy/deploy-test.sh` (a deploy, the rollback of a broken release, a backup and its restore) |
 
 - The shards of `test:py` (#798) are defined in `scripts/pytest_shards.py` by test location (`sim-replays`: the long
   replay and determinism files of `packages/sim`; `sim`; `bots-matches`: the full bot-match files of `apps/bots`; `bots`;
@@ -205,9 +205,12 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_RESIGN_WINDOW_S`, `GOW_RESIGN_BAN_SECOND_S`, `GOW_RESIGN_BAN_THIRD_S`, `GOW_RESIGN_BAN_LATER_S` | `86400`, `300`, `1800`, `7200` | DEC-34: repeated resigns in rated matches within the window ban the player from the queue: the 2nd for `SECOND` seconds, the 3rd for `THIRD`, the 4th and later for `LATER` (the 1st: no ban) |
 | `GOW_OPPONENT_LIMIT`, `GOW_OPPONENT_LIMIT_WINDOW_S` | `3`, `86400` | DEC-34: at most N rated matches between the same two accounts per window, the later ones are unrated |
 | `GOW_INVITE_TTL_S` | `1800` | the lifetime of an invite to a private match (seconds) |
+| `GOW_INVITE_RATE_LIMIT`, `GOW_INVITE_RATE_WINDOW_S` | `10`, `60` | at most N matches (private or public) created per account per window (seconds) |
+| `GOW_LOBBY_STALE_S` | `15` | LOB-01: a public lobby entry is dropped when its host has not asked for the invite this long (seconds) |
 | `GOW_READY_TIMEOUT_S` | `120` | SRV-09: the time to get ready after a guest joins an invite; after that the invite is withdrawn (no-show) |
 | `GOW_MAX_MATCHES` | `30` | #412: at most this many matches run at once (the AGENTS.md section 12 budget for one core); past it a new match is refused with `503` |
 | `GOW_MAX_BOT_MATCHES` | `10` | #412: of them at most this many against a bot; `0` turns bot matches off; `503` when full |
+| `GOW_BOT_BUDGET_S` | `0.001` | SRV-06: a bot decision longer than this makes the bot skip its next call (seconds) |
 | `GOW_BOT_CONNECT_TIMEOUT_S` | `15` | #412: a bot match nobody connected to within this time is dropped as never started (no replay, saved `aborted`) |
 | `GOW_MAPGEN_ENABLED` | `true` | #884: a private invite and a bot match without a map choice get a map made for them; `false`: a random pool map |
 | `GOW_MAPGEN_WORKERS` | `1` | #884: worker processes that make maps (each about 5 s and up to 0.65 GB per map) |
@@ -250,7 +253,7 @@ Guest identity (ID-01):
   new, the old one stops working. `403 wrong password`, `422` the password is not 10..128 characters after NFKC.
   `POST /api/login {nick, password}` → `200 {player_id, token}` of the same player (the previous token stops
   working); `401 wrong nick or password` is the same for an unknown nick, a guest without a password and a wrong
-  password; `403` blocked; `429` limits per IP and per nick. `GET /api/me` → `{player_id, nick, has_password}`.
+  password; `403` blocked; `429` limits per IP and per nick. `GET /api/me` → `{player_id, nick, has_password, calibration, colour}`.
   A `422` response does not repeat the submitted values (`input`). There is no password recovery, reset with `gow-admin reset-password`.
 - `GET /api/me/active-match` → `{match_id, map_id}` of the player's running match or `null` (#189). With it the client
   returns to the match after a page reload: a WebSocket with the same token within the reconnect window (DEC-05).
@@ -337,7 +340,7 @@ a new server setting for production is added both there and in `.env.example`.
 | Path | What it does | Cache |
 |---|---|---|
 | `/api/*` | a proxy to `app:8000`, compression | the server's headers |
-| `/ws/*` | a WebSocket proxy to `app:8000`; on `caddy reload` open connections live for up to 15 more minutes (`stream_close_delay`, a match lasts 12) | none |
+| `/ws/*` | a WebSocket proxy to `app:8000`; on `caddy reload` open connections live for up to 20 more minutes (`stream_close_delay`, a match lasts 15) | none |
 | `/assets/*` | Vite build files with a hash in the name, zstd/gzip compression; no file: 404 | `public, max-age=31536000, immutable` |
 | the rest | `index.html` and files from `apps/client/public`; an unknown path serves `index.html` (`try_files`) | `no-cache` (an ETag check on every load) |
 
@@ -368,8 +371,7 @@ deploy/restore.sh <archive>       # restore (stops app)
 HTTP_PORT=8080 HTTPS_PORT=8443 deploy/deploy-test.sh   # locally: deploy, rollback, backup and restore
 ```
 
-What the following issues will add: draining matches on deploy (after SRV-02, #47); metrics and alerts
-(OPS-04, #83).
+Draining matches on deploy (#47), metrics and alerts (OPS-04, #83): `docs/ops/deploy.md`, sections 3 and 7.
 
 ## E2E
 
@@ -391,15 +393,16 @@ docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait   # 
 E2E_BASE_URL=http://localhost:8080 pnpm -C e2e test   # http://localhost by default
 ```
 
-`e2e/compose.e2e.yaml` turns on `GOW_ENV=e2e`, the ruleset `test-short` (a 60-second match), a reconnect window and a
-pause of 10 seconds each and a large guest limit: the E2E stack must not be used as production.
+`e2e/compose.e2e.yaml` turns on `GOW_ENV=e2e`, the ruleset `test-short` (a 60-second match), a reconnect window of 120 s,
+pauses of up to 300 s and a large guest limit: the E2E stack must not be used as production.
 
 The tests (`e2e/tests/`), each with its own guests in isolated browser contexts:
 
 | File | What it checks |
 |---|---|
-| `invite-match.spec.ts` | two guests: an invite, "Ready", three orders each (a move, a scheduled move, a stance), a match to the end by the timer, a consistent result, "Watch the replay" for both, playback, pause and position; separately a pause (the server sends no snapshots), a socket drop with reconnection and a surrender |
-| `bot-and-pages.spec.ts` | a match with a bot and a surrender; the production build renders the nick form without page errors, the language, the legal pages |
+| `invite-match.spec.ts` | two guests: an invite, "Ready", three orders each (a move, a scheduled move, a stance), a match to the end by the timer, a consistent result, "Watch the replay" for both, playback, pause and position; separately a pause (the server sends no snapshots), a socket drop with reconnection and a surrender; a page reload in a running match returns to the same match (#189) |
+| `bot-and-pages.spec.ts` | a match with a bot and a surrender; the bot map picker (New map first, Random map and the pool); the production build renders the nick form without page errors, the legal pages; a Russian browser still gets the English interface |
+| `account.spec.ts` | an account: register, then a login on a second device logs the first one out (#374) |
 
 Orders on the map are clicked on the real canvas: the coordinates are computed by `e2e/support/player.ts` with the same camera and
 layout functions as the client (`apps/client/src/render/camera.ts`, `layout.ts`), and the acceptance of an order is checked by the `ack` in

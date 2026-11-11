@@ -585,9 +585,10 @@ files) are not served by the server. How the background works and how to rebake 
 
 | Request | Response |
 |---|---|
-| `GET /api/maps` | `[{id, version, width, height, background_url}]`, ordered by `id`; `background_url` is `null` if there is no background |
-| `GET /api/maps/{id}` | the map file as is (geography is public: mechanics.md, section 10) |
-| `GET /api/maps/{id}/background.webp` | the background (`image/webp`) or 404 |
+| `GET /api/maps` | `[{id, version, width, height, background_url, generated, thumb_url, geo_url, per_match}]`: the pool, then the stored generated maps (`maps/gen/`), never a per-match map; a URL is `null` if there is no such file |
+| `GET /api/maps/{id}` | the map file as is (geography is public: mechanics.md, section 10); a per-match map (#884) once it is made |
+| `GET /api/maps/{id}/summary` | the same summary as in the list, for every served map, a per-match one too |
+| `GET /api/maps/{id}/background.webp`, `thumb.webp`, `geo.json` | the background (`image/webp`), its thumbnail (#839) and the geography areas (DEC-36), or 404 |
 
 ## Map background
 
