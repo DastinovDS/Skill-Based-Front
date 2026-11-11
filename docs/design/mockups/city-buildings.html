@@ -1,0 +1,1405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>City buildings, round 1</title>
+<!-- City buildings, round 1 (broad): the owner's feedback of 2026-11-11, the factory and the barracks at a city do not fit
+     the style. Topic T: twelve directions for the two buildings (built, paid for, rising, just built, captured, an
+     enemy's under DEC-31), T0 the client today. Topic C: where the terrain chevrons of a group standing in a node go,
+     C0 the client today (#943). The two combine: every cell is one T with one C.
+     Drawn with the client's numbers: TOWER, CROWN, LOZENGE, VP_LOZENGE, RING_ENGRAVED, CITY_ENGRAVED, PROVINCE (A6),
+     HELMET_ENGRAVED, BADGE, the corner ticks of #949 (render/style.ts, cornerTicks.ts, pieceLayout.ts, pieceShapes.ts,
+     buildPay.ts, badgeLayout.ts, units/helmet.ts), towerScale and the payment motion of #872. The rules on the page:
+     barracks 3 charges, factory 4 (rulesets/mvp-7.toml), paid from the warehouse then the group standing there
+     (DEC-41, item 7), 10 s after the full payment; the capital has both from the start; a capture hands both over and
+     empties the warehouse; an enemy city next to an own node shows only what is built (DEC-31). Self-contained, no
+     network: EB Garamond (SIL OFL) and the ground crops are in assets/city-buildings/. State in the address. -->
+<style>
+@font-face{font-family:'EB Garamond';src:url(assets/city-buildings/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-style:normal;font-display:block}
+:root{
+  --stone:#16130f;--panel:#1d1a15;--raised:#221e18;--ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;
+  --rule:#7d7363;--line:#3d372d;--cut:#050403;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--stone);color:var(--ink);font:14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;background:linear-gradient(var(--stone) 90%,rgba(22,19,15,0));padding:10px 16px 12px}
+h1{font:600 20px/1 'EB Garamond',Georgia,serif;letter-spacing:.04em;margin:0 14px 0 0;color:var(--ink)}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:8px}
+.bar:first-child{margin-top:0}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.lab{font:600 12px/1 'EB Garamond',Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-right:4px}
+button.chip{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 9px;font:500 13px/1 system-ui,sans-serif;cursor:pointer;position:relative;border-radius:0}
+button.chip:hover{border-color:var(--rule);color:var(--ink)}
+button.chip[aria-pressed="true"]{background:var(--ink);color:#16130f;border-color:var(--ink);font-weight:650}
+button.chip[aria-pressed="true"]::after{content:"";position:absolute;left:50%;bottom:-6px;width:6px;height:6px;margin-left:-3px;background:var(--ink);transform:rotate(45deg);border:1px solid var(--stone)}
+button.chip .k{opacity:.7;margin-right:5px;font-weight:700}
+button.chip:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+button.chip.sw{width:22px;height:22px;padding:0}
+button.chip.sw i{position:absolute;inset:4px;transform:rotate(45deg) scale(.78);border:1px solid #060504}
+.sep{width:1px;height:22px;background:var(--line)}
+input[type=range]{accent-color:#ece4d1;width:110px;vertical-align:middle}
+.val{font:600 13px/1 'EB Garamond',Georgia,serif;color:var(--ink);min-width:2.4em;display:inline-block}
+.topic{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.topic .name{font:600 15px/1 'EB Garamond',Georgia,serif;color:var(--ink);margin-right:8px;min-width:120px}
+main{padding:4px 16px 24px}
+#cells{display:grid;gap:14px;grid-template-columns:1fr}
+#cells.n2,#cells.n3,#cells.n4{grid-template-columns:1fr 1fr}
+.cell{background:#0e0c09;border:1px solid var(--line);position:relative}
+.cell::before{content:"";position:absolute;inset:3px;border:1px solid rgba(236,228,209,.08);pointer-events:none}
+.cell h2{margin:0;padding:8px 12px 6px;font:600 15px/1.1 'EB Garamond',Georgia,serif;letter-spacing:.03em;display:flex;gap:14px;align-items:baseline;border-bottom:1px solid var(--line)}
+.cell h2 .b{color:var(--ink-dim);font-weight:500}
+.cell canvas{display:block;width:100%}
+.gray canvas{filter:grayscale(1)}
+#time{display:flex;align-items:center;gap:8px}
+#time input{width:220px}
+@media (prefers-reduced-motion: reduce){button.chip{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>City buildings</h1>
+    <div class="group"><span class="lab">Compare</span>
+      <button class="chip" data-cmp="t">T buildings</button><button class="chip" data-cmp="c">C chevrons</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group"><span class="lab">State</span><span id="states" class="group"></span></div>
+  </div>
+  <div class="bar">
+    <div class="group"><span class="lab">Node</span>
+      <button class="chip" data-node="mixed">Mixed</button><button class="chip" data-node="province">Province</button><button class="chip" data-node="small">Small</button><button class="chip" data-node="medium">Medium</button><button class="chip" data-node="large">Large</button><button class="chip" data-node="capital">Capital</button>
+    </div>
+    <div class="group"><span class="lab">Ground</span>
+      <button class="chip" data-ground="plains">Plains</button><button class="chip" data-ground="forest">Forest</button><button class="chip" data-ground="snow">Snow</button><button class="chip" data-ground="fog">Fog</button>
+    </div>
+    <div class="group"><span class="lab">Colour</span><span id="cols" class="group"></span></div>
+  </div>
+  <div class="bar">
+    <div class="group"><span class="lab">Units</span><input id="units" aria-label="Units in each group" type="range" min="0" max="9" step="1"><span class="val" id="unitsV"></span></div>
+    <div class="group"><span class="lab">Charged</span><input id="charged" aria-label="Charged units" type="range" min="0" max="9" step="1"><span class="val" id="chargedV"></span></div>
+    <div class="group"><span class="lab">Terrain</span>
+      <button class="chip" data-mark="0">None</button><button class="chip" data-mark="1" aria-label="One bonus chevron">+1</button><button class="chip" data-mark="2" aria-label="Two bonus chevrons">+2</button><button class="chip" data-mark="-1" aria-label="One penalty chevron">&minus;1</button><button class="chip" data-mark="-2" aria-label="Two penalty chevrons">&minus;2</button>
+    </div>
+    <div class="group">
+      <button class="chip" id="sel">Selected</button><button class="chip" id="queue">Queue</button><button class="chip" id="cb">Buildings in C</button>
+    </div>
+  </div>
+  <div class="bar">
+    <div class="group"><span class="lab">Zoom</span>
+      <button class="chip" data-z="50">Far</button><button class="chip" data-z="100">Normal</button><button class="chip" data-z="220">Near</button>
+      <input id="zoom" aria-label="Zoom" type="range" min="40" max="320" step="5"><span class="val" id="zoomV"></span>
+    </div>
+    <div class="group"><button class="chip" id="gray">Grey</button><button class="chip" id="still">Reduced motion</button></div>
+    <div id="time"><button class="chip" id="play">Play</button><input id="scrub" aria-label="Time" type="range" min="0" max="6000" step="10"></div>
+  </div>
+  <div class="bar"><div class="topic" id="topicT"><span class="name">T · buildings</span></div></div>
+  <div class="bar"><div class="topic" id="topicC"><span class="name">C · chevrons</span></div></div>
+</header>
+<main><div id="cells"></div></main>
+<script>
+'use strict';
+// =============================================================================================
+// The client's numbers (apps/client/src/render/style.ts, theme/tokens.ts, units/helmet.ts).
+// =============================================================================================
+const C = {
+  casing: '#060504', plate: '#0e0c09', cut: '#050403', ink: '#ccc0a6', ivory: '#ece4d1',
+  neutral: '#b3a88f', vp: '#cfab62', warn: '#e6ab42', up: '#8cc79a', down: '#ec6654', road: '#e6edf3',
+};
+const COLOURS = { lapis: '#86a6ea', minium: '#e5785e', glacier: '#a6e0e8', shell: '#f4b4a4', violet: '#966fd6', madder: '#c8587e' };
+const HELMET_PATHS = {
+  own: {
+    dome: 'M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z',
+    band: 'M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60',
+    strap: 'M46 80 L54 96',
+  },
+  enemy: {
+    dome: 'M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z',
+    band: null,
+    strap: 'M38 75 L58 91 L64 68',
+  },
+};
+const HELMET_SCALE = 1.34, HELMET_INSIDE = 0.92;
+const UNIT_SIDES = [24, 30, 36, 42];
+const HE = { casing: 6, inside: 1.6, gear: 0.55, edge: 1.25, hatchW: 0.9, font: 12.5 };
+const CITY_E = { cutGrow: 3.2, cutAlpha: 0.85, rimGrow: 1.6, rimW: 1.1, innerInset: 1.2, innerW: 0.8, innerA: 0.6, enemyInsets: [4.4, 6.4], enemyW: 0.9, star: [0.6, 0.27, 1.2] };
+const PROV_E = { plate: 8, dot: 6.4, rimR: 7.6, rimW: 0.9, enemyR: 10, enemyW: 0.8 };
+const RING = { gap: 7, cut: 6, cutAlpha: 0.8, filled: 3.4, roomW: 0.9, roomOff: 1.6, wash: 0.3, segGap: 0.16 };
+const LOZ = { casing: 8.2, fill: 5.8, hollow: 4.7, line: 0.9, lineA: 0.92, pitch: 8.8, groupGap: 3.5, drop: 8.5 };
+const VPL = { side: 18.5, outer: 17.2, inner: 12.4, w: 1.1, font: 14.5, lift: 4.5 };
+const BADGE = { size: 11, stroke: 0.3, outline: 2.6, minPx: 8 };
+const BADGE_GAP = 13, BADGE_DROP = 3;
+const TOWER = {
+  barracksAngle: Math.PI * 1.25, factoryAngle: Math.PI * 0.95, out: 4, minScale: 1.35, screen: 1.7, keep: 0.5, halfHeight: 5.2,
+  barracks: [[-4.6, -5.2], [4.6, -5.2], [4.6, 4], [-4.6, 4]],
+  factory: [[-5.4, 4], [-5.4, -1.6], [-1.6, -5.2], [-1.6, -1.6], [2.2, -5.2], [2.2, -1.6], [5.4, -1.6], [5.4, 4]],
+};
+const CROWN = { lift: 8, step: 11, minSpan: 1, lozenge: 0.9, width: 2.4, casing: 2.2, serif: 3.6 };
+const PAY = { flightMs: 450, lift: 12, popMs: 220, pop: 0.3, runMs: 350, runStagger: 60, shrink: 0.6, doneMs: 600 };
+const RECRUIT = { width: 9, step: 0.27 };
+const COST = { barracks: 3, factory: 4 };
+// Capacity and warehouse by kind (rulesets/mvp-7.toml, DEC-22, DEC-43 item C), the body radius
+// (cityLayout.cityRadius; a province 13 since #949, A6).
+const NODE = {
+  province: { cap: 3, r: 13, wh: 1, stock: 1, vp: 0, name: 'Fork' },
+  small: { cap: 4, r: 14, wh: 3, stock: 2, vp: 1, name: 'Ford' },
+  medium: { cap: 6, r: 17, wh: 3, stock: 2, vp: 1, name: 'Watchhouse' },
+  large: { cap: 8, r: 20, wh: 3, stock: 2, vp: 2, name: 'Forkway' },
+  capital: { cap: 10, r: 20, wh: 6, stock: 4, vp: 3, name: 'Stonegate' },
+};
+const NAMES = ['Firwood', 'Watchpost', 'Forkway', 'Wood Hollow', 'Archway', 'Bluff', 'Ford', 'Pinebrook', 'Heart', 'Crest'];
+
+// =============================================================================================
+// Helmet geometry: a port of units/helmet.ts (sampling, centring, extent, helmetFit).
+// =============================================================================================
+function samplePath(d, steps = 10) {
+  const t = d.match(/[MLCQZ]|-?\d*\.?\d+/g) || [];
+  const pts = []; let i = 0, cmd = '', at = { x: 0, y: 0 };
+  const num = () => Number(t[i++]);
+  while (i < t.length) {
+    const tok = t[i];
+    if (/[MLCQZ]/.test(tok)) { cmd = tok; i++; if (cmd === 'Z') continue; }
+    if (cmd === 'M' || cmd === 'L') { at = { x: num(), y: num() }; pts.push(at); }
+    else if (cmd === 'C') {
+      const c1 = { x: num(), y: num() }, c2 = { x: num(), y: num() }, e = { x: num(), y: num() };
+      for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u*u*u*at.x + 3*u*u*s*c1.x + 3*u*s*s*c2.x + s*s*s*e.x, y: u*u*u*at.y + 3*u*u*s*c1.y + 3*u*s*s*c2.y + s*s*s*e.y }); }
+      at = e;
+    } else if (cmd === 'Q') {
+      const c = { x: num(), y: num() }, e = { x: num(), y: num() };
+      for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u*u*at.x + 2*u*s*c.x + s*s*e.x, y: u*u*at.y + 2*u*s*c.y + s*s*e.y }); }
+      at = e;
+    } else i++;
+  }
+  return pts;
+}
+function boundsOf(ps) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of ps) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
+function centroid(ps) {
+  let a = 0, cx = 0, cy = 0;
+  ps.forEach((p, i) => { const q = ps[(i + 1) % ps.length]; const cr = p.x*q.y - q.x*p.y; a += cr; cx += (p.x + q.x)*cr; cy += (p.y + q.y)*cr; });
+  return { x: cx / (3*a), y: cy / (3*a) };
+}
+const RAW = {};
+for (const k of ['own', 'enemy']) {
+  const P = HELMET_PATHS[k];
+  RAW[k] = { dome: samplePath(P.dome), band: P.band ? samplePath(P.band) : null, strap: samplePath(P.strap) };
+  const b = boundsOf([...RAW[k].dome, ...(RAW[k].band || []), ...RAW[k].strap]);
+  RAW[k].c = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+}
+const HELMETS = new Map();
+function helmet(kind, width) {
+  const key = kind + ':' + width;
+  if (HELMETS.has(key)) return HELMETS.get(key);
+  const R = RAW[kind], s = width / 100;
+  const place = (p) => ({ x: (p.x - R.c.x) * s, y: (p.y - R.c.y) * s });
+  const dome = R.dome.map(place), band = R.band ? R.band.map(place) : null, strap = R.strap.map(place);
+  const db = boundsOf(dome), mid = centroid(dome);
+  const h = { kind, width, dome, band, strap, bounds: boundsOf([...dome, ...(band || []), ...strap]), domeTop: db.y, domeBottom: db.y + db.height, domeBounds: db, middle: { x: mid.x, y: mid.y + width * 0.02 } };
+  HELMETS.set(key, h);
+  return h;
+}
+function helmetLines(width) { const s = width / 100; return { strap: Math.max(6.4*s, 2.1), band: Math.max(5.6*s, 2.2), casing: 6.4, edge: 2.1 }; }
+function helmetExtent(h) {
+  const L = helmetLines(h.width); const pad = Math.max(L.casing, L.strap + L.casing) / 2;
+  return { top: h.bounds.y - pad, bottom: h.bounds.y + h.bounds.height + pad, left: h.bounds.x - pad, right: h.bounds.x + h.bounds.width + pad };
+}
+function helmetWidth(side, inside) { return Math.round(side * HELMET_SCALE * (inside ? HELMET_INSIDE : 1) * 100) / 100; }
+function helmetFit(kind, width, reach) {
+  let w = width;
+  for (let step = 0; step < 6 && w > 4; step++) {
+    const e = helmetExtent(helmet(kind, w));
+    const span = Math.max(e.right, -e.left, e.bottom, -e.top);
+    if (span <= reach) break;
+    w = Math.min(w - 0.25, Math.floor(((w * reach) / span) * 4) / 4);
+  }
+  return w;
+}
+function unitSide(units) { return units <= 3 ? UNIT_SIDES[0] : units <= 7 ? UNIT_SIDES[1] : units <= 15 ? UNIT_SIDES[2] : UNIT_SIDES[3]; }
+
+// =============================================================================================
+// Drawing helpers (world units; the canvas transform carries the zoom). `PXW`: device px per world
+// unit, `LS`: the scale of the local frame, so a hairline never falls under 1.3 device px (#865).
+// =============================================================================================
+let GA = 1, PXW = 1, LS = 1;
+const hair = (w) => Math.max(w, 1.3 / (PXW * LS));
+function poly(ctx, ps, closed = true) { ctx.beginPath(); ps.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); if (closed) ctx.closePath(); }
+function polyA(ctx, ps, closed = true) { ctx.beginPath(); ps.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); if (closed) ctx.closePath(); }
+function stroke(ctx, w, color, alpha = 1, cap = 'round', join = 'round') {
+  ctx.lineWidth = w; ctx.strokeStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.lineCap = cap; ctx.lineJoin = join; ctx.stroke(); ctx.globalAlpha = GA;
+}
+function fill(ctx, color, alpha = 1) { ctx.fillStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.fill(); ctx.globalAlpha = GA; }
+function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, Math.PI*2); }
+function hexOf(c) { return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]; }
+function rgb(a) { return '#' + a.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join(''); }
+function mix(a, b, k) { const p = hexOf(a), q = hexOf(b); return rgb(p.map((v, i) => v + (q[i] - v)*k)); }
+function hatchLines(ctx, b, angle, pitch) {
+  const cx = b.x + b.width/2, cy = b.y + b.height/2, R = Math.hypot(b.width, b.height)/2 + pitch;
+  const ux = Math.cos(angle), uy = Math.sin(angle), nx = -uy, ny = ux;
+  ctx.beginPath();
+  for (let d = -R; d <= R; d += pitch) { ctx.moveTo(cx + nx*d - ux*R, cy + ny*d - uy*R); ctx.lineTo(cx + nx*d + ux*R, cy + ny*d + uy*R); }
+}
+const polar = (a, d) => ({ x: d*Math.cos(a), y: d*Math.sin(a) });
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
+const ease = {
+  engrave: (t) => 0.5 - 0.5*Math.cos(Math.PI*clamp01(t)),
+  settle: (t) => 1 - Math.pow(1 - clamp01(t), 3),
+  travel: (t) => { t = clamp01(t); return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2; },
+};
+function lozPath(ctx, x, y, side) { const h = side*Math.SQRT2/2; ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + h, y); ctx.lineTo(x, y + h); ctx.lineTo(x - h, y); ctx.closePath(); }
+/** One charge (57u): the casing, then the colour (in stock, paid) or hollow (room, owed). */
+function drawLozenge(ctx, x, y, on, color, k = 1, alpha = 1) {
+  lozPath(ctx, x, y, LOZ.casing*k); fill(ctx, C.casing, alpha);
+  if (on) { lozPath(ctx, x, y, LOZ.fill*k); fill(ctx, color, alpha); return; }
+  lozPath(ctx, x, y, LOZ.fill*k); fill(ctx, C.plate, alpha);
+  lozPath(ctx, x, y, LOZ.hollow*k); stroke(ctx, hair(LOZ.line), C.ink, LOZ.lineA*alpha, 'butt', 'miter');
+}
+/** A local frame: translate, rotate, scale; hairlines keep their device width. */
+function frame(ctx, x, y, rot, s, fn) {
+  ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(s, s);
+  const ls = LS; LS = ls*s; fn(); LS = ls; ctx.restore();
+}
+/** The client's towerScale (#869): at least 1.35, 1.7 css px per unit near zoom 1, a quarter octave. */
+function towerScale(z) {
+  const out = TOWER.screen / TOWER.minScale / Math.max(1e-3, z);
+  const exact = TOWER.minScale * Math.max(1, out) ** TOWER.keep;
+  return 2 ** (Math.ceil(Math.log2(exact) * 4) / 4);
+}
+/** The same rule for a variant whose buildings keep a size on screen: `base` near zoom 1, grows by the root of the zoom. */
+function growScale(z, base) { return base * Math.max(1, (TOWER.screen / TOWER.minScale) / Math.max(1e-3, z)) ** 0.5; }
+
+// =============================================================================================
+// The material of a building (Engraved: casing, dark plate, the owner's hatch, an ink line). A
+// shape is { path(ctx), box: [x0, y0, x1, y1], details?(ctx, o), shade?(ctx, o), solid? } in its
+// own frame (its top is -y). Looks: built, plan (still owes charges), rising (the build time).
+// The enemy's: hatch at 45 degrees and a double ink contour (the enemy city's two inner rings).
+// =============================================================================================
+function material(ctx, sh, o) {
+  const [x0, y0, x1, y1] = sh.box;
+  const box = { x: x0 - 1, y: y0 - 1, width: x1 - x0 + 2, height: y1 - y0 + 2 };
+  if (o.look === 'plan') {
+    sh.path(ctx); stroke(ctx, 3.2, C.casing, .55, 'round', 'miter'); fill(ctx, C.plate, .55);
+    sh.path(ctx); ctx.setLineDash([1.3, 1.5]); stroke(ctx, hair(1), C.ink, .8, 'butt'); ctx.setLineDash([]);
+    return;
+  }
+  if (o.look === 'socket') { // T10: an empty socket, only where it can be built
+    sh.path(ctx); fill(ctx, C.cut, .55);
+    sh.path(ctx); ctx.setLineDash([1, 1.6]); stroke(ctx, hair(.8), C.ink, .55, 'butt'); ctx.setLineDash([]);
+    return;
+  }
+  sh.path(ctx); stroke(ctx, 3.2, C.casing, 1, 'round', 'miter'); fill(ctx, C.plate);
+  ctx.save(); sh.path(ctx); ctx.clip();
+  if (o.look === 'built') {
+    if (sh.sparse) { hatchLines(ctx, box, o.enemy ? -Math.PI/4 : 0, 2.6); stroke(ctx, hair(.7), o.color, .8, 'butt'); }
+    else if (sh.solid) {
+      sh.path(ctx); fill(ctx, o.color);
+      if (o.enemy) { hatchLines(ctx, box, -Math.PI/4, 2.1); stroke(ctx, hair(.75), C.casing, .9, 'butt'); }
+    } else {
+      hatchLines(ctx, box, o.enemy ? -Math.PI/4 : 0, o.enemy ? 1.9 : 1.7); stroke(ctx, hair(.8), o.color, 1, 'butt');
+    }
+    if (sh.shade) sh.shade(ctx, o);
+  } else timeFill(ctx, sh, box, o);
+  ctx.restore();
+  if (sh.details) sh.details(ctx, o);
+  sh.path(ctx);
+  if (o.enemy && o.look === 'built' && !o.plain) {
+    stroke(ctx, hair(2.5), C.ink, 1, 'round', 'miter'); sh.path(ctx); stroke(ctx, hair(.75), C.casing, 1, 'round', 'miter');
+  } else stroke(ctx, hair(1), C.ink, 1, 'round', 'miter');
+}
+/** The build time inside the shape (clipped): rise from the base, engrave line by line, or sweep round. */
+function timeFill(ctx, sh, box, o) {
+  const t = clamp01(o.time), style = o.style || 'rise';
+  const y0 = box.y + 1, y1 = box.y + box.height - 1;
+  if (style === 'rise') {
+    const y = y1 - t*(y1 - y0);
+    ctx.beginPath(); ctx.rect(box.x, y, box.width, y1 - y + 1); fill(ctx, o.color);
+    ctx.beginPath(); for (let j = y1 - 2.3; j > y + .4; j -= 2.3) { ctx.moveTo(box.x, j); ctx.lineTo(box.x + box.width, j); }
+    stroke(ctx, hair(.4), C.casing, .55, 'butt');
+    if (t > 0 && t < 1) { ctx.beginPath(); ctx.moveTo(box.x, y); ctx.lineTo(box.x + box.width, y); stroke(ctx, hair(1), C.ink, 1, 'butt'); }
+  } else if (style === 'hatch') {
+    const pitch = 1.7, lines = []; for (let j = y1 - 0.6; j > y0; j -= pitch) lines.push(j);
+    const n = lines.length*t, full = Math.floor(n), frac = n - full;
+    ctx.beginPath();
+    for (let i = 0; i < full; i++) { ctx.moveTo(box.x, lines[i]); ctx.lineTo(box.x + box.width, lines[i]); }
+    stroke(ctx, hair(.8), o.color, 1, 'butt');
+    if (full < lines.length && t > 0) {
+      const y = lines[full], x = box.x + box.width*frac;
+      ctx.beginPath(); ctx.moveTo(box.x, y); ctx.lineTo(x, y); stroke(ctx, hair(.8), o.color, 1, 'butt');
+      lozPath(ctx, x, y, 3.4); fill(ctx, C.casing); lozPath(ctx, x, y, 2.1); fill(ctx, C.ink);
+    }
+  } else { // sweep
+    const cx = box.x + box.width/2, cy = box.y + box.height/2, R = Math.hypot(box.width, box.height);
+    const a0 = -Math.PI/2, a1 = a0 + 2*Math.PI*t;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a0, a1); ctx.closePath(); fill(ctx, o.color);
+    if (t > 0 && t < 1) { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R*Math.cos(a1), cy + R*Math.sin(a1)); stroke(ctx, hair(1), C.ink, 1, 'butt'); }
+  }
+}
+/** The moment a build ends: a ring opens (57k), a stamp presses in, or a burin light runs across. */
+function doneFx(ctx, sh, kind, k, style) {
+  if (k <= 0 || k >= 1) return;
+  const [x0, y0, x1, y1] = sh.box, cx = (x0 + x1)/2, cy = (y0 + y1)/2;
+  if (style === 'ring') {
+    const r = 7 + 10*ease.settle(k), a = 1 - k;
+    circle(ctx, cx, cy, r); stroke(ctx, 3, C.casing, a); circle(ctx, cx, cy, r); stroke(ctx, hair(1), C.ink, a);
+  } else if (style === 'stamp') {
+    const s = 1 + 0.4*(1 - ease.settle(k)), a = 1 - k*k;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s); ctx.translate(-cx, -cy);
+    sh.path(ctx); stroke(ctx, 2.6, C.casing, .8*a); sh.path(ctx); stroke(ctx, hair(1.1), C.ivory, a); ctx.restore();
+  } else {
+    ctx.save(); sh.path(ctx); ctx.clip();
+    const x = x0 - 4 + (x1 - x0 + 8)*ease.engrave(k), h = y1 - y0;
+    ctx.beginPath(); ctx.moveTo(x - h*.35, y1 + 1); ctx.lineTo(x + h*.35, y0 - 1); stroke(ctx, 2.6, C.ivory, .85*Math.sin(Math.PI*k), 'butt');
+    ctx.restore();
+  }
+}
+
+// =============================================================================================
+// Payment tracks: a polyline the owed charges sit on and the build time fills (the Crown arc and
+// its kin). `pts` in node coordinates, `slots` the lozenges, `k` their size.
+// =============================================================================================
+function arcPts(cx, cy, r, a0, a1, n = 24) { const out = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0)*i/n; out.push({ x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) }); } return out; }
+/** The Crown arc of the client (crownArc): concentric with the ring, `top` from the centre plus the lift. */
+function crownTrack(angle, top, cost, k) {
+  const r = top + CROWN.lift, n = Math.max(1, cost);
+  const span = Math.max(CROWN.minSpan, ((n + 0.9) * CROWN.step) / r);
+  const slots = [];
+  for (let j = 0; j < n; j++) slots.push(polar(angle + (j - (n - 1)/2) * (CROWN.step / r), r));
+  return { pts: arcPts(0, 0, r, angle - span/2, angle + span/2), slots, k };
+}
+/** A short straight track (a row) from `a` to `b`, the lozenges evenly along it. */
+function rowTrack(a, b, cost, k) {
+  const slots = [], len = Math.hypot(b.x - a.x, b.y - a.y), step = Math.min(len/(cost + 0.2), 10*k + 1.5);
+  for (let j = 0; j < cost; j++) { const d = len/2 + (j - (cost - 1)/2)*step; slots.push({ x: a.x + (b.x - a.x)*d/len, y: a.y + (b.y - a.y)*d/len }); }
+  return { pts: [a, b], slots, k };
+}
+/** An arc round a point (`c`), from `a0` to `a1`: the rim of an emblem. */
+function rimTrack(c, r, a0, a1, cost, k) {
+  const slots = [], step = Math.min((a1 - a0)/(cost + 0.2), (11*k)/r);
+  const mid = (a0 + a1)/2;
+  for (let j = 0; j < cost; j++) { const a = mid + (j - (cost - 1)/2)*step; slots.push({ x: c.x + r*Math.cos(a), y: c.y + r*Math.sin(a) }); }
+  return { pts: arcPts(c.x, c.y, r, a0, a1, 16), slots, k };
+}
+function trackLen(pts) { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y); return L; }
+function trackAt(pts, d) {
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y); if (d <= l) { const q = l ? d/l : 0; return { x: pts[i-1].x + (pts[i].x - pts[i-1].x)*q, y: pts[i-1].y + (pts[i].y - pts[i-1].y)*q, a: Math.atan2(pts[i].y - pts[i-1].y, pts[i].x - pts[i-1].x) }; } d -= l; }
+  const n = pts.length; return { ...pts[n-1], a: Math.atan2(pts[n-1].y - pts[n-2].y, pts[n-1].x - pts[n-2].x) };
+}
+/** The track: casing, a faint ink line, two serifs; owed lozenges (hollow, solid as paid); the time in colour behind a burin point. */
+function drawTrack(ctx, tr, color, prog, alpha = 1) {
+  const pts = tr.pts, kk = Math.max(0.8, tr.k);
+  const ga = GA; GA = ga*alpha;
+  poly(ctx, pts, false); stroke(ctx, CROWN.width + CROWN.casing, C.casing, 1, 'butt');
+  poly(ctx, pts, false); stroke(ctx, hair(.8), C.ink, .55, 'butt');
+  for (const e of [trackAt(pts, 0), trackAt(pts, 1e9)]) {
+    const nx = -Math.sin(e.a), ny = Math.cos(e.a), h = CROWN.serif*kk*.9;
+    ctx.beginPath(); ctx.moveTo(e.x - nx*h, e.y - ny*h); ctx.lineTo(e.x + nx*h, e.y + ny*h); stroke(ctx, 3, C.casing, 1, 'butt');
+    ctx.beginPath(); ctx.moveTo(e.x - nx*h, e.y - ny*h); ctx.lineTo(e.x + nx*h, e.y + ny*h); stroke(ctx, hair(1), C.ink, 1, 'butt');
+  }
+  if (prog.running && prog.time > 0) {
+    const L = trackLen(pts), d = L*clamp01(prog.time);
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    let acc = 0; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y); if (acc + l >= d) { const q = l ? (d - acc)/l : 0; ctx.lineTo(pts[i-1].x + (pts[i].x - pts[i-1].x)*q, pts[i-1].y + (pts[i].y - pts[i-1].y)*q); break; } ctx.lineTo(pts[i].x, pts[i].y); acc += l; }
+    stroke(ctx, CROWN.width, color, 1, 'butt');
+    if (prog.time < 1) { const h = trackAt(pts, d); ctx.save(); ctx.translate(h.x, h.y); ctx.rotate(h.a); lozPath(ctx, 0, 0, 5.4*.75); fill(ctx, C.casing); lozPath(ctx, 0, 0, 3.4*.75); fill(ctx, C.ink); ctx.restore(); }
+  }
+  if (!prog.running) drawOwed(ctx, tr.slots, tr.k, color, prog);
+  GA = ga;
+}
+function drawOwed(ctx, slots, k, color, prog) {
+  slots.forEach((p, j) => { if (!prog.run) drawLozenge(ctx, p.x, p.y, j < prog.paid, color, k*(prog.pops.get(j) || 1)); });
+}
+
+// =============================================================================================
+// The twelve directions. Each: `grow` (keeps its size on screen when zoomed out, like towerScale),
+// `seat(kind, P)` (where a building stands: x, y, rot), `shape(kind, P)` (its outline and details),
+// `track(kind, cost, P)` (where the owed charges sit), `time` and `done` styles, `queue` (the first
+// recruit's angle on the ring), and optional `gaps`, `under`, `furniture`, `draw` for the pieces
+// woven into the city itself. P: { r, R, cap, wh, s (the building scale), kinds: present kinds }.
+// =============================================================================================
+const pts = (a) => (ctx) => polyA(ctx, a);
+function boxOfA(a) { const xs = a.map((p) => p[0]), ys = a.map((p) => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; }
+function rr(ctx, x, y, w, h, r) { ctx.roundRect(x, y, w, h, r); }
+function upright(a, lift) { return (P) => { const d = P.R + 3 + lift*P.s; return { x: d*Math.cos(a), y: d*Math.sin(a), rot: 0 }; }; }
+/** Generic crown over an upright building at `seat`: the arc concentric with the city, just past its top. */
+function crownOver(seat, ext, cost, P) { const a = Math.atan2(seat.y, seat.x); return crownTrack(a, Math.hypot(seat.x, seat.y) + ext*P.s, cost, CROWN.lozenge*P.s/TOWER.minScale); }
+
+// Shared glyphs.
+const ANVIL = [[-7, 0.6], [-3.2, -0.4], [5.6, -0.4], [5.6, 2.6], [2.6, 2.6], [1.6, 4.6], [3.8, 5.9], [3.8, 7], [-3.8, 7], [-3.8, 5.9], [-1.6, 4.6], [-2.6, 2.6], [-4.2, 2.6]];
+function bladePts(rot) {
+  const b = [[0, -7.6], [1, -5.6], [1, 2.6], [3.1, 2.6], [3.1, 3.8], [1, 3.8], [1, 5.2], [1.6, 5.8], [0, 7.2], [-1.6, 5.8], [-1, 5.2], [-1, 3.8], [-3.1, 3.8], [-3.1, 2.6], [-1, 2.6], [-1, -5.6]];
+  const c = Math.cos(rot), s = Math.sin(rot);
+  return b.map(([x, y]) => [x*c - y*s, x*s + y*c]);
+}
+const GLADII = [bladePts(0.66), bladePts(-0.66)];
+const HAMMER = (() => {
+  const head = [[-2.2, -8.6], [3.4, -8.6], [3.4, -5.6], [-2.2, -5.6]], handle = [[0.2, -5.6], [1.4, -5.6], [1.4, -1.6], [0.2, -1.6]];
+  const r = -0.5, c = Math.cos(r), s = Math.sin(r), turn = (a) => a.map(([x, y]) => [x*c - y*s + 1.2, x*s + y*c + 1.2]);
+  return [turn(head), turn(handle)];
+})();
+const TENT = [[-0.5, -10], [0.5, -10], [0.5, -8.2], [7.6, 6], [-7.6, 6], [-0.5, -8.2]];
+function multi(polys) { return (ctx) => { ctx.beginPath(); for (const a of polys) { a.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); } }; }
+
+const T_VARIANTS = [
+  // ---- T0: the client today (Cut and ring towers, 53g; the Crown arc, 57k) ----
+  { id: 'T0', name: 'Today', grow: 'tower', plain: true, time: { barracks: 'rise', factory: 'rise' }, done: 'ring',
+    seat(kind, P) { const a = kind === 'barracks' ? TOWER.barracksAngle : TOWER.factoryAngle, d = P.R + TOWER.out; return { x: d*Math.cos(a), y: d*Math.sin(a), rot: a + Math.PI/2 }; },
+    shape(kind) {
+      const a = TOWER[kind];
+      return { path: pts(a), box: boxOfA(a), details: kind === 'barracks' ? (ctx, o) => { if (o.look === 'built') { ctx.beginPath(); ctx.rect(-1.4, 1.2, 2.8, 2.8); fill(ctx, C.casing); } } : null };
+    },
+    track(kind, cost, P) { const a = kind === 'barracks' ? TOWER.barracksAngle : TOWER.factoryAngle; return crownTrack(a, P.R + TOWER.out + TOWER.halfHeight*P.s, cost, CROWN.lozenge*P.s/TOWER.minScale); },
+    queue: TOWER.barracksAngle + 0.38 },
+
+  // ---- T1: Gatehouse and workshop: the same seats, upright elevations a size up ----
+  { id: 'T1', name: 'Gatehouse', base: 1.05, time: { barracks: 'rise', factory: 'rise' }, done: 'ring',
+    seat(kind, P) { return upright(kind === 'barracks' ? Math.PI*1.22 : Math.PI*0.94, 9.5)(P); },
+    shape(kind) {
+      if (kind === 'barracks') {
+        const a = [[-8, 7], [-8, -4], [-5.5, -8.6], [-3, -4], [-3, -1.6], [3, -1.6], [3, -4], [5.5, -8.6], [8, -4], [8, 7]];
+        return { path: pts(a), box: boxOfA(a),
+          shade(ctx) { ctx.save(); ctx.beginPath(); ctx.moveTo(-8, -4); ctx.lineTo(-5.5, -8.6); ctx.lineTo(-3, -4); ctx.closePath(); ctx.moveTo(3, -4); ctx.lineTo(5.5, -8.6); ctx.lineTo(8, -4); ctx.closePath(); ctx.clip(); ctx.beginPath(); ctx.rect(-9, -10, 18, 6.2); fill(ctx, C.plate); hatchLines(ctx, { x: -9, y: -10, width: 18, height: 6.2 }, -Math.PI/3, 1.1); stroke(ctx, hair(.55), C.ink, .75, 'butt'); ctx.restore(); },
+          details(ctx, o) {
+            if (o.look === 'plan') return;
+            ctx.beginPath(); ctx.moveTo(-2.3, 7); ctx.lineTo(-2.3, 2.8); ctx.arc(0, 2.8, 2.3, Math.PI, 0); ctx.lineTo(2.3, 7); ctx.closePath(); fill(ctx, C.casing);
+            ctx.beginPath(); ctx.rect(-6.1, -1.6, 1.3, 3); ctx.rect(4.8, -1.6, 1.3, 3); fill(ctx, C.casing);
+            ctx.beginPath(); ctx.moveTo(-8, -4); ctx.lineTo(-3, -4); ctx.moveTo(3, -4); ctx.lineTo(8, -4); stroke(ctx, hair(.8), C.ink, .9, 'butt');
+          } };
+      }
+      const a = [[-8.5, 7], [-8.5, -1], [-3, -5.6], [2.5, -1.6], [2.5, -10.2], [1.8, -10.2], [1.8, -12], [7, -12], [7, -10.2], [6.3, -10.2], [6.3, 7]];
+      return { path: pts(a), box: boxOfA(a),
+        details(ctx, o) {
+          if (o.look === 'plan') return;
+          ctx.beginPath(); ctx.rect(-6, 2, 3, 5); fill(ctx, C.casing);
+          circle(ctx, -3, -1.2, 1.15); fill(ctx, C.casing);
+          ctx.beginPath(); ctx.moveTo(2.5, -6.6); ctx.lineTo(6.3, -6.6); ctx.moveTo(2.5, -1.6); ctx.lineTo(6.3, -1.6); stroke(ctx, hair(.8), C.ink, .9, 'butt');
+        } };
+    },
+    track(kind, cost, P) { return crownOver(this.seat(kind, P), 11, cost, P); },
+    queue: Math.PI*1.22 + 0.44 },
+
+  // ---- T2: Scutum and cog: emblems stacked on the left, the payment on their rim ----
+  { id: 'T2', name: 'Scutum and cog', base: 1.12, time: { barracks: 'rise', factory: 'sweep' }, done: 'stamp',
+    seat(kind, P) { return upright(kind === 'barracks' ? Math.PI*1.13 : Math.PI*0.87, 9)(P); },
+    shape(kind) {
+      if (kind === 'barracks') {
+        return { path: (ctx) => { ctx.beginPath(); rr(ctx, -5.6, -7.6, 11.2, 15.2, [2.6, 2.6, 4, 4]); }, box: [-5.6, -7.6, 5.6, 7.6],
+          details(ctx, o) {
+            if (o.look === 'plan') return;
+            ctx.beginPath(); ctx.moveTo(0, -6.4); ctx.lineTo(0, -2.5); ctx.moveTo(0, 2.5); ctx.lineTo(0, 6.4); stroke(ctx, 1.9, C.casing, 1, 'butt');
+            ctx.beginPath(); ctx.moveTo(0, -6.4); ctx.lineTo(0, -2.5); ctx.moveTo(0, 2.5); ctx.lineTo(0, 6.4); stroke(ctx, hair(.7), C.ink, 1, 'butt');
+            circle(ctx, 0, 0, 2.6); fill(ctx, C.casing); circle(ctx, 0, 0, 2.4); stroke(ctx, hair(.9), C.ink, 1); circle(ctx, 0, 0, 1); fill(ctx, C.ink);
+            ctx.beginPath(); rr(ctx, -4.4, -6.4, 8.8, 12.8, [1.8, 1.8, 3, 3]); stroke(ctx, hair(.6), C.ink, .6);
+          } };
+      }
+      const cog = []; const n = 8;
+      for (let i = 0; i < n; i++) { const a = (i/n)*Math.PI*2 - Math.PI/2, w = Math.PI/n; for (const [da, r] of [[-w*.62, 6.3], [-w*.38, 8.1], [w*.38, 8.1], [w*.62, 6.3]]) cog.push([r*Math.cos(a + da), r*Math.sin(a + da)]); }
+      return { path: pts(cog), box: [-8.1, -8.1, 8.1, 8.1],
+        details(ctx, o) {
+          if (o.look === 'plan') return;
+          circle(ctx, 0, 0, 4.3); stroke(ctx, hair(.6), C.ink, .7);
+          circle(ctx, 0, 0, 2.5); fill(ctx, C.casing); circle(ctx, 0, 0, 2.5); stroke(ctx, hair(.9), C.ink, 1);
+        } };
+    },
+    track(kind, cost, P) { const c = this.seat(kind, P), r = 12.5*P.s; return rimTrack(c, r, -Math.PI*0.86, -Math.PI*0.14, cost, CROWN.lozenge*P.s/TOWER.minScale*1.1); },
+    queue: Math.PI*1.32 },
+
+  // ---- T3: Gate in the wall: the ring is the city wall, the barracks its gate, the factory a kiln on it ----
+  { id: 'T3', name: 'Gate in the wall', base: 1.0, time: { barracks: 'rise', factory: 'rise' }, done: 'stamp', woven: true,
+    gate: Math.PI*0.76, kiln: Math.PI*1.08,
+    gaps(P) { return P.kinds.includes('barracks') ? [{ a: this.gate, half: 14/P.R }] : []; },
+    seat(kind, P) { if (kind === 'barracks') { const p = polar(this.gate, P.R); return { ...p, rot: this.gate + Math.PI/2 }; } const p = polar(this.kiln, P.R + 2.4); return { ...p, rot: this.kiln + Math.PI/2 }; },
+    shape(kind, P) {
+      if (kind === 'barracks') {
+        const half = 13, g = 4.4; // two towers through the wall, the passage between
+        const L = [[-half, -7.4], [-g, -7.4], [-g, 3.8], [-half, 3.8]], R = [[g, -7.4], [half, -7.4], [half, 3.8], [g, 3.8]];
+        return { path: multi([L, R]), box: [-half, -7.4, half, 3.8],
+          details(ctx, o) {
+            if (o.look === 'plan') return;
+            ctx.beginPath(); ctx.rect(-g + 0.6, -3.2, 2*g - 1.2, 6.2); fill(ctx, C.cut, .92);
+            ctx.beginPath(); ctx.moveTo(-g + 0.6, -3); ctx.lineTo(-0.3, -1.6); ctx.moveTo(g - 0.6, -3); ctx.lineTo(0.3, -1.6); stroke(ctx, hair(.9), C.ink, .95, 'butt');
+            ctx.beginPath(); ctx.rect(-half + 2, -5.4, 3, 3); ctx.rect(half - 5, -5.4, 3, 3); fill(ctx, C.casing);
+          } };
+      }
+      const a = [[-5.6, 0.6], [-5.6, -6], [-2.3, -6], [-2.3, -14], [2.3, -14], [2.3, -6], [5.6, -6], [5.6, 0.6]];
+      return { path: pts(a), box: boxOfA(a),
+        details(ctx, o) { if (o.look === 'plan') return; ctx.beginPath(); ctx.rect(-1.3, -13, 2.6, 2.6); fill(ctx, C.casing); ctx.beginPath(); ctx.arc(0, 0.6, 2.8, Math.PI, 0); ctx.closePath(); fill(ctx, C.casing); ctx.beginPath(); ctx.moveTo(-2.3, -9.5); ctx.lineTo(2.3, -9.5); stroke(ctx, hair(.7), C.ink, .85, 'butt'); } };
+    },
+    track(kind, cost, P) { const a = kind === 'barracks' ? this.gate : this.kiln; return crownTrack(a, P.R + (kind === 'barracks' ? 7 : 16.5), cost, CROWN.lozenge); },
+    queue: Math.PI*1.2 },
+
+  // ---- T4: Mural crown: two arcs round the ring, merlons for the barracks, saw teeth for the factory ----
+  { id: 'T4', name: 'Mural crown', base: 1.0, woven: true, time: { barracks: 'teeth', factory: 'teeth' }, done: 'run',
+    arcs: { barracks: [Math.PI*1.06, Math.PI*1.40], factory: [Math.PI*0.68, Math.PI*0.98] },
+    seat(kind) { const [a0, a1] = this.arcs[kind]; return { ...polar((a0 + a1)/2, 0), rot: 0 }; },
+    band(kind, P, grow, seg) {
+      // The band outside the ring and its teeth, as a polygon in node coordinates.
+      const [a0, a1] = seg || this.arcs[kind], r0 = P.R + 3.8, r1 = P.R + 7.2, h = 3.2*grow, out = [];
+      const n = kind === 'barracks' ? Math.max(3, Math.round(((a1 - a0)*r1)/5.2)) : Math.max(3, Math.round(((a1 - a0)*r1)/6));
+      const da = (a1 - a0)/n;
+      out.push(polar(a0, r1));
+      for (let i = 0; i < n; i++) {
+        const b0 = a0 + i*da;
+        if (kind === 'barracks') { const m0 = b0 + da*.22, m1 = b0 + da*.78; out.push(polar(m0, r1), polar(m0, r1 + h), polar(m1, r1 + h), polar(m1, r1)); }
+        else { out.push(polar(b0 + da*.12, r1), polar(b0 + da*.12, r1 + h*1.15), polar(b0 + da, r1)); }
+      }
+      out.push(polar(a1, r1));
+      for (let i = 20; i >= 0; i--) out.push(polar(a0 + (a1 - a0)*i/20, r0));
+      return out;
+    },
+    draw(ctx, kind, o, P) {
+      const [a0, a1] = this.arcs[kind];
+      if (o.look === 'built' || o.look === 'rising') {
+        const grow = o.look === 'built' ? 1 : ease.engrave(o.time), band = this.band(kind, P, grow);
+        poly(ctx, band); stroke(ctx, 3.2, C.casing, 1, 'round', 'miter'); fill(ctx, C.plate);
+        ctx.save(); poly(ctx, band); ctx.clip();
+        if (o.look === 'built') { hatchLines(ctx, { x: -P.R - 14, y: -P.R - 14, width: 2*P.R + 28, height: 2*P.R + 28 }, o.enemy ? -Math.PI/4 : 0, o.enemy ? 1.9 : 1.7); stroke(ctx, hair(.8), o.color, 1, 'butt'); }
+        else { poly(ctx, band); fill(ctx, o.color); }
+        ctx.restore();
+        poly(ctx, band);
+        if (o.enemy && o.look === 'built') { stroke(ctx, hair(2.5), C.ink, 1, 'round', 'miter'); poly(ctx, band); stroke(ctx, hair(.75), C.casing, 1, 'round', 'miter'); }
+        else stroke(ctx, hair(1), C.ink, 1, 'round', 'miter');
+        return;
+      }
+      // Owed: the band in `cost` cells, dotted until paid, solid when paid (the payment is the band itself).
+      const n = o.cost, da = (a1 - a0)/n;
+      for (let j = 0; j < n; j++) {
+        const seg = [a0 + j*da + 0.012, a0 + (j + 1)*da - 0.012], cell = this.band(kind, P, 0, seg);
+        const pop = o.pops.get(j) || 1;
+        ctx.save(); if (pop !== 1) { const m = polar((seg[0] + seg[1])/2, P.R + 5.5); ctx.translate(m.x, m.y); ctx.scale(pop, pop); ctx.translate(-m.x, -m.y); }
+        if (j < o.paid) { poly(ctx, cell); stroke(ctx, 3.2, C.casing, 1, 'round', 'miter'); fill(ctx, o.color); poly(ctx, cell); stroke(ctx, hair(1), C.ink, 1, 'round', 'miter'); }
+        else { poly(ctx, cell); stroke(ctx, 3.2, C.casing, .55, 'round', 'miter'); fill(ctx, C.plate, .6); poly(ctx, cell); ctx.setLineDash([1.3, 1.5]); stroke(ctx, hair(1), C.ink, .8, 'butt'); ctx.setLineDash([]); }
+        ctx.restore();
+      }
+    },
+    slots(kind, cost, P) { const [a0, a1] = this.arcs[kind], da = (a1 - a0)/cost, out = []; for (let j = 0; j < cost; j++) out.push(polar(a0 + (j + .5)*da, P.R + 5.5)); return out; },
+    doneFx(ctx, kind, k, P) {
+      if (k <= 0 || k >= 1) return; const [a0, a1] = this.arcs[kind], a = a0 + (a1 - a0)*ease.engrave(k), p = polar(a, P.R + 8.5);
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a); lozPath(ctx, 0, 0, 5.6); fill(ctx, C.casing, 1 - k*k); lozPath(ctx, 0, 0, 3.6); fill(ctx, C.ivory, 1 - k*k); ctx.restore();
+    },
+    queue: Math.PI*1.46 },
+
+  // ---- T5: Camp plans: top-down plans on short spurs, the castra square and the round kiln ----
+  { id: 'T5', name: 'Camp plans', base: 1.0, time: { barracks: 'hatch', factory: 'hatch' }, done: 'stamp',
+    angles: { barracks: Math.PI*0.80, factory: Math.PI*1.19 },
+    seat(kind, P) { return upright(this.angles[kind], 15.5)(P); },
+    furniture(ctx, kind, P, alpha) {
+      const a = this.angles[kind], p0 = polar(a, P.R + 3.2), p1 = polar(a, P.R + 3 + 15.5*P.s - 7.6*P.s);
+      const ga = GA; GA = ga*alpha;
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); stroke(ctx, 4.6, C.casing, .9, 'butt');
+      const nx = -Math.sin(a)*1.1, ny = Math.cos(a)*1.1;
+      ctx.beginPath(); ctx.moveTo(p0.x + nx, p0.y + ny); ctx.lineTo(p1.x + nx, p1.y + ny); ctx.moveTo(p0.x - nx, p0.y - ny); ctx.lineTo(p1.x - nx, p1.y - ny); stroke(ctx, hair(.75), C.ink, .9, 'butt');
+      GA = ga;
+    },
+    shape(kind) {
+      if (kind === 'barracks') {
+        return { path: (ctx) => { ctx.beginPath(); rr(ctx, -7.2, -7.2, 14.4, 14.4, 3.2); }, box: [-7.2, -7.2, 7.2, 7.2],
+          details(ctx, o) {
+            if (o.look === 'plan') return;
+            ctx.beginPath(); ctx.moveTo(0, -7.2); ctx.lineTo(0, 7.2); ctx.moveTo(-7.2, 0); ctx.lineTo(7.2, 0); stroke(ctx, 2.2, C.casing, 1, 'butt');
+            ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(0, 6); ctx.moveTo(-6, 0); ctx.lineTo(6, 0); stroke(ctx, hair(.5), C.ink, .55, 'butt');
+            ctx.beginPath(); ctx.rect(-1.5, -8.6, 3, 2.8); ctx.rect(-1.5, 5.8, 3, 2.8); ctx.rect(-8.6, -1.5, 2.8, 3); ctx.rect(5.8, -1.5, 2.8, 3); fill(ctx, C.casing);
+            ctx.beginPath(); rr(ctx, -5.6, -5.6, 11.2, 11.2, 2); stroke(ctx, hair(.5), C.ink, .45);
+          } };
+      }
+      return { path: (ctx) => circle(ctx, 0, 0, 7.6), box: [-7.6, -7.6, 7.6, 7.6],
+        details(ctx, o) {
+          if (o.look === 'plan') return;
+          ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i*Math.PI/3 + Math.PI/6; ctx.moveTo(3*Math.cos(a), 3*Math.sin(a)); ctx.lineTo(7.6*Math.cos(a), 7.6*Math.sin(a)); } stroke(ctx, 1.7, C.casing, 1, 'butt');
+          circle(ctx, 0, 0, 3.1); fill(ctx, C.casing); circle(ctx, 0, 0, 3.1); stroke(ctx, hair(.9), C.ink, 1); circle(ctx, 0, 0, 5.4); stroke(ctx, hair(.5), C.ink, .45);
+        } };
+    },
+    track(kind, cost, P) { const c = this.seat(kind, P), a = this.angles[kind], r = 11.5*P.s; return rimTrack(c, r, a - 1.25, a + 1.25, cost, CROWN.lozenge*P.s/TOWER.minScale*1.05); },
+    queue: Math.PI*1.33 },
+
+  // ---- T6: Tabula ansata: one cut tablet beside the city, a glyph per building ----
+  { id: 'T6', name: 'Tabula ansata', base: 1.0, time: { barracks: 'rise', factory: 'rise' }, done: 'sweep', tablet: true,
+    tab(P) { const n = Math.max(1, P.kinds.length), W = 15*n + 3; return { n, W, cx: -(P.R + 3 + 4.5*P.s + (W/2 + 4.5)*P.s), cy: -1 }; },
+    seat(kind, P) { const T = this.tab(P), i = P.kinds.length > 1 && kind === 'factory' ? 1 : 0, x = T.cx + (-T.W/2 + 1.5 + 7.5 + 15*i)*P.s; return { x, y: T.cy, rot: 0 }; },
+    furniture(ctx, kind, P, alpha) {
+      if (kind !== P.kinds[0]) return;
+      const T = this.tab(P), W = T.W, H = 16;
+      const ga = GA; GA = ga*alpha;
+      frame(ctx, T.cx, T.cy, 0, P.s, () => {
+        const shape = [[-W/2, -H/2], [W/2, -H/2], [W/2, -3], [W/2 + 4.6, -H/2 + .4], [W/2 + 4.6, H/2 - .4], [W/2, 3], [W/2, H/2], [-W/2, H/2], [-W/2, 3], [-W/2 - 4.6, H/2 - .4], [-W/2 - 4.6, -H/2 + .4], [-W/2, -3]];
+        polyA(ctx, shape); stroke(ctx, 3.2, C.casing, 1, 'round', 'miter'); fill(ctx, '#1a1712');
+        polyA(ctx, shape); stroke(ctx, hair(.9), C.ink, .9, 'round', 'miter');
+        ctx.beginPath(); ctx.rect(-W/2 + 1.6, -H/2 + 1.6, W - 3.2, H - 3.2); stroke(ctx, hair(.6), C.ink, .55, 'butt', 'miter');
+        const lz = (x, y) => { lozPath(ctx, x, y, 1.9); fill(ctx, C.ink, .8); };
+        lz(-W/2 + 1.6, -H/2 + 1.6); lz(W/2 - 1.6, -H/2 + 1.6); lz(-W/2 + 1.6, H/2 - 1.6); lz(W/2 - 1.6, H/2 - 1.6);
+      });
+      GA = ga;
+    },
+    shape(kind) {
+      const k = 0.9;
+      if (kind === 'barracks') { const g = GLADII.map((a) => a.map(([x, y]) => [x*k, y*k])); return { solid: true, path: multi(g), box: [-6.6, -6.6, 6.6, 6.6] }; }
+      const parts = [ANVIL.map(([x, y]) => [x*k*.95, (y + 0.6)*k]), ...HAMMER.map((a) => a.map(([x, y]) => [x*k, y*k + 0.6]))];
+      return { solid: true, path: multi(parts), box: [-6.6, -7.2, 6.6, 6.8] };
+    },
+    track(kind, cost, P) { const c = this.seat(kind, P), y = c.y + 13.5*P.s, w = 6.2*P.s; return rowTrack({ x: c.x - w, y }, { x: c.x + w, y }, cost, CROWN.lozenge*P.s/TOWER.minScale*.82); },
+    queue: Math.PI*1.3 },
+
+  // ---- T7: Quarter: the buildings in elevation on a ground line beside the city ----
+  { id: 'T7', name: 'Quarter skyline', base: 1.15, time: { barracks: 'rise', factory: 'rise' }, done: 'stamp',
+    anchor(P) { return { x: -(P.R + 3.5), y: 5 }; },
+    widths: { barracks: 18.5, factory: 11.5 },
+    offset(kind, P) { let x = 0; for (const k of ['barracks', 'factory']) { if (!P.kinds.includes(k)) continue; if (k === kind) return x; x += this.widths[k] + 1.5; } return x; },
+    seat(kind, P) { const A = this.anchor(P), x = A.x - this.offset(kind, P)*P.s; return { x, y: A.y, rot: 0 }; },
+    furniture(ctx, kind, P, alpha) {
+      if (kind !== P.kinds[0]) return;
+      const A = this.anchor(P); let w = 0; for (const k of P.kinds) w += this.widths[k] + 1.5;
+      const ga = GA; GA = ga*alpha;
+      frame(ctx, A.x, A.y, 0, P.s, () => {
+        ctx.beginPath(); ctx.moveTo(1.5, 0); ctx.lineTo(-w - 2.5, 0); stroke(ctx, 3, C.casing, 1, 'butt'); ctx.beginPath(); ctx.moveTo(1.5, 0); ctx.lineTo(-w - 2.5, 0); stroke(ctx, hair(1), C.ink, 1, 'butt');
+        ctx.beginPath(); for (let x = -w - 1.5; x < 0.5; x += 2.2) { ctx.moveTo(x, 1.4); ctx.lineTo(x - 1.6, 3.4); } stroke(ctx, 1.9, C.casing, .9, 'butt');
+        ctx.beginPath(); for (let x = -w - 1.5; x < 0.5; x += 2.2) { ctx.moveTo(x, 1.4); ctx.lineTo(x - 1.6, 3.4); } stroke(ctx, hair(.55), C.ink, .55, 'butt');
+      });
+      GA = ga;
+    },
+    shape(kind) {
+      if (kind === 'barracks') {
+        const a = [[-17.5, 0], [-17.5, -7], [-18.6, -7], [-9.25, -11.8], [0.1, -7], [-1, -7], [-1, 0]];
+        return { path: pts(a), box: boxOfA(a),
+          shade(ctx, o) { ctx.save(); polyA(ctx, [[-18.6, -7], [-9.25, -11.8], [0.1, -7]]); ctx.clip(); hatchLines(ctx, { x: -19, y: -12, width: 20, height: 6 }, -Math.PI/3, 1.15); stroke(ctx, hair(.55), C.ink, .55, 'butt'); ctx.restore(); },
+          details(ctx, o) {
+            if (o.look === 'plan') return;
+            ctx.beginPath(); ctx.moveTo(-18.6, -7); ctx.lineTo(0.1, -7); stroke(ctx, hair(.8), C.ink, .9, 'butt');
+            for (const x of [-14.2, -9.25, -4.3]) { ctx.beginPath(); ctx.moveTo(x - 1.4, 0); ctx.lineTo(x - 1.4, -2.6); ctx.arc(x, -2.6, 1.4, Math.PI, 0); ctx.lineTo(x + 1.4, 0); ctx.closePath(); fill(ctx, C.casing); }
+          } };
+      }
+      const a = [[-11, 0], [-11, -6], [-5.6, -9.6], [-3.4, -8.2], [-3.4, -16], [-3.9, -16], [-3.9, -17.6], [0.5, -17.6], [0.5, -16], [0, -16], [0, 0]];
+      return { path: pts(a), box: boxOfA(a),
+        shade(ctx) { ctx.save(); polyA(ctx, [[-3.4, -16], [0, -16], [0, 0], [-1.4, 0], [-1.4, -16]]); ctx.clip(); hatchLines(ctx, { x: -4, y: -17, width: 5, height: 18 }, Math.PI/2.4, 1.1); stroke(ctx, hair(.5), C.ink, .5, 'butt'); ctx.restore(); },
+        details(ctx, o) {
+          if (o.look === 'plan') return;
+          ctx.beginPath(); ctx.rect(-9, -3.8, 2.8, 3.8); fill(ctx, C.casing); circle(ctx, -5.6, -5.4, 1.05); fill(ctx, C.casing);
+          ctx.beginPath(); ctx.moveTo(-3.4, -12.5); ctx.lineTo(0, -12.5); stroke(ctx, hair(.75), C.ink, .9, 'butt');
+        } };
+    },
+    track(kind, cost, P) { const c = this.seat(kind, P), w = this.widths[kind]*P.s, y = c.y - (kind === 'barracks' ? 16.5 : 21.5)*P.s; return rowTrack({ x: c.x - w + 1, y }, { x: c.x - 1, y }, cost, CROWN.lozenge*P.s/TOWER.minScale*.9); },
+    queue: Math.PI*1.32 },
+
+  // ---- T8: Bare glyphs: a tent and an anvil, solid in the owner's colour, no container ----
+  { id: 'T8', name: 'Tent and anvil', base: 1.0, time: { barracks: 'rise', factory: 'rise' }, done: 'ring',
+    seat(kind, P) { return upright(kind === 'barracks' ? Math.PI*1.21 : Math.PI*0.93, 8.5)(P); },
+    shape(kind) {
+      if (kind === 'barracks') return { solid: true, path: pts(TENT), box: boxOfA(TENT),
+        details(ctx, o) { if (o.look === 'plan') return; polyA(ctx, [[-2.7, 6], [0, 0.4], [2.7, 6]]); fill(ctx, C.casing); ctx.beginPath(); ctx.moveTo(0, -8.2); ctx.lineTo(0, 0.4); stroke(ctx, hair(.7), C.casing, .9, 'butt'); } };
+      const a = ANVIL.map(([x, y]) => [x*1.08, (y - 3)*1.08]);
+      return { solid: true, path: pts(a), box: boxOfA(a),
+        details(ctx, o) { if (o.look === 'plan') return; ctx.beginPath(); ctx.moveTo(-3.4, -2.8); ctx.lineTo(6, -2.8); stroke(ctx, hair(.6), C.ivory, .7, 'butt'); } };
+    },
+    track(kind, cost, P) { return crownOver(this.seat(kind, P), 10, cost, P); },
+    queue: Math.PI*1.21 + 0.44 },
+
+  // ---- T9: Bastion and drum: the buildings fused to the ring like the works of a fort ----
+  { id: 'T9', name: 'Bastion and drum', base: 1.0, time: { barracks: 'rise', factory: 'rise' }, done: 'ring',
+    angles: { barracks: Math.PI*1.22, factory: Math.PI*0.9 },
+    seat(kind, P) { const a = this.angles[kind], p = polar(a, P.R + 2.2); return { ...p, rot: a + Math.PI/2 }; },
+    shape(kind) {
+      if (kind === 'barracks') { const a = [[-6.4, 0.8], [-6.4, -4.4], [0, -11.2], [6.4, -4.4], [6.4, 0.8]]; return { path: pts(a), box: boxOfA(a),
+        details(ctx, o) { if (o.look === 'plan') return; polyA(ctx, [[-3.6, -3.4], [0, -7.3], [3.6, -3.4], [3.6, -0.6], [-3.6, -0.6]]); stroke(ctx, hair(.55), C.ink, .55, 'round', 'miter'); ctx.beginPath(); ctx.rect(-1.3, -2.6, 2.6, 3.4); fill(ctx, C.casing); } }; }
+      return { path: (ctx) => { ctx.beginPath(); ctx.moveTo(-4, 0.8); ctx.lineTo(-4, -2); ctx.arc(0, -5.6, 5.8, Math.PI*0.79, Math.PI*0.21 + Math.PI*2, false); ctx.lineTo(4, 0.8); ctx.closePath(); }, box: [-5.8, -11.4, 5.8, 0.8],
+        details(ctx, o) { if (o.look === 'plan') return; circle(ctx, 0, -5.6, 3.6); stroke(ctx, hair(.55), C.ink, .55); circle(ctx, 0, -5.6, 1.8); fill(ctx, C.casing); circle(ctx, 0, -5.6, 1.8); stroke(ctx, hair(.8), C.ink, 1); } };
+    },
+    track(kind, cost, P) { return crownTrack(this.angles[kind], P.R + 2.2 + 11.4*P.s, cost, CROWN.lozenge*P.s/TOWER.minScale); },
+    queue: Math.PI*1.22 + 0.46 },
+
+  // ---- T10: Sockets: two fixed inlays by the ring; an own city shows its empty ones; the rim is the payment ----
+  { id: 'T10', name: 'Sockets', base: 1.0, time: { barracks: 'rise', factory: 'sweep' }, done: 'stamp', sockets: true,
+    seat(kind, P) { return upright(kind === 'barracks' ? Math.PI*1.19 : Math.PI*0.91, 7.6)(P); },
+    rimPath(kind) { return kind === 'barracks' ? (ctx) => { ctx.beginPath(); rr(ctx, -7, -7, 14, 14, 1.4); } : (ctx) => circle(ctx, 0, 0, 7.6); },
+    shape(kind) {
+      if (kind === 'barracks') {
+        const a = [[-4.6, 4.8], [-4.6, -1.2], [-5.4, -1.2], [0, -5.6], [5.4, -1.2], [4.6, -1.2], [4.6, 4.8]];
+        return { path: pts(a), box: [-5.4, -5.6, 5.4, 4.8], details(ctx, o) { if (o.look === 'plan') return; ctx.beginPath(); ctx.moveTo(-1.4, 4.8); ctx.lineTo(-1.4, 2); ctx.arc(0, 2, 1.4, Math.PI, 0); ctx.lineTo(1.4, 4.8); ctx.closePath(); fill(ctx, C.casing); } };
+      }
+      const cog = []; const n = 6;
+      for (let i = 0; i < n; i++) { const a = (i/n)*Math.PI*2 - Math.PI/2, w = Math.PI/n; for (const [da, r] of [[-w*.6, 4], [-w*.36, 5.3], [w*.36, 5.3], [w*.6, 4]]) cog.push([r*Math.cos(a + da), r*Math.sin(a + da)]); }
+      return { path: pts(cog), box: [-5.3, -5.3, 5.3, 5.3], details(ctx, o) { if (o.look === 'plan') return; circle(ctx, 0, 0, 1.6); fill(ctx, C.casing); circle(ctx, 0, 0, 1.6); stroke(ctx, hair(.75), C.ink, 1); } };
+    },
+    socket(ctx, kind, o, P) {
+      // The recess and its rim; while paid for, the rim is cut into `cost` runs that fill in the owner's colour.
+      const path = this.rimPath(kind);
+      path(ctx); stroke(ctx, 3.4, C.casing, 1); fill(ctx, C.cut, .92);
+      path(ctx); stroke(ctx, hair(.6), C.ink, .5);
+      if (o.look === 'plan' || o.look === 'paying') {
+        const runs = this.rimRuns(kind, o.cost);
+        runs.forEach((run, j) => {
+          const pop = o.pops ? (o.pops.get(j) || 1) : 1;
+          poly(ctx, run, false); stroke(ctx, 2.6*pop, C.casing, 1, 'butt');
+          poly(ctx, run, false);
+          if (j < o.paid) stroke(ctx, 1.8*pop, o.color, 1, 'butt'); else { ctx.setLineDash([1.1, 1.3]); stroke(ctx, hair(.9), C.ink, .9, 'butt'); ctx.setLineDash([]); }
+        });
+      } else { path(ctx); stroke(ctx, hair(1), C.ink, .95); }
+    },
+    rimRuns(kind, n) {
+      const loop = kind === 'barracks' ? [[-7, -7], [7, -7], [7, 7], [-7, 7], [-7, -7]].map(([x, y]) => ({ x: x*.92 + 0, y: y*.92 })) : arcPts(0, 0, 7.2, -Math.PI/2, Math.PI*1.5, 48);
+      const L = trackLen(loop), runs = [];
+      for (let j = 0; j < n; j++) { const d0 = L*j/n + 0.9, d1 = L*(j + 1)/n - 0.9, run = []; for (let d = d0; d < d1; d += 0.7) run.push(trackAt(loop, d)); run.push(trackAt(loop, d1)); runs.push(run); }
+      return runs;
+    },
+    slots(kind, cost, P) { const seat = this.seat(kind, P); return this.rimRuns(kind, cost).map((run) => { const m = run[Math.floor(run.length/2)]; return { x: seat.x + m.x*P.s, y: seat.y + m.y*P.s }; }); },
+    queue: Math.PI*1.19 + 0.42 },
+
+  // ---- T11: Flanking the store: the barracks and the factory at the two ends of the warehouse row ----
+  { id: 'T11', name: 'Flanking the store', base: 1.05, time: { barracks: 'rise', factory: 'rise' }, done: 'stamp',
+    seat(kind, P) { const xs = rowXs(P.wh), half = xs.length ? -xs[0] + LOZ.casing*.71 : 4, x = half + 3 + 7.2*P.s; return { x: kind === 'barracks' ? -x : x, y: P.R + LOZ.drop - 1, rot: 0 }; },
+    shape(kind) {
+      if (kind === 'barracks') {
+        const a = [[-6, 6], [-6, -0.8], [-7.3, -0.8], [0, -7.2], [7.3, -0.8], [6, -0.8], [6, 6]];
+        return { path: pts(a), box: boxOfA(a),
+          shade(ctx) { ctx.save(); polyA(ctx, [[-7.3, -0.8], [0, -7.2], [7.3, -0.8]]); ctx.clip(); hatchLines(ctx, { x: -8, y: -8, width: 16, height: 8 }, -Math.PI/3, 1.15); stroke(ctx, hair(.5), C.ink, .5, 'butt'); ctx.restore(); },
+          details(ctx, o) { if (o.look === 'plan') return; ctx.beginPath(); ctx.moveTo(-1.7, 6); ctx.lineTo(-1.7, 2.6); ctx.arc(0, 2.6, 1.7, Math.PI, 0); ctx.lineTo(1.7, 6); ctx.closePath(); fill(ctx, C.casing); ctx.beginPath(); ctx.moveTo(-7.3, -0.8); ctx.lineTo(7.3, -0.8); stroke(ctx, hair(.75), C.ink, .9, 'butt'); } };
+      }
+      return { path: (ctx) => { ctx.beginPath(); ctx.moveTo(-6.6, 6); ctx.lineTo(-6.6, 0.4); ctx.bezierCurveTo(-6.6, -5.4, -2.6, -7.2, 1.2, -6.9); ctx.lineTo(1.2, -9.8); ctx.lineTo(0.6, -9.8); ctx.lineTo(0.6, -11.3); ctx.lineTo(4.6, -11.3); ctx.lineTo(4.6, -9.8); ctx.lineTo(4, -9.8); ctx.lineTo(4, -5.6); ctx.bezierCurveTo(5.8, -4.2, 6.6, -2.2, 6.6, 0.4); ctx.lineTo(6.6, 6); ctx.closePath(); }, box: [-6.6, -11.3, 6.6, 6],
+        details(ctx, o) { if (o.look === 'plan') return; ctx.beginPath(); ctx.moveTo(-2.4, 6); ctx.lineTo(-2.4, 3.2); ctx.arc(0, 3.2, 2.4, Math.PI, 0); ctx.lineTo(2.4, 6); ctx.closePath(); fill(ctx, C.casing); ctx.beginPath(); ctx.moveTo(-6.6, 0.4); ctx.lineTo(6.6, 0.4); stroke(ctx, hair(.75), C.ink, .9, 'butt'); } };
+    },
+    track(kind, cost, P) { const c = this.seat(kind, P), dir = kind === 'barracks' ? -1 : 1, x0 = c.x + dir*(7.4*P.s + 3), x1 = x0 + dir*(cost*8.2*P.s*.82 + 1); return rowTrack({ x: x0, y: c.y + 1 }, { x: x1, y: c.y + 1 }, cost, CROWN.lozenge*P.s/TOWER.minScale*.95); },
+    queue: Math.PI*1.3 },
+
+  // ---- T12: Castrum and stack: the barracks squares the whole city, the factory a chimney stack ----
+  { id: 'T12', name: 'Castrum and stack', base: 1.0, time: { barracks: 'hatch', factory: 'rise' }, done: 'stamp', under: ['barracks'], fixed: ['barracks'],
+    seat(kind, P) { if (kind === 'barracks') return { x: 0, y: 0, rot: 0 }; return { x: -(P.R + 9.5*P.s), y: -4 + 5.2*P.s, rot: 0 }; },
+    shape(kind, P) {
+      if (kind === 'barracks') {
+        const h = P.R + 6.2;
+        return { sparse: true, path: (ctx) => { ctx.beginPath(); rr(ctx, -h, -h, 2*h, 2*h, 3); }, box: [-h, -h, h, h],
+          details(ctx, o) {
+            if (o.look === 'plan') return;
+            ctx.beginPath(); rr(ctx, -h + 1.8, -h + 1.8, 2*h - 3.6, 2*h - 3.6, 2); stroke(ctx, hair(.6), C.ink, .55);
+            for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { ctx.beginPath(); ctx.rect(sx*h - 2.6 - sx*0.6, sy*h - 2.6 - sy*0.6, 5.2, 5.2); fill(ctx, C.casing); ctx.beginPath(); ctx.rect(sx*h - 2.6 - sx*0.6, sy*h - 2.6 - sy*0.6, 5.2, 5.2); stroke(ctx, hair(.9), C.ink, 1, 'butt', 'miter'); }
+          } };
+      }
+      const a = [[-4.4, 0], [-4.4, -4.6], [-2, -4.6], [-2, -14], [-2.7, -14], [-2.7, -15.8], [2.7, -15.8], [2.7, -14], [2, -14], [2, -4.6], [4.4, -4.6], [4.4, 0]];
+      return { path: pts(a), box: boxOfA(a), details(ctx, o) { if (o.look === 'plan') return; ctx.beginPath(); ctx.moveTo(-2, -10); ctx.lineTo(2, -10); ctx.moveTo(-2, -7); ctx.lineTo(2, -7); stroke(ctx, hair(.7), C.ink, .85, 'butt'); ctx.beginPath(); ctx.arc(0, 0, 1.9, Math.PI, 0); ctx.closePath(); fill(ctx, C.casing); } };
+    },
+    track(kind, cost, P) { if (kind === 'barracks') return crownTrack(Math.PI*1.25, (P.R + 6.2)*Math.SQRT2 + 1, cost, CROWN.lozenge); return crownOver(this.seat(kind, P), 15.8, cost, P); },
+    queue: Math.PI*1.32 },
+];
+const T_BY = Object.fromEntries(T_VARIANTS.map((v) => [v.id, v]));
+
+// =============================================================================================
+// Topic C: where the terrain chevrons of a group standing in a node go.
+// =============================================================================================
+const C_VARIANTS = [
+  { id: 'C0', name: 'Today, outside' },
+  { id: 'C1a', name: 'Ring gap, VP top' },
+  { id: 'C1b', name: 'Ring gap, VP left' },
+  { id: 'C2', name: 'Shoulder inside' },
+  { id: 'C3', name: 'Over the ring' },
+  { id: 'C4a', name: 'Crest stacked' },
+  { id: 'C4b', name: 'Crest side' },
+  { id: 'C5', name: 'Above the ring' },
+];
+const C_GAP_ANGLE = -0.23*Math.PI;
+
+// =============================================================================================
+// State (also in the address).
+// =============================================================================================
+const STATES = [
+  { id: 'all', name: 'All' }, { id: 'none', name: 'None' }, { id: 'barracks', name: 'Barracks' }, { id: 'factory', name: 'Factory' },
+  { id: 'both', name: 'Both' }, { id: 'paying', name: 'Paying' }, { id: 'rising', name: 'Rising' }, { id: 'done', name: 'Just built' },
+  { id: 'captured', name: 'Captured' }, { id: 'enemy', name: 'Enemy, DEC-31' },
+];
+const TL = 6000;
+const S = { t: ['T0', 'T1', 'T5', 'T11'], c: ['C0'], cmp: 't', state: 'all', node: 'mixed', ground: 'plains', col: 'lapis', units: 3, charged: 2,
+  mark: -1, sel: false, queue: true, cb: true, zoom: 100, gray: false, still: false, time: 2600, playing: true };
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  const list = (k, all) => (q.get(k) || '').split(',').filter((v) => all.some((x) => x.id === v));
+  if (q.get('cmp') === 't' || q.get('cmp') === 'c') S.cmp = q.get('cmp');
+  const t = list('t', T_VARIANTS), c = list('c', C_VARIANTS);
+  if (t.length) S.t = t.slice(0, 4); if (c.length) S.c = c.slice(0, 4);
+  if (S.cmp === 't') S.c = S.c.slice(0, 1); else S.t = S.t.slice(0, 1);
+  if (STATES.some((s) => s.id === q.get('s'))) S.state = q.get('s');
+  if (['mixed', ...Object.keys(NODE)].includes(q.get('n'))) S.node = q.get('n');
+  if (['plains', 'forest', 'snow', 'fog'].includes(q.get('g'))) S.ground = q.get('g');
+  if (COLOURS[q.get('col')]) S.col = q.get('col');
+  const u = Number(q.get('u')); if (q.has('u') && u >= 0 && u <= 9) S.units = u;
+  const ch = Number(q.get('ch')); if (q.has('ch') && ch >= 0 && ch <= 9) S.charged = Math.min(ch, S.units);
+  const m = Number(q.get('m')); if (q.has('m') && [-2, -1, 0, 1, 2].includes(m)) S.mark = m;
+  if (q.has('sel')) S.sel = q.get('sel') === '1'; if (q.has('q')) S.queue = q.get('q') === '1'; if (q.has('cb')) S.cb = q.get('cb') === '1';
+  const z = Number(q.get('z')); if (z >= 40 && z <= 320) S.zoom = z;
+  S.gray = q.get('gr') === '1'; S.still = q.get('rm') === '1';
+  const tm = Number(q.get('tm')); if (q.has('tm') && tm >= 0 && tm <= TL) S.time = tm;
+  if (q.has('play')) S.playing = q.get('play') === '1';
+}
+function writeHash() {
+  const h = `cmp=${S.cmp}&t=${S.t.join(',')}&c=${S.c.join(',')}&s=${S.state}&n=${S.node}&g=${S.ground}&col=${S.col}&u=${S.units}&ch=${S.charged}&m=${S.mark}&sel=${S.sel ? 1 : 0}&q=${S.queue ? 1 : 0}&cb=${S.cb ? 1 : 0}&z=${S.zoom}&gr=${S.gray ? 1 : 0}&rm=${S.still ? 1 : 0}&tm=${Math.round(S.time)}&play=${S.playing ? 1 : 0}`;
+  history.replaceState(null, '', '#' + h);
+}
+const ownColour = () => COLOURS[S.col];
+const enemyColour = () => (S.col === 'minium' ? COLOURS.lapis : COLOURS.minium);
+
+// =============================================================================================
+// The story of a tile at time t (ms, 0..6000): which buildings it has and how far each is.
+// Build: { status: 'built' | 'build', prog } where prog = { cost, paid, flights, pops, run, running, time, done }.
+// =============================================================================================
+const EMPTY_PROG = { cost: 0, paid: 0, flights: [], pops: new Map(), run: null, running: false, time: 0, done: 0 };
+function payProgress(cost, pays, t, timeMs) {
+  // pays: [{ at, from }]: one charge per payment; the last lands, then the lozenges run in, then the time runs.
+  const still = S.still, prog = { cost, paid: 0, flights: [], pops: new Map(), run: null, running: false, time: 0, done: 0 };
+  pays.forEach((p, j) => {
+    const age = t - p.at;
+    if (age < 0) return;
+    if (age < PAY.flightMs && !still) { prog.flights.push({ j, from: p.from, q: ease.travel(age/PAY.flightMs), src: p.src }); return; }
+    prog.paid++;
+    const l = age - PAY.flightMs;
+    if (!still && l < PAY.popMs) prog.pops.set(j, 1 + PAY.pop*Math.sin((l/PAY.popMs)*Math.PI));
+  });
+  const last = pays[pays.length - 1].at + PAY.flightMs;
+  if (prog.paid >= cost && t >= last) {
+    const into = t - last, runEnd = PAY.runMs + (cost - 1)*PAY.runStagger;
+    if (!still && into < runEnd) { prog.run = []; for (let j = 0; j < cost; j++) prog.run.push(ease.engrave((into - j*PAY.runStagger)/PAY.runMs)); }
+    prog.running = true; prog.time = clamp01((t - last)/timeMs);
+  }
+  return prog;
+}
+function tileStory(state, t, G) {
+  const st = { owner: 'own', b: null, f: null, stock: G.stock, chargedDelta: 0, group: 'own', groupIn: 1, flip: null, wh: true };
+  const built = { status: 'built' };
+  if (state === 'barracks') st.b = built;
+  else if (state === 'factory') st.f = built;
+  else if (state === 'both') { st.b = built; st.f = built; }
+  else if (state === 'paying') {
+    const stock0 = Math.min(2, G.wh), fromG = S.units > 0 && S.charged > 0;
+    const pays = [{ at: 400, from: 'w', src: stock0 - 1 }, { at: 1500, from: stock0 > 1 ? 'w' : 'g', src: 0 }, { at: 2600, from: fromG ? 'g' : 'w', src: 0 }];
+    const prog = payProgress(COST.barracks, pays, t, 10000);
+    st.b = { status: 'build', prog };
+    let taken = 0, unitTaken = 0; for (const p of pays) if (t >= p.at) { if (p.from === 'w') taken++; else unitTaken++; }
+    st.stock = Math.max(0, stock0 - taken); st.chargedDelta = -unitTaken;
+  } else if (state === 'rising') {
+    const time = clamp01((t - 200)/5000), prog = { ...EMPTY_PROG, cost: COST.factory, paid: COST.factory, running: true, time };
+    st.f = time >= 1 ? { status: 'built', done: clamp01((t - 5200)/PAY.doneMs) } : { status: 'build', prog };
+    st.stock = 1;
+  } else if (state === 'done') {
+    const time = clamp01(0.82 + (t/900)*0.18), prog = { ...EMPTY_PROG, cost: COST.barracks, paid: COST.barracks, running: true, time };
+    st.b = time >= 1 ? { status: 'built', done: S.still ? 1 : clamp01((t - 900)/PAY.doneMs) } : { status: 'build', prog };
+    st.f = built;
+  } else if (state === 'captured') {
+    st.b = built; st.f = built;
+    const flipAt = 1300;
+    st.groupIn = S.still ? (t >= 900 ? 1 : 0) : ease.settle((t - 500)/700);
+    if (t < flipAt) { st.owner = 'enemy'; st.wh = false; }
+    else { st.owner = 'own'; st.stock = 0; st.flip = S.still ? 1 : clamp01((t - flipAt)/550); }
+  } else if (state === 'enemy') { st.owner = 'enemy'; st.b = built; st.f = built; st.group = 'enemy'; st.wh = false; }
+  // The capital is a factory and recruits from the start (DEC-41 item 2, DEC-26 item 1).
+  if (G.kind === 'capital') { if (!st.b || st.b.status !== 'built') st.b = built; if (!st.f || st.f.status !== 'built') st.f = built; }
+  if (G.kind === 'province') { st.b = null; st.f = null; }
+  return st;
+}
+
+// =============================================================================================
+// Grounds: the baked Intaglio crops, tiled mirrored; the fog is the Ruled veil.
+// =============================================================================================
+const GROUND_FILES = { plains: 'assets/city-buildings/ground-plains.webp', forest: 'assets/city-buildings/ground-forest.webp', snow: 'assets/city-buildings/ground-snow.webp' };
+const tiles = {};
+function loadImg(src) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; }); }
+function mirrorTile(img, grey) {
+  const w = img.width, h = img.height, c = document.createElement('canvas');
+  c.width = 2*w; c.height = 2*h;
+  const g = c.getContext('2d');
+  for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { g.save(); g.translate(sx < 0 ? 2*w : 0, sy < 0 ? 2*h : 0); g.scale(sx, sy); g.drawImage(img, 0, 0); g.restore(); }
+  if (!grey) return c;
+  const q = document.createElement('canvas'); q.width = c.width; q.height = c.height;
+  const qg = q.getContext('2d'); qg.filter = 'grayscale(90%)'; qg.drawImage(c, 0, 0);
+  return q;
+}
+function drawGround(ctx, ground, box) {
+  const t = tiles[ground === 'fog' ? 'fog' : ground];
+  if (t) { ctx.fillStyle = ctx.createPattern(t, 'repeat'); ctx.fillRect(box.x, box.y, box.w, box.h); }
+  else { ctx.fillStyle = '#3a4630'; ctx.fillRect(box.x, box.y, box.w, box.h); }
+}
+function drawVeil(ctx, box) {
+  ctx.fillStyle = 'rgba(11,10,8,0.34)'; ctx.fillRect(box.x, box.y, box.w, box.h);
+  const z = S.zoom / 100, pitch = 3.4 / z;
+  ctx.beginPath();
+  for (let y = Math.floor(box.y / pitch)*pitch; y < box.y + box.h; y += pitch) { ctx.moveTo(box.x, y); ctx.lineTo(box.x + box.w, y); }
+  ctx.lineWidth = 1 / z; ctx.strokeStyle = C.cut; ctx.globalAlpha = 0.33; ctx.lineCap = 'butt'; ctx.stroke(); ctx.globalAlpha = 1;
+}
+
+// =============================================================================================
+// The pieces of a node: body, ring, warehouse, VP, the recruit queue, the helmet, the chevrons.
+// =============================================================================================
+function drawBody(ctx, G, owner, color, occupied) {
+  const r = G.r;
+  if (G.kind === 'province') {
+    circle(ctx, 0, 0, PROV_E.plate); fill(ctx, C.plate);
+    if (occupied) return;
+    circle(ctx, 0, 0, PROV_E.dot); fill(ctx, color);
+    circle(ctx, 0, 0, PROV_E.rimR); stroke(ctx, PROV_E.rimW, C.ink);
+    if (owner === 'enemy') { circle(ctx, 0, 0, PROV_E.enemyR); stroke(ctx, PROV_E.enemyW, C.ink); }
+    return;
+  }
+  circle(ctx, 0, 0, r + CITY_E.cutGrow); fill(ctx, C.cut, CITY_E.cutAlpha);
+  circle(ctx, 0, 0, r); fill(ctx, occupied ? C.plate : color);
+  circle(ctx, 0, 0, r + CITY_E.rimGrow); stroke(ctx, CITY_E.rimW, C.ink);
+  circle(ctx, 0, 0, r - CITY_E.innerInset); stroke(ctx, CITY_E.innerW, C.cut, CITY_E.innerA);
+  if (owner === 'enemy') for (const ins of CITY_E.enemyInsets) { circle(ctx, 0, 0, r - ins); stroke(ctx, CITY_E.enemyW, C.ink); }
+  if (G.kind === 'capital' && !occupied) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI/2 + i*Math.PI/5, rr2 = i % 2 ? r*CITY_E.star[1] : r*CITY_E.star[0]; ctx.lineTo(rr2*Math.cos(a), rr2*Math.sin(a)); }
+    ctx.closePath(); fill(ctx, C.plate); stroke(ctx, CITY_E.star[2], C.ink, 1, 'butt', 'miter');
+  }
+}
+const TAU = Math.PI*2, START = -Math.PI/2;
+const norm = (a) => { a %= TAU; return a < 0 ? a + TAU : a; };
+/** The capacity cells, skipping the gap sectors (T3's gate, C1's chevron); the same count, top first, clockwise. */
+function ringCells(cap, filled, gaps) {
+  const blocked = [];
+  for (const g of gaps) { const c = norm(g.a - START), a = c - g.half, b = c + g.half; if (a < 0) { blocked.push([a + TAU, TAU], [0, b]); } else if (b > TAU) { blocked.push([a, TAU], [0, b - TAU]); } else blocked.push([a, b]); }
+  blocked.sort((p, q) => p[0] - q[0]);
+  const merged = []; for (const iv of blocked) { const last = merged[merged.length - 1]; if (last && iv[0] <= last[1]) last[1] = Math.max(last[1], iv[1]); else merged.push([...iv]); }
+  const free = []; let at = 0; for (const [a, b] of merged) { if (a > at) free.push([at, a]); at = Math.max(at, b); } if (at < TAU) free.push([at, TAU]);
+  const total = free.reduce((s, [a, b]) => s + b - a, 0);
+  const raw = free.map(([a, b]) => cap*(b - a)/total), cnt = raw.map(Math.floor);
+  let rem = cap - cnt.reduce((s, v) => s + v, 0);
+  raw.map((v, i) => [v - cnt[i], i]).sort((p, q) => q[0] - p[0]).slice(0, rem).forEach(([, i]) => cnt[i]++);
+  const gap = RING.segGap * (total / TAU), arcs = []; let idx = 0;
+  free.forEach(([a, b], i) => { const n = cnt[i]; for (let j = 0; j < n; j++) { const f0 = a + (b - a)*j/n, f1 = a + (b - a)*(j + 1)/n; arcs.push({ from: START + f0 + gap/2, to: START + f1 - gap/2, filled: idx < filled }); idx++; } });
+  return arcs;
+}
+function strokeArcs(ctx, r, arcs, w, color, alpha = 1) {
+  ctx.beginPath();
+  for (const a of arcs) { ctx.moveTo(r*Math.cos(a.from), r*Math.sin(a.from)); ctx.arc(0, 0, r, a.from, a.to); }
+  stroke(ctx, w, color, alpha, 'butt');
+}
+function drawRing(ctx, r, arcs) {
+  const o = RING.roomOff;
+  strokeArcs(ctx, r, arcs, RING.cut, C.cut, RING.cutAlpha);
+  strokeArcs(ctx, r, arcs.filter((a) => a.filled), RING.filled, C.ink);
+  const room = arcs.filter((a) => !a.filled);
+  strokeArcs(ctx, r, room, 2*o, C.ink, RING.wash);
+  for (const s of [-1, 1]) strokeArcs(ctx, r + s*o, room, hair(RING.roomW), C.ink);
+  ctx.beginPath();
+  for (const a of room) for (const ang of [a.from, a.to]) { const c = Math.cos(ang), s = Math.sin(ang); ctx.moveTo((r - o)*c, (r - o)*s); ctx.lineTo((r + o)*c, (r + o)*s); }
+  if (room.length) stroke(ctx, hair(RING.roomW), C.ink, 1, 'butt');
+}
+function rowXs(n) {
+  const xs = []; const gap = n > 4 ? LOZ.groupGap : 0;
+  for (let i = 0; i < n; i++) xs.push(i*LOZ.pitch + Math.floor(i/3)*gap);
+  const mid = n ? (xs[0] + xs[n - 1]) / 2 : 0;
+  return xs.map((x) => x - mid);
+}
+function drawVp(ctx, at, n) {
+  lozPath(ctx, at.x, at.y, VPL.side); fill(ctx, C.plate);
+  lozPath(ctx, at.x, at.y, VPL.outer); stroke(ctx, hair(VPL.w), C.vp, 1, 'butt', 'miter');
+  lozPath(ctx, at.x, at.y, VPL.inner); stroke(ctx, hair(VPL.w), C.vp, 1, 'butt', 'miter');
+  ctx.font = `600 ${VPL.font}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = C.vp; ctx.fillText(String(n), at.x, at.y + 1);
+}
+function drawHelmet(ctx, g) {
+  const h = helmet(g.kind, g.width), L = helmetLines(g.width), facing = g.kind === 'own' ? 1 : -1;
+  const casing = g.pip ? 3.2 : HE.casing + HE.inside;
+  ctx.save(); ctx.translate(g.x, g.y); ctx.scale(facing, 1);
+  const gear = h.band ? [h.strap, h.band] : [h.strap];
+  const gw = (line) => (line === h.strap ? L.strap : L.band) * HE.gear;
+  for (const line of gear) { poly(ctx, line, false); stroke(ctx, gw(line) + casing*0.8, C.casing); }
+  poly(ctx, h.dome); stroke(ctx, casing*0.9, C.casing);
+  poly(ctx, h.dome); fill(ctx, C.plate);
+  const pitch = Math.min(3, Math.max(1.4, g.width*0.075));
+  const top = h.domeBottom - g.level*(h.domeBottom - h.domeTop);
+  ctx.save(); poly(ctx, h.dome); ctx.clip();
+  hatchLines(ctx, h.domeBounds, -Math.PI/4, pitch); stroke(ctx, hair(HE.hatchW*(g.pip ? .7 : 1)), g.color, 1, 'butt');
+  if (g.level > 0) { ctx.beginPath(); ctx.rect(h.domeBounds.x - 2, top, h.domeBounds.width + 4, h.domeBottom - top + 2); fill(ctx, g.color); }
+  ctx.restore();
+  for (const line of gear) { poly(ctx, line, false); stroke(ctx, gw(line), C.ink); }
+  poly(ctx, h.dome); stroke(ctx, hair(g.pip ? .8 : HE.edge), C.ink);
+  ctx.restore();
+  if (g.pip) return;
+  const mx = g.x + h.middle.x*facing, my = g.y + h.middle.y;
+  ctx.font = `600 ${HE.font}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const label = String(g.units);
+  ctx.lineWidth = 3; ctx.strokeStyle = C.cut; ctx.lineJoin = 'round'; ctx.globalAlpha = GA; ctx.strokeText(label, mx, my + 0.6);
+  ctx.fillStyle = C.ink; ctx.fillText(label, mx, my + 0.6);
+}
+/** B6 (#949): four ivory corner ticks round the helmet as drawn. */
+function drawTicks(ctx, g) {
+  const e = helmetExtent(helmet(g.kind, g.width)), gap = 1.6, facing = g.kind === 'own' ? 1 : -1;
+  const x0 = g.x + (facing === 1 ? e.left : -e.right) - gap, x1 = g.x + (facing === 1 ? e.right : -e.left) + gap;
+  const y0 = g.y + e.top - gap, y1 = g.y + e.bottom + gap, arm = 4.6;
+  for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]]) {
+    ctx.beginPath(); ctx.moveTo(cx + sx*arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy*arm); stroke(ctx, 3.2, C.casing, .95, 'square', 'miter');
+    ctx.beginPath(); ctx.moveTo(cx + sx*arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy*arm); stroke(ctx, hair(1.3), C.ivory, 1, 'butt', 'miter');
+  }
+}
+/** The chevron badge (#791): count by strokes, a dark outline; `f`: the floor scale (8 px on screen). */
+function badgeGeom(size, count, f) {
+  const n = Math.min(3, Math.max(1, count)), s = size*f;
+  const pad = (s*BADGE.stroke + BADGE.outline*f)/2 + f;
+  return { n, s, halfW: s*0.56 + pad, halfH: s*0.26 + ((n - 1)/2)*s*0.46 + pad, f };
+}
+function drawBadge(ctx, at, dir, bg) {
+  const y = dir === 'up' ? 1 : -1, s = bg.s;
+  for (const [tone, w] of [[C.cut, s*BADGE.stroke + BADGE.outline*bg.f], [dir === 'up' ? C.up : C.down, s*BADGE.stroke]]) {
+    ctx.beginPath();
+    for (let i = 0; i < bg.n; i++) { const oy = (i - (bg.n - 1)/2)*s*0.46; ctx.moveTo(at.x - s*.56, at.y + y*s*.26 + oy); ctx.lineTo(at.x, at.y - y*s*.26 + oy); ctx.lineTo(at.x + s*.56, at.y + y*s*.26 + oy); }
+    stroke(ctx, w, tone);
+  }
+}
+
+// =============================================================================================
+// One node with its buildings. Two passes: the node layer (under the fog) and the token layer.
+// =============================================================================================
+function nodeLayout(G, st, tv, cv, z, units) {
+  const owner = st.owner;
+  const kinds = []; if (st.b) kinds.push('barracks'); if (st.f) kinds.push('factory');
+  const s = tv.grow === 'tower' ? towerScale(z) : tv.woven ? 1 : growScale(z, tv.base || 1);
+  const P = { ...G, s: tv.id === 'T0' ? towerScale(z) : s, kinds, owner };
+  // The group's helmet (A6: fitted inside the ring).
+  const side = unitSide(Math.max(1, units)), full = helmetWidth(side, true);
+  const width = helmetFit(st.group, full, G.R - RING.cut/2 - 1);
+  // Chevron, VP and the ring gaps.
+  const mark = S.mark, gaps = [];
+  if (tv.gaps) gaps.push(...tv.gaps(P));
+  let vp = G.vp ? polar(-Math.PI/4, G.R + VPL.lift) : null;
+  const f = Math.max(1, BADGE.minPx / (BADGE.size*z));
+  const L = { P, width, gaps, vp, badge: null };
+  if (mark !== 0 && units > 0) {
+    const dir = mark > 0 ? 'up' : 'down', count = Math.abs(mark);
+    const id = cv.id;
+    if (id === 'C0') { const bg = badgeGeom(BADGE.size, count, f); L.badge = { at: { x: G.R + BADGE_GAP*f, y: BADGE_DROP }, dir, bg }; }
+    else if (id === 'C1a' || id === 'C1b') {
+      const bg = badgeGeom(BADGE.size*0.9, count, f), at = polar(C_GAP_ANGLE, G.R);
+      gaps.push({ a: C_GAP_ANGLE, half: (Math.hypot(bg.halfW, bg.halfH)*0.92 + 1.5)/G.R });
+      L.badge = { at, dir, bg };
+      if (vp) vp = id === 'C1a' ? polar(-Math.PI/2, G.R + VPL.lift + 1) : polar(Math.PI*1.25, G.R + VPL.lift);
+    } else if (id === 'C2') {
+      const bg = badgeGeom(BADGE.size*0.78, count, f), rad = Math.hypot(bg.halfW, bg.halfH)*0.82;
+      const d = Math.max(0, G.R - RING.cut/2 - 0.6 - rad);
+      L.badge = { at: polar(-0.27*Math.PI, d), dir, bg };
+    } else if (id === 'C3') {
+      const bg = badgeGeom(BADGE.size, count, f);
+      L.badge = { at: polar(-0.07*Math.PI, G.R + 1), dir, bg, cut: true };
+    } else if (id === 'C4a' || id === 'C4b') {
+      const bg = badgeGeom(BADGE.size*0.92, count, f), base = vp || polar(-Math.PI/4, G.R + VPL.lift);
+      const at = !vp ? base : id === 'C4a' ? { x: base.x, y: base.y - VPL.side*0.71 - bg.halfH - 0.5 } : { x: base.x + VPL.side*0.71 + bg.halfW - 0.5, y: base.y };
+      L.badge = { at, dir, bg, crest: true };
+    } else if (id === 'C5') {
+      const bg = badgeGeom(BADGE.size, count, f);
+      L.badge = { at: { x: 0, y: -(G.R + 3 + bg.halfH - 0.6) }, dir, bg };
+    }
+  }
+  L.vp = vp;
+  return L;
+}
+/** Draws the buildings of a node for one owner (the capture draws both, wiped). */
+function drawBuildings(ctx, tv, st, P, owner, layer, t) {
+  const color = owner === 'own' ? ownColour() : enemyColour(), enemy = owner === 'enemy';
+  for (const kind of ['barracks', 'factory']) {
+    const e = kind === 'barracks' ? st.b : st.f;
+    if (!e) continue;
+    const under = tv.under && tv.under.includes(kind);
+    if ((layer === 'under') !== !!under) continue;
+    const build = e.status === 'build' ? e.prog : null;
+    const look = !build ? 'built' : build.running ? 'rising' : 'plan';
+    const o = { look, time: build ? build.time : 1, style: tv.time[kind], color, enemy, plain: tv.plain, cost: build ? build.cost : 0, paid: build ? build.paid : 0, pops: build ? build.pops : new Map() };
+    if (tv.furniture) tv.furniture(ctx, kind, P, look === 'plan' ? .7 : 1);
+    if (tv.draw) { tv.draw(ctx, kind, o, P); if (e.done && tv.doneFx) tv.doneFx(ctx, kind, e.done, P); continue; }
+    const seat = tv.seat(kind, P), sh = tv.shape(kind, P), sc = tv.fixed && tv.fixed.includes(kind) ? 1 : P.s;
+    frame(ctx, seat.x, seat.y, seat.rot, sc, () => {
+      if (tv.sockets) tv.socket(ctx, kind, { ...o, look: build && !build.running ? 'paying' : look }, P);
+      if (tv.sockets && build && !build.running) return;
+      material(ctx, sh, o);
+      if (e.done) doneFx(ctx, sh, kind, e.done, tv.done);
+    });
+  }
+}
+/** The empty sockets of T10: an own city shows where its buildings go. */
+function drawEmptySockets(ctx, tv, st, P) {
+  if (!tv.sockets || st.owner !== 'own' || P.kind === 'province' || P.kind === 'capital') return;
+  for (const kind of ['barracks', 'factory']) {
+    if ((kind === 'barracks' ? st.b : st.f)) continue;
+    const seat = tv.seat(kind, P);
+    frame(ctx, seat.x, seat.y, 0, P.s, () => { const p = tv.rimPath(kind); p(ctx); stroke(ctx, 3, C.casing, .5); fill(ctx, C.cut, .5); p(ctx); ctx.setLineDash([1, 1.5]); stroke(ctx, hair(.8), C.ink, .6, 'butt'); ctx.setLineDash([]); });
+  }
+}
+function buildingCentre(tv, kind, P) {
+  if (tv.slots && tv.id === 'T4') { const [a0, a1] = tv.arcs[kind]; return polar((a0 + a1)/2, P.R + 6); }
+  const seat = tv.seat(kind, P);
+  if (tv.id === 'T12' && kind === 'barracks') return polar(Math.PI*1.25, (P.R + 6)*1.3);
+  const sh = tv.shape(kind, P), [x0, y0, x1, y1] = sh.box, cx = (x0 + x1)/2*P.s, cy = (y0 + y1)/2*P.s;
+  const c = Math.cos(seat.rot || 0), s = Math.sin(seat.rot || 0);
+  return { x: seat.x + cx*c - cy*s, y: seat.y + cx*s + cy*c };
+}
+/** The payment in motion (#872): the track and owed lozenges, the charges in the air, the run into the building. */
+function drawPayment(ctx, tv, st, P, L, groupAt) {
+  if (st.owner !== 'own') return;
+  const color = ownColour();
+  for (const kind of ['barracks', 'factory']) {
+    const e = kind === 'barracks' ? st.b : st.f;
+    if (!e || e.status !== 'build') continue;
+    const prog = e.prog;
+    let slots, k;
+    if (tv.slots) { slots = tv.slots(kind, prog.cost, P); k = CROWN.lozenge; }
+    else { const tr = tv.track(kind, prog.cost, P); drawTrack(ctx, tr, color, prog); slots = tr.slots; k = tr.k; }
+    // The run into the building once paid in full.
+    if (prog.run) {
+      const to = buildingCentre(tv, kind, P);
+      prog.run.forEach((q, j) => { const p = slots[j]; if (!p || q >= 1) return; drawLozenge(ctx, p.x + (to.x - p.x)*q, p.y + (to.y - p.y)*q, true, color, k*(1 - PAY.shrink*q)); });
+    }
+    // The charges in the air: from the warehouse row (its last place in stock) or the group.
+    for (const fl of prog.flights) {
+      const xs = rowXs(P.wh), wy = P.R + LOZ.drop;
+      const from = fl.from === 'w' ? { x: xs[Math.max(0, Math.min(xs.length - 1, fl.src))] || 0, y: wy } : groupAt;
+      const to = slots[fl.j]; if (!to) continue;
+      const q = fl.q, lift = PAY.lift*(P.s/TOWER.minScale)*Math.sin(Math.PI*q);
+      const x = from.x + (to.x - from.x)*q, y = from.y + (to.y - from.y)*q - lift;
+      drawLozenge(ctx, x, y, true, color, 1 + (k - 1)*q);
+    }
+  }
+}
+function drawNodeLayer(ctx, tile, tv, cv, t, z) {
+  const G = tile.G, st = tile.st, L = tile.L, P = L.P;
+  const occupied = tile.units > 0 && st.groupIn > 0.5;
+  // Buildings woven under the city (T12's castrum).
+  const both = (fn) => {
+    if (st.flip !== null && st.flip < 1) {
+      const edge = -P.R*2.2 + (P.R*4.4)*ease.engrave(st.flip);
+      ctx.save(); ctx.beginPath(); ctx.rect(edge, -400, 800, 800); ctx.clip(); fn('enemy'); ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.rect(-800, -400, 800 + edge, 800); ctx.clip(); fn('own'); ctx.restore();
+    } else fn(st.owner);
+  };
+  both((owner) => drawBuildings(ctx, tv, st, P, owner, 'under', t));
+  // The body (a capture flips the colour in 120 ms, #819).
+  const flipK = st.flip === null ? 1 : clamp01(st.flip*550/120);
+  if (st.flip !== null && flipK < 1) { GA = 1 - flipK; drawBody(ctx, G, 'enemy', enemyColour(), occupied); GA = 1; ctx.globalAlpha = 1; }
+  GA = flipK; drawBody(ctx, G, st.owner, st.owner === 'own' ? ownColour() : enemyColour(), occupied); GA = 1; ctx.globalAlpha = 1;
+  const garrison = st.owner === 'own' && occupied ? Math.min(tile.units, G.cap) : 0;
+  drawRing(ctx, G.R, ringCells(G.cap, garrison, L.gaps));
+  drawEmptySockets(ctx, tv, st, P);
+  both((owner) => drawBuildings(ctx, tv, st, P, owner, 'over', t));
+  // Warehouse (own, or where an own group stands), VP, recruit queue.
+  if (st.wh && G.wh) { const xs = rowXs(G.wh), y = G.R + LOZ.drop; xs.forEach((x, i) => drawLozenge(ctx, x, y, i < st.stock, ownColour())); }
+  if (L.vp && !(L.badge && L.badge.crest && L.badge.bg)) drawVp(ctx, L.vp, G.vp);
+  if (L.badge && L.badge.crest && L.vp) drawVp(ctx, L.vp, G.vp);
+  if (S.queue && st.owner === 'own' && st.b && st.b.status === 'built' && st.flip === null && G.kind !== 'province') {
+    for (let j = 0; j < 2; j++) {
+      const p = polar(tv.queue + j*RECRUIT.step, G.R + TOWER.out);
+      const level = j === 0 ? ((t % 3000)/3000) : 0;
+      drawHelmet(ctx, { kind: 'own', width: RECRUIT.width, x: p.x, y: p.y, level, color: ownColour(), pip: true });
+    }
+  }
+  drawPayment(ctx, tv, st, P, L, tile.groupAt);
+  // The place name (#449): 13 px bold on screen, under the warehouse row; hidden below scale 0.45.
+  if (z >= 0.45) {
+    const y = G.kind === 'province' ? G.R + 4 : G.R + 9 + 4 + 2;
+    ctx.save(); ctx.translate(0, y); ctx.scale(1/z, 1/z);
+    ctx.font = `${G.kind === 'province' ? 500 : 700} ${G.kind === 'province' ? 12 : 13}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(5,4,3,0.85)'; ctx.lineJoin = 'round'; ctx.strokeText(tile.name, 0, 0);
+    ctx.fillStyle = '#e6edf3'; ctx.globalAlpha = G.kind === 'province' ? .78 : 1; ctx.fillText(tile.name, 0, 0); ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+}
+function drawTokenLayer(ctx, tile, tv, cv, z) {
+  const G = tile.G, st = tile.st, L = tile.L;
+  if (tile.units <= 0 || st.groupIn <= 0) return;
+  const side = st.group, color = side === 'own' ? ownColour() : enemyColour();
+  const units = Math.min(tile.units, G.cap), charged = Math.max(0, Math.min(units, S.charged + st.chargedDelta));
+  const dx = (1 - st.groupIn)*60;
+  GA = clamp01(st.groupIn); ctx.globalAlpha = GA;
+  const g = { kind: side, width: L.width, x: dx, y: 0, level: units ? charged/units : 0, color, units };
+  drawHelmet(ctx, g);
+  GA = 1; ctx.globalAlpha = 1;
+  if (st.groupIn < 1) return;
+  if (L.badge) {
+    const b = L.badge;
+    if (b.cut) { circle(ctx, b.at.x, b.at.y, Math.max(b.bg.halfW, b.bg.halfH) + 0.6); fill(ctx, C.cut, .9); }
+    if (b.crest) { ctx.beginPath(); rr(ctx, b.at.x - b.bg.halfW - .4, b.at.y - b.bg.halfH - .2, 2*b.bg.halfW + .8, 2*b.bg.halfH + .4, 2); fill(ctx, C.plate, .96); ctx.beginPath(); rr(ctx, b.at.x - b.bg.halfW + .6, b.at.y - b.bg.halfH + .8, 2*b.bg.halfW - 1.2, 2*b.bg.halfH - 1.6, 1.4); stroke(ctx, hair(.8), C.vp, .85); }
+    drawBadge(ctx, b.at, b.dir, b.bg);
+  }
+  if (S.sel && side === 'own') drawTicks(ctx, g);
+}
+
+// =============================================================================================
+// Scenes: the T topic shows a 3 x 3 grid of states (or one state); the C topic a row of node kinds
+// with the bonus above and the penalty below.
+// =============================================================================================
+const STATE_GRID = ['none', 'barracks', 'factory', 'both', 'paying', 'rising', 'done', 'captured', 'enemy'];
+const KIND_CYCLE = ['medium', 'small', 'large', 'capital'];
+function sceneTiles(tv, cv, t, z) {
+  const out = [];
+  const put = (x, y, kind, state, label, mark) => {
+    const G = { ...NODE[kind], kind }; G.R = G.r + RING.gap;
+    const st = tileStory(state, t, G);
+    out.push({ x, y, G, st, label, name: G.kind === 'province' ? 'Fork' : NAMES[out.length % NAMES.length], units: S.units, mark });
+  };
+  if (S.cmp === 't' || true) {
+    if (S.topic === 'c') {
+      const kinds = S.node === 'mixed' ? ['province', 'small', 'medium', 'large', 'capital'] : [S.node];
+      const DX = 140, DY = 140;
+      kinds.forEach((k, i) => { for (const row of [0, 1]) put(i*DX + (row ? 18 : 0), row*DY + (i % 2 ? 10 : 0), k, S.cb ? 'both' : 'none', null, row ? -1 : 1); });
+    } else {
+      const states = S.state === 'all' ? STATE_GRID : [S.state];
+      const DX = 185, DY = 158;
+      states.forEach((state, i) => {
+        const col = i % 3, row = Math.floor(i / 3);
+        const kind = S.node === 'mixed' ? KIND_CYCLE[i % KIND_CYCLE.length] : S.node === 'province' ? 'medium' : S.node;
+        put(col*DX + (row === 1 ? 22 : 0), row*DY + (col === 1 ? -12 : col === 2 ? 8 : 0), kind, state, STATES.find((s) => s.id === state).name, null);
+      });
+    }
+  }
+  for (const tile of out) {
+    const markSave = S.mark;
+    if (tile.mark !== null) S.mark = Math.sign(tile.mark) * Math.max(1, Math.abs(S.mark || 1));
+    tile.L = nodeLayout(tile.G, tile.st, tv, cv, z, Math.min(tile.units, tile.G.cap));
+    S.mark = markSave;
+    tile.groupAt = { x: 0, y: 0 };
+  }
+  return out;
+}
+function drawRoads(ctx, tiles) {
+  const near = [];
+  for (let i = 0; i < tiles.length; i++) for (let j = i + 1; j < tiles.length; j++) {
+    const a = tiles[i], b = tiles[j], d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (d < 205) near.push([a, b]);
+  }
+  for (const [a, b] of near) {
+    const buffer = a.st.owner !== b.st.owner;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    if (buffer) { stroke(ctx, 5.6, C.casing, 0.4, 'butt'); ctx.setLineDash([7, 5]); stroke(ctx, 2, '#aab2bd', 0.7, 'butt'); ctx.setLineDash([]); }
+    else { stroke(ctx, 7.4, C.casing, 0.55, 'butt'); stroke(ctx, 5.6, a.st.owner === 'own' ? ownColour() : enemyColour(), 0.46, 'butt'); stroke(ctx, 2, C.road, 0.7, 'butt'); }
+  }
+}
+
+// =============================================================================================
+// Cells.
+// =============================================================================================
+const cellsEl = document.getElementById('cells');
+let cells = [];
+function buildCells() {
+  cellsEl.innerHTML = '';
+  const pairs = S.cmp === 't' ? S.t.map((a) => [a, S.c[0]]) : S.c.map((c) => [S.t[0], c]);
+  cellsEl.className = 'n' + pairs.length;
+  cells = pairs.map(([a, b]) => {
+    const div = document.createElement('div'); div.className = 'cell';
+    const tv = T_BY[a], cv = C_VARIANTS.find((v) => v.id === b);
+    const h2 = document.createElement('h2');
+    const sa = document.createElement('span'); sa.textContent = `${tv.id} ${tv.name}`;
+    const sb = document.createElement('span'); sb.className = 'b'; sb.textContent = `${cv.id} ${cv.name}`;
+    if (S.cmp === 'c') h2.append(sb, sa); else h2.append(sa, sb);
+    const cv2 = document.createElement('canvas');
+    cv2.setAttribute('role', 'img');
+    cv2.setAttribute('aria-label', `${tv.id} ${tv.name} with ${cv.id} ${cv.name}`);
+    div.append(h2, cv2); cellsEl.append(div);
+    return { tv, cv, el: cv2 };
+  });
+  sizeCells();
+}
+function sizeCells() {
+  const dpr = window.devicePixelRatio || 1;
+  for (const c of cells) {
+    const w = c.el.clientWidth || 600, h = Math.round(w * (cells.length === 1 ? 0.62 : 0.86));
+    c.el.style.height = h + 'px';
+    c.el.width = Math.round(w*dpr); c.el.height = Math.round(h*dpr);
+    c.w = w; c.h = h; c.dpr = dpr;
+  }
+}
+function render() {
+  const z = S.zoom / 100;
+  S.topic = S.cmp;
+  for (const c of cells) {
+    const ctx = c.el.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.el.width, c.el.height);
+    const tiles2 = sceneTiles(c.tv, c.cv, S.time, z);
+    const xs = tiles2.map((t) => t.x), ys = tiles2.map((t) => t.y);
+    const cx = (Math.min(...xs) + Math.max(...xs))/2, cy = (Math.min(...ys) + Math.max(...ys))/2 + 6;
+    const sx = c.dpr*z; PXW = sx;
+    ctx.setTransform(sx, 0, 0, sx, c.el.width/2 - cx*sx, c.el.height/2 - cy*sx);
+    const box = { x: cx - c.w/(2*z) - 2, y: cy - c.h/(2*z) - 2, w: c.w/z + 4, h: c.h/z + 4 };
+    drawGround(ctx, S.ground, box);
+    drawRoads(ctx, tiles2);
+    for (const tile of tiles2) { ctx.save(); ctx.translate(tile.x, tile.y); drawNodeLayer(ctx, tile, c.tv, c.cv, S.time, z); ctx.restore(); }
+    if (S.ground === 'fog') drawVeil(ctx, box);
+    for (const tile of tiles2) { ctx.save(); ctx.translate(tile.x, tile.y); drawTokenLayer(ctx, tile, c.tv, c.cv, z); ctx.restore(); }
+    // The state of each tile, small and dim, at its upper left (the only text of the scene).
+    for (const tile of tiles2) {
+      if (!tile.label) continue;
+      ctx.save(); ctx.translate(tile.x - 80, tile.y - 62); ctx.scale(1/z, 1/z);
+      ctx.font = `600 11px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillStyle = 'rgba(14,12,9,0.72)'; const w = ctx.measureText(tile.label.toUpperCase()).width; ctx.fillRect(-4, -3, w + 8 + 1.5*tile.label.length, 17);
+      ctx.fillStyle = C.ivory; ctx.globalAlpha = .82; ctx.letterSpacing = '1.5px'; ctx.fillText(tile.label.toUpperCase(), 0, 0); ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  }
+}
+
+// =============================================================================================
+// Controls.
+// =============================================================================================
+function chip(parent, id, label, onClick) {
+  const b = document.createElement('button'); b.className = 'chip'; b.dataset.v = id;
+  if (id) { const k = document.createElement('span'); k.className = 'k'; k.textContent = id; b.append(k); }
+  b.append(document.createTextNode(label));
+  b.addEventListener('click', onClick); parent.append(b); return b;
+}
+function pick(list, id, multi) {
+  if (!multi) return [id];
+  const i = list.indexOf(id);
+  if (i >= 0) return list.length > 1 ? list.filter((x) => x !== id) : list;
+  return list.length >= 4 ? [...list.slice(1), id] : [...list, id];
+}
+const tChips = T_VARIANTS.map((v) => chip(document.getElementById('topicT'), v.id, v.name, () => { S.t = pick(S.t, v.id, S.cmp === 't'); refresh(true); }));
+const cChips = C_VARIANTS.map((v) => chip(document.getElementById('topicC'), v.id, v.name, () => { S.c = pick(S.c, v.id, S.cmp === 'c'); refresh(true); }));
+const sChips = STATES.map((s) => chip(document.getElementById('states'), '', s.name, () => { S.state = s.id; refresh(false); }));
+const colChips = Object.keys(COLOURS).map((k) => { const b = chip(document.getElementById('cols'), '', '', () => { S.col = k; refresh(false); }); b.classList.add('sw'); b.setAttribute('aria-label', k[0].toUpperCase() + k.slice(1)); b.title = b.getAttribute('aria-label'); const i = document.createElement('i'); i.style.background = COLOURS[k]; b.append(i); b.dataset.col = k; return b; });
+document.querySelectorAll('[data-cmp]').forEach((b) => b.addEventListener('click', () => { S.cmp = b.dataset.cmp; if (S.cmp === 't') S.c = S.c.slice(0, 1); else S.t = S.t.slice(0, 1); if (S.cmp === 'c' && S.c.length === 1) S.c = ['C0', 'C1a', 'C2', 'C4a']; if (S.cmp === 'c') { S.node = 'mixed'; S.zoom = Math.min(S.zoom, 100); } refresh(true); }));
+const bind = (sel, key, num) => document.querySelectorAll(sel).forEach((b) => b.addEventListener('click', () => { S[key] = num ? Number(b.dataset[key]) : b.dataset[key]; refresh(false); }));
+bind('[data-ground]', 'ground'); bind('[data-node]', 'node'); bind('[data-mark]', 'mark', true);
+document.querySelectorAll('[data-z]').forEach((b) => b.addEventListener('click', () => { S.zoom = Number(b.dataset.z); refresh(false); }));
+const units = document.getElementById('units'), charged = document.getElementById('charged'), zoom = document.getElementById('zoom'), scrub = document.getElementById('scrub');
+units.addEventListener('input', () => { S.units = Number(units.value); S.charged = Math.min(S.charged, S.units); refresh(false); });
+charged.addEventListener('input', () => { S.charged = Math.min(Number(charged.value), S.units); refresh(false); });
+zoom.addEventListener('input', () => { S.zoom = Number(zoom.value); refresh(false); });
+for (const [id, key] of [['gray', 'gray'], ['still', 'still'], ['sel', 'sel'], ['queue', 'queue'], ['cb', 'cb']]) document.getElementById(id).addEventListener('click', () => { S[key] = !S[key]; refresh(false); });
+const playBtn = document.getElementById('play');
+let playFrom = 0, playAt = 0;
+playBtn.addEventListener('click', () => { if (S.playing) S.playing = false; else { S.playing = true; playFrom = S.time >= TL ? 0 : S.time; playAt = performance.now(); } refresh(false); });
+scrub.addEventListener('input', () => { S.playing = false; S.time = Number(scrub.value); refresh(false); });
+function refresh(rebuild) {
+  const press = (els, on) => els.forEach((e) => e.setAttribute('aria-pressed', String(on(e))));
+  press(tChips, (e) => S.t.includes(e.dataset.v)); press(cChips, (e) => S.c.includes(e.dataset.v));
+  press(sChips, (e, i) => false); sChips.forEach((e, i) => e.setAttribute('aria-pressed', String(STATES[i].id === S.state)));
+  press(colChips, (e) => e.dataset.col === S.col);
+  press([...document.querySelectorAll('[data-cmp]')], (e) => e.dataset.cmp === S.cmp);
+  press([...document.querySelectorAll('[data-ground]')], (e) => e.dataset.ground === S.ground);
+  press([...document.querySelectorAll('[data-node]')], (e) => e.dataset.node === S.node);
+  press([...document.querySelectorAll('[data-mark]')], (e) => Number(e.dataset.mark) === S.mark);
+  press([...document.querySelectorAll('[data-z]')], (e) => Number(e.dataset.z) === S.zoom);
+  for (const id of ['gray', 'still', 'sel', 'queue', 'cb']) press([document.getElementById(id)], () => S[id]);
+  document.getElementById('states').style.opacity = S.cmp === 't' ? 1 : .45;
+  playBtn.textContent = S.playing ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(S.playing));
+  units.value = S.units; charged.max = S.units; charged.value = S.charged; zoom.value = S.zoom; scrub.value = S.time; scrub.max = TL;
+  document.getElementById('unitsV').textContent = String(S.units);
+  document.getElementById('chargedV').textContent = String(S.charged);
+  document.getElementById('zoomV').textContent = S.zoom + '%';
+  document.body.classList.toggle('gray', S.gray);
+  writeHash();
+  if (rebuild) buildCells();
+}
+function tick(now) {
+  if (S.playing) {
+    S.time = playFrom + (now - playAt);
+    if (S.time >= TL) { S.time = 0; playFrom = 0; playAt = now; }
+    scrub.value = S.time;
+  }
+  render();
+  requestAnimationFrame(tick);
+}
+window.addEventListener('resize', () => sizeCells());
+try { if (!location.hash && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { S.still = true; S.playing = false; } } catch (e) { /* no media queries */ }
+readHash();
+if (S.playing) { playFrom = S.time; playAt = performance.now(); }
+refresh(true);
+(async () => {
+  await Promise.all(Object.entries(GROUND_FILES).map(async ([k, f]) => {
+    try { const img = await loadImg(f); tiles[k] = mirrorTile(img, false); if (k === 'plains') tiles.fog = mirrorTile(img, true); } catch (e) { /* the flat ground stays */ }
+  }));
+  try { await document.fonts.load("600 12px 'EB Garamond'"); } catch (e) { /* the serif fallback */ }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
