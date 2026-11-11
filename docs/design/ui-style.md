@@ -2710,7 +2710,7 @@ Owner feedback of 2026-11-11, client only.
 - **The invite wait** (`DrawingGraph`, `VersusLine`): the drawing loop runs only while `InviteOut.map_ready` is false (the effect cancels it when `still` turns on); then the finished sketch stays and the empty seat's capital and the dashed helmet breathe slowly (3.2 s, off under reduced motion).
 - **No resize on a way change** (`GoTablet`): the old and the new word share one grid cell, so the box is the wider of the two from the first frame.
 - **Smoothness**: the motion paints up to 60 times a second (was 30), and the land of every owner state of the capture loop is worked out in idle tasks right after the first paint, so no frame pays for it.
-- **The brand is the way home** (`app/FrontTop.svelte`, `app/home.ts`): on the pages, the result and the replay the title in the bar is a button (name `top.home`) that goes to the main screen; on the main screen, the boot, the entry and while the bar is locked it is text.
+- **The brand is the way home** (`app/FrontTop.svelte`, `app/home.ts`): on the pages, the result and the replay the title in the bar is a button (name `top.home`) that goes to the main screen. Since #957 (owner 2026-11-11: a title that is sometimes a link and sometimes text is confusing) it is the same control on every screen that shows the bar, Play included: same cursor, hover rule, focus ring and name (where it does nothing it carries `aria-current="page"`). On the main screen, in the boot and while the bar is locked (a search, a waiting room) the click does nothing (no reload, which would drop a running search or an invite being drawn). A match has no bar, so no brand.
 
 ## 72. Node piece: helmet size with readable capacity, inner selection cues (#949) **[accepted]**
 

@@ -17,22 +17,29 @@
 
   let { player, onhelp, helpHere = false, locked = false }: Props = $props();
 
-  // The brand is the way back to the main screen where the app allows leaving for it (#945).
+  // The brand is always the same control (#945, owner 2026-11-11): it goes to the main screen where
+  // the app allows leaving for it, and does nothing on the main screen, in a locked bar and in the
+  // boot (no reload: that would drop a running search or an invite being drawn).
   const homeOf = getContext<HomeGetter | undefined>(HOME_KEY);
-  const home = $derived(locked ? null : (homeOf?.() ?? null));
+  const goesHome = $derived(locked ? null : (homeOf?.() ?? null));
+  // No way home: this is the main screen (or the boot, or a locked search): marked as the current page.
+  const here = $derived(goesHome === null);
+  function goHome(): void {
+    goesHome?.();
+  }
 </script>
 
 <!-- The top bar of the screens before a match (#919, III Plinth): the brand in cut capitals, then
      on the right the "?" of How to play and the player, over an incised double rule. No tabs. -->
 <header class="top">
   <h1 class="mark">
-    {#if home !== null}
-      <button type="button" class="home" aria-label={t('top.home')} onclick={home}
-        >{t('app.title')}</button
-      >
-    {:else}
-      {t('app.title')}
-    {/if}
+    <button
+      type="button"
+      class="home"
+      aria-label={t('top.home')}
+      aria-current={here ? 'page' : undefined}
+      onclick={goHome}>{t('app.title')}</button
+    >
   </h1>
   {#if player !== undefined || onhelp !== undefined}
     <div class="corner">

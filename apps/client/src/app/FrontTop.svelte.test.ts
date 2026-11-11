@@ -33,17 +33,35 @@ describe('FrontTop brand as a way home (#945)', () => {
     expect(go).toHaveBeenCalledOnce();
   });
 
-  it('is plain text where the app gives no way home (the main screen, the boot)', () => {
+  const brand = (): HTMLButtonElement | null =>
+    document.querySelector<HTMLButtonElement>('.mark button.home');
+
+  it('is the same named button where the app gives no way home (main screen, boot) and does nothing', () => {
+    const reload = vi.fn();
+    window.addEventListener('beforeunload', reload);
     open(() => null);
-    expect(document.querySelector('.mark button')).toBeNull();
-    expect(document.querySelector('.mark')?.textContent.trim()).toBe(translate('en', 'app.title'));
+    expect(brand()).not.toBeNull();
+    expect(brand()?.getAttribute('aria-label')).toBe(translate('en', 'top.home'));
+    expect(brand()?.disabled).toBe(false);
+    expect(brand()?.getAttribute('aria-current')).toBe('page');
+    brand()?.click();
+    window.removeEventListener('beforeunload', reload);
+    expect(reload).not.toHaveBeenCalled();
   });
 
-  it('is plain text without a context, and while the bar is locked', () => {
+  it('is the same button without a context', () => {
     open(undefined);
-    expect(document.querySelector('.mark button')).toBeNull();
-    void unmount(component as Record<string, unknown>);
-    open(() => vi.fn(), true);
-    expect(document.querySelector('.mark button')).toBeNull();
+    expect(brand()?.getAttribute('aria-label')).toBe(translate('en', 'top.home'));
+    expect(() => brand()?.click()).not.toThrow();
+  });
+
+  it('keeps the look and does nothing while the bar is locked', () => {
+    const go = vi.fn();
+    open(() => go, true);
+    expect(brand()?.getAttribute('aria-label')).toBe(translate('en', 'top.home'));
+    expect(brand()?.disabled).toBe(false);
+    expect(brand()?.getAttribute('aria-current')).toBe('page');
+    brand()?.click();
+    expect(go).not.toHaveBeenCalled();
   });
 });

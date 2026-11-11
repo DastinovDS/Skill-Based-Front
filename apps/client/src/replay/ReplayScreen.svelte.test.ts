@@ -116,7 +116,7 @@ describe('ReplayScreen', () => {
     const onback = vi.fn();
     const root = open([answer(202)], onback);
     await wait(0);
-    root.querySelector('button')?.click();
+    root.querySelector<HTMLButtonElement>('button:not(.home)')?.click();
     expect(onback).toHaveBeenCalledTimes(1);
   });
 
