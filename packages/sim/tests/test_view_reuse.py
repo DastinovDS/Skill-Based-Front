@@ -5,13 +5,19 @@
 - ``enemy_figure_ids`` (``Match.figures``, the light projection of a bot that does not decide on a
   call) equals the figure ids of the full view, by edge and then by id, for both players: the same
   fog rules (DEC-33), nothing more;
-- the flow field memo (``systems.flow._field``) returns the field computed without it.
+- the flow field memo (``systems.flow._field``) returns the field computed without it;
+- the vision memo (``systems.vision.compute_vision``, #983) returns the levels computed without
+  it, and the full computations above run on an empty ``GameState.memo``, so no memo of the state
+  takes part in them. Every call of the vision and plan memos in a smart-bot match on a pool map:
+  ``apps/bots/tests/test_sim_memos.py``.
 
 Each replay is re-simulated once; the comparisons run on every ``EVERY``-th tick for both players.
 The Hypothesis machine of ``test_properties.py`` checks the first two on random states as well.
 """
 
 import copy
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
 
@@ -21,7 +27,9 @@ from gow_sim.maps import PLAYERS, load_map
 from gow_sim.match import SIM_VERSION, Match
 from gow_sim.replay import REPLAY_SUFFIX, replay_match
 from gow_sim.ruleset import load_ruleset
+from gow_sim.state import GameState
 from gow_sim.systems import flow
+from gow_sim.systems.vision import compute_vision
 from gow_sim.view import PlayerView, enemy_figure_ids, project
 
 TESTS = Path(__file__).resolve().parent
@@ -34,6 +42,17 @@ EVERY: Final = 17
 """Ticks between two comparisons (odd: the decisions of ``run_headless`` fall every 5 ticks)."""
 FIELD_EVERY: Final = 151
 """Ticks between two comparisons of the flow field (a deep copy of the state each)."""
+
+
+@contextmanager
+def _no_memo(state: GameState) -> Generator[None]:
+    """Run the block on an empty ``GameState.memo``; the memo of the match comes back after."""
+    kept = state.memo
+    state.memo = {}
+    try:
+        yield
+    finally:
+        state.memo = kept
 
 
 def _ids(view: PlayerView) -> tuple[int, ...]:
@@ -56,11 +75,15 @@ class _Compare:
         state, rules, key = match.state, match.rules, match.match_key
         if state.tick % EVERY == 0:
             for p in PLAYERS:
-                full = project(state, rules, p, key)
+                with _no_memo(state):
+                    full = project(state, rules, p, key)
+                    fresh_ids = enemy_figure_ids(state, rules, p, key)
+                    levels = compute_vision(state, rules, p)
                 assert match.view(p, reuse=True) == full, (state.tick, p)
                 ids = _ids(full)
                 assert match.figures(p, reuse=True) == ids, (state.tick, p)
-                assert enemy_figure_ids(state, rules, p, key) == ids, (state.tick, p)
+                assert fresh_ids == ids, (state.tick, p)
+                assert compute_vision(state, rules, p) == levels, (state.tick, p)
                 self.views += 1
                 self.figures += len(ids)
         if state.tick % FIELD_EVERY == 0:
