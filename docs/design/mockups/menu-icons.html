@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu icons, round 1</title>
+<!-- Menu icons, round 1 (#968, owner feedback of 2026-11-11, #940). Two elements, each in one large view with one row of variant buttons:
+     1. the icons of the three ways on the main menu (apps/client/src/app/WayPicker.svelte, today units/HelmetIcon.svelte), drawn in
+        the real plinth (app/plinth.css: the 232 x 84 ways of a 1440 x 900 window, the lozenge marker on a fading rule over the chosen
+        way, a hollow one over the hovered way, the unchosen icons at 55 %, the words ink-dim and ink): Current plus twelve drawn
+        directions and "Words only". Every drawn icon uses the cut language of src/theme/cutIcons.ts: a solid ruled in the ink colour
+        (2.6 period, 1.15 line), the outline in ink 2.1 over a dark casing 4.2 at 0.9, square ends, a 26-unit box. The player's part
+        is ruled level, the opponent's part is hatched at 45 degrees (ui-style 52 III, the owner hatch), so the two sides never rest
+        on colour (AGENTS.md 7.4); the icons are ink only, the choice is brightness and the marker, as WayPicker says.
+     2. the marker over the intro banner (apps/client/src/hud/StartBanner.svelte, the triangle `.mark` in `--own`; the text is the
+        i18n key start.title), drawn over a match frame with the pulsing beacon round the own capital (render/alertLayout.ts BEACON:
+        12 px out, 3 px in the player colour, a 1.5 px paper ring, 800 ms, 18 %): Current plus "No marker" and seven others.
+     Switches: the player colour (DEC-49, the six of app.css) and grayscale; More: the window size, less motion, zoom x2. Clicking a
+     way chooses it, as in the client; clicking the banner replays its entry. State in the address (#w=..&b=..&c=..).
+     Self-contained: Cinzel and EB Garamond (SIL OFL) from assets/out-of-game-style/fonts, the stone, the menu map and the match
+     frame from assets/out-of-game-rework. -->
+<style>
+@font-face{font-family:Cinzel;src:url(assets/out-of-game-style/fonts/cinzel.woff2) format('woff2');font-weight:400 900;font-display:block}
+@font-face{font-family:'EB Garamond';src:url(assets/out-of-game-style/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-display:block}
+@font-face{font-family:'EB Garamond';src:url(assets/out-of-game-style/fonts/ebgaramond-italic.woff2) format('woff2');font-weight:400 800;font-style:italic;font-display:block}
+:root{
+  --stone-bg:#16130f;--stone-panel:#1d1a15;--ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;--rule:#7d7363;--line:#3d372d;
+  --cut:#050403;--lit:rgb(214 200 172 / 30%);--lit-faint:rgb(214 200 172 / 15%);--plate:#0e0c09;--casing:#060504;
+  --own:#86a6ea;--enemy:#e5785e;
+  --font-display:'Cinzel','Times New Roman',serif;--font-text:'EB Garamond',Georgia,'Times New Roman',serif;
+  --ease-settle:cubic-bezier(0.33,1,0.68,1);--ease-travel:cubic-bezier(0.65,0,0.35,1);
+  --stone-tex:url(assets/out-of-game-rework/stone.webp);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--stone-bg);color:var(--ink);font:14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:20;background:var(--stone-bg);padding:10px 16px;border-bottom:1px solid var(--line)}
+h1{font:600 20px/1 'EB Garamond',Georgia,serif;letter-spacing:.04em;margin:0 12px 0 0}
+h2{font:600 13px/1 'EB Garamond',Georgia,serif;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin:0 8px 0 0;white-space:nowrap}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.lab{font:600 12px/1 'EB Garamond',Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-right:3px}
+button.chip{appearance:none;border:1px solid var(--line);background:var(--stone-panel);color:var(--ink-soft);padding:6px 10px;font:500 13px/1 system-ui,sans-serif;cursor:pointer;border-radius:0;position:relative}
+button.chip:hover{border-color:var(--rule);color:var(--ink)}
+button.chip[aria-pressed="true"]{background:var(--ink);color:#16130f;border-color:var(--ink);font-weight:650}
+button.chip .k{opacity:.7;margin-right:5px;font-weight:700}
+button.chip.ref{border-style:dashed}
+button.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+button.chip.sw{width:24px;height:24px;padding:0}
+button.chip.sw i{position:absolute;inset:5px;transform:rotate(45deg) scale(.8);border:1px solid #060504}
+#more{margin-left:auto}
+#moreBar{display:none;padding-top:9px;margin-top:9px;border-top:1px solid var(--line)}
+#moreBar.open{display:flex}
+main{padding:12px 16px 28px;display:grid;gap:22px}
+section.el{display:grid;gap:8px}
+.vrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.cap{margin:0;font:500 16px/1.3 'EB Garamond',Georgia,serif;color:var(--ink-soft);min-height:21px}
+.cap b{color:var(--ink);font-weight:650;margin-right:8px}
+.view{border:1px solid var(--line);background:#0e0c09;overflow:hidden;position:relative}
+.view.zoom{overflow:auto}
+.stage{position:relative;transform-origin:0 0;overflow:hidden}
+.gray .stage{filter:grayscale(1)}
+
+/* ---- the screen behind each element ---------------------------------------------------------- */
+.screen{position:absolute;left:0}
+.screen.menu{background:url(assets/out-of-game-rework/bg-menu.webp) center/cover no-repeat}
+.screen.menu::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgb(22 19 15 / 55%) 0,rgb(22 19 15 / 8%) 20%,rgb(22 19 15 / 14%) 48%,rgb(22 19 15 / 90%) 78%,var(--stone-bg) 100%)}
+.screen.match{background:url(assets/out-of-game-rework/match.webp) center/cover no-repeat}
+.legal{position:absolute;left:0;right:0;bottom:0;height:28px;display:flex;justify-content:center;align-items:center;gap:22px;font:400 12px/1 var(--font-text);color:var(--ink-dim);opacity:.6;z-index:2}
+
+/* ---- the Double rule frame with the Stepped corner (theme/primitives.css) --------------------- */
+.rule-frame{position:relative}
+.rule-frame::before{content:'';position:absolute;inset:-4px;pointer-events:none;background:
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' fill='none'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/svg%3E") left top/26px 26px no-repeat,
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' fill='none'%3E%3Cg transform='matrix(-1 0 0 1 26 0)'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/g%3E%3C/svg%3E") right top/26px 26px no-repeat,
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' fill='none'%3E%3Cg transform='matrix(-1 0 0 -1 26 26)'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/g%3E%3C/svg%3E") right bottom/26px 26px no-repeat,
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' fill='none'%3E%3Cg transform='matrix(1 0 0 -1 0 26)'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/g%3E%3C/svg%3E") left bottom/26px 26px no-repeat,
+  linear-gradient(var(--cut),var(--cut)) 26px 4px/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--cut),var(--cut)) 26px calc(100% - 4px)/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--cut),var(--cut)) 4px 26px/1px calc(100% - 52px) no-repeat,
+  linear-gradient(var(--cut),var(--cut)) calc(100% - 4px) 26px/1px calc(100% - 52px) no-repeat,
+  linear-gradient(var(--lit),var(--lit)) 26px 5px/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--lit),var(--lit)) 26px calc(100% - 5px)/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--lit),var(--lit)) 5px 26px/1px calc(100% - 52px) no-repeat,
+  linear-gradient(var(--lit),var(--lit)) calc(100% - 5px) 26px/1px calc(100% - 52px) no-repeat,
+  linear-gradient(var(--lit-faint),var(--lit-faint)) 26px 9px/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--lit-faint),var(--lit-faint)) 26px calc(100% - 9px)/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--lit-faint),var(--lit-faint)) 9px 26px/1px calc(100% - 52px) no-repeat,
+  linear-gradient(var(--lit-faint),var(--lit-faint)) calc(100% - 9px) 26px/1px calc(100% - 52px) no-repeat}
+.stone-panel{background:var(--stone-tex) var(--stone-panel);color:var(--ink)}
+
+/* ---- the plinth (app/plinth.css, 1440 x 900 sizes by default) -------------------------------- */
+.foot{position:absolute;z-index:3;margin:0 auto;max-width:1520px}
+.plinth{box-sizing:border-box;height:var(--ph);display:flex;align-items:center;gap:32px;padding:0 30px 0 36px}
+.mode{display:grid;gap:4px;min-width:0}
+.segs{position:relative;display:flex;gap:6px;padding-top:14px}
+.seg{position:relative;width:var(--segw);height:var(--segh);display:flex;justify-content:center;align-items:center;gap:14px;padding:0 10px;border:0;background:none;color:var(--ink-dim);cursor:pointer;transition:color .25s}
+.seg:hover{color:var(--ink-soft)}
+.seg[aria-checked="true"]{color:var(--ink)}
+.seg:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+.seg .icons{display:flex;align-items:center;gap:2px;opacity:.55;transition:opacity .25s}
+.seg[aria-checked="true"] .icons{opacity:1}
+.seg .sl{font:500 13.5px/1.25 var(--font-display);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
+.words .seg .sl{font-size:15px;letter-spacing:.16em}
+.segs .mk{position:absolute;left:0;top:0;width:var(--segw);height:12px;pointer-events:none;transform:translateX(calc((var(--segw) + 6px) * var(--at)));transition:transform .5s var(--ease-travel)}
+.segs .mk::before{content:'';position:absolute;left:0;right:0;top:5px;height:1px;background:linear-gradient(90deg,transparent,var(--ink) 30%,var(--ink) 70%,transparent)}
+.segs .mk::after{content:'';position:absolute;left:50%;top:1px;width:8px;height:8px;margin-left:-4px;background:var(--ink);box-shadow:0 0 0 1.5px var(--casing);transform:rotate(45deg)}
+.segs .mk.ghost{opacity:0;transform:translateX(calc((var(--segw) + 6px) * var(--hover))) translateY(-6px);transition:opacity .25s,transform .3s var(--ease-settle)}
+.segs .mk.ghost.on{opacity:1;transform:translateX(calc((var(--segw) + 6px) * var(--hover)))}
+.segs .mk.ghost::after{background:none;border:1px solid var(--ink-soft)}
+.segs .mk.ghost::before{opacity:.35}
+.optl{display:flex;align-items:center;height:28px;padding-left:14px}
+.prule{display:inline-flex;align-items:center;gap:8px;font:italic 400 16px/1 var(--font-text);color:var(--ink-dim);white-space:nowrap}
+.end{margin-left:auto;display:flex;align-items:center;gap:22px;flex:none}
+.go{flex:none;width:var(--gow);height:var(--goh);display:inline-flex;align-items:center;justify-content:center;border:0;background:var(--ink);color:var(--stone-bg);font:500 var(--gof)/1 var(--font-display);letter-spacing:.2em;text-transform:uppercase;box-shadow:inset 0 0 0 4px var(--ink),inset 0 0 0 5px var(--stone-bg);cursor:pointer}
+.go:hover{background:#fff8e9;box-shadow:inset 0 0 0 4px #fff8e9,inset 0 0 0 5px var(--stone-bg)}
+.icon{display:block;overflow:visible;flex:none}
+
+/* ---- the intro banner (hud/StartBanner.svelte) ------------------------------------------------ */
+.banner{position:absolute;top:30%;left:50%;transform:translateX(-50%);z-index:6;display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 28px;border:1px solid rgb(236 228 209 / 60%);background:rgb(14 12 9 / 94%);box-shadow:inset 0 0 0 3px rgb(14 12 9 / 94%),inset 0 0 0 4px rgb(236 228 209 / 25%);color:var(--ink);text-align:center;cursor:pointer;animation:banner-in 240ms ease-out}
+.banner p{margin:0}
+.banner .tl{display:flex;align-items:center;gap:14px}
+.banner .title{font:500 22px/1.2 var(--font-display);letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
+.banner .sub{color:var(--ink-soft);font:400 16px/1.3 var(--font-text)}
+.banner .mark{display:block;overflow:visible}
+.banner .rulemark{display:block;width:240px;height:24px;overflow:visible}
+@keyframes banner-in{from{opacity:0;transform:translateX(-50%) translateY(-8px)}}
+.bob{animation:bob 1.6s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(3px)}}
+.still .banner,.still .bob{animation:none}
+.still .segs .mk,.still .seg,.still .seg .icons{transition:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Menu icons · round 1</h1>
+    <div class="group"><span class="lab">Player colour</span><span id="cols" class="group" role="group" aria-label="Player colour"></span></div>
+    <div class="group"><button class="chip" id="gray" aria-pressed="false">Grayscale</button></div>
+    <button class="chip" id="more" aria-expanded="false" aria-controls="moreBar">More</button>
+  </div>
+  <div class="bar" id="moreBar">
+    <div class="group"><span class="lab">Window</span><button class="chip" data-win="1280">1280 × 720</button><button class="chip" data-win="1440">1440 × 900</button><button class="chip" data-win="1920">1920 × 1080</button></div>
+    <div class="group"><span class="lab">View</span><button class="chip" id="zoom" aria-pressed="false">Zoom × 2</button><button class="chip" id="still" aria-pressed="false">Less motion</button></div>
+  </div>
+</header>
+<main>
+  <section class="el" aria-labelledby="h-ways">
+    <div class="vrow"><h2 id="h-ways">1 · Way icons</h2><div class="group" id="wvars" role="group" aria-label="Way icon variant"></div></div>
+    <p class="cap" id="wcap"></p>
+    <div class="view" id="wview"><div class="stage" id="wstage"></div></div>
+  </section>
+  <section class="el" aria-labelledby="h-banner">
+    <div class="vrow"><h2 id="h-banner">2 · Banner marker</h2><div class="group" id="bvars" role="group" aria-label="Banner marker variant"></div></div>
+    <p class="cap" id="bcap"></p>
+    <div class="view" id="bview"><div class="stage" id="bstage"></div></div>
+  </section>
+</main>
+<script>
+'use strict';
+// ===== Geometry helpers: absolute M L H V C Q Z path data, transformed point by point ==========================
+const KAPPA = 0.5523;
+const f2 = (n) => (Math.abs(n) < 1e-6 ? 0 : Math.round(n * 100) / 100);
+function parse(d) {
+  const tok = d.match(/[MLHVCQZ]|-?\d*\.?\d+(?:e-?\d+)?/g) || [];
+  const out = []; let i = 0, cmd = '', cx = 0, cy = 0, sx = 0, sy = 0;
+  const num = () => Number(tok[i++]);
+  while (i < tok.length) {
+    if (/[MLHVCQZ]/.test(tok[i])) cmd = tok[i++];
+    if (cmd === 'Z') { out.push(['Z']); cx = sx; cy = sy; continue; }
+    if (cmd === 'M') { cx = num(); cy = num(); sx = cx; sy = cy; out.push(['M', [cx, cy]]); cmd = 'L'; continue; }
+    if (cmd === 'L') { cx = num(); cy = num(); out.push(['L', [cx, cy]]); continue; }
+    if (cmd === 'H') { cx = num(); out.push(['L', [cx, cy]]); continue; }
+    if (cmd === 'V') { cy = num(); out.push(['L', [cx, cy]]); continue; }
+    if (cmd === 'C') { const a = [num(), num()], b = [num(), num()], c = [num(), num()]; out.push(['C', a, b, c]); [cx, cy] = c; continue; }
+    if (cmd === 'Q') { const a = [num(), num()], c = [num(), num()]; out.push(['Q', a, c]); [cx, cy] = c; continue; }
+    i++;
+  }
+  return out;
+}
+/** A transform: scale, mirror, rotate (degrees), then move. */
+function T({ x = 0, y = 0, r = 0, s = 1, fx = false } = {}) {
+  const a = (r * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a);
+  return ([px, py]) => { let u = px * s, v = py * s; if (fx) u = -u; return [u * c - v * sn + x, u * sn + v * c + y]; };
+}
+function xf(d, f) {
+  return parse(d).map(([c, ...pts]) => c + (pts.length ? ' ' + pts.map((p) => f(p).map(f2).join(' ')).join(' ') : '')).join(' ');
+}
+function circle(cx, cy, r) {
+  const k = KAPPA * r;
+  return `M${cx + r} ${cy} C${cx + r} ${cy + k} ${cx + k} ${cy + r} ${cx} ${cy + r} C${cx - k} ${cy + r} ${cx - r} ${cy + k} ${cx - r} ${cy} C${cx - r} ${cy - k} ${cx - k} ${cy - r} ${cx} ${cy - r} C${cx + k} ${cy - r} ${cx + r} ${cy - k} ${cx + r} ${cy} Z`;
+}
+/** A pill along x, centred on 0: half length `L` between the cap centres, radius `R`. */
+function pill(L, R) {
+  const k = KAPPA * R;
+  return `M${-L} ${-R} L${L} ${-R} C${L + k} ${-R} ${L + R} ${-k} ${L + R} 0 C${L + R} ${k} ${L + k} ${R} ${L} ${R} L${-L} ${R} C${-L - k} ${R} ${-L - R} ${k} ${-L - R} 0 C${-L - R} ${-k} ${-L - k} ${-R} ${-L} ${-R} Z`;
+}
+/** The lower quarter of a pill's right cap: redrawn over the other link where they cross. */
+function pillQuarter(L, R) { const k = KAPPA * R; return `M${L + R} 0 C${L + R} ${k} ${L + k} ${R} ${L} ${R}`; }
+function gear(cx, cy, ro, ri, n, hole) {
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i) / n - Math.PI / 2, w = Math.PI / n;
+    for (const [ang, r] of [[a - w * 0.62, ri], [a - w * 0.36, ro], [a + w * 0.36, ro], [a + w * 0.62, ri]]) pts.push([cx + r * Math.cos(ang), cy + r * Math.sin(ang)]);
+  }
+  return 'M' + pts.map((p) => p.map(f2).join(' ')).join(' L') + ' Z' + (hole ? ' ' + circle(cx, cy, hole) : '');
+}
+function star(cx, cy, ro, ri, n = 5) {
+  const pts = [];
+  for (let i = 0; i < 2 * n; i++) { const a = (Math.PI * i) / n - Math.PI / 2, r = i % 2 ? ri : ro; pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); }
+  return 'M' + pts.map((p) => p.map(f2).join(' ')).join(' L') + ' Z';
+}
+const loz = (cx, cy, rx, ry) => `M${cx} ${cy - ry} L${cx + rx} ${cy} L${cx} ${cy + ry} L${cx - rx} ${cy} Z`;
+/** A chain of two links at `angle`, centred on (cx, cy); `lw` scales the line. */
+function chain(cx, cy, angle, L, R, gap, lw) {
+  const a = T({ x: cx, y: cy, r: angle }), at = (dx) => T({ x: cx + dx * Math.cos((angle * Math.PI) / 180), y: cy + dx * Math.sin((angle * Math.PI) / 180), r: angle });
+  void a;
+  const A = at(-gap), B = at(gap);
+  return [
+    { d: xf(pill(L, R), A), line: true, lw },
+    { d: xf(pill(L, R), B), line: true, lw },
+    { d: xf(pillQuarter(L, R), A), line: true, lw },
+  ];
+}
+
+// ===== The cut drawing: a ruled solid, a dark casing, the ink line =======================================
+// A part: {d, fill: 'own' | 'foe' | 'ink' (a small solid: a head) | 'plate' | null, line: true | 'dash' | false, lw (line scale)}.
+let uid = 0;
+function iconSvg(spec, height) {
+  const [x0, y0, w, h] = spec.vb;
+  const id = 'p' + (uid++);
+  const width = (height * w) / h;
+  let s = `<svg class="icon" viewBox="${x0} ${y0} ${w} ${h}" width="${f2(width)}" height="${height}" aria-hidden="true" focusable="false">`;
+  s += `<defs><pattern id="${id}o" patternUnits="userSpaceOnUse" width="2.6" height="2.6"><rect width="2.6" height="1.15" fill="currentColor"/></pattern>`;
+  s += `<pattern id="${id}f" patternUnits="userSpaceOnUse" width="2.9" height="2.9" patternTransform="rotate(45)"><rect width="1.1" height="2.9" fill="currentColor"/></pattern></defs>`;
+  const LW = spec.lw ?? 0.82;
+  for (const p of spec.parts) {
+    const lw = (p.lw ?? 1) * LW;
+    if (p.fill) {
+      s += `<path d="${p.d}" fill="#0e0c09" fill-opacity=".82" fill-rule="evenodd"/>`;
+      if (p.fill === 'ink') s += `<path d="${p.d}" fill="currentColor" fill-rule="evenodd"/>`;
+      else if (p.fill !== 'plate') s += `<path d="${p.d}" fill="url(#${id}${p.fill === 'own' ? 'o' : 'f'})" fill-rule="evenodd"/>`;
+    }
+    if (p.line !== false) {
+      s += `<path d="${p.d}" fill="none" stroke="#060504" stroke-width="${f2(4.2 * lw)}" stroke-opacity=".9" stroke-linecap="square" stroke-linejoin="miter"/>`;
+      s += `<path d="${p.d}" fill="none" stroke="currentColor" stroke-width="${f2(2.1 * lw)}" stroke-linecap="${p.line === 'dash' ? 'butt' : 'square'}" stroke-linejoin="miter"${p.line === 'dash' ? ' stroke-dasharray="2.6 2.2"' : ''}/>`;
+    }
+  }
+  return s + '</svg>';
+}
+const P = (d, fill = null, line = true, lw = 1) => ({ d, fill, line, lw });
+
+// ===== The pieces ================================================================================
+function sword(f, fill) {
+  return [
+    P(xf('M-2.2 3.2 L-2.2 -8.2 L0 -11.9 L2.2 -8.2 L2.2 3.2 Z', f), fill),
+    P(xf('M0 4.6 L0 8.2', f), null, true, 1.05),
+    P(xf('M-5.2 3.9 L5.2 3.9', f), null, true, 1.05),
+    P(xf('M0 8.4 L1.7 10.1 L0 11.8 L-1.7 10.1 Z', f), fill, true, 0.8),
+  ];
+}
+function bust(cx, fill) {
+  return [
+    P(`M${cx - 6.5} 10.5 C${cx - 6.5} 4 ${cx - 4} 1.1 ${cx} 1.1 C${cx + 4} 1.1 ${cx + 6.5} 4 ${cx + 6.5} 10.5 Z`, fill),
+    P(circle(cx, -5, 4.1), 'ink'),
+  ];
+}
+function automaton(cx) {
+  return [
+    P(`M${cx - 6.5} 10.5 L${cx - 6.5} 3.9 L${cx - 4.1} 1.3 L${cx + 4.1} 1.3 L${cx + 6.5} 3.9 L${cx + 6.5} 10.5 Z`, 'foe'),
+    P(`M${cx - 4} -9.6 L${cx + 4} -9.6 L${cx + 4} -1 L${cx - 4} -1 Z`, 'foe'),
+    P(`M${cx - 2.1} -5.5 L${cx + 2.1} -5.5`, null, true, 0.85),
+    P(`M${cx - 1.6} -1 L${cx - 1.6} 1.3 M${cx + 1.6} -1 L${cx + 1.6} 1.3`, null, true, 0.6),
+  ];
+}
+const KNIGHT = 'M-4.6 8.4 C-4.5 5.2 -2.9 3.1 -1.5 1.3 C-2.9 0.8 -4.7 1.2 -6.1 0.3 C-7.4 -0.5 -7.4 -2.5 -6.3 -3.5 C-4.7 -5 -3.4 -6.9 -2.3 -8.6 L-1.5 -11.8 L0.1 -9.4 C3.7 -9.2 6.2 -5.8 6.2 -1.4 C6.2 2.6 4.7 5.4 4.9 8.4 Z';
+function knight(cx, fill, faceRight) {
+  const f = T({ x: cx, fx: faceRight });
+  return [
+    P(xf('M-6.4 8.4 L6.4 8.4 L6.4 11.2 L-6.4 11.2 Z', f), fill),
+    P(xf(KNIGHT, f), fill),
+    P(xf('M-3.6 -5.4 L-2.4 -5.4', f), null, true, 0.9),
+  ];
+}
+function pawn(cx, fill, gearHead) {
+  const parts = [
+    P(`M${cx - 6.6} 7.4 L${cx + 6.6} 7.4 L${cx + 6.6} 10.6 L${cx - 6.6} 10.6 Z`, fill),
+    P(`M${cx - 2.7} -2.4 C${cx - 2.7} 2.2 ${cx - 4.6} 5.2 ${cx - 5.6} 7.4 L${cx + 5.6} 7.4 C${cx + 4.6} 5.2 ${cx + 2.7} 2.2 ${cx + 2.7} -2.4 Z`, fill),
+    P(`M${cx - 4} -4.1 L${cx + 4} -4.1 L${cx + 4} -2.4 L${cx - 4} -2.4 Z`, fill, true, 0.85),
+  ];
+  parts.push(gearHead ? P(gear(cx, -8, 4.5, 3.3, 8, 1.3), fill) : P(circle(cx, -8, 3.6), 'ink'));
+  return parts;
+}
+const TOWER = 'M-4.6 11 L-4.6 -4.6 L-5.6 -4.6 L-5.6 -10.6 L-3.3 -10.6 L-3.3 -8.4 L-1.1 -8.4 L-1.1 -10.6 L1.1 -10.6 L1.1 -8.4 L3.3 -8.4 L3.3 -10.6 L5.6 -10.6 L5.6 -4.6 L4.6 -4.6 L4.6 11 Z';
+function tower(cx, fill, clock) {
+  const parts = [P(xf(TOWER, T({ x: cx })), fill), P(`M${cx - 1.8} 11 L${cx - 1.8} 7.6 C${cx - 1.8} 5.6 ${cx + 1.8} 5.6 ${cx + 1.8} 7.6 L${cx + 1.8} 11`, 'plate', true, 0.75)];
+  parts.push(clock ? P(gear(cx, -0.6, 3.6, 2.6, 8, 1), 'plate', true, 0.75) : P(`M${cx} -2.6 L${cx} 0.8`, null, true, 0.8));
+  return parts;
+}
+function heater(cx, cy, s, fill) { return P(xf('M-6 -8 L6 -8 L6 -1.5 C6 3.5 3.5 6.5 0 8.5 C-3.5 6.5 -6 3.5 -6 -1.5 Z', T({ x: cx, y: cy, s })), fill); }
+function node(cx, kind) {
+  if (kind === 'own') return [P(circle(cx, 0, 6.2), 'own')];
+  return [P(circle(cx, 0, 6.2), 'foe'), P(circle(cx, 0, 2.8), 'plate', true, 0.6)];
+}
+const HEAD = 'M-3.4 7.8 C-3.2 5.4 -5 3.8 -5.6 1.6 C-6.6 -2.4 -4.8 -7.4 0 -7.8 C3.7 -8 5.6 -5.4 5.8 -3.1 L7.2 -0.5 C7.4 -0.1 7 0.3 6.4 0.3 L6 0.6 L6.2 1.6 L5.6 2.2 C5.8 3.4 5.2 4.3 3.7 4.3 L2.5 4.3 L2.7 7.8 Z';
+
+// ===== Element 1: the way icons ====================================================================
+// Each variant: {name, note, match, bot, friend}; an icon is a spec {vb, parts} (or null: no icon).
+const WAYS = [
+  { id: 'cur', name: 'Current', note: 'two helmets, one helmet, a dashed helmet', ref: true },
+  { id: 'blades', name: 'Blades', note: 'crossed swords; a sword against a cog; swords bound by a link',
+    match: { vb: [-15, -13, 30, 26], parts: [...sword(T({ r: -42 }), 'own'), ...sword(T({ r: 42 }), 'foe')] },
+    bot: { vb: [-14, -13, 28, 26], parts: [P(gear(1.2, -1.2, 10, 7.8, 9, 3), 'foe'), ...sword(T({ r: -42, x: -0.5, y: 0.5 }), 'own')] },
+    friend: { vb: [-15, -13, 30, 26], parts: [...sword(T({ r: -42, y: -1.2 }), 'own'), ...sword(T({ r: 42, y: -1.2 }), 'foe'), ...chain(0, 7.6, 0, 1.5, 1.8, 2.4, 0.72)] } },
+  { id: 'busts', name: 'Figures', note: 'a figure against a figure; against an automaton; two figures linked',
+    match: { vb: [-14.5, -13, 29, 26], parts: [...bust(-7, 'own'), ...bust(7, 'foe')] },
+    bot: { vb: [-14.5, -13, 29, 26], parts: [...bust(-7, 'own'), ...automaton(7)] },
+    friend: { vb: [-14.5, -13, 29, 26], parts: [...bust(-7, 'own'), ...bust(7, 'foe'), ...chain(0, -5, 0, 1.4, 1.7, 2.3, 0.72)] } },
+  { id: 'herald', name: 'Herald', note: 'a herald’s trumpet calls anyone; a clockwork wheel; a sealed letter',
+    match: { vb: [-13.5, -13, 27, 26], parts: (() => { const f = T({ r: -22, y: -1.4 }); return [
+      P(xf('M-12.4 -0.95 L4.6 -0.95 C7.2 -1.3 9.8 -3 11.6 -5.2 L11.6 5.2 C9.8 3 7.2 1.3 4.6 0.95 L-12.4 0.95 Z', f), 'plate'),
+      P(xf('M-13 -2.3 L-13 2.3', f), null, true, 0.9),
+      P('M-6.15 2.05 L1.27 -0.94 L1.27 6.8 L-2.44 5.7 L-6.15 9.8 Z', 'own'),
+      P(xf('M8 -2.6 L8 2.6', f), null, true, 0.5)]; })() },
+    bot: { vb: [-14, -13, 28, 26], parts: [P(gear(-1.6, 1.6, 10.4, 8.1, 10, 3.2), 'own'), P('M1 -1 L7.2 -7.2', null, true, 1.1), P(circle(7.4, -10.6, 2.4), 'own', true, 0.85), P(circle(10.6, -7.4, 2.4), 'own', true, 0.85)] },
+    friend: { vb: [-14, -13, 28, 26], parts: [P('M-12 -8 L12 -8 L12 8.6 L-12 8.6 Z', 'plate'), P('M-12 8.6 L-3.2 1 M12 8.6 L3.2 1', null, true, 0.6), P('M-12 -8 L0 1.6 L12 -8', null, true, 0.9), P(circle(0, 1.8, 4), 'own'), P(loz(0, 1.8, 1.4, 1.9), null, true, 0.5)] } },
+  { id: 'util', name: 'Plain signs', note: 'an hourglass for the queue; a cog; a chain link',
+    match: { vb: [-14, -13, 28, 26], parts: [
+      P('M-6.2 -10 C-6.2 -4.6 -1.5 -2.4 -1.5 0 C-1.5 2.4 -6.2 4.6 -6.2 10 M6.2 -10 C6.2 -4.6 1.5 -2.4 1.5 0 C1.5 2.4 6.2 4.6 6.2 10'),
+      P('M-4.9 -6.4 L4.9 -6.4 C3.8 -4.1 1.2 -2.6 0 -1.1 C-1.2 -2.6 -3.8 -4.1 -4.9 -6.4 Z', 'own', true, 0.5),
+      P('M-5.2 9.4 C-4.2 6.1 -1.6 4.8 0 3.2 C1.6 4.8 4.2 6.1 5.2 9.4 Z', 'own', true, 0.5),
+      P('M0 -0.6 L0 3', null, true, 0.5),
+      P('M-8.6 -12.4 L8.6 -12.4 L8.6 -10 L-8.6 -10 Z', 'own', true, 0.9),
+      P('M-8.6 10 L8.6 10 L8.6 12.4 L-8.6 12.4 Z', 'own', true, 0.9)] },
+    bot: { vb: [-14, -13, 28, 26], parts: [P(gear(0, 0, 12, 9.4, 10, 4.2), 'own'), P(circle(0, 0, 6.6), null, true, 0.5)] },
+    friend: { vb: [-14, -13, 28, 26], parts: chain(0, 0, -45, 4, 3.9, 4.2, 1.45) } },
+  { id: 'shields', name: 'Shields', note: 'your shield against a round one, a cog shield, a shield with a link',
+    match: { vb: [-13.5, -13, 28, 26], parts: [P(circle(4.6, -2.4, 8.8), 'foe'), P(circle(4.6, -2.4, 2.5), 'plate', true, 0.7), heater(-4.4, 2.8, 1.12, 'own')] },
+    bot: { vb: [-13.5, -13, 28, 26], parts: [P(gear(4.6, -2.4, 9.6, 7.6, 10, 2.5), 'foe'), heater(-4.4, 2.8, 1.12, 'own')] },
+    friend: { vb: [-13.5, -13, 28, 26], parts: [P(circle(5, -2.8, 8.8), 'foe'), heater(-5.4, 3.4, 1.0, 'own'), ...chain(6.6, -4.4, -45, 1.3, 1.7, 2.1, 0.72)] } },
+  { id: 'knights', name: 'Knights', note: 'two chess knights face to face; a knight against a cog; knights joined by a link',
+    match: { vb: [-15.5, -13, 31, 26], parts: [...knight(-7.8, 'own', true), ...knight(7.8, 'foe', false)] },
+    bot: { vb: [-15.5, -13, 31, 26], parts: [...knight(-7.8, 'own', true), P(gear(7.6, -0.2, 7.6, 5.8, 8, 2.2), 'foe')] },
+    friend: { vb: [-15.5, -13, 31, 26], parts: [...knight(-7.8, 'own', true), ...knight(7.8, 'foe', false), ...chain(0, 9.8, 0, 1.3, 1.5, 2.1, 0.66)] } },
+  { id: 'graph', name: 'Map nodes', note: 'two cities meet on a road; a city against a cog; a road made of a link',
+    match: { vb: [-17.5, -9, 35, 18], parts: [P('M-11 0 L11 0', null, true, 0.75), ...node(-10.8, 'own'), ...node(10.8, 'foe'), P('M-3.6 -2.4 L-1.1 0 L-3.6 2.4 M3.6 -2.4 L1.1 0 L3.6 2.4', null, true, 0.75)] },
+    bot: { vb: [-17.5, -9, 35, 18], parts: [P('M-11 0 L11 0', null, true, 0.75), ...node(-10.8, 'own'), P(gear(10.8, 0, 7.3, 5.6, 8, 2), 'foe'), P('M-3.6 -2.4 L-1.1 0 L-3.6 2.4 M3.6 -2.4 L1.1 0 L3.6 2.4', null, true, 0.75)] },
+    friend: { vb: [-17.5, -9, 35, 18], parts: [...node(-10.8, 'own'), ...node(10.8, 'foe'), ...chain(0, 0, 0, 1.4, 1.8, 2.3, 0.75)] } },
+  { id: 'medal', name: 'Medallions', note: 'a profile, a cog and a link, each struck in a coin',
+    match: { vb: [-14, -13, 28, 26], parts: [P(circle(0, 0, 11.8), null), P(circle(0, 0, 9.8), null, true, 0.4), P(xf(HEAD, T({ s: 0.95, y: 0.4 })), 'own'), P(xf('M-4.6 -3.4 C-1.6 -4.4 1.6 -5.2 3.6 -6.2', T({ s: 0.95, y: 0.4 })), null, true, 0.5)] },
+    bot: { vb: [-14, -13, 28, 26], parts: [P(circle(0, 0, 11.8), null), P(circle(0, 0, 9.8), null, true, 0.4), P(gear(0, 0, 7.4, 5.6, 8, 2.3), 'own')] },
+    friend: { vb: [-14, -13, 28, 26], parts: [P(circle(0, 0, 11.8), null), P(circle(0, 0, 9.8), null, true, 0.4), ...chain(0, 0, -45, 2, 2.6, 2.6, 0.95)] } },
+  { id: 'loz', name: 'Lozenges', note: 'the marker’s lozenge: two facing, one against a cog, two joined',
+    match: { vb: [-14, -13, 28, 26], parts: [P(loz(-6.9, 0, 6.1, 10), 'own'), P(loz(6.9, 0, 6.1, 10), 'foe')] },
+    bot: { vb: [-14, -13, 28, 26], parts: [P(loz(-6.9, 0, 6.1, 10), 'own'), P(gear(6.6, 0, 7, 5.4, 8, 2), 'foe')] },
+    friend: { vb: [-15, -13, 30, 26], parts: [P(loz(-8, 0, 6.1, 10), 'own'), P(loz(8, 0, 6.1, 10), 'foe'), ...chain(0, 0, 0, 1.3, 1.7, 2.2, 0.72)] } },
+  { id: 'pawns', name: 'Pawns', note: 'two game pieces; a piece with a cog head; two pieces linked',
+    match: { vb: [-14.5, -13, 29, 26], parts: [...pawn(-7, 'own'), ...pawn(7, 'foe')] },
+    bot: { vb: [-14.5, -13, 29, 26], parts: [...pawn(-7, 'own'), ...pawn(7, 'foe', true)] },
+    friend: { vb: [-14.5, -13, 29, 26], parts: [...pawn(-7, 'own'), ...pawn(7, 'foe'), ...chain(0, -8, 0, 1.4, 1.6, 2.2, 0.68)] } },
+  { id: 'places', name: 'Places', note: 'a crossroads signpost; a practice dummy; an open gate',
+    match: { vb: [-13, -13, 26, 26], parts: [
+      P('M-1.2 -11.6 L1.2 -11.6 L1.2 11 L-1.2 11 Z', 'own', true, 0.9),
+      P('M-3.2 -9.4 L7.6 -9.4 L10.4 -6.8 L7.6 -4.2 L-3.2 -4.2 Z', 'own'),
+      P('M3.2 -2.4 L-7.6 -2.4 L-10.4 0.2 L-7.6 2.8 L3.2 2.8 Z', 'foe'),
+      P('M-6 11.4 L6 11.4', null, true, 0.8)] },
+    bot: { vb: [-13, -13, 26, 26], parts: [
+      P('M-1.1 -1 L1.1 -1 L1.1 10.6 L-1.1 10.6 Z', 'plate', true, 0.85),
+      P('M-6 11 L6 11', null, true, 0.85),
+      P('M-4.6 -2.2 L4.6 -2.2 C4.6 2.5 3.8 5 3 6.8 L-3 6.8 C-3.8 5 -4.6 2.5 -4.6 -2.2 Z', 'foe'),
+      P('M-4.4 1.8 L4.4 1.8', null, true, 0.5),
+      P('M-10.4 -4.6 L10.4 -4.6 L10.4 -2.2 L-10.4 -2.2 Z', 'foe', true, 0.9),
+      P(circle(0, -8.4, 3.7), 'foe'),
+      P('M-1.5 -9.9 L1.5 -6.9 M1.5 -9.9 L-1.5 -6.9', null, true, 0.5)] },
+    friend: { vb: [-14, -13, 28, 26], parts: [
+      P('M-6.2 11 L-6.2 -2 C-6.2 -6.4 -3.4 -8.6 0 -8.6 C3.4 -8.6 6.2 -6.4 6.2 -2 L6.2 11 Z', 'plate', false),
+      P('M-10 -1.4 L-13.4 0.6 L-13.4 12 L-10 11 Z', 'foe', true, 0.8),
+      P('M10 -1.4 L13.4 0.6 L13.4 12 L10 11 Z', 'foe', true, 0.8),
+      P('M-10 11 L-10 -2.2 C-10 -8.8 -5.2 -12.2 0 -12.2 C5.2 -12.2 10 -8.8 10 -2.2 L10 11 L6.2 11 L6.2 -2 C6.2 -6.4 3.4 -8.6 0 -8.6 C-3.4 -8.6 -6.2 -6.4 -6.2 -2 L-6.2 11 Z', 'own'),
+      P('M-1.2 -11.8 L1.2 -11.8', null, true, 0.4),
+      P('M-6.2 11.4 L6.2 11.4', null, true, 0.6)] } },
+  { id: 'towers', name: 'Towers', note: 'two towers; a tower against a clock tower; towers joined by a chain',
+    match: { vb: [-14, -13, 28, 26], parts: [...tower(-6.9, 'own'), ...tower(6.9, 'foe')] },
+    bot: { vb: [-14, -13, 28, 26], parts: [...tower(-6.9, 'own'), ...tower(6.9, 'foe', true)] },
+    friend: { vb: [-15, -13, 30, 26], parts: [...tower(-7.8, 'own'), ...tower(7.8, 'foe'), ...chain(0, -3.4, 0, 1.3, 1.6, 2.1, 0.68)] } },
+  { id: 'words', name: 'Words only', note: 'no icons: the names, a little larger, and the marker', words: true },
+];
+
+// ===== The current helmets (units/helmet.ts, HelmetIcon.svelte engraved) =================================
+const HELMET = {
+  own: { dome: 'M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z', band: 'M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60', strap: 'M46 80 L54 96' },
+  enemy: { dome: 'M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z', band: null, strap: 'M38 75 L58 91 L64 68' },
+};
+const HBOX = { own: [1, 6, 101, 96], enemy: [2, 7, 103, 90] };
+function helmetSvg(side, width, { dashed = false, colour } = {}) {
+  const p = HELMET[side];
+  const [x, y, w, h] = HBOX[side];
+  const flip = side === 'enemy' ? ` transform="translate(${2 * x + w} 0) scale(-1 1)"` : '';
+  const tone = colour;
+  const gearC = dashed ? 'var(--ink-dim)' : 'var(--ink)';
+  let s = `<svg class="icon" viewBox="${x} ${y} ${w} ${h}" width="${width}" height="${f2((width * h) / w)}" aria-hidden="true"><g${flip}>`;
+  const cas = (d) => `<path d="${d}" fill="none" stroke="#060504" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"${dashed ? ' opacity=".5"' : ''}/>`;
+  s += cas(p.strap) + (p.band ? cas(p.band) : '') + cas(p.dome);
+  const g = (d) => `<path d="${d}" fill="none" stroke="${gearC}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+  s += g(p.strap) + (p.band ? g(p.band) : '');
+  s += `<path d="${p.dome}" fill="#0e0c09"${dashed ? ' opacity=".5"' : ''}/>`;
+  if (!dashed) s += `<path d="${p.dome}" fill="${tone}"/>`;
+  s += `<path d="${p.dome}" fill="none" stroke="${gearC}" stroke-width="4" stroke-linejoin="round"${dashed ? ' stroke-dasharray="10 8"' : ''}/>`;
+  return s + '</g></svg>';
+}
+
+// ===== Element 2: the banner markers =============================================================
+const MARKS = [
+  { id: 'cur', name: 'Current', note: 'the triangle in the player colour', ref: true },
+  { id: 'none', name: 'No marker', note: 'the words alone; the map’s beacon shows the place' },
+  { id: 'seal', name: 'Capital seal', note: 'the capital as the map draws it: the star on a disc of the player colour' },
+  { id: 'rule', name: 'Lozenge rule', note: 'the menu’s marker: an ink lozenge on a fading rule' },
+  { id: 'starrule', name: 'Star rule', note: 'the capital star in ink, set in a fading rule' },
+  { id: 'chev', name: 'Cut chevron', note: 'an ink chevron that sinks toward the map' },
+  { id: 'needle', name: 'Needle', note: 'a needle that points at the capital on screen' },
+  { id: 'helmet', name: 'Own helmet', note: 'the player’s helmet, charged' },
+  { id: 'flank', name: 'Flanking lozenges', note: 'two lozenges of the player colour either side of the title, nothing above' },
+];
+
+const COLOURS = [
+  ['lapis', '#86a6ea', 'Lapis'], ['minium', '#e5785e', 'Minium'], ['glacier', '#a6e0e8', 'Glacier'],
+  ['shell', '#f4b4a4', 'Shell'], ['violet', '#966fd6', 'Violet'], ['madder', '#c8587e', 'Madder'],
+];
+
+// ===== The sizes of the plinth per window (app/plinth.css) ===========================================
+const WIN = {
+  1280: { W: 1280, H: 720, gx: 48, pb: 40, ph: 136, segw: 204, segh: 74, goh: 76, gow: 300, gof: 23, crop: 300 },
+  1440: { W: 1440, H: 900, gx: 64, pb: 52, ph: 150, segw: 232, segh: 84, goh: 84, gow: 330, gof: 25, crop: 330 },
+  1920: { W: 1920, H: 1080, gx: 96, pb: 64, ph: 160, segw: 248, segh: 88, goh: 88, gow: 344, gof: 26, crop: 360 },
+};
+const LABEL = { match: 'Find a match', bot: 'Play a bot', friend: 'Invite a friend' };
+const VERB = { match: 'Search', bot: 'Start', friend: 'Get the link' };
+const ORDER = ['match', 'bot', 'friend'];
+const ICON_H = 30;
+
+const S = { w: 'cur', b: 'cur', c: 'lapis', way: 'match', gray: false, win: 1440, zoom: false, still: false, more: false, hover: null };
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (WAYS.some((v) => v.id === q.get('w'))) S.w = q.get('w');
+  if (MARKS.some((v) => v.id === q.get('b'))) S.b = q.get('b');
+  if (COLOURS.some((c) => c[0] === q.get('c'))) S.c = q.get('c');
+  if (ORDER.includes(q.get('way'))) S.way = q.get('way');
+  if (WIN[q.get('win')]) S.win = Number(q.get('win'));
+  S.gray = q.get('g') === '1'; S.zoom = q.get('z') === '1'; S.still = q.get('rm') === '1'; S.more = q.get('more') === '1';
+}
+function writeHash() {
+  const h = `w=${S.w}&b=${S.b}&c=${S.c}&way=${S.way}&win=${S.win}&g=${S.gray ? 1 : 0}&z=${S.zoom ? 1 : 0}&rm=${S.still ? 1 : 0}&more=${S.more ? 1 : 0}`;
+  try { history.replaceState(null, '', '#' + h); } catch (e) { /* a file page may refuse */ }
+}
+const own = () => COLOURS.find((c) => c[0] === S.c)[1];
+const enemy = () => (S.c === 'minium' ? '#86a6ea' : '#e5785e');
+
+function wayIcon(v, way) {
+  if (v.id === 'cur') {
+    if (way === 'match') return helmetSvg('own', 22, { colour: own() }) + helmetSvg('enemy', 22, { colour: enemy() });
+    if (way === 'bot') return helmetSvg('enemy', 30, { colour: enemy() });
+    return helmetSvg('enemy', 30, { dashed: true });
+  }
+  if (v.words) return '';
+  const h = v[way].vb[3];
+  return iconSvg(v[way], h >= 26 ? ICON_H : Math.round(ICON_H * (h / 26) * 1.25));
+}
+
+// ===== Element 1 view ==============================================================================
+const wstage = document.getElementById('wstage');
+function renderWays() {
+  const z = WIN[S.win], v = WAYS.find((x) => x.id === S.w);
+  const at = ORDER.indexOf(S.way);
+  const hov = S.hover ?? at;
+  let segs = '';
+  ORDER.forEach((id, i) => {
+    const ic = wayIcon(v, id);
+    segs += `<button type="button" class="seg" role="radio" aria-checked="${id === S.way}" tabindex="${id === S.way ? 0 : -1}" data-i="${i}">${ic ? `<span class="icons" aria-hidden="true">${ic}</span>` : ''}<span class="sl">${LABEL[id]}</span></button>`;
+  });
+  const pause = S.way === 'match'
+    ? '<svg width="14" height="13" viewBox="0 0 14 13" aria-hidden="true"><path d="M3.5 1.5v10M10.5 1.5v10" stroke="currentColor" stroke-width="2.2" opacity=".55"/><path d="M1 12 13 1" stroke="currentColor" stroke-width="1.4"/></svg>No pauses'
+    : '<svg width="14" height="13" viewBox="0 0 14 13" aria-hidden="true"><path d="M3.5 1.5v10M10.5 1.5v10" stroke="currentColor" stroke-width="2.2"/></svg>1 pause each';
+  wstage.innerHTML = `<div class="screen menu" style="width:${z.W}px;height:${z.H}px;top:${z.crop - z.H}px">
+    <div class="foot" style="left:${z.gx}px;right:${z.gx}px;bottom:${z.pb}px;--ph:${z.ph}px;--segw:${z.segw}px;--segh:${z.segh}px;--goh:${z.goh}px;--gow:${z.gow}px;--gof:${z.gof}px">
+      <div class="plinth rule-frame stone-panel${v.words ? ' words' : ''}">
+        <div class="mode">
+          <div class="segs" role="radiogroup" aria-label="Way to play" style="--at:${at};--hover:${hov}">
+            <span class="mk" aria-hidden="true"></span><span class="mk ghost${S.hover !== null && S.hover !== at ? ' on' : ''}" aria-hidden="true"></span>${segs}
+          </div>
+          <div class="optl"><span class="prule">${pause}</span></div>
+        </div>
+        <div class="end"><button type="button" class="go">${VERB[S.way]}</button></div>
+      </div>
+    </div>
+    <div class="legal"><span>Terms</span><span>Privacy</span><span>Credits</span></div>
+  </div>`;
+  wstage.style.width = z.W + 'px'; wstage.style.height = z.crop + 'px';
+  document.getElementById('wcap').innerHTML = `<b>${v.name}</b>${v.note}`;
+  wstage.querySelectorAll('.seg').forEach((b) => {
+    const i = Number(b.dataset.i);
+    b.addEventListener('click', () => { if (ORDER[i] !== S.way) { S.way = ORDER[i]; moveMarker(); } });
+    b.addEventListener('pointerenter', () => { S.hover = i; hoverMarker(); });
+    b.addEventListener('pointerleave', () => { S.hover = null; hoverMarker(); });
+  });
+  wstage.querySelector('.segs').addEventListener('keydown', (e) => {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!step) return; e.preventDefault();
+    const n = ORDER.indexOf(S.way) + step; if (n < 0 || n > 2) return;
+    S.way = ORDER[n]; moveMarker(); wstage.querySelector('[aria-checked="true"]').focus();
+  });
+}
+// The marker travels: only the attributes change, so the CSS transition runs.
+function moveMarker() {
+  const at = ORDER.indexOf(S.way), segs = wstage.querySelector('.segs');
+  segs.style.setProperty('--at', at);
+  segs.querySelectorAll('.seg').forEach((b, i) => { b.setAttribute('aria-checked', String(i === at)); b.tabIndex = i === at ? 0 : -1; });
+  wstage.querySelector('.go').textContent = VERB[S.way];
+  wstage.querySelector('.prule').innerHTML = S.way === 'match'
+    ? '<svg width="14" height="13" viewBox="0 0 14 13" aria-hidden="true"><path d="M3.5 1.5v10M10.5 1.5v10" stroke="currentColor" stroke-width="2.2" opacity=".55"/><path d="M1 12 13 1" stroke="currentColor" stroke-width="1.4"/></svg>No pauses'
+    : '<svg width="14" height="13" viewBox="0 0 14 13" aria-hidden="true"><path d="M3.5 1.5v10M10.5 1.5v10" stroke="currentColor" stroke-width="2.2"/></svg>1 pause each';
+  hoverMarker(); writeHash();
+}
+function hoverMarker() {
+  const at = ORDER.indexOf(S.way), segs = wstage.querySelector('.segs');
+  segs.style.setProperty('--hover', S.hover ?? at);
+  segs.querySelector('.mk.ghost').classList.toggle('on', S.hover !== null && S.hover !== at);
+}
+
+// ===== Element 2 view ==============================================================================
+const bstage = document.getElementById('bstage');
+const BANNER = { W: 1440, H: 900, top: 140, crop: 560, cap: [135, 585], disc: 28 };
+function markSvg(id) {
+  const c = own();
+  if (id === 'cur') return `<svg class="mark" viewBox="0 0 16 14" width="24" height="21" aria-hidden="true"><path d="M1.5 1.5h13L8 12.5z" fill="${c}" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+  if (id === 'seal') return `<svg class="mark" viewBox="-14 -14 28 28" width="30" height="30" aria-hidden="true"><circle r="11" fill="${c}" stroke="#060504" stroke-width="3.4"/><circle r="11" fill="none" stroke="var(--ink)" stroke-width="1.5"/><circle r="8.6" fill="none" stroke="#050403" stroke-width=".8" opacity=".55"/><path d="${star(0, 0.4, 6.6, 2.97)}" fill="#0e0c09" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="miter"/></svg>`;
+  if (id === 'rule') return `<svg class="rulemark" viewBox="0 0 240 24" aria-hidden="true"><defs><linearGradient id="rg1"><stop offset="0" stop-color="#ece4d1" stop-opacity="0"/><stop offset=".3" stop-color="#ece4d1"/><stop offset=".7" stop-color="#ece4d1"/><stop offset="1" stop-color="#ece4d1" stop-opacity="0"/></linearGradient></defs><rect x="0" y="11.5" width="240" height="1" fill="url(#rg1)"/><path d="M120 6 L126 12 L120 18 L114 12 Z" fill="var(--ink)" stroke="#060504" stroke-width="1.5"/></svg>`;
+  if (id === 'starrule') return `<svg class="rulemark" viewBox="0 0 240 24" aria-hidden="true"><defs><linearGradient id="rg2"><stop offset="0" stop-color="#ece4d1" stop-opacity="0"/><stop offset=".35" stop-color="#ece4d1"/><stop offset=".65" stop-color="#ece4d1"/><stop offset="1" stop-color="#ece4d1" stop-opacity="0"/></linearGradient><mask id="rm2"><rect width="240" height="24" fill="#fff"/><rect x="104" y="0" width="32" height="24" fill="#000"/></mask></defs><rect x="0" y="11.5" width="240" height="1" fill="url(#rg2)" mask="url(#rm2)"/><path d="${star(120, 12.6, 9.4, 4.2)}" fill="none" stroke="#060504" stroke-width="3.6" stroke-linejoin="miter"/><path d="${star(120, 12.6, 9.4, 4.2)}" fill="var(--ink)" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="miter"/><path d="M98 9.5 L100.5 12 L98 14.5 L95.5 12 Z M142 9.5 L144.5 12 L142 14.5 L139.5 12 Z" fill="#8f8573" stroke="#050403" stroke-width=".8"/></svg>`;
+  if (id === 'chev') return `<svg class="mark bob" viewBox="-12 -8 24 16" width="30" height="20" aria-hidden="true"><path d="M-8 -3.6 L0 3.6 L8 -3.6" fill="none" stroke="#060504" stroke-width="5" stroke-linecap="square" opacity=".9"/><path d="M-8 -3.6 L0 3.6 L8 -3.6" fill="none" stroke="var(--ink)" stroke-width="2.3" stroke-linecap="square"/><path d="M-4.6 -6.8 L0 -2.6 L4.6 -6.8" fill="none" stroke="var(--ink)" stroke-width="1" opacity=".55" stroke-linecap="square"/></svg>`;
+  if (id === 'needle') return `<svg class="mark needle" viewBox="-16 -16 32 32" width="36" height="36" aria-hidden="true"><g class="rot"><path d="M-11 0 L6 0" stroke="#060504" stroke-width="4.4" stroke-linecap="square"/><path d="M14 0 L3.6 -6 L6.2 0 L3.6 6 Z" fill="${c}" stroke="#060504" stroke-width="3" stroke-linejoin="miter" paint-order="stroke"/><path d="M-11 0 L6 0" stroke="var(--ink)" stroke-width="1.8" stroke-linecap="square"/><path d="M14 0 L3.6 -6 L6.2 0 L3.6 6 Z" fill="none" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="miter"/><path d="M-11 0 L-8.6 -2.4 L-6.2 0 L-8.6 2.4 Z" fill="var(--ink)" stroke="#060504" stroke-width=".8"/></g></svg>`;
+  if (id === 'helmet') return `<span class="mark">${helmetSvg('own', 32, { colour: c })}</span>`;
+  if (id === 'flank') return `<svg class="mark" viewBox="-8 -8 16 16" width="16" height="16" aria-hidden="true"><path d="M0 -6 L6 0 L0 6 L-6 0 Z" fill="${c}" stroke="#060504" stroke-width="2.6" stroke-linejoin="miter" paint-order="stroke"/><path d="M0 -6 L6 0 L0 6 L-6 0 Z" fill="none" stroke="var(--ink)" stroke-width="1.1" stroke-linejoin="miter"/></svg>`;
+  return '';
+}
+let beaconRaf = 0;
+function renderBanner() {
+  const v = MARKS.find((x) => x.id === S.b), B = BANNER, c = own();
+  const top = v.id === 'none' || v.id === 'flank' ? '' : markSvg(v.id);
+  const title = '<p class="title">You are blue. Your capital is here</p>';
+  const row = v.id === 'flank' ? `<div class="tl">${markSvg('flank')}${title}${markSvg('flank')}</div>` : title;
+  bstage.innerHTML = `<div class="screen match" style="width:${B.W}px;height:${B.H}px;top:${-B.top}px">
+    <svg width="${B.W}" height="${B.H}" style="position:absolute;inset:0" aria-hidden="true"><circle id="beacon" cx="${B.cap[0]}" cy="${B.cap[1]}" r="${B.disc + 12}" fill="none" stroke="${c}" stroke-width="3"/><circle id="beacon2" cx="${B.cap[0]}" cy="${B.cap[1]}" r="${B.disc + 16}" fill="none" stroke="#ece4d1" stroke-opacity=".9" stroke-width="1.5"/></svg>
+    <div class="banner" role="status">${top}${row}<p class="sub">Opponent: Bot</p></div>
+  </div>`;
+  bstage.style.width = B.W + 'px'; bstage.style.height = B.crop + 'px';
+  document.getElementById('bcap').innerHTML = `<b>${v.name}</b>${v.note}`;
+  bstage.querySelector('.banner').addEventListener('click', () => renderBanner());
+  // The needle turns toward the capital on screen (the client knows both places).
+  const nd = bstage.querySelector('.needle');
+  if (nd) {
+    // The marker stands at the banner's top centre: 30 % down the screen, plus the padding and half the mark.
+    const mx = B.W / 2, my = B.H * 0.3 + 14 + 17;
+    const ang = (Math.atan2(B.cap[1] - my, B.cap[0] - mx) * 180) / Math.PI;
+    nd.querySelector('.rot').setAttribute('transform', `rotate(${f2(ang)})`);
+  }
+}
+function beacon(now) {
+  const a = document.getElementById('beacon'), b = document.getElementById('beacon2');
+  if (a && b) {
+    const p = S.still ? 0 : 0.5 - 0.5 * Math.cos((2 * Math.PI * (now % 800)) / 800);
+    const r = (BANNER.disc + 12) * (1 + 0.18 * p);
+    a.setAttribute('r', f2(r)); b.setAttribute('r', f2(r + 4)); a.setAttribute('stroke', own());
+  }
+  beaconRaf = requestAnimationFrame(beacon);
+}
+
+// ===== Controls ====================================================================================
+function buttons(el, list, key, onpick) {
+  el.innerHTML = list.map((v, i) => `<button class="chip${v.ref ? ' ref' : ''}" data-id="${v.id}" aria-pressed="false"><span class="k">${v.ref ? '·' : String.fromCharCode(64 + i)}</span>${v.name}</button>`).join('');
+  el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { S[key] = b.dataset.id; onpick(); }));
+}
+buttons(document.getElementById('wvars'), WAYS, 'w', () => { renderWays(); sync(); });
+buttons(document.getElementById('bvars'), MARKS, 'b', () => { renderBanner(); sync(); });
+document.getElementById('cols').innerHTML = COLOURS.map(([id, hex, name]) => `<button class="chip sw" data-c="${id}" aria-pressed="false" title="${name}" aria-label="${name}"><i style="background:${hex}"></i></button>`).join('');
+document.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => { S.c = b.dataset.c; renderWays(); renderBanner(); sync(); }));
+document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => { S.win = Number(b.dataset.win); renderWays(); sync(); }));
+document.getElementById('gray').addEventListener('click', () => { S.gray = !S.gray; sync(); });
+document.getElementById('zoom').addEventListener('click', () => { S.zoom = !S.zoom; sync(); });
+document.getElementById('still').addEventListener('click', () => { S.still = !S.still; sync(); });
+document.getElementById('more').addEventListener('click', () => { S.more = !S.more; sync(); });
+function fit() {
+  for (const [view, stage, W, Hc] of [['wview', wstage, WIN[S.win].W, WIN[S.win].crop], ['bview', bstage, BANNER.W, BANNER.crop]]) {
+    const el = document.getElementById(view), avail = el.clientWidth;
+    const k = (avail / W) * (S.zoom ? 2 : 1);
+    stage.style.transform = `scale(${k})`;
+    el.style.height = Math.round(Hc * k) + 'px';
+    el.classList.toggle('zoom', S.zoom);
+  }
+}
+function sync() {
+  document.querySelectorAll('#wvars button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === S.w)));
+  document.querySelectorAll('#bvars button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === S.b)));
+  document.querySelectorAll('[data-c]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.c === S.c)));
+  document.querySelectorAll('[data-win]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.win) === S.win)));
+  for (const [id, on] of [['gray', S.gray], ['zoom', S.zoom], ['still', S.still]]) document.getElementById(id).setAttribute('aria-pressed', String(on));
+  document.body.classList.toggle('gray', S.gray);
+  document.body.classList.toggle('still', S.still);
+  document.getElementById('moreBar').classList.toggle('open', S.more);
+  const mb = document.getElementById('more'); mb.setAttribute('aria-expanded', String(S.more)); mb.setAttribute('aria-pressed', String(S.more));
+  fit(); writeHash();
+}
+readHash();
+try { if (!location.hash && window.matchMedia('(prefers-reduced-motion: reduce)').matches) S.still = true; } catch (e) { /* no media queries */ }
+renderWays(); sync(); renderBanner();
+addEventListener('resize', () => { fit(); });
+addEventListener('hashchange', () => { readHash(); renderWays(); renderBanner(); sync(); });
+document.fonts && document.fonts.ready.then(() => { fit(); renderBanner(); });
+beaconRaf = requestAnimationFrame(beacon);
+</script>
+</body>
+</html>

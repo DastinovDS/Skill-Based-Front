@@ -2749,3 +2749,9 @@ The style-fit list the variants were checked against, the directions dropped as 
 
 Deviation from the mockup: the recruit queue is a column of helmets outward beyond the barracks (not a pair across it), so it keeps the clearance the icon was given from the roads at any queue length (`queue_max` is 3) and a helmet keeps its place as the queue grows. Hatch and Lozenges build looks and the other placements are not built.
 
+
+## 74. Main menu way icons and the intro banner marker (#968, #940) **[awaiting the owner's decision]**
+
+The owner's feedback of 2026-11-11 (#940): the helmets of the three ways on the main menu (`app/WayPicker.svelte`) are to be replaced, the helmet stays the unit symbol; the triangle over the match intro banner (`hud/StartBanner.svelte`) is a leftover, to be removed or replaced.
+
+Round 1: [`mockups/menu-icons.html`](mockups/menu-icons.html) (frames: [`mockups/img/menu-icons/`](mockups/img/menu-icons/)), one large view and one row of variant buttons per element (the controls rule of section 23). Way icons in the cut language of `theme/cutIcons.ts` (the player's part ruled level, the other side hatched at 45 degrees, ink only, the choice by brightness and the travelling lozenge): A Blades, B Figures, C Herald, D Plain signs, E Shields, F Knights, G Map nodes, H Medallions, I Lozenges, J Pawns, K Places, L Towers, M Words only, and today's helmets. Banner markers: No marker, Capital seal, Lozenge rule, Star rule, Cut chevron, Needle (points at the capital on screen), Own helmet, Flanking lozenges, and today's triangle. The table, the estimates and the recommendation (ways: B Figures, fallback D Plain signs; banner: Capital seal, fallback No marker) are in the issue. Client only: no DEC, protocol or simulation change.
