@@ -2,7 +2,7 @@ import type { Container } from 'pixi.js';
 import { setReducedMotion } from './motion.ts';
 import type { BakedSprite } from './bake.ts';
 import { cityBodySpec, provinceBodySpec, stockColor } from './bakedShapes.ts';
-import { pipAlertSpec, towerBackSpec, warehouseMarksSpec } from './pieceShapes.ts';
+import { pipAlertSpec, iconBackSpec, warehouseMarksSpec } from './pieceShapes.ts';
 import { CanvasTextMetrics } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
@@ -10,6 +10,7 @@ import { BUNDLED_MAPS, DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { MapFile, NodeView, SnapshotMsg } from '../protocol.gen.ts';
 import { CityView } from './cityView.ts';
 import { createLayers } from './layers.ts';
+import { iconSize, layoutBuildings, roadAngles } from './buildingLayout.ts';
 import { ENEMY, PROVINCE, YOU, playerColours } from './style.ts';
 import { PLAYER_COLOURS } from '../theme/tokens.ts';
 import { testSprites } from './testSprites.ts';
@@ -27,10 +28,10 @@ function withBarracks(base: SnapshotMsg, id: number, value: boolean | null): Sna
   return { ...base, view: { ...base.view, nodes } };
 }
 
-/** The barracks tower of the city `id` (#847): the baked back it shows (`null`: none drawn). */
+/** The barracks icon of the city `id` (#847): the baked back it shows (`null`: none drawn). */
 function barracksMark(nodes: Container, id: number): string | null {
   const city = nodes.children.find((c) => c.label === `node-${String(id)}`) as Container;
-  const tower = city.children.find((c) => c.label === 'tower-barracks') as Container;
+  const tower = city.children.find((c) => c.label === 'building-barracks') as Container;
   const back = tower.children[0] as BakedSprite;
   return tower.visible ? (back.spec?.key ?? null) : null;
 }
@@ -43,7 +44,7 @@ describe('CityView: the barracks of an enemy city next door (DEC-31)', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('draws the same tower as on an own city, hatched as the enemy, and drops it when no longer next door', () => {
+  it('draws the same icon as on an own city, hatched as the enemy, and drops it when no longer next door', () => {
     const snapshot = devSnapshot(map, DEV_RULES, 100);
     const own = snapshot.view.nodes.find((n) => n.owner === 0 && n.has_barracks === true);
     const enemy = map.nodes.find((n) => n.start_owner === 1 && n.kind !== 'province');
@@ -54,12 +55,12 @@ describe('CityView: the barracks of an enemy city next door (DEC-31)', () => {
     const view = new CityView(map, layers, 0, 1, testSprites());
     const nodes = layers.layer.nodes;
 
-    // Next to an own node, barracks built: the same tower as on an own city (its shape says
+    // Next to an own node, barracks built: the same icon as on an own city (its shape says
     // «barracks»); the owner's hatch, at 45 degrees for the enemy, says whose.
     view.update(withBarracks(snapshot, enemy.id, true), null, UPGRADES);
     const drawn = barracksMark(nodes, enemy.id);
-    expect(drawn).toBe(towerBackSpec('barracks', 'built', ENEMY, true).key);
-    expect(barracksMark(nodes, own.id)).toBe(towerBackSpec('barracks', 'built', YOU, false).key);
+    expect(drawn).toBe(iconBackSpec('barracks', 'built', ENEMY, true).key);
+    expect(barracksMark(nodes, own.id)).toBe(iconBackSpec('barracks', 'built', YOU, false).key);
 
     // Next door, but no barracks yet (or being built): no mark.
     view.update(withBarracks(snapshot, enemy.id, false), null, UPGRADES);
@@ -82,7 +83,7 @@ describe('CityView in the players colours (DEC-49)', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('fills each city and tower with the colour of its owner by player id; the shape tells the side', () => {
+  it('fills each city and building with the colour of its owner by player id; the shape tells the side', () => {
     const snapshot = devSnapshot(map, DEV_RULES, 100);
     const own = snapshot.view.nodes.find((n) => n.owner === 0 && n.has_barracks === true);
     const enemy = map.nodes.find((n) => n.start_owner === 1 && n.kind !== 'province');
@@ -100,10 +101,10 @@ describe('CityView in the players colours (DEC-49)', () => {
       new RegExp(`^city:enemy:${String(PLAYER_COLOURS.violet)}:`),
     );
     expect(barracksMark(nodes, own.id)).toBe(
-      towerBackSpec('barracks', 'built', PLAYER_COLOURS.shell, false).key,
+      iconBackSpec('barracks', 'built', PLAYER_COLOURS.shell, false).key,
     );
     expect(barracksMark(nodes, enemy.id)).toBe(
-      towerBackSpec('barracks', 'built', PLAYER_COLOURS.violet, true).key,
+      iconBackSpec('barracks', 'built', PLAYER_COLOURS.violet, true).key,
     );
     view.destroy();
   });
@@ -250,8 +251,8 @@ describe('CityView: a province is a pale dot (PB, #431, DEC-23)', () => {
     const view = new CityView(forged, layers, 0, 1, testSprites());
     view.update(snapshot, null, UPGRADES);
     const container = city(layers.layer.nodes, ownProvince.id);
-    // body, ring, warehouse, the crown, the paid lozenges, tower and ring of the barracks and of the
-    // factory, the recruits, the alert ring: no VP badge after them.
+    // body, ring, warehouse, then per building (the barracks, the factory): the owed row, the icon, the
+    // paying lozenges and the done ring; the recruits, the alert ring: no VP badge after them.
     expect(container.children).toHaveLength(13);
     expect(barracksMark(layers.layer.nodes, ownProvince.id)).toBeNull();
     view.destroy();
@@ -323,10 +324,21 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
   const level = (pip: Container): boolean => (pip.children[1] as BakedSprite).visible;
   const tower = (nodes: Container, id: number, kind: string): Container =>
     (nodes.children.find((c) => c.label === `node-${String(id)}`) as Container).children.find(
-      (c) => c.label === `tower-${kind}`,
+      (c) => c.label === `building-${kind}`,
     ) as Container;
+  /** The row of owed charges by a building (#954): the lozenges shown, and how many of them are paid. */
+  const owedRow = (nodes: Container, id: number, kind: string): { shown: number; paid: number } => {
+    const row = (
+      nodes.children.find((c) => c.label === `node-${String(id)}`) as Container
+    ).children.find((c) => c.label === `owed-${kind}`) as Container;
+    const marks = row.visible ? (row.children.filter((c) => c.visible) as BakedSprite[]) : [];
+    return {
+      shown: marks.length,
+      paid: marks.filter((m) => (m.spec?.key ?? '').startsWith('owed:paid')).length,
+    };
+  };
 
-  it('draws the queue as small helmets on the ring: the first fills, the rest are hatched', () => {
+  it('draws the queue as small helmets beyond the barracks: the first fills, the rest are hatched', () => {
     const { view, nodes } = make();
     view.update(
       withCity({ recruit_queue: 3, recruit_progress: 15 }),
@@ -425,7 +437,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.destroy();
   });
 
-  it('builds the barracks as a tower under the Crown arc: a plan while owed, then it fills', () => {
+  it('builds the barracks as a plan with a row of owed charges, then the icon fills', () => {
     const { view, nodes } = make();
     const upgrades = { ...UPGRADES, barracksCharges: 3 };
     view.update(
@@ -435,13 +447,11 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       rules.queueMax,
     );
     const root = tower(nodes, own.id, 'barracks');
-    const crown = sprite(nodes, own.id, 'crown-barracks');
     expect(root.visible).toBe(true);
     expect((root.children[0] as BakedSprite).spec?.key).toContain(':plan:');
-    expect(crown.visible).toBe(true);
-    // Three charges, one paid: the key names the cost and what is paid.
-    expect(crown.spec?.key).toContain(':barracks:3:1:');
-    // Paid in full: the time runs from `done_tick`, the tower fills from its base.
+    // Three charges, one paid: three lozenges beside the icon, one of them solid.
+    expect(owedRow(nodes, own.id, 'barracks')).toEqual({ shown: 3, paid: 1 });
+    // Paid in full: the time runs from `done_tick`, the icon fills from its base, the row is gone.
     view.update(
       withCity({
         has_barracks: false,
@@ -455,10 +465,11 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.advance(16);
     expect((root.children[0] as BakedSprite).spec?.key).toContain(':rising:');
     expect((root.children[1] as BakedSprite).visible).toBe(true);
+    expect(owedRow(nodes, own.id, 'barracks').shown).toBe(0);
     view.destroy();
   });
 
-  it('fades the arc and opens a ring from the tower when the build is done', () => {
+  it('opens a ring from the icon when the build is done', () => {
     setReducedMotion(false);
     const { view, nodes } = make();
     const upgrades = { ...UPGRADES, barracksCharges: 3 };
@@ -472,21 +483,19 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       rules.queueMax,
     );
     view.update(withCity({ has_barracks: true, building: null }), rules.unitTicks, upgrades);
-    const ring = sprite(nodes, own.id, 'tower-ring-barracks');
-    const crown = sprite(nodes, own.id, 'crown-barracks');
+    const ring = sprite(nodes, own.id, 'building-ring-barracks');
     expect(ring.visible).toBe(true);
     view.advance(200);
-    expect(crown.alpha).toBeLessThan(1);
+    expect(ring.alpha).toBeLessThan(1);
     view.advance(2000);
     expect(ring.visible).toBe(false);
-    expect(crown.visible).toBe(false);
     expect((tower(nodes, own.id, 'barracks').children[0] as BakedSprite).spec?.key).toContain(
       ':built:',
     );
     view.destroy();
   });
 
-  it('flies a paid charge into the arc, pops it, then runs the lozenges into the tower (#872)', () => {
+  it('flies a paid charge into the row, pops it, then runs the lozenges into the icon (#872)', () => {
     setReducedMotion(false);
     const layers = createLayers();
     const view = new CityView(map, layers, 0, 1, testSprites());
@@ -519,15 +528,13 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       view.setPayments(events, 10, () => null);
       view.advance(16);
     };
-    const crown = sprite(nodes, own.id, 'crown-barracks');
     frame(NOW + 2);
     expect(flights()).toHaveLength(1);
     // In the air its lozenge is still owed: one of three shown paid.
-    expect(crown.spec?.key).toContain(':barracks:3:1:');
+    expect(owedRow(nodes, own.id, 'barracks')).toEqual({ shown: 3, paid: 1 });
     frame(NOW + 5.5);
     expect(flights()).toHaveLength(0);
-    expect(crown.spec?.key).toContain(':barracks:3:2:');
-    expect(loose().visible).toBe(true);
+    expect(owedRow(nodes, own.id, 'barracks')).toEqual({ shown: 3, paid: 2 });
     // Paid in full by the group standing there: the last flight lands, the lozenges run in.
     view.update(
       {
@@ -550,6 +557,8 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     frame(NOW + 16);
     expect(flights()).toHaveLength(0);
     expect(loose().visible).toBe(true);
+    // Paid in full: the row gives way to the lozenges that run into the icon.
+    expect(owedRow(nodes, own.id, 'barracks').shown).toBe(0);
     expect((tower(nodes, own.id, 'barracks').children[0] as BakedSprite).spec?.key).toContain(
       ':rising:',
     );
@@ -579,9 +588,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.advance(16);
     const layer = layers.layer.effects.children.find((c) => c.label === 'build-pay') as Container;
     expect(layer.children.filter((c) => c.visible)).toHaveLength(0);
-    expect(sprite(layers.layer.nodes, own.id, 'crown-barracks').spec?.key).toContain(
-      ':barracks:3:2:',
-    );
+    expect(owedRow(layers.layer.nodes, own.id, 'barracks')).toEqual({ shown: 3, paid: 2 });
     view.destroy();
   });
 
@@ -719,6 +726,101 @@ describe('CityView: the warehouse of an own province under economy v2 (DEC-41, i
     expect(barOf(layers.layer.nodes, ownProvince.id).visible).toBe(false);
     view.update(holding(neutralProvince.id, 1), null, UPGRADES, null, 1);
     expect(barOf(layers.layer.nodes, neutralProvince.id).visible).toBe(false);
+    view.destroy();
+  });
+});
+
+describe('CityView: the buildings stand on the free side of the city (#954, P2)', () => {
+  beforeEach(() => {
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    setReducedMotion(null);
+  });
+
+  const base = devSnapshot(map, DEV_RULES, 100);
+  const own = base.view.nodes.find((n) => n.owner === 0 && n.has_barracks === true);
+  if (own === undefined) throw new Error('no own city');
+  const ownId = own.id;
+  const withBoth = (): SnapshotMsg => {
+    const nodes = base.view.nodes.map((n) =>
+      n.id === ownId ? { ...n, has_barracks: true, factory: true } : n,
+    );
+    return { ...base, view: { ...base.view, nodes } };
+  };
+  const icon = (nodes: Container, kind: string): Container =>
+    city(nodes, ownId).children.find((c) => c.label === `building-${kind}`) as Container;
+
+  it('seats both icons where the layout says, from the roads of the map', () => {
+    const layers = createLayers();
+    const view = new CityView(map, layers, 0, 1, testSprites());
+    view.update(withBoth(), null, UPGRADES);
+    const expected = layoutBuildings({
+      radius: view.radiusOf(ownId),
+      roads: roadAngles(map)[ownId] ?? [],
+      vp: map.nodes[ownId]?.vp !== 0,
+      kinds: ['barracks', 'factory'],
+      size: iconSize(1),
+    });
+    for (const kind of ['barracks', 'factory'] as const) {
+      const root = icon(layers.layer.nodes, kind);
+      expect(root.visible).toBe(true);
+      expect(root.x).toBeCloseTo(expected.items[kind]?.x ?? Number.NaN, 6);
+      expect(root.y).toBeCloseTo(expected.items[kind]?.y ?? Number.NaN, 6);
+      expect(root.scale.x).toBeCloseTo(iconSize(1) / 26, 6);
+    }
+    view.destroy();
+  });
+
+  it('keeps the icons their size on screen when the map zooms out, and seats them again', () => {
+    const layers = createLayers();
+    const view = new CityView(map, layers, 0, 1, testSprites());
+    view.update(withBoth(), null, UPGRADES);
+    const near = icon(layers.layer.nodes, 'factory').x;
+    view.setCameraScale(0.5);
+    const root = icon(layers.layer.nodes, 'factory');
+    expect(root.scale.x * 26 * 0.5).toBeGreaterThanOrEqual(13 - 1e-6);
+    expect(root.x).not.toBe(near);
+    view.destroy();
+  });
+
+  it('hides the icon of a building the view does not give: nothing is guessed', () => {
+    const layers = createLayers();
+    const view = new CityView(map, layers, 0, 1, testSprites());
+    const nodes = base.view.nodes.map((n) =>
+      n.id === ownId ? { ...n, has_barracks: null, factory: false } : n,
+    );
+    view.update({ ...base, view: { ...base.view, nodes } }, null, UPGRADES);
+    expect(icon(layers.layer.nodes, 'barracks').visible).toBe(false);
+    expect(icon(layers.layer.nodes, 'factory').visible).toBe(false);
+    view.destroy();
+  });
+
+  it('a captured city keeps the old icon over the new one until it fades', () => {
+    setReducedMotion(false);
+    const layers = createLayers();
+    const view = new CityView(map, layers, 0, 1, testSprites());
+    const held = (owner: 0 | 1): SnapshotMsg => {
+      const nodes = base.view.nodes.map((n) =>
+        n.id === ownId ? { ...n, owner, has_barracks: true, factory: false } : n,
+      );
+      return { ...base, view: { ...base.view, nodes } };
+    };
+    view.update(held(1), null, UPGRADES);
+    const ghosts = (): number =>
+      city(layers.layer.nodes, ownId).children.filter((c) => /^building-ghost/.test(c.label))
+        .length;
+    expect(ghosts()).toBe(0);
+    view.update(held(0), null, UPGRADES);
+    expect(ghosts()).toBe(1);
+    expect((icon(layers.layer.nodes, 'barracks').children[0] as BakedSprite).spec?.key).toBe(
+      iconBackSpec('barracks', 'built', YOU, false).key,
+    );
+    view.advance(5000);
+    expect(ghosts()).toBe(0);
     view.destroy();
   });
 });

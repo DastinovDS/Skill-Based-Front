@@ -263,19 +263,6 @@ export const PROGRESS = {
   owed: { radius: 2.5, width: 1.4, pitch: 7 },
 } as const;
 /**
- * The barracks of an own city (DEC-26): a round dark badge with a little house in it (the shape
- * tells it, not the colour), on the left of the capacity ring.
- */
-/** The barracks badge; the rim is drawn in the owner's colour (`YOU` or `ENEMY`, DEC-31). */
-export const BARRACKS_MARK = {
-  radius: 8,
-  fill: BG,
-  stroke: { width: 2, color: YOU },
-  /** The opponent's barracks: a light inner ring and a smaller house, so the side reads without the hue. */
-  enemy: { innerRadius: 5.6, ringWidth: 1, ringAlpha: 0.85, house: 0.78 },
-} as const;
-
-/**
  * The middle of the gilt VP lozenge lies this far outside the capacity ring's centre line (#847;
  * further out since the lozenge grew, #928, so it covers less of the ring and the helmet).
  */
@@ -409,82 +396,62 @@ export const HELMET_ENGRAVED = {
   question: 15,
 } as const;
 /**
- * Cut and ring towers (53g, 55k): the barracks and the factory stand on the capacity ring, `out`
- * past its centre line, the barracks at the upper left, the factory at the left; the block is
- * `halfHeight` high either side of its middle at scale 1, drawn at `towerScale` (at least
- * `minScale`, `screen` css px per unit near zoom 1, smaller on screen zoomed far out). A built
- * tower is the owner's hatch (own horizontal, the enemy's 45 degrees) in an ink outline on a casing;
- * the barracks has a dark gate.
+ * The barracks and the factory of a city on the map (#954, ui-style 73 topic T, P2 "Free side";
+ * owner 2026-11-11): the city radial menu's own icons (`theme/cutIcons.ts`: the solid ruled `rule`
+ * apart by `ruleW`, a dark casing `casing` wide at `casingAlpha`, the ink line `ink` wide, square
+ * ends, on a `box`-unit box), `world` units across near zoom 1 and never under `minPx` css px. A built
+ * one is the ruled solid in the owner's colour (own horizontal, the enemy's at 45 degrees); one that owes
+ * charges is a `plan` (a half-dark ground, a dotted ink outline); one whose time runs fills from its
+ * base in the owner's colour behind an ivory head line (`head`) over faint bed joints (`joint`).
+ * They stand outside the capacity ring in the widest free angle between the roads (`free`: the
+ * half-widths kept clear of a road, the VP lozenge and the warehouse side; `sep`: the air between
+ * two icons), side by side or, when the angle is narrow, stacked outward. The owed charges are a row
+ * of lozenges beyond the icon (`row`, the menu's price row, `lozenge`: their scale by the icon's
+ * size), the recruit queue a row of helmets beyond the barracks (`queue`).
  */
-export const TOWER = {
-  barracksAngle: Math.PI * 1.25,
-  factoryAngle: Math.PI * 0.95,
-  out: 4,
-  minScale: 1.35,
-  screen: 1.7,
-  /** Zoomed out past `screen / minScale`, the scale grows by this power of the zoom only (#869). */
-  keep: 0.5,
-  halfHeight: 5.2,
-  casing: 3.2,
-  line: 1,
-  hatch: { pitch: 1.7, width: 0.8 },
-  gate: { x: -1.4, y: 1.2, side: 2.8 },
-  /** The bed joints of a tower filling with its build time: faint dark lines this far apart. */
-  joint: { every: 2.3, width: 0.4, alpha: 0.55 },
-  /** While charges are owed the tower is a plan: a light casing, a half-dark ground, a dotted ink outline. */
-  plan: { casingAlpha: 0.55, groundAlpha: 0.5, lineAlpha: 0.75, dot: 1.3, gap: 1.5 },
-  barracks: [
-    [-4.6, -5.2],
-    [4.6, -5.2],
-    [4.6, 4],
-    [-4.6, 4],
-  ],
-  factory: [
-    [-5.4, 4],
-    [-5.4, -1.6],
-    [-1.6, -5.2],
-    [-1.6, -1.6],
-    [2.2, -5.2],
-    [2.2, -1.6],
-    [5.4, -1.6],
-    [5.4, 4],
-  ],
+export const BUILDING = {
+  box: 26,
+  rule: 2.6,
+  ruleW: 1.15,
+  casing: 4.2,
+  casingAlpha: 0.9,
+  ink: 2.1,
+  world: 16,
+  minPx: 13,
+  /** Half the drawn extent of an icon, casing included, as a share of its box (the layout's radius). */
+  half: 0.44,
+  plan: { plateAlpha: 0.62, casingAlpha: 0.5, dash: 2.2, line: 1.5, lineAlpha: 0.9 },
+  joint: { width: 0.55, alpha: 0.5 },
+  head: { width: 1.2 },
+  free: { road: 5.2, vp: 14, store: 0.95, sep: 2.5, ringAir: 1 },
+  row: { gap: 1.5, rim: 0.71 },
+  lozenge: { min: 0.72, max: 1.3, share: 0.74, ref: 14, pitch: 0.96 },
+  queue: { gap: 6, pitch: 10 },
+  /** The recruit helmets keep their size on screen like the icons: at least 1, `screen` css px per unit near zoom 1. */
+  pips: { minScale: 1.35, screen: 1.7, keep: 0.5 },
 } as const;
 /**
- * The Crown arc of a build (57k): one arc `lift` outside the top of the tower, concentric with the
- * city ring, at least `minSpan` radians; the owed charges sit on it as lozenges `step` apart (at
- * `lozenge` of their warehouse size). The time fills the arc in the side's colour (`width`) behind a
- * small ink burin point over a faint ink line, between two ink serifs. `steps`: the baked shares of
- * the time; built, the arc fades over `fadeMs` and a ring opens from the tower (`ring`).
+ * The payment of a build (57k, #872): a charge flies `flightMs` from the warehouse or the group to
+ * its lozenge on the row by the icon on an arc `lift` high, the charges of one `build_paid`
+ * `staggerMs` apart; landed, the lozenge pops by `pop` over `popMs`. Paid in full, the lozenges run
+ * into the icon over `run.ms`, `run.staggerMs` apart, shrinking by `run.shrink`. A finished build
+ * opens a ring from the icon (`done`: `ms`, from `from` of the icon's size, growing by `grow` units).
  */
-export const CROWN = {
-  lift: 8,
-  step: 11,
-  minSpan: 1,
-  lozenge: 0.9,
-  width: 2.4,
-  casing: 2.2,
-  line: { width: 0.8, alpha: 0.55 },
-  serif: { half: 3.6, width: 1, casing: 3 },
-  burin: { casing: 5.4, ink: 3.4 },
-  steps: 48,
-  fadeMs: 500,
-  ring: { ms: 600, from: 7, grow: 10, casing: 3, width: 1 },
-  /**
-   * The payment in motion (#872, the mockup's `payFlight`): a charge flies `flightMs` from the
-   * warehouse or the group to its lozenge on an arc `lift` high, the charges of one `build_paid`
-   * `staggerMs` apart; landed, the lozenge pops by `pop` over `popMs`.
-   */
-  pay: { flightMs: 450, lift: 12, staggerMs: 150, popMs: 220, pop: 0.3 },
-  /** Paid in full: the lozenges run into the tower over `ms`, `staggerMs` apart, shrinking by `shrink`. */
+export const BUILD_PAY = {
+  flightMs: 450,
+  lift: 12,
+  staggerMs: 150,
+  popMs: 220,
+  pop: 0.3,
   run: { ms: DURATION.buildRun, staggerMs: 60, shrink: 0.6 },
+  done: { ms: 600, from: 0.42, grow: 10, casing: 3, width: 1 },
 } as const;
 /**
- * The recruit queue (55k Pips): a small helmet `width` wide per unit on the ring after the barracks
- * tower, the first `first` radians past it, `step` apart; the unit in production fills from the
- * bottom (`steps` baked levels), a queued one is hatched, a free slot of the selected city beaded.
+ * The recruit queue (55k Pips): a small helmet `width` wide per unit beyond the barracks (`BUILDING.queue`);
+ * the unit in production fills from the bottom (`steps` baked levels), a queued one is hatched, a
+ * free slot of the selected city beaded.
  */
-export const RECRUIT_PIPS = { width: 9, first: 0.38, step: 0.27, steps: 12 } as const;
+export const RECRUIT_PIPS = { width: 9, steps: 12 } as const;
 /**
  * Fine rings (55p): every city highlight on one weight system, a 1 px ink line on a 2.6 px casing at
  * `R + 5`, `R + 8` and `R + 11` from the capacity ring `R`. Selected: two rings over a dark band and

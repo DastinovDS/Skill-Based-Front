@@ -121,7 +121,7 @@ export const RADIUS = 0;
  * Durations in milliseconds of the decided rounds. CSS `--t-<name>` (kebab case of the key).
  * `cp*`: the CP gauge (ui-style 57a); `reveal*`: the Burin reveal of the hover cards (ui-style 57r,
  * slowed to about 550 ms by the owner); `captureWalk`: Walk in (54j); `buildRun` and `buildDone`:
- * the Crown arc of a build (57k); `planStep`: one asked bonus of a scheduled order easing full
+ * the build of a city's icon (57k, 73); `planStep`: one asked bonus of a scheduled order easing full
  * (53e); `intro`: the opening scene (56).
  */
 export const DURATION = {

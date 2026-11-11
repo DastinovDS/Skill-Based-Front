@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  BARRACKS_HOUSE,
-  barTop,
-  capacityRing,
-  cityRadius,
-  ringRadius,
-  showsBarracks,
-} from './cityLayout.ts';
+import { barTop, capacityRing, cityRadius, ringRadius, showsBarracks } from './cityLayout.ts';
 
 describe('cityRadius', () => {
   it.each([
@@ -64,17 +57,13 @@ describe('barTop', () => {
   });
 });
 
-describe('the barracks mark (DEC-26)', () => {
+describe('showsBarracks: the barracks of a city (DEC-26)', () => {
   it('is drawn only for a city that is known to have one, and only with the city development on', () => {
     expect(showsBarracks(true, true)).toBe(true);
     expect(showsBarracks(false, true)).toBe(false);
     // A foreign city not next to an own node (DEC-31): the snapshot says `null`.
     expect(showsBarracks(null, true)).toBe(false);
-    // Without the city development every city may recruit: no mark.
+    // Without the city development every city may recruit: no icon.
     expect(showsBarracks(true, false)).toBe(false);
-  });
-
-  it('the house glyph fits the badge', () => {
-    for (const [x, y] of BARRACKS_HOUSE) expect(Math.hypot(x, y)).toBeLessThanOrEqual(6.5);
   });
 });

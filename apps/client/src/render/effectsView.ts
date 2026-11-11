@@ -378,7 +378,7 @@ export class EffectsView {
       if (t === null || used >= MAX_FLAGS) continue;
       const flag = this.flag(used++);
       // The foot of the pole just outside the ring, upper right (mockup `flagMark`, mirrored: the
-      // left of a city holds its towers).
+      // left of a city may hold its buildings).
       const ring = ringRadius(this.radiusOf(capture.node));
       flag.context = this.flagContext[capture.player];
       flag.position.set(capture.at.x + (ring + 4) * scale, capture.at.y - (ring - 4) * scale);

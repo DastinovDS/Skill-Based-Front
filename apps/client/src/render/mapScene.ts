@@ -440,7 +440,7 @@ export class MapScene {
     this.entities.update(frame);
     this.entities.advance(this.frameMs);
     this.view.advance(this.frameMs);
-    // A build's time fills the tower and its Crown arc by the render tick (#847).
+    // A build's time fills its icon by the render tick (#847, #954).
     this.cities.setTick(frame.tick);
     // A charge a build takes flies in from the warehouse or the group standing there (#872).
     const spots = this.entities.groupPoints();

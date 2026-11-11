@@ -1,9 +1,9 @@
 /**
- * The payment of a build in motion (#872, ui-style 57k, the Crown arc; mockup
- * `in-game-style-r5.html`, `payFlight` and `buildTowerR5`): each charge a build takes (progressive
+ * The payment of a build in motion (#872, ui-style 57k and 73; mockups
+ * `in-game-style-r5.html` and `city-buildings-r2.html`): each charge a build takes (progressive
  * payment, DEC-41 item 7) flies from the warehouse or from the own group standing in the city to its
- * lozenge on the Crown arc and pops there as it lands; once the build is paid in full, the lozenges
- * run into the tower.
+ * lozenge of the row of owed charges by the icon and pops there as it lands; once the build is paid in full, the lozenges
+ * run into the icon.
  *
  * Driven only by the server: the event `build_paid` (`warehouse` and `units` taken, `owed` left; an
  * event only its own player gets) and the build in the snapshot. Nothing about the payment is
@@ -12,14 +12,14 @@
  */
 import type { EventMsg, PlayerId } from '../protocol.gen.ts';
 import { easeEngrave, easeTravel } from '../theme/tokens.ts';
-import type { TowerKind } from './pieceLayout.ts';
-import { CROWN } from './style.ts';
+import type { BuildingKind } from './buildingLayout.ts';
+import { BUILD_PAY } from './style.ts';
 
-/** One `build_paid` of an own tower build (the barracks or the factory). */
+/** One `build_paid` of an own build (the barracks or the factory). */
 export interface Payment {
   readonly tick: number;
   readonly node: number;
-  readonly kind: TowerKind;
+  readonly kind: BuildingKind;
   /** Charges taken from the warehouse of the node, then from the own groups standing there. */
   readonly warehouse: number;
   readonly units: number;
@@ -27,7 +27,7 @@ export interface Payment {
   readonly owed: number;
 }
 
-/** The payment of `event` when it is a `build_paid` of `me` for a tower build; `null` otherwise. */
+/** The payment of `event` when it is a `build_paid` of `me` for a build; `null` otherwise. */
 export function paymentOf(event: EventMsg, me: PlayerId): Payment | null {
   if (event.kind !== 'build_paid') return null;
   const { player, node, kind, warehouse, units, owed } = event.data;
@@ -47,7 +47,7 @@ export function paymentMs(payment: Payment, tick: number, tickHz: number): numbe
 
 /** How long after its event the motion of `payment` lasts, ms, for a build of `cost` charges. */
 export function paymentSpan(payment: Payment, cost: number): number {
-  const { pay, run } = CROWN;
+  const { run, ...pay } = BUILD_PAY;
   const n = payment.warehouse + payment.units;
   const landed = pay.flightMs + (n - 1) * pay.staggerMs;
   const tail = payment.owed === 0 ? run.ms + Math.max(0, cost - 1) * run.staggerMs : 0;
@@ -66,21 +66,21 @@ export interface PayFlight {
   readonly q: number;
 }
 
-/** What the Crown arc of one tower build shows at a moment. */
+/** What the row of owed charges of one build shows at a moment. */
 export interface PayShow {
   readonly flights: readonly PayFlight[];
   /** The charges the snapshot counts paid whose flight has not landed yet: shown still owed. */
   readonly hidden: number;
   /** The lozenges that just landed, by index, and their scale (1 + a sine bump). */
   readonly pops: ReadonlyMap<number, number>;
-  /** Paid in full and landed: each lozenge's run into the tower, 0..1 (eased); `null`: not now. */
+  /** Paid in full and landed: each lozenge's run into the icon, 0..1 (eased); `null`: not now. */
   readonly run: readonly number[] | null;
 }
 
 const EMPTY: PayShow = { flights: [], hidden: 0, pops: new Map(), run: null };
 
 /**
- * The motion of one tower build at the render `tick`: `payments` are its own `build_paid` (any
+ * The motion of one build at the render `tick`: `payments` are its own `build_paid` (any
  * order), `cost` the charges it costs, `baseTick` the tick of the snapshot drawn (a payment newer
  * than it is not in the picture yet, so it does not move yet).
  */
@@ -91,7 +91,7 @@ export function payShow(
   baseTick: number,
   tickHz: number,
 ): PayShow {
-  const { pay, run: R } = CROWN;
+  const { run: R, ...pay } = BUILD_PAY;
   const flights: PayFlight[] = [];
   const pops = new Map<number, number>();
   let hidden = 0;
@@ -137,7 +137,7 @@ export function payShow(
 }
 
 /**
- * The own tower payments among the events, read again only when the list changed (the tail only when
+ * The own build payments among the events, read again only when the list changed (the tail only when
  * it grew). `recent` gives those that may still move at the render tick, newest first.
  */
 export class PaymentLog {

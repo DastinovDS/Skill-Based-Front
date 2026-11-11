@@ -92,7 +92,7 @@ export function barTop(radius: number): number {
 }
 
 /**
- * Whether a city shows the barracks mark (DEC-26): only when the city development is on and the
+ * Whether a city shows the barracks (DEC-26): only when the city development is on and the
  * snapshot says the city has one. Own cities and enemy cities next to an own node (DEC-31, the
  * server decides) carry `has_barracks`; it is `null` for the other foreign cities (AGENTS.md 4.4),
  * so the mark goes away with the neighbourhood and nothing is guessed.
@@ -100,17 +100,6 @@ export function barTop(radius: number): number {
 export function showsBarracks(hasBarracks: boolean | null, cityDevelopment: boolean): boolean {
   return cityDevelopment && hasBarracks === true;
 }
-
-/** Corners of the little house glyph of the barracks, relative to the middle of its mark. */
-export const BARRACKS_HOUSE: readonly (readonly [number, number])[] = [
-  [0, -4.5],
-  [4.5, -0.5],
-  [3.5, -0.5],
-  [3.5, 4],
-  [-3.5, 4],
-  [-3.5, -0.5],
-  [-4.5, -0.5],
-];
 
 /**
  * Where the VP badge sits: the gilt lozenge on the capacity ring at its upper right (the angle of
