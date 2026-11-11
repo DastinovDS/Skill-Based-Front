@@ -22,6 +22,7 @@ from websockets.typing import Origin
 from gow_bots.bots import BOTS, Controller
 from gow_protocol.codec import decode_server, encode
 from gow_protocol.commands import SetStanceCmd
+from gow_protocol.convert import snapshot_frame
 from gow_protocol.messages import (
     PROTOCOL_VERSION,
     AckMsg,
@@ -38,10 +39,10 @@ from gow_server.clock import ManualClock
 from gow_server.matches import BOT_ACCOUNT, BotSeat, MatchManager, MatchRunner
 from gow_server.settings import Settings
 from gow_sim.commands import Command, Forfeit
-from gow_sim.maps import load_map
+from gow_sim.maps import PLAYERS, load_map
 from gow_sim.replay import read_replay
 from gow_sim.ruleset import Stance, load_ruleset
-from gow_sim.view import PlayerView
+from gow_sim.view import PlayerView, project
 
 ROOT: Final = Path(__file__).parents[3]
 DT: Final = 0.1
@@ -229,6 +230,63 @@ def test_slow_bot_skips_the_next_call_and_it_is_counted() -> None:
         assert (runner.bot_overruns, runner.bot_skipped) == (2, 1)
         assert runner.finished, "the bot's Forfeit at tick 10 went through resolve like any command"
         assert runner.match.outcome is not None and runner.match.outcome.winner == 0
+
+    asyncio.run(scenario())
+
+
+class _Glancing:
+    """A ``Glancer`` that thinks every 10 ticks and records what it was given (#983)."""
+
+    def __init__(self) -> None:
+        self.decided: list[int] = []
+        self.glanced: list[tuple[int, tuple[int, ...]]] = []
+
+    def thinks(self, tick: int) -> bool:
+        return tick % 10 == 0
+
+    def glance(self, tick: int, figures: tuple[int, ...]) -> None:
+        self.glanced.append((tick, figures))
+
+    def decide(self, view: PlayerView, tick: int) -> list[Command]:
+        self.decided.append(tick)
+        return []
+
+
+def test_a_bot_that_does_not_think_only_glances() -> None:
+    """The server's bot loop asks a ``Glancer`` first, like ``run_headless``: a call it will not
+    think on gets the figure ids of its view alone, no view and no decision."""
+
+    async def scenario() -> None:
+        bot = _Glancing()
+        runner = _runner(bot)
+        for _ in range(21):
+            runner.step()
+        assert bot.decided == [0, 10, 20]
+        assert [t for t, _ in bot.glanced] == [5, 15]
+        assert runner.bot_decisions == 3
+
+    asyncio.run(scenario())
+
+
+def test_snapshots_reuse_the_vision_of_the_step_and_equal_the_full_view() -> None:
+    """A snapshot reuses what the ``vision`` system of the step saw (``Match.view(reuse=True)``)
+    and equals the frame of ``project()`` computed from scratch, on an empty memo."""
+
+    async def scenario() -> None:
+        runner = _runner()
+        match = runner.match
+        state = match.state
+        for _ in range(40):
+            runner.step()
+            for player in PLAYERS:
+                assert match._fresh(player) is not None  # pyright: ignore[reportPrivateUsage]
+                kept = state.memo
+                state.memo = {}
+                try:
+                    full = snapshot_frame(project(state, match.rules, player, match.match_key))
+                finally:
+                    state.memo = kept
+                assert runner.snapshot(player) == full, (state.tick, player)
 
     asyncio.run(scenario())
 

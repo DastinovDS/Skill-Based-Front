@@ -22,9 +22,13 @@ at most ``pause_max_s`` (``request_pause``), and ``paused`` messages tell both p
 
 A match against a bot (SRV-06, #53): one slot is a ``BotSeat``. Its controller lives in the
 server process and decides every ``BOT_DECIDE_EVERY`` ticks inside ``step`` on the same
-``PlayerView`` (``Match.view``) a human gets. Its commands are resolved and applied like the
-humans' ones and land in the command log. A decision longer than ``bot_budget_s`` (1 ms) is
-kept, but the next call is skipped and counted (``bot_overruns``). The bot has no connection,
+``PlayerView`` (``Match.view``) a human gets. A ``Glancer`` that will not think on a call (a
+smart bot between two decisions of its tempo) gets only the figure ids of its view (``glance``),
+as in ``run_headless``. Its commands are resolved and applied like the humans' ones and land in
+the command log. A decision (``decide`` alone, not the projection) longer than ``bot_budget_s``
+(1 ms) is kept, but the next call is skipped and counted (``bot_overruns``). The snapshots, the
+bot's view and the frames reuse the vision of the step (``Match.view(reuse=True)``): nothing but
+``Match.step`` changes the state. The bot has no connection,
 so no reconnect window runs for it; its slot holds ``BOT_ACCOUNT``, which no account has.
 
 A bot match that nobody connects to within ``connect_timeout_s`` (#412) is dropped as never
@@ -82,7 +86,7 @@ if TYPE_CHECKING:
 from gow_sim.analysis import ResultTally
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef
-from gow_sim.match import Match
+from gow_sim.match import Glancer, Match
 from gow_sim.replay import ReplayWriter
 from gow_sim.ruleset import Ruleset
 
@@ -334,7 +338,8 @@ class MatchRunner:
 
     def snapshot(self, player: int) -> SnapshotFrame:
         """The current full view of ``player`` (after ``welcome``)."""
-        frame = snapshot_frame(self.match.view(player))
+        # nothing but ``Match.step`` changes the state: the view reuses the vision of the step
+        frame = snapshot_frame(self.match.view(player, reuse=True))
         if self.validate_snapshots:
             frame.message()
         return frame
@@ -608,9 +613,16 @@ class MatchRunner:
             self.bot_skipped += 1
             self.metrics.bot_skipped += 1
             return []
-        started = time.perf_counter()
+        controller = seat.controller
         try:
-            decided = seat.controller.decide(match.view(seat.slot), match.tick)
+            if isinstance(controller, Glancer) and not controller.thinks(match.tick):
+                # a bot between two decisions of its tempo gets the figure ids of its view alone,
+                # as in ``run_headless``: it decides nothing on this call
+                controller.glance(match.tick, match.figures(seat.slot, reuse=True))
+                return []
+            view = match.view(seat.slot, reuse=True)  # only ``Match.step`` changed the state
+            started = time.perf_counter()  # the budget is the decision's, not the projection's
+            decided = controller.decide(view, match.tick)
         except Exception:  # a broken bot must not end the human's match
             log.exception("bot failed", extra={"match_id": self.match_id, "tick": match.tick})
             return []
