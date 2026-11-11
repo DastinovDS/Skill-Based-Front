@@ -217,61 +217,62 @@
           <LapisButton variant="primary" onclick={onbot}>{t('menu.bot')}</LapisButton>
         </div>
       {:else}
-        <table class="hist">
-          <thead>
-            <tr>
-              <th class="c-res">{t('profile.col.result')}</th>
-              <th>{t('profile.col.opponent')}</th>
-              <th>{t('profile.col.map')}</th>
-              <th class="r c-len">{t('profile.col.length')}</th>
-              <th class="c-rp">{t('profile.col.replay')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each matches as match (match.match_id)}
-              {@const result = RESULTS[match.result]}
-              {@const opponent = opponentOf(match)}
-              {@const level = match.opponent.bot ? botLevel(match.opponent.nick) : null}
+        <!-- A scrolling box takes the focus, so the keys can scroll it (WCAG 2.1.1). -->
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <div class="histbox" role="region" aria-label={t('profile.matches')} tabindex="0">
+          <table class="hist">
+            <thead>
               <tr>
-                <td class="res {result.shape}">
-                  <svg viewBox="0 0 11 10" width="11" height="10" aria-hidden="true">
-                    {#if result.shape === 'w'}<path
-                        d="M5.5 .5 10.5 9.5H.5Z"
-                      />{:else if result.shape === 'l'}<path d="M5.5 9.5 10.5 .5H.5Z" />{:else}<rect
-                        x="1"
-                        y="4"
-                        width="9"
-                        height="2.2"
-                      />{/if}
-                  </svg>{t(result.key)}
-                </td>
-                <td class="opp">
-                  {#if level !== null}
-                    {@const cells = levelCells(level)}
-                    <span
-                      class="botmark"
-                      role="img"
-                      aria-label={tf('bot.difficultyAria', { level: cells, total: 4 })}
-                    >
-                      {#each [1, 2, 3, 4] as i (i)}<i class:on={i <= cells}></i>{/each}
-                    </span>
-                  {/if}<span>{opponent}</span>
-                </td>
-                <td>{match.map_id}</td>
-                <td class="r num">{lengthText(match.ticks) ?? ''}</td>
-                <td class="rp">
-                  <ReplayChip
-                    state={match.replay.state}
-                    {opponent}
-                    onwatch={() => {
-                      onwatch(String(match.match_id));
-                    }}
-                  />
-                </td>
+                <th class="c-res">{t('profile.col.result')}</th>
+                <th>{t('profile.col.opponent')}</th>
+                <th>{t('profile.col.map')}</th>
+                <th class="r c-len">{t('profile.col.length')}</th>
+                <th class="c-rp">{t('profile.col.replay')}</th>
               </tr>
-            {/each}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {#each matches as match (match.match_id)}
+                {@const result = RESULTS[match.result]}
+                {@const opponent = opponentOf(match)}
+                {@const level = match.opponent.bot ? botLevel(match.opponent.nick) : null}
+                <tr>
+                  <td class="res {result.shape}">
+                    <svg viewBox="0 0 11 10" width="11" height="10" aria-hidden="true">
+                      {#if result.shape === 'w'}<path
+                          d="M5.5 .5 10.5 9.5H.5Z"
+                        />{:else if result.shape === 'l'}<path
+                          d="M5.5 9.5 10.5 .5H.5Z"
+                        />{:else}<rect x="1" y="4" width="9" height="2.2" />{/if}
+                    </svg>{t(result.key)}
+                  </td>
+                  <td class="opp">
+                    {#if level !== null}
+                      {@const cells = levelCells(level)}
+                      <span
+                        class="botmark"
+                        role="img"
+                        aria-label={tf('bot.difficultyAria', { level: cells, total: 4 })}
+                      >
+                        {#each [1, 2, 3, 4] as i (i)}<i class:on={i <= cells}></i>{/each}
+                      </span>
+                    {/if}<span>{opponent}</span>
+                  </td>
+                  <td>{match.map_id}</td>
+                  <td class="r num">{lengthText(match.ticks) ?? ''}</td>
+                  <td class="rp">
+                    <ReplayChip
+                      state={match.replay.state}
+                      {opponent}
+                      onwatch={() => {
+                        onwatch(String(match.match_id));
+                      }}
+                    />
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
       {/if}
     {/if}
   </div>
@@ -407,6 +408,38 @@
   table {
     width: 100%;
     border-collapse: collapse;
+  }
+
+  /* The match list grows with the matches. Where the sheet is a fixed frame under the bar (not the
+     short or narrow windows, where the page flows), the profile fills it and only the list scrolls
+     in its own box: the header, the colour and the facts stay, the page never scrolls (#940). */
+  @media (min-width: 900px) and (min-height: 561px) {
+    .profile {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .profile > * {
+      flex-shrink: 0;
+    }
+
+    .profile > .histbox {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
+    }
+
+    .histbox th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding-top: 4px;
+      background: #16130f;
+    }
   }
 
   th {

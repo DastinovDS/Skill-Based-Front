@@ -392,6 +392,31 @@ describe('the answer to a group order (DEC-48, items B3 to B6)', () => {
     expect(feedback.some((f) => f.kind === 'split')).toBe(false);
   });
 
+  it('a planned order is not split: its oversized member is dropped with STACK_LIMIT (#940)', () => {
+    const { controller, book, feedback } = setup();
+    pickAll(controller);
+    controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
+    controller.click({ kind: 'node', id: enemy }, false);
+    book.onAck({
+      type: 'ack',
+      seq: 1,
+      applied_tick: 31,
+      path: null,
+      arrive_tick: 60,
+      reject_code: null,
+      kind: 'attack',
+      cost: 200,
+      members: [member('STACK_LIMIT'), member(null), member(null)],
+    });
+    // The toast of its code, for a planned command (worded for a planned order); no "N of M go".
+    const dropped = feedback.filter((f) => f.kind === 'dropped');
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatchObject({ code: 'STACK_LIMIT', count: 1 });
+    expect(dropped[0]?.cmd).toMatchObject({ type: 'group_move', planned: true });
+    expect(feedback.some((f) => f.kind === 'split')).toBe(false);
+    expect(controller.splitMenu.current.open).toBe(false);
+  });
+
   it('a group the server split: "N of M go", its part is a member, no split offer (#913)', () => {
     const { controller, book, feedback, hud } = setup();
     pickAll(controller);

@@ -94,6 +94,7 @@ export const MENU_SCENES = [
   'crash',
   'profile',
   'profile-guest',
+  'profile-long',
   'profile-empty',
   'profile-loading',
   'profile-network',

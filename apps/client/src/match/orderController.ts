@@ -370,19 +370,7 @@ export class OrderController implements MapInteraction {
       pick !== null && key !== null && pick.group === key && pick.node === node
         ? pick.value
         : PLAN_BONUS.min;
-    return Math.min(value, this.#bonusMaxAt(node));
-  }
-
-  /**
-   * The top of the bonus over `node`: `planBonusMax`, and over a target only a smaller group
-   * reaches no more than the units of the part that goes (`reach.split`, the server's number,
-   * #928): the part asks for its bonus alone.
-   */
-  #bonusMaxAt(node: number | null): number {
-    const max = this.planBonusMax;
-    if (node === null || this.#picks.length > 0) return max;
-    const fit = this.#reach()?.split.get(node) ?? 0;
-    return fit >= 1 ? Math.max(PLAN_BONUS.min, Math.min(max, fit)) : max;
+    return Math.min(value, this.planBonusMax);
   }
 
   /**
@@ -394,7 +382,7 @@ export class OrderController implements MapInteraction {
     const node = this.#previewTarget();
     if (key === null || node === null) return;
     const value = Math.min(
-      this.#bonusMaxAt(node),
+      this.planBonusMax,
       Math.max(PLAN_BONUS.min, this.#bonusFor(node) + delta),
     );
     this.#bonusPick = { group: key, node, value };
@@ -411,11 +399,6 @@ export class OrderController implements MapInteraction {
     ) {
       this.#bonusPick = null;
     }
-  }
-
-  /** Ticks per point of a gathering plan (`ruleset_public.orders.plan_ticks_per_bonus`, DEC-41). */
-  get planTicksPerBonus(): number {
-    return this.#o.rules.orders.plan_ticks_per_bonus;
   }
 
   /** Costs of the buildings, in charges (`ruleset_public`, DEC-41, item 7). */
@@ -560,22 +543,13 @@ export class OrderController implements MapInteraction {
 
   /**
    * The bonus counter over the target of a planned order (#793): a planned order (E
-   * or the switch), the target reachable (`reach`). The value is `planBonus`, 1 until the wheel turns; the
-   * gathering time is display arithmetic from `ruleset_public` (one point per
-   * `orders.plan_ticks_per_bonus` while the warehouse has charges, DEC-41, item 10).
+   * or the switch), the target reachable (`reach`). The value is `planBonus`, 1 until the wheel
+   * turns. No gathering time is told (owner 2026-11-11, #940).
    */
   #bonusMark(from: number | null, target: number | null): BonusMark | null {
     if (!this.planned || from === null || target === null) return null;
     const bonus = this.planBonus;
-    const per = this.planTicksPerBonus;
-    return {
-      node: target,
-      bonus,
-      max: this.#bonusMaxAt(target),
-      // Several groups gather their parts in parallel (DEC-48, item F2): the server's split, so no
-      // time is told before the click.
-      ticks: per > 0 && this.#picks.length === 0 ? bonus * per : null,
-    };
+    return { node: target, bonus, max: this.planBonusMax };
   }
 
   /**
@@ -624,8 +598,11 @@ export class OrderController implements MapInteraction {
     }
     const node = this.#cityOf(hit);
     if (node === null) return null;
-    // The selected group: a click on another place orders it there; on its own place lets it go.
-    if (group !== null) return node === group.node ? null : { node, group: null };
+    // The selected group: a click on another place orders it there; on its own place lets it go;
+    // a place closed to its planned order is not lit (#940).
+    if (group !== null) {
+      return node === group.node || this.#closedToPlan(node) ? null : { node, group: null };
+    }
     if (hit.kind === 'stack') return { node, group: null };
     return this.#isUnselectable(node) ? null : { node, group: null };
   }
@@ -720,6 +697,13 @@ export class OrderController implements MapInteraction {
       this.#o.send !== null &&
       group.node !== hit.id
     ) {
+      // A planned order is not given to a target the group is too big for (`reach.split`, the
+      // stack limit, DEC-20; owner 2026-11-11, #940): no split offer, nothing is sent, the refusal
+      // of the stack limit is told at once. An ordinary order gets the split offer below.
+      if (this.#closedToPlan(hit.id)) {
+        this.#refuseStackLimit(group.id, hit.id);
+        return;
+      }
       // A planned order asks for its bonus (DEC-41, item 10), the wheel's pick over this target or
       // 1 (#797); otherwise 0.
       const bonus = this.planned ? this.#bonusFor(hit.id) : 0;
@@ -730,7 +714,7 @@ export class OrderController implements MapInteraction {
       if (fit >= 1 && group.node !== null) {
         this.#closeMenus();
         if (this.splitMenu.open(group.id, group.units, group.charged, { n: fit, dest: hit.id })) {
-          this.#sendPlan = { group: group.id, planned: this.planned, bonus };
+          this.#sendPlan = { group: group.id, planned: false, bonus: 0 };
         }
         return;
       }
@@ -1815,7 +1799,36 @@ export class OrderController implements MapInteraction {
    */
   #syncSplitHover(reach: ReachInfo | null, preview: number | null): void {
     const node = reach !== null && preview !== null && reach.split.has(preview) ? preview : null;
-    if (node !== this.ui.current.splitHover) this.ui.patch({ splitHover: node });
+    const closed = node !== null && this.#closedToPlan(node);
+    if (node !== this.ui.current.splitHover || closed !== this.ui.current.splitClosed) {
+      this.ui.patch({ splitHover: node, splitClosed: closed });
+    }
+  }
+
+  /**
+   * A planned order (E or the switch) of the selected single group to `node` is closed: the server
+   * lists the node under `reach.split`, the group is too big for it (#940). The group order of
+   * several groups is not touched (the server splits its members, DEC-48, item B4).
+   */
+  #closedToPlan(node: number | null): boolean {
+    if (node === null || !this.planned || this.#picks.length > 0) return false;
+    return this.#reach()?.split.has(node) ?? false;
+  }
+
+  /**
+   * The click on a target closed to a planned order: nothing goes to the server, the answer is the
+   * stack limit's own refusal text and tone, as a refused command gives.
+   */
+  #refuseStackLimit(group: string, dest: number): void {
+    const cmd: Command = { type: 'move', group, dest, planned: true, bonus: 0 };
+    this.#noticeId += 1;
+    const id = this.#noticeId;
+    this.ui.emit({ kind: 'rejected', code: 'STACK_LIMIT', cmd });
+    this.ui.patch({ notice: { id, kind: 'rejected', code: 'STACK_LIMIT', cmd } });
+    clearTimeout(this.#noticeTimer);
+    this.#noticeTimer = setTimeout(() => {
+      this.#clearNotice();
+    }, NOTICE_MS);
   }
 
   /**
@@ -1842,7 +1855,7 @@ export class OrderController implements MapInteraction {
   /**
    * The line to a target only a smaller group reaches (`reach.split` with at least one unit, the
    * server's number): a click there splits the part that fits off and sends it (#762), so the map
-   * shows that order as it shows any other, a planned one with its bonus too (#928). The server
+   * shows that ordinary order as it shows any other. A planned order has none there (#940). The server
    * gives no route for the part before the order (`ReachSplit` has none): the line goes straight
    * from the group's node to the target, as the ghost of an order without a known route does.
    * `null`: not such a target.
@@ -1853,6 +1866,8 @@ export class OrderController implements MapInteraction {
     target: number | null,
   ): readonly number[] | null {
     if (reach === null || from === null || target === null || this.#picks.length > 0) return null;
+    // A planned order is not given there at all (#940): no line.
+    if (this.#closedToPlan(target)) return null;
     return (reach.split.get(target) ?? 0) >= 1 ? [from, target] : null;
   }
 
@@ -1941,9 +1956,12 @@ export class OrderController implements MapInteraction {
 
   /**
    * The groups an accepted group order dropped (DEC-48, item B3, `ack.members`): a toast per code
-   * with the count. A group too big for the road is split by the server and its part goes with the
-   * order (item B4, #913): a notice "N of M go" from `split_units` and `group_units`, and no split
-   * offer of #762 (that stays for a single `move`); `STACK_LIMIT` now means no part reaches it.
+   * with the count. A group too big for the road is split by the server in an ordinary order and
+   * its part goes with it (item B4, #913): a notice "N of M go" from `split_units` and
+   * `group_units`, and no split offer of #762 (that stays for a single ordinary `move`). A planned
+   * order is not split (decision (10), #940): its oversized member comes back with `STACK_LIMIT`
+   * and null split fields, so it gets the toast of its code (worded for a planned order) and no
+   * "N of M go".
    */
   #dropped(cmd: Command & { type: 'group_move' }, members: readonly AckMember[]): void {
     const counts = new Map<string, number>();

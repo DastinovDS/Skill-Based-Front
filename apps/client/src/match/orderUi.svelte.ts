@@ -59,6 +59,8 @@ export interface OrderUiData {
    * order is sent (#468). `null`: none.
    */
   readonly splitHover: number | null;
+  /** The hovered `splitHover` target is closed to a planned order (E, #940): the tip says so. */
+  readonly splitClosed: boolean;
   /**
    * The road pick of "Fortify road" (DEC-43, item D): the own node whose road is being picked, and the
    * road under the pointer; `null`: not picking.
@@ -105,6 +107,7 @@ export class OrderUiState {
   current = $state.raw<OrderUiData>({
     planned: false,
     splitHover: null,
+    splitClosed: false,
     fortFrom: null,
     fortHover: null,
     terrainMode: false,

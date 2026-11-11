@@ -625,7 +625,6 @@ export const BONUS_MARK = {
   /** The size of the chevron of a bonus (the badge's units, `drawBonusChevron`). */
   chevron: 12,
   fontSize: 16,
-  timeFontSize: 12,
   fillAlpha: 0.92,
   rim: { width: 2, alpha: 1 },
   /** The pill's lower edge stands this far above the reach ring of the city. */

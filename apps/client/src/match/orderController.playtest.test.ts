@@ -197,19 +197,12 @@ describe('a click at a place too small for the group splits and sends (#762)', (
     expect(book.ghosts().map((g) => [g.from, g.dest])).toEqual([[home, enemy]]);
   });
 
-  it('keeps a planned order planned, its bonus capped by the charged units of the part', () => {
-    // 6 units, 2 charged: a part of 3 takes both charged ones (the charged go first, DEC-20, B1).
-    const { controller, sent, book, clock } = selected(snapshot({ units: 6, charged: 2 }));
-    wheelOver(controller, clock, enemy, 2);
+  it('a planned order there is refused: no split offer, nothing sent (#940)', () => {
+    const { controller, sent } = selected(snapshot({ units: 6, charged: 2 }));
+    controller.key({ type: 'keydown', code: 'KeyE', shiftKey: false });
     controller.click({ kind: 'node', id: enemy }, false);
-    controller.confirmSplit();
-    book.onEvent({
-      type: 'event',
-      tick: 31,
-      kind: 'group_split',
-      data: { group: GROUP, new_group: 'g-new' },
-    });
-    expect(sent[1]).toEqual({ type: 'move', group: 'g-new', dest: enemy, planned: true, bonus: 2 });
+    expect(sent).toEqual([]);
+    expect(controller.splitMenu.current.open).toBe(false);
   });
 
   it('sends nothing more when the split is refused, or the menu is closed', () => {

@@ -23,7 +23,7 @@ import { isLogged } from './eventText.ts';
 import { AlertState } from '../match/alerts.svelte.ts';
 import { ThreatLog } from '../match/threats.ts';
 import { t } from '../i18n/index.ts';
-import { ToastState } from './toastState.svelte.ts';
+import { TOAST_HOLD_MS, ToastState } from './toastState.svelte.ts';
 import { nodeNamer, type NodeNamer } from './nodeName.ts';
 import { toastOf } from './toasts.ts';
 import type { MatchSummary } from '../app/matchSummary.ts';
@@ -79,6 +79,8 @@ export class HudState {
   /** Own recruits made in a city with a rally point, not gone yet, by group id (#930). */
   #pending: (PendingWalk & { readonly group: string })[] = [];
   #paid: WalkPaid[] = [];
+  /** Charged walks the map has not drawn leaving yet: their flight waits for the render tick. */
+  #paidWaiting: { walk: WalkPaid; tick: number; timer: ReturnType<typeof setTimeout> }[] = [];
   #credit: VpCredit | null = null;
   #extraSeq = 0;
 
@@ -156,6 +158,9 @@ export class HudState {
    */
   onRender(tick: number): void {
     this.toasts.release(tick);
+    for (const entry of [...this.#paidWaiting]) {
+      if (entry.tick <= tick) this.#releasePaid(entry.walk.seq);
+    }
   }
 
   select(selection: Selection | null): void {
@@ -184,12 +189,14 @@ export class HudState {
     this.current = null;
     this.alerts.reset();
     this.toasts.clear();
+    this.#dropPaidWaiting();
     this.#pending = [];
   }
 
   destroy(): void {
     clearTimeout(this.#bannerTimer);
     this.toasts.clear();
+    this.#dropPaidWaiting();
     this.alerts.clearStays();
   }
 
@@ -213,8 +220,11 @@ export class HudState {
       case 'rally_walk_paid':
         if (data.player !== me || node === null) return;
         if (group !== null) this.#pending = this.#pending.filter((p) => p.group !== group);
+        // The gauge spends with this snapshot, but the CP mark flies only when the map shows the
+        // recruit leave its city (the render clock runs behind): `onRender` releases it, the
+        // hold timer covers a render clock that stops short of the tick.
         this.#extraSeq += 1;
-        this.#paid = [...this.#paid, { seq: this.#extraSeq, node, target }].slice(-PAID_KEEP);
+        this.#holdPaid({ seq: this.#extraSeq, node, target }, event.tick);
         return;
       case 'rally_walk_no_cp':
         if (data.player !== me || node === null) return;
@@ -237,6 +247,28 @@ export class HudState {
       }
       default:
     }
+  }
+
+  #dropPaidWaiting(): void {
+    for (const entry of this.#paidWaiting) clearTimeout(entry.timer);
+    this.#paidWaiting = [];
+  }
+
+  #holdPaid(walk: WalkPaid, tick: number): void {
+    const timer = setTimeout(() => {
+      this.#releasePaid(walk.seq);
+    }, TOAST_HOLD_MS);
+    this.#paidWaiting.push({ walk, tick, timer });
+  }
+
+  #releasePaid(seq: number): void {
+    const at = this.#paidWaiting.findIndex((entry) => entry.walk.seq === seq);
+    const entry = this.#paidWaiting[at];
+    if (entry === undefined) return;
+    this.#paidWaiting.splice(at, 1);
+    clearTimeout(entry.timer);
+    this.#paid = [...this.#paid, entry.walk].slice(-PAID_KEEP);
+    this.#publish();
   }
 
   /** A recruit waiting to leave stays one while it stands in its city with its order. */

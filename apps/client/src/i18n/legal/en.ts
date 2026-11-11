@@ -72,7 +72,7 @@ export const en = {
           'sbf.guest: your nickname, your token and whether your account has a password, so that you stay the same player on your next visit. "Log out" in the menu removes it. Without a password the player cannot be reached again from this browser; with a password you can log in again from any browser.',
           'sbf.sound: whether you muted the sound and the volume you chose, saved when you change either.',
           'sbf.settings: the interface scale, the motion and the opening scene you chose in the settings, saved when you change one.',
-          'sbf.newHereOff: that you ticked "Don’t show this again" in the "New here?" dialog after entering a nickname, so that it does not ask again.',
+          'sbf.newHereOff: remembers that you dismissed the "New here" tip, so it is not shown again.',
           'sbf.locale: the interface language, saved only when you choose one yourself. The game is English only for now and has no language selector, so this entry normally does not appear.',
           'sbf.introSeen (sessionStorage, not localStorage): a mark that the opening scene of the start screen already played in this tab, so that it does not play again on a reload. It holds no personal data and is removed when you close the tab.',
         ],

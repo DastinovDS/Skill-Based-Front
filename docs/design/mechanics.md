@@ -385,6 +385,10 @@ Implementation: #242 (`SIM_VERSION` 7, `PROTOCOL_VERSION` 11). The details that 
   smaller size; `0`: no smaller group either). The client opens the split menu with that size on a click at such a
   node and sends the split part there; it never computes the size. The size names nothing hidden: it comes from the
   public capacities and the own nodes, as the path does.
+  Client note (owner 2026-11-11, #940): the split offer is for an **ordinary** order only. A **planned** order (`E`) of a
+  selected single group is not given to a `STACK_LIMIT` node of `reach`: no split offer, no line, no bonus counter, the
+  click sends nothing and the client tells the refusal of `STACK_LIMIT`; the node keeps its dashed ring and its tip says
+  the group is too big for a planned order. The group order of several groups (DEC-48, item B4) is not touched.
 - The auto-merge event `groups_merged` carries the node (`node`), like a manual merge, only to the owner.
 - A recruit that is given an order to move on the same tick has already left the node and does not merge.
 - One command for several groups (a rally to an own node at half price, a synchronized arrival elsewhere) and a recruit rally point: DEC-48 (#896, section 5), [accepted] (owner, 2026-11-09 and 2026-11-10).

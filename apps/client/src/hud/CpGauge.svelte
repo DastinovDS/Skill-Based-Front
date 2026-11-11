@@ -69,6 +69,8 @@
   const SLIVER_SLOTS = [0, 1, 2, 3];
   /** The earmarks of the walks due (#930): a pool, moved per frame with the bar. */
   const EAR_SLOTS = Array.from({ length: 12 }, (_, i) => i);
+  /** The hollow recruit helmets over the earmarks: the first four only (the earmarks stay, #940). */
+  const EAR_HELMETS = 4;
   /** At most this many CP marks fly into the gauge at once. */
   const FLIGHT_SLOTS = [0, 1, 2];
   /** The earmark: the bar's height; the helmet over it; the fuse on its top rule. */
@@ -196,7 +198,9 @@
         r.setAttribute('x', String(xa));
         r.setAttribute('width', String(Math.max(0, xb - xa)));
       }
-      el.querySelector('.ear-helm')?.setAttribute(
+      const helm = el.querySelector('.ear-helm');
+      helm?.setAttribute('visibility', i < EAR_HELMETS ? 'visible' : 'hidden');
+      helm?.setAttribute(
         'transform',
         `translate(${String((xa + xb) / 2 - HELM_W / 2)} ${String(EAR_TOP - 16)})`,
       );

@@ -39,6 +39,10 @@ describe('reject messages', () => {
   });
 
   it('give a generic message for a code this client does not know', () => {
+    expect(rejectMessageKey('STACK_LIMIT', 'move', undefined, true)).toBe(
+      'reject.STACK_LIMIT.planned',
+    );
+    expect(rejectMessageKey('STACK_LIMIT', 'move')).toBe('reject.STACK_LIMIT');
     expect(rejectMessageKey('SOMETHING_NEW')).toBe('reject.unknown');
     expect(rejectMessageKey('constructor')).toBe('reject.unknown');
   });

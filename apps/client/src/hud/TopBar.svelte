@@ -567,6 +567,9 @@
 
   .railed .tugbox {
     transform: translateY(3px);
+    /* The gilt lozenge hangs 14 px past the rail's end: this and the score's gap keep it clear of
+       the opponent's total, whatever its width (#940). */
+    margin-right: 10px;
   }
 
   /* P1, the Ruled rail: a casing, the period ruled upright in gilt to now behind a burin edge, an

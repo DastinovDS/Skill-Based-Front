@@ -14,6 +14,7 @@ import {
 export const BOARD_SCENE_IDS = [
   'profile',
   'profile-guest',
+  'profile-long',
   'profile-empty',
   'profile-loading',
   'profile-network',
@@ -131,6 +132,18 @@ const never = <T>(): Promise<T> => new Promise<T>(() => undefined);
 
 export const BOARD_SCENES: Readonly<Record<BoardSceneId, BoardScene>> = {
   profile: { hasPassword: true, mode: 'profile', own: now(profile()) },
+  // A long history (#940): the list scrolls in its own box, the page does not.
+  'profile-long': {
+    hasPassword: true,
+    mode: 'profile',
+    own: now(
+      profile({
+        matches: [0, 1000, 2000].flatMap((shift) =>
+          MATCHES.map((entry) => ({ ...entry, match_id: entry.match_id + shift })),
+        ),
+      }),
+    ),
+  },
   'profile-guest': {
     hasPassword: false,
     mode: 'profile',
