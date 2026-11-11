@@ -33,6 +33,10 @@ on:
       label:
         description: "Name for the run and the artifact (letters, digits, . _ -)"
         default: ""
+      replays:
+        description: "Also upload the replay of every match (artifacts replays-<shard>, #965)"
+        type: boolean
+        default: false
 
 run-name: Tournament ${{ inputs.label }}
 
@@ -146,8 +150,12 @@ jobs:
           BOTS: ${{ inputs.bots }}
           PIECES: ${{ toJSON(matrix.pieces) }}
           SHARD: ${{ matrix.shard }}
+          REPLAYS: ${{ inputs.replays }}
         run: |
           set -eu
+          # Opt-in replays (#965): `gow-bots stats` and `analyze` read them, the result file is unchanged.
+          replays=""
+          [ "$REPLAYS" != "true" ] || replays="--replays replays-$SHARD"
           # One line per piece: seed_base, seeds, the map files.
           python3 -c 'import json,sys; [print(p["seed_base"], p["seeds"], *p["maps"]) for p in json.loads(sys.argv[1])]' \
             "$PIECES" > "$RUNNER_TEMP/pieces.txt"
@@ -159,7 +167,7 @@ jobs:
             # shellcheck disable=SC2086
             mise run tournament -- --maps $maps --bots $BOTS \
               --seeds "$n" --seed-base "$base" \
-              --jobs "$(nproc)" --ruleset "$RULESET" --out "shard-$SHARD-$i.jsonl"
+              --jobs "$(nproc)" --ruleset "$RULESET" --out "shard-$SHARD-$i.jsonl" $replays
             i=$((i + 1))
           done 3< "$RUNNER_TEMP/pieces.txt"
       - uses: actions/upload-artifact@v7
@@ -167,6 +175,12 @@ jobs:
           name: shard-${{ matrix.shard }}
           path: shard-${{ matrix.shard }}-*.jsonl
           retention-days: 1
+      - if: inputs.replays
+        uses: actions/upload-artifact@v7
+        with:
+          name: replays-${{ matrix.shard }}
+          path: replays-${{ matrix.shard }}
+          retention-days: 7
       - run: mise exec -- uv cache prune --ci
 
   merge:

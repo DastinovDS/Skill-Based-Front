@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # `mise run tournament:gh`: dispatches .github/workflows/tournament.yml (#582), waits for the run with
 # one `gh run watch --exit-status` and downloads the artifact (tournament.jsonl and report.md) into
-# $TGH_DIR/<artifact name>. Options come from the task as environment variables (see mise.toml).
+# $TGH_DIR/<artifact name>, with TGH_REPLAYS=true also the replay of every match into
+# $TGH_DIR/replays-<run id> (#965). Options come from the task as environment variables (see mise.toml).
 # The workflow cuts the (map, seed) cells into at most TGH_SHARDS jobs (scripts/tournament_shards.py
 # plan, #786): more shards than seeds help as long as there are maps x seeds cells.
 set -euo pipefail
@@ -15,9 +16,12 @@ repo="$(printf '%s' "$origin" | sed -E 's#^(https://github.com/|git@github.com:)
 nonce="$(date +%s)-$$"
 label="${TGH_LABEL:+$TGH_LABEL-}$nonce"
 
+# The input `replays` is sent only when asked: a ref whose workflow predates it (#965) still dispatches.
+replays=()
+[ "${TGH_REPLAYS:-false}" != "true" ] || replays=(-f replays=true)
 gh workflow run tournament.yml -R "$repo" --ref "$TGH_REF" \
   -f ref="$TGH_REF" -f ruleset="$TGH_RULESET" -f bots="$TGH_BOTS" -f maps="$TGH_MAPS" \
-  -f seeds="$TGH_SEEDS" -f shards="$TGH_SHARDS" -f label="$label"
+  -f seeds="$TGH_SEEDS" -f shards="$TGH_SHARDS" -f label="$label" ${replays[@]+"${replays[@]}"}
 
 # GitHub registers the run a moment after the dispatch: wait until it shows up (at most 60 s).
 run_id=""
@@ -47,5 +51,8 @@ gh run view "$run_id" -R "$repo" --json createdAt,updatedAt \
 
 mkdir -p "$TGH_DIR"
 gh run download "$run_id" -R "$repo" --pattern 'tournament-*' --dir "$TGH_DIR"
+if [ "${TGH_REPLAYS:-false}" = "true" ]; then
+  gh run download "$run_id" -R "$repo" --pattern 'replays-*' --dir "$TGH_DIR/replays-$run_id"
+fi
 echo "downloaded into $TGH_DIR" >&2
 ls -1 "$TGH_DIR"/tournament-*
