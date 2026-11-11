@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t, tf } from '../i18n/index.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import type { OrderController } from '../match/orderController.ts';
   import { rejectMessageKey } from '../match/rejects.ts';
   import { NO_ANCHORS, type MapAnchors } from '../render/anchors.ts';
@@ -136,8 +137,9 @@
         return;
       }
       const command = t(`cmd.${feedback.cmd.type}`);
+      // A reason that names a key ("cancel it (X)") names its current binding (#966).
       const reason = (code: string): string =>
-        t(
+        tf(
           rejectMessageKey(
             code,
             feedback.cmd.type,
@@ -145,6 +147,7 @@
             (feedback.cmd.type === 'move' || feedback.cmd.type === 'group_move') &&
               feedback.cmd.planned,
           ),
+          keyBindings.names(),
         );
       hud.toasts.push({
         tone: 'warn',

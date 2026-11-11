@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t, tf } from '../i18n/index.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import type { GroupChoice, OrderController } from '../match/orderController.ts';
   import type { MapAnchors } from '../render/anchors.ts';
   import type { GroupInfo } from './hudData.ts';
@@ -32,7 +33,7 @@
       group?.gathering == null
         ? []
         : [tf('plan.gathered', { bonus: group.gathering.bonus, plan: group.gathering.plan })],
-    key: 'F',
+    key: keyBindings.label('release'),
     disabled: group?.gathering == null,
   });
   // Cut and ring (ui-style 54g): icons, the gathered bonus and the keys; the name is in the hub.
@@ -45,7 +46,7 @@
       icon: 'split',
       angle: angles[0] ?? 270,
       label: t('group.split'),
-      key: 'S',
+      key: keyBindings.label('split'),
       disabled: group === null || group.node === null || group.units < 2,
     },
     ...(orders.canRelease ? [release] : []),
@@ -54,7 +55,7 @@
       icon: 'cancel',
       angle: angles[orders.canRelease ? 2 : 1] ?? 90,
       label: t('group.cancel'),
-      key: 'X',
+      key: keyBindings.label('cancel'),
       // Under `combat.retreat = "none"` a group in a fight cannot leave (DEC-40): say why.
       lines: held ? [t('group.stays')] : [],
       disabled: group === null || !orders.canCancel(group),
@@ -64,7 +65,7 @@
       icon: 'merge',
       angle: angles[orders.canRelease ? 3 : 2] ?? 180,
       label: t('group.merge'),
-      key: 'G',
+      key: keyBindings.label('merge'),
       disabled: mergeable < 2,
     },
   ]);

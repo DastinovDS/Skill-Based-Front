@@ -351,7 +351,15 @@
               {#if per !== ''}<text x={f.px} y={at + 14} class="per">{per}</text>{/if}
             {/if}
           {:else if row.kind === 'key'}
-            <rect x={spot.x - 8} y={spot.y + row.dy - 12} width="16" height="15" class="keycap" />
+            {@const w = Math.max(16, row.text.length * 7 + 6)}
+            <!-- A square for one character; a longer name of a rebound key (#966) widens it. -->
+            <rect
+              x={spot.x - w / 2}
+              y={spot.y + row.dy - 12}
+              width={w}
+              height="15"
+              class="keycap"
+            />
             <text x={spot.x} y={spot.y + row.dy - 1} class="key">{row.text}</text>
           {:else}
             <text x={spot.x} y={spot.y + row.dy} class={row.kind}>{row.text}</text>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getLocale, t, tf } from '../i18n/index.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import type { CityChoice, OrderController } from '../match/orderController.ts';
   import type { MapAnchors } from '../render/anchors.ts';
   import { cityChoices } from './cityChoices.ts';
@@ -101,7 +102,7 @@
             icon: 'recruit',
             label: t('city.recruit'),
             ...recruitPrice(),
-            key: 'R',
+            key: keyBindings.label('recruit'),
             compact: true,
             disabled: poor(costs.recruit) || queued >= orders.recruitQueueMax,
           };
@@ -131,7 +132,7 @@
             icon: 'fortify',
             label: t('city.fortify'),
             ...priced(t('city.fortify'), orders.fortCost, 0),
-            key: 'B',
+            key: keyBindings.label('fortify'),
             compact: true,
             // The road is picked next: the sector is dimmed by the CP only (a fight does not stop it).
             disabled: poor(orders.fortCost),
@@ -145,7 +146,7 @@
                 icon: 'rallyOff',
                 label: t('city.rallyClear'),
                 aria: t('city.rallyClear'),
-                key: 'P',
+                key: keyBindings.label('rally'),
                 compact: true,
               }
             : {
@@ -153,7 +154,7 @@
                 icon: 'rally',
                 label: t('city.rally'),
                 ...priced(t('city.rally'), orders.rallyCost, 0),
-                key: 'P',
+                key: keyBindings.label('rally'),
                 compact: true,
               };
       }

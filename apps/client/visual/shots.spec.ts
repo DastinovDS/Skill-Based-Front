@@ -271,6 +271,23 @@ for (const menu of MENUS) {
   });
 }
 
+// The group menu with rebound keys (#966): a key with a longer name widens its keycap.
+test('shot of the group menu with rebound keys', async ({ page }) => {
+  await page.addInitScript(
+    `window.localStorage.setItem('sbf.keys', JSON.stringify({ split: 'Numpad5', cancel: 'Backspace', merge: 'Semicolon' }));`,
+  );
+  await page.goto('/?scene=snapshot_fog&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '300');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(335, 430);
+  await page.waitForTimeout(300);
+  await page.mouse.click(335, 430);
+  await page.mouse.move(1000, 700);
+  await expect(page.locator('[role="menu"]')).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'menu-group-rebound.png') });
+});
+
 // The recruit rally point (DEC-48, item K7, #896): on the scene `group_order` the menu of Ford
 // offers "Rally point" with the walk price, the pick shows the faint muster ring on Forkway; Stonegate,
 // which has its point, offers "Clear rally point".
@@ -761,6 +778,54 @@ test('shot of the log-out dialog', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'screen-account-logout.png') });
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.screenshot({ path: join(OUT, 'screen-account-logout-gray.png') });
+});
+
+// The keys of a match in Settings (#966): the dialog after Recruit took X (Cancel swapped to R,
+// `screen-settings-keys.png` and grey), a key waiting for its new key (`-capture`), and the
+// dialog in the smallest window of the screens (`-1280x720`).
+test('shot of the keys dialog of the settings', async ({ page }) => {
+  await page.goto('/?menu=settings');
+  await page.evaluate('document.fonts.ready.then(() => true)');
+  await page.getByRole('button', { name: 'Change the keys' }).click();
+  await expect(page.getByRole('dialog', { name: 'Keys of a match' })).toBeVisible();
+  await page.getByRole('button', { name: 'Recruit: R. Change it' }).click();
+  await page.keyboard.press('x');
+  await expect(page.getByRole('status')).toHaveText(
+    'Recruit is on X now; Cancel, undo moved to R.',
+  );
+  await page.mouse.move(1000, 700);
+  await page.screenshot({ path: join(OUT, 'screen-settings-keys.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'screen-settings-keys-gray.png') });
+  await page.addStyleTag({ content: 'html { filter: none; }' });
+  await page.getByRole('button', { name: 'Merge the groups: G. Change it' }).click();
+  await expect(page.getByRole('button', { name: 'Merge the groups: G. Change it' })).toHaveText(
+    'Press a key',
+  );
+  await page.screenshot({ path: join(OUT, 'screen-settings-keys-capture.png') });
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Keys of a match' })).toBeVisible();
+  // The keyboard alone: Enter on a key starts the capture, a captured Space binds and does not
+  // click the button again (no new capture).
+  const fit = page.getByRole('button', { name: 'Fit the map: H. Change it' });
+  await fit.focus();
+  await page.keyboard.press('Enter');
+  await expect(fit).toHaveText('Press a key');
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('status')).toHaveText(
+    'Fit the map is on Space now; Go to the alert moved to H.',
+  );
+  await expect(page.getByRole('button', { name: 'Fit the map: Space. Change it' })).toHaveText(
+    'Space',
+  );
+  await page.getByRole('button', { name: 'Reset Fit the map to H' }).click();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: join(OUT, 'screen-settings-keys-1280x720.png') });
+  // Done, then the short list of the screen shows the new keys; the next shots start from the defaults.
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('dialog', { name: 'Keys of a match' })).toHaveCount(0);
+  await page.evaluate("window.localStorage.removeItem('sbf.keys')");
 });
 
 // The nick change of the profile (#871): the dialog with a taken nick (`screen-profile-nick.png`),
@@ -1311,6 +1376,17 @@ test('shot of the help sheet', async ({ page }) => {
   await page.keyboard.press('?');
   await expect(page.getByRole('dialog')).toBeVisible();
   await shootBoth(page, 'help');
+});
+
+// The help with rebound keys (#966): recruit on Y, the planned order on V, terrain on K.
+test('shot of the help sheet with rebound keys', async ({ page }) => {
+  await page.addInitScript(
+    `window.localStorage.setItem('sbf.keys', JSON.stringify({ recruit: 'KeyY', planned: 'KeyV', terrain: 'KeyK' }));`,
+  );
+  await openScene(page, 'snapshot_fog');
+  await page.keyboard.press('?');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await shootBoth(page, 'help-rebound');
 });
 
 // A tall window: the whole help sheet, its bottom (the sound volume) included, without scrolling.

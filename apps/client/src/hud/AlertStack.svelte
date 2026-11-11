@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getLocale, t, tf } from '../i18n/index.ts';
+  import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import type { AlertState } from '../match/alerts.svelte.ts';
   import type { OverflowAlert } from '../match/overflow.ts';
   import BarGlyph from '../theme/BarGlyph.svelte';
@@ -23,8 +24,9 @@
     tf('alert.seconds', { seconds: formatSeconds(ticks, alerts.tickHz, getLocale()) });
   /** Ticks until the overcrowded city loses a unit: the attrition count, else the grace left. */
   const lossTicks = (alert: OverflowAlert): number => alert.attritionIn ?? alert.graceLeft ?? 0;
-  /** The key itself is not translated. */
-  const SPACE = 'Space';
+  /** The key (its name is not translated) and the hint that names it, both following the binding (#966). */
+  const key = $derived(keyBindings.label('alert'));
+  const hint = $derived(tf('alert.focusHint', { alertKey: key }));
 </script>
 
 <!-- The alerts hang as strips under the top bar (Leader, ui-style 54q): a sign, the place and the
@@ -72,8 +74,8 @@
         {/if}
       </li>
     {/each}
-    <li class="key" title={t('alert.focusHint')} aria-label={t('alert.focusHint')}>
-      <kbd aria-hidden="true">{SPACE}</kbd>
+    <li class="key" title={hint} aria-label={hint}>
+      <kbd aria-hidden="true">{key}</kbd>
     </li>
   </ul>
 {/if}

@@ -7,10 +7,10 @@ const TEXT_INPUTS = new Set(['INPUT', 'SELECT', 'TEXTAREA']);
  * (the caller then calls `preventDefault`). Typing in a text field is left alone.
  */
 export function forwardKey(orders: OrderController, event: KeyboardEvent): boolean {
-  // The release of `E` always reaches the controller, in a text field and with a modifier too: a
-  // held E (the planned order, DEC-48, item K2) must never outlive its key.
-  if (event.type === 'keyup' && event.code === 'KeyE') {
-    orders.key({ type: 'keyup', code: 'KeyE', shiftKey: event.shiftKey });
+  // The release of the planned order key (`E` unless rebound, #966) always reaches the controller,
+  // in a text field and with a modifier too: a held E (DEC-48, item K2) must never outlive its key.
+  if (event.type === 'keyup' && event.code === orders.keys.planned) {
+    orders.key({ type: 'keyup', code: event.code, shiftKey: event.shiftKey });
     return false;
   }
   if (event.ctrlKey || event.metaKey || event.altKey) {
