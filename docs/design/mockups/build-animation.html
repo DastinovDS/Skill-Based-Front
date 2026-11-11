@@ -1,0 +1,1165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building animation, round 1</title>
+<!-- Building animation, round 1 (broad, #972): how the build of a barracks or a factory at a city reads on the map, from the
+     order to the finished building. The buildings are the city radial menu's own icons on the free side of the city
+     (#954, P2 "Free side", render/buildingLayout.ts); the motion of today is #872 (render/buildPay.ts, BUILD_PAY of
+     render/style.ts): "Current" below is a port of it. Thirteen directions V1..V13 redo the three parts end to end:
+       1. the progressive payment (DEC-41 item 7): the charges are taken from the warehouse of the city, then from the
+          own group standing there; what is missing is taken as it arrives (here: two at the order, the rest brought by
+          the supply flow, one packet each);
+       2. the build time after the full payment (mvp-7: 10 s for both; compressed to 4.5 s here unless "Real time");
+       3. the moment the building is finished.
+     Rules on the page: barracks 3 charges, factory 4 (rulesets/mvp-7.toml); one build per kind; the build events and
+     the payment go only to the builder (gow_protocol.convert). The opponent's city ("Enemy's" switch, next to an own
+     node) shows nothing of the payment or the time: only the built icon when its view flips (DEC-31, AGENTS.md 4.4),
+     and each variant says what plays then. Self-contained: EB Garamond (SIL OFL) and the ground crop come from
+     assets/city-buildings/ (shared with #954). State in the address (#v=V2&z=far&side=enemy...). -->
+<style>
+@font-face{font-family:'EB Garamond';src:url(assets/city-buildings/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-style:normal;font-display:block}
+:root{--stone:#16130f;--panel:#1d1a15;--ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;--rule:#7d7363;--line:#3d372d}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--stone);color:var(--ink);font:14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--stone);padding:10px 16px;border-bottom:1px solid var(--line)}
+h1{font:600 20px/1 'EB Garamond',Georgia,serif;letter-spacing:.04em;margin:0}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:9px}
+.bar:first-child{margin-top:0}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.lab{font:600 12px/1 'EB Garamond',Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-right:3px}
+button.chip{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:6px 10px;font:500 13px/1 system-ui,sans-serif;cursor:pointer;border-radius:0}
+button.chip:hover{border-color:var(--rule);color:var(--ink)}
+button.chip[aria-pressed="true"]{background:var(--ink);color:#16130f;border-color:var(--ink);font-weight:650}
+button.chip .k{opacity:.7;margin-right:5px;font-weight:700}
+button.chip.var{padding:7px 10px;font-size:14px}
+button.chip.ref{border-style:dashed}
+button.chip:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#more{margin-left:auto}
+#moreBar{display:none;padding-top:9px;margin-top:9px;border-top:1px solid var(--line)}
+#moreBar.open{display:flex}
+input[type=range]{accent-color:#ece4d1;width:220px;vertical-align:middle}
+main{padding:10px 16px 24px}
+#cap{margin:0 0 8px;font:500 16px/1.35 'EB Garamond',Georgia,serif;color:var(--ink-soft);min-height:2.7em}
+#cap b{color:var(--ink);font-weight:650;margin-right:8px}
+#cap .rm{display:block;color:var(--ink-dim);font-size:15px}
+#viewWrap{background:#0e0c09;border:1px solid var(--line)}
+#view{display:block;width:100%;cursor:pointer}
+.gray #view{filter:grayscale(1)}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><h1>Building animation · round 1</h1></div>
+  <div class="bar"><div class="group" id="vars" role="group" aria-label="Variant"></div></div>
+  <div class="bar">
+    <div class="group" role="group" aria-label="Zoom"><span class="lab">Zoom</span><button class="chip" data-z="normal">Normal</button><button class="chip" data-z="far">Far</button></div>
+    <div class="group" role="group" aria-label="Whose city builds"><span class="lab">City</span><button class="chip" data-side="own">Own</button><button class="chip" data-side="enemy">Opponent's</button></div>
+    <button class="chip" id="replay">Replay</button>
+    <button class="chip" id="more" aria-expanded="false" aria-controls="moreBar">More</button>
+  </div>
+  <div class="bar" id="moreBar">
+    <div class="group" role="group" aria-label="Building"><span class="lab">Builds</span><button class="chip" data-kind="barracks">Barracks</button><button class="chip" data-kind="factory">Factory</button></div>
+    <div class="group"><button class="chip" data-z="near">Near zoom</button><button class="chip" id="real">Real time (10 s)</button><button class="chip" id="still">Reduced motion</button><button class="chip" id="gray">Grey</button></div>
+    <div class="group"><button class="chip" id="play">Pause</button><input id="scrub" aria-label="Time in the loop" type="range" min="0" max="10000" step="10"></div>
+  </div>
+</header>
+<main>
+  <p id="cap"></p>
+  <div id="viewWrap"><canvas id="view" role="img"></canvas></div>
+</main>
+<script>
+'use strict';
+// =============================================================================================
+// The client's numbers (render/style.ts, theme/tokens.ts, units/helmet.ts, theme/cutIcons.ts),
+// shared with city-buildings-r2.html.
+// =============================================================================================
+const C = {
+  casing: '#060504', plate: '#0e0c09', cut: '#050403', ink: '#ccc0a6', ivory: '#ece4d1',
+  vp: '#cfab62', up: '#8cc79a', down: '#ec6654', road: '#e6edf3', clash: '#e6ab42',
+};
+// The city menu's icons, exactly (cutIcons.ts): the outline and the ruled solid, a 26-unit box centred on 0.
+const CUT_D = {
+  barracks: 'M-9 9 V-1 L0 -8.5 L9 -1 V9 Z M-3 9 V3 H3 V9 M0 -8.5 V-12.5 L4.5 -11 L0 -9.5',
+  factory: 'M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z M-6.5 4 H-3 M0 4 H3.5',
+};
+const CUT_SOLID_D = { barracks: 'M-9 9 V-1 L0 -8.5 L9 -1 V9 Z', factory: 'M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z' };
+const CUT = { barracks: new Path2D(CUT_D.barracks), factory: new Path2D(CUT_D.factory) };
+const CUT_SOLID = { barracks: new Path2D(CUT_SOLID_D.barracks), factory: new Path2D(CUT_SOLID_D.factory) };
+const CUT_BOX = { barracks: [-9, -12.5, 9, 9], factory: [-10, -10, 8.5, 9] };
+const CUT_STYLE = { box: 26, rule: 2.6, ruleW: 1.15, casing: 4.2, casingA: 0.9, ink: 2.1 };
+const ICON_HALF = 0.44; // half the drawn extent of an icon (casing included), a share of its box
+
+const HELMET_PATHS = {
+  own: { dome: 'M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z', band: 'M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60', strap: 'M46 80 L54 96' },
+  enemy: { dome: 'M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z', band: null, strap: 'M38 75 L58 91 L64 68' },
+};
+const HELMET_SCALE = 1.34, HELMET_INSIDE = 0.92, UNIT_SIDES = [24, 30, 36, 42];
+const HE = { casing: 6, inside: 1.6, gear: 0.55, edge: 1.25, hatchW: 0.9, font: 12.5 };
+const CITY_E = { cutGrow: 3.2, cutAlpha: 0.85, rimGrow: 1.6, rimW: 1.1, innerInset: 1.2, innerW: 0.8, innerA: 0.6, enemyInsets: [4.4, 6.4], enemyW: 0.9, star: [0.6, 0.27, 1.2] };
+const RING = { gap: 7, cut: 6, cutAlpha: 0.8, filled: 3.4, roomW: 0.9, roomOff: 1.6, wash: 0.3, segGap: 0.16 };
+const LOZ = { casing: 8.2, fill: 5.8, hollow: 4.7, line: 0.9, lineA: 0.92, pitch: 8.8, groupGap: 3.5, drop: 8.5 };
+const VPL = { side: 18.5, outer: 17.2, inner: 12.4, w: 1.1, font: 14.5, lift: 4.5 };
+const BADGE = { size: 11, stroke: 0.3, outline: 2.6, minPx: 8 };
+const TICKS = { gap: 2, arm: 6.2, casing: 4.4, ink: 1.7 }; // CORNER_TICKS after #952
+
+// =============================================================================================
+// Helmet geometry (a port of units/helmet.ts).
+// =============================================================================================
+function samplePath(d, steps = 10) {
+  const t = d.match(/[MLCQZ]|-?\d*\.?\d+/g) || [];
+  const pts = []; let i = 0, cmd = '', at = { x: 0, y: 0 };
+  const num = () => Number(t[i++]);
+  while (i < t.length) {
+    const tok = t[i];
+    if (/[MLCQZ]/.test(tok)) { cmd = tok; i++; if (cmd === 'Z') continue; }
+    if (cmd === 'M' || cmd === 'L') { at = { x: num(), y: num() }; pts.push(at); }
+    else if (cmd === 'C') { const c1 = { x: num(), y: num() }, c2 = { x: num(), y: num() }, e = { x: num(), y: num() }; for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u*u*u*at.x + 3*u*u*s*c1.x + 3*u*s*s*c2.x + s*s*s*e.x, y: u*u*u*at.y + 3*u*u*s*c1.y + 3*u*s*s*c2.y + s*s*s*e.y }); } at = e; }
+    else if (cmd === 'Q') { const c = { x: num(), y: num() }, e = { x: num(), y: num() }; for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u*u*at.x + 2*u*s*c.x + s*s*e.x, y: u*u*at.y + 2*u*s*c.y + s*s*e.y }); } at = e; }
+    else i++;
+  }
+  return pts;
+}
+function boundsOf(ps) { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const p of ps) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); } return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }; }
+function centroid(ps) { let a = 0, cx = 0, cy = 0; ps.forEach((p, i) => { const q = ps[(i + 1) % ps.length]; const cr = p.x*q.y - q.x*p.y; a += cr; cx += (p.x + q.x)*cr; cy += (p.y + q.y)*cr; }); return { x: cx / (3*a), y: cy / (3*a) }; }
+const RAW = {};
+for (const k of ['own', 'enemy']) { const P = HELMET_PATHS[k]; RAW[k] = { dome: samplePath(P.dome), band: P.band ? samplePath(P.band) : null, strap: samplePath(P.strap) }; const b = boundsOf([...RAW[k].dome, ...(RAW[k].band || []), ...RAW[k].strap]); RAW[k].c = { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }
+const HELMETS = new Map();
+function helmet(kind, width) {
+  const key = kind + ':' + width; if (HELMETS.has(key)) return HELMETS.get(key);
+  const R = RAW[kind], s = width / 100, place = (p) => ({ x: (p.x - R.c.x) * s, y: (p.y - R.c.y) * s });
+  const dome = R.dome.map(place), band = R.band ? R.band.map(place) : null, strap = R.strap.map(place);
+  const db = boundsOf(dome), mid = centroid(dome);
+  const h = { kind, width, dome, band, strap, bounds: boundsOf([...dome, ...(band || []), ...strap]), domeTop: db.y, domeBottom: db.y + db.height, domeBounds: db, middle: { x: mid.x, y: mid.y + width * 0.02 } };
+  HELMETS.set(key, h); return h;
+}
+function helmetLines(width) { const s = width / 100; return { strap: Math.max(6.4*s, 2.1), band: Math.max(5.6*s, 2.2), casing: 6.4 }; }
+function helmetExtent(h) { const L = helmetLines(h.width), pad = Math.max(L.casing, L.strap + L.casing) / 2; return { top: h.bounds.y - pad, bottom: h.bounds.y + h.bounds.height + pad, left: h.bounds.x - pad, right: h.bounds.x + h.bounds.width + pad }; }
+function helmetWidth(side, inside) { return Math.round(side * HELMET_SCALE * (inside ? HELMET_INSIDE : 1) * 100) / 100; }
+function helmetFit(kind, width, reach) {
+  let w = width;
+  for (let step = 0; step < 6 && w > 4; step++) { const e = helmetExtent(helmet(kind, w)), span = Math.max(e.right, -e.left, e.bottom, -e.top); if (span <= reach) break; w = Math.min(w - 0.25, Math.floor(((w * reach) / span) * 4) / 4); }
+  return w;
+}
+function unitSide(units) { return units <= 3 ? UNIT_SIDES[0] : units <= 7 ? UNIT_SIDES[1] : units <= 15 ? UNIT_SIDES[2] : UNIT_SIDES[3]; }
+
+// =============================================================================================
+// Drawing helpers (world units; the canvas transform carries the zoom). A hairline never falls
+// under 1.3 device px (#865).
+// =============================================================================================
+let GA = 1, PXW = 1, LS = 1;
+const hair = (w) => Math.max(w, 1.3 / (PXW * LS));
+function poly(ctx, ps, closed = true) { ctx.beginPath(); ps.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); if (closed) ctx.closePath(); }
+function polyA(ctx, ps, closed = true) { ctx.beginPath(); ps.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); if (closed) ctx.closePath(); }
+function stroke(ctx, w, color, alpha = 1, cap = 'round', join = 'round') { ctx.lineWidth = w; ctx.strokeStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.lineCap = cap; ctx.lineJoin = join; ctx.stroke(); ctx.globalAlpha = GA; }
+function fill(ctx, color, alpha = 1) { ctx.fillStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.fill(); ctx.globalAlpha = GA; }
+function strokeP(ctx, p, w, color, alpha = 1, cap = 'square', join = 'miter') { ctx.lineWidth = w; ctx.strokeStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.lineCap = cap; ctx.lineJoin = join; ctx.stroke(p); ctx.globalAlpha = GA; }
+function fillP(ctx, p, color, alpha = 1) { ctx.fillStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.fill(p); ctx.globalAlpha = GA; }
+function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, Math.PI*2); }
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function hatchLines(ctx, b, angle, pitch) {
+  const cx = b.x + b.width/2, cy = b.y + b.height/2, R = Math.hypot(b.width, b.height)/2 + pitch;
+  const ux = Math.cos(angle), uy = Math.sin(angle), nx = -uy, ny = ux;
+  ctx.beginPath(); for (let d = -R; d <= R; d += pitch) { ctx.moveTo(cx + nx*d - ux*R, cy + ny*d - uy*R); ctx.lineTo(cx + nx*d + ux*R, cy + ny*d + uy*R); }
+}
+const polar = (a, d) => ({ x: d*Math.cos(a), y: d*Math.sin(a) });
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
+const ease = { engrave: (t) => 0.5 - 0.5*Math.cos(Math.PI*clamp01(t)), settle: (t) => 1 - Math.pow(1 - clamp01(t), 3), travel: (t) => { t = clamp01(t); return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2; } };
+function lozPath(ctx, x, y, side) { const h = side*Math.SQRT2/2; ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + h, y); ctx.lineTo(x, y + h); ctx.lineTo(x - h, y); ctx.closePath(); }
+/** One charge (57u): the casing, then the colour (in stock, paid) or hollow (room, owed). */
+function drawLozenge(ctx, x, y, on, color, k = 1, alpha = 1) {
+  lozPath(ctx, x, y, LOZ.casing*k); fill(ctx, C.casing, alpha);
+  if (on) { lozPath(ctx, x, y, LOZ.fill*k); fill(ctx, color, alpha); return; }
+  lozPath(ctx, x, y, LOZ.fill*k); fill(ctx, C.plate, alpha);
+  lozPath(ctx, x, y, LOZ.hollow*k); stroke(ctx, hair(LOZ.line), C.ink, LOZ.lineA*alpha, 'butt', 'miter');
+}
+function frame(ctx, x, y, rot, s, fn) { ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(s, s); const ls = LS; LS = ls*s; fn(); LS = ls; ctx.restore(); }
+
+function drawBody(ctx, G, owner, color, occupied, star) {
+  const r = G.r;
+  circle(ctx, 0, 0, r + CITY_E.cutGrow); fill(ctx, C.cut, CITY_E.cutAlpha);
+  circle(ctx, 0, 0, r); fill(ctx, occupied ? C.plate : color);
+  circle(ctx, 0, 0, r + CITY_E.rimGrow); stroke(ctx, CITY_E.rimW, C.ink);
+  circle(ctx, 0, 0, r - CITY_E.innerInset); stroke(ctx, CITY_E.innerW, C.cut, CITY_E.innerA);
+  if (owner === 'enemy') for (const ins of CITY_E.enemyInsets) { circle(ctx, 0, 0, r - ins); stroke(ctx, CITY_E.enemyW, C.ink); }
+  if (G.kind === 'capital' && !occupied && star) {
+    ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI/2 + i*Math.PI/5, r2 = i % 2 ? r*CITY_E.star[1] : r*CITY_E.star[0]; ctx.lineTo(r2*Math.cos(a), r2*Math.sin(a)); }
+    ctx.closePath(); fill(ctx, C.plate); stroke(ctx, CITY_E.star[2], C.ink, 1, 'butt', 'miter');
+  }
+}
+const TAU = Math.PI*2, START = -Math.PI/2;
+function ringCells(cap, filled) {
+  const gap = RING.segGap, arcs = [];
+  for (let j = 0; j < cap; j++) { const f0 = TAU*j/cap, f1 = TAU*(j + 1)/cap; arcs.push({ from: START + f0 + gap/2, to: START + f1 - gap/2, filled: j < filled }); }
+  return arcs;
+}
+function strokeArcs(ctx, r, arcs, w, color, alpha = 1) { ctx.beginPath(); for (const a of arcs) { ctx.moveTo(r*Math.cos(a.from), r*Math.sin(a.from)); ctx.arc(0, 0, r, a.from, a.to); } stroke(ctx, w, color, alpha, 'butt'); }
+function drawRing(ctx, r, arcs) {
+  const o = RING.roomOff;
+  strokeArcs(ctx, r, arcs, RING.cut, C.cut, RING.cutAlpha);
+  strokeArcs(ctx, r, arcs.filter((a) => a.filled), RING.filled, C.ink);
+  const room = arcs.filter((a) => !a.filled);
+  strokeArcs(ctx, r, room, 2*o, C.ink, RING.wash);
+  for (const s of [-1, 1]) strokeArcs(ctx, r + s*o, room, hair(RING.roomW), C.ink);
+  ctx.beginPath(); for (const a of room) for (const ang of [a.from, a.to]) { const c = Math.cos(ang), s = Math.sin(ang); ctx.moveTo((r - o)*c, (r - o)*s); ctx.lineTo((r + o)*c, (r + o)*s); }
+  if (room.length) stroke(ctx, hair(RING.roomW), C.ink, 1, 'butt');
+}
+function rowXs(n) { const xs = [], gap = n > 4 ? LOZ.groupGap : 0; for (let i = 0; i < n; i++) xs.push(i*LOZ.pitch + Math.floor(i/3)*gap); const mid = n ? (xs[0] + xs[n - 1]) / 2 : 0; return xs.map((x) => x - mid); }
+function drawVp(ctx, at, n) {
+  lozPath(ctx, at.x, at.y, VPL.side); fill(ctx, C.plate);
+  lozPath(ctx, at.x, at.y, VPL.outer); stroke(ctx, hair(VPL.w), C.vp, 1, 'butt', 'miter');
+  lozPath(ctx, at.x, at.y, VPL.inner); stroke(ctx, hair(VPL.w), C.vp, 1, 'butt', 'miter');
+  ctx.font = `600 ${VPL.font}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = C.vp; ctx.fillText(String(n), at.x, at.y + 1);
+}
+function drawHelmet(ctx, g) {
+  const h = helmet(g.kind, g.width), L = helmetLines(g.width), facing = g.kind === 'own' ? 1 : -1, casing = g.pip ? 3.2 : HE.casing + HE.inside;
+  ctx.save(); ctx.translate(g.x, g.y); ctx.scale(facing, 1);
+  const gear = h.band ? [h.strap, h.band] : [h.strap], gw = (line) => (line === h.strap ? L.strap : L.band) * HE.gear;
+  for (const line of gear) { poly(ctx, line, false); stroke(ctx, gw(line) + casing*0.8, C.casing); }
+  poly(ctx, h.dome); stroke(ctx, casing*0.9, C.casing); poly(ctx, h.dome); fill(ctx, C.plate);
+  const pitch = Math.min(3, Math.max(1.4, g.width*0.075)), top = h.domeBottom - g.level*(h.domeBottom - h.domeTop);
+  ctx.save(); poly(ctx, h.dome); ctx.clip();
+  hatchLines(ctx, h.domeBounds, -Math.PI/4, pitch); stroke(ctx, hair(HE.hatchW*(g.pip ? .7 : 1)), g.color, 1, 'butt');
+  if (g.level > 0) { ctx.beginPath(); ctx.rect(h.domeBounds.x - 2, top, h.domeBounds.width + 4, h.domeBottom - top + 2); fill(ctx, g.color); }
+  ctx.restore();
+  for (const line of gear) { poly(ctx, line, false); stroke(ctx, gw(line), C.ink); }
+  poly(ctx, h.dome); stroke(ctx, hair(g.pip ? .8 : HE.edge), C.ink);
+  ctx.restore();
+  if (g.pip) return;
+  const mx = g.x + h.middle.x*facing, my = g.y + h.middle.y;
+  ctx.font = `600 ${HE.font}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = C.cut; ctx.lineJoin = 'round'; ctx.globalAlpha = GA; ctx.strokeText(String(g.units), mx, my + 0.6); ctx.fillStyle = C.ink; ctx.fillText(String(g.units), mx, my + 0.6);
+}
+/** B6 (#949, #952): four ivory corner ticks round the helmet as drawn. */
+function drawTicks(ctx, g) {
+  const e = helmetExtent(helmet(g.kind, g.width)), gap = TICKS.gap, facing = g.kind === 'own' ? 1 : -1;
+  const x0 = g.x + (facing === 1 ? e.left : -e.right) - gap, x1 = g.x + (facing === 1 ? e.right : -e.left) + gap, y0 = g.y + e.top - gap, y1 = g.y + e.bottom + gap, arm = TICKS.arm;
+  for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]]) {
+    ctx.beginPath(); ctx.moveTo(cx + sx*arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy*arm); stroke(ctx, TICKS.casing, C.casing, .95, 'square', 'miter');
+    ctx.beginPath(); ctx.moveTo(cx + sx*arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy*arm); stroke(ctx, hair(TICKS.ink), C.ivory, 1, 'butt', 'miter');
+  }
+}
+
+const OWN = '#86a6ea', FOE = '#e5785e'; // lapis and minium, the default pair (DEC-49)
+const CHARGE_COST = { barracks: 3, factory: 4 };
+const PAY = { flightMs: 450, lift: 12, staggerMs: 150, popMs: 220, pop: 0.3, runMs: 350, runStagger: 60, shrink: 0.6, doneMs: 600 };
+const ZOOMS = { near: 2.2, normal: 1, far: 0.42 };
+const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const lerp = (a, b, q) => a + (b - a) * q;
+const bump = (q) => Math.sin(Math.PI * clamp01(q));
+
+// =============================================================================================
+// The menu icon on the map (CutIcon.svelte's art; render/pieceShapes.ts iconBackSpec, iconFillSpec,
+// iconFrontSpec). Looks: built (the ruled solid in the owner's colour, the opponent's at 45 degrees),
+// plan (owes charges: a half-dark ground and a dotted outline), rising (the build time: a fill from the
+// base with an ivory head line, or a hatch engraved line by line). `o.flash` lays an ivory outline over
+// it (0..1), `o.alpha` fades the whole icon.
+// =============================================================================================
+function drawIcon(ctx, kind, x, y, sz, o) {
+  const k = sz / CUT_STYLE.box, out = CUT[kind], sol = CUT_SOLID[kind], [bx0, by0, bx1, by1] = CUT_BOX[kind];
+  const ga = GA; GA = ga * (o.alpha === undefined ? 1 : o.alpha); ctx.globalAlpha = GA;
+  frame(ctx, x, y, 0, k, () => {
+    if (o.look === 'plan') {
+      fillP(ctx, sol, C.plate, o.planGround === undefined ? 0.62 : o.planGround);
+      strokeP(ctx, out, CUT_STYLE.casing, C.casing, 0.5);
+      ctx.setLineDash([2.2, 2.2]); strokeP(ctx, out, hair(1.5), C.ink, 0.9, 'butt'); ctx.setLineDash([]);
+    } else {
+      fillP(ctx, sol, C.plate);
+      ctx.save(); ctx.clip(sol);
+      const t = clamp01(o.time === undefined ? 1 : o.time);
+      if (o.look === 'built') {
+        if (o.enemy) { hatchLines(ctx, { x: bx0, y: by0, width: bx1 - bx0, height: by1 - by0 }, -Math.PI / 4, CUT_STYLE.rule); stroke(ctx, CUT_STYLE.ruleW, o.color, 1, 'butt'); }
+        else { ctx.beginPath(); for (let yy = Math.floor(by0 / CUT_STYLE.rule) * CUT_STYLE.rule; yy < by1; yy += CUT_STYLE.rule) ctx.rect(bx0 - 1, yy, bx1 - bx0 + 2, CUT_STYLE.ruleW); fill(ctx, o.color); }
+      } else if (o.prog === 'hatch') {
+        const lines = []; for (let yy = by1 - CUT_STYLE.rule + 0.6; yy > by0 - 1; yy -= CUT_STYLE.rule) lines.push(yy);
+        const n = lines.length * t, full = Math.floor(n), frac = n - full;
+        ctx.beginPath(); for (let i = 0; i < full; i++) ctx.rect(bx0 - 1, lines[i], bx1 - bx0 + 2, CUT_STYLE.ruleW); fill(ctx, o.color);
+        if (full < lines.length && t > 0 && t < 1) { const yy = lines[full]; ctx.beginPath(); ctx.rect(bx0 - 1, yy, (bx1 - bx0 + 2) * frac, CUT_STYLE.ruleW); fill(ctx, o.color); }
+      } else {
+        const top = by1 - t * (by1 - by0);
+        ctx.beginPath(); ctx.rect(bx0 - 1, top, bx1 - bx0 + 2, by1 - top + 1); fill(ctx, o.color);
+        ctx.beginPath(); for (let yy = by1 - CUT_STYLE.rule; yy > top + 0.4; yy -= CUT_STYLE.rule) { ctx.moveTo(bx0 - 1, yy); ctx.lineTo(bx1 + 1, yy); } stroke(ctx, 0.55, C.casing, 0.5, 'butt');
+        if (t > 0 && t < 1) { const hw = o.head || 1.2; ctx.beginPath(); ctx.moveTo(bx0 - 1, top); ctx.lineTo(bx1 + 1, top); if (hw > 1.3) stroke(ctx, hw + 1.6, C.casing, 0.8, 'butt'); stroke(ctx, hair(hw), C.ivory, 1, 'butt'); }
+      }
+      ctx.restore();
+      strokeP(ctx, out, CUT_STYLE.casing, C.casing, CUT_STYLE.casingA);
+      strokeP(ctx, out, hair(CUT_STYLE.ink), C.ink, 1);
+      if (o.look === 'rising' && o.prog === 'hatch' && t > 0 && t < 1) {
+        // The burin: an ivory lozenge at the end of the line being cut.
+        const lines = []; for (let yy = by1 - CUT_STYLE.rule + 0.6; yy > by0 - 1; yy -= CUT_STYLE.rule) lines.push(yy);
+        const n = lines.length * t, full = Math.floor(n), frac = n - full;
+        if (full < lines.length) { const yy = lines[full], xx = bx0 - 1 + (bx1 - bx0 + 2) * frac; lozPath(ctx, xx, yy + 0.6, 5); fill(ctx, C.casing); lozPath(ctx, xx, yy + 0.6, 3.1); fill(ctx, C.ivory); }
+      }
+    }
+    if (o.flash > 0) { strokeP(ctx, out, CUT_STYLE.ink + 2.2, C.ivory, 0.9 * clamp01(o.flash)); strokeP(ctx, out, hair(CUT_STYLE.ink), C.ink, clamp01(o.flash)); }
+  });
+  GA = ga; ctx.globalAlpha = GA;
+}
+/** The ring that opens round an icon just built (57k, BUILD_PAY.done): from 0.42 of its size, 10 out, 600 ms. */
+function doneRing(ctx, x, y, sz, ms, o = {}) {
+  const dur = o.ms || PAY.doneMs, q = ms / dur;
+  if (q < 0 || q >= 1) return;
+  const r = (o.from || 0.42) * sz + (o.grow || 10) * ease.settle(q), a = 1 - q;
+  circle(ctx, x, y, r); stroke(ctx, o.casing || 3, C.casing, a); circle(ctx, x, y, r); stroke(ctx, hair(o.width || 1), o.color || C.ink, a);
+}
+function ringArc(ctx, r, a0, a1, w, color, alpha = 1, cap = 'butt') { if (a1 <= a0) return; ctx.beginPath(); ctx.arc(0, 0, r, a0, a1); stroke(ctx, w, color, alpha, cap); }
+function line(ctx, x0, y0, x1, y1, w, color, alpha = 1, cap = 'round') { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); stroke(ctx, w, color, alpha, cap); }
+/** An ink stroke on its dark casing (the engraved line of every effect). */
+function inkLine(ctx, x0, y0, x1, y1, w, color = C.ink, alpha = 1, cas = 1.8) { line(ctx, x0, y0, x1, y1, w + cas, C.casing, 0.9 * alpha); line(ctx, x0, y0, x1, y1, hair(w), color, alpha); }
+
+// =============================================================================================
+// Where the buildings stand (render/buildingLayout.ts, P2 "Free side").
+// =============================================================================================
+function iconSize(z) { const raw = Math.max(16, 13 / Math.max(1e-3, z)); return 16 * 2 ** (Math.ceil(Math.log2(raw / 16) * 4 - 1e-9) / 4); }
+function lozK(sz) { return Math.max(0.72, Math.min(1.3, (0.74 * sz) / 14)); }
+function freeGap(roads, dist, vp) {
+  const blocks = roads.map((a) => [a, Math.asin(Math.min(1, 5.2 / dist))]);
+  if (vp) blocks.push([-Math.PI / 4, Math.asin(Math.min(1, 14 / dist))]);
+  blocks.push([Math.PI / 2, 0.95]);
+  const spans = blocks.map(([a, h]) => { const c = ((a % TAU) + TAU) % TAU; return [c - h, c + h]; }).sort((p, q) => p[0] - q[0]);
+  let best = { mid: Math.PI, width: 0 };
+  spans.forEach(([, end], i) => {
+    const next = i + 1 < spans.length ? spans[i + 1][0] : spans[0][0] + TAU;
+    let reach = end; for (let j = 0; j <= i; j++) reach = Math.max(reach, spans[j][1]);
+    const width = next - reach; if (width > best.width) best = { mid: reach + width / 2, width };
+  });
+  return best;
+}
+function layoutBuildings(G, kinds, z) {
+  const size = iconSize(z), half = ICON_HALF * size, dist = G.R + RING.cut / 2 + 1 + half;
+  const gap = freeGap(G.roads, dist, G.vp > 0), step = 2 * half + 2.5, side = gap.width >= step / dist + (2 * half) / dist;
+  const items = {}, angles = {};
+  kinds.forEach((kind, i) => {
+    let at;
+    if (kinds.length === 1) at = polar(gap.mid, dist);
+    else if (side) at = polar(gap.mid + ((i === 0 ? -1 : 1) * step) / dist / 2, dist);
+    else at = polar(gap.mid, dist + (kind === 'barracks' ? 1 : 0) * step);
+    items[kind] = at; angles[kind] = Math.atan2(at.y, at.x);
+  });
+  return { size, items, angles, gap };
+}
+/** The row of owed charges beside an icon (buildingLayout.ts owedRow): just outside it, laid across. */
+function owedRow(seat, angle, sz, k, cost) {
+  const out = ICON_HALF * sz + 1.5 + LOZ.casing * k * 0.71, mx = seat.x + Math.cos(angle) * out, my = seat.y + Math.sin(angle) * out;
+  const ax = -Math.sin(angle), ay = Math.cos(angle), pitch = LOZ.pitch * k * 0.96;
+  return Array.from({ length: cost }, (_, j) => { const d = (j - (cost - 1) / 2) * pitch; return { x: mx + ax * d, y: my + ay * d }; });
+}
+
+// =============================================================================================
+// The map: a crop of a front, the subject city Forkway in the middle. Own cities to the west,
+// the opponent's to the east. Coordinates in world units.
+// =============================================================================================
+const KINDS = {
+  small: { cap: 4, r: 14, wh: 3 }, medium: { cap: 6, r: 17, wh: 3 }, large: { cap: 8, r: 20, wh: 3 }, capital: { cap: 10, r: 20, wh: 6 },
+};
+const CITIES = [
+  { name: 'Forkway', x: 0, y: 0, kind: 'medium', side: 'own', vp: 1, stock: 1 },
+  { name: 'Watchpost', x: -250, y: 20, kind: 'small', side: 'own', vp: 1, stock: 2, b: ['factory'], units: 4, charged: 4 },
+  { name: 'Watchhouse', x: -40, y: -255, kind: 'small', side: 'own', vp: 1, stock: 1, units: 2, charged: 1 },
+  { name: 'Ford', x: -125, y: 235, kind: 'small', side: 'own', vp: 0, stock: 0 },
+  { name: 'Stonegate', x: -545, y: 45, kind: 'capital', side: 'own', vp: 3, stock: 4, b: ['barracks', 'factory'], units: 2, charged: 2 },
+  { name: 'Wood Hollow', x: -380, y: -265, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Firwood', x: -700, y: -330, kind: 'small', side: 'own', vp: 1, stock: 2 },
+  { name: 'Brookside', x: -430, y: 310, kind: 'medium', side: 'own', vp: 1, stock: 1, b: ['barracks'] },
+  { name: 'Westmarch', x: -930, y: -40, kind: 'medium', side: 'own', vp: 2, stock: 2 },
+  { name: 'Pinecrest', x: -860, y: 360, kind: 'small', side: 'own', vp: 1, stock: 0 },
+  { name: 'Archway', x: 265, y: 15, kind: 'medium', side: 'foe', vp: 2, b: ['barracks'], units: 3 },
+  { name: 'Crest', x: 470, y: -235, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Gateway', x: 505, y: 255, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Heart', x: 790, y: 15, kind: 'capital', side: 'foe', vp: 3, b: ['barracks', 'factory'] },
+  { name: 'Reach', x: 760, y: -390, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Farmstead', x: 810, y: 390, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Eastmarch', x: 1090, y: -160, kind: 'medium', side: 'foe', vp: 2 },
+  { name: 'Crossing', x: 1110, y: 270, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Highfold', x: -200, y: -585, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Greyhill', x: -620, y: -610, kind: 'medium', side: 'own', vp: 1, stock: 2, b: ['factory'] },
+  { name: 'Northwatch', x: -1060, y: -470, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Saltmere', x: -1260, y: 140, kind: 'small', side: 'own', vp: 1, stock: 3 },
+  { name: 'Edgebrook', x: -1170, y: 560, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Lowmarsh', x: -700, y: 625, kind: 'small', side: 'own', vp: 1, stock: 0 },
+  { name: 'Southford', x: -235, y: 590, kind: 'small', side: 'own', vp: 1, stock: 2 },
+  { name: 'Ridge', x: 330, y: -600, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Coldwater', x: 730, y: -660, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Spire', x: 1310, y: -520, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Farside', x: 1340, y: 90, kind: 'medium', side: 'foe', vp: 2 },
+  { name: 'Dunmore', x: 1300, y: 570, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Embers', x: 730, y: 680, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Marsh', x: 380, y: 615, kind: 'small', side: 'foe', vp: 1 },
+];
+const EDGES = [[0, 1], [0, 2], [0, 3], [0, 10], [1, 4], [1, 2], [2, 5], [5, 4], [5, 6], [4, 6], [4, 7], [3, 7], [4, 8], [6, 8], [7, 9], [8, 9],
+  [10, 11], [10, 12], [11, 13], [12, 13], [11, 14], [14, 13], [12, 15], [15, 13], [13, 16], [13, 17], [14, 16], [15, 17], [2, 11], [3, 12],
+  [18, 2], [18, 5], [19, 5], [19, 6], [20, 6], [20, 8], [21, 8], [21, 9], [22, 9], [22, 21], [23, 9], [23, 7], [24, 3], [24, 23],
+  [25, 11], [25, 18], [26, 25], [26, 14], [27, 14], [27, 16], [28, 16], [28, 17], [29, 17], [29, 30], [30, 15], [31, 12], [31, 24], [31, 30]];
+CITIES.forEach((c, i) => {
+  const k = KINDS[c.kind]; c.i = i; c.r = k.r; c.R = k.r + RING.gap; c.cap = k.cap; c.wh = k.wh;
+  c.roads = EDGES.filter((e) => e.includes(i)).map(([a, b]) => { const o = CITIES[a === i ? b : a]; return Math.atan2(o.y - c.y, o.x - c.x); });
+});
+const SUBJECT = CITIES[0], FEEDER = CITIES[1];
+/** Whose a city is in the scene: the opponent's view turns Forkway into the opponent's city. */
+const sideOf = (c) => (c === SUBJECT && S.side === 'enemy' ? 'foe' : c.side);
+
+// =============================================================================================
+// The story of the build (a loop). The payment is the sim's (systems/build.py pay()): at the order the
+// build takes the one charge in the warehouse and the one of the group standing there, owes the rest;
+// the supply flow brings one charge a packet from Watchpost, taken as it arrives.
+// =============================================================================================
+const S = { v: 'C0', zoom: 'normal', side: 'own', kind: 'barracks', real: false, still: false, gray: false, more: false, playing: true, time: 0 };
+const ORDER = 700, PACKET_MS = 1500;
+function schedule() {
+  const cost = CHARGE_COST[S.kind], pays = [{ at: ORDER, from: ['w', 'g'] }, { at: 2600, from: ['w'] }];
+  if (cost === 4) pays.push({ at: 3700, from: ['w'] });
+  const build = S.real ? 10000 : 4500, last = pays[pays.length - 1].at, charges = [];
+  for (const p of pays) p.from.forEach((f, k) => charges.push({ j: charges.length, from: f, start: p.at + k * PAY.staggerMs, pay: p.at }));
+  return { cost, pays, build, last, charges, done: last + build, loop: last + build + 4200 };
+}
+
+// =============================================================================================
+// One frame of the subject's build: `P` is what every variant draws from.
+// =============================================================================================
+function frameState(t) {
+  const sc = schedule(), z = ZOOMS[S.zoom], enemy = S.side === 'enemy', kind = S.kind, other = kind === 'barracks' ? 'factory' : 'barracks';
+  const ordered = !enemy && t >= ORDER, built = t >= sc.done, visible = enemy ? built : ordered;
+  const kinds = visible ? ['barracks', 'factory'] : [other];
+  const G = SUBJECT, L = layoutBuildings(G, kinds, z), seat = L.items[kind] || polar(L.gap.mid, 30), angle = L.angles[kind] || L.gap.mid;
+  const sz = L.size;
+  return {
+    t, z, sc, kind, other, kinds, L, enemy, cost: sc.cost, color: enemy ? FOE : OWN, G, seat, angle, sz, half: ICON_HALF * sz, k: lozK(sz),
+    dir: { x: Math.cos(angle), y: Math.sin(angle) }, ordered, built, visible,
+    sinceOrder: t - ORDER, time: clamp01((t - sc.last) / sc.build), sinceDone: t - sc.done,
+    charges: enemy ? [] : sc.charges, still: S.still,
+  };
+}
+/** Where a charge leaves from: the warehouse slot below the ring, or the helmet of the group standing there. */
+function srcOf(c, P) { return c.from === 'w' ? { x: rowXs(P.G.wh)[0], y: P.G.R + LOZ.drop } : { x: 0, y: -3 }; }
+function age(c, P) { return P.t - c.start; }
+function landedOf(P, dur) { return P.charges.filter((c) => age(c, P) >= dur).length; }
+function lastLand(P, dur) { return P.charges.length ? Math.max(...P.charges.map((c) => c.start)) + dur : 0; }
+/** A charge in the air along an arc: the eased share `q` and the point, or null on the ground. */
+function arcFlight(c, P, to, dur, lift = PAY.lift) {
+  const a = age(c, P); if (a < 0 || a >= dur) return null;
+  const q = ease.travel(a / dur), from = srcOf(c, P);
+  return { q, x: lerp(from.x, to.x, q), y: lerp(from.y, to.y, q) - Math.sin(q * Math.PI) * lift };
+}
+function popOf(c, P, dur, popMs = PAY.popMs, pop = PAY.pop) { const l = age(c, P) - dur; return !P.still && l >= 0 && l < popMs ? 1 + pop * Math.sin((l / popMs) * Math.PI) : 1; }
+
+// ---------------------------------------------------------------------------------------------
+// The classic parts (today's #872 motion), parameterised: the icon by the seat, the row of owed
+// charges beside it, the flights, the run into the icon once paid, the fill. Variants reuse them.
+// ---------------------------------------------------------------------------------------------
+function classic(P, o = {}) {
+  const s = o.scale || 1, sz = P.sz * s, push = P.half * (s - 1);
+  const seat = { x: P.seat.x + P.dir.x * push, y: P.seat.y + P.dir.y * push };
+  const k = o.k ? o.k(P, sz) : lozK(sz), slots = owedRow(seat, P.angle, sz, k, P.cost), dur = o.flightMs || PAY.flightMs;
+  const landed = P.still ? P.charges.filter((c) => age(c, P) >= 0).length : landedOf(P, dur), end = P.still ? lastLand(P, 0) : lastLand(P, dur);
+  const paid = P.charges.length > 0 && landed >= P.cost, running = paid && P.time > 0;
+  return { s, sz, seat, k, slots, dur, landed, end, paid, running, o };
+}
+function classicIcon(ctx, P, g, extra = {}) {
+  const look = g.running ? 'rising' : 'plan';
+  drawIcon(ctx, P.kind, g.seat.x, g.seat.y, g.sz * (extra.scale || 1), { look, time: P.time, color: P.color, prog: g.o.prog || 'fill', head: g.o.head, flash: extra.flash, alpha: extra.alpha });
+}
+function classicRow(ctx, P, g) {
+  if (g.running) return;
+  g.slots.forEach((p, j) => { const c = P.charges[j]; drawLozenge(ctx, p.x, p.y, j < g.landed, P.color, g.k * (c ? popOf(c, P, g.dur, g.o.popMs, g.o.pop) : 1)); });
+}
+function classicRun(ctx, P, g, to = g.seat) {
+  if (!g.paid || P.still) return;
+  const into = P.t - g.end, ms = g.o.runMs || PAY.runMs;
+  g.slots.forEach((p, j) => { const q = ease.engrave((into - j * PAY.runStagger) / ms); if (q <= 0 || q >= 1) return; drawLozenge(ctx, lerp(p.x, to.x, q), lerp(p.y, to.y, q), true, P.color, g.k * (1 - PAY.shrink * q)); });
+}
+function classicFlights(ctx, P, g, trail = 0) {
+  if (P.still) return;
+  for (const c of P.charges) {
+    const to = g.slots[c.j]; if (!to) continue;
+    for (let i = trail; i >= 0; i--) {
+      const lag = i * 55, cc = { ...c, start: c.start + lag }, f = arcFlight(cc, P, to, g.dur);
+      if (!f) continue;
+      drawLozenge(ctx, f.x, f.y, true, P.color, lerp(1, g.k, f.q) * (1 - i * 0.16), i ? 0.5 - i * 0.13 : 1);
+    }
+  }
+}
+/** The built icon after the finish: `scale` and `flash` animate it; the opponent's is hatched at 45 degrees. */
+function builtIcon(ctx, P, at, sz, extra = {}) { drawIcon(ctx, P.kind, at.x, at.y, sz, { look: 'built', color: P.color, enemy: P.enemy, flash: extra.flash, alpha: extra.alpha }); }
+/** The settle pop of a finish: 1 + over -> 1 over `ms` (no motion: 1). */
+function popScale(P, over, ms, delay = 0) { if (P.still) return 1; const q = (P.sinceDone - delay) / ms; return q < 0 ? 1 + over : q >= 1 ? 1 : 1 + over * (1 - ease.settle(q)); }
+/** A static mark held under reduced motion: on for `ms` after the finish. */
+const held = (P, ms = 1100) => P.still && P.sinceDone >= 0 && P.sinceDone < ms;
+
+// =============================================================================================
+// The variants. Each has `node` (drawn with the city pieces), and may have `under` (below the city
+// body), `top` (over the groups: flights) and `hud` (screen space). `rm`: what it does under reduced
+// motion. `foe`: what the opponent sees (only the finish, when its view flips, DEC-31).
+// =============================================================================================
+const VARIANTS = [
+  { id: 'C0', name: 'Current', ref: true,
+    line: 'Today (#872): owed lozenges by the icon, 450 ms flights, the icon fills, a thin 600 ms ring.',
+    rm: 'Nothing moves: the lozenges switch to paid, the fill still rises, no ring.',
+    node(ctx, P) {
+      const g = classic(P);
+      if (!P.built) { if (P.ordered) { classicIcon(ctx, P, g); classicRow(ctx, P, g); classicRun(ctx, P, g); } return; }
+      builtIcon(ctx, P, P.seat, P.sz);
+      if (!P.still) doneRing(ctx, P.seat.x, P.seat.y, P.sz, P.sinceDone);
+    },
+    top(ctx, P) { if (!P.built && P.ordered) classicFlights(ctx, P, classic(P)); },
+  },
+  { id: 'V1', name: 'Louder',
+    line: 'The same parts, sized to be seen: the icon 1.45 times while it is built, warehouse-size lozenges, 700 ms flights with a trail, a double ring.',
+    rm: 'No flights, trail or pop: the lozenges switch; the icon stays large until done, then a static double ring for 1 s.',
+    node(ctx, P) {
+      const g = classic(P, { scale: 1.45, k: () => 1.1, flightMs: 700, popMs: 300, pop: 0.5, runMs: 450, head: 1.8 });
+      if (!P.built) { if (P.ordered) { classicIcon(ctx, P, g); classicRow(ctx, P, g); classicRun(ctx, P, g); } return; }
+      const q = P.still ? 1 : ease.settle(P.sinceDone / 520), s = lerp(1.45, 1, q) * (1 + (P.still ? 0 : 0.1 * bump(P.sinceDone / 520)));
+      const at = { x: lerp(g.seat.x, P.seat.x, q), y: lerp(g.seat.y, P.seat.y, q) };
+      builtIcon(ctx, P, at, P.sz * s, { flash: P.still ? 0 : 1 - P.sinceDone / 500 });
+      if (held(P)) { for (const r of [P.half + 6, P.half + 10]) { circle(ctx, P.seat.x, P.seat.y, r); stroke(ctx, 3.6, C.casing, 0.9); circle(ctx, P.seat.x, P.seat.y, r); stroke(ctx, hair(1.6), C.ivory); } }
+      if (!P.still) for (const d of [0, 140]) doneRing(ctx, P.seat.x, P.seat.y, P.sz, P.sinceDone - d, { ms: 900, grow: 22, casing: 3.6, width: 1.6, color: d ? C.ink : C.ivory });
+    },
+    top(ctx, P) { if (!P.built && P.ordered) classicFlights(ctx, P, classic(P, { scale: 1.45, k: () => 1.1, flightMs: 700 }), 3); },
+  },
+  { id: 'V2', name: 'Works ring',
+    line: 'A ring of works round the city: one cell per charge fills as it lands, then the ring runs once round for the build time; done, it lights and opens out.',
+    rm: 'Cells switch to paid with no flights; the run round the ring still advances; done: the ring is held ivory for 1 s.',
+    geo(P) { return { Rw: P.G.R + 8.5, w: Math.max(3.4, 2.4 / P.z), gap: 0.16 }; },
+    under(ctx, P) {
+      const { Rw, w, gap } = this.geo(P), dur = 520, n = P.cost, top = -Math.PI / 2;
+      if (!P.built) {
+        if (!P.ordered) return;
+        const landed = P.still ? P.charges.filter((c) => age(c, P) >= 0).length : landedOf(P, dur), end = P.still ? lastLand(P, 0) : lastLand(P, dur);
+        const intro = P.still ? 1 : ease.engrave(P.sinceOrder / 420), reach = top + intro * TAU;
+        const merge = landed >= n ? (P.still ? 1 : ease.engrave((P.t - end) / 320)) : 0, g = gap * (1 - merge);
+        const running = landed >= n && P.time > 0;
+        for (let j = 0; j < n; j++) {
+          const a0 = top + (j * TAU) / n + g / 2, a1 = Math.min(reach, top + ((j + 1) * TAU) / n - g / 2);
+          if (a1 <= a0) continue;
+          ringArc(ctx, Rw, a0, a1, w + 2.6, C.casing, 0.88);
+          const c = P.charges[j], since = c ? age(c, P) - dur : -1;
+          if (j < landed) {
+            const f = P.still ? 1 : ease.settle(since / 220);
+            ringArc(ctx, Rw, a0, lerp(a0, a1, f), w * (c ? popOf(c, P, dur, 260, 0.45) : 1), P.color, running ? 0.42 : 1);
+          } else {
+            ringArc(ctx, Rw, a0, a1, w, C.ink, RING.wash);
+            for (const s of [-1, 1]) ringArc(ctx, Rw + s * (w / 2 - 0.2), a0, a1, hair(0.9), C.ink, 1);
+          }
+        }
+        if (running) {
+          const head = top + P.time * TAU;
+          ringArc(ctx, Rw, top, head, w, P.color, 1);
+          for (const s of [-1, 1]) ringArc(ctx, Rw + s * (w / 2 + 0.3), top, head, hair(0.8), C.ivory, 0.85);
+          ringArc(ctx, Rw, head - 0.2, head, w + 1, C.ivory, 1);
+        }
+        return;
+      }
+      if (held(P)) { circle(ctx, 0, 0, Rw); stroke(ctx, w + 2.6, C.casing, 0.9); circle(ctx, 0, 0, Rw); stroke(ctx, w * 0.6, C.ivory); }
+      if (!P.still && P.sinceDone < 800) {
+        const q = P.sinceDone / 800, r = Rw + 20 * ease.settle(q), a = 1 - q;
+        circle(ctx, 0, 0, r); stroke(ctx, w + 2.6, C.casing, 0.85 * a); circle(ctx, 0, 0, r); stroke(ctx, w * (1 - 0.5 * q), P.enemy ? P.color : C.ivory, a);
+      }
+    },
+    node(ctx, P) {
+      if (!P.built) { if (P.ordered) drawIcon(ctx, P.kind, P.seat.x, P.seat.y, P.sz, { look: 'plan', planGround: 0.75 }); return; }
+      builtIcon(ctx, P, P.seat, P.sz * popScale(P, 0.35, 460));
+    },
+    top(ctx, P) {
+      if (P.built || !P.ordered || P.still) return;
+      const { Rw } = this.geo(P), n = P.cost;
+      for (const c of P.charges) { const mid = -Math.PI / 2 + ((c.j + 0.5) * TAU) / n, f = arcFlight(c, P, polar(mid, Rw), 520, 16); if (f) drawLozenge(ctx, f.x, f.y, true, P.color, lerp(1, 0.85, f.q)); }
+    },
+  },
+  { id: 'V3', name: 'Dial',
+    line: 'The icon on a round dial: the owed charges sit on its rim, then a wedge sweeps round behind the icon for the build time; done, the dial closes into the icon.',
+    rm: 'Rim charges switch with no flights; the wedge still sweeps; done: the dial is cut away, a static ring for 1 s.',
+    geo(P) { const rd = P.half * 1.3 + 4, push = rd - P.half - 1; return { rd, kk: Math.max(0.7, (0.6 * P.sz) / 16), spread: 0.5, c: { x: P.seat.x + P.dir.x * push, y: P.seat.y + P.dir.y * push } }; },
+    ticks(P) { const { rd, spread, c } = this.geo(P); return Array.from({ length: P.cost }, (_, j) => polar(-Math.PI / 2 + (j - (P.cost - 1) / 2) * spread, rd + 0.4)).map((p) => ({ x: c.x + p.x, y: c.y + p.y })); },
+    node(ctx, P) {
+      const { rd, kk, c } = this.geo(P), x = c.x, y = c.y, dur = 480;
+      if (!P.built) {
+        if (!P.ordered) return;
+        const intro = P.still ? 1 : ease.settle(P.sinceOrder / 300), r = rd * intro;
+        circle(ctx, x, y, r + 1.8); fill(ctx, C.casing, 0.9); circle(ctx, x, y, r); fill(ctx, C.plate);
+        const landed = P.still ? P.charges.filter((c) => age(c, P) >= 0).length : landedOf(P, dur), end = P.still ? lastLand(P, 0) : lastLand(P, dur);
+        const running = landed >= P.cost && P.time > 0;
+        if (running) {
+          const a1 = -Math.PI / 2 + P.time * TAU;
+          ctx.save(); ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r - 0.6, -Math.PI / 2, a1); ctx.closePath(); ctx.clip();
+          circle(ctx, x, y, r); fill(ctx, P.color, 0.5);
+          ctx.beginPath(); for (let yy = y - r; yy < y + r; yy += 2.2) ctx.rect(x - r, yy, 2 * r, 1); fill(ctx, P.color, 0.95);
+          ctx.restore();
+          const h = polar(a1, r - 0.4); inkLine(ctx, x, y, x + h.x, y + h.y, 1.3, C.ivory, 1, 1.6);
+        }
+        circle(ctx, x, y, r); stroke(ctx, hair(1.1), C.ink); circle(ctx, x, y, Math.max(0, r - 2.2)); stroke(ctx, hair(0.6), C.ink, 0.45);
+        drawIcon(ctx, P.kind, x, y + 0.6, P.sz * 0.95, { look: 'plan', planGround: 0.8 });
+        const into = P.t - end;
+        this.ticks(P).forEach((p, j) => {
+          const c = P.charges[j];
+          if (landed >= P.cost && !P.still) { const q = ease.engrave((into - j * PAY.runStagger) / 360); if (q >= 1) return; drawLozenge(ctx, lerp(p.x, x, q), lerp(p.y, y, q), true, P.color, kk * (1 - 0.7 * q)); return; }
+          if (landed >= P.cost) return;
+          drawLozenge(ctx, p.x, p.y, j < landed, P.color, kk * (c ? popOf(c, P, dur) : 1) * intro);
+        });
+        return;
+      }
+      const q = P.still ? 1 : ease.engrave(P.sinceDone / 320);
+      if (q < 1) { const r = rd * (1 - q); circle(ctx, x, y, r + 1.8); fill(ctx, C.casing, 0.9 * (1 - q)); circle(ctx, x, y, r); fill(ctx, P.color, 0.8 * (1 - q)); }
+      const s = P.still ? 1 : P.sinceDone < 320 ? lerp(0.95, 1.22, q) : 1 + 0.22 * (1 - ease.settle((P.sinceDone - 320) / 380));
+      const at = P.still ? P.seat : { x: lerp(x, P.seat.x, ease.settle(P.sinceDone / 500)), y: lerp(y, P.seat.y, ease.settle(P.sinceDone / 500)) };
+      builtIcon(ctx, P, at, P.sz * s);
+      if (held(P)) { circle(ctx, x, y, rd + 2); stroke(ctx, 3, C.casing, 0.9); circle(ctx, x, y, rd + 2); stroke(ctx, hair(1.2), C.ivory); }
+      if (!P.still) doneRing(ctx, x, y, P.sz, P.sinceDone - 200, { ms: 560, from: rd / P.sz, grow: 9, width: 1.2, color: C.ivory });
+    },
+    top(ctx, P) {
+      if (P.built || !P.ordered || P.still) return;
+      const ticks = this.ticks(P), kk = this.geo(P).kk;
+      for (const c of P.charges) { const f = arcFlight(c, P, ticks[c.j], 480); if (f) drawLozenge(ctx, f.x, f.y, true, P.color, lerp(1, kk, f.q)); }
+    },
+  },
+  { id: 'V4', name: 'Rise',
+    line: 'The building rises out of the ground: the charges are laid as a foundation under a ground line, the icon climbs out of it for the build time; done, one short lift and a puff of dust.',
+    rm: 'No flights, dust or bounce: the foundation fills, the icon is revealed upward by the time, the ground line is cut at the end.',
+    geo(P) { const gy = P.seat.y + (9 * P.sz) / 26 + 1.2, k = lozK(P.sz) * 0.9; return { gy, k, slots: Array.from({ length: P.cost }, (_, j) => ({ x: P.seat.x + (j - (P.cost - 1) / 2) * LOZ.pitch * k, y: gy + LOZ.casing * k * 0.71 + 1.3 })) }; },
+    node(ctx, P) {
+      const { gy, k, slots } = this.geo(P), x = P.seat.x, w = P.half * 1.4, dur = 450, hgt = (21.5 * P.sz) / 26 + 2;
+      const groundA = !P.built ? 1 : P.still ? 0 : 1 - clamp01(P.sinceDone / 520);
+      if (!P.built && !P.ordered) return;
+      if (groundA > 0) { inkLine(ctx, x - w, gy, x + w, gy, 1.3, C.ink, groundA * (P.still || P.built ? 1 : ease.settle(P.sinceOrder / 300)), 2.2); }
+      if (!P.built) {
+        const landed = P.still ? P.charges.filter((c) => age(c, P) >= 0).length : landedOf(P, dur);
+        const running = landed >= P.cost && P.time > 0;
+        slots.forEach((p, j) => {
+          const c = P.charges[j], eaten = running ? clamp01(P.time * P.cost - j) : 0;
+          if (eaten >= 1) return;
+          drawLozenge(ctx, p.x, p.y, j < landed, P.color, k * (c ? popOf(c, P, dur) : 1) * (1 - 0.6 * eaten), 1 - 0.5 * eaten);
+        });
+        if (!running) { drawIcon(ctx, P.kind, x, P.seat.y, P.sz, { look: 'plan', alpha: 0.8 }); return; }
+        ctx.save(); ctx.beginPath(); ctx.rect(x - 60, gy - 80, 120, 80 - 0.6); ctx.clip();
+        builtIcon(ctx, P, { x, y: P.seat.y + (1 - P.time) * hgt }, P.sz);
+        ctx.restore();
+        if (!P.still) for (const s of [-1, 1]) for (let i = 0; i < 2; i++) {
+          const ph = (P.t / 110 + i * 1.7 + (s > 0 ? 0.9 : 0)) % 2, a = ph < 1 ? bump(ph) : 0, bx = x + s * (P.half * 0.75 + i * 2.2);
+          if (a > 0.05) inkLine(ctx, bx, gy - 0.8, bx + s * 2.2, gy - 2.6 - ph * 1.5, 0.8, C.ink, a, 1.2);
+        }
+        return;
+      }
+      const lift = P.still ? 0 : -3.2 * bump(P.sinceDone / 380);
+      builtIcon(ctx, P, { x, y: P.seat.y + lift }, P.sz);
+      if (!P.still && P.sinceDone < 560) {
+        const q = ease.settle(P.sinceDone / 560), a = 1 - P.sinceDone / 560;
+        for (const s of [-1, 1]) for (const [dx, dy] of [[1, 0], [0.8, -0.6], [0.45, -0.9]]) {
+          const x0 = x + s * (P.half * 0.7 + 2 * q), y0 = gy - 1;
+          inkLine(ctx, x0 + s * dx * 2 * q, y0 + dy * 2 * q, x0 + s * dx * (2 + 5 * q), y0 + dy * (2 + 5 * q), 1, C.ink, a, 1.4);
+        }
+      }
+    },
+    top(ctx, P) {
+      if (P.built || !P.ordered || P.still) return;
+      const { slots, k } = this.geo(P);
+      for (const c of P.charges) { const f = arcFlight(c, P, slots[c.j], 450); if (f) drawLozenge(ctx, f.x, f.y, true, P.color, lerp(1, k, f.q)); }
+    },
+  },
+  { id: 'V5', name: 'Scaffold',
+    line: 'An engraved scaffold: each charge raises one piece of it round the icon, the build time is cut into the icon line by line by an ivory burin; done, the scaffold falls away.',
+    rm: 'Pieces appear whole with no flights; the lines are still cut; done: the scaffold is removed, an ivory outline for 1 s.',
+    pieces(P) {
+      const all = [[[-14.5, 11], [-14.5, -15]], [[14, 11], [14, -15]], [[-17, -4], [16.5, -4]], [[-14.5, 11], [14, -4]]];
+      return all.slice(0, P.cost).map(([a, b]) => { const s = P.sz / CUT_STYLE.box; return { a: { x: P.seat.x + a[0] * s, y: P.seat.y + a[1] * s }, b: { x: P.seat.x + b[0] * s, y: P.seat.y + b[1] * s } }; });
+    },
+    node(ctx, P) {
+      const dur = 460, pcs = this.pieces(P), w = Math.max(1.2, 0.085 * P.sz);
+      if (!P.built) {
+        if (!P.ordered) return;
+        const landed = P.still ? P.charges.filter((c) => age(c, P) >= 0).length : landedOf(P, dur), running = landed >= P.cost && P.time > 0;
+        drawIcon(ctx, P.kind, P.seat.x, P.seat.y, P.sz, { look: running ? 'rising' : 'plan', time: P.time, color: P.color, prog: 'hatch' });
+        pcs.forEach((p, j) => {
+          const c = P.charges[j]; if (j >= landed || !c) { inkLine(ctx, p.a.x, p.a.y, p.b.x, p.b.y, w * 0.6, C.ink, 0.28, 0.6); return; }
+          const q = P.still ? 1 : ease.settle((age(c, P) - dur) / 260);
+          inkLine(ctx, p.a.x, p.a.y, lerp(p.a.x, p.b.x, q), lerp(p.a.y, p.b.y, q), w, C.ivory, 1, 2.2);
+        });
+        if (landed >= 3) { const s = P.sz / CUT_STYLE.box; for (const xx of [-14.5, 14]) { const cx = P.seat.x + xx * s, cy = P.seat.y - 4 * s; ctx.beginPath(); ctx.rect(cx - 1.3, cy - 1.3, 2.6, 2.6); fill(ctx, C.casing); ctx.beginPath(); ctx.rect(cx - 0.7, cy - 0.7, 1.4, 1.4); fill(ctx, C.ivory); } }
+        return;
+      }
+      builtIcon(ctx, P, P.seat, P.sz, { flash: P.still ? (held(P) ? 1 : 0) : 1 - P.sinceDone / 460 });
+      if (P.still) return;
+      pcs.forEach((p, j) => {
+        const q = ease.settle((P.sinceDone - j * 70) / 520); if (q >= 1) return;
+        const mx = (p.a.x + p.b.x) / 2, my = (p.a.y + p.b.y) / 2, dx = mx - P.seat.x, dy = my - P.seat.y, d = Math.hypot(dx, dy) || 1, rot = (j % 2 ? 1 : -1) * 0.45 * q;
+        ctx.save(); ctx.translate(mx + (dx / d) * 9 * q, my + (dy / d) * 9 * q + 4 * q * q); ctx.rotate(rot);
+        inkLine(ctx, p.a.x - mx, p.a.y - my, p.b.x - mx, p.b.y - my, w, C.ivory, 1 - q, 2.2); ctx.restore();
+      });
+    },
+    top(ctx, P) {
+      if (P.built || !P.ordered || P.still) return;
+      const pcs = this.pieces(P);
+      for (const c of P.charges) { const p = pcs[c.j]; if (!p) continue; const f = arcFlight(c, P, { x: (p.a.x + p.b.x) / 2, y: (p.a.y + p.b.y) / 2 }, 460); if (f) drawLozenge(ctx, f.x, f.y, true, P.color, lerp(1, 0.8, f.q)); }
+    },
+  },
+  { id: 'V6', name: 'Beacon',
+    line: 'A soft glow of the owner’s colour behind the icon from the order on, breathing and growing with the payment and the time; done, it flares ivory.',
+    rm: 'The glow is steady (no breathing) and grows in steps; no flights; done: a steady bright glow for 1 s instead of the flare.',
+    under(ctx, P) {
+      if (!P.ordered && !P.built) return;
+      const g = classic(P), prog = (g.landed / P.cost) * 0.35 + (g.running ? P.time : 0) * 0.65;
+      const floor = 20 / P.z, base = Math.max(floor, P.half * (1.7 + 1.2 * prog));
+      if (!P.built) {
+        const breathe = P.still ? 0.85 : 0.72 + 0.28 * Math.sin((P.t / 1500) * TAU);
+        glow(ctx, P.seat, base * (P.still ? 1 : 1 + 0.06 * Math.sin((P.t / 1500) * TAU)), P.color, 0.62 * breathe + 0.2 * prog);
+        return;
+      }
+      if (held(P)) { glow(ctx, P.seat, base * 1.6, C.ivory, 0.55); return; }
+      if (P.still || P.sinceDone > 1000) return;
+      const q = P.sinceDone / 1000, r = lerp(base, Math.max(floor * 2.6, base * 2.6), ease.settle(q));
+      glow(ctx, P.seat, r, P.color, 0.6 * (1 - q)); glow(ctx, P.seat, r * 0.55, C.ivory, 0.85 * (1 - q) ** 1.5);
+    },
+    node(ctx, P) {
+      const g = classic(P);
+      if (!P.built) { if (P.ordered) { classicIcon(ctx, P, g); classicRow(ctx, P, g); classicRun(ctx, P, g); } return; }
+      builtIcon(ctx, P, P.seat, P.sz * popScale(P, 0.2, 400), { flash: P.still ? 0 : 1 - P.sinceDone / 400 });
+    },
+    top(ctx, P) { if (!P.built && P.ordered) classicFlights(ctx, P, classic(P)); },
+  },
+  { id: 'V7', name: 'Radiance',
+    line: 'Engraved rays round the icon (the heraldic glory): the owed charges sit in a crown over it, then the rays grow one by one round the icon like a clock; done, they burst out.',
+    rm: 'No flights or burst: the crown fills, the rays still appear one by one; done: the full rays held for 1 s.',
+    geo(P) { const ri = P.half + 2.4, L = Math.max(5.5, 0.38 * P.sz), kk = lozK(P.sz) * 0.8; return { ri, L, kk, n: 16 }; },
+    crown(P) { const { ri, L } = this.geo(P); return Array.from({ length: P.cost }, (_, j) => { const p = polar(-Math.PI / 2 + (j - (P.cost - 1) / 2) * 0.5, ri + L * 0.55); return { x: P.seat.x + p.x, y: P.seat.y + p.y }; }); },
+    rays(ctx, P, share, ri, L, alpha, grow = 1) {
+      const n = this.geo(P).n;
+      for (let i = 0; i < n; i++) {
+        const len = L * clamp01(share * n - i) * grow; if (len <= 0.2) continue;
+        const a = -Math.PI / 2 + (i * TAU) / n, c = Math.cos(a), s = Math.sin(a), x = P.seat.x, y = P.seat.y;
+        inkLine(ctx, x + c * ri, y + s * ri, x + c * (ri + len * (i % 2 ? 0.7 : 1)), y + s * (ri + len * (i % 2 ? 0.7 : 1)), i % 2 ? 1 : 1.4, C.ivory, alpha, 1.8);
+      }
+    },
+    node(ctx, P) {
+      const { ri, L, kk } = this.geo(P), g = classic(P, { flightMs: 480 });
+      if (!P.built) {
+        if (!P.ordered) return;
+        classicIcon(ctx, P, g);
+        const runEnd = g.end + (P.still ? 0 : 420);
+        if (g.paid && P.t >= runEnd) this.rays(ctx, P, P.time, ri, L, 1);
+        const crown = this.crown(P);
+        if (!g.paid) crown.forEach((p, j) => { const c = P.charges[j]; drawLozenge(ctx, p.x, p.y, j < g.landed, P.color, kk * (c ? popOf(c, P, g.dur) : 1)); });
+        else if (!P.still) { const into = P.t - g.end; crown.forEach((p, j) => { const q = ease.engrave((into - j * PAY.runStagger) / 360); if (q > 0 && q < 1) drawLozenge(ctx, lerp(p.x, P.seat.x, q), lerp(p.y, P.seat.y, q), true, P.color, kk * (1 - 0.6 * q)); }); }
+        return;
+      }
+      builtIcon(ctx, P, P.seat, P.sz, { flash: P.still ? 0 : 1 - P.sinceDone / 450 });
+      if (held(P)) { this.rays(ctx, P, 1, ri, L, 1); return; }
+      if (P.still || P.sinceDone > 820) return;
+      const q = ease.settle(P.sinceDone / 820);
+      this.rays(ctx, P, 1, ri + 6 * q, L, 1 - P.sinceDone / 820, 1 + 1.5 * q);
+    },
+    top(ctx, P) {
+      if (P.built || !P.ordered || P.still) return;
+      const crown = this.crown(P), kk = this.geo(P).kk;
+      for (const c of P.charges) { const f = arcFlight(c, P, crown[c.j], 480); if (f) drawLozenge(ctx, f.x, f.y, true, P.color, lerp(1, kk, f.q)); }
+    },
+  },
+  { id: 'V8', name: 'Tablet',
+    line: 'An engraved tablet pinned to the city keeps its size on screen: the icon large, the owed charges, then the seconds left; done, it folds into the icon on the map.',
+    rm: 'The tablet is cut in and out (no scale or slide), no flights; the seconds still count down; done: a static ring for 1 s.',
+    node(ctx, P) {
+      const g = classic(P);
+      if (!P.built) { if (P.ordered) classicIcon(ctx, P, g); return; }
+      const fold = P.enemy ? 0 : 330;
+      builtIcon(ctx, P, P.seat, P.sz * (P.sinceDone >= fold ? popScale(P, 0.3, 420, fold) : 1));
+      if (held(P)) { circle(ctx, P.seat.x, P.seat.y, P.half + 7); stroke(ctx, 3, C.casing, 0.9); circle(ctx, P.seat.x, P.seat.y, P.half + 7); stroke(ctx, hair(1.2), C.ivory); }
+      if (!P.still) doneRing(ctx, P.seat.x, P.seat.y, P.sz, P.sinceDone - fold, { ms: 700, grow: 14, width: 1.3, color: C.ivory });
+    },
+    hud(ctx, P, view) {
+      if (P.enemy || !P.ordered) return;
+      const fold = 330; if (P.built && (P.still || P.sinceDone >= fold)) return;
+      const sp = view.toScreen(SUBJECT.x + P.seat.x, SUBJECT.y + P.seat.y), W = 116, H = 52, gapPx = P.half * P.z + 36;
+      let cx = sp.x + P.dir.x * (gapPx + W / 2), cy = sp.y + P.dir.y * (gapPx + H / 2);
+      cx = Math.max(W / 2 + 8, Math.min(view.W - W / 2 - 8, cx)); cy = Math.max(H / 2 + 8, Math.min(view.H - H / 2 - 8, cy));
+      let s = P.still ? 1 : ease.settle(P.sinceOrder / 180) * 0.15 + 0.85, a = P.still ? 1 : clamp01(P.sinceOrder / 160);
+      if (P.built) { const q = ease.travel(P.sinceDone / fold); cx = lerp(cx, sp.x, q); cy = lerp(cy, sp.y, q); s = lerp(1, 0.18, q); a = 1 - q * 0.6; }
+      // The leader from the icon to the tablet.
+      if (!P.built) { const ex = sp.x + P.dir.x * (P.half * P.z + 3), ey = sp.y + P.dir.y * (P.half * P.z + 3); line(ctx, ex, ey, cx, cy, 3.2, C.casing, 0.85 * a); line(ctx, ex, ey, cx, cy, 1.1, C.ink, a); }
+      ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s); GA = a; ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(14,12,9,0.95)'; ctx.fillRect(-W / 2, -H / 2, W, H);
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(236,228,209,0.55)'; ctx.strokeRect(-W / 2 + 0.5, -H / 2 + 0.5, W - 1, H - 1);
+      ctx.strokeStyle = 'rgba(236,228,209,0.18)'; ctx.strokeRect(-W / 2 + 3.5, -H / 2 + 3.5, W - 7, H - 7);
+      ctx.fillStyle = P.color; ctx.fillRect(-W / 2, -H / 2, 3, H);
+      const g = classic(P), ix = -W / 2 + 27;
+      drawIcon(ctx, P.kind, ix, 1, 36, { look: P.built ? 'built' : g.running ? 'rising' : 'plan', time: P.time, color: P.color, prog: 'fill', head: 1.6 });
+      const slots = this.slots(P, W);
+      if (!g.running && !P.built) slots.forEach((p, j) => { const c = P.charges[j]; drawLozenge(ctx, p.x, p.y, j < g.landed, P.color, 1.2 * (c ? popOf(c, P, g.dur) : 1)); });
+      else {
+        const left = Math.max(0, Math.ceil(((1 - P.time) * schedule().build * (S.real ? 1 : 10000 / 4500)) / 1000));
+        ctx.font = "600 21px 'EB Garamond', Georgia, serif"; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3; ctx.strokeStyle = C.cut; ctx.strokeText(`0:${String(left).padStart(2, '0')}`, -W / 2 + 54, -3); ctx.fillStyle = C.ivory; ctx.fillText(`0:${String(left).padStart(2, '0')}`, -W / 2 + 54, -3);
+        const bx = -W / 2 + 54, bw = W - 64; ctx.fillStyle = C.casing; ctx.fillRect(bx, 12, bw, 4); ctx.fillStyle = hexA(C.ink, 0.35); ctx.fillRect(bx, 13, bw, 2); ctx.fillStyle = P.color; ctx.fillRect(bx, 13, bw * P.time, 2);
+      }
+      ctx.restore(); GA = 1; ctx.globalAlpha = 1;
+      if (!P.built && !P.still) for (const c of P.charges) {
+        const to = slots[c.j], aa = age(c, P); if (!to || aa < 0 || aa >= g.dur) continue;
+        const from = view.toScreen(SUBJECT.x + srcOf(c, P).x, SUBJECT.y + srcOf(c, P).y), q = ease.travel(aa / g.dur), tx = cx + to.x * s, ty = cy + to.y * s;
+        const fx = lerp(from.x, tx, q), fy = lerp(from.y, ty, q) - Math.sin(q * Math.PI) * 18;
+        drawLozenge(ctx, fx, fy, true, P.color, lerp(P.z, 1.2, q));
+      }
+    },
+    slots(P, W) { return Array.from({ length: P.cost }, (_, j) => ({ x: -W / 2 + 60 + j * 12.5, y: 0 })); },
+  },
+  { id: 'V9', name: 'Ribbon',
+    line: 'An engraved tube from the warehouse round the ring to the icon: each charge travels along it and fills its share, the filling drains into the icon for the build time; done, a burst at the icon.',
+    rm: 'The tube is drawn whole, no charges travel: its fill steps up; the drain still runs; done: the tube is cut away.',
+    path(P) {
+      const G = P.G, xs = rowXs(G.wh), side = P.seat.x < 0 ? -1 : 1, rr = G.R + 14.5;
+      const aS = Math.PI / 2 - side * 0.72, aT = Math.atan2(P.seat.y, P.seat.x);
+      let d = aT - aS; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
+      const aE = aT - Math.sign(d) * ((P.half + 2.5) / rr), pts = [{ x: side * (Math.abs(xs[0]) + 6), y: G.R + LOZ.drop }];
+      let dd = aE - aS; while (dd > Math.PI) dd -= TAU; while (dd < -Math.PI) dd += TAU;
+      for (let i = 0; i <= 30; i++) pts.push(polar(aS + (dd * i) / 30, rr));
+      const lens = [0]; for (let i = 1; i < pts.length; i++) lens.push(lens[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+      return { pts, lens, L: lens[lens.length - 1] };
+    },
+    at(path, d) { const { pts, lens } = path; d = Math.max(0, Math.min(path.L, d)); let i = 1; while (i < lens.length - 1 && lens[i] < d) i++; const q = (d - lens[i - 1]) / Math.max(1e-6, lens[i] - lens[i - 1]); return { x: lerp(pts[i - 1].x, pts[i].x, q), y: lerp(pts[i - 1].y, pts[i].y, q) }; },
+    sub(ctx, path, d0, d1) { ctx.beginPath(); let started = false; const step = 1.5; for (let d = d0; d <= d1 + 1e-6; d += step) { const p = this.at(path, Math.min(d, d1)); if (!started) { ctx.moveTo(p.x, p.y); started = true; } else ctx.lineTo(p.x, p.y); } const e = this.at(path, d1); ctx.lineTo(e.x, e.y); },
+    node(ctx, P) {
+      const path = this.path(P), dur = 680, w = Math.max(3.4, 2.4 / P.z);
+      const g = classic(P, { flightMs: dur });
+      if (!P.built) {
+        if (!P.ordered) return;
+        const intro = P.still ? 1 : ease.engrave(P.sinceOrder / 420), shown = path.L * intro;
+        this.sub(ctx, path, 0, shown); stroke(ctx, w + 2.8, C.casing, 0.9, 'round');
+        this.sub(ctx, path, 0, shown); stroke(ctx, w, C.ink, 0.5, 'round');
+        this.sub(ctx, path, 0, shown); stroke(ctx, Math.max(0.6, w - 1.8), C.plate, 1, 'round');
+        const share = path.L / P.cost;
+        const filled = g.running ? path.L * (1 - P.time) : g.landed * share;
+        if (filled > 0.5) { this.sub(ctx, path, path.L - filled, path.L); stroke(ctx, Math.max(0.6, w - 1.8), P.color, 1, 'butt'); }
+        classicIcon(ctx, P, g);
+        return;
+      }
+      builtIcon(ctx, P, P.seat, P.sz * popScale(P, 0.22, 380));
+      if (!P.still && P.sinceDone < 300 && !P.enemy) { const a = 1 - P.sinceDone / 300; this.sub(ctx, path, 0, path.L); stroke(ctx, w + 2.8, C.casing, 0.9 * a, 'round'); this.sub(ctx, path, 0, path.L); stroke(ctx, w, C.ink, 0.5 * a, 'round'); }
+      if (P.still || P.sinceDone > 560) return;
+      const q = ease.settle(P.sinceDone / 560), a = 1 - P.sinceDone / 560, e = P.enemy ? P.seat : this.at(path, path.L), out = Math.atan2(e.y - P.seat.y, e.x - P.seat.x) || 0;
+      for (let i = 0; i < 7; i++) { const ang = out + (i - 3) * 0.42, r0 = P.enemy ? P.half + 2 : 2 + 2 * q, r1 = r0 + 3 + 6 * q, cx = P.enemy ? P.seat.x : e.x, cy = P.enemy ? P.seat.y : e.y; inkLine(ctx, cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0, cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1, 1, C.ivory, a, 1.5); }
+    },
+    top(ctx, P) {
+      if (P.built || !P.ordered || P.still) return;
+      const path = this.path(P), dur = 680, share = path.L / P.cost;
+      for (const c of P.charges) {
+        const a = age(c, P); if (a < 0 || a >= dur) continue;
+        const q = ease.travel(a / dur), target = path.L - (c.j + 0.5) * share; let p;
+        if (c.from === 'g') { const hop = 0.28, s0 = this.at(path, 0), h = srcOf(c, P); p = q < hop ? { x: lerp(h.x, s0.x, q / hop), y: lerp(h.y, s0.y, q / hop) - 6 * bump(q / hop) } : this.at(path, target * ((q - hop) / (1 - hop))); }
+        else p = this.at(path, target * q);
+        drawLozenge(ctx, p.x, p.y, true, P.color, 0.9);
+      }
+    },
+  },
+  { id: 'V10', name: 'Stamp',
+    line: 'A large outline of the building hovers over its seat with a shadow under it, comes down as the time runs and fills, and lands like a stamp.',
+    rm: 'No hover or descent: the icon fills in place at its size; no impact; done: a static ring for 1 s.',
+    node(ctx, P) {
+      const g = classic(P), base = { x: P.seat.x, y: P.seat.y + (9 * P.sz) / 26 };
+      if (!P.built) {
+        if (!P.ordered) return;
+        classicRow(ctx, P, g); classicRun(ctx, P, g, { x: P.seat.x, y: P.seat.y - 8 });
+        if (P.still) { classicIcon(ctx, P, g); return; }
+        const tq = g.running ? ease.engrave(P.time) : 0, s = lerp(1.9, 1.12, tq), dy = lerp(-15, -2, tq);
+        const intro = ease.settle(P.sinceOrder / 260);
+        ctx.save(); ctx.translate(base.x, base.y); ctx.scale(1, 0.32);
+        circle(ctx, 0, 0, P.half * lerp(1.5, 1.05, tq)); fill(ctx, C.casing, (0.16 + 0.34 * tq) * intro); ctx.restore();
+        drawIcon(ctx, P.kind, P.seat.x, P.seat.y + dy, P.sz * s * lerp(0.9, 1, intro), { look: g.running ? 'rising' : 'plan', time: P.time, color: P.color, prog: 'fill', alpha: lerp(0.62, 1, tq) * intro });
+        return;
+      }
+      if (P.still) { builtIcon(ctx, P, P.seat, P.sz); if (held(P)) { circle(ctx, P.seat.x, P.seat.y, P.half + 7); stroke(ctx, 3, C.casing, 0.9); circle(ctx, P.seat.x, P.seat.y, P.half + 7); stroke(ctx, hair(1.2), C.ivory); } return; }
+      const d = P.sinceDone, q = d / 420;
+      // The last stretch down, accelerating, and it stands: no bounce or overshoot (ui-style 20, rule 4).
+      const fallQ = clamp01(d / 110), s = lerp(P.enemy ? 1.5 : 1.12, 1, fallQ * fallQ), dy = lerp(P.enemy ? -8 : -2, 0, fallQ * fallQ);
+      if (d < 600) { const a = 1 - d / 600, qq = ease.settle(d / 600); ctx.save(); ctx.translate(base.x, base.y); ctx.scale(1, 0.32); circle(ctx, 0, 0, P.half * (1.05 + 0.9 * qq)); fill(ctx, C.casing, 0.5 * a); ctx.restore(); }
+      builtIcon(ctx, P, { x: P.seat.x, y: P.seat.y + dy }, P.sz * s);
+      if (d >= 90 && d < 640) {
+        const k = (d - 90) / 550, a = 1 - k, e = ease.settle(k);
+        for (let i = 0; i < 8; i++) { const ang = Math.PI + (i * Math.PI) / 7, c = Math.cos(ang), sn = Math.sin(ang) * 0.45, r0 = P.half * 1.05 + 2 * e, r1 = r0 + 3 + 6 * e; inkLine(ctx, base.x + c * r0, base.y + sn * r0, base.x + c * r1, base.y + sn * r1, 1, C.ink, a, 1.5); }
+      }
+      if (q >= 1) return;
+    },
+    top(ctx, P) { if (!P.built && P.ordered) classicFlights(ctx, P, classic(P)); },
+  },
+  { id: 'V11', name: 'Ripple',
+    line: 'The city tells it at its own size: each charge sparks where it leaves, a dashed ring of works turns round the city while it builds; done, three fine rings ripple out.',
+    rm: 'The ring of works stands still, no sparks or flights; done: a static double fine ring for 1 s.',
+    under(ctx, P) {
+      if (P.built || !P.ordered) return;
+      const r = P.G.R + 6.5, w = Math.max(1.6, 1.4 / P.z), dash = 5 / Math.min(1, P.z), intro = P.still ? 1 : ease.engrave(P.sinceOrder / 380);
+      circle(ctx, 0, 0, r); stroke(ctx, w + 2.6, C.casing, 0.75 * intro, 'butt');
+      ctx.setLineDash([dash, dash * 0.7]); ctx.lineDashOffset = P.still ? 0 : -P.t / 45;
+      circle(ctx, 0, 0, r); stroke(ctx, w, P.color, intro, 'butt'); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    },
+    node(ctx, P) {
+      const g = classic(P, { head: 1.7 });
+      if (!P.built) {
+        if (!P.ordered) return;
+        classicIcon(ctx, P, g); classicRow(ctx, P, g); classicRun(ctx, P, g);
+        if (!P.still) for (const c of P.charges) { const a = age(c, P); if (a < 0 || a >= 420) continue; const q = a / 420, s = srcOf(c, P), r = (c.from === 'g' ? 6 : 2.5) + (c.from === 'g' ? 12 : 8) * ease.settle(q); circle(ctx, s.x, s.y, r); stroke(ctx, 2.6, C.casing, 0.8 * (1 - q)); circle(ctx, s.x, s.y, r); stroke(ctx, hair(1.1), C.ivory, 1 - q); }
+        return;
+      }
+      builtIcon(ctx, P, P.seat, P.sz * popScale(P, 0.3, 460));
+      const R = P.G.R;
+      if (held(P)) { for (const r of [R + 6, R + 10]) { circle(ctx, 0, 0, r); stroke(ctx, 2.6, C.casing, 0.9); circle(ctx, 0, 0, r); stroke(ctx, hair(1.2), P.color); } return; }
+      if (P.still) return;
+      [0, 160, 320].forEach((d, i) => {
+        const q = (P.sinceDone - d) / 950; if (q < 0 || q >= 1) return;
+        const r = R + 6 + 42 * ease.settle(q), a = (1 - q) ** 1.2;
+        circle(ctx, 0, 0, r); stroke(ctx, 2.8, C.casing, 0.8 * a); circle(ctx, 0, 0, r); stroke(ctx, hair(i ? 1 : 1.5), i ? P.color : C.ivory, a);
+      });
+    },
+    top(ctx, P) { if (!P.built && P.ordered) classicFlights(ctx, P, classic(P)); },
+  },
+  { id: 'V12', name: 'Toast',
+    line: 'The map keeps today’s motion a size up; the finish is told by a toast at the top right (the journal line of the event) and corner ticks round the new icon for 3 s.',
+    rm: 'No flights; the toast appears without sliding, the ticks are static.',
+    node(ctx, P) {
+      const g = classic(P, { scale: 1.25, k: (_, sz) => lozK(sz) * 1.1 });
+      if (!P.built) { if (P.ordered) { classicIcon(ctx, P, g); classicRow(ctx, P, g); classicRun(ctx, P, g); } return; }
+      if (P.enemy) { builtIcon(ctx, P, P.seat, P.sz, { alpha: P.still ? 1 : clamp01(P.sinceDone / 400) }); return; }
+      builtIcon(ctx, P, P.seat, P.sz);
+      if (!P.still) doneRing(ctx, P.seat.x, P.seat.y, P.sz, P.sinceDone);
+      if (P.sinceDone < 3300) {
+        const a = P.sinceDone < 3000 ? 1 : 1 - (P.sinceDone - 3000) / 300, gin = P.still ? 0 : 3 * (1 - ease.settle(P.sinceDone / 180)), e = P.half + 2 + gin, arm = Math.max(3.4, 0.24 * P.sz), x = P.seat.x, y = P.seat.y;
+        for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          const cx = x + sx * e, cy = y + sy * e;
+          ctx.beginPath(); ctx.moveTo(cx - sx * arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy - sy * arm); stroke(ctx, 3.4, C.casing, 0.95 * a, 'square', 'miter');
+          ctx.beginPath(); ctx.moveTo(cx - sx * arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy - sy * arm); stroke(ctx, hair(1.3), C.ivory, a, 'butt', 'miter');
+        }
+      }
+    },
+    top(ctx, P) { if (!P.built && P.ordered) classicFlights(ctx, P, classic(P, { scale: 1.25, k: (_, sz) => lozK(sz) * 1.1 })); },
+    hud(ctx, P, view) {
+      if (P.enemy || !P.built || P.sinceDone > 4600) return;
+      const w = Math.min(340, view.W - 24), h = 44, x0 = view.W - 12 - w, y0 = 12;
+      const slide = P.still ? 0 : 12 * (1 - ease.settle(P.sinceDone / 160)), a = P.still ? 1 : clamp01(P.sinceDone / 160) * (P.sinceDone > 4300 ? 1 - (P.sinceDone - 4300) / 300 : 1);
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(x0 + slide, y0);
+      ctx.fillStyle = 'rgba(14,12,9,0.95)'; ctx.fillRect(0, 0, w, h);
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(236,228,209,0.55)'; ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+      ctx.strokeStyle = 'rgba(236,228,209,0.18)'; ctx.strokeRect(3.5, 3.5, w - 7, h - 7);
+      ctx.fillStyle = P.color; ctx.fillRect(0, 0, 3, h);
+      GA = a; drawIcon(ctx, P.kind, 24, h / 2 + 1, 24, { look: 'built', color: P.color }); GA = 1; ctx.globalAlpha = a;
+      ctx.font = "500 15px 'EB Garamond', Georgia, serif"; ctx.fillStyle = C.ivory; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(P.kind === 'barracks' ? 'Forkway has its barracks: it recruits now' : 'Forkway is a factory now: it makes charges', 44, h / 2 + 1);
+      ctx.restore(); GA = 1; ctx.globalAlpha = 1;
+    },
+  },
+  { id: 'V13', name: 'Float up',
+    line: 'Each landed charge lifts a faint copy of itself off the row; done, a large ghost of the new building rises from its seat and fades, the icon pops.',
+    rm: 'No floats or flights; done: the icon carries an ivory outline for 1 s.',
+    node(ctx, P) {
+      const g = classic(P);
+      if (!P.built) {
+        if (!P.ordered) return;
+        classicIcon(ctx, P, g); classicRow(ctx, P, g); classicRun(ctx, P, g);
+        if (!P.still && !g.running) for (const c of P.charges) { const l = age(c, P) - g.dur, p = g.slots[c.j]; if (!p || l < 0 || l >= 520) continue; const q = l / 520; drawLozenge(ctx, p.x, p.y - 12 * ease.settle(q), true, P.color, g.k * (1 + 0.3 * q), 0.7 * (1 - q)); }
+        return;
+      }
+      builtIcon(ctx, P, P.seat, P.sz * popScale(P, 0.25, 420), { flash: held(P) ? 1 : 0 });
+      if (P.still || P.sinceDone > 1100) return;
+      const q = P.sinceDone / 1100, e = ease.settle(q);
+      drawIcon(ctx, P.kind, P.seat.x, P.seat.y - Math.max(26, 20 / P.z) * e, P.sz * (1 + 0.8 * e), { look: 'built', color: P.color, enemy: P.enemy, flash: 1 - q, alpha: 0.95 * (1 - q) ** 1.1 });
+    },
+    top(ctx, P) { if (!P.built && P.ordered) classicFlights(ctx, P, classic(P)); },
+  },
+];
+const V_BY = Object.fromEntries(VARIANTS.map((v) => [v.id, v]));
+function glow(ctx, at, r, color, a) {
+  if (r <= 0 || a <= 0) return;
+  const g = ctx.createRadialGradient(at.x, at.y, 0, at.x, at.y, r);
+  g.addColorStop(0, hexA(color, a)); g.addColorStop(0.45, hexA(color, a * 0.5)); g.addColorStop(1, hexA(color, 0));
+  ctx.fillStyle = g; ctx.globalAlpha = GA; ctx.beginPath(); ctx.arc(at.x, at.y, r, 0, TAU); ctx.fill();
+}
+
+// =============================================================================================
+// The ground and the territories (a Voronoi of the cities, baked once per side into a bitmap).
+// =============================================================================================
+const BOUNDS = { x: -1750, y: -950, w: 3500, h: 1900 }, STEP = 2.5;
+const terrCache = {};
+function territory(side) {
+  if (terrCache[side]) return terrCache[side];
+  const w = Math.round(BOUNDS.w / STEP), h = Math.round(BOUNDS.h / STEP), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d'), img = g.createImageData(w, h), own = [134, 166, 234], foe = [229, 120, 94];
+  const owner = CITIES.map((c) => (c === SUBJECT && side === 'enemy' ? 'foe' : c.side));
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const x = BOUNDS.x + i * STEP, y = BOUNDS.y + j * STEP;
+    let dOwn = Infinity, dFoe = Infinity;
+    for (let n = 0; n < CITIES.length; n++) { const dx = x - CITIES[n].x, dy = y - CITIES[n].y, d = dx * dx + dy * dy; if (owner[n] === 'own') { if (d < dOwn) dOwn = d; } else if (d < dFoe) dFoe = d; }
+    dOwn = Math.sqrt(dOwn); dFoe = Math.sqrt(dFoe);
+    const o1 = dOwn <= dFoe ? 'own' : 'foe', edge = Math.abs(dFoe - dOwn) / 2, col = o1 === 'own' ? own : foe, k = (j * w + i) * 4;
+    // Soft ramps (no stair steps once the bitmap is scaled up): a dark core on the line, the owner's band beside it.
+    const ramp = (e0, e1, v) => clamp01((v - e0) / (e1 - e0)), core = 1 - ramp(0.6, 2.4, edge);
+    const band = (o1 === 'own' ? 0.55 : 0.45) * (1 - ramp(8, 12.5, edge)) + 0.07 * ramp(8, 12.5, edge);
+    const a = core * 0.85 + (1 - core) * band, mix = a > 0 ? (core * 0.85) / a : 0;
+    img.data[k] = lerp(col[0], 6, mix); img.data[k + 1] = lerp(col[1], 5, mix); img.data[k + 2] = lerp(col[2], 4, mix); img.data[k + 3] = Math.round(a * 255);
+  }
+  g.putImageData(img, 0, 0); terrCache[side] = cv; return cv;
+}
+let groundTile = null;
+function loadImg(src) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; }); }
+function mirrorTile(img) { const w = img.width, h = img.height, c = document.createElement('canvas'); c.width = 2 * w; c.height = 2 * h; const g = c.getContext('2d'); for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { g.save(); g.translate(sx < 0 ? 2 * w : 0, sy < 0 ? 2 * h : 0); g.scale(sx, sy); g.drawImage(img, 0, 0); g.restore(); } return c; }
+
+// =============================================================================================
+// The scene pieces.
+// =============================================================================================
+function drawRoad(ctx, a, b) {
+  const sa = sideOf(a), sb = sideOf(b), ux = b.x - a.x, uy = b.y - a.y, len = Math.hypot(ux, uy), nx = ux / len, ny = uy / len;
+  const x0 = a.x + nx * (a.R + 3), y0 = a.y + ny * (a.R + 3), x1 = b.x - nx * (b.R + 3), y1 = b.y - ny * (b.R + 3);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+  if (sa === sb) { const col = sa === 'own' ? OWN : FOE; stroke(ctx, 7.4, C.casing, 0.55, 'butt'); stroke(ctx, 5.6, col, 0.46, 'butt'); stroke(ctx, 2, C.road, 0.7, 'butt'); }
+  else { stroke(ctx, 5.6, C.casing, 0.4, 'butt'); ctx.setLineDash([7, 5]); stroke(ctx, 2, '#aab2bd', 0.7, 'butt'); ctx.setLineDash([]); }
+}
+/** A packet of the supply flow (#858): a square of the owner's colour on a casing, an ivory outline, turned along its road. */
+function drawPacket(ctx, x, y, ang, color, alpha = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  const r = (s) => { ctx.beginPath(); ctx.rect(-s / 2, -s / 2, s, s); };
+  r(9.2); fill(ctx, C.casing, alpha); r(8); stroke(ctx, hair(0.8), C.ivory, alpha, 'butt', 'miter'); r(6); fill(ctx, color, alpha);
+  ctx.restore();
+}
+function packets(ctx, P) {
+  if (P.enemy) return;
+  const a = FEEDER, b = SUBJECT, ux = b.x - a.x, uy = b.y - a.y, len = Math.hypot(ux, uy), ang = Math.atan2(uy, ux);
+  const run = (q) => { const d0 = a.R + 4, d1 = len - b.R - 2, d = lerp(d0, d1, q); return { x: a.x + (ux / len) * d, y: a.y + (uy / len) * d }; };
+  for (const p of P.sc.pays.slice(1)) {
+    const q = (P.t - (p.at - PACKET_MS)) / PACKET_MS; if (q < 0 || q >= 1) continue;
+    const at = run(q), fade = q > 0.9 ? 1 - (q - 0.9) / 0.1 : 1; drawPacket(ctx, at.x, at.y, ang, OWN, fade);
+  }
+  // The steady flow elsewhere: Stonegate feeds Watchpost and Brookside.
+  for (const [from, to, off] of [[4, 1, 0], [4, 7, 900]]) {
+    const A = CITIES[from], B = CITIES[to], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), q = ((P.t + off) % 2600) / 2600, d = lerp(A.R + 4, L - B.R - 2, q);
+    drawPacket(ctx, A.x + (dx / L) * d, A.y + (dy / L) * d, Math.atan2(dy, dx), OWN, q > 0.9 ? 1 - (q - 0.9) / 0.1 : 1);
+  }
+}
+function cityBuildings(ctx, c, P, z) {
+  const side = sideOf(c), color = side === 'own' ? OWN : FOE, enemy = side === 'foe';
+  if (c === SUBJECT) { const at = P.L.items[P.other]; if (at) drawIcon(ctx, P.other, at.x, at.y, P.L.size, { look: 'built', color, enemy }); return; }
+  // An opponent's city shows only what is built, and only next to an own node (DEC-31).
+  if (enemy && !EDGES.some(([a, b]) => (a === c.i || b === c.i) && sideOf(CITIES[a === c.i ? b : a]) === 'own')) return;
+  const kinds = c.b || []; if (!kinds.length) return;
+  const L = layoutBuildings(c, kinds, z);
+  for (const kd of kinds) drawIcon(ctx, kd, L.items[kd].x, L.items[kd].y, L.size, { look: 'built', color, enemy });
+}
+function groupOf(c, P) {
+  if (c === SUBJECT) return P.enemy ? null : { units: 3, charged: P.t >= ORDER ? 0 : 1 };
+  return c.units ? { units: c.units, charged: c.charged === undefined ? c.units : c.charged } : null;
+}
+function drawCity(ctx, c, P, z) {
+  const side = sideOf(c), color = side === 'own' ? OWN : FOE, grp = groupOf(c, P), occupied = !!grp;
+  drawBody(ctx, c, side === 'own' ? 'own' : 'enemy', color, occupied, true);
+  drawRing(ctx, c.R, ringCells(c.cap, grp ? Math.min(grp.units, c.cap) : 0));
+  cityBuildings(ctx, c, P, z);
+  if (side === 'own') { const stock = c === SUBJECT ? (P.t >= ORDER ? 0 : 1) : c.stock; rowXs(c.wh).forEach((x, i) => drawLozenge(ctx, x, c.R + LOZ.drop, i < stock, OWN)); }
+  if (c.vp) drawVp(ctx, polar(-Math.PI / 4, c.R + VPL.lift), c.vp);
+  if (z >= 0.45) {
+    ctx.save(); ctx.translate(0, c.R + 15 + (side === 'own' && c.wh ? 4 : 0)); ctx.scale(1 / z, 1 / z);
+    ctx.font = '700 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(5,4,3,0.85)'; ctx.lineJoin = 'round'; ctx.globalAlpha = 1; ctx.strokeText(c.name, 0, 0);
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(c.name, 0, 0); ctx.restore();
+  }
+}
+function drawGroup(ctx, c, P) {
+  const grp = groupOf(c, P); if (!grp) return;
+  const side = sideOf(c), kind = side === 'own' ? 'own' : 'enemy', units = Math.min(grp.units, c.cap);
+  const width = helmetFit(kind, helmetWidth(unitSide(units), true), c.R - RING.cut / 2 - 1);
+  drawHelmet(ctx, { kind, width, x: 0, y: 0, level: units ? grp.charged / units : 0, color: side === 'own' ? OWN : FOE, units });
+}
+
+// =============================================================================================
+// The view.
+// =============================================================================================
+const view = document.getElementById('view'), wrap = document.getElementById('viewWrap');
+const VIEW = { W: 1200, H: 600, dpr: 1, cx: -20, cy: -10 };
+function layoutView() {
+  const W = wrap.clientWidth || 1200, room = window.innerHeight - wrap.getBoundingClientRect().top - 20, H = Math.round(Math.max(380, Math.min(W * 0.56, room))), dpr = window.devicePixelRatio || 1;
+  view.style.height = H + 'px'; view.width = Math.round(W * dpr); view.height = Math.round(H * dpr);
+  Object.assign(VIEW, { W, H, dpr });
+}
+function render() {
+  const z = ZOOMS[S.zoom], ctx = view.getContext('2d'), { W, H, dpr } = VIEW, P = frameState(S.time), v = V_BY[S.v];
+  const cx = S.zoom === 'near' ? -25 : VIEW.cx, cy = S.zoom === 'near' ? -14 : VIEW.cy;
+  VIEW.toScreen = (x, y) => ({ x: W / 2 + (x - cx) * z, y: H / 2 + (y - cy) * z });
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, view.width, view.height);
+  PXW = dpr * z; LS = 1; GA = 1;
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (W / 2 - cx * z), dpr * (H / 2 - cy * z));
+  const box = { x: cx - W / 2 / z - 4, y: cy - H / 2 / z - 4, w: W / z + 8, h: H / z + 8 };
+  if (groundTile) { ctx.fillStyle = ctx.createPattern(groundTile, 'repeat'); ctx.fillRect(box.x, box.y, box.w, box.h); } else { ctx.fillStyle = '#3a4630'; ctx.fillRect(box.x, box.y, box.w, box.h); }
+  ctx.fillStyle = 'rgba(11,10,8,0.12)'; ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(territory(S.side), BOUNDS.x, BOUNDS.y, BOUNDS.w, BOUNDS.h);
+  for (const [a, b] of EDGES) drawRoad(ctx, CITIES[a], CITIES[b]);
+  packets(ctx, P);
+  const at = (c, fn) => { ctx.save(); ctx.translate(c.x, c.y); fn(); ctx.restore(); GA = 1; ctx.globalAlpha = 1; };
+  if (v.under) at(SUBJECT, () => v.under(ctx, P));
+  for (const c of CITIES) at(c, () => drawCity(ctx, c, P, z));
+  at(SUBJECT, () => v.node(ctx, P));
+  for (const c of CITIES) at(c, () => drawGroup(ctx, c, P));
+  if (v.top) at(SUBJECT, () => v.top(ctx, P));
+  if (v.hud) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); PXW = dpr; LS = 1; v.hud(ctx, P, VIEW); GA = 1; ctx.globalAlpha = 1; }
+}
+
+// =============================================================================================
+// Controls and state (also in the address).
+// =============================================================================================
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (V_BY[q.get('v')]) S.v = q.get('v');
+  if (ZOOMS[q.get('z')]) S.zoom = q.get('z');
+  if (['own', 'enemy'].includes(q.get('side'))) S.side = q.get('side');
+  if (['barracks', 'factory'].includes(q.get('kind'))) S.kind = q.get('kind');
+  for (const [k, key] of [['real', 'real'], ['rm', 'still'], ['gr', 'gray'], ['more', 'more']]) if (q.has(k)) S[key] = q.get(k) === '1';
+  const tm = Number(q.get('tm')); if (q.has('tm') && tm >= 0) { S.time = tm; S.playing = false; }
+  if (q.has('play')) S.playing = q.get('play') === '1';
+}
+function writeHash() {
+  const h = `v=${S.v}&z=${S.zoom}&side=${S.side}&kind=${S.kind}&real=${S.real ? 1 : 0}&rm=${S.still ? 1 : 0}&gr=${S.gray ? 1 : 0}&more=${S.more ? 1 : 0}` + (S.playing ? '' : `&tm=${Math.round(S.time)}`);
+  history.replaceState(null, '', '#' + h);
+}
+function chip(parent, key, label, onClick, cls) {
+  const b = document.createElement('button'); b.className = 'chip' + (cls ? ' ' + cls : ''); b.dataset.v = key;
+  const k = document.createElement('span'); k.className = 'k'; k.textContent = key; b.append(k, document.createTextNode(label));
+  b.addEventListener('click', onClick); parent.append(b); return b;
+}
+let playFrom = 0, playAt = 0;
+function replay() { S.time = 0; S.playing = true; playFrom = 0; playAt = performance.now(); refresh(); }
+const varChips = VARIANTS.map((v) => chip(document.getElementById('vars'), v.id, v.name, () => { S.v = v.id; replay(); }, 'var' + (v.ref ? ' ref' : '')));
+document.querySelectorAll('[data-z]').forEach((b) => b.addEventListener('click', () => { S.zoom = b.dataset.z; refresh(); }));
+document.querySelectorAll('[data-side]').forEach((b) => b.addEventListener('click', () => { S.side = b.dataset.side; replay(); }));
+document.querySelectorAll('[data-kind]').forEach((b) => b.addEventListener('click', () => { S.kind = b.dataset.kind; replay(); }));
+for (const [id, key] of [['real', 'real'], ['still', 'still'], ['gray', 'gray']]) document.getElementById(id).addEventListener('click', () => { S[key] = !S[key]; if (key === 'real') replay(); else refresh(); });
+const moreBtn = document.getElementById('more'), playBtn = document.getElementById('play'), scrub = document.getElementById('scrub');
+moreBtn.addEventListener('click', () => { S.more = !S.more; refresh(); });
+document.getElementById('replay').addEventListener('click', replay);
+view.addEventListener('click', replay);
+playBtn.addEventListener('click', () => { if (S.playing) S.playing = false; else { S.playing = true; playFrom = S.time; playAt = performance.now(); } refresh(); });
+scrub.addEventListener('input', () => { S.playing = false; S.time = Number(scrub.value); refresh(); });
+function refresh() {
+  const press = (els, on) => els.forEach((e) => e.setAttribute('aria-pressed', String(on(e))));
+  press(varChips, (e) => e.dataset.v === S.v);
+  press([...document.querySelectorAll('[data-z]')], (e) => e.dataset.z === S.zoom);
+  press([...document.querySelectorAll('[data-side]')], (e) => e.dataset.side === S.side);
+  press([...document.querySelectorAll('[data-kind]')], (e) => e.dataset.kind === S.kind);
+  for (const [id, key] of [['real', 'real'], ['still', 'still'], ['gray', 'gray']]) press([document.getElementById(id)], () => S[key]);
+  document.getElementById('moreBar').classList.toggle('open', S.more); moreBtn.setAttribute('aria-expanded', String(S.more));
+  playBtn.textContent = S.playing ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(!S.playing));
+  scrub.max = schedule().loop; scrub.value = S.time;
+  document.body.classList.toggle('gray', S.gray);
+  const v = V_BY[S.v], cap = document.getElementById('cap'); cap.textContent = '';
+  const b = document.createElement('b'); b.textContent = `${v.id} ${v.name}`; cap.append(b, document.createTextNode(S.side === 'enemy' ? v.foe || FOE_LINE : v.line));
+  if (S.still) { const r = document.createElement('span'); r.className = 'rm'; r.textContent = 'Reduced motion: ' + v.rm; cap.append(r); }
+  view.setAttribute('aria-label', `${v.id} ${v.name}: ${S.side === 'enemy' ? 'the opponent' : 'you'} build${S.side === 'enemy' ? 's' : ''} a ${S.kind} at Forkway, ${S.zoom} zoom. Click to replay.`);
+  writeHash();
+}
+const FOE_LINE = 'The opponent’s city next to yours: nothing of the payment or the time shows; when its view turns the building on, the variant’s finish plays in the opponent’s colour.';
+function tick(now) {
+  if (S.playing) { S.time = playFrom + (now - playAt); const L = schedule().loop; if (S.time >= L) { S.time = 0; playFrom = 0; playAt = now; } scrub.value = S.time; }
+  render(); requestAnimationFrame(tick);
+}
+window.addEventListener('resize', () => layoutView());
+try { if (!location.hash && window.matchMedia('(prefers-reduced-motion: reduce)').matches) S.still = true; } catch (e) { /* no media queries */ }
+readHash();
+if (S.playing) { playFrom = S.time; playAt = performance.now(); }
+layoutView(); refresh();
+(async () => {
+  try { groundTile = mirrorTile(await loadImg('assets/city-buildings/ground-plains.webp')); } catch (e) { /* the flat ground stays */ }
+  try { await document.fonts.load("600 12px 'EB Garamond'"); } catch (e) { /* the serif fallback */ }
+  document.body.dataset.ready = '1';
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
