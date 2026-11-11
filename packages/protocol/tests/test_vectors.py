@@ -21,7 +21,6 @@ RULESET_PATH = Path(__file__).resolve().parents[3] / "rulesets" / "mvp-7.toml"
 SIDES = ("a", "b")
 LOCATIONS = {"node_attack", "edge_meeting", "neutral_arrival", "empty_enemy_node"}
 TERRAINS = {"mountains", "forest", "plains"}
-ROLES = {"attacker", "defender", "symmetric"}
 # "Defense" (DEC-30) and its rows were removed (#894): only the plan gives a bonus, every group
 # attacks.
 BONUS_SOURCES = {"planned_order"}

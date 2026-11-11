@@ -25,11 +25,5 @@ def mvp_rules() -> Ruleset:
 
 
 @pytest.fixture(scope="session")
-def mvp7_rules() -> Ruleset:
-    """``mvp-7``, the main ruleset (its ``[map_tempo]`` applies only in ``Match``)."""
-    return load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
-
-
-@pytest.fixture(scope="session")
 def short_rules() -> Ruleset:
     return load_ruleset(ROOT / "rulesets" / "test-short.toml")

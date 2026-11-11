@@ -104,10 +104,6 @@ class Run:
         self.seq = 0
 
     @property
-    def home_a(self) -> int:
-        return 0 if self.a == 0 else 2
-
-    @property
     def home_d(self) -> int:
         return 2 if self.a == 0 else 0
 

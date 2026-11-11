@@ -125,16 +125,22 @@ depends = ["visual:browser"]
 run = "pnpm --silent -C apps/client test:visual"
 
 [tasks.shots]
-description = "PNG of every dev scene into .shots/<label>/ (arg: label, default current; no comparison, look at them with Read). POSIX shell"
-usage = 'arg "[label]" default="current"'
+description = "PNG of every dev scene into .shots/<label>/ (args: [label], default current, then Playwright arguments after --, e.g. `shots before -- --grep fight`; no comparison, look at them with Read). POSIX shell"
+usage = '''
+arg "[label]" default="current" help="folder under .shots/"
+arg "[playwright_args]" var=#true help="Playwright arguments, e.g. -- --grep fight"
+'''
 depends = ["visual:browser"]
-run = "SHOTS_LABEL={{usage.label}} pnpm --silent -C apps/client shots"
+run = "sh scripts/client_shots.sh shots"
 
 [tasks.perf]
-description = "Cost of a match screen under software WebGL on a few dev scenes: main thread blocked while it comes up, frame time (#854); and the main-thread cost of the menu picture (#866); arg: label, numbers in .shots/<label>/perf.json and perf-menu.json. A measurement to compare commits, not a check. POSIX shell"
-usage = 'arg "[label]" default="current"'
+description = "Cost of a match screen under software WebGL on a few dev scenes: main thread blocked while it comes up, frame time (#854); and the main-thread cost of the menu picture (#866); args: [label], default current, then Playwright arguments after --; numbers in .shots/<label>/perf.json and perf-menu.json. A measurement to compare commits, not a check. POSIX shell"
+usage = '''
+arg "[label]" default="current" help="folder under .shots/"
+arg "[playwright_args]" var=#true help="Playwright arguments, e.g. -- --grep fight"
+'''
 depends = ["visual:browser"]
-run = "SHOTS_LABEL={{usage.label}} pnpm --silent -C apps/client perf"
+run = "sh scripts/client_shots.sh perf"
 
 [tasks."shots:publish"]
 description = "Put the PNGs of .shots/ on the branch shots/<N> of origin and print markdown for the PR description (arg: issue or PR number). Needs bash"

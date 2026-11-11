@@ -20,8 +20,8 @@ PLAYERS: Final = (0, 1)
 """Player ids of a 1v1 match (MVP)."""
 
 MAX_LEVEL: Final = 3
-"""Highest road level the format allows: levels 1..3, two upgrades (DEC-22, item 2; DEC-23,
-item 6). Every road starts at level 1 without a type, so the map has no starting level."""
+"""Highest ``max_level`` the map format allows (levels 1..3, DEC-22, item 2; DEC-23, item 6). No
+rule reads the level since the road upgrades were removed (#894); the field stays in the format."""
 
 BORDER_MIN: Final = 100
 BORDER_MAX: Final = 900
@@ -29,9 +29,6 @@ BORDER_MAX: Final = 900
 
 BORDER_SELF_MIRROR: Final = 500
 """``border_permille`` of an edge that is its own mirror (DEC-23, item 7)."""
-
-ROAD_START_LEVEL: Final = 1
-"""Level of every road at the start of a match (DEC-22, item 2): roads have no type."""
 
 NAME_MAX_LEN: Final = 24
 """Longest node name (DEC-23, item 4); the validator checks it (``names``), not the loader."""
@@ -97,7 +94,8 @@ class EdgeDef:
     a: int
     b: int
     max_level: int
-    """Last road level an upgrade reaches, ``1..MAX_LEVEL``; every road starts at level 1."""
+    """``1..MAX_LEVEL``: the level the removed road upgrades reached (#894); read by no rule, it
+    stays in the map format and its hash (the previews draw the road width by it)."""
     travel_ticks: int
     border_permille: int
     """The border point in thousandths from ``a`` (DEC-23, item 5): splits the edge into halves."""

@@ -384,7 +384,6 @@ class Worry:
     """Shots that take the capital from its garrison now (``shots_to_take``)."""
     stage: int | None
     """The enemy node next to the capital with the most visible shots: a target to hit first."""
-    home_units: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -1324,7 +1323,7 @@ class SmartBot(CampaignBot):
         shots = seen_shots + self.hidden_shots(view, a)
         if shots < hold:
             return None
-        return Worry(shots, hold, stage, units)
+        return Worry(shots, hold, stage)
 
     def answer_worry(self, ctx: Ctx) -> None:
         """Item 13: the free charged groups that can walk home within ``alarm`` ticks come home

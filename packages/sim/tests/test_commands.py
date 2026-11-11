@@ -168,7 +168,6 @@ class Row:
     subject: Callable[[Ids], int]
     cost: int
     path: tuple[int, ...] = ()
-    group_command: bool = True
 
 
 ROWS = [
