@@ -13,7 +13,8 @@ generator, `pct` 105; `gen1-58`, 54 nodes, `pct` 104, is the biggest map in the 
 The rest of this document: the definitions (section 1), the maps and the tempo (section 2), the analytic ceiling with
 its formulas in the node count `N` (section 3), the server limit (section 4), the bot measurement (section 5), an
 estimate for a human (section 6) and how to rerun it (section 7). The formulas are written for reuse by the follow-up
-question of when the resource rates should grow with bigger maps or more players.
+question of when the resource rates should grow with bigger maps or more players (answered in
+`docs/balance/scaling-thresholds.md`, #974).
 
 ## 1. Definitions
 
