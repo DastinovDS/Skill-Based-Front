@@ -4071,12 +4071,25 @@ Proposal (each item is a default for the owner to confirm or change):
    coast, W4 painted T2 water. **Recommended: W4**, baked into `maps/<id>.bg.webp` (no per-frame cost): flat water in
    two tones, a soft shore without a hard line, reed tufts on the banks that thin out away from the water (the T2
    language of details thinning at an edge), faint flow streaks on rivers (removed by the owner on 2026-10-30, #585:
-   they read as rendering artifacts), wooden bridges. The owner border line
+   they read as rendering artifacts), wooden bridges. ~~The owner border line
    runs along a coast where the territory ends at water, and not along a river between two areas of one owner.
    Where the border leaves the water (a river ends between two areas of the owner and a third, the far bank of a
    river changes hands, a pond at a junction, a river runs off the map), the line goes on as one line without a gap,
    jump or stub: round the end of the water along the owner's own bank when that is short, else straight across
-   the water to where the land border goes on (owner 2026-11-10, #928; a presentation rule, no game rule).
+   the water to where the land border goes on (owner 2026-11-10, #928; a presentation rule, no game rule).~~
+   **[superseded]** 2026-11-11 by the next paragraph.
+
+   **Water is always a border** (owner decision 2026-11-11, #944, option A of the investigation of #940)
+   **[accepted]**. The owner border line runs along every own bank of water: a coast, a lake shore, a river or a
+   stream bank, a river between two areas of one owner and a stream cut into one area included. It never crosses
+   water (the straight joins over water of #928 are gone), so a river inside one owner's territory is outlined on
+   both banks and the territory reads as pieces of land the water separates. **No small water pockets:** water
+   reads as a lake or a river with its outline, or is not there. The bake (`gow_maps.geo.fill_pockets`, the same
+   for the offline maps and the per-match maps of `gow_server.mapgen`) fills a pocket of streams only (no sea or
+   lake in it) of at most 60 cells of 4 x 4 units (a stream piece of about 60 units) with land where item 3
+   allows it (four areas without roads across meet at a point); one of at most 40 cells that cannot be filled
+   (five areas round it with roads only between neighbours) is widened into a pond of 100 cells. A presentation
+   rule, no game rule: the map files, their hashes and the replays do not change (item 7).
 7. **What does not change.** The graph, the roads and their levels, `travel_ticks`, `border_permille`, capacities,
    supply, vision (DEC-21, DEC-35), fights, the ruleset, `PlayerView`, the protocol, `SIM_VERSION`,
    `PROTOCOL_VERSION`, the map file `maps/<id>.json` and its loader (water is not a field of the map file). The

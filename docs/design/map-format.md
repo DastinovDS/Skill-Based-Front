@@ -161,6 +161,31 @@ new land contact appears. Afterwards under 1% of those cells stay thinner (next 
 with a geography was rebaked; `GENERATOR_VERSION` stays 1 for the reason above (the widening is in the bake, not in
 `generate(seed)`).
 
+**No small water pockets (owner 2026-11-11, #944).** The client outlines every water body with the owner line (DEC-36,
+item 6 as revised on 2026-11-11), so a pond at a junction (a left-over land contact cut and widened: a cross of 8 to 12
+cells) or a short piece of a stream between two areas whose other borders all have roads became a small outlined
+bubble. As the last step of `geo.compute`, `geo.fill_pockets` takes every pocket: a water body of streams only (no sea
+or lake in it) of at most `geo.POCKET_CELLS` (60) cells, about a stream 60 units long.
+- It is filled with land where item 3 allows: the pocket and the land `geo.POCKET_REACH` (3) cells round it (off the
+  roads and the nodes, `geo.WIDEN_CLEAR`) are given anew to the areas around, each growing from its edge, the cell
+  nearest to its site first, never next to an area it has no road to. The two banks have no road, nor have the two
+  areas at the ends, so the four meet at a point (a diagonal of cells is no contact): first as the areas are, then
+  each of `geo.POCKET_TRIES` (24) cells of the pocket as that point (every area's distance less its distance there).
+  A try counts only if it fills the pocket whole and leaves every area one piece.
+- A pocket of at most `geo.POND_SMALL` (40) cells that cannot be filled (five areas round it with roads only between
+  neighbours: no four of them can meet at a point) is widened round itself into a pond of `geo.POND_CELLS` (100) cells,
+  at most `geo.POND_REACH` (40 units) out, keeping `geo.POND_CLEAR` (16 units) off a road and 50 off a node. Land only
+  becomes water, so no land contact appears.
+- A bigger pocket is a piece of a stream that reads as one and stays.
+
+The thresholds were chosen by looking at the outlined water of the 14 maps with a geography and six fresh generated
+seeds: below about 40 cells a pocket reads as a bubble, from about 50 cells (a stream piece of 55 units or more) as a
+stream. Before: 52 pockets of at most 40 cells and 66 of at most 60 on those 20 maps; after: none of at most 40, 8 of
+41 to 60 cells that cannot be filled. The map files do not change (no hash, replay or golden replay changes): only the
+backgrounds, thumbnails, previews and the vector files `maps/geo/<id>.json`. The per-match maps (`gow_server.mapgen`,
+`gow_maps.matchmap`) bake with the same `geo.compute`. A stream line of the vector file whose pocket was filled is left
+out.
+
 **The validator:** a new check `geography`, on for a map that has `maps/src/<id>.geo.json` (the fixtures and the
 current pool without one are not checked):
 
@@ -172,8 +197,9 @@ current pool without one are not checked):
 chains instead of `voronoiCells`: the tint and its capture fade, the owner border, the glow and the thin area line
 (`mapView.ts`, `regionLayout.ts`), the fog veil (`fogView.ts`), the capture effect (`effectsView.ts`), picking an area
 by a click (`pick.ts`, today `insideConvex`: the new areas are not convex) and the Supply view (its flat floor hides the
-background, so it draws the water flat). The owner border runs along a coast where the territory ends at water and not
-along a river between two areas of one owner. Maps without the file keep today's code. No new dependency, no
+background, so it draws the water flat). The owner border runs along a coast where the territory ends at water and ~~not
+along a river between two areas of one owner~~ (since 2026-11-11, #944: along every bank, water is always a border).
+Maps without the file keep today's code. No new dependency, no
 protocol change (the file is bundled like the background; serving it at `GET /api/maps/{id}/geo.json` too is optional).
 
 **Done in #544 (step 2).** `apps/client/src/map/geography.ts` loads `maps/geo/<id>.json` (one lazy chunk per map,
@@ -187,8 +213,8 @@ chains through the point are smoothed as one line, without a kink. A river bank 
 and a run of another answer shorter than 40 units takes the answer of its longer neighbour, so the owner border has no
 loose stub and no gap at a bend or a mouth; the owner border is moved inward with a miter at every corner, so its
 segments meet. Across a sea or a lake there is no area; across a river or a
-stream the client looks for the area on the far bank, so the owner border runs along a coast, along a river bank between two
-owners, and not along a river between two areas of one owner. The thin area line is drawn only between two land areas (no
+stream the client looks for the area on the far bank (a neighbour for the glow of a capture); the owner border runs along
+every bank whoever is across (#944; until then not along a river between two areas of one owner). The thin area line is drawn only between two land areas (no
 line along water). The fog veil covers the areas of hidden nodes only, not the water beside them. The Supply view and the
 terrain mode draw the water flat (the part of the map no area covers). A map without a usable file keeps the Voronoi cells.
 

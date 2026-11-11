@@ -5,7 +5,7 @@ from typing import Final
 
 import pytest
 
-from gow_maps import matchmap
+from gow_maps import geo, matchmap
 from gow_maps.generate import Generated, generate
 from gow_maps.matchmap import files_of, make_map
 from gow_maps.validate import Issue, ValidatorConfig, validate_file
@@ -46,7 +46,11 @@ def test_a_failed_seed_and_a_failed_check_give_way_to_the_next_seed(
     assert len(calls) == 2
     assert calls[0] == sorted(files_of(tmp_path, MAP_ID)[:-1])  # all but the preview
     assert all(file.is_file() for file in files_of(tmp_path, MAP_ID))
-    assert load_map(tmp_path / f"{MAP_ID}.json").meta.name == MAP_ID
+    mapdef = load_map(tmp_path / f"{MAP_ID}.json")
+    assert mapdef.meta.name == MAP_ID
+    # The bake of a match map has the rule of every baked map: no small pocket of water (#944).
+    labels = geo.compute(mapdef, geo.load_spec(geo.spec_path(tmp_path / f"{MAP_ID}.json"))).labels
+    assert geo.pockets(labels, geo.POND_SMALL) == []
     assert min(made.generate_s, made.bake_s, made.validate_s, made.preview_s) > 0
 
 

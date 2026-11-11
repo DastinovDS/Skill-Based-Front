@@ -70,9 +70,15 @@ describe('territoryBorders on a geography', () => {
   const length = (list: { a: { x: number; y: number }; b: { x: number; y: number } }[]) =>
     list.reduce((sum, { a, b }) => sum + Math.hypot(b.x - a.x, b.y - a.y), 0);
 
-  it('does not run along a river between two areas of one owner', () => {
-    // Neither the banks, nor the end of the river, nor the contact is a border.
-    expect(run([0, 0])).toEqual([]);
+  it('runs along both banks of a river between two areas of one owner, round its end (#944)', () => {
+    // Water is always a border (owner 2026-11-11): both banks and the end of the river, never the
+    // land contact of the two areas (y 60..100).
+    const borders = run([0, 0]);
+    expect(borders.every((b) => b.water === true && b.owner === 0)).toBe(true);
+    expect(borders.some((b) => Math.max(b.a.y, b.b.y) > 64)).toBe(false);
+    // Two banks of 60 and the rounded end of the river.
+    expect(length(borders)).toBeGreaterThan(125);
+    expect(length(borders)).toBeLessThan(145);
   });
 
   it('runs along both banks and the contact between two owners, each on its own side', () => {
@@ -353,7 +359,7 @@ function looseEnds(
   return [...ends.values()].filter((end) => end.n % 2 === 1);
 }
 
-describe('the owner line where it leaves the water (#928)', () => {
+describe('the owner line where the far bank changes hands (#928, #944)', () => {
   // Area 0 above a river (y 40..50, from the left frame to x = 120, where it ends); below it
   // area 2 (x < 80) and area 1 (x > 80); right of the river's end areas 0 and 1 touch (y = 45).
   //
@@ -388,39 +394,36 @@ describe('the owner line where it leaves the water (#928)', () => {
   const t = geoTerritory(map, geo);
   const onFrame = (p: { x: number; y: number }) => Math.min(p.x, p.y, 200 - p.x, 100 - p.y) < 6;
 
-  it('is one line from the bank on to the land border, across the river where it leaves it', () => {
+  it('runs on along the bank where the far bank changes hands, never across the river (#944)', () => {
     expect(t).not.toBeNull();
     for (const inset of [0, 2.4, 4.6, 5]) {
       const borders = territoryBorders(t?.cells ?? [], [0, 0, 1], inset, t?.edges);
       // Only the ends at the frame of the map are loose: the line of the owner of areas 0 and 1
-      // runs along the bank of area 0 (across from area 2), crosses the river at x = 80 and goes
-      // down the land border of areas 1 and 2. Before #928 it stopped at both banks.
+      // runs along every bank of its areas and round the end of the river.
       for (const owner of [0, 1]) {
         const loose = looseEnds(borders, owner);
         expect(loose.every(onFrame)).toBe(true);
-        expect(loose).toHaveLength(2);
       }
-      const across = borders.filter(
-        (b) => b.owner === 0 && Math.min(b.a.y, b.b.y) < 42 && Math.max(b.a.y, b.b.y) > 48,
-      );
-      expect(across.length).toBeGreaterThan(0);
-      for (const b of across) expect(Math.abs((b.a.x + b.b.x) / 2 - 80)).toBeLessThan(10);
+      // No segment crosses the river (y 40..50).
+      const across = borders.filter((b) => Math.min(b.a.y, b.b.y) < 39 && Math.max(b.a.y, b.b.y) > 51);
+      expect(across).toEqual([]);
     }
   });
 
-  it('still does not run along the river between two areas of one owner', () => {
+  it('runs along the river between two areas of one owner, on both banks (#944)', () => {
     const borders = territoryBorders(t?.cells ?? [], [0, 0, 1], 2.4, t?.edges);
-    // Areas 0 and 1 face each other across the river for x 80..120: no line there.
+    // Areas 0 and 1 face each other across the river for x 80..120: a line on either bank.
     const along = borders.filter(
       (b) => b.owner === 0 && Math.min(b.a.x, b.b.x) > 90 && Math.max(b.a.x, b.b.x) < 118,
     );
-    expect(along).toEqual([]);
+    expect(along.some((b) => b.cell === 0)).toBe(true);
+    expect(along.some((b) => b.cell === 1)).toBe(true);
+    expect(along.every((b) => b.water === true)).toBe(true);
   });
 
   it('is one line the other way round too', () => {
-    // Areas 0 and 2 are the owner's, area 1 is not: the line runs along the land border of areas
-    // 0 and 1, along the bank of area 0 (across from area 1) to x = 80, across the river and down
-    // the land border of areas 1 and 2.
+    // Areas 0 and 2 are the owner's, area 1 is not: every bank of areas 0 and 2 is the owner's
+    // line, and the land borders with area 1.
     const borders = territoryBorders(t?.cells ?? [], [0, 1, 0], 2.4, t?.edges);
     for (const owner of [0, 1]) {
       const loose = looseEnds(borders, owner);
@@ -448,11 +451,15 @@ describe('a stream cut into one area (#585)', () => {
     ],
   };
 
-  it('is no coast: the banks look across at their own area, and no owner border runs there', () => {
+  it('has banks that look across at their own area, and the owner line runs round them (#944)', () => {
     const t = geoTerritory(map, geo);
     const banks = t?.edges.filter((e) => e.water === true) ?? [];
     expect(banks.length).toBeGreaterThan(0);
     expect(new Set(banks.map((e) => e.neighbour))).toEqual(new Set([0]));
-    expect(territoryBorders(t?.cells ?? [], [0], 1.5, t?.edges)).toEqual([]);
+    // Water is always a border (owner 2026-11-11): the two banks and the end of the stream.
+    const borders = territoryBorders(t?.cells ?? [], [0], 1.5, t?.edges);
+    expect(borders.length).toBeGreaterThan(0);
+    expect(borders.every((b) => b.water === true)).toBe(true);
+    expect(looseEnds(borders, 0).every((p) => p.y < 4)).toBe(true);
   });
 });

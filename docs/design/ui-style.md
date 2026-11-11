@@ -2101,7 +2101,9 @@ the water (shallows), never darker on the land, and the client (step 2, #544) dr
 land areas. Reeds stay sparse and muted so they never line up into a dark edge. The open questions of #537 take
 the DEC-36 defaults (long rivers with bridges, about 20 percent water, fixtures without water, before the release).
 
-**One line where the border leaves the water (owner 2026-11-10, #928).** The owner border runs along the own bank of
+> **Superseded (owner 2026-11-11, #944):** the paragraph below is kept as history; water is now always a border (next paragraph).
+
+~~**One line where the border leaves the water (owner 2026-11-10, #928).** The owner border runs along the own bank of
 water where the territory ends there, and not along a river between two areas of one owner (DEC-36, item 6). Where
 the two meet, the line used to stop at the bank and start again on the land border with water between: a gap with a
 stub on each side, a dark blob of water at the tip of a river. Now the territory border reads as one continuous line
@@ -2113,7 +2115,9 @@ water runs off the map goes on to the frame. A short piece of the line along wat
 that looked across at another owner while the owner's own banks close it round) is dropped, and a straight join that
 would turn back along the bank it starts from cuts that bank back first, so there is no spike. All four engraved lines
 (cut, rule, the own second rule, the enemy beads) take the same joins at their insets; the Border band still stops at
-water.
+water.~~
+
+**Water is always a border (owner 2026-11-11, #944; DEC-36, item 6 as revised).** The owner border runs along every own bank of water: a coast, a lake shore, a river or stream bank, a river between two areas of the owner and a stream cut into one area included (`borderOwner` in `render/regionLayout.ts`). It never crosses water, so the joins of #928 are gone, and a river inside one owner's territory is outlined on both banks: the territory reads as land the water cuts. All four engraved lines (cut, rule, the own second rule, the enemy beads) follow it at their insets; the Border band still stops at water. Where two own areas and the land of another meet at a corner the two drawn ends take the bisector of their two edges (`ownerJoin`), a pinch of four ends keeps the shift of each area. Since every water body is outlined, the bake leaves no small one (**no small water pockets**, `gow_maps.geo.fill_pockets`, `docs/design/map-format.md`): a pond at a junction or a short piece of a stream is filled with land where the adjacency rule allows (the four areas meet at a point), else widened into a pond that reads as a small lake.
 
 ---
 

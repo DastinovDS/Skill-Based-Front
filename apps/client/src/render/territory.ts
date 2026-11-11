@@ -423,8 +423,7 @@ const MIN_BANK_RUN = 40;
 /**
  * The bank of a river along one area, its pieces in order, with the area across each made steady:
  * a look across a bend, a mouth or the end of a river can miss the far bank or hit a third area,
- * and a run of a few units with another answer would draw a loose stub of the owner border or cut
- * a gap into it (#585). Such a run (shorter than `MIN_BANK_RUN`) takes the answer of its longer
+ * and a run of a few units with another answer would make a stray neighbour (#585). Such a run (shorter than `MIN_BANK_RUN`) takes the answer of its longer
  * neighbouring run, the shortest first; deterministic.
  */
 export function steadyBank(
@@ -477,8 +476,9 @@ export function steadyBank(
 /**
  * The edges of the polygons. `neighbour` is the node across; a bank of a river or a stream has the
  * node across the water (`water: true`), found by looking across it: the bank chain alone does not
- * say who is on the far bank, and the owner border must not run along a river between two areas of
- * one owner (DEC-36, item 6). A sea or a lake has no node across (`neighbour: null`, `water`).
+ * say who is on the far bank. The owner border runs along every bank whoever is across (#944); the
+ * area across still counts as a neighbour for the glow of a capture (`neighboursOf`). A sea or a
+ * lake has no node across (`neighbour: null`, `water`).
  */
 function edgesOf(pieces: readonly Piece[], cells: readonly (readonly Point[])[]): CellEdge[] {
   const boxes = cells.map((cell) => {
