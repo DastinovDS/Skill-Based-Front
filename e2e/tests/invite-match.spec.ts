@@ -77,9 +77,15 @@ async function giveOrders(player: Player, map: MapFile): Promise<void> {
   await expect.poll(() => player.accepted('move')).toBe(2);
 
   // 3. The CP stance from the radial menu (Q, a tap keeps it open): costs nothing, the panel shows
-  // the new one.
-  await player.page.keyboard.press('q');
-  await player.page.getByRole('menuitemradio', { name: /War/ }).click();
+  // the new one. The page tells a tap from a hold by the time between its keydown and keyup
+  // handlers (`RADIAL.tapMs`); on a loaded runner one press took 0.7 s and read as a hold, which
+  // closes the menu over its dead zone (#988). So Q again while the menu is not open.
+  const war = player.page.getByRole('menuitemradio', { name: /War/ });
+  await expect(async () => {
+    if (!(await war.isVisible())) await player.page.keyboard.press('q');
+    await expect(war).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
+  await war.click();
   await expect.poll(() => player.accepted('set_stance')).toBe(1);
   await expect(player.page.getByRole('button', { name: /Stance: War/ })).toBeVisible();
 }
@@ -143,6 +149,8 @@ test('pause, a dropped connection and a forfeit in a private match', async ({
   browser,
   baseURL,
 }) => {
+  // The one test on a map made for the match (#884): the plinth's Get the link. It waits for the
+  // map (or the server's fallback to a pool map) longer than the others (#988).
   const { host, guest } = await startInviteMatch(browser, baseURL ?? '');
 
   // Pause (private matches only): both see it, the clock stops, "Resume" brings it back.
@@ -184,7 +192,7 @@ test('a page reload in a running match returns to the same match (#189)', async 
   browser,
   baseURL,
 }) => {
-  const { host, guest } = await startInviteMatch(browser, baseURL ?? '');
+  const { host, guest } = await startInviteMatch(browser, baseURL ?? '', 'ridge');
   const side = await host.side();
   expect(host.welcomes()).toBe(1);
 
