@@ -21,9 +21,11 @@
   // the app allows leaving for it, and does nothing on the main screen, in a locked bar and in the
   // boot (no reload: that would drop a running search or an invite being drawn).
   const homeOf = getContext<HomeGetter | undefined>(HOME_KEY);
+  const goesHome = $derived(locked ? null : (homeOf?.() ?? null));
+  // No way home: this is the main screen (or the boot, or a locked search): marked as the current page.
+  const here = $derived(goesHome === null);
   function goHome(): void {
-    if (locked) return;
-    homeOf?.()?.();
+    goesHome?.();
   }
 </script>
 
@@ -31,8 +33,12 @@
      on the right the "?" of How to play and the player, over an incised double rule. No tabs. -->
 <header class="top">
   <h1 class="mark">
-    <button type="button" class="home" aria-label={t('top.home')} onclick={goHome}
-      >{t('app.title')}</button
+    <button
+      type="button"
+      class="home"
+      aria-label={t('top.home')}
+      aria-current={here ? 'page' : undefined}
+      onclick={goHome}>{t('app.title')}</button
     >
   </h1>
   {#if player !== undefined || onhelp !== undefined}

@@ -43,6 +43,7 @@ describe('FrontTop brand as a way home (#945)', () => {
     expect(brand()).not.toBeNull();
     expect(brand()?.getAttribute('aria-label')).toBe(translate('en', 'top.home'));
     expect(brand()?.disabled).toBe(false);
+    expect(brand()?.getAttribute('aria-current')).toBe('page');
     brand()?.click();
     window.removeEventListener('beforeunload', reload);
     expect(reload).not.toHaveBeenCalled();
@@ -59,6 +60,7 @@ describe('FrontTop brand as a way home (#945)', () => {
     open(() => go, true);
     expect(brand()?.getAttribute('aria-label')).toBe(translate('en', 'top.home'));
     expect(brand()?.disabled).toBe(false);
+    expect(brand()?.getAttribute('aria-current')).toBe('page');
     brand()?.click();
     expect(go).not.toHaveBeenCalled();
   });
