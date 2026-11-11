@@ -88,7 +88,7 @@ A new or changed project command is edited in `mise.toml` and in this table in t
 does not work, that is a bug: fix it. CI installs the tools with `jdx/mise-action` and calls the same tasks (`check:py`, `check:shards`, `test:py`
 (in shards by path), `test:perf`, `golden:check HEAD^1`, `check:client`, `test:client`, `build`, `regen:protocol`, `regen:api`, `test:visual` (in shards), `e2e:up`),
 so a task that passes locally is what CI runs; the tasks `check`, `test`, `test:perf`, `golden:check` repeat what the
-Python jobs (the required check `py`) and the job `web` run. A tool version is edited only in `mise.toml`, never in `.github/workflows/ci.yml`.
+Python jobs (the required check `py`) and the job `web` run. A tool version is edited only in `mise.toml`, never in `.github/workflows/ci.yml`; the one exception is the tag of the Playwright image the job `visual` runs in (`mcr.microsoft.com/playwright:v<version>-noble`, so no `apt` on the runner, #962): it must equal the Playwright version of the lockfiles, and `check:client` fails when it does not.
 
 ### For agents
 
@@ -127,7 +127,7 @@ Python jobs (the required check `py`) and the job `web` run. A tool version is e
 | `hooks` | once per clone: `pre-commit install` (ruff before every commit) | INF-02 |
 | `check` | all static checks: `check:py`, `check:client`, `check:e2e` | INF-02 |
 | `check:py` | ruff (check and format), pyright (strict), lint-imports (package boundaries), `gow-maps validate` of the maps (including the starting warehouse against `rulesets/mvp-7.toml`, DEC-26, item 5; DEC-43, item C) | INF-02 |
-| `check:client` | eslint and prettier, svelte-check and tsc of the client | INF-03 |
+| `check:client` | eslint and prettier, svelte-check and tsc of the client; the Playwright image tag of `ci.yml` against the lockfiles (`scripts/check_playwright_version.py`) | INF-03 |
 | `check:e2e` | prettier and tsc of the `e2e/` package | QA-02 |
 | `check:i18n` | UI strings only in dictionaries, the same keys in every locale dictionary (part of `test:client`) | CLI-11 |
 | `test` | quick run: `test:py` and `test:client` | INF-02 |

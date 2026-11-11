@@ -72,10 +72,11 @@ run = [
 ]
 
 [tasks."check:client"]
-description = "Client lint (eslint, prettier) and check (svelte-check, tsc)"
+description = "Client lint (eslint, prettier) and check (svelte-check, tsc), the Playwright image tag of ci.yml against the lockfiles"
 run = [
   "pnpm --silent -C apps/client lint",
   "pnpm --silent -C apps/client check",
+  "uv run python scripts/check_playwright_version.py",
 ]
 
 [tasks."check:e2e"]
