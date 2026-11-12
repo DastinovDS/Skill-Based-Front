@@ -2,7 +2,9 @@
 
 ``GameState.memo`` keeps the last result of a pure function of the state with every input it read
 (the vision levels, ``systems.vision.compute_vision``; the plan of the next dispatch,
-``systems.flow._store``) and returns it again while those inputs are equal. A memo keyed on too
+``systems.flow._store``, whose sends the dispatch of the next tick reuses, ``_dispatch``; the
+owner-only part of the flow field, which the starving pockets read, ``starving_nodes``; the
+warehouse capacities) and returns it again while those inputs are equal. A memo keyed on too
 little would return a stale result that is still deterministic, so ``test_determinism.py`` and the
 golden replays alone do not prove it right. Here smart bots play a match on a pool map under
 ``mvp-7``, and on every call of every tick, for both players, the memoised result is compared with
@@ -12,7 +14,9 @@ the same function run on an empty memo:
   the levels, and the halves in sight ``current_sightings`` walks;
 - the sight the step's ``vision`` system kept for ``Match.view(reuse=True)``, after every step;
 - every plan (``_store``): the ``Node.flow`` it left equals ``_plan`` on the same field, and that
-  field equals the one computed without the flow memos.
+  field equals the one computed without the flow memos;
+- every dispatch (``_dispatch``): its sends equal ``_run`` on the same inputs (#482);
+- every ``starving_nodes`` and ``warehouse_capacities``: equal to the call on an empty memo.
 
 The quick run plays the first ``QUICK_TICKS`` of a match on ``ridge``; the full matches on the
 pool maps are ``slow``.
@@ -34,6 +38,7 @@ from gow_sim.match import Glancer, Match
 from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import Detail, GameState
 from gow_sim.systems import flow, fortify, vision
+from gow_sim.systems.capacity import warehouse_capacities
 from gow_sim.systems.vision import Vision
 
 ROOT: Final = Path(__file__).resolve().parents[3]
@@ -66,6 +71,9 @@ class _Counts:
     vision_hits: int = 0
     plans: int = 0
     plan_hits: int = 0
+    dispatches: int = 0
+    dispatch_hits: int = 0
+    starving: int = 0
     sights: int = 0
 
 
@@ -106,11 +114,48 @@ def _checked_store(
         stored = [(n, state.nodes[n].flow) for n in field.adj]
         with _no_memo(state):
             assert flow._field(state, rules, player) == field, (state.tick, player)  # pyright: ignore[reportPrivateUsage]
-        fresh = flow._plan(state, field, capacities, dict(incoming))  # pyright: ignore[reportPrivateUsage]
+        fresh, _ = flow._plan(state, field, capacities, dict(incoming))  # pyright: ignore[reportPrivateUsage]
         assert stored == fresh, (state.tick, player)
         seen.plans += 1
         seen.plan_hits += hit
         return None
+
+    return check
+
+
+def _checked_dispatch(
+    real: Callable[[GameState, flow._Field, tuple[int, ...], dict[int, int]], flow._Sends],  # pyright: ignore[reportPrivateUsage]
+    seen: _Counts,
+) -> Callable[[GameState, flow._Field, tuple[int, ...], dict[int, int]], flow._Sends]:  # pyright: ignore[reportPrivateUsage]
+    def check(
+        state: GameState,
+        field: flow._Field,  # pyright: ignore[reportPrivateUsage]
+        capacities: tuple[int, ...],
+        incoming: dict[int, int],
+    ) -> flow._Sends:  # pyright: ignore[reportPrivateUsage]
+        memo = state.memo.get(flow._PLAN_MEMO[field.player])  # pyright: ignore[reportPrivateUsage]
+        got = real(state, field, capacities, incoming)
+        hit = isinstance(memo, flow._PlanMemo) and got is memo.sends  # pyright: ignore[reportPrivateUsage]
+        fresh = flow._run(state, field, capacities, dict(incoming))  # pyright: ignore[reportPrivateUsage]
+        assert got == fresh, (state.tick, field.player)
+        seen.dispatches += 1
+        seen.dispatch_hits += hit
+        return got
+
+    return check
+
+
+def _checked_starving(
+    real: Callable[[GameState, Ruleset, int], list[int]], seen: _Counts
+) -> Callable[[GameState, Ruleset, int], list[int]]:
+    def check(state: GameState, rules: Ruleset, player: int) -> list[int]:
+        got = real(state, rules, player)
+        with _no_memo(state):
+            assert got == real(state, rules, player), (state.tick, player)
+            caps = warehouse_capacities(state, rules)
+        assert warehouse_capacities(state, rules) == caps, state.tick
+        seen.starving += 1
+        return got
 
     return check
 
@@ -125,6 +170,8 @@ def _play(map_name: str, ticks: int | None, monkeypatch: pytest.MonkeyPatch) -> 
     for module in (vision, fortify, commands, view):  # every caller of ``compute_vision``
         monkeypatch.setattr(module, "compute_vision", checked)
     monkeypatch.setattr(flow, "_store", _checked_store(flow._store, match.rules, seen))  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(flow, "_dispatch", _checked_dispatch(flow._dispatch, seen))  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(flow, "starving_nodes", _checked_starving(flow.starving_nodes, seen))
     bots = [bot_factory(b)(mapdef, match.rules, seed=1, player=p) for p, b in enumerate(BOTS)]
     seqs = dict.fromkeys(PLAYERS, 0)
     pending: list[PlayerCommand] = []
@@ -159,6 +206,8 @@ def _assert_both_paths(seen: _Counts) -> None:
     """Both the hits and the misses of each memo were compared."""
     assert 0 < seen.vision_hits < seen.vision_calls
     assert 0 < seen.plan_hits < seen.plans
+    assert 0 < seen.dispatch_hits < seen.dispatches
+    assert seen.starving > 0
     assert seen.sights > 0
 
 

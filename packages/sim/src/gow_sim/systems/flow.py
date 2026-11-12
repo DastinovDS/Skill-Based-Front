@@ -77,7 +77,11 @@ nearest own node with room, reading ``Node.flow`` of the previous tick (``spill_
 
 Cost per tick and player: O(V + E) for the field and the capital distance, O(packets) for the
 room, O(groups) and O(V) (the builds) for the pull and the paths; the calls of item M are one
-bounded BFS per caller and tier (a caller stops when it is covered or no stock is left).
+bounded BFS per caller and tier (a caller stops when it is covered or the stock its tier may call
+is all called). ``GameState.memo`` keeps, with every input they read (none of it is state): the
+part of the field that depends on the owners and the shift (``_Base``, which also gives the
+pockets of step 1b), the rest of the field, and the plan with its sends (``_PlanMemo``): a
+dispatch whose inputs equal those of the previous tick's plan sends what that plan showed.
 """
 
 from collections import deque
@@ -124,7 +128,7 @@ def supply_flow(state: GameState, rules: Ruleset) -> list[Event]:
         incoming = _incoming(state, pid)
         field = _field(state, rules, pid)
         if dispatch:
-            sends = _run(state, field, capacities, incoming)
+            sends = _dispatch(state, field, capacities, incoming)
             events.extend(_send(state, rules, pid, sends, incoming))
         _store(state, field, capacities, incoming)
     _clear_neutral(state)
@@ -179,36 +183,16 @@ def next_dispatch_tick(state: GameState, rules: Ruleset) -> int:
 # Pockets and starvation (item H) --------------------------------------------------------------
 
 
-def starving_nodes(state: GameState, player: int) -> list[int]:
+def starving_nodes(state: GameState, rules: Ruleset, player: int) -> list[int]:
     """The own nodes of ``player`` in a factory-less pocket (items H1, H3, H4), ascending: their
     own component over own nodes does not contain the own capital and has no node with
-    ``Node.factory == player``. O(V + E)."""
-    mapdef = state.map
+    ``Node.factory == player``. The pockets are those of the field's ``_Base`` (kept while the
+    owners stay), the factories are read now. O(V)."""
     nodes = state.nodes
-    incident = mapdef.incident
-    edges = mapdef.edges
-    capital = mapdef.capital(player)
-    seen: dict[int, bool] = {}
     result: list[int] = []
-    for nid in range(len(incident)):  # ascending; ids are 0..n-1 (``MapDef``)
-        if nid in seen or nodes[nid].owner != player:
-            continue
-        seen[nid] = True
-        members = [nid]
-        safe = False
-        head = 0
-        while head < len(members):
-            n = members[head]
-            head += 1
-            safe = safe or n == capital or nodes[n].factory == player
-            for eid in incident[n]:
-                e = edges[eid]
-                m = e.b if e.a == n else e.a
-                if m not in seen and nodes[m].owner == player:
-                    seen[m] = True
-                    members.append(m)
-        if not safe:
-            result.extend(members)
+    for group in _base_memo(state, rules, player).base.pockets:
+        if not any(nodes[n].factory == player for n in group):
+            result.extend(group)
     result.sort()
     return result
 
@@ -220,15 +204,16 @@ def starve_pockets(
     factory-less pockets, provinces included. ``garrisons``: ``supply.garrisons_by_node``."""
     starving: dict[int, bool] = {}
     for pid in sorted(state.players):
-        for n in starving_nodes(state, pid):
+        for n in starving_nodes(state, rules, pid):
             starving[n] = True
     events: list[Event] = []
     tick = state.tick
-    for nid in sorted(state.nodes):
-        node = state.nodes[nid]
-        if nid not in starving:
+    nodes = state.nodes
+    for nid, node in nodes.items():  # independent writes: the order does not matter
+        if node.cut_since is not None and nid not in starving:
             node.cut_since = None  # connected to the capital, a factory, or not own (item H5)
-            continue
+    for nid in sorted(starving):
+        node = nodes[nid]
         if node.cut_since is None:
             node.cut_since = tick
         if is_starvation_tick(state, rules, node.cut_since):
@@ -294,6 +279,8 @@ class _Base:
     shift: int
     k: dict[int, int]
     pocket: dict[int, bool]
+    pockets: list[list[int]]
+    """The own components without the own capital (item H1), each in BFS order."""
 
 
 @dataclass(slots=True)
@@ -319,6 +306,41 @@ def _field(state: GameState, rules: Ruleset, player: int) -> _Field:
     ``GameState.memo`` and returned again while they are equal (the part of the owners and the
     shift alone too, ``_Base``)."""
     nodes = state.nodes
+    memo = _base_memo(state, rules, player)
+    base = memo.base
+    d0 = base.d0
+    adj = base.adj
+    holding: dict[int, bool] = {}
+    for g in state.groups.values():  # flags (the order is kept for ``flat``)
+        loc = g.location
+        if g.owner != player or not isinstance(loc, AtNode):
+            continue
+        n = loc.node
+        if (g.charged < g.units or g.plan > 0) and n in d0:
+            holding[n] = True
+    # An unpaid build pulls like such an army (item J): its node joins the same set; without an
+    # army there its intake is capped by what it still owes (``_run``).
+    owed: dict[int, int] = {}
+    for n in adj:  # ascending
+        node = nodes[n]
+        if (node.build is not None or node.factory_build is not None) and n not in holding:
+            due = _owed(node, player)
+            if due > 0:
+                owed[n] = due
+                holding[n] = True
+    order = list(holding)
+    if memo.field is not None and memo.holding == order and memo.owed == owed:
+        return memo.field
+    field = _pull(state, player, base, holding, owed)
+    memo.holding, memo.owed, memo.field = order, owed, field
+    return field
+
+
+def _base_memo(state: GameState, rules: Ruleset, player: int) -> _FieldMemo:
+    """The field memo of ``player`` with the ``_Base`` of the owners and the leaf shift now (a
+    new one when they changed); stores the clamped shift and its maximum (item B3). Under
+    ``supply.leaf_shift = false`` (DEC-50) the shift is 0."""
+    nodes = state.nodes
     owners = [nodes[nid].owner for nid in range(len(state.map.incident))]  # ids are 0..n-1
     ps = state.players[player]
     if not rules.supply.leaf_shift:
@@ -334,31 +356,7 @@ def _field(state: GameState, rules: Ruleset, player: int) -> _Field:
     base = memo.base
     ps.leaf_shift_max = base.shift_max
     ps.leaf_shift = base.shift  # the clamp is stored (item B3)
-    d0 = base.d0
-    adj = base.adj
-    holding: dict[int, bool] = {}
-    for g in state.groups.values():  # flags (the order is kept for ``flat``)
-        loc = g.location
-        if g.owner != player or not isinstance(loc, AtNode):
-            continue
-        n = loc.node
-        if (g.charged < g.units or g.plan > 0) and n in d0:
-            holding[n] = True
-    # An unpaid build pulls like such an army (item J): its node joins the same set; without an
-    # army there its intake is capped by what it still owes (``_run``).
-    owed: dict[int, int] = {}
-    for n in adj:  # ascending
-        if n not in holding:
-            due = _owed(nodes[n], player)
-            if due > 0:
-                owed[n] = due
-                holding[n] = True
-    order = list(holding)
-    if memo.field is not None and memo.holding == order and memo.owed == owed:
-        return memo.field
-    field = _pull(state, player, base, holding, owed)
-    memo.holding, memo.owed, memo.field = order, owed, field
-    return field
+    return memo
 
 
 def _base(state: GameState, player: int, owners: list[int | None]) -> _Base:
@@ -426,7 +424,7 @@ def _base(state: GameState, player: int, owners: list[int | None]) -> _Base:
     shift = min(state.players[player].leaf_shift, shift_max)  # stored by ``_field`` (item B3)
     k = {n: shift if n in hops else 0 for n in adj}
     pocket = {n: n not in hops for n in adj}  # no own capital: all pockets
-    return _Base(owners, adj, hops, d0, shift_max, shift, k, pocket)
+    return _Base(owners, adj, hops, d0, shift_max, shift, k, pocket, pockets)
 
 
 def _pull(
@@ -715,19 +713,25 @@ def _call(
 
     stock: dict[int, int] = {}
     moving: dict[int, int] = {}
-    for n in c:  # independent entries: the order does not matter
-        if d[n] < k[n] or n in holding:
-            continue
-        on_way = incoming.get(n, 0)
-        total = nodes[n].warehouse + on_way
-        if total:
-            stock[n] = total
-            moving[n] = on_way
-    callers = [t for t in c if d[t] >= k[t] and room[t] and want.get(t, 1)]
     tiers: dict[tuple[int, int], list[int]] = {}
-    for t in callers:
-        tiers.setdefault((d[t], 0 if t in holding else 1), []).append(t)
-    need = {t: min(room[t], want[t]) if t in want else room[t] for t in callers}
+    need: dict[int, int] = {}
+    for n in c:  # the tiers keep this order; the other entries are independent
+        dn = d[n]
+        if dn < k[n]:
+            continue  # ahead of the level: neither stock nor a caller
+        held = n in holding
+        if not held:
+            on_way = incoming.get(n, 0)
+            total = nodes[n].warehouse + on_way
+            if total:
+                stock[n] = total
+                moving[n] = on_way
+        r = room[n]
+        if r:
+            w = want.get(n)
+            if w is None or w:  # a caller: room, and a build node that still wants a charge
+                need[n] = r if w is None or r < w else w
+                tiers.setdefault((dn, 0 if held else 1), []).append(n)
     dist: dict[int, dict[int, int]] = {}
     called: dict[int, list[list[int]]] = {}  # node -> [[caller, warehouse charges], ...]
     left = sum(stock.values())
@@ -736,7 +740,13 @@ def _call(
             break
         j, sub = tier_key
         holds = sub == 0
-        if not any(v and (d[n] > j or (holds and d[n] == j)) for n, v in stock.items()):
+        # the stock this tier may call: once it is all called the ways reach no farther (only
+        # the ways to the called stock are read below)
+        avail = 0
+        for n, v in stock.items():  # a sum: the order does not matter
+            if d[n] > j or (holds and d[n] == j):
+                avail += v
+        if not avail:
             continue  # no stock this tier can call
         tier = tiers[tier_key]
         tier.sort(key=order)
@@ -797,11 +807,12 @@ def _call(
                     moving[n] = on_way - a_way
                     need[t] -= a_way + a_wh
                     left -= a_way + a_wh
+                    avail -= a_way + a_wh
                     if a_wh:
                         called.setdefault(n, []).append([t, a_wh])
                 if need[t]:
                     covered = False
-            if covered or not left:
+            if covered or not avail:
                 break
 
     have: dict[int, int] = {}
@@ -967,10 +978,47 @@ class _PlanMemo:
     incoming: dict[int, int]
     flows: list[tuple[int, FlowNode]]
     """``Node.flow`` of every own node as the plan left it, in ``field.adj`` order."""
+    sends: _Sends
+    """What ``_run`` returned for the plan (never changed after)."""
 
 
 _PLAN_MEMO: tuple[str, str] = ("flow.plan.0", "flow.plan.1")
 """``GameState.memo`` keys of the plan memo, by player id."""
+
+
+def _kept_plan(
+    state: GameState,
+    field: _Field,
+    capacities: tuple[int, ...],
+    incoming: dict[int, int],
+    stock: list[int],
+) -> _PlanMemo | None:
+    """The plan memo of ``field.player`` when it was computed from these inputs of ``_run``
+    (``stock``: the warehouses of the own nodes in ``field.adj`` order), else ``None``."""
+    memo = state.memo.get(_PLAN_MEMO[field.player])
+    if (
+        isinstance(memo, _PlanMemo)
+        and memo.field is field
+        and memo.mapdef is state.map
+        and memo.capacities == capacities
+        and memo.stock == stock
+        and memo.incoming == incoming
+    ):
+        return memo
+    return None
+
+
+def _dispatch(
+    state: GameState, field: _Field, capacities: tuple[int, ...], incoming: dict[int, int]
+) -> _Sends:
+    """Step 5 without sending: ``_run`` on the state now. The plan of the previous tick is
+    ``_run`` too (item E), so while every input is unchanged since (the plan memo) its sends are
+    the dispatch's."""
+    nodes = state.nodes
+    kept = _kept_plan(state, field, capacities, incoming, [nodes[n].warehouse for n in field.adj])
+    if kept is not None:
+        return kept.sends
+    return _run(state, field, capacities, incoming)
 
 
 def _store(
@@ -983,40 +1031,33 @@ def _store(
     of the own nodes and the own packets on the way (``_run``); the last one is kept with these
     inputs in ``GameState.memo`` and the ``FlowNode`` values it gave are set again while they are
     equal."""
-    player = field.player
     nodes = state.nodes
     stock = [nodes[n].warehouse for n in field.adj]
-    memo = state.memo.get(_PLAN_MEMO[player])
-    if (
-        isinstance(memo, _PlanMemo)
-        and memo.field is field
-        and memo.mapdef is state.map
-        and memo.capacities == capacities
-        and memo.stock == stock
-        and memo.incoming == incoming
-    ):
+    memo = _kept_plan(state, field, capacities, incoming, stock)
+    if memo is not None:
         for n, flow in memo.flows:
             old = nodes[n].flow
             if old is not flow and old != flow:
                 nodes[n].flow = flow
         return
-    flows = _plan(state, field, capacities, incoming)
-    state.memo[_PLAN_MEMO[player]] = _PlanMemo(
-        state.map, field, capacities, stock, dict(incoming), flows
+    flows, sends = _plan(state, field, capacities, incoming)
+    state.memo[_PLAN_MEMO[field.player]] = _PlanMemo(
+        state.map, field, capacities, stock, dict(incoming), flows, sends
     )
 
 
 def _plan(
     state: GameState, field: _Field, capacities: tuple[int, ...], incoming: dict[int, int]
-) -> list[tuple[int, FlowNode]]:
+) -> tuple[list[tuple[int, FlowNode]], _Sends]:
     """``_store`` without the memo; returns ``Node.flow`` of every own node, in ``field.adj``
-    order."""
+    order, and the sends of ``_run`` it shows."""
     player = field.player
     key = state.map.node_key
     nodes = state.nodes
     d = field.d
     ways: dict[int, list[int]] = {}
-    plan = dict(_run(state, field, capacities, incoming, ways))
+    sends = _run(state, field, capacities, incoming, ways)
+    plan = dict(sends)
     flows: list[tuple[int, FlowNode]] = []
     for n in field.adj:
         dn = d.get(n)
@@ -1061,7 +1102,7 @@ def _plan(
         flow = FlowNode(d=dn, k=k, pocket=pocket, down=down, next=nxt, idle=idle)
         nodes[n].flow = flow
         flows.append((n, flow))
-    return flows
+    return flows, sends
 
 
 def _clear_neutral(state: GameState) -> None:

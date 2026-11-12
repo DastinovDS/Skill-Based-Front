@@ -326,7 +326,7 @@ def test_h13_without_the_capital_every_node_is_in_a_pocket() -> None:
     state.nodes[C].factory = 0
     events = _run(state, CUT, {CUT: [_owner(K, 1)]})
     assert all(_pocket(state).values())
-    assert starving_nodes(state, 0) == []  # the pocket has the factory in C (item H3)
+    assert starving_nodes(state, RULES, 0) == []  # the pocket has the factory in C (item H3)
     result = outcome(state, RULES)
     assert result is not None and (result.winner, result.reason) == (1, EndReason.CAPITAL)
     events += _run(state, 1200)
@@ -368,5 +368,5 @@ def test_both_players_pockets_are_mirrored() -> None:
     by_player = {p: [(t, w, u) for t, q, _, w, u in _starved(events) if q == p] for p in (0, 1)}
     assert by_player[0] == by_player[1] and len(by_player[0]) == 5  # as H5
     # each also holds the other's A, cut off from everything of its own, and its own pass
-    assert starving_nodes(state, 0) == sorted((*POCKET, 18, mirror[A]))
-    assert starving_nodes(state, 1) == sorted((*(mirror[n] for n in POCKET), 17, A))
+    assert starving_nodes(state, RULES, 0) == sorted((*POCKET, 18, mirror[A]))
+    assert starving_nodes(state, RULES, 1) == sorted((*(mirror[n] for n in POCKET), 17, A))
