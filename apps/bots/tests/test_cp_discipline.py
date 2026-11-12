@@ -1,4 +1,4 @@
-"""CP discipline of the slow levels (#1015, step 2 of the bot plan; ``SmartBot`` item 25).
+"""CP discipline of the slow levels (#1015, step 2 of the bot plan; ``SmartBot`` item 26).
 
 Expected values come from ``rulesets/mvp-7.toml`` and DEC-43, item D: a road fortification costs
 ``fort.cost`` = 1.5 CP, a recruit ``orders.cost.recruit`` = 1 CP, a split ``orders.cost.split`` =
@@ -7,8 +7,9 @@ quantum 0.5 CP, so the sink of ``economy.fort_site`` waits for 4.5 CP.
 
 - The APM bucket (``gow_bots.bots.tempo``) pays only the commands with a CP price: a free
   command needs a ready bucket and takes nothing from it.
-- The CP sink of road fortifications comes last in the decision and only spends the CP the
-  decision leaves near the cap: the attacks and recruits of a slow level come first.
+- The CP sink of road fortifications comes last in the decision, only spends the CP the
+  decision leaves near the cap and shares the ``FORT_SHARE`` budget of the threat
+  fortifications: the attacks and recruits of a slow level come first.
 """
 
 from dataclasses import replace
