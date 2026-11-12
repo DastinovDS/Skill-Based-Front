@@ -62,6 +62,8 @@ class SmartHoarder(SmartBot):
     """The owner's staging strike (module docstring)."""
 
     name: ClassVar[str] = "smart_hoarder"
+    DEFENSE: ClassVar[bool] = False
+    """A benchmark: no defense of ``SmartBot`` item 29 (#1022)."""
     STRIKE: ClassVar[bool] = True
     STRIKE_ONLY: ClassVar[bool] = True
     STRIKE_BANK: ClassVar[bool] = True
