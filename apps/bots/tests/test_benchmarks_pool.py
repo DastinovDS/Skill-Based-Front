@@ -29,12 +29,13 @@ from typing import Final, Protocol
 
 import pytest
 
-from gow_bots.bots import BOTS, Bot
+from gow_bots.bots import BOTS
 from gow_protocol.convert import snapshot_frame
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef, load_map
-from gow_sim.match import Match
+from gow_sim.match import Controller, Match
 from gow_sim.ruleset import Ruleset, load_ruleset
+from gow_sim.state import GameState
 from gow_sim.systems.flow import supply_flow
 from gow_sim.systems.vision import compute_vision
 from gow_sim.view import project
@@ -120,7 +121,7 @@ class _Game:
 
     def _new(self) -> Match:
         match = Match(self.map, self.source, KEY)
-        self.bots: list[Bot] = [
+        self.bots: list[Controller] = [
             BOTS[name](self.map, match.rules, seed=7, player=p) for p, name in enumerate(BOT_NAMES)
         ]
         self.seq = 0
@@ -213,9 +214,12 @@ def _check(benchmark_mean: float | None, factor: float, kind: str, game: _Game) 
     if benchmark_mean is None:
         return
     ceiling = CEILING_MS.get((kind, game.name))
-    assert ceiling is not None, f"no ceiling for {kind} on {game.name}: {benchmark_mean / MS / factor:.3f} ms"
+    assert ceiling is not None, (
+        f"no ceiling for {kind} on {game.name}: {benchmark_mean / MS / factor:.3f} ms"
+    )
     assert benchmark_mean <= ceiling * MS * factor * REGRESSION, (
-        f"{kind} on {game.name}: mean {benchmark_mean / MS:.3f} ms, x{factor:.2f}, ceiling {ceiling} ms"
+        f"{kind} on {game.name}: mean {benchmark_mean / MS:.3f} ms, x{factor:.2f}, "
+        f"ceiling {ceiling} ms"
     )
 
 
@@ -244,7 +248,10 @@ def test_pool_step(benchmark: BenchmarkFixture, speed_factor: float, game: _Game
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
         return (game.commands(),), {}
 
-    _run(benchmark, speed_factor, "step", game, lambda cmds: game.match.step(cmds), setup)
+    def step(cmds: list[PlayerCommand]) -> None:
+        game.match.step(cmds)
+
+    _run(benchmark, speed_factor, "step", game, step, setup)
 
 
 def test_pool_project(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
@@ -274,7 +281,10 @@ def test_pool_supply_flow(benchmark: BenchmarkFixture, speed_factor: float, game
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
         return (copy.deepcopy(state),), {}
 
-    _run(benchmark, speed_factor, "supply", game, lambda s: supply_flow(s, rules), setup, 500)
+    def flow(s: GameState) -> None:
+        supply_flow(s, rules)
+
+    _run(benchmark, speed_factor, "supply", game, flow, setup, 500)
 
 
 def test_pool_snapshot_frame(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:

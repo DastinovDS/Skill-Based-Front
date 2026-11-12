@@ -6,7 +6,9 @@ from pathlib import Path
 from gow_sim.maps import load_map
 
 ROOT = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("snapshot_size", ROOT / "scripts" / "snapshot_size.py")
+_spec = importlib.util.spec_from_file_location(
+    "snapshot_size", ROOT / "scripts" / "snapshot_size.py"
+)
 assert _spec is not None and _spec.loader is not None
 snapshot_size = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(snapshot_size)

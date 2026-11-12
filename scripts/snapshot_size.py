@@ -25,6 +25,7 @@ import sys
 import time
 import zlib
 from pathlib import Path
+from typing import cast
 
 from gow_bots.bots import BOTS
 from gow_protocol.convert import snapshot_frame
@@ -111,11 +112,10 @@ def measure(mapdef: MapDef, ticks: int) -> tuple[Sizes, int]:
 
 
 def _parts(message: dict[str, object], sizes: Sizes) -> None:
-    view = message["view"]
-    assert isinstance(view, dict)
+    view = cast(dict[str, object], message["view"])
     for key, value in view.items():
         size = len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
-        sizes.parts.setdefault(str(key), []).append(size)
+        sizes.parts.setdefault(key, []).append(size)
 
 
 def _kb(n: float) -> str:
