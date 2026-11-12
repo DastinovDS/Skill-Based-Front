@@ -88,8 +88,9 @@ def protocol_json_schema() -> dict[str, Any]:
     """One schema with every type in ``$defs``; the root is the union of ``ROOTS``.
 
     ``x-constants`` carries the values the client needs at runtime (the ``hello`` version, the
-    close codes it handles, the bound of one ``merge``, ARC-C03). json-schema-to-typescript ignores it; ``apps/client/scripts/
-    protocol-consts.js`` appends them to ``protocol.gen.ts`` as ``export const``.
+    close codes it handles, the bound of one ``merge``, ARC-C03). json-schema-to-typescript
+    ignores it; ``apps/client/scripts/protocol-consts.js`` appends them to ``protocol.gen.ts`` as
+    ``export const``.
     """
     refs, schema = TypeAdapter.json_schemas(
         [(i, "serialization", TypeAdapter[Any](root)) for i, root in enumerate(ROOTS)],
