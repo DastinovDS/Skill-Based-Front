@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from gow_sim.maps import MapDef
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import Ruleset, VisionRules
 from gow_sim.state import (
     PROGRESS_SCALE,
     AtNode,
@@ -128,10 +128,58 @@ def _edge_levels(mapdef: MapDef, source: list[bool]) -> tuple[Detail, ...]:
     )
 
 
+@dataclass(slots=True)
+class _VisionMemo:
+    """The last ``Vision`` of a player with every input it was computed from (``compute_vision``);
+    ``GameState.memo``. ``table`` and ``mapdef`` are held, so ``is`` compares them safely."""
+
+    mapdef: MapDef
+    table: VisionRules
+    source: list[bool]
+    stands: list[bool]
+    mine: list[bool]
+    vision: Vision
+    halves: tuple[tuple[int, int], ...]
+    """The halves of edges not in fog, ``(edge, node)`` in the order of ``current_sightings``."""
+
+
+_MEMO: Final = ("vision.0", "vision.1")
+"""``GameState.memo`` keys of the vision memo, by player id."""
+
+
 def compute_vision(state: GameState, rules: Ruleset, player: int) -> Vision:
-    """Detail levels of all nodes and edges for ``player``. O(V + E + G)."""
+    """Detail levels of all nodes and edges for ``player``. O(V + E + G).
+
+    A pure function of the map, the terrain table of the ruleset, the own vision sources and
+    stands (``sources``) and which nodes ``player`` owns; the last result is kept with these inputs
+    in ``GameState.memo`` and returned again while they are equal (O(V + G) then)."""
     mapdef = state.map
+    table = rules.vision
     source, stands = sources(state, player)
+    nodes = state.nodes
+    mine = [nodes[n].owner == player for n in range(len(source))]  # ids are 0..n-1
+    memo = state.memo.get(_MEMO[player])
+    if (
+        isinstance(memo, _VisionMemo)
+        and memo.mapdef is mapdef
+        and memo.table is table
+        and memo.source == source
+        and memo.stands == stands
+        and memo.mine == mine
+    ):
+        return memo.vision
+    levels = _compute(mapdef, rules, source, stands, mine)
+    halves = tuple(
+        (e.id, n) for e in mapdef.edges for n in (e.a, e.b) if levels.zones[n] is not Detail.FOG
+    )
+    state.memo[_MEMO[player]] = _VisionMemo(mapdef, table, source, stands, mine, levels, halves)
+    return levels
+
+
+def _compute(
+    mapdef: MapDef, rules: Ruleset, source: list[bool], stands: list[bool], mine: list[bool]
+) -> Vision:
+    """``compute_vision`` without the memo."""
     zones = [Detail.EXACT if s else Detail.FOG for s in source]
     table = rules.vision.by_terrain
     for n, is_source in enumerate(source):
@@ -144,7 +192,7 @@ def compute_vision(state: GameState, rules: Ruleset, player: int) -> Vision:
             if _RANK[level] < _RANK[zones[m]]:
                 zones[m] = level
     nodes = tuple(
-        Detail.PRESENCE if level is Detail.FOG and state.nodes[n].owner == player else level
+        Detail.PRESENCE if level is Detail.FOG and mine[n] else level
         for n, level in enumerate(zones)
     )
     return Vision(
@@ -153,6 +201,17 @@ def compute_vision(state: GameState, rules: Ruleset, player: int) -> Vision:
         zones=tuple(zones),
         sources=tuple(source),
         stands=tuple(stands),
+    )
+
+
+def _halves_in_sight(state: GameState, player: int, levels: Vision) -> tuple[tuple[int, int], ...]:
+    """The halves of edges ``levels`` does not fog, ``(edge, node)`` by edge id, then ``a``
+    before ``b``: kept by the memo of ``compute_vision`` when ``levels`` is its result."""
+    memo = state.memo.get(_MEMO[player])
+    if isinstance(memo, _VisionMemo) and memo.vision is levels and memo.mapdef is state.map:
+        return memo.halves
+    return tuple(
+        (e.id, n) for e in state.map.edges for n in (e.a, e.b) if levels.half(n) is not Detail.FOG
     )
 
 
@@ -301,24 +360,30 @@ def current_sightings(
             case OnEdge() as loc:
                 on_half.setdefault((loc.edge, half_node(mapdef, loc)), []).append(group)
     tick = state.tick
-    empty = {  # one shared sighting per level for the places without enemies
-        level: _sighting(rules, tick, level, [])
-        for level in (Detail.EXACT, Detail.RANGE, Detail.PRESENCE)
-    }
+    empty: dict[Detail, Sighting] = {}  # one shared sighting per level for places without enemies
     nodes: dict[int, Sighting] = {}
     for n, level in enumerate(levels.nodes):
         if level is not Detail.FOG:
             here = at_node.get(n)
-            nodes[n] = empty[level] if here is None else _sighting(rules, tick, level, here)
+            if here is not None:
+                nodes[n] = _sighting(rules, tick, level, here)
+            else:
+                seen = empty.get(level)
+                if seen is None:
+                    seen = empty[level] = _sighting(rules, tick, level, [])
+                nodes[n] = seen
     halves: dict[tuple[int, int], Sighting] = {}
-    for e in mapdef.edges:
-        for n in (e.a, e.b):
-            level = levels.half(n)
-            if level is not Detail.FOG:
-                here = on_half.get((e.id, n))
-                halves[e.id, n] = (
-                    empty[level] if here is None else _sighting(rules, tick, level, here)
-                )
+    zones = levels.zones
+    for half in _halves_in_sight(state, player, levels):
+        level = zones[half[1]]
+        here = on_half.get(half)
+        if here is not None:
+            halves[half] = _sighting(rules, tick, level, here)
+        else:
+            seen = empty.get(level)
+            if seen is None:
+                seen = empty[level] = _sighting(rules, tick, level, [])
+            halves[half] = seen
     return nodes, halves
 
 

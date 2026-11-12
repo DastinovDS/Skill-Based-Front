@@ -83,6 +83,7 @@ bounded BFS per caller and tier (a caller stops when it is covered or no stock i
 from collections import deque
 from dataclasses import dataclass
 
+from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import AtNode, Event, FlowIdle, FlowNode, GameState, Group, Node, event
 from gow_sim.systems.capacity import consume, is_starvation_tick, warehouse_capacities
@@ -952,17 +953,71 @@ def _send(
     return events
 
 
+@dataclass(slots=True)
+class _PlanMemo:
+    """The last plan of a player (``_store``) with every input of ``_run`` it was computed from;
+    ``GameState.memo``. ``field`` is held, so ``is`` compares it safely (a ``_Field`` is never
+    changed after ``_pull`` made it)."""
+
+    mapdef: MapDef
+    field: _Field
+    capacities: tuple[int, ...]
+    stock: list[int]
+    """The warehouses of the own nodes, in ``field.adj`` order."""
+    incoming: dict[int, int]
+    flows: list[tuple[int, FlowNode]]
+    """``Node.flow`` of every own node as the plan left it, in ``field.adj`` order."""
+
+
+_PLAN_MEMO: tuple[str, str] = ("flow.plan.0", "flow.plan.1")
+"""``GameState.memo`` keys of the plan memo, by player id."""
+
+
 def _store(
     state: GameState, field: _Field, capacities: tuple[int, ...], incoming: dict[int, int]
 ) -> None:
     """Step 6: the plan of the next dispatch and the field into ``Node.flow``. A node keeps its
-    ``FlowNode`` when nothing of it changed (equal values: the same state)."""
+    ``FlowNode`` when nothing of it changed (equal values: the same state).
+
+    The plan is a pure function of the map, the field, the warehouse capacities, the warehouses
+    of the own nodes and the own packets on the way (``_run``); the last one is kept with these
+    inputs in ``GameState.memo`` and the ``FlowNode`` values it gave are set again while they are
+    equal."""
+    player = field.player
+    nodes = state.nodes
+    stock = [nodes[n].warehouse for n in field.adj]
+    memo = state.memo.get(_PLAN_MEMO[player])
+    if (
+        isinstance(memo, _PlanMemo)
+        and memo.field is field
+        and memo.mapdef is state.map
+        and memo.capacities == capacities
+        and memo.stock == stock
+        and memo.incoming == incoming
+    ):
+        for n, flow in memo.flows:
+            old = nodes[n].flow
+            if old is not flow and old != flow:
+                nodes[n].flow = flow
+        return
+    flows = _plan(state, field, capacities, incoming)
+    state.memo[_PLAN_MEMO[player]] = _PlanMemo(
+        state.map, field, capacities, stock, dict(incoming), flows
+    )
+
+
+def _plan(
+    state: GameState, field: _Field, capacities: tuple[int, ...], incoming: dict[int, int]
+) -> list[tuple[int, FlowNode]]:
+    """``_store`` without the memo; returns ``Node.flow`` of every own node, in ``field.adj``
+    order."""
     player = field.player
     key = state.map.node_key
     nodes = state.nodes
     d = field.d
     ways: dict[int, list[int]] = {}
     plan = dict(_run(state, field, capacities, incoming, ways))
+    flows: list[tuple[int, FlowNode]] = []
     for n in field.adj:
         dn = d.get(n)
         k = field.k[n]
@@ -1001,8 +1056,12 @@ def _store(
             and old.next == nxt
             and old.idle is idle
         ):
+            flows.append((n, old))
             continue
-        nodes[n].flow = FlowNode(d=dn, k=k, pocket=pocket, down=down, next=nxt, idle=idle)
+        flow = FlowNode(d=dn, k=k, pocket=pocket, down=down, next=nxt, idle=idle)
+        nodes[n].flow = flow
+        flows.append((n, flow))
+    return flows
 
 
 def _clear_neutral(state: GameState) -> None:
