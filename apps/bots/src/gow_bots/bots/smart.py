@@ -1496,8 +1496,8 @@ class SmartBot(CampaignBot):
         if not self.answering() or not self.CENTRE_BARRACKS:
             return super().wanted_barracks(view)
         centre = self.centre
-        if centre == self.home:
-            return None
+        if centre == self.home or centre in self.barracks_lost:
+            return None  # #683: no rebuild where one was lost
         n = view.nodes[centre]
         if n.owner != self.player or n.has_barracks or n.building is not None:
             return None

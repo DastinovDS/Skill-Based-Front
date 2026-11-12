@@ -12,11 +12,14 @@ twice where one was lost:
 - **Where** (``safe_rear``): an own city (not a province, not the capital, no factory, no fight) at
   least ``SITE_DEPTH`` road hops from every enemy node, reached from the own capital over own
   nodes none of which touches an enemy node, so one capture next to the front does not cut it into
-  a pocket. The farthest from the enemy nodes first (up to ``SITE_DEPTH_CAP`` hops; beyond that
+  a pocket, and never one where an own factory was lost. The farthest from the enemy nodes first
+  (up to ``SITE_DEPTH_CAP`` hops; beyond that
   they count as equally safe), then the nearest to the own capital over those nodes, the largest
   warehouse, ``Bot.key`` (mirror-invariant).
 - **When**: one build at a time while the player has fewer than ``1 + extra`` factories (the
-  capital is one, ``factory.max`` caps the sum), and only while the factory pays back: the charges
+  capital is one, ``factory.max`` caps the sum), not while the enemy holds more nodes than the
+  player (public ownership: losing ground, the rear is the next thing lost), and only while the
+  factory pays back: the charges
   it makes in the ticks left after its build time and ``FACTORY_DELIVERY_TICKS`` at the period of
   the own stance now (``factory_period``, rounded down) are at least ``factory.cost`` plus
   ``FACTORY_PROFIT``. A late build under War (the longest period) is not started.
@@ -59,9 +62,10 @@ __all__ = [
 FACTORY_RESTARTS: Final = 1
 """Unpaid losses of factory builds (a build stopped, or a factory captured before it made
 ``factory.cost`` charges) the bot replaces at most in a match; past them it builds no more."""
-SITE_DEPTH: Final = 2
-"""A site is at least this many road hops from every enemy node: no enemy node next to it."""
-SITE_DEPTH_CAP: Final = 3
+SITE_DEPTH: Final = 3
+"""A site is at least this many road hops from every enemy node: no enemy node within two roads
+(one capture next to it would put the enemy at its door)."""
+SITE_DEPTH_CAP: Final = 4
 """Hops from the enemy nodes beyond which sites count as equally safe (then the nearest to the
 own capital)."""
 FACTORY_PROFIT: Final = 2
@@ -195,6 +199,8 @@ def factory_site(
         count += bool(n.factory)
     if count >= min(rules.factory.max, 1 + extra):
         return None
+    if sum(n.owner == 1 - me for n in view.nodes) > sum(n.owner == me for n in view.nodes):
+        return None  # losing ground: a new factory would be the next thing lost
     if payback(rules, view) < cost + FACTORY_PROFIT:
         return None  # too late for the stance's period
     if spare_stock(bot, view, main) < cost:
