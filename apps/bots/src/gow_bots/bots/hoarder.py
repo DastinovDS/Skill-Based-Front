@@ -68,6 +68,12 @@ class SmartHoarder(SmartBot):
     STRIKE_MIN: ClassVar[int] = 1
     MID_RALLY: ClassVar[bool] = False
     """The capital's spare units march by the build-up (``_guard_split``), not by item 18."""
+    PACKAGE: ClassVar[bool] = False
+    """Item 28 of ``smart`` off: the benchmark stays the yardstick it was (#1023)."""
+    SQUADS: ClassVar[bool] = False
+    COMBINE: ClassVar[bool] = False
+    ASSAULT: ClassVar[bool] = False
+    W_EXPLOIT: ClassVar[int] = 0
     ANSWERS: ClassVar[bool] = False
     """The yardstick stays as it was measured (#624, PR 1): none of items 13-17."""
     DEFENSE_V2: ClassVar[bool] = False

@@ -20,6 +20,8 @@ first:
    node too: DEC-43, item D6, ``Bot.toll_from``, #760), and ``score``
    ranks the viable (group, target) pairs; a group too big for every path to a target splits off
    an army that fits and could take it (``fit_split``), the army goes in the next decision;
+   with ``PACKAGE`` (#1023, the smart bots) a defended enemy node needs ``SURPLUS`` shots more
+   (0 there) and is attacked by a planned order with the full bonus the group can gather;
 4. ``gather``: groups standing in one node are merged when together they can take a target
    that none of them can take alone (and the merged group still fits the path);
 5. ``rally``: groups without a target walk to the own node closest to the objective (a group too
@@ -223,6 +225,11 @@ class CampaignBot(Bot):
     """Factories built beside the capital (``factory.max`` caps the sum)."""
     CONTACT: ClassVar[bool] = False
     """The estimate before contact under ``combat.retreat = "none"`` (module docstring, #881)."""
+    PACKAGE: ClassVar[bool] = False
+    """The strike package (#1023, module docstring): an attack on a defended enemy node brings
+    ``SURPLUS`` shots more and goes by a planned order with the full bonus it can gather."""
+    SURPLUS: ClassVar[int] = 0
+    """``PACKAGE``: shots an attack on a defended enemy node brings above its ``need``."""
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> None:
         super().__init__(mapdef, rules, seed=seed, player=player)
@@ -746,6 +753,9 @@ class CampaignBot(Bot):
                 real = g.charged - toll
                 # The bonus does not grow with the distance (DEC-41, item 10).
                 bonus = self.plan_bonus(view, here, g.charged)
+                defended = self.PACKAGE and self.defended(view, ctx.tick, dest)
+                if defended:
+                    need += self.SURPLUS  # the strike package: a charge to spare (#1023)
                 # DEC-38: the charges must also pay the capture; virtual shots never pay.
                 plain = takes(rules, g.charged, 0, need, toll)
                 plan = bonus >= 1 and takes(rules, g.charged, bonus, need, toll)
@@ -754,6 +764,8 @@ class CampaignBot(Bot):
                 planned = plan and not plain  # the plan turns a bounce into a capture
                 # The plan asks for the shots it misses only (DEC-41, item 10).
                 ask = max(1, need + rules.capture.charge_cost - real)
+                if defended and plan and self.package_plan(ctx, g, dest, bonus):
+                    planned, ask = True, bonus  # #1023: the full bonus into a defended node
                 shots = g.charged + (min(bonus, ask) if planned else 0)
                 if self.DISCIPLINE and self.recall_holds(ctx.tick, dest, shots):
                     continue  # #687: no reissue of a recalled attack without more shots
@@ -762,6 +774,17 @@ class CampaignBot(Bot):
                     found.append(Option(score, g, dest, planned, need, min(bonus, ask)))
         found.sort(key=lambda o: (-o.score, self.key(o.dest), self.group_order(o.group)))
         return found
+
+    def defended(self, view: PlayerView, tick: int, dest: int) -> bool:
+        """``dest`` is an enemy node with a garrison by the estimate (``estimate``): a fight, not
+        a walk-in (the strike package, ``PACKAGE``, #1023)."""
+        return view.nodes[dest].owner == 1 - self.player and self.estimate(view, tick, dest)[0] > 0
+
+    def package_plan(self, ctx: Ctx, g: GroupView, dest: int, bonus: int) -> bool:
+        """``PACKAGE``: the attack of ``g`` on the defended ``dest`` goes by a planned order with
+        the full ``bonus`` it can gather (DEC-41, item 10), unless another plan gathers in its node
+        (``plan_clash``, #899): the ordinary order then, when it takes the node."""
+        return not self.plan_clash(ctx.view, self.order(g.id, dest, True, bonus), ctx.planned)
 
     def group_order(self, g: GroupView) -> tuple[int, int, int]:
         """Mirror-invariant order of own groups (node, then size, then charges)."""
@@ -841,7 +864,7 @@ class CampaignBot(Bot):
                 if view.nodes[dest].owner == self.player or dest in ctx.claimed:
                     continue
                 size = min(spare, self.fit(view, here, dest, g.units))
-                if size < 1:
+                if size < self.min_split(ctx, dest):
                     continue
                 opts = by_size.get(size)
                 if opts is None:
@@ -852,6 +875,12 @@ class CampaignBot(Bot):
                     best = (found[0].score, size)
             if best is not None and self.spend(ctx, Split(g.id, best[1])):
                 ctx.used[g.id] = True
+
+    def min_split(self, ctx: Ctx, dest: int) -> int:
+        """The fewest units ``_fit_split`` and ``_rally`` split off for ``dest`` (``SmartBot``:
+        a squad)."""
+        del ctx, dest
+        return 1
 
     @staticmethod
     def fake_group(like: GroupView, units: int, charged: int) -> GroupView:
@@ -916,7 +945,7 @@ class CampaignBot(Bot):
             if size == g.units and self.spend(ctx, Move(g.id, best)):
                 ctx.used[g.id] = True
                 ctx.standing[here] -= g.units
-            elif 1 <= size < g.units and self.spend(ctx, Split(g.id, size)):
+            elif self.min_split(ctx, best) <= size < g.units and self.spend(ctx, Split(g.id, size)):
                 ctx.used[g.id] = True  # the part that fits rallies in the next decision
 
     # Recruiting -----------------------------------------------------------------------------

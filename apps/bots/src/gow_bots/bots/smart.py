@@ -222,9 +222,38 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     ``_attack``, the last spending of a decision and within ``radius`` hops: the discharged groups
     next to an empty capital could not pay the capture, the charged ones were farther or the
     guard, and the CP went elsewhere first.
+28. **A winning strike package and an army** (#1023, step 4a of the bot plan; the owner's recipe
+    in his matches of 2026-11-12: 3-unit squads, the full bonus, a charge surplus, ``GroupMove``):
+
+    - *The package* (``PACKAGE``, ``SURPLUS``; ``CampaignBot.options``): an attack on a defended
+      enemy node (a garrison by the estimate) goes only with the shots that cancel the defender's
+      charges and terrain, kill each of its units and leave the capture charge (``need``,
+      ``takes``: more than the owner's "charges, terrain, toll and a capture charge" by the units)
+      plus ``SURPLUS`` (0: one more measured weaker), and goes by a planned order with the full
+      bonus the group can gather (DEC-41, item 10), not the shots it misses only; a walk-in
+      stays an ordinary order.
+    - *Squads* (``SQUADS``, ``squad``; on a settled map, item 18): the capital and a front stack
+      split off one squad of a province's capacity (DEC-22, the stack limit of DEC-20 lets it
+      through every node) a decision, so the recruits merge into the stack until a squad is
+      ready, and a stack that took a node stays together until a whole squad can go; less than
+      a squad splits off only to walk into an empty node (``WALK_IN_SPLITS``: the land race is
+      won by walk-ins, and without them the squads lost it to the benchmark).
+    - *A combined attack* (``COMBINE``, ``_combine``, under ``[group_order]``): a defended enemy
+      node no free group takes alone gets one ``GroupMove`` (DEC-48, a synchronized arrival) of
+      the nearest free groups that take it together with the package, as few as it takes, one
+      a decision; the converging strike of item 12 goes by one ``GroupMove`` too
+      (``_strike_together``). Their members are committed (item 12): no recall one by one.
+    - *The second echelon* (``W_EXPLOIT``): the groups a combined attack leaves out stay free,
+      and for ``EXPLOIT_TICKS`` after the bot takes an enemy node every enemy node next to it
+      scores ``W_EXPLOIT`` more (through the hole: the nodes behind it, the supply it cut).
+    - *The late assault* (``ASSAULT``): in the late game (item 18) a striking personality rallies
+      to the enemy capital and its strike reaches one hop farther (``strike_hops``).
+
+    The benchmarks ``smart_hoarder`` and ``smart_exploiter`` keep item 28 off.
 
 An order is planned when the bonus it gathers makes it take its target (DEC-41, item 10), the
-same rule for all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
+same rule for all bots (AGENTS.md, section 8), and with item 28 whenever it attacks a defended
+enemy node and can gather a bonus (the full bonus then). Tie-breaks are mirror-invariant
 (``Bot.key``, ``Bot.edge_keys``), nothing draws from ``self.rng``.
 """
 
@@ -236,7 +265,7 @@ from typing import ClassVar, Final, override
 
 from gow_bots.bots.assess import FRESH_TICKS, Assessment, Assessor, Travel
 from gow_bots.bots.base import ParamRange, node_of
-from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option
+from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option, Wave
 from gow_bots.bots.capital import TakeCommand
 from gow_bots.bots.economy import fort_site
 from gow_bots.bots.estimate import EnemyForce, Phase, Sector, phase, sectors, strengths, threats
@@ -255,6 +284,7 @@ from gow_sim.commands import (
     CancelRecruit,
     Command,
     FortifyRoad,
+    GroupMove,
     Move,
     Recruit,
     Split,
@@ -336,6 +366,8 @@ W_FORT_VP: Final = 100
 """Rank of a threatened node for a fortification per VP it is worth (item 22)."""
 W_FORT_CUT: Final = 50
 """Rank of a threatened node for a fortification per own node its loss cuts off (item 22)."""
+EXPLOIT_TICKS: Final = 300
+"""Item 28: how long a node the bot took from the enemy draws the second echelon (30 s)."""
 BANK_TICKS: Final = 300
 """Item 23 (#687): a goal saved for this long without being paid stops the saving for as long
 (three quanta of CP: the price of a fortification and a keep, or of a strike of three groups)."""
@@ -501,6 +533,27 @@ class SmartBot(CampaignBot):
     BANK: ClassVar[int] = 0
     """Item 23 (#687): CP in hundredths the routine spending leaves for a push or a fortification
     the bot decided on (``saving``); 0: no saving (the benchmark)."""
+    PACKAGE: ClassVar[bool] = True
+    """Item 28: the strike package (``CampaignBot.PACKAGE``); the benchmark keeps it off."""
+    SURPLUS: ClassVar[int] = 0
+    """Item 28: shots an attack on a defended enemy node brings above its ``need``. 0: ``need``
+    already asks one shot per defending unit on top of the pool and ``takes`` the capture charge,
+    so the owner's "shots above the charges, the terrain, the toll and a capture charge" holds;
+    one more measured weaker (fewer attacks, more losses: #1023)."""
+    SQUADS: ClassVar[bool] = True
+    """Item 28: the capital and a front stack split off whole squads only (``squad``)."""
+    WALK_IN_SPLITS: ClassVar[bool] = True
+    """Item 28: with ``SQUADS``, less than a squad still splits off to walk into an empty node
+    (a capture without a fight); without it the squads cost the land race (#1023)."""
+    COMBINE: ClassVar[bool] = True
+    """Item 28: combined attacks of several groups by one ``GroupMove`` (DEC-48), and the
+    converging strike of item 12 by one ``GroupMove`` too."""
+    ASSAULT: ClassVar[bool] = True
+    """Item 28: in the late game a striking personality rallies to the enemy capital and its
+    strike reaches one hop farther (the late synchronized assault)."""
+    W_EXPLOIT: ClassVar[int] = 150
+    """Item 28: score of an enemy node next to a node the bot took within ``EXPLOIT_TICKS``: the
+    second echelon follows a breakthrough."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **_COMMON,
         "radius": ParamRange(2, 3),
@@ -655,6 +708,10 @@ class SmartBot(CampaignBot):
         """Item 27: the enemy capital was in sight at the last look (``thinks``)."""
         self.peeked: int | None = None
         """Item 27: the tick of the last look at the enemy capital with an empty bucket."""
+        self.owned: list[int | None] = [n.start_owner for n in mapdef.nodes]
+        """Item 28: the owner of every node at the last decision (public ownership)."""
+        self.breach: dict[int, int] = {}
+        """Item 28: an enemy node the bot took to the tick it saw it taken (``EXPLOIT_TICKS``)."""
         for e, edef in enumerate(mapdef.edges):
             self.edge_between[(edef.a, edef.b)] = e
             self.edge_between[(edef.b, edef.a)] = e
@@ -711,6 +768,7 @@ class SmartBot(CampaignBot):
         self._read_arrivals(view)
         self.watch = self._watch_nodes(view)
         self._estimate(view)
+        self._read_breaches(view)
         self.pockets = self.read_pockets(view, tick, supplied)
         self.params = self.adjusted(a)
         try:
@@ -1014,6 +1072,7 @@ class SmartBot(CampaignBot):
         self.leave_pockets(ctx, charged=True)
         ctx.saved = self.unpaid(ctx, save)
         self._attack(ctx)
+        self._combine(ctx)  # item 28: what no single group takes, squads take together
         self._fit_split(ctx)
         self._gather(ctx)
         self._rally(ctx)
@@ -1235,15 +1294,16 @@ class SmartBot(CampaignBot):
         if view.nodes[target].owner == self.player:
             return None
         cost = rules.orders.cost
+        reach = self.strike_hops()
         found: list[tuple[GroupView, int, int, int]] = []
         for g in self.free_groups(ctx):
             here = node_of(g)
-            if g.charged == 0 or self.hops[here][target] > self.STRIKE_HOPS or self.pinned[here]:
+            if g.charged == 0 or self.hops[here][target] > reach or self.pinned[here]:
                 continue
             if here == self.home and ctx.standing[here] - g.units < self.params["guard"]:
                 continue
             path = self.way(view, here, target, g.units)
-            if path is None or path[0] > self.STRIKE_HOPS:
+            if path is None or path[0] > reach:
                 continue
             found.append((g, here, path[0], path[1]))
         if not found:
@@ -1278,6 +1338,11 @@ class SmartBot(CampaignBot):
             lead = ticks + (self.plan_lead(bonus) if plan else 0)
             chosen.append(Pick(g.id, here, g.units, g.charged, plan, lead, bonus if plan else 0))
         return StrikePlan(pool, need, spent, tuple(chosen))
+
+    def strike_hops(self) -> int:
+        """The farthest group of a strike in edges: ``STRIKE_HOPS``, one more in the late game
+        with ``ASSAULT`` (item 28: the army that rallied to the enemy capital goes together)."""
+        return self.STRIKE_HOPS + (1 if self.ASSAULT and self.phase is Phase.LATE else 0)
 
     def plan_strike(self, g: GroupView, missing: int, edges: int, bonus: int = 0) -> bool:
         """Whether group ``g`` of a strike goes by a scheduled order: every group that can gather
@@ -1325,6 +1390,9 @@ class SmartBot(CampaignBot):
             self.saving_since = None
         ctx.claimed[s.target] = True
         free = {g.id: g for g in self.free_groups(ctx)}
+        if self.combining():
+            self._strike_together(ctx, s, free)
+            return
         left: list[Pick] = []
         for p in s.picks:
             g = free.get(p.group)
@@ -1343,6 +1411,188 @@ class SmartBot(CampaignBot):
         if not left or tick > s.until:
             self.strike = None
             self.strike_rest = tick + STRIKE_REST
+
+    def _strike_together(self, ctx: Ctx, s: Strike, free: Mapping[int, GroupView]) -> None:
+        """Item 28: the picks of the strike ``s`` go by one ``GroupMove`` (DEC-48): the server
+        times every departure for one arrival, so no ``STRIKE_ALIGN`` timing and no drip. Planned
+        when a pick gathers a bonus, the request the sum of theirs; a planned order takes one
+        group of a node (the bonus of two groups of one node gathers in the order of their
+        internal ids, #899). Unpaid, the strike waits for the CP until ``Strike.until``."""
+        tick = ctx.tick
+        picks = [p for p in s.picks if p.group in free]
+        planned = any(p.planned for p in picks)
+        if planned:
+            one: dict[int, Pick] = {}
+            for p in picks:
+                if p.node not in one or (p.planned and not one[p.node].planned):
+                    one[p.node] = p
+            picks = [one[n] for n in sorted(one, key=self.key)]
+        picks.sort(key=lambda p: (-p.bonus, self.key(p.node), -p.units, -p.charged))
+        picks = picks[: self.group_cap()]
+        bonus = sum(p.bonus for p in picks) if planned else 0
+        sent = len(picks) >= self.STRIKE_MIN and self._group_attack(
+            ctx, [free[p.group] for p in picks], s.target, planned and bonus >= 1, bonus
+        )
+        if sent or not picks or tick > s.until:
+            self.strike = None
+            self.strike_rest = tick + STRIKE_REST
+
+    def group_cap(self) -> int:
+        """Groups in one ``GroupMove`` at most (``group_order.max_groups``; 1 without it)."""
+        order = self.rules.group_order
+        return 1 if order is None else order.max_groups
+
+    def _group_attack(
+        self, ctx: Ctx, groups: list[GroupView], dest: int, planned: bool, bonus: int
+    ) -> bool:
+        """Send one synchronized attack of ``groups`` on ``dest`` (DEC-48, item C) and book it:
+        the groups are used and committed (not recalled one by one, item 12), the target claimed
+        and judged as a wave (``_learn``)."""
+        cmd = GroupMove(tuple(g.id for g in groups), dest, planned, bonus if planned else 0)
+        if not self.spend(ctx, cmd):
+            return False
+        tick = ctx.tick
+        for g in groups:
+            here = node_of(g)
+            ctx.used[g.id] = True
+            ctx.standing[here] -= g.units
+            self.strike_sent[g.id] = tick
+            if planned:
+                ctx.planned[here] = True
+        ctx.claimed[dest] = True
+        estimate = self.estimate(ctx.view, tick, dest)
+        self.waves[dest] = Wave(tick, sum(g.charged for g in groups), estimate)
+        return True
+
+    # A combined attack, squads, the second echelon (item 28) --------------------------------
+
+    def combining(self) -> bool:
+        """Item 28 is on: ``COMBINE`` with ``insight`` (item 9) under ``[group_order]``."""
+        return self.COMBINE and self.tempo.insight and self.rules.group_order is not None
+
+    def _combine(self, ctx: Ctx) -> None:
+        """One combined attack a decision (item 28): the free groups that reach a defended enemy
+        node within ``radius`` (one per node, the most charged) and take it together with the
+        strike package (``need``, ``SURPLUS``, the capture charge, the toll of each road in, the
+        bonus each can gather) while none of them was sent alone, the nearest first, as few as
+        it takes (the rest is the second echelon), at most ``group_order.max_groups`` and what
+        the CP pay; the best such target by ``score``. One ``GroupMove``, planned with the sum of
+        the bonuses when the target is defended and no member's node gathers another plan."""
+        if not self.combining():
+            return
+        view, rules = ctx.view, self.rules
+        move = max(1, rules.orders.cost.move)
+        afford = min(self.group_cap(), (ctx.budget - max(ctx.held, ctx.saved)) // move)
+        if afford < 2:
+            return
+        by_node: dict[int, GroupView] = {}
+        for g in self.free_groups(ctx):
+            if g.charged < 1 or not self.may_leave(ctx, g):
+                continue
+            here = node_of(g)
+            best = by_node.get(here)
+            if best is None or (g.charged, g.units) > (best.charged, best.units):
+                by_node[here] = g
+        if len(by_node) < 2:
+            return
+        radius = self.params["radius"]
+        enemy = 1 - self.player
+        found: dict[int, list[tuple[int, int, int, GroupView]]] = {}
+        for here in sorted(by_node, key=self.key):
+            g = by_node[here]
+            ways = self.ways(view, here, g.units)
+            for dest in self.reachable(view, here, radius, g.units):
+                if dest in ctx.claimed or view.nodes[dest].owner != enemy:
+                    continue
+                if not self.defended(view, ctx.tick, dest):
+                    continue
+                real = g.charged - self.toll_from(view, here, dest, g.units, g.charged)
+                if real <= 0:
+                    continue
+                gathers = ctx.planned.get(here) or self.plans_in(view, here, g.id)
+                bonus = 0 if gathers else min(self.plan_bonus(view, here, g.charged), real)
+                found.setdefault(dest, []).append((ways[dest].ticks, real, bonus, g))
+        cost = rules.capture.charge_cost
+        best_attack: tuple[int, int, list[GroupView], int] | None = None
+        for dest in sorted(found, key=self.key):
+            cands = found[dest]
+            if len(cands) < 2:
+                continue
+            cands.sort(key=lambda c: (c[0], -c[1], self.group_order(c[3])))
+            need = self.need(view, ctx.tick, dest) + self.SURPLUS + cost
+            chosen: list[tuple[int, int, int, GroupView]] = []
+            real = bonus = 0
+            for c in cands[:afford]:
+                chosen.append(c)
+                real, bonus = real + c[1], bonus + c[2]
+                if real >= cost and real + min(bonus, real) >= need:
+                    break
+            else:
+                continue  # not enough together
+            if len(chosen) < 2:
+                continue  # one group alone: a single attack (``_attack``)
+            if self.DISCIPLINE and self.recall_holds(ctx.tick, dest, real + bonus):
+                continue
+            first = chosen[0][3]
+            army = self.fake_group(
+                first, sum(c[3].units for c in chosen), sum(c[3].charged for c in chosen)
+            )
+            score = self.score(ctx, army, dest, need)
+            if score is None:
+                continue
+            if best_attack is None or score > best_attack[0]:
+                groups = [c[3] for c in sorted(chosen, key=lambda c: (-c[2], c[0]))]
+                best_attack = (score, dest, groups, bonus)
+        if best_attack is None:
+            return
+        _, dest, groups, bonus = best_attack
+        self._group_attack(ctx, groups, dest, bonus >= 1, bonus)
+
+    def squads(self) -> bool:
+        """Item 28: the army moves in squads: ``SQUADS`` on a settled map (item 18); the opening
+        keeps its quick splits, the land race is won by walk-ins."""
+        return self.SQUADS and self.settled()
+
+    def squad(self) -> int:
+        """Units of a squad (item 28): the capacity of a province (DEC-22), the biggest group
+        every road of the map lets through (the stack limit, DEC-20, D); 2 without ``squads``
+        (the old smallest split)."""
+        if not self.squads():
+            return 2
+        return max(2, self.rules.capacity.by_kind.of(NodeKind.PROVINCE))
+
+    @override
+    def min_split(self, ctx: Ctx, dest: int) -> int:
+        """Item 28: a split off a stack (an army that fits a path to ``dest``, a part that fits
+        the room of a rally) is a whole squad, unless the army walks into an empty node (a
+        capture without a fight: the land race is won by walk-ins)."""
+        if not self.squads():
+            return 1
+        foreign = ctx.view.nodes[dest].owner != self.player
+        if self.WALK_IN_SPLITS and foreign and not self.defended(ctx.view, ctx.tick, dest):
+            return 1
+        return self.squad()
+
+    def _read_breaches(self, view: PlayerView) -> None:
+        """Item 28: the enemy nodes the bot took since its last decision (public ownership) open
+        a breach for ``EXPLOIT_TICKS``."""
+        tick, me = view.tick, self.player
+        for n in view.nodes:
+            if n.owner == me and self.owned[n.id] == 1 - me:
+                self.breach[n.id] = tick
+            self.owned[n.id] = n.owner
+        self.breach = {
+            n: t
+            for n, t in sorted(self.breach.items())
+            if tick - t <= EXPLOIT_TICKS and view.nodes[n].owner == me
+        }
+
+    def exploit(self, view: PlayerView, dest: int) -> int:
+        """Item 28: ``W_EXPLOIT`` for an enemy node next to a breach (the second echelon goes
+        through the hole: the nodes behind it, the supply it cut); 0 otherwise."""
+        if not self.W_EXPLOIT or view.nodes[dest].owner != 1 - self.player:
+            return 0
+        return self.W_EXPLOIT if any(m in self.breach for m in self.neighbors[dest]) else 0
 
     @override
     def committed(self, group: int) -> bool:
@@ -2011,11 +2261,22 @@ class SmartBot(CampaignBot):
             spare = ctx.standing[here] - keep
             if spare < 2 or g.units <= spare:
                 continue
+            squad = self.squad()
+            whole = not self.squads() or spare >= squad
+            if not whole:
+                if not self.WALK_IN_SPLITS:
+                    continue  # item 28: the recruits merge into the stack until a squad is spare
+            elif self.squads():
+                spare = squad  # item 28: one whole squad a decision
             army = self.fake_group(g, spare, min(spare, g.charged))
             # Item 18: on a settled map the spare units of the capital march to the objective
             # even without a target in reach (a pile at home earns nothing).
             rally = self.MID_RALLY and self.settled() and here == self.home and g.charged > keep
-            if (rally or self.options(ctx, [army])) and self.spend(ctx, Split(g.id, spare)):
+            opts = self.options(ctx, [army])
+            if not whole:  # item 28: less than a squad goes only to walk into an empty node
+                rally = False
+                opts = [o for o in opts if not self.defended(ctx.view, ctx.tick, o.dest)]
+            if (rally or opts) and self.spend(ctx, Split(g.id, spare)):
                 ctx.used[g.id] = True
 
     # Targets --------------------------------------------------------------------------------
@@ -2043,6 +2304,7 @@ class SmartBot(CampaignBot):
         if self.worry is not None and dest == self.worry.stage:
             value += W_STAGE  # item 13: hit the build-up before it strikes
         value += self.mid_value(ctx, dest)
+        value += self.exploit(ctx.view, dest)  # item 28: the second echelon
         if self.pockets is not None:
             value += W_RESCUE * self.pockets.rescue.get(dest, 0)  # item 20: retake the cut
         return value + p["w_closer"] * closer - p["w_need"] * need - p["w_hops"] * hops
@@ -2088,7 +2350,10 @@ class SmartBot(CampaignBot):
     @override
     def objective(self, ctx: Ctx) -> int:
         """Region bots gather at the edge of their region nearest the enemy; cutting bots at the
-        most damaging enemy node; the rest at the enemy capital."""
+        most damaging enemy node; the rest at the enemy capital. In the late game with
+        ``ASSAULT`` every striking personality at the enemy capital (item 28)."""
+        if self.ASSAULT and self.striking() and self.phase is Phase.LATE:
+            return self.enemy_home
         if self.MID_GOAL and self.settled():
             spot = self.weak_spot(ctx)
             if spot is not None:
@@ -2466,7 +2731,8 @@ class SmartTurtle(SmartBot):
     FORTS: ClassVar[int] = 6
     """Item 22: the turtle leans on road fortifications."""
     FORT_KEEP: ClassVar[int] = 0
-    FORT_SHARE: ClassVar[int] = 20
+    FORT_SHARE: ClassVar[int] = 10
+    """Owner decision after step 2 (#1023): the fort CP share of the turtle under 10% too."""
     FRONT_EXTRA: ClassVar[int] = 2
     """Units a threatened front node keeps above ``hold_front`` at most."""
     W_WEAK: ClassVar[int] = 40
