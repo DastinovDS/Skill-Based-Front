@@ -3,6 +3,7 @@ import {
   CLIENT_VERSION,
   Diagnostics,
   FLUSH_MS,
+  MARK_COOLDOWN_MS,
   MAX_ENTRIES,
   consoleText,
   installDiagnostics,
@@ -272,6 +273,17 @@ describe('Diagnostics: the mark', () => {
     expect(await diag.mark()).toEqual({ sent: false, tick: null });
   });
 
+  it('sends no second mark within the cooldown (a hammered key)', async () => {
+    const { diag, sent, advance } = setup();
+    advance(10_000);
+    expect(await diag.mark()).toEqual({ sent: true, tick: null });
+    advance(MARK_COOLDOWN_MS - 1);
+    expect(await diag.mark()).toEqual({ sent: false, tick: null, wait: true });
+    advance(1);
+    expect(await diag.mark()).toEqual({ sent: true, tick: null });
+    expect(sent.map(({ report }) => report.reason)).toEqual(['mark', 'mark']);
+  });
+
   it('shows a toast with the tick, or a warning when it failed', async () => {
     const toasts: unknown[] = [];
     const push = (body: unknown): void => {
@@ -285,6 +297,7 @@ describe('Diagnostics: the mark', () => {
     ]);
     expect(markToast(true, 1234).text).toContain('tick 1234');
     expect(markToast(true, null).text).not.toContain('tick');
+    expect(markToast(false, 1234, true).text).toContain('already marked');
   });
 });
 

@@ -477,6 +477,7 @@ export const en = {
   'diag.marked': 'Problem marked at tick {tick}. The last minute was sent to the developers.',
   'diag.markedNoTick': 'Problem marked. The last minute was sent to the developers.',
   'diag.markFailed': 'The problem mark did not reach the server. Try again in a minute.',
+  'diag.markWait': 'Problem already marked a moment ago.',
   'bar.soundTip': '{tip} ({muteKey})',
   'bar.soundOn': 'Mute the sound',
   'bar.soundOff': 'Turn the sound on',

@@ -37,6 +37,11 @@ export const FLUSH_MS = 10_000;
 export const MAX_ENTRIES = 50;
 /** A mark carries this many seconds of the past (the timeline and the entries). */
 export const MARK_SECONDS = 60;
+/**
+ * A mark this soon after the one before is not sent (the key held or hammered): with a batch at
+ * most every `FLUSH_MS`, a client stays under the server's 20 reports a minute.
+ */
+export const MARK_COOLDOWN_MS = 5_000;
 /** The normal close of the match WebSocket (the match ended): not a problem. */
 const CLOSE_NORMAL = 1000;
 
@@ -52,6 +57,14 @@ export interface DiagnosticsOptions {
   readonly send?: (report: ClientReport, urgent: boolean) => Promise<boolean>;
   readonly setTimer?: (run: () => void, ms: number) => unknown;
   readonly clearTimer?: (timer: unknown) => void;
+}
+
+/** What became of a mark (`Diagnostics.mark`). */
+export interface MarkResult {
+  readonly sent: boolean;
+  readonly tick: number | null;
+  /** Not sent: the mark before is too recent. */
+  readonly wait?: boolean;
 }
 
 interface Second {
@@ -99,6 +112,8 @@ export class Diagnostics {
   /** When the tab was last hidden or shown. */
   #visibilityAt = -Infinity;
   #timer: unknown = null;
+  /** When the last mark went (the page clock). */
+  #markedAt = -Infinity;
 
   constructor(options: DiagnosticsOptions = {}) {
     this.#now = options.now ?? (() => performance.now());
@@ -222,12 +237,15 @@ export class Diagnostics {
 
   /**
    * The "mark problem" key: the entries and the timeline of the last minute go now, the batch with
-   * them. `sent`: the server took it; `tick`: the tick the mark names.
+   * them. `sent`: the server took it; `tick`: the tick the mark names; `wait`: not sent, the mark
+   * before is less than `MARK_COOLDOWN_MS` old.
    */
-  async mark(): Promise<{ readonly sent: boolean; readonly tick: number | null }> {
+  async mark(): Promise<MarkResult> {
     const tick = this.#tick;
     if (!this.enabled) return { sent: false, tick };
     const now = this.#now();
+    if (now - this.#markedAt < MARK_COOLDOWN_MS) return { sent: false, tick, wait: true };
+    this.#markedAt = now;
     const since = now - MARK_SECONDS * 1000;
     const entries = this.#recent.filter((entry) => entry.t_ms >= since);
     const last = Math.floor(now / 1000);
