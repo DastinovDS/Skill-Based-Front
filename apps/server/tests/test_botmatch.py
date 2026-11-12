@@ -19,7 +19,7 @@ import uvicorn
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.typing import Origin
 
-from gow_bots.bots import BOTS, Controller
+from gow_bots.bots import BOTS
 from gow_protocol.codec import decode_server, encode
 from gow_protocol.commands import SetStanceCmd
 from gow_protocol.convert import snapshot_frame
@@ -39,9 +39,10 @@ from gow_server.clock import ManualClock
 from gow_server.matches import BOT_ACCOUNT, BotSeat, MatchManager, MatchRunner
 from gow_server.settings import Settings
 from gow_sim.commands import Command, Forfeit
-from gow_sim.maps import PLAYERS, load_map
+from gow_sim.maps import PLAYERS, MapDef, load_map
+from gow_sim.match import Controller, given
 from gow_sim.replay import read_replay
-from gow_sim.ruleset import Stance, load_ruleset
+from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.view import PlayerView, project
 
 ROOT: Final = Path(__file__).parents[3]
@@ -207,7 +208,7 @@ class _Slow:
 def _runner(controller: Controller | None = None, **kwargs: object) -> MatchRunner:
     mapdef = load_map(ROOT / "maps" / "fixtures" / "web.json")
     rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
-    seat = BotSeat(1, controller or BOTS["idle"](mapdef, rules, seed=1, player=1))
+    seat = BotSeat(1, BOTS["idle"] if controller is None else given(controller), seed=1)
     return MatchRunner(
         "m",
         "web",
@@ -218,6 +219,24 @@ def _runner(controller: Controller | None = None, **kwargs: object) -> MatchRunn
         bot=seat,
         **kwargs,  # type: ignore[arg-type]
     )
+
+
+def test_the_bot_is_made_from_the_rules_the_match_plays() -> None:
+    """#994 (ARP-06): the runner makes the bot itself, from ``Match.rules`` (``[map_tempo]``
+    applied, DEC-46), with the seed and the slot of its ``BotSeat``."""
+    made: list[tuple[Ruleset, int, int]] = []
+
+    def factory(mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> Controller:
+        made.append((rules, seed, player))
+        return BOTS["idle"](mapdef, rules, seed=seed, player=player)
+
+    mapdef = load_map(ROOT / "maps" / "fixtures" / "web.json")
+    rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
+    assert rules.map_tempo is not None
+    seat = BotSeat(1, factory, seed=9)
+    runner = MatchRunner("m", "web", mapdef, rules, (7, BOT_ACCOUNT), ManualClock(), bot=seat)
+    assert made == [(runner.match.rules, 9, 1)]
+    assert runner.match.rules.map_tempo is None
 
 
 def test_slow_bot_skips_the_next_call_and_it_is_counted() -> None:
@@ -309,7 +328,7 @@ def test_every_level_is_a_smart_bot_with_a_tempo_level() -> None:
     """#574: ``LEVEL_BOTS`` names resolve through ``bot_factory`` to smart bots at a level."""
     from gow_bots.bots import SmartBot, bot_factory
     from gow_server.botmatch import LEVEL_BOTS
-    from gow_sim.maps import load_map
+    from gow_sim.maps import MapDef, load_map
     from gow_sim.ruleset import load_ruleset
 
     root = Path(__file__).resolve().parents[3]

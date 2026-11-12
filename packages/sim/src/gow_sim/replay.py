@@ -59,6 +59,7 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import GENERATED_SUBDIR, MapDef, MapFormatError, load_map, map_hash
 from gow_sim.match import (
+    DECIDE_EVERY,
     HEADLESS_MATCH_KEY,
     SIM_VERSION,
     Controller,
@@ -371,7 +372,7 @@ def record_headless(
     rules: Ruleset,
     controllers: Sequence[Controller],
     max_ticks: int | None = None,
-    decide_every: int = 5,
+    decide_every: int = DECIDE_EVERY,
     match_key: bytes = HEADLESS_MATCH_KEY,
 ) -> MatchResult:
     """``run_headless`` that records the match into the replay file ``path``."""

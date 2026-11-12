@@ -1,11 +1,13 @@
 """The controller interface and the base of every bot (AGENTS.md, section 8; BOT-01).
 
 A bot is a ``Controller``: ``decide(view, tick)`` gets the ``PlayerView`` of its player every
-``decide_every`` ticks (5 in ``run_headless`` and on the server) and answers with commands in the
-opaque ids of that view. Besides the view a bot knows only public data: the map and the ruleset.
-``gow_bots.bots`` may not import ``gow_sim.state``, ``gow_sim.systems`` or ``gow_sim.match``
-(``lint-imports``), so ``Controller`` is declared here; it has the shape of
-``gow_sim.match.Controller`` and a bot is accepted by ``run_headless`` as it is.
+``DECIDE_EVERY`` ticks (5, ``gow_sim.match.Seat``: the one driver of ``run_headless``, the
+tournaments and the server, #994) and answers with commands in the opaque ids of that view.
+Besides the view a bot knows only public data: the map and the ruleset; it plays the rules of
+its match whatever rules it is given (``Bot.rules``: ``[map_tempo]`` applied). ``gow_bots.bots``
+may not import ``gow_sim.state``, ``gow_sim.systems`` or ``gow_sim.match`` (``lint-imports``), so
+``Controller`` and ``BotFactory`` are declared here; they have the shape of
+``gow_sim.match.Controller`` and ``ControllerFactory``, and a bot is accepted as it is.
 
 Seed variability: every bot draws its parameters (aggression, expansion radius, attack threshold
 and so on) from the ranges of its class, deterministically from the match seed and its side

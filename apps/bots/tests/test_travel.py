@@ -22,7 +22,7 @@ from gow_bots.bots import bot_factory
 from gow_bots.bots.travel import Times, Way, edge_ticks, ticks_left, ways
 from gow_sim.commands import Move, Ok, PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef, load_map
-from gow_sim.match import Match, run_headless
+from gow_sim.match import Match, play
 from gow_sim.ruleset import load_ruleset
 from gow_sim.state import AtNode
 from gow_sim.systems.movement import leg, reachable_paths
@@ -166,9 +166,8 @@ class _Checker:
 @pytest.mark.parametrize("map_path", POOL, ids=lambda p: p.stem)
 def test_ways_are_the_moves_of_the_simulation(map_path: Path) -> None:
     mapdef = load_map(map_path)
-    played = Match(mapdef, MVP7, bytes(range(32))).rules
-    bots = [bot_factory(BOTS[p])(mapdef, played, seed=7, player=p) for p in PLAYERS]
+    factories = [bot_factory(BOTS[p]) for p in PLAYERS]
     checker = _Checker(mapdef)
-    run_headless(mapdef, MVP7, bots, max_ticks=TICKS, observer=checker)
+    play(mapdef, MVP7, factories, seed=7, max_ticks=TICKS, observer=checker)  # map tempo on
     assert checker.compared >= 100
     assert checker.moved >= 20

@@ -31,7 +31,7 @@ from gow_server.mapgen import MapMaker
 from gow_server.maps import MapCatalog, MapSource, choose_map
 from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, ServerFullError
 from gow_sim.maps import PLAYERS
-from gow_sim.ruleset import Ruleset, apply_map_tempo
+from gow_sim.ruleset import Ruleset
 
 Level = Literal["easy", "normal", "hard", "expert"]
 
@@ -110,12 +110,8 @@ async def create_bot_match(
             assert entry is not None
         slot = secrets.randbelow(len(PLAYERS))
         bot_slot = 1 - slot
-        controller = bot_factory(LEVEL_BOTS[body.level])(
-            entry.definition,
-            apply_map_tempo(rules, entry.definition),  # the periods the match plays (#803)
-            seed=secrets.randbits(SEED_BITS),
-            player=bot_slot,
-        )
+        # the runner makes the bot from ``Match.rules``: the periods the match plays (#803, #994)
+        seat = BotSeat(bot_slot, bot_factory(LEVEL_BOTS[body.level]), secrets.randbits(SEED_BITS))
         accounts = [BOT_ACCOUNT, BOT_ACCOUNT]
         accounts[slot] = player.id
         runner = await lifecycle.start(
@@ -125,7 +121,7 @@ async def create_bot_match(
             rules,
             (accounts[0], accounts[1]),
             private=True,
-            bot=BotSeat(bot_slot, controller),
+            bot=seat,
             bot_name=LEVEL_BOTS[body.level],
         )
     except AlreadyActiveError:

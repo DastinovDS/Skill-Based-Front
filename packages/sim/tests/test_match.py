@@ -19,7 +19,7 @@ from gow_sim.commands import (
     SetStance,
 )
 from gow_sim.maps import MapDef, load_map
-from gow_sim.match import SYSTEMS, Controller, Match, MatchFinishedError, run_headless
+from gow_sim.match import SYSTEMS, Controller, Match, MatchFinishedError, play, run_headless
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.systems.victory import EndReason, Outcome
 from gow_sim.view import PlayerView, opaque_id, project, resolve
@@ -138,6 +138,26 @@ def test_run_headless_calls_controllers_every_decide_every_ticks(mvp_rules: Rule
     result = run_headless(_map("line3"), mvp_rules, [a, b], max_ticks=23, decide_every=5)
     assert a.ticks == b.ticks == [0, 5, 10, 15, 20]
     assert result.outcome is None and result.ticks == 23
+
+
+def test_play_makes_controllers_from_the_rules_the_match_plays(mvp_rules: Ruleset) -> None:
+    """#994 (ARP-06): ``play`` gives every factory ``Match.rules``, ``[map_tempo]`` applied
+    (DEC-46), never the source ruleset; a controller decides like in ``run_headless``."""
+    assert mvp_rules.map_tempo is not None
+    mapdef = _map("web")
+    made: list[tuple[Ruleset, int, int]] = []
+    recorders = [_Recorder(), _Recorder()]
+
+    def factory(mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> Controller:
+        made.append((rules, seed, player))
+        return recorders[player]
+
+    result = play(mapdef, mvp_rules, [factory, factory], seed=11, max_ticks=12)
+    played = Match(mapdef, mvp_rules, bytes(32)).rules
+    assert played.map_tempo is None and played != mvp_rules
+    assert made == [(played, 11, 0), (played, 11, 1)]
+    assert recorders[0].ticks == recorders[1].ticks == [0, 5, 10]
+    assert result.ticks == 12
 
 
 @pytest.mark.parametrize("name", MVP_MAPS)
