@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
@@ -50,20 +50,25 @@ const ack = (seq: number, reject_code: string | null) =>
 
 describe('a recruit or a fortification short of CP flashes the CP gauge (#765, B8)', () => {
   it('marks the gauge with the recruit price, then lets it go', () => {
-    const { controller, book, clock } = setup();
-    controller.click({ kind: 'node', id: home }, false);
-    controller.recruit();
-    expect(controller.ui.current.cpShort).toBe(false);
-    book.onAck(ack(1, 'NOT_ENOUGH_CP'));
-    expect(controller.ui.current.cpShort).toBe(true);
-    expect(controller.ui.current.cpPrice).toBe(RULES.cost.recruit);
-    // The next frames keep the price of the refused recruit, not of a move.
-    controller.overlay();
-    expect(controller.ui.current.cpPrice).toBe(RULES.cost.recruit);
-    clock.now += CP_SHORT_FLASH_MS;
-    controller.overlay();
-    expect(controller.ui.current.cpShort).toBe(false);
-    expect(controller.ui.current.cpPrice).toBeNull();
+    vi.useFakeTimers();
+    try {
+      const { controller, book, clock } = setup();
+      controller.click({ kind: 'node', id: home }, false);
+      controller.recruit();
+      expect(controller.ui.current.cpShort).toBe(false);
+      book.onAck(ack(1, 'NOT_ENOUGH_CP'));
+      expect(controller.ui.current.cpShort).toBe(true);
+      expect(controller.ui.current.cpPrice).toBe(RULES.cost.recruit);
+      // The next steps keep the price of the refused recruit, not of a move.
+      controller.hover(null);
+      expect(controller.ui.current.cpPrice).toBe(RULES.cost.recruit);
+      clock.now += CP_SHORT_FLASH_MS;
+      vi.advanceTimersByTime(CP_SHORT_FLASH_MS);
+      expect(controller.ui.current.cpShort).toBe(false);
+      expect(controller.ui.current.cpPrice).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('marks the gauge with the price of a road fortification', () => {

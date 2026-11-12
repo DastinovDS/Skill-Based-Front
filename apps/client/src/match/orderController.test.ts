@@ -818,7 +818,7 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
     expect(controller.groupMenu.current.open).toBe(false);
     controller.click({ kind: 'node', id: home }, false);
     hud.select(null);
-    controller.overlay(); // the frame loop syncs the menus with the selection
+    // The selection changed outside the controller: the HUD tells it, with no frame drawn.
     expect(controller.cityMenu.current.open).toBe(false);
   });
 

@@ -49,8 +49,7 @@ function setup(charged = 9, split: { node: number; units: number }[] = []) {
     queryReach: () => undefined,
   });
   controller.click({ kind: 'group', id: GROUP }, false);
-  // The frame asks the server where the group goes; the answer comes after the query.
-  controller.overlay();
+  // The selection asks the server where the group goes; the answer comes after the query.
   controller.onReach({
     type: 'reach',
     group: GROUP,

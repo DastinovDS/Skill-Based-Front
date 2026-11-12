@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { cityChoices } from '../hud/cityChoices.ts';
 import { DEV_RULES_FLOW, devSnapshot } from '../hud/devFeed.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
@@ -254,17 +254,23 @@ describe('CP shortage (#762)', () => {
   });
 
   it('marks it for a while after a move is refused with NOT_ENOUGH_CP', () => {
-    const { controller, book, clock } = setup();
-    controller.click({ kind: 'group', id: GROUP }, false);
-    controller.click({ kind: 'node', id: enemy }, false);
-    book.onAck(ack(1, 'NOT_ENOUGH_CP'));
-    expect(controller.ui.current.cpShort).toBe(true);
-    clock.now += CP_SHORT_FLASH_MS - 1;
-    controller.overlay();
-    expect(controller.ui.current.cpShort).toBe(true);
-    clock.now += 1;
-    controller.overlay();
-    expect(controller.ui.current.cpShort).toBe(false);
+    vi.useFakeTimers();
+    try {
+      const { controller, book, clock } = setup();
+      controller.click({ kind: 'group', id: GROUP }, false);
+      controller.click({ kind: 'node', id: enemy }, false);
+      book.onAck(ack(1, 'NOT_ENOUGH_CP'));
+      expect(controller.ui.current.cpShort).toBe(true);
+      // The flash ends on the controller's own timer, with no frame drawn (ARC-C01).
+      clock.now += CP_SHORT_FLASH_MS - 1;
+      vi.advanceTimersByTime(CP_SHORT_FLASH_MS - 1);
+      expect(controller.ui.current.cpShort).toBe(true);
+      clock.now += 1;
+      vi.advanceTimersByTime(1);
+      expect(controller.ui.current.cpShort).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('another refusal does not mark it', () => {
