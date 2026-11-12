@@ -3,6 +3,7 @@
   import { t, tf } from '../i18n/index.ts';
   import type { MessageKey } from '../i18n/messages.ts';
   import { sound } from '../audio/soundState.svelte.ts';
+  import { modal } from '../theme/modal.ts';
   import './dialog.css';
   import HowToPlay from '../howto/HowToPlay.svelte';
   import Icon from './Icon.svelte';
@@ -84,7 +85,13 @@
 
 {#if open}
   <div class="backdrop">
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div
+      class="sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="help-title"
+      use:modal={{ onclose, passKeys: true }}
+    >
       <header>
         <h2 id="help-title">{page ? t('help.howTo') : t('help.title')}</h2>
         <button

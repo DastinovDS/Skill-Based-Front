@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { modal } from './modal.ts';
 
   interface Props {
     /** The name of the overlay for assistive technology. */
@@ -10,7 +11,7 @@
      */
     kind?: 'window' | 'sheet';
     role?: 'dialog' | 'alertdialog';
-    /** Escape closes it; without a handler the overlay ignores the key. */
+    /** Escape closes it; without a handler Escape does nothing (and the screen behind does not see it). */
     onclose?: () => void;
     /** A window wider than a dialog of a few lines (the keys of Settings, #966). */
     wide?: boolean;
@@ -25,35 +26,20 @@
     wide = false,
     children,
   }: Props = $props();
-
-  let panel: HTMLElement | undefined = $state();
-
-  // A dialog takes the focus when it opens, so the keys go to it and not to the screen behind.
-  $effect(() => {
-    if (kind === 'window') panel?.focus();
-  });
-
-  function onkeydown(event: KeyboardEvent): void {
-    if (event.key !== 'Escape' || onclose === undefined) return;
-    event.preventDefault();
-    onclose();
-  }
 </script>
-
-<svelte:window {onkeydown} />
 
 <!-- The blurred stone overlay (#841, ui-style 51): `.stone-overlay` and `.stone-window` in
      src/theme/primitives.css. The blur is the overlay's backdrop, nothing behind is filtered. -->
 <div class="stone-overlay">
   {#if kind === 'window'}
     <div
-      bind:this={panel}
       class="stone-window rule-frame"
       class:wide
       {role}
       aria-modal="true"
       aria-label={label}
       tabindex="-1"
+      use:modal={{ onclose }}
     >
       {@render children()}
     </div>

@@ -95,8 +95,7 @@
 
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-    // The nick dialog and the log-out warning keep their own keys while they are open.
-    if (nickOpen || confirmingLogout) return;
+    // Under a dialog (theme/modal.ts) the screen's keys do not arrive at all.
     if (event.key === 'Escape') {
       event.preventDefault();
       onback();
