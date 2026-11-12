@@ -6,9 +6,12 @@
 # (AGENTS.md, section 5.4), so GOW_ENV is `e2e`. The guest limit is high, so a test does not hit
 # the rate limit. The reconnect window and the pause are long: a slow runner must not lose a match
 # by disconnect during a page reload, or see a pause run out under a test (#484). The map pool is
-# the real one (`maps/*.json`, DEC-27). Only the full invite match makes its invite on `ridge`
-# (through the API); the other invite tests take the plinth's Get the link, whose map the server
-# makes for the invite (#884, #919). The bot match picks `ridge` in the bot drawer.
+# the real one (`maps/*.json`, DEC-27). Making a map for a match (#884) takes 17 to 40 s on the CI
+# runner and sometimes more than a minute (#988), so the tests play pool maps (an invite on `ridge`
+# through the API, "Random map" or `ridge` in the bot drawer), except one: the pause test takes the
+# plinth's Get the link, whose map the server makes for the invite (#884, #919). It waits for its
+# match `MADE_MAP_WAIT_MS` (e2e/support/match.ts), past the server's own wait for the map pinned
+# here, after which the match plays a pool map (AGENTS.md 5.4).
 services:
   app:
     environment:
@@ -17,3 +20,4 @@ services:
       GOW_GUEST_RATE_LIMIT: ${GOW_GUEST_RATE_LIMIT:-1000}
       GOW_RECONNECT_WINDOW_S: ${GOW_RECONNECT_WINDOW_S:-120}
       GOW_PAUSE_MAX_S: ${GOW_PAUSE_MAX_S:-300}
+      GOW_MAPGEN_WAIT_S: 60

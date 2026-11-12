@@ -8,6 +8,8 @@ test('a match against a bot starts and ends with a forfeit', async ({ browser, b
   // The way "Play a bot" on the plinth opens the level and map drawer at once (#919).
   await player.page.getByRole('radio', { name: 'Play a bot' }).click();
   await player.page.getByRole('radio', { name: /Easy/ }).click();
+  // A pool map: a map made for the match is the invite test's (#988); "New map" is the default.
+  await player.page.getByRole('radio', { name: 'Random map' }).click();
   await player.page.getByRole('button', { name: 'Start', exact: true }).click();
   await player.expectPlaying();
 

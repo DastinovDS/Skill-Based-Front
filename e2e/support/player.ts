@@ -142,10 +142,13 @@ export class Player {
     await ready.click();
   }
 
-  /** The match screen is up and snapshots arrive (the canvas carries the last tick). */
-  async expectPlaying(): Promise<void> {
+  /**
+   * The match screen is up and snapshots arrive (the canvas carries the last tick). `timeout`
+   * counts from Ready or Start: a match on a map made for it waits for the map first (#988).
+   */
+  async expectPlaying(timeout = 60_000): Promise<void> {
     await expect(this.page.locator('.game-canvas')).toHaveAttribute('data-tick', /^[1-9]\d*$/, {
-      timeout: 60_000,
+      timeout,
     });
   }
 
