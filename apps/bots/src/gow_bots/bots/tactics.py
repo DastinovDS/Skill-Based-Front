@@ -11,7 +11,7 @@ about and the numbers (``PARAMS``) differ:
 - ``strike``: attack enemy nodes next to own territory when the force suffices;
 - ``reinforce``: fill the garrisons that are below their minimum from free groups or by recruiting;
 - ``strengthen``: spend CP that would otherwise burn on the cap on recruits at the front;
-- ``prioritize``: a factory build (DEC-41, ``economy.factory_site``).
+- ``prioritize``: a factory build (DEC-41, ``factories.factory_site``).
 
 Enemy strength (DEC-21). A view gives exact enemy numbers at ``EXACT`` detail (own nodes, nodes
 where own groups stand, neighbours seen exactly by terrain); ``RANGE`` gives the range of the
@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from gow_bots.bots.base import Bot, node_of
-from gow_bots.bots.economy import factory_site
+from gow_bots.bots.factories import FactorySites, factory_site
 from gow_bots.bots.utility import shots_to_take, takes, terrain_burned
 from gow_sim.commands import BuildFactory, Command, Move, Recruit
 from gow_sim.maps import MapDef
@@ -53,7 +53,7 @@ from gow_sim.view import Detail, GroupView, PlayerView
 __all__ = ["MEMORY_TICKS", "StrategyBot", "Turn"]
 
 FACTORIES: Final = 2
-"""Factories built beside the capital (``economy.factory_site``)."""
+"""Factories built beside the capital (``factories.factory_site``)."""
 MEMORY_TICKS: Final = 600
 """How long an exact sighting of an enemy node stays a better guess than the capacity bound."""
 
@@ -102,6 +102,8 @@ class StrategyBot(Bot):
             for n in mapdef.nodes
         )
         """VP per accrual of every node (the value of owning it)."""
+        self.factory_sites = FactorySites()
+        """The memory of the own factory builds (``factories.factory_site``, #683)."""
 
     # Observation -------------------------------------------------------------------------------
 
@@ -213,9 +215,9 @@ class StrategyBot(Bot):
         return True
 
     def prioritize(self, turn: Turn) -> None:
-        """A factory build of ``gow_bots.bots.economy`` (DEC-41)."""
+        """A factory build of ``gow_bots.bots.factories`` (DEC-41)."""
         view = turn.view
-        site = factory_site(self, view, FACTORIES)
+        site = factory_site(self, view, FACTORIES, self.factory_sites, self.supplied(view))
         if site is not None:
             self.spend(turn, BuildFactory(site))
 

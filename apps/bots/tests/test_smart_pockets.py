@@ -130,8 +130,9 @@ def test_the_pocket_and_its_way_out_follow_row_h1(player: int) -> None:
     # One free capture (A) joins every pocket node to K; A itself is next to K.
     assert all(pk.exits[_at(player, n)] == 1 for n in POCKET)
     assert pk.exits[_at(player, A)] == 0
-    # A cut the pocket off; its capture rejoins the 3 units standing in it.
-    assert pk.rescue == {_at(player, A): 3}
+    # A cut the pocket off; its capture rejoins the 3 units standing in it, each stranded (no
+    # charge, an empty warehouse) counted twice (#683).
+    assert pk.rescue == {_at(player, A): 3 + 3}
 
 
 @pytest.mark.parametrize("player", [0, 1])
@@ -143,7 +144,7 @@ def test_an_enemy_garrison_in_the_cut_closes_the_way_out(player: int) -> None:
     pk = read_pockets(view, bot.neighbors, bot.supplied(view), _free_for(state, player))
     assert pk is not None
     assert all(pk.exits[_at(player, n)] == -1 for n in POCKET)
-    assert pk.rescue == {_at(player, A): 3}
+    assert pk.rescue == {_at(player, A): 3 + 3}
 
 
 def test_a_stopped_factory_in_the_pocket_weighs_in_the_rescue() -> None:
@@ -154,7 +155,7 @@ def test_a_stopped_factory_in_the_pocket_weighs_in_the_rescue() -> None:
     bot = _bot("smart_rusher", 0)
     pk = read_pockets(view, bot.neighbors, bot.supplied(view), _free_for(state, 0))
     assert pk is not None
-    assert pk.rescue == {A: 2 + FACTORY_UNITS}
+    assert pk.rescue == {A: 2 + 2 + FACTORY_UNITS}  # the 2 stranded units count twice (#683)
 
 
 def test_no_pocket_no_reading() -> None:
@@ -258,7 +259,8 @@ def test_a_discharged_group_does_not_walk_into_a_garrisoned_cut(name: str, playe
 @pytest.mark.parametrize("player", [0, 1])
 def test_the_cut_scores_more_by_the_units_it_rejoins(player: int) -> None:
     """The same position with and without 3 discharged units in the pocket: the score of A for a
-    charged group in K differs by ``W_RESCUE`` per unit."""
+    charged group in K differs by ``W_RESCUE`` per unit, twice for a stranded one (no charge, an
+    empty warehouse: #683)."""
     enemy = 1 - player
     scores: list[int] = []
     for pocket_units in ((player, B, 3, 0),), ():
@@ -272,7 +274,7 @@ def test_the_cut_scores_more_by_the_units_it_rejoins(player: int) -> None:
         score = bot.score(ctx, g, _at(player, A), need)
         assert score is not None
         scores.append(score)
-    assert scores[0] - scores[1] == W_RESCUE * 3
+    assert scores[0] - scores[1] == W_RESCUE * (3 + 3)
 
 
 def test_pockets_are_read_only_under_the_flow(mvp_rules: Ruleset) -> None:

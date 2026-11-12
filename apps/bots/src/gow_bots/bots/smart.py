@@ -771,6 +771,8 @@ class SmartBot(CampaignBot):
             payer = min(size, g.charged)
             toll = self.toll_from(view, here, dest, size, payer)
             if size >= 1 and not takes(self.rules, payer, 0, 0, toll):
+                if not charged:
+                    self.pocket_merge(ctx, g)  # #683: leave with a charged group instead
                 continue
             if size == g.units and self.spend(ctx, Move(g.id, dest)):
                 ctx.used[g.id] = True
@@ -780,14 +782,63 @@ class SmartBot(CampaignBot):
                 ctx.used[g.id] = True  # the part that leaves goes in the next decision
 
     def pocket_leaves(self, ctx: Ctx, g: GroupView, charged: bool) -> bool:
-        """Whether ``g``, standing in a pocket, is one ``leave_pockets`` sends out in this pass."""
+        """Whether ``g``, standing in a pocket, is one ``leave_pockets`` sends out in this pass.
+
+        A charged group leaves a node that starves, and one that carries units without a charge
+        the empty warehouse never recharges (#683: they leave with it, its charges pay the
+        capture for all); not while own units are on the way into its node (a discharged group
+        that ``pocket_merge`` sent to leave with it). A front node of a pocket does not keep it
+        (#683: held there it starves to a stranded garrison); a pinned node and a scout's last
+        unit do."""
         here = node_of(g)
         node = ctx.view.nodes[here]
         if charged:
-            return g.charged > 0 and node.starve_in is not None and self.may_leave(ctx, g)
+            stranded = g.units > g.charged and not node.warehouse
+            if g.charged <= 0 or not (node.starve_in is not None or stranded):
+                return False
+            if ctx.incoming[here] > 0 or self.pinned[here]:
+                return False
+            return not self.watch[here] or ctx.standing[here] - g.units >= 1
         if g.charged > 0 or (node.warehouse or 0) > 0 or self.pinned[here]:
             return False
         return not self.watch[here] or ctx.standing[here] - g.units >= 1
+
+    def pocket_merge(self, ctx: Ctx, g: GroupView) -> None:
+        """#683: ``g``, discharged in a pocket and unable to pay the capture of the way out
+        (DEC-38), walks to the nearest node of its pocket (over own pocket nodes, ``node_key``
+        order) where an own charged group stands free, so they leave as one: the charged units
+        pay the capture for all (``pocket_leaves`` waits for it). A city keeps one unit
+        (``pocket_keep``): the rest splits off first and walks in the next decision. Nothing when
+        no such group or the way does not take the units whole (the stack limit, the room at the
+        arrival)."""
+        pk = self.pockets
+        assert pk is not None
+        view, here = ctx.view, node_of(g)
+        size = g.units - self.pocket_keep(ctx, g)
+        if size < 1:
+            return
+        charged = [0] * len(view.nodes)
+        for other in self.free_groups(ctx):
+            if other.id != g.id:
+                charged[node_of(other)] += other.charged
+        seen = {here: True}
+        queue = deque([here])
+        while queue:
+            node = queue.popleft()
+            if node != here and charged[node] > 0:
+                if self.fit(view, here, node, size) < size or self.room(ctx, node) < size:
+                    return
+                if size < g.units:
+                    if self.spend(ctx, Split(g.id, size)):
+                        ctx.used[g.id] = True
+                elif self.spend(ctx, Move(g.id, node)):
+                    ctx.used[g.id] = True
+                    ctx.standing[here] -= g.units
+                return
+            for other in self.neighbors[node]:
+                if other not in seen and pk.pocket[other]:
+                    seen[other] = True
+                    queue.append(other)
 
     def pocket_keep(self, ctx: Ctx, g: GroupView) -> int:
         """Units of ``g`` that stay when it leaves a pocket: 1 in a city (VP above 0) that no

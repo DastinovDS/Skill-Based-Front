@@ -5,11 +5,8 @@ Charges come only from factories and the automatic supply flow carries them (DEC
 helpers are the play every campaign bot shares; they read only the ``PlayerView``, the map and the
 ruleset, and every tie goes through ``Bot.key`` (mirror-invariant):
 
-- **Factories** (``factory_site``): one build at a time while the player has fewer than
-  ``1 + extra`` factories (the capital is one) and the match has at least ``FACTORY_LATE_TICKS``
-  left (4 charges pay back in 400 ticks at the built rate): the own city nearest the enemy
-  capital that no enemy node touches, the largest warehouse first. It is paid by the flow and the
-  groups standing there (the progressive payment of DEC-41, item 7).
+- **Factories**: ``gow_bots.bots.factories`` (#683: a rear site, paid from spare stock, valued
+  by the match left at the stance period, no rebuild churn).
 - **Plans** (``Bot.plan_bonus``, ``release_commands``): a planned order requests at most the
   stock of its node's warehouse and the charged units of the group (DEC-41, item 10); a plan that
   gathered for its requested time plus ``RELEASE_SLACK`` ticks departs with what it has
@@ -43,19 +40,14 @@ from gow_sim.maps import NodeKind
 from gow_sim.view import AtNode, PlayerView
 
 __all__ = [
-    "FACTORY_LATE_TICKS",
     "RELEASE_SLACK",
     "SHIFT_HOLD_TICKS",
     "LeafShift",
-    "factory_site",
     "fort_site",
     "leaf_shift_command",
     "release_commands",
 ]
 
-FACTORY_LATE_TICKS: Final = 1500
-"""No factory is started with fewer ticks left (its 4 charges pay back in 400 ticks plus the
-build and the delivery)."""
 RELEASE_SLACK: Final = 60
 """Ticks a gathering plan waits beyond its requested bonus times ``orders.plan_ticks_per_bonus``."""
 LEAF_MARGIN: Final = 1
@@ -79,37 +71,6 @@ class LeafShift:
         if self.shift is not None and shift != self.shift:
             self.since = view.tick
         self.shift = shift
-
-
-def factory_site(bot: Bot, view: PlayerView, extra: int) -> int | None:
-    """The own city that should start a factory now (module docstring), or ``None``."""
-    rules = bot.rules
-    me = view.player
-    if extra <= 0 or rules.match_ticks - view.tick < FACTORY_LATE_TICKS:
-        return None
-    count = 0
-    for n in view.nodes:
-        if n.owner != me:
-            continue
-        if n.factory_build is not None:
-            return None  # one at a time: the flow pays it first
-        count += bool(n.factory)
-    if count >= min(rules.factory.max, 1 + extra):
-        return None
-    fights = bot.fight_nodes(view)
-    far = bot.hops[bot.map.capital(1 - me)]
-    best: tuple[int, int, int] | None = None
-    site: int | None = None
-    for n in view.nodes:
-        node = n.id
-        if n.owner != me or n.factory or bot.map.nodes[node].kind is NodeKind.PROVINCE:
-            continue
-        if node in fights or any(view.nodes[m].owner == 1 - me for m in bot.neighbors[node]):
-            continue
-        rank = (far[node] if far[node] >= 0 else len(far), -(n.warehouse_cap or 0), bot.key(node))
-        if best is None or rank < best:
-            best, site = rank, node
-    return site
 
 
 def fort_site(bot: Bot, view: PlayerView, budget: int) -> tuple[int, int] | None:
