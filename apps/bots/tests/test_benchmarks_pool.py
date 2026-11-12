@@ -191,7 +191,7 @@ CEILING_MS: Final[dict[tuple[str, str], float]] = {
     ("vision", "narrows"): 0.025,
     ("vision", "ridge"): 0.07,
     ("supply", "crossroads"): 0.029,
-    ("supply", "highway"): 0.032,
+    ("supply", "highway"): 0.042,
     ("supply", "narrows"): 0.021,
     ("supply", "ridge"): 0.06,
     ("supply_replan", "crossroads"): 0.18,
@@ -216,7 +216,9 @@ up about 10%, by (kind, map): see the module docstring. A new pool map needs its
 ``supply_replan`` rows are raised about 30% (#1022): the CI runners measured the replanned dispatch
 1.5 to 1.8 times the reference after ``speed_factor`` on ``develop`` itself (runs 43248526758,
 43301391850: crossroads, highway, narrows over the ceiling), so the job failed on noise; the cost
-of the warm state did not change (``docs/perf.md``)."""
+of the warm state did not change (``docs/perf.md``). The ``supply`` row of highway is raised about
+30% too (#1027): ``develop`` 9f72adf itself failed it on CI (run 43313578489: 0.062 ms at x1.17
+against the 0.032 ms ceiling), while the same benchmark measures 0.022 ms locally."""
 
 
 def _check(benchmark_mean: float | None, factor: float, kind: str, game: _Game) -> None:
