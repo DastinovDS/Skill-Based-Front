@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
+from gow_protocol.commands import MAX_MERGE_GROUPS
 from gow_protocol.messages import (
     CLOSE_NO_MATCH,
     CLOSE_POLICY,
@@ -38,13 +39,15 @@ def test_committed_schema_is_current(schema: dict[str, Any]) -> None:
 
 
 def test_schema_carries_the_runtime_constants_of_the_client(schema: dict[str, Any]) -> None:
-    """The client's ``hello`` and its close-code handling read these (CLI-01, #57; #448)."""
+    """The client's ``hello`` and its close-code handling read these (CLI-01, #57; #448); the
+    order controller bounds one ``merge`` by the protocol's ceiling (ARC-C03)."""
     assert schema["x-constants"] == {
         "PROTOCOL_VERSION": PROTOCOL_VERSION,
         "CLOSE_PROTOCOL_VERSION": CLOSE_PROTOCOL_VERSION,
         "CLOSE_REPLACED": CLOSE_REPLACED,
         "CLOSE_NO_MATCH": CLOSE_NO_MATCH,
         "CLOSE_POLICY": CLOSE_POLICY,
+        "MAX_MERGE_GROUPS": MAX_MERGE_GROUPS,
     }
 
 

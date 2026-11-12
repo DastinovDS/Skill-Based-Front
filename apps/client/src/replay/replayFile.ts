@@ -14,6 +14,7 @@ import type {
   PlayerId,
   Stance,
 } from '../protocol.gen.ts';
+import { DEFAULT_ROUND_TICKS, NO_RENDER_RULES, type RenderRules } from '../render/renderRules.ts';
 import { PLAYER_COLOURS } from '../theme/tokens.ts';
 
 /**
@@ -401,6 +402,39 @@ export function hasVision(file: ReplayFile): boolean {
  */
 export function hasBuildings(file: ReplayFile): boolean {
   return file.frames.some((frame) => frame.c !== undefined);
+}
+
+/**
+ * The rule numbers the map draws a replay with (ARC-C02), from the header `rules`: the `RenderRules`
+ * a live match gets from `renderRules(ruleset_public)`. The buildings' numbers (format 2, #905) only
+ * for a file with buildings: one without them is drawn without build marks; one with buildings but
+ * no header (written between the two parts of #905) draws the barracks without time bars. The
+ * map's numbers (format 3, #980); a file of format 1 or 2 has the default round length, no rally
+ * marks and no province stock. No order countdown: a replay shows no plans being made.
+ */
+export function replayRenderRules(file: ReplayFile): RenderRules {
+  const rules = file.rules;
+  const buildings = hasBuildings(file);
+  const kept = buildings ? rules : undefined;
+  return {
+    ...NO_RENDER_RULES,
+    tickHz: file.tick_hz,
+    roundTicks: rules?.round_ticks ?? DEFAULT_ROUND_TICKS,
+    recruitTicks: kept?.unit_ticks ?? null,
+    recruitQueueMax: kept?.queue_max ?? null,
+    rallyCost: rules?.rally_cost ?? 0,
+    provinceWarehouse: rules?.province_warehouse ?? 0,
+    fortBuildTicks: kept?.fort_ticks ?? 0,
+    buildings: !buildings
+      ? null
+      : {
+          barracks: {
+            ticks: rules?.barracks_ticks ?? 0,
+            charges: rules?.barracks_charges ?? null,
+          },
+          factory: { ticks: rules?.factory_ticks ?? 0, charges: rules?.factory_charges ?? null },
+        },
+  };
 }
 
 /** The numbers of the buildings (format 2 and after). */

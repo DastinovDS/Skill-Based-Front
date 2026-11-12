@@ -4,6 +4,7 @@ import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { interpolateFrame } from '../net/interpolate.ts';
 import { MapScene, type SceneSprites } from './mapScene.ts';
+import { NO_RENDER_RULES } from './renderRules.ts';
 import type { RenderSource } from './source.ts';
 import { testSprites } from './testSprites.ts';
 
@@ -53,6 +54,7 @@ function fakeApp(): Application {
 }
 
 const source: RenderSource = {
+  rules: NO_RENDER_RULES,
   frame: () => interpolateFrame(snapshot, null, snapshot.tick),
   events: () => [],
 };

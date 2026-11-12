@@ -71,3 +71,21 @@ and the CI step `protocol-drift` fail if it is out of date. Do not edit it by ha
 (`apps/client/src/net/eventFields.fixture.ts`) check that every field a consumer reads (the feed, the toasts, the threat arcs,
 the capture and bounce effects, the fight effects, the order book) is in it. A new event field: add it to the table, write a
 fog test for it, regenerate, and read it in the client only after that.
+
+## `display_rules.json`: the numbers the client shows before the server charges them (ARC-C03, #482)
+
+The client works a few numbers out of `ruleset_public` for display: the price of a rally (`rallyPrice`, DEC-48,
+item A2), when each recruit walks to its rally point and whether the CP pay it (`rallyDues`, DEC-25 and DEC-48,
+item H3), the CP income a second (`cpPerSecond`, DEC-44) and the countdown to the next VP credit (`vpCountdown`,
+mechanics.md, section 11). This file holds their expected values, written by hand from those rules (rows R7, RP1,
+RP9 of mechanics.md, section 5, where the rule has worked examples). Both sides read it:
+`packages/sim/tests/test_display_vectors.py` plays each row in `gow_sim` (the map `dec48` of the DEC-48 examples,
+`mvp-7` without CP income for the walks), `apps/client/src/match/ruleVectors.test.ts` feeds each row to the client
+function. A rule change that moves one of these numbers: fix the rows first, then the simulation and the client.
+
+| Section | Row |
+|---|---|
+| `rally_price.rows` | `n` groups, `orders.cost.move` (`move`), `group_order.rally_pct`, the `price` in hundredths |
+| `recruit_walks` | `params` (the `mvp-7` numbers the rows use, checked against the ruleset); each row queues `recruits` units in the capital at `queued_at` with the rally point set, `view` is what the snapshot of tick `at` shows (`queue`, `progress`, `waiting`, `pending`: units made and not gone, `cp`), `walks` the ticks `after` `at` each walk leaves and whether it is `paid` |
+| `cp_rate.rows` | a `stance`, `cp.per_period`, its `period_ticks`, `tick_hz`: the CP `gain` over `seconds` (whole periods) |
+| `vp_countdown.rows` | `victory.vp_period_ticks` (`period`), the snapshot `tick`: the ticks to the next credit (`next_in`) |

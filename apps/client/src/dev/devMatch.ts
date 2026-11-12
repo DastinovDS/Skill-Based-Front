@@ -1,6 +1,7 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import { MatchSession } from '../match/session.ts';
 import type { MapFile, ReachMsg, RulesetPublic } from '../protocol.gen.ts';
+import { renderRules } from '../render/renderRules.ts';
 
 import { createDevServer } from './devServer.ts';
 
@@ -24,13 +25,8 @@ export function createDevMatch(
   const session = new MatchSession({
     matchId: 'dev',
     token: 'dev',
-    context: {
-      hud,
-      tickHz: rules.tick_hz,
-      orders: rules.orders,
-      capacity: rules.capacity,
-      fortBuildTicks: rules.fort.build_ticks,
-    },
+    // Every number of the ruleset, as a live match has them (ARC-C02).
+    context: { hud, rules: renderRules(rules) },
     onServerMessage: (msg) => {
       if (msg.type === 'reach') onReach?.(msg);
     },

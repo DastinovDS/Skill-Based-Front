@@ -8,12 +8,14 @@ import { MAX_BAKED, SpriteCache } from './bake.ts';
 import { CityView } from './cityView.ts';
 import { EntityView } from './entityView.ts';
 import { createLayers } from './layers.ts';
+import type { BuildingRules } from './renderRules.ts';
 import { fakeBaker } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
 const base = devSnapshot(map, DEV_RULES, 100);
-const UPGRADES = {
-  barracks: 100,
+const UPGRADES: BuildingRules = {
+  barracks: { ticks: 100, charges: null },
+  factory: { ticks: 0, charges: null },
 };
 
 /** A deterministic stream of numbers (a test must not depend on `Math.random`). */

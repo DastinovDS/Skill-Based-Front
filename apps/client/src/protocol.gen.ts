@@ -1519,3 +1519,4 @@ export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;
 export const CLOSE_POLICY = 1008;
+export const MAX_MERGE_GROUPS = 16;

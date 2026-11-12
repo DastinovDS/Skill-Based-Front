@@ -53,7 +53,8 @@ export interface VpCountdown {
 /**
  * The rule the server documents (`ruleset_public.victory.vp_period_ticks`, #934): a credit falls on
  * every tick `t > 0` with `t % period == 0`, and a snapshot of tick `t` already includes the credit
- * of `t`, so the next one is `period - t % period` ticks away. `null` without a period.
+ * of `t`, so the next one is `period - t % period` ticks away. `null` without a period. The rows of
+ * `vectors/display_rules.json` (`vp_countdown`) tie it to the simulation (ARC-C03).
  */
 export function vpCountdown(tick: number, period: number): VpCountdown | null {
   if (period <= 0) return null;

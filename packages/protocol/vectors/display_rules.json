@@ -1,0 +1,345 @@
+{
+  "schema_version": 1,
+  "source": "Display numbers the client works out from ruleset_public, with the rule each follows: DEC-48 (mechanics.md, section 5), DEC-25 (section 3), DEC-44 (section 6), section 11. Checked against gow_sim by packages/sim/tests/test_display_vectors.py and against the client by apps/client/src/match/ruleVectors.test.ts (ARC-C03, #482).",
+  "rally_price": {
+    "source": "DEC-48, item A2 and row R7: a rally of n groups costs rally_pct of orders.cost.move per group, the total rounded up to a whole CP; price in hundredths of CP.",
+    "rows": [
+      {
+        "id": "R7.1",
+        "n": 1,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 100
+      },
+      {
+        "id": "R7.2",
+        "n": 2,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 100
+      },
+      {
+        "id": "R7.3",
+        "n": 3,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 200
+      },
+      {
+        "id": "R7.4",
+        "n": 4,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 200
+      },
+      {
+        "id": "R7.5",
+        "n": 5,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 300
+      },
+      {
+        "id": "R7.6",
+        "n": 6,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 300
+      },
+      {
+        "id": "A2.7",
+        "n": 7,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 400
+      },
+      {
+        "id": "A2.8",
+        "n": 8,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 400
+      },
+      {
+        "id": "A2.9",
+        "n": 9,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 500
+      },
+      {
+        "id": "A2.10",
+        "n": 10,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 500
+      },
+      {
+        "id": "A2.11",
+        "n": 11,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 600
+      },
+      {
+        "id": "A2.12",
+        "n": 12,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 600
+      },
+      {
+        "id": "A2.13",
+        "n": 13,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 700
+      },
+      {
+        "id": "A2.14",
+        "n": 14,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 700
+      },
+      {
+        "id": "A2.15",
+        "n": 15,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 800
+      },
+      {
+        "id": "A2.16",
+        "n": 16,
+        "move": 100,
+        "rally_pct": 50,
+        "price": 800
+      },
+      {
+        "id": "A2.p30.1",
+        "n": 1,
+        "move": 150,
+        "rally_pct": 30,
+        "price": 100
+      },
+      {
+        "id": "A2.p30.2",
+        "n": 2,
+        "move": 150,
+        "rally_pct": 30,
+        "price": 100
+      },
+      {
+        "id": "A2.p30.3",
+        "n": 3,
+        "move": 150,
+        "rally_pct": 30,
+        "price": 200
+      },
+      {
+        "id": "A2.p30.7",
+        "n": 7,
+        "move": 150,
+        "rally_pct": 30,
+        "price": 400
+      },
+      {
+        "id": "A2.p30.10",
+        "n": 10,
+        "move": 150,
+        "rally_pct": 30,
+        "price": 500
+      }
+    ]
+  },
+  "recruit_walks": {
+    "source": "DEC-25 (a unit queued into an empty queue in tick t gets its first tick of progress in t and appears in t + unit_ticks - 1; the next one starts in the next tick) and DEC-48, item H3 with rows RP1 and RP9 (a recruit of a city with a rally point leaves the tick after it appears and pays recruit.rally_cost then, or with fewer CP gets no order). No CP income. The map of the worked examples of mechanics.md, section 5 (dec48): the capital H with its point at R, set before the queue. `at`: the tick of the snapshot; `view`: what it shows of H (`pending`: units made and not gone yet) and the own CP; `walks[i].after`: the ticks after `at` the walk leaves.",
+    "params": {
+      "unit_ticks": 30,
+      "rally_cost": 50,
+      "recruit_cost": 100
+    },
+    "rows": [
+      {
+        "id": "W1",
+        "note": "RP1: one recruit queued at 100, seen at 100",
+        "queued_at": 100,
+        "recruits": 1,
+        "at": 100,
+        "view": {
+          "queue": 1,
+          "progress": 1,
+          "waiting": false,
+          "pending": 0,
+          "cp": 400
+        },
+        "walks": [
+          {
+            "after": 30,
+            "paid": true
+          }
+        ]
+      },
+      {
+        "id": "W2",
+        "note": "the same recruit seen half made, at 115",
+        "queued_at": 100,
+        "recruits": 1,
+        "at": 115,
+        "view": {
+          "queue": 1,
+          "progress": 16,
+          "waiting": false,
+          "pending": 0,
+          "cp": 400
+        },
+        "walks": [
+          {
+            "after": 15,
+            "paid": true
+          }
+        ]
+      },
+      {
+        "id": "W3",
+        "note": "three recruits, the CP for two walks: the third gets no order",
+        "queued_at": 100,
+        "recruits": 3,
+        "at": 100,
+        "view": {
+          "queue": 3,
+          "progress": 1,
+          "waiting": false,
+          "pending": 0,
+          "cp": 100
+        },
+        "walks": [
+          {
+            "after": 30,
+            "paid": true
+          },
+          {
+            "after": 60,
+            "paid": true
+          },
+          {
+            "after": 90,
+            "paid": false
+          }
+        ]
+      },
+      {
+        "id": "W4",
+        "note": "two recruits seen at 129: the first made and leaving next, the second not started",
+        "queued_at": 100,
+        "recruits": 2,
+        "at": 129,
+        "view": {
+          "queue": 1,
+          "progress": 0,
+          "waiting": false,
+          "pending": 1,
+          "cp": 300
+        },
+        "walks": [
+          {
+            "after": 1,
+            "paid": true
+          },
+          {
+            "after": 31,
+            "paid": true
+          }
+        ]
+      },
+      {
+        "id": "W5",
+        "note": "RP9: the CP of one walk for three recruits",
+        "queued_at": 100,
+        "recruits": 3,
+        "at": 100,
+        "view": {
+          "queue": 3,
+          "progress": 1,
+          "waiting": false,
+          "pending": 0,
+          "cp": 50
+        },
+        "walks": [
+          {
+            "after": 30,
+            "paid": true
+          },
+          {
+            "after": 60,
+            "paid": false
+          },
+          {
+            "after": 90,
+            "paid": false
+          }
+        ]
+      }
+    ]
+  },
+  "cp_rate": {
+    "source": "DEC-44 and the mvp-7 table [stances.cp_period_ticks]: one quantum of cp.per_period every cp_period_ticks of the stance; the CP gained over whole periods, hundredths, nothing spent and the cap not reached.",
+    "rows": [
+      {
+        "stance": "economy",
+        "per_period": 50,
+        "period_ticks": 100,
+        "tick_hz": 10,
+        "seconds": 60,
+        "gain": 300
+      },
+      {
+        "stance": "balance",
+        "per_period": 50,
+        "period_ticks": 50,
+        "tick_hz": 10,
+        "seconds": 60,
+        "gain": 600
+      },
+      {
+        "stance": "war",
+        "per_period": 50,
+        "period_ticks": 40,
+        "tick_hz": 10,
+        "seconds": 60,
+        "gain": 750
+      }
+    ]
+  },
+  "vp_countdown": {
+    "source": "mechanics.md, section 11 and View.vp_gain: a credit on every tick t > 0 with t % victory.vp_period_ticks == 0; the snapshot of tick t already has the credit of t, so the next one is on t - t % P + P.",
+    "rows": [
+      {
+        "period": 300,
+        "tick": 0,
+        "next_in": 300
+      },
+      {
+        "period": 300,
+        "tick": 1,
+        "next_in": 299
+      },
+      {
+        "period": 300,
+        "tick": 299,
+        "next_in": 1
+      },
+      {
+        "period": 300,
+        "tick": 300,
+        "next_in": 300
+      },
+      {
+        "period": 300,
+        "tick": 451,
+        "next_in": 149
+      }
+    ]
+  }
+}

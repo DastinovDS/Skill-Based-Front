@@ -25,6 +25,7 @@
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
+  import { renderRules } from '../render/renderRules.ts';
   import type { ColourIds } from '../render/style.ts';
   import { colourVar } from '../theme/tokens.ts';
   import type { MatchSummary } from './matchSummary.ts';
@@ -131,30 +132,13 @@
         hud = state;
         return {
           hud: state,
-          tickHz: welcome.ruleset_public.tick_hz,
-          // A plan has no delay, it gathers its bonus instead (DEC-41, item 10).
-          orders: welcome.ruleset_public.orders,
-          capacity: welcome.ruleset_public.capacity,
-          roundTicks: welcome.ruleset_public.combat.round_ticks,
-          recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
-          recruitQueueMax: welcome.ruleset_public.recruit.queue_max,
-          rallyCost: welcome.ruleset_public.recruit.rally_point
-            ? welcome.ruleset_public.recruit.rally_cost
-            : 0,
-          provinceWarehouse: welcome.ruleset_public.city_upgrades.warehouse_province,
-          fortBuildTicks: welcome.ruleset_public.fort.build_ticks,
+          rules: renderRules(welcome.ruleset_public),
           audio: new MatchAudio({
             me: welcome.player,
             play: (id) => {
               sound.play(id);
             },
           }),
-          cityUpgrades: {
-            barracks: welcome.ruleset_public.city_upgrades.barracks_ticks,
-            barracksCharges: welcome.ruleset_public.city_upgrades.barracks_charges,
-            factory: welcome.ruleset_public.factory.build_ticks,
-            factoryCharges: welcome.ruleset_public.factory.cost,
-          },
         };
       },
       onStatus: (next) => {

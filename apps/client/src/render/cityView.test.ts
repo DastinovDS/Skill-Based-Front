@@ -10,14 +10,16 @@ import { BUNDLED_MAPS, DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { MapFile, NodeView, SnapshotMsg } from '../protocol.gen.ts';
 import { CityView } from './cityView.ts';
 import { createLayers } from './layers.ts';
+import type { BuildingRules } from './renderRules.ts';
 import { iconSize, layoutBuildings, roadAngles } from './buildingLayout.ts';
 import { ENEMY, PROVINCE, YOU, playerColours } from './style.ts';
 import { PLAYER_COLOURS } from '../theme/tokens.ts';
 import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
-const UPGRADES = {
-  barracks: 100,
+const UPGRADES: BuildingRules = {
+  barracks: { ticks: 100, charges: null },
+  factory: { ticks: 0, charges: null },
 };
 
 /** The snapshot with `has_barracks` of node `id` replaced (the server decides it, DEC-31). */
@@ -467,7 +469,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
 
   it('builds the barracks as a plan with a row of owed charges, then the icon fills', () => {
     const { view, nodes } = make();
-    const upgrades = { ...UPGRADES, barracksCharges: 3 };
+    const upgrades = { ...UPGRADES, barracks: { ticks: 100, charges: 3 } };
     view.update(
       withCity({ has_barracks: false, building: { kind: 'barracks', done_tick: null, owed: 2 } }),
       rules.unitTicks,
@@ -500,7 +502,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
   it('opens a ring from the icon when the build is done', () => {
     setReducedMotion(false);
     const { view, nodes } = make();
-    const upgrades = { ...UPGRADES, barracksCharges: 3 };
+    const upgrades = { ...UPGRADES, barracks: { ticks: 100, charges: 3 } };
     view.update(
       withCity({
         has_barracks: false,
@@ -531,7 +533,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       grown: number;
     } => {
       const { view, nodes } = make();
-      const upgrades = { ...UPGRADES, barracksCharges: 3 };
+      const upgrades = { ...UPGRADES, barracks: { ticks: 100, charges: 3 } };
       view.update(
         withCity({
           has_barracks: false,
@@ -587,7 +589,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     const layers = createLayers();
     const view = new CityView(map, layers, 0, 1, testSprites());
     const nodes = layers.layer.nodes;
-    const upgrades = { ...UPGRADES, barracksCharges: 3 };
+    const upgrades = { ...UPGRADES, barracks: { ticks: 100, charges: 3 } };
     const flights = (): BakedSprite[] =>
       (
         layers.layer.effects.children.find((c) => c.label === 'build-pay') as Container
@@ -661,7 +663,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.update(
       withCity({ has_barracks: false, building: { kind: 'barracks', done_tick: null, owed: 1 } }),
       rules.unitTicks,
-      { ...UPGRADES, barracksCharges: 3 },
+      { ...UPGRADES, barracks: { ticks: 100, charges: 3 } },
       rules.queueMax,
     );
     const event = {

@@ -75,6 +75,8 @@ export class HudState {
   #paidWaiting: { walk: WalkPaid; tick: number; timer: ReturnType<typeof setTimeout> }[] = [];
   #credit: VpCredit | null = null;
   #extraSeq = 0;
+  /** Told after each change of `current` (the order controller steps on them, ARC-C01). */
+  #listeners: (() => void)[] = [];
 
   constructor(ctx: HudContext) {
     this.#ctx = ctx;
@@ -114,6 +116,21 @@ export class HudState {
     this.#startOnce(snapshot);
     this.#lastMinute(snapshot);
     this.#publish();
+  }
+
+  /**
+   * `listener` runs after each change of `current`: a snapshot, a selection, a hover, a reset (the
+   * order controller steps then, not on a frame of the map, ARC-C01). Returns its removal.
+   */
+  listen(listener: () => void): () => void {
+    this.#listeners = [...this.#listeners, listener];
+    return () => {
+      this.#listeners = this.#listeners.filter((l) => l !== listener);
+    };
+  }
+
+  #tell(): void {
+    for (const listener of this.#listeners) listener();
   }
 
   /** The own group `id` in the newest snapshot; `null`: it is not there (any more). */
@@ -174,6 +191,7 @@ export class HudState {
     this.toasts.clear();
     this.#dropPaidWaiting();
     this.#pending = [];
+    this.#tell();
   }
 
   destroy(): void {
@@ -299,5 +317,6 @@ export class HudState {
       paid: this.#paid,
       credit: this.#credit,
     });
+    this.#tell();
   }
 }

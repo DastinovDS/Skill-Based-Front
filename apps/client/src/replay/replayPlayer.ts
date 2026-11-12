@@ -9,8 +9,9 @@
  */
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
 import type { EventMsg, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
-import type { CapacityTicks, CityDevelopment, RenderSource } from '../render/source.ts';
-import { hasBuildings, hasVision, type ReplayFile } from './replayFile.ts';
+import type { RenderRules } from '../render/renderRules.ts';
+import type { RenderSource } from '../render/source.ts';
+import { hasVision, replayRenderRules, type ReplayFile } from './replayFile.ts';
 import { buildTimeline, type Timeline } from './timeline.ts';
 
 /** Playback speeds of the controls. */
@@ -25,25 +26,8 @@ export class ReplayPlayer implements RenderSource {
   /** The last tick of the match. */
   readonly duration: number;
   readonly outcome: ReplayFile['outcome'];
-  /**
-   * The rule numbers of the buildings (#905): the time bars and prices of the builds, the recruit
-   * queue and the fortification, from the file header. A file without buildings has none of them,
-   * so it is drawn as before; a file with buildings but no header (written between the two parts
-   * of #905) draws the barracks without time bars.
-   */
-  readonly recruitTicks?: number;
-  readonly recruitQueueMax?: number;
-  readonly cityUpgrades?: CityDevelopment;
-  readonly fortBuildTicks?: number;
-  /**
-   * The numbers of the map from the header `rules` of a format 3 file (#980): the round length of
-   * a fight, the rally walk price, the province warehouse and the overcrowding timings. A file of
-   * format 1 or 2 has none: the default round length, no rally marks, province stock or pill.
-   */
-  readonly roundTicks?: number;
-  readonly rallyCost?: number;
-  readonly provinceWarehouse?: number;
-  readonly capacityTicks?: CapacityTicks;
+  /** The rule numbers of the map, from the file header (`replayRenderRules`, ARC-C02). */
+  readonly rules: RenderRules;
   readonly #file: ReplayFile;
   /** The full reveal, then the fog of player 0 and of player 1 once asked for (#600). */
   readonly #timelines = new Map<PlayerId | null, Timeline>();
@@ -62,40 +46,7 @@ export class ReplayPlayer implements RenderSource {
     this.duration = file.frames.at(-1)?.t ?? 0;
     this.outcome = file.outcome;
     this.#file = file;
-    if (hasBuildings(file)) {
-      const rules = file.rules;
-      this.cityUpgrades = {
-        barracks: rules?.barracks_ticks ?? 0,
-        ...(rules === undefined
-          ? {}
-          : {
-              factory: rules.factory_ticks,
-              barracksCharges: rules.barracks_charges,
-              factoryCharges: rules.factory_charges,
-            }),
-      };
-      if (rules !== undefined) {
-        this.recruitTicks = rules.unit_ticks;
-        this.recruitQueueMax = rules.queue_max;
-        this.fortBuildTicks = rules.fort_ticks;
-      }
-    }
-    const rules = file.rules;
-    if (
-      rules?.round_ticks !== undefined &&
-      rules.rally_cost !== undefined &&
-      rules.province_warehouse !== undefined &&
-      rules.attrition_ticks !== undefined &&
-      rules.grace_ticks !== undefined
-    ) {
-      this.roundTicks = rules.round_ticks;
-      this.rallyCost = rules.rally_cost;
-      this.provinceWarehouse = rules.province_warehouse;
-      this.capacityTicks = {
-        attritionTicks: rules.attrition_ticks,
-        graceTicks: rules.grace_ticks,
-      };
-    }
+    this.rules = replayRenderRules(file);
     this.#timeline = buildTimeline(file);
     this.#timelines.set(null, this.#timeline);
     this.#now = now;

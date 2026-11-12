@@ -30,7 +30,8 @@ import { OverlayView } from './overlayView.ts';
 import { UndoView } from './undoView.ts';
 import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
-import { DEFAULT_ROUND_TICKS, type RenderSource } from './source.ts';
+import { DEFAULT_ROUND_TICKS, DEFAULT_TICK_HZ } from './renderRules.ts';
+import type { RenderSource } from './source.ts';
 import { SightView } from './sightView.ts';
 import { FlowView } from './flowView.ts';
 import type { Anchor } from './anchors.ts';
@@ -43,8 +44,6 @@ import { captureWalks, floodDelayMs, type Walk } from './walkLayout.ts';
 /** Failed frames in a row before the player is told (a transient error is only skipped). */
 const FRAME_FAILURE_LIMIT = 3;
 
-/** Ticks per second when the source does not say. */
-const DEFAULT_TICK_HZ = 10;
 /** Frame time assumed when the ticker gives none (60 FPS), ms. */
 const DEFAULT_FRAME_MS = 1000 / 60;
 /** A snapshot further on than this (seconds) from the last one drawn is a jump: its captures do not flood. */
@@ -206,7 +205,7 @@ export class MapScene {
       me,
       this.entities.kit,
       1,
-      this.source?.tickHz ?? DEFAULT_TICK_HZ,
+      this.source?.rules.tickHz ?? DEFAULT_TICK_HZ,
       radiusOf,
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf, colours[me]);
@@ -299,7 +298,7 @@ export class MapScene {
       events,
       this.map,
       this.me,
-      this.source?.roundTicks ?? DEFAULT_ROUND_TICKS,
+      this.source?.rules.roundTicks ?? DEFAULT_ROUND_TICKS,
       tickHz,
     );
   }
@@ -386,7 +385,8 @@ export class MapScene {
     this.view.setHover(hovered === selectedNode ? null : hovered);
     this.cities.pulse(performance.now());
     this.cities.pulseFull(overlay.cityFull ?? null, performance.now());
-    const tickHzNow = this.source.tickHz ?? DEFAULT_TICK_HZ;
+    const rules = this.source.rules;
+    const tickHzNow = rules.tickHz;
     this.readWalks(this.source.events(), tickHzNow);
     const announce = frame.base !== this.base;
     if (announce) {
@@ -396,8 +396,7 @@ export class MapScene {
       const step = this.baseTick === null ? 0 : frame.base.tick - this.baseTick;
       // A capture whose winner walks in floods (and flips its city) as the walker crosses the ring.
       const delays = this.captureDelays(this.baseTick, frame.base.tick, tickHzNow);
-      const flowing =
-        step > 0 && step <= FLOOD_MAX_STEP_S * (this.source.tickHz ?? DEFAULT_TICK_HZ);
+      const flowing = step > 0 && step <= FLOOD_MAX_STEP_S * rules.tickHz;
       this.base = frame.base;
       this.baseTick = frame.base.tick;
       // A dev scene may show a capture under way (#819): the owners before it come first.
@@ -418,14 +417,14 @@ export class MapScene {
       this.view.setRoads(frame.base.view.edges);
       this.cities.update(
         frame.base,
-        this.source.recruitTicks ?? null,
-        this.source.cityUpgrades ?? null,
-        this.source.recruitQueueMax ?? null,
-        this.source.provinceWarehouse ?? 0,
-        this.source.rallyCost ?? 0,
+        rules.recruitTicks,
+        rules.buildings,
+        rules.recruitQueueMax,
+        rules.provinceWarehouse,
+        rules.rallyCost,
       );
       // An own province shows its warehouse (DEC-41, item 13): its caption goes under it.
-      const places = this.source.provinceWarehouse ?? 0;
+      const places = rules.provinceWarehouse;
       this.names.refresh(
         new Set(
           places > 0
@@ -436,10 +435,10 @@ export class MapScene {
         ),
       );
     }
-    const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
+    const tickHz = rules.tickHz;
     this.entities.setTickHz(tickHz);
     this.overlay.setTickHz(tickHz);
-    const delays = this.source.orderDelays ?? null;
+    const delays = rules.orderDelays;
     this.intents.setDelays(delays);
     this.intents.setTickHz(tickHz);
     this.entities.setWalks(this.walks);
@@ -467,7 +466,7 @@ export class MapScene {
       this.source.events(),
       this.entities.groupPoints(),
       tickHz,
-      this.source.roundTicks,
+      rules.roundTicks,
       this.entities,
       this.view.captures,
     );
@@ -495,7 +494,7 @@ export class MapScene {
     // The starving marks of the supply flow (ui-style 42): alerts only.
     this.flow.update(frame.base);
     // The road fortifications; the road pick adds a ghost of the line on every road it reaches.
-    this.forts.setBuildTicks(this.source.fortBuildTicks ?? 0);
+    this.forts.setBuildTicks(rules.fortBuildTicks);
     this.forts.update(frame.base.view, frame.tick, overlay.fortPick ?? null);
     this.forts.advance(this.frameMs);
     this.sight.update(this.terrainOn, frame.base.view.nodes, this.layers.world.scale.x);

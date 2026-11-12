@@ -11,6 +11,10 @@
  * is the comparison of the CP now with the sum of the walks before it and its own, as the price
  * bracket of a move compares its price (the CP may grow before the walk; the server decides at the
  * charge, `rally_walk_paid` or `rally_walk_no_cp`). Pure, no Svelte and no PixiJS.
+ *
+ * The schedule and the CP order are those of the simulation: the rows of
+ * `packages/protocol/vectors/display_rules.json` (`recruit_walks`) are checked against both
+ * (ARC-C03).
  */
 import type { NodeView, PlayerId } from '../protocol.gen.ts';
 

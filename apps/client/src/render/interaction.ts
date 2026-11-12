@@ -205,7 +205,10 @@ export const EMPTY_OVERLAY: OverlayState = {
 };
 
 export interface MapInteraction {
-  /** Returns the same object while nothing changed: the scene redraws when it differs. */
+  /**
+   * Returns the same object while nothing changed: the scene redraws when it differs. A pure read
+   * (ARC-C01): the input's state never moves because a frame asked for it.
+   */
   overlay(): OverlayState;
   /** Primary click (not a drag); `null`: empty map. */
   click(hit: PickHit | null, shift: boolean): void;

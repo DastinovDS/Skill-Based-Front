@@ -6,6 +6,7 @@ import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { createFakeServer, type MockSocket } from '../net/fakeServer.ts';
 import type { ServerMsg } from '../protocol.gen.ts';
+import { renderRules } from '../render/renderRules.ts';
 import { MatchSession } from './session.ts';
 
 const map = DEFAULT_MAP;
@@ -32,7 +33,7 @@ function setup() {
   const session = new MatchSession({
     matchId: 'm1',
     token: 'secret',
-    context: { hud, tickHz: DEV_RULES.tick_hz },
+    context: { hud, rules: renderRules(DEV_RULES) },
     now: () => clock,
     connection: {
       createSocket: server.create,
@@ -72,7 +73,7 @@ describe('MatchSession', () => {
             rules: msg.ruleset_public,
             map,
           }),
-          tickHz: msg.ruleset_public.tick_hz,
+          rules: renderRules(msg.ruleset_public),
         };
       },
       onServerMessage: (msg) => seen.push(msg),
@@ -110,7 +111,7 @@ describe('MatchSession', () => {
     const session = new MatchSession({
       matchId: 'm1',
       token: 'secret',
-      context: { hud, tickHz: DEV_RULES.tick_hz, audio },
+      context: { hud, rules: renderRules(DEV_RULES), audio },
       now: () => clock,
       connection: {
         createSocket: server.create,
