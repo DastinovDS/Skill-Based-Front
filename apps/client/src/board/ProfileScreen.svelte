@@ -1,10 +1,7 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import type { Api, MatchEntry, PlayerProfile } from '../api/http.ts';
-  import type { AccountFailure } from '../app/account.ts';
   import ColourPicker from '../app/ColourPicker.svelte';
-  import LogoutDialog from '../app/LogoutDialog.svelte';
-  import NickDialog from '../app/NickDialog.svelte';
   import UnitMark from '../app/UnitMark.svelte';
   import Icon from '../hud/Icon.svelte';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
@@ -28,17 +25,12 @@
     onwatch: (matchId: string) => void;
     /** The empty list offers a match against a bot. */
     onbot: () => void;
-    /** A new nick (`PUT /api/me/nick`); the answer is why it failed, or null. */
-    onnick: (nick: string) => Promise<AccountFailure | null>;
     /** The colour asked for in matches (DEC-49); null while unknown. */
     colour?: PlayerColour | null;
     /** A new colour (`PUT /api/me/colour`); the answer is why it failed, or null. Without it no picker. */
     oncolour?: (colour: PlayerColour) => Promise<MessageKey | null>;
-    /** The two quiet links of the header (#919): the settings and the way out. */
+    /** The Settings button of the header (the account actions, the log-out, live there). */
     onsettings: () => void;
-    onlogout: () => void;
-    /** The guest's log-out warning offers to set a password first. */
-    onpassword: () => void;
     /** The "?" of the bar: How to play. */
     onhelp: () => void;
     /** Esc: back to the screen the profile was opened from. */
@@ -54,12 +46,9 @@
     map,
     onwatch,
     onbot,
-    onnick,
     colour = null,
     oncolour,
     onsettings,
-    onlogout,
-    onpassword,
     onhelp,
     onback,
   }: Props = $props();
@@ -88,11 +77,6 @@
   const facts = $derived(own.status === 'ready' ? profileFacts(own.value) : null);
   const matches = $derived(own.status === 'ready' ? own.value.matches : []);
 
-  let nickOpen = $state(false);
-  let confirmingLogout = $state(false);
-  let saved = $state(false);
-  let changeLink: HTMLButtonElement | undefined = $state();
-
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
     // Under a dialog (theme/modal.ts) the screen's keys do not arrive at all.
@@ -100,12 +84,6 @@
       event.preventDefault();
       onback();
     }
-  }
-
-  /** A guest without a password loses the account by logging out: the warning asks first. */
-  function logout(): void {
-    if (hasPassword) onlogout();
-    else confirmingLogout = true;
   }
 
   const RESULTS = {
@@ -132,8 +110,9 @@
   player={{ nick, guest: !hasPassword, onprofile: () => undefined, here: true }}
   {onhelp}
 >
-  <!-- The own profile (#919, III Plinth: the sheet on the blurred stone): the player with the two
-       quiet links, the colour and the facts, then the matches with Watch (the replays live here). -->
+  <!-- The own profile (#919, III Plinth: the sheet on the blurred stone): the player with the
+       Settings button, the colour and the facts, then the matches with Watch (the replays live
+       here). The nick is changed only by logging out and back in; Log out is in Settings. -->
   <div class="profile">
     <div class="prof-h">
       <span class="mark" style:--own={colour === null ? undefined : colourVar(colour)}>
@@ -143,19 +122,10 @@
         <p class="kicker">{t('profile.kicker')}</p>
         <h2>{nick}</h2>
       </div>
-      <button
-        bind:this={changeLink}
-        type="button"
-        class="lnk change"
-        onclick={() => {
-          saved = false;
-          nickOpen = true;
-        }}>{t('profile.nick.change')}</button
-      >
-      {#if saved}<p class="sr" role="status">{t('profile.nick.saved')}</p>{/if}
       <div class="tools">
-        <button type="button" class="lnk" onclick={onsettings}>{t('settings.title')}</button>
-        <button type="button" class="lnk" onclick={logout}>{t('menu.logout')}</button>
+        <LapisButton size="sm" onclick={onsettings}
+          ><Icon name="settings" size={16} />{t('settings.title')}</LapisButton
+        >
       </div>
     </div>
 
@@ -275,36 +245,6 @@
       {/if}
     {/if}
   </div>
-
-  {#snippet overlay()}
-    {#if nickOpen}
-      <NickDialog
-        {nick}
-        onsubmit={async (next: string) => {
-          const failure = await onnick(next);
-          if (failure === null) saved = true;
-          return failure;
-        }}
-        onclose={() => {
-          nickOpen = false;
-          // The focus goes back to the link that opened the dialog.
-          void tick().then(() => changeLink?.focus());
-        }}
-      />
-    {/if}
-    {#if confirmingLogout}
-      <LogoutDialog
-        onpassword={() => {
-          confirmingLogout = false;
-          onpassword();
-        }}
-        {onlogout}
-        onstay={() => {
-          confirmingLogout = false;
-        }}
-      />
-    {/if}
-  {/snippet}
 </SheetFrame>
 
 <style>
@@ -313,8 +253,8 @@
     margin: 0 auto;
   }
 
-  /* The player: the helmet, the label and the nick, "Change the nick", and on the right the two
-     quiet links (the mockup's `.prof-h`). */
+  /* The player: the helmet, the label and the nick, and on the right the Settings button (the
+     mockup's `.prof-h`). */
   .prof-h {
     display: flex;
     flex-wrap: wrap;
@@ -339,11 +279,6 @@
     margin: 0;
     font: 400 44px / 1 var(--font-display);
     letter-spacing: 0.1em;
-  }
-
-  .change {
-    align-self: flex-end;
-    margin-bottom: 6px;
   }
 
   .tools {

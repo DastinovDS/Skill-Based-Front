@@ -99,7 +99,6 @@ export const MENU_SCENES = [
   'profile-empty',
   'profile-loading',
   'profile-network',
-  'profile-nick',
   'settings',
   'settings-guest',
   'style',

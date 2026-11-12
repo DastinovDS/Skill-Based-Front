@@ -4,7 +4,6 @@ import { setLocale } from '../i18n/index.ts';
 import {
   failureText,
   loginFailure,
-  nickFailure,
   nickProblem,
   passwordFailure,
   passwordLengthOk,
@@ -86,29 +85,5 @@ describe('the nick change (#871)', () => {
     expect(nickProblem('ab')).toBe('welcome.error.short');
     expect(nickProblem('a b')).toBe('welcome.error.chars');
     expect(nickProblem('x!')).toBe('welcome.error.chars');
-  });
-
-  it('tells taken, refused and the daily limit apart', () => {
-    expect(nickFailure(new ApiError('conflict', 409))).toEqual({ key: 'welcome.error.taken' });
-    expect(nickFailure(new ApiError('invalid', 422))).toEqual({ key: 'welcome.error.invalid' });
-    expect(nickFailure(new ApiError('rate_limited', 429))).toEqual({
-      key: 'error.account.nickLimited',
-    });
-    expect(nickFailure(new ApiError('rate_limited', 429, 7201))).toEqual({
-      key: 'error.account.nickLimitedHours',
-      hours: 3,
-    });
-    expect(nickFailure(new ApiError('rate_limited', 429, 600))).toEqual({
-      key: 'error.account.rateLimitedWait',
-      minutes: 10,
-    });
-    expect(nickFailure(new ApiError('network', 0))).toEqual({ key: 'error.api.network' });
-  });
-
-  it('writes the hours into the text', () => {
-    setLocale('en');
-    expect(failureText({ key: 'error.account.nickLimitedHours', hours: 5 })).toBe(
-      'Too many nick changes. Try again in 5 h.',
-    );
   });
 });

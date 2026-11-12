@@ -343,7 +343,7 @@ export const en = {
   'bar.factoriesLabel': 'Factories: {count} of {max}',
   'bar.factoriesLabelFull': 'Factories: {count} of {max}, at the most',
   'bar.scoreLabel': 'VP score: {mine} {mineVp}, {enemy} {enemyVp}',
-  'bar.help': 'Help [?]',
+  'bar.help': 'Settings [?]',
   'bar.exit': 'Exit',
   'toast.title': 'Notifications',
   'toast.close': 'Close the notification',
@@ -375,30 +375,10 @@ export const en = {
   'start.title': 'You are {colour}. Your capital is here',
   'start.capital': 'Opponent: {nick}',
   'exit.title': 'Leave the match?',
-  'exit.text': 'This is a forfeit: the match ends with your defeat.',
   'exit.eyebrow': 'Forfeit',
   'exit.confirm': 'Forfeit and leave',
   'exit.stay': 'Keep playing',
-  'help.title': 'Help',
-  'help.close': 'Close the help',
-  'help.legend': 'On the map',
-  'help.legend.mineHelmet': 'Your group: a helmet in your colour facing right, with a brim',
-  'help.legend.enemyHelmet':
-    'Enemy group: a helmet in the opponent colour facing left, cut at the ear',
-  'help.legend.chargeHelmet': 'Fill from the bottom: how many units are charged',
-  'help.legend.order': 'Thin arrow: an ordinary order',
-  'help.legend.planned':
-    "Wide ribbon: a planned order, both sides see it (the opponent's has a double outline)",
-  'help.legend.alert': 'Amber ring: they are coming for the city, or it is overcrowded',
-  'help.legend.chips':
-    'Fight arena: a chip per unit (filled: charged, hatched: discharged, dashed: dead), up to 8 a side, then "+N"',
-  'help.legend.badgeUp':
-    'Green chevrons up: an advantage, a stroke per bonus shot. On the map, a defender on mountains; in a fight, gone when the shot fires',
-  'help.legend.badgeDown':
-    'Red chevrons down: a defender on plains. If attacked, one charge burns in the first round',
-  'help.legend.bonusShot': 'A dashed arrow with a green chevron: a bonus shot fired this round',
   'help.howTo': 'How to play',
-  'help.howToBack': 'Back to the keys',
   // The "How to play" screen (CLI-13, #72); the numbers come from the played ruleset.
   'howto.eyebrow': 'The rules in two minutes',
   'howto.copyright': '© 2026 Daniil Stepanov',
@@ -448,7 +428,6 @@ export const en = {
     'Hold cities to score. Every {seconds} s each city of yours gives its points, your capital {multiplier} times more. Take the enemy capital and you win at once. After {minutes} min the higher score wins.',
   'howto.pic.victory':
     'Three cities with point numbers, and a capital with a star that is worth more.',
-  'help.keys': 'Keys',
   'help.key.select': 'pick a group or a city, give an order',
   'help.key.planned': 'planned order: it gathers its bonus in the node, then sets off',
   'help.key.cancel':
@@ -481,11 +460,10 @@ export const en = {
   'bar.soundTip': '{tip} ({muteKey})',
   'bar.soundOn': 'Mute the sound',
   'bar.soundOff': 'Turn the sound on',
-  'help.volume': 'Sound volume',
-  'help.key.help': 'this help',
+  'help.key.settings': 'the settings of the match',
+  'mset.eyebrow': 'Match',
   'help.key.escape': 'drop the selection, twice: leave the match',
   'help.camera': 'Right button: move the map. Wheel: zoom at the pointer.',
-  'help.capture': 'Taking a place costs charges of the group: {n}. Without them it turns back.',
   'menu.dev': 'For development',
   // The leaderboard and the player profile (#78, variant S "Split").
   'board.retry': 'Try again',
@@ -520,13 +498,7 @@ export const en = {
   'profile.col.length': 'Length',
   'profile.col.replay': 'Replay',
   'profile.empty.title': 'No matches yet',
-  'profile.nick.change': 'Change the nick',
-  'profile.nick.label': 'New nick',
-  'profile.nick.hint': '3 to 16 characters: letters, digits, _ and -',
-  'profile.nick.saved': 'The nick is changed.',
   'colour.label': 'Colour',
-  'colour.hint':
-    'Your colour in matches. If your opponent has it too, the one who joined later gets another.',
   'colour.saved': 'Colour saved: {colour}.',
   'colour.lapis': 'Lapis',
   'colour.minium': 'Minium',
@@ -534,8 +506,6 @@ export const en = {
   'colour.shell': 'Shell',
   'colour.violet': 'Violet',
   'colour.madder': 'Madder',
-  'error.account.nickLimited': 'Too many nick changes. Try again later.',
-  'error.account.nickLimitedHours': 'Too many nick changes. Try again in {hours} h.',
   /** The settings of this browser (#871). */
   'settings.title': 'Settings',
   'settings.kicker': 'Account and display',
@@ -559,7 +529,7 @@ export const en = {
   'settings.keys': 'Keys',
   'settings.key.enter': 'Play, confirm',
   'settings.key.escape': 'Back, close',
-  'settings.key.help': 'Help in a match',
+  'settings.key.help': 'Settings in a match',
   'settings.key.mute': 'Sound on or off',
   'settings.key.alert': 'Go to the alert',
   'settings.key.split': 'Split the group',
@@ -597,7 +567,7 @@ export const en = {
   'keys.action.mark': 'Mark a problem',
   'keys.fixed.select': 'Select several groups',
   'keys.fixed.menu': 'Choose in an open menu',
-  'keys.fixed.help': 'Help in a match',
+  'keys.fixed.help': 'Settings in a match',
   'keys.fixed.escape': 'Drop, close, back',
   'keys.fixed.enter': 'Confirm',
   'settings.learn': 'Learn the game',
@@ -635,6 +605,4 @@ export const en = {
   'city.rally': 'Rally point',
   'city.rallyClear': 'Clear rally point',
   'help.key.fortify': 'fortify a road of the selected city or province, then pick the road',
-  'help.economyFlow':
-    'Factories make charges, and supply rolls by itself towards the front, one charge per road each dispatch. Buildings are paid in charges of the node and of the units standing there.',
 };

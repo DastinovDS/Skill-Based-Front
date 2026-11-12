@@ -303,10 +303,10 @@
       type="button"
       class="icon-button"
       aria-label={t('bar.help')}
-      aria-expanded={chrome.helpOpen}
+      aria-expanded={chrome.settingsOpen}
       title={t('bar.help')}
       onclick={() => {
-        chrome.helpOpen = !chrome.helpOpen;
+        chrome.settingsOpen = !chrome.settingsOpen;
       }}
     >
       <BarGlyph name="help" />

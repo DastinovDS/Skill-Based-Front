@@ -796,10 +796,10 @@ for (const [name, link] of [
   });
 }
 
-// The log-out dialog of a guest without a password on the blurred stone, from the quiet link of
-// the profile (#919; `screen-account-logout.png` and grey), with the danger button hovered.
+// The log-out dialog of a guest without a password on the blurred stone, from the Settings
+// (#919, #1003; `screen-account-logout.png` and grey), with the danger button hovered.
 test('shot of the log-out dialog', async ({ page }) => {
-  await page.goto('/?menu=profile-guest');
+  await page.goto('/?menu=settings-guest');
   await page.evaluate('document.fonts.ready.then(() => true)');
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
@@ -857,20 +857,8 @@ test('shot of the keys dialog of the settings', async ({ page }) => {
   await page.evaluate("window.localStorage.removeItem('sbf.keys')");
 });
 
-// The nick change of the profile (#871): the dialog with a taken nick (`screen-profile-nick.png`),
-// and the settings at the 125 % interface scale (`screen-settings-125.png`, chosen on the page).
-test('shot of the nick dialog and of the interface scale', async ({ page }) => {
-  await page.goto('/?menu=profile-nick');
-  await page.evaluate('document.fonts.ready.then(() => true)');
-  await page.getByRole('button', { name: 'Change the nick' }).click();
-  const field = page.getByRole('textbox', { name: 'New nick' });
-  await expect(field).toBeFocused();
-  await field.fill('Vega');
-  await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
-  await page.mouse.move(1000, 700);
-  await page.screenshot({ path: join(OUT, 'screen-profile-nick.png') });
-
+// The settings at the 125 % interface scale (`screen-settings-125.png`, chosen on the page).
+test('shot of the interface scale', async ({ page }) => {
   await page.goto('/?menu=settings');
   await page.evaluate('document.fonts.ready.then(() => true)');
   await page.getByRole('radio', { name: '125%' }).click();
@@ -1415,7 +1403,7 @@ test('shot of the capture_failed toast', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'capture-toast-gray.png') });
 });
 
-// The match dialogs (#597). `help.png` (key ?) and `exit.png` (the Exit button), each with a `-gray` twin.
+// The match dialogs (#597). `match-settings.png` (key ?) and `exit.png` (the Exit button), each with a `-gray` twin.
 async function openScene(page: import('@playwright/test').Page, scene: string): Promise<void> {
   await page.goto(`/?scene=${scene}&menus`);
   await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
@@ -1430,31 +1418,31 @@ async function shootBoth(page: import('@playwright/test').Page, name: string): P
   await page.screenshot({ path: join(OUT, `${name}-gray.png`) });
 }
 
-test('shot of the help sheet', async ({ page }) => {
+test('shot of the settings of a match', async ({ page }) => {
   await openScene(page, 'snapshot_fog');
   await page.keyboard.press('?');
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await shootBoth(page, 'help');
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+  await shootBoth(page, 'match-settings');
 });
 
-// The help with rebound keys (#966): recruit on Y, the planned order on V, terrain on K.
-test('shot of the help sheet with rebound keys', async ({ page }) => {
+// The settings with rebound keys (#966): recruit on Y, the planned order on V, terrain on K.
+test('shot of the settings of a match with rebound keys', async ({ page }) => {
   await page.addInitScript(
     `window.localStorage.setItem('sbf.keys', JSON.stringify({ recruit: 'KeyY', planned: 'KeyV', terrain: 'KeyK' }));`,
   );
   await openScene(page, 'snapshot_fog');
   await page.keyboard.press('?');
   await expect(page.getByRole('dialog')).toBeVisible();
-  await shootBoth(page, 'help-rebound');
+  await shootBoth(page, 'match-settings-rebound');
 });
 
-// A tall window: the whole help sheet, its bottom (the sound volume) included, without scrolling.
-test('shot of the whole help sheet', async ({ page }) => {
+// A tall window: the whole sheet without scrolling.
+test('shot of the whole settings of a match', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   await openScene(page, 'snapshot_fog');
   await page.keyboard.press('?');
   await expect(page.getByRole('dialog')).toBeVisible();
-  await page.screenshot({ path: join(OUT, 'help-tall.png') });
+  await page.screenshot({ path: join(OUT, 'match-settings-tall.png') });
 });
 
 // The whole page of the rules at once: a tall window, so the panel needs no scrolling.
@@ -1466,14 +1454,6 @@ test('shot of the whole How to play screen (CLI-13)', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'screen-howto-tall.png') });
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.screenshot({ path: join(OUT, 'screen-howto-tall-gray.png') });
-});
-
-test('shot of the How to play page inside the help sheet (CLI-13)', async ({ page }) => {
-  await openScene(page, 'snapshot_fog');
-  await page.keyboard.press('?');
-  await page.getByRole('button', { name: 'How to play' }).click();
-  await expect(page.locator('.hw')).toBeVisible();
-  await shootBoth(page, 'help-howto');
 });
 
 test('shot of the forfeit dialog in the match', async ({ page }) => {

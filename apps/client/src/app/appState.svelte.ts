@@ -9,7 +9,7 @@ import { SvelteURLSearchParams } from 'svelte/reactivity';
 import { Api, ApiError, NEW_MAP, type ActiveMatch, type BotLevel } from '../api/http.ts';
 import { forgetGuest, loadGuest, saveGuest } from '../api/guestStore.ts';
 import type { MessageKey } from '../i18n/index.ts';
-import { loginFailure, nickFailure, passwordFailure, type AccountFailure } from './account.ts';
+import { loginFailure, passwordFailure, type AccountFailure } from './account.ts';
 import { apiErrorKey } from './apiErrors.ts';
 import { BOT_START_TIMEOUT_MS } from './waiting.ts';
 import { MapCache } from './mapCache.svelte.ts';
@@ -224,25 +224,6 @@ export class AppState {
         return null;
       }
       return passwordFailure(error);
-    }
-  }
-
-  /**
-   * A new nick (`PUT /api/me/nick`, a few a day). Returns why it failed, or null; a lost session
-   * (401) goes to the menu with its notice like any other action.
-   */
-  async changeNick(nick: string): Promise<AccountFailure | null> {
-    const guest = this.#requireGuest();
-    try {
-      const me = await this.api.changeNick(guest.token, nick);
-      this.#remember({ ...guest, nick: me.nick });
-      return null;
-    } catch (error) {
-      if (error instanceof ApiError && error.code === 'unauthorized') {
-        this.#fail(error);
-        return null;
-      }
-      return nickFailure(error);
     }
   }
 

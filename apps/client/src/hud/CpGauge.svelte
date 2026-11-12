@@ -199,7 +199,9 @@
         r.setAttribute('width', String(Math.max(0, xb - xa)));
       }
       const helm = el.querySelector('.ear-helm');
-      helm?.setAttribute('visibility', i < EAR_HELMETS ? 'visible' : 'hidden');
+      // `inherit`, never `visible`: a child that says `visible` shows through its hidden parent,
+      // so the helmet would stay on the rail after its earmark is gone.
+      helm?.setAttribute('visibility', i < EAR_HELMETS ? 'inherit' : 'hidden');
       helm?.setAttribute(
         'transform',
         `translate(${String((xa + xb) / 2 - HELM_W / 2)} ${String(EAR_TOP - 16)})`,

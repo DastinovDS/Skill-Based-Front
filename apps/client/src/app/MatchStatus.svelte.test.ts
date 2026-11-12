@@ -50,4 +50,15 @@ describe('MatchStatus', () => {
     expect(target.textContent).toContain('resumes by itself in 27 s');
     expect(target.querySelector('button')).toBeNull();
   });
+
+  it('offers Resume to the player who paused, as a game button with its Enter key (#1003)', () => {
+    const paused = { type: 'paused', paused: true, by: 0, ends_in_s: 60 } as const;
+    const { target, onaction } = render({ ...READY, paused, pauseLeft: 56 });
+    const resume = target.querySelector('button');
+    expect(resume?.classList.contains('lapis-btn')).toBe(true);
+    expect(resume?.classList.contains('primary')).toBe(true);
+    expect(resume?.textContent.replace(/\s+/g, ' ').trim()).toBe('Resume ↵');
+    resume?.click();
+    expect(onaction).toHaveBeenCalledWith('resume');
+  });
 });

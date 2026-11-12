@@ -30,10 +30,8 @@
     role="alertdialog"
     eyebrow={t('exit.eyebrow')}
     title={t('exit.title')}
-    describedby="exit-text"
     onclose={onstay}
   >
-    <p class="dlg-lead" id="exit-text">{t('exit.text')}</p>
     {#snippet actions()}
       <!-- Esc still keeps playing (Hud); the key is not printed on the button (#919). -->
       <button

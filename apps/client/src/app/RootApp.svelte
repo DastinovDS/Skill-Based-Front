@@ -194,17 +194,10 @@
     onbot={() => {
       app.go({ name: 'menu', way: 'bot' });
     }}
-    onnick={(nick: string) => app.changeNick(nick)}
     colour={app.colour}
     oncolour={(colour: PlayerColour) => app.changeColour(colour)}
     onsettings={() => {
       app.openAccountPage('settings');
-    }}
-    onpassword={() => {
-      app.openPage('password');
-    }}
-    onlogout={() => {
-      app.logout();
     }}
     onhelp={() => {
       app.openPage('howto');

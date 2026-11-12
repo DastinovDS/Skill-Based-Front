@@ -246,6 +246,30 @@ describe('PlayScreen (#919, III Plinth)', () => {
       expect(document.body.textContent).toContain('Expires in 30 min');
     });
 
+    it('Copy link shows Copied for a few seconds, then is Copy link again (#1003)', async () => {
+      const writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      renderInvite({ invite: () => Promise.resolve(invite()) });
+      await settle();
+      const copy = document.querySelector<HTMLButtonElement>('button.copy');
+      const faces = (): string[] =>
+        [...(copy?.querySelectorAll('.face') ?? [])].map((f) =>
+          f.classList.contains('off') ? 'off' : 'on',
+        );
+      // Both labels are in the button, one of them shown: the button keeps one size.
+      expect(copy?.querySelectorAll('.face')).toHaveLength(2);
+      expect(faces()).toEqual(['on', 'off']);
+      copy?.click();
+      await settle();
+      expect(writeText).toHaveBeenCalledOnce();
+      expect(faces()).toEqual(['off', 'on']);
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(faces()).toEqual(['off', 'on']);
+      await vi.advanceTimersByTimeAsync(1000);
+      flushSync();
+      expect(faces()).toEqual(['on', 'off']);
+    });
+
     it('waits for a friend once the map is there', async () => {
       renderInvite({ invite: () => Promise.resolve(invite({ map_ready: true })) });
       await settle();
