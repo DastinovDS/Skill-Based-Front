@@ -1,18 +1,18 @@
 import type { Container } from 'pixi.js';
 import { setReducedMotion } from './motion.ts';
 import type { BakedSprite } from './bake.ts';
-import { cityBodySpec, provinceBodySpec, stockColor } from './bakedShapes.ts';
-import { pipAlertSpec, iconBackSpec, warehouseMarksSpec } from './pieceShapes.ts';
+import { cityBodySpec, cityRingSpec, provinceBodySpec, stockColor } from './bakedShapes.ts';
+import { iconBackSpec, warehouseMarksSpec } from './pieceShapes.ts';
 import { CanvasTextMetrics } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { BUNDLED_MAPS, DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { MapFile, NodeView, SnapshotMsg } from '../protocol.gen.ts';
+import type { EventMsg, MapFile, NodeView, SnapshotMsg } from '../protocol.gen.ts';
 import { CityView } from './cityView.ts';
 import { createLayers } from './layers.ts';
 import type { BuildingRules } from './renderRules.ts';
 import { iconSize, layoutBuildings, roadAngles } from './buildingLayout.ts';
-import { ENEMY, PROVINCE, YOU, playerColours } from './style.ts';
+import { ENEMY, FOUNDATION, PROVINCE, YOU, playerColours } from './style.ts';
 import { PLAYER_COLOURS } from '../theme/tokens.ts';
 import { testSprites } from './testSprites.ts';
 
@@ -282,14 +282,15 @@ describe('CityView: a province is a pale dot (PB, #431, DEC-23)', () => {
     view.update(snapshot, null, UPGRADES);
     const container = city(layers.layer.nodes, ownProvince.id);
     // body, ring, warehouse, then per building (the barracks, the factory): the owed row, the icon, the
-    // paying lozenges and the done ring; the recruits, the alert ring: no VP badge after them.
-    expect(container.children).toHaveLength(15);
+    // paying lozenges, the done ring and the ticks; no foundation (it never recruits) and no VP
+    // badge after them.
+    expect(container.children).toHaveLength(13);
     expect(barracksMark(layers.layer.nodes, ownProvince.id)).toBeNull();
     view.destroy();
   });
 });
 
-describe('CityView: progress cells of an own city (variant A, #439)', () => {
+describe("CityView: the recruit queue on the barracks' foundation (#1005, D2) and the builds", () => {
   const rules = { unitTicks: DEV_RULES.recruit.unit_ticks, queueMax: DEV_RULES.recruit.queue_max };
   const base = devSnapshot(map, DEV_RULES, 100);
   const own = base.view.nodes.find((n) => n.owner === 0 && n.has_barracks === true);
@@ -341,17 +342,6 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     return { view: new CityView(map, layers, 0, 1, testSprites()), nodes: layers.layer.nodes };
   };
 
-  /** The recruits of a city (#847, 55k Pips): the small helmets shown. */
-  const recruits = (nodes: Container, id: number): Container[] => {
-    const layer = (
-      nodes.children.find((c) => c.label === `node-${String(id)}`) as Container
-    ).children.find((c) => c.label === 'recruits') as Container;
-    return layer.children.filter((c) => c.visible);
-  };
-  /** The back of a recruit's helmet: `solid` (in the queue) or `dashed` (a free slot). */
-  const look = (pip: Container): string =>
-    ((pip.children[0] as BakedSprite).spec?.key ?? '').includes(':dashed') ? 'free' : 'unit';
-  const level = (pip: Container): boolean => (pip.children[1] as BakedSprite).visible;
   const tower = (nodes: Container, id: number, kind: string): Container =>
     (nodes.children.find((c) => c.label === `node-${String(id)}`) as Container).children.find(
       (c) => c.label === `building-${kind}`,
@@ -368,52 +358,94 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     };
   };
 
-  it('draws the queue as small helmets beyond the barracks: the first fills, the rest are hatched', () => {
+  /** The barracks' foundation of a city (#1005, D2): `null` when it is not on the map. */
+  const foundation = (nodes: Container, id: number): Container | null => {
+    const found = city(nodes, id).children.find((c) => c.label === 'foundation');
+    return found !== undefined && found.visible ? found : null;
+  };
+  /** What each socket of the foundation shows: `made` (the unit under way or made), `queued`, `free`, `empty`. */
+  const sockets = (nodes: Container, id: number): string[] => {
+    const root = foundation(nodes, id);
+    if (root === null) return [];
+    const layer = (label: string): BakedSprite[] =>
+      (root.children.find((c) => c.label === label) as Container).children as BakedSprite[];
+    const recesses = layer('recesses').filter((_, i) => i % 2 === 0 && _.visible);
+    const cells = layer('cells').filter((_, i) => i % 2 === 0);
+    return recesses.map((recess, j) => {
+      const cell = cells[j];
+      if (cell !== undefined && cell.visible) {
+        return (cell.spec?.key ?? '').startsWith('socket:queued') ? 'queued' : 'made';
+      }
+      return recess.spec?.key === 'socket:free' ? 'free' : 'empty';
+    });
+  };
+  /** The amber rim of a foundation that asks for a look (no room, or a fight in the city). */
+  const rim = (nodes: Container, id: number): boolean => {
+    const root = foundation(nodes, id);
+    return (
+      root?.children.some(
+        (c) => c.visible && ((c as BakedSprite).spec?.key ?? '').startsWith('foundation-alert'),
+      ) ?? false
+    );
+  };
+  /** The made part of the unit under way: the share of its socket it fills. */
+  const made = (nodes: Container, id: number): number => {
+    const root = foundation(nodes, id);
+    const fill = root?.children.find(
+      (c) => c.visible && ((c as BakedSprite).spec?.key ?? '').startsWith('socket-fill'),
+    );
+    return fill === undefined ? 0 : fill.scale.x;
+  };
+  /** The swing of the barracks onto its foundation, played to its end. */
+  const settle = (view: CityView): void => {
+    view.advance(FOUNDATION.swingMs + 20);
+  };
+
+  it('stands the barracks on its foundation while the city recruits: the unit under way, the rest hatched', () => {
     const { view, nodes } = make();
     view.update(
-      withCity({ recruit_queue: 3, recruit_progress: 15 }),
+      withCity({ recruit_queue: 2, recruit_progress: 15 }),
       rules.unitTicks,
       UPGRADES,
       rules.queueMax,
     );
-    const pips = recruits(nodes, own.id);
-    expect(pips.map(look)).toEqual(['unit', 'unit', 'unit']);
-    expect(pips.map(level)).toEqual([true, false, false]);
-    expect(sprite(nodes, own.id, 'progress-alert').visible).toBe(false);
+    expect(sockets(nodes, own.id)).toEqual(['made', 'queued', 'empty']);
+    expect(made(nodes, own.id)).toBeCloseTo(15 / rules.unitTicks, 9);
+    expect(rim(nodes, own.id)).toBe(false);
+    // One piece: the barracks stands where its foundation does.
+    const root = foundation(nodes, own.id);
+    const barracks = tower(nodes, own.id, 'barracks');
+    expect(root?.x).toBeCloseTo(barracks.x, 9);
+    expect(root?.y).toBeCloseTo(barracks.y, 9);
     view.destroy();
   });
 
-  it('shows no recruits for an empty queue, and none on a foreign city', () => {
+  it('shows no foundation for an empty queue, and none on a foreign city', () => {
     const { view, nodes } = make();
     view.update(withCity({ recruit_queue: 0 }), rules.unitTicks, UPGRADES, rules.queueMax);
-    expect(recruits(nodes, own.id)).toHaveLength(0);
-    expect(recruits(nodes, foreign.id)).toHaveLength(0);
+    expect(foundation(nodes, own.id)).toBeNull();
+    expect(foundation(nodes, foreign.id)).toBeNull();
     view.destroy();
   });
 
-  it('shows the free slots, beaded, only on the selected city', () => {
+  it('dashes the free sockets only on the selected city', () => {
     const { view, nodes } = make();
     view.update(withCity({ recruit_queue: 1 }), rules.unitTicks, UPGRADES, rules.queueMax);
-    expect(recruits(nodes, own.id).map(look)).toEqual(['unit']);
+    expect(sockets(nodes, own.id)).toEqual(['made', 'empty', 'empty']);
     view.setSelected(own.id);
-    const free = Array.from({ length: rules.queueMax - 1 }, () => 'free');
-    expect(recruits(nodes, own.id).map(look)).toEqual(['unit', ...free]);
+    expect(sockets(nodes, own.id)).toEqual(['made', 'free', 'free']);
     // Another selection takes the slots away again.
     view.setSelected(foreign.id);
-    expect(recruits(nodes, own.id).map(look)).toEqual(['unit']);
-    view.setSelected(own.id);
-    view.setSelected(null);
-    expect(recruits(nodes, own.id).map(look)).toEqual(['unit']);
+    expect(sockets(nodes, own.id)).toEqual(['made', 'empty', 'empty']);
     view.destroy();
   });
 
-  it('shows the free slots of an empty queue of the selected city, but not where it cannot recruit', () => {
+  it('stands the barracks on its foundation for a selected city with no queue, but not where it cannot recruit', () => {
     const { view, nodes } = make();
     view.update(withCity({ recruit_queue: 0 }), rules.unitTicks, UPGRADES, rules.queueMax);
     view.setSelected(own.id);
-    expect(recruits(nodes, own.id).map(look)).toEqual(
-      Array.from({ length: rules.queueMax }, () => 'free'),
-    );
+    settle(view);
+    expect(sockets(nodes, own.id)).toEqual(['free', 'free', 'free']);
     // The same city without a barracks (the city development is on): the menu has no recruit.
     view.update(
       withCity({ recruit_queue: 0, has_barracks: false }),
@@ -421,11 +453,35 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       UPGRADES,
       rules.queueMax,
     );
-    expect(recruits(nodes, own.id)).toHaveLength(0);
+    settle(view);
+    expect(foundation(nodes, own.id)).toBeNull();
     view.destroy();
   });
 
-  it('rings the first recruit when it is ready with no room, its helmet full', () => {
+  it('swings the barracks round the city onto its foundation and back when the queue empties', () => {
+    setReducedMotion(false);
+    const { view, nodes } = make();
+    view.update(withCity({ recruit_queue: 0 }), rules.unitTicks, UPGRADES, rules.queueMax);
+    const barracks = tower(nodes, own.id, 'barracks');
+    const rest = { x: barracks.x, y: barracks.y };
+    view.update(withCity({ recruit_queue: 1 }), rules.unitTicks, UPGRADES, rules.queueMax);
+    // On its way: the foundation comes in only at the end of the swing.
+    view.advance(FOUNDATION.swingMs / 2);
+    const half = { x: barracks.x, y: barracks.y };
+    expect(Math.hypot(half.x - rest.x, half.y - rest.y)).toBeGreaterThan(0);
+    settle(view);
+    const seat = { x: barracks.x, y: barracks.y };
+    expect(Math.hypot(seat.x - half.x, seat.y - half.y)).toBeGreaterThan(0);
+    expect(foundation(nodes, own.id)?.alpha).toBe(1);
+    view.update(withCity({ recruit_queue: 0 }), rules.unitTicks, UPGRADES, rules.queueMax);
+    settle(view);
+    expect(foundation(nodes, own.id)).toBeNull();
+    expect(barracks.x).toBeCloseTo(rest.x, 9);
+    expect(barracks.y).toBeCloseTo(rest.y, 9);
+    view.destroy();
+  });
+
+  it('rims the foundation in amber when the unit made has no room, its socket full', () => {
     const { view, nodes } = make();
     view.update(
       withCity({ recruit_queue: 2, recruit_progress: rules.unitTicks, recruit_waiting: true }),
@@ -433,23 +489,21 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       UPGRADES,
       rules.queueMax,
     );
-    const ring = sprite(nodes, own.id, 'progress-alert');
-    expect(ring.visible).toBe(true);
-    expect(ring.spec?.key).toBe(pipAlertSpec(8).key);
-    expect(recruits(nodes, own.id).map(level)).toEqual([true, false]);
+    expect(rim(nodes, own.id)).toBe(true);
+    expect(sockets(nodes, own.id)).toEqual(['made', 'queued', 'empty']);
+    expect(made(nodes, own.id)).toBe(1);
     view.destroy();
   });
 
-  it('rings the production stopped by a fight in the city, and only while the fight lasts', () => {
+  it('rims the production stopped by a fight in the city, and only while the fight lasts', () => {
     const { view, nodes } = make();
     const change = { recruit_queue: 2, recruit_progress: 10 };
     view.update(withCity(change, true), rules.unitTicks, UPGRADES, rules.queueMax);
-    const ring = sprite(nodes, own.id, 'progress-alert');
-    expect(ring.visible).toBe(true);
-    // The first helmet keeps showing how far the unit got.
-    expect(recruits(nodes, own.id).map(level)).toEqual([true, false]);
+    expect(rim(nodes, own.id)).toBe(true);
+    // The first socket keeps showing how far the unit got.
+    expect(made(nodes, own.id)).toBeCloseTo(10 / rules.unitTicks, 9);
     view.update(withCity(change, false), rules.unitTicks, UPGRADES, rules.queueMax);
-    expect(ring.visible).toBe(false);
+    expect(rim(nodes, own.id)).toBe(false);
     view.destroy();
   });
 
@@ -463,7 +517,89 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       UPGRADES,
       rules.queueMax,
     );
-    expect(sprite(nodes, own.id, 'progress-alert').visible).toBe(false);
+    expect(rim(nodes, own.id)).toBe(false);
+    view.destroy();
+  });
+
+  it('holds the ring cell of a made unit empty while it drops in from its socket, then fills it (#1005)', () => {
+    setReducedMotion(false);
+    const { view, nodes } = make();
+    const garrison = base.view.groups
+      .filter((g) => g.location.kind === 'node' && g.location.node === ownId)
+      .reduce((sum, g) => sum + g.units, 0);
+    const capacity = own.capacity;
+    if (garrison < 1 || capacity <= garrison) throw new Error('the city needs a garrison and room');
+    const snapshot = withCity({ recruit_queue: 1, recruit_progress: 3 });
+    view.update(snapshot, rules.unitTicks, UPGRADES, rules.queueMax);
+    const ring = city(nodes, ownId).children[1] as BakedSprite;
+    const radius = view.radiusOf(ownId);
+    const full = cityRingSpec(radius, capacity, garrison).key;
+    expect(ring.spec?.key).toBe(full);
+    const recruited: EventMsg = {
+      type: 'event',
+      tick: NOW,
+      kind: 'recruited',
+      data: { player: 0, node: ownId, group: 'g-new' },
+    };
+    // 0.2 s after the event the unit is on its way: the ring shows the garrison without it.
+    view.setTick(NOW + 2);
+    view.setRecruits([recruited], 10);
+    view.advance(16);
+    expect(ring.spec?.key).toBe(cityRingSpec(radius, capacity, garrison - 1).key);
+    const drop = city(nodes, ownId).children.find((c) => c.label === 'recruit-drop');
+    expect(drop?.visible).toBe(true);
+    // Landed: the cell is the garrison's again and flashes.
+    view.setTick(NOW + 7);
+    view.setRecruits([recruited], 10);
+    view.advance(16);
+    expect(ring.spec?.key).toBe(full);
+    expect(drop?.visible).toBe(true);
+    // Over.
+    view.setTick(NOW + 20);
+    view.setRecruits([recruited], 10);
+    view.advance(16);
+    expect(drop?.visible).toBe(false);
+    // A unit that walks to the rally point never drops into the ring.
+    const walk: EventMsg = {
+      type: 'event',
+      tick: NOW + 20,
+      kind: 'rally_walk_paid',
+      data: { player: 0, group: 'g-walk', node: ownId, target: 0, cost: 50 },
+    };
+    const walker: EventMsg = {
+      ...recruited,
+      tick: NOW + 20,
+      data: { ...recruited.data, group: 'g-walk' },
+    };
+    view.update({ ...snapshot, tick: NOW + 20 }, rules.unitTicks, UPGRADES, rules.queueMax);
+    view.setTick(NOW + 22);
+    view.setRecruits([recruited, walker, walk], 10);
+    view.advance(16);
+    expect(ring.spec?.key).toBe(full);
+    expect(drop?.visible).toBe(false);
+    view.destroy();
+  });
+
+  it('moves no made unit with "less motion": the snapshot at once', () => {
+    setReducedMotion(true);
+    const { view, nodes } = make();
+    view.update(withCity({ recruit_queue: 1 }), rules.unitTicks, UPGRADES, rules.queueMax);
+    view.setTick(NOW + 2);
+    view.setRecruits(
+      [
+        {
+          type: 'event',
+          tick: NOW,
+          kind: 'recruited',
+          data: { player: 0, node: ownId, group: 'g' },
+        },
+      ],
+      10,
+    );
+    view.advance(16);
+    const drop = city(nodes, ownId).children.find((c) => c.label === 'recruit-drop');
+    expect(drop?.visible).toBe(false);
+    expect(foundation(nodes, own.id)?.alpha).toBe(1);
     view.destroy();
   });
 
@@ -681,7 +817,7 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.destroy();
   });
 
-  it('pulses the ring, and holds it steady with "less motion"', () => {
+  it('pulses the amber rim, and holds it steady with "less motion"', () => {
     const { view, nodes } = make();
     view.update(
       withCity({ recruit_queue: 1, recruit_waiting: true, recruit_progress: rules.unitTicks }),
@@ -689,7 +825,9 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
       UPGRADES,
       rules.queueMax,
     );
-    const ring = sprite(nodes, own.id, 'progress-alert');
+    const ring = foundation(nodes, own.id)?.children.find((c) =>
+      ((c as BakedSprite).spec?.key ?? '').startsWith('foundation-alert'),
+    ) as BakedSprite;
     setReducedMotion(false);
     view.pulse(0);
     const low = ring.alpha;

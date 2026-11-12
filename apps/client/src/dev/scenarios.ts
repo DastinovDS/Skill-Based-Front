@@ -51,6 +51,7 @@ import {
 } from './groupScene.ts';
 import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
+import { recruitEvents, recruitSnapshot } from './recruitScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 import { FLOW_VIEW, flowSnapshot, stancesSnapshot } from './flowScene.ts';
 import {
@@ -759,6 +760,18 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     events: [round(PROGRESS_TICK - 12, { node: 4 }, 2, 0, 1)],
     view: ARTERY_VIEW,
     cityUpgrades: true,
+  },
+  {
+    // The barracks on its foundation (#1005, D2): queues with and without a factory, a factory
+    // being built, the capital, a rally point, a unit dropping into the ring, no room, a fight
+    // on a road next to a recruiting city.
+    id: 'recruit',
+    map: 'artery',
+    snapshot: recruitSnapshot(bundledMap('artery')),
+    events: recruitEvents(),
+    view: { x: 90, y: 150, width: 640, height: 650 },
+    cityUpgrades: true,
+    rules: DEV_RULES_GROUP,
   },
   {
     // Planned orders of both sides in every state: ODb "Low relief" (#519).

@@ -186,11 +186,14 @@ export class MapScene {
     this.cities = new CityView(map, this.layers, me, 1, this.sprites, colours);
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
     this.names = new NameView(map, this.layers, radiusOf, 1);
+    // The barracks' foundation keeps clear of the names, the arenas of fights clear of it (#1005).
+    this.cities.setCaptions((node) => this.names.sizeOf(node));
     this.entities = new EntityView(map, this.layers, me, 1, radiusOf, this.sprites, colours);
     this.intents = new IntentView(map, this.layers, me, radiusOf, colours);
     this.intents.setWarehouseSlots((node, index) => this.cities.warehouseSlot(node, index));
     this.forts = new FortView(map, this.layers, me, () => this.view.territoryEdges, colours);
     this.effects = new EffectsView(map, this.layers, me, 1, radiusOf, this.screenSprites, colours);
+    this.effects.setPieces(() => this.cities.pieceBoxes());
     this.tolls = new TollView(
       this.layers.layer.tolls,
       map,
@@ -459,6 +462,8 @@ export class MapScene {
       }
       return null;
     });
+    // A made unit leaves the barracks' foundation: into the ring, or off to the rally point (#1005).
+    this.cities.setRecruits(this.source.events(), tickHz);
     this.cities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
     const punches = this.effects.update(

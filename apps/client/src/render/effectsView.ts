@@ -23,7 +23,7 @@ import {
   type BounceInfo,
   type CaptureInfo,
 } from './effectsLayout.ts';
-import type { Rect } from './arenaLayout.ts';
+import type { PieceBox, Rect } from './arenaLayout.ts';
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import { helmetChipSpec } from './bakedShapes.ts';
 import { FightView } from './fightView.ts';
@@ -123,6 +123,11 @@ export class EffectsView {
     this.hits = new HitView(layers.layer.effects, map, me, radiusOf);
     this.fightView = new FightView(map, layers, me, labelResolution, radiusOf, sprites, colours);
     this.fightView.setContacts((place) => this.contactsAt(place));
+  }
+
+  /** What stands beside the cities (#1005: the barracks on its foundation): the arenas keep clear of it. */
+  setPieces(piecesOf: () => readonly PieceBox[]): void {
+    this.fightView.setPieces(piecesOf);
   }
 
   /** Camera scale (CSS px per world unit): the arenas of fights keep their size on screen. */

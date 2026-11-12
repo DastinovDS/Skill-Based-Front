@@ -28,6 +28,7 @@ export const SCENES: readonly {
   { id: 'shoulder', tick: 2400 },
   { id: 'shoulder_far', tick: 2400 },
   { id: 'progress', tick: 2400 },
+  { id: 'recruit', tick: 2400 },
   { id: 'figures', tick: 2400 },
   { id: 'orders', tick: 2400 },
   { id: 'group_select', tick: 2400 },

@@ -1163,6 +1163,85 @@ test('shot of the progress cells with a selected city', async ({ page }) => {
   await page.locator('canvas').screenshot({ path: join(OUT, 'progress-selected.png') });
 });
 
+// The barracks on its foundation (#1005, D2 "Foundation"): the scene `recruit` zoomed in, the map
+// alone. `recruit-<city>-near.png` four notches in on each recruiting city (and `-gray` in grey
+// scale), `recruit-selected.png` Meadowvale selected (its free sockets dashed) and Watchpost
+// selected (`recruit-selected-queue.png`), `recruit-normal.png` the whole scene at its own zoom with
+// Watchpost selected, `recruit-far.png` zoomed out to the minimum.
+const RECRUIT_SPOTS = [
+  { name: 'centre', x: 640, y: 450 },
+  { name: 'capital', x: 366, y: 452 },
+  { name: 'wood-hollow', x: 513, y: 190 },
+  { name: 'watchhouse', x: 755, y: 283 },
+  { name: 'ford', x: 755, y: 620 },
+] as const;
+for (const spot of RECRUIT_SPOTS) {
+  test(`shot of the recruit foundation near ${spot.name}`, async ({ page }) => {
+    await page.goto('/?scene=recruit');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.addStyleTag({ content: '.hud { display: none !important; }' });
+    await page.mouse.move(spot.x, spot.y);
+    for (let i = 0; i < 4; i++) {
+      await page.mouse.wheel(0, -112);
+      await page.waitForTimeout(150);
+    }
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(800);
+    await page.locator('canvas').screenshot({ path: join(OUT, `recruit-${spot.name}-near.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.locator('canvas').screenshot({ path: join(OUT, `recruit-${spot.name}-gray.png`) });
+  });
+}
+
+test('shot of the recruit foundation selected and far', async ({ page }) => {
+  await page.goto('/?scene=recruit');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.addStyleTag({ content: '.hud { display: none !important; }' });
+  await page.mouse.click(555, 452);
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(600);
+  await page.locator('canvas').screenshot({ path: join(OUT, 'recruit-normal.png') });
+  await page.mouse.click(513, 715);
+  await page.mouse.move(513, 715);
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, -112);
+    await page.waitForTimeout(150);
+  }
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(800);
+  await page.locator('canvas').screenshot({ path: join(OUT, 'recruit-selected.png') });
+  await page.keyboard.press('Escape');
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.wheel(0, 250);
+    await page.waitForTimeout(120);
+  }
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(800);
+  await page.locator('canvas').screenshot({ path: join(OUT, 'recruit-far.png') });
+});
+
+// A unit made at Watchhouse 3 ticks before the frame (`recruited`), frozen at a run of render ticks
+// (`?at=`): it leaves its socket, drops into the capacity ring, the ring's cell flashes; the queue
+// slides one socket on. `recruit-drop-<tick>.png`, four notches in, the map alone.
+for (const at of [2397.5, 2398.5, 2399.5, 2400.5, 2401.5, 2402.5, 2403.5, 2405]) {
+  test(`shot of the recruit drop at tick ${String(at)}`, async ({ page }) => {
+    await page.goto(`/?scene=recruit&at=${String(at)}`);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(at));
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.addStyleTag({ content: '.hud { display: none !important; }' });
+    await page.mouse.move(755, 283);
+    for (let i = 0; i < 6; i++) {
+      await page.mouse.wheel(0, -112);
+      await page.waitForTimeout(150);
+    }
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(800);
+    await page.locator('canvas').screenshot({ path: join(OUT, `recruit-drop-${String(at)}.png`) });
+  });
+}
+
 // The same scene in grey scale at 60% of the map scale (#439): every state of the cells must read without the hue and
 // by its pattern at a small size. `progress-gray-60.png`, the map alone.
 test('shot of the progress cells in grey scale at 60% scale', async ({ page }) => {

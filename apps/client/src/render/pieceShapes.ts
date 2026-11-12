@@ -3,6 +3,7 @@ import type { BakeSpec, BakeTools } from './bake.ts';
 import type { Point } from './camera.ts';
 import type { BuildingKind } from './buildingLayout.ts';
 import { cornerBounds, parseCut, solidCorners } from './cutPath.ts';
+import { foundationOrigin, foundationSize } from './foundationLayout.ts';
 import { lozengeRow } from './pieceLayout.ts';
 import {
   BADGE_DOWN,
@@ -10,6 +11,7 @@ import {
   BUILDING,
   CASING,
   DARK_PLATE,
+  FOUNDATION,
   INK,
   LOZENGE,
   WARN,
@@ -20,7 +22,8 @@ import { ENGRAVED } from '../theme/tokens.ts';
 import { scanLines } from '../units/helmet.ts';
 
 // The baked shapes of the Engraved pieces of a city (#847, part 2 of #829): the warehouse lozenges,
-// the barracks and factory icons (#954), the charges of a build and the alert ring of a recruit. Each
+// the barracks and factory icons (#954), the charges of a build and the barracks' foundation of a
+// city that recruits (#1005). Each
 // returns the `BakeSpec` of one look (a bounded key, `bake.ts`); no shadow, no gradient: line and
 // hatching on the dark plate, every coloured mark on a dark casing. Mockups: in-game-style-r5.html,
 // city-buildings-r2.html.
@@ -331,25 +334,235 @@ export function doneRingSpec(radius: number): BakeSpec {
   };
 }
 
-/** The dashed amber ring round a recruit that needs a look (ready with no room, stopped by a fight). */
-export function pipAlertSpec(radius: number): BakeSpec {
-  const reach = radius + 2;
+// --- The barracks' foundation while its city recruits (#1005, D2 "Foundation") ------------------------
+
+/** The corners of a box with its corners cut by `ch` (the foundation's outline), clockwise. */
+function chamferCorners(x0: number, y0: number, x1: number, y1: number, ch: number): number[] {
+  return [
+    x0 + ch,
+    y0,
+    x1 - ch,
+    y0,
+    x1,
+    y0 + ch,
+    x1,
+    y1 - ch,
+    x1 - ch,
+    y1,
+    x0 + ch,
+    y1,
+    x0,
+    y1 - ch,
+    x0,
+    y0 + ch,
+  ];
+}
+
+/** Dashes `dash` long `gap` apart along a closed outline (flat x, y pairs), from its first corner. */
+function dashOutline(g: Graphics, corners: readonly number[], dash: number, gap: number): Graphics {
+  const n = corners.length / 2;
+  let carry = 0;
+  for (let i = 0; i < n; i++) {
+    const ax = corners[2 * i] ?? 0;
+    const ay = corners[2 * i + 1] ?? 0;
+    const bx = corners[(2 * i + 2) % (2 * n)] ?? 0;
+    const by = corners[(2 * i + 3) % (2 * n)] ?? 0;
+    const length = Math.hypot(bx - ax, by - ay);
+    let d = carry;
+    while (d < length) {
+      const e = Math.min(length, d + dash);
+      g.moveTo(ax + ((bx - ax) * d) / length, ay + ((by - ay) * d) / length).lineTo(
+        ax + ((bx - ax) * e) / length,
+        ay + ((by - ay) * e) / length,
+      );
+      d += dash + gap;
+    }
+    carry = d - length;
+  }
+  return g;
+}
+
+/** The box of the foundation's sprites round the barracks' seat (its casing and a unit of air). */
+function foundationBakeBox(sockets: number): BakeSpec['box'] {
+  const o = foundationOrigin(sockets);
+  const { width, height } = foundationSize(sockets);
+  const c = FOUNDATION.casing;
   return {
-    key: `pip-alert:${String(radius)}`,
-    box: { x: -reach, y: -reach, width: 2 * reach, height: 2 * reach },
-    draw(into) {
+    x: o.x - c - 1,
+    y: o.y - c * 0.4 - 1,
+    width: width + 2 * c + 2,
+    height: height + c * 1.4 + 2,
+  };
+}
+
+/**
+ * The foundation of a barracks of `sockets` sockets, at the 16-unit icon, round the barracks' seat:
+ * a level base under its ground line, on a dark casing that merges with the barracks' own, its
+ * plate darker downward, an ink rim with cut corners.
+ */
+export function foundationSpec(sockets: number): BakeSpec {
+  const o = foundationOrigin(sockets);
+  const { width, height } = foundationSize(sockets);
+  const { casing: c, chamfer, rim, plate } = FOUNDATION;
+  return {
+    key: `foundation:${String(sockets)}`,
+    box: foundationBakeBox(sockets),
+    draw(into, tools) {
+      const x1 = o.x + width;
+      const y1 = o.y + height;
+      graphics(into)
+        .poly(chamferCorners(o.x - c, o.y - c * 0.4, x1 + c, y1 + c, chamfer + c * 0.6))
+        .fill({ color: CASING, alpha: 0.94 });
+      graphics(into)
+        .poly(chamferCorners(o.x, o.y, x1, y1, chamfer))
+        .fill(tools.ramp(plate.top, plate.bottom));
+      const i = rim.inset;
+      graphics(into)
+        .poly(chamferCorners(o.x + i, o.y + i, x1 - i, y1 - i, rim.chamfer))
+        .stroke({ width: tools.hair(rim.width), color: INK, alpha: rim.alpha, join: 'miter' });
+    },
+  };
+}
+
+/**
+ * The amber "needs a look" rim of a foundation (no room, or a fight in the city): dashed on a
+ * casing; the view pulses it.
+ */
+export function foundationAlertSpec(sockets: number): BakeSpec {
+  const o = foundationOrigin(sockets);
+  const { width, height } = foundationSize(sockets);
+  const { rim, alert } = FOUNDATION;
+  return {
+    key: `foundation-alert:${String(sockets)}`,
+    box: foundationBakeBox(sockets),
+    draw(into, tools) {
+      const i = rim.inset;
+      const corners = chamferCorners(
+        o.x + i,
+        o.y + i,
+        o.x + width - i,
+        o.y + height - i,
+        rim.chamfer,
+      );
+      graphics(into)
+        .poly(corners)
+        .stroke({ width: alert.casing, color: CASING, alpha: 0.9, join: 'miter' });
+      dashOutline(graphics(into), corners, alert.dash, alert.gap).stroke({
+        width: tools.hair(alert.width),
+        color: WARN,
+        cap: 'butt',
+      });
+    },
+  };
+}
+
+/**
+ * The body of a socket: a recess (`empty`, `free`), a unit ordered (`queued`), or the hatch under
+ * the unit under way (`under`).
+ */
+export type SocketLook = 'empty' | 'free' | 'queued' | 'under';
+
+/** A socket's body, its origin at the socket's top left (16-unit icon): the dark plate and the owner's hatch. */
+export function socketSpec(look: SocketLook, color: number): BakeSpec {
+  const { cell, socket } = FOUNDATION;
+  const hatched = look === 'queued' || look === 'under';
+  return {
+    key: `socket:${look}${hatched ? `:${String(color)}` : ''}`,
+    box: { x: -0.5, y: -0.5, width: cell + 1, height: cell + 1 },
+    draw(into, tools) {
+      graphics(into)
+        .rect(0, 0, cell, cell)
+        .fill({ color: DARK_PLATE, alpha: hatched ? 1 : socket.plateAlpha });
+      if (!hatched) return;
+      const square: Point[] = [
+        { x: 0, y: 0 },
+        { x: cell, y: 0 },
+        { x: cell, y: cell },
+        { x: 0, y: cell },
+      ];
       const g = graphics(into);
-      const n = Math.max(6, Math.round((2 * Math.PI * radius) / 5));
-      for (let i = 0; i < n; i++) {
-        const a = (2 * Math.PI * i) / n;
-        g.moveTo(radius * Math.cos(a), radius * Math.sin(a)).arc(0, 0, radius, a, a + Math.PI / n);
+      for (const [a, b] of hatchAcross(square, -Math.PI / 4, socket.hatch.pitch))
+        g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      g.stroke({
+        width: tools.hair(socket.hatch.width),
+        color,
+        alpha: look === 'queued' ? socket.hatch.queued : socket.hatch.under,
+        cap: 'butt',
+      });
+    },
+  };
+}
+
+/** A socket's own rule over it: barely there on a recess, dashed on a free slot, ink on a unit. */
+export function socketRuleSpec(look: 'empty' | 'free' | 'filled'): BakeSpec {
+  const { cell, socket } = FOUNDATION;
+  const i = socket.inset;
+  return {
+    key: `socket-rule:${look}`,
+    box: { x: -0.5, y: -0.5, width: cell + 1, height: cell + 1 },
+    draw(into, tools) {
+      const corners = [i, i, cell - i, i, cell - i, cell - i, i, cell - i];
+      const style = {
+        width: tools.hair(socket.rule),
+        color: INK,
+        alpha: socket.ruleAlpha[look],
+        join: 'miter' as const,
+        cap: 'butt' as const,
+      };
+      if (look === 'free')
+        dashOutline(graphics(into), corners, socket.dash, socket.gap).stroke(style);
+      else graphics(into).poly(corners).stroke(style);
+    },
+  };
+}
+
+/**
+ * The made part of a unit under way: the socket in the owner's colour, lighter at the top; the view
+ * scales it from the left.
+ */
+export function socketFillSpec(color: number): BakeSpec {
+  const { cell } = FOUNDATION;
+  return {
+    key: `socket-fill:${String(color)}`,
+    box: { x: 0, y: 0, width: cell, height: cell },
+    draw(into, tools) {
+      graphics(into).rect(0, 0, cell, cell).fill(tools.gradient(color));
+    },
+  };
+}
+
+/** The ivory head line of a unit under way, on its casing, a little past the socket at both ends. */
+export function socketHeadSpec(): BakeSpec {
+  const { cell, head } = FOUNDATION;
+  const reach = head.casing / 2 + 0.5;
+  return {
+    key: 'socket-head',
+    box: { x: -reach, y: -head.over - 0.5, width: 2 * reach, height: cell + 2 * head.over + 1 },
+    draw(into, tools) {
+      graphics(into)
+        .moveTo(0, -head.over)
+        .lineTo(0, cell + head.over)
+        .stroke({ width: head.casing, color: CASING, alpha: head.casingAlpha, cap: 'butt' });
+      graphics(into)
+        .moveTo(0, -head.over)
+        .lineTo(0, cell + head.over)
+        .stroke({ width: tools.hair(head.width), color: ENGRAVED.ink, cap: 'butt' });
+    },
+  };
+}
+
+/** The soft ivory glow at the head of a unit under way, at full strength (the view sets its opacity). */
+export function socketGlowSpec(): BakeSpec {
+  const r = FOUNDATION.head.glow;
+  return {
+    key: 'socket-glow',
+    box: { x: -r - 0.5, y: -r - 0.5, width: 2 * r + 1, height: 2 * r + 1 },
+    draw(into) {
+      // Discs from the rim in: stacked, they fall off as the mockup's radial gradient does.
+      const g = graphics(into);
+      for (let i = 0; i < 6; i++) {
+        g.circle(0, 0, r * (1 - i / 6)).fill({ color: ENGRAVED.ink, alpha: 0.2 });
       }
-      g.stroke({ width: 3, color: CASING, cap: 'butt' });
-      for (let i = 0; i < n; i++) {
-        const a = (2 * Math.PI * i) / n;
-        g.moveTo(radius * Math.cos(a), radius * Math.sin(a)).arc(0, 0, radius, a, a + Math.PI / n);
-      }
-      g.stroke({ width: 1.4, color: WARN, cap: 'butt' });
     },
   };
 }

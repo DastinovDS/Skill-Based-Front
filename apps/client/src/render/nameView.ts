@@ -78,6 +78,17 @@ export class NameView {
     this.place();
   }
 
+  /**
+   * The size on screen (CSS px) of the caption of node `id`, the gap above it included (`null`: it
+   * has none): what is drawn next to a city keeps clear of it.
+   */
+  sizeOf(id: number): { width: number; height: number } | null {
+    const caption = this.captions[id];
+    if (caption === undefined || caption === null) return null;
+    const bounds = caption.text.getLocalBounds();
+    return { width: bounds.width, height: bounds.height + CAPTION.gapPx };
+  }
+
   /** The text resolution: the device pixel ratio. */
   setLabelResolution(resolution: number): void {
     for (const caption of this.captions) {
