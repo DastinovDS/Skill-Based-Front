@@ -187,8 +187,15 @@ function centroid(points: readonly Point[]): Point {
 }
 
 const HELMETS = new Map<string, Helmet>();
+/** The memo holds this many helmets at most: the menu picture asks for a new width almost every frame. */
+const MAX_HELMETS = 64;
 
-/** The helmet of `kind` `width` wide (memoised: the sizes are a few steps). */
+/** How many helmets the memo holds now (a test reads it). */
+export function helmetCacheSize(): number {
+  return HELMETS.size;
+}
+
+/** The helmet of `kind` `width` wide (memoised, and the memo is bounded: it starts over when full). */
 export function helmet(kind: HelmetKind, width: number): Helmet {
   const key = `${kind}:${String(width)}`;
   const known = HELMETS.get(key);
@@ -213,6 +220,7 @@ export function helmet(kind: HelmetKind, width: number): Helmet {
     // A little under the area centre: the dome is flatter at the bottom.
     middle: { x: mid.x, y: mid.y + width * 0.02 },
   };
+  if (HELMETS.size >= MAX_HELMETS) HELMETS.clear();
   HELMETS.set(key, made);
   return made;
 }

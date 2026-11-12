@@ -31,6 +31,7 @@ import type { MapLayers } from './layers.ts';
 import { nodePoint, type TokenSpot } from './layout.ts';
 import { ringRadius } from './cityLayout.ts';
 import { reducedMotion } from './motion.ts';
+import { DEFAULT_ROUND_TICKS } from './source.ts';
 import {
   BOUNCE_HOME,
   CAPTURE,
@@ -42,8 +43,6 @@ import {
   type PlayerColours,
 } from './style.ts';
 
-/** Ticks between rounds when the source does not say (DEC-32). */
-const DEFAULT_ROUND_TICKS = 20;
 /** Flags of captures drawn at once. */
 const MAX_FLAGS = 4;
 /** A token this close to the place of a fight (world units) is a group of that fight: the token of a city, a marker beside it, a figure on its road. */

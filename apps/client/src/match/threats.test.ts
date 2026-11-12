@@ -79,6 +79,32 @@ describe('ThreatLog', () => {
   });
 });
 
+describe('ThreatLog.listen', () => {
+  it('wakes a listener for a threat event and an incoming order, not for a quiet snapshot', () => {
+    const log = new ThreatLog(0, () => 0);
+    let woken = 0;
+    const stop = log.listen(() => woken++);
+    log.onSnapshot(snapshot);
+    log.onEvent({ kind: 'recruited', data: { node: mine.id } }, owner);
+    expect(woken).toBe(0);
+    log.onEvent({ kind: 'fight_started', data: { node: mine.id } }, owner);
+    expect(woken).toBe(1);
+    const intent = {
+      id: 'i1',
+      owner: 1 as const,
+      kind: 'planned_move' as const,
+      origin: theirs.id,
+      target: mine.id,
+      created_tick: 20,
+    };
+    log.onSnapshot({ ...snapshot, view: { ...snapshot.view, intents: [intent] } });
+    expect(woken).toBe(2);
+    stop();
+    log.onEvent({ kind: 'fight_started', data: { node: mine.id } }, owner);
+    expect(woken).toBe(2);
+  });
+});
+
 describe('the fields threatOfEvent reads (ARC-02)', () => {
   it.each([
     ['node_captured', { node: mine.id, player: 1 }],

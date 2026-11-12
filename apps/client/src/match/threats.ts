@@ -51,14 +51,26 @@ export function incomingNodes(snapshot: SnapshotMsg, me: PlayerId): number[] {
 export class ThreatLog {
   readonly #events = new Map<string, number>();
   #incoming: readonly number[] = [];
+  readonly #listeners = new Set<() => void>();
 
   constructor(
     private readonly me: PlayerId,
     private readonly now: () => number = () => performance.now(),
   ) {}
 
+  /** `listener` runs when something to point at may have appeared; returns the way to stop it. */
+  listen(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  #changed(): void {
+    for (const listener of this.#listeners) listener();
+  }
+
   onSnapshot(snapshot: SnapshotMsg): void {
     this.#incoming = incomingNodes(snapshot, this.me);
+    if (this.#incoming.length > 0) this.#changed();
   }
 
   onEvent(
@@ -66,8 +78,9 @@ export class ThreatLog {
     owner: (node: number) => PlayerId | null | undefined,
   ): void {
     const threat = threatOfEvent(event, this.me, owner);
-    if (threat !== null)
-      this.#events.set(`${threat.kind}:${String(threat.node)}`, this.now() + THREAT_MS);
+    if (threat === null) return;
+    this.#events.set(`${threat.kind}:${String(threat.node)}`, this.now() + THREAT_MS);
+    this.#changed();
   }
 
   /** What to point at now, with the time left of an event threat (`null` for an incoming order). */
