@@ -20,6 +20,7 @@ from pydantic import TypeAdapter
 from pydantic.json_schema import GenerateJsonSchema, JsonSchemaValue
 from pydantic_core import core_schema
 
+from gow_protocol.commands import MAX_MERGE_GROUPS
 from gow_protocol.convert import EVENT_FIELDS, EVENT_ID_FIELDS
 from gow_protocol.mapfile import MapFile
 from gow_protocol.messages import (
@@ -86,8 +87,8 @@ def event_fields_vector() -> dict[str, Any]:
 def protocol_json_schema() -> dict[str, Any]:
     """One schema with every type in ``$defs``; the root is the union of ``ROOTS``.
 
-    ``x-constants`` carries the values the client needs at runtime (the ``hello`` version and the
-    close codes it handles). json-schema-to-typescript ignores it; ``apps/client/scripts/
+    ``x-constants`` carries the values the client needs at runtime (the ``hello`` version, the
+    close codes it handles, the bound of one ``merge``, ARC-C03). json-schema-to-typescript ignores it; ``apps/client/scripts/
     protocol-consts.js`` appends them to ``protocol.gen.ts`` as ``export const``.
     """
     refs, schema = TypeAdapter.json_schemas(
@@ -105,6 +106,7 @@ def protocol_json_schema() -> dict[str, Any]:
             "CLOSE_REPLACED": CLOSE_REPLACED,
             "CLOSE_NO_MATCH": CLOSE_NO_MATCH,
             "CLOSE_POLICY": CLOSE_POLICY,
+            "MAX_MERGE_GROUPS": MAX_MERGE_GROUPS,
         },
         "$defs": {name: _wrap_described_refs(d) for name, d in schema["$defs"].items()},
     }

@@ -460,6 +460,16 @@ function groupUnderPointer(
   };
 }
 
+/**
+ * The CP income of `stance`, hundredths of CP a second (DEC-44): one quantum of `cp.per_period`
+ * every `stances.cp_period_ticks` of the stance, at `tick_hz` (the map-tempo periods the server
+ * sends, DEC-46). Display arithmetic; the vector `display_rules.json` (`cp_rate`) ties it to the
+ * simulation (ARC-C03).
+ */
+export function cpPerSecond(rules: RulesetPublic, stance: Stance): number {
+  return (rules.cp.per_period * rules.tick_hz) / rules.stances.cp_period_ticks[stance];
+}
+
 function rallyInfo(
   rules: RulesetPublic,
   view: SnapshotMsg['view'],
@@ -513,8 +523,7 @@ export function buildHudData(
     cp: {
       value: view.me.cp,
       cap: rules.cp.cap,
-      regenPerSecond:
-        (rules.cp.per_period * rules.tick_hz) / rules.stances.cp_period_ticks[view.me.stance],
+      regenPerSecond: cpPerSecond(rules, view.me.stance),
       quantum: rules.cp.per_period,
     },
     stance: view.me.stance,

@@ -10,6 +10,7 @@ import type {
   RulesetPublic,
   Stance,
 } from '../protocol.gen.ts';
+import { MAX_MERGE_GROUPS } from '../protocol.gen.ts';
 
 import {
   type BonusMark,
@@ -54,16 +55,14 @@ export const PLAN_BONUS = { min: 1, max: 9 } as const;
 /** How long an answer stays in the panel, ms. */
 export const NOTICE_MS = 6000;
 
-/** The protocol's ceiling for one `merge` (`MergeCmd.groups`). */
-const MAX_MERGE = 16;
-
 /** No groups selected together: one array, so the overlay and the HUD see no change. */
 const NO_PICKS: readonly string[] = [];
 
 /**
  * The price of a rally of `n` groups (DEC-48, item A2), hundredths of CP: `rally_pct` of a move per
  * group, rounded up to a whole CP. The arithmetic of `ruleset_public` the DEC names for the price
- * shown before the click; the server charges its own.
+ * shown before the click; the server charges its own. The rows of `vectors/display_rules.json`
+ * (`rally_price`) tie it to `gow_sim.commands.rally_price` (ARC-C03).
  */
 export function rallyPrice(n: number, move: number, rallyPct: number): number {
   return Math.ceil((n * move * rallyPct) / 10000) * 100;
@@ -1007,7 +1006,7 @@ export class OrderController implements MapInteraction {
    * together (the HUD selection is let go), one is the ordinary selection, none clears it.
    */
   #setPicks(ids: readonly string[]): void {
-    const max = this.groupOrder?.max_groups ?? MAX_MERGE;
+    const max = this.groupOrder?.max_groups ?? MAX_MERGE_GROUPS;
     const next = ids.slice(0, max);
     this.#closeMenus();
     this.#bonusPick = null;
@@ -1268,7 +1267,7 @@ export class OrderController implements MapInteraction {
     const here = data.groups.filter((g) => g.node === node && !g.planned);
     const ids = here.map((g) => g.id);
     const first = group !== null && ids.includes(group.id) ? [group.id] : [];
-    return [...first, ...ids.filter((id) => id !== group?.id)].slice(0, MAX_MERGE);
+    return [...first, ...ids.filter((id) => id !== group?.id)].slice(0, MAX_MERGE_GROUPS);
   }
 
   /** Merge every own group standing in the selected node or with the selected group; needs two. */

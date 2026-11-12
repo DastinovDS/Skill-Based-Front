@@ -5,7 +5,9 @@
  *
  * The client computes no part of the dispatch rule (`AGENTS.md`, 7.1): every number here is a field
  * the server sends for the own nodes (`front_dist`, `me.leaf_shift`) or an own packet. What this
- * module does is only picking which nodes are starving.
+ * module does is only picking which nodes are starving: a display class of ui-style 42, not a rule
+ * of the simulation; "on the level" is the protocol's own definition (`NodeView.front_dist`: the
+ * level is `front_dist == View.me.leaf_shift`), so nothing here copies DEC-43 (ARC-C03).
  */
 import type { PlayerId, View } from '../protocol.gen.ts';
 
