@@ -473,7 +473,7 @@ export const en = {
   'help.key.alert': 'camera to the alert',
   'help.key.fit': 'fit the map',
   'help.key.mute': 'sound on or off',
-  'help.key.mark': 'mark a problem: the last minute of the game goes to the developers',
+  'help.key.mark': 'mark a problem for the developers',
   'diag.marked': 'Problem marked at tick {tick}. The last minute was sent to the developers.',
   'diag.markedNoTick': 'Problem marked. The last minute was sent to the developers.',
   'diag.markFailed': 'The problem mark did not reach the server. Try again in a minute.',

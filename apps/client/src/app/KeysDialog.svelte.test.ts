@@ -62,8 +62,9 @@ describe('KeysDialog (#966)', () => {
 
   it('lists every rebindable action with its key and the fixed keys', () => {
     render();
-    expect(document.querySelectorAll('button.cap')).toHaveLength(13);
+    expect(document.querySelectorAll('button.cap')).toHaveLength(14);
     expect(cap('Recruit').textContent.trim()).toBe('R');
+    expect(cap('Mark a problem').textContent.trim()).toBe('F8');
     expect(cap('Go to the alert').textContent.trim()).toBe('Space');
     const text = document.body.textContent;
     expect(text).toContain('Shift + LMB');
