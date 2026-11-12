@@ -353,7 +353,7 @@ class FramesRecorder:
         """The frame and, under ``v``, each player's ``project()`` of the same state (#598): the
         snapshot that player had at this tick in the live match."""
         frame = frame_of(match.state, match.rules)
-        frame["v"] = [vision_of(match.view(p)) for p in PLAYERS]
+        frame["v"] = [vision_of(match.view(p, reuse=True)) for p in PLAYERS]  # after a step
         return frame
 
 
