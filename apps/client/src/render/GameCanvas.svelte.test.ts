@@ -53,7 +53,7 @@ const fakes = vi.hoisted(() => {
     }
   }
   /** The background textures `Assets` caches by URL (the scenes load them). */
-  const assets = { unload: vi.fn(() => Promise.resolve()) };
+  const assets = { unload: vi.fn(() => Promise.resolve()), setPreferences: vi.fn() };
   return { FakeApplication, FakeMapScene, FakeSprites, assets };
 });
 

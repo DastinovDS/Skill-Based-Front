@@ -4,7 +4,6 @@
   import type { MessageKey } from '../i18n/index.ts';
   import type { MatchEndMsg, PlayerColour, PlayerId } from '../protocol.gen.ts';
   import { applyPlayerColour } from '../theme/tokens.ts';
-  import ReplayScreen from '../replay/ReplayScreen.svelte';
   import CrashGuard from './CrashGuard.svelte';
   import { AppState, type Guest } from './appState.svelte.ts';
   import { HOME_KEY, type HomeGetter } from './home.ts';
@@ -12,7 +11,7 @@
   import SettingsScreen from './SettingsScreen.svelte';
   import { settings } from './settingsState.svelte.ts';
   import BootScreen from './BootScreen.svelte';
-  import MatchScreen from './MatchScreen.svelte';
+  import MatchLoading from './MatchLoading.svelte';
   import PasswordScreen from './PasswordScreen.svelte';
   import HowToScreen from './HowToScreen.svelte';
   import type { MatchSummary } from './matchSummary.ts';
@@ -30,6 +29,29 @@
 
   onMount(() => {
     void app.start();
+  });
+
+  // The match and the replay screens carry PixiJS and the renderer; they are separate chunks, so the
+  // entry does not load them (ARC-C05, #482). Once a player is signed in and the page is idle the
+  // chunks are fetched anyway, so the first match does not wait for them.
+  const loadMatchScreen = () => import('./MatchScreen.svelte');
+  const loadReplayScreen = () => import('../replay/ReplayScreen.svelte');
+  $effect(() => {
+    if (app.guest === null) return;
+    const warm = () => {
+      void loadMatchScreen().catch(() => undefined);
+      void loadReplayScreen().catch(() => undefined);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warm, { timeout: 5000 });
+      return () => {
+        window.cancelIdleCallback(id);
+      };
+    }
+    const id = window.setTimeout(warm, 2000);
+    return () => {
+      window.clearTimeout(id);
+    };
   });
 
   // Outside a match every helmet that stands for the player wears the colour they chose (DEC-49),
@@ -235,18 +257,22 @@
         app.menu();
       }}
     >
-      <MatchScreen
-        api={app.api}
-        token={guest.token}
-        matchId={screen.matchId}
-        mapId={screen.mapId}
-        onend={(me: PlayerId, end: MatchEndMsg, summary: MatchSummary | null) => {
-          app.finishMatch(screen.matchId, screen.mapId, me, end, summary);
-        }}
-        onexit={() => {
-          app.menu();
-        }}
-      />
+      {#await loadMatchScreen()}
+        <MatchLoading stage="map" />
+      {:then { default: MatchScreen }}
+        <MatchScreen
+          api={app.api}
+          token={guest.token}
+          matchId={screen.matchId}
+          mapId={screen.mapId}
+          onend={(me: PlayerId, end: MatchEndMsg, summary: MatchSummary | null) => {
+            app.finishMatch(screen.matchId, screen.mapId, me, end, summary);
+          }}
+          onexit={() => {
+            app.menu();
+          }}
+        />
+      {/await}
     </CrashGuard>
   {/key}
 {:else if screen.name === 'result'}
@@ -264,14 +290,24 @@
     }}
   />
 {:else}
-  <ReplayScreen
-    api={app.api}
-    matchId={screen.matchId}
-    token={guest.token}
-    me={screen.me ?? null}
-    nick={guest.nick}
-    onback={() => {
+  <CrashGuard
+    onexit={() => {
       app.closeReplay();
     }}
-  />
+  >
+    {#await loadReplayScreen()}
+      <MatchLoading stage="map" />
+    {:then { default: ReplayScreen }}
+      <ReplayScreen
+        api={app.api}
+        matchId={screen.matchId}
+        token={guest.token}
+        me={screen.me ?? null}
+        nick={guest.nick}
+        onback={() => {
+          app.closeReplay();
+        }}
+      />
+    {/await}
+  </CrashGuard>
 {/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import './boot.ts';
   import { Application, Assets } from 'pixi.js';
   import { onMount, untrack } from 'svelte';
   import type { GeoFile } from '../map/geography.ts';

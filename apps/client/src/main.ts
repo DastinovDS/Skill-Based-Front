@@ -1,14 +1,11 @@
-// Must run before any PixiJS renderer starts: replaces the `new Function` code generation of
-// PixiJS with precompiled polyfills, so the CSP needs no 'unsafe-eval' (see csp.ts).
-import 'pixi.js/unsafe-eval';
-import { Assets } from 'pixi.js';
+// PixiJS is not imported here: the match, the replay and the dev scenes load it lazily, and
+// `render/boot.ts` sets it up for the CSP before any renderer starts (ARC-C05, #482).
 import { mount } from 'svelte';
 import RootApp from './app/RootApp.svelte';
 import LegalPage from './legal/LegalPage.svelte';
 import LegalFooter from './legal/LegalFooter.svelte';
 import { loadGuest } from './api/guestStore.ts';
 import { Api } from './api/http.ts';
-import ReplayScreen from './replay/ReplayScreen.svelte';
 import { installErrorLog } from './errorLog.ts';
 import { diagnostics, installDiagnostics } from './diagnostics.ts';
 // The display settings of the viewer (#871): the scale and the motion choice go on the root
@@ -18,9 +15,6 @@ import './app.css';
 
 // What nothing else catches (an uncaught error, an unhandled rejection) is logged, without tokens.
 installErrorLog(window);
-
-// Texture decoding on the main thread: the CSP has worker-src 'none' (see csp.ts).
-Assets.setPreferences({ preferWorkers: false });
 
 const target = document.getElementById('app');
 if (target === null) {
@@ -67,6 +61,7 @@ async function start(target: HTMLElement) {
     const onback = () => {
       window.location.assign('/');
     };
+    const { default: ReplayScreen } = await import('./replay/ReplayScreen.svelte');
     return mount(ReplayScreen, {
       target,
       props: { api: new Api(), matchId: replayId, token, nick: guest?.nick ?? null, onback },
