@@ -17,6 +17,7 @@ from gow_protocol.messages import (
     CLOSE_REPLACED,
     CommandMsg,
     HelloMsg,
+    ReachSplit,
 )
 from gow_protocol.ruleset import CombatPublic, RulesetPublic
 from gow_sim.ruleset import load_ruleset
@@ -120,6 +121,28 @@ def test_client_fixture_is_not_a_server_message(path: Path) -> None:
 def test_server_fixture_is_not_a_client_message(path: Path) -> None:
     with pytest.raises(ValidationError):
         decode_client(path.read_bytes())
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"units": 2},  # a part that fits without its route
+        {"units": 2, "ticks": 20},
+        {"units": 2, "path": (0, 1)},
+        {"units": 0, "ticks": 20, "path": (0, 1)},  # no part, yet a route
+        {"units": 2, "ticks": 20, "path": (0, 2)},  # the route ends elsewhere
+    ],
+)
+def test_reach_split_carries_a_route_exactly_for_a_part(fields: dict[str, object]) -> None:
+    """#1004: a ``split`` node with a part that fits has a path and ticks, one without has none."""
+    with pytest.raises(ValidationError):
+        ReachSplit.model_validate({"node": 1, **fields})
+
+
+def test_reach_split_route_is_kept() -> None:
+    part = ReachSplit(node=1, units=2, ticks=20, path=(0, 1))
+    assert (part.ticks, part.path) == (20, (0, 1))
+    assert ReachSplit(node=1, units=0).path is None
 
 
 def test_messages_built_in_python_roundtrip() -> None:

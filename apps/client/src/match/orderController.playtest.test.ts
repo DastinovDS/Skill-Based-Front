@@ -146,8 +146,8 @@ describe('a click at a place too small for the group splits and sends (#762)', (
       tick: 30,
       nodes: [],
       split: [
-        { node: enemy, units: 3 },
-        { node: second, units: 0 },
+        { node: enemy, units: 3, ticks: 30, path: [home, enemy] },
+        { node: second, units: 0, ticks: null, path: null },
       ],
     });
     return s;

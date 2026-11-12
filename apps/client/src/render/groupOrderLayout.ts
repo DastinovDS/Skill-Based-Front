@@ -98,3 +98,42 @@ export function waitingDeparture(group: GroupView, now: number): number | null {
   const depart = order.depart_tick;
   return depart !== null && depart > now ? depart : null;
 }
+
+/** One stretch of the preview of a group order (#1004): nodes joined, with a head at the target. */
+export interface RouteRun {
+  readonly nodes: readonly number[];
+  /** It ends at the target (the end of its route); else it joins a road drawn already. */
+  readonly head: boolean;
+}
+
+/**
+ * The roads of the members' routes to one target, each drawn once (#1004): the longest route
+ * first, whole; every other one only where it leaves the roads drawn before it. A stretch that
+ * runs into them ends there without a head (it joins), the one that reaches the target has one.
+ * The routes are the server's (`reach`); this only lays them out, it finds no way.
+ */
+export function routeRuns(routes: readonly (readonly number[])[]): RouteRun[] {
+  const drawn = new Set<string>();
+  const runs: RouteRun[] = [];
+  // Longest first; equal lengths keep the order of the selection (a stable sort).
+  const order = [...routes].sort((a, b) => b.length - a.length);
+  for (const route of order) {
+    let run: number[] = [];
+    for (let i = 1; i < route.length; i++) {
+      const a = route[i - 1];
+      const b = route[i];
+      if (a === undefined || b === undefined) continue;
+      const key = `${String(a)}>${String(b)}`;
+      if (drawn.has(key)) {
+        if (run.length >= 2) runs.push({ nodes: run, head: false });
+        run = [];
+        continue;
+      }
+      drawn.add(key);
+      if (run.length === 0) run.push(a);
+      run.push(b);
+    }
+    if (run.length >= 2) runs.push({ nodes: run, head: true });
+  }
+  return runs;
+}

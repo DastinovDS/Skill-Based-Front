@@ -18,7 +18,7 @@
   import { OrderBook } from '../match/orderBook.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
-  import type { Command, ReachNode } from '../protocol.gen.ts';
+  import type { Command, ReachNode, ReachSplit } from '../protocol.gen.ts';
   import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl, bundledGeo } from '../map/bundledMaps.ts';
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
@@ -46,15 +46,19 @@
   // `?flood=<ms>,<node>:<owner before>,...` shows a capture under way on a fixture scene, held at that age (#819).
   const floodPinned = parseFlood(params.get('flood')) ?? undefined;
   const undoPinned = parseUndo(params.get('undo'));
-  // `?split=<node>[,<units>]` makes a fixture scene answer the `reach` of a selected group with that
-  // node under `split` (the group is too big for it, DEC-20) and the size that fits there (0 by
-  // default): the hint "split the group" (#468) and the click that opens the split menu (#762).
+  // `?split=<node>[,<units>[,<ticks>[,<via>...]]]` makes a fixture scene answer the `reach` of a
+  // selected group with that node under `split` (the group is too big for it, DEC-20) and the size
+  // that fits there (0 by default): the hint "split the group" (#468) and the click that opens the
+  // split menu (#762); with `ticks`, the route of that part through `via` (#1004), else the
+  // straight road to the node.
   const splitParts = (params.get('split') ?? '').split(',').map(Number);
   const splitPinned =
     params.has('split') && Number.isInteger(splitParts[0])
       ? {
           node: splitParts[0] ?? 0,
           units: Number.isInteger(splitParts[1]) ? (splitParts[1] ?? 0) : 0,
+          ticks: Number.isInteger(splitParts[2]) ? (splitParts[2] ?? 1) : 1,
+          via: splitParts.slice(3).filter(Number.isInteger),
         }
       : null;
   // `?reach=<to>,<ticks>[,<via>...]` makes a fixture scene answer the `reach` of a selected group with
@@ -279,7 +283,18 @@
               path: [from, next, ...rest],
             });
           }
-          const split = splitPinned === null ? [] : [splitPinned];
+          const split: ReachSplit[] = [];
+          if (splitPinned !== null) {
+            const { node, units, ticks, via } = splitPinned;
+            const [next, ...rest] = [...via, node];
+            const part = units > 0 && from !== null;
+            split.push({
+              node,
+              units,
+              ticks: part ? ticks : null,
+              path: part ? [from, next, ...rest] : null,
+            });
+          }
           orders.onReach({ type: 'reach', group, tick: 0, nodes, split });
         }
       },

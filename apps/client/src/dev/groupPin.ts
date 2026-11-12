@@ -12,9 +12,15 @@ export function pinGroup(base: OrderController, pins: ScenePins): MapInteraction
   const hit: PickHit | null = pins.hover === undefined ? null : { kind: 'node', id: pins.hover };
   let last: OverlayState | null = null;
   let shown: OverlayState | null = null;
+  let answered = false;
   const hold = (): void => {
     // The selection needs the snapshot of the scene (its own groups): it is taken once there is one.
     if (pins.picks !== undefined && base.picks.length === 0) base.selectBox(pins.picks);
+    // The frozen scene has no server: the routes of the picked groups are its answers (#1004).
+    if (!answered && pins.reach !== undefined && base.picks.length > 0) {
+      answered = true;
+      for (const msg of pins.reach) base.onReach(msg);
+    }
     if (pins.eHeld === true)
       base.key({ type: 'keydown', code: base.keys.planned, shiftKey: false });
     if (hit !== null) base.hover(hit);

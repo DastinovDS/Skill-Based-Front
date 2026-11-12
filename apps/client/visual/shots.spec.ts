@@ -1247,6 +1247,24 @@ test('shot of a planned order to a target the group is too big for', async ({ pa
   await page.keyboard.up('KeyE');
 });
 
+// A far target only a part of the group gets to (#1004, the owner's screenshot of 2026-11-12: a
+// straight line across the map): `?split=7,3,140,0,6` answers the `reach` with Bluff under `split`,
+// 3 units fit and their route goes by Stonegate and Wood Hollow in 14 s; the preview follows it with its
+// time, `split-route.png` and grey.
+test('shot of the route of the part that fits', async ({ page }) => {
+  await page.goto('/?scene=economy&menus&split=7,3,140,0,6');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(332, 518);
+  await page.waitForTimeout(300);
+  await page.mouse.move(485, 160);
+  await page.mouse.move(486, 161);
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: join(OUT, 'split-route.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'split-route-gray.png') });
+});
+
 // The cue of `X` with nothing selected (#764), pinned by `?undo` to a frozen scene (it has no server
 // to accept an undo), `undo-<name>.png` and grey: `move` (the order of a group on a road: the arrow
 // runs back into the group), `recruit` (a city), `empty` (nothing to undo: the sign at the pointer).
@@ -1401,6 +1419,32 @@ test('shot of the capture_failed toast', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'capture-toast.png') });
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.screenshot({ path: join(OUT, 'capture-toast-gray.png') });
+});
+
+// A message about a place takes the camera there (#1004, item 14): the same toast under the
+// pointer (`place-toast-hover.png`: the pointer, the lit rules, the underline, and the hint), then
+// clicked (`place-toast-click.png`: the camera on node 2); an alert strip of the `overflow` scene
+// under the pointer (`place-alert-hover.png`).
+test('shot of a toast and an alert that show their place', async ({ page }) => {
+  await page.goto('/?scene=snapshot&capture=2&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  const toast = page.locator('.toast .go').first();
+  await expect(toast).toBeVisible();
+  await toast.hover();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(OUT, 'place-toast-hover.png') });
+  await toast.click();
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: join(OUT, 'place-toast-click.png') });
+  await page.goto('/?scene=overflow&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+  const strip = page.locator('.strip.go button').first();
+  await expect(strip).toBeVisible();
+  await strip.hover();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(OUT, 'place-alert-hover.png') });
 });
 
 // The match dialogs (#597). `match-settings.png` (key ?) and `exit.png` (the Exit button), each with a `-gray` twin.

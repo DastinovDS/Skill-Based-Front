@@ -271,7 +271,7 @@ describe('OrderController', () => {
       group: group.id,
       tick: 30,
       nodes: [{ node: enemy.id, ticks: 25, path: [home, other.id, enemy.id] }],
-      split: [{ node: other.id, units: 0 }],
+      split: [{ node: other.id, units: 0, ticks: null, path: null }],
     });
     const overlay = controller.overlay();
     expect([overlay.reach, overlay.split]).toEqual([[enemy.id], [other.id]]);
@@ -320,7 +320,7 @@ describe('OrderController', () => {
       group: group.id,
       tick: 30,
       nodes: [{ node: enemy.id, ticks: 25, path: [home, other.id, enemy.id] }],
-      split: [{ node: other.id, units: 0 }],
+      split: [{ node: other.id, units: 0, ticks: null, path: null }],
     });
     // Nothing hovered: no hint.
     controller.overlay();

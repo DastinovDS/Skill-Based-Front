@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 52,
+    "PROTOCOL_VERSION": 53,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -2900,11 +2900,45 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "ticks": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Ticks of the path of the part that fits once it departs; ``None`` exactly when ``units``\nis ``0`` (#1004)."
+        },
+        "path": {
+          "anyOf": [
+            {
+              "items": {
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The nodes from the group's node to ``node`` for a group of ``units``: the path an\nordinary group order sends that part along (DEC-48, item B4) and the ``ack`` of a ``move`` of\nsuch a part carries; ``None`` exactly when ``units`` is ``0`` (#1004). All but the last are\nthe group's node or own nodes."
         }
       },
       "required": [
         "node",
-        "units"
+        "units",
+        "ticks",
+        "path"
       ],
       "title": "ReachSplit",
       "type": "object"

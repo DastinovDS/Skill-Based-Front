@@ -149,13 +149,21 @@ export interface WorldRect {
 }
 
 /**
- * The group order a click on `to` would give (DEC-48, item K4): a preview line from each member's
- * node (no path: the server gives it with the `ack`), one seal over the target (B1) with the price
- * of `ruleset_public` beside it; with `E` held (`planned`) a hatched planned ribbon each (D2).
+ * The group order a click on `to` would give (DEC-48, item K4): each member's way along the route
+ * the server gave it in `reach` (#1004; roads several members share drawn once), one seal over the
+ * target (B1) with the price of `ruleset_public` beside it; with `E` held (`planned`) a hatched
+ * planned ribbon each (D2), bent the way its route goes.
  */
 export interface GroupPreview {
   /** The node each member stands in (a member on a road has no line). */
   readonly from: readonly number[];
+  /**
+   * The server's route of each member that has one (`reach`: the whole group's, or for an ordinary
+   * order the part's that fits, DEC-48, item B4), from its node to `to`, ends included. A member
+   * without one (no answer yet, no way there) has no line: the client never draws a way the
+   * server did not give.
+   */
+  readonly routes: readonly (readonly number[])[];
   readonly to: number;
   readonly planned: boolean;
   /** As the owner of the target reads now (the server decides at application, item B2). */

@@ -1,21 +1,46 @@
 <script lang="ts">
-  import { t } from '../i18n/index.ts';
+  import { t, tf } from '../i18n/index.ts';
   import Icon from './Icon.svelte';
+  import type { NodeNamer } from './nodeName.ts';
   import type { ToastState } from './toastState.svelte.ts';
 
   interface Props {
     toasts: ToastState;
+    /**
+     * Takes the camera to the place a toast names (#1004, item 14); without it no toast is a
+     * button.
+     */
+    onshow?: (node: number) => void;
+    /** The name of a place by its id, for the hint of a toast with a place. */
+    names?: NodeNamer;
   }
 
-  let { toasts }: Props = $props();
+  let { toasts, onshow, names }: Props = $props();
 </script>
 
-<!-- Toasts at the top right (ui-style 10.4): up to three, a coloured edge and an icon. -->
+<!-- Toasts at the top right (ui-style 10.4): up to three, a coloured edge and an icon. A toast
+     about a place is a button: a click takes the camera there (#1004). -->
 <ul class="toasts" role="status" aria-live="polite" aria-label={t('toast.title')}>
   {#each toasts.current as toast (toast.id)}
-    <li class="toast {toast.tone}">
-      <Icon name={toast.icon} size={toast.cut === true ? 20 : 16} cut={toast.cut === true} />
-      <span class="text">{toast.text}</span>
+    <li class="toast {toast.tone}" class:place={toast.place !== undefined && onshow !== undefined}>
+      {#if toast.place !== undefined && onshow !== undefined}
+        {@const place = toast.place}
+        {@const hint = tf('toast.show', { node: names?.(place) ?? String(place) })}
+        <button
+          type="button"
+          class="go"
+          title={hint}
+          onclick={() => {
+            onshow(place);
+          }}
+        >
+          <Icon name={toast.icon} size={toast.cut === true ? 20 : 16} cut={toast.cut === true} />
+          <span class="text">{toast.text}</span>
+        </button>
+      {:else}
+        <Icon name={toast.icon} size={toast.cut === true ? 20 : 16} cut={toast.cut === true} />
+        <span class="text">{toast.text}</span>
+      {/if}
       <button
         type="button"
         class="close"
@@ -80,6 +105,44 @@
     flex: 1;
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  /* A toast about a place (#1004): the plate is the button; on hover or focus its rules light up
+     and the text is underlined (shape as well as tone), the pointer says it is clickable. */
+  .go {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  .toast.place:has(.go:hover),
+  .toast.place:has(.go:focus-visible) {
+    border-top-color: rgb(236 228 209 / 85%);
+    border-right-color: rgb(236 228 209 / 85%);
+    border-bottom-color: rgb(236 228 209 / 85%);
+    background: rgb(28 24 18 / 97%);
+  }
+
+  .go:hover .text,
+  .go:focus-visible .text {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  .go:focus-visible {
+    outline: 2px solid var(--paper);
+    outline-offset: 2px;
   }
 
   .close {

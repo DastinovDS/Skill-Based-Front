@@ -348,6 +348,7 @@ export const en = {
   'toast.title': 'Notifications',
   'toast.close': 'Close the notification',
   'toast.lastMinute': 'Last minute: victory points decide',
+  'toast.show': 'Show {node} on the map',
   'unit.s': 's',
   'city.title': 'City {node}',
   'city.recruit': 'Recruit',

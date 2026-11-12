@@ -93,6 +93,7 @@ export class OrderBook {
    * Remembers a sent command. `from` is the node of the group at the time, for the ghost arrow of
    * a move; a move without it (group on a road) has none. `route`: the server's route to the
    * target from its `reach` answer, which the ghost follows until the `ack` brings the order's path.
+   * `memberRoutes`: the same for each group of a group order (#1004), in the order of its `groups`.
    */
   track(
     seq: number,
@@ -100,6 +101,7 @@ export class OrderBook {
     from: number | null = null,
     route: readonly number[] | null = null,
     members: readonly (number | null)[] = [],
+    memberRoutes: readonly (readonly number[] | null)[] = [],
   ): void {
     const ghosts: GhostOrder[] = [];
     const ghostOf = (group: string, at: number, dest: number, planned: boolean): GhostOrder => ({
@@ -113,16 +115,25 @@ export class OrderBook {
       rejectedAt: null,
       rejectCode: null,
     });
+    const known = (at: number, dest: number, path: readonly number[] | null | undefined) =>
+      path != null && path[0] === at && path.at(-1) === dest ? path : null;
     if (cmd.type === 'move' && from !== null) {
-      const path = route !== null && route[0] === from && route.at(-1) === cmd.dest ? route : null;
-      ghosts.push({ ...ghostOf(cmd.group, from, cmd.dest, cmd.planned), path });
+      ghosts.push({
+        ...ghostOf(cmd.group, from, cmd.dest, cmd.planned),
+        path: known(from, cmd.dest, route),
+      });
     }
     // A group order (DEC-48): a ghost per group standing in a node (`members`, in the order of its
-    // `groups`, `null` for one on a road), a straight line until the `ack` brings its path.
+    // `groups`, `null` for one on a road), along the route the server gave it in `reach` (#1004),
+    // a straight line without one, until the `ack` brings its path.
     if (cmd.type === 'group_move') {
       cmd.groups.forEach((group, i) => {
         const at = members[i] ?? null;
-        if (at !== null && at !== cmd.dest) ghosts.push(ghostOf(group, at, cmd.dest, cmd.planned));
+        if (at === null || at === cmd.dest) return;
+        ghosts.push({
+          ...ghostOf(group, at, cmd.dest, cmd.planned),
+          path: known(at, cmd.dest, memberRoutes[i]),
+        });
       });
     }
     this.#pending.set(seq, { cmd, ghosts });

@@ -12,10 +12,10 @@ import {
   type OverlayState,
   type WorldRect,
 } from './interaction.ts';
-import { normRect } from './groupOrderLayout.ts';
+import { normRect, routeRuns } from './groupOrderLayout.ts';
 import { CP_REJECT, ghostLook, ribbonShape, tailStart } from './intentLayout.ts';
 import { drawCasedArrow, pathLength, pointAlong, slicePath, trimPath } from './casedArrow.ts';
-import { HatchTile, hairFloor } from './engraving.ts';
+import { hairFloor } from './engraving.ts';
 import { easeSettle } from '../theme/tokens.ts';
 import { reducedMotion } from './motion.ts';
 import type { MapLayers } from './layers.ts';
@@ -205,8 +205,9 @@ export class OverlayView {
   /** The preview of a group order (DEC-48, item K4): a line, or with E held a ribbon (D2), a member. */
   private readonly groupLines = new Graphics({ label: 'group-preview' });
   private groupDrawn = false;
-  /** The hatch of a planned ribbon in the preview of a group order with E held (D2). */
-  private readonly ownHatch = new HatchTile(RIBBON_ENGRAVED.own);
+  /** The routes of the group order preview drawn (joined), and when they were first shown (ms). */
+  private groupKey = '';
+  private groupSince = 0;
   constructor(
     private readonly map: MapFile,
     layers: MapLayers,
@@ -435,67 +436,45 @@ export class OverlayView {
   }
 
   /**
-   * The order a click would give the groups selected together (DEC-48, item K4): from the ring of
-   * each member's city to the target, the hollow Cased arrow of a move (no route: the server gives
-   * it with the `ack`); with `E` held (D2) a hatched planned ribbon each, the map itself says
-   * "planned". The seal over the target is `GroupOrderView`'s.
+   * The order a click would give the groups selected together (DEC-48, item K4): each member's
+   * way along the route the server gave it (`reach`, #1004), the hollow Cased arrow of the path on
+   * hover (54i), drawn out as it is; a road several members share is drawn once, a member's way
+   * that runs into it ends at the ring of the city where it joins (`routeRuns`). With `E` held the
+   * same routes, as the path of a single planned order (#1004: the routes replace the ribbons of
+   * D2); the bonus counter over the target says "planned". A member without a route has no line.
+   * The seal over the target is `GroupOrderView`'s.
    */
   private drawGroupPreview(state: OverlayState, now: number): void {
     const g = this.groupLines;
     g.clear();
     const preview = state.group ?? null;
     this.groupDrawn = preview !== null;
-    if (preview === null) return;
+    if (preview === null) {
+      this.groupKey = '';
+      return;
+    }
+    const key = preview.routes.map((r) => r.join('>')).join(';');
+    if (key !== this.groupKey) {
+      this.groupKey = key;
+      this.groupSince = now;
+    }
     const reduced = reducedMotion();
-    for (const from of preview.from) {
-      if (preview.planned) {
-        this.drawPlanRibbon(g, from, preview.to);
-        continue;
-      }
-      const points = this.routePoints([from, preview.to]);
-      if (points.length < 2) continue;
-      drawCasedArrow(g, points, {
+    const grow = reduced ? 1 : easeSettle((now - this.groupSince) / PATH_SHADOW.growMs);
+    for (const run of routeRuns(preview.routes)) {
+      const first = run.nodes[0];
+      const last = run.nodes[run.nodes.length - 1];
+      if (first === undefined || last === undefined) continue;
+      const points = this.routePoints(run.nodes, !run.head);
+      const drawn = slicePath(points, 0, pathLength(points) * grow);
+      if (drawn.length < 2) continue;
+      drawCasedArrow(g, drawn, {
         color: this.own,
         ghost: true,
-        alpha: ORDER_GHOST_ALPHA,
         seconds: reduced ? 0 : now / 1000,
+        noHead: !run.head,
         hair: this.hair(),
         zoom: this.cameraScale,
       });
-    }
-  }
-
-  /** A planned ribbon of the preview (D2): the ghost ribbon with the own hatch, the tail dot. */
-  private drawPlanRibbon(g: Graphics, from: number, dest: number): void {
-    const origin = nodePoint(this.map, from);
-    const target = nodePoint(this.map, dest);
-    if (origin === undefined || target === undefined) return;
-    const shape = ribbonShape(
-      origin,
-      target,
-      [],
-      tailStart(origin, target, this.radius(from)),
-      ringRadius(this.radius(dest)) + CASED.endGap,
-      this.cameraScale,
-    );
-    if (shape === null) return;
-    const poly = shape.ribbon.outline.flatMap((p) => [p.x, p.y]);
-    const E = RIBBON_ENGRAVED;
-    g.poly(poly).stroke({ width: E.casing, color: CASING, join: 'round' });
-    g.poly(poly).fill({ color: DARK_PLATE, alpha: E.plateAlpha });
-    // A wash of the own colour under the hatch: the preview reads as an own planned ribbon (D2).
-    g.poly(poly).fill({ color: this.own, alpha: 0.28 });
-    g.poly(poly).fill({
-      texture: this.ownHatch.texture,
-      textureSpace: 'global',
-      matrix: this.ownHatch.matrix(E.own.angle),
-      color: this.own,
-      alpha: E.own.alpha,
-    });
-    g.poly(poly).stroke({ width: Math.max(E.outline, this.hair()), color: INK, join: 'round' });
-    const start = shape.axis[0];
-    if (start !== undefined) {
-      g.circle(start.x, start.y, E.tail.own).fill(CASING).stroke({ width: E.tail.ink, color: INK });
     }
   }
 
@@ -507,13 +486,11 @@ export class OverlayView {
   /** Camera scale (CSS px per world unit): the number keeps its size on screen. */
   setCameraScale(scale: number): void {
     this.cameraScale = scale;
-    this.ownHatch.update(scale, this.deviceResolution);
   }
 
   /** The device pixel ratio: the hairlines of the arrows keep one device pixel. */
   setDeviceResolution(resolution: number): void {
     this.deviceResolution = resolution;
-    this.ownHatch.update(this.cameraScale, resolution);
   }
 
   /** One device pixel in world units now. */
@@ -633,8 +610,11 @@ export class OverlayView {
     this.pathDrawn = true;
   }
 
-  /** The polyline of `route` (nodes) from the ring of its first city to the ring of its last. */
-  private routePoints(route: readonly number[]): Point[] {
+  /**
+   * The polyline of `route` (nodes) from the ring of its first city to the ring of its last; a
+   * way that `joins` another there stops as far from that ring as a way starts from its own.
+   */
+  private routePoints(route: readonly number[], joins = false): Point[] {
     const points: Point[] = [];
     for (const id of route) {
       const at = nodePoint(this.map, id);
@@ -647,7 +627,7 @@ export class OverlayView {
     return trimPath(
       points,
       ringRadius(this.radius(first)) + CASED.startGap,
-      ringRadius(this.radius(last)) + CASED.endGap,
+      ringRadius(this.radius(last)) + (joins ? CASED.startGap : CASED.endGap),
     );
   }
 
@@ -669,7 +649,6 @@ export class OverlayView {
     this.sealStyle.destroy();
     this.boxShape.destroy();
     this.groupLines.destroy();
-    this.ownHatch.destroy();
   }
 
   /**
@@ -706,7 +685,7 @@ export class OverlayView {
     g.clear();
     // The path on hover (54i) is the shadow of the order a click would make, ordinary or planned
     // (#793): the server's route to the hovered target (`ReachNode.path`), drawn by `drawPath`; to a
-    // target only the part that fits reaches, the straight line of the preview (#928).
+    // target only the part that fits reaches, the route of that part (`ReachSplit.path`, #1004).
     const route = state.eta?.path ?? state.preview?.path ?? [];
     const key = route.join('>');
     if (key !== this.pathKey) {

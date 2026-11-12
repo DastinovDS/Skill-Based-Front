@@ -3,15 +3,23 @@
  * on the artery moment, to look at the look the owner chose (item K8, mockup `group-order.html`):
  *
  * - `group_select`: three groups selected together (A1 frames, A2 seals, A3 card), the box of a
- *   Shift drag over a fourth, the pointer on an enemy city: the members' lines and the dashed seal
- *   with the price (B1 before the click);
- * - `group_plan`: the same with `E` held: a hatched planned ribbon a member (D2) and the bonus counter;
+ *   Shift drag over a fourth, the pointer on an enemy city: each member's route (the `reach`
+ *   answers the scene pins, #1004; shared roads drawn once) and the dashed seal with the price (B1
+ *   before the click);
+ * - `group_plan`: the same with `E` held: the same routes and the bonus counter;
  * - `group_order`: a synchronized attack the server has timed: two members wait in their cities (C3),
  *   one is on its way, the seal over the target (B1); a city with its rally point (E3).
  *
  * Made from `arterySnapshot`: a picture for the eyes, the numbers only have to be plausible.
  */
-import type { EventMsg, GroupView, MapFile, OrderView, SnapshotMsg } from '../protocol.gen.ts';
+import type {
+  EventMsg,
+  GroupView,
+  MapFile,
+  OrderView,
+  ReachMsg,
+  SnapshotMsg,
+} from '../protocol.gen.ts';
 import type { WorldRect } from '../render/interaction.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 
@@ -35,7 +43,28 @@ export interface ScenePins {
   readonly eHeld?: boolean;
   /** A selection box being dragged, world units. */
   readonly box?: WorldRect;
+  /** The `reach` answers of the selected groups (#1004): their routes to the target. */
+  readonly reach?: readonly ReachMsg[];
 }
+
+/** The `reach` answer of the group in `node` with one route to `TARGET` (`ReachNode.path`). */
+const routeTo = (path: [number, number, ...number[]], ticks: number): ReachMsg => ({
+  type: 'reach',
+  group: id(path[0]),
+  tick: GROUP_TICK,
+  nodes: [{ node: TARGET, ticks, path }],
+  split: [],
+});
+
+/**
+ * The routes of the three groups to Archway: Watchpost's and Watchhouse's meet at Forkway, Wood
+ * Hollow's comes round by Bluff and Watchhouse, so the roads they share are drawn once.
+ */
+const PICKED_ROUTES: readonly ReachMsg[] = [
+  routeTo([3, 4, TARGET], 40),
+  routeTo([12, 4, TARGET], 40),
+  routeTo([6, 7, 12, 4, TARGET], 90),
+];
 
 const garrison = (node: number, units: number, charged: number, order: OrderView | null = null) =>
   ({
@@ -62,6 +91,7 @@ export function groupSelectSnapshot(map: MapFile): SnapshotMsg {
 export const GROUP_SELECT_PINS: ScenePins = {
   picks: PICKED.map((node) => id(node)),
   hover: TARGET,
+  reach: PICKED_ROUTES,
   // Half dragged over Forkway, from below and to the left of it.
   box: { x0: 430, y0: 560, x1: 575, y1: 445 },
 };
@@ -69,6 +99,7 @@ export const GROUP_SELECT_PINS: ScenePins = {
 export const GROUP_PLAN_PINS: ScenePins = {
   picks: PICKED.map((node) => id(node)),
   hover: TARGET,
+  reach: PICKED_ROUTES,
   eHeld: true,
 };
 

@@ -1435,6 +1435,18 @@ export interface ReachSplit {
    * smaller group either): the size of the split the interface offers (#762).
    */
   units: number;
+  /**
+   * Ticks of the path of the part that fits once it departs; ``None`` exactly when ``units``
+   * is ``0`` (#1004).
+   */
+  ticks: number | null;
+  /**
+   * The nodes from the group's node to ``node`` for a group of ``units``: the path an
+   * ordinary group order sends that part along (DEC-48, item B4) and the ``ack`` of a ``move`` of
+   * such a part carries; ``None`` exactly when ``units`` is ``0`` (#1004). All but the last are
+   * the group's node or own nodes.
+   */
+  path: [number, number, ...number[]] | null;
 }
 export interface MapFile {
   meta: MapMetaFile;
@@ -1514,7 +1526,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 52;
+export const PROTOCOL_VERSION = 53;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

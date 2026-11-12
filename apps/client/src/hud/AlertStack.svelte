@@ -15,9 +15,14 @@
     alerts: AlertState;
     /** The name of a place by its id. */
     names: NodeNamer;
+    /**
+     * Takes the camera to the city of a strip (#1004, item 14), as the alert key does for the next
+     * one; without it the strips are not buttons.
+     */
+    onshow?: (node: number) => void;
   }
 
-  let { alerts, names }: Props = $props();
+  let { alerts, names, onshow }: Props = $props();
 
   const rows = $derived(alertRows(alerts.overflow, alerts.current));
   const seconds = (ticks: number): string =>
@@ -30,7 +35,8 @@
 </script>
 
 <!-- The alerts hang as strips under the top bar (Leader, ui-style 54q): a sign, the place and the
-     numbers, no sentence; the sentence is the strip's accessible name. `Space` takes the camera there. -->
+     numbers, no sentence; the sentence is the strip's accessible name. `Space` takes the camera there,
+     and a click on a strip takes it to that strip's city (#1004): a button laid over the strip. -->
 {#if rows.length > 0 || alerts.stays.length > 0}
   <ul class="alerts" aria-label={t('alert.title')}>
     <!-- #930 (W10): a recruit stays home, its walk not paid: the city, the crossed CP mark and the
@@ -38,6 +44,7 @@
     {#each alerts.stays as stay (stay.seq)}
       <li
         class="strip stay"
+        class:go={onshow !== undefined}
         role="alert"
         aria-label={tf('alert.stay', {
           node: names(stay.node),
@@ -50,10 +57,26 @@
           <span class="crossed"><CpMark size={15} /></span>
           <HelmetIcon side="own" size={18} share={0} engraved />
         </span>
+        {#if onshow !== undefined}
+          {@const show = tf('toast.show', { node: names(stay.node) })}
+          <button
+            type="button"
+            class="cover"
+            aria-label={show}
+            title={show}
+            onclick={() => {
+              onshow(stay.node);
+            }}
+          ></button>
+        {/if}
       </li>
     {/each}
     {#each rows as row (row.kind)}
-      <li class="strip {row.kind}" aria-label={alertRowText(row, alerts.tickHz, names)}>
+      <li
+        class="strip {row.kind}"
+        class:go={onshow !== undefined}
+        aria-label={alertRowText(row, alerts.tickHz, names)}
+      >
         <WarnSign />
         <span class="place" aria-hidden="true">{names(row.first.node)}</span>
         {#if row.kind === 'incoming'}
@@ -71,6 +94,18 @@
         {/if}
         {#if row.cities > 1}
           <span class="more" aria-hidden="true">+{row.cities - 1}</span>
+        {/if}
+        {#if onshow !== undefined}
+          {@const show = tf('toast.show', { node: names(row.first.node) })}
+          <button
+            type="button"
+            class="cover"
+            aria-label={show}
+            title={show}
+            onclick={() => {
+              onshow(row.first.node);
+            }}
+          ></button>
         {/if}
       </li>
     {/each}
@@ -112,6 +147,41 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
     white-space: nowrap;
+  }
+
+  /* A strip that takes the camera to its city (#1004): a clear button over the whole strip; on
+     hover or focus the strip's rules light up and the place is underlined (shape as well as tone). */
+  .strip.go {
+    position: relative;
+    pointer-events: auto;
+  }
+
+  .cover {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  .strip.go:has(.cover:hover),
+  .strip.go:has(.cover:focus-visible) {
+    border-color: rgb(236 228 209 / 85%);
+    background: rgb(28 24 18 / 97%);
+  }
+
+  .strip.go:has(.cover:hover) .place,
+  .strip.go:has(.cover:focus-visible) .place {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  .cover:focus-visible {
+    outline: 2px solid var(--paper);
+    outline-offset: 2px;
   }
 
   .inc {
