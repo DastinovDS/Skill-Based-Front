@@ -169,6 +169,7 @@ def _budget(mapdef: MapDef, kind: str) -> float:
         "step": 0.3,
         "project": 0.45 if big else 0.3,
         "supply": 0.1,
+        "supply_replan": 0.1,
         "vision": 0.0,
         "snapshot": 0.45 if big else 0.3,
         "decision": BOT_BUDGET_MS,
@@ -189,10 +190,14 @@ CEILING_MS: Final[dict[tuple[str, str], float]] = {
     ("vision", "highway"): 0.035,
     ("vision", "narrows"): 0.025,
     ("vision", "ridge"): 0.07,
-    ("supply", "crossroads"): 0.105,
-    ("supply", "highway"): 0.11,
-    ("supply", "narrows"): 0.045,
-    ("supply", "ridge"): 0.13,
+    ("supply", "crossroads"): 0.029,
+    ("supply", "highway"): 0.032,
+    ("supply", "narrows"): 0.021,
+    ("supply", "ridge"): 0.06,
+    ("supply_replan", "crossroads"): 0.135,
+    ("supply_replan", "highway"): 0.115,
+    ("supply_replan", "narrows"): 0.048,
+    ("supply_replan", "ridge"): 0.13,
     ("snapshot", "crossroads"): 0.4,
     ("snapshot", "highway"): 0.3,
     ("snapshot", "narrows"): 0.2,
@@ -206,8 +211,8 @@ CEILING_MS: Final[dict[tuple[str, str], float]] = {
     ("decision", "narrows"): 0.46,
     ("decision", "ridge"): 0.82,
 }
-"""Reference-machine means (3 runs, 2026-11-12), rounded up about 10%, by (kind, map): see the
-module docstring. A new pool map needs its row."""
+"""Reference-machine means (3 runs, 2026-11-12; the supply rows after #482's flow work), rounded
+up about 10%, by (kind, map): see the module docstring. A new pool map needs its row."""
 
 
 def _check(benchmark_mean: float | None, factor: float, kind: str, game: _Game) -> None:
@@ -274,7 +279,10 @@ def test_pool_vision_cold(benchmark: BenchmarkFixture, speed_factor: float, game
 
 def test_pool_supply_flow(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
     """The supply flow on a dispatch tick of the warmed match (the 0.1 ms supply budget); the
-    state is copied in the untimed setup, the field memo travels with the copy like in a match."""
+    state is copied in the untimed setup, the memos travel with the copy like in a match. The
+    flow runs again on the state its step left, so the dispatch finds the plan of the same inputs
+    and sends what it showed, like 90 to 97% of the dispatches of a match (#482); the other ones
+    are ``test_pool_supply_flow_replanned``."""
     rules, state = game.match.rules, game.match.state
     assert state.tick % rules.supply.dispatch_ticks == 0
 
@@ -285,6 +293,27 @@ def test_pool_supply_flow(benchmark: BenchmarkFixture, speed_factor: float, game
         supply_flow(s, rules)
 
     _run(benchmark, speed_factor, "supply", game, flow, setup, 500)
+
+
+def test_pool_supply_flow_replanned(
+    benchmark: BenchmarkFixture, speed_factor: float, game: _Game
+) -> None:
+    """The same dispatch tick without the plans of the previous tick (``systems.flow``'s plan
+    memo dropped in the setup): the dispatch whose inputs changed since the last plan, so both
+    the dispatch and the plan run the calls of item M for each player."""
+    rules, state = game.match.rules, game.match.state
+    assert state.tick % rules.supply.dispatch_ticks == 0
+
+    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
+        s = copy.deepcopy(state)
+        for key in [k for k in s.memo if k.startswith("flow.plan.")]:
+            del s.memo[key]
+        return (s,), {}
+
+    def flow(s: GameState) -> None:
+        supply_flow(s, rules)
+
+    _run(benchmark, speed_factor, "supply_replan", game, flow, setup, 500)
 
 
 def test_pool_snapshot_frame(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:

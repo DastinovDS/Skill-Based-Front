@@ -50,7 +50,7 @@ uv run pytest --benchmark-disable                             # one run without 
 | `packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project` | `snapshot_frame` (a snapshot together with the JSON encoding) against `project()` on the view of a `rusher` match on `web` after 300 ticks; a ratio on one machine, without `speed_factor` | no more expensive than `project()` (× `REGRESSION`) |
 | `apps/bots/tests/test_benchmarks.py::test_bench_decide_strategy_views` | `decide()` of `expander` and `turtle` on the views of their own match on `web` after 300..1500 ticks (many groups, construction, contact with the enemy) | on average ≤ 1 ms |
 | `apps/bots/tests/test_benchmarks.py::test_bench_decide_smart_views`, `test_bench_decide_smart_v2_views` | `decide()` of every `smart_*` bot on the views of a smart match on `web` (`smart_rusher` against `smart_expander`, and against `smart_hoarder`, #166, #648) | on average ≤ 1 ms |
-| `apps/bots/tests/test_benchmarks_pool.py` (`test_pool_*`, #482) | the same quantities on the four pool maps `maps/*.json` under `mvp-7` with map tempo on (`Match.rules`), the state after 1500 ticks of `smart_rusher` against `smart_expander` (hard): `Match.step`, `project()`, the supply flow of a dispatch tick, `compute_vision` with an empty memo, `snapshot_frame`, a server tick (step, two reused views, two frames), and `view` plus `decide` of a bot as the server times it | the section 12 budget of each is in `extra_info` of the report; the test fails above a per-map ceiling (`CEILING_MS`, the measurement of 2026-11-12 + about 10%), which is a regression net and **not** the budget: where a budget does not hold, the section below says so |
+| `apps/bots/tests/test_benchmarks_pool.py` (`test_pool_*`, #482) | the same quantities on the four pool maps `maps/*.json` under `mvp-7` with map tempo on (`Match.rules`), the state after 1500 ticks of `smart_rusher` against `smart_expander` (hard): `Match.step`, `project()`, the supply flow of a dispatch tick (with the plans of the previous tick kept, and without them, #482), `compute_vision` with an empty memo, `snapshot_frame`, a server tick (step, two reused views, two frames), and `view` plus `decide` of a bot as the server times it | the section 12 budget of each is in `extra_info` of the report; the test fails above a per-map ceiling (`CEILING_MS`, the measurement of 2026-11-12 + about 10%), which is a regression net and **not** the budget: where a budget does not hold, the section below says so |
 
 ## Regression
 
@@ -137,22 +137,25 @@ random), but the margin for it is now twice as large.
 
 The benchmarks above run on synthetic grids and the 34-node fixture `web`. The maps the queue plays are the four
 of `maps/*.json` (29 to 51 nodes), played under `mvp-7` with the map tempo applied. These are the section 12
-quantities on them, measured on 2026-11-12 at `d603581` (after the memos of #983), by
+quantities on them, measured on 2026-11-12 at `d603581` (after the memos of #983; the step and supply rows again after
+the flow work of #482, back to back with `6908a44`), by
 `apps/bots/tests/test_benchmarks_pool.py` (`mise run test:bench`).
 
 Method: the state after 1500 ticks of a seeded `smart_rusher` against `smart_expander` match (hard), so there are
 groups on the roads, fights, builds and a grown fog memory; `Match.step` is timed alone (the bots decide in the
 untimed setup), `project()` is called without the reused vision (like the budget test), the supply flow runs on a
-copy of the dispatch-tick state (the memos travel with the copy, like in a match). Means of three runs on the
+copy of the dispatch-tick state (the memos travel with the copy, like in a match; in a full run the step benchmark
+before it has moved the match on by 1500 steps, so this is tick 3000). Means of three runs on the
 reference machine (Apple M4, load average 3 to 5, `speed_factor` 0.97 to 1.00), divided by `speed_factor`.
 Another agent's load shows up as outliers (a single run of a map went 1.5 to 2 times slower): the table is the
 quiet runs.
 
 | Quantity (ms) | budget | `narrows` (29) | `crossroads` (49) | `highway` (49) | `ridge` (51) |
 |---|---|---|---|---|---|
-| `Match.step` | 0.3 | 0.14 | 0.18 | 0.19 | 0.20 |
+| `Match.step` (after #482; before it) | 0.3 | 0.13 (0.14) | 0.16 (0.18) | 0.17 (0.19) | 0.18 (0.20) |
 | `project()`, one player | 0.3 (up to 40 nodes), 0.45 (45..55) | 0.17 | 0.27 | 0.26 | 0.28 |
-| supply flow, dispatch tick | 0.1 | 0.04 | 0.09 | 0.10 | **0.11** |
+| supply flow, dispatch tick (after #482; before it) | 0.1 | 0.019 (0.04) | 0.026 (0.09) | 0.028 (0.10) | 0.054 (**0.11**) |
+| supply flow, dispatch tick without the previous tick's plans (#482; before it) | 0.1 | 0.044 (0.056) | **0.12** (0.14) | **0.105** (0.16) | **0.12** (0.14) |
 | `compute_vision`, empty memo (warm: 0.003) | no budget | 0.02 | 0.03 | 0.03 | 0.03 |
 | `snapshot_frame`, one player | no budget (not dearer than `project()`) | 0.17 (x1.0) | 0.36 (x1.3) | 0.27 (x1.0) | 0.34 (x1.2) |
 | server tick per match: step + 2 views (reused vision) + 2 frames | no budget | 0.79 | 1.5 | 1.5 | 1.5 |
@@ -163,11 +166,33 @@ What holds and what does not (findings, nothing here changes a budget or the cod
 - **The step and the projection hold on every pool map**, the step with a margin of about a third (0.20 ms on `ridge`
   against 0.3). The architecture review (ARP-01) measured 0.45 to 0.64 ms per step and 0.37 to 0.6 ms per projection at
   `7b76b6b`, before the memos of vision and of the flow plan (#983); on the current head these are gone.
-- **The supply budget (0.1 ms) does not hold on `ridge`**: 0.11 ms (runs 0.110, 0.113, 0.122), about 10 to 20% over; `highway`
-  sits at the limit (0.097 to 0.100) and `crossroads` just under (0.092). The synthetic `grid40` and `grid55` measure 0.03
-  and 0.04 ms, so the budget test on them says nothing about the 50-node pool maps. The test net is on, so a regression is
-  caught, but the budget is not met. Decision for the owner: the budget moves (as it did for the projection, #371) or
-  the flow gets cheaper (ARP-03 of the review).
+- **The supply budget (0.1 ms) holds on average since #482, not on every dispatch.** Before it `ridge` measured 0.11 ms
+  (runs 0.110, 0.113, 0.122), `highway` 0.097 to 0.100, `crossroads` 0.092; the owner kept the budget and the flow got
+  cheaper (ARP-03 of the review), hash-neutral (the golden replays and `SIM_VERSION` unchanged):
+  - a dispatch sends what the plan of the previous tick showed when every input of that plan is unchanged (the field
+    object, the capacities, the own warehouses, the own packets on the way: the plan memo of #983 with its sends,
+    `systems.flow._dispatch`). Before, a dispatch tick ran the calls of item M twice per player (send, then plan); in a
+    whole smart-bot match the dispatch finds the plan in 90 to 97% of the dispatches (narrows 94%, crossroads 92%,
+    highway 90%, ridge 97%);
+  - the starving pockets of item H4 come from the memoized owner-only part of the field (`_Base.pockets`) instead of a
+    BFS per player and tick;
+  - the calls of a tier stop when the stock that tier may call is all called (before: when all stock was called, also
+    the stock of the front that no caller of the tier may take);
+  - `warehouse_capacities` is kept in `GameState.memo` with the map and `rules.warehouse`.
+
+  Every memo is checked against a fresh computation on every call of a smart-bot match on `ridge`
+  (`apps/bots/tests/test_sim_memos.py`), the capacities also by `test_capacity.py`.
+
+  The pool benchmark runs the flow again on the state its step left, so its dispatch finds the plan (0.019 to 0.054 ms).
+  A dispatch whose inputs changed since the last plan (the other 3 to 10%) still runs the calls of item M twice per
+  player: `test_pool_supply_flow_replanned` measures it at 0.105 to 0.12 ms on the 49 to 51 node maps (0.14 to 0.16
+  before), **over the budget**; the calls of item M (a BFS per caller and tier, two to four per tick) are most of it. In
+  real play, ticks 300 to 3000 of the same seeded match, the supply step on a dispatch tick: `ridge` mean 0.044 ms (p95
+  0.089; before 0.093, p95 0.168), `highway` 0.047 (p95 0.112; before 0.089, p95 0.177), `crossroads` 0.043 (p95 0.094;
+  before 0.079, p95 0.154), `narrows` 0.026 (before 0.051); on the other ticks 0.018 to 0.028 (before 0.029 to 0.045).
+  Cheaper still would take a new shape of the calls of item M (one search per tier instead of one per caller), with
+  the same results; not done here. The synthetic `grid40` and `grid55` measure 0.03 and 0.04 ms, so the budget test on
+  them says nothing about the 50-node pool maps.
 - **`snapshot_frame` is dearer than `project()` on the big maps** (x1.2 to x1.3 on `crossroads` and `ridge`, x1.0 on
   `highway` and `narrows`). The test `test_snapshot_frame_costs_no_more_than_project` checks the ratio on `web` only.
   Together with the other half of a tick this makes **1.5 ms of server time per match tick on the 49 to 51 node maps**

@@ -34,9 +34,11 @@ Starvation (the consumption of DEC-19, ``consume``): the factory-less pockets st
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Final
 
-from gow_sim.maps import NodeKind
-from gow_sim.ruleset import Ruleset
+from gow_sim.maps import MapDef, NodeKind
+from gow_sim.ruleset import Ruleset, WarehouseRules
 from gow_sim.state import AtNode, Event, GameState, Group, event
 
 
@@ -140,9 +142,29 @@ def _warehouse_of(rules: Ruleset, kind: NodeKind) -> int:
     return w.province if kind is NodeKind.PROVINCE else w.start_by_kind.of(kind)
 
 
+@dataclass(frozen=True, slots=True)
+class _Capacities:
+    """``warehouse_capacities`` with what it was computed from; ``GameState.memo``."""
+
+    mapdef: MapDef
+    rules: WarehouseRules
+    capacities: tuple[int, ...]
+
+
+_CAPACITIES: Final = "capacity.warehouses"
+"""The ``GameState.memo`` key of ``_Capacities``."""
+
+
 def warehouse_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
-    """``warehouse_capacity`` of every node, ``result[node_id]``. O(V)."""
-    return tuple(_warehouse_of(rules, nd.kind) for nd in state.map.nodes)
+    """``warehouse_capacity`` of every node, ``result[node_id]``. O(V), O(1) while the map and
+    ``rules.warehouse`` stay (kept in ``GameState.memo``)."""
+    w = rules.warehouse
+    memo = state.memo.get(_CAPACITIES)
+    if isinstance(memo, _Capacities) and memo.mapdef is state.map and memo.rules == w:
+        return memo.capacities
+    capacities = tuple(_warehouse_of(rules, nd.kind) for nd in state.map.nodes)
+    state.memo[_CAPACITIES] = _Capacities(state.map, w, capacities)
+    return capacities
 
 
 def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:

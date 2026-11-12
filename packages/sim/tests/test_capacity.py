@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from gow_sim.maps import load_map
-from gow_sim.ruleset import KindTable, Ruleset, load_ruleset
+from gow_sim.ruleset import CityKindTable, KindTable, Ruleset, load_ruleset
 from gow_sim.state import (
     AtNode,
     GameState,
@@ -37,6 +37,7 @@ from gow_sim.systems.capacity import (
     node_capacities,
     standing_units,
     supplied_territory,
+    warehouse_capacities,
 )
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -139,6 +140,28 @@ def test_capacity_follows_the_ruleset_table(kind: str, expected: int) -> None:
 
 
 # Owner change --------------------------------------------------------------------------------
+
+
+def test_warehouse_capacities_follow_the_rules_and_the_map_not_the_memo() -> None:
+    """``warehouse_capacities`` keeps its result in ``GameState.memo`` (#482): another warehouse
+    table or another map gives the new numbers, not the kept ones."""
+    state = _fork()
+    kinds = [nd.kind.value for nd in state.map.nodes]
+    assert kinds[0] == "capital" and kinds[1] == "city_small"
+    first = warehouse_capacities(state, RULES)
+    assert first == tuple(RULES.warehouse.start_by_kind.of(nd.kind) for nd in state.map.nodes)
+    assert warehouse_capacities(state, RULES) is first  # kept
+    other = dataclasses.replace(
+        RULES,
+        warehouse=dataclasses.replace(
+            RULES.warehouse,
+            start_by_kind=CityKindTable(capital=9, city_large=8, city_medium=7, city_small=5),
+        ),
+    )
+    assert warehouse_capacities(state, other)[:2] == (9, 5)
+    assert warehouse_capacities(state, RULES) == first
+    state.map = load_map(TESTS_DIR / "maps" / "line3.json")
+    assert len(warehouse_capacities(state, RULES)) == len(state.map.nodes) != len(first)
 
 
 def test_change_owner_empties_the_warehouse() -> None:
