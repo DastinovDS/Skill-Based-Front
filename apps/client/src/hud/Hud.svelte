@@ -13,7 +13,7 @@
   import EdgeAlerts from './EdgeAlerts.svelte';
   import ExitDialog from './ExitDialog.svelte';
   import GroupRadial from './GroupRadial.svelte';
-  import HelpOverlay from './HelpOverlay.svelte';
+  import MatchSettings from './MatchSettings.svelte';
   import type { HudState } from './hudState.svelte.ts';
   import RadialMenu from './RadialMenu.svelte';
   import SelectionCard from './SelectionCard.svelte';
@@ -179,13 +179,12 @@
   <GroupTip group={data?.hovered ?? null} />
   <TerrainBanner {orders} />
   <SplitTip {orders} names={hud.nodeName} />
-  <HelpOverlay
-    open={chrome.helpOpen}
-    captureCost={hud.context.rules.capture.charge_cost}
+  <MatchSettings
+    open={chrome.settingsOpen}
     groupOrder={hud.context.rules.group_order !== null}
     rallyPoint={hud.context.rules.recruit.rally_point}
     onclose={() => {
-      chrome.helpOpen = false;
+      chrome.settingsOpen = false;
     }}
   />
   <ExitDialog

@@ -14,8 +14,8 @@
     describedby?: string;
     /** Escape: the safe way out (the match HUD routes the other keys itself). */
     onclose?: () => void;
-    /** The body between the title and the buttons. */
-    children: Snippet;
+    /** The body between the title and the buttons, if the title and the buttons say enough. */
+    children?: Snippet;
     /** The buttons, in a row at the bottom. */
     actions: Snippet;
   }
@@ -46,7 +46,7 @@
   >
     <p class="dlg-eyebrow">{eyebrow}</p>
     <h2 class="dlg-title" id="{id}-title">{title}</h2>
-    {@render children()}
+    {@render children?.()}
     <div class="dlg-acts">{@render actions()}</div>
   </div>
 </div>

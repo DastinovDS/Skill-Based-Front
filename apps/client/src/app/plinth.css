@@ -114,6 +114,13 @@
 
 .front.play .plinth .end.link {
   gap: 18px;
+  align-items: flex-end;
+}
+
+/* Leave stands in the row of the link box and the copy button: the same height, the same base. */
+.front.play .plinth .end.link .lapis-btn.tall.inrow {
+  box-sizing: border-box;
+  height: var(--goh);
 }
 
 .front.play .plinth .two {
@@ -358,6 +365,8 @@
 
 .front.play .lu .go.copy {
   flex: none;
+  display: inline-grid;
+  place-items: center;
   height: var(--goh);
   padding: 0 28px;
   font-size: calc(var(--gof) * 0.72);
@@ -607,4 +616,16 @@
 :root[data-motion='reduced'] .front.play .seg,
 :root[data-motion='reduced'] .front.play .seg .icons {
   transition: none;
+}
+
+/* The two faces of Copy link share one cell: the button never changes size on "Copied". */
+.front.play .lu .go.copy .face {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.front.play .lu .go.copy .face.off {
+  visibility: hidden;
 }

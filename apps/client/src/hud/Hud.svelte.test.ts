@@ -212,7 +212,7 @@ describe('Hud', () => {
     flushSync();
     expect(chrome.exitOpen).toBe(true);
     expect(target.querySelector('[role="alertdialog"]')).not.toBeNull();
-    expect(target.textContent).toContain('This is a forfeit');
+    expect(target.textContent).toContain('Leave the match?');
     await vi.advanceTimersByTimeAsync(0);
     expect(document.activeElement?.textContent).toContain('Keep playing');
     expect(sent).toEqual([]);
@@ -306,14 +306,18 @@ describe('Hud', () => {
     expect(target.querySelector('.toast.neutral')?.textContent).toContain('3 of 5 go');
   });
 
-  it('opens the help overlay from the button and closes it with its own button', () => {
+  it('opens the settings of the match from the button and closes them with Done', () => {
     setLocale('en');
     const { target, chrome } = render();
-    button(target, 'Help')?.click();
+    button(target, 'Settings')?.click();
     flushSync();
-    expect(chrome.helpOpen).toBe(true);
-    expect(target.querySelector('[role="dialog"]')?.textContent).toContain('fit the map');
-    button(target, 'Close the help')?.click();
+    expect(chrome.settingsOpen).toBe(true);
+    const sheet = target.querySelector('[role="dialog"]')?.textContent ?? '';
+    expect(sheet).toContain('fit the map');
+    // Keys, sound, motion: no map legend and no way to the rules page in a match.
+    expect(sheet).toContain('Sound');
+    expect(sheet).not.toMatch(/On the map|How to play/);
+    button(target, 'Done')?.click();
     flushSync();
     expect(target.querySelector('[role="dialog"]')).toBeNull();
   });

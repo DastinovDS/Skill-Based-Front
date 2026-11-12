@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setLocale } from '../i18n/index.ts';
-import HelpOverlay from '../hud/HelpOverlay.svelte';
+import MatchSettings from '../hud/MatchSettings.svelte';
 import { DEFAULT_KEYS } from './keyBindings.ts';
 import { keyBindings, KeyBindingsState } from './keyBindingsState.svelte.ts';
 import KeysDialog from './KeysDialog.svelte';
@@ -131,13 +131,13 @@ describe('KeysDialog (#966)', () => {
   });
 });
 
-describe('the help of a match follows the bindings (#966)', () => {
+describe('the settings of a match follow the bindings (#966)', () => {
   it('shows the rebound keys and names them in its texts', () => {
     setLocale('en');
     keyBindings.bind('recruit', 'KeyY');
     keyBindings.bind('planned', 'KeyV');
     keyBindings.bind('terrain', 'KeyK');
-    component = mount(HelpOverlay, {
+    component = mount(MatchSettings, {
       target: document.body,
       props: { open: true, onclose: vi.fn() },
     });

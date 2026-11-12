@@ -35,27 +35,6 @@ export interface AccountFailure {
   readonly key: MessageKey;
   /** Whole minutes, rounded up, from `Retry-After`; only with `error.account.rateLimitedWait`. */
   readonly minutes?: number;
-  /** Whole hours, rounded up; only with `error.account.nickLimitedHours`. */
-  readonly hours?: number;
-}
-
-const HOUR_S = 3600;
-
-/** `PUT /api/me/nick`: taken, refused by the rules, or past the few changes a day (MOD-01). */
-export function nickFailure(error: unknown): AccountFailure {
-  if (error instanceof ApiError) {
-    if (error.code === 'conflict') return { key: 'welcome.error.taken' };
-    if (error.code === 'invalid') return { key: 'welcome.error.invalid' };
-    if (error.code === 'rate_limited') {
-      const wait = error.retryAfterS;
-      if (wait === null) return { key: 'error.account.nickLimited' };
-      if (wait > HOUR_S) {
-        return { key: 'error.account.nickLimitedHours', hours: Math.ceil(wait / HOUR_S) };
-      }
-      return { key: 'error.account.rateLimitedWait', minutes: Math.ceil(wait / 60) };
-    }
-  }
-  return { key: apiErrorKey(error) };
 }
 
 function rateLimited(error: ApiError): AccountFailure {
@@ -82,7 +61,6 @@ export function passwordFailure(error: unknown): AccountFailure {
 }
 
 export function failureText(failure: AccountFailure): string {
-  if (failure.hours !== undefined) return tf(failure.key, { hours: failure.hours });
   return failure.minutes === undefined
     ? t(failure.key)
     : tf(failure.key, { minutes: failure.minutes });

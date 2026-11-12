@@ -183,14 +183,6 @@ export class Api {
   }
 
   /**
-   * Change the nick (MOD-01): `conflict` if taken, `invalid` if the server's rules refuse it,
-   * `rate_limited` past the per-player limit (`retryAfterS` says when).
-   */
-  changeNick(token: string, nick: string): Promise<Schemas['Me']> {
-    return this.#request('PUT', '/api/me/nick', token, { nick });
-  }
-
-  /**
    * Set the colour the player asks for in the next matches (DEC-49): one of the set, `invalid`
    * (422) otherwise. A running match keeps the colours it started with.
    */

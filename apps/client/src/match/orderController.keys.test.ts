@@ -138,6 +138,6 @@ describe('HUD keys after a rebinding (#966)', () => {
     expect(fit).toHaveBeenCalledTimes(2);
     expect(mute).toHaveBeenCalledTimes(1);
     expect(hudKey(chrome, press('Slash', '?'), { fit, mute }, 0, keys)).toBe('handled');
-    expect(chrome.helpOpen).toBe(true);
+    expect(chrome.settingsOpen).toBe(true);
   });
 });

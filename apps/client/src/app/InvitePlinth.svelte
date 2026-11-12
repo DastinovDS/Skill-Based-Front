@@ -45,6 +45,9 @@
   let failure = $state.raw<MessageKey | null>(null);
   let copied = $state(false);
   let busy = $state(false);
+  /** How long "Copied" shows before the button is Copy link again, ms. */
+  const COPIED_MS = 3500;
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   // The code is a secret of the two players: it goes into the link and nowhere else.
   const link = $derived(`${origin}/?m=${encodeURIComponent(code)}`);
@@ -86,6 +89,10 @@
     };
   });
 
+  $effect(() => () => {
+    clearTimeout(copiedTimer);
+  });
+
   $effect(() => {
     onbackdrop({
       phase: view.opponent === null ? 'search' : 'found',
@@ -118,6 +125,10 @@
     try {
       await navigator.clipboard.writeText(link);
       copied = true;
+      clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => {
+        copied = false;
+      }, COPIED_MS);
     } catch {
       // No clipboard access: the link is in the field, the player copies it by hand.
       copied = false;
@@ -188,7 +199,7 @@
       </div>
     </div>
     <div class="end link">
-      <LapisButton class="tall" aria-keyshortcuts="Escape" onclick={leave}
+      <LapisButton class="tall inrow" aria-keyshortcuts="Escape" onclick={leave}
         >{t('invite.leave')}</LapisButton
       >
       {#if view.stage === 'link'}
@@ -208,7 +219,9 @@
               }}
             />
             <button type="button" class="lapis-btn primary go copy" onclick={copy}>
-              {#if copied}<Icon name="check" size={16} />{t('invite.copied')}{:else}<svg
+              <!-- Both labels sit in one cell, so the button keeps the width of the longer one. -->
+              <span class="face" class:off={copied}>
+                <svg
                   width="16"
                   height="16"
                   viewBox="0 0 24 24"
@@ -218,7 +231,11 @@
                   aria-hidden="true"
                   focusable="false"
                   ><rect x="9" y="9" width="12" height="12" /><path d="M5 15H3V3h12v2" /></svg
-                >{t('invite.copy')}{/if}
+                >{t('invite.copy')}
+              </span>
+              <span class="face" class:off={!copied}>
+                <Icon name="check" size={16} />{t('invite.copied')}
+              </span>
             </button>
           </div>
         </div>

@@ -22,9 +22,11 @@ describe('ExitDialog', () => {
     return document.querySelector('[role=alertdialog]')?.textContent ?? '';
   }
 
-  it('gives the plain warning; there is no ranked variant at the MVP (#765, H4)', () => {
+  it('asks in the title and the buttons alone; there is no ranked variant at the MVP (#765, H4)', () => {
     const text = render();
-    expect(text).toContain(translate('en', 'exit.text'));
+    expect(text).toContain(translate('en', 'exit.title'));
+    expect(text).toContain(translate('en', 'exit.confirm'));
+    expect(text).not.toMatch(/This is a forfeit/);
     expect(text).not.toMatch(/queue|ranked/);
   });
 

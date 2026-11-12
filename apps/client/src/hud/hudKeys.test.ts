@@ -10,16 +10,16 @@ describe('hudKey', () => {
     const chrome = new HudChrome();
     const fit = vi.fn();
     expect(hudKey(chrome, down('Slash', '?'), { fit }, 0)).toBe('handled');
-    expect(chrome.helpOpen).toBe(true);
+    expect(chrome.settingsOpen).toBe(true);
     expect(hudKey(chrome, down('F1'), { fit }, 1)).toBe('handled');
-    expect(chrome.helpOpen).toBe(false);
+    expect(chrome.settingsOpen).toBe(false);
   });
 
   it('does not flip the help again on a held key', () => {
     const chrome = new HudChrome();
     hudKey(chrome, down('Slash', '?'), { fit: vi.fn() }, 0);
     hudKey(chrome, { ...down('Slash', '?'), repeat: true }, { fit: vi.fn() }, 1);
-    expect(chrome.helpOpen).toBe(true);
+    expect(chrome.settingsOpen).toBe(true);
   });
 
   it('fits the map on H and on Home', () => {
@@ -34,7 +34,7 @@ describe('hudKey', () => {
     const chrome = new HudChrome();
     const mute = vi.fn();
     expect(hudKey(chrome, down('KeyM', 'm'), { fit: vi.fn(), mute }, 0)).toBe('handled');
-    chrome.helpOpen = true;
+    chrome.settingsOpen = true;
     expect(hudKey(chrome, down('KeyM', 'm'), { fit: vi.fn(), mute }, 1)).toBe('handled');
     expect(mute).toHaveBeenCalledTimes(2);
     chrome.openExit();
@@ -49,11 +49,11 @@ describe('hudKey', () => {
     expect(hudKey(chrome, { ...down('F8'), repeat: true }, { fit: vi.fn(), mark }, 1)).toBe(
       'handled',
     );
-    chrome.helpOpen = true;
+    chrome.settingsOpen = true;
     expect(hudKey(chrome, down('F8'), { fit: vi.fn(), mark }, 2)).toBe('handled');
     expect(mark).toHaveBeenCalledTimes(2);
     // Without the action (the replay) the key is not the HUD's.
-    chrome.helpOpen = false;
+    chrome.settingsOpen = false;
     expect(hudKey(chrome, down('F8'), { fit: vi.fn() }, 3)).toBe('pass');
   });
 
@@ -111,14 +111,14 @@ describe('hudKey', () => {
     for (const code of ['KeyQ', 'Space', 'Home', 'Tab', 'Slash']) {
       expect(hudKey(chrome, down(code), { fit: vi.fn() }, 0), code).toBe('blocked');
     }
-    expect(chrome.helpOpen).toBe(false);
+    expect(chrome.settingsOpen).toBe(false);
   });
 
   it('closes the help on Esc', () => {
     const chrome = new HudChrome();
-    chrome.helpOpen = true;
+    chrome.settingsOpen = true;
     expect(hudKey(chrome, down('Escape'), { fit: vi.fn() }, 0)).toBe('handled');
-    expect(chrome.helpOpen).toBe(false);
+    expect(chrome.settingsOpen).toBe(false);
   });
 
   it('lets an Esc through that drops a selection or closes a menu, and it never counts', () => {
@@ -144,7 +144,7 @@ describe('hudKey', () => {
 
   it('blocks the game keys while the help is open', () => {
     const chrome = new HudChrome();
-    chrome.helpOpen = true;
+    chrome.settingsOpen = true;
     expect(hudKey(chrome, down('KeyU'), { fit: vi.fn() }, 0)).toBe('blocked');
     expect(hudKey(chrome, { type: 'keyup', code: 'KeyQ', key: 'q' }, { fit: vi.fn() }, 0)).toBe(
       'blocked',

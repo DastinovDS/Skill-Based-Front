@@ -9,7 +9,7 @@
     value: PlayerColour | null;
     /** Saves a choice (`PUT /api/me/colour`); the answer is why it failed, or null. */
     onchange: (colour: PlayerColour) => Promise<MessageKey | null>;
-    /** Smaller helmets and no hint line (the lobby, where the list comes first). */
+    /** Smaller helmets (the lobby, where the list comes first). */
     compact?: boolean;
   }
 
@@ -53,12 +53,7 @@
      colour alone. -->
 <div class="colours" class:compact>
   <span class="cap" id="{uid}-label">{t('colour.label')}</span>
-  <div
-    class="swatches"
-    role="radiogroup"
-    aria-labelledby="{uid}-label"
-    aria-describedby={compact ? undefined : `${uid}-hint`}
-  >
+  <div class="swatches" role="radiogroup" aria-labelledby="{uid}-label">
     {#each PLAYER_COLOUR_IDS as colour, i (colour)}
       {@const on = colour === current}
       <button
@@ -80,7 +75,6 @@
       </button>
     {/each}
   </div>
-  {#if !compact}<p class="cnote" id="{uid}-hint">{t('colour.hint')}</p>{/if}
   {#if failure !== null}
     <p class="fail" role="alert">{t(failure)}</p>
   {:else if saved !== null}
@@ -155,14 +149,6 @@
   button[aria-checked='true'] .nm {
     text-decoration: underline;
     text-underline-offset: 3px;
-  }
-
-  .cnote {
-    margin: 0;
-    max-width: 52ch;
-    color: var(--ink-dim);
-    font-size: 15px;
-    font-style: italic;
   }
 
   .fail {

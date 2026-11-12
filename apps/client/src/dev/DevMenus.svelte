@@ -99,15 +99,9 @@
     {map}
     onwatch={nothing}
     onbot={nothing}
-    onnick={(nick: string) =>
-      Promise.resolve(
-        nick.toLowerCase() === 'vega' ? { key: 'welcome.error.taken' as const } : null,
-      )}
     {colour}
     oncolour={pickColour}
     onsettings={nothing}
-    onpassword={nothing}
-    onlogout={nothing}
     onhelp={nothing}
     onback={nothing}
   />

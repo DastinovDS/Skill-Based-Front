@@ -65,7 +65,7 @@ export function hudKey(
   }
   if (chrome.exitOpen) return 'blocked';
   if (input.key === '?' || input.code === 'F1') {
-    if (input.repeat !== true) chrome.helpOpen = !chrome.helpOpen;
+    if (input.repeat !== true) chrome.settingsOpen = !chrome.settingsOpen;
     return 'handled';
   }
   if (input.code === keys.mute && actions.mute !== undefined) {

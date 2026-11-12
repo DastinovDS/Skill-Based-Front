@@ -18,7 +18,6 @@ export const BOARD_SCENE_IDS = [
   'profile-empty',
   'profile-loading',
   'profile-network',
-  'profile-nick',
   'settings',
   'settings-guest',
 ] as const;
@@ -160,8 +159,6 @@ export const BOARD_SCENES: Readonly<Record<BoardSceneId, BoardScene>> = {
     mode: 'profile',
     own: () => Promise.reject(new ApiError('network', 0)),
   },
-  // The nick dialog open over the profile (the shots press the link).
-  'profile-nick': { hasPassword: true, mode: 'profile', own: now(profile()) },
   settings: { hasPassword: true, mode: 'settings', own: now(profile()) },
   'settings-guest': { hasPassword: false, mode: 'settings', own: now(profile()) },
 };

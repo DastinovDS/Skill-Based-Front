@@ -668,31 +668,5 @@ describe('AppState', () => {
       app.closeReplay();
       expect(app.screen).toEqual({ name: 'profile', back: { name: 'menu' } });
     });
-
-    it('changes the nick and remembers it', async () => {
-      const changeNick = vi.fn(() =>
-        Promise.resolve({
-          player_id: 4,
-          nick: 'Newer',
-          has_password: false,
-          colour: 'lapis' as const,
-        }),
-      );
-      const { app, storage } = await inMenu({ changeNick });
-      expect(await app.changeNick('Newer')).toBeNull();
-      expect(changeNick).toHaveBeenCalledWith('t', 'Newer');
-      expect(app.guest?.nick).toBe('Newer');
-      expect(storage.getItem(GUEST_STORAGE_KEY)).toContain('Newer');
-    });
-
-    it('a refused nick stays on the screen with its reason', async () => {
-      const { app } = await inMenu({
-        changeNick: () => Promise.reject(new ApiError('conflict', 409)),
-      });
-      app.openAccountPage('profile');
-      expect(await app.changeNick('Taken')).toEqual({ key: 'welcome.error.taken' });
-      expect(app.guest?.nick).toBe('Old');
-      expect(app.screen.name).toBe('profile');
-    });
   });
 });

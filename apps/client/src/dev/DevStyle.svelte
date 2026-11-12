@@ -104,7 +104,6 @@
   <StoneOverlay label={t('exit.title')}>
     <p class="lapis-label">{t('exit.eyebrow')}</p>
     <h2 class="dlg-title">{t('exit.title')}</h2>
-    <p class="text">{t('exit.text')}</p>
     <div class="row acts">
       <LapisButton variant="primary">{t('exit.stay')}</LapisButton>
       <LapisButton danger>{t('exit.confirm')}</LapisButton>

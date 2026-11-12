@@ -8,7 +8,7 @@
 export const DOUBLE_ESC_MS = 600;
 
 export class HudChrome {
-  helpOpen = $state(false);
+  settingsOpen = $state(false);
   /** The "leave the match?" dialog: leaving is a forfeit. */
   exitOpen = $state(false);
 
@@ -17,16 +17,16 @@ export class HudChrome {
 
   /** A modal overlay is up: the game keys wait. */
   get modal(): boolean {
-    return this.exitOpen || this.helpOpen;
+    return this.exitOpen || this.settingsOpen;
   }
 
   openExit(): void {
     this.exitOpen = true;
-    this.helpOpen = false;
+    this.settingsOpen = false;
   }
 
   closeAll(): void {
     this.exitOpen = false;
-    this.helpOpen = false;
+    this.settingsOpen = false;
   }
 }
