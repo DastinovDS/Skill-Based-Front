@@ -9,9 +9,9 @@ show the match "as player 1" or "as player 2" without computing vision (`AGENTS.
 every frame also carries **the buildings** of both players (the keys `c` and `d`, section
 "Buildings"), and `v` the enemy buildings each player's view showed.
 
-Code: `gow_server.frames` (`build_frames`, `FORMAT`). The format version: the field `format` (now `2`,
-since the viewer of #905 reads the buildings, section "Format change"); the client reads `1` and `2`
-and must reject a file with any other `format`.
+Code: `gow_server.frames` (`build_frames`, `FORMAT`). The format version: the field `format` (now `3`,
+since #980 dropped the road-level slots and added the map's numbers to the header `rules`, section
+"Format change"); the client reads `1`, `2` and `3` and must reject a file with any other `format`.
 
 ## Where it comes from
 
@@ -56,12 +56,14 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
 
 ```json
 {
-  "format": 2, "sim_version": 1, "ruleset_hash": "...", "map_id": "artery", "map_hash": "...",
+  "format": 3, "sim_version": 1, "ruleset_hash": "...", "map_id": "artery", "map_hash": "...",
   "tick_hz": 10, "frame_every": 5, "ticks": 9000,
   "outcome": {"winner": 0, "reason": "vp"}, "vp": [31, 24], "state_hash": "...",
   "nicks": ["Ember", "Bot (normal)"], "colours": ["shell", "violet"],
   "rules": {"unit_ticks": 30, "queue_max": 3, "barracks_ticks": 100, "barracks_charges": 3,
-            "factory_ticks": 100, "factory_charges": 4, "fort_ticks": 100},
+            "factory_ticks": 100, "factory_charges": 4, "fort_ticks": 100,
+            "round_ticks": 20, "rally_cost": 50, "province_warehouse": 1,
+            "attrition_ticks": 80, "grace_ticks": 20},
   "map": { ...map format, docs/design/map-format.md... },
   "frames": [ {"t": 0, ...}, {"t": 5, ...}, ... ],
   "events": [ [1, "recruit", {"node": 3, "owner": 0}], ... ]
@@ -91,7 +93,13 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
   the recruit queue (DEC-25), `barracks_ticks` and `barracks_charges` (DEC-26), `factory_ticks` and
   `factory_charges` (DEC-41), `fort_ticks` (DEC-43, item D). The viewer fills the time bars of the
   builds and of the queue with them and decides nothing else by them (`AGENTS.md` 7.1). Files
-  without the key (format 1) are drawn without time bars.
+  without the key (format 1) are drawn without time bars. Format 3 (#980) adds the numbers the map
+  needs and a replay lacked: `round_ticks` (`combat.round_ticks`, the timing of fight rounds and
+  walks), `rally_cost` (`recruit.rally_cost`, hundredths; 0 when the ruleset has no rally point),
+  `province_warehouse` (`warehouse.province`, the stock places of an own province),
+  `attrition_ticks` and `grace_ticks` (`capacity.*`, the overcrowding pill). A format 3 header has
+  all twelve keys or the viewer drops the whole key; a format 2 file has the first seven and the
+  viewer then uses the default round length (20) and draws no rally marks, province stock or pill.
 - `map`: the whole map (the same format as `maps/*.json`), the static graph for rendering. The file is
   self-contained: editing `maps/` does not affect it (`map_hash` is for reference). The map in the file is in the format
   that was current at the time of recording: files from before #366 have no `name` and `border_permille` (they had
@@ -111,7 +119,7 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
 | `t` | tick | integer |
 | `p` | players by id (0, 1) | `[cp, vp, stance, forfeited]`: CP in hundredths, `stance` a string, `forfeited` 0/1 |
 | `n` | nodes by id | `[owner, warehouse, capacity, warehouse_cap]`: `owner` 0, 1 or `null`; `warehouse` charges in the warehouse; `capacity` the current capacity of the city for units (the client does not compute rules); `warehouse_cap` the places of the warehouse (`warehouse.start_by_kind` of its kind, DEC-43 item C, as `NodeView.warehouse_cap` of the live view; until #894 plus the warehouse level of DEC-26), `null` for a province. The fourth element was added in #556 (before it the viewer drew the node capacity as the warehouse, larger than the real one with `city_upgrades`); a record of three elements is an older file, the viewer then knows no places |
-| `w` | road level by id (the name "width" stayed from the map format, DEC-22: 1..3); always 1 since `sim_version` 47 (#894: the road upgrades were removed), the slot stays (no format change for it) | integer |
+| `w` | ~~road level by id~~ **[removed in format 3, #980]**: always 1 since `sim_version` 47 (#894: the road upgrades were removed); present only in files of format 1 and 2, the client ignores it | integer |
 | `g` | groups, in ascending `id` | a group object (below) |
 | `k` | charge packets, by `id` | `[id, owner, edge, from_node, charges, depart_tick, arrive_tick]` |
 | `i` | public intents, by `id` | `[id, owner, kind, origin, target]`, `target` may be `null` |
@@ -197,7 +205,7 @@ strings of `Detail`: `exact`, `range`, `presence`, `fog`.
 | Key | What | Value |
 |---|---|---|
 | `n` | nodes by id (`n[i]` is node `i`), as `NodeView` | `[detail, seen, warehouse]`: `detail` the zone level (`NodeView.detail`); `seen` the sighting (below, `NodeView.seen`): this tick's unless `detail` is `fog`, for `fog` the last one remembered or `null`; `warehouse` the charges of the warehouse as the player saw them (`NodeView.warehouse`: own nodes and foreign nodes where an own group stands, DEC-35; otherwise `null`) |
-| `e` | edges by id, as `EdgeView` | `[width, detail, half_a, half_b, figures]`: `width` the road level the player knew (always 1 since `sim_version` 47, #894; before it `EdgeView.width`: in fog the last one seen, or 1); `detail` the road visibility (`presence` or `fog`); `half_a`, `half_b` the halves of the ends `a` and `b` as `[detail, seen]` (`HalfView`; `seen` as for a node: in `fog` the remembered one, without positions); `figures` (no element while there are none) the enemy figures on the edge (`EdgeView.enemy_groups`, DEC-33), sorted by id |
+| `e` | edges by id, as `EdgeView` | `[detail, half_a, half_b, figures]` (format 3; files of format 1 and 2 have a road level first: `[width, detail, ...]`, always 1 since `sim_version` 47, #894, and the client takes it off while reading); `detail` the road visibility (`presence` or `fog`); `half_a`, `half_b` the halves of the ends `a` and `b` as `[detail, seen]` (`HalfView`; `seen` as for a node: in `fog` the remembered one, without positions); `figures` (no element while there are none) the enemy figures on the edge (`EdgeView.enemy_groups`, DEC-33), sorted by id |
 | `b` | the edges whose road build the player saw (`sim_version` 15 to 46; not written since #894): an own build always, an enemy one only while the edge is not in fog, DEC-17 item 5; no key while there are none | `[edge, ...]`; the tick of an own build is in the frame's `e`, an enemy build has none (`BuildView.done_tick` `null`) |
 | `c` | the enemy cities whose buildings the view showed (#905; DEC-31): an enemy city joined by an edge of the map to an own node; no key while there are none (and in files from before #905) | `[node, factory, barracks]`: `NodeView.factory` and `has_barracks` as 0/1 (a built factory, a built barracks; 0 also while one is being built) |
 | `d` | the enemy road fortifications the view showed (#905; DEC-43, item D8): while the half of its node on the road is not in fog; by edge, the end `a` first; no key while there are none (and in files from before #905) | `[edge, node, built]`: `RoadFortView` of `EdgeView.forts`, without a tick |
@@ -340,3 +348,12 @@ key `rules` (the numbers of the time bars, an addition of the client part) and a
   one written between the two parts of #905 has the keys and the viewer draws them by the same rules
   (without the header `rules` the barracks have no time bars and the queue no helmets' progress);
 - old files are never rewritten (out of scope of #905).
+
+**Format 3 (#980, the road levels gone).** Incompatible, so `FORMAT = 3`: the slot `w` of a frame and
+the first element (the road level) of every edge record of `v` are not written, and the header
+`rules` carries the five map numbers above. The viewer reads formats 1, 2 and 3: `parseReplay`
+takes the road level off the edge records of an older file, so the rest of the client reads one
+shape, and builds the edges of a snapshot from the map instead of from `w`. Old files are never
+rewritten. A viewer needs a rule number for the picture only from the header: a file of format 1
+or 2 falls back as before (the default round length `DEFAULT_ROUND_TICKS`, no rally marks, province
+stock or overcrowding pill).

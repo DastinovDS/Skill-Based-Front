@@ -73,15 +73,14 @@ def full_rules() -> Ruleset:
 # The frames file --------------------------------------------------------------------------
 
 
-def test_frame_roads_are_all_level_1(line3: MapDef, full_rules: Ruleset) -> None:
-    """Key ``w`` keeps its slot with level 1 on every road (#894: no road upgrades); no ``r``
-    (road types, DEC-26), no ``e`` (road builds, DEC-28) and no ``b`` any more; a barracks build
+def test_frame_has_no_road_keys(line3: MapDef, full_rules: Ruleset) -> None:
+    """No ``w`` (road levels, gone from format 3, #980), no ``r`` (road types, DEC-26), no ``e``
+    (road builds, DEC-28) and no ``b`` any more; a barracks build
     (DEC-26) is a building of its city in ``c`` since #905 (``test_frames_buildings.py``)."""
     state = initial_state(line3, full_rules)
     state.nodes[0].build = Build(owner=0, since=0, kind=BuildKind.BARRACKS)
     frame = frame_of(state, full_rules)
-    assert frame["w"] == [1, 1]
-    assert not {"r", "e", "b"} & set(frame)
+    assert not {"w", "r", "e", "b"} & set(frame)
     assert "c" in frame
 
 
@@ -217,7 +216,8 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
         n[2] == full_rules.capacity.by_kind.of(m.kind)
         for n, m in zip(doc["frames"][0]["n"], mapdef.nodes, strict=True)
     )
-    assert len(doc["frames"][0]["w"]) == len(mapdef.edges)
+    assert doc["format"] == 3
+    assert "w" not in doc["frames"][0]
     assert any(f["g"] for f in doc["frames"])
     # Each player's vision (#598): every node and edge, for both players, in every frame.
     assert all(
@@ -302,7 +302,7 @@ def _decoded(vision: dict[str, Any], tick: int) -> dict[str, Any]:
         nodes.append({"detail": detail, "seen": _seen(seen, detail, tick), "warehouse": warehouse})
     edges: list[dict[str, Any]] = []
     for record in vision["e"]:
-        width, detail, a, b, figures = _padded(record, 5)
+        detail, a, b, figures = _padded(record, 4)
         halves: list[dict[str, Any]] = []
         for half in (a, b):
             half_detail, seen = _padded(half, 2)
@@ -322,7 +322,6 @@ def _decoded(vision: dict[str, Any], tick: int) -> dict[str, Any]:
                     "units_range": units_range,
                 }
             )
-        assert width == 1  # the slot of the road level stays (#894)
         edges.append({"detail": detail, "halves": halves, "enemy_groups": enemy})
     assert "b" not in vision
     return {"nodes": nodes, "edges": edges}

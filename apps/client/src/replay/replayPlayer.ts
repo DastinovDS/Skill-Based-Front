@@ -9,7 +9,7 @@
  */
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
 import type { EventMsg, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
-import type { CityDevelopment, RenderSource } from '../render/source.ts';
+import type { CapacityTicks, CityDevelopment, RenderSource } from '../render/source.ts';
 import { hasBuildings, hasVision, type ReplayFile } from './replayFile.ts';
 import { buildTimeline, type Timeline } from './timeline.ts';
 
@@ -35,6 +35,15 @@ export class ReplayPlayer implements RenderSource {
   readonly recruitQueueMax?: number;
   readonly cityUpgrades?: CityDevelopment;
   readonly fortBuildTicks?: number;
+  /**
+   * The numbers of the map from the header `rules` of a format 3 file (#980): the round length of
+   * a fight, the rally walk price, the province warehouse and the overcrowding timings. A file of
+   * format 1 or 2 has none: the default round length, no rally marks, province stock or pill.
+   */
+  readonly roundTicks?: number;
+  readonly rallyCost?: number;
+  readonly provinceWarehouse?: number;
+  readonly capacityTicks?: CapacityTicks;
   readonly #file: ReplayFile;
   /** The full reveal, then the fog of player 0 and of player 1 once asked for (#600). */
   readonly #timelines = new Map<PlayerId | null, Timeline>();
@@ -70,6 +79,22 @@ export class ReplayPlayer implements RenderSource {
         this.recruitQueueMax = rules.queue_max;
         this.fortBuildTicks = rules.fort_ticks;
       }
+    }
+    const rules = file.rules;
+    if (
+      rules?.round_ticks !== undefined &&
+      rules.rally_cost !== undefined &&
+      rules.province_warehouse !== undefined &&
+      rules.attrition_ticks !== undefined &&
+      rules.grace_ticks !== undefined
+    ) {
+      this.roundTicks = rules.round_ticks;
+      this.rallyCost = rules.rally_cost;
+      this.provinceWarehouse = rules.province_warehouse;
+      this.capacityTicks = {
+        attritionTicks: rules.attrition_ticks,
+        graceTicks: rules.grace_ticks,
+      };
     }
     this.#timeline = buildTimeline(file);
     this.#timelines.set(null, this.#timeline);

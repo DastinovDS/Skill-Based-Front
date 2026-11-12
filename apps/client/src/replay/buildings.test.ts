@@ -43,13 +43,14 @@ const nodeOf = (file: ReplayFile, side: PlayerId | null, id: number) =>
   buildTimeline(file, side).snapshots[0]?.view.nodes[id];
 
 describe('the formats (#905)', () => {
-  it('reads format 1 and 2 and refuses any other', () => {
+  it('reads format 1, 2 and 3 and refuses any other', () => {
     expect(SAMPLE.format).toBe(1);
     expect(SAMPLE_BUILDINGS.format).toBe(2);
     const raw = (format: number): unknown => ({ ...structuredClone(SAMPLE_BUILDINGS), format });
     expect(parseReplay(raw(1)).format).toBe(1);
     expect(parseReplay(raw(2)).format).toBe(2);
-    for (const format of [0, 3, 'x']) {
+    expect(parseReplay(raw(3)).format).toBe(3);
+    for (const format of [0, 4, 'x']) {
       expect(() => parseReplay(raw(format as number))).toThrow(
         expect.objectContaining({ code: 'format' }),
       );

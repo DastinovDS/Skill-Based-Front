@@ -7,7 +7,8 @@ import type { RenderFrame } from '../net/interpolate.ts';
  */
 /**
  * Ticks between the rounds of a fight when the source does not say (DEC-32): the value of every
- * ruleset (`combat.round_ticks = 20`). The replay frames carry no ruleset, so a replay uses it.
+ * ruleset (`combat.round_ticks = 20`). Dev scenes without a ruleset and replay files of format 1
+ * and 2 (their header has no `round_ticks`) use it; a live match and a format 3 replay say it.
  */
 export const DEFAULT_ROUND_TICKS = 20;
 
@@ -41,11 +42,11 @@ export interface RenderSource {
   readonly capacityTicks?: CapacityTicks;
   /** Delays for the countdown on order arrows; without them the arrows show no countdown. */
   readonly orderDelays?: OrderDelays;
-  /** Ticks per second (`ruleset_public.tick_hz`), for the age of fog memories. Default 10. */
+  /** Ticks per second (`ruleset_public.tick_hz`), for the age of fog memories. Default `DEFAULT_TICK_HZ`. */
   readonly tickHz?: number;
   /**
-   * Ticks between the rounds of a fight (`ruleset_public.combat.round_ticks`). Default
-   * `DEFAULT_ROUND_TICKS`; the replay frames do not carry the ruleset, so a replay uses the default.
+   * Ticks between the rounds of a fight (`ruleset_public.combat.round_ticks`, the replay header
+   * `rules.round_ticks` from format 3). Default `DEFAULT_ROUND_TICKS`.
    */
   readonly roundTicks?: number;
   /**

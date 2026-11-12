@@ -409,7 +409,7 @@ A road is undirected. There is at most one road between two nodes, loops are for
 |---|---|---|
 | `id` | integer | equals the index in the list |
 | `a`, `b` | node ids | the ends of the road, `a ≠ b` |
-| `max_level` | integer, `1..3` | the last upgrade level (DEC-22, DEC-23, item 6); all roads start at level 1 with no type, there is no starting level in the map. Since #894 no rule reads it: road upgrades were removed with the old rulesets; the field stays in the format (the validator, the symmetry check and the map hash still read it) |
+| `max_level` | integer, `1..3` | the last upgrade level (DEC-22, DEC-23, item 6); all roads start at level 1 with no type, there is no starting level in the map. Since #894 no rule reads it: road upgrades were removed with the old rulesets. **Kept on purpose (#980) as a pure drawing hint:** `gow_maps.preview` draws the road width by it, and removing it would change `map_hash` of every map. A replay log resolves its map by that hash (`gow_sim.replay`), so the frozen golden replays (`AGENTS.md` 4.5) and every replay log already on disk would no longer find their map, and the `MapFile` type of the protocol would change (`PROTOCOL_VERSION`). The validator, the symmetry check, the mirror script and the map hash read it as an ordinary field; no rule may read it |
 | `travel_ticks` | integer ≥ 1 | the base travel time in ticks; the speed by terrain zones of the edge ends comes from the ruleset (`terrain.speed_pct`, mechanics.md, section 4) |
 | `border_permille` | integer, `100..900` | the border point in thousandths of the length from end `a`, 500: the middle (DEC-23, item 5): splits the edge into halves for vision (DEC-21) and into terrain zones for speed (mechanics.md, section 4) |
 

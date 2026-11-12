@@ -211,7 +211,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
       // The frames carry no VP gains (#934): the replay shows none.
       vp_gain: [0, 0],
       nodes,
-      edges: frame.w.map((_, id) => ({
+      edges: map.edges.map((_, id) => ({
         id,
         detail: 'presence',
         // Both sides' groups are drawn as groups: nothing is seen as an enemy here.
@@ -387,7 +387,7 @@ function sideSnapshot(
     const forts = sideForts(map, edge, vision, side);
     const record = vision.e[id];
     if (record === undefined) return { ...edge, forts };
-    const [, detail, a, b, figures] = record;
+    const [detail, a, b, figures] = record;
     return {
       ...edge,
       detail,
