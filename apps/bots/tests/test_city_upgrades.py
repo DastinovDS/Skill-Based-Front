@@ -1,4 +1,4 @@
-"""The bots with the barracks of DEC-26 (#265, item 11): ``rulesets/mvp-5.toml``.
+"""The bots with the barracks of DEC-26 (#265, item 11): ``rulesets/mvp-7.toml``.
 
 - ``Recruit`` only in an own city with the barracks (``NodeView.has_barracks``): never a
   ``NO_BARRACKS``;

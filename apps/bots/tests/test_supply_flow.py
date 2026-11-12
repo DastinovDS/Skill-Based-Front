@@ -35,6 +35,8 @@ SMART = (
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
+    """Historical ``mvp-5`` on purpose: the leaf-shift lever (``supply.leaf_shift`` on) exists only
+    there and in ``mvp-6``; the played ``mvp-7`` has none (DEC-50, the tests below the line)."""
     return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
 
 

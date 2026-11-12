@@ -1,4 +1,7 @@
-"""Cancel discipline and CP banking of the smart bots under ``mvp-5`` (#687; ``SmartBot`` item 23).
+"""Cancel discipline and CP banking of the smart bots under ``mvp-7`` (#687; ``SmartBot`` item 23).
+
+The withdrawal from a fight exists only under ``combat.retreat = "round"`` (DEC-24, item E); those
+two cases run on the historical ruleset ``mvp-5`` and a third checks that ``mvp-7`` has none.
 
 Expected values come from the rules. A cancel refunds nothing (``orders.cost.cancel = 0``, DEC-20,
 C: the order's CP stay spent). A fight (DEC-07, rules 1 to 4): the defenders' pool ``Qd`` is their
@@ -25,7 +28,7 @@ from gow_bots.bots.campaign import RECALL_TICKS, CampaignBot, Ctx
 from gow_bots.bots.smart import BANK_TICKS
 from gow_sim.commands import CancelOrder, Command, FortifyRoad
 from gow_sim.maps import load_map
-from gow_sim.ruleset import load_ruleset
+from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import AtNode, Detail, GameState, Group, Mode, OnEdge, Sighting, initial_state
 from gow_sim.systems.flow import update_flow
 from gow_sim.view import FightView, GroupView, OrderView, PlayerView, project
@@ -33,11 +36,13 @@ from gow_sim.view import FightView, GroupView, OrderView, PlayerView, project
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
+MVP5 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+"""Historical (``retreat = "round"``): the only ruleset left with a withdrawal from a fight."""
 KEEP, CEDAR, DALE = 0, 3, 4
 NORTH_PASS, SOUTH_PASS = 17, 18
 SOUTH_DALE = 24
-TICK = 4000
+TICK = 5000
 SMART = (
     "smart_exploiter",
     "smart_expander",
@@ -66,8 +71,8 @@ def _edge(a: int, b: int) -> int:
     return next(e for e in MAP.incident[a] if MAP.edges[e].other(a) == b)
 
 
-def _bot(name: str, player: int) -> CampaignBot:
-    bot = bot_factory(name)(MAP, RULES, seed=0, player=player)
+def _bot(name: str, player: int, rules: Ruleset = RULES) -> CampaignBot:
+    bot = bot_factory(name)(MAP, rules, seed=0, player=player)
     assert isinstance(bot, CampaignBot)
     return bot
 
@@ -178,12 +183,12 @@ def test_a_recalled_target_waits_for_more_shots(name: str, player: int) -> None:
 @pytest.mark.parametrize("player", [0, 1])
 @pytest.mark.parametrize("name", SMART)
 def test_a_recalled_target_takes_a_group_that_beats_what_was_seen(name: str, player: int) -> None:
-    """The hold lets through a group whose 3 charges reach the shots the recall saw (and the
-    capture price, 0 under ``mvp-5``)."""
+    """The hold lets through a group whose 3 charges reach the shots the recall saw plus the
+    capture price (1 charge under ``mvp-7``, DEC-38)."""
     view = _walk_view(player)
     bot = _bot(name, player)
     dest = _targets(bot, view, TICK)[0]
-    bot.recalled[dest] = (TICK, 3)
+    bot.recalled[dest] = (TICK, 3 - RULES.capture.charge_cost)
     assert dest in _targets(bot, view, TICK)
 
 
@@ -222,7 +227,7 @@ def test_an_attacker_stays_in_a_fight_the_silent_charge_evens(name: str, player:
     """3 charged holders on plains, one of them silent: 2 shots against the attacker's 2, so it
     loses no unit and stays (the old play counts the silent charge and leaves)."""
     view, attacker = _fight(player, 3, 1)
-    cmds = _bot(name, player).fight_commands(view, TICK, view.me.cp)
+    cmds = _bot(name, player, MVP5).fight_commands(view, TICK, view.me.cp)
     assert (CancelOrder(attacker.id) in cmds) is (name in OLD)
 
 
@@ -231,7 +236,17 @@ def test_an_attacker_stays_in_a_fight_the_silent_charge_evens(name: str, player:
 def test_an_attacker_leaves_a_fight_it_loses(name: str, player: int) -> None:
     """4 charged holders, one silent: 3 shots against 2, every round costs a unit: it leaves."""
     view, attacker = _fight(player, 4, 1)
-    assert CancelOrder(attacker.id) in _bot(name, player).fight_commands(view, TICK, view.me.cp)
+    cmds = _bot(name, player, MVP5).fight_commands(view, TICK, view.me.cp)
+    assert CancelOrder(attacker.id) in cmds
+
+
+@pytest.mark.parametrize("player", [0, 1])
+@pytest.mark.parametrize("name", [*SMART, *OLD])
+def test_no_attacker_leaves_a_fight_under_no_retreat(name: str, player: int) -> None:
+    """``mvp-7`` (``combat.retreat = "none"``, DEC-40): even the lost fight of the case above has
+    no withdrawal."""
+    view, _ = _fight(player, 4, 1)
+    assert _bot(name, player).fight_commands(view, TICK, view.me.cp) == []
 
 
 # CP banking ------------------------------------------------------------------------------------

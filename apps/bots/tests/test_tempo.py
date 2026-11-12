@@ -58,7 +58,7 @@ def test_levels_slow_down_from_hard_to_easy() -> None:
 def test_the_lower_levels_cannot_pay_the_demand_of_a_match() -> None:
     # #749: under mvp-4 the smart bots send 118 to 136 commands in a 15-minute match (the field
     # run of #706): that demand binds the ``easy`` and ``normal`` buckets, not ``hard``'s.
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     minutes = rules.match_ticks // (60 * rules.tick_hz)
     assert minutes == 15
     for level in ("easy", "normal"):
@@ -310,7 +310,7 @@ def test_a_bot_between_decisions_glances_and_plays_the_same(maps: dict[str, MapD
     from gow_sim.match import Glancer, run_headless
 
     mapdef = maps["web"]
-    rules = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
     def bots() -> list[SmartBot]:
         return [

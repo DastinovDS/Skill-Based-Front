@@ -128,7 +128,7 @@ def test_bench_decide_strategy_views(
 
 @pytest.fixture(scope="module")
 def smart_views(maps: dict[str, MapDef], mvp_rules: Ruleset) -> list[PlayerView]:
-    """Views of a match of two smart bots on ``mvp-5`` (city builds, fights, threats, #166)."""
+    """Views of a match of two smart bots on ``mvp-7`` (city builds, fights, threats, #166)."""
     return _play(maps["web"], mvp_rules, ("smart_rusher", "smart_expander"))
 
 
@@ -147,7 +147,7 @@ def test_bench_decide_smart_views(
 
 @pytest.fixture(scope="module")
 def v2_views(maps: dict[str, MapDef], mvp_rules: Ruleset) -> list[PlayerView]:
-    """Views of a match of two smart bots on ``mvp-5``, the hoarder on one side (#648)."""
+    """Views of a match of two smart bots on ``mvp-7``, the hoarder on one side (#648)."""
     return _play(maps["web"], mvp_rules, ("smart_rusher", "smart_hoarder"))
 
 

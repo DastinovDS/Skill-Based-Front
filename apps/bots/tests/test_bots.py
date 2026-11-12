@@ -2,7 +2,7 @@
 an ordinary or a scheduled order.
 
 Expected fight numbers come from the DEC-07 table of mechanics.md, section 4 (example numbers in
-the comments); the planned order of DEC-41, item 10 under ``rulesets/mvp-5.toml``.
+the comments); the planned order of DEC-41, item 10 under ``rulesets/mvp-7.toml``.
 """
 
 import dataclasses
@@ -27,7 +27,7 @@ from gow_bots.bots import (
 from gow_sim.commands import CancelOrder
 from gow_sim.maps import MapDef, Terrain, parse_map
 from gow_sim.match import Controller, Match, run_headless
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import AtNode, Group, Mode, OnEdge, Order, initial_state
 from gow_sim.systems.combat import combat
 from gow_sim.systems.movement import leg, movement
@@ -88,30 +88,37 @@ def test_shots_to_take_follows_dec07(
     assert shots_to_take(mvp_rules, terrain, units, charged) == need
 
 
+def _free_capture(rules: Ruleset) -> Ruleset:
+    """``rules`` with a free capture (``capture.charge_cost = 0``, DEC-38), the price of the
+    historical ``mvp-5``: the fight numbers alone, the shape of the DEC-07 table."""
+    return dataclasses.replace(rules, capture=dataclasses.replace(rules.capture, charge_cost=0))
+
+
 def test_planned_order_pays_when_the_bonus_turns_a_bounce_into_a_capture(
     mvp_rules: Ruleset,
 ) -> None:
+    free = _free_capture(mvp_rules)
     # Example 9 with the gathered bonus of DEC-41, item 10: 2 charged + 2 gathered take 2 charged
     # defenders in a forest (need 4); 1 gathered leaves them short.
-    assert prefer_planned(mvp_rules, own_charged=2, need=4, bonus=2)
-    assert not prefer_planned(mvp_rules, own_charged=2, need=4, bonus=1)
+    assert prefer_planned(free, own_charged=2, need=4, bonus=2)
+    assert not prefer_planned(free, own_charged=2, need=4, bonus=1)
     # The bonus never exceeds the charged units: 1 charged with 3 gathered is 1 + 1 < 3.
-    assert not prefer_planned(mvp_rules, own_charged=1, need=3, bonus=3)
+    assert not prefer_planned(free, own_charged=1, need=3, bonus=3)
 
 
 def test_planned_order_does_not_pay_without_a_turn(mvp_rules: Ruleset) -> None:
-    assert not prefer_planned(mvp_rules, own_charged=4, need=4, bonus=2)  # wins anyway
-    assert not prefer_planned(mvp_rules, own_charged=1, need=10, bonus=1)  # bounces anyway
-    assert not prefer_planned(mvp_rules, own_charged=3, need=0, bonus=2)  # an empty node
-    assert not prefer_planned(mvp_rules, own_charged=2, need=4)  # nothing to gather
+    free = _free_capture(mvp_rules)
+    assert not prefer_planned(free, own_charged=4, need=4, bonus=2)  # wins anyway
+    assert not prefer_planned(free, own_charged=1, need=10, bonus=1)  # bounces anyway
+    assert not prefer_planned(free, own_charged=3, need=0, bonus=2)  # an empty node
+    assert not prefer_planned(free, own_charged=2, need=4)  # nothing to gather
 
 
 def test_planned_order_pays_the_capture_with_real_charges(mvp_rules: Ruleset) -> None:
-    # DEC-38: with a capture price of 1 the real charges pay it on top of the fight: 2 charged and
+    # DEC-38 (``mvp-7``: a price of 1): the real charges pay it on top of the fight: 2 charged and
     # 2 gathered fight 4 shots, and nothing is left for the price.
-    paid = dataclasses.replace(
-        mvp_rules, capture=dataclasses.replace(mvp_rules.capture, charge_cost=1)
-    )
+    paid = mvp_rules
+    assert paid.capture.charge_cost == 1
     assert not prefer_planned(paid, own_charged=2, need=4, bonus=2)
     assert prefer_planned(paid, own_charged=3, need=5, bonus=3)
 
@@ -300,14 +307,20 @@ def _attack_into_a_fight(rules: Ruleset, enemy_bonus: int) -> tuple[PlayerView, 
     return project(state, rules, 0, b"k" * 32), bot
 
 
-@pytest.mark.parametrize(("enemy_bonus", "withdraws"), [(0, False), (2, True)])
+@pytest.mark.parametrize(
+    ("ruleset", "enemy_bonus", "withdraws"),
+    [("mvp-5", 0, False), ("mvp-5", 2, True), ("mvp-7", 2, False)],
+)
 def test_a_bot_counts_the_visible_bonus_stock_of_a_fight(
-    mvp_rules: Ruleset, enemy_bonus: int, withdraws: bool
+    ruleset: str, enemy_bonus: int, withdraws: bool
 ) -> None:
     """DEC-32, item 8: the stock of a side is its charged units plus its bonus still left. 2/2
     against 2/2 is even, the attacker stays; with 2 bonus shots of the enemy left it is lost
-    (every round costs a unit), and the attacker cancels (free, DEC-20)."""
-    view, bot = _attack_into_a_fight(mvp_rules, enemy_bonus)
+    (every round costs a unit), and the attacker cancels (free, DEC-20). Only a ruleset with a
+    retreat has the withdrawal: the historical ``mvp-5`` (``retreat = "round"``); under the
+    played ``mvp-7`` (``retreat = "none"``, DEC-40) the lost fight is not left."""
+    rules = load_ruleset(ROOT / "rulesets" / f"{ruleset}.toml")
+    view, bot = _attack_into_a_fight(rules, enemy_bonus)
     (fight,) = view.fights
     assert fight.virtual_left == (0, enemy_bonus)
     cmds = bot.fight_commands(view, view.tick, budget=10_000)

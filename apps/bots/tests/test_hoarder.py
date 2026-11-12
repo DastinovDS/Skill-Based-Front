@@ -31,7 +31,7 @@ KEY = bytes(range(32))
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 @pytest.fixture(scope="module")

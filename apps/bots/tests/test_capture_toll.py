@@ -1,8 +1,8 @@
 """The toll of a road fortification and the capture price in the attack planning (#760, #759).
 
 Expected values come from the rules. A capture spends ``capture.charge_cost`` real charges of the
-group in the node, with fewer it bounces (DEC-38); ``mvp-5`` has 0, the cases with 1 load
-``mvp-5`` with only that number changed (the experiment of #759). A road fortification of node
+group in the node, with fewer it bounces (DEC-38); ``mvp-5`` has 0 (the cases under cost 0),
+the played ``mvp-7`` has 1. A road fortification of node
 ``X`` takes ``min(charged, toll_charges * ceil(units / toll_units))`` charges from an enemy group
 crossing its line point towards ``X`` (DEC-43, item D6; ``mvp-5``: 1 charge per started 3 units),
 before the fight and the capture, an empty ``X`` too; a group moving away or past the line pays
@@ -35,7 +35,9 @@ ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
 MVP4 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
-CAP1 = replace(MVP4, capture=replace(MVP4.capture, charge_cost=1))
+"""Historical (``capture.charge_cost = 0``, #659): the free-capture path of ``takes`` is live code
+as long as a kept ruleset has a free capture; the played ``mvp-7`` is ``CAP1``."""
+CAP1 = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 KEEP, ASH, CEDAR, MID = 0, 1, 3, 8
 NORTH_PASS = 17
 CEDAR_NORTH = 10

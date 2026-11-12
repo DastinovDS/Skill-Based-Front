@@ -15,7 +15,7 @@ from gow_sim.ruleset import load_ruleset
 from gow_sim.view import FightView, PlayerView
 
 ROOT = Path(__file__).resolve().parents[3]
-BURN = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+BURN = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 NODE = 7
 
 

@@ -44,6 +44,9 @@ ROOT: Final = Path(__file__).resolve().parents[3]
 KEY: Final = bytes(range(32))
 MAP: Final = load_map(ROOT / "maps" / "crossroads.json")
 RULES: Final = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+"""Historical, on purpose: these positions rest on the free capture (DEC-38, ``charge_cost = 0``)
+of ``mvp-5``, which a discharged pocket group uses to leave; the played ``mvp-7`` has a capture
+that costs a charge, so the pocket cases of ``mvp-7`` are in ``test_capture_toll`` (#899)."""
 HOME: Final = 0
 ME, FOE = 0, 1
 """The side of a group in a table: the bot under test, its enemy."""

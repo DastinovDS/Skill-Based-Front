@@ -28,7 +28,7 @@ MATCHES = [
 def test_the_ledger_balances_on_a_full_match(
     map_name: str, bot0: str, bot1: str, seed: int, cost: int
 ) -> None:
-    base: Ruleset = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    base: Ruleset = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     rules = replace(base, capture=replace(base.capture, charge_cost=cost))
     mapdef = load_map(ROOT / "maps" / f"{map_name}.json")
     controllers = [

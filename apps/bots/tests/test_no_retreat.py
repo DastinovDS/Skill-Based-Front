@@ -23,7 +23,9 @@ from gow_sim.view import PlayerView, project
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MVP0 = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+"""Historical: ``combat.retreat = "round"``, the only kind of ruleset with a withdrawal."""
 MVP6 = load_ruleset(ROOT / "rulesets" / "mvp-6.toml")
+MVP7 = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 def _lost_attack(rules: Ruleset) -> tuple[PlayerView, ReactiveBot]:
@@ -83,14 +85,17 @@ def crossroads() -> MapDef:
 
 
 @pytest.mark.parametrize("name", ["rusher", "reactive", "smart_exploiter", "smart_rusher"])
-def test_bots_send_no_withdrawal_under_mvp6(crossroads: MapDef, name: str) -> None:
+@pytest.mark.parametrize("rules", [MVP6, MVP7], ids=["mvp-6", "mvp-7"])
+def test_bots_send_no_withdrawal_without_retreat(
+    crossroads: MapDef, name: str, rules: Ruleset
+) -> None:
     """300 s of a match against ``smart_rusher``: fights happen, ``IN_FIGHT`` never comes back."""
-    match = Match(crossroads, MVP6, KEY)
+    match = Match(crossroads, rules, KEY)
     bots = [
-        BOTS[name](crossroads, MVP6, seed=3, player=0),
-        BOTS["smart_rusher"](crossroads, MVP6, seed=3, player=1),
+        BOTS[name](crossroads, match.rules, seed=3, player=0),
+        BOTS["smart_rusher"](crossroads, match.rules, seed=3, player=1),
     ]
-    assert MVP6.combat.retreat is Retreat.NONE
+    assert rules.combat.retreat is Retreat.NONE
     seq = 0
     fights = 0
     rejected = 0
