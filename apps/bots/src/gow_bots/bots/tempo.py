@@ -49,11 +49,11 @@ cancel), and the road fortification of the CP sink came first in every decision 
 ``easy`` put 27 to 42% of its CP into lines that took back about 0.3 charges each and ``normal``
 8 to 24% (the field run of 2026-11-12). Now the sink comes last and shares the fortification
 budget (``SmartBot`` item 26) and the bucket pays only priced commands, at 4 and 5 a minute: the
-paid commands a match stay where they were (about 60 for ``easy``, 72 for ``normal``, 82 for
-``hard``), now orders instead of lines, and the ladder with them (``hard`` over ``easy`` 0.78,
-over ``normal`` 0.62, ``normal`` over ``easy`` 0.70; 80 local matches each, the five
-personalities, the pool maps). 3 and 4 a minute separate the levels more but burn 10 to 14% of
-their CP at the cap.
+paid commands a match stay where they were (about 60 for ``easy``, 71 for ``normal``, 78 for
+``hard``), now orders instead of lines, and the ladder with them (the field run of #1015, 120
+matches a pair of levels over the five personalities: ``hard`` over ``easy`` 0.76, over
+``normal`` 0.61, ``normal`` over ``easy`` 0.69; 0.79, 0.68, 0.73 before). 3 and 4 a minute
+separate the levels more but burn 10 to 14% of their CP at the cap.
 
 Integers only, no randomness: a tempo is a pure function of the ticks, so a match stays a
 function of ``(map, ruleset, bots, seed)`` and the two sides stay mirror-symmetric.
