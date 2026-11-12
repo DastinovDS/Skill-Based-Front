@@ -544,16 +544,26 @@ tournament with `--bots "... smart_exploiter"`.
 > bunker, warehouse levels and Defense were removed with those rulesets, and so were the bot code paths that played them;
 > the bots now play only the automatic supply flow of DEC-43 with factories, road fortifications and planned orders.
 
-**The benchmark `owner_style`** (`gow_bots.bots.owner_style`) scripts the recipe of the owner's five wins against
-`smart_strangler@hard` (2026-11-12): moderate expansion for 1.5 to 3 minutes, then 3-unit squads that strike only with
-a surplus (shots above the defender's pool, units, terrain, toll, the capture charge and one more) and ask for the
-**full planned bonus** at a defended target, a `GroupMove` of squads where one is short, the empty enemy nodes
-harvested, a lost node retaken at once, a second factory in the middle, one barracks a step behind the line with the
-capital's rally point set to it, mostly Balance with short Economy windows and War around big strikes, and one
-synchronized `GroupMove` at the enemy capital in the last 2 to 4 minutes. It sends **one command a decision** (never two
-in a tick, about 6 a minute). It is built on `Bot` and shares nothing with `SmartBot`, so the steps of the smart bots do
-not move it. A yardstick for the gates of the bot plan, not a server level: put it in a tournament with
-`--bots "... owner_style"`.
+**The benchmark `owner_style`** (`gow_bots.bots.owner_style`) plays the recipe of the owner's five wins against
+`smart_strangler@hard` (2026-11-12) and his eight principles (#1027): the capital keeps no idle guard while no enemy can
+reach it soon, else the units that outgun the force in sight (it recruits, calls the nearest group home and fortifies
+the roads out of it); a lost node is retaken at once; a visible strike at an own node is reinforced when the sum holds;
+the front cities and mountains keep a charged garrison (two on the plains, and only with a counter-attack ready behind;
+no salient, no plains province), at most half the army; strikes go by squads of up to 3 units that need a surplus
+(shots above the defender's pool, units, the reinforcements it brings in time, terrain, toll, capture charge and one
+more) and ask for the **full planned bonus** (their charged units) at a defended target, plains targets first, a
+`GroupMove` of squads where one is short; the empty enemy nodes are harvested (a single unit only walks in); a neutral
+province only as a gateway to a city or mountain, or as a shortcut of the own roads (the route of the flow); the rear
+squads score per road of depth, so they leapfrog the front groups (checkers); the first factory in a city one or two
+roads from the capital on the axis to the enemy, paid by the charges of a group standing in it, the second in the
+middle; the capital's rally point leads the recruits to the staging node behind the front; mostly Balance, Economy when
+the CP sit at the cap or units wait for charges, War around big strikes; one synchronized `GroupMove` at the enemy
+capital in the last 2 to 4 minutes, only while behind on the VP forecast or when it takes the capital. It sends **one
+command a decision** (never two in a tick, about 7 a minute, a short burst allowed for the urgent steps). It is a
+`CampaignBot` for the enemy estimate and uses the helpers of `gow_bots.bots.defense`, not `SmartBot`. Measured
+(#1027, 4 pool maps x 8 seeds x both sides, `mvp-7`): 0.80 against `smart_expander@hard`, 0.81 against
+`smart_strangler@hard`, 0.62 against `smart_exploiter`. A yardstick for the gates of the bot plan, not a server level:
+put it in a tournament with `--bots "... owner_style"`.
 
 **Economy v2** (`mvp-3`, DEC-41, #648; `gow_bots.bots.economy`). Under `economy.model = "v2"` every bot sent no v1-only
 command (stance, front markers, rear minimum, transfers, road upgrades, Defense: `Bot.allowed`; under `[stances]` the

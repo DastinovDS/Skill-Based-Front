@@ -36,24 +36,29 @@ BASE, TARGET = 2, 6
 OWN: Final = (0, 1, 2, 3, 4, 5, 7, 8, 12, 13, 15, 17, 18)
 FOE: Final = (6, 16)
 ME, THEM = 0, 1
+HOME_GUARD: Final = (ME, 0, 3, 3)
+"""The own capital's garrison in every scenario: it outguns every enemy force here."""
 
 
 def _at(player: int, node: int) -> int:
     return MAP.node_key(player, node)
 
 
-def _scenario(player: int, groups: Sequence[tuple[int, int, int, int]]) -> Match:
+def _scenario(
+    player: int, groups: Sequence[tuple[int, int, int, int]], foe: Sequence[int] = FOE
+) -> Match:
     """``dec41`` at ``TICK`` with ``OWN`` the bot's and ``FOE`` the enemy's; ``groups`` are
-    ``(side, node, units, charged)``, the start garrisons removed; 3 CP each, a full warehouse
-    in the base node."""
+    ``(side, node, units, charged)``, the start garrisons removed but ``HOME_GUARD`` in the own
+    capital (the enemy city is three roads from it: the capital keeps a guard); 3 CP each, a
+    full warehouse in the base node."""
     match = Match(MAP, RULES, KEY)
     state = match.state
     state.groups.clear()
     state.tick = TICK
     for node in range(len(MAP.nodes)):
-        owner = player if node in OWN else 1 - player if node in FOE else None
+        owner = player if node in OWN else 1 - player if node in foe else None
         change_owner(state, _at(player, node), owner)
-    for side, node, units, charged in groups:
+    for side, node, units, charged in (HOME_GUARD, *groups):
         gid = state.new_id()
         owner = player if side == ME else 1 - player
         state.groups[gid] = Group(
@@ -66,11 +71,16 @@ def _scenario(player: int, groups: Sequence[tuple[int, int, int, int]]) -> Match
     return match
 
 
-def _decide(match: Match, player: int) -> tuple[list[Command], PlayerView]:
+def _bot(match: Match, player: int) -> tuple[OwnerStyleBot, list[Command], PlayerView]:
     bot = bot_factory("owner_style")(MAP, RULES, seed=0, player=player)
     assert isinstance(bot, OwnerStyleBot)
     view = match.view(player)
-    return bot.decide(view, TICK), view
+    return bot, bot.decide(view, TICK), view
+
+
+def _decide(match: Match, player: int) -> tuple[list[Command], PlayerView]:
+    _, cmds, view = _bot(match, player)
+    return cmds, view
 
 
 def _ids_at(view: PlayerView, node: int) -> list[int]:
@@ -92,8 +102,10 @@ def test_a_defended_target_gets_a_planned_order_with_the_full_bonus(player: int)
 @pytest.mark.parametrize("player", [0, 1])
 def test_two_squads_combine_in_one_group_move(player: int) -> None:
     """4 units, 3 charged: the pool is 2 and 4 units die, so 6 shots, 8 with the margin and
-    the capture. One 3/3 squad with the bonus has 6, two have 6 real charges and a bonus of 3
-    (the warehouse): 9. One ``GroupMove`` carries both, planned, with that bonus."""
+    the capture. One 3/3 squad with the bonus has 6 (its charged units), two have 6 real
+    charges and ask for the full bonus of their 6 charged units (the base is supplied: the flow
+    refills its warehouse while they gather, DEC-41 item 10, DEC-48 item F2): 12. One
+    ``GroupMove`` carries both, planned, with that bonus."""
     base, target = _at(player, BASE), _at(player, TARGET)
     groups = [(ME, BASE, 3, 3), (ME, BASE, 3, 3), (THEM, TARGET, 4, 3)]
     cmds, view = _decide(_scenario(player, groups), player)
@@ -101,7 +113,7 @@ def test_two_squads_combine_in_one_group_move(player: int) -> None:
     cmd = cmds[0]
     assert isinstance(cmd, GroupMove)
     assert sorted(cmd.groups) == _ids_at(view, base)
-    assert (cmd.dest, cmd.planned, cmd.bonus) == (target, True, 3)
+    assert (cmd.dest, cmd.planned, cmd.bonus) == (target, True, 6)
 
 
 @pytest.mark.parametrize("player", [0, 1])
@@ -124,6 +136,46 @@ def test_an_empty_enemy_node_is_harvested_by_an_ordinary_move(player: int) -> No
     cmds, view = _decide(_scenario(player, [(ME, BASE, 3, 3), (ME, BASE, 1, 0)]), player)
     squad = next(g for g in view.groups if g.units == 3 and g.location == AtNode(base))
     assert cmds == [Move(squad.id, target)]
+
+
+@pytest.mark.parametrize("player", [0, 1])
+def test_the_capital_keeps_no_guard_while_no_enemy_is_near(player: int) -> None:
+    """Principle 1: the enemy holds only its far capital, no enemy can reach the own capital
+    soon, so its garrison is free to work (none of it is kept)."""
+    match = _scenario(player, [(ME, BASE, 3, 3)], foe=(16,))
+    bot, _, view = _bot(match, player)
+    home = _at(player, 0)
+    assert bot.guard == 0
+    for g in view.groups:
+        if g.location == AtNode(home):
+            assert bot.free[g.id] == g.units
+
+
+@pytest.mark.parametrize("player", [0, 1])
+def test_the_capital_keeps_a_guard_that_outguns_a_force_in_sight(player: int) -> None:
+    """The enemy city three roads from the capital shows 3 units, 2 charged: the capital (plains,
+    one charge burned, DEC-45) keeps the fewest units whose ``shots_to_take`` beat 2 shots: one
+    unit needs 0 + 1 = 1, two need 1 + 2 = 3, so 2."""
+    match = _scenario(player, [(ME, BASE, 3, 3), (THEM, TARGET, 3, 2)])
+    bot, _, _ = _bot(match, player)
+    assert bot.guard == 2
+    assert bot.hold[_at(player, 0)] == 2
+
+
+@pytest.mark.parametrize("player", [0, 1])
+@pytest.mark.parametrize("backed", [False, True])
+def test_a_plains_front_city_is_held_only_with_a_counter_attack_behind(
+    player: int, backed: bool
+) -> None:
+    """Principles 3 and 8: the base city on the plains faces the enemy city with a force in it.
+    With 2 charged units in node 1 (an own neighbour off the front) a counter-attack is ready and
+    the base keeps ``HOLD`` (2: one defender burns its charge, DEC-45); without them it is not
+    held thinly."""
+    groups = [(ME, BASE, 1, 1), (THEM, TARGET, 3, 2)]
+    if backed:
+        groups.append((ME, 1, 2, 2))
+    bot, _, _ = _bot(_scenario(player, groups), player)
+    assert bot.hold[_at(player, BASE)] == (2 if backed else 0)
 
 
 def test_the_benchmark_is_registered_and_plays_no_level() -> None:

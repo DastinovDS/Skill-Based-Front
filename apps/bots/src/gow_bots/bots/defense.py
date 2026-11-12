@@ -73,7 +73,7 @@ from gow_sim.commands import GroupMove, Move
 from gow_sim.view import AtNode, GroupView, IntentView, PlayerView
 
 if TYPE_CHECKING:
-    from gow_bots.bots.campaign import Ctx
+    from gow_bots.bots.campaign import CampaignBot, Ctx
     from gow_bots.bots.smart import SmartBot
 
 __all__ = ["Defense", "Line", "plan_line", "strike_shots"]
@@ -151,14 +151,16 @@ class Defense:
         return h[node] if node < len(h) else 0
 
 
-def strike_shots(bot: "SmartBot", view: PlayerView, origin: int, tick: int) -> int:
+def strike_shots(bot: "CampaignBot", view: PlayerView, origin: int, tick: int) -> int:
     """The shots a strike from ``origin`` brings: the charges the estimate shows there twice (a
     full bonus, at most the charged units, DEC-41 item 10)."""
     charged = bot.estimate(view, tick, origin)[1]
     return 2 * max(charged, 1)
 
 
-def held_shots(bot: "SmartBot", ctx: "Ctx", node: int, extra_units: int, extra_charged: int) -> int:
+def held_shots(
+    bot: "CampaignBot", ctx: "Ctx", node: int, extra_units: int, extra_charged: int
+) -> int:
     """The shots that take own ``node`` from its garrison, the own groups on the way into it
     and ``extra`` more."""
     units = charged = 0
@@ -175,7 +177,7 @@ def held_shots(bot: "SmartBot", ctx: "Ctx", node: int, extra_units: int, extra_c
     return shots_to_take(bot.rules, terrain, units, charged, burned=burned)
 
 
-def seen_near(bot: "SmartBot", view: PlayerView, node: int) -> int:
+def seen_near(bot: "CampaignBot", view: PlayerView, node: int) -> int:
     """The enemy shots in sight next to own ``node``: the strongest fresh sighting of a neighbour
     (``CampaignBot.sighted``: its numbers, a guess for presence only) and the figures on its
     roads heading into it (DEC-33)."""
@@ -193,7 +195,7 @@ def seen_near(bot: "SmartBot", view: PlayerView, node: int) -> int:
     return best
 
 
-def backed(bot: "SmartBot", view: PlayerView, node: int, charged: Sequence[int]) -> bool:
+def backed(bot: "CampaignBot", view: PlayerView, node: int, charged: Sequence[int]) -> bool:
     """A counter-attack is ready behind own ``node``: an own neighbour not next to the enemy holds
     ``HOLD`` charged units or more."""
     me, enemy = view.player, 1 - view.player
