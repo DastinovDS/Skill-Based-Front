@@ -14,8 +14,10 @@ recharges. Two readings of the ``PlayerView`` (AGENTS.md, section 4.4: only the 
   only finds the way. Own nodes cost nothing to pass, a node
   with a fight or one that needs shots cannot be passed (``-1``: no such way).
 - ``rescue``: by foreign node next to both the capital's component and a pocket (the node that cut
-  it), what its capture rejoins: the own units standing in those pockets and ``FACTORY_UNITS`` per
-  own factory there (a stopped factory produces again from its next period, item H5).
+  it), what its capture rejoins: the own units standing in those pockets, a stranded unit (without
+  a charge, in a node with an empty warehouse: nothing recharges it there, and under a capture
+  price it cannot walk out, DEC-38) once more (#683), and ``FACTORY_UNITS`` per own factory there
+  (a stopped factory produces again from its next period, item H5).
 - ``heading``: the own units ordered into each foreign node, those sent earlier and in this
   decision: the captured node holds them all at the arrivals, and units above its capacity die one
   every ``capacity.attrition_ticks`` (DEC-22, DEC-12; #754).
@@ -49,7 +51,8 @@ class Pockets:
     exits: tuple[int, ...]
     """By node: free captures from it into the capital's component; ``-1``: none."""
     rescue: dict[int, int]
-    """Foreign node next to the capital's component and a pocket: what its capture rejoins."""
+    """Foreign node next to the capital's component and a pocket: what its capture rejoins (the
+    units, the stranded ones twice, and the factories, module docstring)."""
 
 
 def read_pockets(
@@ -90,7 +93,8 @@ def read_pockets(
     for g in view.groups:
         loc = g.location
         if isinstance(loc, AtNode) and pocket[loc.node]:
-            weight[comp[loc.node]] += g.units
+            stranded = 0 if nodes[loc.node].warehouse else g.units - g.charged
+            weight[comp[loc.node]] += g.units + stranded  # #683: a stranded unit counts twice
     for n in nodes:
         if pocket[n.id] and n.factory:
             weight[comp[n.id]] += FACTORY_UNITS

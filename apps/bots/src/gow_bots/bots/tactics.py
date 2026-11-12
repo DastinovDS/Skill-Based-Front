@@ -11,7 +11,8 @@ about and the numbers (``PARAMS``) differ:
 - ``strike``: attack enemy nodes next to own territory when the force suffices;
 - ``reinforce``: fill the garrisons that are below their minimum from free groups or by recruiting;
 - ``strengthen``: spend CP that would otherwise burn on the cap on recruits at the front;
-- ``prioritize``: a factory build (DEC-41, ``economy.factory_site``).
+- ``prioritize``: a factory build (DEC-41, ``front_factory_site``: the site rule of the smart bots
+  before #683, kept for these yardsticks).
 
 Enemy strength (DEC-21). A view gives exact enemy numbers at ``EXACT`` detail (own nodes, nodes
 where own groups stand, neighbours seen exactly by terrain); ``RANGE`` gives the range of the
@@ -43,17 +44,18 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from gow_bots.bots.base import Bot, node_of
-from gow_bots.bots.economy import factory_site
 from gow_bots.bots.utility import shots_to_take, takes, terrain_burned
 from gow_sim.commands import BuildFactory, Command, Move, Recruit
-from gow_sim.maps import MapDef
+from gow_sim.maps import MapDef, NodeKind
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import Detail, GroupView, PlayerView
 
-__all__ = ["MEMORY_TICKS", "StrategyBot", "Turn"]
+__all__ = ["MEMORY_TICKS", "StrategyBot", "Turn", "front_factory_site"]
 
 FACTORIES: Final = 2
-"""Factories built beside the capital (``economy.factory_site``)."""
+"""Factories built beside the capital (``front_factory_site``)."""
+FACTORY_LATE_TICKS: Final = 1500
+"""No factory is started with fewer ticks left (``front_factory_site``)."""
 MEMORY_TICKS: Final = 600
 """How long an exact sighting of an enemy node stays a better guess than the capacity bound."""
 
@@ -213,9 +215,9 @@ class StrategyBot(Bot):
         return True
 
     def prioritize(self, turn: Turn) -> None:
-        """A factory build of ``gow_bots.bots.economy`` (DEC-41)."""
+        """A factory build (DEC-41, ``front_factory_site``)."""
         view = turn.view
-        site = factory_site(self, view, FACTORIES)
+        site = front_factory_site(self, view, FACTORIES)
         if site is not None:
             self.spend(turn, BuildFactory(site))
 
@@ -385,3 +387,40 @@ class StrategyBot(Bot):
         cmd = self.development(turn.view, turn.budget - keep)
         if cmd is not None:
             self.spend(turn, cmd, keep)
+
+
+def front_factory_site(bot: Bot, view: PlayerView, extra: int) -> int | None:
+    """The own city that should start a factory now, or ``None``: one build at a time while the
+    player has fewer than ``1 + extra`` factories and ``FACTORY_LATE_TICKS`` are left; the own
+    city nearest the enemy capital that no enemy node touches, the largest warehouse first.
+
+    The rule the smart bots played before #683 (``gow_bots.bots.factories`` replaced it there),
+    kept for the plain BOT-03 bots: they are yardsticks, and under the rear rule of the smart bots
+    their matches played the same over every seed (AGENTS.md, section 8)."""
+    rules = bot.rules
+    me = view.player
+    if extra <= 0 or rules.match_ticks - view.tick < FACTORY_LATE_TICKS:
+        return None
+    count = 0
+    for n in view.nodes:
+        if n.owner != me:
+            continue
+        if n.factory_build is not None:
+            return None  # one at a time: the flow pays it first
+        count += bool(n.factory)
+    if count >= min(rules.factory.max, 1 + extra):
+        return None
+    fights = bot.fight_nodes(view)
+    far = bot.hops[bot.map.capital(1 - me)]
+    best: tuple[int, int, int] | None = None
+    site: int | None = None
+    for n in view.nodes:
+        node = n.id
+        if n.owner != me or n.factory or bot.map.nodes[node].kind is NodeKind.PROVINCE:
+            continue
+        if node in fights or any(view.nodes[m].owner == 1 - me for m in bot.neighbors[node]):
+            continue
+        rank = (far[node] if far[node] >= 0 else len(far), -(n.warehouse_cap or 0), bot.key(node))
+        if best is None or rank < best:
+            best, site = rank, node
+    return site

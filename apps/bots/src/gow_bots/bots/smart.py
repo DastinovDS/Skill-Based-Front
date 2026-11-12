@@ -143,6 +143,12 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     free, its VP with it). With no free way out it waits, and the foreign node that cut the
     pocket off (next to the capital's component and a pocket) scores ``W_RESCUE`` more per unit
     it rejoins (``pockets.rescue``), so a viable attack from either side retakes it first.
+    Pocket discipline (#683, under a capture price): a stranded unit (no charge, an empty
+    warehouse) weighs twice in the rescue; a discharged group that cannot pay the
+    way out walks to a charged group of its pocket (``pocket_merge``), which waits for it and
+    then leaves with it, its charges paying the capture for all; a charged group carrying
+    stranded units leaves like one in a starving node, and a front node of a pocket keeps no
+    charged group (held there it starves).
 21. **Capacity and the leaf shift** (#686, G-L of the ``mvp-4`` bot audit). No move, recall or
     recruit puts an own node over capacity at the arrival (``CampaignBot``, "Capacity"): the
     garrisons, the answers, the reinforcements and the walks home count the units already on the
@@ -725,14 +731,15 @@ class SmartBot(CampaignBot):
         ``charged=False``: the discharged groups in a node with an empty warehouse. They never
         recharge in the pocket and fire no shot, so a front node does not keep them
         (``hold_front``); a pinned node and a scout's last unit do. ``charged=True``: the charged
-        groups that may leave (``may_leave``) a node that starves (``starve_in``, DEC-43 item H4),
-        so their charges go back to the army instead of the starvation. The discharged pass goes
-        first: the CP of the decision are short (one move per CP).
+        groups of a node that starves (``starve_in``, DEC-43 item H4) or that carry stranded units
+        (``pocket_leaves``), so their charges go back to the army instead of the starvation. The
+        discharged pass goes first: the CP of the decision are short (one move per CP).
 
         Under a capture price (DEC-38, ``capture.charge_cost`` above 0) a group leaves only when
         its charged units pay the capture of the way out after the toll of a visible enemy road
         fortification into it (DEC-43, item D6; ``takes``, #760): a discharged one never can, so
-        it waits for a charge instead of walking out, bouncing and being sent again.
+        it walks to a charged group of its pocket instead (``pocket_merge``, #683) or waits for a
+        charge, not walking out, bouncing and being sent again.
 
         A city keeps one unit (``pocket_keep``): an empty one falls to any enemy group for free
         (``capture.charge_cost = 0``) and its VP with it, while every unit standing there costs
@@ -771,6 +778,8 @@ class SmartBot(CampaignBot):
             payer = min(size, g.charged)
             toll = self.toll_from(view, here, dest, size, payer)
             if size >= 1 and not takes(self.rules, payer, 0, 0, toll):
+                if not charged:
+                    self.pocket_merge(ctx, g)  # #683: leave with a charged group instead
                 continue
             if size == g.units and self.spend(ctx, Move(g.id, dest)):
                 ctx.used[g.id] = True
@@ -780,14 +789,63 @@ class SmartBot(CampaignBot):
                 ctx.used[g.id] = True  # the part that leaves goes in the next decision
 
     def pocket_leaves(self, ctx: Ctx, g: GroupView, charged: bool) -> bool:
-        """Whether ``g``, standing in a pocket, is one ``leave_pockets`` sends out in this pass."""
+        """Whether ``g``, standing in a pocket, is one ``leave_pockets`` sends out in this pass.
+
+        A charged group leaves a node that starves, and one that carries units without a charge
+        the empty warehouse never recharges (#683: they leave with it, its charges pay the
+        capture for all); not while own units are on the way into its node (a discharged group
+        that ``pocket_merge`` sent to leave with it). A front node of a pocket does not keep it
+        (#683: held there it starves to a stranded garrison); a pinned node and a scout's last
+        unit do."""
         here = node_of(g)
         node = ctx.view.nodes[here]
         if charged:
-            return g.charged > 0 and node.starve_in is not None and self.may_leave(ctx, g)
+            stranded = g.units > g.charged and not node.warehouse
+            if g.charged <= 0 or not (node.starve_in is not None or stranded):
+                return False
+            if ctx.incoming[here] > 0 or self.pinned[here]:
+                return False
+            return not self.watch[here] or ctx.standing[here] - g.units >= 1
         if g.charged > 0 or (node.warehouse or 0) > 0 or self.pinned[here]:
             return False
         return not self.watch[here] or ctx.standing[here] - g.units >= 1
+
+    def pocket_merge(self, ctx: Ctx, g: GroupView) -> None:
+        """#683: ``g``, discharged in a pocket and unable to pay the capture of the way out
+        (DEC-38), walks to the nearest node of its pocket (over own pocket nodes, ``node_key``
+        order) where an own charged group stands free, so they leave as one: the charged units
+        pay the capture for all (``pocket_leaves`` waits for it). A city keeps one unit
+        (``pocket_keep``): the rest splits off first and walks in the next decision. Nothing when
+        no such group or the way does not take the units whole (the stack limit, the room at the
+        arrival)."""
+        pk = self.pockets
+        assert pk is not None
+        view, here = ctx.view, node_of(g)
+        size = g.units - self.pocket_keep(ctx, g)
+        if size < 1:
+            return
+        charged = [0] * len(view.nodes)
+        for other in self.free_groups(ctx):
+            if other.id != g.id:
+                charged[node_of(other)] += other.charged
+        seen = {here: True}
+        queue = deque([here])
+        while queue:
+            node = queue.popleft()
+            if node != here and charged[node] > 0:
+                if self.fit(view, here, node, size) < size or self.room(ctx, node) < size:
+                    return
+                if size < g.units:
+                    if self.spend(ctx, Split(g.id, size)):
+                        ctx.used[g.id] = True
+                elif self.spend(ctx, Move(g.id, node)):
+                    ctx.used[g.id] = True
+                    ctx.standing[here] -= g.units
+                return
+            for other in self.neighbors[node]:
+                if other not in seen and pk.pocket[other]:
+                    seen[other] = True
+                    queue.append(other)
 
     def pocket_keep(self, ctx: Ctx, g: GroupView) -> int:
         """Units of ``g`` that stay when it leaves a pocket: 1 in a city (VP above 0) that no
@@ -1445,8 +1503,8 @@ class SmartBot(CampaignBot):
         if not self.answering() or not self.CENTRE_BARRACKS:
             return super().wanted_barracks(view)
         centre = self.centre
-        if centre == self.home:
-            return None
+        if centre == self.home or centre in self.barracks_lost:
+            return None  # #683: no rebuild where one was lost
         n = view.nodes[centre]
         if n.owner != self.player or n.has_barracks or n.building is not None:
             return None
@@ -1850,6 +1908,9 @@ class SmartBot(CampaignBot):
         here = node_of(g)
         if self.pinned[here]:
             return False  # DEC-37: caught on the way out, it fights outside the node
+        pk = self.pockets
+        if pk is not None and pk.pocket[here] and ctx.incoming[here] > 0:
+            return False  # #683: stranded units walk in to leave the pocket with it
         if self.watch[here] and ctx.standing[here] - g.units < 1:
             return False  # the scout stays (DEC-35)
         if here == self.home:

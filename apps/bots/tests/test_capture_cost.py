@@ -99,9 +99,15 @@ def _play(name: str, map_name: str, rules: Ruleset, ticks: int) -> Counter[str]:
                             seen["unpaid"] += 1
                     cmds.append(PlayerCommand(p, seq, match.resolve(p, cmd)))
                     seq += 1
-        for e in match.step(cmds):
-            if e.kind in ("capture_failed", "node_captured"):
+        events = match.step(cmds)
+        fought = {e.get("node") for e in events if e.kind == "fight_ended"}
+        for e in events:
+            if e.kind == "node_captured":
                 seen[e.kind] += 1
+            elif e.kind == "capture_failed":
+                # #683: an attack that killed the defenders and cannot pay goes on and bounces at
+                # the end of its fight; only a bounce off a node without a fight is unpaid.
+                seen["capture_failed" if e.get("node") not in fought else "won_unpaid"] += 1
     return seen
 
 

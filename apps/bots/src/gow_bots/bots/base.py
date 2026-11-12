@@ -179,6 +179,11 @@ class Bot:
         self.retreat = rules.combat.retreat is Retreat.ROUND
         """A group may leave a fight (DEC-24, item E); not under ``combat.retreat = "none"``
         (DEC-40, variant N)."""
+        self._barracks: dict[int, bool] = {}
+        """Own cities (not the capital) seen with a barracks built or being built and still own
+        (``observe_barracks``)."""
+        self.barracks_lost: dict[int, bool] = {}
+        """Nodes where an own barracks was lost: never a barracks site again (#683)."""
 
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         raise NotImplementedError
@@ -414,23 +419,43 @@ class Bot:
         buys a shorter way for every later recruit (``wanted_barracks``). Cities without a build
         and without a fight, in ``node_key`` order: mirror-invariant.
         """
+        self.observe_barracks(view)
         want = self.wanted_barracks(view)
         if want is not None and budget >= self.rules.orders.cost.barracks:
             return BuildBarracks(want)
         return None
 
+    def observe_barracks(self, view: PlayerView) -> None:
+        """Remember the own barracks (built or being built) outside the capital, and the nodes
+        where one was lost (``barracks_lost``, #683: never a barracks site again)."""
+        me, home = view.player, self.map.capital(view.player)
+        for n in view.nodes:
+            building = n.building is not None and n.building.kind is BuildKind.BARRACKS
+            if n.owner == me and n.id != home and (n.has_barracks or building):
+                self._barracks[n.id] = True
+        for node in sorted(self._barracks):
+            if view.nodes[node].owner != me:
+                del self._barracks[node]
+                self.barracks_lost[node] = True
+
     def wanted_barracks(self, view: PlayerView) -> int | None:
-        """The own city that should build the barracks now (``development``), or ``None``."""
-        far = self.hops[self.map.capital(1 - view.player)]
-        barracks = [far[n.id] for n in view.nodes if n.owner == view.player and n.has_barracks]
+        """The own city that should build the barracks now (``development``), or ``None``: the
+        own city nearest the enemy capital that no enemy node touches and where no own barracks
+        was lost (#683: the next front city is the next one lost)."""
+        me = view.player
+        far = self.hops[self.map.capital(1 - me)]
+        barracks = [far[n.id] for n in view.nodes if n.owner == me and n.has_barracks]
         if any(
             n.building is not None and n.building.kind is BuildKind.BARRACKS for n in view.nodes
         ):
             return None  # one at a time
         for n in self._free_cities(view):
-            if not n.has_barracks:
-                near = far[n.id] + 2 <= min(barracks, default=far[n.id] + 2)
-                return n.id if near else None
+            if n.has_barracks or n.id in self.barracks_lost:
+                continue
+            if any(view.nodes[m].owner == 1 - me for m in self.neighbors[n.id]):
+                continue
+            near = far[n.id] + 2 <= min(barracks, default=far[n.id] + 2)
+            return n.id if near else None
         return None
 
     def _free_cities(self, view: PlayerView) -> list[NodeView]:

@@ -83,11 +83,11 @@ from typing import ClassVar, override
 from gow_bots.bots.base import Bot, ParamRange, node_of
 from gow_bots.bots.economy import (
     LeafShift,
-    factory_site,
     fort_site,
     leaf_shift_command,
     release_commands,
 )
+from gow_bots.bots.factories import FactorySites, factory_site
 from gow_bots.bots.utility import defender_pool, first_burn, shots_to_take, takes, terrain_burned
 from gow_sim.commands import (
     BuildFactory,
@@ -240,6 +240,8 @@ class CampaignBot(Bot):
         changes there, and ``_fit_split`` asks the options of every free group and trial army."""
         self.leaf = LeafShift()
         """The memory of the leaf shift policy (``economy.leaf_shift_command``)."""
+        self.factory_sites = FactorySites()
+        """The memory of the own factory builds (``factories.factory_site``, #683)."""
 
     # Decision -------------------------------------------------------------------------------
 
@@ -277,7 +279,7 @@ class CampaignBot(Bot):
         for cmd in release_commands(self, view, self.gathering, ctx.tick):
             if self.spend(ctx, cmd) and isinstance(cmd, ReleasePlan | CancelOrder):
                 ctx.used[cmd.group] = True
-        site = factory_site(self, view, self.FACTORIES)
+        site = factory_site(self, view, self.FACTORIES, self.factory_sites, self.supplied(view))
         if site is not None:
             self.spend(ctx, BuildFactory(site))
         if sink:
@@ -593,8 +595,10 @@ class CampaignBot(Bot):
         fortified road still ahead (DEC-43, item D6, ``toll_left``). Otherwise the attack at worst
         bounces (DEC-07, rules 2 to 4: ``min(Qa, Qd)`` charges cancel on both sides, the surplus
         kills defenders, nobody of the group dies) and the CP already paid buy that trade. Under a
-        capture price (DEC-38) an attack that would kill every defender and not pay is recalled
-        too: the bots do not repeat unpaid captures (#580)."""
+        capture price (DEC-38) an attack on an empty node that it cannot pay for is recalled too:
+        it would only bounce, the bots do not repeat unpaid captures (#580). One that kills the
+        defenders and cannot pay goes on (#683): the kills are worth the charges it spends, and
+        the CP of the order are paid either way."""
         seen = self.enemy_at(view, dest)
         if seen is None:
             return False
@@ -605,8 +609,9 @@ class CampaignBot(Bot):
         qa = real + min(bonus, real)
         if qd > qa:
             return True
-        clears = qa >= qd + seen[0]
-        return clears and not takes(self.rules, g.charged, bonus, qd + seen[0], toll)
+        if seen[0] > 0:
+            return False  # #683: it kills the defenders (or bounces without a loss)
+        return not takes(self.rules, g.charged, bonus, 0, toll)
 
     def wins(self, view: PlayerView, g: GroupView, dest: int, bonus: int, toll: int = 0) -> bool:
         """Whether ``g`` takes ``dest`` by the numbers the view shows there now (``seen_shots``,
