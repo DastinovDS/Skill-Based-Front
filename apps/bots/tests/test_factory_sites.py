@@ -3,9 +3,9 @@
 The site is a rear city: at least ``SITE_DEPTH`` (3) roads from every enemy node, reached from the
 own capital over own nodes none of which touches an enemy node (one capture at the front does not
 cut it into a pocket, where a factory stops, DEC-43 item H2); the farthest from the enemy nodes
-first (up to ``SITE_DEPTH_CAP``), then the nearest to the own capital. A build starts only from
-spare stock (the warehouses of the capital's component beyond what the own discharged units there
-want), not while the enemy holds more nodes, and only while the match left pays it back at the
+first (up to ``SITE_DEPTH_CAP``), then the nearest to the own capital. A build starts only while
+no own unit waits for a charge the warehouses of the capital's component do not hold, not while
+the enemy holds more nodes, and only while the match left pays it back at the
 period of the own stance (DEC-47: a built factory makes a charge per capital period of its owner's
 stance, after map tempo); a lost site is never built again, and past ``FACTORY_RESTARTS`` unpaid
 losses (a factory lost before it made ``factory.cost`` charges) no factory is built. Every case
@@ -167,29 +167,31 @@ def test_no_factory_while_losing_ground(rules: Ruleset, crossroads: MapDef, play
 
 
 @pytest.mark.parametrize("player", [0, 1])
-def test_no_build_without_spare_stock(rules: Ruleset, crossroads: MapDef, player: int) -> None:
-    """``factory.cost = 4``: the warehouses of the capital's component must hold 4 beyond the own
-    units without a charge standing in it."""
-    assert rules.factory.cost == 4
+def test_no_build_while_a_unit_waits_for_a_charge(
+    rules: Ruleset, crossroads: MapDef, player: int
+) -> None:
+    """Empty warehouses and every unit charged: no unit waits, the build starts (the flow pays it,
+    DEC-41 item 7). One unit of the capital without a charge and nothing in stock: it waits, no
+    build; one charge in the capital's warehouse covers it, the build starts."""
     bot, view = _setup(rules, crossroads, player, ())
     capital = crossroads.capital(player)
     own = [n.id for n in view.nodes if n.owner == player]
     empty = _warehouses(view, dict.fromkeys(own, 0))
     assert spare_stock(bot, empty, bot.supplied(empty)) == 0
-    assert _site(bot, empty) is None
-    four = _warehouses(empty, {capital: 4})
-    assert spare_stock(bot, four, bot.supplied(four)) == 4
-    assert _site(bot, four) == _node(crossroads, player, 7)
-    groups = list(four.groups)
+    assert _site(bot, empty) == _node(crossroads, player, 7)
+    groups = list(empty.groups)
     at = next(
         i
         for i, g in enumerate(groups)
         if isinstance(g.location, AtNode) and g.location.node == capital
     )
     groups[at] = replace(groups[at], charged=groups[at].units - 1)  # one unit waits for a charge
-    tired = replace(four, groups=tuple(groups))
-    assert spare_stock(bot, tired, bot.supplied(tired)) == 3
+    tired = replace(empty, groups=tuple(groups))
+    assert spare_stock(bot, tired, bot.supplied(tired)) == -1
     assert _site(bot, tired) is None
+    one = _warehouses(tired, {capital: 1})
+    assert spare_stock(bot, one, bot.supplied(one)) == 0
+    assert _site(bot, one) == _node(crossroads, player, 7)
 
 
 def _late(view: PlayerView, tick: int, stance: Stance) -> PlayerView:

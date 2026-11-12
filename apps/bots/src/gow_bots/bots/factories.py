@@ -6,27 +6,29 @@ owner's stance (after map tempo, DEC-46: the bot gets the rules the match plays)
 factory passes to the capturer (DEC-41, item 2), a factory in a pocket stops (DEC-43, item H2), and
 the supply flow rolls every charge toward the front wherever it is made (item A6), so the site of
 a factory decides only whether it is lost, not where its charges go. ``factory_site`` therefore
-builds in the rear, from spare stock, only while the match left pays the factory back, and never
-twice where one was lost:
+builds in the rear, while no unit waits for a charge, only while the match left pays the factory
+back, and never twice where one was lost:
 
 - **Where** (``safe_rear``): an own city (not a province, not the capital, no factory, no fight) at
   least ``SITE_DEPTH`` road hops from every enemy node, reached from the own capital over own
   nodes none of which touches an enemy node, so one capture next to the front does not cut it into
   a pocket, and never one where an own factory was lost. The farthest from the enemy nodes first
-  (up to ``SITE_DEPTH_CAP`` hops; beyond that
-  they count as equally safe), then the nearest to the own capital over those nodes, the largest
-  warehouse, ``Bot.key`` (mirror-invariant).
+  (up to ``SITE_DEPTH_CAP`` hops; beyond that they count as equally safe), then the nearest to the
+  own capital over those nodes, the largest warehouse, ``Bot.key`` (mirror-invariant).
 - **When**: one build at a time while the player has fewer than ``1 + extra`` factories (the
   capital is one, ``factory.max`` caps the sum), not while the enemy holds more nodes than the
   player (public ownership: losing ground, the rear is the next thing lost), and only while the
-  factory pays back: the charges
-  it makes in the ticks left after its build time and ``FACTORY_DELIVERY_TICKS`` at the period of
-  the own stance now (``factory_period``, rounded down) are at least ``factory.cost`` plus
-  ``FACTORY_PROFIT``. A late build under War (the longest period) is not started.
-- **Paid from spare stock** (``spare_stock``): the warehouses of the capital's component hold
-  ``factory.cost`` beyond the own discharged units standing in it and the charges the other builds
-  still owe, so neither the pull of the unpaid build (DEC-43, item J) nor the refill of a rear
-  garrison it discharged (DEC-41, item 7) takes a charge an army waits for.
+  factory pays back: the charges it makes in the ticks left after its build time and
+  ``FACTORY_DELIVERY_TICKS`` at the period of the own stance now (``factory_period``, rounded
+  down) are at least ``factory.cost`` plus ``FACTORY_PROFIT``. A late build under War (the longest
+  period) is not started.
+- **Paid from spare stock** (``spare_stock``): no own unit of the capital's component waits for a
+  charge its warehouses do not hold (the stock covers the own discharged units standing in it and
+  what the other builds still owe), so the pull of the unpaid build (DEC-43, item J) does not
+  compete with a waiting army; the build is then paid as the flow brings charges (the progressive
+  payment of DEC-41, item 7). Not the whole ``factory.cost`` in stock: under ``mvp-7`` the rear
+  rarely holds 4 spare charges (the flow rolls them to the front), and waiting for them put the
+  second factory off to the late game (#683 measurement: a tenth fewer charges made).
 - **No rebuild churn** (``FactorySites``): a node where an own factory build or the factory it
   became was lost is never a site again, and the bot replaces at most ``FACTORY_RESTARTS`` unpaid
   losses in a match. A loss is unpaid unless the factory had made ``factory.cost`` charges by then
@@ -203,8 +205,8 @@ def factory_site(
         return None  # losing ground: a new factory would be the next thing lost
     if payback(rules, view) < cost + FACTORY_PROFIT:
         return None  # too late for the stance's period
-    if spare_stock(bot, view, main) < cost:
-        return None  # the payment would take charges the army waits for
+    if spare_stock(bot, view, main) < 0:
+        return None  # own units wait for charges the warehouses do not hold
     rear = safe_rear(bot, view)
     enemy = [n.id for n in view.nodes if n.owner == 1 - me]
     far = len(view.nodes)
