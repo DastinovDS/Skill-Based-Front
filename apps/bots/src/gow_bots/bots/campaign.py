@@ -269,10 +269,10 @@ class CampaignBot(Bot):
 
     # Economy (DEC-41, DEC-43) ----------------------------------------------------------------
 
-    def economy_v2(self, ctx: Ctx) -> None:
+    def economy_v2(self, ctx: Ctx, *, sink: bool = True) -> None:
         """The play of ``gow_bots.bots.economy``: plans that waited depart, one factory build at a
-        time, the leaf shift (DEC-43), and a road fortification when the CP near their cap
-        (``fort_site``, item D)."""
+        time, the leaf shift (DEC-43), and with ``sink`` a road fortification when the CP near
+        their cap (``fort_sink``, item D)."""
         view = ctx.view
         for cmd in release_commands(self, view, self.gathering, ctx.tick):
             if self.spend(ctx, cmd) and isinstance(cmd, ReleasePlan | CancelOrder):
@@ -280,12 +280,18 @@ class CampaignBot(Bot):
         site = factory_site(self, view, self.FACTORIES)
         if site is not None:
             self.spend(ctx, BuildFactory(site))
-        road = fort_site(self, view, ctx.budget)  # DEC-43, item D: the CP sink
-        if road is not None:
-            self.spend(ctx, FortifyRoad(*road))
+        if sink:
+            self.fort_sink(ctx)
         shift = self.leaf_shift(ctx)  # DEC-43, item G
         if shift is not None:
             self.spend(ctx, shift)
+
+    def fort_sink(self, ctx: Ctx) -> None:
+        """The CP sink: a road fortification while the CP near their cap (``fort_site``, DEC-43
+        item D)."""
+        road = fort_site(self, ctx.view, ctx.budget)
+        if road is not None:
+            self.spend(ctx, FortifyRoad(*road))
 
     def leaf_shift(self, ctx: Ctx) -> Command | None:
         """Hook: the leaf shift command of this decision (``economy.leaf_shift_command``)."""

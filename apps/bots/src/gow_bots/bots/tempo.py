@@ -9,10 +9,12 @@ human pace, three ways:
   an edge (DEC-33; its opaque id is new on every exit from the fog) are *noticed* only
   ``react_ticks`` after they are first shown (``Perception``): until then the decision runs on a
   view without them. Fights and the own state are seen at once.
-- **APM**: a token bucket of commands (``Bucket``): ``apm`` commands per minute of match time,
-  at most ``burst`` saved up. Every command counts, free ones too, like ``apm_avg`` of
-  ``gow-bots stats`` (``gow_sim.analysis``); a command the bucket cannot pay is not sent (the
-  decision goes on in its priority order, so the cheap, urgent ones come first).
+- **APM**: a token bucket of commands (``Bucket``): ``apm`` commands with a CP price per minute
+  of match time, at most ``burst`` saved up. A free command (a split, a merge, a cancel, a stance
+  change, a release, a factory build paid in charges) needs a ready bucket and takes nothing
+  from it (#1015), so ``apm_avg`` of ``gow-bots stats`` (every command) is above ``apm``; a
+  command the bucket cannot pay is not sent (the decision goes on in its priority order, so the
+  cheap, urgent ones come first).
 
 ``insight`` is the quality of the assessment: without it the bot plays its drawn thresholds
 whatever the position (no VP forecast, no enemy CP bound, ``SmartBot.adjusted``), does not see the
@@ -40,6 +42,18 @@ The human figure it models: the owner played ``mvp-3`` match 6 at 8.5 commands a
 (``docs/balance/bot-audit-2026-11.md``, section 1). ``hard`` keeps the unlimited play (40, above
 any demand); ``normal`` and ``easy`` cut it below the demand. The think and reaction delays keep
 their old values (they model the human pace, not the strength).
+
+**Only priced commands count** (#1015, ``mvp-7``). The bucket of 6 and 7 commands a minute counted
+the free ones too, about a third of what the slow levels sent (a stance change, a split, a
+cancel), and the road fortification of the CP sink came first in every decision near the cap, so
+``easy`` put 27 to 42% of its CP into lines that took back about 0.3 charges each and ``normal``
+8 to 24% (the field run of 2026-11-12). Now the sink comes last and shares the fortification
+budget (``SmartBot`` item 26) and the bucket pays only priced commands, at 4 and 5 a minute: the
+paid commands a match stay where they were (about 60 for ``easy``, 71 for ``normal``, 78 for
+``hard``), now orders instead of lines, and the ladder with them (the field run of #1015, 120
+matches a pair of levels over the five personalities: ``hard`` over ``easy`` 0.76, over
+``normal`` 0.61, ``normal`` over ``easy`` 0.69; 0.79, 0.68, 0.73 before). 3 and 4 a minute
+separate the levels more but burn 10 to 14% of their CP at the cap.
 
 Integers only, no randomness: a tempo is a pure function of the ticks, so a match stays a
 function of ``(map, ruleset, bots, seed)`` and the two sides stay mirror-symmetric.
@@ -70,8 +84,8 @@ class Tempo:
 
 
 DIFFICULTIES: Final[dict[str, Tempo]] = {
-    "easy": Tempo(think_ticks=20, react_ticks=30, apm=6, burst=3, insight=True),
-    "normal": Tempo(think_ticks=10, react_ticks=15, apm=7, burst=4, insight=True),
+    "easy": Tempo(think_ticks=20, react_ticks=30, apm=4, burst=3, insight=True),
+    "normal": Tempo(think_ticks=10, react_ticks=15, apm=5, burst=4, insight=True),
     "hard": Tempo(think_ticks=5, react_ticks=0, apm=40, burst=8, insight=True),
 }
 """Difficulty name to its tempo, easiest first."""
