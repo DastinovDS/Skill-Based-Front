@@ -308,7 +308,9 @@
       const tick = hud.current?.tick ?? null;
       void markProblem(hud.toasts, { mark: () => Promise.resolve({ sent: true, tick }) });
     };
-    if (routeKey(chrome, event, { fit: () => canvas?.fitMap(), mark, idle: () => orders.isIdle() })) {
+    if (
+      routeKey(chrome, event, { fit: () => canvas?.fitMap(), mark, idle: () => orders.isIdle() })
+    ) {
       return;
     }
     if (forwardKey(orders, event)) {

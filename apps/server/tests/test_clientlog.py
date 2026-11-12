@@ -1,4 +1,4 @@
-"""#810: client diagnostics in the server log (``POST /api/client-log``, ``gow_server.clientlog``)."""
+"""#810: client diagnostics in the server log (`POST /api/client-log`, `gow_server.clientlog`)."""
 
 import io
 import json
@@ -189,9 +189,7 @@ def test_the_largest_valid_report_fits_the_request_limit(client: TestClient) -> 
         "tick": 2**31,
     }
     second = {"frames": 10_000, "frame_max_ms": 86_400_000, "snapshots": 10_000, "hidden": True}
-    body = report(
-        reason="mark", entries=[entry] * 50, seconds=[second] * 60, dropped=1_000_000
-    )
+    body = report(reason="mark", entries=[entry] * 50, seconds=[second] * 60, dropped=1_000_000)
     body["match_id"] = "9" * 64
     body["client_version"] = "v" * 32
     assert len(json.dumps(body)) < Settings().max_request_body_bytes
@@ -234,9 +232,7 @@ def test_the_file_log_rotates_by_size(make_client: Any, tmp_path: Path) -> None:
     files = clientlog.log_files(directory)
     assert [path.name for path in files] == ["client.jsonl.2", "client.jsonl.1", "client.jsonl"]
     assert all(path.stat().st_size <= 2000 for path in files)
-    ticks = [
-        json.loads(line)["tick"] for path in files for line in path.read_text().splitlines()
-    ]
+    ticks = [json.loads(line)["tick"] for path in files for line in path.read_text().splitlines()]
     # Oldest first; the oldest reports went with the file that fell off the end.
     assert ticks == sorted(ticks)
     assert ticks[-1] == 29

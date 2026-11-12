@@ -206,9 +206,7 @@ describe('Diagnostics: stalls and gaps', () => {
       '[client] snapshot gap 2500 ms',
       '[client] snapshot gap 4000 ms (tab hidden)',
     ]);
-    expect(
-      sent[0]?.report.entries?.map((entry) => [entry.kind, entry.ms, entry.hidden]),
-    ).toEqual([
+    expect(sent[0]?.report.entries?.map((entry) => [entry.kind, entry.ms, entry.hidden])).toEqual([
       ['gap', 2500, false],
       ['gap', 4000, true],
     ]);
@@ -348,11 +346,7 @@ describe('watchFrames', () => {
     const { diag, sent } = setup();
     const queue: ((at: number) => void)[] = [];
     const cancel = vi.fn();
-    const stop = watchFrames(
-      diag,
-      (run) => queue.push(run),
-      cancel,
-    );
+    const stop = watchFrames(diag, (run) => queue.push(run), cancel);
     const tick = (at: number): void => {
       const run = queue.shift();
       run?.(at);

@@ -106,9 +106,7 @@ class ClientReport(BaseModel):
     entries: list[ClientEntry] = Field(default_factory=list[ClientEntry], max_length=MAX_ENTRIES)
     dropped: int = Field(default=0, ge=0, le=1_000_000)
     """Entries the client left out: more than ``MAX_ENTRIES`` different ones in one batch."""
-    seconds: list[ClientSecond] = Field(
-        default_factory=list[ClientSecond], max_length=MAX_SECONDS
-    )
+    seconds: list[ClientSecond] = Field(default_factory=list[ClientSecond], max_length=MAX_SECONDS)
     """A mark only: the last 60 seconds, oldest first, the last one is the second of the key."""
 
 
@@ -131,9 +129,7 @@ def write(report: ClientReport, player_id: int, user_agent: str) -> None:
         extra["dropped"] = report.dropped
     if report.reason == "mark":
         extra["seconds"] = [second.model_dump() for second in report.seconds]
-    client_log.warning(
-        "client mark" if report.reason == "mark" else "client report", extra=extra
-    )
+    client_log.warning("client mark" if report.reason == "mark" else "client report", extra=extra)
 
 
 def open_file_log(settings: Settings) -> RotatingFileHandler | None:

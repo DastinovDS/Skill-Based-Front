@@ -103,7 +103,8 @@ export class Diagnostics {
   constructor(options: DiagnosticsOptions = {}) {
     this.#now = options.now ?? (() => performance.now());
     this.#hidden =
-      options.hidden ?? (() => typeof document !== 'undefined' && document.visibilityState === 'hidden');
+      options.hidden ??
+      (() => typeof document !== 'undefined' && document.visibilityState === 'hidden');
     this.#send = options.send ?? sendReport;
     this.#setTimer = options.setTimer ?? ((run, ms) => setTimeout(run, ms));
     this.#clearTimer =
@@ -167,9 +168,7 @@ export class Diagnostics {
   /** No snapshot for `ms` (the session measures it): the console line, and an entry. */
   gap(ms: number): void {
     const hidden = this.#hiddenWithin(ms);
-    this.echo(
-      `[client] snapshot gap ${String(Math.round(ms))} ms${hidden ? ' (tab hidden)' : ''}`,
-    );
+    this.echo(`[client] snapshot gap ${String(Math.round(ms))} ms${hidden ? ' (tab hidden)' : ''}`);
     this.record('gap', 'snapshot gap', ms, hidden);
   }
 
@@ -202,7 +201,10 @@ export class Diagnostics {
   /** The match WebSocket closed with `code` (a link found dead on this side: `reason` says so). */
   wsClose(code: number, reason = ''): void {
     if (code === CLOSE_NORMAL) return;
-    this.record('ws_close', reason === '' ? `close ${String(code)}` : `close ${String(code)} ${reason}`);
+    this.record(
+      'ws_close',
+      reason === '' ? `close ${String(code)}` : `close ${String(code)} ${reason}`,
+    );
   }
 
   /** Send the batch now (`urgent`: the page may be closing). */
@@ -307,7 +309,10 @@ export function consoleText(args: readonly unknown[]): string {
 export function installDiagnostics(
   diag: Diagnostics,
   page: Pick<Window, 'addEventListener' | 'removeEventListener'> & {
-    readonly document: Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState'>;
+    readonly document: Pick<
+      Document,
+      'addEventListener' | 'removeEventListener' | 'visibilityState'
+    >;
   },
   target: Pick<Console, 'error' | 'warn'> = console,
 ): () => void {
