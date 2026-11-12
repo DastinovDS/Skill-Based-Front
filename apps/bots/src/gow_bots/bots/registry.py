@@ -6,6 +6,7 @@ from typing import Final
 from gow_bots.bots.base import Bot, BotFactory, Controller, ParamRange
 from gow_bots.bots.basic import IdleBot, RandomLegalBot
 from gow_bots.bots.exploiter import BENCHMARKS
+from gow_bots.bots.owner_style import OwnerStyleBot
 from gow_bots.bots.reactive import ReactiveBot
 from gow_bots.bots.rusher import RusherBot
 from gow_bots.bots.smart import PERSONALITIES, SmartBot
@@ -27,6 +28,7 @@ BOTS: Final[dict[str, BotFactory]] = {
     TurtleBot.name: TurtleBot,
     **{cls.name: cls for cls in PERSONALITIES},
     **{cls.name: cls for cls in BENCHMARKS},
+    OwnerStyleBot.name: OwnerStyleBot,
 }
 
 LEVEL_SEP: Final = "@"
