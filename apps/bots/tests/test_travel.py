@@ -75,6 +75,24 @@ def _sim_ways(match: Match, player: int, start: int, size: int) -> dict[int, Way
     return found
 
 
+@pytest.mark.parametrize("map_path", MAP_FILES, ids=lambda p: p.stem)
+def test_ways_on_a_whole_own_map(map_path: Path) -> None:
+    """Every start of a map one player owns whole: the longest paths and the most ties of the
+    key sequence (the heap of ``ways`` orders by ticks alone), with and without a stack limit."""
+    mapdef = load_map(map_path)
+    times = Times(mapdef, MVP7)
+    for player in PLAYERS:
+        match = Match(mapdef, MVP7, bytes(range(32)))
+        for node in match.state.nodes.values():
+            node.owner = player
+        view = match.view(player)
+        keys = tuple(mapdef.node_key(player, n) for n in range(len(mapdef.nodes)))
+        for start in range(len(mapdef.nodes)):
+            for size in (0, 4):
+                mine = ways(view, times, keys, start, size)
+                assert mine == _sim_ways(match, player, start, size), (player, start, size)
+
+
 def _standing(match: Match, player: int) -> list[tuple[int, int, int]]:
     """``(group id, node, units)`` of the own groups standing in a node without an order and
     outside fights."""

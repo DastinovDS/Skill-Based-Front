@@ -78,6 +78,15 @@ class Times:
             for eid, e in enumerate(mapdef.edges)
         )
         """``into[edge]``: the ticks along ``edge`` into its end ``a``, then into its end ``b``."""
+        self.out: tuple[tuple[tuple[int, int, int], ...], ...] = tuple(
+            tuple(
+                (eid, mapdef.edges[eid].other(node), self.ticks(eid, mapdef.edges[eid].other(node)))
+                for eid in mapdef.incident[node]
+            )
+            for node in range(len(mapdef.nodes))
+        )
+        """``out[node]``: ``(edge, the node at its other end, the ticks into it)`` of every road
+        of ``node``, in the order of ``MapDef.incident`` (the order the simulation relaxes)."""
 
     def ticks(self, edge: int, to_node: int) -> int:
         """``edge_ticks`` of ``edge`` into ``to_node``."""
@@ -112,32 +121,50 @@ def ways(
     """By node, the ``Way`` a ``Move`` of a group of ``size`` units standing in ``start`` takes
     there (module docstring), ``start`` included with an empty way; the nodes no ``Move`` reaches
     are missing. ``keys``: ``node_key(view.player, node)`` of every node (``Bot.keys``); ``size``
-    ``0``: no stack limit."""
-    mapdef = times.map
-    me, nodes = view.player, view.nodes
+    ``0``: no stack limit.
+
+    The Dijkstra of the simulation orders its heap by ``(ticks, key sequence)``; here the heap is
+    ordered by ticks alone and the key sequences are compared only when two candidates of a node
+    tie on ticks. That gives the same ways: every road takes at least one tick, so every node of a
+    candidate path but the last is settled before the last is, and each node keeps the least
+    ``(ticks, key sequence)`` of all its candidates, as there.
+    """
+    me, nodes, out = view.player, view.nodes, times.out
     fights = {f.node: True for f in view.fights if f.node is not None}
-    best: dict[int, tuple[int, tuple[int, ...]]] = {start: (0, (keys[start],))}
-    paths: dict[int, tuple[int, ...]] = {start: (start,)}
-    via: dict[int, int] = {start: -1}
+    best: dict[int, int] = {start: 0}
+    parent: dict[int, int] = {}
+    via: dict[int, int] = {}
     found: dict[int, Way] = {}
-    heap: list[tuple[int, tuple[int, ...], int]] = [(0, (keys[start],), start)]
+    heap: list[tuple[int, int]] = [(0, start)]
     while heap:
-        ticks, order, node = heapq.heappop(heap)
-        if node in found:
+        ticks, node = heapq.heappop(heap)
+        if node in found or ticks != best[node]:
             continue
-        found[node] = Way(ticks, paths[node], via[node])
+        path = (*found[parent[node]].path, node) if node != start else (start,)
+        found[node] = Way(ticks, path, via.get(node, -1))
         if node != start and (nodes[node].owner != me or node in fights):
             continue  # the first foreign or neutral node, or one with a fight, ends a path
-        for eid in mapdef.incident[node]:
-            nxt = mapdef.edges[eid].other(node)
+        for eid, nxt, step in out[node]:
             if nxt in found:
                 continue
             if size > 0 and nodes[nxt].capacity < size:
                 continue  # the stack limit (DEC-20, D): the group does not fit there
-            cand = (ticks + times.ticks(eid, nxt), (*order, keys[nxt]))
-            if nxt not in best or cand < best[nxt]:
-                best[nxt] = cand
-                paths[nxt] = (*paths[node], nxt)
-                via[nxt] = eid
-                heapq.heappush(heap, (cand[0], cand[1], nxt))
+            cand = ticks + step
+            old = best.get(nxt)
+            if old is None or cand < old:
+                best[nxt], parent[nxt], via[nxt] = cand, node, eid
+                heapq.heappush(heap, (cand, nxt))
+            elif cand == old and _before(keys, path, found[parent[nxt]].path, nxt):
+                parent[nxt], via[nxt] = node, eid
     return found
+
+
+def _before(
+    keys: tuple[int, ...], path: tuple[int, ...], other: tuple[int, ...], last: int
+) -> bool:
+    """The key sequence of ``path`` and ``last`` is before that of ``other`` and ``last``."""
+    mine, theirs = (*path, last), (*other, last)
+    for a, b in zip(mine, theirs, strict=False):
+        if a != b:
+            return keys[a] < keys[b]
+    return len(mine) < len(theirs)
