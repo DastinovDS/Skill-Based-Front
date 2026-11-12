@@ -160,8 +160,8 @@ description = "Benchmarks and tick lag (mark perf, serial: xdist switches measur
 run = "uv run pytest -m perf -q --tb=short --benchmark-columns=mean,max --benchmark-name=short"
 
 [tasks."test:bench"]
-description = "Simulation benchmarks and the budgets of section 12 (docs/perf.md)"
-run = "uv run pytest packages/sim/tests/test_benchmarks.py -q --tb=short --benchmark-columns=mean,max --benchmark-name=short"
+description = "Simulation benchmarks and the budgets of section 12: synthetic grids and the pool maps (docs/perf.md)"
+run = "uv run pytest packages/sim/tests/test_benchmarks.py apps/bots/tests/test_benchmarks_pool.py -q --tb=short --benchmark-columns=mean,max --benchmark-name=short"
 
 [tasks."golden:check"]
 description = "Golden replays re-simulate and are frozen against a base (arg: git ref, default origin/develop)"

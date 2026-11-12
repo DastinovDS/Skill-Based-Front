@@ -50,6 +50,7 @@ uv run pytest --benchmark-disable                             # one run without 
 | `packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project` | `snapshot_frame` (a snapshot together with the JSON encoding) against `project()` on the view of a `rusher` match on `web` after 300 ticks; a ratio on one machine, without `speed_factor` | no more expensive than `project()` (× `REGRESSION`) |
 | `apps/bots/tests/test_benchmarks.py::test_bench_decide_strategy_views` | `decide()` of `expander` and `turtle` on the views of their own match on `web` after 300..1500 ticks (many groups, construction, contact with the enemy) | on average ≤ 1 ms |
 | `apps/bots/tests/test_benchmarks.py::test_bench_decide_smart_views`, `test_bench_decide_smart_v2_views` | `decide()` of every `smart_*` bot on the views of a smart match on `web` (`smart_rusher` against `smart_expander`, and against `smart_hoarder`, #166, #648) | on average ≤ 1 ms |
+| `apps/bots/tests/test_benchmarks_pool.py` (`test_pool_*`, #482) | the same quantities on the four pool maps `maps/*.json` under `mvp-7` with map tempo on (`Match.rules`), the state after 1500 ticks of `smart_rusher` against `smart_expander` (hard): `Match.step`, `project()`, the supply flow of a dispatch tick, `compute_vision` with an empty memo, `snapshot_frame`, a server tick (step, two reused views, two frames), and `view` plus `decide` of a bot as the server times it | the section 12 budget of each is in `extra_info` of the report; the test fails above a per-map ceiling (`CEILING_MS`, the measurement of 2026-11-12 + about 10%), which is a regression net and **not** the budget: where a budget does not hold, the section below says so |
 
 ## Regression
 
@@ -131,6 +132,98 @@ The "was" run with 25% reproduces the CI failure (26.5% at `speed_factor` 1.14):
 the server load was about half a tick, and any slowdown of the runner produced a queue. The worst
 case with simultaneous ticks stays above 10%; this is not a section 12 budget (match starts are
 random), but the margin for it is now twice as large.
+
+## The pool maps under `mvp-7` (#482, ARP-01 and ARP-08)
+
+The benchmarks above run on synthetic grids and the 34-node fixture `web`. The maps the queue plays are the four
+of `maps/*.json` (29 to 51 nodes), played under `mvp-7` with the map tempo applied. These are the section 12
+quantities on them, measured on 2026-11-12 at `d603581` (after the memos of #983), by
+`apps/bots/tests/test_benchmarks_pool.py` (`mise run test:bench`).
+
+Method: the state after 1500 ticks of a seeded `smart_rusher` against `smart_expander` match (hard), so there are
+groups on the roads, fights, builds and a grown fog memory; `Match.step` is timed alone (the bots decide in the
+untimed setup), `project()` is called without the reused vision (like the budget test), the supply flow runs on a
+copy of the dispatch-tick state (the memos travel with the copy, like in a match). Means of three runs on the
+reference machine (Apple M4, load average 3 to 5, `speed_factor` 0.97 to 1.00), divided by `speed_factor`.
+Another agent's load shows up as outliers (a single run of a map went 1.5 to 2 times slower): the table is the
+quiet runs.
+
+| Quantity (ms) | budget | `narrows` (29) | `crossroads` (49) | `highway` (49) | `ridge` (51) |
+|---|---|---|---|---|---|
+| `Match.step` | 0.3 | 0.14 | 0.18 | 0.19 | 0.20 |
+| `project()`, one player | 0.3 (up to 40 nodes), 0.45 (45..55) | 0.17 | 0.27 | 0.26 | 0.28 |
+| supply flow, dispatch tick | 0.1 | 0.04 | 0.09 | 0.10 | **0.11** |
+| `compute_vision`, empty memo (warm: 0.003) | no budget | 0.02 | 0.03 | 0.03 | 0.03 |
+| `snapshot_frame`, one player | no budget (not dearer than `project()`) | 0.17 (x1.0) | 0.36 (x1.3) | 0.27 (x1.0) | 0.34 (x1.2) |
+| server tick per match: step + 2 views (reused vision) + 2 frames | no budget | 0.79 | 1.5 | 1.5 | 1.5 |
+| bot `view` + `decide` (mean; share over 1 ms) | 1 | 0.41 (0%) | 0.77 (8%) | 0.69 (7%) | 0.74 (6%) |
+
+What holds and what does not (findings, nothing here changes a budget or the code):
+
+- **The step and the projection hold on every pool map**, the step with a margin of about a third (0.20 ms on `ridge`
+  against 0.3). The architecture review (ARP-01) measured 0.45 to 0.64 ms per step and 0.37 to 0.6 ms per projection at
+  `7b76b6b`, before the memos of vision and of the flow plan (#983); on the current head these are gone.
+- **The supply budget (0.1 ms) does not hold on `ridge`**: 0.11 ms (runs 0.110, 0.113, 0.122), about 10 to 20% over; `highway`
+  sits at the limit (0.097 to 0.100) and `crossroads` just under (0.092). The synthetic `grid40` and `grid55` measure 0.03
+  and 0.04 ms, so the budget test on them says nothing about the 50-node pool maps. The test net is on, so a regression is
+  caught, but the budget is not met. Decision for the owner: the budget moves (as it did for the projection, #371) or
+  the flow gets cheaper (ARP-03 of the review).
+- **`snapshot_frame` is dearer than `project()` on the big maps** (x1.2 to x1.3 on `crossroads` and `ridge`, x1.0 on
+  `highway` and `narrows`). The test `test_snapshot_frame_costs_no_more_than_project` checks the ratio on `web` only.
+  Together with the other half of a tick this makes **1.5 ms of server time per match tick on the 49 to 51 node maps**
+  (0.8 ms on `narrows`) before deflate (0.1 to 0.15 ms per frame, measured by `scripts/snapshot_size.py`, so about 0.3 ms
+  for the two players) and before a bot's decision. 30 such matches are 45 ms of a 100 ms tick, 54 ms with deflate. There
+  is no pool-map version of `test_match_load.py` (it plays `web`), so the "30 matches, tick lag below 10%" budget has no
+  measurement on the shipped maps yet.
+- **A hard smart bot overruns the server's 1 ms bot budget** (`Settings.bot_budget_s`) in 6 to 8% of its calls on the
+  49 to 51 node maps on the reference machine, and the live bot skips its next decision after an overrun. Between
+  tournament and server this is a difference of tempo that grows on a slower host (the CI runners are about 2.5 times
+  slower than the reference). The number counts `view(reuse=True)` plus `decide` like `MatchRunner._bot_commands` does
+  (reused vision already in; ARP-04).
+- Side note: `apps/bots/tests/conftest.py` loads **`mvp-5`** as its `mvp_rules`, so the existing bot benchmarks of
+  this file's neighbour (`test_benchmarks.py`) measure the decision on a ruleset that is not played; the pool
+  benchmarks load `rulesets/mvp-7.toml` themselves.
+
+### The size of a snapshot (ARP-08)
+
+`scripts/snapshot_size.py` (`mise exec -- uv run python scripts/snapshot_size.py`, about 90 s for the four maps) plays
+the same match for the whole 9000 ticks and encodes, for each player and tick, the frame the server sends
+(`snapshot_frame`). Deflate is computed the way the server negotiates it: there is no setting in `gow_server`, so it is
+the default of `uvicorn` (0.54, `websockets-sansio`, `ws_per_message_deflate` on): 12-bit window in both
+directions, `memLevel` 5, a window kept between messages (context takeover on), messages ended with `Z_SYNC_FLUSH`
+(`tests/test_snapshot_size.py` fails if those numbers change in `uvicorn`). Browsers offer `permessage-deflate`, so it is
+negotiated unless something in between strips the extension; the check that the
+match socket through Caddy really answers with it is still open (#910 marked it unverified, and this task did not
+touch the stack).
+
+Per player, 18000 frames per map (both players, every tick):
+
+| Map | raw JSON mean / p95 / max | deflate, streaming mean / p95 / max | deflate, one frame alone (mean) | per player per second, raw -> deflate |
+|---|---|---|---|---|
+| `narrows` (29 nodes, 50 roads) | 31.4 / 33.7 / 34.3 KB | 1.7 / 1.9 / 2.1 KB | 1.8 KB | 314 -> 17 KB/s |
+| `crossroads` (49, 92) | 55.1 / 58.7 / 59.3 KB | 2.4 / 2.6 / 2.7 KB | 2.4 KB | 551 -> 24 KB/s |
+| `highway` (49, 78) | 50.8 / 54.2 / 55.6 KB | 2.4 / 2.7 / 3.0 KB | 2.5 KB | 508 -> 24 KB/s |
+| `ridge` (51, 82) | 52.9 / 57.1 / 57.7 KB | 2.3 / 2.7 / 2.9 KB | 2.4 KB | 529 -> 23 KB/s |
+
+- Nodes and roads are about 95% of a frame (`ridge`: nodes 26.8 KB, roads 24.0 KB, groups 1.7 KB); a frame carries
+  about 1200 `null` values on the big maps. The size is flat over the match (p95 within 8% of the mean): it is
+  `V + E` records of fixed fields, not the amount of play.
+- Deflate takes it to 4.3 to 5.4% of raw. The window kept between messages gains only 3 to 5% over compressing each
+  frame alone: a 12-bit window is 4 KB, the previous frame is 50 KB away, so there is no cross-frame delta in it. What
+  deflate removes is the repetition inside one frame (the same keys and `null`s in every record), not the repetition in time.
+- So a player on the wire needs about 17 to 24 KB/s (140 to 190 kbit/s) when deflate is negotiated, and 310 to 550 KB/s
+  (2.5 to 4.4 Mbit/s) when it is not. The CPU of the compressor is 0.10 to 0.15 ms a frame here (about 10% of a match
+  tick on top of the 1.5 ms above).
+
+Recommendation (not done here; the format and the protocol are unchanged): **no change of format is argued for by
+the numbers while deflate is on**: 24 KB/s per player is small, and a delta or a binary format would save bandwidth
+that is already cheap. What the numbers do argue for is (1) verifying the negotiation through Caddy and setting
+`ws_per_message_deflate=True` explicitly in `uvicorn_options` (a one-line change in `gow_server.cli`, so a `uvicorn`
+default change cannot silently turn it off), and (2) a split of the static part of a frame (capacity, warehouse
+capacity, ids, kind, `null` fields) out of the snapshot if the server CPU of `snapshot_frame` (0.34 ms of the 1.5 ms)
+becomes the limit: that would cut the raw size and the encoding cost together, but it is a protocol change
+(`PROTOCOL_VERSION`, the client, the fixtures) and belongs after the release. Without deflate the raw 55 KB per tick
+would be the problem, and that is the case to watch (a proxy that drops the extension).
 
 ## The bot tournament (BOT-04)
 

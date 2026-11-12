@@ -144,7 +144,7 @@ Python jobs (the required check `py`) and the job `web` run. A tool version is e
 | `test:all` | the whole pytest in one go, without `-n` (slow) | INF-02 |
 | `test:slow` | long tests of full bot matches (mark `slow`, not required job `py-slow`) | BOT-04 |
 | `test:perf` | benchmarks and tick lag (mark `perf`), strictly sequential: xdist disables the measurements; the job `py-perf`, alone on its runner | SIM-15 |
-| `test:bench` | simulation benchmarks and the budgets of section 12 (`docs/perf.md`) | SIM-15 |
+| `test:bench` | simulation benchmarks and the budgets of section 12 on synthetic grids and on the pool maps under `mvp-7` (`docs/perf.md`) | SIM-15, #482 |
 | `golden:check` | golden replays are re-simulated (`python -m gow_sim.replay check`) and unchanged relative to the base (`scripts/check_golden_frozen.py`; argument: a git ref, `origin/develop` by default; CI: `HEAD^1`) | SIM-16 |
 | `golden:generate` | create the golden replays `v{SIM_VERSION}` (after raising `SIM_VERSION`; does not overwrite an existing directory) | SIM-16 |
 | `ci` | for a person who wants the whole set (agents use `check:changed`): what the Python jobs and `web` run, locally: `check`, `test`, `golden:check`, `build` in parallel, then `test:perf` last and alone (timing benchmarks do not compete with the other load) | #301, #653 |
