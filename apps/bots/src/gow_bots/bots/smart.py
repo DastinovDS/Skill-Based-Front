@@ -234,10 +234,10 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
       stays an ordinary order.
     - *Squads* (``SQUADS``, ``squad``; on a settled map, item 18): the capital and a front stack
       split off one squad of a province's capacity (DEC-22, the stack limit of DEC-20 lets it
-      through every node) a decision, so the recruits merge into the stack until a squad is
-      ready, and a stack that took a node stays together until a whole squad can go; less than
-      a squad splits off only to walk into an empty node (``WALK_IN_SPLITS``: the land race is
-      won by walk-ins, and without them the squads lost it to the benchmark).
+      through every node) a decision, and a stack that took a node stays together until a whole
+      squad can go; less than a squad splits off only to walk into an empty node
+      (``WALK_IN_SPLITS``: the land race is won by walk-ins, and without them the squads lost it
+      to the benchmark) or, from the capital, to rally to the front (item 18).
     - *A combined attack* (``COMBINE``, ``_combine``, under ``[group_order]``): a defended enemy
       node no free group takes alone gets one ``GroupMove`` (DEC-48, a synchronized arrival) of
       the nearest free groups that take it together with the package, as few as it takes, one
@@ -246,6 +246,12 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     - *The second echelon* (``W_EXPLOIT``): the groups a combined attack leaves out stay free,
       and for ``EXPLOIT_TICKS`` after the bot takes an enemy node every enemy node next to it
       scores ``W_EXPLOIT`` more (through the hole: the nodes behind it, the supply it cut).
+    - *Plains first* (``W_TERRAIN``, the owner's input of 2026-11-12): a defended enemy target
+      scores ``W_TERRAIN`` more per charge its terrain burns (the plains, DEC-45) and less per
+      charge it adds (the mountains); ``need`` counts those charges already.
+    - *Every unit used* (the owner's input of 2026-11-12): the spare of the capital above its
+      guard does not stand idle, a squad or less: it walks into an empty node or rallies to the
+      front (item 18) and merges there.
     - *The late assault* (``ASSAULT``): in the late game (item 18) a striking personality rallies
       to the enemy capital and its strike reaches one hop farther (``strike_hops``).
 
@@ -551,6 +557,9 @@ class SmartBot(CampaignBot):
     ASSAULT: ClassVar[bool] = True
     """Item 28: in the late game a striking personality rallies to the enemy capital and its
     strike reaches one hop farther (the late synchronized assault)."""
+    W_TERRAIN: ClassVar[int] = 40
+    """Item 28: score per charge the terrain takes from (plains) or adds to (mountains) the pool
+    of a defended enemy target (``terrain_value``); ``need`` already counts the charges."""
     W_EXPLOIT: ClassVar[int] = 150
     """Item 28: score of an enemy node next to a node the bot took within ``EXPLOIT_TICKS``: the
     second echelon follows a breakthrough."""
@@ -1587,6 +1596,18 @@ class SmartBot(CampaignBot):
             if tick - t <= EXPLOIT_TICKS and view.nodes[n].owner == me
         }
 
+    def terrain_value(self, ctx: Ctx, dest: int) -> int:
+        """Item 28 (the owner, 2026-11-12: his breakthroughs come on the plains): ``W_TERRAIN``
+        per charge the terrain takes from a defended enemy node's pool (DEC-45: the plains burn
+        one in the first round), less per charge it adds (the mountains); 0 for a walk-in, where
+        the terrain does not act (DEC-07, rule 1)."""
+        if not self.W_TERRAIN or not self.defended(ctx.view, ctx.tick, dest):
+            return 0
+        if self.estimate(ctx.view, ctx.tick, dest)[1] <= 0:
+            return 0  # no firing charge: no terrain modifier
+        mod = self.rules.terrain.defense_mod.of(self.map.nodes[dest].terrain)
+        return -self.W_TERRAIN * mod
+
     def exploit(self, view: PlayerView, dest: int) -> int:
         """Item 28: ``W_EXPLOIT`` for an enemy node next to a breach (the second echelon goes
         through the hole: the nodes behind it, the supply it cut); 0 otherwise."""
@@ -2273,8 +2294,7 @@ class SmartBot(CampaignBot):
             # even without a target in reach (a pile at home earns nothing).
             rally = self.MID_RALLY and self.settled() and here == self.home and g.charged > keep
             opts = self.options(ctx, [army])
-            if not whole:  # item 28: less than a squad goes only to walk into an empty node
-                rally = False
+            if not whole:  # item 28: less than a squad walks into an empty node or to the front
                 opts = [o for o in opts if not self.defended(ctx.view, ctx.tick, o.dest)]
             if (rally or opts) and self.spend(ctx, Split(g.id, spare)):
                 ctx.used[g.id] = True
@@ -2305,6 +2325,7 @@ class SmartBot(CampaignBot):
             value += W_STAGE  # item 13: hit the build-up before it strikes
         value += self.mid_value(ctx, dest)
         value += self.exploit(ctx.view, dest)  # item 28: the second echelon
+        value += self.terrain_value(ctx, dest)  # item 28: plains first, mountains last
         if self.pockets is not None:
             value += W_RESCUE * self.pockets.rescue.get(dest, 0)  # item 20: retake the cut
         return value + p["w_closer"] * closer - p["w_need"] * need - p["w_hops"] * hops

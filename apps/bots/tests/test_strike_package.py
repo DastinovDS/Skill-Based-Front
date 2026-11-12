@@ -165,11 +165,11 @@ def test_without_the_group_order_no_group_move() -> None:
 
 @pytest.mark.parametrize("player", [0, 1])
 def test_a_settled_capital_splits_off_a_whole_squad(player: int) -> None:
-    """On a settled map (item 18: one neutral node of 21) the capital with 5 units and a guard of
-    2 splits off one whole squad of 3 (a province's capacity, DEC-22), never a part of 1 or 2;
-    with 4 units it keeps them together (the recruits merge into the stack until a squad is
-    spare: no empty node to walk into is in reach)."""
-    for units, want in ((5, [3]), (4, [])):
+    """On a settled map (item 18: one neutral node of 21) the capital with 7 units and a guard of
+    2 splits off one whole squad of 3 (a province's capacity, DEC-22) a decision, not the whole
+    spare of 5 (too big for a province, the stack limit of DEC-20); a spare of 2 below a squad
+    does not stand idle either: it rallies to the front (the owner's "use every unit")."""
+    for units, want in ((7, [3]), (4, [2])):
         match = _scenario(player, [(ME, 0, units, units)], {})
         match.state.groups = {
             gid: g

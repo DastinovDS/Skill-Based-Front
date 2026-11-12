@@ -74,6 +74,7 @@ class SmartHoarder(SmartBot):
     COMBINE: ClassVar[bool] = False
     ASSAULT: ClassVar[bool] = False
     W_EXPLOIT: ClassVar[int] = 0
+    W_TERRAIN: ClassVar[int] = 0
     ANSWERS: ClassVar[bool] = False
     """The yardstick stays as it was measured (#624, PR 1): none of items 13-17."""
     DEFENSE_V2: ClassVar[bool] = False
