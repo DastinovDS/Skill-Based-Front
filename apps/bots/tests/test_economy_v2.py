@@ -1,5 +1,5 @@
 """The economy of the bots (DEC-41, #648; mechanics.md, section 7): factories, buildings paid in
-charges and the bonus of every planned order (DEC-41, item 10), under ``mvp-5``.
+charges and the bonus of every planned order (DEC-41, item 10), under ``mvp-7``.
 """
 
 from collections import Counter
@@ -35,7 +35,7 @@ SMART = (
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 @pytest.fixture(scope="module")

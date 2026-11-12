@@ -1,11 +1,12 @@
 """BOT-02: the strategy bots ``expander`` and ``turtle``.
 
-Win rates are measured on full matches of the ruleset ``mvp-5`` on the three MVP maps, each bot on
+Win rates are measured on full matches of the ruleset ``mvp-7`` on the three MVP maps, each bot on
 both sides against ``RandomLegalBot``. Expected enemy numbers in the estimate tests come from
 the rules of DEC-04 (what a view tells) and DEC-07, example 5 (an empty node falls).
 """
 
 import dataclasses
+from pathlib import Path
 
 import pytest
 
@@ -13,7 +14,7 @@ from gow_bots.bots import BOTS, ExpanderBot, ParamRange, TurtleBot, choose_param
 from gow_bots.bots.base import Controller
 from gow_bots.bots.tactics import MEMORY_TICKS, StrategyBot
 from gow_sim.commands import Command, Move, Recruit, SetStance
-from gow_sim.maps import MapDef
+from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import (
@@ -30,6 +31,7 @@ MVP_MAPS = ("artery", "web", "pass")
 STRATEGY = ("expander", "turtle")
 CLASSES: dict[str, type[StrategyBot]] = {"expander": ExpanderBot, "turtle": TurtleBot}
 KEY = bytes(range(32))
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _random(mapdef: MapDef, rules: Ruleset, seed: int, side: int) -> Controller:
@@ -52,7 +54,7 @@ class _Recorder:
 # Strength against the baseline ------------------------------------------------------------------
 
 
-@pytest.mark.slow  # 12 cells x 6 full mvp-5 matches
+@pytest.mark.slow  # 12 cells x 6 full mvp-7 matches
 @pytest.mark.parametrize("name", STRATEGY)
 @pytest.mark.parametrize("map_name", MVP_MAPS)
 def test_strategy_bot_beats_random_legal_in_90_percent(
@@ -91,11 +93,11 @@ def test_params_stay_in_their_ranges_and_depend_on_the_seed(
 
 @pytest.mark.slow  # 10 matches of 250 s per bot
 @pytest.mark.parametrize("name", STRATEGY)
-def test_one_pair_over_seeds_gives_different_matches(
-    maps: dict[str, MapDef], mvp_rules: Ruleset, name: str
-) -> None:
-    # The first 250 s of mvp-5: the 60 s of test-short end before the parameters matter.
-    mapdef = maps["web"]
+def test_one_pair_over_seeds_gives_different_matches(mvp_rules: Ruleset, name: str) -> None:
+    # The first 250 s of mvp-7 on the pool map ``crossroads`` (the small MVP maps are taken
+    # whole by every seed alike under a capture that costs a charge): the 60 s of test-short end
+    # before the parameters matter.
+    mapdef = load_map(ROOT / "maps" / "crossroads.json")
     hashes = {
         run_headless(
             mapdef,
@@ -111,15 +113,11 @@ def test_one_pair_over_seeds_gives_different_matches(
 # Mirror symmetry ----------------------------------------------------------------------------------
 
 
-# 4 short matches (test-short) per cell in the required path; one full mvp-5 match is ``slow``.
+# 4 short matches (test-short) per cell in the required path; one full mvp-7 match is ``slow``.
 _SELF_PLAY = [
     pytest.param("short", 4, id="short"),
-    pytest.param("mvp", 1, id="mvp-5", marks=pytest.mark.slow),
+    pytest.param("mvp", 1, id="mvp-7", marks=pytest.mark.slow),
 ]
-
-
-_ASYMMETRIC = {("artery", "expander", "mvp")}
-"""#899: VP (553, 511) on seed 0, the code before #894 gives the same under mvp-5."""
 
 
 @pytest.mark.parametrize("rules_name, seeds", _SELF_PLAY)
@@ -136,8 +134,6 @@ def test_self_play_on_a_symmetric_map_is_a_draw_on_vp(
 ) -> None:
     # Both sides get the parameters of side 0; then nothing but opaque ids differs between them,
     # and a tie-break by opaque id would break the equality of the VP.
-    if (map_name, name, rules_name) in _ASYMMETRIC:
-        pytest.xfail("TODO(#899): a mirror asymmetry under mvp-5, the same before #894")
     mapdef = maps[map_name]
     cls = CLASSES[name]
     rules = short_rules if rules_name == "short" else mvp_rules

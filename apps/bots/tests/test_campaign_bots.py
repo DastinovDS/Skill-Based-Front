@@ -43,7 +43,7 @@ KEY = bytes(range(32))
 SEEDS = 10  # per map, half of them on each side: 90% means at most one loss
 
 
-@pytest.mark.slow  # 12 cells x 10 full mvp-5 matches
+@pytest.mark.slow  # 12 cells x 10 full mvp-7 matches
 @pytest.mark.parametrize("name", CAMPAIGN)
 @pytest.mark.parametrize("map_name", MVP_MAPS)
 def test_wins_at_least_90_percent_against_random_legal(
@@ -144,7 +144,7 @@ def test_strangler_cuts_the_enemy_road_on_siege(mvp_rules: Ruleset) -> None:
             BOTS["strangler"](mapdef, mvp_rules, seed=seed, player=0),
             IdleBot(mapdef, mvp_rules, seed=seed, player=1),
         ]
-        _play(match, bots, 1500, {})
+        _play(match, bots, 3000, {})  # a capture costs a charge on mvp-7: 1500 ticks are too few
         view = match.view(0)
         owners = [view.nodes[n].owner for n in range(len(mapdef.nodes))]
         cut = [

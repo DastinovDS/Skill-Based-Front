@@ -32,7 +32,7 @@ from gow_sim.view import GroupView, NodeView, OrderView, PlayerView, project
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 KEEP, ASH, BIRCH, CEDAR, DALE, ELM = range(6)
 NORTH_PASS = 17
 TICK = 1000
@@ -238,11 +238,15 @@ def test_a_lost_node_alone_does_not_move_the_leaf_shift_back(player: int) -> Non
 
 
 def test_every_smart_bot_keeps_the_hold_in_a_match() -> None:
-    """In played matches no smart bot changes the shift twice within ``SHIFT_HOLD_TICKS``."""
+    """In played matches no smart bot changes the shift twice within ``SHIFT_HOLD_TICKS``.
+
+    Historical ruleset on purpose: the lever exists only where ``supply.leaf_shift`` is on
+    (``mvp-5``, ``mvp-6``); the played ``mvp-7`` has none (DEC-50, ``test_supply_flow``)."""
     crossroads = load_map(ROOT / "maps" / "crossroads.json")
     names = ("smart_strangler", "smart_reactive")
-    match = Match(crossroads, RULES, KEY)
-    bots = [BOTS[n](crossroads, RULES, seed=1, player=p) for p, n in enumerate(names)]
+    lever = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    match = Match(crossroads, lever, KEY)
+    bots = [BOTS[n](crossroads, lever, seed=1, player=p) for p, n in enumerate(names)]
     assert all(isinstance(b, SmartBot) for b in bots)
     changes: list[list[int]] = [[], []]
     last = [0, 0]

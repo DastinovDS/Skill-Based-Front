@@ -1,8 +1,8 @@
-"""Capital defense and road fortifications of the smart bots under ``mvp-5`` (#682, G-F of the
+"""Capital defense and road fortifications of the smart bots under ``mvp-7`` (#682, G-F of the
 ``mvp-4`` bot audit; ``SmartBot`` item 22, ``gow_bots.bots.forts``).
 
 Expected values come from the rules (mechanics.md, section 7, DEC-43 item D; DEC-25; DEC-22): the
-map is ``dec41`` of the simulation tests, ``mvp-4``. Player 0 holds K = 0 (the capital, capacity
+map is ``dec41`` of the simulation tests, ``mvp-7``. Player 0 holds K = 0 (the capital, capacity
 10, warehouse 6), A = 1, B, C, D = 2, 3, 4, E, F, G = 5, 6, 7; the passes 17 and 18 are player 1's.
 Road 0 is K-A, road 5 is A-E, road 24 is South Pass (18) to D. A road fortification costs 1.5 CP
 (``fort.cost``) and a recruit 1 CP; the CP sink of ``fort_site`` waits for 4 CP
@@ -31,12 +31,15 @@ from gow_sim.view import IntentKind, IntentView, PlayerView, RoadFortView, proje
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 K, A, B, C, D, E, F, G = range(8)
 SOUTH_PASS = 18
 PASSES = (17, 18)
 KA, AE, SD = 0, 5, 24
-TICK = 4000
+TICK = 5000
+"""Late enough for the 5% ``FORT_SHARE`` of ``smart_rusher``: the bot's rules are scaled by the map
+tempo (DEC-46), a period of the Balance stance on ``dec41`` is 76 ticks, so by now it had 3 + 32.5
+CP."""
 SMART = (
     "smart_exploiter",
     "smart_expander",
@@ -176,8 +179,8 @@ def test_a_threatened_front_city_is_fortified_below_the_cp_cap(name: str, player
     """G-F: 4/4 of the enemy in South Pass next to the own city D (2/2 there sees it exactly),
     3.5 CP: D fortifies road 24 though the CP are not near the cap (the sink of ``fort_site``
     waits for 4 CP). 4 shots take 2/2 on plains (``2 - 1 + 2 = 3``, DEC-07), so the line may
-    decide the fight. At tick 4000 the bot has had 3 + 40 CP (``cp.start``, 1 CP per 100 ticks),
-    so even the 5% of ``smart_rusher`` pays the 1.5 CP (``FORT_SHARE``)."""
+    decide the fight. At tick 5000 the bot has had 3 + 32.5 CP (``cp.start``, 0.5 CP per 76
+    ticks, map tempo), so even the 5% of ``smart_rusher`` pays the 1.5 CP (``FORT_SHARE``)."""
     enemy = 1 - player
     state = _state(player, [(player, K, 2, 2), (player, D, 2, 2), (enemy, SOUTH_PASS, 4, 4)])
     view = _view(state, player, 350)

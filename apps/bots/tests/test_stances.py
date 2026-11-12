@@ -23,7 +23,7 @@ KEY = bytes(range(32))
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    return load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 @pytest.fixture(scope="module")
@@ -59,13 +59,15 @@ def test_every_plain_bot_stays_in_balance(rules: Ruleset, crossroads: MapDef, na
 def test_the_bound_of_the_enemy_cp_counts_the_fastest_stance(
     rules: Ruleset, crossroads: MapDef
 ) -> None:
-    """War gives 1 CP per 80 ticks (DEC-44): 3 CP at the start, 4 at tick 80, 5 (the cap) at 160.
-    To 5 CP from 3 at tick 0 it is two periods of 80 ticks."""
+    """War gives 0.5 CP per 40 ticks (DEC-44, ``mvp-7``, a map of the reference size): 3 CP at the
+    start, 3.5 at tick 40, 4 at tick 80, 5 (the cap) at 160. To 5 CP from 3 at tick 0 it is four
+    periods of 40 ticks."""
     match = Match(crossroads, rules, KEY)
     view = match.view(0)
     bound = EnemyCp(rules, 1)
     assert bound.ticks_to(500, 0) == 160
-    assert bound.update(dataclasses.replace(view, tick=79)) == 300
+    assert bound.update(dataclasses.replace(view, tick=39)) == 300
+    assert bound.update(dataclasses.replace(view, tick=40)) == 350
     assert bound.update(dataclasses.replace(view, tick=80)) == 400
     assert bound.update(dataclasses.replace(view, tick=160)) == 500
 

@@ -20,8 +20,12 @@ def maps() -> dict[str, MapDef]:
 
 @pytest.fixture(scope="session")
 def mvp_rules() -> Ruleset:
-    """``mvp-5``: the ruleset of the agents' tournaments (AGENTS.md, section 8), no map tempo."""
-    return load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    """``mvp-7``: the played ruleset and the one of the agents' tournaments (AGENTS.md, section 8).
+
+    Map tempo is on: ``Match`` plays ``Match.rules`` (scaled by the map) and the bots scale the
+    source rules the same way. A test of a historical rule loads the ruleset it needs itself and
+    says so (``mvp-5``: free capture, retreat, leaf shift)."""
+    return load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
 
 
 @pytest.fixture(scope="session")

@@ -28,9 +28,9 @@ START = 100
 
 @pytest.fixture(scope="module")
 def rules() -> Ruleset:
-    """``mvp-5`` with a planned order 1 CP dearer than an ordinary one (``mvp-5``: the same
+    """``mvp-7`` with a planned order 1 CP dearer than an ordinary one (``mvp-7``: the same
     price), so a plan the CP cannot pay leaves an ordinary order paid."""
-    base = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+    base = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     cost = dataclasses.replace(base.orders.cost, planned_move=base.orders.cost.move + 100)
     return dataclasses.replace(base, orders=dataclasses.replace(base.orders, cost=cost))
 

@@ -1,12 +1,14 @@
 """Pockets in the smart bots (#684; ``SmartBot`` item 20, ``gow_bots.bots.pockets``).
 
 Expected values come from the rules (mechanics.md, section 7, DEC-43 item H and its table): the map
-is ``dec41`` of the simulation tests, ``mvp-4``. Player 0 holds K = 0 (capital), A = 1, B, C, D = 2,
+is ``dec41`` of the simulation tests, ``mvp-7``. Player 0 holds K = 0 (capital), A = 1, B, C, D = 2,
 3, 4, E, F, G = 5, 6, 7; the passes 17 and 18 are player 1's, as in the base of table F. When player
 1 takes A, then B, C, D, F, G are a pocket of player 0 (row H1: A was their only way to K) and K, E
-are not. A ``Move`` ends at the first foreign node (SIM-05), and a capture is free under ``mvp-4``
-(``capture.charge_cost = 0``, DEC-38), so a discharged group takes an empty A and stands in the
-capital's component again; with an enemy garrison in A there is no free way out.
+are not. A ``Move`` ends at the first foreign node (SIM-05), and a capture is free under the
+historical ``mvp-5`` (``capture.charge_cost = 0``, DEC-38; ``FREE`` below, three cases), so a
+discharged group takes an empty A and stands in the capital's component again; with an enemy
+garrison in A there is no free way out. Under the played ``mvp-7`` a capture spends a charge, a
+discharged group cannot open the cut (``test_capture_toll``).
 
 Every case is also played mirrored, by player 1 on the mirror nodes (AGENTS.md, section 4.1,
 item 6).
@@ -33,7 +35,9 @@ from gow_sim.view import GroupView, PlayerView, project
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 MAP = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
-RULES = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+RULES = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
+FREE = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
+"""Historical (``capture.charge_cost = 0``): the free-cut path of the pocket rescue is live code."""
 K, A, B, C, D, E, F, G, M = range(9)
 PASSES = (17, 18)
 POCKET = (B, C, D, F, G)
@@ -60,12 +64,13 @@ def _state(
     own: tuple[int, ...] = (),
     *,
     state: GameState | None = None,
+    rules: Ruleset = RULES,
 ) -> GameState:
     """The base of the table with A taken by the other player at tick ``TICK``, then the groups
     ``(owner, node, units, charged)`` (nodes of the table, mirrored for player 1); ``own``: more
     nodes of ``player`` (M joins the pocket: its only own neighbour is C). ``state``: the one to
     set up (a ``Match``'s), a new initial state by default."""
-    state = initial_state(MAP, RULES) if state is None else state
+    state = initial_state(MAP, rules) if state is None else state
     enemy = 1 - player
     for n in PASSES:
         state.nodes[_at(player, n)].owner = enemy
@@ -77,16 +82,16 @@ def _state(
         gid = state.new_id()
         where = AtNode(_at(player, node))
         state.groups[gid] = Group(gid, owner, units, charged, Mode.ATTACK, where)
-    update_flow(state, RULES)
+    update_flow(state, rules)
     return state
 
 
-def _view(state: GameState, player: int) -> PlayerView:
-    return project(state, RULES, player, KEY)
+def _view(state: GameState, player: int, rules: Ruleset = RULES) -> PlayerView:
+    return project(state, rules, player, KEY)
 
 
-def _bot(name: str, player: int) -> SmartBot:
-    bot = BOTS[name](MAP, RULES, seed=0, player=player)
+def _bot(name: str, player: int, rules: Ruleset = RULES) -> SmartBot:
+    bot = BOTS[name](MAP, rules, seed=0, player=player)
     assert isinstance(bot, SmartBot)
     return bot
 
@@ -167,10 +172,10 @@ def test_a_discharged_group_in_a_pocket_walks_out_through_the_free_cut(
     """3/0 in the own province M (in the pocket through C): A, three roads away over own nodes,
     is the free capture that rejoins K; Cedar East next to M is empty too and nearer, but it
     leads deeper into the enemy's land."""
-    state = _state(player, [(player, M, 3, 0)], own=(M,))
-    bot = bot_factory(name)(MAP, RULES, seed=0, player=player)
+    state = _state(player, [(player, M, 3, 0)], own=(M,), rules=FREE)
+    bot = bot_factory(name)(MAP, FREE, seed=0, player=player)
     assert isinstance(bot, SmartBot)
-    view = _view(state, player)
+    view = _view(state, player, FREE)
     assert view.nodes[_at(player, M)].flow_pocket is True
     group = _group_at(view, _at(player, M)).id
     sent: list[int] = []
@@ -185,12 +190,12 @@ def test_a_discharged_group_in_a_pocket_walks_out_through_the_free_cut(
 @pytest.mark.parametrize("player", [0, 1])
 @pytest.mark.parametrize("name", SMART)
 def test_a_pocket_city_keeps_one_unit(name: str, player: int) -> None:
-    """3/0 alone in the city B: an empty city falls to any enemy group for free
+    """Under ``FREE``, 3/0 alone in the city B: an empty city falls to any enemy group for free
     (``capture.charge_cost = 0``), so 2 units split off to leave and 1 stays."""
-    state = _state(player, [(player, B, 3, 0)])
-    view = _view(state, player)
+    state = _state(player, [(player, B, 3, 0)], rules=FREE)
+    view = _view(state, player, FREE)
     group = _group_at(view, _at(player, B)).id
-    cmds = _bot(name, player).decide(view, TICK)
+    cmds = _bot(name, player, FREE).decide(view, TICK)
     assert [c for c in cmds if getattr(c, "group", None) == group] == [Split(group, 2)]
 
 
@@ -218,11 +223,11 @@ def test_pocket_exits_fill_the_cut_up_to_its_capacity(name: str, player: int) ->
     DEC-22): each city keeps one unit and 10 want out, more than A holds; units above the
     capacity die one every ``capacity.attrition_ticks`` (DEC-12). So within 300 ticks A is taken
     (the pocket is gone) and no unit of the bot dies of attrition (``SmartBot`` items 20, 21)."""
-    match = Match(MAP, RULES, KEY)
-    _state(player, [(player, B, 6, 0), (player, D, 6, 0)], state=match.state)
+    match = Match(MAP, FREE, KEY)
+    _state(player, [(player, B, 6, 0), (player, D, 6, 0)], state=match.state, rules=FREE)
     for p in match.state.players.values():
         p.cp = 500
-    bot = bot_factory(name)(MAP, RULES, seed=0, player=player)
+    bot = bot_factory(name)(MAP, FREE, seed=0, player=player)
     attrition, seq = 0, 0
     for _ in range(300):
         cmds: list[PlayerCommand] = []
@@ -234,7 +239,7 @@ def test_pocket_exits_fill_the_cut_up_to_its_capacity(name: str, player: int) ->
         attrition += sum(
             1 for e in match.state.events if e.kind == "attrition" and e.get("player") == player
         )
-    assert RULES.capacity.by_kind.of(MAP.nodes[A].kind) == 8
+    assert FREE.capacity.by_kind.of(MAP.nodes[A].kind) == 8
     assert match.state.nodes[_at(player, A)].owner == player
     assert not any(n.owner == player and n.flow_pocket for n in match.view(player).nodes)
     assert attrition == 0

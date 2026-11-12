@@ -341,6 +341,10 @@ class Hold:
     dest: int
     group: int
     """Opaque id of the group that was to go."""
+    node: int
+    """The node it stood in: a group that stands there later is as good, whatever its id (two idle
+    groups of a node merge into the one with the lowest internal id, which is not mirror-invariant,
+    #899)."""
     cost: int
     """Hundredths of CP."""
     until: int
@@ -937,7 +941,7 @@ class SmartBot(CampaignBot):
         if hold is None:
             return 0
         view = ctx.view
-        free = any(g.id == hold.group for g in self.idle_groups(view))
+        free = any(g.id == hold.group or node_of(g) == hold.node for g in self.idle_groups(view))
         if ctx.tick >= hold.until or not free or view.nodes[hold.dest].owner == self.player:
             self.hold = None
             return 0
@@ -957,7 +961,7 @@ class SmartBot(CampaignBot):
         if last is not None and ctx.tick - last < 2 * wait:
             return
         self.held_at[opt.dest] = ctx.tick
-        self.hold = Hold(opt.dest, opt.group.id, cost, ctx.tick + wait)
+        self.hold = Hold(opt.dest, opt.group.id, node_of(opt.group), cost, ctx.tick + wait)
         ctx.held = cost
 
     # CP banking (item 23, #687) -------------------------------------------------------------
