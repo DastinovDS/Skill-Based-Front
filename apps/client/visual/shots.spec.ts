@@ -1733,3 +1733,57 @@ test('shot of the intro banner of a match', async ({ page }) => {
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.screenshot({ path: join(OUT, 'banner-gray.png') });
 });
+
+// The match clock in the top bar (#1005, T3 "Cartouche"): `clock-<state>-<dpr>x.png` is the right
+// part of the bar (the clock and the buttons) at device pixel ratios 1 and 2 on the frozen scene
+// `rally_due` with the time left pinned (`?clock=<seconds>`); a pause is the status scene
+// `paused-you`. `clock-bar-<state>.png` is the whole bar at ratio 1, `-gray` the grey scale. The
+// beat of the last minute is held near its peak (`clock-last-beat-<dpr>x.png`).
+const CLOCK_STATES = [
+  { id: 'normal', query: 'clock=664' },
+  { id: 'ten', query: 'clock=600' },
+  { id: 'nine', query: 'clock=599' },
+  { id: 'minute', query: 'clock=60' },
+  { id: 'last', query: 'clock=59' },
+  { id: 'end', query: 'clock=0' },
+  { id: 'paused', query: 'clock=463&status=paused-you' },
+  // The CP at the cap: the gauge's own framed cap beside the clock's cartouche (two signs).
+  { id: 'cap', query: 'clock=664&cp=500' },
+] as const;
+for (const dpr of [1, 2]) {
+  test.describe(`the match clock at ratio ${String(dpr)}`, () => {
+    test.use({ deviceScaleFactor: dpr, viewport: { width: 1280, height: 720 } });
+    for (const state of CLOCK_STATES) {
+      test(`shot of the match clock ${state.id} at ratio ${String(dpr)}`, async ({ page }) => {
+        await page.goto(`/?scene=rally_due&${state.query}`);
+        await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2580');
+        await page.evaluate('document.fonts.ready.then(() => true)');
+        await page.mouse.move(5, 300);
+        // Every animation of the bar held at its end (the beat below at its peak).
+        await page.evaluate(
+          'document.getAnimations().forEach((a) => { a.pause(); a.currentTime = 10000; })',
+        );
+        const bar = page.locator('header.bar');
+        const box = await bar.boundingBox();
+        if (box === null) throw new Error('no top bar');
+        const clip = { x: box.x + box.width - 330, y: box.y, width: 330, height: 60 };
+        await page.screenshot({ path: join(OUT, `clock-${state.id}-${String(dpr)}x.png`), clip });
+        if (state.id === 'last') {
+          await page.evaluate(
+            'document.getAnimations().forEach((a) => { a.pause(); a.currentTime = 130; })',
+          );
+          await page.screenshot({ path: join(OUT, `clock-last-beat-${String(dpr)}x.png`), clip });
+        }
+        if (dpr === 1) {
+          await bar.screenshot({ path: join(OUT, `clock-bar-${state.id}.png`) });
+          // The narrowest bar the client lays out without hiding the clock.
+          await page.setViewportSize({ width: 960, height: 600 });
+          await bar.screenshot({ path: join(OUT, `clock-bar-${state.id}-960.png`) });
+          await page.setViewportSize({ width: 1280, height: 720 });
+          await page.addStyleTag({ content: 'header.bar { filter: grayscale(1); }' });
+          await page.screenshot({ path: join(OUT, `clock-${state.id}-gray.png`), clip });
+        }
+      });
+    }
+  });
+}

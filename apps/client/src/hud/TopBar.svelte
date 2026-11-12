@@ -7,10 +7,11 @@
   import type { OrderController } from '../match/orderController.ts';
   import type { HudChrome } from './chrome.svelte.ts';
   import CpGauge from './CpGauge.svelte';
-  import { formatCentis, formatClock } from './format.ts';
+  import { formatCentis } from './format.ts';
   import type { HudData } from './hudData.ts';
   import { LAST_MINUTE_S } from './hudState.svelte.ts';
   import Icon from './Icon.svelte';
+  import MatchClock from './MatchClock.svelte';
   import type { IconName } from './icons.ts';
   import type { NodeNamer } from './nodeName.ts';
   import { NO_ANCHORS, type MapAnchors } from '../render/anchors.ts';
@@ -27,6 +28,8 @@
     chrome: HudChrome;
     /** The pause of a private match; without it (none left, or a rated match) the button is not shown. */
     onpause?: () => void;
+    /** The match is paused (DEC-05): the clock's cartouche is ruled dashed, its serifs hollow. */
+    paused?: boolean;
     /** Where the cities are on screen: a paid rally walk flies its CP mark from its city (#930). */
     anchors?: MapAnchors;
     /** The name of a place by its id (the accessible name of a walk the CP do not pay). */
@@ -38,6 +41,7 @@
     orders,
     chrome,
     onpause,
+    paused = false,
     anchors = NO_ANCHORS,
     names = (node: number) => String(node),
   }: Props = $props();
@@ -268,9 +272,8 @@
 
   <div class="right">
     {#if data !== null}
-      <span class="timer" class:last={lastMinute} role="timer" aria-label={t('status.time')}>
-        <BarGlyph name="clock" size={17} />
-        <span class="time">{formatClock(data.secondsLeft)}</span>
+      <span class="timer" class:last={lastMinute}>
+        <MatchClock seconds={data.secondsLeft} last={lastMinute} {paused} />
       </span>
     {/if}
     {#if onpause !== undefined}
@@ -694,25 +697,10 @@
     background: var(--hatch-enemy);
   }
 
+  /* The match clock (#1005, T3 "Cartouche"): a fixed box, so nothing beside it moves. */
   .timer {
     display: flex;
-    align-items: center;
-    gap: 6px;
     margin-right: 8px;
-  }
-
-  .time {
-    font-size: 27px;
-  }
-
-  /* The last minute: amber, heavier and a size up (more than the colour tells it). */
-  .timer.last {
-    color: var(--warn);
-  }
-
-  .timer.last .time {
-    font-size: 31px;
-    font-weight: 700;
   }
 
   :global(:root[data-motion='reduced']) .gain.slide {
