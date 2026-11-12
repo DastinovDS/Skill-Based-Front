@@ -422,6 +422,8 @@ Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). I
 ## 8. Bots (`gow_bots`)
 
 - A bot implements `Controller.decide(view: PlayerView, tick) -> list[Command]`, sees only the `PlayerView` and is called every 5 ticks.
+- One driver calls every controller: `gow_sim.match.Seat` (cadence, `Glancer`, `seq`, resolve), used by `run_headless`, `play`, the tournament and the server's bot matches; `Seat.build` and `play` make a bot from `Match.rules`, and a `Bot` applies `apply_map_tempo` to whatever rules it is given, so no bot sees the unscaled periods of `[map_tempo]` (#994).
+- Travel times and the path of a `Move` come only from `gow_bots.bots.travel` (the bots may not import `gow_sim.systems`); `apps/bots/tests/test_travel.py` holds it equal to `gow_sim.systems.movement` (#994).
 - Bot parameters are chosen deterministically from the match seed: without this, deterministic matches repeat and the tournament measures nothing.
 - The choice "ordinary or scheduled order" is a common utility function of the ruleset prices.
 - The smart bots (`gow_bots.bots.smart`) play at a human tempo: a difficulty level `easy`, `normal` or `hard` (`smart_rusher@easy`; the name alone is `hard`) limits how often they think, how late they notice a shown enemy and their commands per minute (`gow_bots.bots.tempo`, `docs/balance/README.md`). A tempo is integer and deterministic like the rest of the bot.
