@@ -1,6 +1,6 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { EventMsg, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
-import type { CityDevelopment } from './source.ts';
+import type { BuildingRules } from './renderRules.ts';
 import { cityRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
 import {
   BUILD_BOOST,
@@ -485,7 +485,7 @@ export class CityView {
   update(
     base: SnapshotMsg,
     unitTicks: number | null = null,
-    cityUpgrades: CityDevelopment | null = null,
+    buildings: BuildingRules | null = null,
     queueMax: number | null = null,
     provinceWarehouse = 0,
     /** `recruit.rally_cost`, hundredths (#930); 0: no walk marks. */
@@ -536,7 +536,7 @@ export class CityView {
             fighting: fighting.has(node.id),
             occupied: occupied.has(node.id),
           },
-          { unitTicks, cityUpgrades, queueMax, provinceWarehouse },
+          { unitTicks, buildings, queueMax, provinceWarehouse },
           cityDues(dues, node.id).map((d) => d.short),
         ),
       );
@@ -652,13 +652,13 @@ export class CityView {
     city: { garrison: number; fighting: boolean; occupied: boolean },
     rules: {
       unitTicks: number | null;
-      cityUpgrades: CityDevelopment | null;
+      buildings: BuildingRules | null;
       queueMax: number | null;
       provinceWarehouse: number;
     },
     walks: readonly boolean[] = [],
   ): CityState {
-    const { unitTicks, cityUpgrades, provinceWarehouse } = rules;
+    const { unitTicks, buildings, provinceWarehouse } = rules;
     // DEC-41, item 13: an own province has a warehouse of `provinceWarehouse` places (0: none). Any
     // other province shows no stock.
     const province = this.map.nodes[node.id]?.kind === 'province';
@@ -668,27 +668,27 @@ export class CityView {
     // The builds are drawn wherever the snapshot carries them: a live view carries only the own
     // ones (AGENTS.md 4.4), the full view of a replay those of both players (#905).
     const barracksBuild: BuildingBuild | null =
-      building?.kind === 'barracks' && cityUpgrades !== null
+      building?.kind === 'barracks' && buildings !== null
         ? {
             owed: building.owed,
-            price: cityUpgrades.barracksCharges ?? null,
+            price: buildings.barracks.charges,
             doneTick: building.done_tick,
-            total: cityUpgrades.barracks,
+            total: buildings.barracks.ticks,
           }
         : null;
     const factoryBuild: BuildingBuild | null =
       node.factory_build !== null
         ? {
             owed: node.factory_build.owed,
-            price: cityUpgrades?.factoryCharges ?? null,
+            price: buildings?.factory.charges ?? null,
             doneTick: node.factory_build.done_tick,
-            total: cityUpgrades?.factory ?? 0,
+            total: buildings?.factory.ticks ?? 0,
           }
         : null;
     // Free slots are shown where a unit can be queued: an own city (the view carries its queue), with
     // the barracks when the city development is on (DEC-26, the same test as the city menu).
     const recruits =
-      own && node.recruit_queue !== null && (cityUpgrades === null || node.has_barracks === true);
+      own && node.recruit_queue !== null && (buildings === null || node.has_barracks === true);
     return {
       owner: node.owner,
       capacity: node.capacity,
@@ -707,13 +707,13 @@ export class CityView {
       // shows only its charges.
       warehouseCap: provinceStock
         ? provinceWarehouse
-        : (node.warehouse_cap ?? (cityUpgrades === null ? node.capacity : null)),
+        : (node.warehouse_cap ?? (buildings === null ? node.capacity : null)),
       buildings: {
         // The server sends these only where they may be seen (DEC-31: an enemy's next to an own node).
         barracks: {
-          built: showsBarracks(node.has_barracks, cityUpgrades !== null),
+          built: showsBarracks(node.has_barracks, buildings !== null),
           build: barracksBuild,
-          known: node.has_barracks !== null && cityUpgrades !== null,
+          known: node.has_barracks !== null && buildings !== null,
         },
         factory: {
           built: node.factory === true,

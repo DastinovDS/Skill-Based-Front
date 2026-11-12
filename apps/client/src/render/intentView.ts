@@ -23,7 +23,7 @@ import { splitOrder, trackOrder } from './orderTrack.ts';
 import { chevronHalfWidth, drawBonusChevron } from './bonusChevron.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import { planShown, planStep, type PlanFill } from './planFill.ts';
-import type { OrderDelays } from './source.ts';
+import type { OrderDelays } from './renderRules.ts';
 import {
   CASED,
   CASING,

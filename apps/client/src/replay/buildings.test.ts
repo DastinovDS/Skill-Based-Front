@@ -72,9 +72,9 @@ describe('the formats (#905)', () => {
     expect(edges.every((e) => e.forts.length === 0)).toBe(true);
     // Nothing for the renderer to draw buildings with either.
     const player = new ReplayPlayer(SAMPLE);
-    expect(player.cityUpgrades).toBeUndefined();
-    expect(player.recruitTicks).toBeUndefined();
-    expect(player.fortBuildTicks).toBeUndefined();
+    expect(player.rules.buildings).toBeNull();
+    expect(player.rules.recruitTicks).toBeNull();
+    expect(player.rules.fortBuildTicks).toBe(0);
   });
 
   it('drops damaged building keys instead of drawing a half', () => {
@@ -99,14 +99,12 @@ describe('the formats (#905)', () => {
       fort_ticks: 100,
     });
     const player = new ReplayPlayer(SAMPLE_BUILDINGS);
-    expect(player.recruitTicks).toBe(30);
-    expect(player.recruitQueueMax).toBe(3);
-    expect(player.fortBuildTicks).toBe(100);
-    expect(player.cityUpgrades).toEqual({
-      barracks: 100,
-      factory: 100,
-      barracksCharges: 3,
-      factoryCharges: 4,
+    expect(player.rules.recruitTicks).toBe(30);
+    expect(player.rules.recruitQueueMax).toBe(3);
+    expect(player.rules.fortBuildTicks).toBe(100);
+    expect(player.rules.buildings).toEqual({
+      barracks: { ticks: 100, charges: 3 },
+      factory: { ticks: 100, charges: 4 },
     });
   });
 
@@ -114,8 +112,11 @@ describe('the formats (#905)', () => {
     const raw = { ...structuredClone(SAMPLE_BUILDINGS), format: 1 } as Record<string, unknown>;
     delete raw.rules;
     const player = new ReplayPlayer(parseReplay(raw));
-    expect(player.cityUpgrades).toEqual({ barracks: 0 });
-    expect(player.recruitTicks).toBeUndefined();
+    expect(player.rules.buildings).toEqual({
+      barracks: { ticks: 0, charges: null },
+      factory: { ticks: 0, charges: null },
+    });
+    expect(player.rules.recruitTicks).toBeNull();
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import rawBuildings from './siege-buildings.frames.json';
+import { DEFAULT_ROUND_TICKS } from '../render/renderRules.ts';
 import { parseReplay } from './replayFile.ts';
 import { ReplayPlayer } from './replayPlayer.ts';
 import { buildTimeline } from './timeline.ts';
@@ -60,21 +61,24 @@ describe('road levels are gone from format 3 (#980)', () => {
 
 describe('the map rules of the header (#980)', () => {
   it('a format 3 replay plays with the numbers of its match', () => {
-    const player = new ReplayPlayer(parseReplay(formatThree()));
-    expect(player.roundTicks).toBe(30);
-    expect(player.rallyCost).toBe(50);
-    expect(player.provinceWarehouse).toBe(1);
-    expect(player.capacityTicks).toEqual({ attritionTicks: 80, graceTicks: 20 });
+    const file = parseReplay(formatThree());
+    const player = new ReplayPlayer(file);
+    expect(player.rules.roundTicks).toBe(30);
+    expect(player.rules.rallyCost).toBe(50);
+    expect(player.rules.provinceWarehouse).toBe(1);
+    // The overcrowding timings are read and kept; the map takes the pill's numbers from the
+    // snapshot (`attrition_in`, `grace_left`), so it draws nothing with these.
+    expect(file.rules?.attrition_ticks).toBe(80);
+    expect(file.rules?.grace_ticks).toBe(20);
   });
 
   it('a format 2 replay gives none of them: the viewer falls back as before', () => {
     const player = new ReplayPlayer(parseReplay(structuredClone(rawBuildings)));
-    expect(player.roundTicks).toBeUndefined();
-    expect(player.rallyCost).toBeUndefined();
-    expect(player.provinceWarehouse).toBeUndefined();
-    expect(player.capacityTicks).toBeUndefined();
+    expect(player.rules.roundTicks).toBe(DEFAULT_ROUND_TICKS);
+    expect(player.rules.rallyCost).toBe(0);
+    expect(player.rules.provinceWarehouse).toBe(0);
     // The numbers of the buildings still come from the old header.
-    expect(player.recruitTicks).toBeDefined();
+    expect(player.rules.recruitTicks).toBe(30);
   });
 
   it.each(['round_ticks', 'rally_cost', 'province_warehouse', 'attrition_ticks', 'grace_ticks'])(
@@ -86,7 +90,7 @@ describe('the map rules of the header (#980)', () => {
       );
       const file = parseReplay(raw);
       expect(file.rules).toBeUndefined();
-      expect(new ReplayPlayer(file).roundTicks).toBeUndefined();
+      expect(new ReplayPlayer(file).rules.roundTicks).toBe(DEFAULT_ROUND_TICKS);
     },
   );
 

@@ -8,55 +8,26 @@ import {
 } from '../net/matchConnection.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import { SnapshotBuffer } from '../net/snapshotBuffer.ts';
-import type {
-  CapacityPublic,
-  Command,
-  EventMsg,
-  OrdersPublic,
-  ServerMsg,
-  WelcomeMsg,
-} from '../protocol.gen.ts';
-import type {
-  CapacityTicks,
-  CityDevelopment,
-  OrderDelays,
-  RenderSource,
-} from '../render/source.ts';
+import type { Command, EventMsg, ServerMsg, WelcomeMsg } from '../protocol.gen.ts';
+import { NO_RENDER_RULES, type RenderRules } from '../render/renderRules.ts';
+import type { RenderSource } from '../render/source.ts';
 import { OrderBook } from './orderBook.ts';
 
 /** Events kept for the fight marks: they live a few seconds, so a short tail is enough. */
 const EVENT_TAIL = 64;
 
-/** Until `welcome` tells the real rate. */
-const DEFAULT_TICK_HZ = 10;
-
 /** A silence between two snapshots longer than this is logged (a snapshot comes every 100 ms). */
 const SNAPSHOT_GAP_WARN_MS = 1000;
 
-/** What a session needs to know about the match: the HUD to feed and the tick rate. */
+/** What a session needs to know about the match: the HUD to feed and the rule numbers. */
 export interface MatchContext {
   /** The HUD numbers: fed from the same snapshots the map draws. */
   hud: HudState;
-  /** `ruleset_public.tick_hz`: paces the snapshot buffer and ages fog memories. */
-  tickHz: number;
-  /** `ruleset_public.orders`: the delays of the countdown on order arrows. */
-  orders?: Pick<OrdersPublic, 'plan_ticks_per_bonus'>;
-  /** `ruleset_public.capacity`: the arc of the overcrowding pill. */
-  capacity?: Pick<CapacityPublic, 'attrition_ticks' | 'grace_ticks'>;
-  /** `ruleset_public.combat.round_ticks`: the round progress of a fight going on (DEC-24). */
-  roundTicks?: number;
-  /** `ruleset_public.recruit.unit_ticks`: the progress of a recruit queue (DEC-25). */
-  recruitTicks?: number;
-  /** `ruleset_public.recruit.queue_max`: the free slots a selected city shows (DEC-25). */
-  recruitQueueMax?: number;
-  /** `ruleset_public.recruit.rally_cost` with `rally_point`: the walk marks on the ring (#930). */
-  rallyCost?: number;
-  /** `ruleset_public.city_upgrades.warehouse_province`: the places of an own province warehouse (DEC-41, item 13). */
-  provinceWarehouse?: number;
-  /** `ruleset_public.city_upgrades` (DEC-26): the city build mark. */
-  cityUpgrades?: CityDevelopment | null;
-  /** `ruleset_public.fort.build_ticks`: the part done of an own road fortification (DEC-43, item D). */
-  fortBuildTicks?: number;
+  /**
+   * `renderRules(ruleset_public)` (ARC-C02): what the map draws with; its `tickHz` also paces the
+   * snapshot buffer.
+   */
+  rules: RenderRules;
   /** The sounds of the match (#71); absent: silent (tests, the replay). */
   audio?: MatchAudio;
 }
@@ -88,18 +59,8 @@ export interface MatchSessionOptions {
  */
 export class MatchSession implements RenderSource {
   readonly orders = new OrderBook();
-  tickHz = DEFAULT_TICK_HZ;
-  /** Delays of planned orders: the countdown on the arrows. */
-  orderDelays: OrderDelays | undefined;
-  roundTicks: number | undefined;
-  recruitTicks: number | undefined;
-  recruitQueueMax: number | undefined;
-  rallyCost: number | undefined;
-  provinceWarehouse: number | undefined;
-  cityUpgrades: CityDevelopment | null | undefined;
-  fortBuildTicks: number | undefined;
-  /** The overcrowding numbers: the pill beside an overcrowded city. */
-  capacityTicks: CapacityTicks | undefined;
+  /** The rule numbers of the match; none until `welcome` (the default tick rate). */
+  rules: RenderRules = NO_RENDER_RULES;
   buffer: SnapshotBuffer;
   #hud: HudState | null = null;
   #audio: MatchAudio | null = null;
@@ -152,25 +113,13 @@ export class MatchSession implements RenderSource {
   #setContext(context: MatchContext): void {
     this.#hud = context.hud;
     this.#audio = context.audio ?? null;
-    this.tickHz = context.tickHz;
-    const orders = context.orders;
-    // A plan gathers its bonus, it has no fixed delay (DEC-41, item 10; #894).
-    this.orderDelays = orders === undefined ? undefined : { planned: 0 };
-    this.roundTicks = context.roundTicks;
-    this.recruitTicks = context.recruitTicks;
-    this.recruitQueueMax = context.recruitQueueMax;
-    this.rallyCost = context.rallyCost;
-    this.provinceWarehouse = context.provinceWarehouse;
-    this.cityUpgrades = context.cityUpgrades;
-    this.fortBuildTicks = context.fortBuildTicks;
-    this.capacityTicks =
-      context.capacity === undefined
-        ? undefined
-        : {
-            attritionTicks: context.capacity.attrition_ticks,
-            graceTicks: context.capacity.grace_ticks,
-          };
-    this.buffer = new SnapshotBuffer({ tickMs: 1000 / context.tickHz, now: this.#now });
+    this.rules = context.rules;
+    this.buffer = new SnapshotBuffer({ tickMs: 1000 / context.rules.tickHz, now: this.#now });
+  }
+
+  /** Ticks a second of the match (`ruleset_public.tick_hz`); the default until `welcome`. */
+  get tickHz(): number {
+    return this.rules.tickHz;
   }
 
   get status(): ConnectionStatus {

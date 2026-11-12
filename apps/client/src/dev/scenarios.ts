@@ -25,6 +25,7 @@ import type {
   Seen,
   SnapshotMsg,
 } from '../protocol.gen.ts';
+import { renderRules } from '../render/renderRules.ts';
 import type { RenderSource } from '../render/source.ts';
 import type { ColourIds } from '../render/style.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
@@ -1071,7 +1072,7 @@ export function frozenSource(scene: FixtureScene, at?: number, flood?: FloodPin)
   // `interpolateFrame` holds the tick inside the snapshot: a later render tick is the snapshot taken then.
   const snapshot = tick === undefined ? scene.snapshot : { ...scene.snapshot, tick };
   const frame: RenderFrame = interpolateFrame(snapshot, null, snapshot.tick);
-  const rules = scene.rules ?? DEV_RULES;
+  const rules = renderRules(scene.rules ?? DEV_RULES);
   const events =
     flood === undefined ? scene.events : [...scene.events, ...floodEvents(scene, flood)];
   return {
@@ -1080,26 +1081,7 @@ export function frozenSource(scene: FixtureScene, at?: number, flood?: FloodPin)
     ...(flood === undefined
       ? {}
       : { floodFrom: floodOwners(scene.snapshot, flood), floodHoldMs: flood.ms }),
-    // A plan has no delay, it gathers its bonus (DEC-41, item 10).
-    orderDelays: { planned: 0 },
-    roundTicks: DEV_RULES.combat.round_ticks,
-    recruitTicks: DEV_RULES.recruit.unit_ticks,
-    recruitQueueMax: DEV_RULES.recruit.queue_max,
-    rallyCost: rules.recruit.rally_point ? rules.recruit.rally_cost : 0,
-    provinceWarehouse: rules.city_upgrades.warehouse_province,
-    fortBuildTicks: rules.fort.build_ticks,
-    cityUpgrades:
-      scene.cityUpgrades === true
-        ? {
-            barracks: DEV_RULES.city_upgrades.barracks_ticks,
-            barracksCharges: rules.city_upgrades.barracks_charges,
-            factory: rules.factory.build_ticks,
-            factoryCharges: rules.factory.cost,
-          }
-        : null,
-    capacityTicks: {
-      attritionTicks: DEV_RULES.capacity.attrition_ticks,
-      graceTicks: DEV_RULES.capacity.grace_ticks,
-    },
+    // The numbers of the scene's ruleset (ARC-C02); the city development only where the scene has it.
+    rules: scene.cityUpgrades === true ? rules : { ...rules, buildings: null },
   };
 }

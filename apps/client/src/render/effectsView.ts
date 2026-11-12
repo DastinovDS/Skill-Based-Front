@@ -31,7 +31,7 @@ import type { MapLayers } from './layers.ts';
 import { nodePoint, type TokenSpot } from './layout.ts';
 import { ringRadius } from './cityLayout.ts';
 import { reducedMotion } from './motion.ts';
-import { DEFAULT_ROUND_TICKS } from './source.ts';
+import { DEFAULT_ROUND_TICKS } from './renderRules.ts';
 import {
   BOUNCE_HOME,
   CAPTURE,
