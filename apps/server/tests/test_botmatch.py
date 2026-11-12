@@ -328,7 +328,7 @@ def test_every_level_is_a_smart_bot_with_a_tempo_level() -> None:
     """#574: ``LEVEL_BOTS`` names resolve through ``bot_factory`` to smart bots at a level."""
     from gow_bots.bots import SmartBot, bot_factory
     from gow_server.botmatch import LEVEL_BOTS
-    from gow_sim.maps import MapDef, load_map
+    from gow_sim.maps import load_map
     from gow_sim.ruleset import load_ruleset
 
     root = Path(__file__).resolve().parents[3]
