@@ -3,8 +3,8 @@
  * mockup `docs/design/mockups/city-buildings-r2.html`, `freeGap` and the placement `P2`): outside
  * the capacity ring, in the widest free angle between the roads that leave the city, clear of the VP
  * lozenge and the warehouse side; side by side, or stacked outward (the barracks the outer one) when
- * the angle is narrow. The owed charges of a build are a row of lozenges beyond the icon, the recruit
- * queue a column of helmets beyond the barracks.
+ * the angle is narrow. The owed charges of a build are a row of lozenges beyond the icon; while the
+ * city recruits, the barracks moves onto its own foundation (`foundationLayout.ts`).
  *
  * Pure functions, no PixiJS. The only inputs are the map's roads (public and static: the angles at
  * which they leave a city), the radius of the city, whether it carries a VP lozenge and which
@@ -14,7 +14,7 @@
 import type { MapFile } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { ringRadius } from './cityLayout.ts';
-import { BUILDING, LOZENGE, RECRUIT_PIPS, RING_ENGRAVED, VP_BADGE_LIFT } from './style.ts';
+import { BUILDING, LOZENGE, RING_ENGRAVED, VP_BADGE_LIFT } from './style.ts';
 
 export type BuildingKind = 'barracks' | 'factory';
 
@@ -31,18 +31,6 @@ const TAU = 2 * Math.PI;
 export function iconSize(cameraScale: number): number {
   const raw = Math.max(BUILDING.world, BUILDING.minPx / Math.max(1e-3, cameraScale));
   return BUILDING.world * 2 ** (Math.ceil(Math.log2(raw / BUILDING.world) * 4 - 1e-9) / 4);
-}
-
-/**
- * The scale of a recruit helmet at `cameraScale`: at least 1, and big enough to stay `screen` css
- * px per unit of its drawing down to the zoom where that needs more than the minimum; zoomed out
- * further it grows only by the power `keep` of the zoom (#869). Rounded up to a quarter octave.
- */
-export function pipScale(cameraScale: number): number {
-  const { minScale, screen, keep } = BUILDING.pips;
-  const out = screen / minScale / Math.max(1e-3, cameraScale);
-  const exact = minScale * Math.max(1, out) ** keep;
-  return 2 ** (Math.ceil(Math.log2(exact) * 4) / 4) / minScale;
 }
 
 /** The angle at which every road leaves each city of the map (the roads are straight and static). */
@@ -125,8 +113,6 @@ export interface BuildingLayout {
   /** The middle of each icon's art box, from the city centre, and its direction away from the centre. */
   readonly items: Readonly<Partial<Record<BuildingKind, Point>>>;
   readonly angles: Readonly<Partial<Record<BuildingKind, number>>>;
-  /** Where the recruit queue stands: its angle and its distance from the city centre. */
-  readonly queue: { readonly angle: number; readonly dist: number };
   /** The free angle the seats were taken from. */
   readonly gap: { readonly mid: number; readonly width: number };
 }
@@ -134,7 +120,7 @@ export interface BuildingLayout {
 /**
  * The seats of the buildings of a city (the mockup's P2): one icon in the middle of the free angle;
  * two side by side when the angle is wide enough for both, else on one line outward, the barracks the
- * outer one, so its recruit queue stands beyond it.
+ * outer one.
  */
 export function layoutBuildings(input: BuildingInput): BuildingLayout {
   const { radius, roads, vp, kinds, size } = input;
@@ -153,30 +139,7 @@ export function layoutBuildings(input: BuildingInput): BuildingLayout {
     items[kind] = at;
     angles[kind] = Math.atan2(at.y, at.x);
   });
-  const barracks = items.barracks ?? polar(gap.mid, dist);
-  const angle = Math.atan2(barracks.y, barracks.x);
-  return {
-    size,
-    items,
-    angles,
-    queue: { angle, dist: Math.hypot(barracks.x, barracks.y) + half + BUILDING.queue.gap },
-    gap,
-  };
-}
-
-/**
- * The centres of `slots` recruit helmets of scale `scale` (`pipScale`): in a column outward beyond the
- * barracks along its direction, `BUILDING.queue.pitch` apart (times the scale), the first one
- * `BUILDING.queue.gap` past the icon. A column beyond the icon keeps the clearance the icon was
- * given from the roads and the VP lozenge, whatever its length (the gaps only widen outward), and a
- * helmet keeps its place as the queue grows.
- */
-export function queueSeats(layout: BuildingLayout, slots: number, scale = 1): Point[] {
-  const { angle, dist } = layout.queue;
-  const first = dist + (RECRUIT_PIPS.width / 2) * (scale - 1);
-  const out: Point[] = [];
-  for (let j = 0; j < slots; j++) out.push(polar(angle, first + j * BUILDING.queue.pitch * scale));
-  return out;
+  return { size, items, angles, gap };
 }
 
 /** The row of owed charges beside an icon: `cost` lozenge centres, the scale of each, in payment order. */

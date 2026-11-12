@@ -44,6 +44,30 @@ describe('layoutArenas', () => {
     expect(spot?.moved).toBe(0);
   });
 
+  it('moves a plate off the barracks on its foundation beside a city (#1005)', () => {
+    const s = slot(800, 900, { ring: 0, road: true });
+    const [usual] = layoutArenas([s], [], SCALE, null);
+    if (usual === undefined) throw new Error('a spot');
+    // A piece right where the plate would float, in world units.
+    const plate = boxOf(s, usual);
+    const piece = {
+      x0: plate.left / SCALE + 20,
+      y0: plate.top / SCALE + 20,
+      x1: plate.left / SCALE + 60,
+      y1: plate.top / SCALE + 60,
+    };
+    const [spot] = layoutArenas([s], [], SCALE, null, [piece]);
+    if (spot === undefined) throw new Error('a spot');
+    expect(spot.moved).toBeGreaterThan(0);
+    const px = {
+      left: piece.x0 * SCALE,
+      top: piece.y0 * SCALE,
+      right: piece.x1 * SCALE,
+      bottom: piece.y1 * SCALE,
+    };
+    expect(overlaps(boxOf(s, spot), px)).toBe(false);
+  });
+
   it('moves the plates of fights that would cover each other, so that no two overlap', () => {
     // Four fights in one corner of the map (the scene `fights`), a few px apart.
     const slots = [slot(600, 700), slot(640, 740), slot(700, 760), slot(660, 700)];

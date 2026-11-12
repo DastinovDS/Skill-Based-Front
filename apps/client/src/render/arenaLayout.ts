@@ -36,6 +36,17 @@ export interface ArenaSlot {
   readonly bottom: number;
 }
 
+/**
+ * Something drawn beside a city the arenas must not cover either, in world units: the barracks on
+ * its foundation while the city recruits (#1005).
+ */
+export interface PieceBox {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
 /** A city the arenas must not cover (its ring in world units). */
 export interface Obstacle {
   readonly at: Point;
@@ -55,8 +66,11 @@ const NO_REACH = { top: 0, bottom: 0 } as const;
 const MARGIN = 4;
 /** What a city takes beyond its ring (px): its group, the counter of capacity, the badges. */
 const CITY_REACH = { side: 14, top: 16, bottom: 24 } as const;
-/** Prices of a px²: the arrows of two arenas meeting, covering a plate, covering a city, leaving the screen. */
-const PRICE = { reach: 1, plate: 4, city: 3, outside: 2 } as const;
+/**
+ * Prices of a px²: the arrows of two arenas meeting, covering a plate, covering a city, covering the
+ * barracks on its foundation (small, so dear: a plate never hides it, #1005), leaving the screen.
+ */
+const PRICE = { reach: 1, plate: 4, city: 3, piece: 20, outside: 2 } as const;
 /** Price of moving a plate one px from its usual spot: a plate never travels far for a small gain. */
 const PRICE_MOVE = 40;
 /** The steps of the search (px): aside by about half a plate, up by about half of one. */
@@ -109,16 +123,24 @@ export function cityBox(city: Obstacle, scale: number): Rect {
  * Places the arenas in order: the first one has the best spot, each next one takes the free spot
  * nearest to its usual one. `scale`: camera scale (CSS px per world unit). `view`: the canvas in
  * scaled-world px, `null` when it is not known (nothing is then kept on the screen). `cities`: the
- * cities that an arena should not cover.
+ * cities that an arena should not cover; `pieces`: what stands beside them (the barracks on its
+ * foundation, world units), dearer to cover.
  */
 export function layoutArenas(
   slots: readonly ArenaSlot[],
   cities: readonly Obstacle[],
   scale: number,
   view: Rect | null,
+  pieces: readonly PieceBox[] = [],
 ): ArenaSpot[] {
   const k = scale > 0 ? scale : 1;
   const boxes = cities.map((city) => cityBox(city, k));
+  const pieceRects = pieces.map((b) => ({
+    left: b.x0 * k,
+    top: b.y0 * k,
+    right: b.x1 * k,
+    bottom: b.y1 * k,
+  }));
   const taken: { reach: Rect; plate: Rect }[] = [];
   const spots: ArenaSpot[] = [];
   for (const slot of slots) {
@@ -142,8 +164,9 @@ export function layoutArenas(
         cost +=
           PRICE.reach * overlap(padded, other.reach) + PRICE.plate * overlap(plate, other.plate);
       }
-      // A city is covered by the plate itself; the arrows of the arena may reach over it.
+      // A city (or a piece beside it) is covered by the plate itself; the arrows may reach over it.
       for (const city of boxes) cost += PRICE.city * overlap(plate, city);
+      for (const piece of pieceRects) cost += PRICE.piece * overlap(plate, piece);
       if (view !== null) cost += PRICE.outside * (area(box) - overlap(box, view));
       if (cost < best.cost) best = { x, y, moved, cost };
     };

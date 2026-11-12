@@ -4,12 +4,19 @@ import type { BakeSpec } from './bake.ts';
 import {
   chordsAt,
   doneRingSpec,
+  foundationAlertSpec,
+  foundationSpec,
   iconBackSpec,
   iconFillSpec,
   iconFrontSpec,
   iconHeadSpec,
   iconSpan,
   owedSpec,
+  socketFillSpec,
+  socketGlowSpec,
+  socketHeadSpec,
+  socketRuleSpec,
+  socketSpec,
 } from './pieceShapes.ts';
 import { solidCorners } from './cutPath.ts';
 import { CUT_SOLIDS } from '../theme/cutIcons.ts';
@@ -17,7 +24,7 @@ import { CUT_SOLIDS } from '../theme/cutIcons.ts';
 /** How many instructions of each kind a spec draws (nothing needs WebGL: `draw` only fills a container). */
 function drawn(spec: BakeSpec): Record<string, number> {
   const into = new Container();
-  spec.draw(into, { gradient: (color) => color, hair: (width) => width });
+  spec.draw(into, { gradient: (color) => color, ramp: (top) => top, hair: (width) => width });
   const count: Record<string, number> = {};
   for (const child of into.children) {
     if (!(child instanceof Graphics)) continue;
@@ -108,5 +115,35 @@ describe('the icons of the barracks and the factory on the map (#954)', () => {
     expect(owedSpec(true, 0x86a6ea, 1.7).key).not.toBe(owedSpec(false, 0x86a6ea, 1.7).key);
     expect(drawn(owedSpec(false, 0x86a6ea, 1.7))['fill']).toBe(2);
     expect(doneRingSpec(10).box.width).toBeGreaterThan(20);
+  });
+});
+
+describe('the barracks foundation (#1005, D2)', () => {
+  it('draws the base, the amber rim and every socket look, one key per look', () => {
+    const specs = [
+      foundationSpec(3),
+      foundationAlertSpec(3),
+      socketSpec('empty', 0x86a6ea),
+      socketSpec('free', 0x86a6ea),
+      socketSpec('queued', 0x86a6ea),
+      socketSpec('under', 0x86a6ea),
+      socketRuleSpec('empty'),
+      socketRuleSpec('free'),
+      socketRuleSpec('filled'),
+      socketFillSpec(0x86a6ea),
+      socketHeadSpec(),
+      socketGlowSpec(),
+    ];
+    for (const spec of specs) expect(Object.keys(drawn(spec)).length).toBeGreaterThan(0);
+    expect(new Set(specs.map((s) => s.key)).size).toBe(specs.length);
+    // A recess has no colour of a player: one texture for every owner.
+    expect(socketSpec('empty', 1).key).toBe(socketSpec('empty', 2).key);
+    expect(socketSpec('queued', 1).key).not.toBe(socketSpec('queued', 2).key);
+  });
+
+  it('hatches an ordered unit and dashes a free slot', () => {
+    expect(drawn(socketSpec('queued', 1)).stroke).toBeGreaterThan(0);
+    expect(drawn(socketSpec('empty', 1)).stroke ?? 0).toBe(0);
+    expect(drawn(socketRuleSpec('free')).stroke).toBe(1);
   });
 });

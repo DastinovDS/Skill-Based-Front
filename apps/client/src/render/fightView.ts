@@ -15,6 +15,7 @@ import {
   type ArenaSlot,
   type ArenaSpot,
   type Obstacle,
+  type PieceBox,
   type Rect,
 } from './arenaLayout.ts';
 import { ringRadius } from './cityLayout.ts';
@@ -216,6 +217,7 @@ export class FightView {
   private effects: FightFx[] = [];
   private roundFx: RoundFx[] = [];
   /** Where the two sides of a fight stand on the map: the loss numbers rise over the group that lost them. */
+  private piecesOf: () => readonly PieceBox[] = () => [];
   private contactsOf: (place: FightPlace) => Contacts = (place) => ({
     own: place.at,
     enemy: place.at,
@@ -322,6 +324,11 @@ export class FightView {
   /** Camera scale (CSS px per world unit): the arena keeps its size on screen. */
   setCameraScale(scale: number): void {
     if (scale > 0) this.cameraScale = scale;
+  }
+
+  /** What stands beside the cities (#1005: the barracks on its foundation): the arenas keep clear of it. */
+  setPieces(piecesOf: () => readonly PieceBox[]): void {
+    this.piecesOf = piecesOf;
   }
 
   /** Where the groups of a fight stand (`EffectsView`: their tokens): the numbers of losses go over them. */
@@ -431,7 +438,7 @@ export class FightView {
       const base = { at: item.place.at, ring: item.place.ring, road: item.place.node === null };
       return { ...base, top: LIVE_REACH.top, bottom: LIVE_REACH.bottom };
     });
-    return layoutArenas(slots, this.cities(), this.cameraScale, this.view);
+    return layoutArenas(slots, this.cities(), this.cameraScale, this.view, this.piecesOf());
   }
 
   /** The cities that arenas and feeds should not cover. */

@@ -221,43 +221,6 @@ export const PROVINCE = {
   enemy: { inset: 3.4, width: 1.1, alpha: 0.95 },
 } as const;
 /**
- * The progress marks above an own city (variant A "Cells", #439; ui-style 9.4a): one cell is one
- * unit of the thing, on a dark plate. The recruit queue (DEC-25) is a row of `cell`s (a unit
- * queued, in production, ready, or a free slot of the selected city); the barracks or warehouse
- * build (DEC-26) is one wide cell beside a round badge with the kind of the build. The plates of the
- * two stack above the ring, `gap` apart. The hatch is coarser than in the mockup (a fine one
- * aliases when the map is zoomed out): stripes `thickness` wide every `period`, both measured along
- * the diagonal of the 45 degree stripe (x + y).
- */
-export const PROGRESS = {
-  /** The cell of a recruit queue slot. */
-  cell: { width: 16, height: 10, gap: 3 },
-  /** The wide cell of a build. */
-  buildCell: { width: 36, height: 10 },
-  /** Room round the cells inside the plate. */
-  pad: 4,
-  /** Between the queue plate and the build plate. */
-  gap: 3,
-  /** Between the capacity ring (its centre line) and the lower edge of the lowest plate. */
-  ringGap: 6,
-  plate: { radius: 4, alpha: 0.86, rim: 0.14 },
-  /** The stroke of a cell, the margin of the growing part inside it and its head line. */
-  frame: { width: 1.5, inset: 2, head: 2 },
-  hatch: { period: 9, thickness: 4.5 },
-  /** The dot of a queued unit: its radius is this share of the cell height (at least `min`). */
-  dot: { share: 0.14, min: 1.6 },
-  /** The dashed outline of a free slot. */
-  slot: { dash: 3, gap: 2.5 },
-  /** The dashed amber ring round a cell that needs a look (ready with no room, stopped by a fight). */
-  alert: { width: 1.6, dash: 3, gap: 2, grow: 2, low: 0.45 },
-  /** The round badge with the kind of a build: centre from the left of the plate, radius, rim, glyph size. */
-  badge: { cx: 13, radius: 7, rim: 1.2, glyph: 4 },
-  /** Economy v2: at most this many hollow dots of charges a build still waits for (DEC-41, item 7). */
-  owedDots: 5,
-  /** The hollow dot of an owed charge: radius and stroke. */
-  owed: { radius: 2.5, width: 1.4, pitch: 7 },
-} as const;
-/**
  * The middle of the gilt VP lozenge lies this far outside the capacity ring's centre line (#847;
  * further out since the lozenge grew, #928, so it covers less of the ring and the helmet).
  */
@@ -401,7 +364,7 @@ export const HELMET_ENGRAVED = {
  * half-widths kept clear of a road, the VP lozenge and the warehouse side; `sep`: the air between
  * two icons), side by side or, when the angle is narrow, stacked outward. The owed charges are a row
  * of lozenges beyond the icon (`row`, the menu's price row, `lozenge`: their scale by the icon's
- * size), the recruit queue a row of helmets beyond the barracks (`queue`).
+ * size); while a city recruits, the barracks stands on its own foundation (`FOUNDATION`).
  */
 export const BUILDING = {
   box: 26,
@@ -420,9 +383,6 @@ export const BUILDING = {
   free: { road: 5.2, vp: 14, store: 0.95, sep: 2.5, ringAir: 1 },
   row: { gap: 1.5, rim: 0.71 },
   lozenge: { min: 0.72, max: 1.3, share: 0.74, ref: 14, pitch: 0.96 },
-  queue: { gap: 6, pitch: 10 },
-  /** The recruit helmets keep their size on screen like the icons: at least 1, `screen` css px per unit near zoom 1. */
-  pips: { minScale: 1.35, screen: 1.7, keep: 0.5 },
 } as const;
 /**
  * The payment of a build (57k, #872): a charge flies `flightMs` from the warehouse or the group to
@@ -464,11 +424,47 @@ export const BUILD_TICKS = {
   ink: { width: 1.3 },
 } as const;
 /**
- * The recruit queue (55k Pips): a small helmet `width` wide per unit beyond the barracks (`BUILDING.queue`);
- * the unit in production fills from the bottom (`steps` baked levels), a queued one is hatched, a
- * free slot of the selected city beaded.
+ * The recruit queue (#1005, D2 "Foundation", ui-style 76): while a city recruits, its barracks
+ * stands on a flat foundation of `queue_max` sockets, the barracks' ground line on the foundation's
+ * top rule (one silhouette), at the nearest free seat clear of the factory, the roads, the VP
+ * lozenge, the capacity ring, the selection ticks, the warehouse row and the name (`clear`: the air
+ * kept from the factory; the search steps `search.step` up to `search.reach` from the barracks'
+ * seat at rest). Sizes are for the 16-unit icon (`BUILDING.world`) and scale with it. A socket
+ * `cell` square: a unit ordered is the owner's hatch, the unit under way the owner's colour
+ * sweeping left to right behind an ivory `head` line, past the queue a dark recess (dashed, a free
+ * slot, when the city is selected); with no room the foundation's rim turns amber and dashed
+ * (`alert`, pulsing down to `alert.low`). Motion: the barracks swings to its seat over `swingMs`;
+ * a made unit drops from its socket into the capacity ring over `drop.ms` and the ring's cell
+ * flashes for `drop.flashMs`; the queue slides one socket left over `drop.slideMs`; a unit that
+ * walks to the rally point leaves its socket over `drop.walkMs`. The CP marks of the queued walks
+ * (#930, W4) are a row under the foundation (`marks`).
  */
-export const RECRUIT_PIPS = { width: 9, steps: 12 } as const;
+export const FOUNDATION = {
+  cell: 4.1,
+  gap: 0.9,
+  padX: 1.3,
+  padY: 1.2,
+  casing: 1.5,
+  chamfer: 1,
+  rim: { width: 1, inset: 0.5, chamfer: 0.7, alpha: 0.95 },
+  plate: { top: 0x2c261d, bottom: 0x0b0907 },
+  socket: {
+    rule: 0.5,
+    inset: 0.25,
+    dash: 1.3,
+    gap: 1,
+    hatch: { pitch: 1.5, width: 0.55, queued: 0.95, under: 0.7 },
+    ruleAlpha: { empty: 0.2, free: 0.8, filled: 0.55 },
+    plateAlpha: 0.8,
+  },
+  head: { casing: 2.1, casingAlpha: 0.8, width: 1.1, over: 0.5, glow: 3.2, glowAlpha: 0.14 },
+  alert: { casing: 1.2, width: 1.25, dash: 2.2, gap: 1.5, low: 0.45 },
+  clear: 3.2,
+  search: { step: 0.75, reach: 60 },
+  swingMs: 320,
+  marks: { size: 7.2, pitch: 8.2, gap: 1.8 },
+  drop: { ms: 560, flashMs: 520, slideMs: 300, walkMs: 260 },
+} as const;
 /**
  * Fine rings (55p): every city highlight on one weight system, a 1 px ink line on a 2.6 px casing at
  * `R + 5`, `R + 8` and `R + 11` from the capacity ring `R`. Selected: two rings over a dark band and

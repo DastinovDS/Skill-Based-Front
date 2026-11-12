@@ -8,8 +8,6 @@ import {
   layoutBuildings,
   lozengeScale,
   owedRow,
-  pipScale,
-  queueSeats,
   roadAngles,
   vpSeat,
   type BuildingKind,
@@ -17,7 +15,7 @@ import {
 import { cityRadius, fitReach, ringRadius } from './cityLayout.ts';
 import { captionTop } from './nameLayout.ts';
 import { lozengeRow, lozengeRowY } from './pieceLayout.ts';
-import { BUILDING, RECRUIT_PIPS, RING_ENGRAVED, VP_LOZENGE } from './style.ts';
+import { BUILDING, RING_ENGRAVED, VP_LOZENGE } from './style.ts';
 
 const deg = (d: number): number => (d * Math.PI) / 180;
 
@@ -91,8 +89,8 @@ interface Clash {
 
 /**
  * What an icon at `it` (half extent `r`) meets in a city: a road (the same test as the mockup's
- * `clashesOf`), the VP lozenge, the warehouse row, the name under it, the capacity cells, a recruit
- * helmet. Empty: nothing.
+ * `clashesOf`), the VP lozenge, the warehouse row, the name under it, the capacity cells. Empty:
+ * nothing.
  */
 function clashes(
   city: (typeof CITIES)[number],
@@ -105,8 +103,6 @@ function clashes(
   const ring = ringRadius(city.radius);
   const r = iconHalf(size);
   const out: Clash[] = [];
-  const pips = queueSeats(layout, 3, pipScale(zoom));
-  const pip = (RECRUIT_PIPS.width / 2) * pipScale(zoom);
   const vp = vpSeat(city.radius);
   const store = lozengeRow(city.warehouse);
   const storeY = lozengeRowY(city.radius);
@@ -145,15 +141,11 @@ function clashes(
     // B6 ticks; an icon past the ring never reaches it.
     if (Math.hypot(it.x, it.y) - r < fitReach(city.radius) + 2.2)
       out.push({ what: 'chevrons', kind });
-    if (pips.some((p) => Math.hypot(it.x - p.x, it.y - p.y) < r + pip)) {
-      // The queue stands beyond the barracks; the factory's icon only meets it if the layout is wrong.
-      out.push({ what: 'queue', kind });
-    }
   }
   return out;
 }
 
-describe('iconSize and pipScale', () => {
+describe('iconSize', () => {
   it('is 16 units across near zoom 1 and never under 13 css px on screen', () => {
     expect(iconSize(1)).toBe(BUILDING.world);
     expect(iconSize(2.2)).toBe(BUILDING.world);
@@ -167,13 +159,6 @@ describe('iconSize and pipScale', () => {
     expect(iconSize(0.5)).toBeGreaterThan(iconSize(1));
     const octave = iconSize(0.25) / iconSize(0.5);
     expect(octave).toBeCloseTo(2, 5);
-  });
-
-  it('keeps the recruit helmets at least their size and growing slower than the map shrinks', () => {
-    expect(pipScale(2)).toBeGreaterThanOrEqual(1);
-    expect(pipScale(2)).toBeLessThan(1.2);
-    expect(pipScale(0.5)).toBeGreaterThan(pipScale(1));
-    expect(pipScale(0.5) * 0.5).toBeLessThan(BUILDING.pips.screen / BUILDING.pips.minScale);
   });
 });
 
@@ -262,25 +247,6 @@ describe('layoutBuildings: the free side (#954, P2)', () => {
       2 * iconHalf(size) + BUILDING.free.sep,
       6,
     );
-    // The recruit queue stands beyond the outer one.
-    expect(layout.queue.dist).toBeGreaterThan(Math.hypot(b.x, b.y) + iconHalf(size));
-  });
-
-  it('puts the queue beyond a lone barracks, and on the free side when there is no barracks', () => {
-    const size = iconSize(1);
-    const one = layoutBuildings({ ...base, kinds: ['barracks'], size });
-    const at = one.items.barracks;
-    if (at === undefined) throw new Error('seat');
-    expect(one.queue.angle).toBeCloseTo(Math.atan2(at.y, at.x), 9);
-    expect(one.queue.dist).toBeCloseTo(
-      Math.hypot(at.x, at.y) + iconHalf(size) + BUILDING.queue.gap,
-      9,
-    );
-    const none = layoutBuildings({ ...base, kinds: [], size });
-    expect(none.queue.angle).toBeCloseTo(
-      Math.atan2(Math.sin(none.gap.mid), Math.cos(none.gap.mid)),
-      9,
-    );
   });
 
   it('seats nothing that is not asked for', () => {
@@ -290,7 +256,7 @@ describe('layoutBuildings: the free side (#954, P2)', () => {
 });
 
 describe('the placement against the mockup road sets (nothing collides, ui-style 73)', () => {
-  it('never meets a road, the VP lozenge, the store, the name, the capacity cells or the queue', () => {
+  it('never meets a road, the VP lozenge, the store, the name or the capacity cells', () => {
     const bad: string[] = [];
     let seen = 0;
     for (const city of CITIES) {
@@ -313,54 +279,6 @@ describe('the placement against the mockup road sets (nothing collides, ui-style
     expect(seen).toBe(CITIES.length * 30 * ZOOMS.length * KIND_SETS.length);
     expect(bad).toEqual([]);
   });
-
-  it('keeps the recruit helmets clear of the roads, the VP lozenge, the store and the name too', () => {
-    const bad: string[] = [];
-    for (const city of CITIES) {
-      for (const [n, sets] of Object.entries(ROAD_SETS)) {
-        sets.forEach((degrees, i) => {
-          const roads = degrees.map(deg);
-          for (const zoom of ZOOMS) {
-            const layout = layoutBuildings({
-              radius: city.radius,
-              roads,
-              vp: true,
-              kinds: BOTH,
-              size: iconSize(zoom),
-            });
-            const pip = (RECRUIT_PIPS.width / 2) * pipScale(zoom);
-            for (const p of queueSeats(layout, 3, pipScale(zoom))) {
-              for (const a of roads) {
-                const along = p.x * Math.cos(a) + p.y * Math.sin(a);
-                const perp = Math.abs(-p.x * Math.sin(a) + p.y * Math.cos(a));
-                if (along > ringRadius(city.radius) && perp < pip + 3.7) {
-                  bad.push(`${city.name} ${n} roads #${String(i)} zoom ${String(zoom)}: road`);
-                }
-              }
-              const vp = vpSeat(city.radius);
-              if (Math.hypot(p.x - vp.x, p.y - vp.y) < pip + VP_LOZENGE.side * 0.62) {
-                bad.push(`${city.name} ${n} roads #${String(i)} zoom ${String(zoom)}: vp`);
-              }
-              const storeY = lozengeRowY(city.radius);
-              if (
-                lozengeRow(city.warehouse).some(
-                  (x) => Math.hypot(p.x - x, p.y - storeY) < pip + 3.4,
-                )
-              ) {
-                bad.push(`${city.name} ${n} roads #${String(i)} zoom ${String(zoom)}: store`);
-              }
-              const w = (NAME.length * 4.1) / zoom;
-              const top = captionTop('city', city.radius);
-              if (Math.abs(p.x) < w + pip && p.y + pip > top && p.y - pip < top + 14 / zoom) {
-                bad.push(`${city.name} ${n} roads #${String(i)} zoom ${String(zoom)}: name`);
-              }
-            }
-          }
-        });
-      }
-    }
-    expect(bad).toEqual([]);
-  });
 });
 
 describe('owedRow: the owed charges beside an icon', () => {
@@ -380,35 +298,5 @@ describe('owedRow: the owed charges beside an icon', () => {
 
   it('is empty for no charges', () => {
     expect(owedRow({ x: 0, y: 0 }, 0, 16, 0).slots).toEqual([]);
-  });
-});
-
-describe('queueSeats: the recruit helmets', () => {
-  const layout = layoutBuildings({
-    radius: cityRadius(6),
-    roads: [],
-    vp: true,
-    kinds: ['barracks'],
-    size: iconSize(1),
-  });
-
-  it('stands a column beyond the barracks along its direction, a pitch apart', () => {
-    const seats = queueSeats(layout, 3);
-    expect(seats).toHaveLength(3);
-    seats.forEach((p, j) => {
-      expect(Math.atan2(p.y, p.x)).toBeCloseTo(layout.queue.angle, 9);
-      expect(Math.hypot(p.x, p.y)).toBeCloseTo(layout.queue.dist + j * BUILDING.queue.pitch, 9);
-    });
-    expect(queueSeats(layout, 0)).toEqual([]);
-  });
-
-  it('keeps the first helmet where it was as the queue grows, and widens with the scale', () => {
-    expect(queueSeats(layout, 1)[0]).toEqual(queueSeats(layout, 3)[0]);
-    const [far = { x: 0, y: 0 }, farther = { x: 0, y: 0 }] = queueSeats(layout, 2, 2);
-    expect(Math.hypot(farther.x - far.x, farther.y - far.y)).toBeCloseTo(
-      2 * BUILDING.queue.pitch,
-      9,
-    );
-    expect(Math.hypot(far.x, far.y)).toBeGreaterThan(layout.queue.dist);
   });
 });

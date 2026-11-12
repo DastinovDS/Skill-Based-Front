@@ -1,16 +1,18 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { EventMsg, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { BuildingRules } from './renderRules.ts';
-import { cityRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
+import { cityRadius, ringRadius, vpBadgeAt, showsBarracks } from './cityLayout.ts';
 import {
   BUILD_BOOST,
   BUILD_PAY,
   BUILDING,
   CAPITAL_RADIUS,
   CAPTURE,
+  FOUNDATION,
+  LOZENGE,
   NODE_RADIUS,
   PROVINCE,
-  RECRUIT_PIPS,
+  UNIT_SIDES,
   VP,
   VP_LOZENGE,
   YOU,
@@ -24,7 +26,6 @@ import { capacityPulse, type CapacityPulse } from './capacityPulse.ts';
 import { EaseTween } from './tween.ts';
 import { beaconPulse } from './alertLayout.ts';
 import { cityDues, rallyDues } from '../hud/rallyDue.ts';
-import { alertAlpha } from './progressLayout.ts';
 import { buildProgress, lozengeRow, lozengeRowY, type BuildProgress } from './pieceLayout.ts';
 import {
   BUILDING_KINDS,
@@ -32,22 +33,35 @@ import {
   iconSize,
   layoutBuildings,
   owedRow,
-  pipScale,
-  queueSeats,
   roadAngles,
   type BuildingKind,
   type BuildingLayout,
   type OwedRow,
 } from './buildingLayout.ts';
+import {
+  activeShare,
+  alertAlpha,
+  foundationAlert,
+  foundationOn,
+  foundationScale,
+  iconBox,
+  pieceBoxes,
+  placePiece,
+  socketCount,
+  socketKinds,
+  swingSeat,
+  type Box,
+  type CaptionBox,
+} from './foundationLayout.ts';
+import { FoundationView } from './foundationView.ts';
+import { RecruitLog, eventAge, recruitShow, type Recruit } from './recruitDrop.ts';
+import { captionTop, captionVisible } from './nameLayout.ts';
 import type { MapLayers } from './layers.ts';
-import type { Point } from './camera.ts';
+import { symbolScale, type Point } from './camera.ts';
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import {
   cityBodySpec,
   cityRingSpec,
-  helmetBackSpec,
-  helmetFrontSpec,
-  helmetLevelSpec,
   provinceBodySpec,
   stockColor,
   vpBadgeSpec,
@@ -55,8 +69,6 @@ import {
 } from './bakedShapes.ts';
 import {
   chargeSpec,
-  cpMarkGlyph,
-  cpMarkSpec,
   doneRingSpec,
   iconBackSpec,
   iconFillSpec,
@@ -64,11 +76,10 @@ import {
   iconHeadSpec,
   iconSpan,
   owedSpec,
-  pipAlertSpec,
   warehouseMarksSpec,
   type IconLook,
 } from './pieceShapes.ts';
-import { helmet } from '../units/helmet.ts';
+import { easeEngrave } from '../theme/tokens.ts';
 import { pieceFamily, usePieceFont } from './pieceFont.ts';
 import { PaymentLog, payShow, type Payment, type PayShow } from './buildPay.ts';
 import { buildTicksShow, drawBuildTicks } from './buildTicks.ts';
@@ -209,25 +220,25 @@ const PAY_HORIZON_MS = 4000;
 /** The size a row lozenge, a flying or a popping charge is baked at: the largest it is drawn. */
 const CHARGE_BAKED = BUILDING.lozenge.max * BUILD_BOOST.lozenge * (1 + BUILD_PAY.pop);
 
-/** A recruit of the queue: a small helmet in the column beyond the barracks icon. */
-interface PipSlot {
-  readonly root: Container;
-  readonly back: BakedSprite;
-  readonly level: BakedSprite;
-  readonly front: BakedSprite;
-  /** The shown share of the unit in production: eases toward the snapshot's. */
-  readonly fill: EaseTween;
-  /** #930, W4: the CP mark of its walk, upright beyond it: dimmed, inked in from the foot. */
-  readonly mark: Container;
-  readonly markBack: BakedSprite;
-  readonly markFill: BakedSprite;
+/**
+ * The barracks of a recruiting city on its foundation (#1005, D2): where the barracks stands at
+ * rest and on its foundation, the swing between the two, and what the seat was placed for.
+ */
+interface Piece {
+  readonly view: FoundationView;
+  /** The barracks' seat at rest and on its foundation, from the city centre. */
+  rest: Point;
+  anchor: Point;
+  /** The inputs the seat was placed for: placed again only when they change. */
+  key: string;
+  /** The swing, 0 (at rest) .. 1 (on its foundation), linear in time, and where it heads. */
+  on: number;
+  target: number;
+  /** The foundation's scale (the icon's size over the 16-unit icon). */
+  k: number;
+  /** The garrison the ring shows while a made unit drops into it (`null`: the snapshot's). */
+  held: number | null;
 }
-
-/** The CP mark of a walk on the ring (#930, W4): its size and how far beyond its recruit, world units. */
-const WALK_MARK = { size: 13, out: 15, dim: 0.42 } as const;
-
-/** How long the fill of a recruit takes to follow a new snapshot, ms (one snapshot apart). */
-const PIP_EASE_MS = 120;
 
 /**
  * The cities of the map (ui-style.md 9.4; Engraved, #847, part 2 of #829): a body whose size
@@ -238,14 +249,16 @@ const PIP_EASE_MS = 120;
  * factory as the city menu's own icons outside the ring, in the widest free angle between the roads
  * (#954, P2 "Free side"; own, and an enemy's next to an own node, DEC-31), a build in progress as a
  * plan with a row of owed charges beside it (57k), then the icon filling with the build time, the
- * recruit queue as small helmets beyond the barracks (55k Pips) and the gilt VP lozenge. The
- * capacity is public and exact (DEC-22).
+ * recruit queue as the barracks' own foundation of sockets (#1005, D2 "Foundation": the barracks
+ * steps onto it at the nearest free seat while the city recruits, a made unit drops from it into the
+ * capacity ring) and the gilt VP lozenge. The capacity is public and exact (DEC-22).
  *
  * A province (`kind = province`, DEC-23) is a small dot instead of a body, with the capacity ring.
  *
  * Every shape is a baked sprite (`bakedShapes.ts`, `pieceShapes.ts`, `SpriteCache`), one texture per
- * look with a bounded key; the fill of a building icon and of a recruit is a crop of one baked fill, so it
- * rises continuously without new textures. `destroy()` releases every object.
+ * look with a bounded key; the fill of a building icon is a crop of one baked fill and the unit under
+ * way a baked cell scaled from its left, so they grow continuously without new textures. `destroy()`
+ * releases every object.
  */
 /** How long a replaced city body takes to fade out, ms: the city flips at the start of a capture (#819). */
 const BODY_FADE_MS = CAPTURE.cityMs;
@@ -257,14 +270,25 @@ export class CityView {
   /** The city whose capacity ring pulses now (`pulseFull`), `null`: none. */
   private fullRing: number | null = null;
   private readonly bars: BakedSprite[];
-  private readonly alerts: BakedSprite[];
-  /** The cities whose alert ring is on now (it pulses every frame). */
+  /** The cities whose foundation's rim is amber now (it pulses every frame). */
   private readonly alerting = new Set<number>();
   private readonly buildings: Record<BuildingKind, BuildingSlot>[];
   /** The angles at which the roads leave each city: the buildings stand between them. */
   private readonly roads: readonly (readonly number[])[];
-  private readonly pips: PipSlot[][];
-  private readonly pipLayers: Container[];
+  /** The barracks on its foundation, per city once it has recruited (`null`: never yet). */
+  private readonly pieces: (Piece | null)[];
+  /** The pieces whose swing, fill or made unit moves: stepped every frame. */
+  private readonly stirring = new Set<number>();
+  /** The cities whose foundation is on the map now (on, or swinging off). */
+  private readonly showing = new Set<number>();
+  /** The own and, in a replay, every `recruited` of the events (#1005). */
+  private readonly recruitLog = new RecruitLog();
+  /** The newest recruit still moving per city this frame. */
+  private recruits = new Map<number, Recruit>();
+  /** The name under each city, CSS px (`null`: none); the piece keeps clear of it. */
+  private captionPx: (node: number) => { width: number; height: number } | null = () => null;
+  /** The camera scale the names were measured for, rounded down to a quarter octave. */
+  private captionScale = 1;
   private readonly badges: (Container | null)[];
   private readonly vpLabels: Text[] = [];
   private readonly keys: string[];
@@ -274,9 +298,8 @@ export class CityView {
   private selected: number | null = null;
   private readonly radii: number[];
   private readonly vpStyle: TextStyle;
-  /** The size of the building icons now (`iconSize`) and the scale of the recruits (`pipScale`). */
+  /** The size of the building icons now (`iconSize`). */
   private iconSz = iconSize(1);
-  private pipK = pipScale(1);
   /** The render tick of the frame (fractional): the build time fills by it. */
   private tick = 0;
   /** Set after the first snapshot: a body that changes after it (a capture) cross-fades. */
@@ -287,8 +310,6 @@ export class CityView {
   private captureDelays: ReadonlyMap<number, number> = new Map();
   /** The buildings whose build is running or whose done effect plays: stepped every frame. */
   private readonly moving = new Set<BuildingSlot>();
-  /** The recruits whose fill is still easing. */
-  private readonly easing = new Set<PipSlot>();
   /** The own `build_paid` of the events (#872). */
   private readonly payLog: PaymentLog;
   /** The builds with a payment in motion this frame, and its payments. */
@@ -335,11 +356,9 @@ export class CityView {
     this.bodies = [];
     this.rings = [];
     this.bars = [];
-    this.alerts = [];
     this.buildings = [];
     this.roads = roadAngles(map);
-    this.pips = [];
-    this.pipLayers = [];
+    this.pieces = map.nodes.map(() => null);
     this.badges = [];
     for (const node of map.nodes) {
       const city = new Container({ x: node.x, y: node.y, label: `node-${String(node.id)}` });
@@ -351,13 +370,6 @@ export class CityView {
       const slots = {} as Record<BuildingKind, BuildingSlot>;
       for (const kind of BUILDING_KINDS) slots[kind] = this.buildingSlot(city, kind, node.id);
       this.buildings.push(slots);
-      const pipLayer = city.addChild(new Container({ label: 'recruits' }));
-      this.pipLayers.push(pipLayer);
-      this.pips.push([]);
-      const ring = city.addChild(sprites.sprite());
-      ring.label = 'progress-alert';
-      ring.visible = false;
-      this.alerts.push(ring);
       // A province carries no VP (DEC-23).
       if (node.vp > 0 && node.kind !== 'province') {
         const badge = city.addChild(new Container());
@@ -578,29 +590,82 @@ export class CityView {
     ring.alpha = look.alpha;
   }
 
-  /** Every frame: the dashed rings that ask for a look pulse (steady with "less motion"). */
+  /**
+   * Every frame: the amber rims that ask for a look pulse, and the head of a unit under way glows
+   * softly (both steady with "less motion").
+   */
   pulse(nowMs: number): void {
-    if (this.alerting.size === 0) return;
-    const alpha = alertAlpha(beaconPulse(nowMs, false), reducedMotion());
-    for (const id of this.alerting) {
-      const ring = this.alerts[id];
-      if (ring !== undefined) ring.alpha = alpha;
+    if (this.showing.size === 0) return;
+    const reduced = reducedMotion();
+    const alert = alertAlpha(beaconPulse(nowMs, false), reduced);
+    const { glowAlpha } = FOUNDATION.head;
+    const glow = reduced ? glowAlpha : glowAlpha + 0.05 * Math.sin(nowMs / 170);
+    for (const id of this.showing) {
+      this.pieces[id]?.view.pulse(this.alerting.has(id) ? alert : 0, glow);
     }
   }
 
-  /** The camera scale (CSS px per world unit): the icons and the recruits keep their screen size. */
+  /**
+   * The camera scale (CSS px per world unit): the icons keep their screen size; the names under the
+   * cities keep theirs, so the barracks' foundation is placed again when either changes enough.
+   */
   setCameraScale(scale: number): void {
     const size = iconSize(scale);
-    const pips = pipScale(scale);
-    if (size === this.iconSz && pips === this.pipK) return;
+    // A quarter octave below the scale: the names are never larger in world units than measured.
+    const names = 2 ** (Math.floor(Math.log2(Math.max(1e-3, scale)) * 4) / 4);
+    if (size === this.iconSz && names === this.captionScale) return;
     this.iconSz = size;
-    this.pipK = pips;
+    this.captionScale = names;
     this.states.forEach((state, id) => {
       if (state !== null) {
         this.placeBuildings(id, state);
         this.drawRecruits(id, state, this.selected === id);
       }
     });
+  }
+
+  /** The size on screen (CSS px) of the name under each city: the barracks' foundation keeps clear of it. */
+  setCaptions(captionPx: (node: number) => { width: number; height: number } | null): void {
+    this.captionPx = captionPx;
+  }
+
+  /**
+   * Every frame, after `setTick` (#1005): the `recruited` among `events` move their city's queue (a
+   * made unit leaves its socket and drops into the capacity ring, or walks to the rally point; the
+   * queue slides one socket on), by their age at the render tick. Nothing moves with "less motion".
+   */
+  setRecruits(events: readonly EventMsg[], tickHz: number): void {
+    this.recruitLog.read(events);
+    const before = this.recruits;
+    this.recruits = new Map();
+    if (!reducedMotion()) {
+      for (const r of this.recruitLog.recent(this.tick, this.baseTick, tickHz)) {
+        if (!this.recruits.has(r.node) && this.pieces[r.node] !== null)
+          this.recruits.set(r.node, r);
+      }
+    }
+    for (const id of before.keys()) this.stirring.add(id);
+    for (const id of this.recruits.keys()) this.stirring.add(id);
+  }
+
+  /**
+   * The boxes the barracks on its foundation covers now, in world units: the arenas of fights keep
+   * clear of them (#1005).
+   */
+  pieceBoxes(): Box[] {
+    const out: Box[] = [];
+    for (const id of this.showing) {
+      const piece = this.pieces[id];
+      const node = this.map.nodes[id];
+      const state = this.states[id];
+      if (piece === null || piece === undefined || node === undefined || state === null) continue;
+      if (state === undefined) continue;
+      const sockets = socketCount({ count: state.queue ?? 0, sockets: state.queueMax });
+      for (const b of pieceBoxes(piece.anchor, this.iconSz, sockets, state.walks.length)) {
+        out.push({ x0: node.x + b.x0, y0: node.y + b.y0, x1: node.x + b.x1, y1: node.y + b.y1 });
+      }
+    }
+    return out;
   }
 
   /** The render tick of the frame (fractional): a build's time fills by it, between two snapshots. */
@@ -822,16 +887,77 @@ export class CityView {
       }
     }
     this.drawFlights();
-    for (const pip of this.easing) {
-      if (pip.root.destroyed) {
-        this.easing.delete(pip);
-        continue;
-      }
-      pip.fill.step(dtMs);
-      showPipFill(pip);
-      showMarkFill(pip);
-      if (!pip.fill.active) this.easing.delete(pip);
+    for (const id of this.stirring) {
+      if (!this.stepPiece(id, dtMs)) this.stirring.delete(id);
     }
+  }
+
+  /**
+   * One frame of the barracks on its foundation (#1005): the swing round the city, the fill of the
+   * unit under way, a made unit leaving its socket. Returns whether anything still moves.
+   */
+  private stepPiece(id: number, dtMs: number): boolean {
+    const piece = this.pieces[id];
+    const state = this.states[id];
+    if (piece === null || piece === undefined || state === null || state === undefined) {
+      return false;
+    }
+    if (piece.view.root.destroyed) return false;
+    let moving = false;
+    if (piece.on !== piece.target) {
+      const step = dtMs / FOUNDATION.swingMs;
+      piece.on =
+        piece.target > piece.on
+          ? Math.min(piece.target, piece.on + step)
+          : Math.max(piece.target, piece.on - step);
+      moving = piece.on !== piece.target;
+    }
+    this.seatPiece(id, piece);
+    if (piece.view.stepShare(dtMs)) moving = true;
+    const recruit = this.recruits.get(id) ?? null;
+    const show =
+      recruit === null
+        ? null
+        : recruitShow(eventAge(recruit.tick, this.tick, this.tickHz), recruit.walks);
+    piece.view.setSlide(show?.slide ?? 0);
+    // The made unit drops into the viewer's own garrison: the ring holds its cell empty till it lands.
+    const own = this.kindOf(state.owner) === 'you' && state.capacity !== null;
+    const dropping = show !== null && show.drop !== null && own;
+    const held = dropping ? Math.max(0, state.garrison - 1) : null;
+    if (held !== piece.held) {
+      piece.held = held;
+      this.drawRing(id, state);
+    }
+    piece.view.showDrop(
+      show,
+      piece.anchor,
+      piece.k,
+      own
+        ? {
+            radius: ringRadius(this.radiusOf(id)),
+            capacity: state.capacity,
+            index: Math.max(0, state.garrison - 1),
+          }
+        : null,
+    );
+    return moving || recruit !== null;
+  }
+
+  /** Puts the barracks and its foundation where the swing has them now. */
+  private seatPiece(id: number, piece: Piece): void {
+    const slot = this.buildings[id]?.barracks;
+    const q = easeEngrave(piece.on);
+    const seat = swingSeat(piece.rest, piece.anchor, q);
+    if (slot !== undefined && slot.root.visible) slot.root.position.set(seat.x, seat.y);
+    const root = piece.view.root;
+    root.position.set(seat.x, seat.y);
+    root.scale.set(piece.k);
+    // The foundation comes in at the end of the swing and goes at the start of the way back.
+    const t = Math.min(1, Math.max(0, (piece.on - 0.7) / 0.3));
+    root.alpha = t * t * (3 - 2 * t);
+    root.visible = piece.on > 0;
+    if (piece.on > 0) this.showing.add(id);
+    else this.showing.delete(id);
   }
 
   private set(id: number, state: CityState): void {
@@ -858,13 +984,13 @@ export class CityView {
     const kind = this.kindOf(state.owner);
     this.drawBody(id, state);
 
-    this.drawRecruits(id, state, selected);
+    // The buildings first: the barracks' foundation keeps clear of the factory where it stands.
     this.placeBuildings(id, state);
+    this.drawRecruits(id, state, selected);
 
     const { capacity, warehouse } = state;
     const ringOn = capacity !== null;
-    ring.set(ringOn ? cityRingSpec(radius, capacity, kind === 'you' ? state.garrison : 0) : null);
-    ring.visible = ringOn;
+    this.drawRing(id, state);
     // A province has a warehouse only its owner sees (DEC-41, item 13):
     // `stateOf` leaves `warehouse` null for every other province, so nothing is drawn there.
     const barOn = ringOn && warehouse !== null;
@@ -888,22 +1014,47 @@ export class CityView {
     }
   }
 
-  /** The buildings the snapshot gives a city: built, or being built (nobody's city has any). */
-  private kindsOf(state: CityState): BuildingKind[] {
+  /** The capacity ring of city `id`: the viewer's own garrison filled (one cell held empty while a made unit drops in). */
+  private drawRing(id: number, state: CityState): void {
+    const ring = this.rings[id];
+    if (ring === undefined) return;
+    const ringOn = state.capacity !== null;
+    const own = this.kindOf(state.owner) === 'you';
+    const held = this.pieces[id]?.held ?? null;
+    const garrison = own ? (held ?? state.garrison) : 0;
+    ring.set(ringOn ? cityRingSpec(this.radiusOf(id), state.capacity, garrison) : null);
+    ring.visible = ringOn;
+  }
+
+  /** Units in the recruit queue the map shows (none without the recruit rules). */
+  private queueOf(state: CityState): number {
+    return state.unitTicks === null ? 0 : Math.max(0, state.queue ?? 0);
+  }
+
+  /** The barracks stands on its foundation: the city recruits, or it is selected and may recruit. */
+  private recruiting(id: number, state: CityState): boolean {
+    return foundationOn(this.queueOf(state), this.selected === id, state.queueMax);
+  }
+
+  /**
+   * The buildings the snapshot gives a city: built, or being built (nobody's city has any); a city
+   * that recruits shows its barracks (it stands on its foundation) even where the rules draw none.
+   */
+  private kindsOf(id: number, state: CityState): BuildingKind[] {
     if (state.owner === null) return [];
     return BUILDING_KINDS.filter((kind) => {
       const b = state.buildings[kind];
-      return b.built || b.build !== null;
+      return b.built || b.build !== null || (kind === 'barracks' && this.recruiting(id, state));
     });
   }
 
-  /** Where the buildings and the recruit queue of city `id` stand now (#954, P2 "Free side"). */
+  /** Where the buildings of city `id` stand now (#954, P2 "Free side"). */
   private layoutOf(id: number, state: CityState): BuildingLayout {
     return layoutBuildings({
       radius: this.radii[id] ?? NODE_RADIUS,
       roads: this.roads[id] ?? [],
       vp: (this.badges[id] ?? null) !== null,
-      kinds: this.kindsOf(state),
+      kinds: this.kindsOf(id, state),
       size: this.iconSz,
     });
   }
@@ -924,7 +1075,8 @@ export class CityView {
       const { built, build, known } = state.buildings[kind];
       const at = layout.items[kind];
       const wasBuilding = slot.build !== null;
-      const shown = at !== undefined && (built || build !== null);
+      const stands = kind === 'barracks' && this.recruiting(id, state);
+      const shown = at !== undefined && (built || build !== null || stands);
       slot.root.visible = shown;
       slot.row.visible = false;
       slot.loose.visible = false;
@@ -1212,99 +1364,140 @@ export class CityView {
   }
 
   /**
-   * The recruit queue of an own city (55k Pips): a small helmet per unit in a column beyond the
-   * barracks (#954), the first filling with its production, the others hatched; the selected city's
-   * free slots beaded. A unit ready with no room, or the production stopped by a fight, gets the
-   * dashed amber ring that pulses. All from the snapshot and the rules.
+   * The recruit queue of a city (#1005, D2 "Foundation"): while the city recruits (or, selected,
+   * may recruit) its barracks stands on its own foundation of `queue_max` sockets at the nearest
+   * free seat (`placePiece`), the unit under way sweeping its socket in the owner's colour, the units
+   * ordered hatched, the rest dark recesses (dashed free slots when selected); with no room, or a
+   * fight in the city, the rim turns amber and pulses. The CP marks of the queued walks to the rally
+   * point stand in a row under it (#930, W4). All from the snapshot and the rules.
    */
   private drawRecruits(id: number, state: CityState, selected: boolean): void {
-    const layer = this.pipLayers[id];
-    const pips = this.pips[id];
-    const alert = this.alerts[id];
-    if (layer === undefined || pips === undefined || alert === undefined) return;
-    const count = state.unitTicks === null ? 0 : Math.max(0, state.queue ?? 0);
-    const slots = state.unitTicks === null ? 0 : Math.max(count, selected ? state.queueMax : 0);
-    const width = RECRUIT_PIPS.width;
-    const scale = this.pipK;
-    const seats = queueSeats(
-      this.layoutOf(id, state),
-      state.unitTicks === null ? 0 : Math.max(count, state.queueMax),
-      scale,
-    );
-    while (pips.length < slots) pips.push(this.pipSlot(layer));
-    pips.forEach((pip, j) => {
-      pip.root.visible = j < slots;
-      if (j >= slots) return;
-      const at = seats[j] ?? { x: 0, y: 0 };
-      pip.root.position.set(at.x, at.y);
-      pip.root.scale.set(scale);
-      const free = j >= count;
-      const own = this.colours[this.me];
-      pip.back.set(helmetBackSpec('own', width, own, free ? 'dashed' : 'solid', false));
-      pip.front.set(helmetFrontSpec('own', width, own, free ? 'dashed' : 'solid'));
-      pip.level.set(free ? null : helmetLevelSpec('own', width, own));
-      const unitTicks = state.unitTicks ?? 0;
-      const share =
-        free || j > 0
-          ? 0
-          : state.waiting
-            ? 1
-            : unitTicks > 0
-              ? Math.min(1, Math.max(0, state.progress / unitTicks))
-              : 0;
-      // A new queue or "less motion" shows the level at once; a unit that went shows the next at once.
-      if (!this.warm || reducedMotion() || share < pip.fill.value) pip.fill.snap(share);
-      else pip.fill.setTarget(share);
-      showPipFill(pip);
-      if (pip.fill.active) this.easing.add(pip);
-      // #930, W4: the CP mark of its walk beyond the recruit, upright; red with a down chevron
-      // when the CP now do not pay it.
-      const walk = free ? undefined : state.walks[j];
-      pip.mark.visible = walk !== undefined;
-      if (walk !== undefined) {
-        const d = Math.hypot(at.x, at.y);
-        const k = (d + WALK_MARK.out * scale) / d;
-        pip.mark.position.set(at.x * k, at.y * k);
-        pip.mark.scale.set(scale);
-        pip.markBack.set(cpMarkSpec(walk ? 'down' : 'ink', WALK_MARK.size, WALK_MARK.dim));
-        pip.markFill.set(walk ? null : cpMarkSpec('ink', WALK_MARK.size));
-        showMarkFill(pip);
+    const on = this.recruiting(id, state);
+    const city = this.cities[id];
+    const barracks = this.buildings[id]?.barracks;
+    let piece = this.pieces[id] ?? null;
+    if (!on && piece === null) return;
+    if (city === undefined || barracks === undefined) return;
+    const rest = barracks.seat;
+    const count = this.queueOf(state);
+    const sockets = socketCount({ count, sockets: state.queueMax });
+    if (piece === null) {
+      const view = new FoundationView(city, city.getChildIndex(barracks.row), this.sprites);
+      piece = { view, rest, anchor: rest, key: '', on: 0, target: 0, k: 1, held: null };
+      this.pieces[id] = piece;
+    }
+    piece.rest = rest;
+    piece.k = foundationScale(this.iconSz);
+    if (on) {
+      const key = this.pieceKey(id, state, sockets);
+      if (key !== piece.key) {
+        piece.key = key;
+        const seat = placePiece({
+          signs: this.signsOf(id, state),
+          rest,
+          size: this.iconSz,
+          sockets,
+          marks: state.walks.length,
+        });
+        piece.anchor = { x: seat.x, y: seat.y };
       }
-    });
-    for (let j = slots; j < pips.length; j++) {
-      const pip = pips[j];
-      if (pip !== undefined) pip.mark.visible = false;
+      piece.view.show(
+        {
+          kinds: socketKinds({
+            count,
+            progress: state.progress,
+            unitTicks: state.unitTicks ?? 0,
+            waiting: state.waiting,
+            sockets,
+            selected,
+          }),
+          share: activeShare({
+            progress: state.progress,
+            unitTicks: state.unitTicks ?? 0,
+            waiting: state.waiting,
+          }),
+          alert: foundationAlert(count, state.waiting, state.paused),
+          color: this.colorOf(state.owner) ?? YOU,
+          walks: state.walks,
+        },
+        !this.warm || reducedMotion(),
+      );
     }
-    const ring = count > 0 && (state.waiting || state.paused) ? (seats[0] ?? null) : null;
-    alert.set(ring === null ? null : pipAlertSpec(8));
-    if (ring !== null) {
-      alert.position.set(ring.x, ring.y);
-      alert.scale.set(scale);
-    }
-    alert.visible = ring !== null;
-    if (ring === null) this.alerting.delete(id);
-    else this.alerting.add(id);
+    if (foundationAlert(count, state.waiting, state.paused)) this.alerting.add(id);
+    else this.alerting.delete(id);
+    piece.target = on ? 1 : 0;
+    // The first snapshot and "less motion" put the barracks where it belongs at once.
+    if (!this.warm || reducedMotion()) piece.on = piece.target;
+    this.seatPiece(id, piece);
+    this.stirring.add(id);
   }
 
-  private pipSlot(layer: Container): PipSlot {
-    const root = layer.addChild(new Container({ label: 'recruit' }));
-    const back = root.addChild(this.sprites.sprite());
-    const level = root.addChild(this.sprites.sprite());
-    const front = root.addChild(this.sprites.sprite());
-    level.visible = false;
-    const mark = layer.addChild(new Container({ label: 'walk-mark' }));
-    const markBack = mark.addChild(this.sprites.sprite());
-    const markFill = mark.addChild(this.sprites.sprite());
-    mark.visible = false;
+  /** What the seat of city `id`'s piece depends on: it is placed again only when this changes. */
+  private pieceKey(id: number, state: CityState, sockets: number): string {
+    const factory = this.buildings[id]?.factory;
+    const caption = this.captionOf(id);
+    return [
+      this.iconSz,
+      this.captionScale,
+      this.radiusOf(id),
+      sockets,
+      state.walks.length,
+      state.warehouseCap ?? state.warehouse ?? 0,
+      factory?.root.visible === true
+        ? `${String(factory.seat.x)},${String(factory.seat.y)},${String(factory.size)}`
+        : '',
+      factory?.root.visible === true && factory.build !== null
+        ? (factory.owed?.slots.length ?? 0)
+        : '',
+      caption === null ? '' : `${String(caption.width)},${String(caption.height)}`,
+      this.barracksSeatKey(id),
+    ].join('|');
+  }
+
+  private barracksSeatKey(id: number): string {
+    const seat = this.buildings[id]?.barracks.seat;
+    return seat === undefined ? '' : `${String(seat.x)},${String(seat.y)}`;
+  }
+
+  /** The name under city `id` in world units now (`null`: not shown). */
+  private captionOf(id: number): CaptionBox | null {
+    const node = this.map.nodes[id];
+    if (node === undefined || node.kind === 'province') return null;
+    const scale = this.captionScale;
+    if (!captionVisible('city', scale)) return null;
+    const px = this.captionPx(id);
+    if (px === null) return null;
     return {
-      root,
-      back,
-      level,
-      front,
-      fill: new EaseTween(0, PIP_EASE_MS),
-      mark,
-      markBack,
-      markFill,
+      top: captionTop('city', this.radiusOf(id)),
+      width: px.width / scale,
+      height: px.height / scale,
+    };
+  }
+
+  /** What city `id` shows round it, which its barracks' foundation keeps clear of. */
+  private signsOf(id: number, state: CityState): Parameters<typeof placePiece>[0]['signs'] {
+    const factory = this.buildings[id]?.factory;
+    const shown = factory !== undefined && factory.root.visible;
+    const owed =
+      shown && factory.build !== null && factory.owed !== null
+        ? factory.owed.slots.map((p) => ({
+            x: p.x,
+            y: p.y,
+            r: (LOZENGE.casing * (factory.owed?.k ?? 1) * Math.SQRT2) / 2,
+          }))
+        : [];
+    return {
+      radius: this.radiusOf(id),
+      roads: this.roads[id] ?? [],
+      vp: (this.badges[id] ?? null) !== null,
+      warehouse:
+        state.capacity !== null && state.warehouse !== null
+          ? (state.warehouseCap ?? state.warehouse)
+          : 0,
+      caption: this.captionOf(id),
+      factory: shown ? iconBox('factory', factory.seat, factory.size) : null,
+      owed,
+      tokenScale: symbolScale(UNIT_SIDES[0], this.captionScale),
     };
   }
 }
@@ -1312,22 +1505,4 @@ export class CityView {
 /** The part of a body's key that names its owner and look, without the plate of units standing there. */
 function ownerPart(key: string): string {
   return key.replace(/:o$/, ':');
-}
-
-/** Inks a walk's CP mark in from its foot as its recruit is made (#930, W4). */
-function showMarkFill(pip: PipSlot): void {
-  const shown = pip.fill.value;
-  pip.markFill.visible = shown > 0 && pip.markFill.spec !== null;
-  if (shown <= 0) return;
-  const g = cpMarkGlyph(WALK_MARK.size);
-  const half = WALK_MARK.size / 2 + 1;
-  pip.markFill.cropBottom(half - g.bottom + 1 + shown * (g.bottom - g.top));
-}
-
-/** Puts a recruit's shown fill on its level sprite: the bottom of the dome up to the level. */
-function showPipFill(pip: PipSlot): void {
-  const shown = pip.fill.value;
-  pip.level.visible = shown > 0 && pip.level.spec !== null;
-  const h = helmet('own', RECRUIT_PIPS.width);
-  if (shown > 0) pip.level.cropBottom(1 + shown * (h.domeBottom - h.domeTop));
 }

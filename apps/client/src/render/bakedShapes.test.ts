@@ -41,7 +41,7 @@ interface Instruction {
  */
 function drawn(spec: BakeSpec): Instruction[] {
   const into = new Container();
-  spec.draw(into, { gradient: (color) => color, hair: (width) => width });
+  spec.draw(into, { gradient: (color) => color, ramp: (top) => top, hair: (width) => width });
   const shape = into.children
     .filter((child): child is Graphics => child instanceof Graphics)
     .at(-1);

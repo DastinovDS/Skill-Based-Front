@@ -23,6 +23,8 @@ export interface BakeSpec {
 export interface BakeTools {
   /** The gradient of a colour (BL1: lighter at the top, darker at the bottom), made once and kept by the cache. */
   gradient(color: number): FillGradient | number;
+  /** A vertical gradient from `top` to `bottom` (a plate of its own shade), made once and kept by the cache. */
+  ramp(top: number, bottom: number): FillGradient | number;
   /**
    * A line `width` world units wide, at least one texture pixel at the resolution of the bake (an
    * Engraved hairline never thinner than a device pixel, ui-style 53): a texture is baked anew when
@@ -71,6 +73,7 @@ export const MAX_BAKED_BYTES = 64 * 1024 * 1024;
  */
 export class SpriteCache implements BakeTools {
   private readonly gradients = new Map<number, FillGradient>();
+  private readonly ramps = new Map<string, FillGradient>();
   private readonly entries = new Map<string, Entry>();
   private readonly sprites = new Set<BakedSprite>();
   private current = 1;
@@ -146,6 +149,8 @@ export class SpriteCache implements BakeTools {
     this.retired = [];
     for (const fill of this.gradients.values()) fill.destroy();
     this.gradients.clear();
+    for (const fill of this.ramps.values()) fill.destroy();
+    this.ramps.clear();
   }
 
   /** @internal Takes a texture for `spec` (baked now if it is new) and counts a user of it. */
@@ -185,17 +190,19 @@ export class SpriteCache implements BakeTools {
     let fill = this.gradients.get(color);
     if (fill === undefined) {
       const { top, bottom } = shadeEnds(color);
-      fill = new FillGradient({
-        type: 'linear',
-        start: { x: 0, y: 0 },
-        end: { x: 0, y: 1 },
-        colorStops: [
-          { offset: 0, color: top },
-          { offset: 1, color: bottom },
-        ],
-        textureSpace: 'local',
-      });
+      fill = verticalGradient(top, bottom);
       this.gradients.set(color, fill);
+    }
+    return fill;
+  }
+
+  ramp(top: number, bottom: number): FillGradient | number {
+    if (this.baker.flat === true) return top;
+    const key = `${String(top)}:${String(bottom)}`;
+    let fill = this.ramps.get(key);
+    if (fill === undefined) {
+      fill = verticalGradient(top, bottom);
+      this.ramps.set(key, fill);
     }
     return fill;
   }
@@ -232,6 +239,20 @@ export class SpriteCache implements BakeTools {
     for (const { texture } of this.entries.values()) this.retired.push(texture);
     this.entries.clear();
   }
+}
+
+/** A linear gradient down a shape's own box, `top` to `bottom`. */
+function verticalGradient(top: number, bottom: number): FillGradient {
+  return new FillGradient({
+    type: 'linear',
+    start: { x: 0, y: 0 },
+    end: { x: 0, y: 1 },
+    colorStops: [
+      { offset: 0, color: top },
+      { offset: 1, color: bottom },
+    ],
+    textureSpace: 'local',
+  });
 }
 
 /**
