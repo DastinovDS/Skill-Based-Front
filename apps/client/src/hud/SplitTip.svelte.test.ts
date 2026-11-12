@@ -52,7 +52,14 @@ describe('SplitTip: the stack limit before the order is sent (#468)', () => {
       group: group.id,
       tick: 30,
       nodes: [],
-      split: [{ node: target.id, units: fit }],
+      split: [
+        {
+          node: target.id,
+          units: fit,
+          ticks: fit > 0 ? 30 : null,
+          path: fit > 0 ? [home, target.id] : null,
+        },
+      ],
     });
     return { orders, hud, target, sent };
   }

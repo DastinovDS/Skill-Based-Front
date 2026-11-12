@@ -593,16 +593,22 @@ class Reach:
     accepted there now (``0``: no smaller group either). The interface offers the split of that
     size (#762); it is the same search under the stack limit of a smaller size, so it reads
     nothing more than ``nodes`` does."""
+    split_paths: tuple[tuple[int, int, tuple[int, ...]], ...] = ()
+    """``(node, ticks, path)`` by node id for each ``split`` node with a size above 0: the fastest
+    path of the part that fits and its ticks once it departs, the path an ordinary group order
+    sends that part along (DEC-48, item B4) and the interface shows for the node (#1004). Every
+    node of a path but the last is the group's node or an own node, as in ``nodes``."""
 
 
 def _split_fits(
     state: GameState, rules: Ruleset, player: int, start: int, units: int, nodes: list[int]
-) -> tuple[tuple[int, int], ...]:
-    """``(node, fit)`` for each of ``nodes`` (all rejected with ``STACK_LIMIT`` for ``units``):
-    the largest size below ``units`` a group from ``start`` reaches it with (DEC-20, D). A size
-    passes a node exactly when the node's capacity is not less than it, so the largest such size
-    is one of the node capacities: only those are tried, largest first."""
-    fit: dict[int, int] = {}
+) -> tuple[tuple[int, int, int, tuple[int, ...]], ...]:
+    """``(node, fit, ticks, path)`` for each of ``nodes`` (all rejected with ``STACK_LIMIT`` for
+    ``units``): the largest size below ``units`` a group from ``start`` reaches it with (DEC-20,
+    D), with the ticks and the path of that size (``0`` and ``()`` when not even one unit gets
+    there). A size passes a node exactly when the node's capacity is not less than it, so the
+    largest such size is one of the node capacities: only those are tried, largest first."""
+    fit: dict[int, tuple[int, int, tuple[int, ...]]] = {}
     caps = sorted(dict.fromkeys(c for c in node_capacities(state, rules) if 0 < c < units))
     for size in reversed(caps):
         if len(fit) == len(nodes):
@@ -610,8 +616,9 @@ def _split_fits(
         found = reachable_paths(state, rules, player, start, size=size)
         for node in nodes:
             if node not in fit and node in found:
-                fit[node] = size
-    return tuple((node, fit.get(node, 0)) for node in nodes)
+                ticks, path = found[node]
+                fit[node] = (size, ticks, path)
+    return tuple((node, *fit.get(node, (0, 0, ()))) for node in nodes)
 
 
 def reach(
@@ -628,11 +635,14 @@ def reach(
             start = g.location.node
             fits = reachable_paths(state, rules, player, start, size=g.units)
             every = reachable(state, rules, player, start)
-            split = [n for n in every if n not in fits]
+            split = _split_fits(
+                state, rules, player, start, g.units, [n for n in every if n not in fits]
+            )
             return Reach(
                 group=group,
                 nodes=tuple((node, ticks, path) for node, (ticks, path) in fits.items()),
-                split=_split_fits(state, rules, player, start, g.units, split),
+                split=tuple((node, fit) for node, fit, _, _ in split),
+                split_paths=tuple((node, ticks, path) for node, fit, ticks, path in split if fit),
             )
     return None
 

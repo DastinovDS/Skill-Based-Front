@@ -539,3 +539,21 @@ def test_reach_names_the_size_that_fits_a_split_node(
     found = view_reach(state, RULES, 0, opaque_id(KEY, 0, gid), KEY)
     assert found is not None
     assert found.split == split
+
+
+def test_reach_gives_the_route_of_the_part_that_fits() -> None:
+    """#1004: a ``split`` node of ``reach`` carries the fastest path and the ticks of the part
+    that fits (DEC-20, D; the path an ordinary group order sends that part along, DEC-48, B4),
+    so the interface never draws a straight line across the map. 7 units: B takes 4 (A-B), P 3
+    (A-P), D, E and C 6, C only over D and E (B holds 4), as ``reachable`` of size 5 has it."""
+    state = _state()
+    gid = _add(state, 7, 7, A)
+    found = view_reach(state, RULES, 0, opaque_id(KEY, 0, gid), KEY)
+    assert found is not None
+    assert found.split_paths == (
+        (B, 20, (A, B)),
+        (D, 20, (A, D)),
+        (E, 40, (A, D, E)),
+        (P, 25, (A, P)),
+        (C, 60, (A, D, E, C)),
+    )

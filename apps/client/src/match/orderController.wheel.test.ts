@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEV_RULES_FLOW, devSnapshot } from '../hud/devFeed.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { Command, GroupView, SnapshotMsg } from '../protocol.gen.ts';
+import type { Command, GroupView, ReachSplit, SnapshotMsg } from '../protocol.gen.ts';
 import { OrderBook } from './orderBook.ts';
 import { OrderController, PLAN_BONUS } from './orderController.ts';
 import { WHEEL_GESTURE_GAP_MS } from './wheelSteps.ts';
@@ -34,7 +34,14 @@ function snapshot(charged: number): SnapshotMsg {
   return { ...base, view: { ...base.view, me: { ...base.view.me, cp: 1000 }, groups: [group] } };
 }
 
-function setup(charged = 9, split: { node: number; units: number }[] = []) {
+function setup(charged = 9, parts: { node: number; units: number }[] = []) {
+  // The part that fits goes straight down the road to the target (`ReachSplit.path`, #1004).
+  const split: ReachSplit[] = parts.map(({ node, units }) => ({
+    node,
+    units,
+    ticks: units > 0 ? 30 : null,
+    path: units > 0 ? [home, node] : null,
+  }));
   const hud = new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: RULES, map: DEFAULT_MAP });
   hud.onSnapshot(snapshot(charged));
   const sent: Command[] = [];

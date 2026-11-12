@@ -890,6 +890,11 @@ def test_reach_msg_promises_what_a_move_gets(name: str) -> None:
                     sim.RejectCode.STACK_LIMIT
                 )
                 assert 0 <= item.units < g.units
+                # #1004: the part that fits has the path and the ticks of its own move
+                if item.units > 0:
+                    assert isinstance(g.location, AtNode) and item.path is not None
+                    assert item.path[0] == g.location.node
+                    assert item.ticks is not None
             enemy = reach_msg(wire_id, match.tick, match.reach(1 - player, g.id))
             assert (enemy.nodes, enemy.split) == ((), ())
     assert reach_msg("x", 1, None).nodes == ()
@@ -940,9 +945,17 @@ class _ReachChecker:
                     # #762: the size that fits is the largest one the stack limit lets through
                     here = g.location.node
                     if item.units > 0:
-                        assert find_path(
+                        # #1004: the route of that part is the one its move takes (DEC-48, B4),
+                        # through own nodes only, as for ``nodes``
+                        path = item.path
+                        assert path is not None
+                        assert path == find_path(
                             match.state, RULES, player, here, item.node, size=item.units
                         )
+                        assert item.ticks is not None and item.ticks > 0
+                        assert all(view.nodes[n].owner == player for n in path[1:-1])
+                    else:
+                        assert (item.path, item.ticks) == (None, None)
                     for bigger in range(item.units + 1, g.units + 1):
                         assert (
                             find_path(match.state, RULES, player, here, item.node, size=bigger)

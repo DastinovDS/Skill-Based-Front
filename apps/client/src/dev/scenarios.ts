@@ -782,7 +782,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     pins: GROUP_SELECT_PINS,
   },
   {
-    // DEC-48: the same with E held, a hatched planned ribbon for each group (D2).
+    // DEC-48: the same with E held, the same routes and the bonus counter (#1004).
     id: 'group_plan',
     map: 'artery',
     snapshot: groupSelectSnapshot(bundledMap('artery')),

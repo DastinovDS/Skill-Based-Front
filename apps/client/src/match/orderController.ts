@@ -31,7 +31,7 @@ import { undoCommand, type UndoEntry } from './undoList.ts';
 import { RADIAL, SECTORS, stanceRates, type StanceRate } from '../hud/radial.ts';
 import { getLocale, tf } from '../i18n/index.ts';
 import { formatCentis } from '../hud/format.ts';
-import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
+import { NO_PICK_REACH, OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
 import { GHOST_CP, UNDO_CUE } from '../render/style.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { chargedOfSplit, SplitState } from './splitState.svelte.ts';
@@ -73,6 +73,14 @@ export function rallyPrice(n: number, move: number, rallyPct: number): number {
  * way may change); a new group, node or size asks at once. Well under the message rate limit.
  */
 export const REACH_REFRESH_TICKS = 10;
+
+/**
+ * Each of the groups selected together asks again after this many ticks (#1004), and at most one
+ * of them every `PICK_REACH_GAP_TICKS`: sixteen groups stay well under the message rate limit. A
+ * new group, node or size asks at once.
+ */
+export const PICK_REACH_REFRESH_TICKS = 30;
+export const PICK_REACH_GAP_TICKS = 3;
 
 /** The selection follows a split-off group only for this many ticks after the split (2 s). */
 export const FOLLOW_SPLIT_TICKS = 20;
@@ -214,6 +222,9 @@ export class OrderController implements MapInteraction {
   /** The group, node and size the last `reach_query` was sent for, and the tick it was sent. */
   #reachKey = '';
   #reachTick = 0;
+  /** The same for each of the groups selected together (#1004), and the tick of the last refresh. */
+  #pickReachKeys: ReadonlyMap<string, { readonly key: string; readonly tick: number }> = new Map();
+  #pickRefreshTick = Number.NEGATIVE_INFINITY;
   /**
    * A split the server accepted: the selected `from` group is followed by the new group `to` as
    * soon as a snapshot shows it (`#followSplit`); `tick`: the snapshot tick it was noted at.
@@ -232,6 +243,8 @@ export class OrderController implements MapInteraction {
     readonly dest: number;
     readonly planned: boolean;
     readonly bonus: number;
+    /** The server's route of a part of the size that fits (`reach.split`, #1004), for the ghost. */
+    readonly path: readonly number[] | null;
   } | null = null;
   /** Until when (`now()`, ms) the CP badge stays marked after a refusal for CP (#762). */
   #cpFlashUntil = 0;
@@ -475,7 +488,9 @@ export class OrderController implements MapInteraction {
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
     const splitNodes = reach === null ? [] : [...reach.split.keys()];
     const eta = this.#eta(reach, preview);
-    const route = eta?.path ?? this.#splitRoute(reach, from, preview);
+    // The ghost of the order goes only along a route the server gave (#793, #1004): the whole
+    // group's (`reach.nodes`) or the part's that fits (`reach.split`); none, no line.
+    const route = eta?.path ?? null;
     const hover = this.#hoverMarkNow();
     const undo = this.#undoMarksNow();
     const group = this.#groupPreview(preview);
@@ -487,7 +502,7 @@ export class OrderController implements MapInteraction {
     const groupKey =
       group === null
         ? '-'
-        : `${group.from.join(',')}>${String(group.to)}:${group.kind}:${String(group.planned)}:${group.price}`;
+        : `${group.from.join(',')}>${String(group.to)}:${group.kind}:${String(group.planned)}:${group.price}:${group.routes.map((r) => r.join('>')).join(';')}`;
     const key = `${bonus === null ? '-' : `${String(bonus.bonus)}/${String(bonus.max)}`}|${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${route?.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}|${fortPick === null ? '-' : `${String(fortPick.node)}:${fortPick.edges.join(',')}:${String(fortPick.hover)}`}|${String(hover?.node ?? '-')}:${hover?.group ?? '-'}|${picks.join(',')}|${groupKey}`;
     if (
       key !== this.#overlayKey ||
@@ -504,7 +519,7 @@ export class OrderController implements MapInteraction {
         selection,
         ghosts,
         // The ghost of the order goes only where the server's `reach` says it gets (#793), or
-        // where it says the part that fits gets (`reach.split`, #928).
+        // where it says the part that fits gets (`reach.split`, #928), along its route (#1004).
         preview:
           from !== null && preview !== null && route !== null
             ? {
@@ -587,6 +602,7 @@ export class OrderController implements MapInteraction {
         this.#syncPicks();
         this.#syncRally();
         this.#syncReach();
+        this.#syncPickReach();
         this.#syncTargetMenus();
         this.#syncFort();
         const preview = this.#previewTarget();
@@ -629,17 +645,45 @@ export class OrderController implements MapInteraction {
   #groupPreview(target: number | null): GroupPreview | null {
     if (this.#picks.length === 0 || target === null) return null;
     const groups = this.#o.hud.current?.groups ?? [];
-    const from = this.#picks
-      .map((id) => groups.find((g) => g.id === id)?.node ?? null)
-      .filter((node): node is number => node !== null && node !== target);
     const kind = this.#isOwnNode(target) ? 'rally' : 'attack';
+    const planned = kind === 'attack' && this.planned;
+    const from: number[] = [];
+    const routes: (readonly number[])[] = [];
+    for (const id of this.#picks) {
+      const node = groups.find((g) => g.id === id)?.node ?? null;
+      if (node === null || node === target) continue;
+      from.push(node);
+      const route = this.#memberRoute(id, node, target, planned);
+      if (route !== null) routes.push(route);
+    }
     return {
       from,
+      routes,
       to: target,
-      planned: kind === 'attack' && this.planned,
+      planned,
       kind,
       price: formatCentis(this.#groupPrice(target), getLocale()),
     };
+  }
+
+  /**
+   * The way the member `id` standing in `node` would take to `target` in the group order (#1004):
+   * the server's route of the whole group (`reach.nodes`), else, for an ordinary order, the route
+   * of the part that fits, which the server splits off and sends (`reach.split`, DEC-48, item B4);
+   * a planned member too big for every road is dropped (owner decision (10)). `null`: no answer
+   * yet, an answer about the group elsewhere, or no way there: no line.
+   */
+  #memberRoute(
+    id: string,
+    node: number,
+    target: number,
+    planned: boolean,
+  ): readonly number[] | null {
+    const reach = this.ui.current.pickReach[id];
+    if (reach === undefined) return null;
+    const route =
+      reach.routes.get(target) ?? (planned ? undefined : reach.splitRoutes.get(target)?.path);
+    return route !== undefined && route[0] === node ? route : null;
   }
 
   /** The price of the group order to `target` now, hundredths of CP (`ruleset_public`, item A2). */
@@ -1042,12 +1086,17 @@ export class OrderController implements MapInteraction {
     const bonus = planned ? this.#bonusFor(dest) : 0;
     const groups = this.#o.hud.current?.groups ?? [];
     const from = this.#picks.map((id) => groups.find((g) => g.id === id)?.node ?? null);
+    const routes = this.#picks.map((id, i) => {
+      const at = from[i] ?? null;
+      return at === null ? null : this.#memberRoute(id, at, dest, planned);
+    });
     this.#closeTargetMenus();
     this.#sendCommand(
       { type: 'group_move', groups: [first, ...rest], dest, planned, bonus },
       null,
       null,
       from,
+      routes,
     );
     this.deselect();
   }
@@ -1223,6 +1272,9 @@ export class OrderController implements MapInteraction {
           // The part asks for no more than its own charged units (`planBonusCap`).
           bonus:
             plan.bonus === 0 ? 0 : Math.min(plan.bonus, planBonusCap(chargedOfSplit(n, charged))),
+          // The route the server gave is for a part of the size that fits; another size may differ.
+          path:
+            n === this.splitFit(dest) ? (this.#reach()?.splitRoutes.get(dest)?.path ?? null) : null,
         };
       }
     });
@@ -1240,14 +1292,27 @@ export class OrderController implements MapInteraction {
    */
   onReach(msg: ReachMsg): void {
     this.#input(() => {
-      if (msg.group !== this.#selectedGroup()?.id) return;
+      const single = msg.group === this.#selectedGroup()?.id;
+      if (!single && !this.#picks.includes(msg.group)) return;
       const info: ReachInfo = {
         group: msg.group,
         ticks: new Map(msg.nodes.map((n) => [n.node, n.ticks])),
         routes: new Map(msg.nodes.map((n) => [n.node, n.path])),
         split: new Map(msg.split.map((s) => [s.node, s.units])),
+        splitRoutes: new Map(
+          msg.split.flatMap((s) =>
+            s.path === null || s.ticks === null
+              ? []
+              : [[s.node, { ticks: s.ticks, path: s.path }] as const],
+          ),
+        ),
       };
-      this.ui.patch({ reach: info });
+      if (single) {
+        this.ui.patch({ reach: info });
+        return;
+      }
+      // A group selected together (#1004): its answer joins the others.
+      this.ui.patch({ pickReach: { ...this.ui.current.pickReach, [msg.group]: info } });
     });
   }
 
@@ -1295,6 +1360,7 @@ export class OrderController implements MapInteraction {
       this.#sendCommand(
         { type: 'move', group: to, dest: send.dest, planned: send.planned, bonus: send.bonus },
         send.node,
+        send.path,
       );
       const picked = this.#o.hud.selection;
       if (picked?.kind === 'group' && picked.id === from) this.deselect();
@@ -1838,6 +1904,19 @@ export class OrderController implements MapInteraction {
     return true;
   }
 
+  /**
+   * A click on a toast or an alert strip with a place (#1004, item 14): the camera goes there, as
+   * for the alert key. The place is the one the message named; nothing else changes.
+   */
+  showPlace(node: number): void {
+    this.#o.focusNode?.(node);
+  }
+
+  /** The camera can be moved to a place (a match screen; not a test without a canvas). */
+  get canShowPlace(): boolean {
+    return this.#o.focusNode !== undefined;
+  }
+
   #now(): number {
     return this.#o.now?.() ?? performance.now();
   }
@@ -1882,12 +1961,13 @@ export class OrderController implements MapInteraction {
     from: number | null,
     route: readonly number[] | null = null,
     members: readonly (number | null)[] = [],
+    memberRoutes: readonly (readonly number[] | null)[] = [],
   ): number | null {
     const send = this.#o.send;
     if (send === null) return null;
     this.#clearNotice();
     const seq = send(cmd);
-    this.#o.book.track(seq, cmd, from, route, members);
+    this.#o.book.track(seq, cmd, from, route, members, memberRoutes);
     return seq;
   }
 
@@ -2016,6 +2096,49 @@ export class OrderController implements MapInteraction {
   }
 
   /**
+   * Asks the server where each of the groups selected together can go (#1004), as `#syncReach`
+   * does for one: at once for a new group, node or size, then each again after
+   * `PICK_REACH_REFRESH_TICKS`, one of them at most every `PICK_REACH_GAP_TICKS`. The answers of
+   * groups no longer selected are dropped.
+   */
+  #syncPickReach(): void {
+    const query = this.#o.queryReach;
+    const picks = this.#picks;
+    const known = this.ui.current.pickReach;
+    if (query === undefined || picks.length === 0) {
+      if (this.#pickReachKeys.size > 0) this.#pickReachKeys = new Map();
+      if (Object.keys(known).length > 0) this.ui.patch({ pickReach: NO_PICK_REACH });
+      return;
+    }
+    const groups = this.#o.hud.current?.groups ?? [];
+    const tick = this.#o.hud.current?.tick ?? 0;
+    const keys = new Map<string, { readonly key: string; readonly tick: number }>();
+    for (const id of picks) {
+      const group = groups.find((g) => g.id === id);
+      if (group === undefined || group.node === null) continue;
+      const key = `${id}:${String(group.node)}:${String(group.units)}`;
+      const asked = this.#pickReachKeys.get(id);
+      const stale =
+        asked !== undefined &&
+        tick - asked.tick >= PICK_REACH_REFRESH_TICKS &&
+        tick - this.#pickRefreshTick >= PICK_REACH_GAP_TICKS;
+      if (asked?.key === key && !stale) {
+        keys.set(id, asked);
+        continue;
+      }
+      if (asked?.key === key) this.#pickRefreshTick = tick;
+      keys.set(id, { key, tick });
+      query(id);
+    }
+    this.#pickReachKeys = keys;
+    if (Object.keys(known).some((id) => !picks.includes(id))) {
+      this.ui.patch({
+        pickReach: Object.fromEntries(Object.entries(known).filter(([id]) => picks.includes(id))),
+      });
+    }
+  }
+
+  /**
    * The hovered target the server's `reach` answer lists under `split` (the selected group is bigger
    * than a node on the way, DEC-20), mirrored to `ui.current.splitHover` for the hint. Only what the
    * server sent: nothing about the stack limit is worked out here (AGENTS.md 7.1).
@@ -2067,31 +2190,15 @@ export class OrderController implements MapInteraction {
     if (reach === null || preview === null) return null;
     const ticks = reach.ticks.get(preview);
     const path = reach.routes.get(preview);
-    if (ticks === undefined || path === undefined) return null;
-    return {
+    if (ticks !== undefined && path !== undefined) {
       // A plan waits until its bonus is gathered, an unknown time: the travel time only.
-      ticks,
-      path,
-    };
-  }
-
-  /**
-   * The line to a target only a smaller group reaches (`reach.split` with at least one unit, the
-   * server's number): a click there splits the part that fits off and sends it (#762), so the map
-   * shows that ordinary order as it shows any other. A planned order has none there (#940). The server
-   * gives no route for the part before the order (`ReachSplit` has none): the line goes straight
-   * from the group's node to the target, as the ghost of an order without a known route does.
-   * `null`: not such a target.
-   */
-  #splitRoute(
-    reach: ReachInfo | null,
-    from: number | null,
-    target: number | null,
-  ): readonly number[] | null {
-    if (reach === null || from === null || target === null || this.#picks.length > 0) return null;
-    // A planned order is not given there at all (#940): no line.
-    if (this.#closedToPlan(target)) return null;
-    return (reach.split.get(target) ?? 0) >= 1 ? [from, target] : null;
+      return { ticks, path };
+    }
+    // A target only the part that fits gets to (#762): a click splits it off and sends it, so the
+    // map shows that order along the server's route of the part, with its time (#1004). A planned
+    // order is not given there at all (#940): no line, no time.
+    if (this.#picks.length > 0 || this.#closedToPlan(preview)) return null;
+    return reach.splitRoutes.get(preview) ?? null;
   }
 
   /** Shift held under the group order: groups are being picked, no order shows (#928). */

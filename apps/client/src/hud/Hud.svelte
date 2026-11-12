@@ -80,6 +80,15 @@
         : 'none',
   );
   const mergeable = $derived(data === null ? 0 : orders.mergeCandidates().length);
+  // A toast or an alert strip with a place takes the camera there on a click (#1004, item 14);
+  // without a camera to move (a test without a canvas) they stay plain.
+  const showPlace = $derived(
+    orders.canShowPlace
+      ? (node: number) => {
+          orders.showPlace(node);
+        }
+      : undefined,
+  );
 
   // "Fit map" keeps the map out of the top bar: measure it, its height depends on the zoom of the
   // page and the window.
@@ -161,8 +170,8 @@
     <DevPanel {dev} />
   {/if}
   <EdgeAlerts threats={hud.threats} {anchors} top={topInset} />
-  <AlertStack alerts={hud.alerts} names={hud.nodeName} />
-  <ToastStack toasts={hud.toasts} />
+  <AlertStack alerts={hud.alerts} names={hud.nodeName} onshow={showPlace} />
+  <ToastStack toasts={hud.toasts} names={hud.nodeName} onshow={showPlace} />
   <StartBanner {data} visible={hud.banner} {colour} />
   <RadialMenu {orders} stance={data?.stance ?? null} />
   <SplitMenu {orders} {anchors} names={hud.nodeName} />

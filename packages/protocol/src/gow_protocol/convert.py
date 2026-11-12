@@ -786,11 +786,17 @@ def reach_msg(group: str, tick: int, reach: sv.Reach | None) -> ReachMsg:
     """``reach`` for the wire id ``group`` after tick ``tick``; ``None``: empty lists."""
     if reach is None:
         return ReachMsg(group=group, tick=tick, nodes=(), split=())
+    paths = {n: (t, p) for n, t, p in reach.split_paths}
     return ReachMsg(
         group=group,
         tick=tick,
         nodes=tuple(ReachNode(node=n, ticks=t, path=p) for n, t, p in reach.nodes),
-        split=tuple(ReachSplit(node=n, units=u) for n, u in reach.split),
+        split=tuple(
+            ReachSplit(node=n, units=u, ticks=paths[n][0], path=paths[n][1])
+            if n in paths
+            else ReachSplit(node=n, units=u)
+            for n, u in reach.split
+        ),
     )
 
 

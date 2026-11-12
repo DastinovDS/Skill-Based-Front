@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 52
+PROTOCOL_VERSION: Final = 53
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -491,6 +491,24 @@ class ReachSplit(WireModel):
     units: NonNegInt
     """The most units a group from the same node can have to be accepted there now (``0``: no
     smaller group either): the size of the split the interface offers (#762)."""
+    ticks: PosInt | None = None
+    """Ticks of the path of the part that fits once it departs; ``None`` exactly when ``units``
+    is ``0`` (#1004)."""
+    path: Annotated[tuple[NodeId, ...], Field(min_length=2)] | None = None
+    """The nodes from the group's node to ``node`` for a group of ``units``: the path an
+    ordinary group order sends that part along (DEC-48, item B4) and the ``ack`` of a ``move`` of
+    such a part carries; ``None`` exactly when ``units`` is ``0`` (#1004). All but the last are
+    the group's node or own nodes."""
+
+    @model_validator(mode="after")
+    def _check_path(self) -> Self:
+        if (self.units > 0) != (self.path is not None) or (self.path is None) != (
+            self.ticks is None
+        ):
+            raise ValueError("a part that fits has a path and ticks, no part has neither")
+        if self.path is not None and self.path[-1] != self.node:
+            raise ValueError("a path ends at its node")
+        return self
 
 
 class ReachMsg(WireModel):

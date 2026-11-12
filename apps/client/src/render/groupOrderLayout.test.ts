@@ -4,11 +4,55 @@ import {
   groupOrders,
   insideRect,
   normRect,
+  routeRuns,
   sealLozenges,
   secondsUntil,
   waitShare,
   waitingDeparture,
 } from './groupOrderLayout.ts';
+
+describe('the routes of a group order preview (#1004)', () => {
+  it('draws the longest route whole and joins the others where they meet it', () => {
+    // Three members converge on 5: 6-7-12-4-5, 12-4-5 and 3-4-5 (the server's routes).
+    const runs = routeRuns([
+      [3, 4, 5],
+      [12, 4, 5],
+      [6, 7, 12, 4, 5],
+    ]);
+    expect(runs).toEqual([
+      { nodes: [6, 7, 12, 4, 5], head: true },
+      { nodes: [3, 4], head: false },
+    ]);
+  });
+
+  it('gives each road into the target its own head', () => {
+    expect(
+      routeRuns([
+        [1, 5],
+        [2, 5],
+      ]),
+    ).toEqual([
+      { nodes: [1, 5], head: true },
+      { nodes: [2, 5], head: true },
+    ]);
+  });
+
+  it('draws again where a route leaves the shared roads and comes back', () => {
+    expect(
+      routeRuns([
+        [1, 2, 3, 4, 5],
+        [0, 2, 9, 4, 5],
+      ]),
+    ).toEqual([
+      { nodes: [1, 2, 3, 4, 5], head: true },
+      { nodes: [0, 2, 9, 4], head: false },
+    ]);
+  });
+
+  it('draws nothing for no routes', () => {
+    expect(routeRuns([])).toEqual([]);
+  });
+});
 
 const order = (over: Partial<OrderView> = {}): OrderView => ({
   dest: 9,

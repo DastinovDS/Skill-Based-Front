@@ -12,7 +12,25 @@ export interface ReachInfo {
    * (`ReachSplit.units`, the server's number; 0: no smaller group either).
    */
   readonly split: ReadonlyMap<number, number>;
+  /**
+   * The route and the travel ticks of the part that fits, by `split` node (`ReachSplit.path`,
+   * `ticks`, #1004): the way an ordinary order of that part takes; none for a node no part gets to.
+   */
+  readonly splitRoutes: ReadonlyMap<number, SplitRoute>;
 }
+
+/** The way of the part of a group that fits a `STACK_LIMIT` node (`ReachSplit`, #1004). */
+export interface SplitRoute {
+  readonly ticks: number;
+  /** The nodes from the group's node to the target, ends included. */
+  readonly path: readonly number[];
+}
+
+/** No `reach` answers of groups selected together. */
+export const NO_PICK_REACH: PickReach = {};
+
+/** The `reach` answers of groups selected together, by group id. */
+export type PickReach = Readonly<Partial<Record<string, ReachInfo>>>;
 
 /** The answer to the last command, for the panel. */
 type OrderNotice =
@@ -95,6 +113,11 @@ export interface OrderUiData {
    * selected group is the ordinary selection).
    */
   readonly picks: readonly string[];
+  /**
+   * The `reach` answers of the groups selected together, by group id (DEC-48, #1004): the route of
+   * each member to the hovered target comes from them; a group without one has no line.
+   */
+  readonly pickReach: PickReach;
   /** The rally point pick (DEC-48, item K7): the own city whose point is being set; `null`: none. */
   readonly rallyFrom: number | null;
 }
@@ -117,6 +140,7 @@ export class OrderUiState {
     notice: null,
     reach: null,
     picks: [],
+    pickReach: NO_PICK_REACH,
     rallyFrom: null,
   });
 

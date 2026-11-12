@@ -51,12 +51,14 @@ describe('toastOf', () => {
       icon: 'barracks',
       cut: true,
       text: 'Place4 has its barracks: it recruits now',
+      place: 4,
     });
     expect(toastOf(event('factory_built', { node: 4, player: 0 }), 0, names)).toEqual({
       tone: 'mine',
       icon: 'factory',
       cut: true,
       text: 'Place4 is a factory now: it makes charges',
+      place: 4,
     });
     // The other player's event is no news here.
     expect(toastOf(event('factory_built', { node: 4, player: 1 }), 0, names)).toBeNull();
@@ -69,6 +71,7 @@ describe('toastOf', () => {
       tone: 'enemy',
       icon: 'flag',
       text: 'The enemy captured Place2',
+      place: 2,
     });
   });
 
@@ -80,10 +83,19 @@ describe('toastOf', () => {
       tone: 'warn',
       icon: 'alert',
       text: 'Place1 not taken: no charge to pay, the group turns back',
+      place: 1,
     });
     expect(toastOf(lost, 0, names)?.text).toBe(
       'Place2 not retaken: no charge to pay, the group is lost',
     );
+  });
+});
+
+describe('the place of a toast (#1004, item 14)', () => {
+  it('is the node the event names, never one it does not', () => {
+    const toast = toastOf(event('node_captured', { player: 1 }), 0, names);
+    expect(toast).not.toBeNull();
+    expect(toast?.place).toBeUndefined();
   });
 });
 

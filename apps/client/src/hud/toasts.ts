@@ -19,6 +19,11 @@ export interface ToastBody {
   /** Draw the Engraved "Cut" icon (the building icons of the map, #972) where the icon has one. */
   readonly cut?: boolean;
   readonly text: string;
+  /**
+   * The node the news is about, as the event names it (#1004, item 14): a click on the toast takes
+   * the camera there. Only a place the event itself told the player; none, no click.
+   */
+  readonly place?: number;
 }
 
 export interface Toast extends ToastBody {
@@ -35,8 +40,8 @@ export const TOAST_EVENT_KINDS: ReadonlySet<string> = new Set([
   'factory_built',
 ]);
 
-function nodeOf(data: EventMsg['data']): number {
-  return typeof data.node === 'number' ? data.node : 0;
+function nodeOf(data: EventMsg['data']): number | null {
+  return typeof data.node === 'number' ? data.node : null;
 }
 
 /** The toast of `event` for player `me`, or `null`. A place is told by its name (#449). */
@@ -46,11 +51,19 @@ export function toastOf(
   names: NodeNamer,
 ): ToastBody | null {
   const { data } = event;
-  const node = names(nodeOf(data));
+  const at = nodeOf(data);
+  const node = names(at ?? 0);
+  // The place of the event, for the click that shows it (#1004); the event revealed it.
+  const place = at === null ? {} : { place: at };
   switch (event.kind) {
     case 'node_captured':
       if (data.player === me) return null;
-      return { tone: 'enemy', icon: 'flag', text: tf('event.node_captured.enemy', { node }) };
+      return {
+        tone: 'enemy',
+        icon: 'flag',
+        text: tf('event.node_captured.enemy', { node }),
+        ...place,
+      };
     case 'capture_failed':
       // DEC-38: `bounce`, the group turns back; `encircled`, a returning group could not retake
       // its home and died.
@@ -63,6 +76,7 @@ export function toastOf(
             : 'event.capture_failed.bounce',
           { node },
         ),
+        ...place,
       };
     case 'barracks_built':
     case 'factory_built':
@@ -75,6 +89,7 @@ export function toastOf(
         text: tf(event.kind === 'barracks_built' ? 'event.barracks_built' : 'event.factory_built', {
           node,
         }),
+        ...place,
       };
     default:
       return null;

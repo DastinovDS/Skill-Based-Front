@@ -145,7 +145,7 @@ describe('the playtest batch in the HUD (#762)', () => {
       group: GROUP,
       tick: 30,
       nodes: [],
-      split: [{ node: enemy, units: 4 }],
+      split: [{ node: enemy, units: 4, ticks: 30, path: [home, enemy] }],
     });
     orders.click({ kind: 'node', id: enemy }, false);
     const root = show(SplitMenu, { orders, names: hud.nodeName });
