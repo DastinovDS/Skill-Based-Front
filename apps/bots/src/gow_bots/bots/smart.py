@@ -23,8 +23,8 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
    city, ``w_neutral`` for a neutral one), the damage to the enemy supply network (``w_cut``
    percent of ``cut_value``), the hops it brings closer to the enemy capital (``w_closer``),
    minus the shots it needs (``w_need``) and the hops away (``w_hops``); the enemy capital in
-   reach always first. ``region`` > 0 keeps the targets within that many hops of the own capital
-   (``spill`` more while CP are about to burn).
+   reach always first (an open one before everything else: item 27). ``region`` > 0 keeps the
+   targets within that many hops of the own capital (``spill`` more while CP are about to burn).
 5. **Garrisons and the rest**: ``hold_front`` units stay in own nodes next to the enemy, front
    garrisons below it are filled from free groups nearby; the stance is item 24.
 6. **Arrivals and recruit queues** (#166, PR 2; DEC-25), from ``gow_bots.bots.logistics``
@@ -209,6 +209,19 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     near the cap, so its every decision bought a fortification before any attack (27 to 41% of
     the CP of ``easy``). The APM bucket pays only the commands with a CP price (``spend``): a
     split, a cancel or a stance change needs a ready bucket and takes nothing.
+27. **An open enemy capital is taken at once** (the owner's rule of 2026-11-12;
+    ``gow_bots.bots.capital``). Right after the fights, before every other spending, a free group
+    that reaches the enemy capital and takes it by the numbers the view shows there (empty, or
+    weakly held) is sent, whatever ``radius``, ``region``, the score, a strike or a plan say; the
+    capital guard goes only when it arrives before an enemy could reach the own capital. A node's
+    owner and the enemy seen there reach the decision at once (the reaction delay of item 9 is
+    for strikes and figures), so the level reacts within its think interval: the move is past the
+    APM bucket and the kept CP (the one command that wins), and a bot with an empty bucket that
+    sees the enemy capital still looks at it once a think interval (``peek``). With no CP for the
+    move the decision spends nothing priced. Before, the capital was only the best score of
+    ``_attack``, the last spending of a decision and within ``radius`` hops: the discharged groups
+    next to an empty capital could not pay the capture, the charged ones were farther or the
+    guard, and the CP went elsewhere first.
 
 An order is planned when the bonus it gathers makes it take its target (DEC-41, item 10), the
 same rule for all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -224,6 +237,7 @@ from typing import ClassVar, Final, override
 from gow_bots.bots.assess import FRESH_TICKS, Assessment, Assessor, Travel
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option
+from gow_bots.bots.capital import TakeCommand
 from gow_bots.bots.economy import fort_site
 from gow_bots.bots.estimate import EnemyForce, Phase, Sector, phase, sectors, strengths, threats
 from gow_bots.bots.forts import RoadThreat, cut_off, fortified, road_threats
@@ -637,6 +651,10 @@ class SmartBot(CampaignBot):
         """Item 23: no saving before this tick (a goal waited ``BANK_TICKS`` unpaid)."""
         self.stance_policy = StancePolicy()
         """Item 24: the dwell of the stance policy under ``[stances]``."""
+        self.watching = False
+        """Item 27: the enemy capital was in sight at the last look (``thinks``)."""
+        self.peeked: int | None = None
+        """Item 27: the tick of the last look at the enemy capital with an empty bucket."""
         for e, edef in enumerate(mapdef.edges):
             self.edge_between[(edef.a, edef.b)] = e
             self.edge_between[(edef.b, edef.a)] = e
@@ -646,11 +664,16 @@ class SmartBot(CampaignBot):
     def thinks(self, tick: int) -> bool:
         """Whether the call of ``tick`` decides (the think interval and the APM bucket, item 9);
         otherwise ``decide`` only notes the figures (``gow_sim.match.Glancer``). The refill is
-        the one ``decide`` makes: a second one in the same tick adds nothing."""
-        if self.thought is not None and tick - self.thought < self.tempo.think_ticks:
+        the one ``decide`` makes: a second one in the same tick adds nothing. With an empty
+        bucket a bot that sees the enemy capital still looks at it once a think interval
+        (``watching``, item 27)."""
+        think = self.tempo.think_ticks
+        if self.thought is not None and tick - self.thought < think:
             return False
         self.bucket.refill(tick)
-        return self.bucket.ready()
+        if self.bucket.ready():
+            return True
+        return self.watching and (self.peeked is None or tick - self.peeked >= think)
 
     def glance(self, tick: int, figures: tuple[int, ...]) -> None:
         """A call of ``tick`` that does not decide (``thinks`` is false), with the enemy figure
@@ -663,6 +686,9 @@ class SmartBot(CampaignBot):
         view = self.perception.view(view)  # every call: the first sighting of a figure
         if not self.thinks(tick):
             return []
+        if not self.bucket.ready():
+            self.peeked = tick
+            return self.peek(view, tick)  # item 27: only the open enemy capital
         self.thought = tick
         drawn = self.params
         supplied = self.supplied(view)
@@ -948,6 +974,7 @@ class SmartBot(CampaignBot):
         for cmd in self.fight_commands(view, tick, ctx.budget):  # DEC-24: fights first
             if self.spend(ctx, cmd) and isinstance(cmd, Move):
                 ctx.used[cmd.group] = True
+        self.punish(ctx)  # item 27: the open enemy capital before everything else
         self.economy_v2(ctx, sink=False)  # factories, plans, the leaf shift (DEC-41, DEC-43)
         self.stance_v2(ctx, a)  # item 24 (DEC-44)
         self.evacuate(ctx)
@@ -1015,6 +1042,45 @@ class SmartBot(CampaignBot):
         if plan is not None and self.hold is not None and plan.dest == self.hold.dest:
             self.hold = None
             ctx.held = 0
+        return True
+
+    # The open enemy capital (item 27) ---------------------------------------------------------
+
+    @override
+    def punish(self, ctx: Ctx) -> None:
+        """``CampaignBot.punish``; notes whether the enemy capital is in sight (``watching``)."""
+        capital = ctx.view.nodes[self.enemy_home]
+        self.watching = capital.owner != self.player and capital.detail is not Detail.FOG
+        super().punish(ctx)
+
+    def peek(self, view: PlayerView, tick: int) -> list[Command]:
+        """A call with an empty APM bucket while the enemy capital is in sight (``thinks``): the
+        open enemy capital alone, no other command (item 27)."""
+        self._read_arrivals(view)  # the pin of DEC-37 of this tick
+        ctx = Ctx(view, tick, view.me.cp - self.params["reserve"], standing=self.standing(view))
+        for g in view.groups:
+            if g.order is not None:
+                ctx.claimed[g.order.dest] = True
+        self.punish(ctx)
+        return ctx.cmds
+
+    @override
+    def may_take(self, ctx: Ctx, g: GroupView) -> bool:
+        return not self.pinned[node_of(g)]  # DEC-37: caught on the way out
+
+    @override
+    def pay_capital(self, ctx: Ctx, cmd: TakeCommand) -> bool:
+        """Past the APM bucket and the CP kept for plans or a push (items 9, 10, 23): the one
+        command that wins the match is never short of a hand. It pays a token when there is one."""
+        held, saved = ctx.held, ctx.saved
+        ctx.held = ctx.saved = 0
+        try:
+            if not CampaignBot.spend(self, ctx, cmd):
+                return False
+        finally:
+            ctx.held, ctx.saved = held, saved
+        if self.cost(cmd) > 0:
+            self.bucket.take()
         return True
 
     # A chosen plan gets its CP (item 10) ------------------------------------------------------
@@ -1189,6 +1255,7 @@ class SmartBot(CampaignBot):
         found.sort(key=lambda c: (c[2], -c[0].charged, self.group_order(c[0])))
         spent = pool = 0
         chosen: list[Pick] = []
+        plans: dict[int, bool] = {}  # #899: one gathering plan per node (``Bot.plan_clash``)
         for g, here, edges, ticks in found:
             # a plan asks for what is missing only (DEC-41, item 10)
             bonus = min(self.plan_bonus(view, here, g.charged), need - pool)
@@ -1196,8 +1263,13 @@ class SmartBot(CampaignBot):
                 bonus >= 1
                 and need - pool > 0
                 and spent + cost.planned_move <= budget
+                and not plans.get(here)
+                and not ctx.planned.get(here)
+                and not self.plans_in(view, here)
                 and self.plan_strike(g, need - pool, edges, bonus)
             )
+            if plan:
+                plans[here] = True
             price = cost.planned_move if plan else cost.move
             if spent + price > budget:
                 continue

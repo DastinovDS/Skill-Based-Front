@@ -3,7 +3,8 @@
 ``RandomLegalBot`` is the floor of the strategy bots (BOT-02: they must beat it in 90% of the
 matches). It sends only commands that the view says are legal: own standing groups without an
 order, destinations a path of own nodes reaches (``Bot.reachable``), recruits in own cities with
-a barracks and free capacity, never more CP than it has. It keeps the start stance. A command can
+a barracks and free capacity, never more CP than it has. It keeps the start stance. Like every
+bot it takes an open enemy capital first (``gow_bots.bots.capital``, #1019). A command can
 still be rejected when the state changes in the tick before it is applied (a node lost, a group
 killed); that is expected.
 """
@@ -12,7 +13,8 @@ from collections.abc import Mapping
 from typing import ClassVar, override
 
 from gow_bots.bots.base import Bot, ParamRange, node_of
-from gow_sim.commands import Command, Move, Recruit, Split
+from gow_bots.bots.capital import take_capital
+from gow_sim.commands import Command, Merge, Move, Recruit, Split
 from gow_sim.view import GroupView, PlayerView
 
 __all__ = ["IdleBot", "RandomLegalBot"]
@@ -55,12 +57,24 @@ class RandomLegalBot(Bot):
             cmds.append(cmd)
             return True
 
+        used: dict[int, bool] = {}
+        take = take_capital(self, view, tick, self.idle_groups(view), view.me.cp)
+        if take.wait:
+            budget = min(budget, 0)  # the next CP go to the open enemy capital
+        elif take.cmd is not None:
+            cmd = take.cmd
+            budget += p["reserve"]  # the reserve pays the move that wins
+            if spend(cmd):
+                used.update(
+                    dict.fromkeys(cmd.groups if isinstance(cmd, Merge) else (cmd.group,), True)
+                )
+            budget -= p["reserve"]
         if rng.randrange(100) < p["recruit_pct"]:
             cities = self._recruit_cities(view)
             if cities:
                 spend(Recruit(rng.choice(cities)))
         for g in self.idle_groups(view):
-            if rng.randrange(100) >= p["act_pct"]:
+            if g.id in used or rng.randrange(100) >= p["act_pct"]:
                 continue
             cmd = self._other(g) if rng.randrange(100) < p["other_pct"] else None
             if cmd is None:
