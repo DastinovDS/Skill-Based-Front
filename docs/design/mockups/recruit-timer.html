@@ -1,0 +1,1383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recruiting and the clock, round 1</title>
+<!-- Recruiting and the match clock, round 1 (broad, #1005; owner feedback of 2026-11-12). Two elements, one large view each:
+     RECRUITING: how the recruit queue of an own city reads on the map (DEC-25, DEC-48 item H). Everything is drawn from what
+     the view already carries: NodeView.recruit_queue, recruit_progress, recruit_waiting, rally_point and has_barracks, plus
+     ruleset_public.recruit (mvp-7: unit_ticks 30 = 3 s a unit, queue_max 3, rally_cost 0.5 CP). The loop is real time: a unit
+     every 3 s; a made unit appears discharged and merges with the city's group, or walks to the rally point. "R0 Today" is
+     a port of render/cityView.ts drawRecruits (55k Pips beyond the barracks, #954) and groupOrderView.ts (the E3 muster).
+     THE CLOCK: the timer of the top bar (hud/TopBar.svelte): 15 minutes (match_ticks 9000), a VP award every 30 s, the last
+     minute (LAST_MINUTE_S), the pause of a private match (DEC-05, PausedMsg.ends_in_s). "T0 Today" is a port of the bar.
+     The map pieces are the client's (render/style.ts, units/helmet.ts, theme/cutIcons.ts, theme/cpMark.ts), shared with
+     build-animation.html. Self-contained: EB Garamond and Cinzel (SIL OFL) and the ground crop come from
+     assets/in-match-cp-vp/ and assets/city-buildings/. State in the address (#el=clock&c=T4&cs=last ...). -->
+<style>
+@font-face{font-family:'EB Garamond';src:url(assets/in-match-cp-vp/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-style:normal;font-display:block}
+@font-face{font-family:'Cinzel';src:url(assets/in-match-cp-vp/fonts/cinzel.woff2) format('woff2');font-weight:400 900;font-style:normal;font-display:block}
+:root{--stone:#16130f;--panel:#1d1a15;--ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;--rule:#7d7363;--line:#3d372d;
+  --plate:#0e0c09;--casing:#060504;--warn:#e6ab42;--vp:#cfab62;--own:#86a6ea;--foe:#e5785e;--map-ink:#ccc0a6}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--stone);color:var(--ink);font:14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--stone);padding:10px 16px;border-bottom:1px solid var(--line)}
+h1{font:600 20px/1 'EB Garamond',Georgia,serif;letter-spacing:.04em;margin:0}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:9px}
+.bar:first-child{margin-top:0}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.lab{font:600 12px/1 'EB Garamond',Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-right:3px}
+button.chip{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:6px 10px;font:500 13px/1 system-ui,sans-serif;cursor:pointer;border-radius:0}
+button.chip:hover{border-color:var(--rule);color:var(--ink)}
+button.chip[aria-pressed="true"]{background:var(--ink);color:#16130f;border-color:var(--ink);font-weight:650}
+button.chip .k{opacity:.7;margin-right:5px;font-weight:700}
+button.chip.var{padding:7px 10px;font-size:14px}
+button.chip.ref{border-style:dashed}
+button.chip.el{font:600 15px/1 'EB Garamond',Georgia,serif;letter-spacing:.06em;padding:7px 14px}
+button.chip:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#more{margin-left:auto}
+.moreBar{display:none;padding-top:9px;margin-top:9px;border-top:1px solid var(--line)}
+.moreBar.open{display:flex}
+[hidden]{display:none!important}
+input[type=range]{accent-color:#ece4d1;width:220px;vertical-align:middle}
+main{padding:10px 16px 24px}
+#cap{margin:0 0 8px;font:500 16px/1.35 'EB Garamond',Georgia,serif;color:var(--ink-soft);min-height:2.7em}
+#cap b{color:var(--ink);font-weight:650;margin-right:8px}
+#cap .tag{display:inline-block;margin-left:10px;padding:1px 7px;border:1px solid var(--line);font:600 11px/1.5 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim);vertical-align:2px}
+#cap .rm{display:block;color:var(--ink-dim);font-size:15px}
+.wrap{position:relative;background:#0e0c09;border:1px solid var(--line);overflow:hidden}
+canvas{display:block;width:100%}
+#view{cursor:pointer}
+.gray .wrap{filter:grayscale(1)}
+
+/* ---- The top bar (hud/TopBar.svelte, #860): a dark strip 52 px high under a double rule. ---- */
+#tbHost{position:absolute;left:0;top:0;width:100%;pointer-events:none}
+.tb{position:absolute;left:0;top:0;width:100%;height:52px;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;padding:0 18px;
+  border-bottom:1px solid rgb(236 228 209 / 55%);background:rgb(14 12 9 / 96%);box-shadow:0 3px 0 rgb(14 12 9 / 96%),0 4px 0 rgb(236 228 209 / 22%);
+  color:var(--ink);font:18px/1 'EB Garamond',Georgia,serif;font-variant-numeric:lining-nums tabular-nums}
+.tb svg{display:block;flex:none;overflow:visible}
+.tb-l,.tb-m,.tb-r{display:flex;align-items:center;gap:10px;min-width:0}
+.tb-r{justify-content:flex-end;gap:8px}
+.tb .n23{font-size:23px}.tb .n27{font-size:27px}.tb .n20{font-size:20px}
+.tb .gain{font-size:15px;align-self:flex-start;margin-top:8px}
+.tb .own{color:var(--own)}.tb .foe{color:var(--foe)}
+.tb .ib{width:34px;height:34px;display:grid;place-items:center;border:1px solid rgb(236 228 209 / 55%);box-shadow:inset 0 0 0 2px rgb(14 12 9),inset 0 0 0 3px rgb(236 228 209 / 22%);color:var(--ink)}
+.tb .chipq{display:flex;align-items:center;gap:6px;height:30px;padding:0 6px;border:1px solid rgb(236 228 209 / 40%)}
+.tb .key{font:600 10px/1 'Cinzel',serif;letter-spacing:.08em;border:1px solid rgb(236 228 209 / 45%);padding:3px 4px}
+/* The clock slot: every variant draws into it. */
+.clk{position:relative;display:flex;align-items:center;gap:7px;height:52px;margin-right:8px}
+.num{font:400 27px/1 'EB Garamond',Georgia,serif;font-variant-numeric:lining-nums tabular-nums;color:var(--ink);white-space:nowrap;display:inline-flex;align-items:baseline}
+.num.last{color:var(--warn);font-size:31px;font-weight:700}
+.num .roll{position:relative;display:inline-block;overflow:hidden;height:1.08em;vertical-align:top}
+.num .roll>span{display:block}
+.num .roll>span+span{position:absolute;left:0;top:0}
+.num .col{display:inline-block;padding:0 1px}
+.small{font-size:19px}
+.hang{position:absolute;right:0;top:56px;display:flex;align-items:center;gap:9px;padding:6px 12px 6px 10px;background:rgb(14 12 9 / 95%);
+  border:1px solid rgb(236 228 209 / 55%);box-shadow:inset 0 0 0 2px rgb(14 12 9),inset 0 0 0 3px rgb(236 228 209 / 20%),0 2px 0 rgb(6 5 4 / 80%)}
+.hang::before{content:"";position:absolute;right:42px;top:-5px;width:1px;height:4px;background:rgb(236 228 209 / 55%)}
+.slab{position:relative;display:flex;align-items:center;justify-content:center;height:40px;padding:0 14px 0 14px;
+  background:linear-gradient(180deg,#221e18 0%,#16130f 55%,#100e0b 100%);box-shadow:inset 0 1px 0 rgb(236 228 209 / 18%),inset 0 -1px 0 rgb(0 0 0 / 70%),0 0 0 1px #060504,0 0 0 2px rgb(236 228 209 / 16%)}
+.slab .num{color:#d9cfb8;text-shadow:0 -1px 0 #000,0 1px 0 rgb(236 228 209 / 22%)}
+.slab .num.last{color:var(--warn);text-shadow:0 -1px 0 #000,0 1px 0 rgb(255 220 150 / 25%)}
+.slab.paused::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgb(236 228 209 / 9%) 0 1px,transparent 1px 4px)}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><h1>Recruiting and the clock · round 1</h1>
+    <div class="group" role="group" aria-label="Element"><button class="chip el" data-el="recruit">Recruiting</button><button class="chip el" data-el="clock">The clock</button></div>
+  </div>
+  <div class="bar"><div class="group" id="vars" role="group" aria-label="Variant"></div></div>
+  <div class="bar" id="rBar">
+    <div class="group" role="group" aria-label="City"><span class="lab">City</span><button class="chip" data-city="small">Small</button><button class="chip" data-city="capital">Capital</button></div>
+    <div class="group" role="group" aria-label="Queue"><span class="lab">Queue</span><button class="chip" data-n="1">1</button><button class="chip" data-n="2">2</button><button class="chip" data-n="3">3</button></div>
+    <div class="group" role="group" aria-label="Rally point"><span class="lab">Rally point</span><button class="chip" data-rally="0">Off</button><button class="chip" data-rally="1">On</button></div>
+    <div class="group" role="group" aria-label="Zoom"><span class="lab">Zoom</span><button class="chip" data-z="near">Near</button><button class="chip" data-z="normal">Normal</button><button class="chip" data-z="far">Far</button></div>
+    <button class="chip" id="replay">Replay</button>
+    <button class="chip" id="more" aria-expanded="false">More</button>
+  </div>
+  <div class="bar" id="cBar">
+    <div class="group" role="group" aria-label="State"><span class="lab">State</span><button class="chip" data-cs="normal">Normal</button><button class="chip" data-cs="last">Last minute</button><button class="chip" data-cs="paused">Paused</button></div>
+    <div class="group" role="group" aria-label="View"><span class="lab">View</span><button class="chip" data-cz="0">Bar</button><button class="chip" data-cz="1">Close-up</button></div>
+    <button class="chip" id="more2" aria-expanded="false">More</button>
+  </div>
+  <div class="bar moreBar" id="moreBar">
+    <div class="group" id="rMore"><button class="chip" id="sel">City selected (free slots)</button><button class="chip" id="room">No room</button></div>
+    <div class="group"><button class="chip" id="still">Reduced motion</button><button class="chip" id="gray">Grey</button></div>
+    <div class="group"><button class="chip" id="play">Pause</button><input id="scrub" aria-label="Time in the loop" type="range" min="0" max="10000" step="10"></div>
+  </div>
+</header>
+<main>
+  <p id="cap"></p>
+  <div class="wrap" id="rWrap"><canvas id="view" role="img"></canvas></div>
+  <div class="wrap" id="cWrap"><canvas id="bg" aria-hidden="true"></canvas><div id="tbHost"><div class="tb" id="tb" role="img"></div></div></div>
+</main>
+<script>
+'use strict';
+// =============================================================================================
+// The client's numbers (render/style.ts, theme/tokens.ts, units/helmet.ts, theme/cutIcons.ts),
+// shared with city-buildings-r2.html.
+// =============================================================================================
+const C = {
+  casing: '#060504', plate: '#0e0c09', cut: '#050403', ink: '#ccc0a6', ivory: '#ece4d1',
+  vp: '#cfab62', up: '#8cc79a', down: '#ec6654', road: '#e6edf3', clash: '#e6ab42',
+};
+// The city menu's icons, exactly (cutIcons.ts): the outline and the ruled solid, a 26-unit box centred on 0.
+const CUT_D = {
+  barracks: 'M-9 9 V-1 L0 -8.5 L9 -1 V9 Z M-3 9 V3 H3 V9 M0 -8.5 V-12.5 L4.5 -11 L0 -9.5',
+  factory: 'M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z M-6.5 4 H-3 M0 4 H3.5',
+};
+const CUT_SOLID_D = { barracks: 'M-9 9 V-1 L0 -8.5 L9 -1 V9 Z', factory: 'M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z' };
+const CUT = { barracks: new Path2D(CUT_D.barracks), factory: new Path2D(CUT_D.factory) };
+const CUT_SOLID = { barracks: new Path2D(CUT_SOLID_D.barracks), factory: new Path2D(CUT_SOLID_D.factory) };
+const CUT_BOX = { barracks: [-9, -12.5, 9, 9], factory: [-10, -10, 8.5, 9] };
+const CUT_STYLE = { box: 26, rule: 2.6, ruleW: 1.15, casing: 4.2, casingA: 0.9, ink: 2.1 };
+const ICON_HALF = 0.44; // half the drawn extent of an icon (casing included), a share of its box
+
+const HELMET_PATHS = {
+  own: { dome: 'M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z', band: 'M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60', strap: 'M46 80 L54 96' },
+  enemy: { dome: 'M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z', band: null, strap: 'M38 75 L58 91 L64 68' },
+};
+const HELMET_SCALE = 1.34, HELMET_INSIDE = 0.92, UNIT_SIDES = [24, 30, 36, 42];
+const HE = { casing: 6, inside: 1.6, gear: 0.55, edge: 1.25, hatchW: 0.9, font: 12.5 };
+const CITY_E = { cutGrow: 3.2, cutAlpha: 0.85, rimGrow: 1.6, rimW: 1.1, innerInset: 1.2, innerW: 0.8, innerA: 0.6, enemyInsets: [4.4, 6.4], enemyW: 0.9, star: [0.6, 0.27, 1.2] };
+const RING = { gap: 7, cut: 6, cutAlpha: 0.8, filled: 3.4, roomW: 0.9, roomOff: 1.6, wash: 0.3, segGap: 0.16 };
+const LOZ = { casing: 8.2, fill: 5.8, hollow: 4.7, line: 0.9, lineA: 0.92, pitch: 8.8, groupGap: 3.5, drop: 8.5 };
+const VPL = { side: 18.5, outer: 17.2, inner: 12.4, w: 1.1, font: 14.5, lift: 4.5 };
+const BADGE = { size: 11, stroke: 0.3, outline: 2.6, minPx: 8 };
+const TICKS = { gap: 2, arm: 6.2, casing: 4.4, ink: 1.7 }; // CORNER_TICKS after #952
+
+// =============================================================================================
+// Helmet geometry (a port of units/helmet.ts).
+// =============================================================================================
+function samplePath(d, steps = 10) {
+  const t = d.match(/[MLCQZ]|-?\d*\.?\d+/g) || [];
+  const pts = []; let i = 0, cmd = '', at = { x: 0, y: 0 };
+  const num = () => Number(t[i++]);
+  while (i < t.length) {
+    const tok = t[i];
+    if (/[MLCQZ]/.test(tok)) { cmd = tok; i++; if (cmd === 'Z') continue; }
+    if (cmd === 'M' || cmd === 'L') { at = { x: num(), y: num() }; pts.push(at); }
+    else if (cmd === 'C') { const c1 = { x: num(), y: num() }, c2 = { x: num(), y: num() }, e = { x: num(), y: num() }; for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u*u*u*at.x + 3*u*u*s*c1.x + 3*u*s*s*c2.x + s*s*s*e.x, y: u*u*u*at.y + 3*u*u*s*c1.y + 3*u*s*s*c2.y + s*s*s*e.y }); } at = e; }
+    else if (cmd === 'Q') { const c = { x: num(), y: num() }, e = { x: num(), y: num() }; for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u*u*at.x + 2*u*s*c.x + s*s*e.x, y: u*u*at.y + 2*u*s*c.y + s*s*e.y }); } at = e; }
+    else i++;
+  }
+  return pts;
+}
+function boundsOf(ps) { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const p of ps) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); } return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }; }
+function centroid(ps) { let a = 0, cx = 0, cy = 0; ps.forEach((p, i) => { const q = ps[(i + 1) % ps.length]; const cr = p.x*q.y - q.x*p.y; a += cr; cx += (p.x + q.x)*cr; cy += (p.y + q.y)*cr; }); return { x: cx / (3*a), y: cy / (3*a) }; }
+const RAW = {};
+for (const k of ['own', 'enemy']) { const P = HELMET_PATHS[k]; RAW[k] = { dome: samplePath(P.dome), band: P.band ? samplePath(P.band) : null, strap: samplePath(P.strap) }; const b = boundsOf([...RAW[k].dome, ...(RAW[k].band || []), ...RAW[k].strap]); RAW[k].c = { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }
+const HELMETS = new Map();
+function helmet(kind, width) {
+  const key = kind + ':' + width; if (HELMETS.has(key)) return HELMETS.get(key);
+  const R = RAW[kind], s = width / 100, place = (p) => ({ x: (p.x - R.c.x) * s, y: (p.y - R.c.y) * s });
+  const dome = R.dome.map(place), band = R.band ? R.band.map(place) : null, strap = R.strap.map(place);
+  const db = boundsOf(dome), mid = centroid(dome);
+  const h = { kind, width, dome, band, strap, bounds: boundsOf([...dome, ...(band || []), ...strap]), domeTop: db.y, domeBottom: db.y + db.height, domeBounds: db, middle: { x: mid.x, y: mid.y + width * 0.02 } };
+  HELMETS.set(key, h); return h;
+}
+function helmetLines(width) { const s = width / 100; return { strap: Math.max(6.4*s, 2.1), band: Math.max(5.6*s, 2.2), casing: 6.4 }; }
+function helmetExtent(h) { const L = helmetLines(h.width), pad = Math.max(L.casing, L.strap + L.casing) / 2; return { top: h.bounds.y - pad, bottom: h.bounds.y + h.bounds.height + pad, left: h.bounds.x - pad, right: h.bounds.x + h.bounds.width + pad }; }
+function helmetWidth(side, inside) { return Math.round(side * HELMET_SCALE * (inside ? HELMET_INSIDE : 1) * 100) / 100; }
+function helmetFit(kind, width, reach) {
+  let w = width;
+  for (let step = 0; step < 6 && w > 4; step++) { const e = helmetExtent(helmet(kind, w)), span = Math.max(e.right, -e.left, e.bottom, -e.top); if (span <= reach) break; w = Math.min(w - 0.25, Math.floor(((w * reach) / span) * 4) / 4); }
+  return w;
+}
+function unitSide(units) { return units <= 3 ? UNIT_SIDES[0] : units <= 7 ? UNIT_SIDES[1] : units <= 15 ? UNIT_SIDES[2] : UNIT_SIDES[3]; }
+
+// =============================================================================================
+// Drawing helpers (world units; the canvas transform carries the zoom). A hairline never falls
+// under 1.3 device px (#865).
+// =============================================================================================
+let GA = 1, PXW = 1, LS = 1;
+const hair = (w) => Math.max(w, 1.3 / (PXW * LS));
+function poly(ctx, ps, closed = true) { ctx.beginPath(); ps.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); if (closed) ctx.closePath(); }
+function polyA(ctx, ps, closed = true) { ctx.beginPath(); ps.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); if (closed) ctx.closePath(); }
+function stroke(ctx, w, color, alpha = 1, cap = 'round', join = 'round') { ctx.lineWidth = w; ctx.strokeStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.lineCap = cap; ctx.lineJoin = join; ctx.stroke(); ctx.globalAlpha = GA; }
+function fill(ctx, color, alpha = 1) { ctx.fillStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.fill(); ctx.globalAlpha = GA; }
+function strokeP(ctx, p, w, color, alpha = 1, cap = 'square', join = 'miter') { ctx.lineWidth = w; ctx.strokeStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.lineCap = cap; ctx.lineJoin = join; ctx.stroke(p); ctx.globalAlpha = GA; }
+function fillP(ctx, p, color, alpha = 1) { ctx.fillStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.fill(p); ctx.globalAlpha = GA; }
+function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, Math.PI*2); }
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function hatchLines(ctx, b, angle, pitch) {
+  const cx = b.x + b.width/2, cy = b.y + b.height/2, R = Math.hypot(b.width, b.height)/2 + pitch;
+  const ux = Math.cos(angle), uy = Math.sin(angle), nx = -uy, ny = ux;
+  ctx.beginPath(); for (let d = -R; d <= R; d += pitch) { ctx.moveTo(cx + nx*d - ux*R, cy + ny*d - uy*R); ctx.lineTo(cx + nx*d + ux*R, cy + ny*d + uy*R); }
+}
+const polar = (a, d) => ({ x: d*Math.cos(a), y: d*Math.sin(a) });
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
+const ease = { engrave: (t) => 0.5 - 0.5*Math.cos(Math.PI*clamp01(t)), settle: (t) => 1 - Math.pow(1 - clamp01(t), 3), travel: (t) => { t = clamp01(t); return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2; } };
+function lozPath(ctx, x, y, side) { const h = side*Math.SQRT2/2; ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + h, y); ctx.lineTo(x, y + h); ctx.lineTo(x - h, y); ctx.closePath(); }
+/** One charge (57u): the casing, then the colour (in stock, paid) or hollow (room, owed). */
+function drawLozenge(ctx, x, y, on, color, k = 1, alpha = 1) {
+  lozPath(ctx, x, y, LOZ.casing*k); fill(ctx, C.casing, alpha);
+  if (on) { lozPath(ctx, x, y, LOZ.fill*k); fill(ctx, color, alpha); return; }
+  lozPath(ctx, x, y, LOZ.fill*k); fill(ctx, C.plate, alpha);
+  lozPath(ctx, x, y, LOZ.hollow*k); stroke(ctx, hair(LOZ.line), C.ink, LOZ.lineA*alpha, 'butt', 'miter');
+}
+function frame(ctx, x, y, rot, s, fn) { ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(s, s); const ls = LS; LS = ls*s; fn(); LS = ls; ctx.restore(); }
+
+function drawBody(ctx, G, owner, color, occupied, star) {
+  const r = G.r;
+  circle(ctx, 0, 0, r + CITY_E.cutGrow); fill(ctx, C.cut, CITY_E.cutAlpha);
+  circle(ctx, 0, 0, r); fill(ctx, occupied ? C.plate : color);
+  circle(ctx, 0, 0, r + CITY_E.rimGrow); stroke(ctx, CITY_E.rimW, C.ink);
+  circle(ctx, 0, 0, r - CITY_E.innerInset); stroke(ctx, CITY_E.innerW, C.cut, CITY_E.innerA);
+  if (owner === 'enemy') for (const ins of CITY_E.enemyInsets) { circle(ctx, 0, 0, r - ins); stroke(ctx, CITY_E.enemyW, C.ink); }
+  if (G.kind === 'capital' && !occupied && star) {
+    ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI/2 + i*Math.PI/5, r2 = i % 2 ? r*CITY_E.star[1] : r*CITY_E.star[0]; ctx.lineTo(r2*Math.cos(a), r2*Math.sin(a)); }
+    ctx.closePath(); fill(ctx, C.plate); stroke(ctx, CITY_E.star[2], C.ink, 1, 'butt', 'miter');
+  }
+}
+const TAU = Math.PI*2, START = -Math.PI/2;
+function ringCells(cap, filled) {
+  const gap = RING.segGap, arcs = [];
+  for (let j = 0; j < cap; j++) { const f0 = TAU*j/cap, f1 = TAU*(j + 1)/cap; arcs.push({ from: START + f0 + gap/2, to: START + f1 - gap/2, filled: j < filled }); }
+  return arcs;
+}
+function strokeArcs(ctx, r, arcs, w, color, alpha = 1) { ctx.beginPath(); for (const a of arcs) { ctx.moveTo(r*Math.cos(a.from), r*Math.sin(a.from)); ctx.arc(0, 0, r, a.from, a.to); } stroke(ctx, w, color, alpha, 'butt'); }
+function drawRing(ctx, r, arcs) {
+  const o = RING.roomOff;
+  strokeArcs(ctx, r, arcs, RING.cut, C.cut, RING.cutAlpha);
+  strokeArcs(ctx, r, arcs.filter((a) => a.filled), RING.filled, C.ink);
+  const room = arcs.filter((a) => !a.filled);
+  strokeArcs(ctx, r, room, 2*o, C.ink, RING.wash);
+  for (const s of [-1, 1]) strokeArcs(ctx, r + s*o, room, hair(RING.roomW), C.ink);
+  ctx.beginPath(); for (const a of room) for (const ang of [a.from, a.to]) { const c = Math.cos(ang), s = Math.sin(ang); ctx.moveTo((r - o)*c, (r - o)*s); ctx.lineTo((r + o)*c, (r + o)*s); }
+  if (room.length) stroke(ctx, hair(RING.roomW), C.ink, 1, 'butt');
+}
+function rowXs(n) { const xs = [], gap = n > 4 ? LOZ.groupGap : 0; for (let i = 0; i < n; i++) xs.push(i*LOZ.pitch + Math.floor(i/3)*gap); const mid = n ? (xs[0] + xs[n - 1]) / 2 : 0; return xs.map((x) => x - mid); }
+function drawVp(ctx, at, n) {
+  lozPath(ctx, at.x, at.y, VPL.side); fill(ctx, C.plate);
+  lozPath(ctx, at.x, at.y, VPL.outer); stroke(ctx, hair(VPL.w), C.vp, 1, 'butt', 'miter');
+  lozPath(ctx, at.x, at.y, VPL.inner); stroke(ctx, hair(VPL.w), C.vp, 1, 'butt', 'miter');
+  ctx.font = `600 ${VPL.font}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = C.vp; ctx.fillText(String(n), at.x, at.y + 1);
+}
+function drawHelmet(ctx, g) {
+  const h = helmet(g.kind, g.width), L = helmetLines(g.width), facing = g.kind === 'own' ? 1 : -1, casing = g.pip ? 3.2 : HE.casing + HE.inside;
+  ctx.save(); ctx.translate(g.x, g.y); ctx.scale(facing, 1);
+  const gear = h.band ? [h.strap, h.band] : [h.strap], gw = (line) => (line === h.strap ? L.strap : L.band) * HE.gear;
+  for (const line of gear) { poly(ctx, line, false); stroke(ctx, gw(line) + casing*0.8, C.casing); }
+  poly(ctx, h.dome); stroke(ctx, casing*0.9, C.casing); poly(ctx, h.dome); fill(ctx, C.plate);
+  const pitch = Math.min(3, Math.max(1.4, g.width*0.075)), top = h.domeBottom - g.level*(h.domeBottom - h.domeTop);
+  ctx.save(); poly(ctx, h.dome); ctx.clip();
+  hatchLines(ctx, h.domeBounds, -Math.PI/4, pitch); stroke(ctx, hair(HE.hatchW*(g.pip ? .7 : 1)), g.color, 1, 'butt');
+  if (g.level > 0) { ctx.beginPath(); ctx.rect(h.domeBounds.x - 2, top, h.domeBounds.width + 4, h.domeBottom - top + 2); fill(ctx, g.color); }
+  ctx.restore();
+  for (const line of gear) { poly(ctx, line, false); stroke(ctx, gw(line), C.ink); }
+  poly(ctx, h.dome); stroke(ctx, hair(g.pip ? .8 : HE.edge), C.ink);
+  ctx.restore();
+  if (g.pip) return;
+  const mx = g.x + h.middle.x*facing, my = g.y + h.middle.y;
+  ctx.font = `600 ${HE.font}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = C.cut; ctx.lineJoin = 'round'; ctx.globalAlpha = GA; ctx.strokeText(String(g.units), mx, my + 0.6); ctx.fillStyle = C.ink; ctx.fillText(String(g.units), mx, my + 0.6);
+}
+/** B6 (#949, #952): four ivory corner ticks round the helmet as drawn. */
+function drawTicks(ctx, g) {
+  const e = helmetExtent(helmet(g.kind, g.width)), gap = TICKS.gap, facing = g.kind === 'own' ? 1 : -1;
+  const x0 = g.x + (facing === 1 ? e.left : -e.right) - gap, x1 = g.x + (facing === 1 ? e.right : -e.left) + gap, y0 = g.y + e.top - gap, y1 = g.y + e.bottom + gap, arm = TICKS.arm;
+  for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]]) {
+    ctx.beginPath(); ctx.moveTo(cx + sx*arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy*arm); stroke(ctx, TICKS.casing, C.casing, .95, 'square', 'miter');
+    ctx.beginPath(); ctx.moveTo(cx + sx*arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy*arm); stroke(ctx, hair(TICKS.ink), C.ivory, 1, 'butt', 'miter');
+  }
+}
+
+const OWN = '#86a6ea', FOE = '#e5785e'; // lapis and minium, the default pair (DEC-49)
+const CHARGE_COST = { barracks: 3, factory: 4 };
+const PAY = { flightMs: 450, lift: 12, staggerMs: 150, popMs: 220, pop: 0.3, runMs: 350, runStagger: 60, shrink: 0.6, doneMs: 600 };
+const ZOOMS = { near: 2.2, normal: 1, far: 0.42 };
+const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const lerp = (a, b, q) => a + (b - a) * q;
+const bump = (q) => Math.sin(Math.PI * clamp01(q));
+
+// =============================================================================================
+// The menu icon on the map (CutIcon.svelte's art; render/pieceShapes.ts iconBackSpec, iconFillSpec,
+// iconFrontSpec). Looks: built (the ruled solid in the owner's colour, the opponent's at 45 degrees),
+// plan (owes charges: a half-dark ground and a dotted outline), rising (the build time: a fill from the
+// base with an ivory head line, or a hatch engraved line by line). `o.flash` lays an ivory outline over
+// it (0..1), `o.alpha` fades the whole icon.
+// =============================================================================================
+function drawIcon(ctx, kind, x, y, sz, o) {
+  const k = sz / CUT_STYLE.box, out = CUT[kind], sol = CUT_SOLID[kind], [bx0, by0, bx1, by1] = CUT_BOX[kind];
+  const ga = GA; GA = ga * (o.alpha === undefined ? 1 : o.alpha); ctx.globalAlpha = GA;
+  frame(ctx, x, y, 0, k, () => {
+    if (o.look === 'plan') {
+      fillP(ctx, sol, C.plate, o.planGround === undefined ? 0.62 : o.planGround);
+      strokeP(ctx, out, CUT_STYLE.casing, C.casing, 0.5);
+      ctx.setLineDash([2.2, 2.2]); strokeP(ctx, out, hair(1.5), C.ink, 0.9, 'butt'); ctx.setLineDash([]);
+    } else {
+      fillP(ctx, sol, C.plate);
+      ctx.save(); ctx.clip(sol);
+      const t = clamp01(o.time === undefined ? 1 : o.time);
+      if (o.look === 'built') {
+        if (o.enemy) { hatchLines(ctx, { x: bx0, y: by0, width: bx1 - bx0, height: by1 - by0 }, -Math.PI / 4, CUT_STYLE.rule); stroke(ctx, CUT_STYLE.ruleW, o.color, 1, 'butt'); }
+        else { ctx.beginPath(); for (let yy = Math.floor(by0 / CUT_STYLE.rule) * CUT_STYLE.rule; yy < by1; yy += CUT_STYLE.rule) ctx.rect(bx0 - 1, yy, bx1 - bx0 + 2, CUT_STYLE.ruleW); fill(ctx, o.color); }
+      } else if (o.prog === 'hatch') {
+        const lines = []; for (let yy = by1 - CUT_STYLE.rule + 0.6; yy > by0 - 1; yy -= CUT_STYLE.rule) lines.push(yy);
+        const n = lines.length * t, full = Math.floor(n), frac = n - full;
+        ctx.beginPath(); for (let i = 0; i < full; i++) ctx.rect(bx0 - 1, lines[i], bx1 - bx0 + 2, CUT_STYLE.ruleW); fill(ctx, o.color);
+        if (full < lines.length && t > 0 && t < 1) { const yy = lines[full]; ctx.beginPath(); ctx.rect(bx0 - 1, yy, (bx1 - bx0 + 2) * frac, CUT_STYLE.ruleW); fill(ctx, o.color); }
+      } else {
+        const top = by1 - t * (by1 - by0);
+        ctx.beginPath(); ctx.rect(bx0 - 1, top, bx1 - bx0 + 2, by1 - top + 1); fill(ctx, o.color);
+        ctx.beginPath(); for (let yy = by1 - CUT_STYLE.rule; yy > top + 0.4; yy -= CUT_STYLE.rule) { ctx.moveTo(bx0 - 1, yy); ctx.lineTo(bx1 + 1, yy); } stroke(ctx, 0.55, C.casing, 0.5, 'butt');
+        if (t > 0 && t < 1) { const hw = o.head || 1.2; ctx.beginPath(); ctx.moveTo(bx0 - 1, top); ctx.lineTo(bx1 + 1, top); if (hw > 1.3) stroke(ctx, hw + 1.6, C.casing, 0.8, 'butt'); stroke(ctx, hair(hw), C.ivory, 1, 'butt'); }
+      }
+      ctx.restore();
+      strokeP(ctx, out, CUT_STYLE.casing, C.casing, CUT_STYLE.casingA);
+      strokeP(ctx, out, hair(CUT_STYLE.ink), C.ink, 1);
+      if (o.look === 'rising' && o.prog === 'hatch' && t > 0 && t < 1) {
+        // The burin: an ivory lozenge at the end of the line being cut.
+        const lines = []; for (let yy = by1 - CUT_STYLE.rule + 0.6; yy > by0 - 1; yy -= CUT_STYLE.rule) lines.push(yy);
+        const n = lines.length * t, full = Math.floor(n), frac = n - full;
+        if (full < lines.length) { const yy = lines[full], xx = bx0 - 1 + (bx1 - bx0 + 2) * frac; lozPath(ctx, xx, yy + 0.6, 5); fill(ctx, C.casing); lozPath(ctx, xx, yy + 0.6, 3.1); fill(ctx, C.ivory); }
+      }
+    }
+    if (o.flash > 0) { strokeP(ctx, out, CUT_STYLE.ink + 2.2, C.ivory, 0.9 * clamp01(o.flash)); strokeP(ctx, out, hair(CUT_STYLE.ink), C.ink, clamp01(o.flash)); }
+  });
+  GA = ga; ctx.globalAlpha = GA;
+}
+/** The ring that opens round an icon just built (57k, BUILD_PAY.done): from 0.42 of its size, 10 out, 600 ms. */
+function doneRing(ctx, x, y, sz, ms, o = {}) {
+  const dur = o.ms || PAY.doneMs, q = ms / dur;
+  if (q < 0 || q >= 1) return;
+  const r = (o.from || 0.42) * sz + (o.grow || 10) * ease.settle(q), a = 1 - q;
+  circle(ctx, x, y, r); stroke(ctx, o.casing || 3, C.casing, a); circle(ctx, x, y, r); stroke(ctx, hair(o.width || 1), o.color || C.ink, a);
+}
+function ringArc(ctx, r, a0, a1, w, color, alpha = 1, cap = 'butt') { if (a1 <= a0) return; ctx.beginPath(); ctx.arc(0, 0, r, a0, a1); stroke(ctx, w, color, alpha, cap); }
+function line(ctx, x0, y0, x1, y1, w, color, alpha = 1, cap = 'round') { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); stroke(ctx, w, color, alpha, cap); }
+/** An ink stroke on its dark casing (the engraved line of every effect). */
+function inkLine(ctx, x0, y0, x1, y1, w, color = C.ink, alpha = 1, cas = 1.8) { line(ctx, x0, y0, x1, y1, w + cas, C.casing, 0.9 * alpha); line(ctx, x0, y0, x1, y1, hair(w), color, alpha); }
+
+// =============================================================================================
+// Where the buildings stand (render/buildingLayout.ts, P2 "Free side").
+// =============================================================================================
+function iconSize(z) { const raw = Math.max(16, 13 / Math.max(1e-3, z)); return 16 * 2 ** (Math.ceil(Math.log2(raw / 16) * 4 - 1e-9) / 4); }
+function lozK(sz) { return Math.max(0.72, Math.min(1.3, (0.74 * sz) / 14)); }
+function freeGap(roads, dist, vp) {
+  const blocks = roads.map((a) => [a, Math.asin(Math.min(1, 5.2 / dist))]);
+  if (vp) blocks.push([-Math.PI / 4, Math.asin(Math.min(1, 14 / dist))]);
+  blocks.push([Math.PI / 2, 0.95]);
+  const spans = blocks.map(([a, h]) => { const c = ((a % TAU) + TAU) % TAU; return [c - h, c + h]; }).sort((p, q) => p[0] - q[0]);
+  let best = { mid: Math.PI, width: 0 };
+  spans.forEach(([, end], i) => {
+    const next = i + 1 < spans.length ? spans[i + 1][0] : spans[0][0] + TAU;
+    let reach = end; for (let j = 0; j <= i; j++) reach = Math.max(reach, spans[j][1]);
+    const width = next - reach; if (width > best.width) best = { mid: reach + width / 2, width };
+  });
+  return best;
+}
+function layoutBuildings(G, kinds, z) {
+  const size = iconSize(z), half = ICON_HALF * size, dist = G.R + RING.cut / 2 + 1 + half;
+  const gap = freeGap(G.roads, dist, G.vp > 0), step = 2 * half + 2.5, side = gap.width >= step / dist + (2 * half) / dist;
+  const items = {}, angles = {};
+  kinds.forEach((kind, i) => {
+    let at;
+    if (kinds.length === 1) at = polar(gap.mid, dist);
+    else if (side) at = polar(gap.mid + ((i === 0 ? -1 : 1) * step) / dist / 2, dist);
+    else at = polar(gap.mid, dist + (kind === 'barracks' ? 1 : 0) * step);
+    items[kind] = at; angles[kind] = Math.atan2(at.y, at.x);
+  });
+  return { size, items, angles, gap };
+}
+/** The row of owed charges beside an icon (buildingLayout.ts owedRow): just outside it, laid across. */
+function owedRow(seat, angle, sz, k, cost) {
+  const out = ICON_HALF * sz + 1.5 + LOZ.casing * k * 0.71, mx = seat.x + Math.cos(angle) * out, my = seat.y + Math.sin(angle) * out;
+  const ax = -Math.sin(angle), ay = Math.cos(angle), pitch = LOZ.pitch * k * 0.96;
+  return Array.from({ length: cost }, (_, j) => { const d = (j - (cost - 1) / 2) * pitch; return { x: mx + ax * d, y: my + ay * d }; });
+}
+function glow(ctx, at, r, color, a) {
+  if (r <= 0 || a <= 0) return;
+  const g = ctx.createRadialGradient(at.x, at.y, 0, at.x, at.y, r);
+  g.addColorStop(0, hexA(color, a)); g.addColorStop(0.45, hexA(color, a * 0.5)); g.addColorStop(1, hexA(color, 0));
+  ctx.fillStyle = g; ctx.globalAlpha = GA; ctx.beginPath(); ctx.arc(at.x, at.y, r, 0, TAU); ctx.fill();
+}
+let groundTile = null;
+function loadImg(src) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; }); }
+function mirrorTile(img) { const w = img.width, h = img.height, c = document.createElement('canvas'); c.width = 2 * w; c.height = 2 * h; const g = c.getContext('2d'); for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { g.save(); g.translate(sx < 0 ? 2 * w : 0, sy < 0 ? 2 * h : 0); g.scale(sx, sy); g.drawImage(img, 0, 0); g.restore(); } return c; }
+
+function drawRoad(ctx, a, b) {
+  const sa = sideOf(a), sb = sideOf(b), ux = b.x - a.x, uy = b.y - a.y, len = Math.hypot(ux, uy), nx = ux / len, ny = uy / len;
+  const x0 = a.x + nx * (a.R + 3), y0 = a.y + ny * (a.R + 3), x1 = b.x - nx * (b.R + 3), y1 = b.y - ny * (b.R + 3);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+  if (sa === sb) { const col = sa === 'own' ? OWN : FOE; stroke(ctx, 7.4, C.casing, 0.55, 'butt'); stroke(ctx, 5.6, col, 0.46, 'butt'); stroke(ctx, 2, C.road, 0.7, 'butt'); }
+  else { stroke(ctx, 5.6, C.casing, 0.4, 'butt'); ctx.setLineDash([7, 5]); stroke(ctx, 2, '#aab2bd', 0.7, 'butt'); ctx.setLineDash([]); }
+}
+/** A packet of the supply flow (#858): a square of the owner's colour on a casing, an ivory outline, turned along its road. */
+function drawPacket(ctx, x, y, ang, color, alpha = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  const r = (s) => { ctx.beginPath(); ctx.rect(-s / 2, -s / 2, s, s); };
+  r(9.2); fill(ctx, C.casing, alpha); r(8); stroke(ctx, hair(0.8), C.ivory, alpha, 'butt', 'miter'); r(6); fill(ctx, color, alpha);
+  ctx.restore();
+}
+
+// =============================================================================================
+// More of the client's pieces: the CP mark (theme/cpMark.ts), the recruit helmet scale
+// (buildingLayout.ts pipScale), the muster ring (groupOrderView.ts, GROUP_ORDER.muster).
+// =============================================================================================
+const CPM = [[7.25, 1.5, 8.75, 1.5, 8.75, 15.5, 7.25, 15.5], [8, 0, 10, 3, 6, 3], [1.5, 3, 14.5, 3, 14.5, 4.5, 1.5, 4.5], [2.5, 4.5, 13.5, 4.5, 13.5, 12, 8, 9.5, 2.5, 12]];
+/** The CP mark of a rally walk (#930, W4): dim, inked in from its foot as its recruit is made (`ink` 0..1). */
+function cpMark(ctx, x, y, size, ink = 1, alpha = 1) {
+  const s = size / 16, path = () => { ctx.beginPath(); for (const p of CPM) { ctx.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]); ctx.closePath(); } };
+  ctx.save(); ctx.translate(x - 8 * s, y - 8 * s); ctx.scale(s, s);
+  path(); ctx.lineJoin = 'miter'; ctx.lineWidth = 2; ctx.strokeStyle = C.casing; ctx.globalAlpha = GA * alpha; ctx.stroke();
+  path(); ctx.fillStyle = C.ivory; ctx.globalAlpha = GA * alpha * 0.42; ctx.fill();
+  if (ink > 0) { ctx.save(); ctx.beginPath(); ctx.rect(-1, 16 - ink * 16.5, 18, ink * 16.5 + 1); ctx.clip(); path(); ctx.globalAlpha = GA * alpha; ctx.fill(); ctx.restore(); }
+  ctx.restore(); ctx.globalAlpha = GA;
+}
+function pipScale(z) { const minScale = 1.35, screen = 1.7, keep = 0.5, out = screen / minScale / Math.max(1e-3, z), exact = minScale * Math.max(1, out) ** keep; return 2 ** (Math.ceil(Math.log2(exact) * 4) / 4) / minScale; }
+const MUSTER = { gap: 13, arcs: 4, arc: 1.0, casing: 5.4, width: 2.6, disc: 13, helmet: 17, chevron: { gap: 12, length: 14, width: 7 } };
+const UNIT_MS = 3000, LEAD = 700, MERGE_MS = 420, WALK_MS = 2100, SLIDE_MS = 300, FLASH_MS = 520;
+const smooth = (a, b, x) => { const q = clamp01((x - a) / (b - a)); return q * q * (3 - 2 * q); };
+
+/** A helmet of the client (units/helmet.ts), with the extra looks the variants need. */
+function helm(ctx, o) {
+  const kind = o.kind || 'own', h = helmet(kind, o.w), L = helmetLines(o.w), facing = kind === 'own' ? 1 : -1;
+  const cas = o.cas !== undefined ? o.cas : Math.max(2.6, o.w * 0.24), ga = GA; GA = ga * (o.alpha === undefined ? 1 : o.alpha); ctx.globalAlpha = GA;
+  ctx.save(); ctx.translate(o.x, o.y); if (o.rot) ctx.rotate(o.rot); ctx.scale(facing, 1);
+  const gear = h.band ? [h.strap, h.band] : [h.strap], gw = (ln) => (ln === h.strap ? L.strap : L.band) * HE.gear;
+  if (o.dashed) {
+    poly(ctx, h.dome); fill(ctx, C.plate, 0.6);
+    ctx.setLineDash([Math.max(1, o.w * 0.1), Math.max(0.9, o.w * 0.085)]); poly(ctx, h.dome); stroke(ctx, hair(Math.max(0.75, o.w * 0.07)), C.ink, 0.95, 'butt'); ctx.setLineDash([]);
+  } else {
+    for (const ln of gear) { poly(ctx, ln, false); stroke(ctx, gw(ln) + cas * 0.8, C.casing); }
+    poly(ctx, h.dome); stroke(ctx, cas * 0.9, C.casing); poly(ctx, h.dome); fill(ctx, C.plate);
+    const pitch = Math.min(3, Math.max(1.4, o.w * 0.075)), lv = clamp01(o.level || 0), top = h.domeBottom - lv * (h.domeBottom - h.domeTop);
+    ctx.save(); poly(ctx, h.dome); ctx.clip();
+    hatchLines(ctx, h.domeBounds, -Math.PI / 4, pitch); stroke(ctx, hair(HE.hatchW * (o.w < 16 ? 0.7 : 1)), o.color || OWN, o.hatchA === undefined ? 1 : o.hatchA, 'butt');
+    if (lv > 0) { ctx.beginPath(); ctx.rect(h.domeBounds.x - 2, top, h.domeBounds.width + 4, h.domeBottom - top + 2); fill(ctx, o.color || OWN); }
+    if (o.head && lv > 0.02 && lv < 0.98) line(ctx, h.domeBounds.x - 2, top, h.domeBounds.x + h.domeBounds.width + 2, top, hair(Math.max(0.8, o.w * 0.075)), C.ivory, 1, 'butt');
+    ctx.restore();
+    for (const ln of gear) { poly(ctx, ln, false); stroke(ctx, gw(ln), C.ink); }
+    poly(ctx, h.dome); stroke(ctx, hair(o.w < 16 ? 0.8 : HE.edge), o.edge || C.ink);
+  }
+  ctx.restore(); GA = ga; ctx.globalAlpha = GA;
+}
+/** Text of the map: EB Garamond on a dark cut. */
+function txt(ctx, s, x, y, size, color = C.ivory, o = {}) {
+  ctx.font = `${o.weight || 600} ${size}px 'EB Garamond', Georgia, serif`; ctx.textAlign = o.align || 'center'; ctx.textBaseline = 'middle';
+  ctx.globalAlpha = GA * (o.alpha === undefined ? 1 : o.alpha); ctx.lineJoin = 'round'; ctx.lineWidth = o.cas === undefined ? Math.max(2, size * 0.26) : o.cas; ctx.strokeStyle = C.cut;
+  ctx.strokeText(s, x, y); ctx.fillStyle = color; ctx.fillText(s, x, y); ctx.globalAlpha = GA;
+}
+/** An engraved plate: a casing, the dark plate, an ink rim and a faint inner rule (the toast plate's double rule). */
+function plate(ctx, x, y, w, h, k, o = {}) {
+  const a = o.alpha === undefined ? 1 : o.alpha, c = 1.7 * k;
+  ctx.beginPath(); ctx.rect(x - c, y - c, w + 2 * c, h + 2 * c); fill(ctx, C.casing, 0.9 * a);
+  ctx.beginPath(); ctx.rect(x, y, w, h); fill(ctx, C.plate, 0.95 * a);
+  ctx.beginPath(); ctx.rect(x + 0.45 * k, y + 0.45 * k, w - 0.9 * k, h - 0.9 * k); stroke(ctx, hair(0.95 * k), o.rim || C.ink, 0.85 * a, 'butt', 'miter');
+  ctx.beginPath(); ctx.rect(x + 2.5 * k, y + 2.5 * k, w - 5 * k, h - 5 * k); stroke(ctx, hair(0.6 * k), C.ink, 0.26 * a, 'butt', 'miter');
+}
+/** The disc of the travel time and the waits (GROUP_ORDER.disc): a casing, a dark plate, a paper rim. */
+function disc(ctx, x, y, r, k, o = {}) {
+  circle(ctx, x, y, r + 1.6 * k); fill(ctx, C.casing, 0.92); circle(ctx, x, y, r); fill(ctx, C.plate, 0.94);
+  if (o.dash) ctx.setLineDash(o.dash); circle(ctx, x, y, r - 0.55 * k); stroke(ctx, hair(1 * k), o.rim || C.ink, o.rimA || 0.75, 'butt'); ctx.setLineDash([]);
+}
+function lozenge(ctx, x, y, side, o = {}) {
+  const a = o.alpha === undefined ? 1 : o.alpha;
+  lozPath(ctx, x, y, side + 2.4 * (o.k || 1)); fill(ctx, C.casing, 0.92 * a);
+  if (o.hollow) { lozPath(ctx, x, y, side); fill(ctx, C.plate, a); if (o.dash) ctx.setLineDash(o.dash); lozPath(ctx, x, y, side * 0.8); stroke(ctx, hair(0.85 * (o.k || 1)), o.color || C.ink, 0.9 * a, 'butt', 'miter'); ctx.setLineDash([]); }
+  else { lozPath(ctx, x, y, side); fill(ctx, o.color || C.ink, a); }
+}
+/** A queued unit as a dot on its casing; a free slot as a dashed ring (A "Cells", #439: queued = dot, free = dashed). */
+function bead(ctx, x, y, r, k, free) {
+  circle(ctx, x, y, r + 1.3 * k); fill(ctx, C.casing, 0.9);
+  if (free) { circle(ctx, x, y, r); fill(ctx, C.plate, 0.9); ctx.setLineDash([1.1 * k, 0.9 * k]); circle(ctx, x, y, r - 0.4 * k); stroke(ctx, hair(0.8 * k), C.ink, 0.9, 'butt'); ctx.setLineDash([]); }
+  else { circle(ctx, x, y, r); fill(ctx, C.ink); }
+}
+/** The amber "needs a look" ring (PROGRESS.alert): dashed, pulsing; still under reduced motion. */
+const pulseA = (P) => (P.still ? 1 : 0.45 + 0.55 * (0.5 - 0.5 * Math.cos((TAU * P.t) / 1100)));
+function alertCircle(ctx, x, y, r, P) { const a = pulseA(P); circle(ctx, x, y, r); stroke(ctx, 3.4 * P.k, C.casing, 0.75 * a); ctx.setLineDash([3 * P.k, 2.2 * P.k]); circle(ctx, x, y, r); stroke(ctx, hair(1.4 * P.k), C.clash, a, 'butt'); ctx.setLineDash([]); }
+function alertRect(ctx, x, y, w, h, P) { const a = pulseA(P); ctx.beginPath(); ctx.rect(x, y, w, h); stroke(ctx, 3.4 * P.k, C.casing, 0.75 * a, 'butt', 'miter'); ctx.setLineDash([3 * P.k, 2.2 * P.k]); ctx.beginPath(); ctx.rect(x, y, w, h); stroke(ctx, hair(1.4 * P.k), C.clash, a, 'butt', 'miter'); ctx.setLineDash([]); }
+/** A short progress rule: a dark track with an ink hairline, the owner's fill and an ivory burin lozenge at its head. */
+function progressRule(ctx, x0, y, len, share, k, o = {}) {
+  const h = (o.h || 2.6) * k;
+  ctx.beginPath(); ctx.rect(x0 - 1.2 * k, y - h / 2 - 1.2 * k, len + 2.4 * k, h + 2.4 * k); fill(ctx, C.casing, 0.92);
+  ctx.beginPath(); ctx.rect(x0, y - h / 2, len, h); fill(ctx, C.plate);
+  if (share > 0) { ctx.beginPath(); ctx.rect(x0, y - h / 2, len * share, h); fill(ctx, o.color || OWN); }
+  ctx.beginPath(); ctx.rect(x0, y - h / 2, len, h); stroke(ctx, hair(0.6 * k), C.ink, 0.55, 'butt', 'miter');
+  if (share > 0.01 && share < 0.995 && !o.noHead) { const hx = x0 + len * share; lozPath(ctx, hx, y, 5.6 * k); fill(ctx, C.casing); lozPath(ctx, hx, y, 3.5 * k); fill(ctx, C.ivory); }
+}
+
+// =============================================================================================
+// The map: a crop of a front. Forkway (a small city) and Stonegate (the capital) both recruit.
+// =============================================================================================
+const KINDS = { small: { cap: 4, r: 14, wh: 3 }, medium: { cap: 6, r: 17, wh: 3 }, large: { cap: 8, r: 20, wh: 3 }, capital: { cap: 10, r: 20, wh: 6 } };
+const CITIES = [
+  { name: 'Forkway', x: 0, y: 0, kind: 'small', side: 'own', vp: 1, stock: 2, b: ['barracks'], units: 1, charged: 1 },
+  { name: 'Watchpost', x: -250, y: 20, kind: 'small', side: 'own', vp: 1, stock: 2, b: ['factory'], units: 3, charged: 3 },
+  { name: 'Watchhouse', x: -40, y: -255, kind: 'small', side: 'own', vp: 1, stock: 1, units: 2, charged: 1 },
+  { name: 'Ford', x: -125, y: 235, kind: 'small', side: 'own', vp: 0, stock: 0 },
+  { name: 'Stonegate', x: -545, y: 45, kind: 'capital', side: 'own', vp: 3, stock: 4, b: ['barracks', 'factory'], units: 2, charged: 2 },
+  { name: 'Wood Hollow', x: -380, y: -265, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Firwood', x: -700, y: -330, kind: 'small', side: 'own', vp: 1, stock: 2 },
+  { name: 'Brookside', x: -430, y: 310, kind: 'medium', side: 'own', vp: 1, stock: 1, b: ['barracks'] },
+  { name: 'Westmarch', x: -930, y: -40, kind: 'medium', side: 'own', vp: 2, stock: 2 },
+  { name: 'Pinecrest', x: -860, y: 360, kind: 'small', side: 'own', vp: 1, stock: 0 },
+  { name: 'Archway', x: 265, y: 15, kind: 'medium', side: 'foe', vp: 2, b: ['barracks'], units: 3 },
+  { name: 'Crest', x: 470, y: -235, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Gateway', x: 505, y: 255, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Heart', x: 790, y: 15, kind: 'capital', side: 'foe', vp: 3, b: ['barracks', 'factory'] },
+  { name: 'Reach', x: 760, y: -390, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Farmstead', x: 810, y: 390, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Eastmarch', x: 1090, y: -160, kind: 'medium', side: 'foe', vp: 2 },
+  { name: 'Crossing', x: 1110, y: 270, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Highfold', x: -200, y: -585, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Greyhill', x: -620, y: -610, kind: 'medium', side: 'own', vp: 1, stock: 2, b: ['factory'] },
+  { name: 'Northwatch', x: -1060, y: -470, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Saltmere', x: -1260, y: 140, kind: 'small', side: 'own', vp: 1, stock: 3 },
+  { name: 'Edgebrook', x: -1170, y: 560, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Lowmarsh', x: -700, y: 625, kind: 'small', side: 'own', vp: 1, stock: 0 },
+  { name: 'Southford', x: -235, y: 590, kind: 'small', side: 'own', vp: 1, stock: 2 },
+  { name: 'Ridge', x: 330, y: -600, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Coldwater', x: 730, y: -660, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Spire', x: 1310, y: -520, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Farside', x: 1340, y: 90, kind: 'medium', side: 'foe', vp: 2 },
+  { name: 'Dunmore', x: 1300, y: 570, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Embers', x: 730, y: 680, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Marsh', x: 380, y: 615, kind: 'small', side: 'foe', vp: 1 },
+];
+const EDGES = [[0, 1], [0, 2], [0, 3], [0, 10], [1, 4], [1, 2], [2, 5], [5, 4], [5, 6], [4, 6], [4, 7], [3, 7], [4, 8], [6, 8], [7, 9], [8, 9],
+  [10, 11], [10, 12], [11, 13], [12, 13], [11, 14], [14, 13], [12, 15], [15, 13], [13, 16], [13, 17], [14, 16], [15, 17], [2, 11], [3, 12],
+  [18, 2], [18, 5], [19, 5], [19, 6], [20, 6], [20, 8], [21, 8], [21, 9], [22, 9], [22, 21], [23, 9], [23, 7], [24, 3], [24, 23],
+  [25, 11], [25, 18], [26, 25], [26, 14], [27, 14], [27, 16], [28, 16], [28, 17], [29, 17], [29, 30], [30, 15], [31, 12], [31, 24], [31, 30]];
+CITIES.forEach((c, i) => {
+  const k = KINDS[c.kind]; c.i = i; c.r = k.r; c.R = k.r + RING.gap; c.cap = k.cap; c.wh = k.wh;
+  c.roads = EDGES.filter((e) => e.includes(i)).map(([a, b]) => { const o = CITIES[a === i ? b : a]; return Math.atan2(o.y - c.y, o.x - c.x); });
+});
+const SUBJECTS = { small: CITIES[0], capital: CITIES[4] };
+const RALLY_OF = { small: CITIES[2], capital: CITIES[1] };
+const sideOf = (c) => c.side;
+const adjacentOwn = (c) => EDGES.some(([a, b]) => (a === c.i || b === c.i) && CITIES[a === c.i ? b : a].side === 'own');
+
+// =============================================================================================
+// The state of the page and one frame of the recruit story.
+// =============================================================================================
+const S = { el: 'recruit', rv: 'R0', cv: 'T0', city: 'small', n: 3, rally: false, zoom: 'near', sel: false, room: false,
+  cs: 'normal', cz: false, still: false, gray: false, more: false, playing: true, time: 0 };
+function story() {
+  if (S.room) return { N: 1, done: [], loop: LEAD + UNIT_MS + 5200 };
+  const N = S.n, done = Array.from({ length: N }, (_, j) => LEAD + (j + 1) * UNIT_MS);
+  return { N, done, loop: done[N - 1] + (S.rally ? WALK_MS + 1000 : 2200) };
+}
+function frameState(t) {
+  const sc = story(), sub = SUBJECTS[S.city], rallyNode = RALLY_OF[S.city], z = ZOOMS[S.zoom], v = RV_BY[S.rv];
+  // Reduced motion: the progress steps with the snapshots (10 Hz), nothing flies.
+  const tq = S.still ? Math.floor(t / 100) * 100 : t;
+  const finished = sc.done.filter((d) => t >= d).length, queue = sc.N - finished;
+  let share = 0;
+  if (queue > 0) share = clamp01((tq - LEAD - finished * UNIT_MS) / UNIT_MS);
+  const waiting = S.room && share >= 1;
+  const lastDone = finished ? sc.done[finished - 1] : null, since = lastDone === null ? Infinity : t - lastDone;
+  const merge = S.still || v.instant ? 0 : MERGE_MS;
+  const merged = S.rally ? 0 : sc.done.filter((d) => t >= d + merge).length;
+  const units = S.room ? sub.cap : Math.min(sub.cap, sub.units + merged);
+  const flash = !S.rally && merged > 0 ? t - (sc.done[merged - 1] + merge) : Infinity;
+  const L = layoutBuildings(sub, sub.b, z), bar = L.items.barracks, barA = L.angles.barracks;
+  const qd = Math.hypot(bar.x, bar.y) + ICON_HALF * L.size + 6;
+  const pk = pipScale(z), k = 1.3 * pk / pipScale(1);
+  const shift = finished > 0 && since < SLIDE_MS && !S.still ? 1 - ease.engrave(since / SLIDE_MS) : 0;
+  const rallyA = Math.atan2(rallyNode.y - sub.y, rallyNode.x - sub.x);
+  const arrived = S.rally ? sc.done.filter((d) => t >= d + WALK_MS).length : 0;
+  return { t, sc, sub, z, k, pk, queue, share, waiting, finished, since, lastDone, units, charged: Math.min(units, sub.charged), flash,
+    L, bar, barA, isz: L.size, qd, shift, slots: Math.max(queue, S.sel ? 3 : 0), rally: S.rally, rallyNode, rallyA, arrived,
+    still: S.still, sel: S.sel, out: { x: Math.cos(barA), y: Math.sin(barA) } };
+}
+/** The centre of a box of half sizes hw x hh set beyond the barracks along its direction, clear of the icon. */
+function beyond(P, hw, hh, extra = 0) { const u = P.out, d = P.qd - 2 + Math.abs(u.x) * hw + Math.abs(u.y) * hh + extra; return { x: u.x * d, y: u.y * d }; }
+/** Which side of the city a sideways piece runs to: away from the centre. */
+const sideX = (P) => (P.bar.x >= 0 ? 1 : -1);
+
+// =============================================================================================
+// The variants of the recruit display. Each draws `node` (over the city, under its group) and may
+// draw `top` (over the group); `emit` is where a made unit leaves from; `instant`: the unit is the
+// piece itself, nothing flies; `finish` replaces the shared fly-in.
+// =============================================================================================
+const RVARS = [
+  { id: 'R0', name: 'Today', ref: true,
+    line: 'A small helmet per unit in a column beyond the barracks (55k Pips): the first fills, the queued hatched.',
+    rm: 'the fill steps with the snapshots; the unit appears at once.',
+    seat(P, j) { const s = P.pk, first = P.qd + 4.5 * (s - 1); return polar(P.barA, first + (j + P.shift) * 10 * s); },
+    emit(P) { return this.seat(P, 0); },
+    node(ctx, P) {
+      const s = P.pk;
+      for (let j = 0; j < P.slots; j++) {
+        const at = this.seat(P, j), free = j >= P.queue;
+        helm(ctx, { x: at.x, y: at.y, w: 9 * s, level: j === 0 && !free ? (P.waiting ? 1 : P.share) : 0, dashed: free, cas: 3.2 * s });
+        if (P.rally && !free) { const d = Math.hypot(at.x, at.y), q = (d + 15 * s) / d; cpMark(ctx, at.x * q, at.y * q, 13 * s * 0.62, j === 0 ? P.share : 0); }
+      }
+      if (P.waiting) { const a = this.seat(P, 0); alertCircle(ctx, a.x, a.y, 8 * s, P); }
+    } },
+  { id: 'R1', name: 'Plinth row',
+    line: 'Helmets at twice today’s size standing in a row on an engraved plinth beside the barracks: the first fills, the queue steps up as a unit leaves.',
+    rm: 'no step; the fill steps.',
+    geo(P) { const k = P.k, sx = sideX(P), w = 13 * k, pitch = 15 * k, b = beyond(P, 8 * k, 8 * k, 1 * k); return { k, sx, w, pitch, x0: b.x, y: b.y + 5 * k }; },
+    seat(P, j) { const g = this.geo(P), e = helmetExtent(helmet('own', g.w)); return { x: g.x0 + g.sx * (j + P.shift) * g.pitch, y: g.y - 1.6 * g.k - e.bottom }; },
+    emit(P) { return this.seat(P, 0); },
+    node(ctx, P) {
+      const g = this.geo(P), k = g.k, n = Math.max(P.slots, 1), xa = g.x0 - g.sx * 10 * k, xb = g.x0 + g.sx * ((n - 1) * g.pitch + 10 * k), x0 = Math.min(xa, xb), x1 = Math.max(xa, xb), h = 5.2 * k;
+      // the plinth: a slab on its casing, a lit top rule and a faint second one, lozenge ends
+      ctx.beginPath(); ctx.rect(x0 - 1.7 * k, g.y - 1.7 * k, x1 - x0 + 3.4 * k, h + 3.4 * k); fill(ctx, C.casing, 0.9);
+      const gr = ctx.createLinearGradient(0, g.y, 0, g.y + h); gr.addColorStop(0, '#221e18'); gr.addColorStop(1, '#0c0a08');
+      ctx.fillStyle = gr; ctx.globalAlpha = GA; ctx.fillRect(x0, g.y, x1 - x0, h);
+      line(ctx, x0, g.y + 0.5 * k, x1, g.y + 0.5 * k, hair(1 * k), C.ink, 0.9, 'butt'); line(ctx, x0 + 2 * k, g.y + 2.6 * k, x1 - 2 * k, g.y + 2.6 * k, hair(0.6 * k), C.ink, 0.3, 'butt');
+      for (const xe of [x0, x1]) { lozPath(ctx, xe, g.y + h / 2, 7 * k); fill(ctx, C.casing); lozPath(ctx, xe, g.y + h / 2, 4.4 * k); fill(ctx, C.ink); }
+      for (let j = P.slots - 1; j >= 0; j--) {
+        const at = this.seat(P, j), free = j >= P.queue;
+        helm(ctx, { x: at.x, y: at.y, w: g.w, level: j === 0 && !free ? (P.waiting ? 1 : P.share) : 0, head: j === 0, dashed: free });
+        if (P.rally && !free) cpMark(ctx, at.x, at.y - g.w * 0.95, 8 * k, j === 0 ? P.share : 0);
+      }
+      if (P.waiting) { const a = this.seat(P, 0); alertCircle(ctx, a.x, a.y, g.w * 0.72, P); }
+    } },
+  { id: 'R2', name: 'Outer arc',
+    line: 'A second ring of cells wrapped round the outside of the barracks; the cell under way fills along its arc, a made one drops into the capacity ring.',
+    rm: 'cells switch; no drop.',
+    geo(P) { const Rq = P.qd + 5 * P.k, cell = 15 * P.k, gap = 3.4 * P.k, step = (cell + gap) / Rq; return { Rq, cell, step, half: cell / Rq / 2 }; },
+    ang(P, j) { const g = this.geo(P), n = Math.max(P.slots, 1); return P.barA + (j + P.shift - (n - 1) / 2) * g.step; },
+    emit(P) { return polar(this.ang(P, 0), this.geo(P).Rq); },
+    node(ctx, P) {
+      const g = this.geo(P), k = P.k, w = 5.6 * k;
+      for (let j = 0; j < P.slots; j++) {
+        const a = this.ang(P, j), a0 = a - g.half, a1 = a + g.half, free = j >= P.queue;
+        ringArc(ctx, g.Rq, a0, a1, w + 2.6 * k, C.casing, 0.85);
+        if (free) { ctx.setLineDash([2 * k, 1.6 * k]); for (const s of [-1, 1]) ringArc(ctx, g.Rq + s * w * 0.32, a0, a1, hair(0.85 * k), C.ink, 0.9); ctx.setLineDash([]); continue; }
+        ringArc(ctx, g.Rq, a0, a1, w * 0.64, C.ink, 0.22);
+        for (const s of [-1, 1]) ringArc(ctx, g.Rq + s * w * 0.32, a0, a1, hair(0.85 * k), C.ink, 0.95);
+        if (j === 0) {
+          const sh = P.waiting ? 1 : P.share, ae = a0 + sh * (a1 - a0);
+          if (sh > 0) ringArc(ctx, g.Rq, a0, ae, w, OWN, 1);
+          if (sh > 0.02 && sh < 0.99) { const c = Math.cos(ae), s2 = Math.sin(ae); line(ctx, (g.Rq - w * 0.7) * c, (g.Rq - w * 0.7) * s2, (g.Rq + w * 0.7) * c, (g.Rq + w * 0.7) * s2, 2.6 * k, C.casing, 0.9, 'butt'); line(ctx, (g.Rq - w * 0.62) * c, (g.Rq - w * 0.62) * s2, (g.Rq + w * 0.62) * c, (g.Rq + w * 0.62) * s2, hair(1.1 * k), C.ivory, 1, 'butt'); }
+        } else { const m = polar(a, g.Rq); bead(ctx, m.x, m.y, 1.5 * k, k, false); }
+        if (P.rally) { const m = polar(a, g.Rq + 10 * k); cpMark(ctx, m.x, m.y, 9 * k, j === 0 ? P.share : 0); }
+      }
+      if (P.waiting) { const a = this.ang(P, 0), m = polar(a, g.Rq); alertCircle(ctx, m.x, m.y, 9.5 * k, P); }
+    },
+    finish(ctx, P) {
+      if (P.rally || P.still || P.since >= MERGE_MS) return;
+      const g = this.geo(P), q = ease.travel(P.since / MERGE_MS), a = P.barA - ((Math.max(P.slots + 1, 1) - 1) / 2) * g.step, r = lerp(g.Rq, P.sub.R, q);
+      ringArc(ctx, r, a - g.half * (1 - 0.3 * q), a + g.half * (1 - 0.3 * q), 4.4 * P.k + 2.4 * P.k, C.casing, 0.8 * (1 - q * 0.6));
+      ringArc(ctx, r, a - g.half * (1 - 0.3 * q), a + g.half * (1 - 0.3 * q), 4.4 * P.k, OWN, 1 - q * 0.5);
+    } },
+  { id: 'R3', name: 'Gate',
+    line: 'The unit under way rises out of the ground at the barracks door; the queued ones wait on the same line behind it.',
+    rm: 'the rise steps; the unit is at the ring at once.',
+    box(P) { return beyond(P, 15 * P.k, 9 * P.k, 2 * P.k); },
+    emit(P) { const b = this.box(P); return { x: b.x - 4 * P.k * sideX(P), y: b.y - 2 * P.k }; },
+    node(ctx, P) {
+      const k = P.k, b = this.box(P), sx = sideX(P), gy = b.y + 6 * k, w = 15 * k, hx = b.x - 4 * k * sx, h = helmet('own', w), e = helmetExtent(h);
+      // the pit under the line: a soft dark well
+      const gr = ctx.createRadialGradient(hx, gy + 1 * k, 0, hx, gy + 1 * k, 13 * k); gr.addColorStop(0, 'rgba(6,5,4,0.5)'); gr.addColorStop(1, 'rgba(6,5,4,0)');
+      ctx.fillStyle = gr; ctx.globalAlpha = GA; ctx.beginPath(); ctx.ellipse(hx, gy + 1 * k, 13 * k, 4.2 * k, 0, 0, TAU); ctx.fill();
+      const sh = P.queue > 0 ? (P.waiting ? 1 : P.share) : 0;
+      if (P.queue > 0) {
+        const rise = ease.engrave(sh), dy = (1 - rise) * (e.bottom - e.top + 2 * k);
+        ctx.save(); ctx.beginPath(); ctx.rect(hx - 20 * k, gy - 40 * k, 40 * k, 40 * k - 0.4 * k); ctx.clip();
+        helm(ctx, { x: hx, y: gy - e.bottom + dy, w, level: 0 });
+        ctx.restore();
+      }
+      for (let j = 1; j < P.slots; j++) {
+        const free = j >= P.queue, pw = 9 * k, ph = helmetExtent(helmet('own', pw)), x = hx + sx * (w * 0.5 + 6 * k + (j - 1 + P.shift) * 11 * k);
+        helm(ctx, { x, y: gy - ph.bottom, w: pw, dashed: free });
+      }
+      const x0 = hx - 13 * k * sx, x1 = hx + sx * (w * 0.5 + 6 * k + Math.max(0, P.slots - 2) * 11 * k + 9 * k);
+      inkLine(ctx, Math.min(x0, x1), gy, Math.max(x0, x1), gy, 1.3 * k, C.ink, 1, 2.2 * k);
+      for (const xe of [x0, x1]) { lozPath(ctx, xe, gy, 5.4 * k); fill(ctx, C.casing); lozPath(ctx, xe, gy, 3.4 * k); fill(ctx, C.ink); }
+      if (P.rally && P.queue > 0) cpMark(ctx, x0 - 7 * k * sx, gy - 6 * k, 9 * k, sh);
+      if (P.waiting) alertCircle(ctx, hx, gy - 7 * k, 11 * k, P);
+    } },
+  { id: 'R4', name: 'Tablet',
+    line: 'An engraved tablet beside the barracks: the helmet filling, the number in the queue, the time of the unit as a ruled bar.',
+    rm: 'the bar steps; the number changes without its roll.',
+    box(P) { const k = P.k; return { w: 42 * k, h: 22 * k, c: beyond(P, 21 * k, 11 * k, 2 * k) }; },
+    emit(P) { const b = this.box(P); return { x: b.c.x - b.w / 2 + 11 * P.k, y: b.c.y - 2 * P.k }; },
+    node(ctx, P) {
+      const k = P.k, b = this.box(P), x = b.c.x - b.w / 2, y = b.c.y - b.h / 2;
+      if (P.queue === 0 && !P.sel && P.since > 700) return;
+      const fade = P.queue === 0 && !P.sel ? 1 - clamp01((P.since - 300) / 400) : 1, ga = GA; GA = ga * fade; ctx.globalAlpha = GA;
+      // the leader towards the barracks: a lozenge on the edge
+      const ex = clamp01(0.5 - P.out.x * 0.5), ey = clamp01(0.5 - P.out.y * 0.5);
+      plate(ctx, x, y, b.w, b.h, k, { rim: P.waiting ? C.clash : C.ink });
+      const lx = x + ex * b.w, ly = y + ey * b.h; lozPath(ctx, lx, ly, 7 * k); fill(ctx, C.casing); lozPath(ctx, lx, ly, 4.6 * k); fill(ctx, C.ink);
+      const sh = P.queue > 0 ? (P.waiting ? 1 : P.share) : 0;
+      helm(ctx, { x: x + 11 * k, y: y + 9.5 * k, w: 13 * k, level: sh, head: true, dashed: P.queue === 0 });
+      const n = P.queue, roll = !P.still && P.since < 320 ? ease.engrave(P.since / 320) : 1, nx = x + 28 * k, ny = y + 9.5 * k;
+      ctx.save(); ctx.beginPath(); ctx.rect(x + 20 * k, y + 2.5 * k, 16 * k, 14 * k); ctx.clip();
+      if (roll < 1) txt(ctx, String(n + 1), nx, ny - roll * 10 * k, 15 * k, C.ivory, { alpha: 1 - roll, cas: 0 });
+      txt(ctx, String(n), nx, ny + (1 - roll) * 10 * k, 15 * k, C.ivory, { alpha: roll, cas: 0 });
+      ctx.restore();
+      if (P.sel) txt(ctx, '/3', nx + 8.5 * k, ny + 2 * k, 9 * k, C.ink, { alpha: 0.55, cas: 0, align: 'left' });
+      progressRule(ctx, x + 5 * k, y + b.h - 4.6 * k, b.w - 10 * k, sh, k, { h: 2.4, color: P.waiting ? C.clash : OWN });
+      if (P.waiting) alertRect(ctx, x - 3.5 * k, y - 3.5 * k, b.w + 7 * k, b.h + 7 * k, P);
+      if (P.rally && P.queue > 0) cpMark(ctx, P.out.x >= -0.2 ? x + b.w + 8 * k : x - 8 * k, y + 7 * k, 10 * k, sh);
+      GA = ga; ctx.globalAlpha = GA;
+    } },
+  { id: 'R5', name: 'Dial',
+    line: 'A dial in the language of the travel-time disc: the unit in the middle, its time as a ruled ring, the queued ones as beads under it.',
+    rm: 'the ring steps; no ring opens at the finish.',
+    c(P) { return beyond(P, 15 * P.k, 15 * P.k, 2 * P.k); },
+    emit(P) { return this.c(P); },
+    node(ctx, P) {
+      const k = P.k, c = this.c(P), r = 10.5 * k, sh = P.queue > 0 ? (P.waiting ? 1 : P.share) : 0;
+      if (P.queue === 0 && !P.sel && P.since > 900) return;
+      const fade = P.queue === 0 && !P.sel ? 1 - clamp01((P.since - 500) / 400) : 1, ga = GA; GA = ga * fade; ctx.globalAlpha = GA;
+      circle(ctx, c.x, c.y, r + 5.4 * k); fill(ctx, C.casing, 0.9);
+      ctx.save(); ctx.translate(c.x, c.y);
+      ringArc(ctx, r + 2.9 * k, 0, TAU, 2.6 * k, C.plate, 1);
+      for (let i = 0; i < 12; i++) { const a = START + (i * TAU) / 12; line(ctx, (r + 1.8 * k) * Math.cos(a), (r + 1.8 * k) * Math.sin(a), (r + 4.1 * k) * Math.cos(a), (r + 4.1 * k) * Math.sin(a), hair(0.5 * k), C.ink, 0.45, 'butt'); }
+      if (sh > 0) ringArc(ctx, r + 2.9 * k, START, START + sh * TAU, 2.6 * k, P.waiting ? C.clash : OWN, 1);
+      if (sh > 0.01 && sh < 0.995) { const a = START + sh * TAU, ca = Math.cos(a), sa = Math.sin(a); line(ctx, (r + 0.9 * k) * ca, (r + 0.9 * k) * sa, (r + 4.9 * k) * ca, (r + 4.9 * k) * sa, 2.8 * k, C.casing, 0.9, 'butt'); line(ctx, (r + 1.1 * k) * ca, (r + 1.1 * k) * sa, (r + 4.7 * k) * ca, (r + 4.7 * k) * sa, hair(1.1 * k), C.ivory, 1, 'butt'); }
+      ctx.restore();
+      disc(ctx, c.x, c.y, r, k, { rim: P.waiting ? C.clash : C.ink });
+      helm(ctx, { x: c.x, y: c.y + 0.6 * k, w: 13 * k, level: 0, dashed: P.queue === 0, cas: 2.6 * k });
+      const beads = Math.max(P.slots - 1, 0);
+      for (let j = 0; j < beads; j++) { const bx = c.x + (j - (beads - 1) / 2 + (P.shift ? -P.shift * 0 : 0)) * 7.4 * k, by = c.y + r + 9.5 * k; bead(ctx, bx, by, 2.3 * k, k, j + 1 >= P.queue); }
+      if (P.rally && P.queue > 0) cpMark(ctx, c.x + (r + 11 * k) * (P.out.x >= 0 ? 1 : -1), c.y - r * 0.6, 10 * k, sh);
+      if (!P.still && P.since < 650 && !P.rally) doneRing(ctx, c.x, c.y, 2 * r, P.since, { ms: 650, from: 0.75, grow: 10 * k, width: 1.1 * k, casing: 3 * k });
+      if (P.waiting) alertCircle(ctx, c.x, c.y, r + 7.5 * k, P);
+      GA = ga; ctx.globalAlpha = GA;
+    } },
+  { id: 'R6', name: 'Pennant',
+    line: 'The barracks flag streams out as a pennant that fills with the unit under way; the queued units hang as beads past its tail.',
+    rm: 'no wave; the fill steps.',
+    geo(P) { const ks = P.isz / 26, sx = sideX(P); return { hx: P.bar.x + 0.3 * ks * sx, hy: P.bar.y - 12.4 * ks - 9 * P.k, top: P.bar.y - 12.4 * ks, len: 30 * P.k, h: 7.5 * P.k, sx }; },
+    emit(P) { return { x: P.bar.x, y: P.bar.y + 3 }; },
+    node(ctx, P) {
+      const g = this.geo(P), k = P.k, sh = P.queue > 0 ? (P.waiting ? 1 : P.share) : 0, live = P.queue > 0 && !P.still && !P.waiting;
+      const pre = !P.still && P.since < 380 ? 1 - P.since / 380 : 0; // the snap of a made unit: the full pennant fades out
+      const wave = (q) => (live ? Math.sin(TAU * (q * 0.85 - P.t / 1150)) * 1.1 * k * q : pre * Math.sin(TAU * (q * 1.6 - P.t / 260)) * 1.6 * k * q);
+      const N = 14, top = [], bot = [];
+      for (let i = 0; i <= N; i++) { const q = i / N, x = g.hx + g.sx * q * g.len, hh = lerp(g.h / 2, g.h * 0.36, q), y = g.hy + g.h / 2 + wave(q); top.push({ x, y: y - hh }); bot.push({ x, y: y + hh }); }
+      const tail = { x: g.hx + g.sx * (g.len - 4.2 * k), y: g.hy + g.h / 2 + wave(1) };
+      const path = () => { ctx.beginPath(); top.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.lineTo(tail.x, tail.y); for (let i = N; i >= 0; i--) ctx.lineTo(bot[i].x, bot[i].y); ctx.closePath(); };
+      // the pole up from the icon's own staff
+      inkLine(ctx, g.hx, g.top + 3.6 * (P.isz / 26), g.hx, g.hy - 1.5 * k, 1.2 * k, C.ink, 1, 2 * k); lozPath(ctx, g.hx, g.hy - 2.2 * k, 4.6 * k); fill(ctx, C.casing); lozPath(ctx, g.hx, g.hy - 2.2 * k, 2.8 * k); fill(ctx, C.ink);
+      path(); stroke(ctx, 3 * k, C.casing, 0.9, 'round', 'round'); path(); fill(ctx, C.plate, 0.95);
+      ctx.save(); path(); ctx.clip();
+      ctx.beginPath(); for (let y = g.hy - 3 * k; y < g.hy + g.h + 4 * k; y += 2.6 * k) ctx.rect(g.hx - 40 * k, y, 80 * k, 0.9 * k); fill(ctx, OWN, 0.22);
+      const fx = g.hx + g.sx * sh * g.len;
+      if (sh > 0) { ctx.beginPath(); ctx.rect(Math.min(g.hx, fx), g.hy - 6 * k, Math.abs(fx - g.hx), g.h + 12 * k); fill(ctx, P.waiting ? C.clash : OWN); }
+      if (pre > 0) { path(); fill(ctx, OWN, pre); }
+      if (sh > 0.02 && sh < 0.98) line(ctx, fx, g.hy - 6 * k, fx, g.hy + g.h + 6 * k, hair(1.1 * k), C.ivory, 1, 'butt');
+      ctx.restore();
+      if (P.waiting) { ctx.setLineDash([2.4 * k, 1.8 * k]); path(); stroke(ctx, hair(1.2 * k), C.clash, pulseA(P), 'butt'); ctx.setLineDash([]); } else { path(); stroke(ctx, hair(1 * k), C.ink, 1); }
+      for (let j = 1; j < P.slots; j++) bead(ctx, g.hx + g.sx * (g.len + (3.5 + (j - 1 + P.shift) * 7.2) * k), g.hy + g.h / 2 + wave(1), 2.2 * k, k, j >= P.queue);
+      if (P.rally && P.queue > 0) cpMark(ctx, g.hx - g.sx * 7 * k, g.hy + 1 * k, 9 * k, sh);
+      if (P.waiting) alertCircle(ctx, P.bar.x, P.bar.y, ICON_HALF * P.isz + 4 * k, P);
+    } },
+  { id: 'R7', name: 'Arrival cell', instant: true,
+    line: 'No piece outside the city: the next free cell of the capacity ring fills with the unit under way; queued units dot the cells after it. Far out, a small helmet at the barracks too.',
+    rm: 'the cell steps; same look.',
+    cell(P, j) { const cells = ringCells(P.sub.cap, 0); return cells[P.units + j] || null; },
+    emit(P) { const c = ringCells(P.sub.cap, 0)[Math.max(0, P.units - 1)]; const a = (c.from + c.to) / 2; return polar(a, P.sub.R); },
+    node(ctx, P) {
+      const R = P.sub.R, sh = P.waiting ? 1 : P.share;
+      for (let j = 0; j < P.slots; j++) {
+        const c = this.cell(P, j); if (!c) break; const free = j >= P.queue;
+        if (free) continue;
+        if (j === 0) {
+          const ae = c.from + sh * (c.to - c.from);
+          ringArc(ctx, R, c.from, c.to, RING.filled + 2.4, C.casing, 0.6);
+          ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R + 4, c.from, ae); ctx.arc(0, 0, R - 4, ae, c.from, true); ctx.closePath(); ctx.clip();
+          ringArc(ctx, R, c.from - 0.05, c.to + 0.05, RING.filled + 1.2, OWN, 1); ctx.restore();
+          if (sh > 0.03 && sh < 0.98) { const ca = Math.cos(ae), sa = Math.sin(ae); line(ctx, (R - 3.4) * ca, (R - 3.4) * sa, (R + 3.4) * ca, (R + 3.4) * sa, 2.6, C.casing, 0.9, 'butt'); line(ctx, (R - 3) * ca, (R - 3) * sa, (R + 3) * ca, (R + 3) * sa, hair(1.1), C.ivory, 1, 'butt'); }
+        } else { const m = polar((c.from + c.to) / 2, R); bead(ctx, m.x, m.y, 2.1, 1, false); }
+        if (P.rally) { const m = polar((c.from + c.to) / 2, R + 11 * P.k); cpMark(ctx, m.x, m.y, 9 * P.k, j === 0 ? P.share : 0); }
+      }
+      // far out the cells are a few pixels: a small helmet at the barracks door carries the progress too
+      if (P.z < 0.6 && P.queue > 0 && !P.waiting) { const at = polar(P.barA, P.qd + 4.5 * (P.pk - 1)); helm(ctx, { x: at.x, y: at.y, w: 9 * P.pk, level: sh, cas: 3.2 * P.pk }); }
+      if (P.waiting) {
+        // no free cell: the unit stands made at the barracks, a dashed helmet in amber
+        const at = polar(P.barA, P.qd + 6 * P.k); helm(ctx, { x: at.x, y: at.y, w: 11 * P.k, dashed: true }); alertCircle(ctx, at.x, at.y, 9 * P.k, P);
+      }
+    } },
+  { id: 'R8', name: 'Ruled scale',
+    line: 'The time of the whole queue as one engraved scale beside the barracks: a segment per unit, a burin running along it, the helmet at each segment end.',
+    rm: 'the burin steps; the scale does not slide.',
+    geo(P) { const k = P.k, sx = sideX(P), seg = 17 * k, x0 = P.bar.x + sx * (ICON_HALF * P.isz + 6 * k), y = P.bar.y + 4 * k; return { k, sx, seg, x0, y }; },
+    emit(P) { const g = this.geo(P); return { x: g.x0 + g.sx * g.seg * (1 - P.shift), y: g.y - 9 * g.k }; },
+    node(ctx, P) {
+      const g = this.geo(P), k = g.k, n = P.slots, off = P.shift * g.seg, X = (d) => g.x0 + g.sx * (d - off);
+      if (n === 0) return;
+      const xa = Math.min(X(0), X(n * g.seg)), xb = Math.max(X(0), X(n * g.seg)), h = 4.4 * k;
+      ctx.save(); ctx.beginPath(); ctx.rect(g.sx > 0 ? g.x0 : g.x0 - 300 * k, g.y - 40 * k, 300 * k, 80 * k); ctx.clip();
+      ctx.beginPath(); ctx.rect(xa - 1.6 * k, g.y - h / 2 - 1.6 * k, xb - xa + 3.2 * k, h + 3.2 * k); fill(ctx, C.casing, 0.9);
+      ctx.beginPath(); ctx.rect(xa, g.y - h / 2, xb - xa, h); fill(ctx, C.plate);
+      const sh = P.waiting ? 1 : P.share;
+      if (P.queue > 0 && sh > 0) { const xs = X(0), xe = X(sh * g.seg); ctx.beginPath(); ctx.rect(Math.min(xs, xe), g.y - h / 2, Math.abs(xe - xs), h); fill(ctx, P.waiting ? C.clash : OWN); }
+      for (let j = 0; j < n; j++) {
+        const free = j >= P.queue, xs = X(j * g.seg), xe = X((j + 1) * g.seg);
+        if (free) { ctx.setLineDash([1.6 * k, 1.4 * k]); ctx.beginPath(); ctx.rect(Math.min(xs, xe) + 0.6 * k, g.y - h / 2 + 0.6 * k, Math.abs(xe - xs) - 1.2 * k, h - 1.2 * k); stroke(ctx, hair(0.8 * k), C.ink, 0.85, 'butt', 'miter'); ctx.setLineDash([]); }
+        line(ctx, xe, g.y - h / 2 - 2.6 * k, xe, g.y + h / 2 + 1 * k, 2.4 * k, C.casing, 0.9, 'butt'); line(ctx, xe, g.y - h / 2 - 2.2 * k, xe, g.y + h / 2 + 0.6 * k, hair(0.9 * k), C.ink, 1, 'butt');
+        const pw = 9.5 * k, ph = helmetExtent(helmet('own', pw));
+        helm(ctx, { x: xe - g.sx * 0.5 * k, y: g.y - h / 2 - 2.8 * k - ph.bottom, w: pw, dashed: free, level: 0, hatchA: j === 0 ? 1 : 0.8 });
+      }
+      ctx.beginPath(); ctx.rect(xa, g.y - h / 2, xb - xa, h); stroke(ctx, hair(0.7 * k), C.ink, 0.7, 'butt', 'miter');
+      if (P.queue > 0 && sh > 0.01 && sh < 0.995) { const hx = X(sh * g.seg); lozPath(ctx, hx, g.y, 6.4 * k); fill(ctx, C.casing); lozPath(ctx, hx, g.y, 4 * k); fill(ctx, C.ivory); }
+      ctx.restore();
+      lozPath(ctx, g.x0, g.y, 6.4 * k); fill(ctx, C.casing); lozPath(ctx, g.x0, g.y, 4.2 * k); fill(ctx, C.ink);
+      if (P.rally && P.queue > 0) cpMark(ctx, X(P.queue * g.seg) + g.sx * 8 * k, g.y, 9 * k, sh);
+      if (P.waiting) alertRect(ctx, Math.min(X(0), X(g.seg)) - 2 * k, g.y - 18 * k, g.seg + 4 * k, 23 * k, P);
+    } },
+  { id: 'R9', name: 'Garrison badge',
+    line: 'No piece beside the city: a small badge on the city’s own group says how many units are coming, with a ruled bar for the one under way.',
+    rm: 'the bar steps; the number without its roll.',
+    pos(P) { return P.units > 0 ? { x: -P.sub.R - 10 * P.k, y: 2 * P.k } : { x: 0, y: 0 }; },
+    emit(P) { return this.pos(P); },
+    top(ctx, P) {
+      if (P.queue === 0 && !P.sel && P.since > 600) return;
+      const k = P.k, p = this.pos(P), w = 25 * k, h = 13 * k, x = p.x - w / 2, y = p.y - h / 2, sh = P.queue > 0 ? (P.waiting ? 1 : P.share) : 0;
+      const fade = P.queue === 0 && !P.sel ? 1 - clamp01((P.since - 250) / 350) : 1, ga = GA; GA = ga * fade; ctx.globalAlpha = GA;
+      plate(ctx, x, y, w, h, k * 0.8, { rim: P.waiting ? C.clash : C.ink });
+      helm(ctx, { x: x + 7 * k, y: y + h / 2 + 0.4 * k, w: 8.5 * k, level: sh, cas: 2.2 * k });
+      const label = P.rally ? String(P.queue) : '+' + P.queue, roll = !P.still && P.since < 320 ? ease.engrave(P.since / 320) : 1;
+      ctx.save(); ctx.beginPath(); ctx.rect(x + 12 * k, y + 1 * k, w - 13 * k, h - 2 * k); ctx.clip();
+      if (roll < 1) txt(ctx, P.rally ? String(P.queue + 1) : '+' + (P.queue + 1), x + 18.5 * k, y + h / 2 - roll * 8 * k, 11.5 * k, C.ivory, { alpha: 1 - roll, cas: 0 });
+      txt(ctx, label, x + 18.5 * k, y + h / 2 + (1 - roll) * 8 * k, 11.5 * k, C.ivory, { alpha: roll, cas: 0 });
+      ctx.restore();
+      if (P.rally) { const a = P.rallyA, cx = x + w + 4.5 * k, cy = y + h / 2; ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.beginPath(); ctx.moveTo(-2.4 * k, -3.4 * k); ctx.lineTo(2 * k, 0); ctx.lineTo(-2.4 * k, 3.4 * k); stroke(ctx, 3.4 * k, C.casing, 0.9, 'square', 'miter'); stroke(ctx, hair(1.5 * k), C.ink, 1, 'butt', 'miter'); ctx.restore(); }
+      if (sh > 0) progressRule(ctx, x + 1 * k, y + h + 3.4 * k, w - 2 * k, sh, k, { h: 1.8, noHead: true, color: P.waiting ? C.clash : OWN });
+      if (P.waiting) alertRect(ctx, x - 3 * k, y - 3 * k, w + 6 * k, h + 9 * k, P);
+      GA = ga; ctx.globalAlpha = GA;
+    } },
+  { id: 'R10', name: 'March in',
+    line: 'The unit under way walks in from beyond the barracks along a short dotted track; where it is on the track is how far it is made.',
+    rm: 'the unit steps along the track, no gait.',
+    geo(P) { const u = P.out, nrm = { x: -u.y, y: u.x }, off = ICON_HALF * P.isz + 4.5 * P.k, s = { x: u.x * (P.qd + 16 * P.k) + nrm.x * off, y: u.y * (P.qd + 16 * P.k) + nrm.y * off }, e = { x: u.x * (P.sub.R + 4) + nrm.x * off, y: u.y * (P.sub.R + 4) + nrm.y * off }; return { u, nrm, s, e }; },
+    emit(P) { return this.geo(P).e; },
+    node(ctx, P) {
+      const g = this.geo(P), k = P.k, sh = P.waiting ? 1 : P.share;
+      if (P.slots === 0 && P.since > 600) return;
+      line(ctx, g.s.x, g.s.y, g.e.x, g.e.y, 3 * k, C.casing, 0.55, 'round');
+      ctx.setLineDash([0.1, 3.4 * k]); line(ctx, g.s.x, g.s.y, g.e.x, g.e.y, 1.7 * k, C.ink, 0.9, 'round'); ctx.setLineDash([]);
+      lozPath(ctx, g.e.x, g.e.y, 5 * k); fill(ctx, C.casing); lozPath(ctx, g.e.x, g.e.y, 3 * k); fill(ctx, C.ink);
+      for (let j = P.slots - 1; j >= 1; j--) { const free = j >= P.queue, d = (j - 1 + P.shift) * 10 * k + 9 * k; helm(ctx, { x: g.s.x + g.u.x * d, y: g.s.y + g.u.y * d, w: 10 * k, dashed: free, hatchA: 0.85 }); }
+      if (P.queue > 0) {
+        const q = sh, bob = !P.still && !P.waiting ? Math.abs(Math.sin((P.t / 1000) * TAU * 1.6)) * 1.1 * k : 0, x = lerp(g.s.x, g.e.x, q), y = lerp(g.s.y, g.e.y, q) - bob;
+        ctx.setLineDash([0.1, 3.4 * k]); line(ctx, g.s.x, g.s.y, x, y + bob, 1.9 * k, OWN, 1, 'round'); ctx.setLineDash([]);
+        helm(ctx, { x, y, w: 13 * k, level: 0 });
+        if (P.rally) cpMark(ctx, x + 9 * k, y - 9 * k, 9 * k, sh);
+      }
+      if (P.waiting) alertCircle(ctx, g.e.x, g.e.y, 10 * k, P);
+    } },
+  { id: 'R11', name: 'Hourglass seal',
+    line: 'The hourglass disc of the waits and the travel time, beside the barracks: its sand runs once per unit and it turns over for the next; the number is the queue.',
+    rm: 'the sand steps; no turn.',
+    c(P) { return beyond(P, 13 * P.k, 13 * P.k, 2 * P.k); },
+    emit(P) { return this.c(P); },
+    node(ctx, P) {
+      const k = P.k, c = this.c(P), r = 11.5 * k, sh = P.queue > 0 ? (P.waiting ? 1 : P.share) : 0;
+      if (P.queue === 0 && !P.sel && P.since > 800) return;
+      const fade = P.queue === 0 && !P.sel ? 1 - clamp01((P.since - 400) / 400) : 1, ga = GA; GA = ga * fade; ctx.globalAlpha = GA;
+      disc(ctx, c.x, c.y, r, k, { rim: P.waiting ? C.clash : C.ink, dash: P.waiting ? [2.4 * k, 1.8 * k] : null, rimA: P.waiting ? pulseA(P) : 0.75 });
+      const turn = !P.still && P.since < 360 ? ease.engrave(P.since / 360) : 1;
+      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate((1 - turn) * Math.PI);
+      const hw = 6.2 * k, hh = 7.4 * k, sand = P.waiting ? C.clash : OWN;
+      const glass = () => { ctx.beginPath(); ctx.moveTo(-hw, -hh); ctx.lineTo(hw, -hh); ctx.lineTo(1.1 * k, 0); ctx.lineTo(hw, hh); ctx.lineTo(-hw, hh); ctx.lineTo(-1.1 * k, 0); ctx.closePath(); };
+      ctx.save(); glass(); ctx.clip();
+      const left = turn < 1 ? 0 : 1 - sh, ys = -left * hh; // the top bulb: sand from its surface to the neck
+      if (left > 0) { ctx.beginPath(); ctx.rect(-hw, ys, 2 * hw, -ys); fill(ctx, sand); }
+      const pile = turn < 1 ? 1 : sh; if (pile > 0) { ctx.beginPath(); ctx.moveTo(-hw, hh); ctx.lineTo(hw, hh); ctx.lineTo(hw, hh - pile * hh * 0.85); ctx.lineTo(0, hh - pile * hh); ctx.lineTo(-hw, hh - pile * hh * 0.85); ctx.closePath(); fill(ctx, sand); }
+      if (turn >= 1 && sh > 0.02 && sh < 0.98 && !P.waiting) { ctx.setLineDash([0.9 * k, 0.9 * k]); ctx.lineDashOffset = -P.t / 60; line(ctx, 0, 0, 0, hh - sh * hh, hair(0.8 * k), sand, 1, 'butt'); ctx.setLineDash([]); ctx.lineDashOffset = 0; }
+      ctx.restore();
+      glass(); stroke(ctx, 2.2 * k, C.casing, 0.9, 'round', 'round'); glass(); stroke(ctx, hair(0.9 * k), C.ivory, 1, 'round', 'round');
+      for (const s of [-1, 1]) { line(ctx, -hw - 1.6 * k, s * hh, hw + 1.6 * k, s * hh, 3.2 * k, C.casing, 0.9, 'butt'); line(ctx, -hw - 1.2 * k, s * hh, hw + 1.2 * k, s * hh, hair(1.4 * k), C.ivory, 1, 'butt'); }
+      ctx.restore();
+      // the number (and "/3" when selected) reads left to right on the free side of the disc
+      const right = P.out.x >= -0.3, wGroup = (P.sel ? 18 : 9) * k + (P.rally && P.queue > 0 ? 13 * k : 0), x0 = right ? c.x + r + 4 * k : c.x - r - 4 * k - wGroup;
+      txt(ctx, String(P.queue), x0, c.y + 0.5 * k, 15 * k, C.ivory, { align: 'left' });
+      if (P.sel) txt(ctx, '/3', x0 + 8.5 * k, c.y + 2.5 * k, 9 * k, C.ink, { alpha: 0.55, align: 'left' });
+      if (P.rally && P.queue > 0) cpMark(ctx, x0 + (P.sel ? 24 : 15) * k, c.y, 10 * k, sh);
+      GA = ga; ctx.globalAlpha = GA;
+    } },
+];
+const RV_BY = Object.fromEntries(RVARS.map((v) => [v.id, v]));
+
+// =============================================================================================
+// The ground and the territories (a Voronoi of the cities, baked once into a bitmap).
+// =============================================================================================
+const BOUNDS = { x: -1750, y: -950, w: 3500, h: 1900 }, STEP = 2.5;
+let terrBitmap = null;
+function territory() {
+  if (terrBitmap) return terrBitmap;
+  const w = Math.round(BOUNDS.w / STEP), h = Math.round(BOUNDS.h / STEP), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d'), img = g.createImageData(w, h), own = [134, 166, 234], foe = [229, 120, 94];
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const x = BOUNDS.x + i * STEP, y = BOUNDS.y + j * STEP;
+    let dOwn = Infinity, dFoe = Infinity;
+    for (let n = 0; n < CITIES.length; n++) { const dx = x - CITIES[n].x, dy = y - CITIES[n].y, d = dx * dx + dy * dy; if (CITIES[n].side === 'own') { if (d < dOwn) dOwn = d; } else if (d < dFoe) dFoe = d; }
+    dOwn = Math.sqrt(dOwn); dFoe = Math.sqrt(dFoe);
+    const o1 = dOwn <= dFoe ? 'own' : 'foe', edge = Math.abs(dFoe - dOwn) / 2, col = o1 === 'own' ? own : foe, kk = (j * w + i) * 4;
+    const ramp = (e0, e1, v) => clamp01((v - e0) / (e1 - e0)), core = 1 - ramp(0.6, 2.4, edge);
+    const band = (o1 === 'own' ? 0.55 : 0.45) * (1 - ramp(8, 12.5, edge)) + 0.07 * ramp(8, 12.5, edge);
+    const a = core * 0.85 + (1 - core) * band, mix = a > 0 ? (core * 0.85) / a : 0;
+    img.data[kk] = lerp(col[0], 6, mix); img.data[kk + 1] = lerp(col[1], 5, mix); img.data[kk + 2] = lerp(col[2], 4, mix); img.data[kk + 3] = Math.round(a * 255);
+  }
+  g.putImageData(img, 0, 0); terrBitmap = cv; return cv;
+}
+
+// =============================================================================================
+// The scene pieces.
+// =============================================================================================
+function garrisonOf(c, P) {
+  if (P && c === P.sub) return P.units ? { units: P.units, charged: Math.min(P.units, P.charged) } : null;
+  if (P && P.rally && c === P.rallyNode) return { units: c.units + P.arrived, charged: c.charged };
+  return c.units ? { units: c.units, charged: c.charged === undefined ? c.units : c.charged } : null;
+}
+function garrisonWidth(P) { const units = Math.min(P.units, P.sub.cap); return helmetFit('own', helmetWidth(unitSide(Math.max(1, units)), true), P.sub.R - RING.cut / 2 - 1); }
+function drawCity(ctx, c, P, z) {
+  const side = c.side, color = side === 'own' ? OWN : FOE, grp = garrisonOf(c, P);
+  drawBody(ctx, c, side === 'own' ? 'own' : 'enemy', color, !!grp, true);
+  drawRing(ctx, c.R, ringCells(c.cap, grp ? Math.min(grp.units, c.cap) : 0));
+  if (P && c === P.sub && P.flash < FLASH_MS && P.units > 0) {
+    const cell = ringCells(c.cap, 0)[P.units - 1], q = P.flash / FLASH_MS;
+    ringArc(ctx, c.R, cell.from, cell.to, RING.filled + 3 * (1 - q), C.ivory, 1 - q);
+  }
+  if (side === 'own' || adjacentOwn(c)) {
+    const kinds = c.b || [];
+    if (kinds.length) { const L = layoutBuildings(c, kinds, z); for (const kd of kinds) drawIcon(ctx, kd, L.items[kd].x, L.items[kd].y, L.size, { look: 'built', color, enemy: side === 'foe' }); }
+  }
+  if (side === 'own') rowXs(c.wh).forEach((x, i) => drawLozenge(ctx, x, c.R + LOZ.drop, i < c.stock, OWN));
+  if (c.vp) drawVp(ctx, polar(-Math.PI / 4, c.R + VPL.lift), c.vp);
+  if (z >= 0.45) {
+    ctx.save(); ctx.translate(0, c.R + 15 + (side === 'own' && c.wh ? 4 : 0)); ctx.scale(1 / z, 1 / z);
+    ctx.font = '700 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(5,4,3,0.85)'; ctx.lineJoin = 'round'; ctx.globalAlpha = 1; ctx.strokeText(c.name, 0, 0);
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(c.name, 0, 0); ctx.restore();
+  }
+}
+function drawGroup(ctx, c, P) {
+  const grp = garrisonOf(c, P); if (!grp) return;
+  const kind = c.side === 'own' ? 'own' : 'enemy', units = Math.min(grp.units, c.cap);
+  const width = helmetFit(kind, helmetWidth(unitSide(units), true), c.R - RING.cut / 2 - 1);
+  drawHelmet(ctx, { kind, width, x: 0, y: 0, level: units ? grp.charged / units : 0, color: kind === 'own' ? OWN : FOE, units });
+}
+/** The E3 muster ring round a rally point and the chevron on its city's ring (groupOrderView.ts). */
+function muster(ctx, c, P) {
+  const M = MUSTER, r = c.R + M.gap;
+  for (let j = 0; j < M.arcs; j++) { const a0 = -Math.PI / 2 + Math.PI / M.arcs + (j * TAU) / M.arcs - M.arc / 2; ringArc(ctx, r, a0, a0 + M.arc, M.casing, C.casing, 1); ringArc(ctx, r, a0, a0 + M.arc, M.width, OWN, 1); }
+  disc(ctx, 0, -r, M.disc, 1, { rimA: 0.75 });
+  helm(ctx, { x: 0, y: -r + 0.6, w: M.helmet, level: 0, cas: 3.4 });
+  const px = M.disc * 0.8, py = -r - M.disc * 0.7, d = 2.6;
+  for (const [w, col] of [[2.6, C.casing], [1.2, C.ink]]) { ctx.beginPath(); ctx.moveTo(px - d, py); ctx.lineTo(px + d, py); ctx.moveTo(px, py - d); ctx.lineTo(px, py + d); stroke(ctx, w, col, 1, 'square'); }
+}
+function rallyChevron(ctx, P) {
+  const M = MUSTER.chevron, a = P.rallyA, r = P.sub.R + M.gap;
+  ctx.save(); ctx.rotate(a); ctx.translate(r, 0);
+  ctx.beginPath(); ctx.moveTo(-M.length / 2, -M.width); ctx.lineTo(M.length / 2 - 2, 0); ctx.lineTo(-M.length / 2, M.width);
+  stroke(ctx, 5.4, C.casing, 1, 'butt', 'miter'); stroke(ctx, 2.6, OWN, 1, 'butt', 'miter'); ctx.restore();
+}
+function packets(ctx, P) {
+  for (const [from, to, off] of [[4, 1, 0], [4, 7, 900], [1, 0, 1700]]) {
+    const A = CITIES[from], B = CITIES[to], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), q = ((P.t + off) % 2600) / 2600, d = lerp(A.R + 4, L - B.R - 2, q);
+    drawPacket(ctx, A.x + (dx / L) * d, A.y + (dy / L) * d, Math.atan2(dy, dx), OWN, q > 0.9 ? 1 - (q - 0.9) / 0.1 : 1);
+  }
+}
+/** A made unit: flies into the city's group, or walks to the rally point (world coordinates). */
+function madeUnits(ctx, P, v) {
+  const sub = P.sub;
+  if (!P.rally) {
+    if (v.instant || P.still || P.since >= MERGE_MS) return;
+    if (v.finish) { ctx.save(); ctx.translate(sub.x, sub.y); v.finish(ctx, P); ctx.restore(); GA = 1; ctx.globalAlpha = 1; return; }
+    const from = v.emit(P), q = ease.travel(P.since / MERGE_MS), gw = garrisonWidth(P);
+    helm(ctx, { x: sub.x + lerp(from.x, 0, q), y: sub.y + lerp(from.y, 0, q), w: lerp(12 * P.k, gw * 0.85, q), alpha: 1 - smooth(0.7, 1, q) });
+    return;
+  }
+  const rn = P.rallyNode, a = P.rallyA, ux = Math.cos(a), uy = Math.sin(a), dist = Math.hypot(rn.x - sub.x, rn.y - sub.y);
+  P.sc.done.forEach((d) => {
+    const age = P.t - d; if (age < 0 || age >= WALK_MS) return;
+    const from = v.emit(P), pts = [{ x: sub.x + from.x, y: sub.y + from.y }, { x: sub.x + ux * (sub.R + 9), y: sub.y + uy * (sub.R + 9) }, { x: sub.x + ux * (dist - rn.R - 9), y: sub.y + uy * (dist - rn.R - 9) }];
+    const segs = [Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y), Math.hypot(pts[2].x - pts[1].x, pts[2].y - pts[1].y)], total = segs[0] + segs[1];
+    let s = (P.still ? (age < WALK_MS * 0.5 ? 0.02 : 0.6) : ease.travel(age / WALK_MS)) * total, p;
+    if (s <= segs[0]) p = { x: lerp(pts[0].x, pts[1].x, s / segs[0]), y: lerp(pts[0].y, pts[1].y, s / segs[0]) }; else { s -= segs[0]; p = { x: lerp(pts[1].x, pts[2].x, s / segs[1]), y: lerp(pts[1].y, pts[2].y, s / segs[1]) }; }
+    const w = helmetWidth(unitSide(1), false) * 0.82;
+    helm(ctx, { x: p.x, y: p.y, w, level: 0, alpha: 1 - smooth(0.88, 1, age / WALK_MS) * 0.9 });
+    txt(ctx, '1', p.x + 1.5, p.y + 1, 11, C.ink, { alpha: 1 - smooth(0.88, 1, age / WALK_MS) });
+  });
+}
+
+// =============================================================================================
+// The recruit view.
+// =============================================================================================
+const view = document.getElementById('view'), rWrap = document.getElementById('rWrap');
+const VIEW = { W: 1200, H: 600, dpr: 1 };
+function layoutView() {
+  const W = rWrap.clientWidth || cWrap.clientWidth || 1200, room = window.innerHeight - (S.el === 'recruit' ? rWrap : cWrap).getBoundingClientRect().top - 20;
+  const H = Math.round(Math.max(380, Math.min(W * 0.56, room))), dpr = window.devicePixelRatio || 1;
+  view.style.height = H + 'px'; view.width = Math.round(W * dpr); view.height = Math.round(H * dpr);
+  Object.assign(VIEW, { W, H, dpr });
+  layoutClock(W, H, dpr);
+}
+function drawMap(ctx, W, H, dpr, z, cx, cy, P, v) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W * dpr, H * dpr);
+  PXW = dpr * z; LS = 1; GA = 1;
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (W / 2 - cx * z), dpr * (H / 2 - cy * z));
+  const box = { x: cx - W / 2 / z - 4, y: cy - H / 2 / z - 4, w: W / z + 8, h: H / z + 8 };
+  if (groundTile) { ctx.fillStyle = ctx.createPattern(groundTile, 'repeat'); ctx.fillRect(box.x, box.y, box.w, box.h); } else { ctx.fillStyle = '#3a4630'; ctx.fillRect(box.x, box.y, box.w, box.h); }
+  ctx.fillStyle = 'rgba(11,10,8,0.12)'; ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(territory(), BOUNDS.x, BOUNDS.y, BOUNDS.w, BOUNDS.h);
+  for (const [a, b] of EDGES) drawRoad(ctx, CITIES[a], CITIES[b]);
+  packets(ctx, P);
+  const at = (c, fn) => { ctx.save(); ctx.translate(c.x, c.y); fn(); ctx.restore(); GA = 1; ctx.globalAlpha = 1; };
+  for (const c of CITIES) at(c, () => drawCity(ctx, c, P, z));
+  if (v && P.rally) { at(P.rallyNode, () => muster(ctx, P.rallyNode, P)); at(P.sub, () => rallyChevron(ctx, P)); }
+  if (v && v.node) at(P.sub, () => v.node(ctx, P));
+  for (const c of CITIES) at(c, () => drawGroup(ctx, c, P));
+  if (v && v.top) at(P.sub, () => v.top(ctx, P));
+  if (v) madeUnits(ctx, P, v);
+}
+function renderRecruit() {
+  const P = frameState(S.time), v = RV_BY[S.rv], z = P.z, ctx = view.getContext('2d'), { W, H, dpr } = VIEW;
+  const near = S.zoom === 'near', cx = P.sub.x + (near ? P.out.x * 18 : 30), cy = P.sub.y + (near ? 0 : S.rally && S.zoom === 'normal' ? -70 : 10);
+  drawMap(ctx, W, H, dpr, z, cx, cy, P, v);
+}
+
+// =============================================================================================
+// THE CLOCK. The top bar is HTML as in the client (hud/TopBar.svelte, #860); every variant
+// returns the markup of the clock slot for one frame, so the time slider can scrub it.
+// =============================================================================================
+const BAR_GLYPHS = {
+  soundOn: 'M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z M11 5.5a3.5 3.5 0 0 1 0 5', help: 'M5.6 6a2.4 2.4 0 1 1 3.2 2.3c-.6.2-.8.6-.8 1.2v.6 M8 12.2v.4',
+  exit: 'M9 3H3v10h6M7 8h7M11.5 5.5 14 8l-2.5 2.5', pause: 'M5.5 3.5v9 M10.5 3.5v9', clock: 'M8 1.8a6.2 6.2 0 1 1 0 12.4a6.2 6.2 0 1 1 0-12.4z M8 4.8V8l2.2 1.4',
+};
+const MATCH_S = 900, AWARD_S = 30, LAST_S = 60;
+const glyph = (name, size = 17, color = 'currentColor') => `<svg viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true"><path d="${BAR_GLYPHS[name]}" fill="none" stroke="${color}" stroke-width="1.25" stroke-linecap="round"/></svg>`;
+const fmt = (n) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
+const lozD = (x, y, h) => `M${x} ${y - h}L${x + h} ${y}L${x} ${y + h}L${x - h} ${y}Z`;
+const f2 = (v) => Math.round(v * 100) / 100;
+function cpSvg(size) { return `<svg viewBox="-1 -1 18 18" width="${size}" height="${size}" aria-hidden="true">${CPM.map((p) => `<polygon points="${p.join(' ')}" fill="#ece4d1" stroke="#060504" stroke-width="2" stroke-linejoin="miter" paint-order="stroke"/>`).join('')}</svg>`; }
+function helmetSvg(kind, size) {
+  const P = HELMET_PATHS[kind], col = kind === 'own' ? 'var(--own)' : 'var(--foe)', id = 'h' + kind, flip = kind === 'enemy' ? ' transform="translate(100 0) scale(-1 1)"' : '';
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true"><defs><pattern id="${id}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(${kind === 'own' ? -45 : 45})"><rect width="2.4" height="7" fill="${col}"/></pattern></defs>
+    <g${kind === 'own' ? '' : ''}><path d="${P.dome}" fill="#0e0c09" stroke="#060504" stroke-width="12"/><path d="${P.dome}" fill="url(#${id})"/>${P.band ? `<path d="${P.band}" fill="none" stroke="#060504" stroke-width="10"/><path d="${P.band}" fill="none" stroke="#ece4d1" stroke-width="5"/>` : ''}<path d="${P.strap}" fill="none" stroke="#060504" stroke-width="11"/><path d="${P.strap}" fill="none" stroke="#ece4d1" stroke-width="5.5"/><path d="${P.dome}" fill="none" stroke="#ece4d1" stroke-width="4.5"/></g></svg>`;
+}
+function staticBar() {
+  const cpTicks = Array.from({ length: 11 }, (_, i) => `<line x1="${f2(1 + i * 14.8)}" y1="13" x2="${f2(1 + i * 14.8)}" y2="${i % 2 ? 16 : 18}" stroke="#ece4d1" stroke-width="1" opacity=".75"/>`).join('');
+  const tugTicks = Array.from({ length: 11 }, (_, i) => `<line x1="${f2(1 + i * 17.8)}" y1="16" x2="${f2(1 + i * 17.8)}" y2="${i === 0 || i === 10 ? 21 : 19}" stroke="#ece4d1" stroke-width="1" opacity=".6"/>`).join('');
+  return `<div class="tb-l">${cpSvg(19)}<span class="n23">4.2</span>
+      <svg width="152" height="20" aria-hidden="true"><rect x="0.5" y="3.5" width="150" height="7" fill="#060504" stroke="rgb(236 228 209 / 45%)"/><rect x="1" y="4" width="125" height="6" fill="var(--own)"/>${cpTicks}<path d="M126 11 l3 4 h-6z" fill="#ece4d1"/></svg>
+      <svg viewBox="-13 -13 26 26" width="20" height="20" aria-hidden="true"><path d="${CUT_D.factory}" fill="none" stroke="#ece4d1" stroke-width="1.6" stroke-linejoin="miter"/></svg><span class="n20">0/3</span>
+      <span class="chipq"><svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true"><path d="M8 2.5v11M4 13.5h8M2.5 4.5h11M2.5 4.5 1 9h3zM13.5 4.5 12 9h3z" fill="none" stroke="#ece4d1" stroke-width="1.2"/></svg><span class="key">Q</span></span></div>
+    <div class="tb-m">${helmetSvg('own', 22)}<span class="gain own">+5</span><span class="n27 own">9</span>
+      <svg width="182" height="22" aria-hidden="true"><defs><pattern id="tugh" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.6" height="5" fill="var(--foe)"/></pattern></defs>
+        <rect x="0.5" y="2.5" width="180" height="10" fill="#060504" stroke="rgb(236 228 209 / 40%)"/><rect x="1" y="3" width="62" height="9" fill="var(--own)"/><rect x="63" y="3" width="117" height="9" fill="url(#tugh)"/><line x1="90.5" y1="1" x2="90.5" y2="14" stroke="#ece4d1" opacity=".55"/>${tugTicks}<path d="${lozD(180, 18, 3)}" fill="none" stroke="var(--vp)"/></svg>
+      <span class="n27 foe">17</span><span class="gain foe">+7</span>${helmetSvg('enemy', 22)}</div>
+    <div class="tb-r"><div class="clk" id="clk"></div><span class="ib">${glyph('pause', 15)}</span><span class="ib">${glyph('soundOn', 15)}</span><span class="ib">${glyph('help', 15)}</span><span class="ib">${glyph('exit', 15)}</span></div>`;
+}
+
+/** One frame of the clock: the time left and what the variants need around it. */
+function clockState(tMs) {
+  const t = tMs / 1000; let s, paused = false, pauseLeft = 0, pauseSince = Infinity, resumeSince = Infinity, cut = 0;
+  if (S.cs === 'normal') s = 666.6 - t;
+  else if (S.cs === 'last') { if (t < 10) s = 64.4 - t; else s = Math.max(0, 7.4 - (t - 10)); cut = Math.max(0, 1 - Math.abs(t - 10) / 0.18); }
+  else if (t < 2) s = 464.6 - t;
+  else if (t < 9) { s = 462.6; paused = true; pauseLeft = Math.ceil(45 - (t - 2)); pauseSince = (t - 2) * 1000; }
+  else { s = 462.6 - (t - 9); resumeSince = (t - 9) * 1000; }
+  const whole = Math.max(0, Math.ceil(s - 1e-9)), still = S.still;
+  const sinceTick = still || paused ? Infinity : (whole - s) * 1000;
+  const elapsed = MATCH_S - s, vpSince = still ? Infinity : (elapsed % AWARD_S) * 1000;
+  return { s, whole, text: fmt(whole), prev: fmt(Math.min(MATCH_S, whole + 1)), sinceTick, last: whole <= LAST_S, lastSince: whole <= LAST_S ? (still ? Infinity : (LAST_S - s) * 1000) : -1,
+    ended: s <= 0, frac: clamp01(elapsed / MATCH_S), paused, pauseLeft, pauseSince: still ? Infinity : pauseSince, resumeSince: still ? Infinity : resumeSince, vpSince,
+    awards: Math.floor(elapsed / AWARD_S + 1e-9), still, cut, tms: tMs };
+}
+const numCls = (st, extra = '') => `num${st.last ? ' last' : ''}${extra ? ' ' + extra : ''}`;
+const inkC = (st) => (st.last ? 'var(--warn)' : 'var(--ink)');
+/** The figures, each one that changed rolling (the CP numeral's roll, #860: 0.5 s, the old gone by 60 %, the new from 30 %). */
+function rollText(st, colonHtml) {
+  const q = st.sinceTick / 500, cur = st.text, old = st.prev.padStart(cur.length, ' ');
+  let out = '';
+  for (let i = 0; i < cur.length; i++) {
+    const ch = cur[i], och = old.length === cur.length ? old[i] : ' ';
+    if (ch === ':') { out += colonHtml || '<span class="col">:</span>'; continue; }
+    if (q >= 1 || ch === och) { out += `<span>${ch}</span>`; continue; }
+    const e = ease.engrave(q), oa = clamp01(1 - q / 0.6), na = clamp01((q - 0.3) / 0.7);
+    out += `<span class="roll"><span style="opacity:0">${ch}</span><span style="transform:translateY(${f2(-e * 100)}%);opacity:${f2(oa)}">${och.trim() ? och : ''}</span><span style="transform:translateY(${f2((1 - e) * 100)}%);opacity:${f2(na)}">${ch}</span></span>`;
+  }
+  return out;
+}
+/** The pause sign in place of a mark (two bars). */
+const pauseBars = (size, color = 'var(--ink)') => `<svg viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9" stroke="#060504" stroke-width="4" stroke-linecap="square"/><path d="M5.5 3.5v9M10.5 3.5v9" stroke="${color}" stroke-width="1.8" stroke-linecap="square"/></svg>`;
+/** How far a pause has come in (0..1) and gone (after a resume). */
+const pauseIn = (st) => (st.paused ? clamp01(st.pauseSince / 320) : st.resumeSince < 320 ? 1 - st.resumeSince / 320 : 0);
+
+const CVARS = [
+  { id: 'T0', name: 'Today', ref: true, line: 'The clock glyph and the figures; the last minute amber, heavier and a size up. A pause only stops it.', rm: 'the same.',
+    html(st) { return `${glyph('clock', 17)}<span class="${numCls(st)}">${st.text}</span>`; } },
+  { id: 'T1', name: 'Dial',
+    line: 'The glyph becomes a live engraved dial: the hand and a ruled arc show how much of the match is gone; in the last minute it re-rules to seconds.',
+    rm: 'the hand jumps once a second.',
+    html(st) {
+      const last = st.last, turn = last ? clamp01(1 - st.s / LAST_S) : st.frac, a = turn * 360 - 90, col = inkC(st), r = 12.2, c = 2 * Math.PI * r, n = last ? 12 : 15, pin = pauseIn(st);
+      const tq = st.still ? Math.floor(turn * (last ? 60 : 900)) / (last ? 60 : 900) : turn, ha = (tq * 360 - 90) * Math.PI / 180;
+      const ticks = Array.from({ length: n }, (_, i) => { const b = (i / n) * 2 * Math.PI - Math.PI / 2; return `<line x1="${f2(17 + 13.4 * Math.cos(b))}" y1="${f2(17 + 13.4 * Math.sin(b))}" x2="${f2(17 + 15.4 * Math.cos(b))}" y2="${f2(17 + 15.4 * Math.sin(b))}" stroke="${col}" stroke-width="${i % (last ? 3 : 5) ? 0.8 : 1.4}" opacity="${i % (last ? 3 : 5) ? 0.6 : 0.95}"/>`; }).join('');
+      const hand = `<line x1="17" y1="17" x2="${f2(17 + 10 * Math.cos(ha))}" y2="${f2(17 + 10 * Math.sin(ha))}" stroke="#060504" stroke-width="3.6" stroke-linecap="round"/><line x1="17" y1="17" x2="${f2(17 + 10 * Math.cos(ha))}" y2="${f2(17 + 10 * Math.sin(ha))}" stroke="${col}" stroke-width="1.5" stroke-linecap="round"/>`;
+      const centre = pin > 0 ? `<g opacity="${f2(pin)}"><rect x="12" y="12" width="10" height="10" fill="#0e0c09"/><path d="M14.6 13.2v7.6M19.4 13.2v7.6" stroke="${col}" stroke-width="1.6"/></g>` : `<path d="${lozD(17, 17, 2.6)}" fill="${col}" stroke="#060504" stroke-width="1"/>`;
+      return `<svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="16.2" fill="#0e0c09" stroke="#060504" stroke-width="1.6"/>
+        <circle cx="17" cy="17" r="15.6" fill="none" stroke="${col}" stroke-width="0.9" opacity=".8" ${st.paused ? 'stroke-dasharray="2.4 1.8"' : ''}/>
+        <circle cx="17" cy="17" r="${r}" fill="none" stroke="${col}" stroke-width="2.2" opacity=".42" stroke-dasharray="${f2(c * turn)} ${f2(c)}" transform="rotate(-90 17 17)"/>
+        ${ticks}${hand}${centre}</svg><span class="${numCls(st)}" style="opacity:${f2(1 - 0.4 * pin)}">${st.text}</span>`;
+    } },
+  { id: 'T2', name: 'Rolling figures',
+    line: 'The figures roll like the CP numeral when they change, and the glyph’s hand turns once a minute; a pause swaps the glyph for the pause sign.',
+    rm: 'no roll; the hand jumps.',
+    html(st) {
+      const sec = st.s % 60, a = ((60 - sec) / 60) * 2 * Math.PI - Math.PI / 2, aq = st.still ? (Math.floor(60 - sec) / 60) * 2 * Math.PI - Math.PI / 2 : a, col = inkC(st), pin = pauseIn(st);
+      const g = pin > 0.5 ? pauseBars(17, col) : `<svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="${col}" stroke-width="1.25"/><line x1="8" y1="8" x2="${f2(8 + 4 * Math.cos(aq))}" y2="${f2(8 + 4 * Math.sin(aq))}" stroke="${col}" stroke-width="1.25" stroke-linecap="round"/><circle cx="8" cy="8" r="0.9" fill="${col}"/></svg>`;
+      return `${g}<span class="${numCls(st)}" style="opacity:${f2(1 - 0.45 * pin)}">${rollText(st)}</span>`;
+    } },
+  { id: 'T3', name: 'Cartouche',
+    line: 'The figures in an engraved cartouche with lozenge serifs, the frame of the CP gauge at its cap; in the last minute the frame turns amber and its serifs beat each second.',
+    rm: 'no beat.',
+    html(st) {
+      const col = st.last ? 'var(--warn)' : '#ece4d1', beat = st.last && st.sinceTick < 260 ? 1 + 0.45 * Math.sin(Math.PI * (st.sinceTick / 260)) : 1, pin = pauseIn(st), dash = st.paused ? 'stroke-dasharray="3 2.2"' : '';
+      const ser = (x) => `<g transform="translate(${x} 21) scale(${f2(beat)})"><path d="${lozD(0, 0, 6.2)}" fill="#060504"/><path d="${lozD(0, 0, 4.2)}" fill="${st.paused ? '#0e0c09' : col}" stroke="${col}" stroke-width="${st.paused ? 1 : 0}"/></g>`;
+      return `<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:112px;height:42px"><svg width="112" height="42" style="position:absolute;inset:0" aria-hidden="true">
+        <rect x="6.5" y="1.5" width="99" height="39" fill="rgb(14 12 9 / 70%)" stroke="${col}" stroke-opacity=".6" ${dash}/><rect x="9.5" y="4.5" width="93" height="33" fill="none" stroke="${col}" stroke-opacity=".24" ${dash}/>
+        <path d="M6 1h6M6 1v6M106 1h-6M106 1v6M6 41h6M6 41v-6M106 41h-6M106 41v-6" stroke="${col}" stroke-width="1.6" opacity=".9"/>${ser(6)}${ser(106)}</svg>
+        <span class="${numCls(st)}" style="position:relative;opacity:${f2(1 - 0.45 * pin)}">${st.text}</span></span>`;
+    } },
+  { id: 'T4', name: 'Hourglass',
+    line: 'A cut hourglass drains over the match; it turns over into a one-minute glass for the last minute, and lies on its side while paused.',
+    rm: 'it turns at once; the sand steps.',
+    html(st) {
+      const col = st.last ? 'var(--warn)' : 'var(--ink-soft)', flipping = st.last && st.lastSince < 520;
+      let rot = 0, top;
+      if (flipping) { rot = 180 * ease.engrave(st.lastSince / 520); top = clamp01(st.s / MATCH_S); } else top = st.last ? clamp01(st.s / LAST_S) : clamp01(st.s / MATCH_S);
+      if (st.paused) rot += 90 * ease.engrave(clamp01(st.pauseSince / 380)); else if (st.resumeSince < 380) rot += 90 * (1 - ease.engrave(st.resumeSince / 380));
+      if (flipping) rot = rot; // the pre-flip glass, turning
+      const H = 11, yS = 15 - top * H, bot = 1 - top, run = !st.paused && !st.ended && top > 0.003;
+      const sandTop = top > 0.003 ? `<path d="M${f2(3 + (yS - 4) * 0.47)} ${f2(yS)}H${f2(19 - (yS - 4) * 0.47)}L11.9 15H10.1Z" fill="${col}"/>` : '';
+      const pile = bot > 0.003 ? `<path d="M3.4 26H18.6L${f2(18.6 - bot * 1.5)} ${f2(26 - bot * 8.4)}Q11 ${f2(26 - bot * 10.5)} ${f2(3.4 + bot * 1.5)} ${f2(26 - bot * 8.4)}Z" fill="${col}"/>` : '';
+      const stream = run && !flipping ? `<line x1="11" y1="15" x2="11" y2="${f2(26 - bot * 9.6)}" stroke="${col}" stroke-width="0.9" stroke-dasharray="1 1.1" stroke-dashoffset="${st.still ? 0 : f2(-(st.tms / 70) % 4)}"/>` : '';
+      return `<svg width="26" height="34" viewBox="0 0 22 30" aria-hidden="true" style="overflow:visible"><g transform="rotate(${f2(rot)} 11 15)">
+        <path d="M3 4H19L11.9 15L19 26H3L10.1 15Z" fill="#0e0c09" stroke="#060504" stroke-width="3" stroke-linejoin="round"/>${sandTop}${pile}${stream}
+        <path d="M3 4H19L11.9 15L19 26H3L10.1 15Z" fill="none" stroke="#ece4d1" stroke-width="1" stroke-linejoin="round"/>
+        <path d="M1 3.2H21M1 26.8H21" stroke="#060504" stroke-width="3.6"/><path d="M1.4 3.2H20.6M1.4 26.8H20.6" stroke="#ece4d1" stroke-width="1.5"/></g></svg>
+        <span class="${numCls(st)}" style="opacity:${f2(1 - 0.4 * pauseIn(st))}">${st.text}</span>`;
+    } },
+  { id: 'T5', name: 'Award ticks',
+    line: 'Thirty ticks under the figures, one per VP award: the gone ones engraved, the one under way grows in gilt and lights at the award.',
+    rm: 'no light at the award.',
+    html(st) {
+      const done = Math.min(30, st.awards), phase = clamp01((st.vpSince === Infinity ? ((MATCH_S - st.s) % AWARD_S) * 1000 : st.vpSince) / (AWARD_S * 1000)), flash = st.vpSince < 900 ? 1 - st.vpSince / 900 : 0;
+      let ticks = '';
+      for (let i = 0; i < 30; i++) {
+        const x = f2(1 + i * 3.45);
+        if (i < done) ticks += `<rect x="${x}" y="1.5" width="1.9" height="7" fill="${i === done - 1 && flash > 0 ? 'var(--vp)' : '#ece4d1'}" opacity="${i === done - 1 && flash > 0 ? 1 : 0.9}"/>`;
+        else if (i === done && !st.ended) ticks += `<rect x="${x}" y="5.5" width="1.9" height="3" fill="#ece4d1" opacity=".3"/><rect x="${x}" y="${f2(8.5 - 7 * phase)}" width="1.9" height="${f2(7 * phase)}" fill="var(--vp)"/>`;
+        else ticks += `<rect x="${x}" y="5.5" width="1.9" height="3" fill="${i >= 28 && st.last ? 'var(--warn)' : '#ece4d1'}" opacity="${i >= 28 && st.last ? 0.9 : 0.32}"/>`;
+      }
+      const pop = flash > 0 ? `<path d="${lozD(f2(1.95 + (done - 1) * 3.45), f2(-2 - 3 * (1 - flash)), 2.6)}" fill="var(--vp)" opacity="${f2(flash)}"/>` : '';
+      return `${pauseIn(st) > 0.5 ? pauseBars(15) : ''}<span style="display:flex;flex-direction:column;align-items:center;gap:2px;opacity:${f2(1 - 0.4 * pauseIn(st))}"><span class="${numCls(st)}" style="font-size:${st.last ? 27 : 24}px">${st.text}</span>
+        <svg width="106" height="10" viewBox="0 -1 106 10" aria-hidden="true" style="overflow:visible"><rect x="0" y="9.2" width="105" height="0.8" fill="#ece4d1" opacity=".35"/>${ticks}${pop}</svg></span>`;
+    } },
+  { id: 'T6', name: 'Gauge',
+    line: 'A scale in the CP gauge’s language left of the figures: the time left as a ruled bar with a burin at its end; in the last minute it re-ranges to sixty seconds in amber.',
+    rm: 'the bar steps once a second.',
+    html(st) {
+      const last = st.last, share = last ? clamp01(st.s / LAST_S) : clamp01(st.s / MATCH_S), sq = st.still ? (last ? st.whole / LAST_S : st.whole / MATCH_S) : share, w = 116, col = last ? 'var(--warn)' : '#cfc4ab', n = last ? 6 : 15;
+      const ticks = Array.from({ length: n + 1 }, (_, i) => `<line x1="${f2(2 + (i / n) * w)}" y1="13" x2="${f2(2 + (i / n) * w)}" y2="${i % (last ? 3 : 5) ? 15.5 : 17.5}" stroke="#ece4d1" stroke-width="1" opacity=".7"/>`).join('');
+      const x = f2(2 + sq * w), hatch = st.paused ? `<rect x="2" y="4" width="${f2(sq * w)}" height="6" fill="url(#gh)"/>` : `<rect x="2" y="4" width="${f2(sq * w)}" height="6" fill="${col}"/>`;
+      return `<svg width="122" height="22" aria-hidden="true"><defs><pattern id="gh" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.4" height="4" fill="${col}"/></pattern></defs>
+        <rect x="1.5" y="3.5" width="${w + 1}" height="7" fill="#060504" stroke="rgb(236 228 209 / 45%)"/>${hatch}${ticks}
+        <path d="${lozD(x, 7, 4.4)}" fill="#060504"/><path d="${lozD(x, 7, 2.6)}" fill="#ece4d1"/><path d="M${x} 11.5l3 4h-6z" fill="#ece4d1"/></svg>
+        <span class="${numCls(st)}" style="opacity:${f2(1 - 0.4 * pauseIn(st))}">${st.text}</span>`;
+    } },
+  { id: 'T7', name: 'Plinth',
+    line: 'The figures cut into a small stone plinth with a lozenge cap, the menus’ Plinth look; amber-filled in the last minute, ruled over while paused.',
+    rm: 'the same.',
+    html(st) {
+      const capc = st.last ? 'var(--warn)' : '#ece4d1';
+      return `<span class="slab${st.paused ? ' paused' : ''}"><svg width="14" height="10" style="position:absolute;left:50%;top:-6px;margin-left:-7px" aria-hidden="true"><path d="${lozD(7, 5, 4.6)}" fill="#060504"/><path d="${lozD(7, 5, 2.9)}" fill="${capc}"/></svg>
+        ${st.paused ? `<span style="margin-right:6px;opacity:${f2(pauseIn(st))}">${pauseBars(15)}</span>` : ''}<span class="${numCls(st)}">${st.text}</span></span>`;
+    } },
+  { id: 'T8', name: 'Seal ring',
+    line: 'A round seal of fifteen lozenges, one per minute, emptying as the match runs; for the last minute it becomes sixty ticks that go out one by one.',
+    rm: 'the lozenge of the minute steps.',
+    html(st) {
+      const pin = pauseIn(st), last = st.last;
+      let ring = '';
+      if (!last) {
+        const m = st.s / 60;
+        for (let i = 0; i < 15; i++) {
+          const a = (i / 15) * 2 * Math.PI - Math.PI / 2, x = f2(20 + 15 * Math.cos(a)), y = f2(20 + 15 * Math.sin(a)), part = clamp01(m - i), pq = st.still ? (part >= 1 ? 1 : part > 0 ? 0.5 : 0) : part;
+          ring += `<path d="${lozD(x, y, 3.6)}" fill="#060504"/>`;
+          if (pq >= 1) ring += `<path d="${lozD(x, y, 2.4)}" fill="#ece4d1"/>`;
+          else { ring += `<path d="${lozD(x, y, 2.2)}" fill="#0e0c09" stroke="#ece4d1" stroke-width=".7" opacity=".85"/>`; if (pq > 0) ring += `<clipPath id="sc${i}"><rect x="${x - 3}" y="${f2(y + 2.4 - 4.8 * pq)}" width="6" height="6"/></clipPath><path d="${lozD(x, y, 2.4)}" fill="#ece4d1" clip-path="url(#sc${i})"/>`; }
+        }
+      } else {
+        for (let i = 0; i < 60; i++) { const a = (i / 60) * 2 * Math.PI - Math.PI / 2, on = i < st.s; ring += `<line x1="${f2(20 + 12.4 * Math.cos(a))}" y1="${f2(20 + 12.4 * Math.sin(a))}" x2="${f2(20 + (i % 5 ? 16 : 17.6) * Math.cos(a))}" y2="${f2(20 + (i % 5 ? 16 : 17.6) * Math.sin(a))}" stroke="${on ? 'var(--warn)' : '#ece4d1'}" stroke-width="${on ? 1.3 : 0.7}" opacity="${on ? 1 : 0.25}"/>`; }
+      }
+      const centre = pin > 0.5 ? `<path d="M17.4 16v8M22.6 16v8" stroke="#ece4d1" stroke-width="1.6"/>` : `<path d="${lozD(20, 20, 3.4)}" fill="${last ? 'var(--warn)' : '#ece4d1'}" stroke="#060504"/>`;
+      return `<svg width="40" height="40" aria-hidden="true"><circle cx="20" cy="20" r="19.3" fill="#0e0c09" stroke="#060504" stroke-width="1.4"/><circle cx="20" cy="20" r="10.2" fill="none" stroke="#ece4d1" stroke-width=".7" opacity=".4"/><g opacity="${f2(1 - 0.45 * pin)}">${ring}</g>${centre}</svg>
+        <span class="${numCls(st)}" style="opacity:${f2(1 - 0.4 * pin)}">${st.text}</span>`;
+    } },
+  { id: 'T9', name: 'Split figures',
+    line: 'Large minutes and small seconds inside a ruled ring that sweeps each minute; in the last minute the minutes go and the seconds grow into the ring.',
+    rm: 'the ring steps once a second.',
+    html(st) {
+      const pin = pauseIn(st), mins = Math.floor(st.whole / 60), secs = String(st.whole % 60).padStart(2, '0'), sec = st.still ? st.whole % 60 : st.s % 60;
+      const R = st.last ? 21 : 13.5, size = 2 * R + 6, c = 2 * Math.PI * R, share = st.last ? clamp01(st.s / LAST_S) : sec / 60, col = st.last ? 'var(--warn)' : '#ece4d1';
+      const head = (share * 360 - 90) * Math.PI / 180, hx = f2(size / 2 + R * Math.cos(head)), hy = f2(size / 2 + R * Math.sin(head));
+      const ring = `<svg width="${size}" height="${size}" style="position:absolute;inset:0" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${R}" fill="#0e0c09" stroke="#060504" stroke-width="4"/>
+        <circle cx="${size / 2}" cy="${size / 2}" r="${R}" fill="none" stroke="${col}" stroke-width="2.2" stroke-dasharray="${st.paused ? '2 2' : `${f2(c * share)} ${f2(c)}`}" transform="rotate(-90 ${size / 2} ${size / 2})" opacity="${st.paused ? 0.5 : 0.85}"/>
+        ${!st.paused && share > 0.01 && share < 0.995 ? `<path d="${lozD(hx, hy, 3.4)}" fill="#060504"/><path d="${lozD(hx, hy, 2.1)}" fill="#ece4d1"/>` : ''}</svg>`;
+      const colon = pin > 0.5 ? `<span style="margin:0 4px 0 2px">${pauseBars(14)}</span>` : `<svg width="9" height="22" style="margin:0 2px" aria-hidden="true"><path d="${lozD(4.5, 7, 2.6)}" fill="${col}"/><path d="${lozD(4.5, 16, 2.6)}" fill="${col}"/></svg>`;
+      const minsHtml = st.last ? '' : `<span class="num" style="font-size:31px">${mins}</span>${colon}`;
+      return `${minsHtml}<span style="position:relative;display:inline-grid;place-items:center;width:${size}px;height:${size}px">${ring}<span class="num${st.last ? ' last' : ''}" style="position:relative;font-size:${st.last ? 25 : 17}px;opacity:${f2(1 - 0.4 * pin)}">${secs}</span></span>`;
+    } },
+  { id: 'T10', name: 'Hung plate',
+    line: 'Quieter in the bar; the last minute hangs a plate under the bar with the seconds in large amber, and a pause hangs one with its own countdown.',
+    rm: 'the plates appear without the burin.',
+    html(st) {
+      let hang = '';
+      const reveal = (ms) => (st.still ? 1 : ease.engrave(clamp01(ms / 460)));
+      if (st.paused || st.resumeSince < 300) {
+        const q = st.paused ? reveal(st.pauseSince) : 1 - st.resumeSince / 300;
+        hang = `<span class="hang" style="clip-path:inset(0 0 0 ${f2((1 - q) * 100)}%)">${helmetSvg('own', 20)}${pauseBars(16)}<span class="num" style="font-size:24px">${fmt(Math.max(0, st.pauseLeft || 38))}</span></span>`;
+      } else if (st.last && !st.ended) {
+        const q = reveal(st.lastSince);
+        hang = `<span class="hang" style="clip-path:inset(0 0 0 ${f2((1 - q) * 100)}%)"><svg width="14" height="14" aria-hidden="true"><path d="${lozD(7, 7, 6.6)}" fill="#060504"/><path d="${lozD(7, 7, 4.6)}" fill="var(--warn)"/></svg><span class="num last" style="font-size:36px">${rollText(st)}</span></span>`;
+      }
+      return `${glyph('clock', 15, st.last ? 'var(--warn)' : 'var(--ink-soft)')}<span class="num" style="font-size:22px;color:${st.last ? 'var(--warn)' : 'var(--ink-soft)'}">${st.text}</span>${hang}`;
+    } },
+  { id: 'T11', name: 'Lozenge colon',
+    line: 'The colon is two lozenges that tick each second; in the last minute they turn amber and beat harder, and a pause folds them into the pause sign.',
+    rm: 'no tick; the colon becomes the pause sign at once.',
+    html(st) {
+      const col = st.last ? 'var(--warn)' : '#ece4d1', q = st.sinceTick / 280, flip = q < 1 ? Math.abs(Math.cos(Math.PI * q)) : 1, pop = st.last && st.sinceTick < 300 ? 1 + 0.35 * (1 - st.sinceTick / 300) : 1;
+      const m = st.still ? (st.paused ? 1 : 0) : ease.engrave(pauseIn(st)), w = st.last ? 11 : 9, h = st.last ? 26 : 22, cx = w / 2;
+      // a lozenge (m = 0) folding into a bar (m = 1)
+      const piece = (cy, sx) => { const hh = lerp(2.7, 5.6, m) * (st.last ? 1.15 : 1), hw = lerp(2.7, 0.9, m) * (st.last ? 1.15 : 1), mid = lerp(0, 1, m); const y0 = cy; return `<g transform="translate(${f2(cx)} ${f2(y0)}) scale(${f2(sx * pop)} ${f2(pop)})"><path d="M${f2(-hw * mid)} ${f2(-hh)}L${f2(hw)} ${f2(-hh * mid)}L${f2(hw * mid)} ${f2(hh)}L${f2(-hw)} ${f2(hh * mid)}Z" fill="${col}" stroke="#060504" stroke-width="1.2" paint-order="stroke"/></g>`; };
+      const y1 = lerp(h * 0.33, h * 0.5, m), y2 = lerp(h * 0.72, h * 0.5, m), xs = lerp(0, 2.6, m);
+      const colon = `<svg width="${f2(w + 2 * xs + 2)}" height="${h}" style="margin:0 1px;align-self:center" aria-hidden="true"><g transform="translate(${f2(1 - xs)} 0)">${piece(y1, 1)}</g><g transform="translate(${f2(1 + xs)} 0)">${piece(y2, flip)}</g></svg>`;
+      const parts = st.text.split(':');
+      return `${st.last ? '' : glyph('clock', 17)}<span class="${numCls(st)}" style="align-items:center"><span>${parts[0]}</span>${colon}<span>${parts[1]}</span></span>`;
+    } },
+];
+const CV_BY = Object.fromEntries(CVARS.map((v) => [v.id, v]));
+
+// =============================================================================================
+// The clock view: the map behind (still), the bar on top; "Close-up" magnifies round the clock.
+// =============================================================================================
+const cWrap = document.getElementById('cWrap'), bg = document.getElementById('bg'), tb = document.getElementById('tb'), tbHost = document.getElementById('tbHost');
+const CL = { W: 1200, H: 600, dpr: 1, built: false };
+function layoutClock(W, H, dpr) { bg.style.height = H + 'px'; bg.width = Math.round(W * dpr); bg.height = Math.round(H * dpr); Object.assign(CL, { W, H, dpr }); CL.bgDirty = true; }
+function drawClockMap() {
+  const P = frameState(0); P.t = 600;
+  drawMap(bg.getContext('2d'), CL.W, CL.H, CL.dpr, 0.85, 40, 40, P, null);
+  const ctx = bg.getContext('2d'); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(8,7,5,0.28)'; ctx.fillRect(0, 0, bg.width, bg.height);
+  CL.bgDirty = false;
+}
+function renderClock() {
+  if (!CL.built) { tb.innerHTML = staticBar(); CL.built = true; }
+  if (CL.bgDirty) drawClockMap();
+  const st = clockState(S.time), v = CV_BY[S.cv], clk = document.getElementById('clk');
+  clk.innerHTML = v.html(st);
+  clk.style.opacity = String(1 - 0.75 * st.cut);
+  tb.setAttribute('aria-label', `Top bar. ${st.paused ? 'Paused, ' + st.pauseLeft + ' s of the pause left; ' : ''}${st.text} of the match left${st.last ? ', the last minute' : ''}.`);
+  if (S.cz) {
+    const r = clk.getBoundingClientRect(), host = tbHost.getBoundingClientRect();
+    const xc = (CL.xc === undefined || !CL.zoomed) ? r.left - host.left + r.width / 2 : CL.xc; CL.xc = xc; CL.zoomed = true;
+    tbHost.style.transformOrigin = `${xc}px 26px`; tbHost.style.transform = `translate(${f2(CL.W * 0.5 - xc)}px, ${f2(CL.H * 0.3 - 26)}px) scale(2.6)`;
+  } else { tbHost.style.transform = ''; CL.zoomed = false; CL.xc = undefined; }
+}
+
+// =============================================================================================
+// Controls and state (also in the address).
+// =============================================================================================
+const CLOCK_LOOPS = { normal: 12000, last: 19500, paused: 12000 };
+const loopLen = () => (S.el === 'recruit' ? story().loop : CLOCK_LOOPS[S.cs]);
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (['recruit', 'clock'].includes(q.get('el'))) S.el = q.get('el');
+  if (RV_BY[q.get('v')]) S.rv = q.get('v');
+  if (CV_BY[q.get('c')]) S.cv = q.get('c');
+  if (['small', 'capital'].includes(q.get('city'))) S.city = q.get('city');
+  if (['1', '2', '3'].includes(q.get('n'))) S.n = Number(q.get('n'));
+  if (ZOOMS[q.get('z')]) S.zoom = q.get('z');
+  if (['normal', 'last', 'paused'].includes(q.get('cs'))) S.cs = q.get('cs');
+  for (const [k, key] of [['rally', 'rally'], ['sel', 'sel'], ['room', 'room'], ['cz', 'cz'], ['rm', 'still'], ['gr', 'gray'], ['more', 'more']]) if (q.has(k)) S[key] = q.get(k) === '1';
+  const tm = Number(q.get('tm')); if (q.has('tm') && tm >= 0) { S.time = tm; S.playing = false; }
+}
+function writeHash() {
+  const b = (x) => (x ? 1 : 0);
+  const h = `el=${S.el}&v=${S.rv}&c=${S.cv}&city=${S.city}&n=${S.n}&rally=${b(S.rally)}&z=${S.zoom}&sel=${b(S.sel)}&room=${b(S.room)}&cs=${S.cs}&cz=${b(S.cz)}&rm=${b(S.still)}&gr=${b(S.gray)}&more=${b(S.more)}` + (S.playing ? '' : `&tm=${Math.round(S.time)}`);
+  history.replaceState(null, '', '#' + h);
+}
+let playFrom = 0, playAt = 0;
+function replay() { S.time = 0; S.playing = true; playFrom = 0; playAt = performance.now(); CL.zoomed = false; refresh(); }
+const varsEl = document.getElementById('vars');
+function chip(parent, key, label, onClick, cls) {
+  const b = document.createElement('button'); b.className = 'chip' + (cls ? ' ' + cls : ''); b.dataset.v = key;
+  const k = document.createElement('span'); k.className = 'k'; k.textContent = key; b.append(k, document.createTextNode(label));
+  b.addEventListener('click', onClick); parent.append(b); return b;
+}
+let varChips = [];
+function buildVarChips() {
+  varsEl.textContent = '';
+  const list = S.el === 'recruit' ? RVARS : CVARS;
+  varChips = list.map((v) => chip(varsEl, v.id, v.name, () => { if (S.el === 'recruit') S.rv = v.id; else S.cv = v.id; replay(); }, 'var' + (v.ref ? ' ref' : '')));
+}
+const on = (sel, fn) => document.querySelectorAll(sel).forEach((b) => b.addEventListener('click', () => fn(b)));
+on('[data-el]', (b) => { S.el = b.dataset.el; buildVarChips(); layoutView(); replay(); });
+on('[data-city]', (b) => { S.city = b.dataset.city; replay(); });
+on('[data-n]', (b) => { S.n = Number(b.dataset.n); replay(); });
+on('[data-rally]', (b) => { S.rally = b.dataset.rally === '1'; replay(); });
+on('[data-z]', (b) => { S.zoom = b.dataset.z; refresh(); });
+on('[data-cs]', (b) => { S.cs = b.dataset.cs; replay(); });
+on('[data-cz]', (b) => { S.cz = b.dataset.cz === '1'; CL.zoomed = false; refresh(); });
+for (const [id, key] of [['sel', 'sel'], ['room', 'room'], ['still', 'still'], ['gray', 'gray']]) document.getElementById(id).addEventListener('click', () => { S[key] = !S[key]; if (key === 'room') replay(); else refresh(); });
+const moreBtns = [document.getElementById('more'), document.getElementById('more2')], playBtn = document.getElementById('play'), scrub = document.getElementById('scrub');
+moreBtns.forEach((m) => m.addEventListener('click', () => { S.more = !S.more; refresh(); }));
+document.getElementById('replay').addEventListener('click', replay);
+view.addEventListener('click', replay);
+playBtn.addEventListener('click', () => { if (S.playing) S.playing = false; else { S.playing = true; playFrom = S.time; playAt = performance.now(); } refresh(); });
+scrub.addEventListener('input', () => { S.playing = false; S.time = Number(scrub.value); refresh(); });
+function refresh() {
+  const press = (els, f) => els.forEach((e) => e.setAttribute('aria-pressed', String(f(e))));
+  const rec = S.el === 'recruit';
+  press([...document.querySelectorAll('[data-el]')], (e) => e.dataset.el === S.el);
+  press(varChips, (e) => e.dataset.v === (rec ? S.rv : S.cv));
+  press([...document.querySelectorAll('[data-city]')], (e) => e.dataset.city === S.city);
+  press([...document.querySelectorAll('[data-n]')], (e) => Number(e.dataset.n) === S.n);
+  press([...document.querySelectorAll('[data-rally]')], (e) => (e.dataset.rally === '1') === S.rally);
+  press([...document.querySelectorAll('[data-z]')], (e) => e.dataset.z === S.zoom);
+  press([...document.querySelectorAll('[data-cs]')], (e) => e.dataset.cs === S.cs);
+  press([...document.querySelectorAll('[data-cz]')], (e) => (e.dataset.cz === '1') === S.cz);
+  for (const [id, key] of [['sel', 'sel'], ['room', 'room'], ['still', 'still'], ['gray', 'gray']]) press([document.getElementById(id)], () => S[key]);
+  document.getElementById('rBar').hidden = !rec; document.getElementById('cBar').hidden = rec; document.getElementById('rMore').hidden = !rec;
+  rWrap.hidden = !rec; cWrap.hidden = rec;
+  document.getElementById('moreBar').classList.toggle('open', S.more); moreBtns.forEach((m) => m.setAttribute('aria-expanded', String(S.more)));
+  playBtn.textContent = S.playing ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(!S.playing));
+  scrub.max = loopLen(); scrub.value = S.time;
+  document.body.classList.toggle('gray', S.gray);
+  const v = rec ? RV_BY[S.rv] : CV_BY[S.cv], cap = document.getElementById('cap'); cap.textContent = '';
+  const b = document.createElement('b'); b.textContent = `${v.id} ${v.name}`;
+  const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = v.ref ? 'today' : 'client only · no protocol or sim change';
+  cap.append(b, document.createTextNode(v.line), tag);
+  if (S.still) { const r = document.createElement('span'); r.className = 'rm'; r.textContent = 'Reduced motion: ' + v.rm; cap.append(r); }
+  view.setAttribute('aria-label', `${v.id} ${v.name}: ${S.city === 'small' ? 'a small city' : 'the capital'} recruits ${S.room ? 'with no room' : S.n + (S.n > 1 ? ' units' : ' unit')}${S.rally ? ' to a rally point' : ''}, ${S.zoom} zoom. Click to replay.`);
+  writeHash();
+}
+function tick(now) {
+  if (S.playing) { S.time = playFrom + (now - playAt); const L = loopLen(); if (S.time >= L) { S.time = 0; playFrom = 0; playAt = now; } scrub.value = S.time; }
+  if (S.el === 'recruit') renderRecruit(); else renderClock();
+  requestAnimationFrame(tick);
+}
+window.addEventListener('resize', () => { layoutView(); });
+try { if (!location.hash && window.matchMedia('(prefers-reduced-motion: reduce)').matches) S.still = true; } catch (e) { /* no media queries */ }
+readHash();
+if (S.playing) { playFrom = S.time; playAt = performance.now(); }
+buildVarChips(); refresh(); layoutView();
+(async () => {
+  try { groundTile = mirrorTile(await loadImg('assets/city-buildings/ground-plains.webp')); CL.bgDirty = true; } catch (e) { /* the flat ground stays */ }
+  try { await Promise.all([document.fonts.load("600 12px 'EB Garamond'"), document.fonts.load("600 12px 'Cinzel'")]); } catch (e) { /* the serif fallback */ }
+  document.body.dataset.ready = '1';
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
