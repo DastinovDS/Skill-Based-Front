@@ -166,9 +166,10 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
       on roads from enemy nodes, ``FORT_KEEP`` CP left, ``FORT_SHARE`` percent of the CP had so
       far at most. ``smart_turtle`` leans on them (6, no keep, 20%), ``smart_rusher`` least (1,
       2 CP kept, 5%); the benchmark ``smart_hoarder`` keeps the old
-      capital defense and none (``DEFENSE_V2``). The CP sink of ``economy.fort_site`` stays.
+      capital defense and none (``DEFENSE_V2``). The CP sink of ``economy.fort_site`` stays,
+      last in the decision (item 26).
 23. **Cancel discipline and CP banking** (#687, G5 of the bot audit). A cancel refunds nothing
-    (``orders.cost.cancel``, DEC-20, C) and takes a command of the APM bucket, so a personality
+    (``orders.cost.cancel``, DEC-20, C), so a personality
     with ``DISCIPLINE`` recalls only an attack that would lose units and does not send the same
     target again within ``RECALL_TICKS`` without more shots (``CampaignBot.recall_pays``). A
     personality with ``BANK`` > 0 saves for a push or a fortification it has decided on and
@@ -193,6 +194,14 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     count the reinforcements the defender can bring while the fight lasts (``contact_pct``
     percent of them) and the enemy figures met on the road in; an attack short of that is not
     sent, the group gathers or rallies. Under ``"round"`` nothing changes.
+26. **CP discipline** (#1015, finding 1 of the bot behaviour review of 2026-11-12). The CP sink
+    of ``economy.fort_site`` (a road fortification while the CP near their cap) comes last in
+    the decision, after the attacks, the recruits and ``bank``, and spends only the CP the
+    decision leaves near the cap (``fort_sink``), within the ``FORT_SHARE`` budget of item 22,
+    which it shares. Before, it came first and had no budget: a level whose APM bucket binds sits
+    near the cap, so its every decision bought a fortification before any attack (27 to 41% of
+    the CP of ``easy``). The APM bucket pays only the commands with a CP price (``spend``): a
+    split, a cancel or a stance change needs a ready bucket and takes nothing.
 
 An order is planned when the bonus it gathers makes it take its target (DEC-41, item 10), the
 same rule for all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -207,6 +216,7 @@ from typing import ClassVar, Final, override
 from gow_bots.bots.assess import FRESH_TICKS, Assessment, Assessor, Travel
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option
+from gow_bots.bots.economy import fort_site
 from gow_bots.bots.estimate import EnemyForce, Phase, Sector, phase, sectors, strengths, threats
 from gow_bots.bots.forts import RoadThreat, cut_off, fortified, road_threats
 from gow_bots.bots.logistics import Arrival, arrivals, garrison_need
@@ -596,10 +606,11 @@ class SmartBot(CampaignBot):
         self.pockets: Pockets | None = None
         """The own pockets of this decision (item 20); ``None`` without one."""
         self.fort_cp = 0
+        """CP in hundredths sent on the fortifications of item 22 of nodes other than the capital
+        and on the sink fortifications of item 26 (``fort_share_left``)."""
         self.fort_sent: dict[tuple[int, int], int] = {}
         """Own node and road to the tick a fortification of a node other than the capital was
         sent for it (item 22, ``FORT_RETRY``)."""
-        """CP in hundredths sent on fortifications of nodes other than the capital (item 22)."""
         self._threats: tuple[PlayerView | None, dict[tuple[int, int], RoadThreat]] = (None, {})
         """The view and the ``road_threats`` of the last decision (item 22)."""
         self.saving_since: int | None = None
@@ -866,7 +877,7 @@ class SmartBot(CampaignBot):
         for cmd in self.fight_commands(view, tick, ctx.budget):  # DEC-24: fights first
             if self.spend(ctx, cmd) and isinstance(cmd, Move):
                 ctx.used[cmd.group] = True
-        self.economy_v2(ctx)  # factories, plans, the leaf shift, road fortifications (DEC-41)
+        self.economy_v2(ctx, sink=False)  # factories, plans, the leaf shift (DEC-41, DEC-43)
         self.stance_v2(ctx, a)  # item 24 (DEC-44)
         self.evacuate(ctx)
         self.unbank(ctx)
@@ -910,23 +921,26 @@ class SmartBot(CampaignBot):
         self._rally(ctx)
         self._recruit(ctx)
         self.bank(ctx)
+        self.fort_sink(ctx)  # item 26: the CP the decision left near the cap, last
         return ctx.cmds
 
     @override
     def spend(self, ctx: Ctx, cmd: Command) -> bool:
-        """``CampaignBot.spend`` that also pays one command of the APM bucket (item 9)."""
+        """``CampaignBot.spend`` that also pays one command of the APM bucket (item 9) when the
+        command has a CP price; a free one only needs a ready bucket (item 26, #1015)."""
         if not self.bucket.ready():
             return False
         plan = cmd if isinstance(cmd, Move) and cmd.planned else None
-        if ctx.held and plan is None and self.cost(cmd) > ctx.budget - ctx.held:
-            return False  # item 10: the CP are for the chosen plan
         cost = self.cost(cmd)
+        if ctx.held and plan is None and cost > ctx.budget - ctx.held:
+            return False  # item 10: the CP are for the chosen plan
         short = ctx.saved and cost > 0 and ctx.budget - ctx.saved < cost
         if short and not self.relieves(ctx, cmd):
             return False  # item 23: the CP are saved for a push or a fortification
         if not super().spend(ctx, cmd):
             return False
-        self.bucket.take()
+        if cost > 0:
+            self.bucket.take()
         if plan is not None and self.hold is not None and plan.dest == self.hold.dest:
             self.hold = None
             ctx.held = 0
@@ -1478,19 +1492,24 @@ class SmartBot(CampaignBot):
 
     def defend_capital_v2(self, ctx: Ctx, a: Assessment) -> None:
         """Item 22 (#682): the alarm walks home every free group that can join the fight at the
-        capital (``walk_home``) and fills the capital's recruit queue (``recruit_burst``); then,
-        alarm or not, the roads into the capital that a visible enemy force comes by are fortified
-        (``fortify_capital``). The CP kept by ``DANGER_RESERVE_MOVES`` are spent here."""
+        capital (``walk_home``); alarm or not, the roads into the capital that a visible enemy
+        force comes by are fortified (``fortify_capital``); then the alarm fills the capital's
+        recruit queue (``recruit_burst``) with the CP left. The line comes before the recruits
+        (#1015): 1.5 CP of it take a charge per started 3 attacking units (DEC-43, item D6), more
+        than the units the same CP queue; until #1015 the CP sink of ``fort_site`` bought it first
+        at the cap. The CP kept by ``DANGER_RESERVE_MOVES`` are spent here."""
         view, home = ctx.view, self.home
         if view.nodes[home].owner != self.player or home in self.fight_nodes(view):
             return
         reserve = self.params["reserve"]
         ctx.budget += reserve
+        eta = a.threat.eta if self.alarm else None
         try:
-            if self.alarm and a.threat.eta is not None:
-                self.walk_home(ctx, a.threat.eta, a.threat.units - a.threat.need + 1, a)
-                self.recruit_burst(ctx)
+            if eta is not None:
+                self.walk_home(ctx, eta, a.threat.units - a.threat.need + 1, a)
             self.fortify_capital(ctx)
+            if eta is not None:
+                self.recruit_burst(ctx)
         finally:
             ctx.budget = max(0, ctx.budget - reserve)
 
@@ -1735,16 +1754,21 @@ class SmartBot(CampaignBot):
             self.fort_sent[site] = ctx.tick
             self.saving_since = None
 
+    def fort_share_left(self, tick: int) -> bool:
+        """Whether one more fortification of a node other than the capital stays within
+        ``FORT_SHARE`` percent of the CP the bot has had by ``tick`` (``cp.start`` and the flat
+        income, public), with the ones sent so far (``fort_cp``)."""
+        cp = self.rules.cp
+        # The flat income of the Balance stance (DEC-44), as the bot was tuned on it.
+        had = cp.start + cp.per_period * (tick // self.rules.stances.cp_period_ticks.balance)
+        return 100 * (self.fort_cp + self.rules.fort.cost) <= self.FORT_SHARE * had
+
     def fort_road_site(self, ctx: Ctx) -> tuple[int, int] | None:
         """The ``(node, road)`` ``fortify_roads`` fortifies now with the CP aside (its docstring);
         ``None``: none (no ``insight``, ``FORTS`` 0 or no item 22)."""
-        fort = self.rules.fort
         if self.FORTS <= 0 or not self.tempo.insight or not self.DEFENSE_V2:
             return None
-        cp = self.rules.cp
-        # The flat income of the Balance stance (DEC-44), as the bot was tuned on it.
-        had = cp.start + cp.per_period * (ctx.tick // self.rules.stances.cp_period_ticks.balance)
-        if 100 * (self.fort_cp + fort.cost) > self.FORT_SHARE * had:
+        if not self.fort_share_left(ctx.tick):
             return None
         view, home, me = ctx.view, self.home, self.player
         standing = 0
@@ -1989,6 +2013,21 @@ class SmartBot(CampaignBot):
                 continue
             if n.recruit_queue:
                 self.spend(ctx, CancelRecruit(node))
+
+    @override
+    def fort_sink(self, ctx: Ctx) -> None:
+        """Item 26 (#1015): the CP sink of ``economy.fort_site`` comes last in the decision, after
+        the attacks, the recruits and ``bank``, only while the CP the decision leaves are near the
+        cap (``cp.cap - cp.per_period``, the next income would burn in part), and within the
+        fortification budget of item 22 (``fort_share_left``, which it shares)."""
+        cp = self.rules.cp
+        if ctx.budget + self.params["reserve"] < cp.cap - cp.per_period:
+            return
+        if not self.fort_share_left(ctx.tick):
+            return
+        road = fort_site(self, ctx.view, ctx.budget)
+        if road is not None and self.spend(ctx, FortifyRoad(*road)):
+            self.fort_cp += self.rules.fort.cost
 
     def bank(self, ctx: Ctx) -> None:
         """A second unit in the recruit queue of a rear city with the barracks (DEC-25): a queue

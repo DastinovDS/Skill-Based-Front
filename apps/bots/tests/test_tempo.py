@@ -27,7 +27,7 @@ from gow_bots.bots import (
 from gow_bots.bots.tempo import Bucket, Perception
 from gow_bots.search import mutate, run_search, score_rows
 from gow_bots.tournament import MatchTask
-from gow_sim.commands import Command, PlayerCommand
+from gow_sim.commands import Command, PlayerCommand, command_cost
 from gow_sim.maps import MapDef
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, load_ruleset
@@ -160,8 +160,8 @@ def test_a_bot_thinks_at_most_every_think_ticks(
 def test_commands_a_minute_stay_within_the_bucket(
     maps: dict[str, MapDef], mvp_rules: Ruleset, level: str
 ) -> None:
-    # In any window of a minute a bot sends at most ``burst + apm`` commands (a full bucket and
-    # a minute of refill), free commands included.
+    # In any window of a minute a bot sends at most ``burst + apm`` commands with a CP price (a
+    # full bucket and a minute of refill); free commands take nothing from the bucket (#1015).
     mapdef = maps["artery"]
     tempo = DIFFICULTIES[level]
     bots = [
@@ -178,7 +178,8 @@ def test_commands_a_minute_stay_within_the_bucket(
             for p in (0, 1):
                 for cmd in bots[p].decide(match.view(p), match.tick):
                     cmds.append(PlayerCommand(p, seq, match.resolve(p, cmd)))
-                    sent[p].append(match.tick)
+                    if command_cost(mvp_rules, cmd) > 0:
+                        sent[p].append(match.tick)
                     seq += 1
         match.step(cmds)
     for ticks in sent:

@@ -28,7 +28,8 @@ ruleset, and every tie goes through ``Bot.key`` (mirror-invariant):
   (``LeafShift``), it does not flap with every sighting. Not under ``supply.leaf_shift = false``
   (DEC-50, ``mvp-7``): the ruleset has no lever and ``Bot.allowed`` drops the command.
 - **Road fortifications** (``fort_site``, DEC-43 item D) are the CP sink: while the CP are near
-  the cap, an own node fortifies the road to an enemy neighbour where an enemy is in sight; an
+  the cap, an own node fortifies the road to an enemy neighbour where an enemy is in sight (the
+  smart bots ask last in the decision, with the CP it leaves, #1015: ``SmartBot.fort_sink``); an
   attack whose road into the target is fortified pays the toll from its real charges first
   (``Bot.toll_from``, ``utility.takes``; an empty node too, #760).
 """

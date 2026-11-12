@@ -9,10 +9,12 @@ human pace, three ways:
   an edge (DEC-33; its opaque id is new on every exit from the fog) are *noticed* only
   ``react_ticks`` after they are first shown (``Perception``): until then the decision runs on a
   view without them. Fights and the own state are seen at once.
-- **APM**: a token bucket of commands (``Bucket``): ``apm`` commands per minute of match time,
-  at most ``burst`` saved up. Every command counts, free ones too, like ``apm_avg`` of
-  ``gow-bots stats`` (``gow_sim.analysis``); a command the bucket cannot pay is not sent (the
-  decision goes on in its priority order, so the cheap, urgent ones come first).
+- **APM**: a token bucket of commands (``Bucket``): ``apm`` commands with a CP price per minute
+  of match time, at most ``burst`` saved up. A free command (a split, a merge, a cancel, a stance
+  change, a release, a factory build paid in charges) needs a ready bucket and takes nothing
+  from it (#1015), so ``apm_avg`` of ``gow-bots stats`` (every command) is above ``apm``; a
+  command the bucket cannot pay is not sent (the decision goes on in its priority order, so the
+  cheap, urgent ones come first).
 
 ``insight`` is the quality of the assessment: without it the bot plays its drawn thresholds
 whatever the position (no VP forecast, no enemy CP bound, ``SmartBot.adjusted``), does not see the
