@@ -120,7 +120,7 @@ export class EffectsView {
       own: ownerColor(this.colours, me),
       enemy: ownerColor(this.colours, enemy),
     });
-    this.hits = new HitView(layers.layer.effects, map, me, labelResolution, radiusOf);
+    this.hits = new HitView(layers.layer.effects, map, me, radiusOf);
     this.fightView = new FightView(map, layers, me, labelResolution, radiusOf, sprites, colours);
     this.fightView.setContacts((place) => this.contactsAt(place));
   }
@@ -140,7 +140,6 @@ export class EffectsView {
   setScreenResolution(resolution: number): void {
     if (resolution > 0) this.resolution = resolution;
     this.fightView.setScreenResolution(resolution);
-    this.hits.setScreenResolution(resolution);
   }
 
   update(

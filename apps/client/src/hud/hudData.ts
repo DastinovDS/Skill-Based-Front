@@ -7,7 +7,6 @@
 import type {
   BuildKind,
   Detail,
-  EventMsg,
   GroupView,
   MapFile,
   Mode,
@@ -185,14 +184,6 @@ interface EnemyInfo {
   readonly stale: boolean;
 }
 
-export interface HudEvent {
-  /** Order of arrival, unique: keys the list. */
-  readonly seq: number;
-  readonly tick: number;
-  readonly kind: string;
-  readonly data: EventMsg['data'];
-}
-
 /** An own group in short (which groups stand together, for merging). */
 export interface GroupChoice {
   readonly id: string;
@@ -312,8 +303,6 @@ export interface HudData {
   readonly groups: readonly GroupChoice[];
   readonly nodes: readonly NodeChoice[];
   readonly roads: readonly RoadInfo[];
-  /** Newest first. */
-  readonly events: readonly HudEvent[];
 }
 
 function nodeAt(nodes: readonly NodeView[], id: number): NodeView | undefined {
@@ -500,7 +489,6 @@ export function buildHudData(
   ctx: HudContext,
   snapshot: SnapshotMsg,
   selection: Selection | null,
-  events: readonly HudEvent[],
   /** The group (or the groups of a city) under the pointer. */
   hovered: HoverTarget = null,
   extras: HudExtras = NO_EXTRAS,
@@ -561,6 +549,5 @@ export function buildHudData(
       ...(n.factory === true && n.owner === me ? { factory: true } : {}),
     })),
     roads: view.edges.map((e) => roadInfo(ctx, e)),
-    events,
   };
 }

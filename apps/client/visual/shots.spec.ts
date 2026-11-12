@@ -1129,7 +1129,7 @@ for (const size of [
 
 // The forfeit dialog with the danger button hovered: the hatch has inked in (#919, danger A).
 test('shot of the forfeit dialog with the danger button hovered', async ({ page }) => {
-  await page.goto('/?menu=exit-rated');
+  await page.goto('/?menu=exit-dialog');
   await page.evaluate('document.fonts.ready.then(() => true)');
   await page.getByRole('button', { name: 'Forfeit and leave' }).hover();
   await page.waitForTimeout(700);
@@ -1369,6 +1369,36 @@ for (const name of UX_SHOTS) {
     await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
     await page.screenshot({ path: join(OUT, `ux-${name}-gray.png`) });
     if (name === 'plan-shift') await page.keyboard.up('KeyE');
+  });
+}
+
+// A refused recruit is answered on the map, not by a toast (#765): the frozen scene `snapshot` with
+// `menus` and `?reject=<code>`, the own city n2 selected and R pressed. `CITY_FULL` pulses the capacity
+// ring of the city (B21): `refused-full-<ms>.png`, the city close up at three moments of the pulse;
+// `NOT_ENOUGH_CP` marks the CP gauge with the price of a recruit (B8): `refused-cp.png`.
+for (const code of ['CITY_FULL', 'NOT_ENOUGH_CP'] as const) {
+  test(`shot of a refused recruit (${code})`, async ({ page }) => {
+    await page.goto(`/?scene=snapshot&menus&reject=${code}`);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.mouse.click(640, 597);
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Escape');
+    await page.mouse.click(640, 597);
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(200);
+    await page.keyboard.press('KeyR');
+    if (code === 'CITY_FULL') {
+      const clip = { x: 540, y: 497, width: 200, height: 200 };
+      for (const ms of [0, 120, 600]) {
+        if (ms > 0) await page.waitForTimeout(ms === 120 ? 120 : 480);
+        await page.screenshot({ path: join(OUT, `refused-full-${String(ms)}.png`), clip });
+      }
+    } else {
+      await page.waitForTimeout(200);
+      await page.screenshot({ path: join(OUT, 'refused-cp.png') });
+    }
   });
 }
 

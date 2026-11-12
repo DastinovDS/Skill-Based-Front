@@ -184,14 +184,12 @@ describe('MatchSession', () => {
     warn.mockRestore();
   });
 
-  it('keeps events for the map and the HUD feed', () => {
-    const { session, hud, socket } = setup();
+  it('keeps events for the map', () => {
+    const { session, socket } = setup();
     const event = devEvent(map, 30);
     if (event === null) throw new Error('no dev event at tick 30');
     socket.reply(event);
     expect(session.events()).toEqual([event]);
-    socket.reply(snapshot(31));
-    expect(hud.current?.events).toHaveLength(1);
   });
 
   it('sends commands as intents and routes the ack to the order book', () => {
@@ -321,8 +319,8 @@ describe('MatchSession', () => {
     socket.reply({
       type: 'event',
       tick: 22,
-      kind: 'attrition',
-      data: { node: 0, player: 0 },
+      kind: 'capture_failed',
+      data: { node: 0, player: 0, group: 'g', result: 'bounce' },
     });
     for (const tick of [21, 22]) socket.reply(snapshot(tick));
     // The render time runs behind the newest snapshot: the event is not on the map yet.

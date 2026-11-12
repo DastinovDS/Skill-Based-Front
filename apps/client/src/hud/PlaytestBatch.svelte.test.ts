@@ -133,7 +133,7 @@ describe('the playtest batch in the HUD (#762)', () => {
     // screen reader.
     expect(cp?.querySelector('.bracket.short')).not.toBeNull();
     expect(cp?.querySelector('.chevron')).not.toBeNull();
-    expect(cp?.getAttribute('aria-label')).toContain('not enough for this move');
+    expect(cp?.getAttribute('aria-label')).toContain('not enough for this action');
   });
 
   it('opens the split menu at the size that fits, says where the part goes, and splits on confirm', () => {

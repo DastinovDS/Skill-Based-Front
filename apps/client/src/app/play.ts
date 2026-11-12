@@ -187,41 +187,6 @@ export function inviteView(invite: Invite | null, nick: string): InviteView {
   return { ...base, stage: invite.you_ready && invite.opponent_ready ? 'starting' : 'joined' };
 }
 
-/**
- * The "New here? Learn how to play" dialog (#919, item 6) after the nick is entered. Implemented,
- * and switched off until the tutorial round exists (#806): turn this on with it.
- */
-export const NEW_HERE_ENABLED = false;
-
-/** The browser remembers "Don't show this again" under this key. */
-const NEW_HERE_KEY = 'sbf.newHereOff';
-
-/** The dialog shows once, right after a nick was entered, unless it was turned off for good. */
-export function showNewHere(o: {
-  enabled: boolean;
-  entered: boolean;
-  dismissed: boolean;
-}): boolean {
-  return o.enabled && o.entered && !o.dismissed;
-}
-
-/** "Don't show this again" was ticked in this browser (a storage that throws: not ticked). */
-export function newHereDismissed(storage: () => Storage): boolean {
-  try {
-    return storage().getItem(NEW_HERE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function dismissNewHere(storage: () => Storage): void {
-  try {
-    storage().setItem(NEW_HERE_KEY, '1');
-  } catch {
-    // No storage: the dialog may show again after the next nick.
-  }
-}
-
 /** The node points of the "Drawing the map..." sketch (the mockup's `DRAW_NODES`), 220 x 124. */
 export const DRAW_NODES: readonly (readonly [number, number])[] = [
   [14, 70],

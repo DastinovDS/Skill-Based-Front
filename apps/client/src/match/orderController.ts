@@ -23,6 +23,7 @@ import {
   type UndoMark,
   type WheelInput,
 } from '../render/interaction.ts';
+import type { CapacityPulse } from '../render/capacityPulse.ts';
 import { WheelSteps } from './wheelSteps.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
 import { undoCommand, type UndoEntry } from './undoList.ts';
@@ -235,6 +236,10 @@ export class OrderController implements MapInteraction {
   } | null = null;
   /** Until when (`now()`, ms) the CP badge stays marked after a refusal for CP (#762). */
   #cpFlashUntil = 0;
+  /** The price the CP badge brackets while it is marked after a refusal (hundredths). */
+  #cpFlashPrice = 0;
+  /** The newest recruit refused for want of room (#765, B21): the map pulses its city's ring. */
+  #cityFull: CapacityPulse | null = null;
   #hoverMark: HoverMark | null = null;
   /** Presses of `X` not served yet: one real undo each (#764). */
   #undoWanted = 0;
@@ -472,7 +477,8 @@ export class OrderController implements MapInteraction {
       ghosts !== this.#overlayGhosts ||
       undo !== this.#overlayUndo ||
       this.ui.current.terrainMode !== this.#overlay.terrain ||
-      this.ui.current.rallyFrom !== (this.#overlay.rallyFrom ?? null)
+      this.ui.current.rallyFrom !== (this.#overlay.rallyFrom ?? null) ||
+      this.#cityFull !== (this.#overlay.cityFull ?? null)
     ) {
       this.#overlayKey = key;
       this.#overlayGhosts = ghosts;
@@ -507,6 +513,7 @@ export class OrderController implements MapInteraction {
         box: null,
         group,
         rallyFrom: this.ui.current.rallyFrom,
+        cityFull: this.#cityFull,
       };
     }
     return this.#overlay;
@@ -632,7 +639,8 @@ export class OrderController implements MapInteraction {
     const hovered = preview !== null && cp !== null && cp < this.#movePrice();
     const flash = this.#now() < this.#cpFlashUntil;
     const short = hovered || flash;
-    const price = preview !== null || flash ? this.#movePrice() : null;
+    // A hovered move prices that move; the flash after a refusal, the command refused (#765, B8).
+    const price = preview !== null ? this.#movePrice() : flash ? this.#cpFlashPrice : null;
     if (short !== this.ui.current.cpShort || price !== this.ui.current.cpPrice)
       this.ui.patch({ cpShort: short, cpPrice: price });
   }
@@ -1033,6 +1041,16 @@ export class OrderController implements MapInteraction {
     return group.planned && group.node !== null;
   }
 
+  /**
+   * The group stands in its node with an order that has not set out: a planned order gathering its
+   * bonus, or a member of a group order waiting for its departure (DEC-48). The server takes only
+   * `CancelOrder` from it (`GROUP_BUSY`), so its menu offers the cancel and dims the split (#765,
+   * B10); the server decides.
+   */
+  isWaiting(group: GroupInfo): boolean {
+    return group.node !== null && group.destination !== null;
+  }
+
   /** Split `n` units off the selected group into a new group. */
   split(n: number): void {
     const group = this.#selectedGroup();
@@ -1047,7 +1065,10 @@ export class OrderController implements MapInteraction {
       return;
     }
     const group = this.#selectedGroup();
-    if (group === null || group.node === null || this.#o.send === null) return;
+    // A group on a road (B9) or waiting to depart (B10) is not split: the menu dims the item.
+    if (group === null || group.node === null || this.isWaiting(group) || this.#o.send === null) {
+      return;
+    }
     this.#closeMenus();
     this.splitMenu.open(group.id, group.units, group.charged);
   }
@@ -1113,7 +1134,8 @@ export class OrderController implements MapInteraction {
     const data = this.#o.hud.current;
     if (data === null) return [];
     const group = data.group;
-    if (group?.planned === true) return [];
+    // Waiting to depart (a plan, or a member of a group order): the server refuses the merge (B10).
+    if (group?.planned === true || (group != null && this.isWaiting(group))) return [];
     const node = group?.node ?? (group === null ? (data.node?.id ?? null) : null);
     if (node === null) return [];
     const here = data.groups.filter((g) => g.node === node && !g.planned);
@@ -1932,14 +1954,20 @@ export class OrderController implements MapInteraction {
       this.#pendingSend = null;
     }
     const moving = cmd.type === 'move' || cmd.type === 'group_move';
-    // A group order short of CP is refused as a whole and nothing waits (DEC-48, owner decision
-    // (7)): the CP badge is marked like a move's, the ghosts cross out, the toast tells it.
-    if (result.kind === 'rejected' && moving && result.code === 'NOT_ENOUGH_CP') {
+    // A command short of CP marks the CP badge with its price, and a move's ghosts cross out: no
+    // toast tells it (#765, B8). A group order short of CP is refused as a whole and nothing waits
+    // (DEC-48, owner decision (7)).
+    const price = result.kind === 'rejected' ? this.#refusedPrice(cmd) : null;
+    if (result.kind === 'rejected' && result.code === 'NOT_ENOUGH_CP' && price !== null) {
       this.#cpFlashUntil = this.#now() + CP_SHORT_FLASH_MS;
-      const price = cmd.type === 'group_move' ? this.#commandPrice(cmd) : this.#movePrice();
+      this.#cpFlashPrice = price;
       if (!this.ui.current.cpShort || this.ui.current.cpPrice !== price) {
         this.ui.patch({ cpShort: true, cpPrice: price });
       }
+    }
+    // No room in the city for a recruit: its capacity ring pulses instead of a sentence (B21).
+    if (result.kind === 'rejected' && result.code === 'CITY_FULL' && cmd.type === 'recruit') {
+      this.#cityFull = { node: cmd.node, at: this.#now() };
     }
     this.ui.emit(
       result.kind === 'rejected'
@@ -1993,6 +2021,25 @@ export class OrderController implements MapInteraction {
   }
 
   /** The price of a sent group order (`ruleset_public`, item A2), for the CP badge of a refusal. */
+  /**
+   * The CP price of a command the CP badge marks when it is refused for CP (#765, B8): a move, a
+   * group order, a recruit and a road fortification (`ruleset_public`); `null`: no CP flash.
+   */
+  #refusedPrice(cmd: Command): number | null {
+    switch (cmd.type) {
+      case 'move':
+        return this.#movePrice();
+      case 'group_move':
+        return this.#commandPrice(cmd);
+      case 'recruit':
+        return this.#o.rules.cost.recruit;
+      case 'fortify_road':
+        return this.#o.rules.fort.cost;
+      default:
+        return null;
+    }
+  }
+
   #commandPrice(cmd: Command & { type: 'group_move' }): number {
     const { cost } = this.#o.rules;
     const n = cmd.groups.length;

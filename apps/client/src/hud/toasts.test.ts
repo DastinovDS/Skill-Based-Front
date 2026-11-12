@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLocale, setLocale } from '../i18n/index.ts';
-import type { HudEvent } from './hudData.ts';
+import type { EventMsg } from '../protocol.gen.ts';
+import { declaredFields, expectDeclared, filledData, tracked } from '../net/eventFields.fixture.ts';
 import { TOAST_LIMIT, TOAST_MS, ToastState } from './toastState.svelte.ts';
 import type { NodeNamer } from './nodeName.ts';
 import { TOAST_EVENT_KINDS, toastOf } from './toasts.ts';
 
 const names: NodeNamer = (id) => `Place${String(id)}`;
 
-const event = (kind: string, data: HudEvent['data']): HudEvent => ({ seq: 1, tick: 1, kind, data });
+const event = (kind: string, data: EventMsg['data']) => ({ kind, data });
 
 describe('toastOf', () => {
   const initial = getLocale();
@@ -15,18 +16,20 @@ describe('toastOf', () => {
     setLocale(initial);
   });
 
-  it('makes toasts of fights, captures, unpaid captures, attrition, a lost recruit queue, the lost rally point only', () => {
+  it('makes toasts of an enemy capture, an unpaid capture and a finished building only (#765)', () => {
     expect([...TOAST_EVENT_KINDS].sort()).toEqual([
-      'attrition',
       'barracks_built',
       'capture_failed',
       'factory_built',
-      'fight_ended',
       'node_captured',
-      'rally_point_cleared',
-      'recruit_queue_lost',
     ]);
+    // The owner's marks on the pop-up catalogue (#765): A1 (own capture), A3 and A4 (fights), A5
+    // (attrition), A6 (lost recruit queue), A9 (lost rally point) are no toasts any more.
     for (const kind of [
+      'fight_ended',
+      'attrition',
+      'recruit_queue_lost',
+      'rally_point_cleared',
       // #930 (W10): a recruit that stays home hangs a strip from the bar, not a toast.
       'rally_walk_no_cp',
       'vp_awarded',
@@ -39,13 +42,6 @@ describe('toastOf', () => {
     ]) {
       expect(toastOf(event(kind, { node: 1, player: 0, vp: 1 }), 0, names), kind).toBeNull();
     }
-  });
-
-  it('warns of a recruit queue lost with its city (DEC-25)', () => {
-    setLocale('en');
-    expect(
-      toastOf(event('recruit_queue_lost', { node: 4, player: 0, units: 2 }), 0, names),
-    ).toMatchObject({ tone: 'warn', text: 'Recruit queue lost at Place4: 2 units' });
   });
 
   it('tells the builder of a finished barracks or factory with the building icon (#972)', () => {
@@ -66,24 +62,43 @@ describe('toastOf', () => {
     expect(toastOf(event('factory_built', { node: 4, player: 1 }), 0, names)).toBeNull();
   });
 
-  it('colours a capture by who took the city, and a loss in the colour of the enemy', () => {
+  it('tells only the enemy capture, in the colour of the enemy (#765, A1)', () => {
     setLocale('en');
-    expect(toastOf(event('node_captured', { node: 2, player: 0 }), 0, names)).toMatchObject({
-      tone: 'mine',
-      text: 'You captured Place2',
-    });
-    expect(toastOf(event('node_captured', { node: 2, player: 1 }), 0, names)).toMatchObject({
+    expect(toastOf(event('node_captured', { node: 2, player: 0 }), 0, names)).toBeNull();
+    expect(toastOf(event('node_captured', { node: 2, player: 1 }), 0, names)).toEqual({
       tone: 'enemy',
+      icon: 'flag',
       text: 'The enemy captured Place2',
     });
   });
 
-  it('warns about attrition and keeps fights neutral', () => {
+  it('tells a capture the group could not pay for (DEC-38), as a warning', () => {
     setLocale('en');
-    expect(toastOf(event('attrition', { node: 4, player: 0 }), 0, names)?.tone).toBe('warn');
-    expect(
-      toastOf(event('fight_ended', { node: 3, losses_0: 1, losses_1: 2 }), 0, names)?.tone,
-    ).toBe('neutral');
+    const bounce = event('capture_failed', { node: 1, player: 0, group: 'g', result: 'bounce' });
+    const lost = event('capture_failed', { node: 2, player: 0, group: 'g', result: 'encircled' });
+    expect(toastOf(bounce, 0, names)).toEqual({
+      tone: 'warn',
+      icon: 'alert',
+      text: 'Place1 not taken: no charge to pay, the group turns back',
+    });
+    expect(toastOf(lost, 0, names)?.text).toBe(
+      'Place2 not retaken: no charge to pay, the group is lost',
+    );
+  });
+});
+
+describe('the fields the toasts read (ARC-02)', () => {
+  it.each([...TOAST_EVENT_KINDS])('%s: only fields the server sends', (kind) => {
+    const reads = new Set<string>();
+    for (const me of [0, 1] as const) {
+      for (const variant of [{}, { result: 'encircled' }]) {
+        const own = Object.entries(variant).filter(([key]) => declaredFields(kind).has(key));
+        const { data, reads: read } = tracked(kind, filledData(kind, Object.fromEntries(own)));
+        toastOf(event(kind, data), me, names);
+        for (const key of read) reads.add(key);
+      }
+    }
+    expectDeclared(kind, reads);
   });
 });
 

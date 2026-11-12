@@ -385,6 +385,7 @@ export class MapScene {
     const selectedNode = overlay.selection?.kind === 'node' ? overlay.selection.id : null;
     this.view.setHover(hovered === selectedNode ? null : hovered);
     this.cities.pulse(performance.now());
+    this.cities.pulseFull(overlay.cityFull ?? null, performance.now());
     const tickHzNow = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.readWalks(this.source.events(), tickHzNow);
     const announce = frame.base !== this.base;
@@ -459,8 +460,6 @@ export class MapScene {
       }
       return null;
     });
-    // A recruit that stays home for want of CP crosses the CP mark at its city's gate (#930).
-    this.cities.setStays(this.source.events(), tickHz);
     this.cities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
     const punches = this.effects.update(

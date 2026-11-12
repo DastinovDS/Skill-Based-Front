@@ -13,13 +13,11 @@ import {
   type HudContext,
   type HudData,
   type HoverTarget,
-  type HudEvent,
   type Selection,
   type VpCredit,
   type WalkPaid,
 } from './hudData.ts';
 import type { PendingWalk } from './rallyDue.ts';
-import { isLogged } from './eventText.ts';
 import { AlertState } from '../match/alerts.svelte.ts';
 import { ThreatLog } from '../match/threats.ts';
 import { t } from '../i18n/index.ts';
@@ -27,9 +25,6 @@ import { TOAST_HOLD_MS, ToastState } from './toastState.svelte.ts';
 import { nodeNamer, type NodeNamer } from './nodeName.ts';
 import { toastOf } from './toasts.ts';
 import type { MatchSummary } from '../app/matchSummary.ts';
-
-/** Events kept for the feed. */
-export const EVENT_LIMIT = 30;
 
 /** The start banner and the ring around the capital last this long, ms (U4). */
 export const START_MS = 3000;
@@ -53,7 +48,7 @@ export class HudState {
   /** Threats to own cities for the arcs at the screen edge: plain data, read every frame. */
   readonly threats: ThreatLog;
 
-  /** Toasts of the match (fights, captures, attrition, refused commands). */
+  /** Toasts of the match (an enemy capture, a capture not paid, a building done, the last minute). */
   readonly toasts = new ToastState();
 
   /**
@@ -70,9 +65,6 @@ export class HudState {
   #selection: Selection | null = null;
   /** The group, or the icon of the groups of a city, under the pointer (for its charge tip). */
   #hovered: HoverTarget = null;
-  /** Newest first; events arrive between snapshots and reach `current` with the next one. */
-  #events: HudEvent[] = [];
-  #seq = 0;
   #bannerTimer: ReturnType<typeof setTimeout> | undefined;
   #started = false;
   #lastMinuteSeen = false;
@@ -134,21 +126,12 @@ export class HudState {
     return this.#snapshot?.view.fights.some((f) => f.groups.includes(id)) ?? false;
   }
 
-  /** A visible event for the feed; shown with the next snapshot. */
+  /** A visible event: the threats, the rally walks and the toasts read it (there is no journal, #765). */
   onEvent(event: EventMsg): void {
-    const entry: HudEvent = {
-      seq: this.#seq + 1,
-      tick: event.tick,
-      kind: event.kind,
-      data: event.data,
-    };
     this.threats.onEvent(event, (node) => this.#snapshot?.view.nodes[node]?.owner);
     this.#rallyAndCredit(event);
-    const toast = toastOf(entry, this.#ctx.me, this.nodeName);
+    const toast = toastOf(event, this.#ctx.me, this.nodeName);
     if (toast !== null) this.toasts.later(event.tick, toast);
-    if (!isLogged(event.kind)) return; // bookkeeping kinds would push the real news out
-    this.#seq += 1;
-    this.#events = [entry, ...this.#events].slice(0, EVENT_LIMIT);
   }
 
   /**
@@ -311,13 +294,10 @@ export class HudState {
     if (this.#snapshot === null) {
       return;
     }
-    this.current = buildHudData(
-      this.#ctx,
-      this.#snapshot,
-      this.#selection,
-      this.#events,
-      this.#hovered,
-      { pending: this.#pending, paid: this.#paid, credit: this.#credit },
-    );
+    this.current = buildHudData(this.#ctx, this.#snapshot, this.#selection, this.#hovered, {
+      pending: this.#pending,
+      paid: this.#paid,
+      credit: this.#credit,
+    });
   }
 }

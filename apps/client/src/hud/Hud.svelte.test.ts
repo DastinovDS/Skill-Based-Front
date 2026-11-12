@@ -228,30 +228,67 @@ describe('Hud', () => {
     expect(target.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
-  it('shows a refused command as a toast', () => {
-    const text = 'Not enough CP';
-    setLocale('en');
-    const { target, state, orders, book } = render();
+  /** The own group of the dev snapshot ordered at an enemy node, refused with `code`. */
+  function refuseMove(code: string): ReturnType<typeof render> {
+    const view = render();
     const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 30);
-    state.onSnapshot(snapshot);
+    view.state.onSnapshot(snapshot);
     const group = snapshot.view.groups[0];
     const enemy = snapshot.view.nodes.find((n) => n.owner === 1 && n.detail === 'exact');
     if (group === undefined || enemy === undefined) throw new Error('small dev snapshot');
-    orders.click({ kind: 'group', id: group.id }, false);
-    orders.click({ kind: 'node', id: enemy.id }, false);
-    book.onAck({
+    view.orders.click({ kind: 'group', id: group.id }, false);
+    view.orders.click({ kind: 'node', id: enemy.id }, false);
+    view.book.onAck({
       type: 'ack',
       seq: 1,
       applied_tick: 31,
       path: null,
       arrive_tick: null,
-      reject_code: 'NOT_ENOUGH_CP',
+      reject_code: code,
       kind: null,
       cost: null,
       members: null,
     });
     flushSync();
-    expect(target.querySelector('.toast.warn')?.textContent).toContain(text);
+    return view;
+  }
+
+  it('shows no toast for a refused command, logs it and flashes the CP gauge for CP (#765)', () => {
+    setLocale('en');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { target } = refuseMove('NOT_ENOUGH_CP');
+    expect(target.querySelector('.toast')).toBeNull();
+    expect(target.querySelector('.gauge.short')).not.toBeNull();
+    expect(warn).toHaveBeenCalledWith('[client] command refused: move NOT_ENOUGH_CP');
+    warn.mockRestore();
+  });
+
+  it('tells a refusal code this client does not know, the reason alone (#765, B1, B5)', () => {
+    setLocale('en');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { target } = refuseMove('SOMETHING_NEW');
+    const toast = target.querySelector('.toast.warn')?.textContent ?? '';
+    expect(toast).toContain('The server refused the command');
+    expect(toast).not.toContain('Rejected');
+    expect(warn).toHaveBeenCalledWith('[client] command refused: move SOMETHING_NEW');
+    warn.mockRestore();
+  });
+
+  it('tells the groups a group order went without, with their reason (DEC-48, B3)', () => {
+    setLocale('en');
+    const { target, orders } = render();
+    const cmd: Command = {
+      type: 'group_move',
+      groups: ['a', 'b'],
+      dest: 3,
+      planned: false,
+      bonus: 0,
+    };
+    orders.ui.emit({ kind: 'dropped', code: 'GROUP_BUSY', count: 1, cmd });
+    flushSync();
+    expect(target.querySelector('.toast.warn')?.textContent).toContain(
+      'The group order went without 1 of its groups: The group is waiting to depart',
+    );
   });
 
   it('tells how many of a group the server split went with a group order (#913)', () => {

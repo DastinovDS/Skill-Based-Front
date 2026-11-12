@@ -25,8 +25,6 @@ export interface StatusInput {
   status: ConnectionStatus;
   paused: PausedMsg | null;
   me: PlayerId;
-  /** The pause refusal or another error line that hides by itself (`PauseState.notice`). */
-  notice: MessageKey | null;
   pauseLeft: number;
 }
 
@@ -40,10 +38,10 @@ export const ACTION_KEYS: Readonly<Record<StatusAction, 'Enter' | 'Escape'>> = {
 
 /**
  * The bar for a state of the connection, or `null` when the match runs as usual. A dead connection
- * (gone, failed, version, replaced) wins over a pause; a pause wins over a refusal notice.
+ * (gone, failed, version, replaced) wins over a pause.
  */
 export function statusView(input: StatusInput): StatusView | null {
-  const { status, paused, me, notice, pauseLeft } = input;
+  const { status, paused, me, pauseLeft } = input;
   const base = { seconds: null, role: 'alert', tone: 'alert', icon: 'alert' } as const;
   switch (status) {
     case 'reconnecting':
@@ -98,9 +96,6 @@ export function statusView(input: StatusInput): StatusView | null {
       actions: mine ? ['resume'] : [],
       role: 'status',
     };
-  }
-  if (notice !== null) {
-    return { ...base, title: notice, text: null, actions: [] };
   }
   return null;
 }

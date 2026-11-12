@@ -601,17 +601,6 @@ describe('AppState', () => {
       expect(app.screen).toEqual({ name: 'menu' });
     });
 
-    it('marks a nick just entered, for "New here?", and not a login', async () => {
-      const fresh = setup('', memory(), {
-        createGuest: () => Promise.resolve({ token: 'n' } as never),
-        activeMatch: () => Promise.resolve(null),
-      });
-      await fresh.app.start();
-      expect(fresh.app.entered).toBe(false);
-      await fresh.app.register('Newbie');
-      expect(fresh.app.entered).toBe(true);
-    });
-
     it('How to play and the password open over the screen and go back to it', async () => {
       const { app } = setup('', saved(), { me, activeMatch: () => Promise.resolve(null) });
       await app.start();

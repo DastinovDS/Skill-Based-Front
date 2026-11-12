@@ -1,12 +1,12 @@
 /**
- * Which events and answers become a toast (ui-style 10.4, U2). Pure; `toastState.svelte.ts` keeps
- * the list. Toasts are for fights, captures and lost cities, a capture that could not be paid
- * (DEC-38), attrition, a lost recruit queue, a barracks or a factory finished (#972) and a refused command; VP awards are only in the score of the top bar, and everything else is in the
- * journal.
+ * Which events become a toast (ui-style 10.4, U2; the owner's marks on the pop-up catalogue, #765).
+ * Pure; `toastState.svelte.ts` keeps the list. A toast is for news the map does not tell by itself:
+ * a node the enemy took, a capture that could not be paid (DEC-38) and a barracks or a factory
+ * finished (#972). An own capture, a fight, attrition, a lost recruit queue and a lost rally point
+ * show on the map only; there is no journal either.
  */
-import type { PlayerId } from '../protocol.gen.ts';
-import { eventText } from './eventText.ts';
-import type { HudEvent } from './hudData.ts';
+import type { EventMsg, PlayerId } from '../protocol.gen.ts';
+import { tf } from '../i18n/index.ts';
 import type { AnyIconName } from './icons.ts';
 import type { NodeNamer } from './nodeName.ts';
 
@@ -25,43 +25,58 @@ export interface Toast extends ToastBody {
   readonly id: number;
 }
 
-/** The event kinds with a toast. */
+/** The event kinds that can give a toast. */
 export const TOAST_EVENT_KINDS: ReadonlySet<string> = new Set([
+  // Only the enemy's capture (#765, A1: the own capture is the biggest thing on the map already).
   'node_captured',
-  'fight_ended',
-  'attrition',
-  'recruit_queue_lost',
   'capture_failed',
   // #972, V12: a building finished (the builder's event only), with its own icon.
   'barracks_built',
   'factory_built',
-  // DEC-48, item I3: the alerts of the recruit rally point. A recruit that stays home for want of
-  // CP hangs a strip from the bar instead (#930, W10: `AlertStack`).
-  'rally_point_cleared',
 ]);
 
-/** The toast of `event` for player `me`, or `null` if the event goes to the journal only. */
-export function toastOf(event: HudEvent, me: PlayerId, names: NodeNamer): ToastBody | null {
-  if (!TOAST_EVENT_KINDS.has(event.kind)) return null;
-  const text = eventText(event, me, names);
-  if (text === '') return null;
+function nodeOf(data: EventMsg['data']): number {
+  return typeof data.node === 'number' ? data.node : 0;
+}
+
+/** The toast of `event` for player `me`, or `null`. A place is told by its name (#449). */
+export function toastOf(
+  event: Pick<EventMsg, 'kind' | 'data'>,
+  me: PlayerId,
+  names: NodeNamer,
+): ToastBody | null {
+  const { data } = event;
+  const node = names(nodeOf(data));
   switch (event.kind) {
     case 'node_captured':
-      // A lost city is the opponent's colour: the loss is the news.
-      return { tone: event.data.player === me ? 'mine' : 'enemy', icon: 'flag', text };
-    case 'fight_ended':
-      return { tone: 'neutral', icon: 'war', text };
+      if (data.player === me) return null;
+      return { tone: 'enemy', icon: 'flag', text: tf('event.node_captured.enemy', { node }) };
+    case 'capture_failed':
+      // DEC-38: `bounce`, the group turns back; `encircled`, a returning group could not retake
+      // its home and died.
+      return {
+        tone: 'warn',
+        icon: 'alert',
+        text: tf(
+          data.result === 'encircled'
+            ? 'event.capture_failed.encircled'
+            : 'event.capture_failed.bounce',
+          { node },
+        ),
+      };
     case 'barracks_built':
     case 'factory_built':
       // Only the builder gets the event; one that names the other player is not told here.
-      if (typeof event.data.player === 'number' && event.data.player !== me) return null;
+      if (typeof data.player === 'number' && data.player !== me) return null;
       return {
         tone: 'mine',
         icon: event.kind === 'barracks_built' ? 'barracks' : 'factory',
         cut: true,
-        text,
+        text: tf(event.kind === 'barracks_built' ? 'event.barracks_built' : 'event.factory_built', {
+          node,
+        }),
       };
     default:
-      return { tone: 'warn', icon: 'alert', text };
+      return null;
   }
 }

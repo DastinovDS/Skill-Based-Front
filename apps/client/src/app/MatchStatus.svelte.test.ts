@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import MatchStatus from './MatchStatus.svelte';
 import { statusView, type StatusInput } from './matchStatus.ts';
 
-const READY: StatusInput = { status: 'ready', paused: null, me: 0, notice: null, pauseLeft: 0 };
+const READY: StatusInput = { status: 'ready', paused: null, me: 0, pauseLeft: 0 };
 
 describe('MatchStatus', () => {
   let component: ReturnType<typeof mount> | null = null;

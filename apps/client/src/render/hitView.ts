@@ -1,21 +1,18 @@
-import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
-import { t } from '../i18n/index.ts';
+import { Container, Graphics, GraphicsContext } from 'pixi.js';
 import type { RenderFrame } from '../net/interpolate.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { arenaSides, fightPlace, placeKey, type FightPlace, type RoundFx } from './fightFx.ts';
 import {
-  inFirstRound,
   silentParticle,
   silentProgress,
   sinceShare,
-  CAPTION_SHARE,
   SILENT_SHARE,
   type Contacts,
 } from './fightImpact.ts';
 import { endShare, hitLandings, roundLayout } from './parryLayout.ts';
 import type { Emit } from './particles.ts';
-import { BG, FIGHT_FX_STRENGTH, PLATE_FILL, WARN } from './style.ts';
+import { FIGHT_FX_STRENGTH, PLATE_FILL, WARN } from './style.ts';
 
 type FightData = RenderFrame['base']['view']['fights'][number];
 
@@ -25,12 +22,7 @@ const PUNCH_AMPLITUDE = 0.22;
 /** Where the amber sign of a silent charge sits on a group (world units at 100%). */
 const SIGN_OFFSET = { x: 15, y: 13 } as const;
 const SIGN_SCALE = 1.3;
-/** Where the word "silent" sits under a group. */
-const CAPTION_DROP = 31;
 const MAX_SIGNS = 16;
-const MAX_CAPTIONS = 8;
-/** The ring of a silent charge and its caption last this share of a round at most. */
-const silentEnd = Math.max(SILENT_SHARE, CAPTION_SHARE);
 
 /** A token that swells for a moment: where it stands and by how much. */
 export interface Punch {
@@ -38,15 +30,11 @@ export interface Punch {
   readonly scale: number;
 }
 
-interface Caption {
-  readonly text: Text;
-}
-
 /**
  * What a fight does on the map besides its arena and its shots (the Parry arcs of `ParryView`, #856):
  * the token that was hit swells once as the shot lands, the amber sign of a silent charge stays on its
- * group, a dim dashed ring marks it at each round (DEC-24, F2), and the word "silent" explains it in the
- * first round. No glow and no light (the Engraved style, #829): the wind-up glow and the contact ring of
+ * group and a dim dashed ring marks it at each round (DEC-24, F2); no word explains it (the owner's
+ * marks on the pop-up catalogue, #765: the sign and the burn show it). No glow and no light (the Engraved style, #829): the wind-up glow and the contact ring of
  * #351 are gone. Pooled objects, drawn only when their state changes.
  *
  * Every effect is a function of the render tick and of fields the server sent (`fight_round`,
@@ -57,14 +45,11 @@ export class HitView {
   private readonly layer = new Container({ label: 'fight-hits' });
   private readonly signContext: GraphicsContext;
   private readonly signs: Graphics[] = [];
-  private readonly captions: Caption[] = [];
-  private readonly style: TextStyle;
 
   constructor(
     parent: Container,
     private readonly map: MapFile,
     private readonly me: PlayerId,
-    private resolution: number,
     private readonly radiusOf: (node: number) => number,
   ) {
     // The amber crossed disc of the chips of the arena, for the group on the map.
@@ -75,19 +60,7 @@ export class HitView {
       .moveTo(-3, 3)
       .lineTo(3, -3)
       .stroke({ width: 1.5, color: WARN });
-    this.style = new TextStyle({
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: 12,
-      fontWeight: '700',
-      fill: WARN,
-      stroke: { color: BG, width: 3.5, join: 'round' },
-    });
     parent.addChild(this.layer);
-  }
-
-  setScreenResolution(resolution: number): void {
-    this.resolution = resolution;
-    for (const caption of this.captions) caption.text.resolution = resolution;
   }
 
   /**
@@ -107,7 +80,6 @@ export class HitView {
     const punches: Punch[] = [];
     const live = new Map<string, { fight: FightData; place: FightPlace }>();
     let signs = 0;
-    let captions = 0;
     for (const fight of frame.base.view.fights) {
       const place = fightPlace(this.map, fight.node, fight.edge, fight.point, this.radiusOf);
       if (place === undefined) continue;
@@ -130,7 +102,7 @@ export class HitView {
     for (const fx of rounds) {
       const age = tick - fx.tick;
       const layout = roundLayout(fx, this.me);
-      if (age < 0 || age > Math.max(endShare(layout), silentEnd) * round) continue;
+      if (age < 0 || age > Math.max(endShare(layout), SILENT_SHARE) * round) continue;
       const contacts = contactsOf(fx.place);
       for (const hit of hitLandings(layout)) {
         const p = sinceShare(age, hit.at, PUNCH_SHARE, roundTicks);
@@ -148,30 +120,11 @@ export class HitView {
       for (const side of ['own', 'enemy'] as const) {
         if (sides[side].mute <= 0 || sides[side].charged <= 0) continue;
         silentParticle(emit, contacts[side], q, scale);
-        // The word only in the first round, so that the sign is explained once.
-        const c = sinceShare(age, 0, CAPTION_SHARE, roundTicks);
-        if (
-          c !== null &&
-          inFirstRound(entry.fight.start_tick, fx.tick, roundTicks) &&
-          captions < MAX_CAPTIONS
-        ) {
-          const caption = this.caption(captions++);
-          const word = t('fight.silent');
-          if (caption.text.text !== word) caption.text.text = word;
-          caption.text.position.set(contacts[side].x, contacts[side].y + CAPTION_DROP * scale);
-          caption.text.scale.set(scale);
-          caption.text.alpha = Math.min(1, c / 0.2) * (1 - c * 0.6);
-          caption.text.visible = true;
-        }
       }
     }
     for (let i = signs; i < this.signs.length; i++) {
       const sign = this.signs[i];
       if (sign !== undefined) sign.visible = false;
-    }
-    for (let i = captions; i < this.captions.length; i++) {
-      const caption = this.captions[i];
-      if (caption !== undefined) caption.text.visible = false;
     }
     return punches;
   }
@@ -186,28 +139,8 @@ export class HitView {
     return sign;
   }
 
-  private caption(index: number): Caption {
-    let caption = this.captions[index];
-    if (caption === undefined) {
-      const text = this.layer.addChild(
-        new Text({
-          text: '',
-          style: this.style,
-          anchor: 0.5,
-          resolution: this.resolution,
-          visible: false,
-        }),
-      );
-      text.label = 'silent-caption';
-      caption = { text };
-      this.captions.push(caption);
-    }
-    return caption;
-  }
-
   destroy(): void {
     this.layer.destroy({ children: true });
     this.signContext.destroy();
-    this.style.destroy();
   }
 }

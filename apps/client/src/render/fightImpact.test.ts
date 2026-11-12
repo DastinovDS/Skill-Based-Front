@@ -5,7 +5,6 @@ import {
   HIT_SHARE,
   NUMBER_SHARE,
   contactPoints,
-  inFirstRound,
   silentProgress,
   sinceShare,
 } from './fightImpact.ts';
@@ -37,11 +36,9 @@ describe('timing: shares of the round', () => {
     ).toBeNull();
   });
 
-  it('times the silent ring and the first round', () => {
+  it('times the silent ring', () => {
     expect(silentProgress(4.5, 20)).toBeCloseTo(0.5);
     expect(silentProgress(9, 20)).toBeNull();
-    expect(inFirstRound(100, 120, 20)).toBe(true);
-    expect(inFirstRound(100, 140, 20)).toBe(false);
   });
 });
 

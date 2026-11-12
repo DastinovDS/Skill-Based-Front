@@ -60,7 +60,6 @@ export const MENU_SCENES = [
   'menu-error',
   'menu-bot',
   'menu-friend',
-  'menu-newhere',
   'queue-search',
   'queue-long',
   'queue-found',
@@ -88,7 +87,7 @@ export const MENU_SCENES = [
   'result-disconnect',
   'result-rated',
   'boot',
-  'exit-rated',
+  'exit-dialog',
   'match-loading-map',
   'match-loading-connect',
   'match-loading-frame',
@@ -131,6 +130,5 @@ export const STATUS_SCENES = [
   'replaced',
   'paused-you',
   'paused-enemy',
-  'pause-denied',
   'renderer',
 ] as const;

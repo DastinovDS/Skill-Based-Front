@@ -91,11 +91,6 @@ export class AppState {
   playerId = $state.raw<number | null>(null);
   /** The colour the player asks for in matches (DEC-49), from `/api/me`; null while unknown. */
   colour = $state.raw<PlayerColour | null>(null);
-  /**
-   * A nick was just entered on the entry screen (a new guest or a new account): the main screen
-   * may offer "New here?" once (#919, `play.ts`), then it is cleared.
-   */
-  entered = $state(false);
   /** The matchmaking queue is locked until this time (ms since the epoch), or null (DEC-34). */
   queueBanUntil = $state.raw<number | null>(null);
   /** The map drawn behind the start screens: the menu map, bundled at build time (#474). */
@@ -156,7 +151,6 @@ export class AppState {
       const created = await this.api.createGuest(nick);
       this.guest = { token: created.token, nick, hasPassword: false };
       saveGuest(this.#storage, this.guest);
-      this.entered = true;
     } catch (error) {
       this.notice = apiErrorKey(error);
       return;
@@ -185,7 +179,6 @@ export class AppState {
       this.notice = 'error.account.registerNoPassword';
     }
     this.#remember({ token, nick, hasPassword });
-    this.entered = true;
     await this.#proceed();
     return null;
   }

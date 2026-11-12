@@ -1,70 +1,87 @@
 import type { MessageKey } from '../i18n/messages.ts';
-import type { Retreat } from '../protocol.gen.ts';
+import type { OrderFeedback } from './orderUi.svelte.ts';
 
 /**
- * Reject codes of the simulation (`RejectCode` in `packages/sim/src/gow_sim/commands.py`), each
- * with its message key. `rejects.test.ts` compares this list with the Python enum.
+ * Reject codes of the simulation (`RejectCode` in `packages/sim/src/gow_sim/commands.py`).
+ * `rejects.test.ts` compares this list with the Python enum.
+ *
+ * A refused command is no toast (the owner's marks on the pop-up catalogue, #765): the map answers
+ * it (a refused ghost shakes and fades, the CP gauge flashes for `NOT_ENOUGH_CP`, the capacity ring
+ * pulses for `CITY_FULL`), the menus do not offer what would be refused, and the console keeps a
+ * line of every refusal for the developers. Only a code this client does not know is still told
+ * (`reject.unknown`): the client and the server are out of step.
  */
-export const REJECT_MESSAGES = {
+export const REJECT_CODES = [
+  'NOT_FOUND_OR_HIDDEN',
+  'NOT_OWNER',
+  'NOT_ENOUGH_CP',
+  'GROUP_ON_EDGE',
+  'GROUP_BUSY',
+  'NO_PATH',
+  'INVALID_ARGUMENT',
+  'NOT_SAME_NODE',
+  'NOT_CITY',
+  'CITY_BUSY',
+  'NO_CHANGE',
+  'NOTHING_TO_CANCEL',
+  'CITY_FULL',
+  'QUEUE_FULL',
+  'ALREADY_BUILT',
+  'NO_BARRACKS',
+  'STACK_LIMIT',
+  'IN_FIGHT',
+  'FACTORY_LIMIT',
+  'NOT_ADJACENT',
+] as const;
+
+const KNOWN: ReadonlySet<string> = new Set(REJECT_CODES);
+
+/** A code of the simulation this client knows (else the server is newer than the client). */
+export function isKnownReject(code: string): boolean {
+  return KNOWN.has(code);
+}
+
+/**
+ * The reason a group order went without some of its groups (DEC-48, item B3: the toast
+ * `orders.dropped` stays). A member is checked like a `Move` of that group, so only the codes of a
+ * move come here; any other gets the generic text.
+ */
+export const DROPPED_REASONS = {
   NOT_FOUND_OR_HIDDEN: 'reject.NOT_FOUND_OR_HIDDEN',
   NOT_OWNER: 'reject.NOT_OWNER',
-  NOT_ENOUGH_CP: 'reject.NOT_ENOUGH_CP',
   GROUP_ON_EDGE: 'reject.GROUP_ON_EDGE',
   GROUP_BUSY: 'reject.GROUP_BUSY',
   NO_PATH: 'reject.NO_PATH',
-  INVALID_ARGUMENT: 'reject.INVALID_ARGUMENT',
-  NOT_SAME_NODE: 'reject.NOT_SAME_NODE',
-  NOT_CITY: 'reject.NOT_CITY',
-  CITY_BUSY: 'reject.CITY_BUSY',
-  NO_CHANGE: 'reject.NO_CHANGE',
-  NOTHING_TO_CANCEL: 'reject.NOTHING_TO_CANCEL',
-  CITY_FULL: 'reject.CITY_FULL',
-  QUEUE_FULL: 'reject.QUEUE_FULL',
-  ALREADY_BUILT: 'reject.ALREADY_BUILT',
-  NO_BARRACKS: 'reject.NO_BARRACKS',
   STACK_LIMIT: 'reject.STACK_LIMIT',
-  IN_FIGHT: 'reject.IN_FIGHT',
-  FACTORY_LIMIT: 'reject.FACTORY_LIMIT',
-  NOT_ADJACENT: 'reject.NOT_ADJACENT',
+  // DEC-48, item B4: the one member the client can send that is not valid stands in the target.
+  INVALID_ARGUMENT: 'reject.INVALID_ARGUMENT.groupMove',
+  // A member in a fight is not part of the order (DEC-40; under "round" it could only withdraw).
+  IN_FIGHT: 'reject.IN_FIGHT.stays',
 } as const satisfies Record<string, MessageKey>;
 
-/**
- * Codes whose general message would mislead for one command (DEC-41, #649): the same code means
- * another thing for a factory, a road fortification or a plan. Keyed `code:command`.
- */
-export const REJECT_MESSAGES_BY_COMMAND = {
-  'ALREADY_BUILT:build_factory': 'reject.ALREADY_BUILT.factory',
-  'ALREADY_BUILT:fortify_road': 'reject.ALREADY_BUILT.fort',
-  'NOT_CITY:build_factory': 'reject.NOT_CITY.factory',
-  'INVALID_ARGUMENT:move': 'reject.INVALID_ARGUMENT.move',
-  // DEC-48, item B4: the one group of a group order the client can send that is not valid stands
-  // in the target already (a planned rally and a too long list are never sent).
-  'INVALID_ARGUMENT:group_move': 'reject.INVALID_ARGUMENT.groupMove',
-  'NOTHING_TO_CANCEL:release_plan': 'reject.NOTHING_TO_CANCEL.plan',
-  'IN_FIGHT:release_plan': 'reject.IN_FIGHT.plan',
-} as const satisfies Record<string, MessageKey>;
-
-/**
- * The message for a `reject_code` from `ack`, told for the command `type` it answers when the code
- * reads differently there; a code this client does not know gets a generic one. Under
- * `combat.retreat = "none"` (DEC-40) `IN_FIGHT` is not "the group can only withdraw": nobody can.
- */
-export function rejectMessageKey(
-  code: string,
-  command?: string,
-  retreat?: Retreat,
-  planned = false,
-): MessageKey {
+/** The reason of the members a group order dropped with `code`; `planned`: a planned order. */
+export function droppedReasonKey(code: string, planned = false): MessageKey {
   // A planned order is not split (DEC-48, decision (10), #940): the target is closed to it.
   if (planned && code === 'STACK_LIMIT') return 'reject.STACK_LIMIT.planned';
-  if (retreat === 'none' && code === 'IN_FIGHT' && command !== 'release_plan') {
-    return 'reject.IN_FIGHT.stays';
-  }
-  const special = `${code}:${command ?? ''}`;
-  if (Object.hasOwn(REJECT_MESSAGES_BY_COMMAND, special)) {
-    return REJECT_MESSAGES_BY_COMMAND[special as keyof typeof REJECT_MESSAGES_BY_COMMAND];
-  }
-  return Object.hasOwn(REJECT_MESSAGES, code)
-    ? REJECT_MESSAGES[code as keyof typeof REJECT_MESSAGES]
+  return Object.hasOwn(DROPPED_REASONS, code)
+    ? DROPPED_REASONS[code as keyof typeof DROPPED_REASONS]
     : 'reject.unknown';
+}
+
+/**
+ * The toast of a refused or lost command: only a code this client does not know (#765, B5, told
+ * without the command word, B1). A lost answer is no toast either (B2): the status bar says
+ * "Reconnecting".
+ */
+export function refusalToast(feedback: OrderFeedback): MessageKey | null {
+  return feedback.kind === 'rejected' && !isKnownReject(feedback.code) ? 'reject.unknown' : null;
+}
+
+/** The console line of a refused or lost command (the developers still see each one, #765). */
+export function refusalLine(feedback: OrderFeedback): string | null {
+  if (feedback.kind === 'rejected') {
+    return `[client] command refused: ${feedback.cmd.type} ${feedback.code}`;
+  }
+  if (feedback.kind === 'lost') return `[client] command lost: ${feedback.cmd.type}`;
+  return null;
 }

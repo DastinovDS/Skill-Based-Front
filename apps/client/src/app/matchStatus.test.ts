@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { statusKeyAction, statusView, type StatusInput } from './matchStatus.ts';
 
-const READY: StatusInput = { status: 'ready', paused: null, me: 0, notice: null, pauseLeft: 0 };
+const READY: StatusInput = { status: 'ready', paused: null, me: 0, pauseLeft: 0 };
 const paused = (by: 0 | 1) => ({ type: 'paused', paused: true, by, ends_in_s: 30 }) as const;
 
 describe('statusView', () => {
@@ -36,17 +36,11 @@ describe('statusView', () => {
     expect(theirs).toMatchObject({ title: 'match.paused.enemy.title', actions: [] });
   });
 
-  it('ranks a dead connection over a pause, and a pause over a refusal', () => {
+  it('ranks a dead connection over a pause', () => {
     expect(statusView({ ...READY, status: 'gone', paused: paused(0) })?.title).toBe(
       'match.status.gone.title',
     );
-    const both = statusView({ ...READY, paused: paused(0), notice: 'match.error.pauseDenied' });
-    expect(both?.title).toBe('match.paused.you.title');
-    expect(statusView({ ...READY, notice: 'match.error.pauseDenied' })).toMatchObject({
-      tone: 'alert',
-      role: 'alert',
-      text: null,
-    });
+    expect(statusView({ ...READY, paused: paused(0) })?.title).toBe('match.paused.you.title');
   });
 });
 
