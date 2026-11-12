@@ -46,7 +46,7 @@ their old values (they model the human pace, not the strength).
 **Only priced commands count** (#1015, ``mvp-7``). The bucket of 6 and 7 commands a minute counted
 the free ones too, about a third of what the slow levels sent (a stance change, a split, a
 cancel), and the road fortification of the CP sink came first in every decision near the cap, so
-``easy`` put 27 to 46% of its CP into lines that took back about 0.3 charges each and ``normal``
+``easy`` put 27 to 42% of its CP into lines that took back about 0.3 charges each and ``normal``
 8 to 24% (the field run of 2026-11-12). Now the sink comes last and shares the fortification
 budget (``SmartBot`` item 26) and the bucket pays only priced commands, at 4 and 5 a minute: the
 paid commands a match stay where they were (about 60 for ``easy``, 72 for ``normal``, 82 for

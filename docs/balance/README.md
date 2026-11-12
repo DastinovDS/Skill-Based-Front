@@ -499,7 +499,7 @@ demand; the owner played match 6 (`mvp-3`) at 8.5 commands a minute. The numbers
 **Priced commands only, the fortification sink last (#1015).** Under `mvp-7` the bucket of 6 and 7 commands a minute
 counted the free commands too (stance changes, splits, cancels: about a third of what `easy` sent), and the road
 fortification of the CP sink (`economy.fort_site`) came first in every decision near the CP cap, where a bot with a
-short bucket always is: `easy` put 27 to 46% of its CP income into lines that took back about 0.3 charges each, `normal`
+short bucket always is: `easy` put 27 to 42% of its CP income into lines that took back about 0.3 charges each, `normal`
 8 to 24%. Now the sink comes last in the decision, spends only the CP the decision leaves near the cap and shares the
 `FORT_SHARE` budget of the threat fortifications (`SmartBot` item 26), and the bucket pays only priced commands, at
 4 and 5 a minute. The paid commands of a match stay where they were (about 60 `easy`, 72 `normal`, 82 `hard`) and go
