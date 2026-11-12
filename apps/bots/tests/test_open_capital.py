@@ -50,7 +50,7 @@ SMART: Final = tuple(
     for level in DIFFICULTIES
 )
 PLAIN: Final = ("rusher", "strangler", "reactive", "expander", "turtle", "random_legal")
-BENCH: Final = ("smart_exploiter", "smart_hoarder")
+BENCH: Final = ("smart_exploiter", "smart_hoarder", "owner_style")
 ALL: Final = (*SMART, *BENCH, *PLAIN)
 
 
