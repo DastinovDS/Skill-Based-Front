@@ -9,12 +9,14 @@
      that also has a factory. The factory stands where the client puts it (render/buildingLayout.ts, P2 "Free side", #954):
      beside the barracks in the free angle when it is wide enough, else stacked outward with the barracks the outer one (the
      capital here); a factory being built is one size up, grown outward from its seat (cityView.ts, BUILD_BOOST, #972).
-     D as round 2 drew it runs its plinth under the factory; D1 and D2 keep it clear. Everything comes from what the view
+     D1 "Shared plinth" (the first follow-up, kept as the reference) grounds both buildings on one plinth; the owner found it
+     unclear who produces what (2026-11-12). D2 "Foundation" makes the plinth the barracks' own: a level base right under
+     it, one piece with it, placed clear of the factory, which never moves. Everything comes from what the view
      already carries: NodeView.recruit_queue, recruit_progress, recruit_waiting, rally_point, the buildings and
      ruleset_public.recruit (mvp-7: unit_ticks 30 = 3 s a unit, queue_max 3). The map pieces are the client's
      (render/style.ts, units/helmet.ts, theme/cutIcons.ts, theme/cpMark.ts, render/buildingLayout.ts, render/cornerTicks.ts,
      render/fightFx.ts), shared with recruit-arc-r2.html. Self-contained: EB Garamond and Cinzel (SIL OFL) and the ground
-     crop come from assets/in-match-cp-vp/ and assets/city-buildings/. State in the address (#v=D1&city=small&fac=built ...). -->
+     crop come from assets/in-match-cp-vp/ and assets/city-buildings/. State in the address (#v=D2&city=small&fac=built ...). -->
 <style>
 @font-face{font-family:'EB Garamond';src:url(assets/in-match-cp-vp/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-style:normal;font-display:block}
 @font-face{font-family:'Cinzel';src:url(assets/in-match-cp-vp/fonts/cinzel.woff2) format('woff2');font-weight:400 900;font-style:normal;font-display:block}
@@ -523,7 +525,7 @@ const adjacentOwn = (c) => EDGES.some(([a, b]) => (a === c.i || b === c.i) && CI
 // =============================================================================================
 // The state of the page and one frame of the recruit story (a real loop of mvp-7: a unit every 3 s).
 // =============================================================================================
-const S = { rv: 'D1', city: 'small', fac: 'built', n: 3, fin: false, rally: false, zoom: 'near', sel: false, room: false, fight: false,
+const S = { rv: 'D2', city: 'small', fac: 'built', n: 3, fin: false, rally: false, zoom: 'near', sel: false, room: false, fight: false,
   still: false, gray: false, more: false, playing: true, time: 0 };
 const FIN_MS = 560, OUT_MS = 320, FIN_SPEED = 0.3;
 function story() {
@@ -565,8 +567,14 @@ function frameState(t) {
   P.geo = v.geo(P);
   P.on = queue > 0 || S.sel ? (S.still ? 1 : ease.engrave(clamp01(t / OUT_MS))) : S.still ? 0 : 1 - ease.engrave(since / OUT_MS);
   if (S.sel && queue === 0) P.on = 1;
-  const bA = lerp(barA, P.geo.bA, P.on), bd = Math.hypot(bar.x, bar.y) + P.geo.step * P.on;
-  P.barSeat = polar(bA, bd);
+  if (P.geo.anchor) {
+    // D2: the barracks swings round the city to its seat on its own foundation
+    const A = P.geo.anchor, d0 = Math.hypot(bar.x, bar.y);
+    P.barSeat = polar(barA + norm(Math.atan2(A.y, A.x) - barA) * P.on, lerp(d0, Math.hypot(A.x, A.y), P.on));
+  } else {
+    const bA = lerp(barA, P.geo.bA, P.on), bd = Math.hypot(bar.x, bar.y) + P.geo.step * P.on;
+    P.barSeat = polar(bA, bd);
+  }
   if (P.fac && P.geo.facStep) { P.fac.dist0 = P.fac.dist; P.fac.at = polar(P.fac.angle, P.fac.dist + P.geo.facStep * P.on); }
   return P;
 }
@@ -666,7 +674,7 @@ function queuedDot(ctx, P, s, cas = true) {
 function drawCell(ctx, P, s, kind, o = {}) {
   const k = P.k, alpha = o.alpha === undefined ? 1 : o.alpha, ga = GA; GA = ga * alpha; ctx.globalAlpha = GA;
   if (o.casing !== false) { slotPath(ctx, s, s.a0, s.a1, 1.3 * k); fill(ctx, C.casing, 0.9); }
-  slotPath(ctx, s, s.a0, s.a1); fill(ctx, C.plate, kind === 'free' ? 0.6 : 1);
+  slotPath(ctx, s, s.a0, s.a1); fill(ctx, C.plate, kind === 'free' ? 0.6 : kind === 'empty' ? 0.75 : 1);
   if (kind === 'active' || kind === 'full') {
     const sh = kind === 'full' ? 1 : clamp01(o.share), sp = madeSpan(s, sh), m = slotMid(s);
     ctx.save(); slotPath(ctx, s, s.a0, s.a1); ctx.clip();
@@ -682,7 +690,7 @@ function drawCell(ctx, P, s, kind, o = {}) {
   } else if (kind === 'queued') queuedDot(ctx, P, s);
   const E = edgeLines(s, 0.55 * k);
   if (kind === 'free') ctx.setLineDash([1.5 * k, 1.2 * k]);
-  for (const ln of [E.inner, E.outer]) { poly(ctx, ln, false); stroke(ctx, hair(0.8 * k), C.ink, kind === 'free' ? 0.85 : 0.9, 'butt'); }
+  for (const ln of [E.inner, E.outer]) { poly(ctx, ln, false); stroke(ctx, hair(0.8 * k), C.ink, kind === 'free' ? 0.85 : kind === 'empty' ? 0.32 : 0.9, 'butt'); }
   ctx.setLineDash([]);
   GA = ga; ctx.globalAlpha = GA;
 }
@@ -795,26 +803,180 @@ function drawPlinth(ctx, P, v) {
   if (v.tightWait) waitCell(ctx, P, v.slot(P, 0)); else waitRing(ctx, P, v);
 }
 
-const RVARS = [
-  // ---- D as round 2 drew it: the plinth at the ring, centred on the barracks, blind to the factory --
-  { id: 'D', name: 'Round 2', ref: true,
-    line: 'D as round 2 drew it: the plinth sits at the ring under the barracks and runs under the factory.',
-    geo(P) {
-      const k = P.k, t = PL.t * k, r = P.sub.R + RING.cut / 2 + 1.1 * k + PL.pad * k + t / 2, s = roomySide(P), rm = room(P, P.barA, r, t / 2 + PL.pad * k, 'all');
-      const avail = 2 * Math.min(rm.plus, rm.minus) * r - 4.6 * k, gap = PL.gap * k, len = clamp((avail - (PL.n - 1) * gap) / PL.n, PL.lenMin * k, PL.lenMax * k);
-      return { k, t, r, s, len, gap, c: P.barA, bA: P.barA, step: t + 2 * PL.pad * k + PL.lift * k, facStep: 0, feet: [] };
-    },
-    slot(P, pos) { const g = P.geo; return centred(0, 0, g.r, g.t, g.c, g.s, g.len, g.gap, pos, Math.max(P.nEff, 1)); },
-    node(ctx, P) { drawPlinth(ctx, P, this); },
-    finish(ctx, P) { finishDrop(ctx, P, this); } },
+// =============================================================================================
+// D2: the plinth is the barracks' own. The barracks and its foundation are ONE piece (their
+// casings merge, the barracks' ground line is the foundation's top rule), placed as a whole clear of
+// the factory (which never moves), the roads, the VP lozenge, the ring, the B6 ticks, the store and
+// the name: the nearest free seat to where buildingLayout.ts puts the barracks. The foundation always
+// has queue_max sockets, so the piece keeps its size while the queue runs: an ordered unit is the
+// owner's hatch, the unit under way its solid colour sweeping left to right, past the queue a dark
+// recess (dashed, a free slot, when the city is selected). Dropped while drawing: the same piece with
+// the curved slab of D on the city side of the barracks: beside a factory it lay between the two.
+// =============================================================================================
+const OWNP = { sockets: 3, gap: 3.2 };
+/** The box of a menu icon drawn at (x, y), its casing included. */
+function iconBox(kind, x, y, size) { const s = size / CUT_STYLE.box, [a, b, c, d] = CUT_BOX[kind], p = (CUT_STYLE.casing / 2) * s; return [x + a * s - p, y + b * s - p, x + c * s + p, y + d * s + p]; }
+/** A box as circles that cover it exactly (each the circumcircle of a slice along its long side). */
+function boxCircles(x0, y0, x1, y1) {
+  const w = x1 - x0, h = y1 - y0, wide = w >= h, n = Math.max(1, Math.ceil((wide ? w / h : h / w) * 1.4)), out = [];
+  for (let i = 0; i < n; i++) { const f = (i + 0.5) / n; out.push(wide ? { x: x0 + f * w, y: y0 + h / 2, r: Math.hypot(w / n / 2, h / 2) } : { x: x0 + w / 2, y: y0 + f * h, r: Math.hypot(w / 2, h / n / 2) }); }
+  return out;
+}
+let NAME_W = new Map();
+function nameWidth(s) { if (!NAME_W.has(s)) { const c = document.createElement('canvas').getContext('2d'); c.font = '700 13px system-ui, sans-serif'; NAME_W.set(s, c.measureText(s).width); } return NAME_W.get(s); }
+/** What the piece keeps clear of, about the city centre: circles (c), road capsules (s), boxes (b). */
+function obstacles(P) {
+  const c = P.sub, k = P.k, R = c.R, out = [];
+  out.push({ t: 'c', x: 0, y: 0, r: R + RING.cut / 2 + 1 });
+  // the B6 ticks of the biggest garrison the city holds (they reach past the ring at their corners)
+  const gw = helmetFit('own', helmetWidth(unitSide(c.cap), true), R - RING.cut / 2 - 1), e = helmetExtent(helmet('own', gw)), tg = TICKS.gap + TICKS.casing / 2;
+  out.push({ t: 'b', x0: e.left - tg, y0: e.top - tg, x1: e.right + tg, y1: e.bottom + tg });
+  for (const a of c.roads) out.push({ t: 's', x0: R * Math.cos(a), y0: R * Math.sin(a), x1: 900 * Math.cos(a), y1: 900 * Math.sin(a), r: 3.7 + 1.6 });
+  if (c.vp) { const v = polar(-Math.PI / 4, R + VPL.lift); out.push({ t: 'c', x: v.x, y: v.y, r: (VPL.side * Math.SQRT2) / 2 + 2 }); }
+  const xs = rowXs(c.wh), rh = (xs.length ? xs[xs.length - 1] : 0) + LOZ.casing * 0.75 + 1.5;
+  out.push({ t: 'b', x0: -rh, y0: R + LOZ.drop - LOZ.casing * 0.75 - 1.5, x1: rh, y1: R + LOZ.drop + LOZ.casing * 0.75 + 1.5 });
+  if (P.z >= 0.45) { const nw = nameWidth(c.name) / P.z / 2 + 2, ny = R + 15 + (c.wh ? 4 : 0); out.push({ t: 'b', x0: -nw, y0: ny - 2, x1: nw, y1: ny + 16 / P.z }); }
+  const F = P.fac;
+  if (F) { const b = iconBox('factory', F.at.x, F.at.y, F.size), G = OWNP.gap * k; out.push({ t: 'b', x0: b[0] - G, y0: b[1] - G, x1: b[2] + G, y1: b[3] + G }); }
+  return out;
+}
+function hits(o, x, y, r) {
+  if (o.t === 'c') return Math.hypot(x - o.x, y - o.y) < r + o.r;
+  if (o.t === 'b') return Math.hypot(x - clamp(x, o.x0, o.x1), y - clamp(y, o.y0, o.y1)) < r;
+  const dx = o.x1 - o.x0, dy = o.y1 - o.y0, q = clamp(((x - o.x0) * dx + (y - o.y0) * dy) / (dx * dx + dy * dy), 0, 1);
+  return Math.hypot(x - o.x0 - q * dx, y - o.y0 - q * dy) < r + o.r;
+}
+const PLACED = new Map();
+/**
+ * The seat of the barracks while the city recruits: the free seat nearest to its seat at rest where
+ * the whole piece (`shape(at, a)` -> circles) is clear. Searched once per layout (city, zoom, factory).
+ */
+function placePiece(P, v) {
+  const key = [v.id, S.city, S.zoom, facState()].join('|');
+  if (PLACED.has(key)) return PLACED.get(key);
+  const obs = obstacles(P), seat = P.bar, d0 = Math.hypot(seat.x, seat.y), k = P.k;
+  let best = null;
+  for (let da = -80; da <= 80; da += 0.5) for (let dd = -6 * k; dd <= 50 * k; dd += 0.25 * k) {
+    const a = P.barA + (da * Math.PI) / 180, at = polar(a, d0 + dd), cost = Math.hypot(at.x - seat.x, at.y - seat.y);
+    if (best && cost >= best.cost) continue;
+    if (v.shape(P, at, a).some((ci) => obs.some((o) => hits(o, ci.x, ci.y, ci.r)))) continue;
+    best = { cost, x: at.x, y: at.y, a };
+  }
+  const out = best || { x: seat.x, y: seat.y, a: P.barA, fail: true };
+  PLACED.set(key, out); return out;
+}
+/** The socket kinds: the cell under way, queued, and past the queue empty (or free, dashed, when selected). */
+const socketKind = (P, j) => (j >= P.queue ? (S.sel ? 'free' : 'empty') : j === 0 ? (P.waiting ? 'full' : 'active') : 'queued');
+/** The sockets at rest, then the cells of the queue over them (they slide by one when a unit is made). */
+function drawSockets(ctx, P, v, paint, on = P.on) {
+  for (let j = 0; j < OWNP.sockets; j++) paint(ctx, P, v.slot(P, j), j >= P.queue ? socketKind(P, j) : 'empty', { alpha: on });
+  for (let j = Math.min(P.queue, OWNP.sockets) - 1; j >= 0; j--) paint(ctx, P, v.slot(P, j + P.shift), socketKind(P, j), { share: P.share, alpha: on });
+  if (P.rally && P.since < 260 && !P.still) paint(ctx, P, v.slot(P, 0), 'full', { alpha: 1 - P.since / 260 });
+}
+/** The rally marks: a level row, one per unit queued, moved outward from the city until it clears the barracks. */
+function ownRallyMarks(ctx, P) {
+  if (!P.rally) return;
+  const k = P.k, a = Math.atan2(P.barSeat.y, P.barSeat.x), u = { x: Math.cos(a), y: Math.sin(a) }, pitch = 8.2 * k, sz = 7.2 * k;
+  const hw = ((P.queue - 1) * pitch + sz) / 2 + 2.6 * k, hh = sz / 2 + 2.6 * k, b = iconBox('barracks', P.barSeat.x, P.barSeat.y, P.L.size);
+  let c = { ...P.barSeat };
+  for (let i = 0; i < 80 && !(c.x - hw > b[2] || c.x + hw < b[0] || c.y - hh > b[3] || c.y + hh < b[1]); i++) c = { x: c.x + u.x * 0.5 * k, y: c.y + u.y * 0.5 * k };
+  for (let j = 0; j < P.queue; j++) cpMark(ctx, c.x + (j - (P.queue - 1) / 2) * pitch, c.y, sz, j === 0 ? (P.waiting ? 1 : P.share) : 0, j === 0 ? 1 : 0.85);
+}
 
+// ---- D2 "Foundation": a level base right under the barracks (a building on its foundation) -------
+const FND = { cw: 4.1, ch: 4.1, gap: 0.9, padX: 1.3, padY: 1.2, casing: 1.5, chamfer: 1 };
+/** The foundation under the barracks drawn at (x, y): its box and the socket at a (fractional) place. */
+function foundation(P, x, y) {
+  const k = P.k, s = P.L.size / CUT_STYLE.box, w = OWNP.sockets * FND.cw * k + (OWNP.sockets - 1) * FND.gap * k + 2 * FND.padX * k, h = FND.ch * k + 2 * FND.padY * k;
+  const y0 = y + CUT_BOX.barracks[3] * s; // the barracks' ground line is the foundation's top rule
+  return { x0: x - w / 2, y0, x1: x + w / 2, y1: y0 + h, w, h, k };
+}
+function fndSlot(f, pos) { const k = f.k, x = f.x0 + FND.padX * k + pos * (FND.cw + FND.gap) * k; return { x, y: f.y0 + FND.padY * k, w: FND.cw * k, h: FND.ch * k, rect: true }; }
+/** A chamfered box (the foundation's outline). */
+function chamferBox(ctx, x0, y0, x1, y1, ch) { ctx.beginPath(); ctx.moveTo(x0 + ch, y0); ctx.lineTo(x1 - ch, y0); ctx.lineTo(x1, y0 + ch); ctx.lineTo(x1, y1 - ch); ctx.lineTo(x1 - ch, y1); ctx.lineTo(x0 + ch, y1); ctx.lineTo(x0, y1 - ch); ctx.lineTo(x0, y0 + ch); ctx.closePath(); }
+function drawFoundation(ctx, P, f, alpha) {
+  const k = P.k, c = FND.casing * k, ga = GA; GA = ga * alpha; ctx.globalAlpha = GA;
+  chamferBox(ctx, f.x0 - c, f.y0 - c * 0.4, f.x1 + c, f.y1 + c, FND.chamfer * k + c * 0.6); fill(ctx, C.casing, 0.94);
+  const gr = ctx.createLinearGradient(0, f.y0, 0, f.y1); gr.addColorStop(0, '#2c261d'); gr.addColorStop(0.38, '#1b1712'); gr.addColorStop(1, '#0b0907');
+  chamferBox(ctx, f.x0, f.y0, f.x1, f.y1, FND.chamfer * k); ctx.fillStyle = gr; ctx.globalAlpha = GA; ctx.fill();
+  const rim = () => chamferBox(ctx, f.x0 + 0.5 * k, f.y0 + 0.5 * k, f.x1 - 0.5 * k, f.y1 - 0.5 * k, FND.chamfer * k * 0.7);
+  rim(); stroke(ctx, hair(1 * k), C.ink, 0.95, 'butt', 'miter');
+  if (P.waiting) {
+    // no room: the foundation's own rim turns to the amber dashed "needs a look" rule (PROGRESS.alert), pulsing
+    const a = pulseA(P); rim(); stroke(ctx, hair(1.2 * k), C.casing, 0.9, 'butt', 'miter');
+    ctx.setLineDash([2.2 * k, 1.5 * k]); rim(); stroke(ctx, hair(1.25 * k), C.clash, a, 'butt', 'miter'); ctx.setLineDash([]);
+  }
+  GA = ga; ctx.globalAlpha = GA;
+}
+/**
+ * A socket of the foundation. Ordered units are the owner's hatch (still to make), the unit under way
+ * the solid owner's colour sweeping over its hatch with an ivory head line; past the queue a dark
+ * recess (dashed when the city is selected: a free slot). Count of coloured sockets = the queue.
+ */
+function drawRectCell(ctx, P, s, kind, o = {}) {
+  const k = P.k, alpha = o.alpha === undefined ? 1 : o.alpha, ga = GA; GA = ga * alpha; ctx.globalAlpha = GA;
+  const R = () => { ctx.beginPath(); ctx.rect(s.x, s.y, s.w, s.h); };
+  R(); fill(ctx, C.plate, kind === 'free' || kind === 'empty' ? 0.8 : 1);
+  if (kind !== 'free' && kind !== 'empty') {
+    const sh = kind === 'full' ? 1 : kind === 'queued' ? 0 : clamp01(o.share), xe = s.x + sh * s.w;
+    ctx.save(); R(); ctx.clip();
+    if (sh < 1) { hatchLines(ctx, { x: s.x, y: s.y, width: s.w, height: s.h }, -Math.PI / 4, Math.max(1.5 * k, 1.1)); stroke(ctx, hair(0.55 * k), OWN, kind === 'queued' ? 0.95 : 0.7, 'butt'); }
+    if (sh > 0) {
+      ctx.beginPath(); ctx.rect(s.x, s.y, xe - s.x, s.h); fill(ctx, OWN);
+      const g = ctx.createLinearGradient(0, s.y, 0, s.y + s.h); g.addColorStop(0, 'rgba(236,228,209,0.2)'); g.addColorStop(0.45, 'rgba(6,5,4,0)'); g.addColorStop(1, 'rgba(6,5,4,0.25)');
+      ctx.beginPath(); ctx.rect(s.x, s.y, xe - s.x, s.h); ctx.fillStyle = g; ctx.globalAlpha = GA; ctx.fill();
+    }
+    ctx.restore();
+    if (kind === 'active' && sh > 0.01 && sh < 0.995) {
+      if (!P.still) glow(ctx, { x: xe, y: s.y + s.h / 2 }, 3.2 * k, '#ece4d1', 0.14 + 0.05 * Math.sin(P.t / 170));
+      line(ctx, xe, s.y - 0.5 * k, xe, s.y + s.h + 0.5 * k, 2.1 * k, C.casing, 0.8, 'butt');
+      line(ctx, xe, s.y - 0.5 * k, xe, s.y + s.h + 0.5 * k, hair(1.1 * k), C.ivory, 1, 'butt');
+    }
+  }
+  // the socket's own rule: a recess is barely ruled, a free slot dashed, a unit ordered or under way ruled in ink
+  if (kind === 'free') ctx.setLineDash([1.3 * k, 1 * k]);
+  const ra = kind === 'empty' ? 0.2 : kind === 'free' ? 0.8 : 0.55, i = 0.25 * k;
+  ctx.beginPath(); ctx.rect(s.x + i, s.y + i, s.w - 2 * i, s.h - 2 * i); stroke(ctx, hair(0.5 * k), C.ink, ra, 'butt', 'miter');
+  ctx.setLineDash([]);
+  GA = ga; ctx.globalAlpha = GA;
+}
+/** A made unit leaves its socket and drops into the ring (dropToRing for a level socket). */
+function dropFromRect(ctx, P, s, q) {
+  const cap = P.sub.cap, cell = ringCells(cap, 0)[Math.min(P.units, cap - 1)], R = P.sub.R, k = P.k;
+  const mx = s.x + s.w / 2, my = s.y + s.h / 2, r0 = Math.hypot(mx, my), t0 = Math.atan2(my, mx), b = (cell.from + cell.to) / 2, t1 = t0 + norm(b - t0);
+  const qr = ease.settle(clamp01(q / 0.45)), qa = ease.engrave(clamp01((q - 0.28) / 0.72));
+  const r = lerp(r0, R, qr), a = lerp(t0, t1, qa), len = lerp(s.w, (cell.to - cell.from) * R, qa), h = len / r / 2, w = lerp(s.h * 0.86, RING.filled + 0.6, qr);
+  const lift = 1 - smooth(0, 0.3, q);
+  if (lift > 0) { ctx.beginPath(); ctx.rect(s.x, s.y, s.w, s.h); fill(ctx, OWN, lift); }
+  const on = smooth(0, 0.22, q);
+  ringArc(ctx, r, a - h, a + h, w + 2.4 * k * (1 - q) + 1.2, C.casing, 0.9 * on);
+  ringArc(ctx, r, a - h, a + h, w, OWN, on);
+  ringArc(ctx, r + w * 0.28, a - h * 0.9, a + h * 0.9, hair(0.6 * k), C.ivory, 0.5 * on * (1 - q));
+}
+const RVARS = [
   // ---- D1: one plinth grounds both buildings; while the city recruits both step out onto it ---------
-  { id: 'D1', name: 'Shared plinth', tightWait: true,
+  { id: 'D1', name: 'Shared plinth', tightWait: true, ref: true,
     line: 'Beside each other, one plinth at the ring grounds the barracks and the factory and both step out onto it; in a line, the plinth lies between them and only the barracks steps out.',
     geo(P) { return plinthGeo(P); },
     slot(P, pos) { const g = P.geo; return centred(0, 0, g.r, g.t, g.c, g.s, g.len, g.gap, pos, Math.max(P.nEff, 1)); },
     node(ctx, P) { drawPlinth(ctx, P, this); },
     finish(ctx, P) { finishDrop(ctx, P, this); } },
+
+  // ---- D2: a level foundation right under the barracks: a building on its own base ------------------
+  { id: 'D2', name: 'Foundation',
+    line: 'The barracks rises onto its own level foundation of three sockets: a building on its base, one piece. The factory never moves and never touches it; the piece takes the nearest seat clear of the factory, the roads, the VP lozenge and the ring.',
+    shape(P, at) { const f = foundation(P, at.x, at.y), c = FND.casing * P.k; return [...boxCircles(...iconBox('barracks', at.x, at.y, P.L.size)), ...boxCircles(f.x0 - c, f.y0, f.x1 + c, f.y1 + c)]; },
+    geo(P) { return { anchor: placePiece(P, this) }; },
+    slot(P, pos) { return fndSlot(foundation(P, P.barSeat.x, P.barSeat.y), pos); },
+    emit(P) { const s = this.slot(P, 0); return { x: s.x + s.w / 2, y: s.y + s.h / 2 }; },
+    node(ctx, P) {
+      if (P.on <= 0.01) return;
+      const on = smooth(0.7, 1, P.on);
+      drawFoundation(ctx, P, foundation(P, P.barSeat.x, P.barSeat.y), on);
+      drawSockets(ctx, P, this, drawRectCell, on);
+      ownRallyMarks(ctx, P);
+    },
+    finish(ctx, P) { if (P.rally || P.still || P.since >= P.fms || P.waiting) return; dropFromRect(ctx, P, this.slot(P, 0), ease.travel(P.since / P.fms)); } },
 ];
 /**
  * D1: the plinth never runs under a building that stays put. Beside each other (the wide free angle
