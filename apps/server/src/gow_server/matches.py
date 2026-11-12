@@ -21,15 +21,16 @@ technical defeat is in the command log and the replay stays reproducible; ``matc
 at most ``pause_max_s`` (``request_pause``), and ``paused`` messages tell both players.
 
 A match against a bot (SRV-06, #53): one slot is a ``BotSeat``. Its controller lives in the
-server process and decides every ``BOT_DECIDE_EVERY`` ticks inside ``step`` on the same
-``PlayerView`` (``Match.view``) a human gets. A ``Glancer`` that will not think on a call (a
-smart bot between two decisions of its tempo) gets only the figure ids of its view (``glance``),
-as in ``run_headless``. Its commands are resolved and applied like the humans' ones and land in
-the command log. A decision (``decide`` alone, not the projection) longer than ``bot_budget_s``
-(1 ms) is kept, but the next call is skipped and counted (``bot_overruns``). The snapshots, the
-bot's view and the frames reuse the vision of the step (``Match.view(reuse=True)``): nothing but
-``Match.step`` changes the state. The bot has no connection,
-so no reconnect window runs for it; its slot holds ``BOT_ACCOUNT``, which no account has.
+server process and plays through ``gow_sim.match.Seat``, the driver ``run_headless`` and the
+tournaments use too (#994): made from ``Match.rules`` (the periods of ``[map_tempo]``), called
+every ``DECIDE_EVERY`` ticks inside ``step`` on the same ``PlayerView`` a human gets (a smart bot
+that will not think on a call gets the figure ids of its view alone, ``Glancer``), its commands
+resolved and numbered by the seat, applied like the humans' ones and logged. A decision
+(``decide`` alone, not the projection) longer than ``bot_budget_s`` (1 ms) is kept, but the next
+call is skipped and counted (``bot_overruns``). The snapshots, the bot's view and the frames
+reuse the vision of the step (``Match.view(reuse=True)``): nothing but ``Match.step`` changes the
+state. The bot has no connection, so no reconnect window runs for it; its slot holds
+``BOT_ACCOUNT``, which no account has.
 
 A bot match that nobody connects to within ``connect_timeout_s`` (#412) is dropped as never
 started: the runner ends without an outcome (``never_started``), its partial command log is deleted
@@ -54,7 +55,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from gow_bots.bots import Controller
 from gow_protocol import commands as wire
 from gow_protocol.codec import SnapshotFrame
 from gow_protocol.convert import (
@@ -84,11 +84,12 @@ from gow_server.metrics import ServerMetrics
 if TYPE_CHECKING:
     from gow_server.replays import ReplayService
 from gow_sim.analysis import ResultTally
-from gow_sim.commands import PlayerCommand
+from gow_sim.commands import Command, PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef
-from gow_sim.match import Glancer, Match
+from gow_sim.match import Controller, ControllerFactory, Match, Seat
 from gow_sim.replay import ReplayWriter
 from gow_sim.ruleset import Ruleset
+from gow_sim.view import PlayerView
 
 log = logging.getLogger("gow_server.matches")
 
@@ -105,9 +106,6 @@ DEFAULT_WINDOW_S: Final = 60.0
 
 BOT_ACCOUNT: Final = 0
 """Account id in ``players`` of the slot a bot plays: account ids start at 1."""
-
-BOT_DECIDE_EVERY: Final = 5
-"""A bot decides every this many ticks (AGENTS.md, section 8)."""
 
 BOT_BUDGET_S: Final = 0.001
 """Time a bot decision should take; a longer one makes the bot skip its next call."""
@@ -188,10 +186,13 @@ class Outbox:
 
 @dataclass(frozen=True, slots=True)
 class BotSeat:
-    """The slot a bot plays and its controller (already made for the map, ruleset and seed)."""
+    """The slot a bot plays, how its controller is made and the seed it is made with. The runner
+    makes it for its match (``gow_sim.match.Seat.build``: the map and ``Match.rules``), so no
+    caller can hand a bot the unscaled periods of ``[map_tempo]`` (#994)."""
 
     slot: int
-    controller: Controller
+    factory: ControllerFactory
+    seed: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,6 +260,7 @@ class MatchRunner:
         self.bot: Final = bot
         self.bot_budget_s: Final = bot_budget_s
         self.bot_decisions = 0
+        """Calls of ``decide`` that returned (a ``Glancer`` that does not think is not called)."""
         self.bot_commands = 0
         self.bot_overruns = 0
         """Decisions slower than ``bot_budget_s``; each made the bot skip its next call."""
@@ -269,6 +271,14 @@ class MatchRunner:
         ``None``: never (#412)."""
         self.never_started = False
         """The loop ended because nobody connected in time (``connect_timeout_s``)."""
+        self._bot_seat = (
+            None
+            if bot is None
+            else Seat.build(
+                self.match, bot.slot, bot.factory, seed=bot.seed, decide=self._decide_bot, seq=1
+            )
+        )
+        """The driver of the bot (its ``seq`` counts from 1 like a client's)."""
         self._inbox: list[_Queued] = []
         self._last_seq: dict[int, int] = dict.fromkeys(PLAYERS, 0)
         self._outboxes: dict[int, Outbox] = {}
@@ -603,42 +613,35 @@ class MatchRunner:
         return "disconnect" if defeated & self._seen else "no_show"
 
     def _bot_commands(self) -> list[PlayerCommand]:
-        """Commands of the bot for this tick (it decides every ``BOT_DECIDE_EVERY`` ticks)."""
-        seat = self.bot
-        match = self.match
-        if seat is None or match.tick % BOT_DECIDE_EVERY:
+        """Commands of the bot for this tick (``Seat``: every ``DECIDE_EVERY`` ticks); the call
+        after a decision over ``bot_budget_s`` is skipped."""
+        seat = self._bot_seat
+        if seat is None or not seat.due():
             return []
         if self._bot_skip_next:
             self._bot_skip_next = False
             self.bot_skipped += 1
             self.metrics.bot_skipped += 1
             return []
-        controller = seat.controller
         try:
-            if isinstance(controller, Glancer) and not controller.thinks(match.tick):
-                # a bot between two decisions of its tempo gets the figure ids of its view alone,
-                # as in ``run_headless``: it decides nothing on this call
-                controller.glance(match.tick, match.figures(seat.slot, reuse=True))
-                return []
-            view = match.view(seat.slot, reuse=True)  # only ``Match.step`` changed the state
-            started = time.perf_counter()  # the budget is the decision's, not the projection's
-            decided = controller.decide(view, match.tick)
+            out = seat.commands()
         except Exception:  # a broken bot must not end the human's match
-            log.exception("bot failed", extra={"match_id": self.match_id, "tick": match.tick})
+            log.exception("bot failed", extra={"match_id": self.match_id, "tick": seat.match.tick})
             return []
+        self.bot_commands += len(out)
+        return out
+
+    def _decide_bot(self, controller: Controller, view: PlayerView, tick: int) -> list[Command]:
+        """``decide`` of the bot, timed against ``bot_budget_s`` (the decision's budget, not the
+        projection's)."""
+        started = time.perf_counter()
+        decided = controller.decide(view, tick)
         if time.perf_counter() - started > self.bot_budget_s:
             self.bot_overruns += 1
             self.metrics.bot_overruns += 1
             self._bot_skip_next = True
         self.bot_decisions += 1
-        out: list[PlayerCommand] = []
-        for cmd in decided:
-            self._last_seq[seat.slot] += 1
-            out.append(
-                PlayerCommand(seat.slot, self._last_seq[seat.slot], match.resolve(seat.slot, cmd))
-            )
-        self.bot_commands += len(out)
-        return out
+        return decided
 
     # Replay log ----------------------------------------------------------------------------
 

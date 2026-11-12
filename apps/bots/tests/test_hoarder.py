@@ -14,9 +14,9 @@ from typing import ClassVar
 import pytest
 
 from gow_bots.bots import BOTS, SmartHoarder, bot_factory
-from gow_bots.bots.assess import edge_ticks
 from gow_bots.bots.campaign import Ctx
 from gow_bots.bots.smart import SmartBot
+from gow_bots.bots.travel import edge_ticks
 from gow_bots.bots.utility import shots_to_take
 from gow_sim.commands import Split
 from gow_sim.maps import MapDef, load_map

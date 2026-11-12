@@ -75,7 +75,8 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
     price from the other spending until it is paid. The orders are timed so that every group
     arrives within ``STRIKE_ALIGN`` ticks of the slowest one (the gathering of a plan,
     ``orders.plan_ticks_per_bonus`` a bonus, and the travel times of mechanics.md, section 4,
-    ``edge_ticks``): the joins of the first rounds count in full (DEC-24, D1). The groups of a
+    ``travel.edge_ticks``):
+    the joins of the first rounds count in full (DEC-24, D1). The groups of a
     strike are not recalled one by one and do not leave a fight that the rest of the strike is
     still walking into (``committed``, ``coming``).
 
@@ -198,13 +199,12 @@ same rule for all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
 (``Bot.key``, ``Bot.edge_keys``), nothing draws from ``self.rng``.
 """
 
-import heapq
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import ClassVar, Final, override
 
-from gow_bots.bots.assess import FRESH_TICKS, Assessment, Assessor, Travel, edge_ticks
+from gow_bots.bots.assess import FRESH_TICKS, Assessment, Assessor, Travel
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option
 from gow_bots.bots.estimate import EnemyForce, Phase, Sector, phase, sectors, strengths, threats
@@ -508,11 +508,12 @@ class SmartBot(CampaignBot):
             raise ValueError(f"unknown difficulty {difficulty!r}; known: {list(DIFFICULTIES)}")
         self.difficulty = difficulty
         self.tempo = DIFFICULTIES[difficulty]
+        rules = self.rules  # the rules of the match (``Bot``)
         self.bucket = Bucket(self.tempo, rules.tick_hz)
         self.perception = Perception(self.tempo.react_ticks)
         self.thought: int | None = None
         """The tick of the last decision (item 9)."""
-        self.travel = Travel(mapdef, rules)
+        self.travel = Travel(self.times)
         self.assessor = Assessor(mapdef, rules, player, self.travel)
         self.assessment: Assessment | None = None
         """The assessment of the last decision (tests and the docstring's thresholds)."""
@@ -571,7 +572,6 @@ class SmartBot(CampaignBot):
         """No new strike before this tick."""
         self.strike_sent: dict[int, int] = {}
         """Opaque id of a group sent in a strike to the tick it was sent."""
-        self._edge_ticks: dict[tuple[int, int], int] = {}
         self.edge_between: dict[tuple[int, int], int] = {}
         """``(a, b)`` in both orders to the edge between the two nodes."""
         self.enemy_force = EnemyForce(mapdef, player)
@@ -1066,39 +1066,12 @@ class SmartBot(CampaignBot):
             base = shots_to_take(self.rules, start.terrain, units, units)
         return base + self.strike_margin()
 
-    def edge_time(self, edge: int, to_node: int) -> int:
-        key = (edge, to_node)
-        ticks = self._edge_ticks.get(key)
-        if ticks is None:
-            ticks = edge_ticks(self.map, self.rules, edge, to_node)
-            self._edge_ticks[key] = ticks
-        return ticks
-
     def way(self, view: PlayerView, start: int, dest: int, size: int) -> tuple[int, int] | None:
-        """``(edges, ticks)`` of the fastest path a group of ``size`` units takes from ``start``
-        to ``dest``: through own nodes without a fight, under the stack limit (SIM-05, DEC-20, D),
-        by the travel times of the terrain; ties by ``node_key``. ``None``: none."""
-        me, nodes = view.player, view.nodes
-        fights = self.fight_nodes(view)
-        best: dict[int, int] = {start: 0}
-        heap: list[tuple[int, int, int, int]] = [(0, self.key(start), start, 0)]
-        while heap:
-            ticks, _, node, edges = heapq.heappop(heap)
-            if ticks > best[node]:
-                continue
-            if node == dest:
-                return (edges, ticks)
-            if node != start and (nodes[node].owner != me or node in fights):
-                continue
-            for e in self.incident[node]:
-                other = self.map.edges[e].other(node)
-                if nodes[other].capacity < size:
-                    continue
-                t = ticks + self.edge_time(e, other)
-                if other not in best or t < best[other]:
-                    best[other] = t
-                    heapq.heappush(heap, (t, self.key(other), other, edges + 1))
-        return None
+        """``(edges, ticks)`` of the path a ``Move`` of a group of ``size`` units takes from
+        ``start`` to ``dest`` (``Bot.ways``: SIM-05, DEC-20, D, the travel times of the terrain);
+        ``None``: none."""
+        found = self.ways(view, start, size).get(dest)
+        return None if found is None or dest == start else (found.hops, found.ticks)
 
     def strike_plan(self, ctx: Ctx, budget: int) -> StrikePlan | None:
         """The converging strike on the enemy capital the free groups could make now with

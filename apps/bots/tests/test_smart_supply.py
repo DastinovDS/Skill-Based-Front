@@ -12,10 +12,12 @@ from gow_bots.bots import SmartRusher, SmartStrangler
 from gow_bots.bots.assess import Travel
 from gow_bots.bots.campaign import Ctx
 from gow_bots.bots.logistics import Arrival, arrivals, figure_ticks
+from gow_bots.bots.travel import Times
 from gow_sim.commands import CancelRecruit, Command, Move, Recruit, Split
 from gow_sim.maps import MapDef
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset
+from gow_sim.systems.movement import leg
 from gow_sim.view import (
     AtNode,
     Detail,
@@ -75,10 +77,11 @@ def _toward(mapdef: MapDef, edge: int, node: int, left: int, units: int) -> Enem
 
 
 def _zone_ticks(mapdef: MapDef, rules: Ruleset, edge: int, node: int, left: int) -> int:
-    """mechanics.md, section 4: ``travel_ticks * 100 // speed`` for the part ``left`` of the
-    edge in the zone of ``node``."""
-    speed = rules.terrain.speed_pct.of(mapdef.nodes[node].terrain)
-    return mapdef.edges[edge].travel_ticks * 100 * left // (speed * 1000)
+    """mechanics.md, section 4 (``movement.Leg``): the ticks of the part ``left`` (thousandths)
+    of the edge before ``node``, through both terrain zones: ``T`` minus the ticks behind the
+    part already gone."""
+    way = leg(mapdef, rules, edge, node)
+    return way.ticks - way.spent(1000 - left)
 
 
 def _moves_from(cmds: list[Command], view: PlayerView, node: int) -> list[Command]:
@@ -99,7 +102,7 @@ def test_a_figure_heading_into_an_own_node_arrives_by_the_zone_speed(
     seen = _figure(view, edge, f)
     expected = _zone_ticks(mapdef, mvp_rules, edge, city, 500)
     assert figure_ticks(seen, mapdef, mvp_rules, edge, f) == expected
-    travel = Travel(mapdef, mvp_rules)
+    travel = Travel(Times(mapdef, mvp_rules))
     assert arrivals(seen, mapdef, mvp_rules, travel, 3) == {city: Arrival(view.tick + expected, 4)}
     # Heading away, into the node that is not own: no arrival into an own node.
     away = _figure(view, edge, _toward(mapdef, edge, other, 500, 4))
@@ -113,7 +116,7 @@ def test_a_planned_strike_arrives_after_one_bonus_with_the_guess(
     view = _start(mapdef, mvp_rules)
     _, city, other = _border(mapdef, view)
     strike = IntentView(5, 1, IntentKind.PLANNED_MOVE, other, city, 0)
-    travel = Travel(mapdef, mvp_rules)
+    travel = Travel(Times(mapdef, mvp_rules))
     found = arrivals(dataclasses.replace(view, intents=(strike,)), mapdef, mvp_rules, travel, 3)
     delay = mvp_rules.orders.plan_ticks_per_bonus  # it gathers one bonus at least (DEC-41)
     assert found == {city: Arrival(delay + travel.ticks[other][city], 3)}

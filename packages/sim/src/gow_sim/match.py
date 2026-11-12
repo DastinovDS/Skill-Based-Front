@@ -45,20 +45,30 @@ from gow_sim.view import (
 )
 
 __all__ = [
+    "DECIDE_EVERY",
     "HEADLESS_MATCH_KEY",
     "SIM_VERSION",
     "SYSTEMS",
     "Controller",
+    "ControllerFactory",
+    "Decide",
     "Glancer",
     "Match",
     "MatchFinishedError",
     "MatchObserver",
     "MatchResult",
+    "Seat",
+    "given",
+    "play",
     "run_headless",
 ]
 
 SIM_VERSION: Final = 52
 """Version of the rules and the system order; replays and golden hashes are per version."""
+
+DECIDE_EVERY: Final = 5
+"""A controller decides every this many ticks (AGENTS.md, section 8), in ``run_headless``, a
+tournament and the server's bot matches alike (``Seat``)."""
 
 HEADLESS_MATCH_KEY: Final = b"gow_sim headless match key 0001"
 """Default ``match_key`` of ``run_headless``: a headless match has no players to hide ids from."""
@@ -184,11 +194,29 @@ class Controller(Protocol):
     def decide(self, view: PlayerView, tick: int) -> list[Command]: ...
 
 
+class ControllerFactory(Protocol):
+    """How a controller is made: the public map, the rules the match plays, the match seed and
+    the side (``gow_bots.bots.BotFactory`` has this shape). ``Seat.build`` passes ``Match.rules``,
+    so a bot always sees the periods of ``[map_tempo]`` (DEC-46)."""
+
+    def __call__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> Controller: ...
+
+
+def given(controller: Controller) -> ControllerFactory:
+    """The factory of a controller made already, for a scripted player that reads no rules."""
+
+    def make(mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> Controller:
+        del mapdef, rules, seed, player
+        return controller
+
+    return make
+
+
 @runtime_checkable
 class Glancer(Protocol):
     """A ``Controller`` that can say before its view is built whether a call will decide
-    anything (a bot between two decisions of its tempo). ``run_headless`` then calls ``glance``
-    with the enemy figure ids of the view alone (``Match.figures``) instead of ``decide``.
+    anything (a bot between two decisions of its tempo). ``Seat`` then calls ``glance`` with the
+    enemy figure ids of the view alone (``Match.figures``) instead of ``decide``.
 
     The promise: when ``thinks(tick)`` is false, ``decide(view, tick)`` would return no commands
     and read nothing of ``view`` but those ids, so ``glance(tick, ids)`` leaves the controller as
@@ -197,6 +225,86 @@ class Glancer(Protocol):
     def thinks(self, tick: int) -> bool: ...
 
     def glance(self, tick: int, figures: tuple[int, ...]) -> None: ...
+
+
+type Decide = Callable[[Controller, PlayerView, int], list[Command]]
+"""How a ``Seat`` calls ``decide``: the server times it and catches a broken bot."""
+
+
+def _decide(controller: Controller, view: PlayerView, tick: int) -> list[Command]:
+    return controller.decide(view, tick)
+
+
+class Seat:
+    """The driver of one controlled player of a match (ARP-06, #994): ``run_headless``, a
+    tournament and the server's bot matches call a controller only through it.
+
+    At every ``decide_every``-th tick (``due``) ``commands`` asks a ``Glancer`` whether it will
+    think and gives it the figure ids alone when it will not; otherwise it builds the view of the
+    player (``Match.view(reuse=True)``: call it right after ``Match.step``, before anything else
+    changes the state), lets the controller decide through ``decide`` and turns the commands into
+    ``PlayerCommand`` numbered from ``seq`` with the opaque ids resolved (``Match.resolve``), to be
+    applied at the start of the next tick.
+    """
+
+    def __init__(
+        self,
+        match: Match,
+        player: int,
+        controller: Controller,
+        *,
+        decide_every: int = DECIDE_EVERY,
+        decide: Decide = _decide,
+        seq: int = 0,
+    ) -> None:
+        if decide_every < 1:
+            raise ValueError("decide_every must be at least 1")
+        self.match: Final = match
+        self.player: Final = player
+        self.controller: Final = controller
+        self.decide_every: Final = decide_every
+        self.decide: Final = decide
+        self.seq = seq
+        """The ``seq`` of the next command."""
+        self._glancer = controller if isinstance(controller, Glancer) else None
+
+    @classmethod
+    def build(
+        cls,
+        match: Match,
+        player: int,
+        factory: ControllerFactory,
+        *,
+        seed: int,
+        decide_every: int = DECIDE_EVERY,
+        decide: Decide = _decide,
+        seq: int = 0,
+    ) -> "Seat":
+        """The seat of a controller ``factory`` makes for ``match``: the map and ``Match.rules``,
+        the rules the match plays (``[map_tempo]`` applied, DEC-46)."""
+        controller = factory(match.state.map, match.rules, seed=seed, player=player)
+        return cls(match, player, controller, decide_every=decide_every, decide=decide, seq=seq)
+
+    def due(self) -> bool:
+        """The controller is called at this tick."""
+        return self.match.tick % self.decide_every == 0
+
+    def commands(self) -> list[PlayerCommand]:
+        """The commands of the controller for the tick after this one (class docstring); none
+        when it is not ``due``."""
+        match, player = self.match, self.player
+        if not self.due():
+            return []
+        glancer = self._glancer
+        if glancer is not None and not glancer.thinks(match.tick):
+            glancer.glance(match.tick, match.figures(player, reuse=True))
+            return []
+        view = match.view(player, reuse=True)  # only ``step()`` changed the state
+        out: list[PlayerCommand] = []
+        for cmd in self.decide(self.controller, view, match.tick):
+            out.append(PlayerCommand(player, self.seq, match.resolve(player, cmd)))
+            self.seq += 1
+        return out
 
 
 class MatchObserver(Protocol):
@@ -232,49 +340,62 @@ def run_headless(
     rules: Ruleset,
     controllers: Sequence[Controller],
     max_ticks: int | None = None,
-    decide_every: int = 5,
+    decide_every: int = DECIDE_EVERY,
     match_key: bytes = HEADLESS_MATCH_KEY,
     observer: MatchObserver | None = None,
 ) -> MatchResult:
-    """Play a match between ``controllers`` (by player id) without a server.
+    """Play a match between ``controllers`` (by player id, made already) without a server.
 
-    A controller decides at tick 0 and then every ``decide_every`` ticks, on its view after the
-    tick; its commands (``seq`` counts per player from 0) are resolved like the server does it
-    and applied at the start of the next tick. Stops when the match ends or after ``max_ticks``
-    ticks (default: ``rules.match_ticks``, where the timer ends the match anyway).
-    ``observer`` sees the match before the first tick and after every tick (a replay writer) and
-    does not change it; the views reuse the vision of the step (``Match.view(reuse=True)``).
-    A ``Glancer`` that will not think on a call gets only the figure ids of its view (``glance``),
-    which leaves the match as the full call would.
+    Every controller plays through a ``Seat``: it decides at tick 0 and then every
+    ``decide_every`` ticks, on its view after the tick; its commands (``seq`` counts per player
+    from 0) are resolved like the server does it and applied at the start of the next tick. A
+    ``Glancer`` that will not think on a call gets only the figure ids of its view. Stops when
+    the match ends or after ``max_ticks`` ticks (default: ``rules.match_ticks``, where the timer
+    ends the match anyway). ``observer`` sees the match before the first tick and after every
+    tick (a replay writer) and does not change it.
+
+    A controller made here reads ``rules`` as given; a ``gow_bots`` bot takes the rules of its
+    match itself (``[map_tempo]``), any other one is made by ``play`` from ``Match.rules``.
     """
     if len(controllers) != len(PLAYERS):
         raise ValueError(f"need {len(PLAYERS)} controllers, got {len(controllers)}")
-    if decide_every < 1:
-        raise ValueError("decide_every must be at least 1")
-    limit = rules.match_ticks if max_ticks is None else max_ticks
     match = Match(mapdef, rules, match_key)
-    seqs: dict[int, int] = dict.fromkeys(PLAYERS, 0)
+    seats = [Seat(match, p, controllers[p], decide_every=decide_every) for p in PLAYERS]
+    return _run(match, seats, max_ticks, observer)
+
+
+def play(
+    mapdef: MapDef,
+    rules: Ruleset,
+    factories: Sequence[ControllerFactory],
+    *,
+    seed: int,
+    max_ticks: int | None = None,
+    match_key: bytes = HEADLESS_MATCH_KEY,
+    observer: MatchObserver | None = None,
+) -> MatchResult:
+    """``run_headless`` with every controller made by its factory (by player id) for this match
+    and ``seed`` (``Seat.build``: ``Match.rules``, the rules the match plays)."""
+    if len(factories) != len(PLAYERS):
+        raise ValueError(f"need {len(PLAYERS)} controllers, got {len(factories)}")
+    match = Match(mapdef, rules, match_key)
+    seats = [Seat.build(match, p, factories[p], seed=seed) for p in PLAYERS]
+    return _run(match, seats, max_ticks, observer)
+
+
+def _run(
+    match: Match, seats: Sequence[Seat], max_ticks: int | None, observer: MatchObserver | None
+) -> MatchResult:
+    limit = match.rules.match_ticks if max_ticks is None else max_ticks
     accepted: dict[int, int] = dict.fromkeys(PLAYERS, 0)
     rejected: dict[int, int] = dict.fromkeys(PLAYERS, 0)
-    pending: list[PlayerCommand] = []
-    glancers = [c if isinstance(c, Glancer) else None for c in controllers]
     if observer is not None:
         observer.begin(match)
     while not match.finished and match.tick < limit:
-        if match.tick % decide_every == 0:
-            for player in PLAYERS:
-                glancer = glancers[player]
-                if glancer is not None and not glancer.thinks(match.tick):
-                    glancer.glance(match.tick, match.figures(player, reuse=True))
-                    continue
-                view = match.view(player, reuse=True)  # only ``step()`` changed the state
-                for cmd in controllers[player].decide(view, match.tick):
-                    pending.append(PlayerCommand(player, seqs[player], match.resolve(player, cmd)))
-                    seqs[player] += 1
+        pending = [cmd for seat in seats for cmd in seat.commands()]
         match.step(pending)
         if observer is not None:
             observer.record(match, pending)
-        pending = []
         for r in match.results:
             counter = rejected if isinstance(r.outcome, Reject) else accepted
             counter[r.player] += 1

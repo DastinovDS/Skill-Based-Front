@@ -40,8 +40,9 @@ import heapq
 from dataclasses import dataclass
 from typing import Final
 
+from gow_bots.bots.travel import Times, ticks_left
 from gow_bots.bots.utility import shots_to_take, terrain_burned
-from gow_sim.maps import MapDef, NodeKind, Terrain
+from gow_sim.maps import MapDef, NodeKind
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.view import AtNode, Detail, EnemyGroupView, PlayerView, Sighting
 
@@ -56,7 +57,6 @@ __all__ = [
     "Travel",
     "army",
     "awards_left",
-    "edge_ticks",
     "vp_rates",
 ]
 
@@ -66,34 +66,24 @@ FRESH_TICKS: Final = 50
 """An enemy sighting in a node older than this is not a force of the threat: it moved on."""
 
 
-TRAVEL_ROAD_PCT: Final = 130
-"""The road factor of the lower bounds of ``Travel``, in percent: the fastest road level of the
-rulesets the bots were tuned on (``road.speed_pct`` of level 3). Roads have no levels since #894,
-so the bounds are a margin below the true times; the number stays so the threat estimate of the
-smart bots plays as before."""
-
-
 class Travel:
-    """Lower bounds of the travel ticks between all nodes of the map.
+    """The least travel ticks between all nodes of the map, by the edge times of the rules.
 
-    Every edge at the fastest terrain speed and the road factor ``TRAVEL_ROAD_PCT``
-    (``travel_ticks * 100 * 100 // (terrain * road)``, rounded down): no group is quicker, so an
-    ETA from this table is the earliest possible one. Dijkstra from every node once per bot.
+    Every road at its exact time in the direction travelled (``travel.edge_ticks``), whoever owns
+    the nodes: a group that must go through own nodes only is never quicker, so an ETA from this
+    table is the earliest possible one. Dijkstra from every node once per bot.
     """
 
-    def __init__(self, mapdef: MapDef, rules: Ruleset) -> None:
-        terrain = max(rules.terrain.speed_pct.of(t) for t in Terrain)
-        road = TRAVEL_ROAD_PCT
+    def __init__(self, times: Times) -> None:
+        mapdef = times.map
+        self.times: Times = times
+        """The edge times the table is made of (``Bot.times``)."""
         count = len(mapdef.nodes)
         adj: list[list[tuple[int, int]]] = [[] for _ in range(count)]
-        for e in mapdef.edges:
-            ticks = e.travel_ticks * 100 * 100 // (terrain * road)
-            adj[e.a].append((e.b, ticks))
-            adj[e.b].append((e.a, ticks))
-        self.edge_ticks: tuple[int, ...] = tuple(
-            e.travel_ticks * 100 * 100 // (terrain * road) for e in mapdef.edges
-        )
-        """The lower bound of every edge, by edge id."""
+        for eid, e in enumerate(mapdef.edges):
+            into_a, into_b = times.into[eid]
+            adj[e.a].append((e.b, into_b))
+            adj[e.b].append((e.a, into_a))
         self.ticks: tuple[tuple[int, ...], ...] = tuple(
             self._dijkstra(adj, start) for start in range(count)
         )
@@ -114,22 +104,6 @@ class Travel:
                     best[other] = t
                     heapq.heappush(queue, (t, other))
         return tuple(best)
-
-
-def edge_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> int:
-    """Ticks a group takes along ``edge`` into ``to_node``: the formula of mechanics.md, section 4
-    ("Speed by terrain by zones", #253). The border point splits the edge, each zone goes at the
-    terrain speed of its node, ``T = max(1, travel_ticks * 100 * d // (1000 * pa * pb))`` with
-    ``d = b * pb + (1000 - b) * pa`` (all non-negative, rounded down). Public data only: the map
-    and the ruleset."""
-    e = mapdef.edges[edge]
-    from_node = e.other(to_node)
-    b = e.border_permille if from_node == e.a else 1000 - e.border_permille
-    speed = rules.terrain.speed_pct
-    pa = speed.of(mapdef.nodes[from_node].terrain)
-    pb = speed.of(mapdef.nodes[to_node].terrain)
-    d = b * pb + (1000 - b) * pa
-    return max(1, e.travel_ticks * 100 * d // (1000 * pa * pb))
 
 
 def awards_left(rules: Ruleset, tick: int) -> int:
@@ -399,7 +373,7 @@ class Assessor:
                 continue  # a start only: the path cannot go on through this node
             for eid in self.map.incident[node]:
                 other = self.map.edges[eid].other(node)
-                t = ticks + self.travel.edge_ticks[eid]
+                t = ticks + self.travel.times.ticks(eid, node)  # from ``other`` into ``node``
                 if dist[other] < 0 or t < dist[other]:
                     dist[other] = t
                     heapq.heappush(queue, (t, other))
@@ -415,8 +389,8 @@ class Assessor:
         node = e.b if f.toward_b else e.a
         if to_cap[node] < 0:
             return None
-        left = 1000 - f.pos if f.toward_b else f.pos
-        return self.travel.edge_ticks[edge] * left // 1000 + to_cap[node]
+        gone = f.pos if f.toward_b else 1000 - f.pos
+        return ticks_left(self.map, self.rules, edge, node, gone) + to_cap[node]
 
 
 def _shots(seen: Sighting, guess: int, *, low: bool) -> int:

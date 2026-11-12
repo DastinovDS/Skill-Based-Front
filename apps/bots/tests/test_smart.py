@@ -27,11 +27,13 @@ from gow_bots.bots.assess import (
 )
 from gow_bots.bots.base import Bot
 from gow_bots.bots.smart import PERSONALITIES
+from gow_bots.bots.travel import Times
 from gow_bots.bots.utility import shots_to_take
 from gow_sim.commands import FortifyRoad, Move, PlayerCommand, Recruit
 from gow_sim.maps import MapDef, NodeKind
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset, Stance
+from gow_sim.systems.movement import leg, traversal_ticks
 from gow_sim.view import (
     AtNode,
     Detail,
@@ -52,7 +54,7 @@ def _start(mapdef: MapDef, rules: Ruleset, player: int = 0) -> PlayerView:
 
 
 def _assessor(mapdef: MapDef, rules: Ruleset, player: int = 0) -> Assessor:
-    return Assessor(mapdef, rules, player, Travel(mapdef, rules))
+    return Assessor(mapdef, rules, player, Travel(Times(mapdef, rules)))
 
 
 # VP forecast (DEC-03) ------------------------------------------------------------------------
@@ -134,13 +136,12 @@ def test_army_counts_the_own_groups_and_cities(maps: dict[str, MapDef], mvp_rule
 
 def test_travel_is_a_lower_bound_of_every_edge(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
     mapdef = maps["web"]
-    travel = Travel(mapdef, mvp_rules)
-    fastest = max(mvp_rules.terrain.speed_pct.plains, mvp_rules.terrain.speed_pct.forest)
-    fastest = max(fastest, mvp_rules.terrain.speed_pct.mountains)
-    for e in mapdef.edges:
-        # mechanics.md, section 4: an edge in one terrain takes travel_ticks * 100 // speed.
-        assert travel.ticks[e.a][e.b] <= e.travel_ticks * 100 // fastest
-        assert travel.ticks[e.a][e.b] == travel.ticks[e.b][e.a]
+    travel = Travel(Times(mapdef, mvp_rules))
+    for eid, e in enumerate(mapdef.edges):
+        # mechanics.md, section 4: the edge into a node takes ``traversal_ticks``; no path is
+        # quicker than the least one.
+        assert travel.ticks[e.a][e.b] <= traversal_ticks(mapdef, mvp_rules, eid, e.b)
+        assert travel.ticks[e.b][e.a] <= traversal_ticks(mapdef, mvp_rules, eid, e.a)
     count = len(mapdef.nodes)
     assert all(travel.ticks[n][n] == 0 for n in range(count))
     for a in range(0, count, 5):
@@ -251,7 +252,9 @@ def test_a_figure_heading_to_the_capital_is_a_threat_by_its_eta(
     pos = 600 if cap_is_b else 400  # 400 thousandths of the edge left to the capital
     big = EnemyGroupView(1, pos, cap_is_b, Detail.EXACT, Mode.ATTACK, need, need, None)
     t = assessor.threat(_with_figure(view, edge, big), guess=3, horizon=60)
-    assert t.eta == view.tick + assessor.travel.edge_ticks[edge] * 400 // 1000
+    cap = mapdef.capital(0)
+    way = leg(mapdef, mvp_rules, edge, cap)  # mechanics.md, section 4: 600 thousandths gone
+    assert t.eta == view.tick + way.ticks - way.spent(600)
     assert t.units == need and t.danger
     small = dataclasses.replace(big, units=need - 1, charged=need - 1)
     assert not assessor.threat(_with_figure(view, edge, small), guess=3, horizon=60).danger
