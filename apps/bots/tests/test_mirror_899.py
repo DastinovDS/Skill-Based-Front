@@ -17,8 +17,9 @@ two were not exact:
   group gets which target follows the opaque id, which differs between the sides; the simulation
   then serves the gathering plans in the order of the internal group id and the first one departs
   first, so the targets leave in the other order on one side (``gather_plans``, SIM). A bot cannot
-  see the internal order and the rule is the simulation's, so this stays open (xfail; not strict
-  since #683, after which this seed plays an exact mirror: no repro of the cause is known now).
+  see the internal order, so it keeps out of it: one gathering plan per node at a time
+  (``Bot.plan_clash``): a planned order is not sent from a node where another own group gathers
+  a plan or got one in the same decision (a converging strike plans one group per node).
 """
 
 from collections.abc import Iterator, Mapping
@@ -28,15 +29,15 @@ import pytest
 
 import gow_bots.bots.base as base
 from gow_bots.bots import BOTS, ParamRange, SmartBot, bot_factory
-from gow_bots.bots.campaign import Ctx
+from gow_bots.bots.campaign import CampaignBot, Ctx
 from gow_bots.bots.smart import Hold
-from gow_sim.commands import Ok, PlayerCommand
+from gow_sim.commands import Move, Ok, PlayerCommand, apply_commands
 from gow_sim.maps import load_map
 from gow_sim.match import Match, play
 from gow_sim.ruleset import load_ruleset
 from gow_sim.state import AtNode, Group, Mode, initial_state
 from gow_sim.systems.flow import update_flow
-from gow_sim.view import project
+from gow_sim.view import project, resolve
 
 ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
@@ -71,13 +72,6 @@ def test_mirror_strangler_on_ridge_seed_3() -> None:
 
 
 @pytest.mark.slow  # one full match
-@pytest.mark.xfail(
-    strict=False,
-    reason="#899: interchangeable groups get their plan targets by opaque id, the simulation "
-    "serves plans by internal id (gather_plans); a bot cannot see that order. Not strict since "
-    "#683: this seed no longer reaches the case (32 mirror matches of the exploiter, the 4 pool "
-    "maps x seeds 0..7, were all exact), the cause stays open",
-)
 @pytest.mark.usefixtures("side_zero_params")
 def test_mirror_exploiter_on_narrows_seed_3() -> None:
     _mirror_match("narrows", "smart_exploiter", 3)
@@ -115,6 +109,48 @@ def test_a_hold_stays_while_an_idle_group_stands_in_its_node(name: str, player: 
     ctx = Ctx(empty, 1000, empty.me.cp, standing=bot.standing(empty))
     assert bot.held_cp(ctx) == 0
     assert bot.hold is None
+
+
+# One gathering plan per node (the fast form of the second case) ----------------------------------
+
+
+@pytest.mark.parametrize("player", [0, 1])
+@pytest.mark.parametrize("name", ["smart_exploiter", "smart_rusher", "rusher"])
+def test_one_gathering_plan_per_node(name: str, player: int) -> None:
+    """Two interchangeable idle groups (2/2 each) in the capital and two targets: once one of
+    them got a planned order in a decision, a planned order of the other from that node is not
+    sent in the same decision, nor in a later one while the first gathers its bonus (DEC-41,
+    item 10); an ordinary order of the other is sent, and so is a plan from another node."""
+    mapdef = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "dec41.json")
+    home = mapdef.capital(player)
+    near = mapdef.node_key(player, 1)  # next to the capital, the player's
+    state = initial_state(mapdef, RULES)
+    state.groups.clear()
+    state.tick = 1000
+    for node in (home, home, near):
+        gid = state.new_id()
+        state.groups[gid] = Group(gid, player, 2, 2, Mode.ATTACK, AtNode(node))
+    state.nodes[near].owner = player
+    update_flow(state, RULES)
+    match_view = project(state, RULES, player, KEY)
+    bot = bot_factory(name)(mapdef, RULES, seed=0, player=player)
+    assert isinstance(bot, CampaignBot)
+    a, b = (g.id for g in match_view.groups if g.location == AtNode(home))
+    c = next(g.id for g in match_view.groups if g.location == AtNode(near))
+    t1, t2 = mapdef.node_key(player, 2), mapdef.node_key(player, 4)
+    ctx = Ctx(match_view, 1000, 1000, standing=bot.standing(match_view))
+    assert bot.spend(ctx, Move(a, t1, planned=True, bonus=1))
+    assert not bot.spend(ctx, Move(b, t2, planned=True, bonus=1))
+    assert bot.spend(ctx, Move(c, t2, planned=True, bonus=1))
+    assert bot.spend(ctx, Move(b, t2))
+    # A later decision: ``a`` gathers its bonus in the capital.
+    plan = Move(a, t1, planned=True, bonus=1)
+    apply_commands(state, RULES, [PlayerCommand(player, 0, resolve(state, player, plan, KEY))])
+    later = project(state, RULES, player, KEY)
+    assert any(g.order is not None and g.order.gathering for g in later.groups)
+    b2 = next(g.id for g in later.groups if g.location == AtNode(home) and g.order is None)
+    assert bot.plan_clash(later, Move(b2, t2, planned=True, bonus=1), {})
+    assert not bot.plan_clash(later, Move(b2, t2), {})
 
 
 # A pool-map smoke per personality --------------------------------------------------------------

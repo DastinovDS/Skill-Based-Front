@@ -5,6 +5,8 @@ A strategy bot answers ``decide`` in a fixed order of priorities; each priority 
 commanded. The pieces are the same for every strategy, only the order, the region the bot cares
 about and the numbers (``PARAMS``) differ:
 
+- ``punish`` (in ``begin``, after the fights): an open enemy capital is ordered at once by the
+  free group that reaches it first and pays for it (``gow_bots.bots.capital``, #1019);
 - ``guard``: pick the groups that hold the capital and the front (they are not sent anywhere);
 - ``claim``: capture neutral nodes next to own territory; a free group goes, otherwise a unit is
   recruited at an own node next door (it leaves on the next decision);
@@ -44,8 +46,9 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from gow_bots.bots.base import Bot, node_of
+from gow_bots.bots.capital import take_capital
 from gow_bots.bots.utility import shots_to_take, takes, terrain_burned
-from gow_sim.commands import BuildFactory, Command, Move, Recruit
+from gow_sim.commands import BuildFactory, Command, Merge, Move, Recruit
 from gow_sim.maps import MapDef, NodeKind
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import Detail, GroupView, PlayerView
@@ -84,6 +87,8 @@ class Turn:
     deficits: list[tuple[int, int]] = field(default_factory=list[tuple[int, int]])
     """``(node, units missing)`` of the garrisons below their minimum, the most valuable first."""
     cmds: list[Command] = field(default_factory=list[Command])
+    planned: dict[int, bool] = field(default_factory=dict[int, bool])
+    """Own nodes a planned order left from in this turn (``Bot.plan_clash``, #899)."""
 
     def free(self) -> list[GroupView]:
         return [g for g in self.groups if g.id not in self.busy and g.id not in self.guards]
@@ -147,7 +152,24 @@ class StrategyBot(Bot):
         for cmd in self.fight_commands(view, tick, turn.budget):  # DEC-24: fights first
             if self.spend(turn, cmd) and isinstance(cmd, Move):
                 turn.busy.add(cmd.group)
+        self.punish(turn)
         return turn
+
+    def punish(self, turn: Turn) -> None:
+        """The open enemy capital before every other priority (``capital.take_capital``); with no
+        CP for its move the turn spends nothing priced, so the next CP go to it."""
+        free = [g for g in turn.groups if g.id not in turn.busy]
+        take = take_capital(self, turn.view, turn.tick, free, turn.budget)
+        if take.wait:
+            turn.budget = min(turn.budget, 0)
+        elif take.cmd is not None and self.spend(turn, take.cmd):
+            cmd = take.cmd
+            turn.busy.update(cmd.groups if isinstance(cmd, Merge) else (cmd.group,))
+            if isinstance(cmd, Move):
+                turn.taken.add(cmd.dest)
+
+    def home_keep(self) -> int:
+        return self.params.get("hold_capital", 0)
 
     def _components(self, owner: list[int | None]) -> list[int]:
         comp = [-1] * len(owner)
@@ -207,11 +229,17 @@ class StrategyBot(Bot):
         if fitted is None:
             return False
         cmd = fitted
+        if self.plan_clash(turn.view, cmd, turn.planned):
+            return False  # #899: one gathering plan per node
         cost = self.cost(cmd)
         if cost > turn.budget - keep:
             return False
         turn.budget -= cost
         turn.cmds.append(cmd)
+        if isinstance(cmd, Move) and cmd.planned:
+            g = next((g for g in turn.groups if g.id == cmd.group), None)
+            if g is not None:
+                turn.planned[node_of(g)] = True
         return True
 
     def prioritize(self, turn: Turn) -> None:

@@ -4,6 +4,9 @@ One decision (every 5 ticks) goes in a fixed order, and CP is spent in the same 
 scarce resource (about 0.5 CP per 50 ticks, mechanics.md, section 6) goes to the useful things
 first:
 
+0. ``punish`` (after the fights): an open enemy capital, empty or weakly held by the numbers the
+   view shows, is ordered at once by the free group that reaches it first and pays for it, past
+   ``radius``, ``score`` and ``reserve`` (``gow_bots.bots.capital``, #1019);
 1. ``recall``: an attack on the way whose target turned out stronger (exact numbers seen this
    tick) is cancelled, the group turns back (free since DEC-20, but the order's CP are not
    refunded); with ``DISCIPLINE`` (#687) only an attack that would lose units, and the target
@@ -81,6 +84,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar, override
 
 from gow_bots.bots.base import Bot, ParamRange, node_of
+from gow_bots.bots.capital import Take, TakeCommand, take_capital
 from gow_bots.bots.economy import (
     LeafShift,
     fort_site,
@@ -172,6 +176,8 @@ class Ctx:
     (``OnEdge.back``: a cancel or a bounce returns to the start of the edge)."""
     groups: dict[int, GroupView] = field(default_factory=dict[int, GroupView])
     """Own groups of the view by opaque id."""
+    planned: dict[int, bool] = field(default_factory=dict[int, bool])
+    """Own nodes a planned order left from in this decision (``Bot.plan_clash``, #899)."""
 
     def __post_init__(self) -> None:
         view = self.view
@@ -256,6 +262,7 @@ class CampaignBot(Bot):
         for cmd in self.fight_commands(view, tick, ctx.budget):  # DEC-24: fights first
             if self.spend(ctx, cmd) and isinstance(cmd, Move):
                 ctx.used[cmd.group] = True
+        self.punish(ctx)  # the open enemy capital before everything else (``capital``)
         self.economy_v2(ctx)  # factories, plans, the leaf shift, road fortifications (DEC-41)
         cmd = self.development(ctx.view, ctx.budget)  # DEC-26, item 11: before the orders
         if cmd is not None:
@@ -302,6 +309,71 @@ class CampaignBot(Bot):
     def respond(self, ctx: Ctx) -> None:
         """Hook: commands that come before everything else (``ReactiveBot``)."""
 
+    # The open enemy capital (``gow_bots.bots.capital``) ----------------------------------------
+
+    def punish(self, ctx: Ctx) -> None:
+        """Take the open enemy capital now (``capital.take_capital``) with any free group that
+        reaches it, whatever ``radius``, ``score`` or the CP plans of the decision say."""
+        self.took(ctx, self.find_capital(ctx))
+
+    def find_capital(self, ctx: Ctx) -> Take:
+        """``take_capital`` of this decision: the free groups, every CP including ``reserve``."""
+        return take_capital(
+            self,
+            ctx.view,
+            ctx.tick,
+            self.free_groups(ctx),
+            ctx.budget + self.params["reserve"],
+            lambda g: self.may_take(ctx, g),
+        )
+
+    def may_take(self, ctx: Ctx, g: GroupView) -> bool:
+        """Hook: whether ``g`` may go for the open enemy capital (``SmartBot``: not a pinned
+        group, DEC-37)."""
+        del ctx, g
+        return True
+
+    def took(self, ctx: Ctx, take: Take) -> None:
+        """Send the command of ``take`` (its move may spend ``reserve``); when it waits for the CP
+        of the move, nothing priced is spent in this decision, so the next CP go to it."""
+        if take.wait:
+            ctx.budget = min(ctx.budget, 0)
+            return
+        cmd = take.cmd
+        if cmd is None:
+            return
+        reserve = self.params["reserve"]
+        ctx.budget += reserve
+        try:
+            sent = self.pay_capital(ctx, cmd)
+        finally:
+            ctx.budget -= reserve
+        if not sent:
+            return
+        groups = cmd.groups if isinstance(cmd, Merge) else (cmd.group,)
+        for gid in groups:
+            ctx.used[gid] = True
+        if isinstance(cmd, Move):
+            g = ctx.groups[cmd.group]
+            ctx.claimed[cmd.dest] = True
+            ctx.standing[node_of(g)] -= g.units
+            estimate = self.estimate(ctx.view, ctx.tick, cmd.dest)
+            self.waves[cmd.dest] = Wave(ctx.tick, g.charged, estimate)
+
+    def pay_capital(self, ctx: Ctx, cmd: TakeCommand) -> bool:
+        """Hook: ``spend`` of the command that takes the enemy capital (``SmartBot``: past the
+        APM bucket and the CP kept for plans)."""
+        return CampaignBot.spend(self, ctx, cmd)
+
+    @override
+    def open_support(self, view: PlayerView, tick: int, node: int, need: int) -> int:
+        """``support`` with the estimate before contact (``CONTACT``, DEC-40)."""
+        return self.support(view, tick, node, need) if self.contact() else 0
+
+    @override
+    def home_keep(self) -> int:
+        return self.params["guard"]
+
     def score(self, ctx: Ctx, g: GroupView, dest: int, need: int) -> int | None:
         """Rank of the viable attack of ``g`` on ``dest``; ``None`` drops it. Higher is better."""
         node = self.map.nodes[dest]
@@ -324,6 +396,8 @@ class CampaignBot(Bot):
         ``Ctx.incoming``. A group leaving a fight is exempt: a lost fight costs a unit a round."""
         if not self.allowed(cmd):
             return False  # a stance without a policy (``Bot.allowed``)
+        if self.plan_clash(ctx.view, cmd, ctx.planned):
+            return False  # #899: one gathering plan per node
         into = self.moves_in(ctx, cmd)
         if into is not None and into[1] > self.room(ctx, into[0]):
             return False
@@ -334,6 +408,10 @@ class CampaignBot(Bot):
         ctx.cmds.append(cmd)
         if into is not None:
             ctx.incoming[into[0]] += into[1]
+        if isinstance(cmd, Move) and cmd.planned:
+            g = ctx.groups.get(cmd.group)
+            if g is not None and isinstance(g.location, AtNode):
+                ctx.planned[g.location.node] = True
         return True
 
     def moves_in(self, ctx: Ctx, cmd: Command) -> tuple[int, int] | None:

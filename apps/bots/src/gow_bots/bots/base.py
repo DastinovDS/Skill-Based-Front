@@ -526,6 +526,34 @@ class Bot:
         the stock of the own warehouse there, at most the charged units (DEC-41, item 10)."""
         return max(0, min(charged, view.nodes[node].warehouse or 0))
 
+    def plan_clash(self, view: PlayerView, cmd: Command, planned: Mapping[int, bool]) -> bool:
+        """#899: ``cmd`` is a planned ``Move`` of a group standing in a node where another own
+        group gathers a plan, or that got a planned order earlier in this decision (``planned``:
+        node to ``True``). Plans of one node gather from its warehouse, and when it is short
+        the simulation serves them in the order of their internal group ids (``gather_plans``),
+        which the bot cannot see: two interchangeable groups (same node, units and charges) sent
+        to two targets by opaque id order then depart in a different order on the two sides of
+        a mirror. One gathering plan per node at a time keeps the order the bot's own."""
+        if not isinstance(cmd, Move) or not cmd.planned:
+            return False
+        g = next((g for g in view.groups if g.id == cmd.group), None)
+        if g is None or not isinstance(g.location, AtNode):
+            return False
+        node = g.location.node
+        return bool(planned.get(node)) or self.plans_in(view, node, g.id)
+
+    def plans_in(self, view: PlayerView, node: int, but: int = -1) -> bool:
+        """An own group other than ``but`` (opaque id) waits in ``node`` on a planned order that
+        gathers its bonus (DEC-41, item 10)."""
+        return any(
+            o.id != but
+            and o.order is not None
+            and o.order.gathering
+            and isinstance(o.location, AtNode)
+            and o.location.node == node
+            for o in view.groups
+        )
+
     def plan_lead(self, bonus: int) -> int:
         """Ticks a planned order waits in its node before it departs: the gathering of ``bonus``
         charges (DEC-41, item 10; it departs the tick after the last one)."""
@@ -606,6 +634,19 @@ class Bot:
         if not any(f.node == dest and f.built for f in view.edges[edge].forts):
             return 0
         return fort.toll(units, charged)
+
+    # The open enemy capital (``gow_bots.bots.capital``) ------------------------------------------
+
+    def open_support(self, view: PlayerView, tick: int, node: int, need: int) -> int:
+        """Shots the defender of the open enemy capital ``node`` can still bring into its fight,
+        on top of the ``need`` its numbers ask (``capital.open_need``); none here."""
+        del view, tick, node, need
+        return 0
+
+    def home_keep(self) -> int:
+        """Units the own capital keeps when its group would reach the open enemy capital no
+        sooner than an enemy could reach the own one (``capital.take_capital``); 0: none."""
+        return 0
 
 
 def node_of(group: GroupView) -> int:
