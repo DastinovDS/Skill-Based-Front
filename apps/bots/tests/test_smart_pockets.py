@@ -281,3 +281,19 @@ def test_pockets_are_read_only_under_the_flow(mvp_rules: Ruleset) -> None:
     bot = SmartBot(MAP, mvp_rules, seed=0, player=0)
     view = project(initial_state(MAP, mvp_rules), mvp_rules, 0, KEY)
     assert bot.read_pockets(view, 0, bot.supplied(view)) is None
+
+
+@pytest.mark.parametrize("player", [0, 1])
+@pytest.mark.parametrize("name", SMART)
+def test_a_stranded_group_joins_a_charged_one_to_leave_the_pocket(name: str, player: int) -> None:
+    """#683, under ``mvp-7`` (a capture costs a charge, DEC-38): 2/0 in the own province M cannot
+    pay the way out (M, C, B, then the empty A), so it walks to C, where 2/2 stands, and the 2/2
+    does not leave before it arrives: together the charged units pay the capture for all."""
+    state = _state(player, [(player, M, 2, 0), (player, C, 2, 2)], own=(M,))
+    view = _view(state, player)
+    assert view.nodes[_at(player, M)].flow_pocket is True
+    assert view.nodes[_at(player, M)].warehouse == 0
+    stranded, charged = (_group_at(view, _at(player, n)).id for n in (M, C))
+    cmds = _bot(name, player).decide(view, TICK)
+    assert _moves(cmds, stranded) == [_at(player, C)]
+    assert _moves(cmds, charged) == []

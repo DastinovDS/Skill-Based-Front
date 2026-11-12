@@ -559,6 +559,20 @@ can gather a bonus. The CP keeps of the v1 personalities (`reserve`, `recruit_ke
 has no Defense to keep CP for and doubles the CP income. Under v1 the play is unchanged (the same `state_hash` on
 `mvp-2`).
 
+**Economy waste (#683, `mvp-7`).** Factories (`gow_bots.bots.factories`): a captured factory passes to the capturer
+(DEC-41, item 2) and the flow carries every charge to the front wherever it is made (DEC-43), so the bots build in the
+rear: an own city at least 3 roads from every enemy node, reached from the capital over nodes no enemy node touches,
+the deepest first (up to 4 roads), then the nearest to the capital; not while the enemy holds more nodes; only while
+the match left pays it back (the charges it makes at the period of the own stance now, after map tempo, at least
+`factory.cost` + 2); only while no own unit waits for a charge the warehouses of the capital's component do not hold;
+a lost site is never built again, and past one unpaid loss (a factory lost before it made `factory.cost` charges) no
+factory is built. A barracks is not built in a city next to an enemy node, nor where one was lost. Pockets (`SmartBot`
+item 20): a stranded unit (no charge, an empty warehouse) weighs twice in the rescue score; a discharged group that
+cannot pay the capture of the way out walks to a charged group of its pocket, which waits and leaves with it; a
+charged group carrying stranded units leaves, and a front node of a pocket keeps none. Recall (`CampaignBot.recall_pays`):
+an attack that would kill the defenders but cannot pay the capture goes on (the kill is worth the charge, the CP of the
+order are paid either way); only one that would bounce off an empty node unpaid or lose units is turned back.
+
 ## Bot characters (#663)
 
 The smart personalities differ in the opening, the midgame and the late game, not only in the opening. The phase

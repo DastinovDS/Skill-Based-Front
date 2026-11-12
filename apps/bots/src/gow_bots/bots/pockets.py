@@ -17,9 +17,7 @@ recharges. Two readings of the ``PlayerView`` (AGENTS.md, section 4.4: only the 
   it), what its capture rejoins: the own units standing in those pockets, a stranded unit (without
   a charge, in a node with an empty warehouse: nothing recharges it there, and under a capture
   price it cannot walk out, DEC-38) once more (#683), and ``FACTORY_UNITS`` per own factory there
-  (a stopped factory produces again from its next period, item H5). A pocket cut off by a chain of
-  ``d`` foreign nodes (up to ``RESCUE_DEPTH``) weighs ``1 / d`` of that (rounded down) on the first
-  node of the chain next to the capital's component: its capture is the first step back (#683).
+  (a stopped factory produces again from its next period, item H5).
 - ``heading``: the own units ordered into each foreign node, those sent earlier and in this
   decision: the captured node holds them all at the arrivals, and units above its capacity die one
   every ``capacity.attrition_ticks`` (DEC-22, DEC-12; #754).
@@ -35,10 +33,8 @@ from typing import Final
 from gow_sim.commands import Command, Move
 from gow_sim.view import AtNode, PlayerView
 
-__all__ = ["FACTORY_UNITS", "RESCUE_DEPTH", "Pockets", "heading", "read_pockets"]
+__all__ = ["FACTORY_UNITS", "Pockets", "heading", "read_pockets"]
 
-RESCUE_DEPTH: Final = 3
-"""Foreign nodes between the capital's component and a pocket up to which ``rescue`` counts it."""
 FACTORY_UNITS: Final = 3
 """A stopped own factory in a pocket weighs like this many units in ``rescue``: the units of a
 group it recharges again."""
@@ -102,25 +98,17 @@ def read_pockets(
     for n in nodes:
         if pocket[n.id] and n.factory:
             weight[comp[n.id]] += FACTORY_UNITS
-    # The nodes that cut a pocket off: the foreign nodes next to the capital's component, by the
-    # foreign nodes between them and each pocket (#683: a pocket behind ``d`` of them weighs
-    # ``1 / d``, rounded down, up to ``RESCUE_DEPTH``).
-    count_comps = len(weight)
+    # The nodes that cut a pocket off.
     rescue: dict[int, int] = {}
-    for c in range(count_comps):
-        dist = [0] * count
-        frontier = [n for n in range(count) if comp[n] == c]
-        for depth in range(1, RESCUE_DEPTH + 1):
-            step: list[int] = []
-            for node in frontier:
-                for other in neighbors[node]:
-                    if nodes[other].owner != me and dist[other] == 0:
-                        dist[other] = depth
-                        step.append(other)
-            frontier = step
-        for n in range(count):
-            if dist[n] > 0 and any(main[m] for m in neighbors[n]):
-                rescue[n] = rescue.get(n, 0) + weight[c] // dist[n]
+    for n in nodes:
+        if n.owner == me or not any(main[m] for m in neighbors[n.id]):
+            continue
+        touched: list[int] = []
+        for m in neighbors[n.id]:
+            if pocket[m] and comp[m] not in touched:
+                touched.append(comp[m])
+        if touched:
+            rescue[n.id] = sum(weight[c] for c in touched)
     # Free captures into the capital's component (a 0-1 search from it: stepping from a node into
     # its neighbour ``u`` costs 0 when ``u`` is own, 1 when ``u`` is a free foreign node).
     exits = [-1] * count

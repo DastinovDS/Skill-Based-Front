@@ -143,6 +143,12 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     free, its VP with it). With no free way out it waits, and the foreign node that cut the
     pocket off (next to the capital's component and a pocket) scores ``W_RESCUE`` more per unit
     it rejoins (``pockets.rescue``), so a viable attack from either side retakes it first.
+    Pocket discipline (#683, under a capture price): a stranded unit (no charge, an empty
+    warehouse) weighs twice in the rescue; a discharged group that cannot pay the
+    way out walks to a charged group of its pocket (``pocket_merge``), which waits for it and
+    then leaves with it, its charges paying the capture for all; a charged group carrying
+    stranded units leaves like one in a starving node, and a front node of a pocket keeps no
+    charged group (held there it starves).
 21. **Capacity and the leaf shift** (#686, G-L of the ``mvp-4`` bot audit). No move, recall or
     recruit puts an own node over capacity at the arrival (``CampaignBot``, "Capacity"): the
     garrisons, the answers, the reinforcements and the walks home count the units already on the
@@ -725,14 +731,15 @@ class SmartBot(CampaignBot):
         ``charged=False``: the discharged groups in a node with an empty warehouse. They never
         recharge in the pocket and fire no shot, so a front node does not keep them
         (``hold_front``); a pinned node and a scout's last unit do. ``charged=True``: the charged
-        groups that may leave (``may_leave``) a node that starves (``starve_in``, DEC-43 item H4),
-        so their charges go back to the army instead of the starvation. The discharged pass goes
-        first: the CP of the decision are short (one move per CP).
+        groups of a node that starves (``starve_in``, DEC-43 item H4) or that carry stranded units
+        (``pocket_leaves``), so their charges go back to the army instead of the starvation. The
+        discharged pass goes first: the CP of the decision are short (one move per CP).
 
         Under a capture price (DEC-38, ``capture.charge_cost`` above 0) a group leaves only when
         its charged units pay the capture of the way out after the toll of a visible enemy road
         fortification into it (DEC-43, item D6; ``takes``, #760): a discharged one never can, so
-        it waits for a charge instead of walking out, bouncing and being sent again.
+        it walks to a charged group of its pocket instead (``pocket_merge``, #683) or waits for a
+        charge, not walking out, bouncing and being sent again.
 
         A city keeps one unit (``pocket_keep``): an empty one falls to any enemy group for free
         (``capture.charge_cost = 0``) and its VP with it, while every unit standing there costs
@@ -1901,6 +1908,9 @@ class SmartBot(CampaignBot):
         here = node_of(g)
         if self.pinned[here]:
             return False  # DEC-37: caught on the way out, it fights outside the node
+        pk = self.pockets
+        if pk is not None and pk.pocket[here] and ctx.incoming[here] > 0:
+            return False  # #683: stranded units walk in to leave the pocket with it
         if self.watch[here] and ctx.standing[here] - g.units < 1:
             return False  # the scout stays (DEC-35)
         if here == self.home:

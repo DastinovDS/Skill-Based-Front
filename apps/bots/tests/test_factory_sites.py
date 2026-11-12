@@ -1,15 +1,15 @@
 """Factory sites of the bots under ``mvp-7`` (#683; DEC-41 item 2, DEC-43 items H and J, DEC-47).
 
-The site is a rear city: at least two hops from every enemy node, reached from the own capital over
-own nodes none of which touches an enemy node (one capture at the front does not cut it into a
-pocket, where a factory stops, DEC-43 item H2); the farthest from the enemy nodes first (up to
-``SITE_DEPTH_CAP``), then the nearest to the own capital. A build starts only from spare stock (the
-warehouses of the capital's component beyond what the own discharged units there want) and only
-while the match left pays it back at the period of the own stance (DEC-47: a built factory makes a
-charge per capital period of its owner's stance, after map tempo); a lost site is never built
-again, and past ``FACTORY_RESTARTS`` unpaid losses (a factory lost before it made ``factory.cost``
-charges) no factory is built. Every case runs for player 0 and, mirrored, for player 1 (the map
-symmetry, ``MapDef.mirror_nodes``).
+The site is a rear city: at least ``SITE_DEPTH`` (3) roads from every enemy node, reached from the
+own capital over own nodes none of which touches an enemy node (one capture at the front does not
+cut it into a pocket, where a factory stops, DEC-43 item H2); the farthest from the enemy nodes
+first (up to ``SITE_DEPTH_CAP``), then the nearest to the own capital. A build starts only from
+spare stock (the warehouses of the capital's component beyond what the own discharged units there
+want), not while the enemy holds more nodes, and only while the match left pays it back at the
+period of the own stance (DEC-47: a built factory makes a charge per capital period of its owner's
+stance, after map tempo); a lost site is never built again, and past ``FACTORY_RESTARTS`` unpaid
+losses (a factory lost before it made ``factory.cost`` charges) no factory is built. Every case
+runs for player 0 and, mirrored, for player 1 (the map symmetry, ``MapDef.mirror_nodes``).
 
 The layout is ``crossroads`` (player 0's names; 49 nodes, so map tempo leaves the periods as they
 are: Economy 100, Balance 200, War 400 ticks per charge): the capital 0; the cities 1, 4, 6, 7, 8
@@ -26,6 +26,8 @@ from gow_bots.bots.factories import (
     FACTORY_DELIVERY_TICKS,
     FACTORY_PROFIT,
     FACTORY_RESTARTS,
+    SITE_DEPTH,
+    SITE_DEPTH_CAP,
     FactorySites,
     factory_site,
     payback,
@@ -41,6 +43,9 @@ ROOT = Path(__file__).resolve().parents[3]
 KEY = bytes(range(32))
 EXTRA = 2
 """``CampaignBot.FACTORIES``: two factories beside the capital (``factory.max = 3``)."""
+EXTRA_OWN = (5, 9)
+"""Two more provinces of the player (on its flanks), so the nodes the cases give the enemy do not
+put the player behind on nodes (a factory is not started while losing ground)."""
 
 
 @pytest.fixture(scope="module")
@@ -60,18 +65,24 @@ def _node(mapdef: MapDef, player: int, node: int) -> int:
 
 
 def _setup(
-    rules: Ruleset, mapdef: MapDef, player: int, enemy: tuple[int, ...]
+    rules: Ruleset,
+    mapdef: MapDef,
+    player: int,
+    enemy: tuple[int, ...],
+    own: tuple[int, ...] = EXTRA_OWN,
 ) -> tuple[SmartRusher, PlayerView]:
-    """The start of the match with ``enemy`` (player 0's names) made the opponent's; an own start
-    garrison standing there is removed first. One tick is played."""
+    """The start of the match with ``enemy`` (player 0's names) made the opponent's and ``own``
+    the player's; a start garrison standing in a node that changes hands is removed first. One
+    tick is played."""
     match = Match(mapdef, rules, KEY)
     state = match.state
-    for node in (_node(mapdef, player, n) for n in enemy):
-        for gid in sorted(state.groups):
-            loc = state.groups[gid].location
-            if isinstance(loc, AtNode) and loc.node == node:
-                del state.groups[gid]
-        state.nodes[node].owner = 1 - player
+    for side, nodes in ((1 - player, enemy), (player, own)):
+        for node in (_node(mapdef, player, n) for n in nodes):
+            for gid in sorted(state.groups):
+                loc = state.groups[gid].location
+                if isinstance(loc, AtNode) and loc.node == node:
+                    del state.groups[gid]
+            state.nodes[node].owner = side
     match.step()
     return SmartRusher(mapdef, rules, seed=1, player=player), match.view(player)
 
@@ -88,15 +99,26 @@ def _warehouses(view: PlayerView, stock: dict[int, int]) -> PlayerView:
 
 
 @pytest.mark.parametrize("player", [0, 1])
-def test_the_deepest_rear_city_is_picked(rules: Ruleset, crossroads: MapDef, player: int) -> None:
-    """The enemy holds province 11 next to cities 6 and 7: the rear cities are 1, 4 and 8; 4 is 3
-    hops from 11 (``SITE_DEPTH_CAP``), 1 and 8 are 2, so 4 is the site."""
-    bot, view = _setup(rules, crossroads, player, (11,))
+def test_the_rear_city_three_roads_from_the_enemy_is_picked(
+    rules: Ruleset, crossroads: MapDef, player: int
+) -> None:
+    """The enemy holds province 12: 7 and 8 touch it, 4 is two roads away (4-8-12); 1 and 6 are
+    three (1-2-7-12, 6-2-7-12), the ``SITE_DEPTH``, and two roads from the capital each; 1 wins
+    by ``Bot.key``."""
+    assert SITE_DEPTH == 3
+    bot, view = _setup(rules, crossroads, player, (12,))
     rear = safe_rear(bot, view)
-    for n in (6, 7):
+    for n in (7, 8):
         assert _node(crossroads, player, n) not in rear  # next to the enemy
-    for n in (1, 4, 8):
-        assert _node(crossroads, player, n) in rear
+    assert _site(bot, view) == _node(crossroads, player, 1)
+
+
+@pytest.mark.parametrize("player", [0, 1])
+def test_the_deepest_rear_city_is_picked(rules: Ruleset, crossroads: MapDef, player: int) -> None:
+    """The enemy holds province 15: 6 and 7 are two roads away (6-11-15, 7-11-15), 1 three
+    (1-6-11-15), 4 and 8 four (``SITE_DEPTH_CAP``): of the deepest, 4 wins by ``Bot.key``."""
+    assert SITE_DEPTH_CAP == 4
+    bot, view = _setup(rules, crossroads, player, (15,))
     assert _site(bot, view) == _node(crossroads, player, 4)
 
 
@@ -111,14 +133,13 @@ def test_without_an_enemy_near_the_city_next_to_the_capital_is_picked(
 
 
 @pytest.mark.parametrize("player", [0, 1])
-def test_a_city_next_to_an_enemy_node_is_no_site(
+def test_no_site_within_two_roads_of_the_enemy(
     rules: Ruleset, crossroads: MapDef, player: int
 ) -> None:
-    """The enemy also holds province 9 next to city 4: 4 is out; 1 and 8 are both 2 hops from an
-    enemy node and 2 roads from the capital."""
-    bot, view = _setup(rules, crossroads, player, (11, 9))
-    assert _node(crossroads, player, 4) not in safe_rear(bot, view)
-    assert _site(bot, view) in (_node(crossroads, player, 1), _node(crossroads, player, 8))
+    """The enemy holds provinces 11 and 12: every own city is at most two roads from one of them
+    (1-6-11, 4-8-12; 6, 7 and 8 touch them), so no factory is started."""
+    bot, view = _setup(rules, crossroads, player, (11, 12))
+    assert _site(bot, view) is None
 
 
 @pytest.mark.parametrize("player", [0, 1])
@@ -126,11 +147,23 @@ def test_a_city_reached_only_past_the_front_is_no_site(
     rules: Ruleset, crossroads: MapDef, player: int
 ) -> None:
     """The enemy holds city 7: both provinces next to the capital (2 and 3) touch it, so every own
-    route to cities 1, 4 and 8 passes a node next to the enemy. City 4 is 2 hops from 7, yet one
-    capture of 3 would cut it into a pocket: no site."""
+    route to cities 1, 4 and 8 passes a node next to the enemy, and one capture of 2 or 3 would
+    cut them into a pocket: no site."""
     bot, view = _setup(rules, crossroads, player, (7,))
     assert safe_rear(bot, view) == {crossroads.capital(player): 0}
     assert _site(bot, view) is None
+
+
+@pytest.mark.parametrize("player", [0, 1])
+def test_no_factory_while_losing_ground(rules: Ruleset, crossroads: MapDef, player: int) -> None:
+    """The enemy holds three more nodes far away (the mirrors of 15, 17 and 19): 11 enemy nodes
+    against the player's 10, no factory; with two more own provinces (12 against 11) the site is
+    7 again."""
+    far = tuple(crossroads.mirror_nodes[n] for n in (15, 17, 19))
+    bot, view = _setup(rules, crossroads, player, far)
+    assert _site(bot, view) is None
+    bot, view = _setup(rules, crossroads, player, far, (*EXTRA_OWN, 11, 12))
+    assert _site(bot, view) == _node(crossroads, player, 7)
 
 
 @pytest.mark.parametrize("player", [0, 1])
@@ -138,7 +171,7 @@ def test_no_build_without_spare_stock(rules: Ruleset, crossroads: MapDef, player
     """``factory.cost = 4``: the warehouses of the capital's component must hold 4 beyond the own
     units without a charge standing in it."""
     assert rules.factory.cost == 4
-    bot, view = _setup(rules, crossroads, player, (11,))
+    bot, view = _setup(rules, crossroads, player, ())
     capital = crossroads.capital(player)
     own = [n.id for n in view.nodes if n.owner == player]
     empty = _warehouses(view, dict.fromkeys(own, 0))
@@ -146,7 +179,7 @@ def test_no_build_without_spare_stock(rules: Ruleset, crossroads: MapDef, player
     assert _site(bot, empty) is None
     four = _warehouses(empty, {capital: 4})
     assert spare_stock(bot, four, bot.supplied(four)) == 4
-    assert _site(bot, four) == _node(crossroads, player, 4)
+    assert _site(bot, four) == _node(crossroads, player, 7)
     groups = list(four.groups)
     at = next(
         i
@@ -172,12 +205,12 @@ def test_a_late_factory_must_pay_back_at_the_stance_period(
     makes 4 charges under War (400 ticks each), 9 under Balance (200): only the Balance one pays
     ``factory.cost`` plus ``FACTORY_PROFIT`` back."""
     assert (rules.factory.build_ticks, FACTORY_DELIVERY_TICKS, FACTORY_PROFIT) == (100, 50, 2)
-    bot, view = _setup(rules, crossroads, player, (11,))
+    bot, view = _setup(rules, crossroads, player, ())
     tick = rules.match_ticks - 2000
     war, balance = _late(view, tick, Stance.WAR), _late(view, tick, Stance.BALANCE)
     assert (payback(rules, war), payback(rules, balance)) == (4, 9)
     assert _site(bot, war) is None
-    assert _site(bot, balance) == _node(crossroads, player, 4)
+    assert _site(bot, balance) == _node(crossroads, player, 7)
 
 
 def _with_build(view: PlayerView, node: int, tick: int | None = None) -> PlayerView:
@@ -190,6 +223,10 @@ def _lost(view: PlayerView, node: int, tick: int | None = None) -> PlayerView:
     nodes = list(view.nodes)
     nodes[node] = replace(nodes[node], owner=1 - view.player, factory_build=None, factory=None)
     return replace(view, nodes=tuple(nodes), tick=view.tick if tick is None else tick)
+
+
+def _at(view: PlayerView, tick: int) -> PlayerView:
+    return replace(view, tick=tick)
 
 
 def _factory(view: PlayerView, node: int, tick: int, *, pocket: bool = False) -> PlayerView:
@@ -206,22 +243,21 @@ def _factory(view: PlayerView, node: int, tick: int, *, pocket: bool = False) ->
 def test_a_lost_site_is_not_rebuilt_and_the_restarts_are_capped(
     rules: Ruleset, crossroads: MapDef, player: int
 ) -> None:
-    """A factory build at 4 is captured: 4 is never a site again (while the enemy holds it, 8 next
-    to it is out too and the site is 1; once 4 is own again, 8); once a build at 1 is lost too
-    (more than ``FACTORY_RESTARTS`` losses), no factory is started."""
+    """A factory build at 7 is captured, then 7 is own again: it is never a site again, the site
+    is 1 (two roads from the capital, ``Bot.key``); once a build at 1 is lost too (more than
+    ``FACTORY_RESTARTS`` losses), no factory is started."""
     assert FACTORY_RESTARTS == 1
-    bot, view = _setup(rules, crossroads, player, (11,))
-    four, one = _node(crossroads, player, 4), _node(crossroads, player, 1)
-    eight = _node(crossroads, player, 8)
+    bot, view = _setup(rules, crossroads, player, ())
+    seven, one = _node(crossroads, player, 7), _node(crossroads, player, 1)
     memory = FactorySites()
-    assert _site(bot, _with_build(view, four), memory) is None  # one at a time
-    assert _site(bot, _lost(view, four), memory) == one  # 4 is the enemy's now
-    assert memory.lost == {four: True}
-    assert _site(bot, view, memory) in (one, eight)  # 4 is own again: still no site
+    assert _site(bot, _with_build(view, seven), memory) is None  # one at a time
+    _site(bot, _lost(view, seven), memory)
+    assert memory.lost == {seven: True}
+    assert _site(bot, view, memory) == one  # 7 is own again: still no site
     assert _site(bot, _with_build(view, one), memory) is None
-    assert _site(bot, _lost(view, one), memory) is None  # past the restarts
-    assert memory.lost == {four: True, one: True}
-    assert _site(bot, view, memory) is None
+    _site(bot, _lost(view, one), memory)
+    assert memory.lost == {seven: True, one: True}
+    assert _site(bot, view, memory) is None  # past the restarts
 
 
 @pytest.mark.parametrize("player", [0, 1])
@@ -229,20 +265,22 @@ def test_a_factory_that_paid_back_is_no_loss_for_the_restarts(
     rules: Ruleset, crossroads: MapDef, player: int
 ) -> None:
     """A factory that worked 800 ticks at 200 ticks a charge made its cost (4): two such factories
-    lost (at 4, then at 1) leave the restarts untouched, so a third site (8) is still offered.
+    lost (at 7, then at 1) leave the restarts untouched, so a third site (4) is still offered.
     The lost sites stay excluded."""
-    bot, view = _setup(rules, crossroads, player, (11,))
-    four, one = _node(crossroads, player, 4), _node(crossroads, player, 1)
-    eight = _node(crossroads, player, 8)
+    bot, view = _setup(rules, crossroads, player, ())
+    seven, one = _node(crossroads, player, 7), _node(crossroads, player, 1)
+    four = _node(crossroads, player, 4)
     memory = FactorySites()
-    assert _site(bot, _with_build(view, four, 100), memory) is None
-    assert _site(bot, _factory(view, four, 200), memory) in (one, eight)  # the second one
-    assert _site(bot, _lost(view, four, 1000), memory) == one
-    assert memory.unpaid == 0 and memory.lost == {four: True}
+    assert _site(bot, _with_build(view, seven, 100), memory) is None
+    assert _site(bot, _factory(view, seven, 200), memory) == one  # the second one
+    _site(bot, _lost(view, seven, 1000), memory)
+    assert memory.unpaid == 0 and memory.lost == {seven: True}
+    assert _site(bot, _at(view, 1000), memory) == one
     assert _site(bot, _with_build(view, one, 1100), memory) is None
-    assert _site(bot, _factory(view, one, 1200), memory) == eight
-    assert _site(bot, _lost(view, one, 2000), memory) == eight
-    assert memory.unpaid == 0 and memory.lost == {four: True, one: True}
+    assert _site(bot, _factory(view, one, 1200), memory) == four
+    _site(bot, _lost(view, one, 2000), memory)
+    assert _site(bot, _at(view, 2000), memory) == four
+    assert memory.unpaid == 0 and memory.lost == {seven: True, one: True}
 
 
 @pytest.mark.parametrize("player", [0, 1])
@@ -252,16 +290,18 @@ def test_a_factory_lost_before_it_paid_back_counts(
     """A factory lost after 795 ticks of work made 3 charges (rounded down): an unpaid loss. One
     that stood 800 ticks in a pocket made nothing (DEC-43, item H2): unpaid too. Past
     ``FACTORY_RESTARTS`` (1) unpaid losses no factory is started."""
-    bot, view = _setup(rules, crossroads, player, (11,))
-    four, one = _node(crossroads, player, 4), _node(crossroads, player, 1)
+    bot, view = _setup(rules, crossroads, player, ())
+    seven, one = _node(crossroads, player, 7), _node(crossroads, player, 1)
     memory = FactorySites()
-    assert _site(bot, _with_build(view, four, 100), memory) is None
-    _site(bot, _factory(view, four, 200), memory)
-    _site(bot, _factory(view, four, 995), memory)
-    assert _site(bot, _lost(view, four, 995), memory) == one
+    assert _site(bot, _with_build(view, seven, 100), memory) is None
+    _site(bot, _factory(view, seven, 200), memory)
+    _site(bot, _factory(view, seven, 995), memory)
+    _site(bot, _lost(view, seven, 995), memory)
     assert memory.unpaid == 1
+    assert _site(bot, _at(view, 1000), memory) == one
     assert _site(bot, _with_build(view, one, 1100), memory) is None
     _site(bot, _factory(view, one, 1200, pocket=True), memory)
     _site(bot, _factory(view, one, 2000, pocket=True), memory)
-    assert _site(bot, _lost(view, one, 2000), memory) is None
+    _site(bot, _lost(view, one, 2000), memory)
     assert memory.unpaid == 2
+    assert _site(bot, _at(view, 2000), memory) is None

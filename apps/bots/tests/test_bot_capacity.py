@@ -241,7 +241,9 @@ def test_every_smart_bot_keeps_the_hold_in_a_match() -> None:
     """In played matches no smart bot changes the shift twice within ``SHIFT_HOLD_TICKS``.
 
     Historical ruleset on purpose: the lever exists only where ``supply.leaf_shift`` is on
-    (``mvp-5``, ``mvp-6``); the played ``mvp-7`` has none (DEC-50, ``test_supply_flow``)."""
+    (``mvp-5``, ``mvp-6``); the played ``mvp-7`` has none (DEC-50, ``test_supply_flow``). Only
+    the bot's own changes count: a shift the rules clamp (DEC-43, item B3: at most ``d0`` of the
+    own capital, 0 once the capital touches the enemy) is no command of the bot (#683)."""
     crossroads = load_map(ROOT / "maps" / "crossroads.json")
     names = ("smart_strangler", "smart_reactive")
     lever = load_ruleset(ROOT / "rulesets" / "mvp-5.toml")
@@ -249,7 +251,6 @@ def test_every_smart_bot_keeps_the_hold_in_a_match() -> None:
     bots = [BOTS[n](crossroads, lever, seed=1, player=p) for p, n in enumerate(names)]
     assert all(isinstance(b, SmartBot) for b in bots)
     changes: list[list[int]] = [[], []]
-    last = [0, 0]
     seq = 0
     while match.tick < 3000 and not match.finished:
         cmds: list[PlayerCommand] = []
@@ -258,12 +259,12 @@ def test_every_smart_bot_keeps_the_hold_in_a_match() -> None:
                 for cmd in bots[p].decide(match.view(p), match.tick):
                     cmds.append(PlayerCommand(p, seq, match.resolve(p, cmd)))
                     seq += 1
+        before = [match.state.players[p].leaf_shift for p in (0, 1)]
         match.step(cmds)
-        for p in (0, 1):
-            shift = match.state.players[p].leaf_shift
-            if shift != last[p]:
+        for c in cmds:
+            p = c.player
+            if isinstance(c.cmd, SetLeafShift) and match.state.players[p].leaf_shift != before[p]:
                 changes[p].append(match.tick)
-                last[p] = shift
     assert changes[0] or changes[1]  # the policy is exercised at all
     for ticks in changes:
         assert all(b - a >= SHIFT_HOLD_TICKS for a, b in pairwise(ticks))
